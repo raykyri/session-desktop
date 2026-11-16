@@ -1493,12 +1493,9 @@ button.n-row:active { background: var(--n-fill); }
 .jd-pop { position: absolute; right: 0; left: auto; top: calc(100% + 4px); z-index: 80; width: max(100%, 300px); max-width: calc(100vw - 32px); max-height: min(60vh, 460px); overflow-y: auto; padding: 4px; background: var(--popover); border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); }
 .jd-pop:focus { outline: none; }
 .jd-gh { padding: 8px 8px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--t-faint); }
-.ds-hcard-m { margin: 4px 0 14px; }
 /* text boxes in the app grow with their text (see autosize) and have no resize handle */
 #app textarea { resize: none; }
 @keyframes sh-up { from { transform: translateY(100%); } to { transform: none; } }
-@keyframes sh-spring { 0% { transform: translateY(100%); } 65% { transform: translateY(-8px); } 100% { transform: none; } }
-@keyframes sh-fade { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 @keyframes sh-scrim { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sh-enter, .sh-scrim-enter { animation: none !important; } }
 .data-wait { padding: 48px 24px; text-align: center; color: var(--t-secondary); font-size: var(--fs-sm); }
@@ -2674,21 +2671,13 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .th-vt button { white-space: nowrap; }
   /* thread toolbar: one row, each button with its icon and label, at the desktop heights */
   /* Sheet animation variants (classes added by mwSheets when a sheet opens) */
-  #app[data-msanim="slide"] .sh-enter { animation: sh-up 240ms cubic-bezier(.2, .8, .2, 1); }
-  #app[data-msanim="spring"] .sh-enter { animation: sh-spring 380ms cubic-bezier(.2, .8, .2, 1); }
-  #app[data-msanim="fade"] .sh-enter { animation: sh-fade 200ms ease-out; }
-  #app:not([data-msanim="none"]) .sh-scrim-enter { animation: sh-scrim 200ms ease-out; }
+  #app .sh-enter { animation: sh-up 240ms cubic-bezier(.2, .8, .2, 1); }
+  #app .sh-scrim-enter { animation: sh-scrim 200ms ease-out; }
   /* Model and topic menus variants */
-  #app[data-mmenu="sheet"] .mp-menu, #app[data-mmenu="sheet"] .sf-tpmenu { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; min-width: 0; max-width: none; max-height: 70%; overflow-y: auto; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding-bottom: 20px; }
-  #app[data-mmenu="sheet"] .sw-wrap .pop { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; max-width: none; max-height: 75%; overflow-y: auto; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding-bottom: 20px; }
-  #app[data-mmenu="wide"] .c2 .mp, #app[data-mmenu="wide"] .fu2-bar .mp, #app[data-mmenu="wide"] .qt-cbar .mp { position: static; }
-  #app[data-mmenu="wide"] .mp-menu { left: 8px; right: 8px; width: auto; min-width: 0; }
-  #app[data-mmenu="wide"] .sf-tpmenu { left: 0; right: 0; width: auto; min-width: 0; }
-  #app[data-mmenu="wide"] .sf-tpe, #app[data-mmenu="wide"] .sf-tpm { position: static; }
+  #app .mp-menu, #app .sf-tpmenu { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; min-width: 0; max-width: none; max-height: 70%; overflow-y: auto; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding-bottom: 20px; }
+  #app .sw-wrap .pop { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; max-width: none; max-height: 75%; overflow-y: auto; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding-bottom: 20px; }
   /* full-width menus are placed against the card or row that holds the button, not the scrolling page */
-  #app[data-mmenu="wide"] .qt-cbar, #app[data-mmenu="wide"] .fu2-bar, #app[data-mmenu="wide"] .sf-crumb { position: relative; }
-  #app[data-mmenu="wide"] .c2-spmenu { left: 0; right: 0; width: auto; }
-  #app[data-mmenu="sheet"] .c2-spmenu { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; max-height: 70%; overflow-y: auto; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding-bottom: 20px; }
+  #app .c2-spmenu { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; max-height: 70%; overflow-y: auto; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding-bottom: 20px; }
   /* short labels in action rows */
   .m-long { display: none; }
   /* tap targets */
@@ -2698,7 +2687,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .c2 textarea { padding-right: 32px; }
   .sv-chips { flex: 0 1 auto; max-width: 100%; }
   .sv-search { width: auto; flex: 1 1 100%; }
-  #app[data-mmenu="wide"] .sf-tpmenu.flip-up { max-height: min(400px, 60vh); }
   /* the answer already lists its sources */
   .qt-aside .ds-src { display: none; }
   /* tap targets the first pass missed */
@@ -3027,11 +3015,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
       <div class="knob" id="kw-dspos"><span>Layout</span><div class="seg" id="k-dspos"></div></div>
-    </div>
-    <div class="knobs cs-knobs" id="kw-mweb" aria-label="Mobile Web controls">
-      <span class="cs-kt">Mobile Web</span>
-      <div class="knob"><span>Model, topic and space menus</span><div class="seg" id="k-mmenu"></div></div>
-      <div class="knob"><span>Sheet animation</span><div class="seg" id="k-msanim"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -3791,7 +3774,6 @@ function homeFeed() {
   return `<div class="body home-feed">
     <div class="mcol"><div class="main">
       ${homeTop()}
-      ${st.device === 'phone' ? dsHomeCard().replace('note-card ds-hcard', 'note-card ds-hcard ds-hcard-m') : ''}
       ${feed2(null, homePosts())}
     </div></div>
     <aside class="drawer wk home-side" aria-label="Spaces"><div class="dbody">
@@ -5218,7 +5200,6 @@ const KNOBDEF = () => [
   ...MIKNOBS(),
   ...DSKNOBS(),
   ...QTKNOBS(),
-  ...MWKNOBS(),
 ];
 let HOTKEYS = {};
 function renderControls() {
@@ -7888,25 +7869,23 @@ function dsSideFit() {
 }
 on($('app'), 'scroll', () => { if (!dsSideFit.raf) dsSideFit.raf = requestAnimationFrame(() => { dsSideFit.raf = 0; dsSideFit(); }); }, { passive: true });
 on(window, 'resize', dsSideFit);
-/* Mobile Web: a sheet (dialog, menu or panel at the bottom of the screen) animates when it opens, not
-   when the page re-renders with it already open. The Sheet animation control picks the motion. */
+/* Mobile Web: a sheet (dialog, menu or panel at the bottom of the screen) slides up when it opens, not
+   when the page re-renders with it already open. */
 function mwSheets(a) {
   const prev = mwSheets.prev || new Set(), now = new Set();
   const sheets = [...a.querySelectorAll('.msheet, .modal-scrim > .modal, .pop, .nt-pop, .mp-menu, .ts-ddmenu, .n-sheet')].filter(el => el.getClientRects().length && (el.closest('.modal-scrim') || getComputedStyle(el).position === 'fixed'));
   sheets.forEach(el => {
     const k = el.className.replace(/\bsh-enter\b/, '').trim() + '|' + (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || '');
     now.add(k);
-    if (!prev.has(k) && st.msAnim !== 'none') { el.classList.add('sh-enter'); const sc = el.closest('.modal-scrim') || a.querySelector(':scope > .it-scrim, .msheet-scrim, .um-scrim'); if (sc) sc.classList.add('sh-scrim-enter'); }
+    if (!prev.has(k)) { el.classList.add('sh-enter'); const sc = el.closest('.modal-scrim') || a.querySelector(':scope > .it-scrim, .msheet-scrim, .um-scrim'); if (sc) sc.classList.add('sh-scrim-enter'); }
   });
   mwSheets.prev = now;
 }
 function mwAfterRender() {
-  { const k = $('kw-mweb'); if (k) k.style.display = st.device === 'phone' ? '' : 'none'; }
   const a = $('app'); if (!a || st.device === 'native') return;
-  a.dataset.mmenu = st.mMenu; a.dataset.msanim = st.msAnim;
   if (st.device !== 'phone') return;
   /* item menus open as bottom sheets: dim the page behind them, as the account menu does */
-  const sheetMenu = st.imenu || st.dsMenu || st.qtMenu || ((st.mpOpen || st.tpMenu || st.pop || st.spOpen) && st.mMenu === 'sheet');
+  const sheetMenu = st.imenu || st.dsMenu || st.qtMenu || st.mpOpen || st.tpMenu || st.pop || st.spOpen;
   if (sheetMenu && !a.querySelector(':scope > .it-scrim')) a.insertAdjacentHTML('beforeend', '<div class="um-scrim it-scrim" aria-hidden="true"></div>');
   mwSheets(a);
   /* the current space chip and Manage tab are scrolled into view in their rows */
@@ -8630,19 +8609,11 @@ function qtSyncNotif() {
   const has = st.notifs.some(n => n.id === QT_NOTIF.id);
   if (qtOn() && !has) db.unshift('notifs', QT_NOTIF); else if (!qtOn() && has) st.notifs = st.notifs.filter(n => n.id !== QT_NOTIF.id);
 }
-/* Mobile Web variants for places where the phone layout is a design choice. */
-function MWKNOBS() {
-  return [
-    ['k-msanim', 'msAnim', [['slide', 'Slide up'], ['spring', 'Slide with overshoot'], ['fade', 'Fade and rise'], ['none', 'None']], () => { st.device = 'phone'; mwSheets.prev = new Set(); Object.assign(st, { umenu: true, pop: false, modal: null }); }],
-    ['k-mmenu', 'mMenu', [['sheet', 'Bottom sheet'], ['wide', 'Full-width menu'], ['pop', 'As on desktop']], () => { st.device = 'phone'; jump('mb-ask'); st.device = 'phone'; st.mpOpen = true; }],
-  ];
-}
 /* The Map button: on Mobile Web the Thread map control can replace it with the outline, or open it zoomed out. */
 /* The map: a dialog on desktop. Mobile Web has no map; the outline sheet opens instead. */
 function qtOpenMap() { if (st.device === 'phone') st.modal = 'qt-outline'; else { st.modal = 'qt-map'; st.qtMapOpened = true; } }
 function QTKNOBS() { return []; }
 st.thrV = 'fx';
-Object.assign(st, { mMenu: 'sheet', msAnim: 'slide' });
 qtSyncNotif();
 function qtReset() {
   sfReset();
