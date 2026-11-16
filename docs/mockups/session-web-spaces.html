@@ -914,6 +914,8 @@ kbd, .keys kbd { font: inherit; font-size: 11.35px; font-weight: 600; min-width:
 @media (max-width: 640px) {
   .banner { grid-template-columns: auto minmax(0, 1fr) !important; }
   .banner .m-wiki { margin: 0; }
+  .banner .btn.sm.m-wiki { height: 30px; }
+  .banner .cs-mgb { width: 30px; padding: 0; justify-content: center; }
   .banner > .glyph { top: 0; }
   /* dialogs become bottom sheets */
   .modal-scrim { position: fixed; padding: 0; align-items: flex-end; }
@@ -1705,6 +1707,76 @@ button.n-row:active { background: var(--n-fill); }
 .ab-rrow input { flex: 1; min-width: 0; height: 32px; padding: 0 8px; border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--field); font: inherit; font-size: var(--fs-sm); color: var(--t-primary); }
 .ab-radios { display: flex; flex-direction: column; gap: 8px; }
 .ds-side .mods > div .au { font-size: var(--fs-sm); color: var(--t-primary); }
+/* Skills: preview dialog, Manage list with drag, add and edit dialog */
+.ab-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em; letter-spacing: -0.01em; }
+.sk-tx b.ab-mono { font-size: 12.5px; }
+.sk-tx small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ab-skti { display: inline-flex; align-items: center; gap: 10px; }
+.ab-skti .ab-mono { font-size: 15px; font-weight: 600; }
+.ab-skp { display: flex; flex-direction: column; gap: 12px; }
+.ab-skd { margin: 0; font-size: var(--fs-base, 14px); line-height: 1.55; color: var(--t-body); }
+.ab-skp code, .ab-skhint code, .ab-md code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; padding: 1px 5px; border-radius: 5px; background: var(--fill-subtle); color: var(--t-strong); }
+.ab-skl { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--t-faint); }
+.ab-sku { display: flex; flex-direction: column; gap: 2px; padding-top: 10px; border-top: 1px solid var(--divider); }
+.ab-sku .ab-skl { margin-bottom: 4px; }
+.ab-skt { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; margin: 0 -8px; border: 0; background: transparent; border-radius: var(--r-md); text-align: left; font: inherit; font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; }
+.ab-skt:hover { background: var(--fill-hover); }
+.ab-skt small { color: var(--t-faint); font-size: var(--fs-xs); }
+.ab-skins { display: flex; flex-direction: column; gap: 6px; }
+.ab-skins .ab-md { padding: 12px 14px; border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--card); }
+.ab-md { font-size: var(--fs-sm); line-height: 1.55; color: var(--t-body); }
+.ab-md h4 { margin: 10px 0 4px; font-size: var(--fs-sm); font-weight: 650; color: var(--t-strong); }
+.ab-md h4:first-child { margin-top: 0; }
+.ab-md p { margin: 0 0 8px; }
+.ab-md ul, .ab-md ol { margin: 0 0 8px; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; }
+.ab-md > :last-child { margin-bottom: 0; }
+.ab-skdet { border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--card); }
+.ab-skdet summary { cursor: pointer; padding: 9px 12px; font-size: var(--fs-sm); font-weight: 550; color: var(--t-strong); list-style: none; display: flex; align-items: center; gap: 6px; }
+.ab-skdet summary::-webkit-details-marker { display: none; }
+.ab-skdet summary::before { content: ''; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; margin-right: 2px; }
+.ab-skdet[open] summary::before { transform: rotate(45deg); }
+.ab-skdet .ab-md { padding: 0 14px 12px; }
+.ab-skcode { border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--card); overflow: hidden; }
+.ab-skch { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--divider); background: var(--fill-subtle); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--t-secondary); }
+.ab-skch .faint { font-family: var(--font-ui); }
+.ab-skcode pre, .ab-skpre { margin: 0; padding: 12px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.6; color: var(--t-body); white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow: auto; }
+.ab-skcode.edit textarea { display: block; width: 100%; box-sizing: border-box; border: 0; background: transparent; padding: 12px 14px; font-size: 12.5px; line-height: 1.6; color: var(--t-primary); resize: none; outline: none; min-height: 280px; }
+html:not([data-device="phone"]) .modal.cs-m.ab-skm-d.wide { width: 640px; }
+html:not([data-device="phone"]) .modal.cs-m.ab-sked { width: 600px; }
+html:not([data-device="phone"]) .modal.cs-m.ab-sked-preview { width: 920px; }
+.ab-ske { display: flex; flex-direction: column; gap: 14px; }
+.ab-skfld { display: flex; flex-direction: column; gap: 5px; }
+.ab-skfld > label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.ab-skfld > label span { font-size: var(--fs-sm); font-weight: 550; color: var(--t-strong); }
+.ab-skc { font-size: var(--fs-xs); color: var(--t-faint); font-variant-numeric: tabular-nums; }
+.ab-skc.over, .ab-skerr { color: var(--bad); }
+.ab-skfld input { height: 36px; padding: 0 10px; border-radius: var(--r-md); border: 1px solid var(--border-strong); background: var(--field); color: var(--t-primary); }
+.ab-skfld textarea { width: 100%; box-sizing: border-box; }
+.ab-skfld textarea.ab-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.6; }
+.ab-skhint { margin: 0; font-size: var(--fs-xs); line-height: 1.45; color: var(--t-faint); }
+.ab-skhint .tlink { font-size: var(--fs-xs); }
+.ab-skerr { margin: 0; font-size: var(--fs-xs); line-height: 1.45; }
+.ab-skerr[hidden] { display: none; }
+.ab-skimp { font-size: var(--fs-sm); cursor: pointer; }
+.ab-ske2 { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+.ab-skprev { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--r-lg); background: var(--fill-subtle); position: sticky; top: 0; }
+.ab-skrp { background: var(--card); border: 1px solid var(--divider); cursor: default; margin-bottom: 6px; }
+.ab-skrp:hover { background: var(--card); }
+.ab-skpre { border: 1px solid var(--divider); border-radius: var(--r-md); background: var(--card); max-height: 300px; }
+.ab-skl-list { display: flex; flex-direction: column; }
+.ab-skr { position: relative; background: var(--feed); transition: transform .15s var(--ease, ease); }
+.ab-skr.dragging { z-index: 2; transition: none; background: var(--card); box-shadow: var(--shadow-pop); border-radius: var(--r-md); border-bottom-color: transparent; }
+html.ab-dragging, html.ab-dragging * { cursor: grabbing !important; user-select: none; }
+.ab-skdrag { flex: none; display: grid; place-items: center; width: 22px; height: 30px; margin-left: -4px; border: 0; border-radius: 6px; background: transparent; color: var(--t-faint); cursor: grab; touch-action: none; }
+.ab-skdrag:hover { background: var(--fill-hover); color: var(--t-secondary); }
+.ab-skdrag svg { width: 14px; height: 14px; }
+@media (max-width: 640px) {
+  .ab-ske2 { grid-template-columns: minmax(0, 1fr); }
+  .ab-skprev { position: static; }
+  .ab-skr .ab-pgb .btn { padding: 0 8px; }
+  .cs-mgb { padding: 0 9px; }
+}
+.cs-mgb > svg { width: 14px; height: 14px; }
 .data-wait { padding: 48px 24px; text-align: center; color: var(--t-secondary); font-size: var(--fs-sm); }
 .knob .k-dstat, .k-dstat { font-size: var(--fs-xs); color: var(--t-faint); align-self: center; text-transform: none; letter-spacing: 0; font-weight: 400; min-width: 52px; }
 .jd-o { padding: 6px 8px; border-radius: var(--r-md); font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; }
@@ -1882,6 +1954,11 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .cs-rad { display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; border: 1px solid var(--divider); border-radius: var(--r-lg); cursor: pointer; }
 .cs-rad:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
 .cs-rad input { margin: 3px 0 0; accent-color: var(--accent); }
+#app input[type="radio"] { appearance: none; -webkit-appearance: none; flex: none; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--t-faint); background: var(--field); display: inline-grid; place-items: center; cursor: pointer; }
+#app input[type="radio"]::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); transform: scale(0); transition: transform .12s var(--ease, ease); }
+#app input[type="radio"]:checked { border-color: var(--accent); }
+#app input[type="radio"]:checked::before { transform: scale(1); }
+#app input[type="radio"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cs-rad span { display: flex; flex-direction: column; }
 .cs-rad b { font-weight: 550; color: var(--t-strong); font-size: var(--fs-sm); }
 .cs-rad small { color: var(--t-faint); font-size: var(--fs-xs); }
@@ -2063,6 +2140,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .cs-set { display: flex; flex-direction: column; }
 /* settings sections */
 .st-sec { padding: 22px 0; border-top: 1px solid var(--divider); }
+.ds-manage .st-head + .st-body { margin-top: 12px; }
 .cs-set > .st-sec:first-of-type { border-top: 0; padding-top: 10px; }
 .st-head h3 { margin: 0; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
 .st-head p { margin: 4px 0 0; font-size: var(--fs-sm); line-height: 1.45; color: var(--t-muted); }
@@ -3224,7 +3302,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
       <div class="knob" id="kw-dspos"><span>Layout</span><div class="seg" id="k-dspos"></div></div>
       <div class="knob"><span>Page view</span><div class="seg" id="k-abpage"></div></div>
       <div class="knob"><span>Skill preview</span><div class="seg" id="k-abskill"></div></div>
-      <div class="knob"><span>Member list</span><div class="seg" id="k-abmem"></div></div>
+      <div class="knob"><span>Skill editor</span><div class="seg" id="k-abske"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -3655,36 +3733,37 @@ D.spaces = [
 D.spaces.forEach(s => { s.pct = s.used / s.budget; });
 const SKILLS = {
   public: [
-    ['Summarize an article', 'Summarize this article and list its main claims with the evidence for each: '],
-    ['Transcribe a video', 'Transcribe this video and give me a timestamped outline: '],
-    ['Review a pull request', 'Review this pull request for correctness bugs and risky changes: '],
-    ['Audit a public codebase', 'Audit this public codebase for security issues and unmaintained dependencies: '],
+    ["summarizing-articles", "Summarizes an article and lists its main claims with the evidence given for each. Use when someone shares a link to an article, essay or blog post and asks what it says.\n\n## Steps\n1. Read the whole article, including footnotes.\n2. Write a three-sentence summary.\n3. List each main claim with the passage that supports it.\n\n## Output\n- Quote supporting passages exactly.\n- Mark claims the article gives no evidence for."],
+    ["transcribing-videos", "Transcribes a video and produces a timestamped outline of its sections. Use when someone links a video or a recorded talk and asks for a transcript, an outline or where a topic comes up.\n\n## Steps\n1. Transcribe the audio with speaker labels.\n2. Split the transcript into sections of 2 to 10 minutes.\n3. Give each section a timestamp and a one-line title.\n\nMark parts that cannot be heard as [inaudible]."],
+    ["reviewing-pull-requests", "Reviews a public pull request for correctness bugs and risky changes. Use when someone links a GitHub or GitLab pull request and asks whether it is safe to merge.\n\n## Checks\n- Logic errors and unhandled cases in the changed lines.\n- Changes to public APIs, migrations or configuration.\n- Tests that were removed or weakened.\n\nCite the file and line for each finding. Say so when nothing was found."],
+    ["auditing-codebases", "Audits a public repository for security issues and unmaintained dependencies. Use when someone links a repository and asks whether it is safe to depend on.\n\n## Steps\n1. List direct dependencies with the date of their last release.\n2. Flag dependencies with published security advisories.\n3. Look for committed secrets, unsafe deserialization and shell injection.\n\nSeparate confirmed issues from things to check by hand."],
   ],
   scifi: [
-    ['Find works on a theme', 'Find novels and short stories that explore this theme, grouped by approach: '],
-    ['Trace a term', 'Trace how this term was coined and how its meaning changed over time: '],
+    ["finding-works-on-a-theme", "Finds novels and short stories that explore a theme and groups them by approach. Use when someone names a theme, idea or technology and asks which science fiction deals with it.\n\n## Steps\n1. Find works where the theme is central, not incidental.\n2. Group them by approach, for example utopian, satirical or procedural.\n3. Give the author, the year and one sentence for each work.\n\nMark spoilers as the spoiler policy page describes."],
+    ["tracing-terms", "Traces how a term was coined and how its meaning changed over time. Use when someone asks where a word or concept from science fiction comes from.\n\n## Steps\n1. Find the earliest known use, with a citation.\n2. List later uses that changed the meaning, in order.\n3. Say how the term is used now.\n\nPrefer primary sources to encyclopedias."],
   ],
   ml: [
-    ['Summarize a paper', 'Summarize this paper: the claim, the method, the main results and what was not tested. arXiv ID: '],
-    ['Check a benchmark claim', 'Check whether this benchmark result holds up: compare it with other reported numbers and note setup differences: '],
-    ['Compare two papers', 'Compare these two papers on method, data and results: '],
+    ["summarizing-papers", "Summarizes a research paper: the claim, the method, the main results and what was not tested. Use when someone gives an arXiv ID or a link to a paper.\n\n## Output\n- Claim: one sentence.\n- Method: data, model and evaluation.\n- Results: the main table, with numbers.\n- Not tested: settings, baselines or ablations the paper leaves out.\n\nCopy numbers from the paper without rounding them."],
+    ["checking-benchmark-claims", "Checks whether a reported benchmark result holds up by comparing it with other reported numbers and setups. Use when someone asks whether a benchmark score is credible.\n\n## Steps\n1. Find other reports for the same benchmark and model size.\n2. Compare prompts, number of shots, decoding settings and contamination checks.\n3. Say whether the result is consistent with the others, and why."],
+    ["comparing-papers", "Compares two papers on method, data and results. Use when someone gives two papers and asks how they differ or which result to trust.\n\nMake a table with one row each for method, data, evaluation and main result. Below it, list the differences that explain different results."],
   ],
   markets: [
-    ['Explain a mechanism', 'Explain how this market mechanism works, with a worked example: '],
-    ['Compare data sources', 'Compare public data sources for this metric on coverage, latency and licence: '],
+    ["explaining-mechanisms", "Explains how a market mechanism works, with a worked example. Use when someone asks how an auction, a clearing process or a pricing rule works.\n\n## Steps\n1. Describe the participants and what each one submits.\n2. Work through one example with numbers.\n3. Name a real market that uses the mechanism."],
+    ["comparing-data-sources", "Compares public data sources for a market metric on coverage, latency and licence. Use when someone asks where to get data for a metric.\n\nMake a table of sources with columns for coverage, update frequency, delay and licence. Link each source."],
   ],
   history: [
-    ['Find primary sources', 'Find primary sources for this event and say where each one can be read: '],
+    ["finding-primary-sources", "Finds primary sources for a historical event and says where each one can be read. Use when someone asks for original documents, letters or records about an event.\n\n## Steps\n1. List documents written at the time by participants or witnesses.\n2. For each one, give the archive or edition and whether it is online.\n3. Note translations and their dates."],
   ],
 };
 const SKILL_ICONS = { 'Summarize': 'M3 4h10M3 7h10M3 10h6', 'Transcribe': 'M5 3.5v9l7-4.5z', 'Review': 'M3 4.5l1.5 1.5L7 3.5M9 5h4M3 10.5l1.5 1.5L7 9.5M9 11h4', 'Audit': 'M7 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM10 10l3 3', 'Find': 'M7 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM10 10l3 3', 'Trace': 'M3 12c3 0 3-8 6-8s2 6 4 6', 'Check': 'M3.5 8.5 6.5 11.5 12.5 5', 'Compare': 'M3 4h4v8H3zM9 4h4v8H9z', 'Explain': 'M8 3a3 3 0 0 0-2 5.2V10h4V8.2A3 3 0 0 0 8 3zM6.5 12.5h3' };
 D.skills = structuredClone(SKILLS);
 D.pagedocs = {};
-const skillIcon = n => { const d = SKILL_ICONS[n.split(' ')[0]] || 'M8 2.5 9.4 6.6 13.5 8 9.4 9.4 8 13.5 6.6 9.4 2.5 8 6.6 6.6z'; return `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`; };
+const SKILL_VERB = { summarizing: 'Summarize', transcribing: 'Transcribe', reviewing: 'Review', auditing: 'Audit', finding: 'Find', tracing: 'Trace', checking: 'Check', comparing: 'Compare', explaining: 'Explain' };
+const skillIcon = n => { const w = String(n).split(/[\s-]/)[0], d = SKILL_ICONS[SKILL_VERB[w.toLowerCase()] || w] || 'M8 2.5 9.4 6.6 13.5 8 9.4 9.4 8 13.5 6.6 9.4 2.5 8 6.6 6.6z'; return `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`; };
 function skillsHTML(s) {
   const list = D.skills[s.id]; if (!list) return '';
   const btn = (i, cls, inner, t) => `<button class="${cls}" type="button" data-skill="${i}" title="${esc(t)}">${inner}</button>`;
-  const body = `<div class="sk-list">${list.map(([n, t], i) => btn(i, 'sk-row', `<span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(t.replace(/[:\s]+$/, ''))}</small></span>${I.chev.replace('<svg', '<svg class="sk-go"')}`, t)).join('')}</div>`;
+  const body = `<div class="sk-list">${list.map(([n, t], i) => btn(i, 'sk-row', `<span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span>${I.chev.replace('<svg', '<svg class="sk-go"')}`, abSkParse(t).d)).join('')}</div>`;
   return `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3><span class="edited">${list.length}</span></div>${body}</div>`;
 }
 D.joined = ['public', 'scifi', 'ml', 'markets', 'math'];
@@ -3765,8 +3844,7 @@ D.spaces.push({ id: 'sablefield', name: 'sablefield', title: 'Sablefield', av: 5
   pages: [['Getting started guide', '2d'], ['Release notes digest', '1d'], ['How topics are organized', '1w']],
   mods: [['maya.r', 'owner'], ['devin_o', 'admin'], ['ines.v', 'admin'], ['tove', 'mod']],
   faq: true, postsOff: true, plain: true, dom: { domain: 'sablefield.dev', method: 'dns', state: 'ok', verified: 'Nov 2' },
-  topics: [['start', 'Getting started'], ['sync', 'Sync rules'], ['replicas', 'Replicas and regions'], ['auth', 'Auth and keys'], ['sdk', 'Client SDKs'], ['billing', 'Plans and billing'], ['migr', 'Migrations'], ['sec', 'Security and compliance']],
-  notCover: 'Questions about a specific account, invoice or project: contact Sablefield support. Outages: see status.sablefield.dev. Legal commitments that are not in the published terms.' });
+  topics: [['start', 'Getting started'], ['sync', 'Sync rules'], ['replicas', 'Replicas and regions'], ['auth', 'Auth and keys'], ['sdk', 'Client SDKs'], ['billing', 'Plans and billing'], ['migr', 'Migrations'], ['sec', 'Security and compliance']] });
 D.spaces.forEach(s => { s.pct = s.budget ? s.used / s.budget : 0; });
 D.joined.push('sablefield');
 [
@@ -5639,11 +5717,10 @@ function nSheet() {
   /* About this space: the same sections, in the same order, as About in the web sidebar */
   if (k === 'wiki') {
     const x = sp(nst.stack.length ? nTop().id : st.space), row = (b, v) => `<div class="n-row"><span class="n-row-b"><b>${b}</b></span><span class="n-val">${v}</span></div>`;
-    const sk = (D.skills[x.id] || []).map(([n, t]) => `<div class="n-row"><span class="n-row-b"><b>${esc(n)}</b><small>${esc(t.replace(/[:\s]+$/, ''))}</small></span></div>`);
+    const sk = (D.skills[x.id] || []).map(([n, t]) => `<div class="n-row"><span class="n-row-b"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span></div>`);
     const key = st.userKeys.find(k2 => k2.valid);
     return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det tall" role="dialog" aria-label="About ${esc(nName(x))}"><span class="n-grab"></span><div class="n-sheet-bar"><span></span><b>${nNameH(x)}</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc"><p class="n-wk-d">${esc(x.desc)}</p>`
       + nGroup('Rules', x.rules.map((r, k2) => `<div class="n-row"><span class="n-src-n num">${k2 + 1}</span><span class="n-row-b"><span>${esc(r)}</span></span></div>`), x.rulesAt ? `Updated ${x.rulesAt === 'just now' ? 'just now' : x.rulesAt + ' ago'} by ${esc(x.rulesBy)}.` : '')
-      + (x.notCover ? nGroup('What this space doesn’t cover', [`<div class="n-row"><span class="n-row-b"><span>${esc(x.notCover)}</span></span></div>`]) : '')
       + nGroup('Pages', x.pages.map(([t, a2]) => `<div class="n-row"><span class="n-row-b"><b>${esc(t)}</b><small>Edited ${a2 === 'now' ? 'just now' : a2 + ' ago'}</small></span><span class="n-chev">${NI.chev}</span></div>`))
       + (sk.length ? nGroup('Skills', sk) : '')
       + nGroup('Details', [row('Visibility', isClosed(x) ? visLabel(x) : 'Open'), row('Members', x.members.toLocaleString('en-US')), row('Created', `${x.created} by ${esc(abOwner(x))}`)])
@@ -5833,7 +5910,7 @@ function csBannerActs(s) {
   if (st.auth !== 'in') return '';
   let h = '';
   if (isClosed(s) && isMember(s.id) && canInvite(s)) h += csInviteBtn(s);
-  if (isModOf(s.id)) { const n = reqCount(s.id) + repCount(s.id); h += `<button class="btn cs-b" type="button" data-csmanage="${s.id}">Manage${n ? ` <span class="cs-n num" aria-label="${n} requests and reports to review">${n}</span>` : ''}</button>`; }
+  if (isModOf(s.id)) { const n = reqCount(s.id) + repCount(s.id); h += `<button class="btn cs-b cs-mgb" type="button" data-csmanage="${s.id}" aria-label="Manage ${esc(spName(s))}" title="Manage">${MI.cog}<span class="d-only">Manage</span>${n ? ` <span class="cs-n num" aria-label="${n} requests and reports to review">${n}</span>` : ''}</button>`; }
   return h;
 }
 function csInviteBtn(s) {
@@ -6043,8 +6120,8 @@ function csMembers(s) {
   const banned = s.id === 'replication' ? st.banned : [];
   return `<div class="mem-top"><label class="search cs-sq">${I.search}<input id="cs-memq" type="search" placeholder="Find a member" aria-label="Find a member" autocomplete="off"></label><span class="faint cs-small num">Showing ${list.length} of ${fmt(s.members)}</span></div>
     <div class="mem-list">${list.map(row).join('')}</div>
-    <p class="cs-fine">${MI.mods}<span>Moderators approve requests and remove members. Admins also change roles and settings. ${canRole ? '' : 'Only admins can change roles.'}</span></p>
-    ${banned.length ? `<section class="cs-sec"><h3>Banned</h3><p class="muted cs-small">Banned people cannot request to join or use invite links. Their threads stay in the space.</p>${banned.map(b => `<div class="mem-row">${avatar(b.u, 'sm')}<div class="mem-tx"><b>${b.u}</b><small class="faint">Banned ${b.when}</small></div><button class="tlink" type="button" data-memunban="${b.u}">Unban</button></div>`).join('')}</section>` : ''}`;
+    <p class="cs-fine">${MI.mods}<span>Moderators can approve requests and remove members. Admins can also change roles and settings. ${canRole ? '' : 'Only admins can change roles.'}</span></p>
+    ${banned.length ? `<section class="cs-sec"><h3>Banned</h3><p class="muted cs-small">Banned people cannot request to join or use invite links. Their threads and asks will remain in the space.</p>${banned.map(b => `<div class="mem-row">${avatar(b.u, 'sm')}<div class="mem-tx"><b>${b.u}</b><small class="faint">Banned ${b.when}</small></div><button class="tlink" type="button" data-memunban="${b.u}">Unban</button></div>`).join('')}</section>` : ''}`;
 }
 /* invites ("Invite flow" control decides what the Invite button opens; this tab always exists) */
 const linkLive = l => !l.dead;
@@ -6117,7 +6194,7 @@ function qsEditor(d, note = true) {
 }
 function payPicker(d) {
   const keys = st.userKeys.filter(k => k.valid);
-  return `${d.id && sp(d.id).byok && sp(d.id).byok !== ME.u ? `<p class="cs-fine">${MI.key}<span>The extra tokens use an API key added by ${sp(d.id).byok}, with a limit of ${fmtT(sp(d.id).budget)} tokens a month. Only they can change the key.</span></p>` : ''}
+  return `${d.id && sp(d.id).byok && sp(d.id).byok !== ME.u ? `<p class="cs-fine">${MI.key}<span>Paid with ${sp(d.id).byok}’s API key, up to ${fmtT(sp(d.id).budget)} tokens a month. Only ${sp(d.id).byok} can change the key.</span></p>` : ''}
     ${!(d.id && sp(d.id).byok && sp(d.id).byok !== ME.u) ? `<div class="cs-payk"><div class="fld"><span id="dl-key">Key for the extra tokens</span>${ddSel('key', keys.map(k => [k.id, `${k.label} (${keyMask(k)})`]), d.key, 'dl-key')}</div><div class="fld"><span id="dl-limit">Monthly limit</span>${ddSel('limit', ['2', '8', '20'].map(v => [v, `${v}M tokens`]), d.limit, 'dl-limit')}</div></div>` : ''}
     ${d.vis !== 'open' ? `<p class="cs-fine">${LOCK}<span>Who pays does not change who can read. Answers to asks in a closed space are visible to members only.</span></p>` : ''}`;
 }
@@ -6128,15 +6205,15 @@ function payPicker(d) {
 const stSec = (title, sub, body) => `<section class="st-sec"><div class="st-head"><h3>${title}</h3>${sub ? `<p>${sub}</p>` : ''}</div><div class="st-body">${body}</div></section>`;
 const csDirty = () => !!st.set && JSON.stringify(st.set) !== st.set0;
 function csSettings(s) {
-  if (!st.set || st.set.id !== s.id) { st.set = { id: s.id, vis: s.vis || 'open', policy: s.policy || 'request', qs: structuredClone(s.qs && s.qs.length ? s.qs : [{ q: '', req: true }]), invite: s.invite || 'mods', key: 'k1', limit: '8', faq: !!s.faq, topics: structuredClone(topicsOf(s)), postsOff: !!s.postsOff, plain: !!s.plain, notCover: s.notCover || '', desc: s.desc, rules: [...s.rules], pageEdit: s.pageEdit || 'mods' }; st.set0 = JSON.stringify(st.set); }
+  if (!st.set || st.set.id !== s.id) { st.set = { id: s.id, vis: s.vis || 'open', policy: s.policy || 'request', qs: structuredClone(s.qs && s.qs.length ? s.qs : [{ q: '', req: true }]), invite: s.invite || 'mods', key: 'k1', limit: '8', faq: !!s.faq, topics: structuredClone(topicsOf(s)), postsOff: !!s.postsOff, plain: !!s.plain, desc: s.desc, rules: [...s.rules], pageEdit: s.pageEdit || 'mods' }; st.set0 = JSON.stringify(st.set); }
   const d = st.set, dirty = csDirty();
   /* Order: Visibility, Joining, Questions for applicants, Landing page, Topics, Posts, Domain,
      What this space doesn't cover, Token use. */
   const secs = abSettingsAbout(d) + stSec('Visibility', 'Who can read the space, and whether people who are not members can find it.', visPicker(d))
     + (d.vis !== 'open' ? stSec('Joining', 'How people become members, and who can invite them.', policyPicker(d)) : '')
     + (d.vis !== 'open' && d.policy === 'request' ? stSec('Questions for applicants', 'Shown on the request form. Moderators see the answers in the review queue.', qsEditor(d, false)) : '')
-    + landingSec(d) + (d.faq ? topicSec(d, s) : '') + postsSec(d, s) + abSettingsPages(d) + `<div class="sf-domsec">${domainSec(d, s)}</div>` + notCoverSec(d)
-    + stSec('Token use', 'Asks use the space’s extra tokens until the monthly limit, then the asker’s own API key. Posts use no tokens.', payPicker(d));
+    + landingSec(d) + (d.faq ? topicSec(d, s) : '') + postsSec(d, s) + abSettingsPages(d) + `<div class="sf-domsec">${domainSec(d, s)}</div>`
+    + stSec('Token use', 'Asks use the space’s tokens up to a monthly limit, then the asker’s own API key. Posts are free.', payPicker(d));
   const btns = `<button class="btn ghost" type="button" data-csset="reset" ${dirty ? '' : 'disabled'}>Discard changes</button><button class="btn primary" type="button" data-csset="save" ${dirty ? '' : 'disabled'}>Save changes</button>`;
   const foot = `${dirty ? `<div class="st-barw${csSettings.endVis ? ' off' : ''}"><div class="st-bar" role="region" aria-label="Unsaved changes"><span>You have unsaved changes.</span><span class="st-bar-a">${btns}</span></div></div>` : ''}<div class="cs-setf">${btns}</div>`;
   return `<div class="cs-set st-side">${s.openOn ? `<div class="cs-strip warn">${GLOBE}<span class="grow">Scheduled: ${spName(s)} becomes open on ${s.openOn}. Members were notified.</span><button class="btn sm" type="button" data-csset="cancel-open">Cancel the change</button></div>` : ''}${secs}${foot}</div>`;
@@ -6147,7 +6224,7 @@ function csApplySettings(s0, d) {
   db.update('spaces', s0.id, s => {
     if (d.vis === 'open') { delete s.vis; } else s.vis = d.vis;
     Object.assign(s, { policy: d.policy, qs: d.qs.filter(q => q.q.trim()), invite: d.invite });
-    Object.assign(s, { faq: d.faq, topics: tps, postsOff: d.postsOff, plain: d.plain && isVer(s), notCover: d.notCover.trim() });
+    Object.assign(s, { faq: d.faq, topics: tps, postsOff: d.postsOff, plain: d.plain && isVer(s) });
     if (!s.byok) { s.byok = ME.u; s.budget = (+d.limit || 8) * 1e6; s.pct = s.used / s.budget; }
     /* About: description and rules; a rules change keeps the previous rules for "See changes" */
     if (d.desc != null) s.desc = d.desc.trim() || s.desc;
@@ -6208,7 +6285,7 @@ function layoutCreate() {
     + (closed ? stSec('Joining', 'How people become members, and who can invite them.', policyPicker(c)) : '')
     + (closed && c.policy === 'request' ? stSec('Questions for applicants', 'Shown on the request form. Moderators see the answers in the review queue.', qsEditor(c, false)) : '')
     + landingSec(c, true)
-    + stSec('Token use', 'Asks use the space’s extra tokens until the monthly limit, then the asker’s own API key. Posts use no tokens.', payPicker(c));
+    + stSec('Token use', 'Asks use the space’s tokens up to a monthly limit, then the asker’s own API key. Posts are free.', payPicker(c));
   const foot = `<div class="cr-foot"><button class="btn ghost" type="button" data-home="1">Cancel</button><button class="btn primary" type="button" data-crgo="1" ${c.name ? '' : 'disabled'}>Create space</button></div>`;
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page cs-create"><div class="sub-top"><h2>Create a space</h2></div><div class="cs-crgrid"><div class="cs-set st-stacked cr-form">${all}${foot}</div>${crPreview(c)}</div></div></div>`;
 }
@@ -6284,7 +6361,7 @@ function csModal() {
   }
   if (k === 'cs-rm' || k === 'cs-ban') {
     const ban = k === 'cs-ban', sx = sp(st.mgSpace);
-    return dlg(ban ? `Ban ${a} from ${spName(sx)}?` : `Remove ${a} from ${spName(sx)}?`, `<p class="muted">${ban ? `${a} loses access now and cannot request to join or use invite links. Their threads stay in the space.` : `${a} loses access now. They can request to join again${sx.policy === 'invite' ? ' if someone invites them' : ''}.`}</p><p class="cs-fine">${I.agent}<span>${a} is not notified of the reason. Asks they started stay in the space.</span></p>`, `${cancelB()}<button class="btn danger" type="button" data-csmem-ok="${k}:${a}">${ban ? 'Ban' : 'Remove'}</button>`, 'alertdialog');
+    return dlg(ban ? `Ban ${a} from ${spName(sx)}?` : `Remove ${a} from ${spName(sx)}?`, `<p class="muted">${ban ? `The user will lose access now and cannot request to join or use invite links. Their threads and asks will remain in the space.` : `The user will lose access now. They can request to join again${sx.policy === 'invite' ? ' if someone invites them' : ''}.`}</p><p class="cs-fine">${I.agent}<span>The user will not be notified.</span></p>`, `${cancelB()}<button class="btn danger" type="button" data-csmem-ok="${k}:${a}">${ban ? 'Ban' : 'Remove'}</button>`, 'alertdialog');
   }
   if (k === 'cs-toclosed') return csVisDlg('closed', sp(st.mgSpace));
   if (k === 'cs-toopen') return csVisDlg('open', sp(st.mgSpace));
@@ -6619,7 +6696,7 @@ function csAfterRender() {
      Latest view with the ordinary composer and feed. Admins turn it on in Manage › Settings.
    - Topics (s.topics, p.topic): an ask can have one topic; asks without one are listed under Other.
    - Verified domain (s.dom) and the grey seal. s.plain shows the space title instead of #name.
-   - Space tabs Threads / Wiki / About, "What this space doesn't cover" (s.notCover), Related
+   - Space tab Threads, About in the sidebar, Related
      answers, reports (st.reports, Manage › Reports) and the Posts setting (s.postsOff). */
 const SEAL = '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1.2 9.7 2.5l2.1-.1.6 2 1.7 1.3-.7 2 .7 2-1.7 1.3-.6 2-2.1-.1L8 14.8l-1.7-1.3-2.1.1-.6-2-1.7-1.3.7-2-.7-2 1.7-1.3.6-2 2.1.1z"/><path d="M5.5 8.2 7.2 9.8l3.3-3.4" fill="none" style="stroke:var(--pane)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const SFI = {
@@ -6867,7 +6944,7 @@ function csReports(s) {
     <div class="sf-rq"><span class="faint cs-small">${it.k === 'a' || it.k === 'f' ? 'Agent answer' : esc(it.by)} in <button class="tlink" type="button" data-open="${pid}">${esc(clip(it.p.q, 90))}</button></span><p>${esc(clip(it.text, 220))}</p>${ms ? `<span class="ks bad">${ms === 'hidden' ? 'Hidden' : 'Removed'}</span>` : ''}</div>
     <div class="sf-rby">${avatar(r.by, 'sm')}<span><span class="faint">Reported by </span><b>${esc(r.by === ME.u ? 'you' : r.by)}</b>${r.note ? `<span class="sf-rnote">“${esc(r.note)}”</span>` : '<span class="faint"> · no note</span>'}</span></div>
     <div class="rq-cf sf-racts"><button class="btn sm" type="button" data-sfrep="dismiss:${r.id}">Dismiss</button><button class="btn sm" type="button" data-sfrep="hide:${r.id}">Hide the ${it.noun.replace('follow-up ', '')}</button><button class="btn sm sf-rm" type="button" data-sfrep="remove:${r.id}">Remove</button></div></article>`; };
-  const decided = done.length ? `<section class="cs-sec rq-decided"><h3>Resolved today</h3>${done.map(r => `<div class="rq-drow">${avatar(r.by, 'sm')}<span class="rq-dtx"><b>${repWhy(r.why)}</b> <span class="faint">· ${itemOf(r.key).noun} reported by ${esc(r.by === ME.u ? 'you' : r.by)} · ${REP_DONE[r.st][0]} by you</span></span><button class="tlink" type="button" data-sfrepundo="${r.id}">Undo</button></div>`).join('')}</section>` : '';
+  const decided = done.length ? `<section class="cs-sec rq-decided"><h3>Resolved today</h3>${done.map(r => `<div class="rq-drow">${avatar(r.by, 'sm')}<span class="rq-dtx"><b>${repWhy(r.why)}</b> <span class="faint">· ${itemOf(r.key).noun} reported by ${esc(r.by === ME.u ? 'you' : r.by)} · ${REP_DONE[r.st][0]} by you</span></span>${r.st === 'removed' ? `<button class="tlink" type="button" data-sfrestore="${r.id}">Restore</button>` : `<button class="tlink" type="button" data-sfrepundo="${r.id}">Undo</button>`}</div>`).join('')}</section>` : '';
   const head = `<p class="cs-fine sf-rhead">${SFI.flag}<span>People report answers, follow-up answers, posts and replies from the item’s menu. Hiding keeps the item for moderators and shows a placeholder to everyone else; removing deletes it. The person who reported gets a notification when you resolve the report.</span></p>`;
   if (!list.length) return `${head}<div class="cs-empty"><p class="muted">No open reports. New reports appear here and in your notifications.</p></div>${decided}`;
   return `${head}<div class="rq-cards sf-rcards">${list.map(card).join('')}</div>${decided}`;
@@ -6893,7 +6970,7 @@ function sfTabs(s) {
 const joinLabel = s => !isClosed(s) ? 'Anyone signed in can join' : s.policy === 'invite' ? 'Invite only' : 'Join by request, approved by a moderator';
 const visText = s => !isClosed(s) ? 'Open: anyone can read threads' : s.vis === 'unlisted' ? 'Closed and unlisted: members read threads; hidden from browse and search' : 'Closed: members read threads; shown in browse and search';
 const tokenUse = s => s.byok ? `Asks use ${spName(s)} extra tokens, added by ${esc(s.byok)}, up to ${fmtT(s.budget)} tokens a month. After that, asks use the asker’s own API key. Posts use no tokens.` : 'Asks use the asker’s own API key. Posts use no tokens.';
-const verNote = s => `The admins of ${spName(s)} control ${esc(s.dom.domain)}. Verified ${esc(s.dom.verified)} with ${s.dom.method === 'github' ? 'a GitHub organization' : 'a DNS record'}. The seal does not mean that the space is official.`;
+const verNote = s => `The admins of ${spName(s)} control ${esc(s.dom.domain)}. Verified ${esc(s.dom.verified)} with a DNS record. The seal does not mean that the space is official.`;
 
 /* ---------- settings: landing page, topics, posts, domain, scope note ---------- */
 function sfTog(key, on, title, sub) {
@@ -6922,22 +6999,18 @@ function postsSec(d, s) {
 function domainSec(d, s) {
   const v = isVer(s) ? s.dom : null, w = st.sfDom && st.sfDom.sid === s.id ? st.sfDom : (st.sfDom = { sid: s.id, domain: '', org: '', method: 'dns', state: 'none' });
   const fine = `<p class="cs-fine">${SEAL}<span>The seal next to the space name means that the admins of this space control ${v ? esc(v.domain) : 'the domain'}. It does not mean that the space is official or run by the domain’s owner. Other spaces can verify the same domain, and space names are not reserved.</span></p>`;
-  if (v) return stSec('Domain', 'Show that the admins of this space control a domain. One domain per space.', `<div class="sf-dver"><span class="sf-dver-h">${SEAL}<b>Verified: ${esc(v.domain)}</b></span><span class="faint cs-small">${esc(v.verified)}, with ${v.method === 'github' ? 'the GitHub organization' : 'a DNS record'}</span><span class="grow"></span><button class="tlink" type="button" data-sfdom="remove">Remove</button></div>
+  if (v) return stSec('Domain', 'Show that the admins of this space control a domain. One domain per space.', `<div class="sf-dver"><span class="sf-dver-h">${SEAL}<b>Verified: ${esc(v.domain)}</b></span><span class="faint cs-small">${esc(v.verified)}, with a DNS record</span><span class="grow"></span><button class="tlink" type="button" data-sfdom="remove">Remove</button></div>
     ${sfTog('plain', d.plain, `Show as ${esc(s.title)} instead of #${s.name}`, `Header tabs, the space switcher, feed rows, search results and About show the space title. The address stays session.app/s/${s.name}.`)}${fine}`);
-  const m = w.method, dom = esc(w.domain.trim() || 'example.com'), gh = m === 'github';
-  const opt = (k, l, sub) => `<button type="button" class="wz-opt" data-sfdm="${k}" aria-pressed="${m === k}"><b>${l}</b><small>${sub}</small></button>`;
-  const field = gh ? `<label class="fld"><span>GitHub organization</span><input id="sf-dorg" type="text" value="${esc(w.org)}" placeholder="sablefield" autocomplete="off" ${w.state === 'checking' ? 'disabled' : ''}></label><label class="fld"><span>Domain on the organization’s profile</span><input id="sf-dom" type="text" value="${esc(w.domain)}" placeholder="example.com" autocomplete="off" ${w.state === 'checking' ? 'disabled' : ''}></label>`
-    : `<label class="fld"><span>Domain</span><input id="sf-dom" type="text" value="${esc(w.domain)}" placeholder="example.com" autocomplete="off" ${w.state === 'checking' ? 'disabled' : ''}></label>`;
-  const how = gh ? `<p class="muted cs-small">Install the Session app on the GitHub organization. An owner of the organization approves it. The organization’s profile must list the domain as verified on GitHub.</p>`
-    : `<p class="muted cs-small">Add this TXT record to the DNS of <b>${dom}</b>, then check. DNS changes can take a few minutes.</p><div class="wz-code"><span>TXT</span><code>_session-verify.${dom}</code><code>session-verify=7f3c9a1e</code><button class="btn sm" type="button" data-sfdom="copy">Copy</button></div>`;
-  const state = w.state === 'checking' ? `<p class="wz-wait" role="status"><span class="spin" aria-hidden="true"></span>${gh ? `Waiting for the GitHub organization ${esc(w.org || '')} to approve the app…` : `Checking the TXT record on ${dom}…`}</p>` : `<p class="faint">Not verified. The space has no seal until the check passes.</p>`;
-  return stSec('Domain', 'Show that the admins of this space control a domain. One domain per space.', `<div class="wz-opts c2x">${opt('dns', 'DNS record', 'Add a TXT record to the domain')}${opt('github', 'GitHub organization', 'For a domain verified on a GitHub organization')}</div>${field}${how}<div class="wz-vrow">${state}${w.state === 'checking' ? '' : `<button class="btn primary" type="button" data-sfdom="check" ${w.domain.trim() ? '' : 'disabled'}>${gh ? 'Connect GitHub' : 'Check'}</button>`}</div>${fine}`);
+  const dom = esc(w.domain.trim() || 'example.com');
+  const field = `<label class="fld"><span>Domain</span><input id="sf-dom" type="text" value="${esc(w.domain)}" placeholder="example.com" autocomplete="off" ${w.state === 'checking' ? 'disabled' : ''}></label>`;
+  const how = `<p class="muted cs-small">Add this TXT record to the DNS of <b>${dom}</b>, then check. DNS changes can take a few minutes.</p><div class="wz-code"><span>TXT</span><code>_session-verify.${dom}</code><code>session-verify=7f3c9a1e</code><button class="btn sm" type="button" data-sfdom="copy">Copy</button></div>`;
+  const state = w.state === 'checking' ? `<p class="wz-wait" role="status"><span class="spin" aria-hidden="true"></span>Checking the TXT record on ${dom}…</p>` : `<p class="faint">Not verified. The space has no seal until the check passes.</p>`;
+  return stSec('Domain', 'Show that the admins of this space control a domain. One domain per space.', `${field}${how}<div class="wz-vrow">${state}${w.state === 'checking' ? '' : `<button class="btn primary" type="button" data-sfdom="check" ${w.domain.trim() ? '' : 'disabled'}>Check</button>`}</div>${fine}`);
 }
 function sfDomCheck(s) {
   patch('sfDom', w => { w.state = 'checking'; });
   setTimeout(() => { const w = st.sfDom; if (!w || w.state !== 'checking' || st.sfDomHold) return; spEdit(s.id, x => { x.dom = { domain: w.domain.trim().toLowerCase(), method: w.method, state: 'ok', verified: 'Nov 16' }; }); patch('sfDom', x => { x.state = 'none'; x.domain = ''; }); toast(`Verified. The seal now shows next to ${spName(s)}.`); renderAll(); }, window.__sfFast ? 40 : 1400);
 }
-const notCoverSec = d => stSec('What this space doesn’t cover', 'Shown on the About page. Leave it empty to hide it.', `<textarea id="sf-nc" class="cs-ta" rows="3" placeholder="For example: account-specific questions, outages">${esc(d.notCover)}</textarea>`);
 
 /* ---------- clicks ---------- */
 function sfNavSpace(id, extra) { Object.assign(st, NAVBASE(), { space: id, home: false, spTab: 'threads', faqView: 'topics', faqTopic: null }, extra || {}); }
@@ -6970,6 +7043,8 @@ function sfClick(t) {
     sfResolve(r, v === 'hide' ? 'hidden' : 'dismissed'); return go();
   }
   if ((b = d('[data-sfrmok]'))) { const r = st.reports.find(x => x.id === b.dataset.sfrmok); st.modal = null; if (r) sfResolve(r, 'removed'); return go(); }
+  if ((b = d('[data-sfrestore]'))) { st.modal = 'sf-rsconf:' + b.dataset.sfrestore; return go(); }
+  if ((b = d('[data-sfrestoreok]'))) { const r = st.reports.find(x => x.id === b.dataset.sfrestoreok); st.modal = null; if (r) { sfUndo(r); toast(`Restored. The ${itemOf(r.key).noun} is in the thread again.`); } return go(); }
   if ((b = d('[data-sfrepundo]'))) { const r = st.reports.find(x => x.id === b.dataset.sfrepundo); if (r) sfUndo(r); return go(); }
   if ((b = d('[data-sfunhide]'))) { const k = b.dataset.sfunhide; db.del('modSt', k); toast('Shown again.'); return go(); }
   if ((b = d('[data-tpm]'))) { const k = b.dataset.tpm; st.tpMenu = st.tpMenu === k ? null : k; st.mpOpen = false; st.spOpen = false; return go(); }
@@ -6989,7 +7064,6 @@ function sfClick(t) {
     return go();
   }
   if ((b = d('[data-sfset]'))) { if (b.dataset.sfset === 'postsoff') csEdit(d => { d.postsOff = true; }); return go(); }
-  if ((b = d('[data-sfdm]'))) { patch('sfDom', w => { w.method = b.dataset.sfdm; w.state = 'none'; }); return go(); }
   if ((b = d('[data-sfdom]'))) {
     const v = b.dataset.sfdom, s = sp(st.mgSpace);
     if (v === 'copy') toast('Copied the TXT record.');
@@ -7013,8 +7087,7 @@ function sfInput(e) {
   if (id === 'sf-repnote') { patch('rep', r => { r.note = v; }); return true; }
   if (el.dataset.sftog) { const k = el.dataset.sftog; csEdit(dr => { if (k === 'posts') dr.postsOff = !el.checked; else dr[k] = el.checked; }); renderAll(); return true; }
   if ((m = /^sf-tp-(\d+)$/.exec(id))) { const was = csDirty(); csEdit(d => { d.topics[+m[1]][1] = v; }); if (was !== csDirty()) { const pos = el.selectionStart; renderAll(); csRefocus(id, pos); } return true; }
-  if (id === 'sf-nc') { const was = csDirty(); csEdit(d => { d.notCover = v; }); if (was !== csDirty()) { const pos = el.selectionStart; renderAll(); csRefocus(id, pos); } return true; }
-  if (id === 'sf-dom' || id === 'sf-dorg') { patch('sfDom', w => { w[id === 'sf-dom' ? 'domain' : 'org'] = v; }); const b = document.querySelector('[data-sfdom="check"]'); if (b) b.disabled = !st.sfDom.domain.trim(); return true; }
+  if (id === 'sf-dom') { patch('sfDom', w => { w.domain = v; }); const b = document.querySelector('[data-sfdom="check"]'); if (b) b.disabled = !st.sfDom.domain.trim(); return true; }
   return false;
 }
 on(document, 'keydown', e => {
@@ -7034,6 +7107,7 @@ function sfModal() {
   const [k, a] = (st.modal || '').split(/:(.*)/s);
   if (k === 'sf-report') return sfReportDlg(a);
   if (k === 'sf-rmconf') { const r = st.reports.find(x => x.id === a), it = itemOf(r.key); return dlg(`Remove this ${it.noun}?`, `<p class="muted">The ${it.noun} is deleted for everyone, including moderators. Its place in the thread shows “Removed by a moderator”. This can't be undone after you leave this page.</p><p class="cs-fine">${CI.users}<span>${r.by === ME.u ? 'You get' : `${esc(r.by)} gets`} a notification that the report was resolved. ${it.by === 'Agent' ? '' : `${esc(it.by)} is not told who reported it.`}</span></p>`, `${cancelB()}<button class="btn danger" type="button" data-sfrmok="${a}">Remove</button>`, 'alertdialog'); }
+  if (k === 'sf-rsconf') { const r = st.reports.find(x => x.id === a), it = itemOf(r.key); return dlg(`Restore this ${it.noun}?`, `<p class="muted">The ${it.noun} is shown in the thread again for everyone who can read the space, and “Removed by a moderator” is taken down. The report goes back to the queue.</p><p class="cs-fine">${CI.users}<span>${it.by === 'Agent' ? 'No one is notified.' : `${esc(it.by)} is not notified.`}</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-sfrestoreok="${a}">Restore</button>`, 'alertdialog'); }
   if (k === 'sf-domrm') { const s = sp(a); return dlg(`Remove ${esc(s.dom.domain)}?`, `<p class="muted">${spName(s)} loses the seal${isPlain(s) ? ` and shows as #${s.name} again` : ''}. You can verify a domain again at any time.</p>`, `${cancelB()}<button class="btn danger" type="button" data-sfdomrm="${s.id}">Remove domain</button>`, 'alertdialog'); }
   return '';
 }
@@ -7051,7 +7125,7 @@ JUMPS.push(
   ['FAQ landing', [['sf-faq', 'FAQ landing (Sablefield)'], ['sf-faq-match', 'FAQ landing: search with matches'], ['sf-faq-tried', 'FAQ landing: Ask with matches'], ['sf-faq-new', 'FAQ landing: no match, ask'], ['sf-faq-topic', 'FAQ landing: one topic'], ['sf-faq-latest', 'Latest view on an FAQ space'], ['sf-faq-out', 'FAQ landing, signed out']]],
   ['Topics and posts', [['sf-compose-topic', 'Topic picker in the composer'], ['sf-thread-topic', 'Thread: topic breadcrumb, change topic'], ['sf-posts-off', 'Posts turned off: space composer'], ['sf-posts-home', 'Posts turned off: Home composer']]],
   ['Domain and About', [['sf-about', 'About in the sidebar (verified domain)'], ['sf-about-plain', 'About in the sidebar (no domain)'], ['sf-seal-closed', 'Seal with a closed space (switcher)'], ['sf-dom-none', 'Domain: not verified'], ['sf-dom-checking', 'Domain: checking'], ['sf-dom-ok', 'Domain: verified']]],
-  ['Reports', [['sf-report', 'Report dialog'], ['sf-report-reply', 'Report a reply'], ['sf-reports', 'Reports tab'], ['sf-reports-notif', 'Reports notification'], ['sf-resolved', 'Report resolved (reporter)']]],
+  ['Reports', [['sf-report', 'Report dialog'], ['sf-report-reply', 'Report a reply'], ['sf-reports', 'Reports tab'], ['sf-restore', 'Restore a removed post'], ['sf-reports-notif', 'Reports notification'], ['sf-resolved', 'Report resolved (reporter)']]],
   ['Settings', [['sf-settings', 'Sablefield settings'], ['sf-topics', 'Topic editor'], ['sf-landing-on', 'Turn on the FAQ landing'], ['sf-create', 'Create a space with the FAQ landing']]],
 );
 function sfJump(k) {
@@ -7083,6 +7157,7 @@ function sfJump(k) {
     case 'sf-report': Object.assign(st, { thread: thr('q3'), modal: 'sf-report:a:' + thr('q3'), rep: { why: 'old', note: 'The Free plan limit went up to 250,000 rows on Nov 10.' } }); break;
     case 'sf-report-reply': Object.assign(st, { thread: thr('p1'), imenu: 'r:' + thr('p1') + ':2' }); break;
     case 'sf-reports': st.reports = structuredClone(REPS0); st.modSt = {}; mg('reports'); break;
+    case 'sf-restore': { st.reports = structuredClone(REPS0); st.modSt = {}; mg('reports'); const r = st.reports.find(x => x.st === 'open'); if (r) { sfResolve(r, 'removed'); st.modal = 'sf-rsconf:' + r.id; st.toast = null; } break; }
     case 'sf-reports-notif': st.reports = structuredClone(REPS0); st.modSt = {}; st.repSeen = false; st.home = true; csOpenNotifs(); break;
     case 'sf-resolved': {
       st.reports = structuredClone(REPS0); st.modSt = {};
@@ -8142,8 +8217,8 @@ function DSKNOBS() {
     ['k-dspos', 'dsPos', [['hd-right', 'Header across, sidebar right'], ['hd-left', 'Header across, sidebar left']], () => { Object.assign(st, { drawer: true, dsSTab: 'sources', mWiki: false }); dsOnSpace(); }],
     /* About: where a page opens, how a skill previews, where the member list opens */
     ['k-abpage', 'abPageV', [['article', 'Article'], ['docs', 'Docs'], ['cover', 'Cover']], () => jump('ab-page')],
-    ['k-abskill', 'abSkillV', [['inline', 'In place'], ['dialog', 'In a dialog']], () => jump('ab-skill')],
-    ['k-abmem', 'abMemV', [['dialog', 'In a dialog'], ['side', 'In the sidebar']], () => jump('ab-members')],
+    ['k-abskill', 'abSkillV', [['summary', 'Summary'], ['full', 'Instructions'], ['file', 'SKILL.md']], () => jump('ab-skill')],
+    ['k-abske', 'abSkEditV', [['fields', 'Fields'], ['file', 'SKILL.md'], ['preview', 'Fields and preview']], () => jump('ab-skill-edit')],
   ];
 }
 
@@ -8201,7 +8276,7 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsPos: 'hd-right', abPageV: 'article', abSkillV: 'inline', abMemV: 'dialog', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsPos: 'hd-right', abPageV: 'article', abSkillV: 'summary', abSkEditV: 'fields', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
   dsMenu: null, dsSend: null, dsSTab: null, dsWhy: 'spam', dsRepNote: '',
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
@@ -9002,24 +9077,146 @@ CS_PAGES.abpage = () => {
 };
 
 /* ---------- skills: preview, then use ---------- */
+/* ---------- skills: Agent Skills (a name, a description and instructions) ----------
+   Stored as before: D.skills[space] = [[name, text]]. The text is the description, a blank line,
+   then the instructions in Markdown, so a skill maps onto a SKILL.md file without new fields. */
+const abSkParse = t => { const s = String(t || '').trim(), k = s.indexOf('\n\n'); return k < 0 ? { d: s, b: '' } : { d: s.slice(0, k).trim(), b: s.slice(k + 2).trim() }; };
+const abSkJoin = (d, b) => d.trim() + (b.trim() ? '\n\n' + b.trim() : '');
+const abSkFile = (n, d, b) => `---\nname: ${n}\ndescription: ${d}\n---\n${b ? '\n' + b + '\n' : ''}`;
+const abSkSlug = v => v.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
+function abSkReadFile(raw) {
+  const m = String(raw || '').replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!m) return { n: '', d: '', b: String(raw || '').trim(), bad: true };
+  const fm = {}; m[1].split('\n').forEach(l => { const k = l.indexOf(':'); if (k > 0) fm[l.slice(0, k).trim()] = l.slice(k + 1).trim().replace(/^["']|["']$/g, ''); });
+  return { n: fm.name || '', d: fm.description || '', b: m[2].trim(), bad: false };
+}
+/* the rules from the Agent Skills docs, plus one name per space */
+function abSkCheck(x, sid, i) {
+  const e = [], list = D.skills[sid] || [];
+  if (x.bad) e.push(['raw', 'Start the file with the name and description between two --- lines.']);
+  if (!x.n) e.push(['n', 'Add a name.']);
+  else {
+    if (x.n.length > 64) e.push(['n', 'Use 64 characters or fewer for the name.']);
+    if (!/^[a-z0-9-]+$/.test(x.n)) e.push(['n', 'Use only lowercase letters, numbers and hyphens in the name.']);
+    if (/anthropic|claude/.test(x.n)) e.push(['n', 'The name cannot contain “anthropic” or “claude”.']);
+    if (list.some(([n], k) => n === x.n && k !== i)) e.push(['n', 'Another skill in this space has this name.']);
+  }
+  if (!x.d.trim()) e.push(['d', 'Add a description.']);
+  else { if (x.d.length > 1024) e.push(['d', 'Use 1,024 characters or fewer for the description.']); if (/<[^>]+>/.test(x.d)) e.push(['d', 'Remove the XML tags from the description.']); }
+  if (/<[^>]+>/.test(x.n)) e.push(['n', 'Remove the XML tags from the name.']);
+  return e;
+}
+/* Markdown subset for instructions: ## headings, - and 1. lists, `code`, paragraphs */
+const abMd = t => String(t || '').split(/\n\s*\n/).map(bk => {
+  const ls = bk.split('\n'), il = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+  if (/^#{1,3} /.test(ls[0])) return `<h4>${il(ls[0].replace(/^#+ /, ''))}</h4>${ls.length > 1 ? abMd(ls.slice(1).join('\n')) : ''}`;
+  if (ls.every(l => /^- /.test(l))) return `<ul>${ls.map(l => `<li>${il(l.slice(2))}</li>`).join('')}</ul>`;
+  if (ls.every(l => /^\d+\. /.test(l))) return `<ol>${ls.map(l => `<li>${il(l.replace(/^\d+\. /, ''))}</li>`).join('')}</ol>`;
+  return `<p>${il(bk)}</p>`;
+}).join('');
 const abSkillUses = s => D.posts.map((p, i) => ({ p, i })).filter(({ p }) => p.s === s.id && p.k === 'ask' && !p.running).slice(0, 2);
-function abSkillBody(s, i) {
-  const [n, t] = D.skills[s.id][i], uses = abSkillUses(s);
-  return `<p class="ab-skq"><span class="faint">Asks:</span> ${esc(t.replace(/[:\s]+$/, ''))} <span class="faint">…</span></p><p class="cs-fine">You add what it is about (a link, a title or a passage) after the prompt. The answer is a normal ask in ${spName(s)} and uses its token rules.</p>${uses.length ? `<div class="ab-sku"><span class="faint cs-small">Used in ${uses.length + 3} threads, recently:</span>${uses.map(({ p, i: k }) => `<button class="tlink" type="button" data-open="${k}">${esc(qtClip(p.q, 70))}</button>`).join('')}</div>` : ''}<div class="ab-acts"><button class="btn sm primary" type="button" data-skill="${i}">Use this skill</button></div>`;
+
+/* the preview dialog (Variants › Skill preview: Summary, Instructions, SKILL.md) */
+function abSkillDlg(s, i) {
+  const [n, t] = D.skills[s.id][i], { d, b } = abSkParse(t), uses = abSkillUses(s), v = st.abSkillV;
+  const how = `<p class="cs-fine ab-f">The agent applies this skill when an ask matches the description. You can also start an ask with <code>/${esc(n)}</code>.</p>`;
+  const used = uses.length ? `<div class="ab-sku"><span class="ab-skl">Used in ${uses.length + 3} threads, recently</span>${uses.map(({ p, i: k }) => `<button class="ab-skt" type="button" data-open="${k}">${esc(qtClip(p.q, 80))}<small>${esc(p.u)} · ${p.age}</small></button>`).join('')}</div>` : '';
+  let body;
+  if (v === 'file') body = `<p class="ab-skd">${esc(d)}</p><div class="ab-skcode"><div class="ab-skch"><span>SKILL.md</span><button class="btn sm" type="button" data-abskcopy="${i}">Copy</button></div><pre>${esc(abSkFile(n, d, b))}</pre></div>${how}${used}`;
+  else if (v === 'full') body = `<p class="ab-skd">${esc(d)}</p><div class="ab-skins"><span class="ab-skl">Instructions</span>${b ? `<div class="ab-md">${abMd(b)}</div>` : '<p class="faint cs-small">This skill has no instructions beyond its description.</p>'}</div>${how}${used}`;
+  else body = `<p class="ab-skd">${esc(d)}</p>${how}${b ? `<details class="ab-skdet"><summary>Instructions</summary><div class="ab-md">${abMd(b)}</div></details>` : ''}${used}`;
+  const title = `<span class="ab-skti"><span class="sk-ic">${skillIcon(n)}</span><span class="ab-mono">${esc(n)}</span></span>`;
+  return dlg(title, `<div class="ab-skp ab-skp-${v}">${body}</div>`, `${cancelB('Close')}${st.auth === 'in' ? `<button class="btn primary" type="button" data-skill="${i}">Use this skill</button>` : ''}`).replace('modal cs-m', `modal cs-m ab-skm-d${v === 'file' ? ' wide' : ''}`);
 }
 function abSkillsCard(s) {
-  const list = D.skills[s.id]; if (!list || !list.length) return isModOf(s.id) && st.auth === 'in' ? `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3></div><p class="muted cs-small abw-none">No skills yet.</p><button class="tlink ab-add" type="button" data-abskmg="1">${PLUS}Add a skill</button></div>` : '';
-  const open = st.abSkillV === 'inline' ? st.abSkill : null;
-  const row = ([n, t], i) => `<button class="sk-row" type="button" data-abskill="${i}" aria-expanded="${open === i}">${`<span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(t.replace(/[:\s]+$/, ''))}</small></span>${I.chev.replace('<svg', `<svg class="sk-go${open === i ? ' open' : ''}"`)}`}</button>${open === i ? `<div class="ab-skx">${abSkillBody(s, i)}</div>` : ''}`;
-  return `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3><span class="edited">${list.length}</span>${isModOf(s.id) && st.auth === 'in' ? '<button class="tlink ab-skm" type="button" data-abskmg="1">Manage</button>' : ''}</div><div class="sk-list">${list.map(row).join('')}</div></div>`;
+  const list = D.skills[s.id], mod = isModOf(s.id) && st.auth === 'in';
+  if (!list || !list.length) return mod ? `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3></div><p class="muted cs-small abw-none">No skills yet.</p><button class="tlink ab-add" type="button" data-abskmg="new">${PLUS}Add a skill</button></div>` : '';
+  const row = ([n, t], i) => `<button class="sk-row" type="button" data-abskill="${i}" aria-haspopup="dialog"><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b class="ab-mono">${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span>${I.chev.replace('<svg', '<svg class="sk-go"')}</button>`;
+  return `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3><span class="edited">${list.length}</span>${mod ? '<button class="tlink ab-skm" type="button" data-abskmg="1">Manage</button>' : ''}</div><div class="sk-list">${list.map(row).join('')}</div></div>`;
 }
-/* Manage › Skills */
+
+/* Manage › Skills: drag to reorder, Edit and Add open the same dialog, Remove asks first */
+const SK_GRIP = '<svg viewBox="0 0 16 16" aria-hidden="true"><g fill="currentColor"><circle cx="6" cy="4" r="1.1"/><circle cx="10" cy="4" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="10" cy="8" r="1.1"/><circle cx="6" cy="12" r="1.1"/><circle cx="10" cy="12" r="1.1"/></g></svg>';
 function abSkillsManage(s) {
-  const list = D.skills[s.id] || [], ed = st.abSkEd;
-  const form = (i, n, t) => `<div class="ab-skf"><label class="fld"><span>Name</span><input id="ab-sk-n" type="text" value="${esc(n)}" placeholder="e.g. Trace a term"></label><label class="fld"><span>What it asks</span><textarea id="ab-sk-t" class="cs-ta" rows="2" placeholder="The start of the ask; people add the rest">${esc(t)}</textarea></label><div class="ab-acts"><button class="btn" type="button" data-absk="cancel">Cancel</button><button class="btn primary" type="button" data-absk="save:${i}">${i === 'new' ? 'Add skill' : 'Save'}</button></div></div>`;
-  const rows = list.map(([n, t], i) => ed && ed.i === i ? form(i, ed.n, ed.t) : `<div class="ab-skr"><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(t.replace(/[:\s]+$/, ''))}</small></span><span class="ab-pgb"><button class="iconbtn" type="button" data-absk="up:${i}" aria-label="Move ${esc(n)} up" ${i ? '' : 'disabled'}>${I.chev.replace('<svg', '<svg style="transform:rotate(180deg)"')}</button><button class="iconbtn" type="button" data-absk="down:${i}" aria-label="Move ${esc(n)} down" ${i < list.length - 1 ? '' : 'disabled'}>${I.chev}</button><button class="btn sm" type="button" data-absk="edit:${i}">Edit</button><button class="btn sm" type="button" data-absk="rm:${i}">Remove</button></span></div>`).join('');
-  return `<div class="cs-set st-side ab-skmg">${stSec('Skills', 'Prompts members can start an ask with, shown in About. Members see what a skill asks before using it.', `${rows || '<p class="muted cs-small">No skills yet.</p>'}${ed && ed.i === 'new' ? form('new', ed.n, ed.t) : `<button class="btn sm cs-b st-add" type="button" data-absk="new">${PLUS}Add a skill</button>`}`)}</div>`;
+  const list = D.skills[s.id] || [];
+  const rows = list.map(([n, t], i) => `<div class="ab-skr" data-skrow="${i}"><button class="ab-skdrag" type="button" data-skdrag="${i}" aria-label="Move ${esc(n)}. Drag, or use the up and down arrow keys." title="Drag to reorder">${SK_GRIP}</button><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b class="ab-mono">${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span><span class="ab-pgb"><button class="btn sm" type="button" data-absk="edit:${i}">Edit</button><button class="btn sm" type="button" data-absk="rm:${i}">Remove</button></span></div>`).join('');
+  return `<div class="cs-set st-side ab-skmg">${stSec('Skills', 'Agent skills for asks in this space. The agent applies a skill when an ask matches its description; members can also choose one. Shown in About in this order.', `<div class="ab-skl-list">${rows || '<p class="muted cs-small">No skills yet.</p>'}</div><button class="btn sm cs-b st-add" type="button" data-absk="new">${PLUS}Add a skill</button>`)}</div>`;
 }
+/* the add and edit dialog (Variants › Skill editor: Fields, SKILL.md, Fields and preview) */
+function abSkEdDlg() {
+  const ed = st.abSkEd; if (!ed) return '';
+  const v = st.abSkEditV, isNew = ed.i === 'new', errs = abSkCheck(abSkVals(ed), st.mgSpace, ed.i), seen = ed.seen || {};
+  const em = f => seen[f] ? errs.filter(e => f === 'raw' || e[0] === f).map(e => e[1]).join(' ') : '';
+  const errP = (id, f) => `<p class="ab-skerr" id="${id}-e" ${em(f) ? '' : 'hidden'}>${esc(em(f))}</p>`;
+  const slug = abSkSlug(ed.n), sug = ed.n && slug && slug !== ed.n ? ` <button class="tlink" type="button" data-absk="slug">Use ${esc(slug)}</button>` : '';
+  const fld = (id, label, extra, hint, inner) => `<div class="fld ab-skfld"><label for="${id}"><span>${label}</span>${extra || ''}</label>${inner}${hint ? `<p class="ab-skhint" id="${id}-h">${hint}</p>` : ''}${errP(id, id.slice(6))}</div>`;
+  const fields = fld('ab-sk-n', 'Name', '', `Lowercase letters, numbers and hyphens, up to 64 characters. Members type it as <code>/name</code>.<span id="ab-sk-sug">${sug}</span>`, `<input id="ab-sk-n" class="ab-mono" type="text" value="${esc(ed.n)}" placeholder="summarizing-papers" autocomplete="off" spellcheck="false">`)
+    + fld('ab-sk-d', 'Description', `<small class="ab-skc" id="ab-sk-dc">${ed.d.length} / 1,024</small>`, 'What the skill does and when to use it, in the third person. The agent reads it to decide whether the skill fits an ask.', `<textarea id="ab-sk-d" class="cs-ta" rows="3" placeholder="Summarizes a research paper: the claim, the method and the results. Use when someone gives an arXiv ID.">${esc(ed.d)}</textarea>`)
+    + fld('ab-sk-b', 'Instructions', '<small class="ab-skc">Markdown, optional</small>', 'The steps and output format the agent follows when it uses the skill. Leave out what the agent already knows.', `<textarea id="ab-sk-b" class="cs-ta ab-mono" rows="${v === 'preview' ? 9 : 7}" spellcheck="false" placeholder="## Steps&#10;1. …">${esc(ed.b)}</textarea>`);
+  const file = `<div class="ab-skcode edit"><div class="ab-skch"><span>SKILL.md</span><span class="faint cs-small">YAML frontmatter, then Markdown</span></div><textarea id="ab-sk-raw" class="ab-mono" rows="15" spellcheck="false" aria-label="SKILL.md">${esc(ed.raw)}</textarea></div>${errP('ab-sk-raw', 'raw')}<p class="ab-skhint">Required: <code>name</code> (lowercase letters, numbers and hyphens, up to 64 characters) and <code>description</code> (what the skill does and when to use it, up to 1,024 characters). The instructions follow the second --- line.</p>`;
+  const prev = `<aside class="ab-skprev" aria-label="Preview"><span class="ab-skl">In About</span><div class="sk-row ab-skrp"><span class="sk-ic" id="ab-sk-pi">${skillIcon(ed.n || 'x')}</span><span class="sk-tx"><b class="ab-mono" id="ab-sk-pn">${esc(ed.n || 'name')}</b><small id="ab-sk-pd">${esc(ed.d || 'Description')}</small></span></div><span class="ab-skl">SKILL.md</span><pre class="ab-skpre" id="ab-sk-pf">${esc(abSkFile(ed.n, ed.d, ed.b))}</pre></aside>`;
+  const body = v === 'file' ? file : v === 'preview' ? `<div class="ab-ske2"><div class="ab-ske">${fields}</div>${prev}</div>` : `<div class="ab-ske">${fields}</div>`;
+  const imp = `<label class="tlink ab-skimp">Import a SKILL.md file<input id="ab-sk-file" type="file" accept=".md,text/markdown,text/plain" hidden></label>`;
+  return `<div class="modal-scrim"><div class="modal cs-m ab-sked ab-sked-${v}" role="dialog" aria-modal="true" aria-labelledby="cs-dt"><div class="modal-h"><h3 id="cs-dt">${isNew ? 'Add a skill' : 'Edit skill'}</h3><button class="iconbtn" type="button" data-act="modal-close" aria-label="Close">${I.close}</button></div>${body}<div class="modal-f">${imp}<span style="flex:1"></span>${cancelB()}<button class="btn primary" type="button" data-absk="save">${isNew ? 'Add skill' : 'Save'}</button></div></div></div>`;
+}
+/* the values the dialog would save, from the fields or from the file */
+const abSkVals = ed => st.abSkEditV === 'file' ? abSkReadFile(ed.raw) : { n: ed.n.trim(), d: ed.d.trim(), b: ed.b.trim(), bad: false };
+/* update counters, errors, the name suggestion and the preview in place (no re-render while typing) */
+function abSkRefresh(showAll) {
+  const ed = st.abSkEd; if (!ed) return;
+  const x = abSkVals(ed), errs = abSkCheck(x, st.mgSpace, ed.i), seen = ed.seen || {};
+  const set = (id, t) => { const e = document.getElementById(id); if (e) { e.hidden = !t; e.textContent = t || ''; } };
+  if (st.abSkEditV === 'file') set('ab-sk-raw-e', (showAll || seen.raw) && errs.length ? errs.map(e => e[1]).join(' ') : '');
+  else ['n', 'd'].forEach(f => set(`ab-sk-${f}-e`, (showAll || seen[f]) ? (errs.filter(e => e[0] === f).map(e => e[1]).join(' ')) : ''));
+  const dc = $('ab-sk-dc'); if (dc) { dc.textContent = `${ed.d.length.toLocaleString('en-US')} / 1,024`; dc.classList.toggle('over', ed.d.length > 1024); }
+  const sug = $('ab-sk-sug'), slug = abSkSlug(ed.n); if (sug) sug.innerHTML = ed.n && slug && slug !== ed.n ? ` <button class="tlink" type="button" data-absk="slug">Use ${esc(slug)}</button>` : '';
+  const pn = $('ab-sk-pn'); if (pn) { pn.textContent = ed.n || 'name'; $('ab-sk-pd').textContent = ed.d || 'Description'; $('ab-sk-pf').textContent = abSkFile(ed.n, ed.d, ed.b); $('ab-sk-pi').innerHTML = skillIcon(ed.n || 'x'); }
+  return errs;
+}
+function abSkOpen(sid, i) {
+  const list = D.skills[sid] || [], [n, t] = i === 'new' ? ['', ''] : list[i], { d, b } = abSkParse(t);
+  st.abSkEd = { i, n, d, b, raw: i === 'new' ? abSkFile('', '', '## Steps\n1. ') : abSkFile(n, d, b), seen: {} };
+  st.modal = 'ab-sked';
+}
+/* drag to reorder (pointer events, so touch works too) */
+let abDrag = null;
+function abSkMove(from, to) {
+  const sid = st.mgSpace, l = (D.skills[sid] || []).slice(); if (from === to || to < 0 || to >= l.length) return false;
+  const [x] = l.splice(from, 1); l.splice(to, 0, x); db.put('skills', sid, l); return true;
+}
+on($('app'), 'pointerdown', e => {
+  const h = e.target.closest && e.target.closest('[data-skdrag]'); if (!h || e.button > 0) return;
+  e.preventDefault(); const row = h.closest('[data-skrow]');
+  const rows = [...document.querySelectorAll('[data-skrow]')];
+  abDrag = { from: +h.dataset.skdrag, over: +h.dataset.skdrag, row, rows, y: e.clientY, h: row.getBoundingClientRect().height, mids: rows.map(r => { const b = r.getBoundingClientRect(); return b.top + b.height / 2; }) };
+  row.classList.add('dragging'); document.documentElement.classList.add('ab-dragging');
+});
+on(document, 'pointermove', e => {
+  if (!abDrag) return;
+  abDrag.row.style.transform = `translateY(${e.clientY - abDrag.y}px)`;
+  const { from, rows, mids, h } = abDrag, over = mids.filter((m, k) => k !== from && m < e.clientY).length;
+  abDrag.over = over;
+  rows.forEach((r, k) => { if (k === from) return; const sh = from < over && k > from && k <= over ? -h : from > over && k >= over && k < from ? h : 0; r.style.transform = sh ? `translateY(${sh}px)` : ''; });
+});
+on(document, 'pointerup', () => {
+  if (!abDrag) return; const { from, over } = abDrag; abDrag = null;
+  document.documentElement.classList.remove('ab-dragging');
+  document.querySelectorAll('[data-skrow]').forEach(r => { r.style.transform = ''; r.classList.remove('dragging'); });
+  if (abSkMove(from, over)) { renderAll(); const h = document.querySelector(`[data-skdrag="${over}"]`); if (h) h.focus({ preventScroll: true }); }
+});
+on($('app'), 'keydown', e => {
+  const h = e.target.closest && e.target.closest('[data-skdrag]'); if (!h || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  e.preventDefault(); const i = +h.dataset.skdrag, j = e.key === 'ArrowUp' ? i - 1 : i + 1;
+  if (abSkMove(i, j)) { renderAll(); const n = document.querySelector(`[data-skdrag="${j}"]`); if (n) n.focus(); toast(`Moved to position ${j + 1}.`); }
+});
+on($('app'), 'change', e => {
+  if (e.target.id !== 'ab-sk-file' || !e.target.files[0]) return;
+  e.target.files[0].text().then(raw => {
+    const x = abSkReadFile(raw); if (!st.abSkEd) return;
+    patch('abSkEd', ed => { ed.raw = raw; if (!x.bad) { ed.n = x.n; ed.d = x.d; ed.b = x.b; } ed.seen = { n: 1, d: 1, raw: 1 }; });
+    renderAll(); abSkRefresh(true); toast(x.bad ? 'The file has no name and description at the top.' : `Imported ${x.n || 'the skill'}.`);
+  });
+});
 
 /* ---------- members, moderators, token use ---------- */
 function abMembersList(s) {
@@ -9027,7 +9224,7 @@ function abMembersList(s) {
   const lbl = r => r === 'owner' ? 'Owner' : r === 'admin' ? 'Admin' : r === 'mod' ? 'Moderator' : '';
   return `<label class="search ab-mq">${I.search}<input id="ab-mem-q" type="search" value="${esc(st.abMemQ || '')}" placeholder="Find a member" aria-label="Find a member"></label><ul class="ab-meml">${list.map(m => `<li>${avatar(m.u, 'sm')}${au(m.u)}${lbl(m.role) ? `<small title="${esc(ROLE_HELP[m.role] || '')}">${lbl(m.role)}</small>` : ''}</li>`).join('') || '<li class="faint">No members match.</li>'}</ul><p class="cs-fine">Showing ${list.length} of ${s.members.toLocaleString('en-US')} members. ${isClosed(s) ? 'Only members see this list.' : 'Anyone who can read the space sees this list.'}</p>`;
 }
-const abModsCard = s => `<div class="note-card"><h3>Moderators</h3><div class="mods">${s.mods.map(([h, r]) => `<div>${avatar(h, 'sm')}${au(h)}<small title="${esc(ROLE_HELP[r] || '')}">${MOD_LABEL[r] || r}</small></div>`).join('')}</div>${st.auth === 'in' ? '<button class="tlink ab-add" type="button" data-abmsg="1">Message the moderators</button>' : ''}</div>`;
+const abModsCard = s => `<div class="note-card"><h3>Moderators</h3><div class="mods">${s.mods.map(([h, r]) => `<div>${avatar(h, 'sm')}${au(h)}<small title="${esc(ROLE_HELP[r] || '')}">${MOD_LABEL[r] || r}</small></div>`).join('')}</div></div>`;
 function abUsageBody(s) {
   const used = s.used || 0, m = memFor(s).slice(0, 4), share = [0.38, 0.27, 0.19, 0.09];
   const th = D.posts.map((p, i) => ({ p, i })).filter(({ p }) => p.s === s.id && p.tok).sort((a, b) => b.p.tok - a.p.tok).slice(0, 3);
@@ -9041,12 +9238,10 @@ function abTokenCard(s) {
 
 /* ---------- the About tab ---------- */
 function abAbout(s) {
-  if (st.abMem && st.abMemV === 'side') return `<button class="th-back" type="button" data-abmem="x">${I.chev.replace('<svg', '<svg class="bk"')}About</button><h3 class="ab-pvt sm">Members of ${spName(s)}</h3>${abMembersList(s)}`;
   const facts = `<div class="th-facts"><div><span>Visibility</span><b>${isClosed(s) ? visLabel(s) : 'Open'}</b></div><div><span>Joining</span><b>${!isClosed(s) ? 'Anyone can join' : policyLabel(s)}</b></div><div><span>Members</span><b><button class="tlink num" type="button" data-abmem="1">${s.members.toLocaleString('en-US')}</button></b></div><div><span>Created</span><b>${s.created} by ${au(abOwner(s))}</b></div>${verShown(s) ? `<div><span>Domain</span><b class="sf-vd">${SEAL}${esc(s.dom.domain)}</b></div>` : ''}</div>`;
   const join = joinBtn(s);
   return `<div class="note-card"><p class="sf-ab-d">${esc(s.desc)}</p><button class="tlink ab-cp" type="button" data-abcopy="about">Copy link</button></div>
     <div class="note-card"><h3>Rules</h3>${rulesList(s)}${s.rulesAt ? `<p class="cs-fine ab-upd">Updated ${s.rulesAt === 'just now' ? 'just now' : s.rulesAt + ' ago'} by ${esc(s.rulesBy)} · <button class="tlink" type="button" data-abrules="1">See changes</button></p>` : ''}</div>
-    ${s.notCover ? `<div class="note-card"><h3>What this space doesn’t cover</h3><p class="sf-ab-p">${esc(s.notCover)}</p></div>` : ''}
     ${abPagesCard(s)}${abSkillsCard(s)}
     <div class="note-card"><h3>Details</h3>${facts}${verShown(s) ? `<p class="cs-fine sf-vnote">${SEAL}<span>${verNote(s)}</span></p>` : ''}</div>
     <div class="note-card"><h3>Joining and visibility</h3><ul class="sf-plain"><li>${visText(s)}.</li><li>${joinLabel(s)}.</li>${isClosed(s) ? `<li>${s.invite === 'members' ? 'Members can invite people.' : 'Moderators invite people.'}</li>` : ''}</ul>${join ? `<div class="ab-join">${join}</div>` : ''}</div>
@@ -9057,14 +9252,15 @@ function abAbout(s) {
 function abModal() {
   const [k, a] = st.modal.split(/:(.*)/s), s = sp(st.subPage === 'manage' ? st.mgSpace : st.space);
   if (k === 'ab-mem') return dlg(`Members of ${spName(s)}`, abMembersList(s), cancelB('Close'));
-  if (k === 'ab-msg') return dlg('Message the moderators', `<p class="muted">Your message goes to the ${s.mods.length} moderators of ${spName(s)}. Replies arrive in your notifications.</p><label class="fld"><span>Message</span><textarea id="ab-msg-t" class="cs-ta" rows="4" placeholder="What would you like to ask or report?">${esc(st.abMsg || '')}</textarea></label>`, `${cancelB()}<button class="btn primary" type="button" data-abmsgsend="1" ${(st.abMsg || '').trim() ? '' : 'disabled'}>Send</button>`);
   if (k === 'ab-usage') return dlg(`Token use in ${spName(s)}`, abUsageBody(s), cancelB('Close'));
   if (k === 'ab-rules') {
     const prev = s.rulesPrev || [], now = s.rules, rows = [...now.map(r => prev.includes(r) ? `<li>${esc(r)}</li>` : `<li class="ab-add-r">${esc(r)}</li>`), ...prev.filter(r => !now.includes(r)).map(r => `<li class="ab-rm-r">${esc(r)}</li>`)];
     return dlg('Changes to the rules', `<p class="muted">${esc(s.rulesBy || '')} changed the rules ${s.rulesAt === 'just now' ? 'just now' : s.rulesAt + ' ago'}. Added rules are marked; removed rules are struck through.</p><ol class="ab-diff">${rows.join('')}</ol>`, cancelB('Close'));
   }
   if (k === 'ab-pgdel') { const t = (s.pages[+a] || [''])[0]; return dlg(`Remove “${esc(t)}”?`, `<p class="muted">The page and its history are removed from ${spName(s)}. Links to it stop working.</p>`, `${cancelB()}<button class="btn danger" type="button" data-abpgdelok="${a}">Remove page</button>`, 'alertdialog'); }
-  if (k === 'ab-skill') { const [n] = D.skills[s.id][+a]; return dlg(esc(n), abSkillBody(s, +a), cancelB('Close')); }
+  if (k === 'ab-skill') return abSkillDlg(s, +a);
+  if (k === 'ab-sked') return abSkEdDlg();
+  if (k === 'ab-skrm') { const [n] = D.skills[s.id][+a]; return dlg(`Remove ${esc(n)}?`, `<p class="muted">Members can no longer choose it, and the agent stops applying it to new asks in ${spName(s)}. Answers that already used it stay in their threads.</p>`, `${cancelB()}<button class="btn danger" type="button" data-absk="rmok:${a}">Remove</button>`, 'alertdialog'); }
   return '';
 }
 { const AB_csModal = csModal; csModal = function () { return (st.modal || '').startsWith('ab-') ? abModal() : AB_csModal(); }; }
@@ -9120,21 +9316,26 @@ on($('app'), 'click', e => {
   if ((b = d('[data-abpgmv]'))) { const [v, i] = b.dataset.abpgmv.split(':'), k = +i, j = v === 'up' ? k - 1 : k + 1; spEdit(s.id, x => { [x.pages[k], x.pages[j]] = [x.pages[j], x.pages[k]]; }); return go(); }
   if ((b = d('[data-abpgdel]'))) { st.modal = 'ab-pgdel:' + b.dataset.abpgdel; return go(); }
   if ((b = d('[data-abpgdelok]'))) { const i = +b.dataset.abpgdelok, t = s.pages[i][0]; spEdit(s.id, x => { x.pages.splice(i, 1); }); db.del('pagedocs', abKey(s, t)); st.modal = null; if (st.subPage === 'abpage') Object.assign(st, { ...NAVBASE(), space: s.id, home: false, drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' }); toast(`Removed “${t}”.`); return go(); }
-  if ((b = d('[data-abskill]'))) { const i = +b.dataset.abskill; if (st.abSkillV === 'dialog') st.modal = 'ab-skill:' + i; else st.abSkill = st.abSkill === i ? null : i; return go(); }
-  if (d('[data-abskmg]')) { Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: s.id, space: s.id, mgTab: 'skills', abSkEd: null }); return go(); }
+  if ((b = d('[data-abskill]'))) { st.modal = 'ab-skill:' + b.dataset.abskill; return go(); }
+  if ((b = d('[data-abskcopy]'))) { toast('Copied SKILL.md.'); return go(); }
+  if ((b = d('[data-abskmg]'))) { Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: s.id, space: s.id, mgTab: 'skills', abSkEd: null }); if (b.dataset.abskmg === 'new') abSkOpen(s.id, 'new'); return go(); }
   if ((b = d('[data-absk]'))) {
     const sid = st.mgSpace, list = D.skills[sid] || [], [v, a] = b.dataset.absk.split(':'), i = +a;
-    if (v === 'new') st.abSkEd = { i: 'new', n: '', t: '' };
-    if (v === 'edit') st.abSkEd = { i, n: list[i][0], t: list[i][1] };
-    if (v === 'cancel') st.abSkEd = null;
-    if (v === 'save') { const ed = st.abSkEd; if (!ed.n.trim() || !ed.t.trim()) { toast('Add a name and what the skill asks.'); return go(); } const row = [ed.n.trim(), ed.t.trim().replace(/[:\s]*$/, ': ')]; db.put('skills', sid, a === 'new' ? [...list, row] : list.map((x, k) => k === i ? row : x)); st.abSkEd = null; toast(a === 'new' ? 'Skill added.' : 'Skill saved.'); }
-    if (v === 'up' || v === 'down') { const j = v === 'up' ? i - 1 : i + 1, l = list.slice(); [l[i], l[j]] = [l[j], l[i]]; db.put('skills', sid, l); }
-    if (v === 'rm') { db.put('skills', sid, list.filter((_, k) => k !== i)); toast(`Removed “${list[i][0]}”.`); }
+    if (v === 'new') abSkOpen(sid, 'new');
+    if (v === 'edit') abSkOpen(sid, i);
+    if (v === 'slug') { patch('abSkEd', x => { x.n = abSkSlug(x.n); x.seen = { ...x.seen, n: 1 }; }); const el = $('ab-sk-n'); if (el) { el.value = st.abSkEd.n; el.focus(); } abSkRefresh(); return true; }
+    if (v === 'save') {
+      const ed = st.abSkEd, x = abSkVals(ed), errs = abSkCheck(x, sid, ed.i);
+      if (errs.length) { patch('abSkEd', y => { y.seen = { n: 1, d: 1, raw: 1 }; }); abSkRefresh(true); const f = errs[0][0], el = $(st.abSkEditV === 'file' ? 'ab-sk-raw' : 'ab-sk-' + f); if (el) el.focus(); return true; }
+      const row = [x.n, abSkJoin(x.d, x.b)];
+      db.put('skills', sid, ed.i === 'new' ? [...list, row] : list.map((y, k) => k === ed.i ? row : y));
+      Object.assign(st, { abSkEd: null, modal: null }); toast(ed.i === 'new' ? `Added ${x.n}. It shows in About.` : `Saved ${x.n}.`);
+    }
+    if (v === 'rm') st.modal = 'ab-skrm:' + i;
+    if (v === 'rmok') { const n = list[i][0]; db.put('skills', sid, list.filter((_, k) => k !== i)); st.modal = null; toast(`Removed ${n}.`); }
     return go();
   }
-  if ((b = d('[data-abmem]'))) { if (b.dataset.abmem === 'x') st.abMem = false; else if (st.abMemV === 'side') Object.assign(st, { abMem: true, abMemQ: '', drawer: true, dsSTab: 'wiki' }); else Object.assign(st, { modal: 'ab-mem', abMemQ: '' }); return go(); }
-  if (d('[data-abmsg]')) { Object.assign(st, { modal: 'ab-msg', abMsg: '' }); return go(); }
-  if (d('[data-abmsgsend]')) { Object.assign(st, { modal: null, abMsg: '' }); toast(`Sent to the moderators of ${spName(s)}. Replies arrive in your notifications.`); return go(); }
+  if ((b = d('[data-abmem]'))) { Object.assign(st, { modal: 'ab-mem', abMemQ: '' }); return go(); }
   if (d('[data-abusage]')) { st.modal = 'ab-usage'; return go(); }
   if (d('[data-abrules]')) { st.modal = 'ab-rules'; return go(); }
   if (d('[data-abset]')) { Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: s.id, space: s.id, mgTab: 'settings', set: null }); return go(); }
@@ -9145,8 +9346,7 @@ on($('app'), 'input', e => {
   const el = e.target, id = el.id, v = el.value;
   if (id === 'ab-pg-t' || id === 'ab-pg-b') { patch('abPageEd', x => { x[id === 'ab-pg-t' ? 't' : 'b'] = v; }); const b = document.querySelector('[data-abpged="save"]'); if (b) b.disabled = !st.abPageEd.t.trim(); }
   if (id === 'ab-mem-q') { st.abMemQ = v; const c = el.selectionStart; renderAll(); const i = $('ab-mem-q'); if (i) { i.focus({ preventScroll: true }); i.setSelectionRange(c, c); } }
-  if (id === 'ab-msg-t') { st.abMsg = v; const b = document.querySelector('[data-abmsgsend]'); if (b) b.disabled = !v.trim(); }
-  if (id === 'ab-sk-n' || id === 'ab-sk-t') patch('abSkEd', x => { x[id === 'ab-sk-n' ? 'n' : 't'] = v; });
+  if (/^ab-sk-(n|d|b|raw)$/.test(id) && st.abSkEd) { const f = id.slice(6); patch('abSkEd', x => { x[f] = v; x.seen = { ...x.seen, [f]: 1 }; }); abSkRefresh(); }
   if (id === 'ab-desc' || /^ab-rule-\d+$/.test(id)) { const was = csDirty(); csEdit(x => { if (id === 'ab-desc') x.desc = v; else x.rules[+id.slice(8)] = v; }); if (was !== csDirty()) { const c = el.selectionStart; renderAll(); csRefocus(id, c); } }
 });
 on($('app'), 'change', e => { if (e.target.name === 'ab-pgedit') { csEdit(x => { x.pageEdit = e.target.value; }); renderAll(); } });
@@ -9161,7 +9361,7 @@ on($('app'), 'change', e => { if (e.target.name === 'ab-pgedit') { csEdit(x => {
 }; }
 
 /* ---------- Jump to ---------- */
-JUMPS.push(['About a space', [['ab-about', 'About in the sidebar'], ['ab-page', 'Open a page'], ['ab-page-edit', 'Edit a page'], ['ab-page-hist', 'Page history'], ['ab-pages-order', 'Order and remove pages (moderator)'], ['ab-page-new', 'Add a page'], ['ab-page-notif', 'Notification: a page changed'], ['ab-search', 'Search finds a page'], ['ab-skill', 'Skill preview'], ['ab-skills-mg', 'Manage › Skills'], ['ab-set', 'Settings › About and Pages'], ['ab-rules-upd', 'Rules updated: see the changes'], ['ab-members', 'Member list'], ['ab-msg', 'Message the moderators'], ['ab-usage', 'Token use by member and thread'], ['ab-join', 'Join from About']]]);
+JUMPS.push(['About a space', [['ab-about', 'About in the sidebar'], ['ab-page', 'Open a page'], ['ab-page-edit', 'Edit a page'], ['ab-page-hist', 'Page history'], ['ab-pages-order', 'Order and remove pages (moderator)'], ['ab-page-new', 'Add a page'], ['ab-page-notif', 'Notification: a page changed'], ['ab-search', 'Search finds a page'], ['ab-skill', 'Skill preview'], ['ab-skills-mg', 'Manage › Skills (drag to reorder)'], ['ab-skill-new', 'Add a skill'], ['ab-skill-edit', 'Edit a skill'], ['ab-skill-err', 'Add a skill: name and description errors'], ['ab-skill-rm', 'Remove a skill'], ['ab-set', 'Settings › About and Pages'], ['ab-rules-upd', 'Rules updated: see the changes'], ['ab-members', 'Member list'], ['ab-usage', 'Token use by member and thread'], ['ab-join', 'Join from About']]]);
 function abJump(k) {
   const about = sid => Object.assign(st, { space: sid, home: false, drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' });
   switch (k) {
@@ -9173,12 +9373,18 @@ function abJump(k) {
     case 'ab-page-new': about('scifi'); Object.assign(st, { subPage: 'abpage', mWiki: false, drawer: false }); Object.assign(st, { abPage: sp('scifi').pages.length, abPageEd: { t: 'Recommended anthologies', b: '', isNew: true } }); break;
     case 'ab-page-notif': st.notifs = [{ id: 'npg', k: 'page', u: 'tomasz', sp: 'scifi', page: 1, age: '5m', unread: true, text: 'edited the page <b>Canon starter list</b> in #sci-fi' }, ...st.notifs.filter(n => n.id !== 'npg')]; st.home = true; csOpenNotifs(); break;
     case 'ab-search': Object.assign(st, { subPage: 'search', q: 'spoiler' }); break;
-    case 'ab-skill': about('scifi'); if (st.abSkillV === 'dialog') st.modal = 'ab-skill:0'; else st.abSkill = 0; break;
+    case 'ab-skill': about('scifi'); st.modal = 'ab-skill:0'; break;
+    case 'ab-skill-new': case 'ab-skill-edit': case 'ab-skill-err': case 'ab-skill-rm': {
+      Object.assign(st, { subPage: 'manage', mgSpace: 'ml', space: 'ml', mgTab: 'skills', home: false });
+      if (k === 'ab-skill-rm') { st.modal = 'ab-skrm:2'; break; }
+      abSkOpen('ml', k === 'ab-skill-edit' ? 0 : 'new');
+      if (k === 'ab-skill-err') st.abSkEd = { ...st.abSkEd, n: 'Summarize a paper', d: '', raw: abSkFile('Summarize a paper', '', '## Steps'), seen: { n: 1, d: 1, raw: 1 } };
+      break;
+    }
     case 'ab-skills-mg': Object.assign(st, { subPage: 'manage', mgSpace: 'scifi', space: 'scifi', mgTab: 'skills', home: false }); break;
     case 'ab-set': Object.assign(st, { subPage: 'manage', mgSpace: 'ml', space: 'ml', mgTab: 'settings', set: null, home: false }); break;
     case 'ab-rules-upd': spEdit('scifi', x => { x.rulesPrev = ['Mark spoilers in titles with [spoilers].', 'Cite editions and page numbers when quoting.', 'Reading-group threads are pinned by mods.']; x.rules = ['Mark spoilers in titles with [spoilers].', 'Cite editions and page numbers when quoting.', 'Put plot details after a "Spoilers below" line.']; x.rulesAt = '2d'; x.rulesBy = 'tomasz'; }); about('scifi'); break;
-    case 'ab-members': about('sablefield'); if (st.abMemV === 'side') st.abMem = true; else st.modal = 'ab-mem'; break;
-    case 'ab-msg': about('scifi'); Object.assign(st, { modal: 'ab-msg', abMsg: '' }); break;
+    case 'ab-members': about('sablefield'); st.modal = 'ab-mem'; break;
     case 'ab-usage': about('sablefield'); st.modal = 'ab-usage'; break;
     case 'ab-join': about('history'); break;
   }
@@ -9494,7 +9700,7 @@ on($('app'), 'click', e => {
   const so = t.closest('[data-sort]'); if (so) { st.sort = so.dataset.sort; st.sortOpen = false; renderAll(); return; }
   if (a) { if (a.dataset.act === 'compose' && st.auth === 'out') { st.modal = 'signin'; st.pop = false; renderAll(); return; } if (a.dataset.act === 'compose') { st.compOpen = true; st.pop = false; st.sortOpen = false; } if (a.dataset.act === 'sort') { st.sortOpen = !st.sortOpen; st.pop = false; } if (a.dataset.act === 'pop') { st.pop = !st.pop; st.sortOpen = false; } if (a.dataset.act === 'drawer') st.drawer = !st.drawer; if (a.dataset.act === 'umenu') { st.umenu = !st.umenu; st.pop = false; } if (a.dataset.act === 'saved-page') { st.savedPage = true; st.profilePage = false; st.thread = null; st.umenu = false; st.pop = false; } if (a.dataset.act === 'profile') { st.profileUser = ME.u; st.profilePage = true; st.savedPage = false; st.thread = null; st.umenu = false; } if (a.dataset.act === 'shortcuts') { st.modal = 'kbd'; st.umenu = false; } renderAll(); return; }
   const tg = t.closest('[data-toggle]'); if (tg) { const k = tg.dataset.toggle, id = +tg.dataset.id; if (ST_DATA.has(k)) db.toggle(k, id); else if (st[k]) stToggle(k, id); renderAll(); return; }
-  const sk = t.closest('[data-skill]'); if (sk) { st.draft = D.skills[st.space][+sk.dataset.skill][1]; st.compOpen = true; st.pop = false; st.sortOpen = false; renderAll(); const c = $('compose-text'); if (c) c.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+  const sk = t.closest('[data-skill]'); if (sk) { st.draft = `/${D.skills[st.space][+sk.dataset.skill][0]} `; st.compOpen = true; st.pop = false; st.sortOpen = false; renderAll(); const c = $('compose-text'); if (c) c.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
   const snd = t.closest('[data-send]'); if (snd) { createThread('post'); renderAll(); return; }
   if (st.modal && t.classList.contains('modal-scrim')) { st.modal = null; renderAll(); return; }
   if (st.compOpen && !st.modal && !t.closest('.composer') && !st.draft.trim()) { st.compOpen = false; renderAll(); return; }
