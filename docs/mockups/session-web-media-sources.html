@@ -2091,6 +2091,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .sf-sech h3 { margin: 0; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
 .sf-recent { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
 .sf-recent .row-x { padding-left: 0; padding-right: 0; }
+.sf-recent > .sf-sech { margin-bottom: 4px; }
 .sf-tchips { display: none; }
 .sf-empty h3 { margin: 0 0 4px; font-size: var(--fs-input); color: var(--t-heading); }
 .sf-empty p { margin: 0; }
@@ -2544,6 +2545,27 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .Af.ds-left .body { grid-template-columns: auto minmax(0, 1fr); }
   .Af.ds-left .body > .drawer { order: -1; border-left: 0; border-right: 1px solid var(--divider); }
 }
+/* "Layout" control (desktop; on phones the sidebar layouts open as a sheet) */
+.ds-dht { color: var(--t-heading); font-size: var(--fs-sm); }
+.ds-side .dh .grow { flex: 1; }
+.ds-allm { gap: 12px !important; }
+.ds-allh { display: flex; align-items: flex-start; gap: 6px; }
+.ds-allh > .ds-drop { flex: 1; min-width: 0; }
+.ds-allh > .ds-selb { width: 36px; height: 36px; flex: none; }
+.ds-allm .ds-pickbar { position: sticky; bottom: 10px; z-index: 5; }
+.ds-wikim > .drawer { position: static; width: auto; border: 0; background: transparent; }
+.ds-wikim > .drawer .dbody { padding: 0; }
+.ds-ovb[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+@media (min-width: 921px) {
+  .Af.ds-l-split .body { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .Af.ds-l-split .body > .ds-lsrc { border-left: 0; border-right: 1px solid var(--divider); }
+  .Af.ds-l-overlay .body { grid-template-columns: minmax(0, 1fr); }
+  .Af.ds-l-overlay .body > .mcol { grid-row: 1; grid-column: 1; }
+  .Af.ds-l-overlay .body > .drawer { display: none; }
+  .Af.ds-l-overlay.ds-ovopen .body > .drawer { display: flex; grid-row: 1; grid-column: 1; justify-self: end; align-self: start; position: sticky; top: 0; height: var(--ds-ovh, 600px); z-index: 30; border: 1px solid var(--divider); box-shadow: var(--shadow-pop); }
+  .Af.ds-l-overlay.ds-ovopen .body > .drawer .dbody { overflow-y: auto; min-height: 0; flex: 1; }
+}
+@media (max-width: 640px) { .ds-allh > .ds-selb { width: 40px; height: 40px; } }
 /* right sidebar: Sources and Wiki tabs */
 .ds-pane > .ds-sunits { margin: 0 -4px; }
 .ds-sunits .mi-u-t { font-size: var(--fs-sm); }
@@ -2562,18 +2584,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .ds-tabl { display: flex; gap: 2px; align-self: stretch; }
 .ds-tabs .ds-selb { width: 28px; height: 28px; }
 .ds-pane > .ds-list, .ds-hcard .ds-list { margin: 0 -8px; }
-.ds-morel { align-self: flex-start; font-size: var(--fs-sm); }
-.ds-stk { position: relative; display: block; width: 100%; padding: 0 0 14px; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; }
-.ds-stk-c { position: relative; z-index: 2; display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: var(--r-lg); background: var(--card); }
-.ds-stk-c .mi-u-dot { top: 12px; right: 10px; }
-.ds-stk::before, .ds-stk::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 7px; height: 30px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--card); z-index: 1; }
-.ds-stk::after { left: 16px; right: 16px; bottom: 0; z-index: 0; background: var(--fill-subtle); border-color: var(--border-subtle); }
-.ds-stk.n1::before, .ds-stk.n1::after, .ds-stk.n2::after { display: none; }
-.ds-stk.n2 { padding-bottom: 7px; }
-.ds-stk:hover .ds-stk-c { border-color: var(--border-strong); }
-.ds-stk-more { display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-xs); color: var(--t-muted); }
-.ds-stk-more > span { display: flex; gap: 6px; align-items: center; min-width: 0; }
-.ds-stk-more > span > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* source page: note, actions, cited pages */
 .ds-note { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 8px 10px; border-radius: var(--r-lg); background: var(--fill-subtle); font-size: var(--fs-sm); line-height: 1.45; color: var(--t-secondary); }
 .ds-note b { font-weight: 600; color: var(--t-strong); }
@@ -2649,8 +2659,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
     </div>
     <div class="knobs cs-knobs" aria-label="Dropped sources controls">
       <span class="cs-kt">Dropped sources</span>
-      <div class="knob" id="kw-dsside"><span>Sidebar</span><div class="seg" id="k-dsside"></div></div>
-      <div class="knob" id="kw-dspos"><span>Sidebar side</span><div class="seg" id="k-dspos"></div></div>
+      <div class="knob" id="kw-dspos"><span>Layout</span><div class="seg" id="k-dspos"></div></div>
       <div class="knob" id="kw-dsask"><span>Ask about a source</span><div class="seg" id="k-dsask"></div></div>
       <div class="knob" id="kw-companim"><span>Composer opening</span><div class="seg" id="k-companim"></div></div>
     </div>
@@ -3017,7 +3026,7 @@ function csTabs() {
 const banner = (s, noCta) => {
   const bv = faqOn(s) ? 'compact' : 'full', tabs = sfTabs(s);
   const meta = (isClosed(s) ? csVisLine(s) : '') + verLine(s);
-  const mw = canRead(s) ? `<button class="btn sm m-wiki" type="button" data-act="mwiki">${MII.library}Sources</button>` : `<button class="btn sm m-wiki" type="button" data-act="mwiki">${I.book}Wiki</button>`;
+  const lay = dsLay(), mw = !canRead(s) ? `<button class="btn sm m-wiki" type="button" data-act="mwiki">${I.book}Wiki</button>` : lay === 'tabs' ? '' : lay === 'overlay' ? `<button class="btn sm ds-ovb" type="button" data-dsov="${st.dsOvOpen ? 0 : 1}" aria-pressed="${!!st.dsOvOpen}">${MII.library}Sources</button>` : `<button class="btn sm m-wiki" type="button" data-act="mwiki">${MII.library}Sources</button>`;
   return `<div class="banner${bv === 'compact' ? ' sf-compact' : ''}${tabs ? ' has-tabs' : ''}" style="--sp:${avColor(s.av)}">${csGlyph(s, bv === 'compact' ? 'lg' : 'xl')}<div style="min-width:0"><h2>${spName(s)}${spSeal(s, 'lg')}</h2><p class="sf-desc">${esc(s.desc)}</p>${meta ? `<div class="cs-brow">${meta}</div>` : ''}</div><div class="banner-acts">${csBannerActs(s)}${noCta && !isMember(s.id) ? '' : joinBtn(s)}${mw}</div></div>${tabs}`;
 };
 /* Space page: banner, composer and feed, with the wiki as a collapsible panel on the right. */
@@ -3038,7 +3047,7 @@ const layoutSpace = () => {
   const x = dsSpaceParts(s, tab, body);
   return `<div class="A C Af${st.mWiki ? ' mwiki' : ''}${x.cls}">
     ${topHeader()}
-    <div class="body">
+    <div class="body">${x.left || ''}
       <div class="mcol">${x.mcol}</div>
       ${x.side}
     </div></div>`;
@@ -3344,7 +3353,7 @@ const layoutHome = () => {
 };
 
 function wikiDrawer(s) {
-  if (canRead(s)) return dsSideDrawer(s);
+  if (canRead(s) && dsLay() !== 'split') return dsSideDrawer(s);
   return st.drawer
     ? `<aside class="drawer wk" aria-label="Space wiki"><div class="dh">${I.book.replace('<svg', '<svg width="15" height="15" style="color:var(--t-faint)"')}<b style="color:var(--t-heading);font-size:var(--fs-sm)">Wiki</b><span style="margin-left:auto;display:flex;gap:4px;align-items:center"><button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse wiki">${I.close}</button></span></div><div class="dbody">
         ${wikiCards(s)}</div></aside>`
@@ -5829,10 +5838,10 @@ function sfResolve(r, how) {
 }
 
 /* ---------- space tabs: Threads / About ---------- */
-/* Tabs: Threads, About. Sources are in the sidebar. */
-const sfTabCur = () => st.spTab === 'about' ? 'about' : 'threads';
+/* Tabs: Threads, About; with the "Tabs beside Threads" layout also Sources and Wiki. */
+const sfTabCur = () => dsLay() === 'tabs' && ['sources', 'wiki'].includes(st.spTab) && canRead(sp(st.space)) ? st.spTab : st.spTab === 'about' ? 'about' : 'threads';
 function sfTabs(s) {
-  const cur = sfTabCur(), items = [['threads', 'Threads'], ['about', 'About']];
+  const cur = sfTabCur(), items = dsLay() === 'tabs' && canRead(s) ? [['threads', 'Threads'], ['sources', 'Sources'], ['wiki', 'Wiki'], ['about', 'About']] : [['threads', 'Threads'], ['about', 'About']];
   return `<nav class="sp-tabs" aria-label="${spName(s)}">${items.map(([k, l]) => `<button type="button" class="sp-tab" data-sptab="${k}" aria-current="${cur === k}">${l}</button>`).join('')}</nav>`;
 }
 const joinLabel = s => !isClosed(s) ? 'Anyone signed in can join' : s.policy === 'invite' ? 'Invite only' : 'Join by request, approved by a moderator';
@@ -6707,9 +6716,9 @@ Object.assign(st, {
    - A source can be in several spaces; each space has its own entry: who added it, when, the note.
    - Order: newest addition first. "New": added since your last visit by someone else, not opened.
    - Removing takes the entry out of the space's list; asks about it stay. Anyone can report one.
-   Placement: the right sidebar with Sources and Wiki tabs ("Sidebar" control, st.dsSide): the Sources
-   tab shows a stack of the newest three, which expands in place into the full list (stack), or lists
-   every source (tabsty). The list is in the Social feed style. */
+   Placement ("Layout" control, st.dsPos): a sidebar with Sources and Wiki tabs on the right or the
+   left, Sources and Wiki as space tabs beside Threads and About, Sources on the left with the wiki on
+   the right, or the sidebar as a panel over the page. Sources are listed in the Social feed style. */
 const DS_DROPS0 = {
   ml: [
     { m: 'm9', by: 'hal_b', age: '16h' },
@@ -6861,34 +6870,46 @@ function dsSourceActs(m, s) {
 const dsCiteBtn = (p, k) => st.auth === 'in' ? `<button class="iconbtn ds-csend" type="button" data-dssend="w:${POSTS.indexOf(p)}:${k}" aria-label="Send to a space" title="Send to a space">${MII.send}</button>` : '';
 
 /* ---------- right sidebar: Sources and Wiki tabs ---------- */
-/* The Sources tab's list (tabsty, and the expanded stack): every source in the Social feed style. */
+/* The Sources list: every source in the Social feed style. */
 function dsSideList(s) {
   const l = dsList(s.id);
   return l.length ? `<div class="mi-units mi-lay-rows mi-sty-social ds-units ds-sunits" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>` : dsEmpty(s);
 }
-function dsStack(s) {
-  const l = dsList(s.id).slice(0, 3);
-  if (!l.length) return dsEmpty(s);
-  const top = MIT(l[0].m), nw = dsList(s.id).some(d => dsIsNew(s.id, d));
-  return `<button class="ds-stk n${l.length}" type="button" data-dsexp="1" aria-label="Show all sources"><span class="ds-stk-c">${miIc(top, 'sm')}<span class="ds-rb"><b class="ds-t">${esc(miTitle(top))}</b><span class="ds-m">${dsWho(l[0].by)} · ${l[0].age}</span></span>${nw ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</span></button><div class="ds-stk-more">${l.slice(1).map(d => `<span>${miIc(MIT(d.m), 'xs')}<span>${esc(clip(miTitle(MIT(d.m)), 46))}</span></span>`).join('')}</div><button class="tlink ds-morel" type="button" data-dsexp="1">Show all</button>`;
-}
 function dsSideDrawer(s) {
-  const close = `<button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse the sidebar">${I.close}</button>`;
-  if (!st.drawer) return `<aside class="drawer closed ds-sclosed" aria-label="Sources and wiki"><div class="dh"><button class="iconbtn" type="button" data-act="drawer" aria-label="Open the sidebar">${MII.library}</button><span class="vlabel">Sources</span></div></aside>`;
+  const ov = st.dsPos === 'overlay';
+  const close = ov ? `<button class="iconbtn" type="button" data-dsov="0" aria-label="Close">${I.close}</button>` : `<button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse the sidebar">${I.close}</button>`;
+  if (!st.drawer && !ov) return `<aside class="drawer closed ds-sclosed" aria-label="Sources and wiki"><div class="dh"><button class="iconbtn" type="button" data-act="drawer" aria-label="Open the sidebar">${MII.library}</button><span class="vlabel">Sources</span></div></aside>`;
   const tab = (k, l) => `<button class="ds-stab" type="button" role="tab" aria-selected="${st.dsSTab === k}" data-dsstab="${k}">${l}</button>`;
-  const wiki = st.dsSTab === 'wiki', stack = st.dsSide === 'stack' && !st.dsExp;
-  /* Stack: the newest three; clicking the stack (or Show all) expands it into the full list, with Show fewer */
-  const fewer = st.dsSide === 'stack' ? '<button class="tlink ds-morel" type="button" data-dsexp="0">Show fewer</button>' : '';
-  const pane = wiki ? `<div class="dbody" role="tabpanel">${wikiCards(s)}</div>`
-    : stack ? `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${dsDropBox(s)}${dsStack(s)}${dsOver(s)}</div>`
-    : `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${dsDropBox(s)}${fewer}${dsSideList(s)}${fewer}${dsPickBar()}${dsOver(s)}</div>`;
-  return `<aside class="drawer wk ds-side ds-s-${st.dsSide}" aria-label="Sources and wiki"><div class="dh ds-tabs"><span role="tablist" class="ds-tabl">${tab('sources', 'Sources')}${tab('wiki', 'Wiki')}</span><span class="grow"></span>${wiki || stack ? '' : dsSelBtn(s)}${close}</div>${pane}</aside>`;
+  const wiki = st.dsSTab === 'wiki';
+  const pane = wiki ? `<div class="dbody" role="tabpanel">${wikiCards(s)}</div>` : `<div class="dbody ds-pane" role="tabpanel" ${dsZoneAttr(s)}>${dsSrcPane(s)}</div>`;
+  return `<aside class="drawer wk ds-side${ov ? ' ds-ovl' : ''}" aria-label="Sources and wiki"><div class="dh ds-tabs"><span role="tablist" class="ds-tabl">${tab('sources', 'Sources')}${tab('wiki', 'Wiki')}</span><span class="grow"></span>${wiki ? '' : dsSelBtn(s)}${close}</div>${pane}</aside>`;
+}
+/* the drop box, the list and the selection bar */
+const dsSrcPane = s => `${dsDropBox(s)}${dsSideList(s)}${dsPickBar()}${dsOver(s)}`;
+/* Sources on the left, wiki on the right (Layout: split) */
+function dsSrcDrawer(s) {
+  if (!st.dsLOpen) return `<aside class="drawer closed ds-lsrc" aria-label="Sources"><div class="dh"><button class="iconbtn" type="button" data-dsl="1" aria-label="Open sources">${MII.library}</button><span class="vlabel">Sources</span></div></aside>`;
+  return `<aside class="drawer wk ds-side ds-lsrc" aria-label="Sources"><div class="dh">${MII.library.replace('<svg', '<svg width="15" height="15" style="color:var(--t-faint)"')}<b class="ds-dht">Sources</b><span class="grow"></span>${dsSelBtn(s)}<button class="iconbtn" type="button" data-dsl="0" aria-label="Collapse sources">${I.close}</button></div><div class="dbody ds-pane" ${dsZoneAttr(s)}>${dsSrcPane(s)}</div></aside>`;
+}
+/* Sources tab in the main column (Layout: tabs) */
+function dsAllMain(s) {
+  return `<div class="main ds-allm" ${dsZoneAttr(s)}><div class="ds-allh">${dsDropBox(s)}${dsSelBtn(s)}</div>${dsSideList(s)}${dsPickBar()}${dsOver(s)}</div>`;
 }
 
 /* ---------- space page ---------- */
-/* Parts of the space page: main column and the sidebar, on the right or the left ("Sidebar side" control, st.dsPos). */
+/* Parts of the space page for the "Layout" control (st.dsPos). On phones the split and the panel use the
+   sidebar sheet like the other sidebar layouts. */
+const dsLay = () => dsNarrow() && ['split', 'overlay'].includes(st.dsPos) ? 'right' : st.dsPos;
 function dsSpaceParts(s, tab, body) {
-  const x = { mcol: banner(s) + body, side: wikiDrawer(s), cls: st.dsPos === 'left' ? ' ds-left' : '' };
+  const lay = dsLay();
+  const x = { left: '', mcol: banner(s) + body, side: wikiDrawer(s), cls: ` ds-l-${lay}${lay === 'left' ? ' ds-left' : ''}${lay === 'overlay' && st.dsOvOpen ? ' ds-ovopen' : ''}` };
+  if (!canRead(s)) return x;
+  if (lay === 'tabs') {
+    x.side = '';
+    if (tab === 'sources') x.mcol = banner(s) + dsAllMain(s);
+    if (tab === 'wiki') x.mcol = banner(s) + `<div class="main ds-wikim"><aside class="drawer wk" aria-label="Space wiki"><div class="dbody">${wikiCards(s)}</div></aside></div>`;
+  }
+  if (lay === 'split') x.left = dsSrcDrawer(s);
   return x;
 }
 /* Home: the latest sources added to your spaces */
@@ -6939,7 +6960,7 @@ function dsClick(t) {
   const d = sel => t.closest(sel), go = () => { renderAll(); return true; };
   let b;
   if (st.dsMenu && !d('.ds-mw')) st.dsMenu = null;
-  if (d('[data-space],[data-home],[data-open],[data-user],[data-sub],[data-act="saved-page"],[data-mtab]')) Object.assign(st, { dsUrl: '', dsNote: '', dsDrag: null, dsExp: false });
+  if (d('[data-space],[data-home],[data-open],[data-user],[data-sub],[data-act="saved-page"],[data-mtab]')) Object.assign(st, { dsUrl: '', dsNote: '', dsDrag: null });
   if ((b = d('[data-cstoast^="ds:"]'))) {
     const [, v, sid, mid] = b.dataset.cstoast.split(':'); st.toast = null;
     if (v === 'open') { Object.assign(st, NAVBASE(), { space: sid }); miOpen(mid); }
@@ -6949,7 +6970,9 @@ function dsClick(t) {
   if ((b = d('[data-dsmenu]'))) { st.dsMenu = st.dsMenu === b.dataset.dsmenu ? null : b.dataset.dsmenu; return go(); }
   if ((b = d('[data-dssignin]'))) { st.modal = 'signin'; return go(); }
   if ((b = d('[data-dsstab]'))) { st.dsSTab = b.dataset.dsstab; return go(); }
-  if ((b = d('[data-dsexp]'))) { st.dsExp = b.dataset.dsexp === '1'; if (!st.dsExp) Object.assign(st, { miPickMode: false, miPick: [] }); return go(); }
+  if ((b = d('[data-dsl]'))) { st.dsLOpen = b.dataset.dsl === '1'; return go(); }
+  if ((b = d('[data-dsov]'))) { st.dsOvOpen = b.dataset.dsov === '1'; return go(); }
+  if (st.dsOvOpen && !d('.ds-ovl') && !d('.modal, .modal-scrim')) { st.dsOvOpen = false; renderAll(); }
   if ((b = d('[data-dsdropdemo]'))) { dsDropped(b.dataset.dsdropdemo, DS_DRAG_URL); return true; }
   if ((b = d('[data-dsclear]'))) { Object.assign(st, { dsUrl: '', dsNote: '' }); renderAll(); miFocusQ('ds-url'); return true; }
   if ((b = d('[data-dsadd]'))) {
@@ -7075,8 +7098,17 @@ function compAnim() {
     }
   });
 }
+/* the panel over the page is as tall as the visible part of the page below the header */
+function dsOvFit() {
+  const a = $('app'), el = a && a.querySelector('.ds-ovopen .ds-ovl'); if (!el) { dsOvFit.was = false; return; }
+  const b = el.parentElement.getBoundingClientRect(), r = a.getBoundingClientRect();
+  a.style.setProperty('--ds-ovh', Math.round(r.bottom - Math.max(r.top, b.top)) + 'px');
+  if (!dsOvFit.was && !matchMedia('(prefers-reduced-motion: reduce)').matches) el.animate([{ opacity: 0, transform: `translateX(${st.dsPos === 'overlay' ? 12 : 0}px)` }, { opacity: 1, transform: 'none' }], { duration: 140, easing: COMP_EASE });
+  dsOvFit.was = true;
+}
+$('app').addEventListener('scroll', () => { if (st.dsOvOpen) dsOvFit(); }, { passive: true });
 function dsAfterRender() {
-  compAnim();
+  compAnim(); dsOvFit();
   if (st.dsFlash && st.device !== 'native') {
     const el = document.querySelector('#app .ds-r.flash, #app .mi-u.flash');
     if (el) el.scrollIntoView({ block: 'nearest' });
@@ -7092,8 +7124,7 @@ const dsOnSpace = () => {
 };
 function DSKNOBS() {
   return [
-    ['k-dsside', 'dsSide', [['stack', 'Stack that expands'], ['tabsty', 'Sources and Wiki tabs, social feed']], () => { Object.assign(st, { drawer: true, dsSTab: 'sources', dsExp: false }); dsOnSpace(); }],
-    ['k-dspos', 'dsPos', [['right', 'Right'], ['left', 'Left']], () => { st.drawer = true; dsOnSpace(); }],
+    ['k-dspos', 'dsPos', [['right', 'Sidebar right'], ['left', 'Sidebar left'], ['tabs', 'Tabs beside Threads'], ['split', 'Sources left, wiki right'], ['overlay', 'Panel over the page']], () => { Object.assign(st, { drawer: true, dsLOpen: true, dsOvOpen: st.dsPos === 'overlay', dsSTab: 'sources', mWiki: false }); if (['sources', 'wiki'].includes(st.spTab)) st.spTab = 'threads'; dsOnSpace(); }],
     ['k-dsask', 'dsAsk', [['dialog', 'Dialog'], ['end', 'Inline at the end'], ['passage', 'Inline at the passage'], ['dock', 'Docked']], () => { Object.assign(st, { miAsk: null, miAskQ: '', modal: null }); if (st.subPage !== 'mitem') { dsJump('ds-s-space'); miOpen('m2'); } }],
     ['k-companim', 'compAnim', [['expand', 'Expand'], ['unfold', 'Unfold'], ['rise', 'Rise'], ['fade', 'Fade'], ['none', 'None']], () => { compAnim.prev = new Set(); }],
   ];
@@ -7102,7 +7133,7 @@ function DSKNOBS() {
 /* ---------- "Jump to" ---------- */
 const DS_LIST_J = [['space', 'Space page'], ['paste', 'Paste a link'], ['drag', 'Drag a link onto the list'], ['dup', 'Paste a link that is already there'], ['reader', 'Open a source'], ['pass', 'Ask about a passage'], ['pick', 'Select several sources'], ['multi', 'Ask about two sources'], ['empty', 'New space with no sources'], ['closed', 'Closed space: add as a member'], ['out', 'Signed out']];
 JUMPS.push(
-  ['Sources in the sidebar', [...DS_LIST_J.map(([k, l]) => ['ds-s-' + k, k === 'reader' ? 'Open a source (source page)' : l]), ['ds-s-all', 'Stack: expanded']]],
+  ['Sources in the sidebar', [...DS_LIST_J.map(([k, l]) => ['ds-s-' + k, k === 'reader' ? 'Open a source (source page)' : l])]],
   ['Sending and moderating sources', [['ds-x-send', 'Send a source to other spaces'], ['ds-x-cite', 'Send a cited web page from an answer'], ['ds-x-share', 'Shared from the browser (share target)'], ['ds-x-home', 'Home: new sources'], ['ds-x-review', 'Add a source in a space with review'], ['ds-x-queue', 'Manage › Sources: review queue'], ['ds-x-manage', 'Manage › Sources'], ['ds-x-report', 'Report a source'], ['ds-x-remove', 'Remove a source']]],
 );
 function dsNewSpace() {
@@ -7116,15 +7147,15 @@ function dsNewSpace() {
 }
 function dsJump(k) {
   if (st.device === 'native') st.device = 'desktop';
-  Object.assign(st, NAVBASE(), MI_CLEAR(), { auth: 'in', toast: null, welcome: null, created: null, space: 'ml', home: false, miAsk: null, miAskQ: '', miFrom: null, mpOpen: false, dd: null, kindF: 'all', drawer: true, dsExp: false, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null, dsMenu: null, dsSend: null, dsSTab: 'sources' });
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { auth: 'in', toast: null, welcome: null, created: null, space: 'ml', home: false, miAsk: null, miAskQ: '', miFrom: null, mpOpen: false, dd: null, kindF: 'all', drawer: true, dsLOpen: true, dsOvOpen: false, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null, dsMenu: null, dsSend: null, dsSTab: 'sources' });
   { const rs = sp('replication'); rs.dom = null; rs.plain = false; }
   setRel('replication', 'none');
   dsReset();
   const [, g, v] = k.split('-');
   const nar = dsNarrow();
   /* show the source list: the sidebar panel (on phones, its sheet), or the full list with the Stack */
-  const list = () => { if (nar) st.mWiki = true; };
-  const listFull = () => { if (st.dsSide === 'stack') st.dsExp = true; list(); };
+  const list = () => { const l = dsLay(); if (l === 'tabs') st.spTab = 'sources'; else if (l === 'overlay') st.dsOvOpen = true; else if (nar) st.mWiki = true; };
+  const listFull = list;
   const ask = (a, q) => Object.assign(st, { miAsk: a, miAskQ: q || '', miAskSp: st.space, modal: 'mi-ask' });
   const th = rf => Object.assign(st, { thread: sfIdx(rf), space: POSTS[sfIdx(rf)].s });
   switch (g === 'x' ? 'x-' + v : v) {
@@ -7139,7 +7170,6 @@ function dsJump(k) {
     case 'empty': { const s = dsNewSpace(); st.space = s.id; list(); break; }
     case 'closed': setRel('replication', 'member'); st.space = 'replication'; list(); st.dsUrl = DS_DRAG_URL; break;
     case 'out': st.auth = 'out'; list(); break;
-    case 'all': st.dsSide = 'stack'; st.dsExp = true; break;
     case 'x-send': setRel('replication', 'member'); miOpen('m3'); Object.assign(st, { dsSend: { m: 'm3', pick: ['replication'], note: '' }, modal: 'ds-send' }); break;
     case 'x-cite': th('mia4'); Object.assign(st, { dsSend: { m: 'm11', pick: [], note: '' }, modal: 'ds-send' }); break;
     case 'x-share': setRel('replication', 'member'); st.home = true; Object.assign(st, { dsSend: { m: 'm12', pick: ['ml'], note: '', share: true }, modal: 'ds-send' }); break;
@@ -7154,8 +7184,8 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsSide: 'stack', dsPos: 'right', dsAsk: 'dialog', compAnim: 'expand', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
-  dsMenu: null, dsSend: null, dsSTab: 'sources', dsWhy: 'spam', dsRepNote: '', dsExp: false,
+  dsPos: 'right', dsLOpen: true, dsOvOpen: false, dsAsk: 'dialog', compAnim: 'expand', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsMenu: null, dsSend: null, dsSTab: 'sources', dsWhy: 'spam', dsRepNote: '',
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
 /* END dropped sources js */
