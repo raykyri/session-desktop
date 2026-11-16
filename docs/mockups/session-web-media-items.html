@@ -2282,9 +2282,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .mi-u-dot { position: absolute; top: 6px; right: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 .mi-u .mi-pk { margin-top: 2px; }
 .mi-u:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-md); }
-.mi-u-top { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-xs); color: var(--t-faint); }
-.mi-u-badge { display: inline-flex; align-items: center; gap: 4px; flex: none; height: 18px; padding: 0 7px; border-radius: 999px; background: var(--fill-subtle); border: 1px solid var(--border-subtle); color: var(--t-secondary); font-weight: 600; font-size: 10.8px; }
-.mi-u-by { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Plain rows: no box, hairlines between units */
 .mi-sty-plain .mi-u { padding: 14px 4px; border-top: 1px solid var(--divider); }
 .mi-sty-plain.mi-lay-rows .mi-u:first-child { border-top: 0; }
@@ -2296,27 +2293,19 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .mi-sty-boxed .mi-u { padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); }
 .mi-sty-boxed .mi-u:hover { border-color: var(--border-strong); }
 .mi-sty-boxed .mi-u-dot { top: 20px; right: 14px; }
-/* Reader: larger title, source line under it, longer excerpt */
-.mi-sty-reader .mi-u { padding: 18px 4px; border-top: 1px solid var(--divider); }
-.mi-sty-reader.mi-lay-rows .mi-u:first-child { border-top: 0; padding-top: 6px; }
-.mi-sty-reader.mi-lay-cards { gap: 0 28px; }
-.mi-sty-reader .mi-u-b { gap: 6px; }
-.mi-sty-reader .mi-u-t { font-size: 17.5px; line-height: 1.35; letter-spacing: -.01em; }
-.mi-sty-reader .mi-u-x { font-size: var(--fs-base); color: var(--t-secondary); -webkit-line-clamp: 4; }
-.mi-sty-reader .mi-u-dot { top: 26px; }
-.mi-sty-reader.mi-lay-rows .mi-u:first-child .mi-u-dot { top: 14px; }
+/* Boxed media only: plain rows, with podcasts and videos in a box */
+.mi-sty-boxedav .mi-u { padding: 14px 4px; border-top: 1px solid var(--divider); }
+.mi-sty-boxedav.mi-lay-rows .mi-u:first-child, .mi-sty-boxedav.mi-lay-rows .mi-u.mi-box + .mi-u { border-top: 0; }
+.mi-sty-boxedav.mi-lay-cards { gap: 0 24px; }
+.mi-sty-boxedav .mi-u:not(.mi-box):hover .mi-u-t { text-decoration: underline; text-underline-offset: 2px; }
+.mi-sty-boxedav .mi-u-dot { top: 20px; }
+.mi-sty-boxedav .mi-u.mi-box { padding: 14px 16px; margin: 6px 0; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); }
+.mi-sty-boxedav .mi-u.mi-box:hover { border-color: var(--border-strong); }
+.mi-sty-boxedav .mi-u.mi-box .mi-u-dot { right: 14px; }
 /* Compact: source badge above the title, two-line excerpt */
-.mi-sty-compact .mi-u { padding: 10px 4px; border-top: 1px solid var(--divider); }
-.mi-sty-compact.mi-lay-rows .mi-u:first-child { border-top: 0; }
-.mi-sty-compact.mi-lay-cards { gap: 8px; }
-.mi-sty-compact.mi-lay-cards .mi-u { padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: var(--r-lg); background: var(--fill-subtle); }
-.mi-sty-compact .mi-u-b { gap: 4px; }
-.mi-sty-compact .mi-u-t { font-size: var(--fs-sm); -webkit-line-clamp: 2; }
-.mi-sty-compact .mi-u-x { font-size: var(--fs-xs); }
-.mi-sty-compact .mi-u-dot { top: 15px; }
 .mi-u.picked .mi-u-t { color: var(--accent-strong); }
-.mi-sty-boxed .mi-u.picked, .mi-sty-compact.mi-lay-cards .mi-u.picked { border-color: var(--accent); background: var(--accent-soft); }
-/* Native by type, Post cards, Social feed */
+.mi-sty-boxed .mi-u.picked, .mi-sty-boxedav .mi-u.mi-box.picked { border-color: var(--accent); background: var(--accent-soft); }
+/* Native by type, Social feed */
 .mi-u2 { grid-template-columns: minmax(0, 1fr); }
 .mi-u2.picking { grid-template-columns: 18px minmax(0, 1fr); }
 .mi-p { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; min-width: 0; }
@@ -2337,41 +2326,10 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .mi-sty-native.mi-lay-rows .mi-u:first-child, .mi-sty-social.mi-lay-rows .mi-u:first-child { border-top: 0; }
 .mi-sty-native.mi-lay-cards, .mi-sty-social.mi-lay-cards { gap: 0 24px; }
 .mi-sty-native .mi-u-dot, .mi-sty-social .mi-u-dot { top: 20px; }
-/* Post cards: X posts as post cards, other items as link cards */
-.mi-sty-postcards { gap: 10px; }
-.mi-sty-postcards .mi-u { padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); align-content: start; }
-.mi-sty-postcards .mi-u:hover { border-color: var(--border-strong); }
-.mi-sty-postcards .mi-u-dot { top: 18px; right: 14px; }
-.mi-pc { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; min-width: 0; }
-.mi-pc > .av { width: 36px; height: 36px; font-size: 13px; }
-.mi-pc-b { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-right: 30px; }
-.mi-pc-x { position: absolute; right: 30px; top: 14px; color: var(--t-faint); }
-.mi-pc-x svg { width: 13px; height: 13px; }
-.mi-lc { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; min-width: 0; }
-.mi-lc-b { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding-right: 14px; }
-.mi-lc-d { font-size: var(--fs-xs); color: var(--t-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mi-lc-m { font-size: var(--fs-xs); }
-.mi-sty-postcards .mi-lc .mi-u-t { font-size: var(--fs-sm); -webkit-line-clamp: 2; }
 /* Social feed: link previews */
 .mi-lp { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); min-width: 0; }
 .mi-lp-m { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); }
 .mi-lp-m svg { width: 12px; height: 12px; }
-/* Headlines: titles grouped by source */
-.mi-sty-headlines { gap: 18px; }
-.mi-sty-headlines.mi-lay-cards { gap: 10px; align-items: start; }
-.mi-hg { display: flex; flex-direction: column; min-width: 0; }
-.mi-sty-headlines.mi-lay-cards .mi-hg { padding: 12px 14px; border: 1px solid var(--border-subtle); border-radius: var(--r-xl); background: var(--card); }
-.mi-hg-h { display: flex; align-items: center; gap: 7px; margin: 0 0 4px; font-size: var(--fs-xs); font-weight: 650; color: var(--t-secondary); text-transform: uppercase; letter-spacing: .05em; }
-.mi-hg-h svg { width: 13px; height: 13px; color: var(--t-faint); }
-.mi-hd { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 7px 18px 7px 0; border-top: 1px solid var(--divider); }
-.mi-hd.picking { grid-template-columns: 18px minmax(0, 1fr) auto; }
-.mi-hg-h + .mi-hd { border-top: 0; }
-.mi-hd-t { color: var(--t-heading); font-weight: 550; line-height: 1.4; overflow-wrap: anywhere; }
-.mi-hd:hover .mi-hd-t { text-decoration: underline; text-underline-offset: 2px; }
-.mi-hd-a { font-size: var(--fs-xs); }
-.mi-hd .mi-u-dot { top: 50%; margin-top: -3px; }
-.mi-hd.picked .mi-hd-t { color: var(--accent-strong); }
-.mi-sty-postcards .mi-u.picked { border-color: var(--accent); background: var(--accent-soft); }
 /* Items tab layouts */
 /* item page */
 .mi-page { position: relative; padding: 18px 40px 48px; max-width: 1120px; margin: 0 auto; }
@@ -2575,11 +2533,8 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .mi-msrc h3 { margin: 0; font-size: var(--fs-xs); font-weight: 500; color: var(--t-faint); }
   .mi-pickbar { bottom: 8px; }
   .mi-units.mi-lay-cards { grid-template-columns: minmax(0, 1fr); }
-  .mi-sty-plain.mi-lay-cards .mi-u:first-child, .mi-sty-reader.mi-lay-cards .mi-u:first-child { border-top: 0; }
-  .mi-sty-reader .mi-u-t { font-size: var(--fs-input); }
+  .mi-sty-plain.mi-lay-cards .mi-u:first-child, .mi-sty-boxedav.mi-lay-cards .mi-u:first-child { border-top: 0; }
   .mi-sty-native.mi-lay-cards .mi-u:first-child, .mi-sty-social.mi-lay-cards .mi-u:first-child { border-top: 0; }
-  .mi-pc-x { display: none; }
-  .mi-pc-b { padding-right: 14px; }
   .mi-note-a { width: 100%; }
 }
 /* END media items css */
@@ -6267,19 +6222,19 @@ const miPickBox = m => st.miPickMode ? `<span class="mi-pk${st.miPick.includes(m
 const miItemAttr = (m, pick, open) => st.miPickMode && pick ? `data-mipick="${m.id}" role="checkbox" aria-checked="${st.miPick.includes(m.id)}"` : open || miOpenAttr(m);
 /* Item unit on the Items tab (and in Saved): source, author and age, title and excerpt, plus an
    unread dot at the top right. Statuses (edited, deleted, paid, shared by) are on the item page.
-   st.miSty ("Item style" control): plain | boxed | reader | compact. */
+   st.miSty ("Item style" control): plain | boxed | boxedav (podcasts and videos boxed, others plain). */
 const miExcerpt = m => m.deleted ? '' : m.desc || (m.t ? m.body.find(b => b.p).p : miRest(m));
 function miUnit(m, o = {}) {
   const sty = o.sty || st.miSty, unread = !st.miRead.has(m.id) && ageMin(m.age) < 1440 * 2 && !o.noDot;
   const pick = o.pick ? miPickBox(m) : '', ex = miExcerpt(m), on = st.miPickMode && o.pick && st.miPick.includes(m.id);
   const src = `<span class="mi-u-src">${miByline(m)}<span class="faint">· ${miSrcLine(m)} · ${m.age}</span></span>`;
-  const t = `<b class="mi-u-t">${esc(miTitle(m))}</b>`, x = ex ? `<span class="mi-u-x">${esc(clip(ex, sty === 'reader' ? 320 : 200))}</span>` : '';
-  const body = sty === 'reader' ? `${t}${src}${x}` : sty === 'compact' ? `<span class="mi-u-top"><span class="mi-u-badge">${MIPLAT[m.pl].n}</span><span class="mi-u-by">${esc(m.au)} · ${m.age}</span></span>${t}${x}` : `${src}${t}${x}`;
-  const ic = sty === 'plain' || sty === 'boxed' ? miIc(m, 'mi-u-ic') : '';
-  return `<article class="mi-u${unread ? ' unread' : ''}${pick ? ' picking' : ''}${on ? ' picked' : ''}${ic ? ' has-ic' : ''}" ${miItemAttr(m, o.pick)} tabindex="0">${pick}${ic}<div class="mi-u-b">${body}</div>${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`;
+  const t = `<b class="mi-u-t">${esc(miTitle(m))}</b>`, x = ex ? `<span class="mi-u-x">${esc(clip(ex, 200))}</span>` : '';
+  const body = `${src}${t}${x}`;
+  const ic = ['plain', 'boxed', 'boxedav'].includes(sty) ? miIc(m, 'mi-u-ic') : '', box = sty === 'boxedav' && miAV(m);
+  return `<article class="mi-u${box ? ' mi-box' : ''}${unread ? ' unread' : ''}${pick ? ' picking' : ''}${on ? ' picked' : ''}${ic ? ' has-ic' : ''}" ${miItemAttr(m, o.pick)} tabindex="0">${pick}${ic}<div class="mi-u-b">${body}</div>${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`;
 }
 const miRow = (m, o = {}) => miUnit(m, { ...o, sty: o.sty || 'plain' });
-/* Styles that take the item's own shape (native, postcards, social). X posts read as posts: avatar,
+/* Styles that take the item's own shape (native, social). X posts read as posts: avatar,
    name and handle, the full first post, a quoted post as an inset box and the thread length. */
 const miDomain = m => m.url.split('/')[0];
 const miAv = (m, cls = '') => m.pl === 'x' && m.h ? avatar(m.h.slice(1), cls) : miIc(m, cls);
@@ -6290,17 +6245,11 @@ function miUnit2(m, o) {
   const sty = st.miSty, unread = !st.miRead.has(m.id) && ageMin(m.age) < 1440 * 2;
   const pick = o.pick ? miPickBox(m) : '', on = st.miPickMode && o.pick && st.miPick.includes(m.id), ex = miExcerpt(m);
   let inner;
-  if (m.pl === 'x') inner = sty === 'postcards' ? `<div class="mi-pc">${miAv(m)}<div class="mi-pc-b">${miPostHead(m)}${miPostText(m)}</div><span class="mi-pc-x" aria-hidden="true">${XL}</span></div>` : `<div class="mi-p">${miAv(m)}<div class="mi-p-b">${miPostHead(m)}${miPostText(m)}</div></div>`;
+  if (m.pl === 'x') inner = `<div class="mi-p">${miAv(m)}<div class="mi-p-b">${miPostHead(m)}${miPostText(m)}</div></div>`;
   else if (sty === 'native') inner = miAV(m) ? `<div class="mi-p">${miIc(m)}<div class="mi-p-b"><b class="mi-u-t">${esc(miTitle(m))}</b><span class="mi-u-src">${esc(m.pub || m.au)}<span class="faint">· ${m.len} · ${m.age}</span></span>${ex ? `<span class="mi-u-x">${esc(clip(ex, 160))}</span>` : ''}</div></div>`
     : `<div class="mi-p">${miIc(m)}<div class="mi-p-b"><span class="mi-u-src">${esc(m.pub && m.pub !== m.au ? m.pub : MIPLAT[m.pl].n)}<span class="faint">· ${esc(m.au)} · ${m.age}</span></span><b class="mi-u-t">${esc(miTitle(m))}</b>${ex ? `<span class="mi-u-x">${esc(clip(ex, 200))}</span>` : ''}</div></div>`;
-  else if (sty === 'postcards') inner = `<div class="mi-lc">${miIc(m, 'sm')}<div class="mi-lc-b"><span class="mi-lc-d">${esc(miDomain(m))}</span><b class="mi-u-t">${esc(miTitle(m))}</b><span class="mi-lc-m faint">${esc(m.au)} · ${m.age}</span></div></div>`;
   else inner = `<div class="mi-p">${miIc(m)}<div class="mi-p-b"><span class="mi-p-h"><b>${esc(m.pub && m.pub !== m.au && !miAV(m) ? m.pub : m.au)}</b><span class="faint">· ${m.age}</span></span><div class="mi-lp"><span class="mi-lc-d">${esc(miDomain(m))}</span><b class="mi-u-t">${esc(miTitle(m))}</b>${miAV(m) ? `<span class="mi-lp-m faint">${MII[MIPLAT[m.pl].ic]}${esc(m.pub || m.au)}</span>` : ex ? `<span class="mi-u-x">${esc(clip(ex, 160))}</span>` : ''}</div></div></div>`;
   return `<article class="mi-u mi-u2${unread ? ' unread' : ''}${pick ? ' picking' : ''}${on ? ' picked' : ''}" ${miItemAttr(m, o.pick)} tabindex="0">${pick}${inner}${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`;
-}
-/* Headlines: titles only, grouped by source; in Cards each source is a box. */
-function miHeadlines(list) {
-  const groups = []; list.forEach(m => { const f = miFeedOf(m), k = f ? f.label : m.by ? 'Shared links' : (m.pub || m.au); let g = groups.find(x => x.k === k); if (!g) groups.push(g = { k, m, f, l: [] }); g.l.push(m); });
-  return groups.map(g => `<section class="mi-hg"><h4 class="mi-hg-h">${g.f ? MII[MIPLAT[g.f.pl].ic] : CI.link}<span>${esc(g.k)}</span></h4>${g.l.map(m => { const unread = !st.miRead.has(m.id) && ageMin(m.age) < 1440 * 2, on = st.miPickMode && st.miPick.includes(m.id); return `<article class="mi-u mi-hd${unread ? ' unread' : ''}${st.miPickMode ? ' picking' : ''}${on ? ' picked' : ''}" ${miItemAttr(m, true)} tabindex="0">${miPickBox(m)}<span class="mi-hd-t">${esc(miTitle(m))}</span><span class="mi-hd-a faint num">${m.age}</span>${unread ? '<span class="mi-u-dot" aria-label="New"></span>' : ''}</article>`; }).join('')}</section>`).join('');
 }
 function miHead(m, big = true, noVia) {
   const f = miFeedOf(m);
@@ -6386,8 +6335,8 @@ function miItemsList(s) {
 const miSpaceItems = sid => miSpItems(sid).filter(m => !(st.miHidden || []).includes(m.id));
 /* Items tab layouts ("Items tab" control): List or Cards, with the same filters, selection and Add a link. */
 function miItemsBody(list) {
-  const sty = st.miSty, two = ['native', 'postcards', 'social'].includes(sty);
-  return `<div class="mi-units mi-lay-${st.miLay} mi-sty-${sty}">${sty === 'headlines' ? miHeadlines(list) : list.map(m => two ? miUnit2(m, { pick: true }) : miUnit(m, { pick: true })).join('')}</div>`;
+  const sty = st.miSty, two = ['native', 'social'].includes(sty);
+  return `<div class="mi-units mi-lay-${st.miLay} mi-sty-${sty}">${list.map(m => two ? miUnit2(m, { pick: true }) : miUnit(m, { pick: true })).join('')}</div>`;
 }
 function miFeedsCard(s) {
   const f = MIFEEDS[s.id]; if (!f || !canRead(s) || st.home) return '';
@@ -6649,7 +6598,7 @@ const miOnItems = () => { if (!(st.subPage == null && st.thread == null && !st.h
 function MIKNOBS() {
   return [
     ['k-milay', 'miLay', [['rows', 'List'], ['cards', 'Cards']], miOnItems],
-    ['k-misty', 'miSty', [['plain', 'Plain rows'], ['boxed', 'Boxed'], ['reader', 'Reader'], ['compact', 'Compact'], ['native', 'Native by type'], ['postcards', 'Post cards'], ['social', 'Social feed'], ['headlines', 'Headlines']], miOnItems],
+    ['k-misty', 'miSty', [['plain', 'Plain rows'], ['boxed', 'Boxed'], ['boxedav', 'Boxed media only', '1'], ['native', 'Native by type'], ['social', 'Social feed']], miOnItems],
   ];
 }
 
