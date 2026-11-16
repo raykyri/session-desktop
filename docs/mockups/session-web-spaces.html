@@ -2552,6 +2552,10 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .Af.ds-hd .drawer .dh.ds-tabs { background: var(--pane); }
   .Af.ds-hd .ds-stab { height: 38px; }
   .Af.ds-hd .drawer.closed .dh { padding-top: 6px; }
+  /* the sidebar's divider starts below the tab strips, so the two strips read as one row */
+  .Af.ds-hd .body > .drawer { border-left: 0; border-right: 0; }
+  .Af.ds-hd .body > .drawer::before { content: ""; position: absolute; top: 39px; bottom: 0; left: 0; width: 1px; background: var(--divider); pointer-events: none; }
+  .Af.ds-hd.ds-left .body > .drawer::before { left: auto; right: 0; }
 }
 /* right sidebar: Sources and Wiki tabs */
 .ds-pane > .ds-sunits { margin: 0 -4px; }
