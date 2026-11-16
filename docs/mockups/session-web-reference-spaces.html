@@ -1,4 +1,4 @@
-<title>Session Web - Reference Spaces</title>
+<title>Session Web - Organization Spaces</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
 /* Valley Sans 100–900 variable (SIL OFL 1.1), the file bundled in web/packages/client/src/assets/fonts. Not on Google Fonts, so embedded. */
@@ -1423,8 +1423,8 @@ button.n-row:active { background: var(--n-fill); }
 .r2-h b { font-size: 15.5px; font-weight: 650; color: var(--t-heading); }
 .r2-d { margin: -10px 8px 0; font-size: var(--fs-sm); line-height: 1.45; color: var(--t-muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .r2-foot { margin-top: auto; padding: 10px 8px 0; border-top: 1px solid var(--divider); font-size: var(--fs-xs); color: var(--t-faint); }
-/* BEGIN reference spaces css */
-/* ================= reference spaces ================= */
+/* BEGIN organization spaces css */
+/* ================= organization spaces ================= */
 /* control bar: a second group of knobs */
 .knob-break { flex-basis: 100%; height: 0; }
 .knob-group { font-size: var(--fs-xs); font-weight: 650; color: var(--t-heading); text-transform: uppercase; letter-spacing: .06em; padding: 3px 8px; border-radius: var(--r-sm); background: var(--accent-soft); }
@@ -1902,7 +1902,7 @@ button.n-row:active { background: var(--n-fill); }
   .wz-code .btn { margin-left: 0; }
   .rf-toast { bottom: 16px; }
 }
-/* END reference spaces css */
+/* END organization spaces css */
 </style>
 
 <div class="shell" id="shell">
@@ -1920,8 +1920,8 @@ button.n-row:active { background: var(--n-fill); }
       <div class="knob"><span>Rail</span><div class="seg" id="k-rail"></div></div>
       <div class="knob"><span>Answer credit</span><div class="seg" id="k-credit"></div></div>
       <div class="knob-break" aria-hidden="true"></div>
-      <span class="knob-group">Reference spaces</span>
-      <div class="knob"><span>Jump to</span><select id="k-rfgo" class="k-sel" aria-label="Jump to a reference-space screen"></select></div>
+      <span class="knob-group">Organization spaces</span>
+      <div class="knob"><span>Jump to</span><select id="k-rfgo" class="k-sel" aria-label="Jump to a organization-space screen"></select></div>
       <div class="knob"><span>Role</span><div class="seg" id="k-rfrole"></div></div>
     </div>
   </div>
@@ -2133,7 +2133,7 @@ function switcher() {
   const joined = st.auth === 'in' ? SPACES.filter(s => JOINED.includes(s.id) && !s.ref) : [];
   const refs = SPACES.filter(s => s.ref && !s.draft);
   const rest = SPACES.filter(s => !joined.includes(s) && !s.ref);
-  return `<div class="sw-wrap sw-r"><button class="btn hb sw-btn" type="button" data-act="pop" aria-expanded="${st.pop}" aria-haspopup="true" aria-label="Switch space"><span class="sw-d">All spaces</span><span class="sw-m">${swCurrent()}</span>${I.chev}</button>${st.pop ? `<div class="pop" role="menu"><input id="sw-q" type="search" placeholder="Find a space" aria-label="Find a space" autocomplete="off"><button class="pop-row" type="button" data-home="1" data-name="home" aria-current="${!!st.home}"><span class="glyph home-g">${I.house}</span><span class="nm">Home</span></button>${joined.length ? `<div class="grp eyebrow">Joined</div>${joined.map(row).join('')}` : ''}<div class="grp eyebrow">Reference spaces</div>${refs.map(row).join('')}<div class="grp eyebrow">${joined.length ? 'More spaces' : 'All spaces'}</div>${rest.map(row).join('')}${swFoot()}</div>` : ''}</div>`;
+  return `<div class="sw-wrap sw-r"><button class="btn hb sw-btn" type="button" data-act="pop" aria-expanded="${st.pop}" aria-haspopup="true" aria-label="Switch space"><span class="sw-d">All spaces</span><span class="sw-m">${swCurrent()}</span>${I.chev}</button>${st.pop ? `<div class="pop" role="menu"><input id="sw-q" type="search" placeholder="Find a space" aria-label="Find a space" autocomplete="off"><button class="pop-row" type="button" data-home="1" data-name="home" aria-current="${!!st.home}"><span class="glyph home-g">${I.house}</span><span class="nm">Home</span></button>${joined.length ? `<div class="grp eyebrow">Joined</div>${joined.map(row).join('')}` : ''}<div class="grp eyebrow">Organization spaces</div>${refs.map(row).join('')}<div class="grp eyebrow">${joined.length ? 'More spaces' : 'All spaces'}</div>${rest.map(row).join('')}${swFoot()}</div>` : ''}</div>`;
 }
 const GLOBE = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="5.8"/><path d="M2.4 8h11.2M8 2.2c1.7 1.6 2.6 3.6 2.6 5.8S9.7 12.2 8 13.8M8 2.2C6.3 3.8 5.4 5.8 5.4 8s.9 4.2 2.6 5.8"/></svg>';
 const tokenSources = () => {
@@ -3878,8 +3878,8 @@ function renderNative() {
   if (nst.sheet === 'compose' && !nst.sub) { const d = $('n-draft'); if (d) d.focus({ preventScroll: true }); }
 }
 
-/* BEGIN reference spaces */
-/* Reference spaces: a space an organization runs as the reference for its product. Visitors
+/* BEGIN organization spaces */
+/* Organization spaces: a space an organization runs as the reference for its product. Visitors
    search and ask; the agent answers only from the organization's connected sources (docs, help
    center, changelog, repository).
    Organizations, products and people below are invented. */
@@ -4020,7 +4020,7 @@ const RF_NEWSUM = { sablefield: 'Declare the rule with scope: user and filter on
 RF_HTML.new_larkdown = '<p>Enable Git sync in Settings › Sync, choose the remote, and set how often Larkdown commits and pulls. <sup class="cite">1</sup> If the same note changed on two devices, Larkdown opens both versions in a merge view instead of overwriting one. <sup class="cite">1</sup></p>';
 RF_HTML.new_tallyfern = '<p>Open Reports › Export and pick the period. Tallyfern creates a ZIP with the profit and loss statement, the balance sheet and the general ledger, each as CSV and PDF. <sup class="cite">1</sup></p>';
 
-/* ---------- reference spaces: helpers ---------- */
+/* ---------- organization spaces: helpers ---------- */
 const RFI = {
   seal: '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1.2 9.7 2.5l2.1-.1.6 2 1.7 1.3-.7 2 .7 2-1.7 1.3-.6 2-2.1-.1L8 14.8l-1.7-1.3-2.1.1-.6-2-1.7-1.3.7-2-.7-2 1.7-1.3.6-2 2.1.1z"/><path d="M5.5 8.2 7.2 9.8l3.3-3.4" fill="none" style="stroke:var(--pane)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   docs: I.book,
@@ -4271,7 +4271,7 @@ function rfStats(s) {
       <section class="st-card"><h3>Lowest rated answers</h3><ol class="rf-mini st-ol">${['q3', 'q12', 'q5'].map(id => { const q = rfQ(id); return `<li><button type="button" data-rfq="${id}">${esc(q.q)}</button><span class="num faint">${q.help}%</span></li>`; }).join('')}</ol></section></div></div>`;
 }
 
-/* ---------- create a reference space, and settings ---------- */
+/* ---------- create a organization space, and settings ---------- */
 const WZ_STEPS = [['org', 'Organization', 'Who runs this space and where it lives.'], ['verify', 'Verify', 'Prove that you control the organization’s domain. Verified spaces get the official badge.'], ['sources', 'Sources', 'Answers come only from what you connect here.'], ['answers', 'Scope and answers', 'What the agent answers, and how.'], ['budget', 'Budget', 'The organization pays for the tokens visitors use.'], ['staff', 'Staff', 'Who can manage this space.']];
 const WZ_SRC = [['docs', 'docs', 'Documentation site', 'docs.pinemark.dev', 'Crawled from this address; include or exclude paths below.'], ['help', 'help', 'Help center', 'help.pinemark.dev', 'Articles listed in the sitemap.'], ['log', 'log', 'Changelog or release notes', 'pinemark.dev/changelog', 'Page or RSS feed.'], ['gh', 'repo', 'GitHub repository', 'github.com/pinemark/pinemark-sdk', 'README, /docs, releases, and maintainer replies in issues.'], ['api', 'api', 'API specification', 'api.pinemark.dev/openapi.json', 'OpenAPI or GraphQL schema.'], ['files', 'file', 'Files', '', 'PDF, Markdown or HTML files you upload.']];
 const wzNew = () => ({ name: 'Pinemark', slug: 'pinemark', kind: 'Startup', site: 'pinemark.dev', desc: 'Official answers about the Pinemark maps SDK, from Pinemark’s documentation, API specification and changelog.', vmethod: 'dns', vstate: 'none', vemail: 'ana@pinemark.dev',
@@ -4319,7 +4319,7 @@ function layoutRfNew() {
   if (!st.rf.wiz) st.rf.wiz = wzNew();
   const w = st.rf.wiz;
   const back = `<button class="th-back" type="button" data-sub="browse">${I.chev.replace('<svg', '<svg class="bk"')}Browse spaces</button>`;
-  const inner = `<div class="wz-head">${back}<h2>New reference space</h2><p class="muted">A reference space answers questions from your organization’s own sources. Fill in each section; you can publish when the domain is verified and one source is connected.</p></div>
+  const inner = `<div class="wz-head">${back}<h2>New organization space</h2><p class="muted">A organization space answers questions from your organization’s own sources. Fill in each section; you can publish when the domain is verified and one source is connected.</p></div>
       <div class="wz-pg"><nav class="wz-toc">${WZ_STEPS.map(([k, l]) => `<a href="#wz-${k}" data-wscroll="${k}" class="${wzDone(w, k) ? 'ok' : ''}">${wzDone(w, k) && (k === 'verify' || k === 'sources') ? I.check : ''}${l}</a>`).join('')}</nav><div class="wz-all">${WZ_STEPS.map(([k, l, d], i) => { const ok = (k === 'verify' || k === 'sources') && wzDone(w, k); return `<section class="wz-sec${ok ? ' ok' : ''}" id="wz-${k}"><h3><span class="wz-ck">${ok ? I.check : i + 1}</span>${l}</h3><p class="muted">${d}</p>${wzSec(k, w)}</section>`; }).join('')}</div></div>
       <div class="wz-bar"><span class="faint">${wzReady(w) ? 'Ready to publish' : 'Verify the domain and connect a source to publish'}</span><span class="grow"></span><button class="btn" type="button" data-wpub="draft">Save as draft</button><button class="btn primary" type="button" data-wpub="pub" ${wzReady(w) ? '' : 'disabled'}>Publish</button></div>`;
   return `<div class="A C Af H">${topHeader()}<div class="home-wide wz">${inner}</div></div>`;
@@ -4345,24 +4345,24 @@ function rfSettings(s) {
     <div class="set"><nav class="set-nav">${secs.map(([k, l]) => `<button type="button" data-rfset="${k}" aria-current="${cur === k}">${l}</button>`).join('')}</nav><section class="set-b"><h3>${sec[1]}</h3>${wzSec(sec[0], w, 'settings')}${cur === 'verify' ? '' : `<div class="wz-foot"><span class="grow"></span><button class="btn primary" type="button" data-rf="set-save">Save</button></div>`}</section></div></div>`;
 }
 
-/* ---------- reference spaces elsewhere: home, browse ---------- */
+/* ---------- organization spaces elsewhere: home, browse ---------- */
 const rfFollowed = () => st.auth === 'in' ? SPACES.filter(x => x.ref && !x.draft && JOINED.includes(x.id)) : [];
-/* Home: reference spaces the user follows appear only in the right column (hidden on phones). */
+/* Home: organization spaces the user follows appear only in the right column (hidden on phones). */
 function rfHomeSide() {
   const fol = rfFollowed(), list = fol.length ? fol : SPACES.filter(x => x.ref && !x.draft);
-  return `<div class="note-card"><div class="sk-head"><h3>Reference spaces</h3></div><div class="sp-rows">${list.map(x => `<button class="sp-row" type="button" data-space="${x.id}">${glyph(x)}<span>${spLabel(x)}${rfMark(x, 'tab')}</span></button>`).join('')}</div></div>`;
+  return `<div class="note-card"><div class="sk-head"><h3>Organization spaces</h3></div><div class="sp-rows">${list.map(x => `<button class="sp-row" type="button" data-space="${x.id}">${glyph(x)}<span>${spLabel(x)}${rfMark(x, 'tab')}</span></button>`).join('')}</div></div>`;
 }
 function rfBrowseSection() {
   const refs = SPACES.filter(x => x.ref && !x.draft);
-  return `<section class="br-grp rf-br"><h3 class="br-h">Reference spaces</h3><p class="rf-br-d muted">Run by an organization. Answers come only from the organization’s own docs and help pages.</p><div class="rf-brgrid">${refs.map(x => `<article class="rf-brc">${glyph(x, 'lg')}<div class="rf-brc-b"><div class="rf-brc-n"><button class="dg-name" type="button" data-space="${x.id}">${esc(x.title)}</button>${rfMark(x, 'row')}</div><span class="faint rf-brc-dom">${esc(x.ref.kind)} · ${esc(x.ref.domain)}</span><p>${esc(x.desc)}</p><span class="faint num">${rfNum(x.ref.answers)} answers · ${(RF_SRC[x.id] || []).length} sources</span></div>${st.auth === 'in' ? (JOINED.includes(x.id) ? `<button class="btn sm" type="button" data-leave="${x.id}">Following</button>` : `<button class="btn sm primary" type="button" data-join="${x.id}">Follow</button>`) : ''}</article>`).join('')}</div></section>`;
+  return `<section class="br-grp rf-br"><h3 class="br-h">Organization spaces</h3><p class="rf-br-d muted">Run by an organization. Answers come only from the organization’s own docs and help pages.</p><div class="rf-brgrid">${refs.map(x => `<article class="rf-brc">${glyph(x, 'lg')}<div class="rf-brc-b"><div class="rf-brc-n"><button class="dg-name" type="button" data-space="${x.id}">${esc(x.title)}</button>${rfMark(x, 'row')}</div><span class="faint rf-brc-dom">${esc(x.ref.kind)} · ${esc(x.ref.domain)}</span><p>${esc(x.desc)}</p><span class="faint num">${rfNum(x.ref.answers)} answers · ${(RF_SRC[x.id] || []).length} sources</span></div>${st.auth === 'in' ? (JOINED.includes(x.id) ? `<button class="btn sm" type="button" data-leave="${x.id}">Following</button>` : `<button class="btn sm primary" type="button" data-join="${x.id}">Follow</button>`) : ''}</article>`).join('')}</div></section>`;
 }
 
 /* ---------- dialogs ---------- */
 function rfModal() {
   const m = st.modal || '', s = rfSpace(), close = `<button class="iconbtn" type="button" data-act="modal-close" aria-label="Close">${I.close}</button>`;
   const wrap = (id, title, body, foot, cls = '') => `<div class="modal-scrim"><div class="modal ${cls}" role="dialog" aria-modal="true" aria-labelledby="${id}"><div class="modal-h"><h3 id="${id}">${title}</h3>${close}</div>${body}<div class="modal-f">${foot}</div></div></div>`;
-  if (m === 'rf-create') return wrap('rfc-t', 'Create a space', `<div class="rf-types"><button type="button" class="rf-type" data-rfcreate="community">${MI.grid}<b>Community space</b><span>People post and ask; anyone’s tokens pay for asks. Moderated by members.</span></button><button type="button" class="rf-type" data-rfcreate="ref">${RFI.seal}<b>Reference space</b><span>For an organization’s product. Answers come only from your docs and help pages. Your organization pays for answers.</span></button></div>`, '<span class="faint">Reference spaces need a domain you control.</span>', 'rf-mtypes');
-  if (m === 'rf-community') return wrap('rfcc-t', 'Community space', '<p class="muted">Creating a community space is outside this mock. Choose Reference space to see that flow.</p>', '<span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Close</button>', 'sm');
+  if (m === 'rf-create') return wrap('rfc-t', 'Create a space', `<div class="rf-types"><button type="button" class="rf-type" data-rfcreate="community">${MI.grid}<b>Community space</b><span>People post and ask; anyone’s tokens pay for asks. Moderated by members.</span></button><button type="button" class="rf-type" data-rfcreate="ref">${RFI.seal}<b>Organization space</b><span>For an organization’s product. Answers come only from your docs and help pages. Your organization pays for answers.</span></button></div>`, '<span class="faint">Organization spaces need a domain you control.</span>', 'rf-mtypes');
+  if (m === 'rf-community') return wrap('rfcc-t', 'Community space', '<p class="muted">Creating a community space is outside this mock. Choose Organization space to see that flow.</p>', '<span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Close</button>', 'sm');
   if (m === 'rf-report') {
     const r = st.rf.report, q = rfQ(st.rf.qid);
     return wrap('rfr-t', 'Report a problem', `<p class="muted">With “${esc(q ? q.q : '')}”</p><div class="wz-opts">${[['wrong', 'The answer is wrong'], ['old', 'It is out of date'], ['src', 'A cited source is wrong or missing'], ['harm', 'It contains private or harmful content']].map(([k, l]) => `<button type="button" class="wz-opt" data-rfrep="${k}" aria-pressed="${r.why === k}"><b>${l}</b></button>`).join('')}</div><label class="fld"><span>Details <small class="faint">optional</small></span><textarea rows="3" id="rf-repdet" placeholder="What is wrong, and where did you see the correct information?">${esc(r.det)}</textarea></label><p class="faint">Reports go to ${esc(s.ref.org)} staff. The answer stays visible while they check it.</p>`, '<span style="flex:1"></span><button class="btn ghost" type="button" data-act="modal-close">Cancel</button><button class="btn primary" type="button" data-rf="report-send">Send report</button>');
@@ -4390,7 +4390,7 @@ function rfClick(t, e) {
   let el;
   if ((el = d('[data-act="create-space"]'))) { Object.assign(st, { modal: 'rf-create', pop: false, umenu: false }); renderAll(); return true; }
   if ((el = d('[data-rfcreate]'))) { if (el.dataset.rfcreate === 'community') { st.modal = 'rf-community'; renderAll(); return true; } st.modal = null; st.rf.wiz = wzNew(); rfNav(() => Object.assign(st, rfBase(), { subPage: 'rfnew' })); return true; }
-  /* entering a reference space from anywhere opens its landing */
+  /* entering a organization space from anywhere opens its landing */
   if ((el = d('[data-space]')) && sp(el.dataset.space) && sp(el.dataset.space).ref && !d('[data-rfq]')) { rfNav(() => rfOpenSpace(el.dataset.space)); return true; }
   if ((el = d('[data-rfq]'))) {
     if (d('input, textarea')) return false;
@@ -4502,7 +4502,7 @@ $('k-reset').addEventListener('click', () => {
   clearTimeout(rfTick.t); renderAll();
 });
 
-/* ---------- native phone app: reference spaces as a plain answer list ---------- */
+/* ---------- native phone app: organization spaces as a plain answer list ---------- */
 const nSpaceBase = nSpace;
 nSpace = function (id) {
   const x = sp(id); if (!x.ref) return nSpaceBase(id);
@@ -4519,7 +4519,7 @@ nSheet = function () {
   if (k !== 'wiki' || !x || !x.ref) return nSheetBase();
   return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det tall" role="dialog" aria-label="About ${esc(x.title)}"><span class="n-grab"></span><div class="n-sheet-bar"><span></span><b>${esc(x.title)}</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc"><p class="n-wk-d">${esc(x.desc)}</p>${nGroup('Sources', (RF_SRC[x.id] || []).map(s2 => `<div class="n-row"><span class="n-row-b"><b>${esc(s2.name)}</b><small>${esc(s2.where)} · ${esc(s2.n)}</small></span></div>`))}${nGroup('Staff', x.ref.staff.map(([u, r]) => `<div class="n-row">${avatar(u, 'n-av sm')}<span class="n-row-b"><b>${esc(u)}</b></span><span class="n-val">${r}</span></div>`))}<p class="n-grp-f">${`Verified: ${esc(x.ref.domain)}. Answers come only from these sources.`}</p></div></div>`;
 };
-/* END reference spaces */
+/* END organization spaces */
 const ST0 = structuredClone(st), JOINED0 = [...JOINED], NST0 = structuredClone(nst);
 $('ctl-toggle').addEventListener('click', e => { const open = document.querySelector('.ctl').classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded', open); });
 document.getElementById('k-reset').addEventListener('click', () => {
@@ -4595,7 +4595,7 @@ function renderAllInner() {
     return;
   }
   $('url').textContent = st.subPage === 'browse' ? 'session.app/spaces/browse' : st.subPage === 'yourspaces' ? (st.ysEdit ? 'session.app/spaces/header' : 'session.app/spaces') : st.subPage === 'keys' ? 'session.app/settings/keys' : st.thread != null ? `session.app/s/${sp(POSTS[st.thread].s).name}/t/${st.thread + 1000}` : st.profilePage ? `session.app/u/${st.profileUser}` : st.savedPage ? 'session.app/saved' : st.home ? 'session.app' : `session.app/s/${sp(st.space).name}`;
-  if (st.subPage === 'rfnew') $('url').textContent = 'session.app/new/reference'; else if (!st.subPage && st.thread == null && !st.profilePage && !st.savedPage && !st.home && sp(st.space).ref) $('url').textContent = rfUrl();
+  if (st.subPage === 'rfnew') $('url').textContent = 'session.app/new/organization'; else if (!st.subPage && st.thread == null && !st.profilePage && !st.savedPage && !st.home && sp(st.space).ref) $('url').textContent = rfUrl();
   $('app').innerHTML = shellWrap(st.subPage === 'rfnew' ? layoutRfNew() : st.subPage === 'browse' ? layoutBrowse() : st.subPage === 'yourspaces' ? layoutYourSpaces() : st.subPage === 'keys' ? layoutKeys() : st.thread != null ? layoutThread() : st.profilePage ? layoutProfile() : st.savedPage ? layoutSaved() : st.home ? layoutHome() : sp(st.space).ref ? layoutRef() : L[st.opt]()) + rfModal() + (st.modal === 'discard' ? discardDialog() : st.modal === 'kbd' ? kbdOverlay() : (st.modal || '').startsWith('revoke:') ? revokeDialog() : st.modal === 'signout' ? signoutDialog() : st.modal === 'signin' ? signinDialog() : st.modal === 'addkey' ? addKeyDialog() : '');
   document.documentElement.dataset.sh = st.shV;
   document.documentElement.dataset.mnav = st.mnav;
