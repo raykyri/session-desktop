@@ -3204,7 +3204,7 @@ function thDoc(p) {
         : `<section class="th-rps" id="th-f"><h3>Replies <span class="faint num">${rps.length}</span></h3>${rps.map((r, i) => replyHTML(r, 0, pid + ':' + i)).join('')}</section>`}
       ${fuInput(p)}${relatedHTML(p)}</article>
     <aside class="th-aside">
-      <div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(sp(p.s))}</button></div>${isClosed(sp(p.s)) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(sp(p.s).members)})</b></div>` : ''}<div><span>${p.k === 'ask' ? 'Asked by' : 'Posted by'}</span><b>${p.u}</b></div>${p.k === 'ask' ? `<div><span>Answered by</span><b>${MODEL_NAME}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Tokens</span><b class="num">${p.running ? '18K so far' : fmt(p.tok)}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Paid from</span><b>${paidOf(p)}</b></div>` : ''}<div><span>Likes</span><b class="num">${p.likes}</b></div></div></aside></div>`;
+      <div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(sp(p.s))}</button></div>${isClosed(sp(p.s)) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(sp(p.s).members)})</b></div>` : ''}<div><span>${p.k === 'ask' ? 'Asked by' : 'Posted by'}</span><b>${p.u}</b></div>${p.k === 'ask' ? `<div><span>Answered by</span><b>${MODEL_NAME}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Tokens</span><b class="num">${p.running ? '18K so far' : fmt(p.tok)}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Token use</span><b>${paidOf(p)}</b></div>` : ''}<div><span>Likes</span><b class="num">${p.likes}</b></div></div></aside></div>`;
 }
 function layoutThread() {
   const p = POSTS[st.thread];
@@ -3473,7 +3473,7 @@ function thChat(p) {
   if (p.k !== 'ask') return thRead(p);
   const um = (u, age, txt) => `<div class="ch-m ch-u">${avatar(u, 'sm')}<div><div class="ch-h">${au(u)}<span>${age}</span></div><p>${esc(txt)}</p></div></div>`;
   const pid = POSTS.indexOf(p), am = (html, foot, key) => `<div class="ch-m ch-a"><span class="agent">${I.agent}</span><div><div class="ch-h"><b>Agent</b>${key && modOf(key) !== 'removed' ? itemMenu(key) : ''}</div>${key && modOf(key) ? modPh(key, key[0] === 'a' ? 'answer' : 'follow-up answer') : html}${foot || ''}</div></div>`;
-  const aside = ((thDocSrc(p).match(/<aside class="th-aside">[\s\S]*<\/aside>/) || [''])[0]).replace(/<div><span>Paid from<\/span><b>[^<]*<\/b><\/div>/, '');
+  const aside = ((thDocSrc(p).match(/<aside class="th-aside">[\s\S]*<\/aside>/) || [''])[0]).replace(/<div><span>Token use<\/span><b>[^<]*<\/b><\/div>/, '');
   const stream = `<div class="ch-stream">${miAbout(p)}${um(p.u, p.age, p.q)}${am(p.running ? answerHTML(p) : `<div class="prose">${ansBody(p)}</div>`, p.running ? '' : `<div class="ch-cost num">${fmt(p.tok)} tokens</div>`, p.running ? '' : 'a:' + pid)}${fuFor(p).map((f, i) => um(f.u, f.age, f.q) + am(f.html ? `<div class="prose">${f.html}</div>` : `<p>${esc(f.a)}</p>`, '', `f:${pid}:${i}`)).join('')}</div>`;
   return `<div class="th-doc ch ch-divided ch-grid"><article class="th-main"><div class="th-top">${thHead(p)}</div>${stream}${thActs(p)}${fuInput(p)}${relatedHTML(p)}</article>${aside}</div>`;
 }
