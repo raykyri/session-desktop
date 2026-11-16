@@ -1544,8 +1544,134 @@ button.n-row:active { background: var(--n-fill); }
 .ab-hist li { display: flex; align-items: flex-start; gap: 8px; font-size: var(--fs-sm); }
 .ab-hist li > .ab-ht { flex: 1; min-width: 0; color: var(--t-secondary); }
 .ab-hist small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
-.ab-page .ab-pv { max-width: 680px; }
-.ab-page .ab-pvt { font-size: 24px; }
+/* About › a page of its own (Variants › Page view: Article, Docs, Cover) */
+.ab-page { gap: 0; }
+.abp { width: 100%; margin: 0 auto; color: var(--t-primary); }
+.abp h1 { margin: 0; font-size: 32px; line-height: 1.2; font-weight: 680; letter-spacing: -0.015em; color: var(--t-heading); }
+.abp-crumb { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--t-faint); }
+.abp-crumb .tlink { color: var(--t-muted); font-weight: 550; }
+.abp-crumb .tlink:hover { color: var(--t-primary); }
+.abp-gl.glyph { width: 18px; height: 18px; border-radius: 5px; font-size: 10px; }
+.abp-hd { display: flex; flex-direction: column; gap: 12px; padding-bottom: 20px; border-bottom: 1px solid var(--divider); }
+.abp-by { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--t-muted); flex-wrap: wrap; }
+.abp-by .au { font-size: var(--fs-sm); }
+.abp-by > span:last-child { flex: 1; min-width: 0; }
+.abp-avs { display: inline-flex; flex: none; }
+.abp-avs > * + * { margin-left: -6px; box-shadow: 0 0 0 2px var(--feed); }
+.abp-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.abp-acts .btn svg { width: 12px; height: 12px; }
+.abp-rm { color: var(--bad); font-size: var(--fs-sm); margin-left: 4px; }
+.abp-prose { font-size: 16px; line-height: 1.7; color: var(--t-body); }
+.abp-prose p { margin: 0 0 14px; }
+.abp-prose h3 { margin: 28px 0 8px; font-size: 18px; font-weight: 650; color: var(--t-heading); scroll-margin-top: 16px; }
+.abp-prose h3:first-child { margin-top: 0; }
+.abp-prose ul { margin: 0 0 14px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.abp-prose li::marker { color: var(--t-faint); }
+.abp-hist { border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--card); padding: 12px 14px; }
+.abp-hh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.abp-hh h4, .abp-toc h4, .abp-nav h4, .abp-ac h4 { margin: 0; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--t-faint); }
+.abp-hh .iconbtn { width: 24px; height: 24px; }
+.abp-hh .iconbtn svg { width: 10px; height: 10px; }
+.abp-hist ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.abp-hist li { position: relative; display: flex; align-items: flex-start; gap: 10px; padding: 6px 0 10px; font-size: var(--fs-sm); }
+.abp-hist li:not(:last-child)::before { content: ''; position: absolute; left: 10px; top: 30px; bottom: -4px; width: 1px; background: var(--divider); }
+.abp-hist li > .ab-ht { flex: 1; min-width: 0; color: var(--t-secondary); }
+.abp-hist li small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
+.abp-hist .abp-cur { display: inline-block; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-strong); font-size: var(--fs-xs); font-weight: 550; }
+.abp-rel { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; padding-top: 20px; border-top: 1px solid var(--divider); }
+.abp-rel h2 { margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--t-strong); }
+.abp-rel ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.abp-th { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 8px 10px; margin: 0 -10px; border: 0; border-radius: var(--r-md); background: transparent; text-align: left; font: inherit; color: var(--t-primary); cursor: pointer; }
+.abp-th:hover { background: var(--fill-hover); }
+.abp-th b { font-weight: 550; font-size: var(--fs-sm); }
+.abp-th small { color: var(--t-faint); font-size: var(--fs-xs); }
+.abp-ask { align-self: flex-start; }
+.abp-ask svg { width: 12px; height: 12px; }
+.abp-toc ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; border-left: 1px solid var(--divider); }
+.abp-toc .tlink { display: block; padding-left: 12px; margin-left: -1px; border-left: 2px solid transparent; font-size: var(--fs-sm); color: var(--t-muted); text-align: left; }
+.abp-toc .tlink:hover { color: var(--t-primary); border-left-color: var(--border-strong); }
+/* editor, shared by the three layouts */
+.abp-ed { display: flex; flex-direction: column; gap: 10px; }
+.abp-edbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px 8px 14px; border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--card); font-size: var(--fs-sm); color: var(--t-muted); }
+.abp-edb-a { display: inline-flex; gap: 6px; flex: none; }
+.abp-edt { border: 0; background: transparent; padding: 6px 0; font: inherit; font-size: 32px; font-weight: 680; letter-spacing: -0.015em; color: var(--t-heading); outline: none; border-bottom: 1px solid var(--divider); }
+.abp-edt::placeholder, .abp-edx::placeholder { color: var(--placeholder); }
+.abp-edx { border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--card); padding: 14px 16px; font: inherit; font-size: 15px; line-height: 1.65; color: var(--t-body); min-height: 280px; }
+.abp-edx:focus { border-color: var(--border-strong); outline: none; }
+
+/* A. Article */
+.abp-article { max-width: 680px; display: flex; flex-direction: column; gap: 20px; padding-top: 8px; }
+.abp-article .abp-hd h1 { margin-top: 4px; }
+.abp-article .abp-prose { margin-top: 4px; }
+
+/* B. Docs */
+.ab-page.abv-docs { padding-top: 0; padding-bottom: 0; }
+.abp-docs { max-width: 1160px; display: grid; grid-template-columns: 210px minmax(0, 1fr) 220px; gap: 40px; align-items: start; }
+.abp-docs.editing { grid-template-columns: 210px minmax(0, 1fr); }
+.abp-nav, .abp-aside { position: sticky; top: 0; padding: 26px 0 24px; display: flex; flex-direction: column; gap: 8px; }
+.abp-nav { border-right: 1px solid var(--divider); padding-right: 16px; min-height: 680px; }
+.abp-nav ul { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.abp-nav li button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: var(--r-md); background: transparent; font: inherit; font-size: var(--fs-sm); color: var(--t-secondary); text-align: left; cursor: pointer; }
+.abp-nav li button:hover { background: var(--fill-hover); color: var(--t-primary); }
+.abp-nav li button[aria-current] { background: var(--fill-subtle); color: var(--t-heading); font-weight: 600; }
+.abp-nav li svg { width: 13px; height: 13px; flex: none; color: var(--t-faint); }
+.abp-nav .ab-add { margin-top: 0; padding-left: 8px; }
+.abp-navab { margin-top: 10px; padding: 10px 8px 0; border-top: 1px solid var(--divider) !important; font-size: var(--fs-sm); text-align: left; }
+.abp-main { display: flex; flex-direction: column; gap: 20px; padding: 26px 0 48px; min-width: 0; }
+.abp-aside { gap: 20px; }
+.abp-ac { display: flex; flex-direction: column; gap: 10px; }
+.abp-ac .abp-acts { flex-direction: column; align-items: stretch; }
+.abp-ac .abp-acts .btn { justify-content: center; }
+.abp-ac .abp-rm { align-self: center; margin: 2px 0 0; }
+.abp-dl { margin: 0; display: flex; flex-direction: column; gap: 8px; font-size: var(--fs-sm); }
+.abp-dl dt { color: var(--t-faint); font-size: var(--fs-xs); }
+.abp-dl dd { margin: 1px 0 0; color: var(--t-primary); }
+.abp-dl .au { font-size: var(--fs-sm); }
+.abp-aside .abp-hist { padding: 10px 12px; }
+
+/* C. Cover */
+.ab-page.abv-cover, .H .ab-page.abv-cover { padding: 0 0 48px; }
+.abp-cover { display: flex; flex-direction: column; }
+.abp-band { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-height: 150px; padding: 18px max(32px, calc((100% - 720px) / 2)); background: linear-gradient(135deg, color-mix(in srgb, var(--ab-c) 26%, var(--feed)), color-mix(in srgb, var(--ab-c) 8%, var(--feed))); border-bottom: 1px solid var(--divider); }
+.abp-band .abp-crumb .tlink { color: var(--t-secondary); }
+.abp-band .abp-acts .btn { background: color-mix(in srgb, var(--card) 85%, transparent); }
+.abp-icon { position: absolute; left: max(32px, calc((100% - 720px) / 2)); bottom: -28px; display: grid; place-items: center; width: 60px; height: 60px; border-radius: 16px; background: var(--card); color: var(--ab-c); box-shadow: 0 0 0 1px var(--divider), 0 6px 18px rgba(0, 0, 0, .08); }
+.abp-icon svg { width: 26px; height: 26px; }
+.abp-in { width: 100%; max-width: 720px; margin: 0 auto; padding: 48px 32px 0; box-sizing: content-box; display: flex; flex-direction: column; gap: 20px; }
+.abp-cover .abp-in { max-width: 720px; }
+.abp-props { margin: 0; display: grid; grid-template-columns: 120px 1fr; row-gap: 2px; padding: 4px 0 16px; border-bottom: 1px solid var(--divider); font-size: var(--fs-sm); }
+.abp-props > div { display: contents; }
+.abp-props dt { color: var(--t-faint); padding: 5px 0; }
+.abp-props dd { margin: 0; padding: 5px 0; display: flex; align-items: center; gap: 7px; color: var(--t-primary); }
+.abp-props .au { font-size: var(--fs-sm); }
+.abp-toc.inline { padding: 12px 16px; border-radius: var(--r-lg); background: var(--fill-subtle); }
+.abp-toc.inline ul { border-left: 0; flex-direction: row; flex-wrap: wrap; gap: 4px 16px; }
+.abp-toc.inline .tlink { padding-left: 0; border-left: 0; }
+.abp-rel.cards ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.abp-rel.cards .abp-th { margin: 0; height: 100%; padding: 12px; border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--card); justify-content: space-between; gap: 8px; }
+
+@media (max-width: 980px) {
+  .abp-docs, .abp-docs.editing { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .abp-nav { position: static; min-height: 0; border-right: 0; border-bottom: 1px solid var(--divider); padding: 14px 0 10px; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .abp-nav h4, .abp-nav .abp-navab, .abp-nav .ab-add { display: none; }
+  .abp-nav ul { flex-direction: row; gap: 4px; overflow-x: auto; margin: 0; scrollbar-width: none; mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+  .abp-nav li button { white-space: nowrap; }
+  .abp-aside { position: static; padding: 0 0 32px; }
+  .abp-aside .abp-toc { display: none; }
+  .abp-ac .abp-acts { flex-direction: row; }
+  .abp-main { padding: 18px 0 20px; }
+}
+@media (max-width: 760px) {
+  .abp h1, .abp-edt { font-size: 26px; }
+  .abp-prose { font-size: 15px; }
+  .abp-band { padding: 14px 16px 48px; min-height: 0; flex-direction: column; gap: 14px; }
+  .abp-icon { left: 16px; width: 52px; height: 52px; bottom: -24px; }
+  .abp-in { padding: 40px 16px 0; box-sizing: border-box; }
+  .abp-props { grid-template-columns: 96px 1fr; }
+  .abp-rel.cards ul { grid-template-columns: minmax(0, 1fr); }
+  .abp-edbar { flex-direction: column; align-items: stretch; }
+  .abp-edb-a { justify-content: flex-end; }
+}
 .ab-skx { padding: 4px 4px 10px 34px; display: flex; flex-direction: column; gap: 8px; }
 .ab-skq { margin: 0; font-size: var(--fs-sm); color: var(--t-primary); }
 .ab-sku { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; font-size: var(--fs-sm); }
@@ -8015,7 +8141,7 @@ function DSKNOBS() {
   return [
     ['k-dspos', 'dsPos', [['hd-right', 'Header across, sidebar right'], ['hd-left', 'Header across, sidebar left']], () => { Object.assign(st, { drawer: true, dsSTab: 'sources', mWiki: false }); dsOnSpace(); }],
     /* About: where a page opens, how a skill previews, where the member list opens */
-    ['k-abpage', 'abPageV', [['side', 'In the sidebar'], ['page', 'As a page']], () => jump('ab-page')],
+    ['k-abpage', 'abPageV', [['article', 'Article'], ['docs', 'Docs'], ['cover', 'Cover']], () => jump('ab-page')],
     ['k-abskill', 'abSkillV', [['inline', 'In place'], ['dialog', 'In a dialog']], () => jump('ab-skill')],
     ['k-abmem', 'abMemV', [['dialog', 'In a dialog'], ['side', 'In the sidebar']], () => jump('ab-members')],
   ];
@@ -8075,7 +8201,7 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsPos: 'hd-right', abPageV: 'side', abSkillV: 'inline', abMemV: 'dialog', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsPos: 'hd-right', abPageV: 'article', abSkillV: 'inline', abMemV: 'dialog', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
   dsMenu: null, dsSend: null, dsSTab: null, dsWhy: 'spam', dsRepNote: '',
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
@@ -8797,10 +8923,10 @@ const ROLE_HELP = { owner: 'Owner: settings, extra tokens and moderators', admin
 const abOwner = s => (s.mods.find(m => m[1] === 'owner') || s.mods[0] || [s.byok || 'lettie'])[0];
 const abCanEdit = s => st.auth === 'in' && (isModOf(s.id) || (s.pageEdit === 'members' && isMember(s.id)));
 const ABDOC_TEXT = {
-  'getting-started-guide': ['Sablefield is a hosted Postgres-compatible database that syncs a subset of your data to client devices.', 'Create a project, add a sync rule that scopes rows to the signed-in user, then install a client SDK.', 'Questions that are specific to your account go to support, not this space.'],
-  'reading-group-schedule': ['November: The Dispossessed (Le Guin). Thread opens Nov 20.', 'December: Accelerando (Stross), chapters 1–4.', 'Suggest a book in the reading-group thread; the moderators pick by vote.'],
-  'canon-starter-list': ['A short list for people new to the genre, one book per subgenre.', 'The Left Hand of Darkness; Neuromancer; The Fifth Season; Hyperion; Ancillary Justice.', 'Add a book with a sentence on why it belongs.'],
-  'spoiler-policy': ['Mark spoilers in titles with [spoilers].', 'In answers, put plot details after a line that says "Spoilers below".', 'Moderators hide threads that reveal endings without a warning.'],
+  'getting-started-guide': ['Sablefield is a hosted Postgres-compatible database that syncs a subset of your data to client devices. This page lists the first steps and the threads that answer the most common questions about each one.', '## 1. Create a project', 'Pick a region close to most of your users. You can add read replicas in other regions later; the primary region cannot change after creation.', '## 2. Add a sync rule', 'A sync rule selects the rows each signed-in user receives. Scope every rule by the user or team column:', '- Start with one table and one rule.\n- Deploy the rule from the dashboard or with sablefield rules deploy.\n- E_SYNC_SCOPE means the rule can return rows outside its declared scope.', '## 3. Install a client SDK', 'SDKs exist for TypeScript, Swift and Kotlin. Each one queues writes while the device is offline and replays them in order.', '## Not covered here', 'Questions about a specific account, invoice or project go to Sablefield support.'],
+  'reading-group-schedule': ['The reading group reads one book a month. Each book gets a thread on the date below; post notes there, not in new threads.', '## Upcoming', '- November: The Dispossessed (Le Guin). Thread opens Nov 20.\n- December: Accelerando (Stross), chapters 1–4. Thread opens Dec 18.\n- January: to be chosen by vote.', '## How books are chosen', 'Suggest a book in the reading-group thread with one sentence on why. Moderators open a vote on the first of the month and pin the result.', '## Spoilers', 'Mark plot details in the monthly thread as described in the spoiler policy.'],
+  'canon-starter-list': ['A short list for people new to the genre: one book per subgenre, each with a sentence on why it is on the list.', '## Classics', '- The Left Hand of Darkness (Le Guin, 1969): gender and politics on a planet in an ice age.\n- Neuromancer (Gibson, 1984): the novel that named cyberspace.\n- Hyperion (Simmons, 1989): six stories told on one pilgrimage.', '## Recent', '- Ancillary Justice (Leckie, 2013): told by a soldier who used to be a starship.\n- The Fifth Season (Jemisin, 2015): geology as the centre of the worldbuilding.', '## Adding a book', 'Reply in the canon thread with the title, the year and one sentence. Moderators update this page at the start of each month.'],
+  'spoiler-policy': ['Threads in #sci-fi are public and show up in search, so mark anything that gives away a plot.', '## In titles', 'Put [spoilers] at the start of a title that names a twist or an ending.', '## In answers and replies', '- Put plot details after a line that says Spoilers below.\n- Name the book and the chapter the spoiler comes from.', '## Moderation', 'Moderators hide threads that reveal endings without a warning and ask the author to add one. The thread comes back once it is marked.'],
 };
 /* a page's document: stored edits, else one made from the page's title */
 function abDoc(s, i) {
@@ -8810,7 +8936,6 @@ function abDoc(s, i) {
   const text = ABDOC_TEXT[abSlug(t)] || [`${t} for ${spName(s)}.`, 'This page collects what members ask about most, with links to the threads that answer it.', 'Moderators keep it current; suggest a change in a thread.'];
   return { t, text, by, ed, revs: [{ by: ed, age, note: 'Updated the page' }, { by: ed, age: '3w', note: 'Added a section' }, { by, age: '2mo', note: 'Created the page' }] };
 }
-const abDocHTML = d => `<div class="prose ab-prose">${d.text.map(p => `<p>${esc(p)}</p>`).join('')}</div>`;
 
 /* ---------- pages card, page view, editor, history ---------- */
 function abPagesCard(s) {
@@ -8822,21 +8947,58 @@ function abPagesCard(s) {
   const add = can ? `<button class="tlink ab-add" type="button" data-abpgnew="1">${PLUS}Add a page</button>` : '';
   return `<div class="note-card ab-pages">${head}${s.pages.length ? `<ul class="links ab-pgl">${rows}</ul>` : `<p class="muted cs-small abw-none">No pages yet.${can ? '' : ' Moderators add pages such as guides and schedules.'}</p>`}${add}</div>`;
 }
-/* the page: in the sidebar (back to About) or as a page of its own (back to the space) */
-function abPageView(s, inSide) {
-  const i = st.abPage, d = abDoc(s, i), can = abCanEdit(s), back = inSide ? `<button class="th-back" type="button" data-abpage="x">${I.chev.replace('<svg', '<svg class="bk"')}About</button>` : '';
+/* ---------- a page of its own: three layouts (Variants › Page view) ---------- */
+const abAge = a => a === 'now' || a === 'just now' ? 'just now' : a + ' ago';
+const abWords = d => d.text.join(' ').split(/\s+/).filter(Boolean).length;
+/* blocks: "## " is a heading, lines that start with "- " are a list, anything else is a paragraph */
+const abBlocks = d => d.text.map((b, k) => b.startsWith('## ') ? { h: b.slice(3).trim(), id: `abh-${k}` } : /^- /.test(b) ? { li: b.split('\n').map(l => l.replace(/^-\s*/, '').trim()).filter(Boolean) } : { p: b });
+const abDocHTML = d => `<div class="abp-prose">${abBlocks(d).map(b => b.h ? `<h3 id="${b.id}">${esc(b.h)}</h3>` : b.li ? `<ul>${b.li.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : `<p>${esc(b.p)}</p>`).join('')}</div>`;
+const abPageThreads = s => D.posts.map((p, i) => ({ p, i })).filter(({ p }) => p.s === s.id && p.k === 'ask' && !p.running).slice(0, 3);
+function abPageParts(s) {
+  const i = st.abPage, d = abDoc(s, i), can = abCanEdit(s), mod = isModOf(s.id) && st.auth === 'in';
+  const age = abAge(d.revs[0].age), mins = Math.max(1, Math.round(abWords(d) / 200));
+  const crumb = `<nav class="abp-crumb" aria-label="Breadcrumb">${glyph(s, 'abp-gl')}<button class="tlink" type="button" data-space="${s.id}">${spName(s)}</button><span aria-hidden="true">/</span><button class="tlink" type="button" data-abtoabout="1">Pages</button></nav>`;
+  const btn = (attr, icon, label, extra = '') => `<button class="btn sm" type="button" ${attr} ${extra}>${icon || ''}${label}</button>`;
+  const acts = `<div class="abp-acts">${can ? btn('data-abpged="edit"', I.write, 'Edit') : ''}${btn('data-abhist="1"', '', 'History', `aria-pressed="${!!st.abHist}"`)}${btn('data-abcopy="page"', '', 'Copy link')}${mod ? `<button class="tlink abp-rm" type="button" data-abpgdel="${i}">Remove</button>` : ''}</div>`;
+  const byline = `<div class="abp-by"><span class="abp-avs">${avatar(d.ed, 'sm')}${d.by !== d.ed ? avatar(d.by, 'sm') : ''}</span><span>Edited by ${au(d.ed)} ${age} · created by ${au(d.by)} · ${mins} min read</span></div>`;
+  const hist = `<section class="abp-hist" aria-label="Page history"><div class="abp-hh"><h4>History</h4><button class="iconbtn" type="button" data-abhist="1" aria-label="Close history">${I.close}</button></div><ol>${d.revs.map((r, k) => `<li class="${k ? '' : 'cur'}">${avatar(r.by, 'sm')}<span class="ab-ht"><b>${esc(r.by)}</b> ${esc(r.note)}<small>${abAge(r.age)}</small></span>${k && mod ? `<button class="tlink" type="button" data-abrestore="${k}">Restore</button>` : k ? '' : '<small class="abp-cur">Current</small>'}</li>`).join('')}</ol></section>`;
+  const th = abPageThreads(s);
+  const rel = `<section class="abp-rel"><div class="abp-relh"><h2>Threads in ${spName(s)} that link to this page</h2></div>${th.length ? `<ul>${th.map(({ p, i: k }) => `<li><button class="abp-th" type="button" data-open="${k}"><b>${esc(qtClip(p.q, 90))}</b><small>${esc(p.u)} · ${p.age} · ${replyCount(p)} ${replyCount(p) === 1 ? 'reply' : 'replies'}</small></button></li>`).join('')}</ul>` : '<p class="faint cs-small">No threads link to this page yet.</p>'}${st.auth === 'in' ? `<button class="btn sm abp-ask" type="button" data-abask="1">${I.reply}Ask about this page</button>` : ''}</section>`;
+  const toc = abBlocks(d).filter(b => b.h);
+  const tocHTML = toc.length ? `<nav class="abp-toc" aria-label="On this page"><h4>On this page</h4><ul>${toc.map(b => `<li><button class="tlink" type="button" data-abtoc="${b.id}">${esc(b.h)}</button></li>`).join('')}</ul></nav>` : '';
+  let editor = '';
   if (st.abPageEd != null) {
     const ed = st.abPageEd;
-    return `${back}<div class="ab-pv ab-ed"><label class="fld"><span>Title</span><input id="ab-pg-t" type="text" value="${esc(ed.t)}"></label><label class="fld"><span>Page</span><textarea id="ab-pg-b" class="cs-ta" rows="8">${esc(ed.b)}</textarea></label><p class="cs-fine">Blank lines separate paragraphs. Members see who edited the page and when.</p><div class="ab-acts"><button class="btn" type="button" data-abpged="cancel">Cancel</button><button class="btn primary" type="button" data-abpged="save" ${ed.t.trim() ? '' : 'disabled'}>Save</button></div></div>`;
+    editor = `<div class="abp-ed"><div class="abp-edbar"><span>${ed.isNew ? `New page in ${spName(s)}` : 'Editing. Members get a notification when you save.'}</span><span class="abp-edb-a"><button class="btn sm" type="button" data-abpged="cancel">Cancel</button><button class="btn sm primary" type="button" data-abpged="save" ${ed.t.trim() ? '' : 'disabled'}>${ed.isNew ? 'Add page' : 'Save'}</button></span></div><input id="ab-pg-t" class="abp-edt" type="text" value="${esc(ed.t)}" placeholder="Page title" aria-label="Page title"><textarea id="ab-pg-b" class="abp-edx" rows="12" placeholder="Write the page" aria-label="Page text">${esc(ed.b)}</textarea><p class="cs-fine ab-f">Blank lines separate blocks. A block that starts with ## is a heading; lines that start with - are a list.</p></div>`;
   }
-  const meta = `<p class="ab-pm faint">Created by ${au(d.by)} · edited by ${au(d.ed)} ${d.revs[0].age === 'now' || d.revs[0].age === 'just now' ? 'just now' : d.revs[0].age + ' ago'}</p>`;
-  const hist = st.abHist ? `<div class="ab-hist"><h4>History</h4><ol>${d.revs.map((r, k) => `<li>${avatar(r.by, 'sm')}<span class="ab-ht"><b>${esc(r.by)}</b> ${esc(r.note)}<small>${r.age === 'now' || r.age === 'just now' ? 'just now' : r.age + ' ago'}</small></span>${k && isModOf(s.id) ? `<button class="tlink" type="button" data-abrestore="${k}">Restore</button>` : k ? '' : '<small class="faint">Current</small>'}</li>`).join('')}</ol></div>` : '';
-  const acts = `<div class="ab-acts">${can ? `<button class="btn sm" type="button" data-abpged="edit">${I.write}Edit</button>` : ''}<button class="btn sm" type="button" data-abhist="1" aria-pressed="${!!st.abHist}">History</button><button class="btn sm" type="button" data-abcopy="page">Copy link</button></div>`;
-  return `${back}<article class="ab-pv"><h2 class="ab-pvt">${esc(d.t)}</h2>${meta}${acts}${hist}${abDocHTML(d)}</article>`;
+  return { s, i, d, can, mod, age, crumb, acts, byline, hist, rel, toc, tocHTML, editor };
+}
+/* A. Article: one reading column */
+function abPageArticle(s) {
+  const x = abPageParts(s);
+  if (x.editor) return `<div class="abp abp-article">${x.crumb}${x.editor}</div>`;
+  return `<article class="abp abp-article">${x.crumb}<header class="abp-hd"><h1>${esc(x.d.t)}</h1>${x.byline}${x.acts}</header>${st.abHist ? x.hist : ''}${abDocHTML(x.d)}${x.rel}</article>`;
+}
+/* B. Docs: the space's pages on the left, contents and page details on the right */
+function abPageDocs(s) {
+  const x = abPageParts(s);
+  const nav = `<nav class="abp-nav" aria-label="Pages in ${esc(spName(s))}"><h4>Pages</h4><ul>${s.pages.map(([t, a], k) => `<li><button type="button" data-abopen="${s.id}:${k}" ${k === x.i ? 'aria-current="page"' : ''}>${I.page}<span>${esc(t)}</span></button></li>`).join('')}${x.i >= s.pages.length ? `<li><button type="button" aria-current="page">${I.page}<span>${esc(st.abPageEd && st.abPageEd.t || 'New page')}</span></button></li>` : ''}</ul>${x.can && !x.editor ? `<button class="tlink ab-add" type="button" data-abpgnew="1">${PLUS}Add a page</button>` : ''}<button class="tlink abp-navab" type="button" data-abtoabout="1">About ${spName(s)}</button></nav>`;
+  const det = `<dl class="abp-dl"><div><dt>Created</dt><dd>${au(x.d.by)} · ${abAge(x.d.revs[x.d.revs.length - 1].age)}</dd></div><div><dt>Last edited</dt><dd>${au(x.d.ed)} · ${x.age}</dd></div><div><dt>Who can edit</dt><dd>${s.pageEdit === 'members' ? 'Members' : 'Moderators'}</dd></div></dl>`;
+  const aside = x.editor ? '' : `<aside class="abp-aside">${st.abHist ? x.hist : x.tocHTML}<div class="abp-ac"><h4>Page</h4>${det}${x.acts}</div></aside>`;
+  const main = x.editor ? `<div class="abp-main">${x.crumb}${x.editor}</div>` : `<article class="abp-main">${x.crumb}<header class="abp-hd"><h1>${esc(x.d.t)}</h1>${x.byline}</header>${abDocHTML(x.d)}${x.rel}</article>`;
+  return `<div class="abp abp-docs${x.editor ? ' editing' : ''}">${nav}${main}${aside}</div>`;
+}
+/* C. Cover: a band in the space's colour, then page properties above the text */
+function abPageCover(s) {
+  const x = abPageParts(s);
+  const band = `<div class="abp-band" style="--ab-c:${avColor(s.av)}">${x.crumb}${x.editor ? '' : x.acts}<span class="abp-icon">${I.page}</span></div>`;
+  if (x.editor) return `<div class="abp abp-cover">${band}<div class="abp-in">${x.editor}</div></div>`;
+  const props = `<dl class="abp-props"><div><dt>Space</dt><dd>${glyph(s, 'abp-gl')}${spName(s)}</dd></div><div><dt>Created by</dt><dd>${avatar(x.d.by, 'sm')}${au(x.d.by)}<span class="faint">${abAge(x.d.revs[x.d.revs.length - 1].age)}</span></dd></div><div><dt>Last edited</dt><dd>${avatar(x.d.ed, 'sm')}${au(x.d.ed)}<span class="faint">${x.age}</span></dd></div><div><dt>Visible to</dt><dd>${isClosed(s) ? 'Members' : 'Anyone'}</dd></div></dl>`;
+  return `<article class="abp abp-cover">${band}<div class="abp-in"><h1>${esc(x.d.t)}</h1>${props}${st.abHist ? x.hist : ''}${x.tocHTML ? x.tocHTML.replace('abp-toc', 'abp-toc inline') : ''}${abDocHTML(x.d)}${x.rel.replace('abp-rel', 'abp-rel cards')}</div></article>`;
 }
 CS_PAGES.abpage = () => {
-  const s = sp(st.space);
-  return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page ab-page"><div class="sub-top"><button class="th-back" type="button" data-space="${s.id}">${I.chev.replace('<svg', '<svg class="bk"')}${spName(s)}</button></div>${abPageView(s, false)}</div></div>`;
+  const s = sp(st.space), v = st.abPageV;
+  return `<div class="A C Af H">${topHeader()}<div class="home-wide ab-page abv-${v}">${v === 'docs' ? abPageDocs(s) : v === 'cover' ? abPageCover(s) : abPageArticle(s)}</div></div>`;
 };
 
 /* ---------- skills: preview, then use ---------- */
@@ -8879,7 +9041,6 @@ function abTokenCard(s) {
 
 /* ---------- the About tab ---------- */
 function abAbout(s) {
-  if (st.abPage != null && st.abPageV === 'side') return abPageView(s, true);
   if (st.abMem && st.abMemV === 'side') return `<button class="th-back" type="button" data-abmem="x">${I.chev.replace('<svg', '<svg class="bk"')}About</button><h3 class="ab-pvt sm">Members of ${spName(s)}</h3>${abMembersList(s)}`;
   const facts = `<div class="th-facts"><div><span>Visibility</span><b>${isClosed(s) ? visLabel(s) : 'Open'}</b></div><div><span>Joining</span><b>${!isClosed(s) ? 'Anyone can join' : policyLabel(s)}</b></div><div><span>Members</span><b><button class="tlink num" type="button" data-abmem="1">${s.members.toLocaleString('en-US')}</button></b></div><div><span>Created</span><b>${s.created} by ${au(abOwner(s))}</b></div>${verShown(s) ? `<div><span>Domain</span><b class="sf-vd">${SEAL}${esc(s.dom.domain)}</b></div>` : ''}</div>`;
   const join = joinBtn(s);
@@ -8927,15 +9088,18 @@ const abSettingsPages = d => stSec('Pages', 'Who can edit the pages in About. Mo
 CS_SUBNAME.abpage = 'Page';
 
 /* ---------- clicks and typing ---------- */
-const abOpenPage = (sid, i) => Object.assign(st, st.abPageV === 'page' ? { ...NAVBASE(), space: sid, subPage: 'abpage', abPage: i } : { ...NAVBASE(), space: sid, drawer: true, dsSTab: 'wiki', abPage: i, mWiki: st.device === 'phone' });
+const abOpenPage = (sid, i) => Object.assign(st, { ...NAVBASE(), space: sid, home: false, subPage: 'abpage', abPage: i });
 on($('app'), 'click', e => {
   const t = e.target, d = sel => t.closest && t.closest(sel); let b;
   const s = sp(st.space), go = () => { renderAll(); return true; };
   if (d('[data-skill]') && (st.modal || '').startsWith('ab-skill')) { st.modal = null; return go(); }
-  if ((b = d('[data-abpage]'))) { const v = b.dataset.abpage; if (v === 'x') Object.assign(st, { abPage: null, abPageEd: null, abHist: false }); else if (st.abPageV === 'page') abOpenPage(s.id, +v); else Object.assign(st, { abPage: +v, abPageEd: null, abHist: false }); return go(); }
+  if ((b = d('[data-abpage]'))) { const v = b.dataset.abpage; if (v === 'x') Object.assign(st, { abPage: null, abPageEd: null, abHist: false }); else abOpenPage(s.id, +v); return go(); }
   if ((b = d('[data-abopen]'))) { const [sid, i] = b.dataset.abopen.split(':'); abOpenPage(sid, +i); return go(); }
   if (d('[data-abhist]')) { st.abHist = !st.abHist; return go(); }
-  if ((b = d('[data-abpgnew]'))) { Object.assign(st, st.abPageV === 'page' ? { ...NAVBASE(), space: s.id, subPage: 'abpage' } : { drawer: true, dsSTab: 'wiki' }, { abPage: s.pages.length, abHist: false, abPageEd: { t: '', b: '', isNew: true } }); return go(); }
+  if (d('[data-abtoabout]')) { Object.assign(st, { ...NAVBASE(), space: s.id, home: false, drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' }); return go(); }
+  if ((b = d('[data-abtoc]'))) { const h = document.getElementById(b.dataset.abtoc); if (h) h.scrollIntoView({ block: 'start', behavior: 'smooth' }); return true; }
+  if (d('[data-abask]')) { const t = abDoc(s, st.abPage).t; Object.assign(st, { ...NAVBASE(), space: s.id, home: false, draft: `About the page “${t}”: `, compOpen: true }); renderAll(); const c = $('compose-text'); if (c) { c.focus(); c.setSelectionRange(c.value.length, c.value.length); } return true; }
+  if ((b = d('[data-abpgnew]'))) { Object.assign(st, { ...NAVBASE(), space: s.id, home: false, subPage: 'abpage' }, { abPage: s.pages.length, abHist: false, abPageEd: { t: '', b: '', isNew: true } }); return go(); }
   if ((b = d('[data-abpged]'))) {
     const v = b.dataset.abpged, i = st.abPage, doc = abDoc(s, i);
     if (v === 'edit') st.abPageEd = { t: doc.t, b: doc.text.join('\n\n') };
@@ -8955,7 +9119,7 @@ on($('app'), 'click', e => {
   if (d('[data-abpgorder]')) { st.abPgOrder = !st.abPgOrder; return go(); }
   if ((b = d('[data-abpgmv]'))) { const [v, i] = b.dataset.abpgmv.split(':'), k = +i, j = v === 'up' ? k - 1 : k + 1; spEdit(s.id, x => { [x.pages[k], x.pages[j]] = [x.pages[j], x.pages[k]]; }); return go(); }
   if ((b = d('[data-abpgdel]'))) { st.modal = 'ab-pgdel:' + b.dataset.abpgdel; return go(); }
-  if ((b = d('[data-abpgdelok]'))) { const i = +b.dataset.abpgdelok, t = s.pages[i][0]; spEdit(s.id, x => { x.pages.splice(i, 1); }); db.del('pagedocs', abKey(s, t)); st.modal = null; toast(`Removed “${t}”.`); return go(); }
+  if ((b = d('[data-abpgdelok]'))) { const i = +b.dataset.abpgdelok, t = s.pages[i][0]; spEdit(s.id, x => { x.pages.splice(i, 1); }); db.del('pagedocs', abKey(s, t)); st.modal = null; if (st.subPage === 'abpage') Object.assign(st, { ...NAVBASE(), space: s.id, home: false, drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' }); toast(`Removed “${t}”.`); return go(); }
   if ((b = d('[data-abskill]'))) { const i = +b.dataset.abskill; if (st.abSkillV === 'dialog') st.modal = 'ab-skill:' + i; else st.abSkill = st.abSkill === i ? null : i; return go(); }
   if (d('[data-abskmg]')) { Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: s.id, space: s.id, mgTab: 'skills', abSkEd: null }); return go(); }
   if ((b = d('[data-absk]'))) {
@@ -8990,7 +9154,7 @@ on($('app'), 'change', e => { if (e.target.name === 'ab-pgedit') { csEdit(x => {
 /* ---------- search finds pages ---------- */
 { const AB_layoutSearch = layoutSearch; layoutSearch = CS_PAGES.search = function () {
   const h = AB_layoutSearch(), q = st.q.trim().toLowerCase(); if (q.length < 3) return h;
-  const hits = []; D.spaces.filter(s => canRead(s)).forEach(s => s.pages.forEach((p, i) => { const d = abDoc(s, i), txt = d.text.join(' '); if ((d.t + ' ' + txt).toLowerCase().includes(q)) hits.push({ s, i, d, txt }); }));
+  const hits = []; D.spaces.filter(s => canRead(s)).forEach(s => s.pages.forEach((p, i) => { const d = abDoc(s, i), txt = d.text.join(' ').replace(/(^|\s)(## |- )/g, '$1'); if ((d.t + ' ' + txt).toLowerCase().includes(q)) hits.push({ s, i, d, txt }); }));
   if (!hits.length) return h;
   const sec = `<section class="sr-sec"><h3 class="br-h">Pages <span class="num">${hits.length}</span></h3><div class="sr-list">${hits.slice(0, 4).map(({ s, i, d, txt }) => `<article class="sr-row" data-abopen="${s.id}:${i}"><a class="sr-t row-link" href="#" onclick="return false" data-abopen="${s.id}:${i}">${esc(d.t)}</a><p class="sr-ex">${esc(qtClip(txt, 160))}</p><div class="sr-m faint">${spName(s)} · page · edited ${s.pages[i][1] === 'now' ? 'just now' : s.pages[i][1] + ' ago'}</div></article>`).join('')}</div></section>`;
   return h.includes('</div><aside class="sr-side">') ? h.replace('</div><aside class="sr-side">', sec + '</div><aside class="sr-side">') : h;
@@ -9006,7 +9170,7 @@ function abJump(k) {
     case 'ab-page-edit': { about('scifi'); abOpenPage('scifi', 1); const d = abDoc(sp('scifi'), 1); st.abPageEd = { t: d.t, b: d.text.join('\n\n') }; break; }
     case 'ab-page-hist': about('scifi'); abOpenPage('scifi', 1); st.abHist = true; break;
     case 'ab-pages-order': about('scifi'); st.abPgOrder = true; break;
-    case 'ab-page-new': about('scifi'); if (st.abPageV === 'page') Object.assign(st, { subPage: 'abpage', mWiki: false }); Object.assign(st, { abPage: sp('scifi').pages.length, abPageEd: { t: 'Recommended anthologies', b: '', isNew: true } }); break;
+    case 'ab-page-new': about('scifi'); Object.assign(st, { subPage: 'abpage', mWiki: false, drawer: false }); Object.assign(st, { abPage: sp('scifi').pages.length, abPageEd: { t: 'Recommended anthologies', b: '', isNew: true } }); break;
     case 'ab-page-notif': st.notifs = [{ id: 'npg', k: 'page', u: 'tomasz', sp: 'scifi', page: 1, age: '5m', unread: true, text: 'edited the page <b>Canon starter list</b> in #sci-fi' }, ...st.notifs.filter(n => n.id !== 'npg')]; st.home = true; csOpenNotifs(); break;
     case 'ab-search': Object.assign(st, { subPage: 'search', q: 'spoiler' }); break;
     case 'ab-skill': about('scifi'); if (st.abSkillV === 'dialog') st.modal = 'ab-skill:0'; else st.abSkill = 0; break;
