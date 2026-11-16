@@ -797,6 +797,11 @@ kbd, .keys kbd { font: inherit; font-size: 11.35px; font-weight: 600; min-width:
 .fu-prose ul, .fu-prose ol { margin: 0 0 10px; padding-left: 22px; }
 .fu-prose li { margin-bottom: 6px; line-height: 1.55; }
 .fu-prose > :last-child, .fu-prose li:last-child { margin-bottom: 0; }
+/* answers in the thread's main column (the question's answer, and asks in question trees) use the follow-ups type */
+#th-a .prose p, .qt-prose p { color: var(--t-secondary); line-height: 1.6; }
+#th-a .prose ul, #th-a .prose ol, .qt-prose ul, .qt-prose ol { padding-left: 22px; }
+#th-a .prose li, .qt-prose li { margin-bottom: 6px; line-height: 1.55; }
+#th-a .prose li:last-child, .qt-prose li:last-child { margin-bottom: 0; }
 
 /* section heading variants (Follow-ups / Replies) */
 :is(.th-fus, .th-rps, .tr-sec) h3 { line-height: 1.3; }
