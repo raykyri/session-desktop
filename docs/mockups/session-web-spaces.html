@@ -3542,26 +3542,26 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 /* ==== tint: green Sage variants (D1 Green chrome, D2 Green trim) ====
    The --trim tokens are set by applyTint (TINTS.sagewc, TINTS.sagewt); without them these rules do not apply.
    :root (not html) keeps them above the Mobile Web copies of the phone rules, which are scoped to html[data-device]. */
-:root[data-tint^="sagew"] :focus-visible { outline-color: var(--trim); }
-:root[data-tint^="sagew"] .sp-tab[aria-current="true"]::after,
-:root[data-tint^="sagew"] .ds-stab[aria-selected="true"]::after { background: var(--trim); }
-:root[data-tint^="sagew"] .qt-olr[aria-current="true"],
-:root[data-tint^="sagew"] .pop-row[aria-current="true"],
-:root[data-tint^="sagew"] .ts-row.sel { background: var(--trim-soft); }
-:root[data-tint^="sagew"] :is(.mchips, .sf-tchips) .mchip[aria-current="true"] { background: var(--trim-ink); border-color: var(--trim-ink); color: var(--trim-on); }
-:root[data-tint^="sagew"] .mchip[aria-current="true"] .sf-seal path:last-child { stroke: var(--trim-ink) !important; }
-:root[data-tint^="sagew"] .mtabs button[aria-current="true"],
-:root[data-tint^="sagew"] .n-tab.on, :root[data-tint^="sagew"] .n-check { color: var(--trim-ink); }
+:root:is([data-tint^="sagew"], [data-tint="warmwc"]) :focus-visible { outline-color: var(--trim); }
+:root:is([data-tint^="sagew"], [data-tint="warmwc"]) .sp-tab[aria-current="true"]::after,
+:root:is([data-tint^="sagew"], [data-tint="warmwc"]) .ds-stab[aria-selected="true"]::after { background: var(--trim); }
+:root:is([data-tint^="sagew"], [data-tint="warmwc"]) .qt-olr[aria-current="true"],
+:root:is([data-tint^="sagew"], [data-tint="warmwc"]) .pop-row[aria-current="true"],
+:root:is([data-tint^="sagew"], [data-tint="warmwc"]) .ts-row.sel { background: var(--trim-soft); }
+:root:is([data-tint^="sagew"], [data-tint="warmwc"]) :is(.mchips, .sf-tchips) .mchip[aria-current="true"] { background: var(--trim-ink); border-color: var(--trim-ink); color: var(--trim-on); }
+:root:is([data-tint^="sagew"], [data-tint="warmwc"]) .mchip[aria-current="true"] .sf-seal path:last-child { stroke: var(--trim-ink) !important; }
+:root:is([data-tint^="sagew"], [data-tint="warmwc"]) .mtabs button[aria-current="true"],
+:root:is([data-tint^="sagew"], [data-tint="warmwc"]) .n-tab.on, :root:is([data-tint^="sagew"], [data-tint="warmwc"]) .n-check { color: var(--trim-ink); }
 /* D1 Green chrome: a pale green band (--chrome) with a green line under it; the current header tab is a white pill.
    On Phone the status bar, navigation bars, tab bar and dock are the band, and the system tint is green. */
-:root[data-tint="sagewc"] :is(.hdr, .strip, .mchips) { border-bottom-color: var(--trim-line); }
-:root[data-tint="sagewc"] .rail { border-right-color: var(--trim-line); }
-:root[data-tint="sagewc"] .utab[aria-current="true"] { background: var(--pane); box-shadow: 0 0 0 1px var(--trim-line); }
-:root[data-tint="sagewc"] .mtabs { border-top-color: var(--trim-line); }
-:root[data-tint="sagewc"] .n-root { --n-tint: var(--trim-ink); }
-:root[data-tint="sagewc"] .n-root, :root[data-tint="sagewc"] .n-scr:has(.n-grp) .n-bar, :root[data-tint="sagewc"] .n-scr:has(.n-grp) ~ .n-tabbar { --n-bar-bg: color-mix(in srgb, var(--chrome) 92%, transparent); }
-:root[data-tint="sagewc"] .n-status, :root[data-tint="sagewc"] .n-under:has(.n-scr .n-grp) .n-status { background: var(--chrome); }
-:root[data-tint="sagewc"] :is(.n-tabbar, .n-dock) { border-top-color: var(--trim-line); }
+:root:is([data-tint="sagewc"], [data-tint="warmwc"]) :is(.hdr, .strip, .mchips) { border-bottom-color: color-mix(in srgb, var(--trim-line) 40%, var(--divider)); }
+:root:is([data-tint="sagewc"], [data-tint="warmwc"]) .rail { border-right-color: var(--trim-line); }
+:root:is([data-tint="sagewc"], [data-tint="warmwc"]) .utab[aria-current="true"] { background: var(--pane); box-shadow: 0 0 0 1px var(--trim-line); }
+:root:is([data-tint="sagewc"], [data-tint="warmwc"]) .mtabs { border-top-color: var(--trim-line); }
+:root:is([data-tint="sagewc"], [data-tint="warmwc"]) .n-root { --n-tint: var(--trim-ink); }
+:root:is([data-tint="sagewc"], [data-tint="warmwc"]) .n-root, :root:is([data-tint="sagewc"], [data-tint="warmwc"]) .n-scr:has(.n-grp) .n-bar, :root:is([data-tint="sagewc"], [data-tint="warmwc"]) .n-scr:has(.n-grp) ~ .n-tabbar { --n-bar-bg: color-mix(in srgb, var(--chrome) 92%, transparent); }
+:root:is([data-tint="sagewc"], [data-tint="warmwc"]) .n-status, :root:is([data-tint="sagewc"], [data-tint="warmwc"]) .n-under:has(.n-scr .n-grp) .n-status { background: var(--chrome); }
+:root:is([data-tint="sagewc"], [data-tint="warmwc"]) :is(.n-tabbar, .n-dock) { border-top-color: var(--trim-line); }
 /* D2 Green trim: white header with a green top rule; the current tab and selected rows are green */
 /* ==== Font (Variants bar): Inter for the app on every device; the Variants bar keeps Valley Sans ==== */
 :root[data-font="inter"] #app { --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-family: var(--font-ui); letter-spacing: -0.005em; }
@@ -5857,7 +5857,7 @@ function seg(el, items, key, onPick) {
 const toThread = () => { if (st.thread == null) { const i = D.posts.findIndex(p => p.k === 'ask' && D.rich[D.posts.indexOf(p)] && p.s === 'markets'); Object.assign(st, { thread: i < 0 ? 0 : i, savedPage: false, profilePage: false, subPage: null, auth: 'in', modal: null, umenu: false }); } };
 const KNOBDEF = () => [
   ['k-dir', 'shell', [['tabs2', 'Header tabs'], ['rail', 'Left rail']], () => { st.umenu = false; st.pop = false; }],
-  ['k-tint', 'tint', [['warmlo', 'Beige'], ['sagewc', 'Sage']]],
+  ['k-tint', 'tint', [['warmlo', 'Beige'], ['warmwc', 'Beige chrome', '1'], ['sagewc', 'Sage']]],
   ['k-font', 'font', [['inter', 'Inter'], ['valley', 'Valley Sans']]],
   ...(typeof CSKNOBS === 'function' ? CSKNOBS() : []),
   ...SFKNOBS(),
@@ -12565,6 +12565,11 @@ function applyTint() {
    - Green chrome: the header, rail and Phone bars are a pale green band with a green divider under it.
    - Green trim: the header and bars are white; green appears only as a top rule, underlines and selection. */
 Object.assign(TINTS, {
+  /* Beige chrome (C1): the Sage treatment in the Beige hue, derived in OKLCH (hue 78, trim hue 62) */
+  warmwc: { h: 72, m: 0.6, a: 0, vars: {
+    light: { '--page': '#f6f2ec', '--chrome': '#f6f2ec', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#faf7f3', '--card-sel': '#f6ecde', '--pop-btn': '#ffffff', '--pop-btn-b': '#e4ded6', '--pop-btn-h': '#f6f2ec', '--control': '#f5f2ed', '--control-hover': '#efebe4', '--control-border': '#e1dbd3', '--divider': '#e9e4dd', '--border-strong': '#e0dad1', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#976537', '--trim-line': '#e1c8b3', '--trim-soft': '#fbebdd', '--trim-ink': '#603f1f', '--trim-on': '#ffffff' },
+    dark: { '--page': '#13100c', '--chrome': '#13100c', '--pane': '#1c1915', '--feed': '#1a1713', '--card': '#23201b', '--field': '#24211d', '--popover': '#26221e', '--inset': '#1e1b17', '--card-sel': '#2c2417', '--pop-btn': '#292621', '--pop-btn-b': '#413d36', '--pop-btn-h': '#312d27', '--control': '#292621', '--control-hover': '#312d27', '--control-border': '#413d36', '--divider': '#302c27', '--border-strong': '#3a3630', '--seg-on': '#3e3a33', '--trim': '#d89d69', '--trim-line': '#604732', '--trim-soft': '#2f2216', '--trim-ink': '#f5c7a1', '--trim-on': '#1c1915', '--t-faint': '#928f8b' },
+  } },
   sagewc: { h: 152, m: 0.9, a: 0.004, dark: { m: 0.6, a: 0.003 }, vars: {
     light: { '--page': '#edf5ef', '--chrome': '#edf5ef', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#f4f9f5', '--card-sel': '#e0f4e4', '--pop-btn': '#ffffff', '--pop-btn-b': '#d7e3da', '--pop-btn-h': '#edf5ee', '--control': '#eef4ef', '--control-hover': '#e5eee7', '--control-border': '#d4e0d7', '--divider': '#dee8e0', '--border-strong': '#d2dfd5', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#3b8352', '--trim-line': '#b7d7bf', '--trim-soft': '#e0f4e4', '--trim-ink': '#225332', '--trim-on': '#ffffff' },
     dark: { '--page': '#0d120e', '--chrome': '#0d120e', '--pane': '#161b17', '--feed': '#141915', '--card': '#1c221d', '--field': '#1d231f', '--popover': '#1e2520', '--inset': '#181d19', '--card-sel': '#182a1d', '--pop-btn': '#222823', '--pop-btn-b': '#374039', '--pop-btn-h': '#28302a', '--control': '#222823', '--control-hover': '#28302a', '--control-border': '#374039', '--divider': '#282f29', '--border-strong': '#313933', '--seg-on': '#343d36', '--trim': '#6fc087', '--trim-line': '#35563e', '--trim-soft': '#182a1d', '--trim-ink': '#a7e2b6', '--trim-on': '#161b17', '--t-faint': '#8c918d' },
