@@ -3568,6 +3568,63 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 :root[data-tint="sagewt"] :is(.rf-toc-i, .rl-row, .sv-ritem, .qt-olr)[aria-current="true"], :root[data-tint="sagewt"] .rq-li.cur { box-shadow: inset 2px 0 0 var(--trim); }
 /* ==== Font (Variants bar): Inter for the app on every device; the Variants bar keeps Valley Sans ==== */
 :root[data-font="inter"] #app { --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-family: var(--font-ui); letter-spacing: -0.005em; }
+/* ==== navigation: back links, search, Saved, notifications and system states ==== */
+.pop-row[hidden], .pop .grp[hidden], .nv-swnone[hidden] { display: none; }
+.nv-swnone { margin: 6px 8px; color: var(--t-faint); font-size: var(--fs-sm); }
+.nv-back { max-width: 100%; min-width: 0; }
+.nv-back .bk { flex: none; }
+.nv-bl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nv-backrow { display: flex; min-width: 0; }
+.pf-wrap > .nv-backrow { margin-bottom: -6px; }
+.nv-thh { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; min-width: 0; max-width: 100%; }
+.nv-thh .sf-crumb { color: var(--t-faint); font-size: var(--fs-sm); }
+.nv-crsp { font-size: var(--fs-sm); }
+.qt-bar .nv-thh { margin-right: auto; }
+.nv-fh:focus { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.nt-open { display: block; width: 100%; padding: 0; margin: 0; border: 0; background: transparent; font: inherit; font-size: var(--fs-sm); text-align: left; cursor: pointer; }
+.nt-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.hdr-right > .nv-sbtn { padding: 0 9px; }
+.nv-scope { display: inline-flex; align-items: center; gap: 2px; align-self: flex-start; padding: 2px 3px 2px 10px; border: 1px solid var(--divider); border-radius: 999px; background: var(--fill-subtle); font-size: var(--fs-sm); color: var(--t-strong); }
+.nv-scope .iconbtn { width: 22px; height: 22px; }
+.nv-sprompt { margin: 6px 0 0; }
+.nv-all { align-self: flex-start; margin-top: 8px; }
+.sv-search input, .nv-spq input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; color: var(--t-primary); font: inherit; font-size: var(--fs-sm); outline: none; }
+.sv-search input::placeholder, .nv-spq input::placeholder { color: var(--placeholder); }
+.nv-fbar { justify-content: space-between; }
+.nv-spq { width: 240px; max-width: 100%; }
+.nv-fbar .nv-spq { order: 2; }
+.nv-off { display: flex; align-items: center; gap: 10px; padding: 8px 20px; border-bottom: 1px solid var(--divider); background: color-mix(in srgb, var(--warn) 14%, var(--chrome)); color: var(--t-strong); font-size: var(--fs-sm); }
+.nv-off > svg { width: 16px; height: 16px; flex: none; color: var(--warn); }
+.nv-off .grow { flex: 1; min-width: 0; }
+.data-wait p { margin: 0 0 12px; }
+.nv-vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.nv-skel { background: var(--feed); min-height: 727px; }
+.nv-sk-hdr { display: flex; align-items: center; gap: 14px; height: 50px; padding: 0 24px; background: var(--chrome); border-bottom: 1px solid var(--divider); }
+.nv-sk-hdr .grow { flex: 1; }
+.nv-sk { display: block; height: 10px; border-radius: 5px; background: color-mix(in srgb, var(--t-muted) 16%, transparent); }
+@media (prefers-reduced-motion: no-preference) { .nv-sk { animation: nv-pulse 1.4s ease-in-out infinite; } }
+@keyframes nv-pulse { 50% { opacity: .45; } }
+.nv-sk-logo { width: 22px; height: 22px; border-radius: 6px; }
+.nv-sk-tab { width: 64px; }
+.nv-sk-av { width: 26px; height: 26px; border-radius: 50%; }
+.nv-sk-body { max-width: 760px; margin: 0 auto; padding: 28px 28px 40px; display: flex; flex-direction: column; }
+.nv-sk-h { width: 120px; height: 18px; margin-bottom: 18px; }
+.nv-sk-row { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; padding: 14px 0; border-top: 1px solid var(--divider); }
+.nv-sk-ic { width: 22px; height: 22px; border-radius: 50%; }
+.nv-sk-tx { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.nv-sk-s { width: 92%; height: 8px; }
+.nv-sk-m { width: 36%; height: 8px; }
+/* Mobile Web: a code block in a follow-up answer scrolls inside itself instead of widening the page */
+.fu-a > * { min-width: 0; }
+@media (max-width: 640px) {
+  .qt-bar .nv-thh { width: 100%; }
+  .prose table { display: block; overflow-x: auto; }
+  .nv-fbar .nv-spq { order: 0; flex: 1 1 100%; width: auto; }
+  .nv-off { padding: 8px 14px; align-items: flex-start; }
+  .nv-sk-hdr { padding: 0 12px; }
+  .nv-sk-tab:nth-of-type(n+3) { display: none; }
+  .nv-sk-body { padding: 20px 14px 32px; }
+}
 </style>
 
 <div class="shell" id="shell">
@@ -3887,7 +3944,7 @@ DS = liveData;
 window.__sessionDispose = () => { DISPOSED = true; LIFE.abort(); OBSERVERS.forEach(o => o.disconnect()); mockBackend.restore(); window.__sessionDispose = null; };
 /* a failed write: tell the person and show the restored data */
 let dataError = msg => {};
-const applyApiMode = () => { mockBackend.cfg.failWrites = st.apiMode === 'fail'; };
+const applyApiMode = () => { mockBackend.cfg.failWrites = st.apiMode === 'fail'; const was = mockBackend.cfg.failReads; mockBackend.cfg.failReads = st.apiMode === 'failload'; if (APP_STARTED && (mockBackend.cfg.failReads || (was && DS.meta.getState().status === 'error'))) apiSource.load(liveData); };
 /* for tests: true when the data store is loaded and has no requests in flight */
 window.__dataIdle = () => dataReady() && DS.meta.getState().pending === 0;
 /* the store finished loading, a request finished, or a failed write was undone: show it */
@@ -3901,7 +3958,7 @@ liveData.meta.subscribe((m, p) => { if (!APP_STARTED) return; if (m.status !== p
 const mockBackend = (() => {
   const LS = 'session-mock-db-v2';
   const base = typeof window.__SESSION_API_LATENCY === 'number' ? window.__SESSION_API_LATENCY : 120;
-  const cfg = { base, latency: base, failWrites: false };
+  const cfg = { base, latency: base, failWrites: false, failReads: false };
   let data = null, ver = null;
   const seed = () => dec(enc(FIXTURES));
   /* the seed data's version: a hash of its JSON */
@@ -3915,6 +3972,7 @@ const mockBackend = (() => {
     if (path === '/api/dev/reset' && method === 'POST') { data = seed(); save(); return out(204); }
     if (path === '/api/dev/config') { if (method === 'PUT') Object.assign(cfg, body); return out(200, cfg); }
     const m = route(path); if (!m) return out(404, { error: 'Not found' });
+    if (cfg.failReads && method === 'GET') return out(503, { error: 'The server is unavailable' });
     const d = db0(), { key, r, id } = m, idx = c => r.kind === 'index' ? +id : c.findIndex(x => String(x[r.id]) === id);
     if (method === 'GET') { if (id === undefined) return out(200, d[key]); const c = d[key]; const v = r.kind === 'map' ? c[id] : c[idx(c)]; return v === undefined ? out(404, { error: 'Not found' }) : out(200, v); }
     if (cfg.failWrites) return out(503, { error: 'The server is unavailable' });
@@ -4275,7 +4333,7 @@ function createThread(kind) {
   Object.assign(st, { thread: D.posts.length - 1, draft: '', compOpen: false, modal: null, clar: {}, home: false, savedPage: false, space: s.id, compTopic: null, tpMenu: null });
   if (kind === 'ask') askRun(D.posts.length - 1);
 }
-const SORTS = [['Latest', 'Newest first'], ['Active', 'Recent replies'], ['Most followed', 'This week']];
+const SORTS = [['Latest', 'Newest first'], ['Active', 'Latest follow-up or reply first'], ['Most followed', 'Most follow-ups and replies']];
 function sortCtl(withKind) {
   const KF = [['all', 'All', 'Asks and posts'], ['ask', 'Asks', 'Answered by an agent'], ['post', 'Posts', 'Replies from people']];
   const kl = withKind && st.kindF !== 'all' ? `${KF.find(k => k[0] === st.kindF)[1]} · ` : '';
@@ -4294,10 +4352,10 @@ const topSpaces = () => D.spaces.filter(visibleSp).sort((a, b) => b.online - a.o
 const L = {};
 const hdrGroups = () => {
   if (st.auth === 'out') return '';
-  const g = (n, icon, label) => n > 0 ? `<button class="btn${st.savedPage ? ' on' : ''}" type="button" data-act="saved-page" title="${label}" aria-label="${label}: ${n}">${icon}<span class="num">${n}</span></button>` : '';
+  const g = (n, icon, label) => `<button class="btn${st.savedPage ? ' on' : ''}" type="button" data-act="saved-page" title="${label}" aria-label="${n ? `${label}: ${n}` : label}">${icon}${n ? `<span class="num">${n}</span>` : ''}</button>`;
   return g(st.saved.size, I.mark, 'Saved');
 };
-const topHeader = () => `<div class="hdr"><button class="logo-btn" type="button" data-home="1" aria-label="Home">${logo('')}</button><nav class="hnav" aria-label="Top spaces">${`<button class="utab utab-home" type="button" data-home="1" aria-current="${!!st.home && st.thread == null && !st.profilePage && !st.savedPage && !st.subPage}">${I.house}Home</button><span class="hdr-sep"></span>`}<div class="hscroll">${csTabs()}</div></nav><div class="hdr-right">${switcher()}${ntBell()}${hdrGroups()}${account(true)}</div></div>`;
+const topHeader = () => `<div class="hdr"><button class="logo-btn" type="button" data-home="1" aria-label="Home">${logo('')}</button><nav class="hnav" aria-label="Top spaces">${`<button class="utab utab-home" type="button" data-home="1" aria-current="${!!st.home && st.thread == null && !st.profilePage && !st.savedPage && !st.subPage}">${I.house}Home</button><span class="hdr-sep"></span>`}<div class="hscroll">${csTabs()}</div></nav><div class="hdr-right">${nvSearchBtn()}${switcher()}${ntBell()}${hdrGroups()}${account(true)}</div></div>`;
 /* Header tabs leave out closed spaces the user is not a member of. */
 function csTabs() {
   const tab = x => `<button class="utab" type="button" data-space="${x.id}" aria-current="${!st.home && !st.profilePage && !st.savedPage && !st.subPage && st.thread == null && x.id === st.space}">${spName(x)}${spSeal(x, 'sm')}${csAfter(x, false)}</button>`;
@@ -4391,6 +4449,7 @@ function userMenu() {
     <button class="um-head" type="button" role="menuitem" data-act="profile" aria-label="Your profile">${avatar('ines.v', 'lg')}<span class="um-id"><b>${esc(ME.name)}</b><span>${ME.u}</span></span></button>
     <div class="um-sep"></div>
     ${item(CI.bell, 'Notifications', ntUnread() ? `<small class="num">${ntUnread()} new</small>` : '', 'data-csnotif="page"')}
+    ${item(I.mark, 'Saved', st.saved.size ? `<small class="num">${st.saved.size}</small>` : '', 'data-act="saved-page"')}
     ${item(MI.grid, 'Your spaces', '', 'data-sub="yourspaces"')}
     ${item(MI.key, 'API keys', '', 'data-sub="keys"')}
     ${item(MI.cog, 'Account', '', 'data-sub="account"')}
@@ -4407,7 +4466,7 @@ const SVI = {
   list: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M3 4h10M3 8h10M3 12h10"/></svg>',
   reader: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6.5 3v10"/></svg>',
 };
-const savedItems = () => [...st.saved].map(id => canRead(sp(D.posts[id].s)) ? { ...D.posts[id], id } : { ...D.posts[id], id, q: `Only members of ${spName(sp(D.posts[id].s))} can read this thread.`, sum: null, locked: true }).filter(p => st.savedFilter === 'all' || p.s === st.savedFilter);
+const savedItems = () => [...st.saved].filter(id => nvSvHit((D.posts[id].t || '') + ' ' + D.posts[id].q + ' ' + (D.posts[id].sum || ''))).map(id => canRead(sp(D.posts[id].s)) ? { ...D.posts[id], id } : { ...D.posts[id], id, q: `Only members of ${spName(sp(D.posts[id].s))} can read this thread.`, sum: null, locked: true }).filter(p => st.savedFilter === 'all' || p.s === st.savedFilter);
 const unsaveBtn = id => `<button class="iconbtn sv-x" type="button" data-toggle="saved" data-id="${id}" aria-label="Remove from saved" title="Remove from saved">${I.mark}</button>`;
 const spTagTx = x => isPlain(x) ? `${isClosed(x) ? LK('cs-lk cs-lk-hash', 'Members only') : ''}${esc(x.title)}` : `${isClosed(x) ? LK('cs-lk cs-lk-hash', 'Members only') : '#'}${x.name}`;
 const sTag = p => `<button class="sp-tag" type="button" data-space="${p.s}">${spName(sp(p.s))}</button>`;
@@ -4434,10 +4493,10 @@ function savedReader(items) {
 
 function layoutSaved() {
   const items = savedItems(), v = st.savedView;
-  const body = !st.saved.size ? `<p class="muted sv-empty">Nothing saved yet. Use the bookmark on any post to keep it here.</p>`
-    : st.savedFilter === 'mi-items' ? miSavedList() : v === 'reader' ? savedReader(items) : savedList(items);
+  const body = nvSavedNone() ? `<p class="muted sv-empty">Nothing saved yet. Use the bookmark on a thread, an ask or a source to keep it here.</p>`
+    : st.savedFilter === 'mi-items' ? miSavedList() : !items.length ? nvSavedNoThreads() : v === 'reader' ? savedReader(items) : savedList(items);
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sv-page svp-${v}">
-    <div class="sv-top"><div class="sv-title"><h2>Saved</h2><span class="faint num">${st.saved.size} thread${st.saved.size === 1 ? '' : 's'}</span></div><div class="search sv-search">${I.search}Search saved</div></div>
+    <div class="sv-top"><div class="sv-title"><h2>Saved</h2><span class="faint num">${st.saved.size} thread${st.saved.size === 1 ? '' : 's'}</span></div><label class="search sv-search">${I.search}<input id="nv-svq" type="search" value="${esc(st.nvSvQ)}" placeholder="Search saved" aria-label="Search saved" autocomplete="off"></label></div>
     ${savedFilters()}
     ${body}
   </div></div>`;
@@ -4482,7 +4541,7 @@ function fuInput(p) {
   const ask = p.k === 'ask', ph = ask ? 'Ask a follow-up…' : 'Write a reply…';
   return `<div class="fu-box2"><textarea id="fu-input" rows="2" placeholder="${ph}" aria-label="${ask ? 'Ask a follow-up' : 'Write a reply'}">${esc((st.fuDraft || {})[D.posts.indexOf(p)] || '')}</textarea>${st.askErr === 'fu' ? askErrNote() : ''}<div class="fu2-bar">${ask ? modelPicker() : ''}<span class="grow"></span><button class="btn primary" type="button" data-fugo="${D.posts.indexOf(p)}">${ask ? 'Ask' : 'Reply'}</button></div></div>`;
 }
-const thHead = p => sfCrumb(p, `<button class="th-back" type="button" data-space="${p.s}">${I.chev.replace('<svg', '<svg class="bk"')}${spName(sp(p.s))}${isClosed(sp(p.s)) ? LK('cs-lk', 'Closed space') : ''}</button>`);
+const thHead = p => nvThHead(p, `<button class="th-back" type="button" data-space="${p.s}">${I.chev.replace('<svg', '<svg class="bk"')}${spName(sp(p.s))}${isClosed(sp(p.s)) ? LK('cs-lk', 'Closed space') : ''}</button>`);
 const thMeta = p => `<div class="meta">${avatar(p.u, 'sm')}${au(p.u)}<span>${p.age}</span>${p.k === 'post' ? '<span class="faint">· post</span>' : ''}${p.edited && !p.del ? '<span class="faint">· edited</span>' : ''}</div>`;
 /* Thread page meta line: like, save, share (closed spaces), then the token count, all left-aligned. The follow-up or reply count is in the section heading below. */
 const thActs = p => { const i = D.posts.indexOf(p), key = (p.k === 'ask' ? 'a:' : 'p:') + i; return `<div class="p-foot">${acts(p, false)}${csShareBtn(p)}${p.tok ? `<span class="num" title="${fmtT(p.tok)} tokens">${fmtT(p.tok)}<span class="m-long"> tokens</span></span>` : ''}${p.running || modOf(key) === 'removed' ? '' : itemMenu(key, 'sf-pend')}</div>`; };
@@ -4554,7 +4613,7 @@ function layoutProfile() {
 
 /* ---------- keyboard shortcuts ---------- */
 const KEYS = [
-  ['Navigation', [[['g', 'h'], 'Go to Home'], [['g', 's'], 'Go to Saved'], [['g', 'p'], 'Go to your profile'], [['/'], 'Find a space'], [['['], 'Previous space'], [[']'], 'Next space'], [['?'], 'Show keyboard shortcuts']]],
+  ['Navigation', [[['g', 'h'], 'Go to Home'], [['g', 's'], 'Go to Saved'], [['g', 'p'], 'Go to your profile'], [['/'], 'Search'], [['f'], 'Find a space'], [['?'], 'Show keyboard shortcuts']]],
   ['Composer', [[['c'], 'Ask or write a post'], [['⌘', '↵'], 'Ask…'], [['⇧', '⌘', '↵'], 'Post'], [['Esc'], 'Close the composer']]],
   ['Threads', [[['j'], 'Next post'], [['k'], 'Previous post'], [['o'], 'Open thread'], [['l'], 'Like'], [['b'], 'Save'], [['r'], 'Ask a follow-up or reply']]],
 ];
@@ -5813,7 +5872,7 @@ function renderControls() {
   seg($('k-auth'), [['in', 'Signed in'], ['out', 'Signed out']], 'auth', () => { st.pop = false; });
   seg($('k-dev'), [['desktop', 'Desktop'], ['phone', 'Mobile Web'], ['native', 'Phone']], 'device', () => { st.umenu = false; st.pop = false; });
   /* Data: the mock backend's latency and failures */
-  seg($('k-api'), [['normal', '120ms'], ['fail', 'Fail']], 'apiMode', applyApiMode);
+  seg($('k-api'), [['normal', '120ms'], ['fail', 'Fail'], ['failload', 'Fail on load']], 'apiMode', applyApiMode);
   /* the Sources layout control has no effect in the phone app */
   { const k = $('kw-sources'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
@@ -6022,7 +6081,7 @@ function nSaved() {
 }
 const nSignedOut = msg => `<div class="n-out"><p>${msg}</p><button class="n-capbtn wide" type="button" data-n="sheet:signin">Log in or sign up</button></div>`;
 function nYou() {
-  if (!nSignedIn()) return { body: `${nRootBar('', 'You')}${nSignedOut('Log in to ask questions, post in spaces and add your own API keys.')}${nAppearance()}` };
+  if (!nSignedIn()) return { body: `${nRootBar('', 'You')}${nSignedOut('Log in to ask questions, post in spaces and add your own API keys.')}` };
   const mine = D.posts.filter(p => !p.gone && p.u === ME.u && canRead(sp(p.s))).length;
   return { body: `${nRootBar('', 'You')}<button class="n-me" type="button" data-n="push:profile:${ME.u}">${avatar(ME.u, 'n-av xl')}<span class="n-me-b"><b>${esc(ME.name)}</b><small>${ME.x} · ${mine} threads</small></span><span class="n-chev">${NI.chev}</span></button>${nGroup('', [
     `<button class="n-row" type="button" data-n="tab:spaces"><span class="n-row-b"><b>Your spaces</b></span><span class="n-val">${D.joined.length}</span><span class="n-chev">${NI.chev}</span></button>`,
@@ -6824,7 +6883,7 @@ function ntItem(x) {
     : x.k === 'invite' ? `<span class="nt-done">${x.done}</span>`
     : x.k === 'reqs' ? `<span class="nt-acts"><button class="btn sm" type="button" data-ntopen="${x.id}">Review requests</button></span>`
     : x.k === 'reps' ? `<span class="nt-acts"><button class="btn sm" type="button" data-ntopen="${x.id}">Review reports</button></span>` : '';
-  return `<div class="nt-item${x.unread ? ' unread' : ''}" data-ntopen="${x.id}">${icon}<span class="nt-b"><span class="nt-tx">${who}${x.text}</span>${x.why ? `<span class="nt-q">${esc(x.why)}</span>` : ''}<span class="nt-age">${x.age}</span>${extra}</span>${x.unread ? '<span class="nt-u" aria-label="Unread"></span>' : ''}</div>`;
+  return `<div class="nt-item${x.unread ? ' unread' : ''}" data-ntopen="${x.id}">${icon}<span class="nt-b"><button class="nt-tx nt-open" type="button" data-ntopen="${x.id}">${who}${x.text}</button>${x.why ? `<span class="nt-q">${esc(x.why)}</span>` : ''}<span class="nt-age">${x.age}</span>${extra}</span>${x.unread ? '<span class="nt-u" aria-label="Unread"></span>' : ''}</div>`;
 }
 function ntPop() {
   const list = ntItems(), un = list.some(x => x.unread);
@@ -7104,9 +7163,9 @@ function csCreate() {
 function layoutSearch() {
   const q = st.q.trim().toLowerCase(), stem = q.replace(/(ions|ion|s)$/, '');
   const hit = txt => !!stem && txt.toLowerCase().includes(stem);
-  const spaces = D.spaces.filter(x => visibleSp(x) && hit(x.name + ' ' + x.title + ' ' + x.desc));
+  const spaces = st.nvScope ? [] : D.spaces.filter(x => visibleSp(x) && hit(x.name + ' ' + x.title + ' ' + x.desc));
   const body_ = i => (D.rich[i] || '').replace(/<sup[^>]*>.*?<\/sup>/g, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
-  const threads = D.posts.map((p, i) => ({ p, i })).filter(({ p, i }) => canRead(sp(p.s)) && !p.gone && hit((p.t || '') + ' ' + p.q + ' ' + (p.sum || '') + ' ' + body_(i)));
+  const threads = D.posts.map((p, i) => ({ p, i })).filter(({ p, i }) => canRead(sp(p.s)) && !p.gone && nvInScope(p.s) && hit((p.t || '') + ' ' + p.q + ' ' + (p.sum || '') + ' ' + body_(i)));
   const re = stem ? new RegExp(stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi') : null;
   const hl = t => re ? esc(t).replace(re, m => `<mark class="sr-m">${m}</mark>`) : esc(t);
   const excerpt = ({ p, i }) => {
@@ -7122,9 +7181,10 @@ function layoutSearch() {
   const sideRow = x => `<div class="sr-sp">${csGlyph(x)}<div class="br-nm"><span class="cs-nmrow"><button class="dg-name" type="button" data-space="${x.id}">${spName(x)}</button>${spSeal(x, 'sm')}${csAfter(x, true)}</span><small class="num">${fmt(x.members)} members</small></div></div>`;
   const noSpaces = '<p class="muted sr-none">No spaces match.</p>', noThreads = '<p class="muted sr-none">No threads you can read match this search.</p>';
   const threadsSec = (list = threads) => `<section class="sr-sec"><h3 class="br-h">Threads <span class="num">${list.length}</span></h3><div class="sr-list">${list.map(t => result(t)).join('') || noThreads}</div></section>`;
-  const body = `<div class="sr-two"><div>${threadsSec()}</div><aside class="sr-side"><h3 class="br-h">Spaces <span class="num">${spaces.length}</span></h3>${spaces.map(sideRow).join('') || noSpaces}</aside></div>`;
+  const body = !q ? nvSearchPrompt() : `<div class="sr-two"><div>${threadsSec()}</div><aside class="sr-side">${st.nvScope ? nvScopeSide() : `<h3 class="br-h">Spaces <span class="num">${spaces.length}</span></h3>${spaces.map(sideRow).join('') || noSpaces}`}</aside></div>`;
+  const ph = st.nvScope ? `Search in ${spName(sp(st.nvScope))}` : 'Search threads, spaces, pages and sources';
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page br-page cs-search"><div class="sub-top"><h2>Search</h2></div>
-    <label class="search cs-sq">${I.search}<input id="cs-q" type="search" value="${esc(st.q)}" placeholder="Search spaces and threads" aria-label="Search spaces and threads" autocomplete="off"></label>
+    <label class="search cs-sq">${I.search}<input id="cs-q" type="search" value="${esc(st.q)}" placeholder="${ph}" aria-label="${ph}" autocomplete="off"></label>${nvScopeChip()}
     ${body}</div></div>`;
 }
 
@@ -7326,7 +7386,7 @@ function csClick(t) {
   if ((b = d('[data-csaccept]'))) { const id = b.dataset.csaccept; setRel(id, 'member'); Object.assign(st, NAVBASE(), { space: id, welcome: id }); toast(`You joined ${spName(sp(id))}.`); return go(); }
   if ((b = d('[data-csaskinv]'))) { db.push('askedInv', b.dataset.csaskinv); return go(); }
   if (d('[data-cswel]')) { st.welcome = null; st.created = null; return go(); }
-  if (d('[data-cssearch]')) { Object.assign(st, NAVBASE(), { subPage: 'search' }); return go(); }
+  if (d('[data-cssearch]')) { nvOpenSearch(); return true; }
   if ((b = d('[data-brf]'))) { st.brF = b.dataset.brf; return go(); }
   if (closed) renderAll();
   return false;
@@ -8316,7 +8376,7 @@ function miItemPage() {
   /* opening a source marks it read */
   if (!st.miRead.has(m.id)) db.toggle('miRead', m.id, true);
   const x = miParts(m);
-  const back = `<button class="th-back" type="button" data-miback="1">${I.chev.replace('<svg', '<svg class="bk"')}${st.miFrom === 'saved' ? 'Saved' : spName(sp(st.space))}</button>`;
+  const back = nvBackBtn() || `<button class="th-back" type="button" data-miback="1">${I.chev.replace('<svg', '<svg class="bk"')}${st.miFrom === 'saved' ? 'Saved' : spName(sp(st.space))}</button>`;
   const side = `<aside class="mi-aside">${x.side}</aside>`;
   return `<div class="A C Af H">${topHeader()}<div class="mi-page"><div class="mi-bar">${back}${x.acts}</div><div class="mi-grid"><article class="mi-main">${x.main}</article>${side}</div>${x.selBar}</div></div>`;
 }
@@ -8438,7 +8498,7 @@ function miAttachAsk(p) {
 
 /* ---------- saved items ---------- */
 function miSavedList() {
-  const l = [...st.miSaved].map(MIT).filter(Boolean);
+  const l = [...st.miSaved].map(MIT).filter(m => m && nvSvHit(miTitle(m) + ' ' + m.au));
   return `<div class="mi-units mi-lay-rows mi-sty-plain mi-saved">${l.map(m => miRow(m, { noDot: true }).replace('data-miopen="', 'data-mifrom="saved" data-miopen="')).join('')}</div><p class="faint cs-small">You get a notification when someone asks about a saved source or when its author edits it.</p>`;
 }
 /* ---------- navigation and clicks ---------- */
@@ -9935,8 +9995,9 @@ rowHTML = function (p) {
 };
 const QT_layoutSaved = layoutSaved;
 layoutSaved = function () {
-  const h = QT_layoutSaved(); if (!qtOn() || !st.qtSaved.size) return h;
-  const rows = [...st.qtSaved].map(k => { const [th, id] = k.split(':'), T = qtT(+th), n = T.by[id]; if (!n || !canRead(sp(T.p.s))) return ''; return `<button class="qt-svrow" type="button" data-qtopen="${k}"><small>${spName(sp(T.p.s))} · Level ${n.lv} in ${esc(qtClip(T.p.t || T.p.q, 60))}</small><b>${esc(n.q)}</b><small>${n.u} · ${n.age} · ${esc(qtClip(qtTxt(n.html), 120))}</small></button>`; }).join('');
+  const h = QT_layoutSaved(); if (!qtOn() || !st.qtSaved.size || st.savedFilter === 'mi-items') return h;
+  const rows = [...st.qtSaved].map(k => { const [th, id] = k.split(':'), T = qtT(+th), n = T.by[id]; if (!n || !canRead(sp(T.p.s)) || !nvSvHit(n.q + ' ' + qtTxt(n.html))) return ''; return `<button class="qt-svrow" type="button" data-qtopen="${k}"><small>${spName(sp(T.p.s))} · Level ${n.lv} in ${esc(qtClip(T.p.t || T.p.q, 60))}</small><b>${esc(n.q)}</b><small>${n.u} · ${n.age} · ${esc(qtClip(qtTxt(n.html), 120))}</small></button>`; }).join('');
+  if (!rows) return h;
   return h.replace(/<\/div><\/div>$/, `<section class="qt-svsec"><h3>Saved asks inside threads <span class="num faint">${st.qtSaved.size}</span></h3>${rows}</section></div></div>`);
 };
 const QT_layoutSearch = layoutSearch;
@@ -9944,11 +10005,11 @@ layoutSearch = CS_PAGES.search = function () {
   const h = QT_layoutSearch(), q = st.q.trim().toLowerCase(), stem = q.replace(/(ions|ion|s)$/, '');
   if (!qtOn() || !stem) return h;
   const hits = [];
-  D.posts.forEach((p, i) => { if (p.k !== 'ask' || p.running || !canRead(sp(p.s)) || !D.qtd[i]) return; const T = qtT(i); T.nodes.slice(1).forEach(n => { if (!n.running && (n.q + ' ' + qtTxt(n.html)).toLowerCase().includes(stem)) hits.push({ T, n }); }); });
+  D.posts.forEach((p, i) => { if (p.k !== 'ask' || p.running || !canRead(sp(p.s)) || !nvInScope(p.s) || !D.qtd[i]) return; const T = qtT(i); T.nodes.slice(1).forEach(n => { if (!n.running && (n.q + ' ' + qtTxt(n.html)).toLowerCase().includes(stem)) hits.push({ T, n }); }); });
   if (!hits.length) return h;
   const re = new RegExp(stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), hl = t => esc(t).replace(re, m => `<mark class="sr-m">${m}</mark>`);
   const ex = n => { const s = qtTxt(n.html), k = s.toLowerCase().indexOf(stem); if (k < 60) return qtClip(s, 170); const a = s.indexOf(' ', k - 60) + 1; return '…' + qtClip(s.slice(a), 170); };
-  const sec = `<section class="sr-sec"><h3 class="br-h">Asks inside threads <span class="num">${hits.length}</span></h3><div class="sr-list">${hits.slice(0, 6).map(({ T, n }) => `<article class="sr-row" data-qtopen="${T.i}:${n.id}"><a class="sr-t row-link" href="#t${T.i}" data-qtopen="${T.i}:${n.id}">${hl(n.q)}</a><p class="sr-ex">${hl(ex(n))}</p><div class="sr-meta"><button class="row-sp" type="button" data-space="${T.p.s}">${spTagTx(sp(T.p.s))}</button><span aria-hidden="true">·</span>${au(n.u)}<span>${n.age}</span><span aria-hidden="true">·</span><span>Level ${n.lv} in ${esc(qtClip(T.p.t || T.p.q, 50))}</span></div></article>`).join('')}</div></section>`;
+  const sec = `<section class="sr-sec"><h3 class="br-h">Asks inside threads <span class="num">${hits.length}</span></h3><div class="sr-list">${hits.slice(0, st.nvAll === 'asks' ? hits.length : 6).map(({ T, n }) => `<article class="sr-row" data-qtopen="${T.i}:${n.id}"><a class="sr-t row-link" href="#t${T.i}" data-qtopen="${T.i}:${n.id}">${hl(n.q)}</a><p class="sr-ex">${hl(ex(n))}</p><div class="sr-meta"><button class="row-sp" type="button" data-space="${T.p.s}">${spTagTx(sp(T.p.s))}</button><span aria-hidden="true">·</span>${au(n.u)}<span>${n.age}</span><span aria-hidden="true">·</span><span>Level ${n.lv} in ${esc(qtClip(T.p.t || T.p.q, 50))}</span></div></article>`).join('')}</div>${nvShowAll('asks', hits.length, 6)}</section>`;
   return h.replace('</div><aside class="sr-side">', sec + '</div><aside class="sr-side">');
 };
 const QT_itemOf = itemOf;
@@ -10378,9 +10439,9 @@ on($('app'), 'change', e => { if (e.target.name === 'ab-pgedit') { csEdit(x => {
 /* ---------- search finds pages ---------- */
 { const AB_layoutSearch = layoutSearch; layoutSearch = CS_PAGES.search = function () {
   const h = AB_layoutSearch(), q = st.q.trim().toLowerCase(); if (q.length < 3) return h;
-  const hits = []; D.spaces.filter(s => canRead(s)).forEach(s => s.pages.forEach((p, i) => { const d = abDoc(s, i), txt = d.text.join(' ').replace(/(^|\s)(## |- )/g, '$1'); if ((d.t + ' ' + txt).toLowerCase().includes(q)) hits.push({ s, i, d, txt }); }));
+  const hits = []; D.spaces.filter(s => canRead(s) && nvInScope(s.id)).forEach(s => s.pages.forEach((p, i) => { const d = abDoc(s, i), txt = d.text.join(' ').replace(/(^|\s)(## |- )/g, '$1'); if ((d.t + ' ' + txt).toLowerCase().includes(q)) hits.push({ s, i, d, txt }); }));
   if (!hits.length) return h;
-  const sec = `<section class="sr-sec"><h3 class="br-h">Pages <span class="num">${hits.length}</span></h3><div class="sr-list">${hits.slice(0, 4).map(({ s, i, d, txt }) => `<article class="sr-row" data-abopen="${s.id}:${i}"><a class="sr-t row-link" href="#" onclick="return false" data-abopen="${s.id}:${i}">${esc(d.t)}</a><p class="sr-ex">${esc(qtClip(txt, 160))}</p><div class="sr-m faint">${spName(s)} · page · edited ${s.pages[i][1] === 'now' ? 'just now' : s.pages[i][1] + ' ago'}</div></article>`).join('')}</div></section>`;
+  const sec = `<section class="sr-sec"><h3 class="br-h">Pages <span class="num">${hits.length}</span></h3><div class="sr-list">${hits.slice(0, st.nvAll === 'pages' ? hits.length : 4).map(({ s, i, d, txt }) => `<article class="sr-row" data-abopen="${s.id}:${i}"><a class="sr-t row-link" href="#" onclick="return false" data-abopen="${s.id}:${i}">${esc(d.t)}</a><p class="sr-ex">${esc(qtClip(txt, 160))}</p><div class="sr-m faint">${spName(s)} · page · edited ${s.pages[i][1] === 'now' ? 'just now' : s.pages[i][1] + ' ago'}</div></article>`).join('')}</div>${nvShowAll('pages', hits.length, 4)}</section>`;
   return h.includes('</div><aside class="sr-side">') ? h.replace('</div><aside class="sr-side">', sec + '</div><aside class="sr-side">') : h;
 }; }
 
@@ -11552,6 +11613,416 @@ function taJump(k) {
 }
 { const TA_jump = jump; jump = function (k) { if (!dataReady()) return TA_jump(k); taRestore(); TA_jump(k); if (String(k).startsWith('ta-')) taJump(k); }; }
 /* ==== end thread actions ==== */
+/* ==== navigation: history, back links, search, Saved, notifications and system states ==== */
+/* ---------- history ----------
+   Desktop and Mobile Web keep one browser history entry per screen. The hash mirrors the address in #url
+   (csUrl and its wrappers): #/s/public/t/1006, #/u/hal_b/follow-ups, #/saved?filter=sources&view=reader.
+   A variant other than the default is written in front of the path (#c/s/public); #b alone still picks B.
+   - A change of screen, or of a part of one that has its own path (an ask in a thread, a profile tab, a
+     Manage tab, a topic), pushes an entry. Changes that only touch the query (search text, Saved filter
+     and view, Document or Transcript, sort) replace the current entry.
+   - The Variants bar and the Screen menu replace the current entry (nvQuiet).
+   - Each entry's state holds the screen's fields (NV_F) with its scroll position, and the screen it was
+     opened from (`from`, with that entry's index). popstate puts the fields back (nvApply) and renders.
+   - Back links (data-nvback) go to `from`: with history.go when its entry is behind this one, otherwise
+     by opening its fields as a new entry. Without `from` they fall back (a thread to its space). */
+Object.assign(st, { nvScope: null, nvAll: null, nvSvQ: '', nvOffline: false, nvNF: null, nvGone: null });
+const NV = { cur: null, from: null, pre: { sa: 0, sf: 0 }, quiet: false, qt: 0, mode: null, restoring: false, jumpFrom: undefined, forceFrom: undefined, focusSel: null, focusHead: false, mem: { ds: {}, mg: {} }, mgWant: null, bak: null, sig: '', hash0: location.hash };
+const NV_F = ['home', 'space', 'thread', 'subPage', 'savedPage', 'profilePage', 'profileUser', 'ptab', 'mgSpace', 'mgTab', 'miItem', 'miHi', 'miFrom', 'abPage', 'abMem', 'spTab', 'faqView', 'faqTopic', 'dsSTab', 'qtTh', 'qtNode', 'qtExp', 'qtCmp', 'qtSide', 'thV', 'savedFilter', 'savedView', 'savedSel', 'sort', 'kindF', 'homeView', 'q', 'nvScope', 'nvAll', 'nvSvQ', 'ntF', 'invite', 'nvNF', 'nvGone', 'ysEdit'];
+const NV_SORTQ = { Active: 'active', 'Most followed': 'followed' };
+function nvQuiet() { NV.quiet = true; clearTimeout(NV.qt); NV.qt = setTimeout(() => { NV.quiet = false; NV.jumpFrom = undefined; }, 0); }
+const nvSnap = () => Object.fromEntries(NV_F.map(k => [k, st[k] instanceof Set ? new Set(st[k]) : st[k]]));
+/* the screen: what a back link names and returns to */
+function nvScreen(x = st) {
+  if (x.subPage) return `sub:${x.subPage}:${x.subPage === 'manage' ? x.mgSpace : x.subPage === 'mitem' ? x.miItem : x.subPage === 'abpage' ? x.space + '/' + x.abPage : x.subPage === 'csjoin' ? x.space : x.subPage === 'nvnf' ? (x.nvNF || {}).path : x.subPage === 'nvgone' ? (x.nvGone || {}).t : ''}`;
+  if (x.thread != null) return 't:' + x.thread;
+  if (x.profilePage) return 'u:' + x.profileUser;
+  if (x.savedPage) return 'saved';
+  if (x.home) return 'home';
+  return 's:' + x.space;
+}
+/* the screen and the parts of it that have their own path: a change pushes an entry */
+function nvKey(x = st) {
+  const s = nvScreen(x);
+  if (x.subPage === 'manage') return s + '|' + x.mgTab;
+  if (x.subPage) return s;
+  if (x.thread != null) return s + '|' + (x.qtTh === x.thread ? `${x.qtNode}|${x.qtCmp || ''}` : '');
+  if (x.profilePage) return s + '|' + x.ptab;
+  if (x.savedPage || x.home) return s;
+  return `${s}|${x.spTab}|${x.faqView}|${x.faqTopic || ''}`;
+}
+/* the name of a screen, as HTML (space names are escaped by spName) */
+function nvLabel(x) {
+  const sub = { browse: 'Browse spaces', yourspaces: 'Your spaces', keys: 'API keys', account: 'Account', nvnf: 'Page not found', nvgone: 'Deleted thread', manage: 'Manage' };
+  if (x.subPage === 'mitem') { const m = MIT(x.miItem); return m ? esc(qtClip(miTitle(m), 40)) : 'Source'; }
+  if (x.subPage === 'abpage') { try { return esc(qtClip(abDoc(sp(x.space), x.abPage).t, 40)); } catch (e) { return 'Page'; } }
+  if (x.subPage) return sub[x.subPage] || CS_SUBNAME[x.subPage] || 'Back';
+  if (x.thread != null) { const p = D.posts[x.thread]; return p ? esc(qtClip(p.t || p.q, 40)) : 'Thread'; }
+  if (x.profilePage) return x.profileUser === ME.u ? 'Your profile' : esc(NAMES[x.profileUser] || x.profileUser);
+  if (x.savedPage) return 'Saved';
+  if (x.home) return 'Home';
+  const s = sp(x.space); return s ? spName(s) : 'Back';
+}
+const nvFromRec = (cur, pre) => ({ i: cur.i, scr: cur.scr, label: nvLabel(cur.snap), snap: { ...cur.snap, ...pre }, from: cur.from ? { ...cur.from, from: null } : null });
+const nvHash = url => '#' + (st.opt && st.opt !== 'b' ? st.opt : '') + ((url || '').replace(/^session\.app/, '') || '/').replace(/#/g, '%23');
+/* the route in a hash, or null for a variant alone or another anchor */
+function nvPathOf(h) {
+  const v = h.split('/')[0]; if (v && !L[v]) return null;
+  const path = h.slice(v.length); if (!path.startsWith('/')) return null;
+  try { return decodeURI(path).replace(/%23/g, '#'); } catch (e) { return path; }
+}
+function nvApply(x) {
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { toast: null });
+  for (const k of NV_F) if (k in x) st[k] = x[k];
+  if (st.thread != null && !D.posts[st.thread]) Object.assign(st, { thread: null, subPage: 'nvnf', nvNF: { path: '/' } });
+}
+function nvScrollTo(x) {
+  const a = $('app'), fr = document.querySelector('.frame');
+  if (a) a.scrollTop = x.sa || 0;
+  if (fr && st.device === 'phone') fr.scrollTop = x.sf || 0;
+}
+function nvBefore() {
+  const a = $('app'), fr = document.querySelector('.frame');
+  NV.pre = { sa: a ? a.scrollTop : 0, sf: fr ? fr.scrollTop : 0 };
+  if (!NV.cur || NV.restoring || st.device === 'native' || !dataReady()) return;
+  if (NV.mgWant) { if (st.subPage === 'manage') st.mgTab = NV.mgWant; NV.mgWant = null; }
+  const scr = nvScreen();
+  if (NV.forceFrom !== undefined) { NV.from = NV.forceFrom; NV.forceFrom = undefined; }
+  else if (NV.quiet) NV.from = NV.jumpFrom !== undefined ? NV.jumpFrom : scr === NV.cur.scr ? NV.cur.from : null;
+  else NV.from = scr !== NV.cur.scr ? nvFromRec(NV.cur, NV.pre) : NV.cur.from;
+  /* a space keeps its sidebar tab (Sources or About) for the session */
+  if (scr !== NV.cur.scr && !NV.quiet && scr.startsWith('s:') && st.dsSTab == null && NV.mem.ds[st.space]) st.dsSTab = NV.mem.ds[st.space];
+}
+const nvSig = x => JSON.stringify(x, (k, v) => v instanceof Set ? [...v] : v);
+function nvAfter() {
+  if (st.device === 'native' || !dataReady() || !$('url')) return;
+  nvUrlParts();
+  nvBanner();
+  const url = $('url').textContent, key = nvKey(), scr = nvScreen(), snap0 = nvSnap();
+  /* an entry keeps its scroll position (nvScrolled) until a push leaves it */
+  const mk = (i, from) => ({ nv: 1, i, key, scr, snap: NV.cur && i === NV.cur.i ? { ...snap0, sa: NV.cur.snap.sa, sf: NV.cur.snap.sf } : snap0, from, url }), scr0 = NV.cur && NV.cur.scr;
+  let push = false;
+  if (!NV.cur) NV.cur = mk(0, null);
+  else if (NV.restoring) NV.cur = mk(NV.cur.i, NV.cur.from);
+  else {
+    const mode = NV.mode || (NV.quiet ? 'replace' : key !== NV.cur.key ? 'push' : 'replace'); NV.mode = null;
+    if (mode === 'push') { try { history.replaceState({ ...NV.cur, snap: { ...NV.cur.snap, ...NV.pre } }, '', nvHash(NV.cur.url)); } catch (e) {} }
+    NV.cur = mode === 'replace' ? mk(NV.cur.i, NV.from) : mk(NV.cur.i + 1, NV.from);
+    push = mode === 'push';
+  }
+  const sig = nvSig(NV.cur);
+  if (push || sig !== NV.sig) { try { history[push ? 'pushState' : 'replaceState'](NV.cur, '', nvHash(url)); } catch (e) {} NV.sig = sig; }
+  if (scr.startsWith('s:') && st.dsSTab) NV.mem.ds[st.space] = st.dsSTab;
+  if (st.subPage === 'manage') NV.mem.mg[st.mgSpace] = st.mgTab;
+  if (NV.focusSel) { const el = document.querySelector(NV.focusSel); NV.focusSel = null; if (el) { el.focus({ preventScroll: true }); if (el.setSelectionRange && el.value != null) try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) {} } }
+  if (NV.focusHead) { NV.focusHead = false; if (scr !== scr0) nvFocusHeading(); }
+}
+/* After a notification opens a page, focus moves to the page's heading (the question on a thread). */
+function nvFocusHeading() {
+  const h = document.querySelector('#app :is(.qt-main, .th-main, .rd-main, .mi-main, .abp, .sub-page, .cs-napage, .pf-page) :is(h1, h2, #th-q, .qt-q)') || document.querySelector('#app main h1, #app h1, #app h2');
+  if (!h) return;
+  if (!h.hasAttribute('tabindex')) h.setAttribute('tabindex', '-1');
+  h.classList.add('nv-fh'); h.focus({ preventScroll: true });
+}
+function nvBack() {
+  const f = NV.from; if (!f) return;
+  if (f.i != null && NV.cur && f.i < NV.cur.i) { history.go(f.i - NV.cur.i); return; }
+  nvApply(f.snap); NV.forceFrom = f.from || null; renderAll(); nvScrollTo(f.snap);
+}
+/* An address typed or edited in the hash: open it as a new screen. */
+function nvRoute(path) {
+  const [p0, qs] = path.split('?'), q = new URLSearchParams(qs || ''), seg = p0.split('/').filter(Boolean);
+  const nf = (extra = {}) => Object.assign(st, NAVBASE(), MI_CLEAR(), { subPage: 'nvnf', nvNF: { path, ...extra } });
+  const sortQ = () => { const v = q.get('sort'); st.sort = v === 'active' ? 'Active' : v === 'followed' ? 'Most followed' : 'Latest'; };
+  const [a, b, c, d, e, f] = seg;
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { toast: null });
+  if (!a) { st.home = true; sortQ(); return; }
+  if (a === 's') {
+    const s = D.spaces.find(x => x.name === b && !x.deleted); if (!s) return nf({ space: b });
+    Object.assign(st, { space: s.id, home: false });
+    if (!c) { sortQ(); return; }
+    if (c === 't') { const i = +d - 1000, p = D.posts[i]; if (!p) return nf(); st.space = p.s; st.thread = i; st.thV = q.get('view') === 'transcript' ? 'chat' : 'docsrc'; if (e === 'a' && f) { qtEnter(i); st.qtNode = f; } return; }
+    if (c === 'manage') { Object.assign(st, { subPage: 'manage', mgSpace: s.id, mgTab: d || 'members', set: null }); return; }
+    if (c === 'join') { st.subPage = 'csjoin'; return; }
+    if (c === 'latest') { st.faqView = 'latest'; sortQ(); return; }
+    if (c === 'topics') { const t = topicsOf(s).find(([, l]) => abSlug(l) === d); st.faqTopic = t ? t[0] : d === 'other' ? 'other' : null; return; }
+    if (c === 'pages') { const i = s.pages.findIndex(pg => abSlug(pg[0]) === d); if (i < 0) return nf(); abOpenPage(s.id, i); return; }
+    if (c === 'about' || c === 'members') { Object.assign(st, { drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone', abMem: c === 'members' }); return; }
+    return nf();
+  }
+  if (a === 'u' && b) { Object.assign(st, { profilePage: true, profileUser: b, ptab: c === 'follow-ups' ? 'followups' : c === 'liked' ? 'likes' : 'threads' }); return; }
+  if (a === 'saved') { const fl = q.get('filter'), s = fl && D.spaces.find(x => x.name === fl); Object.assign(st, { savedPage: true, savedFilter: fl === 'sources' ? 'mi-items' : s ? s.id : 'all', savedView: q.get('view') === 'reader' ? 'reader' : 'list' }); return; }
+  if (a === 'notifications') { st.subPage = 'notifs'; return; }
+  if (a === 'search') { const s = q.get('in') && D.spaces.find(x => x.name === q.get('in')); Object.assign(st, { subPage: 'search', q: q.get('q') || '', nvScope: s ? s.id : null }); return; }
+  if (a === 'source' && b) { const m = [...D.media, ...(st.miAdded || [])].find(x => x.url.split('/').pop() === b.split('#')[0]); if (!m) return nf(); miOpen(m.id); return; }
+  if (a === 'spaces') { if (!b || b === 'header') Object.assign(st, { subPage: 'yourspaces', ysEdit: b === 'header' }); else if (b === 'browse') st.subPage = 'browse'; else if (b === 'new') Object.assign(st, { subPage: 'create', cr: CR0() }); else nf(); return; }
+  if (a === 'settings' && (b === 'keys' || b === 'account')) { st.subPage = b; return; }
+  nf();
+}
+function nvBoot() {
+  const path = nvPathOf(NV.hash0.slice(1));
+  if (path != null && path !== '/') { nvRoute(path); NV.cur = null; }
+}
+DS.whenReady(nvBoot);
+on(window, 'popstate', e => {
+  if (st.device === 'native' || !dataReady() || !NV.cur) return;
+  const s = e.state;
+  if (s && s.nv) { NV.cur = s; NV.from = s.from || null; NV.sig = ''; nvApply(s.snap); NV.restoring = true; try { renderAll(); } finally { NV.restoring = false; } nvScrollTo(s.snap); return; }
+  const h = location.hash.slice(1);
+  if (L[h]) return;   /* a variant: the hashchange handler picks it */
+  const path = nvPathOf(h);
+  if (path == null) { history.back(); return; }   /* an anchor that is not an address */
+  nvRoute(path); NV.mode = 'adopt'; renderAll(); $('app').scrollTop = 0;
+});
+/* the scroll position of the current entry, written once scrolling stops */
+function nvScrolled() {
+  clearTimeout(NV.st);
+  NV.st = setTimeout(() => {
+    if (!NV.cur || NV.restoring || st.device === 'native') return;
+    const a = $('app'), fr = document.querySelector('.frame'), sa = a ? a.scrollTop : 0, sf = fr ? fr.scrollTop : 0;
+    if (NV.cur.snap.sa === sa && NV.cur.snap.sf === sf) return;
+    NV.cur = { ...NV.cur, snap: { ...NV.cur.snap, sa, sf } }; NV.sig = nvSig(NV.cur);
+    try { history.replaceState(NV.cur, '', location.hash); } catch (e) {}
+  }, 150);
+}
+on($('app'), 'scroll', nvScrolled, { passive: true });
+on(document.querySelector('.frame'), 'scroll', nvScrolled, { passive: true });
+/* the Screen menu picked with a pointer: a screen that shows focus takes it after the menu closes */
+on(document, 'pointerdown', e => { NV.jdPtr = !!(e.target.closest && e.target.closest('#k-jump .jd-o')); }, true);
+/* the Variants bar and its letter keys replace the history entry */
+on(document.querySelector('.ctl'), 'click', nvQuiet, true);
+on(document.querySelector('.ctl'), 'keydown', nvQuiet, true);
+on(document, 'keydown', e => { if (e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && /^[A-Z]$/.test(e.key) && HOTKEYS[e.key] && !(e.target.closest && e.target.closest('input, textarea, select'))) nvQuiet(); }, true);
+
+/* ---------- addresses: the parts that have their own place in the URL ---------- */
+{ const NV_csUrl = csUrl; csUrl = function () {
+  if (st.subPage === 'nvnf') return 'session.app' + ((st.nvNF || {}).path || '/');
+  if (st.subPage === 'nvgone') { const g = st.nvGone || {}; return `session.app/s/${sp(g.s).name}/t/${g.t}`; }
+  const u = NV_csUrl();
+  if (u) return st.subPage === 'search' && st.nvScope ? `${u}&in=${sp(st.nvScope).name}` : u;
+  if (st.subPage || st.thread != null) return null;
+  if (st.profilePage) return `session.app/u/${st.profileUser}${{ followups: '/follow-ups', likes: '/liked' }[st.ptab] || ''}`;
+  if (st.savedPage) { const f = st.savedFilter, qs = new URLSearchParams(); if (f && f !== 'all') qs.set('filter', f === 'mi-items' ? 'sources' : sp(f) ? sp(f).name : f); if (st.savedView === 'reader') qs.set('view', 'reader'); return 'session.app/saved' + (qs.toString() ? '?' + qs : ''); }
+  return null;
+}; }
+/* Document or Transcript on a thread, and the sort of a feed, are query parameters */
+function nvUrlParts() {
+  const el = $('url'); let u = el.textContent;
+  if (u.includes('?')) return;
+  if (st.thread != null && !st.subPage && st.thV === 'chat' && D.posts[st.thread] && D.posts[st.thread].k === 'ask') u += '?view=transcript';
+  else if (NV_SORTQ[st.sort] && !st.subPage && st.thread == null && !st.savedPage && !st.profilePage) {
+    const s = sp(st.space);
+    if (st.home) u = 'session.app/?sort=' + NV_SORTQ[st.sort];
+    else if (s && !/\/(about|members|pages)\b/.test(u) && (!faqOn(s) || st.faqView === 'latest')) u += '?sort=' + NV_SORTQ[st.sort];
+  }
+  el.textContent = u;
+}
+
+/* ---------- back links ---------- */
+const nvBk = () => I.chev.replace('<svg', '<svg class="bk"');
+function nvBackBtn() {
+  const f = NV.from; if (!f) return '';
+  return `<button class="th-back nv-back" type="button" data-nvback="1" aria-label="Back to ${f.label.replace(/<[^>]+>/g, '')}">${nvBk()}<span class="nv-bl">${f.label}</span></button>`;
+}
+/* Notifications, Search, Saved, a profile and Account: back to the previous screen, else to Home */
+const nvBackRow = () => `<div class="nv-backrow">${nvBackBtn() || `<button class="th-back nv-back" type="button" data-home="1">${nvBk()}<span class="nv-bl">Home</span></button>`}</div>`;
+const nvWithBack = (h, marker) => h.includes(marker) ? h.replace(marker, marker.endsWith('pf-wrap">') ? marker + nvBackRow() : nvBackRow() + marker) : h;
+/* Thread header: the back link names where the thread was opened from. On a space with topics the
+   breadcrumb (space › topic) stays next to it. Without a record the link goes to the space. */
+function nvThHead(p, spaceBack) {
+  const f = NV.from;
+  if (!f) return sfCrumb(p, spaceBack);
+  const back = nvBackBtn();
+  if (f.scr === 's:' + p.s) return sfCrumb(p, back);
+  const crumb = sfCrumb(p, `<button class="tlink nv-crsp" type="button" data-space="${p.s}">${spName(sp(p.s))}</button>`);
+  return `<span class="nv-thh">${back}${crumb.startsWith('<span class="sf-crumb">') ? crumb : ''}</span>`;
+}
+{ const f = CS_PAGES.notifs; layoutNotifs = CS_PAGES.notifs = () => nvWithBack(f(), '<div class="sub-top">'); }
+{ const f = CS_PAGES.account; CS_PAGES.account = () => nvWithBack(f(), '<div class="sub-top">'); }
+{ const f = layoutSaved; layoutSaved = () => nvWithBack(f(), '<div class="sv-top">'); }
+{ const f = layoutProfile; layoutProfile = () => nvWithBack(f(), '<div class="pf-wrap">'); }
+
+/* ---------- not found, deleted thread, offline, loading ---------- */
+const NVI = {
+  off: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M2 2l12 12M5.2 8.6a4.2 4.2 0 0 1 2.3-1.1M2.5 5.9A8 8 0 0 1 5 4.4M13.5 5.9a8 8 0 0 0-5-2.3M10.8 8.6c-.3-.2-.6-.4-.9-.5M8 12h.01"/></svg>',
+  map: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2 4l4-1.5 4 1.5 4-1.5v9.5L10 13.5 6 12l-4 1.5z"/><path d="M6 2.5V12M10 4v9.5"/></svg>',
+  trash: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9"/></svg>',
+};
+function nvNotFound() {
+  const nf = st.nvNF || {};
+  const body = nf.space ? `<h2>No space named #${esc(nf.space)}</h2><p class="muted">Session has no space at this address. Check the name, or search for the space. If its moderators renamed it, links to the old name stop working.</p>`
+    : `<h2>Page not found</h2><p class="muted">Session has no page at <b>session.app${esc(nf.path || '/')}</b>. Check the address, or search for what you were looking for.</p>`;
+  return `<div class="A C Af H">${topHeader()}<div class="cs-napage nv-nf"><div class="cs-na"><span class="cs-na-ic">${NVI.map}</span>${body}<div class="cs-na-b"><button class="btn primary" type="button" data-home="1">Go to Home</button><button class="btn" type="button" data-cssearch="1">Search</button></div></div></div></div>`;
+}
+function nvGonePage() {
+  const g = st.nvGone || {}, s = sp(g.s);
+  const who = g.by ? `<b>${esc(g.by)}</b> deleted this thread on ${esc(g.on)}.` : `A moderator of ${spName(s)} deleted this thread on ${esc(g.on)}.`;
+  return `<div class="A C Af H">${topHeader()}<div class="cs-napage nv-gone"><div class="cs-na"><span class="cs-na-ic">${NVI.trash}</span><h2>This thread was deleted</h2><p class="muted">${who} Its question, answer and follow-ups are no longer available.</p><div class="cs-na-b">${s && canRead(s) ? `<button class="btn primary" type="button" data-space="${s.id}">Open ${spName(s)}</button>` : ''}<button class="btn" type="button" data-home="1">Go to Home</button></div></div></div></div>`;
+}
+CS_PAGES.nvnf = nvNotFound;
+CS_PAGES.nvgone = nvGonePage;
+/* a thread marked deleted (p.deleted = { by, on }) shows the same page */
+{ const f = layoutThread; layoutThread = function () { const p = D.posts[st.thread]; if (p && p.deleted) { st.nvGone = { s: p.s, t: st.thread + 1000, by: p.deleted.by || null, on: p.deleted.on || 'today' }; return nvGonePage(); } return f(); }; }
+function nvBanner() {
+  if (!st.nvOffline) return;
+  const html = `<div class="nv-off" role="status">${NVI.off}<span class="grow">You’re offline. Session shows what it already loaded and can’t send changes until the connection is back.</span><button class="btn sm" type="button" data-nvoffline="1">Try again</button></div>`;
+  const h = document.querySelector('#app .mchips') || document.querySelector('#app .hdr');
+  if (h) h.insertAdjacentHTML('afterend', html); else $('app').insertAdjacentHTML('afterbegin', html);
+}
+on(window, 'offline', () => { st.nvOffline = true; renderAll(); });
+on(window, 'online', () => { if (st.nvOffline) { st.nvOffline = false; renderAll(); } });
+/* While the data store loads: the page's outline with placeholder rows */
+function nvSkeleton() {
+  const w = [78, 62, 86, 56, 72, 66];
+  return `<div class="nv-skel" role="status"><span class="nv-vh">Loading…</span><div class="nv-sk-hdr" aria-hidden="true"><span class="nv-sk nv-sk-logo"></span><span class="nv-sk nv-sk-tab"></span><span class="nv-sk nv-sk-tab"></span><span class="nv-sk nv-sk-tab"></span><span class="grow"></span><span class="nv-sk nv-sk-av"></span></div><div class="nv-sk-body" aria-hidden="true"><span class="nv-sk nv-sk-h"></span>${w.map(x => `<div class="nv-sk-row"><span class="nv-sk nv-sk-ic"></span><span class="nv-sk-tx"><span class="nv-sk" style="width:${x}%"></span><span class="nv-sk nv-sk-s"></span><span class="nv-sk nv-sk-m"></span></span></div>`).join('')}</div></div>`;
+}
+
+/* ---------- search ---------- */
+const nvInScope = sid => !st.nvScope || st.nvScope === sid;
+function nvOpenSearch(q = '', scope = null) { Object.assign(st, NAVBASE(), MI_CLEAR(), { subPage: 'search', q, nvScope: scope, nvAll: null }); NV.focusSel = '#cs-q'; renderAll(); }
+function nvSearchBtn() { return `<button class="btn hb nv-sbtn${st.subPage === 'search' ? ' on' : ''}" type="button" data-cssearch="1" aria-label="Search" title="Search (/)">${I.search}</button>`; }
+const nvSearchPrompt = () => `<p class="muted nv-sprompt">Type a word or phrase to search the threads, ${st.nvScope ? '' : 'spaces, '}pages and sources you can read${st.nvScope ? ` in ${spName(sp(st.nvScope))}` : ''}.</p>`;
+const nvScopeChip = () => st.nvScope ? `<div class="nv-scope"><span>In ${spName(sp(st.nvScope))}</span><button class="iconbtn" type="button" data-nvscope="x" aria-label="Search all spaces" title="Search all spaces">${I.close}</button></div>` : '';
+function nvScopeSide() {
+  const s = sp(st.nvScope);
+  return `<h3 class="br-h">Space</h3><div class="sr-sp">${csGlyph(s)}<div class="br-nm"><span class="cs-nmrow"><button class="dg-name" type="button" data-space="${s.id}">${spName(s)}</button>${spSeal(s, 'sm')}</span><small class="num">${fmt(s.members)} members</small></div></div><button class="tlink nv-all" type="button" data-nvscope="x">Search all spaces</button>`;
+}
+const nvShowAll = (k, n, cap) => n > cap && st.nvAll !== k ? `<button class="tlink nv-all" type="button" data-nvall="${k}">Show all ${n}</button>` : '';
+/* sources whose title, author or publisher match */
+{ const NV_layoutSearch = layoutSearch; layoutSearch = CS_PAGES.search = function () {
+  let h = NV_layoutSearch();
+  const q = st.q.trim().toLowerCase(), A = '</div><aside class="sr-side">';
+  if (q.length >= 2 && h.includes(A)) {
+    const all = [...D.media, ...(st.miAdded || [])], seen = new Set();
+    const hits = all.filter(m => !seen.has(m.id) && seen.add(m.id) && m.sp.some(x => sp(x) && canRead(sp(x)) && nvInScope(x)) && (miTitle(m) + ' ' + m.au + ' ' + (m.pub || '')).toLowerCase().includes(q));
+    if (hits.length) {
+      const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), hl = t => esc(t).replace(re, x => `<mark class="sr-m">${x}</mark>`);
+      const row = m => `<article class="sr-row" data-miopen="${m.id}"><a class="sr-t row-link" href="#" onclick="return false" data-miopen="${m.id}">${hl(miTitle(m))}</a><div class="sr-meta">${miIc(m)}<span>${hl(m.au)}</span><span aria-hidden="true">·</span><span>${miSrcLine(m)}</span><span aria-hidden="true">·</span><span>${m.date}</span></div></article>`;
+      h = h.replace(A, `<section class="sr-sec"><h3 class="br-h">Sources <span class="num">${hits.length}</span></h3><div class="sr-list">${hits.slice(0, st.nvAll === 'sources' ? hits.length : 4).map(row).join('')}</div>${nvShowAll('sources', hits.length, 4)}</section>${A}`);
+    }
+  }
+  return nvWithBack(h, '<div class="sub-top">');
+}; }
+/* a search box in a space's feed bar: Enter searches that space */
+{ const f = feedBar; feedBar = function () {
+  const h = f(), s = sp(st.space);
+  if (st.home || st.subPage || !s || !canRead(s)) return h;
+  return h.replace('<div class="fbar fbar-k">', `<div class="fbar fbar-k nv-fbar"><label class="search nv-spq">${I.search}<input id="nv-spq" type="search" placeholder="Search in ${spName(s)}" aria-label="Search in ${spName(s)}" autocomplete="off"></label>`);
+}; }
+
+/* ---------- sort ---------- */
+const nvAgeOk = a => { if (typeof a !== 'string') return null; const v = ageMin(a); return v >= 0 ? v : null; };
+/* the age of a thread's last follow-up, ask or reply, or of the thread itself */
+function nvLast(p) {
+  const o = p.orig || p, i = D.posts.indexOf(o); let m = nvAgeOk(o.age) ?? 1e9;
+  const see = a => { const v = nvAgeOk(a); if (v != null) m = Math.min(m, v); };
+  if (o.k === 'ask') { fuFor(o).forEach(f => see(f.age)); if (D.qtd[i]) D.qtd[i].nodes.forEach(n => see(n.age)); }
+  else { const walk = l => l.forEach(r => { see(r.age); walk(r.kids || []); }); walk(rpFor(o)); }
+  return m;
+}
+{ const f = feed2; feed2 = function (id, src) {
+  const feed = !st.subPage && st.thread == null && !st.profilePage && !st.savedPage;
+  if (!feed || !NV_SORTQ[st.sort]) return f(id, src);
+  const list = [...(src || postsFor(id).map(p => ({ ...p, orig: p })))];
+  if (st.sort === 'Active') { const k = new Map(list.map(p => [p, nvLast(p)])); list.sort((a, b) => k.get(a) - k.get(b)); }
+  else list.sort((a, b) => replyCount(b) - replyCount(a) || (b.likes || 0) - (a.likes || 0));
+  return f(id, list);
+}; }
+
+/* ---------- Saved ---------- */
+const nvSvHit = t => { const q = (st.nvSvQ || '').trim().toLowerCase(); return !q || String(t).toLowerCase().includes(q); };
+const nvSavedNone = () => !st.saved.size && !st.miSaved.size && !(qtOn() && st.qtSaved.size);
+function nvSavedNoThreads() {
+  const q = (st.nvSvQ || '').trim();
+  if (q) return `<p class="muted sv-empty">No saved threads match “${esc(q)}”.</p>`;
+  if (st.saved.size) return '<p class="muted sv-empty">No saved threads in this space.</p>';
+  return `<p class="muted sv-empty">No saved threads.${st.miSaved.size ? ' Saved sources are listed under Sources.' : ''}</p>`;
+}
+{ const f = miSavedList; miSavedList = function () {
+  const q = (st.nvSvQ || '').trim();
+  if (q && ![...st.miSaved].map(MIT).some(m => m && nvSvHit(miTitle(m) + ' ' + m.au))) return `<p class="muted sv-empty">No saved sources match “${esc(q)}”.</p>`;
+  return f();
+}; }
+
+/* ---------- space switcher: filter ---------- */
+function nvSwFilter(pop, q) {
+  const kids = [...pop.children];
+  kids.forEach((el, i) => { if (!el.classList.contains('grp')) return; let any = false; for (let j = i + 1; j < kids.length && !kids[j].classList.contains('grp'); j++) if (kids[j].classList.contains('pop-row') && !kids[j].hidden) any = true; el.hidden = !any; });
+  const any = kids.some(el => el.classList.contains('pop-row') && !el.hidden);
+  let none = pop.querySelector('.nv-swnone');
+  if (!none) { none = document.createElement('p'); none.className = 'nv-swnone'; none.setAttribute('role', 'status'); none.textContent = 'No spaces match'; pop.querySelector('#sw-q').after(none); }
+  none.hidden = any;
+}
+
+/* ---------- clicks, typing and keys ---------- */
+on($('app'), 'click', e => {
+  const t = e.target; if (!t.closest || st.device === 'native') return;
+  const stop = () => { e.stopPropagation(); e.preventDefault(); };
+  let b;
+  if ((b = t.closest('[data-nvretry]'))) { stop(); apiSource.load(liveData); return; }
+  if (!dataReady()) return;
+  if ((b = t.closest('[data-nvback]'))) { stop(); st.toast = null; nvBack(); return; }
+  if ((b = t.closest('[data-nvall]'))) { stop(); st.nvAll = b.dataset.nvall; renderAll(); return; }
+  if ((b = t.closest('[data-nvscope]'))) { stop(); st.nvScope = null; st.nvAll = null; renderAll(); return; }
+  if ((b = t.closest('[data-nvoffline]'))) { stop(); st.nvOffline = !navigator.onLine; if (st.nvOffline) toast('Session is still offline.'); renderAll(); return; }
+  if ((b = t.closest('[data-ntopen]')) && !t.closest('[data-ntinv]')) NV.focusHead = true;
+  if ((b = t.closest('[data-csmanage]')) && !b.dataset.mgto && NV.mem.mg[b.dataset.csmanage]) NV.mgWant = NV.mem.mg[b.dataset.csmanage];
+}, true);
+on($('app'), 'input', e => {
+  const el = e.target; if (st.device === 'native') return;
+  if (el.id === 'cs-q') { st.nvAll = null; return; }
+  if (el.id === 'nv-svq') { e.stopPropagation(); st.nvSvQ = el.value; const pos = el.selectionStart; renderAll(); csRefocus('nv-svq', pos); }
+}, true);
+on(document, 'keydown', e => {
+  if (e.key !== 'Enter' || !e.target.id) return;
+  if (e.target.id === 'sw-q') { e.preventDefault(); const r = [...e.target.closest('.pop').querySelectorAll('.pop-row')].find(x => !x.hidden); if (r) r.click(); return; }
+  if (e.target.id === 'nv-spq') { e.preventDefault(); const v = e.target.value.trim(); nvOpenSearch(v, st.space); }
+}, true);
+
+/* ---------- Screen menu ---------- */
+JUMPS.push(['Navigation and system states', [['nv-404', 'Page not found: unknown address'], ['nv-404-space', 'Page not found: unknown space'], ['nv-deleted', 'Thread was deleted'], ['nv-offline', 'Offline banner'], ['nv-loading', 'Loading: skeleton rows (slow server)'], ['nv-search-empty', 'Search: empty, field focused'], ['nv-search-all', 'Search: capped sections with Show all'], ['nv-search-in', 'Search in a space'], ['nv-saved-empty', 'Saved: nothing saved'], ['nv-ntfocus', 'Thread opened from a notification: heading focused'], ['nv-from-search', 'Thread opened from Search: back link'], ['nv-sf-crumb', 'Topic thread opened from Home: back link and breadcrumb']]]);
+function nvRestoreData() {
+  if (!NV.bak || !dataReady()) return;
+  const b = NV.bak; NV.bak = null;
+  db.set('saved', b.saved); db.set('qtSaved', b.qtSaved); db.set('miSaved', b.miSaved);
+}
+{ const NV_jump = jump; jump = function (k) {
+  nvQuiet();
+  if (!dataReady()) return NV_jump(k);
+  NV.jumpFrom = null; NV.mem = { ds: {}, mg: {} }; NV.focusHead = false;
+  nvRestoreData();
+  Object.assign(st, { nvScope: null, nvAll: null, nvSvQ: '', nvOffline: false, nvNF: null, nvGone: null });
+  if (!String(k).startsWith('nv-')) return NV_jump(k);
+  NV_jump('nv-base');
+  const snapAs = o => ({ ...nvSnap(), ...NAVBASE(), ...o });
+  const from = o => { const x = snapAs(o); NV.jumpFrom = { i: null, scr: nvScreen(x), label: nvLabel(x), snap: x, from: null }; };
+  switch (k) {
+    case 'nv-404': Object.assign(st, { subPage: 'nvnf', nvNF: { path: '/s/public/wiki/start-here' } }); break;
+    case 'nv-404-space': Object.assign(st, { subPage: 'nvnf', nvNF: { path: '/s/field-notes', space: 'field-notes' } }); break;
+    case 'nv-deleted': Object.assign(st, { subPage: 'nvgone', space: 'public', nvGone: { s: 'public', t: 1042, by: 'hal_b', on: 'Nov 16' } }); break;
+    case 'nv-offline': Object.assign(st, { home: true, nvOffline: true }); break;
+    case 'nv-loading': {
+      st.home = true;
+      const lat = mockBackend.cfg.latency;
+      DS.meta.setState({ status: 'loading', error: null });
+      apiSource.queue.then(() => { mockBackend.cfg.latency = 3000; apiSource.load(liveData, () => { mockBackend.cfg.latency = lat; NV.mode = 'replace'; NV.forceFrom = null; }); });
+      break;
+    }
+    case 'nv-search-empty': Object.assign(st, { subPage: 'search', q: '' }); NV.focusSel = '#cs-q'; break;
+    case 'nv-search-all': Object.assign(st, { subPage: 'search', q: 'void' }); break;
+    case 'nv-search-in': Object.assign(st, { subPage: 'search', q: 'port', nvScope: 'public', space: 'public' }); from({ space: 'public', home: false }); break;
+    case 'nv-saved-empty': NV.bak = { saved: st.saved, qtSaved: st.qtSaved, miSaved: st.miSaved }; db.set('saved', new Set()); db.set('qtSaved', new Set()); db.set('miSaved', new Set()); st.savedPage = true; break;
+    case 'nv-ntfocus': {
+      const x = st.notifs.find(n => n.k === 'reply' && D.posts[n.open]) || st.notifs.find(n => n.open != null && D.posts[n.open]);
+      from({ subPage: 'notifs' });
+      if (x) Object.assign(st, { thread: x.open, space: D.posts[x.open].s }); else st.subPage = 'notifs';
+      NV.focusHead = true; if (NV.jdPtr) setTimeout(nvFocusHeading, 0); break;
+    }
+    case 'nv-from-search': { const i = D.posts.findIndex(p => p.s === 'public' && p.k === 'ask' && /port/i.test(p.q)); from({ subPage: 'search', q: 'port' }); Object.assign(st, { thread: i < 0 ? 0 : i, space: 'public' }); break; }
+    case 'nv-sf-crumb': { const i = D.posts.findIndex(p => p.s === 'sablefield' && p.k === 'ask' && !p.running && topicOf(p)); from({ home: true }); Object.assign(st, { thread: i < 0 ? 0 : i, space: 'sablefield' }); break; }
+  }
+}; }
+/* ==== end of navigation ==== */
 
 buildJump();
 /* End of start-up: the fixtures are complete. Copy them as the mock backend's seed data, start loading
@@ -11757,6 +12228,7 @@ function renderKeepFocus() {
 }
 function renderAll() {
   if (DISPOSED) return;   /* a timer from a version replaced by hot reload */
+  nvBefore();
   const _app = document.getElementById('app'), route = routeKey(), moved = renderAll.route != null && renderAll.route !== route;
   renderAll.route = route;
   if (_app && moved) _app.scrollTop = 0;
@@ -11769,6 +12241,7 @@ function renderAll() {
   if (_app && _st) _app.scrollTop = _st;
   /* Mobile Web: a sheet over the page (Sources and wiki, request panel) keeps the page under it still */
   if (_app) { const sheet = st.device === 'phone' && (st.mWiki || (st.reqOpen && st.reqV === 'panel')); if (sheet && !_app.classList.contains('sheet-lock')) _app.scrollTop = 0; _app.classList.toggle('sheet-lock', !!sheet); }
+  nvAfter();
 }
 function renderAllInner() {
   renderControls();
@@ -11776,7 +12249,7 @@ function renderAllInner() {
   { const R = document.documentElement; R.dataset.device = st.device; R.dataset.font = st.font; R.dataset.sh = st.shV; R.dataset.mnav = st.mnav; R.toggleAttribute('data-theme', st.appearance !== 'system'); if (st.appearance !== 'system') R.dataset.theme = st.appearance; }
   if (!dataReady()) {
     const m = DS.meta.getState();
-    $('app').innerHTML = `<div class="data-wait" role="status">${m.status === 'error' ? `Couldn’t load data from the server (${esc(m.error)}).` : 'Loading…'}</div>`;
+    $('app').innerHTML = m.status === 'error' ? `<div class="data-wait" role="alert"><p>Couldn’t load data from the server (${esc(m.error)}).</p><button class="btn" type="button" data-nvretry="1">Retry</button></div>` : nvSkeleton();
     return;
   }
   if (st.device === 'native') {
@@ -11805,7 +12278,7 @@ function renderAllInner() {
 function pickOption(id) {
   const o = OPTIONS.find(x => x.id === id); if (!o) return;
   Object.assign(st, { opt: id, auth: o.auth, pop: false });
-  if (location.hash.slice(1) !== id) { try { history.replaceState(null, '', '#' + id); } catch (e) { location.hash = id; } }
+  nvQuiet();   /* a variant switch replaces the history entry; nvAfter writes the hash */
   renderAll();
 }
 /* Edit profile */
@@ -11906,6 +12379,7 @@ on($('app'), 'input', e => {
   if (e.target.id !== 'sw-q') return;
   const q = e.target.value.trim().toLowerCase();
   e.target.closest('.pop').querySelectorAll('.pop-row').forEach(r => { r.hidden = q && !r.dataset.name.includes(q); });
+  nvSwFilter(e.target.closest('.pop'), q);
 });
 let gPending = false;
 on(document, 'keydown', e => {
@@ -11921,7 +12395,8 @@ on(document, 'keydown', e => {
     if (k === 'g') { gPending = true; setTimeout(() => { gPending = false; }, 1200); return; }
     if (k === '?') { st.modal = st.modal === 'kbd' ? null : 'kbd'; renderAll(); e.preventDefault(); return; }
     if (k === 'c' && !st.modal) { st.compOpen = true; renderAll(); e.preventDefault(); return; }
-    if (k === '/' && !st.modal) { st.pop = true; renderAll(); e.preventDefault(); return; }
+    if (k === '/' && !st.modal) { nvOpenSearch(); e.preventDefault(); return; }
+    if (k === 'f' && !st.modal) { st.pop = true; renderAll(); e.preventDefault(); return; }
   } if (e.key === 'Escape' && st.modal) { if (st.modal === 'addkey') st.addingKey = false; st.modal = null; renderAll(); return; } if (e.key === 'Escape' && (st.pop || st.sortOpen || st.compOpen || st.umenu)) { if (st.compOpen && st.draft.trim() && !st.pop && !st.sortOpen && !st.umenu) { st.modal = 'discard'; renderAll(); return; } st.umenu = false; st.pop = false; st.sortOpen = false; if (!st.draft.trim()) st.compOpen = false; renderAll(); } });
 /* Mobile Web simulation. The phone layout is written once, as @media (max-width: …) rules. When
    "Mobile Web" is picked on a wide screen, those rules are copied without their media condition and
