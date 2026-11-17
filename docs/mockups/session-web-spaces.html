@@ -5909,7 +5909,7 @@ function nNotifs() {
 }
 function nHome() {
   const ids = nSignedIn() ? D.joined : D.spaces.filter(x => visibleSp(x) && !isClosed(x)).map(x => x.id);
-  const posts = D.posts.filter(p => ids.includes(p.s) && canRead(sp(p.s)) && (nst.homeF === 'all' || p.k === nst.homeF)).sort((a, b) => ageMin(a.age) - ageMin(b.age));
+  const posts = D.posts.filter(p => !p.gone && ids.includes(p.s) && canRead(sp(p.s)) && (nst.homeF === 'all' || p.k === nst.homeF)).sort((a, b) => ageMin(a.age) - ageMin(b.age));
   const top = `${nRootBar(nBell(), nSignedIn() ? 'Home' : 'Everything on Session')}${nHomeSearch()}`;
   if ((nst.hq || '').trim()) return { body: top + nSearchResults(nst.hq) };
   const empty = nSignedIn() && !D.joined.length ? `<div class="n-out"><p>Join a space to see its threads here.</p><button class="n-capbtn wide" type="button" data-n="tab:spaces">Find spaces</button></div>` : nFeed(posts);
@@ -5963,6 +5963,7 @@ const nDock = (ph, x) => nSignedIn()
   : `<div class="n-dock"><button class="n-dock-f out" type="button" data-n="sheet:signin">${ph}</button></div>`;
 function nThread(i) {
   const p = D.posts[i], ask = p.k === 'ask', s = sp(p.s), sv = nSignedIn() && st.saved.has(i);
+  if (p.gone) return { body: `${nPushBar('', '')}<p class="n-empty">${p.u === ME.u ? 'You deleted this thread.' : `${esc(p.u)} deleted this thread.`}</p>` };
   if (!canRead(s)) {
     if (s.vis === 'unlisted') return nNoAccess(s, true);
     return { body: `${nPushBar('', '')}<div class="n-sphead">${glyph(s, 'n-gl-xl')}<h2>${esc(s.title)}</h2><p>${esc(s.desc)}</p><div class="n-sphead-m"><span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(s)}</span><span>${fmt(s.members)} members</span></div>${nCta(s)}</div>${nReqNote(s)}<p class="n-empty">This thread is in ${spName(s)}. Only members can read it.</p>` };
@@ -5989,7 +5990,7 @@ function nSaved() {
 const nSignedOut = msg => `<div class="n-out"><p>${msg}</p><button class="n-capbtn wide" type="button" data-n="sheet:signin">Log in or sign up</button></div>`;
 function nYou() {
   if (!nSignedIn()) return { body: `${nRootBar('', 'You')}${nSignedOut('Log in to ask questions, post in spaces and add your own API keys.')}${nAppearance()}` };
-  const mine = D.posts.filter(p => p.u === ME.u && canRead(sp(p.s))).length;
+  const mine = D.posts.filter(p => !p.gone && p.u === ME.u && canRead(sp(p.s))).length;
   return { body: `${nRootBar('', 'You')}<button class="n-me" type="button" data-n="push:profile:${ME.u}">${avatar(ME.u, 'n-av xl')}<span class="n-me-b"><b>${esc(ME.name)}</b><small>${ME.x} · ${mine} threads</small></span><span class="n-chev">${NI.chev}</span></button>${nGroup('', [
     `<button class="n-row" type="button" data-n="tab:spaces"><span class="n-row-b"><b>Your spaces</b></span><span class="n-val">${D.joined.length}</span><span class="n-chev">${NI.chev}</span></button>`,
     `<button class="n-row" type="button" data-n="push:keys"><span class="n-row-b"><b>API keys</b></span><span class="n-val">${st.userKeys.length}</span><span class="n-chev">${NI.chev}</span></button>`,
@@ -6353,7 +6354,7 @@ function nSrcAsk(id, txt) {
 /* ---------- profiles ---------- */
 function nProfile(u) {
   const self = u === ME.u, P = self ? ME : { u, name: NAMES[u] || u, x: '@' + u.replace(/\./g, '_') };
-  const th = D.posts.filter(p => p.u === u && canRead(sp(p.s)));
+  const th = D.posts.filter(p => !p.gone && p.u === u && canRead(sp(p.s)));
   const fus = Object.entries(D.fu).flatMap(([pid, l]) => (l || []).filter(f => f.u === u).map(f => ({ ...f, pid: +pid }))).filter(f => D.posts[f.pid] && canRead(sp(D.posts[f.pid].s)));
   const nsp = self ? D.joined.length : new Set(th.map(p => p.s)).size, pl = (n, w) => `<span class="num">${n}</span> ${w}${n === 1 ? '' : 's'}`;
   const head = `<div class="n-pf">${avatar(u, 'n-av xl')}<h2>${esc(P.name)}</h2><p class="n-pf-h">${esc(u)} · X ${esc(P.x)}</p>${P.bio ? `<p class="n-pf-bio">${esc(P.bio)}</p>` : ''}<p class="n-pf-st">${pl(th.length, 'thread')} · ${pl(nsp, 'space')}</p>${self ? '<button class="n-capbtn ghost" type="button" data-n="sheet:pfedit">Edit profile</button>' : ''}</div>`;
@@ -6434,14 +6435,14 @@ const nHomeSearch = () => `<div class="n-pad"><label class="n-search">${NI.searc
 function nSearchResults(q0) {
   const q = q0.trim().toLowerCase(), has = t => String(t || '').toLowerCase().includes(q);
   const sps = D.spaces.filter(x => visibleSp(x) && (has(x.name) || has(x.title) || has(x.desc)));
-  const th = D.posts.filter(p => canRead(sp(p.s)) && visibleSp(sp(p.s)) && (has(p.q) || has(p.t) || has(p.sum)));
+  const th = D.posts.filter(p => !p.gone && canRead(sp(p.s)) && visibleSp(sp(p.s)) && (has(p.q) || has(p.t) || has(p.sum)));
   if (!sps.length && !th.length) return `<p class="n-empty">No threads or spaces match “${esc(q0.trim())}”.</p>`;
   const rows = sps.map(x => nGo2(`push:space:${x.id}`, `${glyph(x, 'n-gl')}<span class="n-row-b"><b>${nNameH(x)}${isClosed(x) ? LK('cs-lk n-lk', 'Closed space') : ''}</b><small>${fmt(x.members)} members${isClosed(x) ? ' · ' + visLabel(x) : ''}</small></span>`));
   return `${sps.length ? nGroup('Spaces', rows) : ''}${th.length ? `<h3 class="n-grp-h n-srh">Threads</h3>${nFeed(th)}` : ''}`;
 }
 function nSavedBody() {
   const asks = [...st.qtSaved].map(k => { const [th, id] = String(k).split(':'), T = D.posts[+th] ? qtT(+th) : null, n = T && T.by[id]; return n && canRead(sp(T.p.s)) ? { k, T, n } : null; }).filter(Boolean);
-  const srcs = [...st.miSaved].map(MIT).filter(Boolean), th = [...st.saved].map(i => D.posts[i]).filter(Boolean);
+  const srcs = [...st.miSaved].map(MIT).filter(Boolean), th = [...st.saved].map(i => D.posts[i]).filter(p => p && !p.gone);
   const empty = msg => `<p class="n-empty n-sv-empty">${NI.saved}<span>${msg}</span></p>`;
   if (!asks.length && !srcs.length && !th.length) return empty('Tap the bookmark on a thread to save it here.');
   const unsave = (what, id) => `<button class="n-ib n-unsave" type="button" data-n="unsave:${what}:${id}" aria-label="Remove from Saved">${NI.savedOn}</button>`;
