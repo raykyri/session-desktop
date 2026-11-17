@@ -11889,7 +11889,13 @@ function tmRestore() {
   if (TMJ.keys) { db.set('userKeys', structuredClone(ST0.userKeys)); TMJ.keys = false; }
   if (TMJ.qtd != null) { const i = TMJ.qtd; if (QTD0[i]) db.put('qtd', i, structuredClone(QTD0[i])); else db.del('qtd', i); TMJ.qtd = null; }
   const i = D.posts.findIndex(p => p.tmDemo);
-  if (i >= 0 && i === D.posts.length - 1) { askCancel(i); db.remove('posts', i); }
+  if (i >= 0 && i === D.posts.length - 1) {
+    askCancel(i); db.remove('posts', i);
+    /* the Phone app must not keep a screen for the removed thread */
+    const gone = e => e && e.v === 'thread' && +e.id === i;
+    if ((nst.stack || []).some(gone)) nst.stack = nst.stack.filter(e => !gone(e));
+    if (nst.stacks) for (const [t, a] of Object.entries(nst.stacks)) if ((a || []).some(gone)) nst.stacks = { ...nst.stacks, [t]: a.filter(e => !gone(e)) };
+  }
   Object.assign(st, { tmPick: null, tmChoose: false, tmSkErr: '' });
 }
 /* usage helpers for the entries: add tokens to a source (in the matrix, and on a key's record) */

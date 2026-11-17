@@ -12,6 +12,11 @@
    - Limit tracking is out of scope for the backend. API keys and space token budgets stay as they are:
      their endpoints and fields are marked `stub` with TODO comments. The backend does no token accounting.
    - Answers are not streamed; progress steps are enough.
+   - There are no private threads: every thread belongs to a shared space and is visible to that space's
+     members (and to anyone, in an open space).
+   - Only threads in open spaces can be shared with a link; access to a closed space's threads comes
+     from membership alone.
+   - Ids are ULIDs, as in the real server (web/packages/db/src/ids.ts), including in thread URLs.
 
    Contents
    1. The wire codec (JSON; Sets travel as { $set: [...] }). The page uses this copy.
@@ -170,6 +175,10 @@
   S.PageDoc = obj({ t: str, text: arr(str), 'by?': str, 'ed?': str, revs: arr(obj({ by: str, age: str, note: str })) }, 'PageDoc');
   S.Profile = obj({ name: str, bio: str }, 'Profile');
   S.Invite = named('Invite', nul(obj({ sp: str, by: str, state: str })));
+  /* TODO(limits): token usage is simulated in the page for the Token model variants (owner decision:
+     no server-side limit tracking yet). Stored as sent. */
+  S.Usage = obj({ cap: num, reset: str, def: nul(str), movedSeen: bool, by: rec(rec(num)),
+    skeys: rec(obj({ prov: str, mask: str, by: str, cap: num, used: num, member: num })) }, 'Usage');
   S.Settings = obj({ email: str, emailNew: nul(str), exportAt: nul(str), emailOn: bool, types: rec(bool), spaces: rec(str) }, 'Settings');
   S.ClosedSpaceState = one('none', 'pending', 'member', 'mod', 'denied');
 
@@ -217,6 +226,7 @@
     acct:     { path: '/api/me/settings', kind: 'value', item: S.Settings },
     muted:    { path: '/api/me/muted', kind: 'value', item: named('Set<Handle>', set(str)) },
     blocked:  { path: '/api/me/blocked', kind: 'value', item: named('Set<Handle>', set(str)) },
+    usage:    { path: '/api/me/usage', kind: 'value', item: S.Usage, stub: true },
     repSeen:  { path: '/api/me/reports-seen', kind: 'value', item: bool },
     reqSeen:  { path: '/api/me/requests-seen', kind: 'value', item: bool },
     rpLiked:  { path: '/api/me/reply-likes', kind: 'value', item: named('Set<ReplyKey>', set(str)) },
@@ -389,6 +399,8 @@
     row('pagedocs', 'delete', 'moderator', 'pages.remove'),
     row('acct', 'list', 'user', 'settings.get', { wire: 'UserSettings' }),
     row('acct', 'replace', 'user', 'settings.update', { wire: 'UserSettings' }),
+    row('usage', 'list', 'user', 'usage.get', { stub: true, note: 'TODO(limits): token usage by source and space; space keys (Token model variant D)' }),
+    row('usage', 'replace', 'user', ['usage.setDefaultKey', 'spaceKeys.set'], { stub: true, note: 'TODO(limits): the page computes usage; the server stores it as sent' }),
     row('muted', 'list', 'user', 'mutes.list'),
     row('muted', 'replace', 'user', 'mutes.set'),
     row('blocked', 'list', 'user', 'blocks.list'),
