@@ -1203,6 +1203,10 @@ html[data-device="native"] .frame > .app { min-height: 0; height: 100%; }
 .n-sw.on { background: var(--good); }
 .n-sw.on i { transform: translateX(20px); }
 /* search */
+.n-hsrow { display: flex; align-items: center; gap: 6px; }
+.n-hsrow .n-search { flex: 1; min-width: 0; }
+.n-hsrow .n-tb { flex: none; padding: 8px 4px; }
+.n-hsbtn svg { width: 21px; height: 21px; }
 .n-search { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 8px; border-radius: 10px; background: var(--n-fill); color: var(--t-faint); }
 .n-search svg { width: 17px; height: 17px; flex: none; }
 .n-search input { flex: 1; min-width: 0; border: 0; background: none; font: inherit; font-size: 16.5px; color: var(--t-primary); outline: none; }
@@ -3554,9 +3558,9 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 :root:is([data-tint^="sagew"], [data-tint="warmwc"]) .n-tab.on, :root:is([data-tint^="sagew"], [data-tint="warmwc"]) .n-check { color: var(--trim-ink); }
 /* D1 Green chrome: a pale green band (--chrome) with a green line under it; the current header tab is a white pill.
    On Phone the status bar, navigation bars, tab bar and dock are the band, and the system tint is green. */
-:root:is([data-tint="sagewc"], [data-tint="warmwc"]) :is(.hdr, .strip, .mchips) { border-bottom-color: color-mix(in srgb, var(--trim-line) 40%, var(--divider)); }
+:root:is([data-tint="sagewc"], [data-tint="warmwc"]) :is(.hdr, .strip, .mchips) { border-bottom-color: var(--hdr-line, color-mix(in srgb, var(--trim-line) 40%, var(--divider))); }
 :root:is([data-tint="sagewc"], [data-tint="warmwc"]) .rail { border-right-color: var(--trim-line); }
-:root:is([data-tint="sagewc"], [data-tint="warmwc"]) .utab[aria-current="true"] { background: var(--pane); box-shadow: 0 0 0 1px var(--trim-line); }
+:root:is([data-tint="sagewc"], [data-tint="warmwc"]) .utab[aria-current="true"] { background: var(--pane); box-shadow: 0 0 0 1px var(--divider); }
 :root:is([data-tint="sagewc"], [data-tint="warmwc"]) .mtabs { border-top-color: var(--trim-line); }
 :root:is([data-tint="sagewc"], [data-tint="warmwc"]) .n-root { --n-tint: var(--trim-ink); }
 :root:is([data-tint="sagewc"], [data-tint="warmwc"]) .n-root, :root:is([data-tint="sagewc"], [data-tint="warmwc"]) .n-scr:has(.n-grp) .n-bar, :root:is([data-tint="sagewc"], [data-tint="warmwc"]) .n-scr:has(.n-grp) ~ .n-tabbar { --n-bar-bg: color-mix(in srgb, var(--chrome) 92%, transparent); }
@@ -6003,7 +6007,8 @@ function nNotifs() {
 function nHome() {
   const ids = nSignedIn() ? D.joined : D.spaces.filter(x => visibleSp(x) && !isClosed(x)).map(x => x.id);
   const posts = D.posts.filter(p => !p.gone && ids.includes(p.s) && canRead(sp(p.s)) && (nst.homeF === 'all' || p.k === nst.homeF)).sort((a, b) => ageMin(a.age) - ageMin(b.age));
-  const top = `${nRootBar(nBell(), nSignedIn() ? 'Home' : 'Everything on Session')}${nHomeSearch()}`;
+  const sOpen = nst.hsOpen || !!(nst.hq || '').trim();
+  const top = `${nRootBar(`${sOpen ? '' : `<button class="n-ib n-hsbtn" type="button" data-n="hsopen" aria-label="Search threads and spaces">${NI.search}</button>`}${nBell()}`, nSignedIn() ? 'Home' : 'Everything on Session')}${sOpen ? nHomeSearch() : ''}`;
   if ((nst.hq || '').trim()) return { body: top + nSearchResults(nst.hq) };
   const empty = nSignedIn() && !D.joined.length ? `<div class="n-out"><p>Join a space to see its threads here.</p><button class="n-capbtn wide" type="button" data-n="tab:spaces">Find spaces</button></div>` : nFeed(posts);
   return { body: `${top}<div class="n-pad">${nSeg([['all', 'All'], ['ask', 'Asks'], ['post', 'Posts']], nst.homeF, 'homef')}</div>${nInline(null)}${empty}` };
@@ -6139,6 +6144,9 @@ function nClick(e) {
   const [k, a] = b.dataset.n.split(/:(.*)/s);
   if (nClickX(k, a)) return;
   /* one stack of screens per tab; tapping the current tab goes back to its root */
+  if (k === 'hsopen') { nGo(() => { nst.hsOpen = true; }); const i = $('n-hq'); if (i) i.focus(); return; }
+  if (k === 'hsclose') return nGo(() => { nst.hsOpen = false; nst.hq = ''; });
+  if (k === 'tab' && nst.tab === a && !nst.stack.length && !nst.sheet) { const sc = $('n-scr'); if (sc) sc.scrollTo({ top: 0, behavior: 'smooth' }); nst.scroll = { ...nst.scroll, ['tab:' + a]: 0 }; return; }
   if (k === 'tab') return nGo(() => {
     if (nst.tab === a) { if (!nst.stack.length) nst.scroll = { ...nst.scroll, ['tab:' + a]: 0 }; nst.stack = []; }
     else { nst.stacks = { ...nst.stacks, [nst.tab]: nst.stack }; nst.stack = nst.stacks[a] || []; nst.tab = a; }
@@ -6524,7 +6532,7 @@ function nNtTarget(x) {
 }
 
 /* ---------- Home search, Saved ---------- */
-const nHomeSearch = () => `<div class="n-pad"><label class="n-search">${NI.search}<input id="n-hq" type="search" placeholder="Search threads and spaces" aria-label="Search threads and spaces" value="${esc(nst.hq || '')}"></label></div>`;
+const nHomeSearch = () => `<div class="n-pad n-hsrow"><label class="n-search">${NI.search}<input id="n-hq" type="search" placeholder="Search threads and spaces" aria-label="Search threads and spaces" value="${esc(nst.hq || '')}"></label><button class="n-tb" type="button" data-n="hsclose">Cancel</button></div>`;
 function nSearchResults(q0) {
   const q = q0.trim().toLowerCase(), has = t => String(t || '').toLowerCase().includes(q);
   const sps = D.spaces.filter(x => visibleSp(x) && (has(x.name) || has(x.title) || has(x.desc)));
@@ -10810,7 +10818,7 @@ function npJump(k) {
   switch (k) {
     case 'np-home': tab('home'); break;
     case 'np-home-empty': setRel('grants', 'none'); db.set('joined', []); tab('home'); break;
-    case 'np-search': tab('home'); nst.hq = 'market'; break;
+    case 'np-search': tab('home'); nst.hsOpen = true; nst.hq = 'market'; break;
     case 'np-tabs': nst.stacks = { home: [{ v: 'thread', id: home0 }] }; tab('spaces', { v: 'space', id: 'scifi' }); break;
     case 'np-composer': case 'np-payer': case 'np-discard':
       tab('home'); Object.assign(nst, { inl: true, inlAt: 'home', cSpace: 'markets', cMode: 'ask', draft: 'How did the 2008 money-market fund run spread between funds?' });
@@ -12567,12 +12575,12 @@ function applyTint() {
 Object.assign(TINTS, {
   /* Beige chrome (C1): the Sage treatment in the Beige hue, derived in OKLCH (hue 78, trim hue 62) */
   warmwc: { h: 72, m: 0.6, a: 0, vars: {
-    light: { '--page': '#f6f2ec', '--chrome': '#f6f2ec', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#faf7f3', '--card-sel': '#f6ecde', '--pop-btn': '#ffffff', '--pop-btn-b': '#e4ded6', '--pop-btn-h': '#f6f2ec', '--control': '#f5f2ed', '--control-hover': '#efebe4', '--control-border': '#e1dbd3', '--divider': '#e9e4dd', '--border-strong': '#e0dad1', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#976537', '--trim-line': '#e1c8b3', '--trim-soft': '#fbebdd', '--trim-ink': '#603f1f', '--trim-on': '#ffffff' },
-    dark: { '--page': '#13100c', '--chrome': '#13100c', '--pane': '#1c1915', '--feed': '#1a1713', '--card': '#23201b', '--field': '#24211d', '--popover': '#26221e', '--inset': '#1e1b17', '--card-sel': '#2c2417', '--pop-btn': '#292621', '--pop-btn-b': '#413d36', '--pop-btn-h': '#312d27', '--control': '#292621', '--control-hover': '#312d27', '--control-border': '#413d36', '--divider': '#302c27', '--border-strong': '#3a3630', '--seg-on': '#3e3a33', '--trim': '#d89d69', '--trim-line': '#604732', '--trim-soft': '#2f2216', '--trim-ink': '#f5c7a1', '--trim-on': '#1c1915', '--t-faint': '#928f8b' },
+    light: { '--hdr-line': 'var(--divider)', '--page': '#f6f2ec', '--chrome': '#f6f2ec', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#faf7f3', '--card-sel': '#f6ecde', '--pop-btn': '#ffffff', '--pop-btn-b': '#e4ded6', '--pop-btn-h': '#f6f2ec', '--control': '#f5f2ed', '--control-hover': '#efebe4', '--control-border': '#e1dbd3', '--divider': '#e9e4dd', '--border-strong': '#e0dad1', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#976537', '--trim-line': '#e1c8b3', '--trim-soft': '#fbebdd', '--trim-ink': '#603f1f', '--trim-on': '#ffffff' },
+    dark: { '--hdr-line': 'var(--divider)', '--page': '#13100c', '--chrome': '#13100c', '--pane': '#1c1915', '--feed': '#1a1713', '--card': '#23201b', '--field': '#24211d', '--popover': '#26221e', '--inset': '#1e1b17', '--card-sel': '#2c2417', '--pop-btn': '#292621', '--pop-btn-b': '#413d36', '--pop-btn-h': '#312d27', '--control': '#292621', '--control-hover': '#312d27', '--control-border': '#413d36', '--divider': '#302c27', '--border-strong': '#3a3630', '--seg-on': '#3e3a33', '--trim': '#d89d69', '--trim-line': '#604732', '--trim-soft': '#2f2216', '--trim-ink': '#f5c7a1', '--trim-on': '#1c1915', '--t-faint': '#928f8b' },
   } },
   sagewc: { h: 152, m: 0.9, a: 0.004, dark: { m: 0.35, a: 0.0018 }, vars: {
     light: { '--page': '#edf5ef', '--chrome': '#edf5ef', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#f4f9f5', '--card-sel': '#e0f4e4', '--pop-btn': '#ffffff', '--pop-btn-b': '#d7e3da', '--pop-btn-h': '#edf5ee', '--control': '#eef4ef', '--control-hover': '#e5eee7', '--control-border': '#d4e0d7', '--divider': '#dee8e0', '--border-strong': '#d2dfd5', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#3b8352', '--trim-line': '#b7d7bf', '--trim-soft': '#e0f4e4', '--trim-ink': '#225332', '--trim-on': '#ffffff' },
-    dark: { '--page': '#0f110f', '--chrome': '#0f110f', '--pane': '#181a18', '--feed': '#161816', '--card': '#1e211e', '--field': '#1f2220', '--popover': '#202421', '--inset': '#1a1c1a', '--card-sel': '#1e2821', '--pop-btn': '#242724', '--pop-btn-b': '#3a3f3b', '--pop-btn-h': '#2b2f2c', '--control': '#242724', '--control-hover': '#2b2f2c', '--control-border': '#3a3f3b', '--divider': '#2a2e2b', '--border-strong': '#343835', '--seg-on': '#373c38', '--trim': '#8db798', '--trim-line': '#415245', '--trim-soft': '#1e2821', '--trim-ink': '#bbdbc2', '--trim-on': '#181a18', '--t-faint': '#8e908e' },
+    dark: { '--hdr-line': 'var(--divider)', '--page': '#0f110f', '--chrome': '#0f110f', '--pane': '#181a18', '--feed': '#161816', '--card': '#1e211e', '--field': '#1f2220', '--popover': '#202421', '--inset': '#1a1c1a', '--card-sel': '#1e2821', '--pop-btn': '#242724', '--pop-btn-b': '#3a3f3b', '--pop-btn-h': '#2b2f2c', '--control': '#242724', '--control-hover': '#2b2f2c', '--control-border': '#3a3f3b', '--divider': '#2a2e2b', '--border-strong': '#343835', '--seg-on': '#373c38', '--trim': '#8db798', '--trim-line': '#415245', '--trim-soft': '#1e2821', '--trim-ink': '#bbdbc2', '--trim-on': '#181a18', '--t-faint': '#8e908e' },
   } },
   sagewt: { h: 152, m: 0.9, a: 0.004, dark: { m: 0.6, a: 0.003 }, vars: {
     light: { '--page': '#f3f7f4', '--chrome': '#ffffff', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#f7faf7', '--card-sel': '#dff6e4', '--pop-btn': '#ffffff', '--pop-btn-b': '#dde3de', '--pop-btn-h': '#f2f6f2', '--control': '#f1f5f2', '--control-hover': '#e9efea', '--control-border': '#dbe2dc', '--divider': '#e4e9e5', '--border-strong': '#d9e0db', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#378450', '--trim-line': '#a2c9ab', '--trim-soft': '#dff6e4', '--trim-ink': '#205431', '--trim-on': '#ffffff' },
