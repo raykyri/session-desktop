@@ -3722,6 +3722,75 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 .rf-meta .rf-arr { display: inline-flex; color: var(--t-faint); }
 .rf-meta .rf-arr svg { width: 12px; height: 12px; }
 .rf-demo .rf-dh { margin: 22px 0 4px; }
+/* ==== account: one Account page for settings, Usage, API keys and Your spaces (Variants bar: Account) ==== */
+.sub-page.acx-page { padding-left: max(32px, calc((100% - 1040px) / 2)); padding-right: max(32px, calc((100% - 1040px) / 2)); }
+.sub-page.acx-page:is(.acx-tabs-v, .acx-full, .acx-over, .acx-outp) { padding-left: max(32px, calc((100% - 820px) / 2)); padding-right: max(32px, calc((100% - 820px) / 2)); }
+.acx-title { margin: 0; font-size: 22.65px; font-weight: 700; letter-spacing: -.01em; color: var(--t-heading); }
+.acx-page .acx-main.acx-main { padding: 0; max-width: none; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+/* A: the section list on the left */
+.acx-grid { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 40px; align-items: start; }
+.acx-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 16px; }
+.acx-it { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 0; border-radius: var(--r-md); background: transparent; color: var(--t-secondary); font: inherit; font-size: var(--fs-sm); font-weight: 550; text-align: left; cursor: pointer; }
+.acx-it svg { width: 16px; height: 16px; flex: none; color: var(--t-faint); }
+.acx-it:hover { background: var(--fill-hover); color: var(--t-strong); }
+.acx-it[aria-current="page"] { background: var(--card-sel); color: var(--t-heading); font-weight: 650; }
+.acx-it[aria-current="page"] svg { color: var(--t-heading); }
+/* B, and A at 920px and below: a tab strip under the title */
+.acx-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--divider); overflow-x: auto; scrollbar-width: none; margin-top: -6px; }
+.acx-tabs::-webkit-scrollbar { display: none; }
+.acx-tab { position: relative; flex: none; height: 38px; padding: 0 10px; border: 0; background: transparent; color: var(--t-muted); font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
+.acx-tab:first-child { margin-left: -10px; }
+.acx-tab:hover { color: var(--t-strong); }
+.acx-tab[aria-current="page"] { color: var(--t-heading); }
+.acx-tab[aria-current="page"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--t-heading); }
+/* A and B: the list or the tab names the section, so the section's own title is for screen readers only */
+.acx-page:is(.acx-tabs-v, .acx-side) .acx-main > .sub-top > h2:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.acx-page:is(.acx-tabs-v, .acx-side) .acx-main > .sub-top:not(:has(> :not(h2))) { margin-bottom: -18px; }
+.acx-page:is(.acx-tabs-v, .acx-side) .acx-main > .sub-top { justify-content: flex-end; }
+@media (max-width: 920px) {
+  .acx-grid { display: flex; flex-direction: column; align-items: stretch; gap: 18px; }
+  .acx-nav { position: static; flex-direction: row; gap: 2px; border-bottom: 1px solid var(--divider); overflow-x: auto; scrollbar-width: none; margin-top: -6px; }
+  .acx-nav::-webkit-scrollbar { display: none; }
+  .acx-it { position: relative; flex: none; height: 38px; border-radius: 0; color: var(--t-muted); font-weight: 600; }
+  .acx-it:first-child { margin-left: -10px; }
+  .acx-it svg { display: none; }
+  .acx-it:hover, .acx-it[aria-current="page"] { background: transparent; }
+  .acx-it[aria-current="page"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--t-heading); }
+}
+/* C: the overview */
+.acx-secs { display: flex; flex-direction: column; gap: 28px; }
+.acx-sec { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.acx-sh { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.acx-sh h3 { margin: 0; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
+.acx-sh .tlink { font-size: var(--fs-sm); }
+.acx-rows { display: flex; flex-direction: column; border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--pane); overflow: hidden; }
+.acx-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; min-width: 0; }
+.acx-row + .acx-row { border-top: 1px solid var(--divider); }
+.acx-rt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.acx-rt > b { font-weight: 600; color: var(--t-strong); font-size: var(--fs-sm); }
+.acx-rt > small { color: var(--t-muted); font-size: var(--fs-xs); line-height: 1.45; overflow-wrap: anywhere; }
+.acx-rt .tlink { align-self: flex-start; font-size: var(--fs-xs); }
+.acx-row > b.num { color: var(--t-strong); font-weight: 600; font-size: var(--fs-sm); }
+.acx-row > .btn { flex: none; }
+.acx-total { display: flex; align-items: baseline; gap: 8px; }
+.acx-total b { font-size: 26px; font-weight: 650; color: var(--t-heading); letter-spacing: -.01em; }
+.acx-total span { color: var(--t-muted); font-size: var(--fs-sm); }
+.acx-meter .tm-bar { max-width: none; }
+.acx-spn { display: inline-flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.acx-more { margin: 0; font-size: var(--fs-xs); color: var(--t-faint); }
+.acx-add { align-self: flex-start; }
+.btn.acx-del { color: var(--bad); }
+/* the left rail: the Your spaces heading opens Account › Your spaces */
+button.eyebrow.acx-rlh { border: 0; padding: 0; background: transparent; font-family: inherit; cursor: pointer; }
+button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
+/* the account menu: this month's tokens next to Account */
+.um-item .acx-umt { margin-left: auto; color: var(--t-faint); font-size: var(--fs-xs); }
+@media (max-width: 640px) {
+  .sub-page.acx-page, .sub-page.acx-page:is(.acx-tabs-v, .acx-full, .acx-over, .acx-outp) { padding-left: 14px; padding-right: 14px; }
+  .acx-row { flex-wrap: wrap; }
+  .acx-rt { flex-basis: calc(100% - 90px); }
+}
+/* ==== end account CSS ==== */
 </style>
 
 <div class="shell" id="shell">
@@ -3744,6 +3813,10 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
       <div class="knob" id="kw-dspos"><span>Layout</span><div class="seg" id="k-dspos"></div></div>
+    </div>
+    <div class="knobs cs-knobs" id="kw-account" aria-label="Account controls">
+      <span class="cs-kt">Account</span>
+      <div class="knob"><span>Layout</span><div class="seg" id="k-acv"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -5192,6 +5265,7 @@ const KNOBDEF = () => [
   ...REFKNOBS(),
   ...DSKNOBS(),
   ...QTKNOBS(),
+  ...ACVKNOBS(),
 ];
 let HOTKEYS = {};
 function renderControls() {
@@ -12162,6 +12236,235 @@ JUMPS.push(['Back and unsaved input', [['ov-sked-back', 'Skill editor with chang
   renderAll();
 }; }
 /* ==== end of overlay history ==== */
+
+/* ==== account: settings, Usage, API keys and Your spaces in one Account page ====
+   The four pages keep their own screens (subPage account, usage, keys, yourspaces), addresses and history
+   entries; this block shows them inside one Account page. The Variants bar's Account control (st.acV) picks
+   the layout on Desktop and Mobile Web:
+   - A (side): a section list on the left; at 920px and below it turns into a tab strip.
+   - B (tabs): a tab strip under the Account title, like the space tabs.
+   - C (over): an overview (subPage acct, /settings) with a short part for each section and a link to its
+     full page. The full pages are the A and B sections without the list, with a back link to Account.
+   Sections, in this order everywhere: Account (settings; headed Settings on C's overview, under the
+   Account title), Usage, API keys, Your spaces. The Usage line that
+   the token model added to the settings is left out here: Usage is the next section.
+   Addresses: /settings (C's overview; A and B show Account), /settings/account, /settings/usage,
+   /settings/keys, /settings/spaces (and /settings/spaces/header). /spaces and /spaces/header still open
+   Your spaces. Signed out, every section shows one Log in note (AC_PRIVATE has all of them).
+   Phone: You › Account is a screen with Usage, API keys and Your spaces, then the account settings
+   (email, notifications, export, delete). The Spaces tab stays as it is. No new data: settings writes use
+   the settings.update mutation, as on the web. */
+Object.assign(st, { acV: 'side' });
+Object.assign(nst, { acEmail: '', acEmailErr: '' });
+const ACX_SECS = [['account', 'Account', MI.cog], ['usage', 'Usage', TM_I.usage], ['keys', 'API keys', MI.key], ['yourspaces', 'Your spaces', MI.grid]];
+const ACX_IDS = ACX_SECS.map(s => s[0]);
+const acxOn = (x = st) => ACX_IDS.includes(x.subPage) || x.subPage === 'acct';
+/* where Account opens: the overview in C, the Account section in A and B */
+const acxHome = () => st.acV === 'over' ? 'acct' : 'account';
+function ACVKNOBS() { return [['k-acv', 'acV', [['side', 'Sidebar'], ['tabs', 'Tabs'], ['over', 'Overview']], acxPick]]; }
+/* picking a layout shows it: from another screen it opens Account; C's overview and A/B's Account section swap */
+function acxPick() {
+  if (st.device === 'native') return;
+  if (!acxOn()) Object.assign(st, NAVBASE(), MI_CLEAR(), { subPage: acxHome() });
+  else if (st.acV === 'over' && st.subPage === 'account') st.subPage = 'acct';
+  else if (st.acV !== 'over' && st.subPage === 'acct') st.subPage = 'account';
+}
+AC_PRIVATE.push('acct');
+CS_SUBNAME.acct = 'Account';
+/* the pages as the earlier blocks draw them (with their back links, which this block replaces) */
+const ACX_RAW = { account: CS_PAGES.account, usage: CS_PAGES.usage, keys: () => layoutKeys(), yourspaces: () => layoutYourSpaces() };
+const ACX_END = '</div></div>';
+const ACX_USAGE_RE = /<section class="st-sec"><div class="st-head"><h3>Usage<\/h3>[\s\S]*?<\/section>/;
+const ACX_KEYS_BTN = '<button class="btn" type="button" data-sub="keys">API keys</button>';
+/* a page's header, its classes and its content */
+function acxSplit(h) {
+  h = h.replace(/<div class="nv-backrow">[\s\S]*?<\/button><\/div>/, '');
+  const m = /<div class="home-wide sub-page([^"]*)">/.exec(h);
+  if (!m || !h.endsWith(ACX_END)) return null;
+  return { head: h.slice(0, m.index), cls: m[1].trim(), body: h.slice(m.index + m[0].length, -ACX_END.length) };
+}
+const acxWrap = (cls, inner) => `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page ak-page ac-page acx-page ${cls}">${inner}</div></div>`;
+/* C's full pages go back to the overview: with history when the overview is the entry before, else as a new entry */
+function acxBackAcct() {
+  const f = NV.from, prev = f && f.scr === 'sub:acct:';
+  return `<div class="nv-backrow"><button class="th-back nv-back" type="button" ${prev ? 'data-nvback="1"' : 'data-sub="acct"'} aria-label="Back to Account">${nvBk()}<span class="nv-bl">Account</span></button></div>`;
+}
+const acxOut = () => acxWrap('acx-outp', `${nvBackRow()}<div class="sub-top"><h2>Account</h2></div>${acOutNote('Log in to see your account settings, usage, API keys and spaces.')}`);
+/* one section: A and B put it in the Account page with the section list or tabs; C shows it as a full page */
+function acxSection(sec) {
+  if (st.auth !== 'in') return acxOut();
+  const raw = ACX_RAW[sec](), p = acxSplit(raw); if (!p) return raw;
+  let body = p.body;
+  if (sec === 'account') body = body.replace(ACX_USAGE_RE, '');
+  if (st.acV === 'over') return `${p.head}<div class="home-wide sub-page ${p.cls} acx-page acx-full">${acxBackAcct()}${body}${ACX_END}`;
+  if (sec === 'usage') body = body.replace(ACX_KEYS_BTN, '');
+  const tabs = st.acV === 'tabs', cur = k => `aria-current="${k === sec ? 'page' : 'false'}"`;
+  const nav = tabs
+    ? `<nav class="acx-tabs" aria-label="Account sections">${ACX_SECS.map(([k, l]) => `<button class="acx-tab" type="button" data-sub="${k}" ${cur(k)}>${l}</button>`).join('')}</nav>`
+    : `<nav class="acx-nav" aria-label="Account sections">${ACX_SECS.map(([k, l, ic]) => `<button class="acx-it" type="button" data-sub="${k}" ${cur(k)}>${ic}<span>${l}</span></button>`).join('')}</nav>`;
+  const main = `<div class="acx-main ${p.cls}">${body}</div>`;
+  return `${p.head}<div class="home-wide sub-page acx-page ${tabs ? 'acx-tabs-v' : 'acx-side'}">${nvBackRow()}<h1 class="acx-title">Account</h1>${tabs ? nav + main : `<div class="acx-grid">${nav}${main}</div>`}${ACX_END}`;
+}
+/* C: the overview, one part per section in the same order */
+function acxOverview() {
+  if (st.auth !== 'in') return acxOut();
+  const a = D.acct, mod = acModerates();
+  const sec = (id, title, link, linkTo, body) => `<section class="acx-sec" aria-labelledby="acx-h-${id}"><div class="acx-sh"><h3 id="acx-h-${id}">${title}</h3><button class="tlink" type="button" data-sub="${linkTo}">${link}</button></div>${body}</section>`;
+  const row = (title, sub, end = '') => `<div class="acx-row"><div class="acx-rt"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</div>${end}</div>`;
+  /* Account: email, notifications, export, delete */
+  const types = AC_TYPES.filter(t => !t[3] || mod), on = types.filter(t => a.types[t[0]]).length;
+  const email = row('Email', a.emailNew ? `${esc(a.email)} · Waiting for you to confirm ${esc(a.emailNew)}` : esc(a.email), a.emailNew ? '<button class="btn sm" type="button" data-acx="email-cancel">Cancel change</button>' : '<button class="btn sm" type="button" data-acx="email">Change</button>');
+  const notifs = row('Notifications', `${on} of ${types.length} kinds on · Email ${a.emailOn ? 'on' : 'off'}`, '<button class="btn sm" type="button" data-acnset="1">Change</button>');
+  const exp = a.exportAt ? row('Export your data', `Requested ${agoText(a.exportAt)}. We’ll email you a download link at ${esc(a.email)}.`) : row('Export your data', 'A copy of your profile, threads, follow-ups, likes, saved items and settings.', '<button class="btn sm" type="button" data-acx="export">Export</button>');
+  const del = row('Delete account', 'Deletes your profile, likes, saved items, API keys and settings.', '<button class="btn sm acx-del" type="button" data-acx="delete">Delete</button>');
+  const account = sec('account', 'Settings', 'All settings', 'account', `<div class="acx-rows">${email}${notifs}${exp}${del}</div>`);
+  /* Usage: the month's total, the included tokens, the top spaces */
+  const s = tmSrc('session'), spaces = tmBySpace(tmSources()), top = spaces.slice(0, 3);
+  const meter = `<div class="acx-row acx-meter"><div class="acx-rt"><b>Included tokens</b><small class="num">${tmSrcLine(s)}</small>${tmBar(s.used, s.cap)}</div><b class="num">${fmtT(s.used)}</b></div>`;
+  const spRows = top.map(([sid, v]) => `<div class="acx-row">${glyph(sp(sid))}<div class="acx-rt"><button class="tlink tm-sp" type="button" data-space="${sid}">${spName(sp(sid))}</button>${tmBar(v, top[0][1])}</div><b class="num">${fmtT(v)}</b></div>`).join('');
+  const usage = sec('usage', 'Usage', 'All usage', 'usage', `<div class="acx-total"><b class="num">${fmtT(tmTotal())}</b><span>tokens this month</span></div><div class="acx-rows">${meter}${spRows}</div>${spaces.length > 3 ? `<p class="acx-more">Top 3 of ${spaces.length} spaces. All usage has every space and source.</p>` : ''}`);
+  /* API keys: the list, with Add */
+  const keys = sec('keys', 'API keys', 'Manage keys', 'keys', `${akList()}<button class="btn acx-add" type="button" data-act="key-open">${PLUS}Add a key</button>`);
+  /* Your spaces: a compact list */
+  const joined = D.spaces.filter(x => D.joined.includes(x.id)), show = joined.slice(0, 5);
+  const ys = joined.length ? `<div class="acx-rows">${show.map(x => `<div class="acx-row">${csGlyph(x)}<div class="acx-rt"><span class="acx-spn"><button class="dg-name" type="button" data-space="${x.id}">${spName(x)}</button>${spSeal(x, 'sm')}</span></div><small class="faint">${roleLabel(role(x))}</small></div>`).join('')}</div>${joined.length > show.length ? `<p class="acx-more">${joined.length - show.length} more in Manage spaces.</p>` : ''}` : '<p class="muted">You have not joined any spaces.</p>';
+  const yours = sec('spaces', 'Your spaces', 'Manage spaces', 'yourspaces', ys);
+  return acxWrap('acx-over', `${nvBackRow()}<div class="sub-top"><h2>Account</h2></div><div class="acx-secs">${account}${usage}${keys}${yours}</div>`);
+}
+ACX_IDS.forEach(k => { CS_PAGES[k] = () => acxSection(k); });
+/* /settings in A or B (or an entry made in C): the Account section */
+CS_PAGES.acct = () => st.acV === 'over' ? acxOverview() : acxSection('account');
+
+/* ---- addresses and routes ---- */
+{ const u0 = csUrl; csUrl = function () {
+  if (st.subPage === 'yourspaces') return st.ysEdit ? 'session.app/settings/spaces/header' : 'session.app/settings/spaces';
+  if (st.subPage === 'acct') return 'session.app/settings';
+  return u0();
+}; }
+{ const r0 = nvRoute; nvRoute = function (path) {
+  const seg = path.split('?')[0].split('/').filter(Boolean);
+  if (seg[0] === 'settings' && (!seg[1] || (seg[1] === 'usage' && !seg[2]) || (seg[1] === 'spaces' && (!seg[2] || (seg[2] === 'header' && !seg[3]))))) {
+    Object.assign(st, NAVBASE(), MI_CLEAR(), { toast: null });
+    if (!seg[1]) st.subPage = acxHome();
+    else if (seg[1] === 'usage') st.subPage = 'usage';
+    else Object.assign(st, { subPage: 'yourspaces', ysEdit: seg[2] === 'header' });
+    return;
+  }
+  return r0(path);
+}; }
+
+/* ---- links that opened the separate pages ---- */
+/* the account menu: one Account item (with this month's tokens) in place of Your spaces, API keys and Usage */
+{ const um0 = userMenu; userMenu = function () {
+  return um0().replace(/<button class="um-item" type="button" role="menuitem" data-sub="(?:yourspaces|keys|usage)">[\s\S]*?<\/button>\s*/g, '')
+    .replace(/<button class="um-item" type="button" role="menuitem" data-sub="account">([\s\S]*?)<\/button>/, (_, inner) => `<button class="um-item" type="button" role="menuitem" data-sub="${acxHome()}">${inner}<small class="num acx-umt" title="Tokens your asks used this month">${fmtT(tmTotal())} tokens</small></button>`);
+}; }
+/* the header's current-page label */
+{ const sw0 = swCurrent; swCurrent = function () { return acxOn() ? `${MI.cog.replace('<svg', '<svg class="sw-house"')}Account` : sw0(); }; }
+/* the left rail: the Your spaces heading opens Account › Your spaces */
+{ const rl0 = railSpaceList; railSpaceList = function (joined, inn, onFeed, item) {
+  const h = rl0(joined, inn, onFeed, item);
+  return inn ? h.replace('<span class="eyebrow">Your spaces</span>', '<button class="eyebrow acx-rlh" type="button" data-sub="yourspaces">Your spaces</button>') : h;
+}; }
+/* copy that names where keys live */
+{ const o0 = layoutOnb; layoutOnb = CS_PAGES.welcome = function () { return o0().replace('You can add and change keys later in API keys.', 'You can add and change keys later in Account › API keys.'); }; }
+/* the overview's Add a key opens the key dialog, as on API keys */
+on($('app'), 'click', e => {
+  if (st.device === 'native' || st.subPage !== 'acct') return;
+  const b = e.target.closest && e.target.closest('[data-act="key-open"]'); if (!b) return;
+  e.stopImmediatePropagation();
+  Object.assign(st, { addingKey: true, keyDraft: '', keyName: '', keyErr: '', keyShow: false, renaming: null, keyMode: 'add', keyFor: null, keyCap: '0', modal: 'addkey' });
+  renderAll(); const ki = $('key-in'); if (ki) ki.focus();
+});
+/* the Variants bar: the Account control is for Desktop and Mobile Web */
+{ const rc0 = renderControls; renderControls = function () { rc0(); const k = $('kw-account'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }; }
+
+/* ---- Phone: You › Account ---- */
+const nAcRow = (act, label, val, sub, cls = '') => `<button class="n-row${cls}" type="button" data-n="${act}"><span class="n-row-b"><b>${label}</b>${sub ? `<small>${sub}</small>` : ''}</span>${val != null ? `<span class="n-val">${val}</span>` : ''}<span class="n-chev">${NI.chev}</span></button>`;
+{ const y0 = nYou; nYou = function () {
+  const r = y0(); if (!nSignedIn()) return r;
+  const acct = nGroup('', [nAcRow('push:account:', 'Account', null, 'Usage, API keys, your spaces and settings')]);
+  return { ...r, body: r.body.replace(/<section class="n-grp"><div class="n-list"><button class="n-row" type="button" data-n="tab:spaces">[\s\S]*?<\/div><\/section>/, acct) };
+}; }
+function nAccount() {
+  if (!nSignedIn()) return { body: `${nPushBar('Account', '')}${nSignedOut('Log in to see your usage, API keys and settings.')}` };
+  const a = D.acct, mod = acModerates(), types = AC_TYPES.filter(t => !t[3] || mod), on = types.filter(t => a.types[t[0]]).length;
+  const top = nGroup('', [nAcRow('push:usage:', 'Usage', `<span class="num">${fmtT(tmTotal())}</span>`), nAcRow('push:keys', 'API keys', st.userKeys.length), nAcRow('tab:spaces', 'Your spaces', D.joined.length)]);
+  const exp = a.exportAt ? `<div class="n-row"><span class="n-row-b"><b>Export your data</b><small>Requested ${agoText(a.exportAt)}</small></span></div>` : nAcRow('sheet:acexport', 'Export your data');
+  const set = nGroup('Settings', [nAcRow('sheet:acemail', 'Email', esc(a.email)), nAcRow('push:acnotifs:', 'Notifications', `${on} of ${types.length} on`), exp, ...(a.emailNew ? [`<button class="n-row" type="button" data-n="acemailx"><span class="n-row-b"><b>Cancel email change</b></span></button>`] : [])],
+    a.emailNew ? `We sent a confirmation link to ${esc(a.emailNew)}. Your email changes when you open it.` : 'Used for notification emails and data exports. Other people can’t see it.');
+  const del = nGroup('', [`<button class="n-row n-danger" type="button" data-n="sheet:acdel"><span class="n-row-b"><b>Delete account</b></span></button>`]);
+  return { body: `${nPushBar('Account', '')}${top}${set}${del}` };
+}
+function nAcNotifs() {
+  const a = D.acct, mod = acModerates();
+  const r = ([k, l, d]) => `<div class="n-row"><span class="n-row-b"><b>${l}</b><small>${d}</small></span>${nSwitch(!!a.types[k], 'acnt:' + k, l)}</div>`;
+  return { body: `${nPushBar('Notifications', '')}${nGroup('', AC_TYPES.filter(t => !t[3]).map(r))}${mod ? nGroup('In spaces you moderate', AC_TYPES.filter(t => t[3]).map(r)) : ''}${nGroup('Delivery', [`<div class="n-row"><span class="n-row-b"><b>Email</b><small>Also send these notifications to ${esc(a.email)}.</small></span>${nSwitch(!!a.emailOn, 'acnt:email', 'Email')}</div>`])}` };
+}
+NSCR.account = () => nAccount();
+NSCR.acnotifs = () => nAcNotifs();
+{ const lx0 = nLabelX; nLabelX = function (e) { return e.v === 'account' ? 'Account' : e.v === 'acnotifs' ? 'Notifications' : lx0(e); }; }
+{ const so0 = nSheetOpen; nSheetOpen = function (a) { if (a === 'acemail') Object.assign(nst, { acEmail: '', acEmailErr: '' }); return so0(a); }; }
+{ const sx0 = nSheetX; nSheetX = function (k, a) {
+  if (k === 'acemail') return nForm('Change email', '<button class="n-tb" type="button" data-n="close">Cancel</button>', 'Change email', `<button class="n-tb" type="button" data-n="acemailsave" id="n-ac-esave"${nst.acEmail.trim() ? '' : ' disabled'}><b>Send</b></button>`,
+    nGroup('', [`<label class="n-row n-field"><span>Email</span><input id="n-ac-email" type="email" autocomplete="email" spellcheck="false" placeholder="New address" value="${esc(nst.acEmail)}"></label>`], nst.acEmailErr ? `<span class="n-bad">${nst.acEmailErr}</span>` : 'We send a confirmation link to the new address. Your email changes when you open it.'));
+  if (k === 'acexport') return nAct('Export your data?', 'The export has your profile, threads, follow-ups, likes, saved items and settings. It does not include your API keys. Preparing it can take up to a day.', [['Request export', 'acexportok']]);
+  if (k === 'acdel') return nAct('Delete your account?', 'Session deletes your profile, likes, saved items, API keys and settings. Your threads and follow-ups stay in their spaces, shown as from a deleted account. This can’t be undone.', [['Delete account', 'acdelok', 'n-red']]);
+  return sx0(k, a).replace('You can add a key later in You › API keys.', 'You can add a key later in You › Account › API keys.');
+}; }
+{ const cx0 = nClickX; nClickX = function (k, a) {
+  const go = f => { nGo(f); return true; };
+  if (k === 'acnt') return go(() => { const on = a === 'email' ? !D.acct.emailOn : !D.acct.types[a]; mutate('settings.update', a === 'email' ? { emailOn: on } : { types: { [a]: on } }, () => db.set('acct', x => { if (a === 'email') x.emailOn = on; else x.types[a] = on; })); });
+  if (k === 'acemailsave') return go(() => {
+    const x = nst.acEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)) nst.acEmailErr = 'Enter a full email address, like name@example.com.';
+    else if (x === D.acct.email) nst.acEmailErr = 'This is already your email.';
+    else { mutate('settings.update', { emailNew: x }, () => db.set('acct', y => { y.emailNew = x; })); nst.sheet = null; toast(`We sent a confirmation link to ${esc(x)}.`); }
+  });
+  if (k === 'acemailx') return go(() => { mutate('settings.update', { emailNew: null }, () => db.set('acct', y => { y.emailNew = null; })); });
+  if (k === 'acexportok') return go(() => { mutate('settings.update', { export: true }, () => db.set('acct', y => { y.exportAt = nowIso(); })); nst.sheet = null; toast('We’ll email you a download link.'); });
+  if (k === 'acdelok') return go(() => { acSignOut(true); st.acctGone = true; Object.assign(nst, { sheet: null, stack: [], stacks: {} }); toast('Your account is deleted.'); });
+  return cx0(k, a);
+}; }
+{ const ix0 = nInputX; nInputX = function (id, v, el) {
+  if (id === 'n-ac-email') { nst.acEmail = v; const b = $('n-ac-esave'); if (b) b.disabled = !v.trim(); if (nst.acEmailErr) { nst.acEmailErr = ''; const f = el.closest('.n-grp') && el.closest('.n-grp').querySelector('.n-grp-f'); if (f) f.textContent = 'We send a confirmation link to the new address. Your email changes when you open it.'; } return true; }
+  return ix0(id, v, el);
+}; }
+
+/* ---- Screen entries ---- */
+JUMPS.push(['Account', [
+  ['acx-a-account', 'A · Sidebar: Account'], ['acx-a-usage', 'A · Sidebar: Usage'], ['acx-a-keys', 'A · Sidebar: API keys'], ['acx-a-spaces', 'A · Sidebar: Your spaces'],
+  ['acx-b-account', 'B · Tabs: Account'], ['acx-b-usage', 'B · Tabs: Usage'], ['acx-b-keys', 'B · Tabs: API keys'], ['acx-b-spaces', 'B · Tabs: Your spaces'],
+  ['acx-c-over', 'C · Overview'], ['acx-c-account', 'C · Overview › All settings'], ['acx-c-usage', 'C · Overview › All usage'], ['acx-c-keys', 'C · Overview › Manage keys'], ['acx-c-spaces', 'C · Overview › Manage spaces'],
+  ['acx-out', 'Account, signed out'],
+  ['acx-n-account', 'Phone: You › Account'], ['acx-n-notifs', 'Phone: Account › Notifications'],
+]]);
+/* Screen labels that name the old places */
+JUMPS.forEach(g => g[1].forEach(it => { if (it[0] === 'tm-usage') it[1] = 'Account › Usage'; if (it[0] === 'tm-n-usage') it[1] = 'Phone: You › Account › Usage'; }));
+function acxJump(k) {
+  const [, v, s] = k.split('-');
+  if (v === 'n') { npJump('np-home'); nst.tab = 'you'; nst.stack = s === 'notifs' ? [{ v: 'account', id: '' }, { v: 'acnotifs', id: '' }] : [{ v: 'account', id: '' }]; return; }
+  acJump('acx');   /* the seeded keys and settings */
+  if (v === 'out') { Object.assign(st, { auth: 'out', subPage: acxHome() }); return; }
+  st.acV = { a: 'side', b: 'tabs', c: 'over' }[v];
+  st.subPage = s === 'over' ? 'acct' : s === 'spaces' ? 'yourspaces' : s;
+}
+/* Phone: a key or Usage screen at the root of You sits under Account */
+function acxNatYou() {
+  if (st.device !== 'native') return;
+  const fix = l => l && l.length && (l[0].v === 'keys' || l[0].v === 'usage') ? [{ v: 'account', id: '' }, ...l] : l;
+  if (nst.tab === 'you') { const l = fix(nst.stack); if (l !== nst.stack) nst.stack = l; }
+  if (nst.stacks && nst.stacks.you) { const l = fix(nst.stacks.you); if (l !== nst.stacks.you) nst.stacks = { ...nst.stacks, you: l }; }
+}
+/* what a Phone entry here opened (You › Account), put back by the next jump, as the token model's entries do */
+const ACXJ = { nat: false };
+{ const j0 = jump; jump = function (k) {
+  if (ACXJ.nat && dataReady()) { ACXJ.nat = false; Object.assign(nst, { tab: NST0.tab, stack: structuredClone(NST0.stack), stacks: structuredClone(NST0.stacks || {}), sheet: null }); }
+  j0(k); if (!dataReady()) return;
+  if (String(k).startsWith('acx-')) { acxJump(k); ACXJ.nat = k.startsWith('acx-n-'); }
+  acxNatYou();
+}; }
+/* ==== end account ==== */
 
 buildJump();
 /* End of start-up: start loading the data store over HTTP, and move the Variants bar's keys from the UI
