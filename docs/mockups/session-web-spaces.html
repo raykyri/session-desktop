@@ -3537,6 +3537,33 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 .mp-think .mp-val { color: var(--t-muted); font-size: var(--fs-sm); }
 .cr-sk { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: var(--fs-xs); color: var(--t-faint); }
 /* ==== end thread actions ==== */
+/* ==== tint: green Sage variants (D1 Green chrome, D2 Green trim) ====
+   The --trim tokens are set by applyTint (TINTS.sagewc, TINTS.sagewt); without them these rules do not apply.
+   :root (not html) keeps them above the Mobile Web copies of the phone rules, which are scoped to html[data-device]. */
+:root[data-tint^="sagew"] :focus-visible { outline-color: var(--trim); }
+:root[data-tint^="sagew"] .sp-tab[aria-current="true"]::after,
+:root[data-tint^="sagew"] .ds-stab[aria-selected="true"]::after { background: var(--trim); }
+:root[data-tint^="sagew"] .qt-olr[aria-current="true"],
+:root[data-tint^="sagew"] .pop-row[aria-current="true"],
+:root[data-tint^="sagew"] .ts-row.sel { background: var(--trim-soft); }
+:root[data-tint^="sagew"] :is(.mchips, .sf-tchips) .mchip[aria-current="true"] { background: var(--trim-ink); border-color: var(--trim-ink); color: var(--trim-on); }
+:root[data-tint^="sagew"] .mchip[aria-current="true"] .sf-seal path:last-child { stroke: var(--trim-ink) !important; }
+:root[data-tint^="sagew"] .mtabs button[aria-current="true"],
+:root[data-tint^="sagew"] .n-tab.on, :root[data-tint^="sagew"] .n-check { color: var(--trim-ink); }
+/* D1 Green chrome: a pale green band (--chrome) with a green line under it; the current header tab is a white pill.
+   On Phone the status bar, navigation bars, tab bar and dock are the band, and the system tint is green. */
+:root[data-tint="sagewc"] :is(.hdr, .strip, .mchips) { border-bottom-color: var(--trim-line); }
+:root[data-tint="sagewc"] .rail { border-right-color: var(--trim-line); }
+:root[data-tint="sagewc"] .utab[aria-current="true"] { background: var(--pane); box-shadow: 0 0 0 1px var(--trim-line); }
+:root[data-tint="sagewc"] .mtabs { border-top-color: var(--trim-line); }
+:root[data-tint="sagewc"] .n-root { --n-tint: var(--trim-ink); }
+:root[data-tint="sagewc"] .n-root, :root[data-tint="sagewc"] .n-scr:has(.n-grp) .n-bar, :root[data-tint="sagewc"] .n-scr:has(.n-grp) ~ .n-tabbar { --n-bar-bg: color-mix(in srgb, var(--chrome) 92%, transparent); }
+:root[data-tint="sagewc"] .n-status, :root[data-tint="sagewc"] .n-under:has(.n-scr .n-grp) .n-status { background: var(--chrome); }
+:root[data-tint="sagewc"] :is(.n-tabbar, .n-dock) { border-top-color: var(--trim-line); }
+/* D2 Green trim: white header with a green top rule; the current tab and selected rows are green */
+:root[data-tint="sagewt"] .hdr { box-shadow: inset 0 2px 0 var(--trim); }
+:root[data-tint="sagewt"] .utab[aria-current="true"] { background: var(--trim-soft); color: var(--trim-ink); }
+:root[data-tint="sagewt"] :is(.rf-toc-i, .rl-row, .sv-ritem, .qt-olr)[aria-current="true"], :root[data-tint="sagewt"] .rq-li.cur { box-shadow: inset 2px 0 0 var(--trim); }
 </style>
 
 <div class="shell" id="shell">
@@ -5765,7 +5792,7 @@ function seg(el, items, key, onPick) {
 const toThread = () => { if (st.thread == null) { const i = D.posts.findIndex(p => p.k === 'ask' && D.rich[D.posts.indexOf(p)] && p.s === 'markets'); Object.assign(st, { thread: i < 0 ? 0 : i, savedPage: false, profilePage: false, subPage: null, auth: 'in', modal: null, umenu: false }); } };
 const KNOBDEF = () => [
   ['k-dir', 'shell', [['tabs2', 'Header tabs'], ['rail', 'Left rail']], () => { st.umenu = false; st.pop = false; }],
-  ['k-tint', 'tint', [['warmlo', 'Beige'], ['sagelo', 'Sage']]],
+  ['k-tint', 'tint', [['warmlo', 'Beige'], ['sagelo', 'Sage'], ['sagewc', 'Green chrome', '1'], ['sagewt', 'Green trim', '2']]],
   ...(typeof CSKNOBS === 'function' ? CSKNOBS() : []),
   ...SFKNOBS(),
   ...MIKNOBS(),
@@ -11589,8 +11616,10 @@ let tintSet = [];
 function applyTint() {
   const root = document.documentElement;
   tintSet.forEach(k => root.style.removeProperty(k)); tintSet = [];
+  root.dataset.tint = st.tint;
   let t = TINTS[st.tint]; if (!t) return;
-  if (t.dark && (st.appearance === 'dark' || (st.appearance === 'system' && matchMedia('(prefers-color-scheme: dark)').matches))) t = { ...t, ...t.dark };
+  const dark = st.appearance === 'dark' || (st.appearance === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+  if (t.dark && dark) t = { ...t, ...t.dark };
   const cs = getComputedStyle(root), names = new Set();
   for (const sh of document.styleSheets) { let rules; try { rules = sh.cssRules; } catch (e) { continue; }
     const walk = rs => { for (const r of rs) { if (r.cssRules) walk(r.cssRules); if (r.style && /:root/.test(r.selectorText || '')) for (const p of r.style) if (p.startsWith('--')) names.add(p); } };
@@ -11602,7 +11631,28 @@ function applyTint() {
       .replace(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/g, (_, r, g, b) => { const c = tintColor(+r, +g, +b, t); return `rgba(${c[0]}, ${c[1]}, ${c[2]}`; });
     if (nv !== v) { root.style.setProperty(k, nv); tintSet.push(k); }
   }
+  /* tokens a tint sets to fixed values, after the rotation */
+  if (t.vars) for (const [k, v] of Object.entries(t.vars[dark ? 'dark' : 'light'])) { root.style.setProperty(k, v); tintSet.push(k); }
 }
+
+/* ==== tint: green Sage variants with white surfaces (D1 Green chrome, D2 Green trim) ====
+   Both rotate the remaining neutral tokens (text, fills) to hue 152 and set the surfaces to fixed values:
+   white content surfaces in light mode, dark green-grey in dark mode. In dark mode --t-faint is a step lighter,
+   so it keeps 4.5:1 on selected rows and controls. --trim (focus rings, tab underlines),
+   --trim-line (thin dividers), --trim-soft (selected rows) and --trim-ink / --trim-on (selected chips, Phone tint)
+   are placed by the CSS block of the same name. Links and primary buttons keep --accent.
+   - Green chrome: the header, rail and Phone bars are a pale green band with a green divider under it.
+   - Green trim: the header and bars are white; green appears only as a top rule, underlines and selection. */
+Object.assign(TINTS, {
+  sagewc: { h: 152, m: 0.9, a: 0.004, dark: { m: 0.6, a: 0.003 }, vars: {
+    light: { '--page': '#edf5ef', '--chrome': '#e3f6e7', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#f4f9f5', '--card-sel': '#e0f4e4', '--pop-btn': '#ffffff', '--pop-btn-b': '#d7e3da', '--pop-btn-h': '#edf5ee', '--control': '#eef4ef', '--control-hover': '#e5eee7', '--control-border': '#d4e0d7', '--divider': '#dee8e0', '--border-strong': '#d2dfd5', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#3b8352', '--trim-line': '#b7d7bf', '--trim-soft': '#e0f4e4', '--trim-ink': '#225332', '--trim-on': '#ffffff' },
+    dark: { '--page': '#0d120e', '--chrome': '#1a261d', '--pane': '#161b17', '--feed': '#141915', '--card': '#1c221d', '--field': '#1d231f', '--popover': '#1e2520', '--inset': '#181d19', '--card-sel': '#182a1d', '--pop-btn': '#222823', '--pop-btn-b': '#374039', '--pop-btn-h': '#28302a', '--control': '#222823', '--control-hover': '#28302a', '--control-border': '#374039', '--divider': '#282f29', '--border-strong': '#313933', '--seg-on': '#343d36', '--trim': '#6fc087', '--trim-line': '#35563e', '--trim-soft': '#182a1d', '--trim-ink': '#a7e2b6', '--trim-on': '#161b17', '--t-faint': '#8c918d' },
+  } },
+  sagewt: { h: 152, m: 0.9, a: 0.004, dark: { m: 0.6, a: 0.003 }, vars: {
+    light: { '--page': '#f3f7f4', '--chrome': '#ffffff', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#f7faf7', '--card-sel': '#dff6e4', '--pop-btn': '#ffffff', '--pop-btn-b': '#dde3de', '--pop-btn-h': '#f2f6f2', '--control': '#f1f5f2', '--control-hover': '#e9efea', '--control-border': '#dbe2dc', '--divider': '#e4e9e5', '--border-strong': '#d9e0db', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#378450', '--trim-line': '#a2c9ab', '--trim-soft': '#dff6e4', '--trim-ink': '#205431', '--trim-on': '#ffffff' },
+    dark: { '--page': '#0d100e', '--chrome': '#161916', '--pane': '#161916', '--feed': '#131714', '--card': '#1c211d', '--field': '#1d221e', '--popover': '#1f231f', '--inset': '#181c19', '--card-sel': '#16291b', '--pop-btn': '#222723', '--pop-btn-b': '#363c38', '--pop-btn-h': '#292e2a', '--control': '#222723', '--control-hover': '#292e2a', '--control-border': '#363c38', '--divider': '#282d29', '--border-strong': '#313733', '--seg-on': '#353b36', '--trim': '#6cc185', '--trim-line': '#386043', '--trim-soft': '#16291b', '--trim-ink': '#a5e3b4', '--trim-on': '#161916', '--t-faint': '#8c918d' },
+  } },
+});
 
 /* The page the app is on: when it changes, the new page starts at its top. */
 const routeKey = () => [st.device, st.auth, st.home, st.space, st.thread, st.subPage, st.savedPage, st.profilePage, st.miItem, st.mgTab, st.spTab].join('|');
