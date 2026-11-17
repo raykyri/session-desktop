@@ -8579,7 +8579,7 @@ const dsIsNew = (sid, d) => st.auth === 'in' && d.by !== ME.u && !st.miRead.has(
 const dsWho = by => by === ME.u ? 'you' : esc(by);
 const dsAgo = a => a === 'now' ? 'just now' : a + ' ago';
 function dsCanAdd(s) {
-  if (!s || st.auth !== 'in') return false;
+  if (!s || st.auth !== 'in' || s.archived) return false;
   if (isClosed(s) && !isMember(s.id)) return false;
   return dsPol(s.id) !== 'mods' || isModOf(s.id);
 }
@@ -8671,7 +8671,7 @@ function dsNoteHTML(m, s) {
 /* actions on a source page or in the reader: send, copy link, remove and report */
 function dsSourceActs(m, s) {
   const d = s && dsDropOf(s.id, m.id), open = st.dsMenu === m.id;
-  const canRm = d && st.auth === 'in' && (d.by === ME.u || isModOf(s.id));
+  const canRm = d && st.auth === 'in' && !s.archived && (d.by === ME.u || isModOf(s.id));
   const menu = `<span class="sf-imw ds-mw"><button class="btn sm ds-more" type="button" data-dsmenu="${m.id}" aria-haspopup="true" aria-expanded="${open}" aria-label="More actions" title="More">${MII.more}</button>${open ? `<div class="pop cs-pop sf-ipop" role="menu">${canRm ? `<button class="um-item" type="button" role="menuitem" data-dsrm="${m.id}:${s.id}">${MII.trash}<span>Remove from ${spName(s)}</span></button>` : ''}<button class="um-item m-only" type="button" role="menuitem" data-micopy="item">${CI.link}<span>Copy link</span></button><button class="um-item" type="button" role="menuitem" data-dsreport="${m.id}:${s.id}">${SFI.flag}<span>Report</span></button></div>` : ''}</span>`;
   return `<button class="btn sm d-only" type="button" data-micopy="item">${CI.link}Copy link</button>${menu}`;
 }
@@ -8716,12 +8716,14 @@ function dsHomeCard() {
 function dsManagePage(s) {
   const pol = dsPol(s.id), all = dsAll(s.id);
   const row = (d, acts, sub) => { const m = MIT(d.m); return `<div class="ds-mrow">${miIc(m, 'sm')}<div class="ds-mrow-t"><b>${esc(miTitle(m))}</b><small>${sub || `Added by ${dsWho(d.by)} ${dsAgo(d.age)}`}</small></div><span class="ds-mrow-a">${acts}</span></div>`; };
-  const b = (k, d, l, cls = '') => `<button class="btn sm${cls}" type="button" data-dsmod="${k}:${s.id}:${d.m}">${l}</button>`;
+  const b = (k, d, l, cls = '') => `<button class="btn sm${cls}" type="button" data-dsmod="${k}:${s.id}:${d.m}"${s.archived ? ' disabled' : ''}>${l}</button>`;
   const pend = all.filter(d => d.rv && !d.rm), rem = all.filter(d => d.rm), reps = st.dsReps.filter(r => r.sid === s.id && dsDropOf(s.id, r.m));
   const who = stSec('Who can add sources', '', `<div class="cs-radios">${radio('ds-pol', 'members', pol, isClosed(s) ? 'Members' : 'Anyone who can post', 'Sources appear in the list when they are added.')}${radio('ds-pol', 'review', pol, isClosed(s) ? 'Members, after review' : 'Anyone who can post, after review', 'A moderator approves each source before others see it.')}${radio('ds-pol', 'mods', pol, 'Moderators', 'Others can still ask about a link they paste into the composer.')}</div>`);
   const sec = (t, l) => l ? `<section class="st-sec"><div class="st-head"><h3>${t}</h3></div><div class="ds-mlist">${l}</div></section>` : '';
   const copies = stSec('Reader copies', '', `<ul class="mi-plain"><li>Session keeps one reader copy of each source, shared by the spaces that have it.</li><li>Paid posts: only the free part is kept.</li><li>When the author edits a source, both versions are kept and answers that quote the old text are marked.</li><li>When the author deletes a source, its copy is removed and quotes are replaced with a note.</li>${isClosed(s) ? `<li>Sources and asks in ${spName(s)} are visible to members only. The originals stay public on their sites.</li>` : ''}</ul>`);
-  return `<div class="ds-manage">${sec('Waiting for review', pend.map(d => row(d, `<button class="btn sm" type="button" data-dsrmq="${d.m}:${s.id}:pend">Remove</button>` + b('approve', d, 'Approve', ' primary'), `Added by ${dsWho(d.by)} ${dsAgo(d.age)}${d.note ? ' · ' + esc(d.note) : ''}`)).join(''))}${sec('Reported', reps.map(r => row({ m: r.m, by: r.by, age: r.age }, b('keep', r, 'Keep') + `<button class="btn sm" type="button" data-dsrmq="${r.m}:${s.id}:rep">Remove</button>`, `${DS_WHY[r.why]} · reported by ${dsWho(r.by)} ${dsAgo(r.age)}`)).join(''))}${who}${sec('Removed', rem.map(d => row(d, b('restore', d, 'Restore'))).join(''))}${copies}</div>`;
+  const out = `<div class="ds-manage">${sec('Waiting for review', pend.map(d => row(d, `<button class="btn sm" type="button" data-dsrmq="${d.m}:${s.id}:pend">Remove</button>` + b('approve', d, 'Approve', ' primary'), `Added by ${dsWho(d.by)} ${dsAgo(d.age)}${d.note ? ' · ' + esc(d.note) : ''}`)).join(''))}${sec('Reported', reps.map(r => row({ m: r.m, by: r.by, age: r.age }, b('keep', r, 'Keep') + `<button class="btn sm" type="button" data-dsrmq="${r.m}:${s.id}:rep">Remove</button>`, `${DS_WHY[r.why]} · reported by ${dsWho(r.by)} ${dsAgo(r.age)}`)).join(''))}${who}${sec('Removed', rem.map(d => row(d, b('restore', d, 'Restore'))).join(''))}${copies}</div>`;
+  /* archived: the lists stay readable; every action is off */
+  return s.archived ? `<div class="cs-strip cx-ro">${CX_ARCH}<span class="grow">${spName(s)} is archived. Unarchive it in Settings to add, review or remove sources.</span></div>` + out.replace(/data-dsrmq=/g, 'disabled data-dsrmq=').replace(/<input type="radio"/g, '<input type="radio" disabled') : out;
 }
 
 /* ---------- dialogs ---------- */
@@ -9064,7 +9066,7 @@ function cxTransfer(s, u) {
 const CX_ARCH = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="12" height="3" rx=".8"/><path d="M3 6v6.5h10V6M6.5 8.8h3" stroke-linecap="round"/></svg>';
 const cxArchLine = s => s.archived ? `<span class="cs-lbl cx-arch">Archived</span>` : '';
 const cxByWho = s => s.archived.by === ME.u ? 'You' : esc(s.archived.by);
-const cxReadOnly = s => `<div class="cs-strip cx-ro">${CX_ARCH}<span class="grow">${cxByWho(s)} archived ${spName(s)} on ${s.archived.on}. Threads are read-only: nobody can ask, post, follow up or reply.</span></div>`;
+const cxReadOnly = s => `<div class="cs-strip cx-ro">${CX_ARCH}<span class="grow">${cxByWho(s)} archived ${spName(s)} on ${s.archived.on}. Nobody can ask, post, follow up or reply, or change its pages, skills or sources.</span></div>`;
 const cxArchStrip = s => s.archived ? `<div class="cs-strip warn cx-ro">${CX_ARCH}<span class="grow">${cxByWho(s)} archived ${spName(s)} on ${s.archived.on}. It is read-only and hidden from browse and search.</span>${cxMyRole(s) === 'owner' ? '<button class="btn sm" type="button" data-cxarch="off">Unarchive</button>' : ''}</div>` : '';
 function cxDanger(s) {
   const own = cxMyRole(s) === 'owner', owner = (memFor(s).find(m => m.role === 'owner') || {}).u;
@@ -9173,7 +9175,7 @@ function cxModal() {
     const sx = sp(st.mgSpace);
     return dlg(`Make ${esc(a)} the owner of ${spName(sx)}?`, `<p class="muted">${esc(a)} becomes the owner: they can transfer ownership, and archive or delete ${spName(sx)}. You become an admin and can still change roles and settings.</p><p class="cs-fine">${MI.mods}<span>A space has one owner. Only ${esc(a)} can make you the owner again.</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-cxowner-ok="${esc(a)}">Make owner</button>`, 'alertdialog');
   }
-  if (k === 'cs-xarch') return dlg(`Archive ${spName(s)}?`, `<p class="muted">Nobody can ask, post, follow up or reply in ${spName(s)}. Members can still read its threads, pages and sources. ${spName(s)} is hidden from browse and search, and its header shows “Archived”.</p><p class="cs-fine">${CX_ARCH}<span>You can unarchive it in Settings at any time.</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-cxarch-ok="${s.id}">Archive</button>`, 'alertdialog');
+  if (k === 'cs-xarch') return dlg(`Archive ${spName(s)}?`, `<p class="muted">Nobody can ask, post, follow up or reply in ${spName(s)}, or change its pages, skills or sources. Members can still read all of them. ${spName(s)} is hidden from browse and search, and its header shows “Archived”.</p><p class="cs-fine">${CX_ARCH}<span>You can unarchive it in Settings at any time.</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-cxarch-ok="${s.id}">Archive</button>`, 'alertdialog');
   if (k === 'cs-xdel') return dlg(`Delete ${spName(s)}?`, `<p class="muted">This deletes ${spName(s)} for everyone, with its ${fmt(s.posts)} threads, their follow-ups and replies, its pages and its sources. Members lose access. This can’t be undone.</p>${s.archived ? '' : `<p class="cs-fine">${CX_ARCH}<span>To keep the threads readable, archive the space instead.</span></p>`}<label class="fld"><span>Type <b>${esc(s.name)}</b> to confirm</span><input id="cx-delname" type="text" value="${esc(st.cxDel)}" autocomplete="off" spellcheck="false"></label>`, `${cancelB()}<button class="btn danger" type="button" id="cx-delok" data-cxdel-ok="${s.id}"${cxDelMatch(s) ? '' : ' disabled'}>Delete space</button>`, 'alertdialog');
   if (k === 'cs-ximrm') { const it = itemOf(a); return dlg(`Remove this ${it.noun}?`, `<p class="muted">This deletes the ${it.noun} for everyone, including moderators. Its place in the thread shows “This ${it.noun} was removed by a moderator.” You can't undo after you leave this page.</p>${it.by === 'Agent' ? '' : `<p class="cs-fine">${CI.users}<span>${esc(it.by)} is not notified.</span></p>`}`, `${cancelB()}<button class="btn danger" type="button" data-cximrm-ok="${esc(a)}">Remove</button>`, 'alertdialog'); }
   return '';
@@ -9959,7 +9961,7 @@ const abSlug = t => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g
 const abKey = (s, t) => `${s.id}/${abSlug(t)}`;
 const ROLE_HELP = { owner: 'Owner: settings, extra tokens and moderators', admin: 'Admin: settings and moderation', mod: 'Moderator: reviews requests and reports, hides and removes items' };
 const abOwner = s => (s.mods.find(m => m[1] === 'owner') || s.mods[0] || [s.byok || 'lettie'])[0];
-const abCanEdit = s => st.auth === 'in' && (isModOf(s.id) || (s.pageEdit === 'members' && isMember(s.id)));
+const abCanEdit = s => st.auth === 'in' && !s.archived && (isModOf(s.id) || (s.pageEdit === 'members' && isMember(s.id)));
 const ABDOC_TEXT = {
   'getting-started-guide': ['Sablefield is a hosted Postgres-compatible database that syncs a subset of your data to client devices. This page lists the first steps and the threads that answer the most common questions about each one.', '## 1. Create a project', 'Pick a region close to most of your users. You can add read replicas in other regions later; the primary region cannot change after creation.', '## 2. Add a sync rule', 'A sync rule selects the rows each signed-in user receives. Scope every rule by the user or team column:', '- Start with one table and one rule.\n- Deploy the rule from the dashboard or with sablefield rules deploy.\n- E_SYNC_SCOPE means the rule can return rows outside its declared scope.', '## 3. Install a client SDK', 'SDKs exist for TypeScript, Swift and Kotlin. Each one queues writes while the device is offline and replays them in order.', '## Not covered here', 'Questions about a specific account, invoice or project go to Sablefield support.'],
   'reading-group-schedule': ['The reading group reads one book a month. Each book gets a thread on the date below; post notes there, not in new threads.', '## Upcoming', '- November: The Dispossessed (Le Guin). Thread opens Nov 20.\n- December: Accelerando (Stross), chapters 1–4. Thread opens Dec 18.\n- January: to be chosen by vote.', '## How books are chosen', 'Suggest a book in the reading-group thread with one sentence on why. Moderators open a vote on the first of the month and pin the result.', '## Spoilers', 'Mark plot details in the monthly thread as described in the spoiler policy.'],
@@ -9977,7 +9979,7 @@ function abDoc(s, i) {
 
 /* ---------- pages card, page view, editor, history ---------- */
 function abPagesCard(s) {
-  const can = abCanEdit(s), mod = isModOf(s.id) && st.auth === 'in', order = st.abPgOrder && mod;
+  const can = abCanEdit(s), mod = isModOf(s.id) && st.auth === 'in' && !s.archived, order = st.abPgOrder && mod;
   const rows = s.pages.map(([t, a], i) => order
     ? `<li class="ab-pgo"><span class="ab-pgt">${I.page}${esc(t)}</span><span class="ab-pgb"><button class="iconbtn" type="button" data-abpgmv="up:${i}" aria-label="Move ${esc(t)} up" ${i ? '' : 'disabled'}>${I.chev.replace('<svg', '<svg style="transform:rotate(180deg)"')}</button><button class="iconbtn" type="button" data-abpgmv="down:${i}" aria-label="Move ${esc(t)} down" ${i < s.pages.length - 1 ? '' : 'disabled'}>${I.chev}</button><button class="iconbtn" type="button" data-abpgdel="${i}" aria-label="Remove ${esc(t)}">${I.close}</button></span></li>`
     : `<li><button class="ab-pgr" type="button" data-abpage="${i}">${I.page}<span>${esc(t)}</span><small>${a}</small></button></li>`).join('');
@@ -9993,7 +9995,7 @@ const abBlocks = d => d.text.map((b, k) => b.startsWith('## ') ? { h: b.slice(3)
 const abDocHTML = d => `<div class="abp-prose">${abBlocks(d).map(b => b.h ? `<h3 id="${b.id}">${esc(b.h)}</h3>` : b.li ? `<ul>${b.li.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : `<p>${esc(b.p)}</p>`).join('')}</div>`;
 const abPageThreads = s => D.posts.map((p, i) => ({ p, i })).filter(({ p }) => p.s === s.id && p.k === 'ask' && !p.running).slice(0, 3);
 function abPageParts(s) {
-  const i = st.abPage, d = abDoc(s, i), can = abCanEdit(s), mod = isModOf(s.id) && st.auth === 'in';
+  const i = st.abPage, d = abDoc(s, i), can = abCanEdit(s), mod = isModOf(s.id) && st.auth === 'in' && !s.archived;
   const age = abAge(d.revs[0].age), mins = Math.max(1, Math.round(abWords(d) / 200));
   const crumb = `<nav class="abp-crumb" aria-label="Breadcrumb">${glyph(s, 'abp-gl')}<button class="tlink" type="button" data-space="${s.id}">${spName(s)}</button><span aria-hidden="true">/</span><button class="tlink" type="button" data-abtoabout="1">Pages</button></nav>`;
   const btn = (attr, icon, label, extra = '') => `<button class="btn sm" type="button" ${attr} ${extra}>${icon || ''}${label}</button>`;
@@ -10067,7 +10069,7 @@ function abSkillDlg(s, i) {
   return dlg(title, `<div class="ab-skp">${body}</div>`, `${cancelB('Close')}${st.auth === 'in' ? `<button class="btn primary" type="button" data-skill="${i}">Use this skill</button>` : ''}`).replace('modal cs-m', 'modal cs-m ab-skm-d wide');
 }
 function abSkillsCard(s) {
-  const list = D.skills[s.id], mod = isModOf(s.id) && st.auth === 'in';
+  const list = D.skills[s.id], mod = isModOf(s.id) && st.auth === 'in' && !s.archived;
   if (!list || !list.length) return mod ? `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3></div><p class="muted cs-small abw-none">No skills yet.</p><button class="tlink ab-add" type="button" data-abskmg="new">${PLUS}Add a skill</button></div>` : '';
   const row = ([n, t], i) => `<button class="sk-row" type="button" data-abskill="${i}" aria-haspopup="dialog"><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span>${I.chev.replace('<svg', '<svg class="sk-go"')}</button>`;
   return `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3><span class="edited">${list.length}</span>${mod ? '<button class="tlink ab-skm" type="button" data-abskmg="1">Manage</button>' : ''}</div><div class="sk-list">${list.map(row).join('')}</div></div>`;
@@ -10077,6 +10079,7 @@ function abSkillsCard(s) {
 const SK_GRIP = '<svg viewBox="0 0 16 16" aria-hidden="true"><g fill="currentColor"><circle cx="6" cy="4" r="1.1"/><circle cx="10" cy="4" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="10" cy="8" r="1.1"/><circle cx="6" cy="12" r="1.1"/><circle cx="10" cy="12" r="1.1"/></g></svg>';
 function abSkillsManage(s) {
   const list = D.skills[s.id] || [];
+  if (s.archived) return `<div class="cs-set st-side ab-skmg">${stSec('Skills', `${spName(s)} is archived. Unarchive it in Settings to change its skills.`, `<div class="ab-skl-list">${list.map(([n, t]) => `<div class="ab-skr"><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span></div>`).join('') || '<p class="muted cs-small">No skills.</p>'}</div>`)}</div>`;
   const rows = list.map(([n, t], i) => `<div class="ab-skr" data-skrow="${i}"><button class="ab-skdrag" type="button" data-skdrag="${i}" aria-label="Move ${esc(n)}. Drag, or use the up and down arrow keys." title="Drag to reorder">${SK_GRIP}</button><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span><span class="ab-pgb"><button class="btn sm" type="button" data-absk="edit:${i}">Edit</button><button class="btn sm" type="button" data-absk="rm:${i}">Remove</button></span></div>`).join('');
   return `<div class="cs-set st-side ab-skmg">${stSec('Skills', 'Agent skills members can use in asks in this space. Shown in About in this order.', `<div class="ab-skl-list">${rows || '<p class="muted cs-small">No skills yet.</p>'}</div><button class="btn sm cs-b st-add" type="button" data-absk="new">${PLUS}Add a skill</button>`)}</div>`;
 }
