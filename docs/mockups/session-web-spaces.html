@@ -3700,6 +3700,24 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
   html:not([data-device="phone"]) .A.ntab-side .drawer { border-top: 0; }
   html:not([data-device="phone"]) .A.ntab-side .drawer .ds-tabl, html:not([data-device="phone"]) .A.ntab-side .drawer .dh [data-act="drawer"] { display: none; }
 }
+
+/* source reference in feed rows (miRowChip), the Source ref variants */
+.mi-rchip.rf-pill { display: inline-flex; align-self: flex-start; align-items: stretch; max-width: 100%; margin: 4px 0 3px; border: 1px solid var(--control-border); border-radius: 999px; background: var(--pane); font-size: var(--fs-xs); color: var(--t-secondary); overflow: hidden; }
+.rf-pill .rf-t { display: inline-flex; align-items: center; gap: 5px; min-width: 0; padding: 3px 9px 3px 6px; }
+.rf-pill .rf-t > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rf-pill .rf-loc { display: inline-flex; align-items: center; gap: 3px; flex: none; padding: 0 9px; border-left: 1px solid var(--control-border); background: var(--fill-subtle); color: var(--t-strong); }
+.rf-pill .rf-loc svg { width: 9px; height: 9px; }
+.rf-ics { display: inline-flex; }
+.rf-ics .mi-ic.xs + .mi-ic.xs { margin-left: -5px; }
+.mi-rchip.rf-words { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 2px 0 1px; font-size: var(--fs-sm); color: var(--t-tertiary); }
+.rf-words > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rf-words b { font-weight: 550; color: var(--t-secondary); }
+.mi-rchip.rf-quote { display: flex; flex-direction: column; gap: 4px; margin: 5px 0 3px; padding: 1px 0 1px 10px; border-left: 2px solid var(--border-strong); }
+.rf-quote.rf-noq { border-left: 0; padding-left: 0; margin-top: 2px; }
+.rf-quote q { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: var(--fs-sm); line-height: 1.45; color: var(--t-secondary); }
+.rf-quote .rf-src { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: var(--fs-xs); color: var(--t-tertiary); }
+.rf-quote .rf-src > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rf-demo .rf-dh { margin: 22px 0 4px; }
 </style>
 
 <div class="shell" id="shell">
@@ -3716,6 +3734,7 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
       <div class="knob"><span>Nav</span><div class="seg" id="k-dir"></div></div>
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
       <div class="knob"><span>Font</span><div class="seg" id="k-font"></div></div>
+      <div class="knob"><span>Source ref</span><div class="seg" id="k-ref"></div></div>
     </div>
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
@@ -5198,6 +5217,7 @@ const KNOBDEF = () => [
   ...(typeof CSKNOBS === 'function' ? CSKNOBS() : []),
   ...SFKNOBS(),
   ...MIKNOBS(),
+  ...REFKNOBS(),
   ...DSKNOBS(),
   ...QTKNOBS(),
 ];
@@ -5213,7 +5233,7 @@ function renderControls() {
   /* the Sources layout control has no effect in the phone app */
   { const k = $('kw-sources'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   /* the Phone app always uses the base Beige and has its own navigation, so the Tint and Nav controls have no effect there */
-  for (const id of ['k-tint', 'k-dir']) { const k = $(id) && $(id).closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
+  for (const id of ['k-tint', 'k-dir', 'k-ref']) { const k = $(id) && $(id).closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
   HOTKEYS = {}; let n = 0;
   for (const [el, key, items, pick] of KNOBDEF()) {
@@ -7670,12 +7690,67 @@ function miSrc(p, src) {
   const d = `<div class="ds-src mi-src">${grp.own.length ? `<h3>From ${own.size > 1 ? 'the sources' : 'the source'}</h3><ol class="sx-src">${grp.own.map(pas).join('')}</ol>` : ''}${grp.other.length ? `<h3>From other sources in ${spName(sp(p.s))}</h3><ol class="sx-src">${grp.other.map(pas).join('')}</ol>` : ''}${src.length ? `<h3>From the web</h3><ol class="sx-src">${web(src)}</ol>` : ''}</div>`;
   return { d, m: d.replace('ds-src mi-src', 'mi-msrc') };
 }
-/* feed row: what an ask is about */
+/* feed row: what an ask is about. Four treatments (Variants bar › Source ref), for every media type:
+   - Inline: icon, title and a short locator (¶15, 3/7, 12:40).
+   - Pill: a bordered chip with the locator in its own segment.
+   - Spelled out: the locator in words before the title, and the platform after it.
+   - Quote: the passage the ask is about, then the source line.
+   Locators: articles and PDFs count paragraphs, threads count posts, audio and video use the timestamp;
+   a single post and a whole source have none. */
+const rfKind = m => m.kind === 'thread' ? 'X thread' : m.kind === 'post' ? (m.pl === 'x' ? 'X post' : 'Post') : MIPLAT[m.pl].n;
+const rfLoc = (m, b, long) => {
+  if (b == null || m.kind === 'post' || !m.body[b]) return '';
+  const l = miLbl(m, b);
+  if (m.body[b].ts) return long ? `At ${l}` : l;
+  if (m.kind === 'thread') { const [n, t] = l.split('/'); return long ? `Post ${n} of ${t}` : l; }
+  return long ? `Paragraph ${l.slice(1)}` : l;
+};
+const RF_PLAY = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.5v9l7.5-4.5z"/></svg>';
 function miRowChip(p) {
   if (!p.about) return '';
   const its = miRefs(p).map(MIT).filter(Boolean); if (!its.length) return '';
-  return `<span class="mi-rchip">${miIc(its[0], 'xs')}<span>${its.length > 1 ? `${esc(clip(miTitle(its[0]), 40))} and ${its.length - 1} more` : esc(clip(miTitle(its[0]), 64))}${p.about.b != null ? ` · ${miLbl(its[0], p.about.b)}` : ''}</span></span>`;
+  const m = its[0], b = its.length > 1 ? null : p.about.b, v = st.refv || 'inline';
+  const title = n => esc(clip(miTitle(m), n));
+  const loc = rfLoc(m, b), ts = b != null && m.body[b] && m.body[b].ts;
+  if (v === 'pill') {
+    const ics = its.length > 1 ? `<span class="rf-ics">${its.slice(0, 3).map(x => miIc(x, 'xs')).join('')}</span>` : miIc(m, 'xs');
+    const t = its.length > 1 ? `${its.length} sources` : title(56);
+    return `<span class="mi-rchip rf-pill" title="${esc(its.map(miTitle).join(' · '))}"><span class="rf-t">${ics}<span>${t}</span></span>${loc ? `<span class="rf-loc num">${ts ? RF_PLAY : ''}${loc}</span>` : ''}</span>`;
+  }
+  if (v === 'words') {
+    const lead = its.length > 1 ? '' : rfLoc(m, b, true);
+    const t = its.length > 1 ? `<b>${title(40)}</b> and ${its.length - 1} more ${its.length === 2 ? 'source' : 'sources'}` : `${lead ? `${lead} of ` : ''}<b>${title(lead ? 52 : 64)}</b> · ${rfKind(m)}`;
+    return `<span class="mi-rchip rf-words">${miIc(m, 'xs')}<span>${t}</span></span>`;
+  }
+  if (v === 'quote') {
+    const q = its.length > 1 || (b == null && !p.about.quote) ? '' : (p.about.quote || (m.body[b] && m.body[b].p) || '');
+    const src = `<span class="rf-src">${miIc(m, 'xs')}<span>${its.length > 1 ? `${title(40)} and ${its.length - 1} more` : `${title(60)}${loc ? ` · <span class="num">${loc}</span>` : ''}`}</span></span>`;
+    return q ? `<span class="mi-rchip rf-quote"><q>${esc(clip(q, 160))}</q>${src}</span>` : `<span class="mi-rchip rf-quote rf-noq">${src}</span>`;
+  }
+  return `<span class="mi-rchip">${miIc(m, 'xs')}<span>${its.length > 1 ? `${title(40)} and ${its.length - 1} more` : title(64)}${loc ? ` · ${loc}` : ''}</span></span>`;
 }
+/* Screen entry: the reference for every media type, in feed rows */
+Object.assign(st, { refv: 'inline' });
+function REFKNOBS() { return [['k-ref', 'refv', [['inline', 'Inline'], ['pill', 'Pill'], ['words', 'Spelled out'], ['quote', 'Quote']]]]; }
+const RF_DEMO = [
+  ['Article, a paragraph', { it: 'm2', b: 6 }, 'Is the 3.1x figure in this paragraph right for the larger model?'],
+  ['Article, the whole source', { it: 'm8' }, 'What did the eval track agree on, and what is still open?'],
+  ['Article, a selected quote', { it: 'm2', b: 3, quote: 'The second tenfold increase pays for itself on about half of them.' }, 'Which tasks are in the half where it pays for itself?'],
+  ['PDF (arXiv), a paragraph', { it: 'm11', b: 2 }, 'Do the rewritten items keep the original difficulty?'],
+  ['X thread, one post', { it: 'm1', b: 2 }, 'Which benchmark is this post about?'],
+  ['X post', { it: 'm7' }, 'Is there a source for this claim?'],
+  ['Podcast, a timestamp', { it: 'm4', b: 4 }, 'Which paper is Lin Feld describing here?'],
+  ['YouTube video, a timestamp', { it: 'm6', b: 2 }, 'What search budget does the demo use?'],
+  ['Two sources', { its: ['m1', 'm5'] }, 'Where do the thread and Orbit Lab’s response disagree?'],
+];
+function rfDemoPage() {
+  const s = sp('ml');
+  const rows = RF_DEMO.map(([h, about, q]) => `<h3 class="br-h rf-dh">${h}</h3><div class="feed" role="list"><article class="row row-x row-rowsq row-i-lefttxt row-ask" role="listitem"><span class="row-k"><span class="agent">${I.agent}</span></span><div class="row-m"><a class="row-t row-link" href="#" onclick="return false">${esc(q)}</a>${miRowChip({ about })}<span class="row-meta"><button class="au" type="button">mira_k</button><button class="row-sp" type="button">${spTagTx(s)}</button><span>2h</span></span></div></article></div>`).join('');
+  return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page rf-demo"><div class="sub-top"><h2>Source references</h2></div><p class="muted">How a feed row shows the source an ask is about. Switch the treatment with Source ref in the Variants bar.</p>${rows}</div></div>`;
+}
+CS_PAGES.rfdemo = rfDemoPage;
+JUMPS.push(['Source references', [['rf-all', 'Every media type, in feed rows'], ['rf-feed', 'In a feed: #ml-papers']]]);
+{ const j0 = jump; jump = k => { if (!dataReady() || !String(k).startsWith('rf-')) return j0(k); j0('mb-home'); if (k === 'rf-all') st.subPage = 'rfdemo'; else Object.assign(st, { home: false, space: 'ml' }); }; }
 /* ---------- Manage › Sources (replaces Manage › Feeds) ---------- */
 function miMgTabs(s, tabs) {
   if (!isModOf(s.id)) return;
