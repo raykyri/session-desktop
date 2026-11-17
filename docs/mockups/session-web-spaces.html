@@ -1117,6 +1117,36 @@ html[data-device="native"] .frame > .app { min-height: 0; height: 100%; }
 .n-sys svg { width: 17px; height: 11px; }
 .n-batt { width: 25px; height: 12px; border: 1px solid color-mix(in srgb, var(--t-heading) 45%, transparent); border-radius: 4px; padding: 1px; display: inline-flex; }
 .n-batt i { flex: .8; background: var(--t-heading); border-radius: 2px; }
+/* Phone › Type (Variants bar): small changes to leading, size and tracking. The default is the base above. */
+html[data-ntype="airy"] .n-ans { line-height: 1.58; }
+html[data-ntype="airy"] .n-ans p, html[data-ntype="airy"] .n-ans li { margin-bottom: .7em; }
+html[data-ntype="airy"] .n-cell-q { line-height: 1.42; }
+html[data-ntype="airy"] .n-cell-s, html[data-ntype="airy"] .n-cell-p, html[data-ntype="airy"] .n-row-b span, html[data-ntype="airy"] .n-sphead p, html[data-ntype="airy"] .n-wk-d, html[data-ntype="airy"] .n-fu-a, html[data-ntype="airy"] .n-reply p { line-height: 1.48; }
+html[data-ntype="airy"] .n-th-ask { line-height: 1.4; }
+html[data-ntype="airy"] .n-th-post { line-height: 1.52; }
+html[data-ntype="airy"] .n-cell-m { margin-top: 4px; }
+
+html[data-ntype="compact"] .n-ans { line-height: 1.44; }
+html[data-ntype="compact"] .n-cell-q { line-height: 1.3; }
+html[data-ntype="compact"] .n-cell-s, html[data-ntype="compact"] .n-cell-p, html[data-ntype="compact"] .n-row-b span, html[data-ntype="compact"] .n-sphead p, html[data-ntype="compact"] .n-wk-d, html[data-ntype="compact"] .n-fu-a, html[data-ntype="compact"] .n-reply p { line-height: 1.34; }
+html[data-ntype="compact"] .n-th-ask { line-height: 1.3; }
+html[data-ntype="compact"] .n-th-post { line-height: 1.4; }
+html[data-ntype="compact"] .n-cell-m { margin-top: 0; }
+
+html[data-ntype="large"] .n-ans { font-size: 17px; line-height: 1.52; }
+html[data-ntype="large"] .n-cell-q { font-size: 17px; }
+html[data-ntype="large"] .n-cell-s, html[data-ntype="large"] .n-cell-p, html[data-ntype="large"] .n-row-b span, html[data-ntype="large"] .n-sphead p, html[data-ntype="large"] .n-wk-d, html[data-ntype="large"] .n-fu-a, html[data-ntype="large"] .n-reply p { font-size: 15.9px; }
+html[data-ntype="large"] .n-th-post { font-size: 18px; }
+html[data-ntype="large"] .n-th-ask { font-size: 20px; }
+html[data-ntype="large"] .n-cell-m, html[data-ntype="large"] .n-row-b small, html[data-ntype="large"] .n-grp-f, html[data-ntype="large"] .n-th-by small, html[data-ntype="large"] .n-sphead-m { font-size: 13.8px; }
+
+html[data-ntype="tracked"] .n-lt { letter-spacing: -.03em; }
+html[data-ntype="tracked"] .n-bar-h, html[data-ntype="tracked"] .n-sphead h2, html[data-ntype="tracked"] .n-sec, html[data-ntype="tracked"] .n-sheet-t { letter-spacing: -.018em; }
+html[data-ntype="tracked"] .n-th-ask { letter-spacing: -.012em; }
+html[data-ntype="tracked"] .n-cell-q, html[data-ntype="tracked"] .n-ans h3, html[data-ntype="tracked"] .n-ans h4 { letter-spacing: -.008em; }
+html[data-ntype="tracked"] .n-grp-h { font-size: 12.6px; letter-spacing: .055em; }
+html[data-ntype="tracked"] .n-cell-m, html[data-ntype="tracked"] .n-row-b small, html[data-ntype="tracked"] .n-th-by small, html[data-ntype="tracked"] .n-tab { letter-spacing: .01em; }
+html[data-ntype="tracked"] .n-ans { font-feature-settings: "kern" 1, "liga" 1; hanging-punctuation: first; }
 .n-scr { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; padding-bottom: 24px; }
 .n-scr::-webkit-scrollbar { display: none; }
 .n-home-ind { position: absolute; left: 50%; bottom: 8px; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px; background: var(--t-heading); z-index: 40; pointer-events: none; }
@@ -1136,6 +1166,20 @@ html[data-device="native"] .frame > .app { min-height: 0; height: 100%; }
 .n-lt { font-size: 32.95px; line-height: 1.15; font-weight: 700; letter-spacing: -.02em; color: var(--t-heading); margin: 2px 16px 10px; }
 .n-lt.sm { font-size: 28.85px; }
 .n-bar-root { grid-template-columns: minmax(0, 1fr) auto; }
+.n-bell { position: relative; }
+.n-bell svg { width: 23px; height: 23px; }
+.n-badge { position: absolute; top: 3px; right: 2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: var(--on-accent, #fff); font-size: 11.5px; font-weight: 650; line-height: 18px; text-align: center; box-shadow: 0 0 0 2px var(--n-bar-bg, var(--page)); box-sizing: border-box; }
+.n-nts { padding-top: 6px; }
+.n-nt { align-items: flex-start; }
+.n-nt .n-av, .n-nt-ic { margin-top: 1px; }
+.n-nt-ic { width: 36px; height: 36px; flex: none; border-radius: 50%; background: var(--n-fill); color: var(--t-secondary); display: grid; place-items: center; }
+.n-nt-ic svg { width: 17px; height: 17px; }
+.n-nt .n-row-b { display: flex; flex-direction: column; gap: 2px; }
+.n-nt .n-nt-tx { font-size: 15.45px; line-height: 1.38; color: var(--t-secondary); }
+.n-nt .n-nt-tx b { font-weight: 600; color: var(--t-heading); font-size: inherit; }
+.n-nt.unread .n-row-b .n-nt-tx { color: var(--t-primary); }
+.n-nt-u { flex: none; width: 9px; height: 9px; margin-top: 7px; border-radius: 50%; background: var(--accent); }
+
 .n-bar-h { margin: 0; padding-left: 8px; font-size: 22px; line-height: 1.2; font-weight: 700; letter-spacing: -.01em; color: var(--t-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* phone composer (inline above the feed) */
 .n-icomp-f { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 0 14px; border: 0; border-radius: 12px; background: var(--n-fill, var(--fill-subtle)); color: var(--t-faint); font: inherit; font-size: 15px; text-align: left; }
@@ -3243,6 +3287,10 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
       </div>
       <div class="knob"><span>Navigation</span><div class="seg" id="k-dir"></div></div>
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
+    </div>
+    <div class="knobs cs-knobs" id="kw-phone" aria-label="Phone controls">
+      <span class="cs-kt">Phone</span>
+      <div class="knob"><span>Type</span><div class="seg" id="k-ntype"></div></div>
     </div>
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
@@ -5449,6 +5497,7 @@ function renderControls() {
   seg($('k-api'), [['normal', '120ms'], ['fail', 'Fail']], 'apiMode', applyApiMode);
   /* the Sources layout control has no effect in the phone app */
   { const k = $('kw-sources'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
+  { const k = $('kw-phone'); if (k) k.style.display = st.device === 'native' ? '' : 'none'; }
   { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
   HOTKEYS = {}; let n = 0;
   for (const [el, key, items, pick] of KNOBDEF()) {
@@ -5523,7 +5572,7 @@ function nPushBar(title, right) {
   const prev = nst.stack.length > 1 ? nLabel(nst.stack[nst.stack.length - 2]) : nTitles[nst.tab];
   return `<div class="n-bar"><button class="n-back" type="button" data-n="back">${NI.back}<span>${esc(prev)}</span></button><b class="n-bar-t">${title}</b><span class="n-bar-r">${right || ''}</span></div>`;
 }
-const nLabel = e => e.v === 'space' ? nName(sp(e.id)) : e.v === 'thread' || e.v === 'ask' ? nName(sp(D.posts[+String(e.id).split(':')[0]].s)) : e.v === 'keys' ? 'API keys' : e.v === 'browse' ? 'Discover' : '';
+const nLabel = e => e.v === 'notifs' ? 'Notifications' : e.v === 'space' ? nName(sp(e.id)) : e.v === 'thread' || e.v === 'ask' ? nName(sp(D.posts[+String(e.id).split(':')[0]].s)) : e.v === 'keys' ? 'API keys' : e.v === 'browse' ? 'Discover' : '';
 const nGroup = (head, rows, foot) => `<section class="n-grp">${head ? `<h3 class="n-grp-h">${head}</h3>` : ''}<div class="n-list">${rows.join('')}</div>${foot ? `<p class="n-grp-f">${foot}</p>` : ''}</section>`;
 const nSeg = (items, cur, attr, off = []) => `<div class="n-seg" role="tablist">${items.map(([v, l]) => `<button type="button" role="tab" aria-selected="${cur === v}" class="${cur === v ? 'on' : ''}" data-n="${attr}:${v}"${off.includes(v) ? ' disabled aria-disabled="true"' : ''}>${l}</button>`).join('')}</div>`;
 const nSwitch = (on, act, label) => `<button class="n-sw${on ? ' on' : ''}" type="button" role="switch" aria-checked="${on}" aria-label="${label}" data-n="${act}"><i></i></button>`;
@@ -5557,10 +5606,24 @@ function nInline(sid) {
     + `<button class="n-icomp-x" type="button" data-n="inline:close">Cancel</button><button class="n-capbtn" type="button" data-n="submit" id="n-submit"${nst.draft.trim() && pay ? '' : ' disabled'}>${ask ? 'Ask' : 'Post'}</button></div>`
     + `<p class="n-icomp-m">${note}</p></div></div>`;
 }
+/* Notifications: the same items as the web (ntItems), as a pushed screen opened from the bell on Home */
+function nBell() {
+  if (!nSignedIn()) return '';
+  const n = ntUnread();
+  return `<button class="n-ib n-bell" type="button" data-n="push:notifs" aria-label="Notifications${n ? `, ${n} unread` : ''}">${CI.bell}${n ? `<span class="n-badge num">${n > 9 ? '9+' : n}</span>` : ''}</button>`;
+}
+function nNotifs() {
+  const list = ntItems(), un = list.filter(x => x.unread), old = list.filter(x => !x.unread);
+  const ic = x => x.k === 'reqs' ? `<span class="n-nt-ic">${CI.users}</span>` : x.k === 'declined' ? `<span class="n-nt-ic">${LOCK}</span>` : x.k === 'reps' || x.k === 'resolved' ? `<span class="n-nt-ic">${SFI.flag}</span>` : x.u ? avatar(x.u, 'n-av') : `<span class="n-nt-ic">${CI.bell}</span>`;
+  const row = x => `<button class="n-row n-nt${x.unread ? ' unread' : ''}" type="button" data-n="nt:${esc(x.id)}">${ic(x)}<span class="n-row-b"><span class="n-nt-tx">${x.u && x.k !== 'declined' ? `<b>${esc(x.u)}</b> ` : ''}${x.text}</span><small>${x.age === 'just now' ? 'Just now' : x.age}</small></span>${x.unread ? '<span class="n-nt-u" aria-label="Unread"></span>' : ''}</button>`;
+  const right = un.length ? '<button class="n-tb" type="button" data-n="ntread"><b>Read all</b></button>' : '';
+  const body = list.length ? `${un.length ? nGroup('New', un.map(row)) : ''}${old.length ? nGroup('Earlier', old.map(row)) : ''}` : '<p class="n-empty">No notifications yet. Replies to your asks, join requests and reports show here.</p>';
+  return { body: `${nPushBar('Notifications', right)}<div class="n-nts">${body}</div>` };
+}
 function nHome() {
   const ids = nSignedIn() ? D.joined : D.spaces.filter(x => visibleSp(x) && !isClosed(x)).map(x => x.id);
   const posts = D.posts.filter(p => ids.includes(p.s) && canRead(sp(p.s)) && (nst.homeF === 'all' || p.k === nst.homeF)).sort((a, b) => ageMin(a.age) - ageMin(b.age));
-  return { body: `${nRootBar('', nSignedIn() ? 'Home' : 'Everything on Session')}<div class="n-pad">${nSeg([['all', 'All'], ['ask', 'Asks'], ['post', 'Posts']], nst.homeF, 'homef')}</div>${nInline(null)}${nFeed(posts)}` };
+  return { body: `${nRootBar(nBell(), nSignedIn() ? 'Home' : 'Everything on Session')}<div class="n-pad">${nSeg([['all', 'All'], ['ask', 'Asks'], ['post', 'Posts']], nst.homeF, 'homef')}</div>${nInline(null)}${nFeed(posts)}` };
 }
 function nSpacesRoot() {
   const order = st.tabOrder.length ? st.tabOrder.map(sp) : topSpaces();
@@ -5690,7 +5753,7 @@ function nSheet() {
 
 function nativeApp() {
   const t = nTop();
-  const scr = t ? (t.v === 'space' ? nSpace(t.id) : t.v === 'thread' ? nThread(t.id) : t.v === 'ask' ? nAsk(t.id) : t.v === 'keys' ? nKeys() : nSpacesRoot())
+  const scr = t ? (t.v === 'notifs' ? nNotifs() : t.v === 'space' ? nSpace(t.id) : t.v === 'thread' ? nThread(t.id) : t.v === 'ask' ? nAsk(t.id) : t.v === 'keys' ? nKeys() : nSpacesRoot())
     : ({ home: nHome, spaces: nSpacesRoot, saved: nSaved, you: nYou })[nst.tab]();
   const docked = !!scr.bar;
   return `<div class="n-root${nst.sheet && /^(compose|addkey|wiki)/.test(nst.sheet) ? ' sheeted' : ''}"><div class="n-under">${nStatus()}<div class="n-scr${docked ? ' docked' : ''}" id="n-scr">${scr.body}</div>${scr.bar || ''}${docked ? '' : nTabs()}</div>${nst.sheet ? nSheet() : ''}<span class="n-home-ind"></span></div>`;
@@ -5703,6 +5766,13 @@ function nClick(e) {
   const b = e.target.closest('[data-n]'); if (!b || b.disabled) return;
   const [k, a] = b.dataset.n.split(/:(.*)/s);
   if (k === 'tab') return nGo(() => { if (nst.tab === a && !nst.stack.length) nst.scroll = { ...nst.scroll, ['tab:' + a]: 0 }; nst.tab = a; nst.stack = []; nst.edit = false; });
+  if (k === 'ntread') return nGo(() => { st.notifs = st.notifs.map(x => x.unread ? { ...x, unread: false } : x); st.reqSeen = true; st.repSeen = true; });
+  if (k === 'nt') return nGo(() => {
+    const x = ntItems().find(n => n.id === a); if (!x) return;
+    if (x.k === 'reqs') st.reqSeen = true; else if (x.k === 'reps') st.repSeen = true; else if (x.unread) st.notifs = st.notifs.map(n => n.id === x.id ? { ...n, unread: false } : n);
+    const to = x.open != null && D.posts[x.open] ? { v: 'thread', id: x.open } : x.sp && sp(x.sp) ? { v: 'space', id: x.sp } : null;
+    if (to) { nst.stack = [...nst.stack, to]; nst.scroll = { ...nst.scroll, [to.v + ':' + to.id]: 0 }; }
+  });
   if (k === 'push') { const [v, ...rest] = a.split(':'), id = rest.join(':'); return nGo(() => { const e2 = { v, id: v === 'thread' ? +id : id }; nst.stack = [...nst.stack, e2]; nst.scroll = { ...nst.scroll, [v + ':' + (e2.id ?? '')]: 0 }; nst.fu = ''; if (v === 'space' || v === 'thread' || v === 'ask') st.space = v === 'space' ? id : D.posts[+id.split(':')[0]].s; }); }
   if (k === 'back') return nGo(() => { nst.stack = nst.stack.slice(0, -1); nst.fu = ''; });
   if (k === 'close') return nGo(() => { nst.sheet = null; nst.sub = null; nst.keyErr = ''; });
@@ -5763,6 +5833,7 @@ function nInput(e) {
   if (id === 'n-ak-key') { nst.keyDraft = v; nst.keyErr = ''; const s = $('n-ak-save'); if (s) s.disabled = !KEY_RE.test(v.trim()); }
 }
 function renderNative() {
+  document.documentElement.dataset.ntype = st.nType;
   $('app').innerHTML = nativeApp();
   const sc = $('n-scr'); if (sc) sc.scrollTop = nst.scroll[nKey()] || 0;
   if (nInlineFocus && !nst.sheet) { nInlineFocus = false; const d = $('n-draft'); if (d) { d.focus({ preventScroll: true }); d.setSelectionRange(d.value.length, d.value.length); } }
@@ -8184,6 +8255,7 @@ const dsOnSpace = () => {
 };
 function DSKNOBS() {
   return [
+    ['k-ntype', 'nType', [['base', 'Current'], ['airy', 'More leading'], ['compact', 'Less leading'], ['large', 'Larger text'], ['tracked', 'Tighter headings']]],
     ['k-dspos', 'dsPos', [['hd-right', 'Header across, sidebar right'], ['hd-left', 'Header across, sidebar left']], () => { Object.assign(st, { drawer: true, dsSTab: 'sources', mWiki: false }); dsOnSpace(); }],
     /* About: where a page opens, how a skill previews, where the member list opens */
   ];
@@ -8244,7 +8316,7 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsPos: 'hd-right', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsPos: 'hd-right', nType: 'base', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
   dsMenu: null, dsSend: null, dsSTab: null, dsWhy: 'spam', dsRepNote: '',
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
