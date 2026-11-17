@@ -3238,6 +3238,19 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 }
 
 /* END question-trees css */
+/* ==== asks, answers and failures (web): CSS ==== */
+.run-h .as-stop { margin-left: auto; flex: none; }
+.run.as-end { gap: 8px; }
+.as-ic { display: inline-grid; place-items: center; width: 16px; height: 16px; flex: none; border-radius: 50%; border: 1.5px solid currentColor; color: var(--warn); font-size: 10.5px; font-weight: 700; line-height: 1; }
+.as-why { margin: 0; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.5; }
+.as-why b { color: var(--t-heading); font-weight: 600; }
+.as-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.as-pnote .tlink, .as-perr .tlink { font-size: inherit; color: inherit; text-decoration: underline; text-underline-offset: 3px; font-weight: 600; }
+.qt-comp .as-pnote, .fu-box2 .as-perr { display: block; padding-left: 0; }
+.as-empty { margin-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.as-empty b { color: var(--t-heading); font-weight: 600; }
+.as-empty-a { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 6px; }
+/* ==== end asks, answers and failures (web): CSS ==== */
 </style>
 
 <div class="shell" id="shell">
@@ -3896,10 +3909,7 @@ function switcher() {
   return `<div class="sw-wrap sw-r"><button class="btn hb sw-btn" type="button" data-act="pop" aria-expanded="${st.pop}" aria-haspopup="true" aria-label="Switch space"><span class="sw-d">All spaces</span><span class="sw-m">${swCurrent()}</span>${I.chev}</button>${st.pop ? `<div class="pop" role="menu"><input id="sw-q" type="search" placeholder="Find a space" aria-label="Find a space" autocomplete="off"><button class="pop-row" type="button" data-home="1" data-name="home" aria-current="${!!st.home}"><span class="glyph home-g">${I.house}</span><span class="nm">Home</span></button>${joined.length ? `<div class="grp eyebrow">Joined</div>${joined.map(row).join('')}` : ''}${pend.length ? `<div class="grp eyebrow">Requested</div>${pend.map(row).join('')}` : ''}<div class="grp eyebrow">${joined.length ? 'More spaces' : 'All spaces'}</div>${rest.map(row).join('')}${swFoot()}</div>` : ''}</div>`;
 }
 const GLOBE = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="5.8"/><path d="M2.4 8h11.2M8 2.2c1.7 1.6 2.6 3.6 2.6 5.8S9.7 12.2 8 13.8M8 2.2C6.3 3.8 5.4 5.8 5.4 8s.9 4.2 2.6 5.8"/></svg>';
-const tokenSources = () => {
-  const x = sp(curSpace());
-  return [...(x.byok ? [{ id: 'space:' + x.id, kind: 'space', label: `${spName(x)} extra tokens`, sub: `From ${x.byok}`, valid: true }] : []), ...st.userKeys];
-};
+const tokenSources = () => askSources(curSpace());
 const tsIcon = t => t.kind === 'space' ? glyph(sp(curSpace())) : `<span class="ts-ic">${MI.key}</span>`;
 const tsText = t => `<span class="ts-tx"><b>${esc(t.label)}</b><small>${esc(t.sub)}</small></span>`;
 const XL = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.2 2.5h3.6l2.7 3.8 3.2-3.8h1.7L9.3 7l4.6 6.5h-3.6L7.4 9.4l-3.5 4.1H2.2l4.3-5z"/></svg>';
@@ -3930,15 +3940,15 @@ const SAMPLE_Q = 'What changed in public guidance on AI model evaluations this y
 const curSpace = () => st.home ? (D.joined.includes(st.compSpace) ? st.compSpace : D.joined[0]) : st.space;
 function createThread(kind) {
   const s = sp(curSpace());
-  if (kind === 'post' && s.postsOff) return;
+  if (!s || (kind === 'post' && s.postsOff)) return;
   const q = st.draft.trim() || (kind === 'ask' ? SAMPLE_Q : 'Testing the new composer.');
   /* In a space with the FAQ landing, an ask takes the topic picked in the composer; otherwise the agent assigns one when it answers. */
   const tp = kind === 'ask' && faqOn(s) && topicsOf(s).some(t => t[0] === st.compTopic) ? st.compTopic : null;
-  const np = { s: s.id, u: 'ines.v', mine: true, k: kind, t: null, q, sum: null, r: 0, tok: 0, age: 'now', likes: 0, running: kind === 'ask', kw: q, topic: tp, topicBy: tp ? 'asker' : null };
+  const np = { s: s.id, u: 'ines.v', mine: true, k: kind, t: null, q, sum: null, r: 0, tok: 0, age: 'now', likes: 0, running: kind === 'ask', kw: q, topic: tp, topicBy: tp ? 'asker' : null, ...(kind === 'ask' && payer() ? { pay: payer().id } : {}) };
   if (kind === 'ask') miAttachAsk(np);
   db.push('posts', np);
   Object.assign(st, { thread: D.posts.length - 1, draft: '', compOpen: false, modal: null, clar: {}, home: false, savedPage: false, space: s.id, compTopic: null, tpMenu: null });
-  if (kind === 'ask' && faqOn(s)) sfFinish(D.posts.length - 1);
+  if (kind === 'ask') askRun(D.posts.length - 1);
 }
 const SORTS = [['Latest', 'Newest first'], ['Active', 'Recent replies'], ['Most followed', 'This week']];
 function sortCtl(withKind) {
@@ -4019,8 +4029,8 @@ function homeFeed() {
   const sugRow = x => `<div class="cs-sug">${csGlyph(x)}<div class="br-nm"><button class="dg-name" type="button" data-space="${x.id}">${spName(x)}</button><small class="num">${fmt(x.members)} members · ${policyLabel(x)}</small></div>${csJoinCtl(x)}</div>`;
   return `<div class="body home-feed">
     <div class="mcol"><div class="main">
-      ${homeTop()}
-      ${feed2(null, homePosts())}
+      ${askNoJoined() ? askHomeEmpty() : `${homeTop()}
+      ${feed2(null, homePosts())}`}
     </div></div>
     <aside class="drawer wk home-side" aria-label="Spaces"><div class="dbody">
       ${joined.length ? `<div class="note-card"><div class="sk-head"><h3>Your spaces</h3></div><div class="sp-rows">${joined.map(spRow).join('')}</div></div>` : ''}
@@ -4127,6 +4137,7 @@ const srcFor = p => SOURCES[D.posts.indexOf(p)] || SOURCES[p.s] || [];
 /* With question trees on, an ask's count is its first-level asks, as on the thread page. */
 const replyCount = p => { const o = p.orig || p; return o.k === 'ask' ? nFuList(D.posts.indexOf(o)).length : rpFor(o).length; };
 function answerHTML(p) {
+  if (p.fail || (p.running && D.posts.indexOf(p) >= 0)) return askStateHTML(p);
   if (p.running && p.about) return miRun(p);
   if (p.running) return `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Researching</b><span class="faint">· 18k tokens so far</span></div><ol class="run-steps"><li class="done">Read the question and planned 4 searches</li><li class="done">Searched the web and ${spName(sp(p.s))} threads</li><li class="cur">Reading 9 sources</li><li>Write the answer</li></ol></div>`;
   const src = srcFor(p);
@@ -4142,7 +4153,7 @@ function addFollowUp(i, txt) {
 }
 function fuInput(p) {
   const ask = p.k === 'ask', ph = ask ? 'Ask a follow-up…' : 'Write a reply…';
-  return `<div class="fu-box2"><textarea id="fu-input" rows="2" placeholder="${ph}" aria-label="${ask ? 'Ask a follow-up' : 'Write a reply'}"></textarea><div class="fu2-bar">${ask ? modelPicker() : ''}<span class="grow"></span><button class="btn primary" type="button" data-fugo="${D.posts.indexOf(p)}">${ask ? 'Ask' : 'Reply'}</button></div></div>`;
+  return `<div class="fu-box2"><textarea id="fu-input" rows="2" placeholder="${ph}" aria-label="${ask ? 'Ask a follow-up' : 'Write a reply'}">${esc((st.fuDraft || {})[D.posts.indexOf(p)] || '')}</textarea>${st.askErr === 'fu' ? askErrNote() : ''}<div class="fu2-bar">${ask ? modelPicker() : ''}<span class="grow"></span><button class="btn primary" type="button" data-fugo="${D.posts.indexOf(p)}">${ask ? 'Ask' : 'Reply'}</button></div></div>`;
 }
 const thHead = p => sfCrumb(p, `<button class="th-back" type="button" data-space="${p.s}">${I.chev.replace('<svg', '<svg class="bk"')}${spName(sp(p.s))}${isClosed(sp(p.s)) ? LK('cs-lk', 'Closed space') : ''}</button>`);
 const thMeta = p => `<div class="meta">${avatar(p.u, 'sm')}${au(p.u)}<span>${p.age}</span>${p.k === 'post' ? '<span class="faint">· post</span>' : ''}</div>`;
@@ -4374,7 +4385,7 @@ MP.base = {
     const pay = payer(), m = curModel();
     return `<div class="mp mp-base"><button class="chip dd" type="button" data-mp="toggle" aria-haspopup="menu" aria-expanded="${st.mpOpen}">${I.agent}<span>${m.name}</span>${I.chev}</button>${st.mpOpen ? `<div class="ts-ddmenu mp-menu" role="menu">
       <div class="mp-h">Model</div>${MODELS.map(x => `<button type="button" class="ts-opt" role="menuitemradio" aria-checked="${x.id === m.id}" data-model="${x.id}"><span class="ts-tx"><b>${x.name}</b>${x.desc ? `<small>${x.desc}</small>` : ''}</span>${x.id === m.id ? I.check : ''}</button>`).join('')}
-      <div class="ts-ddsep"></div><div class="mp-h">Provider</div>${tokenSources().map(t => `<button type="button" class="ts-opt${t.valid ? '' : ' bad'}" role="menuitemradio" aria-checked="${!!(pay && pay.id === t.id)}" data-tsrc="${t.id}" ${t.valid ? '' : 'disabled'}>${tsIcon(t)}${tsText(t)}${t.valid ? (pay && pay.id === t.id ? I.check : '') : '<span class="ts-bad">Invalid</span>'}</button>`).join('')}
+      <div class="ts-ddsep"></div><div class="mp-h">Provider</div>${tokenSources().map(t => `<button type="button" class="ts-opt${t.valid ? '' : ' bad'}" role="menuitemradio" aria-checked="${!!(pay && pay.id === t.id)}" data-tsrc="${t.id}" ${t.valid ? '' : 'disabled'}>${tsIcon(t)}${tsText(t)}${t.valid ? (pay && pay.id === t.id ? I.check : '') : `<span class="ts-bad">${t.bad || 'Invalid'}</span>`}</button>`).join('')}
       <div class="ts-ddsep"></div>${wsRow()}</div>` : ''}</div>`;
   },
   click(t) {
@@ -4385,6 +4396,7 @@ MP.base = {
 };
 const modelPicker = () => MP.base.render();
 function composer(force) {
+  if (!sp(curSpace())) return '';
   syncSrc();
   const out = st.auth === 'out';
   const s = sp(curSpace()), pay = payer();
@@ -4398,8 +4410,8 @@ function composer(force) {
   const spaceSel = st.home ? `<div class="c2-spm"><button class="c2-sp" type="button" data-act="sp-menu" aria-haspopup="listbox" aria-expanded="${!!st.spOpen}" aria-label="Space: ${spName(s)}">${glyph(s)}<span>${spName(s)}</span>${I.chev}</button>${st.spOpen ? `<div class="ts-ddmenu c2-spmenu" role="listbox" aria-label="Space">${D.spaces.filter(x => D.joined.includes(x.id)).map(x => `<button type="button" class="ts-opt" role="option" aria-selected="${x.id === s.id}" data-cspace="${x.id}">${glyph(x)}<span class="ts-tx"><b class="cs-nmrow">${spName(x)}${spSeal(x, 'sm')}${csMark(x, false)}</b></span>${x.id === s.id ? I.check : ''}</button>`).join('')}</div>` : ''}</div>` : `<span class="c2-sp static">${glyph(s)}${spName(s)}</span>`;
   const closeB = force ? '' : `<button class="iconbtn c2-x" type="button" data-act="comp-close" aria-label="Close composer" title="Close">${I.close}</button>`;
   const ta = `<textarea id="compose-text" rows="2" placeholder="${ask ? 'Make a query' : 'Write a post'}" aria-label="${ask ? 'Query' : 'Post text'}">${esc(st.draft)}</textarea>`;
-  const warn = ask && !pay ? `<span class="c2-note warn">${spName(s)} has no extra tokens. Add an API key to ask here.</span>` : '';
-  const submit = ask ? `<button class="btn primary" type="button" data-act="ask-go" ${pay ? '' : 'disabled aria-disabled="true"'}>Ask</button>` : `<button class="btn primary" type="button" data-send="post">Post</button>`;
+  const warn = st.askErr === 'comp' ? askErrNote() : ask ? askPayNote(s, pay) : '';
+  const submit = ask ? `<button class="btn primary" type="button" data-act="ask-go" ${pay && !ASK.hold ? '' : 'disabled aria-disabled="true"'}>Ask</button>` : `<button class="btn primary" type="button" data-send="post"${ASK.hold ? ' disabled aria-disabled="true"' : ''}>Post</button>`;
   const left = ask ? modelPicker() + (faqOn(s) ? tpPicker(s) : '') : '<span class="c2-note c2-free">Posts use no tokens.</span>';
   const off = s.postsOff ? `<span class="c2-note sf-pnote">Posts are turned off in ${spName(s)}. You can still reply to existing posts.</span>` : '';
   return `<div class="composer open c2 c2v-bar">${closeB}${ta}${ask ? `<div id="mi-att" class="mi-att-w">${miAttHTML()}</div>` : ''}<div class="c2-bar">${modeSeg}${left}<span class="grow"></span>${warn}<span class="c2-end">${spaceSel}${submit}</span>${off}</div></div>`;
@@ -4414,7 +4426,7 @@ const srcItems = p => { const i = D.posts.indexOf(p); return D.srcd[i] ? D.srcd[
 /* Citation markers are written into each D.rich answer next to the claim their source supports. */
 const ansBody = p => D.rich[D.posts.indexOf(p)] || `<p>${esc(p.sum)}</p>`;
 /* Token use: the space's name when asks draw on its tokens, otherwise the asker's API key */
-const paidOf = p => { const s = sp(p.s); return s.byok ? spName(s) : `${p.mine ? 'your' : p.u + '’s'} API key`; };
+const paidOf = p => { const s = sp(p.s); return s.byok && !(p.pay && !String(p.pay).startsWith('space:')) ? spName(s) : `${p.mine ? 'your' : p.u + '’s'} API key`; };
 function fuSection(p) {
   const ask = p.k === 'ask', fus = ask ? fuFor(p) : [], rps = ask ? [] : rpFor(p);
   return ask ? `<section class="tr-sec" id="th-f"><h3>Follow-ups <span class="faint num">${fus.length}</span></h3>${fus.map(fq2).join('') || '<p class="muted">Follow-ups can be added once the answer is ready.</p>'}</section>`
@@ -6361,6 +6373,7 @@ function csModal() {
   if (k.startsWith('sf-')) return sfModal();
   if (k.startsWith('mi-')) return miModal();
   if (k.startsWith('ds-')) return dsModal();
+  if (k.startsWith('ask-')) return askModal();
   if (k === 'cs-share') {
     const p = D.posts[+a], sx = sp(p.s), url = `session.app/s/${sx.name}/t/${+a + 1000}`;
     const link = `<div class="cs-url"><input type="text" readonly value="${url}" aria-label="Thread link"><button class="btn" type="button" data-cssh="copy">Copy link</button></div><p class="cs-fine">${LOCK}<span>Only members of ${spName(sx)} can open this link. Other people see ${sx.vis === 'unlisted' ? 'a "not available" page' : "the space's join page"}.</span></p>`;
@@ -6863,21 +6876,8 @@ function faqAsk(force) {
   sfFinish(i);
 }
 /* Asks in spaces with the FAQ landing finish after a short delay; the agent assigns a topic if the asker chose none. */
-function sfFinish(i) {
-  setTimeout(() => {
-    const p = D.posts[i]; if (!p || !p.running) return;
-    const s = sp(p.s), sync = s.id === 'sablefield' && /sync|rule|scope|row/i.test(p.q);
-    const nsrc = srcFor(p).length;
-    if (sync) { db.put('rich', i, SF_HTML.new); db.put('srcd', i, [['Sync rules › Scopes', 'docs.sablefield.dev', 'Documentation'], ['Fixing sync rule deploy errors', 'help.sablefield.dev', 'Help center']]); }
-    else db.put('rich', i, `<p>The sources listed below describe this. <sup class="cite">1</sup> The answer quotes the relevant passage from each and notes where they differ. <sup class="cite">2</sup></p>`);
-    db.update('posts', i, p => {
-      p.running = false; p.tok = 41e3;
-      if (!p.topic) { p.topic = sfClassify(s, p.q); p.topicBy = p.topic ? 'agent' : null; }
-      p.sum = sync ? 'Declare the rule with scope: user and filter on the owner column with auth.user_id().' : `Answered from ${nsrc || 'several'} sources, listed under Sources.`;
-    });
-    renderKeepFocus();
-  }, window.__sfFast ? 40 : 1600);
-}
+/* FAQ asks finish through the shared answer pipeline (askRun); it writes the topic when the asker chose none. */
+function sfFinish(i) { askRun(i); }
 
 /* ---------- topic picker (composer) and topic change (thread page, moderators) ---------- */
 function tpPicker(s) {
@@ -8469,7 +8469,7 @@ const qtEdit = (i, recipe) => db.put('qtd', i, produce(qtData(i), recipe));
 const qtNodeEdit = (i, id, recipe) => qtEdit(i, d => { const n = d.nodes.find(x => x.id === id); if (n) recipe(n); });
 function qtT(i) {
   const p = D.posts[i], d = qtData(i), fus = fuFor(p);
-  const root = { id: 'r', par: null, u: p.u, age: p.age, q: p.q, t: p.t, html: p.running ? '' : ansBody(p), tok: p.tok, running: p.running, rep: 'a:' + i, lv: 0 };
+  const root = { id: 'r', par: null, u: p.u, age: p.age, q: p.q, t: p.t, html: p.running ? '' : ansBody(p), tok: p.tok, running: p.running || !!p.fail, fail: !!p.fail, rep: 'a:' + i, lv: 0 };
   const nodes = [root, ...d.nodes.map(n => {
     const f = n.fu != null ? fus[n.fu] || {} : null;
     return Object.assign({ ...n }, f ? { u: f.u, age: f.age, q: f.q, html: f.html || `<p>${esc(f.a || '')}</p>` } : {}, { rep: n.fu != null ? `f:${i}:${n.fu}` : `n:${i}:${n.id}` });
@@ -8499,6 +8499,7 @@ const qtPaidBy = (T, n) => n.id === 'r' ? paidOf(T.p) : sp(T.p.s).byok ? spName(
 
 /* ---------- small parts ---------- */
 function qtAnswer(T, n) {
+  if (n.id === 'r' && (T.p.running || T.p.fail)) return answerHTML(T.p);
   if (n.running) return n.id === 'r' && T.p.about ? miRun(T.p) : answerHTML({ running: true, s: T.p.s });
   if (modOf(n.rep)) return modPh(n.rep, n.id === 'r' ? 'answer' : 'follow-up answer');
   return `<div class="prose qt-prose">${n.html}</div>`;
@@ -8537,8 +8538,9 @@ const qtExtra = (T, n) => `${n.uses ? `<div class="qt-note">Asked from a compari
 function qtComposer(T, par, opts = {}) {
   if (st.auth !== 'in') return `<div class="qt-comp"><p class="muted" style="margin:0">Log in to ask about this answer.</p><div class="qt-cbar"><span class="grow"></span><button class="btn primary" type="button" data-act="signin">Log in</button></div></div>`;
   const pn = T.by[par]; if (!pn || pn.running) return '';
-  return `<div class="qt-comp" id="qt-comp"><textarea id="qt-in" rows="2" placeholder="Ask about this answer…" aria-label="Ask about the answer to ${par === 'r' ? 'the question' : 'level ' + pn.lv}">${esc(st.qtDraft)}</textarea>${st.qtErr ? `<span class="qt-err">${st.qtErr}</span>` : ''}
-    <div class="qt-cbar fu2-bar">${modelPicker()}<span class="grow"></span>${opts.cancel ? `<button class="btn" type="button" data-qt="comp-x">Cancel</button>` : ''}<button class="btn primary" type="button" data-qt="ask" data-qtpar="${par}">Ask</button></div></div>`;
+  const pay = askPay(T.p.s), note = st.qtErr ? '' : askPayNote(sp(T.p.s), pay);
+  return `<div class="qt-comp" id="qt-comp"><textarea id="qt-in" rows="2" placeholder="Ask about this answer…" aria-label="Ask about the answer to ${par === 'r' ? 'the question' : 'level ' + pn.lv}">${esc(st.qtDraft)}</textarea>${st.qtErr ? `<span class="qt-err">${st.qtErr}</span>` : ''}${note}
+    <div class="qt-cbar fu2-bar">${modelPicker()}<span class="grow"></span>${opts.cancel ? `<button class="btn" type="button" data-qt="comp-x">Cancel</button>` : ''}<button class="btn primary" type="button" data-qt="ask" data-qtpar="${par}"${pay && !ASK.hold ? '' : ' disabled aria-disabled="true"'}>Ask</button></div></div>`;
 }
 
 /* ---------- outline: the way to reach sibling branches ---------- */
@@ -8547,7 +8549,7 @@ function qtOutline(T, cur) {
   const row = (n, d) => {
     const vis = qtVisKids(T, n.id), all = T.kids(n.id), hid = all.length - vis.length;
     const cls = ['qt-olr', d === 0 ? 'top' : '', on.has(n.id) ? 'path' : '', n.col ? 'coll' : '', st.qtHi && n.par === st.qtHi && !on.has(n.id) ? 'hi' : ''].filter(Boolean).join(' ');
-    return `<li role="treeitem" aria-level="${d + 1}"${all.length ? ' aria-expanded="true"' : ''}><button class="${cls}" type="button" data-qtgo="${n.id}" style="--d: ${d}" aria-current="${n.id === cur.id}">${avatar(n.u)}<span class="qt-olt">${esc(n.id === 'r' && n.t ? n.t : n.q)}</span><span class="qt-olm">${n.running ? '<span class="spin" aria-label="Researching"></span>' : ''}${hid ? `+${hid}` : ''}</span></button>${vis.length ? `<ul role="group" style="--d: ${d + 1}">${vis.map(k => row(k, d + 1)).join('')}</ul>` : ''}</li>`;
+    return `<li role="treeitem" aria-level="${d + 1}"${all.length ? ' aria-expanded="true"' : ''}><button class="${cls}" type="button" data-qtgo="${n.id}" style="--d: ${d}" aria-current="${n.id === cur.id}">${avatar(n.u)}<span class="qt-olt">${esc(n.id === 'r' && n.t ? n.t : n.q)}</span><span class="qt-olm">${n.running && !n.fail ? '<span class="spin" aria-label="Researching"></span>' : ''}${hid ? `+${hid}` : ''}</span></button>${vis.length ? `<ul role="group" style="--d: ${d + 1}">${vis.map(k => row(k, d + 1)).join('')}</ul>` : ''}</li>`;
   };
   return `<nav class="qt-ol" id="qt-ol" aria-label="Outline of this thread"><div class="qt-ol-h"><h3>Outline</h3><span class="num">${T.nodes.length} ask${T.nodes.length === 1 ? '' : 's'} · ${T.depth} level${T.depth === 1 ? '' : 's'}</span></div><ul role="tree">${row(T.nodes[0], 0)}</ul><div class="qt-ol-legend">${st.qtHi ? '<span><i class="qt-hidot"></i>Other questions about the same answer</span>' : ''}</div></nav>`;
 }
@@ -8656,7 +8658,7 @@ function qtMapDialog(T) {
   const cur = qtCur(T), L = qtMapLayout(T), z = st.qtZoom, on = new Set(T.path(cur.id).map(n => n.id));
   const nodes = T.nodes.filter(n => L.pos[n.id]);
   const edges = nodes.filter(n => n.par && L.pos[n.par]).map(n => { const a = L.pos[n.par], b = L.pos[n.id], x1 = a.x + L.W + 12, y1 = a.y + L.H / 2 + 12, x2 = b.x + 12, y2 = b.y + L.H / 2 + 12, mx = (x1 + x2) / 2; return `<path class="${on.has(n.id) ? 'on' : ''}" d="M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}"/>`; }).join('');
-  const box = n => { const p = L.pos[n.id], hid = T.kids(n.id).length - qtVisKids(T, n.id).length; return `<button class="qt-mn${on.has(n.id) ? ' path' : ''}${st.qtPick ? ' pick' : ''}" type="button" data-qtmap="${n.id}" aria-current="${n.id === cur.id}" style="left:${p.x + 12}px;top:${p.y + 12}px" title="${esc(n.q)}"><span class="qt-mn-t">${esc(n.id === 'r' && n.t ? n.t : n.q)}</span><span class="qt-mn-m">${avatar(n.u)}<span>${n.id === 'r' ? 'Question' : 'L' + n.lv} · ${n.u}</span>${n.running ? '<span class="spin"></span>' : ''}${hid ? `<span>+${hid} collapsed</span>` : ''}</span></button>`; };
+  const box = n => { const p = L.pos[n.id], hid = T.kids(n.id).length - qtVisKids(T, n.id).length; return `<button class="qt-mn${on.has(n.id) ? ' path' : ''}${st.qtPick ? ' pick' : ''}" type="button" data-qtmap="${n.id}" aria-current="${n.id === cur.id}" style="left:${p.x + 12}px;top:${p.y + 12}px" title="${esc(n.q)}"><span class="qt-mn-t">${esc(n.id === 'r' && n.t ? n.t : n.q)}</span><span class="qt-mn-m">${avatar(n.u)}<span>${n.id === 'r' ? 'Question' : 'L' + n.lv} · ${n.u}</span>${n.running && !n.fail ? '<span class="spin"></span>' : ''}${hid ? `<span>+${hid} collapsed</span>` : ''}</span></button>`; };
   const tool = `<div class="qt-maptool"><span class="seg" role="group" aria-label="Zoom">${[[0.6, '60%'], [0.8, '80%'], [1, '100%']].map(([v, l]) => `<button type="button" data-qtzoom="${v}" aria-pressed="${z === v}">${l}</button>`).join('')}</span><span class="grow"></span><span><i class="qt-pathdot"></i>Path to the ask you are on</span></div>`;
   const pick = st.qtPick && T.by[st.qtPick] ? `<div class="qt-pickbar qt-mappick" role="status"><span>Choose a second ask to compare with <b>${esc(qtClip(T.by[st.qtPick].q, 60))}</b>.</span><span class="grow"></span><button class="btn sm" type="button" data-qt="pick-x">Cancel</button></div>` : '';
   return `<div class="modal-scrim qt-mapscrim"><div class="modal qt-mapdlg" role="dialog" aria-modal="true" aria-labelledby="qt-map-t"><div class="modal-h"><h3 id="qt-map-t">Map of this thread <span class="num faint">${T.nodes.length} ask${T.nodes.length === 1 ? '' : 's'} · ${T.depth} level${T.depth === 1 ? '' : 's'}</span></h3><button class="iconbtn" type="button" data-act="modal-close" aria-label="Close the map">${I.close}</button></div>${pick}${tool}<div class="qt-map" id="qt-map"><div class="qt-mapc" style="width:${L.w * z}px;height:${L.h * z}px"><div style="position:absolute;inset:0;width:${L.w}px;height:${L.h}px;transform:scale(${z});transform-origin:0 0"><svg class="qt-edges" width="${L.w}" height="${L.h}" aria-hidden="true">${edges}</svg>${nodes.map(box).join('')}</div></div></div><p class="qt-note qt-maphint">Select an ask to open it in the thread.</p></div></div>`;
@@ -8681,12 +8683,13 @@ layoutThread = function () {
 /* ---------- new asks ---------- */
 let qtSeq = 0;
 function qtAsk(T, par, text) {
-  const n = { id: 'n' + (++qtSeq), par, u: ME.u, age: 'now', q: text, tok: 0, running: true, uses: st.qtCmp ? [...st.qtCmp] : null };
-  const html = QT_CANNED[st.qtCanned] || QT_CANNED.generic;
+  const pay = askPay(T.p.s);
+  const n = { id: 'n' + (++qtSeq), par, u: ME.u, age: 'now', q: text, tok: 0, running: true, uses: st.qtCmp ? [...st.qtCmp] : null, pay: pay ? pay.id : null };
+  const html = QT_CANNED[st.qtCanned] || QT_CANNED.generic, tok = 9e3 + qtTokTxt(html) * 20;
   qtEdit(T.i, d => { d.nodes.push(n); });
   Object.assign(st, { qtAskAt: null, qtDraft: '', qtErr: '', qtCmp: null, qtCanned: null });
   qtGo(qtT(T.i), n.id);
-  setTimeout(() => { qtNodeEdit(T.i, n.id, x => { x.running = false; x.html = html; x.tok = 9e3 + qtTokTxt(html) * 20; }); if (st.thread === T.i || st.device === 'native') renderKeepFocus(); }, 2200);
+  setTimeout(() => { if (!D.posts[T.i] || !qtT(T.i).by[n.id]) return; qtNodeEdit(T.i, n.id, x => { x.running = false; x.html = html; x.tok = tok; }); askCharge(n.pay, tok); if (st.thread === T.i || st.device === 'native') renderKeepFocus(); }, 2200);
 }
 
 /* ---------- start a thread from a branch ---------- */
@@ -9317,6 +9320,310 @@ function abJump(k) {
     case 'ab-join': about('history'); break;
   }
 }
+
+/* ==== asks, answers and failures (web): answer pipeline, payer checks, failed writes ==== */
+/* Every ask runs through askRun: progress steps, then askFinish writes the answer, its sources, the token
+   charge and a notification, or ends the run in a failed state (askFail). Stop ends a run with nothing
+   written. Writes from the composers wait for the server (askHold); a failed write puts the composer back
+   with its text. */
+Object.assign(st, { fuDraft: {}, askErr: null });
+const ASK = { hold: false, failed: false, retry: null, nav: null, tick: 0, keys: false, joined: false, mkt: false };
+const RUNS = new Map();   /* thread → { step, timer } for the runs started in this page */
+const AS_TOK = [3e3, 9e3, 18e3, 31e3];
+const AS_MKT = 7.97e6;    /* #markets starts 30k tokens short of its monthly limit */
+db.update('spaces', 'markets', s => { s.used = AS_MKT; s.pct = s.used / s.budget; });
+/* a run's length: short; near zero when the API latency is 0 (tests) */
+const askMs = () => typeof window.__SESSION_ASK_MS === 'number' ? window.__SESSION_ASK_MS : (window.__sfFast || window.__SESSION_API_LATENCY === 0) ? 40 : 2400;
+const asLeft = s => s && s.byok ? Math.max(0, s.budget - s.used) : 0;
+/* token sources for a space: its extra tokens (while any are left), then the person's keys */
+function askSources(sid) {
+  const x = sp(sid); if (!x) return [...st.userKeys];
+  const left = asLeft(x) > 0;
+  return [...(x.byok ? [{ id: 'space:' + x.id, kind: 'space', label: `${spName(x)} extra tokens`, sub: left ? `From ${x.byok}` : 'Used for this month', valid: left, bad: left ? null : 'Used up' }] : []), ...st.userKeys];
+}
+/* the payer for an ask in a space: the selected source if it can pay, otherwise the first that can */
+const askPay = sid => { const l = askSources(sid).filter(t => t.valid); return l.find(t => st.srcSel.has(t.id)) || l[0] || null; };
+const askPayOk = id => { if (!id) return false; if (String(id).startsWith('space:')) return asLeft(sp(id.slice(6))) > 0; const k = st.userKeys.find(x => x.id === id); return !!(k && k.valid); };
+const askKey = id => st.userKeys.find(x => x.id === id);
+const askProv = id => { const k = askKey(id); return k ? kinfo(k).provider : null; };
+const AS_ADD = '<button class="tlink" type="button" data-askkey="1">Add an API key</button>';
+/* the composer's line about who pays: a space that has used its tokens, or no tokens and no key */
+function askPayNote(s, pay) {
+  if (!s || st.auth !== 'in') return '';
+  if (s.byok && !asLeft(s)) return `<span class="c2-note${pay ? '' : ' warn'} as-pnote">${spName(s)} has used its tokens for this month. ${pay ? `Asks here use your ${esc(pay.label)}.` : `${AS_ADD} to ask here.`}</span>`;
+  if (!pay) return `<span class="c2-note warn as-pnote">${spName(s)} has no extra tokens. ${AS_ADD} to ask here.</span>`;
+  return '';
+}
+const AS_ERR = 'Couldn’t post. Try again.';
+const askErrNote = () => `<span class="c2-note warn as-perr" role="alert">${AS_ERR} <button class="tlink" type="button" data-askretry="1">Retry</button></span>`;
+const askNoJoined = () => st.auth === 'in' && !D.joined.some(id => sp(id));
+const askHomeEmpty = () => `${homeTitle('Home', 'New threads from the spaces you joined.')}<div class="cs-empty as-empty"><p><b>Join a space to see its threads here</b></p><p class="muted">Threads from the spaces you join show on Home, newest first. You can ask and post once you have joined a space.</p><div class="as-empty-a"><button class="btn primary" type="button" data-sub="browse">Browse spaces</button><button class="btn" type="button" data-sub="create">${PLUS}Create a space</button></div></div>`;
+
+/* ---------- runs ---------- */
+function askCancel(i) { const r = RUNS.get(i); if (r) { clearTimeout(r.timer); RUNS.delete(i); } }
+function askRun(i) {
+  askCancel(i);
+  const n = AS_TOK.length, r = { step: 0, timer: 0 };
+  RUNS.set(i, r);
+  const tick = () => {
+    if (RUNS.get(i) !== r) return;
+    const p = D.posts[i]; if (!p || !p.running) { RUNS.delete(i); return; }
+    if (r.step < n - 1) { r.step++; r.timer = setTimeout(tick, askMs() / n); if (st.thread === i && st.device !== 'native') renderKeepFocus(); return; }
+    RUNS.delete(i); askFinish(i);
+  };
+  r.timer = setTimeout(tick, askMs() / n);
+}
+/* charge an ask to its payer: the space's extra tokens (up to the limit) or the person's key */
+function askCharge(pay, tok) {
+  if (!pay || !tok) return;
+  if (String(pay).startsWith('space:')) { const id = pay.slice(6); if (sp(id)) spEdit(id, x => { x.used = Math.min(x.budget, x.used + tok); x.pct = x.budget ? x.used / x.budget : 0; }); return; }
+  const k = askKey(pay); if (!k) return;
+  const inf = kinfo(k); KEYINFO[k.id] = { ...inf, used: inf.used + tok, last: 'Just now' };
+}
+function askNotify(i, text) {
+  const p = D.posts[i]; if (!p || p.u !== ME.u) return;
+  db.unshift('notifs', { id: `nask:${i}:${Date.now().toString(36)}`, k: 'reply', ic: I.agent, open: i, age: 'just now', unread: !(st.thread === i && st.device !== 'native'), text: `${text} <b>${esc(clip(p.q, 60))}</b>` });
+}
+/* a plausible answer from the question, the space's usual sources and, for asks about sources, their passages */
+function askAnswer(p, i) {
+  const s = sp(p.s);
+  if (s.id === 'sablefield' && /sync|rule|scope|row/i.test(p.q)) return { rich: SF_HTML.new, srcd: [['Sync rules › Scopes', 'docs.sablefield.dev', 'Documentation'], ['Fixing sync rule deploy errors', 'help.sablefield.dev', 'Help center']], sum: 'Declare the rule with scope: user and filter on the owner column with auth.user_id().' };
+  const doms = srcFor(p).slice(0, 3), kw = clip(p.q.replace(/\?$/, ''), 56);
+  const T = [`Background: ${kw}`, 'Primary document', 'Later commentary and corrections'], N = ['Overview and dates', 'Quoted where the wording matters', 'Notes one correction'];
+  const srcd = doms.map((d, k) => [T[k], d, N[k]]);
+  const c = k => k < srcd.length ? ` <sup class="cite">${k + 1}</sup>` : '';
+  const its = miRefs(p).map(MIT).filter(m => m && m.body && m.body.length);
+  const mc = its.map((m, k) => MC(m.id, k === 0 && p.about && p.about.b != null && m.body[p.about.b] ? p.about.b : 0)).join(' ');
+  const lead = its.length ? `<p>The ${its.length > 1 ? 'sources you asked about agree' : 'source you asked about agrees'} with the pages it cites on the main point and differs on the details. ${mc}</p>` : `<p>The sources below agree on the main point. Where they differ, the answer gives each view with its source.${c(0)}</p>`;
+  const list = srcd.length > 1 ? `<h4>What the sources say</h4><ul>${['The first source gives the background and the dates.', 'The second source is the primary document. The answer quotes it where the wording matters.', 'The third source is later commentary. It notes one correction to the earlier accounts.'].slice(0, srcd.length).map((t, k) => `<li>${t}${c(k)}</li>`).join('')}</ul>` : '';
+  return { rich: `${lead}${list}<h4>Limits</h4><p>The agent searched the web and ${spName(s)} threads. Sources older than five years were left out unless no newer source covered the point.</p>`, srcd, sum: its.length ? 'The source agrees with the pages it cites on the main point; the answer lists where they differ.' : `Answered from ${srcd.length || 'several'} sources, listed under Sources.` };
+}
+function askFinish(i) {
+  const p = D.posts[i]; if (!p || !p.running) return;
+  const s = sp(p.s), tok = Math.round((34e3 + (p.q.length * 997) % 14e3) / 1e3) * 1e3;
+  const forced = window.__SESSION_ASK_FAIL; if (forced) { window.__SESSION_ASK_FAIL = null; return askFail(i, forced, { used: forced === 'tokens' ? asLeft(s) : 0 }); }
+  const pay = askPayOk(p.pay) ? p.pay : (askPay(p.s) || {}).id || null;
+  if (!pay) return askFail(i, 'tokens', { used: 0 });
+  if (pay.startsWith('space:') && asLeft(s) < tok) { const used = asLeft(s); askCharge(pay, used); return askFail(i, 'tokens', { used, pay }); }
+  const a = askAnswer(p, i);
+  db.put('rich', i, a.rich); db.put('srcd', i, a.srcd); if (!D.fu[i]) db.put('fu', i, []);
+  db.update('posts', i, x => {
+    x.running = false; x.tok = tok; x.pay = pay; x.sum = a.sum; delete x.fail;
+    if (faqOn(s) && !x.topic) { x.topic = sfClassify(s, x.q); x.topicBy = x.topic ? 'agent' : null; }
+  });
+  askCharge(pay, tok);
+  askNotify(i, 'The agent answered your ask');
+  renderKeepFocus();
+}
+const AS_SUM = {
+  stopped: () => 'Stopped. The agent wrote nothing.',
+  tokens: s => s.byok ? `The answer failed: ${spName(s)} has used its tokens for this month.` : `The answer failed: ${spName(s)} has no extra tokens and no API key was available.`,
+  key: () => 'The answer failed: the provider rejected the API key.',
+  rate: () => 'The answer failed: the provider is limiting requests.',
+};
+function askFail(i, why, o = {}) {
+  askCancel(i);
+  const p = D.posts[i]; if (!p) return;
+  const pay = o.pay || p.pay || null, wait = why === 'rate' ? (o.wait || 20) : 0;
+  if (!D.fu[i]) db.put('fu', i, []);
+  db.update('posts', i, x => { x.running = false; x.tok = o.used || 0; x.pay = pay; x.sum = AS_SUM[why](sp(x.s)); x.fail = { why, ...(wait ? { at: Date.now() + wait * 1e3 } : {}) }; });
+  if (why !== 'stopped') askNotify(i, 'The agent couldn’t finish your ask');
+  renderKeepFocus();
+}
+function askStop(i) {
+  const p = D.posts[i]; if (!p || !p.running) return;
+  const r = RUNS.get(i), used = AS_TOK[r ? r.step : 2], pay = askPayOk(p.pay) ? p.pay : (askPay(p.s) || {}).id;
+  askCharge(pay, used);
+  askFail(i, 'stopped', { used, pay });
+}
+/* run again; pay: a key the person picked (out of tokens), otherwise the payer that can pay now */
+function askAgain(i, pay) {
+  const p = D.posts[i]; if (!p) return;
+  const to = pay || (askPayOk(p.pay) ? p.pay : (askPay(p.s) || {}).id || null);
+  db.update('posts', i, x => { x.running = true; x.sum = null; x.tok = 0; x.pay = to; delete x.fail; });
+  askRun(i);
+}
+
+/* ---------- running and failed answers ---------- */
+function askStateHTML(p) {
+  const i = D.posts.indexOf(p), s = sp(p.s), web = st.device !== 'native', mine = web && st.auth === 'in' && p.u === ME.u;
+  if (p.running) {
+    const stop = mine ? `<button class="btn sm as-stop" type="button" data-askstop="${i}">Stop</button>` : '';
+    if (p.about) return miRun(p).replace('</div><ol class="run-steps">', `${stop}</div><ol class="run-steps">`);
+    const r = RUNS.get(i), step = r ? r.step : 2;
+    const steps = ['Read the question and planned 4 searches', `Searched the web and ${spName(s)} threads`, 'Reading 9 sources', 'Write the answer'];
+    return `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Researching</b><span class="faint">· ${fmtT(AS_TOK[step])} tokens so far</span>${stop}</div><ol class="run-steps">${steps.map((t, k) => `<li${k < step ? ' class="done"' : k === step ? ' class="cur"' : ''}>${t}</li>`).join('')}</ol></div>`;
+  }
+  const f = p.fail || {}, used = p.tok ? ` <span class="faint num">${fmtT(p.tok)} tokens used.</span>` : '';
+  if (f.why === 'stopped') return `<div class="run as-end" role="status"><p class="as-why"><b>Stopped.</b> The agent wrote nothing.${used}</p>${mine ? `<div class="as-acts"><button class="btn sm" type="button" data-askagain="${i}">Run again</button></div>` : ''}</div>`;
+  const key = askKey(p.pay), prov = askProv(p.pay), own = st.userKeys.find(k => k.valid);
+  let why = '', acts = '';
+  if (f.why === 'tokens') {
+    why = s.byok ? `${spName(s)} has used its tokens for this month. The agent stopped${p.tok ? ` after ${fmtT(p.tok)} tokens` : ''} and wrote nothing.` : `${spName(s)} has no extra tokens, and no API key was available. The agent wrote nothing.`;
+    acts = own ? `<button class="btn sm primary" type="button" data-askagain="${i}:${own.id}">Use your ${esc(own.label)}</button>` : AS_ADD;
+  } else if (f.why === 'key') {
+    why = `${prov || 'The provider'} rejected ${key ? `your ${esc(key.label)}` : 'the API key'}. The agent wrote nothing.`;
+    acts = `<button class="btn sm" type="button" data-askagain="${i}">Retry</button><button class="tlink" type="button" data-sub="keys">API keys</button>`;
+  } else {
+    const left = Math.max(0, Math.ceil(((f.at || 0) - Date.now()) / 1e3));
+    why = `${prov || 'The provider'} is limiting requests from ${key ? `your ${esc(key.label)}` : `${spName(s)} extra tokens`}. The agent wrote nothing.`;
+    acts = left ? `<button class="btn sm" type="button" disabled aria-disabled="true">Retry in ${left} second${left === 1 ? '' : 's'}</button>` : `<button class="btn sm" type="button" data-askagain="${i}">Retry</button>`;
+    if (left && web && !ASK.tick) ASK.tick = setTimeout(() => { ASK.tick = 0; if (!DISPOSED && st.thread === i) renderKeepFocus(); }, 1e3);
+  }
+  return `<div class="run as-end as-fail" role="status"><div class="run-h"><span class="as-ic" aria-hidden="true">!</span><b>Couldn’t finish the answer</b></div><p class="as-why">${why}</p>${mine ? `<div class="as-acts">${acts}</div>` : ''}</div>`;
+}
+
+/* ---------- writes that wait for the server ----------
+   create() makes the change and moves the view (for example to the new thread). The view stays where it
+   was until the server has the write; then it moves. If the write fails, the store has already been put
+   back; the view stays on the composer with its text and onFail shows the error. */
+function askHold(create, onFail) {
+  if (ASK.hold) return false;
+  if (!dataError.asHold) { const prev = dataError; dataError = Object.assign(msg => { if (ASK.hold) { ASK.failed = true; return; } prev(msg); }, { asHold: true }); }
+  const before = uiStore.getState(), q0 = apiSource.queue, n0 = D.posts.length;
+  create();
+  if (apiSource.queue === q0) return false;
+  const after = uiStore.getState(), fwd = {}, back = {};
+  new Set([...Object.keys(before), ...Object.keys(after)]).forEach(k => { if (before[k] !== after[k]) { fwd[k] = after[k]; back[k] = before[k]; } });
+  uiStore.setState(back);
+  const made = D.posts.length > n0 ? n0 : null;
+  Object.assign(ASK, { hold: true, failed: false, retry: () => askHold(create, onFail) });
+  apiSource.queue.then(() => {
+    ASK.hold = false;
+    if (!ASK.failed) uiStore.setState(fwd);
+    else { if (made != null) askCancel(made); onFail(); }
+    renderAll();
+  });
+  return true;
+}
+const askToast = () => toast(AS_ERR, 'ask-retry', 'Retry');
+function askPost(kind) {
+  st.askErr = null;
+  if (kind === 'ask' && !payer()) return;
+  askHold(() => createThread(kind), () => { st.askErr = 'comp'; st.compOpen = true; });
+}
+function askReply(i) {
+  const f = $('fu-input'), txt = ((st.fuDraft || {})[i] || (f ? f.value : '')).trim();
+  if (!txt) { if (f) f.focus(); return false; }
+  if (st.auth !== 'in') { st.modal = 'signin'; return true; }
+  st.askErr = null;
+  askHold(() => { addFollowUp(i, txt); const d = { ...st.fuDraft }; delete d[i]; st.fuDraft = d; }, () => { st.askErr = 'fu'; });
+  return true;
+}
+function askFollowUp(par) {
+  const T = qtT(st.thread), txt = st.qtDraft.trim();
+  if (!txt) return false;
+  if (!askPay(T.p.s)) { st.qtFocusIn = true; return true; }
+  st.qtErr = '';
+  askHold(() => qtAsk(T, par, txt), () => { st.qtErr = `${AS_ERR} <button class="tlink" type="button" data-askretry="1">Retry</button>`; st.qtFocusIn = true; });
+  return true;
+}
+/* asks from the FAQ box and from source pages wait for the server the same way */
+{ const faq0 = faqAsk, mi0 = miCreateAsk;
+  faqAsk = force => { let r; askHold(() => { r = faq0(force); }, askToast); return r; };
+  miCreateAsk = () => { const n0 = D.posts.length; askHold(() => { mi0(); if (D.posts.length > n0 && D.posts[n0].running) askRun(n0); }, askToast); };
+}
+
+/* ---------- unsent follow-ups ---------- */
+const askUnsent = () => {
+  if (st.thread == null || st.auth !== 'in' || st.device === 'native') return '';
+  const p = D.posts[st.thread]; if (!p) return '';
+  if (p.k === 'ask') return (st.qtDraft || '').trim() ? 'follow-up' : '';
+  return ((st.fuDraft || {})[st.thread] || '').trim() ? 'reply' : '';
+};
+const AS_NAV = [['data-home'], ['data-space'], ['data-open'], ['data-user'], ['data-sub'], ['data-act', 'saved-page'], ['data-act', 'profile'], ['data-ntopen'], ['data-qtopen'], ['data-mtab'], ['data-miopen'], ['data-miref'], ['data-faqtopic'], ['data-csnotif', 'page'], ['data-abopen']];
+const asNavSel = ([a, v]) => v ? `[${a}="${v}"]` : `[${a}]`;
+function askModal() {
+  const [k, kind] = (st.modal || '').split(':');
+  if (k !== 'ask-discard') return '';
+  return `<div class="modal-scrim"><div class="modal sm" role="alertdialog" aria-modal="true" aria-labelledby="as-dd-t"><h3 id="as-dd-t">Discard your ${kind === 'reply' ? 'reply' : 'follow-up'}?</h3><p class="muted">The text you wrote will be deleted.</p><div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Keep editing</button><button class="btn danger" type="button" data-askdiscard="1">Discard</button></div></div></div>`;
+}
+/* Leaving a thread with an unsent follow-up or reply asks first. The link that was clicked is found
+   again by its attribute and clicked once the text is discarded. */
+on($('app'), 'click', e => {
+  if (st.modal || st.device === 'native') return;
+  const t = e.target; if (!t.closest) return;
+  const nav = t.closest(AS_NAV.map(asNavSel).join(',')); if (!nav) return;
+  const kind = askUnsent(); if (!kind) return;
+  if (nav.dataset.open != null && +nav.dataset.open === st.thread) return;
+  const m = AS_NAV.find(([a, v]) => nav.hasAttribute(a) && (!v || nav.getAttribute(a) === v));
+  e.preventDefault(); e.stopImmediatePropagation();
+  ASK.nav = `[${m[0]}="${CSS.escape(nav.getAttribute(m[0]))}"]`;
+  st.modal = 'ask-discard:' + kind; renderAll();
+}, true);
+on($('app'), 'click', e => {
+  if (st.device === 'native') return;
+  const t = e.target; if (!t.closest) return;
+  const d = sel => t.closest(sel), done = () => { e.stopImmediatePropagation(); e.preventDefault(); renderAll(); };
+  let b;
+  if (d('[data-act="ask-go"]')) { askPost('ask'); return done(); }
+  if (d('[data-send]')) { askPost('post'); return done(); }
+  if ((b = d('[data-fugo]'))) { if (askReply(+b.dataset.fugo)) done(); else e.stopImmediatePropagation(); return; }
+  if ((b = d('[data-qt="ask"]')) && st.thread != null) { if (askFollowUp(b.dataset.qtpar)) done(); return; }
+  if (d('[data-qt="comp-x"]') && (st.qtDraft || '').trim()) { ASK.nav = null; st.modal = 'ask-discard:follow-up'; return done(); }
+  if ((b = d('[data-askstop]'))) { askStop(+b.dataset.askstop); return done(); }
+  if ((b = d('[data-askagain]'))) { const [i, k] = b.dataset.askagain.split(':'); askAgain(+i, k); return done(); }
+  if (d('[data-askkey]')) { Object.assign(st, { addingKey: true, keyDraft: '', keyName: '', keyErr: '', keyShow: false, renaming: null, modal: 'addkey', mpOpen: false }); return done(); }
+  if (d('[data-askretry]') || d('[data-cstoast="ask-retry"]')) { st.toast = null; st.askErr = null; st.qtErr = ''; if (ASK.retry) ASK.retry(); return done(); }
+  if (d('[data-askdiscard]')) {
+    const i = st.thread, f = { ...st.fuDraft }; delete f[i];
+    Object.assign(st, { fuDraft: f, qtDraft: '', qtErr: '', qtAskAt: null, modal: null, askErr: null });
+    const sel = ASK.nav; ASK.nav = null; done();
+    const el = sel && document.querySelector('#app ' + sel); if (el) el.click();
+  }
+});
+on($('app'), 'input', e => {
+  if (st.device === 'native') return;
+  if (e.target.id === 'fu-input' && st.thread != null) st.fuDraft = { ...st.fuDraft, [st.thread]: e.target.value };
+  if ((e.target.id === 'compose-text' || e.target.id === 'fu-input') && st.askErr) { st.askErr = null; const er = document.querySelector('.as-perr'); if (er) er.remove(); }
+});
+
+/* ---------- Screen entries ---------- */
+JUMPS.push(['Asks and answers', [['as-run', 'Answer running, with Stop'], ['as-stopped', 'Answer stopped'], ['as-fail-tokens', 'Answer failed: space out of tokens'], ['as-fail-key', 'Answer failed: provider rejected the key'], ['as-fail-rate', 'Answer failed: rate limit'], ['as-notif', 'Notification: an ask was answered'], ['as-out', 'Composer: space used its tokens, your key pays'], ['as-out-nokey', 'Composer: space used its tokens, no API key'], ['as-nokey', 'Composer: no extra tokens, add an API key'], ['as-fu-nokey', 'Follow-up: no tokens and no API key'], ['as-post-fail', 'Couldn’t post: Retry'], ['as-fu-fail', 'Follow-up couldn’t post: Retry'], ['as-discard', 'Discard your follow-up?'], ['as-home-empty', 'Home with no joined spaces']]]);
+const AS_MQ = 'How do prediction markets settle a contract when the source agency revises its data?';
+/* Screens change data that other screens read (keys, memberships, #markets usage, a sample thread);
+   the next screen puts it back. */
+function asRestore(keepDemo) {
+  if (ASK.keys) { st.userKeys = structuredClone(ST0.userKeys); ASK.keys = false; }
+  if (ASK.joined) { db.set('joined', [...JOINED0]); ASK.joined = false; }
+  if (ASK.mkt) { spEdit('markets', x => { x.used = AS_MKT; x.pct = x.used / x.budget; }); ASK.mkt = false; }
+  const i = D.posts.findIndex(p => p.askDemo);
+  if (!keepDemo && i >= 0 && i === D.posts.length - 1) { askCancel(i); db.remove('posts', i); }
+}
+function asJump(k) {
+  const noKeys = () => { st.userKeys = st.userKeys.filter(x => !x.valid); ASK.keys = true; };
+  const usedUp = () => { spEdit('markets', x => { x.used = x.budget; x.pct = 1; }); ASK.mkt = true; };
+  const thread = (i, o = {}) => { Object.assign(st, { thread: i, space: D.posts[i].s, home: false }); qtEnter(i); Object.assign(st, o); };
+  const demo = (sid, o) => {
+    let i = D.posts.findIndex(p => p.askDemo);
+    const rec = { s: sid, u: ME.u, mine: true, k: 'ask', t: null, q: SAMPLE_Q, sum: null, r: 0, tok: 0, age: '1m', likes: 0, running: false, kw: SAMPLE_Q, askDemo: true, ...o };
+    if (i < 0) { db.push('posts', rec); i = D.posts.length - 1; } else { askCancel(i); db.update('posts', i, () => rec); }
+    db.put('fu', i, []); db.del('qtd', i);
+    thread(i); return i;
+  };
+  const compose = (id, o) => Object.assign(st, { space: id, home: false, compOpen: true, mode: 'ask', draft: '', srcSpace2: null }, o);
+  const askIn = id => D.posts.findIndex(p => p.s === id && p.k === 'ask' && !p.running && !p.fail && !p.about);
+  switch (k) {
+    case 'as-run': demo('public', { running: true, pay: 'space:public' }); break;
+    case 'as-stopped': demo('public', { pay: 'space:public', tok: 18e3, sum: AS_SUM.stopped(), fail: { why: 'stopped' } }); break;
+    case 'as-fail-tokens': usedUp(); demo('markets', { q: AS_MQ, kw: AS_MQ, pay: 'space:markets', tok: 30e3, sum: AS_SUM.tokens(sp('markets')), fail: { why: 'tokens' } }); break;
+    case 'as-fail-key': demo('public', { pay: 'k0', sum: AS_SUM.key(), fail: { why: 'key' } }); break;
+    case 'as-fail-rate': demo('public', { pay: 'k2', sum: AS_SUM.rate(), fail: { why: 'rate', at: Date.now() + 20e3 } }); break;
+    case 'as-notif': { const i = askIn('public'); st.notifs = [{ id: 'nask:demo', k: 'reply', ic: I.agent, open: i, age: 'just now', unread: true, text: `The agent answered your ask <b>${esc(clip(D.posts[i].q, 60))}</b>` }, ...st.notifs]; Object.assign(st, { home: true, ntOpen: true }); break; }
+    case 'as-out': usedUp(); compose('markets', { draft: AS_MQ }); break;
+    case 'as-out-nokey': usedUp(); noKeys(); compose('markets', { draft: AS_MQ }); break;
+    case 'as-nokey': noKeys(); compose('scifi', { draft: 'Which novels in the canon starter list were first published as serials?' }); break;
+    case 'as-fu-nokey': noKeys(); thread(askIn('scifi'), { qtAskAt: 'r', qtFocusIn: true, qtDraft: 'Which of these were published before 1960?' }); break;
+    case 'as-post-fail': compose('public', { mode: 'post', draft: 'Notes from Thursday’s reading group are on the wiki page. Next week: chapters 4 to 6.', askErr: 'comp' }); ASK.retry = () => askPost('post'); break;
+    case 'as-fu-fail': thread(askIn('public'), { qtAskAt: 'r', qtFocusIn: true, qtDraft: 'Which of these changes apply to open-weight models?', qtErr: `${AS_ERR} <button class="tlink" type="button" data-askretry="1">Retry</button>` }); ASK.retry = () => askFollowUp('r'); break;
+    case 'as-discard': thread(askIn('public'), { qtAskAt: 'r', qtFocusIn: true, qtDraft: 'Which of these changes apply to open-weight models?', modal: 'ask-discard:follow-up' }); ASK.nav = '[data-home="1"]'; break;
+    case 'as-home-empty': db.set('joined', []); ASK.joined = true; st.home = true; break;
+  }
+}
+{ const jump0 = jump;
+  jump = k => { if (!dataReady()) return jump0(k); const as = k.startsWith('as-'); asRestore(as); jump0(k); if (as) asJump(k); };
+}
+/* ==== end asks, answers and failures (web) ==== */
 
 buildJump();
 /* End of start-up: the fixtures are complete. Copy them as the mock backend's seed data, start loading
