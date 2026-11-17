@@ -2974,23 +2974,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .ds-more { padding: 0 8px; }
 .ds-more svg { width: 14px; height: 14px; }
 .ds-mw .pop.sf-ipop { width: 240px; }
-.ds-csend { flex: none; width: 26px; height: 26px; margin-left: auto; }
-.ds-csend svg, .ds-msend svg { width: 13px; height: 13px; }
-.ds-msend { flex: none; width: 26px; height: 26px; }
-/* send dialog */
-.ds-senddlg { width: 480px; max-height: 100%; overflow-y: auto; }
-.ds-shared { display: flex; gap: 6px; align-items: center; margin: 0; overflow-wrap: anywhere; }
-.ds-shared svg { width: 13px; height: 13px; flex: none; }
-.ds-splist { display: flex; flex-direction: column; max-height: 264px; overflow-y: auto; border: 1px solid var(--divider); border-radius: var(--r-lg); }
-.ds-sprow { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 12px; border: 0; border-top: 1px solid var(--divider); background: transparent; font: inherit; font-size: var(--fs-sm); color: var(--t-strong); text-align: left; cursor: pointer; }
-.ds-sprow:first-child { border-top: 0; }
-.ds-sprow:hover:not(.dis) { background: var(--fill-hover); }
-.ds-sprow .cs-nmrow { flex: 1; min-width: 0; }
-.ds-sprow small { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; }
-.ds-sprow .mi-pk { margin-top: 0; flex: none; }
-.ds-sprow .glyph { width: 20px; height: 20px; font-size: 10px; border-radius: 5px; flex: none; }
-.ds-sprow.dis { cursor: default; color: var(--t-muted); }
-.ds-sprow.dis .mi-pk { opacity: .45; }
 /* Manage › Sources */
 .ds-manage { margin-top: 6px; }
 .ds-manage > .st-sec:first-child { border-top: 0; padding-top: 14px; }
@@ -3002,10 +2985,8 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .ds-mrow-t small { font-size: var(--fs-xs); color: var(--t-faint); }
 .ds-mrow-a { display: flex; gap: 6px; }
 @media (max-width: 640px) {
-  .ds-senddlg { width: 100%; }
   .ds-mrow { grid-template-columns: 22px minmax(0, 1fr); }
   .ds-mrow-a { grid-column: 2; }
-  .ds-csend { width: 30px; height: 30px; }
   .ds-in { height: 40px; }
   .mi-acts .um-item.m-only { display: flex; }
   .mi-bar { gap: 6px; }
@@ -6583,7 +6564,7 @@ function jump(k) {
   const pushN = n => { st.notifs = [n, ...st.notifs.filter(x => x.k !== n.k || x.sp !== n.sp)]; };
   const role = k.split('-')[0];
   /* each screen starts from the same baseline: sidebar tab, notifications, Saved filter, sources, selection */
-  Object.assign(st, MI_CLEAR(), { thV: 'docsrc', dsSTab: null, notifs: structuredClone(ST0.notifs), savedFilter: 'all', dsUrl: '', dsNote: '', dsMenu: null, dsSend: null, qtMenu: null, qtPick: null });
+  Object.assign(st, MI_CLEAR(), { thV: 'docsrc', dsSTab: null, notifs: structuredClone(ST0.notifs), savedFilter: 'all', dsUrl: '', dsNote: '', dsMenu: null, qtMenu: null, qtPick: null });
   dsReset(); qtSyncNotif();
   if (role === 'sf') { sfJump(k); return; }
   if (role === 'mi') { miJump(k); return; }
@@ -7570,8 +7551,7 @@ function miAbout(p) {
   const quote = b != null ? (m.deleted ? `<p class="mi-qgone">The quoted passage was removed because the author deleted the post on ${m.deleted}.</p>` : `<blockquote class="mi-q" ${miOpenAttr(m, b)}><p>${st.miDiff && changed ? `<del>${esc(m.edited.old)}</del> <ins>${esc(m.body[b].p)}</ins>` : esc(miQuoteText(p, m))}</p><cite>${miLbl(m, b)}</cite></blockquote>`) : '';
   const flag = changed ? `<div class="mi-chg">${MII.changed}<span>The author edited this passage ${m.edited.age} ago, after this answer was written.</span><button class="tlink" type="button" data-midiff="1">${st.miDiff ? 'Hide changes' : 'Show changes'}</button><button class="tlink" type="button" data-miagain="${D.posts.indexOf(p)}">Ask again with the new text</button></div>` : '';
   const lbl = its.length > 1 ? `Asked about ${its.length} sources` : b != null ? 'Asked about a passage' : 'Asked about';
-  const send = x => st.auth === 'in' ? `<button class="iconbtn ds-msend" type="button" data-dssend="m:${x.id}" aria-label="Send to a space" title="Send to a space">${MII.send}</button>` : '';
-  return `<section class="mi-about"><div class="mi-ab-h">${MII.ask}<span>${lbl}</span></div>${its.map(x => miMini(x, `${send(x)}<span class="mi-mini-go">${I.chev}</span>`, ` role="link" tabindex="0" ${miOpenAttr(x)}`)).join('')}${quote}${flag}</section>`;
+  return `<section class="mi-about"><div class="mi-ab-h">${MII.ask}<span>${lbl}</span></div>${its.map(x => miMini(x, `<span class="mi-mini-go">${I.chev}</span>`, ` role="link" tabindex="0" ${miOpenAttr(x)}`)).join('')}${quote}${flag}</section>`;
 }
 /* running steps for an ask about items */
 function miRun(p) {
@@ -7587,7 +7567,7 @@ function miSrc(p, src) {
   const own = new Set(miRefs(p));
   const grp = { own: refs.filter(r => own.has(r.split(':')[0])), other: refs.filter(r => !own.has(r.split(':')[0])) };
   const pas = r => { const [id, b] = r.split(':'), m = MIT(id); return `<li ${miOpenAttr(m, +b)}><span class="sx-n num mi-sxl">${miLbl(m, +b)}</span><div><b>${esc(clip(m.body[+b].p, 90))}</b><span>${esc(m.au)} · ${miSrcLine(m)}</span></div></li>`; };
-  const web = l => l.map((x, k) => `<li><span class="sx-n num">${k + 1}</span><div><b>${esc(x.t)}</b><span>${x.d}</span></div>${typeof dsCiteBtn === 'function' ? dsCiteBtn(p, k) : ''}</li>`).join('');
+  const web = l => l.map((x, k) => `<li><span class="sx-n num">${k + 1}</span><div><b>${esc(x.t)}</b><span>${x.d}</span></div></li>`).join('');
   const d = `<div class="ds-src mi-src">${grp.own.length ? `<h3>From ${own.size > 1 ? 'the sources' : 'the source'}</h3><ol class="sx-src">${grp.own.map(pas).join('')}</ol>` : ''}${grp.other.length ? `<h3>From other sources in ${spName(sp(p.s))}</h3><ol class="sx-src">${grp.other.map(pas).join('')}</ol>` : ''}${src.length ? `<h3>From the web</h3><ol class="sx-src">${web(src)}</ol>` : ''}</div>`;
   return { d, m: d.replace('ds-src mi-src', 'mi-msrc') };
 }
@@ -7826,8 +7806,7 @@ Object.assign(st, {
 /* ================= dropped sources =================
    Model. A source (article, post, thread, video, PDF, paper) is one record per URL, as above. It
    reaches a space only when someone adds it there, one at a time: by pasting a link or dropping a
-   link or file on the space's source list, with "Send to a space" (from a source page, an About card,
-   a cited web page, or the browser share target), or by pasting a link into the composer with an ask.
+   link or file on the space's source list, or by pasting a link into the composer with an ask.
    Spaces do not subscribe to feeds.
    - Who can add: anyone who can post in the space (members of a closed space). Manage › Sources can
      limit this to moderators, or require moderator review (here #public).
@@ -7932,13 +7911,6 @@ function dsDropped(sid, u, file) {
   renderAll();
 }
 /* a cited web page: the source record with that title, or a new one */
-function dsFromCite(pi, k) {
-  const x = (D.srcd[pi] || [])[k]; if (!x) return MIT('m11');
-  const key = x[0].toLowerCase().slice(0, 18);
-  const m = [...D.media, ...st.miAdded].find(y => y.t && y.t.toLowerCase().startsWith(key));
-  if (m) return m;
-  return dsMake(`${x[1].replace(/\s.*/, '')}/${x[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`, null, x[0]);
-}
 
 /* ---------- pieces ---------- */
 function dsGuessMini(u) {
@@ -7987,9 +7959,8 @@ function dsSourceActs(m, s) {
   const d = s && dsDropOf(s.id, m.id), open = st.dsMenu === m.id;
   const canRm = d && st.auth === 'in' && (d.by === ME.u || isModOf(s.id));
   const menu = `<span class="sf-imw ds-mw"><button class="btn sm ds-more" type="button" data-dsmenu="${m.id}" aria-haspopup="true" aria-expanded="${open}" aria-label="More actions" title="More">${MII.more}</button>${open ? `<div class="pop cs-pop sf-ipop" role="menu">${canRm ? `<button class="um-item" type="button" role="menuitem" data-dsrm="${m.id}:${s.id}">${MII.trash}<span>Remove from ${spName(s)}</span></button>` : ''}<button class="um-item m-only" type="button" role="menuitem" data-micopy="item">${CI.link}<span>Copy link</span></button><button class="um-item" type="button" role="menuitem" data-dsreport="${m.id}:${s.id}">${SFI.flag}<span>Report</span></button></div>` : ''}</span>`;
-  return `<button class="btn sm" type="button" data-dssend="m:${m.id}" aria-label="Send to a space">${MII.send}<span class="d-only">Send to a space</span></button><button class="btn sm d-only" type="button" data-micopy="item">${CI.link}Copy link</button>${menu}`;
+  return `<button class="btn sm d-only" type="button" data-micopy="item">${CI.link}Copy link</button>${menu}`;
 }
-const dsCiteBtn = (p, k) => st.auth === 'in' ? `<button class="iconbtn ds-csend" type="button" data-dssend="w:${D.posts.indexOf(p)}:${k}" aria-label="Send to a space" title="Send to a space">${MII.send}</button>` : '';
 
 /* ---------- right sidebar: Sources and Wiki tabs ---------- */
 /* The Sources list: every source in the Social feed style. */
@@ -8040,22 +8011,8 @@ function dsManagePage(s) {
 }
 
 /* ---------- dialogs ---------- */
-function dsSendDlg() {
-  const x = st.dsSend; if (!x) return '';
-  const m = MIT(x.m); if (!m) return '';
-  const mine = D.spaces.filter(s => D.joined.includes(s.id) && canRead(s) && dsCanAdd(s));
-  const rows = mine.map(s => {
-    const d = dsDropOf(s.id, m.id), on = x.pick.includes(s.id), nm = `${csGlyph(s)}<span class="cs-nmrow">${spName(s)}${isClosed(s) ? LK() : ''}</span>`;
-    return d ? `<div class="ds-sprow dis" aria-disabled="true"><span class="mi-pk on" aria-hidden="true">${I.check}</span>${nm}<small>Already there</small></div>` : `<button class="ds-sprow" type="button" role="checkbox" aria-checked="${on}" data-dspick="${s.id}"><span class="mi-pk${on ? ' on' : ''}" aria-hidden="true">${I.check}</span>${nm}${dsPol(s.id) === 'review' && !isModOf(s.id) ? '<small>After review</small>' : ''}</button>`;
-  }).join('');
-  const closed = x.pick.map(sp).filter(isClosed);
-  const fine = closed.length ? `<p class="cs-fine">${LOCK}<span>In ${closed.map(spName).join(' and ')}, only members see it.</span></p>` : '';
-  const body = `${x.share ? `<p class="faint cs-small ds-shared">${MII.link}<span>${esc(m.url)}</span></p>` : ''}${miMini(m)}<div class="ds-splist" role="group" aria-label="Spaces">${rows}</div><label class="fld"><span>Note (optional)</span><input id="ds-sendnote" type="text" value="${esc(x.note)}" autocomplete="off"></label>${fine}`;
-  return dlg('Send to a space', body, `${cancelB()}<button class="btn primary" type="button" data-dssendgo="1" ${x.pick.length ? '' : 'disabled aria-disabled="true"'}>Send</button>`).replace('class="modal cs-m"', 'class="modal cs-m ds-senddlg"');
-}
 function dsModal() {
   const [k, a] = (st.modal || '').split(/:(.*)/s);
-  if (k === 'ds-send') return dsSendDlg();
   const [mid, sid] = (a || '').split(':'), m = MIT(mid), s = sp(sid);
   if (k === 'ds-rmq') {
     const kind = (a || '').split(':')[2], x = dsAll(sid).find(y => y.m === mid && !y.rm), rp = st.dsReps.find(r => r.sid === sid && r.m === mid);
@@ -8095,22 +8052,6 @@ function dsClick(t) {
     else if (r.rv) toast('Added. A moderator reviews it before others see it.');
     return go();
   }
-  if ((b = d('[data-dssend]'))) {
-    if (st.auth !== 'in') { st.modal = 'signin'; return go(); }
-    const v = b.dataset.dssend;
-    const m = v.startsWith('w:') ? dsFromCite(+v.split(':')[1], +v.split(':')[2]) : MIT(v.slice(2));
-    Object.assign(st, { dsSend: { m: m.id, pick: [], note: '' }, dsMenu: null, modal: 'ds-send' });
-    return go();
-  }
-  if ((b = d('[data-dspick]'))) { const id = b.dataset.dspick; patch('dsSend', x => { x.pick = x.pick.includes(id) ? x.pick.filter(y => y !== id) : [...x.pick, id]; }); return go(); }
-  if ((b = d('[data-dssendgo]'))) {
-    const x = st.dsSend, m = MIT(x.m); if (!x.pick.length) return true;
-    const res = x.pick.map(sid => ({ sid, r: dsAdd(m.url, sid, x.note) }));
-    const rv = res.filter(y => y.r.rv).map(y => spName(sp(y.sid)));
-    Object.assign(st, { modal: null, dsSend: null, dsFlash: null });
-    toast(`Sent to ${res.map(y => spName(sp(y.sid))).join(' and ')}.${rv.length ? ` A moderator of ${rv.join(' and ')} reviews it first.` : ''}`, `ds:open:${res[0].sid}:${m.id}`, 'Open');
-    return go();
-  }
   if ((b = d('[data-dsrmq]'))) { st.modal = 'ds-rmq:' + b.dataset.dsrmq; return go(); }
   if ((b = d('[data-dsrm]'))) { Object.assign(st, { dsMenu: null, modal: 'ds-rm:' + b.dataset.dsrm }); return go(); }
   if ((b = d('[data-dsrmok]'))) {
@@ -8142,7 +8083,6 @@ function dsInput(e) {
     return true;
   }
   if (id === 'ds-note') { st.dsNote = el.value; return true; }
-  if (id === 'ds-sendnote') { if (st.dsSend) patch('dsSend', x => { x.note = el.value; }); return true; }
   if (id === 'ds-repnote') { st.dsRepNote = el.value; return true; }
   if (el.name === 'ds-why') { st.dsWhy = el.value; return true; }
   if (el.name === 'ds-pol') { db.put('dsPol', st.mgSpace, el.value); return true; }
@@ -8243,7 +8183,7 @@ function DSKNOBS() {
 const DS_LIST_J = [['space', 'Space page'], ['paste', 'Paste a link'], ['drag', 'Drag a link onto the list'], ['dup', 'Paste a link that is already there'], ['reader', 'Open a source'], ['pass', 'Ask about a passage'], ['pick', 'Select several sources'], ['multi', 'Ask about two sources'], ['empty', 'New space with no sources'], ['closed', 'Closed space: add as a member'], ['out', 'Signed out']];
 JUMPS.push(
   ['Sources in the sidebar', [...DS_LIST_J.map(([k, l]) => ['ds-s-' + k, k === 'reader' ? 'Open a source (source page)' : l])]],
-  ['Sending and moderating sources', [['ds-x-send', 'Send a source to other spaces'], ['ds-x-cite', 'Send a cited web page from an answer'], ['ds-x-share', 'Shared from the browser (share target)'], ['ds-x-home', 'Home: new sources'], ['ds-x-review', 'Add a source in a space with review'], ['ds-x-rmq', 'Manage › Sources: remove a source (confirm)'], ['ds-x-queue', 'Manage › Sources: review queue'], ['ds-x-manage', 'Manage › Sources'], ['ds-x-report', 'Report a source'], ['ds-x-remove', 'Remove a source']]],
+  ['Sending and moderating sources', [['ds-x-home', 'Home: new sources'], ['ds-x-review', 'Add a source in a space with review'], ['ds-x-rmq', 'Manage › Sources: remove a source (confirm)'], ['ds-x-queue', 'Manage › Sources: review queue'], ['ds-x-manage', 'Manage › Sources'], ['ds-x-report', 'Report a source'], ['ds-x-remove', 'Remove a source']]],
 );
 function dsNewSpace() {
   let s = sp('sp-field-notes');
@@ -8256,7 +8196,7 @@ function dsNewSpace() {
 }
 function dsJump(k) {
   if (st.device === 'native') st.device = 'desktop';
-  Object.assign(st, NAVBASE(), MI_CLEAR(), { auth: 'in', toast: null, welcome: null, created: null, space: 'ml', home: false, miAsk: null, miAskQ: '', miFrom: null, mpOpen: false, dd: null, kindF: 'all', drawer: true, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null, dsMenu: null, dsSend: null, dsSTab: 'sources' });
+  Object.assign(st, NAVBASE(), MI_CLEAR(), { auth: 'in', toast: null, welcome: null, created: null, space: 'ml', home: false, miAsk: null, miAskQ: '', miFrom: null, mpOpen: false, dd: null, kindF: 'all', drawer: true, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null, dsMenu: null, dsSTab: 'sources' });
   spEdit('replication', rs => { rs.dom = null; rs.plain = false; });
   setRel('replication', 'none');
   dsReset();
@@ -8279,9 +8219,6 @@ function dsJump(k) {
     case 'empty': { const s = dsNewSpace(); st.space = s.id; list(); break; }
     case 'closed': setRel('replication', 'member'); st.space = 'replication'; list(); st.dsUrl = DS_DRAG_URL; break;
     case 'out': st.auth = 'out'; list(); break;
-    case 'x-send': setRel('replication', 'member'); miOpen('m3'); Object.assign(st, { dsSend: { m: 'm3', pick: ['replication'], note: '' }, modal: 'ds-send' }); break;
-    case 'x-cite': th('mia4'); Object.assign(st, { dsSend: { m: 'm11', pick: [], note: '' }, modal: 'ds-send' }); break;
-    case 'x-share': setRel('replication', 'member'); st.home = true; Object.assign(st, { dsSend: { m: 'm12', pick: ['ml'], note: '', share: true }, modal: 'ds-send' }); break;
     case 'x-home': st.home = true; break;
     case 'x-review': st.space = 'public'; list(); st.dsUrl = 'x.com/lin_feld/status/18590'; break;
     case 'x-queue': setRel('public', 'mod'); Object.assign(st, { space: 'public', subPage: 'manage', mgSpace: 'public', mgTab: 'sources', set: null }); break;
@@ -8295,7 +8232,7 @@ function dsJump(k) {
 /* ---------- state ---------- */
 Object.assign(st, {
   dsPos: 'hd-right', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
-  dsMenu: null, dsSend: null, dsSTab: null, dsWhy: 'spam', dsRepNote: '',
+  dsMenu: null, dsSTab: null, dsWhy: 'spam', dsRepNote: '',
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
 /* END dropped sources js */
