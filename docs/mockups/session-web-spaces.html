@@ -3705,7 +3705,7 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
       <div class="knob" title="Mock backend: request latency, or every write fails"><div class="seg" id="k-api" aria-label="Mock backend"></div><span class="k-dstat" id="k-dstat" role="status"></span></div>
       <div class="knob cs-jk"><div id="k-jump" class="jd"></div></div>
       </div>
-      <div class="knob"><span>Navigation</span><div class="seg" id="k-dir"></div></div>
+      <div class="knob"><span>Nav</span><div class="seg" id="k-dir"></div></div>
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
       <div class="knob"><span>Font</span><div class="seg" id="k-font"></div></div>
     </div>
@@ -4983,7 +4983,7 @@ function seg(el, items, key, onPick) {
 }
 const toThread = () => { if (st.thread == null) { const i = tidWhere(p => p.k === 'ask' && D.rich[p.id] && p.s === 'markets'); Object.assign(st, { thread: i == null ? TID(0) : i, savedPage: false, profilePage: false, subPage: null, auth: 'in', modal: null, umenu: false }); } };
 const KNOBDEF = () => [
-  ['k-dir', 'shell', [['tabs2', 'Header tabs'], ['rail', 'Left rail']], () => { st.umenu = false; st.pop = false; }],
+  ['k-dir', 'shell', [['tabs2', 'Header'], ['rail', 'Left rail']], () => { st.umenu = false; st.pop = false; }],
   ['k-tint', 'tint', [['warmlo', 'Beige'], ['warmwc', 'Beige chrome', '1'], ['sagewc', 'Sage']]],
   ['k-font', 'font', [['inter', 'Inter'], ['valley', 'Valley Sans']]],
   /* Token model: who pays for asks. Labels carry their own letters (A–D), as the Screen entries name them. */
@@ -5004,6 +5004,8 @@ function renderControls() {
   seg($('k-api'), [['normal', '120ms'], ['fail', 'Fail'], ['failload', 'Fail on load']], 'apiMode', applyApiMode);
   /* the Sources layout control has no effect in the phone app */
   { const k = $('kw-sources'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
+  /* the Phone app always uses the base Beige, so the Tint control has no effect there */
+  { const k = $('k-tint') && $('k-tint').closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
   HOTKEYS = {}; let n = 0;
   for (const [el, key, items, pick] of KNOBDEF()) {
@@ -12180,8 +12182,10 @@ let tintSet = [];
 function applyTint() {
   const root = document.documentElement;
   tintSet.forEach(k => root.style.removeProperty(k)); tintSet = [];
-  root.dataset.tint = st.tint;
-  let t = TINTS[st.tint]; if (!t) return;
+  /* the Phone app has no chrome tints: it always uses the base Beige */
+  const tint = st.device === 'native' ? 'warmlo' : st.tint;
+  root.dataset.tint = tint;
+  let t = TINTS[tint]; if (!t) return;
   const dark = st.appearance === 'dark' || (st.appearance === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
   if (t.dark && dark) t = { ...t, ...t.dark };
   const cs = getComputedStyle(root), names = new Set();
@@ -12329,7 +12333,7 @@ function renderAll() {
   renderAllInner();
   document.querySelectorAll('#app textarea').forEach(autosize);
   focusAfterRender(_fd);
-  if (renderAll.tint !== st.tint + st.appearance) { renderAll.tint = st.tint + st.appearance; applyTint(); }
+  { const tk = (st.device === 'native' ? 'warmlo' : st.tint) + st.appearance; if (renderAll.tint !== tk) { renderAll.tint = tk; applyTint(); } }
   if (_app && _st) _app.scrollTop = _st;
   /* Mobile Web: a sheet over the page (Sources and wiki, request panel) keeps the page under it still */
   if (_app) { const sheet = st.device === 'phone' && (st.mWiki || (st.reqOpen && st.reqV === 'panel')); if (sheet && !_app.classList.contains('sheet-lock')) _app.scrollTop = 0; _app.classList.toggle('sheet-lock', !!sheet); }
