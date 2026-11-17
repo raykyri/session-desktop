@@ -3238,6 +3238,86 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 }
 
 /* END question-trees css */
+/* ==== accounts, API keys and profiles (web): key checks, Account, first run, mute and block ==== */
+/* API keys: check line, usage line, the provider's reason, actions */
+.ak-tx .ak-use, .ak-tx .ak-why, .ak-tx .ak-chk { font-size: var(--fs-xs); line-height: 1.45; margin-top: 2px; }
+.ak-tx .ak-use { color: var(--t-muted); }
+.ak-tx .ak-why { color: var(--bad); }
+.ak-tx .ak-chk { color: var(--t-secondary); display: inline-flex; align-items: center; gap: 6px; }
+.ak-acts { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.ac-spin { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--border-strong); border-top-color: var(--t-secondary); animation: ac-spin .8s linear infinite; flex: none; }
+@keyframes ac-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ac-spin { animation: none; border-top-color: var(--t-secondary); } }
+.ak-lead { font-size: var(--fs-sm); }
+.ac-out { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 16px; }
+@media (max-width: 640px) {
+  .ak-row .ks { margin-left: 40px; }
+  .ak-acts { margin-left: auto; }
+}
+/* revoke: the spaces a key pays for */
+.ac-rv { display: flex; flex-direction: column; gap: 8px; }
+.ac-rv > p { font-size: var(--fs-sm); color: var(--t-secondary); }
+.ac-rv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ac-rv-list li { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); min-width: 0; }
+.ac-rv-list b { color: var(--t-strong); font-weight: 600; }
+.ac-rv-list small { color: var(--t-faint); font-size: var(--fs-xs); margin-left: auto; text-align: right; }
+.si .si-msg { font-size: var(--fs-sm); line-height: 1.5; }
+/* Account */
+.ac-set { margin-top: 6px; }
+.ac-anchor { height: 0; }
+.ac-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ac-v { font-size: var(--fs-sm); color: var(--t-strong); font-weight: 550; overflow-wrap: anywhere; }
+.ac-note svg, .ac-pfst > svg { width: 15px; height: 15px; color: var(--t-muted); flex: none; }
+.ac-grp { margin: 8px 0 -4px; font-size: var(--fs-xs); font-weight: 650; color: var(--t-faint); }
+.ac-nrow { display: flex; align-items: center; gap: 14px; }
+.ac-ntx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: var(--fs-sm); }
+.ac-ntx b { font-weight: 550; color: var(--t-strong); }
+.ac-ntx small { color: var(--t-faint); font-size: var(--fs-xs); line-height: 1.4; }
+.ac-sprow { display: flex; align-items: center; gap: 10px; }
+.ac-spn { flex: 1; min-width: 0; font-size: var(--fs-sm); color: var(--t-strong); font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac-sprow .dd { width: 210px; flex: none; }
+.ac-done { display: flex; gap: 8px; align-items: flex-start; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.45; margin: 0; }
+.ac-done svg { width: 14px; height: 14px; color: var(--good); flex: none; margin-top: 2px; }
+.ac-danger .st-head h3 { color: var(--bad); }
+@media (max-width: 640px) { .ac-sprow .dd { width: 180px; } }
+/* profiles: More, and the muted or blocked state */
+.ac-pfm .cs-pop { width: 220px; }
+.ac-pfst { margin-top: 14px; }
+/* notifications page: the link to the notification settings */
+.btn.ac-nset { display: inline-flex; align-items: center; gap: 6px; }
+.btn.ac-nset svg { width: 14px; height: 14px; flex: none; }
+/* first run */
+.onb-shell { min-height: 100%; display: flex; flex-direction: column; }
+.onb-hdr { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--divider); background: var(--chrome); }
+.onb-page { flex: 1; display: flex; justify-content: center; padding: 40px 24px 56px; background: var(--feed); }
+.onb-f.onb-stick { position: sticky; bottom: 0; padding: 12px 0 16px; margin-bottom: -16px; background: var(--feed); border-top: 1px solid var(--divider); }
+.onb-card { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 16px; }
+.onb-card h2 { margin: 0; font-size: 22.65px; font-weight: 700; color: var(--t-heading); letter-spacing: -.01em; }
+.onb-card > p { margin: 0; line-height: 1.5; }
+.onb-steps { display: flex; gap: 6px; }
+.onb-steps span { flex: 1; height: 3px; border-radius: 3px; background: var(--divider); }
+.onb-steps span.on { background: var(--accent); }
+.ac-chk { display: flex; gap: 10px; align-items: flex-start; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.45; padding: 12px 14px; border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--pane); cursor: pointer; }
+.ac-chk input { margin: 2px 0 0; width: 15px; height: 15px; flex: none; accent-color: var(--accent); }
+.onb-sps { display: flex; flex-direction: column; border: 1px solid var(--divider); border-radius: var(--r-lg); overflow: hidden; background: var(--pane); }
+.onb-sp { display: flex; align-items: center; gap: 12px; padding: 10px 14px; text-align: left; background: transparent; border: 0; color: inherit; font: inherit; cursor: pointer; min-width: 0; }
+.onb-sp + .onb-sp { border-top: 1px solid var(--divider); }
+.onb-sp:hover { background: var(--fill-subtle); }
+.onb-sp:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.onb-sptx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.onb-sptx b { font-weight: 600; color: var(--t-strong); font-size: var(--fs-sm); }
+.onb-sptx small { color: var(--t-faint); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.onb-ck { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border-strong); display: grid; place-items: center; flex: none; }
+.onb-sp[aria-pressed="true"] .onb-ck { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.onb-ck svg { width: 12px; height: 12px; }
+.onb-key { display: flex; flex-direction: column; gap: 12px; }
+.onb-f { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.onb-f .grow { flex: 1; }
+#app:has(.onb-shell) .mtabs { display: none; }
+@media (max-width: 640px) {
+  .onb-hdr { padding: 12px 16px; }
+  .onb-page { padding: 24px 16px 40px; }
+}
 </style>
 
 <div class="shell" id="shell">
@@ -3869,7 +3949,7 @@ function acts(p, withReply) {
 const au = (u, label) => `<button class="au" type="button" data-user="${u}">${esc(label || u)}</button>`;
 /* ---------------- shared chrome ---------------- */
 function account(compact) {
-  if (st.auth === 'out') return `<div class="acct"><button class="btn hb" type="button" data-act="signin">Log in</button><button class="btn primary" type="button" data-act="signin">Sign up</button></div>`;
+  if (st.auth === 'out') return `<div class="acct"><button class="btn hb" type="button" data-act="signin">Log in</button><button class="btn primary" type="button" data-act="signup">Sign up</button></div>`;
   return `<div class="acct"><button class="me" type="button" data-act="umenu" aria-haspopup="true" aria-expanded="${st.umenu}" aria-label="Account: ines.v">${avatar('ines.v')}${compact ? '' : '<b>ines.v</b>'}${I.chev}</button>${st.umenu ? `<div class="um-scrim" data-act="umenu"></div>${userMenu()}` : ''}</div>`;
 }
 function swCurrent() {
@@ -3913,15 +3993,22 @@ function pfEditDialog() {
     <div class="fld"><span>Handle and X account</span><span class="pf-ro">${ME.u} · ${XI} ${ME.x.replace('@', '')}</span><small class="faint">From your X login. Used in links to your profile.</small></div>
     <div class="modal-f"><span class="grow" style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Cancel</button><button class="btn primary" type="button" data-pf="save">Save</button></div></div></div>`;
 }
-function signinDialog() {
-  return `<div class="modal-scrim"><div class="modal sm si" role="dialog" aria-modal="true" aria-labelledby="si-t"><div class="modal-h"><h3 id="si-t">Log in or sign up</h3><button class="iconbtn" type="button" data-act="modal-close" aria-label="Close">${I.close}</button></div><div class="si-opts"><button class="si-opt" type="button" data-act="signin-x">${XL}<span>Continue with X</span></button></div><p class="si-fine faint">Session does not post to X.</p></div></div>`;
+/* Log in (mode 'login'), Sign up ('signup': continues to the first-run path), and the state after X did not
+   complete the sign-in (err). X login itself is not mocked: Continue with X signs in at once. */
+function signinDialog(mode = 'login', err = false) {
+  const up = mode === 'signup';
+  const title = err ? 'Couldn’t sign in with X' : up ? 'Sign up for Session' : 'Log in to Session';
+  const body = err ? `<p class="muted si-msg">X did not complete the sign-in, so Session ${up ? 'did not create an account' : 'did not sign you in'}. Nothing on your X account changed.</p>`
+    : up ? '<p class="muted si-msg">Session creates your account from your X handle, name and profile photo. Next, you accept the terms and pick spaces to join.</p>' : '';
+  return `<div class="modal-scrim"><div class="modal sm si" role="${err ? 'alertdialog' : 'dialog'}" aria-modal="true" aria-labelledby="si-t"><div class="modal-h"><h3 id="si-t">${title}</h3><button class="iconbtn" type="button" data-act="modal-close" aria-label="Close">${I.close}</button></div>${body}<div class="si-opts"><button class="si-opt" type="button" data-act="signin-x">${XL}<span>${err ? 'Try again' : 'Continue with X'}</span></button></div><p class="si-fine faint">Session does not post to X.</p></div></div>`;
 }
 function signoutDialog() {
   return `<div class="modal-scrim"><div class="modal sm" role="alertdialog" aria-modal="true" aria-labelledby="so-t"><h3 id="so-t">Sign out?</h3><p class="muted">You can sign back in with X at any time.</p><div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Cancel</button><button class="btn primary" type="button" data-act="signout-confirm">Sign out</button></div></div></div>`;
 }
 function revokeDialog() {
-  const k = st.userKeys.find(x => x.id === st.modal.split(':')[1]);
-  return `<div class="modal-scrim"><div class="modal sm" role="alertdialog" aria-modal="true" aria-labelledby="rv-t"><h3 id="rv-t">Revoke ${esc(k ? k.label : 'this key')}?</h3><p class="muted">Asks that use this key will stop working. This can't be undone.</p><div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Cancel</button><button class="btn danger" type="button" data-act="revoke-confirm">Revoke</button></div></div></div>`;
+  const k = st.userKeys.find(x => x.id === st.modal.split(':')[1]), pays = k ? acPays(k.id) : [];
+  const paid = pays.length ? `<div class="ac-rv"><p>This key pays for the extra tokens in:</p><ul class="ac-rv-list">${pays.map(s => `<li>${glyph(s)}<b>${spName(s)}</b><small class="num">${fmtT(s.used)} of ${fmtT(s.budget)} tokens used this month</small></li>`).join('')}</ul><p class="cs-fine">${MI.key}<span>After you revoke it, asks in ${pays.length === 1 ? 'this space' : 'these spaces'} use each asker’s own API key.</span></p></div>` : '';
+  return `<div class="modal-scrim"><div class="modal sm" role="alertdialog" aria-modal="true" aria-labelledby="rv-t"><h3 id="rv-t">Revoke ${esc(k ? k.label : 'this key')}?</h3><p class="muted">Asks that use this key will stop working. This can’t be undone.</p>${paid}<div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Cancel</button><button class="btn danger" type="button" data-act="revoke-confirm">Revoke</button></div></div></div>`;
 }
 function discardDialog() {
   return `<div class="modal-scrim"><div class="modal sm" role="alertdialog" aria-modal="true" aria-labelledby="dd-t"><h3 id="dd-t">Discard this draft?</h3><p class="muted">The text you wrote will be deleted.</p><div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Keep editing</button><button class="btn danger" type="button" data-act="discard">Discard</button></div></div></div>`;
@@ -4006,7 +4093,7 @@ L.b = layoutSpace;
 const ageMin = a => { if (a === 'now') return 0; const n = parseFloat(a); return a.endsWith('mo') ? n * 43200 : a.endsWith('w') ? n * 10080 : a.endsWith('m') ? n : a.endsWith('h') ? n * 60 : n * 1440; };
 const homePosts = () => {
   const ids = st.auth === 'in' ? D.joined : D.spaces.map(x => x.id);
-  return D.posts.filter(p => ids.includes(p.s) && canRead(sp(p.s))).sort((a, b) => ageMin(a.age) - ageMin(b.age)).map(p => ({ ...p, tag: true, orig: p }));
+  return D.posts.filter(p => ids.includes(p.s) && canRead(sp(p.s)) && !acHides(p.u)).sort((a, b) => ageMin(a.age) - ageMin(b.age)).map(p => ({ ...p, tag: true, orig: p }));
 };
 const hrow = p => `<button class="hrow" type="button" data-space="${p.s}"><span class="hrow-t">${esc(p.t || p.q)}</span><span class="hrow-s">${esc(p.sum || (p.t ? p.q : ''))}</span><span class="hrow-m"><span class="num">${I.reply}${replyCount(p)}</span><span>${p.age}</span></span></button>`;
 const homeTitle = (h, sub) => `<div class="home-head"><h2>${h}</h2>${sub ? `<p>${sub}</p>` : ''}</div>`;
@@ -4058,6 +4145,7 @@ function userMenu() {
     ${item(CI.bell, 'Notifications', ntUnread() ? `<small class="num">${ntUnread()} new</small>` : '', 'data-csnotif="page"')}
     ${item(MI.grid, 'Your spaces', '', 'data-sub="yourspaces"')}
     ${item(MI.key, 'API keys', '', 'data-sub="keys"')}
+    ${item(MI.cog, 'Account', '', 'data-sub="account"')}
     ${item(MI.kbd, 'Keyboard shortcuts', '<kbd>?</kbd>', 'data-act="shortcuts"')}
     <div class="um-sep"></div>
     ${apControl()}
@@ -4192,21 +4280,23 @@ const ME = new Proxy(ME0, { get: (t, k) => (k === 'name' || k === 'bio') && D.pr
 const NAMES = { 'ines.v': 'Ines V.', 'hal_b': 'Hal B.', 'jun.park': 'Jun Park', 'oduya': 'Oduya', 'sol': 'Sol', 'lettie': 'Lettie', 'mira_k': 'Mira K.', 'tomasz': 'Tomasz' };
 const PU = () => st.profileUser === ME.u ? ME : { u: st.profileUser, name: NAMES[st.profileUser] || st.profileUser, x: '@' + st.profileUser.replace(/\./g, '_') };
 const isSelf = () => st.profileUser === ME.u;
+/* the signed-in person on their own profile: Edit profile and the private Liked tab */
+const pfOwner = () => isSelf() && st.auth === 'in';
 const userSpaces = () => isSelf() ? D.joined.length : new Set(D.posts.filter(p => p.u === st.profileUser).map(p => p.s)).size;
 const myPosts = () => D.posts.map((p, i) => ({ ...p, orig: p, tag: true, id: i })).filter(p => p.u === PU().u && canRead(sp(p.s)));
 const myFUs = () => Object.entries(D.fu).flatMap(([pid, list]) => list.filter(f => f.u === PU().u).map(f => ({ ...f, pid: +pid })));
-const profTabs = (cls = '') => `<div class="pf-tabs ${cls}" role="tablist">${[['threads', 'Threads'], ['followups', 'Follow-ups'], ...(isSelf() ? [['likes', 'Liked']] : [])].map(([k, l]) => `<button type="button" role="tab" data-ptab="${k}" aria-selected="${st.ptab === k}">${l}</button>`).join('')}</div>`;
+const profTabs = (cls = '') => `<div class="pf-tabs ${cls}" role="tablist">${[['threads', 'Threads'], ['followups', 'Follow-ups'], ...(pfOwner() ? [['likes', 'Liked']] : [])].map(([k, l]) => `<button type="button" role="tab" data-ptab="${k}" aria-selected="${st.ptab === k}">${l}</button>`).join('')}</div>`;
 function profFeed() {
   if (st.ptab === 'followups') return `<div class="pf-fus">${myFUs().map(f => `<button class="hrow" type="button" data-open="${f.pid}"><span class="hrow-t">${esc(f.q)}</span><span class="hrow-s">on: ${esc(D.posts[f.pid].q)}</span><span class="hrow-m"><span>${f.age}</span></span></button>`).join('') || '<p class="muted">No follow-ups yet.</p>'}</div>`;
-  if (st.ptab === 'likes' && isSelf()) { const ls = [...st.liked].map(i => ({ ...D.posts[i], orig: D.posts[i], tag: true })); return `<p class="pf-private">${LOCK}Your likes are private. Only you can see this list.</p>${ls.length ? feed2(null, ls) : '<p class="muted">No liked threads yet.</p>'}`; }
+  if (st.ptab === 'likes' && pfOwner()) { const ls = [...st.liked].map(i => ({ ...D.posts[i], orig: D.posts[i], tag: true })); return `<p class="pf-private">${LOCK}Your likes are private. Only you can see this list.</p>${ls.length ? feed2(null, ls) : '<p class="muted">No liked threads yet.</p>'}`; }
   const cl = myPosts().some(p => isClosed(sp(p.s)));
   return feed2(null, myPosts()) + (cl ? `<p class="cs-fine cs-pfnote">${LOCK}<span>Threads in closed spaces are shown only to members of those spaces.</span></p>` : '');
 }
-const editBtn = () => isSelf() ? `<button class="btn" type="button" data-pf="edit" aria-label="Edit profile">Edit<span class="m-long"> profile</span></button>` : '';
+const editBtn = () => pfOwner() ? `<button class="btn" type="button" data-pf="edit" aria-label="Edit profile">Edit<span class="m-long"> profile</span></button>` : acPfMore();
 const LOCK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg>';
 const meta = () => `<span class="xh" title="X">${XI}${PU().x.replace('@', '')}</span><span class="pf-stats"><span class="num">${myPosts().length} thread${myPosts().length === 1 ? '' : 's'}</span><span class="num">${userSpaces()} space${userSpaces() === 1 ? '' : 's'}</span></span>`;
 function layoutProfile() {
-  const inner = `<div class="pf pf-slim2"><div class="pf-cover"></div><div class="pf-wrap"><div class="pf-row">${avatar(PU().u, 'pf-av sm')}<div class="pf-id"><h2>${PU().name}</h2><div class="pf-meta faint"><span>${PU().u}</span>${meta()}</div>${PU().bio ? `<p class="pf-bio">${esc(PU().bio)}</p>` : ''}</div>${editBtn()}</div>${profTabs()}<div class="pf-feed">${profFeed()}</div></div></div>`;
+  const inner = `<div class="pf pf-slim2"><div class="pf-cover"></div><div class="pf-wrap"><div class="pf-row">${avatar(PU().u, 'pf-av sm')}<div class="pf-id"><h2>${PU().name}</h2><div class="pf-meta faint"><span>${PU().u}</span>${meta()}</div>${PU().bio ? `<p class="pf-bio">${esc(PU().bio)}</p>` : ''}</div>${editBtn()}</div>${acPfState()}${profTabs()}<div class="pf-feed">${profFeed()}</div></div></div>`;
   return `<div class="A C Af H">${topHeader()}<div class="pf-page">${inner}</div></div>`;
 }
 
@@ -4280,9 +4370,10 @@ function layoutYourSpaces() {
 
 /* ---------- API keys ---------- */
 const KEYINFO = { k2: { provider: 'Google', added: 'Nov 3', last: '1d ago', used: 248e3, cap: 1e6 }, k1: { provider: 'Anthropic', added: 'Oct 2', last: '2h ago', used: 612e3, cap: 2e6 }, k0: { provider: 'Anthropic', added: 'Aug 14', last: 'Sep 30', used: 0, cap: 0 } };
-const kinfo = k => KEYINFO[k.id] || { provider: 'Anthropic', added: 'Just now', last: 'Never', used: 0, cap: 0 };
+/* provider, dates, usage this month and the monthly limit: the key record's own fields first (keys added here), then KEYINFO */
+const kinfo = k => { const o = { provider: 'Anthropic', added: 'Just now', last: 'Never', used: 0, cap: 0, ...KEYINFO[k.id] }; for (const f of ['provider', 'added', 'last', 'used', 'cap']) if (k[f] !== undefined) o[f] = k[f]; return o; };
 const keyMask = k => (k.sub.split(' · ')[0]);
-const keyStatus = k => k.valid ? '<span class="ks ok">Active</span>' : '<span class="ks bad">Invalid</span>';
+const keyStatus = k => k.check === 'checking' ? '' : k.valid ? '<span class="ks ok">Active</span>' : '<span class="ks bad">Invalid</span>';
 const provOf = v => v.startsWith('AIza') ? 'Google' : v.startsWith('sk-ant-') ? 'Anthropic' : v.startsWith('sk-or-') ? 'OpenRouter' : 'OpenAI';
 /* Anthropic, OpenAI and OpenRouter keys start with sk-; Google AI Studio (Gemini) keys start with AIza. */
 const KEY_RE = /^(sk-[A-Za-z0-9_-]{12,}|AIza[A-Za-z0-9_-]{30,})$/;
@@ -4291,21 +4382,31 @@ const KEY_HELP = 'Stored encrypted. Used only for asks you start, or for spaces 
 const keyErr = () => st.keyErr ? `<p class="ts-err" role="alert">${st.keyErr}</p>` : '';
 const fName = (lbl = 'Name') => `<label class="fld"><span>${lbl} <small class="faint">optional</small></span><input id="key-name" type="text" placeholder="e.g. Personal key" autocomplete="off" value="${esc(st.keyName)}"></label>`;
 const fKey = () => `<label class="fld"><span>API key</span><span class="fld-pw"><input id="key-in" type="${st.keyShow ? 'text' : 'password'}" placeholder="sk-… or AIza…" autocomplete="off" spellcheck="false" value="${esc(st.keyDraft)}"><button class="tlink" type="button" data-act="key-show">${st.keyShow ? 'Hide' : 'Show'}</button></span></label>`;
+/* The key dialog: add a key (with an optional monthly limit), replace a key the provider rejected, or change a limit */
 function addKeyDialog() {
-  const close = `<button class="iconbtn" type="button" data-act="key-cancel" aria-label="Close">${I.close}</button>`;
-  return `<div class="modal-scrim"><div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="ak-t"><div class="modal-h"><h3 id="ak-t">Add an API key</h3>${close}</div>${fKey()}${fName()}${keyErr()}<p class="ts-help faint">${KEY_HELP}</p><div class="modal-f"><span style="flex:1"></span><button class="btn ghost" type="button" data-act="key-cancel">Cancel</button><button class="btn primary" type="button" data-act="key-save">Add key</button></div></div></div>`;
+  const close = `<button class="iconbtn" type="button" data-act="key-cancel" aria-label="Close">${I.close}</button>`, k = st.keyFor && st.userKeys.find(x => x.id === st.keyFor);
+  const shell = (title, body, ok) => `<div class="modal-scrim"><div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="ak-t"><div class="modal-h"><h3 id="ak-t">${title}</h3>${close}</div>${body}<div class="modal-f"><span style="flex:1"></span><button class="btn ghost" type="button" data-act="key-cancel">Cancel</button>${ok}</div></div></div>`;
+  if (st.keyMode === 'limit' && k) return shell(`Monthly limit for ${esc(k.label)}`, `${fCap()}<p class="ts-help faint">${fmtT(kinfo(k).used)} tokens used this month.</p>`, `<button class="btn primary" type="button" data-akcapsave="${k.id}">Save</button>`);
+  const rp = st.keyMode === 'replace' && k;
+  const lead = rp ? `<p class="muted ak-lead">Paste a new key from ${kinfo(rp).provider}. The name, the limit${acPays(rp.id).length ? ' and the spaces the key pays for' : ''} stay the same.</p>` : '';
+  return shell(rp ? `Replace ${esc(rp.label)}` : 'Add an API key', `${lead}${fKey()}${rp ? '' : fName() + fCap()}${keyErr()}<p class="ts-help faint">${KEY_HELP} Session checks the key with the provider when you add it.</p>`, `<button class="btn primary" type="button" data-act="key-save">${rp ? 'Replace key' : 'Add key'}</button>`);
+}
+/* One key: a line while the provider checks it; for a valid key, usage this month, the limit and the spaces it
+   pays for; for a key the provider rejected, the provider's reason with Replace and Check again. */
+function akRow(k) {
+  const i = kinfo(k), chk = k.check === 'checking', pays = acPays(k.id);
+  const tl = (attr, l) => `<button class="tlink" type="button" ${attr}="${k.id}">${l}</button>`;
+  const name = st.renaming === k.id
+    ? `<div class="ak-tx ak-rn"><input id="rn-in" type="text" aria-label="Key name" value="${esc(st.renameDraft)}" autocomplete="off"><small>${esc(keyMask(k))} · ${i.provider}</small></div><button class="btn sm ghost" type="button" data-act="rn-cancel">Cancel</button><button class="btn sm primary" type="button" data-act="rn-save">Save</button>`
+    : `<div class="ak-tx"><b>${esc(k.label)}</b><small>${esc(keyMask(k))} · ${i.provider} · Added ${i.added}${chk ? '' : ` · Last used ${i.last}`}</small>${chk ? `<span class="ak-chk" role="status"><span class="ac-spin" aria-hidden="true"></span>Checking with ${i.provider}…</span>` : !k.valid ? `<span class="ak-why">${i.provider} rejected this key: ${esc(k.reason || 'it gave no reason')}.</span>` : `<span class="ak-use num">${fmtT(i.used)} tokens this month${i.cap ? ` · Limit ${fmtT(i.cap)}/mo` : ''}${pays.length ? ` · Pays for extra tokens in ${pays.map(spName).join(', ')}` : ''}</span>`}</div>${keyStatus(k)}<span class="ak-acts">${chk ? '' : k.valid ? tl('data-rename', 'Rename') + tl('data-akcap', i.cap ? 'Change limit' : 'Set limit') : tl('data-akrep', 'Replace') + tl('data-akcheck', 'Check again')}<button class="tlink danger-l" type="button" data-revoke="${k.id}">Revoke</button></span>`;
+  return `<div class="ak-row${k.valid || chk ? '' : ' bad'}${st.keyNew === k.id ? ' ak-new' : ''}"><span class="ts-ic">${MI.key}</span>${name}</div>`;
 }
 function akList() {
-  const rows = st.userKeys.map(k => {
-    const i = kinfo(k);
-    const name = st.renaming === k.id
-      ? `<div class="ak-tx ak-rn"><input id="rn-in" type="text" aria-label="Key name" value="${esc(st.renameDraft)}" autocomplete="off"><small>${esc(keyMask(k))} · ${i.provider}</small></div><button class="btn sm ghost" type="button" data-act="rn-cancel">Cancel</button><button class="btn sm primary" type="button" data-act="rn-save">Save</button>`
-      : `<div class="ak-tx"><b>${esc(k.label)}</b><small>${esc(keyMask(k))} · ${i.provider} · Added ${i.added} · Last used ${i.last}${i.cap ? ` · Limit ${fmt(i.cap)}/mo` : ''}</small></div>${keyStatus(k)}<button class="tlink" type="button" data-rename="${k.id}">Rename</button><button class="tlink danger-l" type="button" data-revoke="${k.id}">Revoke</button>`;
-    return `<div class="ak-row${k.valid ? '' : ' bad'}${st.keyNew === k.id ? ' ak-new' : ''}"><span class="ts-ic">${MI.key}</span>${name}</div>`;
-  }).join('');
+  const rows = st.userKeys.map(akRow).join('');
   return rows ? `<div class="ak-list">${rows}</div>` : `<div class="ak-empty"><p class="muted">No API keys yet. Add one to start asks with your own tokens.</p></div>`;
 }
 function layoutKeys() {
+  if (st.auth !== 'in') return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page ak-page"><div class="sub-top"><h2>API keys</h2></div>${acOutNote('Log in to see and change your API keys.')}</div></div>`;
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page ak-page"><div class="sub-top"><h2>API keys</h2><button class="btn primary" type="button" data-act="key-open">Add a key</button></div>${akList()}</div></div>`;
 }
 
@@ -5381,7 +5482,7 @@ function rail1() {
   const asks = inn ? D.posts.map((p, i) => ({ p, i })).filter(({ p }) => p.u === ME.u && p.k === 'ask' && canRead(sp(p.s))) : [];
   const askRow = ({ p, i }) => `<button class="rl-ask" type="button" data-open="${i}" aria-current="${st.thread === i}">${p.running ? '<span class="spin" aria-hidden="true"></span>' : `<span class="rl-done" aria-hidden="true">${I.check}</span>`}<span class="rl-al"><b>${esc(p.t || p.q)}</b><small>${p.running ? 'Researching' : `Answered ${p.age} ago · ${replyCount(p)} follow-up${replyCount(p) === 1 ? '' : 's'}`}</small></span></button>`;
   const acct = inn ? `<div class="acct rl-acct rs-top rs-mini"><button class="me" type="button" data-act="umenu" aria-haspopup="true" aria-expanded="${st.umenu}" aria-label="Account: ines.v">${avatar('ines.v')}${I.chev}</button>${st.umenu ? userMenu() : ''}</div>` : '';
-  const out = inn ? '' : `<div class="rl-foot"><div class="rl-out"><button class="btn" type="button" data-act="signin">Log in</button><button class="btn primary" type="button" data-act="signin">Sign up</button></div></div>`;
+  const out = inn ? '' : `<div class="rl-foot"><div class="rl-out"><button class="btn" type="button" data-act="signin">Log in</button><button class="btn primary" type="button" data-act="signup">Sign up</button></div></div>`;
   return `<nav class="rail rail1" aria-label="Main">
     <div class="rl-top rs-head"><button class="logo-btn rl-logo" type="button" data-home="1" aria-label="Home">${logo('Session')}</button>${acct}</div>
     <div class="rl-srow"><button class="rl-search" type="button" aria-label="Search" data-cssearch="1">${I.search}<span>Search</span><kbd>/</kbd></button><button class="rl-new" type="button" data-mtab="ask" aria-label="New ask" title="New ask">${PLUS}</button></div>
@@ -9318,6 +9419,334 @@ function abJump(k) {
   }
 }
 
+/* ==== accounts, API keys and profiles (web): sign-up, account settings, key checks, mute and block ====
+   - Sign up continues to a first-run path: accept the terms, join spaces, add an API key or skip, then Home.
+     "Couldn’t sign in with X" is the dialog's error state, with Try again. X login itself is not mocked.
+   - Signing out from a private screen (API keys, Account, Notifications, Your spaces, Manage, Saved) opens Home.
+     Profiles show Edit profile and the Liked tab only to their signed-in owner.
+   - Session checks a key with its provider when it is added or replaced. A key the provider rejects shows the
+     provider's reason, with Replace and Check again. Each key has a usage line and an optional monthly limit.
+   - A space's extra tokens can be paid with one of your keys (space field `key`: the key id). Revoking that key
+     lists those spaces and sets their `key` to null.
+   - Account (user menu): email, notification settings by type and by space, an email toggle, data export and
+     account deletion. The notifications page links to the notification settings.
+   - Other people's profiles have a More menu: Mute (Home hides their threads), Block, Report. */
+
+/* ---- server data ---- */
+RES.acct = { url: '/api/me/settings', kind: 'value' };      /* email, notification settings, data export */
+RES.muted = { url: '/api/me/muted', kind: 'value' };        /* handles whose threads Home leaves out */
+RES.blocked = { url: '/api/me/blocked', kind: 'value' };    /* handles that can't reply to you or see your profile */
+DATA_KEYS.push('acct', 'muted', 'blocked');
+D.acct = { email: 'ines@example.com', emailNew: null, exportAt: null, emailOn: true, types: { replies: true, followups: true, reqs: true, reports: true, pages: false }, spaces: { public: 'mentions' } };
+D.muted = new Set();
+D.blocked = new Set();
+/* the seeded invalid key: the provider's reason */
+db.update('userKeys', 'k0', k => { k.reason = 'it was revoked'; });
+/* Math (ines.v is its owner) pays for its extra tokens with ines.v's Anthropic key */
+spEdit('math', s => { s.byok = ME.u; s.key = 'k1'; });
+
+Object.assign(st, { keyMode: 'add', keyFor: null, keyCap: '0', onb: null, acEmail: '', acEmailErr: '', acDel: '', acRep: null, acctGone: false });
+
+const AC_I = {
+  block: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="5.6"/><path d="M4 4l8 8" stroke-linecap="round"/></svg>',
+  mail: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3.5" width="12" height="9" rx="1.4"/><path d="m2.6 4.4 5.4 4.2 5.4-4.2"/></svg>',
+};
+const acOutNote = msg => `<div class="ak-empty ac-out"><p class="muted">${msg}</p><button class="btn primary" type="button" data-act="signin">Log in</button></div>`;
+const acModerates = () => D.spaces.some(s => isModOf(s.id));
+/* Home leaves out threads by people you muted or blocked */
+const acHides = u => st.auth === 'in' && (D.muted.has(u) || D.blocked.has(u));
+
+/* ---- sign-in, sign-up, sign-out ---- */
+const AC_PRIVATE = ['keys', 'account', 'notifs', 'yourspaces', 'manage', 'welcome'];
+function acSignOut(toHome) {
+  const priv = toHome || st.savedPage || AC_PRIVATE.includes(st.subPage);
+  Object.assign(st, { auth: 'out', modal: null, umenu: false, renaming: null, addingKey: false, csMenu: null, ntOpen: false, onb: null, dd: null, ptab: st.ptab === 'likes' ? 'threads' : st.ptab });
+  if (priv) Object.assign(st, NAVBASE(), { home: true });
+}
+/* Continue with X (or Try again) succeeded. A new account (Sign up, or after deleting the account) starts the first-run path. */
+function acSignedIn() {
+  const up = st.acctGone || st.modal === 'ac-signup' || st.modal === 'ac-sierr:signup';
+  Object.assign(st, { auth: 'in', modal: null });
+  if (up) acOnbStart();
+}
+function acOnbStart() {
+  Object.assign(st, NAVBASE(), { subPage: 'welcome', onb: { step: 0, terms: false, picks: [], key: null }, keyDraft: '', keyName: '', keyErr: '', keyShow: false, keyMode: 'add', keyFor: null, keyCap: '0' });
+}
+
+/* ---- first run: terms, spaces, API key ---- */
+const onbSpaces = () => D.spaces.filter(s => !isClosed(s) && visibleSp(s));
+function layoutOnb() {
+  const o = st.onb || { step: 0, terms: false, picks: [], key: null }, n = o.picks.length;
+  const steps = `<div class="onb-steps" aria-hidden="true">${[0, 1, 2].map(i => `<span class="${i <= o.step ? 'on' : ''}"></span>`).join('')}</div>`;
+  const back = '<button class="btn ghost" type="button" data-onb="back">Back</button>';
+  let body;
+  if (o.step === 0) body = `<h2>Welcome to Session</h2><p class="muted">You signed in with X as <b>${esc(ME.x)}</b>. Your profile uses your X handle, name and profile photo. Session does not post to X.</p>
+    <label class="ac-chk"><input id="onb-terms" type="checkbox" ${o.terms ? 'checked' : ''}><span>I accept the <a class="tlink" href="#" onclick="return false">Terms of Service</a> and the <a class="tlink" href="#" onclick="return false">Privacy Policy</a>.</span></label>
+    <div class="onb-f"><button class="btn ghost" type="button" data-onb="cancel">Cancel</button><span class="grow"></span><button class="btn primary" type="button" data-onb="next" ${o.terms ? '' : 'disabled'}>Continue</button></div>`;
+  else if (o.step === 1) body = `<h2>Join a few spaces</h2><p class="muted">Threads from the spaces you join show on your Home. You can join and leave spaces at any time.</p>
+    <div class="onb-sps">${onbSpaces().map(s => { const on = o.picks.includes(s.id); return `<button class="onb-sp" type="button" data-onbsp="${s.id}" aria-pressed="${on}">${glyph(s)}<span class="onb-sptx"><b>${spName(s)}</b><small>${fmt(s.members)} members · ${esc(s.desc)}</small></span><span class="onb-ck">${on ? I.check : ''}</span></button>`; }).join('')}</div>
+    <div class="onb-f onb-stick">${back}<span class="grow"></span><span class="faint cs-small" role="status">${n ? `${n} selected` : 'Pick at least one'}</span><button class="btn primary" type="button" data-onb="next" ${n ? '' : 'disabled'}>Continue</button></div>`;
+  else {
+    const k = o.key && st.userKeys.find(x => x.id === o.key);
+    body = `<h2>Add an API key</h2><p class="muted">Asks in a space use its extra tokens when it has them, and your own API key otherwise. Session stores the key encrypted and uses it only for asks you start.</p>
+      ${k ? `<div class="ak-list">${akRow(k)}</div>` : `<div class="onb-key">${fKey()}${fName()}${keyErr()}</div>`}
+      <div class="onb-f">${back}<span class="grow"></span>${k ? '<button class="btn primary" type="button" data-onb="done">Go to Home</button>' : '<button class="btn" type="button" data-onb="done">Skip for now</button><button class="btn primary" type="button" data-act="key-save">Add key</button>'}</div>
+      <p class="cs-fine">${MI.key}<span>You can add and change keys later in API keys.</span></p>`;
+  }
+  return `<div class="A C Af H onb-shell"><div class="onb-hdr">${logo('')}<span class="faint cs-small">Step ${o.step + 1} of 3</span></div><div class="onb-page"><div class="onb-card">${steps}${body}</div></div></div>`;
+}
+
+/* ---- API keys: provider check, limits, replace, revoke ---- */
+const AC_CHECK_MS = 1400;
+const AC_CAPS = [['0', 'No limit'], ['250000', '250k tokens'], ['500000', '500k tokens'], ['1000000', '1M tokens'], ['2000000', '2M tokens'], ['5000000', '5M tokens']];
+DD_SET.acCap = v => { st.keyCap = v; };
+const fCap = () => `<div class="fld"><span id="ak-cap-l">Monthly limit <small class="faint">optional</small></span>${ddSel('acCap', AC_CAPS, st.keyCap, 'ak-cap-l')}<small class="faint">When asks reach the limit, Session stops using this key until the 1st of the next month.</small></div>`;
+const acPays = id => D.spaces.filter(s => s.key === id);
+/* the provider's answer in this mock: a key with "revoked" or "expired" in it is rejected; a seeded key keeps its reason */
+const acVerdict = k => k.raw ? (/revoked/i.test(k.raw) ? 'it was revoked' : /expired/i.test(k.raw) ? 'it has expired' : null) : k.valid ? null : k.reason || 'it gave no reason';
+function acCheckKey(id) {
+  const k0 = st.userKeys.find(x => x.id === id); if (!k0) return;
+  const why = acVerdict(k0);
+  db.update('userKeys', id, k => { k.check = 'checking'; k.valid = false; delete k.reason; k.sub = `${keyMask(k)} · Checking with ${kinfo(k).provider}…`; });
+  setTimeout(() => {
+    if (DISPOSED) return;
+    const k = st.userKeys.find(x => x.id === id); if (!k || k.check !== 'checking') return;
+    db.update('userKeys', id, r => { delete r.check; r.valid = !why; if (why) { r.reason = why; r.sub = `${keyMask(r)} · Rejected by the provider`; } else r.sub = `${keyMask(r)} · Added ${kinfo(r).added === 'Just now' ? 'just now' : kinfo(r).added}`; });
+    renderKeepFocus();
+  }, AC_CHECK_MS);
+}
+/* Add key / Replace key in the key dialog, on the first-run page, or wherever key-save is pressed */
+function acSaveKey(v) {
+  const rp = st.keyMode === 'replace' && st.userKeys.find(x => x.id === st.keyFor), prov = provOf(v);
+  if (rp) {
+    db.update('userKeys', rp.id, k => { Object.assign(k, { raw: v, provider: prov, added: 'Just now', last: 'Never', used: 0, sub: `${maskOf(v)} · Added just now` }); });
+    acCheckKey(rp.id); return rp.id;
+  }
+  const id = 'k' + Date.now().toString(36), n = st.userKeys.length + 1;
+  db.push('userKeys', { id, kind: 'key', raw: v, label: st.keyName.trim() || `API key ${n}`, sub: `${maskOf(v)} · Added just now`, valid: false, provider: prov, added: 'Just now', last: 'Never', used: 0, cap: +st.keyCap || 0 });
+  acCheckKey(id);
+  if (st.onb) patch('onb', o => { o.key = id; });
+  return id;
+}
+function acRevoke(id) {
+  const k = st.userKeys.find(x => x.id === id); st.modal = null; if (!k) return;
+  const pays = acPays(id);
+  db.remove('userKeys', id); stToggle('srcSel', id, false);
+  /* the space's extra tokens lose their key; Manage › Settings shows that state */
+  pays.forEach(s => spEdit(s.id, x => { x.key = null; }));
+  toast(pays.length ? `Revoked ${esc(k.label)}. Asks in ${pays.map(spName).join(', ')} now use each asker’s own API key.` : `Revoked ${esc(k.label)}.`);
+}
+
+/* ---- Account ---- */
+const AC_TYPES = [
+  ['replies', 'Replies to your asks', 'Someone replies to a thread you started.'],
+  ['followups', 'Follow-ups', 'Someone asks a follow-up on your thread or under your follow-up.'],
+  ['reqs', 'Join requests', 'Someone asks to join a space you moderate.', true],
+  ['reports', 'Reports', 'Someone reports a post, reply or source in a space you moderate.', true],
+  ['pages', 'Page edits', 'Someone edits a page in the About tab of a space you joined.'],
+];
+const AC_LV = [['all', 'All'], ['mentions', 'Mentions and replies'], ['off', 'Off']];
+DD_SET.acSp = (v, sid) => db.set('acct', a => { a.spaces[sid] = v; });
+const acSw = (attr, on, label) => `<label class="ts-sw"><input type="checkbox" ${attr} ${on ? 'checked' : ''} aria-label="${label}"><span class="sw-track" aria-hidden="true"></span></label>`;
+function layoutAccount() {
+  const wrap = h => `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page ak-page ac-page"><div class="sub-top"><h2>Account</h2></div>${h}</div></div>`;
+  if (st.auth !== 'in') return wrap(acOutNote('Log in to change your account settings.'));
+  const a = D.acct, mod = acModerates();
+  const nrow = ([k, l, d]) => `<div class="ac-nrow"><span class="ac-ntx"><b>${l}</b><small>${d}</small></span>${acSw(`data-acnt="${k}"`, a.types[k], l)}</div>`;
+  const email = `<div class="ac-row"><span class="ac-v">${esc(a.email)}</span><button class="btn sm" type="button" data-acx="email">Change</button></div>${a.emailNew ? `<div class="cs-strip ac-note" role="status">${AC_I.mail}<span class="grow">We sent a confirmation link to <b>${esc(a.emailNew)}</b>. Your email changes when you open it.</span><button class="btn sm" type="button" data-acx="email-cancel">Cancel change</button></div>` : ''}`;
+  const types = AC_TYPES.filter(t => !t[3]).map(nrow).join('') + (mod ? `<h4 class="ac-grp">In spaces you moderate</h4>${AC_TYPES.filter(t => t[3]).map(nrow).join('')}` : '')
+    + `<h4 class="ac-grp">Delivery</h4><div class="ac-nrow"><span class="ac-ntx"><b>Email</b><small>Also send these notifications to ${esc(a.email)}.</small></span>${acSw('data-acnt="email"', a.emailOn, 'Email')}</div>`;
+  const spaces = D.spaces.filter(s => D.joined.includes(s.id));
+  const bySpace = spaces.length ? spaces.map(s => `<div class="ac-sprow">${glyph(s)}<span class="ac-spn" id="ac-spl-${s.id}">${spName(s)}</span>${ddSel('acSp.' + s.id, AC_LV, a.spaces[s.id] || 'all', 'ac-spl-' + s.id)}</div>`).join('') : '<p class="muted">You have not joined any spaces.</p>';
+  const exp = a.exportAt ? `<p class="ac-done" role="status">${I.check}<span>Export requested ${esc(a.exportAt)}. We’ll email you a download link at ${esc(a.email)}.</span></p>` : '<div><button class="btn" type="button" data-acx="export">Export your data</button></div>';
+  const secs = stSec('Email', 'Used for notification emails and data exports. Other people can’t see it.', email)
+    + `<div id="ac-notifs" class="ac-anchor"></div>` + stSec('Notifications', 'Which events send you a notification.', types)
+    + stSec('Notifications by space', 'All: every type above. Mentions and replies: only replies, follow-ups and mentions of you. Off: nothing from that space.', bySpace)
+    + stSec('Export your data', 'A copy of your profile, threads, follow-ups, likes, saved items and settings.', exp)
+    + `<div class="ac-danger">${stSec('Delete account', 'Deletes your profile, likes, saved items, API keys and settings. This can’t be undone.', '<div><button class="btn danger" type="button" data-acx="delete">Delete account</button></div>')}</div>`;
+  return wrap(`<div class="cs-set st-side ac-set">${secs}</div>`);
+}
+/* the Account page with the notification settings at the top of the view */
+function acToNotifs() {
+  const a = $('app'), el = $('ac-notifs'); if (!a || !el) return;
+  a.scrollTop += el.getBoundingClientRect().top - a.getBoundingClientRect().top - 8;
+}
+
+/* ---- profiles: More (Mute, Block, Report) and the states they leave ---- */
+function acPfMore() {
+  if (isSelf() || st.auth !== 'in') return '';
+  const u = st.profileUser, k = 'pf:' + u, open = st.csMenu === k, m = D.muted.has(u), b = D.blocked.has(u);
+  const it = (v, icon, label) => `<button class="um-item" type="button" role="menuitem" data-acpf="${v}">${icon}<span>${label}</span></button>`;
+  return `<div class="cs-mw ac-pfm"><button class="btn cs-b cs-ib" type="button" data-csmenu="${k}" aria-haspopup="true" aria-expanded="${open}" aria-label="More for ${esc(u)}" title="More">${SFI.more}</button>${open ? `<div class="um-scrim cs-scrim"></div><div class="pop cs-pop" role="menu" aria-label="${esc(u)}">${it(m ? 'unmute' : 'mute', CI.eyeOff, `${m ? 'Unmute' : 'Mute'} ${esc(u)}`)}${it(b ? 'unblock' : 'block', AC_I.block, `${b ? 'Unblock' : 'Block'} ${esc(u)}`)}${it('report', SFI.flag, `Report ${esc(u)}`)}</div>` : ''}</div>`;
+}
+function acPfState() {
+  if (isSelf() || st.auth !== 'in') return '';
+  const u = esc(st.profileUser), strip = (ic, txt, v, l) => `<div class="cs-strip ac-pfst" role="status">${ic}<span class="grow">${txt}</span><button class="btn sm" type="button" data-acpf="${v}">${l}</button></div>`;
+  if (D.blocked.has(st.profileUser)) return strip(AC_I.block, `You blocked ${u}. They can’t reply to your threads or follow-ups or see your profile, and their threads don’t show on your Home.`, 'unblock', 'Unblock');
+  if (D.muted.has(st.profileUser)) return strip(CI.eyeOff, `You muted ${u}. Their threads don’t show on your Home. ${u} isn’t notified.`, 'unmute', 'Unmute');
+  return '';
+}
+const AC_WHY = [['spam', 'Spam', 'Advertising, repeated posts or fake engagement.'], ['harass', 'Harassment', 'Abuse aimed at you or at someone else.'], ['imperson', 'Impersonation', 'The account pretends to be another person or an organization.'], ['other', 'Other', 'Something else. Describe it in the note.']];
+function acSetMute(u, on, undo) {
+  db.toggle('muted', u, on);
+  toast(on ? `You muted ${esc(u)}. Their threads don’t show on your Home.` : `You unmuted ${esc(u)}.`, undo ? `ac-undo:${on ? 'unmute' : 'mute'}:${u}` : null, 'Undo');
+}
+function acSetBlock(u, on, undo) {
+  db.toggle('blocked', u, on);
+  toast(on ? `You blocked ${esc(u)}.` : `You unblocked ${esc(u)}.`, undo ? `ac-undo:${on ? 'unblock' : 'block'}:${u}` : null, 'Undo');
+}
+
+/* ---- dialogs ---- */
+function acModal() {
+  const [k, a] = st.modal.split(/:(.*)/s);
+  if (k === 'ac-signup') return signinDialog('signup');
+  if (k === 'ac-sierr') return signinDialog(a, true);
+  if (k === 'ac-email') return dlg('Change email', `<label class="fld"><span>New email</span><input id="ac-email-in" type="email" autocomplete="email" spellcheck="false" value="${esc(st.acEmail)}"></label>${st.acEmailErr ? `<p class="ts-err" role="alert">${st.acEmailErr}</p>` : ''}<p class="cs-fine">${AC_I.mail}<span>We send a confirmation link to the new address. Your email changes when you open it.</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-acx="email-save">Send link</button>`);
+  if (k === 'ac-export') return dlg('Export your data?', '<p class="muted">The export has your profile, threads, follow-ups, likes, saved items and settings. It does not include your API keys. Preparing it can take up to a day.</p>', `${cancelB()}<button class="btn primary" type="button" data-acx="export-ok">Request export</button>`);
+  if (k === 'ac-delete') {
+    const pays = st.userKeys.flatMap(x => acPays(x.id));
+    return dlg('Delete your account?', `<p class="muted">Session deletes your profile, likes, saved items, API keys and settings. Your threads and follow-ups stay in their spaces, shown as from a deleted account. This can’t be undone.</p>${pays.length ? `<p class="cs-fine">${MI.key}<span>Your keys pay for the extra tokens in ${pays.map(spName).join(', ')}. After you delete your account, asks there use each asker’s own API key.</span></p>` : ''}<label class="fld"><span>Type your handle, ${ME.u}, to confirm</span><input id="ac-del-in" type="text" autocomplete="off" spellcheck="false" value="${esc(st.acDel)}"></label>`, `${cancelB()}<button class="btn danger" type="button" data-acx="delete-ok" ${st.acDel.trim() === ME.u ? '' : 'disabled'}>Delete account</button>`, 'alertdialog');
+  }
+  if (k === 'ac-block') return dlg(`Block ${esc(a)}?`, `<p class="muted">${esc(a)} can’t reply to your threads or follow-ups and can’t see your profile. Their threads stop showing on your Home. ${esc(a)} isn’t notified.</p><p class="cs-fine">${SFI.flag}<span>To tell the Session team about abuse, also report the account.</span></p>`, `${cancelB()}<button class="btn danger" type="button" data-acpf="blockok">Block</button>`, 'alertdialog');
+  if (k === 'ac-report') {
+    const r = st.acRep || { why: 'spam', note: '' };
+    return dlg(`Report ${esc(a)}`, `<div class="ts-list cs-opts" role="radiogroup" aria-label="Reason">${AC_WHY.map(([v, l, d]) => optRow('data-acwhy', v, r.why === v, l, d)).join('')}</div>
+      <label class="fld"><span>Note <small class="faint">optional</small></span><textarea id="ac-repnote" class="cs-ta" rows="3" placeholder="Links to threads or replies help">${esc(r.note)}</textarea></label>
+      <p class="cs-fine">${CI.users}<span>The Session team sees your report, your note and your handle. ${esc(a)} isn’t notified.</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-acrepsend="${esc(a)}">Send report</button>`);
+  }
+  return '';
+}
+{ const AC_csModal = csModal; csModal = function () { return (st.modal || '').startsWith('ac-') ? acModal() : AC_csModal(); }; }
+
+/* ---- pages, addresses, the notifications page header ---- */
+CS_PAGES.account = layoutAccount;
+CS_PAGES.welcome = layoutOnb;
+CS_SUBNAME.account = 'Account';
+CS_SUBNAME.welcome = 'Welcome';
+{ const AC_csUrl = csUrl; csUrl = function () { if (st.subPage === 'account') return 'session.app/settings/account'; if (st.subPage === 'welcome') return 'session.app/welcome'; return AC_csUrl(); }; }
+{ const AC_layoutNotifs = layoutNotifs; layoutNotifs = CS_PAGES.notifs = function () {
+  const h = AC_layoutNotifs(), set = `<button class="btn ac-nset" type="button" data-acnset="1" aria-label="Notification settings" title="Notification settings">${MI.cog}<span class="d-only">Settings</span></button>`;
+  return h.replace(/(<div class="sub-top"><h2>Notifications<\/h2>)(.*?)(<\/div><div class="sv-chips">)/s, (_, a, b, c) => `${a}<span class="ys-acts">${b}${set}</span>${c}`);
+}; }
+
+/* ---- clicks and typing ---- */
+on($('app'), 'click', e => {
+  if (st.device === 'native') return;
+  const t = e.target, d = sel => t.closest && t.closest(sel); let b;
+  /* a control of this block: the other click handlers do not run for it */
+  const go = () => { e.stopImmediatePropagation(); renderAll(); };
+  const clearToast = () => { if (st.toast && !d('.cs-toast')) st.toast = null; };
+  if ((b = d('[data-cstoast^="ac-undo:"]'))) { const [, v, u] = b.dataset.cstoast.split(':'); st.toast = null; if (v === 'mute' || v === 'unmute') acSetMute(u, v === 'mute', false); else acSetBlock(u, v === 'block', false); return go(); }
+  if ((b = d('[data-acpf]'))) {
+    clearToast(); const v = b.dataset.acpf, u = st.profileUser; st.csMenu = null;
+    if (v === 'mute' || v === 'unmute') acSetMute(u, v === 'mute', true);
+    if (v === 'block') st.modal = 'ac-block:' + u;
+    if (v === 'blockok') { st.modal = null; acSetBlock(u, true, true); }
+    if (v === 'unblock') acSetBlock(u, false, true);
+    if (v === 'report') Object.assign(st, { modal: 'ac-report:' + u, acRep: { why: 'spam', note: '' } });
+    return go();
+  }
+  if ((b = d('[data-acwhy]'))) { patch('acRep', r => { r.why = b.dataset.acwhy; }); return go(); }
+  if ((b = d('[data-acrepsend]'))) { st.modal = null; st.acRep = null; toast('Report sent. The Session team reviews it.'); return go(); }
+  if ((b = d('[data-acnset]'))) { clearToast(); Object.assign(st, NAVBASE(), { subPage: 'account' }); go(); acToNotifs(); return; }
+  if ((b = d('[data-acnt]'))) { const k = b.dataset.acnt, on = b.checked; db.set('acct', a => { if (k === 'email') a.emailOn = on; else a.types[k] = on; }); return go(); }
+  if ((b = d('[data-acx]'))) {
+    clearToast(); const v = b.dataset.acx;
+    if (v === 'email') Object.assign(st, { modal: 'ac-email', acEmail: '', acEmailErr: '' });
+    if (v === 'email-save') {
+      const x = st.acEmail.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)) st.acEmailErr = x ? 'Enter a full email address, like name@example.com.' : 'Enter the new email address.';
+      else if (x === D.acct.email) st.acEmailErr = 'This is already your email.';
+      else { db.set('acct', a => { a.emailNew = x; }); st.modal = null; }
+    }
+    if (v === 'email-cancel') db.set('acct', a => { a.emailNew = null; });
+    if (v === 'export') st.modal = 'ac-export';
+    if (v === 'export-ok') { db.set('acct', a => { a.exportAt = 'just now'; }); st.modal = null; toast('We’ll email you a download link.'); }
+    if (v === 'delete') Object.assign(st, { modal: 'ac-delete', acDel: '' });
+    if (v === 'delete-ok') { if (st.acDel.trim() !== ME.u) return go(); acSignOut(true); st.acctGone = true; toast('Your account is deleted.'); }
+    go();
+    if (v === 'email-save' && st.modal) { const f = $('ac-email-in'); if (f) f.focus(); }
+    return;
+  }
+  if ((b = d('[data-onb]'))) {
+    const v = b.dataset.onb, o = st.onb; if (!o) return;
+    if (v === 'next') patch('onb', x => { x.step = Math.min(2, x.step + 1); });
+    if (v === 'back') patch('onb', x => { x.step = Math.max(0, x.step - 1); });
+    if (v === 'cancel') { acSignOut(true); toast('Session did not create an account.'); }
+    if (v === 'done') { db.set('joined', [...o.picks]); Object.assign(st, NAVBASE(), { home: true, onb: null, acctGone: false, keyErr: '' }); toast(`You joined ${o.picks.length} space${o.picks.length === 1 ? '' : 's'}. Their threads show on your Home.`); }
+    go(); const a = $('app'); if (a) a.scrollTop = 0;
+    return;
+  }
+  if ((b = d('[data-onbsp]'))) { const id = b.dataset.onbsp; patch('onb', x => { x.picks = x.picks.includes(id) ? x.picks.filter(y => y !== id) : [...x.picks, id]; }); return go(); }
+  if (t.id === 'onb-terms') { patch('onb', x => { x.terms = t.checked; }); return go(); }
+  if ((b = d('[data-akcheck]'))) { clearToast(); acCheckKey(b.dataset.akcheck); return go(); }
+  if ((b = d('[data-akrep]'))) { clearToast(); Object.assign(st, { addingKey: true, keyDraft: '', keyName: '', keyErr: '', keyShow: false, renaming: null, keyMode: 'replace', keyFor: b.dataset.akrep, modal: 'addkey' }); return go(); }
+  if ((b = d('[data-akcap]'))) { clearToast(); const k = st.userKeys.find(x => x.id === b.dataset.akcap); Object.assign(st, { renaming: null, keyMode: 'limit', keyFor: k.id, keyCap: String(kinfo(k).cap || 0), modal: 'addkey' }); return go(); }
+  if ((b = d('[data-akcapsave]'))) { const id = b.dataset.akcapsave, cap = +st.keyCap || 0; db.update('userKeys', id, k => { k.cap = cap; }); Object.assign(st, { modal: null, keyMode: 'add', keyFor: null, dd: null }); toast(cap ? `Limit set: ${fmtT(cap)} tokens a month.` : 'Limit removed.'); return go(); }
+});
+on($('app'), 'input', e => {
+  if (st.device === 'native') return;
+  const id = e.target.id, v = e.target.value;
+  if (id === 'ac-email-in') { st.acEmail = v; if (st.acEmailErr) { st.acEmailErr = ''; const er = document.querySelector('.modal .ts-err'); if (er) er.remove(); } }
+  if (id === 'ac-del-in') { st.acDel = v; const b = document.querySelector('[data-acx="delete-ok"]'); if (b) b.disabled = v.trim() !== ME.u; }
+  if (id === 'ac-repnote') patch('acRep', r => { r.note = v; });
+});
+on(document, 'keydown', e => {
+  if (e.key !== 'Enter' || st.device === 'native') return;
+  if (e.target.id === 'ac-email-in') { e.preventDefault(); const b = document.querySelector('[data-acx="email-save"]'); if (b) b.click(); }
+  if (e.target.id === 'ac-del-in') { e.preventDefault(); const b = document.querySelector('[data-acx="delete-ok"]'); if (b && !b.disabled) b.click(); }
+}, true);
+
+/* ---- Screen entries ---- */
+JUMPS.push(['Accounts and keys', [
+  ['ac-signup', 'Sign up'], ['ac-si-err', 'Couldn’t sign in with X'], ['ac-onb-terms', 'First run: accept the terms'], ['ac-onb-spaces', 'First run: join spaces'], ['ac-onb-key', 'First run: add an API key or skip'],
+  ['ac-signout-keys', 'Sign out from API keys'], ['ac-out-profile', 'Your profile, signed out'],
+  ['ac-keys', 'API keys: usage, limits, a rejected key'], ['ac-key-add', 'Add a key with a monthly limit'], ['ac-key-checking', 'Key check with the provider'], ['ac-key-replace', 'Replace a rejected key'], ['ac-key-limit', 'Change a key’s monthly limit'], ['ac-revoke-paid', 'Revoke a key that pays for a space'],
+  ['ac-account', 'Account'], ['ac-notif-settings', 'Notification settings'], ['ac-notifs-link', 'Notifications: link to settings'], ['ac-email', 'Change email'], ['ac-email-pending', 'Email change waiting for confirmation'], ['ac-export', 'Export your data'], ['ac-export-done', 'Export requested'], ['ac-delete', 'Delete account'],
+  ['ac-pf-more', 'Profile: More (Mute, Block, Report)'], ['ac-pf-muted', 'Profile: muted'], ['ac-pf-block', 'Block an account'], ['ac-pf-blocked', 'Profile: blocked'], ['ac-pf-report', 'Report an account'],
+]]);
+function acJump(k) {
+  /* each screen starts from the seeded keys, settings, mutes and blocks */
+  db.set('userKeys', structuredClone(ST0.userKeys));
+  db.set('acct', structuredClone(FIXTURES.acct)); db.set('muted', new Set()); db.set('blocked', new Set());
+  spEdit('math', s => { s.byok = ME.u; s.key = 'k1'; });
+  Object.assign(st, { onb: null, acctGone: false, keyMode: 'add', keyFor: null, keyCap: '0', keyDraft: '', keyName: '', keyErr: '', keyShow: false, addingKey: false, renaming: null, acEmail: '', acEmailErr: '', acDel: '', acRep: null, dd: null, keyNew: null });
+  const onb = (step, x) => Object.assign(st, { subPage: 'welcome', onb: { step, terms: step > 0, picks: step > 1 ? ['public', 'scifi', 'history'] : step ? ['scifi'] : [], key: null, ...x } });
+  const prof = u => Object.assign(st, { profilePage: true, profileUser: u, ptab: 'threads' });
+  const keys = x => Object.assign(st, { subPage: 'keys' }, x);
+  const acct = x => Object.assign(st, { subPage: 'account' }, x);
+  switch (k) {
+    case 'ac-signup': Object.assign(st, { auth: 'out', home: true, modal: 'ac-signup' }); break;
+    case 'ac-si-err': Object.assign(st, { auth: 'out', home: true, modal: 'ac-sierr:login' }); break;
+    case 'ac-onb-terms': onb(0); break;
+    case 'ac-onb-spaces': onb(1); break;
+    case 'ac-onb-key': onb(2); st.keyDraft = ''; break;
+    case 'ac-signout-keys': keys({ modal: 'signout' }); break;
+    case 'ac-out-profile': st.auth = 'out'; prof(ME.u); break;
+    case 'ac-keys': keys(); break;
+    case 'ac-key-add': keys({ modal: 'addkey', addingKey: true, keyDraft: 'sk-ant-api03-Xr7qL2mN8vB4kW9dT1fS6hJ3', keyName: 'Work key', keyCap: '1000000' }); break;
+    case 'ac-key-checking': db.push('userKeys', { id: 'k3', kind: 'key', raw: 'sk-ant-api03-Xr7qL2mN8vB4kW9dT1fS6hJ3', label: 'Work key', sub: 'sk-ant-…6hJ3 · Checking with Anthropic…', valid: false, check: 'checking', provider: 'Anthropic', added: 'Just now', last: 'Never', used: 0, cap: 1e6 }); keys(); break;
+    case 'ac-key-replace': keys({ modal: 'addkey', addingKey: true, keyMode: 'replace', keyFor: 'k0' }); break;
+    case 'ac-key-limit': keys({ modal: 'addkey', keyMode: 'limit', keyFor: 'k2', keyCap: '1000000' }); break;
+    case 'ac-revoke-paid': keys({ modal: 'revoke:k1' }); break;
+    case 'ac-account': acct(); break;
+    case 'ac-notif-settings': acct(); requestAnimationFrame(acToNotifs); break;
+    case 'ac-notifs-link': st.subPage = 'notifs'; break;
+    case 'ac-email': acct({ modal: 'ac-email', acEmail: 'ines.v@work.example' }); break;
+    case 'ac-email-pending': db.set('acct', a => { a.emailNew = 'ines.v@work.example'; }); acct(); break;
+    case 'ac-export': acct({ modal: 'ac-export' }); break;
+    case 'ac-export-done': db.set('acct', a => { a.exportAt = 'just now'; }); acct(); toast('We’ll email you a download link.'); break;
+    case 'ac-delete': acct({ modal: 'ac-delete', acDel: 'ines' }); break;
+    case 'ac-pf-more': prof('hal_b'); st.csMenu = 'pf:hal_b'; break;
+    case 'ac-pf-muted': db.set('muted', new Set(['hal_b'])); prof('hal_b'); break;
+    case 'ac-pf-block': prof('hal_b'); st.modal = 'ac-block:hal_b'; break;
+    case 'ac-pf-blocked': db.set('blocked', new Set(['hal_b'])); prof('hal_b'); break;
+    case 'ac-pf-report': prof('hal_b'); Object.assign(st, { modal: 'ac-report:hal_b', acRep: { why: 'harass', note: '' } }); break;
+  }
+}
+{ const AC_jump = jump; jump = function (k) { AC_jump(k); if (String(k).startsWith('ac-') && dataReady()) acJump(k); }; }
+/* ==== end of accounts, API keys and profiles ==== */
+
 buildJump();
 /* End of start-up: the fixtures are complete. Copy them as the mock backend's seed data, start loading
    the data store over HTTP, and move the Variants bar's keys from the UI store to the mockup store. */
@@ -9576,13 +10005,14 @@ on($('app'), 'click', e => {
   const jo = t.closest('[data-spjoin-ok]'); if (jo) { const id = jo.dataset.spjoinOk; joinSpace(id); st.modal = null; toast(`You joined ${spName(sp(id))}.`); renderAll(); return; }
   const lo = t.closest('[data-spleave-ok]'); if (lo) { const id = lo.dataset.spleaveOk; leaveSpace(id); st.modal = null; toast(`You left ${spName(sp(id))}.`); renderAll(); return; }
   const rv = t.closest('[data-revoke]'); if (rv) { st.modal = 'revoke:' + rv.dataset.revoke; renderAll(); return; }
-  const rvc = t.closest('[data-act="revoke-confirm"]'); if (rvc) { const id = st.modal.split(':')[1]; st.userKeys = st.userKeys.filter(k => k.id !== id); stToggle('srcSel', id, false); st.modal = null; renderAll(); return; }
+  const rvc = t.closest('[data-act="revoke-confirm"]'); if (rvc) { acRevoke(st.modal.split(':')[1]); renderAll(); return; }
   const tmv2 = t.closest('[data-tabmove]'); if (tmv2) { const [id, d] = tmv2.dataset.tabmove.split(':'); const ids = st.tabOrder.length ? [...st.tabOrder] : defaultTabOrder(); const k = ids.indexOf(id), n = k + +d; if (n >= 0 && n < ids.length) { [ids[k], ids[n]] = [ids[n], ids[k]]; st.tabOrder = ids; } renderAll(); return; }
   const tsh = t.closest('[data-tabshow]'); if (tsh) { stToggle('tabHidden', tsh.dataset.tabshow); renderAll(); return; }
   const so2 = t.closest('[data-signout]'); if (so2) { st.modal = 'signout'; st.umenu = false; renderAll(); return; }
   const sib = t.closest('[data-act="signin"]'); if (sib) { st.modal = 'signin'; st.pop = false; renderAll(); return; }
-  const six = t.closest('[data-act="signin-x"]'); if (six) { st.auth = 'in'; st.modal = null; renderAll(); return; }
-  const soc = t.closest('[data-act="signout-confirm"]'); if (soc) { st.auth = 'out'; st.modal = null; renderAll(); return; }
+  const sup = t.closest('[data-act="signup"]'); if (sup) { st.modal = 'ac-signup'; st.pop = false; renderAll(); return; }
+  const six = t.closest('[data-act="signin-x"]'); if (six) { acSignedIn(); renderAll(); return; }
+  const soc = t.closest('[data-act="signout-confirm"]'); if (soc) { acSignOut(); renderAll(); return; }
   const apb = t.closest('[data-appearance]'); if (apb) { st.appearance = apb.dataset.appearance; try { localStorage.setItem('session-web-appearance', st.appearance); } catch (e) {} renderAll(); return; }
   const sv = t.closest('[data-sview]'); if (sv) { st.savedView = sv.dataset.sview; renderAll(); return; }
   const pt = t.closest('[data-ptab]'); if (pt) { st.ptab = pt.dataset.ptab; renderAll(); return; }
@@ -9598,7 +10028,7 @@ on($('app'), 'click', e => {
   const a = t.closest('[data-act]');
   if (a && ['key-open', 'key-cancel', 'key-save', 'key-show'].includes(a.dataset.act)) {
     const k = a.dataset.act, onPage = st.subPage === 'keys';
-    if (k === 'key-open') { Object.assign(st, { addingKey: true, keyDraft: '', keyName: '', keyErr: '', keyShow: false, renaming: null }); if (onPage) st.modal = 'addkey'; }
+    if (k === 'key-open') { Object.assign(st, { addingKey: true, keyDraft: '', keyName: '', keyErr: '', keyShow: false, renaming: null, keyMode: 'add', keyFor: null, keyCap: '0' }); if (onPage) st.modal = 'addkey'; }
     if (k === 'key-cancel') { st.addingKey = false; st.keyErr = ''; if (st.modal === 'addkey') st.modal = null; }
     if (k === 'key-show') st.keyShow = !st.keyShow;
     if (k === 'key-save') {
@@ -9606,10 +10036,8 @@ on($('app'), 'click', e => {
       if (!KEY_RE.test(v)) st.keyErr = v ? 'That key is not valid. Anthropic, OpenAI and OpenRouter keys start with sk-; Gemini keys start with AIza.' : 'Paste a key first.';
       else if (st.userKeys.some(x => x.raw === v)) st.keyErr = 'This key has already been added.';
       else {
-        const id = 'k' + Date.now().toString(36), n = st.userKeys.length + 1;
-        KEYINFO[id] = { provider: provOf(v), added: 'Just now', last: 'Never', used: 0, cap: 0 };
-        db.push('userKeys', { id, kind: 'key', raw: v, label: st.keyName.trim() || `API key ${n}`, sub: `${maskOf(v)} · Added just now`, valid: true });
-        Object.assign(st, { addingKey: false, keyErr: '', keyNew: id, modal: st.modal === 'addkey' ? null : st.modal });
+        const id = acSaveKey(v);
+        Object.assign(st, { addingKey: false, keyErr: '', keyNew: id, keyMode: 'add', keyFor: null, modal: st.modal === 'addkey' ? null : st.modal });
       }
     }
     renderAll(); st.keyNew = null;
@@ -9617,7 +10045,7 @@ on($('app'), 'click', e => {
     return;
   }
   const rnb = t.closest('[data-rename]'); if (rnb) { const k = st.userKeys.find(x => x.id === rnb.dataset.rename); Object.assign(st, { renaming: k.id, renameDraft: k.label, addingKey: false }); renderAll(); const r = $('rn-in'); if (r) { r.focus(); r.select(); } return; }
-  if (a && (a.dataset.act === 'rn-save' || a.dataset.act === 'rn-cancel')) { if (a.dataset.act === 'rn-save') { const k = st.userKeys.find(x => x.id === st.renaming), v = st.renameDraft.trim(); if (k && v) k.label = v; } st.renaming = null; renderAll(); return; }
+  if (a && (a.dataset.act === 'rn-save' || a.dataset.act === 'rn-cancel')) { if (a.dataset.act === 'rn-save') { const v = st.renameDraft.trim(); if (v) db.update('userKeys', st.renaming, k => { k.label = v; }); } st.renaming = null; renderAll(); return; }
   if (a && ['comp-close', 'discard', 'modal-close'].includes(a.dataset.act)) {
     const k = a.dataset.act;
     if (k === 'comp-close') { if (st.draft.trim()) st.modal = 'discard'; else { st.compOpen = false; } }
