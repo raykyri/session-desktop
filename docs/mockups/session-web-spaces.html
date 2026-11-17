@@ -4455,7 +4455,7 @@ const OPTIONS = [
   { id: 'b', label: 'B', name: 'Strip + sidebar, banner', blurb: 'Space tabs in the header; banner at the top of the main column; flush wiki panel.', auth: 'in',
     note: 'Space tabs in the header. A banner across the top of the main column: icon, name, description and Join. The wiki is one full-height panel against the right edge that collapses to a narrow strip; Join stays in the banner so it is reachable when the wiki is collapsed.' },
 ];
-Object.assign(st, { opt: 'b', space: 'public', auth: 'in', pop: false, drawer: true, mode: 'ask', compOpen: false, draft: '', home: true, homeView: 'feed', savedPage: false, profilePage: false, profileUser: 'ines.v', ptab: 'threads', thread: null, srcWeb: true, addingKey: false, keyDraft: '', keyErr: '', srcSel: new Set(['space:public']), subPage: null, ysEdit: false, keyName: '', keyShow: false, renaming: null, renameDraft: '', keyNew: null, tabOrder: [], tabHidden: new Set(), modal: null, savedView: 'list', savedFilter: 'all', savedSel: 0, umenu: false, appearance: 'system', sort: 'Latest', sortOpen: false, thV: 'docsrc', spOpen: false, device: 'desktop', mnav: 'chips', mWiki: false, tint: 'warmlo', shV: 'd', model: 'argon', mpOpen: false, shell: 'tabs2', kindF: 'all', compSpace: null, srcSpace2: null });
+Object.assign(st, { opt: 'b', space: 'public', auth: 'in', pop: false, drawer: true, mode: 'ask', compOpen: false, draft: '', home: true, homeView: 'feed', savedPage: false, profilePage: false, profileUser: 'ines.v', ptab: 'threads', thread: null, srcWeb: true, addingKey: false, keyDraft: '', keyErr: '', srcSel: new Set(['space:public']), subPage: null, ysEdit: false, keyName: '', keyShow: false, renaming: null, renameDraft: '', keyNew: null, tabOrder: [], tabHidden: new Set(), modal: null, savedView: 'list', savedFilter: 'all', savedSel: 0, umenu: false, appearance: 'system', sort: 'Latest', sortOpen: false, thV: 'docsrc', spOpen: false, device: 'desktop', mnav: 'chips', mWiki: false, tint: 'warmwc', shV: 'd', model: 'argon', mpOpen: false, shell: 'tabs2', kindF: 'all', compSpace: null, srcSpace2: null });
 try { const ap = localStorage.getItem('session-web-appearance'); if (ap === 'light' || ap === 'dark' || ap === 'system') st.appearance = ap; } catch (e) {}
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -5183,7 +5183,7 @@ function seg(el, items, key, onPick) {
 const toThread = () => { if (st.thread == null) { const i = tidWhere(p => p.k === 'ask' && D.rich[p.id] && p.s === 'markets'); Object.assign(st, { thread: i == null ? TID(0) : i, savedPage: false, profilePage: false, subPage: null, auth: 'in', modal: null, umenu: false }); } };
 const KNOBDEF = () => [
   ['k-dir', 'shell', [['tabs2', 'Header'], ['rail', 'Left rail']], () => { st.umenu = false; st.pop = false; }],
-  ['k-tint', 'tint', [['warmlo', 'Beige'], ['warmwc', 'Beige chrome', '1'], ['sagewc', 'Sage']]],
+  ['k-tint', 'tint', [['warmwc', 'Beige'], ['sagewc', 'Sage']]],
   ['k-font', 'font', [['inter', 'Inter'], ['valley', 'Valley Sans']]],
   /* Token model: who pays for asks. Labels carry their own letters (A–D), as the Screen entries name them. */
   ...(typeof CSKNOBS === 'function' ? CSKNOBS() : []),
@@ -5203,8 +5203,8 @@ function renderControls() {
   seg($('k-api'), [['normal', '120ms'], ['fail', 'Fail'], ['failload', 'Fail on load']], 'apiMode', applyApiMode);
   /* the Sources layout control has no effect in the phone app */
   { const k = $('kw-sources'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
-  /* the Phone app always uses the base Beige, so the Tint control has no effect there */
-  { const k = $('k-tint') && $('k-tint').closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
+  /* the Phone app always uses the base Beige and has its own navigation, so the Tint and Nav controls have no effect there */
+  for (const id of ['k-tint', 'k-dir']) { const k = $(id) && $(id).closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
   HOTKEYS = {}; let n = 0;
   for (const [el, key, items, pick] of KNOBDEF()) {
@@ -12524,7 +12524,7 @@ function applyTint() {
    - Green chrome: the header, rail and Phone bars are a pale green band with a green divider under it.
    - Green trim: the header and bars are white; green appears only as a top rule, underlines and selection. */
 Object.assign(TINTS, {
-  /* Beige chrome (C1): the Sage treatment in the Beige hue, derived in OKLCH (hue 78, trim hue 62) */
+  /* Beige (formerly Beige chrome, C1): the Sage treatment in the Beige hue, derived in OKLCH (hue 78, trim hue 62) */
   warmwc: { h: 72, m: 0.6, a: 0, vars: {
     light: { '--hdr-line': 'var(--divider)', '--page': '#f6f2ec', '--chrome': '#f6f2ec', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#faf7f3', '--card-sel': '#f6ecde', '--pop-btn': '#ffffff', '--pop-btn-b': '#e4ded6', '--pop-btn-h': '#f6f2ec', '--control': '#f5f2ed', '--control-hover': '#efebe4', '--control-border': '#e1dbd3', '--divider': '#e9e4dd', '--border-strong': '#e0dad1', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#976537', '--trim-line': '#e1c8b3', '--trim-soft': '#fbebdd', '--trim-ink': '#603f1f', '--trim-on': '#ffffff' },
     dark: { '--hdr-line': 'var(--divider)', '--page': '#13100c', '--chrome': '#13100c', '--pane': '#1c1915', '--feed': '#1a1713', '--card': '#23201b', '--field': '#24211d', '--popover': '#26221e', '--inset': '#1e1b17', '--card-sel': '#2c2417', '--pop-btn': '#292621', '--pop-btn-b': '#413d36', '--pop-btn-h': '#312d27', '--control': '#292621', '--control-hover': '#312d27', '--control-border': '#413d36', '--divider': '#302c27', '--border-strong': '#3a3630', '--seg-on': '#3e3a33', '--trim': '#d89d69', '--trim-line': '#604732', '--trim-soft': '#2f2216', '--trim-ink': '#f5c7a1', '--trim-on': '#1c1915', '--t-faint': '#928f8b' },
