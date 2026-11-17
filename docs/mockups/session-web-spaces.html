@@ -3490,6 +3490,49 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   .onb-hdr { padding: 12px 16px; }
   .onb-page { padding: 24px 16px 40px; }
 }
+/* ==== thread actions: edit and delete, replies to replies, citations, Share, the skill list, Thinking level ==== */
+.ta-ed { gap: 10px; }
+.th-main > .ta-ed, .qt-fuv > .ta-ed { margin: 2px 0; }
+.ta-run { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: var(--fs-sm); }
+.ta-run input { margin: 2px 0 0; accent-color: var(--accent); flex: none; }
+.ta-run span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ta-run b { font-weight: 550; color: var(--t-strong); }
+.ta-run small { color: var(--t-faint); font-size: var(--fs-xs); }
+.ta-gone { padding: 8px 12px; }
+.ta-gonepg { margin: 40px auto; max-width: 520px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.ta-gonepg p { margin: 0; }
+.ta-gonepg .btn { margin-top: 8px; }
+.rp-b > .ta-rpbox, .rp-b > .ta-ed { margin-top: 6px; }
+.rp-acts .ta-like { gap: 4px; color: var(--t-faint); }
+.rp-acts .ta-like:hover { color: var(--t-strong); }
+.rp-acts .ta-like[aria-pressed="true"] { color: var(--bad); }
+.rp-acts .ta-like[aria-pressed="true"] svg { fill: currentColor; }
+sup.ta-cite { cursor: pointer; }
+sup.ta-cite:hover, sup.ta-cite:focus-visible { color: var(--t-strong); background: var(--fill-hover); }
+sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+[data-tasrc] { cursor: pointer; border-radius: var(--r-md); transition: background-color .4s ease, box-shadow .4s ease; }
+[data-tasrc]:hover b { color: var(--t-strong); text-decoration: underline; text-underline-offset: 2px; }
+[data-tasrc].ta-hi { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent); }
+.ta-web { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--field); }
+.ta-web b { font-weight: 550; color: var(--t-strong); line-height: 1.4; overflow-wrap: anywhere; }
+.ta-web p { margin: 4px 0 0; font-size: var(--fs-sm); }
+.ta-web-k { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--t-faint); }
+.ta-web-k svg { width: 13px; height: 13px; }
+.ta-web-d { font-size: var(--fs-sm); color: var(--t-muted); }
+.ta-shw .ta-shpop { left: 0; right: auto; min-width: 180px; }
+.ta-shpop .xi { width: 14px; height: 14px; color: var(--t-muted); }
+.ta-skl { display: flex; flex-direction: column; max-height: 232px; overflow-y: auto; margin: 0 4px 2px -8px; padding: 4px 0 0; border-top: 1px solid var(--divider); scrollbar-width: thin; }
+.ta-skl .mp-h { padding-left: 8px; }
+.ta-sko { padding: 6px 8px; }
+.ta-sko[aria-selected="true"] { background: var(--fill-hover); }
+.ta-sko .ts-tx { display: flex; flex-direction: column; min-width: 0; }
+.ta-sko .ts-tx b { font-weight: 550; color: var(--t-strong); font-size: var(--fs-sm); }
+.ta-sko .ts-tx small { color: var(--t-faint); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ta-skl-none { margin: 4px 8px 6px; font-size: var(--fs-sm); color: var(--t-muted); }
+.mp-think { cursor: default; }
+.mp-think .mp-val { color: var(--t-muted); font-size: var(--fs-sm); }
+.cr-sk { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: var(--fs-xs); color: var(--t-faint); }
+/* ==== end thread actions ==== */
 </style>
 
 <div class="shell" id="shell">
@@ -4112,7 +4155,7 @@ function meter(s) {
 const miniMeter = s => `<span class="mini-ring ${lvl(s.pct)}" title="${pctS(s.pct)} of tokens used">${ring(s.pct, 14, 2.5)}</span>`;
 
 /* ---------------- posts ---------------- */
-function postsFor(id) { return D.posts.filter(p => p.s === id).sort((a, b) => ageMin(a.age) - ageMin(b.age)); }
+function postsFor(id) { return D.posts.filter(p => p.s === id && !p.gone).sort((a, b) => ageMin(a.age) - ageMin(b.age)); }
 function acts(p, withReply) {
   const id = D.posts.indexOf(p.orig || p), v = st.saved.has(id), l = st.liked.has(id);
   const reply = `<span class="act-n">${I.reply}<span class="num" aria-label="${replyCount(p)} ${p.k === 'ask' ? 'follow-ups' : 'replies'}">${replyCount(p)}</span></span>`;
@@ -4262,7 +4305,7 @@ L.b = layoutSpace;
 const ageMin = a => { if (a === 'now') return 0; const n = parseFloat(a); return a.endsWith('mo') ? n * 43200 : a.endsWith('w') ? n * 10080 : a.endsWith('m') ? n : a.endsWith('h') ? n * 60 : n * 1440; };
 const homePosts = () => {
   const ids = st.auth === 'in' ? D.joined : D.spaces.map(x => x.id);
-  return D.posts.filter(p => ids.includes(p.s) && canRead(sp(p.s)) && !acHides(p.u)).sort((a, b) => ageMin(a.age) - ageMin(b.age)).map(p => ({ ...p, tag: true, orig: p }));
+  return D.posts.filter(p => ids.includes(p.s) && canRead(sp(p.s)) && !acHides(p.u) && !p.gone).sort((a, b) => ageMin(a.age) - ageMin(b.age)).map(p => ({ ...p, tag: true, orig: p }));
 };
 const hrow = p => `<button class="hrow" type="button" data-space="${p.s}"><span class="hrow-t">${esc(p.t || p.q)}</span><span class="hrow-s">${esc(p.sum || (p.t ? p.q : ''))}</span><span class="hrow-m"><span class="num">${I.reply}${replyCount(p)}</span><span>${p.age}</span></span></button>`;
 const homeTitle = (h, sub) => `<div class="home-head"><h2>${h}</h2>${sub ? `<p>${sub}</p>` : ''}</div>`;
@@ -4378,7 +4421,7 @@ D.rp = {
       { u: 'sol', age: '9m', t: 'Confirmed, it is on the alpha known-issues page. A fix is in review.', kids: [{ u: 'hal_b', age: '6m', t: 'Thanks, I will watch the changelog.' }] }],
 };
 const rpFor = p => D.rp[D.posts.indexOf(p)] || (p.mine && p.age === 'now' ? [] : [{ u: 'jun.park', age: '1h', t: 'Thanks for posting this.' }, { u: 'lettie', age: '40m', t: 'Linked this from the wiki.', kids: [{ u: p.u, age: '30m', t: 'Great, thank you.' }] }]);
-const fuFor = p => p.running ? [] : (D.fu[D.posts.indexOf(p)] || FU_GENERIC.slice(0, Math.max(1, Math.min(2, p.r))));
+const fuFor = p => p.running && !D.fu[D.posts.indexOf(p)] ? [] : (D.fu[D.posts.indexOf(p)] || FU_GENERIC.slice(0, Math.max(1, Math.min(2, p.r))));
 const srcFor = p => SOURCES[D.posts.indexOf(p)] || SOURCES[p.s] || [];
 /* Every count of follow-ups or replies reads the same lists the thread page renders. */
 /* With question trees on, an ask's count is its first-level asks, as on the thread page. */
@@ -4404,15 +4447,17 @@ function fuInput(p) {
   return `<div class="fu-box2"><textarea id="fu-input" rows="2" placeholder="${ph}" aria-label="${ask ? 'Ask a follow-up' : 'Write a reply'}">${esc((st.fuDraft || {})[D.posts.indexOf(p)] || '')}</textarea>${st.askErr === 'fu' ? askErrNote() : ''}<div class="fu2-bar">${ask ? modelPicker() : ''}<span class="grow"></span><button class="btn primary" type="button" data-fugo="${D.posts.indexOf(p)}">${ask ? 'Ask' : 'Reply'}</button></div></div>`;
 }
 const thHead = p => sfCrumb(p, `<button class="th-back" type="button" data-space="${p.s}">${I.chev.replace('<svg', '<svg class="bk"')}${spName(sp(p.s))}${isClosed(sp(p.s)) ? LK('cs-lk', 'Closed space') : ''}</button>`);
-const thMeta = p => `<div class="meta">${avatar(p.u, 'sm')}${au(p.u)}<span>${p.age}</span>${p.k === 'post' ? '<span class="faint">· post</span>' : ''}</div>`;
+const thMeta = p => `<div class="meta">${avatar(p.u, 'sm')}${au(p.u)}<span>${p.age}</span>${p.k === 'post' ? '<span class="faint">· post</span>' : ''}${p.edited && !p.del ? '<span class="faint">· edited</span>' : ''}</div>`;
 /* Thread page meta line: like, save, share (closed spaces), then the token count, all left-aligned. The follow-up or reply count is in the section heading below. */
 const thActs = p => { const i = D.posts.indexOf(p), key = (p.k === 'ask' ? 'a:' : 'p:') + i; return `<div class="p-foot">${acts(p, false)}${csShareBtn(p)}${p.tok ? `<span class="num" title="${fmtT(p.tok)} tokens">${fmtT(p.tok)}<span class="m-long"> tokens</span></span>` : ''}${p.running || modOf(key) === 'removed' ? '' : itemMenu(key, 'sf-pend')}</div>`; };
 /* Settled: sharing a closed thread gives a link that only members can open. */
-const csShareBtn = p => !isClosed(sp(p.s)) ? '' : `<button class="act" type="button" data-csshare="${D.posts.indexOf(p)}" aria-label="Share">${CI.share}<span>Share</span></button>`;
-/* key: "<thread>:<path>" of the reply, used for reports and moderation (r:<key>). */
+const csShareBtn = p => !isClosed(sp(p.s)) ? taShareMenu(p) : `<button class="act" type="button" data-csshare="${D.posts.indexOf(p)}" aria-label="Share">${CI.share}<span>Share</span></button>`;
+/* key: "<thread>:<path>" of the reply, used for reports and moderation (r:<key>), likes, edits and replies to it. */
 function replyHTML(r, depth = 0, key = '') {
-  const k = 'r:' + key, ms = key && modOf(k);
-  return `<div class="rp${depth ? ' rp-kid' : ''}">${avatar(r.u, 'sm')}<div class="rp-b"><div class="meta"><b>${r.u}</b><span>${r.age}</span></div>${ms ? modPh(k, 'reply') : `<p>${esc(r.t)}</p>`}<div class="rp-acts"><button class="tlink" type="button">Reply</button><button class="tlink" type="button">${I.heart.replace('<svg', '<svg width="12" height="12"')}</button>${key && ms !== 'removed' ? itemMenu(k) : ''}</div>${(r.kids || []).map((x, j) => replyHTML(x, depth + 1, key ? key + '.' + j : '')).join('')}</div></div>`;
+  const k = 'r:' + key, ms = key && modOf(k), editing = key && st.taEdit && st.taEdit.key === k;
+  const body = r.del ? taGone('reply') : ms ? modPh(k, 'reply') : editing ? taEditBox(k, { noun: 'reply' }) : `<p>${esc(r.t)}</p>`;
+  const acts = r.del || editing ? '' : `<div class="rp-acts">${key ? taRpActs(r, key) : ''}${key && ms !== 'removed' ? itemMenu(k) : ''}</div>`;
+  return `<div class="rp${depth ? ' rp-kid' : ''}">${avatar(r.u, 'sm')}<div class="rp-b"><div class="meta"><b>${r.u}</b><span>${r.age}</span>${r.edited && !r.del ? '<span class="faint">· edited</span>' : ''}</div>${body}${acts}${(r.kids || []).map((x, j) => replyHTML(x, depth + 1, key ? key + '.' + j : '')).join('')}${key && st.taRp === key ? taRpBox(r, key) : ''}</div></div>`;
 }
 function fuCard(f, i, pid) {
   const k = `f:${pid}:${i}`, ms = pid != null && modOf(k);
@@ -4422,10 +4467,10 @@ function fuCard(f, i, pid) {
 /* Agent credit on the thread page: a small "Agent answer" label above the answer; the model and
    who paid are listed in the details panel. */
 const MODEL_NAME = 'Gemini 4 Argon';
-const creditHead = () => `<div class="cr-label"><span class="agent">${I.agent}</span>Agent answer</div>`;
+const creditHead = p => `<div class="cr-label"><span class="agent">${I.agent}</span>Agent answer${p && p.skill ? `<span class="cr-sk">· Used /${esc(p.skill)}</span>` : ''}</div>`;
 function thDoc(p) {
   const fus = fuFor(p), rps = p.k === 'post' ? rpFor(p) : [], pid = D.posts.indexOf(p), am = modOf('a:' + pid), pm = modOf('p:' + pid);
-  return `<div class="th-doc"><article class="th-main"><div class="th-top">${thHead(p)}</div>${thMeta(p)}${miAbout(p)}${pm ? modPh('p:' + pid, 'post') : `<p class="th-q${p.k === 'post' ? ' th-post' : ''}" id="th-q">${esc(p.q)}</p>`}
+  return `<div class="th-doc"><article class="th-main"><div class="th-top">${thHead(p)}</div>${thMeta(p)}${miAbout(p)}${pm ? modPh('p:' + pid, 'post') : taQ(p)}
       ${p.k === 'ask' ? `<section class="th-ans${p.running ? ' running' : ''}" id="th-a">${creditHead(p)}${am ? modPh('a:' + pid, 'answer') : answerHTML(p)}</section>` : ''}${thActs(p)}
       ${p.k === 'ask' ? `<section class="th-fus" id="th-f"><h3>Follow-ups <span class="faint num">${fus.length}</span></h3>${fus.map((f, i) => fuCard(f, i, pid)).join('') || '<p class="muted">Follow-ups appear here once the answer is ready.</p>'}</section>`
         : `<section class="th-rps" id="th-f"><h3>Replies <span class="faint num">${rps.length}</span></h3>${rps.map((r, i) => replyHTML(r, 0, pid + ':' + i)).join('')}</section>`}
@@ -4454,8 +4499,8 @@ const isSelf = () => st.profileUser === ME.u;
 /* the signed-in person on their own profile: Edit profile and the private Liked tab */
 const pfOwner = () => isSelf() && st.auth === 'in';
 const userSpaces = () => isSelf() ? D.joined.length : new Set(D.posts.filter(p => p.u === st.profileUser).map(p => p.s)).size;
-const myPosts = () => D.posts.map((p, i) => ({ ...p, orig: p, tag: true, id: i })).filter(p => p.u === PU().u && canRead(sp(p.s)));
-const myFUs = () => Object.entries(D.fu).flatMap(([pid, list]) => list.filter(f => f.u === PU().u).map(f => ({ ...f, pid: +pid })));
+const myPosts = () => D.posts.map((p, i) => ({ ...p, orig: p, tag: true, id: i })).filter(p => p.u === PU().u && canRead(sp(p.s)) && !p.gone);
+const myFUs = () => Object.entries(D.fu).flatMap(([pid, list]) => list.filter(f => f.u === PU().u && !f.del).map(f => ({ ...f, pid: +pid })));
 const profTabs = (cls = '') => `<div class="pf-tabs ${cls}" role="tablist">${[['threads', 'Threads'], ['followups', 'Follow-ups'], ...(pfOwner() ? [['likes', 'Liked']] : [])].map(([k, l]) => `<button type="button" role="tab" data-ptab="${k}" aria-selected="${st.ptab === k}">${l}</button>`).join('')}</div>`;
 function profFeed() {
   if (st.ptab === 'followups') return `<div class="pf-fus">${myFUs().map(f => `<button class="hrow" type="button" data-open="${f.pid}"><span class="hrow-t">${esc(f.q)}</span><span class="hrow-s">on: ${esc(D.posts[f.pid].q)}</span><span class="hrow-m"><span>${f.age}</span></span></button>`).join('') || '<p class="muted">No follow-ups yet.</p>'}</div>`;
@@ -4621,7 +4666,7 @@ function rowHTML(p) {
   const nLbl = `${rc} ${ask ? (rc === 1 ? 'follow-up' : 'follow-ups') : (rc === 1 ? 'reply' : 'replies')}`;
   const k = `<span class="row-k" title="${ask ? 'Ask: answered by an agent' : 'Post: replies from people'}">${ask ? `<span class="agent">${I.agent}</span>` : avatar(p.u, 'sm')}</span>`;
   const ms = modOf((ask ? 'a:' : 'p:') + id);
-  const q = `<a class="row-t row-link${ask ? '' : ' row-tp'}" href="#t${id}" data-open="${id}">${!ask && ms ? `Post ${ms} by a moderator.` : esc(p.q)}</a>`;
+  const q = `<a class="row-t row-link${ask ? '' : ' row-tp'}" href="#t${id}" data-open="${id}">${!ask && ms ? `Post ${ms} by a moderator.` : p.del ? `You deleted this ${ask ? 'ask' : 'post'}.` : esc(p.q)}</a>`;
   const ans = ask ? `<span class="row-s">${p.running ? 'Researching…' : ms ? `Answer ${ms} by a moderator.` : esc(p.sum)}</span>` : '';
   const meta = `<span class="row-meta">${au(p.u)}<span>${p.age}</span>${p.tag ? `<button class="row-sp" type="button" data-space="${p.s}">${spTagTx(sp(p.s))}</button>` : ''}<span class="row-n num" aria-label="${nLbl}">${I.reply}${rc}</span></span>`;
   return `<article class="row row-x row-rowsq row-i-lefttxt ${ask ? 'row-ask' : 'row-post'}" role="listitem" data-open="${id}">${k}<div class="row-m">${q}${miRowChip(p)}${ans}${meta}</div></article>`;
@@ -4647,7 +4692,7 @@ MP.base = {
     return `<div class="mp mp-base"><button class="chip dd" type="button" data-mp="toggle" aria-haspopup="menu" aria-expanded="${st.mpOpen}">${I.agent}<span>${m.name}</span>${I.chev}</button>${st.mpOpen ? `<div class="ts-ddmenu mp-menu" role="menu">
       <div class="mp-h">Model</div>${MODELS.map(x => `<button type="button" class="ts-opt" role="menuitemradio" aria-checked="${x.id === m.id}" data-model="${x.id}"><span class="ts-tx"><b>${x.name}</b>${x.desc ? `<small>${x.desc}</small>` : ''}</span>${x.id === m.id ? I.check : ''}</button>`).join('')}
       <div class="ts-ddsep"></div><div class="mp-h">Provider</div>${tokenSources().map(t => `<button type="button" class="ts-opt${t.valid ? '' : ' bad'}" role="menuitemradio" aria-checked="${!!(pay && pay.id === t.id)}" data-tsrc="${t.id}" ${t.valid ? '' : 'disabled'}>${tsIcon(t)}${tsText(t)}${t.valid ? (pay && pay.id === t.id ? I.check : '') : `<span class="ts-bad">${t.bad || 'Invalid'}</span>`}</button>`).join('')}
-      <div class="ts-ddsep"></div>${wsRow()}</div>` : ''}</div>`;
+      <div class="ts-ddsep"></div>${wsRow()}${taThinkRow()}</div>` : ''}</div>`;
   },
   click(t) {
     if (t.closest('[data-mp="toggle"]')) { st.mpOpen = !st.mpOpen; renderAll(); return true; }
@@ -4676,7 +4721,7 @@ function composer(force) {
   const submit = ask ? `<button class="btn primary" type="button" data-act="ask-go" ${pay && !ASK.hold ? '' : 'disabled aria-disabled="true"'}>Ask</button>` : `<button class="btn primary" type="button" data-send="post"${ASK.hold ? ' disabled aria-disabled="true"' : ''}>Post</button>`;
   const left = ask ? modelPicker() + (faqOn(s) ? tpPicker(s) : '') : '<span class="c2-note c2-free">Posts use no tokens.</span>';
   const off = s.postsOff ? `<span class="c2-note sf-pnote">Posts are turned off in ${spName(s)}. You can still reply to existing posts.</span>` : '';
-  return `<div class="composer open c2 c2v-bar">${closeB}${ta}${ask ? `<div id="mi-att" class="mi-att-w">${miAttHTML()}</div>` : ''}<div class="c2-bar">${modeSeg}${left}<span class="grow"></span>${warn}<span class="c2-end">${spaceSel}${submit}</span>${off}</div></div>`;
+  return `<div class="composer open c2 c2v-bar">${closeB}${ta}${ask ? `<div id="ta-skl" class="ta-skl-w">${taSkHTML()}</div>` : ''}${ask ? `<div id="mi-att" class="mi-att-w">${miAttHTML()}</div>` : ''}<div class="c2-bar">${modeSeg}${left}<span class="grow"></span>${warn}<span class="c2-end">${spaceSel}${submit}</span>${off}</div></div>`;
 }
 function homeTop() {
   const out = st.auth === 'out';
@@ -4700,7 +4745,7 @@ function thRead(p) {
   const meta = `<div class="rd-meta">${avatar(p.u, 'sm')}${au(p.u)}<span>${p.age}</span><span class="rd-dot">·</span><button class="tlink" type="button" data-space="${p.s}">${spName(s)}</button>${ask && !p.running ? `<span class="rd-dot">·</span><span class="num">${fmtT(p.tok)} tokens from ${paidOf(p)}</span>` : ''}</div>`;
   return `<div class="rd"><article class="rd-main"><div class="th-top">${thHead(p)}</div>${ask && p.t ? `<h1 class="rd-title">${esc(p.t)}</h1>` : ''}${meta}
     <p class="rd-q${ask ? '' : ' rd-post'}">${esc(p.q)}</p>
-    ${ask ? (p.running ? answerHTML(p) : `<div class="prose rd-ans">${ansBody(p)}</div>${src.length ? `<ol class="rd-src">${src.map(x => `<li><b>${esc(x.t)}</b><span>${x.d}</span></li>`).join('')}</ol>` : ''}`) : ''}
+    ${ask ? (p.running ? answerHTML(p) : `<div class="prose rd-ans">${ansBody(p)}</div>${src.length ? `<ol class="rd-src">${src.map((x, k) => `<li${taSrcAttr(p, k)}><b>${esc(x.t)}</b><span>${x.d}</span></li>`).join('')}</ol>` : ''}`) : ''}
     ${thActs(p)}${fuSection(p)}${fuInput(p)}</article></div>`;
 }
 /* Document layout with the numbered source list in its sidebar */
@@ -4710,8 +4755,8 @@ function thDocSrc(p) {
   if (p.k !== 'ask' || p.running || modOf('a:' + D.posts.indexOf(p))) return h;
   const src = srcItems(p);
   const mis = miSrc(p, src);
-  h = h.replace(answerHTML(p), `<div class="prose">${ansBody(p)}</div>${mis ? mis.m : `<ol class="m-src">${src.map(x => `<li><b>${esc(x.t)}</b><span>${x.d}</span></li>`).join('')}</ol>`}`);
-  const list = mis ? mis.d : `<div class="ds-src"><h3>Sources <span class="num">${src.length}</span></h3><ol class="sx-src">${src.map((x, i) => `<li><span class="sx-n num">${i + 1}</span><div><b>${esc(x.t)}</b><span>${x.d}</span></div></li>`).join('')}</ol></div>`;
+  h = h.replace(answerHTML(p), `<div class="prose">${ansBody(p)}</div>${mis ? mis.m : `<ol class="m-src">${src.map((x, k) => `<li${taSrcAttr(p, k)}><b>${esc(x.t)}</b><span>${x.d}</span></li>`).join('')}</ol>`}`);
+  const list = mis ? mis.d : `<div class="ds-src"><h3>Sources <span class="num">${src.length}</span></h3><ol class="sx-src">${src.map((x, i) => `<li${taSrcAttr(p, i)}><span class="sx-n num">${i + 1}</span><div><b>${esc(x.t)}</b><span>${x.d}</span></div></li>`).join('')}</ol></div>`;
   h = h.replace('<div class="th-facts">', list + '<div class="th-facts">');
   return h;
 }
@@ -5343,6 +5388,7 @@ D.srcd[12] = [
   ['The Illusion of Thinking', 'machinelearning.apple.com', 'Puzzle-based study of reasoning collapse'],
   ['Reasoning models don\'t always say what they think', 'anthropic.com', 'Faithfulness of chain-of-thought'],
   ['Does Reinforcement Learning Really Incentivize Reasoning Capacity in LLMs Beyond the Base Model?', 'arxiv.org', 'pass@k comparison of base and RL models'],
+  ['Where test-time compute stops paying', 'gradientnotes.substack.com', 'Priya Venn, Gradient Notes; accuracy per dollar by reasoning length'],
 ];
 
 D.fu[12] = [
@@ -5652,7 +5698,7 @@ function rail1() {
   const inn = st.auth === 'in', joined = inn ? D.spaces.filter(x => D.joined.includes(x.id)) : D.spaces.filter(visibleSp);
   const other = st.profilePage || st.savedPage || st.subPage, onFeed = !other && st.thread == null;
   const item = (attrs, icon, label, extra, cur) => `<button class="rl-row" type="button" ${attrs} aria-current="${!!cur}">${icon}<span class="rl-n">${label}</span>${extra || ''}</button>`;
-  const asks = inn ? D.posts.map((p, i) => ({ p, i })).filter(({ p }) => p.u === ME.u && p.k === 'ask' && canRead(sp(p.s))) : [];
+  const asks = inn ? D.posts.map((p, i) => ({ p, i })).filter(({ p }) => p.u === ME.u && p.k === 'ask' && canRead(sp(p.s)) && !p.gone) : [];
   const askRow = ({ p, i }) => `<button class="rl-ask" type="button" data-open="${i}" aria-current="${st.thread === i}">${p.running ? '<span class="spin" aria-hidden="true"></span>' : `<span class="rl-done" aria-hidden="true">${I.check}</span>`}<span class="rl-al"><b>${esc(p.t || p.q)}</b><small>${p.running ? 'Researching' : `Answered ${p.age} ago · ${replyCount(p)} follow-up${replyCount(p) === 1 ? '' : 's'}`}</small></span></button>`;
   const acct = inn ? `<div class="acct rl-acct rs-top rs-mini"><button class="me" type="button" data-act="umenu" aria-haspopup="true" aria-expanded="${st.umenu}" aria-label="Account: ines.v">${avatar('ines.v')}${I.chev}</button>${st.umenu ? userMenu() : ''}</div>` : '';
   const out = inn ? '' : `<div class="rl-foot"><div class="rl-out"><button class="btn" type="button" data-act="signin">Log in</button><button class="btn primary" type="button" data-act="signup">Sign up</button></div></div>`;
@@ -6447,7 +6493,7 @@ function nClickX(k, a) {
   const go = f => { nGo(f); return true; };
   switch (k) {
     case 'toastact': return go(() => { st.toast = null; nToastAct(a); });
-    case 'copylink': case 'shcopy': return go(() => { nst.sheet = null; toast('Link copied.'); });
+    case 'copylink': case 'shcopy': return go(() => { taCopy(taPhoneUrl()); nst.sheet = null; toast('Link copied.'); });
     case 'shmsg': return go(() => { nst.sheet = null; toast('Opened Messages with a link to the thread.'); });
     case 'repwhy': return go(() => { nst.rep = { ...nst.rep, why: a }; });
     case 'repsend': return go(() => {
@@ -7022,7 +7068,7 @@ function layoutSearch() {
   const hit = txt => !!stem && txt.toLowerCase().includes(stem);
   const spaces = D.spaces.filter(x => visibleSp(x) && hit(x.name + ' ' + x.title + ' ' + x.desc));
   const body_ = i => (D.rich[i] || '').replace(/<sup[^>]*>.*?<\/sup>/g, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
-  const threads = D.posts.map((p, i) => ({ p, i })).filter(({ p, i }) => canRead(sp(p.s)) && hit((p.t || '') + ' ' + p.q + ' ' + (p.sum || '') + ' ' + body_(i)));
+  const threads = D.posts.map((p, i) => ({ p, i })).filter(({ p, i }) => canRead(sp(p.s)) && !p.gone && hit((p.t || '') + ' ' + p.q + ' ' + (p.sum || '') + ' ' + body_(i)));
   const re = stem ? new RegExp(stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi') : null;
   const hl = t => re ? esc(t).replace(re, m => `<mark class="sr-m">${m}</mark>`) : esc(t);
   const excerpt = ({ p, i }) => {
@@ -7206,7 +7252,7 @@ function csClick(t) {
   if ((b = d('[data-cslink]'))) {
     const [v, id] = b.dataset.cslink.split(':');
     if (v === 'new') { const code = Math.random().toString(36).slice(2, 7); const exp = { 1: 'Nov 17', 7: 'Nov 23', 30: 'Dec 16', 0: '' }[b.dataset.exp || st.linkExp]; const l = { id: 'l' + code, code, by: ME.u, exp, sp: b.dataset.sp || st.mgSpace }; db.unshift('links', l); st.linkNew = l.id; toast(`Link created: session.app/i/${code}`); }
-    if (v === 'copy') { const l = st.links.find(x => x.id === id); toast(`Copied session.app/i/${l.code}`); }
+    if (v === 'copy') { const l = st.links.find(x => x.id === id); taCopy(`session.app/i/${l.code}`); toast(`Copied session.app/i/${l.code}`); }
     if (v === 'revoke') { st.linkGone = st.links.find(x => x.id === id); db.remove('links', id); toast('Link revoked. People who already joined with it stay members.', 'undo-link', 'Undo'); }
     renderAll(); st.linkNew = null; return true;
   }
@@ -7237,7 +7283,7 @@ function csClick(t) {
   if (d('[data-crgo]')) { csCreate(); if (!st.cr.err) toast(`Created ${spName(sp(st.space))}.`); return go(); }
   /* threads */
   if ((b = d('[data-csshare]'))) { st.modal = 'cs-share:' + b.dataset.csshare; return go(); }
-  if ((b = d('[data-cssh]'))) { const v = b.dataset.cssh; if (v === 'copy') toast('Link copied. It opens only for members.'); else { st.modal = null; toast('Public copy published. Anyone with its link can read the question, answer and sources.'); } return go(); }
+  if ((b = d('[data-cssh]'))) { taCopy(taThreadUrl(+(st.modal || '').split(':')[1])); toast('Link copied. It opens only for members.'); return go(); }
   /* invite landing and unlisted pages */
   if ((b = d('[data-csaccept]'))) { const id = b.dataset.csaccept; setRel(id, 'member'); Object.assign(st, NAVBASE(), { space: id, welcome: id }); toast(`You joined ${spName(sp(id))}.`); return go(); }
   if ((b = d('[data-csaskinv]'))) { db.push('askedInv', b.dataset.csaskinv); return go(); }
@@ -7498,7 +7544,7 @@ const topicOf = p => topicsOf(sp(p.s)).some(t => t[0] === p.topic) ? p.topic : n
 const topicName = (s, k) => (k && k !== 'other' && (topicsOf(s).find(t => t[0] === k) || [])[1]) || 'Other';
 const modOf = key => st.modSt[key] || null;
 /* Asks listed in the FAQ index and search: answered and not hidden or removed. */
-const asksOf = s => D.posts.map((p, i) => ({ p, i })).filter(({ p, i }) => p.s === s.id && p.k === 'ask' && !p.running && !modOf('a:' + i));
+const asksOf = s => D.posts.map((p, i) => ({ p, i })).filter(({ p, i }) => p.s === s.id && p.k === 'ask' && !p.running && !p.gone && !modOf('a:' + i));
 const KW_STOP = new Set('a an the i my me we our to of in on for and or is are do does did can could how what why when where with be it its this that you your from at by as which will would there should if im get use using any have has not no yes'.split(' '));
 const kwToks = (txt, s) => txt.toLowerCase().replace(/[^a-z0-9_ ]/g, ' ').split(/\s+/).filter(w => w.length > 1 && !KW_STOP.has(w) && (!s || (w !== s.name && w !== s.title.toLowerCase()))).map(w => w.replace(/(ies|es|s)$/, ''));
 const askText = p => `${p.t || ''} ${p.q} ${p.kw || ''}`;
@@ -7623,8 +7669,8 @@ function itemOf(key) {
   return { k, p, s, noun: 'reply', text: r ? r.t : '', by: r ? r.u : '' };
 }
 function itemMenu(key, cls = '') {
-  const open = st.imenu === key;
-  return `<span class="sf-imw ${cls}"><button class="act sf-im" type="button" data-imenu="${key}" aria-haspopup="true" aria-expanded="${open}" aria-label="More actions" title="More">${SFI.more}</button>${open ? `<div class="pop cs-pop sf-ipop" role="menu"><button class="um-item" type="button" role="menuitem" data-sfreport="${key}">${SFI.flag}<span>Report a problem</span></button><button class="um-item" type="button" role="menuitem" data-sfcopy="${key}">${CI.link}<span>Copy link</span></button>${cxModItems(key)}</div>` : ''}</span>`;
+  const open = st.imenu === key, own = taOwnKey(key);
+  return `<span class="sf-imw ${cls}"><button class="act sf-im" type="button" data-imenu="${key}" aria-haspopup="true" aria-expanded="${open}" aria-label="More actions" title="More">${SFI.more}</button>${open ? `<div class="pop cs-pop sf-ipop" role="menu">${own ? taMenuItems(own, 'edit') : `<button class="um-item" type="button" role="menuitem" data-sfreport="${key}">${SFI.flag}<span>Report a problem</span></button>`}<button class="um-item" type="button" role="menuitem" data-sfcopy="${key}">${CI.link}<span>Copy link</span></button>${own ? taMenuItems(own, 'del') : ''}${cxModItems(key)}</div>` : ''}</span>`;
 }
 /* Placeholder for an item a moderator hid or removed. Moderators can show a hidden item again. */
 function modPh(key, noun) {
@@ -7736,7 +7782,7 @@ function sfClick(t) {
   if ((b = d('[data-faq]'))) { const v = b.dataset.faq; const inp = $('faq-q'); if (inp) st.faqQ = inp.value; if (faqAsk(v === 'ask-force') === 'focus') return true; renderAll(); if (st.faqTried) { const r = $('faq-res'); if (r) r.scrollIntoView({ block: 'nearest' }); } return true; }
   if ((b = d('[data-imenu]'))) { const k = b.dataset.imenu; st.imenu = st.imenu === k ? null : k; return go(); }
   if ((b = d('[data-sfreport]'))) { st.imenu = null; if (st.auth !== 'in') { st.modal = 'signin'; return go(); } st.rep = { why: 'incorrect', note: '' }; st.modal = 'sf-report:' + b.dataset.sfreport; return go(); }
-  if ((b = d('[data-sfcopy]'))) { st.imenu = null; toast('Link copied.'); return go(); }
+  if ((b = d('[data-sfcopy]'))) { st.imenu = null; taCopy(taItemUrl(b.dataset.sfcopy)); toast('Link copied.'); return go(); }
   if ((b = d('[data-sfwhy]'))) { patch('rep', r => { r.why = b.dataset.sfwhy; }); renderAll(); const n = $('sf-repnote'); if (n) n.focus({ preventScroll: true }); return true; }
   if ((b = d('[data-sfrepsend]'))) {
     const key = b.dataset.sfrepsend, it = itemOf(key);
@@ -7774,7 +7820,7 @@ function sfClick(t) {
   if ((b = d('[data-sfset]'))) { if (b.dataset.sfset === 'postsoff') csEdit(d => { d.postsOff = true; }); return go(); }
   if ((b = d('[data-sfdom]'))) {
     const v = b.dataset.sfdom, s = sp(st.mgSpace);
-    if (v === 'copy') toast('Copied the TXT record.');
+    if (v === 'copy') { taCopy('session-verify=7f3c9a1e'); toast('Copied the TXT record.'); }
     if (v === 'check') { const dm = (st.sfDom.domain || '').trim(); if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(dm)) { toast('Enter a domain such as example.com.'); return go(); } sfDomCheck(s); }
     if (v === 'remove') { st.modal = 'sf-domrm:' + s.id; }
     return go();
@@ -8120,7 +8166,7 @@ const MI_NOTIF = {
 /* ---------- helpers ---------- */
 const miRefs = p => !p.about ? [] : p.about.its ? p.about.its : [p.about.it];
 /* asks about an item in spaces the viewer can read */
-const miAsksOf = id => D.posts.map((p, i) => ({ p, i })).filter(({ p }) => p.about && miRefs(p).includes(id) && canRead(sp(p.s)));
+const miAsksOf = id => D.posts.map((p, i) => ({ p, i })).filter(({ p }) => p.about && miRefs(p).includes(id) && canRead(sp(p.s)) && !p.gone);
 const miTok = n => n >= 1e3 ? fmt(n) : Math.round(n / 100) * 100 || 100;
 const miIsAdmin = sid => isAdminOf(sid);
 /* No Items tab: a space's sources are listed in the sidebar and the full list (see dropped sources). */
@@ -8281,7 +8327,7 @@ function miSrc(p, src) {
   const own = new Set(miRefs(p));
   const grp = { own: refs.filter(r => own.has(r.split(':')[0])), other: refs.filter(r => !own.has(r.split(':')[0])) };
   const pas = r => { const [id, b] = r.split(':'), m = MIT(id); return `<li ${miOpenAttr(m, +b)}><span class="sx-n num mi-sxl">${miLbl(m, +b)}</span><div><b>${esc(clip(m.body[+b].p, 90))}</b><span>${esc(m.au)} · ${miSrcLine(m)}</span></div></li>`; };
-  const web = l => l.map((x, k) => `<li><span class="sx-n num">${k + 1}</span><div><b>${esc(x.t)}</b><span>${x.d}</span></div></li>`).join('');
+  const web = l => l.map((x, k) => `<li${taSrcAttr(p, k)}><span class="sx-n num">${k + 1}</span><div><b>${esc(x.t)}</b><span>${x.d}</span></div></li>`).join('');
   const d = `<div class="ds-src mi-src">${grp.own.length ? `<h3>From ${own.size > 1 ? 'the sources' : 'the source'}</h3><ol class="sx-src">${grp.own.map(pas).join('')}</ol>` : ''}${grp.other.length ? `<h3>From other sources in ${spName(sp(p.s))}</h3><ol class="sx-src">${grp.other.map(pas).join('')}</ol>` : ''}${src.length ? `<h3>From the web</h3><ol class="sx-src">${web(src)}</ol>` : ''}</div>`;
   return { d, m: d.replace('ds-src mi-src', 'mi-msrc') };
 }
@@ -8441,7 +8487,7 @@ function miClick(t) {
   if ((b = d('[data-miaskx]'))) { Object.assign(st, { miAsk: null, miAskQ: '' }); return go(); }
   if ((b = d('[data-miagain]'))) { const p = D.posts[+b.dataset.miagain], a = { it: p.about.it, b: p.about.b }; Object.assign(st, { miAsk: a, miAskQ: p.q, miAskSp: p.s, modal: miAskInline(a) ? null : 'mi-ask' }); renderAll(); miFocusQ('mi-askq'); return true; }
   if ((b = d('[data-misave]'))) { db.toggle('miSaved', b.dataset.misave); return go(); }
-  if ((b = d('[data-micopy]'))) { const v = b.dataset.micopy, m = MIT(st.miItem); toast(v === 'item' ? 'Link to the source copied.' : `Link to ${miLblLong(m, +v)} copied.`); st.miSel = null; return go(); }
+  if ((b = d('[data-micopy]'))) { const v = b.dataset.micopy, m = MIT(st.miItem); taCopy(v === 'item' ? `session.app/source/${m.url.split('/').pop()}` : `session.app/source/${m.url.split('/').pop()}#${miLbl(m, +v).replace(/[^0-9a-z:]/gi, '')}`); toast(v === 'item' ? 'Link to the source copied.' : `Link to ${miLblLong(m, +v)} copied.`); st.miSel = null; return go(); }
   if ((b = d('[data-midiff]'))) { st.miDiff = !st.miDiff; return go(); }
   if ((b = d('[data-mipickmode]'))) { st.miPickMode = !st.miPickMode; st.miPick = []; return go(); }
   if ((b = d('[data-mipickx]'))) { st.miPickMode = false; st.miPick = []; return go(); }
@@ -9511,7 +9557,7 @@ const qtSrcs = (T, n) => {
   if (n.id !== 'r' || n.running) return '';
   const src = srcItems(T.p), mis = miSrc(T.p, src); /* asks about sources list the passages they used */
   if (mis) return mis.m;
-  return src.length ? `<ol class="m-src qt-src">${src.map(x => `<li><b>${esc(x.t)}</b><span>${x.d}</span></li>`).join('')}</ol>` : '';
+  return src.length ? `<ol class="m-src qt-src">${src.map((x, k) => `<li${taSrcAttr(T.p, k)}><b>${esc(x.t)}</b><span>${x.d}</span></li>`).join('')}</ol>` : '';
 };
 const qtLv = (n, on) => `<span class="qt-lv num${on ? ' on' : ''}" title="${qtLvName(n)}">${n.id === 'r' ? 'Q' : n.lv}</span>`;
 function qtMenu(T, n) {
@@ -9526,7 +9572,7 @@ function qtMenu(T, n) {
     ${it(`data-qtpick="${n.id}"`, QTI.cmp, 'Compare with another ask')}
     ${it(`data-qtpro="${n.id}"`, QTI.out, 'Start a thread from this branch', canP ? '' : 'Only the asker of this branch, the thread owner and moderators can do this.', !canP)}
     ${canX ? it(`data-qtcol="${n.id}"`, QTI.fold, n.col ? 'Show this branch' : 'Collapse this branch', n.col ? '' : 'It stays in the thread behind a "collapsed" row.') : ''}
-    ${it(`data-sfreport="${n.rep}"`, SFI.flag, 'Report a problem')}
+    ${qtMine(n) ? taMenuItems(`n:${T.i}:${n.id}`) : it(`data-sfreport="${n.rep}"`, SFI.flag, 'Report a problem')}
   </div></span>`;
 }
 function qtNodeActs(T, n) {
@@ -9613,24 +9659,25 @@ function qtFuCard(T, n, cur) {
   if (st.qtFuQ) return qtFlRow(T, n, cur);
   const kids = qtVisKids(T, n.id), k = T.sub(n.id), open = st.qtExp.has(n.id);
   const below = !kids.length ? '' : `<button class="tlink qt-fub" type="button" data-qtexp="${n.id}" aria-expanded="${open}">${I.chev.replace('<svg', '<svg class="chv"')}${open ? 'Hide' : 'Show'} ${k} ask${k > 1 ? 's' : ''} below</button>`;
-  return `<div class="fu qt-fu${n.id === cur.id ? ' on' : ''}" id="qt-n-${n.id}"><div class="meta">${avatar(n.u, 'sm')}<b>${n.u}</b><span>${n.age}</span></div><p class="fu-q">${esc(n.q)}</p><div class="fu-a">${n.running ? qtAnswer(T, n) : modOf(n.rep) ? modPh(n.rep, 'follow-up answer') : `<div class="prose fu-prose">${n.html}</div>`}</div>${qtNodeActs(T, n)}${st.qtAskAt === n.id ? qtComposer(T, n.id, { cancel: true }) : ''}${below}${open ? `<div class="qt-fuk">${kids.map(x => qtFuCard(T, x, cur)).join('')}</div>` : ''}</div>`;
+  const ek = `n:${T.i}:${n.id}`, ed = st.taEdit && st.taEdit.key === ek;
+  return `<div class="fu qt-fu${n.id === cur.id ? ' on' : ''}" id="qt-n-${n.id}"><div class="meta">${avatar(n.u, 'sm')}<b>${n.u}</b><span>${n.age}</span>${n.edited && !n.del ? '<span class="faint">· edited</span>' : ''}</div>${n.del ? taGone('follow-up') : `${ed ? taEditBox(ek, { noun: 'follow-up', ask: true }) : `<p class="fu-q">${esc(n.q)}</p>`}<div class="fu-a">${n.running ? qtAnswer(T, n) : modOf(n.rep) ? modPh(n.rep, 'follow-up answer') : `<div class="prose fu-prose">${n.html}</div>`}</div>${ed ? '' : qtNodeActs(T, n)}`}${st.qtAskAt === n.id ? qtComposer(T, n.id, { cancel: true }) : ''}${below}${open ? `<div class="qt-fuk">${kids.map(x => qtFuCard(T, x, cur)).join('')}</div>` : ''}</div>`;
 }
 function qtFuView(T, cur) {
   const r = T.nodes[0], l1 = qtVisKids(T, 'r').slice().sort((a, b) => qtAge(b.age) - qtAge(a.age));
-  const head = `${miAbout(T.p)}<div class="meta">${avatar(r.u, 'sm')}${au(r.u)}<span>${r.age}</span></div><p class="th-q" id="th-q">${esc(r.q)}</p>`;
+  const head = `${miAbout(T.p)}<div class="meta">${avatar(r.u, 'sm')}${au(r.u)}<span>${r.age}</span>${T.p.edited && !T.p.del ? '<span class="faint">· edited</span>' : ''}</div>${taQ(T.p)}`;
   const tog = `<div class="seg qt-fut" role="group" aria-label="Show follow-ups as">${[['a', 'Answers'], ['q', 'Questions']].map(([k, l]) => `<button type="button" data-qtfuq="${k}" aria-pressed="${(st.qtFuQ ? 'q' : 'a') === k}">${l}</button>`).join('')}</div>`;
   const fus = `<section class="th-fus${st.qtFuQ ? ' qt-fls' : ''}" id="th-f"><h3>Follow-ups <span class="faint num">${l1.length}</span>${l1.length ? tog : ''}</h3>${l1.map(n => qtFuCard(T, n, cur)).join('') || '<p class="muted">Follow-ups appear here once the answer is ready.</p>'}</section>`;
   /* An "Ask about this answer" button in the answer's action row opens the composer there, above the follow-ups */
   const acts = !r.running ? thActs(T.p).replace('<div class="p-foot">', `<div class="p-foot"><button class="btn sm" type="button" data-qtaskat="r" aria-label="Ask about this answer" aria-expanded="${st.qtAskAt === 'r'}">${QTI.ask}<span>Ask<span class="m-long"> about this answer</span></span></button>`) : thActs(T.p);
   const inl = st.qtAskAt === 'r' && !r.running ? `<div class="qt-rootask qt-rootask-in">${qtComposer(T, 'r', { cancel: true })}</div>` : '';
-  return `${qtPickBar(T)}<article class="qt-node qt-inl qt-fuv" id="qt-n-r">${head}<section class="th-ans${r.running ? ' running' : ''}" id="th-a">${creditHead()}${qtAnswer(T, r)}${qtSrcs(T, r)}</section>${acts}${inl}${fus}</article>`;
+  return `${qtPickBar(T)}<article class="qt-node qt-inl qt-fuv" id="qt-n-r">${head}<section class="th-ans${r.running ? ' running' : ''}" id="th-a">${creditHead(T.p)}${qtAnswer(T, r)}${qtSrcs(T, r)}</section>${acts}${inl}${fus}</article>`;
 }
 /* ---------- sources of the question's answer, in the side column ---------- */
 function qtSrcList(T) {
   const r = T.nodes[0]; if (r.running || modOf(r.rep)) return '';
   const src = srcItems(T.p), mis = miSrc(T.p, src);
   if (mis) return mis.d;
-  return src.length ? `<div class="ds-src"><h3>Sources <span class="num">${src.length}</span></h3><ol class="sx-src">${src.map((x, i) => `<li><span class="sx-n num">${i + 1}</span><div><b>${esc(x.t)}</b><span>${x.d}</span></div></li>`).join('')}</ol></div>` : '';
+  return src.length ? `<div class="ds-src"><h3>Sources <span class="num">${src.length}</span></h3><ol class="sx-src">${src.map((x, i) => `<li${taSrcAttr(T.p, i)}><span class="sx-n num">${i + 1}</span><div><b>${esc(x.t)}</b><span>${x.d}</span></div></li>`).join('')}</ol></div>` : '';
 }
 /* ---------- transcript: the path to the selected ask as a conversation ----------
    The question, its answer and each ask on the path to the selected ask, in order. The outline
@@ -9783,7 +9830,7 @@ function qtClick(t, e) {
   if ((b = d('[data-qtexp]'))) { stToggle('qtExp', b.dataset.qtexp); return go(); }
   if ((b = d('[data-qtaskat]'))) { if (st.auth !== 'in') { st.modal = 'signin'; return go(); } Object.assign(st, { qtAskAt: b.dataset.qtaskat, qtErr: '', qtFocusIn: true }); return go(); }
   if ((b = d('[data-qtsave]'))) { const k = `${T.i}:${b.dataset.qtsave}`; if (st.auth !== 'in') { st.modal = 'signin'; return go(); } if (st.qtSaved.has(k)) { db.toggle('qtSaved', k, false); toast('Removed from Saved.'); } else { db.toggle('qtSaved', k, true); toast('Saved. Listed under Saved with its path.'); } st.qtMenu = null; return go(); }
-  if ((b = d('[data-qtcopy]'))) { st.qtMenu = null; toast(`Link copied: ${qtAddr(T, b.dataset.qtcopy)}`); return go(); }
+  if ((b = d('[data-qtcopy]'))) { st.qtMenu = null; taCopy(qtAddr(T, b.dataset.qtcopy)); toast(`Link copied: ${qtAddr(T, b.dataset.qtcopy)}`); return go(); }
   if ((b = d('[data-qtpick]'))) { Object.assign(st, { qtPick: b.dataset.qtpick, qtMenu: null, qtCmp: null }); return go(); }
   if ((b = d('[data-qtpro]'))) { qtProOpen(T, b.dataset.qtpro); return go(); }
   if ((b = d('[data-qtcol]'))) { const n = T.by[b.dataset.qtcol], col = !n.col; qtNodeEdit(T.i, n.id, x => { x.col = col; }); st.qtMenu = null; if (col && T.path(st.qtNode).some(x => x.id === n.id)) qtGo(qtT(T.i), n.par); toast(col ? 'Branch collapsed. It is still in the thread and its link still works.' : 'Branch shown again.'); return go(); }
@@ -10061,7 +10108,8 @@ const abMd = t => String(t || '').split(/\n\s*\n/).map(bk => {
 
 /* the preview dialog: the description and the skill's SKILL.md */
 function abSkillDlg(s, i) {
-  const [n, t] = D.skills[s.id][i], { d, b } = abSkParse(t);
+  const sk = (D.skills[s.id] || [])[i]; if (!sk) return '';
+  const [n, t] = sk, { d, b } = abSkParse(t);
   const body = `<p class="ab-skd">${esc(d)}</p><div class="ab-skcode"><div class="ab-skch"><span>SKILL.md</span><button class="btn sm" type="button" data-abskcopy="${i}">Copy</button></div><pre>${esc(abSkFile(n, d, b))}</pre></div><p class="cs-fine ab-f">You can start an ask with <code>/${esc(n)}</code>.</p>`;
   const title = `<span class="ab-skti"><span class="sk-ic">${skillIcon(n)}</span><span class="ab-skn">${esc(n)}</span></span>`;
   return dlg(title, `<div class="ab-skp">${body}</div>`, `${cancelB('Close')}${st.auth === 'in' ? `<button class="btn primary" type="button" data-skill="${i}">Use this skill</button>` : ''}`).replace('modal cs-m', 'modal cs-m ab-skm-d wide');
@@ -10196,7 +10244,7 @@ function abModal() {
   if (k === 'ab-pgdel') { const t = (s.pages[+a] || [''])[0]; return dlg(`Remove “${esc(t)}”?`, `<p class="muted">This removes the page and its history from ${spName(s)}. Links to it stop working.</p>`, `${cancelB()}<button class="btn danger" type="button" data-abpgdelok="${a}">Remove page</button>`, 'alertdialog'); }
   if (k === 'ab-skill') return abSkillDlg(s, +a);
   if (k === 'ab-sked') return abSkEdDlg();
-  if (k === 'ab-skrm') { const [n] = D.skills[s.id][+a]; return dlg(`Remove ${esc(n)}?`, `<p class="muted">Members can no longer use it in asks in ${spName(s)}. Answers that already used it stay in their threads.</p>`, `${cancelB()}<button class="btn danger" type="button" data-absk="rmok:${a}">Remove</button>`, 'alertdialog'); }
+  if (k === 'ab-skrm') { const sk = (D.skills[s.id] || [])[+a]; if (!sk) return ''; const [n] = sk; return dlg(`Remove ${esc(n)}?`, `<p class="muted">Members can no longer use it in asks in ${spName(s)}. Answers that already used it stay in their threads.</p>`, `${cancelB()}<button class="btn danger" type="button" data-absk="rmok:${a}">Remove</button>`, 'alertdialog'); }
   return '';
 }
 { const AB_csModal = csModal; csModal = function () { return (st.modal || '').startsWith('ab-') ? abModal() : AB_csModal(); }; }
@@ -10246,13 +10294,13 @@ on($('app'), 'click', e => {
     return go();
   }
   if ((b = d('[data-abrestore]'))) { const doc = abDoc(s, st.abPage), r = doc.revs[+b.dataset.abrestore]; db.put('pagedocs', abKey(s, doc.t), { ...doc, ed: ME.u, revs: [{ by: ME.u, age: 'just now', note: `Restored the version from ${r.age} ago` }, ...doc.revs] }); toast('Restored. The page history keeps both versions.'); return go(); }
-  if ((b = d('[data-abcopy]'))) { toast(`Copied ${csUrl()}`); return go(); }
+  if ((b = d('[data-abcopy]'))) { taCopy(csUrl()); toast(`Copied ${csUrl()}`); return go(); }
   if (d('[data-abpgorder]')) { st.abPgOrder = !st.abPgOrder; return go(); }
   if ((b = d('[data-abpgmv]'))) { const [v, i] = b.dataset.abpgmv.split(':'), k = +i, j = v === 'up' ? k - 1 : k + 1; spEdit(s.id, x => { [x.pages[k], x.pages[j]] = [x.pages[j], x.pages[k]]; }); return go(); }
   if ((b = d('[data-abpgdel]'))) { st.modal = 'ab-pgdel:' + b.dataset.abpgdel; return go(); }
   if ((b = d('[data-abpgdelok]'))) { const i = +b.dataset.abpgdelok, t = s.pages[i][0]; spEdit(s.id, x => { x.pages.splice(i, 1); }); db.del('pagedocs', abKey(s, t)); st.modal = null; if (st.subPage === 'abpage') Object.assign(st, { ...NAVBASE(), space: s.id, home: false, drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' }); toast(`Removed “${t}”.`); return go(); }
   if ((b = d('[data-abskill]'))) { st.modal = 'ab-skill:' + b.dataset.abskill; return go(); }
-  if ((b = d('[data-abskcopy]'))) { toast('Copied SKILL.md.'); return go(); }
+  if ((b = d('[data-abskcopy]'))) { const sk = (D.skills[st.subPage === 'manage' ? st.mgSpace : st.space] || [])[+b.dataset.abskcopy]; if (sk) { const { d: ds, b: bd } = abSkParse(sk[1]); taCopy(abSkFile(sk[0], ds, bd)); } toast('Copied SKILL.md.'); return go(); }
   if ((b = d('[data-abskmg]'))) { Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: s.id, space: s.id, mgTab: 'skills', abSkEd: null }); if (b.dataset.abskmg === 'new') abSkOpen(s.id, 'new'); return go(); }
   if ((b = d('[data-absk]'))) {
     const sid = st.mgSpace, list = D.skills[sid] || [], [v, a] = b.dataset.absk.split(':'), i = +a;
@@ -11032,6 +11080,437 @@ function acJump(k) {
 }
 { const AC_jump = jump; jump = function (k) { AC_jump(k); if (String(k).startsWith('ac-') && dataReady()) acJump(k); }; }
 /* ==== end of accounts, API keys and profiles ==== */
+
+/* ==== thread actions: edit and delete your own items, replies to replies, citations, Share, copy, the skill list, Thinking level ====
+   - Your own post, ask, reply and follow-up have Edit and Delete in their menu, and no Report. Edit works in
+     place (Save, Cancel); editing an ask or a follow-up can run it again. Delete asks first. An item with
+     replies or follow-ups leaves "You deleted this …" in the thread; one without them is removed.
+     Edit and delete keys: t:<thread> (the post or the ask's question), r:<thread>:<path> (a reply),
+     n:<thread>:<ask id> (a follow-up in the question tree).
+   - Replies have Reply (a box under that reply; the new reply joins its replies, one level deep) and a like.
+   - A citation scrolls to its source row and highlights it. A source row opens the source's page when it is
+     a source item, otherwise a sheet that describes the web page.
+   - Threads in open spaces have a Share menu: Copy link and Share to X.
+   - Copy buttons write to the clipboard.
+   - Typing / in the composer lists the space's skills; an ask that starts with a skill shows "Used /name".
+   - The model menu shows the thinking level (Medium, fixed). */
+
+/* ---- server data ---- */
+RES.repSeen = { url: '/api/me/reports-seen', kind: 'value' };    /* the reports notification was read */
+RES.reqSeen = { url: '/api/me/requests-seen', kind: 'value' };   /* the join-requests notification was read */
+RES.rpLiked = { url: '/api/me/reply-likes', kind: 'value' };     /* replies you liked, as "<thread>:<path>" */
+DATA_KEYS.push('repSeen', 'reqSeen', 'rpLiked');
+ST_DATA.add('repSeen').add('reqSeen');
+/* earlier defaults went to the UI store; move them to the data store */
+{ const u = { ...uiStore.getState() }; ['repSeen', 'reqSeen'].forEach(k => { delete u[k]; }); uiStore.setState(u, true); }
+D.repSeen = false;
+D.reqSeen = false;
+D.rpLiked = new Set();
+
+/* ---- client state ---- */
+Object.assign(st, { taEdit: null, taRp: null, taRpDraft: '', taRpErr: false, taCite: null, taShare: null, taSk: null });
+
+/* ---- clipboard and links ---- */
+function taCopy(text) {
+  try { const w = navigator.clipboard && navigator.clipboard.writeText(String(text)); if (w && w.catch) w.catch(() => {}); } catch (e) {}
+}
+const taThreadUrl = i => { const p = D.posts[i]; return p ? `session.app/s/${sp(p.s).name}/t/${i + 1000}` : 'session.app'; };
+/* the link an item menu's Copy link gives: the thread, and the reply or follow-up in it */
+const taItemUrl = key => { const [k, a, b] = key.split(':'); return taThreadUrl(+a) + (k === 'r' ? `#reply-${b}` : k === 'f' ? `/a/f${b}` : ''); };
+/* Phone: the screen on top of the current tab */
+const taPhoneUrl = () => { const l = nst.stack || [], t = l[l.length - 1]; return t && t.v === 'thread' && D.posts[t.id] ? taThreadUrl(t.id) : t && t.v === 'space' && sp(t.id) ? `session.app/s/${sp(t.id).name}` : 'session.app'; };
+
+/* ---- your own items ---- */
+const taIn = () => st.auth === 'in';
+const taAt = (list, path) => { let r = null; path.forEach(j => { r = list && list[j]; list = (r && r.kids) || []; }); return r; };
+/* the item an edit or delete key names, with what the confirmation and the placeholder need */
+function taItem(key) {
+  const [k, a, b] = String(key).split(':'), i = +a, p = D.posts[i]; if (!p) return null;
+  if (k === 't') { const ask = p.k === 'ask'; return { k, i, p, noun: ask ? 'ask' : 'post', ask, text: p.q, u: p.u, del: !!p.del, busy: !!p.running, kids: ask ? qtT(i).nodes.length - 1 : rpFor(p).length }; }
+  if (k === 'r' && b != null) { const path = b.split('.').map(Number), r = taAt(rpFor(p), path); return r ? { k, i, p, path, r, noun: 'reply', text: r.t, u: r.u, del: !!r.del, kids: (r.kids || []).length } : null; }
+  if (k === 'n') { const T = qtT(i), n = T.by[b]; return n && n.id !== 'r' ? { k, i, p, T, n, noun: 'follow-up', ask: true, text: n.q, u: n.u, del: !!n.del, busy: !!n.running, kids: T.kids(n.id).length } : null; }
+  return null;
+}
+/* an item menu's key (p:, a:, r:) → the edit key, when the signed-in person wrote the item */
+function taOwnKey(key) {
+  if (!taIn()) return null;
+  const [k, a] = key.split(':'), p = D.posts[+a]; if (!p) return null;
+  if ((k === 'p' || k === 'a') && p.u === ME.u) return 't:' + a;
+  if (k === 'r') { const it = taItem(key); return it && it.u === ME.u ? key : null; }
+  return null;
+}
+/* part: 'edit' or 'del' (an item menu puts Copy link between them); both when left out */
+function taMenuItems(key, part) {
+  const it = taItem(key); if (!it || it.del || it.u !== ME.u) return '';
+  const ed = it.busy ? '' : `<button class="um-item" type="button" role="menuitem" data-taedit="${key}">${I.write}<span>Edit</span></button>`;
+  const dl = `<button class="um-item cx-danger-i" type="button" role="menuitem" data-tadel="${key}">${PG_TRASH}<span>Delete</span></button>`;
+  return part === 'edit' ? ed : part === 'del' ? dl : ed + dl;
+}
+const taGone = noun => `<div class="sf-modph ta-gone">${PG_TRASH}<span>You deleted this ${noun}.</span></div>`;
+const taErr = () => `<span class="c2-note warn as-perr" role="alert">Couldn’t save the change. Try again. <button class="tlink" type="button" data-askretry="1">Retry</button></span>`;
+/* the question of an ask, or the text of a post, on the thread page */
+function taQ(p) {
+  const i = D.posts.indexOf(p), k = 't:' + i, ask = p.k === 'ask';
+  if (p.del) return taGone(ask ? 'ask' : 'post');
+  if (st.taEdit && st.taEdit.key === k) return taEditBox(k, { noun: ask ? 'ask' : 'post', ask });
+  return `<p class="th-q${ask ? '' : ' th-post'}" id="th-q">${esc(p.q)}</p>`;
+}
+function taEditBox(key, o) {
+  const e = st.taEdit, what = o.noun === 'ask' ? 'question' : o.noun;
+  const run = o.ask ? `<label class="ta-run"><input type="checkbox" id="ta-ed-run"${e.run ? ' checked' : ''}><span><b>Run it again</b><small>The agent researches the edited ${what} and replaces ${o.noun === 'ask' ? 'the' : 'its'} answer. Uses tokens.</small></span></label>` : '';
+  return `<div class="fu-box2 ta-ed"><textarea id="ta-ed" rows="2" aria-label="Edit your ${o.noun}">${esc(e.text)}</textarea>${run}${e.err ? taErr() : ''}<div class="fu2-bar"><span class="grow"></span><button class="btn" type="button" data-taed="cancel">Cancel</button><button class="btn primary" type="button" data-taed="save"${e.text.trim() ? '' : ' disabled aria-disabled="true"'}>Save</button></div></div>`;
+}
+/* Save: one write per record. An ask that runs again goes through the ask pipeline (askRun);
+   a follow-up that runs again gets its answer the way new follow-ups do. */
+function taSave() {
+  const e = st.taEdit, it = e && taItem(e.key); if (!it) { st.taEdit = null; return; }
+  const txt = e.text.trim(); if (!txt) return;
+  const changed = txt !== it.text, run = !!(it.ask && e.run);
+  if (!changed && !run) { st.taEdit = null; return; }
+  if (e.err) st.taEdit = { ...e, err: false };
+  const e0 = st.taEdit;
+  askHold(() => {
+    if (it.k === 't') {
+      const p = it.p, to = run ? (askPayOk(p.pay) ? p.pay : (askPay(p.s) || {}).id || null) : null;
+      db.update('posts', it.i, x => { x.q = txt; x.kw = txt; if (changed) { x.edited = true; x.t = null; } if (run) { x.running = true; x.sum = null; x.tok = 0; x.pay = to; delete x.fail; } });
+      if (run) askRun(it.i);
+    } else if (it.k === 'r') {
+      db.put('rp', it.i, produce(rpFor(it.p), l => { const r = taAt(l, it.path); r.t = txt; if (changed) r.edited = true; }));
+    } else {
+      const n = it.n;
+      if (n.fu != null) db.put('fu', it.i, produce(fuFor(it.p), l => { if (l[n.fu]) l[n.fu].q = txt; }));
+      qtNodeEdit(it.i, n.id, x => { if (x.fu == null) x.q = txt; if (changed) x.edited = true; if (run) { x.running = true; x.tok = 0; } });
+      if (run) taRunNode(it.i, n.id);
+    }
+    st.taEdit = null;
+  }, () => { st.taEdit = { ...e0, err: true }; });
+}
+function taRunNode(i, id) {
+  const p0 = D.posts[i], pay = p0 ? (askPay(p0.s) || {}).id || null : null;
+  setTimeout(() => {
+    const p = D.posts[i]; if (DISPOSED || !p) return;
+    const n = qtT(i).by[id]; if (!n || !n.running) return;
+    const html = QT_CANNED.generic, tok = 9e3 + qtTokTxt(html) * 20;
+    if (n.fu != null) db.put('fu', i, produce(fuFor(p), l => { if (l[n.fu]) { l[n.fu].html = html; l[n.fu].a = qtTxt(html); } }));
+    qtNodeEdit(i, id, x => { x.running = false; x.tok = tok; if (x.fu == null) x.html = html; });
+    askCharge(pay, tok);
+    if (st.thread === i && st.device !== 'native') renderKeepFocus();
+  }, Math.max(40, askMs()));
+}
+function taDelDlg(key) {
+  const it = taItem(key); if (!it) return '';
+  const n = it.kids, rest = { post: n === 1 ? 'The reply stays' : `The ${n} replies stay`, ask: `The answer and ${n === 1 ? 'the follow-up' : `the ${n} follow-ups`} stay`, reply: n === 1 ? 'The reply to it stays' : `The ${n} replies to it stay`, 'follow-up': n === 1 ? 'The ask below it stays' : `The ${n} asks below it stay` }[it.noun];
+  const gone = { post: 'This removes the post for everyone.', ask: 'This removes the ask and its answer for everyone.', reply: 'This removes the reply for everyone.', 'follow-up': 'This removes the follow-up and its answer for everyone.' }[it.noun];
+  const body = n ? `<p class="muted">${rest}. The thread shows “You deleted this ${it.noun}.” in its place. You can’t undo this.</p>` : `<p class="muted">${gone} You can’t undo this.</p>`;
+  return dlg(`Delete your ${it.noun}?`, body, `${cancelB()}<button class="btn danger" type="button" data-tadelok="${key}">Delete</button>`, 'alertdialog');
+}
+function taDelete(key) {
+  const it = taItem(key); st.modal = null; if (!it) return;
+  const keep = it.kids > 0, noun = it.noun;
+  askHold(() => {
+    if (it.k === 't') {
+      if (keep) db.update('posts', it.i, x => { x.del = true; x.q = ''; x.kw = ''; x.t = null; delete x.edited; });
+      else {
+        askCancel(it.i);
+        db.update('posts', it.i, x => { x.gone = true; x.del = true; x.q = ''; x.kw = ''; x.t = null; x.sum = null; x.running = false; delete x.edited; });
+        if (st.saved.has(it.i)) db.toggle('saved', it.i, false);
+        if (st.liked.has(it.i)) db.toggle('liked', it.i, false);
+        Object.assign(st, NAVBASE(), { space: it.p.s, home: false });
+      }
+    } else if (it.k === 'r') {
+      db.put('rp', it.i, produce(rpFor(it.p), l => {
+        const par = it.path.length > 1 ? taAt(l, it.path.slice(0, -1)).kids : l, j = it.path[it.path.length - 1];
+        if (keep) { par[j].del = true; par[j].t = ''; delete par[j].edited; } else par.splice(j, 1);
+      }));
+    } else {
+      const n = it.n;
+      if (n.fu != null) db.put('fu', it.i, produce(fuFor(it.p), l => { if (l[n.fu]) { l[n.fu].del = true; l[n.fu].q = ''; l[n.fu].a = ''; delete l[n.fu].html; } }));
+      qtEdit(it.i, d => { if (keep) { const x = d.nodes.find(y => y.id === n.id); if (x) { x.del = true; x.q = ''; x.html = ''; delete x.edited; } } else d.nodes = d.nodes.filter(y => y.id !== n.id); });
+      if (st.qtNode === n.id) st.qtNode = 'r';
+    }
+    toast(`You deleted the ${noun}.`);
+  }, () => toast(`Couldn’t delete the ${noun}. Try again.`, 'ask-retry', 'Retry'));
+}
+/* a deleted ask or follow-up reads as deleted wherever the tree lists it (outline, map, transcript) */
+{ const qtT0 = qtT; qtT = function (i) { const T = qtT0(i); T.nodes.forEach(n => { if (n.id === 'r' ? T.p.del : n.del) { n.q = `You deleted this ${n.id === 'r' ? 'ask' : 'follow-up'}.`; if (n.id !== 'r') n.html = ''; } }); return T; }; }
+/* a thread removed outright: its link shows that it is gone */
+{ const lt0 = layoutThread; layoutThread = function () {
+  const p = D.posts[st.thread];
+  if (!p || !p.gone) return lt0();
+  const s = sp(p.s);
+  return `<div class="A C Af H">${topHeader()}<div class="th-page"><div class="cs-empty ta-gonepg"><p><b>${p.u === ME.u ? 'You' : esc(p.u)} deleted this ${p.k === 'ask' ? 'ask' : 'post'}.</b></p><p class="muted">The thread is no longer in ${spName(s)}.</p><button class="btn" type="button" data-space="${s.id}">Go to ${spName(s)}</button></div></div></div>`;
+}; }
+
+/* ---- replies to replies, and likes on replies ---- */
+const taRpBase = r => r.likes != null ? r.likes : r.u === ME.u ? 0 : (String(r.t || '').length * 7) % 9;
+function taRpActs(r, key) {
+  const p = D.posts[+key.split(':')[0]], ro = p && sp(p.s).archived, lk = D.rpLiked.has(key), n = taRpBase(r) + (lk ? 1 : 0);
+  return `${ro ? '' : `<button class="tlink" type="button" data-tarp="${key}" aria-expanded="${st.taRp === key}">Reply</button>`}<button class="tlink ta-like" type="button" data-talike="${key}" aria-pressed="${lk}" aria-label="${lk ? 'Unlike' : 'Like'} (${n} like${n === 1 ? '' : 's'})">${I.heart.replace('<svg', '<svg width="12" height="12"')}<span class="num">${n}</span></button>`;
+}
+function taRpBox(r, key) {
+  return `<div class="fu-box2 ta-rpbox"><textarea id="ta-rp" rows="2" placeholder="Reply to ${esc(r.u)}…" aria-label="Reply to ${esc(r.u)}">${esc(st.taRpDraft)}</textarea>${st.taRpErr ? `<span class="c2-note warn as-perr" role="alert">${AS_ERR} <button class="tlink" type="button" data-askretry="1">Retry</button></span>` : ''}<div class="fu2-bar"><span class="grow"></span><button class="btn" type="button" data-tarpx="1">Cancel</button><button class="btn primary" type="button" data-tarpgo="${key}">Reply</button></div></div>`;
+}
+/* The new reply joins the replies of the top-level reply: one level of nesting, as in the thread's replies. */
+function taRpSend(key) {
+  const txt = (st.taRpDraft || '').trim(), f = $('ta-rp');
+  if (!txt) { if (f) f.focus(); return false; }
+  const [a, path] = key.split(':'), i = +a, top = +path.split('.')[0];
+  st.taRpErr = false;
+  askHold(() => {
+    db.put('rp', i, produce(rpFor(D.posts[i]), l => { const t = l[top]; if (t) t.kids = [...(t.kids || []), { u: ME.u, age: 'now', t: txt }]; }));
+    Object.assign(st, { taRp: null, taRpDraft: '' });
+  }, () => { st.taRpErr = true; });
+  return true;
+}
+
+/* ---- citations and source rows ---- */
+const taSrcAttr = (p, k) => { const i = D.posts.indexOf(p), on = st.taCite && st.taCite.th === i && st.taCite.n === k; return ` data-tasrc="${i}:${k}" tabindex="0" role="button"${on ? ' class="ta-hi"' : ''}`; };
+const taKnown = x => [...D.media, ...(st.miAdded || [])].find(m => m.t && m.t === x.t) || null;
+/* a plain citation in the thread's own answer (not one in a follow-up answer) */
+function taCiteOk(el) {
+  if (!el.closest('.th-page') || el.classList.contains('mi-cite') || st.thread == null) return false;
+  const a = el.closest('#th-a, .ch-a, .rd-ans'); if (!a) return false;
+  return !a.classList.contains('ch-a') || a === document.querySelector('#app .th-page .ch-a');
+}
+function taCiteGo(el) {
+  const n = parseInt(el.textContent, 10) - 1, i = st.thread;
+  if (!(n >= 0) || !document.querySelector(`#app [data-tasrc="${i}:${n}"]`)) return false;
+  st.taCite = { th: i, n };
+  renderAll();
+  const row = [...document.querySelectorAll(`#app [data-tasrc="${i}:${n}"]`)].find(x => x.getClientRects().length);
+  if (row) { row.scrollIntoView({ block: 'center', behavior: 'smooth' }); row.focus({ preventScroll: true }); }
+  return true;
+}
+function taSrcOpen(v) {
+  const [i, k] = v.split(':').map(Number), p = D.posts[i], x = p && srcItems(p)[k]; if (!x) return;
+  const m = taKnown(x);
+  st.taCite = null;
+  if (m) miOpen(m.id); else st.modal = `ta-web:${i}:${k}`;
+}
+function taWebDlg(a) {
+  const [i, k] = a.split(':').map(Number), p = D.posts[i], x = p && srcItems(p)[k]; if (!x) return '';
+  const host = String(x.d || x.t).replace(/^https?:\/\//, '').split('/')[0];
+  const body = `<div class="ta-web"><span class="ta-web-k">${GLOBE}Cited as source ${k + 1}</span><b>${esc(x.t)}</b><span class="ta-web-d">${esc(host)}</span>${x.n ? `<p class="muted">${esc(x.n)}</p>` : ''}</div><p class="cs-fine">${I.agent}<span>The agent read this page on the web when it wrote the answer. It is not a source item in ${spName(sp(p.s))}.</span></p>`;
+  return dlg('Web result', body, `${cancelB('Close')}<a class="btn primary" href="https://${esc(host)}" target="_blank" rel="noopener noreferrer">Open ${esc(host)}</a>`);
+}
+
+/* ---- Share for threads in open spaces ---- */
+function taShareMenu(p) {
+  const i = D.posts.indexOf(p), open = st.taShare === i;
+  return `<span class="sf-imw ta-shw"><button class="act" type="button" data-tashare="${i}" aria-haspopup="true" aria-expanded="${open}" aria-label="Share">${CI.share}<span>Share</span></button>${open ? `<div class="pop cs-pop sf-ipop ta-shpop" role="menu"><button class="um-item" type="button" role="menuitem" data-tash="copy:${i}">${CI.link}<span>Copy link</span></button><button class="um-item" type="button" role="menuitem" data-tash="x:${i}">${XI}<span>Share to X</span></button></div>` : ''}</span>`;
+}
+
+/* ---- skills after "/" in the composer ---- */
+const taSkAll = () => { const s = sp(curSpace()); return s ? (D.skills[s.id] || []).map(([n, t]) => ({ n, d: abSkParse(t).d })) : []; };
+const taSkList = q => { const l = taSkAll(); return [...l.filter(x => x.n.startsWith(q)), ...l.filter(x => !x.n.startsWith(q) && x.n.includes(q))]; };
+function taSkHTML() {
+  const k = st.taSk; if (!k || st.mode !== 'ask' || !taSkAll().length) return '';
+  const l = taSkList(k.q), s = sp(curSpace());
+  return `<div class="ta-skl" id="ta-skl-l" role="listbox" aria-label="Skills in ${spName(s)}"><div class="mp-h">Skills in ${spName(s)}</div>${l.length ? l.map((x, j) => `<button type="button" class="ts-opt ta-sko" role="option" id="ta-sko-${j}" tabindex="-1" aria-selected="${j === k.sel}" data-taskill="${esc(x.n)}"><span class="sk-ic">${skillIcon(x.n)}</span><span class="ts-tx"><b>/${esc(x.n)}</b><small>${esc(x.d)}</small></span></button>`).join('') : `<p class="ta-skl-none">No skill in ${spName(s)} matches /${esc(k.q)}.</p>`}</div>`;
+}
+/* the list follows the text before the cursor: "/" at the start or after a space, then letters, digits and hyphens */
+function taSkScan(el) {
+  const m = /(^|\s)\/([a-z0-9-]*)$/.exec(el.value.slice(0, el.selectionStart)), was = st.taSk;
+  st.taSk = m && st.mode === 'ask' && taSkAll().length ? { q: m[2], sel: was && was.q === m[2] ? was.sel : 0 } : null;
+  taSkSync(el);
+}
+function taSkSync(el) {
+  const w = $('ta-skl'); if (w) { const h = taSkHTML(); if (w.innerHTML !== h) w.innerHTML = h; }
+  el = el || $('compose-text'); if (!el) return;
+  const opt = st.taSk && $('ta-sko-' + st.taSk.sel);
+  if (st.taSk && w && w.firstChild) el.setAttribute('aria-controls', 'ta-skl-l'); else el.removeAttribute('aria-controls');
+  if (opt) { el.setAttribute('aria-activedescendant', opt.id); const box = w.querySelector('.ta-skl'); if (box) { const o = opt.offsetTop, h = opt.offsetHeight; if (o < box.scrollTop) box.scrollTop = o; else if (o + h > box.scrollTop + box.clientHeight) box.scrollTop = o + h - box.clientHeight; } }
+  else el.removeAttribute('aria-activedescendant');
+}
+function taSkInsert(name) {
+  const el = $('compose-text'); if (!el) return;
+  const c = el.selectionStart, v = el.value, before = v.slice(0, c).replace(/\/[a-z0-9-]*$/, `/${name} `), after = v.slice(c).replace(/^ /, '');
+  st.taSk = null;
+  el.value = before + after; el.focus(); el.setSelectionRange(before.length, before.length);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+/* an ask that starts with one of the space's skills records it; the answer header shows "Used /name" */
+{ const ct0 = createThread; createThread = function (kind) {
+  const m = /^\/([a-z0-9-]+)(?=\s|$)/.exec(st.draft.trim()), s = sp(curSpace());
+  const sk = kind === 'ask' && m && s && (D.skills[s.id] || []).some(x => x[0] === m[1]) ? m[1] : null;
+  const n0 = D.posts.length; ct0(kind);
+  if (sk && D.posts.length > n0) db.update('posts', n0, x => { x.skill = sk; });
+}; }
+
+/* ---- the model menu: thinking level ---- */
+const TA_THINK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M2.3 11.8a5.7 5.7 0 0 1 11.4 0"/><path d="M8 11.8 10.4 7.6"/><path d="M4.2 7.3l.7.6M11.8 7.3l-.7.6M8 5.4v.9"/></svg>';
+const taThinkRow = () => `<div class="tl-switch mp-web mp-ws-plain mp-think" role="menuitem" aria-disabled="true">${TA_THINK}<span class="tl-sw-tx"><b>Thinking level</b></span><span class="mp-val">Medium</span></div>`;
+
+/* ---- dialogs ---- */
+function taModal() {
+  const [k, a] = (st.modal || '').split(/:(.*)/s);
+  if (k === 'ta-del') return taDelDlg(a);
+  if (k === 'ta-web') return taWebDlg(a);
+  return '';
+}
+{ const TA_csModal = csModal; csModal = function () { return (st.modal || '').startsWith('ta-') ? taModal() : TA_csModal(); }; }
+
+/* ---- state that belongs to one screen ----
+   Leaving a thread ends an edit, a reply box, a highlighted citation and an open Share menu. A skill dialog
+   in About or Manage closes when the space behind it changes, because it names a skill by its position. */
+uiStore.subscribe((s, p) => {
+  const dlgSp = x => x.subPage === 'manage' ? x.mgSpace : x.space;
+  if (/^ab-sk(ill|rm):/.test(s.modal || '') && s.modal === p.modal && dlgSp(s) !== dlgSp(p)) { uiStore.setState({ modal: null }); return; }
+  if (s.thread !== p.thread && (s.taEdit || s.taRp || s.taCite || s.taShare != null)) { uiStore.setState({ taEdit: null, taRp: null, taRpDraft: '', taRpErr: false, taCite: null, taShare: null }); return; }
+  if (s.taSk && (!s.compOpen || s.space !== p.space || s.mode !== 'ask' || s.compSpace !== p.compSpace)) uiStore.setState({ taSk: null });
+});
+
+/* ---- after each render: citations in the thread's answer are buttons ---- */
+{ const ar0 = csAfterRender; csAfterRender = function () {
+  ar0();
+  if (st.thread == null) return;
+  document.querySelectorAll('#app .th-page sup.cite:not(.mi-cite)').forEach(el => {
+    if (!taCiteOk(el)) return;
+    const n = parseInt(el.textContent, 10);
+    if (!document.querySelector(`#app [data-tasrc="${st.thread}:${n - 1}"]`)) return;
+    el.classList.add('ta-cite'); el.tabIndex = 0; el.setAttribute('role', 'button'); el.setAttribute('aria-label', `Source ${n}`);
+  });
+}; }
+
+/* ---- clicks, typing and keys ---- */
+on($('app'), 'click', e => {
+  if (st.device === 'native') return;
+  const t = e.target; if (!t.closest) return;
+  const d = sel => t.closest(sel), go = () => { e.stopImmediatePropagation(); renderAll(); return true; };
+  const focus = id => { const f = $(id); if (f) { f.focus({ preventScroll: true }); f.setSelectionRange(f.value.length, f.value.length); f.scrollIntoView({ block: 'nearest' }); } };
+  let b;
+  if (st.toast && d('[data-taedit], [data-taed], [data-tadel], [data-tadelok], [data-tarp], [data-tarpx], [data-tarpgo], [data-talike], [data-tasrc], [data-tashare], [data-tash]')) st.toast = null;
+  /* outside clicks close the Share menu and the skill list, and end the highlight */
+  if (st.taShare != null && !d('.ta-shw')) { st.taShare = null; if (!d('button, a, input, textarea, label, [data-tasrc], [tabindex]')) return go(); }
+  if (st.taSk && !d('#ta-skl, #compose-text')) { st.taSk = null; taSkSync(); }
+  if (st.taCite && !d('sup.ta-cite, [data-tasrc]')) st.taCite = null;
+  /* edit */
+  if ((b = d('[data-taedit]'))) {
+    const k = b.dataset.taedit, it = taItem(k);
+    Object.assign(st, { imenu: null, qtMenu: null, taRp: null, taEdit: it ? { key: k, text: it.text, run: !!it.ask, err: false } : null });
+    go(); focus('ta-ed'); return;
+  }
+  if ((b = d('[data-taed]'))) { if (b.dataset.taed === 'cancel') st.taEdit = null; else taSave(); return go(); }
+  if (t.id === 'ta-ed-run') { if (st.taEdit) st.taEdit = { ...st.taEdit, run: t.checked }; e.stopImmediatePropagation(); return; }
+  if (d('.ta-run')) { e.stopImmediatePropagation(); return; }
+  /* delete */
+  if ((b = d('[data-tadel]'))) { Object.assign(st, { imenu: null, qtMenu: null, modal: 'ta-del:' + b.dataset.tadel }); return go(); }
+  if ((b = d('[data-tadelok]'))) { taDelete(b.dataset.tadelok); return go(); }
+  /* replies */
+  if ((b = d('[data-tarp]'))) {
+    if (!taIn()) { st.modal = 'signin'; return go(); }
+    const k = b.dataset.tarp; if (st.taRp === k) { Object.assign(st, { taRp: null, taRpErr: false }); return go(); }
+    const it = taItem('r:' + k), kid = k.includes('.');
+    Object.assign(st, { taRp: k, taRpErr: false, taEdit: null, imenu: null, taRpDraft: kid && it && it.u !== ME.u ? `@${it.u} ` : '' });
+    go(); focus('ta-rp'); return;
+  }
+  if (d('[data-tarpx]')) { Object.assign(st, { taRp: null, taRpDraft: '', taRpErr: false }); return go(); }
+  if ((b = d('[data-tarpgo]'))) { taRpSend(b.dataset.tarpgo); return go(); }
+  if ((b = d('[data-talike]'))) { if (!taIn()) { st.modal = 'signin'; return go(); } db.toggle('rpLiked', b.dataset.talike); return go(); }
+  /* citations and sources */
+  { const c = d('sup.cite'); if (c && taCiteOk(c)) { e.stopImmediatePropagation(); taCiteGo(c); return; } }
+  if ((b = d('[data-tasrc]'))) { taSrcOpen(b.dataset.tasrc); return go(); }
+  /* Share */
+  if ((b = d('[data-tashare]'))) { const i = +b.dataset.tashare; Object.assign(st, { taShare: st.taShare === i ? null : i, imenu: null }); return go(); }
+  if ((b = d('[data-tash]'))) {
+    const [v, i] = b.dataset.tash.split(':'); st.taShare = null;
+    if (v === 'copy') { taCopy(taThreadUrl(+i)); toast('Link copied.'); } else toast('Opened X with a link to the thread.');
+    return go();
+  }
+  /* skills */
+  if ((b = d('[data-taskill]'))) { e.stopImmediatePropagation(); taSkInsert(b.dataset.taskill); return; }
+});
+/* an option in the skill list keeps the focus in the composer */
+on($('app'), 'mousedown', e => { if (e.target.closest && e.target.closest('.ta-sko')) e.preventDefault(); });
+on($('app'), 'input', e => {
+  if (st.device === 'native') return;
+  const el = e.target;
+  if (el.id === 'compose-text') taSkScan(el);
+  if (el.id === 'ta-ed' && st.taEdit) { st.taEdit = { ...st.taEdit, text: el.value }; const s = document.querySelector('[data-taed="save"]'); if (s) { s.disabled = !el.value.trim(); s.setAttribute('aria-disabled', String(!el.value.trim())); } }
+  if (el.id === 'ta-rp') st.taRpDraft = el.value;
+});
+on(document, 'keydown', e => {
+  if (st.device === 'native' || !e.target || !e.target.closest) return;
+  const el = e.target, stop = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (el.id === 'compose-text' && st.taSk) {
+    const l = taSkList(st.taSk.q);
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && l.length) { stop(); st.taSk = { ...st.taSk, sel: (st.taSk.sel + (e.key === 'ArrowDown' ? 1 : -1) + l.length) % l.length }; taSkSync(el); return; }
+    if ((e.key === 'Enter' || e.key === 'Tab') && l.length && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) { stop(); taSkInsert(l[Math.min(st.taSk.sel, l.length - 1)].n); return; }
+    if (e.key === 'Escape') { stop(); st.taSk = null; taSkSync(el); return; }
+  }
+  if (el.id === 'ta-ed' || el.id === 'ta-rp') {
+    if (e.key === 'Escape') { stop(); if (el.id === 'ta-ed') st.taEdit = null; else Object.assign(st, { taRp: null, taRpErr: false }); renderAll(); return; }
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { stop(); if (el.id === 'ta-ed') taSave(); else taRpSend(st.taRp); renderAll(); return; }
+  }
+  if ((e.key === 'Enter' || e.key === ' ') && el.matches('[data-tasrc], sup.ta-cite')) { stop(); el.click(); }
+}, true);
+
+/* ---- Screen entries ---- */
+JUMPS.push(['Thread actions', [
+  ['ta-menu', 'Your post: menu with Edit and Delete'], ['ta-edit-post', 'Edit your post'], ['ta-edit-ask', 'Edit your ask, with Run it again'],
+  ['ta-edit-reply', 'Edit your reply'], ['ta-edit-fu', 'Edit your follow-up'], ['ta-del', 'Delete your post: confirm'], ['ta-del-reply', 'Delete your reply: confirm'],
+  ['ta-deleted', 'Deleted post and reply, replies kept'], ['ta-deleted-ask', 'Deleted ask, follow-ups kept'], ['ta-reply', 'Reply to a reply'],
+  ['ta-cite', 'Citation: its source highlighted'], ['ta-web', 'Source: web result'], ['ta-share', 'Share menu, open space'],
+  ['ta-skills', 'Composer: skills after /'], ['ta-skill-used', 'Answer that used a skill'], ['ta-model', 'Model menu with Thinking level'],
+]]);
+const TA = { touched: new Map() };   /* fixture threads a screen changed: thread → the record before */
+const TA_POST = 'Notes from Thursday’s reading group are on the wiki page. Next week: chapters 4 to 6.';
+function taDemoPost(o = {}) {
+  let i = D.posts.findIndex(p => p.taDemo);
+  const rec = { s: 'public', u: ME.u, mine: true, k: 'post', t: null, q: TA_POST, sum: null, r: 3, tok: 0, age: '2h', likes: 4, running: false, kw: TA_POST, taDemo: true, ...o };
+  if (i < 0) { db.push('posts', rec); i = D.posts.length - 1; } else db.update('posts', i, () => rec);
+  db.put('rp', i, [
+    { u: 'jun.park', age: '1h', t: 'Is the group still meeting on Thursdays at six?', kids: [{ u: ME.u, age: '50m', t: 'Yes, same time. The room is now 2B.' }] },
+    { u: ME.u, age: '40m', t: 'I added the discussion questions for chapter 4 to the page.' },
+    { u: 'lettie', age: '20m', t: 'Linked this from the reading list.' },
+  ]);
+  Object.assign(st, { thread: i, space: 'public', home: false });
+  return i;
+}
+const taTouch = (i, recipe) => { if (!TA.touched.has(i)) TA.touched.set(i, D.posts[i]); db.update('posts', i, recipe); };
+function taRestore() {
+  TA.touched.forEach((p, i) => { if (D.posts[i]) db.update('posts', i, () => p); });
+  TA.touched.clear();
+  const i = D.posts.findIndex(p => p.taDemo);
+  if (i >= 0 && i === D.posts.length - 1) { db.remove('posts', i); db.del('rp', String(i)); }
+  Object.assign(st, { taEdit: null, taRp: null, taRpDraft: '', taRpErr: false, taCite: null, taShare: null, taSk: null });
+}
+function taJump(k) {
+  const thread = i => { Object.assign(st, { thread: i, space: D.posts[i].s, home: false }); qtEnter(i); };
+  const ASK0 = 0;   /* your ask in #public, with follow-ups */
+  const compose = o => Object.assign(st, { space: 'public', home: false, compOpen: true, mode: 'ask', draft: '' }, o);
+  switch (k) {
+    case 'ta-menu': { const i = taDemoPost(); st.imenu = 'p:' + i; break; }
+    case 'ta-edit-post': { const i = taDemoPost(); st.taEdit = { key: 't:' + i, text: TA_POST + ' Bring your own copy.', run: false, err: false }; break; }
+    case 'ta-edit-ask': thread(ASK0); st.taEdit = { key: 't:' + ASK0, text: D.posts[ASK0].q, run: true, err: false }; break;
+    case 'ta-edit-reply': { const i = taDemoPost(); st.taEdit = { key: `r:${i}:1`, text: 'I added the discussion questions for chapters 4 and 5 to the page.', run: false, err: false }; break; }
+    case 'ta-edit-fu': {
+      thread(ASK0);
+      const T = qtT(ASK0), n = T.nodes.find(x => x.id !== 'r' && x.u === ME.u && !x.running) || T.nodes[1];
+      st.qtExp = new Set(T.path(n.id).map(x => x.id));
+      st.taEdit = { key: `n:${ASK0}:${n.id}`, text: n.q, run: true, err: false };
+      setTimeout(() => { const el = $('ta-ed'); if (el) el.scrollIntoView({ block: 'center' }); }, 0);
+      break;
+    }
+    case 'ta-del': { const i = taDemoPost(); st.modal = 'ta-del:t:' + i; break; }
+    case 'ta-del-reply': { const i = taDemoPost(); st.modal = `ta-del:r:${i}:0.0`; break; }
+    case 'ta-deleted': {
+      const i = taDemoPost({ del: true, q: '', kw: '' });
+      db.put('rp', i, produce(D.rp[i], l => { l[1] = { ...l[1], del: true, t: '', kids: [{ u: 'jun.park', age: '30m', t: 'Thanks, I found them.' }] }; }));
+      break;
+    }
+    case 'ta-deleted-ask': thread(ASK0); taTouch(ASK0, x => { x.del = true; x.q = ''; x.kw = ''; x.t = null; }); break;
+    case 'ta-reply': { const i = taDemoPost(); Object.assign(st, { taRp: `${i}:0`, taRpDraft: 'Room 2B is on the second floor, next to the library.' }); setTimeout(() => { const el = $('ta-rp'); if (el) el.scrollIntoView({ block: 'center' }); }, 0); break; }
+    case 'ta-cite': thread(ASK0); st.taCite = { th: ASK0, n: 1 }; setTimeout(() => { const r = [...document.querySelectorAll(`#app [data-tasrc="${ASK0}:1"]`)].find(x => x.getClientRects().length); if (r) r.scrollIntoView({ block: 'center' }); }, 0); break;
+    case 'ta-web': thread(ASK0); st.modal = `ta-web:${ASK0}:1`; break;
+    case 'ta-share': thread(ASK0); st.taShare = ASK0; setTimeout(() => { const m = document.querySelector('#app .ta-shpop'); if (m) m.scrollIntoView({ block: 'center' }); }, 0); break;
+    case 'ta-skills': compose({ draft: '/' }); st.taSk = { q: '', sel: 0 }; break;
+    case 'ta-skill-used': { const i = D.posts.findIndex(p => p.s === 'ml' && p.k === 'ask' && D.rich[D.posts.indexOf(p)] && !p.about); thread(i); taTouch(i, x => { x.skill = 'summarizing-papers'; }); break; }
+    case 'ta-model': compose({ draft: 'Which reading-group books have a sequel?', mpOpen: true }); break;
+  }
+}
+{ const TA_jump = jump; jump = function (k) { if (!dataReady()) return TA_jump(k); taRestore(); TA_jump(k); if (String(k).startsWith('ta-')) taJump(k); }; }
+/* ==== end thread actions ==== */
 
 buildJump();
 /* End of start-up: the fixtures are complete. Copy them as the mock backend's seed data, start loading
