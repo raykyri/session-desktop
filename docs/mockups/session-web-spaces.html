@@ -3701,48 +3701,55 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
   html:not([data-device="phone"]) .A.ntab-side .drawer .ds-tabl, html:not([data-device="phone"]) .A.ntab-side .drawer .dh [data-act="drawer"] { display: none; }
 }
 
-/* source reference in feed rows (miRowChip), the Source ref variants */
-.mi-rchip.rf-pill { display: inline-flex; align-self: flex-start; align-items: stretch; max-width: 100%; margin: 4px 0 3px; border: 1px solid var(--control-border); border-radius: 999px; background: var(--pane); font-size: var(--fs-xs); color: var(--t-secondary); overflow: hidden; }
-.rf-pill .rf-t { display: inline-flex; align-items: center; gap: 5px; min-width: 0; padding: 3px 9px 3px 6px; }
-.rf-pill .rf-t > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rf-pill .rf-loc { display: inline-flex; align-items: center; gap: 3px; flex: none; padding: 0 9px; border-left: 1px solid var(--control-border); background: var(--fill-subtle); color: var(--t-strong); }
-.rf-pill .rf-loc svg { width: 9px; height: 9px; }
-.rf-ics { display: inline-flex; }
-.rf-ics .mi-ic.xs + .mi-ic.xs { margin-left: -5px; }
-.mi-rchip.rf-words { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 2px 0 1px; font-size: var(--fs-sm); color: var(--t-tertiary); }
-.rf-words > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rf-words b { font-weight: 550; color: var(--t-secondary); }
-.mi-rchip.rf-quote { display: flex; flex-direction: column; gap: 4px; margin: 5px 0 3px; padding: 1px 0 1px 10px; border-left: 2px solid var(--border-strong); }
-.rf-quote.rf-noq { border-left: 0; padding-left: 0; margin-top: 2px; }
-.rf-quote q { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: var(--fs-sm); line-height: 1.45; color: var(--t-secondary); }
-.rf-quote .rf-src { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: var(--fs-xs); color: var(--t-tertiary); }
-.rf-quote .rf-src > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+
+/* ---- Source ref: the source an ask is about, in feed rows (miRowChip, miMetaRef) ----
+   One line between the title and the answer summary: quieter than the summary, louder than the meta row.
+   Shared pieces: .rf-ti the title (truncates), .rf-lo the locator (tabular, never truncates), .rf-sep a dot. */
+.row-m > .mi-rchip { display: flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; margin: 3px 0 1px; font-size: var(--fs-sm); line-height: 18px; color: var(--t-tertiary); }
+.mi-rchip .mi-ic.xs, .rf-meta .mi-ic.xs { width: 14px; height: 14px; color: var(--t-tertiary); }
+.mi-rchip .mi-ic.xs svg, .rf-meta .mi-ic.xs svg { width: 12px; height: 12px; }
+.mi-rchip .rf-ti, .rf-meta .rf-ti { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--t-secondary); }
+.mi-rchip .rf-more, .mi-rchip .rf-w, .rf-meta .rf-more, .rf-meta .rf-w { flex: none; white-space: pre; }
+.mi-rchip .rf-lo, .rf-meta .rf-lo { flex: none; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rf-lo svg { width: 8px; height: 8px; }
+.rf-sep { flex: none; color: var(--t-faint); }
+/* A inline */
+.rf-a1 .rf-lo { color: var(--t-strong); font-weight: 550; margin-right: 1px; }
+.rf-a2 .rf-pl { flex: none; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--t-faint); margin-right: 2px; }
+/* B pill */
+.row-m > .mi-rchip:is(.rf-pill, .rf-tag, .rf-split) { align-self: flex-start; margin: 5px 0 2px; font-size: var(--fs-xs); line-height: 1; }
+.rf-pill { gap: 0 !important; height: 22px; border: 1px solid var(--control-border); border-radius: 999px; background: var(--pane); overflow: hidden; }
+.rf-pill .rf-c { display: flex; align-items: center; gap: 5px; min-width: 0; height: 100%; padding: 0 9px 0 6px; }
+.rf-pill .rf-lc { display: flex; align-items: center; flex: none; height: 100%; padding: 0 8px; border-left: 1px solid var(--control-border); background: var(--fill-subtle); }
+.rf-pill .rf-lo, .rf-tag .rf-lo, .rf-split .rf-lo { color: var(--t-strong); font-weight: 550; }
+.rf-tag { height: 22px; padding: 0 8px 0 5px; border-radius: 5px; background: var(--fill-subtle); }
+.rf-tag .rf-ti { color: var(--t-strong); }
+.rf-split { gap: 4px !important; }
+.rf-split .rf-c { display: flex; align-items: center; gap: 5px; min-width: 0; height: 22px; padding: 0 9px 0 6px; border: 1px solid var(--control-border); border-radius: 999px; background: var(--pane); }
+.rf-split .rf-lc { flex: none; padding: 0 8px; border-color: transparent; background: var(--fill-subtle); }
+.rf-ics { display: inline-flex; flex: none; }
+.rf-ics .mi-ic.xs + .mi-ic.xs { margin-left: -4px; }
+/* C spelled out */
+.rf-words { gap: 0 !important; }
+.rf-words .mi-ic.xs { margin-right: 5px; }
+.rf-words .rf-ti { font-weight: 500; }
+/* D quote */
+.row-m > .mi-rchip.rf-quote { flex-direction: column; align-items: stretch; gap: 3px; margin: 5px 0 3px; padding: 0 0 0 11px; border-left: 2px solid var(--border-strong); }
+.rf-quote q { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: var(--fs-sm); line-height: 1.5; color: var(--t-secondary); }
+.rf-quote .rf-src { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: var(--fs-xs); line-height: 16px; }
+.rf-quote .rf-src .rf-ti { color: var(--t-tertiary); }
+.row-m > .mi-rchip.rf-quote.rf-noq { border-left: 0; padding-left: 0; margin-top: 3px; }
+.rf-quote.rf-noq .rf-src { font-size: var(--fs-sm); }
+.rf-quote.rf-noq .rf-src .rf-ti { color: var(--t-secondary); }
+.rf-qline q { -webkit-line-clamp: 1; font-style: italic; }
+.row-m > .mi-rchip.rf-quote.rf-qcard { gap: 5px; padding: 8px 11px 7px; border: 0; border-radius: 8px; background: var(--inset); box-shadow: inset 0 0 0 1px var(--divider); }
+/* E in the meta row */
+.row-meta .rf-meta { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
+.row-meta .rf-meta .rf-ti { color: var(--t-tertiary); }
+.rf-meta .rf-arr { display: inline-flex; color: var(--t-faint); }
+.rf-meta .rf-arr svg { width: 12px; height: 12px; }
 .rf-demo .rf-dh { margin: 22px 0 4px; }
-
-/* Source ref sub-variants */
-.mi-rchip.rf-ia { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.rf-ia .rf-it { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.rf-ia .rf-l1 { display: inline-flex; align-items: center; gap: 3px; flex: none; color: var(--t-strong); font-weight: 550; }
-.rf-ia .rf-l1 svg, .rf-tag .rf-loc svg, .rf-split .rf-lc svg { width: 9px; height: 9px; }
-.rf-ip .rf-pl { flex: none; font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.02em; color: var(--t-tertiary); text-transform: uppercase; }
-.mi-rchip.rf-tag { display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; max-width: 100%; margin: 4px 0 3px; padding: 2px 8px 2px 5px; border-radius: 6px; background: var(--fill-subtle); font-size: var(--fs-xs); color: var(--t-secondary); }
-.rf-tag .rf-tt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.rf-tag .rf-loc { display: inline-flex; align-items: center; gap: 3px; flex: none; color: var(--t-strong); font-weight: 550; }
-.rf-tag .rf-loc::before { content: "·"; margin-right: 3px; color: var(--t-faint); font-weight: 400; }
-.mi-rchip.rf-split { display: flex; align-items: center; gap: 5px; min-width: 0; margin: 4px 0 3px; font-size: var(--fs-xs); color: var(--t-secondary); }
-.rf-split .rf-c { display: inline-flex; align-items: center; gap: 5px; min-width: 0; height: 22px; padding: 0 9px 0 6px; border: 1px solid var(--control-border); border-radius: 999px; background: var(--pane); }
-.rf-split .rf-c > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rf-split .rf-lc { flex: none; gap: 3px; padding: 0 8px; color: var(--t-strong); background: var(--fill-subtle); border-color: transparent; }
-.rf-quote.rf-qline q { -webkit-line-clamp: 1; font-style: italic; }
-.mi-rchip.rf-quote.rf-qcard { border-left: 0; padding: 9px 12px 8px; border-radius: 10px; background: var(--inset); border: 1px solid var(--divider); gap: 6px; }
-
-/* Source ref E: in the meta row after the timestamp */
-.row-meta .rf-meta { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; color: var(--t-tertiary); }
-.row-meta .rf-meta > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.row-meta .rf-meta .mi-ic.xs { width: 14px; height: 14px; }
-.row-meta .rf-meta .mi-ic.xs svg { width: 11px; height: 11px; }
-.rf-mre .rf-arr { display: inline-flex; color: var(--t-faint); }
-.rf-mre .rf-arr svg { width: 12px; height: 12px; }
 </style>
 
 <div class="shell" id="shell">
@@ -3760,6 +3767,7 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
       <div class="knob"><span>Font</span><div class="seg" id="k-font"></div></div>
       <div class="knob"><span>Source ref</span><div class="seg" id="k-ref"></div></div>
+      <div class="knob" title="Paragraph numbers, post numbers and timestamps in the source reference"><span>Locator</span><div class="seg" id="k-refloc"></div></div>
     </div>
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
@@ -5258,7 +5266,7 @@ function renderControls() {
   /* the Sources layout control has no effect in the phone app */
   { const k = $('kw-sources'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   /* the Phone app always uses the base Beige and has its own navigation, so the Tint and Nav controls have no effect there */
-  for (const id of ['k-tint', 'k-dir', 'k-ref']) { const k = $(id) && $(id).closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
+  for (const id of ['k-tint', 'k-dir', 'k-ref', 'k-refloc']) { const k = $(id) && $(id).closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
   HOTKEYS = {}; let n = 0;
   for (const [el, key, items, pick] of KNOBDEF()) {
@@ -7724,73 +7732,92 @@ function miSrc(p, src) {
    a single post and a whole source have none. */
 const rfKind = m => m.kind === 'thread' ? 'X thread' : m.kind === 'post' ? (m.pl === 'x' ? 'X post' : 'Post') : MIPLAT[m.pl].n;
 const rfLoc = (m, b, long) => {
-  if (b == null || m.kind === 'post' || !m.body[b]) return '';
+  if (b == null || m.kind === 'post' || !m.body[b] || st.refloc === 'none') return '';
+  /* Locator control: No ¶ drops paragraph numbers and keeps timestamps and post numbers */
+  if (st.refloc === 'nopara' && !m.body[b].ts && m.kind !== 'thread') return '';
   const l = miLbl(m, b);
   if (m.body[b].ts) return long ? `At ${l}` : l;
   if (m.kind === 'thread') { const [n, t] = l.split('/'); return long ? `Post ${n} of ${t}` : l; }
   return long ? `Paragraph ${l.slice(1)}` : l;
 };
 const RF_PLAY = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.5v9l7.5-4.5z"/></svg>';
+/* Pieces shared by every treatment: the title truncates, the locator and counts never do. */
+const RF_SEP = '<span class="rf-sep" aria-hidden="true">·</span>';
+function rfParts(p) {
+  const its = miRefs(p).map(MIT).filter(Boolean); if (!its.length) return null;
+  const m = its[0], b = its.length > 1 ? null : p.about.b, ts = b != null && m.body[b] && m.body[b].ts;
+  const loc = rfLoc(m, b), lw = rfLoc(m, b, true);
+  return {
+    its, m, b, loc, lw, lwl: lw ? lw.charAt(0).toLowerCase() + lw.slice(1) : '',
+    ic: miIc(m, 'xs'),
+    ics: its.length > 1 ? `<span class="rf-ics">${its.slice(0, 3).map(x => miIc(x, 'xs')).join('')}</span>` : miIc(m, 'xs'),
+    ti: (n = 64) => `<span class="rf-ti">${esc(clip(miTitle(m), n))}</span>`,
+    more: its.length > 1 ? `<span class="rf-more">and ${its.length - 1} more</span>` : '',
+    /* lo: the locator in text; loP: in a chip, with a play mark before a timestamp */
+    lo: loc ? `<span class="rf-lo num">${loc}</span>` : '',
+    loP: loc ? `<span class="rf-lo num">${ts ? RF_PLAY : ''}${loc}</span>` : '',
+    /* "paragraph 5 of" a title, but "post 3 of 7 in" a thread and "14:02 in" a recording */
+    cn: ts || m.kind === 'thread' ? 'in' : 'of',
+    tip: esc(its.map(miTitle).join(' · ')),
+  };
+}
 function miRowChip(p) {
   if (!p.about) return '';
-  const its = miRefs(p).map(MIT).filter(Boolean); if (!its.length) return '';
-  const m = its[0], b = its.length > 1 ? null : p.about.b, [v, sub = ''] = (st.refv || 'inline').split('-');
+  const [v, sub = ''] = (st.refv || 'inline').split('-');
   if (v === 'meta') return '';
-  const title = n => esc(clip(miTitle(m), n)), more = its.length > 1 ? ` and ${its.length - 1} more` : '';
-  const loc = rfLoc(m, b), ts = b != null && m.body[b] && m.body[b].ts, lw = rfLoc(m, b, true);
-  const locTx = loc ? `${ts ? RF_PLAY : ''}${loc}` : '';
+  const x = rfParts(p); if (!x) return '';
+  const { its, m, ic, ics, ti, more, lo, tip } = x, many = its.length > 1;
+  const tail = lo ? RF_SEP + lo : '', tailP = x.loP ? RF_SEP + x.loP : '';
   if (v === 'pill') {
-    const ics = its.length > 1 ? `<span class="rf-ics">${its.slice(0, 3).map(x => miIc(x, 'xs')).join('')}</span>` : miIc(m, 'xs');
-    const t = its.length > 1 ? `${its.length} sources` : title(56), tip = esc(its.map(miTitle).join(' · '));
-    /* B1 tag: a filled, squarer tag with the locator after a dot. B2 split: the source and the locator as two chips. */
-    if (sub === 'tag') return `<span class="mi-rchip rf-tag" title="${tip}">${ics}<span class="rf-tt">${t}</span>${loc ? `<span class="rf-loc num">${locTx}</span>` : ''}</span>`;
-    if (sub === 'split') return `<span class="mi-rchip rf-split" title="${tip}"><span class="rf-c">${ics}<span>${t}</span></span>${loc ? `<span class="rf-c rf-lc num">${locTx}</span>` : ''}</span>`;
-    return `<span class="mi-rchip rf-pill" title="${tip}"><span class="rf-t">${ics}<span>${t}</span></span>${loc ? `<span class="rf-loc num">${locTx}</span>` : ''}</span>`;
+    const t = many ? `<span class="rf-ti">${its.length} sources</span>` : ti(56);
+    /* B1 tag: a filled tag with the locator after a dot. B2 two chips: the source and the locator apart. */
+    if (sub === 'tag') return `<span class="mi-rchip rf-tag" title="${tip}">${ics}${t}${tailP}</span>`;
+    if (sub === 'split') return `<span class="mi-rchip rf-split" title="${tip}"><span class="rf-c">${ics}${t}</span>${lo ? `<span class="rf-c rf-lc">${x.loP}</span>` : ''}</span>`;
+    return `<span class="mi-rchip rf-pill" title="${tip}"><span class="rf-c">${ics}${t}</span>${lo ? `<span class="rf-lc">${x.loP}</span>` : ''}</span>`;
   }
   if (v === 'words') {
-    const kind = rfKind(m), lwl = lw ? lw.charAt(0).toLowerCase() + lw.slice(1) : '';
-    let t;
-    if (its.length > 1) t = `<b>${title(40)}</b> and ${its.length - 1} more ${its.length === 2 ? 'source' : 'sources'}`;
-    /* C1 title first: the title, then the locator in words; no platform */
-    else if (sub === 'title') t = `<b>${title(60)}</b>${lwl ? `, ${lwl}` : ''}`;
-    /* C2 about: a sentence that says what the ask is about */
-    else if (sub === 'about') t = `Asked about ${lwl ? `${lwl} of ` : ''}<b>${title(lw ? 52 : 64)}</b>`;
-    else t = `${lw ? `${lw} of ` : ''}<b>${title(lw ? 52 : 64)}</b> · ${kind}`;
-    return `<span class="mi-rchip rf-words">${miIc(m, 'xs')}<span>${t}</span></span>`;
+    const w = t => `<span class="rf-w">${t}</span>`;
+    let h;
+    if (many) h = `<b class="rf-ti">${esc(clip(miTitle(m), 48))}</b>${w(` and ${its.length - 1} more ${its.length === 2 ? 'source' : 'sources'}`)}`;
+    /* C1 title first, then the locator in words; no platform. C2 a sentence: what the ask is about. */
+    else if (sub === 'title') h = `<b class="rf-ti">${esc(clip(miTitle(m), 64))}</b>${x.lwl ? w(`, ${x.lwl}`) : ''}`;
+    else if (sub === 'about') h = `${w(`Asked about ${x.loc ? `${x.lwl.replace(/^at /, '')} ${x.cn} ` : ''}`)}<b class="rf-ti">${esc(clip(miTitle(m), 64))}</b>`;
+    else h = `${x.lw ? w(`${x.lw} ${x.cn} `) : ''}<b class="rf-ti">${esc(clip(miTitle(m), 64))}</b>${w(` · ${rfKind(m)}`)}`;
+    return `<span class="mi-rchip rf-words">${ic}${h}</span>`;
   }
   if (v === 'quote') {
-    const q = its.length > 1 || (b == null && !p.about.quote) ? '' : (p.about.quote || (m.body[b] && m.body[b].p) || '');
-    const src = `<span class="rf-src">${miIc(m, 'xs')}<span>${its.length > 1 ? `${title(40)}${more}` : `${title(60)}${loc ? ` · <span class="num">${loc}</span>` : ''}`}</span></span>`;
-    /* D1 line: one line of the passage. D2 card: the passage and the source line in a filled box. */
+    const q = many || (x.b == null && !p.about.quote) ? '' : (p.about.quote || (m.body[x.b] && m.body[x.b].p) || '');
+    const src = `<span class="rf-src">${ic}${ti(60)}${more}${tail}</span>`;
+    /* D1 one line: a single italic line of the passage. D2 card: the passage and the source line in a filled box. */
     const cls = sub === 'line' ? ' rf-qline' : sub === 'card' ? ' rf-qcard' : '';
-    return q ? `<span class="mi-rchip rf-quote${cls}"><q>${esc(clip(q, 160))}</q>${src}</span>` : `<span class="mi-rchip rf-quote rf-noq">${src}</span>`;
+    return q ? `<span class="mi-rchip rf-quote${cls}"><q>${esc(clip(q, 170))}</q>${src}</span>` : `<span class="mi-rchip rf-quote rf-noq">${src}</span>`;
   }
-  /* A1 locator first: the locator, then the title. A2 platform: the platform name before the title, no icon. */
-  if (sub === 'loc') return `<span class="mi-rchip rf-ia">${miIc(m, 'xs')}${loc ? `<span class="rf-l1 num">${locTx}</span>` : ''}<span class="rf-it">${its.length > 1 ? `${title(40)}${more}` : title(64)}</span></span>`;
-  if (sub === 'plat') return `<span class="mi-rchip rf-ia rf-ip"><span class="rf-pl">${its.length > 1 ? `${its.length} sources` : rfKind(m)}</span><span class="rf-it">${its.length > 1 ? `${title(40)}${more}` : title(64)}${loc ? ` · <span class="num">${loc}</span>` : ''}</span></span>`;
-  return `<span class="mi-rchip">${miIc(m, 'xs')}<span>${its.length > 1 ? `${title(40)}${more}` : title(64)}${loc ? ` · ${loc}` : ''}</span></span>`;
+  /* A1 locator first. A2 the platform name in small capitals instead of the icon. */
+  if (sub === 'loc') return `<span class="mi-rchip rf-a rf-a1">${ic}${lo}${ti()}${more}</span>`;
+  if (sub === 'plat') return `<span class="mi-rchip rf-a rf-a2"><span class="rf-pl">${many ? `${its.length} sources` : rfKind(m)}</span>${ti()}${more}${tail}</span>`;
+  return `<span class="mi-rchip rf-a">${ic}${ti()}${more}${tail}</span>`;
 }
 /* E: the reference goes in the meta row, after the timestamp.
-   E: icon, title and locator. E1 about: "about ¶5 of Title". E2 reply: a reply arrow before the icon and title. */
+   E: icon, title and locator. E1 about: "about ¶5 of Title". E2 reply: a reply arrow before the icon. */
 const RF_RE = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v5.5a2 2 0 0 0 2 2h8M10 7.5l3 3-3 3"/></svg>';
 function miMetaRef(p) {
   const [v, sub = ''] = (st.refv || 'inline').split('-');
   if (v !== 'meta' || !p.about) return '';
-  const its = miRefs(p).map(MIT).filter(Boolean); if (!its.length) return '';
-  const m = its[0], b = its.length > 1 ? null : p.about.b, loc = rfLoc(m, b), t = esc(clip(miTitle(m), 48));
-  const more = its.length > 1 ? ` and ${its.length - 1} more` : '';
-  if (sub === 'about') return `<span class="rf-meta">${miIc(m, 'xs')}<span>about ${loc ? `<span class="num">${loc}</span> of ` : ''}${t}${more}</span></span>`;
-  if (sub === 'reply') return `<span class="rf-meta rf-mre"><span class="rf-arr">${RF_RE}</span>${miIc(m, 'xs')}<span>${t}${more}${loc ? ` · <span class="num">${loc}</span>` : ''}</span></span>`;
-  return `<span class="rf-meta">${miIc(m, 'xs')}<span>${t}${more}${loc ? ` · <span class="num">${loc}</span>` : ''}</span></span>`;
+  const x = rfParts(p); if (!x) return '';
+  const tail = x.lo ? RF_SEP + x.lo : '';
+  if (sub === 'about') return `<span class="rf-meta"><span class="rf-w">about${x.loc ? ` ${x.lwl.replace(/^at /, '')} ${x.cn}` : ''}</span>${x.ic}${x.ti(48)}${x.more}</span>`;
+  if (sub === 'reply') return `<span class="rf-meta"><span class="rf-arr">${RF_RE}</span>${x.ic}${x.ti(48)}${x.more}${tail}</span>`;
+  return `<span class="rf-meta">${x.ic}${x.ti(48)}${x.more}${tail}</span>`;
 }
 /* Screen entry: the reference for every media type, in feed rows */
-Object.assign(st, { refv: 'inline' });
+Object.assign(st, { refv: 'inline', refloc: 'all' });
 function REFKNOBS() { return [['k-ref', 'refv', [
   ['inline', 'Inline'], ['inline-loc', 'Locator first', '1'], ['inline-plat', 'Platform', '2'],
   ['pill', 'Pill'], ['pill-tag', 'Tag', '1'], ['pill-split', 'Two chips', '2'],
   ['words', 'Spelled out'], ['words-title', 'Title first', '1'], ['words-about', 'Asked about', '2'],
   ['quote', 'Quote'], ['quote-line', 'One line', '1'], ['quote-card', 'Card', '2'],
-  ['meta', 'After the time'], ['meta-about', 'About', '1'], ['meta-reply', 'Reply arrow', '2']]]]; }
+  ['meta', 'After the time'], ['meta-about', 'About', '1'], ['meta-reply', 'Reply arrow', '2']]],
+  ['k-refloc', 'refloc', [['all', 'All'], ['nopara', 'No ¶'], ['none', 'None']]]]; }
 const RF_DEMO = [
   ['Article, a paragraph', { it: 'm2', b: 6 }, 'Is the 3.1x figure in this paragraph right for the larger model?'],
   ['Article, the whole source', { it: 'm8' }, 'What did the eval track agree on, and what is still open?'],
@@ -7802,9 +7829,10 @@ const RF_DEMO = [
   ['YouTube video, a timestamp', { it: 'm6', b: 2 }, 'What search budget does the demo use?'],
   ['Two sources', { its: ['m1', 'm5'] }, 'Where do the thread and Orbit Lab’s response disagree?'],
 ];
+const RF_SUM = 'Short answer first: the figure holds for the smaller model and drops by about a third for the larger one, because the larger model saturates sooner. Details and sources below.';
 function rfDemoPage() {
   const s = sp('ml');
-  const rows = RF_DEMO.map(([h, about, q]) => `<h3 class="br-h rf-dh">${h}</h3><div class="feed" role="list"><article class="row row-x row-rowsq row-i-lefttxt row-ask" role="listitem"><span class="row-k"><span class="agent">${I.agent}</span></span><div class="row-m"><a class="row-t row-link" href="#" onclick="return false">${esc(q)}</a>${miRowChip({ about })}<span class="row-meta"><button class="au" type="button">mira_k</button><button class="row-sp" type="button">${spTagTx(s)}</button><span>2h</span>${miMetaRef({ about })}</span></div></article></div>`).join('');
+  const rows = RF_DEMO.map(([h, about, q]) => `<h3 class="br-h rf-dh">${h}</h3><div class="feed" role="list"><article class="row row-x row-rowsq row-i-lefttxt row-ask" role="listitem"><span class="row-k"><span class="agent">${I.agent}</span></span><div class="row-m"><a class="row-t row-link" href="#" onclick="return false">${esc(q)}</a>${miRowChip({ about })}<span class="row-s">${RF_SUM}</span><span class="row-meta"><button class="au" type="button">mira_k</button><button class="row-sp" type="button">${spTagTx(s)}</button><span>2h</span>${miMetaRef({ about })}</span></div></article></div>`).join('');
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page rf-demo"><div class="sub-top"><h2>Source references</h2></div><p class="muted">How a feed row shows the source an ask is about. Switch the treatment with Source ref in the Variants bar.</p>${rows}</div></div>`;
 }
 CS_PAGES.rfdemo = rfDemoPage;
