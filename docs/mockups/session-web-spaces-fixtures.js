@@ -3362,7 +3362,6 @@ alter table notes validate constraint notes_owner_nn;</code></pre>`,
       { id: 'ninv', type: 'invite', actor: 'jun.park', space: 'ward7', createdAt: '2026-11-16T05:30:00Z', read: false },
     ],
     askedInv: [],
-    invite: { sp: 'ward7', by: 'jun.park', state: 'ok' },
     reqs: [
       {
         u: 'noor.a',

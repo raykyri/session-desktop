@@ -3828,6 +3828,7 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
 <!-- the fixtures (SessionFixtures), then the mock backend and the API contract (SessionMockApi): plain scripts, so the page also works from file:// -->
 <script src="session-web-spaces-fixtures.js"></script>
 <script src="session-web-spaces-mock-api.js"></script>
+<script src="session-web-spaces-scenarios.js"></script>
 <script>
 (() => {
 'use strict';
@@ -3938,7 +3939,6 @@ const RES = {
   userKeys: { url: '/api/me/api-keys', kind: 'list', id: 'id', serverId: true, writeOnly: ['raw'] },
   notifs:   { url: '/api/me/notifications', kind: 'list', id: 'id', serverId: true },
   askedInv: { url: '/api/me/invite-requests', kind: 'value' },
-  invite:   { url: '/api/me/invite', kind: 'value' },
   reqs:     { url: '/api/join-requests', kind: 'list', id: 'u' },
   mem:      { url: '/api/members', kind: 'value' },
   memOther: { url: '/api/members/other-spaces', kind: 'map' },
@@ -3956,7 +3956,7 @@ const RES = {
 };
 const DATA_KEYS = Object.keys(RES);
 /* keys of `st` that are the signed-in person's server data: they live in the data store */
-const ST_DATA = new Set(['liked', 'saved', 'qtSaved', 'miSaved', 'miRead', 'miAdded', 'rel', 'userKeys', 'notifs', 'askedInv', 'invite', 'reqs', 'mem', 'memOther', 'banned', 'links', 'reports', 'modSt', 'dsDrops', 'dsPol', 'dsReps']);
+const ST_DATA = new Set(['liked', 'saved', 'qtSaved', 'miSaved', 'miRead', 'miAdded', 'rel', 'userKeys', 'notifs', 'askedInv', 'reqs', 'mem', 'memOther', 'banned', 'links', 'reports', 'modSt', 'dsDrops', 'dsPol', 'dsReps']);
 
 /* ---- data stores ---- */
 /* the fixtures as GET returns them (with the fields the server derives): the mock backend's seed data, from
@@ -4019,8 +4019,6 @@ const db = {
   del(key, k) { const prev = D[key]; if (!(k in prev)) return; const next = { ...prev }; delete next[k]; commit(key, prev, next); },
   /* Sets: add or remove a member */
   toggle(key, v, on) { const prev = D[key], has = prev.has(v), want = on === undefined ? !has : !!on; if (has === want) return; const next = new Set(prev); want ? next.add(v) : next.delete(v); commit(key, prev, next); },
-  /* back to the data the active source starts from (fixtures, or the server's seed data) */
-  reset(done) { DS.source.reset(DS, done); },
 };
 
 /* ---- client state: the UI store, the mockup's controls, the phone app ---- */
@@ -4217,11 +4215,12 @@ const apiSource = {
       .catch(() => {});
   },
   write(inst, key, prev, next) {
-    /* user actions are mutations (mutate); the collection endpoints are for the Screen entries, the ask
-       pipeline and the token-usage stub */
-    if (DEV && !JUMPING && !SERVER_SIDE && !(RES[key] || {}).stub && APP_STARTED) console.error(`[session] a REST write of ${key} outside a Screen entry: user actions go through mutate()`);
-    /* who wrote it, for the mock backend's request log: a Screen entry, the ask pipeline, a stub, or a person (a bug) */
-    const origin = JUMPING ? 'scenario' : SERVER_SIDE ? 'run' : (RES[key] || {}).stub ? 'stub' : 'user';
+    /* user actions are mutations (mutate) and Screen entries set up their data with a scenario (runScenario);
+       the collection endpoints are only for the ask pipeline and the token-usage stub. In dev mode any other
+       collection write is an error. */
+    if (DEV && !SERVER_SIDE && !(RES[key] || {}).stub && APP_STARTED) { const m = `[session] a REST write of ${key} outside the ask pipeline: user actions go through mutate(), Screen entries through their scenario`; console.error(m); setTimeout(() => { throw new Error(m); }); }
+    /* who wrote it, for the mock backend's request log: the ask pipeline, a stub, or a person (a bug) */
+    const origin = SERVER_SIDE ? 'run' : (RES[key] || {}).stub ? 'stub' : 'user';
     for (const op of diffOps(key, prev, next)) {
       inst.meta.setState(m => ({ pending: m.pending + 1 }));
       apiSource.queue = apiSource.queue
@@ -4229,10 +4228,6 @@ const apiSource = {
         .then(res => { try { adopt(inst, op, res); } catch (e) { console.error('[session] could not take the server’s answer', e); } }, e => { undoOp(inst, op); if (e !== SKIPPED) dataError(apiErrText(e, 'write'), e); })
         .finally(() => inst.meta.setState(m => ({ pending: m.pending - 1 })));
     }
-  },
-  reset(inst, done) {
-    inst.meta.setState({ status: 'loading' });
-    apiSource.queue = apiSource.queue.then(() => http('POST', '/api/dev/reset')).then(() => apiSource.load(inst, done));
   },
 };
 const liveData = createDataStore('liveData', apiSource);
@@ -4257,14 +4252,13 @@ DS = liveData;
    - opts.then(result) and opts.fail(error) run after the answer.
    - opts.stubs: stub collections (usage) that the procedure writes itself; the recipe's changes to them are
      part of the mutation (sent with it, undone with it) instead of separate stub writes.
-   - Inside a Screen entry (JUMPING) and inside another mutation's recipe, mutate runs the recipe only: a
-     Screen entry writes through the collection endpoints (step 10 replaces them with a scenario endpoint),
-     and a nested recipe is part of the outer mutation.
-   The collection endpoints stay for the Screen entries, the ask pipeline (serverSide: answers, charges and
-   run notifications, until step 7 makes asks server jobs) and the token-usage stub. In dev mode a REST
-   write from anywhere else is a console.error (apiSource.write). */
+   - Inside another mutation's recipe, mutate runs the recipe only: a nested recipe is part of the outer
+     mutation.
+   The collection endpoints stay for the ask pipeline (serverSide: answers, charges and run notifications,
+   until step 7 makes asks server jobs) and the token-usage stub. Screen entries set up their data with a
+   scenario (POST /api/dev/scenario, step 10). In dev mode a collection write from anywhere else is an error
+   (apiSource.write). */
 let TX = null;          /* the mutation whose recipe is running: { name, before: Map(key → value before), stubs } */
-let JUMPING = 0;        /* a Screen entry is running */
 let SERVER_SIDE = 0;    /* the page writes what the server would (the ask pipeline): REST writes allowed */
 const SKIPPED = { skipped: true };   /* a queued write dropped because it refers to a record whose create failed */
 const DEAD_TMP = new Set();          /* temporary ids of records whose create failed */
@@ -4336,19 +4330,18 @@ function applyChanges(changes, held) {
         if (i >= 0) next[i] = x; else if ((ch.at || {})[x[f]] === 0) next.unshift(x); else next.push(x);
       }
       for (const id of ch.del || []) { if (held(key, id)) continue; const i = next.findIndex(y => y[f] === id); if (i >= 0) { if (next === cur) next = cur.slice(); next.splice(i, 1); } }
+      /* a scenario's changes: the list's order (its ids), when records moved */
+      if (ch.order) { const at = new Map(ch.order.map((id, i) => [id, i])), o = l => l.map(x => x[f]).join('\n'); const sorted = next.slice().sort((x, y) => (at.has(x[f]) ? at.get(x[f]) : 1e9) - (at.has(y[f]) ? at.get(y[f]) : 1e9)); if (o(sorted) !== o(next)) next = sorted; }
     }
     if (next !== cur) { DS.store.setState({ [key]: deepFreeze(next) }); any = true; }
   }
   return any;
 }
 const pkey = (key, rec) => key + '/' + rec;
-/* run fn as a Screen entry (its writes go to the collection endpoints), or as a person's action inside one */
-const asScenario = fn => function (...a) { JUMPING++; try { return fn.apply(this, a); } finally { JUMPING--; } };
-const asUser = fn => { const j = JUMPING; JUMPING = 0; try { return fn(); } finally { JUMPING = j; } };
 /* run fn outside the mutation whose recipe is running: its own mutations are queued before that one */
 const outside = fn => { const t = TX; TX = null; try { return fn(); } finally { TX = t; } };
 function mutate(name, input, recipe, opts = {}) {
-  if (JUMPING || TX) return recipe ? recipe() : undefined;
+  if (TX) return recipe ? recipe() : undefined;
   const tx = TX = { name, before: new Map(), stubs: opts.stubs || [] };
   let ret;
   try { ret = recipe ? recipe() : undefined; } finally { TX = null; }
@@ -4433,7 +4426,7 @@ liveData.meta.subscribe((m, p) => { if (!APP_STARTED) return; if (m.status !== p
    The Variants bar's 120ms / Fail control can make every write fail; /api/dev/config can choose the error
    code and set the mock clock. */
 const mockBackend = window.SessionMockApi.createBackend({
-  fixtures: window.SessionFixtures, storageKey: 'session-mock-db-v5', dev: DEV,
+  fixtures: window.SessionFixtures, scenarios: window.SessionScenarios, storageKey: 'session-mock-db-v5', dev: DEV,
   latency: typeof window.__SESSION_API_LATENCY === 'number' ? window.__SESSION_API_LATENCY : 120,
 });
 /* databases saved by earlier versions: v2 before errors had codes, v3 before records carried createdAt, v4 before threads had ids */
@@ -5252,7 +5245,7 @@ function rdClick(t) {
 
 function seg(el, items, key, onPick) {
   el.innerHTML = items.map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${String(st[key]) === String(v)}">${t}</button>`).join('');
-  el.onclick = e => { const b = e.target.closest('button[data-v]'); if (!b) return; st[key] = typeof st[key] === 'number' ? +b.dataset.v : b.dataset.v; onPick && asScenario(onPick)(); renderAll(); };
+  el.onclick = e => { const b = e.target.closest('button[data-v]'); if (!b) return; st[key] = typeof st[key] === 'number' ? +b.dataset.v : b.dataset.v; onPick && onPick(); renderAll(); };
 }
 const toThread = () => { if (st.thread == null) { const i = tidWhere(p => p.k === 'ask' && D.rich[p.id] && p.s === 'markets'); Object.assign(st, { thread: i == null ? TID(0) : i, savedPage: false, profilePage: false, subPage: null, auth: 'in', modal: null, umenu: false }); } };
 const KNOBDEF = () => [
@@ -6077,9 +6070,10 @@ function setRel(id, r) {
   if (r === 'mod') { if (!D.roles[id]) db.put('roles', id, 'Admin'); }
   else if (D.roles[id] && !D.roles0[id]) db.del('roles', id);
 }
-/* The invite landing shows the invite in /api/me/invite: screen state kept as server data (TODO(step 10/11):
-   make it screen state keyed by the link, or an invites.open procedure). It stays on the collection endpoint. */
-const inviteLanding = v => { if (!sameJSON(st.invite, v)) asScenario(() => { st.invite = v; })(); };
+/* The invite landing's invite (the space, who invited you, whether the link has expired) is screen state:
+   the page opens the landing from an invite link or notification (step 10; it was server data). */
+Object.assign(st, { invite: { sp: 'ward7', by: 'jun.park', state: 'ok' } });
+const inviteLanding = v => { if (!sameJSON(st.invite, v)) st.invite = v; };
 /* membership actions (spaces.join, spaces.leave, join requests) */
 const userJoin = (id, notification) => mutate('spaces.join', Object.assign({ space: id }, notification != null ? { notification } : {}), () => {
   if (notification != null) db.update('notifs', notification, n => { n.read = true; n.response = 'accepted'; });
@@ -6873,6 +6867,10 @@ const JUMPS = [
   ['Moderator', [['md-space', 'Space page with request count'], ['md-queue', 'Review queue'], ['md-decline', 'Decline a request'], ['md-members', 'Members: roles, remove, ban'], ['md-role', 'Change a role (confirm)'], ['md-invite', 'Invite people'], ['md-links', 'Invite links'], ['md-settings', 'Space settings'], ['md-toclosed', 'Switch #math from open to closed'], ['md-toopen', 'Switch #replication-club to open']]],
   ['Owner', [['ow-create', 'Create a space'], ['ow-create-closed', 'Create a closed space']]],
 ];
+/* the data of each Screen entry: entry key → [scenario name, args?] (step 10; see runScenario). An entry
+   that is not listed uses the scenario 'seed'. */
+const SCREEN_DATA = {};
+const screenData = (keys, name, args) => { [].concat(keys).forEach(k => { SCREEN_DATA[k] = args ? [name, args] : [name]; }); };
 const SAMPLE_ANS = ['The default-enrolment savings result, using the public survey microdata.', 'github.com/ines-v/replications'];
 function jump(k) {
   /* the live data store is still loading: open the screen when it is ready */
@@ -6880,21 +6878,19 @@ function jump(k) {
   if (k.startsWith('np-')) { npJump(k); return; }
   if (st.device === 'native') st.device = 'desktop';
   Object.assign(st, NAVBASE(), { auth: 'in', toast: null, welcome: null, created: null });
-  const R = r => { setRel('replication', r); if (r === 'pending' || r === 'none') { st.reqAge = '2h'; st.reqAns = r === 'pending' ? [...SAMPLE_ANS] : ['', '']; st.reqRules = r === 'pending'; } };
+  /* your relation to #replication-club is the entry's scenario (SCREEN_DATA); the request form's answers are screen state */
+  const R = r => { if (r === 'pending' || r === 'none') { st.reqAge = '2h'; st.reqAns = r === 'pending' ? [...SAMPLE_ANS] : ['', '']; st.reqRules = r === 'pending'; } };
   const space = id => Object.assign(st, { space: id, home: false });
   const repThread = () => tidWhere(p => p.s === 'replication' && p.k === 'ask');
-  const pushN = n => { st.notifs = [n, ...st.notifs.filter(x => x.type !== n.type || x.space !== n.space)]; };
   const role = k.split('-')[0];
-  /* each screen starts from the same baseline: sidebar tab, notifications, Saved filter, sources, selection */
-  Object.assign(st, MI_CLEAR(), { thV: 'docsrc', dsSTab: null, notifs: structuredClone(ST0.notifs), savedFilter: 'all', dsUrl: '', dsNote: '', dsMenu: null, qtMenu: null, qtPick: null });
-  dsReset(); qtSyncNotif();
+  /* each screen starts from the same baseline: sidebar tab, Saved filter, sources, selection */
+  Object.assign(st, MI_CLEAR(), { thV: 'docsrc', dsSTab: null, savedFilter: 'all', dsUrl: '', dsNote: '', dsMenu: null, qtMenu: null, qtPick: null });
   if (role === 'sf') { sfJump(k); return; }
   if (role === 'mi') { miJump(k); return; }
   if (role === 'ds') { dsJump(k); return; }
   if (role === 'qt') { qtJump(k); return; }
   if (role === 'ab') { abJump(k); return; }
-  spEdit('replication', rs => { rs.dom = null; rs.plain = false; });
-  if (role === 'md') { R('mod'); if (!openReqs().length || k === 'md-queue' || k === 'md-decline') { st.reqs = structuredClone(REQS0); st.rqSel = new Set(); } }
+  if (role === 'md') { R('mod'); st.rqSel = new Set(); }
   if (role === 'mb') R('member');
   if (role === 'pd') R('pending');
   if (role === 'nm') R('none');
@@ -6902,37 +6898,45 @@ function jump(k) {
   switch (k) {
     case 'out-space': case 'nm-space': case 'pd-space': case 'mb-space': case 'md-space': space('replication'); break;
     case 'out-thread': case 'nm-thread': st.thread = repThread(); st.space = 'replication'; break;
-    case 'out-unlisted': case 'nm-unlisted': setRel('ward7', 'none'); space('ward7'); break;
-    case 'out-invite': case 'nm-invite': setRel('ward7', 'none'); Object.assign(st, { subPage: 'invite', invite: { sp: 'ward7', by: 'jun.park', state: 'ok' } }); break;
-    case 'nm-expired': setRel('ward7', 'none'); Object.assign(st, { subPage: 'invite', invite: { sp: 'ward7', by: 'jun.park', state: 'expired' } }); break;
+    case 'out-unlisted': case 'nm-unlisted': space('ward7'); break;
+    case 'out-invite': case 'nm-invite': Object.assign(st, { subPage: 'invite', invite: { sp: 'ward7', by: 'jun.park', state: 'ok' } }); break;
+    case 'nm-expired': Object.assign(st, { subPage: 'invite', invite: { sp: 'ward7', by: 'jun.park', state: 'expired' } }); break;
     case 'nm-browse': st.subPage = 'browse'; break;
     case 'nm-search': Object.assign(st, { subPage: 'search', q: 'replication' }); break;
     case 'nm-switcher': case 'pd-switcher': Object.assign(st, { home: true, pop: true }); break;
     case 'pd-yours': st.subPage = 'yourspaces'; break;
     case 'nm-request': csOpenRequest('replication'); break;
     case 'pd-withdraw': space('replication'); st.modal = 'cs-withdraw:replication'; break;
-    case 'pd-approved': setRel('replication', 'member'); pushN({ id: 'napp', type: 'join_approved', actor: 'lettie', space: 'replication', read: false }); st.home = true; csOpenNotifs(); if (st.notifV === 'toast') toast(`lettie approved your request to join ${spName(sp('replication'))}.`, 'open:replication', 'Open space'); break;
-    case 'pd-declined': setRel('replication', 'denied'); pushN({ id: 'ndec', type: 'join_declined', space: 'replication', read: false }); st.home = true; csOpenNotifs(); if (st.notifV === 'toast') toast(`Your request to join ${spName(sp('replication'))} was declined.`, 'open:replication', 'View'); break;
+    case 'pd-approved': st.home = true; csOpenNotifs(); if (st.notifV === 'toast') toast(`lettie approved your request to join ${spName(sp('replication'))}.`, 'open:replication', 'Open space'); break;
+    case 'pd-declined': st.home = true; csOpenNotifs(); if (st.notifV === 'toast') toast(`Your request to join ${spName(sp('replication'))} was declined.`, 'open:replication', 'View'); break;
     case 'mb-welcome': space('replication'); st.welcome = 'replication'; break;
     case 'mb-ask': space('replication'); Object.assign(st, { compOpen: true, mode: 'ask', draft: 'Re-run the robustness table of the default-enrolment paper with the revised weights.' }); break;
     case 'mb-thread': { const i = tidWhere(p => p.s === 'replication' && p.mine); Object.assign(st, { thread: i, space: 'replication' }); st.modal = 'cs-share:' + i; break; }
     case 'mb-home': st.home = true; break;
     case 'mb-leave': space('replication'); st.modal = 'cs-leave:replication'; break;
-    case 'mb-unlisted': setRel('grants', 'member'); space('grants'); break;
-    case 'mb-invite': setRel('grants', 'member'); space('grants'); csInvite('grants'); break;
-    case 'md-queue': Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'requests', space: 'replication', reqSeen: true }); break;
+    case 'mb-unlisted': space('grants'); break;
+    case 'mb-invite': space('grants'); csInvite('grants'); break;
+    case 'md-queue': Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'requests', space: 'replication' }); break;
     case 'md-decline': Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'requests', space: 'replication', declIds: [openReqs()[0].u], modal: 'cs-decline' }); break;
     case 'md-members': Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'members', space: 'replication' }); break;
     case 'md-role': { Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'members', space: 'replication' }); const m = memFor(sp('replication')).find(x => x.u !== ME.u && x.role === 'member'); if (m) st.modal = `cs-role:${m.u}:mod`; break; }
     case 'md-links': Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'invites', space: 'replication' }); break;
     case 'md-invite': space('replication'); csInvite('replication'); break;
     case 'md-settings': Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'settings', space: 'replication', set: null }); break;
-    case 'md-toclosed': { if (isClosed(sp('math'))) { spEdit('math', m => { delete m.vis; }); db.del('rel', 'math'); } Object.assign(st, { subPage: 'manage', mgSpace: 'math', mgTab: 'settings', space: 'math', set: null }); csSettings(sp('math')); patch('set', d => { d.vis = 'listed'; }); st.visKeep = 'all'; st.modal = 'cs-toclosed'; break; }
-    case 'md-toopen': { spEdit('replication', s => { s.vis = s.vis || 'listed'; }); Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'settings', space: 'replication', set: null }); csSettings(sp('replication')); patch('set', d => { d.vis = 'open'; }); st.openKeep = 'keep'; st.modal = 'cs-toopen'; break; }
+    case 'md-toclosed': { Object.assign(st, { subPage: 'manage', mgSpace: 'math', mgTab: 'settings', space: 'math', set: null }); csSettings(sp('math')); patch('set', d => { d.vis = 'listed'; }); st.visKeep = 'all'; st.modal = 'cs-toclosed'; break; }
+    case 'md-toopen': { Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'settings', space: 'replication', set: null }); csSettings(sp('replication')); patch('set', d => { d.vis = 'open'; }); st.openKeep = 'keep'; st.modal = 'cs-toopen'; break; }
     case 'ow-create': Object.assign(st, { subPage: 'create', cr: CR0() }); break;
     case 'ow-create-closed': Object.assign(st, { subPage: 'create', cr: Object.assign(CR0(), { name: 'field-recordings', desc: 'Sound recordings from fieldwork, with notes on equipment and permissions.', vis: 'listed' }) }); break;
   }
 }
+JUMPS.forEach(([, l]) => l.forEach(([k]) => {
+  const role = k.split('-')[0];
+  if (role === 'pd') screenData(k, 'replication: pending');
+  if (role === 'mb') screenData(k, 'replication: member');
+  if (role === 'md') screenData(k, 'replication: moderator', k === 'md-queue' ? { seen: true } : null);
+}));
+screenData('pd-approved', 'replication: request approved');
+screenData('pd-declined', 'replication: request declined');
 /* Picking a variant shows a screen where it applies, unless one is already on screen. */
 function csScreen() {
   if (st.subPage) return st.subPage === 'manage' ? 'manage-' + st.mgTab : st.subPage;
@@ -7402,6 +7406,10 @@ JUMPS.push(
   ['Reports', [['sf-report', 'Report dialog'], ['sf-report-reply', 'Report a reply'], ['sf-reports', 'Reports tab'], ['sf-restore', 'Restore a removed post'], ['sf-reports-notif', 'Reports notification'], ['sf-resolved', 'Report resolved (reporter)']]],
   ['Settings', [['sf-settings', 'Sablefield settings'], ['sf-topics', 'Topic editor'], ['sf-landing-on', 'Turn on the FAQ landing'], ['sf-create', 'Create a space with the FAQ landing']]],
 );
+screenData(['sf-dom-none', 'sf-dom-checking'], 'replication: moderator');
+screenData('sf-dom-ok', 'replication: verified domain');
+screenData('sf-restore', 'sablefield: a removed post');
+screenData('sf-resolved', 'sablefield: your report dismissed');
 function sfJump(k) {
   if (st.device === 'native') st.device = 'desktop';
   Object.assign(st, NAVBASE(), { auth: 'in', toast: null, welcome: null, created: null, space: 'sablefield', home: false, faqQ: '', faqTried: false, sfDomHold: false });
@@ -7423,21 +7431,17 @@ function sfJump(k) {
     case 'sf-about-plain': Object.assign(st, { space: 'scifi', drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' }); break;
     case 'sf-seal-closed': Object.assign(st, { home: true, pop: true }); break;
     case 'sf-dom-none': case 'sf-dom-checking': case 'sf-dom-ok': {
-      const s = sp('replication'); setRel('replication', 'mod'); mg('settings', 'replication');
-      if (k === 'sf-dom-ok') { spEdit(s.id, x => { x.dom = { domain: 'replicationclub.org', method: 'dns', state: 'ok', verifiedAt: nowIso() }; }); st.sfDom = null; }
-      else { spEdit(s.id, x => { x.dom = null; x.plain = false; }); st.sfDom = { sid: 'replication', domain: k === 'sf-dom-none' ? '' : 'replicationclub.org', org: '', method: 'dns', state: k === 'sf-dom-checking' ? 'checking' : 'none' }; st.sfDomHold = k === 'sf-dom-checking'; }
+      mg('settings', 'replication');
+      if (k === 'sf-dom-ok') st.sfDom = null;
+      else { st.sfDom = { sid: 'replication', domain: k === 'sf-dom-none' ? '' : 'replicationclub.org', org: '', method: 'dns', state: k === 'sf-dom-checking' ? 'checking' : 'none' }; st.sfDomHold = k === 'sf-dom-checking'; }
       setTimeout(() => { const el = document.querySelector('#app .sf-domsec'); if (el) el.scrollIntoView({ block: 'center' }); }, 0); break;
     }
     case 'sf-report': Object.assign(st, { thread: thr('q3'), modal: 'sf-report:a:' + thr('q3'), rep: { why: 'old', note: 'The Free plan limit went up to 250,000 rows on Nov 10.' } }); break;
     case 'sf-report-reply': Object.assign(st, { thread: thr('p1'), imenu: 'r:' + thr('p1') + ':2' }); break;
-    case 'sf-reports': st.reports = structuredClone(REPS0); st.modSt = {}; mg('reports'); break;
-    case 'sf-restore': { st.reports = structuredClone(REPS0); st.modSt = {}; mg('reports'); const r = st.reports.find(x => x.st === 'open'); if (r) { sfResolve(r, 'removed'); st.modal = 'sf-rsconf:' + r.id; st.toast = null; } break; }
-    case 'sf-reports-notif': st.reports = structuredClone(REPS0); st.modSt = {}; st.repSeen = false; st.home = true; csOpenNotifs(); break;
-    case 'sf-resolved': {
-      st.reports = structuredClone(REPS0); st.modSt = {};
-      const r = { id: 'rpme', sp: 'sablefield', key: 'a:' + thr('q11'), why: 'old', note: 'Enterprise credits now roll over for 24 months.', by: ME.u, createdAt: isoAgo('1h'), st: 'open' };
-      db.unshift('reports', r); sfResolve(st.reports[0], 'dismissed'); st.toast = null; st.home = true; csOpenNotifs(); break;
-    }
+    case 'sf-reports': mg('reports'); break;
+    case 'sf-restore': { mg('reports'); const r = st.reports.find(x => x.st === 'removed'); if (r) st.modal = 'sf-rsconf:' + r.id; break; }
+    case 'sf-reports-notif': st.home = true; csOpenNotifs(); break;
+    case 'sf-resolved': st.home = true; csOpenNotifs(); break;
     case 'sf-settings': mg('settings'); break;
     case 'sf-topics': mg('settings'); setTimeout(() => { const el = document.querySelector('#app .sf-tps'); if (el) el.scrollIntoView({ block: 'center' }); }, 0); break;
     case 'sf-landing-on': { mg('settings', 'ml'); csSettings(sp('ml')); patch('set', d => { d.faq = true; }); setTimeout(() => { const el = document.querySelector('#app [data-sftog="faq"]'); if (el) el.closest('.sf-tog').scrollIntoView({ block: 'center' }); }, 0); break; }
@@ -7513,11 +7517,6 @@ const MI_TPL = {
   ml: ['Is this claim supported by its sources?', 'What does this cite, and does the source say the same?', 'Who disagrees with this, and why?', 'Explain this passage.'],
   public: ['Summarize the main claims and the evidence for each.', 'Who disagrees with this, and why?'],
 };
-/* item-level notifications used by the jumps */
-const MI_NOTIF = () => ({
-  edited: { id: 'mi-n-edit', type: 'source_edited', source: 'm2', block: 6, createdAt: isoAgo('3h'), read: false },
-  ask: { id: 'mi-n-ask', type: 'source_asked', actor: 'jun.park', source: 'm2', thread: sfIdx('mia1'), createdAt: isoAgo('5h'), read: false },
-});
 
 /* ---------- helpers ---------- */
 const miRefs = p => !p.about ? [] : p.about.its ? p.about.its : [p.about.it];
@@ -7801,6 +7800,7 @@ function rfDemoPage() {
 }
 CS_PAGES.rfdemo = rfDemoPage;
 JUMPS.push(['Source references', [['rf-all', 'Every media type, in feed rows'], ['rf-feed', 'In a feed: #ml-papers']]]);
+screenData(['rf-all', 'rf-feed'], 'replication: member');
 { const j0 = jump; jump = k => { if (!dataReady() || !String(k).startsWith('rf-')) return j0(k); j0('mb-home'); if (k === 'rf-all') st.subPage = 'rfdemo'; else Object.assign(st, { home: false, space: 'ml' }); }; }
 /* ---------- Manage › Sources (replaces Manage › Feeds) ---------- */
 function miMgTabs(s, tabs) {
@@ -7992,15 +7992,14 @@ function MIKNOBS() { return []; }
 JUMPS.push(
   ['Source pages', [['mi-a-item', 'Source page: article'], ['mi-a-pass', 'Select a passage'], ['mi-a-askdlg', 'Ask about a passage'], ['mi-a-thread', 'Answer about a passage'], ['mi-a-xthread', 'Source page: X thread with a quoted post'], ['mi-a-pod', 'Source page: podcast transcript'], ['mi-a-multi', 'Answer across two sources'], ['mi-a-feed', 'Threads feed: asks about sources'], ['mi-a-edited', 'Source edited upstream'], ['mi-a-deleted', 'Source deleted upstream'], ['mi-a-paid', 'Paid post'], ['mi-a-closed', 'Source in an open and a closed space'], ['mi-a-saved', 'Saved sources'], ['mi-a-notif', 'Notification: saved source edited'], ['mi-f-paste', 'Paste a link in the composer']]],
 );
+screenData('mi-a-closed', 'replication: member');
+screenData('mi-a-saved', 'sources: saved');
+screenData('mi-a-notif', 'sources: a saved source changed');
 function miJump(k) {
   if (st.device === 'native') st.device = 'desktop';
   Object.assign(st, NAVBASE(), MI_CLEAR(), { auth: 'in', toast: null, welcome: null, created: null, space: 'ml', home: false, miAsk: null, miAskQ: '', miFrom: null, mpOpen: false, dd: null, kindF: 'all' });
-  spEdit('replication', rs => { rs.dom = null; rs.plain = false; });
-  if (k !== 'mi-a-closed') setRel('replication', 'none');
-  dsReset();
   const item = (id, b) => miOpen(id, b);
   const th = rf => Object.assign(st, { thread: sfIdx(rf), space: postById(sfIdx(rf)).s });
-  const pushN = n => { st.notifs = [{ ...n, read: false }, ...st.notifs.filter(x => x.id !== n.id)]; };
   const ask = (a, q) => Object.assign(st, { miAsk: a, miAskQ: q || '', miAskSp: st.space, modal: miAskInline(a) ? null : 'mi-ask' });
   switch (k) {
     case 'mi-a-item': item('m2'); break;
@@ -8014,9 +8013,9 @@ function miJump(k) {
     case 'mi-a-edited': item('m2', 6); st.miDiff = true; break;
     case 'mi-a-deleted': item('m7'); break;
     case 'mi-a-paid': item('m8'); break;
-    case 'mi-a-closed': setRel('replication', 'member'); item('m1'); break;
-    case 'mi-a-saved': st.miSaved = new Set(['m2', 'm4', 'm1']); Object.assign(st, { savedPage: true, savedFilter: 'mi-items' }); break;
-    case 'mi-a-notif': dbToggle('miSaved', 'm2', true); pushN(MI_NOTIF().edited); pushN(MI_NOTIF().ask); st.home = true; st.ntOpen = true; break;
+    case 'mi-a-closed': item('m1'); break;
+    case 'mi-a-saved': Object.assign(st, { savedPage: true, savedFilter: 'mi-items' }); break;
+    case 'mi-a-notif': st.home = true; st.ntOpen = true; break;
     case 'mi-f-paste': Object.assign(st, { compOpen: true, mode: 'ask', draft: 'What does the maintainers’ response leave unanswered? orbitlab.ai/blog/rb-2-response' }); break;
   }
 }
@@ -8042,12 +8041,8 @@ Object.assign(st, {
    - Removing takes the entry out of the space's list; asks about it stay. Anyone can report one.
    Placement ("Layout" control, st.dsPos): the space header spans the page; below it the space tabs
    and a sidebar with Sources and Wiki tabs, on the right or the left. Sources are listed in the Social feed style. */
-const DS_DROPS0 = FIXTURES.dsDrops;
 /* minutes since your last visit: sources added after it are marked new */
 const DS_SEEN = { ml: 20 * 60, replication: 16 * 60, public: 120 };
-const DS_POL0 = FIXTURES.dsPol;
-const DS_REPS0 = FIXTURES.dsReps;
-const DS_SP0 = D.media.map(m => [m.id, [...m.sp]]);
 const DS_DRAG_URL = 'arxiv.org/abs/2604.0981';
 const DS_WHY = { spam: 'Spam or advertising', topic: 'Not about this space', broken: 'Broken link or wrong reader copy', other: 'Something else' };
 
@@ -8068,15 +8063,6 @@ function dsCanAdd(s) {
   if (!s || st.auth !== 'in' || s.archived) return false;
   if (isClosed(s) && !isMember(s.id)) return false;
   return dsPol(s.id) !== 'mods' || isModOf(s.id);
-}
-function dsReset() {
-  st.dsDrops = structuredClone(DS_DROPS0); st.dsPol = { ...DS_POL0 }; st.dsReps = structuredClone(DS_REPS0);
-  const sp0 = new Map(DS_SP0);
-  if (D.media.some(m => sp0.has(m.id) && m.sp.join() !== sp0.get(m.id).join())) db.set('media', D.media.map(m => sp0.has(m.id) ? { ...m, sp: [...sp0.get(m.id)] } : m));
-  st.miAdded = []; st.miRead = new Set(['m6', 'm8']);
-  setRel('public', 'member'); if (!D.roles0.public) db.del('roles', 'public');
-  /* the new space from "New space with no sources" exists only on that screen */
-  if (sp('sp-field-notes')) { setRel('sp-field-notes', 'none'); db.remove('spaces', 'sp-field-notes'); db.del('rel', 'sp-field-notes'); db.del('dsDrops', 'sp-field-notes'); }
 }
 /* A new record for a URL or file that Session has not seen. */
 function dsMake(u, file, title) {
@@ -8389,21 +8375,12 @@ JUMPS.push(
   ['Sources in the sidebar', [...DS_LIST_J.map(([k, l]) => ['ds-s-' + k, k === 'reader' ? 'Open a source (source page)' : l])]],
   ['Sending and moderating sources', [['ds-x-home', 'Home: new sources'], ['ds-x-review', 'Add a source in a space with review'], ['ds-x-rmq', 'Manage › Sources: remove a source (confirm)'], ['ds-x-queue', 'Manage › Sources: review queue'], ['ds-x-manage', 'Manage › Sources'], ['ds-x-report', 'Report a source'], ['ds-x-remove', 'Remove a source']]],
 );
-function dsNewSpace() {
-  let s = sp('sp-field-notes');
-  if (!s) {
-    s = { id: 'sp-field-notes', name: 'field-notes', title: 'field-notes', av: 3, members: 1, online: 1, posts: 0, desc: 'Methods and sources for ecology field surveys.', rules: ['Say in a note why a source matters.'], pages: [], mods: [], faq: false, topics: [] };
-    db.push('spaces', s); db.put('roles', s.id, 'Owner'); db.put('roles0', s.id, 'Owner');
-  }
-  setRel(s.id, 'mod');
-  return sp(s.id);
-}
+screenData('ds-s-empty', 'field-notes: a new space');
+screenData('ds-s-closed', 'replication: member');
+screenData(['ds-x-queue', 'ds-x-rmq'], 'public: moderator');
 function dsJump(k) {
   if (st.device === 'native') st.device = 'desktop';
   Object.assign(st, NAVBASE(), MI_CLEAR(), { auth: 'in', toast: null, welcome: null, created: null, space: 'ml', home: false, miAsk: null, miAskQ: '', miFrom: null, mpOpen: false, dd: null, kindF: 'all', drawer: true, dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null, dsMenu: null, dsSTab: 'sources' });
-  spEdit('replication', rs => { rs.dom = null; rs.plain = false; });
-  setRel('replication', 'none');
-  dsReset();
   const [, g, v] = k.split('-');
   const nar = dsNarrow();
   /* show the source list: the sidebar panel (on phones, its sheet), or the full list with the Stack */
@@ -8420,13 +8397,13 @@ function dsJump(k) {
     case 'pass': miOpen('m2', 3); Object.assign(st, { miSel: 3, miQuote: 'The second tenfold increase pays for itself on about half of them.' }); ask({ it: 'm2', b: 3, quote: 'The second tenfold increase pays for itself on about half of them.' }, 'Which tasks are in the half where the second tenfold increase does not pay for itself?'); break;
     case 'pick': listFull(); Object.assign(st, { miPickMode: true, miPick: ['m1', 'm5'] }); break;
     case 'multi': listFull(); Object.assign(st, { miPickMode: true, miPick: ['m1', 'm5'] }); ask({ its: ['m1', 'm5'] }, 'Where do the thread and Orbit Lab’s response disagree, and what evidence does each give?'); break;
-    case 'empty': { const s = dsNewSpace(); st.space = s.id; list(); break; }
-    case 'closed': setRel('replication', 'member'); st.space = 'replication'; list(); st.dsUrl = DS_DRAG_URL; break;
+    case 'empty': st.space = 'sp-field-notes'; list(); break;
+    case 'closed': st.space = 'replication'; list(); st.dsUrl = DS_DRAG_URL; break;
     case 'out': st.auth = 'out'; list(); break;
     case 'x-home': st.home = true; break;
     case 'x-review': st.space = 'public'; list(); st.dsUrl = 'x.com/lin_feld/status/18590'; break;
-    case 'x-queue': setRel('public', 'mod'); Object.assign(st, { space: 'public', subPage: 'manage', mgSpace: 'public', mgTab: 'sources', set: null }); break;
-    case 'x-rmq': { setRel('public', 'mod'); Object.assign(st, { space: 'public', subPage: 'manage', mgSpace: 'public', mgTab: 'sources', set: null }); const x = dsAll('public').find(d => d.rv && !d.rm); if (x) st.modal = `ds-rmq:${x.m}:public:pend`; break; }
+    case 'x-queue': Object.assign(st, { space: 'public', subPage: 'manage', mgSpace: 'public', mgTab: 'sources', set: null }); break;
+    case 'x-rmq': { Object.assign(st, { space: 'public', subPage: 'manage', mgSpace: 'public', mgTab: 'sources', set: null }); const x = dsAll('public').find(d => d.rv && !d.rm); if (x) st.modal = `ds-rmq:${x.m}:public:pend`; break; }
     case 'x-manage': Object.assign(st, { subPage: 'manage', mgSpace: 'ml', mgTab: 'sources', set: null }); break;
     case 'x-report': miOpen('m10'); Object.assign(st, { dsWhy: 'topic', dsRepNote: '', modal: 'ds-report:m10:ml' }); break;
     case 'x-remove': miOpen('m10'); st.modal = 'ds-rm:m10:ml'; break;
@@ -8458,12 +8435,6 @@ Object.assign(st, {
   compTopic: null, tpMenu: null, imenu: null, rep: { why: 'incorrect', note: '' },
   repSeen: false, sfDom: null, sfDomHold: false,
 });
-const POSTS0 = structuredClone(D.posts);
-function sfReset() {
-  db.set('posts', structuredClone(POSTS0));
-  Object.keys(D.rich).forEach(k => { if (!FIXTURE_TIDS.has(k)) db.del('rich', k); });
-  Object.keys(D.srcd).forEach(k => { if (!FIXTURE_TIDS.has(k)) db.del('srcd', k); });
-}
 
 /* ---------- state ---------- */
 const REQS0 = FIXTURES.reqs;
@@ -8479,11 +8450,6 @@ Object.assign(st, {
   brF: 'all', q: 'replication',
 });
 const SPACES0 = structuredClone(D.spaces);
-function csReset() {
-  db.set('spaces', structuredClone(SPACES0));
-  const base = Object.fromEntries(Object.entries(D.roles0).filter(([k]) => ['scifi', 'ml', 'math', 'sablefield'].includes(k)));
-  db.set('roles', { ...base }); db.set('roles0', base);
-}
 /* ==== spaces and moderation: ownership, archive and delete, role limits,
    records keyed by space, invite by handle, moderator actions, declined requests,
    space name and icon ====
@@ -8493,7 +8459,7 @@ function csReset() {
      and admins also act on admins; nobody acts on the owner. Only the owner transfers ownership,
      archives or deletes. A sole owner cannot leave.
    - Archived: s.archived = { by, on }. Read-only, hidden from browse and search. Deleted: s.deleted. */
-Object.assign(st, { cxDeclNote: '', cxHandle: '', cxHOpen: false, cxSent: [], cxDel: '', cxDecl: {}, cxDemo: null });
+Object.assign(st, { cxDeclNote: '', cxHandle: '', cxHOpen: false, cxSent: [], cxDel: '', cxDecl: {} });
 const banSp = b => b.sp || 'replication';
 const bansOf = id => st.banned.filter(b => banSp(b) === id);
 const linksOf = id => st.links.filter(l => (l.sp || 'replication') === id);
@@ -8694,63 +8660,44 @@ on(document, 'keydown', e => {
 
 /* ---------- "Screen" entries ---------- */
 const CX_NEW = 'sp-tide-gauges';
-/* a closed space created with Create a space: you are its owner and only member */
-function cxNewSpace() {
-  if (!sp(CX_NEW)) { const cr = st.cr; st.cr = Object.assign(CR0(), { name: 'tide-gauges', desc: 'Readings and calibration notes from coastal tide gauges.', vis: 'listed' }); csCreate(); st.cr = cr; }
-  return sp(CX_NEW);
-}
-/* every screen starts without the changes these screens make */
-function cxRestore() {
-  st.cxDecl = {}; st.cxHandle = ''; st.cxHOpen = false; st.cxDel = ''; st.cxDeclNote = '';
-  if (st.cxDemo) {
-    const id = st.cxDemo, o = SPACES0.find(x => x.id === id); st.cxDemo = null;
-    if (o) spEdit(id, x => { ['archived', 'deleted', 'name', 'title', 'av', 'img', 'mods', 'members'].forEach(f => { if (f in o) x[f] = structuredClone(o[f]); else delete x[f]; }); });
-    if (id === 'math') { db.put('roles', 'math', 'Owner'); db.put('roles0', 'math', 'Owner'); joinSpace('math'); }
-    if (FIXTURES.memOther[id]) db.put('memOther', id, structuredClone(FIXTURES.memOther[id])); else db.del('memOther', id);
-  }
-  if (sp(CX_NEW)) {
-    leaveSpace(CX_NEW); ['rel', 'roles', 'roles0', 'memOther'].forEach(k => db.del(k, CX_NEW)); db.remove('spaces', CX_NEW);
-    st.links = st.links.filter(l => l.sp !== CX_NEW); st.banned = st.banned.filter(b => b.sp !== CX_NEW);
-    if (st.space === CX_NEW) st.space = 'scifi';
-    if (st.mgSpace === CX_NEW) st.mgSpace = 'replication';
-    if (st.created === CX_NEW) st.created = null;
-  }
-}
 { const CX_jump = jump; jump = function (k) {
-  if (!dataReady()) { DS.whenReady(() => { jump(k); renderAll(); }); return; }
-  cxRestore(); CX_jump(k);
+  CX_jump(k);
   if (k.startsWith('cx-')) cxJump(k);
 }; }
 JUMPS.push(
   ['Spaces: ownership, archive, roles', [['cx-transfer', 'Members: Make owner (confirm)'], ['cx-leave-owner', 'Leave as the only owner'], ['cx-danger', 'Settings: archive or delete'], ['cx-archive', 'Archive a space (confirm)'], ['cx-archived', 'Archived space page'], ['cx-delete', 'Delete a space (type the name)'], ['cx-mem-invite', 'Member: invite dialog with own links only'], ['cx-mod-members', 'Moderator: Members with limited actions'], ['cx-approved', 'Request approved: added to Members'], ['cx-new-members', 'New space: Members'], ['cx-new-requests', 'New space: Requests'], ['cx-new-invites', 'New space: Invites']]],
   ['Spaces: invites, moderation', [['cx-inv-handle', 'Invite by handle'], ['cx-inv-incoming', 'Invite notification: Accept or Decline'], ['cx-im-mod', 'Item menu: Hide and Remove (moderator)'], ['cx-im-rm', 'Remove from the item menu (confirm)'], ['cx-rep-author', 'Reports: remove or ban the author'], ['cx-decline-note', 'Decline a request with a note'], ['cx-declined', 'Declined: note and waiting period'], ['cx-declined-again', 'Declined: request again after the wait'], ['cx-set-about', 'Settings › About: name, title, icon'], ['cx-dom-failed', 'Domain: TXT record not found']]],
 );
+screenData('cx-archived', 'math: archived');
+screenData(['cx-delete', 'cx-new-members', 'cx-new-requests', 'cx-new-invites'], 'tide-gauges: a new closed space');
+screenData('cx-approved', 'replication: noor.a approved');
+screenData(['cx-inv-handle', 'cx-dom-failed'], 'replication: moderator');
+screenData('cx-decline-note', 'replication: moderator', { seen: true });
+screenData(['cx-declined', 'cx-declined-again'], 'replication: denied');
 function cxJump(k) {
   const mg = (tab, id) => Object.assign(st, { subPage: 'manage', mgSpace: id, mgTab: tab, space: id, set: null });
   const space = id => Object.assign(st, { space: id, home: false });
   const scrollTo = q => setTimeout(() => { const el = document.querySelector('#app ' + q); if (el) el.scrollIntoView({ block: 'center' }); }, 0);
-  const demo = id => { st.cxDemo = id; };
   const thr = rf => tidWhere(p => p.s === 'sablefield' && p.rf === rf);
-  const replMod = () => { setRel('replication', 'mod'); st.reqs = structuredClone(REQS0); st.rqSel = new Set(); st.mem = structuredClone(ST0.mem); spEdit('replication', x => { x.members = 214; }); };
   switch (k) {
-    case 'cx-transfer': demo('math'); mg('members', 'math'); st.modal = 'cs-xowner:lettie'; break;
-    case 'cx-leave-owner': demo('math'); space('math'); st.modal = 'sp-leave:math'; break;
-    case 'cx-danger': demo('math'); mg('settings', 'math'); scrollTo('.cx-danger'); break;
-    case 'cx-archive': demo('math'); mg('settings', 'math'); st.modal = 'cs-xarch:math'; break;
-    case 'cx-archived': demo('math'); spEdit('math', x => { x.archived = { by: ME.u, on: 'Nov 17' }; }); space('math'); break;
-    case 'cx-delete': { const s = cxNewSpace(); mg('settings', s.id); st.cxDel = 'tide-ga'; st.modal = 'cs-xdel:' + s.id; break; }
-    case 'cx-mem-invite': setRel('grants', 'member'); space('grants'); csInvite('grants'); break;
+    case 'cx-transfer': mg('members', 'math'); st.modal = 'cs-xowner:lettie'; break;
+    case 'cx-leave-owner': space('math'); st.modal = 'sp-leave:math'; break;
+    case 'cx-danger': mg('settings', 'math'); scrollTo('.cx-danger'); break;
+    case 'cx-archive': mg('settings', 'math'); st.modal = 'cs-xarch:math'; break;
+    case 'cx-archived': space('math'); break;
+    case 'cx-delete': mg('settings', CX_NEW); st.cxDel = 'tide-ga'; st.modal = 'cs-xdel:' + CX_NEW; break;
+    case 'cx-mem-invite': space('grants'); csInvite('grants'); break;
     case 'cx-mod-members': mg('members', 'scifi'); break;
-    case 'cx-approved': { replMod(); const s = sp('replication'); st.reqs = st.reqs.map(r => r.u === 'noor.a' ? { ...r, st: 'approved' } : r); cxAddMembers(s, ['noor.a']); mg('members', 'replication'); toast(`Approved noor.a. They can read ${spName(s)} now.`); break; }
-    case 'cx-new-members': case 'cx-new-requests': case 'cx-new-invites': { const s = cxNewSpace(); mg(k.slice(7), s.id); break; }
-    case 'cx-inv-handle': setRel('replication', 'mod'); space('replication'); csInvite('replication'); Object.assign(st, { cxHandle: 'to', cxHOpen: true }); break;
-    case 'cx-inv-incoming': setRel('ward7', 'none'); st.home = true; csOpenNotifs(); break;
-    case 'cx-im-mod': case 'cx-im-rm': { st.reports = structuredClone(REPS0); st.modSt = {}; const i = thr('p1'); Object.assign(st, { space: 'sablefield', home: false, thread: i }); if (k === 'cx-im-mod') st.imenu = 'r:' + i + ':2'; else st.modal = 'cs-ximrm:r:' + i + ':2'; break; }
-    case 'cx-rep-author': st.reports = structuredClone(REPS0); st.modSt = {}; mg('reports', 'sablefield'); scrollTo('.cx-rauth'); break;
-    case 'cx-decline-note': replMod(); mg('requests', 'replication'); Object.assign(st, { reqSeen: true, declIds: [openReqs('replication')[0].u], cxDeclNote: 'Name the result you want to replicate, and link to earlier work if you have any.', modal: 'cs-decline' }); break;
-    case 'cx-declined': case 'cx-declined-again': setRel('replication', 'denied'); st.cxDecl = { replication: { note: 'Your answers did not name a result to replicate. Name one when you request again.', on: 'Nov 15', again: 'Dec 1', ready: k === 'cx-declined-again' } }; space('replication'); break;
-    case 'cx-set-about': demo('math'); mg('settings', 'math'); break;
-    case 'cx-dom-failed': setRel('replication', 'mod'); spEdit('replication', x => { x.dom = null; x.plain = false; }); mg('settings', 'replication'); st.sfDom = { sid: 'replication', domain: 'replicationclub.test', org: '', method: 'dns', state: 'failed' }; scrollTo('.sf-domsec'); break;
+    case 'cx-approved': mg('members', 'replication'); toast(`Approved noor.a. They can read ${spName(sp('replication'))} now.`); break;
+    case 'cx-new-members': case 'cx-new-requests': case 'cx-new-invites': mg(k.slice(7), CX_NEW); break;
+    case 'cx-inv-handle': space('replication'); csInvite('replication'); Object.assign(st, { cxHandle: 'to', cxHOpen: true }); break;
+    case 'cx-inv-incoming': st.home = true; csOpenNotifs(); break;
+    case 'cx-im-mod': case 'cx-im-rm': { const i = thr('p1'); Object.assign(st, { space: 'sablefield', home: false, thread: i }); if (k === 'cx-im-mod') st.imenu = 'r:' + i + ':2'; else st.modal = 'cs-ximrm:r:' + i + ':2'; break; }
+    case 'cx-rep-author': mg('reports', 'sablefield'); scrollTo('.cx-rauth'); break;
+    case 'cx-decline-note': mg('requests', 'replication'); Object.assign(st, { rqSel: new Set(), declIds: [openReqs('replication')[0].u], cxDeclNote: 'Name the result you want to replicate, and link to earlier work if you have any.', modal: 'cs-decline' }); break;
+    case 'cx-declined': case 'cx-declined-again': st.cxDecl = { replication: { note: 'Your answers did not name a result to replicate. Name one when you request again.', on: 'Nov 15', again: 'Dec 1', ready: k === 'cx-declined-again' } }; space('replication'); break;
+    case 'cx-set-about': mg('settings', 'math'); break;
+    case 'cx-dom-failed': mg('settings', 'replication'); st.sfDom = { sid: 'replication', domain: 'replicationclub.test', org: '', method: 'dns', state: 'failed' }; scrollTo('.sf-domsec'); break;
   }
 }
 /* Domain check: a domain that ends in .test has no TXT record in this mockup */
@@ -9032,7 +8979,7 @@ let qtSeq = 0;
 /* the payer and its model are stored on the node; the answer is written, or stopped for tokens, by tmQtRun */
 function qtAsk(T, par, text) {
   const pay = askPay(T.p.s); if (!pay) return;
-  const n = { id: JUMPING ? 'n' + (++qtSeq) : tmpId(), par, u: ME.u, q: text, tok: 0, running: true, uses: st.qtCmp ? [...st.qtCmp] : null, pay: pay.id, model: tmModelFor(pay).id };
+  const n = { id: tmpId(), par, u: ME.u, q: text, tok: 0, running: true, uses: st.qtCmp ? [...st.qtCmp] : null, pay: pay.id, model: tmModelFor(pay).id };
   const html = QT_CANNED[st.qtCanned] || QT_CANNED.generic, tok = 9e3 + qtTokTxt(html) * 20;
   qtEdit(T.i, d => { d.nodes.push(n); });
   Object.assign(st, { qtAskAt: null, qtDraft: '', qtErr: '', qtCmp: null, qtCanned: null });
@@ -9048,12 +8995,11 @@ function qtProOpen(T, id) {
   Object.assign(st, { modal: 'qt-promote', qtMenu: null });
 }
 const qtProSpaces = T => { const s = sp(T.p.s); if (isClosed(s)) return [[s.id, spName(s)]]; return [[s.id, spName(s)], ...D.joined.filter(id => id !== s.id && sp(id) && !isClosed(sp(id))).map(id => [id, spName(sp(id))])]; };
-const QT_MADE = [];
 function qtPromote() {
   const pro = st.qtPro, T = qtT(pro.th), n = T.by[pro.node], s = sp(pro.sp);
   const p = { id: tmpId(), s: pro.sp, u: n.u, mine: n.u === ME.u || undefined, k: 'ask', t: (pro.title || n.q).trim(), q: n.q, sum: qtClip(qtTxt(n.html), 170), r: 0, tok: n.tok, likes: 0, from: { th: pro.th, node: n.id, lv: n.lv } };
   if (faqOn(s) && pro.topic) p.topic = pro.topic;
-  db.push('posts', p); const ni = p.id; QT_MADE.push(ni);
+  db.push('posts', p); const ni = p.id;
   db.put('rich', ni, n.html); db.put('fu', ni, []);
   const desc = pro.inc === 'all' ? T.nodes.filter(x => x.id !== n.id && T.path(x.id).some(y => y.id === n.id)) : [];
   db.put('qtd', ni, { nodes: desc.map(x => ({ id: x.id, par: x.par === n.id ? 'r' : x.par, u: x.u, createdAt: x.createdAt, q: x.q, html: x.html, tok: x.tok })) });
@@ -9223,22 +9169,11 @@ Object.assign(st, { qtTh: null, qtNode: 'r', qtCmp: null, qtPick: null, qtMenu: 
    Follow-ups page (QT_layoutThread) is used for posts and for threads the person cannot read. */
 const qtOn = () => true;
 const qtComb = () => true;
-const QT_NOTIF = FIXTURES.notifs.find(n => n.id === 'nqt1');
-function qtSyncNotif() {
-  const has = st.notifs.some(n => n.id === QT_NOTIF.id);
-  if (qtOn() && !has) db.unshift('notifs', QT_NOTIF); else if (!qtOn() && has) st.notifs = st.notifs.filter(n => n.id !== QT_NOTIF.id);
-}
 /* The Map button: on Mobile Web the Thread map control can replace it with the outline, or open it zoomed out. */
 /* The map: a dialog on desktop. Mobile Web has no map; the outline sheet opens instead. */
 function qtOpenMap() { if (st.device === 'phone') st.modal = 'qt-outline'; else { st.modal = 'qt-map'; st.qtMapOpened = true; } }
 function QTKNOBS() { return []; }
 st.thrV = 'fx';
-function qtReset() {
-  sfReset();
-  QT_MADE.splice(0).map(realId).forEach(i => { db.del('fu', i); db.del('rich', i); });
-  db.set('qtd', structuredClone(QTD0));
-  st.qtTh = null;
-}
 JUMPS.push(
   ['Question trees: reading', [['qt-root', 'Open someone else’s thread with branches'], ['qt-deep', 'An ask five levels deep'], ['qt-sib', 'Switch between sibling questions (outline)'], ['qt-up', 'Go back up to an earlier answer'], ['qt-outline', 'Outline as a sheet'], ['qt-out', 'Signed out: someone else’s thread']]],
   ['Question trees: follow-ups as questions', [['qt-fl', 'Follow-ups as questions'], ['qt-fl-deep', 'A deep ask from the outline']]],
@@ -9247,11 +9182,13 @@ JUMPS.push(
   ['Question trees: organizing', [['qt-pick', 'Compare: choose the second ask'], ['qt-compare', 'Compare two branches'], ['qt-merge', 'Ask about both branches'], ['qt-promote', 'Start a thread from a branch'], ['qt-promoted', 'New thread with a “Branched from” link'], ['qt-collapse', 'Owner collapses a branch'], ['qt-faq', 'FAQ space: branch to an FAQ entry'], ['qt-closed', 'Closed space: branch to a thread']]],
   ['Question trees: finding', [['qt-home', 'Home feed with branch activity'], ['qt-notif', 'Notification: an ask under yours'], ['qt-notif-open', 'Open the ask from the notification'], ['qt-saved', 'Saved asks inside threads'], ['qt-search', 'Search finds asks inside threads']]],
 );
+screenData('qt-promoted', 'asks: a branch became a thread');
+screenData('qt-collapse', 'asks: a collapsed branch');
+screenData('qt-closed', 'replication: member');
 function qtJump(k) {
   if (st.device === 'native') st.device = 'desktop';
-  st.thrV = 'fx'; st.qtFuQ = /^qt-fl\b/.test(k); qtSyncNotif();
-  Object.assign(st, NAVBASE(), { auth: 'in', toast: null, welcome: null, created: null, qtPro: null, qtShowCol: false });
-  qtReset();
+  st.thrV = 'fx'; st.qtFuQ = /^qt-fl\b/.test(k);
+  Object.assign(st, NAVBASE(), { auth: 'in', toast: null, welcome: null, created: null, qtPro: null, qtShowCol: false, qtTh: null });
   const open = (i, node, extra) => { Object.assign(st, { thread: i, space: postById(i).s, home: false }); qtEnter(i); if (node) qtGo(qtT(i), node); Object.assign(st, extra || {}); };
   const M = TID(11);
   switch (k) {
@@ -9271,10 +9208,10 @@ function qtJump(k) {
     case 'qt-compare': open(M, 'd1', { qtCmp: ['d1', 'd2'], qtSide: 'a' }); break;
     case 'qt-merge': open(M, 'd1', { qtCmp: ['d1', 'd2'], qtSide: 'a', qtDraft: 'Taken together, can traders on a regulated exchange price void risk separately?', qtCanned: 'both', qtFocusIn: true }); break;
     case 'qt-promote': open(M, 'b3'); qtProOpen(qtT(M), 'b3'); break;
-    case 'qt-promoted': open(M, 'b3'); qtProOpen(qtT(M), 'b3'); patch('qtPro', x => { x.title = 'Disputed prediction markets decided by UMA votes'; }); qtPromote(); break;
-    case 'qt-collapse': qtNodeEdit(TID(0), 'g2', n => { n.col = true; }); open(TID(0), 'f1'); break;
+    case 'qt-promoted': { const ni = tidWhere(p => p.from && p.from.th === M && p.from.node === 'b3'), sid = postById(ni).s; Object.assign(st, NAVBASE(), { thread: ni, space: sid }); qtEnter(ni); toast(`Thread started in ${spName(sp(sid))}. The branch it came from links to it.`); break; }
+    case 'qt-collapse': open(TID(0), 'f1'); break;
     case 'qt-faq': open(QT_SF, 's1'); qtProOpen(qtT(QT_SF), 's1'); patch('qtPro', x => { x.topic = 'migr'; x.inc = 'all'; }); break;
-    case 'qt-closed': setRel('replication', 'member'); open(QT_REP, 'x2'); qtProOpen(qtT(QT_REP), 'x2'); break;
+    case 'qt-closed': open(QT_REP, 'x2'); qtProOpen(qtT(QT_REP), 'x2'); break;
     case 'qt-home': st.home = true; break;
     case 'qt-notif': st.home = true; csOpenNotifs(); break;
     case 'qt-notif-open': { const x = ntFind('nqt1'); open(TID(0), x.qtNode); break; }
@@ -9631,6 +9568,8 @@ on($('app'), 'change', e => { if (e.target.name === 'ab-pgedit') { csEdit(x => {
 
 /* ---------- Jump to ---------- */
 JUMPS.push(['About a space', [['ab-about', 'About in the sidebar'], ['ab-page', 'Open a page'], ['ab-page-edit', 'Edit a page'], ['ab-page-hist', 'Page history'], ['ab-pages-order', 'Order and remove pages (moderator)'], ['ab-page-new', 'Add a page'], ['ab-page-notif', 'Notification: a page changed'], ['ab-search', 'Search finds a page'], ['ab-skill', 'Skill preview'], ['ab-skills-mg', 'Manage › Skills (drag to reorder)'], ['ab-skill-new', 'Add a skill'], ['ab-skill-edit', 'Edit a skill'], ['ab-skill-err', 'Add a skill: name and description errors'], ['ab-skill-rm', 'Remove a skill'], ['ab-set', 'Settings › About and Pages'], ['ab-rules-upd', 'Rules updated: see the changes'], ['ab-members', 'Member list'], ['ab-join', 'Join from About']]]);
+screenData('ab-page-notif', 'scifi: a page changed');
+screenData('ab-rules-upd', 'scifi: rules updated');
 function abJump(k) {
   const about = sid => Object.assign(st, { space: sid, home: false, drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' });
   switch (k) {
@@ -9640,7 +9579,7 @@ function abJump(k) {
     case 'ab-page-hist': about('scifi'); abOpenPage('scifi', 1); st.abHist = true; break;
     case 'ab-pages-order': about('scifi'); st.abPgOrder = true; break;
     case 'ab-page-new': about('scifi'); Object.assign(st, { subPage: 'abpage', mWiki: false, drawer: false }); Object.assign(st, { abPage: sp('scifi').pages.length, abPageEd: { t: 'Recommended anthologies', b: '', isNew: true } }); break;
-    case 'ab-page-notif': st.notifs = [{ id: 'npg', type: 'page_edited', actor: 'tomasz', space: 'scifi', page: 1, createdAt: isoAgo('5m'), read: false }, ...st.notifs.filter(n => n.id !== 'npg')]; st.home = true; csOpenNotifs(); break;
+    case 'ab-page-notif': st.home = true; csOpenNotifs(); break;
     case 'ab-search': Object.assign(st, { subPage: 'search', q: 'spoiler' }); break;
     case 'ab-skill': about('scifi'); st.modal = 'ab-skill:0'; break;
     case 'ab-skill-new': case 'ab-skill-edit': case 'ab-skill-err': case 'ab-skill-rm': {
@@ -9652,7 +9591,7 @@ function abJump(k) {
     }
     case 'ab-skills-mg': Object.assign(st, { subPage: 'manage', mgSpace: 'scifi', space: 'scifi', mgTab: 'skills', home: false }); break;
     case 'ab-set': Object.assign(st, { subPage: 'manage', mgSpace: 'ml', space: 'ml', mgTab: 'settings', set: null, home: false }); break;
-    case 'ab-rules-upd': spEdit('scifi', x => { x.rulesPrev = ['Mark spoilers in titles with [spoilers].', 'Cite editions and page numbers when quoting.', 'Reading-group threads are pinned by mods.']; x.rules = ['Mark spoilers in titles with [spoilers].', 'Cite editions and page numbers when quoting.', 'Put plot details after a "Spoilers below" line.']; x.rulesAt = isoAgo('2d'); x.rulesBy = 'tomasz'; }); about('scifi'); break;
+    case 'ab-rules-upd': about('scifi'); break;
     case 'ab-members': about('sablefield'); st.modal = 'ab-mem'; break;
     case 'ab-join': about('history'); break;
   }
@@ -9950,7 +9889,6 @@ function npJump(k) {
   Object.assign(st, NAVBASE(), { auth: 'in', toast: null, welcome: null, created: null, device: 'native', reqAge: '2h', reqAns: ['', ''], reqRules: false, reqSeen: false, repSeen: false, modSt: {}, rqSel: new Set() });
   st.notifs = structuredClone(ST0.notifs); st.reports = structuredClone(REPS0); st.reqs = structuredClone(REQS0); st.userKeys = structuredClone(ST0.userKeys);
   st.saved = new Set(ST0.saved); st.qtSaved = new Set(ST0.qtSaved); st.miSaved = new Set(ST0.miSaved);
-  qtSyncNotif();
   db.set('joined', [...JOINED0]);
   ['replication', 'northwind', 'ward7'].forEach(id => setRel(id, 'none')); setRel('grants', 'member');
   Object.assign(nst, structuredClone(NST0));
@@ -10650,9 +10588,9 @@ const tmSetDef = id => { db.set('usage', u => { u.def = id; }); const k = st.use
 /* ---------- first run: the API key step ---------- */
 /* a new account: nothing used yet; asks made before it (fixtures) are not its asks */
 const tmFresh = () => ({ ...structuredClone(FIXTURES.usage), by: {}, def: null, movedSeen: false, fresh: true });
-/* A new account starts without keys. The mock has one signed-in person, so this sets up the new account's
-   data the way a Screen entry does (TODO(step 10): a scenario; the real server makes the account empty). */
-{ const ob0 = acOnbStart; acOnbStart = function () { asScenario(() => { db.set('userKeys', []); db.set('usage', tmFresh()); })(); ob0(); }; }
+/* A new account starts without keys. The mock has one signed-in person, so the server sets up the new
+   account's data with a scenario, as for a Screen entry (the real server makes the account empty). */
+{ const ob0 = acOnbStart; acOnbStart = function () { ob0(); runScenario('new account', null, renderAll); }; }
 const tmOnbCopy = () => `Each month, your asks can use up to ${fmtT(TU().cap)} included tokens. After they run out, asks use your API key, and your provider bills you for those tokens. Session uses the key only for asks you start. Account › Usage shows both.`;
 
 /* ---------- Phone: composer line, dock, chooser, You › Usage, key details, first run ---------- */
@@ -11234,7 +11172,7 @@ JUMPS.push(['Data errors', [
   const DE = { load: false };
   const failOn = (code, paths) => { mockBackend.cfg.failOn = { code, paths, methods: ['PUT', 'POST', 'DELETE'] }; };
   /* draw the screen, then click a control on it as a person would; false when the control isn't there */
-  const press = sel => { renderAll(); const e = document.querySelector(sel); if (e) asUser(() => e.click()); return !!e; };
+  const press = sel => { renderAll(); const e = document.querySelector(sel); if (e) e.click(); return !!e; };
   const clear = () => {
     mockBackend.cfg.failOn = null;
     if (!DE.load) return;
@@ -11262,7 +11200,7 @@ JUMPS.push(['Data errors', [
         if (i == null) break;
         Object.assign(st, { thread: i, space: 'public', home: false });
         failOn('NOT_FOUND', ['/api/rpc/research.createPostFollowUp']);
-        asUser(() => addFollowUp(i, 'Is the reading group still in room 2B?'));
+        addFollowUp(i, 'Is the reading group still in room 2B?');
         break;
       }
       case 'de-badreq':
@@ -11340,10 +11278,7 @@ function nvPathOf(h) {
 function nvApply(x) {
   x = remapIds(x);   /* an entry made before the server replaced a new thread's temporary id */
   Object.assign(st, NAVBASE(), MI_CLEAR(), { toast: null });
-  /* TODO(step 10/11): `invite` (the invite landing's invite) is screen state kept as server data
-     (/api/me/invite); going back to an invite landing writes it through the collection endpoint, as
-     opening an invite notification does (inviteLanding). */
-  for (const k of NV_F) if (k in x && !(ST_DATA.has(k) && sameJSON(st[k], x[k]))) { if (ST_DATA.has(k)) asScenario(() => { st[k] = x[k]; })(); else st[k] = x[k]; }
+  for (const k of NV_F) if (k in x) st[k] = x[k];
   if (st.thread != null && !postById(st.thread)) Object.assign(st, { thread: null, subPage: 'nvnf', nvNF: { path: '/' } });
 }
 function nvScrollTo(x) {
@@ -12515,28 +12450,50 @@ askStop = serverSide(askStop); askAgain = serverSide(askAgain); taRunNode = serv
     () => { const r = da(u, sid, note, file); if (!found && D.miAdded.length > n0) made = D.miAdded[D.miAdded.length - 1].id; return r; }, { tmp: () => made });
 }; }
 /* ==== end of the thread actions as mutations ==== */
-/* Screen entries set up their data through the collection endpoints (step 10: a scenario endpoint) */
-jump = asScenario(jump);
 Object.assign(st, { apiMode: 'normal' });
 bootData();
 const ST0 = structuredClone(stSnapshot(FIXTURES)), JOINED0 = [...FIXTURES.joined], NST0 = structuredClone(phoneStore.getState());
+/* ==== mock backend, step 10: Screen entries set up their data on the server ====
+   A Screen entry has two parts. Its data is a named scenario that the server sets up (runScenario:
+   POST /api/dev/scenario; the scenarios are in session-web-spaces-scenarios.js): the server goes back to its
+   seed, writes the scenario's changes in one transaction and answers with every record that changed, which
+   the page puts in its store as server truth. Its screen is UI state that the page sets up: the jump
+   functions above (st, nst, screen, modal), which no longer write data. Every entry starts from the seed
+   and from the UI and Phone state the page starts with (screenReset: the Variants bar and the theme stay),
+   so an entry shows the same whatever was open before it. SCREEN_DATA (each group fills it next to its
+   JUMPS) names the scenario of each entry; an entry it does not name uses 'seed'. */
+const UI0 = structuredClone(uiStore.getState());
+const UI_KEEP = ['appearance'];   /* UI keys that a Screen entry keeps: the theme */
+function screenReset() {
+  const ui = uiStore.getState();
+  uiStore.setState(deepFreeze(Object.assign(structuredClone(UI0), Object.fromEntries(UI_KEEP.filter(k => k in ui).map(k => [k, ui[k]])))), true);
+  phoneStore.setState(deepFreeze(structuredClone(NST0)), true);
+}
+/* the server sets up a scenario's data; then(): the screen, once the page has the server's records */
+function runScenario(name, args, then) {
+  const inst = DS;
+  inst.meta.setState(m => ({ pending: m.pending + 1 }));
+  apiSource.queue = apiSource.queue
+    .then(() => http('POST', '/api/dev/scenario', args ? { name, args } : { name }))
+    .then(res => { applyChanges(res && res.changes, () => false); if (then) then(); },
+      e => { console.error(`[session] the scenario ${name} failed: ${e.message}`); dataError(apiErrText(e, 'write')); apiSource.load(inst); })
+    .catch(e => console.error(`[session] scenario ${name}: could not set up the screen`, e))
+    .finally(() => inst.meta.setState(m => ({ pending: m.pending - 1 })));
+}
+const screenUi = jump;   /* the Screen entries' UI state (the jump functions above) */
+jump = function (k) {
+  if (!dataReady()) { DS.whenReady(() => jump(k)); return; }
+  const [name, args] = SCREEN_DATA[k] || ['seed'];
+  runScenario(name, args, () => { screenReset(); screenUi(k); renderAll(); });
+};
 on($('ctl-toggle'), 'click', e => { const open = document.querySelector('.ctl').classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded', open); });
-on(document.getElementById('k-reset'), 'click', () => {
-  /* the mock backend's data goes back to its seed; then the controls and the screen */
-  db.reset(asScenario(resetControls));
-  renderAll();
-});
+/* the Variants bar's Reset: the seed data (the same reset as a Screen entry's), then the controls and the screen */
+on(document.getElementById('k-reset'), 'click', () => runScenario('seed', null, resetControls));
 function resetControls() {
-  const ap = st.appearance, api = st.apiMode;
-  Object.assign(st, structuredClone(ST0), { appearance: ap, apiMode: api });
+  const api = st.apiMode;
+  screenReset();
   for (const [, key, items] of KNOBDEF()) st[key] = items[0][0];
-  Object.assign(st, { auth: 'in', device: 'desktop' });
-  db.set('joined', [...JOINED0]);
-  csReset();
-  sfReset();
-  qtReset();
-  dsReset();
-  Object.assign(nst, structuredClone(NST0));
+  Object.assign(st, { auth: 'in', device: 'desktop', opt: ST0.opt, apiMode: api });
   renderAll();
   const a = document.getElementById('app'); if (a) a.scrollTop = 0;
 }

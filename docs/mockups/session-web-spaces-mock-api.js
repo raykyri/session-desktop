@@ -228,7 +228,6 @@
   S.PageDoc = obj({ t: str, text: arr(str), 'by?': str, 'ed?': str, revs: arr(obj({ by: str, 'createdAt?': iso, note: str })) }, 'PageDoc');
   S.Profile = obj({ name: str, bio: str }, 'Profile');
   S.Me = obj({ u: str, name: str, bio: str, x: str, createdAt: iso }, 'Me');
-  S.Invite = named('Invite', nul(obj({ sp: str, by: str, state: str })));
   /* TODO(limits): token usage is simulated in the page (owner decision: no server-side limit tracking yet).
      Stored as sent. by: tokens this month per source ('session' or a key id) and space; cap: the included
      tokens a month; def: the default key, which pays after the included tokens run out. */
@@ -262,7 +261,6 @@
     userKeys: { path: '/api/me/api-keys', kind: 'list', id: 'id', serverId: true, writeOnly: ['raw'], item: S.ApiKey },
     notifs:   { path: '/api/me/notifications', kind: 'list', id: 'id', serverId: true, item: S.Notification },
     askedInv: { path: '/api/me/invite-requests', kind: 'value', item: named('SpaceId[]', arr(str)) },
-    invite:   { path: '/api/me/invite', kind: 'value', item: S.Invite },
     reqs:     { path: '/api/join-requests', kind: 'list', id: 'u', item: S.JoinRequest },
     mem:      { path: '/api/members', kind: 'value', space: 'replication', item: named('Member[]', arr(S.Member)) },   /* one closed space's members */
     memOther: { path: '/api/members/other-spaces', kind: 'map', key: 'space', item: named('Member[]', arr(S.Member)) },
@@ -449,8 +447,6 @@
     row('notifs', 'delete', 'user', 'notifications.remove'),
     row('askedInv', 'list', 'user', 'invites.listRequested'),
     row('askedInv', 'replace', 'user', 'invites.request'),
-    row('invite', 'list', 'user', 'invites.received', { wire: 'ReceivedInvite' }),
-    row('invite', 'replace', 'user', 'invites.accept', { errors: ['NOT_FOUND'] }),
 
     row('reqs', 'list', 'moderator', 'joinRequests.list'),
     row('reqs', 'replace', 'moderator', 'joinRequests.decideMany'),
@@ -517,6 +513,8 @@
 
     /* development only: not part of the product API */
     { method: 'POST', path: '/api/dev/reset', coll: null, op: 'dev-reset', input: null, output: null, who: 'guest', trpc: null, wire: null, errors: [], dev: true, note: 'back to the seed data' },
+    { method: 'POST', path: '/api/dev/scenario', coll: null, op: 'dev-scenario', input: '{ name: string, args?: object }', output: '{ changes }', who: 'guest', trpc: null, wire: null, errors: ['BAD_REQUEST', 'INTERNAL_SERVER_ERROR'], dev: true,
+      note: 'a Screen entry’s data (step 10): back to the seed, then the named scenario (session-web-spaces-scenarios.js) in one transaction; changes: every record that differs from the database before the call' },
     { method: 'GET', path: '/api/dev/config', coll: null, op: 'dev-config', input: null, output: 'DevConfig', who: 'guest', trpc: null, wire: null, errors: [], dev: true },
     { method: 'PUT', path: '/api/dev/config', coll: null, op: 'dev-config', input: 'Partial<DevConfig>', output: 'DevConfig', who: 'guest', trpc: null, wire: null, errors: ['BAD_REQUEST'], dev: true,
       note: 'DevConfig: { now (the mock clock, an ISO time), latency, failWrites, failReads, failCode, failOn: { code, paths: string[], methods?: string[], times? } | null }' },
@@ -1120,7 +1118,7 @@
     return t + r;
   }
   const omit = (o, ks) => { if (!ks || !ks.some(k => k in o)) return o; const x = { ...o }; ks.forEach(k => delete x[k]); return x; };
-  function createBackend({ fixtures, seed, storageKey = 'session-mock-db-v5', latency = 120, dev = false }) {
+  function createBackend({ fixtures, seed, scenarios, storageKey = 'session-mock-db-v5', latency = 120, dev = false }) {
     const fx = fixtures || { data: seed ? seed() : {} };
     const me = fx.me || { u: 'me', x: '@me', createdAt: new Date().toISOString() };
     const cfg = { now: fx.clock || new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), base: latency, latency, failWrites: false, failReads: false, failCode: 'SERVICE_UNAVAILABLE', failOn: null };
@@ -1270,6 +1268,84 @@
       return null;
     }
 
+    /* ---- scenarios (step 10): the Screen entries' data, set up on the server ----
+       POST /api/dev/scenario { name, args? }. The database goes back to the seed (one deep copy of it per
+       call); then the scenario's base, if it names one, and the scenario itself write to it in one
+       transaction (scenarios: SessionScenarios, from session-web-spaces-scenarios.js). The answer is
+       { changes }, in the shape of a procedure's changes: every record that differs from the database
+       before the call, as GET returns it. A list whose order changed also carries `order`: its ids, in order.
+       A scenario writes as the server: no permission checks (step 5 must keep it that way). */
+    const SC = (scenarios && scenarios.list) || {}, SC_BASES = (scenarios && scenarios.bases) || {};
+    /* every collection as GET returns it, each record encoded once, for the comparison */
+    function snapshot(d) {
+      const o = {};
+      for (const [k, c] of Object.entries(C)) {
+        if (!(k in d)) continue;
+        if (c.kind === 'list') { const views = d[k].map(x => viewOne(k, x, d)); o[k] = { ids: views.map(x => String(x[c.id])), views, codes: new Map(views.map(x => [String(x[c.id]), enc(x)])) }; }
+        else if (c.kind === 'map') o[k] = new Map(Object.entries(d[k]).map(([key, v]) => [key, enc(v)]));
+        else o[k] = enc(d[k]);
+      }
+      return o;
+    }
+    function changesBetween(a, b, d) {
+      const changes = {};
+      for (const [k, c] of Object.entries(C)) {
+        if (!(k in b)) continue;
+        const x = a[k], y = b[k];
+        if (c.kind === 'value') { if (x !== y) changes[k] = { value: d[k] }; continue; }
+        if (c.kind === 'map') {
+          const put = {}, del = [];
+          y.forEach((v, key) => { if (!x || x.get(key) !== v) put[key] = d[k][key]; });
+          if (x) x.forEach((v, key) => { if (!y.has(key)) del.push(key); });
+          if (Object.keys(put).length || del.length) changes[k] = { put, del };
+          continue;
+        }
+        const put = y.views.filter(v => !x || x.codes.get(String(v[c.id])) !== y.codes.get(String(v[c.id])));
+        const del = x ? x.ids.filter(id => !y.codes.has(id)) : [];
+        /* the order the page gets by keeping its records in place and adding new ones at the end */
+        const kept = x ? x.ids.filter(id => y.codes.has(id)) : [], fresh = y.ids.filter(id => !x || !x.codes.has(id));
+        const ch = { put, del };
+        if ([...kept, ...fresh].join('\n') !== y.ids.join('\n')) ch.order = y.ids;
+        if (put.length || del.length || ch.order) changes[k] = ch;
+      }
+      return changes;
+    }
+    /* what a scenario can use besides tx: the server's own rules for memberships and member lists, the
+       procedures (their run, without permission checks), and times relative to the mock clock */
+    const AGO_MIN = { m: 1, h: 60, d: 1440, w: 10080 };
+    const isoOf = ms => new Date(Math.floor(ms / 1000) * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const helpers = tx => ({
+      /* an ISO time this long before the clock ("3h", "2d", "1mo"), as the page's isoAgo */
+      ago: a => { const m = /^(\d+)(mo|m|h|d|w)$/.exec(a), n = +m[1]; const [lo, hi] = m[2] === 'mo' ? [Math.max(30 * n, 56) * 1440, (30 * n + 30) * 1440] : [n * AGO_MIN[m[2]], (n + 1) * AGO_MIN[m[2]]]; return isoOf(Date.parse(cfg.now) - (lo + hi) / 2 * 60e3); },
+      in: days => isoOf(Date.parse(cfg.now) + days * 1440 * 60e3),
+      rel: (sid, r) => setRelation(tx, sid, r),
+      joined: (sid, on) => setJoined(tx, sid, on),
+      roster: sid => rosterOf(tx, sid),
+      setRoster: (sid, list) => setRoster(tx, sid, list),
+      proc: (name, input) => {
+        const P = PROCS[name]; if (!P) throw new Error(`no procedure ${name}`);
+        const issues = check(P.input, input, 'input'); if (issues.length) throw new Error(`${name}: ${issues.map(i => `${i.path}: expected ${i.expected}`).join('; ')}`);
+        return P.run(tx, input);
+      },
+    });
+    function scenario(body) {
+      const sc = body && typeof body === 'object' && SC[body.name];
+      if (!sc) return err('BAD_REQUEST', undefined, { issues: [`name: expected one of ${Object.keys(SC).join(', ')}`] });
+      const before = snapshot(db0());
+      data = seedData(); ids = 0;
+      const tx = transaction(data), h = helpers(tx), args = body.args || {};
+      try {
+        if (sc.base) SC_BASES[sc.base](tx, args, h);
+        if (sc.run) sc.run(tx, args, h);
+        tx.commit();
+      } catch (e) {
+        tx.abort(); save();
+        fail(`scenario ${body.name} failed: ${e && e.message}`);
+        return err('INTERNAL_SERVER_ERROR', `The scenario ${body.name} failed: ${e && e.message}`);
+      }
+      return out(200, { changes: changesBetween(before, snapshot(data), data) });
+    }
+
     function handle(method, url, body) {
       const [path, qs] = url.split('?');
       const hits = matchPath(path);
@@ -1279,6 +1355,7 @@
       const { r, id } = hit;
       if (r.dev) {
         if (r.op === 'dev-reset') { data = seedData(); ids = 0; save(); return { res: out(204) }; }
+        if (r.op === 'dev-scenario') return { res: scenario(body) };
         if (method === 'PUT') {
           if (!body || typeof body !== 'object') return { res: err('BAD_REQUEST') };
           if (body.failCode && !CODES[body.failCode]) return { res: err('BAD_REQUEST', undefined, { issues: ['failCode: expected one of ' + Object.keys(CODES).join(', ')] }) };
