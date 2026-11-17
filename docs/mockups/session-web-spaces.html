@@ -3625,6 +3625,10 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
   .nv-sk-tab:nth-of-type(n+3) { display: none; }
   .nv-sk-body { padding: 20px 14px 32px; }
 }
+/* ==== overlay history: the discard confirmation over a dialog or a Phone sheet ==== */
+.ovg-scrim { z-index: 55; }
+.ovg-w .n-scrim { z-index: 30; }
+.ovg-w .n-act { z-index: 31; }
 </style>
 
 <div class="shell" id="shell">
@@ -7398,7 +7402,7 @@ function csInput(e) {
   const el = e.target, id = el.id, v = el.value;
   const rr = () => { const pos = el.selectionStart; renderAll(); csRefocus(id, pos); return true; };
   let m;
-  if ((m = /^cs-ans-(\d)$/.exec(id))) { st.reqAns[+m[1]] = v; const b = $('cs-send'); if (b) b.disabled = !csReqValid(sp(b.dataset.csreqSend)); return true; }
+  if ((m = /^cs-ans-(\d)$/.exec(id))) { const a = [...st.reqAns]; a[+m[1]] = v; st.reqAns = a; const b = $('cs-send'); if (b) b.disabled = !csReqValid(sp(b.dataset.csreqSend)); return true; }
   if (id === 'cs-rules') { st.reqRules = el.checked; const b = $('cs-send'); if (b) b.disabled = !csReqValid(sp(b.dataset.csreqSend)); return true; }
   if (el.name === 'cs-vc') { st.visKeep = v; return rr(); }
   if (el.name === 'cs-vo') { st.openKeep = v; return true; }
@@ -11695,27 +11699,41 @@ function nvBefore() {
 }
 const nvSig = x => JSON.stringify(x, (k, v) => v instanceof Set ? [...v] : v);
 function nvAfter() {
-  if (st.device === 'native' || !dataReady() || !$('url')) return;
+  if (!dataReady() || !$('url')) return;
+  if (st.device === 'native') { natAfter(); return; }   /* the Phone app: one entry while it has something to go back to */
   nvUrlParts();
   nvBanner();
-  const url = $('url').textContent, key = nvKey(), scr = nvScreen(), snap0 = nvSnap();
-  /* an entry keeps its scroll position (nvScrolled) until a push leaves it */
-  const mk = (i, from) => ({ nv: 1, i, key, scr, snap: NV.cur && i === NV.cur.i ? { ...snap0, sa: NV.cur.snap.sa, sf: NV.cur.snap.sf } : snap0, from, url }), scr0 = NV.cur && NV.cur.scr;
-  let push = false;
-  if (!NV.cur) NV.cur = mk(0, null);
-  else if (NV.restoring) NV.cur = mk(NV.cur.i, NV.cur.from);
-  else {
-    const mode = NV.mode || (NV.quiet ? 'replace' : key !== NV.cur.key ? 'push' : 'replace'); NV.mode = null;
-    if (mode === 'push') { try { history.replaceState({ ...NV.cur, snap: { ...NV.cur.snap, ...NV.pre } }, '', nvHash(NV.cur.url)); } catch (e) {} }
-    NV.cur = mode === 'replace' ? mk(NV.cur.i, NV.from) : mk(NV.cur.i + 1, NV.from);
-    push = mode === 'push';
-  }
-  const sig = nvSig(NV.cur);
-  if (push || sig !== NV.sig) { try { history[push ? 'pushState' : 'replaceState'](NV.cur, '', nvHash(url)); } catch (e) {} NV.sig = sig; }
+  const scr = nvScreen(), scr0 = NV.cur && NV.cur.scr;
+  /* while history.go goes back over overlay entries (ovUnwind), the popstate that ends it commits */
+  if (!NV.ovWait) nvCommit();
   if (scr.startsWith('s:') && st.dsSTab) NV.mem.ds[st.space] = st.dsSTab;
   if (st.subPage === 'manage') NV.mem.mg[st.mgSpace] = st.mgTab;
   if (NV.focusSel) { const el = document.querySelector(NV.focusSel); NV.focusSel = null; if (el) { el.focus({ preventScroll: true }); if (el.setSelectionRange && el.value != null) try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) {} } }
   if (NV.focusHead) { NV.focusHead = false; if (scr !== scr0) nvFocusHeading(); }
+  ovAfter();
+}
+/* the history writes for this render: the screen's entry, then the overlay entries on top of it (ovPlan) */
+function nvCommit() {
+  const url = $('url').textContent, key = nvKey(), scr = nvScreen(), snap0 = nvSnap();
+  /* an entry keeps its scroll position (nvScrolled) until a push leaves it */
+  const mk = (i, from) => ({ nv: 1, i, key, scr, snap: NV.cur && i === NV.cur.i ? { ...snap0, sa: NV.cur.snap.sa, sf: NV.cur.snap.sf } : snap0, from, url });
+  const mode = !NV.cur ? 'init' : NV.restoring ? 'restore' : NV.mode || (NV.quiet ? 'replace' : key !== NV.cur.key ? 'push' : 'replace');
+  if (NV.cur && !NV.restoring) NV.mode = null;
+  const plan = ovPlan(mode === 'push');
+  /* overlay entries that have to go first (closed overlays, or all of them before a new screen) */
+  if (plan.drop || NV.nat) { ovUnwind(plan.drop ? plan.keep : NV.ovs.length, mode); return; }
+  let push = false;
+  if (mode === 'init') NV.cur = mk(0, null);
+  else if (mode === 'restore') NV.cur = mk(NV.cur.i, NV.cur.from);
+  else {
+    if (mode === 'push') { try { history.replaceState({ ...NV.cur, snap: { ...NV.cur.snap, ...NV.pre } }, '', nvHash(NV.cur.url)); } catch (e) {} }
+    NV.cur = mode === 'replace' ? mk(NV.cur.i, NV.from) : mk(NV.cur.i + 1, NV.from);
+    push = mode === 'push';
+  }
+  if (plan.swap) NV.ovs = [...NV.ovs.slice(0, -1), plan.swap];
+  const sig = nvSig(nvState());
+  if (push || sig !== NV.sig) { try { history[push ? 'pushState' : 'replaceState'](nvState(), '', nvHash(url)); } catch (e) {} NV.sig = sig; }
+  ovPush(plan.add || [], url);
 }
 /* After a notification opens a page, focus moves to the page's heading (the question on a thread). */
 function nvFocusHeading() {
@@ -11726,7 +11744,7 @@ function nvFocusHeading() {
 }
 function nvBack() {
   const f = NV.from; if (!f) return;
-  if (f.i != null && NV.cur && f.i < NV.cur.i) { history.go(f.i - NV.cur.i); return; }
+  if (f.i != null && NV.cur && f.i < NV.cur.i) { history.go(f.i - nvPos()); return; }
   nvApply(f.snap); NV.forceFrom = f.from || null; renderAll(); nvScrollTo(f.snap);
 }
 /* An address typed or edited in the hash: open it as a new screen. */
@@ -11765,6 +11783,7 @@ function nvBoot() {
 }
 DS.whenReady(nvBoot);
 on(window, 'popstate', e => {
+  if (ovPop(e)) return;   /* overlay entries, unsaved input and the Phone app (overlay history block) */
   if (st.device === 'native' || !dataReady() || !NV.cur) return;
   const s = e.state;
   if (s && s.nv) { NV.cur = s; NV.from = s.from || null; NV.sig = ''; nvApply(s.snap); NV.restoring = true; try { renderAll(); } finally { NV.restoring = false; } nvScrollTo(s.snap); return; }
@@ -11778,11 +11797,11 @@ on(window, 'popstate', e => {
 function nvScrolled() {
   clearTimeout(NV.st);
   NV.st = setTimeout(() => {
-    if (!NV.cur || NV.restoring || st.device === 'native') return;
+    if (!NV.cur || NV.restoring || NV.ovWait || st.device === 'native') return;
     const a = $('app'), fr = document.querySelector('.frame'), sa = a ? a.scrollTop : 0, sf = fr ? fr.scrollTop : 0;
     if (NV.cur.snap.sa === sa && NV.cur.snap.sf === sf) return;
-    NV.cur = { ...NV.cur, snap: { ...NV.cur.snap, sa, sf } }; NV.sig = nvSig(NV.cur);
-    try { history.replaceState(NV.cur, '', location.hash); } catch (e) {}
+    NV.cur = { ...NV.cur, snap: { ...NV.cur.snap, sa, sf } }; NV.sig = nvSig(nvState());
+    try { history.replaceState(nvState(), '', location.hash); } catch (e) {}
   }, 150);
 }
 on($('app'), 'scroll', nvScrolled, { passive: true });
@@ -12023,6 +12042,432 @@ function nvRestoreData() {
   }
 }; }
 /* ==== end of navigation ==== */
+/* ==== overlay history: Back closes the top overlay, and unsaved input asks before it is discarded ====
+   Desktop and Mobile Web
+   - An open overlay has a history entry of its own, on top of its screen's entry: a copy of the screen's
+     entry with `ovs`, the ids of the overlays open at that level. NV.ovs holds them for the current entry.
+     Dialogs (st.modal, id m:<kind>) and the discard confirmation (guard) get entries on both devices. On
+     Mobile Web, where menus, popovers and the About and request sheets cover the page, those get entries
+     too (OV_MENUS). On Desktop they are anchored to their button and stay out of history.
+   - nvCommit asks ovPlan what changed. An overlay that opens pushes an entry. One closed by its own
+     controls (X, Escape, the scrim, Cancel, a submit) is gone back over with history.go (ovUnwind), and the
+     popstate that ends it commits again, so no entry is left behind. A new screen from inside an overlay
+     first goes back over the overlay entries, then pushes. A menu that opens a dialog swaps its entry.
+   - A dialog opened from a dialog stacks: Back closes the top one and shows the one under it again.
+   - popstate to an entry of the same screen with fewer overlays closes the ones above it (ovPop); an entry
+     with more (Forward) is gone back over at once, so Forward never reopens an overlay.
+   Unsaved input
+   - OV_DIRTY: an overlay or screen id → dirty() (or val(): changed since the overlay opened), the title and
+     text of the confirmation, and discard() for state the close leaves behind. A dialog without an entry
+     counts as changed when one of its fields differs from when it opened (ovSig).
+   - Back, Escape, a click on the scrim and the X stop at a dirty overlay and ask (ovAsk). Back first goes
+     forward again, so the page stays as it was while the confirmation is open. Discard does what was
+     stopped; Keep editing, Escape or Back again stays. Cancel buttons discard without asking.
+   - A screen with unsaved input (OV_SCR) asks on Back too. The composer and a thread use their own discard
+     dialogs; the others use the guard.
+   Phone
+   - Browser Back acts as the system back gesture: it closes the top sheet (a sheet with a back button goes
+     to the sheet it came from), then the inline composer, then pops the current tab's stack. One entry
+     (`nat`) sits on top of the web entries while there is something to go back to; at a tab's root Back
+     does nothing. Sheets with input ask first, as on the web. */
+Object.assign(st, { ovGuard: null });
+Object.assign(NV, { ovs: [], ovVal: {}, ovBase: {}, ovBaseNext: {}, ovWait: null, ovSkip: new Set(), ovThen: [], nat: false });
+const OVG = { how: null, scr: null, bypass: false, pass: false, opener: null, nat: undefined };
+const nvPos = () => (NV.cur ? NV.cur.i : 0) + NV.ovs.length + (NV.nat ? 1 : 0);
+const ovPosOf = s => s.i + (s.ovs ? s.ovs.length : 0) + (s.nat ? 1 : 0);
+const nvState = () => NV.ovs.length ? { ...NV.cur, ovs: [...NV.ovs] } : NV.cur;
+const ovShown = el => !!el && el.getClientRects().length > 0;
+const ovQ = sel => ovShown(document.querySelector('#app ' + sel));
+/* menus, popovers and sheets that cover the page on Mobile Web: [id, open, close] */
+const OV_MENUS = [
+  ['sheet:about', () => st.mWiki && ovQ('.mwiki .drawer'), () => { st.mWiki = false; }],
+  ['sheet:request', () => st.reqOpen && ovQ('.cs-rpanel'), () => { st.reqOpen = false; }],
+  ['menu:switcher', () => st.pop && ovQ('.sw-wrap .pop'), () => { st.pop = false; }],
+  ['menu:user', () => st.umenu && ovQ('.pop.um'), () => { st.umenu = false; }],
+  ['menu:notifs', () => st.ntOpen && ovQ('.nt-pop'), () => { st.ntOpen = false; }],
+  ['menu:sort', () => st.sortOpen && ovQ('.sortdd .pop'), () => { st.sortOpen = false; }],
+  ['menu:model', () => st.mpOpen && ovQ('.mp-menu'), () => { st.mpOpen = false; }],
+  ['menu:space', () => st.spOpen && ovQ('.c2-spmenu'), () => { st.spOpen = false; }],
+  ['menu:topic', () => st.tpMenu && ovQ('.sf-tpmenu'), () => { st.tpMenu = null; }],
+  ['menu:item', () => st.imenu && ovQ('.sf-imw:not(.ds-mw):not(.ta-shw) > .pop'), () => { st.imenu = null; }],
+  ['menu:followup', () => st.qtMenu && ovQ('.qt-pop'), () => { st.qtMenu = null; }],
+  ['menu:source', () => st.dsMenu && ovQ('.ds-mw > .pop'), () => { st.dsMenu = null; }],
+  ['menu:dropdown', () => st.dd && ovQ('.dd-pop'), () => { st.dd = null; }],
+  ['menu:space-actions', () => st.csMenu && ovQ('.cs-mw > .pop'), () => { st.csMenu = null; }],
+  ['menu:share', () => st.taShare != null && ovQ('.ta-shpop'), () => { st.taShare = null; }],
+];
+const ovKind = m => 'm:' + String(m).split(':')[0];
+/* the overlays open now, lowest first; menus only where they have entries (or for the Escape check) */
+function ovOpen(menus) {
+  const out = menus ? OV_MENUS.filter(x => x[1]()).map(x => x[0]) : [];
+  if (st.modal && ovEl('m:')) out.push(ovKind(st.modal));
+  if (st.ovGuard) out.push('guard');
+  return out;
+}
+function ovEl(id) {
+  if (id.startsWith('m:')) return [...document.querySelectorAll('#app [aria-modal="true"]:not(.ovg)')].filter(ovShown).pop() || null;
+  if (id === 'sheet:request') return document.querySelector('#app .cs-rpanel');
+  return null;
+}
+/* the values of the fields in a dialog, for one without an OV_DIRTY entry */
+const ovSig = el => JSON.stringify([...el.querySelectorAll('input, textarea, select')].filter(f => !f.disabled && !f.readOnly && !/^(search|file|hidden|button|submit)$/.test(f.type)).map(f => /^(radio|checkbox)$/.test(f.type) ? f.checked : f.value));
+
+/* ---------- unsaved input: overlay or screen id → dirty() or val(), and the confirmation ---------- */
+const ovKeyOf = id => st.userKeys.find(x => x.id === id);
+const ovPageDoc = () => { try { return abDoc(sp(st.space), st.abPage); } catch (e) { return null; } };
+const OV_REQ = { val: () => [...(st.reqAns || []), !!st.reqRules], title: 'Discard your request?', body: 'Your answers will be deleted.', discard: () => { st.reqAns = (st.reqAns || []).map(() => ''); st.reqRules = false; } };
+const OV_DIRTY = {
+  /* dialogs and sheets on Desktop and Mobile Web */
+  'm:ab-sked': { val: () => st.abSkEd && [st.abSkEd.n, st.abSkEd.d, st.abSkEd.b], title: () => st.abSkEd && st.abSkEd.i === 'new' ? 'Discard this skill?' : 'Discard your changes to this skill?', body: () => st.abSkEd && st.abSkEd.i === 'new' ? 'The name, description and instructions you entered will be deleted.' : 'The skill keeps the name, description and instructions it had before.' },
+  'm:sf-report': { val: () => st.rep && [st.rep.why, st.rep.note], title: 'Discard your report?', body: 'The reason and note you entered will be deleted.' },
+  'm:ds-report': { val: () => [st.dsWhy, st.dsRepNote], title: 'Discard your report?', body: 'The reason and note you entered will be deleted.' },
+  'm:ac-report': { val: () => st.acRep && [st.acRep.why, st.acRep.note], title: 'Discard your report?', body: 'The reason and note you entered will be deleted.' },
+  'm:cs-req': OV_REQ,
+  'sheet:request': OV_REQ,
+  'm:cs-invite': { dirty: () => !!st.cxHandle.trim(), title: 'Discard this invitation?', body: () => `You haven’t sent the invitation to @${esc(st.cxHandle.trim().replace(/^@/, ''))}.`, discard: () => { st.cxHandle = ''; st.cxHOpen = false; } },
+  'm:pf-edit': { dirty: () => !!st.pfDraft && (st.pfDraft.name !== ME.name || (st.pfDraft.bio || '') !== (ME.bio || '')), title: 'Discard your changes to your profile?', body: 'Your name and bio stay as they were.' },
+  'm:addkey': { val: () => [st.keyDraft, st.keyName, st.keyCap], title: () => st.keyMode === 'limit' ? 'Discard the new limit?' : 'Discard this key?', body: () => st.keyMode === 'limit' ? 'The key keeps its current monthly limit.' : 'Session doesn’t save the key you pasted.', discard: () => { Object.assign(st, { keyDraft: '', keyName: '', keyErr: '', addingKey: false }); } },
+  'm:cs-decline': { dirty: () => !!(st.cxDeclNote || '').trim(), title: 'Discard your note?', body: 'The note to the people you decline will be deleted.', discard: () => { st.cxDeclNote = ''; } },
+  'm:ac-email': { dirty: () => !!(st.acEmail || '').trim(), title: 'Discard the new email address?', body: 'Your account keeps its current email address.', discard: () => { st.acEmail = ''; st.acEmailErr = ''; } },
+  'm:mi-ask': { dirty: () => !!(st.miAskQ || '').trim(), title: 'Discard your ask?', body: 'The question you wrote will be deleted.', discard: () => { st.miAskQ = ''; } },
+  /* fields that only confirm or filter: closing them loses nothing */
+  'm:cs-xdel': { dirty: () => false }, 'm:ac-delete': { dirty: () => false }, 'm:kbd': { dirty: () => false }, 'm:cs-share': { dirty: () => false },
+  /* screens: Back asks first */
+  'scr:composer': { dirty: () => st.compOpen && !!st.draft.trim() && ovQ('.composer.open'), ask: () => { st.modal = 'discard'; }, done: '[data-act="discard"]' },
+  'scr:thread': { dirty: () => !!askUnsent(), ask: () => { ASK.nav = null; st.modal = 'ask-discard:' + askUnsent(); }, done: '[data-askdiscard]' },
+  'scr:reply': { dirty: () => { if (st.thread == null) return false; if (st.taEdit) { const it = taItem(st.taEdit.key); return !!it && st.taEdit.text !== it.text; } const t = st.taRp ? (st.taRpDraft || '').trim() : ''; return !!t && !/^@\S+$/.test(t); }, title: () => st.taEdit ? 'Discard your edit?' : 'Discard your reply?', body: () => st.taEdit ? 'The text stays as it was before you edited it.' : 'The text you wrote will be deleted.', discard: () => { Object.assign(st, { taRp: null, taRpDraft: '', taRpErr: false, taEdit: null }); } },
+  'scr:page': { dirty: () => { const ed = st.abPageEd; if (!ed || st.subPage !== 'abpage') return false; if (ed.isNew) return !!(ed.t.trim() || ed.b.trim()); const d = ovPageDoc(); return !!d && (ed.t !== d.t || ed.b !== d.text.join('\n\n')); }, title: () => st.abPageEd && st.abPageEd.isNew ? 'Discard this page?' : 'Discard your changes to this page?', body: () => st.abPageEd && st.abPageEd.isNew ? 'The title and text you wrote will be deleted.' : 'The page stays as it was before you edited it.', discard: () => { st.abPageEd = null; } },
+  'scr:settings': { dirty: () => csDirty() && ovQ('[data-csset="save"]'), title: 'Discard your changes to the settings?', body: () => { const s = sp(st.set && st.set.id); return `You haven’t saved your changes to the settings of ${s ? spName(s) : 'this space'}.`; }, discard: () => { st.set = null; } },
+  'scr:create': { dirty: () => st.subPage === 'create' && !!st.cr && JSON.stringify({ ...st.cr, step: 0, err: '' }) !== JSON.stringify(CR0()), title: 'Discard this space?', body: 'The name, description and settings you entered will be deleted.', discard: () => { st.cr = CR0(); } },
+  'scr:rename': { dirty: () => { const k = st.renaming && ovKeyOf(st.renaming); return !!k && ovQ('#rn-in') && st.renameDraft.trim() !== k.label; }, title: 'Discard the new name?', body: () => `The key keeps the name ${esc((ovKeyOf(st.renaming) || {}).label || '')}.`, discard: () => { st.renaming = null; } },
+  'scr:key': { dirty: () => st.addingKey && st.modal !== 'addkey' && ovQ('#key-in') && !!(st.keyDraft.trim() || st.keyName.trim()), title: 'Discard this key?', body: 'Session doesn’t save the key you pasted.', discard: () => { Object.assign(st, { addingKey: false, keyDraft: '', keyName: '', keyErr: '' }); } },
+  'scr:srcask': { dirty: () => !!st.miAsk && !st.modal && !!(st.miAskQ || '').trim() && ovQ('#mi-askq'), title: 'Discard your ask?', body: 'The question you wrote will be deleted.', discard: () => { st.miAsk = null; st.miAskQ = ''; } },
+  /* Phone sheets (nst.sheet kind), and a follow-up typed on a Phone screen */
+  'n:report': { dirty: () => !!(nst.rep && nst.rep.note.trim()), title: 'Discard your report?', body: 'The note you wrote will be deleted.' },
+  'n:req': { dirty: () => (st.reqAns || []).some(a => (a || '').trim()), title: 'Discard your request?', body: 'Your answers will be deleted.', discard: OV_REQ.discard },
+  'n:pfedit': { dirty: () => nst.pf.name !== ME.name || (nst.pf.bio || '') !== (ME.bio || ''), title: 'Discard your changes to your profile?', body: 'Your name and bio stay as they were.' },
+  'n:keyrn': { dirty: () => { const k = ovKeyOf(String(nst.sheet).split(':')[1]); return !!k && nst.keyRn.trim() !== k.label; }, title: 'Discard the new name?', body: 'The key keeps its current name.' },
+  'n:addkey': { dirty: () => !!(nst.keyDraft.trim() || nst.keyName.trim()), title: 'Discard this key?', body: 'Session doesn’t save the key you pasted.', discard: () => { nst.keyDraft = ''; nst.keyName = ''; } },
+  'n:fu': { dirty: () => !!nst.stack.length && !!nst.fu.trim(), title: 'Discard your follow-up?', body: 'The text you wrote will be deleted.', discard: () => { nst.fu = ''; } },
+};
+const OV_SCR = ['scr:composer', 'scr:thread', 'scr:reply', 'scr:page', 'scr:settings', 'scr:create', 'scr:rename', 'scr:key', 'scr:srcask'];
+function ovDirty(id) {
+  const e = OV_DIRTY[id];
+  try {
+    if (e) return e.dirty ? !!e.dirty() : id in NV.ovBase && JSON.stringify(e.val()) !== NV.ovBase[id];
+    if (id.startsWith('m:')) { const el = ovEl(id); return !!el && id in NV.ovBase && ovSig(el) !== NV.ovBase[id]; }
+  } catch (x) {}
+  return false;
+}
+const ovFirstDirty = ids => [...ids].reverse().find(id => id !== 'guard' && ovDirty(id)) || null;
+const ovScrDirty = () => OV_SCR.find(ovDirty) || null;
+const natSheetId = () => nst.sheet ? 'n:' + String(nst.sheet).split(':')[0] : null;
+/* what a field held when its overlay opened, for val() entries and dialogs without an entry */
+function ovBases(now) {
+  for (const k of Object.keys(NV.ovBase)) if (!now.includes(k) && !NV.ovs.includes(k)) delete NV.ovBase[k];
+  for (const id of now) {
+    if (id in NV.ovBase) continue;
+    const e = OV_DIRTY[id];
+    if (id in NV.ovBaseNext) { NV.ovBase[id] = JSON.stringify(NV.ovBaseNext[id]); delete NV.ovBaseNext[id]; }
+    else if (e && e.val) NV.ovBase[id] = JSON.stringify(e.val());
+    else if (!e && id.startsWith('m:')) { const el = ovEl(id); if (el) NV.ovBase[id] = ovSig(el); }
+  }
+}
+
+/* ---------- entries ---------- */
+/* What the overlay entries need: { drop, keep } goes back to `keep` entries first; { swap } replaces the top
+   entry; { add } pushes. A dialog opened over another dialog stacks on it (the one under it is kept). */
+function ovPlan(screenPush) {
+  const have = NV.ovs, now = ovOpen(st.device === 'phone');
+  ovBases(ovOpen(true));
+  if (st.modal) NV.ovVal[ovKind(st.modal)] = st.modal;
+  if (OVG.scr && st.modal !== OVG.scr.modal) OVG.scr = null;
+  for (const id of [...NV.ovSkip]) if (!now.includes(id)) NV.ovSkip.delete(id);
+  const m = now.find(x => x.startsWith('m:')), want = [];
+  let hit = false;
+  for (const id of have) {
+    if (id.startsWith('m:')) { if (m && !hit) { want.push(id); hit = id === m; } }
+    else if (now.includes(id)) want.push(id);
+  }
+  /* a variant switch (Variants bar) does not push: what it opens has no entry */
+  const variant = NV.quiet && NV.jumpFrom === undefined;
+  for (const id of now) {
+    if (want.includes(id) || NV.ovSkip.has(id) || (hit && id.startsWith('m:'))) continue;
+    if (variant) NV.ovSkip.add(id); else want.push(id);
+  }
+  if (screenPush) return have.length ? { drop: true, keep: 0 } : { add: want };
+  let c = 0; while (c < have.length && c < want.length && have[c] === want[c]) c++;
+  if (c === have.length) return { add: want.slice(c) };
+  if (c === have.length - 1 && want.length > c) return { swap: want[c], add: want.slice(c + 1) };
+  return { drop: true, keep: c };
+}
+function ovPush(ids, url) {
+  for (const id of ids) {
+    NV.ovs = [...NV.ovs, id];
+    try { history.pushState(nvState(), '', nvHash(url)); } catch (e) {}
+    NV.sig = nvSig(nvState());
+  }
+}
+/* history.go and the popstate it causes: NV.ovWait says what it was for, and other history writes wait */
+function ovGo(n, w) {
+  if (!n) { ovWaitDone(w); return; }
+  NV.ovWait = w;
+  w.t = setTimeout(() => { if (NV.ovWait === w) { NV.ovWait = null; ovWaitDone(w); } }, 1500);
+  history.go(n);
+}
+function ovUnwind(keep, mode) {
+  const n = NV.ovs.length - keep + (NV.nat ? 1 : 0);
+  ovGo(-n, { kind: 'unwind', to: keep, mode, from: NV.from, pre: NV.pre, variant: NV.quiet && NV.jumpFrom === undefined });
+}
+function ovWaitDone(w) {
+  clearTimeout(w.t);
+  if (w.kind === 'unwind') {
+    NV.ovs = NV.ovs.slice(0, w.to); NV.nat = false; NV.sig = '';
+    if (st.device === 'native') natAfter();
+    else if ($('url')) {
+      NV.from = w.from; NV.pre = w.pre;
+      const restore = w.mode === 'restore', q = NV.quiet, jf = NV.jumpFrom;
+      if (restore) NV.restoring = true; else NV.mode = w.mode === 'init' ? null : w.mode;
+      if (w.variant) { NV.quiet = true; NV.jumpFrom = undefined; }
+      try { nvCommit(); } finally { NV.restoring = false; NV.quiet = q; NV.jumpFrom = jf; }
+      ovAfter();
+    }
+  }
+  if (w.then) w.then();
+  while (!NV.ovWait && NV.ovThen.length) NV.ovThen.shift()();
+}
+const ovIdle = fn => { if (NV.ovWait) NV.ovThen.push(fn); else fn(); };
+function ovCloseIds(ids, keep) {
+  for (const id of [...ids].reverse()) {
+    if (id === 'guard') { st.ovGuard = null; OVG.how = null; continue; }
+    if (id.startsWith('m:')) {
+      if (st.modal === 'addkey') st.addingKey = false;
+      const under = keep.filter(x => x.startsWith('m:')).pop();
+      st.modal = under ? NV.ovVal[under] || null : null; continue;
+    }
+    const t = OV_MENUS.find(x => x[0] === id); if (t) t[2]();
+  }
+}
+/* everything that covers a screen, before another screen's entry is shown */
+function ovCloseAll() {
+  OV_MENUS.forEach(x => x[2]());
+  Object.assign(st, { modal: null, ovGuard: null }); OVG.how = null; OVG.scr = null;
+}
+
+/* ---------- popstate ---------- */
+function ovPop(e) {
+  if (!dataReady() || !NV.cur) return false;
+  const s = e.state;
+  if (NV.ovWait) { const w = NV.ovWait; NV.ovWait = null; ovWaitDone(w); return true; }
+  if (st.device === 'native') { natPop(s); return true; }
+  if (!s || !s.nv) {
+    const h = location.hash.slice(1);
+    if (!L[h] && nvPathOf(h) != null) { ovCloseAll(); NV.cur = { ...NV.cur, i: nvPos() }; NV.ovs = []; NV.nat = false; }
+    return false;
+  }
+  const here = nvPos(), there = ovPosOf(s), sOvs = s.ovs || [];
+  /* the Phone app's entry, reached on Desktop or Mobile Web: not a place of its own */
+  if (s.nat) { ovGo(here - there, { kind: 'skip' }); return true; }
+  if (s.i === NV.cur.i) {
+    if (there >= here) { if (there > here) ovGo(here - there, { kind: 'skip' }); return true; }   /* Forward: an overlay is not opened again */
+    const closing = NV.ovs.slice(sOvs.length), keep = NV.ovs.slice(0, sOvs.length);
+    const d = ovFirstDirty(closing);
+    if (d) { ovGo(here - there, { kind: 'undo', then: () => ovAsk(d, { back: closing }) }); return true; }
+    ovCloseIds(closing, keep); NV.ovs = keep; NV.sig = '';
+    NV.restoring = true; try { renderAll(); } finally { NV.restoring = false; }
+    return true;
+  }
+  /* another screen: unsaved input asks first */
+  if (!OVG.pass) {
+    const d = ovFirstDirty(NV.ovs) || ovScrDirty();
+    if (d) { ovGo(here - there, { kind: 'undo', then: () => ovAsk(d, { go: there - here }) }); return true; }
+  }
+  OVG.pass = false;
+  ovCloseAll(); NV.ovs = []; NV.nat = false;
+  if (!sOvs.length) return false;   /* the screen's entry: nvApply in the navigation block */
+  /* an overlay entry of another screen (left behind): show the screen, then go back over the entries */
+  NV.cur = { ...s }; delete NV.cur.ovs; NV.ovs = sOvs.map(() => 'left');
+  NV.from = s.from || null; NV.sig = ''; nvApply(s.snap);
+  NV.restoring = true; try { renderAll(); } finally { NV.restoring = false; }
+  return true;
+}
+
+/* ---------- the confirmation ---------- */
+/* how: { back: ids } (Back on overlays), { go: n } (Back to another screen), { redo } (Escape, scrim, X),
+   { nat } (Phone). Discard does it; Keep editing drops it. */
+function ovAsk(id, how) {
+  const e = OV_DIRTY[id] || {}, v = f => typeof f === 'function' ? f() : f;
+  if (e.ask) { e.ask(); OVG.scr = { modal: st.modal, done: e.done, how }; renderAll(); return; }
+  st.ovGuard = { id, title: v(e.title) || 'Discard your changes?', body: v(e.body) || 'The changes you made in this dialog aren’t saved.' };
+  OVG.how = how; OVG.opener = focusDesc(document.activeElement); renderAll();
+}
+function ovKeep() { st.ovGuard = null; OVG.how = null; renderAll(); }
+/* the field that had focus when the confirmation opened gets it back (a render with a dialog open can move it) */
+function ovRefocus() { const d = OVG.opener; OVG.opener = null; const el = d && findDesc(d); if (el && !el.contains(document.activeElement)) { el.focus({ preventScroll: true }); if (d.sel0 && el.setSelectionRange) try { el.setSelectionRange(d.sel0[0], d.sel0[1]); } catch (e) {} } }
+function ovDiscard() {
+  const g = st.ovGuard, how = OVG.how || {}, e = (g && OV_DIRTY[g.id]) || {};
+  st.ovGuard = null; OVG.how = null; OVG.opener = null;
+  if (e.discard) e.discard();
+  if (how.back) { ovCloseIds(how.back, NV.ovs.filter(x => x !== 'guard' && !how.back.includes(x))); renderAll(); return; }
+  if (how.go) { renderAll(); ovIdle(() => { OVG.pass = true; history.go(how.go); }); return; }
+  if (how.redo) {
+    document.querySelectorAll('#app .ovg-w').forEach(x => x.remove());
+    how.redo();
+    if (NV.ovs.includes('guard') && !NV.ovWait) renderAll();
+    return;
+  }
+  if (how.nat) { how.nat(); if (st.device === 'native' && document.querySelector('#app .ovg-w')) renderAll(); return; }
+  renderAll();
+}
+const ovRedoKey = desc => () => {
+  const el = (desc && findDesc(desc)) || document.body;
+  if (el.focus) el.focus({ preventScroll: true });
+  OVG.bypass = true;
+  try { el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true })); } finally { OVG.bypass = false; }
+};
+const ovRedoClick = (desc, scrim) => () => {
+  const el = scrim ? [...document.querySelectorAll('#app .modal-scrim')].pop() : desc && findDesc(desc);
+  if (!el) return;
+  OVG.bypass = true; try { el.click(); } finally { OVG.bypass = false; }
+};
+function ovGuardDom() {
+  const g = st.ovGuard;
+  if (st.device === 'native') {
+    const r = document.querySelector('#app .n-root');
+    if (r) r.insertAdjacentHTML('beforeend', `<div class="ovg-w"><div class="n-scrim ovg-ns"></div><div class="n-act ovg" role="alertdialog" aria-modal="true" aria-labelledby="ovg-t" aria-describedby="ovg-d"><div class="n-act-g"><div class="n-act-h"><b id="ovg-t">${g.title}</b><p id="ovg-d">${g.body}</p></div><button type="button" class="n-red" data-ovg="discard">Discard</button></div><div class="n-act-g"><button type="button" class="n-act-c" data-ovg="keep" autofocus>Keep editing</button></div></div></div>`);
+    return;
+  }
+  $('app').insertAdjacentHTML('beforeend', `<div class="modal-scrim ovg-scrim ovg-w"><div class="modal sm ovg" role="alertdialog" aria-modal="true" aria-labelledby="ovg-t" aria-describedby="ovg-d"><h3 id="ovg-t">${g.title}</h3><p class="muted" id="ovg-d">${g.body}</p><div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-ovg="keep" autofocus>Keep editing</button><button class="btn danger" type="button" data-ovg="discard">Discard</button></div></div></div>`);
+}
+{ const f = renderAllInner; renderAllInner = function () {
+  /* a confirmation does not carry over between the web app and the Phone app */
+  const nat = st.device === 'native';
+  if (OVG.nat !== undefined && OVG.nat !== nat && st.ovGuard) { st.ovGuard = null; OVG.how = null; }
+  OVG.nat = nat;
+  f(); if (st.ovGuard && dataReady()) ovGuardDom();
+}; }
+/* focus stays in the confirmation while it is open */
+function ovAfter() {
+  if (!st.ovGuard) { if (OVG.opener) ovRefocus(); return; }
+  const g = document.querySelector('#app .ovg');
+  if (g && !g.contains(document.activeElement)) { const b = g.querySelector('[data-ovg="keep"]'); if (b) b.focus({ preventScroll: true }); }
+}
+const ovStop = e => { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); };
+/* Escape: the confirmation's Keep editing, or ask before a dirty overlay closes */
+on(window, 'keydown', e => {
+  if (e.key !== 'Escape' || OVG.bypass || !dataReady()) return;
+  if (st.ovGuard) { ovStop(e); ovKeep(); return; }
+  if (st.device === 'native') { const id = natSheetId(); if (id && ovDirty(id)) { ovStop(e); ovAsk(id, { nat: natCloseSheet }); } return; }
+  const t = e.target, desc = focusDesc(t);
+  if (t.id === 'rn-in' && ovDirty('scr:rename')) { ovStop(e); ovAsk('scr:rename', { redo: ovRedoKey(desc) }); return; }
+  const id = ovOpen(true).pop();
+  /* the About sheet and the Share menu have no Escape of their own */
+  if ((id === 'sheet:about' || id === 'menu:share') && !(t.closest && t.closest('input, textarea'))) { ovStop(e); OV_MENUS.find(x => x[0] === id)[2](); renderAll(); return; }
+  /* Escape in the handle field closes its suggestions first */
+  if (id === 'm:cs-invite' && st.cxHOpen && ovQ('#cx-hsug')) { ovStop(e); st.cxHOpen = false; renderKeepFocus(); return; }
+  if (!id || !ovDirty(id)) return;
+  ovStop(e); ovAsk(id, { redo: ovRedoKey(desc) });
+}, true);
+/* clicks: the confirmation's buttons and scrim, the discard dialogs used for Back, and the scrim or X of a
+   dirty overlay */
+on(window, 'click', e => {
+  const t = e.target; if (!t || !t.closest || OVG.bypass || !dataReady()) return;
+  const g = t.closest('[data-ovg]');
+  if (g) { ovStop(e); if (g.dataset.ovg === 'keep') ovKeep(); else ovDiscard(); return; }
+  if (st.ovGuard && t.closest('.ovg-scrim, .ovg-ns')) { if (t.matches('.ovg-scrim, .ovg-ns')) { ovStop(e); ovKeep(); } return; }
+  if (OVG.scr && t.closest(OVG.scr.done)) { const how = OVG.scr.how; OVG.scr = null; if (how && how.go) setTimeout(() => ovIdle(() => { OVG.pass = true; history.go(how.go); }), 0); return; }
+  if (st.device === 'native') {
+    const id = natSheetId();
+    if (id && t.matches('.n-scrim') && ovDirty(id)) { ovStop(e); ovAsk(id, { nat: () => nGo(() => { nst.sheet = null; nst.sub = null; nst.keyErr = ''; }) }); }
+    return;
+  }
+  const id = ovOpen(true).pop(); if (!id) return;
+  const el = ovEl(id); if (!el) return;
+  const scrim = t.matches('.modal-scrim') && t === el.parentElement, x = el.contains(t) && t.closest('[aria-label="Close"]');
+  if ((!scrim && !x) || !ovDirty(id)) return;
+  ovStop(e); ovAsk(id, { redo: ovRedoClick(x ? focusDesc(x) : null, scrim) });
+}, true);
+
+/* ---------- Phone ---------- */
+const natCan = () => !!(st.ovGuard || nst.sheet || nst.inl || nst.stack.length);
+function natAfter() {
+  if (NV.ovWait || !NV.cur) return;
+  const can = natCan(), variant = NV.quiet && NV.jumpFrom === undefined;
+  if (can && !NV.nat && !variant) { NV.nat = true; try { history.pushState({ ...nvState(), nat: 1 }, '', location.hash); } catch (e) {} }
+  else if (!can && NV.nat) ovGo(-1, { kind: 'unwind', to: NV.ovs.length });
+  ovAfter();
+}
+function natPop(s) {
+  const here = nvPos(), there = s && s.nv ? ovPosOf(s) : here;
+  if (there >= here) { if (there > here) ovGo(here - there, { kind: 'skip' }); return; }   /* Forward: nothing to go forward to */
+  const base = NV.nat ? here - 1 : here;
+  const back = () => { NV.nat = false; natBack(); };
+  if (there === base) back(); else ovGo(base - there, { kind: 'undo', then: back });
+}
+/* the system back gesture: the confirmation, the top sheet, the inline composer, then the tab's stack */
+function natBack() {
+  if (st.ovGuard) { ovKeep(); return; }
+  if (nst.sheet) { const id = natSheetId(); if (ovDirty(id)) ovAsk(id, { nat: natCloseSheet }); else natCloseSheet(); return; }
+  if (nst.inl) { nGo(() => { if (nst.draft.trim()) nst.sheet = 'discard'; else { nst.inl = false; nst.draft = ''; } }); return; }
+  if (nst.stack.length) { if (ovDirty('n:fu')) ovAsk('n:fu', { nat: natPopStack }); else natPopStack(); return; }
+  renderAll();
+}
+function natCloseSheet() {
+  const sh = [...document.querySelectorAll('#app .n-sheet, #app .n-act:not(.ovg)')].pop();
+  const b = sh && (sh.querySelector('.n-tb-back') || sh.querySelector('.n-sheet-bar > .n-tb[data-n^="sheet:"]:first-child'));
+  if (b) { b.click(); return; }
+  nGo(() => { nst.sheet = null; nst.sub = null; nst.keyErr = ''; });
+}
+const natPopStack = () => nGo(() => { nst.stack = nst.stack.slice(0, -1); nst.fu = ''; });
+
+/* ---------- test hooks ---------- */
+window.__ovIdle = () => !NV.ovWait;
+/* scripts that wait for the data store also wait for a history.go of this block to land */
+{ const f = window.__dataIdle; window.__dataIdle = () => f() && !NV.ovWait; }
+window.__ovState = () => ({ pos: nvPos(), ovs: [...NV.ovs], nat: NV.nat, guard: st.ovGuard && st.ovGuard.title, modal: st.modal, sheet: nst.sheet, stack: nst.stack.length });
+
+/* ---------- Screen menu ---------- */
+JUMPS.push(['Back and unsaved input', [['ov-sked-back', 'Skill editor with changes, then Back'], ['ov-report-esc', 'Report with a note, then Escape'], ['ov-profile-scrim', 'Edit profile with changes, then a click outside'], ['ov-settings-back', 'Settings with unsaved changes, then Back'], ['ov-page-back', 'Page editor with changes, then Back'], ['ov-compose-back', 'Composer with a draft, then Back'], ['ov-n-report', 'Phone: report with a note, then Back'], ['ov-n-rename', 'Phone: rename a key, then Back']]]);
+{ const OV_jump = jump; jump = function (k) {
+  Object.assign(st, { ovGuard: null }); OVG.how = null; OVG.scr = null; OVG.pass = false; NV.ovBase = {}; NV.ovBaseNext = {};
+  if (!String(k).startsWith('ov-')) return OV_jump(k);
+  const guard = (id, how) => { const e = OV_DIRTY[id], v = f => typeof f === 'function' ? f() : f; st.ovGuard = { id, title: v(e.title), body: v(e.body) }; OVG.how = how; };
+  switch (k) {
+    case 'ov-sked-back':
+      OV_jump('ab-skill-edit');
+      patch('abSkEd', x => { x.d = x.d + ' Lists the datasets the paper uses.'; });
+      guard('m:ab-sked', { back: ['m:ab-sked'] }); break;
+    case 'ov-report-esc':
+      NV.ovBaseNext['m:sf-report'] = ['incorrect', ''];
+      OV_jump('sf-report');
+      guard('m:sf-report', { redo: ovRedoKey(null) }); break;
+    case 'ov-profile-scrim':
+      OV_jump('mb-home');
+      Object.assign(st, { profilePage: true, profileUser: ME.u, ptab: 'threads', pfDraft: { name: ME.name, bio: 'Reads about housing policy and transit.', err: '' }, modal: 'pf-edit' });
+      guard('m:pf-edit', { redo: ovRedoClick(null, true) }); break;
+    case 'ov-settings-back':
+      OV_jump('md-settings'); renderAll();
+      patch('set', d => { d.desc = d.desc + ' Replications of published results only.'; });
+      guard('scr:settings', { go: -1 }); break;
+    case 'ov-page-back':
+      OV_jump('ab-page-edit');
+      patch('abPageEd', x => { x.b = x.b + '\n\nThe list leaves out anthologies that are out of print.'; });
+      guard('scr:page', { go: -1 }); break;
+    case 'ov-compose-back':
+      OV_jump('mb-ask');
+      st.modal = 'discard'; OVG.scr = { modal: 'discard', done: '[data-act="discard"]', how: { go: -1 } }; break;
+    case 'ov-n-report':
+      OV_jump('np-report');
+      nst.rep = { ...nst.rep, note: 'The answer quotes the 2023 limits; they changed in March.' };
+      guard('n:report', { nat: natCloseSheet }); break;
+    case 'ov-n-rename':
+      OV_jump('np-key-rename');
+      nst.keyRn = 'Work key';
+      guard('n:keyrn', { nat: natCloseSheet }); break;
+  }
+  renderAll();
+}; }
+/* ==== end of overlay history ==== */
 
 buildJump();
 /* End of start-up: the fixtures are complete. Copy them as the mock backend's seed data, start loading
