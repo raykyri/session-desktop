@@ -4258,7 +4258,7 @@ const miniMeter = s => `<span class="mini-ring ${lvl(s.pct)}" title="${pctS(s.pc
 function postsFor(id) { return D.posts.filter(p => p.s === id && !p.gone).sort((a, b) => ageMin(a.age) - ageMin(b.age)); }
 function acts(p, withReply) {
   const id = D.posts.indexOf(p.orig || p), v = st.saved.has(id), l = st.liked.has(id);
-  const reply = `<span class="act-n">${I.reply}<span class="num" aria-label="${replyCount(p)} ${p.k === 'ask' ? 'follow-ups' : 'replies'}">${replyCount(p)}</span></span>`;
+  const reply = `<span class="act-n"><span class="num" aria-label="${replyCount(p)} ${p.k === 'ask' ? 'follow-ups' : 'replies'}">${replyCount(p)}</span>${I.reply}</span>`;
   return `${withReply ? reply : ''}<button class="act" type="button" data-toggle="liked" data-id="${id}" aria-pressed="${l}" aria-label="${l ? 'Unlike' : 'Like'}">${I.heart}<span class="num">${p.likes + (l ? 1 : 0)}</span></button><button class="act" type="button" data-toggle="saved" data-id="${id}" aria-pressed="${v}" aria-label="${v ? 'Remove from saved' : 'Save'}" title="${v ? 'Saved' : 'Save'}">${I.mark}</button>`;
 }
 const au = (u, label) => `<button class="au" type="button" data-user="${u}">${esc(label || u)}</button>`;
@@ -4407,7 +4407,7 @@ const homePosts = () => {
   const ids = st.auth === 'in' ? D.joined : D.spaces.map(x => x.id);
   return D.posts.filter(p => ids.includes(p.s) && canRead(sp(p.s)) && !acHides(p.u) && !p.gone).sort((a, b) => ageMin(a.age) - ageMin(b.age)).map(p => ({ ...p, tag: true, orig: p }));
 };
-const hrow = p => `<button class="hrow" type="button" data-space="${p.s}"><span class="hrow-t">${esc(p.t || p.q)}</span><span class="hrow-s">${esc(p.sum || (p.t ? p.q : ''))}</span><span class="hrow-m"><span class="num">${I.reply}${replyCount(p)}</span><span>${p.age}</span></span></button>`;
+const hrow = p => `<button class="hrow" type="button" data-space="${p.s}"><span class="hrow-t">${esc(p.t || p.q)}</span><span class="hrow-s">${esc(p.sum || (p.t ? p.q : ''))}</span><span class="hrow-m"><span class="num">${replyCount(p)}${I.reply}</span><span>${p.age}</span></span></button>`;
 const homeTitle = (h, sub) => `<div class="home-head"><h2>${h}</h2>${sub ? `<p>${sub}</p>` : ''}</div>`;
 
 function homeFeed() {
@@ -4494,7 +4494,7 @@ function savedReader(items) {
   const sel = items.find(p => p.id === st.savedSel) || items[0];
   if (!sel) return '';
   return `<div class="sv-reader"><div class="sv-rlist">${items.map(p => `<button class="sv-ritem" type="button" data-ssel="${p.id}" aria-current="${p.id === sel.id}"><span class="sv-rmeta">${glyph(sp(p.s))}<span>${spName(sp(p.s))}</span></span><span class="sv-q1">${esc(p.q)}</span></button>`).join('')}</div>
-    <article class="sv-rpane"><div class="meta">${avatar(sel.u, 'sm')}${au(sel.u)}<span>${sel.age}</span>${sTag(sel)}</div><p class="sv-rq">${esc(sel.q)}</p>${sel.sum ? `<div class="reply"><span class="agent">${I.agent}</span><p class="p-sum">${esc(sel.sum)}</p></div>` : ''}<div class="p-foot"><span class="act-n">${I.reply}<span class="num">${replyCount(D.posts[sel.id])}</span></span><span class="p-foot-end">${acts(D.posts[sel.id], false)}</span></div><div class="sv-ropen"><button class="btn primary" type="button" data-open="${sel.id}">Open thread</button><button class="btn" type="button" data-toggle="saved" data-id="${sel.id}">Remove from saved</button></div></article></div>`;
+    <article class="sv-rpane"><div class="meta">${avatar(sel.u, 'sm')}${au(sel.u)}<span>${sel.age}</span>${sTag(sel)}</div><p class="sv-rq">${esc(sel.q)}</p>${sel.sum ? `<div class="reply"><span class="agent">${I.agent}</span><p class="p-sum">${esc(sel.sum)}</p></div>` : ''}<div class="p-foot"><span class="act-n"><span class="num">${replyCount(D.posts[sel.id])}</span>${I.reply}</span><span class="p-foot-end">${acts(D.posts[sel.id], false)}</span></div><div class="sv-ropen"><button class="btn primary" type="button" data-open="${sel.id}">Open thread</button><button class="btn" type="button" data-toggle="saved" data-id="${sel.id}">Remove from saved</button></div></article></div>`;
 }
 
 function layoutSaved() {
@@ -4769,7 +4769,7 @@ function rowHTML(p) {
   const ms = modOf((ask ? 'a:' : 'p:') + id);
   const q = `<a class="row-t row-link${ask ? '' : ' row-tp'}" href="#t${id}" data-open="${id}">${!ask && ms ? `Post ${ms} by a moderator.` : p.del ? `You deleted this ${ask ? 'ask' : 'post'}.` : esc(p.q)}</a>`;
   const ans = ask ? `<span class="row-s">${p.running ? 'Researching…' : ms ? `Answer ${ms} by a moderator.` : esc(p.sum)}</span>` : '';
-  const meta = `<span class="row-meta">${au(p.u)}<span>${p.age}</span>${p.tag ? `<button class="row-sp" type="button" data-space="${p.s}">${spTagTx(sp(p.s))}</button>` : ''}<span class="row-n num" aria-label="${nLbl}">${I.reply}${rc}</span></span>`;
+  const meta = `<span class="row-meta">${au(p.u)}<span>${p.age}</span>${p.tag ? `<button class="row-sp" type="button" data-space="${p.s}">${spTagTx(sp(p.s))}</button>` : ''}<span class="row-n num" aria-label="${nLbl}">${rc}${I.reply}</span></span>`;
   return `<article class="row row-x row-rowsq row-i-lefttxt ${ask ? 'row-ask' : 'row-post'}" role="listitem" data-open="${id}">${k}<div class="row-m">${q}${miRowChip(p)}${ans}${meta}</div></article>`;
 }
 function feed2(id, src) {
