@@ -3750,8 +3750,10 @@ const on = (target, type, fn, opts) => target.addEventListener(type, fn, { ...(t
                  appearance, tint, backend speed. Not part of the application. Read and written through `st`.
 
    Data. The data store (liveData) reads and writes the HTTP API (/api/*): it loads each collection
-   with its own GET; writes are applied to the store first (optimistic) and sent as requests in order;
-   a failed request puts the written record back and shows a toast that depends on the error code. The
+   with its own GET. A person's action is one named mutation (mutate: POST /api/rpc/<name>), applied to
+   the store first (optimistic) and sent in order with the other writes; the server's records replace the
+   optimistic ones, and a failure puts back every record the action changed and shows one toast that
+   depends on the error code. Screen entries and the ask pipeline write collections directly. The
    mock backend (session-web-spaces-mock-api.js, loaded before this script) serves /api/* inside the
    page: only the endpoints in its API table, with validated writes and { code, message } errors. Its
    seed data, the fixtures, is in session-web-spaces-fixtures.js: the app never reads them directly.
@@ -5177,7 +5179,7 @@ function rdClick(t) {
 
 function seg(el, items, key, onPick) {
   el.innerHTML = items.map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${String(st[key]) === String(v)}">${t}</button>`).join('');
-  el.onclick = e => { const b = e.target.closest('button[data-v]'); if (!b) return; st[key] = typeof st[key] === 'number' ? +b.dataset.v : b.dataset.v; onPick && onPick(); renderAll(); };
+  el.onclick = e => { const b = e.target.closest('button[data-v]'); if (!b) return; st[key] = typeof st[key] === 'number' ? +b.dataset.v : b.dataset.v; onPick && asScenario(onPick)(); renderAll(); };
 }
 const toThread = () => { if (st.thread == null) { const i = tidWhere(p => p.k === 'ask' && D.rich[p.id] && p.s === 'markets'); Object.assign(st, { thread: i == null ? TID(0) : i, savedPage: false, profilePage: false, subPage: null, auth: 'in', modal: null, umenu: false }); } };
 const KNOBDEF = () => [
@@ -6031,6 +6033,9 @@ function setRel(id, r) {
   if (r === 'mod') { if (!D.roles[id]) db.put('roles', id, 'Admin'); }
   else if (D.roles[id] && !D.roles0[id]) db.del('roles', id);
 }
+/* The invite landing shows the invite in /api/me/invite: screen state kept as server data (TODO(step 10/11):
+   make it screen state keyed by the link, or an invites.open procedure). It stays on the collection endpoint. */
+const inviteLanding = v => { if (!sameJSON(st.invite, v)) asScenario(() => { st.invite = v; })(); };
 /* membership actions (spaces.join, spaces.leave, join requests) */
 const userJoin = (id, notification) => mutate('spaces.join', Object.assign({ space: id }, notification != null ? { notification } : {}), () => {
   if (notification != null) db.update('notifs', notification, n => { n.read = true; n.response = 'accepted'; });
@@ -6711,7 +6716,7 @@ function csClick(t) {
     if (x.k === 'reply' || x.k === 'resolved') Object.assign(st, nav, { thread: x.open, space: postById(x.open).s });
     else if (x.k === 'reps') Object.assign(st, nav, { subPage: 'manage', mgSpace: x.sp, mgTab: 'reports', space: x.sp, set: null });
     else if (x.k === 'reqs') Object.assign(st, nav, { subPage: 'manage', mgSpace: x.sp, mgTab: 'requests' });
-    else if (x.k === 'invite' && !x.done) Object.assign(st, nav, { subPage: 'invite', invite: { sp: x.sp, by: x.u, state: 'ok' } });
+    else if (x.k === 'invite' && !x.done) { Object.assign(st, nav, { subPage: 'invite' }); inviteLanding({ sp: x.sp, by: x.u, state: 'ok' }); }
     else if (x.k === 'page') abOpenPage(x.sp, x.page);
     else Object.assign(st, nav, { space: x.sp, welcome: x.k === 'approved' ? x.sp : st.welcome });
     return go();
@@ -10702,7 +10707,9 @@ const tmSetDef = id => { db.set('usage', u => { u.def = id; }); const k = st.use
 /* ---------- first run: the API key step ---------- */
 /* a new account: nothing used yet; asks made before it (fixtures) are not its asks */
 const tmFresh = () => ({ ...structuredClone(FIXTURES.usage), by: {}, def: null, movedSeen: false, fresh: true });
-{ const ob0 = acOnbStart; acOnbStart = function () { if (tmOn()) { db.set('userKeys', []); db.set('usage', tmFresh()); } ob0(); }; }
+/* A new account starts without keys. The mock has one signed-in person, so this sets up the new account's
+   data the way a Screen entry does (TODO(step 10): a scenario; the real server makes the account empty). */
+{ const ob0 = acOnbStart; acOnbStart = function () { if (tmOn()) asScenario(() => { db.set('userKeys', []); db.set('usage', tmFresh()); })(); ob0(); }; }
 const tmOnbCopy = () => tm().session
   ? `Session tokens pay for up to ${fmtT(TU().cap)} tokens of asks each month. After they run out, asks use your API key, and your provider bills you for those tokens. Session uses the key only for asks you start. Account › Usage shows both.`
   : 'Asks run on your own API key, and your provider bills you for the tokens they use. Session uses the key only for asks you start. Account › Usage shows how many tokens each key used.';
@@ -11488,7 +11495,10 @@ function nvPathOf(h) {
 function nvApply(x) {
   x = remapIds(x);   /* an entry made before the server replaced a new thread's temporary id */
   Object.assign(st, NAVBASE(), MI_CLEAR(), { toast: null });
-  for (const k of NV_F) if (k in x) st[k] = x[k];
+  /* TODO(step 10/11): `invite` (the invite landing's invite) is screen state kept as server data
+     (/api/me/invite); going back to an invite landing writes it through the collection endpoint, as
+     opening an invite notification does (inviteLanding). */
+  for (const k of NV_F) if (k in x && !(ST_DATA.has(k) && sameJSON(st[k], x[k]))) { if (ST_DATA.has(k)) asScenario(() => { st[k] = x[k]; })(); else st[k] = x[k]; }
   if (st.thread != null && !postById(st.thread)) Object.assign(st, { thread: null, subPage: 'nvnf', nvNF: { path: '/' } });
 }
 function nvScrollTo(x) {

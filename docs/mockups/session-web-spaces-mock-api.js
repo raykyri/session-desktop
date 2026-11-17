@@ -41,12 +41,21 @@
      saved asks; "<kind>:<thread>[:…]" in report and moderation keys; a notification's thread; a thread's
      from.th.
 
+   Mutations by intent (step 3)
+   - A person's action is one procedure: POST /api/rpc/<name> (tRPC-style names, as in the real app's
+     routers), answered with { result, changes }. The server validates the input, checks that the records
+     exist, computes the new state (ids, counts, member lists, notifications it sends, memberships, roles),
+     writes every collection it changes at once (all or none) and returns the changed records. See 5b.
+   - The collection write rows stay for the Screen entries (scope 'scenario', until step 10's scenario
+     endpoint), the page's ask pipeline (scope 'run', until step 7) and the token-usage stub.
+
    Contents
    1. The wire codec (JSON; Sets travel as { $set: [...] }). The page uses this copy.
    2. Error codes: tRPC codes, their HTTP status, and a default user-facing message.
    3. Record schemas and a small validator (no library).
    4. Collections: how the server stores each one; derived fields; createdAt stamps.
    5. API: the contract table, one row per endpoint. The router serves only these rows.
+      5b. Procedures: the mutations, their transaction helper, and their rows in the table.
    6. createBackend(): the in-memory database, persisted to localStorage, behind a fetch patch for /api/*.
 
    The real app's conventions: web/docs/03-api-and-events.md (procedures, error codes) and
@@ -328,8 +337,18 @@
      in step 5. In dev, /api/dev/config can force any code on any row.
      trpc: the procedure in web/docs/03-api-and-events.md where one exists, otherwise a new name in the
      same style. Rows marked `bulk` replace a whole collection: the page's diff sends one when records move
-     or several change at once; the real app sends one mutation per change instead.
-     stub: TODO(limits) rows: API keys and space token budgets, kept as they are, without accounting. */
+     or several change at once (never for threads); the real app sends one mutation per change instead.
+     stub: TODO(limits) rows: API keys and space token budgets, kept as they are, without accounting.
+     scope (step 3): who writes through a row. A person's actions are procedures (section 5b, scope 'user').
+     The collection write rows remain only for:
+       'scenario'  the Screen entries and the Variants bar's reset, which set up their data with them
+                   (step 10 replaces them with a scenario endpoint);
+       'run'       the ask pipeline in the page (answers, their sources, charges, run notifications, key
+                   and domain checks), which writes what the server will write itself in step 7;
+       'stub'      the token-usage stub (TODO(limits)).
+     Write rows that only a person's actions used are gone: reply likes, the profile, skills and pages.
+     The page sends X-Session-Origin (scenario, run, stub) with each collection write; the request log
+     records it. */
   const OPS = {
     list:    { method: 'GET', sub: '', errors: [] },
     get:     { method: 'GET', sub: '/:id', errors: ['NOT_FOUND'] },
@@ -505,6 +524,15 @@
     { method: 'PUT', path: '/api/dev/config', coll: null, op: 'dev-config', input: 'Partial<DevConfig>', output: 'DevConfig', who: 'guest', trpc: null, wire: null, errors: ['BAD_REQUEST'], dev: true,
       note: 'DevConfig: { now (the mock clock, an ISO time), latency, failWrites, failReads, failCode, failOn: { code, paths: string[], methods?: string[], times? } | null }' },
   ];
+  /* scopes of the collection write rows (see `scope` above). GONE: rows that only a person's actions used,
+     and whole-collection replaces the page no longer sends (threads; maps are written per key). */
+  const GONE = new Set(['rpLiked:replace', 'profile:replace', 'skills:put', 'skills:delete', 'pagedocs:put', 'pagedocs:delete', 'posts:replace', 'qtd:replace']);
+  const RUN = new Set(['posts:put', 'rich:put', 'rich:delete', 'srcd:put', 'srcd:delete', 'fu:put', 'qtd:put', 'spaces:put', 'userKeys:put', 'notifs:create']);
+  for (let i = API.length - 1; i >= 0; i--) {
+    const a = API[i]; if (a.dev || a.method === 'GET') continue;
+    if (GONE.has(`${a.coll}:${a.op}`)) { API.splice(i, 1); continue; }
+    a.scope = C[a.coll].stub ? ['stub'] : RUN.has(`${a.coll}:${a.op}`) ? ['scenario', 'run'] : ['scenario'];
+  }
 
   /* ---- 5b. procedures (step 3): mutations by intent ----
      A person's action is one procedure, POST /api/rpc/<name> with the input as the body, named as in the
@@ -1054,13 +1082,12 @@
     note: 'who can add sources: members, members with review, or moderators', run: (tx, i) => { tx.need('spaces', i.space, 'space'); tx.mapPut('dsPol', i.space, i.policy); } });
   proc('sourceReports.create', { input: obj({ space: ID, source: ID, why: str }), output: 'null', who: 'member', errors: ['NOT_FOUND'], writes: ['dsReps'],
     run: (tx, i) => { tx.need('spaces', i.space, 'space'); if (!srcColl(tx, i.source)) throw rpcError('NOT_FOUND'); tx.setValue('dsReps', [...tx.value('dsReps'), { m: i.source, sid: i.space, by: tx.me.u, why: i.why }]); } });
-  /* @@PROCS@@ */
 
   /* the procedures' rows in the contract table */
   for (const [name, P] of Object.entries(PROCS)) {
     const who = P.who || 'user';
     const errors = [...new Set(['BAD_REQUEST', ...(P.errors || []), ...(ROLE_RANK[who] >= ROLE_RANK.user ? ['UNAUTHORIZED'] : []), ...(ROLE_RANK[who] >= ROLE_RANK.author ? ['FORBIDDEN'] : [])])];
-    API.push({ method: 'POST', path: '/api/rpc/' + name, coll: null, op: 'rpc', input: describe(P.input, true), output: P.output || 'null', who, trpc: name, wire: P.wire || null, errors, writes: P.writes || [], bulk: false, ...(P.stub ? { stub: true } : {}), ...(P.note ? { note: P.note } : {}) });
+    API.push({ method: 'POST', path: '/api/rpc/' + name, coll: null, op: 'rpc', input: describe(P.input, true), output: P.output || 'null', who, trpc: name, wire: P.wire || null, errors, writes: P.writes || [], bulk: false, scope: ['user'], ...(P.stub ? { stub: true } : {}), ...(P.note ? { note: P.note } : {}) });
   }
 
   /* match a request to a row: literal segments win over ":id" */
