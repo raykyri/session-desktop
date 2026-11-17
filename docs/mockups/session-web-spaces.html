@@ -1206,6 +1206,8 @@ html[data-ntype="tracked"] .n-ans { font-feature-settings: "kern" 1, "liga" 1; h
 .n-tab svg { width: 26px; height: 26px; }
 .n-tab.on { color: var(--n-tint); }
 /* segmented */
+.n-row.n-appr { padding: 6px; min-height: 0; }
+.n-row.n-appr .n-seg button { height: 32px; }
 .n-seg { display: flex; padding: 2px; border-radius: 9px; background: var(--n-fill); width: 100%; }
 .n-seg button { flex: 1; height: 30px; border: 0; background: none; border-radius: 7px; font: inherit; font-size: 13.9px; font-weight: 500; color: var(--t-primary); white-space: nowrap; padding: 0 10px; }
 .n-seg button.on { background: var(--seg-on); box-shadow: var(--seg-shadow); font-weight: 600; color: var(--t-heading); }
@@ -5631,7 +5633,7 @@ function nSpacesRoot() {
   const row = x => nst.edit
     ? `<div class="n-row ys-drag" draggable="true" data-drag="${x.id}">${glyph(x, 'n-gl')}<span class="n-row-b"><b>${nNameH(x)}</b></span><span class="n-grip">${NI.grip}</span></div>`
     : `<button class="n-row" type="button" data-n="push:space:${x.id}"><span class="ys-gw">${glyph(x, 'n-gl')}</span><span class="n-row-b"><span class="ys-nm"><b>${nNameH(x)}${isClosed(x) ? LK('cs-lk n-lk', 'Closed space') : ''}</b>${roleHTML(x)}</span><small>${fmt(x.members)} members${isClosed(x) ? ' · ' + visLabel(x) : ''}</small></span><span class="n-chev">${NI.chev}</span></button>`;
-  const disc = x => `<div class="n-row"><button class="n-row-main" type="button" data-n="push:space:${x.id}">${glyph(x, 'n-gl')}<span class="n-row-b"><b>${nNameH(x)}${isClosed(x) ? LK('cs-lk n-lk', 'Closed space') : ''}</b><small>${fmt(x.members)} members${isClosed(x) ? ' · ' + policyLabel(x) : ''}</small></span></button>${!isClosed(x) ? `<button class="n-cap" type="button" data-n="join:${x.id}">Join</button>` : relOf(x.id) === 'pending' ? '<span class="n-val">Requested</span>' : x.policy === 'request' ? `<button class="n-cap" type="button" data-n="join:${x.id}">Request</button>` : ''}</div>`;
+  const disc = x => `<div class="n-row"><button class="n-row-main" type="button" data-n="push:space:${x.id}">${glyph(x, 'n-gl')}<span class="n-row-b"><b>${nNameH(x)}${isClosed(x) ? LK('cs-lk n-lk', 'Closed space') : ''}</b><small>${isClosed(x) ? policyLabel(x) : `${fmt(x.members)} members`}</small></span></button>${!isClosed(x) ? `<button class="n-cap" type="button" data-n="join:${x.id}">Join</button>` : relOf(x.id) === 'pending' ? '<span class="n-val">Requested</span>' : x.policy === 'request' ? `<button class="n-cap" type="button" data-n="join:${x.id}">Request</button>` : ''}</div>`;
   const right = nSignedIn() ? `<button class="n-tb" type="button" data-n="edit">${nst.edit ? '<b>Done</b>' : 'Edit'}</button>` : '';
   /* Search filters by name and title while rendering; Edit shows every space */
   const q = nst.edit ? '' : (nst.sq || '').trim().toLowerCase(), hit = x => !q || (x.name + ' ' + (x.title || '') + ' ' + spName(x)).toLowerCase().includes(q);
@@ -5703,7 +5705,7 @@ function nYou() {
     `<button class="n-row" type="button" data-n="push:keys"><span class="n-row-b"><b>API keys</b></span><span class="n-val">${st.userKeys.length}</span><span class="n-chev">${NI.chev}</span></button>`,
   ])}${nAppearance()}${nGroup('', [`<button class="n-row n-danger" type="button" data-n="sheet:signout"><span class="n-row-b"><b>Sign out</b></span></button>`])}` };
 }
-const nAppearance = () => nGroup('Appearance', [`<div class="n-row"><span class="n-row-b">${nSeg([['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], st.appearance, 'appear')}</span></div>`]);
+const nAppearance = () => nGroup('Appearance', [`<div class="n-row n-appr"><span class="n-row-b">${nSeg([['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], st.appearance, 'appear')}</span></div>`]);
 function nKeys() {
   const rows = st.userKeys.map(k => `<button class="n-row" type="button" data-n="sheet:key:${k.id}"><span class="n-row-b"><b>${esc(k.label)}</b><small${k.valid ? '' : ' class="n-bad"'}>${esc(k.sub)}</small></span><span class="n-chev">${NI.chev}</span></button>`);
   rows.push(`<button class="n-row n-add" type="button" data-n="sheet:addkey">${NI.plus}<span class="n-row-b"><b>Add API key</b></span></button>`);
