@@ -25,9 +25,10 @@
    - The mock clock: cfg.now, a fixed instant (SessionFixtures.clock), read and set through /api/dev/config.
      Records carry createdAt (an ISO instant); the server sets it on a new record that has none, and sets
      updatedAt when a list or thread record changes. The page formats both relative to the clock.
-   - Ids: a record created with POST on a collection marked `serverId` gets a ULID when the body has none
-     (time from the mock clock, then a counter, so runs are deterministic). The response carries it; the
-     page puts it in place of its temporary id. Fixture ids (k1, rp1, …) stay as they are.
+   - Ids: a record created on a collection marked `serverId` gets a ULID when it has none (time from the
+     mock clock, then a counter, so runs are deterministic; the counter is not reset by a scenario). The
+     answer carries it; the page puts it in place of its temporary id. Fixture ids (k1, rp1, …) stay as
+     they are.
    - Derived fields: the server computes them on every read and does not store them (see DERIVED below):
      a thread's r, likes, liked and mine; a space's members. GET /api/me says who is signed in.
    - Write-only fields: an API key's raw value is stored but never returned.
@@ -35,9 +36,9 @@
    Thread ids (step 2)
    - A thread (posts) is a list record with a ULID in `id`, also in thread URLs (/s/<space>/t/<id>). The
      fixture threads have fixed ULIDs: the time part is their createdAt.
-   - POST /api/threads creates a thread; the server assigns its id. PUT /api/threads/:id updates one, and
-     DELETE /api/threads/:id removes one (only the Screen entries' clean-up does this; a person deletes a
-     thread by marking it deleted).
+   - threads.create (POST /api/rpc/threads.create) creates a thread; the server assigns its id. A person
+     deletes a thread by marking it deleted (threads.delete). PUT /api/threads/:id is left for the ask
+     pipeline (the answer's state, until step 7).
    - Everything that points at a thread uses its id: the keys of /api/answers, /api/answer-sources,
      /api/follow-ups, /api/replies and /api/ask-trees; the members of likes and saves; "<thread>:<node>" in
      saved asks; "<kind>:<thread>[:…]" in report and moderation keys; a notification's thread; a thread's
@@ -374,18 +375,12 @@
   };
   const API = [
     row('spaces', 'list', 'guest', 'spaces.list', { note: 'listed and joined spaces; a guest gets the listed ones' }),
-    row('spaces', 'replace', 'owner', 'spaces.reorder'),
-    row('spaces', 'create', 'user', 'spaces.create'),
-    row('spaces', 'put', 'admin', 'spaces.update'),
-    row('spaces', 'delete', 'owner', 'spaces.remove'),
+    row('spaces', 'put', 'server', null, { note: 'a domain check’s result (the page’s server job until step 7); admins change settings with spaces.update' }),
 
     /* threads: addressed by id (a ULID). r, likes, liked and mine are derived on read. */
     row('posts', 'list', 'guest', 'research.listTrees', { wire: 'ResearchTreeSummary[]' }),
     row('posts', 'get', 'guest', 'research.getTree', { wire: 'ResearchTreeDetail' }),
-    row('posts', 'replace', 'moderator', 'threads.moveToTopic', { note: 'a moderator moves several threads at once (deleted topics)' }),
-    row('posts', 'create', 'member', ['research.createTree', 'research.createPost'], { wire: 'ResearchTree', note: 'the server assigns the id (a ULID)' }),
-    row('posts', 'put', 'author', 'research.updatePost', { wire: 'ResearchTree', note: 'the author edits; moderators move or remove; the run sets the answer state' }),
-    row('posts', 'delete', 'author', 'research.deleteTree', { note: 'only the Screen entries’ clean-up removes threads; a person deletes a thread by marking it deleted' }),
+    row('posts', 'put', 'server', null, { wire: 'ResearchTree', note: 'the run sets the answer state (running, stopped, failed); people change threads with procedures' }),
 
     row('rich', 'list', 'guest', 'research.getNodeContent', { wire: 'ResearchNodeContent' }),
     row('rich', 'get', 'guest', 'research.getNodeContent', { wire: 'ResearchNodeContent' }),
@@ -395,121 +390,54 @@
     row('srcd', 'put', 'server', null, { note: 'written by the run' }),
     row('srcd', 'delete', 'server', null),
     row('fu', 'list', 'guest', 'followups.list'),
-    row('fu', 'put', 'member', 'followups.ask', { wire: 'ResearchExchangeNode', note: 'the thread’s follow-up asks, replaced whole' }),
-    row('fu', 'delete', 'author', 'research.removeBranch', { wire: 'ResearchBranchRemoval' }),
+    row('fu', 'put', 'server', null, { wire: 'ResearchExchangeNode', note: 'the run writes a follow-up’s answer (the thread’s follow-ups, replaced whole)' }),
     row('rp', 'list', 'guest', 'research.getTree'),
-    row('rp', 'put', 'member', 'research.createPostFollowUp', { wire: 'ResearchPostNode', note: 'the thread’s replies, replied to, edited or deleted by their authors' }),
-    row('rp', 'delete', 'author', 'research.removeBranch', { wire: 'ResearchBranchRemoval' }),
     row('qtd', 'list', 'guest', 'research.getTree', { wire: 'ResearchTreeDetail' }),
-    row('qtd', 'replace', 'server', 'threads.resetAskTrees'),
-    row('qtd', 'put', 'member', 'research.forkNode', { wire: 'ResearchNode' }),
-    row('qtd', 'delete', 'author', 'research.removeBranch', { wire: 'ResearchBranchRemoval' }),
+    row('qtd', 'put', 'server', null, { wire: 'ResearchNode', note: 'the run writes an ask’s answer in the tree' }),
 
     row('media', 'list', 'guest', 'sources.list'),
-    row('media', 'replace', 'moderator', 'sources.updateMany'),
-    row('media', 'create', 'member', 'sources.create'),
-    row('media', 'put', 'moderator', 'sources.update'),
-    row('media', 'delete', 'moderator', 'sources.remove'),
     row('miAdded', 'list', 'user', 'sources.listNew'),
-    row('miAdded', 'replace', 'user', 'sources.resetNew'),
-    row('miAdded', 'create', 'member', 'sources.create'),
-    row('miAdded', 'put', 'author', 'sources.update'),
-    row('miAdded', 'delete', 'author', 'sources.remove'),
 
     row('joined', 'list', 'user', 'spaces.listJoined'),
-    row('joined', 'replace', 'user', ['spaces.join', 'spaces.leave'], { errors: ['FORBIDDEN'] }),
     row('roles', 'list', 'user', 'spaces.myRoles'),
-    row('roles', 'replace', 'admin', 'members.setRole'),
     row('roles0', 'list', 'user', 'spaces.myRoles'),
-    row('roles0', 'replace', 'owner', 'members.setRole'),
     row('rel', 'list', 'user', 'spaces.myClosedSpaces'),
-    row('rel', 'put', 'user', ['joinRequests.create', 'spaces.join'], { note: 'none, pending, member, mod or denied' }),
-    row('rel', 'delete', 'user', 'spaces.leave'),
     row('liked', 'list', 'user', 'likes.list'),
-    row('liked', 'replace', 'user', 'likes.set'),
     row('saved', 'list', 'user', 'saves.list'),
-    row('saved', 'replace', 'user', 'saves.set'),
     row('qtSaved', 'list', 'user', 'saves.list'),
-    row('qtSaved', 'replace', 'user', 'saves.set'),
     row('miSaved', 'list', 'user', 'saves.list'),
-    row('miSaved', 'replace', 'user', 'saves.set'),
     row('miRead', 'list', 'user', 'sources.listRead'),
-    row('miRead', 'replace', 'user', 'sources.markRead'),
 
     /* TODO(limits): API keys are a stub: stored as sent (no encryption, no usage accounting). raw is write-only. */
     row('userKeys', 'list', 'user', 'apiKeys.list', { stub: true, note: 'masked keys only: raw is never returned' }),
-    row('userKeys', 'replace', 'user', 'apiKeys.replaceAll', { stub: true }),
-    row('userKeys', 'create', 'user', 'apiKeys.add', { stub: true, note: 'the server assigns the id; CONFLICT when the same raw key exists' }),
-    row('userKeys', 'put', 'user', ['apiKeys.rename', 'apiKeys.replace', 'apiKeys.setCap', 'apiKeys.check'], { stub: true }),
-    row('userKeys', 'delete', 'user', 'apiKeys.revoke', { stub: true }),
+    row('userKeys', 'put', 'server', null, { stub: true, note: 'a key check’s result, and the run’s last-used time' }),
 
     row('notifs', 'list', 'user', 'notifications.list', { wire: 'InboxNotificationPage' }),
-    row('notifs', 'replace', 'user', 'notifications.markAllRead'),
     row('notifs', 'create', 'server', null, { wire: 'InboxNotification', note: 'the real server creates notifications (notification.requested); the page still posts the ones that follow an ask run or a resolved report, as structured records, and the server assigns the id' }),
-    row('notifs', 'put', 'user', 'notifications.markRead', { wire: 'InboxNotification' }),
-    row('notifs', 'delete', 'user', 'notifications.remove'),
     row('askedInv', 'list', 'user', 'invites.listRequested'),
-    row('askedInv', 'replace', 'user', 'invites.request'),
 
     row('reqs', 'list', 'moderator', 'joinRequests.list'),
-    row('reqs', 'replace', 'moderator', 'joinRequests.decideMany'),
-    row('reqs', 'create', 'user', 'joinRequests.create'),
-    row('reqs', 'put', 'moderator', 'joinRequests.decide'),
-    row('reqs', 'delete', 'author', 'joinRequests.withdraw'),
     row('mem', 'list', 'member', 'sharing.listMembers', { wire: 'ThreadMember[]', note: 'space roles replace commenter and viewer' }),
-    row('mem', 'replace', 'admin', ['sharing.setRole', 'sharing.removeMember'], { wire: 'ThreadMember[]' }),
     row('memOther', 'list', 'member', 'sharing.listMembers', { wire: 'ThreadMember[]' }),
-    row('memOther', 'put', 'admin', ['sharing.setRole', 'sharing.removeMember'], { wire: 'ThreadMember[]' }),
-    row('memOther', 'delete', 'admin', 'sharing.removeMember'),
     row('banned', 'list', 'moderator', 'bans.list'),
-    row('banned', 'replace', 'moderator', 'bans.removeMany'),
-    row('banned', 'create', 'moderator', 'bans.create'),
-    row('banned', 'put', 'moderator', 'bans.update'),
-    row('banned', 'delete', 'moderator', 'bans.remove'),
     row('links', 'list', 'moderator', 'invites.list', { wire: 'ThreadInvite[]' }),
-    row('links', 'replace', 'moderator', 'invites.revokeMany'),
-    row('links', 'create', 'moderator', 'invites.create', { wire: 'CreatedInvite' }),
-    row('links', 'put', 'moderator', 'invites.update', { wire: 'ThreadInvite' }),
-    row('links', 'delete', 'moderator', 'invites.revoke', { wire: 'ThreadInvite' }),
     row('reports', 'list', 'moderator', 'reports.list'),
-    row('reports', 'replace', 'moderator', 'reports.resetQueue'),
-    row('reports', 'create', 'member', 'reports.create'),
-    row('reports', 'put', 'moderator', 'reports.resolve'),
-    row('reports', 'delete', 'moderator', 'reports.remove'),
     row('modSt', 'list', 'moderator', 'moderation.list'),
-    row('modSt', 'put', 'moderator', 'moderation.decide', { note: 'removed, hidden or kept' }),
-    row('modSt', 'delete', 'moderator', 'moderation.undo'),
 
     row('dsDrops', 'list', 'guest', 'spaceSources.list'),
-    row('dsDrops', 'put', 'member', ['spaceSources.add', 'spaceSources.review'], { note: 'members add; moderators approve or remove' }),
-    row('dsDrops', 'delete', 'moderator', 'spaceSources.clear'),
     row('dsPol', 'list', 'guest', 'spaceSources.policies'),
-    row('dsPol', 'put', 'admin', 'spaceSources.setPolicy'),
-    row('dsPol', 'delete', 'admin', 'spaceSources.setPolicy'),
     row('dsReps', 'list', 'moderator', 'sourceReports.list'),
-    row('dsReps', 'replace', 'member', ['sourceReports.create', 'sourceReports.resolve']),
     row('profile', 'list', 'user', 'profile.get', { wire: 'User' }),
-    row('profile', 'replace', 'user', 'profile.update'),
     row('skills', 'list', 'guest', 'skills.list'),
-    row('skills', 'put', 'moderator', ['skills.create', 'skills.update', 'skills.remove', 'skills.reorder']),
-    row('skills', 'delete', 'moderator', 'skills.removeAll'),
     row('pagedocs', 'list', 'guest', 'pages.list'),
-    row('pagedocs', 'put', 'member', ['pages.create', 'pages.update', 'pages.restore'], { errors: ['CONFLICT'], note: 'who may edit follows the space’s pageEdit setting; CONFLICT when the page changed since it was opened (checked in step 5)' }),
-    row('pagedocs', 'delete', 'moderator', 'pages.remove'),
     row('acct', 'list', 'user', 'settings.get', { wire: 'UserSettings' }),
-    row('acct', 'replace', 'user', 'settings.update', { wire: 'UserSettings' }),
     row('usage', 'list', 'user', 'usage.get', { stub: true, note: 'TODO(limits): token usage by source and space, the included tokens and the default key' }),
     row('usage', 'replace', 'user', 'usage.setDefaultKey', { stub: true, note: 'TODO(limits): the page computes usage; the server stores it as sent' }),
     row('muted', 'list', 'user', 'mutes.list'),
-    row('muted', 'replace', 'user', 'mutes.set'),
     row('blocked', 'list', 'user', 'blocks.list'),
-    row('blocked', 'replace', 'user', 'blocks.set'),
     row('repSeen', 'list', 'moderator', 'notifications.unreadCount'),
-    row('repSeen', 'replace', 'moderator', 'notifications.markRead'),
     row('reqSeen', 'list', 'moderator', 'notifications.unreadCount'),
-    row('reqSeen', 'replace', 'moderator', 'notifications.markRead'),
     row('rpLiked', 'list', 'user', 'likes.list'),
-    row('rpLiked', 'replace', 'user', 'likes.set'),
 
     { method: 'GET', path: '/api/me', coll: null, op: 'me', input: null, output: 'Me', who: 'user', trpc: 'auth.me', wire: 'User', errors: ['UNAUTHORIZED'],
       note: 'the signed-in person; the server uses it for mine and liked' },
@@ -522,16 +450,10 @@
     { method: 'PUT', path: '/api/dev/config', coll: null, op: 'dev-config', input: 'Partial<DevConfig>', output: 'DevConfig', who: 'guest', trpc: null, wire: null, errors: ['BAD_REQUEST'], dev: true,
       note: 'DevConfig: { now (the mock clock, an ISO time), latency, failWrites, failReads, failCode, failOn: { code, paths: string[], methods?: string[], times? } | null }' },
   ];
-  /* scopes of the collection write rows (see `scope` above): the rows the ask pipeline writes (RUN) and the
-     stub's. The other write rows are gone: a person's actions are procedures, and the Screen entries use
-     scenarios (step 10). */
-  const RUN = new Set(['posts:put', 'rich:put', 'rich:delete', 'srcd:put', 'srcd:delete', 'fu:put', 'qtd:put', 'spaces:put', 'userKeys:put', 'notifs:create']);
-  for (let i = API.length - 1; i >= 0; i--) {
-    const a = API[i]; if (a.dev || a.method === 'GET') continue;
-    if (C[a.coll].stub) a.scope = ['stub', 'run'];   /* the usage stub; the ask pipeline charges asks to it */
-    else if (RUN.has(`${a.coll}:${a.op}`)) a.scope = ['run'];
-    else API.splice(i, 1);
-  }
+  /* scopes of the collection write rows (see `scope` above): every one left is the ask pipeline's, and the
+     usage stub's (which the pipeline also charges asks to). A person's actions are procedures, and the
+     Screen entries use scenarios (step 10). */
+  for (const a of API) if (!a.dev && a.method !== 'GET') a.scope = C[a.coll].stub ? ['stub', 'run'] : ['run'];
 
   /* ---- 5b. procedures (step 3): mutations by intent ----
      A person's action is one procedure, POST /api/rpc/<name> with the input as the body, named as in the

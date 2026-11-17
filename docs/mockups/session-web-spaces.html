@@ -6977,17 +6977,21 @@ function buildJump() {
   const setOpen = o => { open = o; pop.hidden = !o; btn.setAttribute('aria-expanded', String(o)); if (o) { act = cur < 0 ? 0 : cur; paint(); pop.focus({ preventScroll: true }); } };
   const go = (i, keepFocus) => {
     cur = act = i; paint();
-    jump(flat[i].k); renderAll();
-    const fr = document.querySelector('.frame'); if (fr && fr.getBoundingClientRect().top < 0) fr.scrollIntoView({ block: 'start' });
-    const a = $('app'); if (a && st.device !== 'native') a.scrollTop = 0;
-    if (keepFocus) (open ? pop : btn).focus({ preventScroll: true });
+    /* the screen is drawn once the server has set up the entry's data (step 10): then the frame scrolls to
+       the top and focus goes back to the list or its button */
+    Promise.resolve(jump(flat[i].k)).then(() => {
+      const fr = document.querySelector('.frame'); if (fr && fr.getBoundingClientRect().top < 0) fr.scrollIntoView({ block: 'start' });
+      const a = $('app'); if (a && st.device !== 'native') a.scrollTop = 0;
+      if (keepFocus) (open ? pop : btn).focus({ preventScroll: true });
+    });
+    renderAll();
   };
   const step = (d, abs) => {
     const n = flat.length, base = open ? act : cur;
     go(abs != null ? abs : base < 0 ? (d > 0 ? 0 : n - 1) : Math.min(n - 1, Math.max(0, base + d)), true);
   };
   on(btn, 'click', () => setOpen(!open));
-  on(pop, 'click', e => { const o = e.target.closest('.jd-o'); if (!o) return; go(opts.indexOf(o), false); setOpen(false); btn.focus({ preventScroll: true }); });
+  on(pop, 'click', e => { const o = e.target.closest('.jd-o'); if (!o) return; go(opts.indexOf(o), true); setOpen(false); btn.focus({ preventScroll: true }); });
   on(pop, 'mousemove', e => { const o = e.target.closest('.jd-o'); if (o && opts.indexOf(o) !== act) { act = opts.indexOf(o); paint(); } });
   const keys = e => {
     const k = e.key;
@@ -12416,25 +12420,29 @@ function screenReset() {
   /* what the last screen left in the page: a confirmation's device, the settings bar's place */
   OVG.nat = undefined; OVG.space = undefined; csSettings.endVis = false;
 }
-/* the server sets up a scenario's data; then(): the screen, once the page has the server's records */
+/* the server sets up a scenario's data; then(): the screen, once the page has the server's records.
+   Returns a promise that settles when both are done. */
 function runScenario(name, args, then) {
   const inst = DS;
   /* the runs and checks in progress end: the server's data goes back to the seed */
   SCENARIO_GEN++; [...RUNS.keys()].forEach(askCancel);
   inst.meta.setState(m => ({ pending: m.pending + 1 }));
-  apiSource.queue = apiSource.queue
+  const done = apiSource.queue
     .then(() => http('POST', '/api/dev/scenario', args ? { name, args } : { name }, 'scenario'))
     .then(res => { applyChanges(res && res.changes, () => false); if (then) then(); },
       e => { console.error(`[session] the scenario ${name} failed: ${e.message}`); dataError(apiErrText(e, 'write')); apiSource.load(inst); })
-    .catch(e => console.error(`[session] scenario ${name}: could not set up the screen`, e))
+    .catch(e => { setTimeout(() => { throw e; }); })   /* an error in the screen's set-up is an uncaught error, as before (test harnesses count them) */
     .finally(() => inst.meta.setState(m => ({ pending: m.pending - 1 })));
+  apiSource.queue = done;
+  return done;
 }
 const screenUi = jump;   /* the Screen entries' UI state (the jump functions above) */
+/* a Screen entry: its scenario, then its screen; the promise settles when the screen is drawn */
 jump = function (k) {
   SCREEN_BEFORE.forEach(f => f());
-  if (!dataReady()) { DS.whenReady(() => jump(k)); return; }
+  if (!dataReady()) return new Promise(res => DS.whenReady(() => jump(k).then(res)));
   const [name, args] = SCREEN_DATA[k] || ['seed'];
-  runScenario(name, args, () => { screenReset(); screenUi(k); renderAll(); });
+  return runScenario(name, args, () => { screenReset(); screenUi(k); renderAll(); });
 };
 on($('ctl-toggle'), 'click', e => { const open = document.querySelector('.ctl').classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded', open); });
 /* the Variants bar's Reset: the seed data (the same reset as a Screen entry's), then the controls and the screen */
