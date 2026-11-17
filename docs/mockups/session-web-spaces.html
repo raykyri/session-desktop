@@ -3238,6 +3238,50 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 }
 
 /* END question-trees css */
+/* ==== spaces, moderation and space token settings: archive, danger section, invite by handle, icon picker ==== */
+.glyph.cx-img { background: linear-gradient(160deg, #8fb3c9 0 38%, #5f8a6a 38% 62%, #3f6b52 62%); color: transparent; }
+.cs-lbl.cx-arch { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.cs-strip.cx-ro { margin-bottom: 12px; }
+.cx-danger .st-sec h3 { color: var(--bad); }
+.cx-drow { display: flex; align-items: center; gap: 14px; padding: 10px 0; }
+.cx-drow + .cx-drow { border-top: 1px solid var(--divider); }
+.cx-dtx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); }
+.cx-dtx b { color: var(--t-heading); font-weight: 600; }
+.cx-dtx small { color: var(--t-muted); font-size: var(--fs-sm); }
+.cx-drow .btn { flex: none; }
+.um-item.cx-danger-i, .um-item.cx-danger-i svg { color: var(--bad); }
+.cx-hrow { display: flex; gap: 6px; align-items: center; }
+.cx-hfld { flex: 1; min-width: 0; }
+.cx-hfld input { flex: 1; min-width: 0; border: 0; height: 32px; padding-left: 2px; background: transparent; color: var(--t-primary); font: inherit; font-size: var(--fs-sm); }
+.cx-hfld input:focus { outline: none; }
+.cx-hfld:focus-within { outline: 2px solid var(--accent); outline-offset: -1px; }
+.cx-hsug { display: flex; flex-direction: column; border: 1px solid var(--border-subtle); border-radius: var(--r-md); padding: 3px; background: var(--card); }
+.cx-hopt { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; padding: 5px 6px; border-radius: var(--r-sm, 6px); text-align: left; color: var(--t-primary); font: inherit; }
+.cx-hopt:hover, .cx-hopt:focus-visible { background: var(--fill-hover); }
+.cx-hopt[aria-disabled="true"] { opacity: .55; cursor: default; }
+.cx-htx { display: flex; flex-direction: column; min-width: 0; font-size: var(--fs-sm); }
+.cx-htx b { font-weight: 600; }
+.cx-htx small { color: var(--t-faint); font-size: var(--fs-xs); }
+.cx-hsent { display: flex; flex-direction: column; gap: 6px; }
+.cx-hsr { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); }
+.cx-mklink { align-self: flex-start; }
+.cx-mylinks { border: 1px solid var(--border-subtle); border-radius: var(--r-md); }
+.cx-mylinks .ak-row { padding: 8px 10px; flex-wrap: wrap; }
+.cx-rauth { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: var(--fs-sm); color: var(--t-secondary); }
+.cx-rauth b { font-weight: 600; color: var(--t-strong); }
+.cx-rauth .grow { flex: 1; }
+.cx-dnote { margin: 0; padding: 8px 12px; border-left: 2px solid var(--divider); background: var(--fill-subtle); border-radius: 0 var(--r-md) var(--r-md) 0; display: flex; flex-direction: column; gap: 2px; }
+.cx-dnote p { margin: 0; color: var(--t-primary); }
+.cx-icons { display: flex; flex-wrap: wrap; gap: 6px; }
+.cx-av { border: 2px solid transparent; border-radius: 13px; padding: 2px; background: transparent; display: inline-grid; place-items: center; }
+.cx-av.on { border-color: var(--accent); }
+.cx-av .glyph.lg { width: 36px; height: 36px; font-size: 15.5px; }
+.cx-upb { width: 36px; height: 36px; border-radius: 10px; border: 1px dashed var(--border-strong); display: grid; place-items: center; color: var(--t-muted); }
+.cx-upb svg { width: 14px; height: 14px; }
+.cx-url { font-weight: 600; color: var(--t-secondary); word-break: break-all; }
+.cx-domfail { margin: 0; font-size: var(--fs-sm); }
+@media (max-width: 640px) { .cx-drow { flex-wrap: wrap; } .cx-drow .btn { width: 100%; justify-content: center; } }
+/* ==== end of spaces, moderation and space token settings css ==== */
 </style>
 
 <div class="shell" id="shell">
@@ -3375,7 +3419,7 @@ const RES = {
   reqs:     { url: '/api/join-requests', kind: 'list', id: 'u' },
   mem:      { url: '/api/members', kind: 'value' },
   memOther: { url: '/api/members/other-spaces', kind: 'map' },
-  banned:   { url: '/api/bans', kind: 'list', id: 'u' },
+  banned:   { url: '/api/bans', kind: 'list', id: 'id' },      /* id: "<space>:<handle>" */
   links:    { url: '/api/invite-links', kind: 'list', id: 'id' },
   reports:  { url: '/api/reports', kind: 'list', id: 'id' },
   modSt:    { url: '/api/moderation', kind: 'map' },         /* item key → removed / kept */
@@ -3845,7 +3889,7 @@ const sp = id => D.spaces.find(s => s.id === id);
 const avColor = n => `var(--av${n})`;
 const initials = h => h.replace('@', '').replace(/[._]/g, ' ').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 const avatar = (h, cls = '') => `<span class="av ${cls}" style="background:${avColor(USERS[h] || 1)}" aria-hidden="true">${initials(h)}</span>`;
-const glyph = (s, cls = '') => `<span class="glyph ${cls}" style="background:${avColor(s.av)}" aria-hidden="true">${s.name[0].toUpperCase()}</span>`;
+const glyph = (s, cls = '') => s.img ? `<span class="glyph cx-img ${cls}" aria-hidden="true"></span>` : `<span class="glyph ${cls}" style="background:${avColor(s.av)}" aria-hidden="true">${s.name[0].toUpperCase()}</span>`;
 
 /* ---------------- meters ---------------- */
 function ring(p, size, w) {
@@ -3951,7 +3995,7 @@ const logo = (txt = 'Session', sub = '') => `<span class="logo">${I.logo}${txt}$
 const linksList = s => `<ul class="links">${s.pages.map(([t, a]) => `<li><a href="#${st.opt}" onclick="return false">${I.page}${esc(t)}<small>${a}</small></a></li>`).join('')}</ul>`;
 const rulesList = s => `<ol>${s.rules.map(r => `<li>${esc(r)}</li>`).join('')}</ol>`;
 const MOD_LABEL = { owner: 'Owner', admin: 'Admin', mod: 'Moderator' };
-const modsList = s => `<div class="mods">${s.mods.map(([h, r]) => `<div>${avatar(h, 'sm')}<span>${h}</span><small>${MOD_LABEL[r] || r}</small></div>`).join('')}</div>`;
+const modsList = s => `<div class="mods">${cxMods(s).map(([h, r]) => `<div>${avatar(h, 'sm')}<span>${h}</span><small>${MOD_LABEL[r] || r}</small></div>`).join('')}</div>`;
 const joinBtn = s => isClosed(s) ? (isMember(s.id) ? csJoinedBtn(s) : csCta(s)) : st.auth === 'out' ? '<button class="btn primary" type="button" data-act="signin">Join</button>' : D.joined.includes(s.id) ? `<button class="btn" type="button" data-leave="${s.id}">Joined</button>` : `<button class="btn primary" type="button" data-join="${s.id}">Join</button>`;
 const topSpaces = () => D.spaces.filter(visibleSp).sort((a, b) => b.online - a.online);
 
@@ -3966,7 +4010,7 @@ const topHeader = () => `<div class="hdr"><button class="logo-btn" type="button"
 /* Header tabs leave out closed spaces the user is not a member of. */
 function csTabs() {
   const tab = x => `<button class="utab" type="button" data-space="${x.id}" aria-current="${!st.home && !st.profilePage && !st.savedPage && !st.subPage && st.thread == null && x.id === st.space}">${spName(x)}${spSeal(x, 'sm')}${csAfter(x, false)}</button>`;
-  return headerSpaces().filter(x => !isClosed(x) || isMember(x.id)).map(tab).join('');
+  return headerSpaces().filter(x => !x.deleted && (!isClosed(x) || isMember(x.id))).map(tab).join('');
 }
 /* Banner: name (title when "Show as …" is on) and seal, description, and a meta line with visibility for
    closed spaces and the verified domain ("Verified line" control). On spaces with the FAQ landing the
@@ -3974,7 +4018,7 @@ function csTabs() {
 /* noTabs: the space tabs are placed by the layout (header across both columns) */
 const banner = (s, noCta, noTabs) => {
   const bv = faqOn(s) ? 'compact' : 'full', tabs = noTabs ? '' : sfTabs(s);
-  const meta = (isClosed(s) ? csVisLine(s) : '') + verLine(s);
+  const meta = cxArchLine(s) + (isClosed(s) ? csVisLine(s) : '') + verLine(s);
   const mw = canRead(s) ? `<button class="btn sm m-wiki" type="button" data-act="mwiki" data-mwtab="sources">${MII.library}Sources</button><button class="btn sm m-wiki" type="button" data-act="mwiki" data-mwtab="wiki">${I.book}About</button>` : canRead(s) ? `<button class="btn sm m-wiki" type="button" data-act="mwiki">${MII.library}Sources</button>` : `<button class="btn sm m-wiki" type="button" data-act="mwiki">${I.book}Wiki</button>`;
   return `<div class="banner${bv === 'compact' ? ' sf-compact' : ''}${tabs || noTabs ? ' has-tabs' : ''}" style="--sp:${avColor(s.av)}">${csGlyph(s, bv === 'compact' ? 'lg' : 'xl')}<div style="min-width:0"><h2>${spName(s)}${spSeal(s, 'lg')}</h2><p class="sf-desc">${esc(s.desc)}</p>${meta ? `<div class="cs-brow">${meta}</div>` : ''}</div><div class="banner-acts">${csBannerActs(s)}${noCta && !isMember(s.id) ? '' : joinBtn(s)}${mw}</div></div>${tabs}`;
 };
@@ -4013,7 +4057,7 @@ const homeTitle = (h, sub) => `<div class="home-head"><h2>${h}</h2>${sub ? `<p>$
 
 function homeFeed() {
   const joined = st.auth === 'in' ? D.spaces.filter(x => D.joined.includes(x.id)) : [];
-  const more = D.spaces.filter(x => !joined.includes(x) && !isClosed(x)).slice(0, 4);
+  const more = D.spaces.filter(x => !joined.includes(x) && !isClosed(x) && visibleSp(x)).slice(0, 4);
   const spRow = x => `<button class="sp-row" type="button" data-space="${x.id}">${csGlyph(x)}<span class="cs-nmrow">${spName(x)}${spSeal(x, 'sm')}${csAfter(x, true)}</span><small class="num">${x.posts.toLocaleString()}</small></button>`;
   const sug = [];
   const sugRow = x => `<div class="cs-sug">${csGlyph(x)}<div class="br-nm"><button class="dg-name" type="button" data-space="${x.id}">${spName(x)}</button><small class="num">${fmt(x.members)} members · ${policyLabel(x)}</small></div>${csJoinCtl(x)}</div>`;
@@ -4141,6 +4185,7 @@ function addFollowUp(i, txt) {
   db.put('rp', i, [...(D.rp[i] || rpFor(p)), { u: ME.u, age: 'now', t: txt }]);
 }
 function fuInput(p) {
+  if (sp(p.s).archived) return cxReadOnly(sp(p.s));
   const ask = p.k === 'ask', ph = ask ? 'Ask a follow-up…' : 'Write a reply…';
   return `<div class="fu-box2"><textarea id="fu-input" rows="2" placeholder="${ph}" aria-label="${ask ? 'Ask a follow-up' : 'Write a reply'}"></textarea><div class="fu2-bar">${ask ? modelPicker() : ''}<span class="grow"></span><button class="btn primary" type="button" data-fugo="${D.posts.indexOf(p)}">${ask ? 'Ask' : 'Reply'}</button></div></div>`;
 }
@@ -4391,11 +4436,12 @@ function composer(force) {
   /* Posts setting: in a space with posts turned off the composer is ask-only. */
   if (s.postsOff && st.mode === 'post') st.mode = 'ask';
   const ask = out || st.mode === 'ask';
+  if (s.archived && !st.home) return cxReadOnly(s);
   if (out) return `<button class="composer c2-closed" type="button" data-act="signin"><span class="ph">Log in to ask a question${s.postsOff && !st.home ? '' : ' or post'}</span></button>`;
   if (!st.compOpen && !force) return `<button class="composer c2-closed" type="button" data-act="compose"><span class="ph">${s.postsOff && !st.home ? 'Make a query…' : 'Make a query, or write a post…'}</span></button>`;
   const modes = [['ask', 'Ask', 'An agent researches the question and posts a sourced answer. Uses tokens.', I.agent], ['post', 'Post', s.postsOff ? `Posts are turned off in ${spName(s)}` : 'A plain post. People reply. Uses no tokens.', I.write]];
   const modeSeg = `<div class="seg c2-mode" role="group" aria-label="Thread kind">${modes.map(([k, l, d, ic]) => `<button type="button" data-mode="${k}" aria-pressed="${st.mode === k}" title="${d}"${k === 'post' && s.postsOff ? ' disabled aria-disabled="true"' : ''}>${ic}${l}</button>`).join('')}</div>`;
-  const spaceSel = st.home ? `<div class="c2-spm"><button class="c2-sp" type="button" data-act="sp-menu" aria-haspopup="listbox" aria-expanded="${!!st.spOpen}" aria-label="Space: ${spName(s)}">${glyph(s)}<span>${spName(s)}</span>${I.chev}</button>${st.spOpen ? `<div class="ts-ddmenu c2-spmenu" role="listbox" aria-label="Space">${D.spaces.filter(x => D.joined.includes(x.id)).map(x => `<button type="button" class="ts-opt" role="option" aria-selected="${x.id === s.id}" data-cspace="${x.id}">${glyph(x)}<span class="ts-tx"><b class="cs-nmrow">${spName(x)}${spSeal(x, 'sm')}${csMark(x, false)}</b></span>${x.id === s.id ? I.check : ''}</button>`).join('')}</div>` : ''}</div>` : `<span class="c2-sp static">${glyph(s)}${spName(s)}</span>`;
+  const spaceSel = st.home ? `<div class="c2-spm"><button class="c2-sp" type="button" data-act="sp-menu" aria-haspopup="listbox" aria-expanded="${!!st.spOpen}" aria-label="Space: ${spName(s)}">${glyph(s)}<span>${spName(s)}</span>${I.chev}</button>${st.spOpen ? `<div class="ts-ddmenu c2-spmenu" role="listbox" aria-label="Space">${D.spaces.filter(x => D.joined.includes(x.id) && !x.archived).map(x => `<button type="button" class="ts-opt" role="option" aria-selected="${x.id === s.id}" data-cspace="${x.id}">${glyph(x)}<span class="ts-tx"><b class="cs-nmrow">${spName(x)}${spSeal(x, 'sm')}${csMark(x, false)}</b></span>${x.id === s.id ? I.check : ''}</button>`).join('')}</div>` : ''}</div>` : `<span class="c2-sp static">${glyph(s)}${spName(s)}</span>`;
   const closeB = force ? '' : `<button class="iconbtn c2-x" type="button" data-act="comp-close" aria-label="Close composer" title="Close">${I.close}</button>`;
   const ta = `<textarea id="compose-text" rows="2" placeholder="${ask ? 'Make a query' : 'Write a post'}" aria-label="${ask ? 'Query' : 'Post text'}">${esc(st.draft)}</textarea>`;
   const warn = ask && !pay ? `<span class="c2-note warn">${spName(s)} has no extra tokens. Add an API key to ask here.</span>` : '';
@@ -5826,8 +5872,9 @@ const isClosed = s => !!s && (s.vis === 'listed' || s.vis === 'unlisted');
 const relOf = id => st.auth !== 'in' ? 'out' : st.rel[id] || (D.joined.includes(id) ? 'member' : 'none');
 const isMember = id => relOf(id) === 'member' || relOf(id) === 'mod';
 const isModOf = id => st.auth === 'in' && (relOf(id) === 'mod' || (D.joined.includes(id) && !!D.roles[id]));
-const canRead = s => !isClosed(s) || isMember(s.id);
-const visibleSp = s => s.vis !== 'unlisted' || isMember(s.id);
+const canRead = s => !s.deleted && (!isClosed(s) || isMember(s.id));
+/* archived and deleted spaces are left out of browse, search and the switcher (cxArchive) */
+const visibleSp = s => !s.deleted && !s.archived && (s.vis !== 'unlisted' || isMember(s.id));
 const canInvite = s => isModOf(s.id) || (isMember(s.id) && s.invite === 'members');
 D.roles0 = { ...D.roles };
 /* memberships: the spaces you joined, and your relation to closed spaces */
@@ -5845,8 +5892,10 @@ function setRel(id, r) {
   if (r === 'mod') { if (!D.roles[id]) db.put('roles', id, 'Admin'); }
   else if (D.roles[id] && !D.roles0[id]) db.del('roles', id);
 }
-const openReqs = () => st.reqs.filter(r => r.st === 'open');
-const reqCount = id => id === 'replication' && isModOf(id) && isClosed(sp(id)) ? openReqs().length : 0;
+/* join requests are keyed by space (r.sp; records without one belong to #replication-club) */
+const reqSp = r => r.sp || 'replication';
+const openReqs = (id = 'replication') => st.reqs.filter(r => r.st === 'open' && reqSp(r) === id);
+const reqCount = id => isModOf(id) && isClosed(sp(id)) ? openReqs(id).length : 0;
 const policyLabel = s => s.policy === 'invite' ? 'Invite only' : 'Join by request';
 const visLabel = s => s.vis === 'unlisted' ? 'Closed, unlisted' : 'Closed';
 
@@ -5871,7 +5920,7 @@ function csJoinCtl(x) {
   if (r === 'out') return '';
   if (r === 'member' || r === 'mod') return `<button class="btn sm" type="button" data-csleave="${x.id}">Joined</button>`;
   if (r === 'pending') return `<button class="btn sm cs-reqd cs-b" type="button" data-csmyreq="${x.id}">${CI.clock}Requested</button>`;
-  if (r === 'denied') return '<span class="faint cs-small">Declined</span>';
+  if (r === 'denied') return cxDecl(x.id).ready ? `<button class="btn sm primary" type="button" data-csreq="${x.id}">Request</button>` : '<span class="faint cs-small">Declined</span>';
   if (x.policy === 'invite') return '<span class="faint cs-small">Invite only</span>';
   return `<button class="btn sm primary" type="button" data-csreq="${x.id}">Request</button>`;
 }
@@ -5884,7 +5933,7 @@ function csCta(s) {
     const k = 'pend:' + s.id, open = st.csMenu === k;
     return `<div class="cs-mw"><button class="btn cs-reqd cs-b" type="button" data-csmenu="${k}" aria-haspopup="true" aria-expanded="${open}">${CI.clock}Requested${CV}</button>${open ? `<div class="um-scrim cs-scrim"></div><div class="pop cs-pop" role="menu"><button class="um-item" type="button" role="menuitem" data-csmyreq="${s.id}">${I.page}<span>View your request</span></button><button class="um-item" type="button" role="menuitem" data-cswithdraw="${s.id}">${I.close}<span>Withdraw request</span></button></div>` : ''}</div>`;
   }
-  if (r === 'denied') return '<button class="btn" type="button" disabled>Request declined</button>';
+  if (r === 'denied') return cxDecl(s.id).ready ? `<button class="btn primary" type="button" data-csreq="${s.id}">Request to join</button>` : '<button class="btn" type="button" disabled>Request declined</button>';
   if (s.policy === 'invite') return `<span class="cs-invonly">${LOCK}Invite only</span>`;
   return `<button class="btn primary" type="button" data-csreq="${s.id}">Request to join</button>`;
 }
@@ -5936,7 +5985,7 @@ function csHow(s) {
 }
 function csStatusCard(s) {
   const r = relOf(s.id);
-  if (r === 'denied') return `<section class="cs-card cs-denied"><div class="cs-card-h"><b>Your request was declined</b><span class="faint">Nov 15</span></div><p class="muted">The moderators of ${spName(s)} declined your request to join.</p></section>`;
+  if (r === 'denied') return cxDeniedCard(s);
   if (r !== 'pending' || st.pendV !== 'card') return '';
   return `<section class="cs-card cs-status"><div class="cs-card-h">${CI.clock}<b>Request sent ${st.reqAge === 'just now' ? 'just now' : st.reqAge + ' ago'}</b></div><ol class="run-steps"><li class="done">Request sent with your answers</li><li class="cur">A moderator of ${spName(s)} reviews it</li><li>You get a notification with the decision</li></ol><details class="cs-ans"><summary>Your answers</summary>${csAnswers(s)}</details><div class="cs-card-f"><button class="btn sm" type="button" data-cswithdraw="${s.id}">Withdraw request</button></div></section>`;
 }
@@ -5947,7 +5996,7 @@ function csAboutDrawer(s) {
     <div class="note-card"><h3>Rules</h3>${rulesList(s)}</div>
     <div class="note-card"><h3>Moderators</h3>${modsList(s)}</div>
     <div class="note-card"><h3>Pages</h3><p class="cs-acc">${LOCK}<span>${s.pages.length} pages, visible to members.</span></p></div>
-    <div class="note-card"><h3>Token use</h3><p class="cs-acc">${I.agent}<span>Asks use the space’s extra tokens until the monthly limit, then the asker’s own API key.</span></p></div>
+    <div class="note-card"><h3>Token use</h3><p class="cs-acc">${I.agent}<span>${tokenUse(s)}</span></p></div>
   </div></aside>`;
 }
 const csSkeleton = () => `<div class="cs-skel" aria-hidden="true">${[78, 64, 90, 55, 72, 60].map((w, i) => `<div class="cs-sk"><i class="dot"></i><div><i style="width:${w}%"></i><i style="width:${w - 22}%"></i>${i % 2 ? '' : `<i style="width:${w - 40}%"></i>`}</div></div>`).join('')}</div>`;
@@ -6016,7 +6065,7 @@ function layoutInvite() {
 /* ---------- notifications ("Notifications" control) ---------- */
 function ntItems() {
   const n = reqCount('replication');
-  const req = n ? [{ id: 'nreq', k: 'reqs', sp: 'replication', age: openReqs()[0].age, unread: !st.reqSeen, text: `${n} ${n === 1 ? 'person' : 'people'} asked to join <b>${spName(sp('replication'))}</b>` }] : [];
+  const req = n ? [{ id: 'nreq', k: 'reqs', sp: 'replication', age: openReqs('replication')[0].age, unread: !st.reqSeen, text: `${n} ${n === 1 ? 'person' : 'people'} asked to join <b>${spName(sp('replication'))}</b>` }] : [];
   /* Moderators get one notification per space with open reports, like requests. */
   const reps = D.spaces.filter(x => repCount(x.id)).map(x => { const l = openReps(x.id), k = l.length; return { id: 'nrep:' + x.id, k: 'reps', sp: x.id, age: l[0].age, unread: !st.repSeen, text: `${k} open report${k === 1 ? '' : 's'} in <b>${spName(x)}</b>` }; });
   return [...req, ...reps, ...st.notifs];
@@ -6077,7 +6126,7 @@ function rqBulk(list, v) {
   return `<div class="rq-bulk"><label class="cs-chk"><input type="checkbox" data-rqall="1" ${n && n === list.length ? 'checked' : ''} aria-label="Select all requests"><span>${n ? `${n} selected` : 'Select all'}</span></label><span class="grow"></span>${n ? `<button class="btn sm" type="button" data-rq="bulk-no">Decline ${n}</button><button class="btn sm primary" type="button" data-rq="bulk-ok">Approve ${n}</button>` : `<span class="faint cs-small">${list.length} waiting · newest first</span>`}${rqViewSeg(v)}</div>`;
 }
 function csQueue(s) {
-  const list = openReqs(), done = st.reqs.filter(r => r.st !== 'open'), v = st.queueV;
+  const list = openReqs(s.id), done = st.reqs.filter(r => r.st !== 'open' && reqSp(r) === s.id), v = st.queueV;
   const decided = done.length ? `<section class="cs-sec rq-decided"><h3>Decided today</h3>${done.map(r => `<div class="rq-drow">${avatar(r.u, 'sm')}<span class="rq-dtx"><b>${r.u}</b> <span class="faint">${r.st === 'approved' ? 'Approved by you' : 'Declined by you'}</span></span>${r.st === 'declined' ? `<button class="tlink" type="button" data-rq="undo:${r.u}">Undo</button>` : ''}</div>`).join('')}</section>` : '';
   if (!list.length) return `<div class="cs-empty"><p class="muted">No requests waiting. New requests appear here and in your notifications.</p></div>${decided}`;
   const body = v === 'table' ? `<div class="rq-tw"><table class="rq-table"><thead><tr><th></th><th>Applicant</th><th>${esc(s.qs[0] ? s.qs[0].q : 'Answer')}</th><th>Requested</th><th></th></tr></thead><tbody>${list.map(r => `<tr class="${st.rqSel.has(r.u) ? 'sel' : ''}"><td>${rqChk(r)}</td><td><span class="rq-tn">${avatar(r.u, 'sm')}<span>${au(r.u)}${rqFlags(r)}</span></span></td><td class="rq-tans">${esc(r.a[0])}${r.a[1] ? `<small class="faint">${esc(r.a[1])}</small>` : ''}</td><td class="faint num">${r.age}</td><td>${rqActs(r)}</td></tr>`).join('')}</tbody></table></div>`
@@ -6086,8 +6135,8 @@ function csQueue(s) {
 }
 /* members */
 function memFor(s) {
-  if (s.id === 'replication') return st.mem;
-  return st.memOther[s.id] || [{ u: ME.u, role: D.roles[s.id] === 'Owner' ? 'owner' : D.roles[s.id] === 'Moderator' ? 'mod' : isModOf(s.id) ? 'admin' : 'member', since: s.created }, ...s.mods.filter(m => m[0] !== ME.u).map(([u, r]) => ({ u, role: r === 'owner' || r === 'admin' ? r : 'mod', since: s.created })), ...['hal_b', 'jun.park', 'oduya'].filter(u => !s.mods.some(m => m[0] === u)).map(u => ({ u, role: 'member', since: 'Nov 2026' }))];
+  if (s.id === 'replication') return cxWithMe(s, st.mem);
+  return cxWithMe(s, st.memOther[s.id] || [{ u: ME.u, role: D.roles[s.id] === 'Owner' ? 'owner' : D.roles[s.id] === 'Moderator' ? 'mod' : isModOf(s.id) ? 'admin' : 'member', since: s.created }, ...s.mods.filter(m => m[0] !== ME.u).map(([u, r]) => ({ u, role: r === 'owner' || r === 'admin' ? r : 'mod', since: s.created })), ...['hal_b', 'jun.park', 'oduya'].filter(u => !s.mods.some(m => m[0] === u)).map(u => ({ u, role: 'member', since: 'Nov 2026' }))].slice(0, Math.max(1, s.members)));
 }
 /* replace a space's member list */
 const setMembers = (s, list) => { if (s.id === 'replication') st.mem = list; else db.put('memOther', s.id, list); };
@@ -6098,13 +6147,13 @@ function csMembers(s) {
   const row = m => {
     const me = m.u === ME.u, own = m.role === 'owner';
     const roleC = own ? '<span class="mem-role">Owner</span>' : me || !canRole ? `<span class="mem-role">${ROLES.find(r => r[0] === m.role)[1]}${me ? ' (you)' : ''}</span>` : `<span class="mem-dd"><span class="sr-only" id="dl-role-${m.u}">Role of ${m.u}</span>${ddSel('role.' + m.u, ROLES, m.role, 'dl-role-' + m.u)}</span>`;
-    const acts = own || me ? '' : `<button class="tlink" type="button" data-memrm="${m.u}">Remove</button><button class="tlink danger-l" type="button" data-memban="${m.u}">Ban</button>`;
+    const acts = (meRole === 'owner' && m.role === 'admin' ? `<button class="tlink" type="button" data-cxowner="${m.u}">Make owner</button>` : '') + (cxCanAct(meRole, m) ? `<button class="tlink" type="button" data-memrm="${m.u}">Remove</button><button class="tlink danger-l" type="button" data-memban="${m.u}">Ban</button>` : '');
     return `<div class="mem-row" data-mname="${m.u}">${avatar(m.u)}<div class="mem-tx">${au(m.u, NAMES[m.u] || m.u)}<small class="faint">${m.u} · joined ${m.since}</small></div>${roleC}<span class="mem-acts">${acts}</span></div>`;
   };
-  const banned = s.id === 'replication' ? st.banned : [];
+  const banned = bansOf(s.id);
   return `<div class="mem-top"><label class="search cs-sq">${I.search}<input id="cs-memq" type="search" placeholder="Find a member" aria-label="Find a member" autocomplete="off"></label><span class="faint cs-small num">Showing ${list.length} of ${fmt(s.members)}</span></div>
     <div class="mem-list">${list.map(row).join('')}</div>
-    <p class="cs-fine">${MI.mods}<span>Moderators can approve requests and remove members. Admins can also change roles and settings. ${canRole ? '' : 'Only admins can change roles.'}</span></p>
+    <p class="cs-fine">${MI.mods}<span>Moderators can approve requests and remove or ban members. Admins can also remove or ban moderators and admins, and change roles and settings. Only the owner can transfer ownership. ${canRole ? '' : 'Only admins can change roles.'}</span></p>
     ${banned.length ? `<section class="cs-sec"><h3>Banned</h3><p class="muted cs-small">Banned people cannot request to join or use invite links. Their threads and asks will remain in the space.</p>${banned.map(b => `<div class="mem-row">${avatar(b.u, 'sm')}<div class="mem-tx"><b>${b.u}</b><small class="faint">Banned ${b.when}</small></div><button class="tlink" type="button" data-memunban="${b.u}">Unban</button></div>`).join('')}</section>` : ''}`;
 }
 /* invites ("Invite flow" control decides what the Invite button opens; this tab always exists) */
@@ -6132,17 +6181,23 @@ on(document, 'keydown', e => {
     list[n].focus({ preventScroll: true });
   }
 }, true);
-function csLinkMaker() {
-  return `<div class="cs-linkmk"><div class="fld"><span id="dl-lexp">Expires</span>${ddSel('lexp', [['1', 'After 1 day'], ['7', 'After 7 days'], ['30', 'After 30 days'], ['0', 'Never']], st.linkExp, 'dl-lexp')}</div><button class="btn primary" type="button" data-cslink="new">Create link</button></div>`;
+function csLinkMaker(s) {
+  return `<div class="cs-linkmk"><div class="fld"><span id="dl-lexp">Expires</span>${ddSel('lexp', [['1', 'After 1 day'], ['7', 'After 7 days'], ['30', 'After 30 days'], ['0', 'Never']], st.linkExp, 'dl-lexp')}</div><button class="btn primary" type="button" data-cslink="new" data-sp="${s.id}">Create link</button></div>`;
 }
+const linkRow = l => `<div class="ak-row${l.dead ? ' bad' : ''}${st.linkNew === l.id ? ' ak-new' : ''}"><span class="ts-ic">${CI.link}</span><div class="ak-tx"><b>session.app/i/${l.code}</b><small>Created by ${l.by} · ${linkMeta(l)}</small></div>${l.dead ? '<span class="ks bad">Inactive</span>' : `<button class="btn sm" type="button" data-cslink="copy:${l.id}">Copy</button><button class="btn sm" type="button" data-cslink="revoke:${l.id}">Revoke</button>`}</div>`;
 function csInvites(s) {
-  const links = st.links.map(l => `<div class="ak-row${l.dead ? ' bad' : ''}${st.linkNew === l.id ? ' ak-new' : ''}"><span class="ts-ic">${CI.link}</span><div class="ak-tx"><b>session.app/i/${l.code}</b><small>Created by ${l.by} · ${linkMeta(l)}</small></div>${l.dead ? '<span class="ks bad">Inactive</span>' : `<button class="btn sm" type="button" data-cslink="copy:${l.id}">Copy</button><button class="btn sm" type="button" data-cslink="revoke:${l.id}">Revoke</button>`}</div>`).join('');
-  return `<section class="cs-sec"><h3>Invite links</h3><p class="muted cs-small">Each link works once: the first person who opens it joins without a request${s.vis === 'unlisted' ? '. Links are the only way to find this unlisted space' : ''}.</p>${csLinkMaker()}<div class="ak-list">${links || '<div class="ak-row"><span class="muted">No links yet.</span></div>'}</div></section>`;
+  const links = linksOf(s.id).map(linkRow).join('');
+  return `<section class="cs-sec"><h3>Invite links</h3><p class="muted cs-small">Each link works once: the first person who opens it joins without a request${s.vis === 'unlisted' ? '. Links are the only way to find this unlisted space' : ''}.</p>${csLinkMaker(s)}<div class="ak-list">${links || '<div class="ak-row"><span class="muted">No links yet.</span></div>'}</div></section>`;
 }
+/* Moderators see the newest active link and a way to Manage › Invites. Members see only the links
+   they created, and create or revoke them here; they never reach Manage. Both can invite by handle. */
 function csInviteDlg(s) {
-  const l = st.links.find(linkLive);
+  const mod = isModOf(s.id), l = linksOf(s.id).find(linkLive);
+  const mine = linksOf(s.id).filter(x => x.by === ME.u && linkLive(x));
+  const linkSec = mod ? `<div class="cs-sub"><b>Invite link</b>${l ? `<div class="cs-url"><input type="text" readonly value="session.app/i/${l.code}" aria-label="Invite link"><button class="btn" type="button" data-cslink="copy:${l.id}">Copy</button></div><p class="cs-fine">${CI.link}<span>${linkMeta(l)}. The first person who opens it joins without a request.</span></p>` : '<p class="muted">No active link.</p>'}<button class="tlink cs-small" type="button" data-csmanage="${s.id}" data-mgto="invites">Create or revoke links</button></div>`
+    : `<div class="cs-sub"><b>Your invite links</b><div class="ak-list cx-mylinks">${mine.map(linkRow).join('') || '<div class="ak-row"><span class="muted cs-small">You have no active invite links.</span></div>'}</div><p class="cs-fine">${CI.link}<span>Each link works once and expires after 7 days. You see only the links you created.</span></p><button class="btn sm cs-b cx-mklink" type="button" data-cslink="new" data-sp="${s.id}" data-exp="7">${PLUS}Create a link</button></div>`;
   return `<div class="modal-scrim"><div class="modal cs-m" role="dialog" aria-modal="true" aria-labelledby="cs-dt"><div class="modal-h"><h3 id="cs-dt">Invite people to ${spName(s)}</h3><button class="iconbtn" type="button" data-act="modal-close" aria-label="Close">${I.close}</button></div>
-    <div class="cs-sub"><b>Invite link</b>${l ? `<div class="cs-url"><input type="text" readonly value="session.app/i/${l.code}" aria-label="Invite link"><button class="btn" type="button" data-cslink="copy:${l.id}">Copy</button></div><p class="cs-fine">${CI.link}<span>${linkMeta(l)}. The first person who opens it joins without a request.</span></p>` : '<p class="muted">No active link.</p>'}<button class="tlink cs-small" type="button" data-csmanage="${s.id}" data-mgto="invites">Create or revoke links</button></div>
+    ${linkSec}${cxHandleSec(s)}
     ${s.vis === 'unlisted' ? `<p class="cs-fine">${CI.eyeOff}<span>${spName(s)} is unlisted, so invites are the only way people can find it.</span></p>` : ''}</div></div>`;
 }
 function csInvite(id) {
@@ -6177,10 +6232,16 @@ function policyPicker(d) {
 function qsEditor(d, note = true) {
   return `<div class="cs-qs">${d.qs.map((q, i) => `<div class="cs-qrow"><span class="ts-n num">${i + 1}</span><input id="cs-q-${i}" type="text" value="${esc(q.q)}" placeholder="Question for applicants${q.req ? '' : ' (Optional)'}" aria-label="Question ${i + 1}"><label class="st-req"><span>Required</span><span class="ts-sw"><input type="checkbox" data-csqreq="${i}" ${q.req ? 'checked' : ''} aria-label="Question ${i + 1} is required"><span class="sw-track" aria-hidden="true"></span></span></label><button class="iconbtn" type="button" data-csqrm="${i}" aria-label="Remove question ${i + 1}" title="Remove">${I.close}</button></div>`).join('')}${d.qs.length < 3 ? `<button class="btn sm cs-b st-add" type="button" data-csqadd="1">${PLUS}Add a question</button>` : '<p class="faint cs-small">Up to 3 questions.</p>'}${note ? '<p class="cs-fine">Applicants see these on the request form. Moderators see the answers in the review queue.</p>' : ''}</div>`;
 }
+/* Token use: extra tokens from one of your API keys up to a monthly limit, or no extra tokens
+   (every ask uses the asker's own key). With no valid key only "No extra tokens" can be chosen. */
 function payPicker(d) {
-  const keys = st.userKeys.filter(k => k.valid);
-  return `${d.id && sp(d.id).byok && sp(d.id).byok !== ME.u ? `<p class="cs-fine">${MI.key}<span>Paid with ${sp(d.id).byok}’s API key, up to ${fmtT(sp(d.id).budget)} tokens a month. Only ${sp(d.id).byok} can change the key.</span></p>` : ''}
-    ${!(d.id && sp(d.id).byok && sp(d.id).byok !== ME.u) ? `<div class="cs-payk"><div class="fld"><span id="dl-key">Key for the extra tokens</span>${ddSel('key', keys.map(k => [k.id, `${k.label} (${keyMask(k)})`]), d.key, 'dl-key')}</div><div class="fld"><span id="dl-limit">Monthly limit</span>${ddSel('limit', ['2', '8', '20'].map(v => [v, `${v}M tokens`]), d.limit, 'dl-limit')}</div></div>` : ''}
+  const keys = payKeys(), other = d.id && sp(d.id).byok && sp(d.id).byok !== ME.u, mode = payMode(d);
+  const lims = [...new Set(['2', '8', '20', String(d.limit)])].sort((a, b) => a - b);
+  const keyRow = optRow('data-cxpay', 'key', mode === 'key', 'Extra tokens from your API key', keys.length ? 'Asks use the space’s tokens up to the monthly limit, then the asker’s own API key.' : 'Needs an API key.', !keys.length);
+  const noneRow = optRow('data-cxpay', 'none', mode === 'none', 'No extra tokens', 'Every ask uses the asker’s own API key.', false);
+  const pick = `<div class="ts-list cs-opts" role="radiogroup" aria-label="Token use">${keyRow}${noneRow}</div>${!keys.length ? `<div class="cs-strip cx-nokey">${MI.key}<span class="grow">You have no API keys. Add one to give ${d.id ? spName(sp(d.id)) : 'the space'} extra tokens.</span><button class="btn sm" type="button" data-cxaddkey="1">Add a key</button></div>` : ''}`;
+  const dds = mode === 'key' ? `<div class="cs-payk"><div class="fld"><span id="dl-key">Key for the extra tokens</span>${ddSel('key', keys.map(k => [k.id, `${k.label} (${keyMask(k)})`]), payKey(d), 'dl-key')}</div><div class="fld"><span id="dl-limit">Monthly limit</span>${ddSel('limit', lims.map(v => [v, `${v}M tokens`]), String(d.limit), 'dl-limit')}</div></div>` : '';
+  return `${other ? `<p class="cs-fine">${MI.key}<span>Paid with ${sp(d.id).byok}’s API key, up to ${fmtT(sp(d.id).budget)} tokens a month. Only ${sp(d.id).byok} can change the key.</span></p>` : pick + dds}
     ${d.vis !== 'open' ? `<p class="cs-fine">${LOCK}<span>Who pays does not change who can read. Answers to asks in a closed space are visible to members only.</span></p>` : ''}`;
 }
 /* Space settings: each section's title and description sit in a left column.
@@ -6190,7 +6251,7 @@ function payPicker(d) {
 const stSec = (title, sub, body) => `<section class="st-sec"><div class="st-head"><h3>${title}</h3>${sub ? `<p>${sub}</p>` : ''}</div><div class="st-body">${body}</div></section>`;
 const csDirty = () => !!st.set && JSON.stringify(st.set) !== st.set0;
 function csSettings(s) {
-  if (!st.set || st.set.id !== s.id) { st.set = { id: s.id, vis: s.vis || 'open', policy: s.policy || 'request', qs: structuredClone(s.qs && s.qs.length ? s.qs : [{ q: '', req: true }]), invite: s.invite || 'mods', key: 'k1', limit: '8', faq: !!s.faq, topics: structuredClone(topicsOf(s)), postsOff: !!s.postsOff, plain: !!s.plain, desc: s.desc, rules: [...s.rules], pageEdit: s.pageEdit || 'mods' }; st.set0 = JSON.stringify(st.set); }
+  if (!st.set || st.set.id !== s.id) { st.set = { id: s.id, vis: s.vis || 'open', policy: s.policy || 'request', qs: structuredClone(s.qs && s.qs.length ? s.qs : [{ q: '', req: true }]), invite: s.invite || 'mods', ...cxSetDraft(s), faq: !!s.faq, topics: structuredClone(topicsOf(s)), postsOff: !!s.postsOff, plain: !!s.plain, desc: s.desc, rules: [...s.rules], pageEdit: s.pageEdit || 'mods' }; st.set0 = JSON.stringify(st.set); }
   const d = st.set, dirty = csDirty();
   /* Order: Visibility, Joining, Questions for applicants, Landing page, Topics, Posts, Domain,
      What this space doesn't cover, Token use. */
@@ -6201,7 +6262,7 @@ function csSettings(s) {
     + stSec('Token use', 'Asks use the space’s tokens up to a monthly limit, then the asker’s own API key. Posts are free.', payPicker(d));
   const btns = `<button class="btn ghost" type="button" data-csset="reset" ${dirty ? '' : 'disabled'}>Discard changes</button><button class="btn primary" type="button" data-csset="save" ${dirty ? '' : 'disabled'}>Save changes</button>`;
   const foot = `${dirty ? `<div class="st-barw${csSettings.endVis ? ' off' : ''}"><div class="st-bar" role="region" aria-label="Unsaved changes"><span>You have unsaved changes.</span><span class="st-bar-a">${btns}</span></div></div>` : ''}<div class="cs-setf">${btns}</div>`;
-  return `<div class="cs-set st-side">${s.openOn ? `<div class="cs-strip warn">${GLOBE}<span class="grow">Scheduled: ${spName(s)} becomes open on ${s.openOn}. Members were notified.</span><button class="btn sm" type="button" data-csset="cancel-open">Cancel the change</button></div>` : ''}${secs}${foot}</div>`;
+  return `<div class="cs-set st-side">${cxArchStrip(s)}${s.openOn ? `<div class="cs-strip warn">${GLOBE}<span class="grow">Scheduled: ${spName(s)} becomes open on ${s.openOn}. Members were notified.</span><button class="btn sm" type="button" data-csset="cancel-open">Cancel the change</button></div>` : ''}${secs}${foot}${cxDanger(s)}</div>`;
 }
 function csApplySettings(s0, d) {
   /* Deleted topics, and topics left without a name, move their threads to Other. */
@@ -6210,7 +6271,7 @@ function csApplySettings(s0, d) {
     if (d.vis === 'open') { delete s.vis; } else s.vis = d.vis;
     Object.assign(s, { policy: d.policy, qs: d.qs.filter(q => q.q.trim()), invite: d.invite });
     Object.assign(s, { faq: d.faq, topics: tps, postsOff: d.postsOff, plain: d.plain && isVer(s) });
-    if (!s.byok) { s.byok = ME.u; s.budget = (+d.limit || 8) * 1e6; s.pct = s.used / s.budget; }
+    cxApplyIdent(s, d); cxApplyPay(s, d);
     /* About: description and rules; a rules change keeps the previous rules for "See changes" */
     if (d.desc != null) s.desc = d.desc.trim() || s.desc;
     if (d.rules) { const rules = d.rules.map(r => r.trim()).filter(Boolean); if (rules.join('\n') !== s.rules.join('\n')) { s.rulesPrev = s.rules.slice(); s.rules = rules; s.rulesAt = 'just now'; s.rulesBy = ME.u; } }
@@ -6256,7 +6317,7 @@ function crPreview(c) {
   const page = `<div class="cr-pv-page"><div class="cr-pv-h">${csGlyph(fake, 'lg')}<div><b>#${name}</b><small>${vis} · 1 member · ${how}</small></div></div><p class="cr-pv-d">${desc}</p><span class="btn sm${cta === 'Invite only' ? '' : ' primary'}">${cta}</span>${rules.length ? `<div class="cr-pv-rules"><small>Rules</small><ol>${rules.slice(0, 3).map(x => `<li>${esc(x)}</li>`).join('')}</ol>${rules.length > 3 ? `<small class="faint">and ${rules.length - 3} more</small>` : ''}</div>` : ''}${closed ? `<p class="cr-pv-note">${LOCK}<span>Threads are visible to members only.</span></p>` : ''}</div>`;
   const qs = c.qs.filter(q => q.q.trim());
   const form = closed && c.policy === 'request' ? `<div class="cr-pv-sec"><span class="cr-pv-l">Request form</span>${qs.length ? `<ol class="cr-pv-qs">${qs.map(q => `<li><span>${esc(q.q)}</span><em>${q.req ? 'Required' : 'Optional'}</em></li>`).join('')}</ol>` : '<p class="cr-pv-note">No questions. People request with one click.</p>'}</div>` : '';
-  const pay = `Asks use the space’s extra tokens, up to ${c.limit}M tokens a month, then the asker’s own API key. Posts use no tokens.`;
+  const pay = payMode(c) === 'none' ? 'No extra tokens: every ask uses the asker’s own API key. Posts use no tokens.' : `Asks use the space’s extra tokens, up to ${c.limit}M tokens a month, then the asker’s own API key. Posts use no tokens.`;
   return `<aside class="cs-crprev" aria-label="Preview"><h3 class="cr-pv-t">Preview</h3>
     <div class="cr-pv-sec"><span class="cr-pv-l">In browse</span>${browse}</div>
     <div class="cr-pv-sec"><span class="cr-pv-l">${closed ? 'Space page, for people who are not members' : 'Space page'}</span>${page}</div>
@@ -6281,10 +6342,12 @@ function csCreate() {
   const id = 'sp-' + name, rules = c.rules.split('\n').map(x => x.trim()).filter(Boolean);
   const s = { id, name, title: name, av: 3, members: 1, online: 1, posts: 0, used: 0, budget: (+c.limit || 8) * 1e6, created: 'Nov 2026', desc: c.desc.trim() || 'No description yet.', rules: rules.length ? rules : ['Be specific in asks.'], pages: [], mods: [], pct: 0 };
   if (c.vis !== 'open') Object.assign(s, { vis: c.vis, policy: c.policy, qs: c.qs.filter(q => q.q.trim()), invite: c.invite });
-  s.byok = ME.u; s.faq = !!c.faq; s.topics = [];
+  cxApplyPay(s, c); s.faq = !!c.faq; s.topics = [];
   db.push('spaces', s);
   db.put('roles', id, 'Owner'); db.put('roles0', id, 'Owner');
   setRel(id, 'mod');
+  /* a new space starts with its creator as owner and only member */
+  setMembers(s, [{ u: ME.u, role: 'owner', since: 'Nov 2026' }]);
   Object.assign(st, { subPage: null, home: false, space: id, thread: null, created: id, cr: CR0() });
 }
 
@@ -6350,7 +6413,7 @@ function csModal() {
   }
   if (k === 'cs-decline') {
     const ids = st.declIds, one = ids.length === 1;
-    return dlg(one ? `Decline the request from ${ids[0]}?` : `Decline ${ids.length} requests?`, `<p class="muted">${one ? `${ids[0]} gets` : 'Each applicant gets'} a notification that the request was declined.</p>`, `${cancelB()}<button class="btn danger" type="button" data-csdecl="ok">Decline</button>`);
+    return dlg(one ? `Decline the request from ${ids[0]}?` : `Decline ${ids.length} requests?`, `<p class="muted">${one ? `${ids[0]} gets` : 'Each applicant gets'} a notification that the request was declined${one ? '' : ', with the same note'}. They can request again after 14 days.</p><label class="fld"><span>Note to ${one ? esc(ids[0]) : 'the applicants'} <small class="faint">optional</small></span><textarea id="cx-declnote" class="cs-ta" rows="2" placeholder="For example, what to include next time">${esc(st.cxDeclNote)}</textarea></label>`, `${cancelB()}<button class="btn danger" type="button" data-csdecl="ok">Decline</button>`);
   }
   if (k === 'cs-rm' || k === 'cs-ban') {
     const ban = k === 'cs-ban', sx = sp(st.mgSpace);
@@ -6448,28 +6511,28 @@ function csClick(t) {
   if ((b = d('[data-mgtab]'))) { st.mgTab = b.dataset.mgtab; if (st.mgTab === 'requests') st.reqSeen = true; return go(); }
   /* review queue */
   if ((b = d('[data-rqsel]'))) { stToggle('rqSel', b.dataset.rqsel); return go(); }
-  if ((b = d('[data-rqall]'))) { const list = openReqs(), all = list.every(r => st.rqSel.has(r.u)); st.rqSel = new Set(all ? [] : list.map(r => r.u)); return go(); }
+  if ((b = d('[data-rqall]'))) { const list = openReqs(st.mgSpace), all = list.every(r => st.rqSel.has(r.u)); st.rqSel = new Set(all ? [] : list.map(r => r.u)); return go(); }
   if ((b = d('[data-rqexp]'))) { stToggle('rqExp', b.dataset.rqexp); return go(); }
   if ((b = d('[data-rqview]'))) { st.queueV = b.dataset.rqview; return go(); }
   if ((b = d('[data-rq]'))) {
     const [v, u] = b.dataset.rq.split(':');
-    const sel = openReqs().filter(r => st.rqSel.has(r.u));
+    const sel = openReqs(st.mgSpace).filter(r => st.rqSel.has(r.u));
     if (v === 'ok' || v === 'bulk-ok') { st.apprIds = v === 'ok' ? [u] : sel.map(r => r.u); st.modal = 'cs-approve'; }
     if (v === 'no' || v === 'bulk-no') { st.declIds = v === 'no' ? [u] : sel.map(r => r.u); st.modal = 'cs-decline'; }
     if (v === 'undo') db.update('reqs', u, r => { if (r.st === 'declined') r.st = 'open'; });
     return go();
   }
   if ((b = d('[data-rqcur]')) && !t.closest('input, button')) { st.rqCur = b.dataset.rqcur; return go(); }
-  if (d('[data-csappr]')) { const ids = st.apprIds; st.reqs = st.reqs.map(r => ids.includes(r.u) ? { ...r, st: 'approved' } : r); ids.forEach(u => stToggle('rqSel', u, false)); st.modal = null; toast(ids.length === 1 ? `Approved ${ids[0]}. They can read ${spName(sp(st.mgSpace))} now.` : `Approved ${ids.length} requests.`); return go(); }
-  if (d('[data-csdecl]')) { st.reqs = st.reqs.map(r => st.declIds.includes(r.u) ? { ...r, st: 'declined' } : r); st.declIds.forEach(u => stToggle('rqSel', u, false)); const n = st.declIds.length; st.modal = null; toast(n === 1 ? `Declined ${st.declIds[0]}.` : `Declined ${n} requests.`, n === 1 ? 'undo:' + st.declIds[0] : '', 'Undo'); return go(); }
+  if (d('[data-csappr]')) { const ids = st.apprIds, sid = st.mgSpace; st.reqs = st.reqs.map(r => ids.includes(r.u) && reqSp(r) === sid ? { ...r, st: 'approved' } : r); cxAddMembers(sp(sid), ids); ids.forEach(u => stToggle('rqSel', u, false)); st.modal = null; toast(ids.length === 1 ? `Approved ${ids[0]}. They can read ${spName(sp(st.mgSpace))} now.` : `Approved ${ids.length} requests.`); return go(); }
+  if (d('[data-csdecl]')) { const why = st.cxDeclNote.trim(), sid = st.mgSpace; st.cxDeclNote = ''; st.reqs = st.reqs.map(r => st.declIds.includes(r.u) && reqSp(r) === sid ? { ...r, st: 'declined', why } : r); st.declIds.forEach(u => stToggle('rqSel', u, false)); const n = st.declIds.length; st.modal = null; toast(n === 1 ? `Declined ${st.declIds[0]}.` : `Declined ${n} requests.`, n === 1 ? 'undo:' + st.declIds[0] : '', 'Undo'); return go(); }
   /* members */
   if ((b = d('[data-memrm]'))) { st.modal = 'cs-rm:' + b.dataset.memrm; return go(); }
   if ((b = d('[data-memban]'))) { st.modal = 'cs-ban:' + b.dataset.memban; return go(); }
-  if ((b = d('[data-memunban]'))) { st.banned = st.banned.filter(x => x.u !== b.dataset.memunban); toast(`Unbanned ${b.dataset.memunban}. They can request to join again.`); return go(); }
+  if ((b = d('[data-memunban]'))) { const sid = st.mgSpace; st.banned = st.banned.filter(x => x.u !== b.dataset.memunban || banSp(x) !== sid); toast(`Unbanned ${b.dataset.memunban}. They can request to join again.`); return go(); }
   if ((b = d('[data-csmem-ok]'))) {
     const [k, u] = b.dataset.csmemOk.split(':'), s = sp(st.mgSpace);
-    setMembers(s, memFor(s).filter(m => m.u !== u));
-    if (k === 'cs-ban' && s.id === 'replication') db.unshift('banned', { u, when: 'today' });
+    if (memFor(s).some(m => m.u === u)) { setMembers(s, memFor(s).filter(m => m.u !== u)); spEdit(s.id, x => { x.members = Math.max(1, x.members - 1); }); }
+    if (k === 'cs-ban' && !bansOf(s.id).some(x => x.u === u)) db.unshift('banned', { id: s.id + ':' + u, sp: s.id, u, when: 'today' });
     st.modal = null; toast(k === 'cs-ban' ? `Banned ${u}.` : `Removed ${u}.`); return go();
   }
   /* invites */
@@ -6479,7 +6542,7 @@ function csClick(t) {
   if ((b = d('[data-ddv]'))) { const [id, v] = b.dataset.ddv.split(/:(.*)/s), [k, arg] = id.split(/\.(.*)/s); DD_SET[k](v, arg); st.dd = null; renderAll(); const f = document.querySelector(`[data-dd="${id}"]`); if (f) f.focus({ preventScroll: true }); return true; }
   if ((b = d('[data-cslink]'))) {
     const [v, id] = b.dataset.cslink.split(':');
-    if (v === 'new') { const code = Math.random().toString(36).slice(2, 7); const exp = { 1: 'Nov 17', 7: 'Nov 23', 30: 'Dec 16', 0: '' }[st.linkExp]; const l = { id: 'l' + code, code, by: ME.u, exp }; db.unshift('links', l); st.linkNew = l.id; toast(`Link created: session.app/i/${code}`); }
+    if (v === 'new') { const code = Math.random().toString(36).slice(2, 7); const exp = { 1: 'Nov 17', 7: 'Nov 23', 30: 'Dec 16', 0: '' }[b.dataset.exp || st.linkExp]; const l = { id: 'l' + code, code, by: ME.u, exp, sp: b.dataset.sp || st.mgSpace }; db.unshift('links', l); st.linkNew = l.id; toast(`Link created: session.app/i/${code}`); }
     if (v === 'copy') { const l = st.links.find(x => x.id === id); toast(`Copied session.app/i/${l.code}`); }
     if (v === 'revoke') { st.linkGone = st.links.find(x => x.id === id); db.remove('links', id); toast('Link revoked. People who already joined with it stay members.', 'undo-link', 'Undo'); }
     renderAll(); st.linkNew = null; return true;
@@ -6504,7 +6567,7 @@ function csClick(t) {
   if ((b = d('[data-csconf]'))) {
     const s = sp(st.mgSpace), dr = st.set;
     if (b.dataset.csconf === 'closed') { csApplySettings(s, dr); setRel(s.id, 'mod'); toast(`${spName(s)} is closed. ${st.visKeep === 'keep' ? 'Earlier threads stay public.' : 'All threads are members-only.'}`); }
-    else { st.reqs = st.reqs.map(r => r.st === 'open' ? { ...r, st: 'approved' } : r); csApplySettings(s, dr); toast(`${spName(s)} is open.`); }
+    else { cxAddMembers(s, openReqs(s.id).map(r => r.u)); st.reqs = st.reqs.map(r => r.st === 'open' && reqSp(r) === s.id ? { ...r, st: 'approved' } : r); csApplySettings(s, dr); toast(`${spName(s)} is open.`); }
     st.modal = null; return go();
   }
   if ((b = d('[data-sub="create"]'))) { Object.assign(st, NAVBASE(), { subPage: 'create', cr: CR0() }); return go(); }
@@ -6911,7 +6974,7 @@ function itemOf(key) {
 }
 function itemMenu(key, cls = '') {
   const open = st.imenu === key;
-  return `<span class="sf-imw ${cls}"><button class="act sf-im" type="button" data-imenu="${key}" aria-haspopup="true" aria-expanded="${open}" aria-label="More actions" title="More">${SFI.more}</button>${open ? `<div class="pop cs-pop sf-ipop" role="menu"><button class="um-item" type="button" role="menuitem" data-sfreport="${key}">${SFI.flag}<span>Report a problem</span></button><button class="um-item" type="button" role="menuitem" data-sfcopy="${key}">${CI.link}<span>Copy link</span></button></div>` : ''}</span>`;
+  return `<span class="sf-imw ${cls}"><button class="act sf-im" type="button" data-imenu="${key}" aria-haspopup="true" aria-expanded="${open}" aria-label="More actions" title="More">${SFI.more}</button>${open ? `<div class="pop cs-pop sf-ipop" role="menu"><button class="um-item" type="button" role="menuitem" data-sfreport="${key}">${SFI.flag}<span>Report a problem</span></button><button class="um-item" type="button" role="menuitem" data-sfcopy="${key}">${CI.link}<span>Copy link</span></button>${cxModItems(key)}</div>` : ''}</span>`;
 }
 /* Placeholder for an item a moderator hid or removed. Moderators can show a hidden item again. */
 function modPh(key, noun) {
@@ -6937,7 +7000,7 @@ function csReports(s) {
   const list = openReps(s.id), done = st.reports.filter(r => r.sp === s.id && r.st !== 'open');
   const card = r => { const it = itemOf(r.key), pid = D.posts.indexOf(it.p), ms = modOf(r.key); return `<article class="rq-card sf-rcard"><div class="sf-rc-h"><span class="sf-why">${SFI.flag}${repWhy(r.why)}</span><span class="faint cs-small">${it.noun} · reported ${r.age === 'just now' ? 'just now' : r.age + ' ago'}</span></div>
     <div class="sf-rq"><span class="faint cs-small">${it.k === 'a' || it.k === 'f' ? 'Agent answer' : esc(it.by)} in <button class="tlink" type="button" data-open="${pid}">${esc(clip(it.p.q, 90))}</button></span><p>${esc(clip(it.text, 220))}</p>${ms ? `<span class="ks bad">${ms === 'hidden' ? 'Hidden' : 'Removed'}</span>` : ''}</div>
-    <div class="sf-rby">${avatar(r.by, 'sm')}<span><span class="faint">Reported by </span><b>${esc(r.by === ME.u ? 'you' : r.by)}</b>${r.note ? `<span class="sf-rnote">“${esc(r.note)}”</span>` : '<span class="faint"> · no note</span>'}</span></div>
+    <div class="sf-rby">${avatar(r.by, 'sm')}<span><span class="faint">Reported by </span><b>${esc(r.by === ME.u ? 'you' : r.by)}</b>${r.note ? `<span class="sf-rnote">“${esc(r.note)}”</span>` : '<span class="faint"> · no note</span>'}</span></div>${cxRepAuthor(s, it)}
     <div class="rq-cf sf-racts"><button class="btn sm" type="button" data-sfrep="dismiss:${r.id}">Dismiss</button><button class="btn sm" type="button" data-sfrep="hide:${r.id}">Hide the ${it.noun.replace('follow-up ', '')}</button><button class="btn sm sf-rm" type="button" data-sfrep="remove:${r.id}">Remove</button></div></article>`; };
   const decided = done.length ? `<section class="cs-sec rq-decided"><h3>Resolved today</h3>${done.map(r => `<div class="rq-drow">${avatar(r.by, 'sm')}<span class="rq-dtx"><b>${repWhy(r.why)}</b> <span class="faint">· ${itemOf(r.key).noun} reported by ${esc(r.by === ME.u ? 'you' : r.by)} · ${REP_DONE[r.st][0]} by you</span></span>${r.st === 'removed' ? `<button class="tlink" type="button" data-sfrestore="${r.id}">Restore</button>` : `<button class="tlink" type="button" data-sfrepundo="${r.id}">Undo</button>`}</div>`).join('')}</section>` : '';
   const head = `<p class="cs-fine sf-rhead">${SFI.flag}<span>People report answers, follow-up answers, posts and replies from the item’s menu. Hiding keeps the item for moderators and shows a placeholder to everyone else; removing deletes it. The person who reported gets a notification when you resolve the report.</span></p>`;
@@ -6999,12 +7062,12 @@ function domainSec(d, s) {
   const dom = esc(w.domain.trim() || 'example.com');
   const field = `<label class="fld"><span>Domain</span><input id="sf-dom" type="text" value="${esc(w.domain)}" placeholder="example.com" autocomplete="off" ${w.state === 'checking' ? 'disabled' : ''}></label>`;
   const how = `<p class="muted cs-small">Add this TXT record to the DNS of <b>${dom}</b>, then check. DNS changes can take a few minutes.</p><div class="wz-code"><span>TXT</span><code>_session-verify.${dom}</code><code>session-verify=7f3c9a1e</code><button class="btn sm" type="button" data-sfdom="copy">Copy</button></div>`;
-  const state = w.state === 'checking' ? `<p class="wz-wait" role="status"><span class="spin" aria-hidden="true"></span>Checking the TXT record on ${dom}…</p>` : `<p class="faint">Not verified. The space has no seal until the check passes.</p>`;
-  return stSec('Domain', 'Show that the admins of this space control a domain. One domain per space.', `${field}${how}<div class="wz-vrow">${state}${w.state === 'checking' ? '' : `<button class="btn primary" type="button" data-sfdom="check" ${w.domain.trim() ? '' : 'disabled'}>Check</button>`}</div>${fine}`);
+  const state = w.state === 'checking' ? `<p class="wz-wait" role="status"><span class="spin" aria-hidden="true"></span>Checking the TXT record on ${dom}…</p>` : w.state === 'failed' ? `<p class="cs-err cx-domfail" role="alert">Couldn’t find the TXT record on ${dom}. DNS changes can take a few minutes.</p>` : `<p class="faint">Not verified. The space has no seal until the check passes.</p>`;
+  return stSec('Domain', 'Show that the admins of this space control a domain. One domain per space.', `${field}${how}<div class="wz-vrow">${state}${w.state === 'checking' ? '' : `<button class="btn primary" type="button" data-sfdom="check" ${w.domain.trim() ? '' : 'disabled'}>${w.state === 'failed' ? 'Check again' : 'Check'}</button>`}</div>${fine}`);
 }
 function sfDomCheck(s) {
   patch('sfDom', w => { w.state = 'checking'; });
-  setTimeout(() => { const w = st.sfDom; if (!w || w.state !== 'checking' || st.sfDomHold) return; spEdit(s.id, x => { x.dom = { domain: w.domain.trim().toLowerCase(), method: w.method, state: 'ok', verified: 'Nov 16' }; }); patch('sfDom', x => { x.state = 'none'; x.domain = ''; }); toast(`Verified. The seal now shows next to ${spName(s)}.`); renderAll(); }, window.__sfFast ? 40 : 1400);
+  setTimeout(() => { const w = st.sfDom; if (!w || w.state !== 'checking' || st.sfDomHold) return; if (cxDomFails(w.domain)) { patch('sfDom', x => { x.state = 'failed'; }); renderAll(); return; } spEdit(s.id, x => { x.dom = { domain: w.domain.trim().toLowerCase(), method: w.method, state: 'ok', verified: 'Nov 16' }; }); patch('sfDom', x => { x.state = 'none'; x.domain = ''; }); toast(`Verified. The seal now shows next to ${spName(s)}.`); renderAll(); }, window.__sfFast ? 40 : 1400);
 }
 
 /* ---------- clicks ---------- */
@@ -7082,7 +7145,7 @@ function sfInput(e) {
   if (id === 'sf-repnote') { patch('rep', r => { r.note = v; }); return true; }
   if (el.dataset.sftog) { const k = el.dataset.sftog; csEdit(dr => { if (k === 'posts') dr.postsOff = !el.checked; else dr[k] = el.checked; }); renderAll(); return true; }
   if ((m = /^sf-tp-(\d+)$/.exec(id))) { const was = csDirty(); csEdit(d => { d.topics[+m[1]][1] = v; }); if (was !== csDirty()) { const pos = el.selectionStart; renderAll(); csRefocus(id, pos); } return true; }
-  if (id === 'sf-dom') { patch('sfDom', w => { w.domain = v; }); const b = document.querySelector('[data-sfdom="check"]'); if (b) b.disabled = !st.sfDom.domain.trim(); return true; }
+  if (id === 'sf-dom') { patch('sfDom', w => { w.domain = v; if (w.state === 'failed') w.state = 'none'; }); const b = document.querySelector('[data-sfdom="check"]'); if (b) b.disabled = !st.sfDom.domain.trim(); return true; }
   return false;
 }
 on(document, 'keydown', e => {
@@ -8299,6 +8362,296 @@ function csReset() {
   const base = Object.fromEntries(Object.entries(D.roles0).filter(([k]) => ['scifi', 'ml', 'math', 'sablefield'].includes(k)));
   db.set('roles', { ...base }); db.set('roles0', base);
 }
+/* ==== spaces, moderation and space token settings: ownership, archive and delete, role limits,
+   records keyed by space, token choice, invite by handle, moderator actions, declined requests,
+   space name and icon ====
+   - Join requests, invite links and bans carry the space id (r.sp, l.sp, b.sp); records without one
+     belong to #replication-club. Members are memFor(s); About's Moderators list reads the same list.
+   - Roles rank member < mod < admin < owner. Remove and Ban apply to people below your role; owners
+     and admins also act on admins; nobody acts on the owner. Only the owner transfers ownership,
+     archives or deletes. A sole owner cannot leave.
+   - Archived: s.archived = { by, on }. Read-only, hidden from browse and search. Deleted: s.deleted. */
+Object.assign(st, { cxDeclNote: '', cxHandle: '', cxHOpen: false, cxSent: [], cxDel: '', cxDecl: {}, cxKeysBak: null, cxDemo: null });
+/* seed data: links and bans by space, one incoming invite */
+st.links = [...st.links.map(l => ({ ...l, sp: l.sp || 'replication' })), { id: 'l4', sp: 'grants', code: 'g8Tn3', by: 'ines.v', exp: 'Nov 24' }, { id: 'l5', sp: 'grants', code: 'q2Lr7', by: 'tomasz', exp: '' }];
+st.banned = st.banned.map(b => ({ id: (b.sp || 'replication') + ':' + b.u, sp: 'replication', ...b }));
+st.notifs = [...st.notifs, { id: 'ninv', k: 'invite', u: 'jun.park', sp: 'ward7', age: '4h', unread: true, text: 'invited you to join <b>#ward-7-tenants</b>' }];
+
+const banSp = b => b.sp || 'replication';
+const bansOf = id => st.banned.filter(b => banSp(b) === id);
+const linksOf = id => st.links.filter(l => (l.sp || 'replication') === id);
+const CX_RANK = { member: 0, mod: 1, admin: 2, owner: 3 };
+const CX_ROLEOF = { Owner: 'owner', Admin: 'admin', Moderator: 'mod' };
+/* your own entry in a member list follows your membership and role (also while signed out:
+   other people still see you in the list) */
+function cxWithMe(s, list) {
+  const mine = list.find(m => m.u === ME.u), r = st.rel[s.id];
+  const memb = r ? r === 'member' || r === 'mod' : D.joined.includes(s.id);
+  if (!memb) return mine ? list.filter(m => m.u !== ME.u) : list;
+  const role = r === 'mod' || (D.joined.includes(s.id) && D.roles[s.id]) ? CX_ROLEOF[D.roles[s.id]] || 'admin' : 'member';
+  if (!mine) return [{ u: ME.u, role, since: 'Nov 2026' }, ...list];
+  return mine.role === role ? list : list.map(m => m.u === ME.u ? { ...m, role } : m);
+}
+const cxMyRole = s => (memFor(s).find(m => m.u === ME.u) || {}).role;
+/* About › Moderators: the member list's roles, owner first */
+const cxMods = s => memFor(s).filter(m => m.role !== 'member').sort((a, b) => CX_RANK[b.role] - CX_RANK[a.role]).map(m => [m.u, m.role]);
+const cxCanAct = (meRole, m) => !!meRole && m.u !== ME.u && m.role !== 'owner' && (m.role === 'admin' ? CX_RANK[meRole] >= 2 : CX_RANK[meRole] > CX_RANK[m.role]);
+const cxSoleOwner = s => { const o = memFor(s).filter(m => m.role === 'owner'); return o.length === 1 && o[0].u === ME.u; };
+function cxAddMembers(s, ids) {
+  const list = memFor(s), add = ids.filter(u => !list.some(m => m.u === u));
+  if (!add.length) return;
+  setMembers(s, [...list, ...add.map(u => ({ u, role: 'member', since: 'Nov 2026' }))]);
+  spEdit(s.id, x => { x.members += add.length; });
+}
+function cxTransfer(s, u) {
+  setMembers(s, memFor(s).map(m => m.u === u ? { ...m, role: 'owner' } : m.u === ME.u ? { ...m, role: 'admin' } : m));
+  db.put('roles', s.id, 'Admin'); if (D.roles0[s.id] === 'Owner') db.put('roles0', s.id, 'Admin');
+  spEdit(s.id, x => { x.mods = [[u, 'owner'], ...x.mods.filter(m => m[0] !== u && m[0] !== ME.u), [ME.u, 'admin']]; });
+  toast(`${esc(u)} is now the owner of ${spName(s)}. You are an admin.`);
+}
+
+/* ---------- archive and delete ---------- */
+const CX_ARCH = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="12" height="3" rx=".8"/><path d="M3 6v6.5h10V6M6.5 8.8h3" stroke-linecap="round"/></svg>';
+const cxArchLine = s => s.archived ? `<span class="cs-lbl cx-arch">Archived</span>` : '';
+const cxByWho = s => s.archived.by === ME.u ? 'You' : esc(s.archived.by);
+const cxReadOnly = s => `<div class="cs-strip cx-ro">${CX_ARCH}<span class="grow">${cxByWho(s)} archived ${spName(s)} on ${s.archived.on}. Threads are read-only: nobody can ask, post, follow up or reply.</span></div>`;
+const cxArchStrip = s => s.archived ? `<div class="cs-strip warn cx-ro">${CX_ARCH}<span class="grow">${cxByWho(s)} archived ${spName(s)} on ${s.archived.on}. It is read-only and hidden from browse and search.</span>${cxMyRole(s) === 'owner' ? '<button class="btn sm" type="button" data-cxarch="off">Unarchive</button>' : ''}</div>` : '';
+function cxDanger(s) {
+  const own = cxMyRole(s) === 'owner', owner = (memFor(s).find(m => m.role === 'owner') || {}).u;
+  const row = (t, sub, btn) => `<div class="cx-drow"><div class="cx-dtx"><b>${t}</b><small>${sub}</small></div>${btn}</div>`;
+  const dis = own ? '' : ' disabled';
+  const body = (s.archived
+    ? row('Unarchive the space', 'People can ask, post, follow up and reply again, and the space shows in browse and search.', `<button class="btn" type="button" data-cxarch="off"${dis}>Unarchive</button>`)
+    : row('Archive the space', 'Threads become read-only. The space is hidden from browse and search. You can unarchive it here.', `<button class="btn" type="button" data-cxarch="on"${dis}>Archive</button>`))
+    + row('Delete the space', 'Deletes the space with its threads, pages and sources for everyone. This can’t be undone.', `<button class="btn danger" type="button" data-cxdel="${s.id}"${dis}>Delete space</button>`)
+    + (own ? '' : `<p class="cs-fine">${MI.mods}<span>Only the owner${owner ? `, ${esc(owner)},` : ''} can archive or delete ${spName(s)}.</span></p>`);
+  return `<div class="cx-danger">${stSec('Archive or delete', 'These take effect at once. They are not part of Save changes.', body)}</div>`;
+}
+const cxDelMatch = s => { const v = st.cxDel.trim().replace(/^#/, ''); return !!v && v === s.name; };
+
+/* ---------- token use ---------- */
+const payKeys = () => st.userKeys.filter(k => k.valid);
+const payMode = d => d.key === 'none' || !payKeys().length ? 'none' : 'key';
+const payKey = d => (payKeys().find(k => k.id === d.key) || payKeys()[0] || {}).id;
+/* settings draft fields read from the space */
+const cxSetDraft = s => ({ key: s.byok ? s.key || (payKeys()[0] || {}).id || 'k1' : 'none', limit: s.byok && s.budget ? String(Math.round(s.budget / 1e6)) : '8', name: s.name, title: s.title, av: s.av, img: !!s.img });
+/* store the key choice and the monthly limit on the space; only the person who pays changes them */
+function cxApplyPay(s, d) {
+  if (s.byok && s.byok !== ME.u) return;
+  if (payMode(d) === 'none') { delete s.byok; delete s.key; s.budget = 0; s.pct = 0; return; }
+  s.byok = ME.u; s.key = payKey(d); s.budget = (+d.limit || 8) * 1e6; s.pct = (s.used || 0) / s.budget;
+}
+
+/* ---------- name, title and icon (Settings › About) ---------- */
+function cxNameErr(d) {
+  if (!d || d.name == null) return '';
+  if (!d.name) return 'Add a name.';
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(d.name)) return 'Use lowercase letters, numbers and hyphens.';
+  if (D.spaces.some(x => x.id !== d.id && x.name === d.name)) return `#${esc(d.name)} already exists.`;
+  return '';
+}
+function cxIdentFields(d) {
+  if (!d.id || d.name == null) return '';
+  const err = cxNameErr(d), letter = (d.name || sp(d.id).name)[0].toUpperCase();
+  const sw = [1, 2, 3, 4, 5, 6].map(n => `<button type="button" class="cx-av${!d.img && d.av === n ? ' on' : ''}" role="radio" aria-checked="${!d.img && d.av === n}" data-cxav="${n}" aria-label="Letter on colour ${n}"><span class="glyph lg" style="background:${avColor(n)}">${letter}</span></button>`).join('');
+  const up = `<button type="button" class="cx-av cx-up${d.img ? ' on' : ''}" role="radio" aria-checked="${!!d.img}" data-cxav="img" aria-label="${d.img ? 'Uploaded image' : 'Upload an image'}">${d.img ? '<span class="glyph lg cx-img"></span>' : `<span class="cx-upb">${PLUS}</span>`}</button>`;
+  return `<label class="fld"><span>Name</span><span class="cs-pre"><span>#</span><input id="cx-sname" type="text" value="${esc(d.name)}" autocomplete="off" spellcheck="false"></span>${err ? `<small class="cs-err" role="alert">${err}</small>` : `<small class="faint">Lowercase letters, numbers and hyphens. Unique on Session. The address is <b class="cx-url">session.app/s/${esc(d.name)}</b>.</small>`}</label>
+    <label class="fld"><span>Title</span><input id="cx-stitle" type="text" value="${esc(d.title)}" autocomplete="off"><small class="faint">Shown in About. With a verified domain, it can replace the #name.</small></label>
+    <div class="fld"><span id="cx-icl">Icon</span><div class="cx-icons" role="radiogroup" aria-labelledby="cx-icl">${sw}${up}</div><small class="faint">${d.img ? 'icon.png, 256 × 256. ' : 'A letter on a colour, or a square PNG or JPG of at least 128 × 128.'}${d.img ? '<button class="tlink cs-small" type="button" data-cxav="noimg">Remove image</button>' : ''}</small></div>`;
+}
+function cxApplyIdent(s, d) {
+  if (d.name != null && !cxNameErr(d)) s.name = d.name;
+  if (d.title != null && d.title.trim()) s.title = d.title.trim();
+  if (d.av) s.av = d.av;
+  if (d.img) s.img = true; else delete s.img;
+}
+
+/* ---------- invite by handle ---------- */
+const cxKnown = () => [...new Set([...Object.keys(NAMES), ...Object.keys(USERS)])].filter(u => u !== 'you' && u !== ME.u).sort();
+function cxHandleSec(s) {
+  const q = st.cxHandle.trim().replace(/^@/, '').toLowerCase(), known = cxKnown();
+  const mem = new Set(memFor(s).map(m => m.u)), ban = new Set(bansOf(s.id).map(b => b.u)), sent = st.cxSent.filter(x => x.sp === s.id);
+  const state = u => mem.has(u) ? 'Member' : ban.has(u) ? 'Banned' : sent.some(x => x.u === u) ? 'Invited' : '';
+  const sugg = st.cxHOpen && q ? known.filter(u => u.includes(q) || (NAMES[u] || '').toLowerCase().includes(q)).slice(0, 5) : [];
+  const ok = known.includes(q) && !state(q);
+  const why = !q || sugg.length ? '' : !known.includes(q) ? `No one on Session has the handle ${esc(q)}.` : { Member: `${esc(q)} is already a member.`, Banned: `${esc(q)} is banned from ${spName(s)}.`, Invited: `You already invited ${esc(q)}.` }[state(q)] || '';
+  const list = sugg.length ? `<div class="cx-hsug" role="listbox" id="cx-hsug" aria-label="People">${sugg.map(u => `<button type="button" class="cx-hopt" role="option" data-cxhpick="${u}" aria-selected="false"${state(u) ? ' aria-disabled="true"' : ''}>${avatar(u, 'sm')}<span class="cx-htx"><b>${esc(NAMES[u] || u)}</b><small>${u}${state(u) ? ' · ' + state(u) : ''}</small></span></button>`).join('')}</div>` : '';
+  const sentL = sent.length ? `<div class="cx-hsent">${sent.map(x => `<div class="cx-hsr">${avatar(x.u, 'sm')}<span><b>${x.u}</b> <span class="faint">· invited ${x.age}</span></span></div>`).join('')}</div>` : '';
+  return `<div class="cs-sub cx-hinv"><b id="cx-hl">Invite by handle</b><div class="cx-hrow"><span class="cs-pre cx-hfld"><span>@</span><input id="cx-hinv" type="text" value="${esc(st.cxHandle)}" placeholder="handle" autocomplete="off" spellcheck="false" role="combobox" aria-labelledby="cx-hl" aria-expanded="${!!sugg.length}" aria-controls="cx-hsug"></span><button class="btn primary" type="button" data-cxhsend="${s.id}"${ok ? '' : ' disabled'}>Send</button></div>${list}${why ? `<small class="cs-err">${why}</small>` : ''}<p class="cs-fine">${CI.bell}<span>They get a notification with Accept and Decline${isClosed(s) && s.policy === 'request' ? ', and joining skips the request' : ''}.</span></p>${sentL}</div>`;
+}
+function cxSendInv(sid) {
+  const s = sp(sid), u = st.cxHandle.trim().replace(/^@/, '').toLowerCase();
+  if (!cxKnown().includes(u) || memFor(s).some(m => m.u === u) || bansOf(sid).some(b => b.u === u) || st.cxSent.some(x => x.sp === sid && x.u === u)) return;
+  st.cxSent = [...st.cxSent, { sp: sid, u, age: 'just now' }]; st.cxHandle = ''; st.cxHOpen = false;
+  toast(`Invite sent to ${esc(u)}. They get a notification with Accept and Decline.`);
+}
+
+/* ---------- moderators: item menu and report cards ---------- */
+function cxModItems(key) {
+  const p = D.posts[+key.split(':')[1]]; if (!p || !isModOf(p.s)) return '';
+  return `<div class="ts-ddsep"></div>${modOf(key) === 'hidden' ? '' : `<button class="um-item" type="button" role="menuitem" data-cximod="hide:${key}">${CI.eyeOff}<span>Hide</span></button>`}<button class="um-item cx-danger-i" type="button" role="menuitem" data-cximod="rm:${key}">${I.close}<span>Remove</span></button>`;
+}
+function cxModAct(key, how) {
+  const it = itemOf(key), r = st.reports.find(x => x.key === key && x.st === 'open');
+  if (r) { sfResolve(r, how); return; }
+  db.put('modSt', key, how);
+  if (how === 'hidden') toast(`Hidden. People see “This ${it.noun} is hidden by a moderator.”`, 'cxunhide:' + key, 'Undo');
+  else toast(`Removed. The thread shows “This ${it.noun} was removed by a moderator.”`);
+}
+function cxRepAuthor(s, it) {
+  if (!it.by || it.by === 'Agent' || it.by === ME.u) return '';
+  const u = it.by, list = memFor(s), m = list.find(x => x.u === u);
+  if (bansOf(s.id).some(b => b.u === u)) return `<div class="cx-rauth"><span class="faint">Author</span><b>${esc(u)}</b><span class="ks bad">Banned</span></div>`;
+  if (!cxCanAct(cxMyRole(s), m || { u, role: 'member' })) return '';
+  return `<div class="cx-rauth"><span class="faint">Author</span><b>${esc(u)}</b><span class="grow"></span>${m ? `<button class="tlink" type="button" data-cxrauth="rm:${esc(u)}">Remove the author</button>` : ''}<button class="tlink danger-l" type="button" data-cxrauth="ban:${esc(u)}">Ban the author</button></div>`;
+}
+
+/* ---------- a declined request: the moderators' note and the waiting period ---------- */
+const cxDecl = id => st.cxDecl[id] || { note: '', on: 'Nov 15', again: 'Dec 1', ready: false };
+function cxDeniedCard(s) {
+  const x = cxDecl(s.id);
+  return `<section class="cs-card cs-denied"><div class="cs-card-h"><b>Your request was declined</b><span class="faint">${x.on}</span></div><p class="muted">The moderators of ${spName(s)} declined your request to join.</p>${x.note ? `<blockquote class="cx-dnote"><small class="faint">Note from the moderators</small><p>${esc(x.note)}</p></blockquote>` : ''}<p class="cs-fine">${CI.clock}<span>${x.ready ? 'The waiting period has passed. You can send a new request with new answers.' : `You can request again on ${x.again}.`}</span></p></section>`;
+}
+
+/* ---------- dialogs ---------- */
+{ const CX_csModal = csModal; csModal = function () { return cxModal() || CX_csModal(); }; }
+function cxModal() {
+  const [k, a] = (st.modal || '').split(/:(.*)/s), s = a ? sp(a) : null;
+  if ((k === 'sp-leave' || k === 'cs-leave') && s && cxSoleOwner(s))
+    return dlg('Transfer ownership first', `<p class="muted">You are the only owner of ${spName(s)}, so you can’t leave it yet. In Manage › Members, make an admin the owner, then leave.</p><p class="cs-fine">${CX_ARCH}<span>To stop activity in ${spName(s)} instead, archive or delete it in Manage › Settings.</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-csmanage="${s.id}" data-mgto="members">Go to Members</button>`, 'alertdialog');
+  if (k === 'cs-xowner') {
+    const sx = sp(st.mgSpace);
+    return dlg(`Make ${esc(a)} the owner of ${spName(sx)}?`, `<p class="muted">${esc(a)} becomes the owner: they can transfer ownership, and archive or delete ${spName(sx)}. You become an admin and can still change roles and settings.</p><p class="cs-fine">${MI.mods}<span>A space has one owner. Only ${esc(a)} can make you the owner again.</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-cxowner-ok="${esc(a)}">Make owner</button>`, 'alertdialog');
+  }
+  if (k === 'cs-xarch') return dlg(`Archive ${spName(s)}?`, `<p class="muted">Nobody can ask, post, follow up or reply in ${spName(s)}. Members can still read its threads, pages and sources. ${spName(s)} is hidden from browse and search, and its header shows “Archived”.</p><p class="cs-fine">${CX_ARCH}<span>You can unarchive it in Settings at any time.</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-cxarch-ok="${s.id}">Archive</button>`, 'alertdialog');
+  if (k === 'cs-xdel') return dlg(`Delete ${spName(s)}?`, `<p class="muted">This deletes ${spName(s)} for everyone, with its ${fmt(s.posts)} threads, their follow-ups and replies, its pages and its sources. Members lose access. This can’t be undone.</p>${s.archived ? '' : `<p class="cs-fine">${CX_ARCH}<span>To keep the threads readable, archive the space instead.</span></p>`}<label class="fld"><span>Type <b>${esc(s.name)}</b> to confirm</span><input id="cx-delname" type="text" value="${esc(st.cxDel)}" autocomplete="off" spellcheck="false"></label>`, `${cancelB()}<button class="btn danger" type="button" id="cx-delok" data-cxdel-ok="${s.id}"${cxDelMatch(s) ? '' : ' disabled'}>Delete space</button>`, 'alertdialog');
+  if (k === 'cs-ximrm') { const it = itemOf(a); return dlg(`Remove this ${it.noun}?`, `<p class="muted">The ${it.noun} is deleted for everyone, including moderators. Its place in the thread shows “This ${it.noun} was removed by a moderator.” This can't be undone after you leave this page.</p>${it.by === 'Agent' ? '' : `<p class="cs-fine">${CI.users}<span>${esc(it.by)} is not notified.</span></p>`}`, `${cancelB()}<button class="btn danger" type="button" data-cximrm-ok="${esc(a)}">Remove</button>`, 'alertdialog'); }
+  return '';
+}
+
+/* ---------- clicks and typing ---------- */
+{ const CX_csClick = csClick; csClick = function (t) { return cxClick(t) || CX_csClick(t); }; }
+const CX_SEL = '[data-cxowner],[data-cxowner-ok],[data-cxarch],[data-cxarch-ok],[data-cxdel],[data-cxdel-ok],[data-cxpay],[data-cxaddkey],[data-cxhpick],[data-cxhsend],[data-cximod],[data-cximrm-ok],[data-cxrauth],[data-cxav],[data-cstoast^="cxunhide:"]';
+function cxClick(t) {
+  const d = sel => t.closest(sel), go = () => { renderAll(); return true; };
+  let b;
+  /* Manage is for moderators; a member's invite dialog has no way there */
+  if ((b = d('[data-csmanage]')) && !isModOf(b.dataset.csmanage)) { st.modal = null; return go(); }
+  if (d('[data-csinvite]')) { st.cxHandle = ''; st.cxHOpen = false; return false; }
+  if ((b = d('[data-memrm],[data-memban]'))) { const s = sp(st.mgSpace), u = b.dataset.memrm || b.dataset.memban, m = memFor(s).find(x => x.u === u) || { u, role: 'member' }; return cxCanAct(cxMyRole(s), m) ? false : go(); }
+  if ((b = d('[data-csset="save"]')) && st.set && cxNameErr(st.set)) { toast('Fix the name before you save.'); return go(); }
+  if (!d(CX_SEL)) return false;
+  if (st.toast && !d('.cs-toast')) st.toast = null;
+  if ((b = d('[data-cstoast^="cxunhide:"]'))) { db.del('modSt', b.dataset.cstoast.slice(9)); st.toast = null; return go(); }
+  if ((b = d('[data-cxowner]'))) { st.modal = 'cs-xowner:' + b.dataset.cxowner; return go(); }
+  if ((b = d('[data-cxowner-ok]'))) { st.modal = null; cxTransfer(sp(st.mgSpace), b.dataset.cxownerOk); return go(); }
+  if ((b = d('[data-cxarch]'))) {
+    const s = sp(st.mgSpace);
+    if (b.dataset.cxarch === 'on') st.modal = 'cs-xarch:' + s.id;
+    else { spEdit(s.id, x => { delete x.archived; }); toast(`Unarchived ${spName(s)}. People can ask, post and reply again, and it shows in browse and search.`); }
+    return go();
+  }
+  if ((b = d('[data-cxarch-ok]'))) { const s = sp(b.dataset.cxarchOk); spEdit(s.id, x => { x.archived = { by: ME.u, on: 'Nov 17' }; }); st.modal = null; toast(`Archived ${spName(s)}. Threads are read-only.`); return go(); }
+  if ((b = d('[data-cxdel]'))) { st.cxDel = ''; st.modal = 'cs-xdel:' + b.dataset.cxdel; renderAll(); const i = $('cx-delname'); if (i) i.focus({ preventScroll: true }); return true; }
+  if ((b = d('[data-cxdel-ok]'))) {
+    const s = sp(b.dataset.cxdelOk); if (!cxDelMatch(s)) return true;
+    const n = spName(s); spEdit(s.id, x => { x.deleted = true; delete x.archived; }); leaveSpace(s.id); db.del('rel', s.id);
+    Object.assign(st, NAVBASE(), { home: true, cxDel: '' }); toast(`Deleted ${n}. Its threads, pages and sources are gone.`); return go();
+  }
+  if ((b = d('[data-cxpay]'))) { const v = b.dataset.cxpay; csEdit(x => { x.key = v === 'none' ? 'none' : payKey({ key: x.key === 'none' ? '' : x.key }); }); return go(); }
+  if (d('[data-cxaddkey]')) { Object.assign(st, { addingKey: true, keyDraft: '', keyName: '', keyErr: '', keyShow: false, renaming: null, modal: 'addkey' }); renderAll(); const ki = $('key-in'); if (ki) ki.focus(); return true; }
+  if ((b = d('[data-cxhpick]'))) { if (b.getAttribute('aria-disabled') === 'true') return true; st.cxHandle = b.dataset.cxhpick; st.cxHOpen = false; renderAll(); const sb = document.querySelector('[data-cxhsend]'); if (sb) sb.focus({ preventScroll: true }); return true; }
+  if ((b = d('[data-cxhsend]'))) { cxSendInv(b.dataset.cxhsend); return go(); }
+  if ((b = d('[data-cximod]'))) { const [v, key] = b.dataset.cximod.split(/:(.*)/s); st.imenu = null; if (v === 'rm') st.modal = 'cs-ximrm:' + key; else cxModAct(key, 'hidden'); return go(); }
+  if ((b = d('[data-cximrm-ok]'))) { st.modal = null; cxModAct(b.dataset.cximrmOk, 'removed'); return go(); }
+  if ((b = d('[data-cxrauth]'))) { const [v, u] = b.dataset.cxrauth.split(/:(.*)/s); st.modal = (v === 'ban' ? 'cs-ban:' : 'cs-rm:') + u; return go(); }
+  if ((b = d('[data-cxav]'))) { const v = b.dataset.cxav; csEdit(x => { if (v === 'img') x.img = true; else if (v === 'noimg') x.img = false; else { x.av = +v; x.img = false; } }); return go(); }
+  return false;
+}
+{ const CX_csInput = csInput; csInput = function (e) { return cxInput(e) || CX_csInput(e); }; }
+function cxInput(e) {
+  const el = e.target, id = el.id, v = el.value;
+  const rr = () => { const pos = el.selectionStart; renderAll(); csRefocus(id, pos); return true; };
+  if (id === 'cx-delname') { st.cxDel = v; const b = $('cx-delok'), s = sp((st.modal || '').split(':')[1]); if (b && s) b.disabled = !cxDelMatch(s); return true; }
+  if (id === 'cx-hinv') { st.cxHandle = v; st.cxHOpen = true; return rr(); }
+  if (id === 'cx-declnote') { st.cxDeclNote = v; return true; }
+  if (id === 'cx-sname') { const sv = slug(v); if (sv !== v) el.value = sv; csEdit(x => { x.name = sv; }); return rr(); }
+  if (id === 'cx-stitle') { const was = csDirty(); csEdit(x => { x.title = v; }); return was !== csDirty() ? rr() : true; }
+  return false;
+}
+on(document, 'keydown', e => {
+  if (e.key !== 'Enter' || !e.target || e.target.id !== 'cx-hinv') return;
+  const b = document.querySelector('[data-cxhsend]'); if (!b || b.disabled) return;
+  e.preventDefault(); cxSendInv(b.dataset.cxhsend); renderAll(); const i = $('cx-hinv'); if (i) i.focus({ preventScroll: true });
+}, true);
+
+/* ---------- "Screen" entries ---------- */
+const CX_NEW = 'sp-tide-gauges';
+/* a closed space created with Create a space: you are its owner and only member */
+function cxNewSpace() {
+  if (!sp(CX_NEW)) { const cr = st.cr; st.cr = Object.assign(CR0(), { name: 'tide-gauges', desc: 'Readings and calibration notes from coastal tide gauges.', vis: 'listed' }); csCreate(); st.cr = cr; }
+  return sp(CX_NEW);
+}
+/* every screen starts without the changes these screens make */
+function cxRestore() {
+  st.cxDecl = {}; st.cxHandle = ''; st.cxHOpen = false; st.cxDel = ''; st.cxDeclNote = '';
+  if (st.cxKeysBak) { st.userKeys = st.cxKeysBak; st.cxKeysBak = null; }
+  if (st.cxDemo) {
+    const id = st.cxDemo, o = SPACES0.find(x => x.id === id); st.cxDemo = null;
+    if (o) spEdit(id, x => { ['archived', 'deleted', 'byok', 'key', 'budget', 'pct', 'name', 'title', 'av', 'img', 'mods', 'members'].forEach(f => { if (f in o) x[f] = structuredClone(o[f]); else delete x[f]; }); });
+    if (id === 'math') { db.put('roles', 'math', 'Owner'); db.put('roles0', 'math', 'Owner'); joinSpace('math'); }
+    db.del('memOther', id);
+  }
+  if (sp(CX_NEW)) {
+    leaveSpace(CX_NEW); ['rel', 'roles', 'roles0', 'memOther'].forEach(k => db.del(k, CX_NEW)); db.remove('spaces', CX_NEW);
+    st.links = st.links.filter(l => l.sp !== CX_NEW); st.banned = st.banned.filter(b => b.sp !== CX_NEW);
+    if (st.space === CX_NEW) st.space = 'scifi';
+    if (st.mgSpace === CX_NEW) st.mgSpace = 'replication';
+    if (st.created === CX_NEW) st.created = null;
+  }
+}
+{ const CX_jump = jump; jump = function (k) {
+  if (!dataReady()) { DS.whenReady(() => { jump(k); renderAll(); }); return; }
+  cxRestore(); CX_jump(k);
+  if (k.startsWith('cx-')) cxJump(k);
+}; }
+JUMPS.push(
+  ['Spaces: ownership, archive, roles', [['cx-transfer', 'Members: Make owner (confirm)'], ['cx-leave-owner', 'Leave as the only owner'], ['cx-danger', 'Settings: archive or delete'], ['cx-archive', 'Archive a space (confirm)'], ['cx-archived', 'Archived space page'], ['cx-delete', 'Delete a space (type the name)'], ['cx-mem-invite', 'Member: invite dialog with own links only'], ['cx-mod-members', 'Moderator: Members with limited actions'], ['cx-approved', 'Request approved: added to Members'], ['cx-new-members', 'New space: Members'], ['cx-new-requests', 'New space: Requests'], ['cx-new-invites', 'New space: Invites']]],
+  ['Spaces: tokens, invites, moderation', [['cx-tokens', 'Settings: token use'], ['cx-tokens-none', 'Settings: No extra tokens'], ['cx-create-nokey', 'Create a space without an API key'], ['cx-inv-handle', 'Invite by handle'], ['cx-inv-incoming', 'Invite notification: Accept or Decline'], ['cx-im-mod', 'Item menu: Hide and Remove (moderator)'], ['cx-im-rm', 'Remove from the item menu (confirm)'], ['cx-rep-author', 'Reports: remove or ban the author'], ['cx-decline-note', 'Decline a request with a note'], ['cx-declined', 'Declined: note and waiting period'], ['cx-declined-again', 'Declined: request again after the wait'], ['cx-set-about', 'Settings › About: name, title, icon'], ['cx-dom-failed', 'Domain: TXT record not found']]],
+);
+function cxJump(k) {
+  const mg = (tab, id) => Object.assign(st, { subPage: 'manage', mgSpace: id, mgTab: tab, space: id, set: null });
+  const space = id => Object.assign(st, { space: id, home: false });
+  const scrollTo = q => setTimeout(() => { const el = document.querySelector('#app ' + q); if (el) el.scrollIntoView({ block: 'center' }); }, 0);
+  const demo = id => { st.cxDemo = id; };
+  const thr = rf => D.posts.findIndex(p => p.s === 'sablefield' && p.rf === rf);
+  const replMod = () => { setRel('replication', 'mod'); st.reqs = structuredClone(REQS0); st.rqSel = new Set(); st.mem = structuredClone(ST0.mem); spEdit('replication', x => { x.members = 214; }); };
+  switch (k) {
+    case 'cx-transfer': demo('math'); mg('members', 'math'); st.modal = 'cs-xowner:lettie'; break;
+    case 'cx-leave-owner': demo('math'); space('math'); st.modal = 'sp-leave:math'; break;
+    case 'cx-danger': demo('math'); mg('settings', 'math'); scrollTo('.cx-danger'); break;
+    case 'cx-archive': demo('math'); mg('settings', 'math'); st.modal = 'cs-xarch:math'; break;
+    case 'cx-archived': demo('math'); spEdit('math', x => { x.archived = { by: ME.u, on: 'Nov 17' }; }); space('math'); break;
+    case 'cx-delete': { const s = cxNewSpace(); mg('settings', s.id); st.cxDel = 'tide-ga'; st.modal = 'cs-xdel:' + s.id; break; }
+    case 'cx-mem-invite': setRel('grants', 'member'); space('grants'); csInvite('grants'); break;
+    case 'cx-mod-members': mg('members', 'scifi'); break;
+    case 'cx-approved': { replMod(); const s = sp('replication'); st.reqs = st.reqs.map(r => r.u === 'noor.a' ? { ...r, st: 'approved' } : r); cxAddMembers(s, ['noor.a']); mg('members', 'replication'); toast(`Approved noor.a. They can read ${spName(s)} now.`); break; }
+    case 'cx-new-members': case 'cx-new-requests': case 'cx-new-invites': { const s = cxNewSpace(); mg(k.slice(7), s.id); break; }
+    case 'cx-tokens': case 'cx-tokens-none': demo('math'); spEdit('math', x => { x.byok = ME.u; x.key = (payKeys()[0] || {}).id; x.budget = 8e6; x.pct = x.used / x.budget; }); mg('settings', 'math'); if (k === 'cx-tokens-none') { csSettings(sp('math')); patch('set', d => { d.key = 'none'; }); } scrollTo('.cs-payk, .cx-nokey, [data-cxpay]'); break;
+    case 'cx-create-nokey': st.cxKeysBak = st.userKeys; st.userKeys = []; Object.assign(st, { subPage: 'create', cr: Object.assign(CR0(), { name: 'field-recordings', desc: 'Sound recordings from fieldwork, with notes on equipment and permissions.' }) }); scrollTo('[data-cxpay]'); break;
+    case 'cx-inv-handle': setRel('replication', 'mod'); space('replication'); csInvite('replication'); Object.assign(st, { cxHandle: 'to', cxHOpen: true }); break;
+    case 'cx-inv-incoming': setRel('ward7', 'none'); st.home = true; csOpenNotifs(); break;
+    case 'cx-im-mod': case 'cx-im-rm': { st.reports = structuredClone(REPS0); st.modSt = {}; const i = thr('p1'); Object.assign(st, { space: 'sablefield', home: false, thread: i }); if (k === 'cx-im-mod') st.imenu = 'r:' + i + ':2'; else st.modal = 'cs-ximrm:r:' + i + ':2'; break; }
+    case 'cx-rep-author': st.reports = structuredClone(REPS0); st.modSt = {}; mg('reports', 'sablefield'); scrollTo('.cx-rauth'); break;
+    case 'cx-decline-note': replMod(); mg('requests', 'replication'); Object.assign(st, { reqSeen: true, declIds: [openReqs('replication')[0].u], cxDeclNote: 'Name the result you want to replicate, and link to earlier work if you have any.', modal: 'cs-decline' }); break;
+    case 'cx-declined': case 'cx-declined-again': setRel('replication', 'denied'); st.cxDecl = { replication: { note: 'Your answers did not name a result to replicate. Name one when you request again.', on: 'Nov 15', again: 'Dec 1', ready: k === 'cx-declined-again' } }; space('replication'); break;
+    case 'cx-set-about': demo('math'); mg('settings', 'math'); break;
+    case 'cx-dom-failed': setRel('replication', 'mod'); spEdit('replication', x => { x.dom = null; x.plain = false; }); mg('settings', 'replication'); st.sfDom = { sid: 'replication', domain: 'replicationclub.test', org: '', method: 'dns', state: 'failed' }; scrollTo('.sf-domsec'); break;
+  }
+}
+/* Domain check: a domain that ends in .test has no TXT record in this mockup */
+const cxDomFails = dm => /\.test$/i.test((dm || '').trim());
+/* ==== end of spaces, moderation and space token settings ==== */
 /* BEGIN question-trees */
 /* ================= question trees =================
    Model:
@@ -8535,6 +8888,7 @@ const qtExtra = (T, n) => `${n.uses ? `<div class="qt-note">Asked from a compari
 
 /* ---------- composer ---------- */
 function qtComposer(T, par, opts = {}) {
+  if (sp(T.p.s).archived) return cxReadOnly(sp(T.p.s));
   if (st.auth !== 'in') return `<div class="qt-comp"><p class="muted" style="margin:0">Log in to ask about this answer.</p><div class="qt-cbar"><span class="grow"></span><button class="btn primary" type="button" data-act="signin">Log in</button></div></div>`;
   const pn = T.by[par]; if (!pn || pn.running) return '';
   return `<div class="qt-comp" id="qt-comp"><textarea id="qt-in" rows="2" placeholder="Ask about this answer…" aria-label="Ask about the answer to ${par === 'r' ? 'the question' : 'level ' + pn.lv}">${esc(st.qtDraft)}</textarea>${st.qtErr ? `<span class="qt-err">${st.qtErr}</span>` : ''}
@@ -9153,7 +9507,7 @@ function abMembersList(s) {
   const lbl = r => r === 'owner' ? 'Owner' : r === 'admin' ? 'Admin' : r === 'mod' ? 'Moderator' : '';
   return `<label class="search ab-mq">${I.search}<input id="ab-mem-q" type="search" value="${esc(st.abMemQ || '')}" placeholder="Find a member" aria-label="Find a member"></label><ul class="ab-meml">${list.map(m => `<li>${avatar(m.u, 'sm')}${au(m.u)}${lbl(m.role) ? `<small title="${esc(ROLE_HELP[m.role] || '')}">${lbl(m.role)}</small>` : ''}</li>`).join('') || '<li class="faint">No members match.</li>'}</ul><p class="cs-fine">Showing ${list.length} of ${s.members.toLocaleString('en-US')} members. ${isClosed(s) ? 'Only members see this list.' : 'Anyone who can read the space sees this list.'}</p>`;
 }
-const abModsCard = s => `<div class="note-card"><h3>Moderators</h3><div class="mods">${s.mods.map(([h, r]) => `<div>${avatar(h, 'sm')}${au(h)}<small title="${esc(ROLE_HELP[r] || '')}">${MOD_LABEL[r] || r}</small></div>`).join('')}</div></div>`;
+const abModsCard = s => `<div class="note-card"><h3>Moderators</h3><div class="mods">${cxMods(s).map(([h, r]) => `<div>${avatar(h, 'sm')}${au(h)}<small title="${esc(ROLE_HELP[r] || '')}">${MOD_LABEL[r] || r}</small></div>`).join('')}</div></div>`;
 function abUsageBody(s) {
   const used = s.used || 0, m = memFor(s).slice(0, 4), share = [0.38, 0.27, 0.19, 0.09];
   const th = D.posts.map((p, i) => ({ p, i })).filter(({ p }) => p.s === s.id && p.tok).sort((a, b) => b.p.tok - a.p.tok).slice(0, 3);
@@ -9198,7 +9552,7 @@ function abModal() {
 function abSettingsAbout(d) {
   const n = d.rules.length, up = I.chev.replace('<svg', '<svg style="transform:rotate(180deg)"');
   const rows = d.rules.map((r, i) => `<div class="ab-rrow"><span class="ts-n num">${i + 1}</span><input id="ab-rule-${i}" type="text" value="${esc(r)}" placeholder="A rule" aria-label="Rule ${i + 1}"><span class="ab-pgb"><button class="iconbtn" type="button" data-abrule="up:${i}" aria-label="Move rule ${i + 1} up" ${i ? '' : 'disabled'}>${up}</button><button class="iconbtn" type="button" data-abrule="down:${i}" aria-label="Move rule ${i + 1} down" ${i < n - 1 ? '' : 'disabled'}>${I.chev}</button><button class="iconbtn" type="button" data-abrule="rm:${i}" aria-label="Remove rule ${i + 1}">${I.close}</button></span></div>`).join('');
-  return stSec('About', 'Shown in the About tab of the space. Members get a notification when the rules change.', `<label class="fld"><span>Description</span><textarea id="ab-desc" class="cs-ta" rows="2">${esc(d.desc)}</textarea></label><div class="fld"><span>Rules</span>${rows}<button class="btn sm cs-b st-add" type="button" data-abrule="add">${PLUS}Add a rule</button></div>`);
+  return stSec('About', 'Shown in the About tab of the space. Members get a notification when the rules change.', `${cxIdentFields(d)}<label class="fld"><span>Description</span><textarea id="ab-desc" class="cs-ta" rows="2">${esc(d.desc)}</textarea></label><div class="fld"><span>Rules</span>${rows}<button class="btn sm cs-b st-add" type="button" data-abrule="add">${PLUS}Add a rule</button></div>`);
 }
 const abSettingsPages = d => stSec('Pages', 'Who can edit the pages in About. Moderators can always add, order and remove pages.', `<div class="ab-radios">${[['mods', 'Moderators', 'Only moderators edit pages.'], ['members', 'Members', 'Any member can edit a page. The page history shows every change.']].map(([v, t, sub]) => `<label class="cs-rad"><input type="radio" name="ab-pgedit" value="${v}" ${d.pageEdit === v ? 'checked' : ''}><span><b>${t}</b><small>${sub}</small></span></label>`).join('')}</div>`);
 
