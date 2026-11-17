@@ -3718,6 +3718,23 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 .rf-quote .rf-src { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: var(--fs-xs); color: var(--t-tertiary); }
 .rf-quote .rf-src > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rf-demo .rf-dh { margin: 22px 0 4px; }
+
+/* Source ref sub-variants */
+.mi-rchip.rf-ia { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rf-ia .rf-it { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.rf-ia .rf-l1 { display: inline-flex; align-items: center; gap: 3px; flex: none; color: var(--t-strong); font-weight: 550; }
+.rf-ia .rf-l1 svg, .rf-tag .rf-loc svg, .rf-split .rf-lc svg { width: 9px; height: 9px; }
+.rf-ip .rf-pl { flex: none; font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.02em; color: var(--t-tertiary); text-transform: uppercase; }
+.mi-rchip.rf-tag { display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; max-width: 100%; margin: 4px 0 3px; padding: 2px 8px 2px 5px; border-radius: 6px; background: var(--fill-subtle); font-size: var(--fs-xs); color: var(--t-secondary); }
+.rf-tag .rf-tt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.rf-tag .rf-loc { display: inline-flex; align-items: center; gap: 3px; flex: none; color: var(--t-strong); font-weight: 550; }
+.rf-tag .rf-loc::before { content: "·"; margin-right: 3px; color: var(--t-faint); font-weight: 400; }
+.mi-rchip.rf-split { display: flex; align-items: center; gap: 5px; min-width: 0; margin: 4px 0 3px; font-size: var(--fs-xs); color: var(--t-secondary); }
+.rf-split .rf-c { display: inline-flex; align-items: center; gap: 5px; min-width: 0; height: 22px; padding: 0 9px 0 6px; border: 1px solid var(--control-border); border-radius: 999px; background: var(--pane); }
+.rf-split .rf-c > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rf-split .rf-lc { flex: none; gap: 3px; padding: 0 8px; color: var(--t-strong); background: var(--fill-subtle); border-color: transparent; }
+.rf-quote.rf-qline q { -webkit-line-clamp: 1; font-style: italic; }
+.mi-rchip.rf-quote.rf-qcard { border-left: 0; padding: 9px 12px 8px; border-radius: 10px; background: var(--inset); border: 1px solid var(--divider); gap: 6px; }
 </style>
 
 <div class="shell" id="shell">
@@ -7709,29 +7726,48 @@ const RF_PLAY = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"
 function miRowChip(p) {
   if (!p.about) return '';
   const its = miRefs(p).map(MIT).filter(Boolean); if (!its.length) return '';
-  const m = its[0], b = its.length > 1 ? null : p.about.b, v = st.refv || 'inline';
-  const title = n => esc(clip(miTitle(m), n));
-  const loc = rfLoc(m, b), ts = b != null && m.body[b] && m.body[b].ts;
+  const m = its[0], b = its.length > 1 ? null : p.about.b, [v, sub = ''] = (st.refv || 'inline').split('-');
+  const title = n => esc(clip(miTitle(m), n)), more = its.length > 1 ? ` and ${its.length - 1} more` : '';
+  const loc = rfLoc(m, b), ts = b != null && m.body[b] && m.body[b].ts, lw = rfLoc(m, b, true);
+  const locTx = loc ? `${ts ? RF_PLAY : ''}${loc}` : '';
   if (v === 'pill') {
     const ics = its.length > 1 ? `<span class="rf-ics">${its.slice(0, 3).map(x => miIc(x, 'xs')).join('')}</span>` : miIc(m, 'xs');
-    const t = its.length > 1 ? `${its.length} sources` : title(56);
-    return `<span class="mi-rchip rf-pill" title="${esc(its.map(miTitle).join(' · '))}"><span class="rf-t">${ics}<span>${t}</span></span>${loc ? `<span class="rf-loc num">${ts ? RF_PLAY : ''}${loc}</span>` : ''}</span>`;
+    const t = its.length > 1 ? `${its.length} sources` : title(56), tip = esc(its.map(miTitle).join(' · '));
+    /* B1 tag: a filled, squarer tag with the locator after a dot. B2 split: the source and the locator as two chips. */
+    if (sub === 'tag') return `<span class="mi-rchip rf-tag" title="${tip}">${ics}<span class="rf-tt">${t}</span>${loc ? `<span class="rf-loc num">${locTx}</span>` : ''}</span>`;
+    if (sub === 'split') return `<span class="mi-rchip rf-split" title="${tip}"><span class="rf-c">${ics}<span>${t}</span></span>${loc ? `<span class="rf-c rf-lc num">${locTx}</span>` : ''}</span>`;
+    return `<span class="mi-rchip rf-pill" title="${tip}"><span class="rf-t">${ics}<span>${t}</span></span>${loc ? `<span class="rf-loc num">${locTx}</span>` : ''}</span>`;
   }
   if (v === 'words') {
-    const lead = its.length > 1 ? '' : rfLoc(m, b, true);
-    const t = its.length > 1 ? `<b>${title(40)}</b> and ${its.length - 1} more ${its.length === 2 ? 'source' : 'sources'}` : `${lead ? `${lead} of ` : ''}<b>${title(lead ? 52 : 64)}</b> · ${rfKind(m)}`;
+    const kind = rfKind(m), lwl = lw ? lw.charAt(0).toLowerCase() + lw.slice(1) : '';
+    let t;
+    if (its.length > 1) t = `<b>${title(40)}</b> and ${its.length - 1} more ${its.length === 2 ? 'source' : 'sources'}`;
+    /* C1 title first: the title, then the locator in words; no platform */
+    else if (sub === 'title') t = `<b>${title(60)}</b>${lwl ? `, ${lwl}` : ''}`;
+    /* C2 about: a sentence that says what the ask is about */
+    else if (sub === 'about') t = `Asked about ${lwl ? `${lwl} of ` : ''}<b>${title(lw ? 52 : 64)}</b>`;
+    else t = `${lw ? `${lw} of ` : ''}<b>${title(lw ? 52 : 64)}</b> · ${kind}`;
     return `<span class="mi-rchip rf-words">${miIc(m, 'xs')}<span>${t}</span></span>`;
   }
   if (v === 'quote') {
     const q = its.length > 1 || (b == null && !p.about.quote) ? '' : (p.about.quote || (m.body[b] && m.body[b].p) || '');
-    const src = `<span class="rf-src">${miIc(m, 'xs')}<span>${its.length > 1 ? `${title(40)} and ${its.length - 1} more` : `${title(60)}${loc ? ` · <span class="num">${loc}</span>` : ''}`}</span></span>`;
-    return q ? `<span class="mi-rchip rf-quote"><q>${esc(clip(q, 160))}</q>${src}</span>` : `<span class="mi-rchip rf-quote rf-noq">${src}</span>`;
+    const src = `<span class="rf-src">${miIc(m, 'xs')}<span>${its.length > 1 ? `${title(40)}${more}` : `${title(60)}${loc ? ` · <span class="num">${loc}</span>` : ''}`}</span></span>`;
+    /* D1 line: one line of the passage. D2 card: the passage and the source line in a filled box. */
+    const cls = sub === 'line' ? ' rf-qline' : sub === 'card' ? ' rf-qcard' : '';
+    return q ? `<span class="mi-rchip rf-quote${cls}"><q>${esc(clip(q, 160))}</q>${src}</span>` : `<span class="mi-rchip rf-quote rf-noq">${src}</span>`;
   }
-  return `<span class="mi-rchip">${miIc(m, 'xs')}<span>${its.length > 1 ? `${title(40)} and ${its.length - 1} more` : title(64)}${loc ? ` · ${loc}` : ''}</span></span>`;
+  /* A1 locator first: the locator, then the title. A2 platform: the platform name before the title, no icon. */
+  if (sub === 'loc') return `<span class="mi-rchip rf-ia">${miIc(m, 'xs')}${loc ? `<span class="rf-l1 num">${locTx}</span>` : ''}<span class="rf-it">${its.length > 1 ? `${title(40)}${more}` : title(64)}</span></span>`;
+  if (sub === 'plat') return `<span class="mi-rchip rf-ia rf-ip"><span class="rf-pl">${its.length > 1 ? `${its.length} sources` : rfKind(m)}</span><span class="rf-it">${its.length > 1 ? `${title(40)}${more}` : title(64)}${loc ? ` · <span class="num">${loc}</span>` : ''}</span></span>`;
+  return `<span class="mi-rchip">${miIc(m, 'xs')}<span>${its.length > 1 ? `${title(40)}${more}` : title(64)}${loc ? ` · ${loc}` : ''}</span></span>`;
 }
 /* Screen entry: the reference for every media type, in feed rows */
 Object.assign(st, { refv: 'inline' });
-function REFKNOBS() { return [['k-ref', 'refv', [['inline', 'Inline'], ['pill', 'Pill'], ['words', 'Spelled out'], ['quote', 'Quote']]]]; }
+function REFKNOBS() { return [['k-ref', 'refv', [
+  ['inline', 'Inline'], ['inline-loc', 'Locator first', '1'], ['inline-plat', 'Platform', '2'],
+  ['pill', 'Pill'], ['pill-tag', 'Tag', '1'], ['pill-split', 'Two chips', '2'],
+  ['words', 'Spelled out'], ['words-title', 'Title first', '1'], ['words-about', 'Asked about', '2'],
+  ['quote', 'Quote'], ['quote-line', 'One line', '1'], ['quote-card', 'Card', '2']]]]; }
 const RF_DEMO = [
   ['Article, a paragraph', { it: 'm2', b: 6 }, 'Is the 3.1x figure in this paragraph right for the larger model?'],
   ['Article, the whole source', { it: 'm8' }, 'What did the eval track agree on, and what is still open?'],
