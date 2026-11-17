@@ -1672,7 +1672,6 @@ button.n-row:active { background: var(--n-fill); }
 .ab-add-r { background: color-mix(in srgb, var(--good, #2e7d32) 14%, transparent); border-radius: 4px; padding: 1px 4px; }
 .ab-rm-r { text-decoration: line-through; color: var(--t-faint); }
 .ab-join { margin-top: 8px; }
-.ab-cp { font-size: var(--fs-xs); }
 .note-card > .tlink, .note-card > .btn { align-self: flex-start; }
 .cs-fine.ab-f { display: block; }
 .th-facts .tlink.num { text-decoration: underline; text-decoration-color: var(--divider-strong, currentColor); text-underline-offset: 3px; }
@@ -1682,13 +1681,13 @@ button.n-row:active { background: var(--n-fill); }
 .ds-side .mods > div .au { font-size: var(--fs-sm); color: var(--t-primary); }
 /* Skills: preview dialog, Manage list with drag, add and edit dialog */
 .ab-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em; letter-spacing: -0.01em; }
-.sk-tx b.ab-mono { font-size: 12.5px; }
 .sk-tx small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ab-skti { display: inline-flex; align-items: center; gap: 10px; }
-.ab-skti .ab-mono { font-size: 15px; font-weight: 600; }
+.ab-skti .ab-skn { font-size: 15px; font-weight: 600; }
 .ab-skp { display: flex; flex-direction: column; gap: 12px; }
 .ab-skd { margin: 0; font-size: var(--fs-base, 14px); line-height: 1.55; color: var(--t-body); }
-.ab-skp code, .ab-skhint code, .ab-md code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; padding: 1px 5px; border-radius: 5px; background: var(--fill-subtle); color: var(--t-strong); }
+.ab-skp code, .ab-skhint code { font-family: inherit; font-size: inherit; padding: 1px 5px; border-radius: 5px; background: var(--fill-subtle); color: var(--t-strong); }
+.ab-md code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; padding: 1px 5px; border-radius: 5px; background: var(--fill-subtle); color: var(--t-strong); }
 .ab-skl { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--t-faint); }
 .ab-sku { display: flex; flex-direction: column; gap: 2px; padding-top: 10px; border-top: 1px solid var(--divider); }
 .ab-sku .ab-skl { margin-bottom: 4px; }
@@ -1711,7 +1710,7 @@ button.n-row:active { background: var(--n-fill); }
 .ab-skdet .ab-md { padding: 0 14px 12px; }
 .ab-skcode { border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--card); overflow: hidden; }
 .ab-skch { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--divider); background: var(--fill-subtle); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--t-secondary); }
-.ab-skch .faint { font-family: var(--font-ui); }
+.ab-skch .faint, .ab-skch .btn { font-family: var(--font-ui); }
 .ab-skcode pre, .ab-skpre { margin: 0; padding: 12px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.6; color: var(--t-body); white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow: auto; }
 .ab-skcode.edit textarea { display: block; width: 100%; box-sizing: border-box; border: 0; background: transparent; padding: 12px 14px; font-size: 12.5px; line-height: 1.6; color: var(--t-primary); resize: none; outline: none; min-height: 280px; }
 html:not([data-device="phone"]) .modal.cs-m.ab-skm-d.wide { width: 640px; }
@@ -9057,13 +9056,13 @@ const abMd = t => String(t || '').split(/\n\s*\n/).map(bk => {
 function abSkillDlg(s, i) {
   const [n, t] = D.skills[s.id][i], { d, b } = abSkParse(t);
   const body = `<p class="ab-skd">${esc(d)}</p><div class="ab-skcode"><div class="ab-skch"><span>SKILL.md</span><button class="btn sm" type="button" data-abskcopy="${i}">Copy</button></div><pre>${esc(abSkFile(n, d, b))}</pre></div><p class="cs-fine ab-f">You can start an ask with <code>/${esc(n)}</code>.</p>`;
-  const title = `<span class="ab-skti"><span class="sk-ic">${skillIcon(n)}</span><span class="ab-mono">${esc(n)}</span></span>`;
+  const title = `<span class="ab-skti"><span class="sk-ic">${skillIcon(n)}</span><span class="ab-skn">${esc(n)}</span></span>`;
   return dlg(title, `<div class="ab-skp">${body}</div>`, `${cancelB('Close')}${st.auth === 'in' ? `<button class="btn primary" type="button" data-skill="${i}">Use this skill</button>` : ''}`).replace('modal cs-m', 'modal cs-m ab-skm-d wide');
 }
 function abSkillsCard(s) {
   const list = D.skills[s.id], mod = isModOf(s.id) && st.auth === 'in';
   if (!list || !list.length) return mod ? `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3></div><p class="muted cs-small abw-none">No skills yet.</p><button class="tlink ab-add" type="button" data-abskmg="new">${PLUS}Add a skill</button></div>` : '';
-  const row = ([n, t], i) => `<button class="sk-row" type="button" data-abskill="${i}" aria-haspopup="dialog"><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b class="ab-mono">${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span>${I.chev.replace('<svg', '<svg class="sk-go"')}</button>`;
+  const row = ([n, t], i) => `<button class="sk-row" type="button" data-abskill="${i}" aria-haspopup="dialog"><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span>${I.chev.replace('<svg', '<svg class="sk-go"')}</button>`;
   return `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3><span class="edited">${list.length}</span>${mod ? '<button class="tlink ab-skm" type="button" data-abskmg="1">Manage</button>' : ''}</div><div class="sk-list">${list.map(row).join('')}</div></div>`;
 }
 
@@ -9071,7 +9070,7 @@ function abSkillsCard(s) {
 const SK_GRIP = '<svg viewBox="0 0 16 16" aria-hidden="true"><g fill="currentColor"><circle cx="6" cy="4" r="1.1"/><circle cx="10" cy="4" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="10" cy="8" r="1.1"/><circle cx="6" cy="12" r="1.1"/><circle cx="10" cy="12" r="1.1"/></g></svg>';
 function abSkillsManage(s) {
   const list = D.skills[s.id] || [];
-  const rows = list.map(([n, t], i) => `<div class="ab-skr" data-skrow="${i}"><button class="ab-skdrag" type="button" data-skdrag="${i}" aria-label="Move ${esc(n)}. Drag, or use the up and down arrow keys." title="Drag to reorder">${SK_GRIP}</button><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b class="ab-mono">${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span><span class="ab-pgb"><button class="btn sm" type="button" data-absk="edit:${i}">Edit</button><button class="btn sm" type="button" data-absk="rm:${i}">Remove</button></span></div>`).join('');
+  const rows = list.map(([n, t], i) => `<div class="ab-skr" data-skrow="${i}"><button class="ab-skdrag" type="button" data-skdrag="${i}" aria-label="Move ${esc(n)}. Drag, or use the up and down arrow keys." title="Drag to reorder">${SK_GRIP}</button><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span><span class="ab-pgb"><button class="btn sm" type="button" data-absk="edit:${i}">Edit</button><button class="btn sm" type="button" data-absk="rm:${i}">Remove</button></span></div>`).join('');
   return `<div class="cs-set st-side ab-skmg">${stSec('Skills', 'Agent skills members can use in asks in this space. Shown in About in this order.', `<div class="ab-skl-list">${rows || '<p class="muted cs-small">No skills yet.</p>'}</div><button class="btn sm cs-b st-add" type="button" data-absk="new">${PLUS}Add a skill</button>`)}</div>`;
 }
 /* the add and edit dialog: fields on the left, how the skill appears in About and its SKILL.md on the right */
@@ -9082,10 +9081,10 @@ function abSkEdDlg() {
   const errP = (id, f) => `<p class="ab-skerr" id="${id}-e" ${em(f) ? '' : 'hidden'}>${esc(em(f))}</p>`;
   const slug = abSkSlug(ed.n), sug = ed.n && slug && slug !== ed.n ? ` <button class="tlink" type="button" data-absk="slug">Use ${esc(slug)}</button>` : '';
   const fld = (id, label, extra, hint, inner) => `<div class="fld ab-skfld"><label for="${id}"><span>${label}</span>${extra || ''}</label>${inner}${hint ? `<p class="ab-skhint" id="${id}-h">${hint}</p>` : ''}${errP(id, id.slice(6))}</div>`;
-  const fields = fld('ab-sk-n', 'Name', '', `Lowercase letters, numbers and hyphens, up to 64 characters. Members type it as <code>/name</code>.<span id="ab-sk-sug">${sug}</span>`, `<input id="ab-sk-n" class="ab-mono" type="text" value="${esc(ed.n)}" placeholder="summarizing-papers" autocomplete="off" spellcheck="false">`)
+  const fields = fld('ab-sk-n', 'Name', '', `Lowercase letters, numbers and hyphens, up to 64 characters. Members type it as <code>/name</code>.<span id="ab-sk-sug">${sug}</span>`, `<input id="ab-sk-n" type="text" value="${esc(ed.n)}" placeholder="summarizing-papers" autocomplete="off" spellcheck="false">`)
     + fld('ab-sk-d', 'Description', `<small class="ab-skc" id="ab-sk-dc">${ed.d.length} / 1,024</small>`, 'What the skill does and when to use it, in the third person.', `<textarea id="ab-sk-d" class="cs-ta" rows="3" placeholder="Summarizes a research paper: the claim, the method and the results. Use when someone gives an arXiv ID.">${esc(ed.d)}</textarea>`)
     + fld('ab-sk-b', 'Instructions', '<small class="ab-skc">Markdown, optional</small>', 'The steps and output format the agent follows when it uses the skill. Leave out what the agent already knows.', `<textarea id="ab-sk-b" class="cs-ta ab-mono" rows="9" spellcheck="false" placeholder="## Steps&#10;1. …">${esc(ed.b)}</textarea>`);
-  const prev = `<aside class="ab-skprev" aria-label="Preview"><span class="ab-skl">In About</span><div class="sk-row ab-skrp"><span class="sk-ic" id="ab-sk-pi">${skillIcon(ed.n || 'x')}</span><span class="sk-tx"><b class="ab-mono" id="ab-sk-pn">${esc(ed.n || 'name')}</b><small id="ab-sk-pd">${esc(ed.d || 'Description')}</small></span></div><span class="ab-skl">SKILL.md</span><pre class="ab-skpre" id="ab-sk-pf">${esc(abSkFile(ed.n, ed.d, ed.b))}</pre></aside>`;
+  const prev = `<aside class="ab-skprev" aria-label="Preview"><span class="ab-skl">In About</span><div class="sk-row ab-skrp"><span class="sk-ic" id="ab-sk-pi">${skillIcon(ed.n || 'x')}</span><span class="sk-tx"><b id="ab-sk-pn">${esc(ed.n || 'name')}</b><small id="ab-sk-pd">${esc(ed.d || 'Description')}</small></span></div><span class="ab-skl">SKILL.md</span><pre class="ab-skpre" id="ab-sk-pf">${esc(abSkFile(ed.n, ed.d, ed.b))}</pre></aside>`;
   const body = `<div class="ab-ske2"><div class="ab-ske">${fields}</div>${prev}</div>`;
   const imp = `<label class="tlink ab-skimp">Import a SKILL.md file<input id="ab-sk-file" type="file" accept=".md,text/markdown,text/plain" hidden></label>`;
   return `<div class="modal-scrim"><div class="modal cs-m ab-sked ab-sked-${v}" role="dialog" aria-modal="true" aria-labelledby="cs-dt"><div class="modal-h"><h3 id="cs-dt">${isNew ? 'Add a skill' : 'Edit skill'}</h3><button class="iconbtn" type="button" data-act="modal-close" aria-label="Close">${I.close}</button></div>${body}<div class="modal-f">${imp}<span style="flex:1"></span>${cancelB()}<button class="btn primary" type="button" data-absk="save">${isNew ? 'Add skill' : 'Save'}</button></div></div></div>`;
@@ -9170,7 +9169,7 @@ function abTokenCard(s) {
 function abAbout(s) {
   const facts = `<div class="th-facts"><div><span>Visibility</span><b>${isClosed(s) ? visLabel(s) : 'Open'}</b></div><div><span>Joining</span><b>${!isClosed(s) ? 'Anyone can join' : policyLabel(s)}</b></div><div><span>Members</span><b><button class="tlink num" type="button" data-abmem="1">${s.members.toLocaleString('en-US')}</button></b></div><div><span>Created</span><b>${s.created} by ${au(abOwner(s))}</b></div>${verShown(s) ? `<div><span>Domain</span><b class="sf-vd">${SEAL}${esc(s.dom.domain)}</b></div>` : ''}</div>`;
   const join = joinBtn(s);
-  return `<div class="note-card"><p class="sf-ab-d">${esc(s.desc)}</p><button class="tlink ab-cp" type="button" data-abcopy="about">Copy link</button></div>
+  return `<div class="note-card"><p class="sf-ab-d">${esc(s.desc)}</p></div>
     <div class="note-card"><h3>Rules</h3>${rulesList(s)}${s.rulesAt ? `<p class="cs-fine ab-upd">Updated ${s.rulesAt === 'just now' ? 'just now' : s.rulesAt + ' ago'} by ${esc(s.rulesBy)} · <button class="tlink" type="button" data-abrules="1">See changes</button></p>` : ''}</div>
     ${abPagesCard(s)}${abSkillsCard(s)}
     <div class="note-card"><h3>Details</h3>${facts}${verShown(s) ? `<p class="cs-fine sf-vnote">${SEAL}<span>${verNote(s)}</span></p>` : ''}</div>
