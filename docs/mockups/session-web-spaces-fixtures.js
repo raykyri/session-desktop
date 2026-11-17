@@ -12,6 +12,10 @@
      a thread's r (follow-up or reply count), likes, liked and mine; a space's members and pct. likesBase and
      membersBase count people outside these fixtures.
    - Ids are the fixtures' own (k1, rp1, …); records created later get ULIDs from the server.
+   - Threads (posts) have ULIDs: the time part is the thread's createdAt and the random part is fixed, so the
+     ids stay the same between runs. Everything that points at a thread uses its id: the keys of rich, srcd,
+     fu, rp and qtd; the members of liked and saved; "<thread>:<node>" in qtSaved; "<kind>:<thread>[:…]" in
+     report keys; a notification's thread; a thread's from.th.
    - Sets are written in the wire form { $set: [...] }. */
 window.SessionFixtures = {
   clock: '2026-11-16T10:00:00Z',
@@ -323,6 +327,7 @@ window.SessionFixtures = {
     ],
     posts: [
       {
+        id: '01M7HWGZJGT7JTFFVSYPX055KV',
         s: 'public',
         u: 'ines.v',
         k: 'ask',
@@ -334,6 +339,7 @@ window.SessionFixtures = {
         likesBase: 26,
       },
       {
+        id: '01M7HVQB8G7QAKZFGDA9MW1526',
         s: 'public',
         u: 'hal_b',
         k: 'post',
@@ -343,6 +349,7 @@ window.SessionFixtures = {
         likesBase: 24,
       },
       {
+        id: '01M7HQMDT0RH0G2WHVJHQ6Z8C2',
         s: 'public',
         u: 'jun.park',
         k: 'ask',
@@ -354,6 +361,7 @@ window.SessionFixtures = {
         likesBase: 18,
       },
       {
+        id: '01M7HM6J60FXTCP97AMP8ZRX5E',
         s: 'public',
         u: 'oduya',
         k: 'ask',
@@ -365,6 +373,7 @@ window.SessionFixtures = {
         likesBase: 14,
       },
       {
+        id: '01M7HGRPJ051131HPPPSW01RZ1',
         s: 'public',
         u: 'sol',
         k: 'post',
@@ -374,6 +383,7 @@ window.SessionFixtures = {
         likesBase: 18,
       },
       {
+        id: '01M7H9WZA0CYDP5Z7ACZYSZTQ2',
         s: 'public',
         u: 'lettie',
         k: 'ask',
@@ -385,6 +395,7 @@ window.SessionFixtures = {
         likesBase: 4,
       },
       {
+        id: '01M7HTF26GS2MA4P948GD5K0EG',
         s: 'scifi',
         u: 'mira_k',
         k: 'ask',
@@ -396,6 +407,7 @@ window.SessionFixtures = {
         likesBase: 35,
       },
       {
+        id: '01M7HM6J60BNFNCYM0WE5BCMK1',
         s: 'scifi',
         u: 'tomasz',
         k: 'post',
@@ -405,6 +417,7 @@ window.SessionFixtures = {
         likesBase: 7,
       },
       {
+        id: '01M7H6F3P02JFX3X2X804X3986',
         s: 'scifi',
         u: 'ines.v',
         k: 'ask',
@@ -416,6 +429,7 @@ window.SessionFixtures = {
         likesBase: 5,
       },
       {
+        id: '01M7E164R0BPYCCAQ4CDZ2QSG8',
         s: 'scifi',
         u: 'jun.park',
         k: 'ask',
@@ -427,6 +441,7 @@ window.SessionFixtures = {
         likesBase: 6,
       },
       {
+        id: '01M7HQMDT05MJQ0F8KR8KKWF5G',
         s: 'markets',
         u: 'hal_b',
         k: 'post',
@@ -436,6 +451,7 @@ window.SessionFixtures = {
         likesBase: 33,
       },
       {
+        id: '01M7HGRPJ0E7RGZ45D4KENBQ6P',
         s: 'markets',
         u: 'oduya',
         k: 'ask',
@@ -447,6 +463,7 @@ window.SessionFixtures = {
         likesBase: 11,
       },
       {
+        id: '01M7HM6J60Z1FFM56RSRTHFM2Y',
         s: 'ml',
         u: 'mira_k',
         k: 'ask',
@@ -458,6 +475,7 @@ window.SessionFixtures = {
         likesBase: 5,
       },
       {
+        id: '01M7H9WZA0NR1T4T2TGBEKK21Y',
         s: 'bio',
         u: 'lettie',
         k: 'ask',
@@ -469,6 +487,7 @@ window.SessionFixtures = {
         likesBase: 18,
       },
       {
+        id: '01M7GW5GT0XMQGVRNF95PDQ8HV',
         s: 'history',
         u: 'tomasz',
         k: 'ask',
@@ -480,6 +499,7 @@ window.SessionFixtures = {
         likesBase: 19,
       },
       {
+        id: '01M7E164R0M5VQ0DTHTK7229GY',
         s: 'climate',
         u: 'sol',
         k: 'ask',
@@ -491,6 +511,7 @@ window.SessionFixtures = {
         likesBase: 35,
       },
       {
+        id: '01M7HDATY00YDFQVMNJW7VNX53',
         s: 'urbanism',
         u: 'sol',
         k: 'ask',
@@ -502,6 +523,7 @@ window.SessionFixtures = {
         likesBase: 24,
       },
       {
+        id: '01M7E164R00RC9Q9AK5XBX7WXX',
         s: 'math',
         u: 'lettie',
         k: 'post',
@@ -511,6 +533,7 @@ window.SessionFixtures = {
         likesBase: 33,
       },
       {
+        id: '01M7HVAH3GCWYN0S5H6NX9WKRT',
         s: 'replication',
         u: 'mira_k',
         k: 'ask',
@@ -523,6 +546,7 @@ window.SessionFixtures = {
         likesBase: 36,
       },
       {
+        id: '01M7HGRPJ0PTJXQ2N1GJPWFQ4F',
         s: 'replication',
         u: 'lettie',
         k: 'post',
@@ -532,6 +556,7 @@ window.SessionFixtures = {
         likesBase: 20,
       },
       {
+        id: '01M7H6F3P012CRWKEQVTVA6PV4',
         s: 'replication',
         u: 'ines.v',
         k: 'ask',
@@ -543,6 +568,7 @@ window.SessionFixtures = {
         likesBase: 16,
       },
       {
+        id: '01M7H31820BK289S2XPP2DTK2N',
         s: 'replication',
         u: 'oduya',
         k: 'ask',
@@ -555,6 +581,7 @@ window.SessionFixtures = {
         likesBase: 22,
       },
       {
+        id: '01M7E164R0YQF6XYA39B2CX7FD',
         s: 'replication',
         u: 'hal_b',
         k: 'post',
@@ -564,6 +591,7 @@ window.SessionFixtures = {
         likesBase: 31,
       },
       {
+        id: '01M7H9WZA0TT6MXVG1Q58NWVM7',
         s: 'northwind',
         u: 'oduya',
         k: 'post',
@@ -573,6 +601,7 @@ window.SessionFixtures = {
         likesBase: 17,
       },
       {
+        id: '01M7E164R0RBHSCJH2YBWZ6AWG',
         s: 'northwind',
         u: 'pat.r',
         k: 'ask',
@@ -584,6 +613,7 @@ window.SessionFixtures = {
         likesBase: 18,
       },
       {
+        id: '01M7HM6J60AETSZKDBM6K6A8FA',
         s: 'grants',
         u: 'tomasz',
         k: 'post',
@@ -593,6 +623,7 @@ window.SessionFixtures = {
         likesBase: 7,
       },
       {
+        id: '01M7E164R0Y9DN252RVM5BA939',
         s: 'grants',
         u: 'ines.v',
         k: 'ask',
@@ -604,6 +635,7 @@ window.SessionFixtures = {
         likesBase: 3,
       },
       {
+        id: '01M7HDATY0QNJTDSMHQB97FPMJ',
         s: 'ward7',
         u: 'jun.park',
         k: 'post',
@@ -613,6 +645,7 @@ window.SessionFixtures = {
         likesBase: 19,
       },
       {
+        id: '01M7BESDR08WWS4J3FKS5B43EB',
         s: 'ward7',
         u: 'sol',
         k: 'ask',
@@ -624,6 +657,7 @@ window.SessionFixtures = {
         likesBase: 20,
       },
       {
+        id: '01M3WQPGR00ZSXTEADW1R349TJ',
         s: 'sablefield',
         rf: 'q1',
         u: 'jun.park',
@@ -637,6 +671,7 @@ window.SessionFixtures = {
         likesBase: 4,
       },
       {
+        id: '01M1GRZA80V05VTX2Q0GTKZVSR',
         s: 'sablefield',
         rf: 'q2',
         u: 'mira_k',
@@ -650,6 +685,7 @@ window.SessionFixtures = {
         likesBase: 17,
       },
       {
+        id: '01M5JT1KR02CNFDXPGDT7X75TM',
         s: 'sablefield',
         rf: 'q3',
         u: 'hal_b',
@@ -663,6 +699,7 @@ window.SessionFixtures = {
         likesBase: 30,
       },
       {
+        id: '01M4ERFHR0DNSWS2YX9D6AVJAQ',
         s: 'sablefield',
         rf: 'q4',
         u: 'lettie',
@@ -676,6 +713,7 @@ window.SessionFixtures = {
         likesBase: 43,
       },
       {
+        id: '01M1GRZA80726WNZAKFS9STHV3',
         s: 'sablefield',
         rf: 'q5',
         u: 'ines.v',
@@ -689,6 +727,7 @@ window.SessionFixtures = {
         likesBase: 15,
       },
       {
+        id: '01M1GRZA80FN67R0GKD0E3G3KR',
         s: 'sablefield',
         rf: 'q6',
         u: 'sol',
@@ -702,6 +741,7 @@ window.SessionFixtures = {
         likesBase: 28,
       },
       {
+        id: '01M1GRZA803XVMSM2D58P7SYV7',
         s: 'sablefield',
         rf: 'q7',
         u: 'mira_k',
@@ -715,6 +755,7 @@ window.SessionFixtures = {
         likesBase: 41,
       },
       {
+        id: '01M7H9WZA0HJBEXT0EGHNW4AJR',
         s: 'sablefield',
         rf: 'q8',
         u: 'hal_b',
@@ -728,6 +769,7 @@ window.SessionFixtures = {
         likesBase: 13,
       },
       {
+        id: '01M7HGRPJ0JTKXYA2WM6BJVTCR',
         s: 'sablefield',
         rf: 'q9',
         u: 'oduya',
@@ -741,6 +783,7 @@ window.SessionFixtures = {
         likesBase: 26,
       },
       {
+        id: '01M50S8JR0V9Q6QPE9B1JC34QW',
         s: 'sablefield',
         rf: 'q10',
         u: 'oduya',
@@ -754,6 +797,7 @@ window.SessionFixtures = {
         likesBase: 39,
       },
       {
+        id: '01M3APXFR0KY3SCSBDTJ62S595',
         s: 'sablefield',
         rf: 'q11',
         u: 'jun.park',
@@ -767,6 +811,7 @@ window.SessionFixtures = {
         likesBase: 11,
       },
       {
+        id: '01M4ERFHR0ZNF5JKHYBYT43S81',
         s: 'sablefield',
         rf: 'q12',
         u: 'lettie',
@@ -780,6 +825,7 @@ window.SessionFixtures = {
         likesBase: 24,
       },
       {
+        id: '01M3WQPGR0JNGCT8FKAGNK4AZ0',
         s: 'sablefield',
         rf: 'q13',
         u: 'mira_k',
@@ -793,6 +839,7 @@ window.SessionFixtures = {
         likesBase: 37,
       },
       {
+        id: '01M7E164R0TE5YDZ70HY74F0XP',
         s: 'sablefield',
         rf: 'q14',
         u: 'tomasz',
@@ -806,6 +853,7 @@ window.SessionFixtures = {
         likesBase: 9,
       },
       {
+        id: '01M3APXFR0FH01RWRB64FWZCK8',
         s: 'sablefield',
         rf: 'q15',
         u: 'sol',
@@ -819,6 +867,7 @@ window.SessionFixtures = {
         likesBase: 22,
       },
       {
+        id: '01M7E164R0AMBWTXP79008BSJ1',
         s: 'sablefield',
         rf: 'q16',
         u: 'jun.park',
@@ -832,6 +881,7 @@ window.SessionFixtures = {
         likesBase: 35,
       },
       {
+        id: '01M1GRZA806GFS4QG0QWB8V40P',
         s: 'sablefield',
         rf: 'q17',
         u: 'hal_b',
@@ -845,6 +895,7 @@ window.SessionFixtures = {
         likesBase: 7,
       },
       {
+        id: '01M1GRZA80HQ5KMQ3S48QVGJTT',
         s: 'sablefield',
         rf: 'q18',
         u: 'lettie',
@@ -858,6 +909,7 @@ window.SessionFixtures = {
         likesBase: 20,
       },
       {
+        id: '01M7H6F3P02DNSM2XPA246JG1F',
         s: 'sablefield',
         rf: 'q19',
         u: 'cleo',
@@ -871,6 +923,7 @@ window.SessionFixtures = {
         likesBase: 33,
       },
       {
+        id: '01M769ZZR0AGZ2PQESX65WRGQS',
         s: 'sablefield',
         rf: 'p1',
         u: 'devin_o',
@@ -881,6 +934,7 @@ window.SessionFixtures = {
         likesBase: 31,
       },
       {
+        id: '01M64TTMR0EXK3TA7C86EV3CVM',
         s: 'sablefield',
         rf: 'p2',
         u: 'maya.r',
@@ -891,6 +945,7 @@ window.SessionFixtures = {
         likesBase: 18,
       },
       {
+        id: '01M7H9WZA09M3CNSPTFF22FZ86',
         rf: 'mia1',
         s: 'ml',
         u: 'jun.park',
@@ -903,6 +958,7 @@ window.SessionFixtures = {
         likesBase: 14,
       },
       {
+        id: '01M7GB06P0P8ZXPB0DEXY3G3RT',
         rf: 'mia2',
         s: 'ml',
         u: 'hal_b',
@@ -915,6 +971,7 @@ window.SessionFixtures = {
         likesBase: 21,
       },
       {
+        id: '01M7GRQN60V68CFNX27EE5W66S',
         rf: 'mia3',
         s: 'ml',
         u: 'mira_k',
@@ -927,6 +984,7 @@ window.SessionFixtures = {
         likesBase: 17,
       },
       {
+        id: '01M7BESDR0YSSVFVJ47HD56Y9M',
         rf: 'mia4',
         s: 'ml',
         u: 'oduya',
@@ -939,6 +997,7 @@ window.SessionFixtures = {
         likesBase: 9,
       },
       {
+        id: '01M7E164R0B8KHNGZTQ0METX7J',
         rf: 'mia5',
         s: 'ml',
         u: 'lettie',
@@ -951,6 +1010,7 @@ window.SessionFixtures = {
         likesBase: 8,
       },
       {
+        id: '01M7GZKCE0ZYF4MBKKGYS455JM',
         rf: 'mia6',
         s: 'replication',
         u: 'lettie',
@@ -964,7 +1024,7 @@ window.SessionFixtures = {
       },
     ],
     rich: {
-      0: `<p>Science fiction rarely uses the term "intention marketplace", but many works describe systems that make what people want, plan or believe visible to others and then price, rank or match it. The examples fall into four mechanisms: reputation ledgers, prediction and decision markets, attention auctions, and agent-brokered matching. The list below covers the clearest cases; the full scan found 31 works published between 1953 and 2024. <sup class="cite">5</sup></p>
+      '01M7HWGZJGT7JTFFVSYPX055KV': `<p>Science fiction rarely uses the term "intention marketplace", but many works describe systems that make what people want, plan or believe visible to others and then price, rank or match it. The examples fall into four mechanisms: reputation ledgers, prediction and decision markets, attention auctions, and agent-brokered matching. The list below covers the clearest cases; the full scan found 31 works published between 1953 and 2024. <sup class="cite">5</sup></p>
 
 <h4>Reputation ledgers</h4>
 <p>In these systems, a public score records how others regard a person's past actions and stated aims. The score works as a currency, or replaces one, but it is earned rather than transferred.</p>
@@ -1009,7 +1069,7 @@ window.SessionFixtures = {
 <li>Some inclusions are judgment calls. <i>Infomocracy</i> and <i>The Circle</i> deal with aggregated preference but have no market in the strict sense.</li>
 <li>Short fiction from magazines and anthologies is under-represented compared with novels.</li>
 </ul>`,
-      2: `<p>Sweden switched from left-hand to right-hand traffic at 05:00 on Sunday 3 September 1967. Four years of planning by a state commission led up to the switch, and non-essential traffic was stopped from 01:00 to 06:00 so that it could happen. Accident numbers fell after the change and then returned to their earlier trend within roughly two years.</p>
+      '01M7HQMDT0RH0G2WHVJHQ6Z8C2': `<p>Sweden switched from left-hand to right-hand traffic at 05:00 on Sunday 3 September 1967. Four years of planning by a state commission led up to the switch, and non-essential traffic was stopped from 01:00 to 06:00 so that it could happen. Accident numbers fell after the change and then returned to their earlier trend within roughly two years.</p>
 
 <h4>Why Sweden switched</h4>
 <p>Sweden drove on the left even though its land neighbours, Norway and Finland, drove on the right. Most Swedish cars were already left-hand drive, because they were imported or built to the same layout as cars in right-hand-traffic countries. Overtaking on two-lane roads was therefore harder, since the driver sat on the kerb side. In a 1955 referendum a large majority, commonly reported as about 83 percent, voted to keep left-hand traffic. The Riksdag passed the change anyway in 1963, and the switch date was set for 1967. <sup class="cite">1</sup><sup class="cite">2</sup></p>
@@ -1051,7 +1111,7 @@ window.SessionFixtures = {
 <li><b>Total cost.</b> Totals vary depending on whether vehicle conversions and replacements brought forward from later years are included.</li>
 </ul>
 <p>Iceland made the same switch on 26 May 1968 with a similar plan, and its accident numbers followed a similar short-term pattern. <sup class="cite">6</sup></p>`,
-      3: `<p>Five public sources are usable for container-ship port waiting and dwell times: UNCTAD port-call statistics, the World Bank and S&amp;P Global Container Port Performance Index, IMF PortWatch, the US Bureau of Transportation Statistics port performance program, and raw AIS archives from NOAA and the Danish Maritime Authority. Only the two AIS archives provide vessel-level records from before 2019, and both require processing to derive dwell times.</p>
+      '01M7HM6J60FXTCP97AMP8ZRX5E': `<p>Five public sources are usable for container-ship port waiting and dwell times: UNCTAD port-call statistics, the World Bank and S&amp;P Global Container Port Performance Index, IMF PortWatch, the US Bureau of Transportation Statistics port performance program, and raw AIS archives from NOAA and the Danish Maritime Authority. Only the two AIS archives provide vessel-level records from before 2019, and both require processing to derive dwell times.</p>
 
 <h4>Definitions first</h4>
 <p>Sources use different terms for different intervals:</p>
@@ -1098,7 +1158,7 @@ window.SessionFixtures = {
 <li>Aggregated sources use different definitions of arrival, so their numbers cannot be compared directly.</li>
 <li>Coverage start dates above are approximate and should be checked against each provider's current documentation.</li>
 </ul>`,
-      5: `<p>The Banach–Tarski paradox states that a solid ball in three-dimensional space can be split into finitely many disjoint pieces, and those pieces can be moved by rotations and translations to form two balls, each the same size as the original. The axiom of choice enters at one step: selecting one point from each of uncountably many orbits of a group action on the sphere. Without that selection, the pieces cannot be shown to exist.</p>
+      '01M7H9WZA0CYDP5Z7ACZYSZTQ2': `<p>The Banach–Tarski paradox states that a solid ball in three-dimensional space can be split into finitely many disjoint pieces, and those pieces can be moved by rotations and translations to form two balls, each the same size as the original. The axiom of choice enters at one step: selecting one point from each of uncountably many orbits of a group action on the sphere. Without that selection, the pieces cannot be shown to exist.</p>
 
 <h4>The statement, precisely</h4>
 <p>Two subsets A and B of ℝ³ are <i>equidecomposable</i> if A can be partitioned into finitely many sets A₁, …, Aₙ, and B into sets B₁, …, Bₙ, such that each Aᵢ is congruent to Bᵢ by an isometry. The theorem, published by Banach and Tarski in 1924, says that the unit ball is equidecomposable with two disjoint copies of itself. <sup class="cite">3</sup> Five pieces suffice, and Raphael Robinson showed that five is the minimum. <sup class="cite">2</sup></p>
@@ -1139,7 +1199,7 @@ window.SessionFixtures = {
 <li>The paradox fails in one and two dimensions. The isometry groups there are amenable, which allows finitely additive invariant measures on all sets. This is the starting point of von Neumann's theory of amenable groups. <sup class="cite">7</sup></li>
 <li>Work on how many pieces are needed, and on related results such as Laczkovich's circle-squaring (1990), is still active.</li>
 </ul>`,
-      6: `<p>Fiction about personal AI agents that bargain for their owners clusters around two periods: late-1990s and 2000s cyberpunk and post-cyberpunk, where agents are extensions of a networked self, and 2010s short fiction, where the agent is a commercial product with its own incentives. In most of these works the plot turns on the gap between whom the agent formally serves and whose interests it actually advances.</p>
+      '01M7HTF26GS2MA4P948GD5K0EG': `<p>Fiction about personal AI agents that bargain for their owners clusters around two periods: late-1990s and 2000s cyberpunk and post-cyberpunk, where agents are extensions of a networked self, and 2010s short fiction, where the agent is a commercial product with its own incentives. In most of these works the plot turns on the gap between whom the agent formally serves and whose interests it actually advances.</p>
 
 <h4>How the list was built</h4>
 <p>The scan looked for works in which a software agent, or an AI acting in that role, does at least one of the following on a person's behalf: negotiates terms, trades goods or favours, files or brokers deals, or allocates the person's attention. Stories in which an AI is only a servant, companion or weapon were excluded. Works are listed by publication year.</p>
@@ -1174,7 +1234,7 @@ window.SessionFixtures = {
 
 <h4>Limits</h4>
 <p>The scan covered English-language fiction and translations in wide circulation. Short fiction published only in magazines or anthologies is likely under-represented. Classifying a work as "negotiation" is a judgment call: several entries above involve brokering or allocation more than bargaining, and others could reasonably be moved to the adjacent list.</p>`,
-      8: `<p>Science fiction of the 1960s and earlier predicted the hardware for video calls fairly well: a screen, a camera, a call dialled like a phone call, and in some cases a fee per call. It largely missed the social side. In practice people resist being seen by default, schedule video calls rather than placing them casually, and turn cameras off.</p>
+      '01M7H6F3P02JFX3X2X804X3986': `<p>Science fiction of the 1960s and earlier predicted the hardware for video calls fairly well: a screen, a camera, a call dialled like a phone call, and in some cases a fee per call. It largely missed the social side. In practice people resist being seen by default, schedule video calls rather than placing them casually, and turn cameras off.</p>
 
 <h4>What the fiction showed</h4>
 <ul>
@@ -1213,7 +1273,7 @@ window.SessionFixtures = {
 
 <h4>Limits</h4>
 <p>This comparison relies on the best-known 1960s works, which are mostly film and television. Magazine short fiction of the period may contain more nuanced depictions that are not covered here. Usage figures for current video-call services come mainly from company statements and are not directly comparable across years.</p>`,
-      9: `<p>The word "metaverse" has had three main meanings since Neal Stephenson coined it in <i>Snow Crash</i> (1992): a specific fictional place, then an umbrella term for networked 3D virtual worlds, then a corporate strategy label after Facebook renamed itself Meta in 2021. Since about 2023 its use has fallen sharply as industry attention moved to generative AI.</p>
+      '01M7E164R0BPYCCAQ4CDZ2QSG8': `<p>The word "metaverse" has had three main meanings since Neal Stephenson coined it in <i>Snow Crash</i> (1992): a specific fictional place, then an umbrella term for networked 3D virtual worlds, then a corporate strategy label after Facebook renamed itself Meta in 2021. Since about 2023 its use has fallen sharply as industry attention moved to generative AI.</p>
 
 <h4>1992: a place in a novel</h4>
 <p>In <i>Snow Crash</i>, the Metaverse is a single shared virtual city built along "the Street", a boulevard running around a black planet. Users appear as avatars, and the quality of an avatar signals wealth and technical skill. <sup class="cite">1</sup> Property along the Street is controlled by an industry body, and access is sold. The novel presents the Metaverse as commercial and stratified, not as a utopia. Stephenson combined "meta" and "universe"; the word was used for this one fictional space.</p>
@@ -1247,7 +1307,7 @@ window.SessionFixtures = {
 
 <h4>Open questions</h4>
 <p>There is no agreed definition, so claims that the metaverse "failed" or "is still coming" usually depend on which meaning is in use. Usage trends cited here are based on news coverage and search-interest data, which reflect attention rather than actual adoption of the underlying products.</p>`,
-      11: `<p>Prediction markets use four main approaches when resolution criteria turn out to be ambiguous: pre-committed oracles with dispute bonds, appeals to a decision body, refunding or voiding the market (often called N/A or "invalid"), and votes by token holders or a committee. Each approach moves the risk of ambiguity onto a different party, and none removes it. <sup class="cite">7</sup></p>
+      '01M7HGRPJ0E7RGZ45D4KENBQ6P': `<p>Prediction markets use four main approaches when resolution criteria turn out to be ambiguous: pre-committed oracles with dispute bonds, appeals to a decision body, refunding or voiding the market (often called N/A or "invalid"), and votes by token holders or a committee. Each approach moves the risk of ambiguity onto a different party, and none removes it. <sup class="cite">7</sup></p>
 
 <h4>Where ambiguity comes from</h4>
 <ul>
@@ -1287,7 +1347,7 @@ window.SessionFixtures = {
 
 <h4>What the sources disagree on</h4>
 <p>Writers disagree about whether ambiguity is a design flaw or a cost of trading on real-world events. Some argue that traders should price resolution risk like any other risk. Others argue that frequent disputes undermine the claim that market prices reflect probabilities of the underlying event, since they partly reflect predictions about the resolver. There is little systematic data on how often markets resolve contrary to a reasonable reading of their wording.</p>`,
-      12: `<p>Published work from 2025 and 2026 shows that spending more inference compute on reasoning raises accuracy substantially on tasks with checkable answers, such as competition mathematics and code with unit tests. Gains on open-ended or knowledge-heavy tasks are smaller and less consistent, and papers measure "compute" in incompatible ways, which makes direct comparison difficult.</p>
+      '01M7HM6J60Z1FFM56RSRTHFM2Y': `<p>Published work from 2025 and 2026 shows that spending more inference compute on reasoning raises accuracy substantially on tasks with checkable answers, such as competition mathematics and code with unit tests. Gains on open-ended or knowledge-heavy tasks are smaller and less consistent, and papers measure "compute" in incompatible ways, which makes direct comparison difficult.</p>
 
 <h4>Background going into 2025</h4>
 <p>Two lines of work set the agenda. Snell and colleagues (2024) compared spending a fixed FLOP budget on a larger model against spending it on search or revision at inference, and found that adaptive test-time strategies could match a model several times larger on problems of moderate difficulty, but not on the hardest ones. <sup class="cite">1</sup> OpenAI's o1 release in late 2024 reported accuracy that rose roughly log-linearly with both training-time reinforcement learning and the length of the reasoning trace at inference, without publishing the method in detail. <sup class="cite">2</sup></p>
@@ -1329,7 +1389,7 @@ window.SessionFixtures = {
 <li>Whether the log-linear accuracy curves continue or flatten at budgets beyond those published.</li>
 <li>How much benchmark gains reflect contamination, since many maths benchmarks are public and reused.</li>
 </ul>`,
-      13: `<p>Dsup (damage suppressor) is a protein found in the tardigrade <i>Ramazzottius varieornatus</i> that binds to nucleosomes, the units of DNA wrapped around histone proteins. Bound Dsup appears to form a physical shield that reduces DNA strand breaks caused by hydroxyl radicals, which are the main source of indirect damage from X-rays. In cultured human cells expressing Dsup, X-ray-induced DNA damage was reduced by roughly 40%.</p>
+      '01M7H9WZA0NR1T4T2TGBEKK21Y': `<p>Dsup (damage suppressor) is a protein found in the tardigrade <i>Ramazzottius varieornatus</i> that binds to nucleosomes, the units of DNA wrapped around histone proteins. Bound Dsup appears to form a physical shield that reduces DNA strand breaks caused by hydroxyl radicals, which are the main source of indirect damage from X-rays. In cultured human cells expressing Dsup, X-ray-induced DNA damage was reduced by roughly 40%.</p>
 
 <h4>Discovery</h4>
 <p>Hashimoto and colleagues identified Dsup in 2016 while sequencing the genome of <i>R. varieornatus</i>, one of the most stress-tolerant tardigrade species. They looked for tardigrade-specific proteins associated with chromatin and found one with no clear homologue in other animals. When they expressed it in human HEK293 cells and irradiated them, comet assays (which measure fragmented DNA) showed about 40% less damage than in control cells. Dsup-expressing cells also kept more proliferative ability after irradiation. <sup class="cite">1</sup></p>
@@ -1367,7 +1427,7 @@ window.SessionFixtures = {
 <li>The in vitro protection was shown with chemically generated radicals; protection against direct ionisation is not well established.</li>
 <li>The cost of Dsup to transcription and replication in non-tardigrade cells is not fully characterised.</li>
 </ul>`,
-      14: `<p>In much of later medieval Europe, apprenticeships were set out in a written contract, usually called an indenture in England, agreed between the master and the apprentice's parent or guardian. Terms were enforced through a mix of guild authority and civic courts: guild officials registered and supervised apprentices, and city courts heard disputes, with fines, cancellation of the contract and exclusion from the trade as the main sanctions.</p>
+      '01M7GW5GT0XMQGVRNF95PDQ8HV': `<p>In much of later medieval Europe, apprenticeships were set out in a written contract, usually called an indenture in England, agreed between the master and the apprentice's parent or guardian. Terms were enforced through a mix of guild authority and civic courts: guild officials registered and supervised apprentices, and city courts heard disputes, with fines, cancellation of the contract and exclusion from the trade as the main sanctions.</p>
 
 <h4>Form of the contract</h4>
 <p>Practice varied by region, but common features appear across Italian, French and English evidence:</p>
@@ -1406,7 +1466,7 @@ window.SessionFixtures = {
 <li>How often apprentices completed their terms; English evidence from later centuries suggests many left early, but medieval completion rates are poorly documented.</li>
 <li>How representative London, Paris and the Italian cities are of smaller towns.</li>
 </ul>`,
-      15: `<p>Norway has one of the highest heat-pump penetrations in the world, with estimates of homes that have at least one heat pump commonly put at around or above 60%. <sup class="cite">2</sup> Poland started from a low base dominated by coal and district heating, grew quickly from about 2020 on subsidies and air-quality rules, then slowed after 2022. The gap comes mainly from electricity prices, existing heating systems and housing stock rather than from climate. <sup class="cite">1</sup></p>
+      '01M7E164R0M5VQ0DTHTK7229GY': `<p>Norway has one of the highest heat-pump penetrations in the world, with estimates of homes that have at least one heat pump commonly put at around or above 60%. <sup class="cite">2</sup> Poland started from a low base dominated by coal and district heating, grew quickly from about 2020 on subsidies and air-quality rules, then slowed after 2022. The gap comes mainly from electricity prices, existing heating systems and housing stock rather than from climate. <sup class="cite">1</sup></p>
 
 <h4>Norway's adoption path</h4>
 <ul>
@@ -1450,7 +1510,7 @@ window.SessionFixtures = {
 <li>Polish market data come mostly from industry associations and are revised; annual sales figures should be checked against the latest reports.</li>
 <li>Sales and installed stock are different measures; Poland's stock remains small relative to its housing even after the 2021-2022 growth.</li>
 </ul>`,
-      16: `<p>After Houston extended its exemption from off-street parking minimums from the downtown core to the East Downtown (EaDo) and Midtown areas in 2019, developers built a number of projects with fewer spaces than the old rules would have required, including small-lot infill and conversions of existing buildings. Most new projects still included some parking. Analyses so far find effects concentrated within the reform area, with little evidence of spillover elsewhere in the city.</p>
+      '01M7HDATY00YDFQVMNJW7VNX53': `<p>After Houston extended its exemption from off-street parking minimums from the downtown core to the East Downtown (EaDo) and Midtown areas in 2019, developers built a number of projects with fewer spaces than the old rules would have required, including small-lot infill and conversions of existing buildings. Most new projects still included some parking. Analyses so far find effects concentrated within the reform area, with little evidence of spillover elsewhere in the city.</p>
 
 <h4>The rules before reform</h4>
 <p>Houston is known for having no conventional zoning code, but it does regulate development through other ordinances, including lot sizes, setbacks and off-street parking requirements. The parking ordinance set minimum numbers of spaces by land use, such as a fixed number per dwelling unit or per thousand square feet of restaurant or office space. <sup class="cite">2</sup> The central business district had long been exempt. Outside it, the minimums made many small or older lots hard to redevelop, because the required parking took up much of the site. <sup class="cite">1</sup></p>
@@ -1482,7 +1542,7 @@ window.SessionFixtures = {
 <li>Available studies count projects and spaces; evidence on rents, housing prices and street parking congestion is limited.</li>
 <li>Some projects might have been built anyway with variances, so counting all reduced-parking projects as caused by the reform would overstate its effect.</li>
 </ul>`,
-      29: `<p>Yes. Since Sablefield 4.2 you can pin a read replica to one region with <code>--pin-region</code>. A pinned replica stays in that region during failover and is not moved by automatic placement. <sup class="cite">1</sup></p>
+      '01M3WQPGR00ZSXTEADW1R349TJ': `<p>Yes. Since Sablefield 4.2 you can pin a read replica to one region with <code>--pin-region</code>. A pinned replica stays in that region during failover and is not moved by automatic placement. <sup class="cite">1</sup></p>
 <h4>Create a pinned replica</h4>
 <pre><code>sable replicas create --project acme-prod --pin-region eu-central-2</code></pre>
 <p>To pin an existing replica, run <code>sable replicas update &lt;replica-id&gt; --pin-region eu-central-2</code>. The replica restarts once, which usually takes under a minute. <sup class="cite">1</sup></p>
@@ -1490,7 +1550,7 @@ window.SessionFixtures = {
 <p>Before 4.2 the flag was <code>--region</code>. It only set the initial placement, and replicas could move during failover. <code>--region</code> still works but is deprecated and prints a warning. <sup class="cite">2</sup></p>
 <h4>Limits</h4>
 <ul><li>Pinning is available on the Team and Enterprise plans. <sup class="cite">1</sup></li><li>A project can pin up to 5 replicas per region. <sup class="cite">1</sup></li><li>In the API, set <code>pin_region</code> on <code>POST /v1/replicas</code>. <sup class="cite">3</sup></li></ul>`,
-      30: `<p><code>E_SYNC_SCOPE</code> means the rule's query can return rows outside the scope the rule declares. Sablefield checks this when the rule is deployed, not when clients sync, so the deploy fails before any client is affected. <sup class="cite">1</sup></p>
+      '01M1GRZA80V05VTX2Q0GTKZVSR': `<p><code>E_SYNC_SCOPE</code> means the rule's query can return rows outside the scope the rule declares. Sablefield checks this when the rule is deployed, not when clients sync, so the deploy fails before any client is affected. <sup class="cite">1</sup></p>
 <h4>Common causes</h4>
 <ol><li>The <code>where</code> clause does not filter on the scope column. A rule with <code>scope: user</code> must filter by <code>auth.user_id()</code>. <sup class="cite">1</sup></li><li>A subquery reads from a table that has no scope column. <sup class="cite">2</sup></li><li>The rule uses <code>or</code> with a branch that does not reference the scope. <sup class="cite">2</sup></li></ol>
 <h4>Example</h4>
@@ -1500,40 +1560,40 @@ select * from notes where archived = false;
 -- passes
 select * from notes where owner_id = auth.user_id() and archived = false;</code></pre>
 <p>Run <code>sable rules check</code> locally to get the same error with a line number before you deploy. <sup class="cite">3</sup></p>`,
-      31: `<p>When a project on the Free plan goes over 100,000 rows, inserts fail with <code>E_PLAN_LIMIT</code>. Reads, updates and deletes keep working, and no data is removed. <sup class="cite">1</sup></p>
+      '01M5JT1KR02CNFDXPGDT7X75TM': `<p>When a project on the Free plan goes over 100,000 rows, inserts fail with <code>E_PLAN_LIMIT</code>. Reads, updates and deletes keep working, and no data is removed. <sup class="cite">1</sup></p>
 <p>Sablefield emails the project owners when the project reaches 80% and 100% of the limit. <sup class="cite">2</sup></p>
 <p>To add rows again, delete data or upgrade to the Team plan. The limit is lifted within a minute of the upgrade. <sup class="cite">1</sup></p>`,
-      32: `<p>Create a second service key, deploy it, then revoke the old one. Sablefield accepts both keys while both exist, so requests do not fail during the switch. <sup class="cite">1</sup></p>
+      '01M4ERFHR0DNSWS2YX9D6AVJAQ': `<p>Create a second service key, deploy it, then revoke the old one. Sablefield accepts both keys while both exist, so requests do not fail during the switch. <sup class="cite">1</sup></p>
 <ol><li>Create a new key: <code>sable keys create --role service --name service-2026-11</code>. <sup class="cite">1</sup></li><li>Update the secret in every server and job that uses it, and deploy.</li><li>Check that the old key is no longer used. <code>sable keys usage &lt;old-key-id&gt;</code> shows the time of its last request. <sup class="cite">2</sup></li><li>Revoke the old key: <code>sable keys revoke &lt;old-key-id&gt;</code>.</li></ol>
 <p>A project can have up to 10 active service keys. A revoked key stops working in all regions within 30 seconds. <sup class="cite">3</sup></p>`,
-      33: `<p>Yes. The Swift SDK stores writes in a local queue while the device is offline and sends them in order when it reconnects. <sup class="cite">1</sup></p>
+      '01M1GRZA80726WNZAKFS9STHV3': `<p>Yes. The Swift SDK stores writes in a local queue while the device is offline and sends them in order when it reconnects. <sup class="cite">1</sup></p>
 <p>The queue holds up to 10,000 writes. After that, new writes throw <code>SableError.queueFull</code>. <sup class="cite">1</sup></p>
 <p>Conflicts are resolved with last-write-wins per column. <sup class="cite">2</sup></p>`,
-      50: `<p>Not as stated. The paragraph gives 3.1 times the accuracy per dollar of the no-reasoning baseline on math and attributes the figure to the appendix table of Halvorsen et al. <sup class="cite mi-cite" data-miref="m2:6" title="Where test-time compute stops paying, paragraph 5">¶5</sup></p>
+      '01M7H9WZA09M3CNSPTFF22FZ86': `<p>Not as stated. The paragraph gives 3.1 times the accuracy per dollar of the no-reasoning baseline on math and attributes the figure to the appendix table of Halvorsen et al. <sup class="cite mi-cite" data-miref="m2:6" title="Where test-time compute stops paying, paragraph 5">¶5</sup></p>
 <p>That table reports accuracy and the number of reasoning tokens for each configuration, not cost. <sup class="cite">1</sup> Converting the token counts with the list prices the article uses earlier <sup class="cite mi-cite" data-miref="m2:3" title="Where test-time compute stops paying, paragraph 3">¶3</sup> gives about 2.4 times for the best math configuration. 3.1 is the ratio of accuracies at equal token budgets, which is a different quantity. <sup class="cite">1</sup></p>
 <p>The knowledge-heavy figure of 1.4 times is consistent with the same table under either reading. <sup class="cite">1</sup> The argument of the article does not depend on the exact math figure: the flat region it describes <sup class="cite mi-cite" data-miref="m2:5" title="Where test-time compute stops paying, paragraph 4">¶4</sup> appears with 2.4 as well.</p>`,
-      51: `<p>The thread makes three checkable claims. Two have been checked by the benchmark maintainers; one has not been checked by anyone else yet.</p>
+      '01M7GB06P0P8ZXPB0DEXY3G3RT': `<p>The thread makes three checkable claims. Two have been checked by the benchmark maintainers; one has not been checked by anyone else yet.</p>
 <table><thead><tr><th>Claim</th><th>Checked by</th><th>Result</th></tr></thead><tbody>
 <tr><td>41% of problems have a public near-duplicate <sup class="cite mi-cite" data-miref="m1:2" title="I spent the weekend checking RB-2, the reasoning benchmark that most launch posts cited…, post 3">3/7</sup></td><td>Orbit Lab <sup class="cite mi-cite mi-cx" data-miref="m5:1" title="RB-2: our response to the contamination report, paragraph 2">Orbit ¶2</sup></td><td>Agree with 298 of 492 matches; dispute 194</td></tr>
 <tr><td>Some problems come from a 2019 olympiad forum <sup class="cite mi-cite" data-miref="m1:4" title="I spent the weekend checking RB-2, the reasoning benchmark that most launch posts cited…, post 5">5/7</sup></td><td>Orbit Lab <sup class="cite mi-cite mi-cx" data-miref="m5:1" title="RB-2: our response to the contamination report, paragraph 2">Orbit ¶2</sup></td><td>Confirmed: a contractor adapted public problems</td></tr>
 <tr><td>The 47% with no match keeps the model ranking <sup class="cite mi-cite" data-miref="m1:6" title="I spent the weekend checking RB-2, the reasoning benchmark that most launch posts cited…, post 7">7/7</sup></td><td>Nobody yet</td><td>The match list is public, so this can be checked <sup class="cite">1</sup></td></tr>
 </tbody></table>
 <p>The search script reproduces on the author’s published match list. <sup class="cite">1</sup> No independent re-run has been published so far. <sup class="cite">2</sup></p>`,
-      52: `<p>Both sides agree on the 298 matches that came from adapted public problems. <sup class="cite mi-cite mi-cx" data-miref="m5:1" title="RB-2: our response to the contamination report, paragraph 2">Orbit ¶2</sup> The disagreement is about the remaining 194.</p>
+      '01M7GRQN60V68CFNX27EE5W66S': `<p>Both sides agree on the 298 matches that came from adapted public problems. <sup class="cite mi-cite mi-cx" data-miref="m5:1" title="RB-2: our response to the contamination report, paragraph 2">Orbit ¶2</sup> The disagreement is about the remaining 194.</p>
 <h4>What each side says</h4>
 <ul><li>The thread counts a problem as contaminated when a public problem has the same numbers and the same answer. <sup class="cite mi-cite mi-cx" data-miref="m1:2" title="I spent the weekend checking RB-2, the reasoning benchmark that most launch posts cited…, post 3">Tamsin 3/7</sup></li><li>Orbit Lab says the 194 share only a standard setup, such as drawing cards, and ask different questions. <sup class="cite mi-cite mi-cx" data-miref="m5:2" title="RB-2: our response to the contamination report, paragraph 3">Orbit ¶3</sup></li></ul>
 <h4>Evidence</h4>
 <p>The thread publishes the match list and the script, with 31 borderline cases marked for review. <sup class="cite mi-cite mi-cx" data-miref="m1:5" title="I spent the weekend checking RB-2, the reasoning benchmark that most launch posts cited…, post 6">Tamsin 6/7</sup> The response does not publish its own review of the 194; it says a per-problem decontamination report will come with RB-2.1 on Dec 1. <sup class="cite mi-cite mi-cx" data-miref="m5:3" title="RB-2: our response to the contamination report, paragraph 4">Orbit ¶4</sup></p>
 <p>Until that report is out, the 194 cannot be checked from Orbit Lab’s side. The match list is enough to sample them. <sup class="cite">1</sup></p>`,
-      53: `<p>Probably “Same structure, new numbers” by Achebe and Lund (2026). It rewrote every problem of a math benchmark with new numbers and the same structure, as Feld describes. <sup class="cite mi-cite" data-miref="m4:4" title="Evals after saturation, 14:02">14:02</sup> <sup class="cite">1</sup></p>
+      '01M7BESDR0YSSVFVJ47HD56Y9M': `<p>Probably “Same structure, new numbers” by Achebe and Lund (2026). It rewrote every problem of a math benchmark with new numbers and the same structure, as Feld describes. <sup class="cite mi-cite" data-miref="m4:4" title="Evals after saturation, 14:02">14:02</sup> <sup class="cite">1</sup></p>
 <p>The paper reports drops of 4 to 19 points across the models it tested. <sup class="cite">1</sup> Feld rounds this to between five and twenty. No other paper from this spring matches the description. <sup class="cite">2</sup></p>`,
-      54: `<p>For a closed model, FLOPs per problem cannot be computed as the post proposes <sup class="cite mi-cite" data-miref="m3:3" title="Thinking tokens are not a unit of compute, paragraph 4">¶4</sup>, because the parameter count and how the context is processed are not published.</p>
+      '01M7E164R0B8KHNGZTQ0METX7J': `<p>For a closed model, FLOPs per problem cannot be computed as the post proposes <sup class="cite mi-cite" data-miref="m3:3" title="Thinking tokens are not a unit of compute, paragraph 4">¶4</sup>, because the parameter count and how the context is processed are not published.</p>
 <p>Two papers bound it instead: one from measured latency on known hardware, one from the price per token. <sup class="cite">1</sup> <sup class="cite">2</sup> Both give ranges of about three times, which is still enough to separate parallel sampling from long sequential traces <sup class="cite mi-cite" data-miref="m3:2" title="Thinking tokens are not a unit of compute, paragraph 3">¶3</sup>.</p>`,
-      55: `<p>On a random sample of 200 problems, the published script reproduces 79 of the 82 matches reported for those problems. <sup class="cite mi-cite" data-miref="m1:5" title="I spent the weekend checking RB-2, the reasoning benchmark that most launch posts cited…, post 6">6/7</sup> <sup class="cite">1</sup></p>
+      '01M7GZKCE0ZYF4MBKKGYS455JM': `<p>On a random sample of 200 problems, the published script reproduces 79 of the 82 matches reported for those problems. <sup class="cite mi-cite" data-miref="m1:5" title="I spent the weekend checking RB-2, the reasoning benchmark that most launch posts cited…, post 6">6/7</sup> <sup class="cite">1</sup></p>
 <p>The three differences are problems that the author marked as borderline in the manual review. The sample is consistent with the 41% figure <sup class="cite mi-cite" data-miref="m1:2" title="I spent the weekend checking RB-2, the reasoning benchmark that most launch posts cited…, post 3">3/7</sup>.</p>`,
     },
     srcd: {
-      0: [
+      '01M7HWGZJGT7JTFFVSYPX055KV': [
         ['Down and Out in the Magic Kingdom', 'en.wikipedia.org', 'Whuffie as a reputation currency'],
         ['Accelerando', 'antipope.org', 'Author\'s free online edition'],
         ['The Shockwave Rider', 'en.wikipedia.org', 'Delphi pools as public forecasting'],
@@ -1542,7 +1602,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
         ['Maneki Neko (short story)', 'en.wikipedia.org', 'Sterling, gift-economy network'],
         ['The Intention Economy', 'hbr.org', 'Searls, origin of the term'],
       ],
-      2: [
+      '01M7HQMDT0RH0G2WHVJHQ6Z8C2': [
         ['Dagen H', 'en.wikipedia.org', 'Overview, timeline and figures'],
         ['Högertrafikomläggningen', 'ne.se', 'Nationalencyklopedin entry'],
         ['Statens högertrafikkommission archive', 'riksarkivet.se', 'Commission records'],
@@ -1550,7 +1610,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
         ['Traffic safety statistics, historical', 'trafa.se', 'Trafikanalys long-run accident series'],
         ['H-dagurinn', 'en.wikipedia.org', 'Iceland\'s 1968 switch'],
       ],
-      3: [
+      '01M7HM6J60FXTCP97AMP8ZRX5E': [
         ['UNCTADstat: Port calls and performance statistics', 'unctadstat.unctad.org', 'Median time in port by economy'],
         ['The Container Port Performance Index', 'worldbank.org', 'Annual port ranking with port hours'],
         ['IMF PortWatch', 'portwatch.imf.org', 'Daily port calls from satellite AIS'],
@@ -1558,7 +1618,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
         ['MarineCadastre AIS Vessel Traffic Data', 'marinecadastre.gov', 'US AIS archive from 2009'],
         ['AIS data', 'dma.dk', 'Danish Maritime Authority historical AIS'],
       ],
-      5: [
+      '01M7H9WZA0CYDP5Z7ACZYSZTQ2': [
         ['Banach–Tarski paradox', 'en.wikipedia.org', 'Statement and proof outline'],
         ['The Banach–Tarski Paradox (Tomkowicz and Wagon, 2nd ed.)', 'cambridge.org', 'Standard monograph'],
         [
@@ -1571,7 +1631,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
         ['The Hahn–Banach theorem implies the Banach–Tarski paradox', 'eudml.org', 'Pawlikowski, Fundamenta Mathematicae, 1991'],
         ['Amenable group', 'en.wikipedia.org', 'Why dimensions 1 and 2 differ'],
       ],
-      6: [
+      '01M7HTF26GS2MA4P948GD5K0EG': [
         ['Accelerando', 'en.wikipedia.org', 'Plot summary and publication history of the stories'],
         ['Maneki Neko (short story)', 'isfdb.org', 'Publication record for Sterling\'s story'],
         ['Daemon (novel)', 'en.wikipedia.org', 'Summary of the distributed-agent premise'],
@@ -1580,7 +1640,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
         ['Fall; or, Dodge in Hell', 'en.wikipedia.org', 'Editors and filtered feeds'],
         ['Agents that negotiate: a survey', 'arxiv.org', 'Background on automated negotiation research'],
       ],
-      8: [
+      '01M7H6F3P02JFX3X2X804X3986': [
         ['2001: A Space Odyssey (film)', 'en.wikipedia.org', 'Picturephone scene and production notes'],
         ['The Machine Stops', 'en.wikipedia.org', 'Forster\'s 1909 story and its video plates'],
         ['The Naked Sun', 'en.wikipedia.org', 'Viewing versus seeing on Solaria'],
@@ -1589,7 +1649,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
         ['Nonverbal overload: A theoretical argument for the causes of Zoom fatigue', 'tmb.apa.org', 'Bailenson, 2021'],
         ['FaceTime', 'en.wikipedia.org', 'Launch and adoption'],
       ],
-      9: [
+      '01M7E164R0BPYCCAQ4CDZ2QSG8': [
         ['Snow Crash', 'en.wikipedia.org', 'Coinage and description of the Street'],
         ['Metaverse', 'en.wikipedia.org', 'Overview of the term\'s history'],
         ['Metaverse Roadmap: Pathways to the 3D Web', 'metaverseroadmap.org', 'Acceleration Studies Foundation, broad definition'],
@@ -1598,7 +1658,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
         ['Roblox Corporation Form S-1', 'sec.gov', '2021 filing that uses the term'],
         ['Meta Platforms quarterly reports', 'investor.atmeta.com', 'Reality Labs operating results'],
       ],
-      11: [
+      '01M7HGRPJ0E7RGZ45D4KENBQ6P': [
         ['How does UMA\'s Optimistic Oracle work?', 'docs.uma.xyz', 'Proposal, dispute bonds and DVM voting'],
         ['Polymarket market resolution', 'docs.polymarket.com', 'Resolution process and clarifications'],
         ['Kalshi Rulebook', 'kalshi.com', 'Contract terms and exchange determinations'],
@@ -1607,7 +1667,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
         ['Metaculus FAQ: annulled questions', 'metaculus.com', 'Handling of unresolvable questions'],
         ['Prediction market', 'en.wikipedia.org', 'Overview of market types and history'],
       ],
-      12: [
+      '01M7HM6J60Z1FFM56RSRTHFM2Y': [
         [
           'Scaling LLM Test-Time Compute Optimally can be More Effective than Scaling Model Parameters',
           'arxiv.org',
@@ -1625,7 +1685,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
         ],
         ['Where test-time compute stops paying', 'gradientnotes.substack.com', 'Priya Venn, Gradient Notes; accuracy per dollar by reasoning length'],
       ],
-      13: [
+      '01M7H9WZA0NR1T4T2TGBEKK21Y': [
         [
           'Extremotolerant tardigrade genome and improved radiotolerance of human cultured cells by tardigrade-unique protein',
           'nature.com',
@@ -1641,7 +1701,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
         ['Multi-omic analysis of a tardigrade species reveals radiation-tolerance mechanisms', 'science.org', 'H. henanensis study, 2024'],
         ['Tardigrade', 'en.wikipedia.org', 'Stress tolerance across species'],
       ],
-      14: [
+      '01M7GW5GT0XMQGVRNF95PDQ8HV': [
         ['Apprenticeship', 'en.wikipedia.org', 'History of indentures and terms'],
         ['Wage Labor and Guilds in Medieval Europe', 'uncpress.org', 'Steven A. Epstein, 1991'],
         ['Livre des métiers', 'fr.wikipedia.org', 'Paris craft regulations, c. 1268'],
@@ -1653,7 +1713,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
         ],
         ['The European Guilds: An Economic Analysis', 'press.princeton.edu', 'Sheilagh Ogilvie, 2019'],
       ],
-      15: [
+      '01M7E164R0M5VQ0DTHTK7229GY': [
         ['The Future of Heat Pumps', 'iea.org', 'IEA special report, 2022; country comparisons'],
         ['Energy use in households', 'ssb.no', 'Statistics Norway heating surveys'],
         ['Enova support programmes', 'enova.no', 'Norwegian state energy agency'],
@@ -1662,7 +1722,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
         ['European Heat Pump Market Report', 'ehpa.org', 'Sales per household by country'],
         ['Heating in Poland', 'forum-energii.eu', 'Analysis of household heating and coal use'],
       ],
-      16: [
+      '01M7HDATY00YDFQVMNJW7VNX53': [
         ['Off-Street Parking Requirements', 'houstontx.gov', 'Houston Planning and Development Department'],
         ['Parking mandates', 'en.wikipedia.org', 'Background on minimum parking requirements'],
         ['Walkable Places and Transit-Oriented Development', 'houstontx.gov', 'Related Houston ordinances'],
@@ -1671,42 +1731,42 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
         ['The High Cost of Free Parking', 'routledge.com', 'Donald Shoup, 2005'],
         ['Parking Reform Map', 'parkingreform.org', 'US cities that have removed minimums'],
       ],
-      29: [
+      '01M3WQPGR00ZSXTEADW1R349TJ': [
         ['Read replicas › Region pinning', 'docs.sablefield.dev', 'Documentation'],
         ['Release 4.2.0', 'sablefield.dev', 'Changelog'],
         ['POST /v1/replicas', 'api.sablefield.dev', 'API reference'],
       ],
-      30: [
+      '01M1GRZA80V05VTX2Q0GTKZVSR': [
         ['Sync rules › Scopes', 'docs.sablefield.dev', 'Documentation'],
         ['Fixing sync rule deploy errors', 'help.sablefield.dev', 'Help center'],
         ['CLI reference: sable rules check', 'github.com', 'sablefield/sablefield'],
       ],
-      31: [
+      '01M5JT1KR02CNFDXPGDT7X75TM': [
         ['Plan limits', 'help.sablefield.dev', 'Help center'],
         ['Usage emails', 'help.sablefield.dev', 'Help center'],
         ['Pricing', 'sablefield.dev', 'Website'],
       ],
-      32: [
+      '01M4ERFHR0DNSWS2YX9D6AVJAQ': [
         ['API keys › Rotating keys', 'docs.sablefield.dev', 'Documentation'],
         ['CLI: sable keys usage', 'docs.sablefield.dev', 'Documentation'],
         ['Limits', 'api.sablefield.dev', 'API reference'],
       ],
-      33: [['Offline writes in the Swift SDK', 'help.sablefield.dev', 'Help center'], ['Conflict resolution', 'docs.sablefield.dev', 'Documentation']],
-      50: [['Scaling test-time search (Halvorsen et al.), Table 3 and appendix C', 'arxiv.org', '']],
-      51: [['rb2-matches: match list and search script', 'github.com', ''], ['Search: RB-2 contamination replication', 'web search', '']],
-      52: [['rb2-matches: match list and search script', 'github.com', '']],
-      53: [
+      '01M1GRZA80726WNZAKFS9STHV3': [['Offline writes in the Swift SDK', 'help.sablefield.dev', 'Help center'], ['Conflict resolution', 'docs.sablefield.dev', 'Documentation']],
+      '01M7H9WZA09M3CNSPTFF22FZ86': [['Scaling test-time search (Halvorsen et al.), Table 3 and appendix C', 'arxiv.org', '']],
+      '01M7GB06P0P8ZXPB0DEXY3G3RT': [['rb2-matches: match list and search script', 'github.com', ''], ['Search: RB-2 contamination replication', 'web search', '']],
+      '01M7GRQN60V68CFNX27EE5W66S': [['rb2-matches: match list and search script', 'github.com', '']],
+      '01M7BESDR0YSSVFVJ47HD56Y9M': [
         ['Same structure, new numbers (Achebe and Lund, 2026)', 'arxiv.org', ''],
         ['Search: rewritten math benchmark new numbers 2026', 'web search', ''],
       ],
-      54: [
+      '01M7E164R0B8KHNGZTQ0METX7J': [
         ['Estimating inference FLOPs from latency (Ortiz, 2026)', 'arxiv.org', ''],
         ['What does a reasoning token cost? (Nakamura, 2026)', 'arxiv.org', ''],
       ],
-      55: [['rb2-matches: match list and search script', 'github.com', '']],
+      '01M7GZKCE0ZYF4MBKKGYS455JM': [['rb2-matches: match list and search script', 'github.com', '']],
     },
     fu: {
-      0: [
+      '01M7HWGZJGT7JTFFVSYPX055KV': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:56:30Z',
@@ -1747,7 +1807,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
 <p>The shift follows real technology closely: early web reputation systems in the late 1990s, then smartphone platforms and public betting markets from the 2010s on.</p>`,
         },
       ],
-      2: [
+      '01M7HQMDT0RH0G2WHVJHQ6Z8C2': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:09:30Z',
@@ -1775,7 +1835,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
 <p>The precise number of buses converted versus replaced differs between sources.</p>`,
         },
       ],
-      3: [
+      '01M7HM6J60FXTCP97AMP8ZRX5E': [
         {
           u: 'mira_k',
           createdAt: '2026-11-16T08:30:00Z',
@@ -1804,7 +1864,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
 <p>The queuing system change matters for any analysis: after it, many ships waited far offshore or slow-steamed instead of anchoring. Using anchorage-only metrics therefore makes the queue look smaller than it was.</p>`,
         },
       ],
-      5: [
+      '01M7H9WZA0CYDP5Z7ACZYSZTQ2': [
         {
           u: 'tomasz',
           createdAt: '2026-11-16T07:30:00Z',
@@ -1832,7 +1892,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
 <p>The difference is that circle-squaring preserves area, while Banach–Tarski doubles volume. Doubling requires non-measurable pieces.</p>`,
         },
       ],
-      6: [
+      '01M7HTF26GS2MA4P948GD5K0EG': [
         {
           u: 'tomasz',
           createdAt: '2026-11-16T09:34:30Z',
@@ -1860,7 +1920,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
 <p>Outside fiction, the question is usually framed through the law of agency: a principal is generally bound by what an authorised agent agrees to. How that applies to software agents remains an open legal question in most jurisdictions.</p>`,
         },
       ],
-      8: [
+      '01M7H6F3P02JFX3X2X804X3986': [
         {
           u: 'lettie',
           createdAt: '2026-11-16T06:30:00Z',
@@ -1883,7 +1943,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
 <p>Time zones are rarely mentioned. In practice, scheduling across time zones has become one of the main frictions of video meetings, which the fiction did not anticipate.</p>`,
         },
       ],
-      9: [
+      '01M7E164R0BPYCCAQ4CDZ2QSG8': [
         {
           u: 'mira_k',
           createdAt: '2026-11-15T13:30:00Z',
@@ -1920,7 +1980,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
 <p>The OASIS is closer to the 2020s corporate vision of a single platform that hosts many experiences.</p>`,
         },
       ],
-      11: [
+      '01M7HGRPJ0E7RGZ45D4KENBQ6P': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T07:30:00Z',
@@ -1948,7 +2008,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
 <p>Augur's design addresses part of this by making "invalid" a reported outcome subject to the same dispute bonds as any other, so arguing for it carries a cost.</p>`,
         },
       ],
-      12: [
+      '01M7HM6J60Z1FFM56RSRTHFM2Y': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T08:30:00Z',
@@ -1977,7 +2037,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
 <p>The general pattern is that test-time compute helps where intermediate steps can be checked, which is why most papers focus on maths and code.</p>`,
         },
       ],
-      13: [
+      '01M7H9WZA0NR1T4T2TGBEKK21Y': [
         {
           u: 'mira_k',
           createdAt: '2026-11-16T06:30:00Z',
@@ -2004,7 +2064,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
 <p>Expression level also matters: overexpression from strong promoters can produce effects absent at lower doses. The difference suggests Dsup's benefit is context-dependent rather than a general property that transfers to any cell.</p>`,
         },
       ],
-      14: [
+      '01M7GW5GT0XMQGVRNF95PDQ8HV': [
         {
           u: 'lettie',
           createdAt: '2026-11-16T03:30:00Z',
@@ -2032,7 +2092,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
 <p>Time already served generally counted toward the required term when the apprentice was turned over, which protected the route to guild membership.</p>`,
         },
       ],
-      15: [
+      '01M7E164R0M5VQ0DTHTK7229GY': [
         {
           u: 'oduya',
           createdAt: '2026-11-15T13:30:00Z',
@@ -2060,7 +2120,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
 <p>Coastal regions, where much of the population lives, are milder than inland areas, which also helps.</p>`,
         },
       ],
-      16: [
+      '01M7HDATY00YDFQVMNJW7VNX53': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T06:30:00Z',
@@ -2089,7 +2149,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
 <p>Check the Planning and Development Department's current ordinance pages for the boundaries in force, since these programmes are expanded street by street.</p>`,
         },
       ],
-      18: [
+      '01M7HVAH3GCWYN0S5H6NX9WKRT': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2103,7 +2163,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      20: [
+      '01M7H6F3P012CRWKEQVTVA6PV4': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2117,7 +2177,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      21: [
+      '01M7H31820BK289S2XPP2DTK2N': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2131,7 +2191,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      24: [
+      '01M7E164R0RBHSCJH2YBWZ6AWG': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2145,7 +2205,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      26: [
+      '01M7E164R0Y9DN252RVM5BA939': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2159,7 +2219,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      28: [
+      '01M7BESDR08WWS4J3FKS5B43EB': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2167,7 +2227,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
         },
       ],
-      29: [
+      '01M3WQPGR00ZSXTEADW1R349TJ': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2175,21 +2235,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
         },
       ],
-      30: [
-        {
-          u: 'hal_b',
-          createdAt: '2026-11-16T09:19:30Z',
-          q: 'Which sources does this lean on most?',
-          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
-        },
-        {
-          u: 'lettie',
-          createdAt: '2026-11-16T09:39:30Z',
-          q: 'What would change this conclusion?',
-          a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
-        },
-      ],
-      31: [
+      '01M1GRZA80V05VTX2Q0GTKZVSR': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2203,15 +2249,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      32: [
-        {
-          u: 'hal_b',
-          createdAt: '2026-11-16T09:19:30Z',
-          q: 'Which sources does this lean on most?',
-          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
-        },
-      ],
-      33: [
+      '01M5JT1KR02CNFDXPGDT7X75TM': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2225,7 +2263,15 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      34: [
+      '01M4ERFHR0DNSWS2YX9D6AVJAQ': [
+        {
+          u: 'hal_b',
+          createdAt: '2026-11-16T09:19:30Z',
+          q: 'Which sources does this lean on most?',
+          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
+        },
+      ],
+      '01M1GRZA80726WNZAKFS9STHV3': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2239,15 +2285,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      35: [
-        {
-          u: 'hal_b',
-          createdAt: '2026-11-16T09:19:30Z',
-          q: 'Which sources does this lean on most?',
-          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
-        },
-      ],
-      36: [
+      '01M1GRZA80FN67R0GKD0E3G3KR': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2261,7 +2299,15 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      37: [
+      '01M1GRZA803XVMSM2D58P7SYV7': [
+        {
+          u: 'hal_b',
+          createdAt: '2026-11-16T09:19:30Z',
+          q: 'Which sources does this lean on most?',
+          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
+        },
+      ],
+      '01M7H9WZA0HJBEXT0EGHNW4AJR': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2275,15 +2321,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      38: [
-        {
-          u: 'hal_b',
-          createdAt: '2026-11-16T09:19:30Z',
-          q: 'Which sources does this lean on most?',
-          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
-        },
-      ],
-      39: [
+      '01M7HGRPJ0JTKXYA2WM6BJVTCR': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2297,7 +2335,15 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      40: [
+      '01M50S8JR0V9Q6QPE9B1JC34QW': [
+        {
+          u: 'hal_b',
+          createdAt: '2026-11-16T09:19:30Z',
+          q: 'Which sources does this lean on most?',
+          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
+        },
+      ],
+      '01M3APXFR0KY3SCSBDTJ62S595': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2311,15 +2357,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      41: [
-        {
-          u: 'hal_b',
-          createdAt: '2026-11-16T09:19:30Z',
-          q: 'Which sources does this lean on most?',
-          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
-        },
-      ],
-      42: [
+      '01M4ERFHR0ZNF5JKHYBYT43S81': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2333,7 +2371,15 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      43: [
+      '01M3WQPGR0JNGCT8FKAGNK4AZ0': [
+        {
+          u: 'hal_b',
+          createdAt: '2026-11-16T09:19:30Z',
+          q: 'Which sources does this lean on most?',
+          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
+        },
+      ],
+      '01M7E164R0TE5YDZ70HY74F0XP': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2347,15 +2393,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      44: [
-        {
-          u: 'hal_b',
-          createdAt: '2026-11-16T09:19:30Z',
-          q: 'Which sources does this lean on most?',
-          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
-        },
-      ],
-      45: [
+      '01M3APXFR0FH01RWRB64FWZCK8': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2369,7 +2407,15 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      46: [
+      '01M7E164R0AMBWTXP79008BSJ1': [
+        {
+          u: 'hal_b',
+          createdAt: '2026-11-16T09:19:30Z',
+          q: 'Which sources does this lean on most?',
+          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
+        },
+      ],
+      '01M1GRZA806GFS4QG0QWB8V40P': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2383,23 +2429,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      47: [
-        {
-          u: 'hal_b',
-          createdAt: '2026-11-16T09:19:30Z',
-          q: 'Which sources does this lean on most?',
-          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
-        },
-      ],
-      50: [
-        {
-          u: 'hal_b',
-          createdAt: '2026-11-16T09:19:30Z',
-          q: 'Which sources does this lean on most?',
-          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
-        },
-      ],
-      51: [
+      '01M1GRZA80HQ5KMQ3S48QVGJTT': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2413,7 +2443,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
         },
       ],
-      52: [
+      '01M7H6F3P02DNSM2XPA246JG1F': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2421,7 +2451,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
         },
       ],
-      53: [
+      '01M7H9WZA09M3CNSPTFF22FZ86': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2429,7 +2459,21 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
         },
       ],
-      54: [
+      '01M7GB06P0P8ZXPB0DEXY3G3RT': [
+        {
+          u: 'hal_b',
+          createdAt: '2026-11-16T09:19:30Z',
+          q: 'Which sources does this lean on most?',
+          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
+        },
+        {
+          u: 'lettie',
+          createdAt: '2026-11-16T09:39:30Z',
+          q: 'What would change this conclusion?',
+          a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.',
+        },
+      ],
+      '01M7GRQN60V68CFNX27EE5W66S': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2437,7 +2481,23 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
         },
       ],
-      55: [
+      '01M7BESDR0YSSVFVJ47HD56Y9M': [
+        {
+          u: 'hal_b',
+          createdAt: '2026-11-16T09:19:30Z',
+          q: 'Which sources does this lean on most?',
+          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
+        },
+      ],
+      '01M7E164R0B8KHNGZTQ0METX7J': [
+        {
+          u: 'hal_b',
+          createdAt: '2026-11-16T09:19:30Z',
+          q: 'Which sources does this lean on most?',
+          a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.',
+        },
+      ],
+      '01M7GZKCE0ZYF4MBKKGYS455JM': [
         {
           u: 'hal_b',
           createdAt: '2026-11-16T09:19:30Z',
@@ -2447,7 +2507,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
       ],
     },
     rp: {
-      1: [
+      '01M7HVQB8G7QAKZFGDA9MW1526': [
         {
           u: 'oduya',
           createdAt: '2026-11-16T09:47:30Z',
@@ -2462,7 +2522,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           kids: [{ u: 'hal_b', createdAt: '2026-11-16T09:53:30Z', t: 'Thanks, I will watch the changelog.', likes: 2 }],
         },
       ],
-      4: [
+      '01M7HGRPJ051131HPPPSW01RZ1': [
         { u: 'jun.park', createdAt: '2026-11-16T08:30:00Z', t: 'Thanks for posting this.', likes: 6 },
         {
           u: 'lettie',
@@ -2472,7 +2532,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           kids: [{ u: 'sol', createdAt: '2026-11-16T09:29:30Z', t: 'Great, thank you.', likes: 2 }],
         },
       ],
-      7: [
+      '01M7HM6J60BNFNCYM0WE5BCMK1': [
         { u: 'jun.park', createdAt: '2026-11-16T08:30:00Z', t: 'Thanks for posting this.', likes: 6 },
         {
           u: 'lettie',
@@ -2482,7 +2542,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           kids: [{ u: 'tomasz', createdAt: '2026-11-16T09:29:30Z', t: 'Great, thank you.', likes: 2 }],
         },
       ],
-      10: [
+      '01M7HQMDT05MJQ0F8KR8KKWF5G': [
         { u: 'jun.park', createdAt: '2026-11-16T08:30:00Z', t: 'Thanks for posting this.', likes: 6 },
         {
           u: 'lettie',
@@ -2492,7 +2552,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           kids: [{ u: 'hal_b', createdAt: '2026-11-16T09:29:30Z', t: 'Great, thank you.', likes: 2 }],
         },
       ],
-      17: [
+      '01M7E164R00RC9Q9AK5XBX7WXX': [
         { u: 'jun.park', createdAt: '2026-11-16T08:30:00Z', t: 'Thanks for posting this.', likes: 6 },
         {
           u: 'lettie',
@@ -2502,7 +2562,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           kids: [{ u: 'lettie', createdAt: '2026-11-16T09:29:30Z', t: 'Great, thank you.', likes: 2 }],
         },
       ],
-      19: [
+      '01M7HGRPJ0PTJXQ2N1GJPWFQ4F': [
         { u: 'jun.park', createdAt: '2026-11-16T08:30:00Z', t: 'Thanks for posting this.', likes: 6 },
         {
           u: 'lettie',
@@ -2512,7 +2572,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           kids: [{ u: 'lettie', createdAt: '2026-11-16T09:29:30Z', t: 'Great, thank you.', likes: 2 }],
         },
       ],
-      22: [
+      '01M7E164R0YQF6XYA39B2CX7FD': [
         { u: 'jun.park', createdAt: '2026-11-16T08:30:00Z', t: 'Thanks for posting this.', likes: 6 },
         {
           u: 'lettie',
@@ -2522,7 +2582,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           kids: [{ u: 'hal_b', createdAt: '2026-11-16T09:29:30Z', t: 'Great, thank you.', likes: 2 }],
         },
       ],
-      23: [
+      '01M7H9WZA0TT6MXVG1Q58NWVM7': [
         { u: 'jun.park', createdAt: '2026-11-16T08:30:00Z', t: 'Thanks for posting this.', likes: 6 },
         {
           u: 'lettie',
@@ -2532,7 +2592,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           kids: [{ u: 'oduya', createdAt: '2026-11-16T09:29:30Z', t: 'Great, thank you.', likes: 2 }],
         },
       ],
-      25: [
+      '01M7HM6J60AETSZKDBM6K6A8FA': [
         { u: 'jun.park', createdAt: '2026-11-16T08:30:00Z', t: 'Thanks for posting this.', likes: 6 },
         {
           u: 'lettie',
@@ -2542,7 +2602,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           kids: [{ u: 'tomasz', createdAt: '2026-11-16T09:29:30Z', t: 'Great, thank you.', likes: 2 }],
         },
       ],
-      27: [
+      '01M7HDATY0QNJTDSMHQB97FPMJ': [
         { u: 'jun.park', createdAt: '2026-11-16T08:30:00Z', t: 'Thanks for posting this.', likes: 6 },
         {
           u: 'lettie',
@@ -2552,7 +2612,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           kids: [{ u: 'jun.park', createdAt: '2026-11-16T09:29:30Z', t: 'Great, thank you.', likes: 2 }],
         },
       ],
-      48: [
+      '01M769ZZR0AGZ2PQESX65WRGQS': [
         { u: 'jun.park', createdAt: '2026-11-12T22:00:00Z', t: 'Region pinning is what we were waiting for. Thanks.', likes: 6 },
         {
           u: 'lettie',
@@ -2563,7 +2623,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
         },
         { u: 'bram', createdAt: '2026-11-14T22:00:00Z', t: 'Get 50% off managed Postgres hosting at cheapdb.example with code SABLE50.', likes: 5 },
       ],
-      49: [
+      '01M64TTMR0EXK3TA7C86EV3CVM': [
         { u: 'jun.park', createdAt: '2026-11-16T08:30:00Z', t: 'Thanks for posting this.', likes: 6 },
         {
           u: 'lettie',
@@ -2575,7 +2635,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
       ],
     },
     qtd: {
-      0: {
+      '01M7HWGZJGT7JTFFVSYPX055KV': {
         nodes: [
           { id: 'f0', par: 'r', fu: 0, tok: 3.6e4 },
           { id: 'f1', par: 'r', fu: 1, tok: 2.2e4 },
@@ -2610,7 +2670,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           },
         ],
       },
-      11: {
+      '01M7HGRPJ0E7RGZ45D4KENBQ6P': {
         nodes: [
           { id: 'a1', par: 'r', fu: 0, tok: 4.1e4 },
           { id: 'a2', par: 'r', fu: 1, tok: 3.8e4 },
@@ -2758,7 +2818,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           },
         ],
       },
-      18: {
+      '01M7HVAH3GCWYN0S5H6NX9WKRT': {
         nodes: [
           { id: 'f0', par: 'r', fu: 0, tok: 2e4 },
           {
@@ -2781,7 +2841,7 @@ select * from notes where owner_id = auth.user_id() and archived = false;</code>
           },
         ],
       },
-      30: {
+      '01M1GRZA80V05VTX2Q0GTKZVSR': {
         nodes: [
           {
             id: 's1',
@@ -3276,9 +3336,20 @@ alter table notes validate constraint notes_owner_nn;</code></pre>`,
     roles: { scifi: 'Moderator', ml: 'Admin', math: 'Owner', sablefield: 'Admin' },
     roles0: { scifi: 'Moderator', ml: 'Admin', math: 'Owner', sablefield: 'Admin' },
     rel: { replication: 'none', northwind: 'none', grants: 'member', ward7: 'none' },
-    liked: { $set: [2] },
-    saved: { $set: [0, 3, 6, 9, 11, 12, 13, 15] },
-    qtSaved: { $set: ['11:c2'] },
+    liked: { $set: ['01M7HQMDT0RH0G2WHVJHQ6Z8C2'] },
+    saved: {
+      $set: [
+        '01M7HWGZJGT7JTFFVSYPX055KV',
+        '01M7HM6J60FXTCP97AMP8ZRX5E',
+        '01M7HTF26GS2MA4P948GD5K0EG',
+        '01M7E164R0BPYCCAQ4CDZ2QSG8',
+        '01M7HGRPJ0E7RGZ45D4KENBQ6P',
+        '01M7HM6J60Z1FFM56RSRTHFM2Y',
+        '01M7H9WZA0NR1T4T2TGBEKK21Y',
+        '01M7E164R0M5VQ0DTHTK7229GY',
+      ],
+    },
+    qtSaved: { $set: ['01M7HGRPJ0E7RGZ45D4KENBQ6P:c2'] },
     miSaved: { $set: ['m2'] },
     miRead: { $set: ['m6', 'm8'] },
     userKeys: [
@@ -3321,9 +3392,9 @@ alter table notes validate constraint notes_owner_nn;</code></pre>`,
       },
     ],
     notifs: [
-      { id: 'nqt1', type: 'branch', actor: 'hal_b', thread: 0, node: 'h1', createdAt: '2026-11-16T09:54:30Z', read: false },
-      { id: 'n1', type: 'follow_up', actor: 'hal_b', thread: 0, createdAt: '2026-11-16T09:56:30Z', read: false },
-      { id: 'n2', type: 'follow_up', actor: 'jun.park', thread: 8, createdAt: '2026-11-14T22:00:00Z', read: true },
+      { id: 'nqt1', type: 'branch', actor: 'hal_b', thread: '01M7HWGZJGT7JTFFVSYPX055KV', node: 'h1', createdAt: '2026-11-16T09:54:30Z', read: false },
+      { id: 'n1', type: 'follow_up', actor: 'hal_b', thread: '01M7HWGZJGT7JTFFVSYPX055KV', createdAt: '2026-11-16T09:56:30Z', read: false },
+      { id: 'n2', type: 'follow_up', actor: 'jun.park', thread: '01M7H6F3P02JFX3X2X804X3986', createdAt: '2026-11-14T22:00:00Z', read: true },
       { id: 'ninv', type: 'invite', actor: 'jun.park', space: 'ward7', createdAt: '2026-11-16T05:30:00Z', read: false },
     ],
     askedInv: [],
@@ -3503,14 +3574,23 @@ alter table notes validate constraint notes_owner_nn;</code></pre>`,
       {
         id: 'rp1',
         sp: 'sablefield',
-        key: 'a:31',
+        key: 'a:01M5JT1KR02CNFDXPGDT7X75TM',
         why: 'old',
         note: 'The Free plan limit went up to 250,000 rows on Nov 10. The pricing page shows the new number.',
         by: 'hal_b',
         createdAt: '2026-11-16T07:30:00Z',
         st: 'open',
       },
-      { id: 'rp2', sp: 'sablefield', key: 'r:48:2', why: 'offensive', note: '', by: 'cleo', createdAt: '2026-11-16T04:30:00Z', st: 'open' },
+      {
+        id: 'rp2',
+        sp: 'sablefield',
+        key: 'r:01M769ZZR0AGZ2PQESX65WRGQS:2',
+        why: 'offensive',
+        note: '',
+        by: 'cleo',
+        createdAt: '2026-11-16T04:30:00Z',
+        st: 'open',
+      },
     ],
     modSt: {},
     dsDrops: {

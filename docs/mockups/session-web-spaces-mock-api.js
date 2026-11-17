@@ -30,6 +30,17 @@
      a thread's r, likes, liked and mine; a space's members and pct. GET /api/me says who is signed in.
    - Write-only fields: an API key's raw value is stored but never returned.
 
+   Thread ids (step 2)
+   - A thread (posts) is a list record with a ULID in `id`, also in thread URLs (/s/<space>/t/<id>). The
+     fixture threads have fixed ULIDs: the time part is their createdAt.
+   - POST /api/threads creates a thread; the server assigns its id. PUT /api/threads/:id updates one, and
+     DELETE /api/threads/:id removes one (only the Screen entries' clean-up does this; a person deletes a
+     thread by marking it deleted).
+   - Everything that points at a thread uses its id: the keys of /api/answers, /api/answer-sources,
+     /api/follow-ups, /api/replies and /api/ask-trees; the members of likes and saves; "<thread>:<node>" in
+     saved asks; "<kind>:<thread>[:…]" in report and moderation keys; a notification's thread; a thread's
+     from.th.
+
    Contents
    1. The wire codec (JSON; Sets travel as { $set: [...] }). The page uses this copy.
    2. Error codes: tRPC codes, their HTTP status, and a default user-facing message.
@@ -153,7 +164,7 @@
     'budget?': t.any, 'used?': t.any, 'pct?': t.any, 'byok?': t.any, 'key?': t.any,
   }, 'Space');
   S.Thread = obj({
-    s: str, u: str, k: one('ask', 'post'), q: str, 'createdAt?': iso, 'updatedAt?': iso,
+    id: str, s: str, u: str, k: one('ask', 'post'), q: str, 'createdAt?': iso, 'updatedAt?': iso,
     't?': nul(str), 'sum?': nul(str), 'tok?': num,
     'r?': int,              /* derived: first-level follow-ups of an ask, or replies to a post */
     'likes?': int,          /* derived: likesBase + your like */
@@ -164,7 +175,7 @@
     'topic?': nul(str), 'topicBy?': nul(str), 'running?': bool,
     'pay?': t.any,   /* TODO(limits): who pays for the ask (a key or a space budget), stored as sent */
     'fail?': obj({ why: str, 'at?': num }), 'edited?': bool, 'del?': bool, 'gone?': bool, 'skill?': nul(str),
-    'from?': obj({ th: num, node: str }),
+    'from?': obj({ th: str, node: str }),   /* the thread and ask node it was started from */
   }, 'Thread');
   S.Reply = t.named('Reply', t.lazy(() => obj({ u: str, 'createdAt?': iso, t: str, 'likes?': int, 'kids?': arr(S.Reply), 'del?': bool, 'edited?': bool })));
   S.FollowUp = obj({ u: str, 'createdAt?': iso, q: str, 'a?': str, 'html?': str, 'del?': bool, 'edited?': bool }, 'FollowUp');
@@ -185,14 +196,14 @@
     'lastUsedAt?': nul(iso), 'used?': num, 'cap?': num,
   }, 'ApiKey');
   /* Notifications are structured; the page writes their text and picks their icon from `type`.
-     thread: a thread's position (step 2 makes it a ULID); node: a node of its ask tree; page: an index into the
+     thread: a thread's id; node: a node of its ask tree; page: an index into the
      space's pages; source and block: a source and one of its passages; report and item: a report and the key of
      the item it is about; outcome: how the report was resolved; response: your answer to an invite. */
   const NOTIFICATION_TYPES = ['follow_up', 'branch', 'answer_ready', 'answer_failed', 'invite', 'join_approved', 'join_declined',
     'page_edited', 'report_resolved', 'source_edited', 'source_asked'];
   S.Notification = obj({
     id: str, type: one(...NOTIFICATION_TYPES), 'createdAt?': iso, read: bool,
-    'actor?': str, 'space?': str, 'thread?': int, 'node?': str, 'page?': int, 'source?': str, 'block?': int,
+    'actor?': str, 'space?': str, 'thread?': str, 'node?': str, 'page?': int, 'source?': str, 'block?': int,
     'report?': str, 'item?': str, 'outcome?': one('dismissed', 'hidden', 'removed'), 'response?': one('accepted', 'declined'),
   }, 'Notification');
   S.JoinRequest = obj({
@@ -219,13 +230,12 @@
   S.ClosedSpaceState = one('none', 'pending', 'member', 'mod', 'denied');
 
   /* ---- 4. collections ----
-     kind: 'list' (records with an id field), 'index' (records addressed by position), 'map' (values by key),
-     'value' (one value, replaced whole). `item` is the schema of one record (list, index, map) or of the
-     value. `key` checks a map key: 'thread' (a thread's position) or 'space' (a space id); for pages,
-     the part before the "/" is a space id. */
+     kind: 'list' (records with an id field), 'map' (values by key), 'value' (one value, replaced whole).
+     `item` is the schema of one record (list, map) or of the value. `key` checks a map key: 'thread' (a
+     thread's id) or 'space' (a space id); for pages, the part before the "/" is a space id. */
   const C = {
     spaces:   { path: '/api/spaces', kind: 'list', id: 'id', item: S.Space },
-    posts:    { path: '/api/threads', kind: 'index', item: S.Thread },
+    posts:    { path: '/api/threads', kind: 'list', id: 'id', serverId: true, item: S.Thread },
     rich:     { path: '/api/answers', kind: 'map', key: 'thread', item: named('AnswerHtml', str) },
     srcd:     { path: '/api/answer-sources', kind: 'map', key: 'thread', item: named('CitedPage[]', arr(arr(str))) },
     fu:       { path: '/api/follow-ups', kind: 'map', key: 'thread', item: named('FollowUp[]', arr(S.FollowUp)) },
@@ -237,8 +247,8 @@
     roles:    { path: '/api/me/roles', kind: 'value', item: named('Record<SpaceId, SpaceRole>', rec(SPACE_ROLE)) },
     roles0:   { path: '/api/me/roles/granted', kind: 'value', item: named('Record<SpaceId, SpaceRole>', rec(SPACE_ROLE)) },
     rel:      { path: '/api/me/closed-spaces', kind: 'map', key: 'space', item: S.ClosedSpaceState },
-    liked:    { path: '/api/me/likes', kind: 'value', item: named('Set<ThreadIndex>', set(int)) },
-    saved:    { path: '/api/me/saved', kind: 'value', item: named('Set<ThreadIndex>', set(int)) },
+    liked:    { path: '/api/me/likes', kind: 'value', item: named('Set<ThreadId>', set(str)) },
+    saved:    { path: '/api/me/saved', kind: 'value', item: named('Set<ThreadId>', set(str)) },
     qtSaved:  { path: '/api/me/saved-asks', kind: 'value', item: named('Set<AskNodeKey>', set(str)) },
     miSaved:  { path: '/api/me/saved-sources', kind: 'value', item: named('Set<SourceId>', set(str)) },
     miRead:   { path: '/api/me/read-sources', kind: 'value', item: named('Set<SourceId>', set(str)) },
@@ -268,7 +278,7 @@
     rpLiked:  { path: '/api/me/reply-likes', kind: 'value', item: named('Set<ReplyKey>', set(str)) },
   };
   /* Records nested in a value that get a createdAt (joinedAt in member lists) from the server when a write
-     brings them without one. Every record of a list or index collection gets one too. */
+     brings them without one. Every record of a list collection gets one too. */
   const objs = l => (Array.isArray(l) ? l : []).filter(x => x && typeof x === 'object');
   function stampTargets(k, v) {
     switch (k) {
@@ -282,23 +292,23 @@
   const stampField = k => k === 'mem' || k === 'memOther' ? 'joinedAt' : 'createdAt';
 
   /* Derived fields: computed on every read from the stored records and the signed-in person, never stored.
-     view(record, i, d, me) gives the record as GET returns it; a write drops `fields` and keeps the base that
+     view(record, d, me) gives the record as GET returns it; a write drops `fields` and keeps the base that
      base(body, stored) gives; `hidden` fields are stored but not returned. */
-  const firstLevel = (d, i) => d.qtd && d.qtd[i] ? d.qtd[i].nodes.filter(n => n.par === 'r').length : ((d.fu && d.fu[i]) || []).length;
+  const firstLevel = (d, id) => d.qtd && d.qtd[id] ? d.qtd[id].nodes.filter(n => n.par === 'r').length : ((d.fu && d.fu[id]) || []).length;
   const roster = (d, sid) => (sid === C.mem.space ? d.mem : (d.memOther || {})[sid]) || [];
   const DERIVED = {
     posts: {
       fields: ['r', 'likes', 'liked', 'mine'], hidden: ['likesBase'],
-      view: (p, i, d, me) => {
-        const liked = !!(d.liked && d.liked.has(i));
-        return { ...p, r: p.k === 'ask' ? firstLevel(d, i) : ((d.rp && d.rp[i]) || []).length, likes: (p.likesBase || 0) + (liked ? 1 : 0), liked, mine: p.u === me.u };
+      view: (p, d, me) => {
+        const liked = !!(d.liked && d.liked.has(p.id));
+        return { ...p, r: p.k === 'ask' ? firstLevel(d, p.id) : ((d.rp && d.rp[p.id]) || []).length, likes: (p.likesBase || 0) + (liked ? 1 : 0), liked, mine: p.u === me.u };
       },
       /* the client sends the thread as it holds it: likes and liked from its last read, so likes − liked is the base */
       base: (b, stored) => ({ likesBase: typeof b.likes === 'number' ? Math.max(0, b.likes - (b.liked ? 1 : 0)) : stored ? stored.likesBase || 0 : 0 }),
     },
     spaces: {
       fields: ['members', 'pct'], hidden: ['membersBase'],
-      view: (s, i, d) => ({ ...s, members: (s.membersBase || 0) + roster(d, s.id).length, pct: s.budget ? s.used / s.budget : 0 }),
+      view: (s, d) => ({ ...s, members: (s.membersBase || 0) + roster(d, s.id).length, pct: s.budget ? s.used / s.budget : 0 }),
       /* a new space starts with no members outside its member list */
       base: (b, stored) => ({ membersBase: stored ? stored.membersBase || 0 : 0 }),
     },
@@ -331,7 +341,7 @@
   const ROLE_RANK = { guest: 0, user: 1, author: 2, member: 2, moderator: 3, admin: 4, owner: 5, server: 6 };
   const shapeOf = (coll, op) => {
     const c = C[coll], one = describe(c.item);
-    const many = c.kind === 'list' || c.kind === 'index' ? `${one}[]` : c.kind === 'map' ? `Record<string, ${one}>` : one;
+    const many = c.kind === 'list' ? `${one}[]` : c.kind === 'map' ? `Record<string, ${one}>` : one;
     return {
       list: [null, many], get: [null, one], replace: [many, many], create: [one, one], put: [one, one],
       delete: [null, null],
@@ -352,11 +362,13 @@
     row('spaces', 'put', 'admin', 'spaces.update', { stub: true, note: 'TODO(limits): the token budget fields are stored as sent' }),
     row('spaces', 'delete', 'owner', 'spaces.remove'),
 
-    /* threads: the mock addresses a thread by its position in the list. r, likes, liked and mine are derived on read. */
+    /* threads: addressed by id (a ULID). r, likes, liked and mine are derived on read. */
     row('posts', 'list', 'guest', 'research.listTrees', { wire: 'ResearchTreeSummary[]' }),
     row('posts', 'get', 'guest', 'research.getTree', { wire: 'ResearchTreeDetail' }),
     row('posts', 'replace', 'moderator', 'threads.moveToTopic', { note: 'a moderator moves several threads at once (deleted topics)' }),
-    row('posts', 'put', 'author', ['research.createTree', 'research.createPost', 'research.updatePost'], { wire: 'ResearchTree', note: 'PUT at the next position creates a thread; otherwise it updates one (the author edits; moderators move or remove; the run sets the answer state)' }),
+    row('posts', 'create', 'member', ['research.createTree', 'research.createPost'], { wire: 'ResearchTree', note: 'the server assigns the id (a ULID)' }),
+    row('posts', 'put', 'author', 'research.updatePost', { wire: 'ResearchTree', note: 'the author edits; moderators move or remove; the run sets the answer state' }),
+    row('posts', 'delete', 'author', 'research.deleteTree', { note: 'only the Screen entries’ clean-up removes threads; a person deletes a thread by marking it deleted' }),
 
     row('rich', 'list', 'guest', 'research.getNodeContent', { wire: 'ResearchNodeContent' }),
     row('rich', 'get', 'guest', 'research.getNodeContent', { wire: 'ResearchNodeContent' }),
@@ -515,6 +527,7 @@
      - latency: each request waits this long (ms).
      - dev: report contract mismatches (console.error, and an uncaught error so test harnesses fail).
      Returns { cfg, wipe, restore, checkClient, seedView }. */
+  const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
   const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';   /* Crockford base32, as in ULIDs */
   /* a ULID: 10 characters of time (ms) and 16 of a counter instead of random bits, so runs are deterministic */
   function ulid(ms, n) {
@@ -524,7 +537,7 @@
     return t + r;
   }
   const omit = (o, ks) => { if (!ks || !ks.some(k => k in o)) return o; const x = { ...o }; ks.forEach(k => delete x[k]); return x; };
-  function createBackend({ fixtures, seed, storageKey = 'session-mock-db-v4', latency = 120, dev = false }) {
+  function createBackend({ fixtures, seed, storageKey = 'session-mock-db-v5', latency = 120, dev = false }) {
     const fx = fixtures || { data: seed ? seed() : {} };
     const me = fx.me || { u: 'me', x: '@me', createdAt: new Date().toISOString() };
     const cfg = { now: fx.clock || new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), base: latency, latency, failWrites: false, failReads: false, failCode: 'SERVICE_UNAVAILABLE', failOn: null };
@@ -549,16 +562,16 @@
     const newId = () => ulid(Date.parse(cfg.now), ++ids);
 
     /* ---- reads: the stored record with its derived fields, without its hidden and write-only fields ---- */
-    function viewOne(k, x, i, d) {
+    function viewOne(k, x, d) {
       const V = DERIVED[k];
-      if (V) x = omit(V.view(x, i, d, me), V.hidden);
+      if (V) x = omit(V.view(x, d, me), V.hidden);
       return omit(x, C[k].writeOnly);
     }
-    const viewAll = (k, d) => C[k].kind === 'list' || C[k].kind === 'index' ? d[k].map((x, i) => viewOne(k, x, i, d)) : d[k];
+    const viewAll = (k, d) => C[k].kind === 'list' ? d[k].map(x => viewOne(k, x, d)) : d[k];
     /* ---- writes ---- */
     /* nested records without a time get the clock's (createdAt; joinedAt in member lists) */
     function stampValue(k, v) { const f = stampField(k); stampTargets(k, v).forEach(x => { if (x[f] === undefined) x[f] = cfg.now; }); return v; }
-    /* a list or thread record as the client sends it → as the server stores it */
+    /* a list record as the client sends it → as the server stores it */
     function storeRecord(k, body, stored) {
       let rec = { ...body };
       const V = DERIVED[k];
@@ -598,7 +611,7 @@
     function checkKey(k, key, d, mode) {
       const c = C[k];
       if (!key) return ['a key'];
-      if (c.key === 'thread') { if (!/^\d+$/.test(key)) return ['a thread position']; if (mode === 'NOT_FOUND' && +key >= (d.posts || []).length) return ['NOT_FOUND']; }
+      if (c.key === 'thread') { if (!ULID_RE.test(key)) return ['a thread id (a ULID)']; if (mode === 'NOT_FOUND' && !(d.posts || []).some(p => p.id === key)) return ['NOT_FOUND']; }
       if (c.key === 'space' || c.key === 'page') {
         const sid = c.key === 'page' ? key.split('/')[0] : key;
         if (c.key === 'page' && !/^[^/]+\/./.test(key)) return ['"<space>/<page>"'];
@@ -639,21 +652,21 @@
       const d = db0();
       if (r.op === 'me') return { res: out(200, { u: me.u, name: d.profile.name, bio: d.profile.bio, x: me.x, createdAt: me.createdAt }) };
       const k = r.coll, c = C[k];
-      const pos = cur => c.kind === 'index' ? (/^\d+$/.test(id) ? +id : -1) : cur.findIndex(x => String(x[c.id]) === id);
+      const pos = cur => cur.findIndex(x => String(x[c.id]) === id);
       switch (r.op) {
         case 'list': return { res: out(200, viewAll(k, d)) };
         case 'get': {
           const cur = d[k];
           if (c.kind === 'map') return { res: cur[id] === undefined ? err('NOT_FOUND') : out(200, cur[id]) };
           const i = pos(cur);
-          return { res: cur[i] === undefined ? err('NOT_FOUND') : out(200, viewOne(k, cur[i], i, d)) };
+          return { res: cur[i] === undefined ? err('NOT_FOUND') : out(200, viewOne(k, cur[i], d)) };
         }
         case 'replace': {
           const issues = checkWhole(k, body, d);
           if (issues.length) return { res: bad(issues) };
-          if (c.kind === 'list' || c.kind === 'index') {
+          if (c.kind === 'list') {
             const cur = d[k];
-            d[k] = body.map((x, i) => storeRecord(k, x, c.kind === 'index' ? cur[i] : cur.find(y => String(y[c.id]) === String(x[c.id]))));
+            d[k] = body.map(x => storeRecord(k, x, cur.find(y => String(y[c.id]) === String(x[c.id]))));
           } else if (c.kind === 'map') { Object.values(body).forEach(v => stampValue(k, v)); d[k] = body; }
           else d[k] = stampValue(k, body);
           save(); return { res: out(200, viewAll(k, d)) };
@@ -667,7 +680,7 @@
           if ((c.writeOnly || []).includes('raw') && body.raw && d[k].some(x => x.raw === body.raw)) return { res: err('CONFLICT', 'This key has already been added.') };
           const rec = storeRecord(k, body);
           d[k] = qs === 'at=start' ? [rec, ...d[k]] : [...d[k], rec]; save();
-          return { res: out(201, viewOne(k, rec, d[k].indexOf(rec), d)) };
+          return { res: out(201, viewOne(k, rec, d)) };
         }
         case 'put': {
           const cur = d[k];
@@ -677,14 +690,12 @@
             if (checkKey(k, id, d, 'NOT_FOUND').length) return { res: err('NOT_FOUND') };
             cur[id] = stampValue(k, body); save(); return { res: out(200, cur[id]) };
           }
-          if (c.kind === 'index' && !/^\d+$/.test(id)) return { res: bad([{ path: `${k} position "${id}"`, expected: 'a position' }]) };
           const issues = check(c.item, body, `${k}[${id}]`); if (issues.length) return { res: bad(issues) };
-          if (c.kind === 'list' && String(body[c.id]) !== id) return { res: bad([{ path: `${k}[${id}].${c.id}`, expected: `"${id}" (the id in the address)` }]) };
+          if (String(body[c.id]) !== id) return { res: bad([{ path: `${k}[${id}].${c.id}`, expected: `"${id}" (the id in the address)` }]) };
           const i = pos(cur);
-          if (i >= 0 && i < cur.length) cur[i] = storeRecord(k, body, cur[i]);
-          else if (c.kind === 'index' && i === cur.length) cur.push(storeRecord(k, body));   /* a new thread */
-          else return { res: err('NOT_FOUND') };
-          save(); return { res: out(200, viewOne(k, cur[i], i, d)) };
+          if (i < 0) return { res: err('NOT_FOUND') };
+          cur[i] = storeRecord(k, body, cur[i]);
+          save(); return { res: out(200, viewOne(k, cur[i], d)) };
         }
         case 'delete': {
           const cur = d[k];
