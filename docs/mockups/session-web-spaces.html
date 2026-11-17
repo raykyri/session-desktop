@@ -3846,7 +3846,7 @@ const RES = {
   profile:  { url: '/api/me/profile', kind: 'value' },        /* name and bio */
   skills:   { url: '/api/space-skills', kind: 'map' },        /* space id → skills ([name, prompt]) */
   pagedocs: { url: '/api/pages', kind: 'map' },               /* "space/page-slug" → page text, authors, history */
-  usage:    { url: '/api/me/usage', kind: 'value' },          /* Token model: tokens this month by source and space, space keys */
+  usage:    { url: '/api/me/usage', kind: 'value', stub: true },          /* Token model: tokens this month by source and space, space keys */
 };
 const DATA_KEYS = Object.keys(RES);
 /* keys of `st` that are the signed-in person's server data: they live in the data store */
@@ -3881,6 +3881,7 @@ function commit(key, prev, next) {
   if (Object.is(prev, next)) return;
   if (ID_MAP.size) next = remapIds(next);   /* a write that still holds a temporary id the server has replaced (a timer's closure) */
   DS.store.setState({ [key]: deepFreeze(next) });
+  if (TX && !(RES[key] || {}).stub) { txNote(key, prev); return; }   /* inside a mutation: the server writes it (mutate, below); stubs are written as sent */
   DS.source.write(DS, key, prev, next);
 }
 const pick = (arr, sel) => { if (typeof sel === 'number') return sel; if (typeof sel === 'function') return arr.findIndex(sel); const s2 = realId(sel); return arr.findIndex(x => x && (x.id === sel || x.id === s2 || x.u === sel)); };
@@ -3895,7 +3896,13 @@ const db = {
   update(key, sel, recipe) {
     if (DEV && key === 'posts' && typeof sel !== 'string') console.error('[session] db.update(\'posts\') takes a thread id, not', sel);
     const prev = D[key];
-    if (Array.isArray(prev)) { const i = pick(prev, sel); if (i < 0) return; const next = prev.slice(); next[i] = produce(prev[i], recipe); commit(key, prev, next); }
+    if (Array.isArray(prev)) {
+      const i = pick(prev, sel); if (i < 0) return; const next = prev.slice(), f = (RES[key] || {}).id;
+      let x = produce(prev[i], recipe);
+      /* a recipe that returns a new record keeps the record's id */
+      if (f && x && typeof x === 'object' && x[f] === undefined && prev[i][f] !== undefined) x = { ...x, [f]: prev[i][f] };
+      next[i] = x; commit(key, prev, next);
+    }
     else commit(key, prev, { ...prev, [sel]: produce(prev[sel], recipe) });
   },
   push(key, ...items) { const prev = D[key]; commit(key, prev, [...prev, ...items]); return prev.length + items.length; },
@@ -3965,7 +3972,8 @@ function diffOps(key, prev, next) {
   const moved = kept.some((k, i) => k !== before[i]);
   /* added at the start or end, or removed: one request each; reordered or several changes: the whole list */
   const front = added.every(x => next.indexOf(x) < added.length), back = added.every(x => next.indexOf(x) >= next.length - added.length);
-  if (moved || added.length + gone.length > 3 || (added.length && !front && !back)) return [{ key, method: 'PUT', url: r.url, body: next, undo: { whole: prev } }];
+  /* threads are never sent as a whole list: each change is a request on that thread (its id in the address) */
+  if (key !== 'posts' && (moved || added.length + gone.length > 3 || (added.length && !front && !back))) return [{ key, method: 'PUT', url: r.url, body: next, undo: { whole: prev } }];
   const ops = added.map(x => ({ key, method: 'POST', url: r.url + (front && !back ? '?at=start' : ''), body: x, undo: { listId: id(x), was: undefined } }));
   gone.forEach(x => ops.push({ key, method: 'DELETE', url: url(id(x)), undo: { listId: id(x), was: x, at: prev.indexOf(x) } }));
   next.forEach(x => { const p = P.get(id(x)); if (p && p !== x && !sameJSON(p, x)) ops.push({ key, method: 'PUT', url: url(id(x)), body: x, undo: { listId: id(x), was: p } }); });
@@ -4036,9 +4044,16 @@ function remapIds(v) {
   return o;
 }
 /* the request an op becomes: ids the server has replaced; a new record keeps its temporary id to itself */
+const DERIVED_FIELDS = { posts: ['r', 'likes', 'liked', 'mine'], spaces: ['members', 'pct'] };
 function sendable(op) {
   const r = RES[op.key], url = remapIds(op.url); let body = remapIds(op.body);
   if (op.method === 'POST' && r.kind === 'list' && r.serverId && body && String(body[r.id]).startsWith('tmp-')) { body = { ...body }; delete body[r.id]; }
+  /* fields the server derives are never sent; a thread's likes travel as likesBase (likes from other people) */
+  const drop = DERIVED_FIELDS[op.key];
+  if (drop && body && typeof body === 'object') {
+    const one = x => { if (!x || typeof x !== 'object' || !drop.some(f => f in x)) return x; const y = { ...x }; if (op.key === 'posts' && typeof x.likes === 'number') y.likesBase = Math.max(0, x.likes - (x.liked ? 1 : 0)); drop.forEach(f => delete y[f]); return y; };
+    body = Array.isArray(body) ? body.map(one) : one(body);
+  }
   return { url, body };
 }
 /* a's missing createdAt / joinedAt from b, in records at the same place; a itself when nothing changes */
@@ -4095,11 +4110,14 @@ const apiSource = {
       .catch(() => {});
   },
   write(inst, key, prev, next) {
+    /* user actions are mutations (mutate); the collection endpoints are for the Screen entries, the ask
+       pipeline and the token-usage stub */
+    if (DEV && !JUMPING && !SERVER_SIDE && !(RES[key] || {}).stub && APP_STARTED) console.error(`[session] a REST write of ${key} outside a Screen entry: user actions go through mutate()`);
     for (const op of diffOps(key, prev, next)) {
       inst.meta.setState(m => ({ pending: m.pending + 1 }));
       apiSource.queue = apiSource.queue
-        .then(() => { const q = sendable(op); return http(op.method, q.url, q.body); })
-        .then(res => { try { adopt(inst, op, res); } catch (e) { console.error('[session] could not take the server’s answer', e); } }, e => { undoOp(inst, op); dataError(apiErrText(e, 'write'), e); })
+        .then(() => { const q = sendable(op); if (refsDead(q)) throw SKIPPED; return http(op.method, q.url, q.body); })
+        .then(res => { try { adopt(inst, op, res); } catch (e) { console.error('[session] could not take the server’s answer', e); } }, e => { undoOp(inst, op); if (e !== SKIPPED) dataError(apiErrText(e, 'write'), e); })
         .finally(() => inst.meta.setState(m => ({ pending: m.pending - 1 })));
     }
   },
@@ -4110,6 +4128,178 @@ const apiSource = {
 };
 const liveData = createDataStore('liveData', apiSource);
 DS = liveData;
+
+/* ==== mock backend, step 3: mutations by intent ====
+   A person's action is one named mutation, a tRPC-style procedure (POST /api/rpc/<name>), that the server
+   carries out: it validates the input, checks that the records exist, computes the new state, writes every
+   collection it changes at once (all or nothing) and answers { result, changes }. `changes` lists the
+   records it wrote, per collection: { posts: { put: [record], del: [id], at: { id: index } },
+   fu: { put: { thread: [...] }, del: [thread] }, joined: { value } }.
+
+   mutate(name, input, recipe, opts) runs the recipe first: the same db.* calls as before, which update the
+   store at once (the optimistic state). Inside the recipe those changes are recorded, not sent. The call
+   joins the one write queue, so writes keep their order. When the server answers, its records replace the
+   optimistic ones (except records a later queued mutation also changed: its answer brings them). When it
+   fails, every record the recipe changed goes back to its state before the mutation, and one toast names
+   the error (API_ERR, by code).
+   - A record the recipe creates with a temporary id (tmpId) takes the server's id: opts.tmp names the
+     temporary id and result.id the new one; the page replaces it everywhere (adoptId). If the create fails,
+     queued writes that refer to the temporary id are dropped without a second toast.
+   - opts.then(result) and opts.fail(error) run after the answer.
+   - Inside a Screen entry (JUMPING) and inside another mutation's recipe, mutate runs the recipe only: a
+     Screen entry writes through the collection endpoints (step 10 replaces them with a scenario endpoint),
+     and a nested recipe is part of the outer mutation.
+   The collection endpoints stay for the Screen entries, the ask pipeline (serverSide: answers, charges and
+   run notifications, until step 7 makes asks server jobs) and the token-usage stub. In dev mode a REST
+   write from anywhere else is a console.error (apiSource.write). */
+let TX = null;          /* the mutation whose recipe is running: { name, before: Map(key → value before) } */
+let JUMPING = 0;        /* a Screen entry is running */
+let SERVER_SIDE = 0;    /* the page writes what the server would (the ask pipeline): REST writes allowed */
+const SKIPPED = { skipped: true };   /* a queued write dropped because it refers to a record whose create failed */
+const DEAD_TMP = new Set();          /* temporary ids of records whose create failed */
+const PENDING = new Map();           /* "key/record" → queued mutations that changed it */
+/* fn, run as the server side of the mockup (the ask pipeline): its writes go to the collection endpoints */
+const serverSide = fn => function (...a) { SERVER_SIDE++; try { return fn.apply(this, a); } finally { SERVER_SIDE--; } };
+const refsDead = v => DEAD_TMP.size > 0 && [...enc(v === undefined ? null : v).matchAll(TMP_RE)].some(m => DEAD_TMP.has(m[0]));
+function txNote(key, prev) { if (!TX.before.has(key)) TX.before.set(key, prev); }
+/* the records of a collection that differ between two values: list ids, map keys, or '*' for a value */
+function txRecs(key, a, b) {
+  const r = RES[key];
+  if (r.kind === 'value') return sameJSON(a, b) ? [] : ['*'];
+  if (r.kind === 'map') return [...new Set([...Object.keys(a || {}), ...Object.keys(b || {})])].filter(k => a[k] !== b[k] && !sameJSON(a[k], b[k]));
+  const A = new Map(a.map(x => [x[r.id], x])), B = new Map(b.map(x => [x[r.id], x]));
+  return [...new Set([...A.keys(), ...B.keys()])].filter(k => A.get(k) !== B.get(k) && !sameJSON(A.get(k), B.get(k)));
+}
+/* a function that puts back the records a mutation changed (from `before` to `after`), keeping later changes to other records */
+function txUndo(key, before, after) {
+  const r = RES[key];
+  if (r.kind === 'list') {
+    const ids = txRecs(key, before, after), f = r.id, B = new Map(before.map((x, i) => [x[f], [x, i]]));
+    const order = l => l.map(x => x[f]).filter(id => B.has(id) && after.some(y => y[f] === id)).join('\u0000');
+    if (order(before) !== order(after)) return () => before;
+    return cur => {
+      const next = cur.filter(x => !ids.includes(x[f]) || B.has(x[f])).map(x => B.has(x[f]) && ids.includes(x[f]) ? B.get(x[f])[0] : x);
+      ids.filter(id => B.has(id) && !next.some(x => x[f] === id)).forEach(id => { const [x, i] = B.get(id); next.splice(Math.min(i, next.length), 0, x); });
+      return next;
+    };
+  }
+  if (r.kind === 'map') { const ks = txRecs(key, before, after); return cur => { const next = { ...cur }; ks.forEach(k => { if (k in before) next[k] = before[k]; else delete next[k]; }); return next; }; }
+  if (before instanceof Set && after instanceof Set) {
+    const add = [...after].filter(x => !before.has(x)), rm = [...before].filter(x => !after.has(x));
+    return cur => { const next = new Set(cur); add.forEach(x => next.delete(x)); rm.forEach(x => next.add(x)); return next; };
+  }
+  if (Array.isArray(before) && Array.isArray(after) && before.concat(after).every(x => typeof x !== 'object')) {
+    const add = after.filter(x => !before.includes(x)), rm = before.filter(x => !after.includes(x));
+    return cur => { const next = cur.filter(x => !add.includes(x)); rm.forEach(x => { if (!next.includes(x)) next.splice(Math.min(before.indexOf(x), next.length), 0, x); }); return next; };
+  }
+  if (before && after && typeof before === 'object' && typeof after === 'object' && !Array.isArray(before) && !Array.isArray(after)) {
+    const ks = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(k => !sameJSON(before[k], after[k]));
+    return cur => { const next = { ...cur }; ks.forEach(k => { if (k in before) next[k] = before[k]; else delete next[k]; }); return next; };
+  }
+  return () => before;
+}
+/* the server gave a record a new id: the page uses it everywhere (as for a REST create, adopt) */
+function adoptId(tmp, id) {
+  if (!tmp || !id || tmp === id) return;
+  mapId(tmp, id);
+  for (const s of [DS.store, uiStore, phoneStore]) { const v = s.getState(), n = remapIds(v); if (n !== v) s.setState(deepFreeze(n), true); }
+  if (typeof NV !== 'undefined') { NV.cur = remapIds(NV.cur); NV.from = remapIds(NV.from); }
+}
+/* the server's records replace the store's; held(key, record): a later queued mutation changed it too */
+function applyChanges(changes, held) {
+  let any = false;
+  for (const [key, ch] of Object.entries(changes || {})) {
+    const r = RES[key], cur = D[key]; if (!r || cur === undefined || !ch) continue;
+    let next = cur;
+    if (r.kind === 'value') { if ('value' in ch && !held(key, '*') && !sameJSON(cur, ch.value)) next = ch.value; }
+    else if (r.kind === 'map') {
+      for (const [k, v] of Object.entries(ch.put || {})) if (!held(key, k) && !sameJSON(next[k], v)) { if (next === cur) next = { ...cur }; next[k] = v; }
+      for (const k of ch.del || []) if (!held(key, k) && k in next) { if (next === cur) next = { ...cur }; delete next[k]; }
+    } else {
+      const f = r.id;
+      for (const x of ch.put || []) {
+        if (held(key, x[f])) continue;
+        const i = next.findIndex(y => y[f] === x[f]);
+        if (i >= 0 && sameJSON(next[i], x)) continue;
+        if (next === cur) next = cur.slice();
+        if (i >= 0) next[i] = x; else if ((ch.at || {})[x[f]] === 0) next.unshift(x); else next.push(x);
+      }
+      for (const id of ch.del || []) { if (held(key, id)) continue; const i = next.findIndex(y => y[f] === id); if (i >= 0) { if (next === cur) next = cur.slice(); next.splice(i, 1); } }
+    }
+    if (next !== cur) { DS.store.setState({ [key]: deepFreeze(next) }); any = true; }
+  }
+  return any;
+}
+const pkey = (key, rec) => key + '/' + rec;
+/* run fn as a Screen entry (its writes go to the collection endpoints), or as a person's action inside one */
+const asScenario = fn => function (...a) { JUMPING++; try { return fn.apply(this, a); } finally { JUMPING--; } };
+const asUser = fn => { const j = JUMPING; JUMPING = 0; try { return fn(); } finally { JUMPING = j; } };
+/* run fn outside the mutation whose recipe is running: its own mutations are queued before that one */
+const outside = fn => { const t = TX; TX = null; try { return fn(); } finally { TX = t; } };
+function mutate(name, input, recipe, opts = {}) {
+  if (JUMPING || TX) return recipe ? recipe() : undefined;
+  const tx = TX = { name, before: new Map() };
+  let ret;
+  try { ret = recipe ? recipe() : undefined; } finally { TX = null; }
+  /* input and opts.tmp can be functions, read after the recipe; an input of null sends nothing (the recipe made no change) */
+  const body0 = typeof input === 'function' ? input(ret) : input, tmp = typeof opts.tmp === 'function' ? opts.tmp() : opts.tmp;
+  if (body0 === null) { if (DEV && tx.before.size) console.error(`[session] ${name}: the recipe changed ${[...tx.before.keys()].join(', ')} but the mutation has no input`); return ret; }
+  const undos = [], recs = [];
+  for (const [key, before] of tx.before) {
+    const after = D[key]; if (before === after) continue;
+    const u = txUndo(key, before, after);
+    undos.push(() => DS.store.setState({ [key]: deepFreeze(u(D[key])) }));
+    txRecs(key, before, after).forEach(x => recs.push(pkey(key, x)));
+  }
+  /* records the recipe created with temporary ids: the one opts.tmp names takes the server's id; the server's
+     changes bring the others (a notification it sends, say), so the optimistic copies go */
+  const fresh = [];
+  for (const [key, before] of tx.before) {
+    const r = RES[key]; if (r.kind !== 'list' || !r.serverId) continue;
+    const had = new Set(before.map(x => x[r.id]));
+    D[key].forEach(x => { const id = x[r.id]; if (!had.has(id) && String(id).startsWith('tmp-') && id !== tmp) fresh.push([key, id]); });
+  }
+  recs.forEach(k => PENDING.set(k, (PENDING.get(k) || 0) + 1));
+  const settle = () => recs.forEach(k => { const n = (PENDING.get(k) || 1) - 1; if (n) PENDING.set(k, n); else PENDING.delete(k); });
+  const inst = DS;
+  inst.meta.setState(m => ({ pending: m.pending + 1 }));
+  apiSource.queue = apiSource.queue
+    .then(() => { const body = remapIds(body0 === undefined ? {} : body0); if (refsDead(body)) throw SKIPPED; return http('POST', '/api/rpc/' + name, body); })
+    .then(res => {
+      settle();
+      if (tmp && res && res.result && res.result.id) adoptId(tmp, res.result.id);
+      fresh.forEach(([key, id]) => { const f = RES[key].id, cur = D[key]; if (cur.some(x => x[f] === id)) DS.store.setState({ [key]: deepFreeze(cur.filter(x => x[f] !== id)) }); });
+      const any = applyChanges(res && res.changes, (key, x) => PENDING.has(pkey(key, x)));
+      if (opts.then) opts.then(res && res.result);
+      if ((any || tmp) && APP_STARTED && !DISPOSED) renderKeepFocus();
+    }, e => {
+      settle();
+      undos.reverse().forEach(u => u());
+      if (tmp) DEAD_TMP.add(tmp);
+      fresh.forEach(([, id]) => DEAD_TMP.add(id));
+      if (e !== SKIPPED) dataError(apiErrText(e, 'write'), e); else if (APP_STARTED && !DISPOSED) renderAll();
+      if (opts.fail) opts.fail(e);
+    })
+    .catch(e => console.error(`[session] ${name}: could not take the server’s answer`, e))
+    .finally(() => inst.meta.setState(m => ({ pending: m.pending - 1 })));
+  return ret;
+}
+/* personal toggles: a Set member on or off, as one mutation */
+const TOGGLES = {
+  liked: v => ['likes.toggle', { thread: v }], rpLiked: v => ['likes.toggleReply', { reply: v }],
+  saved: v => ['saved.toggle', { kind: 'thread', id: v }], qtSaved: v => ['saved.toggle', { kind: 'ask', id: v }], miSaved: v => ['saved.toggle', { kind: 'source', id: v }],
+  muted: v => ['mutes.set', { handle: v }], blocked: v => ['blocks.set', { handle: v }], miRead: v => ['sources.markRead', { id: v }],
+};
+function dbToggle(key, v, on) {
+  const want = on === undefined ? !D[key].has(v) : !!on;
+  if (D[key].has(v) === want) return;
+  const [name, input] = TOGGLES[key](v);
+  mutate(name, key === 'miRead' ? input : { ...input, on: want }, () => db.toggle(key, v, want));
+}
+/* for tests: the data store's collections (encoded), and the toast */
+window.__dataState = keys => enc(Object.fromEntries((keys || Object.keys(DS.store.getState())).map(k => [k, D[k]])));
+window.__toastText = () => (st.toast && st.toast.t) || null;
+/* ==== end of mutations by intent ==== */
 window.__sessionDispose = () => { DISPOSED = true; LIFE.abort(); OBSERVERS.forEach(o => o.disconnect()); mockBackend.restore(); window.__sessionDispose = null; };
 /* a failed write: tell the person and show the restored data */
 let dataError = msg => {};
@@ -4564,8 +4754,8 @@ function answerHTML(p) {
 function addFollowUp(i, txt) {
   const p = postById(i);
   if (p.k === 'ask' && qtOn()) return qtAsk(qtT(i), 'r', txt);
-  if (p.k === 'ask') { db.put('fu', i, [...(D.fu[i] || fuFor(p)), { u: ME.u, q: txt, a: 'Researching…' }]); return; }
-  db.put('rp', i, [...(D.rp[i] || rpFor(p)), { u: ME.u, t: txt }]);
+  if (p.k === 'ask') { mutate('followups.ask', { thread: i, q: txt }, () => db.put('fu', i, [...(D.fu[i] || fuFor(p)), { u: ME.u, q: txt, a: 'Researching…' }])); return; }
+  mutate('research.createPostFollowUp', { thread: i, t: txt }, () => db.put('rp', i, [...(D.rp[i] || rpFor(p)), { u: ME.u, t: txt }]));
 }
 function fuInput(p) {
   if (sp(p.s).archived) return cxReadOnly(sp(p.s));
@@ -5281,7 +5471,7 @@ function nClick(e) {
   if (k === 'ntread') return nGo(ntReadAll);
   if (k === 'nt') return nGo(() => {
     const x = ntItems().find(n => n.id === a); if (!x) return;
-    if (x.k === 'reqs') st.reqSeen = true; else if (x.k === 'reps') st.repSeen = true; else if (x.unread) ntRead(x.id);
+    if (x.k === 'reqs') seen('reqSeen'); else if (x.k === 'reps') seen('repSeen'); else if (x.unread) ntRead(x.id);
     if (x.k === 'invite' && !x.done) { nst.sheet = 'inv:' + x.id; return; }
     const to = nNtTarget(x);
     nst.stack = [...nst.stack, ...to]; to.forEach(e2 => { nst.scroll = { ...nst.scroll, [e2.v + ':' + e2.id]: 0 }; });
@@ -5308,12 +5498,12 @@ function nClick(e) {
   if (k === 'appear') return nGo(() => { st.appearance = a; try { localStorage.setItem('session-web-appearance', a); } catch (x) {} });
   if (k === 'edit') return nGo(() => { nst.edit = !nst.edit; });
   if (k === 'join') return nGo(() => { if (!nSignedIn()) { nst.sheet = 'signin'; return; } if (isClosed(sp(a))) { if (sp(a).policy === 'request' && relOf(a) === 'none') { nSheetOpen('req:' + a); nst.sheet = 'req:' + a; } return; } nst.sheet = 'joinc:' + a; });
-  if (k === 'joinok') return nGo(() => { joinSpace(a); nst.sheet = null; });
-  if (k === 'leave') return nGo(() => { if (isClosed(sp(a))) setRel(a, 'none'); leaveSpace(a); nst.sheet = null; });
-  if (k === 'save') return nGo(() => { if (!nSignedIn()) { nst.sheet = 'signin'; return; } db.toggle('saved', a); });
+  if (k === 'joinok') return nGo(() => { userJoin(a); nst.sheet = null; });
+  if (k === 'leave') return nGo(() => { userLeave(a); nst.sheet = null; });
+  if (k === 'save') return nGo(() => { if (!nSignedIn()) { nst.sheet = 'signin'; return; } dbToggle('saved', a); });
   if (k === 'signin') return nGo(() => { st.auth = 'in'; nst.sheet = null; });
   if (k === 'signout') return nGo(() => { st.auth = 'out'; nst.sheet = null; nst.stack = []; nst.stacks = {}; });
-  if (k === 'revoke') return nGo(() => { const pays = D.spaces.filter(s => s.key === a && s.byok === ME.u); st.userKeys = st.userKeys.filter(x => x.id !== a); pays.forEach(s => spEdit(s.id, x => { delete x.byok; delete x.key; x.budget = 0; x.pct = 0; })); nst.sheet = null; });
+  if (k === 'revoke') return nGo(() => { const pays = D.spaces.filter(s => s.key === a && s.byok === ME.u); mutate('apiKeys.revoke', { id: a }, () => { st.userKeys = st.userKeys.filter(x => x.id !== a); pays.forEach(s => spEdit(s.id, x => { delete x.byok; delete x.key; x.budget = 0; x.pct = 0; })); }); nst.sheet = null; });
   if (k === 'send') return nGo(() => {
     const t = nTop(), txt = nst.fu.trim();
     if (!t || !txt) return;
@@ -5337,7 +5527,8 @@ function nClick(e) {
   if (k === 'addkey-save') return nGo(() => {
     const v = nst.keyDraft.trim();
     if (keyDup(v)) { nst.keyErr = 'This key has already been added.'; return; }
-    db.push('userKeys', { id: tmpId(), kind: 'key', raw: v, label: nst.keyName.trim() || `API key ${st.userKeys.length + 1}`, mask: maskOf(v), provider: provOf(v), valid: true });
+    const k = { id: tmpId(), kind: 'key', raw: v, label: nst.keyName.trim() || `API key ${st.userKeys.length + 1}`, mask: maskOf(v), provider: provOf(v), valid: true };
+    mutate('apiKeys.create', { raw: v, label: k.label }, () => db.push('userKeys', k), { tmp: k.id });
     nst.sheet = null;
   });
 }
@@ -5396,7 +5587,7 @@ function nToast(docked) {
 }
 function nToastAct(v) {
   if (v.startsWith('open:')) { const id = v.slice(5); if (!sp(id)) return; nst.stack = [...nst.stack, { v: 'space', id }]; nst.scroll = { ...nst.scroll, ['space:' + id]: 0 }; st.space = id; }
-  else if (v.startsWith('undo:')) db.update('reqs', v.slice(5), r => { r.st = 'open'; });
+  else if (v.startsWith('undo:')) reopenReq(v.slice(5));
   else if (v.startsWith('repundo:')) { const r = st.reports.find(x => x.id === v.slice(8)); if (r) nRepUndo(r); }
   else if (v === 'tokeys') nst.stack = [...nst.stack, { v: 'keys', id: '' }];
 }
@@ -5571,9 +5762,8 @@ function nSrcAsk(id, txt) {
     return;
   }
   Object.assign(st, { home: false, space: x.s.id, draft: txt, compTopic: null });
-  createThread('ask');
+  threadCreate(() => { createThread('ask'); if (x.m) db.update('posts', lastTid(), p => { p.about = { it: x.m.id }; }); });
   const ni = lastTid();
-  if (x.m) db.update('posts', ni, p => { p.about = { it: x.m.id }; });
   nst.stack = [...nst.stack, { v: 'thread', id: ni }]; nst.scroll = { ...nst.scroll, ['thread:' + ni]: 0 };
 }
 
@@ -5639,9 +5829,11 @@ function nReps(sid) {
 }
 /* reopen a resolved report (without changing the stored record in place) */
 function nRepUndo(r) {
-  const was = r.st; db.update('reports', r.id, y => { y.st = 'open'; });
-  if (was !== 'dismissed' && !st.reports.some(x => x.key === r.key && x.st !== 'open')) db.del('modSt', r.key);
-  st.notifs = st.notifs.filter(n => !ntOfReport(n, r.id));
+  mutate('reports.resolve', { report: r.id, outcome: 'open' }, () => {
+    const was = r.st; db.update('reports', r.id, y => { y.st = 'open'; });
+    if (was !== 'dismissed' && !st.reports.some(x => x.key === r.key && x.st !== 'open')) db.del('modSt', r.key);
+    st.notifs = st.notifs.filter(n => !ntOfReport(n, r.id));
+  });
   toast('Report reopened.');
 }
 
@@ -5729,22 +5921,23 @@ function nClickX(k, a) {
     case 'repwhy': return go(() => { nst.rep = { ...nst.rep, why: a }; });
     case 'repsend': return go(() => {
       const it = itemOf(a);
-      db.unshift('reports', { id: tmpId(), sp: it.s.id, key: a, why: nst.rep.why, note: nst.rep.note.trim(), by: ME.u, st: 'open' });
-      st.repSeen = false; nst.sheet = null;
+      const r = { id: tmpId(), sp: it.s.id, key: a, why: nst.rep.why, note: nst.rep.note.trim(), by: ME.u, st: 'open' };
+      mutate('reports.create', { item: a, why: r.why, note: r.note }, () => { db.unshift('reports', r); st.repSeen = false; }, { tmp: r.id });
+      nst.sheet = null;
       toast(`Report sent to the moderators of ${spName(it.s)}. You get a notification when they resolve it.`);
     });
     case 'reqrules': return go(() => { st.reqRules = !st.reqRules; });
-    case 'reqsend': return go(() => { const x = sp(a); if (!csReqValid(x)) return; setRel(a, 'pending'); st.reqAge = 'just now'; nst.sheet = null; toast(`Request sent to the moderators of ${spName(x)}. You get a notification when they decide.`); });
-    case 'withdrawok': return go(() => { setRel(a, 'none'); nst.sheet = null; toast('Request withdrawn.'); });
+    case 'reqsend': return go(() => { const x = sp(a); if (!csReqValid(x)) return; userRequest(a, st.reqAns); st.reqAge = 'just now'; nst.sheet = null; toast(`Request sent to the moderators of ${spName(x)}. You get a notification when they decide.`); });
+    case 'withdrawok': return go(() => { userWithdraw(a); nst.sheet = null; toast('Request withdrawn.'); });
     case 'invok': case 'invno': return go(() => {
       const x = ntFind(a); nst.sheet = null; if (!x) return;
-      db.update('notifs', a, n => { n.read = true; n.response = k === 'invok' ? 'accepted' : 'declined'; });
-      if (k === 'invok') { setRel(x.sp, 'member'); toast(`You joined ${spName(sp(x.sp))}.`, 'open:' + x.sp, 'Open'); }
+      if (k === 'invok') userJoin(x.sp, a); else mutate('invites.decline', { notification: a }, () => db.update('notifs', a, n => { n.read = true; n.response = 'declined'; }));
+      if (k === 'invok') { toast(`You joined ${spName(sp(x.sp))}.`, 'open:' + x.sp, 'Open'); }
       else toast('Invite declined. The person who invited you is not notified.');
     });
-    case 'rqokgo': return go(() => { const s = nTop() && nTop().v === 'mreq' ? sp(nTop().id) : sp('replication'); st.reqs = st.reqs.map(r => r.u === a ? { ...r, st: 'approved' } : r); nst.sheet = null; toast(`Approved ${a}. They can read ${spName(s)} now.`); });
-    case 'rqnogo': return go(() => { st.reqs = st.reqs.map(r => r.u === a ? { ...r, st: 'declined' } : r); nst.sheet = null; toast(`Declined ${a}.`, 'undo:' + a, 'Undo'); });
-    case 'rqundo': return go(() => { db.update('reqs', a, r => { if (r.st === 'declined') r.st = 'open'; }); });
+    case 'rqokgo': return go(() => { const s = nTop() && nTop().v === 'mreq' ? sp(nTop().id) : sp('replication'); mutate('joinRequests.decide', { space: s.id, users: [a], decision: 'approve' }, () => { st.reqs = st.reqs.map(r => r.u === a ? { ...r, st: 'approved' } : r); }); nst.sheet = null; toast(`Approved ${a}. They can read ${spName(s)} now.`); });
+    case 'rqnogo': return go(() => { const r0 = st.reqs.find(r => r.u === a); mutate('joinRequests.decide', { space: r0 ? reqSp(r0) : 'replication', users: [a], decision: 'decline', why: '' }, () => { st.reqs = st.reqs.map(r => r.u === a ? { ...r, st: 'declined' } : r); }); nst.sheet = null; toast(`Declined ${a}.`, 'undo:' + a, 'Undo'); });
+    case 'rqundo': return go(() => { reopenReq(a); });
     case 'rep': return go(() => { const [v, id] = a.split(':'), r = st.reports.find(x => x.id === id); if (r) sfResolve(r, v === 'hide' ? 'hidden' : 'dismissed'); });
     case 'repremgo': return go(() => { const r = st.reports.find(x => x.id === a); nst.sheet = null; if (r) sfResolve(r, 'removed'); });
     case 'repundo': return go(() => { const r = st.reports.find(x => x.id === a); nst.sheet = null; if (r) nRepUndo(r); });
@@ -5761,13 +5954,13 @@ function nClickX(k, a) {
     case 'pfsave': return go(() => {
       const name = nst.pf.name.trim();
       if (!name) { nst.pf = { ...nst.pf, err: 'Add a name.' }; return; }
-      db.set('profile', { name, bio: (nst.pf.bio || '').trim() }); nst.sheet = null; toast('Profile saved.');
+      mutate('profile.update', { name, bio: (nst.pf.bio || '').trim() }, () => db.set('profile', { name, bio: (nst.pf.bio || '').trim() })); nst.sheet = null; toast('Profile saved.');
     });
-    case 'keyrnsave': return go(() => { const v = nst.keyRn.trim(); if (!v) return; db.update('userKeys', a, x => { x.label = v; }); nst.sheet = 'key:' + a; toast('Key renamed.'); });
+    case 'keyrnsave': return go(() => { const v = nst.keyRn.trim(); if (!v) return; mutate('apiKeys.rename', { id: a, label: v }, () => db.update('userKeys', a, x => { x.label = v; })); nst.sheet = 'key:' + a; toast('Key renamed.'); });
     case 'svseg': return go(() => { nst.svSeg = a; });
-    case 'unsave': return go(() => { const [w, id] = a.split(/:(.*)/s); db.toggle(w === 'ask' ? 'qtSaved' : 'miSaved', id, false); toast('Removed from Saved.'); });
-    case 'qtsave': return go(() => { if (!nSignedIn()) { nst.sheet = 'signin'; return; } const on = !st.qtSaved.has(a); db.toggle('qtSaved', a, on); toast(on ? 'Saved. It is listed under Saved › Asks.' : 'Removed from Saved.'); });
-    case 'misave': return go(() => { if (!nSignedIn()) { nst.sheet = 'signin'; return; } const on = !st.miSaved.has(a); db.toggle('miSaved', a, on); toast(on ? 'Saved. It is listed under Saved › Sources.' : 'Removed from Saved.'); });
+    case 'unsave': return go(() => { const [w, id] = a.split(/:(.*)/s); dbToggle(w === 'ask' ? 'qtSaved' : 'miSaved', id, false); toast('Removed from Saved.'); });
+    case 'qtsave': return go(() => { if (!nSignedIn()) { nst.sheet = 'signin'; return; } const on = !st.qtSaved.has(a); dbToggle('qtSaved', a, on); toast(on ? 'Saved. It is listed under Saved › Asks.' : 'Removed from Saved.'); });
+    case 'misave': return go(() => { if (!nSignedIn()) { nst.sheet = 'signin'; return; } const on = !st.miSaved.has(a); dbToggle('miSaved', a, on); toast(on ? 'Saved. It is listed under Saved › Sources.' : 'Removed from Saved.'); });
   }
   return false;
 }
@@ -5831,6 +6024,28 @@ function setRel(id, r) {
   if (r === 'mod') { if (!D.roles[id]) db.put('roles', id, 'Admin'); }
   else if (D.roles[id] && !D.roles0[id]) db.del('roles', id);
 }
+/* membership actions (spaces.join, spaces.leave, join requests) */
+const userJoin = (id, notification) => mutate('spaces.join', Object.assign({ space: id }, notification != null ? { notification } : {}), () => {
+  if (notification != null) db.update('notifs', notification, n => { n.read = true; n.response = 'accepted'; });
+  if (notification != null || isClosed(sp(id))) setRel(id, 'member'); else joinSpace(id);
+});
+const userLeave = id => mutate('spaces.leave', { space: id }, () => { if (isClosed(sp(id))) setRel(id, 'none'); leaveSpace(id); });
+const userRequest = (id, answers) => mutate('joinRequests.create', { space: id, answers: (answers || []).map(String) }, () => {
+  setRel(id, 'pending');
+  st.reqs = [...st.reqs.filter(r => r.u !== ME.u), { u: ME.u, sp: id, st: 'open', a: (answers || []).map(String) }];
+});
+const userWithdraw = id => mutate('joinRequests.withdraw', { space: id }, () => { setRel(id, 'none'); if (st.reqs.some(r => r.u === ME.u && reqSp(r) === id)) st.reqs = st.reqs.filter(r => !(r.u === ME.u && reqSp(r) === id)); });
+/* a moderator's decision on join requests: approve, decline or reopen (Undo) */
+function decideReqs(sid, users, decision, why) {
+  return mutate('joinRequests.decide', Object.assign({ space: sid, users, decision }, decision === 'decline' ? { why: why || '' } : {}), () => {
+    if (decision === 'approve') { st.reqs = st.reqs.map(r => users.includes(r.u) && reqSp(r) === sid ? { ...r, st: 'approved' } : r); cxAddMembers(sp(sid), users); }
+    if (decision === 'decline') st.reqs = st.reqs.map(r => users.includes(r.u) && reqSp(r) === sid ? { ...r, st: 'declined', why: why || '' } : r);
+    if (decision === 'reopen') users.forEach(u => db.update('reqs', u, r => { if (r.st === 'declined') r.st = 'open'; }));
+  });
+}
+const reopenReq = u => { const r = st.reqs.find(x => x.u === u); if (r) decideReqs(reqSp(r), [u], 'reopen'); };
+/* the moderators' notifications for join requests and reports were read */
+const seen = k => { if (st[k] !== true) mutate('notifications.markSeen', { kind: k === 'reqSeen' ? 'requests' : 'reports' }, () => { st[k] = true; }); };
 /* join requests are keyed by space (r.sp; records without one belong to #replication-club) */
 const reqSp = r => r.sp || 'replication';
 const openReqs = (id = 'replication') => st.reqs.filter(r => r.st === 'open' && reqSp(r) === id);
@@ -6049,8 +6264,8 @@ function ntItems() {
   return [...req, ...reps, ...st.notifs.map(ntView)];
 }
 const ntFind = id => ntItems().find(x => x.id === id);
-const ntRead = id => db.update('notifs', id, n => { n.read = true; });
-const ntReadAll = () => { if (st.notifs.some(x => !x.read)) st.notifs = st.notifs.map(x => x.read ? x : { ...x, read: true }); st.reqSeen = true; st.repSeen = true; };
+const ntRead = id => mutate('notifications.markRead', { id }, () => db.update('notifs', id, n => { n.read = true; }));
+const ntReadAll = () => mutate('notifications.markAllRead', {}, () => { if (st.notifs.some(x => !x.read)) st.notifs = st.notifs.map(x => x.read ? x : { ...x, read: true }); seen('reqSeen'); seen('repSeen'); });
 /* a resolved-report notification for one report */
 const ntOfReport = (n, rid) => n.type === 'report_resolved' && n.report === rid;
 const ntUnread = () => ntItems().filter(x => x.unread).length;
@@ -6089,7 +6304,7 @@ function layoutManage() {
   const tabs = [...(cl && (s.policy === 'request' || n) ? [['requests', `Requests${n ? ` <span class="cs-n num">${n}</span>` : ''}`]] : []), ['reports', `Reports${nr ? ` <span class="cs-n num">${nr}</span>` : ''}`], ['members', `Members <span class="faint num">${fmt(s.members)}</span>`], ...(cl ? [['invites', 'Invites']] : []), ['skills', 'Skills'], ...(isAdminOf(s.id) ? [['settings', 'Settings']] : [])];
   miMgTabs(s, tabs);
   if (!tabs.some(t => t[0] === st.mgTab)) st.mgTab = tabs[0][0];
-  if (st.mgTab === 'reports') st.repSeen = true;
+  if (st.mgTab === 'reports') seen('repSeen');
   const body = { requests: csQueue, reports: csReports, members: csMembers, invites: csInvites, settings: csSettings, sources: dsManagePage, skills: abSkillsManage }[st.mgTab](s);
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page cs-mg cs-mg-${st.mgTab}"><div class="sub-top"><div class="ys-et"><button class="th-back" type="button" data-space="${s.id}">${I.chev.replace('<svg', '<svg class="bk"')}${spName(s)}</button><h2>Manage</h2></div>${cl ? `<span class="cs-vis cs-vis-top">${s.vis === 'unlisted' ? CI.eyeOff : LOCK}${visLabel(s)}</span>` : ''}</div><div class="pf-tabs cs-mtabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" data-mgtab="${k}" aria-selected="${st.mgTab === k}">${l}</button>`).join('')}</div>${body}</div></div>`;
 }
@@ -6146,7 +6361,7 @@ const linkMeta = l => l.dead ? (l.dead === 'Used' ? `Used by ${l.usedBy}` : `Exp
 /* In-page dropdown: a button and a listbox, re-rendered from state (st.dd is the open one).
    Up/Down moves between options, Enter or Space picks one, Escape closes. */
 const DD_SET = { role: (v, u) => { const s2 = sp(st.mgSpace), m = memFor(s2).find(x => x.u === u); if (!m || m.role === v) return; st.modal = `cs-role:${u}:${v}`; },
-  roleSet: (v, u) => { const s2 = sp(st.mgSpace), l = ROLES.find(x => x[0] === v)[1]; setMembers(s2, memFor(s2).map(x => x.u === u ? { ...x, role: v } : x)); toast(`${u} is now ${v === 'admin' ? 'an admin' : 'a ' + l.toLowerCase()}.`); },
+  roleSet: (v, u) => { const s2 = sp(st.mgSpace), l = ROLES.find(x => x[0] === v)[1]; mutate('members.setRole', { space: s2.id, user: u, role: v }, () => setMembers(s2, memFor(s2).map(x => x.u === u ? { ...x, role: v } : x))); toast(`${u} is now ${v === 'admin' ? 'an admin' : 'a ' + l.toLowerCase()}.`); },
   lexp: v => { st.linkExp = v; }, key: v => { csEdit(d => { d.key = v; }); }, limit: v => { csEdit(d => { d.limit = v; }); } };
 function ddSel(id, opts, val, labelId) {
   const cur = opts.find(o => o[0] === val) || opts[0], open = st.dd === id;
@@ -6247,10 +6462,16 @@ function csSettings(s) {
   const foot = `${dirty ? `<div class="st-barw${csSettings.endVis ? ' off' : ''}"><div class="st-bar" role="region" aria-label="Unsaved changes"><span>You have unsaved changes.</span><span class="st-bar-a">${btns}</span></div></div>` : ''}<div class="cs-setf">${btns}</div>`;
   return `<div class="cs-set st-side">${cxArchStrip(s)}${secs}${foot}${cxDanger(s)}</div>`;
 }
-function csApplySettings(s0, d) {
-  /* Deleted topics, and topics left without a name, move their threads to Other. */
+/* the settings a person changes (spaces.update); the server derives the rest (rules history, members) */
+const SPACE_SETTINGS = ['name', 'title', 'av', 'img', 'desc', 'rules', 'vis', 'policy', 'qs', 'invite', 'faq', 'topics', 'postsOff', 'plain', 'pageEdit', 'pages', 'dom', 'budget', 'byok', 'key'];
+function spacePatch(a, b) {
+  const set = {}, unset = [];
+  SPACE_SETTINGS.forEach(k => { if (k in b && b[k] !== undefined) { if (!sameJSON(a[k], b[k])) set[k] = b[k]; } else if (k in a && a[k] !== undefined) unset.push(k); });
+  return Object.assign({}, Object.keys(set).length ? { set } : {}, unset.length ? { unset } : {});
+}
+function csSettingsEdit(s0, d) {
   const tps = d.topics.map(([k, l]) => [k, l.trim()]).filter(t => t[1]);
-  db.update('spaces', s0.id, s => {
+  return s => {
     if (d.vis === 'open') { delete s.vis; } else s.vis = d.vis;
     Object.assign(s, { policy: d.policy, qs: d.qs.filter(q => q.q.trim()), invite: d.invite });
     Object.assign(s, { faq: d.faq, topics: tps, postsOff: d.postsOff, plain: d.plain && isVer(s) });
@@ -6259,10 +6480,18 @@ function csApplySettings(s0, d) {
     if (d.desc != null) s.desc = d.desc.trim() || s.desc;
     if (d.rules) { const rules = d.rules.map(r => r.trim()).filter(Boolean); if (rules.join('\n') !== s.rules.join('\n')) { s.rulesPrev = s.rules.slice(); s.rules = rules; s.rulesAt = nowIso(); s.rulesBy = ME.u; } }
     if (d.pageEdit) s.pageEdit = d.pageEdit;
+  };
+}
+const spacesUpdateInput = (s0, d) => Object.assign({ id: s0.id }, spacePatch(sp(s0.id), produce(sp(s0.id), csSettingsEdit(s0, d))));
+function csApplySettings(s0, d) {
+  /* Deleted topics, and topics left without a name, move their threads to Other. */
+  const tps = d.topics.map(([k, l]) => [k, l.trim()]).filter(t => t[1]);
+  mutate('spaces.update', spacesUpdateInput(s0, d), () => {
+    db.update('spaces', s0.id, csSettingsEdit(s0, d));
+    D.posts.filter(p => p.s === s0.id && p.topic && !tps.some(t => t[0] === p.topic)).forEach(p => db.update('posts', p.id, x => { x.topic = null; }));
+    const s = sp(s0.id);
+    if (isClosed(s) && D.joined.includes(s.id) && !st.rel[s.id]) db.put('rel', s.id, isModOf(s.id) ? 'mod' : 'member');
   });
-  if (D.posts.some(p => p.s === s0.id && p.topic && !tps.some(t => t[0] === p.topic))) db.set('posts', ps => { ps.forEach(p => { if (p.s === s0.id && p.topic && !tps.some(t => t[0] === p.topic)) p.topic = null; }); });
-  const s = sp(s0.id);
-  if (isClosed(s) && D.joined.includes(s.id) && !st.rel[s.id]) db.put('rel', s.id, isModOf(s.id) ? 'mod' : 'member');
   st.set = null;
 }
 const radio = (name, val, cur, t, sub) => `<label class="cs-rad"><input type="radio" name="${name}" value="${val}" ${cur === val ? 'checked' : ''}><span><b>${t}</b><small>${sub}</small></span></label>`;
@@ -6326,11 +6555,14 @@ function csCreate() {
   const s = { id, name, title: name, av: 3, members: 1, online: 1, posts: 0, used: 0, budget: (+c.limit || 8) * 1e6, desc: c.desc.trim() || 'No description yet.', rules: rules.length ? rules : ['Be specific in asks.'], pages: [], mods: [], pct: 0 };
   if (c.vis !== 'open') Object.assign(s, { vis: c.vis, policy: c.policy, qs: c.qs.filter(q => q.q.trim()), invite: c.invite });
   cxApplyPay(s, c); s.faq = !!c.faq; s.topics = [];
-  db.push('spaces', s);
-  db.put('roles', id, 'Owner'); db.put('roles0', id, 'Owner');
-  setRel(id, 'mod');
-  /* a new space starts with its creator as owner and only member */
-  setMembers(s, [{ u: ME.u, role: 'owner' }]);
+  const input = Object.assign({ name, desc: c.desc, rules, vis: c.vis, faq: !!c.faq, pay: Object.assign({ budget: s.budget }, s.byok ? { byok: s.byok, key: s.key } : {}) }, c.vis !== 'open' ? { policy: c.policy, qs: s.qs, invite: c.invite } : {});
+  mutate('spaces.create', input, () => {
+    db.push('spaces', s);
+    db.put('roles', id, 'Owner'); db.put('roles0', id, 'Owner');
+    setRel(id, 'mod');
+    /* a new space starts with its creator as owner and only member */
+    setMembers(s, [{ u: ME.u, role: 'owner' }]);
+  });
   Object.assign(st, { subPage: null, home: false, space: id, thread: null, created: id, cr: CR0() });
 }
 
@@ -6449,7 +6681,7 @@ function csClick(t) {
   if (dsClick(t)) return true;
   if (miClick(t)) return true;
   if (sfClick(t)) return true;
-  if ((b = d('[data-cstoast]'))) { const v = b.dataset.cstoast; st.toast = null; if (v.startsWith('open:')) Object.assign(st, NAVBASE(), { space: v.slice(5) }); if (v.startsWith('undo:')) db.update('reqs', v.slice(5), r => { r.st = 'open'; }); if (v === 'undo-link') db.unshift('links', st.linkGone); return go(); }
+  if ((b = d('[data-cstoast]'))) { const v = b.dataset.cstoast; st.toast = null; if (v.startsWith('open:')) Object.assign(st, NAVBASE(), { space: v.slice(5) }); if (v.startsWith('undo:')) reopenReq(v.slice(5)); if (v === 'undo-link' && st.linkGone) { const l = st.linkGone, days = l.expiresAt ? Math.max(1, Math.round((Date.parse(l.expiresAt) - NOW) / 864e5)) : null; mutate('invites.create', { space: l.sp, days, code: l.code }, () => db.unshift('links', l), { tmp: l.id.startsWith('tmp-') ? l.id : null }); } return go(); }
   if ((b = d('[data-csnotif]'))) {
     const v = b.dataset.csnotif;
     if (v === 'bell') { if (st.notifV === 'page') Object.assign(st, NAVBASE(), { subPage: 'notifs' }); else { st.ntOpen = !st.ntOpen; st.umenu = false; st.pop = false; st.csMenu = null; } }
@@ -6461,13 +6693,13 @@ function csClick(t) {
   if ((b = d('[data-ntf]'))) { st.ntF = b.dataset.ntf; return go(); }
   if ((b = d('[data-ntinv]'))) {
     const [v, id] = b.dataset.ntinv.split(':'), x = ntFind(id);
-    db.update('notifs', id, n => { n.read = true; n.response = v === 'ok' ? 'accepted' : 'declined'; });
-    if (v === 'ok') { setRel(x.sp, 'member'); toast(`You joined ${spName(sp(x.sp))}.`, 'open:' + x.sp, 'Open'); } else toast('Invite declined. The person who invited you is not notified.');
+    if (v === 'ok') userJoin(x.sp, id); else mutate('invites.decline', { notification: id }, () => db.update('notifs', id, n => { n.read = true; n.response = 'declined'; }));
+    if (v === 'ok') { toast(`You joined ${spName(sp(x.sp))}.`, 'open:' + x.sp, 'Open'); } else toast('Invite declined. The person who invited you is not notified.');
     return go();
   }
   if ((b = d('[data-ntopen]'))) {
     const x = ntItems().find(n => n.id === b.dataset.ntopen); if (!x) return go();
-    if (x.id === 'nreq') st.reqSeen = true; else if (x.k === 'reps') st.repSeen = true; else ntRead(x.id);
+    if (x.id === 'nreq') seen('reqSeen'); else if (x.k === 'reps') seen('repSeen'); else ntRead(x.id);
     const nav = NAVBASE();
     if (x.k === 'reply' || x.k === 'resolved') Object.assign(st, nav, { thread: x.open, space: postById(x.open).s });
     else if (x.k === 'reps') Object.assign(st, nav, { subPage: 'manage', mgSpace: x.sp, mgTab: 'reports', space: x.sp, set: null });
@@ -6482,18 +6714,18 @@ function csClick(t) {
   if (d('[data-csreq-cancel]')) { st.reqOpen = false; st.modal = null; if (st.subPage === 'csjoin') st.subPage = null; return go(); }
   if ((b = d('[data-csreq-send]'))) {
     const id = b.dataset.csreqSend; if (!csReqValid(sp(id))) return true;
-    setRel(id, 'pending'); Object.assign(st, { reqAge: 'just now', reqOpen: false, modal: null, subPage: null, space: id, home: false });
+    userRequest(id, st.reqAns); Object.assign(st, { reqAge: 'just now', reqOpen: false, modal: null, subPage: null, space: id, home: false });
     toast(`Request sent to the moderators of ${spName(sp(id))}. You get a notification when they decide.`);
     return go();
   }
   if ((b = d('[data-csmyreq]'))) { st.modal = 'cs-myreq:' + b.dataset.csmyreq; st.csMenu = null; return go(); }
   if ((b = d('[data-cswithdraw]'))) { st.modal = 'cs-withdraw:' + b.dataset.cswithdraw; st.csMenu = null; return go(); }
-  if ((b = d('[data-cswithdraw-ok]'))) { const id = b.dataset.cswithdrawOk; setRel(id, 'none'); st.modal = null; toast('Request withdrawn.'); return go(); }
+  if ((b = d('[data-cswithdraw-ok]'))) { const id = b.dataset.cswithdrawOk; userWithdraw(id); st.modal = null; toast('Request withdrawn.'); return go(); }
   if ((b = d('[data-csleave]'))) { st.modal = 'cs-leave:' + b.dataset.csleave; st.csMenu = null; return go(); }
-  if ((b = d('[data-csleave-ok]'))) { const id = b.dataset.csleaveOk, s = sp(id); setRel(id, 'none'); st.modal = null; if (s.vis === 'unlisted') Object.assign(st, NAVBASE(), { home: true }); toast(`You left ${spName(s)}.`); return go(); }
+  if ((b = d('[data-csleave-ok]'))) { const id = b.dataset.csleaveOk, s = sp(id); userLeave(id); st.modal = null; if (s.vis === 'unlisted') Object.assign(st, NAVBASE(), { home: true }); toast(`You left ${spName(s)}.`); return go(); }
   if ((b = d('[data-csinvite]'))) { const id = b.dataset.csinvite; if (st.csMenu === 'share:' + id && !closed) { st.csMenu = null; return go(); } csInvite(id); return go(); }
   if ((b = d('[data-csmanage]'))) { const id = b.dataset.csmanage, s = sp(id); Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: id, mgTab: b.dataset.mgto || (reqCount(id) ? 'requests' : repCount(id) ? 'reports' : 'members'), space: id, set: null }); if (!s) return true; return go(); }
-  if ((b = d('[data-mgtab]'))) { st.mgTab = b.dataset.mgtab; if (st.mgTab === 'requests') st.reqSeen = true; return go(); }
+  if ((b = d('[data-mgtab]'))) { st.mgTab = b.dataset.mgtab; if (st.mgTab === 'requests') seen('reqSeen'); return go(); }
   /* review queue */
   if ((b = d('[data-rqsel]'))) { stToggle('rqSel', b.dataset.rqsel); return go(); }
   if ((b = d('[data-rqall]'))) { const list = openReqs(st.mgSpace), all = list.every(r => st.rqSel.has(r.u)); st.rqSel = new Set(all ? [] : list.map(r => r.u)); return go(); }
@@ -6504,20 +6736,22 @@ function csClick(t) {
     const sel = openReqs(st.mgSpace).filter(r => st.rqSel.has(r.u));
     if (v === 'ok' || v === 'bulk-ok') { st.apprIds = v === 'ok' ? [u] : sel.map(r => r.u); st.modal = 'cs-approve'; }
     if (v === 'no' || v === 'bulk-no') { st.declIds = v === 'no' ? [u] : sel.map(r => r.u); st.modal = 'cs-decline'; }
-    if (v === 'undo') db.update('reqs', u, r => { if (r.st === 'declined') r.st = 'open'; });
+    if (v === 'undo') reopenReq(u);
     return go();
   }
   if ((b = d('[data-rqcur]')) && !t.closest('input, button')) { st.rqCur = b.dataset.rqcur; return go(); }
-  if (d('[data-csappr]')) { const ids = st.apprIds, sid = st.mgSpace; st.reqs = st.reqs.map(r => ids.includes(r.u) && reqSp(r) === sid ? { ...r, st: 'approved' } : r); cxAddMembers(sp(sid), ids); ids.forEach(u => stToggle('rqSel', u, false)); st.modal = null; toast(ids.length === 1 ? `Approved ${ids[0]}. They can read ${spName(sp(st.mgSpace))} now.` : `Approved ${ids.length} requests.`); return go(); }
-  if (d('[data-csdecl]')) { const why = st.cxDeclNote.trim(), sid = st.mgSpace; st.cxDeclNote = ''; st.reqs = st.reqs.map(r => st.declIds.includes(r.u) && reqSp(r) === sid ? { ...r, st: 'declined', why } : r); st.declIds.forEach(u => stToggle('rqSel', u, false)); const n = st.declIds.length; st.modal = null; toast(n === 1 ? `Declined ${st.declIds[0]}.` : `Declined ${n} requests.`, n === 1 ? 'undo:' + st.declIds[0] : '', 'Undo'); return go(); }
+  if (d('[data-csappr]')) { const ids = st.apprIds, sid = st.mgSpace; decideReqs(sid, ids, 'approve'); ids.forEach(u => stToggle('rqSel', u, false)); st.modal = null; toast(ids.length === 1 ? `Approved ${ids[0]}. They can read ${spName(sp(st.mgSpace))} now.` : `Approved ${ids.length} requests.`); return go(); }
+  if (d('[data-csdecl]')) { const why = st.cxDeclNote.trim(), sid = st.mgSpace; st.cxDeclNote = ''; decideReqs(sid, st.declIds, 'decline', why); st.declIds.forEach(u => stToggle('rqSel', u, false)); const n = st.declIds.length; st.modal = null; toast(n === 1 ? `Declined ${st.declIds[0]}.` : `Declined ${n} requests.`, n === 1 ? 'undo:' + st.declIds[0] : '', 'Undo'); return go(); }
   /* members */
   if ((b = d('[data-memrm]'))) { st.modal = 'cs-rm:' + b.dataset.memrm; return go(); }
   if ((b = d('[data-memban]'))) { st.modal = 'cs-ban:' + b.dataset.memban; return go(); }
-  if ((b = d('[data-memunban]'))) { const sid = st.mgSpace; st.banned = st.banned.filter(x => x.u !== b.dataset.memunban || banSp(x) !== sid); toast(`Unbanned ${b.dataset.memunban}. They can request to join again.`); return go(); }
+  if ((b = d('[data-memunban]'))) { const sid = st.mgSpace, u0 = b.dataset.memunban; mutate('members.unban', { space: sid, user: u0 }, () => { st.banned = st.banned.filter(x => x.u !== u0 || banSp(x) !== sid); }); toast(`Unbanned ${b.dataset.memunban}. They can request to join again.`); return go(); }
   if ((b = d('[data-csmem-ok]'))) {
     const [k, u] = b.dataset.csmemOk.split(':'), s = sp(st.mgSpace);
-    if (memFor(s).some(m => m.u === u)) { setMembers(s, memFor(s).filter(m => m.u !== u)); spEdit(s.id, x => { x.members = Math.max(1, x.members - 1); }); }
-    if (k === 'cs-ban' && !bansOf(s.id).some(x => x.u === u)) db.unshift('banned', { id: s.id + ':' + u, sp: s.id, u });
+    mutate(k === 'cs-ban' ? 'members.ban' : 'members.remove', { space: s.id, user: u }, () => {
+      if (memFor(s).some(m => m.u === u)) { setMembers(s, memFor(s).filter(m => m.u !== u)); spEdit(s.id, x => { x.members = Math.max(1, x.members - 1); }); }
+      if (k === 'cs-ban' && !bansOf(s.id).some(x => x.u === u)) db.unshift('banned', { id: s.id + ':' + u, sp: s.id, u });
+    });
     st.modal = null; toast(k === 'cs-ban' ? `Banned ${u}.` : `Removed ${u}.`); return go();
   }
   /* invites */
@@ -6527,9 +6761,9 @@ function csClick(t) {
   if ((b = d('[data-ddv]'))) { const [id, v] = b.dataset.ddv.split(/:(.*)/s), [k, arg] = id.split(/\.(.*)/s), m0 = st.modal; DD_SET[k](v, arg); st.dd = null; renderAll(); const f = document.querySelector(`[data-dd="${id}"]`); if (f && st.modal === m0) f.focus({ preventScroll: true }); return true; }
   if ((b = d('[data-cslink]'))) {
     const [v, id] = b.dataset.cslink.split(':');
-    if (v === 'new') { const code = Math.random().toString(36).slice(2, 7); const days = +(b.dataset.exp || st.linkExp); const l = { id: tmpId(), code, by: ME.u, expiresAt: days ? isoIn(days) : null, sp: b.dataset.sp || st.mgSpace }; db.unshift('links', l); st.linkNew = l.id; toast(`Link created: session.app/i/${code}`); }
+    if (v === 'new') { const code = Math.random().toString(36).slice(2, 7); const days = +(b.dataset.exp || st.linkExp); const l = { id: tmpId(), code, by: ME.u, expiresAt: days ? isoIn(days) : null, sp: b.dataset.sp || st.mgSpace }; mutate('invites.create', { space: l.sp, days: days || null }, () => db.unshift('links', l), { tmp: l.id, then: x => { if (x && x.code) toast(`Link created: session.app/i/${x.code}`); } }); st.linkNew = l.id; }
     if (v === 'copy') { const l = st.links.find(x => x.id === id); taCopy(`session.app/i/${l.code}`); toast(`Copied session.app/i/${l.code}`); }
-    if (v === 'revoke') { st.linkGone = st.links.find(x => x.id === id); db.remove('links', id); toast('Link revoked. People who already joined with it stay members.', 'undo-link', 'Undo'); }
+    if (v === 'revoke') { st.linkGone = st.links.find(x => x.id === id); mutate('invites.revoke', { id }, () => db.remove('links', id)); toast('Link revoked. People who already joined with it stay members.', 'undo-link', 'Undo'); }
     renderAll(); st.linkNew = null; return true;
   }
   /* settings and create */
@@ -6550,8 +6784,8 @@ function csClick(t) {
   }
   if ((b = d('[data-csconf]'))) {
     const s = sp(st.mgSpace), dr = st.set;
-    if (b.dataset.csconf === 'closed') { csApplySettings(s, dr); setRel(s.id, 'mod'); toast(`${spName(s)} is closed. ${st.visKeep === 'keep' ? 'Earlier threads stay public.' : 'All threads are members-only.'}`); }
-    else { cxAddMembers(s, openReqs(s.id).map(r => r.u)); st.reqs = st.reqs.map(r => r.st === 'open' && reqSp(r) === s.id ? { ...r, st: 'approved' } : r); csApplySettings(s, dr); toast(`${spName(s)} is open.`); }
+    if (b.dataset.csconf === 'closed') { mutate('spaces.update', spacesUpdateInput(s, dr), () => { csApplySettings(s, dr); setRel(s.id, 'mod'); }); toast(`${spName(s)} is closed. ${st.visKeep === 'keep' ? 'Earlier threads stay public.' : 'All threads are members-only.'}`); }
+    else { mutate('spaces.update', spacesUpdateInput(s, dr), () => { cxAddMembers(s, openReqs(s.id).map(r => r.u)); st.reqs = st.reqs.map(r => r.st === 'open' && reqSp(r) === s.id ? { ...r, st: 'approved' } : r); csApplySettings(s, dr); }); toast(`${spName(s)} is open.`); }
     st.modal = null; return go();
   }
   if ((b = d('[data-sub="create"]'))) { Object.assign(st, NAVBASE(), { subPage: 'create', cr: CR0() }); return go(); }
@@ -6561,8 +6795,8 @@ function csClick(t) {
   if ((b = d('[data-csshare]'))) { st.modal = 'cs-share:' + b.dataset.csshare; return go(); }
   if ((b = d('[data-cssh]'))) { taCopy(taThreadUrl(+(st.modal || '').split(':')[1])); toast('Link copied. It opens only for members.'); return go(); }
   /* invite landing and unlisted pages */
-  if ((b = d('[data-csaccept]'))) { const id = b.dataset.csaccept; setRel(id, 'member'); Object.assign(st, NAVBASE(), { space: id, welcome: id }); toast(`You joined ${spName(sp(id))}.`); return go(); }
-  if ((b = d('[data-csaskinv]'))) { db.push('askedInv', b.dataset.csaskinv); return go(); }
+  if ((b = d('[data-csaccept]'))) { const id = b.dataset.csaccept; userJoin(id); Object.assign(st, NAVBASE(), { space: id, welcome: id }); toast(`You joined ${spName(sp(id))}.`); return go(); }
+  if ((b = d('[data-csaskinv]'))) { const id = b.dataset.csaskinv; mutate('invites.request', { space: id }, () => db.push('askedInv', id)); return go(); }
   if (d('[data-cswel]')) { st.welcome = null; st.created = null; return go(); }
   if (d('[data-cssearch]')) { nvOpenSearch(); return true; }
   if ((b = d('[data-brf]'))) { st.brF = b.dataset.brf; return go(); }
@@ -6943,10 +7177,12 @@ function csReports(s) {
 }
 function sfResolve(r, how) {
   const it = itemOf(r.key), same = st.reports.filter(x => x.key === r.key && x.st === 'open');
-  if (how !== 'dismissed') db.put('modSt', r.key, how); else if (same.length === 1) db.del('modSt', r.key);
-  (how === 'dismissed' ? [r] : same).forEach(x => {
-    db.update('reports', x.id, y => { y.st = how; });
-    if (x.by === ME.u) { st.notifs = st.notifs.filter(n => !ntOfReport(n, x.id)); db.unshift('notifs', { id: tmpId(), type: 'report_resolved', report: x.id, item: x.key, outcome: how, read: false }); }
+  mutate('reports.resolve', { report: r.id, outcome: how }, () => {
+    if (how !== 'dismissed') db.put('modSt', r.key, how); else if (same.length === 1) db.del('modSt', r.key);
+    (how === 'dismissed' ? [r] : same).forEach(x => {
+      db.update('reports', x.id, y => { y.st = how; });
+      if (x.by === ME.u) { st.notifs = st.notifs.filter(n => !ntOfReport(n, x.id)); db.unshift('notifs', { id: tmpId(), type: 'report_resolved', report: x.id, item: x.key, outcome: how, read: false }); }
+    });
   });
   const who = r.by === ME.u ? 'You get' : `${r.by} gets`;
   toast(`${REP_DONE[how][0]}. ${who} a notification that the report was resolved.`, 'repundo:' + r.id, 'Undo');
@@ -7001,7 +7237,7 @@ function domainSec(d, s) {
 }
 function sfDomCheck(s) {
   patch('sfDom', w => { w.state = 'checking'; });
-  setTimeout(() => { const w = st.sfDom; if (!w || w.state !== 'checking' || st.sfDomHold) return; if (cxDomFails(w.domain)) { patch('sfDom', x => { x.state = 'failed'; }); renderAll(); return; } spEdit(s.id, x => { x.dom = { domain: w.domain.trim().toLowerCase(), method: w.method, state: 'ok', verifiedAt: nowIso() }; }); patch('sfDom', x => { x.state = 'none'; x.domain = ''; }); toast(`Verified. The seal now shows next to ${spName(s)}.`); renderAll(); }, window.__sfFast ? 40 : 1400);
+  setTimeout(serverSide(() => { const w = st.sfDom; if (!w || w.state !== 'checking' || st.sfDomHold) return; if (cxDomFails(w.domain)) { patch('sfDom', x => { x.state = 'failed'; }); renderAll(); return; } spEdit(s.id, x => { x.dom = { domain: w.domain.trim().toLowerCase(), method: w.method, state: 'ok', verifiedAt: nowIso() }; }); patch('sfDom', x => { x.state = 'none'; x.domain = ''; }); toast(`Verified. The seal now shows next to ${spName(s)}.`); renderAll(); }), window.__sfFast ? 40 : 1400);
 }
 
 /* ---------- clicks ---------- */
@@ -7024,8 +7260,9 @@ function sfClick(t) {
   if ((b = d('[data-sfwhy]'))) { patch('rep', r => { r.why = b.dataset.sfwhy; }); renderAll(); const n = $('sf-repnote'); if (n) n.focus({ preventScroll: true }); return true; }
   if ((b = d('[data-sfrepsend]'))) {
     const key = b.dataset.sfrepsend, it = itemOf(key);
-    db.unshift('reports', { id: tmpId(), sp: it.s.id, key, why: st.rep.why, note: st.rep.note.trim(), by: ME.u, st: 'open' });
-    st.repSeen = false; st.modal = null;
+    const r = { id: tmpId(), sp: it.s.id, key, why: st.rep.why, note: st.rep.note.trim(), by: ME.u, st: 'open' };
+    mutate('reports.create', { item: key, why: r.why, note: r.note }, () => { db.unshift('reports', r); st.repSeen = false; }, { tmp: r.id });
+    st.modal = null;
     toast(`Report sent to the moderators of ${spName(it.s)}. You get a notification when they resolve it.`);
     return go();
   }
@@ -7038,12 +7275,12 @@ function sfClick(t) {
   if ((b = d('[data-sfrestore]'))) { st.modal = 'sf-rsconf:' + b.dataset.sfrestore; return go(); }
   if ((b = d('[data-sfrestoreok]'))) { const r = st.reports.find(x => x.id === b.dataset.sfrestoreok); st.modal = null; if (r) { sfUndo(r); toast(`Restored. The ${itemOf(r.key).noun} is in the thread again.`); } return go(); }
   if ((b = d('[data-sfrepundo]'))) { const r = st.reports.find(x => x.id === b.dataset.sfrepundo); if (r) sfUndo(r); return go(); }
-  if ((b = d('[data-sfunhide]'))) { const k = b.dataset.sfunhide; db.del('modSt', k); toast('Shown again.'); return go(); }
+  if ((b = d('[data-sfunhide]'))) { const k = b.dataset.sfunhide; mutate('moderation.decide', { item: k, decision: 'shown' }, () => db.del('modSt', k)); toast('Shown again.'); return go(); }
   if ((b = d('[data-tpm]'))) { const k = b.dataset.tpm; st.tpMenu = st.tpMenu === k ? null : k; st.mpOpen = false; st.spOpen = false; return go(); }
   if ((b = d('[data-tpv]'))) {
     const [scope, k] = b.dataset.tpv.split('|'); st.tpMenu = null;
     if (scope === 'comp') st.compTopic = k || null;
-    else { const i = scope.slice(2), s = sp(postById(i).s); db.update('posts', i, p => { p.topic = k === 'other' ? null : k; p.topicBy = 'mod'; }); toast(`Moved to ${esc(topicName(s, postById(i).topic))}.`); }
+    else { const i = scope.slice(2), s = sp(postById(i).s); mutate('threads.move', { id: i, topic: k === 'other' ? null : k }, () => db.update('posts', i, p => { p.topic = k === 'other' ? null : k; p.topicBy = 'mod'; })); toast(`Moved to ${esc(topicName(s, postById(i).topic))}.`); }
     renderAll(); if (scope === 'comp') { const c = $('compose-text'); if (c) c.focus({ preventScroll: true }); } return true;
   }
   if ((b = d('[data-sftp]'))) {
@@ -7063,13 +7300,15 @@ function sfClick(t) {
     if (v === 'remove') { st.modal = 'sf-domrm:' + s.id; }
     return go();
   }
-  if ((b = d('[data-sfdomrm]'))) { const s = sp(b.dataset.sfdomrm); spEdit(s.id, x => { x.dom = null; x.plain = false; }); if (st.set) patch('set', d => { d.plain = false; }); st.modal = null; toast(`Domain removed. ${spName(s)} no longer shows the seal.`); return go(); }
+  if ((b = d('[data-sfdomrm]'))) { const s = sp(b.dataset.sfdomrm); mutate('spaces.update', { id: s.id, set: { dom: null, plain: false } }, () => spEdit(s.id, x => { x.dom = null; x.plain = false; })); if (st.set) patch('set', d => { d.plain = false; }); st.modal = null; toast(`Domain removed. ${spName(s)} no longer shows the seal.`); return go(); }
   return false;
 }
 function sfUndo(r) {
-  const was = r.st; db.update('reports', r.id, y => { y.st = 'open'; });
-  if (was !== 'dismissed' && !st.reports.some(x => x.key === r.key && x.st !== 'open')) db.del('modSt', r.key);
-  st.notifs = st.notifs.filter(n => !ntOfReport(n, r.id));
+  mutate('reports.resolve', { report: r.id, outcome: 'open' }, () => {
+    const was = r.st; db.update('reports', r.id, y => { y.st = 'open'; });
+    if (was !== 'dismissed' && !st.reports.some(x => x.key === r.key && x.st !== 'open')) db.del('modSt', r.key);
+    st.notifs = st.notifs.filter(n => !ntOfReport(n, r.id));
+  });
   toast('Report reopened.');
 }
 function sfInput(e) {
@@ -7350,7 +7589,7 @@ function miFacts(m) {
 function miItemPage() {
   const m = MIT(st.miItem); if (!m) return layoutHome();
   /* opening a source marks it read */
-  if (!st.miRead.has(m.id)) db.toggle('miRead', m.id, true);
+  if (!st.miRead.has(m.id)) dbToggle('miRead', m.id, true);
   const x = miParts(m);
   const back = nvBackBtn() || `<button class="th-back" type="button" data-miback="1">${I.chev.replace('<svg', '<svg class="bk"')}${st.miFrom === 'saved' ? 'Saved' : spName(sp(st.space))}</button>`;
   const side = `<aside class="mi-aside">${x.side}</aside>`;
@@ -7466,7 +7705,7 @@ function miAttHTML() {
 function miAttachAsk(p) {
   const mm = p.q.match(MI_URLRE); if (!mm) return;
   let m = miFindUrl(mm[1]);
-  m = dsAdd(mm[1], p.s).m;
+  m = outside(() => dsAdd(mm[1], p.s)).m;
   p.about = { it: m.id };
   p.q = p.q.replace(mm[0], '').replace(/\s+/g, ' ').trim() || 'Summarize this source and list its main claims with the evidence for each.';
   p.kw = p.q;
@@ -7560,7 +7799,7 @@ function miClick(t) {
   if ((b = d('[data-miaskgo]'))) { miCreateAsk(); return go(); }
   if ((b = d('[data-miaskx]'))) { Object.assign(st, { miAsk: null, miAskQ: '' }); return go(); }
   if ((b = d('[data-miagain]'))) { const p = postById(b.dataset.miagain), a = { it: p.about.it, b: p.about.b }; Object.assign(st, { miAsk: a, miAskQ: p.q, miAskSp: p.s, modal: miAskInline(a) ? null : 'mi-ask' }); renderAll(); miFocusQ('mi-askq'); return true; }
-  if ((b = d('[data-misave]'))) { db.toggle('miSaved', b.dataset.misave); return go(); }
+  if ((b = d('[data-misave]'))) { dbToggle('miSaved', b.dataset.misave); return go(); }
   if ((b = d('[data-micopy]'))) { const v = b.dataset.micopy, m = MIT(st.miItem); taCopy(v === 'item' ? `session.app/source/${m.url.split('/').pop()}` : `session.app/source/${m.url.split('/').pop()}#${miLbl(m, +v).replace(/[^0-9a-z:]/gi, '')}`); toast(v === 'item' ? 'Link to the source copied.' : `Link to ${miLblLong(m, +v)} copied.`); st.miSel = null; return go(); }
   if ((b = d('[data-midiff]'))) { st.miDiff = !st.miDiff; return go(); }
   if ((b = d('[data-mipickmode]'))) { st.miPickMode = !st.miPickMode; st.miPick = []; return go(); }
@@ -7625,7 +7864,7 @@ function miJump(k) {
     case 'mi-a-paid': item('m8'); break;
     case 'mi-a-closed': setRel('replication', 'member'); item('m1'); break;
     case 'mi-a-saved': st.miSaved = new Set(['m2', 'm4', 'm1']); Object.assign(st, { savedPage: true, savedFilter: 'mi-items' }); break;
-    case 'mi-a-notif': db.toggle('miSaved', 'm2', true); pushN(MI_NOTIF().edited); pushN(MI_NOTIF().ask); st.home = true; st.ntOpen = true; break;
+    case 'mi-a-notif': dbToggle('miSaved', 'm2', true); pushN(MI_NOTIF().edited); pushN(MI_NOTIF().ask); st.home = true; st.ntOpen = true; break;
     case 'mi-f-paste': Object.assign(st, { compOpen: true, mode: 'ask', draft: 'What does the maintainers’ response leave unanswered? orbitlab.ai/blog/rb-2-response' }); break;
   }
 }
@@ -7707,7 +7946,7 @@ function dsAdd(u, sid, note, file) {
   const rv = dsPol(sid) === 'review' && !isModOf(sid);
   db.put('dsDrops', sid, [{ m: m.id, by: ME.u, note: (note || '').trim(), rv }, ...(st.dsDrops[sid] || [])]);
   if (!m.sp.includes(sid)) db.update(D.media.some(x => x.id === m.id) ? 'media' : 'miAdded', m.id, x => { x.sp.push(sid); });
-  db.toggle('miRead', m.id, true); st.dsFlash = m.id;
+  dbToggle('miRead', m.id, true); st.dsFlash = m.id;
   return { m: MIT(m.id), rv };
 }
 function dsDropped(sid, u, file) {
@@ -7845,7 +8084,7 @@ function dsClick(t) {
   if ((b = d('[data-cstoast^="ds:"]'))) {
     const [, v, sid, mid] = b.dataset.cstoast.split(':'); st.toast = null;
     if (v === 'open') { Object.assign(st, NAVBASE(), { space: sid }); miOpen(mid); }
-    if (v === 'undo') dsEdit(sid, y => y.m === mid && y.rm, y => { y.rm = false; });
+    if (v === 'undo') mutate('spaceSources.review', { space: sid, source: mid, decision: 'restore' }, () => dsEdit(sid, y => y.m === mid && y.rm, y => { y.rm = false; }));
     return go();
   }
   if ((b = d('[data-dsmenu]'))) { st.dsMenu = st.dsMenu === b.dataset.dsmenu ? null : b.dataset.dsmenu; return go(); }
@@ -7867,19 +8106,21 @@ function dsClick(t) {
   if ((b = d('[data-dsrm]'))) { Object.assign(st, { dsMenu: null, modal: 'ds-rm:' + b.dataset.dsrm }); return go(); }
   if ((b = d('[data-dsrmok]'))) {
     const [mid, sid] = b.dataset.dsrmok.split(':'), x = dsDropOf(sid, mid);
-    if (x) dsEdit(sid, y => y === x, y => { y.rm = true; });
+    if (x) mutate('spaceSources.review', { space: sid, source: mid, decision: 'remove' }, () => dsEdit(sid, y => y === x, y => { y.rm = true; }));
     st.modal = null;
     if (st.subPage === 'mitem' && st.miItem === mid) miBack();
     toast(`Removed from ${spName(sp(sid))}.`, `ds:undo:${sid}:${mid}`, 'Undo');
     return go();
   }
   if ((b = d('[data-dsreport]'))) { st.dsMenu = null; if (st.auth !== 'in') { st.modal = 'signin'; return go(); } Object.assign(st, { dsWhy: 'spam', dsRepNote: '', modal: 'ds-report:' + b.dataset.dsreport }); return go(); }
-  if ((b = d('[data-dsrepgo]'))) { const [mid, sid] = b.dataset.dsrepgo.split(':'); st.dsReps = [...st.dsReps, { m: mid, sid, by: ME.u, why: st.dsWhy }]; st.modal = null; toast(`Report sent to the moderators of ${spName(sp(sid))}.`); return go(); }
+  if ((b = d('[data-dsrepgo]'))) { const [mid, sid] = b.dataset.dsrepgo.split(':'), why = st.dsWhy; mutate('sourceReports.create', { space: sid, source: mid, why }, () => { st.dsReps = [...st.dsReps, { m: mid, sid, by: ME.u, why }]; }); st.modal = null; toast(`Report sent to the moderators of ${spName(sp(sid))}.`); return go(); }
   if ((b = d('[data-dsmod]'))) {
     const [k, sid, mid] = b.dataset.dsmod.split(':'), x = dsAll(sid).find(y => y.m === mid && (k === 'restore' ? y.rm : !y.rm));
-    if (x) dsEdit(sid, y => y === x, y => { if (k === 'approve') y.rv = false; if (k === 'reject') y.rm = true; if (k === 'restore') y.rm = false; });
+    if (x || k === 'keep') mutate('spaceSources.review', { space: sid, source: mid, decision: k }, () => {
+      if (x) dsEdit(sid, y => y === x, y => { if (k === 'approve') y.rv = false; if (k === 'reject') y.rm = true; if (k === 'restore') y.rm = false; });
+      if (k === 'keep' || k === 'reject') st.dsReps = st.dsReps.filter(r => !(r.sid === sid && r.m === mid));
+    });
     if (k === 'reject') { st.modal = null; toast(`Removed from ${spName(sp(sid))}. It now shows under Removed.`); }
-    if (k === 'keep' || k === 'reject') st.dsReps = st.dsReps.filter(r => !(r.sid === sid && r.m === mid));
     return go();
   }
   if ((b = d('[data-dsgo]'))) { const [sid, mid] = b.dataset.dsgo.split(':'); Object.assign(st, NAVBASE(), { space: sid, dsUrl: '', dsNote: '', modal: null }); miOpen(mid); return go(); }
@@ -7896,7 +8137,7 @@ function dsInput(e) {
   if (id === 'ds-note') { st.dsNote = el.value; return true; }
   if (id === 'ds-repnote') { st.dsRepNote = el.value; return true; }
   if (el.name === 'ds-why') { st.dsWhy = el.value; return true; }
-  if (el.name === 'ds-pol') { db.put('dsPol', st.mgSpace, el.value); return true; }
+  if (el.name === 'ds-pol') { const sid = st.mgSpace, v = el.value; mutate('spaceSources.setPolicy', { space: sid, policy: v }, () => db.put('dsPol', sid, v)); return true; }
   if (id === 'ds-file') return true;
   return false;
 }
@@ -8128,9 +8369,11 @@ function cxAddMembers(s, ids) {
   spEdit(s.id, x => { x.members += add.length; });
 }
 function cxTransfer(s, u) {
-  setMembers(s, memFor(s).map(m => m.u === u ? { ...m, role: 'owner' } : m.u === ME.u ? { ...m, role: 'admin' } : m));
-  db.put('roles', s.id, 'Admin'); if (D.roles0[s.id] === 'Owner') db.put('roles0', s.id, 'Admin');
-  spEdit(s.id, x => { x.mods = [[u, 'owner'], ...x.mods.filter(m => m[0] !== u && m[0] !== ME.u), [ME.u, 'admin']]; });
+  mutate('members.setRole', { space: s.id, user: u, role: 'owner' }, () => {
+    setMembers(s, memFor(s).map(m => m.u === u ? { ...m, role: 'owner' } : m.u === ME.u ? { ...m, role: 'admin' } : m));
+    db.put('roles', s.id, 'Admin'); if (D.roles0[s.id] === 'Owner') db.put('roles0', s.id, 'Admin');
+    spEdit(s.id, x => { x.mods = [[u, 'owner'], ...x.mods.filter(m => m[0] !== u && m[0] !== ME.u), [ME.u, 'admin']]; });
+  });
   toast(`${esc(u)} is now the owner of ${spName(s)}. You are an admin.`);
 }
 
@@ -8218,7 +8461,7 @@ function cxModItems(key) {
 function cxModAct(key, how) {
   const it = itemOf(key), r = st.reports.find(x => x.key === key && x.st === 'open');
   if (r) { sfResolve(r, how); return; }
-  db.put('modSt', key, how);
+  mutate('moderation.decide', { item: key, decision: how }, () => db.put('modSt', key, how));
   if (how === 'hidden') toast(`Hidden. People see “This ${it.noun} is hidden by a moderator.”`, 'cxunhide:' + key, 'Undo');
   else toast(`Removed. The thread shows “This ${it.noun} was removed by a moderator.”`);
 }
@@ -8266,20 +8509,20 @@ function cxClick(t) {
   if ((b = d('[data-csset="save"]')) && st.set && cxNameErr(st.set)) { toast('Fix the name before you save.'); return go(); }
   if (!d(CX_SEL)) return false;
   if (st.toast && !d('.cs-toast')) st.toast = null;
-  if ((b = d('[data-cstoast^="cxunhide:"]'))) { db.del('modSt', b.dataset.cstoast.slice(9)); st.toast = null; return go(); }
+  if ((b = d('[data-cstoast^="cxunhide:"]'))) { const k = b.dataset.cstoast.slice(9); mutate('moderation.decide', { item: k, decision: 'shown' }, () => db.del('modSt', k)); st.toast = null; return go(); }
   if ((b = d('[data-cxowner]'))) { st.modal = 'cs-xowner:' + b.dataset.cxowner; return go(); }
   if ((b = d('[data-cxowner-ok]'))) { st.modal = null; cxTransfer(sp(st.mgSpace), b.dataset.cxownerOk); return go(); }
   if ((b = d('[data-cxarch]'))) {
     const s = sp(st.mgSpace);
     if (b.dataset.cxarch === 'on') st.modal = 'cs-xarch:' + s.id;
-    else { spEdit(s.id, x => { delete x.archived; }); toast(`Unarchived ${spName(s)}. People can ask, post and reply again, and it shows in browse and search.`); }
+    else { mutate('spaces.archive', { id: s.id, archived: false }, () => spEdit(s.id, x => { delete x.archived; })); toast(`Unarchived ${spName(s)}. People can ask, post and reply again, and it shows in browse and search.`); }
     return go();
   }
-  if ((b = d('[data-cxarch-ok]'))) { const s = sp(b.dataset.cxarchOk); spEdit(s.id, x => { x.archived = { by: ME.u, on: 'Nov 17' }; }); st.modal = null; toast(`Archived ${spName(s)}. Threads are read-only.`); return go(); }
+  if ((b = d('[data-cxarch-ok]'))) { const s = sp(b.dataset.cxarchOk); mutate('spaces.archive', { id: s.id, archived: true }, () => spEdit(s.id, x => { x.archived = { by: ME.u, on: 'Nov 17' }; })); st.modal = null; toast(`Archived ${spName(s)}. Threads are read-only.`); return go(); }
   if ((b = d('[data-cxdel]'))) { st.cxDel = ''; st.modal = 'cs-xdel:' + b.dataset.cxdel; renderAll(); const i = $('cx-delname'); if (i) i.focus({ preventScroll: true }); return true; }
   if ((b = d('[data-cxdel-ok]'))) {
     const s = sp(b.dataset.cxdelOk); if (!cxDelMatch(s)) return true;
-    const n = spName(s); spEdit(s.id, x => { x.deleted = true; delete x.archived; }); leaveSpace(s.id); db.del('rel', s.id);
+    const n = spName(s); mutate('spaces.delete', { id: s.id }, () => { spEdit(s.id, x => { x.deleted = true; delete x.archived; }); leaveSpace(s.id); db.del('rel', s.id); });
     Object.assign(st, NAVBASE(), { home: true, cxDel: '' }); toast(`Deleted ${n}. Its threads, pages and sources are gone.`); return go();
   }
   if ((b = d('[data-cxpay]'))) { const v = b.dataset.cxpay; csEdit(x => { x.key = v === 'none' ? 'none' : payKey({ key: x.key === 'none' ? '' : x.key }); }); return go(); }
@@ -8654,12 +8897,12 @@ layoutThread = function () {
 let qtSeq = 0;
 function qtAsk(T, par, text) {
   const pay = askPay(T.p.s);
-  const n = { id: 'n' + (++qtSeq), par, u: ME.u, q: text, tok: 0, running: true, uses: st.qtCmp ? [...st.qtCmp] : null, pay: pay ? pay.id : null };
+  const n = { id: JUMPING ? 'n' + (++qtSeq) : tmpId(), par, u: ME.u, q: text, tok: 0, running: true, uses: st.qtCmp ? [...st.qtCmp] : null, pay: pay ? pay.id : null };
   const html = QT_CANNED[st.qtCanned] || QT_CANNED.generic, tok = 9e3 + qtTokTxt(html) * 20;
   qtEdit(T.i, d => { d.nodes.push(n); });
   Object.assign(st, { qtAskAt: null, qtDraft: '', qtErr: '', qtCmp: null, qtCanned: null });
   qtGo(qtT(T.i), n.id);
-  setTimeout(() => { if (!postById(T.i) || !qtT(T.i).by[n.id]) return; qtNodeEdit(T.i, n.id, x => { x.running = false; x.html = html; x.tok = tok; }); askCharge(n.pay, tok); if (st.thread === T.i || st.device === 'native') renderKeepFocus(); }, 2200);
+  setTimeout(serverSide(() => { const ti = realId(T.i), id = realId(n.id); if (!postById(ti) || !qtT(ti).by[id]) return; qtNodeEdit(ti, id, x => { x.running = false; x.html = html; x.tok = tok; }); askCharge(n.pay, tok); if (st.thread === ti || st.device === 'native') renderKeepFocus(); }), 2200);
 }
 
 /* ---------- start a thread from a branch ---------- */
@@ -8748,7 +8991,7 @@ function qtClick(t, e) {
   if ((b = d('[data-qtfuq]'))) { st.qtFuQ = b.dataset.qtfuq === 'q'; return go(); }
   if ((b = d('[data-qtexp]'))) { stToggle('qtExp', b.dataset.qtexp); return go(); }
   if ((b = d('[data-qtaskat]'))) { if (st.auth !== 'in') { st.modal = 'signin'; return go(); } Object.assign(st, { qtAskAt: b.dataset.qtaskat, qtErr: '', qtFocusIn: true }); return go(); }
-  if ((b = d('[data-qtsave]'))) { const k = `${T.i}:${b.dataset.qtsave}`; if (st.auth !== 'in') { st.modal = 'signin'; return go(); } if (st.qtSaved.has(k)) { db.toggle('qtSaved', k, false); toast('Removed from Saved.'); } else { db.toggle('qtSaved', k, true); toast('Saved. Listed under Saved with its path.'); } st.qtMenu = null; return go(); }
+  if ((b = d('[data-qtsave]'))) { const k = `${T.i}:${b.dataset.qtsave}`; if (st.auth !== 'in') { st.modal = 'signin'; return go(); } if (st.qtSaved.has(k)) { dbToggle('qtSaved', k, false); toast('Removed from Saved.'); } else { dbToggle('qtSaved', k, true); toast('Saved. Listed under Saved with its path.'); } st.qtMenu = null; return go(); }
   if ((b = d('[data-qtcopy]'))) { st.qtMenu = null; taCopy(qtAddr(T, b.dataset.qtcopy)); toast(`Link copied: ${qtAddr(T, b.dataset.qtcopy)}`); return go(); }
   if ((b = d('[data-qtpick]'))) { Object.assign(st, { qtPick: b.dataset.qtpick, qtMenu: null, qtCmp: null }); return go(); }
   if ((b = d('[data-qtpro]'))) { qtProOpen(T, b.dataset.qtpro); return go(); }
@@ -9085,7 +9328,7 @@ function abSkOpen(sid, i) {
 let abDrag = null;
 function abSkMove(from, to) {
   const sid = st.mgSpace, l = (D.skills[sid] || []).slice(); if (from === to || to < 0 || to >= l.length) return false;
-  const [x] = l.splice(from, 1); l.splice(to, 0, x); db.put('skills', sid, l); return true;
+  const [x] = l.splice(from, 1); l.splice(to, 0, x); mutate('skills.reorder', { space: sid, from, to }, () => db.put('skills', sid, l)); return true;
 }
 on($('app'), 'pointerdown', e => {
   const h = e.target.closest && e.target.closest('[data-skdrag]'); if (!h || e.button > 0) return;
@@ -9205,19 +9448,21 @@ on($('app'), 'click', e => {
     if (v === 'save') {
       const ed = st.abPageEd, title = ed.t.trim(), text = ed.b.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
       if (!title) return go();
-      if (ed.isNew) spEdit(s.id, x => { x.pages.push([title, nowIso()]); }); else spEdit(s.id, x => { x.pages[i] = [title, nowIso()]; });
-      if (!ed.isNew && abKey(s, doc.t) !== abKey(s, title)) db.del('pagedocs', abKey(s, doc.t));
-      db.put('pagedocs', abKey(s, title), { t: title, text: text.length ? text : [''], by: ed.isNew ? ME.u : doc.by, ed: ME.u, revs: [{ by: ME.u, note: ed.isNew ? 'Created the page' : 'Edited the page' }, ...(ed.isNew ? [] : doc.revs)] });
+      mutate('pages.update', Object.assign({ space: s.id, page: ed.isNew ? null : i, title, text }, ed.isNew || D.pagedocs[abKey(s, doc.t)] ? {} : { base: { by: doc.by, ed: doc.ed, revs: doc.revs } }), () => {
+        if (ed.isNew) spEdit(s.id, x => { x.pages.push([title, nowIso()]); }); else spEdit(s.id, x => { x.pages[i] = [title, nowIso()]; });
+        if (!ed.isNew && abKey(s, doc.t) !== abKey(s, title)) db.del('pagedocs', abKey(s, doc.t));
+        db.put('pagedocs', abKey(s, title), { t: title, text: text.length ? text : [''], by: ed.isNew ? ME.u : doc.by, ed: ME.u, revs: [{ by: ME.u, note: ed.isNew ? 'Created the page' : 'Edited the page' }, ...(ed.isNew ? [] : doc.revs)] });
+      });
       st.abPageEd = null; toast(ed.isNew ? 'Page added. Members get a notification.' : 'Page saved. Members get a notification.');
     }
     return go();
   }
-  if ((b = d('[data-abrestore]'))) { const doc = abDoc(s, st.abPage), r = doc.revs[+b.dataset.abrestore]; db.put('pagedocs', abKey(s, doc.t), { ...doc, ed: ME.u, revs: [{ by: ME.u, note: `Restored the version from ${agoText(r)}` }, ...doc.revs] }); toast('Restored. The page history keeps both versions.'); return go(); }
+  if ((b = d('[data-abrestore]'))) { const doc = abDoc(s, st.abPage), k = +b.dataset.abrestore, r = doc.revs[k], note = `Restored the version from ${agoText(r)}`; mutate('pages.restore', Object.assign({ space: s.id, page: st.abPage, rev: k, note }, D.pagedocs[abKey(s, doc.t)] ? {} : { base: { by: doc.by, ed: doc.ed, revs: doc.revs } }), () => db.put('pagedocs', abKey(s, doc.t), { ...doc, ed: ME.u, revs: [{ by: ME.u, note }, ...doc.revs] })); toast('Restored. The page history keeps both versions.'); return go(); }
   if ((b = d('[data-abcopy]'))) { taCopy(csUrl()); toast(`Copied ${csUrl()}`); return go(); }
   if (d('[data-abpgorder]')) { st.abPgOrder = !st.abPgOrder; return go(); }
-  if ((b = d('[data-abpgmv]'))) { const [v, i] = b.dataset.abpgmv.split(':'), k = +i, j = v === 'up' ? k - 1 : k + 1; spEdit(s.id, x => { [x.pages[k], x.pages[j]] = [x.pages[j], x.pages[k]]; }); return go(); }
+  if ((b = d('[data-abpgmv]'))) { const [v, i] = b.dataset.abpgmv.split(':'), k = +i, j = v === 'up' ? k - 1 : k + 1; mutate('pages.move', { space: s.id, from: k, to: j }, () => spEdit(s.id, x => { [x.pages[k], x.pages[j]] = [x.pages[j], x.pages[k]]; })); return go(); }
   if ((b = d('[data-abpgdel]'))) { st.modal = 'ab-pgdel:' + b.dataset.abpgdel; return go(); }
-  if ((b = d('[data-abpgdelok]'))) { const i = +b.dataset.abpgdelok, t = s.pages[i][0]; spEdit(s.id, x => { x.pages.splice(i, 1); }); db.del('pagedocs', abKey(s, t)); st.modal = null; if (st.subPage === 'abpage') Object.assign(st, { ...NAVBASE(), space: s.id, home: false, drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' }); toast(`Removed “${t}”.`); return go(); }
+  if ((b = d('[data-abpgdelok]'))) { const i = +b.dataset.abpgdelok, t = s.pages[i][0]; mutate('pages.remove', { space: s.id, page: i }, () => { spEdit(s.id, x => { x.pages.splice(i, 1); }); db.del('pagedocs', abKey(s, t)); }); st.modal = null; if (st.subPage === 'abpage') Object.assign(st, { ...NAVBASE(), space: s.id, home: false, drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' }); toast(`Removed “${t}”.`); return go(); }
   if ((b = d('[data-abskill]'))) { st.modal = 'ab-skill:' + b.dataset.abskill; return go(); }
   if ((b = d('[data-abskcopy]'))) { const sk = (D.skills[st.subPage === 'manage' ? st.mgSpace : st.space] || [])[+b.dataset.abskcopy]; if (sk) { const { d: ds, b: bd } = abSkParse(sk[1]); taCopy(abSkFile(sk[0], ds, bd)); } toast('Copied SKILL.md.'); return go(); }
   if ((b = d('[data-abskmg]'))) { Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: s.id, space: s.id, mgTab: 'skills', abSkEd: null }); if (b.dataset.abskmg === 'new') abSkOpen(s.id, 'new'); return go(); }
@@ -9230,11 +9475,11 @@ on($('app'), 'click', e => {
       const ed = st.abSkEd, x = abSkVals(ed), errs = abSkCheck(x, sid, ed.i);
       if (errs.length) { patch('abSkEd', y => { y.seen = { n: 1, d: 1 }; }); abSkRefresh(true); const f = errs[0][0], el = $('ab-sk-' + f); if (el) el.focus(); return true; }
       const row = [x.n, abSkJoin(x.d, x.b)];
-      db.put('skills', sid, ed.i === 'new' ? [...list, row] : list.map((y, k) => k === ed.i ? row : y));
+      mutate(ed.i === 'new' ? 'skills.create' : 'skills.update', Object.assign({ space: sid, name: row[0], prompt: row[1] }, ed.i === 'new' ? {} : { index: ed.i }), () => db.put('skills', sid, ed.i === 'new' ? [...list, row] : list.map((y, k) => k === ed.i ? row : y)));
       Object.assign(st, { abSkEd: null, modal: null }); toast(ed.i === 'new' ? `Added ${x.n}. It shows in About.` : `Saved ${x.n}.`);
     }
     if (v === 'rm') st.modal = 'ab-skrm:' + i;
-    if (v === 'rmok') { const n = list[i][0]; db.put('skills', sid, list.filter((_, k) => k !== i)); st.modal = null; toast(`Removed ${n}.`); }
+    if (v === 'rmok') { const n = list[i][0]; mutate('skills.remove', { space: sid, index: i }, () => db.put('skills', sid, list.filter((_, k) => k !== i))); st.modal = null; toast(`Removed ${n}.`); }
     return go();
   }
   if ((b = d('[data-abmem]'))) { Object.assign(st, { modal: 'ab-mem', abMemQ: '' }); return go(); }
@@ -9495,6 +9740,7 @@ function askFollowUp(par) {
   askHold(() => qtAsk(T, par, txt), () => { st.qtErr = `${AS_ERR} <button class="tlink" type="button" data-askretry="1">Retry</button>`; st.qtFocusIn = true; });
   return true;
 }
+{ const f0 = faqAsk, m0 = miCreateAsk; faqAsk = force => threadCreate(() => f0(force)); miCreateAsk = () => threadCreate(m0); }
 /* asks from the FAQ box and from source pages wait for the server the same way */
 { const faq0 = faqAsk, mi0 = miCreateAsk;
   faqAsk = force => { let r; askHold(() => { r = faq0(force); }, askToast); return r; };
@@ -9758,33 +10004,36 @@ const acVerdict = k => k.raw ? (/revoked/i.test(k.raw) ? 'it was revoked' : /exp
 function acCheckKey(id) {
   const k0 = st.userKeys.find(x => x.id === id); if (!k0) return;
   const why = acVerdict(k0);
-  db.update('userKeys', id, k => { k.check = 'checking'; k.valid = false; delete k.reason; });
-  setTimeout(() => {
+  mutate('apiKeys.check', { id }, () => db.update('userKeys', id, k => { k.check = 'checking'; k.valid = false; delete k.reason; }));
+  /* the check's result: the server's job (TODO(limits): the page decides the verdict) */
+  setTimeout(serverSide(() => {
     if (DISPOSED) return;
     const k = st.userKeys.find(x => x.id === realId(id)); if (!k || k.check !== 'checking') return;
     db.update('userKeys', k.id, r => { delete r.check; r.valid = !why; if (why) r.reason = why; });
     renderKeepFocus();
-  }, AC_CHECK_MS);
+  }), AC_CHECK_MS);
 }
 /* Add key / Replace key in the key dialog, on the first-run page, or wherever key-save is pressed */
 function acSaveKey(v) {
   const rp = st.keyMode === 'replace' && st.userKeys.find(x => x.id === st.keyFor), prov = provOf(v);
   if (rp) {
-    db.update('userKeys', rp.id, k => { Object.assign(k, { raw: v, mask: maskOf(v), provider: prov, createdAt: nowIso(), lastUsedAt: null, used: 0 }); });
-    acCheckKey(rp.id); return rp.id;
+    mutate('apiKeys.replace', { id: rp.id, raw: v }, () => { db.update('userKeys', rp.id, k => { Object.assign(k, { raw: v, mask: maskOf(v), provider: prov, createdAt: nowIso(), lastUsedAt: null, used: 0 }); }); acCheckKey(rp.id); });
+    return rp.id;
   }
-  const id = tmpId(), n = st.userKeys.length + 1;
-  db.push('userKeys', { id, kind: 'key', raw: v, label: st.keyName.trim() || `API key ${n}`, mask: maskOf(v), valid: false, provider: prov, lastUsedAt: null, used: 0, cap: +st.keyCap || 0 });
-  acCheckKey(id);
+  const id = tmpId(), n = st.userKeys.length + 1, label = st.keyName.trim() || `API key ${n}`;
+  mutate('apiKeys.create', { raw: v, label, cap: +st.keyCap || 0, check: true }, () => {
+    db.push('userKeys', { id, kind: 'key', raw: v, label, mask: maskOf(v), valid: false, provider: prov, lastUsedAt: null, used: 0, cap: +st.keyCap || 0 });
+    acCheckKey(id);
+  }, { tmp: id });
   if (st.onb) patch('onb', o => { o.key = id; });
   return id;
 }
 function acRevoke(id) {
   const k = st.userKeys.find(x => x.id === id); st.modal = null; if (!k) return;
   const pays = acPays(id);
-  db.remove('userKeys', id); stToggle('srcSel', id, false);
+  stToggle('srcSel', id, false);
   /* the space's extra tokens lose their key; Manage › Settings shows that state */
-  pays.forEach(s => spEdit(s.id, x => { delete x.byok; delete x.key; x.budget = 0; x.pct = 0; }));
+  mutate('apiKeys.revoke', { id }, () => { db.remove('userKeys', id); pays.forEach(s => spEdit(s.id, x => { delete x.byok; delete x.key; x.budget = 0; x.pct = 0; })); });
   toast(pays.length ? `Revoked ${esc(k.label)}. Asks in ${pays.map(spName).join(', ')} now use each asker’s own API key.` : `Revoked ${esc(k.label)}.`);
 }
 
@@ -9797,7 +10046,7 @@ const AC_TYPES = [
   ['pages', 'Page edits', 'Someone edits a page in the About tab of a space you joined.'],
 ];
 const AC_LV = [['all', 'All'], ['mentions', 'Mentions and replies'], ['off', 'Off']];
-DD_SET.acSp = (v, sid) => db.set('acct', a => { a.spaces[sid] = v; });
+DD_SET.acSp = (v, sid) => mutate('settings.update', { spaces: { [sid]: v } }, () => db.set('acct', a => { a.spaces[sid] = v; }));
 const acSw = (attr, on, label) => `<label class="ts-sw"><input type="checkbox" ${attr} ${on ? 'checked' : ''} aria-label="${label}"><span class="sw-track" aria-hidden="true"></span></label>`;
 function layoutAccount() {
   const wrap = h => `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page ak-page ac-page"><div class="sub-top"><h2>Account</h2></div>${h}</div></div>`;
@@ -9839,11 +10088,11 @@ function acPfState() {
 }
 const AC_WHY = [['spam', 'Spam', 'Advertising, repeated posts or fake engagement.'], ['harass', 'Harassment', 'Abuse aimed at you or at someone else.'], ['imperson', 'Impersonation', 'The account pretends to be another person or an organization.'], ['other', 'Other', 'Something else. Describe it in the note.']];
 function acSetMute(u, on, undo) {
-  db.toggle('muted', u, on);
+  dbToggle('muted', u, on);
   toast(on ? `You muted ${esc(u)}. Their threads don’t show on your Home.` : `You unmuted ${esc(u)}.`, undo ? `ac-undo:${on ? 'unmute' : 'mute'}:${u}` : null, 'Undo');
 }
 function acSetBlock(u, on, undo) {
-  db.toggle('blocked', u, on);
+  dbToggle('blocked', u, on);
   toast(on ? `You blocked ${esc(u)}.` : `You unblocked ${esc(u)}.`, undo ? `ac-undo:${on ? 'unblock' : 'block'}:${u}` : null, 'Undo');
 }
 
@@ -9900,7 +10149,7 @@ on($('app'), 'click', e => {
   if ((b = d('[data-acwhy]'))) { patch('acRep', r => { r.why = b.dataset.acwhy; }); return go(); }
   if ((b = d('[data-acrepsend]'))) { st.modal = null; st.acRep = null; toast('Report sent. The Session team reviews it.'); return go(); }
   if ((b = d('[data-acnset]'))) { clearToast(); Object.assign(st, NAVBASE(), { subPage: 'account' }); go(); acToNotifs(); return; }
-  if ((b = d('[data-acnt]'))) { const k = b.dataset.acnt, on = b.checked; db.set('acct', a => { if (k === 'email') a.emailOn = on; else a.types[k] = on; }); return go(); }
+  if ((b = d('[data-acnt]'))) { const k = b.dataset.acnt, on = b.checked; mutate('settings.update', k === 'email' ? { emailOn: on } : { types: { [k]: on } }, () => db.set('acct', a => { if (k === 'email') a.emailOn = on; else a.types[k] = on; })); return go(); }
   if ((b = d('[data-acx]'))) {
     clearToast(); const v = b.dataset.acx;
     if (v === 'email') Object.assign(st, { modal: 'ac-email', acEmail: '', acEmailErr: '' });
@@ -9908,11 +10157,11 @@ on($('app'), 'click', e => {
       const x = st.acEmail.trim();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)) st.acEmailErr = x ? 'Enter a full email address, like name@example.com.' : 'Enter the new email address.';
       else if (x === D.acct.email) st.acEmailErr = 'This is already your email.';
-      else { db.set('acct', a => { a.emailNew = x; }); st.modal = null; }
+      else { mutate('settings.update', { emailNew: x }, () => db.set('acct', a => { a.emailNew = x; })); st.modal = null; }
     }
-    if (v === 'email-cancel') db.set('acct', a => { a.emailNew = null; });
+    if (v === 'email-cancel') mutate('settings.update', { emailNew: null }, () => db.set('acct', a => { a.emailNew = null; }));
     if (v === 'export') st.modal = 'ac-export';
-    if (v === 'export-ok') { db.set('acct', a => { a.exportAt = nowIso(); }); st.modal = null; toast('We’ll email you a download link.'); }
+    if (v === 'export-ok') { mutate('settings.update', { export: true }, () => db.set('acct', a => { a.exportAt = nowIso(); })); st.modal = null; toast('We’ll email you a download link.'); }
     if (v === 'delete') Object.assign(st, { modal: 'ac-delete', acDel: '' });
     if (v === 'delete-ok') { if (st.acDel.trim() !== ME.u) return go(); acSignOut(true); st.acctGone = true; toast('Your account is deleted.'); }
     go();
@@ -9924,7 +10173,7 @@ on($('app'), 'click', e => {
     if (v === 'next') patch('onb', x => { x.step = Math.min(2, x.step + 1); });
     if (v === 'back') patch('onb', x => { x.step = Math.max(0, x.step - 1); });
     if (v === 'cancel') { acSignOut(true); toast('Session did not create an account.'); }
-    if (v === 'done') { db.set('joined', [...o.picks]); Object.assign(st, NAVBASE(), { home: true, onb: null, acctGone: false, keyErr: '' }); toast(`You joined ${o.picks.length} space${o.picks.length === 1 ? '' : 's'}. Their threads show on your Home.`); }
+    if (v === 'done') { mutate('onboarding.finish', { spaces: [...o.picks] }, () => db.set('joined', [...o.picks])); Object.assign(st, NAVBASE(), { home: true, onb: null, acctGone: false, keyErr: '' }); toast(`You joined ${o.picks.length} space${o.picks.length === 1 ? '' : 's'}. Their threads show on your Home.`); }
     go(); const a = $('app'); if (a) a.scrollTop = 0;
     return;
   }
@@ -9933,7 +10182,7 @@ on($('app'), 'click', e => {
   if ((b = d('[data-akcheck]'))) { clearToast(); acCheckKey(b.dataset.akcheck); return go(); }
   if ((b = d('[data-akrep]'))) { clearToast(); Object.assign(st, { addingKey: true, keyDraft: '', keyName: '', keyErr: '', keyShow: false, renaming: null, keyMode: 'replace', keyFor: b.dataset.akrep, modal: 'addkey' }); return go(); }
   if ((b = d('[data-akcap]'))) { clearToast(); const k = st.userKeys.find(x => x.id === b.dataset.akcap); Object.assign(st, { renaming: null, keyMode: 'limit', keyFor: k.id, keyCap: String(kinfo(k).cap || 0), modal: 'addkey' }); return go(); }
-  if ((b = d('[data-akcapsave]'))) { const id = b.dataset.akcapsave, cap = +st.keyCap || 0; db.update('userKeys', id, k => { k.cap = cap; }); Object.assign(st, { modal: null, keyMode: 'add', keyFor: null, dd: null }); toast(cap ? `Limit set: ${fmtT(cap)} tokens a month.` : 'Limit removed.'); return go(); }
+  if ((b = d('[data-akcapsave]'))) { const id = b.dataset.akcapsave, cap = +st.keyCap || 0; mutate('apiKeys.setCap', { id, cap }, () => db.update('userKeys', id, k => { k.cap = cap; })); Object.assign(st, { modal: null, keyMode: 'add', keyFor: null, dd: null }); toast(cap ? `Limit set: ${fmtT(cap)} tokens a month.` : 'Limit removed.'); return go(); }
 });
 on($('app'), 'input', e => {
   if (st.device === 'native') return;
@@ -10291,20 +10540,21 @@ askCharge = function (pay, tok) { return tmOn() ? tmCharge(pay, tok, curSpace())
   tmPickClear();
 }; }
 /* follow-ups: the same payer rule and the same check when the answer is written */
-function tmQtRun(ti, id, html, tok) {
-  setTimeout(() => {
+function tmQtRun(ti0, id0, html, tok) {
+  setTimeout(serverSide(() => {
+    const ti = realId(ti0), id = realId(id0);
     if (DISPOSED || !postById(ti)) return;
     const T = qtT(ti), n = T.by[id]; if (!n || !n.running) return;
     const src = tmSrc(n.pay, T.p.s);
     if (!src || src.left < tok) { const used = src ? Math.min(src.left, tok) : 0; qtNodeEdit(ti, id, x => { x.running = false; x.html = ''; x.tok = used; x.fail = { why: 'tokens' }; }); tmCharge(n.pay, used, T.p.s); }
     else { qtNodeEdit(ti, id, x => { x.running = false; x.html = html; x.tok = tok; delete x.fail; }); tmCharge(n.pay, tok, T.p.s); }
     if (st.thread === ti || st.device === 'native') renderKeepFocus();
-  }, 2200);
+  }), 2200);
 }
 qtAsk = function (T, par, text) {
   if (!tmOn()) return TM_ASK.qtAsk(T, par, text);
   const pay = tmPayer(T.p.s, { followUp: true, override: tmOverride() }); if (!pay.ok) return;
-  const n = { id: 'n' + (++qtSeq), par, u: ME.u, q: text, tok: 0, running: true, uses: st.qtCmp ? [...st.qtCmp] : null, pay: pay.id, model: tmModelFor(pay).id };
+  const n = { id: JUMPING ? 'n' + (++qtSeq) : tmpId(), par, u: ME.u, q: text, tok: 0, running: true, uses: st.qtCmp ? [...st.qtCmp] : null, pay: pay.id, model: tmModelFor(pay).id };
   const html = QT_CANNED[st.qtCanned] || QT_CANNED.generic, tok = 9e3 + qtTokTxt(html) * 20;
   qtEdit(T.i, d => { d.nodes.push(n); });
   Object.assign(st, { qtAskAt: null, qtDraft: '', qtErr: '', qtCmp: null, qtCanned: null });
@@ -10434,7 +10684,7 @@ function tmRevokeText(k) {
 function tmRevoke(id) {
   const k = st.userKeys.find(x => x.id === id); if (!k) return;
   const msg = `Revoked ${esc(tmKeyName(k))}. ${tmRevokeText(k)}`, d = tmDef(), rest = tmKeys().filter(x => x.id !== id);
-  db.remove('userKeys', id); stToggle('srcSel', id, false);
+  mutate('apiKeys.revoke', { id }, () => db.remove('userKeys', id)); stToggle('srcSel', id, false);
   if (d && d.id === id) db.set('usage', u => { u.def = rest.length ? rest[0].id : null; });
   if (st.tmPick === id) st.tmPick = null; if (nst.payer === id) nst.payer = null;
   toast(msg);
@@ -10564,7 +10814,7 @@ function tmNSheet(k, a) {
   if (k === 'tmmoved') return go(() => { db.set('usage', u => { u.movedSeen = true; }); });
   if (k === 'tmaddkey') return go(() => { nst.sub = null; nst.stack = [...nst.stack, { v: 'keys', id: '' }]; nst.keyName = ''; nst.keyDraft = ''; nst.keyErr = ''; nst.sheet = 'addkey'; });
   if (k === 'tmcap') return go(() => { nst.sheet = 'tmcap:' + a; });
-  if (k === 'tmcapset') return go(() => { const [id, v] = a.split(':'); db.update('userKeys', id, x => { x.cap = +v; }); nst.sheet = 'key:' + id; toast(+v ? `Limit set: ${fmtT(+v)} tokens a month.` : 'Limit removed.'); });
+  if (k === 'tmcapset') return go(() => { const [id, v] = a.split(':'); mutate('apiKeys.setCap', { id, cap: +v }, () => db.update('userKeys', id, x => { x.cap = +v; })); nst.sheet = 'key:' + id; toast(+v ? `Limit set: ${fmtT(+v)} tokens a month.` : 'Limit removed.'); });
   if (k === 'tmdef') return go(() => tmSetDef(a));
   if (k === 'revoke' && tmOn()) return go(() => { nst.sheet = null; tmRevoke(a); });
   /* signing in with no key, in a variant with keys: the first-run key step */
@@ -10765,14 +11015,16 @@ function taSave() {
   askHold(() => {
     if (it.k === 't') {
       const p = it.p, to = run ? (askPayOk(p.pay) ? p.pay : (askPay(p.s) || {}).id || null) : null;
-      db.update('posts', it.i, x => { x.q = txt; x.kw = txt; if (changed) { x.edited = true; x.t = null; } if (run) { x.running = true; x.sum = null; x.tok = 0; x.pay = to; delete x.fail; } });
+      mutate('threads.update', Object.assign({ id: it.i, q: txt }, run ? { run: true, pay: to } : {}), () => db.update('posts', it.i, x => { x.q = txt; x.kw = txt; if (changed) { x.edited = true; x.t = null; } if (run) { x.running = true; x.sum = null; x.tok = 0; x.pay = to; delete x.fail; } }));
       if (run) askRun(it.i);
     } else if (it.k === 'r') {
-      db.put('rp', it.i, produce(rpFor(it.p), l => { const r = taAt(l, it.path); r.t = txt; if (changed) r.edited = true; }));
+      mutate('replies.update', { thread: it.i, path: it.path.join('.'), t: txt }, () => db.put('rp', it.i, produce(rpFor(it.p), l => { const r = taAt(l, it.path); r.t = txt; if (changed) r.edited = true; })));
     } else {
       const n = it.n;
-      if (n.fu != null) db.put('fu', it.i, produce(fuFor(it.p), l => { if (l[n.fu]) l[n.fu].q = txt; }));
-      qtNodeEdit(it.i, n.id, x => { if (x.fu == null) x.q = txt; if (changed) x.edited = true; if (run) { x.running = true; x.tok = 0; } });
+      mutate('followups.update', Object.assign({ thread: it.i, node: n.id, q: txt }, run ? { run: true } : {}), () => {
+        if (n.fu != null) db.put('fu', it.i, produce(fuFor(it.p), l => { if (l[n.fu]) l[n.fu].q = txt; }));
+        qtNodeEdit(it.i, n.id, x => { if (x.fu == null) x.q = txt; if (changed) x.edited = true; if (run) { x.running = true; x.tok = 0; } });
+      });
       if (run) taRunNode(it.i, n.id);
     }
     st.taEdit = null;
@@ -10780,15 +11032,16 @@ function taSave() {
 }
 function taRunNode(i, id) {
   const p0 = postById(i), pay = p0 ? (askPay(p0.s) || {}).id || null : null;
-  setTimeout(() => {
+  setTimeout(serverSide(() => {
     const p = postById(i); if (DISPOSED || !p) return;
+    i = p.id; id = realId(id);
     const n = qtT(i).by[id]; if (!n || !n.running) return;
     const html = QT_CANNED.generic, tok = 9e3 + qtTokTxt(html) * 20;
     if (n.fu != null) db.put('fu', i, produce(fuFor(p), l => { if (l[n.fu]) { l[n.fu].html = html; l[n.fu].a = qtTxt(html); } }));
     qtNodeEdit(i, id, x => { x.running = false; x.tok = tok; if (x.fu == null) x.html = html; });
     askCharge(pay, tok);
     if (st.thread === i && st.device !== 'native') renderKeepFocus();
-  }, Math.max(40, askMs()));
+  }), Math.max(40, askMs()));
 }
 function taDelDlg(key) {
   const it = taItem(key); if (!it) return '';
@@ -10801,24 +11054,27 @@ function taDelete(key) {
   const it = taItem(key); st.modal = null; if (!it) return;
   const keep = it.kids > 0, noun = it.noun;
   askHold(() => {
-    if (it.k === 't') {
+    if (it.k === 't') mutate('threads.delete', { id: it.i }, () => {
       if (keep) db.update('posts', it.i, x => { x.del = true; x.q = ''; x.kw = ''; x.t = null; delete x.edited; });
       else {
         askCancel(it.i);
         db.update('posts', it.i, x => { x.gone = true; x.del = true; x.q = ''; x.kw = ''; x.t = null; x.sum = null; x.running = false; delete x.edited; });
-        if (st.saved.has(it.i)) db.toggle('saved', it.i, false);
-        if (st.liked.has(it.i)) db.toggle('liked', it.i, false);
+        if (st.saved.has(it.i)) dbToggle('saved', it.i, false);
+        if (st.liked.has(it.i)) dbToggle('liked', it.i, false);
         Object.assign(st, NAVBASE(), { space: it.p.s, home: false });
       }
-    } else if (it.k === 'r') {
-      db.put('rp', it.i, produce(rpFor(it.p), l => {
+    });
+    else if (it.k === 'r') {
+      mutate('replies.delete', { thread: it.i, path: it.path.join('.') }, () => db.put('rp', it.i, produce(rpFor(it.p), l => {
         const par = it.path.length > 1 ? taAt(l, it.path.slice(0, -1)).kids : l, j = it.path[it.path.length - 1];
         if (keep) { par[j].del = true; par[j].t = ''; delete par[j].edited; } else par.splice(j, 1);
-      }));
+      })));
     } else {
       const n = it.n;
-      if (n.fu != null) db.put('fu', it.i, produce(fuFor(it.p), l => { if (l[n.fu]) { l[n.fu].del = true; l[n.fu].q = ''; l[n.fu].a = ''; delete l[n.fu].html; } }));
-      qtEdit(it.i, d => { if (keep) { const x = d.nodes.find(y => y.id === n.id); if (x) { x.del = true; x.q = ''; x.html = ''; delete x.edited; } } else d.nodes = d.nodes.filter(y => y.id !== n.id); });
+      mutate('followups.delete', { thread: it.i, node: n.id }, () => {
+        if (n.fu != null) db.put('fu', it.i, produce(fuFor(it.p), l => { if (l[n.fu]) { l[n.fu].del = true; l[n.fu].q = ''; l[n.fu].a = ''; delete l[n.fu].html; } }));
+        qtEdit(it.i, d => { if (keep) { const x = d.nodes.find(y => y.id === n.id); if (x) { x.del = true; x.q = ''; x.html = ''; delete x.edited; } } else d.nodes = d.nodes.filter(y => y.id !== n.id); });
+      });
       if (st.qtNode === n.id) st.qtNode = 'r';
     }
     toast(`You deleted the ${noun}.`);
@@ -10850,7 +11106,7 @@ function taRpSend(key) {
   const [a, path] = key.split(':'), i = a, top = +path.split('.')[0];
   st.taRpErr = false;
   askHold(() => {
-    db.put('rp', i, produce(rpFor(postById(i)), l => { const t = l[top]; if (t) t.kids = [...(t.kids || []), { u: ME.u, t: txt }]; }));
+    mutate('research.createPostFollowUp', { thread: i, t: txt, parent: top }, () => db.put('rp', i, produce(rpFor(postById(i)), l => { const t = l[top]; if (t) t.kids = [...(t.kids || []), { u: ME.u, t: txt }]; })));
     Object.assign(st, { taRp: null, taRpDraft: '' });
   }, () => { st.taRpErr = true; });
   return true;
@@ -10999,7 +11255,7 @@ on($('app'), 'click', e => {
   }
   if (d('[data-tarpx]')) { Object.assign(st, { taRp: null, taRpDraft: '', taRpErr: false }); return go(); }
   if ((b = d('[data-tarpgo]'))) { taRpSend(b.dataset.tarpgo); return go(); }
-  if ((b = d('[data-talike]'))) { if (!taIn()) { st.modal = 'signin'; return go(); } db.toggle('rpLiked', b.dataset.talike); return go(); }
+  if ((b = d('[data-talike]'))) { if (!taIn()) { st.modal = 'signin'; return go(); } dbToggle('rpLiked', b.dataset.talike); return go(); }
   /* citations and sources */
   { const c = d('sup.cite'); if (c && taCiteOk(c)) { e.stopImmediatePropagation(); taCiteGo(c); return; } }
   if ((b = d('[data-tasrc]'))) { taSrcOpen(b.dataset.tasrc); return go(); }
@@ -11119,7 +11375,7 @@ JUMPS.push(['Data errors', [
   const DE = { load: false };
   const failOn = (code, paths) => { mockBackend.cfg.failOn = { code, paths, methods: ['PUT', 'POST', 'DELETE'] }; };
   /* draw the screen, then click a control on it as a person would; false when the control isn't there */
-  const press = sel => { renderAll(); const e = document.querySelector(sel); if (e) e.click(); return !!e; };
+  const press = sel => { renderAll(); const e = document.querySelector(sel); if (e) asUser(() => e.click()); return !!e; };
   const clear = () => {
     mockBackend.cfg.failOn = null;
     if (!DE.load) return;
@@ -11133,11 +11389,11 @@ JUMPS.push(['Data errors', [
     if (!String(k).startsWith('de-') || !dataReady()) return DE_jump(k);
     switch (k) {
       case 'de-forbidden':
-        DE_jump('md-queue'); failOn('FORBIDDEN', ['/api/join-requests', '/api/members']);
+        DE_jump('md-queue'); failOn('FORBIDDEN', ['/api/rpc/joinRequests.decide']);
         if (press('[data-rq^="ok:"]')) press('[data-csappr]');
         break;
       case 'de-conflict':
-        DE_jump('ab-page-edit'); failOn('CONFLICT', ['/api/pages/']);
+        DE_jump('ab-page-edit'); failOn('CONFLICT', ['/api/rpc/pages.update']);
         patch('abPageEd', x => { x.b = x.b + '\n\nAdded: the 2026 reissues.'; });
         press('[data-abpged="save"]');
         break;
@@ -11146,12 +11402,12 @@ JUMPS.push(['Data errors', [
         const i = tidWhere(p => p.s === 'public' && p.k === 'post' && !p.del && !p.gone);
         if (i == null) break;
         Object.assign(st, { thread: i, space: 'public', home: false });
-        failOn('NOT_FOUND', ['/api/replies/']);
-        addFollowUp(i, 'Is the reading group still in room 2B?');
+        failOn('NOT_FOUND', ['/api/rpc/research.createPostFollowUp']);
+        asUser(() => addFollowUp(i, 'Is the reading group still in room 2B?'));
         break;
       }
       case 'de-badreq':
-        DE_jump('mb-home'); failOn('BAD_REQUEST', ['/api/me/profile']);
+        DE_jump('mb-home'); failOn('BAD_REQUEST', ['/api/rpc/profile.update']);
         Object.assign(st, { home: false, profilePage: true, profileUser: ME.u, ptab: 'threads', pfDraft: { name: ME.name, bio: 'Reads about housing policy and transit.', err: '' }, modal: 'pf-edit' });
         press('[data-pf="save"]');
         break;
@@ -12131,13 +12387,52 @@ function bootData() {
   apiSource.load(liveData);
   dataError = msg => { toast(msg); renderAll(); };
 }
+/* ==== step 3: the person's thread actions as mutations ====
+   These wrap the composers and thread actions above (and their earlier wrappers), so each user action is
+   one mutation whose recipe is the existing store change. */
+/* the create input for a thread record the page made */
+const threadInput = p => p ? Object.assign({ space: p.s, kind: p.k, q: p.q }, p.t ? { title: p.t } : {}, p.topic ? { topic: p.topic } : {}, ...['pay', 'model', 'about', 'skill'].filter(f => p[f] != null).map(f => ({ [f]: p[f] }))) : null;
+/* fn makes a thread (and may change it): one threads.create; the new thread takes the server's id */
+function threadCreate(fn) {
+  const t0 = lastTid(); let made = null;
+  return mutate('threads.create', () => made ? threadInput(postById(made)) : null, () => { const r = fn(); made = lastTid() !== t0 ? lastTid() : null; return r; }, { tmp: () => made });
+}
+{ const ct = createThread; createThread = kind => threadCreate(() => ct(kind)); }
+/* an ask about an answer (ask trees): the server assigns the node's id */
+{ const qa = qtAsk; qtAsk = function (T, par, text) {
+  let n = null; const ids0 = new Set(qtData(T.i).nodes.map(x => x.id));
+  return mutate('research.forkNode', () => n && Object.assign({ thread: T.i, parent: par, q: n.q }, n.uses ? { uses: n.uses } : {}, n.pay ? { pay: n.pay } : {}, n.model ? { model: n.model } : {}),
+    () => { const r = qa(T, par, text); n = (qtData(T.i).nodes.find(x => !ids0.has(x.id))) || null; return r; }, { tmp: () => n && n.id });
+}; }
+/* a thread from a branch of an ask tree */
+{ const qp = qtPromote; qtPromote = function () {
+  const pro = st.qtPro, t0 = lastTid(); let made = null;
+  return mutate('threads.create', () => { const p = made && postById(made); return p && Object.assign({ space: pro.sp, kind: 'ask', q: p.q, title: p.t, from: { th: pro.th, node: pro.node }, branch: pro.inc === 'all' ? 'all' : 'one' }, p.topic ? { topic: p.topic } : {}); },
+    () => { const r = qp(); made = lastTid() !== t0 ? lastTid() : null; return r; }, { tmp: () => made });
+}; }
+/* The ask pipeline writes what the server will write in step 7 (answers, charges, run notifications), and
+   Stop and Run again change a run: they stay on the collection endpoints (TODO(step 7): research.stopNode,
+   research.rerunNode). */
+askFinish = serverSide(askFinish); askFail = serverSide(askFail); askCharge = serverSide(askCharge); askNotify = serverSide(askNotify);
+askStop = serverSide(askStop); askAgain = serverSide(askAgain); taRunNode = serverSide(taRunNode);
+/* ---- step 3: sources added to spaces, settings and keys ---- */
+/* a URL or file added to a space: the server makes the source record when Session has none */
+{ const da = dsAdd; dsAdd = function (u, sid, note, file) {
+  const found = !file && miFindUrl(u), n0 = D.miAdded.length;
+  let made = null;
+  return mutate('spaceSources.add', r => r.dup ? null : Object.assign({ space: sid, note: (note || '').trim() }, found ? { source: found.id } : file ? { file } : { url: u }),
+    () => { const r = da(u, sid, note, file); if (!found && D.miAdded.length > n0) made = D.miAdded[D.miAdded.length - 1].id; return r; }, { tmp: () => made });
+}; }
+/* ==== end of the thread actions as mutations ==== */
+/* Screen entries set up their data through the collection endpoints (step 10: a scenario endpoint) */
+jump = asScenario(jump);
 Object.assign(st, { apiMode: 'normal' });
 bootData();
 const ST0 = structuredClone(stSnapshot(FIXTURES)), JOINED0 = [...FIXTURES.joined], NST0 = structuredClone(phoneStore.getState());
 on($('ctl-toggle'), 'click', e => { const open = document.querySelector('.ctl').classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded', open); });
 on(document.getElementById('k-reset'), 'click', () => {
   /* the mock backend's data goes back to its seed; then the controls and the screen */
-  db.reset(resetControls);
+  db.reset(asScenario(resetControls));
   renderAll();
 });
 function resetControls() {
@@ -12387,7 +12682,7 @@ on($('app'), 'click', e => {
   if (b.dataset.pf === 'save') {
     const d = st.pfDraft, name = d.name.trim();
     if (!name) { patch('pfDraft', x => { x.err = 'Add a name.'; }); renderAll(); const i = $('pf-name'); if (i) i.focus(); return; }
-    db.set('profile', { name, bio: (d.bio || '').trim() }); Object.assign(st, { modal: null, pfDraft: null }); toast('Profile saved.');
+    mutate('profile.update', { name, bio: (d.bio || '').trim() }, () => db.set('profile', { name, bio: (d.bio || '').trim() })); Object.assign(st, { modal: null, pfDraft: null }); toast('Profile saved.');
   }
   renderAll();
 });
@@ -12403,8 +12698,8 @@ on($('app'), 'click', e => {
   const sub = t.closest('[data-sub]'); if (sub) { Object.assign(st, { ysEdit: false, subPage: sub.dataset.sub, umenu: false, pop: false, thread: null, savedPage: false, profilePage: false, addingKey: false, keyErr: '' }); renderAll(); return; }
   const jn = t.closest('[data-join]'); if (jn) { Object.assign(st, { modal: 'sp-join:' + jn.dataset.join, pop: false }); renderAll(); return; }
   const lv = t.closest('[data-leave]'); if (lv) { Object.assign(st, { modal: 'sp-leave:' + lv.dataset.leave, pop: false }); renderAll(); return; }
-  const jo = t.closest('[data-spjoin-ok]'); if (jo) { const id = jo.dataset.spjoinOk; joinSpace(id); st.modal = null; toast(`You joined ${spName(sp(id))}.`); renderAll(); return; }
-  const lo = t.closest('[data-spleave-ok]'); if (lo) { const id = lo.dataset.spleaveOk; leaveSpace(id); st.modal = null; toast(`You left ${spName(sp(id))}.`); renderAll(); return; }
+  const jo = t.closest('[data-spjoin-ok]'); if (jo) { const id = jo.dataset.spjoinOk; userJoin(id); st.modal = null; toast(`You joined ${spName(sp(id))}.`); renderAll(); return; }
+  const lo = t.closest('[data-spleave-ok]'); if (lo) { const id = lo.dataset.spleaveOk; userLeave(id); st.modal = null; toast(`You left ${spName(sp(id))}.`); renderAll(); return; }
   const rv = t.closest('[data-revoke]'); if (rv) { st.modal = 'revoke:' + rv.dataset.revoke; renderAll(); return; }
   const rvc = t.closest('[data-act="revoke-confirm"]'); if (rvc) { acRevoke(st.modal.split(':')[1]); renderAll(); return; }
   const tmv2 = t.closest('[data-tabmove]'); if (tmv2) { const [id, d] = tmv2.dataset.tabmove.split(':'); const ids = st.tabOrder.length ? [...st.tabOrder] : defaultTabOrder(); const k = ids.indexOf(id), n = k + +d; if (n >= 0 && n < ids.length) { [ids[k], ids[n]] = [ids[n], ids[k]]; st.tabOrder = ids; } renderAll(); return; }
@@ -12446,7 +12741,7 @@ on($('app'), 'click', e => {
     return;
   }
   const rnb = t.closest('[data-rename]'); if (rnb) { const k = st.userKeys.find(x => x.id === rnb.dataset.rename); Object.assign(st, { renaming: k.id, renameDraft: k.label, addingKey: false }); renderAll(); const r = $('rn-in'); if (r) { r.focus(); r.select(); } return; }
-  if (a && (a.dataset.act === 'rn-save' || a.dataset.act === 'rn-cancel')) { if (a.dataset.act === 'rn-save') { const v = st.renameDraft.trim(); if (v) db.update('userKeys', st.renaming, k => { k.label = v; }); } st.renaming = null; renderAll(); return; }
+  if (a && (a.dataset.act === 'rn-save' || a.dataset.act === 'rn-cancel')) { if (a.dataset.act === 'rn-save') { const v = st.renameDraft.trim(), id = st.renaming; if (v) mutate('apiKeys.rename', { id, label: v }, () => db.update('userKeys', id, k => { k.label = v; })); } st.renaming = null; renderAll(); return; }
   if (a && ['comp-close', 'discard', 'modal-close'].includes(a.dataset.act)) {
     const k = a.dataset.act;
     if (k === 'comp-close') { if (st.draft.trim()) st.modal = 'discard'; else { st.compOpen = false; } }
@@ -12456,7 +12751,7 @@ on($('app'), 'click', e => {
   }
   const so = t.closest('[data-sort]'); if (so) { st.sort = so.dataset.sort; st.sortOpen = false; renderAll(); return; }
   if (a) { if (a.dataset.act === 'compose' && st.auth === 'out') { st.modal = 'signin'; st.pop = false; renderAll(); return; } if (a.dataset.act === 'compose') { st.compOpen = true; st.pop = false; st.sortOpen = false; } if (a.dataset.act === 'sort') { st.sortOpen = !st.sortOpen; st.pop = false; } if (a.dataset.act === 'pop') { st.pop = !st.pop; st.sortOpen = false; } if (a.dataset.act === 'drawer') st.drawer = !st.drawer; if (a.dataset.act === 'umenu') { st.umenu = !st.umenu; st.pop = false; } if (a.dataset.act === 'saved-page') { st.savedPage = true; st.profilePage = false; st.thread = null; st.umenu = false; st.pop = false; } if (a.dataset.act === 'profile') { st.profileUser = ME.u; st.profilePage = true; st.savedPage = false; st.thread = null; st.umenu = false; } if (a.dataset.act === 'shortcuts') { st.modal = 'kbd'; st.umenu = false; } renderAll(); return; }
-  const tg = t.closest('[data-toggle]'); if (tg) { const k = tg.dataset.toggle, id = tg.dataset.id; if (ST_DATA.has(k)) db.toggle(k, id); else if (st[k]) stToggle(k, id); renderAll(); return; }
+  const tg = t.closest('[data-toggle]'); if (tg) { const k = tg.dataset.toggle, id = tg.dataset.id; if (ST_DATA.has(k)) dbToggle(k, id); else if (st[k]) stToggle(k, id); renderAll(); return; }
   const sk = t.closest('[data-skill]'); if (sk) { st.draft = `/${D.skills[st.space][+sk.dataset.skill][0]} `; Object.assign(st, { compOpen: true, pop: false, sortOpen: false, mWiki: false, modal: null }); renderAll(); const c = $('compose-text'); if (c) { c.scrollIntoView({ block: 'center', behavior: 'smooth' }); c.focus({ preventScroll: true }); c.setSelectionRange(c.value.length, c.value.length); } return; }
   const snd = t.closest('[data-send]'); if (snd) { createThread('post'); renderAll(); return; }
   if (st.modal && t.classList.contains('modal-scrim')) { st.modal = null; renderAll(); return; }
