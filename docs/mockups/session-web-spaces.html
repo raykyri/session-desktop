@@ -7931,7 +7931,7 @@ function sfClick(t) {
   return false;
 }
 function sfUndo(r) {
-  const was = r.st; r.st = 'open';
+  const was = r.st; db.update('reports', r.id, y => { y.st = 'open'; });
   if (was !== 'dismissed' && !st.reports.some(x => x.key === r.key && x.st !== 'open')) db.del('modSt', r.key);
   st.notifs = st.notifs.filter(n => n.id !== 'nres:' + r.id);
   toast('Report reopened.');
@@ -12366,6 +12366,8 @@ on(window, 'keydown', e => {
   /* Escape in the handle field closes its suggestions first */
   if (id === 'm:cs-invite' && st.cxHOpen && ovQ('#cx-hsug')) { ovStop(e); st.cxHOpen = false; renderKeepFocus(); return; }
   if (!id || !ovDirty(id)) return;
+  /* a dropdown or menu open inside the dialog closes first, with its own Escape */
+  { const el = ovEl(id); if (el && [...el.querySelectorAll('.dd-pop, .pop, [role="listbox"], [role="menu"]')].some(ovShown)) return; }
   ovStop(e); ovAsk(id, { redo: ovRedoKey(desc) });
 }, true);
 /* clicks: the confirmation's buttons and scrim, the discard dialogs used for Back, and the scrim or X of a
