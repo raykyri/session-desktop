@@ -2936,7 +2936,9 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
   #app .sh-scrim-enter { animation: sh-scrim 200ms ease-out; }
   /* Model and topic menus variants */
   #app .mp-menu, #app .sf-tpmenu { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; min-width: 0; max-width: none; max-height: 70%; overflow-y: auto; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding-bottom: 20px; }
-  #app .sw-wrap .pop { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; max-width: none; max-height: 75%; overflow-y: auto; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding-bottom: 20px; }
+  #app .sw-wrap .pop { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; max-width: none; max-height: 75%; overflow-y: auto; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding: 10px 10px 20px; }
+  /* the search field sits 10px in from the sheet's 16px corners, so its 6px radius follows the sheet's curve */
+  #app .sw-wrap .pop > input { height: 36px; }
   /* full-width menus are placed against the card or row that holds the button, not the scrolling page */
   #app .c2-spmenu { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; max-height: 70%; overflow-y: auto; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding-bottom: 20px; }
   /* short labels in action rows */
