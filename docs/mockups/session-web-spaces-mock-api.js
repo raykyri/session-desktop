@@ -48,8 +48,13 @@
      routers), answered with { result, changes }. The server validates the input, checks that the records
      exist, computes the new state (ids, counts, member lists, notifications it sends, memberships, roles),
      writes every collection it changes at once (all or none) and returns the changed records. See 5b.
-   - The collection write rows stay for the Screen entries (scope 'scenario', until step 10's scenario
-     endpoint), the page's ask pipeline (scope 'run', until step 7) and the token-usage stub.
+   - The collection write rows stay only for the page's ask pipeline (scope 'run', until step 7) and the
+     token-usage stub (scope 'stub').
+
+   Scenarios (step 10)
+   - The Screen entries set up their data with POST /api/dev/scenario { name, args? }: the server goes back
+     to the seed and runs a named scenario (session-web-spaces-scenarios.js, SessionScenarios) in one
+     transaction, and answers { changes } as a procedure does. See createBackend (section 6).
 
    Contents
    1. The wire codec (JSON; Sets travel as { $set: [...] }). The page uses this copy.
@@ -335,16 +340,14 @@
      same style. Rows marked `bulk` replace a whole collection: the page's diff sends one when records move
      or several change at once (never for threads); the real app sends one mutation per change instead.
      stub: TODO(limits) rows: API keys and token usage, kept as they are, without accounting.
-     scope (step 3): who writes through a row. A person's actions are procedures (section 5b, scope 'user').
-     The collection write rows remain only for:
-       'scenario'  the Screen entries and the Variants bar's reset, which set up their data with them
-                   (step 10 replaces them with a scenario endpoint);
+     scope (steps 3 and 10): who writes through a row. A person's actions are procedures (section 5b, scope
+     'user'); the Screen entries and the Variants bar's Reset use the scenario endpoint (dev, step 10). The
+     collection write rows remain only for:
        'run'       the ask pipeline in the page (answers, their sources, charges, run notifications, key
                    and domain checks), which writes what the server will write itself in step 7;
-       'stub'      the token-usage stub (TODO(limits)).
-     Write rows that only a person's actions used are gone: reply likes, the profile, skills and pages.
-     The page sends X-Session-Origin (scenario, run, stub) with each collection write; the request log
-     records it. */
+       'stub'      the token-usage stub (TODO(limits)), which the ask pipeline also writes (its charges).
+     The page sends X-Session-Origin (run, stub; user would be a bug) with each collection write; the
+     request log records it, and in dev a write from another origin is an error. */
   const OPS = {
     list:    { method: 'GET', sub: '', errors: [] },
     get:     { method: 'GET', sub: '/:id', errors: ['NOT_FOUND'] },
@@ -519,14 +522,15 @@
     { method: 'PUT', path: '/api/dev/config', coll: null, op: 'dev-config', input: 'Partial<DevConfig>', output: 'DevConfig', who: 'guest', trpc: null, wire: null, errors: ['BAD_REQUEST'], dev: true,
       note: 'DevConfig: { now (the mock clock, an ISO time), latency, failWrites, failReads, failCode, failOn: { code, paths: string[], methods?: string[], times? } | null }' },
   ];
-  /* scopes of the collection write rows (see `scope` above). GONE: rows that only a person's actions used,
-     and whole-collection replaces the page no longer sends (threads; maps are written per key). */
-  const GONE = new Set(['rpLiked:replace', 'profile:replace', 'skills:put', 'skills:delete', 'pagedocs:put', 'pagedocs:delete', 'posts:replace', 'qtd:replace']);
+  /* scopes of the collection write rows (see `scope` above): the rows the ask pipeline writes (RUN) and the
+     stub's. The other write rows are gone: a person's actions are procedures, and the Screen entries use
+     scenarios (step 10). */
   const RUN = new Set(['posts:put', 'rich:put', 'rich:delete', 'srcd:put', 'srcd:delete', 'fu:put', 'qtd:put', 'spaces:put', 'userKeys:put', 'notifs:create']);
   for (let i = API.length - 1; i >= 0; i--) {
     const a = API[i]; if (a.dev || a.method === 'GET') continue;
-    if (GONE.has(`${a.coll}:${a.op}`)) { API.splice(i, 1); continue; }
-    a.scope = C[a.coll].stub ? ['stub'] : RUN.has(`${a.coll}:${a.op}`) ? ['scenario', 'run'] : ['scenario'];
+    if (C[a.coll].stub) a.scope = ['stub', 'run'];   /* the usage stub; the ask pipeline charges asks to it */
+    else if (RUN.has(`${a.coll}:${a.op}`)) a.scope = ['run'];
+    else API.splice(i, 1);
   }
 
   /* ---- 5b. procedures (step 3): mutations by intent ----
@@ -1101,11 +1105,12 @@
   }
 
   /* ---- 6. the backend ----
-     createBackend({ fixtures, seed, storageKey, latency, dev }):
+     createBackend({ fixtures, seed, scenarios, storageKey, latency, dev }):
      - fixtures: SessionFixtures ({ clock, me, data }): the seed data, the mock clock's start and the signed-in
        person. seed() can give the data instead (then the clock starts at the real time).
      - storageKey: the localStorage key. The stored database is kept while the seed's hash is the same.
      - latency: each request waits this long (ms).
+     - scenarios: SessionScenarios (session-web-spaces-scenarios.js), for POST /api/dev/scenario.
      - dev: report contract mismatches (console.error, and an uncaught error so test harnesses fail).
      Returns { cfg, wipe, restore, checkClient, seedView }. */
   const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -1199,7 +1204,7 @@
       };
       tx.commit = () => {
         /* every staged collection must still pass its schema: a failed check is a bug in a procedure */
-        for (const k of Object.keys(staged)) { const issues = checkWhole(k, staged[k], { ...d, ...staged }); if (issues.length) { fail(`a procedure wrote ${k} that fails its schema: ${issues.slice(0, 3).map(i => `${i.path}: expected ${i.expected}`).join('; ')}`); throw rpcError('INTERNAL_SERVER_ERROR'); } }
+        for (const k of Object.keys(staged)) { const issues = checkWhole(k, staged[k], { ...d, ...staged }, true); if (issues.length) { fail(`a procedure wrote ${k} that fails its schema: ${issues.slice(0, 3).map(i => `${i.path}: expected ${i.expected}`).join('; ')}`); throw rpcError('INTERNAL_SERVER_ERROR'); } }
         /* records whose derived fields depend on what changed */
         const dep = { posts: new Set(), spaces: new Set() };
         if (touched.liked) { const a = d.liked, b = staged.liked; new Set([...a, ...b]).forEach(x => { if (a.has(x) !== b.has(x)) dep.posts.add(x); }); }
@@ -1232,8 +1237,8 @@
         if (issues.length) fail(`seed data for ${k} fails its schema: ${issues.slice(0, 3).map(i => `${i.path}: expected ${i.expected}`).join('; ')}`);
       }
     }
-    /* the schema of a whole collection, with id and key checks. Unique ids are required of the seed only:
-       the page sends whole notification lists that hold the same id twice (np-notifs, np-invite). */
+    /* the schema of a whole collection, with id and key checks; unique: list ids must be unique (the seed, and
+       what a transaction wrote) */
     function checkWhole(k, v, d, unique) {
       const c = C[k];
       if (c.kind === 'value') return check(c.item, v, k);
@@ -1270,12 +1275,14 @@
 
     /* ---- scenarios (step 10): the Screen entries' data, set up on the server ----
        POST /api/dev/scenario { name, args? }. The database goes back to the seed (one deep copy of it per
-       call); then the scenario's base, if it names one, and the scenario itself write to it in one
-       transaction (scenarios: SessionScenarios, from session-web-spaces-scenarios.js). The answer is
+       call); then the scenario writes to it in one transaction (scenarios: SessionScenarios, from
+       session-web-spaces-scenarios.js; the transaction's schema checks apply). The answer is
        { changes }, in the shape of a procedure's changes: every record that differs from the database
        before the call, as GET returns it. A list whose order changed also carries `order`: its ids, in order.
-       A scenario writes as the server: no permission checks (step 5 must keep it that way). */
-    const SC = (scenarios && scenarios.list) || {}, SC_BASES = (scenarios && scenarios.bases) || {};
+       The id counter is not reset, so ids stay unique across scenarios (the page may still hold old ones, in
+       its history entries and its map of temporary ids). A scenario writes as the server: no permission
+       checks (step 5 must keep it that way). */
+    const SC = (scenarios && scenarios.list) || {};
     /* every collection as GET returns it, each record encoded once, for the comparison */
     function snapshot(d) {
       const o = {};
@@ -1310,18 +1317,15 @@
       }
       return changes;
     }
-    /* what a scenario can use besides tx: the server's own rules for memberships and member lists, the
+    /* what a scenario can use besides tx: the server's own rules for memberships and ask trees, the
        procedures (their run, without permission checks), and times relative to the mock clock */
     const AGO_MIN = { m: 1, h: 60, d: 1440, w: 10080 };
     const isoOf = ms => new Date(Math.floor(ms / 1000) * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
     const helpers = tx => ({
       /* an ISO time this long before the clock ("3h", "2d", "1mo"), as the page's isoAgo */
       ago: a => { const m = /^(\d+)(mo|m|h|d|w)$/.exec(a), n = +m[1]; const [lo, hi] = m[2] === 'mo' ? [Math.max(30 * n, 56) * 1440, (30 * n + 30) * 1440] : [n * AGO_MIN[m[2]], (n + 1) * AGO_MIN[m[2]]]; return isoOf(Date.parse(cfg.now) - (lo + hi) / 2 * 60e3); },
-      in: days => isoOf(Date.parse(cfg.now) + days * 1440 * 60e3),
       rel: (sid, r) => setRelation(tx, sid, r),
-      joined: (sid, on) => setJoined(tx, sid, on),
-      roster: sid => rosterOf(tx, sid),
-      setRoster: (sid, list) => setRoster(tx, sid, list),
+      tree: th => askTree(tx, th),
       proc: (name, input) => {
         const P = PROCS[name]; if (!P) throw new Error(`no procedure ${name}`);
         const issues = check(P.input, input, 'input'); if (issues.length) throw new Error(`${name}: ${issues.map(i => `${i.path}: expected ${i.expected}`).join('; ')}`);
@@ -1331,11 +1335,12 @@
     function scenario(body) {
       const sc = body && typeof body === 'object' && SC[body.name];
       if (!sc) return err('BAD_REQUEST', undefined, { issues: [`name: expected one of ${Object.keys(SC).join(', ')}`] });
+      if (body.args !== undefined && check(t.rec(t.any), body.args).length) return err('BAD_REQUEST', undefined, { issues: ['args: expected an object'] });
       const before = snapshot(db0());
-      data = seedData(); ids = 0;
+      /* the id counter keeps counting: an id the server gave out before is not given to another record */
+      data = seedData();
       const tx = transaction(data), h = helpers(tx), args = body.args || {};
       try {
-        if (sc.base) SC_BASES[sc.base](tx, args, h);
         if (sc.run) sc.run(tx, args, h);
         tx.commit();
       } catch (e) {
@@ -1346,13 +1351,18 @@
       return out(200, { changes: changesBetween(before, snapshot(data), data) });
     }
 
-    function handle(method, url, body) {
+    function handle(method, url, body, origin) {
       const [path, qs] = url.split('?');
       const hits = matchPath(path);
       if (!hits.length) { fail(`no API entry for ${method} ${path}`); return { res: err('NOT_FOUND', 'The server has no address like this.') }; }
       const hit = hits.find(h => h.r.method === method);
-      if (!hit) return { res: err('METHOD_NOT_SUPPORTED') };
+      if (!hit) {
+        /* a collection write without a row: only the ask pipeline and the usage stub write collections */
+        if (method !== 'GET' && hits.some(h => h.r.coll)) fail(`no collection write ${method} ${path}${origin ? ` (from ${origin})` : ''}: a person's action is a procedure, and a Screen entry's data a scenario`);
+        return { res: err('METHOD_NOT_SUPPORTED') };
+      }
       const { r, id } = hit;
+      if (r.coll && r.scope && !r.scope.includes(origin)) fail(`${method} ${path} from ${origin || 'an unknown origin'}: this collection write is for ${r.scope.join(', ')} only`);
       if (r.dev) {
         if (r.op === 'dev-reset') { data = seedData(); ids = 0; save(); return { res: out(204) }; }
         if (r.op === 'dev-scenario') return { res: scenario(body) };
@@ -1446,11 +1456,11 @@
       const method = (init.method || 'GET').toUpperCase();
       return new Promise(resolve => setTimeout(() => {
         let res, forcedErr = false;
-        try { const body = init.body ? dec(init.body) : undefined; ({ res, forced: forcedErr } = handle(method, url, body)); }
+        /* who sent a collection write (the page's X-Session-Origin): run (the ask pipeline), stub, or user (a bug) */
+        const h = init.headers || {}, origin = typeof h.get === 'function' ? h.get('X-Session-Origin') : h['X-Session-Origin'];
+        try { const body = init.body ? dec(init.body) : undefined; ({ res, forced: forcedErr } = handle(method, url, body, origin)); }
         catch (e) { console.error('[mock api]', e); res = err('INTERNAL_SERVER_ERROR'); }
         const entry = { seq: ++seq, method, path: url.split('?')[0], status: res.status, code: null };
-        /* who sent a collection write (the page's X-Session-Origin): scenario (a Screen entry), run (the ask pipeline), stub or user */
-        const h = init.headers || {}, origin = typeof h.get === 'function' ? h.get('X-Session-Origin') : h['X-Session-Origin'];
         if (origin) entry.origin = origin;
         if (!res.ok) { entry.code = res.code || null; if (forcedErr) entry.forced = true; }
         log.push(entry); if (log.length > LOG_MAX) log.splice(0, log.length - LOG_MAX);
@@ -1473,8 +1483,8 @@
       checkClient,
       wipe: () => { data = null; ids = 0; try { localStorage.removeItem(storageKey); } catch (e) {} },
       restore: () => { window.fetch = realFetch; },
-      /* the seed data as GET returns it (derived fields included), without touching the database: the
-         page's Screen entries restore these baselines */
+      /* the seed data as GET returns it (derived fields included), without touching the database: the page
+         reads it while it starts */
       seedView: () => { const d = seedData(); return dec(enc(Object.fromEntries(Object.keys(d).map(k => [k, viewAll(k, d)])))); },
     };
   }
