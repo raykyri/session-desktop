@@ -4323,7 +4323,7 @@ function revokeDialog() {
   return `<div class="modal-scrim"><div class="modal sm" role="alertdialog" aria-modal="true" aria-labelledby="rv-t"><h3 id="rv-t">Revoke ${esc(k ? k.label : 'this key')}?</h3><p class="muted">Asks that use this key will stop working. You can’t undo this.</p>${paid}<div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Cancel</button><button class="btn danger" type="button" data-act="revoke-confirm">Revoke</button></div></div></div>`;
 }
 function discardDialog() {
-  return `<div class="modal-scrim"><div class="modal sm" role="alertdialog" aria-modal="true" aria-labelledby="dd-t"><h3 id="dd-t">Discard this draft?</h3><p class="muted">The text you wrote will be deleted.</p><div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Keep editing</button><button class="btn danger" type="button" data-act="discard">Discard</button></div></div></div>`;
+  return `<div class="modal-scrim"><div class="modal sm" role="alertdialog" aria-modal="true" aria-labelledby="dd-t"><h3 id="dd-t">Discard this draft?</h3><p class="muted">The text you wrote will be deleted.</p><div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-act="modal-close" autofocus>Keep editing</button><button class="btn danger" type="button" data-act="discard">Discard</button></div></div></div>`;
 }
 const SAMPLE_Q = 'What changed in public guidance on AI model evaluations this year?';
 const curSpace = () => st.home ? (D.joined.includes(st.compSpace) ? st.compSpace : D.joined[0]) : st.space;
@@ -7356,7 +7356,7 @@ function csClick(t) {
   if (st.dd && !t.closest('.dd')) { st.dd = null; renderAll(); }
   if ((b = d('[data-dd]'))) { const id = b.dataset.dd; st.dd = st.dd === id ? null : id; renderAll(); const f = st.dd ? document.querySelector('.dd-pop [aria-selected="true"]') || document.querySelector('.dd-pop .dd-o') : document.querySelector(`[data-dd="${id}"]`); if (f) f.focus({ preventScroll: true }); return true; }
   if ((b = d('[data-csrole-ok]'))) { const [u, v] = b.dataset.csroleOk.split(':'); st.modal = null; DD_SET.roleSet(v, u); return go(); }
-  if ((b = d('[data-ddv]'))) { const [id, v] = b.dataset.ddv.split(/:(.*)/s), [k, arg] = id.split(/\.(.*)/s); DD_SET[k](v, arg); st.dd = null; renderAll(); const f = document.querySelector(`[data-dd="${id}"]`); if (f) f.focus({ preventScroll: true }); return true; }
+  if ((b = d('[data-ddv]'))) { const [id, v] = b.dataset.ddv.split(/:(.*)/s), [k, arg] = id.split(/\.(.*)/s), m0 = st.modal; DD_SET[k](v, arg); st.dd = null; renderAll(); const f = document.querySelector(`[data-dd="${id}"]`); if (f && st.modal === m0) f.focus({ preventScroll: true }); return true; }
   if ((b = d('[data-cslink]'))) {
     const [v, id] = b.dataset.cslink.split(':');
     if (v === 'new') { const code = Math.random().toString(36).slice(2, 7); const exp = { 1: 'Nov 17', 7: 'Nov 23', 30: 'Dec 16', 0: '' }[b.dataset.exp || st.linkExp]; const l = { id: 'l' + code, code, by: ME.u, exp, sp: b.dataset.sp || st.mgSpace }; db.unshift('links', l); st.linkNew = l.id; toast(`Link created: session.app/i/${code}`); }
@@ -10652,10 +10652,14 @@ function askHold(create, onFail) {
   uiStore.setState(back);
   const made = D.posts.length > n0 ? n0 : null;
   Object.assign(ASK, { hold: true, failed: false, retry: () => askHold(create, onFail) });
+  /* the screen the write was sent from: if the user leaves it (Back, a link) before the server answers, the
+     view stays where the user went (askLanded, askFailedAway in the overlay history block) */
+  const scr0 = nvScreen(), snap0 = nvSnap();
   apiSource.queue.then(() => {
     ASK.hold = false;
-    if (!ASK.failed) uiStore.setState(fwd);
-    else { if (made != null) askCancel(made); onFail(); }
+    const moved = nvScreen() !== scr0;
+    if (!ASK.failed) { if (moved) askLanded(fwd, made, scr0); else uiStore.setState(fwd); }
+    else { if (made != null) askCancel(made); if (moved) askFailedAway(snap0, onFail); else onFail(); }
     renderAll();
   });
   return true;
@@ -10690,7 +10694,7 @@ function askFollowUp(par) {
 
 /* ---------- unsent follow-ups ---------- */
 const askUnsent = () => {
-  if (st.thread == null || st.auth !== 'in' || st.device === 'native') return '';
+  if (st.thread == null || st.auth !== 'in' || st.device === 'native' || ASK.hold) return '';   /* text being sent is not unsaved */
   const p = D.posts[st.thread]; if (!p) return '';
   if (p.k === 'ask') return (st.qtDraft || '').trim() ? 'follow-up' : '';
   return ((st.fuDraft || {})[st.thread] || '').trim() ? 'reply' : '';
@@ -10700,7 +10704,7 @@ const asNavSel = ([a, v]) => v ? `[${a}="${v}"]` : `[${a}]`;
 function askModal() {
   const [k, kind] = (st.modal || '').split(':');
   if (k !== 'ask-discard') return '';
-  return `<div class="modal-scrim"><div class="modal sm" role="alertdialog" aria-modal="true" aria-labelledby="as-dd-t"><h3 id="as-dd-t">Discard your ${kind === 'reply' ? 'reply' : 'follow-up'}?</h3><p class="muted">The text you wrote will be deleted.</p><div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Keep editing</button><button class="btn danger" type="button" data-askdiscard="1">Discard</button></div></div></div>`;
+  return `<div class="modal-scrim"><div class="modal sm" role="alertdialog" aria-modal="true" aria-labelledby="as-dd-t"><h3 id="as-dd-t">Discard your ${kind === 'reply' ? 'reply' : 'follow-up'}?</h3><p class="muted">The text you wrote will be deleted.</p><div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-act="modal-close" autofocus>Keep editing</button><button class="btn danger" type="button" data-askdiscard="1">Discard</button></div></div></div>`;
 }
 /* Leaving a thread with an unsent follow-up or reply asks first. The link that was clicked is found
    again by its attribute and clicked once the text is discarded. */
@@ -11721,6 +11725,8 @@ function nvAfter() {
 /* the history writes for this render: the screen's entry, then the overlay entries on top of it (ovPlan) */
 function nvCommit() {
   const url = $('url').textContent, key = nvKey(), scr = nvScreen(), snap0 = nvSnap();
+  /* the first commit after a load or reload continues from the entry the browser shows (overlay history block) */
+  if (!NV.cur && NV.ovH0 === undefined) { const h = history.state; NV.ovH0 = h && h.nv ? h : null; if (NV.ovH0) { NV.ovs = (h.ovs || []).map(() => 'left'); NV.nat = !!h.nat; } }
   /* an entry keeps its scroll position (nvScrolled) until a push leaves it */
   const mk = (i, from) => ({ nv: 1, i, key, scr, snap: NV.cur && i === NV.cur.i ? { ...snap0, sa: NV.cur.snap.sa, sf: NV.cur.snap.sf } : snap0, from, url });
   const mode = !NV.cur ? 'init' : NV.restoring ? 'restore' : NV.mode || (NV.quiet ? 'replace' : key !== NV.cur.key ? 'push' : 'replace');
@@ -11729,7 +11735,7 @@ function nvCommit() {
   /* overlay entries that have to go first (closed overlays, or all of them before a new screen) */
   if (plan.drop || NV.nat) { ovUnwind(plan.drop ? plan.keep : NV.ovs.length, mode); return; }
   let push = false;
-  if (mode === 'init') NV.cur = mk(0, null);
+  if (mode === 'init') { const h = NV.ovH0; NV.cur = mk(h ? h.i : 0, h && h.scr === scr ? h.from || null : null); }
   else if (mode === 'restore') NV.cur = mk(NV.cur.i, NV.cur.from);
   else {
     if (mode === 'push') { try { history.replaceState({ ...NV.cur, snap: { ...NV.cur.snap, ...NV.pre } }, '', nvHash(NV.cur.url)); } catch (e) {} }
@@ -12070,15 +12076,27 @@ function nvRestoreData() {
      forward again, so the page stays as it was while the confirmation is open. Discard does what was
      stopped; Keep editing, Escape or Back again stays. Cancel buttons discard without asking.
    - A screen with unsaved input (OV_SCR) asks on Back too. The composer and a thread use their own discard
-     dialogs; the others use the guard.
+     dialogs; the others use the guard. An address typed in the bar asks the same way before it opens.
+   - Text that was sent (Ask, Send, Save) is not unsaved while the server has it: Back does not ask. If the
+     user leaves the screen before the write lands, the view stays where the user went; a toast offers the
+     new thread (askLanded), or the composer again when the write failed (askFailedAway).
+   Screen jumps and reloads
+   - A Screen jump starts clean and adds no entries: overlay entries from before are gone back over, the
+     jump replaces the screen's entry, and what the jump opens has no entry of its own (NV.ovSkip). Back then
+     leaves the screen, and still asks first when there is unsaved input.
+   - After a reload, the first commit continues from history.state (its index, and the overlay or Phone
+     entries above the screen, which are gone back over).
    Phone
    - Browser Back acts as the system back gesture: it closes the top sheet (a sheet with a back button goes
      to the sheet it came from), then the inline composer, then pops the current tab's stack. One entry
-     (`nat`) sits on top of the web entries while there is something to go back to; at a tab's root Back
-     does nothing. Sheets with input ask first, as on the web. */
+     (`nat`) sits on top of the web entries while there is something to go back to. At a tab's root the app
+     has nothing to go back to, so Back is the browser's: it goes to the previous web entry (the Phone screen
+     stays) or leaves the page when there is none. Sheets with input ask first, as on the web. */
 Object.assign(st, { ovGuard: null });
-Object.assign(NV, { ovs: [], ovVal: {}, ovBase: {}, ovBaseNext: {}, ovWait: null, ovSkip: new Set(), ovThen: [], nat: false });
-const OVG = { how: null, scr: null, bypass: false, pass: false, opener: null, nat: undefined };
+Object.assign(NV, { ovs: [], ovVal: {}, ovBase: {}, ovBaseNext: {}, ovWait: null, ovSkip: new Set(), ovThen: [], nat: false, ovJump: false, ovJt: 0, ovH0: undefined });
+const OVG = { how: null, scr: null, bypass: false, pass: false, opener: null, nat: undefined, focus: null, fail: null, space: undefined };
+/* a render that must not push: a variant switch (Variants bar) or a Screen jump */
+const ovNoPush = () => NV.ovJump || (NV.quiet && NV.jumpFrom === undefined);
 const nvPos = () => (NV.cur ? NV.cur.i : 0) + NV.ovs.length + (NV.nat ? 1 : 0);
 const ovPosOf = s => s.i + (s.ovs ? s.ovs.length : 0) + (s.nat ? 1 : 0);
 const nvState = () => NV.ovs.length ? { ...NV.cur, ovs: [...NV.ovs] } : NV.cur;
@@ -12121,6 +12139,7 @@ const ovSig = el => JSON.stringify([...el.querySelectorAll('input, textarea, sel
 /* ---------- unsaved input: overlay or screen id → dirty() or val(), and the confirmation ---------- */
 const ovKeyOf = id => st.userKeys.find(x => x.id === id);
 const ovPageDoc = () => { try { return abDoc(sp(st.space), st.abPage); } catch (e) { return null; } };
+const OV_DSURL = { dirty: () => !!(st.dsUrl || '').trim() && ovQ('#ds-url'), title: 'Discard this link?', body: 'Session doesn’t add the source you entered.', discard: () => { st.dsUrl = ''; st.dsNote = ''; } };
 const OV_REQ = { val: () => [...(st.reqAns || []), !!st.reqRules], title: 'Discard your request?', body: 'Your answers will be deleted.', discard: () => { st.reqAns = (st.reqAns || []).map(() => ''); st.reqRules = false; } };
 const OV_DIRTY = {
   /* dialogs and sheets on Desktop and Mobile Web */
@@ -12139,14 +12158,19 @@ const OV_DIRTY = {
   /* fields that only confirm or filter: closing them loses nothing */
   'm:cs-xdel': { dirty: () => false }, 'm:ac-delete': { dirty: () => false }, 'm:kbd': { dirty: () => false }, 'm:cs-share': { dirty: () => false },
   /* screens: Back asks first */
-  'scr:composer': { dirty: () => st.compOpen && !!st.draft.trim() && ovQ('.composer.open'), ask: () => { st.modal = 'discard'; }, done: '[data-act="discard"]' },
+  /* a draft that only holds a skill prefix (Use this skill) is not unsaved; nor is text being sent */
+  'scr:composer': { dirty: () => st.compOpen && !ASK.hold && !!st.draft.trim() && !/^\/[\w-]+$/.test(st.draft.trim()) && ovQ('.composer.open'), ask: () => { st.modal = 'discard'; }, done: '[data-act="discard"]' },
   'scr:thread': { dirty: () => !!askUnsent(), ask: () => { ASK.nav = null; st.modal = 'ask-discard:' + askUnsent(); }, done: '[data-askdiscard]' },
-  'scr:reply': { dirty: () => { if (st.thread == null) return false; if (st.taEdit) { const it = taItem(st.taEdit.key); return !!it && st.taEdit.text !== it.text; } const t = st.taRp ? (st.taRpDraft || '').trim() : ''; return !!t && !/^@\S+$/.test(t); }, title: () => st.taEdit ? 'Discard your edit?' : 'Discard your reply?', body: () => st.taEdit ? 'The text stays as it was before you edited it.' : 'The text you wrote will be deleted.', discard: () => { Object.assign(st, { taRp: null, taRpDraft: '', taRpErr: false, taEdit: null }); } },
+  'scr:reply': { dirty: () => { if (st.thread == null || ASK.hold) return false; if (st.taEdit) { const it = taItem(st.taEdit.key); return !!it && st.taEdit.text !== it.text; } const t = st.taRp ? (st.taRpDraft || '').trim() : ''; return !!t && !/^@\S+$/.test(t); }, title: () => st.taEdit ? 'Discard your edit?' : 'Discard your reply?', body: () => st.taEdit ? 'The text stays as it was before you edited it.' : 'The text you wrote will be deleted.', discard: () => { Object.assign(st, { taRp: null, taRpDraft: '', taRpErr: false, taEdit: null }); } },
   'scr:page': { dirty: () => { const ed = st.abPageEd; if (!ed || st.subPage !== 'abpage') return false; if (ed.isNew) return !!(ed.t.trim() || ed.b.trim()); const d = ovPageDoc(); return !!d && (ed.t !== d.t || ed.b !== d.text.join('\n\n')); }, title: () => st.abPageEd && st.abPageEd.isNew ? 'Discard this page?' : 'Discard your changes to this page?', body: () => st.abPageEd && st.abPageEd.isNew ? 'The title and text you wrote will be deleted.' : 'The page stays as it was before you edited it.', discard: () => { st.abPageEd = null; } },
   'scr:settings': { dirty: () => csDirty() && ovQ('[data-csset="save"]'), title: 'Discard your changes to the settings?', body: () => { const s = sp(st.set && st.set.id); return `You haven’t saved your changes to the settings of ${s ? spName(s) : 'this space'}.`; }, discard: () => { st.set = null; } },
   'scr:create': { dirty: () => st.subPage === 'create' && !!st.cr && JSON.stringify({ ...st.cr, step: 0, err: '' }) !== JSON.stringify(CR0()), title: 'Discard this space?', body: 'The name, description and settings you entered will be deleted.', discard: () => { st.cr = CR0(); } },
-  'scr:rename': { dirty: () => { const k = st.renaming && ovKeyOf(st.renaming); return !!k && ovQ('#rn-in') && st.renameDraft.trim() !== k.label; }, title: 'Discard the new name?', body: () => `The key keeps the name ${esc((ovKeyOf(st.renaming) || {}).label || '')}.`, discard: () => { st.renaming = null; } },
+  'scr:rename': { dirty: () => { const k = st.renaming && ovKeyOf(st.renaming); return !!k && ovQ('#rn-in') && st.renameDraft.trim() !== k.label; }, focus: () => `[data-rename="${st.renaming}"]`, title: 'Discard the new name?', body: () => `The key keeps the name ${esc((ovKeyOf(st.renaming) || {}).label || '')}.`, discard: () => { st.renaming = null; } },
   'scr:key': { dirty: () => st.addingKey && st.modal !== 'addkey' && ovQ('#key-in') && !!(st.keyDraft.trim() || st.keyName.trim()), title: 'Discard this key?', body: 'Session doesn’t save the key you pasted.', discard: () => { Object.assign(st, { addingKey: false, keyDraft: '', keyName: '', keyErr: '' }); } },
+  /* a domain typed in Settings › Domain that Session hasn't checked */
+  'scr:domain': { dirty: () => !!st.sfDom && !!(st.sfDom.domain || '').trim() && st.sfDom.state !== 'checking' && ovQ('#sf-dom'), title: 'Discard the domain?', body: () => `Session hasn’t checked ${esc(st.sfDom.domain.trim())}. The space keeps its current domain settings.`, discard: () => { patch('sfDom', w => { w.domain = ''; w.state = 'none'; }); } },
+  /* a source link typed in the sidebar (Desktop) or the Sources sheet (Mobile Web) */
+  'scr:dsurl': OV_DSURL, 'sheet:about': OV_DSURL,
   'scr:srcask': { dirty: () => !!st.miAsk && !st.modal && !!(st.miAskQ || '').trim() && ovQ('#mi-askq'), title: 'Discard your ask?', body: 'The question you wrote will be deleted.', discard: () => { st.miAsk = null; st.miAskQ = ''; } },
   /* Phone sheets (nst.sheet kind), and a follow-up typed on a Phone screen */
   'n:report': { dirty: () => !!(nst.rep && nst.rep.note.trim()), title: 'Discard your report?', body: 'The note you wrote will be deleted.' },
@@ -12156,7 +12180,7 @@ const OV_DIRTY = {
   'n:addkey': { dirty: () => !!(nst.keyDraft.trim() || nst.keyName.trim()), title: 'Discard this key?', body: 'Session doesn’t save the key you pasted.', discard: () => { nst.keyDraft = ''; nst.keyName = ''; } },
   'n:fu': { dirty: () => !!nst.stack.length && !!nst.fu.trim(), title: 'Discard your follow-up?', body: 'The text you wrote will be deleted.', discard: () => { nst.fu = ''; } },
 };
-const OV_SCR = ['scr:composer', 'scr:thread', 'scr:reply', 'scr:page', 'scr:settings', 'scr:create', 'scr:rename', 'scr:key', 'scr:srcask'];
+const OV_SCR = ['scr:composer', 'scr:thread', 'scr:reply', 'scr:page', 'scr:settings', 'scr:domain', 'scr:create', 'scr:rename', 'scr:key', 'scr:dsurl', 'scr:srcask'];
 function ovDirty(id) {
   const e = OV_DIRTY[id];
   try {
@@ -12166,7 +12190,9 @@ function ovDirty(id) {
   return false;
 }
 const ovFirstDirty = ids => [...ids].reverse().find(id => id !== 'guard' && ovDirty(id)) || null;
-const ovScrDirty = () => OV_SCR.find(ovDirty) || null;
+/* the overlays open now (with or without entries), then the screen */
+const ovDirtyNow = () => ovFirstDirty([...new Set([...NV.ovs, ...ovOpen(true)])]) || ovScrDirty();
+function ovScrDirty() { return OV_SCR.find(ovDirty) || null; }
 const natSheetId = () => nst.sheet ? 'n:' + String(nst.sheet).split(':')[0] : null;
 /* what a field held when its overlay opened, for val() entries and dialogs without an entry */
 function ovBases(now) {
@@ -12195,11 +12221,13 @@ function ovPlan(screenPush) {
     if (id.startsWith('m:')) { if (m && !hit) { want.push(id); hit = id === m; } }
     else if (now.includes(id)) want.push(id);
   }
-  /* a variant switch (Variants bar) does not push: what it opens has no entry */
-  const variant = NV.quiet && NV.jumpFrom === undefined;
+  /* a Screen jump starts clean: the entries from before go, and what it opens has no entry */
+  if (NV.ovJump) { now.forEach(id => NV.ovSkip.add(id)); NV.ovVal = {}; return have.length ? { drop: true, keep: 0 } : {}; }
+  /* a variant switch does not push: what it opens has no entry */
+  const noPush = ovNoPush();
   for (const id of now) {
     if (want.includes(id) || NV.ovSkip.has(id) || (hit && id.startsWith('m:'))) continue;
-    if (variant) NV.ovSkip.add(id); else want.push(id);
+    if (noPush) NV.ovSkip.add(id); else want.push(id);
   }
   if (screenPush) return have.length ? { drop: true, keep: 0 } : { add: want };
   let c = 0; while (c < have.length && c < want.length && have[c] === want[c]) c++;
@@ -12218,12 +12246,19 @@ function ovPush(ids, url) {
 function ovGo(n, w) {
   if (!n) { ovWaitDone(w); return; }
   NV.ovWait = w;
-  w.t = setTimeout(() => { if (NV.ovWait === w) { NV.ovWait = null; ovWaitDone(w); } }, 1500);
+  w.t = setTimeout(() => { if (NV.ovWait === w) { NV.ovWait = null; ovStuck(w); } }, 1500);
   history.go(n);
 }
 function ovUnwind(keep, mode) {
   const n = NV.ovs.length - keep + (NV.nat ? 1 : 0);
-  ovGo(-n, { kind: 'unwind', to: keep, mode, from: NV.from, pre: NV.pre, variant: NV.quiet && NV.jumpFrom === undefined });
+  ovGo(-n, { kind: 'unwind', to: keep, mode, from: NV.from, pre: NV.pre, variant: NV.quiet && NV.jumpFrom === undefined, jump: NV.ovJump });
+}
+/* no popstate came (history did not move): the current entry stands for the screen from now on, and the
+   overlay entries under it are treated as left behind (ovPop goes back over them when Back reaches them) */
+function ovStuck(w) {
+  if (NV.cur) NV.cur = { ...NV.cur, i: nvPos() };
+  NV.ovs = []; NV.nat = false; NV.sig = '';
+  ovWaitDone(w.kind === 'unwind' ? { ...w, to: 0 } : { kind: 'skip', then: w.then });
 }
 function ovWaitDone(w) {
   clearTimeout(w.t);
@@ -12234,8 +12269,10 @@ function ovWaitDone(w) {
       NV.from = w.from; NV.pre = w.pre;
       const restore = w.mode === 'restore', q = NV.quiet, jf = NV.jumpFrom;
       if (restore) NV.restoring = true; else NV.mode = w.mode === 'init' ? null : w.mode;
+      const oj = NV.ovJump;
       if (w.variant) { NV.quiet = true; NV.jumpFrom = undefined; }
-      try { nvCommit(); } finally { NV.restoring = false; NV.quiet = q; NV.jumpFrom = jf; }
+      if (w.jump) NV.ovJump = true;
+      try { nvCommit(); } finally { NV.restoring = false; NV.quiet = q; NV.jumpFrom = jf; NV.ovJump = oj; }
       ovAfter();
     }
   }
@@ -12262,13 +12299,20 @@ function ovCloseAll() {
 
 /* ---------- popstate ---------- */
 function ovPop(e) {
+  if (NV.ovWait) { const w = NV.ovWait; NV.ovWait = null; ovWaitDone(w); return true; }
   if (!dataReady() || !NV.cur) return false;
   const s = e.state;
-  if (NV.ovWait) { const w = NV.ovWait; NV.ovWait = null; ovWaitDone(w); return true; }
   if (st.device === 'native') { natPop(s); return true; }
   if (!s || !s.nv) {
     const h = location.hash.slice(1);
-    if (!L[h] && nvPathOf(h) != null) { ovCloseAll(); NV.cur = { ...NV.cur, i: nvPos() }; NV.ovs = []; NV.nat = false; }
+    if (!L[h] && nvPathOf(h) != null) {
+      /* an address typed in the bar: unsaved input asks first (the bar's entry is gone back over, and set
+         again after Discard) */
+      const d = !OVG.pass && ovDirtyNow();
+      if (d) { ovGo(-1, { kind: 'undo', then: () => ovAsk(d, { hash: h }) }); return true; }
+      OVG.pass = false;
+      ovCloseAll(); NV.cur = { ...NV.cur, i: nvPos() }; NV.ovs = []; NV.nat = false;
+    }
     return false;
   }
   const here = nvPos(), there = ovPosOf(s), sOvs = s.ovs || [];
@@ -12279,13 +12323,18 @@ function ovPop(e) {
     const closing = NV.ovs.slice(sOvs.length), keep = NV.ovs.slice(0, sOvs.length);
     const d = ovFirstDirty(closing);
     if (d) { ovGo(here - there, { kind: 'undo', then: () => ovAsk(d, { back: closing }) }); return true; }
+    /* a menu or dropdown closed with Back gives focus back to the button that opened it */
+    const menuOnly = closing.every(x => x.startsWith('menu:') || x.startsWith('sheet:')), trig = menuOnly && [...document.querySelectorAll('#app [aria-expanded="true"]')].filter(ovShown).pop(), td = trig && focusDesc(trig);
     ovCloseIds(closing, keep); NV.ovs = keep; NV.sig = '';
     NV.restoring = true; try { renderAll(); } finally { NV.restoring = false; }
+    if (td) { const el = findDesc(td); if (el) el.focus({ preventScroll: true }); }
     return true;
   }
-  /* another screen: unsaved input asks first */
+  /* another screen: the open confirmation stays (Keep editing); unsaved input asks first. Overlays a Screen
+     jump opened have no entries, so this also covers them. */
   if (!OVG.pass) {
-    const d = ovFirstDirty(NV.ovs) || ovScrDirty();
+    if (st.ovGuard || (OVG.scr && st.modal === OVG.scr.modal)) { ovGo(here - there, { kind: 'undo', then: ovKeep }); return true; }
+    const d = ovDirtyNow();
     if (d) { ovGo(here - there, { kind: 'undo', then: () => ovAsk(d, { go: there - here }) }); return true; }
   }
   OVG.pass = false;
@@ -12305,25 +12354,39 @@ function ovAsk(id, how) {
   const e = OV_DIRTY[id] || {}, v = f => typeof f === 'function' ? f() : f;
   if (e.ask) { e.ask(); OVG.scr = { modal: st.modal, done: e.done, how }; renderAll(); return; }
   st.ovGuard = { id, title: v(e.title) || 'Discard your changes?', body: v(e.body) || 'The changes you made in this dialog aren’t saved.' };
-  OVG.how = how; OVG.opener = focusDesc(document.activeElement); renderAll();
+  OVG.how = how; OVG.opener = focusDesc(document.activeElement); OVG.focus = e.focus ? e.focus() : null; renderAll();
 }
-function ovKeep() { st.ovGuard = null; OVG.how = null; renderAll(); }
+function ovKeep() {
+  /* the composer's and the thread's own discard dialogs, opened for Back, close the same way */
+  if (!st.ovGuard && OVG.scr && st.modal === OVG.scr.modal) { st.modal = null; OVG.scr = null; }
+  st.ovGuard = null; OVG.how = null; renderAll();
+}
 /* the field that had focus when the confirmation opened gets it back (a render with a dialog open can move it) */
 function ovRefocus() { const d = OVG.opener; OVG.opener = null; const el = d && findDesc(d); if (el && !el.contains(document.activeElement)) { el.focus({ preventScroll: true }); if (d.sel0 && el.setSelectionRange) try { el.setSelectionRange(d.sel0[0], d.sel0[1]); } catch (e) {} } }
 function ovDiscard() {
   const g = st.ovGuard, how = OVG.how || {}, e = (g && OV_DIRTY[g.id]) || {};
-  st.ovGuard = null; OVG.how = null; OVG.opener = null;
+  const fsel = OVG.focus;
+  st.ovGuard = null; OVG.how = null; OVG.opener = null; OVG.focus = null;
   if (e.discard) e.discard();
-  if (how.back) { ovCloseIds(how.back, NV.ovs.filter(x => x !== 'guard' && !how.back.includes(x))); renderAll(); return; }
+  if (how.back) { ovCloseIds(how.back, NV.ovs.filter(x => x !== 'guard' && !how.back.includes(x))); renderAll(); ovFocusLost(fsel); return; }
   if (how.go) { renderAll(); ovIdle(() => { OVG.pass = true; history.go(how.go); }); return; }
+  if (how.hash) { renderAll(); ovIdle(() => { OVG.pass = true; location.hash = how.hash; }); return; }
   if (how.redo) {
     document.querySelectorAll('#app .ovg-w').forEach(x => x.remove());
     how.redo();
-    if (NV.ovs.includes('guard') && !NV.ovWait) renderAll();
+    if (document.querySelector('#app .ovg-w') || (NV.ovs.includes('guard') && !NV.ovWait)) renderAll();
+    ovFocusLost(fsel);
     return;
   }
   if (how.nat) { how.nat(); if (st.device === 'native' && document.querySelector('#app .ovg-w')) renderAll(); return; }
   renderAll();
+}
+/* after Discard: focus that went to the page body goes to the control the entry names (Rename) */
+function ovFocusLost(sel) {
+  const a = document.activeElement;
+  if (a && a !== document.body) return;
+  const el = sel && document.querySelector('#app ' + sel);
+  if (el) el.focus({ preventScroll: true });
 }
 const ovRedoKey = desc => () => {
   const el = (desc && findDesc(desc)) || document.body;
@@ -12350,7 +12413,12 @@ function ovGuardDom() {
   const nat = st.device === 'native';
   if (OVG.nat !== undefined && OVG.nat !== nat && st.ovGuard) { st.ovGuard = null; OVG.how = null; }
   OVG.nat = nat;
+  /* the source link typed in a space's sidebar belongs to that space */
+  if (!NV.ovJump && OVG.space !== undefined && OVG.space !== st.space && (st.dsUrl || st.dsNote)) { st.dsUrl = ''; st.dsNote = ''; }
+  OVG.space = st.space;
   f(); if (st.ovGuard && dataReady()) ovGuardDom();
+  /* the Phone discard sheet opens with focus on Keep editing, as the web confirmations do */
+  if (nat && nst.sheet === 'discard') { const c = document.querySelector('#app .n-act .n-act-c'); if (c) c.setAttribute('autofocus', ''); }
 }; }
 /* focus stays in the confirmation while it is open */
 function ovAfter() {
@@ -12359,6 +12427,31 @@ function ovAfter() {
   if (g && !g.contains(document.activeElement)) { const b = g.querySelector('[data-ovg="keep"]'); if (b) b.focus({ preventScroll: true }); }
 }
 const ovStop = e => { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); };
+/* A write (askHold) landed after the user left the screen it was sent from: the draft is cleared, the view
+   stays, and a toast offers the thread. */
+function askLanded(fwd, made, scr0) {
+  const keep = new Set([...NV_F, 'modal', 'toast', 'umenu', 'pop', 'ntOpen']), rest = {};
+  Object.keys(fwd).forEach(k => { if (!keep.has(k)) rest[k] = fwd[k]; });
+  uiStore.setState(rest);
+  const t = fwd.thread != null ? fwd.thread : made != null ? made : scr0.startsWith('t:') ? +scr0.slice(2) : null;
+  if (t != null && D.posts[t]) toast('Posted.', 'ovopen:' + t, 'Open thread'); else toast('Posted.');
+}
+/* The write failed after the user left: the text stays where it was typed; Show opens that screen again
+   with the composer and its error. */
+function askFailedAway(snap, onFail) {
+  OVG.fail = { snap, onFail };
+  /* after the writes still queued, so their own messages do not replace this one */
+  const show = () => { if (OVG.fail) { toast('Couldn’t post. Session kept your text.', 'ovfail', 'Show'); renderAll(); } };
+  show(); apiSource.queue.then(() => { if (!/Couldn’t post/.test((st.toast || {}).t || '')) show(); });
+}
+on($('app'), 'click', e => {
+  const b = e.target.closest && e.target.closest('[data-cstoast^="ovopen:"], [data-cstoast="ovfail"]'); if (!b) return;
+  ovStop(e); st.toast = null;
+  const v = b.dataset.cstoast;
+  if (v === 'ovfail') { const f = OVG.fail; OVG.fail = null; if (f) { nvApply(f.snap); f.onFail(); } }
+  else { const i = +v.slice(7); if (D.posts[i]) Object.assign(st, NAVBASE(), { thread: i, space: D.posts[i].s, home: false }); }
+  renderAll();
+}, true);
 /* Escape: the confirmation's Keep editing, or ask before a dirty overlay closes */
 on(window, 'keydown', e => {
   if (e.key !== 'Escape' || OVG.bypass || !dataReady()) return;
@@ -12400,13 +12493,19 @@ on(window, 'click', e => {
 const natCan = () => !!(st.ovGuard || nst.sheet || nst.inl || nst.stack.length);
 function natAfter() {
   if (NV.ovWait || !NV.cur) return;
-  const can = natCan(), variant = NV.quiet && NV.jumpFrom === undefined;
-  if (can && !NV.nat && !variant) { NV.nat = true; try { history.pushState({ ...nvState(), nat: 1 }, '', location.hash); } catch (e) {} }
+  const can = natCan();
+  if (can && !NV.nat && !ovNoPush()) { NV.nat = true; try { history.pushState({ ...nvState(), nat: 1 }, '', location.hash); } catch (e) {} }
   else if (!can && NV.nat) ovGo(-1, { kind: 'unwind', to: NV.ovs.length });
   ovAfter();
 }
 function natPop(s) {
   const here = nvPos(), there = s && s.nv ? ovPosOf(s) : here;
+  /* at a tab's root (no Phone entry, nothing to go back to): the entry is the browser's, as when there is
+     no earlier entry and Back leaves the page. The web state of that entry is kept for the web devices. */
+  if (s && s.nv && !s.nat && !NV.nat && !natCan() && there !== here) {
+    NV.cur = { ...s }; delete NV.cur.ovs; NV.ovs = (s.ovs || []).map(() => 'left'); NV.from = s.from || null; NV.sig = '';
+    nvApply(s.snap); return;
+  }
   if (there >= here) { if (there > here) ovGo(here - there, { kind: 'skip' }); return; }   /* Forward: nothing to go forward to */
   const base = NV.nat ? here - 1 : here;
   const back = () => { NV.nat = false; natBack(); };
@@ -12430,6 +12529,8 @@ const natPopStack = () => nGo(() => { nst.stack = nst.stack.slice(0, -1); nst.fu
 
 /* ---------- test hooks ---------- */
 window.__ovIdle = () => !NV.ovWait;
+/* tests: give the overlays open now entries, as if the user had opened them (a Screen jump gives none) */
+window.__ovAdopt = () => { NV.ovSkip.clear(); NV.ovJump = false; renderAll(); };
 /* scripts that wait for the data store also wait for a history.go of this block to land */
 { const f = window.__dataIdle; window.__dataIdle = () => f() && !NV.ovWait; }
 window.__ovState = () => ({ pos: nvPos(), ovs: [...NV.ovs], nat: NV.nat, guard: st.ovGuard && st.ovGuard.title, modal: st.modal, sheet: nst.sheet, stack: nst.stack.length });
@@ -12437,7 +12538,9 @@ window.__ovState = () => ({ pos: nvPos(), ovs: [...NV.ovs], nat: NV.nat, guard: 
 /* ---------- Screen menu ---------- */
 JUMPS.push(['Back and unsaved input', [['ov-sked-back', 'Skill editor with changes, then Back'], ['ov-report-esc', 'Report with a note, then Escape'], ['ov-profile-scrim', 'Edit profile with changes, then a click outside'], ['ov-settings-back', 'Settings with unsaved changes, then Back'], ['ov-page-back', 'Page editor with changes, then Back'], ['ov-compose-back', 'Composer with a draft, then Back'], ['ov-n-report', 'Phone: report with a note, then Back'], ['ov-n-rename', 'Phone: rename a key, then Back']]]);
 { const OV_jump = jump; jump = function (k) {
-  Object.assign(st, { ovGuard: null }); OVG.how = null; OVG.scr = null; OVG.pass = false; NV.ovBase = {}; NV.ovBaseNext = {};
+  Object.assign(st, { ovGuard: null }); OVG.how = null; OVG.scr = null; OVG.pass = false; OVG.fail = null; NV.ovBase = {}; NV.ovBaseNext = {};
+  /* a jump replaces: no entries for what it opens, and the entries from before are gone back over */
+  NV.ovJump = true; clearTimeout(NV.ovJt); NV.ovJt = setTimeout(() => { NV.ovJump = false; }, 0);
   if (!String(k).startsWith('ov-')) return OV_jump(k);
   const guard = (id, how) => { const e = OV_DIRTY[id], v = f => typeof f === 'function' ? f() : f; st.ovGuard = { id, title: v(e.title), body: v(e.body) }; OVG.how = how; };
   switch (k) {
@@ -12604,7 +12707,7 @@ const OVERLAYS = '#app [aria-modal="true"], #app [role="dialog"], #app [role="al
 const shown = el => !!el && el.getClientRects().length > 0;
 const overlays = () => [...document.querySelectorAll(OVERLAYS)].filter((el, i, all) => shown(el) && !all.some(o => o !== el && o.contains(el) && o.matches('[aria-modal="true"]') && el.matches('[role="dialog"], [role="alertdialog"]')));
 const topOverlay = () => overlays().pop() || null;
-const ovKey = el => `${el.className}|${el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || ''}|${el.matches('[aria-modal="true"]') ? st.modal : ''}`;
+const ovKey = el => `${el.className.replace(/\s*\bsh-enter\b/g, '')}|${el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || ''}|${el.matches('[aria-modal="true"]') ? st.modal : ''}`;
 const traps = el => el.matches('[aria-modal="true"], .n-sheet, .msheet') || !!el.closest('[aria-modal="true"]') || getComputedStyle(el).position === 'fixed' || st.device !== 'desktop';
 /* a description of a control that still finds it after the DOM is rebuilt */
 function focusDesc(el) {
@@ -12725,7 +12828,7 @@ function renderAllInner() {
   { const h = document.querySelector('#app .hdr'); if (h && st.mnav === 'chips') h.insertAdjacentHTML('afterend', mobileChips()); if (st.mnav === 'tabs') $('app').insertAdjacentHTML('beforeend', mobileTabs()); }
   document.documentElement.toggleAttribute('data-theme', st.appearance !== 'system');
   if (st.appearance !== 'system') document.documentElement.dataset.theme = st.appearance;
-  if (st.modal && !(st.modal === 'pf-edit' && document.activeElement && document.activeElement.closest('.pf-edit'))) { const m = document.querySelector('#key-in') || document.querySelector('#kb-q') || document.querySelector('#pf-name') || document.querySelector('.modal .btn.primary:not([disabled])') || document.querySelector('.modal .btn.danger') || document.querySelector('.modal [data-tsrc]:not([disabled])'); if (m) m.focus({ preventScroll: true }); }
+  if (st.modal && !(st.modal === 'pf-edit' && document.activeElement && document.activeElement.closest('.pf-edit'))) { const m = document.querySelector('#app .modal [autofocus]') || document.querySelector('#key-in') || document.querySelector('#kb-q') || document.querySelector('#pf-name') || document.querySelector('.modal .btn.primary:not([disabled])') || document.querySelector('.modal .btn.danger') || document.querySelector('.modal [data-tsrc]:not([disabled])'); if (m) m.focus({ preventScroll: true }); }
   else if (st.pop) { const q = $('sw-q'); if (q) q.focus({ preventScroll: true }); }
   else if (st.compOpen) { const c = $('compose-text'); if (c) { c.focus({ preventScroll: true }); c.setSelectionRange(c.value.length, c.value.length); } }
   flipMenus(); dsStuck();
@@ -12816,7 +12919,7 @@ on($('app'), 'click', e => {
   const so = t.closest('[data-sort]'); if (so) { st.sort = so.dataset.sort; st.sortOpen = false; renderAll(); return; }
   if (a) { if (a.dataset.act === 'compose' && st.auth === 'out') { st.modal = 'signin'; st.pop = false; renderAll(); return; } if (a.dataset.act === 'compose') { st.compOpen = true; st.pop = false; st.sortOpen = false; } if (a.dataset.act === 'sort') { st.sortOpen = !st.sortOpen; st.pop = false; } if (a.dataset.act === 'pop') { st.pop = !st.pop; st.sortOpen = false; } if (a.dataset.act === 'drawer') st.drawer = !st.drawer; if (a.dataset.act === 'umenu') { st.umenu = !st.umenu; st.pop = false; } if (a.dataset.act === 'saved-page') { st.savedPage = true; st.profilePage = false; st.thread = null; st.umenu = false; st.pop = false; } if (a.dataset.act === 'profile') { st.profileUser = ME.u; st.profilePage = true; st.savedPage = false; st.thread = null; st.umenu = false; } if (a.dataset.act === 'shortcuts') { st.modal = 'kbd'; st.umenu = false; } renderAll(); return; }
   const tg = t.closest('[data-toggle]'); if (tg) { const k = tg.dataset.toggle, id = +tg.dataset.id; if (ST_DATA.has(k)) db.toggle(k, id); else if (st[k]) stToggle(k, id); renderAll(); return; }
-  const sk = t.closest('[data-skill]'); if (sk) { st.draft = `/${D.skills[st.space][+sk.dataset.skill][0]} `; st.compOpen = true; st.pop = false; st.sortOpen = false; renderAll(); const c = $('compose-text'); if (c) c.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+  const sk = t.closest('[data-skill]'); if (sk) { st.draft = `/${D.skills[st.space][+sk.dataset.skill][0]} `; Object.assign(st, { compOpen: true, pop: false, sortOpen: false, mWiki: false, modal: null }); renderAll(); const c = $('compose-text'); if (c) { c.scrollIntoView({ block: 'center', behavior: 'smooth' }); c.focus({ preventScroll: true }); c.setSelectionRange(c.value.length, c.value.length); } return; }
   const snd = t.closest('[data-send]'); if (snd) { createThread('post'); renderAll(); return; }
   if (st.modal && t.classList.contains('modal-scrim')) { st.modal = null; renderAll(); return; }
   if (st.compOpen && !st.modal && !t.closest('.composer') && !st.draft.trim()) { st.compOpen = false; renderAll(); return; }
