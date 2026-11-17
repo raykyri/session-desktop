@@ -1353,6 +1353,121 @@ button.n-row:active { background: var(--n-fill); }
 .n-act-c { font-weight: 600 !important; }
 @keyframes n-up { from { transform: translateY(100%); } }
 @keyframes n-fade { from { opacity: 0; } }
+/* ==== Phone app: toast, sheets, moderation, About, pages, sources, profiles, Saved ==== */
+.n-toast { position: absolute; left: 12px; right: 12px; bottom: 92px; z-index: 15; display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 14px; background: var(--t-heading); color: var(--popover); font-size: 14.4px; line-height: 1.38; box-shadow: 0 8px 24px rgba(0,0,0,.22); animation: n-fade .2s; }
+.n-toast.docked { bottom: 96px; }
+.n-toast > span { flex: 1; min-width: 0; }
+.n-toast b { font-weight: 600; }
+.n-toast-a { flex: none; border: 0; background: none; color: inherit; font: inherit; font-weight: 650; padding: 4px 0; text-decoration: underline; text-underline-offset: 2px; }
+button.n-th-by, .n-au, .n-rq-who { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; }
+.n-au { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.n-reply > .n-au { align-self: flex-start; }
+.n-cell-h .n-au b { color: var(--t-heading); font-weight: 600; }
+.n-lnk { border: 0; background: none; padding: 0; font: inherit; color: var(--accent-strong, var(--accent)); }
+button.n-me { width: calc(100% - 32px); border: 0; font: inherit; color: inherit; text-align: left; }
+.n-me-b { flex: 1; min-width: 0; }
+.n-dock { flex-wrap: wrap; }
+.n-dock-n { flex-basis: 100%; margin: 0 4px 2px; font-size: 12.35px; color: var(--t-faint); }
+.n-dock-n .n-lnk, .n-icomp-m .n-lnk { font-size: inherit; }
+.n-capbtn:disabled { opacity: .45; }
+.n-capbtn svg { width: 15px; height: 15px; vertical-align: -2px; margin-right: 5px; }
+.n-capbtn.ghost.n-red { color: var(--bad); }
+.n-na p { max-width: 290px; }
+.n-reqn { text-align: center; margin: -8px 28px 8px; }
+.n-row-cta { justify-content: flex-start; }
+.n-dim { opacity: .55; }
+/* form sheets: questions, notes, checkbox */
+.n-ta { display: block; width: 100%; min-height: 76px; border: 0; background: transparent; padding: 11px 16px; font: inherit; font-size: 16.5px; line-height: 1.4; color: var(--t-heading); resize: none; outline: none; }
+.n-ta::placeholder { color: var(--t-faint); }
+.n-q { display: block; margin: 0 16px 6px; font-size: 14.4px; line-height: 1.38; color: var(--t-secondary); }
+.n-q small { color: var(--t-faint); font-size: 12.35px; }
+.n-box { width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid var(--t-dim); display: grid; place-items: center; flex: none; font-size: 13.4px; font-weight: 700; color: var(--popover); }
+.n-chk[aria-checked="true"] .n-box { background: var(--t-heading); border-color: var(--t-heading); }
+.n-rep-ctx { padding: 11px 16px; }
+.n-rep-ctx small { display: block; font-size: 13.4px; color: var(--t-faint); }
+.n-rep-ctx p { margin: 3px 0 0; font-size: 15.45px; line-height: 1.45; color: var(--t-primary); }
+/* share sheet */
+.n-share { padding-bottom: 40px; }
+.n-sh-h { display: flex; align-items: center; gap: 12px; padding: 4px 0 16px; border-bottom: .5px solid var(--n-sep); }
+.n-sh-h .n-row-b b { font-weight: 600; font-size: 15.45px; }
+.n-sh-x { width: 30px; height: 30px; flex: none; border-radius: 50%; border: 0; background: var(--n-fill); color: var(--t-secondary); display: grid; place-items: center; }
+.n-sh-x svg { width: 16px; height: 16px; }
+.n-sh-apps { display: flex; gap: 20px; padding: 18px 4px 4px; }
+.n-sh-apps button { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 72px; border: 0; background: none; padding: 0; font: inherit; font-size: 12.35px; color: var(--t-primary); }
+.n-sh-ic { width: 60px; height: 60px; border-radius: 15px; background: var(--n-cell); border: .5px solid var(--n-sep); display: grid; place-items: center; color: var(--t-heading); }
+.n-sh-ic svg { width: 26px; height: 26px; }
+.n-sh-ic.msg { background: #34c759; color: #fff; border: 0; }
+.n-pick .n-sheet-sc { padding-bottom: 4px; }
+.n-sheet.n-det.n-pick { padding: 6px 0 34px; }
+/* About and its sheets */
+.n-tb-back { display: inline-flex; align-items: center; padding-left: 0; }
+.n-tb-back svg { width: 22px; height: 22px; }
+.n-skic { width: 32px; height: 32px; border-radius: 8px; background: var(--n-fill); display: grid; place-items: center; color: var(--t-secondary); flex: none; }
+.n-skic svg { width: 17px; height: 17px; }
+.n-skic.lg { width: 52px; height: 52px; border-radius: 14px; margin: 0 auto 8px; }
+.n-skic.lg svg { width: 26px; height: 26px; }
+.n-skr small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.n-row:has(.n-skic) + .n-row::before { left: 60px; }
+.n-sk-h { text-align: center; padding: 4px 24px 18px; }
+.n-sk-h h2 { margin: 0 0 6px; font-size: 20.6px; font-weight: 700; color: var(--t-heading); }
+.n-sk-h p { margin: 0; font-size: 15.45px; line-height: 1.48; color: var(--t-secondary); }
+.n-skpre { margin: 0; padding: 12px 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.35px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; color: var(--t-body); }
+.n-mark { flex: none; font-size: 12.35px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--n-fill); color: var(--t-secondary); }
+.n-mark.add { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+.n-mark.rm { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.n-row s { color: var(--t-faint); }
+/* pages and sources */
+.n-pg-sp { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; font-size: 13.4px; color: var(--t-faint); }
+.n-pg-sp .n-gl { width: 22px; height: 22px; border-radius: 6px; font-size: 11px; }
+.n-doc-t { margin: 0 0 8px; font-size: 26.8px; line-height: 1.2; font-weight: 700; letter-spacing: -.01em; color: var(--t-heading); }
+.n-pg-m { display: flex; align-items: center; gap: 8px; margin: 0 0 18px; font-size: 13.4px; line-height: 1.4; color: var(--t-faint); }
+.n-doc { font-size: 16.5px; line-height: 1.6; color: var(--t-body); }
+.n-doc .abp-prose { font-size: inherit; line-height: inherit; color: inherit; }
+.n-doc p { margin: 0 0 14px; }
+.n-doc h3 { margin: 24px 0 8px; font-size: 18.5px; font-weight: 650; color: var(--t-heading); }
+.n-doc h3:first-child { margin-top: 0; }
+.n-doc ul { margin: 0 0 14px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.n-src-sum { margin: 0 0 18px; padding: 10px 12px; border-radius: 10px; background: var(--n-fill); font-size: 15.45px; line-height: 1.48; color: var(--t-secondary); }
+.n-src-none { margin: 0 0 18px; }
+.n-src-url { margin: 18px 0 0; font-size: 13.4px; color: var(--t-faint); word-break: break-all; }
+.n-ts { color: var(--t-faint); font-size: 13.4px; }
+.n-src .n-src-n svg { width: 13px; height: 13px; }
+/* moderation */
+.n-rq .n-list { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.n-rq-who { display: flex; align-items: center; gap: 12px; }
+.n-rq-a small { display: block; font-size: 13.4px; color: var(--t-faint); }
+.n-rq-a p { margin: 2px 0 0; font-size: 15.45px; line-height: 1.45; color: var(--t-primary); word-break: break-word; }
+.n-rq-acts { display: flex; gap: 8px; }
+.n-rq-acts .n-capbtn { flex: 1; padding: 0 10px; }
+.n-flag { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--n-fill); color: var(--t-secondary); vertical-align: 1px; }
+.n-flag.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); align-self: flex-start; }
+.n-mg-d { margin: 0 32px 12px; }
+.n-rp-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0; }
+.n-rp-h small { font-size: 13.4px; color: var(--t-faint); white-space: nowrap; }
+.n-rp-why { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--t-heading); }
+.n-rp-why svg { width: 15px; height: 15px; color: var(--bad); }
+.n-rp-it { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 10px; background: var(--n-fill); border: 0; font: inherit; color: inherit; text-align: left; }
+.n-rp-it small { font-size: 13.4px; color: var(--t-faint); }
+.n-rp-it span { font-size: 15.45px; line-height: 1.45; color: var(--t-primary); }
+.n-rp-by { display: flex; gap: 8px; align-items: flex-start; margin: 0; font-size: 14.4px; line-height: 1.4; color: var(--t-secondary); }
+.n-rp-by b { color: var(--t-heading); font-weight: 600; }
+.n-rp-by q { display: block; margin-top: 2px; color: var(--t-primary); }
+/* profile */
+.n-pf { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 8px 24px 18px; }
+.n-pf h2 { margin: 8px 0 0; font-size: 22.65px; font-weight: 700; color: var(--t-heading); }
+.n-pf-h, .n-pf-st { margin: 0; font-size: 14.4px; color: var(--t-faint); }
+.n-pf-bio { margin: 6px 0 2px; font-size: 15.45px; line-height: 1.48; color: var(--t-secondary); }
+.n-pf .n-capbtn { margin-top: 10px; }
+.n-pf-note { margin: 12px 16px 0; }
+/* Saved */
+.n-svr { position: relative; }
+.n-svr .n-cell { padding-right: 52px; }
+.n-unsave { position: absolute; top: 6px; right: 6px; color: var(--t-secondary); }
+.n-unsave svg { width: 21px; height: 21px; }
+.n-sv-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.n-sv-empty svg { width: 28px; height: 28px; color: var(--t-dim); }
+.n-srh { margin-top: 4px; }
+.n-seg .num { font-weight: 400; color: var(--t-faint); margin-left: 2px; }
 /* user menu trigger: same tint as the header menu triggers */
 .hdr .acct > .me { background: var(--control); border-color: var(--control-border); }
 .hdr .acct > .me:hover { background: var(--control-hover); }
@@ -5533,7 +5648,7 @@ function nPushBar(title, right) {
   const prev = nst.stack.length > 1 ? nLabel(nst.stack[nst.stack.length - 2]) : nTitles[nst.tab];
   return `<div class="n-bar"><button class="n-back" type="button" data-n="back">${NI.back}<span>${esc(prev)}</span></button><b class="n-bar-t">${title}</b><span class="n-bar-r">${right || ''}</span></div>`;
 }
-const nLabel = e => e.v === 'notifs' ? 'Notifications' : e.v === 'space' ? nName(sp(e.id)) : e.v === 'thread' || e.v === 'ask' ? nName(sp(D.posts[+String(e.id).split(':')[0]].s)) : e.v === 'keys' ? 'API keys' : e.v === 'browse' ? 'Discover' : '';
+const nLabel = e => e.v === 'notifs' ? 'Notifications' : e.v === 'space' ? nName(sp(e.id)) : e.v === 'thread' || e.v === 'ask' ? nName(sp(D.posts[+String(e.id).split(':')[0]].s)) : e.v === 'keys' ? 'API keys' : e.v === 'browse' ? 'Discover' : nLabelX(e);
 const nGroup = (head, rows, foot) => `<section class="n-grp">${head ? `<h3 class="n-grp-h">${head}</h3>` : ''}<div class="n-list">${rows.join('')}</div>${foot ? `<p class="n-grp-f">${foot}</p>` : ''}</section>`;
 const nSeg = (items, cur, attr, off = []) => `<div class="n-seg" role="tablist">${items.map(([v, l]) => `<button type="button" role="tab" aria-selected="${cur === v}" class="${cur === v ? 'on' : ''}" data-n="${attr}:${v}"${off.includes(v) ? ' disabled aria-disabled="true"' : ''}>${l}</button>`).join('')}</div>`;
 const nSwitch = (on, act, label) => `<button class="n-sw${on ? ' on' : ''}" type="button" role="switch" aria-checked="${on}" aria-label="${label}" data-n="${act}"><i></i></button>`;
@@ -5558,12 +5673,13 @@ function nInline(sid) {
   const ph = f === 'ask' ? 'Make a query…' : f === 'post' ? 'Write a post…' : 'Make a query, or write a post…';
   const field = act => `<div class="n-pad"><button class="n-icomp-f" type="button" data-n="${act}">${NI.compose}<span>${ph}</span></button></div>`;
   if (!nSignedIn()) return field('sheet:signin');
+  if (!sid && !D.joined.length) return `<div class="n-pad"><button class="n-icomp-f" type="button" data-n="tab:spaces">${NI.compose}<span>Join a space to ask</span></button></div>`;
   if (!nst.inl || nst.inlAt !== at) return field('inline:' + at);
   const x = sp(nst.cSpace), ask = f === 'ask' || (f === 'all' && (nst.cMode === 'ask' || !!x.postsOff));
   const off = !ask && !!x.postsOff, pay = ask ? nCanPay(x) : !off;
-  const note = ask ? (pay ? `Gemini 4 Argon · ${esc(nProvider(x))}` : `${spName(x)} has no extra tokens. <button class="tlink" type="button" data-n="tokeys">Add an API key</button>`) : off ? `Posts are turned off in ${spName(x)}. Choose another space.` : 'Posts use no tokens.';
+  const note = ask ? (pay ? `${MODEL_NAME} · <button class="n-lnk" type="button" data-n="sheet:payer:${x.id}">Paid by ${esc(nPayer(x).label)}</button>` : `${spName(x)} has no extra tokens. <button class="tlink" type="button" data-n="tokeys">Add an API key</button>`) : off ? `Posts are turned off in ${spName(x)}. Choose another space.` : 'Posts use no tokens.';
   return `<div class="n-pad"><div class="n-icomp"><textarea id="n-draft" class="n-draft n-idraft" rows="3" placeholder="${ask ? 'Make a query' : 'Write a post'}" aria-label="${ask ? 'Make a query' : 'Write a post'}">${esc(nst.draft)}</textarea>`
-    + `<div class="n-icomp-r">${f === 'all' ? nSeg([['ask', 'Ask'], ['post', 'Post']], ask ? 'ask' : 'post', 'cmode', x.postsOff ? ['post'] : []) : ''}${sid ? '' : `<button class="n-chip" type="button" data-n="sheet:ispace" aria-label="Space: ${esc(nName(x))}">${glyph(x, 'n-gl')}<span>${nNameH(x)}</span>${NI.chev}</button>`}<span class="grow"></span>`
+    + `<div class="n-icomp-r">${f === 'all' ? nSeg([['ask', 'Ask'], ['post', 'Post']], ask ? 'ask' : 'post', 'cmode', x.postsOff ? ['post'] : []) : ''}${sid ? '' : `<button class="n-chip" type="button" data-n="sheet:ispace" aria-label="Space: ${esc(nName(x))}">${glyph(x, 'n-gl')}<span>${nNameH(x)}</span>${NI.chev}</button>`}${ask && faqOn(x) ? nTopicChip(x) : ''}<span class="grow"></span>`
     + `<button class="n-icomp-x" type="button" data-n="inline:close">Cancel</button><button class="n-capbtn" type="button" data-n="submit" id="n-submit"${nst.draft.trim() && pay ? '' : ' disabled'}>${ask ? 'Ask' : 'Post'}</button></div>`
     + `<p class="n-icomp-m">${note}</p></div></div>`;
 }
@@ -5576,7 +5692,7 @@ function nBell() {
 function nNotifs() {
   const list = ntItems(), un = list.filter(x => x.unread), old = list.filter(x => !x.unread);
   const ic = x => x.k === 'reqs' ? `<span class="n-nt-ic">${CI.users}</span>` : x.k === 'declined' ? `<span class="n-nt-ic">${LOCK}</span>` : x.k === 'reps' || x.k === 'resolved' ? `<span class="n-nt-ic">${SFI.flag}</span>` : x.u ? avatar(x.u, 'n-av') : `<span class="n-nt-ic">${CI.bell}</span>`;
-  const row = x => `<button class="n-row n-nt${x.unread ? ' unread' : ''}" type="button" data-n="nt:${esc(x.id)}">${ic(x)}<span class="n-row-b"><span class="n-nt-tx">${x.u && x.k !== 'declined' ? `<b>${esc(x.u)}</b> ` : ''}${x.text}</span><small>${x.age === 'just now' ? 'Just now' : x.age}</small></span>${x.unread ? '<span class="n-nt-u" aria-label="Unread"></span>' : ''}</button>`;
+  const row = x => `<button class="n-row n-nt${x.unread ? ' unread' : ''}" type="button" data-n="nt:${esc(x.id)}">${ic(x)}<span class="n-row-b"><span class="n-nt-tx">${x.u && x.k !== 'declined' ? `<b>${esc(x.u)}</b> ` : ''}${x.text}</span><small>${x.age === 'just now' ? 'Just now' : x.age}${x.done ? ' · ' + x.done : ''}</small></span>${x.unread ? '<span class="n-nt-u" aria-label="Unread"></span>' : ''}</button>`;
   const right = un.length ? '<button class="n-tb" type="button" data-n="ntread"><b>Read all</b></button>' : '';
   const grp = (h, rows) => `<section class="n-ntg"><h3 class="n-grp-h">${h}</h3><div class="n-ntl">${rows.join('')}</div></section>`;
   const body = list.length ? `${un.length ? grp('New', un.map(row)) : ''}${old.length ? grp('Earlier', old.map(row)) : ''}` : '<p class="n-empty">No notifications yet. Replies to your asks, join requests and reports show here.</p>';
@@ -5585,7 +5701,10 @@ function nNotifs() {
 function nHome() {
   const ids = nSignedIn() ? D.joined : D.spaces.filter(x => visibleSp(x) && !isClosed(x)).map(x => x.id);
   const posts = D.posts.filter(p => ids.includes(p.s) && canRead(sp(p.s)) && (nst.homeF === 'all' || p.k === nst.homeF)).sort((a, b) => ageMin(a.age) - ageMin(b.age));
-  return { body: `${nRootBar(nBell(), nSignedIn() ? 'Home' : 'Everything on Session')}<div class="n-pad">${nSeg([['all', 'All'], ['ask', 'Asks'], ['post', 'Posts']], nst.homeF, 'homef')}</div>${nInline(null)}${nFeed(posts)}` };
+  const top = `${nRootBar(nBell(), nSignedIn() ? 'Home' : 'Everything on Session')}${nHomeSearch()}`;
+  if ((nst.hq || '').trim()) return { body: top + nSearchResults(nst.hq) };
+  const empty = nSignedIn() && !D.joined.length ? `<div class="n-out"><p>Join a space to see its threads here.</p><button class="n-capbtn wide" type="button" data-n="tab:spaces">Find spaces</button></div>` : nFeed(posts);
+  return { body: `${top}<div class="n-pad">${nSeg([['all', 'All'], ['ask', 'Asks'], ['post', 'Posts']], nst.homeF, 'homef')}</div>${nInline(null)}${empty}` };
 }
 function nSpacesRoot() {
   const order = st.tabOrder.length ? st.tabOrder.map(sp) : topSpaces();
@@ -5593,7 +5712,7 @@ function nSpacesRoot() {
   const row = x => nst.edit
     ? `<div class="n-row ys-drag" draggable="true" data-drag="${x.id}">${glyph(x, 'n-gl')}<span class="n-row-b"><b>${nNameH(x)}</b></span><span class="n-grip">${NI.grip}</span></div>`
     : `<button class="n-row" type="button" data-n="push:space:${x.id}"><span class="ys-gw">${glyph(x, 'n-gl')}</span><span class="n-row-b"><span class="ys-nm"><b>${nNameH(x)}${isClosed(x) ? LK('cs-lk n-lk', 'Closed space') : ''}</b>${roleHTML(x)}</span><small>${fmt(x.members)} members${isClosed(x) ? ' · ' + visLabel(x) : ''}</small></span><span class="n-chev">${NI.chev}</span></button>`;
-  const disc = x => `<div class="n-row"><button class="n-row-main" type="button" data-n="push:space:${x.id}">${glyph(x, 'n-gl')}<span class="n-row-b"><b>${nNameH(x)}${isClosed(x) ? LK('cs-lk n-lk', 'Closed space') : ''}</b><small>${isClosed(x) ? policyLabel(x) : `${fmt(x.members)} members`}</small></span></button>${!isClosed(x) ? `<button class="n-cap" type="button" data-n="join:${x.id}">Join</button>` : relOf(x.id) === 'pending' ? '<span class="n-val">Requested</span>' : x.policy === 'request' ? `<button class="n-cap" type="button" data-n="join:${x.id}">Request</button>` : ''}</div>`;
+  const disc = x => `<div class="n-row"><button class="n-row-main" type="button" data-n="push:space:${x.id}">${glyph(x, 'n-gl')}<span class="n-row-b"><b>${nNameH(x)}${isClosed(x) ? LK('cs-lk n-lk', 'Closed space') : ''}</b><small>${isClosed(x) ? policyLabel(x) : `${fmt(x.members)} members`}</small></span></button>${!isClosed(x) ? `<button class="n-cap" type="button" data-n="join:${x.id}">Join</button>` : relOf(x.id) === 'pending' ? `<button class="n-cap" type="button" data-n="sheet:pend:${x.id}">Requested</button>` : relOf(x.id) === 'denied' ? '<span class="n-val">Declined</span>' : x.policy === 'request' ? `<button class="n-cap" type="button" data-n="join:${x.id}">Request</button>` : ''}</div>`;
   const right = nSignedIn() ? `<button class="n-tb" type="button" data-n="edit">${nst.edit ? '<b>Done</b>' : 'Edit'}</button>` : '';
   /* Search filters by name and title while rendering; Edit shows every space */
   const q = nst.edit ? '' : (nst.sq || '').trim().toLowerCase(), hit = x => !q || (x.name + ' ' + (x.title || '') + ' ' + spName(x)).toLowerCase().includes(q);
@@ -5604,10 +5723,10 @@ function nSpacesRoot() {
 function nSpace(id) {
   const x = sp(id), j = D.joined.includes(id);
   if (!canRead(x)) {
-    const r = relOf(id), cta = r === 'out' ? `<button class="n-capbtn" type="button" data-n="sheet:signin">Log in</button>` : r === 'pending' ? '<span class="n-val">Request sent</span>' : x.policy === 'request' ? `<button class="n-capbtn" type="button" data-n="join:${id}">Request to join</button>` : `<span class="n-val">${policyLabel(x)}</span>`;
-    return { body: `${nPushBar(nNameH(x), nBtn('sheet:wiki', NI.info, 'About this space'))}<div class="n-sphead">${glyph(x, 'n-gl-xl')}<h2>${esc(x.title)}</h2><p>${esc(x.desc)}</p><div class="n-sphead-m"><span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(x)}</span><span>${fmt(x.members)} members</span></div>${cta}</div><p class="n-empty">Threads in ${spName(x)} are visible to members only.</p>` };
+    if (x.vis === 'unlisted') return nNoAccess(x, false);
+    return { body: `${nPushBar(nNameH(x), nBtn('sheet:wiki:' + id, NI.info, 'About this space'))}<div class="n-sphead">${glyph(x, 'n-gl-xl')}<h2>${esc(x.title)}</h2><p>${esc(x.desc)}</p><div class="n-sphead-m"><span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(x)}</span><span>${fmt(x.members)} members</span></div>${nCta(x)}</div>${nReqNote(x)}<p class="n-empty">Threads in ${spName(x)} are visible to members only.</p>` };
   }
-  const right = nBtn('sheet:wiki', NI.info, 'About this space');
+  const right = nBtn('sheet:wiki:' + id, NI.info, 'About this space');
   return { body: `${nPushBar(nNameH(x), right)}<div class="n-sphead">${glyph(x, 'n-gl-xl')}<h2>${esc(x.title)}${spSeal(x)}</h2><p>${esc(x.desc)}</p><div class="n-sphead-m">${isClosed(x) ? `<span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(x)}</span>` : ''}<span>${fmt(x.members)} members</span><span>${x.online} online</span></div>${nSignedIn() ? (j ? `<button class="n-capbtn ghost" type="button" data-n="sheet:leave:${id}">Joined</button>` : `<button class="n-capbtn" type="button" data-n="join:${id}">Join</button>`) : ''}</div>${j || !nSignedIn() ? nInline(id) : ''}${nFeed(postsFor(id))}` };
 }
 /* Follow-ups of an ask thread, from the same data as the web: with question trees on, the asks about
@@ -5618,49 +5737,51 @@ function nFuList(i) {
   const T = qtT(i);
   return qtVisKids(T, 'r').slice().sort((a, b) => qtAge(b.age) - qtAge(a.age)).map(n => ({ u: n.u, age: n.age, q: n.q, html: n.html, node: n.id, below: T.sub(n.id), running: n.running }));
 }
-const nFuHTML = (i, list) => list.map(f => `<div class="n-fu"><div class="n-cell-h">${avatar(f.u, 'n-av sm')}<b>${esc(f.u)}</b><span>${f.age}</span></div><p class="n-fu-q">${esc(f.q)}</p><div class="n-fu-a">${f.running ? '<p class="n-muted">Researching…</p>' : f.html ? `<div class="n-ans">${f.html}</div>` : `<p>${esc(f.a || '')}</p>`}</div>${f.below ? `<button class="n-below" type="button" data-n="push:ask:${i}:${f.node}">${f.below} ask${f.below > 1 ? 's' : ''} below<span class="n-chev">${NI.chev}</span></button>` : ''}</div>`).join('');
+const nFuHTML = (i, list) => list.map(f => `<div class="n-fu"><div class="n-cell-h">${nAu(f.u, avatar(f.u, 'n-av sm') + `<b>${esc(f.u)}</b>`)}<span>${f.age}</span></div><p class="n-fu-q">${esc(f.q)}</p><div class="n-fu-a">${f.running ? '<p class="n-muted">Researching…</p>' : f.html ? `<div class="n-ans">${f.html}</div>` : `<p>${esc(f.a || '')}</p>`}</div>${f.below ? `<button class="n-below" type="button" data-n="push:ask:${i}:${f.node}">${f.below} ask${f.below > 1 ? 's' : ''} below<span class="n-chev">${NI.chev}</span></button>` : ''}</div>`).join('');
 /* An ask inside a question tree, with the asks about its answer. */
 function nAsk(key) {
   const [ti, id] = String(key).split(':'), i = +ti, T = qtT(i), n = T.by[id];
   const kids = qtVisKids(T, id).slice().sort((a, b) => qtAge(b.age) - qtAge(a.age)).map(k => ({ u: k.u, age: k.age, q: k.q, html: k.html, node: k.id, below: T.sub(k.id), running: k.running }));
   const par = T.by[n.par];
-  const body = `<div class="n-th-by">${avatar(n.u, 'n-av')}<span><b>${esc(n.u)}</b><small>${nNameH(sp(T.p.s))} · ${n.age} · Level ${n.lv}</small></span></div><p class="n-about">Asked about the answer to ${par.id === 'r' ? 'the question' : 'level ' + par.lv}<span>${esc(qtClip(par.q, 90))}</span></p><p class="n-th-ask">${esc(n.q)}</p><div class="n-ans">${n.running ? answerHTML({ running: true, s: T.p.s }) : n.html}</div>${kids.length ? `<h3 class="n-sec">Asks about this answer</h3>${nFuHTML(i, kids)}` : ''}`;
-  return { body: `${nPushBar('', '')}<div class="n-th">${body}</div>`, bar: n.running ? '' : nDock('Ask about this answer') };
+  const body = `<button class="n-th-by" type="button" data-n="push:profile:${esc(n.u)}">${avatar(n.u, 'n-av')}<span><b>${esc(n.u)}</b><small>${nNameH(sp(T.p.s))} · ${n.age} · Level ${n.lv}</small></span></button><p class="n-about">Asked about the answer to ${par.id === 'r' ? 'the question' : 'level ' + par.lv}<span>${esc(qtClip(par.q, 90))}</span></p><p class="n-th-ask">${esc(n.q)}</p><div class="n-ans">${n.running ? answerHTML({ running: true, s: T.p.s }) : n.html}</div>${kids.length ? `<h3 class="n-sec">Asks about this answer</h3>${nFuHTML(i, kids)}` : ''}`;
+  const sv = nSignedIn() && st.qtSaved.has(key);
+  return { body: `${nPushBar('', nBtn('qtsave:' + key, sv ? NI.savedOn : NI.saved, sv ? 'Remove from Saved' : 'Save'))}<div class="n-th">${body}</div>`, bar: n.running ? '' : nDock('Ask about this answer', sp(T.p.s)) };
 }
 /* the input docked at the bottom of a thread or an ask */
-const nDock = ph => nSignedIn()
-  ? `<div class="n-dock"><label class="n-dock-f"><input id="n-fu" type="text" placeholder="${ph}" value="${esc(nst.fu)}" aria-label="${ph}"></label><button class="n-send" type="button" data-n="send" aria-label="Send"${nst.fu.trim() ? '' : ' disabled'}>${NI.up}</button></div>`
+/* x: the space an ask goes to; the dock checks that something can pay for it, as the composer does */
+const nDock = (ph, x) => nSignedIn()
+  ? `<div class="n-dock">${x && !nCanPay(x) ? `<p class="n-dock-n">${spName(x)} has no extra tokens. <button class="n-lnk" type="button" data-n="tokeys">Add an API key</button></p>` : ''}<label class="n-dock-f"><input id="n-fu" type="text" placeholder="${ph}" value="${esc(nst.fu)}" aria-label="${ph}"></label><button class="n-send" type="button" data-n="send" aria-label="Send"${x && !nCanPay(x) ? ' data-nopay="1" disabled' : nst.fu.trim() ? '' : ' disabled'}>${NI.up}</button></div>`
   : `<div class="n-dock"><button class="n-dock-f out" type="button" data-n="sheet:signin">${ph}</button></div>`;
 function nThread(i) {
   const p = D.posts[i], ask = p.k === 'ask', s = sp(p.s), sv = nSignedIn() && st.saved.has(i);
-  if (!canRead(s)) return { body: `${nPushBar('', '')}<div class="n-sphead">${glyph(s, 'n-gl-xl')}<h2>${esc(s.title)}</h2><p>${esc(s.desc)}</p><div class="n-sphead-m"><span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(s)}</span><span>${fmt(s.members)} members</span></div></div><p class="n-empty">This thread is in ${spName(s)}. Only members can read it.</p>` };
+  if (!canRead(s)) {
+    if (s.vis === 'unlisted') return nNoAccess(s, true);
+    return { body: `${nPushBar('', '')}<div class="n-sphead">${glyph(s, 'n-gl-xl')}<h2>${esc(s.title)}</h2><p>${esc(s.desc)}</p><div class="n-sphead-m"><span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(s)}</span><span>${fmt(s.members)} members</span></div>${nCta(s)}</div>${nReqNote(s)}<p class="n-empty">This thread is in ${spName(s)}. Only members can read it.</p>` };
+  }
   const right = nBtn('save:' + i, sv ? NI.savedOn : NI.saved, sv ? 'Remove from Saved' : 'Save') + nBtn('sheet:tmore:' + i, NI.more, 'More');
-  const head = `<div class="n-th-by">${avatar(p.u, 'n-av')}<span><b>${esc(p.u)}</b><small>${nNameH(s)}${isClosed(s) ? LK('cs-lk n-lk', 'Closed space') : ''} · ${p.age}</small></span></div>`;
+  const head = `<button class="n-th-by" type="button" data-n="push:profile:${esc(p.u)}">${avatar(p.u, 'n-av')}<span><b>${esc(p.u)}</b><small>${nNameH(s)}${isClosed(s) ? LK('cs-lk n-lk', 'Closed space') : ''} · ${p.age}</small></span></button>`;
   let body;
   if (!ask) {
-    body = `${head}<p class="n-th-post">${esc(p.q)}</p><h3 class="n-sec">Replies</h3>${rpFor(p).map(r => `<div class="n-reply">${avatar(r.u, 'n-av sm')}<div><div class="n-cell-h"><b>${esc(r.u)}</b><span>${r.age}</span></div><p>${esc(r.t)}</p>${(r.kids || []).map(k => `<div class="n-reply kid">${avatar(k.u, 'n-av sm')}<div><div class="n-cell-h"><b>${esc(k.u)}</b><span>${k.age}</span></div><p>${esc(k.t)}</p></div></div>`).join('')}</div></div>`).join('')}`;
+    body = `${head}<p class="n-th-post">${esc(p.q)}</p><h3 class="n-sec">Replies</h3>${rpFor(p).map(r => `<div class="n-reply">${nAu(r.u, avatar(r.u, 'n-av sm'))}<div><div class="n-cell-h">${nAu(r.u, `<b>${esc(r.u)}</b>`)}<span>${r.age}</span></div><p>${esc(r.t)}</p>${(r.kids || []).map(k => `<div class="n-reply kid">${nAu(k.u, avatar(k.u, 'n-av sm'))}<div><div class="n-cell-h">${nAu(k.u, `<b>${esc(k.u)}</b>`)}<span>${k.age}</span></div><p>${esc(k.t)}</p></div></div>`).join('')}</div></div>`).join('')}`;
   } else if (nst.seg === 'doc') {
-    const src = srcItems(p);
-    body = `${head}<p class="n-th-ask">${esc(p.q)}</p><div class="n-pad0">${nSeg([['doc', 'Document'], ['chat', 'Transcript']], nst.seg, 'seg')}</div><div class="n-ans">${p.running ? answerHTML(p) : ansBody(p)}</div>${src.length ? nGroup('Sources', src.map((r, k) => `<div class="n-row n-src"><span class="n-src-n num">${k + 1}</span><span class="n-row-b"><b>${esc(r.t)}</b><small>${esc(r.d)}</small></span></div>`)) : ''}${nFuList(i).length ? `<h3 class="n-sec">Follow-ups</h3>${nFuHTML(i, nFuList(i))}` : ''}`;
+    const src = nSrcRows(i);
+    body = `${head}<p class="n-th-ask">${esc(p.q)}</p><div class="n-pad0">${nSeg([['doc', 'Document'], ['chat', 'Transcript']], nst.seg, 'seg')}</div><div class="n-ans">${p.running ? answerHTML(p) : ansBody(p)}</div>${src.length ? nGroup('Sources', src) : ''}${nFuList(i).length ? `<h3 class="n-sec">Follow-ups</h3>${nFuHTML(i, nFuList(i))}` : ''}`;
   } else {
     const turns = [{ q: p.q, a: p.running ? answerHTML(p) : ansBody(p), u: p.u }, ...nFuList(i).map(f => ({ q: f.q, a: f.running ? '<p>Researching…</p>' : f.html || `<p>${esc(f.a || '')}</p>`, u: f.u }))];
     body = `${head}<div class="n-pad0">${nSeg([['doc', 'Document'], ['chat', 'Transcript']], nst.seg, 'seg')}</div><div class="n-chat">${turns.map(t => `<div class="n-msg-u">${t.u !== p.u || t.u !== ME.u ? `<small>${esc(t.u)}</small>` : ''}<p>${esc(t.q)}</p></div><div class="n-msg-a"><span class="n-spark">${NI.sparkle}</span><div class="n-ans">${t.a}</div></div>`).join('')}</div>`;
   }
-  const ph = ask ? 'Ask a follow-up' : 'Reply';
-  const dock = nSignedIn()
-    ? `<div class="n-dock"><label class="n-dock-f"><input id="n-fu" type="text" placeholder="${ph}" value="${esc(nst.fu)}" aria-label="${ph}"></label><button class="n-send" type="button" data-n="send" aria-label="Send"${nst.fu.trim() ? '' : ' disabled'}>${NI.up}</button></div>`
-    : `<div class="n-dock"><button class="n-dock-f out" type="button" data-n="sheet:signin">${ph}</button></div>`;
+  const dock = nDock(ask ? 'Ask a follow-up' : 'Reply', ask ? s : null);
   return { body: `${nPushBar('', right)}<div class="n-th">${body}</div>`, bar: ask && p.running ? '' : dock };
 }
 function nSaved() {
-  const list = [...st.saved].map(i => D.posts[i]);
-  return { body: `${nRootBar('', 'Saved')}${nSignedIn() ? nFeed(list) : nSignedOut('Log in to save threads and read them later.')}` };
+  if (!nSignedIn()) return { body: `${nRootBar('', 'Saved')}${nSignedOut('Log in to save threads and read them later.')}` };
+  return { body: `${nRootBar('', 'Saved')}${nSavedBody()}` };
 }
 const nSignedOut = msg => `<div class="n-out"><p>${msg}</p><button class="n-capbtn wide" type="button" data-n="sheet:signin">Log in or sign up</button></div>`;
 function nYou() {
   if (!nSignedIn()) return { body: `${nRootBar('', 'You')}${nSignedOut('Log in to ask questions, post in spaces and add your own API keys.')}${nAppearance()}` };
   const mine = D.posts.filter(p => p.u === ME.u && canRead(sp(p.s))).length;
-  return { body: `${nRootBar('', 'You')}<div class="n-me">${avatar(ME.u, 'n-av xl')}<div><b>${esc(ME.name)}</b><small>${ME.x} · ${mine} threads</small></div></div>${nGroup('', [
+  return { body: `${nRootBar('', 'You')}<button class="n-me" type="button" data-n="push:profile:${ME.u}">${avatar(ME.u, 'n-av xl')}<span class="n-me-b"><b>${esc(ME.name)}</b><small>${ME.x} · ${mine} threads</small></span><span class="n-chev">${NI.chev}</span></button>${nGroup('', [
     `<button class="n-row" type="button" data-n="tab:spaces"><span class="n-row-b"><b>Your spaces</b></span><span class="n-val">${D.joined.length}</span><span class="n-chev">${NI.chev}</span></button>`,
     `<button class="n-row" type="button" data-n="push:keys"><span class="n-row-b"><b>API keys</b></span><span class="n-val">${st.userKeys.length}</span><span class="n-chev">${NI.chev}</span></button>`,
   ])}${nAppearance()}${nGroup('', [`<button class="n-row n-danger" type="button" data-n="sheet:signout"><span class="n-row-b"><b>Sign out</b></span></button>`])}` };
@@ -5684,28 +5805,12 @@ function nProvider(x) {
 function nSheet() {
   const s = nst.sheet, [k, a] = s.split(/:(.*)/s);
   const act = (title, msg, items) => `<div class="n-scrim" data-n="close"></div><div class="n-act" role="dialog" aria-label="${esc(title || 'Actions')}"><div class="n-act-g">${title || msg ? `<div class="n-act-h">${title ? `<b>${title}</b>` : ''}${msg ? `<p>${msg}</p>` : ''}</div>` : ''}${items.map(([l, d, cls]) => `<button type="button" class="${cls || ''}" data-n="${d}">${l}</button>`).join('')}</div><div class="n-act-g"><button type="button" class="n-act-c" data-n="close">Cancel</button></div></div>`;
+  { const h = nSheetX(k, a); if (h) return h; }
   if (k === 'ispace') return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det" role="dialog" aria-label="Choose a space"><span class="n-grab"></span><div class="n-sheet-bar"><span></span><b>Space</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc">${nGroup('', D.spaces.filter(y => D.joined.includes(y.id)).map(y => `<button class="n-row" type="button" data-n="icspace:${y.id}">${glyph(y, 'n-gl')}<span class="n-row-b"><b>${nNameH(y)}</b></span>${y.id === nst.cSpace ? '<span class="n-check">✓</span>' : ''}</button>`))}</div></div>`;
-  if (k === 'tmore') return act('', '', [['Share…', 'close'], ['Copy link', 'close'], ['Report', 'close', 'n-red']]);
   if (k === 'signout') return act('', 'You can sign back in with X at any time.', [['Sign out', 'signout', 'n-red']]);
   if (k === 'joinc') { const x = sp(a); return act('', `Join ${esc(nName(x))}? New threads show on your Home, and you can ask and post in it.`, [['Join', 'joinok:' + a]]); }
   if (k === 'leave') { const x = sp(a), back = !isClosed(x) ? `You’ll stop seeing its threads on your Home screen. Your threads and follow-ups will remain.` : `You’ll lose access to its threads. Your threads and follow-ups will remain, and ${x.vis === 'unlisted' || x.policy === 'invite' ? 'you’ll need a new invite to join again' : 'you’ll need to request to join again'}.`; return act('', `Leave ${esc(nName(x))}? ${back}`, [['Leave space', 'leave:' + a, 'n-red']]); }
-  if (k === 'key') { const key = st.userKeys.find(x => x.id === a); return act(esc(key.label), 'Asks that use this key will stop working. This can’t be undone.', [['Revoke key', 'revoke:' + a, 'n-red']]); }
   if (k === 'signin') return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det" role="dialog" aria-label="Log in or sign up"><span class="n-grab"></span><h2 class="n-sheet-t">Log in or sign up</h2><button class="n-xbtn" type="button" data-n="signin">${XL}<span>Continue with X</span></button><p class="n-fine">Session does not post to X.</p></div>`;
-  /* About this space: the same sections, in the same order, as About in the web sidebar */
-  if (k === 'wiki') {
-    const x = sp(nst.stack.length ? nTop().id : st.space), row = (b, v) => `<div class="n-row"><span class="n-row-b"><b>${b}</b></span><span class="n-val">${v}</span></div>`;
-    const sk = (D.skills[x.id] || []).map(([n, t]) => `<div class="n-row"><span class="n-row-b"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span></div>`);
-    const key = st.userKeys.find(k2 => k2.valid);
-    return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det tall" role="dialog" aria-label="About ${esc(nName(x))}"><span class="n-grab"></span><div class="n-sheet-bar"><span></span><b>${nNameH(x)}</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc"><p class="n-wk-d">${esc(x.desc)}</p>`
-      + nGroup('Rules', x.rules.map((r, k2) => `<div class="n-row"><span class="n-src-n num">${k2 + 1}</span><span class="n-row-b"><span>${esc(r)}</span></span></div>`), x.rulesAt ? `Updated ${x.rulesAt === 'just now' ? 'just now' : x.rulesAt + ' ago'} by ${esc(x.rulesBy)}.` : '')
-      + nGroup('Pages', x.pages.map(([t, a2]) => `<div class="n-row"><span class="n-row-b"><b>${esc(t)}</b><small>Edited ${a2 === 'now' ? 'just now' : a2 + ' ago'}</small></span><span class="n-chev">${NI.chev}</span></div>`))
-      + (sk.length ? nGroup('Skills', sk) : '')
-      + nGroup('Details', [row('Visibility', isClosed(x) ? visLabel(x) : 'Open'), row('Members', x.members.toLocaleString('en-US')), row('Created', `${x.created} by ${esc(abOwner(x))}`)])
-      + nGroup('Joining', [`<div class="n-row"><span class="n-row-b"><span>${visText(x)}. ${joinLabel(x)}.</span></span></div>`])
-      + nGroup('Token use', [`<div class="n-row"><span class="n-row-b"><span>${tokenUse(x)}</span>${x.byok ? `<small>${pctS(x.pct)} of extra tokens used this month · resets Dec 1</small>` : ''}</span></div>`], st.auth === 'in' && key ? `${x.byok ? 'After the limit, your asks use' : 'Your asks use'} your ${esc(key.label)}.` : '')
-      + nGroup('Moderators', x.mods.map(([u, r]) => `<div class="n-row">${avatar(u, 'n-av sm')}<span class="n-row-b"><b>${esc(u)}</b></span><span class="n-val">${({ owner: 'Owner', admin: 'Admin', mod: 'Moderator' })[r] || 'Moderator'}</span></div>`))
-      + `</div></div>`;
-  }
   if (k === 'addkey') {
     const ok = KEY_RE.test(nst.keyDraft.trim());
     return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-page" role="dialog" aria-label="Add API key"><div class="n-sheet-bar"><button class="n-tb" type="button" data-n="close">Cancel</button><b>Add API key</b><button class="n-tb" type="button" data-n="addkey-save" id="n-ak-save"${ok ? '' : ' disabled'}><b>Add</b></button></div><div class="n-sheet-sc">${nGroup('', [`<label class="n-row n-field"><span>Name</span><input id="n-ak-name" type="text" placeholder="Optional" value="${esc(nst.keyName)}"></label>`, `<label class="n-row n-field"><span>Key</span><input id="n-ak-key" type="password" placeholder="sk-… or AIza…" autocomplete="off" value="${esc(nst.keyDraft)}"></label>`], nst.keyErr ? `<span class="n-bad">${esc(nst.keyErr)}</span>` : 'Paste a key from your provider. Keys start with sk- or AIza.')}</div></div>`;
@@ -5715,56 +5820,70 @@ function nSheet() {
 
 function nativeApp() {
   const t = nTop();
-  const scr = t ? (t.v === 'notifs' ? nNotifs() : t.v === 'space' ? nSpace(t.id) : t.v === 'thread' ? nThread(t.id) : t.v === 'ask' ? nAsk(t.id) : t.v === 'keys' ? nKeys() : nSpacesRoot())
+  const scr = t ? (NSCR[t.v] || nSpacesRoot)(t.id)
     : ({ home: nHome, spaces: nSpacesRoot, saved: nSaved, you: nYou })[nst.tab]();
-  const docked = !!scr.bar;
-  return `<div class="n-root${nst.sheet && /^(compose|addkey|wiki)/.test(nst.sheet) ? ' sheeted' : ''}"><div class="n-under">${nStatus()}<div class="n-scr${docked ? ' docked' : ''}" id="n-scr">${scr.body}</div>${scr.bar || ''}${docked ? '' : nTabs()}</div>${nst.sheet ? nSheet() : ''}<span class="n-home-ind"></span></div>`;
+  const docked = !!scr.bar, sh = nst.sheet ? nSheet() : '';
+  return `<div class="n-root${nst.sheet && NSHEETED.test(nst.sheet) ? ' sheeted' : ''}"><div class="n-under">${nStatus()}<div class="n-scr${docked ? ' docked' : ''}" id="n-scr">${scr.body}</div>${nToast(docked)}${scr.bar || ''}${docked ? '' : nTabs()}</div>${sh}<span class="n-home-ind"></span></div>`;
 }
 function nGo(fn) {
   const sc = document.getElementById('n-scr'); if (sc) nst.scroll = { ...nst.scroll, [nKey()]: sc.scrollTop };
   fn(); renderAll();
 }
 function nClick(e) {
+  /* a toast goes away with the next tap outside it, as on the web */
+  if (st.toast && !e.target.closest('.n-toast')) { st.toast = null; if (!e.target.closest('[data-n]')) { renderAll(); return; } }
   const b = e.target.closest('[data-n]'); if (!b || b.disabled) return;
   const [k, a] = b.dataset.n.split(/:(.*)/s);
-  if (k === 'tab') return nGo(() => { if (nst.tab === a && !nst.stack.length) nst.scroll = { ...nst.scroll, ['tab:' + a]: 0 }; nst.tab = a; nst.stack = []; nst.edit = false; });
+  if (nClickX(k, a)) return;
+  /* one stack of screens per tab; tapping the current tab goes back to its root */
+  if (k === 'tab') return nGo(() => {
+    if (nst.tab === a) { if (!nst.stack.length) nst.scroll = { ...nst.scroll, ['tab:' + a]: 0 }; nst.stack = []; }
+    else { nst.stacks = { ...nst.stacks, [nst.tab]: nst.stack }; nst.stack = nst.stacks[a] || []; nst.tab = a; }
+    nst.edit = false; nst.sheet = null; nst.fu = '';
+  });
   if (k === 'ntread') return nGo(() => { st.notifs = st.notifs.map(x => x.unread ? { ...x, unread: false } : x); st.reqSeen = true; st.repSeen = true; });
   if (k === 'nt') return nGo(() => {
     const x = ntItems().find(n => n.id === a); if (!x) return;
     if (x.k === 'reqs') st.reqSeen = true; else if (x.k === 'reps') st.repSeen = true; else if (x.unread) st.notifs = st.notifs.map(n => n.id === x.id ? { ...n, unread: false } : n);
-    const to = x.open != null && D.posts[x.open] ? { v: 'thread', id: x.open } : x.sp && sp(x.sp) ? { v: 'space', id: x.sp } : null;
-    if (to) { nst.stack = [...nst.stack, to]; nst.scroll = { ...nst.scroll, [to.v + ':' + to.id]: 0 }; }
+    if (x.k === 'invite' && !x.done) { nst.sheet = 'inv:' + x.id; return; }
+    const to = nNtTarget(x);
+    nst.stack = [...nst.stack, ...to]; to.forEach(e2 => { nst.scroll = { ...nst.scroll, [e2.v + ':' + e2.id]: 0 }; });
   });
-  if (k === 'push') { const [v, ...rest] = a.split(':'), id = rest.join(':'); return nGo(() => { const e2 = { v, id: v === 'thread' ? +id : id }; nst.stack = [...nst.stack, e2]; nst.scroll = { ...nst.scroll, [v + ':' + (e2.id ?? '')]: 0 }; nst.fu = ''; if (v === 'space' || v === 'thread' || v === 'ask') st.space = v === 'space' ? id : D.posts[+id.split(':')[0]].s; }); }
+  if (k === 'push') { const [v, ...rest] = a.split(':'), id = rest.join(':'); return nGo(() => { const e2 = { v, id: v === 'thread' ? +id : id }; nst.stack = [...nst.stack, e2]; nst.sheet = null; nst.scroll = { ...nst.scroll, [v + ':' + (e2.id ?? '')]: 0 }; nst.fu = ''; if (v === 'space' || v === 'thread' || v === 'ask') st.space = v === 'space' ? id : D.posts[+id.split(':')[0]].s; }); }
   if (k === 'back') return nGo(() => { nst.stack = nst.stack.slice(0, -1); nst.fu = ''; });
   if (k === 'close') return nGo(() => { nst.sheet = null; nst.sub = null; nst.keyErr = ''; });
   if (k === 'sheet') return nGo(() => {
     if (a === 'addkey') { nst.keyName = ''; nst.keyDraft = ''; nst.keyErr = ''; }
+    nSheetOpen(a);
     nst.sheet = a;
   });
   /* inline composer: open it on Home or in a space, close it, pick its space */
   if (k === 'inline') return nGo(() => {
-    if (a === 'close') { nst.inl = false; nst.draft = ''; return; }
+    if (a === 'close') { if (nst.draft.trim()) { nst.sheet = 'discard'; return; } nst.inl = false; nst.draft = ''; return; }
     nst.inl = true; nst.inlAt = a; nst.cMode = a === 'home' && nst.homeF === 'post' ? 'post' : 'ask'; nInlineFocus = true;
     nst.cSpace = a !== 'home' ? a : D.joined.includes(nst.cSpace) ? nst.cSpace : D.joined[0] || 'public';
   });
-  if (k === 'icspace') return nGo(() => { nst.cSpace = a; nst.sheet = null; if (sp(a).postsOff && nst.homeF !== 'post') nst.cMode = 'ask'; nInlineFocus = true; });
+  if (k === 'icspace') return nGo(() => { nst.cSpace = a; nst.cTopic = null; nst.sheet = null; if (sp(a).postsOff && nst.homeF !== 'post') nst.cMode = 'ask'; nInlineFocus = true; });
   if (k === 'cmode') return nGo(() => { nst.cMode = a; });
   if (k === 'web') return nGo(() => { nst.web = !nst.web; });
   if (k === 'homef') return nGo(() => { nst.homeF = a; if (a !== 'all') nst.cMode = a; });
   if (k === 'seg') return nGo(() => { nst.seg = a; });
   if (k === 'appear') return nGo(() => { st.appearance = a; try { localStorage.setItem('session-web-appearance', a); } catch (x) {} });
   if (k === 'edit') return nGo(() => { nst.edit = !nst.edit; });
-  if (k === 'join') return nGo(() => { if (!nSignedIn()) { nst.sheet = 'signin'; return; } if (isClosed(sp(a))) { setRel(a, 'pending'); st.reqAge = 'just now'; return; } nst.sheet = 'joinc:' + a; });
+  if (k === 'join') return nGo(() => { if (!nSignedIn()) { nst.sheet = 'signin'; return; } if (isClosed(sp(a))) { if (sp(a).policy === 'request' && relOf(a) === 'none') { nSheetOpen('req:' + a); nst.sheet = 'req:' + a; } return; } nst.sheet = 'joinc:' + a; });
   if (k === 'joinok') return nGo(() => { joinSpace(a); nst.sheet = null; });
   if (k === 'leave') return nGo(() => { if (isClosed(sp(a))) setRel(a, 'none'); leaveSpace(a); nst.sheet = null; });
   if (k === 'save') return nGo(() => { if (!nSignedIn()) { nst.sheet = 'signin'; return; } db.toggle('saved', +a); });
   if (k === 'signin') return nGo(() => { st.auth = 'in'; nst.sheet = null; });
-  if (k === 'signout') return nGo(() => { st.auth = 'out'; nst.sheet = null; nst.stack = []; });
+  if (k === 'signout') return nGo(() => { st.auth = 'out'; nst.sheet = null; nst.stack = []; nst.stacks = {}; });
   if (k === 'revoke') return nGo(() => { st.userKeys = st.userKeys.filter(x => x.id !== a); nst.sheet = null; });
   if (k === 'send') return nGo(() => {
-    const t = nTop(), txt = nst.fu.trim(); nst.fu = '';
+    const t = nTop(), txt = nst.fu.trim();
     if (!t || !txt) return;
+    /* an ask needs something that pays for it, as in the composer */
+    const ax = nDockSpace(t); if (ax && !nCanPay(ax)) return;
+    nst.fu = '';
+    if (t.v === 'src') { nSrcAsk(t.id, txt); return; }
     if (t.v === 'thread') addFollowUp(t.id, txt);
     if (t.v === 'ask') { const [ti, id] = String(t.id).split(':'); qtAsk(qtT(+ti), id, txt); }
   });
@@ -5773,8 +5892,8 @@ function nClick(e) {
     if (nst.cMode === 'post' && sp(nst.cSpace).postsOff) return;
     const kind = nst.cMode;
     if (kind === 'ask' && !nCanPay(sp(nst.cSpace))) return;
-    Object.assign(st, { home: false, space: nst.cSpace, draft: nst.draft });
-    createThread(kind);
+    Object.assign(st, { home: false, space: nst.cSpace, draft: nst.draft, compTopic: kind === 'ask' ? nst.cTopic : null });
+    createThread(kind); nst.cTopic = null;
     nst.sheet = null; nst.draft = ''; nst.inl = false;
     nst.stack = [...nst.stack, { v: 'thread', id: st.thread }]; nst.scroll = { ...nst.scroll, ['thread:' + st.thread]: 0 };
   });
@@ -5788,9 +5907,10 @@ function nClick(e) {
 }
 function nInput(e) {
   const id = e.target.id, v = e.target.value;
+  if (nInputX(id, v, e.target)) return;
   if (id === 'n-sq') { nst.sq = v; const c = e.target.selectionStart; renderAll(); const i = $('n-sq'); if (i) { i.focus({ preventScroll: true }); i.setSelectionRange(c, c); } return; }
   if (id === 'n-draft') { nst.draft = v; const s = $('n-submit'), x = sp(nst.cSpace); if (s) s.disabled = !v.trim() || (nst.cMode === 'post' ? !!x.postsOff : !nCanPay(x)); }
-  if (id === 'n-fu') { nst.fu = v; const s = document.querySelector('.n-send'); if (s) s.disabled = !v.trim(); }
+  if (id === 'n-fu') { nst.fu = v; const s = document.querySelector('.n-send'); if (s) s.disabled = !v.trim() || !!s.dataset.nopay; }
   if (id === 'n-ak-name') nst.keyName = v;
   if (id === 'n-ak-key') { nst.keyDraft = v; nst.keyErr = ''; const s = $('n-ak-save'); if (s) s.disabled = !KEY_RE.test(v.trim()); }
 }
@@ -5799,6 +5919,436 @@ function renderNative() {
   const sc = $('n-scr'); if (sc) sc.scrollTop = nst.scroll[nKey()] || 0;
   if (nInlineFocus && !nst.sheet) { nInlineFocus = false; const d = $('n-draft'); if (d) { d.focus({ preventScroll: true }); d.setSelectionRange(d.value.length, d.value.length); } }
 }
+
+/* ==== Phone app: toasts, sheets, requests, moderation, About, sources, profiles, search, Saved, tab stacks ====
+   Additions to the native Phone app (st.device === 'native'). Screens are pushed as { v, id } entries on the
+   current tab's stack; each tab keeps its own stack in nst.stacks. Sheets are named by nst.sheet ('kind:arg'). */
+Object.assign(nst, { stacks: {}, sq: '', hq: '', svSeg: 'threads', payer: null, cTopic: null, rep: { why: 'incorrect', note: '' }, pfTab: 'threads', pf: { name: '', bio: '', err: '' }, keyRn: '', memQ: '' });
+const NX = {
+  msg: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3.5c5 0 9 3.3 9 7.5s-4 7.5-9 7.5c-.9 0-1.8-.1-2.6-.3L5 20.3l1-3.6C4.2 15.3 3 13.3 3 11c0-4.2 4-7.5 9-7.5z"/></svg>',
+  close: NS('<path d="M7 7l10 10M17 7 7 17"/>', 2),
+};
+const NSCR = { notifs: () => nNotifs(), space: nSpace, thread: nThread, ask: nAsk, keys: () => nKeys(), page: nPage, src: nSrc, profile: nProfile, mreq: nReqs, mrep: nReps };
+/* sheets that cover most of the screen push the screen under them back */
+const NSHEETED = /^(compose|addkey|wiki|req:|report:|skill:|mem:|usage:|rules:|key:|keyrn:|pfedit)/;
+const nCap = t => t ? t[0].toUpperCase() + t.slice(1) : t;
+const nAge = a => a === 'now' || a === 'just now' ? 'just now' : a + ' ago';
+function nLabelX(e) {
+  if (e.v === 'mreq') return 'Requests';
+  if (e.v === 'mrep') return 'Reports';
+  if (e.v === 'page') { const [sid, i] = String(e.id).split(':'); return abDoc(sp(sid), +i).t; }
+  if (e.v === 'src') return 'Source';
+  if (e.v === 'profile') return e.id === ME.u ? 'Profile' : NAMES[e.id] || e.id;
+  return '';
+}
+/* an author's avatar or name: opens their profile */
+const nAu = (u, inner) => `<button class="n-au" type="button" data-n="push:profile:${esc(u)}" aria-label="${esc(u)}: profile">${inner}</button>`;
+/* an action sheet with a cancel label of its own */
+const nAct = (title, msg, items, cancel = 'Cancel') => `<div class="n-scrim" data-n="close"></div><div class="n-act" role="dialog" aria-label="${esc(String(title || msg || 'Actions').replace(/<[^>]+>/g, ''))}"><div class="n-act-g">${title || msg ? `<div class="n-act-h">${title ? `<b>${title}</b>` : ''}${msg ? `<p>${msg}</p>` : ''}</div>` : ''}${items.map(([l, d, cls]) => `<button type="button" class="${cls || ''}" data-n="${d}">${l}</button>`).join('')}</div><div class="n-act-g"><button type="button" class="n-act-c" data-n="close">${cancel}</button></div></div>`;
+/* a form sheet: Cancel, title, and a primary action */
+const nForm = (label, left, title, right, body) => `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-page" role="dialog" aria-label="${esc(label)}"><div class="n-sheet-bar">${left}<b>${title}</b>${right}</div><div class="n-sheet-sc">${body}</div></div>`;
+/* a tall sheet opened from About keeps a way back to About */
+const nSub = (sid, label, title, body) => `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det tall" role="dialog" aria-label="${esc(label)}"><span class="n-grab"></span><div class="n-sheet-bar">${sid ? `<button class="n-tb n-tb-back" type="button" data-n="sheet:wiki:${sid}">${NI.back}<span>About</span></button>` : '<span></span>'}<b>${title}</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc">${body}</div></div>`;
+const nGo2 = (attr, inner, cls = '') => `<button class="n-row${cls}" type="button" data-n="${attr}">${inner}<span class="n-chev">${NI.chev}</span></button>`;
+
+/* ---------- toast: the web's toasts, shown above the tab bar or the input ---------- */
+const NTOAST_ACT = /^(open:|undo:|repundo:|tokeys$)/;
+function nToast(docked) {
+  const t = st.toast; if (!t || !t.t) return '';
+  const act = t.act && NTOAST_ACT.test(t.act) ? `<button class="n-toast-a" type="button" data-n="toastact:${esc(t.act)}">${esc(t.label || 'Open')}</button>` : '';
+  return `<div class="n-toast${docked ? ' docked' : ''}" role="status"><span>${t.t}</span>${act}</div>`;
+}
+function nToastAct(v) {
+  if (v.startsWith('open:')) { const id = v.slice(5); if (!sp(id)) return; nst.stack = [...nst.stack, { v: 'space', id }]; nst.scroll = { ...nst.scroll, ['space:' + id]: 0 }; st.space = id; }
+  else if (v.startsWith('undo:')) db.update('reqs', v.slice(5), r => { r.st = 'open'; });
+  else if (v.startsWith('repundo:')) { const r = st.reports.find(x => x.id === v.slice(8)); if (r) nRepUndo(r); }
+  else if (v === 'tokeys') nst.stack = [...nst.stack, { v: 'keys', id: '' }];
+}
+
+/* ---------- membership: no access, requests, pending and declined ---------- */
+/* An unlisted space or thread opened by someone who is not a member: the name and nothing else, as csNoAccess on the web. */
+function nNoAccess(x, isThread) {
+  const out = !nSignedIn();
+  return { body: `${nPushBar('', '')}<div class="n-sphead n-na">${glyph(x, 'n-gl-xl')}<h2>${nNameH(x)}</h2><div class="n-sphead-m"><span>${CI.eyeOff.replace('<svg', '<svg width="12" height="12"')} ${visLabel(x)}</span></div><p>Only members can see this ${isThread ? 'thread' : 'space'}. ${out ? 'Log in to check whether you are a member.' : 'Ask a member for an invite link.'}</p>${out ? '<button class="n-capbtn" type="button" data-n="sheet:signin">Log in</button>' : ''}</div>` };
+}
+/* the main action on a closed space for someone who is not a member (csCta on the web) */
+function nCta(x) {
+  const r = relOf(x.id);
+  if (r === 'out') return `<button class="n-capbtn" type="button" data-n="sheet:signin">${x.policy === 'invite' ? 'Log in' : 'Log in to request'}</button>`;
+  if (r === 'member' || r === 'mod') return '';
+  if (r === 'pending') return `<button class="n-capbtn ghost" type="button" data-n="sheet:pend:${x.id}">${CI.clock}Requested</button>`;
+  if (r === 'denied') return '<button class="n-capbtn" type="button" disabled>Request declined</button>';
+  if (x.policy === 'invite') return '<span class="n-val">Invite only</span>';
+  return `<button class="n-capbtn" type="button" data-n="join:${x.id}">Request to join</button>`;
+}
+function nReqNote(x) {
+  const r = relOf(x.id);
+  if (r === 'pending') return `<p class="n-grp-f n-reqn">Request sent ${nAge(st.reqAge)}. A moderator of ${spName(x)} reviews it, and you get a notification with the decision.</p>`;
+  if (r === 'denied') return `<p class="n-grp-f n-reqn">The moderators of ${spName(x)} declined your request to join.</p>`;
+  return '';
+}
+function nReqSheet(x) {
+  const qs = (x.qs || []).map((q, i) => `<section class="n-grp"><label class="n-q" for="n-ans-${i}">${esc(q.q)}${q.req ? '' : ' <small>Optional</small>'}</label><div class="n-list"><textarea id="n-ans-${i}" class="n-ta" rows="3">${esc(st.reqAns[i] || '')}</textarea></div></section>`).join('');
+  const rules = nGroup(`Rules of ${spName(x)}`, [...x.rules.map((r, k) => `<div class="n-row"><span class="n-src-n num">${k + 1}</span><span class="n-row-b"><span>${esc(r)}</span></span></div>`),
+    `<button class="n-row n-chk" type="button" role="checkbox" aria-checked="${!!st.reqRules}" data-n="reqrules"><span class="n-box" aria-hidden="true">${st.reqRules ? '✓' : ''}</span><span class="n-row-b"><b>I’ve read the rules</b></span></button>`],
+    'Moderators see your handle, your X account, your public threads and these answers.');
+  const intro = `<p class="n-wk-d">A moderator of ${spName(x)} reviews your request. You get a notification with the decision.</p>`;
+  return nForm(`Request to join ${nName(x)}`, '<button class="n-tb" type="button" data-n="close">Cancel</button>', 'Request to join', `<button class="n-tb" type="button" id="n-req-send" data-n="reqsend:${x.id}"${csReqValid(x) ? '' : ' disabled'}><b>Send</b></button>`, intro + qs + rules);
+}
+
+/* ---------- thread: More, Share, Report ---------- */
+const nRepKey = i => (D.posts[i].k === 'ask' ? 'a:' : 'p:') + i;
+function nShareSheet(i) {
+  const p = D.posts[i], x = sp(p.s), url = `session.app/s/${x.name}/t/${i + 1000}`;
+  return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det n-share" role="dialog" aria-label="Share"><span class="n-grab"></span><div class="n-sh-h">${glyph(x, 'n-gl')}<span class="n-row-b"><b>${esc(clip(p.t || p.q, 70))}</b><small>${url}</small></span><button class="n-sh-x" type="button" data-n="close" aria-label="Close">${NX.close}</button></div>`
+    + `<div class="n-sh-apps"><button type="button" data-n="shcopy:${i}"><span class="n-sh-ic">${CI.link}</span>Copy link</button><button type="button" data-n="shmsg:${i}"><span class="n-sh-ic msg">${NX.msg}</span>Messages</button></div>`
+    + `${isClosed(x) ? `<p class="n-fine">Only members of ${spName(x)} can open this link.</p>` : ''}</div>`;
+}
+function nReportSheet(key) {
+  const it = itemOf(key), r = nst.rep;
+  const ctx = `<div class="n-rep-ctx"><small>${it.by === 'Agent' ? `Agent ${it.noun}` : `${nCap(it.noun)} by ${esc(it.by)}`}</small><p>${esc(clip(it.text || it.p.q))}</p></div>`;
+  const why = REP_WHY.map(([k, l, d]) => `<button class="n-row" type="button" role="radio" aria-checked="${r.why === k}" data-n="repwhy:${k}"><span class="n-row-b"><b>${l}</b><small>${d}</small></span>${r.why === k ? '<span class="n-check">✓</span>' : ''}</button>`);
+  const body = nGroup('', [ctx]) + nGroup('Reason', why) + nGroup('Note', [`<textarea id="n-repnote" class="n-ta" rows="3" placeholder="${REP_PH[r.why]}" aria-label="Note">${esc(r.note)}</textarea>`], `The moderators of ${spName(it.s)} see your report, your note and your handle. The ${it.noun} stays visible while they review it. You get a notification when they resolve it.`);
+  return nForm(`Report this ${it.noun}`, '<button class="n-tb" type="button" data-n="close">Cancel</button>', `Report this ${it.noun}`, `<button class="n-tb" type="button" data-n="repsend:${key}"><b>Send</b></button>`, body);
+}
+
+/* ---------- composer: who pays, topic ---------- */
+const nPaySrc = x => [...(x.byok ? [{ id: 'space:' + x.id, label: `${nName(x)} extra tokens`, sub: `From ${x.byok} · ${pctS(x.pct)} used this month`, valid: true }] : []), ...st.userKeys.map(k => ({ id: k.id, label: k.label, sub: k.sub, valid: k.valid }))];
+const nPayer = x => { const l = nPaySrc(x).filter(o => o.valid); return l.find(o => o.id === nst.payer) || l[0] || { id: '', label: 'No API key' }; };
+const nTopicChip = x => { const cur = topicsOf(x).some(t => t[0] === nst.cTopic) ? nst.cTopic : null; return `<button class="n-chip" type="button" data-n="sheet:topic:${x.id}" aria-label="Topic: ${esc(cur ? topicName(x, cur) : 'chosen by the agent')}">${SFI.tag}<span>${esc(cur ? topicName(x, cur) : 'Topic: auto')}</span>${NI.chev}</button>`; };
+function nPayerSheet(x) {
+  const cur = nPayer(x).id;
+  const rows = nPaySrc(x).map(o => o.valid
+    ? `<button class="n-row" type="button" data-n="setpayer:${o.id}"><span class="n-row-b"><b>${esc(o.label)}</b><small>${esc(o.sub)}</small></span>${o.id === cur ? '<span class="n-check">✓</span>' : ''}</button>`
+    : `<div class="n-row n-dim" aria-disabled="true"><span class="n-row-b"><b>${esc(o.label)}</b><small class="n-bad">${esc(o.sub)}</small></span></div>`);
+  rows.push(`<button class="n-row n-add" type="button" data-n="tokeys">${NI.plus}<span class="n-row-b"><b>Add API key</b></span></button>`);
+  return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det n-pick" role="dialog" aria-label="Paid by"><span class="n-grab"></span><div class="n-sheet-bar"><span></span><b>Paid by</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc">${nGroup('', rows, `Asks you make in ${spName(x)} from this composer use the tokens you pick here. Usage on an API key is billed by its provider.`)}</div></div>`;
+}
+function nTopicSheet(x) {
+  const cur = topicsOf(x).some(t => t[0] === nst.cTopic) ? nst.cTopic : '';
+  const row = (k, l, sm) => `<button class="n-row" type="button" data-n="settopic:${k}"><span class="n-row-b"><b>${esc(l)}</b>${sm ? `<small>${sm}</small>` : ''}</span>${cur === k ? '<span class="n-check">✓</span>' : ''}</button>`;
+  return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det n-pick" role="dialog" aria-label="Topic"><span class="n-grab"></span><div class="n-sheet-bar"><span></span><b>Topic</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc">${nGroup('', [row('', 'Agent chooses', 'Assigned when the answer is ready')])}${nGroup('Topics', topicsOf(x).map(([k, l]) => row(k, l)))}</div></div>`;
+}
+
+/* ---------- About: the web sidebar's sections, plus Manage for moderators ---------- */
+function nWiki(x) {
+  const id = x.id, read = canRead(x), inn = nSignedIn(), row = (b, v) => `<div class="n-row"><span class="n-row-b"><b>${b}</b></span><span class="n-val">${v}</span></div>`;
+  const key = st.userKeys.find(k2 => k2.valid);
+  let h = `<p class="n-wk-d">${esc(x.desc)}</p>`;
+  if (isModOf(id)) {
+    const nq = reqCount(id), nr = repCount(id), cnt = n => `<span class="n-val num">${n || ''}</span>`;
+    h += nGroup('Manage', [...(isClosed(x) && (x.policy === 'request' || nq) ? [nGo2(`push:mreq:${id}`, `<span class="n-row-b"><b>Requests</b></span>${cnt(nq)}`)] : []), nGo2(`push:mrep:${id}`, `<span class="n-row-b"><b>Reports</b></span>${cnt(nr)}`)]);
+  }
+  const rulesF = x.rulesAt ? `Updated ${x.rulesAt === 'just now' ? 'just now' : x.rulesAt + ' ago'} by ${esc(x.rulesBy)}.${x.rulesPrev ? ` <button class="n-lnk" type="button" data-n="sheet:rules:${id}">See changes</button>` : ''}` : '';
+  h += nGroup('Rules', x.rules.map((r, k2) => `<div class="n-row"><span class="n-src-n num">${k2 + 1}</span><span class="n-row-b"><span>${esc(r)}</span></span></div>`), rulesF);
+  if (x.pages.length) h += nGroup('Pages', x.pages.map(([t, a2], i) => { const inner = `<span class="n-row-b"><b>${esc(t)}</b><small>Edited ${a2 === 'now' ? 'just now' : a2 + ' ago'}</small></span>`; return read ? nGo2(`push:page:${id}:${i}`, inner) : `<div class="n-row">${inner}</div>`; }), read ? '' : 'Pages are visible to members.');
+  const sk = (D.skills[id] || []).map(([n, t], i) => nGo2(`sheet:skill:${id}:${i}`, `<span class="n-skic">${skillIcon(n)}</span><span class="n-row-b"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span>`, ' n-skr'));
+  if (sk.length) h += nGroup('Skills', sk);
+  h += nGroup('Details', [row('Visibility', isClosed(x) ? visLabel(x) : 'Open'), read ? nGo2(`sheet:mem:${id}`, `<span class="n-row-b"><b>Members</b></span><span class="n-val num">${x.members.toLocaleString('en-US')}</span>`) : row('Members', x.members.toLocaleString('en-US')), row('Created', `${x.created} by ${esc(abOwner(x))}`)]);
+  const joined = D.joined.includes(id), cta = !inn || joined ? '' : isClosed(x) ? nCta(x) : `<button class="n-capbtn" type="button" data-n="join:${id}">Join</button>`;
+  h += nGroup('Joining', [`<div class="n-row"><span class="n-row-b"><span>${visText(x)}. ${joinLabel(x)}.</span></span></div>`, ...(cta ? [`<div class="n-row n-row-cta">${cta}</div>`] : [])], inn ? nReqNote(x).replace(/^<p class="n-grp-f n-reqn">|<\/p>$/g, '') : '');
+  h += nGroup('Token use', [`<div class="n-row"><span class="n-row-b"><span>${tokenUse(x)}</span>${x.byok ? `<small>${pctS(x.pct)} of extra tokens used this month · resets Dec 1</small>` : ''}</span></div>`, ...(x.byok && read ? [nGo2(`sheet:usage:${id}`, '<span class="n-row-b"><b>See usage</b><small>By member and by thread</small></span>')] : [])], inn && key ? `${x.byok ? 'After the limit, your asks use' : 'Your asks use'} your ${esc(key.label)}.` : '');
+  h += nGroup('Moderators', x.mods.map(([u, r]) => `<button class="n-row" type="button" data-n="push:profile:${u}">${avatar(u, 'n-av sm')}<span class="n-row-b"><b>${esc(u)}</b></span><span class="n-val">${MOD_LABEL[r] || 'Moderator'}</span></button>`));
+  return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det tall" role="dialog" aria-label="About ${esc(nName(x))}"><span class="n-grab"></span><div class="n-sheet-bar"><span></span><b>${nNameH(x)}</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc">${h}</div></div>`;
+}
+function nSkillSheet(sid, i) {
+  const l = D.skills[sid] || [], sk = l[+i]; if (!sk) return '';
+  const [n, t] = sk, { d, b } = abSkParse(t), can = nSignedIn() && D.joined.includes(sid);
+  const body = `<div class="n-sk-h"><span class="n-skic lg">${skillIcon(n)}</span><h2>${esc(n)}</h2><p>${esc(d)}</p></div>${nGroup('SKILL.md', [`<pre class="n-skpre">${esc(abSkFile(n, d, b))}</pre>`], `You can start an ask with /${esc(n)}.`)}${can ? `<div class="n-pad"><button class="n-capbtn wide" type="button" data-n="useskill:${sid}:${i}">Use this skill</button></div>` : ''}`;
+  return nSub(sid, n, 'Skill', body);
+}
+function nMemSheet(x) {
+  const q = (nst.memQ || '').trim().toLowerCase(), list = memFor(x).filter(m => !q || m.u.toLowerCase().includes(q) || (NAMES[m.u] || '').toLowerCase().includes(q));
+  const lbl = r => r === 'owner' ? 'Owner' : r === 'admin' ? 'Admin' : r === 'mod' ? 'Moderator' : '';
+  const rows = list.map(m => `<button class="n-row" type="button" data-n="push:profile:${m.u}">${avatar(m.u, 'n-av sm')}<span class="n-row-b"><b>${esc(NAMES[m.u] || m.u)}</b><small>${esc(m.u)}</small></span><span class="n-val">${lbl(m.role)}</span></button>`);
+  const foot = `Showing ${list.length} of ${x.members.toLocaleString('en-US')} members. ${isClosed(x) ? 'Only members see this list.' : 'Anyone who can read the space sees this list.'}`;
+  return nSub(x.id, `Members of ${nName(x)}`, 'Members', `<div class="n-pad"><label class="n-search">${NI.search}<input id="n-memq" type="search" placeholder="Find a member" aria-label="Find a member" value="${esc(nst.memQ || '')}"></label></div>${rows.length ? nGroup('', rows, foot) : '<p class="n-empty">No members match.</p>'}`);
+}
+/* token use by member and by thread: the same figures as abUsageBody on the web */
+function nUsageSheet(x) {
+  const used = x.used || 0, share = [0.38, 0.27, 0.19, 0.09], m = memFor(x).slice(0, 4);
+  const th = D.posts.map((p, i) => ({ p, i })).filter(({ p }) => p.s === x.id && p.tok).sort((a, b) => b.p.tok - a.p.tok).slice(0, 3);
+  const body = `<p class="n-wk-d">${fmtT(used)} of ${fmtT(x.budget)} tokens used this month. The limit resets on Dec 1.</p>`
+    + nGroup('By member', m.map((u, k) => `<button class="n-row" type="button" data-n="push:profile:${u.u}">${avatar(u.u, 'n-av sm')}<span class="n-row-b"><b>${esc(u.u)}</b></span><span class="n-val num">${fmtT(Math.round(used * share[k]))}</span></button>`))
+    + nGroup('Largest threads', th.length ? th.map(({ p, i }) => `<button class="n-row" type="button" data-n="push:thread:${i}"><span class="n-row-b"><span>${esc(qtClip(p.q, 70))}</span></span><span class="n-val num">${fmtT(p.tok)}</span></button>`) : ['<div class="n-row"><span class="n-row-b"><span>No asks yet this month.</span></span></div>']);
+  return nSub(x.id, `Token use in ${nName(x)}`, 'Token use', body);
+}
+function nRulesSheet(x) {
+  const prev = x.rulesPrev || [], now = x.rules;
+  const rows = [...now.map(r => `<div class="n-row"><span class="n-row-b"><span>${esc(r)}</span></span>${prev.includes(r) ? '' : '<span class="n-mark add">Added</span>'}</div>`), ...prev.filter(r => !now.includes(r)).map(r => `<div class="n-row"><span class="n-row-b"><span><s>${esc(r)}</s></span></span><span class="n-mark rm">Removed</span></div>`)];
+  return nSub(x.id, 'Changes to the rules', 'Changes to the rules', `<p class="n-wk-d">${esc(x.rulesBy || '')} changed the rules ${x.rulesAt === 'just now' ? 'just now' : x.rulesAt + ' ago'}. Added and removed rules are marked.</p>${nGroup('Rules', rows)}`);
+}
+
+/* ---------- a page of a space, in the app's own type ---------- */
+function nPage(id) {
+  const [sid, i] = String(id).split(':'), s = sp(sid);
+  if (!canRead(s)) return s.vis === 'unlisted' ? nNoAccess(s, false) : { body: `${nPushBar('', '')}<p class="n-empty">Pages in ${spName(s)} are visible to members only.</p>` };
+  const d = abDoc(s, +i), mins = Math.max(1, Math.round(abWords(d) / 200));
+  return { body: `${nPushBar('', '')}<article class="n-th n-pg"><p class="n-pg-sp">${glyph(s, 'n-gl')}<span>${nNameH(s)} · Pages</span></p><h1 class="n-doc-t">${esc(d.t)}</h1><p class="n-pg-m">${avatar(d.ed, 'n-av sm')}<span>Edited by ${esc(d.ed)} ${abAge(d.revs[0].age)} · created by ${esc(d.by)} · ${mins} min read</span></p><div class="n-doc">${abDocHTML(d)}</div></article>` };
+}
+
+/* ---------- sources: a source cited in an answer, or a source an ask is about ---------- */
+function nSrcRows(i) {
+  const p = D.posts[i], ms = miRefs(p).map(MIT).filter(Boolean);
+  const row = (n, t, d, to) => `<button class="n-row n-src" type="button" data-n="push:src:${to}"><span class="n-src-n num">${n}</span><span class="n-row-b"><b>${t}</b><small>${d}</small></span><span class="n-chev">${NI.chev}</span></button>`;
+  return [...ms.map(m => row(CI.link, esc(miTitle(m)), miSrcLine(m), `m:${m.id}:${i}`)), ...srcItems(p).map((r, k) => row(k + 1, esc(r.t), esc(r.d), `${i}:${k}`))];
+}
+/* id: "m:<source id>:<thread or empty>" for a source in Sources, "<thread>:<n>" for a page cited in an answer */
+function nSrcOf(id) {
+  const parts = String(id).split(':');
+  if (parts[0] === 'm') {
+    const m = MIT(parts[1]); if (!m) return null;
+    const ti = parts[2] === '' || parts[2] == null || !D.posts[+parts[2]] ? null : +parts[2];
+    const sid = ti != null ? D.posts[ti].s : (m.sp || []).find(x => D.joined.includes(x)) || (m.sp || [])[0] || D.joined[0] || 'public';
+    return { m, t: miTitle(m), pub: miSrcLine(m), url: m.url, ti, s: sp(sid) };
+  }
+  const ti = +parts[0], p = D.posts[ti], r = p && srcItems(p)[+parts[1]]; if (!r) return null;
+  const m = D.media.find(y => y.t && y.t === r.t) || null;
+  return { m, t: m ? miTitle(m) : r.t, pub: m ? miSrcLine(m) : esc(r.d), note: r.n, url: m ? m.url : r.d, ti, s: sp(p.s) };
+}
+function nSrc(id) {
+  const x = nSrcOf(id); if (!x) return { body: `${nPushBar('', '')}<p class="n-empty">This source is no longer available.</p>` };
+  const m = x.m, sv = m && nSignedIn() && st.miSaved.has(m.id);
+  const right = m ? nBtn('misave:' + m.id, sv ? NI.savedOn : NI.saved, sv ? 'Remove from Saved' : 'Save') : '';
+  const meta = [x.pub, m && esc(m.date || ''), m && esc(m.len || '')].filter(Boolean).join(' · ');
+  const text = m
+    ? `${m.sum ? `<p class="n-src-sum">${esc(m.sum)}</p>` : ''}<div class="n-doc">${m.body.map(b => b.h ? `<h3>${esc(b.h)}</h3>` : `<p>${b.ts ? `<span class="n-ts num">${esc(b.ts)}</span> ` : ''}${esc(b.p || '')}</p>`).join('')}</div>`
+    : `${x.note ? `<p class="n-src-sum">${esc(x.note)}</p>` : ''}<p class="n-muted n-src-none">Reader text isn’t available for this source. It is a web page cited in the answer.</p>`;
+  const dock = !nSignedIn() ? nDock('Ask about this source') : canRead(x.s) && D.joined.includes(x.s.id) ? nDock('Ask about this source', x.s) : '';
+  return { body: `${nPushBar('', right)}<article class="n-th n-srcv"><p class="n-pg-sp">${meta}</p><h1 class="n-doc-t">${esc(x.t)}</h1>${m && m.au ? `<p class="n-pg-m">By ${esc(m.au)}</p>` : ''}${text}<p class="n-src-url">${esc(x.url || '')}</p></article>`, bar: dock };
+}
+/* the space that pays for an ask sent from the dock of this screen; null when it sends a reply */
+function nDockSpace(t) {
+  if (t.v === 'thread') { const p = D.posts[t.id]; return p && p.k === 'ask' ? sp(p.s) : null; }
+  if (t.v === 'ask') return sp(D.posts[+String(t.id).split(':')[0]].s);
+  if (t.v === 'src') { const x = nSrcOf(t.id); return x ? x.s : null; }
+  return null;
+}
+/* Ask about this source: a follow-up in the thread that cites it, or a new ask about a saved source */
+function nSrcAsk(id, txt) {
+  const x = nSrcOf(id); if (!x) return;
+  if (x.ti != null) {
+    addFollowUp(x.ti, `About “${x.t}”: ${txt}`);
+    nst.stack = nst.stack.slice(0, -1);
+    const t = nTop(); if (!(t && t.v === 'thread' && t.id === x.ti)) nst.stack = [...nst.stack, { v: 'thread', id: x.ti }];
+    toast('Follow-up added to the thread.');
+    return;
+  }
+  Object.assign(st, { home: false, space: x.s.id, draft: txt, compTopic: null });
+  createThread('ask');
+  const ni = D.posts.length - 1;
+  if (x.m) db.update('posts', ni, p => { p.about = { it: x.m.id }; });
+  nst.stack = [...nst.stack, { v: 'thread', id: ni }]; nst.scroll = { ...nst.scroll, ['thread:' + ni]: 0 };
+}
+
+/* ---------- profiles ---------- */
+function nProfile(u) {
+  const self = u === ME.u, P = self ? ME : { u, name: NAMES[u] || u, x: '@' + u.replace(/\./g, '_') };
+  const th = D.posts.filter(p => p.u === u && canRead(sp(p.s)));
+  const fus = Object.entries(D.fu).flatMap(([pid, l]) => (l || []).filter(f => f.u === u).map(f => ({ ...f, pid: +pid }))).filter(f => D.posts[f.pid] && canRead(sp(D.posts[f.pid].s)));
+  const nsp = self ? D.joined.length : new Set(th.map(p => p.s)).size, pl = (n, w) => `<span class="num">${n}</span> ${w}${n === 1 ? '' : 's'}`;
+  const head = `<div class="n-pf">${avatar(u, 'n-av xl')}<h2>${esc(P.name)}</h2><p class="n-pf-h">${esc(u)} · X ${esc(P.x)}</p>${P.bio ? `<p class="n-pf-bio">${esc(P.bio)}</p>` : ''}<p class="n-pf-st">${pl(th.length, 'thread')} · ${pl(nsp, 'space')}</p>${self ? '<button class="n-capbtn ghost" type="button" data-n="sheet:pfedit">Edit profile</button>' : ''}</div>`;
+  const list = nst.pfTab === 'fus'
+    ? `<div class="n-feed">${fus.map(f => `<button class="n-cell" type="button" data-n="push:thread:${f.pid}"><span class="n-cell-b"><span class="n-cell-q">${esc(f.q)}</span><span class="n-cell-s">On ${esc(D.posts[f.pid].q)}</span><span class="n-cell-m">${f.age === 'now' ? 'Just now' : f.age}</span></span></button>`).join('') || '<p class="n-empty">No follow-ups yet.</p>'}</div>`
+    : nFeed(th);
+  const note = nst.pfTab !== 'fus' && th.some(p => isClosed(sp(p.s))) ? '<p class="n-grp-f n-pf-note">Threads in closed spaces are shown only to members of those spaces.</p>' : '';
+  return { body: `${nPushBar(self ? 'Profile' : '', '')}${head}<div class="n-pad">${nSeg([['threads', 'Threads'], ['fus', 'Follow-ups']], nst.pfTab, 'pftab')}</div>${list}${note}` };
+}
+function nPfSheet() {
+  const d = nst.pf;
+  const body = `<div class="n-pf n-pf-ed">${avatar(ME.u, 'n-av xl')}<p class="n-pf-h">Your X profile photo. Change it on X.</p></div>`
+    + nGroup('', [`<label class="n-row n-field"><span>Name</span><input id="n-pf-name" type="text" maxlength="50" value="${esc(d.name)}" autocomplete="off"></label>`], d.err ? `<span class="n-bad">${d.err}</span>` : '')
+    + nGroup('Bio', [`<textarea id="n-pf-bio" class="n-ta" rows="3" maxlength="160" aria-label="Bio" placeholder="Optional">${esc(d.bio)}</textarea>`], `Your handle, ${esc(ME.u)}, and your X account, ${esc(ME.x)}, come from your X login.`);
+  return nForm('Edit profile', '<button class="n-tb" type="button" data-n="close">Cancel</button>', 'Edit profile', '<button class="n-tb" type="button" data-n="pfsave"><b>Save</b></button>', body);
+}
+
+/* ---------- API key: details, rename, revoke ---------- */
+function nKeySheet(id) {
+  const k = st.userKeys.find(x => x.id === id); if (!k) return '';
+  const i = kinfo(k), row = (b, v, cls = '') => `<div class="n-row"><span class="n-row-b"><b>${b}</b></span><span class="n-val${cls}">${v}</span></div>`;
+  const body = nGroup('', [row('Name', esc(k.label)), row('Provider', k.raw ? provOf(k.raw) : i.provider), row('Key', esc(keyMask(k))), row('Added', esc(i.added)), row('Last used', esc(i.last)), row('Status', k.valid ? 'Active' : 'Rejected by the provider', k.valid ? '' : ' n-bad')])
+    + nGroup('', [nGo2(`sheet:keyrn:${id}`, '<span class="n-row-b"><b>Rename</b></span>')])
+    + nGroup('', [`<button class="n-row n-danger" type="button" data-n="sheet:keyrv:${id}"><span class="n-row-b"><b>Revoke key</b></span></button>`], 'Asks that use this key stop working when you revoke it.');
+  return nSub('', k.label, esc(k.label), body);
+}
+function nKeyRnSheet(id) {
+  const k = st.userKeys.find(x => x.id === id); if (!k) return '';
+  return nForm('Rename key', `<button class="n-tb" type="button" data-n="sheet:key:${id}">Cancel</button>`, 'Rename key', `<button class="n-tb" type="button" id="n-krn-save" data-n="keyrnsave:${id}"${nst.keyRn.trim() ? '' : ' disabled'}><b>Save</b></button>`,
+    nGroup('', [`<label class="n-row n-field"><span>Name</span><input id="n-key-rn" type="text" value="${esc(nst.keyRn)}" autocomplete="off"></label>`], `The name is shown where you pick who pays for an ask. The key itself does not change.`));
+}
+
+/* ---------- moderation: requests and reports ---------- */
+const nModGate = (s, title, what) => ({ body: `${nPushBar(title, '')}<p class="n-empty">Only moderators of ${spName(s)} can review ${what}.</p>` });
+function nReqs(sid) {
+  const s = sp(sid); if (!isModOf(sid)) return nModGate(s, 'Requests', 'requests');
+  const on = sid === 'replication' && isClosed(s), list = on ? openReqs() : [], done = on ? st.reqs.filter(r => r.st !== 'open') : [];
+  const card = r => `<section class="n-grp n-rq"><div class="n-list"><button class="n-rq-who" type="button" data-n="push:profile:${r.u}">${avatar(r.u, 'n-av')}<span class="n-row-b"><b>${esc(NAMES[r.u] || r.u)}${r.fresh ? ' <span class="n-flag">New account</span>' : ''}</b><small>${esc(r.u)} · Requested ${r.age} ago</small></span></button>${(s.qs || []).map((q, i) => r.a[i] ? `<div class="n-rq-a"><small>${esc(q.q)}</small><p>${esc(r.a[i])}</p></div>` : '').join('')}<div class="n-rq-acts"><button class="n-capbtn ghost" type="button" data-n="sheet:rqno:${r.u}">Decline</button><button class="n-capbtn" type="button" data-n="sheet:rqok:${r.u}">Approve</button></div></div></section>`;
+  const dec = done.length ? nGroup('Decided today', done.map(r => `<div class="n-row">${avatar(r.u, 'n-av sm')}<span class="n-row-b"><b>${esc(r.u)}</b><small>${r.st === 'approved' ? 'Approved by you' : 'Declined by you'}</small></span>${r.st === 'declined' ? `<button class="n-cap" type="button" data-n="rqundo:${r.u}">Undo</button>` : ''}</div>`)) : '';
+  const head = `<p class="n-grp-f n-mg-d">${spName(s)} · ${list.length} waiting · newest first</p>`;
+  return { body: `${nPushBar('Requests', '')}${list.length ? head + list.map(card).join('') : '<p class="n-empty">No requests waiting. New requests appear here and in your notifications.</p>'}${dec}` };
+}
+function nReps(sid) {
+  const s = sp(sid); if (!isModOf(sid)) return nModGate(s, 'Reports', 'reports');
+  const list = openReps(sid), done = st.reports.filter(r => r.sp === sid && r.st !== 'open');
+  const card = r => {
+    const it = itemOf(r.key), pid = D.posts.indexOf(it.p), ms = modOf(r.key);
+    return `<section class="n-grp n-rq"><div class="n-list"><p class="n-rp-h"><span class="n-rp-why">${SFI.flag}${repWhy(r.why)}</span><small>${nCap(it.noun)} · reported ${nAge(r.age)}</small></p>`
+      + `<button class="n-rp-it" type="button" data-n="push:thread:${pid}"><small>${it.by === 'Agent' ? 'Agent answer' : esc(it.by)} in ${esc(clip(it.p.q, 70))}</small><span>${esc(clip(it.text, 220))}</span>${ms ? `<span class="n-flag bad">${ms === 'hidden' ? 'Hidden' : 'Removed'}</span>` : ''}</button>`
+      + `<p class="n-rp-by">${avatar(r.by, 'n-av sm')}<span>Reported by <b>${esc(r.by === ME.u ? 'you' : r.by)}</b>${r.note ? `<q>${esc(r.note)}</q>` : ' · no note'}</span></p>`
+      + `<div class="n-rq-acts"><button class="n-capbtn ghost" type="button" data-n="rep:dismiss:${r.id}">Dismiss</button><button class="n-capbtn ghost" type="button" data-n="rep:hide:${r.id}">Hide</button><button class="n-capbtn ghost n-red" type="button" data-n="sheet:reprm:${r.id}">Remove</button></div></div></section>`;
+  };
+  const dec = done.length ? nGroup('Resolved today', done.map(r => `<div class="n-row">${avatar(r.by, 'n-av sm')}<span class="n-row-b"><b>${repWhy(r.why)}</b><small>${nCap(itemOf(r.key).noun)} · ${REP_DONE[r.st][0]} by you</small></span>${r.st === 'removed' ? `<button class="n-cap" type="button" data-n="sheet:reprs:${r.id}">Restore</button>` : `<button class="n-cap" type="button" data-n="repundo:${r.id}">Undo</button>`}</div>`)) : '';
+  const head = '<p class="n-grp-f n-mg-d">Hiding keeps the item for moderators and shows a placeholder to everyone else. Removing deletes it. The person who reported it gets a notification when you resolve the report.</p>';
+  return { body: `${nPushBar('Reports', '')}${head}${list.length ? list.map(card).join('') : '<p class="n-empty">No open reports. New reports appear here and in your notifications.</p>'}${dec}` };
+}
+/* reopen a resolved report (without changing the stored record in place) */
+function nRepUndo(r) {
+  const was = r.st; db.update('reports', r.id, y => { y.st = 'open'; });
+  if (was !== 'dismissed' && !st.reports.some(x => x.key === r.key && x.st !== 'open')) db.del('modSt', r.key);
+  st.notifs = st.notifs.filter(n => n.id !== 'nres:' + r.id);
+  toast('Report reopened.');
+}
+
+/* ---------- notifications: where each kind opens ---------- */
+function nNtTarget(x) {
+  if (x.k === 'reqs') return [{ v: 'mreq', id: x.sp }];
+  if (x.k === 'reps') return [{ v: 'mrep', id: x.sp }];
+  if (x.k === 'page' && sp(x.sp)) return [{ v: 'page', id: `${x.sp}:${x.page || 0}` }];
+  if (typeof x.open === 'string' && x.open.startsWith('item:') && MIT(x.open.split(':')[1])) return [{ v: 'src', id: `m:${x.open.split(':')[1]}:` }];
+  if (x.open != null && D.posts[x.open]) { const to = [{ v: 'thread', id: +x.open }]; if (x.qtNode && qtT(+x.open).by[x.qtNode]) to.push({ v: 'ask', id: `${+x.open}:${x.qtNode}` }); return to; }
+  if (x.sp && sp(x.sp)) return [{ v: 'space', id: x.sp }];
+  return [];
+}
+
+/* ---------- Home search, Saved ---------- */
+const nHomeSearch = () => `<div class="n-pad"><label class="n-search">${NI.search}<input id="n-hq" type="search" placeholder="Search threads and spaces" aria-label="Search threads and spaces" value="${esc(nst.hq || '')}"></label></div>`;
+function nSearchResults(q0) {
+  const q = q0.trim().toLowerCase(), has = t => String(t || '').toLowerCase().includes(q);
+  const sps = D.spaces.filter(x => visibleSp(x) && (has(x.name) || has(x.title) || has(x.desc)));
+  const th = D.posts.filter(p => canRead(sp(p.s)) && visibleSp(sp(p.s)) && (has(p.q) || has(p.t) || has(p.sum)));
+  if (!sps.length && !th.length) return `<p class="n-empty">No threads or spaces match “${esc(q0.trim())}”.</p>`;
+  const rows = sps.map(x => nGo2(`push:space:${x.id}`, `${glyph(x, 'n-gl')}<span class="n-row-b"><b>${nNameH(x)}${isClosed(x) ? LK('cs-lk n-lk', 'Closed space') : ''}</b><small>${fmt(x.members)} members${isClosed(x) ? ' · ' + visLabel(x) : ''}</small></span>`));
+  return `${sps.length ? nGroup('Spaces', rows) : ''}${th.length ? `<h3 class="n-grp-h n-srh">Threads</h3>${nFeed(th)}` : ''}`;
+}
+function nSavedBody() {
+  const asks = [...st.qtSaved].map(k => { const [th, id] = String(k).split(':'), T = D.posts[+th] ? qtT(+th) : null, n = T && T.by[id]; return n && canRead(sp(T.p.s)) ? { k, T, n } : null; }).filter(Boolean);
+  const srcs = [...st.miSaved].map(MIT).filter(Boolean), th = [...st.saved].map(i => D.posts[i]).filter(Boolean);
+  const empty = msg => `<p class="n-empty n-sv-empty">${NI.saved}<span>${msg}</span></p>`;
+  if (!asks.length && !srcs.length && !th.length) return empty('Tap the bookmark on a thread to save it here.');
+  const unsave = (what, id) => `<button class="n-ib n-unsave" type="button" data-n="unsave:${what}:${id}" aria-label="Remove from Saved">${NI.savedOn}</button>`;
+  const seg = `<div class="n-pad">${nSeg([['threads', `Threads <span class="num">${th.length}</span>`], ['asks', `Asks <span class="num">${asks.length}</span>`], ['sources', `Sources <span class="num">${srcs.length}</span>`]], nst.svSeg, 'svseg')}</div>`;
+  let body;
+  if (nst.svSeg === 'asks') body = asks.length ? `<div class="n-feed">${asks.map(({ k, T, n }) => `<div class="n-svr"><button class="n-cell" type="button" data-n="push:ask:${k}"><span class="n-cell-b"><span class="n-cell-h"><b>${esc(n.u)}</b><span>${nNameH(sp(T.p.s))} · Level ${n.lv}</span></span><span class="n-cell-q">${esc(n.q)}</span><span class="n-cell-s">In “${esc(qtClip(T.p.t || T.p.q, 70))}”</span></span></button>${unsave('ask', k)}</div>`).join('')}</div>` : empty('Tap the bookmark on an ask inside a thread to save it here.');
+  else if (nst.svSeg === 'sources') body = srcs.length ? `<div class="n-feed">${srcs.map(m => `<div class="n-svr"><button class="n-cell" type="button" data-n="push:src:m:${m.id}:"><span class="n-cell-b"><span class="n-cell-h"><span>${miSrcLine(m)}${m.date ? ' · ' + esc(m.date) : ''}</span></span><span class="n-cell-q">${esc(miTitle(m))}</span>${m.sum ? `<span class="n-cell-s">${esc(m.sum)}</span>` : ''}</span></button>${unsave('src', m.id)}</div>`).join('')}</div>` : empty('Tap the bookmark on a source to save it here.');
+  else body = th.length ? nFeed(th) : empty('Tap the bookmark on a thread to save it here.');
+  return seg + body;
+}
+
+/* ---------- sheets added in this block (nSheet asks here first) ---------- */
+function nSheetX(k, a) {
+  const tsp = () => { const t = nTop(); return t && (t.v === 'mreq' || t.v === 'space') ? sp(t.id) : sp('replication'); };
+  switch (k) {
+    case 'tmore': { const i = +a; return nAct('', '', [['Share…', 'sheet:share:' + i], ['Copy link', 'copylink:' + i], ['Report', nSignedIn() ? 'sheet:report:' + nRepKey(i) : 'sheet:signin', 'n-red']]); }
+    case 'share': return nShareSheet(+a);
+    case 'report': return nReportSheet(a);
+    case 'req': return nReqSheet(sp(a));
+    case 'pend': { const x = sp(a); return nAct(`Request sent ${nAge(st.reqAge)}`, `A moderator of ${esc(nName(x))} reviews it. You get a notification with the decision.`, [['Withdraw request', 'sheet:withdraw:' + a, 'n-red']], 'Close'); }
+    case 'withdraw': { const x = sp(a); return nAct('Withdraw your request?', `Moderators of ${esc(nName(x))} will no longer see it. You can request again at any time.`, [['Withdraw', 'withdrawok:' + a, 'n-red']], 'Keep request'); }
+    case 'wiki': { const t = nTop(); return nWiki(sp(a || (t && t.v === 'space' ? t.id : st.space))); }
+    case 'skill': { const [sid, i] = a.split(':'); return nSkillSheet(sid, i); }
+    case 'mem': return nMemSheet(sp(a));
+    case 'usage': return nUsageSheet(sp(a));
+    case 'rules': return nRulesSheet(sp(a));
+    case 'key': return nKeySheet(a);
+    case 'keyrv': { const key = st.userKeys.find(x => x.id === a); return key ? nAct(esc(key.label), 'Asks that use this key will stop working. This can’t be undone.', [['Revoke key', 'revoke:' + a, 'n-red']]) : ''; }
+    case 'keyrn': return nKeyRnSheet(a);
+    case 'pfedit': return nPfSheet();
+    case 'payer': return nPayerSheet(sp(a));
+    case 'topic': return nTopicSheet(sp(a));
+    case 'discard': return nAct('Discard this draft?', 'The text you wrote will be deleted.', [['Discard', 'discardok', 'n-red']], 'Keep editing');
+    case 'inv': { const x = st.notifs.find(n => n.id === a); if (!x || !sp(x.sp)) return ''; const s = sp(x.sp); return nAct(`${esc(x.u)} invited you to join ${esc(nName(s))}`, esc(s.desc), [['Accept invite', 'invok:' + a], ['Decline', 'invno:' + a, 'n-red']], 'Not now'); }
+    case 'rqok': return nAct(`Approve the request from ${esc(a)}?`, `${esc(a)} becomes a member of ${esc(nName(tsp()))}, can read its threads and gets a notification. To reverse this, remove the member.`, [['Approve', 'rqokgo:' + a]]);
+    case 'rqno': return nAct(`Decline the request from ${esc(a)}?`, `${esc(a)} gets a notification that the request was declined.`, [['Decline', 'rqnogo:' + a, 'n-red']]);
+    case 'reprm': { const r = st.reports.find(x => x.id === a); if (!r) return ''; const it = itemOf(r.key); return nAct(`Remove this ${it.noun}?`, `The ${it.noun} is deleted for everyone, including moderators. Its place in the thread shows “Removed by a moderator”. ${r.by === ME.u ? 'You get' : `${esc(r.by)} gets`} a notification that the report was resolved.`, [['Remove', 'repremgo:' + a, 'n-red']]); }
+    case 'reprs': { const r = st.reports.find(x => x.id === a); if (!r) return ''; const it = itemOf(r.key); return nAct(`Restore this ${it.noun}?`, `The ${it.noun} is shown in the thread again for everyone who can read the space. The report goes back to the queue.`, [['Restore', 'repundo:' + a]]); }
+  }
+  return '';
+}
+/* state a sheet starts from */
+function nSheetOpen(a) {
+  const [k, v] = a.split(/:(.*)/s);
+  if (k === 'report') nst.rep = { why: 'incorrect', note: '' };
+  if (k === 'pfedit') nst.pf = { name: ME.name, bio: ME.bio || '', err: '' };
+  if (k === 'keyrn') nst.keyRn = (st.userKeys.find(x => x.id === v) || {}).label || '';
+  if (k === 'mem') nst.memQ = '';
+}
+
+/* ---------- taps handled in this block (nClick asks here first) ---------- */
+function nClickX(k, a) {
+  const go = f => { nGo(f); return true; };
+  switch (k) {
+    case 'toastact': return go(() => { st.toast = null; nToastAct(a); });
+    case 'copylink': case 'shcopy': return go(() => { nst.sheet = null; toast('Link copied.'); });
+    case 'shmsg': return go(() => { nst.sheet = null; toast('Opened Messages with a link to the thread.'); });
+    case 'repwhy': return go(() => { nst.rep = { ...nst.rep, why: a }; });
+    case 'repsend': return go(() => {
+      const it = itemOf(a);
+      db.unshift('reports', { id: 'rp' + Date.now().toString(36), sp: it.s.id, key: a, why: nst.rep.why, note: nst.rep.note.trim(), by: ME.u, age: 'just now', st: 'open' });
+      st.repSeen = false; nst.sheet = null;
+      toast(`Report sent to the moderators of ${spName(it.s)}. You get a notification when they resolve it.`);
+    });
+    case 'reqrules': return go(() => { st.reqRules = !st.reqRules; });
+    case 'reqsend': return go(() => { const x = sp(a); if (!csReqValid(x)) return; setRel(a, 'pending'); st.reqAge = 'just now'; nst.sheet = null; toast(`Request sent to the moderators of ${spName(x)}. You get a notification when they decide.`); });
+    case 'withdrawok': return go(() => { setRel(a, 'none'); nst.sheet = null; toast('Request withdrawn.'); });
+    case 'invok': case 'invno': return go(() => {
+      const x = st.notifs.find(n => n.id === a); nst.sheet = null; if (!x) return;
+      db.update('notifs', a, n => { n.unread = false; n.done = k === 'invok' ? 'Accepted' : 'Declined'; });
+      if (k === 'invok') { setRel(x.sp, 'member'); toast(`You joined ${spName(sp(x.sp))}.`, 'open:' + x.sp, 'Open'); }
+      else toast('Invite declined. The person who invited you is not notified.');
+    });
+    case 'rqokgo': return go(() => { const s = nTop() && nTop().v === 'mreq' ? sp(nTop().id) : sp('replication'); st.reqs = st.reqs.map(r => r.u === a ? { ...r, st: 'approved' } : r); nst.sheet = null; toast(`Approved ${a}. They can read ${spName(s)} now.`); });
+    case 'rqnogo': return go(() => { st.reqs = st.reqs.map(r => r.u === a ? { ...r, st: 'declined' } : r); nst.sheet = null; toast(`Declined ${a}.`, 'undo:' + a, 'Undo'); });
+    case 'rqundo': return go(() => { db.update('reqs', a, r => { if (r.st === 'declined') r.st = 'open'; }); });
+    case 'rep': return go(() => { const [v, id] = a.split(':'), r = st.reports.find(x => x.id === id); if (r) sfResolve(r, v === 'hide' ? 'hidden' : 'dismissed'); });
+    case 'repremgo': return go(() => { const r = st.reports.find(x => x.id === a); nst.sheet = null; if (r) sfResolve(r, 'removed'); });
+    case 'repundo': return go(() => { const r = st.reports.find(x => x.id === a); nst.sheet = null; if (r) nRepUndo(r); });
+    case 'useskill': return go(() => {
+      const [sid, i] = a.split(':'), sk = (D.skills[sid] || [])[+i]; nst.sheet = null; if (!sk) return;
+      const t = nTop(); if (!(t && t.v === 'space' && t.id === sid)) nst.stack = [...nst.stack, { v: 'space', id: sid }];
+      Object.assign(nst, { inl: true, inlAt: sid, cSpace: sid, cMode: 'ask', cTopic: null, draft: `/${sk[0]} ` });
+      nst.scroll = { ...nst.scroll, ['space:' + sid]: 0 }; st.space = sid; nInlineFocus = true;
+    });
+    case 'setpayer': return go(() => { nst.payer = a; nst.sheet = null; nInlineFocus = true; });
+    case 'settopic': return go(() => { nst.cTopic = a || null; nst.sheet = null; nInlineFocus = true; });
+    case 'discardok': return go(() => { nst.inl = false; nst.draft = ''; nst.cTopic = null; nst.sheet = null; });
+    case 'pftab': return go(() => { nst.pfTab = a; });
+    case 'pfsave': return go(() => {
+      const name = nst.pf.name.trim();
+      if (!name) { nst.pf = { ...nst.pf, err: 'Add a name.' }; return; }
+      db.set('profile', { name, bio: (nst.pf.bio || '').trim() }); nst.sheet = null; toast('Profile saved.');
+    });
+    case 'keyrnsave': return go(() => { const v = nst.keyRn.trim(); if (!v) return; db.update('userKeys', a, x => { x.label = v; }); nst.sheet = 'key:' + a; toast('Key renamed.'); });
+    case 'svseg': return go(() => { nst.svSeg = a; });
+    case 'unsave': return go(() => { const [w, id] = a.split(/:(.*)/s); db.toggle(w === 'ask' ? 'qtSaved' : 'miSaved', id, false); toast('Removed from Saved.'); });
+    case 'qtsave': return go(() => { if (!nSignedIn()) { nst.sheet = 'signin'; return; } const on = !st.qtSaved.has(a); db.toggle('qtSaved', a, on); toast(on ? 'Saved. It is listed under Saved › Asks.' : 'Removed from Saved.'); });
+    case 'misave': return go(() => { if (!nSignedIn()) { nst.sheet = 'signin'; return; } const on = !st.miSaved.has(a); db.toggle('miSaved', a, on); toast(on ? 'Saved. It is listed under Saved › Sources.' : 'Removed from Saved.'); });
+  }
+  return false;
+}
+/* typing in fields added in this block */
+function nInputX(id, v, el) {
+  const refocus = () => { const c = el.selectionStart; renderAll(); const i = $(id); if (i) { i.focus({ preventScroll: true }); i.setSelectionRange(c, c); } };
+  let m;
+  if (id === 'n-hq') { nst.hq = v; refocus(); return true; }
+  if (id === 'n-memq') { nst.memQ = v; refocus(); return true; }
+  if ((m = /^n-ans-(\d+)$/.exec(id))) { const a = [...st.reqAns]; a[+m[1]] = v; st.reqAns = a; const b = $('n-req-send'), x = sp(String(nst.sheet).split(':')[1]); if (b && x) b.disabled = !csReqValid(x); return true; }
+  if (id === 'n-repnote') { nst.rep = { ...nst.rep, note: v }; return true; }
+  if (id === 'n-pf-name') { nst.pf = { ...nst.pf, name: v, err: '' }; return true; }
+  if (id === 'n-pf-bio') { nst.pf = { ...nst.pf, bio: v }; return true; }
+  if (id === 'n-key-rn') { nst.keyRn = v; const b = $('n-krn-save'); if (b) b.disabled = !v.trim(); return true; }
+  return false;
+}
+/* ==== end Phone app additions ==== */
 
 /* ================= closed spaces =================
    Threads in a closed space can be read by members only. A listed closed space appears in
@@ -6557,6 +7107,7 @@ const SAMPLE_ANS = ['The default-enrolment savings result, using the public surv
 function jump(k) {
   /* the live data store is still loading: open the screen when it is ready */
   if (!dataReady()) { DS.whenReady(() => { jump(k); renderAll(); }); return; }
+  if (k.startsWith('np-')) { npJump(k); return; }
   if (st.device === 'native') st.device = 'desktop';
   Object.assign(st, NAVBASE(), { auth: 'in', toast: null, welcome: null, created: null });
   const R = r => { setRel('replication', r); if (r === 'pending' || r === 'none') { st.reqAge = '2h'; st.reqAns = r === 'pending' ? [...SAMPLE_ANS] : ['', '']; st.reqRules = r === 'pending'; } };
@@ -9318,6 +9869,82 @@ function abJump(k) {
   }
 }
 
+/* ==== Phone app: Screen entries ====
+   Each entry switches to the Phone device and sets nst. The baseline (signed in, the fixtures' memberships,
+   notifications, requests, reports, keys and saved items) is restored first, so entries do not depend on each other. */
+JUMPS.push(['Phone', [
+  ['np-home', 'Home'], ['np-home-empty', 'Home with no spaces joined'], ['np-search', 'Search on Home'], ['np-tabs', 'Each tab keeps its screens'],
+  ['np-composer', 'Composer: model and who pays'], ['np-payer', 'Composer: choose who pays'], ['np-topic', 'Composer: topic in an FAQ space'], ['np-discard', 'Composer: discard the draft'], ['np-nopay', 'Follow-up with nothing to pay for it'],
+  ['np-more', 'Thread › More'], ['np-share', 'Thread › Share'], ['np-report', 'Thread › Report'], ['np-toast', 'A failed save'], ['np-src', 'Source with reader text'], ['np-src-web', 'Source cited in an answer'],
+  ['np-request', 'Request to join'], ['np-pending', 'Request pending'], ['np-withdraw', 'Withdraw a request'], ['np-declined', 'Request declined'], ['np-unlisted', 'Unlisted space, no access'], ['np-unlisted-thread', 'Unlisted thread, no access'],
+  ['np-about', 'About with Manage (moderator)'], ['np-about-join', 'About a space you have not joined'], ['np-rules', 'About: see rule changes'], ['np-page', 'A page'], ['np-skill', 'A skill'], ['np-members', 'Members'], ['np-usage', 'Token use'],
+  ['np-requests', 'Requests (moderator)'], ['np-approve', 'Approve a request'], ['np-reports', 'Reports (moderator)'], ['np-remove', 'Remove a reported item'],
+  ['np-notifs', 'Notifications: requests, reports, invite, page'], ['np-invite', 'Invite from a notification'],
+  ['np-saved-empty', 'Saved, empty'], ['np-saved-asks', 'Saved asks'], ['np-saved-sources', 'Saved sources'],
+  ['np-profile', 'Your profile'], ['np-profile-edit', 'Edit profile'], ['np-profile-other', 'Someone else’s profile'], ['np-key', 'API key details'], ['np-key-rename', 'Rename an API key'],
+]]);
+function npJump(k) {
+  /* baseline */
+  Object.assign(st, NAVBASE(), { auth: 'in', toast: null, welcome: null, created: null, device: 'native', reqAge: '2h', reqAns: ['', ''], reqRules: false, reqSeen: false, repSeen: false, modSt: {}, rqSel: new Set() });
+  st.notifs = structuredClone(ST0.notifs); st.reports = structuredClone(REPS0); st.reqs = structuredClone(REQS0); st.userKeys = structuredClone(ST0.userKeys);
+  st.saved = new Set(ST0.saved); st.qtSaved = new Set(ST0.qtSaved); st.miSaved = new Set(ST0.miSaved);
+  qtSyncNotif();
+  db.set('joined', [...JOINED0]);
+  ['replication', 'northwind', 'ward7'].forEach(id => setRel(id, 'none')); setRel('grants', 'member');
+  Object.assign(nst, structuredClone(NST0));
+  const tab = (t, ...stack) => { nst.tab = t; nst.stack = stack; };
+  const pi = (s, kind) => D.posts.findIndex(p => p.s === s && (!kind || p.k === kind));
+  const home0 = D.posts.findIndex(p => p.k === 'ask' && D.rich[D.posts.indexOf(p)] && D.joined.includes(p.s));
+  const modSable = () => { if (!D.joined.includes('sablefield')) db.push('joined', 'sablefield'); };
+  switch (k) {
+    case 'np-home': tab('home'); break;
+    case 'np-home-empty': setRel('grants', 'none'); db.set('joined', []); tab('home'); break;
+    case 'np-search': tab('home'); nst.hq = 'market'; break;
+    case 'np-tabs': nst.stacks = { home: [{ v: 'thread', id: home0 }] }; tab('spaces', { v: 'space', id: 'scifi' }); break;
+    case 'np-composer': case 'np-payer': case 'np-discard':
+      tab('home'); Object.assign(nst, { inl: true, inlAt: 'home', cSpace: 'markets', cMode: 'ask', draft: 'How did the 2008 money-market fund run spread between funds?' });
+      if (k === 'np-payer') nst.sheet = 'payer:markets'; if (k === 'np-discard') nst.sheet = 'discard'; break;
+    case 'np-topic': modSable(); tab('spaces', { v: 'space', id: 'sablefield' }); Object.assign(nst, { inl: true, inlAt: 'sablefield', cSpace: 'sablefield', cMode: 'ask', draft: 'Why does my sync rule return E_SYNC_SCOPE?', sheet: 'topic:sablefield' }); break;
+    case 'np-nopay': st.userKeys = st.userKeys.filter(x => !x.valid); tab('home', { v: 'thread', id: pi('scifi', 'ask') }); break;
+    case 'np-more': case 'np-share': case 'np-report': case 'np-toast':
+      tab('home', { v: 'thread', id: home0 });
+      if (k === 'np-more') nst.sheet = 'tmore:' + home0;
+      if (k === 'np-share') nst.sheet = 'share:' + home0;
+      if (k === 'np-report') { nst.sheet = 'report:a:' + home0; nst.rep = { why: 'old', note: '' }; }
+      if (k === 'np-toast') toast('Couldn’t save the change (The server is unavailable). It was undone.');
+      break;
+    case 'np-src': { setRel('replication', 'member'); const i = D.posts.findIndex(p => p.s === 'replication' && p.about); tab('home', { v: 'thread', id: i }, { v: 'src', id: `m:${D.posts[i].about.it}:${i}` }); break; }
+    case 'np-src-web': tab('home', { v: 'thread', id: 0 }, { v: 'src', id: '0:1' }); break;
+    case 'np-request': tab('spaces', { v: 'space', id: 'replication' }); st.reqAns = ['The default-enrolment savings result, using the public survey microdata.', '']; nst.sheet = 'req:replication'; break;
+    case 'np-pending': case 'np-withdraw': setRel('replication', 'pending'); tab('spaces', { v: 'space', id: 'replication' }); if (k === 'np-withdraw') nst.sheet = 'withdraw:replication'; break;
+    case 'np-declined': setRel('replication', 'denied'); tab('spaces', { v: 'space', id: 'replication' }); break;
+    case 'np-unlisted': tab('home', { v: 'space', id: 'ward7' }); break;
+    case 'np-unlisted-thread': tab('home', { v: 'thread', id: pi('ward7') }); break;
+    case 'np-about': modSable(); tab('spaces', { v: 'space', id: 'sablefield' }); nst.sheet = 'wiki:sablefield'; break;
+    case 'np-about-join': tab('spaces', { v: 'space', id: 'history' }); nst.sheet = 'wiki:history'; break;
+    case 'np-rules': spEdit('scifi', x => { x.rulesPrev = ['Mark spoilers in titles with [spoilers].', 'Cite editions and page numbers when quoting.', 'Reading-group threads are pinned by mods.']; x.rules = ['Mark spoilers in titles with [spoilers].', 'Cite editions and page numbers when quoting.', 'Put plot details after a "Spoilers below" line.']; x.rulesAt = '2d'; x.rulesBy = 'tomasz'; });
+      tab('spaces', { v: 'space', id: 'scifi' }); nst.sheet = 'rules:scifi'; break;
+    case 'np-page': tab('spaces', { v: 'space', id: 'scifi' }, { v: 'page', id: 'scifi:1' }); break;
+    case 'np-skill': tab('spaces', { v: 'space', id: 'scifi' }); nst.sheet = 'skill:scifi:0'; break;
+    case 'np-members': case 'np-usage': modSable(); tab('spaces', { v: 'space', id: 'sablefield' }); nst.sheet = (k === 'np-members' ? 'mem' : 'usage') + ':sablefield'; break;
+    case 'np-requests': case 'np-approve': setRel('replication', 'mod'); tab('spaces', { v: 'space', id: 'replication' }, { v: 'mreq', id: 'replication' }); if (k === 'np-approve') nst.sheet = 'rqok:' + openReqs()[0].u; break;
+    case 'np-reports': case 'np-remove': modSable(); tab('spaces', { v: 'space', id: 'sablefield' }, { v: 'mrep', id: 'sablefield' }); if (k === 'np-remove') nst.sheet = 'reprm:' + st.reports[0].id; break;
+    case 'np-notifs': case 'np-invite':
+      setRel('replication', 'mod'); modSable();
+      db.unshift('notifs', { id: 'npg', k: 'page', u: 'tomasz', sp: 'scifi', page: 1, age: '5m', unread: true, text: 'edited the page <b>Canon starter list</b> in #sci-fi' });
+      db.unshift('notifs', { id: 'ninv', k: 'invite', u: 'jun.park', sp: 'ward7', age: '1m', unread: true, text: `invited you to join <b>${spName(sp('ward7'))}</b>` });
+      tab('home', { v: 'notifs', id: '' }); if (k === 'np-invite') nst.sheet = 'inv:ninv'; break;
+    case 'np-saved-empty': st.saved = new Set(); st.qtSaved = new Set(); st.miSaved = new Set(); tab('saved'); break;
+    case 'np-saved-asks': tab('saved'); nst.svSeg = 'asks'; break;
+    case 'np-saved-sources': st.miSaved = new Set(['m2', 'm4']); tab('saved'); nst.svSeg = 'sources'; break;
+    case 'np-profile': case 'np-profile-edit': tab('you', { v: 'profile', id: ME.u }); if (k === 'np-profile-edit') { nst.sheet = 'pfedit'; nSheetOpen('pfedit'); } break;
+    case 'np-profile-other': tab('home', { v: 'thread', id: 0 }, { v: 'profile', id: 'hal_b' }); break;
+    case 'np-key': case 'np-key-rename': tab('you', { v: 'keys', id: '' }); nst.sheet = (k === 'np-key' ? 'key:' : 'keyrn:') + 'k2'; if (k === 'np-key-rename') nSheetOpen(nst.sheet); break;
+  }
+  const t = nst.stack[nst.stack.length - 1];
+  if (t && (t.v === 'space' || t.v === 'thread')) st.space = t.v === 'space' ? t.id : D.posts[t.id].s;
+}
+/* ==== end Phone app: Screen entries ==== */
 buildJump();
 /* End of start-up: the fixtures are complete. Copy them as the mock backend's seed data, start loading
    the data store over HTTP, and move the Variants bar's keys from the UI store to the mockup store. */
