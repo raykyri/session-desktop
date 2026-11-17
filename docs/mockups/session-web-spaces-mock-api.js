@@ -19,11 +19,22 @@
      from membership alone.
    - Ids are ULIDs, as in the real server (web/packages/db/src/ids.ts), including in thread URLs.
 
+   Server-shaped records (step 6)
+   - The mock clock: cfg.now, a fixed instant (SessionFixtures.clock), read and set through /api/dev/config.
+     Records carry createdAt (an ISO instant); the server sets it on a new record that has none, and sets
+     updatedAt when a list or thread record changes. The page formats both relative to the clock.
+   - Ids: a record created with POST on a collection marked `serverId` gets a ULID when the body has none
+     (time from the mock clock, then a counter, so runs are deterministic). The response carries it; the
+     page puts it in place of its temporary id. Fixture ids (k1, rp1, …) stay as they are.
+   - Derived fields: the server computes them on every read and does not store them (see DERIVED below):
+     a thread's r, likes, liked and mine; a space's members and pct. GET /api/me says who is signed in.
+   - Write-only fields: an API key's raw value is stored but never returned.
+
    Contents
    1. The wire codec (JSON; Sets travel as { $set: [...] }). The page uses this copy.
    2. Error codes: tRPC codes, their HTTP status, and a default user-facing message.
    3. Record schemas and a small validator (no library).
-   4. Collections: how the server stores each one.
+   4. Collections: how the server stores each one; derived fields; createdAt stamps.
    5. API: the contract table, one row per endpoint. The router serves only these rows.
    6. createBackend(): the in-memory database, persisted to localStorage, behind a fetch patch for /api/*.
 
@@ -59,9 +70,10 @@
      Object schemas list their fields; a key ending in "?" is optional (absent or undefined). Fields a
      schema does not list are accepted as they are (the mockup adds display fields freely); listed fields
      must have the listed type. */
+  const ISO_RE = /^\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d{1,3})?)?Z$/;
   const t = {
     str: { t: 'string' }, num: { t: 'number' }, bool: { t: 'boolean' }, any: { t: 'any' }, null: { t: 'null' },
-    int: { t: 'integer' },
+    int: { t: 'integer' }, iso: { t: 'iso' },
     or: (...of) => ({ t: 'or', of }),
     nul: s => ({ t: 'or', of: [s, { t: 'null' }] }),
     arr: of => ({ t: 'array', of }),
@@ -80,6 +92,7 @@
       case 'string': return typeof v === 'string' ? out : bad('string');
       case 'number': return typeof v === 'number' && Number.isFinite(v) ? out : bad('number');
       case 'integer': return Number.isInteger(v) && v >= 0 ? out : bad('integer');
+      case 'iso': return typeof v === 'string' && ISO_RE.test(v) && !isNaN(Date.parse(v)) ? out : bad('ISO time');
       case 'boolean': return typeof v === 'boolean' ? out : bad('boolean');
       case 'null': return v === null ? out : bad('null');
       case 'enum': return s.vs.includes(v) ? out : bad(s.vs.map(x => JSON.stringify(x)).join(' | '));
@@ -113,74 +126,96 @@
       case 'set': return `Set<${describe(s.of)}>`;
       case 'record': return `Record<string, ${describe(s.of)}>`;
       case 'lazy': return describe(s.f());
+      case 'iso': return 'ISOTime';
       case 'object': return `{ ${Object.entries(s.fields).map(([k, x]) => `${k}: ${describe(x)}`).join(', ')} }`;
       default: return s.t;
     }
   }
 
-  const { str, num, bool, int, nul, arr, tup, set, rec, obj, one, named } = t;
+  const { str, num, bool, int, iso, nul, arr, tup, set, rec, obj, one, named } = t;
   const SPACE_ROLE = one('Owner', 'Admin', 'Moderator', 'Member');
+  /* Fields marked "derived" are computed by the server on every read (section 4, DERIVED) and not stored. */
   const S = {};
   S.Space = obj({
-    id: str, name: str, title: str,
-    'av?': num, 'members?': num, 'online?': num, 'posts?': num, 'created?': str, 'desc?': str,
-    'rules?': arr(str), 'rulesPrev?': arr(str), 'rulesAt?': str, 'rulesBy?': str,
-    'pages?': arr(tup(str, str)), 'mods?': arr(tup(str, str)), 'topics?': arr(tup(str, str)),
+    id: str, name: str, title: str, 'createdAt?': iso,
+    'av?': num, 'online?': num, 'posts?': num, 'desc?': str,
+    'members?': int,       /* derived: membersBase + the space's member list */
+    'membersBase?': int,   /* members outside the fixtures; not returned */
+    'rules?': arr(str), 'rulesPrev?': arr(str), 'rulesAt?': iso, 'rulesBy?': str,
+    'pages?': arr(tup(str, iso)),   /* [title, edited at] */
+    'mods?': arr(tup(str, str)), 'topics?': arr(tup(str, str)),
     'vis?': str, 'policy?': str, 'invite?': str, 'qs?': arr(obj({ q: str, 'req?': bool })),
     'faq?': bool, 'postsOff?': bool, 'plain?': bool, 'pageEdit?': str,
+    'dom?': nul(obj({ domain: str, 'method?': str, 'state?': str, 'verifiedAt?': iso })),
     /* TODO(limits): stub fields, stored as sent and not checked. The space token budget and the paying
-       key stay as the mockup has them; the backend does no token accounting (owner decision). */
+       key stay as the mockup has them; the backend does no token accounting (owner decision). pct is
+       derived (used / budget). */
     'budget?': t.any, 'used?': t.any, 'pct?': t.any, 'byok?': t.any, 'key?': t.any,
   }, 'Space');
   S.Thread = obj({
-    s: str, u: str, k: one('ask', 'post'), q: str,
-    'mine?': bool, 't?': nul(str), 'sum?': nul(str), 'r?': num, 'tok?': num, 'age?': str, 'likes?': num,
+    s: str, u: str, k: one('ask', 'post'), q: str, 'createdAt?': iso, 'updatedAt?': iso,
+    't?': nul(str), 'sum?': nul(str), 'tok?': num,
+    'r?': int,              /* derived: first-level follow-ups of an ask, or replies to a post */
+    'likes?': int,          /* derived: likesBase + your like */
+    'liked?': bool,         /* derived: you liked it */
+    'mine?': bool,          /* derived: u is you */
+    'likesBase?': int,      /* likes from people outside the fixtures; not returned. A write sets it to likes − liked. */
     'about?': t.obj({ 'it?': str, 'its?': arr(str), 'b?': num }), 'rf?': str, 'kw?': str,
     'topic?': nul(str), 'topicBy?': nul(str), 'running?': bool,
     'pay?': t.any,   /* TODO(limits): who pays for the ask (a key or a space budget), stored as sent */
     'fail?': obj({ why: str, 'at?': num }), 'edited?': bool, 'del?': bool, 'gone?': bool, 'skill?': nul(str),
     'from?': obj({ th: num, node: str }),
   }, 'Thread');
-  S.Reply = t.named('Reply', t.lazy(() => obj({ u: str, age: str, t: str, 'kids?': arr(S.Reply), 'del?': bool, 'edited?': bool })));
-  S.FollowUp = obj({ u: str, age: str, q: str, 'a?': str, 'html?': str, 'del?': bool, 'edited?': bool }, 'FollowUp');
-  S.AskNode = obj({ id: str, par: str, 'u?': str, 'age?': str, 'tok?': num, 'q?': str, 'html?': str, 'fu?': num, 'del?': bool, 'edited?': bool }, 'AskNode');
+  S.Reply = t.named('Reply', t.lazy(() => obj({ u: str, 'createdAt?': iso, t: str, 'likes?': int, 'kids?': arr(S.Reply), 'del?': bool, 'edited?': bool })));
+  S.FollowUp = obj({ u: str, 'createdAt?': iso, q: str, 'a?': str, 'html?': str, 'del?': bool, 'edited?': bool }, 'FollowUp');
+  S.AskNode = obj({ id: str, par: str, 'u?': str, 'createdAt?': iso, 'tok?': num, 'q?': str, 'html?': str, 'fu?': num, 'del?': bool, 'edited?': bool }, 'AskNode');
   S.AskTree = obj({ nodes: arr(S.AskNode) }, 'AskTree');
   S.Source = obj({
     id: str, pl: str, kind: str,
-    'au?': str, 'h?': str, 'date?': str, 'age?': str, 'len?': str, 'tok?': num, 'sp?': arr(str), 'url?': str,
-    'sum?': str, 'body?': arr(t.obj({})), 'pub?': str, 't?': str, 'desc?': str, 'by?': str, 'deleted?': str, 'paid?': num,
+    'au?': str, 'h?': str, 'createdAt?': iso,   /* when the author published it */
+    'len?': str, 'tok?': num, 'sp?': arr(str), 'url?': str,
+    'sum?': str, 'body?': arr(t.obj({})), 'pub?': str, 't?': str, 'desc?': str, 'by?': str, 'paid?': num,
+    'edited?': obj({ at: iso, b: num, 'old?': str }), 'deletedAt?': iso,
   }, 'Source');
-  /* TODO(limits): API keys are a stub (owner decision): stored as written, not encrypted, no usage accounting. */
+  /* TODO(limits): API keys are a stub (owner decision): stored as written, not encrypted, no usage accounting.
+     raw is write-only: stored, never returned (GET returns the mask). */
   S.ApiKey = obj({
-    id: str, kind: str, label: str,
-    'sub?': str, 'valid?': bool, 'reason?': str, 'raw?': str, 'provider?': str, 'added?': str, 'last?': str,
-    'used?': num, 'cap?': num, 'check?': str,
+    id: str, kind: str, label: str, 'createdAt?': iso,
+    'mask?': str, 'provider?': str, 'raw?': str, 'valid?': bool, 'reason?': str, 'check?': str,
+    'lastUsedAt?': nul(iso), 'used?': num, 'cap?': num,
   }, 'ApiKey');
+  /* Notifications are structured; the page writes their text and picks their icon from `type`.
+     thread: a thread's position (step 2 makes it a ULID); node: a node of its ask tree; page: an index into the
+     space's pages; source and block: a source and one of its passages; report and item: a report and the key of
+     the item it is about; outcome: how the report was resolved; response: your answer to an invite. */
+  const NOTIFICATION_TYPES = ['follow_up', 'branch', 'answer_ready', 'answer_failed', 'invite', 'join_approved', 'join_declined',
+    'page_edited', 'report_resolved', 'source_edited', 'source_asked'];
   S.Notification = obj({
-    id: str, k: str,
-    /* open: a thread's position, or "item:<source>:<n>" / "thread:<id>" for source notifications */
-    'u?': str, 'age?': str, 'unread?': bool, 'open?': t.or(num, str), 'qtNode?': str, 'text?': str, 'why?': str, 'sp?': str,
-    'done?': str, 'ic?': str, 'page?': num,
+    id: str, type: one(...NOTIFICATION_TYPES), 'createdAt?': iso, read: bool,
+    'actor?': str, 'space?': str, 'thread?': int, 'node?': str, 'page?': int, 'source?': str, 'block?': int,
+    'report?': str, 'item?': str, 'outcome?': one('dismissed', 'hidden', 'removed'), 'response?': one('accepted', 'declined'),
   }, 'Notification');
   S.JoinRequest = obj({
-    u: str, st: one('open', 'approved', 'declined'),
-    'age?': str, 'since?': str, 'th?': num, 'common?': arr(str), 'bio?': str, 'a?': arr(str), 'why?': str, 'fresh?': bool, 'sp?': str,
+    u: str, st: one('open', 'approved', 'declined'), 'createdAt?': iso,
+    'userCreatedAt?': iso,   /* when the applicant joined Session */
+    'th?': num, 'common?': arr(str), 'bio?': str, 'a?': arr(str), 'why?': str, 'fresh?': bool, 'sp?': str,
   }, 'JoinRequest');
-  S.Member = obj({ u: str, role: str, 'since?': str }, 'Member');
-  S.Ban = obj({ id: str, sp: str, u: str, 'when?': str }, 'Ban');
-  S.InviteLink = obj({ id: str, code: str, by: str, sp: str, 'exp?': str, 'dead?': str, 'usedBy?': str }, 'InviteLink');
-  S.Report = obj({ id: str, sp: str, key: str, by: str, st: one('open', 'dismissed', 'hidden', 'removed'), 'why?': str, 'note?': str, 'age?': str }, 'Report');
-  S.SpaceSource = obj({ m: str, by: str, age: str, 'note?': str, 'rv?': bool }, 'SpaceSource');
-  S.SourceReport = obj({ m: str, sid: str, by: str, 'why?': str, 'age?': str }, 'SourceReport');
+  S.Member = obj({ u: str, role: str, 'joinedAt?': iso }, 'Member');
+  S.Ban = obj({ id: str, sp: str, u: str, 'createdAt?': iso }, 'Ban');
+  S.InviteLink = obj({ id: str, code: str, by: str, sp: str, 'createdAt?': iso, 'expiresAt?': nul(iso), 'dead?': str, 'usedBy?': str }, 'InviteLink');
+  S.Report = obj({ id: str, sp: str, key: str, by: str, st: one('open', 'dismissed', 'hidden', 'removed'), 'why?': str, 'note?': str, 'createdAt?': iso }, 'Report');
+  S.SpaceSource = obj({ m: str, by: str, 'createdAt?': iso, 'note?': str, 'rv?': bool }, 'SpaceSource');
+  S.SourceReport = obj({ m: str, sid: str, by: str, 'why?': str, 'createdAt?': iso }, 'SourceReport');
   S.Skill = named('Skill', tup(str, str));
-  S.PageDoc = obj({ t: str, text: arr(str), 'by?': str, 'ed?': str, revs: arr(obj({ by: str, age: str, note: str })) }, 'PageDoc');
+  S.PageDoc = obj({ t: str, text: arr(str), 'by?': str, 'ed?': str, revs: arr(obj({ by: str, 'createdAt?': iso, note: str })) }, 'PageDoc');
   S.Profile = obj({ name: str, bio: str }, 'Profile');
+  S.Me = obj({ u: str, name: str, bio: str, x: str, createdAt: iso }, 'Me');
   S.Invite = named('Invite', nul(obj({ sp: str, by: str, state: str })));
   /* TODO(limits): token usage is simulated in the page for the Token model variants (owner decision:
      no server-side limit tracking yet). Stored as sent. */
-  S.Usage = obj({ cap: num, reset: str, def: nul(str), movedSeen: bool, by: rec(rec(num)),
+  S.Usage = obj({ cap: num, resetAt: iso, def: nul(str), movedSeen: bool, by: rec(rec(num)),
     skeys: rec(obj({ prov: str, mask: str, by: str, cap: num, used: num, member: num })) }, 'Usage');
-  S.Settings = obj({ email: str, emailNew: nul(str), exportAt: nul(str), emailOn: bool, types: rec(bool), spaces: rec(str) }, 'Settings');
+  S.Settings = obj({ email: str, emailNew: nul(str), exportAt: nul(iso), emailOn: bool, types: rec(bool), spaces: rec(str) }, 'Settings');
   S.ClosedSpaceState = one('none', 'pending', 'member', 'mod', 'denied');
 
   /* ---- 4. collections ----
@@ -196,8 +231,8 @@
     fu:       { path: '/api/follow-ups', kind: 'map', key: 'thread', item: named('FollowUp[]', arr(S.FollowUp)) },
     rp:       { path: '/api/replies', kind: 'map', key: 'thread', item: named('Reply[]', arr(S.Reply)) },
     qtd:      { path: '/api/ask-trees', kind: 'map', key: 'thread', item: S.AskTree },
-    media:    { path: '/api/sources', kind: 'list', id: 'id', item: S.Source },
-    miAdded:  { path: '/api/sources/new', kind: 'list', id: 'id', item: S.Source },
+    media:    { path: '/api/sources', kind: 'list', id: 'id', serverId: true, item: S.Source },
+    miAdded:  { path: '/api/sources/new', kind: 'list', id: 'id', serverId: true, item: S.Source },
     joined:   { path: '/api/me/memberships', kind: 'value', item: named('SpaceId[]', arr(str)) },
     roles:    { path: '/api/me/roles', kind: 'value', item: named('Record<SpaceId, SpaceRole>', rec(SPACE_ROLE)) },
     roles0:   { path: '/api/me/roles/granted', kind: 'value', item: named('Record<SpaceId, SpaceRole>', rec(SPACE_ROLE)) },
@@ -207,16 +242,16 @@
     qtSaved:  { path: '/api/me/saved-asks', kind: 'value', item: named('Set<AskNodeKey>', set(str)) },
     miSaved:  { path: '/api/me/saved-sources', kind: 'value', item: named('Set<SourceId>', set(str)) },
     miRead:   { path: '/api/me/read-sources', kind: 'value', item: named('Set<SourceId>', set(str)) },
-    userKeys: { path: '/api/me/api-keys', kind: 'list', id: 'id', item: S.ApiKey },
-    notifs:   { path: '/api/me/notifications', kind: 'list', id: 'id', item: S.Notification },
+    userKeys: { path: '/api/me/api-keys', kind: 'list', id: 'id', serverId: true, writeOnly: ['raw'], item: S.ApiKey },
+    notifs:   { path: '/api/me/notifications', kind: 'list', id: 'id', serverId: true, item: S.Notification },
     askedInv: { path: '/api/me/invite-requests', kind: 'value', item: named('SpaceId[]', arr(str)) },
     invite:   { path: '/api/me/invite', kind: 'value', item: S.Invite },
     reqs:     { path: '/api/join-requests', kind: 'list', id: 'u', item: S.JoinRequest },
-    mem:      { path: '/api/members', kind: 'value', item: named('Member[]', arr(S.Member)) },
+    mem:      { path: '/api/members', kind: 'value', space: 'replication', item: named('Member[]', arr(S.Member)) },   /* one closed space's members */
     memOther: { path: '/api/members/other-spaces', kind: 'map', key: 'space', item: named('Member[]', arr(S.Member)) },
     banned:   { path: '/api/bans', kind: 'list', id: 'id', item: S.Ban },
-    links:    { path: '/api/invite-links', kind: 'list', id: 'id', item: S.InviteLink },
-    reports:  { path: '/api/reports', kind: 'list', id: 'id', item: S.Report },
+    links:    { path: '/api/invite-links', kind: 'list', id: 'id', serverId: true, item: S.InviteLink },
+    reports:  { path: '/api/reports', kind: 'list', id: 'id', serverId: true, item: S.Report },
     modSt:    { path: '/api/moderation', kind: 'map', item: named('ModerationState', str) },
     dsDrops:  { path: '/api/space-sources', kind: 'map', key: 'space', item: named('SpaceSource[]', arr(S.SpaceSource)) },
     dsPol:    { path: '/api/space-source-policies', kind: 'map', key: 'space', item: named('SourcePolicy', str) },
@@ -231,6 +266,42 @@
     repSeen:  { path: '/api/me/reports-seen', kind: 'value', item: bool },
     reqSeen:  { path: '/api/me/requests-seen', kind: 'value', item: bool },
     rpLiked:  { path: '/api/me/reply-likes', kind: 'value', item: named('Set<ReplyKey>', set(str)) },
+  };
+  /* Records nested in a value that get a createdAt (joinedAt in member lists) from the server when a write
+     brings them without one. Every record of a list or index collection gets one too. */
+  const objs = l => (Array.isArray(l) ? l : []).filter(x => x && typeof x === 'object');
+  function stampTargets(k, v) {
+    switch (k) {
+      case 'fu': case 'dsDrops': case 'dsReps': case 'mem': case 'memOther': return objs(v);
+      case 'rp': { const out = []; (function walk(l) { objs(l).forEach(x => { out.push(x); walk(x.kids); }); })(v); return out; }
+      case 'qtd': return objs(v && v.nodes).filter(n => n.u);   /* asks; nodes that point at a follow-up (fu) have no time of their own */
+      case 'pagedocs': return objs(v && v.revs);
+    }
+    return [];
+  }
+  const stampField = k => k === 'mem' || k === 'memOther' ? 'joinedAt' : 'createdAt';
+
+  /* Derived fields: computed on every read from the stored records and the signed-in person, never stored.
+     view(record, i, d, me) gives the record as GET returns it; a write drops `fields` and keeps the base that
+     base(body, stored) gives; `hidden` fields are stored but not returned. */
+  const firstLevel = (d, i) => d.qtd && d.qtd[i] ? d.qtd[i].nodes.filter(n => n.par === 'r').length : ((d.fu && d.fu[i]) || []).length;
+  const roster = (d, sid) => (sid === C.mem.space ? d.mem : (d.memOther || {})[sid]) || [];
+  const DERIVED = {
+    posts: {
+      fields: ['r', 'likes', 'liked', 'mine'], hidden: ['likesBase'],
+      view: (p, i, d, me) => {
+        const liked = !!(d.liked && d.liked.has(i));
+        return { ...p, r: p.k === 'ask' ? firstLevel(d, i) : ((d.rp && d.rp[i]) || []).length, likes: (p.likesBase || 0) + (liked ? 1 : 0), liked, mine: p.u === me.u };
+      },
+      /* the client sends the thread as it holds it: likes and liked from its last read, so likes − liked is the base */
+      base: (b, stored) => ({ likesBase: typeof b.likes === 'number' ? Math.max(0, b.likes - (b.liked ? 1 : 0)) : stored ? stored.likesBase || 0 : 0 }),
+    },
+    spaces: {
+      fields: ['members', 'pct'], hidden: ['membersBase'],
+      view: (s, i, d) => ({ ...s, members: (s.membersBase || 0) + roster(d, s.id).length, pct: s.budget ? s.used / s.budget : 0 }),
+      /* a new space starts with no members outside its member list */
+      base: (b, stored) => ({ membersBase: stored ? stored.membersBase || 0 : 0 }),
+    },
   };
 
   /* ---- 5. the API contract ----
@@ -281,7 +352,7 @@
     row('spaces', 'put', 'admin', 'spaces.update', { stub: true, note: 'TODO(limits): the token budget fields are stored as sent' }),
     row('spaces', 'delete', 'owner', 'spaces.remove'),
 
-    /* threads: the mock addresses a thread by its position in the list */
+    /* threads: the mock addresses a thread by its position in the list. r, likes, liked and mine are derived on read. */
     row('posts', 'list', 'guest', 'research.listTrees', { wire: 'ResearchTreeSummary[]' }),
     row('posts', 'get', 'guest', 'research.getTree', { wire: 'ResearchTreeDetail' }),
     row('posts', 'replace', 'moderator', 'threads.moveToTopic', { note: 'a moderator moves several threads at once (deleted topics)' }),
@@ -336,16 +407,16 @@
     row('miRead', 'list', 'user', 'sources.listRead'),
     row('miRead', 'replace', 'user', 'sources.markRead'),
 
-    /* TODO(limits): API keys are a stub: stored as sent (no encryption, no usage accounting) */
-    row('userKeys', 'list', 'user', 'apiKeys.list', { stub: true }),
+    /* TODO(limits): API keys are a stub: stored as sent (no encryption, no usage accounting). raw is write-only. */
+    row('userKeys', 'list', 'user', 'apiKeys.list', { stub: true, note: 'masked keys only: raw is never returned' }),
     row('userKeys', 'replace', 'user', 'apiKeys.replaceAll', { stub: true }),
-    row('userKeys', 'create', 'user', 'apiKeys.add', { stub: true }),
+    row('userKeys', 'create', 'user', 'apiKeys.add', { stub: true, note: 'the server assigns the id; CONFLICT when the same raw key exists' }),
     row('userKeys', 'put', 'user', ['apiKeys.rename', 'apiKeys.replace', 'apiKeys.setCap', 'apiKeys.check'], { stub: true }),
     row('userKeys', 'delete', 'user', 'apiKeys.revoke', { stub: true }),
 
     row('notifs', 'list', 'user', 'notifications.list', { wire: 'InboxNotificationPage' }),
     row('notifs', 'replace', 'user', 'notifications.markAllRead'),
-    row('notifs', 'create', 'server', null, { wire: 'InboxNotification', note: 'the real server creates notifications (notification.requested)' }),
+    row('notifs', 'create', 'server', null, { wire: 'InboxNotification', note: 'the real server creates notifications (notification.requested); the page still posts the ones that follow an ask run or a resolved report, as structured records, and the server assigns the id' }),
     row('notifs', 'put', 'user', 'notifications.markRead', { wire: 'InboxNotification' }),
     row('notifs', 'delete', 'user', 'notifications.remove'),
     row('askedInv', 'list', 'user', 'invites.listRequested'),
@@ -390,7 +461,7 @@
     row('dsPol', 'delete', 'admin', 'spaceSources.setPolicy'),
     row('dsReps', 'list', 'moderator', 'sourceReports.list'),
     row('dsReps', 'replace', 'member', ['sourceReports.create', 'sourceReports.resolve']),
-    row('profile', 'list', 'user', 'auth.me', { wire: 'User' }),
+    row('profile', 'list', 'user', 'profile.get', { wire: 'User' }),
     row('profile', 'replace', 'user', 'profile.update'),
     row('skills', 'list', 'guest', 'skills.list'),
     row('skills', 'put', 'moderator', ['skills.create', 'skills.update', 'skills.remove', 'skills.reorder']),
@@ -413,11 +484,14 @@
     row('rpLiked', 'list', 'user', 'likes.list'),
     row('rpLiked', 'replace', 'user', 'likes.set'),
 
+    { method: 'GET', path: '/api/me', coll: null, op: 'me', input: null, output: 'Me', who: 'user', trpc: 'auth.me', wire: 'User', errors: ['UNAUTHORIZED'],
+      note: 'the signed-in person; the server uses it for mine and liked' },
+
     /* development only: not part of the product API */
     { method: 'POST', path: '/api/dev/reset', coll: null, op: 'dev-reset', input: null, output: null, who: 'guest', trpc: null, wire: null, errors: [], dev: true, note: 'back to the seed data' },
     { method: 'GET', path: '/api/dev/config', coll: null, op: 'dev-config', input: null, output: 'DevConfig', who: 'guest', trpc: null, wire: null, errors: [], dev: true },
     { method: 'PUT', path: '/api/dev/config', coll: null, op: 'dev-config', input: 'Partial<DevConfig>', output: 'DevConfig', who: 'guest', trpc: null, wire: null, errors: ['BAD_REQUEST'], dev: true,
-      note: 'DevConfig: { latency, failWrites, failReads, failCode, failOn: { code, paths: string[], methods?: string[], times? } | null }' },
+      note: 'DevConfig: { now (the mock clock, an ISO time), latency, failWrites, failReads, failCode, failOn: { code, paths: string[], methods?: string[], times? } | null }' },
   ];
   /* match a request to a row: literal segments win over ":id" */
   const segs = p => p.split('/').filter(Boolean);
@@ -434,32 +508,69 @@
   }
 
   /* ---- 6. the backend ----
-     createBackend({ seed, storageKey, latency, dev }):
-     - seed(): the seed data (SessionFixtures.data), keyed by collection; read when the database is first used.
+     createBackend({ fixtures, seed, storageKey, latency, dev }):
+     - fixtures: SessionFixtures ({ clock, me, data }): the seed data, the mock clock's start and the signed-in
+       person. seed() can give the data instead (then the clock starts at the real time).
      - storageKey: the localStorage key. The stored database is kept while the seed's hash is the same.
      - latency: each request waits this long (ms).
      - dev: report contract mismatches (console.error, and an uncaught error so test harnesses fail).
-     Returns { cfg, wipe, restore, checkClient }. */
-  function createBackend({ seed, storageKey = 'session-mock-db-v3', latency = 120, dev = false }) {
-    const cfg = { base: latency, latency, failWrites: false, failReads: false, failCode: 'SERVICE_UNAVAILABLE', failOn: null };
+     Returns { cfg, wipe, restore, checkClient, seedView }. */
+  const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';   /* Crockford base32, as in ULIDs */
+  /* a ULID: 10 characters of time (ms) and 16 of a counter instead of random bits, so runs are deterministic */
+  function ulid(ms, n) {
+    let t = '', r = '';
+    for (let i = 0, x = ms; i < 10; i++, x = Math.floor(x / 32)) t = B32[x % 32] + t;
+    for (let i = 0, x = n; i < 16; i++, x = Math.floor(x / 32)) r = B32[x % 32] + r;
+    return t + r;
+  }
+  const omit = (o, ks) => { if (!ks || !ks.some(k => k in o)) return o; const x = { ...o }; ks.forEach(k => delete x[k]); return x; };
+  function createBackend({ fixtures, seed, storageKey = 'session-mock-db-v4', latency = 120, dev = false }) {
+    const fx = fixtures || { data: seed ? seed() : {} };
+    const me = fx.me || { u: 'me', x: '@me', createdAt: new Date().toISOString() };
+    const cfg = { now: fx.clock || new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), base: latency, latency, failWrites: false, failReads: false, failCode: 'SERVICE_UNAVAILABLE', failOn: null };
     const log = window.__mockApiLog = [];
     const LOG_MAX = 400;   /* the newest requests; `seq` counts every request, so a test can take the ones after a mark */
     let seq = 0;
-    let data = null, ver = null;
+    let data = null, ids = 0, ver = null;   /* ids: how many ids the server has made (the ULID counter) */
     const fail = msg => { console.error('[mock api] ' + msg); if (dev) setTimeout(() => { throw new Error('[mock api] ' + msg); }); };
-    const seedData = () => { const s = seed(), o = {}; for (const k of Object.keys(C)) if (k in s) o[k] = s[k]; return dec(enc(o)); };
-    const version = () => { if (ver) return ver; const t = enc(seedData()); let x = 2166136261; for (let i = 0; i < t.length; i++) { x ^= t.charCodeAt(i); x = Math.imul(x, 16777619); } return (ver = (x >>> 0).toString(36) + ':' + t.length); };
+    const seedData = () => { const s = fixtures ? fixtures.data : seed(), o = {}; for (const k of Object.keys(C)) if (k in s) o[k] = s[k]; return dec(enc(o)); };
+    const version = () => { if (ver) return ver; const t = enc({ seed: seedData(), clock: fx.clock || null, me }); let x = 2166136261; for (let i = 0; i < t.length; i++) { x ^= t.charCodeAt(i); x = Math.imul(x, 16777619); } return (ver = (x >>> 0).toString(36) + ':' + t.length); };
     const db0 = () => {
       if (data) return data;
-      try { const s = localStorage.getItem(storageKey); if (s) { const o = dec(s); if (o && o.v === version()) return (data = o.data); } } catch (e) {}
-      data = seedData();
+      try { const s = localStorage.getItem(storageKey); if (s) { const o = dec(s); if (o && o.v === version()) { ids = o.ids || 0; return (data = o.data); } } } catch (e) {}
+      data = seedData(); ids = 0;
       if (dev) checkSeed(data);
       return data;
     };
-    const save = () => { try { localStorage.setItem(storageKey, enc({ v: version(), data })); } catch (e) {} };
+    const save = () => { try { localStorage.setItem(storageKey, enc({ v: version(), ids, data })); } catch (e) {} };
     const out = (status, body) => new Response(body === undefined ? null : enc(body), { status, headers: { 'Content-Type': 'application/json' } });
     const err = (code, message, extra) => { const r = out(STATUS[code], Object.assign({ code, message: message || CODES[code][1] }, extra)); r.code = code; r.issues = extra && extra.issues; return r; };
     const bad = issues => err('BAD_REQUEST', undefined, { issues: issues.slice(0, 5).map(i => `${i.path}: expected ${i.expected}`) });
+    const newId = () => ulid(Date.parse(cfg.now), ++ids);
+
+    /* ---- reads: the stored record with its derived fields, without its hidden and write-only fields ---- */
+    function viewOne(k, x, i, d) {
+      const V = DERIVED[k];
+      if (V) x = omit(V.view(x, i, d, me), V.hidden);
+      return omit(x, C[k].writeOnly);
+    }
+    const viewAll = (k, d) => C[k].kind === 'list' || C[k].kind === 'index' ? d[k].map((x, i) => viewOne(k, x, i, d)) : d[k];
+    /* ---- writes ---- */
+    /* nested records without a time get the clock's (createdAt; joinedAt in member lists) */
+    function stampValue(k, v) { const f = stampField(k); stampTargets(k, v).forEach(x => { if (x[f] === undefined) x[f] = cfg.now; }); return v; }
+    /* a list or thread record as the client sends it → as the server stores it */
+    function storeRecord(k, body, stored) {
+      let rec = { ...body };
+      const V = DERIVED[k];
+      if (V) { V.fields.forEach(f => delete rec[f]); Object.assign(rec, V.base(body, stored)); }
+      for (const f of C[k].writeOnly || []) if (rec[f] === undefined && stored && stored[f] !== undefined) rec[f] = stored[f];
+      if (rec.createdAt === undefined) rec.createdAt = (stored && stored.createdAt) || cfg.now;
+      if (stored) {
+        const { updatedAt: a, ...was } = stored, { updatedAt: b, ...next } = rec;
+        if (enc(was) !== enc(next)) rec.updatedAt = cfg.now; else if (a !== undefined) rec.updatedAt = a; else delete rec.updatedAt;
+      }
+      return rec;
+    }
 
     /* the dev check of the seed: every record must pass its collection's schema */
     function checkSeed(d) {
@@ -513,35 +624,50 @@
       if (!hit) return { res: err('METHOD_NOT_SUPPORTED') };
       const { r, id } = hit;
       if (r.dev) {
-        if (r.op === 'dev-reset') { data = seedData(); save(); return { res: out(204) }; }
+        if (r.op === 'dev-reset') { data = seedData(); ids = 0; save(); return { res: out(204) }; }
         if (method === 'PUT') {
           if (!body || typeof body !== 'object') return { res: err('BAD_REQUEST') };
           if (body.failCode && !CODES[body.failCode]) return { res: err('BAD_REQUEST', undefined, { issues: ['failCode: expected one of ' + Object.keys(CODES).join(', ')] }) };
           if (body.failOn && !CODES[body.failOn.code]) return { res: err('BAD_REQUEST', undefined, { issues: ['failOn.code: expected one of ' + Object.keys(CODES).join(', ')] }) };
+          if (body.now !== undefined && check(t.iso, body.now).length) return { res: err('BAD_REQUEST', undefined, { issues: ['now: expected an ISO time such as 2026-11-16T10:00:00Z'] }) };
           Object.assign(cfg, body);
         }
         return { res: out(200, cfg) };
       }
       const f = forced(method, path);
       if (f) return { res: err(f), forced: true };
-      const d = db0(), k = r.coll, c = C[k];
+      const d = db0();
+      if (r.op === 'me') return { res: out(200, { u: me.u, name: d.profile.name, bio: d.profile.bio, x: me.x, createdAt: me.createdAt }) };
+      const k = r.coll, c = C[k];
       const pos = cur => c.kind === 'index' ? (/^\d+$/.test(id) ? +id : -1) : cur.findIndex(x => String(x[c.id]) === id);
       switch (r.op) {
-        case 'list': return { res: out(200, d[k]) };
+        case 'list': return { res: out(200, viewAll(k, d)) };
         case 'get': {
-          const cur = d[k], v = c.kind === 'map' ? cur[id] : cur[pos(cur)];
-          return { res: v === undefined ? err('NOT_FOUND') : out(200, v) };
+          const cur = d[k];
+          if (c.kind === 'map') return { res: cur[id] === undefined ? err('NOT_FOUND') : out(200, cur[id]) };
+          const i = pos(cur);
+          return { res: cur[i] === undefined ? err('NOT_FOUND') : out(200, viewOne(k, cur[i], i, d)) };
         }
         case 'replace': {
           const issues = checkWhole(k, body, d);
           if (issues.length) return { res: bad(issues) };
-          d[k] = body; save(); return { res: out(200, body) };
+          if (c.kind === 'list' || c.kind === 'index') {
+            const cur = d[k];
+            d[k] = body.map((x, i) => storeRecord(k, x, c.kind === 'index' ? cur[i] : cur.find(y => String(y[c.id]) === String(x[c.id]))));
+          } else if (c.kind === 'map') { Object.values(body).forEach(v => stampValue(k, v)); d[k] = body; }
+          else d[k] = stampValue(k, body);
+          save(); return { res: out(200, viewAll(k, d)) };
         }
         case 'create': {
+          /* a new record without an id gets a ULID */
+          if (c.serverId && body && typeof body === 'object' && !Array.isArray(body) && body[c.id] == null) body = { [c.id]: newId(), ...body };
           const issues = check(c.item, body, k);
           if (issues.length) return { res: bad(issues) };
           if (d[k].some(x => String(x[c.id]) === String(body[c.id]))) return { res: err('CONFLICT', 'An item with this id already exists.') };
-          d[k] = qs === 'at=start' ? [body, ...d[k]] : [...d[k], body]; save(); return { res: out(201, body) };
+          if ((c.writeOnly || []).includes('raw') && body.raw && d[k].some(x => x.raw === body.raw)) return { res: err('CONFLICT', 'This key has already been added.') };
+          const rec = storeRecord(k, body);
+          d[k] = qs === 'at=start' ? [rec, ...d[k]] : [...d[k], rec]; save();
+          return { res: out(201, viewOne(k, rec, d[k].indexOf(rec), d)) };
         }
         case 'put': {
           const cur = d[k];
@@ -549,14 +675,16 @@
             const kb = checkKey(k, id, d, 'BAD_REQUEST'); if (kb.length) return { res: bad(kb.map(m => ({ path: `${k} key "${id}"`, expected: m }))) };
             const issues = check(c.item, body, `${k}.${id}`); if (issues.length) return { res: bad(issues) };
             if (checkKey(k, id, d, 'NOT_FOUND').length) return { res: err('NOT_FOUND') };
-            cur[id] = body; save(); return { res: out(200, body) };
+            cur[id] = stampValue(k, body); save(); return { res: out(200, cur[id]) };
           }
           if (c.kind === 'index' && !/^\d+$/.test(id)) return { res: bad([{ path: `${k} position "${id}"`, expected: 'a position' }]) };
           const issues = check(c.item, body, `${k}[${id}]`); if (issues.length) return { res: bad(issues) };
           if (c.kind === 'list' && String(body[c.id]) !== id) return { res: bad([{ path: `${k}[${id}].${c.id}`, expected: `"${id}" (the id in the address)` }]) };
           const i = pos(cur);
-          if (i >= 0 && i < cur.length) cur[i] = body; else if (c.kind === 'index' && i === cur.length) cur.push(body); else return { res: err('NOT_FOUND') };
-          save(); return { res: out(200, body) };
+          if (i >= 0 && i < cur.length) cur[i] = storeRecord(k, body, cur[i]);
+          else if (c.kind === 'index' && i === cur.length) cur.push(storeRecord(k, body));   /* a new thread */
+          else return { res: err('NOT_FOUND') };
+          save(); return { res: out(200, viewOne(k, cur[i], i, d)) };
         }
         case 'delete': {
           const cur = d[k];
@@ -596,10 +724,13 @@
     return {
       cfg,
       checkClient,
-      wipe: () => { data = null; try { localStorage.removeItem(storageKey); } catch (e) {} },
+      wipe: () => { data = null; ids = 0; try { localStorage.removeItem(storageKey); } catch (e) {} },
       restore: () => { window.fetch = realFetch; },
+      /* the seed data as GET returns it (derived fields included), without touching the database: the
+         page's Screen entries restore these baselines */
+      seedView: () => { const d = seedData(); return dec(enc(Object.fromEntries(Object.keys(d).map(k => [k, viewAll(k, d)])))); },
     };
   }
 
-  window.SessionMockApi = { enc, dec, CODES, STATUS, API, COLLECTIONS: C, SCHEMAS: S, check, describe, createBackend };
+  window.SessionMockApi = { enc, dec, CODES, STATUS, API, COLLECTIONS: C, SCHEMAS: S, NOTIFICATION_TYPES, check, describe, ulid, createBackend };
 })();
