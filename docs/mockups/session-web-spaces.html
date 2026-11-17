@@ -1864,6 +1864,8 @@ html.ab-dragging, html.ab-dragging * { cursor: grabbing !important; user-select:
   .cs-mgb { padding: 0 9px; }
 }
 .cs-mgb > svg { width: 14px; height: 14px; }
+/* one-column layouts above phone width: the header actions stay right of the title and description */
+@media (min-width: 641px) and (max-width: 920px) { html:not([data-device="phone"]) .banner { grid-template-columns: auto minmax(0, 1fr) auto; } html:not([data-device="phone"]) .banner-acts { grid-column: auto; } }
 /* one-column layouts: the space header's Manage button shows only its gear */
 @media (max-width: 920px) { .cs-mgb > .d-only { display: none; } .cs-mgb { min-width: 32px; padding: 0 9px; justify-content: center; } }
 .data-wait { padding: 48px 24px; text-align: center; color: var(--t-secondary); font-size: var(--fs-sm); }
