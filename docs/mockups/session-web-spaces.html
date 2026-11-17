@@ -3421,6 +3421,67 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .as-empty b { color: var(--t-heading); font-weight: 600; }
 .as-empty-a { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 6px; }
 /* ==== end asks, answers and failures (web): CSS ==== */
+/* ==== token model: CSS (composer line and chooser, "Paid with" lines, Usage page, space key settings, Phone) ==== */
+.c2-bar .tm-line, .c2-bar .tm-moved { flex-basis: 100%; order: 9; }
+.c2-bar .tm-pop { order: 10; }
+.c2v-bar .c2-bar { position: relative; }
+.tm-line, .tm-moved { display: block; line-height: 1.5; }
+.tm-line b { font-weight: 550; color: var(--t-secondary); }
+.tm-line .tlink, .tm-moved .tlink { font-size: inherit; color: var(--t-secondary); text-decoration: underline; text-decoration-color: var(--divider-strong, currentColor); text-underline-offset: 3px; }
+.tm-line.warn .tlink, .tm-line.warn b { color: inherit; }
+.tm-line .tm-who { display: inline-flex; align-items: center; gap: 2px; font-weight: 550; }
+.tm-line .tm-who svg { width: 11px; height: 11px; }
+.tm-moved { color: var(--t-strong); background: var(--fill-subtle); border-radius: var(--r-md); padding: 6px 10px; }
+.qt-comp .tm-line, .qt-comp .tm-moved { padding-left: 0; }
+.qt-comp { position: relative; }
+.tm-pop { top: auto; left: 0; right: auto; width: min(340px, 100%); margin-top: 4px; }
+.c2-bar .tm-pop { position: absolute; top: 100%; }
+.qt-comp .tm-pop { position: absolute; top: 100%; }
+.tm-mnote { margin: 0 10px 6px; padding: 6px 8px; border-radius: var(--r-md); background: var(--fill-subtle); color: var(--t-secondary); font-size: var(--fs-xs); line-height: 1.45; }
+.tm-meta { margin: 8px 0 0; font-size: var(--fs-xs); color: var(--t-faint); }
+.tm-meta .num { color: var(--t-muted); }
+html[data-tm] .p-foot > span.num[title] { display: none; }
+.th-facts .tm-fby { padding-left: 12px; }
+.th-facts .tm-fby span, .th-facts .tm-fby b { font-size: var(--fs-xs); }
+.tm-fail { margin-top: 6px; }
+.tm-req { display: inline-block; margin: -4px 0 10px; font-size: var(--fs-xs); font-weight: 650; color: var(--accent-strong, var(--accent)); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 999px; padding: 1px 9px; }
+.tm-req.opt { color: var(--t-muted); background: var(--fill-subtle); }
+.ks.tm-def { color: var(--accent-strong, var(--accent)); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.tm-bar { display: block; height: 4px; border-radius: 2px; background: var(--fill-subtle); overflow: hidden; margin-top: 6px; max-width: 320px; }
+.tm-bar i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+.tm-upage .tm-total { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 2px; }
+.tm-upage .tm-total b { font-size: 30px; font-weight: 650; color: var(--t-heading); letter-spacing: -.01em; }
+.tm-upage .tm-total span { color: var(--t-muted); font-size: var(--fs-sm); }
+.tm-ulead { margin: 0 0 8px; font-size: var(--fs-sm); }
+.tm-rows { display: flex; flex-direction: column; border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--pane); overflow: hidden; }
+.tm-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; flex-wrap: wrap; }
+.tm-row + .tm-row { border-top: 1px solid var(--divider); }
+.tm-row > .glyph { flex: none; }
+.tm-rt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tm-rt b { font-weight: 600; color: var(--t-strong); font-size: var(--fs-sm); }
+.tm-rt small { color: var(--t-faint); font-size: var(--fs-xs); line-height: 1.45; }
+.tm-row > b.num { color: var(--t-strong); font-weight: 600; font-size: var(--fs-sm); }
+.tm-ra { display: inline-flex; gap: 12px; flex-basis: 100%; padding-left: 34px; }
+.tm-rt .tm-sp, .tm-rt .tm-rq { align-self: flex-start; text-align: left; font-size: var(--fs-sm); color: var(--t-strong); }
+.tm-rec .tm-rt .tm-rq { font-weight: 550; }
+.tm-memf { margin-top: 14px; max-width: 360px; }
+.tm-memf > b { font-weight: 500; font-size: var(--fs-sm); color: var(--t-strong); }
+/* Phone */
+.tm-nusage .tm-bar { max-width: none; }
+.tm-ntotal { display: flex; align-items: baseline; gap: 8px; padding: 6px 20px 2px; }
+.tm-ntotal b { font-size: 34px; font-weight: 700; color: var(--t-heading); }
+.tm-ntotal span { color: var(--t-faint); font-size: 15px; }
+.tm-nrow .n-row-b small { white-space: normal; }
+.n-icomp-m .tm-who, .n-dock-n .tm-who { font-weight: 600; }
+.tm-moved .n-lnk { font-weight: 600; }
+.n-icomp-m .tm-moved, .n-dock-n .tm-moved { display: block; margin-bottom: 4px; padding: 6px 8px; font-size: 12.35px; }
+.tm-nrun { margin: 6px 0; }
+.tm-nrun .as-acts { gap: 8px 14px; }
+.tm-nbtn { height: 30px; padding: 0 14px; font-size: 14px; }
+.tm-nonb-h { padding: 4px 20px 0; }
+.tm-nonb-h p { margin: 0 0 10px; font-size: 15px; line-height: 1.45; color: var(--t-secondary); }
+.tm-nonb-h .tm-req { margin: 8px 0 8px; font-size: 12.35px; }
+/* ==== end token model: CSS ==== */
 /* ==== accounts, API keys and profiles (web): key checks, Account, first run, mute and block ==== */
 /* API keys: check line, usage line, the provider's reason, actions */
 .ak-tx .ak-use, .ak-tx .ak-why, .ak-tx .ak-chk { font-size: var(--fs-xs); line-height: 1.45; margin-top: 2px; }
@@ -3647,6 +3708,7 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
       <div class="knob"><span>Navigation</span><div class="seg" id="k-dir"></div></div>
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
       <div class="knob"><span>Font</span><div class="seg" id="k-font"></div></div>
+      <div class="knob" title="Who pays for the tokens an ask uses"><span>Token model</span><div class="seg" id="k-tok"></div></div>
     </div>
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
@@ -3779,6 +3841,7 @@ const RES = {
   profile:  { url: '/api/me/profile', kind: 'value' },        /* name and bio */
   skills:   { url: '/api/space-skills', kind: 'map' },        /* space id → skills ([name, prompt]) */
   pagedocs: { url: '/api/pages', kind: 'map' },               /* "space/page-slug" → page text, authors, history */
+  usage:    { url: '/api/me/usage', kind: 'value' },          /* Token model: tokens this month by source and space, space keys */
 };
 const DATA_KEYS = Object.keys(RES);
 /* keys of `st` that are the signed-in person's server data: they live in the data store */
@@ -4234,7 +4297,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 2).replace(/\.(\d*?)0+$/, '.$1').replace(/\.$/, '') + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'K' : String(n);
 /* token amounts use a lowercase k (156k tokens); other counts keep K (3K members) */
 const fmtT = n => fmt(n).replace(/K$/, 'k');
-const pctS = p => Math.round(p * 100) + '%';
+const pctS = p => Math.floor(p * 100 + 1e-9) + '%';   /* rounds down: 7.97M of 8M is 99%, not 100% */
 const lvl = p => p >= 0.85 ? 'm-bad' : p >= 0.6 ? 'm-warn' : 'm-ok';
 const sp = id => D.spaces.find(s => s.id === id);
 const avColor = n => `var(--av${n})`;
@@ -4320,7 +4383,7 @@ function signoutDialog() {
 function revokeDialog() {
   const k = st.userKeys.find(x => x.id === st.modal.split(':')[1]), pays = k ? acPays(k.id) : [];
   const paid = pays.length ? `<div class="ac-rv"><p>This key pays for the extra tokens in:</p><ul class="ac-rv-list">${pays.map(s => `<li>${glyph(s)}<b>${spName(s)}</b><small class="num">${fmtT(s.used)} of ${fmtT(s.budget)} tokens used this month</small></li>`).join('')}</ul><p class="cs-fine">${MI.key}<span>After you revoke it, asks in ${pays.length === 1 ? 'this space' : 'these spaces'} use each asker’s own API key.</span></p></div>` : '';
-  return `<div class="modal-scrim"><div class="modal sm" role="alertdialog" aria-modal="true" aria-labelledby="rv-t"><h3 id="rv-t">Revoke ${esc(k ? k.label : 'this key')}?</h3><p class="muted">Asks that use this key will stop working. You can’t undo this.</p>${paid}<div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Cancel</button><button class="btn danger" type="button" data-act="revoke-confirm">Revoke</button></div></div></div>`;
+  return `<div class="modal-scrim"><div class="modal sm" role="alertdialog" aria-modal="true" aria-labelledby="rv-t"><h3 id="rv-t">Revoke ${esc(k ? k.label : 'this key')}?</h3><p class="muted">${tmRevokeText(k)} You can’t undo this.</p>${paid}<div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Cancel</button><button class="btn danger" type="button" data-act="revoke-confirm">Revoke</button></div></div></div>`;
 }
 function discardDialog() {
   return `<div class="modal-scrim"><div class="modal sm" role="alertdialog" aria-modal="true" aria-labelledby="dd-t"><h3 id="dd-t">Discard this draft?</h3><p class="muted">The text you wrote will be deleted.</p><div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Keep editing</button><button class="btn danger" type="button" data-act="discard">Discard</button></div></div></div>`;
@@ -4705,7 +4768,7 @@ function addKeyDialog() {
   const shell = (title, body, ok) => `<div class="modal-scrim"><div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="ak-t"><div class="modal-h"><h3 id="ak-t">${title}</h3>${close}</div>${body}<div class="modal-f"><span style="flex:1"></span><button class="btn ghost" type="button" data-act="key-cancel">Cancel</button>${ok}</div></div></div>`;
   if (st.keyMode === 'limit' && k) return shell(`Monthly limit for ${esc(k.label)}`, `${fCap()}<p class="ts-help faint">${fmtT(kinfo(k).used)} tokens used this month.</p>`, `<button class="btn primary" type="button" data-akcapsave="${k.id}">Save</button>`);
   const rp = st.keyMode === 'replace' && k;
-  const lead = rp ? `<p class="muted ak-lead">Paste a new key from ${kinfo(rp).provider}. The name, the limit${acPays(rp.id).length ? ' and the spaces the key pays for' : ''} stay the same.</p>` : '';
+  const lead = rp ? `<p class="muted ak-lead">Paste a new key from ${kinfo(rp).provider}. The name${!tmOn() && acPays(rp.id).length ? ', the limit and the spaces the key pays for' : ' and limit'} stay the same.</p>` : '';
   return shell(rp ? `Replace ${esc(rp.label)}` : 'Add an API key', `${lead}${fKey()}${rp ? '' : fName() + fCap()}${keyErr()}<p class="ts-help faint">${KEY_HELP} Session checks the key with the provider when you add it.</p>`, `<button class="btn primary" type="button" data-act="key-save">${rp ? 'Replace key' : 'Add key'}</button>`);
 }
 /* One key: a line while the provider checks it; for a valid key, usage this month, the limit and the spaces it
@@ -4736,7 +4799,7 @@ function wikiDrawer(s) {
   return st.drawer
     ? `<aside class="drawer wk" aria-label="Space wiki"><div class="dh">${I.book.replace('<svg', '<svg width="15" height="15" style="color:var(--t-faint)"')}<b style="color:var(--t-heading);font-size:var(--fs-sm)">Wiki</b><span style="margin-left:auto;display:flex;gap:4px;align-items:center"><button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse wiki">${I.close}</button></span></div><div class="dbody">
         ${wikiCards(s)}</div></aside>`
-    : `<aside class="drawer closed" aria-label="Space wiki"><div class="dh"><button class="iconbtn" type="button" data-act="drawer" aria-label="Open wiki">${I.book}</button>${s.byok ? miniMeter(s) : ''}<span class="vlabel">${ab ? 'About' : 'Wiki'}</span></div></aside>`;
+    : `<aside class="drawer closed" aria-label="Space wiki"><div class="dh"><button class="iconbtn" type="button" data-act="drawer" aria-label="Open wiki">${I.book}</button>${s.byok && !tmOn() ? miniMeter(s) : ''}<span class="vlabel">${ab ? 'About' : 'Wiki'}</span></div></aside>`;
 }
 /* About is the second tab of the sidebar (abAbout); the space has no About tab. */
 function wikiCards(s) {
@@ -4745,7 +4808,7 @@ function wikiCards(s) {
         <div class="note-card"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Pages</h3><a class="tlink" href="#" onclick="return false">Edit</a></div>${linksList(s)}</div>
         <div class="note-card"><h3>Moderators</h3>${modsList(s)}</div>
         ${csWikiAccess(s)}
-        ${s.byok ? `<div class="note-card"><h3>${poolName()}</h3>${meter(s)}</div>` : ''}`;
+        ${s.byok && !tmOn() ? `<div class="note-card"><h3>${poolName()}</h3>${meter(s)}</div>` : ''}`;
 }
 
 /* ---------------- controls ---------------- */
@@ -5864,6 +5927,8 @@ const KNOBDEF = () => [
   ['k-dir', 'shell', [['tabs2', 'Header tabs'], ['rail', 'Left rail']], () => { st.umenu = false; st.pop = false; }],
   ['k-tint', 'tint', [['warmlo', 'Beige'], ['warmwc', 'Beige chrome', '1'], ['sagewc', 'Sage']]],
   ['k-font', 'font', [['inter', 'Inter'], ['valley', 'Valley Sans']]],
+  /* Token model: who pays for asks. Labels carry their own letters (A–D), as the Screen entries name them. */
+  ['k-tok', 'tokmodel', [['session', 'A. Session tokens', '#'], ['key', 'B. Your key', '#'], ['both', 'C. Session, then key', '#'], ['spacekey', 'D. Space keys', '#'], ['current', 'Current', '#']], () => { st.mpOpen = false; st.tmChoose = false; st.tmPick = null; }],
   ...(typeof CSKNOBS === 'function' ? CSKNOBS() : []),
   ...SFKNOBS(),
   ...MIKNOBS(),
@@ -5984,7 +6049,7 @@ function nInline(sid) {
   if (!nst.inl || nst.inlAt !== at) return field('inline:' + at);
   const x = sp(nst.cSpace), ask = f === 'ask' || (f === 'all' && (nst.cMode === 'ask' || !!x.postsOff));
   const off = !ask && !!x.postsOff, pay = ask ? nCanPay(x) : !off;
-  const note = ask ? (pay ? `${MODEL_NAME} · <button class="n-lnk" type="button" data-n="sheet:payer:${x.id}">Paid by ${esc(nPayer(x).label)}</button>` : `${spName(x)} has no extra tokens. <button class="tlink" type="button" data-n="tokeys">Add an API key</button>`) : off ? `Posts are turned off in ${spName(x)}. Choose another space.` : 'Posts use no tokens.';
+  const note = ask ? (tmOn() ? tmNNote(x) : pay ? `${MODEL_NAME} · <button class="n-lnk" type="button" data-n="sheet:payer:${x.id}">Paid by ${esc(nPayer(x).label)}</button>` : `${spName(x)} has no extra tokens. <button class="tlink" type="button" data-n="tokeys">Add an API key</button>`) : off ? `Posts are turned off in ${spName(x)}. Choose another space.` : 'Posts use no tokens.';
   return `<div class="n-pad"><div class="n-icomp"><textarea id="n-draft" class="n-draft n-idraft" rows="3" placeholder="${ask ? 'Make a query' : 'Write a post'}" aria-label="${ask ? 'Make a query' : 'Write a post'}">${esc(nst.draft)}</textarea>`
     + `<div class="n-icomp-r">${f === 'all' ? nSeg([['ask', 'Ask'], ['post', 'Post']], ask ? 'ask' : 'post', 'cmode', x.postsOff ? ['post'] : []) : ''}${sid ? '' : `<button class="n-chip" type="button" data-n="sheet:ispace" aria-label="Space: ${esc(nName(x))}">${glyph(x, 'n-gl')}<span>${nNameH(x)}</span>${NI.chev}</button>`}${ask && faqOn(x) ? nTopicChip(x) : ''}<span class="grow"></span>`
     + `<button class="n-icomp-x" type="button" data-n="inline:close">Cancel</button><button class="n-capbtn" type="button" data-n="submit" id="n-submit"${nst.draft.trim() && pay ? '' : ' disabled'}>${ask ? 'Ask' : 'Post'}</button></div>`
@@ -6045,20 +6110,20 @@ function nFuList(i) {
   const T = qtT(i);
   return qtVisKids(T, 'r').slice().sort((a, b) => qtAge(b.age) - qtAge(a.age)).map(n => ({ u: n.u, age: n.age, q: n.q, html: n.html, node: n.id, below: T.sub(n.id), running: n.running }));
 }
-const nFuHTML = (i, list) => list.map(f => `<div class="n-fu"><div class="n-cell-h">${nAu(f.u, avatar(f.u, 'n-av sm') + `<b>${esc(f.u)}</b>`)}<span>${f.age}</span></div><p class="n-fu-q">${esc(f.q)}</p><div class="n-fu-a">${f.running ? '<p class="n-muted">Researching…</p>' : f.html ? `<div class="n-ans">${f.html}</div>` : `<p>${esc(f.a || '')}</p>`}</div>${f.below ? `<button class="n-below" type="button" data-n="push:ask:${i}:${f.node}">${f.below} ask${f.below > 1 ? 's' : ''} below<span class="n-chev">${NI.chev}</span></button>` : ''}</div>`).join('');
+const nFuHTML = (i, list) => list.map(f => `<div class="n-fu"><div class="n-cell-h">${nAu(f.u, avatar(f.u, 'n-av sm') + `<b>${esc(f.u)}</b>`)}<span>${f.age}</span></div><p class="n-fu-q">${esc(f.q)}</p><div class="n-fu-a">${f.running ? '<p class="n-muted">Researching…</p>' : f.html ? `<div class="n-ans">${f.html}</div>` : `<p>${esc(f.a || '')}</p>`}</div>${f.node ? tmNodeExtra(i, f.node) : ''}${f.below ? `<button class="n-below" type="button" data-n="push:ask:${i}:${f.node}">${f.below} ask${f.below > 1 ? 's' : ''} below<span class="n-chev">${NI.chev}</span></button>` : ''}</div>`).join('');
 /* An ask inside a question tree, with the asks about its answer. */
 function nAsk(key) {
   const [ti, id] = String(key).split(':'), i = +ti, T = qtT(i), n = T.by[id];
   const kids = qtVisKids(T, id).slice().sort((a, b) => qtAge(b.age) - qtAge(a.age)).map(k => ({ u: k.u, age: k.age, q: k.q, html: k.html, node: k.id, below: T.sub(k.id), running: k.running }));
   const par = T.by[n.par];
-  const body = `<button class="n-th-by" type="button" data-n="push:profile:${esc(n.u)}">${avatar(n.u, 'n-av')}<span><b>${esc(n.u)}</b><small>${nNameH(sp(T.p.s))} · ${n.age} · Level ${n.lv}</small></span></button><p class="n-about">Asked about the answer to ${par.id === 'r' ? 'the question' : 'level ' + par.lv}<span>${esc(qtClip(par.q, 90))}</span></p><p class="n-th-ask">${esc(n.q)}</p><div class="n-ans">${n.running ? answerHTML({ running: true, s: T.p.s }) : n.html}</div>${kids.length ? `<h3 class="n-sec">Asks about this answer</h3>${nFuHTML(i, kids)}` : ''}`;
+  const body = `<button class="n-th-by" type="button" data-n="push:profile:${esc(n.u)}">${avatar(n.u, 'n-av')}<span><b>${esc(n.u)}</b><small>${nNameH(sp(T.p.s))} · ${n.age} · Level ${n.lv}</small></span></button><p class="n-about">Asked about the answer to ${par.id === 'r' ? 'the question' : 'level ' + par.lv}<span>${esc(qtClip(par.q, 90))}</span></p><p class="n-th-ask">${esc(n.q)}</p><div class="n-ans">${n.running ? answerHTML({ running: true, s: T.p.s }) : n.html}</div>${tmNodeExtra(i, id)}${kids.length ? `<h3 class="n-sec">Asks about this answer</h3>${nFuHTML(i, kids)}` : ''}`;
   const sv = nSignedIn() && st.qtSaved.has(key);
   return { body: `${nPushBar('', nBtn('qtsave:' + key, sv ? NI.savedOn : NI.saved, sv ? 'Remove from Saved' : 'Save'))}<div class="n-th">${body}</div>`, bar: n.running ? '' : nDock('Ask about this answer', sp(T.p.s)) };
 }
 /* the input docked at the bottom of a thread or an ask */
 /* x: the space an ask goes to; the dock checks that something can pay for it, as the composer does */
 const nDock = (ph, x) => nSignedIn()
-  ? `<div class="n-dock">${x && !nCanPay(x) ? `<p class="n-dock-n">${spName(x)} has no extra tokens. <button class="n-lnk" type="button" data-n="tokeys">Add an API key</button></p>` : ''}<label class="n-dock-f"><input id="n-fu" type="text" placeholder="${ph}" value="${esc(nst.fu)}" aria-label="${ph}"></label><button class="n-send" type="button" data-n="send" aria-label="Send"${x && !nCanPay(x) ? ' data-nopay="1" disabled' : nst.fu.trim() ? '' : ' disabled'}>${NI.up}</button></div>`
+  ? `<div class="n-dock">${x && tmOn() ? tmNDock(x) : x && !nCanPay(x) ? `<p class="n-dock-n">${spName(x)} has no extra tokens. <button class="n-lnk" type="button" data-n="tokeys">Add an API key</button></p>` : ''}<label class="n-dock-f"><input id="n-fu" type="text" placeholder="${ph}" value="${esc(nst.fu)}" aria-label="${ph}"></label><button class="n-send" type="button" data-n="send" aria-label="Send"${x && !nCanPay(x) ? ' data-nopay="1" disabled' : nst.fu.trim() ? '' : ' disabled'}>${NI.up}</button></div>`
   : `<div class="n-dock"><button class="n-dock-f out" type="button" data-n="sheet:signin">${ph}</button></div>`;
 function nThread(i) {
   const p = D.posts[i], ask = p.k === 'ask', s = sp(p.s), sv = nSignedIn() && st.saved.has(i);
@@ -6074,7 +6139,7 @@ function nThread(i) {
     body = `${head}<p class="n-th-post">${esc(p.q)}</p><h3 class="n-sec">Replies</h3>${rpFor(p).map(r => `<div class="n-reply">${nAu(r.u, avatar(r.u, 'n-av sm'))}<div><div class="n-cell-h">${nAu(r.u, `<b>${esc(r.u)}</b>`)}<span>${r.age}</span></div><p>${esc(r.t)}</p>${(r.kids || []).map(k => `<div class="n-reply kid">${nAu(k.u, avatar(k.u, 'n-av sm'))}<div><div class="n-cell-h">${nAu(k.u, `<b>${esc(k.u)}</b>`)}<span>${k.age}</span></div><p>${esc(k.t)}</p></div></div>`).join('')}</div></div>`).join('')}`;
   } else if (nst.seg === 'doc') {
     const src = nSrcRows(i);
-    body = `${head}<p class="n-th-ask">${esc(p.q)}</p><div class="n-pad0">${nSeg([['doc', 'Document'], ['chat', 'Transcript']], nst.seg, 'seg')}</div><div class="n-ans">${p.running ? answerHTML(p) : ansBody(p)}</div>${src.length ? nGroup('Sources', src) : ''}${nFuList(i).length ? `<h3 class="n-sec">Follow-ups</h3>${nFuHTML(i, nFuList(i))}` : ''}`;
+    body = `${head}<p class="n-th-ask">${esc(p.q)}</p><div class="n-pad0">${nSeg([['doc', 'Document'], ['chat', 'Transcript']], nst.seg, 'seg')}</div><div class="n-ans">${p.running || (p.fail && tmOn()) ? answerHTML(p) : ansBody(p)}</div>${tmRootMeta(p)}${src.length ? nGroup('Sources', src) : ''}${nFuList(i).length ? `<h3 class="n-sec">Follow-ups</h3>${nFuHTML(i, nFuList(i))}` : ''}`;
   } else {
     const turns = [{ q: p.q, a: p.running ? answerHTML(p) : ansBody(p), u: p.u }, ...nFuList(i).map(f => ({ q: f.q, a: f.running ? '<p>Researching…</p>' : f.html || `<p>${esc(f.a || '')}</p>`, u: f.u }))];
     body = `${head}<div class="n-pad0">${nSeg([['doc', 'Document'], ['chat', 'Transcript']], nst.seg, 'seg')}</div><div class="n-chat">${turns.map(t => `<div class="n-msg-u">${t.u !== p.u || t.u !== ME.u ? `<small>${esc(t.u)}</small>` : ''}<p>${esc(t.q)}</p></div><div class="n-msg-a"><span class="n-spark">${NI.sparkle}</span><div class="n-ans">${t.a}</div></div>`).join('')}</div>`;
@@ -6105,7 +6170,7 @@ function nKeys() {
 /* sheets */
 /* the provider the web composer would use for an ask in this space */
 /* An ask needs someone to pay for tokens: the space's extra tokens or one of your valid API keys (as payer() on the web). */
-const nCanPay = x => !!x.byok || st.userKeys.some(k => k.valid);
+const nCanPay = x => tmOn() ? !!tmPayOk(x.id) : !!x.byok || st.userKeys.some(k => k.valid);
 function nProvider(x) {
   if (x.byok) return `${nName(x)} extra tokens`;
   const k = st.userKeys.find(k => k.valid);
@@ -6359,7 +6424,7 @@ function nWiki(x) {
   h += nGroup('Details', [row('Visibility', isClosed(x) ? visLabel(x) : 'Open'), read ? nGo2(`sheet:mem:${id}`, `<span class="n-row-b"><b>Members</b></span><span class="n-val num">${x.members.toLocaleString('en-US')}</span>`) : row('Members', x.members.toLocaleString('en-US')), row('Created', `${x.created} by ${esc(abOwner(x))}`)]);
   const joined = D.joined.includes(id), cta = !inn || joined ? '' : isClosed(x) ? nCta(x) : `<button class="n-capbtn" type="button" data-n="join:${id}">Join</button>`;
   h += nGroup('Joining', [`<div class="n-row"><span class="n-row-b"><span>${visText(x)}. ${joinLabel(x)}.</span></span></div>`, ...(cta ? [`<div class="n-row n-row-cta">${cta}</div>`] : [])], inn ? nReqNote(x).replace(/^<p class="n-grp-f n-reqn">|<\/p>$/g, '') : '');
-  h += nGroup('Token use', [`<div class="n-row"><span class="n-row-b"><span>${tokenUse(x)}</span>${x.byok ? `<small>${pctS(x.pct)} of extra tokens used this month · resets Dec 1</small>` : ''}</span></div>`, ...(x.byok && read ? [nGo2(`sheet:usage:${id}`, '<span class="n-row-b"><b>See usage</b><small>By member and by thread</small></span>')] : [])], inn && key ? `${x.byok ? 'After the limit, your asks use' : 'Your asks use'} your ${esc(key.label)}.` : '');
+  h += tmOn() ? (tmSkLine(x) ? nGroup('Tokens', [`<div class="n-row"><span class="n-row-b"><span>${tmSkLine(x)}</span></span></div>`]) : '') : nGroup('Token use', [`<div class="n-row"><span class="n-row-b"><span>${tokenUse(x)}</span>${x.byok ? `<small>${pctS(x.pct)} of extra tokens used this month · resets Dec 1</small>` : ''}</span></div>`, ...(x.byok && read ? [nGo2(`sheet:usage:${id}`, '<span class="n-row-b"><b>See usage</b><small>By member and by thread</small></span>')] : [])], inn && key ? `${x.byok ? 'After the limit, your asks use' : 'Your asks use'} your ${esc(key.label)}.` : '');
   h += nGroup('Moderators', x.mods.map(([u, r]) => `<button class="n-row" type="button" data-n="push:profile:${u}">${avatar(u, 'n-av sm')}<span class="n-row-b"><b>${esc(u)}</b></span><span class="n-val">${MOD_LABEL[r] || 'Moderator'}</span></button>`));
   return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det tall" role="dialog" aria-label="About ${esc(nName(x))}"><span class="n-grab"></span><div class="n-sheet-bar"><span></span><b>${nNameH(x)}</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc">${h}</div></div>`;
 }
@@ -6480,7 +6545,7 @@ function nKeySheet(id) {
   const i = kinfo(k), row = (b, v, cls = '') => `<div class="n-row"><span class="n-row-b"><b>${b}</b></span><span class="n-val${cls}">${v}</span></div>`;
   const body = nGroup('', [row('Name', esc(k.label)), row('Provider', k.raw ? provOf(k.raw) : i.provider), row('Key', esc(keyMask(k))), row('Added', esc(i.added)), row('Last used', esc(i.last)), row('Status', k.valid ? 'Active' : 'Rejected by the provider', k.valid ? '' : ' n-bad')])
     + nGroup('', [nGo2(`sheet:keyrn:${id}`, '<span class="n-row-b"><b>Rename</b></span>')])
-    + nGroup('', [`<button class="n-row n-danger" type="button" data-n="sheet:keyrv:${id}"><span class="n-row-b"><b>Revoke key</b></span></button>`], 'Asks that use this key stop working when you revoke it.');
+    + nGroup('', [`<button class="n-row n-danger" type="button" data-n="sheet:keyrv:${id}"><span class="n-row-b"><b>Revoke key</b></span></button>`], `After you revoke it, ${tmRevokeText(k).replace(/^./, c => c.toLowerCase())}`);
   return nSub('', k.label, esc(k.label), body);
 }
 function nKeyRnSheet(id) {
@@ -6572,7 +6637,7 @@ function nSheetX(k, a) {
     case 'usage': return nUsageSheet(sp(a));
     case 'rules': return nRulesSheet(sp(a));
     case 'key': return nKeySheet(a);
-    case 'keyrv': { const key = st.userKeys.find(x => x.id === a); return key ? nAct(esc(key.label), 'Asks that use this key will stop working. You can’t undo this.', [['Revoke key', 'revoke:' + a, 'n-red']]) : ''; }
+    case 'keyrv': { const key = st.userKeys.find(x => x.id === a); return key ? nAct(esc(key.label), `${tmRevokeText(key)} You can’t undo this.`, [['Revoke key', 'revoke:' + a, 'n-red']]) : ''; }
     case 'keyrn': return nKeyRnSheet(a);
     case 'pfedit': return nPfSheet();
     case 'payer': return nPayerSheet(sp(a));
@@ -6811,7 +6876,7 @@ function csAboutDrawer(s) {
     <div class="note-card"><h3>Rules</h3>${rulesList(s)}</div>
     <div class="note-card"><h3>Moderators</h3>${modsList(s)}</div>
     <div class="note-card"><h3>Pages</h3><p class="cs-acc">${LOCK}<span>${s.pages.length} pages, visible to members.</span></p></div>
-    <div class="note-card"><h3>Token use</h3><p class="cs-acc">${I.agent}<span>${tokenUse(s)}</span></p></div>
+    ${tmOn() ? tmAboutCard(s) : `<div class="note-card"><h3>Token use</h3><p class="cs-acc">${I.agent}<span>${tokenUse(s)}</span></p></div>`}
   </div></aside>`;
 }
 const csSkeleton = () => `<div class="cs-skel" aria-hidden="true">${[78, 64, 90, 55, 72, 60].map((w, i) => `<div class="cs-sk"><i class="dot"></i><div><i style="width:${w}%"></i><i style="width:${w - 22}%"></i>${i % 2 ? '' : `<i style="width:${w - 40}%"></i>`}</div></div>`).join('')}</div>`;
@@ -6872,7 +6937,7 @@ function layoutInvite() {
   let body;
   if (iv.state === 'expired') body = `<span class="cs-na-ic">${CI.link}</span><h2>This invite link has expired</h2><p class="muted">Links to ${spName(s)} stop working after their expiry date or use limit. Ask <b>${iv.by}</b> for a new link.</p><div class="cs-na-b"><button class="btn" type="button" data-home="1">Go to Home</button></div>`;
   else body = `<p class="cs-invby">${avatar(iv.by, 'sm')}<span><b>${iv.by}</b> invited you to join</span></p>${csGlyph(s, 'xl')}<h2>${spName(s)}</h2><p class="muted">${esc(s.desc)}</p>
-    <ul class="cs-facts"><li>${LOCK}<span>Threads are visible to members only.</span></li><li>${CI.link}<span>This link expires on Nov 21 and works once.</span></li><li>${I.agent}<span>Asks use the space’s extra tokens, then your own API key once they reach their monthly limit.</span></li></ul>
+    <ul class="cs-facts"><li>${LOCK}<span>Threads are visible to members only.</span></li><li>${CI.link}<span>This link expires on Nov 21 and works once.</span></li>${tmOn() ? (tmSkLine(s) ? `<li>${I.agent}<span>${tmSkLine(s)}</span></li>` : '') : `<li>${I.agent}<span>Asks use the space’s extra tokens, then your own API key once they reach their monthly limit.</span></li>`}</ul>
     <div class="cs-na-b">${mem ? `<span class="faint">You are already a member.</span><button class="btn primary" type="button" data-space="${s.id}">Open ${spName(s)}</button>` : out ? `<button class="btn primary" type="button" data-act="signin">Log in with X to accept</button>` : `<button class="btn primary" type="button" data-csaccept="${s.id}">Accept invite</button><button class="btn" type="button" data-home="1">Not now</button>`}</div>`;
   return `<div class="A C Af H">${topHeader()}<div class="cs-napage"><div class="cs-na cs-invcard">${body}</div></div></div>`;
 }
@@ -7074,7 +7139,7 @@ function csSettings(s) {
     + (d.vis !== 'open' ? stSec('Joining', 'How people become members, and who can invite them.', policyPicker(d)) : '')
     + (d.vis !== 'open' && d.policy === 'request' ? stSec('Questions for applicants', 'Shown on the request form. Moderators see the answers in the review queue.', qsEditor(d, false)) : '')
     + landingSec(d) + (d.faq ? topicSec(d, s) : '') + postsSec(d, s) + abSettingsPages(d) + `<div class="sf-domsec">${domainSec(d, s)}</div>`
-    + stSec('Token use', 'Asks use the space’s tokens up to a monthly limit, then the asker’s own API key. Posts are free.', payPicker(d));
+    + (tmOn() ? tmSetSec(s) : stSec('Token use', 'Asks use the space’s tokens up to a monthly limit, then the asker’s own API key. Posts are free.', payPicker(d)));
   const btns = `<button class="btn ghost" type="button" data-csset="reset" ${dirty ? '' : 'disabled'}>Discard changes</button><button class="btn primary" type="button" data-csset="save" ${dirty ? '' : 'disabled'}>Save changes</button>`;
   const foot = `${dirty ? `<div class="st-barw${csSettings.endVis ? ' off' : ''}"><div class="st-bar" role="region" aria-label="Unsaved changes"><span>You have unsaved changes.</span><span class="st-bar-a">${btns}</span></div></div>` : ''}<div class="cs-setf">${btns}</div>`;
   return `<div class="cs-set st-side">${cxArchStrip(s)}${secs}${foot}${cxDanger(s)}</div>`;
@@ -7137,7 +7202,7 @@ function crPreview(c) {
     <div class="cr-pv-sec"><span class="cr-pv-l">In browse</span>${browse}</div>
     <div class="cr-pv-sec"><span class="cr-pv-l">${closed ? 'Space page, for people who are not members' : 'Space page'}</span>${page}</div>
     <div class="cr-pv-sec"><span class="cr-pv-l">Landing page</span><div class="cr-pv-land" aria-hidden="true">${c.faq ? `<span class="cr-pv-box">${I.search}Search answers or ask a question</span><span class="cr-pv-cards"><i></i><i></i><i></i><i></i></span>` : '<span class="cr-pv-box">Make a query, or write a post…</span><span class="cr-pv-feed"><i></i><i></i><i></i></span>'}</div><p class="cr-pv-note">${c.faq ? `${I.book}<span>FAQ landing: search and ask, answers grouped by topic, recent threads below. Add topics in Settings after you create the space.</span>` : `${I.book}<span>Feed: the composer and the newest threads.</span>`}</p></div>
-    ${form}<div class="cr-pv-sec"><span class="cr-pv-l">Token use</span><p class="cr-pv-note">${I.agent}<span>${pay}</span></p></div></aside>`;
+    ${form}${tmOn() ? '' : `<div class="cr-pv-sec"><span class="cr-pv-l">Token use</span><p class="cr-pv-note">${I.agent}<span>${pay}</span></p></div>`}</aside>`;
 }
 function layoutCreate() {
   const c = st.cr, closed = c.vis !== 'open';
@@ -7146,7 +7211,7 @@ function layoutCreate() {
     + (closed ? stSec('Joining', 'How people become members, and who can invite them.', policyPicker(c)) : '')
     + (closed && c.policy === 'request' ? stSec('Questions for applicants', 'Shown on the request form. Moderators see the answers in the review queue.', qsEditor(c, false)) : '')
     + landingSec(c, true)
-    + stSec('Token use', 'Asks use the space’s tokens up to a monthly limit, then the asker’s own API key. Posts are free.', payPicker(c));
+    + (tmOn() ? '' : stSec('Token use', 'Asks use the space’s tokens up to a monthly limit, then the asker’s own API key. Posts are free.', payPicker(c)));
   const foot = `<div class="cr-foot"><button class="btn ghost" type="button" data-home="1">Cancel</button><button class="btn primary" type="button" data-crgo="1" ${c.name ? '' : 'disabled'}>Create space</button></div>`;
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page cs-create"><div class="sub-top"><h2>Create a space</h2></div><div class="cs-crgrid"><div class="cs-set st-stacked cr-form">${all}${foot}</div>${crPreview(c)}</div></div></div>`;
 }
@@ -7216,7 +7281,7 @@ function csModal() {
   if (k === 'cs-myreq') return dlg(`Your request to join ${spName(s)}`, `<p class="faint cs-small">Sent ${st.reqAge === 'just now' ? 'just now' : st.reqAge + ' ago'}. A moderator has not decided yet.</p>${csAnswers(s)}`, `<button class="btn" type="button" data-cswithdraw="${s.id}">Withdraw request</button>${cancelB('Close')}`);
   if (k === 'cs-withdraw') return dlg('Withdraw your request?', `<p class="muted">Moderators of ${spName(s)} will no longer see it. You can request again at any time.</p>`, `${cancelB('Keep request')}<button class="btn danger" type="button" data-cswithdraw-ok="${s.id}">Withdraw</button>`, 'alertdialog');
   /* joining and leaving an open space ask first */
-  if (k === 'sp-join') return dlg(`Join ${spName(s)}?`, `<p class="muted">New threads from ${spName(s)} show on your Home, and you can ask and post in it. ${s.byok ? 'Asks use its extra tokens first.' : 'Asks use your own API key.'}</p><div class="cs-jrules"><b>Rules</b>${rulesList(s)}</div>`, `${cancelB()}<button class="btn primary" type="button" data-spjoin-ok="${s.id}">Join</button>`);
+  if (k === 'sp-join') return dlg(`Join ${spName(s)}?`, `<p class="muted">New threads from ${spName(s)} show on your Home, and you can ask and post in it. ${tmOn() ? tmSkLine(s) : s.byok ? 'Asks use its extra tokens first.' : 'Asks use your own API key.'}</p><div class="cs-jrules"><b>Rules</b>${rulesList(s)}</div>`, `${cancelB()}<button class="btn primary" type="button" data-spjoin-ok="${s.id}">Join</button>`);
   if (k === 'sp-leave') return dlg(`Leave ${spName(s)}?`, `<p class="muted">You’ll stop seeing ${spName(s)}’s threads on your Home screen. Your threads and follow-ups will remain.</p>`, `${cancelB()}<button class="btn danger" type="button" data-spleave-ok="${s.id}">Leave space</button>`, 'alertdialog');
   if (k === 'cs-leave') {
     const back = s.vis === 'unlisted' || s.policy === 'invite' ? 'you’ll need a new invite to join again' : 'you’ll need to request to join again';
@@ -9715,7 +9780,7 @@ function qtOutline(T, cur) {
 }
 function qtFacts(T) {
   const p = T.p, s = sp(p.s);
-  return `<div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(s)}</button></div>${isClosed(s) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(s.members)})</b></div>` : ''}<div><span>Started by</span><b>${p.u}</b></div><div><span>Asks</span><b class="num">${T.nodes.length}</b></div><div><span>People</span><b class="num">${T.people}</b></div><div><span>Levels</span><b class="num">${T.depth}</b></div><div><span>Model</span><b>${MODEL_NAME}</b></div><div><span>Thinking level</span><b>${p.think || 'Medium'}</b></div><div><span>Tokens, all asks</span><b class="num">${fmtT(T.tok)}</b></div><div><span>Token use</span><b>${s.byok ? spName(s) : 'Each asker’s API key'}</b></div></div>`;
+  return `<div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(s)}</button></div>${isClosed(s) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(s.members)})</b></div>` : ''}<div><span>Started by</span><b>${p.u}</b></div><div><span>Asks</span><b class="num">${T.nodes.length}</b></div><div><span>People</span><b class="num">${T.people}</b></div><div><span>Levels</span><b class="num">${T.depth}</b></div><div><span>Model</span><b>${tmOn() ? tmModelName(p.model) : MODEL_NAME}</b></div><div><span>Thinking level</span><b>${p.think || 'Medium'}</b></div>${tmOn() ? tmFactsTok(T) : `<div><span>Tokens, all asks</span><b class="num">${fmtT(T.tok)}</b></div><div><span>Token use</span><b>${s.byok ? spName(s) : 'Each asker’s API key'}</b></div>`}</div>`;
 }
 
 /* ---------- compare ---------- */
@@ -9780,7 +9845,7 @@ function qtFuView(T, cur) {
   /* An "Ask about this answer" button in the answer's action row opens the composer there, above the follow-ups */
   const acts = !r.running ? thActs(T.p).replace('<div class="p-foot">', `<div class="p-foot"><button class="btn sm" type="button" data-qtaskat="r" aria-label="Ask about this answer" aria-expanded="${st.qtAskAt === 'r'}">${QTI.ask}<span>Ask<span class="m-long"> about this answer</span></span></button>`) : thActs(T.p);
   const inl = st.qtAskAt === 'r' && !r.running ? `<div class="qt-rootask qt-rootask-in">${qtComposer(T, 'r', { cancel: true })}</div>` : '';
-  return `${qtPickBar(T)}<article class="qt-node qt-inl qt-fuv" id="qt-n-r">${head}<section class="th-ans${r.running ? ' running' : ''}" id="th-a">${creditHead(T.p)}${qtAnswer(T, r)}${qtSrcs(T, r)}</section>${acts}${inl}${fus}</article>`;
+  return `${qtPickBar(T)}<article class="qt-node qt-inl qt-fuv" id="qt-n-r">${head}<section class="th-ans${r.running ? ' running' : ''}" id="th-a">${creditHead(T.p)}${qtAnswer(T, r)}${qtSrcs(T, r)}${tmRootMeta(T.p)}</section>${acts}${inl}${fus}</article>`;
 }
 /* ---------- sources of the question's answer, in the side column ---------- */
 function qtSrcList(T) {
@@ -9795,7 +9860,7 @@ function qtSrcList(T) {
 function qtTranscript(T, cur) {
   const path = T.path(cur.id), last = path[path.length - 1];
   const um = n => `<div class="ch-m ch-u" id="qt-n-${n.id}">${avatar(n.u, 'sm')}<div><div class="ch-h">${au(n.u)}<span>${n.age}</span>${n.id !== 'r' ? `<span>· ${qtLvName(n)}</span>` : ''}</div><p>${esc(n.q)}</p></div></div>`;
-  const am = n => `<div class="ch-m ch-a"><span class="agent">${I.agent}</span><div><div class="ch-h"><b>Agent</b></div>${qtAnswer(T, n)}${n.running ? '' : `<div class="ch-cost num">${fmtT(n.tok)} tokens</div>`}${n.id === 'r' ? qtSrcs(T, n) : ''}</div></div>`;
+  const am = n => `<div class="ch-m ch-a"><span class="agent">${I.agent}</span><div><div class="ch-h"><b>Agent</b></div>${qtAnswer(T, n)}${n.running ? '' : tmOn() ? (n.fail ? '' : tmNodeMeta(T, n)) : `<div class="ch-cost num">${fmtT(n.tok)} tokens</div>`}${n.id === 'r' ? qtSrcs(T, n) : ''}</div></div>`;
   const more = n => { const k = qtVisKids(T, n.id).filter(x => !path.includes(x)).length; return k ? `<p class="qt-trmore faint cs-small">${k} other question${k > 1 ? 's' : ''} about this answer, in the outline</p>` : ''; };
   const stream = path.map(n => um(n) + am(n) + more(n)).join('');
   return `<div class="ch ch-divided qt-chat">${miAbout(T.p)}<div class="ch-stream">${stream}</div>${last.running ? '' : `<div class="qt-trask">${qtComposer(T, last.id)}</div>`}</div>`;
@@ -11192,6 +11257,693 @@ function acJump(k) {
 }
 { const AC_jump = jump; jump = function (k) { AC_jump(k); if (String(k).startsWith('ac-') && dataReady()) acJump(k); }; }
 /* ==== end of accounts, API keys and profiles ==== */
+
+/* ==== token model: who pays for an ask (Variants bar › Token model) ====
+   Four variants share one implementation, set by the TM table:
+     A session   Session tokens only (before invite codes): no API keys anywhere.
+     B key       your own API keys only (after invite codes): a default key pays; no key, no asks.
+     C both      Session tokens first, then your default key.
+     D spacekey  C, plus a space key that a space admin attaches; asks in that space use it first.
+   'current' keeps the earlier model (space extra tokens, then your keys) and none of the code below runs for it.
+   tmPayer() is the one payer rule for every path: web and Phone composers, follow-ups, Retry and Ask again.
+   Usage this month lives in one value collection, `usage`: tokens by source and space (`by`), the Session
+   allowance (`cap`), the default key (`def`) and the space keys (`skeys`, variant D). */
+const TM = {
+  session:  { session: true,  keys: false, spaceKeys: false },
+  key:      { session: false, keys: true,  spaceKeys: false },
+  both:     { session: true,  keys: true,  spaceKeys: false },
+  spacekey: { session: true,  keys: true,  spaceKeys: true },
+};
+Object.assign(st, { tokmodel: 'current', tmPick: null, tmChoose: false, tmSk: null, tmSkCap: '6000000', tmSkErr: '' });
+Object.assign(nst, { tmCap: null });
+/* Fixtures. by: tokens this month per source and space; each source's total is the sum of its spaces, and each
+   is at least what your listed asks in that space used. Session tokens: 1.38M of 2M. Gemini key (k2): 372k of
+   its 1M limit; Anthropic key (k1): 612k of 2M. In a key variant a key's use this month is read from here. */
+D.usage = {
+  cap: 2e6, reset: 'Dec 1', def: 'k2', movedSeen: false,
+  by: {
+    session: { public: 420e3, scifi: 260e3, replication: 200e3, grants: 160e3, markets: 220e3, ml: 120e3 },
+    k2: { public: 300e3, markets: 72e3 },
+    k1: { scifi: 160e3, replication: 240e3, grants: 212e3 },
+    'skey:markets': { markets: 180e3 },
+    'skey:ml': { ml: 96e3 },
+  },
+  /* space keys (variant D): provider, masked key, who added it, monthly limit and use by all members, limit per member */
+  skeys: {
+    markets: { prov: 'Google', mask: 'AIza…k2Pq', by: 'oduya', cap: 6e6, used: 3.9e6, member: 0 },
+    ml: { prov: 'OpenAI', mask: 'sk-…7d1e', by: 'mira_k', cap: 8e6, used: 5.84e6, member: 300e3 },
+  },
+};
+const tm = () => TM[st.tokmodel] || null;
+const tmOn = () => !!tm();
+const TU = () => D.usage;
+const tmSum = o => Object.values(o || {}).reduce((a, b) => a + b, 0);
+const tmUsed = src => tmSum((TU().by || {})[src]);
+const tmKeys = () => st.userKeys.filter(k => k.valid);
+const tmDef = () => { const v = tmKeys(); return v.find(k => k.id === TU().def) || v[0] || null; };
+/* "Gemini API key" → "Gemini key"; "Work" → "Work key"; "Work key" and "API key 2" stay as they are */
+const tmKeyName = k => { const m = /^(.*?)\s*(api\s*)?key$/i.exec(k.label.trim()); return m && m[1] ? `${m[1]} key` : /key/i.test(k.label) ? k.label.trim() : `${k.label.trim()} key`; };
+const tmProv = k => k.raw ? provOf(k.raw) : kinfo(k).provider;
+const tmSkey = sid => (tm() && tm().spaceKeys && (TU().skeys || {})[sid]) || null;
+const tmLow = x => x.cap && x.left <= x.cap * 0.2;
+const tmPickClear = () => { if (st.tmPick) st.tmPick = null; if (nst.payer) nst.payer = null; st.tmChoose = false; };
+const tmOverride = () => st.device === 'native' ? nst.payer : st.tmPick;
+/* one source: Session tokens, one of your keys, or a space key */
+function tmSrc(id, sid) {
+  if (!id) return null;
+  if (id === 'session') { const cap = TU().cap, used = tmUsed('session'); return { kind: 'session', id, label: 'Session tokens', cap, used, left: Math.max(0, cap - used), prov: null }; }
+  if (String(id).startsWith('skey:')) {
+    const s2 = id.slice(5), k = (TU().skeys || {})[s2]; if (!k || !sp(s2)) return null;
+    const mine = tmUsed(id), spLeft = Math.max(0, k.cap - k.used), memLeft = k.member ? Math.max(0, k.member - mine) : Infinity;
+    return { kind: 'space', id, sid: s2, label: `${spName(sp(s2))} key`, cap: k.cap, used: k.used, mine, member: k.member, left: Math.min(spLeft, memLeft), memberOut: memLeft < spLeft && memLeft <= 0, prov: k.prov };
+  }
+  const k = st.userKeys.find(x => x.id === id); if (!k) return null;
+  const cap = kinfo(k).cap || 0, used = tmUsed(id);
+  return { kind: 'key', id, label: tmKeyName(k), cap, used, left: !k.valid ? 0 : cap ? Math.max(0, cap - used) : Infinity, prov: tmProv(k), valid: k.valid };
+}
+/* the order sources pay in, for an ask in space sid */
+function tmChain(sid) {
+  const M = tm(), out = [];
+  if (M.spaceKeys && tmSkey(sid)) out.push('skey:' + sid);
+  if (M.session) out.push('session');
+  if (M.keys) { const d = tmDef(); if (d) out.push(d.id); }
+  return out.map(id => tmSrc(id, sid)).filter(Boolean);
+}
+/* everything the chooser lists: the chain and your other keys */
+function tmChoices(sid) {
+  const l = tmChain(sid);
+  if (tm().keys) tmKeys().forEach(k => { if (!l.some(x => x.id === k.id)) l.push(tmSrc(k.id, sid)); });
+  return l;
+}
+/* The payer for an ask in space sid: the source picked for this ask (override) if it has tokens left,
+   otherwise the first source in the chain that has. When nothing can pay, ok is false and why says so:
+   'out' (Session tokens used up), 'nokey' (no API key), 'out-nokey' (both), 'limit' (the default key is at its limit). */
+function tmPayer(sid, o = {}) {
+  const M = tm(); if (!M) return null;
+  if (o.override) { const x = tmChoices(sid).find(c => c.id === o.override && c.left > 0); if (x) return { ok: true, picked: true, ...x }; }
+  const x = tmChain(sid).find(c => c.left > 0); if (x) return { ok: true, ...x };
+  const d = M.keys ? tmDef() : null;
+  if (M.keys && !d) return { ok: false, why: M.session ? 'out-nokey' : 'nokey' };
+  if (d) return { ok: false, why: 'limit', key: tmSrc(d.id, sid) };
+  return { ok: false, why: 'out' };
+}
+const tmPayOk = sid => { const p = tmPayer(sid, { override: tmOverride() }); return p && p.ok ? p : null; };
+const tmCanPayWith = (id, sid) => tmOn() && tmChoices(sid).some(c => c.id === id && c.left > 0);
+/* charge tokens to a source, in the space they were used in */
+function tmCharge(pay, tok, sid) {
+  if (!pay || !tok) return;
+  db.set('usage', u => {
+    const by = u.by[pay] || (u.by[pay] = {});
+    by[sid] = (by[sid] || 0) + tok;
+    if (String(pay).startsWith('skey:') && u.skeys[pay.slice(5)]) u.skeys[pay.slice(5)].used += tok;
+  });
+  if (st.userKeys.some(x => x.id === pay)) db.update('userKeys', pay, r => { r.last = 'Just now'; });
+}
+const tmLeftTx = x => x.left === Infinity ? `${fmtT(x.used)} used this month, no limit` : `${fmtT(x.left)} left this month`;
+
+/* ---------- models: the model must run on the payer's provider ---------- */
+const TM_MODELS = [
+  { id: 'argon', name: 'Gemini 4 Argon', prov: 'Google' }, { id: 'gflash', name: 'Gemini 4 Flash', prov: 'Google' },
+  { id: 'gpt6', name: 'GPT-6', prov: 'OpenAI' }, { id: 'gpt6m', name: 'GPT-6 mini', prov: 'OpenAI' },
+  { id: 'opus', name: 'Claude Opus 5', prov: 'Anthropic' }, { id: 'sonnet', name: 'Claude Sonnet 5', prov: 'Anthropic' },
+];
+const TM_FAM = { Google: 'Gemini', OpenAI: 'GPT', Anthropic: 'Claude' };
+const tmModels = pay => !pay || pay.kind === 'session' || !pay.prov ? TM_MODELS.filter(m => m.prov !== 'Anthropic') : pay.prov === 'OpenRouter' ? TM_MODELS : TM_MODELS.filter(m => m.prov === pay.prov);
+const tmModelFor = pay => { const l = tmModels(pay); return l.find(m => m.id === st.model) || l[0]; };
+const tmModelName = id => (TM_MODELS.find(m => m.id === id) || { name: MODEL_NAME }).name;
+
+/* ---------- who paid for an answer ---------- */
+/* An answer stores its payer id. Answers from the fixtures (and from the earlier model) have none, or one of
+   the earlier model's ids; they show the source that this variant's usage data has for that space. */
+function tmPaidId(pay, u, sid) {
+  if (pay === 'session' || /^skey:/.test(pay || '') || (u === ME.u && /^k/.test(pay || ''))) return pay;
+  const M = tm();
+  if (u !== ME.u) return M.spaceKeys && tmSkey(sid) ? 'skey:' + sid : M.session ? 'session' : 'user:' + u;
+  const ids = [...tmChain(sid).map(x => x.id), ...(M.keys ? tmKeys().map(k => k.id) : [])];
+  return ids.find(id => ((TU().by || {})[id] || {})[sid] > 0) || ids[0] || (M.session ? 'session' : 'user:' + u);
+}
+function tmPaidLabel(pay, u, sid) {
+  const id = tmPaidId(pay, u, sid);
+  if (id === 'session') return 'Session tokens';
+  if (/^skey:/.test(id)) return sp(id.slice(5)) ? `${spName(sp(id.slice(5)))} key` : 'A space key';
+  if (/^user:/.test(id)) return `${esc(id.slice(5))}’s API key`;
+  const k = st.userKeys.find(x => x.id === id);
+  return k ? esc(tmKeyName(k)) : 'A key you revoked';
+}
+const tmMeta = (pay, tok, u, sid, cls = '') => tok ? `<p class="tm-meta${cls}">Paid with ${tmPaidLabel(pay, u, sid)} · <span class="num">${fmtT(tok)} tokens</span></p>` : '';
+const tmRootMeta = p => tmOn() && p.k === 'ask' && !p.running && !p.fail ? tmMeta(p.pay, p.tok, p.u, p.s) : '';
+const tmNodeMeta = (T, n) => n.id === 'r' ? tmMeta(T.p.pay, n.tok, T.p.u, T.p.s) : tmMeta(n.pay, n.tok, n.u, T.p.s);
+/* Thread facts: the thread's total and the part each payer paid */
+function tmFactsTok(T) {
+  const by = {};
+  T.nodes.forEach(n => { if (!n.tok) return; const l = n.id === 'r' ? tmPaidLabel(T.p.pay, T.p.u, T.p.s) : tmPaidLabel(n.pay, n.u, T.p.s); by[l] = (by[l] || 0) + n.tok; });
+  const rows = Object.entries(by).sort((a, b) => b[1] - a[1]);
+  return `<div><span>Tokens</span><b class="num">${fmtT(T.tok)}</b></div>${rows.map(([l, v]) => `<div class="tm-fby"><span>${l}</span><b class="num">${fmtT(v)}</b></div>`).join('')}`;
+}
+
+/* ---------- buttons that work on the web and in the Phone app ---------- */
+function tmBtn(kind, arg, label, primary) {
+  const ph = st.device === 'native';
+  const A = { again: ['data-askagain', 'tmagain'], fu: ['data-tmfu', 'tmfu'], usage: ['data-sub', 'push:usage'], addkey: ['data-askkey', 'tmaddkey'], cap: ['data-akcap', 'tmcap'], pick: ['data-tmpick', 'tmpick'], keys: ['data-sub', 'tokeys'], moved: ['data-tmmoved', 'tmmoved'] }[kind];
+  const webArg = kind === 'usage' ? 'usage' : kind === 'keys' ? 'keys' : kind === 'addkey' ? '1' : arg;
+  if (ph) return `<button class="${primary ? 'n-capbtn tm-nbtn' : 'n-lnk'}" type="button" data-n="${A[1]}:${arg == null ? '' : arg}">${label}</button>`;
+  return `<button class="${primary ? 'btn sm primary' : 'tlink'}" type="button" ${A[0]}="${webArg}">${label}</button>`;
+}
+
+/* ---------- the composer line: who pays, and what is left ---------- */
+/* sid: the space the ask goes to. o.phone: the Phone composer and dock (the chooser is a sheet there). */
+function tmLine(sid, o = {}) {
+  const M = tm(), U = TU(), pay = tmPayer(sid, { override: tmOverride() }), sess = M.session ? tmSrc('session') : null;
+  const ph = st.device === 'native', reset = U.reset;
+  const many = tmChoices(sid).length > 1;
+  const who = l => !many ? `<b>${l}</b>` : ph ? `<button class="n-lnk tm-who" type="button" data-n="sheet:payer:${sid}">${l}</button>` : `<button class="tlink tm-who" type="button" data-tmchoose="${sid}" aria-haspopup="menu" aria-expanded="${!!st.tmChoose}">${l}${I.chev}</button>`;
+  const usage = t => tmBtn('usage', '', t);
+  const wrap = (h, warn) => ph ? h : `<span class="c2-note tm-line${warn ? ' warn' : ''}">${h}</span>${st.tmChoose === sid && many ? tmPop(sid, pay) : ''}`;
+  if (!pay.ok) {
+    if (pay.why === 'out') return wrap(`You’ve used this month’s Session tokens. They reset ${reset}. ${usage('See usage')}`, true);
+    if (pay.why === 'nokey') return wrap(`Add an API key to ask. ${tmBtn('addkey', '', 'Add an API key')}`, true);
+    if (pay.why === 'out-nokey') return wrap(`You’ve used this month’s Session tokens. They reset ${reset}. ${tmBtn('addkey', '', 'Add an API key')} to keep asking.`, true);
+    const k = pay.key, other = tmChoices(sid).find(c => c.left > 0 && c.id !== k.id);
+    return wrap(`${sess ? 'You’ve used this month’s Session tokens, and ' : ''}${esc(k.label)} reached its monthly limit of ${fmtT(k.cap)} tokens. ${other ? `${tmBtn('pick', other.id, `Use ${esc(other.label)}`)} · ` : ''}${tmBtn('cap', k.id, 'Change limit')}`, true);
+  }
+  /* A: nothing to say until 20% or less is left */
+  if (!M.keys) return tmLow(pay) ? wrap(`${fmtT(pay.left)} Session tokens left this month. They reset ${reset}. ${usage('See usage')}`, true) : '';
+  let pre = '', post = '';
+  const sk = M.spaceKeys && tmSrc('skey:' + sid, sid);
+  if (sk && pay.id !== sk.id && sk.left <= 0) pre = sk.memberOut ? `You’ve used your monthly limit on ${sk.label}. ` : `${sk.label} has no tokens left this month. `;
+  if (pay.kind === 'session' && tmLow(pay) && !tmKeys().length) post = `. ${tmBtn('addkey', '', 'Add an API key')} to keep asking after they run out.`;
+  const moved = pay.kind === 'key' && sess && sess.left <= 0 && !U.movedSeen && !pay.picked;
+  const note = moved ? (ph ? `<span class="tm-moved">You’ve used this month’s Session tokens, so asks now use ${esc(pay.label)} until they reset ${reset}. ${tmBtn('moved', '1', 'OK')}</span> ` : `<span class="c2-note tm-moved" role="status">You’ve used this month’s Session tokens, so asks now use ${esc(pay.label)} until they reset ${reset}. ${tmBtn('moved', '1', 'OK')}</span>`) : '';
+  const line = `${pre}Paid with ${who(esc(pay.label))} · ${usage(tmLeftTx(pay))}${pay.picked ? ' · For this ask only' : ''}${post}`;
+  return ph ? note + line : note + wrap(line, !!post || tmLow(pay));
+}
+/* the web chooser under the composer line */
+function tmPop(sid, pay) {
+  const rows = tmChoices(sid).map(c => `<button type="button" class="ts-opt" role="menuitemradio" aria-checked="${pay.ok && pay.id === c.id}" data-tmpick="${c.id}"${c.left > 0 ? '' : ' disabled'}>${tmIc(c)}<span class="ts-tx"><b>${esc(c.label)}</b><small>${tmSub(c)}</small></span>${pay.ok && pay.id === c.id ? I.check : ''}</button>`).join('');
+  return `<div class="ts-ddmenu tm-pop" role="menu" aria-label="Paid with"><div class="mp-h">Paid with, for this ask</div>${rows}${tm().keys ? `<div class="ts-ddsep"></div><button type="button" class="ts-opt" data-askkey="1"><span class="ts-ic">${PLUS}</span><span class="ts-tx"><b>Add an API key</b></span></button>` : ''}</div>`;
+}
+const tmIc = c => c.kind === 'space' ? glyph(sp(c.sid)) : `<span class="ts-ic">${c.kind === 'session' ? I.agent : MI.key}</span>`;
+function tmSub(c) {
+  if (c.kind === 'key' && c.valid === false) return 'Rejected by the provider';
+  if (c.left <= 0) return c.kind === 'key' ? `Reached its ${fmtT(c.cap)} limit` : c.memberOut ? 'You used your monthly limit' : 'None left this month';
+  return `${tmLeftTx(c)}${c.kind === 'key' ? ` · ${esc(c.prov)}` : ''}`;
+}
+
+/* ---------- the model menu: models for the payer's provider, then who pays ---------- */
+function tmModelMenu() {
+  const sid = curSpace(), pay = tmPayer(sid, { override: tmOverride() }), m = tmModelFor(pay), list = tmModels(pay);
+  const cur = TM_MODELS.find(x => x.id === st.model);
+  const sw = pay.ok && cur && !list.includes(cur) ? `<p class="tm-mnote" role="status">${esc(pay.label)} runs ${TM_FAM[pay.prov] || pay.prov} models, so the model changed from ${cur.name} to ${m.name}.</p>` : '';
+  const ch = tmChoices(sid);
+  const payRows = ch.map(c => `<button type="button" class="ts-opt" role="menuitemradio" aria-checked="${pay.ok && pay.id === c.id}" data-tmpick="${c.id}"${c.left > 0 && ch.length > 1 ? '' : ' disabled'}>${tmIc(c)}<span class="ts-tx"><b>${esc(c.label)}</b><small>${tmSub(c)}</small></span>${pay.ok && pay.id === c.id ? I.check : ''}</button>`).join('');
+  return `<div class="mp mp-base"><button class="chip dd" type="button" data-mp="toggle" aria-haspopup="menu" aria-expanded="${st.mpOpen}">${I.agent}<span>${m.name}</span>${I.chev}</button>${st.mpOpen ? `<div class="ts-ddmenu mp-menu" role="menu">
+    <div class="mp-h">Model</div>${sw}${list.map(x => `<button type="button" class="ts-opt" role="menuitemradio" aria-checked="${x.id === m.id}" data-model="${x.id}"><span class="ts-tx"><b>${x.name}</b></span>${x.id === m.id ? I.check : ''}</button>`).join('')}
+    <div class="ts-ddsep"></div><div class="mp-h">Paid with</div>${payRows}${tm().keys && st.auth === 'in' ? `<button type="button" class="ts-opt" data-askkey="1"><span class="ts-ic">${PLUS}</span><span class="ts-tx"><b>Add an API key</b></span></button>` : ''}
+    <div class="ts-ddsep"></div>${wsRow()}${taThinkRow()}</div>` : ''}</div>`;
+}
+
+/* ---------- answers that stopped, and Retry ---------- */
+/* why an answer stopped for tokens, naming the payer */
+function tmStopWhy(src, lbl, tok) {
+  const after = tok ? `The agent stopped after ${fmtT(tok)} tokens and wrote nothing.` : 'The agent wrote nothing.';
+  if (!src) return `Nothing could pay for this ask. ${after}`;
+  if (src.kind === 'session') return `You’ve used this month’s Session tokens. ${after} They reset ${TU().reset}.`;
+  if (src.kind === 'key') return `${esc(src.label)} reached its monthly limit of ${fmtT(src.cap)} tokens. ${after}`;
+  return src.memberOut ? `You reached your monthly limit of ${fmtT(src.member)} tokens on ${src.label}. ${after}` : `${src.label} has no tokens left this month. ${after}`;
+}
+const tmStopSum = src => src ? `The answer stopped: ${src.kind === 'session' ? 'this month’s Session tokens are used up' : src.kind === 'key' ? `${esc(src.label)} reached its monthly limit` : `${src.label} has no tokens left`}.` : 'The answer stopped: nothing could pay for it.';
+/* The actions after a stop: run again with the original payer when it can pay now, otherwise with the payer
+   that would pay now (the button names it); raise the key's limit; add a key; see usage.
+   again(id, label, primary) builds the button that runs the ask again with payer id. */
+function tmActs(sid, failedId, again) {
+  const out = [], pay = tmPayer(sid);
+  if (failedId && tmCanPayWith(failedId, sid)) out.push(again(failedId, 'Retry', true));
+  else if (pay.ok) out.push(again(pay.id, `Use ${esc(pay.label)}`, true));
+  else { const o = tmChoices(sid).find(c => c.left > 0); if (o) out.push(again(o.id, `Use ${esc(o.label)}`, true)); }
+  const f = failedId && tmSrc(failedId, sid);
+  if (f && f.kind === 'key' && f.cap && f.left <= 0) out.push(tmBtn('cap', f.id, 'Change limit'));
+  if (tm().keys && !tmKeys().length) out.push(tmBtn('addkey', '', 'Add an API key'));
+  if (!tm().keys) out.push(tmBtn('usage', '', 'See usage'));
+  return out.join('');
+}
+/* a root answer that failed or was stopped, in a key variant */
+function tmFailHTML(p) {
+  const i = D.posts.indexOf(p), s = sp(p.s), f = p.fail || {}, ph = st.device === 'native', mine = st.auth === 'in' && p.u === ME.u;
+  const id = tmPaidId(p.pay, p.u, p.s), src = tmSrc(id, p.s), lbl = tmPaidLabel(p.pay, p.u, p.s);
+  const again = (pid, label, primary) => tmBtn('again', `${i}:${pid}`, label, primary);
+  const retry = word => tmCanPayWith(id, p.s) ? again(id, word, false) : (() => { const x = tmPayer(p.s); return x.ok ? again(x.id, `${word} with ${esc(x.label)}`, false) : ''; })();
+  const box = (head, why, acts) => `<div class="run as-end${head ? ' as-fail' : ''}${ph ? ' tm-nrun' : ''}" role="status">${head ? `<div class="run-h"><span class="as-ic" aria-hidden="true">!</span><b>${head}</b></div>` : ''}<p class="as-why">${why}</p>${mine && acts ? `<div class="as-acts">${acts}</div>` : ''}</div>`;
+  if (f.why === 'stopped') return box('', `<b>Stopped.</b> The agent wrote nothing.${p.tok ? ` <span class="faint num">${fmtT(p.tok)} tokens used, paid with ${lbl}.</span>` : ''}`, retry('Run again'));
+  if (f.why === 'tokens') return box('Couldn’t finish the answer', tmStopWhy(src, lbl, p.tok), tmActs(p.s, src && id, again));
+  const k = st.userKeys.find(x => x.id === id), prov = k ? tmProv(k) : 'The provider';
+  if (f.why === 'key') return box('Couldn’t finish the answer', `${esc(prov)} rejected ${lbl}. The agent wrote nothing.`, retry('Retry') + (tm().keys ? tmBtn('keys', '', 'API keys') : ''));
+  const left = Math.max(0, Math.ceil(((f.at || 0) - Date.now()) / 1e3));
+  if (left && !ph && !ASK.tick) ASK.tick = setTimeout(() => { ASK.tick = 0; if (!DISPOSED && st.thread === i) renderKeepFocus(); }, 1e3);
+  return box('Couldn’t finish the answer', `${esc(prov)} is limiting requests from ${lbl}. The agent wrote nothing.`, left ? `<button class="${ph ? 'n-capbtn tm-nbtn' : 'btn sm'}" type="button" disabled aria-disabled="true">Retry in ${left} second${left === 1 ? '' : 's'}</button>` : retry('Retry'));
+}
+/* a follow-up that stopped for tokens */
+function tmNodeFail(T, n) {
+  const ph = st.device === 'native', mine = st.auth === 'in' && n.u === ME.u, src = tmSrc(n.pay, T.p.s);
+  const acts = mine ? tmActs(T.p.s, src && n.pay, (pid, label, primary) => tmBtn('fu', `${T.i}:${n.id}:${pid}`, label, primary)) : '';
+  return `<div class="run as-end as-fail tm-fail${ph ? ' tm-nrun' : ''}" role="status"><div class="run-h"><span class="as-ic" aria-hidden="true">!</span><b>Couldn’t finish the answer</b></div><p class="as-why">${tmStopWhy(src, tmPaidLabel(n.pay, n.u, T.p.s), n.tok)}</p>${acts ? `<div class="as-acts">${acts}</div>` : ''}</div>`;
+}
+/* Phone: the line under a follow-up's answer, or its stop */
+const tmNodeExtra = (i, id) => { if (!tmOn()) return ''; const T = qtT(i), n = T.by[id]; if (!n || n.running) return ''; return n.fail ? tmNodeFail(T, n) : tmNodeMeta(T, n); };
+
+/* ---------- the answer pipeline in a key variant ---------- */
+const TM_ASK = { finish: askFinish, stop: askStop, again: askAgain, state: askStateHTML, charge: askCharge, qtAsk };
+askFinish = function (i) {
+  if (!tmOn() || window.__SESSION_ASK_FAIL) return TM_ASK.finish(i);
+  const p = D.posts[i]; if (!p || !p.running) return;
+  const s = sp(p.s), tok = Math.round((34e3 + (p.q.length * 997) % 14e3) / 1e3) * 1e3;
+  let pay = p.pay; if (!tmSrc(pay, p.s)) { const x = tmPayer(p.s); pay = x.ok ? x.id : null; }
+  const src = tmSrc(pay, p.s);
+  /* the payer ran out while the agent worked: stop, charge what was left, and say why */
+  if (!src || src.left < tok) {
+    const used = src ? Math.min(src.left, tok) : 0;
+    tmCharge(pay, used, p.s); askFail(i, 'tokens', { used, pay });
+    db.update('posts', i, x => { x.sum = tmStopSum(src); });
+    return;
+  }
+  const a = askAnswer(p, i);
+  db.put('rich', i, a.rich); db.put('srcd', i, a.srcd); if (!D.fu[i]) db.put('fu', i, []);
+  db.update('posts', i, x => {
+    x.running = false; x.tok = tok; x.pay = pay; x.sum = a.sum; delete x.fail;
+    if (faqOn(s) && !x.topic) { x.topic = sfClassify(s, x.q); x.topicBy = x.topic ? 'agent' : null; }
+  });
+  tmCharge(pay, tok, p.s);
+  askNotify(i, 'The agent answered your ask');
+  renderKeepFocus();
+};
+askStop = function (i) {
+  if (!tmOn()) return TM_ASK.stop(i);
+  const p = D.posts[i]; if (!p || !p.running) return;
+  const r = RUNS.get(i), src = tmSrc(p.pay, p.s), used = src ? Math.min(src.left, AS_TOK[r ? r.step : 2]) : 0;
+  tmCharge(p.pay, used, p.s);
+  askFail(i, 'stopped', { used, pay: p.pay });
+};
+/* Run again: the payer that was picked, else the original payer while it can pay, else the payer that can pay now */
+askAgain = function (i, pay) {
+  if (!tmOn()) return TM_ASK.again(i, pay);
+  const p = D.posts[i]; if (!p) return;
+  const to = pay || (tmCanPayWith(p.pay, p.s) ? p.pay : (tmPayer(p.s).ok ? tmPayer(p.s).id : null));
+  db.update('posts', i, x => { x.running = true; x.sum = null; x.tok = 0; x.pay = to; x.model = tmModelFor(tmSrc(to, p.s)).id; delete x.fail; });
+  askRun(i);
+};
+askStateHTML = function (p) { return tmOn() && !p.running && p.fail ? tmFailHTML(p) : TM_ASK.state(p); };
+askCharge = function (pay, tok) { return tmOn() ? tmCharge(pay, tok, curSpace()) : TM_ASK.charge(pay, tok); };
+/* the web and Phone composers read the payer through askSources (payer(), askPay) and askPayNote */
+{ const as0 = askSources; askSources = function (sid) { if (!tmOn()) return as0(sid); const p = tmPayOk(sid); return p ? [{ id: p.id, kind: p.kind, label: p.label, sub: '', valid: true }] : []; }; }
+{ const pn0 = askPayNote; askPayNote = function (s, pay) { if (!tmOn()) return pn0(s, pay); return !s || st.auth !== 'in' ? '' : tmLine(s.id); }; }
+{ const r0 = MP.base.render; MP.base.render = function () { return tmOn() ? tmModelMenu() : r0.call(this); }; }
+/* a new ask stores its payer and model; a payer picked for one ask is cleared */
+{ const ct0 = createThread; createThread = function (kind) {
+  if (!tmOn() || kind !== 'ask') return ct0(kind);
+  const pay = tmPayer(curSpace(), { override: tmOverride() }); if (!pay.ok) return;
+  const n0 = D.posts.length; ct0(kind);
+  if (D.posts.length > n0) db.update('posts', n0, x => { x.pay = pay.id; x.model = tmModelFor(pay).id; });
+  if (pay.kind === 'key' && !TU().movedSeen && tm().session) db.set('usage', u => { u.movedSeen = true; });
+  tmPickClear();
+}; }
+/* follow-ups: the same payer rule and the same check when the answer is written */
+function tmQtRun(ti, id, html, tok) {
+  setTimeout(() => {
+    if (DISPOSED || !D.posts[ti]) return;
+    const T = qtT(ti), n = T.by[id]; if (!n || !n.running) return;
+    const src = tmSrc(n.pay, T.p.s);
+    if (!src || src.left < tok) { const used = src ? Math.min(src.left, tok) : 0; qtNodeEdit(ti, id, x => { x.running = false; x.html = ''; x.tok = used; x.fail = { why: 'tokens' }; }); tmCharge(n.pay, used, T.p.s); }
+    else { qtNodeEdit(ti, id, x => { x.running = false; x.html = html; x.tok = tok; delete x.fail; }); tmCharge(n.pay, tok, T.p.s); }
+    if (st.thread === ti || st.device === 'native') renderKeepFocus();
+  }, 2200);
+}
+qtAsk = function (T, par, text) {
+  if (!tmOn()) return TM_ASK.qtAsk(T, par, text);
+  const pay = tmPayer(T.p.s, { followUp: true, override: tmOverride() }); if (!pay.ok) return;
+  const n = { id: 'n' + (++qtSeq), par, u: ME.u, age: 'now', q: text, tok: 0, running: true, uses: st.qtCmp ? [...st.qtCmp] : null, pay: pay.id, model: tmModelFor(pay).id };
+  const html = QT_CANNED[st.qtCanned] || QT_CANNED.generic, tok = 9e3 + qtTokTxt(html) * 20;
+  qtEdit(T.i, d => { d.nodes.push(n); });
+  Object.assign(st, { qtAskAt: null, qtDraft: '', qtErr: '', qtCmp: null, qtCanned: null });
+  qtGo(qtT(T.i), n.id);
+  tmPickClear();
+  tmQtRun(T.i, n.id, html, tok);
+};
+/* run a stopped follow-up again with payer pay */
+function tmFuAgain(a) {
+  const [ti, id, pay] = a.split(':'), T = qtT(+ti);
+  if (!T.by[id]) return;
+  qtNodeEdit(+ti, id, x => { x.running = true; x.pay = pay; x.tok = 0; delete x.fail; });
+  tmQtRun(+ti, id, QT_CANNED.generic, 9e3 + qtTokTxt(QT_CANNED.generic) * 20);
+}
+/* the answer and follow-up action rows: a visible "Paid with" line in place of the token count's tooltip */
+const TM_TOKSPAN = /<span class="num" title="[^"]*">[^<]*<span class="m-long"> tokens<\/span><\/span>/;
+{ const na0 = qtNodeActs; qtNodeActs = function (T, n) { const h = na0(T, n); return !tmOn() ? h : (n.fail ? tmNodeFail(T, n) : n.running ? '' : tmNodeMeta(T, n)) + h.replace(TM_TOKSPAN, ''); }; }
+{ const ca0 = qtCalmActs; qtCalmActs = function (T, n) { const h = ca0(T, n); return !tmOn() ? h : (n.fail ? tmNodeFail(T, n) : n.running ? '' : tmNodeMeta(T, n)) + h.replace(TM_TOKSPAN, ''); }; }
+{ const qa0 = qtAnswer; qtAnswer = function (T, n) { return tmOn() && n.id !== 'r' && n.fail ? tmNodeFail(T, n) : qa0(T, n); }; }
+
+/* ---------- Usage: this month's tokens, by source, by space, and recent asks ---------- */
+/* the sources this variant shows, with this month's use */
+function tmSources() {
+  const M = tm(), out = [];
+  if (M.session) out.push(tmSrc('session'));
+  if (M.keys) st.userKeys.forEach(k => { const x = tmSrc(k.id); if (x) out.push(x); });
+  if (M.spaceKeys) Object.keys(TU().skeys || {}).forEach(sid => { const x = tmSrc('skey:' + sid, sid); if (x && (x.mine || D.joined.includes(sid))) out.push(x); });
+  return out;
+}
+const tmSrcUse = x => x.kind === 'space' ? x.mine : x.used;
+function tmBySpace(srcs) {
+  const by = {};
+  srcs.forEach(x => Object.entries((TU().by || {})[x.id] || {}).forEach(([sid, v]) => { by[sid] = (by[sid] || 0) + v; }));
+  return Object.entries(by).filter(([sid, v]) => v && sp(sid)).sort((a, b) => b[1] - a[1]);
+}
+/* your asks and follow-ups with tokens, newest first (for a new account, only the asks it made) */
+function tmRecent(n = 8) {
+  const l = [], fresh = TU().fresh;
+  D.posts.forEach((p, i) => {
+    if (p.k !== 'ask' || p.gone || !sp(p.s)) return;
+    if (p.u === ME.u && p.tok && !p.running) l.push({ age: p.age, t: p.t || p.q, s: p.s, pay: p.pay, u: p.u, tok: p.tok, open: `data-open="${i}"`, nopen: `push:thread:${i}` });
+    if (!D.qtd[i]) return;
+    qtT(i).nodes.slice(1).forEach(x => { if (x.u === ME.u && x.tok && !x.running && !x.fail) l.push({ age: x.age, t: x.q, s: p.s, pay: x.pay, u: x.u, tok: x.tok, open: `data-qtopen="${i}:${x.id}"`, nopen: `push:ask:${i}:${x.id}` }); });
+  });
+  return l.filter(r => !fresh || r.age === 'now').sort((a, b) => qtAge(a.age) - qtAge(b.age)).slice(0, n);
+}
+const tmBar = (v, max) => `<span class="tm-bar" aria-hidden="true"><i style="width:${Math.max(1, Math.min(100, max ? v / max * 100 : 0)).toFixed(1)}%"></i></span>`;
+const tmSrcLine = x => x.kind === 'session' ? `${fmtT(x.used)} of ${fmtT(x.cap)} · ${fmtT(x.left)} left · resets ${TU().reset}`
+  : x.kind === 'key' ? `${esc(x.prov)}${tmDef() && tmDef().id === x.id ? ' · Used for asks' : ''} · ${x.valid === false ? 'Rejected by the provider' : x.cap ? `${fmtT(x.used)} of a ${fmtT(x.cap)} monthly limit` : 'No monthly limit'}`
+  : `Your use only. Asks in ${spName(sp(x.sid))} use it first.${x.member ? ` Your limit there: ${fmtT(x.member)} a month.` : ''}`;
+function tmUsagePage() {
+  const wrap = h => `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page ak-page ac-page tm-upage"><div class="sub-top"><h2>Usage</h2>${tmOn() && tm().keys && st.auth === 'in' ? '<button class="btn" type="button" data-sub="keys">API keys</button>' : ''}</div>${h}</div></div>`;
+  if (st.auth !== 'in') return wrap(acOutNote('Log in to see your usage.'));
+  if (!tmOn()) return wrap('<div class="ak-empty"><p class="muted">Usage is part of the Token model variants. Choose one in the Variants bar.</p></div>');
+  const srcs = tmSources(), total = srcs.reduce((a, x) => a + tmSrcUse(x), 0), spaces = tmBySpace(srcs), rec = tmRecent();
+  const head = `<div class="tm-total"><b class="num">${fmtT(total)}</b><span>tokens this month</span></div><p class="muted tm-ulead">${tm().session ? `Session tokens reset ${TU().reset}. ` : ''}${tm().keys ? 'Your providers bill your keys. Key limits reset on the 1st of each month.' : ''}</p>`;
+  const src = `<div class="tm-rows">${srcs.map(x => `<div class="tm-row">${tmIc(x)}<div class="tm-rt"><b>${esc(x.label)}</b><small>${tmSrcLine(x)}</small>${x.cap && x.kind !== 'space' ? tmBar(x.used, x.cap) : ''}</div><b class="num">${fmtT(tmSrcUse(x))}</b>${x.kind === 'key' && x.valid !== false ? `<span class="tm-ra">${tmDef() && tmDef().id === x.id ? '' : `<button class="tlink" type="button" data-tmdef="${x.id}">Use for asks</button>`}<button class="tlink" type="button" data-akcap="${x.id}">${x.cap ? 'Change limit' : 'Set limit'}</button></span>` : ''}</div>`).join('') || '<p class="muted">No sources.</p>'}</div>`;
+  const sps = spaces.length ? `<div class="tm-rows">${spaces.map(([sid, v]) => `<div class="tm-row">${glyph(sp(sid))}<div class="tm-rt"><button class="tlink tm-sp" type="button" data-space="${sid}">${spName(sp(sid))}</button>${tmBar(v, spaces[0][1])}</div><b class="num">${fmtT(v)}</b></div>`).join('')}</div>` : '<p class="muted">No asks this month.</p>';
+  const recent = rec.length ? `<div class="tm-rows">${rec.map(r => `<div class="tm-row tm-rec"><div class="tm-rt"><button class="tlink tm-rq" type="button" ${r.open}>${esc(qtClip(r.t, 80))}</button><small>${spName(sp(r.s))} · Paid with ${tmPaidLabel(r.pay, r.u, r.s)} · ${r.age === 'now' ? 'just now' : r.age + ' ago'}</small></div><b class="num">${fmtT(r.tok)}</b></div>`).join('')}</div>` : '<p class="muted">No asks yet this month.</p>';
+  return wrap(`${head}<div class="cs-set st-side ac-set">${stSec('By source', 'Who paid for your asks this month.', src)}${stSec('By space', 'Where you asked. The figures add up to the total.', sps)}${stSec('Recent asks', 'Your latest asks and follow-ups. They are part of the totals above.', recent)}</div>`);
+}
+/* Phone › You › Usage: the same figures */
+function tmNUsage() {
+  if (!tmOn() || !nSignedIn()) return { body: `${nPushBar('Usage', '')}<p class="n-empty">${nSignedIn() ? 'Usage is part of the Token model variants. Choose one in the Variants bar.' : 'Log in to see your usage.'}</p>` };
+  const srcs = tmSources(), total = srcs.reduce((a, x) => a + tmSrcUse(x), 0), spaces = tmBySpace(srcs), rec = tmRecent(6);
+  const row = (l, sub, v, extra = '', bar = '') => `<div class="n-row tm-nrow"><span class="n-row-b"><b>${l}</b>${sub ? `<small>${sub}</small>` : ''}${bar}</span><span class="n-val num">${v}</span>${extra}</div>`;
+  const body = `<div class="tm-ntotal"><b class="num">${fmtT(total)}</b><span>tokens this month</span></div>`
+    + nGroup('By source', srcs.map(x => row(esc(x.label), tmSrcLine(x), fmtT(tmSrcUse(x)), '', x.cap && x.kind !== 'space' ? tmBar(x.used, x.cap) : '')), tm().session ? `Session tokens reset ${TU().reset}.` : 'Your providers bill your keys.')
+    + nGroup('By space', spaces.map(([sid, v]) => row(spName(sp(sid)), '', fmtT(v), '', tmBar(v, spaces[0][1]))), 'The figures add up to the total.')
+    + nGroup('Recent asks', rec.map(r => `<button class="n-row" type="button" data-n="${r.nopen}"><span class="n-row-b"><b>${esc(qtClip(r.t, 70))}</b><small>${spName(sp(r.s))} · Paid with ${tmPaidLabel(r.pay, r.u, r.s)}</small></span><span class="n-val num">${fmtT(r.tok)}</span></button>`));
+  return { body: `${nPushBar('Usage', '')}<div class="tm-nusage">${body}</div>` };
+}
+CS_PAGES.usage = () => typeof nvWithBack === 'function' ? nvWithBack(tmUsagePage(), '<div class="sub-top">') : tmUsagePage();
+CS_SUBNAME.usage = 'Usage';
+AC_PRIVATE.push('usage');
+NSCR.usage = () => tmNUsage();
+{ const lx0 = nLabelX; nLabelX = function (e) { return e.v === 'usage' ? 'Usage' : lx0(e); }; }
+{ const u0 = csUrl; csUrl = function () { return st.subPage === 'usage' ? 'session.app/settings/usage' : u0(); }; }
+const TM_I = { usage: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M3 13V8M8 13V3M13 13v-3"/></svg>' };
+/* the account menu: Usage above Account; Variant A has no API keys */
+{ const um0 = userMenu; userMenu = function () {
+  let h = um0(); if (!tmOn()) return h;
+  if (!tm().keys) h = h.replace(/<button class="um-item" type="button" role="menuitem" data-sub="keys">[\s\S]*?<\/button>/, '');
+  return h.replace('<button class="um-item" type="button" role="menuitem" data-sub="account">', `<button class="um-item" type="button" role="menuitem" data-sub="usage">${TM_I.usage}<span>Usage</span><small class="num">${fmtT(tmSources().reduce((a, x) => a + tmSrcUse(x), 0))}</small></button>$&`);
+}; }
+/* Account: a Usage section with the month's total */
+{ const ap0 = CS_PAGES.account; CS_PAGES.account = function () {
+  const h = ap0(); if (!tmOn() || st.auth !== 'in') return h;
+  const srcs = tmSources(), total = srcs.reduce((a, x) => a + tmSrcUse(x), 0), sess = tm().session ? tmSrc('session') : null, d = tmDef();
+  const sec = stSec('Usage', 'Tokens your asks used this month.', `<div class="ac-row"><span class="ac-v">${fmtT(total)} tokens${sess ? ` · ${fmtT(sess.left)} Session tokens left` : d ? ` · ${esc(tmKeyName(d))} pays` : ''}</span><button class="btn sm" type="button" data-sub="usage">See usage</button></div>`);
+  return h.replace('<div id="ac-notifs"', sec + '<div id="ac-notifs"');
+}; }
+
+/* ---------- API keys: the default key, the key dialog, Revoke ---------- */
+{ const lk0 = layoutKeys; layoutKeys = function () {
+  if (tmOn() && !tm().keys && st.auth === 'in') return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page ak-page"><div class="sub-top"><h2>API keys</h2></div><div class="ak-empty"><p class="muted">In this variant asks use Session tokens, and API keys aren’t used. <button class="tlink" type="button" data-sub="usage">See usage</button></p></div></div></div>`;
+  return lk0();
+}; }
+{ const ak0 = akRow; akRow = function (k) {
+  let h = ak0(k); if (!tmOn() || !tm().keys) return h;
+  h = h.replace(/ · Pays for extra tokens in [^<]*/, '').replace(`${fmtT(kinfo(k).used)} tokens this month`, `${fmtT(tmUsed(k.id))} tokens this month`);
+  const d = tmDef();
+  if (d && d.id === k.id) return h.replace('<span class="ks ok">Active</span>', '<span class="ks tm-def">Used for asks</span><span class="ks ok">Active</span>');
+  return k.valid ? h.replace('<span class="ak-acts">', `<span class="ak-acts"><button class="tlink" type="button" data-tmdef="${k.id}">Use for asks</button>`) : h;
+}; }
+const tmKeyHelp = () => tm().session ? 'Stored encrypted. Session uses it only for asks you start, after your Session tokens run out or when you pick it. Your provider bills you for the tokens.' : 'Stored encrypted. Session uses it only for asks you start. Your provider bills you for the tokens.';
+{ const kd0 = addKeyDialog; addKeyDialog = function () {
+  const h = kd0(), k = st.keyFor && st.userKeys.find(x => x.id === st.keyFor); if (!tmOn()) return h;
+  return h.replace(KEY_HELP, tmKeyHelp()).replace(k && st.keyMode === 'limit' ? `${fmtT(kinfo(k).used)} tokens used this month.` : '\u0000', k ? `${fmtT(tmUsed(k.id))} tokens used this month.` : '');
+}; }
+/* What revoking a key changes, in words. 'current': space extra tokens first, then your first other key. */
+function tmRevokeText(k) {
+  const rest = st.userKeys.filter(x => x.valid && (!k || x.id !== k.id));
+  if (!tmOn()) return rest.length ? `Asks you start will use a space’s extra tokens where it has them, and otherwise your ${esc(rest[0].label)}.` : 'Asks you start will use a space’s extra tokens where it has them. In other spaces you won’t be able to ask until you add another key.';
+  const d = tmDef(), wasDef = !!(k && d && d.id === k.id), next = wasDef ? rest[0] : d;
+  if (!tm().session) return !rest.length ? 'You won’t be able to ask until you add another key.' : wasDef ? `Asks you start will use ${esc(tmKeyName(next))} instead.` : `Asks you start will keep using ${esc(tmKeyName(next))}.`;
+  if (tmSrc('session').left <= 0) return !rest.length ? `You won’t be able to ask until your Session tokens reset ${TU().reset} or you add another key.` : wasDef ? `Asks you start will use ${esc(tmKeyName(next))} instead.` : `Asks you start will keep using ${esc(tmKeyName(next))}.`;
+  if (!rest.length) return 'Asks you start will use Session tokens. After they run out, you won’t be able to ask until you add another key.';
+  return wasDef ? `Asks you start will use Session tokens, then ${esc(tmKeyName(next))} instead.` : `Asks you start will keep using Session tokens, then ${esc(tmKeyName(next))}.`;
+}
+{ const rd0 = revokeDialog; revokeDialog = function () {
+  if (!tmOn()) return rd0();
+  const k = st.userKeys.find(x => x.id === st.modal.split(':')[1]), x = k && tmSrc(k.id);
+  return `<div class="modal-scrim"><div class="modal sm" role="alertdialog" aria-modal="true" aria-labelledby="rv-t"><h3 id="rv-t">Revoke ${esc(k ? tmKeyName(k) : 'this key')}?</h3><p class="muted">${tmRevokeText(k)} You can’t undo this.</p>${x && x.used ? `<p class="cs-fine">${MI.key}<span>${fmtT(x.used)} tokens used this month stay in Usage.</span></p>` : ''}<div class="modal-f"><span style="flex:1"></span><button class="btn" type="button" data-act="modal-close">Cancel</button><button class="btn danger" type="button" data-act="revoke-confirm">Revoke</button></div></div></div>`;
+}; }
+function tmRevoke(id) {
+  const k = st.userKeys.find(x => x.id === id); if (!k) return;
+  const msg = `Revoked ${esc(tmKeyName(k))}. ${tmRevokeText(k)}`, d = tmDef(), rest = tmKeys().filter(x => x.id !== id);
+  db.remove('userKeys', id); stToggle('srcSel', id, false);
+  if (d && d.id === id) db.set('usage', u => { u.def = rest.length ? rest[0].id : null; });
+  if (st.tmPick === id) st.tmPick = null; if (nst.payer === id) nst.payer = null;
+  toast(msg);
+}
+{ const rv0 = acRevoke; acRevoke = function (id) { if (!tmOn()) return rv0(id); st.modal = null; tmRevoke(id); }; }
+const tmSetDef = id => { db.set('usage', u => { u.def = id; }); const k = st.userKeys.find(x => x.id === id); if (k) toast(`${esc(tmKeyName(k))} pays for your asks${tm().session ? ' after your Session tokens run out' : ''}.`); };
+
+/* ---------- first run: the API key step ---------- */
+/* a new account: nothing used yet; asks made before it (fixtures) are not its asks */
+const tmFresh = () => ({ ...structuredClone(FIXTURES.usage), by: {}, def: null, movedSeen: false, fresh: true });
+{ const ob0 = acOnbStart; acOnbStart = function () { if (tmOn()) { db.set('userKeys', []); db.set('usage', tmFresh()); } ob0(); }; }
+const tmOnbCopy = () => tm().session
+  ? `Session tokens pay for up to ${fmtT(TU().cap)} tokens of asks each month. After they run out, asks use your API key, and your provider bills you for those tokens. Session uses the key only for asks you start. Account › Usage shows both.`
+  : 'Asks run on your own API key, and your provider bills you for the tokens they use. Session uses the key only for asks you start. Account › Usage shows how many tokens each key used.';
+CS_PAGES.welcome = function () {
+  let h = layoutOnb(); if (!tmOn()) return h;
+  const o = st.onb || { step: 0 };
+  if (!tm().keys) {
+    /* A: two steps, terms and spaces; the second one ends the first run */
+    h = h.replace(/Step (\d) of 3/, 'Step $1 of 2').replace(/(<div class="onb-steps"[^>]*>(?:<span[^>]*><\/span>){2})<span[^>]*><\/span>/, '$1');
+    if (o.step === 1) h = h.replace('data-onb="next"', 'data-onb="done"').replace(/>Continue<\/button>(\s*<\/div>)/, '>Go to Home</button>$1');
+    return h;
+  }
+  if (o.step !== 2) return h;
+  const req = !tm().session;
+  return h.replace(/<h2>Add an API key<\/h2><p class="muted">[^<]*<\/p>/, `<h2>Add an API key${req ? '' : ' <small class="faint">optional</small>'}</h2>${req ? '<p class="tm-req">Needed to ask</p>' : ''}<p class="muted">${tmOnbCopy()}</p>`)
+    .replace('You can add and change keys later in API keys.', req ? 'If you skip this step, you can read and post, but you can’t ask until you add a key in API keys.' : 'You can add and change keys later in API keys.');
+};
+
+/* ---------- space billing: hidden in A, B and C; space keys in D ---------- */
+/* About in the sidebar, the About drawer, the join dialog and invite facts: one line about the space key (D) */
+const tmSkLine = s => { const k = tmSkey(s.id); return k ? `Asks here use ${spName(s)} key while it has tokens left.` : ''; };
+const tmAboutCard = s => tmSkLine(s) ? `<div class="note-card"><h3>Tokens</h3><p class="cs-acc">${I.agent}<span>${tmSkLine(s)}</span></p></div>` : '';
+{ const tc0 = abTokenCard; abTokenCard = function (s) { return tmOn() ? tmAboutCard(s) : tc0(s); }; }
+const TM_MEM = [['0', 'No limit'], ['100000', '100k tokens'], ['300000', '300k tokens'], ['1000000', '1M tokens']];
+const TM_SKCAPS = [['2000000', '2M tokens'], ['6000000', '6M tokens'], ['8000000', '8M tokens'], ['20000000', '20M tokens']];
+DD_SET.tmMem = (v, sid) => { db.set('usage', u => { if (u.skeys[sid]) u.skeys[sid].member = +v; }); toast(+v ? `Each member can use ${fmtT(+v)} tokens of the space key a month.` : 'Members have no limit on the space key.'); };
+DD_SET.tmSkCap = v => { st.tmSkCap = v; };
+/* Settings › Tokens (D): the space key, as a key row, with a monthly limit and a limit per member. Any admin can change it. */
+function tmSetSec(s) {
+  if (!tm().spaceKeys) return '';
+  const k = (TU().skeys || {})[s.id], adm = isAdminOf(s.id);
+  const tl = (v, l, cls = '') => `<button class="tlink${cls}" type="button" data-tmsk="${v}:${s.id}">${l}</button>`;
+  const body = !k
+    ? `<div class="ak-empty"><p class="muted">${spName(s)} has no space key. Asks here use each member’s Session tokens or API key.</p>${adm ? `<button class="btn" type="button" data-tmsk="add:${s.id}">${PLUS}Add a space key</button>` : ''}</div>`
+    : `<div class="ak-list"><div class="ak-row"><span class="ts-ic">${MI.key}</span><div class="ak-tx"><b>${spName(s)} key</b><small>${esc(k.mask)} · ${esc(k.prov)} · Added by ${esc(k.by)}</small><span class="ak-use num">${fmtT(k.used)} of ${fmtT(k.cap)} tokens used this month by all members</span>${tmBar(k.used, k.cap)}</div><span class="ks ok">Active</span>${adm ? `<span class="ak-acts">${tl('cap', 'Change limit')}${tl('rep', 'Replace')}${tl('rm', 'Remove', ' danger-l')}</span>` : ''}</div></div>
+      <div class="fld tm-memf"><span id="tm-mem-l">Limit per member <small class="faint">optional</small></span>${adm ? ddSel('tmMem.' + s.id, TM_MEM, String(k.member || 0), 'tm-mem-l') : `<b>${esc((TM_MEM.find(x => +x[0] === (k.member || 0)) || TM_MEM[0])[1])}</b>`}<small class="faint">After a member reaches it, their asks here use their own Session tokens or API key.</small></div>`;
+  const fine = `<p class="cs-fine">${MI.key}<span>${adm ? `Any admin of ${spName(s)} can change the space key and its limits.` : `Only admins of ${spName(s)} can change the space key.`} The key’s provider bills the account the key belongs to. Changes apply at once.</span></p>`;
+  return stSec('Tokens', `Asks in ${spName(s)} use the space key first, up to its monthly limit. After that, members’ asks use their Session tokens or API key.`, body + fine);
+}
+function tmModal() {
+  const [k, sid] = (st.modal || '').split(':'), s = sp(sid); if (!s) return '';
+  const cur = (TU().skeys || {})[sid];
+  if (k === 'tm-skrm') return dlg(`Remove ${spName(s)} key?`, `<p class="muted">Asks in ${spName(s)} will use each member’s Session tokens or API key. Usage this month stays in each member’s Usage.</p>`, `${cancelB()}<button class="btn danger" type="button" data-tmsk="rmok:${sid}">Remove key</button>`, 'alertdialog');
+  if (k === 'tm-skcap') return dlg(`Monthly limit for ${spName(s)} key`, `<div class="fld"><span id="tm-skc-l">Monthly limit</span>${ddSel('tmSkCap', TM_SKCAPS, st.tmSkCap, 'tm-skc-l')}<small class="faint">${fmtT(cur ? cur.used : 0)} tokens used this month by all members. At the limit, asks here use each member’s own tokens until the 1st.</small></div>`, `${cancelB()}<button class="btn primary" type="button" data-tmsk="capok:${sid}">Save</button>`);
+  if (k === 'tm-skadd' || k === 'tm-skrep') {
+    const rep = k === 'tm-skrep';
+    return dlg(rep ? `Replace ${spName(s)} key` : `Add a key to ${spName(s)}`, `${rep ? '<p class="muted ak-lead">Paste a new key. The limits stay the same.</p>' : `<p class="muted ak-lead">Asks in ${spName(s)} use this key first, up to the monthly limit. The key’s provider bills you.</p>`}<label class="fld"><span>API key</span><input id="tm-sk-in" type="password" placeholder="sk-… or AIza…" autocomplete="off" spellcheck="false" value="${esc(st.keyDraft)}"></label>${rep ? '' : `<div class="fld"><span id="tm-skc-l">Monthly limit</span>${ddSel('tmSkCap', TM_SKCAPS, st.tmSkCap, 'tm-skc-l')}</div>`}${st.tmSkErr ? `<p class="ts-err" role="alert">${st.tmSkErr}</p>` : ''}<p class="ts-help faint">Stored encrypted. Session uses it only for asks in ${spName(s)}.</p>`, `${cancelB()}<button class="btn primary" type="button" data-tmsk="${rep ? 'repok' : 'addok'}:${sid}">${rep ? 'Replace key' : 'Add key'}</button>`);
+  }
+  return '';
+}
+{ const m0 = csModal; csModal = function () { return (st.modal || '').startsWith('tm-') ? tmModal() : m0(); }; }
+function tmSkAct(v, sid) {
+  const s = sp(sid), cur = (TU().skeys || {})[sid];
+  if (!isAdminOf(sid)) return;
+  if (v === 'add' || v === 'rep') Object.assign(st, { modal: `tm-sk${v}:${sid}`, keyDraft: '', tmSkErr: '', tmSkCap: '6000000' });
+  if (v === 'cap') Object.assign(st, { modal: 'tm-skcap:' + sid, tmSkCap: String(cur ? cur.cap : 6e6) });
+  if (v === 'rm') st.modal = 'tm-skrm:' + sid;
+  if (v === 'rmok') { db.set('usage', u => { delete u.skeys[sid]; }); st.modal = null; toast(`Removed ${spName(s)} key.`); }
+  if (v === 'capok') { const cap = +st.tmSkCap; db.set('usage', u => { u.skeys[sid].cap = cap; }); st.modal = null; toast(`Limit set: ${fmtT(cap)} tokens a month.`); }
+  if (v === 'addok' || v === 'repok') {
+    const raw = st.keyDraft.trim();
+    if (!KEY_RE.test(raw)) { st.tmSkErr = raw ? 'That key is not valid. Anthropic, OpenAI and OpenRouter keys start with sk-; Gemini keys start with AIza.' : 'Paste a key first.'; return; }
+    db.set('usage', u => { const o = u.skeys[sid] || { used: 0, member: 0, cap: +st.tmSkCap }; u.skeys[sid] = { ...o, prov: provOf(raw), mask: maskOf(raw), by: ME.u }; });
+    Object.assign(st, { modal: null, keyDraft: '' });
+    toast(v === 'repok' ? `Replaced ${spName(s)} key.` : `Added ${spName(s)} key. Asks in ${spName(s)} use it first.`);
+  }
+}
+
+/* ---------- Phone: composer line, dock, chooser, You › Usage, key details, first run ---------- */
+/* the inline composer's line: the model for the payer, then who pays */
+const tmNNote = x => { const pay = tmPayer(x.id, { override: nst.payer }), l = tmLine(x.id, { phone: true }); return `${tmModelFor(pay).name}${l ? ' · ' + l : ''}`; };
+const tmNDock = x => { const l = tmLine(x.id, { phone: true }); return l ? `<p class="n-dock-n">${l}</p>` : ''; };
+{ const ps0 = nPayerSheet; nPayerSheet = function (x) {
+  if (!tmOn()) return ps0(x);
+  const pay = tmPayer(x.id, { override: nst.payer });
+  const rows = tmChoices(x.id).map(c => c.left > 0
+    ? `<button class="n-row" type="button" data-n="tmpick:${c.id}"><span class="n-row-b"><b>${esc(c.label)}</b><small>${tmSub(c)}</small></span>${pay.ok && pay.id === c.id ? '<span class="n-check">✓</span>' : ''}</button>`
+    : `<div class="n-row n-dim" aria-disabled="true"><span class="n-row-b"><b>${esc(c.label)}</b><small class="n-bad">${tmSub(c)}</small></span></div>`);
+  if (tm().keys) rows.push(`<button class="n-row n-add" type="button" data-n="tmaddkey:">${NI.plus}<span class="n-row-b"><b>Add API key</b></span></button>`);
+  return `<div class="n-scrim" data-n="close"></div><div class="n-sheet n-det n-pick" role="dialog" aria-label="Paid with"><span class="n-grab"></span><div class="n-sheet-bar"><span></span><b>Paid with</b><button class="n-tb" type="button" data-n="close"><b>Done</b></button></div><div class="n-sheet-sc">${nGroup('', rows, 'Your choice applies to the next ask only. The model changes to one your choice can run.')}</div></div>`;
+}; }
+{ const y0 = nYou; nYou = function () {
+  const r = y0(); if (!tmOn() || !nSignedIn()) return r;
+  let b = r.body;
+  if (!tm().keys) b = b.replace(/<button class="n-row" type="button" data-n="push:keys">[\s\S]*?<\/button>/, '');
+  const tot = tmSources().reduce((a, x) => a + tmSrcUse(x), 0);
+  b = b.replace(/(<button class="n-row" type="button" data-n="tab:spaces">[\s\S]*?<\/button>)/, `$1<button class="n-row" type="button" data-n="push:usage:"><span class="n-row-b"><b>Usage</b></span><span class="n-val num">${fmtT(tot)}</span><span class="n-chev">${NI.chev}</span></button>`);
+  return { ...r, body: b };
+}; }
+/* key details: this month's use, the monthly limit, and whether it pays for your asks */
+{ const ks0 = nKeySheet; nKeySheet = function (id) {
+  const h = ks0(id); if (!tmOn() || !tm().keys || !h) return h;
+  const k = st.userKeys.find(x => x.id === id), x = tmSrc(id), d = tmDef();
+  const rows = [`<div class="n-row"><span class="n-row-b"><b>This month</b></span><span class="n-val num">${fmtT(x.used)} tokens</span></div>`, nGo2(`tmcap:${id}`, `<span class="n-row-b"><b>Monthly limit</b></span><span class="n-val">${x.cap ? fmtT(x.cap) : 'None'}</span>`)];
+  if (k.valid) rows.push(d && d.id === id ? `<div class="n-row"><span class="n-row-b"><b>Used for asks</b><small>${tm().session ? 'After your Session tokens run out' : 'Pays for asks you start'}</small></span><span class="n-check">✓</span></div>` : `<button class="n-row" type="button" data-n="tmdef:${id}"><span class="n-row-b"><b>Use for asks</b><small>Make this the key that pays</small></span></button>`);
+  return h.replace('<section class="n-grp"><div class="n-list"><button class="n-row" type="button" data-n="sheet:keyrn:', `${nGroup('Usage', rows)}$&`);
+}; }
+function tmNSheet(k, a) {
+  if (k === 'tmcap') {
+    const key = st.userKeys.find(x => x.id === a); if (!key) return '';
+    const cap = kinfo(key).cap || 0;
+    return nSub('', 'Monthly limit', 'Monthly limit', nGroup('', AC_CAPS.map(([v, l]) => `<button class="n-row" type="button" data-n="tmcapset:${a}:${v}"><span class="n-row-b"><b>${l}</b></span>${+v === cap ? '<span class="n-check">✓</span>' : ''}</button>`), `${fmtT(tmUsed(a))} tokens used this month. At the limit, Session stops using ${esc(tmKeyName(key))} until the 1st of the next month.`));
+  }
+  if (k === 'tmonb') {
+    const ok = KEY_RE.test(nst.keyDraft.trim()), req = !tm().session;
+    return `<div class="n-scrim"></div><div class="n-sheet n-page tm-nonb" role="dialog" aria-label="Add an API key"><div class="n-sheet-bar"><button class="n-tb" type="button" data-n="close">Skip</button><b>Add an API key</b><button class="n-tb" type="button" data-n="addkey-save" id="n-ak-save"${ok ? '' : ' disabled'}><b>Add</b></button></div><div class="n-sheet-sc"><div class="tm-nonb-h">${req ? '<p class="tm-req">Needed to ask</p>' : '<p class="tm-req opt">Optional</p>'}<p>${tmOnbCopy()}</p></div>${nGroup('', [`<label class="n-row n-field"><span>Name</span><input id="n-ak-name" type="text" placeholder="Optional" value="${esc(nst.keyName)}"></label>`, `<label class="n-row n-field"><span>Key</span><input id="n-ak-key" type="password" placeholder="sk-… or AIza…" autocomplete="off" value="${esc(nst.keyDraft)}"></label>`], nst.keyErr ? `<span class="n-bad">${esc(nst.keyErr)}</span>` : req ? 'If you skip, you can read and post, but you can’t ask until you add a key in You › API keys.' : 'You can add a key later in You › API keys.')}</div></div>`;
+  }
+  return '';
+}
+{ const sx0 = nSheetX; nSheetX = function (k, a) { return tmNSheet(k, a) || sx0(k, a); }; }
+{ const cx0 = nClickX; nClickX = function (k, a) {
+  const go = f => { nGo(f); return true; };
+  if (k === 'tmagain') return go(() => { const [i, p] = a.split(':'); askAgain(+i, p); });
+  if (k === 'tmfu') return go(() => tmFuAgain(a));
+  if (k === 'tmpick') return go(() => { nst.payer = a; nst.sheet = null; nInlineFocus = true; });
+  if (k === 'tmmoved') return go(() => { db.set('usage', u => { u.movedSeen = true; }); });
+  if (k === 'tmaddkey') return go(() => { nst.sub = null; nst.stack = [...nst.stack, { v: 'keys', id: '' }]; nst.keyName = ''; nst.keyDraft = ''; nst.keyErr = ''; nst.sheet = 'addkey'; });
+  if (k === 'tmcap') return go(() => { nst.sheet = 'tmcap:' + a; });
+  if (k === 'tmcapset') return go(() => { const [id, v] = a.split(':'); db.update('userKeys', id, x => { x.cap = +v; }); nst.sheet = 'key:' + id; toast(+v ? `Limit set: ${fmtT(+v)} tokens a month.` : 'Limit removed.'); });
+  if (k === 'tmdef') return go(() => tmSetDef(a));
+  if (k === 'revoke' && tmOn()) return go(() => { nst.sheet = null; tmRevoke(a); });
+  /* signing in with no key, in a variant with keys: the first-run key step */
+  if (k === 'signin' && tmOn() && tm().keys && !tmKeys().length) return go(() => { st.auth = 'in'; nst.keyName = ''; nst.keyDraft = ''; nst.keyErr = ''; nst.sheet = 'tmonb'; });
+  return cx0(k, a);
+}; }
+
+/* ---------- clicks on the web ---------- */
+on($('app'), 'click', e => {
+  if (st.device === 'native' || !tmOn()) return;
+  const t = e.target; if (!t.closest) return;
+  const d = sel => t.closest(sel), done = () => { e.stopImmediatePropagation(); e.preventDefault(); renderAll(); };
+  let b;
+  if ((b = d('[data-tmchoose]'))) { st.tmChoose = st.tmChoose ? false : b.dataset.tmchoose; st.mpOpen = false; return done(); }
+  if ((b = d('[data-tmpick]'))) { if (!b.disabled) st.tmPick = b.dataset.tmpick; st.tmChoose = false; return done(); }
+  if ((b = d('[data-tmdef]'))) { tmSetDef(b.dataset.tmdef); return done(); }
+  if (d('[data-tmmoved]')) { db.set('usage', u => { u.movedSeen = true; }); return done(); }
+  if ((b = d('[data-tmfu]'))) { tmFuAgain(b.dataset.tmfu); return done(); }
+  if ((b = d('[data-tmsk]'))) { const [v, sid] = b.dataset.tmsk.split(':'); tmSkAct(v, sid); return done(); }
+  if (st.tmChoose && !d('.tm-pop')) st.tmChoose = false;
+});
+on($('app'), 'input', e => { if (e.target.id === 'tm-sk-in') { st.keyDraft = e.target.value; if (st.tmSkErr) { st.tmSkErr = ''; const er = document.querySelector('.modal .ts-err'); if (er) er.remove(); } } });
+on(document, 'keydown', e => { if (e.key === 'Enter' && e.target.id === 'tm-sk-in') { e.preventDefault(); const b = document.querySelector('[data-tmsk^="addok"], [data-tmsk^="repok"]'); if (b) b.click(); } }, true);
+/* the Variants bar's Reset puts the Token model back to Current */
+{ const rc0 = resetControls; resetControls = function () { rc0(); st.tokmodel = 'current'; renderAll(); }; }
+/* answers in a key variant hide the old token count beside Like and Save: the "Paid with" line replaces it */
+{ const ar0 = csAfterRender; csAfterRender = function () { document.documentElement.toggleAttribute('data-tm', tmOn()); ar0(); }; }
+
+/* ---------- Screen entries ---------- */
+JUMPS.push(['Token model', [
+  ['tm-a-low', 'A · Composer: 20% of Session tokens left'], ['tm-a-out', 'A · Composer: Session tokens used up'], ['tm-a-stop', 'A · Answer stopped: Session tokens ran out'],
+  ['tm-b-normal', 'B · Composer: paid with your default key'], ['tm-b-choose', 'B · Composer: choose a key for one ask'], ['tm-b-model', 'B · Model menu: model changed to match the key'],
+  ['tm-b-nokey', 'B · No key: Ask is disabled'], ['tm-b-limit', 'B · Composer: key at its monthly limit'], ['tm-b-stop', 'B · Answer stopped: key reached its limit'],
+  ['tm-b-onb', 'B · First run: add an API key'], ['tm-b-n-onb', 'B · Phone: first-run key step'],
+  ['tm-c-normal', 'C · Composer: Session tokens pay first'], ['tm-c-low', 'C · Composer: 80% used, no key'], ['tm-c-moved', 'C · Session tokens used up: asks move to your key'], ['tm-c-out', 'C · Session tokens used up, no key'], ['tm-c-fu-stop', 'C · Follow-up stopped for tokens'],
+  ['tm-d-composer', 'D · Composer: paid with the space key'], ['tm-d-spout', 'D · Space key used up: Session tokens pay'], ['tm-d-settings', 'D · Settings › Tokens (admin)'], ['tm-d-about', 'D · About: Tokens row'],
+  ['tm-usage', 'Account › Usage'], ['tm-n-usage', 'Phone: You › Usage'], ['tm-n-composer', 'Phone: composer line'], ['tm-n-payer', 'Phone: choose who pays'], ['tm-n-stop', 'Phone: answer stopped for tokens'],
+  ['tm-retry', 'Answer failed: key rejected, Retry names the payer'], ['tm-revoke', 'Revoke a key'],
+]]);
+/* what a Screen entry changed, put back by the next jump */
+const TMJ = { keys: false, qtd: null };
+function tmRestore() {
+  if (!sameJSON(D.usage, FIXTURES.usage)) db.set('usage', structuredClone(FIXTURES.usage));
+  if (TMJ.keys) { db.set('userKeys', structuredClone(ST0.userKeys)); TMJ.keys = false; }
+  if (TMJ.qtd != null) { const i = TMJ.qtd; if (QTD0[i]) db.put('qtd', i, structuredClone(QTD0[i])); else db.del('qtd', i); TMJ.qtd = null; }
+  const i = D.posts.findIndex(p => p.tmDemo);
+  if (i >= 0 && i === D.posts.length - 1) { askCancel(i); db.remove('posts', i); }
+  Object.assign(st, { tmPick: null, tmChoose: false, tmSkErr: '' });
+}
+/* usage helpers for the entries: add tokens to a source (in the matrix, and on a key's record) */
+const tmAdd = (src, sid, tok) => { if (st.userKeys.some(k => k.id === src)) TMJ.keys = true; tmCharge(src, tok, sid); };
+const tmSessTo = used => tmAdd('session', 'public', used - tmUsed('session'));
+function tmJump(k) {
+  const v = k.split('-')[1], M = { a: 'session', b: 'key', c: 'both', d: 'spacekey' }[v];
+  if (M) st.tokmodel = M; else if (!tmOn()) st.tokmodel = 'both';
+  if (k === 'tm-revoke' && !tm().keys) st.tokmodel = 'both';
+  const noKeys = () => { db.set('userKeys', []); TMJ.keys = true; };
+  const compose = (id, draft) => Object.assign(st, { space: id, home: false, compOpen: true, mode: 'ask', draft, srcSpace2: null });
+  const demo = (sid, o) => {
+    let i = D.posts.findIndex(p => p.tmDemo);
+    const rec = { s: sid, u: ME.u, mine: true, k: 'ask', t: null, q: SAMPLE_Q, sum: null, r: 0, tok: 0, age: '1m', likes: 0, running: false, kw: SAMPLE_Q, tmDemo: true, ...o };
+    if (i < 0) { db.push('posts', rec); i = D.posts.length - 1; } else { askCancel(i); db.update('posts', i, () => rec); }
+    db.put('fu', i, []); db.del('qtd', i);
+    Object.assign(st, { thread: i, space: sid, home: false }); qtEnter(i); return i;
+  };
+  const stop = (sid, pay, tok) => { const src = tmSrc(pay, sid); return demo(sid, { pay, tok, sum: tmStopSum(src), fail: { why: 'tokens' } }); };
+  const phone = () => { npJump('np-home'); st.tokmodel = M || st.tokmodel; };
+  const Q = 'Which novels in the canon starter list were first published as serials?';
+  switch (k) {
+    case 'tm-a-low': tmSessTo(1.62e6); compose('scifi', Q); break;
+    case 'tm-a-out': tmSessTo(2e6); compose('scifi', Q); break;
+    case 'tm-a-stop': tmSessTo(1.98e6); tmAdd('session', 'public', 2e4); stop('public', 'session', 2e4); break;
+    case 'tm-b-normal': compose('scifi', Q); break;
+    case 'tm-b-choose': compose('scifi', Q); st.tmChoose = 'scifi'; break;
+    case 'tm-b-model': compose('scifi', Q); Object.assign(st, { tmPick: 'k1', mpOpen: true, model: 'argon' }); break;
+    case 'tm-b-nokey': noKeys(); compose('scifi', Q); break;
+    case 'tm-b-limit': tmAdd('k2', 'public', 1e6 - tmUsed('k2')); compose('scifi', Q); break;
+    case 'tm-b-stop': tmAdd('k2', 'public', 1e6 - tmUsed('k2') - 21e3); stop('public', 'k2', 21e3); tmAdd('k2', 'public', 21e3); break;
+    case 'tm-b-onb': db.set('userKeys', []); TMJ.keys = true; db.set('usage', tmFresh()); Object.assign(st, { subPage: 'welcome', onb: { step: 2, terms: true, picks: ['public', 'scifi', 'history'], key: null }, keyDraft: '', keyName: '', keyErr: '', keyShow: false, keyMode: 'add', keyFor: null, keyCap: '0' }); break;
+    case 'tm-b-n-onb': phone(); noKeys(); db.set('usage', tmFresh()); Object.assign(nst, { keyName: '', keyDraft: '', keyErr: '', sheet: 'tmonb' }); break;
+    case 'tm-c-normal': compose('public', SAMPLE_Q); break;
+    case 'tm-c-low': noKeys(); tmSessTo(1.62e6); compose('public', SAMPLE_Q); break;
+    case 'tm-c-moved': tmSessTo(2e6); compose('public', SAMPLE_Q); break;
+    case 'tm-c-out': noKeys(); tmSessTo(2e6); compose('public', SAMPLE_Q); break;
+    case 'tm-c-fu-stop': {
+      tmSessTo(2e6);
+      const i = D.posts.findIndex(p => p.u === ME.u && p.k === 'ask' && p.s === 'public' && D.rich[D.posts.indexOf(p)]);
+      TMJ.qtd = i; qtEdit(i, d => { d.nodes.push({ id: 'tmf', par: 'r', u: ME.u, age: '2m', q: 'Which of these works describe a market that prices attention directly?', tok: 6e3, running: false, html: '', pay: 'session', fail: { why: 'tokens' } }); });
+      Object.assign(st, { thread: i, space: 'public', home: false }); qtEnter(i); break;
+    }
+    case 'tm-d-composer': compose('markets', AS_MQ); break;
+    case 'tm-d-spout': db.set('usage', u => { u.skeys.markets.used = u.skeys.markets.cap; }); compose('markets', AS_MQ); break;
+    case 'tm-d-settings': Object.assign(st, { subPage: 'manage', mgSpace: 'ml', space: 'ml', mgTab: 'settings', set: null, home: false }); requestAnimationFrame(() => { const el = document.querySelector('[data-tmsk], .tm-memf'); if (el) el.scrollIntoView({ block: 'center' }); }); break;
+    case 'tm-d-about': Object.assign(st, { space: 'markets', home: false, drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' }); break;
+    case 'tm-usage': st.subPage = 'usage'; break;
+    case 'tm-n-usage': phone(); nst.tab = 'you'; nst.stack = [{ v: 'usage', id: '' }]; break;
+    case 'tm-n-composer': case 'tm-n-payer': phone(); Object.assign(nst, { inl: true, inlAt: 'home', cSpace: 'markets', cMode: 'ask', draft: 'How did the 2008 money-market fund run spread between funds?' }); if (k === 'tm-n-payer') nst.sheet = 'payer:markets'; break;
+    case 'tm-n-stop': { tmSessTo(1.99e6); const i = stop('public', 'session', 1e4); tmAdd('session', 'public', 1e4); phone(); nst.tab = 'home'; nst.stack = [{ v: 'thread', id: i }]; st.space = 'public'; break; }
+    case 'tm-retry': if (!tm().keys) st.tokmodel = 'key'; demo('public', { pay: 'k0', sum: AS_SUM.key(), fail: { why: 'key' } }); break;
+    case 'tm-revoke': Object.assign(st, { subPage: 'keys', modal: 'revoke:k2' }); break;
+  }
+}
+{ const j0 = jump; jump = k => { if (!dataReady()) return j0(k); tmRestore(); j0(k); if (k.startsWith('tm-')) tmJump(k); }; }
+/* ==== end token model ==== */
+
 
 /* ==== thread actions: edit and delete your own items, replies to replies, citations, Share, copy, the skill list, Thinking level ====
    - Your own post, ask, reply and follow-up have Edit and Delete in their menu, and no Report. Edit works in
