@@ -421,7 +421,8 @@ button.tlink { border: 0; background: transparent; padding: 0; }
 .sv-rlist { border-right: 1px solid var(--divider); display: flex; flex-direction: column; overflow-y: auto; }
 .sv-ritem { border: 0; border-bottom: 1px solid var(--divider); background: transparent; text-align: left; padding: 10px 14px; display: flex; flex-direction: column; gap: 4px; color: inherit; }
 .sv-ritem:hover { background: var(--fill-hover); }
-.sv-ritem[aria-current="true"] { background: var(--card-sel); }
+/* the selected item uses the header tint */
+.sv-ritem[aria-current="true"] { background: var(--chrome); }
 .sv-ritem .sv-q1 { color: var(--t-secondary); font-size: var(--fs-sm); }
 .sv-ritem[aria-current="true"] .sv-q1 { color: var(--t-strong); }
 .sv-rmeta { display: flex; align-items: center; gap: 7px; font-size: var(--fs-xs); color: var(--t-tertiary); }
