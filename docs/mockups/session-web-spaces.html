@@ -5920,7 +5920,6 @@ function csSpaceStrips(s) {
   let h = '';
   if (st.welcome === s.id && isMember(s.id)) h += `<div class="cs-strip">${LOCK}<span class="grow">You joined ${spName(s)}. Threads here are visible to members only. The rules are in the wiki.</span><button class="iconbtn" type="button" data-cswel="x" aria-label="Dismiss">${I.close}</button></div>`;
   if (st.created === s.id) h += `<div class="cs-strip">${I.check}<span class="grow">${spName(s)} is ready. ${isClosed(s) ? 'Invite the first members.' : 'Share it with people who should join.'}</span>${isClosed(s) ? `<button class="btn sm" type="button" data-csinvite="${s.id}">Invite people</button>` : ''}<button class="iconbtn" type="button" data-cswel="x" aria-label="Dismiss">${I.close}</button></div>`;
-  if (s.openOn && isMember(s.id)) h += `<div class="cs-strip warn">${GLOBE}<span class="grow">${spName(s)} becomes open on ${s.openOn}. ${s.openKeep ? 'Threads posted before then stay members-only.' : 'All threads, including older ones, become public.'}</span></div>`;
   const n = reqCount(s.id);
   return h;
 }
@@ -6201,7 +6200,7 @@ function csSettings(s) {
     + stSec('Token use', 'Asks use the space’s tokens up to a monthly limit, then the asker’s own API key. Posts are free.', payPicker(d));
   const btns = `<button class="btn ghost" type="button" data-csset="reset" ${dirty ? '' : 'disabled'}>Discard changes</button><button class="btn primary" type="button" data-csset="save" ${dirty ? '' : 'disabled'}>Save changes</button>`;
   const foot = `${dirty ? `<div class="st-barw${csSettings.endVis ? ' off' : ''}"><div class="st-bar" role="region" aria-label="Unsaved changes"><span>You have unsaved changes.</span><span class="st-bar-a">${btns}</span></div></div>` : ''}<div class="cs-setf">${btns}</div>`;
-  return `<div class="cs-set st-side">${s.openOn ? `<div class="cs-strip warn">${GLOBE}<span class="grow">Scheduled: ${spName(s)} becomes open on ${s.openOn}. Members were notified.</span><button class="btn sm" type="button" data-csset="cancel-open">Cancel the change</button></div>` : ''}${secs}${foot}</div>`;
+  return `<div class="cs-set st-side">${secs}${foot}</div>`;
 }
 function csApplySettings(s0, d) {
   /* Deleted topics, and topics left without a name, move their threads to Other. */
@@ -6493,7 +6492,6 @@ function csClick(t) {
   if ((b = d('[data-csset]'))) {
     const v = b.dataset.csset, s = sp(st.mgSpace), dr = st.set;
     if (v === 'reset') { st.set = null; return go(); }
-    if (v === 'cancel-open') { spEdit(s.id, x => { delete x.openOn; }); toast('The change was cancelled. Members were notified.'); return go(); }
     const was = isClosed(s), will = dr.vis !== 'open';
     if (!was && will) { st.visKeep = 'all'; st.modal = 'cs-toclosed'; return go(); }
     if (was && !will) { st.openKeep = 'keep'; st.modal = 'cs-toopen'; return go(); }
@@ -6607,7 +6605,7 @@ function jump(k) {
     case 'md-invite': space('replication'); csInvite('replication'); break;
     case 'md-settings': Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'settings', space: 'replication', set: null }); break;
     case 'md-toclosed': { if (isClosed(sp('math'))) { spEdit('math', m => { delete m.vis; }); db.del('rel', 'math'); } Object.assign(st, { subPage: 'manage', mgSpace: 'math', mgTab: 'settings', space: 'math', set: null }); csSettings(sp('math')); patch('set', d => { d.vis = 'listed'; }); st.visKeep = 'all'; st.modal = 'cs-toclosed'; break; }
-    case 'md-toopen': { spEdit('replication', s => { s.vis = s.vis || 'listed'; delete s.openOn; }); Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'settings', space: 'replication', set: null }); csSettings(sp('replication')); patch('set', d => { d.vis = 'open'; }); st.openKeep = 'keep'; st.modal = 'cs-toopen'; break; }
+    case 'md-toopen': { spEdit('replication', s => { s.vis = s.vis || 'listed'; }); Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'settings', space: 'replication', set: null }); csSettings(sp('replication')); patch('set', d => { d.vis = 'open'; }); st.openKeep = 'keep'; st.modal = 'cs-toopen'; break; }
     case 'ow-create': Object.assign(st, { subPage: 'create', cr: CR0() }); break;
     case 'ow-create-closed': Object.assign(st, { subPage: 'create', cr: Object.assign(CR0(), { name: 'field-recordings', desc: 'Sound recordings from fieldwork, with notes on equipment and permissions.', vis: 'listed' }) }); break;
   }
