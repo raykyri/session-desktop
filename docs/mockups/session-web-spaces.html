@@ -1117,36 +1117,14 @@ html[data-device="native"] .frame > .app { min-height: 0; height: 100%; }
 .n-sys svg { width: 17px; height: 11px; }
 .n-batt { width: 25px; height: 12px; border: 1px solid color-mix(in srgb, var(--t-heading) 45%, transparent); border-radius: 4px; padding: 1px; display: inline-flex; }
 .n-batt i { flex: .8; background: var(--t-heading); border-radius: 2px; }
-/* Phone › Type (Variants bar): small changes to leading, size and tracking. The default is the base above. */
-html[data-ntype="airy"] .n-ans { line-height: 1.58; }
-html[data-ntype="airy"] .n-ans p, html[data-ntype="airy"] .n-ans li { margin-bottom: .7em; }
-html[data-ntype="airy"] .n-cell-q { line-height: 1.42; }
-html[data-ntype="airy"] .n-cell-s, html[data-ntype="airy"] .n-cell-p, html[data-ntype="airy"] .n-row-b span, html[data-ntype="airy"] .n-sphead p, html[data-ntype="airy"] .n-wk-d, html[data-ntype="airy"] .n-fu-a, html[data-ntype="airy"] .n-reply p { line-height: 1.48; }
-html[data-ntype="airy"] .n-th-ask { line-height: 1.4; }
-html[data-ntype="airy"] .n-th-post { line-height: 1.52; }
-html[data-ntype="airy"] .n-cell-m { margin-top: 4px; }
-
-html[data-ntype="compact"] .n-ans { line-height: 1.44; }
-html[data-ntype="compact"] .n-cell-q { line-height: 1.3; }
-html[data-ntype="compact"] .n-cell-s, html[data-ntype="compact"] .n-cell-p, html[data-ntype="compact"] .n-row-b span, html[data-ntype="compact"] .n-sphead p, html[data-ntype="compact"] .n-wk-d, html[data-ntype="compact"] .n-fu-a, html[data-ntype="compact"] .n-reply p { line-height: 1.34; }
-html[data-ntype="compact"] .n-th-ask { line-height: 1.3; }
-html[data-ntype="compact"] .n-th-post { line-height: 1.4; }
-html[data-ntype="compact"] .n-cell-m { margin-top: 0; }
-
-html[data-ntype="large"] .n-ans { font-size: 17px; line-height: 1.52; }
-html[data-ntype="large"] .n-cell-q { font-size: 17px; }
-html[data-ntype="large"] .n-cell-s, html[data-ntype="large"] .n-cell-p, html[data-ntype="large"] .n-row-b span, html[data-ntype="large"] .n-sphead p, html[data-ntype="large"] .n-wk-d, html[data-ntype="large"] .n-fu-a, html[data-ntype="large"] .n-reply p { font-size: 15.9px; }
-html[data-ntype="large"] .n-th-post { font-size: 18px; }
-html[data-ntype="large"] .n-th-ask { font-size: 20px; }
-html[data-ntype="large"] .n-cell-m, html[data-ntype="large"] .n-row-b small, html[data-ntype="large"] .n-grp-f, html[data-ntype="large"] .n-th-by small, html[data-ntype="large"] .n-sphead-m { font-size: 13.8px; }
-
-html[data-ntype="tracked"] .n-lt { letter-spacing: -.03em; }
-html[data-ntype="tracked"] .n-bar-h, html[data-ntype="tracked"] .n-sphead h2, html[data-ntype="tracked"] .n-sec, html[data-ntype="tracked"] .n-sheet-t { letter-spacing: -.018em; }
-html[data-ntype="tracked"] .n-th-ask { letter-spacing: -.012em; }
-html[data-ntype="tracked"] .n-cell-q, html[data-ntype="tracked"] .n-ans h3, html[data-ntype="tracked"] .n-ans h4 { letter-spacing: -.008em; }
-html[data-ntype="tracked"] .n-grp-h { font-size: 12.6px; letter-spacing: .055em; }
-html[data-ntype="tracked"] .n-cell-m, html[data-ntype="tracked"] .n-row-b small, html[data-ntype="tracked"] .n-th-by small, html[data-ntype="tracked"] .n-tab { letter-spacing: .01em; }
-html[data-ntype="tracked"] .n-ans { font-feature-settings: "kern" 1, "liga" 1; hanging-punctuation: first; }
+/* Phone type: a little more leading than the web in answers, feed rows, titles and list text */
+.n-root .n-ans { line-height: 1.58; }
+.n-root .n-ans p, .n-root .n-ans li { margin-bottom: .7em; }
+.n-root .n-cell-q { line-height: 1.42; }
+.n-root .n-cell-s, .n-root .n-cell-p, .n-root .n-row-b span, .n-root .n-sphead p, .n-root .n-wk-d, .n-root .n-fu-a, .n-root .n-reply p { line-height: 1.48; }
+.n-root .n-th-ask { line-height: 1.4; }
+.n-root .n-th-post { line-height: 1.52; }
+.n-root .n-cell-m { margin-top: 4px; }
 .n-scr { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; padding-bottom: 24px; }
 .n-scr::-webkit-scrollbar { display: none; }
 .n-home-ind { position: absolute; left: 50%; bottom: 8px; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px; background: var(--t-heading); z-index: 40; pointer-events: none; }
@@ -1169,7 +1147,12 @@ html[data-ntype="tracked"] .n-ans { font-feature-settings: "kern" 1, "liga" 1; h
 .n-bell { position: relative; }
 .n-bell svg { width: 23px; height: 23px; }
 .n-badge { position: absolute; top: 3px; right: 2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: var(--on-accent, #fff); font-size: 11.5px; font-weight: 650; line-height: 18px; text-align: center; box-shadow: 0 0 0 2px var(--n-bar-bg, var(--page)); box-sizing: border-box; }
-.n-nts { padding-top: 6px; }
+.n-nts { padding-top: 4px; }
+.n-ntg + .n-ntg { margin-top: 18px; }
+.n-ntg .n-grp-h { margin-bottom: 2px; }
+.n-ntl .n-nt { padding-top: 10px; padding-bottom: 10px; }
+.n-ntl .n-nt + .n-nt::before { content: ''; position: absolute; top: 0; left: 64px; right: 0; height: .5px; background: var(--n-sep); }
+.n-ntl .n-nt:active { background: var(--n-fill); }
 .n-nt { align-items: flex-start; }
 .n-nt .n-av, .n-nt-ic { margin-top: 1px; }
 .n-nt-ic { width: 36px; height: 36px; flex: none; border-radius: 50%; background: var(--n-fill); color: var(--t-secondary); display: grid; place-items: center; }
@@ -3288,10 +3271,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
       </div>
       <div class="knob"><span>Navigation</span><div class="seg" id="k-dir"></div></div>
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
-    </div>
-    <div class="knobs cs-knobs" id="kw-phone" aria-label="Phone controls">
-      <span class="cs-kt">Phone</span>
-      <div class="knob"><span>Type</span><div class="seg" id="k-ntype"></div></div>
     </div>
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
@@ -5498,7 +5477,6 @@ function renderControls() {
   seg($('k-api'), [['normal', '120ms'], ['fail', 'Fail']], 'apiMode', applyApiMode);
   /* the Sources layout control has no effect in the phone app */
   { const k = $('kw-sources'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
-  { const k = $('kw-phone'); if (k) k.style.display = st.device === 'native' ? '' : 'none'; }
   { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
   HOTKEYS = {}; let n = 0;
   for (const [el, key, items, pick] of KNOBDEF()) {
@@ -5618,7 +5596,8 @@ function nNotifs() {
   const ic = x => x.k === 'reqs' ? `<span class="n-nt-ic">${CI.users}</span>` : x.k === 'declined' ? `<span class="n-nt-ic">${LOCK}</span>` : x.k === 'reps' || x.k === 'resolved' ? `<span class="n-nt-ic">${SFI.flag}</span>` : x.u ? avatar(x.u, 'n-av') : `<span class="n-nt-ic">${CI.bell}</span>`;
   const row = x => `<button class="n-row n-nt${x.unread ? ' unread' : ''}" type="button" data-n="nt:${esc(x.id)}">${ic(x)}<span class="n-row-b"><span class="n-nt-tx">${x.u && x.k !== 'declined' ? `<b>${esc(x.u)}</b> ` : ''}${x.text}</span><small>${x.age === 'just now' ? 'Just now' : x.age}</small></span>${x.unread ? '<span class="n-nt-u" aria-label="Unread"></span>' : ''}</button>`;
   const right = un.length ? '<button class="n-tb" type="button" data-n="ntread"><b>Read all</b></button>' : '';
-  const body = list.length ? `${un.length ? nGroup('New', un.map(row)) : ''}${old.length ? nGroup('Earlier', old.map(row)) : ''}` : '<p class="n-empty">No notifications yet. Replies to your asks, join requests and reports show here.</p>';
+  const grp = (h, rows) => `<section class="n-ntg"><h3 class="n-grp-h">${h}</h3><div class="n-ntl">${rows.join('')}</div></section>`;
+  const body = list.length ? `${un.length ? grp('New', un.map(row)) : ''}${old.length ? grp('Earlier', old.map(row)) : ''}` : '<p class="n-empty">No notifications yet. Replies to your asks, join requests and reports show here.</p>';
   return { body: `${nPushBar('Notifications', right)}<div class="n-nts">${body}</div>` };
 }
 function nHome() {
@@ -5834,7 +5813,6 @@ function nInput(e) {
   if (id === 'n-ak-key') { nst.keyDraft = v; nst.keyErr = ''; const s = $('n-ak-save'); if (s) s.disabled = !KEY_RE.test(v.trim()); }
 }
 function renderNative() {
-  document.documentElement.dataset.ntype = st.nType;
   $('app').innerHTML = nativeApp();
   const sc = $('n-scr'); if (sc) sc.scrollTop = nst.scroll[nKey()] || 0;
   if (nInlineFocus && !nst.sheet) { nInlineFocus = false; const d = $('n-draft'); if (d) { d.focus({ preventScroll: true }); d.setSelectionRange(d.value.length, d.value.length); } }
@@ -8256,7 +8234,6 @@ const dsOnSpace = () => {
 };
 function DSKNOBS() {
   return [
-    ['k-ntype', 'nType', [['base', 'Current'], ['airy', 'More leading'], ['compact', 'Less leading'], ['large', 'Larger text'], ['tracked', 'Tighter headings']]],
     ['k-dspos', 'dsPos', [['hd-right', 'Header across, sidebar right'], ['hd-left', 'Header across, sidebar left']], () => { Object.assign(st, { drawer: true, dsSTab: 'sources', mWiki: false }); dsOnSpace(); }],
     /* About: where a page opens, how a skill previews, where the member list opens */
   ];
@@ -8317,7 +8294,7 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsPos: 'hd-right', nType: 'base', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsPos: 'hd-right', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
   dsMenu: null, dsSend: null, dsSTab: null, dsWhy: 'spam', dsRepNote: '',
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
