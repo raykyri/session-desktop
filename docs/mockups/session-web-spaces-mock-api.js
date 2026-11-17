@@ -1347,6 +1347,9 @@
         try { const body = init.body ? dec(init.body) : undefined; ({ res, forced: forcedErr } = handle(method, url, body)); }
         catch (e) { console.error('[mock api]', e); res = err('INTERNAL_SERVER_ERROR'); }
         const entry = { seq: ++seq, method, path: url.split('?')[0], status: res.status, code: null };
+        /* who sent a collection write (the page's X-Session-Origin): scenario (a Screen entry), run (the ask pipeline), stub or user */
+        const h = init.headers || {}, origin = typeof h.get === 'function' ? h.get('X-Session-Origin') : h['X-Session-Origin'];
+        if (origin) entry.origin = origin;
         if (!res.ok) { entry.code = res.code || null; if (forcedErr) entry.forced = true; }
         log.push(entry); if (log.length > LOG_MAX) log.splice(0, log.length - LOG_MAX);
         if (dev && !res.ok && !forcedErr) console.error(`[mock api] ${method} ${entry.path}: ${res.status} ${entry.code}${res.issues ? ' (' + res.issues.join('; ') + ')' : ''}`);

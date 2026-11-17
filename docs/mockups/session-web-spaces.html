@@ -3989,9 +3989,10 @@ function undoOp(inst, op) {
 }
 /* A failed request throws an Error with the server's `code` (a tRPC code), `status` and `message`.
    A request that never reached the server has code SERVICE_UNAVAILABLE and status 0. */
-async function http(method, url, body) {
+async function http(method, url, body, origin) {
   let res;
-  try { res = await fetch(url, { method, headers: body === undefined ? {} : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : enc(body) }); }
+  const headers = Object.assign(body === undefined ? {} : { 'Content-Type': 'application/json' }, origin ? { 'X-Session-Origin': origin } : {});
+  try { res = await fetch(url, { method, headers, body: body === undefined ? undefined : enc(body) }); }
   catch (x) { throw Object.assign(new Error('The server is unavailable.'), { code: 'SERVICE_UNAVAILABLE', status: 0 }); }
   const text = await res.text(); let data = null;
   try { data = text ? dec(text) : null; } catch (x) {}
@@ -4113,10 +4114,12 @@ const apiSource = {
     /* user actions are mutations (mutate); the collection endpoints are for the Screen entries, the ask
        pipeline and the token-usage stub */
     if (DEV && !JUMPING && !SERVER_SIDE && !(RES[key] || {}).stub && APP_STARTED) console.error(`[session] a REST write of ${key} outside a Screen entry: user actions go through mutate()`);
+    /* who wrote it, for the mock backend's request log: a Screen entry, the ask pipeline, a stub, or a person (a bug) */
+    const origin = JUMPING ? 'scenario' : SERVER_SIDE ? 'run' : (RES[key] || {}).stub ? 'stub' : 'user';
     for (const op of diffOps(key, prev, next)) {
       inst.meta.setState(m => ({ pending: m.pending + 1 }));
       apiSource.queue = apiSource.queue
-        .then(() => { const q = sendable(op); if (refsDead(q)) throw SKIPPED; return http(op.method, q.url, q.body); })
+        .then(() => { const q = sendable(op); if (refsDead(q)) throw SKIPPED; return http(op.method, q.url, q.body, origin); })
         .then(res => { try { adopt(inst, op, res); } catch (e) { console.error('[session] could not take the server’s answer', e); } }, e => { undoOp(inst, op); if (e !== SKIPPED) dataError(apiErrText(e, 'write'), e); })
         .finally(() => inst.meta.setState(m => ({ pending: m.pending - 1 })));
     }
@@ -4275,6 +4278,10 @@ function mutate(name, input, recipe, opts = {}) {
     }, e => {
       settle();
       undos.reverse().forEach(u => u());
+      /* the screen showed a thread or space the server did not create: go back to one that exists */
+      if (String(st.thread).startsWith('tmp-') && !postById(st.thread)) Object.assign(st, NAVBASE(), { space: st.space });
+      if (tx.before.has('spaces') && st.space && !sp(st.space)) Object.assign(st, NAVBASE(), { home: true });
+      if (tmp && nst.stack && nst.stack.some(x => x.id === tmp)) nst.stack = nst.stack.filter(x => x.id !== tmp);
       if (tmp) DEAD_TMP.add(tmp);
       fresh.forEach(([, id]) => DEAD_TMP.add(id));
       if (e !== SKIPPED) dataError(apiErrText(e, 'write'), e); else if (APP_STARTED && !DISPOSED) renderAll();
