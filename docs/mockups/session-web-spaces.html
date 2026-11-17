@@ -3563,9 +3563,6 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 :root[data-tint="sagewc"] .n-status, :root[data-tint="sagewc"] .n-under:has(.n-scr .n-grp) .n-status { background: var(--chrome); }
 :root[data-tint="sagewc"] :is(.n-tabbar, .n-dock) { border-top-color: var(--trim-line); }
 /* D2 Green trim: white header with a green top rule; the current tab and selected rows are green */
-:root[data-tint="sagewt"] .hdr { box-shadow: inset 0 2px 0 var(--trim); }
-:root[data-tint="sagewt"] .utab[aria-current="true"] { background: var(--trim-soft); color: var(--trim-ink); }
-:root[data-tint="sagewt"] :is(.rf-toc-i, .rl-row, .sv-ritem, .qt-olr)[aria-current="true"], :root[data-tint="sagewt"] .rq-li.cur { box-shadow: inset 2px 0 0 var(--trim); }
 /* ==== Font (Variants bar): Inter for the app on every device; the Variants bar keeps Valley Sans ==== */
 :root[data-font="inter"] #app { --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-family: var(--font-ui); letter-spacing: -0.005em; }
 /* ==== navigation: back links, search, Saved, notifications and system states ==== */
@@ -5860,7 +5857,7 @@ function seg(el, items, key, onPick) {
 const toThread = () => { if (st.thread == null) { const i = D.posts.findIndex(p => p.k === 'ask' && D.rich[D.posts.indexOf(p)] && p.s === 'markets'); Object.assign(st, { thread: i < 0 ? 0 : i, savedPage: false, profilePage: false, subPage: null, auth: 'in', modal: null, umenu: false }); } };
 const KNOBDEF = () => [
   ['k-dir', 'shell', [['tabs2', 'Header tabs'], ['rail', 'Left rail']], () => { st.umenu = false; st.pop = false; }],
-  ['k-tint', 'tint', [['warmlo', 'Beige'], ['sagelo', 'Sage'], ['sagewc', 'Green chrome', '1'], ['sagewt', 'Green trim', '2']]],
+  ['k-tint', 'tint', [['warmlo', 'Beige'], ['sagewc', 'Sage']]],
   ['k-font', 'font', [['valley', 'Valley Sans'], ['inter', 'Inter']]],
   ...(typeof CSKNOBS === 'function' ? CSKNOBS() : []),
   ...SFKNOBS(),
@@ -12569,8 +12566,8 @@ function applyTint() {
    - Green trim: the header and bars are white; green appears only as a top rule, underlines and selection. */
 Object.assign(TINTS, {
   sagewc: { h: 152, m: 0.9, a: 0.004, dark: { m: 0.6, a: 0.003 }, vars: {
-    light: { '--page': '#edf5ef', '--chrome': '#e3f6e7', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#f4f9f5', '--card-sel': '#e0f4e4', '--pop-btn': '#ffffff', '--pop-btn-b': '#d7e3da', '--pop-btn-h': '#edf5ee', '--control': '#eef4ef', '--control-hover': '#e5eee7', '--control-border': '#d4e0d7', '--divider': '#dee8e0', '--border-strong': '#d2dfd5', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#3b8352', '--trim-line': '#b7d7bf', '--trim-soft': '#e0f4e4', '--trim-ink': '#225332', '--trim-on': '#ffffff' },
-    dark: { '--page': '#0d120e', '--chrome': '#1a261d', '--pane': '#161b17', '--feed': '#141915', '--card': '#1c221d', '--field': '#1d231f', '--popover': '#1e2520', '--inset': '#181d19', '--card-sel': '#182a1d', '--pop-btn': '#222823', '--pop-btn-b': '#374039', '--pop-btn-h': '#28302a', '--control': '#222823', '--control-hover': '#28302a', '--control-border': '#374039', '--divider': '#282f29', '--border-strong': '#313933', '--seg-on': '#343d36', '--trim': '#6fc087', '--trim-line': '#35563e', '--trim-soft': '#182a1d', '--trim-ink': '#a7e2b6', '--trim-on': '#161b17', '--t-faint': '#8c918d' },
+    light: { '--page': '#edf5ef', '--chrome': '#edf5ef', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#f4f9f5', '--card-sel': '#e0f4e4', '--pop-btn': '#ffffff', '--pop-btn-b': '#d7e3da', '--pop-btn-h': '#edf5ee', '--control': '#eef4ef', '--control-hover': '#e5eee7', '--control-border': '#d4e0d7', '--divider': '#dee8e0', '--border-strong': '#d2dfd5', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#3b8352', '--trim-line': '#b7d7bf', '--trim-soft': '#e0f4e4', '--trim-ink': '#225332', '--trim-on': '#ffffff' },
+    dark: { '--page': '#0d120e', '--chrome': '#0d120e', '--pane': '#161b17', '--feed': '#141915', '--card': '#1c221d', '--field': '#1d231f', '--popover': '#1e2520', '--inset': '#181d19', '--card-sel': '#182a1d', '--pop-btn': '#222823', '--pop-btn-b': '#374039', '--pop-btn-h': '#28302a', '--control': '#222823', '--control-hover': '#28302a', '--control-border': '#374039', '--divider': '#282f29', '--border-strong': '#313933', '--seg-on': '#343d36', '--trim': '#6fc087', '--trim-line': '#35563e', '--trim-soft': '#182a1d', '--trim-ink': '#a7e2b6', '--trim-on': '#161b17', '--t-faint': '#8c918d' },
   } },
   sagewt: { h: 152, m: 0.9, a: 0.004, dark: { m: 0.6, a: 0.003 }, vars: {
     light: { '--page': '#f3f7f4', '--chrome': '#ffffff', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#f7faf7', '--card-sel': '#dff6e4', '--pop-btn': '#ffffff', '--pop-btn-b': '#dde3de', '--pop-btn-h': '#f2f6f2', '--control': '#f1f5f2', '--control-hover': '#e9efea', '--control-border': '#dbe2dc', '--divider': '#e4e9e5', '--border-strong': '#d9e0db', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#378450', '--trim-line': '#a2c9ab', '--trim-soft': '#dff6e4', '--trim-ink': '#205431', '--trim-on': '#ffffff' },
