@@ -1,4 +1,6 @@
 <title>Session - Main</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <meta name="claude:viewport-fit-sides" content="cover">
 <style id="app-css">
 /* Valley Sans 100–900 variable (SIL OFL 1.1), the file bundled in web/packages/client/src/assets/fonts. Not on Google Fonts, so embedded. */
@@ -3564,6 +3566,8 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 :root[data-tint="sagewt"] .hdr { box-shadow: inset 0 2px 0 var(--trim); }
 :root[data-tint="sagewt"] .utab[aria-current="true"] { background: var(--trim-soft); color: var(--trim-ink); }
 :root[data-tint="sagewt"] :is(.rf-toc-i, .rl-row, .sv-ritem, .qt-olr)[aria-current="true"], :root[data-tint="sagewt"] .rq-li.cur { box-shadow: inset 2px 0 0 var(--trim); }
+/* ==== Font (Variants bar): Inter for the app on every device; the Variants bar keeps Valley Sans ==== */
+:root[data-font="inter"] #app { --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-family: var(--font-ui); letter-spacing: -0.005em; }
 </style>
 
 <div class="shell" id="shell">
@@ -3579,6 +3583,7 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
       </div>
       <div class="knob"><span>Navigation</span><div class="seg" id="k-dir"></div></div>
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
+      <div class="knob"><span>Font</span><div class="seg" id="k-font"></div></div>
     </div>
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
@@ -5793,6 +5798,7 @@ const toThread = () => { if (st.thread == null) { const i = D.posts.findIndex(p 
 const KNOBDEF = () => [
   ['k-dir', 'shell', [['tabs2', 'Header tabs'], ['rail', 'Left rail']], () => { st.umenu = false; st.pop = false; }],
   ['k-tint', 'tint', [['warmlo', 'Beige'], ['sagelo', 'Sage'], ['sagewc', 'Green chrome', '1'], ['sagewt', 'Green trim', '2']]],
+  ['k-font', 'font', [['valley', 'Valley Sans'], ['inter', 'Inter']]],
   ...(typeof CSKNOBS === 'function' ? CSKNOBS() : []),
   ...SFKNOBS(),
   ...MIKNOBS(),
@@ -9025,7 +9031,7 @@ function dsJump(k) {
 
 /* ---------- state ---------- */
 Object.assign(st, {
-  dsPos: 'hd-right', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
+  dsPos: 'hd-right', font: 'valley', abPage: null, abPageEd: null, abHist: false, abPgOrder: false, abSkill: null, abSkEd: null, abMem: false, abMemQ: '', abMsg: '', dsUrl: '', dsNote: '', dsDrag: null, dsFlash: null,
   dsMenu: null, dsSTab: null, dsWhy: 'spam', dsRepNote: '',
   dsDrops: structuredClone(DS_DROPS0), dsPol: { ...DS_POL0 }, dsReps: structuredClone(DS_REPS0),
 });
@@ -11767,14 +11773,14 @@ function renderAll() {
 function renderAllInner() {
   renderControls();
   /* the page-wide attributes come first, also while data loads: the tint is computed from the theme they select */
-  { const R = document.documentElement; R.dataset.device = st.device; R.dataset.sh = st.shV; R.dataset.mnav = st.mnav; R.toggleAttribute('data-theme', st.appearance !== 'system'); if (st.appearance !== 'system') R.dataset.theme = st.appearance; }
+  { const R = document.documentElement; R.dataset.device = st.device; R.dataset.font = st.font; R.dataset.sh = st.shV; R.dataset.mnav = st.mnav; R.toggleAttribute('data-theme', st.appearance !== 'system'); if (st.appearance !== 'system') R.dataset.theme = st.appearance; }
   if (!dataReady()) {
     const m = DS.meta.getState();
     $('app').innerHTML = `<div class="data-wait" role="status">${m.status === 'error' ? `Couldn’t load data from the server (${esc(m.error)}).` : 'Loading…'}</div>`;
     return;
   }
   if (st.device === 'native') {
-    document.documentElement.dataset.device = 'native';
+    document.documentElement.dataset.device = 'native'; document.documentElement.dataset.font = st.font;
     document.documentElement.toggleAttribute('data-theme', st.appearance !== 'system');
     if (st.appearance !== 'system') document.documentElement.dataset.theme = st.appearance;
     renderNative();
