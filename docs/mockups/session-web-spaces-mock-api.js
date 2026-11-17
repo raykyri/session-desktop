@@ -10,8 +10,10 @@
    - Shared spaces are the only way to organize threads; there are no per-user workspaces. Space roles
      (owner, admin, moderator, member) replace the real app's thread roles (`commenter`, `viewer`).
    - API keys are not encrypted for now.
-   - Limit tracking is out of scope for the backend. API keys and space token budgets stay as they are:
-     their endpoints and fields are marked `stub` with TODO comments. The backend does no token accounting.
+   - Limit tracking is out of scope for the backend. API keys and token usage stay as they are: their
+     endpoints and fields are marked `stub` with TODO comments. The backend does no token accounting.
+   - Token model: included tokens pay for asks first, then the person's default API key. Spaces have no
+     token budget.
    - Answers are not streamed; progress steps are enough.
    - There are no private threads: every thread belongs to a shared space and is visible to that space's
      members (and to anyone, in an open space).
@@ -27,7 +29,7 @@
      (time from the mock clock, then a counter, so runs are deterministic). The response carries it; the
      page puts it in place of its temporary id. Fixture ids (k1, rp1, …) stay as they are.
    - Derived fields: the server computes them on every read and does not store them (see DERIVED below):
-     a thread's r, likes, liked and mine; a space's members and pct. GET /api/me says who is signed in.
+     a thread's r, likes, liked and mine; a space's members. GET /api/me says who is signed in.
    - Write-only fields: an API key's raw value is stored but never returned.
 
    Thread ids (step 2)
@@ -167,10 +169,6 @@
     'vis?': str, 'policy?': str, 'invite?': str, 'qs?': arr(obj({ q: str, 'req?': bool })),
     'faq?': bool, 'postsOff?': bool, 'plain?': bool, 'pageEdit?': str,
     'dom?': nul(obj({ domain: str, 'method?': str, 'state?': str, 'verifiedAt?': iso })),
-    /* TODO(limits): stub fields, stored as sent and not checked. The space token budget and the paying
-       key stay as the mockup has them; the backend does no token accounting (owner decision). pct is
-       derived (used / budget). */
-    'budget?': t.any, 'used?': t.any, 'pct?': t.any, 'byok?': t.any, 'key?': t.any,
   }, 'Space');
   S.Thread = obj({
     id: str, s: str, u: str, k: one('ask', 'post'), q: str, 'createdAt?': iso, 'updatedAt?': iso,
@@ -182,7 +180,7 @@
     'likesBase?': int,      /* likes from people outside the fixtures; not returned. A write sets it to likes − liked. */
     'about?': t.obj({ 'it?': str, 'its?': arr(str), 'b?': num }), 'rf?': str, 'kw?': str,
     'topic?': nul(str), 'topicBy?': nul(str), 'running?': bool,
-    'pay?': t.any,   /* TODO(limits): who pays for the ask (a key or a space budget), stored as sent */
+    'pay?': t.any,   /* TODO(limits): who pays for the ask ('session' for the included tokens, or a key id), stored as sent */
     'fail?': obj({ why: str, 'at?': num }), 'edited?': bool, 'del?': bool, 'gone?': bool, 'skill?': nul(str),
     'from?': obj({ th: str, node: str }),   /* the thread and ask node it was started from */
   }, 'Thread');
@@ -231,10 +229,10 @@
   S.Profile = obj({ name: str, bio: str }, 'Profile');
   S.Me = obj({ u: str, name: str, bio: str, x: str, createdAt: iso }, 'Me');
   S.Invite = named('Invite', nul(obj({ sp: str, by: str, state: str })));
-  /* TODO(limits): token usage is simulated in the page for the Token model variants (owner decision:
-     no server-side limit tracking yet). Stored as sent. */
-  S.Usage = obj({ cap: num, resetAt: iso, def: nul(str), movedSeen: bool, by: rec(rec(num)),
-    skeys: rec(obj({ prov: str, mask: str, by: str, cap: num, used: num, member: num })) }, 'Usage');
+  /* TODO(limits): token usage is simulated in the page (owner decision: no server-side limit tracking yet).
+     Stored as sent. by: tokens this month per source ('session' or a key id) and space; cap: the included
+     tokens a month; def: the default key, which pays after the included tokens run out. */
+  S.Usage = obj({ cap: num, resetAt: iso, def: nul(str), movedSeen: bool, 'fresh?': bool, by: rec(rec(num)) }, 'Usage');
   S.Settings = obj({ email: str, emailNew: nul(str), exportAt: nul(iso), emailOn: bool, types: rec(bool), spaces: rec(str) }, 'Settings');
   S.ClosedSpaceState = one('none', 'pending', 'member', 'mod', 'denied');
 
@@ -316,8 +314,8 @@
       base: (b, stored) => ({ likesBase: typeof b.likesBase === 'number' ? b.likesBase : typeof b.likes === 'number' ? Math.max(0, b.likes - (b.liked ? 1 : 0)) : stored ? stored.likesBase || 0 : 0 }),
     },
     spaces: {
-      fields: ['members', 'pct'], hidden: ['membersBase'],
-      view: (s, d) => ({ ...s, members: (s.membersBase || 0) + roster(d, s.id).length, pct: s.budget ? s.used / s.budget : 0 }),
+      fields: ['members'], hidden: ['membersBase'],
+      view: (s, d) => ({ ...s, members: (s.membersBase || 0) + roster(d, s.id).length }),
       /* a new space starts with no members outside its member list */
       base: (b, stored) => ({ membersBase: stored ? stored.membersBase || 0 : 0 }),
     },
@@ -338,7 +336,7 @@
      trpc: the procedure in web/docs/03-api-and-events.md where one exists, otherwise a new name in the
      same style. Rows marked `bulk` replace a whole collection: the page's diff sends one when records move
      or several change at once (never for threads); the real app sends one mutation per change instead.
-     stub: TODO(limits) rows: API keys and space token budgets, kept as they are, without accounting.
+     stub: TODO(limits) rows: API keys and token usage, kept as they are, without accounting.
      scope (step 3): who writes through a row. A person's actions are procedures (section 5b, scope 'user').
      The collection write rows remain only for:
        'scenario'  the Screen entries and the Variants bar's reset, which set up their data with them
@@ -374,11 +372,10 @@
     return Object.assign({ method: o.method, path: c.path + o.sub, coll, op, input, output, who, trpc, wire: null, bulk: !!o.bulk }, extra, { errors });
   };
   const API = [
-    /* spaces: TODO(limits) budget, used, pct and byok on a space are stub fields (see S.Space) */
     row('spaces', 'list', 'guest', 'spaces.list', { note: 'listed and joined spaces; a guest gets the listed ones' }),
     row('spaces', 'replace', 'owner', 'spaces.reorder'),
     row('spaces', 'create', 'user', 'spaces.create'),
-    row('spaces', 'put', 'admin', 'spaces.update', { stub: true, note: 'TODO(limits): the token budget fields are stored as sent' }),
+    row('spaces', 'put', 'admin', 'spaces.update'),
     row('spaces', 'delete', 'owner', 'spaces.remove'),
 
     /* threads: addressed by id (a ULID). r, likes, liked and mine are derived on read. */
@@ -502,8 +499,8 @@
     row('pagedocs', 'delete', 'moderator', 'pages.remove'),
     row('acct', 'list', 'user', 'settings.get', { wire: 'UserSettings' }),
     row('acct', 'replace', 'user', 'settings.update', { wire: 'UserSettings' }),
-    row('usage', 'list', 'user', 'usage.get', { stub: true, note: 'TODO(limits): token usage by source and space; space keys (Token model variant D)' }),
-    row('usage', 'replace', 'user', ['usage.setDefaultKey', 'spaceKeys.set'], { stub: true, note: 'TODO(limits): the page computes usage; the server stores it as sent' }),
+    row('usage', 'list', 'user', 'usage.get', { stub: true, note: 'TODO(limits): token usage by source and space, the included tokens and the default key' }),
+    row('usage', 'replace', 'user', 'usage.setDefaultKey', { stub: true, note: 'TODO(limits): the page computes usage; the server stores it as sent' }),
     row('muted', 'list', 'user', 'mutes.list'),
     row('muted', 'replace', 'user', 'mutes.set'),
     row('blocked', 'list', 'user', 'blocks.list'),
@@ -895,20 +892,18 @@
 
   /* -- spaces -- */
   /* the settings a space's admins change (spaces.update) */
-  const SPACE_SETTINGS = ['name', 'title', 'av', 'img', 'desc', 'rules', 'vis', 'policy', 'qs', 'invite', 'faq', 'topics', 'postsOff', 'plain', 'pageEdit', 'pages', 'dom', 'budget', 'byok', 'key'];
+  const SPACE_SETTINGS = ['name', 'title', 'av', 'img', 'desc', 'rules', 'vis', 'policy', 'qs', 'invite', 'faq', 'topics', 'postsOff', 'plain', 'pageEdit', 'pages', 'dom'];
   const settingsSchema = obj(Object.fromEntries(SPACE_SETTINGS.map(k => [k + '?', k === 'img' ? bool : (S.Space.fields[k + '?'] || t.any)])), 'SpaceSettings');
-  const PAY_IN = obj({ 'byok?': str, 'key?': str, 'budget?': num }, 'SpacePay');
-  proc('spaces.create', { input: obj({ name: str, 'desc?': str, 'rules?': arr(str), 'vis?': one('open', 'listed', 'unlisted'), 'policy?': str, 'qs?': arr(obj({ q: str, 'req?': bool })), 'invite?': str, 'faq?': bool, 'pay?': PAY_IN }, 'CreateSpaceInput'),
+  proc('spaces.create', { input: obj({ name: str, 'desc?': str, 'rules?': arr(str), 'vis?': one('open', 'listed', 'unlisted'), 'policy?': str, 'qs?': arr(obj({ q: str, 'req?': bool })), 'invite?': str, 'faq?': bool }, 'CreateSpaceInput'),
     output: '{ id: SpaceId }', who: 'user', errors: ['CONFLICT'], writes: ['spaces', 'roles', 'roles0', 'rel', 'joined', 'memOther'],
-    note: 'a new space: you are its owner and only member. pay: TODO(limits), the paying key and monthly token budget, stored as sent.',
+    note: 'a new space: you are its owner and only member.',
     run: (tx, i) => {
       const name = i.name.toLowerCase().replace(/^#/, '').replace(/[^a-z0-9-]+/g, '-').replace(/^-+/, '').slice(0, 32);
       if (!name) throw bad1('name', 'a name');
       if (tx.get('spaces').some(s => s.name === name)) throw rpcError('CONFLICT', `#${name} already exists.`);
-      const id = 'sp-' + name, rules = (i.rules || []).map(x => x.trim()).filter(Boolean), pay = i.pay || {};
-      const s = { id, name, title: name, av: 3, online: 1, posts: 0, used: 0, budget: pay.budget || 0, desc: (i.desc || '').trim() || 'No description yet.', rules: rules.length ? rules : ['Be specific in asks.'], pages: [], mods: [] };
+      const id = 'sp-' + name, rules = (i.rules || []).map(x => x.trim()).filter(Boolean);
+      const s = { id, name, title: name, av: 3, online: 1, posts: 0, desc: (i.desc || '').trim() || 'No description yet.', rules: rules.length ? rules : ['Be specific in asks.'], pages: [], mods: [] };
       if (i.vis && i.vis !== 'open') Object.assign(s, { vis: i.vis, policy: i.policy, qs: (i.qs || []).filter(q => q.q.trim()), invite: i.invite });
-      if (pay.byok) Object.assign(s, { byok: pay.byok, key: pay.key });
       s.faq = !!i.faq; s.topics = [];
       tx.put('spaces', s);
       tx.setValue('roles', { ...tx.value('roles'), [id]: 'Owner' }); tx.setValue('roles0', { ...tx.value('roles0'), [id]: 'Owner' });
@@ -917,7 +912,7 @@
       return { id };
     } });
   proc('spaces.update', { input: obj({ id: ID, 'set?': settingsSchema, 'unset?': arr(one(...SPACE_SETTINGS)) }, 'UpdateSpaceInput'), output: 'null', who: 'admin', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['spaces', 'posts', 'rel', 'reqs', 'mem', 'memOther'],
-    note: 'change a space’s settings. The server keeps the previous rules for “See changes”, moves threads in deleted topics to Other, approves the open join requests when the space becomes open, and records your membership of a space that becomes closed. budget, byok and key: TODO(limits), stored as sent.',
+    note: 'change a space’s settings. The server keeps the previous rules for “See changes”, moves threads in deleted topics to Other, approves the open join requests when the space becomes open, and records your membership of a space that becomes closed.',
     run: (tx, i) => {
       const s0 = tx.need('spaces', i.id, 'space'), set = i.set || {};
       if (set.name != null && set.name !== s0.name && tx.get('spaces').some(x => x.id !== s0.id && x.name === set.name)) throw rpcError('CONFLICT', `#${set.name} already exists.`);
@@ -1012,11 +1007,14 @@
     run: (tx, i) => { const label = text(i.label, 'label'); tx.edit('userKeys', i.id, k => { k.label = label; }, 'key'); } });
   proc('apiKeys.setCap', { input: obj({ id: ID, cap: num }), output: 'null', who: 'user', errors: ['NOT_FOUND'], stub: true, writes: ['userKeys'],
     note: 'TODO(limits) stub: a monthly token limit for the key (0: none), stored and not enforced', run: (tx, i) => { tx.edit('userKeys', i.id, k => { k.cap = i.cap; }, 'key'); } });
-  proc('apiKeys.revoke', { input: obj({ id: ID }), output: 'null', who: 'user', errors: ['NOT_FOUND'], stub: true, writes: ['userKeys', 'spaces'],
-    note: 'TODO(limits) stub: spaces whose extra tokens this key paid for lose their key and budget',
+  proc('apiKeys.revoke', { input: obj({ id: ID }), output: 'null', who: 'user', errors: ['NOT_FOUND'], stub: true, writes: ['userKeys', 'usage'],
+    note: 'TODO(limits) stub. When the key was the default key (usage.def, or the first valid key when none is set), the next valid key becomes the default, or none; the answer returns the usage record.',
     run: (tx, i) => {
-      tx.need('userKeys', i.id, 'key'); tx.remove('userKeys', i.id);
-      tx.get('spaces').filter(s => s.key === i.id && s.byok === tx.me.u).forEach(s => tx.edit('spaces', s.id, x => { delete x.byok; delete x.key; x.budget = 0; }));
+      tx.need('userKeys', i.id, 'key');
+      const valid = tx.get('userKeys').filter(k => k.valid), u = tx.value('usage');
+      const def = valid.find(k => k.id === u.def) || valid[0];
+      tx.remove('userKeys', i.id);
+      if (def && def.id === i.id) { const next = valid.find(k => k.id !== i.id); tx.setValue('usage', { ...u, def: next ? next.id : null }); }
     } });
 
   /* -- profile and settings -- */
