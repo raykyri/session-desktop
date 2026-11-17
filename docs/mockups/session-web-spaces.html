@@ -3708,7 +3708,6 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
       <div class="knob"><span>Navigation</span><div class="seg" id="k-dir"></div></div>
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
       <div class="knob"><span>Font</span><div class="seg" id="k-font"></div></div>
-      <div class="knob" title="Who pays for the tokens an ask uses"><span>Token model</span><div class="seg" id="k-tok"></div></div>
     </div>
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
@@ -4988,7 +4987,6 @@ const KNOBDEF = () => [
   ['k-tint', 'tint', [['warmlo', 'Beige'], ['warmwc', 'Beige chrome', '1'], ['sagewc', 'Sage']]],
   ['k-font', 'font', [['inter', 'Inter'], ['valley', 'Valley Sans']]],
   /* Token model: who pays for asks. Labels carry their own letters (A–D), as the Screen entries name them. */
-  ['k-tok', 'tokmodel', [['session', 'A. Session tokens', '#'], ['key', 'B. Your key', '#'], ['both', 'C. Session, then key', '#'], ['spacekey', 'D. Space keys', '#'], ['current', 'Current', '#']], () => { st.mpOpen = false; st.tmChoose = false; st.tmPick = null; }],
   ...(typeof CSKNOBS === 'function' ? CSKNOBS() : []),
   ...SFKNOBS(),
   ...MIKNOBS(),
@@ -10014,7 +10012,7 @@ const TM = {
   both:     { session: true,  keys: true,  spaceKeys: false },
   spacekey: { session: true,  keys: true,  spaceKeys: true },
 };
-Object.assign(st, { tokmodel: 'current', tmPick: null, tmChoose: false, tmSk: null, tmSkCap: '6000000', tmSkErr: '' });
+Object.assign(st, { tokmodel: 'both', tmPick: null, tmChoose: false, tmSk: null, tmSkCap: '6000000', tmSkErr: '' });
 Object.assign(nst, { tmCap: null });
 /* The usage fixture (D.usage). by: tokens this month per source and space; each source's total is the sum of its spaces, and each
    is at least what your listed asks in that space used. Session tokens: 1.38M of 2M. Gemini key (k2): 372k of
@@ -10589,18 +10587,13 @@ on($('app'), 'click', e => {
 on($('app'), 'input', e => { if (e.target.id === 'tm-sk-in') { st.keyDraft = e.target.value; if (st.tmSkErr) { st.tmSkErr = ''; const er = document.querySelector('.modal .ts-err'); if (er) er.remove(); } } });
 on(document, 'keydown', e => { if (e.key === 'Enter' && e.target.id === 'tm-sk-in') { e.preventDefault(); const b = document.querySelector('[data-tmsk^="addok"], [data-tmsk^="repok"]'); if (b) b.click(); } }, true);
 /* the Variants bar's Reset puts the Token model back to Current */
-{ const rc0 = resetControls; resetControls = function () { rc0(); st.tokmodel = 'current'; renderAll(); }; }
+{ const rc0 = resetControls; resetControls = function () { rc0(); st.tokmodel = 'both'; renderAll(); }; }
 /* answers in a key variant hide the old token count beside Like and Save: the "Paid with" line replaces it */
 { const ar0 = csAfterRender; csAfterRender = function () { document.documentElement.toggleAttribute('data-tm', tmOn()); ar0(); }; }
 
 /* ---------- Screen entries ---------- */
 JUMPS.push(['Token model', [
-  ['tm-a-low', 'A · Composer: 20% of Session tokens left'], ['tm-a-out', 'A · Composer: Session tokens used up'], ['tm-a-stop', 'A · Answer stopped: Session tokens ran out'],
-  ['tm-b-normal', 'B · Composer: paid with your default key'], ['tm-b-choose', 'B · Composer: choose a key for one ask'], ['tm-b-model', 'B · Model menu: model changed to match the key'],
-  ['tm-b-nokey', 'B · No key: Ask is disabled'], ['tm-b-limit', 'B · Composer: key at its monthly limit'], ['tm-b-stop', 'B · Answer stopped: key reached its limit'],
-  ['tm-b-onb', 'B · First run: add an API key'], ['tm-b-n-onb', 'B · Phone: first-run key step'],
-  ['tm-c-normal', 'C · Composer: Session tokens pay first'], ['tm-c-low', 'C · Composer: 80% used, no key'], ['tm-c-moved', 'C · Session tokens used up: asks move to your key'], ['tm-c-out', 'C · Session tokens used up, no key'], ['tm-c-fu-stop', 'C · Follow-up stopped for tokens'],
-  ['tm-d-composer', 'D · Composer: paid with the space key'], ['tm-d-spout', 'D · Space key used up: Session tokens pay'], ['tm-d-settings', 'D · Settings › Tokens (admin)'], ['tm-d-about', 'D · About: Tokens row'],
+  ['tm-c-normal', 'Composer: Session tokens pay first'], ['tm-c-low', 'Composer: 80% used, no key'], ['tm-c-moved', 'Session tokens used up: asks move to your key'], ['tm-c-out', 'Session tokens used up, no key'], ['tm-c-fu-stop', 'Follow-up stopped for tokens'],
   ['tm-usage', 'Account › Usage'], ['tm-n-usage', 'Phone: You › Usage'], ['tm-n-composer', 'Phone: composer line'], ['tm-n-payer', 'Phone: choose who pays'], ['tm-n-stop', 'Phone: answer stopped for tokens'],
   ['tm-retry', 'Answer failed: key rejected, Retry names the payer'], ['tm-revoke', 'Revoke a key'],
 ]]);
@@ -12220,9 +12213,9 @@ Object.assign(TINTS, {
     light: { '--hdr-line': 'var(--divider)', '--page': '#f6f2ec', '--chrome': '#f6f2ec', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#faf7f3', '--card-sel': '#f6ecde', '--pop-btn': '#ffffff', '--pop-btn-b': '#e4ded6', '--pop-btn-h': '#f6f2ec', '--control': '#f5f2ed', '--control-hover': '#efebe4', '--control-border': '#e1dbd3', '--divider': '#e9e4dd', '--border-strong': '#e0dad1', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#976537', '--trim-line': '#e1c8b3', '--trim-soft': '#fbebdd', '--trim-ink': '#603f1f', '--trim-on': '#ffffff' },
     dark: { '--hdr-line': 'var(--divider)', '--page': '#13100c', '--chrome': '#13100c', '--pane': '#1c1915', '--feed': '#1a1713', '--card': '#23201b', '--field': '#24211d', '--popover': '#26221e', '--inset': '#1e1b17', '--card-sel': '#2c2417', '--pop-btn': '#292621', '--pop-btn-b': '#413d36', '--pop-btn-h': '#312d27', '--control': '#292621', '--control-hover': '#312d27', '--control-border': '#413d36', '--divider': '#302c27', '--border-strong': '#3a3630', '--seg-on': '#3e3a33', '--trim': '#d89d69', '--trim-line': '#604732', '--trim-soft': '#2f2216', '--trim-ink': '#f5c7a1', '--trim-on': '#1c1915', '--t-faint': '#928f8b' },
   } },
-  sagewc: { h: 152, m: 0.9, a: 0.004, dark: { m: 0.35, a: 0.0018 }, vars: {
-    light: { '--page': '#edf5ef', '--chrome': '#edf5ef', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#f4f9f5', '--card-sel': '#e0f4e4', '--pop-btn': '#ffffff', '--pop-btn-b': '#d7e3da', '--pop-btn-h': '#edf5ee', '--control': '#eef4ef', '--control-hover': '#e5eee7', '--control-border': '#d4e0d7', '--divider': '#dee8e0', '--border-strong': '#d2dfd5', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#3b8352', '--trim-line': '#b7d7bf', '--trim-soft': '#e0f4e4', '--trim-ink': '#225332', '--trim-on': '#ffffff' },
-    dark: { '--hdr-line': 'var(--divider)', '--page': '#0f110f', '--chrome': '#0f110f', '--pane': '#181a18', '--feed': '#161816', '--card': '#1e211e', '--field': '#1f2220', '--popover': '#202421', '--inset': '#1a1c1a', '--card-sel': '#1e2821', '--pop-btn': '#242724', '--pop-btn-b': '#3a3f3b', '--pop-btn-h': '#2b2f2c', '--control': '#242724', '--control-hover': '#2b2f2c', '--control-border': '#3a3f3b', '--divider': '#2a2e2b', '--border-strong': '#343835', '--seg-on': '#373c38', '--trim': '#8db798', '--trim-line': '#415245', '--trim-soft': '#1e2821', '--trim-ink': '#bbdbc2', '--trim-on': '#181a18', '--t-faint': '#8e908e' },
+  sagewc: { h: 152, m: 0.585, a: 0.0026, dark: { m: 0.23, a: 0.0012 }, vars: {
+    light: { '--page': '#eff4f0', '--chrome': '#eff4f0', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#f5f8f6', '--card-sel': '#e5f2e7', '--pop-btn': '#ffffff', '--pop-btn-b': '#dae2dc', '--pop-btn-h': '#eff4f0', '--control': '#eff3f0', '--control-hover': '#e7ede8', '--control-border': '#d7dfd9', '--divider': '#e0e7e2', '--border-strong': '#d5ded7', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#537d5e', '--trim-line': '#bfd4c4', '--trim-soft': '#e5f2e7', '--trim-ink': '#324f3a', '--trim-on': '#ffffff' },
+    dark: { '--hdr-line': 'var(--divider)', '--page': '#0f110f', '--chrome': '#0f110f', '--pane': '#181a18', '--feed': '#161816', '--card': '#1f211f', '--field': '#202220', '--popover': '#212422', '--inset': '#1a1c1a', '--card-sel': '#212722', '--pop-btn': '#252725', '--pop-btn-b': '#3b3e3c', '--pop-btn-h': '#2c2f2d', '--control': '#252725', '--control-hover': '#2c2f2d', '--control-border': '#3b3e3c', '--divider': '#2b2e2c', '--border-strong': '#353836', '--seg-on': '#383b39', '--trim': '#98b39f', '--trim-line': '#455048', '--trim-soft': '#212722', '--trim-ink': '#c3d8c7', '--trim-on': '#181a18', '--t-faint': '#8e908e' },
   } },
   sagewt: { h: 152, m: 0.9, a: 0.004, dark: { m: 0.6, a: 0.003 }, vars: {
     light: { '--page': '#f3f7f4', '--chrome': '#ffffff', '--pane': '#ffffff', '--feed': '#ffffff', '--card': '#ffffff', '--field': '#ffffff', '--popover': '#ffffff', '--inset': '#f7faf7', '--card-sel': '#dff6e4', '--pop-btn': '#ffffff', '--pop-btn-b': '#dde3de', '--pop-btn-h': '#f2f6f2', '--control': '#f1f5f2', '--control-hover': '#e9efea', '--control-border': '#dbe2dc', '--divider': '#e4e9e5', '--border-strong': '#d9e0db', '--seg-on': '#ffffff', '--hsel-bg': '#ffffff', '--trim': '#378450', '--trim-line': '#a2c9ab', '--trim-soft': '#dff6e4', '--trim-ink': '#205431', '--trim-on': '#ffffff' },
