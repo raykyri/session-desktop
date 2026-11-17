@@ -3542,7 +3542,7 @@ const apiSource = {
       inst.meta.setState(m => ({ pending: m.pending + 1 }));
       apiSource.queue = apiSource.queue
         .then(() => http(op.method, op.url, op.body))
-        .catch(e => { undoOp(inst, op); dataError(`Couldn’t save the change (${e.message}). It was undone.`); })
+        .catch(e => { undoOp(inst, op); dataError(`Couldn’t save the change (${e.message}). Session reverted it.`); })
         .finally(() => inst.meta.setState(m => ({ pending: m.pending - 1 })));
     }
   },
@@ -4200,7 +4200,7 @@ function profFeed() {
   if (st.ptab === 'followups') return `<div class="pf-fus">${myFUs().map(f => `<button class="hrow" type="button" data-open="${f.pid}"><span class="hrow-t">${esc(f.q)}</span><span class="hrow-s">on: ${esc(D.posts[f.pid].q)}</span><span class="hrow-m"><span>${f.age}</span></span></button>`).join('') || '<p class="muted">No follow-ups yet.</p>'}</div>`;
   if (st.ptab === 'likes' && isSelf()) { const ls = [...st.liked].map(i => ({ ...D.posts[i], orig: D.posts[i], tag: true })); return `<p class="pf-private">${LOCK}Your likes are private. Only you can see this list.</p>${ls.length ? feed2(null, ls) : '<p class="muted">No liked threads yet.</p>'}`; }
   const cl = myPosts().some(p => isClosed(sp(p.s)));
-  return feed2(null, myPosts()) + (cl ? `<p class="cs-fine cs-pfnote">${LOCK}<span>Threads in closed spaces are shown only to members of those spaces.</span></p>` : '');
+  return feed2(null, myPosts()) + (cl ? `<p class="cs-fine cs-pfnote">${LOCK}<span>Only members of a closed space can see its threads.</span></p>` : '');
 }
 const editBtn = () => isSelf() ? `<button class="btn" type="button" data-pf="edit" aria-label="Edit profile">Edit<span class="m-long"> profile</span></button>` : '';
 const LOCK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg>';
@@ -6179,7 +6179,7 @@ function qsEditor(d, note = true) {
 }
 function payPicker(d) {
   const keys = st.userKeys.filter(k => k.valid);
-  return `${d.id && sp(d.id).byok && sp(d.id).byok !== ME.u ? `<p class="cs-fine">${MI.key}<span>Paid with ${sp(d.id).byok}’s API key, up to ${fmtT(sp(d.id).budget)} tokens a month. Only ${sp(d.id).byok} can change the key.</span></p>` : ''}
+  return `${d.id && sp(d.id).byok && sp(d.id).byok !== ME.u ? `<p class="cs-fine">${MI.key}<span>Asks use ${sp(d.id).byok}’s API key, up to ${fmtT(sp(d.id).budget)} tokens a month. Only ${sp(d.id).byok} can change the key.</span></p>` : ''}
     ${!(d.id && sp(d.id).byok && sp(d.id).byok !== ME.u) ? `<div class="cs-payk"><div class="fld"><span id="dl-key">Key for the extra tokens</span>${ddSel('key', keys.map(k => [k.id, `${k.label} (${keyMask(k)})`]), d.key, 'dl-key')}</div><div class="fld"><span id="dl-limit">Monthly limit</span>${ddSel('limit', ['2', '8', '20'].map(v => [v, `${v}M tokens`]), d.limit, 'dl-limit')}</div></div>` : ''}
     ${d.vis !== 'open' ? `<p class="cs-fine">${LOCK}<span>Who pays does not change who can read. Answers to asks in a closed space are visible to members only.</span></p>` : ''}`;
 }
@@ -6983,9 +6983,9 @@ function topicSec(d, s) {
   const gone = topicsOf(s).filter(t => !d.topics.some(x => x[0] === t[0]));
   const goneN = gone.reduce((a, t) => a + cnt(t[0]), 0);
   return stSec('Topics', 'Asks are grouped by topic on the FAQ landing. Askers can pick a topic; otherwise the agent assigns one. Moderators can change a thread’s topic from the thread page.',
-    `<div class="sf-tps">${rows || '<p class="muted cs-small">No topics yet. Every ask is listed under Other.</p>'}<div class="sf-tprow sf-tpo"><span class="ts-n"></span><span class="ts-move"></span><span class="sf-tpo-l">Other</span><span class="faint num sf-tpn">${other} thread${other === 1 ? '' : 's'}</span><span class="faint cs-small">Always last</span></div></div>
+    `<div class="sf-tps">${rows || '<p class="muted cs-small">No topics yet. Asks go under Other.</p>'}<div class="sf-tprow sf-tpo"><span class="ts-n"></span><span class="ts-move"></span><span class="sf-tpo-l">Other</span><span class="faint num sf-tpn">${other} thread${other === 1 ? '' : 's'}</span><span class="faint cs-small">Always last</span></div></div>
     <button class="btn sm cs-b st-add" type="button" data-sftp="add">${PLUS}Add a topic</button>
-    ${gone.length ? `<p class="cs-fine sf-warn">${SFI.tag}<span>Deleting ${gone.map(t => `“${esc(t[1])}”`).join(', ')} moves ${goneN} thread${goneN === 1 ? '' : 's'} to Other when you save.</span></p>` : '<p class="cs-fine">Asks without a topic, and asks in a deleted topic, are listed under Other. Posts have no topic.</p>'}`);
+    ${gone.length ? `<p class="cs-fine sf-warn">${SFI.tag}<span>Deleting ${gone.map(t => `“${esc(t[1])}”`).join(', ')} moves ${goneN} thread${goneN === 1 ? '' : 's'} to Other when you save.</span></p>` : '<p class="cs-fine">Asks without a topic, and asks in a deleted topic, go under Other. Posts have no topic.</p>'}`);
 }
 function postsSec(d, s) {
   return stSec('Posts', 'Plain posts that people reply to. Asks are not affected.', sfTog('posts', !d.postsOff, 'Allow new posts', d.postsOff ? `Off: the composer in ${spName(s)} is ask-only. Existing posts and their replies stay visible, and people can still reply to them.` : 'People can write posts as well as asks.'));
@@ -7101,8 +7101,8 @@ on(document, 'keydown', e => {
 function sfModal() {
   const [k, a] = (st.modal || '').split(/:(.*)/s);
   if (k === 'sf-report') return sfReportDlg(a);
-  if (k === 'sf-rmconf') { const r = st.reports.find(x => x.id === a), it = itemOf(r.key); return dlg(`Remove this ${it.noun}?`, `<p class="muted">This deletes the ${it.noun} for everyone, including moderators. Its place in the thread shows “Removed by a moderator”. You can't undo after you leave this page.</p><p class="cs-fine">${CI.users}<span>${r.by === ME.u ? 'You get' : `${esc(r.by)} gets`} a notification that the report was resolved. ${it.by === 'Agent' ? '' : `${esc(it.by)} is not told who reported it.`}</span></p>`, `${cancelB()}<button class="btn danger" type="button" data-sfrmok="${a}">Remove</button>`, 'alertdialog'); }
-  if (k === 'sf-rsconf') { const r = st.reports.find(x => x.id === a), it = itemOf(r.key); return dlg(`Restore this ${it.noun}?`, `<p class="muted">The ${it.noun} is shown in the thread again for everyone who can read the space, and “Removed by a moderator” is taken down. The report goes back to the queue.</p><p class="cs-fine">${CI.users}<span>${it.by === 'Agent' ? 'No one is notified.' : `${esc(it.by)} is not notified.`}</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-sfrestoreok="${a}">Restore</button>`, 'alertdialog'); }
+  if (k === 'sf-rmconf') { const r = st.reports.find(x => x.id === a), it = itemOf(r.key); return dlg(`Remove this ${it.noun}?`, `<p class="muted">This deletes the ${it.noun} for everyone, including moderators. Its place in the thread shows “Removed by a moderator”. You can't undo after you leave this page.</p><p class="cs-fine">${CI.users}<span>${r.by === ME.u ? 'You get' : `${esc(r.by)} gets`} a notification that the report was resolved. ${it.by === 'Agent' ? '' : `${esc(it.by)} does not see who reported it.`}</span></p>`, `${cancelB()}<button class="btn danger" type="button" data-sfrmok="${a}">Remove</button>`, 'alertdialog'); }
+  if (k === 'sf-rsconf') { const r = st.reports.find(x => x.id === a), it = itemOf(r.key); return dlg(`Restore this ${it.noun}?`, `<p class="muted">The ${it.noun} shows in the thread again for everyone who can read the space, and the “Removed by a moderator” note goes away. The report goes back to the queue.</p><p class="cs-fine">${CI.users}<span>${it.by === 'Agent' ? 'No one gets a notification.' : `${esc(it.by)} is not notified.`}</span></p>`, `${cancelB()}<button class="btn primary" type="button" data-sfrestoreok="${a}">Restore</button>`, 'alertdialog'); }
   if (k === 'sf-domrm') { const s = sp(a); return dlg(`Remove ${esc(s.dom.domain)}?`, `<p class="muted">${spName(s)} loses the seal${isPlain(s) ? ` and shows as #${s.name} again` : ''}. You can verify a domain again at any time.</p>`, `${cancelB()}<button class="btn danger" type="button" data-sfdomrm="${s.id}">Remove domain</button>`, 'alertdialog'); }
   return '';
 }
@@ -7626,7 +7626,7 @@ function miAttHTML() {
   const mm = (st.draft || '').match(MI_URLRE); if (!mm) return '';
   const m = miFindUrl(mm[1]), s = sp(curSpace());
   const card = m ? miMini(m) : `<div class="mi-mini">${MII.article}<span class="mi-mini-tx"><b>${esc(mm[1].split('/')[0])}</b><span>Reader copy ready · about 6 min read</span></span></div>`;
-  const note = `The ask is about this source. It is also added to the sources of ${spName(s)}.`;
+  const note = `The ask is about this source. This also adds it to the sources of ${spName(s)}.`;
   const alt = `<button class="tlink" type="button" data-milinkadd="1">Add as a source without asking</button>`;
   return `<div class="mi-att">${card}<p class="faint cs-small">${note} Fetching uses no tokens; the agent reads it when you ask.</p><div class="mi-att-a">${alt}<button class="tlink" type="button" data-miattx="1">Remove the link</button></div></div>`;
 }
@@ -8068,7 +8068,7 @@ function dsClick(t) {
   if ((b = d('[data-dsmod]'))) {
     const [k, sid, mid] = b.dataset.dsmod.split(':'), x = dsAll(sid).find(y => y.m === mid && (k === 'restore' ? y.rm : !y.rm));
     if (x) dsEdit(sid, y => y === x, y => { if (k === 'approve') y.rv = false; if (k === 'reject') y.rm = true; if (k === 'restore') y.rm = false; });
-    if (k === 'reject') { st.modal = null; toast(`Removed from ${spName(sp(sid))}. It is listed under Removed.`); }
+    if (k === 'reject') { st.modal = null; toast(`Removed from ${spName(sp(sid))}. It now shows under Removed.`); }
     if (k === 'keep' || k === 'reject') st.dsReps = st.dsReps.filter(r => !(r.sid === sid && r.m === mid));
     return go();
   }
@@ -8723,7 +8723,7 @@ function qtModal() {
       <div class="qt-fl"><span id="qt-pro-spl">Space</span>${ddSel('qtsp', qtProSpaces(T), pro.sp, 'qt-pro-spl')}</div>
       ${isClosed(src) ? `<p class="qt-note">${LOCK} ${spName(src)} is closed. A branch from a closed space can only become a thread in the same space, so members-only text does not become public.</p>` : pro.sp !== src.id ? `<p class="qt-note">The new thread is readable by everyone who can read ${spName(tgt)}. The original branch stays in ${spName(src)}.</p>` : ''}
       ${faqOn(tgt) && topicsOf(tgt).length ? `<div class="qt-fl"><span id="qt-pro-tpl">Topic</span>${ddSel('qttopic', topicsOf(tgt), pro.topic, 'qt-pro-tpl')}</div><p class="qt-note">${spName(tgt)} uses the FAQ landing. The new thread is listed under this topic, and search finds it like any other answer.</p>` : ''}
-      ${sub ? `<div class="qt-fl"><span>Include</span><div class="qt-radio" role="radiogroup">${radio('all', `This ask and the ${sub} below it`, 'They are copied into the new thread. Their askers are notified.')}${radio('one', 'This ask only', 'The asks below it stay only in this thread.')}</div></div>` : ''}
+      ${sub ? `<div class="qt-fl"><span>Include</span><div class="qt-radio" role="radiogroup">${radio('all', `This ask and the ${sub} below it`, 'This copies them into the new thread and notifies their askers.')}${radio('one', 'This ask only', 'The asks below it stay only in this thread.')}</div></div>` : ''}
       <p class="qt-note">The asker of a branch, the thread owner and moderators can do this. ${T.owner === ME.u ? 'People who asked in this branch are' : T.owner + ' is'} notified.</p></div>`;
     return dlg('Start a thread from this branch', body, `${cancelB()}<button class="btn primary" type="button" data-qtpro-ok="1">Start thread</button>`);
   }
@@ -8775,7 +8775,7 @@ function qtClick(t, e) {
   if ((b = d('[data-qtfuq]'))) { st.qtFuQ = b.dataset.qtfuq === 'q'; return go(); }
   if ((b = d('[data-qtexp]'))) { stToggle('qtExp', b.dataset.qtexp); return go(); }
   if ((b = d('[data-qtaskat]'))) { if (st.auth !== 'in') { st.modal = 'signin'; return go(); } Object.assign(st, { qtAskAt: b.dataset.qtaskat, qtErr: '', qtFocusIn: true }); return go(); }
-  if ((b = d('[data-qtsave]'))) { const k = `${T.i}:${b.dataset.qtsave}`; if (st.auth !== 'in') { st.modal = 'signin'; return go(); } if (st.qtSaved.has(k)) { db.toggle('qtSaved', k, false); toast('Removed from Saved.'); } else { db.toggle('qtSaved', k, true); toast('Saved. It is listed under Saved with its path.'); } st.qtMenu = null; return go(); }
+  if ((b = d('[data-qtsave]'))) { const k = `${T.i}:${b.dataset.qtsave}`; if (st.auth !== 'in') { st.modal = 'signin'; return go(); } if (st.qtSaved.has(k)) { db.toggle('qtSaved', k, false); toast('Removed from Saved.'); } else { db.toggle('qtSaved', k, true); toast('Saved. Listed under Saved with its path.'); } st.qtMenu = null; return go(); }
   if ((b = d('[data-qtcopy]'))) { st.qtMenu = null; toast(`Link copied: ${qtAddr(T, b.dataset.qtcopy)}`); return go(); }
   if ((b = d('[data-qtpick]'))) { Object.assign(st, { qtPick: b.dataset.qtpick, qtMenu: null, qtCmp: null }); return go(); }
   if ((b = d('[data-qtpro]'))) { qtProOpen(T, b.dataset.qtpro); return go(); }
@@ -9186,7 +9186,7 @@ function abModal() {
     const prev = s.rulesPrev || [], now = s.rules, rows = [...now.map(r => prev.includes(r) ? `<li>${esc(r)}</li>` : `<li class="ab-add-r">${esc(r)}</li>`), ...prev.filter(r => !now.includes(r)).map(r => `<li class="ab-rm-r">${esc(r)}</li>`)];
     return dlg('Changes to the rules', `<p class="muted">${esc(s.rulesBy || '')} changed the rules ${s.rulesAt === 'just now' ? 'just now' : s.rulesAt + ' ago'}. Added rules are marked; removed rules are struck through.</p><ol class="ab-diff">${rows.join('')}</ol>`, cancelB('Close'));
   }
-  if (k === 'ab-pgdel') { const t = (s.pages[+a] || [''])[0]; return dlg(`Remove “${esc(t)}”?`, `<p class="muted">The page and its history are removed from ${spName(s)}. Links to it stop working.</p>`, `${cancelB()}<button class="btn danger" type="button" data-abpgdelok="${a}">Remove page</button>`, 'alertdialog'); }
+  if (k === 'ab-pgdel') { const t = (s.pages[+a] || [''])[0]; return dlg(`Remove “${esc(t)}”?`, `<p class="muted">This removes the page and its history from ${spName(s)}. Links to it stop working.</p>`, `${cancelB()}<button class="btn danger" type="button" data-abpgdelok="${a}">Remove page</button>`, 'alertdialog'); }
   if (k === 'ab-skill') return abSkillDlg(s, +a);
   if (k === 'ab-sked') return abSkEdDlg();
   if (k === 'ab-skrm') { const [n] = D.skills[s.id][+a]; return dlg(`Remove ${esc(n)}?`, `<p class="muted">Members can no longer use it in asks in ${spName(s)}. Answers that already used it stay in their threads.</p>`, `${cancelB()}<button class="btn danger" type="button" data-absk="rmok:${a}">Remove</button>`, 'alertdialog'); }
