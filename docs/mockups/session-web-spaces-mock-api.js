@@ -5,7 +5,8 @@
 
    Owner decisions for the backend work (they apply to this file and to the later steps):
    - The mock backend and its fixtures may move out of the HTML into separate .js files. This file holds
-     the backend; the fixtures stay in the HTML until step 6 and are passed in as the seed.
+     the backend; the fixtures are in session-web-spaces-fixtures.js (SessionFixtures) and are passed in as
+     the seed.
    - Shared spaces are the only way to organize threads; there are no per-user workspaces. Space roles
      (owner, admin, moderator, member) replace the real app's thread roles (`commenter`, `viewer`).
    - API keys are not encrypted for now.
@@ -434,7 +435,7 @@
 
   /* ---- 6. the backend ----
      createBackend({ seed, storageKey, latency, dev }):
-     - seed(): the seed data (the page's fixtures), keyed by collection; read when the database is first used.
+     - seed(): the seed data (SessionFixtures.data), keyed by collection; read when the database is first used.
      - storageKey: the localStorage key. The stored database is kept while the seed's hash is the same.
      - latency: each request waits this long (ms).
      - dev: report contract mismatches (console.error, and an uncaught error so test harnesses fail).
