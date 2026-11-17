@@ -3659,6 +3659,8 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
   </div>
 </div>
 
+<!-- the mock backend and the API contract (SessionMockApi): a plain script, so the page also works from file:// -->
+<script src="session-web-spaces-mock-api.js"></script>
 <script>
 (() => {
 'use strict';
@@ -3686,9 +3688,10 @@ const on = (target, type, fn, opts) => target.addEventListener(type, fn, { ...(t
 
    Data. The data store (liveData) reads and writes the HTTP API (/api/*): it loads each collection
    with its own GET; writes are applied to the store first (optimistic) and sent as requests in order;
-   a failed request puts the written record back and shows a toast. The mock backend at the end of
-   this block serves /api/* inside the page. The fixtures in this file are only its seed data: the app
-   never reads them directly.
+   a failed request puts the written record back and shows a toast that depends on the error code. The
+   mock backend (session-web-spaces-mock-api.js, loaded before this script) serves /api/* inside the
+   page: only the endpoints in its API table, with validated writes and { code, message } errors. The
+   fixtures in this file are only its seed data: the app never reads them directly.
 
    `st` and `nst` are facades over the stores: reading a key returns the store's current value;
    assigning a key replaces it with setState. Collections in the stores are not changed in place:
@@ -3736,9 +3739,8 @@ function deepFreeze(o) {
   for (const v of (o instanceof Set || o instanceof Map ? o.values() : Object.values(o))) deepFreeze(v);
   return o;
 }
-/* JSON on the wire; Sets travel as { $set: [...] } */
-const enc = v => JSON.stringify(v, (k, x) => x instanceof Set ? { $set: [...x] } : x);
-const dec = s => JSON.parse(s, (k, x) => x && typeof x === 'object' && !Array.isArray(x) && Array.isArray(x.$set) && Object.keys(x).length === 1 ? new Set(x.$set) : x);
+/* JSON on the wire; Sets travel as { $set: [...] }. The codec is part of the API contract: one copy, in session-web-spaces-mock-api.js. */
+const { enc, dec } = window.SessionMockApi;
 
 /* ---- data: collections and their HTTP resources ----
    kind: 'list' (array of records with an id field), 'index' (array; a record's id is its position),
@@ -3914,20 +3916,47 @@ function undoOp(inst, op) {
   else { const i = cur.findIndex(x => x[r.id] === u.listId); next = cur.slice(); if (u.was === undefined) { if (i >= 0) next.splice(i, 1); } else if (i >= 0) next[i] = u.was; else next.splice(Math.min(u.at ?? next.length, next.length), 0, u.was); }
   inst.store.setState({ [op.key]: deepFreeze(next) });
 }
+/* A failed request throws an Error with the server's `code` (a tRPC code), `status` and `message`.
+   A request that never reached the server has code SERVICE_UNAVAILABLE and status 0. */
 async function http(method, url, body) {
-  const res = await fetch(url, { method, headers: body === undefined ? {} : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : enc(body) });
-  const text = await res.text(), data = text ? dec(text) : null;
-  if (!res.ok) { const e = new Error((data && data.error) || `HTTP ${res.status}`); e.status = res.status; throw e; }
+  let res;
+  try { res = await fetch(url, { method, headers: body === undefined ? {} : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : enc(body) }); }
+  catch (x) { throw Object.assign(new Error('The server is unavailable.'), { code: 'SERVICE_UNAVAILABLE', status: 0 }); }
+  const text = await res.text(); let data = null;
+  try { data = text ? dec(text) : null; } catch (x) {}
+  if (!res.ok) throw Object.assign(new Error((data && data.message) || `HTTP ${res.status}`), { code: (data && data.code) || (res.status >= 500 ? 'INTERNAL_SERVER_ERROR' : 'BAD_REQUEST'), status: res.status });
   return data;
 }
+/* What the page says about a failed request, by error code. `write`: a change the store has already undone
+   (shown in a toast); `load`: the first load (shown in place of the app). */
+const API_ERR = {
+  write: {
+    BAD_REQUEST: 'The server rejected the change as not valid. Session undid it.',
+    UNAUTHORIZED: 'Your sign-in expired, so the server didn’t save the change. Sign in again.',
+    FORBIDDEN: 'You no longer have permission to do this. Session undid the change.',
+    NOT_FOUND: 'Someone deleted this item, so the server couldn’t save the change. Session undid it.',
+    CONFLICT: 'Someone else changed this item first. Session undid your change.',
+    PRECONDITION_FAILED: 'The item changed state, so the server didn’t save the change. Session undid it.',
+    TOO_MANY_REQUESTS: 'You made too many changes in a short time. Session undid the last one. Try again in a minute.',
+    unavailable: 'Couldn’t reach the server, so Session undid the change. Try again in a moment.',
+  },
+  load: {
+    UNAUTHORIZED: 'Your sign-in expired. Sign in again to load your spaces.',
+    FORBIDDEN: 'Your account doesn’t have access to this data.',
+    TOO_MANY_REQUESTS: 'The server is limiting requests from your account. Try again in a minute.',
+    unavailable: 'Session couldn’t reach the server.',
+  },
+};
+const apiErrText = (e, kind) => { const t = API_ERR[kind], c = e && e.code; return t[c] || (!c || c === 'SERVICE_UNAVAILABLE' || c === 'INTERNAL_SERVER_ERROR' || (e.status || 0) >= 500 ? t.unavailable : `${(e && e.message) || 'The server returned an error.'}${kind === 'write' ? ' Session undid the change.' : ''}`); };
 const apiSource = {
   name: 'api',
   queue: Promise.resolve(),
   /* load every collection; the store is ready when all have arrived (and `then` has run, e.g. resetting the screen) */
   load(inst, then) {
-    inst.meta.setState({ status: 'loading', error: null });
+    if (!apiSource.checked) { apiSource.checked = true; if (DEV) mockBackend.checkClient(RES); }
+    inst.meta.setState({ status: 'loading', error: null, code: null });
     return Promise.all(DATA_KEYS.map(k => http('GET', RES[k].url).then(v => [k, v])))
-      .then(entries => { inst.store.setState(deepFreeze(Object.fromEntries(entries)), true); }, e => { inst.meta.setState({ status: 'error', error: e.message }); throw e; })
+      .then(entries => { inst.store.setState(deepFreeze(Object.fromEntries(entries)), true); }, e => { inst.meta.setState({ status: 'error', error: e.message, code: e.code }); throw e; })
       .then(() => { if (then) then(); inst.meta.setState({ status: 'ready' }); })
       .catch(() => {});
   },
@@ -3936,7 +3965,7 @@ const apiSource = {
       inst.meta.setState(m => ({ pending: m.pending + 1 }));
       apiSource.queue = apiSource.queue
         .then(() => http(op.method, op.url, op.body))
-        .catch(e => { undoOp(inst, op); dataError(`Couldn’t save the change (${e.message}). Session reverted it.`); })
+        .catch(e => { undoOp(inst, op); dataError(apiErrText(e, 'write'), e); })
         .finally(() => inst.meta.setState(m => ({ pending: m.pending - 1 })));
     }
   },
@@ -3951,52 +3980,23 @@ window.__sessionDispose = () => { DISPOSED = true; LIFE.abort(); OBSERVERS.forEa
 /* a failed write: tell the person and show the restored data */
 let dataError = msg => {};
 const applyApiMode = () => { mockBackend.cfg.failWrites = st.apiMode === 'fail'; const was = mockBackend.cfg.failReads; mockBackend.cfg.failReads = st.apiMode === 'failload'; if (APP_STARTED && (mockBackend.cfg.failReads || (was && DS.meta.getState().status === 'error'))) apiSource.load(liveData); };
-/* for tests: true when the data store is loaded and has no requests in flight */
-window.__dataIdle = () => dataReady() && DS.meta.getState().pending === 0;
+/* for tests: true when the data store has loaded (or its load failed) and has no requests in flight */
+window.__dataIdle = () => { const m = DS.meta.getState(); return (m.status === 'ready' || m.status === 'error') && m.pending === 0; };
 /* the store finished loading, a request finished, or a failed write was undone: show it */
 let APP_STARTED = false;   /* set when the first screen has been drawn; store events before that do not draw */
 liveData.meta.subscribe((m, p) => { if (!APP_STARTED) return; if (m.status !== p.status) renderAll(); else if (m.pending !== p.pending) { const e = document.getElementById('k-dstat'); if (e) e.textContent = m.pending ? `Saving ${m.pending}…` : 'Saved'; } });
 
 /* ---- mock backend: serves /api/* in this page ----
-   An in-memory database seeded from the fixtures (its own copy), saved to localStorage so it survives a
-   reload. A new version of the seed data (a changed fixture in this file) starts a new database.
-   Each request waits 120 ms. The Variants bar's 120ms / Fail control can make every write fail. */
-const mockBackend = (() => {
-  const LS = 'session-mock-db-v2';
-  const base = typeof window.__SESSION_API_LATENCY === 'number' ? window.__SESSION_API_LATENCY : 120;
-  const cfg = { base, latency: base, failWrites: false, failReads: false };
-  let data = null, ver = null;
-  const seed = () => dec(enc(FIXTURES));
-  /* the seed data's version: a hash of its JSON */
-  const version = () => { if (ver) return ver; const t = enc(FIXTURES); let x = 2166136261; for (let i = 0; i < t.length; i++) { x ^= t.charCodeAt(i); x = Math.imul(x, 16777619); } return (ver = (x >>> 0).toString(36) + ':' + t.length); };
-  const db0 = () => { if (data) return data; try { const s = localStorage.getItem(LS); if (s) { const o = dec(s); if (o && o.v === version()) return (data = o.data); } } catch (e) {} return (data = seed()); };
-  const save = () => { try { localStorage.setItem(LS, enc({ v: version(), data })); } catch (e) {} };
-  const out = (status, body) => new Response(body === undefined ? null : enc(body), { status, headers: { 'Content-Type': 'application/json' } });
-  const route = url => { for (const [key, r] of Object.entries(RES)) { if (url === r.url) return { key, r }; if (url.startsWith(r.url + '/') && !Object.values(RES).some(o => o !== r && o.url.startsWith(r.url + '/') && (url === o.url || url.startsWith(o.url + '/')))) return { key, r, id: decodeURIComponent(url.slice(r.url.length + 1)) }; } return null; };
-  function handle(method, url, body) {
-    const [path, qs] = url.split('?');
-    if (path === '/api/dev/reset' && method === 'POST') { data = seed(); save(); return out(204); }
-    if (path === '/api/dev/config') { if (method === 'PUT') Object.assign(cfg, body); return out(200, cfg); }
-    const m = route(path); if (!m) return out(404, { error: 'Not found' });
-    if (cfg.failReads && method === 'GET') return out(503, { error: 'The server is unavailable' });
-    const d = db0(), { key, r, id } = m, idx = c => r.kind === 'index' ? +id : c.findIndex(x => String(x[r.id]) === id);
-    if (method === 'GET') { if (id === undefined) return out(200, d[key]); const c = d[key]; const v = r.kind === 'map' ? c[id] : c[idx(c)]; return v === undefined ? out(404, { error: 'Not found' }) : out(200, v); }
-    if (cfg.failWrites) return out(503, { error: 'The server is unavailable' });
-    if (method === 'PUT' && id === undefined) { d[key] = body; save(); return out(200, body); }
-    if (method === 'POST' && id === undefined && r.kind === 'list') { d[key] = qs === 'at=start' ? [body, ...d[key]] : [...d[key], body]; save(); return out(201, body); }
-    if (method === 'PUT') { const c = d[key]; if (r.kind === 'map') c[id] = body; else { const i = idx(c); if (i >= 0 && i < c.length) c[i] = body; else if (r.kind === 'index' && i === c.length) c.push(body); else return out(404, { error: 'Not found' }); } save(); return out(200, body); }
-    if (method === 'DELETE') { const c = d[key]; if (r.kind === 'map') { if (!(id in c)) return out(404, { error: 'Not found' }); delete c[id]; } else { const i = idx(c); if (i < 0) return out(404, { error: 'Not found' }); c.splice(i, 1); } save(); return out(204); }
-    return out(405, { error: 'Method not allowed' });
-  }
-  const realFetch = window.fetch.bind(window);
-  window.fetch = (input, init = {}) => {
-    const url = typeof input === 'string' ? input : input.url;
-    if (!url.startsWith('/api/')) return realFetch(input, init);
-    const method = (init.method || 'GET').toUpperCase(), body = init.body ? dec(init.body) : undefined;
-    return new Promise(res => setTimeout(() => { try { res(handle(method, url, body)); } catch (e) { res(out(500, { error: e.message })); } }, cfg.latency));
-  };
-  return { cfg, wipe: () => { data = null; try { localStorage.removeItem(LS); } catch (e) {} }, restore: () => { window.fetch = realFetch; } };
-})();
+   session-web-spaces-mock-api.js: an in-memory database seeded from the fixtures (its own copy), saved to
+   localStorage so it survives a reload; a new version of the seed data (a changed fixture in this file)
+   starts a new database. It serves only the endpoints in its API table, validates every write, and
+   answers errors as { code, message } with tRPC codes. Each request waits 120 ms. The Variants bar's
+   120ms / Fail control can make every write fail; /api/dev/config can choose the error code. */
+const mockBackend = window.SessionMockApi.createBackend({
+  seed: () => FIXTURES, storageKey: 'session-mock-db-v3', dev: DEV,
+  latency: typeof window.__SESSION_API_LATENCY === 'number' ? window.__SESSION_API_LATENCY : 120,
+});
+try { localStorage.removeItem('session-mock-db-v2'); } catch (e) {}   /* the database saved before errors had codes */
 
 /* Pinwheel mark (5 blades): tapered blades on a spiral centerline (r 13→47, 115° sweep,
    angle eased by t^1.45, width t^0.8·(1−t)^1.3), one monochrome fill with a
@@ -11623,6 +11623,66 @@ function taJump(k) {
 }
 { const TA_jump = jump; jump = function (k) { if (!dataReady()) return TA_jump(k); taRestore(); TA_jump(k); if (String(k).startsWith('ta-')) taJump(k); }; }
 /* ==== end thread actions ==== */
+/* ==== data errors: rejected writes and a failed load, by error code (mock backend, API contract) ====
+   Each entry opens a screen, tells the mock backend to answer the next writes to some addresses with one
+   error code (/api/dev/config `failOn`), and makes the write through the screen's own controls. The data
+   store undoes the change and the toast says why. The next Screen entry clears the forced failure. */
+JUMPS.push(['Data errors', [
+  ['de-forbidden', 'Approve a request: FORBIDDEN (an admin removed your moderator role)'],
+  ['de-conflict', 'Save a page: CONFLICT (another member saved it first)'],
+  ['de-notfound', 'Reply to a post: NOT_FOUND (its author deleted it)'],
+  ['de-badreq', 'Save your profile: BAD_REQUEST (the server rejected the data)'],
+  ['de-load-auth', 'Loading fails: UNAUTHORIZED (your sign-in expired)'],
+]]);
+{
+  const DE = { load: false };
+  const failOn = (code, paths) => { mockBackend.cfg.failOn = { code, paths, methods: ['PUT', 'POST', 'DELETE'] }; };
+  /* draw the screen, then click a control on it as a person would; false when the control isn't there */
+  const press = sel => { renderAll(); const e = document.querySelector(sel); if (e) e.click(); return !!e; };
+  const clear = () => {
+    mockBackend.cfg.failOn = null;
+    if (!DE.load) return;
+    DE.load = false;
+    Object.assign(mockBackend.cfg, { failCode: 'SERVICE_UNAVAILABLE', failReads: st.apiMode === 'failload' });
+    apiSource.load(liveData);
+  };
+  const DE_jump = jump;
+  jump = function (k) {
+    clear();
+    if (!String(k).startsWith('de-') || !dataReady()) return DE_jump(k);
+    switch (k) {
+      case 'de-forbidden':
+        DE_jump('md-queue'); failOn('FORBIDDEN', ['/api/join-requests', '/api/members']);
+        if (press('[data-rq^="ok:"]')) press('[data-csappr]');
+        break;
+      case 'de-conflict':
+        DE_jump('ab-page-edit'); failOn('CONFLICT', ['/api/pages/']);
+        patch('abPageEd', x => { x.b = x.b + '\n\nAdded: the 2026 reissues.'; });
+        press('[data-abpged="save"]');
+        break;
+      case 'de-notfound': {
+        DE_jump('mb-home');
+        const i = D.posts.findIndex(p => p.s === 'public' && p.k === 'post' && !p.del && !p.gone);
+        if (i < 0) break;
+        Object.assign(st, { thread: i, space: 'public', home: false });
+        failOn('NOT_FOUND', ['/api/replies/']);
+        addFollowUp(i, 'Is the reading group still in room 2B?');
+        break;
+      }
+      case 'de-badreq':
+        DE_jump('mb-home'); failOn('BAD_REQUEST', ['/api/me/profile']);
+        Object.assign(st, { home: false, profilePage: true, profileUser: ME.u, ptab: 'threads', pfDraft: { name: ME.name, bio: 'Reads about housing policy and transit.', err: '' }, modal: 'pf-edit' });
+        press('[data-pf="save"]');
+        break;
+      case 'de-load-auth':
+        DE_jump('mb-home'); DE.load = true;
+        Object.assign(mockBackend.cfg, { failCode: 'UNAUTHORIZED', failReads: true });
+        apiSource.load(liveData);
+        break;
+    }
+  };
+}
+/* ==== end of data errors ==== */
 /* ==== navigation: history, back links, search, Saved, notifications and system states ==== */
 /* ---------- history ----------
    Desktop and Mobile Web keep one browser history entry per screen. The hash mirrors the address in #url
@@ -12707,7 +12767,7 @@ function renderAllInner() {
   { const R = document.documentElement; R.dataset.device = st.device; R.dataset.font = st.font; R.dataset.sh = st.shV; R.dataset.mnav = st.mnav; R.toggleAttribute('data-theme', st.appearance !== 'system'); if (st.appearance !== 'system') R.dataset.theme = st.appearance; }
   if (!dataReady()) {
     const m = DS.meta.getState();
-    $('app').innerHTML = m.status === 'error' ? `<div class="data-wait" role="alert"><p>Couldn’t load data from the server (${esc(m.error)}).</p><button class="btn" type="button" data-nvretry="1">Retry</button></div>` : nvSkeleton();
+    $('app').innerHTML = m.status === 'error' ? `<div class="data-wait" role="alert"><p>${esc(apiErrText({ code: m.code, message: m.error }, 'load'))}</p><button class="btn" type="button" data-nvretry="1">Retry</button></div>` : nvSkeleton();
     return;
   }
   if (st.device === 'native') {
