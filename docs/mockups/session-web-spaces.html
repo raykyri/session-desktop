@@ -3690,6 +3690,15 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 .ovg-scrim { z-index: 55; }
 .ovg-w .n-scrim { z-index: 30; }
 .ovg-w .n-act { z-index: 31; }
+
+/* narrow Desktop windows: Sources and About are tabs of the space (sfTabs). The Threads tab hides the sidebar
+   that would otherwise stack below the feed; the Sources and About tabs show only the sidebar, without its own tabs. */
+@media (max-width: 920px) {
+  html:not([data-device="phone"]) .A.sp-ntabs:not(.ntab-side) .drawer { display: none; }
+  html:not([data-device="phone"]) .A.ntab-side .mcol > :not(.sp-tabs) { display: none; }
+  html:not([data-device="phone"]) .A.ntab-side .drawer { border-top: 0; }
+  html:not([data-device="phone"]) .A.ntab-side .drawer .ds-tabl, html:not([data-device="phone"]) .A.ntab-side .drawer .dh [data-act="drawer"] { display: none; }
+}
 </style>
 
 <div class="shell" id="shell">
@@ -4621,7 +4630,8 @@ const layoutSpace = () => {
   const body = threads;
   /* Sources are in the sidebar, on the right or the left (dsSpaceParts). */
   const x = dsSpaceParts(s, tab, body);
-  return `<div class="A C Af${st.mWiki ? ' mwiki' : ''}${x.cls}">
+  const nt = sfNarrow() && canRead(s) ? ` sp-ntabs${tab !== 'threads' ? ' ntab-side' : ''}` : '';
+  return `<div class="A C Af${st.mWiki ? ' mwiki' : ''}${x.cls}${nt}">
     ${topHeader()}
     <div class="body">${x.top || ''}
       <div class="mcol">${x.mcol}</div>
@@ -7199,10 +7209,15 @@ function sfResolve(r, how) {
 }
 
 /* ---------- space tabs: Threads / About ---------- */
-/* One tab, Threads; Sources and About are in the sidebar. Hidden on phones. */
-const sfTabCur = () => 'threads';
+/* Threads; Sources and About are in the sidebar. On narrow Desktop windows (920px and below) the sidebar
+   no longer fits beside the feed, so Sources and About become tabs here and replace the feed when chosen.
+   Hidden on phones (Mobile Web opens them from the banner). */
+const SF_NARROW = matchMedia('(max-width: 920px)');
+const sfNarrow = () => st.device === 'desktop' && SF_NARROW.matches;
+SF_NARROW.addEventListener('change', () => { if (st.device === 'desktop' && !st.home) renderAll(); }, { signal: LIFE.signal });
+const sfTabCur = () => sfNarrow() && (st.spTab === 'sources' || st.spTab === 'about') ? st.spTab : 'threads';
 function sfTabs(s) {
-  const cur = sfTabCur(), items = [['threads', 'Threads']];
+  const cur = sfTabCur(), items = [['threads', 'Threads'], ...(sfNarrow() && canRead(s) ? [['sources', 'Sources'], ['about', 'About']] : [])];
   return `<nav class="sp-tabs" aria-label="${spName(s)}">${items.map(([k, l]) => `<button type="button" class="sp-tab" data-sptab="${k}" aria-current="${cur === k}">${l}</button>`).join('')}</nav>`;
 }
 const joinLabel = s => !isClosed(s) ? 'Anyone signed in can join' : s.policy === 'invite' ? 'Invite only' : 'Join by request, approved by a moderator';
@@ -7260,7 +7275,7 @@ function sfClick(t) {
   /* any link to a space opens its Threads tab at the top of the landing */
   if ((b = d('[data-space]'))) { if (b.dataset.space !== st.space) { st.faqQ = ''; st.faqTried = false; } Object.assign(st, { spTab: 'threads', faqView: 'topics', faqTopic: null, imenu: null, tpMenu: null }); return false; }
   if ((b = d('[data-cstoast^="repundo:"]'))) { const r = st.reports.find(x => x.id === b.dataset.cstoast.slice(8)); st.toast = null; if (r) sfUndo(r); return go(); }
-  if ((b = d('[data-sptab]'))) { st.spTab = b.dataset.sptab; if (st.spTab === 'threads') { st.faqTopic = null; st.faqView = 'topics'; } st.mWiki = false; scrollMockTop(); return go(); }
+  if ((b = d('[data-sptab]'))) { st.spTab = b.dataset.sptab; if (st.spTab === 'threads') { st.faqTopic = null; st.faqView = 'topics'; } else { st.drawer = true; st.dsSTab = st.spTab === 'about' ? 'wiki' : 'sources'; } st.mWiki = false; scrollMockTop(); return go(); }
   if ((b = d('[data-faqtopic]'))) { const k = b.dataset.faqtopic || null; if (b.dataset.faqsp) sfNavSpace(b.dataset.faqsp, { faqTopic: k }); else Object.assign(st, { faqTopic: k, faqView: 'topics', spTab: 'threads' }); renderAll(); scrollMockTop(); return true; }
   if ((b = d('[data-faqview]'))) { st.faqView = b.dataset.faqview; st.faqTopic = null; st.compOpen = false; renderAll(); return true; }
   if ((b = d('[data-faq]'))) { const v = b.dataset.faq; const inp = $('faq-q'); if (inp) st.faqQ = inp.value; if (faqAsk(v === 'ask-force') === 'focus') return true; renderAll(); if (st.faqTried) { const r = $('faq-res'); if (r) r.scrollIntoView({ block: 'nearest' }); } return true; }
