@@ -2930,6 +2930,7 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 /* ---------- dropped sources ---------- */
 /* drop and paste target */
 .ds-drop { display: flex; flex-direction: column; gap: 8px; }
+.ds-ro .ds-ro-b { width: 100%; justify-content: center; }
 .ds-in { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 4px 0 10px; border: 1px dashed var(--border-strong); border-radius: var(--r-lg); background: var(--field); color: var(--t-faint); }
 .ds-in:focus-within { border-style: solid; border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
 .ds-in > svg { width: 14px; height: 14px; flex: none; }
@@ -8795,7 +8796,7 @@ function dsDetHTML(u, sid) {
 }
 /* The paste and drop target at the top of a source list. */
 function dsDropBox(s) {
-  if (st.auth !== 'in') return `<div class="ds-drop ds-ro"><button class="btn sm" type="button" data-dssignin="1">Log in to add a source</button></div>`;
+  if (st.auth !== 'in') return `<div class="ds-drop ds-ro"><button class="btn sm ds-ro-b" type="button" data-dssignin="1">Log in to add a source</button></div>`;
   if (!dsCanAdd(s)) return dsPol(s.id) === 'mods' ? '<p class="faint cs-small ds-ronly">Moderators add sources here.</p>' : '';
   return `<div class="ds-drop"><div class="ds-in">${MII.link}<input id="ds-url" type="url" value="${esc(st.dsUrl)}" placeholder="${dsNarrow() ? 'Paste a link' : 'Paste a link or drop a file'}" aria-label="Add a source to ${spName(s)}: paste a link" autocomplete="off"></div><div id="ds-det" class="ds-det">${dsDetHTML(st.dsUrl, s.id)}</div></div>`;
 }
