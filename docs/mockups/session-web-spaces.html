@@ -1864,6 +1864,8 @@ html.ab-dragging, html.ab-dragging * { cursor: grabbing !important; user-select:
   .cs-mgb { padding: 0 9px; }
 }
 .cs-mgb > svg { width: 14px; height: 14px; }
+/* one-column layouts: the space header's Manage button shows only its gear */
+@media (max-width: 920px) { .cs-mgb > .d-only { display: none; } .cs-mgb { min-width: 32px; padding: 0 9px; justify-content: center; } }
 .data-wait { padding: 48px 24px; text-align: center; color: var(--t-secondary); font-size: var(--fs-sm); }
 .knob .k-dstat, .k-dstat { font-size: var(--fs-xs); color: var(--t-faint); align-self: center; text-transform: none; letter-spacing: 0; font-weight: 400; min-width: 52px; }
 .jd-o { padding: 6px 8px; border-radius: var(--r-md); font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; }
