@@ -180,7 +180,9 @@ a { color: inherit; }
 .pop-row { display: flex; align-items: center; gap: 9px; width: 100%; padding: 5px 8px; border: 0; background: transparent; border-radius: var(--r-md); text-align: left; }
 .pop-row:hover { background: var(--fill-hover); }
 .sw-wrap .pop .pop-row:not([aria-current="true"]):hover { background: var(--sw-hover); }
-.pop-row[aria-current="true"] { background: var(--accent-soft); }
+/* the selected row (All spaces and the other menus that use .pop-row): the menu colour with 5% of the heading colour,
+   as the left rail's selected row */
+.pop-row[aria-current="true"] { background: color-mix(in srgb, var(--popover), var(--t-heading) 5%); }
 .pop-row .nm { flex: 1; min-width: 0; font-size: var(--fs-sm); color: var(--t-strong); }
 .pop-row .nm small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
 .pop-foot { border-top: 1px solid var(--divider); margin-top: 4px; padding: 6px 4px 2px; display: flex; gap: 6px; }
@@ -1585,17 +1587,9 @@ button.n-me { width: calc(100% - 32px); border: 0; font: inherit; color: inherit
 .rl-h .tlink { font-size: var(--fs-xs); }
 .rl-row { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 8px; border: 0; background: transparent; border-radius: var(--r-md); color: var(--t-secondary); font-size: var(--fs-base); font-weight: 500; text-align: left; width: 100%; }
 .rl-row:hover { background: var(--fill-hover); color: var(--t-strong); }
-.rl-row[aria-current="true"] { background: var(--card-sel); color: var(--t-heading); font-weight: 600; }
+/* the selected row: the rail colour with 5% of the heading colour (the Shade option) */
+.rl-row[aria-current="true"] { background: color-mix(in srgb, var(--chrome), var(--t-heading) 5%); color: var(--t-heading); font-weight: 600; }
 .rl-row > svg { width: 16px; height: 16px; margin: 0 3px; flex: none; color: var(--t-muted); }
-/* Variants bar › Rail selection: the background of the left rail's selected row (A is --card-sel, as before) */
-:root[data-rlsel="soft"] .rl-row[aria-current="true"] { background: color-mix(in srgb, var(--card-sel) 50%, var(--chrome)); }
-:root[data-rlsel="grey"] .rl-row[aria-current="true"] { background: var(--fill-hover); }
-:root[data-rlsel="shade"] .rl-row[aria-current="true"] { background: color-mix(in srgb, var(--chrome), var(--t-heading) 5%); }
-:root[data-rlsel="raised"] .rl-row[aria-current="true"] { background: var(--pane); box-shadow: 0 0 0 1px var(--divider); }
-:root[data-rlsel="trim"] .rl-row[aria-current="true"] { background: color-mix(in srgb, var(--trim-soft, var(--card-sel)) 70%, var(--chrome)); }
-:root[data-rlsel="bar"] .rl-row[aria-current="true"] { background: color-mix(in srgb, var(--card-sel) 40%, var(--chrome)); box-shadow: inset 2px 0 0 var(--trim, var(--accent)); }
-:root[data-rlsel="none"] .rl-row[aria-current="true"] { background: transparent; }
-:root[data-rlsel="none"] .rl-row[aria-current="true"] > svg { color: var(--t-heading); }
 .rl-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rl-c { font-size: var(--fs-xs); color: var(--t-faint); }
 .rl-foot { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--divider); }
@@ -3612,7 +3606,6 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 :root:is([data-tint^="sagew"], [data-tint="warmwc"]) .sp-tab[aria-current="true"]::after,
 :root:is([data-tint^="sagew"], [data-tint="warmwc"]) .ds-stab[aria-selected="true"]::after { background: var(--trim); }
 :root:is([data-tint^="sagew"], [data-tint="warmwc"]) .qt-olr[aria-current="true"],
-:root:is([data-tint^="sagew"], [data-tint="warmwc"]) .pop-row[aria-current="true"],
 :root:is([data-tint^="sagew"], [data-tint="warmwc"]) .ts-row.sel { background: var(--trim-soft); }
 :root:is([data-tint^="sagew"], [data-tint="warmwc"]) :is(.mchips, .sf-tchips) .mchip[aria-current="true"] { background: var(--trim-ink); border-color: var(--trim-ink); color: var(--trim-on); }
 :root:is([data-tint^="sagew"], [data-tint="warmwc"]) .mchip[aria-current="true"] .sf-seal path:last-child { stroke: var(--trim-ink) !important; }
@@ -3797,7 +3790,6 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
       </div>
       <div class="knob"><span>Nav</span><div class="seg" id="k-dir"></div></div>
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
-      <div class="knob" title="The background of the selected row in the left rail (Nav: Left rail)"><span>Rail selection</span><div class="seg" id="k-rlsel"></div></div>
       <div class="knob"><span>Font</span><div class="seg" id="k-font"></div></div>
     </div>
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
@@ -5254,13 +5246,9 @@ function seg(el, items, key, onPick) {
 const toThread = () => { if (st.thread == null) { const i = tidWhere(p => p.k === 'ask' && D.rich[p.id] && p.s === 'markets'); Object.assign(st, { thread: i == null ? TID(0) : i, savedPage: false, profilePage: false, subPage: null, auth: 'in', modal: null, umenu: false }); } };
 /* signed out: the person icon with a slash */
 const K_OUT = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.6-2.4 2.6-3.7 5-3.7s4.4 1.3 5 3.7M2.5 2.5l11 11"/></svg>';
-/* Variants bar › Rail selection (Desktop, Left rail): the selected row's background; see the CSS block of the same name */
-const RLSEL = [['base', 'Current'], ['soft', 'Softer'], ['grey', 'Grey'], ['shade', 'Shade'], ['raised', 'Raised'], ['trim', 'Trim'], ['bar', 'Edge bar'], ['none', 'Text only']];
-Object.assign(st, { rlSel: 'base' });
 const KNOBDEF = () => [
   ['k-dir', 'shell', [['tabs2', 'Header'], ['rail', 'Left rail']], () => { st.umenu = false; st.pop = false; }],
   ['k-tint', 'tint', [['warmwc', 'Beige'], ['sagewc', 'Sage']]],
-  ['k-rlsel', 'rlSel', RLSEL],
   ['k-font', 'font', [['inter', 'Inter'], ['valley', 'Valley Sans']]],
   ...(typeof CSKNOBS === 'function' ? CSKNOBS() : []),
   ...SFKNOBS(),
@@ -5282,7 +5270,7 @@ function renderControls() {
   /* the Sources layout control has no effect in the phone app */
   { const k = $('kw-sources'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   /* the Phone app always uses Beige and has its own navigation, so the Tint and Nav controls have no effect there */
-  for (const id of ['k-tint', 'k-dir', 'k-rlsel']) { const k = $(id) && $(id).closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
+  for (const id of ['k-tint', 'k-dir']) { const k = $(id) && $(id).closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : ''; }
   HOTKEYS = {}; let n = 0;
   for (const [el, key, items, pick] of KNOBDEF()) {
@@ -13431,7 +13419,7 @@ function renderAll() {
 function renderAllInner() {
   renderControls();
   /* the page-wide attributes come first, also while data loads: the tint is computed from the theme they select */
-  { const R = document.documentElement; R.dataset.device = st.device; R.dataset.font = st.font; R.dataset.rlsel = st.rlSel; R.dataset.sh = st.shV; R.dataset.mnav = st.mnav; R.toggleAttribute('data-theme', st.appearance !== 'system'); if (st.appearance !== 'system') R.dataset.theme = st.appearance; }
+  { const R = document.documentElement; R.dataset.device = st.device; R.dataset.font = st.font; R.dataset.sh = st.shV; R.dataset.mnav = st.mnav; R.toggleAttribute('data-theme', st.appearance !== 'system'); if (st.appearance !== 'system') R.dataset.theme = st.appearance; }
   if (!dataReady()) {
     const m = DS.meta.getState();
     $('app').innerHTML = m.status === 'error' ? `<div class="data-wait" role="alert"><p>${esc(apiErrText({ code: m.code, message: m.error }, 'load'))}</p><button class="btn" type="button" data-nvretry="1">Retry</button></div>` : nvSkeleton();
