@@ -85,6 +85,12 @@
      answers CONFLICT with `current` and `changes` and keeps nothing; `force: true` saves anyway (Overwrite).
      See "versions and edit conflicts" in section 5b.
 
+   Paged lists (step 8)
+   - The lists that grow without bound are read a page at a time: tRPC-style queries, GET /api/rpc/<name>?input=…,
+     { cursor?, limit? } → { items, nextCursor } (notifications.list's shape in web/docs/03-api-and-events.md).
+     Newest first by time, then id; read scope applies before the slice; cursors are opaque. See section 5c.
+     The page's "Show more" button reads the next page (owner decision: no infinite scroll).
+
    Contents
    1. The wire codec (JSON; Sets travel as { $set: [...] }). The page uses this copy.
    2. Error codes: tRPC codes, their HTTP status, and a default user-facing message.
@@ -93,6 +99,7 @@
    5. API: the contract table, one row per endpoint. The router serves only these rows.
       5a. Permissions: the caller's role in a space, the `who` check, and what GET returns to whom.
       5b. Procedures: the mutations, their transaction helper, and their rows in the table.
+      5c. Paged lists: the queries that read a list a page at a time (step 8).
    6. createBackend(): the in-memory database, persisted to localStorage, behind a fetch patch for /api/*.
       6a. Jobs and the event stream (step 7).
 

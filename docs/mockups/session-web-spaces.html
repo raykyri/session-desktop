@@ -3789,7 +3789,8 @@ const on = (target, type, fn, opts) => target.addEventListener(type, fn, { ...(t
                  appearance, tint, backend speed. Not part of the application. Read and written through `st`.
 
    Data. The data store (liveData) reads and writes the HTTP API (/api/*): it loads each collection
-   with its own GET. A person's action is one named mutation (mutate: POST /api/rpc/<name>), applied to
+   with its own GET, except the notifications, which load a page at a time (step 8: paged lists, see
+   "mock backend, step 8" below for which lists load whole and which load paged). A person's action is one named mutation (mutate: POST /api/rpc/<name>), applied to
    the store first (optimistic) and sent in order with the other writes; the server's records replace the
    optimistic ones, and a failure puts back every record the action changed and shows one toast that
    depends on the error code. An ask runs on the server (step 7): its progress and results arrive on the
@@ -12356,7 +12357,8 @@ function pgSave() {
 try { const l = JSON.parse(sessionStorage.getItem(PG_STORE_KEY) || '[]'); if (Array.isArray(l)) l.forEach(([k, s]) => { if (s && PG_KINDS[s.kind]) PG.set(k, { ...s, last: s.last && [s.last[0] === null ? Infinity : s.last[0], s.last[1]], gen: ++PG_GEN, restored: true }); }); } catch (e) {}
 /* every list at its first page; the notifications the store holds stay (pgNotifsSync loads their first page again) */
 function pgReset() { const n = PG.get('notifs'); PG.clear(); if (n) PG.set('notifs', n); PG_FOCUS = null; pgSave(); }
-const pgRender = () => { if (APP_STARTED && !DISPOSED) renderAll(); };
+/* a render for a page that arrived: the same screen, so it adds no history entry (nor the Phone app's) */
+const pgRender = () => { if (APP_STARTED && !DISPOSED) { nvQuiet(); renderAll(); } };
 /* run fn after this render; the data store is not idle until it has run */
 const pgSoon = fn => { PG_PENDING++; setTimeout(() => { PG_PENDING--; fn(); }, 0); };
 { const idle0 = window.__dataIdle; window.__dataIdle = () => idle0() && PG_PENDING === 0; }
@@ -12657,7 +12659,8 @@ jump = function (k) {
 SCREEN_BEFORE.push(() => { PG_SIZE = null; mockBackend.cfg.pageSize = null; pgReset(); });
 /* the Variants bar's Reset: every list at its first page, at the default page size */
 { const rc = resetControls; resetControls = function () { PG_SIZE = null; mockBackend.cfg.pageSize = null; pgReset(); rc(); pgNotifsSync(); pgRender(); }; }
-JUMPS.push(['Paged lists', [
+/* before the Account group, whose last entry leaves the Phone app with a screen to go back to */
+JUMPS.splice((i => i < 0 ? JUMPS.length : i)(JUMPS.findIndex(g => g[0] === 'Account')), 0, ['Paged lists', [
   ['pg-feed', 'Home: Show more (5 a page)'], ['pg-space', 'Space threads, Latest: Show more (8 a page)'], ['pg-topic', 'FAQ topic: Show more (2 a page)'],
   ['pg-notifs', 'Notifications: Show more (2 a page)'], ['pg-profile', 'Profile threads: Show more (3 a page)'], ['pg-followups', 'Profile follow-ups: Show more (10 a page)'],
   ['pg-saved', 'Saved: Show more (3 a page)'], ['pg-search', 'Search results: Show more (4 a page)'], ['pg-members', 'Manage › Members: Show more (2 a page)'],
