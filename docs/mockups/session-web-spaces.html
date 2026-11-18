@@ -362,14 +362,14 @@ button.tlink { border: 0; background: transparent; padding: 0; }
 .um-head:hover { background: var(--fill-hover); }
 .um-id { display: flex; flex-direction: column; min-width: 0; }
 .um-head b { display: block; color: var(--t-heading); font-weight: 650; }
-.um-id span { color: var(--t-faint); font-size: var(--fs-xs); }
+.um-id span { margin-top: -1px; color: var(--t-faint); font-size: var(--fs-xs); }
 .um-sep { height: 1px; background: var(--divider); margin: 4px 2px; }
-.um-item { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: transparent; padding: 7px 8px; border-radius: var(--r-md); color: var(--t-primary); font-size: var(--fs-sm); text-align: left; }
+.um-item { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: transparent; padding: 6px 8px; border-radius: var(--r-md); color: var(--t-primary); font-size: var(--fs-sm); text-align: left; }
 .um-item:hover { background: var(--fill-hover); }
 .um-item svg { width: 15px; height: 15px; color: var(--t-muted); flex: none; }
 .um-item span { flex: 1; }
 .um-item small { color: var(--t-faint); font-size: var(--fs-xs); }
-.um-item kbd { font: inherit; font-size: var(--fs-xs); color: var(--t-faint); border: 1px solid var(--divider); border-radius: 4px; padding: 0 5px; }
+.um-item kbd { font: inherit; font-size: var(--fs-xs); height: 18px; min-width: 18px; color: var(--t-faint); border: 1px solid var(--divider); border-radius: 4px; padding: 0 5px; }
 .um-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px; font-size: var(--fs-sm); color: var(--t-primary); }
 .um-seg button { font-size: var(--fs-xs); padding: 2px 7px; }
 .hdr-right > .btn.on { background: var(--fill-subtle); border-color: var(--border-strong); }
@@ -920,7 +920,7 @@ kbd, .keys kbd { font: inherit; font-size: 11.35px; font-weight: 600; min-width:
   .msheet::before { content: ""; display: block; width: 36px; height: 4px; border-radius: 4px; background: var(--border-strong); margin: 2px auto 8px; }
   .msheet .pop.um { position: static; width: auto; box-shadow: none; border: 0; background: none; padding: 0; }
   .msheet .um-head { padding-top: 10px; padding-bottom: 10px; }
-  .msheet .um-item { padding-top: 9px; padding-bottom: 9px; }
+  .msheet .um-item { padding-top: 8px; padding-bottom: 8px; }
   .um-item[data-act="shortcuts"] { display: none; }
   /* sources follow the answer; the sidebar keeps only the details */
   .m-src { display: flex; flex-direction: column; gap: 8px; list-style: none; margin: 4px 0 0; padding: 12px 0 0; border-top: 1px solid var(--divider); counter-reset: ms; }
@@ -992,7 +992,7 @@ html[data-device="phone"] .frame-bar { position: sticky; top: 0; z-index: 70; }
   .acct .pop.um { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; max-width: none; border-radius: 16px 16px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding: 10px 12px 24px; }
   .acct .pop.um::before { content: ""; display: block; width: 36px; height: 4px; border-radius: 4px; background: var(--border-strong); margin: 0 auto 10px; }
   .pop.um .um-head { padding-top: 10px; padding-bottom: 10px; }
-  .pop.um .um-item { padding-top: 9px; padding-bottom: 9px; }
+  .pop.um .um-item { padding-top: 8px; padding-bottom: 8px; }
   .msheet .pop.um { max-width: none; }
   /* cards: less space under the footer row */
   .p-foot .act, .p-foot button { min-height: 0; }
@@ -1622,8 +1622,6 @@ button.n-me { width: calc(100% - 32px); border: 0; font: inherit; color: inherit
 /* ================= closed spaces ================= */
 /* control bar */
 .cs-knobs { padding-top: 12px; border-top: 1px solid var(--divider); }
-.qt-rowl-u { margin-left: 8px; }
-.qt-rowl-a { margin-left: 6px; }
 .cs-kt { font-weight: 650; color: var(--t-heading); font-size: var(--fs-sm); margin-right: 2px; }
 .cs-jk { min-width: 0; max-width: 100%; }
 /* Jump to dropdown */
@@ -3296,10 +3294,6 @@ mark.sr-m { background: var(--accent-soft); color: inherit; border-radius: 3px; 
 .qt-maphint { flex: none; }
 
 /* feed, Saved */
-.qt-rowl { display: flex; align-items: baseline; gap: 6px; margin-top: 6px; width: 100%; text-align: left; border: 0; background: var(--fill-subtle); border-radius: var(--r-md); padding: 6px 9px; font: inherit; font-size: var(--fs-sm); color: var(--t-muted); }
-.qt-rowl b { color: var(--t-strong); font-weight: 550; }
-.qt-rowl q { color: var(--t-secondary); overflow-wrap: anywhere; }
-.qt-rowl svg { width: 12px; height: 12px; flex: none; transform: translateY(1px); }
 .qt-svsec { margin-top: 18px; display: flex; flex-direction: column; gap: 6px; }
 .qt-svsec h3 { margin: 0; font-size: var(--fs-sm); color: var(--t-heading); }
 .qt-svrow { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--pane); padding: 10px 12px; font: inherit; color: var(--t-primary); }
@@ -3676,18 +3670,16 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 
 
 /* ---- Source ref: the source an ask is about, in feed rows (miRowChip, miMetaRef) ----
-   Pill and Tag sit between the title and the answer summary; After the time sits in the meta row.
+   Pill sits between the title and the answer summary; After the time sits in the meta row.
    .rf-ti the title (truncates). Quiet: a hairline pill with no fill, a light tag, tertiary text and faint icons. */
-.row-m > .mi-rchip { display: flex; align-items: center; gap: 5px; align-self: flex-start; min-width: 0; max-width: 100%; height: 22px; margin: 5px 0 2px; font-size: var(--fs-xs); line-height: 1; color: var(--t-tertiary); }
+.row-m > .mi-rchip { display: flex; align-items: center; gap: 5px; align-self: flex-start; min-width: 0; max-width: 100%; height: 22px; margin: 4px 0 2px; font-size: var(--fs-xs); line-height: 1; color: var(--t-tertiary); }
 .mi-rchip .mi-ic.xs, .rf-meta .mi-ic.xs { width: 14px; height: 14px; color: var(--t-faint); }
 .mi-rchip .mi-ic.xs svg, .rf-meta .mi-ic.xs svg { width: 12px; height: 12px; }
 .mi-rchip .rf-ti { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--t-tertiary); }
 .rf-ics { display: inline-flex; flex: none; }
-.rf-ics .mi-ic.xs + .mi-ic.xs { margin-left: -4px; }
+.rf-ics .mi-ic.xs + .mi-ic.xs { margin-left: -3px; }
 /* Pill */
 .rf-pill { padding: 0 9px 0 6px; border: 1px solid var(--divider); border-radius: 999px; background: transparent; }
-/* Tag */
-.rf-tag { padding: 0 8px 0 5px; border-radius: 5px; background: color-mix(in srgb, var(--fill-subtle) 55%, transparent); }
 /* After the time */
 .row-meta .rf-meta { display: inline-flex; align-items: center; flex: none; cursor: default; }
 .rf-demo .rf-dh { margin: 22px 0 4px; }
@@ -3711,8 +3703,6 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 /* the left rail: the Your spaces heading opens Account › Your spaces */
 button.eyebrow.acx-rlh { border: 0; padding: 0; background: transparent; font-family: inherit; cursor: pointer; }
 button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
-/* the account menu: this month's tokens next to Account */
-.um-item .acx-umt { margin-left: auto; color: var(--t-faint); font-size: var(--fs-xs); }
 @media (max-width: 640px) {
   .sub-page.acx-page, .sub-page.acx-page:is(.acx-tabs-v, .acx-outp) { padding-left: 14px; padding-right: 14px; }
 }
@@ -4699,8 +4689,8 @@ function userMenu() {
   return `<div class="pop um" role="menu" aria-label="Account">
     <button class="um-head" type="button" role="menuitem" data-act="profile" aria-label="Your profile">${avatar('ines.v', 'lg')}<span class="um-id"><b>${esc(ME.name)}</b><span>${ME.u}</span></span></button>
     <div class="um-sep"></div>
-    ${item(CI.bell, 'Notifications', ntUnread() ? `<small class="num">${ntUnread()} new</small>` : '', 'data-csnotif="page"')}
-    ${item(I.mark, 'Saved', st.saved.size ? `<small class="num">${st.saved.size}</small>` : '', 'data-act="saved-page"')}
+    ${item(CI.bell, 'Notifications', '', 'data-csnotif="page"')}
+    ${item(I.mark, 'Saved', '', 'data-act="saved-page"')}
     ${item(MI.grid, 'Your spaces', '', 'data-sub="yourspaces"')}
     ${item(MI.key, 'API keys', '', 'data-sub="keys"')}
     ${item(MI.cog, 'Account', '', 'data-sub="account"')}
@@ -7623,9 +7613,8 @@ function miSrc(p, src) {
 /* feed row: what an ask is about (Variants bar › Source ref), for every media type. No locator: the
    reference names the source, not the paragraph, post or timestamp.
    - Pill: a bordered chip under the title.
-   - Tag: a filled tag under the title.
    - After the time: the source's icon alone in the meta row, after the timestamp; the title is in its tooltip.
-   All three use quiet colours: tertiary text and faint icons (the Soft tint picked from the earlier variants). */
+   Both use quiet colours: tertiary text and faint icons. */
 function rfParts(p) {
   const its = miRefs(p).map(MIT).filter(Boolean); if (!its.length) return null;
   const m = its[0];
@@ -7641,7 +7630,6 @@ function miRowChip(p) {
   if (!p.about || st.refv === 'meta') return '';
   const x = rfParts(p); if (!x) return '';
   const t = x.its.length > 1 ? `<span class="rf-ti">${x.its.length} sources</span>` : x.ti(56);
-  if (st.refv === 'tag') return `<span class="mi-rchip rf-tag" title="${x.tip}">${x.ics}${t}</span>`;
   return `<span class="mi-rchip rf-pill" title="${x.tip}">${x.ics}${t}</span>`;
 }
 function miMetaRef(p) {
@@ -7653,7 +7641,7 @@ function miMetaRef(p) {
 /* Screen entry: the reference for every media type, in feed rows */
 Object.assign(st, { refv: 'pill' });
 function REFKNOBS() { return [
-  ['k-ref', 'refv', [['pill', 'Pill'], ['tag', 'Tag'], ['meta', 'After the time']]]]; }
+  ['k-ref', 'refv', [['pill', 'Pill'], ['meta', 'After the time']]]]; }
 const RF_DEMO = [
   ['Article', { it: 'm2', b: 6 }, 'Is the 3.1x figure in this paragraph right for the larger model?'],
   ['PDF (arXiv)', { it: 'm11', b: 2 }, 'Do the rewritten items keep the original difficulty?'],
@@ -8995,15 +8983,6 @@ function qtAfterRender() {
 }
 
 /* ---------- feed, Saved, search, reports, dialogs ---------- */
-/* Home feed: a thread with branches gets a line naming its latest ask. */
-const QT_rowHTML = rowHTML;
-rowHTML = function (p) {
-  const h = QT_rowHTML(p), i = pidOf(p);
-  if (!qtOn() || p.k !== 'ask' || p.running || i < 0 || !canRead(sp(p.s))) return h;
-  const T = qtT(i); if (!qtIsTree(T)) return h;
-  const L = T.latest;
-  return h.replace(/<\/div><\/article>$/, `<button class="qt-rowl" type="button" data-qtopen="${i}:${L.id}">${QTI.ask}<span>${esc(qtClip(L.q, 90))}<b class="qt-rowl-u">${L.u}</b><span class="qt-rowl-a">${ago(L)}</span></span></button></div></article>`);
-};
 const QT_layoutSaved = layoutSaved;
 layoutSaved = function () {
   const h = QT_layoutSaved(); if (!qtOn() || !st.qtSaved.size || st.savedFilter === 'mi-items') return h;
@@ -12046,10 +12025,10 @@ CS_PAGES.acct = () => acxSection('account');
 }; }
 
 /* ---- links that opened the separate pages ---- */
-/* the account menu: one Account item (with this month's tokens) in place of Your spaces, API keys and Usage */
+/* the account menu: one Account item in place of Your spaces, API keys and Usage */
 { const um0 = userMenu; userMenu = function () {
   return um0().replace(/<button class="um-item" type="button" role="menuitem" data-sub="(?:yourspaces|keys|usage)">[\s\S]*?<\/button>\s*/g, '')
-    .replace(/<button class="um-item" type="button" role="menuitem" data-sub="account">([\s\S]*?)<\/button>/, (_, inner) => `<button class="um-item" type="button" role="menuitem" data-sub="${acxHome()}">${inner}<small class="num acx-umt" title="Tokens your asks used this month">${fmtT(tmTotal())} tokens</small></button>`);
+    .replace(/<button class="um-item" type="button" role="menuitem" data-sub="account">([\s\S]*?)<\/button>/, (_, inner) => `<button class="um-item" type="button" role="menuitem" data-sub="${acxHome()}">${inner}</button>`);
 }; }
 /* the header's current-page label */
 { const sw0 = swCurrent; swCurrent = function () { return acxOn() ? `${MI.cog.replace('<svg', '<svg class="sw-house"')}Account` : sw0(); }; }
