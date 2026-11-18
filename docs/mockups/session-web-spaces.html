@@ -3691,8 +3691,7 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 .rf-tag { padding: 0 8px 0 5px; border-radius: 5px; background: var(--fill-subtle); }
 .rf-tag .rf-ti { color: var(--t-strong); }
 /* After the time */
-.row-meta .rf-meta { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
-.row-meta .rf-meta .rf-ti { color: var(--t-tertiary); }
+.row-meta .rf-meta { display: inline-flex; align-items: center; flex: none; cursor: default; }
 /* Ref tint. Soft: a hairline and no fill on the pill, half the fill on the tag, tertiary text. */
 .rf-pill.rf-t-soft { border-color: var(--divider); background: transparent; }
 .rf-tag.rf-t-soft { background: color-mix(in srgb, var(--fill-subtle) 55%, transparent); }
@@ -3702,14 +3701,14 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
    4.5:1 minimum for small text) and a dimmed icon; the pill's edge and the tag's fill are barely there */
 .rf-pill.rf-t-faint { border-color: color-mix(in srgb, var(--divider) 70%, transparent); background: transparent; }
 .rf-tag.rf-t-faint { background: color-mix(in srgb, var(--fill-subtle) 35%, transparent); }
-:is(.mi-rchip, .row-meta .rf-meta).rf-t-faint .rf-ti { color: color-mix(in srgb, var(--t-faint) 85%, var(--feed)); }
+.mi-rchip.rf-t-faint .rf-ti { color: color-mix(in srgb, var(--t-faint) 85%, var(--feed)); }
 .rf-t-faint .mi-ic.xs { color: var(--t-faint); opacity: .6; }
 /* Chrome: the header's tint as the fill, no border, tertiary text */
 .rf-pill.rf-t-chrome { border-color: transparent; background: var(--chrome); }
 .rf-tag.rf-t-chrome { background: var(--chrome); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--divider) 60%, transparent); }
 .mi-rchip.rf-t-chrome .rf-ti { color: var(--t-tertiary); }
 .rf-t-chrome .mi-ic.xs { color: var(--t-faint); }
-.row-meta .rf-meta.rf-t-chrome { padding: 2px 6px 2px 4px; margin: -2px 0; border-radius: 4px; background: var(--chrome); }
+.row-meta .rf-meta.rf-t-chrome { padding: 2px 3px; margin: -2px 0; border-radius: 4px; background: var(--chrome); }
 .row-meta .rf-meta.rf-t-soft .mi-ic.xs { color: var(--t-faint); }
 .rf-demo .rf-dh { margin: 22px 0 4px; }
 /* ==== account: one Account page for settings, Usage, API keys and Your spaces, with a tab strip ==== */
@@ -7646,7 +7645,7 @@ function miSrc(p, src) {
    reference names the source, not the paragraph, post or timestamp.
    - Pill: a bordered chip under the title.
    - Tag: a filled tag under the title.
-   - After the time: icon and title in the meta row, after the timestamp.
+   - After the time: the source's icon alone in the meta row, after the timestamp; the title is in its tooltip.
    Ref tint (Variants bar) makes all three quieter: Soft, Faint, or Chrome (the header's tint as the fill). */
 function rfParts(p) {
   const its = miRefs(p).map(MIT).filter(Boolean); if (!its.length) return null;
@@ -7670,7 +7669,8 @@ function miRowChip(p) {
 function miMetaRef(p) {
   if (st.refv !== 'meta' || !p.about) return '';
   const x = rfParts(p); if (!x) return '';
-  return `<span class="rf-meta${rfTint()}" title="${x.tip}">${x.ic}${x.ti(48)}${x.more}</span>`;
+  /* the icon only (two or three, overlapped, for several sources); the titles are in the tooltip and the label */
+  return `<span class="rf-meta${rfTint()}" role="img" aria-label="About ${x.tip}" title="${x.tip}">${x.ics.replace(/ title="[^"]*"/g, '')}</span>`;
 }
 /* Screen entry: the reference for every media type, in feed rows */
 Object.assign(st, { refv: 'pill', rtint: 'base' });
