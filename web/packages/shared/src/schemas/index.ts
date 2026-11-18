@@ -4,5 +4,6 @@
 
 export * from "./events.js";
 export * from "./research.js";
+export * from "./spaces.js";
 export * from "./turn.js";
 export * from "./tweet.js";
