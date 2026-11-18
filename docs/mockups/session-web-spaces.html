@@ -3868,6 +3868,7 @@ const RES = {
   pagedocs: { url: '/api/pages', kind: 'map' },               /* "space/page-slug" → page text, authors, history */
   usage:    { url: '/api/me/usage', kind: 'value', stub: true },          /* token model: tokens this month by source and space, the default key */
   runs:     { url: '/api/runs', kind: 'map' },                /* "<thread>:<node>" → a run in progress (the server's job), its progress step */
+  people:   { url: '/api/users', kind: 'map' },               /* handle → { spaces }: a profile's count of spaces (the server computes it) */
 };
 const DATA_KEYS = Object.keys(RES);
 /* keys of `st` that are the signed-in person's server data: they live in the data store */
@@ -4347,7 +4348,9 @@ FIXTURES = deepFreeze(mockBackend.seedView());
 /* ---- threads by id ----
    postById(id): the thread with this id (a ULID, or a temporary id the server has since replaced), from a
    lookup table rebuilt when D.posts changes. TID(n): the id of the fixture thread that was at position n
-   before threads had ids; the Screen entries and tests use it. */
+   before threads had ids; the Screen entries and tests use it. It reads the id from the fixtures file (the
+   fixture threads have fixed ULIDs), as the page may not get every thread: a closed space's threads go to
+   non-members only when they wrote them. */
 let PB_LIST = null, PB_MAP = null;
 function postById(id) {
   if (id == null) return undefined;
@@ -4356,8 +4359,10 @@ function postById(id) {
   if (DEV && typeof id !== 'string') console.error('[session] postById takes a thread id (a string), not', id);
   return PB_MAP.get(id) || (ID_MAP.has(id) ? PB_MAP.get(ID_MAP.get(id)) : undefined);
 }
-const TID = n => FIXTURES.posts[n].id;
-window.__tid = n => (FIXTURES.posts[n] || {}).id;
+const TID = n => window.SessionFixtures.data.posts[n].id;
+window.__tid = n => (window.SessionFixtures.data.posts[n] || {}).id;
+/* the open thread's space: its record's, or for a link to a thread the page does not have, the link's */
+const thSpace = () => (postById(st.thread) || { s: st.space }).s;
 /* the id of the first thread that matches, or null */
 const tidWhere = f => { const p = D.posts.find(f); return p ? p.id : null; };
 /* the id of the newest thread in the list (the one a create just added) */
@@ -4808,7 +4813,9 @@ function thDoc(p) {
 }
 function layoutThread() {
   const p = postById(st.thread);
-  if (!canRead(sp(p.s))) return csThreadGate(p);
+  /* a link to a closed space's thread that the server does not send (another person's, to a non-member):
+     the note comes from the link, the space and the thread id */
+  if (!p || !canRead(sp(p.s))) return csThreadGate(p ? p.s : st.space);
   const inner = st.thV === 'chat' ? thChat(p) : thDocSrc(p);
   const bar = p.k === 'ask' ? `<div class="th-bar">${thHead(p)}${viewToggle(p)}</div>` : '';
   return `<div class="A C Af H">${topHeader()}<div class="th-page${bar ? ' vs-bar' : ''}">${bar}${inner}</div></div>`;
@@ -4825,9 +4832,10 @@ const PU = () => st.profileUser === ME.u ? ME : { u: st.profileUser, name: NAMES
 const isSelf = () => st.profileUser === ME.u;
 /* the signed-in person on their own profile: Edit profile and the private Liked tab */
 const pfOwner = () => isSelf() && st.auth === 'in';
-const userSpaces = () => isSelf() ? D.joined.length : new Set(D.posts.filter(p => p.u === st.profileUser).map(p => p.s)).size;
+/* another person's count of spaces comes from the server: it includes closed spaces whose threads the page does not get */
+const userSpaces = () => isSelf() ? D.joined.length : ((D.people || {})[st.profileUser] || { spaces: 0 }).spaces;
 const myPosts = () => D.posts.map(p => ({ ...p, orig: p, tag: true })).filter(p => p.u === PU().u && canRead(sp(p.s)) && !p.gone);
-const myFUs = () => Object.entries(D.fu).flatMap(([pid, list]) => list.filter(f => f.u === PU().u && !f.del).map(f => ({ ...f, pid })));
+const myFUs = () => Object.entries(D.fu).filter(([pid]) => postById(pid)).flatMap(([pid, list]) => list.filter(f => f.u === PU().u && !f.del).map(f => ({ ...f, pid })));
 const profTabs = (cls = '') => `<div class="pf-tabs ${cls}" role="tablist">${[['threads', 'Threads'], ['followups', 'Follow-ups'], ...(pfOwner() ? [['likes', 'Liked']] : [])].map(([k, l]) => `<button type="button" role="tab" data-ptab="${k}" aria-selected="${st.ptab === k}">${l}</button>`).join('')}</div>`;
 function profFeed() {
   if (st.ptab === 'followups') return `<div class="pf-fus">${myFUs().map(f => `<button class="hrow" type="button" data-open="${f.pid}"><span class="hrow-t">${esc(f.q)}</span><span class="hrow-s">on: ${esc(postById(f.pid).q)}</span><span class="hrow-m"><span>${ago(f)}</span></span></button>`).join('') || '<p class="muted">No follow-ups yet.</p>'}</div>`;
@@ -5264,7 +5272,7 @@ function nPushBar(title, right) {
   const prev = nst.stack.length > 1 ? nLabel(nst.stack[nst.stack.length - 2]) : nTitles[nst.tab];
   return `<div class="n-bar"><button class="n-back" type="button" data-n="back">${NI.back}<span>${esc(prev)}</span></button><b class="n-bar-t">${title}</b><span class="n-bar-r">${right || ''}</span></div>`;
 }
-const nLabel = e => e.v === 'notifs' ? 'Notifications' : e.v === 'space' ? nName(sp(e.id)) : e.v === 'thread' || e.v === 'ask' ? nName(sp(postById(String(e.id).split(':')[0]).s)) : e.v === 'keys' ? 'API keys' : e.v === 'browse' ? 'Discover' : nLabelX(e);
+const nLabel = e => e.v === 'notifs' ? 'Notifications' : e.v === 'space' ? nName(sp(e.id)) : e.v === 'thread' || e.v === 'ask' ? nName(sp((postById(String(e.id).split(':')[0]) || { s: e.s }).s)) : e.v === 'keys' ? 'API keys' : e.v === 'browse' ? 'Discover' : nLabelX(e);
 const nGroup = (head, rows, foot) => `<section class="n-grp">${head ? `<h3 class="n-grp-h">${head}</h3>` : ''}<div class="n-list">${rows.join('')}</div>${foot ? `<p class="n-grp-f">${foot}</p>` : ''}</section>`;
 const nSeg = (items, cur, attr, off = []) => `<div class="n-seg" role="tablist">${items.map(([v, l]) => `<button type="button" role="tab" aria-selected="${cur === v}" class="${cur === v ? 'on' : ''}" data-n="${attr}:${v}"${off.includes(v) ? ' disabled aria-disabled="true"' : ''}>${l}</button>`).join('')}</div>`;
 const nSwitch = (on, act, label) => `<button class="n-sw${on ? ' on' : ''}" type="button" role="switch" aria-checked="${on}" aria-label="${label}" data-n="${act}"><i></i></button>`;
@@ -5369,13 +5377,18 @@ function nAsk(key) {
 const nDock = (ph, x) => nSignedIn()
   ? `<div class="n-dock">${x ? tmNDock(x) : ''}<label class="n-dock-f"><input id="n-fu" type="text" placeholder="${ph}" value="${esc(nst.fu)}" aria-label="${ph}"></label><button class="n-send" type="button" data-n="send" aria-label="Send"${x && !tmPayOk(x.id) ? ' data-nopay="1" disabled' : nst.fu.trim() ? '' : ' disabled'}>${NI.up}</button></div>`
   : `<div class="n-dock"><button class="n-dock-f out" type="button" data-n="sheet:signin">${ph}</button></div>`;
-function nThread(i) {
-  const p = postById(i), ask = p.k === 'ask', s = sp(p.s), sv = nSignedIn() && st.saved.has(i);
+/* a thread the person can't read: an unlisted space shows nothing about it; a listed one shows its landing */
+function nThreadGate(s) {
+  if (s.vis === 'unlisted') return nNoAccess(s, true);
+  return { body: `${nPushBar('', '')}<div class="n-sphead">${glyph(s, 'n-gl-xl')}<h2>${esc(s.title)}</h2><p>${esc(s.desc)}</p><div class="n-sphead-m"><span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(s)}</span><span>${fmt(s.members)} members</span></div>${nCta(s)}</div>${nReqNote(s)}<p class="n-empty">This thread is in ${spName(s)}. Only members can read it.</p>` };
+}
+/* e: the stack entry; a link to a closed space's thread the page does not have carries the link's space (e.s) */
+function nThread(i, e) {
+  const p = postById(i), ask = !!p && p.k === 'ask', s = sp(p ? p.s : (e || {}).s), sv = nSignedIn() && st.saved.has(i);
+  if (!p && !s) return { body: nPushBar('', '') };
+  if (!p) return nThreadGate(s);
   if (p.gone) return { body: `${nPushBar('', '')}<p class="n-empty">${p.u === ME.u ? 'You deleted this thread.' : `${esc(p.u)} deleted this thread.`}</p>` };
-  if (!canRead(s)) {
-    if (s.vis === 'unlisted') return nNoAccess(s, true);
-    return { body: `${nPushBar('', '')}<div class="n-sphead">${glyph(s, 'n-gl-xl')}<h2>${esc(s.title)}</h2><p>${esc(s.desc)}</p><div class="n-sphead-m"><span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(s)}</span><span>${fmt(s.members)} members</span></div>${nCta(s)}</div>${nReqNote(s)}<p class="n-empty">This thread is in ${spName(s)}. Only members can read it.</p>` };
-  }
+  if (!canRead(s)) return nThreadGate(s);
   const right = nBtn('save:' + i, sv ? NI.savedOn : NI.saved, sv ? 'Remove from Saved' : 'Save') + nBtn('sheet:tmore:' + i, NI.more, 'More');
   const head = `<button class="n-th-by" type="button" data-n="push:profile:${esc(p.u)}">${avatar(p.u, 'n-av')}<span><b>${esc(p.u)}</b><small>${nNameH(s)}${isClosed(s) ? LK('cs-lk n-lk', 'Closed space') : ''} · ${ago(p)}</small></span></button>`;
   let body;
@@ -5430,7 +5443,7 @@ function nSheet() {
 
 function nativeApp() {
   const t = nTop();
-  const scr = t ? (NSCR[t.v] || nSpacesRoot)(t.id)
+  const scr = t ? (NSCR[t.v] || nSpacesRoot)(t.id, t)
     : ({ home: nHome, spaces: nSpacesRoot, saved: nSaved, you: nYou })[nst.tab]();
   const docked = !!scr.bar, sh = nst.sheet ? nSheet() : '';
   return `<div class="n-root${nst.sheet && NSHEETED.test(nst.sheet) ? ' sheeted' : ''}"><div class="n-under">${nStatus()}<div class="n-scr${docked ? ' docked' : ''}" id="n-scr">${scr.body}</div>${nToast(docked)}${scr.bar || ''}${docked ? '' : nTabs()}</div>${sh}<span class="n-home-ind"></span></div>`;
@@ -6162,8 +6175,8 @@ function csNoAccess(s, isThread) {
   return `<div class="A C Af H">${topHeader()}<div class="cs-napage"><div class="cs-na">${card}</div></div></div>`;
 }
 /* Thread link opened by someone who cannot read it. */
-function csThreadGate(p) {
-  const s = sp(p.s);
+function csThreadGate(sid) {
+  const s = sp(sid);
   if (s.vis === 'unlisted') return csNoAccess(s, true);
   const r = relOf(s.id);
   return `<div class="A C Af H">${topHeader()}<div class="cs-napage"><div class="cs-na"><span class="cs-na-ic">${LOCK}</span><h2>This thread is in a closed space</h2><p class="muted">${r === 'out' ? `Log in to check whether you are a member of ${spName(s)}.` : `Only members of ${spName(s)} can read it.`}</p>
@@ -6803,7 +6816,8 @@ function jump(k) {
   /* your relation to #replication-club is the entry's scenario (SCREEN_DATA); the request form's answers are screen state */
   const R = r => { if (r === 'pending' || r === 'none') { st.reqAge = '2h'; st.reqAns = r === 'pending' ? [...SAMPLE_ANS] : ['', '']; st.reqRules = r === 'pending'; } };
   const space = id => Object.assign(st, { space: id, home: false });
-  const repThread = () => tidWhere(p => p.s === 'replication' && p.k === 'ask');
+  /* a link to mira_k's ask in #replication-club: a non-member's page does not have the thread record */
+  const repThread = () => TID(18);
   const role = k.split('-')[0];
   /* each screen starts from the same baseline: sidebar tab, Saved filter, sources, selection */
   Object.assign(st, MI_CLEAR(), { thV: 'docsrc', dsSTab: null, savedFilter: 'all', dsUrl: '', dsNote: '', dsMenu: null, qtMenu: null, qtPick: null });
@@ -6862,7 +6876,7 @@ screenData('pd-declined', 'replication: request declined');
 /* Picking a variant shows a screen where it applies, unless one is already on screen. */
 function csScreen() {
   if (st.subPage) return st.subPage === 'manage' ? 'manage-' + st.mgTab : st.subPage;
-  if (st.thread != null) return isClosed(sp(postById(st.thread).s)) ? 'closed-thread' : 'thread';
+  if (st.thread != null) return isClosed(sp(thSpace())) ? 'closed-thread' : 'thread';
   if (st.savedPage || st.profilePage) return 'other';
   if (st.home) return 'home';
   const s = sp(st.space);
@@ -8566,7 +8580,8 @@ const QTI = {
 };
 
 /* Two of the seeded trees (the closed-space and FAQ flows): their thread indexes are looked up, not fixed. */
-const QT_REP = tidWhere(p => p.s === 'replication' && p.k === 'ask');
+/* QT_REP(): the first ask in #replication-club, looked up once the screen's data (a member's) is in */
+const QT_REP = () => tidWhere(p => p.s === 'replication' && p.k === 'ask');
 const QT_SF = tidWhere(p => p.rf === 'q2');
 
 
@@ -8788,7 +8803,7 @@ function qtEnter(i) {
 }
 layoutThread = function () {
   const p = postById(st.thread);
-  if (!qtOn() || p.k !== 'ask' || !canRead(sp(p.s))) return QT_layoutThread();
+  if (!p || !qtOn() || p.k !== 'ask' || !canRead(sp(p.s))) return QT_layoutThread();
   if (st.qtTh !== st.thread) qtEnter(st.thread);
   const T = qtT(st.thread), cur = qtCur(T);
   if (cur.id !== st.qtNode) st.qtNode = cur.id;
@@ -8951,7 +8966,7 @@ function qtAfterRender() {
 const QT_layoutSaved = layoutSaved;
 layoutSaved = function () {
   const h = QT_layoutSaved(); if (!qtOn() || !st.qtSaved.size || st.savedFilter === 'mi-items') return h;
-  const rows = [...st.qtSaved].map(k => { const [th, id] = k.split(':'), T = qtT(th), n = T.by[id]; if (!n || !canRead(sp(T.p.s)) || !nvSvHit(n.q + ' ' + qtTxt(n.html))) return ''; return `<button class="qt-svrow" type="button" data-qtopen="${k}"><small>${spName(sp(T.p.s))} · Level ${n.lv} in ${esc(qtClip(T.p.t || T.p.q, 60))}</small><b>${esc(n.q)}</b><small>${n.u} · ${ago(n)} · ${esc(qtClip(qtTxt(n.html), 120))}</small></button>`; }).join('');
+  const rows = [...st.qtSaved].map(k => { const [th, id] = k.split(':'); if (!postById(th)) return ''; const T = qtT(th), n = T.by[id]; if (!n || !canRead(sp(T.p.s)) || !nvSvHit(n.q + ' ' + qtTxt(n.html))) return ''; return `<button class="qt-svrow" type="button" data-qtopen="${k}"><small>${spName(sp(T.p.s))} · Level ${n.lv} in ${esc(qtClip(T.p.t || T.p.q, 60))}</small><b>${esc(n.q)}</b><small>${n.u} · ${ago(n)} · ${esc(qtClip(qtTxt(n.html), 120))}</small></button>`; }).join('');
   if (!rows) return h;
   return h.replace(/<\/div><\/div>$/, `<section class="qt-svsec"><h3>Saved asks inside threads <span class="num faint">${st.qtSaved.size}</span></h3>${rows}</section></div></div>`);
 };
@@ -9024,7 +9039,7 @@ function qtJump(k) {
     case 'qt-promoted': { const ni = tidWhere(p => p.from && p.from.th === M && p.from.node === 'b3'), sid = postById(ni).s; Object.assign(st, NAVBASE(), { thread: ni, space: sid }); qtEnter(ni); toast(`Thread started in ${spName(sp(sid))}. The branch it came from links to it.`); break; }
     case 'qt-collapse': open(TID(0), 'f1'); break;
     case 'qt-faq': open(QT_SF, 's1'); qtProOpen(qtT(QT_SF), 's1'); patch('qtPro', x => { x.topic = 'migr'; x.inc = 'all'; }); break;
-    case 'qt-closed': open(QT_REP, 'x2'); qtProOpen(qtT(QT_REP), 'x2'); break;
+    case 'qt-closed': { const i = QT_REP(); open(i, 'x2'); qtProOpen(qtT(i), 'x2'); break; }
     case 'qt-home': st.home = true; break;
     case 'qt-notif': st.home = true; csOpenNotifs(); break;
     case 'qt-notif-open': { const x = ntFind('nqt1'); open(TID(0), x.qtNode); break; }
@@ -9737,7 +9752,7 @@ function npJump(k) {
     case 'np-pending': case 'np-withdraw': tab('spaces', { v: 'space', id: 'replication' }); if (k === 'np-withdraw') nst.sheet = 'withdraw:replication'; break;
     case 'np-declined': tab('spaces', { v: 'space', id: 'replication' }); break;
     case 'np-unlisted': tab('home', { v: 'space', id: 'ward7' }); break;
-    case 'np-unlisted-thread': tab('home', { v: 'thread', id: pi('ward7') }); break;
+    case 'np-unlisted-thread': tab('home', { v: 'thread', id: TID(27), s: 'ward7' }); break;   /* a link to jun.park's thread: a non-member's page does not have it */
     case 'np-about': tab('spaces', { v: 'space', id: 'sablefield' }); nst.sheet = 'wiki:sablefield'; break;
     case 'np-about-join': tab('spaces', { v: 'space', id: 'history' }); nst.sheet = 'wiki:history'; break;
     case 'np-rules': tab('spaces', { v: 'space', id: 'scifi' }); nst.sheet = 'rules:scifi'; break;
@@ -9756,7 +9771,7 @@ function npJump(k) {
     case 'np-key': case 'np-key-rename': tab('you', { v: 'keys', id: '' }); nst.sheet = (k === 'np-key' ? 'key:' : 'keyrn:') + 'k2'; if (k === 'np-key-rename') nSheetOpen(nst.sheet); break;
   }
   const t = nst.stack[nst.stack.length - 1];
-  if (t && (t.v === 'space' || t.v === 'thread')) st.space = t.v === 'space' ? t.id : postById(t.id).s;
+  if (t && (t.v === 'space' || t.v === 'thread')) st.space = t.v === 'space' ? t.id : (postById(t.id) || { s: t.s }).s;
 }
 /* ==== end Phone app: Screen entries ==== */
 /* ==== accounts, API keys and profiles (web): sign-up, account settings, key checks, mute and block ====
@@ -10308,6 +10323,11 @@ function tmRecent(n = 8) {
     if (p.u === ME.u && p.tok && !p.running) l.push({ createdAt: p.createdAt, t: p.t || p.q, s: p.s, pay: p.pay, u: p.u, tok: p.tok, open: `data-open="${i}"`, nopen: `push:thread:${i}` });
     if (!D.qtd[i]) return;
     qtT(i).nodes.slice(1).forEach(x => { if (x.u === ME.u && x.tok && !x.running && !x.fail) l.push({ createdAt: x.createdAt, t: x.q, s: p.s, pay: x.pay, u: x.u, tok: x.tok, open: `data-qtopen="${i}:${x.id}"`, nopen: `push:ask:${i}:${x.id}` }); });
+  });
+  /* your asks in the tree of a closed-space thread you can't read: the server sends them with the tree's space, without the thread */
+  Object.entries(D.qtd).forEach(([i, d]) => {
+    if (postById(i) || !d.space || !sp(d.space)) return;
+    d.nodes.forEach(x => { if (x.u === ME.u && x.tok && !x.running && !x.fail && !x.del) l.push({ createdAt: x.createdAt, t: x.q, s: d.space, pay: x.pay, u: x.u, tok: x.tok, open: `data-thlink="${d.space}:${i}"`, nopen: `push:space:${d.space}` }); });
   });
   return l.filter(r => !fresh || isNew(r)).sort((a, b) => qtAge(a) - qtAge(b)).slice(0, n);
 }
@@ -12385,7 +12405,7 @@ function renderAllInner() {
     renderNative();
     return;
   }
-  $('url').textContent = csUrl() || (st.subPage === 'browse' ? 'session.app/spaces/browse' : st.subPage === 'yourspaces' ? (st.ysEdit ? 'session.app/spaces/header' : 'session.app/spaces') : st.subPage === 'keys' ? 'session.app/settings/keys' : st.thread != null ? `session.app/s/${sp(postById(st.thread).s).name}/t/${st.thread}` : st.profilePage ? `session.app/u/${st.profileUser}` : st.savedPage ? 'session.app/saved' : st.home ? 'session.app' : `session.app/s/${sp(st.space).name}${sfPath()}`);
+  $('url').textContent = csUrl() || (st.subPage === 'browse' ? 'session.app/spaces/browse' : st.subPage === 'yourspaces' ? (st.ysEdit ? 'session.app/spaces/header' : 'session.app/spaces') : st.subPage === 'keys' ? 'session.app/settings/keys' : st.thread != null ? `session.app/s/${sp(thSpace()).name}/t/${st.thread}` : st.profilePage ? `session.app/u/${st.profileUser}` : st.savedPage ? 'session.app/saved' : st.home ? 'session.app' : `session.app/s/${sp(st.space).name}${sfPath()}`);
   $('app').innerHTML = shellWrap(CS_PAGES[st.subPage] ? CS_PAGES[st.subPage]() : st.subPage === 'browse' ? layoutBrowse() : st.subPage === 'yourspaces' ? layoutYourSpaces() : st.subPage === 'keys' ? layoutKeys() : st.thread != null ? layoutThread() : st.profilePage ? layoutProfile() : st.savedPage ? layoutSaved() : st.home ? layoutHome() : L[st.opt]()) + (st.modal === 'discard' ? discardDialog() : st.modal === 'kbd' ? kbdOverlay() : (st.modal || '').startsWith('revoke:') ? revokeDialog() : st.modal === 'signout' ? signoutDialog() : st.modal === 'signin' ? signinDialog() : st.modal === 'pf-edit' ? pfEditDialog() : st.modal === 'addkey' ? addKeyDialog() : csModal()) + csToast();
   document.documentElement.dataset.sh = st.shV;
   document.documentElement.dataset.mnav = st.mnav;
@@ -12450,6 +12470,8 @@ on($('app'), 'click', e => {
   const hm = t.closest('[data-home]'); if (hm) { st.thread = null; st.profilePage = false; st.savedPage = false; st.umenu = false; st.home = true; if (hm.dataset.home !== '1') st.homeView = hm.dataset.home; st.pop = false; renderAll(); return; }
   const usr = t.closest('[data-user]'); if (usr) { Object.assign(st, { profileUser: usr.dataset.user, profilePage: true, savedPage: false, thread: null, umenu: false, pop: false, modal: null }); if (st.ptab === 'likes' && !isSelf()) st.ptab = 'threads'; renderAll(); document.querySelector('.frame').scrollIntoView({ block: 'start' }); return; }
   const spB = t.closest('[data-space]'); if (spB) { st.space = spB.dataset.space; st.thread = null; st.profilePage = false; st.savedPage = false; st.umenu = false; st.home = false; st.pop = false; renderAll(); return; }
+  /* a link to a closed space's thread the page does not have (Usage): the closed-space note */
+  const tl = t.closest('[data-thlink]'); if (tl) { const [sid, th] = tl.dataset.thlink.split(':'); Object.assign(st, NAVBASE(), { thread: th, space: sid }); renderAll(); return; }
   const op = t.closest('[data-open]'); if (op) { const ctl = t.closest('button, a, input, textarea'); if (!ctl || ctl === op) { if (ctl) e.preventDefault(); st.thread = op.dataset.open; st.savedPage = false; st.profilePage = false; st.modal = null; st.home = false; st.space = postById(st.thread).s; st.umenu = false; renderAll(); document.querySelector('.frame').scrollIntoView({ block: 'start' }); return; } }
   const wb = t.closest('[data-web]'); if (wb) { if (wb.tagName !== 'INPUT') e.preventDefault(); st.srcWeb = !st.srcWeb; renderAll(); return; }
   const a = t.closest('[data-act]');

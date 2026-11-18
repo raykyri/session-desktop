@@ -227,7 +227,8 @@
      seq: the number of the run's last event. paused: a dev-only hold (a Screen entry's scenario): the job does
      not move it on. TODO(limits): pay as stored on the ask. */
   S.Run = obj({ th: str, node: str, u: str, status: one('queued', 'running'), attempt: int, seq: int, step: int, 'model?': nul(str), 'pay?': t.any, 'createdAt?': iso, 'paused?': bool }, 'Run');
-  S.AskTree = obj({ nodes: arr(S.AskNode) }, 'AskTree');
+  /* space: sent with a tree scoped to the caller's own asks (a closed space they are not a member of, READ_RULES) */
+  S.AskTree = obj({ nodes: arr(S.AskNode), 'space?': str }, 'AskTree');
   S.Source = obj({
     id: str, pl: str, kind: str,
     'au?': str, 'h?': str, 'createdAt?': iso,   /* when the author published it */
@@ -268,6 +269,8 @@
   S.Skill = named('Skill', tup(str, str));
   S.PageDoc = obj({ t: str, text: arr(str), 'by?': str, 'ed?': str, revs: arr(obj({ by: str, 'createdAt?': iso, note: str })) }, 'PageDoc');
   S.Profile = obj({ name: str, bio: str }, 'Profile');
+  /* what a profile shows of another person: the number of spaces they wrote threads in, closed spaces included */
+  S.PersonSummary = obj({ spaces: int }, 'PersonSummary');
   S.Me = obj({ u: str, name: str, bio: str, x: str, createdAt: iso }, 'Me');
   /* TODO(limits): token usage is a stub (owner decision: no server-side limit tracking yet). The jobs charge
      asks to it (section 6a, charge) with the page's former arithmetic; people set the default key with
@@ -324,6 +327,8 @@
     reqSeen:  { path: '/api/me/requests-seen', kind: 'value', item: bool },
     rpLiked:  { path: '/api/me/reply-likes', kind: 'value', item: named('Set<ReplyKey>', set(str)) },
     runs:     { path: '/api/runs', kind: 'map', key: 'node', item: S.Run },   /* the runs in progress, by "<thread>:<node>" */
+    /* computed on every read from the threads, never stored: per person who wrote a thread, by handle */
+    people:   { path: '/api/users', kind: 'map', key: 'handle', item: S.PersonSummary, computed: d => { const by = {}; for (const p of d.posts || []) (by[p.u] = by[p.u] || new Set()).add(p.s); return Object.fromEntries(Object.entries(by).map(([u, x]) => [u, { spaces: x.size }])); } },
   };
   /* Records nested in a value that get a createdAt (joinedAt in member lists) from the server when a write
      brings them without one. Every record of a list collection gets one too. */
@@ -412,16 +417,16 @@
     row('spaces', 'list', 'guest', 'spaces.list', { note: 'every space record, closed ones included: a closed space’s landing (name, description, rules, member count, request questions) is public; its content is scoped (READ_RULES)' }),
 
     /* threads: addressed by id (a ULID). r, likes, liked and mine are derived on read. */
-    row('posts', 'list', 'guest', 'research.listTrees', { wire: 'ResearchTreeSummary[]', reads: 'threads in open spaces, and in the closed spaces the caller is a member of' }),
+    row('posts', 'list', 'guest', 'research.listTrees', { wire: 'ResearchTreeSummary[]', reads: 'threads in open spaces and in the closed spaces the caller is a member of, and the threads the caller wrote in other closed spaces' }),
     row('posts', 'get', 'guest', 'research.getTree', { wire: 'ResearchTreeDetail', reads: 'NOT_FOUND for a thread the caller may not read' }),
 
     row('rich', 'list', 'guest', 'research.getNodeContent', { wire: 'ResearchNodeContent', reads: 'the threads the caller may read' }),
     row('rich', 'get', 'guest', 'research.getNodeContent', { wire: 'ResearchNodeContent', reads: 'NOT_FOUND for a thread the caller may not read' }),
     row('srcd', 'list', 'guest', 'research.getNodeContent', { wire: 'ResearchNodeContent', reads: 'the threads the caller may read' }),
-    row('fu', 'list', 'guest', 'followups.list', { reads: 'the threads the caller may read' }),
+    row('fu', 'list', 'guest', 'followups.list', { reads: 'in a closed space the caller is not a member of, only the follow-ups they wrote' }),
     row('rp', 'list', 'guest', 'research.getTree', { reads: 'the threads the caller may read' }),
-    row('qtd', 'list', 'guest', 'research.getTree', { wire: 'ResearchTreeDetail', reads: 'the threads the caller may read' }),
-    row('runs', 'list', 'guest', 'research.listActivity', { wire: 'ResearchNode[]', reads: 'the runs of the threads and ask trees the caller may read (readScope: readsThread, readsAskTree)', note: 'the runs in progress, with their progress step: the page’s starting point, which the event stream then updates' }),
+    row('qtd', 'list', 'guest', 'research.getTree', { wire: 'ResearchTreeDetail', reads: 'in a closed space the caller is not a member of, only the asks they wrote, with the tree’s space' }),
+    row('runs', 'list', 'guest', 'research.listActivity', { wire: 'ResearchNode[]', reads: 'the runs the caller may read (readScope’s readsRun): in a closed space they are not a member of, the runs of their own asks', note: 'the runs in progress, with their progress step: the page’s starting point, which the event stream then updates' }),
 
     row('media', 'list', 'guest', 'sources.list', { reads: 'without the closed spaces the caller is not a member of: a source only they have is left out' }),
     row('miAdded', 'list', 'user', 'sources.listNew', { reads: 'as sources.list' }),
@@ -443,7 +448,7 @@
     row('askedInv', 'list', 'user', 'invites.listRequested'),
 
     row('reqs', 'list', 'user', 'joinRequests.list', { reads: 'the caller’s own requests, and the requests to the spaces they moderate' }),
-    row('mem', 'list', 'guest', 'sharing.listMembers', { wire: 'ThreadMember[]', note: 'space roles replace commenter and viewer', reads: 'the list of a closed space is for its members (empty otherwise); an open space’s is public' }),
+    row('mem', 'list', 'guest', 'sharing.listMembers', { wire: 'ThreadMember[]', note: 'space roles replace commenter and viewer', reads: 'an open space’s list is public; a closed space’s goes whole to its members, and to others as its owner, admins and moderators' }),
     row('memOther', 'list', 'guest', 'sharing.listMembers', { wire: 'ThreadMember[]', reads: 'as /api/members' }),
     row('banned', 'list', 'moderator', 'bans.list', { reads: 'the bans of the spaces the caller moderates' }),
     row('links', 'list', 'user', 'invites.list', { wire: 'ThreadInvite[]', reads: 'the links of the spaces the caller moderates, and the links they created; never revoked ones' }),
@@ -463,6 +468,7 @@
     row('repSeen', 'list', 'user', 'notifications.unreadCount'),
     row('reqSeen', 'list', 'user', 'notifications.unreadCount'),
     row('rpLiked', 'list', 'user', 'likes.list'),
+    row('people', 'list', 'guest', 'users.get', { wire: 'User', note: 'computed from the threads on every read: a profile’s count of spaces, closed spaces included (READ_RULES closedMembers: the count, not the list)' }),
 
     { method: 'GET', path: '/api/me', coll: null, op: 'me', input: null, output: 'Me', who: 'user', trpc: 'auth.me', wire: 'User', errors: ['UNAUTHORIZED'],
       note: 'the signed-in person; the server uses it for mine and liked' },
@@ -539,33 +545,35 @@
   const threadSpace = (tx, i) => tx.need('posts', i.thread, 'thread').s;
 
   /* ---- reads: what GET returns to whom ----
-     READ_RULES are the parts of the scoping; /api/dev/config { readRules } switches each on or off. A rule
-     that is off returns those records to everyone, as before step 5. Two are off: the page shows what they
-     would leave out to people outside the space, so whether they may see it is the owner's decision.
-       closedThreads   OFF. The thread records (title, question, author, tokens) of a closed space are for
-                       its members. The page shows them to non-members: Usage lists your own asks in a closed
-                       space you are not a member of, and a link to a closed space's thread opens a "This
-                       thread is in a closed space" screen with the thread's address.
-       closedFollowUps OFF. The follow-ups and ask trees (asks about asks, with their answers) of a closed
-                       space's threads are for its members. The page shows non-members their own follow-up
-                       asks there: Usage lists each with its question and tokens.
+     READ_RULES are the parts of the scoping; all are on. /api/dev/config { readRules } can switch one off (a
+     dev override: a rule that is off returns those records to everyone, as before step 5). "Hidden" below: a
+     closed space the caller is not a member of (signed out: every closed space).
+       closedThreads   a hidden space's thread records (title, question, author, tokens) go only to the person
+                       who wrote them: Usage keeps listing your own asks in a closed space you left. A link to
+                       another person's thread there opens the "This thread is in a closed space" note, which
+                       the page works out from the link (the space and the thread id), without the record.
+       closedFollowUps the same rule for a hidden space's follow-ups and ask-tree nodes: the caller gets the ones
+                       they wrote. Such a tree carries `space` (its thread's space), as the caller may not have
+                       the thread record; a follow-up node's fu index points into the follow-ups they get.
        closedContent   the answers, sources cited, replies, moderation states, pages and source lists of a
                        closed space are for its members.
        closedSources   a source that only closed spaces you are not a member of have is left out, and those
                        spaces are left out of a source's list of spaces.
-       closedMembers   OFF. A closed space's member list is for its members. The page shows non-members the
-                       moderators on the space's landing, and counts closed spaces in a profile's spaces.
+       closedMembers   a hidden space's member list holds its owner, admins and moderators (the landing's
+                       Moderators list), not its members. The member count (a space's `members`) and a
+                       person's count of spaces (/api/users) still include closed spaces.
        ownOrModerated  join requests, reports and source reports: your own, and those of the spaces you
                        moderate. Bans: the spaces you moderate. Invite links: those you created, and those
                        of the spaces you moderate.
        pendingSources  a source waiting for review: for the person who added it and the space's moderators.
      Space records are public (a closed space's landing shows its name, description, rules, member count
      and request questions). Revoked invite links are never returned. */
-  const READ_RULES = { closedThreads: false, closedFollowUps: false, closedContent: true, closedSources: true, closedMembers: false, ownOrModerated: true, pendingSources: true };
+  const READ_RULES = { closedThreads: true, closedFollowUps: true, closedContent: true, closedSources: true, closedMembers: true, ownOrModerated: true, pendingSources: true };
   /* readScope(d, signedIn, rules, me): per kind, a record as the caller may read it, or null / undefined.
-     readsThread(p) and readsAskTree(threadId) answer "may the caller read this thread (its record), and its
-     follow-ups and ask tree": GET of threads, follow-ups, ask trees and runs uses them, and so does the event
-     stream (section 6a) for the run events of a thread's ask and of an ask in its tree. */
+     readsThread(p) answers "may the caller read this thread record"; readsRun(r) "this run" (a run goes with the
+     ask it answers: in a hidden space, to the person who asked). GET of threads, follow-ups, ask trees and runs
+     uses them, procedure changes are scoped the same way, and the event stream (section 6a) sends a run's
+     events only when readsRun holds. */
   function readScope(d, signedIn, rules, me) {
     const g = k => d[k], R = { ...READ_RULES, ...rules };
     const hidden = new Set(d.spaces.filter(s => !readsSpace(g, signedIn, s)).map(s => s.id));
@@ -573,13 +581,22 @@
     const spaceOf = new Map(d.posts.map(p => [p.id, p.s]));
     const hideSp = sid => R.closedContent && hidden.has(sid);
     const hideTh = id => spaceOf.has(id) && hideSp(spaceOf.get(id));
-    const readsThread = p => !(R.closedThreads && p && hidden.has(p.s));
-    const readsAskTree = th => !(R.closedFollowUps && spaceOf.has(th) && hidden.has(spaceOf.get(th)));
-    const hideFu = (key, v) => readsAskTree(key) ? v : undefined;
-    const postOf = new Map(d.posts.map(p => [p.id, p]));
-    /* a run: as the thread for its ask (node r), as the ask tree for the others */
-    const readsRun = r => r.node === 'r' ? readsThread(postOf.get(r.th)) : readsAskTree(r.th);
     const own = u => signedIn && u === me.u;
+    /* a thread whose follow-ups and ask tree are scoped to the caller's own asks */
+    const ownAsksOnly = th => R.closedFollowUps && spaceOf.has(th) && hidden.has(spaceOf.get(th));
+    const readsThread = p => !(R.closedThreads && p && hidden.has(p.s)) || own(p.u);
+    const readsRun = r => !(spaceOf.has(r.th) && hidden.has(spaceOf.get(r.th)) && (r.node === 'r' ? R.closedThreads : R.closedFollowUps)) || own(r.u);
+    /* follow-ups: the caller's own; keep: the old index → the new one, for the ask tree's fu */
+    const ownFus = l => { const keep = new Map(), out = []; (l || []).forEach((f, k) => { if (f && own(f.u)) { keep.set(k, out.length); out.push(f); } }); return { out, keep }; };
+    const fuScoped = (key, v) => { if (!ownAsksOnly(key)) return v; const { out } = ownFus(v); return out.length ? out : undefined; };
+    const qtdScoped = (key, v) => {
+      if (!ownAsksOnly(key)) return v;
+      const { keep } = ownFus(d.fu && d.fu[key]);
+      const nodes = (v.nodes || []).filter(n => n.fu != null ? keep.has(n.fu) : own(n.u)).map(n => n.fu != null ? { ...n, fu: keep.get(n.fu) } : n);
+      return nodes.length ? { ...v, nodes, space: spaceOf.get(key) } : undefined;
+    };
+    /* a hidden space's member list: its owner, admins and moderators */
+    const staff = l => (l || []).filter(m => m.role !== 'member');
     const scoped = (sid, u) => !R.ownOrModerated || own(u) || mods.has(sid);
     /* a pending source in a space's list, for someone other than the person who added it and its moderators */
     const pendingHidden = (sid, x) => R.pendingSources && x.rv && !own(x.by) && !mods.has(sid);
@@ -601,22 +618,22 @@
     };
     const byThread = (key, v) => hideTh(key) ? undefined : v;
     const MAP = {
-      rich: byThread, srcd: byThread, rp: byThread, fu: hideFu, qtd: hideFu,
+      rich: byThread, srcd: byThread, rp: byThread, fu: fuScoped, qtd: qtdScoped,
       runs: (key, v) => readsRun(v) ? v : undefined,
       modSt: (key, v) => hideTh(String(key).split(':')[1]) ? undefined : v,
       pagedocs: (key, v) => hideSp(key.split('/')[0]) ? undefined : v,
-      memOther: (key, v) => R.closedMembers && hidden.has(key) ? undefined : v,
+      memOther: (key, v) => R.closedMembers && hidden.has(key) ? staff(v) : v,
       dsDrops: (key, v) => {
         if (hideSp(key)) return undefined;
         return v.some(x => pendingHidden(key, x)) ? v.filter(x => !pendingHidden(key, x)) : v;
       },
     };
     const VALUE = {
-      mem: v => R.closedMembers && hidden.has(C.mem.space) ? [] : v,
+      mem: v => R.closedMembers && hidden.has(C.mem.space) ? staff(v) : v,
       dsReps: v => R.ownOrModerated && v.some(x => !scoped(x.sid, x.by)) ? v.filter(x => scoped(x.sid, x.by)) : v,
     };
     return {
-      readsThread, readsAskTree, readsRun,
+      readsThread, readsRun,
       list: (k, x) => LIST[k] ? LIST[k](x) : x,
       map: (k, key, v) => MAP[k] ? MAP[k](key, v) : v,
       value: (k, v) => VALUE[k] ? VALUE[k](v) : v,
@@ -1468,6 +1485,7 @@
     /* a collection as GET returns it to the caller (sc: their readScope) */
     function viewAll(k, d, sc) {
       const c = C[k];
+      if (c.computed) return c.computed(d);
       if (c.kind === 'list') return d[k].map(x => sc.list(k, x)).filter(Boolean).map(x => viewOne(k, x, d));
       if (c.kind === 'map') { const o = {}; for (const [key, v] of Object.entries(d[k])) { const y = sc.map(k, key, v); if (y !== undefined) o[key] = y; } return o; }
       return sc.value(k, d[k]);
@@ -1547,6 +1565,8 @@
           keys.forEach(x => { const i = d[k].findIndex(y => idOf(k, y) === x), r = i < 0 ? null : sc.list(k, d[k][i]); if (!r) { del.push(x); return; } put.push(viewOne(k, r, d)); if (!(before[k] || new Set()).has(x)) at[x] = i; });
           changes[k] = Object.keys(at).length ? { put, del, at } : { put, del };
         }
+        /* computed collections: the people whose threads changed */
+        if (touched.posts) { const all = C.people.computed(d), put = {}; touched.posts.forEach(x => { const p = d.posts.find(y => y.id === x); if (p && all[p.u]) put[p.u] = all[p.u]; }); if (Object.keys(put).length) changes.people = { put, del: [] }; }
         return changes;
       };
       return tx;
@@ -1555,6 +1575,7 @@
     /* the dev check of the seed: every record must pass its collection's schema */
     function checkSeed(d) {
       for (const [k, c] of Object.entries(C)) {
+        if (c.computed) continue;
         if (!(k in d)) { fail(`no seed data for ${k} (${c.path})`); continue; }
         const issues = checkWhole(k, d[k], d, true);
         if (issues.length) fail(`seed data for ${k} fails its schema: ${issues.slice(0, 3).map(i => `${i.path}: expected ${i.expected}`).join('; ')}`);
@@ -1612,7 +1633,7 @@
       const o = { $views: {} }, sc = scopeFor(d, caller);
       for (const k of keys) {
         const c = C[k];
-        if (!(k in d)) continue;
+        if (!(k in d) && !c.computed) continue;
         const view = viewAll(k, d, sc); o.$views[k] = view;
         if (c.kind === 'list') o[k] = { ids: view.map(x => String(x[c.id])), views: view, codes: new Map(view.map(x => [String(x[c.id]), enc(x)])) };
         else if (c.kind === 'map') o[k] = new Map(Object.entries(view).map(([key, v]) => [key, enc(v)]));
@@ -2097,7 +2118,7 @@
       eventsPending: () => outPending,
       /* the seed data as GET returns it (derived fields included), without touching the database: the page
          reads it while it starts */
-      seedView: () => { const d = seedData(), sc = scopeFor(d, ME); return dec(enc(Object.fromEntries(Object.keys(d).map(k => [k, viewAll(k, d, sc)])))); },
+      seedView: () => { const d = seedData(), sc = scopeFor(d, ME); return dec(enc(Object.fromEntries(Object.keys(C).filter(k => k in d || C[k].computed).map(k => [k, viewAll(k, d, sc)])))); },
     };
   }
 
