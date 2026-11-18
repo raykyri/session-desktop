@@ -3770,6 +3770,7 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
 
 <!-- the fixtures (SessionFixtures), then the mock backend and the API contract (SessionMockApi): plain scripts, so the page also works from file:// -->
 <script src="session-web-spaces-fixtures.js"></script>
+<script src="session-web-spaces-jobs.js"></script>
 <script src="session-web-spaces-mock-api.js"></script>
 <script src="session-web-spaces-scenarios.js"></script>
 <script>
@@ -3897,6 +3898,7 @@ const RES = {
   skills:   { url: '/api/space-skills', kind: 'map' },        /* space id → skills ([name, prompt]) */
   pagedocs: { url: '/api/pages', kind: 'map' },               /* "space/page-slug" → page text, authors, history */
   usage:    { url: '/api/me/usage', kind: 'value', stub: true },          /* token model: tokens this month by source and space, the default key */
+  runs:     { url: '/api/runs', kind: 'map' },                /* "<thread>:<node>" → a run in progress (the server's job), its progress step */
 };
 const DATA_KEYS = Object.keys(RES);
 /* keys of `st` that are the signed-in person's server data: they live in the data store */
@@ -3931,7 +3933,7 @@ function commit(key, prev, next) {
   if (Object.is(prev, next)) return;
   if (ID_MAP.size) next = remapIds(next);   /* a write that still holds a temporary id the server has replaced (a timer's closure) */
   DS.store.setState({ [key]: deepFreeze(next) });
-  if (TX && (!(RES[key] || {}).stub || TX.stubs.includes(key))) { txNote(key, prev); return; }   /* inside a mutation: the server writes it (mutate, below); stubs are written as sent, unless the procedure writes them (opts.stubs) */
+  if (TX) { txNote(key, prev); return; }   /* inside a mutation: the server writes it (mutate, below) */
   DS.source.write(DS, key, prev, next);
 }
 const pick = (arr, sel) => { if (typeof sel === 'number') return sel; if (typeof sel === 'function') return arr.findIndex(sel); const s2 = realId(sel); return arr.findIndex(x => x && (x.id === sel || x.id === s2 || x.u === sel)); };
@@ -4159,16 +4161,15 @@ const apiSource = {
       .catch(() => {});
   },
   write(inst, key, prev, next) {
-    /* user actions are mutations (mutate) and Screen entries set up their data with a scenario (runScenario);
-       the collection endpoints are only for the ask pipeline and the token-usage stub. In dev mode any other
-       collection write is an error. */
-    if (DEV && !SERVER_SIDE && !(RES[key] || {}).stub && APP_STARTED) { const m = `[session] a REST write of ${key} outside the ask pipeline: user actions go through mutate(), Screen entries through their scenario`; console.error(m); setTimeout(() => { throw new Error(m); }); }
-    /* who wrote it, for the mock backend's request log: the ask pipeline, a stub, or a person (a bug) */
-    const origin = SERVER_SIDE ? 'run' : (RES[key] || {}).stub ? 'stub' : 'user';
+    /* user actions are mutations (mutate), what an ask's run writes comes from the server's job (events), and
+       Screen entries set up their data with a scenario (runScenario): the collections have no write endpoints
+       (step 7). A write here is a bug: in dev mode it is an error; the server refuses it and the store puts the
+       record back. */
+    if (DEV && APP_STARTED) { const m = `[session] a REST write of ${key}: user actions go through mutate(), a run’s results come from the server, Screen entries use their scenario`; console.error(m); setTimeout(() => { throw new Error(m); }); }
     for (const op of diffOps(key, prev, next)) {
       inst.meta.setState(m => ({ pending: m.pending + 1 }));
       apiSource.queue = apiSource.queue
-        .then(() => { const q = sendable(op); if (refsDead(q)) throw SKIPPED; return http(op.method, q.url, q.body, origin); })
+        .then(() => { const q = sendable(op); if (refsDead(q)) throw SKIPPED; return http(op.method, q.url, q.body, 'user'); })
         .then(res => { try { adopt(inst, op, res); } catch (e) { console.error('[session] could not take the server’s answer', e); } }, e => { undoOp(inst, op); if (e !== SKIPPED) dataError(apiErrText(e, 'write'), e); })
         .finally(() => inst.meta.setState(m => ({ pending: m.pending - 1 })));
     }
@@ -4194,25 +4195,16 @@ DS = liveData;
      temporary id and result.id the new one; the page replaces it everywhere (adoptId). If the create fails,
      queued writes that refer to the temporary id are dropped without a second toast.
    - opts.then(result) and opts.fail(error) run after the answer.
-   - opts.stubs: stub collections (usage) that the procedure writes itself; the recipe's changes to them are
-     part of the mutation (sent with it, undone with it) instead of separate stub writes.
    - Inside another mutation's recipe, mutate runs the recipe only: a nested recipe is part of the outer
      mutation.
-   The collection endpoints stay for the ask pipeline (serverSide: answers, charges and run notifications,
-   until step 7 makes asks server jobs) and the token-usage stub. Screen entries set up their data with a
-   scenario (POST /api/dev/scenario, step 10). In dev mode a collection write from anywhere else is an error
-   (apiSource.write). */
-let TX = null;          /* the mutation whose recipe is running: { name, before: Map(key → value before), stubs } */
-let SERVER_SIDE = 0;    /* the page writes what the server would (the ask pipeline): REST writes allowed */
+   What an ask's run writes (answers, charges, run notifications, key and domain checks) the server's jobs
+   write; the page gets it from the event stream (step 7, applyChanges). Screen entries set up their data
+   with a scenario (POST /api/dev/scenario, step 10). The page makes no collection writes; in dev mode one is
+   an error (apiSource.write). */
+let TX = null;          /* the mutation whose recipe is running: { name, before: Map(key → value before) } */
 const SKIPPED = { skipped: true };   /* a queued write dropped because it refers to a record whose create failed */
 const DEAD_TMP = new Set();          /* temporary ids of records whose create failed */
 const PENDING = new Map();           /* "key/record" → queued mutations that changed it */
-/* fn, run as the server side of the mockup (the ask pipeline): its writes go to the collection endpoints */
-const serverSide = fn => function (...a) { SERVER_SIDE++; try { return fn.apply(this, a); } finally { SERVER_SIDE--; } };
-/* a server-side job that finishes later (a run, a key or domain check): it is dropped when a scenario
-   (step 10) puts the server's data back to the seed in between, as the server's jobs would end */
-let SCENARIO_GEN = 0;
-const serverLater = fn => { const gen = SCENARIO_GEN; return serverSide(function (...a) { if (gen === SCENARIO_GEN) return fn.apply(this, a); }); };
 const refsDead = v => DEAD_TMP.size > 0 && [...enc(v === undefined ? null : v).matchAll(TMP_RE)].some(m => DEAD_TMP.has(m[0]));
 function txNote(key, prev) { if (!TX.before.has(key)) TX.before.set(key, prev); }
 /* the records of a collection that differ between two values: list ids, map keys, or '*' for a value */
@@ -4290,7 +4282,7 @@ const pkey = (key, rec) => key + '/' + rec;
 const outside = fn => { const t = TX; TX = null; try { return fn(); } finally { TX = t; } };
 function mutate(name, input, recipe, opts = {}) {
   if (TX) return recipe ? recipe() : undefined;
-  const tx = TX = { name, before: new Map(), stubs: opts.stubs || [] }, signedOut = st.auth !== 'in';
+  const tx = TX = { name, before: new Map() }, signedOut = st.auth !== 'in';
   let ret;
   try { ret = recipe ? recipe() : undefined; } finally { TX = null; }
   /* input and opts.tmp can be functions, read after the recipe; an input of null sends nothing (the recipe made no change) */
@@ -4361,7 +4353,7 @@ window.__sessionDispose = () => { DISPOSED = true; LIFE.abort(); OBSERVERS.forEa
 let dataError = msg => {};
 const applyApiMode = () => { mockBackend.cfg.failWrites = st.apiMode === 'fail'; const was = mockBackend.cfg.failReads; mockBackend.cfg.failReads = st.apiMode === 'failload'; if (APP_STARTED && (mockBackend.cfg.failReads || (was && DS.meta.getState().status === 'error'))) apiSource.load(liveData); };
 /* for tests: true when the data store has loaded (or its load failed) and has no requests in flight */
-window.__dataIdle = () => { const m = DS.meta.getState(); return (m.status === 'ready' || m.status === 'error') && m.pending === 0; };
+window.__dataIdle = () => { const m = DS.meta.getState(); return (m.status === 'ready' || m.status === 'error') && m.pending === 0 && !mockBackend.eventsPending(); };
 /* the store finished loading, a request finished, or a failed write was undone: show it */
 let APP_STARTED = false;   /* set when the first screen has been drawn; store events before that do not draw */
 liveData.meta.subscribe((m, p) => { if (!APP_STARTED) return; if (m.status !== p.status) renderAll(); else if (m.pending !== p.pending) { const e = document.getElementById('k-dstat'); if (e) e.textContent = m.pending ? `Saving ${m.pending}…` : 'Saved'; } });
@@ -4376,6 +4368,9 @@ liveData.meta.subscribe((m, p) => { if (!APP_STARTED) return; if (m.status !== p
 const mockBackend = window.SessionMockApi.createBackend({
   fixtures: window.SessionFixtures, scenarios: window.SessionScenarios, storageKey: 'session-mock-db-v5', dev: DEV,
   latency: typeof window.__SESSION_API_LATENCY === 'number' ? window.__SESSION_API_LATENCY : 120,
+  /* a run's length (DevConfig jobMs): __SESSION_ASK_MS, which tests set before the page loads; short when the latency is 0 */
+  jobMs: typeof window.__SESSION_ASK_MS === 'number' ? window.__SESSION_ASK_MS : (window.__sfFast || window.__SESSION_API_LATENCY === 0) ? 40 : 2400,
+  checkMs: window.__sfFast ? 40 : 1400,
 });
 /* databases saved by earlier versions: v2 before errors had codes, v3 before records carried createdAt, v4 before threads had ids */
 try { ['v2', 'v3', 'v4'].forEach(v => localStorage.removeItem('session-mock-db-' + v)); } catch (e) {}
@@ -4601,7 +4596,7 @@ function createThread(kind) {
   if (kind === 'ask') miAttachAsk(np);
   db.push('posts', np);
   Object.assign(st, { thread: np.id, draft: '', compOpen: false, modal: null, clar: {}, home: false, savedPage: false, space: s.id, compTopic: null, tpMenu: null });
-  if (kind === 'ask') askRun(np.id);
+  if (kind === 'ask') runStart(np.id);
   /* the first ask on a key after the included tokens run out: the composer stops showing the note about it.
      A payer picked for one ask is cleared. */
   if (pay) { if (pay.kind === 'key' && !TU().movedSeen) db.set('usage', u => { u.movedSeen = true; }); tmPickClear(); }
@@ -4777,7 +4772,8 @@ function layoutSaved() {
 
 
 /* ---------- thread page ---------- */
-const SOURCES = { public: ['wikipedia.org', 'archive.org', 'gov.uk'], scifi: ['isfdb.org', 'tor.com', 'sf-encyclopedia.com'], markets: ['bis.org', 'sec.gov', 'ssrn.com'], ml: ['arxiv.org', 'openreview.net', 'paperswithcode.com'], bio: ['ncbi.nlm.nih.gov', 'nature.com'], history: ['archive.org', 'jstor.org'], climate: ['iea.org', 'eurostat.ec.europa.eu'], urbanism: ['houstontx.gov', 'citylab.com'], math: ['arxiv.org', 'mathoverflow.net'] };
+/* the web sources each space's answers cite: the server's (session-web-spaces-jobs.js), which its runs write */
+const SOURCES = window.SessionJobs.SOURCES;
 const FU_GENERIC = () => [
   { u: 'hal_b', createdAt: isoAgo('40m'), q: 'Which sources does this lean on most?', a: 'Mostly the primary documents listed under Sources. The secondary summaries agree with them on the main points.' },
   { u: 'lettie', createdAt: isoAgo('20m'), q: 'What would change this conclusion?', a: 'New data that contradicts the primary sources, or a narrower definition of the terms in the question.' },
@@ -4791,7 +4787,8 @@ const replyCount = p => { const o = p.orig || p; return o.k === 'ask' ? nFuList(
 function answerHTML(p) {
   if (p.fail || (p.running && postById(p.id) === p)) return askStateHTML(p);
   if (p.running && p.about) return miRun(p);
-  if (p.running) return `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Researching</b><span class="faint">· 18k tokens so far</span></div><ol class="run-steps"><li class="done">Read the question and planned 4 searches</li><li class="done">Searched the web and ${spName(sp(p.s))} threads</li><li class="cur">Reading 9 sources</li><li>Write the answer</li></ol></div>`;
+  /* an ask in a thread's tree: { running, s, th, node } */
+  if (p.running) return runStepsHTML(sp(p.s), runStep(p.th, p.node));
   const src = srcFor(p);
   return `<div class="prose">${D.rich[p.id] || `<p>${esc(p.sum)}</p>`}</div>${src.length ? `<div class="srcs"><span class="ao-l">Sources</span>${src.map(d => `<span class="src">${d}</span>`).join('')}</div>` : ''}`;
 }
@@ -4838,7 +4835,7 @@ function thDoc(p) {
         : `<section class="th-rps" id="th-f"><h3>Replies <span class="faint num">${rps.length}</span></h3>${rps.map((r, i) => replyHTML(r, 0, pid + ':' + i)).join('')}</section>`}
       ${fuInput(p)}</article>
     <aside class="th-aside">
-      <div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(sp(p.s))}</button></div>${isClosed(sp(p.s)) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(sp(p.s).members)})</b></div>` : ''}<div><span>${p.k === 'ask' ? 'Asked by' : 'Posted by'}</span><b>${p.u}</b></div>${p.k === 'ask' ? `<div><span>Model</span><b>${MODEL_NAME}</b></div><div><span>Thinking level</span><b>${p.think || 'Medium'}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Tokens</span><b class="num">${p.running ? '18k so far' : fmtT(p.tok)}</b></div>` : ''}</div></aside></div>`;
+      <div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(sp(p.s))}</button></div>${isClosed(sp(p.s)) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(sp(p.s).members)})</b></div>` : ''}<div><span>${p.k === 'ask' ? 'Asked by' : 'Posted by'}</span><b>${p.u}</b></div>${p.k === 'ask' ? `<div><span>Model</span><b>${MODEL_NAME}</b></div><div><span>Thinking level</span><b>${p.think || 'Medium'}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Tokens</span><b class="num">${p.running ? `${fmtT(AS_TOK[runStep(p.id)])} so far` : fmtT(p.tok)}</b></div>` : ''}</div></aside></div>`;
 }
 function layoutThread() {
   const p = postById(st.thread);
@@ -5390,7 +5387,7 @@ function nAsk(key) {
   const [ti, id] = String(key).split(':'), i = ti, T = qtT(i), n = T.by[id];
   const kids = qtVisKids(T, id).slice().sort((a, b) => qtAge(b) - qtAge(a)).map(k => ({ u: k.u, createdAt: k.createdAt, q: k.q, html: k.html, node: k.id, below: T.sub(k.id), running: k.running }));
   const par = T.by[n.par];
-  const body = `<button class="n-th-by" type="button" data-n="push:profile:${esc(n.u)}">${avatar(n.u, 'n-av')}<span><b>${esc(n.u)}</b><small>${nNameH(sp(T.p.s))} · ${ago(n)} · Level ${n.lv}</small></span></button><p class="n-about">Asked about the answer to ${par.id === 'r' ? 'the question' : 'level ' + par.lv}<span>${esc(qtClip(par.q, 90))}</span></p><p class="n-th-ask">${esc(n.q)}</p><div class="n-ans">${n.running ? answerHTML({ running: true, s: T.p.s }) : n.html}</div>${tmNodeExtra(i, id)}${kids.length ? `<h3 class="n-sec">Asks about this answer</h3>${nFuHTML(i, kids)}` : ''}`;
+  const body = `<button class="n-th-by" type="button" data-n="push:profile:${esc(n.u)}">${avatar(n.u, 'n-av')}<span><b>${esc(n.u)}</b><small>${nNameH(sp(T.p.s))} · ${ago(n)} · Level ${n.lv}</small></span></button><p class="n-about">Asked about the answer to ${par.id === 'r' ? 'the question' : 'level ' + par.lv}<span>${esc(qtClip(par.q, 90))}</span></p><p class="n-th-ask">${esc(n.q)}</p><div class="n-ans">${n.running ? answerHTML({ running: true, s: T.p.s, th: T.i, node: n.id }) : n.html}</div>${tmNodeExtra(i, id)}${kids.length ? `<h3 class="n-sec">Asks about this answer</h3>${nFuHTML(i, kids)}` : ''}`;
   const sv = nSignedIn() && st.qtSaved.has(key);
   return { body: `${nPushBar('', nBtn('qtsave:' + key, sv ? NI.savedOn : NI.saved, sv ? 'Remove from Saved' : 'Save'))}<div class="n-th">${body}</div>`, bar: n.running ? '' : nDock('Ask about this answer', sp(T.p.s)) };
 }
@@ -5990,7 +5987,7 @@ const CI = {
 };
 const LK = (cls = 'cs-lk', title = 'Closed space') => `<span class="${cls}" title="${title}" aria-label="${title}">${LOCK}</span>`;
 const CV = I.chev.replace('<svg', '<svg class="cs-cv"');
-Object.assign(SOURCES, { replication: ['arxiv.org', 'osf.io', 'github.com'], northwind: ['postgresql.org', 'aws.amazon.com', 'cloud.google.com'], grants: ['osf.io', 'cos.io', 'ukri.org'], ward7: ['codelibrary.amlegal.com', 'hud.gov'] });
+
 Object.assign(NAMES, { 'pat.r': 'Pat R.', 'noor.a': 'Noor A.', ekow: 'Ekow', 'dana.l': 'Dana L.', 'yuki.t': 'Yuki T.', bram: 'Bram', cleo: 'Cleo' });
 
 /* ---------- membership ---------- */
@@ -6983,17 +6980,8 @@ const SFI = {
   repo: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="4.5" cy="3.8" r="1.5"/><circle cx="4.5" cy="12.2" r="1.5"/><circle cx="11.5" cy="6" r="1.5"/><path d="M4.5 5.3v5.4M11.5 7.5c0 2.2-2.6 2.2-5.6 3.6"/></svg>',
 };
 Object.assign(NAMES, { 'maya.r': 'Maya R.', devin_o: 'Devin O.', tove: 'Tove' });
-SOURCES.sablefield = ['docs.sablefield.dev', 'help.sablefield.dev', 'sablefield.dev'];
+
 const sfIdx = rf => tidWhere(p => p.rf === rf);
-/* The answer the mock agent gives to a new sync-rule ask in Sablefield (askAnswer). */
-const SF_HTML = {
-  new: `<p>Declare the rule with <code>scope: user</code> and filter on the owner column with <code>auth.user_id()</code>. Clients then receive only the rows where the filter matches the signed-in user. <sup class="cite">1</sup></p>
-<pre><code>rule "my_notes" {
-  scope: user
-  query: select * from notes where owner_id = auth.user_id()
-}</code></pre>
-<p>Deploy with <code>sable rules deploy</code>. If the filter is missing, the deploy fails with <code>E_SYNC_SCOPE</code>. <sup class="cite">2</sup></p>`,
-};
 
 /* ---------- names, seal ---------- */
 const isVer = s => !!(s && s.dom && s.dom.state === 'ok');
@@ -7026,12 +7014,6 @@ function faqSearch(s, q) {
     .filter(x => x.sc >= 0.34).sort((a, b) => b.sc - a.sc || likesOf(b.p) - likesOf(a.p)).slice(0, 5);
 }
 const faqHi = (text, q, s) => { let h = esc(text); kwToks(q, s).filter(w => w.length > 2).forEach(w => { h = h.replace(new RegExp(`\\b(${w.replace(/[^a-z0-9_]/g, '')}[a-z]*)`, 'gi'), '<mark>$1</mark>'); }); return h; };
-/* The topic the agent assigns: the topic whose asks share the most keywords with the question. */
-function sfClassify(s, q) {
-  const qt = new Set(kwToks(q, s)); let best = null, top = 0;
-  topicsOf(s).forEach(([k, l]) => { const words = new Set(kwToks(l + ' ' + asksOf(s).filter(x => x.p.topic === k).map(x => askText(x.p)).join(' '), s)); const n = [...qt].filter(w => tokHit(w, words)).length; if (n > top) { top = n; best = k; } });
-  return best;
-}
 
 /* ---------- FAQ landing ---------- */
 function faqBox(s, big) {
@@ -7103,11 +7085,9 @@ function faqAsk(force) {
   const i = tmpId();
   db.push('posts', { id: i, s: s.id, u: ME.u, mine: true, k: 'ask', t: null, q, sum: null, r: 0, tok: 0, likes: 0, running: true, kw: q, topic: tp, topicBy: tp ? 'asker' : null });
   Object.assign(st, NAVBASE(), { thread: i, space: s.id, faqQ: '', faqTried: false });
-  sfFinish(i);
+  /* the server runs it; its answer assigns a topic when the asker chose none */
+  runStart(i);
 }
-/* Asks in spaces with the FAQ landing finish after a short delay; the agent assigns a topic if the asker chose none. */
-/* FAQ asks finish through the shared answer pipeline (askRun); it writes the topic when the asker chose none. */
-function sfFinish(i) { askRun(i); }
 
 /* ---------- topic picker (composer) and topic change (thread page, moderators) ---------- */
 function tpPicker(s) {
@@ -7238,9 +7218,11 @@ function domainSec(d, s) {
   const state = w.state === 'checking' ? `<p class="wz-wait" role="status"><span class="spin" aria-hidden="true"></span>Checking the TXT record on ${dom}…</p>` : w.state === 'failed' ? `<p class="cs-err cx-domfail" role="alert">Couldn’t find the TXT record on ${dom}. DNS changes can take a few minutes.</p>` : `<p class="faint">Not verified. The space has no seal until the check passes.</p>`;
   return stSec('Domain', 'Show that the admins of this space control a domain. One domain per space.', `${field}${how}<div class="wz-vrow">${state}${w.state === 'checking' ? '' : `<button class="btn primary" type="button" data-sfdom="check" ${w.domain.trim() ? '' : 'disabled'}>${w.state === 'failed' ? 'Check again' : 'Check'}</button>`}</div>${fine}`);
 }
+/* The server checks the DNS record (spaces.verifyDomain, a job); the event stream brings the result (evDomain). */
 function sfDomCheck(s) {
-  patch('sfDom', w => { w.state = 'checking'; });
-  setTimeout(serverLater(() => { const w = st.sfDom; if (!w || w.state !== 'checking' || st.sfDomHold) return; if (cxDomFails(w.domain)) { patch('sfDom', x => { x.state = 'failed'; }); renderAll(); return; } spEdit(s.id, x => { x.dom = { domain: w.domain.trim().toLowerCase(), method: w.method, state: 'ok', verifiedAt: nowIso() }; }); patch('sfDom', x => { x.state = 'none'; x.domain = ''; }); toast(`Verified. The seal now shows next to ${spName(s)}.`); renderAll(); }), window.__sfFast ? 40 : 1400);
+  const w = st.sfDom, domain = w.domain.trim().toLowerCase();
+  patch('sfDom', x => { x.state = 'checking'; });
+  mutate('spaces.verifyDomain', { id: s.id, domain, method: w.method }, () => spEdit(s.id, x => { x.dom = { domain, method: w.method, state: 'checking' }; }), { fail: () => { if (st.sfDom && st.sfDom.sid === s.id) patch('sfDom', x => { x.state = 'none'; }); } });
 }
 
 /* ---------- clicks ---------- */
@@ -7624,11 +7606,12 @@ function miAbout(p) {
   const lbl = its.length > 1 ? `Asked about ${its.length} sources` : b != null ? 'Asked about a passage' : 'Asked about';
   return `<section class="mi-about"><div class="mi-ab-h">${MII.ask}<span>${lbl}</span></div>${its.map(x => miMini(x, `<span class="mi-mini-go">${I.chev}</span>`, ` role="link" tabindex="0" ${miOpenAttr(x)}`)).join('')}${quote}${flag}</section>`;
 }
-/* running steps for an ask about items */
+/* running steps for an ask about items: the run's progress step (from the server) and its tokens so far */
 function miRun(p) {
-  const its = miRefs(p).map(MIT).filter(Boolean), m = its[0], b = p.about.b;
+  const its = miRefs(p).map(MIT).filter(Boolean), m = its[0], b = p.about.b, step = runStep(p.id);
   const read = its.length > 1 ? `Read ${its.length} sources (${miTok(its.reduce((a, x) => a + x.tok, 0))} tokens)` : b != null ? `Read ${miLblLong(m, b)} and the section around it (${miTok(Math.max(400, m.tok * 3 / m.body.length))} tokens)` : `Read the source in full (${miTok(m.tok)} tokens)`;
-  return `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Researching</b><span class="faint">· 9k tokens so far</span></div><ol class="run-steps"><li class="done">${read}</li><li class="done">Checked other sources in ${spName(sp(p.s))} that mention the same claims</li><li class="cur">Searching the web for the pages the ${its.length > 1 ? 'sources cite' : m.kind === 'thread' ? 'thread cites' : 'source cites'}</li><li>Write the answer</li></ol></div>`;
+  const steps = [read, `Checked other sources in ${spName(sp(p.s))} that mention the same claims`, `Searching the web for the pages the ${its.length > 1 ? 'sources cite' : m.kind === 'thread' ? 'thread cites' : 'source cites'}`, 'Write the answer'];
+  return `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Researching</b><span class="faint">· ${fmtT(AS_TOK[step])} tokens so far</span></div><ol class="run-steps">${steps.map((t, k) => `<li${k < step ? ' class="done"' : k === step ? ' class="cur"' : ''}>${t}</li>`).join('')}</ol></div>`;
 }
 /* Sources for item asks: passages of the item, other items in the space, then the web. */
 function miSrc(p, src) {
@@ -8592,7 +8575,7 @@ function cxJump(k) {
   }
 }
 /* Domain check: a domain that ends in .test has no TXT record in this mockup */
-const cxDomFails = dm => /\.test$/i.test((dm || '').trim());
+
 /* ==== end of spaces and moderation ==== */
 /* BEGIN question-trees */
 /* ================= question trees =================
@@ -8632,12 +8615,6 @@ const QTI = {
 const QT_REP = tidWhere(p => p.s === 'replication' && p.k === 'ask');
 const QT_SF = tidWhere(p => p.rf === 'q2');
 
-/* Answers for asks made in the mock. Keyed by the jump that prefills them; others get the sample text. */
-const QT_CANNED = {
-  wording: `<p>Only indirect evidence. Platforms that publish resolution histories report fewer disputes after they adopted templates for common question types, such as elections and economic releases. None has published a comparison with a control group, and disputes also fell as moderators gained experience, so the effect of wording alone is not measured.</p>`,
-  both: `<p>The two branches answer different parts of the same problem. The worked example shows that a fixed void payout moves the price (0.58 instead of 0.6), and a trader who expects fewer voids earns about 2.6% before fees. The side-market branch shows a way to price the void directly, but such markets exist only on user-created platforms and are thinly traded. Together they suggest that on regulated venues, void risk stays mixed into the main price.</p>`,
-  generic: `<p>Sample answer for this mock. The agent answers with the context shown in the composer, and lists its sources below the answer.</p>`,
-};
 
 /* ---------- tree access ---------- */
 const qtTxt = h => String(h || '').replace(/<sup[^>]*>.*?<\/sup>/g, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
@@ -8682,7 +8659,7 @@ const qtAddr = (T, id) => `session.app/s/${sp(T.p.s).name}/t/${T.p.id}${id && id
 /* ---------- small parts ---------- */
 function qtAnswer(T, n) {
   if (n.id === 'r' && (T.p.running || T.p.fail)) return answerHTML(T.p);
-  if (n.running) return n.id === 'r' && T.p.about ? miRun(T.p) : answerHTML({ running: true, s: T.p.s });
+  if (n.running) return n.id === 'r' && T.p.about ? miRun(T.p) : answerHTML({ running: true, s: T.p.s, th: T.i, node: n.id });
   if (modOf(n.rep)) return modPh(n.rep, n.id === 'r' ? 'answer' : 'follow-up answer');
   return `<div class="prose qt-prose">${n.html}</div>`;
 }
@@ -8866,16 +8843,15 @@ layoutThread = function () {
 
 /* ---------- new asks ---------- */
 let qtSeq = 0;
-/* the payer and its model are stored on the node; the answer is written, or stopped for tokens, by tmQtRun */
+/* the payer and its model are stored on the node; the server's run writes the answer, or stops it for tokens */
 function qtAsk(T, par, text) {
   const pay = askPay(T.p.s); if (!pay) return;
   const n = { id: tmpId(), par, u: ME.u, q: text, tok: 0, running: true, uses: st.qtCmp ? [...st.qtCmp] : null, pay: pay.id, model: tmModelFor(pay).id };
-  const html = QT_CANNED[st.qtCanned] || QT_CANNED.generic, tok = 9e3 + qtTokTxt(html) * 20;
   qtEdit(T.i, d => { d.nodes.push(n); });
-  Object.assign(st, { qtAskAt: null, qtDraft: '', qtErr: '', qtCmp: null, qtCanned: null });
+  runStart(T.i, n.id);
+  Object.assign(st, { qtAskAt: null, qtDraft: '', qtErr: '', qtCmp: null });
   qtGo(qtT(T.i), n.id);
   tmPickClear();
-  tmQtRun(T.i, n.id, html, tok);
 }
 
 /* ---------- start a thread from a branch ---------- */
@@ -9053,7 +9029,7 @@ csModal = function () { return (st.modal || '').startsWith('qt-') ? qtModal() : 
 
 /* ---------- state and "Jump to" ---------- */
 Object.assign(st, { qtTh: null, qtNode: 'r', qtCmp: null, qtPick: null, qtMenu: null, qtAskAt: null, qtDraft: '', qtErr: '', qtHi: null,
-  qtZoom: 0.8, qtSide: 'a', qtShowCol: false, qtPro: null, qtCanned: null, qtScroll: null, qtFocusIn: false, qtMapOpened: false,
+  qtZoom: 0.8, qtSide: 'a', qtShowCol: false, qtPro: null, qtScroll: null, qtFocusIn: false, qtMapOpened: false,
   qtExp: new Set(), qtFuQ: false });
 /* Ask threads show the follow-ups with the tree in the side column (st.thrV 'fx'). The flat
    Follow-ups page (QT_layoutThread) is used for posts and for threads the person cannot read. */
@@ -9074,6 +9050,7 @@ JUMPS.push(
 );
 screenData('qt-promoted', 'asks: a branch became a thread');
 screenData('qt-collapse', 'asks: a collapsed branch');
+screenData('qt-running', 'asks: a follow-up running');
 screenData('qt-closed', 'replication: member');
 function qtJump(k) {
   if (st.device === 'native') st.device = 'desktop';
@@ -9093,10 +9070,11 @@ function qtJump(k) {
     case 'qt-map': open(M, 'c2'); qtOpenMap(); break;
     case 'qt-map-deep': open(M, 'c2'); qtGo(qtT(M), 'e1'); break;
     case 'qt-compose': open(M, 'c2', { qtAskAt: 'c2', qtDraft: 'Show the same example with a 10% void probability.', qtFocusIn: true }); break;
-    case 'qt-running': open(M, 'r', { qtCanned: 'wording' }); qtAsk(qtT(M), 'r', 'Is there evidence that clearer wording reduces disputes?'); break;
+    /* your ask, made just now; the scenario holds its run at a progress step */
+    case 'qt-running': open(M, qtData(M).nodes.find(n => n.running).id); break;
     case 'qt-pick': open(M, 'd1', { qtPick: 'd1' }); break;
     case 'qt-compare': open(M, 'd1', { qtCmp: ['d1', 'd2'], qtSide: 'a' }); break;
-    case 'qt-merge': open(M, 'd1', { qtCmp: ['d1', 'd2'], qtSide: 'a', qtDraft: 'Taken together, can traders on a regulated exchange price void risk separately?', qtCanned: 'both', qtFocusIn: true }); break;
+    case 'qt-merge': open(M, 'd1', { qtCmp: ['d1', 'd2'], qtSide: 'a', qtDraft: 'Taken together, can traders on a regulated exchange price void risk separately?', qtFocusIn: true }); break;
     case 'qt-promote': open(M, 'b3'); qtProOpen(qtT(M), 'b3'); break;
     case 'qt-promoted': { const ni = tidWhere(p => p.from && p.from.th === M && p.from.node === 'b3'), sid = postById(ni).s; Object.assign(st, NAVBASE(), { thread: ni, space: sid }); qtEnter(ni); toast(`Thread started in ${spName(sp(sid))}. The branch it came from links to it.`); break; }
     case 'qt-collapse': open(TID(0), 'f1'); break;
@@ -9487,19 +9465,26 @@ function abJump(k) {
   }
 }
 
-/* ==== asks, answers and failures (web): answer pipeline, payer checks, failed writes ==== */
-/* Every ask runs through askRun: progress steps, then askFinish writes the answer, its sources, the token
-   charge and a notification, or ends the run in a failed state (askFail). The payer is the token model's
-   (tmPayer: the included tokens, then the default key). Stop ends a run with nothing written. Writes from
-   the composers wait for the server (askHold); a failed write puts the composer back with its text. */
+/* ==== asks, answers and failures (web): runs, payer checks, failed writes ==== */
+/* An ask runs on the server (step 7). The procedure that makes it (threads.create, research.forkNode,
+   threads.update or followups.update with run, research.retryNode) starts its run, a job in the mock backend,
+   which writes the answer, its sources, the token charge and a notification, or ends the run in a failed
+   state. The page shows the run from its record (D.runs, "<thread>:<node>"), which the event stream keeps
+   current (below), and puts in the records the server wrote when the run ends. Stop is research.cancelNode
+   and Run again research.retryNode. The payer is the token model's (tmPayer: the included tokens, then the
+   default key); the page sends the one it picked. Writes from the composers wait for the server (askHold);
+   a failed write puts the composer back with its text. */
 Object.assign(st, { fuDraft: {}, askErr: null });
 const ASK = { hold: false, failed: false, retry: null, nav: null, tick: 0 };
-const RUNS = new Map();   /* thread id → { step, timer } for the runs started in this page */
-/* [key, run] for a thread: a run started before the server replaced the thread's temporary id is found by either id */
-const runOf = i => { const id = realId(i); for (const [k, r] of RUNS) if (realId(k) === id) return [k, r]; return [i, undefined]; };
-const AS_TOK = [3e3, 9e3, 18e3, 31e3];
-/* a run's length: short; near zero when the API latency is 0 (tests) */
-const askMs = () => typeof window.__SESSION_ASK_MS === 'number' ? window.__SESSION_ASK_MS : (window.__sfFast || window.__SESSION_API_LATENCY === 0) ? 40 : 2400;
+/* the tokens a run has used when each progress step starts (the server's numbers, session-web-spaces-jobs.js) */
+const AS_TOK = window.SessionJobs.STEP_TOK;
+/* the run of a node's ask (node r: the thread's ask), from the server; null when none is in progress */
+const runKeyOf = (i, node = 'r') => `${realId(i)}:${node}`;
+const runOf = (i, node = 'r') => (D.runs || {})[runKeyOf(i, node)] || null;
+/* the progress step a run is on (0 to 3); without a run record (a run the page may not see), the third */
+const runStep = (i, node) => { const r = i == null ? null : runOf(i, node); return r ? r.step : 2; };
+/* in a mutation's recipe: the run the procedure starts, as the server will write it (its answer replaces it) */
+const runStart = (i, node = 'r') => db.put('runs', `${i}:${node}`, { th: i, node, u: ME.u, status: 'queued', attempt: 1, seq: 0, step: 0 });
 /* the payer for an ask in space sid (tmPayOk: a payer picked for this ask, or the token model's order), or null */
 const askPay = sid => tmPayOk(sid);
 /* a key the ask names that can still be used (Edit and run again keeps it) */
@@ -9511,100 +9496,105 @@ const askErrNote = () => `<span class="c2-note warn as-perr" role="alert">${AS_E
 const askNoJoined = () => st.auth === 'in' && !D.joined.some(id => sp(id));
 const askHomeEmpty = () => `${homeTitle('Home', 'New threads from the spaces you joined.')}<div class="cs-empty as-empty"><p><b>Join a space to see its threads here</b></p><p class="muted">Threads from the spaces you join show on Home, newest first. You can ask and post once you have joined a space.</p><div class="as-empty-a"><button class="btn primary" type="button" data-sub="browse">Browse spaces</button><button class="btn" type="button" data-sub="create">${PLUS}Create a space</button></div></div>`;
 
-/* ---------- runs ---------- */
-function askCancel(i) { const [k, r] = runOf(i); if (r) { clearTimeout(r.timer); RUNS.delete(k); } }
-function askRun(i) {
-  askCancel(i);
-  const n = AS_TOK.length, r = { step: 0, timer: 0 };
-  RUNS.set(i, r);
-  const tick = () => {
-    const [k, r2] = runOf(i); if (r2 !== r) return;
-    const p = postById(i); if (!p || !p.running) { RUNS.delete(k); return; }
-    if (r.step < n - 1) { r.step++; r.timer = setTimeout(tick, askMs() / n); if (st.thread === p.id && st.device !== 'native') renderKeepFocus(); return; }
-    RUNS.delete(k); askFinish(p.id);
-  };
-  r.timer = setTimeout(tick, askMs() / n);
-}
-/* charge an ask to its payer, in the space that is open */
-function askCharge(pay, tok) { tmCharge(pay, tok, curSpace()); }
-function askNotify(i, type) {
-  const p = postById(i); if (!p || p.u !== ME.u) return;
-  db.unshift('notifs', { id: tmpId(), type, thread: p.id, read: st.thread === p.id && st.device !== 'native' });
-}
-/* a plausible answer from the question, the space's usual sources and, for asks about sources, their passages */
-function askAnswer(p, i) {
-  const s = sp(p.s);
-  if (s.id === 'sablefield' && /sync|rule|scope|row/i.test(p.q)) return { rich: SF_HTML.new, srcd: [['Sync rules › Scopes', 'docs.sablefield.dev', 'Documentation'], ['Fixing sync rule deploy errors', 'help.sablefield.dev', 'Help center']], sum: 'Declare the rule with scope: user and filter on the owner column with auth.user_id().' };
-  const doms = srcFor(p).slice(0, 3), kw = clip(p.q.replace(/\?$/, ''), 56);
-  const T = [`Background: ${kw}`, 'Primary document', 'Later commentary and corrections'], N = ['Overview and dates', 'Quoted where the wording matters', 'Notes one correction'];
-  const srcd = doms.map((d, k) => [T[k], d, N[k]]);
-  const c = k => k < srcd.length ? ` <sup class="cite">${k + 1}</sup>` : '';
-  const its = miRefs(p).map(MIT).filter(m => m && m.body && m.body.length);
-  const mc = its.map((m, k) => MC(m.id, k === 0 && p.about && p.about.b != null && m.body[p.about.b] ? p.about.b : 0)).join(' ');
-  const lead = its.length ? `<p>The ${its.length > 1 ? 'sources you asked about agree' : 'source you asked about agrees'} with the pages it cites on the main point and differs on the details. ${mc}</p>` : `<p>The sources below agree on the main point. Where they differ, the answer gives each view with its source.${c(0)}</p>`;
-  const list = srcd.length > 1 ? `<h4>What the sources say</h4><ul>${['The first source gives the background and the dates.', 'The second source is the primary document. The answer quotes it where the wording matters.', 'The third source is later commentary. It notes one correction to the earlier accounts.'].slice(0, srcd.length).map((t, k) => `<li>${t}${c(k)}</li>`).join('')}</ul>` : '';
-  return { rich: `${lead}${list}<h4>Limits</h4><p>The agent searched the web and ${spName(s)} threads. Sources older than five years were left out unless no newer source covered the point.</p>`, srcd, sum: its.length ? 'The source agrees with the pages it cites on the main point; the answer lists where they differ.' : `Answered from ${srcd.length || 'several'} sources, listed under Sources.` };
-}
-function askFinish(i) {
-  const p = postById(i); if (!p || !p.running) return;
-  const s = sp(p.s), tok = Math.round((34e3 + (p.q.length * 997) % 14e3) / 1e3) * 1e3;
-  const forced = window.__SESSION_ASK_FAIL; if (forced) { window.__SESSION_ASK_FAIL = null; return askFail(i, forced); }
-  let pay = p.pay; if (!tmSrc(pay)) { const x = tmPayer(p.s); pay = x.ok ? x.id : null; }
-  const src = tmSrc(pay);
-  /* the payer ran out while the agent worked: stop, charge what was left, and say why */
-  if (!src || src.left < tok) {
-    const used = src ? Math.min(src.left, tok) : 0;
-    tmCharge(pay, used, p.s); askFail(i, 'tokens', { used, pay, sum: tmStopSum(src) });
-    return;
-  }
-  const a = askAnswer(p, i);
-  db.put('rich', i, a.rich); db.put('srcd', i, a.srcd); if (!D.fu[i]) db.put('fu', i, []);
-  db.update('posts', i, x => {
-    x.running = false; x.tok = tok; x.pay = pay; x.sum = a.sum; delete x.fail;
-    if (faqOn(s) && !x.topic) { x.topic = sfClassify(s, x.q); x.topicBy = x.topic ? 'agent' : null; }
-  });
-  tmCharge(pay, tok, p.s);
-  askNotify(i, 'answer_ready');
-  renderKeepFocus();
-}
-const AS_SUM = {
-  stopped: () => 'Stopped. The agent wrote nothing.',
-  tokens: () => tmStopSum(null),
-  key: () => 'The answer failed: the provider rejected the API key.',
-  rate: () => 'The answer failed: the provider is limiting requests.',
-};
-function askFail(i, why, o = {}) {
-  askCancel(i);
-  const p = postById(i); if (!p) return;
-  const pay = o.pay || p.pay || null, wait = why === 'rate' ? (o.wait || 20) : 0;
-  if (!D.fu[i]) db.put('fu', i, []);
-  db.update('posts', i, x => { x.running = false; x.tok = o.used || 0; x.pay = pay; x.sum = o.sum || AS_SUM[why](); x.fail = { why, ...(wait ? { at: Date.now() + wait * 1e3 } : {}) }; });
-  if (why !== 'stopped') askNotify(i, 'answer_failed');
-  renderKeepFocus();
-}
+/* ---------- Stop and Run again ---------- */
+/* Stop: the server ends the run and charges what it used so far (its progress step's tokens) */
 function askStop(i) {
   const p = postById(i); if (!p || !p.running) return;
-  const r = runOf(i)[1], src = tmSrc(p.pay), used = src ? Math.min(src.left, AS_TOK[r ? r.step : 2]) : 0;
-  tmCharge(p.pay, used, p.s);
-  askFail(i, 'stopped', { used, pay: p.pay });
+  const src = tmSrc(p.pay), used = src ? Math.min(src.left, AS_TOK[runStep(p.id)]) : 0;
+  mutate('research.cancelNode', { thread: p.id, node: 'r' }, () => {
+    if (!D.fu[p.id]) db.put('fu', p.id, []);
+    db.update('posts', p.id, x => { x.running = false; x.tok = used; x.pay = p.pay || null; x.sum = 'Stopped. The agent wrote nothing.'; x.fail = { why: 'stopped' }; });
+    db.del('runs', runKeyOf(p.id));
+  });
 }
 /* Run again: the payer that was picked, else the original payer while it can pay, else the payer that can pay now */
 function askAgain(i, pay) {
   const p = postById(i); if (!p) return;
-  const now = tmPayer(p.s), to = pay || (tmCanPayWith(p.pay) ? p.pay : now.ok ? now.id : null);
-  db.update('posts', i, x => { x.running = true; x.sum = null; x.tok = 0; x.pay = to; x.model = tmModelFor(tmSrc(to)).id; delete x.fail; });
-  askRun(i);
+  const now = tmPayer(p.s), to = pay || (tmCanPayWith(p.pay) ? p.pay : now.ok ? now.id : null), model = tmModelFor(tmSrc(to)).id;
+  mutate('research.retryNode', Object.assign({ thread: p.id, node: 'r', model }, to ? { pay: to } : {}), () => {
+    db.update('posts', p.id, x => { x.running = true; x.sum = null; x.tok = 0; x.pay = to; x.model = model; delete x.fail; });
+    runStart(p.id);
+  });
+}
+
+/* ---------- the event stream (events.subscribe) ----------
+   One connection while signed in, none while signed out: GET /api/rpc/events.subscribe with EventSource
+   (the mock backend serves it). It carries SessionEvent objects (web/docs/03-api-and-events.md §3):
+     connection.ready              the first event; a later one means the stream reconnected: the runs are
+                                   fetched again (GET /api/runs)
+     research.run.started          a run is running: its record, at step 0
+     research.turn.committed       the run finished a progress step (turn.sourceIndex): the next one is current
+     research.run.finished         the run ended (complete, failed, cancelled)
+     research.node.updated         a run's state changed; its `changes` are the records the server wrote (the
+                                   answer, the thread or node, usage, the run record), put in the store as a
+                                   mutation's answer is (applyChanges)
+     notification.requested        a notification for you, with its inbox record in `changes`
+     workspace.updated             a space changed (a domain check ended), with `changes`
+     apiKeys.updated               TODO(limits) stub, mock only: a key check ended, with `changes`
+   A run's events carry seq: one that is not the next for its run is dropped (a replay) or, after a gap, the
+   runs are fetched again. */
+const EV = { src: null, connection: null };
+function evSync() {
+  const want = st.auth === 'in' && !DISPOSED && dataReady();
+  if (want && !EV.src) { EV.src = new EventSource('/api/rpc/events.subscribe'); EV.src.onmessage = evOn; }
+  if (!want && EV.src) { EV.src.close(); EV.src = null; EV.connection = null; }
+}
+/* a GET outside the write queue that the data store counts as pending (tests wait for it) */
+function evGet(url, then) {
+  DS.meta.setState(m => ({ pending: m.pending + 1 }));
+  http('GET', url).then(then, e => console.error(`[session] ${url}: ${e.message}`)).finally(() => DS.meta.setState(m => ({ pending: m.pending - 1 })));
+}
+const evRefetchRuns = () => evGet('/api/runs', v => { const del = Object.keys(D.runs).filter(k => !(k in v)); if (applyChanges({ runs: { put: v, del } }, () => false)) evRender(); });
+const evRender = () => { if (APP_STARTED && !DISPOSED) renderKeepFocus(); };
+function evOn(e) {
+  let ev; try { ev = dec(e.data); } catch (x) { return; }
+  const p = ev.payload || {};
+  switch (ev.type) {
+    case 'connection.ready': if (EV.connection) evRefetchRuns(); EV.connection = p.connectionId; return;
+    case 'research.run.started': return evRun(p, { status: 'running', attempt: p.attempt, model: p.model, step: 0 });
+    case 'research.turn.committed': return evRun(p, { step: p.turn.sourceIndex + 1 });
+    case 'research.run.finished': if (D.runs[p.nodeId]) evRun(p, {}); return;
+    case 'research.node.updated': case 'workspace.updated': case 'apiKeys.updated': return evApply(ev);
+    case 'notification.requested': evApply(ev); return evSeen(p);
+  }
+}
+/* a run event: the next seq for its run updates the record; a lower one is a replay; a gap fetches the runs */
+function evRun(p, change) {
+  const cur = D.runs[p.nodeId], last = cur ? cur.seq : 0;
+  if (cur && p.seq <= last) return;
+  if (!cur || p.seq !== last + 1) { evRefetchRuns(); return; }
+  if (applyChanges({ runs: { put: { [p.nodeId]: { ...cur, ...change, seq: p.seq } } } }, () => false)) evRender();
+}
+/* the records an event carries; a later queued mutation's answer brings the ones it changed */
+function evApply(ev) {
+  const any = applyChanges(ev.payload.changes, (key, x) => PENDING.has(pkey(key, x)));
+  if (ev.type === 'workspace.updated' && ev.payload.workspace) evDomain(sp(ev.payload.workspace.id));
+  if (any) evRender();
+}
+/* the answer is ready while you read its thread: the notification is read */
+function evSeen(p) {
+  const n = D.notifs.find(x => x.id === p.id);
+  if (n && !n.read && p.treeId && st.thread != null && realId(st.thread) === p.treeId && st.device !== 'native') mutate('notifications.markRead', { id: n.id }, () => db.update('notifs', n.id, x => { x.read = true; }));
+}
+/* a domain check ended: the Settings section shows the result */
+function evDomain(s) {
+  const w = st.sfDom; if (!s || !w || w.sid !== s.id || w.state !== 'checking' || st.sfDomHold) return;
+  if (s.dom && s.dom.state === 'failed') patch('sfDom', x => { x.state = 'failed'; });
+  else if (isVer(s)) { patch('sfDom', x => { x.state = 'none'; x.domain = ''; }); toast(`Verified. The seal now shows next to ${spName(s)}.`); }
 }
 
 /* ---------- running and failed answers ---------- */
+/* the progress of a run: its four steps, the current one marked, and the tokens so far */
+function runStepsHTML(s, step, stop = '') {
+  const steps = ['Read the question and planned 4 searches', `Searched the web and ${spName(s)} threads`, 'Reading 9 sources', 'Write the answer'];
+  return `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Researching</b><span class="faint">· ${fmtT(AS_TOK[step])} tokens so far</span>${stop}</div><ol class="run-steps">${steps.map((t, k) => `<li${k < step ? ' class="done"' : k === step ? ' class="cur"' : ''}>${t}</li>`).join('')}</ol></div>`;
+}
 function askStateHTML(p) {
   const i = p.id, s = sp(p.s), web = st.device !== 'native', mine = web && st.auth === 'in' && p.u === ME.u;
   if (p.running) {
     const stop = mine ? `<button class="btn sm as-stop" type="button" data-askstop="${i}">Stop</button>` : '';
     if (p.about) return miRun(p).replace('</div><ol class="run-steps">', `${stop}</div><ol class="run-steps">`);
-    const r = runOf(i)[1], step = r ? r.step : 2;
-    const steps = ['Read the question and planned 4 searches', `Searched the web and ${spName(s)} threads`, 'Reading 9 sources', 'Write the answer'];
-    return `<div class="run"><div class="run-h"><span class="spin" aria-hidden="true"></span><b>Researching</b><span class="faint">· ${fmtT(AS_TOK[step])} tokens so far</span>${stop}</div><ol class="run-steps">${steps.map((t, k) => `<li${k < step ? ' class="done"' : k === step ? ' class="cur"' : ''}>${t}</li>`).join('')}</ol></div>`;
+    return runStepsHTML(s, runStep(i), stop);
   }
   /* a stopped or failed answer: what happened, who paid, and Retry (token model block) */
   return tmFailHTML(p);
@@ -9633,7 +9623,7 @@ function askHold(create, onFail) {
     const moved = nvScreen() !== scr0;
     const fwdR = remapIds(fwd), madeR = made == null ? null : realId(made);
     if (!ASK.failed) { if (moved) askLanded(fwdR, madeR, scr0); else uiStore.setState(deepFreeze(fwdR)); }
-    else { if (made != null) askCancel(made); if (moved) askFailedAway(snap0, onFail); else onFail(); }
+    else { if (moved) askFailedAway(snap0, onFail); else onFail(); }
     renderAll();
   });
   return true;
@@ -9660,11 +9650,11 @@ function askFollowUp(par) {
   askHold(() => qtAsk(T, par, txt), () => { st.qtErr = `${AS_ERR} <button class="tlink" type="button" data-askretry="1">Retry</button>`; st.qtFocusIn = true; });
   return true;
 }
-{ const f0 = faqAsk, m0 = miCreateAsk; faqAsk = force => threadCreate(() => f0(force)); miCreateAsk = () => threadCreate(m0); }
+{ const f0 = faqAsk, m0 = miCreateAsk; faqAsk = force => threadCreate(() => f0(force)); miCreateAsk = () => threadCreate(() => { const t0 = lastTid(), r = m0(), p = lastTid() !== t0 && postById(lastTid()); if (p && p.running) runStart(p.id); return r; }); }
 /* asks from the FAQ box and from source pages wait for the server the same way */
 { const faq0 = faqAsk, mi0 = miCreateAsk;
   faqAsk = force => { let r; askHold(() => { r = faq0(force); }, askToast); return r; };
-  miCreateAsk = () => { const t0 = lastTid(); askHold(() => { mi0(); const p = lastTid() !== t0 && postById(lastTid()); if (p && p.running) askRun(p.id); }, askToast); };
+  miCreateAsk = () => { askHold(mi0, askToast); };
 }
 
 /* ---------- unsent follow-ups ---------- */
@@ -9891,23 +9881,16 @@ function layoutOnb() {
 }
 
 /* ---- API keys: provider check, limits, replace, revoke ---- */
-const AC_CHECK_MS = 1400;
+
 const AC_CAPS = [['0', 'No limit'], ['250000', '250k tokens'], ['500000', '500k tokens'], ['1000000', '1M tokens'], ['2000000', '2M tokens'], ['5000000', '5M tokens']];
 DD_SET.acCap = v => { st.keyCap = v; };
 const fCap = () => `<div class="fld"><span id="ak-cap-l">Monthly limit <small class="faint">optional</small></span>${ddSel('acCap', AC_CAPS, st.keyCap, 'ak-cap-l')}<small class="faint">When asks reach the limit, Session stops using this key until the 1st of the next month.</small></div>`;
-/* the provider's answer in this mock: a key with "revoked" or "expired" in it is rejected; a seeded key keeps its reason */
-const acVerdict = k => k.raw ? (/revoked/i.test(k.raw) ? 'it was revoked' : /expired/i.test(k.raw) ? 'it has expired' : null) : k.valid ? null : k.reason || 'it gave no reason';
+/* The provider checks the key: the server's job writes the verdict (TODO(limits) stub; a key with "revoked" or
+   "expired" in it is rejected) and the event stream brings it. In apiKeys.create and apiKeys.replace (a nested
+   mutation) this is the optimistic state only: those procedures start the check. */
 function acCheckKey(id) {
   const k0 = st.userKeys.find(x => x.id === id); if (!k0) return;
-  const why = acVerdict(k0);
   mutate('apiKeys.check', { id }, () => db.update('userKeys', id, k => { k.check = 'checking'; k.valid = false; delete k.reason; }));
-  /* the check's result: the server's job (TODO(limits): the page decides the verdict) */
-  setTimeout(serverLater(() => {
-    if (DISPOSED) return;
-    const k = st.userKeys.find(x => x.id === realId(id)); if (!k || k.check !== 'checking') return;
-    db.update('userKeys', k.id, r => { delete r.check; r.valid = !why; if (why) r.reason = why; });
-    renderKeepFocus();
-  }), AC_CHECK_MS);
 }
 /* Add key / Replace key in the key dialog, on the first-run page, or wherever key-save is pressed */
 function acSaveKey(v) {
@@ -10193,12 +10176,6 @@ function tmPayer(sid, o = {}) {
 }
 const tmPayOk = sid => { const p = tmPayer(sid, { override: tmOverride() }); return p.ok ? p : null; };
 const tmCanPayWith = id => tmChoices().some(c => c.id === id && c.left > 0);
-/* charge tokens to a source, in the space they were used in */
-function tmCharge(pay, tok, sid) {
-  if (!pay || !tok) return;
-  db.set('usage', u => { const by = u.by[pay] || (u.by[pay] = {}); by[sid] = (by[sid] || 0) + tok; });
-  if (st.userKeys.some(x => x.id === pay)) db.update('userKeys', pay, r => { r.lastUsedAt = nowIso(); });
-}
 const tmLeftTx = x => x.left === Infinity ? `${fmtT(x.used)} used this month, no limit` : `${fmtT(x.left)} left this month`;
 
 /* ---------- models: the model must run on the payer's provider ---------- */
@@ -10347,25 +10324,12 @@ function tmNodeFail(T, n) {
 /* Phone: the line under a follow-up's answer, or its stop */
 const tmNodeExtra = (i, id) => { const T = qtT(i), n = T.by[id]; if (!n || n.running) return ''; return n.fail ? tmNodeFail(T, n) : tmNodeMeta(T, n); };
 
-/* ---------- the answer pipeline: askFinish, askStop, askAgain and qtAsk charge the payer (tmCharge) ---------- */
-/* follow-ups: the same payer rule and the same check when the answer is written */
-function tmQtRun(ti0, id0, html, tok) {
-  setTimeout(serverLater(() => {
-    const ti = realId(ti0), id = realId(id0);
-    if (DISPOSED || !postById(ti)) return;
-    const T = qtT(ti), n = T.by[id]; if (!n || !n.running) return;
-    const src = tmSrc(n.pay, T.p.s);
-    if (!src || src.left < tok) { const used = src ? Math.min(src.left, tok) : 0; qtNodeEdit(ti, id, x => { x.running = false; x.html = ''; x.tok = used; x.fail = { why: 'tokens' }; }); tmCharge(n.pay, used, T.p.s); }
-    else { qtNodeEdit(ti, id, x => { x.running = false; x.html = html; x.tok = tok; delete x.fail; }); tmCharge(n.pay, tok, T.p.s); }
-    if (st.thread === ti || st.device === 'native') renderKeepFocus();
-  }), 2200);
-}
-/* run a stopped follow-up again with payer pay */
+/* ---------- follow-ups: the server's run writes the answer, or stops it for tokens (step 7) ---------- */
+/* run a stopped follow-up again with payer pay (research.retryNode) */
 function tmFuAgain(a) {
   const [ti, id, pay] = a.split(':'), T = qtT(ti);
   if (!T.by[id]) return;
-  qtNodeEdit(ti, id, x => { x.running = true; x.pay = pay; x.tok = 0; delete x.fail; });
-  tmQtRun(ti, id, QT_CANNED.generic, 9e3 + qtTokTxt(QT_CANNED.generic) * 20);
+  mutate('research.retryNode', { thread: T.i, node: id, pay }, () => { qtNodeEdit(T.i, id, x => { x.running = true; x.pay = pay; x.tok = 0; delete x.fail; }); runStart(T.i, id); });
 }
 /* the answer and follow-up action rows: a visible payer line (tmNodeMeta) above Like and Save */
 { const na0 = qtNodeActs; qtNodeActs = function (T, n) { return (n.fail ? tmNodeFail(T, n) : n.running ? '' : tmNodeMeta(T, n)) + na0(T, n); }; }
@@ -10459,11 +10423,13 @@ function tmRevokeText(k) {
 function tmRevoke(id) {
   const k = st.userKeys.find(x => x.id === id); if (!k) return;
   const msg = `Revoked your ${esc(tmKeyName(k))}. ${tmRevokeText(k)}`, d = tmDef(), rest = tmKeys().filter(x => x.id !== id);
-  mutate('apiKeys.revoke', { id }, () => { db.remove('userKeys', id); if (d && d.id === id) db.set('usage', u => { u.def = rest.length ? rest[0].id : null; }); }, { stubs: ['usage'] });
+  mutate('apiKeys.revoke', { id }, () => { db.remove('userKeys', id); if (d && d.id === id) db.set('usage', u => { u.def = rest.length ? rest[0].id : null; }); });
   if (st.tmPick === id) st.tmPick = null; if (nst.payer === id) nst.payer = null;
   toast(msg);
 }
-const tmSetDef = id => { db.set('usage', u => { u.def = id; }); const k = st.userKeys.find(x => x.id === id); if (k) toast(`Asks now use your ${esc(tmKeyName(k))} after your included tokens run out.`); };
+const tmSetDef = id => { mutate('usage.setDefaultKey', { id }, () => db.set('usage', u => { u.def = id; })); const k = st.userKeys.find(x => x.id === id); if (k) toast(`Asks now use your ${esc(tmKeyName(k))} after your included tokens run out.`); };
+/* the note that asks now use your key: dismissed */
+const tmMovedSeen = () => mutate('usage.markMovedSeen', {}, () => db.set('usage', u => { u.movedSeen = true; }));
 
 /* ---------- first run: the API key step ---------- */
 /* A new account starts without keys, and with nothing used (asks made before it, in the fixtures, are not
@@ -10516,7 +10482,7 @@ function tmNSheet(k, a) {
   if (k === 'tmagain') return go(() => { const [i, p] = a.split(':'); askAgain(i, p); });
   if (k === 'tmfu') return go(() => tmFuAgain(a));
   if (k === 'tmpick') return go(() => { nst.payer = a; nst.sheet = null; nInlineFocus = true; });
-  if (k === 'tmmoved') return go(() => { db.set('usage', u => { u.movedSeen = true; }); });
+  if (k === 'tmmoved') return go(tmMovedSeen);
   if (k === 'tmaddkey') return go(() => { nst.sub = null; nst.stack = [...nst.stack, { v: 'keys', id: '' }]; nst.keyName = ''; nst.keyDraft = ''; nst.keyErr = ''; nst.sheet = 'addkey'; });
   if (k === 'tmcap') return go(() => { nst.sheet = 'tmcap:' + a; });
   if (k === 'tmcapset') return go(() => { const [id, v] = a.split(':'); mutate('apiKeys.setCap', { id, cap: +v }, () => db.update('userKeys', id, x => { x.cap = +v; })); nst.sheet = 'key:' + id; toast(+v ? `Limit set: ${fmtT(+v)} tokens a month.` : 'Limit removed.'); });
@@ -10535,7 +10501,7 @@ on($('app'), 'click', e => {
   if ((b = d('[data-tmchoose]'))) { st.tmChoose = st.tmChoose ? false : b.dataset.tmchoose; st.mpOpen = false; return done(); }
   if ((b = d('[data-tmpick]'))) { if (!b.disabled) st.tmPick = b.dataset.tmpick; st.tmChoose = false; return done(); }
   if ((b = d('[data-tmdef]'))) { tmSetDef(b.dataset.tmdef); return done(); }
-  if (d('[data-tmmoved]')) { db.set('usage', u => { u.movedSeen = true; }); return done(); }
+  if (d('[data-tmmoved]')) { tmMovedSeen(); return done(); }
   if ((b = d('[data-tmfu]'))) { tmFuAgain(b.dataset.tmfu); return done(); }
   if (st.tmChoose && !d('.tm-pop')) st.tmChoose = false;
 });
@@ -10653,7 +10619,7 @@ function taEditBox(key, o) {
   const run = o.ask ? `<label class="ta-run"><input type="checkbox" id="ta-ed-run"${e.run ? ' checked' : ''}><span><b>Run it again</b><small>The agent researches the edited ${what} and replaces ${o.noun === 'ask' ? 'the' : 'its'} answer. Uses tokens.</small></span></label>` : '';
   return `<div class="fu-box2 ta-ed"><textarea id="ta-ed" rows="2" aria-label="Edit your ${o.noun}">${esc(e.text)}</textarea>${run}${e.err ? taErr() : ''}<div class="fu2-bar"><span class="grow"></span><button class="btn" type="button" data-taed="cancel">Cancel</button><button class="btn primary" type="button" data-taed="save"${e.text.trim() ? '' : ' disabled aria-disabled="true"'}>Save</button></div></div>`;
 }
-/* Save: one write per record. An ask that runs again goes through the ask pipeline (askRun);
+/* Save: one write per record. An ask or follow-up that runs again starts a new run on the server;
    a follow-up that runs again gets its answer the way new follow-ups do. */
 function taSave() {
   const e = st.taEdit, it = e && taItem(e.key); if (!it) { st.taEdit = null; return; }
@@ -10665,33 +10631,20 @@ function taSave() {
   askHold(() => {
     if (it.k === 't') {
       const p = it.p, to = run ? (askPayOk(p.pay) ? p.pay : (askPay(p.s) || {}).id || null) : null;
-      mutate('threads.update', Object.assign({ id: it.i, q: txt }, run ? { run: true, pay: to } : {}), () => db.update('posts', it.i, x => { x.q = txt; x.kw = txt; if (changed) { x.edited = true; x.t = null; } if (run) { x.running = true; x.sum = null; x.tok = 0; x.pay = to; delete x.fail; } }));
-      if (run) askRun(it.i);
+      mutate('threads.update', Object.assign({ id: it.i, q: txt }, run ? { run: true, pay: to } : {}), () => { db.update('posts', it.i, x => { x.q = txt; x.kw = txt; if (changed) { x.edited = true; x.t = null; } if (run) { x.running = true; x.sum = null; x.tok = 0; x.pay = to; delete x.fail; } }); if (run) runStart(it.i); });
     } else if (it.k === 'r') {
       mutate('replies.update', { thread: it.i, path: it.path.join('.'), t: txt }, () => db.put('rp', it.i, produce(rpFor(it.p), l => { const r = taAt(l, it.path); r.t = txt; if (changed) r.edited = true; })));
     } else {
       const n = it.n;
-      mutate('followups.update', Object.assign({ thread: it.i, node: n.id, q: txt }, run ? { run: true } : {}), () => {
+      const pay = run ? (askPay(it.p.s) || {}).id || null : null;
+      mutate('followups.update', Object.assign({ thread: it.i, node: n.id, q: txt }, run ? { run: true, pay } : {}), () => {
         if (n.fu != null) db.put('fu', it.i, produce(fuFor(it.p), l => { if (l[n.fu]) l[n.fu].q = txt; }));
-        qtNodeEdit(it.i, n.id, x => { if (x.fu == null) x.q = txt; if (changed) x.edited = true; if (run) { x.running = true; x.tok = 0; } });
+        qtNodeEdit(it.i, n.id, x => { if (x.fu == null) x.q = txt; if (changed) x.edited = true; if (run) { x.running = true; x.tok = 0; x.pay = pay; delete x.fail; } });
+        if (run) runStart(it.i, n.id);
       });
-      if (run) taRunNode(it.i, n.id);
     }
     st.taEdit = null;
   }, () => { st.taEdit = { ...e0, err: true }; });
-}
-function taRunNode(i, id) {
-  const p0 = postById(i), pay = p0 ? (askPay(p0.s) || {}).id || null : null;
-  setTimeout(serverLater(() => {
-    const p = postById(i); if (DISPOSED || !p) return;
-    i = p.id; id = realId(id);
-    const n = qtT(i).by[id]; if (!n || !n.running) return;
-    const html = QT_CANNED.generic, tok = 9e3 + qtTokTxt(html) * 20;
-    if (n.fu != null) db.put('fu', i, produce(fuFor(p), l => { if (l[n.fu]) { l[n.fu].html = html; l[n.fu].a = qtTxt(html); } }));
-    qtNodeEdit(i, id, x => { x.running = false; x.tok = tok; if (x.fu == null) x.html = html; });
-    askCharge(pay, tok);
-    if (st.thread === i && st.device !== 'native') renderKeepFocus();
-  }), Math.max(40, askMs()));
 }
 function taDelDlg(key) {
   const it = taItem(key); if (!it) return '';
@@ -10707,7 +10660,7 @@ function taDelete(key) {
     if (it.k === 't') mutate('threads.delete', { id: it.i }, () => {
       if (keep) db.update('posts', it.i, x => { x.del = true; x.q = ''; x.kw = ''; x.t = null; delete x.edited; });
       else {
-        askCancel(it.i);
+
         db.update('posts', it.i, x => { x.gone = true; x.del = true; x.q = ''; x.kw = ''; x.t = null; x.sum = null; x.running = false; delete x.edited; });
         if (st.saved.has(it.i)) dbToggle('saved', it.i, false);
         if (st.liked.has(it.i)) dbToggle('liked', it.i, false);
@@ -12200,11 +12153,7 @@ function threadCreate(fn) {
   return mutate('threads.create', () => { const p = made && postById(made); return p && Object.assign({ space: pro.sp, kind: 'ask', q: p.q, title: p.t, from: { th: pro.th, node: pro.node }, branch: pro.inc === 'all' ? 'all' : 'one' }, p.topic ? { topic: p.topic } : {}); },
     () => { const r = qp(); made = lastTid() !== t0 ? lastTid() : null; return r; }, { tmp: () => made });
 }; }
-/* The ask pipeline writes what the server will write in step 7 (answers, charges, run notifications), and
-   Stop and Run again change a run: they stay on the collection endpoints (TODO(step 7): research.stopNode,
-   research.rerunNode). */
-askFinish = serverSide(askFinish); askFail = serverSide(askFail); askCharge = serverSide(askCharge); askNotify = serverSide(askNotify);
-askStop = serverSide(askStop); askAgain = serverSide(askAgain); taRunNode = serverSide(taRunNode);
+
 /* ---- step 3: sources added to spaces, settings and keys ---- */
 /* a URL or file added to a space: the server makes the source record when Session has none */
 { const da = dsAdd; dsAdd = function (u, sid, note, file) {
@@ -12244,8 +12193,7 @@ function screenReset() {
    Returns a promise that settles when both are done. */
 function runScenario(name, args, then) {
   const inst = DS;
-  /* the runs and checks in progress end: the server's data goes back to the seed */
-  SCENARIO_GEN++; [...RUNS.keys()].forEach(askCancel);
+  /* the server's data goes back to the seed: the runs and checks in progress end there */
   inst.meta.setState(m => ({ pending: m.pending + 1 }));
   const done = apiSource.queue
     .then(() => http('POST', '/api/dev/scenario', args ? { name, args } : { name }, 'scenario'))
@@ -12465,6 +12413,7 @@ function renderAll() {
   /* Mobile Web: a sheet over the page (Sources and wiki, request panel) keeps the page under it still */
   if (_app) { const sheet = st.device === 'phone' && (st.mWiki || (st.reqOpen && st.reqV === 'panel')); if (sheet && !_app.classList.contains('sheet-lock')) _app.scrollTop = 0; _app.classList.toggle('sheet-lock', !!sheet); }
   nvAfter();
+  evSync();   /* the event stream: open while signed in (asks block) */
 }
 function renderAllInner() {
   renderControls();
