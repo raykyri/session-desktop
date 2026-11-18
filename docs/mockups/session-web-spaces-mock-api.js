@@ -1738,7 +1738,8 @@
     let checks = [];                  /* checks in progress: [kind, id, due (ms, real time), { why }] */
     const conns = new Set();          /* open event streams */
     let connIds = 0, outDue = 0, outPending = 0;
-    const evLog = window.__mockEventLog = [];
+    const evLog = window.__mockEventLog = [];   /* the newest events emitted: { n (counts every event), type, nodeId, seq, conns (connections it went to), changes (the collections it carried) } */
+    let evN = 0;
     const stepMs = () => Math.max(0, +cfg.jobMs || 0) / J.STEPS;
     /* a view of a transaction's data for readScope */
     const txData = tx => new Proxy({}, { get: (_, k) => typeof k === 'string' ? tx.get(k) : undefined });
@@ -1776,7 +1777,7 @@
     }
     function emit(type, payload, only) {
       const ev = { type, payload, timestamp: Date.now() };
-      evLog.push({ n: evLog.length + 1, type, nodeId: payload.nodeId || (payload.node && payload.node.id) || null, seq: payload.seq == null ? null : payload.seq, conns: only ? 1 : conns.size });
+      evLog.push({ n: ++evN, type, nodeId: payload.nodeId || (payload.node && payload.node.id) || null, seq: payload.seq == null ? null : payload.seq, conns: only ? 1 : conns.size, changes: Object.keys(payload.changes || {}) });
       if (evLog.length > 400) evLog.splice(0, evLog.length - 400);
       for (const c of only ? [only] : conns) deliver(c, ev);
     }

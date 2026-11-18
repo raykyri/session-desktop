@@ -3802,8 +3802,9 @@ const on = (target, type, fn, opts) => target.addEventListener(type, fn, { ...(t
    with its own GET. A person's action is one named mutation (mutate: POST /api/rpc/<name>), applied to
    the store first (optimistic) and sent in order with the other writes; the server's records replace the
    optimistic ones, and a failure puts back every record the action changed and shows one toast that
-   depends on the error code. The ask pipeline writes collections directly (until step 7); a Screen
-   entry's data is a scenario the server sets up (POST /api/dev/scenario, step 10). The
+   depends on the error code. An ask runs on the server (step 7): its progress and results arrive on the
+   event stream (events.subscribe); a Screen entry's data is a scenario the server sets up
+   (POST /api/dev/scenario, step 10). The page writes no collection directly. The
    mock backend (session-web-spaces-mock-api.js, loaded before this script) serves /api/* inside the
    page: only the endpoints in its API table, with validated writes and { code, message } errors. Its
    seed data, the fixtures, is in session-web-spaces-fixtures.js: the app never reads them directly.
