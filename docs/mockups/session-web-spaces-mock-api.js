@@ -511,7 +511,7 @@
   function permitIn(tx, sid, who) {
     const s = tx.need('spaces', sid, 'space');
     const ok = who === 'member' ? !closedSpace(s) || !!roleIn(tx.get, sid) : rankIn(tx.get, sid) >= RANK[who];
-    return ok || deny(`Only ${ROLE_PL[who]}${who === 'owner' ? '' : ' (or a higher role)'} of #${s.name} can do this.`);
+    return ok || deny(`Only ${ROLE_PL[who]}${who === 'moderator' || who === 'admin' ? ' (or a higher role)' : ''} of #${s.name} can do this.`);
   }
   function authorize(tx, P, input) {
     const who = P.who || 'user';
