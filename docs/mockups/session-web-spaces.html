@@ -3726,6 +3726,8 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
 .pg-err { margin: 0; color: var(--warn); font-size: var(--fs-sm); text-align: center; }
 .nt-pop .pg-more { padding: 8px 0; }
 .n-pgmore { padding: 12px 16px 16px; }
+.n-pgmore .pg-btn { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.n-pgmore .pg-btn .spin { width: 15px; height: 15px; }
 .n-pgmore .pg-err { font-size: 15px; }
 .pg-err.pg-left { text-align: left; }
 .pg-wait { display: flex; align-items: center; gap: 8px; }
@@ -4764,7 +4766,7 @@ function savedReader(items) {
 function layoutSaved() {
   const items = pgSaved(savedItems()), v = st.savedView;
   const body = nvSavedNone() ? `<p class="muted sv-empty">Nothing saved yet. Use the bookmark on a thread, an ask or a source to keep it here.</p>`
-    : st.savedFilter === 'mi-items' ? miSavedList() : !items.length ? nvSavedNoThreads() : (v === 'reader' ? savedReader(items) : savedList(items)) + pgFoot(pgSavedLk());
+    : st.savedFilter === 'mi-items' ? miSavedList() : (!items.length ? nvSavedNoThreads() : v === 'reader' ? savedReader(items) : savedList(items)) + pgFoot(pgSavedLk());
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sv-page svp-${v}">
     <div class="sv-top"><div class="sv-title"><h2>Saved</h2><span class="faint num">${st.saved.size} thread${st.saved.size === 1 ? '' : 's'}</span></div><label class="search sv-search">${I.search}<input id="nv-svq" type="search" value="${esc(st.nvSvQ)}" placeholder="Search saved" aria-label="Search saved" autocomplete="off"></label></div>
     ${savedFilters()}
@@ -5817,11 +5819,11 @@ function nReqs(sid) {
   const card = r => `<section class="n-grp n-rq"><div class="n-list"><button class="n-rq-who" type="button" data-n="push:profile:${r.u}">${avatar(r.u, 'n-av')}<span class="n-row-b"><b>${esc(NAMES[r.u] || r.u)}${r.fresh ? ' <span class="n-flag">New account</span>' : ''}</b><small>${esc(r.u)} · Requested ${ago(r)} ago</small></span></button>${(s.qs || []).map((q, i) => r.a[i] ? `<div class="n-rq-a"><small>${esc(q.q)}</small><p>${esc(r.a[i])}</p></div>` : '').join('')}<div class="n-rq-acts"><button class="n-capbtn ghost" type="button" data-n="sheet:rqno:${r.u}">Decline</button><button class="n-capbtn" type="button" data-n="sheet:rqok:${r.u}">Approve</button></div></div></section>`;
   const dec = done.length ? nGroup('Decided today', done.map(r => `<div class="n-row">${avatar(r.u, 'n-av sm')}<span class="n-row-b"><b>${esc(r.u)}</b><small>${r.st === 'approved' ? 'Approved by you' : 'Declined by you'}</small></span>${r.st === 'declined' ? `<button class="n-cap" type="button" data-n="rqundo:${r.u}">Undo</button>` : ''}</div>`)) : '';
   const head = `<p class="n-grp-f n-mg-d">${spName(s)} · ${all.length} waiting · newest first</p>`;
-  return { body: `${nPushBar('Requests', '')}${list.length ? head + list.map(card).join('') + pgFoot('requests:' + sid) : '<p class="n-empty">No requests waiting. New requests appear here and in your notifications.</p>'}${dec}` };
+  return { body: `${nPushBar('Requests', '')}${all.length ? head + list.map(card).join('') + pgFoot('requests:' + sid) : '<p class="n-empty">No requests waiting. New requests appear here and in your notifications.</p>'}${dec}` };
 }
 function nReps(sid) {
   const s = sp(sid); if (!isModOf(sid)) return nModGate(s, 'Reports', 'reports');
-  const list = pgWin('reports:' + sid, 'reports', { space: sid, state: 'open' }, openReps(sid)), done = st.reports.filter(r => r.sp === sid && r.st !== 'open');
+  const all = openReps(sid), list = pgWin('reports:' + sid, 'reports', { space: sid, state: 'open' }, all), done = st.reports.filter(r => r.sp === sid && r.st !== 'open');
   const card = r => {
     const it = itemOf(r.key), pid = it.p.id, ms = modOf(r.key);
     return `<section class="n-grp n-rq"><div class="n-list"><p class="n-rp-h"><span class="n-rp-why">${SFI.flag}${repWhy(r.why)}</span><small>${nCap(it.noun)} · reported ${agoText(r)}</small></p>`
@@ -5831,7 +5833,7 @@ function nReps(sid) {
   };
   const dec = done.length ? nGroup('Resolved today', done.map(r => `<div class="n-row">${avatar(r.by, 'n-av sm')}<span class="n-row-b"><b>${repWhy(r.why)}</b><small>${nCap(itemOf(r.key).noun)} · ${REP_DONE[r.st][0]} by you</small></span>${r.st === 'removed' ? `<button class="n-cap" type="button" data-n="sheet:reprs:${r.id}">Restore</button>` : `<button class="n-cap" type="button" data-n="repundo:${r.id}">Undo</button>`}</div>`)) : '';
   const head = '<p class="n-grp-f n-mg-d">Hiding keeps the item for moderators and shows a placeholder to everyone else. Removing deletes it. The person who reported it gets a notification when you resolve the report.</p>';
-  return { body: `${nPushBar('Reports', '')}${head}${list.length ? list.map(card).join('') + pgFoot('reports:' + sid) : '<p class="n-empty">No open reports. New reports appear here and in your notifications.</p>'}${dec}` };
+  return { body: `${nPushBar('Reports', '')}${head}${all.length ? list.map(card).join('') + pgFoot('reports:' + sid) : '<p class="n-empty">No open reports. New reports appear here and in your notifications.</p>'}${dec}` };
 }
 /* reopen a resolved report (without changing the stored record in place) */
 function nRepUndo(r) {
@@ -7159,14 +7161,14 @@ const openReps = id => st.reports.filter(r => r.sp === id && r.st === 'open');
 const repCount = id => isModOf(id) ? openReps(id).length : 0;
 const REP_DONE = { dismissed: ['Dismissed', 'the moderators kept it as it is'], hidden: ['Hidden', 'a moderator hid it'], removed: ['Removed', 'a moderator removed it'] };
 function csReports(s) {
-  const list = pgWin('reports:' + s.id, 'reports', { space: s.id, state: 'open' }, openReps(s.id)), done = st.reports.filter(r => r.sp === s.id && r.st !== 'open');
+  const all = openReps(s.id), list = pgWin('reports:' + s.id, 'reports', { space: s.id, state: 'open' }, all), done = st.reports.filter(r => r.sp === s.id && r.st !== 'open');
   const card = r => { const it = itemOf(r.key), pid = it.p.id, ms = modOf(r.key); return `<article class="rq-card sf-rcard"><div class="sf-rc-h"><span class="sf-why">${SFI.flag}${repWhy(r.why)}</span><span class="faint cs-small">${it.noun} · reported ${agoText(r)}</span></div>
     <div class="sf-rq"><span class="faint cs-small">${it.k === 'a' || it.k === 'f' ? 'Agent answer' : esc(it.by)} in <button class="tlink" type="button" data-open="${pid}">${esc(clip(it.p.q, 90))}</button></span><p>${esc(clip(it.text, 220))}</p>${ms ? `<span class="ks bad">${ms === 'hidden' ? 'Hidden' : 'Removed'}</span>` : ''}</div>
     <div class="sf-rby">${avatar(r.by, 'sm')}<span><span class="faint">Reported by </span><b>${esc(r.by === ME.u ? 'you' : r.by)}</b>${r.note ? `<span class="sf-rnote">“${esc(r.note)}”</span>` : '<span class="faint"> · no note</span>'}</span></div>${cxRepAuthor(s, it)}
     <div class="rq-cf sf-racts"><button class="btn sm" type="button" data-sfrep="dismiss:${r.id}">Dismiss</button><button class="btn sm" type="button" data-sfrep="hide:${r.id}">Hide the ${it.noun.replace('follow-up ', '')}</button><button class="btn sm sf-rm" type="button" data-sfrep="remove:${r.id}">Remove</button></div></article>`; };
   const decided = done.length ? `<section class="cs-sec rq-decided"><h3>Resolved today</h3>${done.map(r => `<div class="rq-drow">${avatar(r.by, 'sm')}<span class="rq-dtx"><b>${repWhy(r.why)}</b> <span class="faint">· ${itemOf(r.key).noun} reported by ${esc(r.by === ME.u ? 'you' : r.by)} · ${REP_DONE[r.st][0]} by you</span></span>${r.st === 'removed' ? `<button class="tlink" type="button" data-sfrestore="${r.id}">Restore</button>` : `<button class="tlink" type="button" data-sfrepundo="${r.id}">Undo</button>`}</div>`).join('')}</section>` : '';
   const head = `<p class="cs-fine sf-rhead">${SFI.flag}<span>People report answers, follow-up answers, posts and replies from the item’s menu. Hiding keeps the item for moderators and shows a placeholder to everyone else; removing deletes it. The person who reported gets a notification when you resolve the report.</span></p>`;
-  if (!list.length) return `${head}<div class="cs-empty"><p class="muted">No open reports. New reports appear here and in your notifications.</p></div>${decided}`;
+  if (!all.length) return `${head}<div class="cs-empty"><p class="muted">No open reports. New reports appear here and in your notifications.</p></div>${decided}`;
   return `${head}<div class="rq-cards sf-rcards">${list.map(card).join('')}</div>${pgFoot('reports:' + s.id)}${decided}`;
 }
 function sfResolve(r, how) {
@@ -8025,7 +8027,7 @@ function dsSourceActs(m, s) {
 /* The Sources list: every source in the Social feed style. */
 function dsSideList(s) {
   const l = pgWin('sources:' + s.id, 'sources', { space: s.id }, dsList(s.id));
-  return l.length ? `<div class="mi-units mi-lay-rows mi-sty-social ds-units ds-sunits" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>${pgFoot('sources:' + s.id)}` : dsEmpty(s);
+  return l.length ? `<div class="mi-units mi-lay-rows mi-sty-social ds-units ds-sunits" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>${pgFoot('sources:' + s.id)}` : dsEmpty(s) + pgFoot('sources:' + s.id);
 }
 function dsSideDrawer(s) {
   const close = `<button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse the sidebar">${I.close}</button>`;
@@ -12398,7 +12400,8 @@ function pgOwn(lk, kind, input, lim0) {
 function pgFoot(lk) {
   const s = PG.get(lk); if (!s || (s.end && !s.err) || (PG_KINDS[s.kind].own && !s.items)) return '';
   const K = PG_KINDS[s.kind], nat = st.device === 'native', a = esc(lk);
-  if (s.err && !s.loading) return `<div class="pg-more${nat ? ' n-pgmore' : ''}"><p class="pg-err" role="alert">Couldn’t load more ${K.noun}. <button class="tlink" type="button" data-pgretry="${a}">Retry</button></p></div>`;
+  if (s.err && !s.loading) return nat ? `<div class="pg-more n-pgmore"><p class="pg-err" role="alert">Couldn’t load more ${K.noun}.</p><button class="n-capbtn ghost wide pg-btn" type="button" data-pgretry="${a}">Retry</button></div>`
+    : `<div class="pg-more"><p class="pg-err" role="alert">Couldn’t load more ${K.noun}. <button class="tlink" type="button" data-pgretry="${a}">Retry</button></p></div>`;
   const busy = !!s.loading && !s.first;
   return `<div class="pg-more${nat ? ' n-pgmore' : ''}" aria-live="polite"><button class="${nat ? 'n-capbtn ghost wide' : 'btn sm'} pg-btn" type="button" data-pgmore="${a}"${busy ? ' aria-disabled="true"' : ''}>${busy ? '<span class="spin" aria-hidden="true"></span>' : ''}Show more</button>${busy ? `<span class="sr-only">Loading more ${K.noun}</span>` : ''}</div>`;
 }
