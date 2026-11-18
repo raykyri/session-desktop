@@ -3675,7 +3675,7 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 .row-m > .mi-rchip { display: flex; align-items: center; gap: 5px; align-self: flex-start; min-width: 0; max-width: 100%; height: 22px; margin: 4px 0 2px; font-size: var(--fs-xs); line-height: 1; color: var(--t-tertiary); }
 .mi-rchip .mi-ic.xs, .rf-meta .mi-ic.xs { width: 14px; height: 14px; color: var(--t-faint); }
 .mi-rchip .mi-ic.xs svg, .rf-meta .mi-ic.xs svg { width: 12px; height: 12px; }
-.mi-rchip .rf-ti { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--t-tertiary); }
+.mi-rchip .rf-ti { min-width: 0; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--t-tertiary); }   /* 16px: room for descenders, which overflow: hidden would clip at line-height 1 */
 .rf-ics { display: inline-flex; flex: none; }
 .rf-ics .mi-ic.xs + .mi-ic.xs { margin-left: -3px; }
 /* Pill */
