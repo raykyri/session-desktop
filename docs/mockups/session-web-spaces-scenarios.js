@@ -137,8 +137,11 @@
     tokens: { pay: 'session', sum: 'The answer stopped: this month’s included tokens are used up.', fail: { why: 'tokens' } },
     key: { pay: 'k0', sum: 'The answer failed: the provider rejected the API key.', fail: { why: 'key' } },
     rate: { pay: 'k2', sum: 'The answer failed: the provider is limiting requests.', fail: { why: 'rate' } },
+    /* the run's checks when it started failed (step 7), and the server could not resume a run after a restart */
+    access: { pay: 'session', sum: window.SessionJobs.FAIL_SUM.access(), fail: { why: 'access' } },
+    interrupted: { pay: 'session', sum: window.SessionJobs.FAIL_SUM.interrupted(), fail: { why: 'interrupted' } },
   };
-  scenario('asks: your ask', { note: 'you asked a minute ago, the newest thread. args: space, end (running, stopped, tokens, key, rate), q, tok. An ask stopped for tokens: your included tokens are used up. A running ask: its run is held at the third progress step (Reading 9 sources)',
+  scenario('asks: your ask', { note: 'you asked a minute ago, the newest thread. args: space, end (running, stopped, tokens, key, rate, access, interrupted), q, tok. An ask stopped for tokens: your included tokens are used up. A running ask: its run is held at the third progress step (Reading 9 sources)',
     run: (tx, a, h) => {
       const q = a.q || SAMPLE_Q, end = JSON.parse(JSON.stringify(ASK_ENDS[a.end]));
       if (a.end === 'rate') end.fail.at = Date.now() + 20e3;   /* the provider's retry time, on the real clock as the page counts it */

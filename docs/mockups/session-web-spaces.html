@@ -9712,13 +9712,15 @@ on($('app'), 'input', e => {
 });
 
 /* ---------- Screen entries ---------- */
-JUMPS.push(['Asks and answers', [['as-run', 'Answer running, with Stop'], ['as-stopped', 'Answer stopped'], ['as-fail-tokens', 'Answer stopped: included tokens used up'], ['as-fail-key', 'Answer failed: provider rejected the key'], ['as-fail-rate', 'Answer failed: rate limit'], ['as-notif', 'Notification: an ask was answered'], ['as-post-fail', 'Couldn’t post: Retry'], ['as-fu-fail', 'Follow-up couldn’t post: Retry'], ['as-discard', 'Discard your follow-up?'], ['as-home-empty', 'Home with no joined spaces']]]);
+JUMPS.push(['Asks and answers', [['as-run', 'Answer running, with Stop'], ['as-stopped', 'Answer stopped'], ['as-fail-tokens', 'Answer stopped: included tokens used up'], ['as-fail-key', 'Answer failed: provider rejected the key'], ['as-fail-rate', 'Answer failed: rate limit'], ['as-fail-access', 'Answer failed: no access when the run started'], ['as-fail-interrupted', 'Answer failed: the server couldn’t resume the run'], ['as-notif', 'Notification: an ask was answered'], ['as-post-fail', 'Couldn’t post: Retry'], ['as-fu-fail', 'Follow-up couldn’t post: Retry'], ['as-discard', 'Discard your follow-up?'], ['as-home-empty', 'Home with no joined spaces']]]);
 const AS_MQ = 'How do prediction markets settle a contract when the source agency revises its data?';
 screenData('as-run', 'asks: your ask', { space: 'public', end: 'running' });
 screenData('as-stopped', 'asks: your ask', { space: 'public', end: 'stopped' });
 screenData('as-fail-tokens', 'asks: your ask', { space: 'markets', end: 'tokens', q: AS_MQ, tok: 30e3 });
 screenData('as-fail-key', 'asks: your ask', { space: 'public', end: 'key' });
 screenData('as-fail-rate', 'asks: your ask', { space: 'public', end: 'rate' });
+screenData('as-fail-access', 'asks: your ask', { space: 'public', end: 'access' });
+screenData('as-fail-interrupted', 'asks: your ask', { space: 'public', end: 'interrupted' });
 screenData('as-notif', 'asks: an answer is ready');
 screenData('as-home-empty', 'no joined spaces');
 function asJump(k) {
@@ -9727,7 +9729,7 @@ function asJump(k) {
   const askIn = id => tidWhere(p => p.s === id && p.k === 'ask' && !p.running && !p.fail && !p.about);
   switch (k) {
     /* your ask: the scenario's thread, the newest one */
-    case 'as-run': case 'as-stopped': case 'as-fail-tokens': case 'as-fail-key': case 'as-fail-rate': thread(lastTid()); break;
+    case 'as-run': case 'as-stopped': case 'as-fail-tokens': case 'as-fail-key': case 'as-fail-rate': case 'as-fail-access': case 'as-fail-interrupted': thread(lastTid()); break;
     case 'as-notif': Object.assign(st, { home: true, ntOpen: true }); break;
     case 'as-post-fail': compose('public', { mode: 'post', draft: 'Notes from Thursday’s reading group are on the wiki page. Next week: chapters 4 to 6.', askErr: 'comp' }); ASK.retry = () => askPost('post'); break;
     case 'as-fu-fail': thread(askIn('public'), { qtAskAt: 'r', qtFocusIn: true, qtDraft: 'Which of these changes apply to open-weight models?', qtErr: `${AS_ERR} <button class="tlink" type="button" data-askretry="1">Retry</button>` }); ASK.retry = () => askFollowUp('r'); break;
@@ -10311,16 +10313,23 @@ function tmFailHTML(p) {
   if (f.why === 'tokens') return box('Couldn’t finish the answer', tmStopWhy(src, p.tok), tmActs(p.s, src && id, again));
   const k = st.userKeys.find(x => x.id === id), prov = k ? tmProv(k) : 'The provider';
   if (f.why === 'key') return box('Couldn’t finish the answer', `${esc(prov)} rejected ${noun}. The agent wrote nothing.`, retry('Retry') + tmBtn('keys', '', 'API keys'));
+  if (TM_RUN_WHY[f.why]) return box('Couldn’t finish the answer', TM_RUN_WHY[f.why](sp(p.s)), retry('Retry'));
   const left = Math.max(0, Math.ceil(((f.at || 0) - Date.now()) / 1e3));
   if (left && !ph && !ASK.tick) ASK.tick = setTimeout(() => { ASK.tick = 0; if (!DISPOSED && st.thread === i) renderKeepFocus(); }, 1e3);
   return box('Couldn’t finish the answer', `${esc(prov)} is limiting requests from ${noun}. The agent wrote nothing.`, left ? `<button class="${ph ? 'n-capbtn tm-nbtn' : 'btn sm'}" type="button" disabled aria-disabled="true">Retry in ${left} second${left === 1 ? '' : 's'}</button>` : retry('Retry'));
 }
 /* a follow-up that stopped for tokens */
 function tmNodeFail(T, n) {
-  const ph = st.device === 'native', mine = st.auth === 'in' && n.u === ME.u, src = tmSrc(n.pay);
+  const ph = st.device === 'native', mine = st.auth === 'in' && n.u === ME.u, src = tmSrc(n.pay), why = (n.fail || {}).why;
   const acts = mine ? tmActs(T.p.s, src && n.pay, (pid, label, primary) => tmBtn('fu', `${T.i}:${n.id}:${pid}`, label, primary)) : '';
-  return `<div class="run as-end as-fail tm-fail${ph ? ' tm-nrun' : ''}" role="status"><div class="run-h"><span class="as-ic" aria-hidden="true">!</span><b>Couldn’t finish the answer</b></div><p class="as-why">${tmStopWhy(src, n.tok)}</p>${acts ? `<div class="as-acts">${acts}</div>` : ''}</div>`;
+  const text = why === 'stopped' ? 'Stopped. The agent wrote nothing.' : TM_RUN_WHY[why] ? TM_RUN_WHY[why](sp(T.p.s)) : tmStopWhy(src, n.tok);
+  return `<div class="run as-end as-fail tm-fail${ph ? ' tm-nrun' : ''}" role="status"><div class="run-h"><span class="as-ic" aria-hidden="true">!</span><b>Couldn’t finish the answer</b></div><p class="as-why">${text}</p>${acts ? `<div class="as-acts">${acts}</div>` : ''}</div>`;
 }
+/* why a run ended before it wrote anything, besides tokens, the key and the rate limit (step 7: the server's checks) */
+const TM_RUN_WHY = {
+  access: s => `The agent didn’t run: when the run began, you could no longer read ${spName(s)} or a source this ask is about, or the API key that pays isn’t yours.`,
+  interrupted: () => 'The server restarted while the agent worked and couldn’t resume the run. The agent wrote nothing.',
+};
 /* Phone: the line under a follow-up's answer, or its stop */
 const tmNodeExtra = (i, id) => { const T = qtT(i), n = T.by[id]; if (!n || n.running) return ''; return n.fail ? tmNodeFail(T, n) : tmNodeMeta(T, n); };
 

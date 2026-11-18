@@ -135,7 +135,7 @@
     tokens: () => stopSum(null),
     key: () => 'The answer failed: the provider rejected the API key.',
     rate: () => 'The answer failed: the provider is limiting requests.',
-    access: () => 'The answer failed: the person who asked can no longer read what the ask needs.',
+    access: () => 'The answer failed: the person who asked no longer had access when the run started.',
     interrupted: () => 'The answer failed: the server stopped while the agent worked.',
   };
 

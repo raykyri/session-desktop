@@ -2061,7 +2061,7 @@
       const method = (init.method || 'GET').toUpperCase();
       return new Promise(resolve => setTimeout(() => {
         let res, forcedErr = false;
-        /* who sent a collection write (the page's X-Session-Origin): run (the ask pipeline), stub, or user (a bug);
+        /* X-Session-Origin: who sent a request, for the log (scenario: a Screen entry's set-up; user: a collection write from the page, which is a bug);
            X-Session-Auth: out, a request without a session (signed out) */
         const h = init.headers || {}, hd = n => typeof h.get === 'function' ? h.get(n) : h[n], origin = hd('X-Session-Origin'), caller = hd('X-Session-Auth') === 'out' ? GUEST : ME;
         try { const body = init.body ? dec(init.body) : undefined; ({ res, forced: forcedErr } = handle(method, url, body, origin, caller)); }
