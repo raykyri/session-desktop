@@ -494,7 +494,7 @@
       note: 'a Screen entry’s data (step 10): back to the seed, then the named scenario (session-web-spaces-scenarios.js) in one transaction; changes: every record that differs from the database before the call' },
     { method: 'GET', path: '/api/dev/config', coll: null, op: 'dev-config', input: null, output: 'DevConfig', who: 'guest', trpc: null, wire: null, errors: [], dev: true },
     { method: 'PUT', path: '/api/dev/config', coll: null, op: 'dev-config', input: 'Partial<DevConfig>', output: 'DevConfig', who: 'guest', trpc: null, wire: null, errors: ['BAD_REQUEST'], dev: true,
-      note: 'DevConfig: { now (the mock clock, an ISO time), latency, failWrites, failReads, failCode, failOn: { code, paths: string[], methods?: string[], times? } | null, readRules: the parts of the read scoping that are on (READ_RULES; a partial object is merged), jobs: "run" | "paused" (paused: no job moves on until it is "run" again), jobMs (a run’s length, ms), checkMs (a key or domain check’s length, ms), failNextRun: null | "tokens" | "key" | "rate" (the next thread ask that finishes fails so), resumeJobs (false: after a reload, runs in progress fail as interrupted instead of resuming) }' },
+      note: 'DevConfig: { now (the mock clock, an ISO time), latency, failWrites, failReads, failCode, failOn: { code, paths: string[], methods?: string[], times? } | null, readRules: the parts of the read scoping that are on (READ_RULES; a partial object is merged), jobs: "run" | "paused" (paused: no job moves on until it is "run" again), jobMs (a run’s length, ms), checkMs (a key or domain check’s length, ms), failNextRun: null | "tokens" | "key" | "rate" (the next thread ask that finishes fails so), resumeJobs (false: after a reload, runs in progress fail as interrupted instead of resuming), pageSize (null, or the default limit of every paged query, 1 to 100: a dev override for the Screen entries, step 8) }' },
   ];
   /* collections are read only (step 7): every write is a procedure, a job or a scenario */
   for (const a of API) if (a.coll && a.method !== 'GET') throw new Error(`${a.method} ${a.path}: collections have no write rows`);
@@ -1473,6 +1473,136 @@
     API.push({ method: 'POST', path: '/api/rpc/' + name, coll: null, op: 'rpc', input: describe(P.input, true), output: P.output || 'null', who, trpc: name, wire: P.wire || null, errors, writes: P.writes || [], bulk: false, scope: ['user'], ...(P.stub ? { stub: true } : {}), ...(P.note ? { note: P.note } : {}) });
   }
 
+  /* ---- 5c. paged lists (step 8) ----
+     The lists that grow without bound are read a page at a time with a query: GET /api/rpc/<name>?input=<JSON>
+     (tRPC queries are GETs; the input is URL-encoded JSON, encoded with the wire codec). A paged query takes
+     { cursor?, limit? } with its own fields and answers { items, nextCursor }, as notifications.list in
+     web/docs/03-api-and-events.md (InboxNotificationPage, web/packages/shared/src/types/sharing.ts):
+       order       newest first: by the record's time (createdAt; joinedAt for members), then by id, both
+                   descending. A record without a time sorts as the newest.
+       readScope   the rows are what GET returns to the caller (section 5a), filtered before the slice, so a page
+                   is never short because records were left out after it.
+       limit       1 to 100; the default is the query's (30 unless it says otherwise), or DevConfig pageSize when
+                   it is set (a dev override, for the Screen entries).
+       cursor      an opaque string: the time (ms) and id of the last record of the page, base64url-encoded.
+                   The next page starts after that record, so records created between two page loads go on top
+                   and do not shift the next page. nextCursor is null on the last page. A cursor that does not
+                   decode is BAD_REQUEST.
+     The counts the page shows stay totals: a space's members, a profile's threads (/api/users), the unread
+     count (notifications.unreadCount) and the Usage totals (usage.get) do not depend on the pages loaded.
+     defQuery(name, def): def.input (the fields besides cursor and limit), def.who ('guest' or 'user'; a list is
+     scoped, not refused), def.rows(ctx, input) → the scoped records, def.key(record) → [time, id],
+     def.limit, def.item (the item type's name), def.wire, def.note. def.run(ctx, input) instead of rows: a
+     query that is not a page. ctx (createBackend): d, sc (readScope), me, signedIn, now, all(k) (a
+     collection as GET returns it), reads(space) (may the caller read the space's threads). */
+  const PAGE_LIMIT = 30, PAGE_MAX = 100;
+  const QUERIES = {};
+  const defQuery = (name, def) => { QUERIES[name] = def; };
+  const PAGE_IN = { 'cursor?': nul(str), 'limit?': int };
+  /* a record's place in the order: [time in ms (Infinity without one), id] */
+  const keyOf = (t, id) => { const ms = t ? Date.parse(t) : NaN; return [isNaN(ms) ? Infinity : ms, String(id)]; };
+  const cmpKey = (a, b) => (a[0] === b[0] ? 0 : a[0] < b[0] ? -1 : 1) || (a[1] === b[1] ? 0 : a[1] < b[1] ? -1 : 1);
+  const b64u = s => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const unb64u = s => atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+  const encodeCursor = k => b64u(encodeURIComponent(JSON.stringify([k[0] === Infinity ? null : k[0], k[1]])));
+  function decodeCursor(c) {
+    try { const k = JSON.parse(decodeURIComponent(unb64u(c))); if (Array.isArray(k) && k.length === 2 && (k[0] === null || typeof k[0] === 'number') && typeof k[1] === 'string') return [k[0] === null ? Infinity : k[0], k[1]]; } catch (e) {}
+    return null;
+  }
+  /* one page of rows (newest first) after the cursor */
+  function pageOf(rows, key, input, limit) {
+    const keyed = rows.map(x => [key(x), x]).sort((a, b) => cmpKey(b[0], a[0]));
+    let start = 0;
+    if (input.cursor != null) {
+      const c = decodeCursor(input.cursor);
+      if (!c) throw rpcError('BAD_REQUEST', undefined, ['input.cursor: expected a cursor from an earlier page']);
+      start = keyed.findIndex(([k]) => cmpKey(k, c) < 0); if (start < 0) start = keyed.length;
+    }
+    const slice = keyed.slice(start, start + limit), more = start + limit < keyed.length;
+    return { items: slice.map(([, x]) => x), nextCursor: more ? encodeCursor(slice[slice.length - 1][0]) : null };
+  }
+  const notGone = p => !p.gone;
+  const THREAD_KIND = { 'kind?': one('ask', 'post') };
+  /* the search the page runs: a word's stem in a thread's title, question, summary or answer text */
+  const searchStem = s => String(s || '').trim().toLowerCase().replace(/(ions|ion|s)$/, '');
+  defQuery('threads.feed', { input: { 'scope?': one('joined', 'all', 'public'), ...THREAD_KIND }, who: 'guest', item: 'Thread',
+    note: 'Home: threads in the caller’s spaces (scope joined, the default; without the threads of people they muted or blocked), in every space they can read (all), or in the listed open spaces (public); kind: asks or posts only',
+    key: p => keyOf(p.createdAt, p.id),
+    rows: (x, i) => {
+      const scope = i.scope || 'joined', joined = new Set(x.d.joined), hide = scope === 'joined' ? new Set([...x.d.muted, ...x.d.blocked]) : new Set();
+      const ok = new Set(x.d.spaces.filter(s => !s.deleted && x.reads(s) && (scope === 'joined' ? joined.has(s.id) : scope === 'public' ? !closedSpace(s) && !s.archived && s.vis !== 'unlisted' : true)).map(s => s.id));
+      return x.all('posts').filter(p => ok.has(p.s) && notGone(p) && !hide.has(p.u) && (!i.kind || p.k === i.kind));
+    } });
+  defQuery('threads.list', { input: { space: ID, 'topic?': str, ...THREAD_KIND }, who: 'guest', item: 'Thread',
+    note: 'a space’s threads (Latest, and the FAQ landing’s topic lists): topic, a topic key, or "other" for threads without one of the space’s topics',
+    key: p => keyOf(p.createdAt, p.id),
+    rows: (x, i) => {
+      const s = x.d.spaces.find(y => y.id === i.space); if (!s) throw rpcError('NOT_FOUND', 'The server has no record of this space. Someone may have deleted it.');
+      const topics = new Set((s.topics || []).map(t => t[0])), topicOf = p => p.topic && topics.has(p.topic) ? p.topic : 'other';
+      return x.all('posts').filter(p => p.s === s.id && notGone(p) && (!i.kind || p.k === i.kind) && (i.topic == null || topicOf(p) === i.topic));
+    } });
+  defQuery('notifications.list', { input: {}, who: 'user', item: 'Notification', wire: 'InboxNotificationPage', note: 'the caller’s notifications, newest first. The page’s shape is InboxNotificationPage’s; its items are the mock’s Notification records, not InboxNotification',
+    key: n => keyOf(n.createdAt, n.id), rows: x => x.all('notifs') });
+  defQuery('notifications.unreadCount', { input: { 'after?': nul(str) }, who: 'user', output: '{ count: number }', note: 'the caller’s unread notifications; after: only those after a cursor (the ones not loaded yet)',
+    run: (x, i) => {
+      const c = i.after == null ? null : decodeCursor(i.after);
+      if (i.after != null && !c) throw rpcError('BAD_REQUEST', undefined, ['input.after: expected a cursor from notifications.list']);
+      return { count: x.all('notifs').filter(n => !n.read && (!c || cmpKey(keyOf(n.createdAt, n.id), c) < 0)).length };
+    } });
+  defQuery('users.listThreads', { input: { handle: str }, who: 'guest', item: 'Thread', note: 'a profile’s threads in the spaces the caller can read; the count on the profile is the whole list’s (the page holds every thread record)',
+    key: p => keyOf(p.createdAt, p.id), rows: (x, i) => { const sps = new Map(x.d.spaces.map(s => [s.id, s])); return x.all('posts').filter(p => p.u === i.handle && notGone(p) && sps.has(p.s) && !sps.get(p.s).deleted && x.reads(sps.get(p.s))); } });
+  defQuery('users.listFollowUps', { input: { handle: str }, who: 'guest', item: '{ id, thread, index } & FollowUp', note: 'a profile’s follow-ups on the threads the caller can read; id: "<thread>:<index>"',
+    key: f => keyOf(f.createdAt, f.id),
+    rows: (x, i) => { const th = new Set(x.all('posts').map(p => p.id)), fu = x.all('fu'); return Object.entries(fu).filter(([pid]) => th.has(pid)).flatMap(([pid, l]) => l.map((f, k) => ({ ...f, id: `${pid}:${k}`, thread: pid, index: k })).filter(f => f.u === i.handle && !f.del)); } });
+  defQuery('saved.list', { input: { 'space?': ID, 'q?': str }, who: 'user', item: 'Thread', note: 'the caller’s saved threads (the threads they can read or wrote); space: one space’s; q: text in the title, question or summary',
+    key: p => keyOf(p.createdAt, p.id),
+    rows: (x, i) => { const by = new Map(x.all('posts').map(p => [p.id, p])), t = String(i.q || '').trim().toLowerCase(); return [...x.d.saved].map(id => by.get(id)).filter(p => p && (!i.space || p.s === i.space) && (!t || `${p.t || ''} ${p.q} ${p.sum || ''}`.toLowerCase().includes(t))); } });
+  defQuery('search.threads', { input: { q: str, 'space?': ID }, who: 'guest', item: 'Thread', note: 'threads the caller can read whose title, question, summary or answer has the search word (its stem); space: one space’s. The Threads count on the page is the whole result’s.',
+    key: p => keyOf(p.createdAt, p.id),
+    rows: (x, i) => {
+      const stem = searchStem(i.q); if (!stem) return [];
+      const sps = new Map(x.d.spaces.map(s => [s.id, s])), rich = x.all('rich');
+      const body = id => String(rich[id] || '').replace(/<sup[^>]*>.*?<\/sup>/g, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+      return x.all('posts').filter(p => { const s = sps.get(p.s); return s && !s.deleted && x.reads(s) && notGone(p) && (!i.space || p.s === i.space) && `${p.t || ''} ${p.q} ${p.sum || ''} ${body(p.id)}`.toLowerCase().includes(stem); });
+    } });
+  defQuery('members.list', { input: { space: ID }, who: 'guest', item: 'Member', wire: 'ThreadMember[]', note: 'a space’s members, newest first by joinedAt (as /api/members: a closed space’s list goes whole to its members, and to others as its owner, admins and moderators). The count is the space’s members field.',
+    key: m => keyOf(m.joinedAt, m.u), rows: (x, i) => i.space === C.mem.space ? x.all('mem') : (x.all('memOther')[i.space] || []) });
+  defQuery('joinRequests.list', { input: { space: ID, 'state?': one('open', 'approved', 'declined') }, who: 'user', item: 'JoinRequest', note: 'Manage › Requests: a space’s join requests (the caller’s own, or every one in a space they moderate)',
+    key: r => keyOf(r.createdAt, r.u), rows: (x, i) => x.all('reqs').filter(r => reqSpace(r) === i.space && (!i.state || r.st === i.state)) });
+  defQuery('reports.list', { input: { space: ID, 'state?': one('open', 'dismissed', 'hidden', 'removed') }, who: 'user', item: 'Report', note: 'Manage › Reports: a space’s reports (the caller’s own, or every one in a space they moderate)',
+    key: r => keyOf(r.createdAt, r.id), rows: (x, i) => x.all('reports').filter(r => r.sp === i.space && (!i.state || r.st === i.state)) });
+  defQuery('spaceSources.list', { input: { space: ID }, who: 'guest', item: '{ id } & SpaceSource', note: 'a space’s sources list: the sources it has (not removed), newest first; id: the source’s id (m)',
+    key: e => keyOf(e.createdAt, e.m),
+    rows: (x, i) => { const srcs = new Set([...x.all('media'), ...x.all('miAdded')].map(m => m.id)); return (x.all('dsDrops')[i.space] || []).filter(e => !e.rm && srcs.has(e.m)).map(e => ({ ...e, id: e.m })); } });
+  /* TODO(limits): token usage is a stub; the asks are read from the threads and ask trees, as the page did */
+  defQuery('usage.listAsks', { input: {}, who: 'user', limit: 8, item: 'UsageAsk', stub: true,
+    note: 'Usage › Recent asks: the caller’s asks and follow-ups that used tokens, newest first (for a new account, only the ones from the last minute). UsageAsk: { id: "<thread>:<node>", thread, node, space, t, u, tok, pay, del?, createdAt, readable } (readable: false for an ask in the tree of a closed space’s thread the caller cannot read). Default limit 8.',
+    key: r => keyOf(r.createdAt, r.id),
+    rows: x => {
+      const out = [], me = x.me.u, posts = x.all('posts'), fu = x.all('fu'), qtd = x.all('qtd'), sps = new Set(x.d.spaces.map(s => s.id));
+      const nodesOf = (th, tree) => { const fus = fu[th] || []; return tree.nodes.map(n => { const f = n.fu != null ? fus[n.fu] || {} : null; return f ? { ...n, u: f.u, createdAt: f.createdAt, q: f.q, del: f.del } : n; }); };
+      const add = (p, n, space, readable) => out.push({ id: `${p}:${n.id}`, thread: p, node: n.id, space, t: n.t || n.q || '', u: n.u, tok: n.tok, pay: n.pay == null ? null : n.pay, createdAt: n.createdAt, readable, ...(n.del ? { del: true } : {}) });
+      const seen = new Set();
+      for (const p of posts) {
+        if (p.k !== 'ask' || p.gone || !sps.has(p.s)) continue;
+        seen.add(p.id);
+        if (p.u === me && p.tok && !p.running) add(p.id, { ...p, id: 'r' }, p.s, true);
+        if (!qtd[p.id]) continue;
+        nodesOf(p.id, qtd[p.id]).forEach(n => { if (n.u === me && n.tok && !n.running && !n.fail) add(p.id, n, p.s, true); });
+      }
+      /* your asks in the tree of a closed space’s thread you cannot read: the tree carries its space */
+      Object.entries(qtd).forEach(([th, tree]) => { if (seen.has(th) || !tree.space || !sps.has(tree.space)) return; nodesOf(th, tree).forEach(n => { if (n.u === me && n.tok && !n.running && !n.fail && !n.del) add(th, n, tree.space, false); }); });
+      const fresh = x.d.usage && x.d.usage.fresh, now = Date.parse(x.now);
+      return fresh ? out.filter(r => now - Date.parse(r.createdAt || x.now) < 60e3) : out;
+    } });
+  /* the queries' rows in the contract table */
+  for (const [name, Q] of Object.entries(QUERIES)) {
+    Q.inputSchema = obj(Q.run ? Q.input : { ...Q.input, ...PAGE_IN }, name + 'Input');
+    API.push({ method: 'GET', path: '/api/rpc/' + name, coll: null, op: 'query', input: describe(Q.inputSchema, true), output: Q.run ? Q.output : `{ items: ${Q.item}[], nextCursor: string | null }`,
+      who: Q.who, trpc: name, wire: Q.wire || null, errors: ['BAD_REQUEST', ...authErrors(Q.who, 'GET')], bulk: false, paged: !Q.run, ...(Q.stub ? { stub: true } : {}), ...(Q.note ? { note: Q.note } : {}),
+      ...(Q.run ? {} : { limit: Q.limit || PAGE_LIMIT }) });
+  }
+
   /* match a request to a row: literal segments win over ":id" */
   const segs = p => p.split('/').filter(Boolean);
   const ROUTES = API.map(r => ({ r, s: segs(r.path) })).sort((a, b) => a.s.filter(x => x[0] === ':').length - b.s.filter(x => x[0] === ':').length);
@@ -1510,7 +1640,7 @@
     const fx = fixtures || { data: seed ? seed() : {} };
     const me = fx.me || { u: 'me', x: '@me', createdAt: new Date().toISOString() };
     const cfg = { now: fx.clock || new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), base: latency, latency, failWrites: false, failReads: false, failCode: 'SERVICE_UNAVAILABLE', failOn: null, readRules: { ...READ_RULES },
-      jobs: 'run', jobMs: jobMs == null ? (latency === 0 ? 40 : 2400) : jobMs, checkMs: checkMs == null ? 1400 : checkMs, failNextRun: null, resumeJobs: true };
+      jobs: 'run', jobMs: jobMs == null ? (latency === 0 ? 40 : 2400) : jobMs, checkMs: checkMs == null ? 1400 : checkMs, failNextRun: null, resumeJobs: true, pageSize: null };
     const log = window.__mockApiLog = [];
     const LOG_MAX = 400;   /* the newest requests; `seq` counts every request, so a test can take the ones after a mark */
     let seq = 0;
@@ -2035,6 +2165,7 @@
             ...['jobMs', 'checkMs'].map(k => body[k] !== undefined && !(typeof body[k] === 'number' && body[k] >= 0) && `${k}: expected a number of ms`),
             body.failNextRun !== undefined && body.failNextRun !== null && !['tokens', 'key', 'rate'].includes(body.failNextRun) && 'failNextRun: expected null | "tokens" | "key" | "rate"',
             body.resumeJobs !== undefined && typeof body.resumeJobs !== 'boolean' && 'resumeJobs: expected boolean',
+            body.pageSize !== undefined && body.pageSize !== null && !(Number.isInteger(body.pageSize) && body.pageSize >= 1 && body.pageSize <= PAGE_MAX) && `pageSize: expected null or 1 to ${PAGE_MAX}`,
           ].filter(Boolean);
           if (jobIssues.length) return { res: err('BAD_REQUEST', undefined, { issues: jobIssues }) };
           Object.assign(cfg, body, body.readRules ? { readRules: { ...cfg.readRules, ...body.readRules } } : {});
@@ -2050,6 +2181,24 @@
       const d = db0();
       if (r.op === 'me') return { res: out(200, { u: me.u, name: d.profile.name, bio: d.profile.bio, x: me.x, createdAt: me.createdAt }) };
       if (r.op === 'events') return { res: err('BAD_REQUEST', 'Open the event stream with EventSource.') };
+      if (r.op === 'query') {
+        /* a paged list or another query (section 5c): the input is the query string's input, URL-encoded JSON */
+        const Q = QUERIES[r.trpc]; let input = {};
+        const raw = new URLSearchParams(qs || '').get('input');
+        if (raw != null) { try { input = dec(raw); } catch (e) { return { res: bad([{ path: 'input', expected: 'JSON' }]) }; } }
+        const issues = check(Q.inputSchema, input, 'input');
+        if (input && input.limit !== undefined && Number.isInteger(input.limit) && (input.limit < 1 || input.limit > PAGE_MAX)) issues.push({ path: 'input.limit', expected: `1 to ${PAGE_MAX}` });
+        if (issues.length) return { res: bad(issues) };
+        const sc = scopeFor(d, caller), g = k => d[k];
+        const ctx = { d, sc, me, signedIn: caller.signedIn, now: cfg.now, all: k => viewAll(k, d, sc), reads: s => readsSpace(g, caller.signedIn, s) };
+        try {
+          if (Q.run) return { res: out(200, Q.run(ctx, input)) };
+          return { res: out(200, pageOf(Q.rows(ctx, input), Q.key, input, input.limit || cfg.pageSize || Q.limit || PAGE_LIMIT)) };
+        } catch (e) {
+          if (e && e.rpcCode) return { res: err(e.rpcCode, e.message, e.issues ? { issues: e.issues } : {}) };
+          throw e;
+        }
+      }
       if (r.op === 'rpc') {
         const P = PROCS[r.trpc], input = body === undefined ? {} : body;
         const issues = check(P.input, input, 'input');

@@ -3719,6 +3719,15 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
 .ed-mine-h .ed-cf-a { display: flex; gap: 6px; }
 .ed-mine-t { width: 100%; box-sizing: border-box; min-height: 0; max-height: 160px; resize: vertical; font-size: var(--fs-sm); color: var(--t-secondary); }
 /* ==== end edit conflicts CSS ==== */
+/* ==== paged lists (step 8): Show more ==== */
+.pg-more { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0 4px; }
+.pg-btn .spin { width: 12px; height: 12px; flex: none; }
+.pg-btn[aria-disabled="true"] { cursor: default; opacity: .75; }
+.pg-err { margin: 0; color: var(--warn); font-size: var(--fs-sm); text-align: center; }
+.nt-pop .pg-more { padding: 8px 0; }
+.n-pgmore { padding: 12px 16px 16px; }
+.n-pgmore .pg-err { font-size: 15px; }
+/* ==== end of paged lists ==== */
 </style>
 
 <div class="shell" id="shell">
@@ -4124,6 +4133,9 @@ function adopt(inst, op, res) {
   }
 }
 const apiErrText = (e, kind) => { const t = API_ERR[kind], c = e && e.code; return t[c] || (!c || c === 'SERVICE_UNAVAILABLE' || c === 'INTERNAL_SERVER_ERROR' || (e.status || 0) >= 500 ? t.unavailable : `${(e && e.message) || 'The server returned an error.'}${kind === 'write' ? ' Session undid the change.' : ''}`); };
+/* collections that load another way than a GET of their URL: key → () => Promise of the value (step 8: the paged
+   collections load their first page) */
+const LOADERS = {};
 const apiSource = {
   name: 'api',
   queue: Promise.resolve(),
@@ -4132,7 +4144,7 @@ const apiSource = {
   load(inst, then) {
     if (!apiSource.checked) { apiSource.checked = true; if (DEV) mockBackend.checkClient(RES); }
     inst.meta.setState({ status: 'loading', error: null, code: null });
-    return Promise.all([http('GET', '/api/dev/config'), http('GET', '/api/me'), ...DATA_KEYS.map(k => http('GET', RES[k].url).then(v => [k, v]))])
+    return Promise.all([http('GET', '/api/dev/config'), http('GET', '/api/me'), ...DATA_KEYS.map(k => (LOADERS[k] ? LOADERS[k](k) : http('GET', RES[k].url)).then(v => [k, v]))])
       .then(([cfg, me, ...entries]) => {
         NOW = Date.parse(cfg.now); SERVER_ME = me;
         if (DEV && me.u !== ME0.u) console.error(`[session] the server says ${me.u} is signed in; the page assumes ${ME0.u}`);
@@ -5333,7 +5345,7 @@ function nNotifs() {
   const right = un.length ? '<button class="n-tb" type="button" data-n="ntread"><b>Read all</b></button>' : '';
   const grp = (h, rows) => `<section class="n-ntg"><h3 class="n-grp-h">${h}</h3><div class="n-ntl">${rows.join('')}</div></section>`;
   const body = list.length ? `${un.length ? grp('New', un.map(row)) : ''}${old.length ? grp('Earlier', old.map(row)) : ''}` : '<p class="n-empty">No notifications yet. Replies to your asks, join requests and reports show here.</p>';
-  return { body: `${nPushBar('Notifications', right)}<div class="n-nts">${body}</div>` };
+  return { body: `${nPushBar('Notifications', right)}<div class="n-nts">${body}</div>${pgFoot('notifs')}` };
 }
 function nHome() {
   const ids = nSignedIn() ? D.joined : D.spaces.filter(x => visibleSp(x) && !isClosed(x)).map(x => x.id);
@@ -5341,7 +5353,7 @@ function nHome() {
   const sOpen = nst.hsOpen || !!(nst.hq || '').trim();
   const top = `${nRootBar(`${sOpen ? '' : `<button class="n-ib n-hsbtn" type="button" data-n="hsopen" aria-label="Search threads and spaces">${NI.search}</button>`}${nBell()}`, nSignedIn() ? 'Home' : 'Everything on Session')}${sOpen ? nHomeSearch() : ''}`;
   if ((nst.hq || '').trim()) return { body: top + nSearchResults(nst.hq) };
-  const empty = nSignedIn() && !D.joined.length ? `<div class="n-out"><p>Join a space to see its threads here.</p><button class="n-capbtn wide" type="button" data-n="tab:spaces">Find spaces</button></div>` : nFeed(posts);
+  const empty = nSignedIn() && !D.joined.length ? `<div class="n-out"><p>Join a space to see its threads here.</p><button class="n-capbtn wide" type="button" data-n="tab:spaces">Find spaces</button></div>` : pgNHome(posts);
   return { body: `${top}<div class="n-pad">${nSeg([['all', 'All'], ['ask', 'Asks'], ['post', 'Posts']], nst.homeF, 'homef')}</div>${nInline(null)}${empty}` };
 }
 function nSpacesRoot() {
@@ -5365,7 +5377,7 @@ function nSpace(id) {
     return { body: `${nPushBar(nNameH(x), nBtn('sheet:wiki:' + id, NI.info, 'About this space'))}<div class="n-sphead">${glyph(x, 'n-gl-xl')}<h2>${esc(x.title)}</h2><p>${esc(x.desc)}</p><div class="n-sphead-m"><span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(x)}</span><span>${fmt(x.members)} members</span></div>${nCta(x)}</div>${nReqNote(x)}<p class="n-empty">Threads in ${spName(x)} are visible to members only.</p>` };
   }
   const right = nBtn('sheet:wiki:' + id, NI.info, 'About this space');
-  return { body: `${nPushBar(nNameH(x), right)}<div class="n-sphead">${glyph(x, 'n-gl-xl')}<h2>${esc(x.title)}${spSeal(x)}</h2><p>${esc(x.desc)}</p><div class="n-sphead-m">${isClosed(x) ? `<span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(x)}</span>` : ''}<span>${fmt(x.members)} members</span><span>${x.online} online</span></div>${nSignedIn() ? (j ? `<button class="n-capbtn ghost" type="button" data-n="sheet:leave:${id}">Joined</button>` : `<button class="n-capbtn" type="button" data-n="join:${id}">Join</button>`) : ''}</div>${j || !nSignedIn() ? nInline(id) : ''}${nFeed(postsFor(id))}` };
+  return { body: `${nPushBar(nNameH(x), right)}<div class="n-sphead">${glyph(x, 'n-gl-xl')}<h2>${esc(x.title)}${spSeal(x)}</h2><p>${esc(x.desc)}</p><div class="n-sphead-m">${isClosed(x) ? `<span>${LOCK.replace('<svg', '<svg width="12" height="12"')} ${visLabel(x)}</span>` : ''}<span>${fmt(x.members)} members</span><span>${x.online} online</span></div>${nSignedIn() ? (j ? `<button class="n-capbtn ghost" type="button" data-n="sheet:leave:${id}">Joined</button>` : `<button class="n-capbtn" type="button" data-n="join:${id}">Join</button>`) : ''}</div>${j || !nSignedIn() ? nInline(id) : ''}${pgNFeed('space:' + id + ':all', 'threads', { space: id }, postsFor(id))}` };
 }
 /* Follow-ups of an ask thread, from the same data as the web: with question trees on, the asks about
    the question's answer (asks below them open on their own screen); otherwise the flat follow-ups. */
@@ -5766,8 +5778,8 @@ function nProfile(u) {
   const nsp = self ? D.joined.length : new Set(th.map(p => p.s)).size, pl = (n, w) => `<span class="num">${n}</span> ${w}${n === 1 ? '' : 's'}`;
   const head = `<div class="n-pf">${avatar(u, 'n-av xl')}<h2>${esc(P.name)}</h2><p class="n-pf-h">${esc(u)} · X ${esc(P.x)}</p>${P.bio ? `<p class="n-pf-bio">${esc(P.bio)}</p>` : ''}<p class="n-pf-st">${pl(th.length, 'thread')} · ${pl(nsp, 'space')}</p>${self ? '<button class="n-capbtn ghost" type="button" data-n="sheet:pfedit">Edit profile</button>' : ''}</div>`;
   const list = nst.pfTab === 'fus'
-    ? `<div class="n-feed">${fus.map(f => `<button class="n-cell" type="button" data-n="push:thread:${f.pid}"><span class="n-cell-b"><span class="n-cell-q">${esc(f.q)}</span><span class="n-cell-s">On ${esc(postById(f.pid).q)}</span><span class="n-cell-m">${ago(f, 'Just now')}</span></span></button>`).join('') || '<p class="n-empty">No follow-ups yet.</p>'}</div>`
-    : nFeed(th);
+    ? `<div class="n-feed">${pgWin('followups:' + u, 'followups', { handle: u }, fus).map(f => `<button class="n-cell" type="button" data-n="push:thread:${f.pid}"><span class="n-cell-b"><span class="n-cell-q">${esc(f.q)}</span><span class="n-cell-s">On ${esc(postById(f.pid).q)}</span><span class="n-cell-m">${ago(f, 'Just now')}</span></span></button>`).join('') || '<p class="n-empty">No follow-ups yet.</p>'}</div>${pgFoot('followups:' + u)}`
+    : pgNFeed('profile:' + u, 'profile', { handle: u }, th);
   const note = nst.pfTab !== 'fus' && th.some(p => isClosed(sp(p.s))) ? '<p class="n-grp-f n-pf-note">Threads in closed spaces are shown only to members of those spaces.</p>' : '';
   return { body: `${nPushBar(self ? 'Profile' : '', '')}${head}<div class="n-pad">${nSeg([['threads', 'Threads'], ['fus', 'Follow-ups']], nst.pfTab, 'pftab')}</div>${list}${note}` };
 }
@@ -6258,10 +6270,10 @@ function ntItems() {
 }
 const ntFind = id => ntItems().find(x => x.id === id);
 const ntRead = id => mutate('notifications.markRead', { id }, () => db.update('notifs', id, n => { n.read = true; }));
-const ntReadAll = () => mutate('notifications.markAllRead', {}, () => { if (st.notifs.some(x => !x.read)) st.notifs = st.notifs.map(x => x.read ? x : { ...x, read: true }); seen('reqSeen'); seen('repSeen'); });
+let ntReadAll = () => mutate('notifications.markAllRead', {}, () => { if (st.notifs.some(x => !x.read)) st.notifs = st.notifs.map(x => x.read ? x : { ...x, read: true }); seen('reqSeen'); seen('repSeen'); });
 /* a resolved-report notification for one report */
 const ntOfReport = (n, rid) => n.type === 'report_resolved' && n.report === rid;
-const ntUnread = () => ntItems().filter(x => x.unread).length;
+let ntUnread = () => ntItems().filter(x => x.unread).length;
 function ntItem(x) {
   const icon = x.ic ? `<span class="nt-ic">${x.ic}</span>` : x.k === 'reqs' ? `<span class="nt-ic">${CI.users}</span>` : x.k === 'declined' ? `<span class="nt-ic">${LOCK}</span>` : x.k === 'reps' || x.k === 'resolved' ? `<span class="nt-ic">${SFI.flag}</span>` : avatar(x.u);
   const who = x.u && x.k !== 'declined' ? `<b>${x.u}</b> ` : '';
@@ -6273,7 +6285,7 @@ function ntItem(x) {
 }
 function ntPop() {
   const list = ntItems(), un = list.some(x => x.unread);
-  return `<div class="pop nt-pop" role="dialog" aria-label="Notifications"><div class="nt-h"><b>Notifications</b>${un ? '<button class="tlink" type="button" data-csnotif="read">Mark all as read</button>' : ''}</div><div class="nt-list">${list.map(ntItem).join('') || '<p class="muted nt-empty">No notifications.</p>'}</div><div class="nt-f"><button class="tlink" type="button" data-csnotif="page">See all notifications</button></div></div>`;
+  return `<div class="pop nt-pop" role="dialog" aria-label="Notifications"><div class="nt-h"><b>Notifications</b>${un ? '<button class="tlink" type="button" data-csnotif="read">Mark all as read</button>' : ''}</div><div class="nt-list">${list.map(ntItem).join('') || '<p class="muted nt-empty">No notifications.</p>'}${pgFoot('notifs')}</div><div class="nt-f"><button class="tlink" type="button" data-csnotif="page">See all notifications</button></div></div>`;
 }
 function ntBell() {
   if (st.auth !== 'in') return '';
@@ -6283,7 +6295,7 @@ function ntBell() {
 function layoutNotifs() {
   const f = st.ntF, list = ntItems().filter(x => f === 'all' || (f === 'spaces' ? x.k !== 'reply' : x.k === 'reply'));
   const chip = (k, l) => `<button type="button" data-ntf="${k}" aria-pressed="${f === k}">${l}</button>`;
-  return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page nt-page"><div class="sub-top"><h2>Notifications</h2>${ntUnread() ? '<button class="btn" type="button" data-csnotif="read">Mark all as read</button>' : ''}</div><div class="sv-chips">${chip('all', 'All')}${chip('spaces', 'Spaces and requests')}${chip('threads', 'Threads')}</div><div class="nt-list">${list.map(ntItem).join('') || '<p class="muted">Nothing here.</p>'}</div></div></div>`;
+  return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page nt-page"><div class="sub-top"><h2>Notifications</h2>${ntUnread() ? '<button class="btn" type="button" data-csnotif="read">Mark all as read</button>' : ''}</div><div class="sv-chips">${chip('all', 'All')}${chip('spaces', 'Spaces and requests')}${chip('threads', 'Threads')}</div><div class="nt-list">${list.map(ntItem).join('') || '<p class="muted">Nothing here.</p>'}</div>${pgFoot('notifs')}</div></div>`;
 }
 function csOpenNotifs() {
   if (st.notifV === 'page') Object.assign(st, { subPage: 'notifs', ntOpen: false, thread: null, savedPage: false, profilePage: false });
@@ -12273,6 +12285,331 @@ function acxNatYou() {
   acxNatYou();
 }; }
 /* ==== end account ==== */
+/* ==== mock backend, step 8: paged lists with a Show more button ====
+   The lists that grow without bound are read from the server a page at a time (section 5c of the API file:
+   GET /api/rpc/<query>?input=…, { cursor?, limit? } → { items, nextCursor }; newest first by time, then id).
+   Each paged list has an entry in PG, by list key (the list and its input: "space:<id>:<kind>", "notifs", …):
+   { kind, input, lim, last, cursor, end, loading, err }. last is the [time, id] of the last record loaded
+   (the lower edge of what the list shows), cursor the server's nextCursor, end: the last page has loaded.
+   Two ways a list loads:
+   - Loaded paged (the store holds only the pages loaded): notifications (the first page at start, in place of
+     GET /api/me/notifications; Show more adds the next page to the store; the unread count adds
+     notifications.unreadCount for the ones not loaded yet) and Usage › Recent asks (usage.listAsks: the list
+     is the server's pages, kept in PG; it no longer reads D.posts or D.qtd, and it reloads its pages when
+     threads, follow-ups, ask trees or usage change).
+   - Windows over a whole collection (the store keeps the collection whole, as other screens read its records:
+     thread pages, counts, badges, roles): Home, a space's threads (Latest and an FAQ topic), a profile's
+     threads and follow-ups, Saved, search results, Manage › Members, Requests and Reports, and a space's
+     sources list. A list shows its records at or above `last`. The first page's cursor and edge come from the
+     server: the query runs when the list is first drawn with more records than a page. Show more loads the
+     next page, whose records the store takes (posts, reqs, reports), and moves the edge down.
+   Live changes: a record created after the pages loaded sorts above the edge and shows at the top; a deleted
+   one leaves the store and the list; a record below the edge (a notification the server sends with an older
+   time) is not added until its page loads. The counts the page shows stay totals (the collections' lengths,
+   a space's members, /api/users, notifications.unreadCount, usage.get).
+   Lists that stay whole: a thread's follow-ups and replies, an ask tree, your spaces, API keys, skills, pages,
+   the FAQ landing's topic cards and Recent (3 and 4 items), and the Active and Most followed sorts (they
+   order the whole list by activity, not by time).
+   Back, Forward and reload keep how far each list was expanded: PG is kept in sessionStorage for the tab, and
+   a reload loads the pages again, up to the same record. A Screen entry and the Variants bar's Reset start
+   every list at its first page, with the page size the entry sets (DevConfig pageSize, PG_SIZE). */
+const PG = new Map();
+let PG_SIZE = null, PG_PENDING = 0, PG_GEN = 0, PG_FOCUS = null, PG_NSYNC = 0;
+const PG_STORE_KEY = 'session-pages';
+/* [time in ms (a record without one is new: Infinity), id], as the server orders them */
+const pgK = (t, id) => { const ms = t ? Date.parse(t) : NaN; return [isNaN(ms) ? Infinity : ms, String(id)]; };
+const pgCmp = (a, b) => (a[0] === b[0] ? 0 : a[0] < b[0] ? -1 : 1) || (a[1] === b[1] ? 0 : a[1] < b[1] ? -1 : 1);
+const pgThread = { noun: 'threads', key: p => pgK(p.createdAt, pidOf(p)), fid: p => pidOf(p), store: 'posts' };
+/* a follow-up's id on the server: "<thread>:<its index in the thread's follow-ups>" */
+const pgFuIdx = f => (D.fu[f.pid] || []).findIndex(x => x.u === f.u && x.q === f.q && x.createdAt === f.createdAt);
+/* per kind: the query, the noun in the error line, key (a row as the page holds it), skey (an item as the
+   query returns it, when it differs), fid (the id a row's data attributes carry: focus after Show more),
+   store (the collection that takes the page's records), paged (the store holds only the pages loaded),
+   own (the list is the pages, kept in PG), limit (the default page size) */
+const PG_KINDS = {
+  feed: { q: 'threads.feed', ...pgThread },
+  threads: { q: 'threads.list', ...pgThread },
+  profile: { q: 'users.listThreads', ...pgThread },
+  saved: { q: 'saved.list', ...pgThread },
+  search: { q: 'search.threads', ...pgThread },
+  followups: { q: 'users.listFollowUps', noun: 'follow-ups', key: f => pgK(f.createdAt, `${f.pid}:${pgFuIdx(f)}`), skey: f => pgK(f.createdAt, f.id), fid: f => f.pid || f.thread },
+  members: { q: 'members.list', noun: 'members', key: m => pgK(m.joinedAt, m.u), fid: m => m.u },
+  requests: { q: 'joinRequests.list', noun: 'requests', key: r => pgK(r.createdAt, r.u), fid: r => r.u, store: 'reqs' },
+  reports: { q: 'reports.list', noun: 'reports', key: r => pgK(r.createdAt, r.id), fid: r => r.id, store: 'reports' },
+  sources: { q: 'spaceSources.list', noun: 'sources', key: d => pgK(d.createdAt, d.m), fid: d => d.m },
+  notifs: { q: 'notifications.list', noun: 'notifications', key: n => pgK(n.createdAt, n.id), fid: n => n.id, store: 'notifs', paged: true },
+  usage: { q: 'usage.listAsks', noun: 'asks', key: r => pgK(r.createdAt, r.id), fid: r => r.thread, own: true, limit: 8 },
+};
+const pgLimit = (kind, lim) => PG_SIZE || lim || PG_KINDS[kind].limit || 30;
+const pgUrl = (q, input) => `/api/rpc/${q}?input=${encodeURIComponent(enc(input))}`;
+const pgPut = (lk, o) => { const s = PG.get(lk); if (s) PG.set(lk, { ...s, ...o }); pgSave(); };
+function pgSave() {
+  try {
+    const keep = [...PG].filter(([, s]) => !s.fit && (s.last || s.cursor) && !s.err).slice(-60)
+      .map(([k, s]) => [k, { kind: s.kind, input: s.input, lim: s.lim, last: s.last && [s.last[0] === Infinity ? null : s.last[0], s.last[1]], cursor: s.cursor, end: !!s.end }]);
+    sessionStorage.setItem(PG_STORE_KEY, JSON.stringify(keep));
+  } catch (e) {}
+}
+/* a reload: how far each list was expanded (the pages load again, up to the same record) */
+try { const l = JSON.parse(sessionStorage.getItem(PG_STORE_KEY) || '[]'); if (Array.isArray(l)) l.forEach(([k, s]) => { if (s && PG_KINDS[s.kind]) PG.set(k, { ...s, last: s.last && [s.last[0] === null ? Infinity : s.last[0], s.last[1]], gen: ++PG_GEN, restored: true }); }); } catch (e) {}
+/* every list at its first page; the notifications the store holds stay (pgNotifsSync loads their first page again) */
+function pgReset() { const n = PG.get('notifs'); PG.clear(); if (n) PG.set('notifs', n); PG_FOCUS = null; pgSave(); }
+const pgRender = () => { if (APP_STARTED && !DISPOSED) renderAll(); };
+/* run fn after this render; the data store is not idle until it has run */
+const pgSoon = fn => { PG_PENDING++; setTimeout(() => { PG_PENDING--; fn(); }, 0); };
+{ const idle0 = window.__dataIdle; window.__dataIdle = () => idle0() && PG_PENDING === 0; }
+/* the records of a page go into the store, except records a queued mutation changed */
+const pgMerge = (key, items) => items.length && applyChanges({ [key]: { put: items } }, (k, x) => PENDING.has(pkey(k, x)));
+/* the window of a list over a whole collection: the records at or above the last one loaded. items: the list
+   as the screen builds it (any order). The first time a list is drawn with more than a page, its first page
+   is read from the server (for the cursor); until then the window is the page's worth the store holds. */
+function pgWin(lk, kind, input, items, lim0) {
+  const K = PG_KINDS[kind], lim = pgLimit(kind, lim0);
+  let s = PG.get(lk);
+  if (s && (s.lim !== lim || !sameJSON(s.input, input))) { PG.delete(lk); s = null; }
+  if (!s) {
+    if (items.length <= lim) { PG.set(lk, { kind, input, lim, last: null, cursor: null, end: true, fit: true, gen: ++PG_GEN }); return items; }
+    const ks = items.map(K.key).sort((a, b) => pgCmp(b, a));
+    s = { kind, input, lim, last: ks[lim - 1], cursor: null, end: false, loading: true, first: true, gen: ++PG_GEN };
+    PG.set(lk, s); pgSoon(() => pgFetch(lk, null));
+  } else if (s.restored && !s.end && !s.cursor && !s.loading) { pgPut(lk, { loading: true, first: true, restored: false }); pgSoon(() => pgFetch(lk, null)); }
+  return s.end ? items : items.filter(x => pgCmp(K.key(x), s.last) >= 0);
+}
+/* a list the server's pages make up (Usage): { items (null until the first page), loading, err } */
+function pgOwn(lk, kind, input, lim0) {
+  const lim = pgLimit(kind, lim0);
+  let s = PG.get(lk);
+  if (s && (s.lim !== lim || !sameJSON(s.input, input))) { PG.delete(lk); s = null; }
+  if (!s || (!s.items && !s.loading && !s.err) || (s.stale && !s.loading)) {
+    const prev = s, upto = prev && !prev.items && prev.last ? prev.last : null, had = !!(prev && prev.items);
+    s = { kind, input, lim, items: had ? prev.items : null, last: had ? prev.last : null, cursor: had ? prev.cursor : null, end: had && !!prev.end, loading: true, first: !had, stale: false, gen: ++PG_GEN };
+    PG.set(lk, s);
+    pgSoon(() => upto ? pgUntil(lk, upto) : had ? pgRefresh(lk) : pgFetch(lk, null));
+  }
+  return PG.get(lk);
+}
+/* the Show more line under a list: the button, its loading state, or the error with Retry; '' when every page has loaded */
+function pgFoot(lk) {
+  const s = PG.get(lk); if (!s || (s.end && !s.err) || (PG_KINDS[s.kind].own && !s.items)) return '';
+  const K = PG_KINDS[s.kind], nat = st.device === 'native', a = esc(lk);
+  if (s.err && !s.loading) return `<div class="pg-more${nat ? ' n-pgmore' : ''}"><p class="pg-err" role="alert">Couldn’t load more ${K.noun}. <button class="tlink" type="button" data-pgretry="${a}">Retry</button></p></div>`;
+  const busy = !!s.loading && !s.first;
+  return `<div class="pg-more${nat ? ' n-pgmore' : ''}" aria-live="polite"><button class="${nat ? 'n-capbtn ghost wide' : 'btn sm'} pg-btn" type="button" data-pgmore="${a}"${busy ? ' aria-disabled="true"' : ''}>${busy ? '<span class="spin" aria-hidden="true"></span>' : ''}Show more</button>${busy ? `<span class="sr-only">Loading more ${K.noun}</span>` : ''}</div>`;
+}
+/* the notifications not loaded yet that are unread (0 on the last page) */
+const pgUnreadAfter = cursor => !cursor ? Promise.resolve(0) : http('GET', pgUrl('notifications.unreadCount', { after: cursor })).then(r => (r && r.count) || 0, () => 0);
+/* read one page: the first (cursor null) or the one after cursor. user: Show more (focus follows it) */
+function pgFetch(lk, cursor, user) {
+  const s0 = PG.get(lk); if (!s0) return Promise.resolve();
+  const K = PG_KINDS[s0.kind], gen = s0.gen;
+  pgPut(lk, { loading: true, err: false });
+  if (user) pgRender();
+  PG_PENDING++;
+  const input = { ...s0.input, limit: s0.lim, ...(cursor ? { cursor } : {}) };
+  return http('GET', pgUrl(K.q, input)).then(async page => {
+    if (!PG.get(lk) || PG.get(lk).gen !== gen) return;
+    const items = (page && page.items) || [], skey = K.skey || K.key;
+    const o = { loading: false, err: false, first: false, cursor: page.nextCursor || null, end: !page.nextCursor, last: items.length ? skey(items[items.length - 1]) : PG.get(lk).last };
+    if (s0.kind === 'notifs') o.beyond = await pgUnreadAfter(o.cursor);
+    const s = PG.get(lk); if (!s || s.gen !== gen) return;
+    if (K.own) o.items = cursor ? [...(s.items || []), ...items] : items;
+    pgPut(lk, o);
+    if (K.store) pgMerge(K.store, items);
+    if (user) PG_FOCUS = { lk, id: items.length ? K.fid(items[0]) : null };
+    const want = s.want && !o.end; if (s.want) pgPut(lk, { want: false });
+    pgRender(); pgFocus();
+    if (want) return pgFetch(lk, o.cursor, true);
+  }, () => {
+    const s = PG.get(lk); if (!s || s.gen !== gen) return;
+    const a = document.activeElement, had = !!(a && a.closest && a.closest(`[data-pgmore="${CSS.escape(lk)}"]`));
+    pgPut(lk, { loading: false, err: true, errCursor: cursor, want: false });
+    pgRender();
+    if (had || user) { const r = document.querySelector(`[data-pgretry="${CSS.escape(lk)}"]`); if (r) r.focus({ preventScroll: true }); }
+  }).finally(() => { PG_PENDING--; });
+}
+/* load pages until the one that holds the record `upto` (a reload of an expanded list) */
+async function pgUntil(lk, upto) {
+  for (let n = 0; n < 20; n++) {
+    const s = PG.get(lk); if (!s) return;
+    await pgFetch(lk, n ? s.cursor : null);
+    const t = PG.get(lk); if (!t || t.err || t.end || (t.last && pgCmp(t.last, upto) <= 0)) return;
+  }
+}
+/* a list the server's pages make up, after a change: the same number of records again, from the top */
+function pgRefresh(lk) {
+  const s0 = PG.get(lk); if (!s0) return Promise.resolve();
+  const K = PG_KINDS[s0.kind], gen = s0.gen, n = Math.min(100, Math.max(s0.lim, (s0.items || []).length));
+  PG_PENDING++;
+  return http('GET', pgUrl(K.q, { ...s0.input, limit: n })).then(page => {
+    const s = PG.get(lk); if (!s || s.gen !== gen) return;
+    const items = page.items || [];
+    pgPut(lk, { items, loading: false, err: false, cursor: page.nextCursor || null, end: !page.nextCursor, last: items.length ? (K.skey || K.key)(items[items.length - 1]) : null });
+    pgRender();
+  }, () => { const s = PG.get(lk); if (s && s.gen === gen) { pgPut(lk, { loading: false }); pgRender(); } }).finally(() => { PG_PENDING--; });
+}
+/* after Show more: focus stays on the button; on the last page, it moves to the first new row */
+function pgFocus() {
+  const f = PG_FOCUS; PG_FOCUS = null; if (!f) return;
+  const b = document.querySelector(`[data-pgmore="${CSS.escape(f.lk)}"]`);
+  if (b) { if (document.activeElement !== b) b.focus({ preventScroll: true }); return; }
+  if (f.id == null) return;
+  const id = String(f.id), hit = el => [...el.attributes].some(a => a.name.startsWith('data-') && (a.value === id || a.value.split(':').includes(id)));
+  const el = [...document.querySelectorAll('#shell :is([data-open], [data-n], [data-mname], [data-rqsel], [data-ntopen], [data-sfrep], [data-miopen], [data-qtopen], [data-thlink], [data-dsunit], [data-user], [data-pgrow])')].find(hit);
+  if (!el) return;
+  let t = el.matches(FOCUSABLE) ? el : el.querySelector(FOCUSABLE);
+  if (!t) { t = el; el.setAttribute('tabindex', '-1'); }
+  t.focus({ preventScroll: true });
+}
+/* Show more (or Retry) pressed */
+function pgMore(lk) {
+  const s = PG.get(lk); if (!s) return;
+  if (s.loading) { if (s.first) pgPut(lk, { want: true }); return; }
+  if (s.err) { pgFetch(lk, s.errCursor, true); return; }
+  if (!s.end) pgFetch(lk, s.cursor, true);
+}
+on(document, 'click', e => {
+  const b = e.target.closest && e.target.closest('[data-pgmore], [data-pgretry]'); if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  pgMore(b.dataset.pgmore || b.dataset.pgretry);
+}, true);
+
+/* -- notifications: loaded paged (the store holds the pages loaded) -- */
+/* the first page (and, after a reload of an expanded list, the pages up to the same notification) */
+LOADERS.notifs = async () => {
+  const lim = pgLimit('notifs'), was = PG.get('notifs'), upto = was && was.lim === lim && was.last && !was.fit ? was.last : null;
+  const K = PG_KINDS.notifs, items = []; let cursor = null;
+  for (let n = 0; n < 20; n++) {
+    const page = await http('GET', pgUrl(K.q, { limit: lim, ...(cursor ? { cursor } : {}) }));
+    items.push(...page.items); cursor = page.nextCursor || null;
+    if (!cursor || !upto || pgCmp(K.key(items[items.length - 1]), upto) <= 0) break;
+  }
+  const beyond = await pgUnreadAfter(cursor);
+  PG.set('notifs', { kind: 'notifs', input: {}, lim, last: items.length ? K.key(items[items.length - 1]) : null, cursor, end: !cursor, fit: !cursor && !upto, beyond, gen: ++PG_GEN });
+  pgSave();
+  return items;
+};
+/* after a scenario or a new page size: the notifications the store holds are the first page again */
+function pgNotifsSync() {
+  const lim = pgLimit('notifs'), tok = ++PG_NSYNC, s = PG.get('notifs');
+  if (s && s.end && s.lim === lim && D.notifs.length <= lim) return;
+  if (!s && D.notifs.length <= lim) { PG.set('notifs', { kind: 'notifs', input: {}, lim, last: null, cursor: null, end: true, fit: true, beyond: 0, gen: ++PG_GEN }); pgSave(); return; }
+  /* until the first page arrives, the list shows a page's worth of the newest */
+  const ks = D.notifs.map(PG_KINDS.notifs.key).sort((a, b) => pgCmp(b, a));
+  PG.set('notifs', { kind: 'notifs', input: {}, lim, last: ks[lim - 1], cursor: null, end: false, loading: true, first: true, beyond: 0, gen: ++PG_GEN });
+  PG_PENDING++;
+  LOADERS.notifs().then(items => { if (tok !== PG_NSYNC) return; DS.store.setState({ notifs: deepFreeze(items) }); pgRender(); }, () => {}).finally(() => { PG_PENDING--; });
+}
+/* a notification the server sends with an older time than the pages loaded waits for its page */
+{ const ac = applyChanges; applyChanges = function (changes, held) {
+  const s = PG.get('notifs'), ch = changes && changes.notifs;
+  if (ch && ch.put && s && !s.end && s.last) {
+    const have = new Set((D.notifs || []).map(n => n.id)), K = PG_KINDS.notifs;
+    const put = ch.put.filter(x => have.has(x.id) || pgCmp(K.key(x), s.last) >= 0);
+    if (put.length !== ch.put.length) changes = { ...changes, notifs: { ...ch, put } };
+  }
+  return ac(changes, held);
+}; }
+/* the unread count is a total: the loaded notifications' and the server's count of the rest */
+{ const nu = ntUnread; ntUnread = () => nu() + ((PG.get('notifs') || {}).beyond || 0); }
+{ const ra = ntReadAll; ntReadAll = function () {
+  const s = PG.get('notifs'); if (s && s.beyond) pgPut('notifs', { beyond: 0 });
+  const r = ra();
+  /* after the write: the server's count of the notifications not loaded */
+  if (s && s.cursor) { PG_PENDING++; apiSource.queue.then(() => pgUnreadAfter((PG.get('notifs') || {}).cursor)).then(n => { pgPut('notifs', { beyond: n }); pgRender(); }).finally(() => { PG_PENDING--; }); }
+  return r;
+}; }
+/* the notification lists: the loaded notifications, then Show more */
+const pgNtWin = items => { const s = PG.get('notifs'); return !s || s.end || !s.last ? items : items.filter(x => x.k === 'reqs' || x.k === 'reps' || pgCmp(pgK(x.createdAt, x.id), s.last) >= 0); };
+{ const ni = ntItems; ntItems = () => pgNtWin(ni()); }
+/* Usage › Recent asks reload their pages when what they are made of changes */
+DS.store.subscribe((a, b) => { if (!b || ['posts', 'qtd', 'fu', 'usage'].every(k => a[k] === b[k])) return; for (const [k, s] of PG) if (s.kind === 'usage' && s.items) PG.set(k, { ...s, stale: true }); });
+
+/* -- the lists -- */
+/* Home, a space's Latest and a profile's threads (feed2): the window, then Show more. Active and Most
+   followed order the whole list by activity: they are not paged. */
+function pgFeedCtx(id) {
+  const kind = st.kindF !== 'all' ? { kind: st.kindF } : {};
+  if (st.profilePage) return st.ptab === 'threads' ? { lk: `profile:${st.profileUser}:${st.kindF}`, kind: 'profile', input: { handle: st.profileUser, ...kind } } : null;
+  if (st.subPage || st.thread != null || st.savedPage || NV_SORTQ[st.sort]) return null;
+  if (id != null) return { lk: `space:${id}:${st.kindF}`, kind: 'threads', input: { space: id, ...kind } };
+  if (st.home) { const scope = st.auth === 'in' ? 'joined' : 'all'; return { lk: `feed:${scope}:${st.kindF}`, kind: 'feed', input: { scope, ...kind } }; }
+  return null;
+}
+{ const f = feed2; feed2 = function (id, src) {
+  const c = pgFeedCtx(id); if (!c) return f(id, src);
+  let list = src || postsFor(id).map(p => ({ ...p, orig: p }));
+  if (st.kindF !== 'all') list = list.filter(p => p.k === st.kindF);
+  return f(id, pgWin(c.lk, c.kind, c.input, list)) + pgFoot(c.lk);
+}; }
+/* Phone: Home, a space and a profile */
+const pgNFeed = (lk, kind, input, list) => nFeed(pgWin(lk, kind, input, list)) + pgFoot(lk);
+function pgNHome(posts) {
+  const scope = nSignedIn() ? 'joined' : 'public';
+  return pgNFeed(`nfeed:${scope}:${nst.homeF}`, 'feed', { scope, ...(nst.homeF !== 'all' ? { kind: nst.homeF } : {}) }, posts);
+}
+
+/* -- Screen entries: a list of each kind with Show more (a small page size: DevConfig pageSize), the button
+   loading, and a failed page with Retry. They open on the device the Variants bar has: Desktop, Mobile Web
+   or Phone. -- */
+const PG_SCREENS = {
+  'pg-feed': 5, 'pg-space': 8, 'pg-notifs': 2, 'pg-loading': 5, 'pg-error': 5,
+};
+/* the list each entry shows, on the web and on the Phone */
+const pgScreenList = k => {
+  const nat = st.device === 'native';
+  return {
+    'pg-feed': nat ? 'nfeed:joined:all' : 'feed:joined:all', 'pg-loading': nat ? 'nfeed:joined:all' : 'feed:joined:all', 'pg-error': nat ? 'nfeed:joined:all' : 'feed:joined:all',
+    'pg-space': 'space:sablefield:all', 'pg-notifs': 'notifs',
+  }[k];
+};
+/* wait (holding the data store busy) until the list's first page has loaded */
+function pgWhenLoaded(lk) {
+  PG_PENDING++;
+  return new Promise(res => { let n = 0; const t = () => { const s = PG.get(lk); if ((s && !s.loading) || ++n > 300) { PG_PENDING--; res(PG.get(lk)); } else setTimeout(t, 10); }; setTimeout(t, 0); });
+}
+function pgScreen(k) {
+  const nat = st.device === 'native';
+  if (nat) {
+    PG_J0('np-pgbase');   /* the Phone app's baseline (npJump) */
+    const tab = (t, ...stack) => { nst.tab = t; nst.stack = stack; };
+    switch (k) {
+      case 'pg-feed': case 'pg-loading': case 'pg-error': tab('home'); break;
+      case 'pg-space': tab('spaces', { v: 'space', id: 'sablefield' }); break;
+      case 'pg-notifs': tab('home', { v: 'notifs', id: '' }); break;
+    }
+  } else {
+    PG_J0('pg-base');
+    switch (k) {
+      case 'pg-feed': case 'pg-loading': case 'pg-error': st.home = true; break;
+      case 'pg-space': Object.assign(st, { space: 'sablefield', home: false, faqView: 'latest' }); break;
+      case 'pg-notifs': Object.assign(st, { subPage: 'notifs', ntOpen: false }); break;
+    }
+  }
+  const lk = pgScreenList(k);
+  /* the loading state: the next page requested and not answered yet (a page's state, set without a request) */
+  if (k === 'pg-loading') pgWhenLoaded(lk).then(s => { if (s && !s.end) { pgPut(lk, { loading: true, first: false }); pgRender(); } });
+  /* a failed page: the next request to the query fails once (DevConfig failOn); Retry loads it */
+  if (k === 'pg-error') pgWhenLoaded(lk).then(s => {
+    if (!s || s.end) return;
+    mockBackend.cfg.failOn = { code: 'SERVICE_UNAVAILABLE', paths: ['/api/rpc/' + PG_KINDS[s.kind].q], methods: ['GET'], times: 1 };
+    return pgFetch(lk, s.cursor, true);
+  });
+}
+const PG_J0 = jump;
+jump = function (k) {
+  pgReset();
+  PG_SIZE = PG_SCREENS[k] || null; mockBackend.cfg.pageSize = PG_SIZE;
+  if (PG_SCREENS[k]) pgScreen(k); else PG_J0(k);
+  pgNotifsSync();
+};
+SCREEN_BEFORE.push(() => { PG_SIZE = null; mockBackend.cfg.pageSize = null; pgReset(); });
+/* the Variants bar's Reset: every list at its first page, at the default page size */
+{ const rc = resetControls; resetControls = function () { PG_SIZE = null; mockBackend.cfg.pageSize = null; pgReset(); rc(); pgNotifsSync(); pgRender(); }; }
+JUMPS.push(['Paged lists', [
+  ['pg-feed', 'Home: Show more (5 a page)'], ['pg-space', 'Space threads, Latest: Show more (8 a page)'], ['pg-notifs', 'Notifications: Show more (2 a page)'],
+  ['pg-loading', 'Show more: loading the next page'], ['pg-error', 'Show more: the page failed, with Retry'],
+]]);
+/* ==== end of paged lists ==== */
 
 buildJump();
 /* End of start-up: start loading the data store over HTTP, and move the Variants bar's keys from the UI
