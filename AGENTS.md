@@ -52,8 +52,9 @@ rules above stay as they are. Decisions for the new client:
     scope; idempotent apply by client mutation id; SSE with Last-Event-ID).
 - Ids: clients generate ULIDs; the server checks them.
 - Replication: full records for the last 90 days or the newest 500 threads
-  per space, whichever covers more, plus threads the user wrote, saved or
-  opened in the past 14 days; summaries for every other readable thread. The
+  per space, whichever covers more, plus every thread the user wrote or saved
+  and any thread opened in the past 14 days; summaries for every other
+  readable thread. The
   web client uses an in-memory adapter (no IndexedDB); the Phone app is React
   Native.
 - Server: one SQLite database on one Fly machine; requests carry a protocol
