@@ -424,6 +424,7 @@ export class ProtoServer implements TestServer {
   }
 
   logRows(log: LogId): LogRow[] {
+    this.prune(this.clock.now());
     return [...this.rows(log).values()].map((r) => ({ ...r }));
   }
 
