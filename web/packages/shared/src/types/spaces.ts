@@ -1,28 +1,41 @@
 // Types of the Spaces API, inferred from the zod schemas in
 // `../schemas/spaces.ts` (the reference for the HTML mockup's mock backend,
 // `docs/mockups/session-web-spaces-mock-api.js`). The real app does not serve
-// this API yet; where an endpoint stands in for a real wire type, the schema's
-// comment names that type and how the two differ.
+// this API yet.
+//
+// A record that stands in for a real wire type has that type's name
+// (`ResearchTreeSummary`, `ThreadMember`, `InboxNotification`, …); its
+// schema's comment says how the two differ. The real types with those names
+// are different shapes, so the package root exports these only under the
+// `Spaces` namespace (`import type { Spaces } from "@session/shared"`, then
+// `Spaces.ResearchTreeSummary`), and their schemas under `spaces`
+// (`import { spaces } from "@session/shared/schemas"`).
 
 import type { z } from "zod";
 
 import type {
-  accountSettingsSchema,
   apiKeySchema,
-  askNodeSchema,
   askTreeSchema,
   banSchema,
   citedPageSchema,
   closedSpaceStateSchema,
+  createdInviteSchema,
   editConflictCurrentSchema,
-  followUpSchema,
-  inviteLinkSchema,
+  inboxNotificationPageSchema,
+  inboxNotificationSchema,
+  inboxNotificationTypeSchema,
   joinRequestSchema,
   moderationStateSchema,
   pageDocSchema,
   personSummarySchema,
   reportSchema,
+  researchBranchRemovalSchema,
+  researchExchangeNodeSchema,
+  researchNodeContentSchema,
+  researchNodeSchema,
+  researchTreeSummarySchema,
   runFailureSchema,
+  sessionEventSchema,
   skillSchema,
   sourceBlockSchema,
   sourcePolicySchema,
@@ -32,12 +45,7 @@ import type {
   spaceCollectionSchemas,
   spaceErrorCodeSchema,
   spaceErrorSchema,
-  spaceEventSchema,
-  spaceMeSchema,
   spaceMemberRoleSchema,
-  spaceMemberSchema,
-  spaceNotificationSchema,
-  spaceNotificationTypeSchema,
   spaceProcedures,
   spaceProfileSchema,
   spaceQueries,
@@ -49,26 +57,31 @@ import type {
   spaceSourceSchema,
   spaceVisibilitySchema,
   storedApiKeySchema,
+  storedResearchTreeSummarySchema,
   storedSpaceSchema,
-  storedThreadSchema,
-  threadSchema,
+  storedThreadInviteSchema,
+  threadInviteSchema,
+  threadMemberSchema,
   tokenUsageSchema,
   usageAskSchema,
   userFollowUpSchema,
+  userSchema,
+  userSettingsSchema,
 } from "../schemas/spaces.js";
 
-import type { InboxNotificationPage } from "./sharing.js";
-
-// `Reply` is declared with its schema in `../schemas/spaces.ts`: a recursive
-// schema needs the type written out.
+// `ResearchPostNode` (a reply) is declared with its schema in
+// `../schemas/spaces.ts`: a recursive schema needs the type written out.
+export type { ResearchPostNode } from "../schemas/spaces.js";
 
 export type SpaceRole = z.infer<typeof spaceRoleSchema>;
 export type SpaceMemberRole = z.infer<typeof spaceMemberRoleSchema>;
 export type ClosedSpaceState = z.infer<typeof closedSpaceStateSchema>;
-export type SpaceMember = z.infer<typeof spaceMemberSchema>;
+export type ThreadMember = z.infer<typeof threadMemberSchema>;
 export type JoinRequest = z.infer<typeof joinRequestSchema>;
 export type Ban = z.infer<typeof banSchema>;
-export type InviteLink = z.infer<typeof inviteLinkSchema>;
+export type ThreadInvite = z.infer<typeof threadInviteSchema>;
+export type StoredThreadInvite = z.infer<typeof storedThreadInviteSchema>;
+export type CreatedInvite = z.infer<typeof createdInviteSchema>;
 
 export type SpaceVisibility = z.infer<typeof spaceVisibilitySchema>;
 export type Space = z.infer<typeof spaceSchema>;
@@ -76,12 +89,21 @@ export type StoredSpace = z.infer<typeof storedSpaceSchema>;
 export type SpaceSettings = z.infer<typeof spaceSettingsSchema>;
 
 export type RunFailure = z.infer<typeof runFailureSchema>;
-export type Thread = z.infer<typeof threadSchema>;
-export type StoredThread = z.infer<typeof storedThreadSchema>;
+/** A thread. */
+export type ResearchTreeSummary = z.infer<typeof researchTreeSummarySchema>;
+/** One thread (`GET /api/threads/:id`): the same record as
+ * `ResearchTreeSummary`. */
+export type ResearchTreeDetail = ResearchTreeSummary;
+export type StoredResearchTreeSummary = z.infer<typeof storedResearchTreeSummarySchema>;
+/** An answer's HTML. */
+export type ResearchNodeContent = z.infer<typeof researchNodeContentSchema>;
 export type CitedPage = z.infer<typeof citedPageSchema>;
-export type FollowUp = z.infer<typeof followUpSchema>;
-export type AskNode = z.infer<typeof askNodeSchema>;
+/** A follow-up on an ask thread. */
+export type ResearchExchangeNode = z.infer<typeof researchExchangeNodeSchema>;
+/** A node of a thread's ask tree. */
+export type ResearchNode = z.infer<typeof researchNodeSchema>;
 export type AskTree = z.infer<typeof askTreeSchema>;
+export type ResearchBranchRemoval = z.infer<typeof researchBranchRemovalSchema>;
 export type SpaceRun = z.infer<typeof spaceRunSchema>;
 
 export type SourceBlock = z.infer<typeof sourceBlockSchema>;
@@ -94,16 +116,18 @@ export type SourceReport = z.infer<typeof sourceReportSchema>;
 export type Report = z.infer<typeof reportSchema>;
 export type ModerationState = z.infer<typeof moderationStateSchema>;
 
-export type SpaceNotificationType = z.infer<typeof spaceNotificationTypeSchema>;
-export type SpaceNotification = z.infer<typeof spaceNotificationSchema>;
+export type InboxNotificationType = z.infer<typeof inboxNotificationTypeSchema>;
+export type InboxNotification = z.infer<typeof inboxNotificationSchema>;
+export type InboxNotificationPage = z.infer<typeof inboxNotificationPageSchema>;
 
 export type PageDoc = z.infer<typeof pageDocSchema>;
 export type Skill = z.infer<typeof skillSchema>;
 
 export type SpaceProfile = z.infer<typeof spaceProfileSchema>;
 export type PersonSummary = z.infer<typeof personSummarySchema>;
-export type SpaceMe = z.infer<typeof spaceMeSchema>;
-export type AccountSettings = z.infer<typeof accountSettingsSchema>;
+/** The signed-in person (`GET /api/me`). */
+export type User = z.infer<typeof userSchema>;
+export type UserSettings = z.infer<typeof userSettingsSchema>;
 
 /** TODO(limits) stubs. */
 export type ApiKey = z.infer<typeof apiKeySchema>;
@@ -123,7 +147,7 @@ export type SpaceErrorCode = z.infer<typeof spaceErrorCodeSchema>;
 export type EditConflictCurrent = z.infer<typeof editConflictCurrentSchema>;
 export type SpaceError = z.infer<typeof spaceErrorSchema>;
 
-export type SpaceEvent = z.infer<typeof spaceEventSchema>;
+export type SessionEvent = z.infer<typeof sessionEventSchema>;
 
 /** One page of a paged query: `InboxNotificationPage`'s shape with the
  * query's items. */

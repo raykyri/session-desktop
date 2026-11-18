@@ -12,6 +12,15 @@
 // schemas here, and that every row of the mock's API table has an entry in
 // `spacesApi` below.
 //
+// Names: a record that stands in for one of the real app's wire types has
+// that type's name (`researchTreeSummarySchema`, `threadMemberSchema`,
+// `inboxNotificationSchema`, …: the wire names in the mock's API table); its
+// comment says how the two differ. The real types with those names are other
+// shapes, so these never go to the package root by name: `../schemas/index.ts`
+// exports this module as the namespace `spaces`, and the package root
+// exports its types (`../types/spaces.ts`) as the type namespace `Spaces`.
+// Records without a wire type keep descriptive names.
+//
 // Conventions:
 // - The wire is JSON. A Set travels as `{ $set: [...] }` (the mock's codec),
 //   and the schemas validate that form (`wireSetSchema`).
@@ -34,7 +43,7 @@
 
 import { z } from "zod";
 
-import { sessionEventSchema } from "./events.js";
+import { sessionEventSchema as sessionEventEnvelopeSchema } from "./events.js";
 import { researchNodeStatusSchema } from "./research.js";
 import { turnSchema } from "./turn.js";
 
@@ -95,7 +104,7 @@ export const closedSpaceStateSchema = z.enum(["none", "pending", "member", "mod"
 /** wire: `ThreadMember`, which the mock replaces: a handle and a space role
  * instead of a user id, login, name, avatar and thread role; `joinedAt` is an
  * ISO time, not milliseconds. */
-export const spaceMemberSchema = z.object({
+export const threadMemberSchema = z.object({
   u: spaceHandleSchema,
   role: spaceMemberRoleSchema,
   joinedAt: spaceIsoTimeSchema.optional(),
@@ -133,8 +142,8 @@ export const banSchema = z.object({
 /** wire: `ThreadInvite`, which the mock replaces: a one-use link to a space
  * with a short code, made by a moderator (or a member, where the space allows
  * it). Times are ISO, and `expiresAt` is null for a link that does not
- * expire. A revoked link is never returned (`storedInviteLinkSchema`). */
-export const inviteLinkSchema = z.object({
+ * expire. A revoked link is never returned (`storedThreadInviteSchema`). */
+export const threadInviteSchema = z.object({
   id: spaceRecordIdSchema,
   code: z.string(),
   by: spaceHandleSchema,
@@ -149,7 +158,7 @@ export const inviteLinkSchema = z.object({
 
 /** The stored invite link: a revoked one stays on the server for
  * `invites.restore`. Not sent. */
-export const storedInviteLinkSchema = inviteLinkSchema.extend({
+export const storedThreadInviteSchema = threadInviteSchema.extend({
   revokedAt: spaceIsoTimeSchema.optional(),
 });
 
@@ -252,8 +261,9 @@ export const askAboutSchema = z.object({
  * wire: `ResearchTreeSummary` (`research.listTrees`) and `ResearchTreeDetail`
  * (`research.getTree`), which the mock replaces with one flat record; its
  * answer, sources, follow-ups, replies and ask tree are separate collections
- * keyed by the thread's id. */
-export const threadSchema = z.object({
+ * keyed by the thread's id. The record is a list row with derived counts, as
+ * `ResearchTreeSummary` is; `researchTreeDetailSchema` is the same schema. */
+export const researchTreeSummarySchema = z.object({
   id: spaceThreadIdSchema,
   /** The space. */
   s: spaceIdSchema,
@@ -303,21 +313,28 @@ export const threadSchema = z.object({
   from: z.object({ th: spaceThreadIdSchema, node: z.string(), lv: count.optional() }).optional(),
 });
 
+/** One thread (`GET /api/threads/:id`). wire: `ResearchTreeDetail`, which
+ * holds the tree and its nodes; the mock sends the thread's record, as in the
+ * list. */
+export const researchTreeDetailSchema = researchTreeSummarySchema;
+
 /** The stored thread: `likesBase` counts likes from people outside the
  * fixtures. Not sent. */
-export const storedThreadSchema = threadSchema
+export const storedResearchTreeSummarySchema = researchTreeSummarySchema
   .omit({ r: true, likes: true, liked: true, mine: true })
   .extend({ likesBase: count.optional() });
 
 /** An answer's HTML (`/api/answers`). wire: `ResearchNodeContent`, which
  * holds turns and a snapshot instead. */
-export const answerHtmlSchema = z.string();
+export const researchNodeContentSchema = z.string();
 
 /** A page an answer cites: [title, host, note] (`/api/answer-sources`). */
 export const citedPageSchema = z.tuple([z.string(), z.string(), z.string()]);
 
-/** A follow-up ask on an ask thread (the flat list, without ask trees). */
-export const followUpSchema = z.object({
+/** A follow-up ask on an ask thread (the flat list, without ask trees).
+ * wire: `ResearchExchangeNode` (`followups.ask`), which the mock replaces: a
+ * question and its answer, without ids, a tree or a run state. */
+export const researchExchangeNodeSchema = z.object({
   u: spaceHandleSchema,
   createdAt: spaceIsoTimeSchema.optional(),
   q: z.string(),
@@ -328,24 +345,26 @@ export const followUpSchema = z.object({
   edited: z.boolean().optional(),
 });
 
-/** A reply to a post; replies have one level of nesting. */
-export interface Reply {
+/** A reply to a post; replies have one level of nesting. wire:
+ * `ResearchPostNode` (`research.createPostFollowUp`), which the mock replaces:
+ * the text with its author and likes, nested under the reply it answers. */
+export interface ResearchPostNode {
   u: string;
   createdAt?: string | undefined;
   t: string;
   likes?: number | undefined;
-  kids?: Reply[] | undefined;
+  kids?: ResearchPostNode[] | undefined;
   del?: boolean | undefined;
   edited?: boolean | undefined;
 }
 
-export const replySchema: z.ZodType<Reply> = z.object({
+export const researchPostNodeSchema: z.ZodType<ResearchPostNode> = z.object({
   u: spaceHandleSchema,
   createdAt: spaceIsoTimeSchema.optional(),
   t: z.string(),
   likes: count.optional(),
   get kids() {
-    return z.array(replySchema).optional();
+    return z.array(researchPostNodeSchema).optional();
   },
   del: z.boolean().optional(),
   edited: z.boolean().optional(),
@@ -355,7 +374,7 @@ export const replySchema: z.ZodType<Reply> = z.object({
  * `ResearchNode` (an exchange node), which the mock replaces. `par`: `r` (the
  * thread's ask) or a node id. A node with `fu` stands for the flat follow-up
  * at that index and takes its text from it. */
-export const askNodeSchema = z.object({
+export const researchNodeSchema = z.object({
   id: z.string().min(1),
   par: z.string().min(1),
   u: spaceHandleSchema.optional(),
@@ -382,7 +401,7 @@ export const askNodeSchema = z.object({
 /** `space`: sent with a tree scoped to the caller's own asks (a closed space
  * they are not a member of), as they may not have the thread record. */
 export const askTreeSchema = z.object({
-  nodes: z.array(askNodeSchema),
+  nodes: z.array(researchNodeSchema),
   space: spaceIdSchema.optional(),
 });
 
@@ -490,7 +509,7 @@ export const moderationStateSchema = z.enum(["hidden", "removed"]);
 
 // ---- notifications ----
 
-export const spaceNotificationTypeSchema = z.enum([
+export const inboxNotificationTypeSchema = z.enum([
   "follow_up",
   "branch",
   "answer_ready",
@@ -510,9 +529,9 @@ export const spaceNotificationTypeSchema = z.enum([
  * replaces `readAt`, and `createdAt` is an ISO time. `page`: an index into the
  * space's pages; `block`: a passage of `source`; `item`: the moderation key a
  * report is about; `response`: the caller's answer to an invite. */
-export const spaceNotificationSchema = z.object({
+export const inboxNotificationSchema = z.object({
   id: spaceRecordIdSchema,
-  type: spaceNotificationTypeSchema,
+  type: inboxNotificationTypeSchema,
   createdAt: spaceIsoTimeSchema.optional(),
   updatedAt: spaceIsoTimeSchema.optional(),
   read: z.boolean(),
@@ -561,8 +580,8 @@ export const skillSchema = z.object({
 
 // ---- people, profile, settings ----
 
-/** The caller's profile (`/api/me/profile`). wire: `User`, which the mock
- * replaces. */
+/** The caller's profile (`/api/me/profile`), the part of `userSchema` they
+ * edit. wire: `User`, which the mock replaces. */
 export const spaceProfileSchema = z.object({ name: z.string(), bio: z.string() });
 
 /** What a profile shows of another person (`/api/users`, by handle): the
@@ -572,8 +591,9 @@ export const personSummarySchema = z.object({ spaces: count });
 
 /** The signed-in person (`GET /api/me`). wire: `User`, which the mock
  * replaces: a handle and an X handle instead of a GitHub login; `createdAt`
- * is an ISO time. */
-export const spaceMeSchema = z.object({
+ * is an ISO time. Of the three rows with the wire type `User` (`/api/me`,
+ * `/api/me/profile`, `/api/users`), this one has its name. */
+export const userSchema = z.object({
   u: spaceHandleSchema,
   name: z.string(),
   bio: z.string(),
@@ -585,7 +605,7 @@ export const spaceMeSchema = z.object({
  * wire: `UserSettings`, which holds the appearance settings instead; these
  * are the mock's own. `types`: notification types on or off; `spaces`: the
  * notification level per space. */
-export const accountSettingsSchema = z.object({
+export const userSettingsSchema = z.object({
   email: z.string(),
   /** A new address waiting for confirmation. */
   emailNew: z.string().nullable(),
@@ -660,15 +680,15 @@ export const spaceCollectionSchemas = {
   /** GET /api/spaces */
   spaces: z.array(spaceSchema),
   /** GET /api/threads */
-  posts: z.array(threadSchema),
+  posts: z.array(researchTreeSummarySchema),
   /** GET /api/answers */
-  rich: z.record(spaceThreadIdSchema, answerHtmlSchema),
+  rich: z.record(spaceThreadIdSchema, researchNodeContentSchema),
   /** GET /api/answer-sources */
   srcd: z.record(spaceThreadIdSchema, z.array(citedPageSchema)),
   /** GET /api/follow-ups */
-  fu: z.record(spaceThreadIdSchema, z.array(followUpSchema)),
+  fu: z.record(spaceThreadIdSchema, z.array(researchExchangeNodeSchema)),
   /** GET /api/replies */
-  rp: z.record(spaceThreadIdSchema, z.array(replySchema)),
+  rp: z.record(spaceThreadIdSchema, z.array(researchPostNodeSchema)),
   /** GET /api/ask-trees */
   qtd: z.record(spaceThreadIdSchema, askTreeSchema),
   /** GET /api/sources */
@@ -696,19 +716,19 @@ export const spaceCollectionSchemas = {
   /** GET /api/me/api-keys (TODO(limits)) */
   userKeys: z.array(apiKeySchema),
   /** GET /api/me/notifications */
-  notifs: z.array(spaceNotificationSchema),
+  notifs: z.array(inboxNotificationSchema),
   /** GET /api/me/invite-requests */
   askedInv: z.array(spaceIdSchema),
   /** GET /api/join-requests */
   reqs: z.array(joinRequestSchema),
   /** GET /api/members: one closed space's members */
-  mem: z.array(spaceMemberSchema),
+  mem: z.array(threadMemberSchema),
   /** GET /api/members/other-spaces */
-  memOther: z.record(spaceIdSchema, z.array(spaceMemberSchema)),
+  memOther: z.record(spaceIdSchema, z.array(threadMemberSchema)),
   /** GET /api/bans */
   banned: z.array(banSchema),
   /** GET /api/invite-links */
-  links: z.array(inviteLinkSchema),
+  links: z.array(threadInviteSchema),
   /** GET /api/reports */
   reports: z.array(reportSchema),
   /** GET /api/moderation */
@@ -726,7 +746,7 @@ export const spaceCollectionSchemas = {
   /** GET /api/pages */
   pagedocs: z.record(pageKeySchema, pageDocSchema),
   /** GET /api/me/settings */
-  acct: accountSettingsSchema,
+  acct: userSettingsSchema,
   /** GET /api/me/muted */
   muted: wireSetSchema(spaceHandleSchema),
   /** GET /api/me/blocked */
@@ -753,9 +773,9 @@ export type SpaceCollection = keyof typeof spaceCollectionSchemas;
 export const storedSpaceCollectionSchemas = {
   ...spaceCollectionSchemas,
   spaces: z.array(storedSpaceSchema),
-  posts: z.array(storedThreadSchema),
+  posts: z.array(storedResearchTreeSummarySchema),
   userKeys: z.array(storedApiKeySchema),
-  links: z.array(storedInviteLinkSchema),
+  links: z.array(storedThreadInviteSchema),
 };
 
 // ---- changes: the records a write changed ----
@@ -787,11 +807,11 @@ const valueChange = <Value extends z.ZodType>(value: Value) => z.object({ value 
 export const spaceChangesSchema = z
   .object({
     spaces: listChanges(spaceSchema),
-    posts: listChanges(threadSchema),
-    rich: mapChanges(spaceThreadIdSchema, answerHtmlSchema),
+    posts: listChanges(researchTreeSummarySchema),
+    rich: mapChanges(spaceThreadIdSchema, researchNodeContentSchema),
     srcd: mapChanges(spaceThreadIdSchema, z.array(citedPageSchema)),
-    fu: mapChanges(spaceThreadIdSchema, z.array(followUpSchema)),
-    rp: mapChanges(spaceThreadIdSchema, z.array(replySchema)),
+    fu: mapChanges(spaceThreadIdSchema, z.array(researchExchangeNodeSchema)),
+    rp: mapChanges(spaceThreadIdSchema, z.array(researchPostNodeSchema)),
     qtd: mapChanges(spaceThreadIdSchema, askTreeSchema),
     media: listChanges(sourceSchema),
     miAdded: listChanges(sourceSchema),
@@ -805,13 +825,13 @@ export const spaceChangesSchema = z
     miSaved: valueChange(spaceCollectionSchemas.miSaved),
     miRead: valueChange(spaceCollectionSchemas.miRead),
     userKeys: listChanges(apiKeySchema),
-    notifs: listChanges(spaceNotificationSchema),
+    notifs: listChanges(inboxNotificationSchema),
     askedInv: valueChange(spaceCollectionSchemas.askedInv),
     reqs: listChanges(joinRequestSchema),
     mem: valueChange(spaceCollectionSchemas.mem),
-    memOther: mapChanges(spaceIdSchema, z.array(spaceMemberSchema)),
+    memOther: mapChanges(spaceIdSchema, z.array(threadMemberSchema)),
     banned: listChanges(banSchema),
-    links: listChanges(inviteLinkSchema),
+    links: listChanges(threadInviteSchema),
     reports: listChanges(reportSchema),
     modSt: mapChanges(moderationKeySchema, moderationStateSchema),
     dsDrops: mapChanges(spaceIdSchema, z.array(spaceSourceSchema)),
@@ -820,7 +840,7 @@ export const spaceChangesSchema = z
     profile: valueChange(spaceProfileSchema),
     skills: mapChanges(spaceIdSchema, z.array(skillSchema)),
     pagedocs: mapChanges(pageKeySchema, pageDocSchema),
-    acct: valueChange(accountSettingsSchema),
+    acct: valueChange(userSettingsSchema),
     muted: valueChange(spaceCollectionSchemas.muted),
     blocked: valueChange(spaceCollectionSchemas.blocked),
     usage: valueChange(tokenUsageSchema),
@@ -885,9 +905,17 @@ export const spaceErrorSchema = z.object({
 export const spaceProcedureResponseSchema = <Result extends z.ZodType>(result: Result) =>
   z.object({ result, changes: spaceChangesSchema });
 
+/** `invites.create`'s result. wire: `CreatedInvite`, which the mock replaces
+ * with the link's id and code (the link record is in `changes`). */
+export const createdInviteSchema = z.object({ id: spaceUlidSchema, code: z.string() });
+
 const onInput = { on: z.boolean().optional() };
 const onResultSchema = z.object({ on: z.boolean() });
-const keptResultSchema = z.object({ kept: z.boolean() });
+/** A delete's answer: `kept`, the item keeps its place (as deleted) for the
+ * follow-ups or replies under it. wire: `ResearchBranchRemoval`, which the
+ * mock replaces: the changed records are in `changes`. `threads.delete`
+ * answers the same. */
+export const researchBranchRemovalSchema = z.object({ kept: z.boolean() });
 const nullResultSchema = z.null();
 
 /** A path in a thread's replies: indexes joined with "." */
@@ -1057,7 +1085,10 @@ export const spaceProcedures = {
   },
   /** wire: `ResearchTree` */
   "threads.update": { input: updateThreadInputSchema, result: nullResultSchema },
-  "threads.delete": { input: z.object({ id: spaceThreadIdSchema }), result: keptResultSchema },
+  "threads.delete": {
+    input: z.object({ id: spaceThreadIdSchema }),
+    result: researchBranchRemovalSchema,
+  },
   "threads.move": {
     input: z.object({ id: spaceThreadIdSchema, topic: z.string().nullable() }),
     result: nullResultSchema,
@@ -1081,7 +1112,7 @@ export const spaceProcedures = {
   /** wire: `ResearchBranchRemoval` */
   "replies.delete": {
     input: z.object({ thread: spaceThreadIdSchema, path: replyPathSchema }),
-    result: keptResultSchema,
+    result: researchBranchRemovalSchema,
   },
   /** wire: `ResearchNode` */
   "followups.update": {
@@ -1093,7 +1124,7 @@ export const spaceProcedures = {
     result: nullResultSchema,
   },
   /** wire: `ResearchBranchRemoval` */
-  "followups.delete": { input: askNodeInputSchema, result: keptResultSchema },
+  "followups.delete": { input: askNodeInputSchema, result: researchBranchRemovalSchema },
   // -- runs
   /** Stop. wire: `ResearchNode` */
   "research.cancelNode": { input: askNodeInputSchema, result: nullResultSchema },
@@ -1180,11 +1211,10 @@ export const spaceProcedures = {
     result: nullResultSchema,
   },
   // -- invite links
-  /** wire: `CreatedInvite`, which the mock replaces with the link's id and
-   * code (the link record is in `changes`). */
+  /** wire: `CreatedInvite` */
   "invites.create": {
     input: z.object({ ...spaceInput, days: count.nullable().optional() }),
-    result: z.object({ id: spaceUlidSchema, code: z.string() }),
+    result: createdInviteSchema,
   },
   /** wire: `ThreadInvite` */
   "invites.revoke": { input: z.object({ id: spaceRecordIdSchema }), result: nullResultSchema },
@@ -1304,9 +1334,14 @@ export const spacePageInput = {
 export const spacePageSchema = <Item extends z.ZodType>(item: Item) =>
   z.object({ items: z.array(item), nextCursor: z.string().nullable() });
 
+/** A page of the caller's notifications (`notifications.list`). wire:
+ * `InboxNotificationPage`: the same page shape; the items are the mock's
+ * notifications (`inboxNotificationSchema`). */
+export const inboxNotificationPageSchema = spacePageSchema(inboxNotificationSchema);
+
 /** A profile's follow-up (`users.listFollowUps`): `id` is
  * `"<thread>:<index>"`. */
-export const userFollowUpSchema = followUpSchema.extend({
+export const userFollowUpSchema = researchExchangeNodeSchema.extend({
   id: z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}:\d+$/),
   thread: spaceThreadIdSchema,
   index: count,
@@ -1326,7 +1361,7 @@ export const spaceQueries = {
       ...threadKind,
       ...spacePageInput,
     }),
-    output: spacePageSchema(threadSchema),
+    output: spacePageSchema(researchTreeSummarySchema),
   },
   "threads.list": {
     input: z.object({
@@ -1335,13 +1370,12 @@ export const spaceQueries = {
       ...threadKind,
       ...spacePageInput,
     }),
-    output: spacePageSchema(threadSchema),
+    output: spacePageSchema(researchTreeSummarySchema),
   },
-  /** wire: `InboxNotificationPage`: the same page shape; the items are the
-   * mock's notifications, not `InboxNotification`. */
+  /** wire: `InboxNotificationPage` */
   "notifications.list": {
     input: z.object(spacePageInput),
-    output: spacePageSchema(spaceNotificationSchema),
+    output: inboxNotificationPageSchema,
   },
   /** after: only the unread notifications after a cursor (the ones not loaded
    * yet). Not a page. */
@@ -1351,7 +1385,7 @@ export const spaceQueries = {
   },
   "users.listThreads": {
     input: z.object({ handle: spaceHandleSchema, ...spacePageInput }),
-    output: spacePageSchema(threadSchema),
+    output: spacePageSchema(researchTreeSummarySchema),
   },
   "users.listFollowUps": {
     input: z.object({ handle: spaceHandleSchema, ...spacePageInput }),
@@ -1363,16 +1397,16 @@ export const spaceQueries = {
       q: z.string().optional(),
       ...spacePageInput,
     }),
-    output: spacePageSchema(threadSchema),
+    output: spacePageSchema(researchTreeSummarySchema),
   },
   "search.threads": {
     input: z.object({ q: z.string(), space: spaceIdSchema.optional(), ...spacePageInput }),
-    output: spacePageSchema(threadSchema),
+    output: spacePageSchema(researchTreeSummarySchema),
   },
   /** wire: `ThreadMember[]` */
   "members.list": {
     input: z.object({ space: spaceIdSchema, ...spacePageInput }),
-    output: spacePageSchema(spaceMemberSchema),
+    output: spacePageSchema(threadMemberSchema),
   },
   "joinRequests.list": {
     input: z.object({
@@ -1422,9 +1456,11 @@ export const notificationPayloadSchema = z.object({
 /** An event of the type `type` with `payload`, in the `SessionEvent`
  * envelope (`{ type, payload, timestamp }`). */
 const spaceEvent = <Type extends string, Payload extends z.ZodType>(type: Type, payload: Payload) =>
-  sessionEventSchema.extend({ type: z.literal(type), payload });
+  sessionEventEnvelopeSchema.extend({ type: z.literal(type), payload });
 
-/** The events the mock sends. Run events follow `03-api-and-events.md` §3;
+/** The events the mock sends. wire: `SessionEvent`, the envelope
+ * (`{ type, payload, timestamp }`, `./events.ts`) with these types and
+ * payloads. Run events follow `03-api-and-events.md` §3;
  * `nodeId` is the run's key, `"<thread>:<node>"`. Differences from the real
  * events, all from the mock:
  * - `research.run.started`: `model` is null when the ask named no model (the
@@ -1439,7 +1475,7 @@ const spaceEvent = <Type extends string, Payload extends z.ZodType>(type: Type, 
  * - `apiKeys.updated`: mock only (TODO(limits)): a key check finished.
  * The mock sends no `research.run.thinking` or `research.turn.delta` (owner
  * decision: no streamed answer text). */
-export const spaceEventSchema = z.discriminatedUnion("type", [
+export const sessionEventSchema = z.discriminatedUnion("type", [
   spaceEvent("connection.ready", z.object({ connectionId: z.string() })),
   spaceEvent(
     "research.run.started",
@@ -1560,11 +1596,11 @@ export const spacesApi: Record<string, { input: z.ZodType | null; output: z.ZodT
   /** wire: `ResearchTreeSummary[]` */
   "GET /api/threads": { input: null, output: c.posts },
   /** wire: `ResearchTreeDetail` */
-  "GET /api/threads/:id": { input: null, output: threadSchema },
+  "GET /api/threads/:id": { input: null, output: researchTreeDetailSchema },
   /** wire: `ResearchNodeContent` */
   "GET /api/answers": { input: null, output: c.rich },
   /** wire: `ResearchNodeContent` */
-  "GET /api/answers/:id": { input: null, output: answerHtmlSchema },
+  "GET /api/answers/:id": { input: null, output: researchNodeContentSchema },
   /** wire: `ResearchNodeContent` */
   "GET /api/answer-sources": { input: null, output: c.srcd },
   "GET /api/follow-ups": { input: null, output: c.fu },
@@ -1618,9 +1654,9 @@ export const spacesApi: Record<string, { input: z.ZodType | null; output: z.ZodT
   /** wire: `User` */
   "GET /api/users": { input: null, output: c.people },
   /** wire: `User` */
-  "GET /api/me": { input: null, output: spaceMeSchema },
+  "GET /api/me": { input: null, output: userSchema },
   /** wire: `SessionEvent` */
-  "GET /api/rpc/events.subscribe": { input: null, output: spaceEventSchema },
+  "GET /api/rpc/events.subscribe": { input: null, output: sessionEventSchema },
   "POST /api/dev/reset": { input: null, output: null },
   "POST /api/dev/scenario": {
     input: z.object({ name: z.string(), args: z.record(z.string(), z.unknown()).optional() }),

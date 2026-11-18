@@ -135,6 +135,16 @@
      here so the page needs no build step; web/packages/shared/test/spacesMock.test.ts checks that they agree:
      that each S.* lists the same fields as its zod schema, and that the fixtures, the GET rows, the paged
      queries, every procedure's answer, the error bodies and the events pass the zod schemas.
+     The zod schemas are named after the real app's wire type where the API table below gives one, and the
+     package exports them under the namespace `spaces` (types: `Spaces`), as the real types with those names
+     are other shapes. S.* keep the mock's names: S.Thread is researchTreeSummarySchema (ResearchTreeSummary;
+     ResearchTreeDetail is the same schema), S.AskNode researchNodeSchema (ResearchNode), S.FollowUp
+     researchExchangeNodeSchema (ResearchExchangeNode), S.Reply researchPostNodeSchema (ResearchPostNode),
+     S.Member threadMemberSchema (ThreadMember), S.InviteLink threadInviteSchema (ThreadInvite),
+     S.Notification inboxNotificationSchema (InboxNotification), S.Me userSchema (User) and S.Settings
+     userSettingsSchema (UserSettings); an answer's HTML is researchNodeContentSchema (ResearchNodeContent), the
+     events sessionEventSchema (SessionEvent). The others have descriptive names (S.Space spaceSchema, S.Skill
+     skillSchema, …).
      A schema is a small object; check(schema, value) returns a list of issues ({ path, expected }).
      Object schemas list their fields; a key ending in "?" is optional (absent or undefined). Fields a
      schema does not list are accepted as they are (the mockup adds display fields freely); listed fields

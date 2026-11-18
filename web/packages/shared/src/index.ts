@@ -65,7 +65,10 @@ export * from "./research/stalledChain.js";
 export * from "./types/account.js";
 export * from "./types/activity.js";
 export * from "./types/sharing.js";
-export * from "./types/spaces.js";
+/** The Spaces API's types, named after the real wire types they stand in for
+ * (`Spaces.ResearchTreeSummary`); their schemas are `spaces` (from
+ * `./schemas/index.js`). */
+export type * as Spaces from "./types/spaces.js";
 
 export * from "./util/sha256.js";
 export * from "./util/tokenEstimate.js";

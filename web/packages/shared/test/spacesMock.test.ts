@@ -18,47 +18,50 @@ import test from "ava";
 import type { ExecutionContext } from "ava";
 import type { z } from "zod";
 
+import * as root from "../src/index.js";
+import type { Spaces } from "../src/index.js";
+import { researchTreeSummarySchema as realTreeSummarySchema } from "../src/schemas/research.js";
 import {
-  accountSettingsSchema,
   apiKeySchema,
-  askNodeSchema,
   askTreeSchema,
   banSchema,
   closedSpaceStateSchema,
-  followUpSchema,
-  inviteLinkSchema,
+  inboxNotificationSchema,
+  inboxNotificationTypeSchema,
   joinRequestSchema,
   pageDocSchema,
   personSummarySchema,
-  replySchema,
   reportSchema,
+  researchExchangeNodeSchema,
+  researchNodeSchema,
+  researchPostNodeSchema,
+  researchTreeSummarySchema,
+  sessionEventSchema,
   skillSchema,
   sourceReportSchema,
   sourceSchema,
   spaceCollectionSchemas,
   spaceErrorCodeSchema,
   spaceErrorSchema,
-  spaceEventSchema,
-  spaceMeSchema,
-  spaceMemberSchema,
-  spaceNotificationSchema,
-  spaceNotificationTypeSchema,
   spaceProcedureResponseSchema,
   spaceProcedures,
   spaceProfileSchema,
   spaceQueries,
   spaceReadRulesSchema,
   spaceRunSchema,
+  spacesApi,
   spaceSchema,
   spaceSourceSchema,
-  spacesApi,
   storedApiKeySchema,
-  storedInviteLinkSchema,
+  storedResearchTreeSummarySchema,
   storedSpaceCollectionSchemas,
   storedSpaceSchema,
-  storedThreadSchema,
-  threadSchema,
+  storedThreadInviteSchema,
+  threadInviteSchema,
+  threadMemberSchema,
   tokenUsageSchema,
+  userSchema,
+  userSettingsSchema,
 } from "../src/schemas/spaces.js";
 import type { notificationPayloadSchema, spacePageSchema } from "../src/schemas/spaces.js";
 import type { InboxNotificationPage, NotificationPayload } from "../src/types/sharing.js";
@@ -82,6 +85,27 @@ const conformance: [
 
 test("the schemas that stand for real types match them", (t) => {
   t.true(conformance.every(Boolean));
+});
+
+// ---- exports: a namespace, and no name of the real app's taken ----
+
+/** The types the package root exports as `Spaces.<name>` are this module's. */
+const namespaced: [
+  Same<Spaces.ResearchTreeSummary, z.output<typeof researchTreeSummarySchema>>,
+  Same<Spaces.ResearchTreeDetail, Spaces.ResearchTreeSummary>,
+  Same<Spaces.User, z.output<typeof userSchema>>,
+] = [true, true, true];
+
+test("the package root exports the Spaces schemas only under `spaces`", (t) => {
+  t.true(namespaced.every(Boolean));
+  t.is(root.spaces.researchTreeSummarySchema, researchTreeSummarySchema);
+  t.is(root.spaces.researchTreeDetailSchema, researchTreeSummarySchema);
+  t.is(root.researchTreeSummarySchema, realTreeSummarySchema);
+  const values = new Set<unknown>(Object.values(root));
+  const leaked = Object.entries(root.spaces)
+    .filter(([, v]) => values.has(v))
+    .map(([k]) => k);
+  t.deepEqual(leaked, [], "values of the spaces module at the package root");
 });
 
 // ---- loading the mock ----
@@ -240,23 +264,24 @@ test("every row of the mock's API table has schemas for its input and output", (
 
 // ---- the mock's own schemas agree with these ----
 
-/** Each of the mock's record schemas (`S.*`) and the schemas here that
- * describe it: the response shape and, where it differs, the stored one. */
+/** Each of the mock's record schemas (`S.*`, by the mock's own names) and
+ * the schemas here that describe it: the response shape and, where it
+ * differs, the stored one. */
 const MOCK_SCHEMAS: Record<string, z.ZodType[]> = {
   Space: [spaceSchema, storedSpaceSchema],
-  Thread: [threadSchema, storedThreadSchema],
-  Reply: [replySchema],
-  FollowUp: [followUpSchema],
-  AskNode: [askNodeSchema],
+  Thread: [researchTreeSummarySchema, storedResearchTreeSummarySchema],
+  Reply: [researchPostNodeSchema],
+  FollowUp: [researchExchangeNodeSchema],
+  AskNode: [researchNodeSchema],
   Run: [spaceRunSchema],
   AskTree: [askTreeSchema],
   Source: [sourceSchema],
   ApiKey: [apiKeySchema, storedApiKeySchema],
-  Notification: [spaceNotificationSchema],
+  Notification: [inboxNotificationSchema],
   JoinRequest: [joinRequestSchema],
-  Member: [spaceMemberSchema],
+  Member: [threadMemberSchema],
   Ban: [banSchema],
-  InviteLink: [inviteLinkSchema, storedInviteLinkSchema],
+  InviteLink: [threadInviteSchema, storedThreadInviteSchema],
   Report: [reportSchema],
   SpaceSource: [spaceSourceSchema],
   SourceReport: [sourceReportSchema],
@@ -264,9 +289,9 @@ const MOCK_SCHEMAS: Record<string, z.ZodType[]> = {
   PageDoc: [pageDocSchema],
   Profile: [spaceProfileSchema],
   PersonSummary: [personSummarySchema],
-  Me: [spaceMeSchema],
+  Me: [userSchema],
   Usage: [tokenUsageSchema],
-  Settings: [accountSettingsSchema],
+  Settings: [userSettingsSchema],
 };
 
 test("the mock's hand-written schemas list the same fields", (t) => {
@@ -292,7 +317,7 @@ test("the mock's hand-written schemas list the same fields", (t) => {
   }
   t.deepEqual(differences, []);
   t.deepEqual(M.SCHEMAS.ClosedSpaceState?.vs, closedSpaceStateSchema.options);
-  t.deepEqual(M.NOTIFICATION_TYPES, spaceNotificationTypeSchema.options);
+  t.deepEqual(M.NOTIFICATION_TYPES, inboxNotificationTypeSchema.options);
   t.deepEqual(Object.keys(M.CODES), spaceErrorCodeSchema.options);
   t.deepEqual(Object.keys(M.READ_RULES), Object.keys(spaceReadRulesSchema.shape));
 });
@@ -788,7 +813,7 @@ test.serial("the events of an ask's run, from start to finish", async (t) => {
         "research.node.updated",
       ],
     );
-    for (const e of stream.events) exact(t, spaceEventSchema, e, `event ${e.type}`);
+    for (const e of stream.events) exact(t, sessionEventSchema, e, `event ${e.type}`);
   } finally {
     stream.close();
   }
@@ -813,7 +838,7 @@ test.serial("the events of a key check and a domain check", async (t) => {
         ),
       "both checks",
     );
-    for (const e of stream.events) exact(t, spaceEventSchema, e, `event ${e.type}`);
+    for (const e of stream.events) exact(t, sessionEventSchema, e, `event ${e.type}`);
   } finally {
     stream.close();
     await request("PUT", "/api/dev/config", { checkMs: 1400 });
