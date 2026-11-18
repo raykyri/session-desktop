@@ -4091,10 +4091,12 @@ function undoOp(inst, op) {
   inst.store.setState({ [op.key]: deepFreeze(next) });
 }
 /* A failed request throws an Error with the server's `code` (a tRPC code), `status` and `message`.
-   A request that never reached the server has code SERVICE_UNAVAILABLE and status 0. */
-async function http(method, url, body, origin) {
+   A request that never reached the server has code SERVICE_UNAVAILABLE and status 0.
+   signedOut: the request goes without a session (X-Session-Auth: out), as a procedure called while the
+   screen is signed out (mutate). Loads and scenarios are the signed-in person's (mock backend, step 5). */
+async function http(method, url, body, origin, signedOut) {
   let res;
-  const headers = Object.assign(body === undefined ? {} : { 'Content-Type': 'application/json' }, origin ? { 'X-Session-Origin': origin } : {});
+  const headers = Object.assign(body === undefined ? {} : { 'Content-Type': 'application/json' }, origin ? { 'X-Session-Origin': origin } : {}, signedOut ? { 'X-Session-Auth': 'out' } : {});
   try { res = await fetch(url, { method, headers, body: body === undefined ? undefined : enc(body) }); }
   catch (x) { throw Object.assign(new Error('The server is unavailable.'), { code: 'SERVICE_UNAVAILABLE', status: 0 }); }
   const text = await res.text(); let data = null;
@@ -4345,7 +4347,7 @@ const pkey = (key, rec) => key + '/' + rec;
 const outside = fn => { const t = TX; TX = null; try { return fn(); } finally { TX = t; } };
 function mutate(name, input, recipe, opts = {}) {
   if (TX) return recipe ? recipe() : undefined;
-  const tx = TX = { name, before: new Map(), stubs: opts.stubs || [] };
+  const tx = TX = { name, before: new Map(), stubs: opts.stubs || [] }, signedOut = st.auth !== 'in';
   let ret;
   try { ret = recipe ? recipe() : undefined; } finally { TX = null; }
   /* input and opts.tmp can be functions, read after the recipe; an input of null sends nothing (the recipe made no change) */
@@ -4371,7 +4373,7 @@ function mutate(name, input, recipe, opts = {}) {
   const inst = DS;
   inst.meta.setState(m => ({ pending: m.pending + 1 }));
   apiSource.queue = apiSource.queue
-    .then(() => { const body = remapIds(body0 === undefined ? {} : body0); if (refsDead(body)) throw SKIPPED; return http('POST', '/api/rpc/' + name, body); })
+    .then(() => { const body = remapIds(body0 === undefined ? {} : body0); if (refsDead(body)) throw SKIPPED; return http('POST', '/api/rpc/' + name, body, undefined, signedOut); })
     .then(res => {
       settle();
       if (tmp && res && res.result && res.result.id) adoptId(tmp, res.result.id);
@@ -6083,7 +6085,8 @@ const userJoin = (id, notification) => mutate('spaces.join', Object.assign({ spa
   if (notification != null || isClosed(sp(id))) setRel(id, 'member'); else joinSpace(id);
 });
 const userLeave = id => mutate('spaces.leave', { space: id }, () => { if (isClosed(sp(id))) setRel(id, 'none'); leaveSpace(id); });
-const userRequest = (id, answers) => mutate('joinRequests.create', { space: id, answers: (answers || []).map(String) }, () => {
+/* the page sends a request only when csReqValid passes: the required answers, and the rules accepted */
+const userRequest = (id, answers) => mutate('joinRequests.create', { space: id, answers: (answers || []).map(String), rulesAccepted: !!st.reqRules }, () => {
   setRel(id, 'pending');
   st.reqs = [...st.reqs.filter(r => r.u !== ME.u), { u: ME.u, sp: id, st: 'open', a: (answers || []).map(String) }];
 });
@@ -6717,7 +6720,7 @@ function csClick(t) {
   if (dsClick(t)) return true;
   if (miClick(t)) return true;
   if (sfClick(t)) return true;
-  if ((b = d('[data-cstoast]'))) { const v = b.dataset.cstoast; st.toast = null; if (v.startsWith('open:')) Object.assign(st, NAVBASE(), { space: v.slice(5) }); if (v.startsWith('undo:')) reopenReq(v.slice(5)); if (v === 'undo-link' && st.linkGone) { const l = st.linkGone, days = l.expiresAt ? Math.max(1, Math.round((Date.parse(l.expiresAt) - NOW) / 864e5)) : null; mutate('invites.create', { space: l.sp, days, code: l.code }, () => db.unshift('links', l), { tmp: l.id.startsWith('tmp-') ? l.id : null }); } return go(); }
+  if ((b = d('[data-cstoast]'))) { const v = b.dataset.cstoast; st.toast = null; if (v.startsWith('open:')) Object.assign(st, NAVBASE(), { space: v.slice(5) }); if (v.startsWith('undo:')) reopenReq(v.slice(5)); if (v === 'undo-link' && st.linkGone) { const l = st.linkGone; mutate('invites.restore', { id: l.id }, () => db.unshift('links', l)); } return go(); }
   if ((b = d('[data-csnotif]'))) {
     const v = b.dataset.csnotif;
     if (v === 'bell') { if (st.notifV === 'page') Object.assign(st, NAVBASE(), { subPage: 'notifs' }); else { st.ntOpen = !st.ntOpen; st.umenu = false; st.pop = false; st.csMenu = null; } }
