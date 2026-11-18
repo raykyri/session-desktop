@@ -3708,6 +3708,17 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
   .sub-page.acx-page, .sub-page.acx-page:is(.acx-tabs-v, .acx-outp) { padding-left: 14px; padding-right: 14px; }
 }
 /* ==== end account CSS ==== */
+/* ==== edit conflicts (step 9): the notice in an editor, and the box with your text ==== */
+.ed-cf { margin: 10px 0; }
+.ed-cf .ed-cf-a { display: flex; gap: 6px; flex-wrap: wrap; }
+.ed-cf b { color: var(--t-strong); font-weight: 600; }
+.ab-sked .ed-cf { margin: 0 0 12px; }
+.ed-mine { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--fill-subtle); }
+.ed-mine-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; font-size: var(--fs-sm); }
+.ed-mine-h b { flex: 1; color: var(--t-strong); font-weight: 600; }
+.ed-mine-h .ed-cf-a { display: flex; gap: 6px; }
+.ed-mine-t { width: 100%; box-sizing: border-box; font-size: var(--fs-sm); color: var(--t-secondary); }
+/* ==== end edit conflicts CSS ==== */
 </style>
 
 <div class="shell" id="shell">
@@ -4016,7 +4027,7 @@ async function http(method, url, body, origin, signedOut) {
   catch (x) { throw Object.assign(new Error('The server is unavailable.'), { code: 'SERVICE_UNAVAILABLE', status: 0 }); }
   const text = await res.text(); let data = null;
   try { data = text ? dec(text) : null; } catch (x) {}
-  if (!res.ok) throw Object.assign(new Error((data && data.message) || `HTTP ${res.status}`), { code: (data && data.code) || (res.status >= 500 ? 'INTERNAL_SERVER_ERROR' : 'BAD_REQUEST'), status: res.status });
+  if (!res.ok) throw Object.assign(new Error((data && data.message) || `HTTP ${res.status}`), { code: (data && data.code) || (res.status >= 500 ? 'INTERNAL_SERVER_ERROR' : 'BAD_REQUEST'), status: res.status, data });
   return data;
 }
 /* What the page says about a failed request, by error code. `write`: a change the store has already undone
@@ -4250,6 +4261,8 @@ function applyChanges(changes, held) {
 const pkey = (key, rec) => key + '/' + rec;
 /* run fn outside the mutation whose recipe is running: its own mutations are queued before that one */
 const outside = fn => { const t = TX; TX = null; try { return fn(); } finally { TX = t; } };
+/* opts: tmp (the id of the record the server creates), then(result) after it saved, fail(error) after the undo,
+   quiet(error): true when the caller shows that failure itself (an editor's conflict notice) instead of the toast */
 function mutate(name, input, recipe, opts = {}) {
   if (TX) return recipe ? recipe() : undefined;
   const tx = TX = { name, before: new Map() }, signedOut = st.auth !== 'in';
@@ -4295,7 +4308,7 @@ function mutate(name, input, recipe, opts = {}) {
       if (tmp && nst.stack && nst.stack.some(x => x.id === tmp)) nst.stack = nst.stack.filter(x => x.id !== tmp);
       if (tmp) DEAD_TMP.add(tmp);
       fresh.forEach(([, id]) => DEAD_TMP.add(id));
-      if (e !== SKIPPED) dataError(apiErrText(e, 'write'), e); else if (APP_STARTED && !DISPOSED) renderAll();
+      if (e !== SKIPPED && !(opts.quiet && opts.quiet(e))) dataError(apiErrText(e, 'write'), e); else if (APP_STARTED && !DISPOSED) renderAll();
       if (opts.fail) opts.fail(e);
     })
     .catch(e => console.error(`[session] ${name}: could not take the server’s answer`, e))
@@ -6445,20 +6458,20 @@ function csSettingsEdit(s0, d) {
     cxApplyIdent(s, d);
     /* About: description and rules; a rules change keeps the previous rules for "See changes" */
     if (d.desc != null) s.desc = d.desc.trim() || s.desc;
-    if (d.rules) { const rules = d.rules.map(r => r.trim()).filter(Boolean); if (rules.join('\n') !== s.rules.join('\n')) { s.rulesPrev = s.rules.slice(); s.rules = rules; s.rulesAt = nowIso(); s.rulesBy = ME.u; } }
+    if (d.rules) { const rules = d.rules.map(r => r.trim()).filter(Boolean); if (rules.join('\n') !== s.rules.join('\n')) { s.rulesPrev = s.rules.slice(); s.rules = rules; s.rulesAt = edStamp(s.rulesAt); s.rulesBy = ME.u; } }
     if (d.pageEdit) s.pageEdit = d.pageEdit;
   };
 }
-const spacesUpdateInput = (s0, d) => Object.assign({ id: s0.id }, spacePatch(sp(s0.id), produce(sp(s0.id), csSettingsEdit(s0, d))));
-function csApplySettings(s0, d) {
+const spacesUpdateInput = (s0, d, force) => edRulesBase(Object.assign({ id: s0.id }, spacePatch(sp(s0.id), produce(sp(s0.id), csSettingsEdit(s0, d)))), force);
+function csApplySettings(s0, d, force) {
   /* Deleted topics, and topics left without a name, move their threads to Other. */
   const tps = d.topics.map(([k, l]) => [k, l.trim()]).filter(t => t[1]);
-  mutate('spaces.update', spacesUpdateInput(s0, d), () => {
+  mutate('spaces.update', spacesUpdateInput(s0, d, force), () => {
     db.update('spaces', s0.id, csSettingsEdit(s0, d));
     D.posts.filter(p => p.s === s0.id && p.topic && !tps.some(t => t[0] === p.topic)).forEach(p => db.update('posts', p.id, x => { x.topic = null; }));
     const s = sp(s0.id);
     if (isClosed(s) && D.joined.includes(s.id) && !st.rel[s.id]) db.put('rel', s.id, isModOf(s.id) ? 'mod' : 'member');
-  });
+  }, edOpts('rules', s0.id, null, d));
   st.set = null;
 }
 const radio = (name, val, cur, t, sub) => `<label class="cs-rad"><input type="radio" name="${name}" value="${val}" ${cur === val ? 'checked' : ''}><span><b>${t}</b><small>${sub}</small></span></label>`;
@@ -6748,8 +6761,8 @@ function csClick(t) {
   }
   if ((b = d('[data-csconf]'))) {
     const s = sp(st.mgSpace), dr = st.set;
-    if (b.dataset.csconf === 'closed') { mutate('spaces.update', spacesUpdateInput(s, dr), () => { csApplySettings(s, dr); setRel(s.id, 'mod'); }); toast(`${spName(s)} is closed. ${st.visKeep === 'keep' ? 'Earlier threads stay public.' : 'All threads are members-only.'}`); }
-    else { mutate('spaces.update', spacesUpdateInput(s, dr), () => { cxAddMembers(s, openReqs(s.id).map(r => r.u)); st.reqs = st.reqs.map(r => r.st === 'open' && reqSp(r) === s.id ? { ...r, st: 'approved' } : r); csApplySettings(s, dr); }); toast(`${spName(s)} is open.`); }
+    if (b.dataset.csconf === 'closed') { mutate('spaces.update', spacesUpdateInput(s, dr), () => { csApplySettings(s, dr); setRel(s.id, 'mod'); }, edOpts('rules', s.id, null, dr)); toast(`${spName(s)} is closed. ${st.visKeep === 'keep' ? 'Earlier threads stay public.' : 'All threads are members-only.'}`); }
+    else { mutate('spaces.update', spacesUpdateInput(s, dr), () => { cxAddMembers(s, openReqs(s.id).map(r => r.u)); st.reqs = st.reqs.map(r => r.st === 'open' && reqSp(r) === s.id ? { ...r, st: 'approved' } : r); csApplySettings(s, dr); }, edOpts('rules', s.id, null, dr)); toast(`${spName(s)} is open.`); }
     st.modal = null; return go();
   }
   if ((b = d('[data-sub="create"]'))) { Object.assign(st, NAVBASE(), { subPage: 'create', cr: CR0() }); return go(); }
@@ -9106,13 +9119,13 @@ function abPageParts(s) {
   const crumb = `<nav class="abp-crumb" aria-label="Breadcrumb">${glyph(s, 'abp-gl')}<button class="tlink" type="button" data-space="${s.id}">${spName(s)}</button><span aria-hidden="true">/</span><button class="tlink" type="button" data-abtoabout="1">Pages</button></nav>`;
   const btn = (attr, icon, label, extra = '') => `<button class="btn sm" type="button" ${attr} ${extra}>${icon || ''}${label}</button>`;
   const byline = `<div class="abp-by"><span class="abp-avs">${avatar(d.ed, 'sm')}${d.by !== d.ed ? avatar(d.by, 'sm') : ''}</span><span>Edited by ${au(d.ed)} ${age} · created by ${au(d.by)} · ${mins} min read</span></div>`;
-  const hist = `<section class="abp-hist" aria-label="Page history"><div class="abp-hh"><h4>History</h4><button class="iconbtn" type="button" data-abhist="1" aria-label="Close history">${I.close}</button></div><ol>${d.revs.map((r, k) => `<li class="${k ? '' : 'cur'}">${avatar(r.by, 'sm')}<span class="ab-ht"><b>${esc(r.by)}</b> ${esc(r.note)}<small>${agoText(r)}</small></span>${k && mod ? `<button class="tlink" type="button" data-abrestore="${k}">Restore</button>` : k ? '' : '<small class="abp-cur">Current</small>'}</li>`).join('')}</ol></section>`;
+  const hist = `<section class="abp-hist" aria-label="Page history"><div class="abp-hh"><h4>History</h4><button class="iconbtn" type="button" data-abhist="1" aria-label="Close history">${I.close}</button></div>${edNotice('restore', s.id, i)}<ol>${d.revs.map((r, k) => `<li class="${k ? '' : 'cur'}">${avatar(r.by, 'sm')}<span class="ab-ht"><b>${esc(r.by)}</b> ${esc(r.note)}<small>${agoText(r)}</small></span>${k && mod ? `<button class="tlink" type="button" data-abrestore="${k}">Restore</button>` : k ? '' : '<small class="abp-cur">Current</small>'}</li>`).join('')}</ol></section>`;
   const th = abPageThreads(s);
   const rel = `<section class="abp-rel"><div class="abp-relh"><h2>Threads in ${spName(s)} that link to this page</h2></div>${th.length ? `<ul>${th.map(({ p, i: k }) => `<li><button class="abp-th" type="button" data-open="${k}"><b>${esc(qtClip(p.q, 90))}</b><small>${esc(p.u)} · ${ago(p)} · ${replyCount(p)} ${replyCount(p) === 1 ? 'reply' : 'replies'}</small></button></li>`).join('')}</ul>` : '<p class="faint cs-small">No threads link to this page yet.</p>'}${st.auth === 'in' ? `<button class="btn sm abp-ask" type="button" data-abask="1">${I.reply}Ask about this page</button>` : ''}</section>`;
   let editor = '';
   if (st.abPageEd != null) {
     const ed = st.abPageEd;
-    editor = `<div class="abp-ed"><div class="abp-edbar"><span>${ed.isNew ? `New page in ${spName(s)}` : 'Editing. Members get a notification when you save.'}</span><span class="abp-edb-a"><button class="btn sm" type="button" data-abpged="cancel">Cancel</button><button class="btn sm primary" type="button" data-abpged="save" ${ed.t.trim() ? '' : 'disabled'}>${ed.isNew ? 'Add page' : 'Save'}</button></span></div><input id="ab-pg-t" class="abp-edt" type="text" value="${esc(ed.t)}" placeholder="Page title" aria-label="Page title"><textarea id="ab-pg-b" class="abp-edx" rows="12" placeholder="Write the page" aria-label="Page text">${esc(ed.b)}</textarea><p class="cs-fine ab-f">Blank lines separate blocks. A block that starts with ## is a heading; lines that start with - are a list.</p></div>`;
+    editor = `<div class="abp-ed"><div class="abp-edbar"><span>${ed.isNew ? `New page in ${spName(s)}` : 'Editing. Members get a notification when you save.'}</span><span class="abp-edb-a"><button class="btn sm" type="button" data-abpged="cancel">Cancel</button><button class="btn sm primary" type="button" data-abpged="save" ${ed.t.trim() ? '' : 'disabled'}>${ed.isNew ? 'Add page' : 'Save'}</button></span></div>${edNotice('page', s.id, i)}<input id="ab-pg-t" class="abp-edt" type="text" value="${esc(ed.t)}" placeholder="Page title" aria-label="Page title"><textarea id="ab-pg-b" class="abp-edx" rows="12" placeholder="Write the page" aria-label="Page text">${esc(ed.b)}</textarea><p class="cs-fine ab-f">Blank lines separate blocks. A block that starts with ## is a heading; lines that start with - are a list.</p></div>`;
   }
   return { s, i, d, can, mod, age, crumb, byline, hist, rel, editor };
 }
@@ -9202,7 +9215,7 @@ function abSkEdDlg() {
     + fld('ab-sk-d', 'Description', `<small class="ab-skc" id="ab-sk-dc">${ed.d.length} / 1,024</small>`, 'What the skill does and when to use it, in the third person.', `<textarea id="ab-sk-d" class="cs-ta" rows="3" placeholder="Summarizes a research paper: the claim, the method and the results. Use when someone gives an arXiv ID.">${esc(ed.d)}</textarea>`)
     + fld('ab-sk-b', 'Instructions', '<small class="ab-skc">Markdown, optional</small>', 'The steps and output format the agent follows when it uses the skill. Leave out what the agent already knows.', `<textarea id="ab-sk-b" class="cs-ta ab-mono" rows="9" spellcheck="false" placeholder="## Steps&#10;1. …">${esc(ed.b)}</textarea>`);
   const prev = `<aside class="ab-skprev" aria-label="Preview"><span class="ab-skl">In About</span><div class="sk-row ab-skrp"><span class="sk-ic" id="ab-sk-pi">${skillIcon(ed.n || 'x')}</span><span class="sk-tx"><b id="ab-sk-pn">${esc(ed.n || 'name')}</b><small id="ab-sk-pd">${esc(ed.d || 'Description')}</small></span></div><span class="ab-skl">SKILL.md</span><pre class="ab-skpre" id="ab-sk-pf">${esc(abSkFile(ed.n, ed.d, ed.b))}</pre></aside>`;
-  const body = `<div class="ab-ske2"><div class="ab-ske">${fields}</div>${prev}</div>`;
+  const body = `${edNotice('skill', st.mgSpace, ed.i)}<div class="ab-ske2"><div class="ab-ske">${fields}</div>${prev}</div>`;
   const imp = `<label class="tlink ab-skimp">Import a SKILL.md file<input id="ab-sk-file" type="file" accept=".md,text/markdown,text/plain" hidden></label>`;
   return `<div class="modal-scrim"><div class="modal cs-m ab-sked ab-sked-${v}" role="dialog" aria-modal="true" aria-labelledby="cs-dt"><div class="modal-h"><h3 id="cs-dt">${isNew ? 'Add a skill' : 'Edit skill'}</h3><button class="iconbtn" type="button" data-act="modal-close" aria-label="Close">${I.close}</button></div>${body}<div class="modal-f">${imp}<span style="flex:1"></span>${cancelB()}<button class="btn primary" type="button" data-absk="save">${isNew ? 'Add skill' : 'Save'}</button></div></div></div>`;
 }
@@ -9221,8 +9234,8 @@ function abSkRefresh(showAll) {
 }
 function abSkOpen(sid, i) {
   const list = D.skills[sid] || [], [n, t] = i === 'new' ? ['', ''] : list[i], { d, b } = abSkParse(t);
-  st.abSkEd = { i, n, d, b, seen: {} };
-  st.modal = 'ab-sked';
+  st.abSkEd = { i, n, d, b, seen: {}, rev: i === 'new' ? 0 : (list[i][2] || 0) };
+  st.modal = 'ab-sked'; st.edCf = null;
 }
 /* drag to reorder (pointer events, so touch works too) */
 let abDrag = null;
@@ -9304,7 +9317,7 @@ function abModal() {
 function abSettingsAbout(d) {
   const n = d.rules.length, up = I.chev.replace('<svg', '<svg style="transform:rotate(180deg)"');
   const rows = d.rules.map((r, i) => `<div class="ab-rrow"><span class="ts-n num">${i + 1}</span><input id="ab-rule-${i}" type="text" value="${esc(r)}" placeholder="A rule" aria-label="Rule ${i + 1}"><span class="ab-pgb"><button class="iconbtn" type="button" data-abrule="up:${i}" aria-label="Move rule ${i + 1} up" ${i ? '' : 'disabled'}>${up}</button><button class="iconbtn" type="button" data-abrule="down:${i}" aria-label="Move rule ${i + 1} down" ${i < n - 1 ? '' : 'disabled'}>${I.chev}</button><button class="iconbtn" type="button" data-abrule="rm:${i}" aria-label="Remove rule ${i + 1}">${I.close}</button></span></div>`).join('');
-  return stSec('About', 'Shown in the About tab of the space. Members get a notification when the rules change.', `${cxIdentFields(d)}<label class="fld"><span>Description</span><textarea id="ab-desc" class="cs-ta" rows="2">${esc(d.desc)}</textarea></label><div class="fld"><span>Rules</span>${rows}<button class="btn sm cs-b st-add" type="button" data-abrule="add">${PLUS}Add a rule</button></div>`);
+  return stSec('About', 'Shown in the About tab of the space. Members get a notification when the rules change.', `${cxIdentFields(d)}<label class="fld"><span>Description</span><textarea id="ab-desc" class="cs-ta" rows="2">${esc(d.desc)}</textarea></label><div class="fld"><span>Rules</span>${edNotice('rules', d.id)}${rows}<button class="btn sm cs-b st-add" type="button" data-abrule="add">${PLUS}Add a rule</button></div>`);
 }
 const abSettingsPages = d => stSec('Pages', 'Who can edit the pages in About. Moderators can always add, order and remove pages.', `<div class="ab-radios">${[['mods', 'Moderators', 'Only moderators edit pages.'], ['members', 'Members', 'Any member can edit a page. The page history shows every change.']].map(([v, t, sub]) => `<label class="cs-rad"><input type="radio" name="ab-pgedit" value="${v}" ${d.pageEdit === v ? 'checked' : ''}><span><b>${t}</b><small>${sub}</small></span></label>`).join('')}</div>`);
 
@@ -9326,27 +9339,18 @@ on($('app'), 'click', e => {
   if (d('[data-skill]') && (st.modal || '').startsWith('ab-skill')) { st.modal = null; return go(); }
   if ((b = d('[data-abpage]'))) { const v = b.dataset.abpage; if (v === 'x') Object.assign(st, { abPage: null, abPageEd: null, abHist: false }); else abOpenPage(s.id, +v); return go(); }
   if ((b = d('[data-abopen]'))) { const [sid, i] = b.dataset.abopen.split(':'); abOpenPage(sid, +i); return go(); }
-  if (d('[data-abhist]')) { st.abHist = !st.abHist; return go(); }
+  if (d('[data-abhist]')) { st.abHist = !st.abHist; st.abHistRev = st.abHist ? abDoc(s, st.abPage).rev || 0 : null; if (st.edCf && st.edCf.kind === 'restore') st.edCf = null; return go(); }
   if (d('[data-abtoabout]')) { Object.assign(st, { ...NAVBASE(), space: s.id, home: false, drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' }); return go(); }
   if (d('[data-abask]')) { const t = abDoc(s, st.abPage).t; Object.assign(st, { ...NAVBASE(), space: s.id, home: false, draft: `About the page “${t}”: `, compOpen: true }); renderAll(); const c = $('compose-text'); if (c) { c.focus(); c.setSelectionRange(c.value.length, c.value.length); } return true; }
   if ((b = d('[data-abpgnew]'))) { Object.assign(st, { ...NAVBASE(), space: s.id, home: false, subPage: 'abpage' }, { abPage: s.pages.length, abHist: false, abPageEd: { t: '', b: '', isNew: true } }); return go(); }
   if ((b = d('[data-abpged]'))) {
     const v = b.dataset.abpged, i = st.abPage, doc = abDoc(s, i);
-    if (v === 'edit') st.abPageEd = { t: doc.t, b: doc.text.join('\n\n') };
+    if (v === 'edit') { st.abPageEd = { t: doc.t, b: doc.text.join('\n\n'), rev: doc.rev || 0 }; st.edCf = null; }
     if (v === 'cancel') { if (st.abPageEd && st.abPageEd.isNew) { st.abPage = null; if (st.subPage === 'abpage') Object.assign(st, { subPage: null, drawer: true, dsSTab: 'wiki' }); } st.abPageEd = null; }
-    if (v === 'save') {
-      const ed = st.abPageEd, title = ed.t.trim(), text = ed.b.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
-      if (!title) return go();
-      mutate('pages.update', Object.assign({ space: s.id, page: ed.isNew ? null : i, title, text }, ed.isNew || D.pagedocs[abKey(s, doc.t)] ? {} : { base: { by: doc.by, ed: doc.ed, revs: doc.revs } }), () => {
-        if (ed.isNew) spEdit(s.id, x => { x.pages.push([title, nowIso()]); }); else spEdit(s.id, x => { x.pages[i] = [title, nowIso()]; });
-        if (!ed.isNew && abKey(s, doc.t) !== abKey(s, title)) db.del('pagedocs', abKey(s, doc.t));
-        db.put('pagedocs', abKey(s, title), { t: title, text: text.length ? text : [''], by: ed.isNew ? ME.u : doc.by, ed: ME.u, revs: [{ by: ME.u, note: ed.isNew ? 'Created the page' : 'Edited the page' }, ...(ed.isNew ? [] : doc.revs)] });
-      });
-      st.abPageEd = null; toast(ed.isNew ? 'Page added. Members get a notification.' : 'Page saved. Members get a notification.');
-    }
+    if (v === 'save') abPageSave(s, i, st.abPageEd);
     return go();
   }
-  if ((b = d('[data-abrestore]'))) { const doc = abDoc(s, st.abPage), k = +b.dataset.abrestore, r = doc.revs[k], note = `Restored the version from ${agoText(r)}`; mutate('pages.restore', Object.assign({ space: s.id, page: st.abPage, rev: k, note }, D.pagedocs[abKey(s, doc.t)] ? {} : { base: { by: doc.by, ed: doc.ed, revs: doc.revs } }), () => db.put('pagedocs', abKey(s, doc.t), { ...doc, ed: ME.u, revs: [{ by: ME.u, note }, ...doc.revs] })); toast('Restored. The page history keeps both versions.'); return go(); }
+  if ((b = d('[data-abrestore]'))) { abRestore(s, st.abPage, +b.dataset.abrestore); return go(); }
   if ((b = d('[data-abcopy]'))) { taCopy(csUrl()); toast(`Copied ${csUrl()}`); return go(); }
   if (d('[data-abpgorder]')) { st.abPgOrder = !st.abPgOrder; return go(); }
   if ((b = d('[data-abpgmv]'))) { const [v, i] = b.dataset.abpgmv.split(':'), k = +i, j = v === 'up' ? k - 1 : k + 1; mutate('pages.move', { space: s.id, from: k, to: j }, () => spEdit(s.id, x => { [x.pages[k], x.pages[j]] = [x.pages[j], x.pages[k]]; })); return go(); }
@@ -9363,9 +9367,7 @@ on($('app'), 'click', e => {
     if (v === 'save') {
       const ed = st.abSkEd, x = abSkVals(ed), errs = abSkCheck(x, sid, ed.i);
       if (errs.length) { patch('abSkEd', y => { y.seen = { n: 1, d: 1 }; }); abSkRefresh(true); const f = errs[0][0], el = $('ab-sk-' + f); if (el) el.focus(); return true; }
-      const row = [x.n, abSkJoin(x.d, x.b)];
-      mutate(ed.i === 'new' ? 'skills.create' : 'skills.update', Object.assign({ space: sid, name: row[0], prompt: row[1] }, ed.i === 'new' ? {} : { index: ed.i }), () => db.put('skills', sid, ed.i === 'new' ? [...list, row] : list.map((y, k) => k === ed.i ? row : y)));
-      Object.assign(st, { abSkEd: null, modal: null }); toast(ed.i === 'new' ? `Added ${x.n}. It shows in About.` : `Saved ${x.n}.`);
+      abSkSave(sid, ed);
     }
     if (v === 'rm') st.modal = 'ab-skrm:' + i;
     if (v === 'rmok') { const n = list[i][0]; mutate('skills.remove', { space: sid, index: i }, () => db.put('skills', sid, list.filter((_, k) => k !== i))); st.modal = null; toast(`Removed ${n}.`); }
@@ -9403,8 +9405,8 @@ function abJump(k) {
   switch (k) {
     case 'ab-about': about('sablefield'); break;
     case 'ab-page': about('scifi'); abOpenPage('scifi', 1); break;
-    case 'ab-page-edit': { about('scifi'); abOpenPage('scifi', 1); const d = abDoc(sp('scifi'), 1); st.abPageEd = { t: d.t, b: d.text.join('\n\n') }; break; }
-    case 'ab-page-hist': about('scifi'); abOpenPage('scifi', 1); st.abHist = true; break;
+    case 'ab-page-edit': { about('scifi'); abOpenPage('scifi', 1); const d = abDoc(sp('scifi'), 1); st.abPageEd = { t: d.t, b: d.text.join('\n\n'), rev: d.rev || 0 }; break; }
+    case 'ab-page-hist': about('scifi'); abOpenPage('scifi', 1); st.abHist = true; st.abHistRev = abDoc(sp('scifi'), 1).rev || 0; break;
     case 'ab-pages-order': about('scifi'); st.abPgOrder = true; break;
     case 'ab-page-new': about('scifi'); Object.assign(st, { subPage: 'abpage', mWiki: false, drawer: false }); Object.assign(st, { abPage: sp('scifi').pages.length, abPageEd: { t: 'Recommended anthologies', b: '', isNew: true } }); break;
     case 'ab-page-notif': st.home = true; csOpenNotifs(); break;
@@ -9425,6 +9427,184 @@ function abJump(k) {
   }
 }
 
+/* ==== edit conflicts (step 9): pages, skills and space rules ====
+   Each editor records the version it opened: a page's rev (abPageEd.rev; the history's abHistRev for Restore),
+   a skill's rev (abSkEd.rev, the third item of its row) and the rules' stamp (edRules: { sid, at }, the
+   space's rulesAt when the settings form opened). A save sends it as `base`. When someone else saved first,
+   the server answers CONFLICT with the current version and content (e.data.current) and those records
+   (e.data.changes), which the store takes as server data. The editor then keeps the draft and shows
+   "Someone else changed … while you were editing" (edCf), with two choices:
+   - Copy my text and reload: the draft goes to the clipboard and into a "Your text" box; the editor gets the
+     server's content and version. Saving again works.
+   - Overwrite: a confirmation, then the save again with force: true. Cancel goes back to the draft.
+   Restore in the page history is the same check without a draft: Reload, or Restore anyway.
+   A CONFLICT without `current` (another cause, or one forced in dev) keeps the toast.
+   edCf: { kind: 'page' | 'restore' | 'skill' | 'rules', sid, i (the page or skill index), step: 'conflict' |
+   'reloaded', cur (the server's version), mine (the copied text), k (Restore: the history entry) }.
+   No live notice: the event stream has no event for another person's page, skill or rules save. */
+Object.assign(st, { edCf: null, edRules: null, abHistRev: null });
+let ED_NEXT = null;   /* a Screen entry's next step once the conflict arrives: 'reload' or 'over' */
+const ED_NOUN = { page: 'this page', restore: 'this page', skill: 'this skill', rules: 'the rules' };
+/* the rules stamp the page writes before the server answers: it moves forward, as the server's */
+const edStamp = prev => isoOf(Math.max(NOW, prev ? Date.parse(prev) + 1000 : 0));
+/* spaces.update: a change to the rules carries the stamp the form opened (or Overwrite: force) */
+function edRulesBase(input, force) {
+  if (!input.set || !input.set.rules) return input;
+  const at = st.edRules && st.edRules.sid === input.id ? st.edRules.at : (sp(input.id).rulesAt || null);
+  return Object.assign(input, { base: { rulesAt: at } }, force ? { force: true } : {});
+}
+{ const ED_csSettings = csSettings; csSettings = function (s) { if (!st.set || st.set.id !== s.id) st.edRules = { sid: s.id, at: s.rulesAt || null }; return ED_csSettings(s); }; }
+/* the mutate options of an editor's save: a CONFLICT with the server's version opens the notice */
+const edIsConflict = e => !!e && e.code === 'CONFLICT' && !!e.data && !!e.data.current;
+const edOpts = (kind, sid, i, draft, extra) => ({
+  quiet: edIsConflict,
+  fail: e => { if (edIsConflict(e)) edConflict(kind, sid, i, draft, e, extra); },
+  then: () => { if (st.edCf && st.edCf.kind === kind && st.edCf.sid === sid) st.edCf = null; },
+});
+function edConflict(kind, sid, i, draft, e, extra) {
+  applyChanges(e.data.changes, (key, x) => PENDING.has(pkey(key, x)));
+  st.toast = null;
+  const onPage = () => st.space === sid && st.abPage === i && !st.thread && (st.subPage === 'abpage' || (!st.subPage && st.drawer));
+  if (kind === 'page' || kind === 'restore') { if (!onPage()) abOpenPage(sid, i); if (kind === 'page') st.abPageEd = draft; else st.abHist = true; }
+  if (kind === 'skill') { Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: sid, space: sid, mgTab: 'skills', home: false, abSkEd: draft, modal: 'ab-sked' }); }
+  if (kind === 'rules') { if (!(st.subPage === 'manage' && st.mgSpace === sid && st.mgTab === 'settings')) Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: sid, space: sid, mgTab: 'settings', home: false }); st.set = draft; }
+  st.edCf = Object.assign({ kind, sid, i, step: 'conflict', cur: e.data.current, mine: null }, extra || {});
+  const next = ED_NEXT; ED_NEXT = null;
+  if (next) edAct(next);
+  if (APP_STARTED && !DISPOSED) renderAll();
+}
+/* who saved the other version, and when (a skill records neither) */
+const edWho = c => c.kind === 'rules' ? c.cur.rulesBy : c.kind === 'skill' ? null : c.cur.ed;
+const edWhen = c => c.kind === 'rules' ? c.cur.rulesAt : c.kind === 'skill' ? null : c.cur.at;
+const edSaved = c => { const w = edWho(c), t = edWhen(c); return w ? `${esc(w)} saved ${c.kind === 'rules' ? 'new rules' : 'a new version'}${t ? ' ' + agoText(t) : ''}.` : 'Another member saved a new version.'; };
+/* is the notice for the editor that is open now */
+function edOpen(kind, sid, i) {
+  const c = st.edCf; if (!c || c.kind !== kind || c.sid !== sid) return null;
+  if (kind === 'page') return st.abPageEd && st.abPage === i ? c : null;
+  if (kind === 'restore') return st.abHist && st.abPage === i ? c : null;
+  if (kind === 'skill') return st.abSkEd && st.abSkEd.i === i ? c : null;
+  return st.set && st.set.id === sid ? c : null;
+}
+/* the notice inside the editor */
+function edNotice(kind, sid, i) {
+  const c = edOpen(kind, sid, i); if (!c) return '';
+  const btn = (a, label, cls = '') => `<button class="btn sm${cls}" type="button" data-edcf="${a}">${label}</button>`;
+  if (c.step === 'conflict') {
+    const head = kind === 'restore' ? 'Someone else changed this page after you opened its history.' : `Someone else changed ${ED_NOUN[kind]} while you were editing.`;
+    const keep = kind === 'restore' ? '' : kind === 'rules' ? ' Your rules are still in the form.' : ' Your text is still in the editor.';
+    const acts = kind === 'restore' ? btn('reload', 'Reload') + btn('over', 'Restore anyway') : btn('reload', kind === 'rules' ? 'Copy my rules and reload' : 'Copy my text and reload') + btn('over', 'Overwrite');
+    return `<div class="cs-strip warn ed-cf" role="alert">${MII.changed}<span class="grow"><b>${head}</b> ${edSaved(c)}${keep}</span><span class="ed-cf-a">${acts}</span></div>`;
+  }
+  const yours = kind === 'rules' ? 'Your rules' : 'Your text';
+  const now = kind === 'rules' ? `The form now has the rules ${edWho(c) ? esc(edWho(c)) : 'another member'} saved.` : `The editor now has the version ${edWho(c) ? esc(edWho(c)) : 'another member'} saved.`;
+  return `<div class="cs-strip ed-cf" role="status">${MII.changed}<span class="grow">${now} ${yours} ${kind === 'rules' ? 'are' : 'is'} on the clipboard and below. Make your changes again, then save.</span></div>
+    <div class="ed-mine"><div class="ed-mine-h"><b id="ed-mine-l">${yours}</b><span class="ed-cf-a">${btn('copy', 'Copy')}${btn('close', 'Hide')}</span></div><textarea class="cs-ta ed-mine-t" rows="5" readonly aria-labelledby="ed-mine-l">${esc(c.mine || '')}</textarea></div>`;
+}
+/* the confirmation before Overwrite: it discards the other person's change */
+function edOverDlg() {
+  const c = st.edCf; if (!c) return '';
+  const w = edWho(c), t = edWhen(c), when = t ? ` ${agoText(t)}` : '', who = w ? esc(w) : 'another member';
+  const back = `<button class="btn" type="button" data-edcf="back">Cancel</button>`, ok = l => `<button class="btn danger" type="button" data-edcf="overok">${l}</button>`;
+  if (c.kind === 'page') return dlg(`Overwrite ${w ? esc(w) + '’s' : 'the other'} version?`, `<p class="muted">Your text replaces the version ${who} saved${when}. Their version stays in the page history.</p>`, back + ok('Overwrite'), 'alertdialog');
+  if (c.kind === 'restore') return dlg('Restore this version anyway?', `<p class="muted">It replaces the version ${who} saved${when}. Their version stays in the page history.</p>`, back + ok('Restore anyway'), 'alertdialog');
+  if (c.kind === 'skill') return dlg(`Overwrite the other version of ${esc(c.cur.name)}?`, '<p class="muted">Your text replaces the version another member saved while you were editing. Skills have no history, so their version is not kept.</p>', back + ok('Overwrite'), 'alertdialog');
+  return dlg(`Overwrite the rules ${who} saved?`, `<p class="muted">Your rules replace the ones ${who} saved${when}. See changes in About then compares your rules with theirs.</p>`, back + ok('Overwrite'), 'alertdialog');
+}
+{ const ED_csModal = csModal; csModal = function () { return st.modal === 'ed-over' ? edOverDlg() : ED_csModal(); }; }
+/* the saves, with the version the editor opened; force: Overwrite */
+function abPageSave(s, i, ed, force) {
+  const doc = abDoc(s, i), title = ed.t.trim(), text = ed.b.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+  if (!title) return;
+  const stand = !ed.isNew && !D.pagedocs[abKey(s, doc.t)];
+  const base = ed.isNew ? null : Object.assign({ rev: ed.rev || 0 }, stand ? { by: doc.by, ed: doc.ed, revs: doc.revs } : {});
+  mutate('pages.update', Object.assign({ space: s.id, page: ed.isNew ? null : i, title, text }, base ? { base } : {}, force ? { force: true } : {}), () => {
+    if (ed.isNew) spEdit(s.id, x => { x.pages.push([title, nowIso()]); }); else spEdit(s.id, x => { x.pages[i] = [title, nowIso()]; });
+    if (!ed.isNew && abKey(s, doc.t) !== abKey(s, title)) db.del('pagedocs', abKey(s, doc.t));
+    db.put('pagedocs', abKey(s, title), { t: title, text: text.length ? text : [''], by: ed.isNew ? ME.u : doc.by, ed: ME.u, rev: ed.isNew ? 1 : (doc.rev || 0) + 1, revs: [{ by: ME.u, note: ed.isNew ? 'Created the page' : 'Edited the page' }, ...(ed.isNew ? [] : doc.revs)] });
+  }, ed.isNew ? {} : edOpts('page', s.id, i, ed));
+  st.abPageEd = null; toast(ed.isNew ? 'Page added. Members get a notification.' : 'Page saved. Members get a notification.');
+}
+function abRestore(s, i, k, force) {
+  const doc = abDoc(s, i), r = doc.revs[k]; if (!r) return;
+  const note = `Restored the version from ${agoText(r)}`, base = Object.assign({ rev: st.abHistRev != null ? st.abHistRev : doc.rev || 0 }, D.pagedocs[abKey(s, doc.t)] ? {} : { by: doc.by, ed: doc.ed, revs: doc.revs });
+  mutate('pages.restore', Object.assign({ space: s.id, page: i, rev: k, note, base }, force ? { force: true } : {}), () => db.put('pagedocs', abKey(s, doc.t), { ...doc, ed: ME.u, rev: (doc.rev || 0) + 1, revs: [{ by: ME.u, note }, ...doc.revs] }), Object.assign(edOpts('restore', s.id, i, null, { k }), { then: () => { st.abHistRev = (abDoc(sp(s.id), i).rev || 0); if (st.edCf && st.edCf.kind === 'restore') st.edCf = null; } }));
+  toast('Restored. The page history keeps both versions.');
+}
+function abSkSave(sid, ed, force) {
+  const x = abSkVals(ed), row = [x.n, abSkJoin(x.d, x.b)], list = D.skills[sid] || [];
+  if (ed.i !== 'new') row.push(((list[ed.i] || [])[2] || 0) + 1);
+  mutate(ed.i === 'new' ? 'skills.create' : 'skills.update', Object.assign({ space: sid, name: row[0], prompt: row[1] }, ed.i === 'new' ? {} : { index: ed.i, base: { rev: ed.rev || 0 } }, force ? { force: true } : {}),
+    () => db.put('skills', sid, ed.i === 'new' ? [...list, row] : list.map((y, k) => k === ed.i ? row : y)), ed.i === 'new' ? {} : edOpts('skill', sid, ed.i, ed));
+  Object.assign(st, { abSkEd: null, modal: null }); toast(ed.i === 'new' ? `Added ${x.n}. It shows in About.` : `Saved ${x.n}.`);
+}
+/* the notice's buttons */
+function edAct(a) {
+  const c = st.edCf; if (!c) return;
+  const s = sp(c.sid);
+  if (a === 'copy') { taCopy(c.mine || ''); toast(c.kind === 'rules' ? 'Copied your rules.' : 'Copied your text.'); return; }
+  if (a === 'close') { st.edCf = null; return; }
+  if (a === 'over') { st.modal = 'ed-over'; return; }
+  if (a === 'back') { st.modal = c.kind === 'skill' ? 'ab-sked' : null; return; }
+  if (a === 'overok') {
+    st.modal = null; st.edCf = null;
+    if (c.kind === 'page') abPageSave(s, c.i, st.abPageEd, true);
+    if (c.kind === 'restore') abRestore(s, c.i, c.k, true);
+    if (c.kind === 'skill') abSkSave(c.sid, st.abSkEd, true);
+    if (c.kind === 'rules') { csApplySettings(s, st.set, true); toast('Settings saved.'); }
+    return;
+  }
+  if (a !== 'reload') return;
+  /* Copy my text and reload: the draft goes to the clipboard and the box; the editor gets the server's version */
+  if (c.kind === 'restore') { st.abHistRev = c.cur.rev; st.edCf = null; return; }
+  let mine = '';
+  if (c.kind === 'page') { const ed = st.abPageEd; mine = `${ed.t}\n\n${ed.b}`; st.abPageEd = { ...ed, t: c.cur.t, b: c.cur.text.join('\n\n'), rev: c.cur.rev }; }
+  if (c.kind === 'skill') { const ed = st.abSkEd, { d, b } = abSkParse(c.cur.prompt); mine = abSkFile(ed.n, ed.d, ed.b); st.abSkEd = { ...ed, n: c.cur.name, d, b, rev: c.cur.rev, seen: {} }; }
+  if (c.kind === 'rules') { mine = st.set.rules.map(r => r.trim()).filter(Boolean).join('\n'); patch('set', x => { x.rules = c.cur.rules.slice(); }); st.edRules = { sid: c.sid, at: c.cur.rulesAt }; }
+  taCopy(mine);
+  st.edCf = { ...c, step: 'reloaded', mine };
+}
+on($('app'), 'click', e => {
+  const b = e.target.closest && e.target.closest('[data-edcf]'); if (!b) return;
+  edAct(b.dataset.edcf); renderAll();
+  if (b.dataset.edcf === 'back' || b.dataset.edcf === 'reload') { const f = document.querySelector('.ed-cf .btn, .ed-mine .btn'); if (f) f.focus({ preventScroll: true }); }
+});
+
+/* ---------- Screen entries: another member's save lands while the editor is open ----------
+   Each entry opens the editor on the seed (the version it records), then a scenario lands another member's
+   save on the server (the version goes up), then the person saves: the server answers CONFLICT. */
+JUMPS.push(['Edit conflicts', [
+  ['ec-page', 'Page editor: someone else saved the page'], ['ec-page-reload', 'Page editor: after Copy my text and reload'], ['ec-page-over', 'Page editor: Overwrite, confirmation'],
+  ['ec-restore', 'Page history: Restore after someone else saved'],
+  ['ec-skill', 'Skill editor: someone else saved the skill'], ['ec-skill-reload', 'Skill editor: after Copy my text and reload'], ['ec-skill-over', 'Skill editor: Overwrite, confirmation'],
+  ['ec-rules', 'Space rules: someone else changed them'], ['ec-rules-reload', 'Space rules: after Copy my rules and reload'], ['ec-rules-over', 'Space rules: Overwrite, confirmation'],
+]]);
+{
+  const EC_jump = jump;
+  const press = sel => { renderAll(); const e = document.querySelector(sel); if (e) e.click(); return !!e; };
+  /* another member's save lands (a scenario from the seed: the editor's version is the seed's), then Save */
+  const land = (name, sel, next) => runScenario(name, null, () => { ED_NEXT = next || null; press(sel); });
+  jump = function (k) {
+    if (!String(k).startsWith('ec-')) return EC_jump(k);
+    const [, kind, step] = k.split('-'), next = step === 'reload' ? 'reload' : step === 'over' ? 'over' : null;
+    if (kind === 'page') {
+      EC_jump('ab-page-edit');
+      patch('abPageEd', x => { x.b = x.b + '\n\nAdded: the 2026 reissues.'; });
+      land('scifi: tomasz saved a page', '[data-abpged="save"]', next);
+    }
+    if (kind === 'restore') { EC_jump('ab-page-hist'); land('scifi: tomasz saved a page', '[data-abrestore="2"]'); }
+    if (kind === 'skill') {
+      EC_jump('ab-skill-edit');
+      patch('abSkEd', x => { x.b = x.b + '\n\nSay which version of the paper you read (arXiv v1, v2, …).'; });
+      land('ml: mira_k saved a skill', '[data-absk="save"]', next);
+    }
+    if (kind === 'rules') {
+      EC_jump('ab-set'); renderAll();
+      patch('set', x => { x.rules = [...x.rules, 'Name the dataset and split when you report a number.']; });
+      land('ml: mira_k changed the rules', '[data-csset="save"]', next);
+    }
+  };
+}
+/* ==== end edit conflicts ==== */
 /* ==== asks, answers and failures (web): runs, payer checks, failed writes ==== */
 /* An ask runs on the server (step 7). The procedure that makes it (threads.create, research.forkNode,
    threads.update or followups.update with run, research.retryNode) starts its run, a job in the mock backend,
@@ -10924,7 +11104,6 @@ function taJump(k) {
    store undoes the change and the toast says why. The next Screen entry clears the forced failure. */
 JUMPS.push(['Data errors', [
   ['de-forbidden', 'Approve a request: FORBIDDEN (an admin removed your moderator role)'],
-  ['de-conflict', 'Save a page: CONFLICT (another member saved it first)'],
   ['de-notfound', 'Reply to a post: NOT_FOUND (its author deleted it)'],
   ['de-badreq', 'Save your profile: BAD_REQUEST (the server rejected the data)'],
   ['de-load-auth', 'Loading fails: UNAUTHORIZED (your sign-in expired)'],
@@ -10950,11 +11129,6 @@ JUMPS.push(['Data errors', [
       case 'de-forbidden':
         DE_jump('md-queue'); failOn('FORBIDDEN', ['/api/rpc/joinRequests.decide']);
         if (press('[data-rq^="ok:"]')) press('[data-csappr]');
-        break;
-      case 'de-conflict':
-        DE_jump('ab-page-edit'); failOn('CONFLICT', ['/api/rpc/pages.update']);
-        patch('abPageEd', x => { x.b = x.b + '\n\nAdded: the 2026 reissues.'; });
-        press('[data-abpged="save"]');
         break;
       case 'de-notfound': {
         DE_jump('mb-home');

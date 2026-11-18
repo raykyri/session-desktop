@@ -21,6 +21,9 @@
          h.ago('3h'): an ISO time this long before the mock clock (as the page's isoAgo);
          h.run(thread, node, step): a run in progress on the node's ask (node r: the thread's ask), held at that
          progress step (paused: its job does not move it on), as the job writes it (step 7).
+     h.savePage(space, page, { by, text, title?, base? }), h.saveSkill(space, index, { prompt, name? }),
+     h.saveRules(space, rules, by): another member's save of a page, a skill or the rules, as the procedure
+         writes it: the version goes up by one (step 9, edit conflicts).
    A scenario writes as the server does, so it is not subject to the permission checks of step 5. */
 (function () {
   'use strict';
@@ -120,6 +123,20 @@
       x.rules = ['Mark spoilers in titles with [spoilers].', 'Cite editions and page numbers when quoting.', 'Put plot details after a "Spoilers below" line.'];
       x.rulesAt = h.ago('2d'); x.rulesBy = 'tomasz';
     }) });
+
+  /* ---- edit conflicts (step 9): another member saves while your editor is open ----
+     The Screen entries open the editor on the seed, then run one of these: the version goes up, so the save
+     that follows is a CONFLICT. */
+  scenario('scifi: tomasz saved a page', { note: 'tomasz saved a new version of Canon starter list in #sci-fi (the page had no stored document: its history is the one the page shows)',
+    run: (tx, a, h) => h.savePage('scifi', 1, {
+      by: 'tomasz',
+      text: ['A short list for people new to the genre: one book per subgenre, each with a sentence on why it is on the list.', '## Classics', '- The Left Hand of Darkness (Le Guin, 1969): gender and politics on a planet in an ice age.\n- Neuromancer (Gibson, 1984): the novel that named cyberspace.\n- Hyperion (Simmons, 1989): six stories told on one pilgrimage.', '## Recent', '- Ancillary Justice (Leckie, 2013): told by a soldier who used to be a starship.\n- The Fifth Season (Jemisin, 2015): geology as the centre of the worldbuilding.\n- Children of Time (Tchaikovsky, 2015): a spider civilization over thousands of years.', '## Adding a book', 'Reply in the canon thread with the title, the year and one sentence. Moderators update this page at the start of each month.'],
+      base: { by: 'tomasz', ed: 'ines.v', revs: [{ by: 'ines.v', createdAt: '2026-10-29T22:00:00Z', note: 'Updated the page' }, { by: 'ines.v', createdAt: h.ago('3w'), note: 'Added a section' }, { by: 'tomasz', createdAt: h.ago('2mo'), note: 'Created the page' }] },
+    }) });
+  scenario('ml: mira_k saved a skill', { note: 'mira_k saved a new version of the skill summarizing-papers in #ml-papers',
+    run: (tx, a, h) => { const [, prompt] = tx.mapGet('skills', 'ml')[0]; h.saveSkill('ml', 0, { prompt: prompt.replace('- Not tested:', '- Code: whether the code and weights are public.\n- Not tested:') }); } });
+  scenario('ml: mira_k changed the rules', { note: 'mira_k changed the rules of #ml-papers',
+    run: (tx, a, h) => h.saveRules('ml', [...tx.find('spaces', 'ml').rules, 'Mark preprints that have not been peer reviewed.'], 'mira_k') });
 
   /* ---- your asks, and who pays for them (the token model; TODO(limits): usage is a stub) ---- */
   const SAMPLE_Q = 'What changed in public guidance on AI model evaluations this year?';

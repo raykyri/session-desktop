@@ -127,6 +127,8 @@
     nul: s => ({ t: 'or', of: [s, { t: 'null' }] }),
     arr: of => ({ t: 'array', of }),
     tup: (...of) => ({ t: 'tuple', of }),
+    /* a tuple with optional items at the end (checked when present) */
+    tupOpt: (of, rest) => ({ t: 'tuple', of, rest }),
     set: of => ({ t: 'set', of }),
     rec: of => ({ t: 'record', of }),
     obj: (fields, name) => ({ t: 'object', fields, name }),
@@ -148,7 +150,7 @@
       case 'lazy': return check(s.f(), v, path, out);
       case 'or': return s.of.some(x => !check(x, v, path).length) ? out : bad(describe(s));
       case 'array': if (!Array.isArray(v)) return bad('array'); v.forEach((x, i) => check(s.of, x, `${path}[${i}]`, out)); return out;
-      case 'tuple': if (!Array.isArray(v) || v.length < s.of.length) return bad(describe(s)); s.of.forEach((x, i) => check(x, v[i], `${path}[${i}]`, out)); return out;
+      case 'tuple': if (!Array.isArray(v) || v.length < s.of.length) return bad(describe(s)); s.of.forEach((x, i) => check(x, v[i], `${path}[${i}]`, out)); (s.rest || []).forEach((x, i) => { const k = s.of.length + i; if (v[k] !== undefined) check(x, v[k], `${path}[${k}]`, out); }); return out;
       case 'set': if (!(v instanceof Set)) return bad('Set'); [...v].forEach((x, i) => check(s.of, x, `${path}{${i}}`, out)); return out;
       case 'record': if (!v || typeof v !== 'object' || Array.isArray(v) || v instanceof Set) return bad('object'); Object.entries(v).forEach(([k, x]) => check(s.of, x, `${path}.${k}`, out)); return out;
       case 'object': {
@@ -171,7 +173,7 @@
       case 'enum': return s.vs.map(x => JSON.stringify(x)).join(' | ');
       case 'or': return s.of.map(x => describe(x)).join(' | ');
       case 'array': return `${describe(s.of)}[]`;
-      case 'tuple': return `[${s.of.map(x => describe(x)).join(', ')}]`;
+      case 'tuple': return `[${[...s.of.map(x => describe(x)), ...(s.rest || []).map(x => describe(x) + '?')].join(', ')}]`;
       case 'set': return `Set<${describe(s.of)}>`;
       case 'record': return `Record<string, ${describe(s.of)}>`;
       case 'lazy': return describe(s.f());
@@ -266,8 +268,10 @@
   S.Report = obj({ id: str, sp: str, key: str, by: str, st: one('open', 'dismissed', 'hidden', 'removed'), 'why?': str, 'note?': str, 'createdAt?': iso }, 'Report');
   S.SpaceSource = obj({ m: str, by: str, 'createdAt?': iso, 'note?': str, 'rv?': bool }, 'SpaceSource');
   S.SourceReport = obj({ m: str, sid: str, by: str, 'why?': str, 'createdAt?': iso }, 'SourceReport');
-  S.Skill = named('Skill', tup(str, str));
-  S.PageDoc = obj({ t: str, text: arr(str), 'by?': str, 'ed?': str, revs: arr(obj({ by: str, 'createdAt?': iso, note: str })) }, 'PageDoc');
+  /* [name, prompt, rev?]: rev, the skill's version (step 9), counts its saves (absent: 0) */
+  S.Skill = named('Skill', t.tupOpt([str, str], [int]));
+  /* rev: the document's version (step 9), counts its saves; a page without a stored document is version 0 */
+  S.PageDoc = obj({ t: str, text: arr(str), 'by?': str, 'ed?': str, 'rev?': int, revs: arr(obj({ by: str, 'createdAt?': iso, note: str })) }, 'PageDoc');
   S.Profile = obj({ name: str, bio: str }, 'Profile');
   /* what a profile shows of another person: the number of spaces they wrote threads in, closed spaces included */
   S.PersonSummary = obj({ spaces: int }, 'PersonSummary');
@@ -667,7 +671,9 @@
        tx.put(k, rec, 'start'?)        create or replace a list record; tx.edit(k, id, fn); tx.remove(k, id)
        tx.mapGet(k, key), tx.mapPut(k, key, v), tx.mapDel(k, key)
        tx.setValue(k, v) */
-  const rpcError = (code, message, issues) => Object.assign(new Error(message || CODES[code][1]), { rpcCode: code, issues });
+  /* data: { current, reads } for a CONFLICT (step 9): the error answer adds `current` (the version and content the
+     server has) and `changes` (the records named in reads, as the caller reads them now) */
+  const rpcError = (code, message, issues, data) => Object.assign(new Error(message || CODES[code][1]), { rpcCode: code, issues, data });
   const PROCS = {};
   const proc = (name, def) => { PROCS[name] = def; };
   const ID = str;   /* a record id */
@@ -1196,6 +1202,27 @@
     space: linkIn, can: (tx, i) => linkOf(tx, i.id),
     run: (tx, i) => { const l = tx.need('links', i.id, 'invite link'); if (!l.revokedAt) throw rpcError('NOT_FOUND', 'This invite link is not revoked.'); tx.edit('links', l.id, x => { delete x.revokedAt; }); } });
 
+  /* -- versions and edit conflicts (step 9) --
+     A page document, a skill and a space's rules carry a version: a page's rev, a skill's rev (the third item of
+     its row) and the space's rulesAt (not its updatedAt, which a domain check also changes). An editor records
+     the version it opened and sends it as `base` when it saves; when it is not the current one, the server
+     answers CONFLICT with `current` (the version and content it has) and `changes` (those records as the caller
+     reads them), and keeps nothing. force: true saves over the other version (the page's Overwrite). A save
+     without a base is not checked. The scenario helpers h.savePage, h.saveSkill and h.saveRules write another
+     member's save, as these procedures do, and bump the version. */
+  const stale = (base, cur, force) => !force && base !== undefined && base !== cur;
+  const conflict = (current, reads) => rpcError('CONFLICT', undefined, undefined, { current, reads });
+  const pageRev = doc => doc.rev || 0;
+  const skillRev = row => (row && row[2]) || 0;
+  /* a rules stamp that moves forward even when the mock clock does not, so it works as the rules' version */
+  const rulesStamp = (now, prev) => { const t = Math.max(Date.parse(now), prev ? Date.parse(prev) + 1000 : 0); return new Date(t).toISOString().replace(/\.\d{3}Z$/, 'Z'); };
+  const BASE_RULES = obj({ rulesAt: nul(iso) }, 'RulesBase');
+  /* a space's rules, as spaces.update writes them: the previous rules stay for "See changes" */
+  function writeRules(tx, sid, rules, by) {
+    tx.edit('spaces', sid, x => { const r = rules.map(y => y.trim()).filter(Boolean); if (r.join('\n') !== (x.rules || []).join('\n')) { x.rulesPrev = (x.rules || []).slice(); x.rules = r; x.rulesAt = rulesStamp(tx.now, x.rulesAt); x.rulesBy = by; } }, 'space');
+  }
+  const rulesCurrent = s => ({ rulesAt: s.rulesAt || null, rules: s.rules || [], rulesBy: s.rulesBy || null });
+
   /* -- spaces -- */
   /* the settings a space's admins change (spaces.update) */
   const SPACE_SETTINGS = ['name', 'title', 'av', 'img', 'desc', 'rules', 'vis', 'policy', 'qs', 'invite', 'faq', 'topics', 'postsOff', 'plain', 'pageEdit', 'pages', 'dom'];
@@ -1217,17 +1244,20 @@
       setRoster(tx, id, [{ u: tx.me.u, role: 'owner' }]);
       return { id };
     } });
-  proc('spaces.update', { input: obj({ id: ID, 'set?': settingsSchema, 'unset?': arr(one(...SPACE_SETTINGS)) }, 'UpdateSpaceInput'), output: 'null', who: 'admin', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['spaces', 'posts', 'rel', 'reqs', 'mem', 'memOther'],
+  proc('spaces.update', { input: obj({ id: ID, 'set?': settingsSchema, 'unset?': arr(one(...SPACE_SETTINGS)), 'base?': BASE_RULES, 'force?': bool }, 'UpdateSpaceInput'), output: 'null', who: 'admin', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['spaces', 'posts', 'rel', 'reqs', 'mem', 'memOther'],
     space: (tx, i) => i.id,
-    note: 'change a space’s settings. The server keeps the previous rules for “See changes”, moves threads in deleted topics to Other, approves the open join requests when the space becomes open, and records your membership of a space that becomes closed.',
+    note: 'change a space’s settings. The server keeps the previous rules for “See changes”, moves threads in deleted topics to Other, approves the open join requests when the space becomes open, and records your membership of a space that becomes closed. base.rulesAt: the rules’ version the editor opened; CONFLICT when the rules changed since (step 9).',
     run: (tx, i) => {
       const s0 = tx.need('spaces', i.id, 'space'), set = i.set || {};
       if (set.name != null && set.name !== s0.name && tx.get('spaces').some(x => x.id !== s0.id && x.name === set.name)) throw rpcError('CONFLICT', `#${set.name} already exists.`);
-      const s = tx.edit('spaces', s0.id, x => {
+      const rulesChange = set.rules && set.rules.map(r => r.trim()).filter(Boolean).join('\n') !== (s0.rules || []).join('\n');
+      if (rulesChange && stale(i.base && i.base.rulesAt, s0.rulesAt || null, i.force)) throw conflict(rulesCurrent(s0), [['spaces', s0.id]]);
+      tx.edit('spaces', s0.id, x => {
         for (const k of i.unset || []) delete x[k];
         for (const [k, v] of Object.entries(set)) if (k !== 'rules') x[k] = v;
-        if (set.rules) { const rules = set.rules.map(r => r.trim()).filter(Boolean); if (rules.join('\n') !== (x.rules || []).join('\n')) { x.rulesPrev = (x.rules || []).slice(); x.rules = rules; x.rulesAt = tx.now; x.rulesBy = tx.me.u; } }
       });
+      if (set.rules) writeRules(tx, s0.id, set.rules, tx.me.u);
+      const s = tx.need('spaces', s0.id, 'space');
       /* threads in topics that no longer exist move to Other */
       if (set.topics) tx.get('posts').filter(p => p.s === s.id && p.topic && !set.topics.some(t => t[0] === p.topic)).forEach(p => tx.edit('posts', p.id, x => { x.topic = null; }));
       /* a closed space that becomes open: the open requests are approved */
@@ -1262,8 +1292,17 @@
   const SKILL_IN = { space: ID, name: str, prompt: str };
   proc('skills.create', { space: spaceIn, input: obj(SKILL_IN), output: 'null', who: 'moderator', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['skills'],
     run: (tx, i) => { const l = skillsOf(tx, i.space); if (l.some(x => x[0] === i.name)) throw rpcError('CONFLICT', `The space has a skill named ${i.name}.`); tx.mapPut('skills', i.space, [...l, [i.name, i.prompt]]); } });
-  proc('skills.update', { space: spaceIn, input: obj({ ...SKILL_IN, index: int }), output: 'null', who: 'moderator', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['skills'],
-    run: (tx, i) => { const l = skillsOf(tx, i.space); if (!l[i.index]) throw rpcError('NOT_FOUND', 'The server has no record of this skill.'); if (l.some((x, k) => k !== i.index && x[0] === i.name)) throw rpcError('CONFLICT', `The space has a skill named ${i.name}.`); l[i.index] = [i.name, i.prompt]; tx.mapPut('skills', i.space, l); } });
+  /* a skill's new text: its version goes up by one */
+  function writeSkill(tx, sid, index, name, prompt) { const l = skillsOf(tx, sid); l[index] = [name, prompt, skillRev(l[index]) + 1]; tx.mapPut('skills', sid, l); }
+  proc('skills.update', { space: spaceIn, input: obj({ ...SKILL_IN, index: int, 'base?': obj({ rev: int }, 'SkillBase'), 'force?': bool }), output: 'null', who: 'moderator', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['skills'],
+    note: 'base.rev: the skill’s version the editor opened; CONFLICT when someone else saved it since (step 9)',
+    run: (tx, i) => {
+      const l = skillsOf(tx, i.space), row = l[i.index];
+      if (!row) throw rpcError('NOT_FOUND', 'The server has no record of this skill.');
+      if (stale(i.base && i.base.rev, skillRev(row), i.force)) throw conflict({ rev: skillRev(row), name: row[0], prompt: row[1] }, [['skills', i.space]]);
+      if (l.some((x, k) => k !== i.index && x[0] === i.name)) throw rpcError('CONFLICT', `The space has a skill named ${i.name}.`);
+      writeSkill(tx, i.space, i.index, i.name, i.prompt);
+    } });
   proc('skills.remove', { space: spaceIn, input: obj({ space: ID, index: int }), output: 'null', who: 'moderator', errors: ['NOT_FOUND'], writes: ['skills'],
     run: (tx, i) => { const l = skillsOf(tx, i.space); if (!l[i.index]) throw rpcError('NOT_FOUND', 'The server has no record of this skill.'); tx.mapPut('skills', i.space, l.filter((_, k) => k !== i.index)); } });
   proc('skills.reorder', { space: spaceIn, input: obj({ space: ID, from: int, to: int }), output: 'null', who: 'moderator', errors: ['NOT_FOUND'], writes: ['skills'],
@@ -1271,33 +1310,44 @@
   const pageSlug = t => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   /* TODO(fixtures): the fixtures have no page documents; the page shows a generated stand-in (abDoc). Until
      they do, the page sends the stand-in's author and history as `base`, used when the server has no document. */
-  const BASE_DOC = obj({ 'by?': str, 'ed?': str, 'revs?': arr(obj({ by: str, 'createdAt?': iso, note: str })) }, 'PageBase');
+  /* base: the document as the editor opened it: its version (rev, step 9), and for a stand-in its author and history */
+  const BASE_DOC = obj({ 'rev?': int, 'by?': str, 'ed?': str, 'revs?': arr(obj({ by: str, 'createdAt?': iso, note: str })) }, 'PageBase');
   const pageAt = (tx, sid, index) => { const s = tx.need('spaces', sid, 'space'), pg = (s.pages || [])[index]; if (!pg) throw rpcError('NOT_FOUND', 'The server has no record of this page. Someone may have deleted it.'); return [s, pg]; };
   const docOf = (tx, sid, title, base) => tx.mapGet('pagedocs', `${sid}/${pageSlug(title)}`) || { t: title, text: [''], by: (base && base.by) || tx.me.u, ed: base && base.ed, revs: (base && base.revs) || [] };
   /* the space's pageEdit setting (the page's abCanEdit): moderators edit pages; with "members", its members too */
   const pageEditor = (tx, sid) => { const s = tx.need('spaces', sid, 'space'); return rankIn(tx.get, sid) >= RANK.moderator || (s.pageEdit === 'members' && !!roleIn(tx.get, sid)) || deny(`In #${s.name}, ${s.pageEdit === 'members' ? 'members' : 'moderators'} edit pages.`); };
-  proc('pages.update', { input: obj({ space: ID, 'page?': nul(int), title: str, text: arr(str), 'base?': BASE_DOC }, 'UpdatePageInput'), output: 'null', who: 'member', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['pagedocs', 'spaces'],
+  /* the version and content of a page, for a CONFLICT; and the records the page reads again */
+  const pageCurrent = doc => ({ rev: pageRev(doc), t: doc.t, text: doc.text, ed: doc.ed || null, at: (doc.revs[0] && doc.revs[0].createdAt) || null });
+  const pageReads = (sid, title) => [['pagedocs', `${sid}/${pageSlug(title)}`], ['spaces', sid]];
+  /* an edit of page `index` by `by`: the new title and text, one more version, a line in the history */
+  function writePage(tx, sid, index, title, body, by, base) {
+    const [, pg] = pageAt(tx, sid, index), doc = docOf(tx, sid, pg[0], base);
+    tx.edit('spaces', sid, x => { x.pages = x.pages.map((p, k) => k === index ? [title, tx.now] : p); });
+    if (pageSlug(pg[0]) !== pageSlug(title)) tx.mapDel('pagedocs', `${sid}/${pageSlug(pg[0])}`);
+    tx.mapPut('pagedocs', `${sid}/${pageSlug(title)}`, { t: title, text: body, by: doc.by, ed: by, rev: pageRev(doc) + 1, revs: [{ by, note: 'Edited the page' }, ...doc.revs] });
+  }
+  proc('pages.update', { input: obj({ space: ID, 'page?': nul(int), title: str, text: arr(str), 'base?': BASE_DOC, 'force?': bool }, 'UpdatePageInput'), output: 'null', who: 'member', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['pagedocs', 'spaces'],
     note: 'add a page (page: null) or edit one (page: its index in the space’s pages); members get a notification. Who may edit follows the space’s pageEdit setting: moderators, and its members when it is "members". CONFLICT when the page changed since it was opened (step 9).',
     space: spaceIn, can: (tx, i) => pageEditor(tx, i.space),
     run: (tx, i) => {
       const title = text(i.title, 'title'), body = i.text.length ? i.text : [''];
       if (i.page == null) {
         tx.edit('spaces', i.space, x => { x.pages = [...(x.pages || []), [title, tx.now]]; }, 'space');
-        tx.mapPut('pagedocs', `${i.space}/${pageSlug(title)}`, { t: title, text: body, by: tx.me.u, ed: tx.me.u, revs: [{ by: tx.me.u, note: 'Created the page' }] });
+        tx.mapPut('pagedocs', `${i.space}/${pageSlug(title)}`, { t: title, text: body, by: tx.me.u, ed: tx.me.u, rev: 1, revs: [{ by: tx.me.u, note: 'Created the page' }] });
         return;
       }
       const [, pg] = pageAt(tx, i.space, i.page), doc = docOf(tx, i.space, pg[0], i.base);
-      tx.edit('spaces', i.space, x => { x.pages = x.pages.map((p, k) => k === i.page ? [title, tx.now] : p); });
-      if (pageSlug(pg[0]) !== pageSlug(title)) tx.mapDel('pagedocs', `${i.space}/${pageSlug(pg[0])}`);
-      tx.mapPut('pagedocs', `${i.space}/${pageSlug(title)}`, { t: title, text: body, by: doc.by, ed: tx.me.u, revs: [{ by: tx.me.u, note: 'Edited the page' }, ...doc.revs] });
+      if (stale(i.base && i.base.rev, pageRev(doc), i.force)) throw conflict(pageCurrent(doc), pageReads(i.space, pg[0]));
+      writePage(tx, i.space, i.page, title, body, tx.me.u, i.base);
     } });
-  proc('pages.restore', { input: obj({ space: ID, page: int, rev: int, note: str, 'base?': BASE_DOC }), output: 'null', who: 'member', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['pagedocs'],
-    note: 'restore an earlier version; the history keeps both (note: the history line, written by the page). Who may: as pages.update.',
+  proc('pages.restore', { input: obj({ space: ID, page: int, rev: int, note: str, 'base?': BASE_DOC, 'force?': bool }), output: 'null', who: 'member', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['pagedocs'],
+    note: 'restore an earlier version; the history keeps both (note: the history line, written by the page). rev: the index of the version in the history; base.rev: the document’s version when its history was opened (CONFLICT, step 9). Who may: as pages.update.',
     space: spaceIn, can: (tx, i) => pageEditor(tx, i.space),
     run: (tx, i) => {
       const [, pg] = pageAt(tx, i.space, i.page), doc = docOf(tx, i.space, pg[0], i.base);
+      if (stale(i.base && i.base.rev, pageRev(doc), i.force)) throw conflict(pageCurrent(doc), pageReads(i.space, pg[0]));
       if (!doc.revs[i.rev]) throw rpcError('NOT_FOUND', 'The server has no record of this version.');
-      tx.mapPut('pagedocs', `${i.space}/${pageSlug(pg[0])}`, { ...doc, ed: tx.me.u, revs: [{ by: tx.me.u, note: i.note }, ...doc.revs] });
+      tx.mapPut('pagedocs', `${i.space}/${pageSlug(pg[0])}`, { ...doc, ed: tx.me.u, rev: pageRev(doc) + 1, revs: [{ by: tx.me.u, note: i.note }, ...doc.revs] });
     } });
   proc('pages.remove', { space: spaceIn, input: obj({ space: ID, page: int }), output: 'null', who: 'moderator', errors: ['NOT_FOUND'], writes: ['pagedocs', 'spaces'],
     run: (tx, i) => { const [, pg] = pageAt(tx, i.space, i.page); tx.edit('spaces', i.space, x => { x.pages = x.pages.filter((_, k) => k !== i.page); }); tx.mapDel('pagedocs', `${i.space}/${pageSlug(pg[0])}`); } });
@@ -1679,6 +1729,11 @@
         const x = node === 'r' ? tx.find('posts', th) : askTree(tx, th).nodes.find(n => n.id === node);
         tx.mapPut('runs', runKey(th, node), { th, node, u: x.u || tx.me.u, status: 'running', attempt: x.att || 1, seq: 1 + step, step, model: x.model || null, pay: x.pay == null ? null : x.pay, createdAt: tx.now, paused: true });
       },
+      /* another member's save (step 9): the version goes up by one, as when they save in the editor */
+      /* base: a page without a stored document: its author and history as the page shows them (TODO(fixtures)) */
+      savePage: (sid, index, { by, title, text, base }) => { const [, pg] = pageAt(tx, sid, index); writePage(tx, sid, index, title || pg[0], text, by, base); },
+      saveSkill: (sid, index, { name, prompt }) => { const row = (tx.mapGet('skills', sid) || [])[index]; writeSkill(tx, sid, index, name || row[0], prompt); },
+      saveRules: (sid, rules, by) => writeRules(tx, sid, rules, by),
       proc: (name, input) => {
         const P = PROCS[name]; if (!P) throw new Error(`no procedure ${name}`);
         const issues = check(P.input, input, 'input'); if (issues.length) throw new Error(`${name}: ${issues.map(i => `${i.path}: expected ${i.expected}`).join('; ')}`);
@@ -1935,6 +1990,17 @@
       });
     }
 
+    /* the records [collection, key or id] as the caller reads them now, in the shape of a procedure's changes */
+    function readsNow(d, caller, refs) {
+      const sc = scopeFor(d, caller), changes = {};
+      for (const [k, key] of refs) {
+        const c = C[k];
+        if (c.kind === 'map') { const ch = changes[k] = changes[k] || { put: {}, del: [] }, v = key in d[k] ? sc.map(k, key, d[k][key]) : undefined; if (v !== undefined) ch.put[key] = v; else ch.del.push(key); continue; }
+        const ch = changes[k] = changes[k] || { put: [], del: [] }, x = d[k].find(y => String(y[c.id]) === String(key)), r = x && sc.list(k, x);
+        if (r) ch.put.push(viewOne(k, r, d)); else ch.del.push(key);
+      }
+      return changes;
+    }
     function handle(method, url, body, origin, caller = ME) {
       const [path, qs] = url.split('?');
       const hits = matchPath(path);
@@ -1991,7 +2057,7 @@
           return { res: out(200, { result: result === undefined ? null : result, changes }) };
         } catch (e) {
           tx.abort();
-          if (e && e.rpcCode) return { res: err(e.rpcCode, e.message, e.issues ? { issues: e.issues } : undefined) };
+          if (e && e.rpcCode) return { res: err(e.rpcCode, e.message, Object.assign({}, e.issues ? { issues: e.issues } : {}, e.data ? { current: e.data.current, changes: readsNow(d, caller, e.data.reads || []) } : {})) };
           throw e;
         }
       }
