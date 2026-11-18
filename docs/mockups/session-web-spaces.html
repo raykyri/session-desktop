@@ -114,6 +114,8 @@ a { color: inherit; }
 .seg { display: inline-flex; background: var(--control); border: 1px solid var(--control-border); border-radius: var(--r-md); padding: 2px; gap: 2px; flex-wrap: wrap; }
 .seg button { border: 0; background: transparent; padding: 3px 9px; border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--t-secondary); }
 .seg button:hover { color: var(--t-strong); }
+.k-iseg button { display: inline-grid; place-items: center; padding: 3px 7px; }
+.k-iseg button svg { width: 14px; height: 14px; display: block; }
 .seg button[aria-pressed="true"] { background: var(--seg-on); color: var(--t-heading); box-shadow: var(--seg-shadow); }
 .note { max-width: 1320px; margin: 0 auto 12px; color: var(--t-secondary); font-size: var(--fs-sm); }
 .note b { color: var(--t-strong); font-weight: 600; }
@@ -1861,6 +1863,7 @@ html.ab-dragging, html.ab-dragging * { cursor: grabbing !important; user-select:
 /* one-column layouts: the space header's Manage button shows only its gear */
 @media (max-width: 920px) { .cs-mgb > .d-only { display: none; } .cs-mgb { min-width: 32px; padding: 0 9px; justify-content: center; } }
 .data-wait { padding: 48px 24px; text-align: center; color: var(--t-secondary); font-size: var(--fs-sm); }
+.k-dstat:empty { display: none; }
 .knob .k-dstat, .k-dstat { font-size: var(--fs-xs); color: var(--t-faint); align-self: center; text-transform: none; letter-spacing: 0; font-weight: 400; min-width: 52px; }
 .jd-o { padding: 6px 8px; border-radius: var(--r-md); font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; }
 .jd-o.act { background: var(--fill-hover); }
@@ -4329,7 +4332,7 @@ const applyApiMode = () => { mockBackend.cfg.failWrites = st.apiMode === 'fail';
 window.__dataIdle = () => { const m = DS.meta.getState(); return (m.status === 'ready' || m.status === 'error') && m.pending === 0; };
 /* the store finished loading, a request finished, or a failed write was undone: show it */
 let APP_STARTED = false;   /* set when the first screen has been drawn; store events before that do not draw */
-liveData.meta.subscribe((m, p) => { if (!APP_STARTED) return; if (m.status !== p.status) renderAll(); else if (m.pending !== p.pending) { const e = document.getElementById('k-dstat'); if (e) e.textContent = m.pending ? `Saving ${m.pending}…` : 'Saved'; } });
+liveData.meta.subscribe((m, p) => { if (!APP_STARTED) return; if (m.status !== p.status) renderAll(); else if (m.pending !== p.pending) { const e = document.getElementById('k-dstat'); if (e) e.textContent = m.pending ? `Saving ${m.pending}…` : ''; } });
 
 /* ---- mock backend: serves /api/* in this page ----
    session-web-spaces-mock-api.js: an in-memory database seeded from the fixtures (its own copy), saved to
@@ -5156,11 +5159,14 @@ function rdClick(t) {
   return false;
 }
 
+/* items: [value, label] or [value, icon, name] (an icon button, with the name as its label and tooltip) */
 function seg(el, items, key, onPick) {
-  el.innerHTML = items.map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${String(st[key]) === String(v)}">${t}</button>`).join('');
+  el.innerHTML = items.map(([v, t, name]) => `<button type="button" data-v="${v}" aria-pressed="${String(st[key]) === String(v)}"${name ? ` aria-label="${name}" title="${name}"` : ''}>${t}</button>`).join('');
   el.onclick = e => { const b = e.target.closest('button[data-v]'); if (!b) return; st[key] = typeof st[key] === 'number' ? +b.dataset.v : b.dataset.v; onPick && onPick(); screenPicked(); renderAll(); };
 }
 const toThread = () => { if (st.thread == null) { const i = tidWhere(p => p.k === 'ask' && D.rich[p.id] && p.s === 'markets'); Object.assign(st, { thread: i == null ? TID(0) : i, savedPage: false, profilePage: false, subPage: null, auth: 'in', modal: null, umenu: false }); } };
+/* signed out: the person icon with a slash */
+const K_OUT = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.6-2.4 2.6-3.7 5-3.7s4.4 1.3 5 3.7M2.5 2.5l11 11"/></svg>';
 const KNOBDEF = () => [
   ['k-dir', 'shell', [['tabs2', 'Header'], ['rail', 'Left rail']], () => { st.umenu = false; st.pop = false; }],
   ['k-tint', 'tint', [['warmwc', 'Beige'], ['sagewc', 'Sage']]],
@@ -5175,8 +5181,10 @@ let HOTKEYS = {};
 function renderControls() {
   if (!renderControls.init && st.appearance === 'system') st.appearance = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   renderControls.init = true;
-  seg($('k-theme'), [['light', 'Light'], ['dark', 'Dark']], 'appearance', () => { try { localStorage.setItem('session-web-appearance', st.appearance); } catch (e) {} });
-  seg($('k-auth'), [['in', 'Signed in'], ['out', 'Signed out']], 'auth', () => { st.pop = false; });
+  /* theme and sign-in state as icons */
+  for (const id of ['k-theme', 'k-auth']) $(id).classList.add('k-iseg');
+  seg($('k-theme'), [['light', API.light, 'Light'], ['dark', API.dark, 'Dark']], 'appearance', () => { try { localStorage.setItem('session-web-appearance', st.appearance); } catch (e) {} });
+  seg($('k-auth'), [['in', MI.user, 'Signed in'], ['out', K_OUT, 'Signed out']], 'auth', () => { st.pop = false; });
   seg($('k-dev'), [['desktop', 'Desktop'], ['phone', 'Mobile Web'], ['native', 'Phone']], 'device', () => { st.umenu = false; st.pop = false; });
   /* Data: the mock backend's latency and failures */
   seg($('k-api'), [['normal', '120ms'], ['fail', 'Fail'], ['failload', 'Fail on load']], 'apiMode', applyApiMode);
@@ -5184,7 +5192,7 @@ function renderControls() {
   { const k = $('kw-sources'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   /* the Phone app always uses the base Beige and has its own navigation and rows, so the Tint, Nav and Source ref controls have no effect there */
   for (const id of ['k-tint', 'k-dir']) { const k = $(id) && $(id).closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
-  { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
+  { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : ''; }
   HOTKEYS = {}; let n = 0;
   for (const [el, key, items, pick] of KNOBDEF()) {
     const lettered = items.map(([v, l, sub]) => { if (sub === '#') return [v, l]; if (sub) return [v, n ? `${String.fromCharCode(64 + n)}${sub}. ${l}` : l]; const L = n < 26 ? String.fromCharCode(65 + n) : ''; n++; if (L) HOTKEYS[L] = [key, v, pick]; return [v, L ? `${L}. ${l}` : l]; });
