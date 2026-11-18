@@ -12460,7 +12460,7 @@ function nePgSave(force) {
   const ed = neCur(); if (!ed || ed.saving) return;
   const s = sp(ed.sid), title = ed.t.trim(), text = ed.b.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
   if (!title) { neSet({ err: 'Add a title.', cf: null }); NE_FOCUS = 'ne-t'; return; }
-  if (!text.length) { neSet({ err: 'Add the text of the page.', cf: null }); NE_FOCUS = 'ne-b'; return; }
+  /* an empty page is allowed, as on the web: only the title is required */
   const isNew = ed.isNew, i = ed.i, doc = isNew ? null : abDoc(s, i);
   const stand = !isNew && !D.pagedocs[abKey(s, doc.t)];
   const base = isNew ? null : Object.assign({ rev: ed.rev || 0 }, stand ? { by: doc.by, ed: doc.ed, revs: doc.revs } : {});
