@@ -5890,7 +5890,6 @@ function nRepUndo(r) {
 function nNtTarget(x) {
   if (x.k === 'reqs') return [{ v: 'mreq', id: x.sp }];
   if (x.k === 'reps') return [{ v: 'mrep', id: x.sp }];
-  if (x.k === 'page' && sp(x.sp)) return [{ v: 'page', id: `${x.sp}:${x.page || 0}` }];
   if (typeof x.open === 'string' && x.open.startsWith('item:') && MIT(x.open.split(':')[1])) return [{ v: 'src', id: `m:${x.open.split(':')[1]}:` }];
   if (x.open != null && postById(x.open)) { const to = [{ v: 'thread', id: x.open }]; if (x.qtNode && qtT(x.open).by[x.qtNode]) to.push({ v: 'ask', id: `${x.open}:${x.qtNode}` }); return to; }
   if (x.sp && sp(x.sp)) return [{ v: 'space', id: x.sp }];
@@ -6277,13 +6276,12 @@ function layoutInvite() {
    - invite           actor invited you to a closed space (space); response: accepted or declined
    - join_approved    actor approved your request to join (space)
    - join_declined    a moderator declined your request to join (space)
-   - page_edited      actor edited a page of a space (space, page: its index)
    - report_resolved  a moderator resolved your report (report, item: what it was about, outcome)
    - source_edited    the author of a source you saved edited it (source, block: the passage)
    - source_asked     actor asked about a source you saved (source, thread)
    Open join requests and open reports are not stored: moderators see one summary item per space, made here. */
 const NT_K = { follow_up: 'reply', branch: 'reply', answer_ready: 'reply', answer_failed: 'reply', invite: 'invite', join_approved: 'approved',
-  join_declined: 'declined', page_edited: 'page', report_resolved: 'resolved', source_edited: 'mi', source_asked: 'mi' };
+  join_declined: 'declined', report_resolved: 'resolved', source_edited: 'mi', source_asked: 'mi' };
 const ntAsk = i => { const p = postById(i); return `<b>${p ? esc(p.t || clip(p.q, 60)) : 'a deleted thread'}</b>`; };
 const ntAnswer = i => { const p = postById(i); return `<b>${p ? esc(clip(p.q, 60)) : 'a deleted thread'}</b>`; };
 function ntView(n) {
@@ -6299,7 +6297,6 @@ function ntView(n) {
     case 'invite': v.text = `invited you to join ${spB()}`; break;
     case 'join_approved': v.text = `approved your request to join ${spB()}`; break;
     case 'join_declined': v.text = `Your request to join ${spB()} was declined.`; break;
-    case 'page_edited': { const s = sp(n.space), pg = s && s.pages[n.page]; v.text = `edited the page <b>${esc(pg ? pg[0] : 'a page')}</b> in ${spName(s)}`; break; }
     case 'report_resolved': { const it = itemOf(n.item); Object.assign(v, { open: it.p.id, text: `Your report on the ${it.noun} in <b>${esc(clip(it.p.q, 60))}</b> was resolved: ${REP_DONE[n.outcome][1]}.` }); break; }
     case 'source_edited': { const m = MIT(n.source), c = miAsksOf(n.source).filter(x => x.p.about.b === n.block).length;
       Object.assign(v, { ic: MII.changed, open: `item:${n.source}:${n.block}`, text: `${esc(m.au)} edited <b>${esc(miTitle(m))}</b>, a source you saved.${c ? ` ${c === 1 ? 'One ask quotes' : c + ' asks quote'} the paragraph that changed.` : ''}` }); break; }
@@ -6740,7 +6737,6 @@ function csClick(t) {
     else if (x.k === 'reps') Object.assign(st, nav, { subPage: 'manage', mgSpace: x.sp, mgTab: 'reports', space: x.sp, set: null });
     else if (x.k === 'reqs') Object.assign(st, nav, { subPage: 'manage', mgSpace: x.sp, mgTab: 'requests' });
     else if (x.k === 'invite' && !x.done) { Object.assign(st, nav, { subPage: 'invite' }); inviteLanding({ sp: x.sp, by: x.u, state: 'ok' }); }
-    else if (x.k === 'page') abOpenPage(x.sp, x.page);
     else Object.assign(st, nav, { space: x.sp, welcome: x.k === 'approved' ? x.sp : st.welcome });
     return go();
   }
@@ -9126,8 +9122,8 @@ on(document, 'keydown', e => { if (e.key === 'Escape' && !st.modal && (st.csMenu
    What the sidebar's About tab needs beyond a summary of the space:
    - Pages open with their author, last editor and history (Page view control: in the sidebar, or as a
      page with its own address). Moderators, or members when Manage › Settings › Pages allows it, edit
-     pages; moderators add, order and remove them. Members get a notification when a page is edited (not when
-     one is added), and Search finds pages. A page's text is Markdown without HTML (mdBlocks).
+     pages; moderators add, order and remove them. Adding or editing a page sends no notification, and Search
+     finds pages. A page's text is Markdown without HTML (mdBlocks).
    - Skills show what they ask and the threads that used them before you use one (Skill preview control);
      moderators add, edit, order and remove skills in Manage › Skills.
    - Description and rules are edited in Manage › Settings › About. A rules change shows "Rules updated"
@@ -9256,7 +9252,7 @@ function abPageParts(s) {
   let editor = '';
   if (st.abPageEd != null) {
     const ed = st.abPageEd;
-    editor = `<div class="abp-ed"><div class="abp-edbar"><span>${ed.isNew ? `New page in ${spName(s)}` : 'Editing. Members get a notification when you save.'}</span><span class="abp-edb-a"><button class="btn sm" type="button" data-abpged="cancel">Cancel</button><button class="btn sm primary" type="button" data-abpged="save" ${ed.t.trim() ? '' : 'disabled'}>${ed.isNew ? 'Add page' : 'Save'}</button></span></div>${edNotice('page', s.id, i)}<input id="ab-pg-t" class="abp-edt" type="text" value="${esc(ed.t)}" placeholder="Page title" aria-label="Page title"><textarea id="ab-pg-b" class="abp-edx" rows="12" placeholder="Write the page" aria-label="Page text">${esc(ed.b)}</textarea><p class="cs-fine ab-f">Blank lines separate blocks. A block that starts with ## is a heading; lines that start with - are a list.</p></div>`;
+    editor = `<div class="abp-ed"><div class="abp-edbar"><span>${ed.isNew ? `New page in ${spName(s)}` : 'Editing'}</span><span class="abp-edb-a"><button class="btn sm" type="button" data-abpged="cancel">Cancel</button><button class="btn sm primary" type="button" data-abpged="save" ${ed.t.trim() ? '' : 'disabled'}>${ed.isNew ? 'Add page' : 'Save'}</button></span></div>${edNotice('page', s.id, i)}<input id="ab-pg-t" class="abp-edt" type="text" value="${esc(ed.t)}" placeholder="Page title" aria-label="Page title"><textarea id="ab-pg-b" class="abp-edx" rows="12" placeholder="Write the page" aria-label="Page text">${esc(ed.b)}</textarea><p class="cs-fine ab-f">Blank lines separate blocks. A block that starts with ## is a heading; lines that start with - are a list.</p></div>`;
   }
   return { s, i, d, can, mod, age, crumb, byline, hist, rel, editor };
 }
@@ -9528,8 +9524,7 @@ on($('app'), 'change', e => { if (e.target.name === 'ab-pgedit') { csEdit(x => {
 }; }
 
 /* ---------- Jump to ---------- */
-JUMPS.push(['About a space', [['ab-about', 'About in the sidebar'], ['ab-page', 'Open a page'], ['ab-page-edit', 'Edit a page'], ['ab-page-hist', 'Page history'], ['ab-pages-order', 'Order and remove pages (moderator)'], ['ab-page-new', 'Add a page'], ['ab-page-notif', 'Notification: a page changed'], ['ab-search', 'Search finds a page'], ['ab-skill', 'Skill preview'], ['ab-skills-mg', 'Manage › Skills (drag to reorder)'], ['ab-skill-new', 'Add a skill'], ['ab-skill-edit', 'Edit a skill'], ['ab-skill-err', 'Add a skill: name and description errors'], ['ab-skill-rm', 'Remove a skill'], ['ab-set', 'Settings › About and Pages'], ['ab-rules-upd', 'Rules updated: see the changes'], ['ab-members', 'Member list'], ['ab-join', 'Join from About']]]);
-screenData('ab-page-notif', 'scifi: a page changed');
+JUMPS.push(['About a space', [['ab-about', 'About in the sidebar'], ['ab-page', 'Open a page'], ['ab-page-edit', 'Edit a page'], ['ab-page-hist', 'Page history'], ['ab-pages-order', 'Order and remove pages (moderator)'], ['ab-page-new', 'Add a page'], ['ab-search', 'Search finds a page'], ['ab-skill', 'Skill preview'], ['ab-skills-mg', 'Manage › Skills (drag to reorder)'], ['ab-skill-new', 'Add a skill'], ['ab-skill-edit', 'Edit a skill'], ['ab-skill-err', 'Add a skill: name and description errors'], ['ab-skill-rm', 'Remove a skill'], ['ab-set', 'Settings › About and Pages'], ['ab-rules-upd', 'Rules updated: see the changes'], ['ab-members', 'Member list'], ['ab-join', 'Join from About']]]);
 screenData('ab-rules-upd', 'scifi: rules updated');
 function abJump(k) {
   const about = sid => Object.assign(st, { space: sid, home: false, drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' });
@@ -9540,7 +9535,6 @@ function abJump(k) {
     case 'ab-page-hist': about('scifi'); abOpenPage('scifi', 1); st.abHist = true; st.abHistRev = abDoc(sp('scifi'), 1).rev || 0; break;
     case 'ab-pages-order': about('scifi'); st.abPgOrder = true; break;
     case 'ab-page-new': about('scifi'); Object.assign(st, { subPage: 'abpage', mWiki: false, drawer: false }); Object.assign(st, { abPage: sp('scifi').pages.length, abPageEd: { t: 'Recommended anthologies', b: '', isNew: true } }); break;
-    case 'ab-page-notif': st.home = true; csOpenNotifs(); break;
     case 'ab-search': Object.assign(st, { subPage: 'search', q: 'spoiler' }); break;
     case 'ab-skill': about('scifi'); st.modal = 'ab-skill:0'; break;
     case 'ab-skill-new': case 'ab-skill-edit': case 'ab-skill-err': case 'ab-skill-rm': {
@@ -9660,7 +9654,7 @@ function abPageSave(s, i, ed, force) {
     if (!ed.isNew && abKey(s, doc.t) !== abKey(s, title)) db.del('pagedocs', abKey(s, doc.t));
     db.put('pagedocs', abKey(s, title), { t: title, text: text.length ? text : [''], by: ed.isNew ? ME.u : doc.by, ed: ME.u, rev: ed.isNew ? 1 : (doc.rev || 0) + 1, revs: [{ by: ME.u, note: ed.isNew ? 'Created the page' : 'Edited the page' }, ...(ed.isNew ? [] : doc.revs)] });
   }, ed.isNew ? {} : edOpts('page', s.id, i, ed));
-  st.abPageEd = null; toast(ed.isNew ? 'Page added.' : 'Page saved. Members get a notification.');
+  st.abPageEd = null; toast(ed.isNew ? 'Page added.' : 'Page saved.');
 }
 function abRestore(s, i, k, force) {
   const doc = abDoc(s, i), r = doc.revs[k]; if (!r) return;
@@ -10029,7 +10023,7 @@ JUMPS.push(['Phone', [
   ['np-request', 'Request to join'], ['np-pending', 'Request pending'], ['np-withdraw', 'Withdraw a request'], ['np-declined', 'Request declined'], ['np-unlisted', 'Unlisted space, no access'], ['np-unlisted-thread', 'Unlisted thread, no access'],
   ['np-about', 'About with Manage (moderator)'], ['np-about-join', 'About a space you have not joined'], ['np-rules', 'About: see rule changes'], ['np-page', 'A page'], ['np-skill', 'A skill'], ['np-members', 'Members'],
   ['np-requests', 'Requests (moderator)'], ['np-approve', 'Approve a request'], ['np-reports', 'Reports (moderator)'], ['np-remove', 'Remove a reported item'],
-  ['np-notifs', 'Notifications: requests, reports, invite, page'], ['np-invite', 'Invite from a notification'],
+  ['np-notifs', 'Notifications: requests, reports, invite'], ['np-invite', 'Invite from a notification'],
   ['np-saved-empty', 'Saved, empty'], ['np-saved-asks', 'Saved asks'], ['np-saved-sources', 'Saved sources'],
   ['np-profile', 'Your profile'], ['np-profile-edit', 'Edit profile'], ['np-profile-other', 'Someone else’s profile'], ['np-key', 'API key details'], ['np-key-rename', 'Rename an API key'],
 ]]);
@@ -10195,7 +10189,6 @@ const AC_TYPES = [
   ['followups', 'Follow-ups', 'Someone asks a follow-up on your thread or under your follow-up.'],
   ['reqs', 'Join requests', 'Someone asks to join a space you moderate.', true],
   ['reports', 'Reports', 'Someone reports a post, reply or source in a space you moderate.', true],
-  ['pages', 'Page edits', 'Someone edits a page in the About tab of a space you joined.'],
 ];
 const AC_LV = [['all', 'All'], ['mentions', 'Mentions and replies'], ['off', 'Off']];
 DD_SET.acSp = (v, sid) => mutate('settings.update', { spaces: { [sid]: v } }, () => db.set('acct', a => { a.spaces[sid] = v; }));
@@ -12524,7 +12517,7 @@ function nePgSave(force) {
   }, neOpts(ed, cur => {
     const idx = isNew ? Math.max(0, sp(ed.sid).pages.findIndex(p => abSlug(p[0]) === abSlug(title))) : null;
     if (cur) neClose(cur, idx);
-    toast(isNew ? 'Page added.' : 'Page saved. Members get a notification.');
+    toast(isNew ? 'Page added.' : 'Page saved.');
   }));
 }
 function neRuSave(force) {
@@ -12542,11 +12535,10 @@ const neDis = ed => ed.saving ? ' disabled' : '';
 const neCancelB = ed => `<button class="n-tb" type="button" data-n="ne:cancel"${neDis(ed)}>Cancel</button>`;
 const neSaveB = (ed, label) => `<button class="n-tb" type="button" id="ne-save" data-n="ne:save"${!neDirty(ed) || ed.saving ? ' disabled' : ''}><b>${ed.saving ? 'Saving…' : label}</b></button>`;
 const neErr = ed => ed.err ? `<p class="ne-err" role="alert">${ed.err}</p>` : '';
-const neNote = ed => ed.isNew ? '' : 'Members get a notification when you save.';
 /* a form sheet over the page */
 function nePgSheet(ed) {
   const s = sp(ed.sid);
-  const body = `${neErr(ed)}<p class="n-wk-d">${ed.isNew ? `A new page in ${nNameH(s)}.` : `${esc(ed.t0)}, in ${nNameH(s)}. ${neNote(ed)}`}</p>`
+  const body = `${neErr(ed)}<p class="n-wk-d">${ed.isNew ? `A new page in ${nNameH(s)}.` : `${esc(ed.t0)}, in ${nNameH(s)}.`}</p>`
     + nGroup('', [`<label class="n-row n-field ne-sf"><span>Title</span><input id="ne-t" type="text" value="${esc(ed.t)}" placeholder="Required" aria-label="Page title"${neDis(ed)}></label>`])
     + nGroup('Text', [`<textarea id="ne-b" class="n-ta ne-sbx" placeholder="Write the page" aria-label="Page text"${neDis(ed)}>${esc(ed.b)}</textarea>`], NE_HINT);
   return nForm(ed.isNew ? 'New page' : 'Edit page', neCancelB(ed), ed.isNew ? 'New page' : 'Edit page', neSaveB(ed, ed.isNew ? 'Add' : 'Save'), body).replace('<div class="n-scrim" data-n="close"></div>', '<div class="ne-scrim" data-n="ne:cancel"></div>');

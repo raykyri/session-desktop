@@ -517,7 +517,6 @@ export const inboxNotificationTypeSchema = z.enum([
   "invite",
   "join_approved",
   "join_declined",
-  "page_edited",
   "report_resolved",
   "source_edited",
   "source_asked",

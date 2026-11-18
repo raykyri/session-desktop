@@ -286,7 +286,7 @@
      space's pages; source and block: a source and one of its passages; report and item: a report and the key of
      the item it is about; outcome: how the report was resolved; response: your answer to an invite. */
   const NOTIFICATION_TYPES = ['follow_up', 'branch', 'answer_ready', 'answer_failed', 'invite', 'join_approved', 'join_declined',
-    'page_edited', 'report_resolved', 'source_edited', 'source_asked'];
+    'report_resolved', 'source_edited', 'source_asked'];
   S.Notification = obj({
     id: str, type: one(...NOTIFICATION_TYPES), 'createdAt?': iso, 'updatedAt?': iso, read: bool,
     'actor?': str, 'space?': str, 'thread?': str, 'node?': str, 'page?': int, 'source?': str, 'block?': int,
@@ -1365,7 +1365,7 @@
     tx.mapPut('pagedocs', `${sid}/${pageSlug(title)}`, { t: title, text: body, by: doc.by, ed: by, rev: pageRev(doc) + 1, revs: [{ by, note: 'Edited the page' }, ...doc.revs] });
   }
   proc('pages.update', { input: obj({ space: ID, 'page?': nul(int), title: str, text: arr(str), 'base?': BASE_DOC, 'force?': bool }, 'UpdatePageInput'), output: 'null', who: 'member', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['pagedocs', 'spaces'],
-    note: 'add a page (page: null) or edit one (page: its index in the space’s pages); an edit sends members a page_edited notification, an added page sends none. Who may edit follows the space’s pageEdit setting: moderators, and its members when it is "members". CONFLICT when the page changed since it was opened (step 9).',
+    note: 'add a page (page: null) or edit one (page: its index in the space’s pages); adding or editing a page sends no notification. Who may edit follows the space’s pageEdit setting: moderators, and its members when it is "members". CONFLICT when the page changed since it was opened (step 9).',
     space: spaceIn, can: (tx, i) => pageEditor(tx, i.space),
     run: (tx, i) => {
       const title = text(i.title, 'title'), body = i.text.length ? i.text : [''];

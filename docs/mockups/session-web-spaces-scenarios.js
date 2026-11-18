@@ -71,10 +71,9 @@
   scenario('replication: noor.a approved', { note: 'you moderate #replication-club and approved noor.a’s request: they are a member',
     run: (tx, a, h) => { h.rel('replication', 'mod'); h.proc('joinRequests.decide', { space: 'replication', users: ['noor.a'], decision: 'approve' }); } });
 
-  scenario('replication: moderator, with notifications', { note: 'you moderate #replication-club; tomasz edited a #sci-fi page five minutes ago, and jun.park invited you to #ward7 a minute ago',
+  scenario('replication: moderator, with notifications', { note: 'you moderate #replication-club, and jun.park invited you to #ward7 a minute ago',
     run: (tx, a, h) => {
       h.rel('replication', 'mod');
-      tx.put('notifs', { id: 'npg', type: 'page_edited', actor: 'tomasz', space: 'scifi', page: 1, createdAt: h.ago('5m'), read: false }, 'start');
       const inv = tx.find('notifs', 'ninv'); tx.remove('notifs', 'ninv');
       tx.put('notifs', { ...inv, read: false, createdAt: h.ago('1m') }, 'start');
     } });
@@ -123,8 +122,6 @@
     run: tx => { const th = seedThread(tx, 0), tree = tx.mapGet('qtd', th); tx.mapPut('qtd', th, { ...tree, nodes: tree.nodes.map(x => x.id === 'g2' ? { ...x, col: true } : x) }); } });
 
   /* ---- About: pages and rules in #sci-fi ---- */
-  scenario('scifi: a page changed', { note: 'tomasz edited the page Canon starter list in #sci-fi five minutes ago: a notification',
-    run: (tx, a, h) => tx.put('notifs', { id: 'npg', type: 'page_edited', actor: 'tomasz', space: 'scifi', page: 1, createdAt: h.ago('5m'), read: false }, 'start') });
   scenario('scifi: rules updated', { note: 'tomasz changed a rule of #sci-fi two days ago (See changes)',
     run: (tx, a, h) => tx.edit('spaces', 'scifi', x => {
       x.rulesPrev = ['Mark spoilers in titles with [spoilers].', 'Cite editions and page numbers when quoting.', 'Reading-group threads are pinned by mods.'];

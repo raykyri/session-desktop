@@ -3739,7 +3739,7 @@ Make a table of sources with columns for coverage, update frequency, delay and l
       emailNew: null,
       exportAt: null,
       emailOn: true,
-      types: { replies: true, followups: true, reqs: true, reports: true, pages: false },
+      types: { replies: true, followups: true, reqs: true, reports: true },
       spaces: { public: 'mentions' },
     },
     muted: { $set: [] },
