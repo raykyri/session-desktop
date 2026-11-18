@@ -182,5 +182,15 @@
   scenario('threads: an answer that used a skill', { note: 'an answer in #ml-papers used the skill summarizing-papers',
     run: tx => { const rich = tx.get('rich'), p = tx.get('posts').find(x => x.s === 'ml' && x.k === 'ask' && rich[x.id] && !x.about); tx.edit('posts', p.id, x => { x.skill = 'summarizing-papers'; }); } });
 
+  /* ---- permission checks (step 5): states for the server's checks that no Screen entry needs ---- */
+  scenario('replication: banned', { note: 'a moderator of #replication-club banned you: you can’t request to join it or join with an invite link',
+    run: tx => tx.put('banned', { id: 'replication:' + tx.me.u, sp: 'replication', u: tx.me.u, createdAt: tx.now }, 'start') });
+  scenario('replication: request approved, not joined', { note: 'a moderator of #replication-club approved your request; you have not joined yet',
+    run: (tx, a, h) => { h.rel('replication', 'pending'); tx.put('reqs', { u: tx.me.u, sp: 'replication', st: 'approved', a: ['Re-running the grokking table.', ''], userCreatedAt: tx.me.createdAt }); } });
+  scenario('public: members edit pages', { note: 'the admins of #public let its members edit pages (pageEdit "members")',
+    run: tx => tx.edit('spaces', 'public', x => { x.pageEdit = 'members'; }) });
+  scenario('public: moderators add sources', { note: 'only moderators of #public can add sources (source policy "mods")',
+    run: tx => tx.mapPut('dsPol', 'public', 'mods') });
+
   window.SessionScenarios = { list };
 })();

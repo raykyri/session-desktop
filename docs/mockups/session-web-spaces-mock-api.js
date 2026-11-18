@@ -564,9 +564,11 @@
     const hideFu = (key, v) => R.closedFollowUps && spaceOf.has(key) && hidden.has(spaceOf.get(key)) ? undefined : v;
     const own = u => signedIn && u === me.u;
     const scoped = (sid, u) => !R.ownOrModerated || own(u) || mods.has(sid);
-    /* a source: the spaces that have it (its sp, and the source lists it is in) */
+    /* a pending source in a space's list, for someone other than the person who added it and its moderators */
+    const pendingHidden = (sid, x) => R.pendingSources && x.rv && !own(x.by) && !mods.has(sid);
+    /* a source: the spaces that have it (its sp, and the source lists it is in where the caller sees it) */
     const listed = new Map();
-    for (const [sid, l] of Object.entries(d.dsDrops)) for (const x of l) if (!x.rm) (listed.get(x.m) || listed.set(x.m, new Set()).get(x.m)).add(sid);
+    for (const [sid, l] of Object.entries(d.dsDrops)) for (const x of l) if (!x.rm && !pendingHidden(sid, x)) (listed.get(x.m) || listed.set(x.m, new Set()).get(x.m)).add(sid);
     const src = x => {
       if (!R.closedSources) return x;
       const sps = new Set([...(x.sp || []), ...(listed.get(x.id) || [])]);
@@ -588,8 +590,7 @@
       memOther: (key, v) => R.closedMembers && hidden.has(key) ? undefined : v,
       dsDrops: (key, v) => {
         if (hideSp(key)) return undefined;
-        if (!R.pendingSources || mods.has(key) || !v.some(x => x.rv && !own(x.by))) return v;
-        return v.filter(x => !x.rv || own(x.by));
+        return v.some(x => pendingHidden(key, x)) ? v.filter(x => !pendingHidden(key, x)) : v;
       },
     };
     const VALUE = {
