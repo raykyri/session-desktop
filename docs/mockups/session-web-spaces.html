@@ -12646,7 +12646,8 @@ on(document, 'dragend', () => { NE_DRAG = null; neDropClear(); });
 
 /* ---------- Screen entries ---------- */
 const NE_PG_V = [['push', 'A (full screen)'], ['sheet', 'B (sheet)'], ['place', 'C (in place)']], NE_RU_V = [['fields', 'A (one field per rule)'], ['text', 'B (one text field)']];
-JUMPS.splice((i => i < 0 ? JUMPS.length : i)(JUMPS.findIndex(g => g[0] === 'Account')), 0, ['Phone: editors', [
+/* the last group, after Account: its entries leave the Phone app with a screen to go back to, as Account's last one does */
+JUMPS.push(['Phone: editors', [
   ...NE_PG_V.flatMap(([v, l]) => [[`ne-pg-${v}`, `Page editor ${l}`], [`ne-pg-${v}-ed`, `Page editor ${l}: with changes`], [`ne-pg-${v}-cf`, `Page editor ${l}: someone else saved first`]]),
   ['ne-pg-empty', 'Page editor: Save with an empty title'], ['ne-pg-new', 'Page editor: add a page'],
   ...NE_RU_V.flatMap(([v, l]) => [[`ne-ru-${v}`, `Rules editor ${l}`], [`ne-ru-${v}-ed`, `Rules editor ${l}: with changes`], [`ne-ru-${v}-cf`, `Rules editor ${l}: someone else saved first`]]),
