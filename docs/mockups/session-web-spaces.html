@@ -3732,6 +3732,33 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
 .pg-err.pg-left { text-align: left; }
 .pg-wait { display: flex; align-items: center; gap: 8px; }
 /* ==== end of paged lists ==== */
+/* ==== Phone editors: About pages and space rules (variants: Variants bar › Phone editors) ==== */
+.ne-bar > :first-child { justify-self: start; }
+.ne-ti { display: block; width: 100%; margin: 0 0 8px; padding: 0; border: 0; background: none; outline: none; font: inherit; font-size: 26.8px; line-height: 1.2; font-weight: 700; letter-spacing: -.01em; color: var(--t-heading); }
+.ne-bx { display: block; width: 100%; min-height: 300px; margin: 0; padding: 0; border: 0; background: none; outline: none; resize: none; font: inherit; font-size: 16.5px; line-height: 1.6; color: var(--t-body); }
+.ne-ti::placeholder, .ne-bx::placeholder, .ne-rin::placeholder { color: var(--t-faint); }
+.ne-ti:disabled, .ne-bx:disabled, .ne-rin:disabled, .ne-sf input:disabled, .ne-sbx:disabled { opacity: .55; -webkit-text-fill-color: currentColor; }
+.ne-err { margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--bad) 10%, transparent); color: var(--bad); font-size: 14.4px; line-height: 1.4; }
+.n-sheet-sc > .ne-err { margin: 0 16px 16px; }
+.ne-note { margin: 0 0 14px; font-size: 13.4px; color: var(--t-faint); }
+.ne-hint { margin: 16px 0 0; font-size: 13.4px; line-height: 1.4; color: var(--t-faint); }
+.ne-dock { flex: none; padding: 10px 16px 34px; border-top: .5px solid var(--n-sep); background: var(--n-bar-bg); font-size: 13.4px; line-height: 1.4; color: var(--t-faint); }
+.ne-sbx { min-height: 300px; }
+.ne-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.4); z-index: 20; animation: n-fade .2s; }
+.ne-cfs { position: absolute; inset: 0; background: rgba(0,0,0,.4); z-index: 30; animation: n-fade .2s; }
+.n-act.ne-cf { z-index: 31; }
+.ne-rr { gap: 10px; padding: 6px 8px 6px 12px; }
+.ne-rr .n-src-n { flex: none; }
+.ne-rm { flex: none; width: 26px; height: 26px; padding: 0; border: 0; background: none; color: var(--bad); display: grid; place-items: center; }
+.ne-rm svg { width: 22px; height: 22px; }
+.ne-rin { flex: 1; min-width: 0; margin: 0; padding: 4px 0; border: 0; background: none; outline: none; resize: none; font: inherit; font-size: 15.45px; line-height: 1.4; color: var(--t-heading); }
+.ne-grip { flex: none; padding: 6px; border-radius: 6px; cursor: grab; touch-action: none; }
+.ne-grip:focus-visible { outline: 2px solid var(--accent); }
+.ne-rr.dragging { opacity: .45; }
+.ne-rr.drop-a { box-shadow: inset 0 2px 0 var(--accent); }
+.ne-rr.drop-b { box-shadow: inset 0 -2px 0 var(--accent); }
+.ne-rta { min-height: 240px; line-height: 1.6; }
+/* ==== end Phone editors ==== */
 </style>
 
 <div class="shell" id="shell">
@@ -3752,6 +3779,11 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
       <div class="knob" id="kw-dspos"><span>Layout</span><div class="seg" id="k-dspos"></div></div>
+    </div>
+    <div class="knobs cs-knobs" id="kw-neditors" aria-label="Phone editor controls">
+      <span class="cs-kt">Phone editors</span>
+      <div class="knob"><span>Page</span><div class="seg" id="k-nepg"></div></div>
+      <div class="knob"><span>Rules</span><div class="seg" id="k-neru"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -5212,6 +5244,7 @@ const KNOBDEF = () => [
   ...MIKNOBS(),
   ...DSKNOBS(),
   ...QTKNOBS(),
+  ...NEKNOBS(),
 ];
 let HOTKEYS = {};
 function renderControls() {
@@ -12290,6 +12323,357 @@ function acxNatYou() {
   acxNatYou();
 }; }
 /* ==== end account ==== */
+/* ==== Phone editors: About pages and space rules, with variants ====
+   The Phone app edits a space's pages and rules. Who may edit follows the web: a page, abCanEdit (moderators;
+   members too when the space's pageEdit is "members"; not in an archived space), and adding a page is shown to
+   the same people as the web's "Add a page"; the rules, the space's admins (spaces.update is admin), not in an
+   archived space. Ordering and removing pages stay on the web.
+   The Variants bar's Phone editors controls (shown on the Phone device only) choose the editor:
+   - Page (st.nePg): push, a full-screen screen pushed on the stack (Cancel and Save in its bar);
+     sheet, a form sheet over the page; place, the page screen itself switches to editing (Edit, then Done).
+   - Rules (st.neRu): fields, one field per rule with delete, add and drag handles; text, one field with a rule
+     per line. Both are form sheets opened from About or from Changes to the rules.
+   The draft is nst.ne: { kind: 'page' | 'rules', v (the page editor's variant when it opened), sid, i (the page's
+   index; null for a new page), isNew, t, b (title, text), t0, b0 (as opened), rev (the page's version as opened),
+   rules, rules0, at (the rules' rulesAt as opened), from ('wiki' | 'rules': the sheet it was opened from),
+   saving, err (a message in the editor), cf (another save landed first: { who, when }), tok }.
+   Saves send the version the editor opened (pages.update base.rev, spaces.update base.rulesAt). The editor stays
+   open while the save is in flight (Saving…), closes when the server answers, and keeps the draft on a failure
+   with a message in the editor. A CONFLICT (someone else saved first) shows a confirmation naming who and when:
+   Overwrite saves again with force: true, Cancel goes back to the draft. There is no copy-and-reload on Phone. */
+Object.assign(st, { nePg: 'push', neRu: 'fields' });
+Object.assign(nst, { ne: null });
+function NEKNOBS() {
+  return [
+    ['k-nepg', 'nePg', [['push', 'Full screen'], ['sheet', 'Sheet'], ['place', 'In place']], neRemount],
+    ['k-neru', 'neRu', [['fields', 'One field per rule'], ['text', 'One text field']]],
+  ];
+}
+{ const rc0 = renderControls; renderControls = function () { rc0(); const k = $('kw-neditors'); if (k) k.style.display = st.device === 'native' ? '' : 'none'; }; }
+let NE_TOK = 0, NE_FOCUS = null, NE_SCREEN = false, NE_DRAG = null;
+const NE_HINT = 'Blank lines separate blocks. A block that starts with ## is a heading; lines that start with - are a list.';
+const NE_MINUS = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7.5 12h9" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>';
+const neCanPage = x => nSignedIn() && canRead(x) && abCanEdit(x);
+const neCanRules = x => nSignedIn() && !x.archived && isAdminOf(x.id);
+const nePgKey = ed => ed.sid + ':' + (ed.isNew ? 'new' : ed.i);
+const neNorm = l => l.map(r => r.trim()).filter(Boolean).join('\n');
+function neDirty(ed) {
+  if (!ed) return false;
+  if (ed.kind === 'rules') return neNorm(ed.rules) !== neNorm(ed.rules0);
+  return ed.isNew ? !!(ed.t.trim() || ed.b.trim()) : ed.t !== ed.t0 || ed.b !== ed.b0;
+}
+/* the editor that is open now: its draft, when its sheet or screen is the one showing */
+function neCur() {
+  const ed = nst.ne; if (!ed) return null;
+  if (ed.kind === 'rules') return nst.sheet === 'rued:' + ed.sid ? ed : null;
+  const t = nTop(), key = nePgKey(ed);
+  if (ed.v === 'sheet') return nst.sheet === 'pged:' + key ? ed : null;
+  if (ed.v === 'push') return t && t.v === 'pged' && t.id === key ? ed : null;
+  return t && t.v === 'page' && t.id === key ? ed : null;
+}
+const neSet = f => { nst.ne = { ...nst.ne, ...f }; };
+
+/* ---------- opening and closing: where each variant puts the editor ---------- */
+function neMount(ed) {
+  const key = nePgKey(ed), t = nTop();
+  if (ed.v === 'sheet') { nst.sheet = 'pged:' + key; return; }
+  nst.sheet = null;
+  if (ed.v === 'push') { nst.stack = [...nst.stack, { v: 'pged', id: key }]; nst.scroll = { ...nst.scroll, ['pged:' + key]: 0 }; return; }
+  if (!(t && t.v === 'page' && t.id === key)) { nst.stack = [...nst.stack, { v: 'page', id: key }]; nst.scroll = { ...nst.scroll, ['page:' + key]: 0 }; }
+}
+function neUnmount(ed) {
+  const key = nePgKey(ed), t = nTop();
+  if (ed.v === 'sheet') { if (nst.sheet === 'pged:' + key) nst.sheet = null; return; }
+  if (t && t.id === key && (t.v === 'pged' || (t.v === 'page' && ed.isNew))) nst.stack = nst.stack.slice(0, -1);
+}
+/* the page editor's variant changed while it is open: the draft moves to the new one */
+function neRemount() {
+  const ed = neCur(); if (!ed || ed.kind !== 'page' || ed.v === st.nePg) return;
+  neUnmount(ed); const e2 = { ...ed, v: st.nePg }; nst.ne = e2; neMount(e2);
+}
+function nePgOpen(sid, i, isNew, from) {
+  const s = sp(sid), d = isNew ? null : abDoc(s, i), t0 = d ? d.t : '', b0 = d ? d.text.join('\n\n') : '';
+  const ed = { kind: 'page', v: st.nePg, sid, i: isNew ? null : i, isNew: !!isNew, t: t0, b: b0, t0, b0, rev: d ? d.rev || 0 : 0, from: from || null, saving: false, err: '', cf: null, tok: ++NE_TOK };
+  nst.ne = ed; neMount(ed);
+  if (isNew) NE_FOCUS = 'ne-t';
+}
+function neRuOpen(sid, from) {
+  const x = sp(sid);
+  nst.ne = { kind: 'rules', sid, rules: x.rules.slice(), rules0: x.rules.slice(), at: x.rulesAt || null, from, saving: false, err: '', cf: null, tok: ++NE_TOK };
+  nst.sheet = 'rued:' + sid;
+}
+/* after Cancel, Discard or a save; idx: the index of a page that was just added */
+function neClose(ed, idx) {
+  if (ed.kind === 'rules') { nst.sheet = ed.from === 'rules' ? 'rules:' + ed.sid : 'wiki:' + ed.sid; nst.ne = null; return; }
+  neUnmount(ed); nst.ne = null;
+  if (idx != null) { nst.sheet = null; nst.stack = [...nst.stack, { v: 'page', id: ed.sid + ':' + idx }]; nst.scroll = { ...nst.scroll, ['page:' + ed.sid + ':' + idx]: 0 }; return; }
+  if (ed.isNew && ed.v === 'sheet' && ed.from === 'wiki') nst.sheet = 'wiki:' + ed.sid;
+}
+const neDiscardText = ed => !ed ? {} : ed.kind === 'rules' ? { title: 'Discard your changes to the rules?', body: 'The rules stay as they were.' }
+  : ed.isNew ? { title: 'Discard this page?', body: 'The title and text you wrote will be deleted.' } : { title: 'Discard your changes to this page?', body: 'The page stays as it was before you edited it.' };
+/* Cancel, the sheet's scrim and Back: ask first when the draft has changes */
+function neCancel() {
+  const ed = neCur(); if (!ed) return;
+  if (ed.cf) { nGo(() => neSet({ cf: null })); return; }
+  if (neDirty(ed) && !ed.saving) { ovAsk('n:ne', { nat: () => nGo(() => { const e2 = neCur(); if (e2) neClose(e2); }) }); return; }
+  nGo(() => neClose(ed));
+}
+/* the confirmation's text (ovAsk); n:pged and n:rued: the sheets, for the Phone's Escape, scrim and Back */
+{
+  const dirtyNow = () => { const ed = neCur(); return !!ed && !ed.saving && !ed.cf && neDirty(ed); };
+  const e = { dirty: dirtyNow, title: () => neDiscardText(neCur()).title, body: () => neDiscardText(neCur()).body };
+  Object.assign(OV_DIRTY, { 'n:ne': { ...e, dirty: () => false }, 'n:pged': e, 'n:rued': e });
+}
+{ const cs0 = natCloseSheet; natCloseSheet = function () { const ed = neCur(); if (ed && /^(pged|rued):/.test(nst.sheet || '')) { nGo(() => neClose(ed)); return; } cs0(); }; }
+/* the system Back: the conflict confirmation closes first; an editor on a screen (full screen, in place) cancels */
+{ const nb0 = natBack; natBack = function () {
+  const ed = neCur();
+  if (!st.ovGuard && ed && ed.cf) { nGo(() => neSet({ cf: null })); return; }
+  if (!st.ovGuard && ed && ed.kind === 'page' && ed.v !== 'sheet' && !nst.sheet && !nst.inl) { neCancel(); return; }
+  nb0();
+}; }
+
+/* ---------- saving ---------- */
+const neFailText = (e, noun) => !e || !e.code || e.code === 'SERVICE_UNAVAILABLE' || e.code === 'INTERNAL_SERVER_ERROR' || (e.status || 0) >= 500
+  ? `Session couldn’t reach the server, so ${noun} ${noun === 'the rules' ? 'aren’t' : 'isn’t'} saved. Your changes are still here. Try again.`
+  : `${esc(e.message || 'The server returned an error.')} ${nCap(noun)} ${noun === 'the rules' ? 'aren’t' : 'isn’t'} saved. Your changes are still here.`;
+function neOpts(ed, done) {
+  const tok = ed.tok, mine = () => nst.ne && nst.ne.tok === tok ? nst.ne : null, noun = ed.kind === 'rules' ? 'the rules' : 'the page';
+  return {
+    quiet: () => true,
+    then: () => { NE_SCREEN = false; if (mine()) nGo(() => done(mine())); else { done(null); renderAll(); } },
+    fail: e => {
+      if (edIsConflict(e)) {
+        applyChanges(e.data.changes, (key, x) => PENDING.has(pkey(key, x)));
+        if (NE_SCREEN) { NE_SCREEN = false; edQuiet(); }
+        const c = { kind: ed.kind, cur: e.data.current };
+        if (mine()) nGo(() => neSet({ saving: false, cf: { who: edWho(c), when: edWhen(c) } }));
+        return;
+      }
+      NE_SCREEN = false;
+      if (mine()) nGo(() => neSet({ saving: false, err: neFailText(e, noun) }));
+      else { toast(neFailText(e, noun).replace(' Your changes are still here.', '')); renderAll(); }
+    },
+  };
+}
+function nePgSave(force) {
+  const ed = neCur(); if (!ed || ed.saving) return;
+  const s = sp(ed.sid), title = ed.t.trim(), text = ed.b.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+  if (!title) { neSet({ err: 'Add a title.', cf: null }); NE_FOCUS = 'ne-t'; return; }
+  if (!text.length) { neSet({ err: 'Add the text of the page.', cf: null }); NE_FOCUS = 'ne-b'; return; }
+  const isNew = ed.isNew, i = ed.i, doc = isNew ? null : abDoc(s, i);
+  const stand = !isNew && !D.pagedocs[abKey(s, doc.t)];
+  const base = isNew ? null : Object.assign({ rev: ed.rev || 0 }, stand ? { by: doc.by, ed: doc.ed, revs: doc.revs } : {});
+  neSet({ saving: true, err: '', cf: null });
+  mutate('pages.update', Object.assign({ space: s.id, page: isNew ? null : i, title, text }, base ? { base } : {}, force ? { force: true } : {}), () => {
+    if (isNew) spEdit(s.id, x => { x.pages.push([title, nowIso()]); }); else spEdit(s.id, x => { x.pages[i] = [title, nowIso()]; });
+    if (!isNew && abKey(s, doc.t) !== abKey(s, title)) db.del('pagedocs', abKey(s, doc.t));
+    db.put('pagedocs', abKey(s, title), { t: title, text, by: isNew ? ME.u : doc.by, ed: ME.u, rev: isNew ? 1 : (doc.rev || 0) + 1, revs: [{ by: ME.u, note: isNew ? 'Created the page' : 'Edited the page' }, ...(isNew ? [] : doc.revs)] });
+  }, neOpts(ed, cur => {
+    const idx = isNew ? Math.max(0, sp(ed.sid).pages.findIndex(p => abSlug(p[0]) === abSlug(title))) : null;
+    if (cur) neClose(cur, idx);
+    toast(isNew ? 'Page added. Members get a notification.' : 'Page saved. Members get a notification.');
+  }));
+}
+function neRuSave(force) {
+  const ed = neCur(); if (!ed || ed.saving) return;
+  const rules = ed.rules.map(r => r.trim()).filter(Boolean);
+  neSet({ saving: true, err: '', cf: null });
+  mutate('spaces.update', Object.assign({ id: ed.sid, set: { rules }, base: { rulesAt: ed.at } }, force ? { force: true } : {}),
+    () => db.update('spaces', ed.sid, x => { if (rules.join('\n') !== x.rules.join('\n')) { x.rulesPrev = x.rules.slice(); x.rules = rules; x.rulesAt = edStamp(x.rulesAt); x.rulesBy = ME.u; } }),
+    neOpts(ed, cur => { if (cur) neClose(cur); toast('Rules saved. Members get a notification.'); }));
+}
+const neSave = force => { const ed = neCur(); if (!ed) return; if (ed.kind === 'rules') neRuSave(force); else nePgSave(force); };
+
+/* ---------- the editors ---------- */
+const neDis = ed => ed.saving ? ' disabled' : '';
+const neCancelB = ed => `<button class="n-tb" type="button" data-n="ne:cancel"${neDis(ed)}>Cancel</button>`;
+const neSaveB = (ed, label) => `<button class="n-tb" type="button" id="ne-save" data-n="ne:save"${!neDirty(ed) || ed.saving ? ' disabled' : ''}><b>${ed.saving ? 'Saving…' : label}</b></button>`;
+const neErr = ed => ed.err ? `<p class="ne-err" role="alert">${ed.err}</p>` : '';
+const neTitleF = ed => `<input id="ne-t" class="ne-ti" type="text" value="${esc(ed.t)}" placeholder="Title" aria-label="Page title"${neDis(ed)}>`;
+const neBodyF = ed => `<textarea id="ne-b" class="ne-bx" placeholder="Write the page" aria-label="Page text"${neDis(ed)}>${esc(ed.b)}</textarea>`;
+const neSpLine = s => `<p class="n-pg-sp">${glyph(s, 'n-gl')}<span>${nNameH(s)} · Pages</span></p>`;
+const neNote = ed => ed.isNew ? 'Members get a notification when you add the page.' : 'Members get a notification when you save.';
+/* A. full screen, pushed */
+function nePgScreen(id) {
+  const ed = neCur();
+  if (!ed || ed.v !== 'push') { const [sid, i] = String(id).split(':'); return i === 'new' || !sp(sid) ? { body: `${nPushBar('', '')}<p class="n-empty">This page wasn’t added.</p>` } : NSCR.page(`${sid}:${i}`); }
+  const s = sp(ed.sid);
+  const bar = `<div class="n-bar ne-bar">${neCancelB(ed)}<b class="n-bar-t">${ed.isNew ? 'New page' : 'Edit page'}</b><span class="n-bar-r">${neSaveB(ed, ed.isNew ? 'Add' : 'Save')}</span></div>`;
+  return { body: `${bar}<div class="n-th ne-pg">${neErr(ed)}${neSpLine(s)}${neTitleF(ed)}<p class="ne-note">${neNote(ed)}</p>${neBodyF(ed)}</div>`, bar: `<div class="ne-dock">${NE_HINT}</div>` };
+}
+/* B. a form sheet over the page */
+function nePgSheet(ed) {
+  const s = sp(ed.sid);
+  const body = `${neErr(ed)}<p class="n-wk-d">${ed.isNew ? `A new page in ${nNameH(s)}.` : `${esc(ed.t0)}, in ${nNameH(s)}.`} ${neNote(ed)}</p>`
+    + nGroup('', [`<label class="n-row n-field ne-sf"><span>Title</span><input id="ne-t" type="text" value="${esc(ed.t)}" placeholder="Required" aria-label="Page title"${neDis(ed)}></label>`])
+    + nGroup('Text', [`<textarea id="ne-b" class="n-ta ne-sbx" placeholder="Write the page" aria-label="Page text"${neDis(ed)}>${esc(ed.b)}</textarea>`], NE_HINT);
+  return nForm(ed.isNew ? 'New page' : 'Edit page', neCancelB(ed), ed.isNew ? 'New page' : 'Edit page', neSaveB(ed, ed.isNew ? 'Add' : 'Save'), body).replace('<div class="n-scrim" data-n="close"></div>', '<div class="ne-scrim" data-n="ne:cancel"></div>');
+}
+/* C. in place: the page screen, editing */
+function nePgPlace(ed) {
+  const s = sp(ed.sid);
+  const bar = `<div class="n-bar ne-bar">${neCancelB(ed)}<b class="n-bar-t"></b><span class="n-bar-r">${neSaveB(ed, 'Done')}</span></div>`;
+  return { body: `${bar}<article class="n-th n-pg ne-in">${neErr(ed)}${neSpLine(s)}${neTitleF(ed)}<p class="n-pg-m">${avatar(ME.u, 'n-av sm')}<span>Editing. ${neNote(ed)}</span></p>${neBodyF(ed)}<p class="ne-hint">${NE_HINT}</p></article>` };
+}
+/* the rules: A. one field per rule; B. one field, a rule per line */
+function neRuSheet(ed) {
+  const x = sp(ed.sid), n = ed.rules.length, dis = neDis(ed);
+  const intro = `${neErr(ed)}<p class="n-wk-d">The rules of ${nNameH(x)} show in About and on the request to join. Members get a notification when they change.</p>`;
+  const list = st.neRu === 'text'
+    ? nGroup('Rules', [`<textarea id="ne-rt" class="n-ta ne-rta" placeholder="One rule per line" aria-label="Rules, one per line"${dis}>${esc(ed.rules.join('\n'))}</textarea>`], 'One rule per line, in order. Blank lines are left out.')
+    : nGroup('Rules', [...ed.rules.map((r, k) => `<div class="n-row ne-rr" data-nrd="${k}"><button class="ne-rm" type="button" data-n="ne:rm:${k}" aria-label="Delete rule ${k + 1}"${dis}>${NE_MINUS}</button><span class="n-src-n num">${k + 1}</span><textarea id="ne-r-${k}" class="ne-rin" rows="1" placeholder="A rule" aria-label="Rule ${k + 1}"${dis}>${esc(r)}</textarea>${n > 1 ? `<span class="n-grip ne-grip" draggable="true" role="button" tabindex="0" data-nrg="${k}" aria-label="Move rule ${k + 1}. Drag, or use the up and down arrow keys.">${NI.grip}</span>` : ''}</div>`),
+      `<button class="n-row n-add" type="button" data-n="ne:add"${dis}>${NI.plus}<span class="n-row-b"><b>Add a rule</b></span></button>`], n > 1 ? 'Drag a rule by its handle to move it. Empty rules are left out.' : 'Empty rules are left out.');
+  return nForm(`Edit the rules of ${nName(x)}`, neCancelB(ed), 'Rules', neSaveB(ed, 'Save'), intro + list).replace('<div class="n-scrim" data-n="close"></div>', '<div class="ne-scrim" data-n="ne:cancel"></div>');
+}
+/* the confirmation when someone else saved first: Overwrite, or Cancel back to the draft */
+function neCfSheet(ed) {
+  const who = ed.cf.who ? esc(ed.cf.who) : 'Another member', when = ed.cf.when ? ' ' + agoText(ed.cf.when) : '';
+  const [title, msg] = ed.kind === 'rules'
+    ? [`${who} changed the rules after you opened them`, `${who} saved new rules${when}. If you overwrite them, your rules replace theirs, and See changes in About compares your rules with theirs.`]
+    : [`${who} saved this page after you opened it`, `${who} saved a new version${when}. If you overwrite it, your text replaces theirs. Their version stays in the page history.`];
+  return `<div class="ne-cfs" data-n="ne:cfback"></div><div class="n-act ne-cf" role="alertdialog" aria-modal="true" aria-labelledby="ne-cf-t" aria-describedby="ne-cf-d"><div class="n-act-g"><div class="n-act-h"><b id="ne-cf-t">${title}</b><p id="ne-cf-d">${msg}</p></div><button type="button" class="n-red" data-n="ne:over">Overwrite</button></div><div class="n-act-g"><button type="button" class="n-act-c" data-n="ne:cfback">Cancel</button></div></div>`;
+}
+
+/* ---------- where the editors open: About, Changes to the rules, a page ---------- */
+const neRow = (act, ic, label) => `<button class="n-row n-add" type="button" data-n="${act}">${ic}<span class="n-row-b"><b>${label}</b></span></button>`;
+const neGroupOf = (root, name) => [...root.querySelectorAll('.n-grp')].find(g => { const h = g.querySelector(':scope > .n-grp-h'); return h && h.textContent === name; });
+{ const w0 = nWiki; nWiki = function (x) {
+  const h = w0(x), r = neCanRules(x), p = neCanPage(x);
+  if (!r && !p) return h;
+  const t = document.createElement('template'); t.innerHTML = h;
+  const rules = neGroupOf(t.content, 'Rules');
+  if (r && rules) rules.querySelector('.n-list').insertAdjacentHTML('beforeend', neRow(`ne:rules:${x.id}:wiki`, NI.compose, 'Edit rules'));
+  if (p) {
+    const pages = neGroupOf(t.content, 'Pages'), add = neRow(`ne:new:${x.id}`, NI.plus, 'Add a page');
+    if (pages) pages.querySelector('.n-list').insertAdjacentHTML('beforeend', add);
+    else if (rules) rules.insertAdjacentHTML('afterend', nGroup('Pages', [add], 'No pages yet.'));
+  }
+  return t.innerHTML;
+}; }
+{ const r0 = nRulesSheet; nRulesSheet = function (x) {
+  const h = r0(x); if (!neCanRules(x)) return h;
+  const t = document.createElement('template'); t.innerHTML = h;
+  const g = neGroupOf(t.content, 'Rules'); if (g) g.querySelector('.n-list').insertAdjacentHTML('beforeend', neRow(`ne:rules:${x.id}:rules`, NI.compose, 'Edit rules'));
+  return t.innerHTML;
+}; }
+NSCR.pged = id => nePgScreen(id);
+{ const p0 = NSCR.page; NSCR.page = function (id, e) {
+  const ed = neCur();
+  if (ed && ed.kind === 'page' && ed.v === 'place') return nePgPlace(ed);
+  const [sid, i] = String(id).split(':'), s = sp(sid);
+  if (i === 'new' || !s) return { body: `${nPushBar('', '')}<p class="n-empty">This page wasn’t added.</p>` };
+  const out = p0(id, e);
+  if (!neCanPage(s) || !s.pages[+i]) return out;
+  return { ...out, body: out.body.replace('<span class="n-bar-r"></span>', `<span class="n-bar-r"><button class="n-tb" type="button" data-n="ne:edit:${sid}:${i}">Edit</button></span>`) };
+}; }
+{ const lx0 = nLabelX; nLabelX = function (e) { if (e.v === 'pged') return String(e.id).endsWith(':new') ? 'New page' : 'Edit page'; if (e.v === 'page' && String(e.id).endsWith(':new')) return 'New page'; return lx0(e); }; }
+{ const sx0 = nSheetX; nSheetX = function (k, a) {
+  if (k === 'pged') { const ed = neCur(); return ed ? nePgSheet(ed) : ''; }
+  if (k === 'rued') { const ed = neCur(); return ed ? neRuSheet(ed) : ''; }
+  return sx0(k, a);
+}; }
+{ const na0 = nativeApp; nativeApp = function () {
+  let h = na0();
+  if (/^(pged|rued):/.test(nst.sheet || '')) h = h.replace('<div class="n-root">', '<div class="n-root sheeted">');
+  const ed = neCur();
+  if (ed && ed.cf) h = h.replace(/<span class="n-home-ind"><\/span><\/div>$/, m => neCfSheet(ed) + m);
+  return h;
+}; }
+{ const rn0 = renderNative; renderNative = function () {
+  rn0();
+  const ed = neCur();
+  if (ed && ed.cf) { const c = document.querySelector('#app .ne-cf .n-act-c'); if (c && !c.contains(document.activeElement)) c.focus({ preventScroll: true }); return; }
+  if (NE_FOCUS) { const f = $(NE_FOCUS); NE_FOCUS = null; if (f) { f.focus({ preventScroll: false }); if (f.setSelectionRange) f.setSelectionRange(f.value.length, f.value.length); } }
+}; }
+
+/* ---------- taps and typing ---------- */
+function neMove(from, to) {
+  const ed = neCur(); if (!ed || ed.kind !== 'rules' || from === to || to < 0 || to >= ed.rules.length) return false;
+  const l = ed.rules.slice(), [r] = l.splice(from, 1); l.splice(to, 0, r); neSet({ rules: l }); return true;
+}
+{ const cx0 = nClickX; nClickX = function (k, a) {
+  if (k !== 'ne') return cx0(k, a);
+  const [v, ...rest] = String(a).split(':');
+  switch (v) {
+    case 'edit': nGo(() => nePgOpen(rest[0], +rest[1], false)); return true;
+    case 'new': nGo(() => nePgOpen(rest[0], null, true, 'wiki')); return true;
+    case 'rules': nGo(() => neRuOpen(rest[0], rest[1])); return true;
+    case 'cancel': neCancel(); return true;
+    case 'save': nGo(() => neSave(false)); return true;
+    case 'over': nGo(() => neSave(true)); return true;
+    case 'cfback': nGo(() => { if (neCur()) neSet({ cf: null }); }); return true;
+    case 'rm': nGo(() => { const ed = neCur(); if (ed) neSet({ rules: ed.rules.filter((r, j) => j !== +rest[0]) }); }); return true;
+    case 'add': nGo(() => { const ed = neCur(); if (ed) { neSet({ rules: [...ed.rules, ''] }); NE_FOCUS = 'ne-r-' + ed.rules.length; } }); return true;
+  }
+  return true;
+}; }
+const neSync = () => { const b = $('ne-save'), ed = nst.ne; if (b && ed) b.disabled = !neDirty(ed) || ed.saving; };
+{ const ix0 = nInputX; nInputX = function (id, v, el) {
+  let m;
+  if (!nst.ne) return ix0(id, v, el);
+  if (id === 'ne-t' || id === 'ne-b') { if (nst.ne.err) document.querySelectorAll('#app .ne-err').forEach(x => x.remove()); neSet({ [id === 'ne-t' ? 't' : 'b']: v, err: '' }); neSync(); return true; }
+  if (id === 'ne-rt') { neSet({ rules: v.split('\n'), err: '' }); neSync(); return true; }
+  if ((m = /^ne-r-(\d+)$/.exec(id))) { const l = nst.ne.rules.slice(); l[+m[1]] = v; neSet({ rules: l, err: '' }); neSync(); return true; }
+  return ix0(id, v, el);
+}; }
+/* Enter in a rule adds the next one; the arrow keys on a handle move its rule; Escape closes the conflict confirmation */
+on($('app'), 'keydown', e => {
+  if (st.device !== 'native') return;
+  const t = e.target, ed = neCur(); if (!ed || ed.kind !== 'rules' || ed.saving) return;
+  let m;
+  if (e.key === 'Enter' && !e.shiftKey && (m = /^ne-r-(\d+)$/.exec(t.id || ''))) {
+    e.preventDefault(); const k = +m[1], l = ed.rules.slice(); l.splice(k + 1, 0, ''); nGo(() => { neSet({ rules: l }); NE_FOCUS = 'ne-r-' + (k + 1); }); return;
+  }
+  const g = t.closest && t.closest('[data-nrg]');
+  if (g && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    e.preventDefault(); const k = +g.dataset.nrg, to = k + (e.key === 'ArrowUp' ? -1 : 1);
+    if (neMove(k, to)) { renderAll(); const n = document.querySelector(`#app [data-nrg="${to}"]`); if (n) n.focus({ preventScroll: true }); }
+  }
+});
+on(window, 'keydown', e => { if (e.key !== 'Escape' || st.device !== 'native' || st.ovGuard) return; const ed = neCur(); if (ed && ed.cf) { e.preventDefault(); nGo(() => neSet({ cf: null })); } });
+/* drag a rule by its handle */
+const neDropClear = () => document.querySelectorAll('#app .ne-rr.drop-a, #app .ne-rr.drop-b, #app .ne-rr.dragging').forEach(x => x.classList.remove('drop-a', 'drop-b', 'dragging'));
+on(document, 'dragstart', e => { const g = e.target.closest && e.target.closest('[data-nrg]'); if (!g) return; NE_DRAG = +g.dataset.nrg; g.closest('.ne-rr').classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', 'rule'); } catch (x) {} });
+on(document, 'dragover', e => { if (NE_DRAG == null) return; const r = e.target.closest && e.target.closest('[data-nrd]'); if (!r) return; e.preventDefault(); const b = r.getBoundingClientRect(); document.querySelectorAll('#app .ne-rr.drop-a, #app .ne-rr.drop-b').forEach(x => x.classList.remove('drop-a', 'drop-b')); r.classList.add(e.clientY < b.top + b.height / 2 ? 'drop-a' : 'drop-b'); });
+on(document, 'drop', e => {
+  if (NE_DRAG == null) return; const r = e.target.closest && e.target.closest('[data-nrd]'); if (!r) return;
+  e.preventDefault(); const from = NE_DRAG, at = +r.dataset.nrd + (r.classList.contains('drop-b') ? 1 : 0); NE_DRAG = null; neDropClear();
+  if (neMove(from, at > from ? at - 1 : at)) renderAll();
+});
+on(document, 'dragend', () => { NE_DRAG = null; neDropClear(); });
+
+/* ---------- Screen entries ---------- */
+const NE_PG_V = [['push', 'A (full screen)'], ['sheet', 'B (sheet)'], ['place', 'C (in place)']], NE_RU_V = [['fields', 'A (one field per rule)'], ['text', 'B (one text field)']];
+JUMPS.splice((i => i < 0 ? JUMPS.length : i)(JUMPS.findIndex(g => g[0] === 'Account')), 0, ['Phone: editors', [
+  ...NE_PG_V.flatMap(([v, l]) => [[`ne-pg-${v}`, `Page editor ${l}`], [`ne-pg-${v}-ed`, `Page editor ${l}: with changes`], [`ne-pg-${v}-cf`, `Page editor ${l}: someone else saved first`]]),
+  ['ne-pg-empty', 'Page editor: Save with an empty title'], ['ne-pg-new', 'Page editor: add a page'],
+  ...NE_RU_V.flatMap(([v, l]) => [[`ne-ru-${v}`, `Rules editor ${l}`], [`ne-ru-${v}-ed`, `Rules editor ${l}: with changes`], [`ne-ru-${v}-cf`, `Rules editor ${l}: someone else saved first`]]),
+]]);
+function neJump(k) {
+  const [, kind, v, step] = k.split('-');
+  npJump('np-home');
+  NE_SCREEN = false;
+  const land = (name, then) => runScenario(name, null, () => { NE_SCREEN = true; edQuiet(); then(); renderAll(); });
+  if (kind === 'pg') {
+    Object.assign(nst, { tab: 'spaces', stack: [{ v: 'space', id: 'scifi' }] }); st.space = 'scifi';
+    if (v === 'new') { nePgOpen('scifi', null, true, 'wiki'); neSet({ t: 'Recommended anthologies', b: 'Anthologies that members recommend, with the editor and the year.' }); NE_FOCUS = null; return; }
+    nst.stack = [...nst.stack, { v: 'page', id: 'scifi:1' }];
+    if (v !== 'empty') st.nePg = v;
+    nePgOpen('scifi', 1, false);
+    if (v === 'empty') { neSet({ t: '' }); nePgSave(false); NE_FOCUS = null; return; }
+    if (step) neSet({ b: nst.ne.b + '\n\nAdded: the 2026 reissues.' });
+    if (step === 'cf') land('scifi: tomasz saved a page', () => nePgSave(false));
+    return;
+  }
+  st.neRu = v;
+  Object.assign(nst, { tab: 'spaces', stack: [{ v: 'space', id: 'ml' }] }); st.space = 'ml';
+  neRuOpen('ml', 'wiki');
+  if (step) neSet({ rules: [...nst.ne.rules, 'Name the dataset and split when you report a number.'] });
+  if (step === 'cf') land('ml: mira_k changed the rules', () => neRuSave(false));
+}
+{ const j0 = jump; jump = function (k) { j0(k); if (String(k).startsWith('ne-')) neJump(k); }; }
+/* ==== end Phone editors ==== */
 /* ==== mock backend, step 8: paged lists with a Show more button ====
    The lists that grow without bound are read from the server a page at a time (section 5c of the API file:
    GET /api/rpc/<query>?input=…, { cursor?, limit? } → { items, nextCursor }; newest first by time, then id).
