@@ -12440,7 +12440,8 @@ const neFailText = (e, noun) => !e || !e.code || e.code === 'SERVICE_UNAVAILABLE
 function neOpts(ed, done) {
   const tok = ed.tok, mine = () => nst.ne && nst.ne.tok === tok ? nst.ne : null, noun = ed.kind === 'rules' ? 'the rules' : 'the page';
   return {
-    quiet: () => true,
+    /* a Screen entry's conflict: what the store's render after the undo shows adds no history entry */
+    quiet: e => { if (NE_SCREEN && edIsConflict(e)) edQuiet(); return true; },
     then: () => { NE_SCREEN = false; if (mine()) nGo(() => done(mine())); else { done(null); renderAll(); } },
     fail: e => {
       if (edIsConflict(e)) {
