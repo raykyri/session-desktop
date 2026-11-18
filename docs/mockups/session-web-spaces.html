@@ -3676,66 +3676,48 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 
 
 /* ---- Source ref: the source an ask is about, in feed rows (miRowChip, miMetaRef) ----
-   One line between the title and the answer summary: quieter than the summary, louder than the meta row.
-   Shared pieces: .rf-ti the title (truncates), .rf-lo the locator (tabular, never truncates), .rf-sep a dot. */
-.row-m > .mi-rchip { display: flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; margin: 3px 0 1px; font-size: var(--fs-sm); line-height: 18px; color: var(--t-tertiary); }
+   Pill and Tag sit between the title and the answer summary; After the time sits in the meta row.
+   .rf-ti the title (truncates). Ref tint: .rf-t-soft, .rf-t-faint, .rf-t-chrome. */
+.row-m > .mi-rchip { display: flex; align-items: center; gap: 5px; align-self: flex-start; min-width: 0; max-width: 100%; height: 22px; margin: 5px 0 2px; font-size: var(--fs-xs); line-height: 1; color: var(--t-tertiary); }
 .mi-rchip .mi-ic.xs, .rf-meta .mi-ic.xs { width: 14px; height: 14px; color: var(--t-tertiary); }
 .mi-rchip .mi-ic.xs svg, .rf-meta .mi-ic.xs svg { width: 12px; height: 12px; }
 .mi-rchip .rf-ti, .rf-meta .rf-ti { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--t-secondary); }
-.mi-rchip .rf-more, .mi-rchip .rf-w, .rf-meta .rf-more, .rf-meta .rf-w { flex: none; white-space: pre; }
-.mi-rchip .rf-lo, .rf-meta .rf-lo { flex: none; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.rf-lo svg { width: 8px; height: 8px; }
-.rf-sep { flex: none; color: var(--t-faint); }
-/* A inline */
-.rf-a1 .rf-lo { color: var(--t-strong); font-weight: 550; margin-right: 1px; }
-.rf-a2 .rf-pl { flex: none; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--t-faint); margin-right: 2px; }
-/* B pill */
-.row-m > .mi-rchip:is(.rf-pill, .rf-tag, .rf-split) { align-self: flex-start; margin: 5px 0 2px; font-size: var(--fs-xs); line-height: 1; }
-.rf-pill { gap: 0 !important; height: 22px; border: 1px solid var(--control-border); border-radius: 999px; background: var(--pane); overflow: hidden; }
-.rf-pill .rf-c { display: flex; align-items: center; gap: 5px; min-width: 0; height: 100%; padding: 0 9px 0 6px; }
-.rf-pill .rf-lc { display: flex; align-items: center; flex: none; height: 100%; padding: 0 8px; border-left: 1px solid var(--control-border); background: var(--fill-subtle); }
-.rf-pill .rf-lo, .rf-tag .rf-lo, .rf-split .rf-lo { color: var(--t-strong); font-weight: 550; }
-.rf-tag { height: 22px; padding: 0 8px 0 5px; border-radius: 5px; background: var(--fill-subtle); }
-.rf-tag .rf-ti { color: var(--t-strong); }
-.rf-split { gap: 4px !important; }
-.rf-split .rf-c { display: flex; align-items: center; gap: 5px; min-width: 0; height: 22px; padding: 0 9px 0 6px; border: 1px solid var(--control-border); border-radius: 999px; background: var(--pane); }
-.rf-split .rf-lc { flex: none; padding: 0 8px; border-color: transparent; background: var(--fill-subtle); }
+.rf-meta .rf-more { flex: none; white-space: pre; }
 .rf-ics { display: inline-flex; flex: none; }
 .rf-ics .mi-ic.xs + .mi-ic.xs { margin-left: -4px; }
-/* C spelled out */
-.rf-words { gap: 0 !important; }
-.rf-words .mi-ic.xs { margin-right: 5px; }
-.rf-words .rf-ti { font-weight: 500; }
-/* D quote */
-.row-m > .mi-rchip.rf-quote { flex-direction: column; align-items: stretch; gap: 3px; margin: 5px 0 3px; padding: 0 0 0 11px; border-left: 2px solid var(--border-strong); }
-.rf-quote q { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: var(--fs-sm); line-height: 1.5; color: var(--t-secondary); }
-.rf-quote .rf-src { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: var(--fs-xs); line-height: 16px; }
-.rf-quote .rf-src .rf-ti { color: var(--t-tertiary); }
-.row-m > .mi-rchip.rf-quote.rf-noq { border-left: 0; padding-left: 0; margin-top: 3px; }
-.rf-quote.rf-noq .rf-src { font-size: var(--fs-sm); }
-.rf-quote.rf-noq .rf-src .rf-ti { color: var(--t-secondary); }
-.rf-qline q { -webkit-line-clamp: 1; font-style: italic; }
-.row-m > .mi-rchip.rf-quote.rf-qcard { gap: 5px; padding: 8px 11px 7px; border: 0; border-radius: 8px; background: var(--inset); box-shadow: inset 0 0 0 1px var(--divider); }
-/* E in the meta row */
+/* Pill */
+.rf-pill { padding: 0 9px 0 6px; border: 1px solid var(--control-border); border-radius: 999px; background: var(--pane); }
+/* Tag */
+.rf-tag { padding: 0 8px 0 5px; border-radius: 5px; background: var(--fill-subtle); }
+.rf-tag .rf-ti { color: var(--t-strong); }
+/* After the time */
 .row-meta .rf-meta { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
 .row-meta .rf-meta .rf-ti { color: var(--t-tertiary); }
-.rf-meta .rf-arr { display: inline-flex; color: var(--t-faint); }
-.rf-meta .rf-arr svg { width: 12px; height: 12px; }
+/* Ref tint. Soft: a hairline and no fill on the pill, half the fill on the tag, tertiary text. */
+.rf-pill.rf-t-soft { border-color: var(--divider); background: transparent; }
+.rf-tag.rf-t-soft { background: color-mix(in srgb, var(--fill-subtle) 55%, transparent); }
+.mi-rchip.rf-t-soft .rf-ti { color: var(--t-tertiary); }
+.rf-t-soft .mi-ic.xs { color: var(--t-faint); }
+/* Faint: text lighter than the faint token (about 3.6:1 on the feed in light, 4.0:1 in dark; under the
+   4.5:1 minimum for small text) and a dimmed icon; the pill's edge and the tag's fill are barely there */
+.rf-pill.rf-t-faint { border-color: color-mix(in srgb, var(--divider) 70%, transparent); background: transparent; }
+.rf-tag.rf-t-faint { background: color-mix(in srgb, var(--fill-subtle) 35%, transparent); }
+:is(.mi-rchip, .row-meta .rf-meta).rf-t-faint .rf-ti { color: color-mix(in srgb, var(--t-faint) 85%, var(--feed)); }
+.rf-t-faint .mi-ic.xs { color: var(--t-faint); opacity: .6; }
+/* Chrome: the header's tint as the fill, no border, tertiary text */
+.rf-pill.rf-t-chrome { border-color: transparent; background: var(--chrome); }
+.rf-tag.rf-t-chrome { background: var(--chrome); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--divider) 60%, transparent); }
+.mi-rchip.rf-t-chrome .rf-ti { color: var(--t-tertiary); }
+.rf-t-chrome .mi-ic.xs { color: var(--t-faint); }
+.row-meta .rf-meta.rf-t-chrome { padding: 2px 6px 2px 4px; margin: -2px 0; border-radius: 4px; background: var(--chrome); }
+.row-meta .rf-meta.rf-t-soft .mi-ic.xs { color: var(--t-faint); }
 .rf-demo .rf-dh { margin: 22px 0 4px; }
-/* ==== account: one Account page for settings, Usage, API keys and Your spaces (Variants bar: Account) ==== */
+/* ==== account: one Account page for settings, Usage, API keys and Your spaces, with a tab strip ==== */
 .sub-page.acx-page { padding-left: max(32px, calc((100% - 1040px) / 2)); padding-right: max(32px, calc((100% - 1040px) / 2)); }
-.sub-page.acx-page:is(.acx-tabs-v, .acx-full, .acx-over, .acx-outp) { padding-left: max(32px, calc((100% - 820px) / 2)); padding-right: max(32px, calc((100% - 820px) / 2)); }
+.sub-page.acx-page:is(.acx-tabs-v, .acx-outp) { padding-left: max(32px, calc((100% - 820px) / 2)); padding-right: max(32px, calc((100% - 820px) / 2)); }
 .acx-title { margin: 0; font-size: 22.65px; font-weight: 700; letter-spacing: -.01em; color: var(--t-heading); }
 .acx-page .acx-main.acx-main { padding: 0; max-width: none; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
-/* A: the section list on the left */
-.acx-grid { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 40px; align-items: start; }
-.acx-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 16px; }
-.acx-it { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 0; border-radius: var(--r-md); background: transparent; color: var(--t-secondary); font: inherit; font-size: var(--fs-sm); font-weight: 550; text-align: left; cursor: pointer; }
-.acx-it svg { width: 16px; height: 16px; flex: none; color: var(--t-faint); }
-.acx-it:hover { background: var(--fill-hover); color: var(--t-strong); }
-.acx-it[aria-current="page"] { background: var(--card-sel); color: var(--t-heading); font-weight: 650; }
-.acx-it[aria-current="page"] svg { color: var(--t-heading); }
-/* B, and A at 920px and below: a tab strip under the title */
+/* the tab strip under the title */
 .acx-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--divider); overflow-x: auto; scrollbar-width: none; margin-top: -6px; }
 .acx-tabs::-webkit-scrollbar { display: none; }
 .acx-tab { position: relative; flex: none; height: 38px; padding: 0 10px; border: 0; background: transparent; color: var(--t-muted); font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
@@ -3743,52 +3725,17 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 .acx-tab:hover { color: var(--t-strong); }
 .acx-tab[aria-current="page"] { color: var(--t-heading); }
 .acx-tab[aria-current="page"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--t-heading); }
-/* A and B: the list or the tab names the section, so the section's own title is for screen readers only */
-.acx-page:is(.acx-tabs-v, .acx-side) .acx-main > .sub-top > h2:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.acx-page:is(.acx-tabs-v, .acx-side) .acx-main > .sub-top:not(:has(> :not(h2))) { margin-bottom: -18px; }
-.acx-page:is(.acx-tabs-v, .acx-side) .acx-main > .sub-top { justify-content: flex-end; }
-@media (max-width: 920px) {
-  .acx-grid { display: flex; flex-direction: column; align-items: stretch; gap: 18px; }
-  .acx-nav { position: static; flex-direction: row; gap: 2px; border-bottom: 1px solid var(--divider); overflow-x: auto; scrollbar-width: none; margin-top: -6px; }
-  .acx-nav::-webkit-scrollbar { display: none; }
-  .acx-it { position: relative; flex: none; height: 38px; border-radius: 0; color: var(--t-muted); font-weight: 600; }
-  .acx-it:first-child { margin-left: -10px; }
-  .acx-it svg { display: none; }
-  .acx-it:hover, .acx-it[aria-current="page"] { background: transparent; }
-  .acx-it[aria-current="page"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--t-heading); }
-}
-/* C: the overview */
-.acx-secs { display: flex; flex-direction: column; gap: 28px; }
-.acx-sec { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.acx-sh { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.acx-sh h3 { margin: 0; font-size: var(--fs-base); font-weight: 650; color: var(--t-heading); }
-.acx-sh .tlink { font-size: var(--fs-sm); }
-.acx-rows { display: flex; flex-direction: column; border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--pane); overflow: hidden; }
-.acx-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; min-width: 0; }
-.acx-row + .acx-row { border-top: 1px solid var(--divider); }
-.acx-rt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.acx-rt > b { font-weight: 600; color: var(--t-strong); font-size: var(--fs-sm); }
-.acx-rt > small { color: var(--t-muted); font-size: var(--fs-xs); line-height: 1.45; overflow-wrap: anywhere; }
-.acx-rt .tlink { align-self: flex-start; font-size: var(--fs-xs); }
-.acx-row > b.num { color: var(--t-strong); font-weight: 600; font-size: var(--fs-sm); }
-.acx-row > .btn { flex: none; }
-.acx-total { display: flex; align-items: baseline; gap: 8px; }
-.acx-total b { font-size: 26px; font-weight: 650; color: var(--t-heading); letter-spacing: -.01em; }
-.acx-total span { color: var(--t-muted); font-size: var(--fs-sm); }
-.acx-meter .tm-bar { max-width: none; }
-.acx-spn { display: inline-flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
-.acx-more { margin: 0; font-size: var(--fs-xs); color: var(--t-faint); }
-.acx-add { align-self: flex-start; }
-.btn.acx-del { color: var(--bad); }
+/* the tab names the section, so the section's own title is for screen readers only */
+.acx-page.acx-tabs-v .acx-main > .sub-top > h2:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.acx-page.acx-tabs-v .acx-main > .sub-top:not(:has(> :not(h2))) { margin-bottom: -18px; }
+.acx-page.acx-tabs-v .acx-main > .sub-top { justify-content: flex-end; }
 /* the left rail: the Your spaces heading opens Account › Your spaces */
 button.eyebrow.acx-rlh { border: 0; padding: 0; background: transparent; font-family: inherit; cursor: pointer; }
 button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
 /* the account menu: this month's tokens next to Account */
 .um-item .acx-umt { margin-left: auto; color: var(--t-faint); font-size: var(--fs-xs); }
 @media (max-width: 640px) {
-  .sub-page.acx-page, .sub-page.acx-page:is(.acx-tabs-v, .acx-full, .acx-over, .acx-outp) { padding-left: 14px; padding-right: 14px; }
-  .acx-row { flex-wrap: wrap; }
-  .acx-rt { flex-basis: calc(100% - 90px); }
+  .sub-page.acx-page, .sub-page.acx-page:is(.acx-tabs-v, .acx-outp) { padding-left: 14px; padding-right: 14px; }
 }
 /* ==== end account CSS ==== */
 </style>
@@ -3808,15 +3755,11 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
       <div class="knob"><span>Font</span><div class="seg" id="k-font"></div></div>
       <div class="knob"><span>Source ref</span><div class="seg" id="k-ref"></div></div>
-      <div class="knob" title="Paragraph numbers, post numbers and timestamps in the source reference"><span>Locator</span><div class="seg" id="k-refloc"></div></div>
+      <div class="knob" title="How strongly the source reference shows in feed rows"><span>Ref tint</span><div class="seg" id="k-rtint"></div></div>
     </div>
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
       <div class="knob" id="kw-dspos"><span>Layout</span><div class="seg" id="k-dspos"></div></div>
-    </div>
-    <div class="knobs cs-knobs" id="kw-account" aria-label="Account controls">
-      <span class="cs-kt">Account</span>
-      <div class="knob"><span>Layout</span><div class="seg" id="k-acv"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -5261,7 +5204,6 @@ const KNOBDEF = () => [
   ...REFKNOBS(),
   ...DSKNOBS(),
   ...QTKNOBS(),
-  ...ACVKNOBS(),
 ];
 let HOTKEYS = {};
 function renderControls() {
@@ -5274,8 +5216,8 @@ function renderControls() {
   seg($('k-api'), [['normal', '120ms'], ['fail', 'Fail'], ['failload', 'Fail on load']], 'apiMode', applyApiMode);
   /* the Sources layout control has no effect in the phone app */
   { const k = $('kw-sources'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
-  /* the Phone app always uses the base Beige and has its own navigation, so the Tint and Nav controls have no effect there */
-  for (const id of ['k-tint', 'k-dir', 'k-ref', 'k-refloc']) { const k = $(id) && $(id).closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
+  /* the Phone app always uses the base Beige and has its own navigation and rows, so the Tint, Nav and Source ref controls have no effect there */
+  for (const id of ['k-tint', 'k-dir', 'k-ref', 'k-rtint']) { const k = $(id) && $(id).closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
   HOTKEYS = {}; let n = 0;
   for (const [el, key, items, pick] of KNOBDEF()) {
@@ -7697,117 +7639,55 @@ function miSrc(p, src) {
   const d = `<div class="ds-src mi-src">${grp.own.length ? `<h3>From ${own.size > 1 ? 'the sources' : 'the source'}</h3><ol class="sx-src">${grp.own.map(pas).join('')}</ol>` : ''}${grp.other.length ? `<h3>From other sources in ${spName(sp(p.s))}</h3><ol class="sx-src">${grp.other.map(pas).join('')}</ol>` : ''}${src.length ? `<h3>From the web</h3><ol class="sx-src">${web(src)}</ol>` : ''}</div>`;
   return { d, m: d.replace('ds-src mi-src', 'mi-msrc') };
 }
-/* feed row: what an ask is about. Four treatments (Variants bar › Source ref), for every media type:
-   - Inline: icon, title and a short locator (¶15, 3/7, 12:40).
-   - Pill: a bordered chip with the locator in its own segment.
-   - Spelled out: the locator in words before the title, and the platform after it.
-   - Quote: the passage the ask is about, then the source line.
-   Locators: articles and PDFs count paragraphs, threads count posts, audio and video use the timestamp;
-   a single post and a whole source have none. */
-const rfKind = m => m.kind === 'thread' ? 'X thread' : m.kind === 'post' ? (m.pl === 'x' ? 'X post' : 'Post') : MIPLAT[m.pl].n;
-const rfLoc = (m, b, long) => {
-  if (b == null || m.kind === 'post' || !m.body[b] || st.refloc === 'none') return '';
-  /* Locator control: No ¶ drops paragraph numbers and keeps timestamps and post numbers */
-  if (st.refloc === 'nopara' && !m.body[b].ts && m.kind !== 'thread') return '';
-  const l = miLbl(m, b);
-  if (m.body[b].ts) return long ? `At ${l}` : l;
-  if (m.kind === 'thread') { const [n, t] = l.split('/'); return long ? `Post ${n} of ${t}` : l; }
-  return long ? `Paragraph ${l.slice(1)}` : l;
-};
-const RF_PLAY = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.5v9l7.5-4.5z"/></svg>';
-/* Pieces shared by every treatment: the title truncates, the locator and counts never do. */
-const RF_SEP = '<span class="rf-sep" aria-hidden="true">·</span>';
+/* feed row: what an ask is about (Variants bar › Source ref), for every media type. No locator: the
+   reference names the source, not the paragraph, post or timestamp.
+   - Pill: a bordered chip under the title.
+   - Tag: a filled tag under the title.
+   - After the time: icon and title in the meta row, after the timestamp.
+   Ref tint (Variants bar) makes all three quieter: Soft, Faint, or Chrome (the header's tint as the fill). */
 function rfParts(p) {
   const its = miRefs(p).map(MIT).filter(Boolean); if (!its.length) return null;
-  const m = its[0], b = its.length > 1 ? null : p.about.b, ts = b != null && m.body[b] && m.body[b].ts;
-  const loc = rfLoc(m, b), lw = rfLoc(m, b, true);
+  const m = its[0];
   return {
-    its, m, b, loc, lw, lwl: lw ? lw.charAt(0).toLowerCase() + lw.slice(1) : '',
-    ic: miIc(m, 'xs'),
+    its, m, ic: miIc(m, 'xs'),
     ics: its.length > 1 ? `<span class="rf-ics">${its.slice(0, 3).map(x => miIc(x, 'xs')).join('')}</span>` : miIc(m, 'xs'),
     ti: (n = 64) => `<span class="rf-ti">${esc(clip(miTitle(m), n))}</span>`,
     more: its.length > 1 ? `<span class="rf-more">and ${its.length - 1} more</span>` : '',
-    /* lo: the locator in text; loP: in a chip, with a play mark before a timestamp */
-    lo: loc ? `<span class="rf-lo num">${loc}</span>` : '',
-    loP: loc ? `<span class="rf-lo num">${ts ? RF_PLAY : ''}${loc}</span>` : '',
-    /* "paragraph 5 of" a title, but "post 3 of 7 in" a thread and "14:02 in" a recording */
-    cn: ts || m.kind === 'thread' ? 'in' : 'of',
     tip: esc(its.map(miTitle).join(' · ')),
   };
 }
+const rfTint = () => st.rtint && st.rtint !== 'base' ? ` rf-t-${st.rtint}` : '';
 function miRowChip(p) {
-  if (!p.about) return '';
-  const [v, sub = ''] = (st.refv || 'inline').split('-');
-  if (v === 'meta') return '';
+  if (!p.about || st.refv === 'meta') return '';
   const x = rfParts(p); if (!x) return '';
-  const { its, m, ic, ics, ti, more, lo, tip } = x, many = its.length > 1;
-  const tail = lo ? RF_SEP + lo : '', tailP = x.loP ? RF_SEP + x.loP : '';
-  if (v === 'pill') {
-    const t = many ? `<span class="rf-ti">${its.length} sources</span>` : ti(56);
-    /* B1 tag: a filled tag with the locator after a dot. B2 two chips: the source and the locator apart. */
-    if (sub === 'tag') return `<span class="mi-rchip rf-tag" title="${tip}">${ics}${t}${tailP}</span>`;
-    if (sub === 'split') return `<span class="mi-rchip rf-split" title="${tip}"><span class="rf-c">${ics}${t}</span>${lo ? `<span class="rf-c rf-lc">${x.loP}</span>` : ''}</span>`;
-    return `<span class="mi-rchip rf-pill" title="${tip}"><span class="rf-c">${ics}${t}</span>${lo ? `<span class="rf-lc">${x.loP}</span>` : ''}</span>`;
-  }
-  if (v === 'words') {
-    const w = t => `<span class="rf-w">${t}</span>`;
-    let h;
-    if (many) h = `<b class="rf-ti">${esc(clip(miTitle(m), 48))}</b>${w(` and ${its.length - 1} more ${its.length === 2 ? 'source' : 'sources'}`)}`;
-    /* C1 title first, then the locator in words; no platform. C2 a sentence: what the ask is about. */
-    else if (sub === 'title') h = `<b class="rf-ti">${esc(clip(miTitle(m), 64))}</b>${x.lwl ? w(`, ${x.lwl}`) : ''}`;
-    else if (sub === 'about') h = `${w(`Asked about ${x.loc ? `${x.lwl.replace(/^at /, '')} ${x.cn} ` : ''}`)}<b class="rf-ti">${esc(clip(miTitle(m), 64))}</b>`;
-    else h = `${x.lw ? w(`${x.lw} ${x.cn} `) : ''}<b class="rf-ti">${esc(clip(miTitle(m), 64))}</b>${w(` · ${rfKind(m)}`)}`;
-    return `<span class="mi-rchip rf-words">${ic}${h}</span>`;
-  }
-  if (v === 'quote') {
-    const q = many || (x.b == null && !p.about.quote) ? '' : (p.about.quote || (m.body[x.b] && m.body[x.b].p) || '');
-    const src = `<span class="rf-src">${ic}${ti(60)}${more}${tail}</span>`;
-    /* D1 one line: a single italic line of the passage. D2 card: the passage and the source line in a filled box. */
-    const cls = sub === 'line' ? ' rf-qline' : sub === 'card' ? ' rf-qcard' : '';
-    return q ? `<span class="mi-rchip rf-quote${cls}"><q>${esc(clip(q, 170))}</q>${src}</span>` : `<span class="mi-rchip rf-quote rf-noq">${src}</span>`;
-  }
-  /* A1 locator first. A2 the platform name in small capitals instead of the icon. */
-  if (sub === 'loc') return `<span class="mi-rchip rf-a rf-a1">${ic}${lo}${ti()}${more}</span>`;
-  if (sub === 'plat') return `<span class="mi-rchip rf-a rf-a2"><span class="rf-pl">${many ? `${its.length} sources` : rfKind(m)}</span>${ti()}${more}${tail}</span>`;
-  return `<span class="mi-rchip rf-a">${ic}${ti()}${more}${tail}</span>`;
+  const t = x.its.length > 1 ? `<span class="rf-ti">${x.its.length} sources</span>` : x.ti(56);
+  if (st.refv === 'tag') return `<span class="mi-rchip rf-tag${rfTint()}" title="${x.tip}">${x.ics}${t}</span>`;
+  return `<span class="mi-rchip rf-pill${rfTint()}" title="${x.tip}">${x.ics}${t}</span>`;
 }
-/* E: the reference goes in the meta row, after the timestamp.
-   E: icon, title and locator. E1 about: "about ¶5 of Title". E2 reply: a reply arrow before the icon. */
-const RF_RE = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v5.5a2 2 0 0 0 2 2h8M10 7.5l3 3-3 3"/></svg>';
 function miMetaRef(p) {
-  const [v, sub = ''] = (st.refv || 'inline').split('-');
-  if (v !== 'meta' || !p.about) return '';
+  if (st.refv !== 'meta' || !p.about) return '';
   const x = rfParts(p); if (!x) return '';
-  const tail = x.lo ? RF_SEP + x.lo : '';
-  if (sub === 'about') return `<span class="rf-meta"><span class="rf-w">about${x.loc ? ` ${x.lwl.replace(/^at /, '')} ${x.cn}` : ''}</span>${x.ic}${x.ti(48)}${x.more}</span>`;
-  if (sub === 'reply') return `<span class="rf-meta"><span class="rf-arr">${RF_RE}</span>${x.ic}${x.ti(48)}${x.more}${tail}</span>`;
-  return `<span class="rf-meta">${x.ic}${x.ti(48)}${x.more}${tail}</span>`;
+  return `<span class="rf-meta${rfTint()}" title="${x.tip}">${x.ic}${x.ti(48)}${x.more}</span>`;
 }
 /* Screen entry: the reference for every media type, in feed rows */
-Object.assign(st, { refv: 'inline', refloc: 'all' });
-function REFKNOBS() { return [['k-ref', 'refv', [
-  ['inline', 'Inline'], ['inline-loc', 'Locator first', '1'], ['inline-plat', 'Platform', '2'],
-  ['pill', 'Pill'], ['pill-tag', 'Tag', '1'], ['pill-split', 'Two chips', '2'],
-  ['words', 'Spelled out'], ['words-title', 'Title first', '1'], ['words-about', 'Asked about', '2'],
-  ['quote', 'Quote'], ['quote-line', 'One line', '1'], ['quote-card', 'Card', '2'],
-  ['meta', 'After the time'], ['meta-about', 'About', '1'], ['meta-reply', 'Reply arrow', '2']]],
-  ['k-refloc', 'refloc', [['all', 'All'], ['nopara', 'No ¶'], ['none', 'None']]]]; }
+Object.assign(st, { refv: 'pill', rtint: 'base' });
+function REFKNOBS() { return [
+  ['k-ref', 'refv', [['pill', 'Pill'], ['tag', 'Tag'], ['meta', 'After the time']]],
+  ['k-rtint', 'rtint', [['base', 'Default'], ['soft', 'Soft'], ['faint', 'Faint'], ['chrome', 'Chrome']]]]; }
 const RF_DEMO = [
-  ['Article, a paragraph', { it: 'm2', b: 6 }, 'Is the 3.1x figure in this paragraph right for the larger model?'],
-  ['Article, the whole source', { it: 'm8' }, 'What did the eval track agree on, and what is still open?'],
-  ['Article, a selected quote', { it: 'm2', b: 3, quote: 'The second tenfold increase pays for itself on about half of them.' }, 'Which tasks are in the half where it pays for itself?'],
-  ['PDF (arXiv), a paragraph', { it: 'm11', b: 2 }, 'Do the rewritten items keep the original difficulty?'],
-  ['X thread, one post', { it: 'm1', b: 2 }, 'Which benchmark is this post about?'],
+  ['Article', { it: 'm2', b: 6 }, 'Is the 3.1x figure in this paragraph right for the larger model?'],
+  ['PDF (arXiv)', { it: 'm11', b: 2 }, 'Do the rewritten items keep the original difficulty?'],
+  ['X thread', { it: 'm1', b: 2 }, 'Which benchmark is this post about?'],
   ['X post', { it: 'm7' }, 'Is there a source for this claim?'],
-  ['Podcast, a timestamp', { it: 'm4', b: 4 }, 'Which paper is Lin Feld describing here?'],
-  ['YouTube video, a timestamp', { it: 'm6', b: 2 }, 'What search budget does the demo use?'],
+  ['Podcast', { it: 'm4', b: 4 }, 'Which paper is Lin Feld describing here?'],
+  ['YouTube video', { it: 'm6', b: 2 }, 'What search budget does the demo use?'],
   ['Two sources', { its: ['m1', 'm5'] }, 'Where do the thread and Orbit Lab’s response disagree?'],
 ];
 const RF_SUM = 'Short answer first: the figure holds for the smaller model and drops by about a third for the larger one, because the larger model saturates sooner. Details and sources below.';
 function rfDemoPage() {
   const s = sp('ml');
   const rows = RF_DEMO.map(([h, about, q]) => `<h3 class="br-h rf-dh">${h}</h3><div class="feed" role="list"><article class="row row-x row-rowsq row-i-lefttxt row-ask" role="listitem"><span class="row-k"><span class="agent">${I.agent}</span></span><div class="row-m"><a class="row-t row-link" href="#" onclick="return false">${esc(q)}</a>${miRowChip({ about })}<span class="row-s">${RF_SUM}</span><span class="row-meta"><button class="au" type="button">mira_k</button><button class="row-sp" type="button">${spTagTx(s)}</button><span>2h</span>${miMetaRef({ about })}</span></div></article></div>`).join('');
-  return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page rf-demo"><div class="sub-top"><h2>Source references</h2></div><p class="muted">How a feed row shows the source an ask is about. Switch the treatment with Source ref in the Variants bar.</p>${rows}</div></div>`;
+  return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page rf-demo"><div class="sub-top"><h2>Source references</h2></div><p class="muted">How a feed row shows the source an ask is about. Switch the treatment with Source ref, and its strength with Ref tint, in the Variants bar.</p>${rows}</div></div>`;
 }
 CS_PAGES.rfdemo = rfDemoPage;
 JUMPS.push(['Source references', [['rf-all', 'Every media type, in feed rows'], ['rf-feed', 'In a feed: #ml-papers']]]);
@@ -12121,36 +12001,21 @@ screenAs(['ov-profile-scrim', 'ov-compose-back'], 'mb-home'); screenAs('ov-setti
 
 /* ==== account: settings, Usage, API keys and Your spaces in one Account page ====
    The four pages keep their own screens (subPage account, usage, keys, yourspaces), addresses and history
-   entries; this block shows them inside one Account page. The Variants bar's Account control (st.acV) picks
-   the layout on Desktop and Mobile Web:
-   - A (side): a section list on the left; at 920px and below it turns into a tab strip.
-   - B (tabs): a tab strip under the Account title, like the space tabs.
-   - C (over): an overview (subPage acct, /settings) with a short part for each section and a link to its
-     full page. The full pages are the A and B sections without the list, with a back link to Account.
-   Sections, in this order everywhere: Account (settings; headed Settings on C's overview, under the
-   Account title), Usage, API keys, Your spaces. The Usage line that
+   entries; this block shows them inside one Account page, with a tab strip under the Account title (like
+   the space tabs) on Desktop and Mobile Web.
+   Sections, in this order everywhere: Account (settings), Usage, API keys, Your spaces. The Usage line that
    the token model added to the settings is left out here: Usage is the next section.
-   Addresses: /settings (C's overview; A and B show Account), /settings/account, /settings/usage,
+   Addresses: /settings (the Account section), /settings/account, /settings/usage,
    /settings/keys, /settings/spaces (and /settings/spaces/header). /spaces and /spaces/header still open
    Your spaces. Signed out, every section shows one Log in note (AC_PRIVATE has all of them).
    Phone: You › Account is a screen with Usage, API keys and Your spaces, then the account settings
    (email, notifications, export, delete). The Spaces tab stays as it is. No new data: settings writes use
    the settings.update mutation, as on the web. */
-Object.assign(st, { acV: 'side' });
 Object.assign(nst, { acEmail: '', acEmailErr: '' });
 const ACX_SECS = [['account', 'Account', MI.cog], ['usage', 'Usage', TM_I.usage], ['keys', 'API keys', MI.key], ['yourspaces', 'Your spaces', MI.grid]];
 const ACX_IDS = ACX_SECS.map(s => s[0]);
 const acxOn = (x = st) => ACX_IDS.includes(x.subPage) || x.subPage === 'acct';
-/* where Account opens: the overview in C, the Account section in A and B */
-const acxHome = () => st.acV === 'over' ? 'acct' : 'account';
-function ACVKNOBS() { return [['k-acv', 'acV', [['side', 'Sidebar'], ['tabs', 'Tabs'], ['over', 'Overview']], acxPick]]; }
-/* picking a layout shows it: from another screen it opens Account; C's overview and A/B's Account section swap */
-function acxPick() {
-  if (st.device === 'native') return;
-  if (!acxOn()) Object.assign(st, NAVBASE(), MI_CLEAR(), { subPage: acxHome() });
-  else if (st.acV === 'over' && st.subPage === 'account') st.subPage = 'acct';
-  else if (st.acV !== 'over' && st.subPage === 'acct') st.subPage = 'account';
-}
+const acxHome = () => 'account';
 AC_PRIVATE.push('acct');
 CS_SUBNAME.acct = 'Account';
 /* the pages as the earlier blocks draw them (with their back links, which this block replaces) */
@@ -12166,56 +12031,21 @@ function acxSplit(h) {
   return { head: h.slice(0, m.index), cls: m[1].trim(), body: h.slice(m.index + m[0].length, -ACX_END.length) };
 }
 const acxWrap = (cls, inner) => `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page ak-page ac-page acx-page ${cls}">${inner}</div></div>`;
-/* C's full pages go back to the overview: with history when the overview is the entry before, else as a new entry */
-function acxBackAcct() {
-  const f = NV.from, prev = f && f.scr === 'sub:acct:';
-  return `<div class="nv-backrow"><button class="th-back nv-back" type="button" ${prev ? 'data-nvback="1"' : 'data-sub="acct"'} aria-label="Back to Account">${nvBk()}<span class="nv-bl">Account</span></button></div>`;
-}
 const acxOut = () => acxWrap('acx-outp', `${nvBackRow()}<div class="sub-top"><h2>Account</h2></div>${acOutNote('Log in to see your account settings, usage, API keys and spaces.')}`);
-/* one section: A and B put it in the Account page with the section list or tabs; C shows it as a full page */
+/* one section, in the Account page under the tabs */
 function acxSection(sec) {
   if (st.auth !== 'in') return acxOut();
   const raw = ACX_RAW[sec](), p = acxSplit(raw); if (!p) return raw;
   let body = p.body;
   if (sec === 'account') body = body.replace(ACX_USAGE_RE, '');
-  if (st.acV === 'over') return `${p.head}<div class="home-wide sub-page ${p.cls} acx-page acx-full">${acxBackAcct()}${body}${ACX_END}`;
   if (sec === 'usage') body = body.replace(ACX_KEYS_BTN, '');
-  const tabs = st.acV === 'tabs', cur = k => `aria-current="${k === sec ? 'page' : 'false'}"`;
-  const nav = tabs
-    ? `<nav class="acx-tabs" aria-label="Account sections">${ACX_SECS.map(([k, l]) => `<button class="acx-tab" type="button" data-sub="${k}" ${cur(k)}>${l}</button>`).join('')}</nav>`
-    : `<nav class="acx-nav" aria-label="Account sections">${ACX_SECS.map(([k, l, ic]) => `<button class="acx-it" type="button" data-sub="${k}" ${cur(k)}>${ic}<span>${l}</span></button>`).join('')}</nav>`;
-  const main = `<div class="acx-main ${p.cls}">${body}</div>`;
-  return `${p.head}<div class="home-wide sub-page acx-page ${tabs ? 'acx-tabs-v' : 'acx-side'}">${nvBackRow()}<h1 class="acx-title">Account</h1>${tabs ? nav + main : `<div class="acx-grid">${nav}${main}</div>`}${ACX_END}`;
-}
-/* C: the overview, one part per section in the same order */
-function acxOverview() {
-  if (st.auth !== 'in') return acxOut();
-  const a = D.acct, mod = acModerates();
-  const sec = (id, title, link, linkTo, body) => `<section class="acx-sec" aria-labelledby="acx-h-${id}"><div class="acx-sh"><h3 id="acx-h-${id}">${title}</h3><button class="tlink" type="button" data-sub="${linkTo}">${link}</button></div>${body}</section>`;
-  const row = (title, sub, end = '') => `<div class="acx-row"><div class="acx-rt"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</div>${end}</div>`;
-  /* Account: email, notifications, export, delete */
-  const types = AC_TYPES.filter(t => !t[3] || mod), on = types.filter(t => a.types[t[0]]).length;
-  const email = row('Email', a.emailNew ? `${esc(a.email)} · Waiting for you to confirm ${esc(a.emailNew)}` : esc(a.email), a.emailNew ? '<button class="btn sm" type="button" data-acx="email-cancel">Cancel change</button>' : '<button class="btn sm" type="button" data-acx="email">Change</button>');
-  const notifs = row('Notifications', `${on} of ${types.length} kinds on · Email ${a.emailOn ? 'on' : 'off'}`, '<button class="btn sm" type="button" data-acnset="1">Change</button>');
-  const exp = a.exportAt ? row('Export your data', `Requested ${agoText(a.exportAt)}. We’ll email you a download link at ${esc(a.email)}.`) : row('Export your data', 'A copy of your profile, threads, follow-ups, likes, saved items and settings.', '<button class="btn sm" type="button" data-acx="export">Export</button>');
-  const del = row('Delete account', 'Deletes your profile, likes, saved items, API keys and settings.', '<button class="btn sm acx-del" type="button" data-acx="delete">Delete</button>');
-  const account = sec('account', 'Settings', 'All settings', 'account', `<div class="acx-rows">${email}${notifs}${exp}${del}</div>`);
-  /* Usage: the month's total, the included tokens, the top spaces */
-  const s = tmSrc('session'), spaces = tmBySpace(tmSources()), top = spaces.slice(0, 3);
-  const meter = `<div class="acx-row acx-meter"><div class="acx-rt"><b>Included tokens</b><small class="num">${tmSrcLine(s)}</small>${tmBar(s.used, s.cap)}</div><b class="num">${fmtT(s.used)}</b></div>`;
-  const spRows = top.map(([sid, v]) => `<div class="acx-row">${glyph(sp(sid))}<div class="acx-rt"><button class="tlink tm-sp" type="button" data-space="${sid}">${spName(sp(sid))}</button>${tmBar(v, top[0][1])}</div><b class="num">${fmtT(v)}</b></div>`).join('');
-  const usage = sec('usage', 'Usage', 'All usage', 'usage', `<div class="acx-total"><b class="num">${fmtT(tmTotal())}</b><span>tokens this month</span></div><div class="acx-rows">${meter}${spRows}</div>${spaces.length > 3 ? `<p class="acx-more">Top 3 of ${spaces.length} spaces. All usage has every space and source.</p>` : ''}`);
-  /* API keys: the list, with Add */
-  const keys = sec('keys', 'API keys', 'Manage keys', 'keys', `${akList()}<button class="btn acx-add" type="button" data-act="key-open">${PLUS}Add a key</button>`);
-  /* Your spaces: a compact list */
-  const joined = D.spaces.filter(x => D.joined.includes(x.id)), show = joined.slice(0, 5);
-  const ys = joined.length ? `<div class="acx-rows">${show.map(x => `<div class="acx-row">${csGlyph(x)}<div class="acx-rt"><span class="acx-spn"><button class="dg-name" type="button" data-space="${x.id}">${spName(x)}</button>${spSeal(x, 'sm')}</span></div><small class="faint">${roleLabel(role(x))}</small></div>`).join('')}</div>${joined.length > show.length ? `<p class="acx-more">${joined.length - show.length} more in Manage spaces.</p>` : ''}` : '<p class="muted">You have not joined any spaces.</p>';
-  const yours = sec('spaces', 'Your spaces', 'Manage spaces', 'yourspaces', ys);
-  return acxWrap('acx-over', `${nvBackRow()}<div class="sub-top"><h2>Account</h2></div><div class="acx-secs">${account}${usage}${keys}${yours}</div>`);
+  const cur = k => `aria-current="${k === sec ? 'page' : 'false'}"`;
+  const nav = `<nav class="acx-tabs" aria-label="Account sections">${ACX_SECS.map(([k, l]) => `<button class="acx-tab" type="button" data-sub="${k}" ${cur(k)}>${l}</button>`).join('')}</nav>`;
+  return `${p.head}<div class="home-wide sub-page acx-page acx-tabs-v">${nvBackRow()}<h1 class="acx-title">Account</h1>${nav}<div class="acx-main ${p.cls}">${body}</div>${ACX_END}`;
 }
 ACX_IDS.forEach(k => { CS_PAGES[k] = () => acxSection(k); });
-/* /settings in A or B (or an entry made in C): the Account section */
-CS_PAGES.acct = () => st.acV === 'over' ? acxOverview() : acxSection('account');
+/* /settings (or a history entry made for it): the Account section */
+CS_PAGES.acct = () => acxSection('account');
 
 /* ---- addresses and routes ---- */
 { const u0 = csUrl; csUrl = function () {
@@ -12250,16 +12080,6 @@ CS_PAGES.acct = () => st.acV === 'over' ? acxOverview() : acxSection('account');
 }; }
 /* copy that names where keys live */
 { const o0 = layoutOnb; layoutOnb = CS_PAGES.welcome = function () { return o0().replace('You can add and change keys later in API keys.', 'You can add and change keys later in Account › API keys.'); }; }
-/* the overview's Add a key opens the key dialog, as on API keys */
-on($('app'), 'click', e => {
-  if (st.device === 'native' || st.subPage !== 'acct') return;
-  const b = e.target.closest && e.target.closest('[data-act="key-open"]'); if (!b) return;
-  e.stopImmediatePropagation();
-  Object.assign(st, { addingKey: true, keyDraft: '', keyName: '', keyErr: '', keyShow: false, renaming: null, keyMode: 'add', keyFor: null, keyCap: '0', modal: 'addkey' });
-  renderAll(); const ki = $('key-in'); if (ki) ki.focus();
-});
-/* the Variants bar: the Account control is for Desktop and Mobile Web */
-{ const rc0 = renderControls; renderControls = function () { rc0(); const k = $('kw-account'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }; }
 
 /* ---- Phone: You › Account ---- */
 const nAcRow = (act, label, val, sub, cls = '') => `<button class="n-row${cls}" type="button" data-n="${act}"><span class="n-row-b"><b>${label}</b>${sub ? `<small>${sub}</small>` : ''}</span>${val != null ? `<span class="n-val">${val}</span>` : ''}<span class="n-chev">${NI.chev}</span></button>`;
@@ -12315,9 +12135,7 @@ NSCR.acnotifs = () => nAcNotifs();
 
 /* ---- Screen entries ---- */
 JUMPS.push(['Account', [
-  ['acx-a-account', 'A · Sidebar: Account'], ['acx-a-usage', 'A · Sidebar: Usage'], ['acx-a-keys', 'A · Sidebar: API keys'], ['acx-a-spaces', 'A · Sidebar: Your spaces'],
-  ['acx-b-account', 'B · Tabs: Account'], ['acx-b-usage', 'B · Tabs: Usage'], ['acx-b-keys', 'B · Tabs: API keys'], ['acx-b-spaces', 'B · Tabs: Your spaces'],
-  ['acx-c-over', 'C · Overview'], ['acx-c-account', 'C · Overview › All settings'], ['acx-c-usage', 'C · Overview › All usage'], ['acx-c-keys', 'C · Overview › Manage keys'], ['acx-c-spaces', 'C · Overview › Manage spaces'],
+  ['acx-b-account', 'Account'], ['acx-b-usage', 'Account › Usage'], ['acx-b-keys', 'Account › API keys'], ['acx-b-spaces', 'Account › Your spaces'],
   ['acx-out', 'Account, signed out'],
   ['acx-n-account', 'Phone: You › Account'], ['acx-n-notifs', 'Phone: Account › Notifications'],
 ]]);
@@ -12328,8 +12146,7 @@ function acxJump(k) {
   if (v === 'n') { npJump('np-home'); nst.tab = 'you'; nst.stack = s === 'notifs' ? [{ v: 'account', id: '' }, { v: 'acnotifs', id: '' }] : [{ v: 'account', id: '' }]; return; }
   acJump('acx');   /* the seeded keys and settings */
   if (v === 'out') { Object.assign(st, { auth: 'out', subPage: acxHome() }); return; }
-  st.acV = { a: 'side', b: 'tabs', c: 'over' }[v];
-  st.subPage = s === 'over' ? 'acct' : s === 'spaces' ? 'yourspaces' : s;
+  st.subPage = s === 'spaces' ? 'yourspaces' : s;
 }
 /* Phone: a key or Usage screen at the root of You sits under Account */
 function acxNatYou() {
