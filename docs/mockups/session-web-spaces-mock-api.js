@@ -37,8 +37,7 @@
    - A thread (posts) is a list record with a ULID in `id`, also in thread URLs (/s/<space>/t/<id>). The
      fixture threads have fixed ULIDs: the time part is their createdAt.
    - threads.create (POST /api/rpc/threads.create) creates a thread; the server assigns its id. A person
-     deletes a thread by marking it deleted (threads.delete). PUT /api/threads/:id is left for the ask
-     pipeline (the answer's state, until step 7).
+     deletes a thread by marking it deleted (threads.delete).
    - Everything that points at a thread uses its id: the keys of /api/answers, /api/answer-sources,
      /api/follow-ups, /api/replies and /api/ask-trees; the members of likes and saves; "<thread>:<node>" in
      saved asks; "<kind>:<thread>[:…]" in report and moderation keys; a notification's thread; a thread's
@@ -49,13 +48,24 @@
      routers), answered with { result, changes }. The server validates the input, checks that the records
      exist, computes the new state (ids, counts, member lists, notifications it sends, memberships, roles),
      writes every collection it changes at once (all or none) and returns the changed records. See 5b.
-   - The collection write rows stay only for the page's ask pipeline (scope 'run', until step 7) and the
-     token-usage stub (scope 'stub').
+   - There are no collection write rows (step 7): the page reads collections and calls procedures.
 
    Scenarios (step 10)
    - The Screen entries set up their data with POST /api/dev/scenario { name, args? }: the server goes back
      to the seed and runs a named scenario (session-web-spaces-scenarios.js, SessionScenarios) in one
      transaction, and answers { changes } as a procedure does. See createBackend (section 6).
+
+   Runs as server jobs (step 7)
+   - An ask runs on the server: the procedure that starts it (threads.create, threads.update with run,
+     research.forkNode, followups.ask, followups.update with run, research.retryNode) writes a run record
+     (/api/runs, research.listActivity) and the backend's job takes it through its progress steps on a timer.
+     The job writes the answer, the run state and failures, the follow-up and ask-tree nodes, the
+     notifications, and the token charge (a TODO(limits) stub). Stop is research.cancelNode. Key checks and
+     domain checks are jobs too. What the run writes is in session-web-spaces-jobs.js (SessionJobs).
+   - Progress reaches the page as events: GET /api/rpc/events.subscribe, opened with EventSource (patched by
+     the backend), carries SessionEvent objects (web/docs/03-api-and-events.md §3). See section 6a.
+   - Runs survive a reload: the run records are stored with the database and the jobs resume when the
+     backend starts. /api/dev/config pauses jobs, sets their length and forces the next run to fail.
 
    Permissions (step 5)
    - The server checks `who` (section 5a): the rpc dispatcher before a procedure runs, and the REST router
@@ -75,6 +85,7 @@
       5a. Permissions: the caller's role in a space, the `who` check, and what GET returns to whom.
       5b. Procedures: the mutations, their transaction helper, and their rows in the table.
    6. createBackend(): the in-memory database, persisted to localStorage, behind a fetch patch for /api/*.
+      6a. Jobs and the event stream (step 7).
 
    The real app's conventions: web/docs/03-api-and-events.md (procedures, error codes) and
    web/docs/01-architecture-decisions.md (ADR-3); wire types in web/packages/shared/src
@@ -174,6 +185,11 @@
   const SPACE_ROLE = one('Owner', 'Admin', 'Moderator', 'Member');
   /* Fields marked "derived" are computed by the server on every read (section 4, DERIVED) and not stored. */
   const S = {};
+  /* why an answer ended without one: stopped (research.cancelNode), tokens (nothing could pay), key (the provider
+     rejected the key), rate (the provider limits requests; at: when Retry works again, ms), access (when the
+     run started, the person who asked could no longer read the space, a source the ask is about, or use the key
+     that pays), interrupted (the server could not resume the run after a restart) */
+  const S_FAIL = obj({ why: one('stopped', 'tokens', 'key', 'rate', 'access', 'interrupted'), 'at?': num }, 'RunFailure');
   S.Space = obj({
     id: str, name: str, title: str, 'createdAt?': iso,
     'av?': num, 'online?': num, 'posts?': num, 'desc?': str,
@@ -197,12 +213,20 @@
     'about?': t.obj({ 'it?': str, 'its?': arr(str), 'b?': num }), 'rf?': str, 'kw?': str,
     'topic?': nul(str), 'topicBy?': nul(str), 'running?': bool,
     'pay?': t.any,   /* TODO(limits): who pays for the ask ('session' for the included tokens, or a key id), stored as sent */
-    'fail?': obj({ why: str, 'at?': num }), 'edited?': bool, 'del?': bool, 'gone?': bool, 'skill?': nul(str),
+    'fail?': S_FAIL, 'edited?': bool, 'del?': bool, 'gone?': bool, 'skill?': nul(str),
+    'att?': int,    /* the number of the latest run (attempt) of its ask */
     'from?': obj({ th: str, node: str }),   /* the thread and ask node it was started from */
   }, 'Thread');
   S.Reply = t.named('Reply', t.lazy(() => obj({ u: str, 'createdAt?': iso, t: str, 'likes?': int, 'kids?': arr(S.Reply), 'del?': bool, 'edited?': bool })));
   S.FollowUp = obj({ u: str, 'createdAt?': iso, q: str, 'a?': str, 'html?': str, 'del?': bool, 'edited?': bool }, 'FollowUp');
-  S.AskNode = obj({ id: str, par: str, 'u?': str, 'createdAt?': iso, 'tok?': num, 'q?': str, 'html?': str, 'fu?': num, 'del?': bool, 'edited?': bool }, 'AskNode');
+  S.AskNode = obj({ id: str, par: str, 'u?': str, 'createdAt?': iso, 'tok?': num, 'q?': str, 'html?': str, 'fu?': num, 'del?': bool, 'edited?': bool,
+    'running?': bool, 'fail?': S_FAIL, 'pay?': t.any, 'model?': str, 'att?': int }, 'AskNode');
+  /* A run in progress (research.listActivity): the job's state. Keyed by the node it answers, "<thread>:<node>"
+     (node r: the thread's ask), as in saved asks; the real app's node ids are ULIDs. status: queued until the
+     job starts it, then running; a finished run's record is removed. step: the progress step it is on (0 to 3);
+     seq: the number of the run's last event. paused: a dev-only hold (a Screen entry's scenario): the job does
+     not move it on. TODO(limits): pay as stored on the ask. */
+  S.Run = obj({ th: str, node: str, u: str, status: one('queued', 'running'), attempt: int, seq: int, step: int, 'model?': nul(str), 'pay?': t.any, 'createdAt?': iso, 'paused?': bool }, 'Run');
   S.AskTree = obj({ nodes: arr(S.AskNode) }, 'AskTree');
   S.Source = obj({
     id: str, pl: str, kind: str,
@@ -245,8 +269,9 @@
   S.PageDoc = obj({ t: str, text: arr(str), 'by?': str, 'ed?': str, revs: arr(obj({ by: str, 'createdAt?': iso, note: str })) }, 'PageDoc');
   S.Profile = obj({ name: str, bio: str }, 'Profile');
   S.Me = obj({ u: str, name: str, bio: str, x: str, createdAt: iso }, 'Me');
-  /* TODO(limits): token usage is simulated in the page (owner decision: no server-side limit tracking yet).
-     Stored as sent. by: tokens this month per source ('session' or a key id) and space; cap: the included
+  /* TODO(limits): token usage is a stub (owner decision: no server-side limit tracking yet). The jobs charge
+     asks to it (section 6a, charge) with the page's former arithmetic; people set the default key with
+     usage.setDefaultKey. by: tokens this month per source ('session' or a key id) and space; cap: the included
      tokens a month; def: the default key, which pays after the included tokens run out. */
   S.Usage = obj({ cap: num, resetAt: iso, def: nul(str), movedSeen: bool, 'fresh?': bool, by: rec(rec(num)) }, 'Usage');
   S.Settings = obj({ email: str, emailNew: nul(str), exportAt: nul(iso), emailOn: bool, types: rec(bool), spaces: rec(str) }, 'Settings');
@@ -298,6 +323,7 @@
     repSeen:  { path: '/api/me/reports-seen', kind: 'value', item: bool },
     reqSeen:  { path: '/api/me/requests-seen', kind: 'value', item: bool },
     rpLiked:  { path: '/api/me/reply-likes', kind: 'value', item: named('Set<ReplyKey>', set(str)) },
+    runs:     { path: '/api/runs', kind: 'map', key: 'node', item: S.Run },   /* the runs in progress, by "<thread>:<node>" */
   };
   /* Records nested in a value that get a createdAt (joinedAt in member lists) from the server when a write
      brings them without one. Every record of a list collection gets one too. */
@@ -343,9 +369,7 @@
 
      who: 'guest' (anyone, also signed out), 'user' (any signed-in user; /api/me/* rows are scoped to the
      caller), 'author' (the record's author), 'member' | 'moderator' | 'admin' | 'owner' (a role in the
-     record's space; a higher role includes the lower ones), 'server' (written by an agent run or by the
-     server in the real app; the mockup's ask pipeline writes it only because the mock has no runs: these
-     rows check the origin, not the caller). Enforced (step 5): see 5a. On a GET row a role is a scope:
+     record's space; a higher role includes the lower ones). Enforced (step 5): see 5a. On a GET row a role is a scope:
      the list holds only the records of the spaces where the caller has it (`reads` says what).
      errors: the codes the row can return. UNAUTHORIZED and FORBIDDEN follow from `who` (and a
      procedure's can): UNAUTHORIZED on every row that needs a signed-in caller, FORBIDDEN on the writes
@@ -354,14 +378,10 @@
      same style. Rows marked `bulk` replace a whole collection: the page's diff sends one when records move
      or several change at once (never for threads); the real app sends one mutation per change instead.
      stub: TODO(limits) rows: API keys and token usage, kept as they are, without accounting.
-     scope (steps 3 and 10): who writes through a row. A person's actions are procedures (section 5b, scope
-     'user'); the Screen entries and the Variants bar's Reset use the scenario endpoint (dev, step 10). The
-     collection write rows remain only for:
-       'run'       the ask pipeline in the page (answers, their sources, charges, run notifications, key
-                   and domain checks), which writes what the server will write itself in step 7;
-       'stub'      the token-usage stub (TODO(limits)), which the ask pipeline also writes (its charges).
-     The page sends X-Session-Origin (run, stub; user would be a bug) with each collection write; the
-     request log records it, and in dev a write from another origin is an error. */
+     Collections are read only (GET). A person's actions are procedures (section 5b); the Screen entries and
+     the Variants bar's Reset use the scenario endpoint (dev, step 10); what an ask's run writes, the server's
+     jobs write (step 7, section 6a). A collection write has no row: the router answers METHOD_NOT_SUPPORTED,
+     and in dev it is an error. */
   const OPS = {
     list:    { method: 'GET', sub: '', errors: [] },
     get:     { method: 'GET', sub: '/:id', errors: ['NOT_FOUND'] },
@@ -370,10 +390,10 @@
     put:     { method: 'PUT', sub: '/:id', errors: ['BAD_REQUEST', 'NOT_FOUND'] },
     delete:  { method: 'DELETE', sub: '/:id', errors: ['NOT_FOUND'] },
   };
-  /* the auth codes a row can return: UNAUTHORIZED unless anyone may call it (guest) or only the origin is
-     checked (server); FORBIDDEN on a write that checks a role or the author (GET rows are scoped instead) */
+  /* the auth codes a row can return: UNAUTHORIZED unless anyone may call it (guest); FORBIDDEN on a write that
+     checks a role or the author (GET rows are scoped instead) */
   const ROLE_WHO = ['author', 'member', 'moderator', 'admin', 'owner'];
-  const authErrors = (who, method) => [...(who !== 'guest' && who !== 'server' ? ['UNAUTHORIZED'] : []), ...(method !== 'GET' && ROLE_WHO.includes(who) ? ['FORBIDDEN'] : [])];
+  const authErrors = (who, method) => [...(who !== 'guest' ? ['UNAUTHORIZED'] : []), ...(method !== 'GET' && ROLE_WHO.includes(who) ? ['FORBIDDEN'] : [])];
   const shapeOf = (coll, op) => {
     const c = C[coll], one = describe(c.item);
     const many = c.kind === 'list' ? `${one}[]` : c.kind === 'map' ? `Record<string, ${one}>` : one;
@@ -390,25 +410,18 @@
   };
   const API = [
     row('spaces', 'list', 'guest', 'spaces.list', { note: 'every space record, closed ones included: a closed space’s landing (name, description, rules, member count, request questions) is public; its content is scoped (READ_RULES)' }),
-    row('spaces', 'put', 'server', null, { note: 'a domain check’s result (the page’s server job until step 7); admins change settings with spaces.update' }),
 
     /* threads: addressed by id (a ULID). r, likes, liked and mine are derived on read. */
     row('posts', 'list', 'guest', 'research.listTrees', { wire: 'ResearchTreeSummary[]', reads: 'threads in open spaces, and in the closed spaces the caller is a member of' }),
     row('posts', 'get', 'guest', 'research.getTree', { wire: 'ResearchTreeDetail', reads: 'NOT_FOUND for a thread the caller may not read' }),
-    row('posts', 'put', 'server', null, { wire: 'ResearchTree', note: 'the run sets the answer state (running, stopped, failed); people change threads with procedures' }),
 
     row('rich', 'list', 'guest', 'research.getNodeContent', { wire: 'ResearchNodeContent', reads: 'the threads the caller may read' }),
     row('rich', 'get', 'guest', 'research.getNodeContent', { wire: 'ResearchNodeContent', reads: 'NOT_FOUND for a thread the caller may not read' }),
-    row('rich', 'put', 'server', null, { note: 'written by the run; the real app sends research.node.* events' }),
-    row('rich', 'delete', 'server', null, { note: 'cleared when an ask runs again (research.rerunNode)' }),
     row('srcd', 'list', 'guest', 'research.getNodeContent', { wire: 'ResearchNodeContent', reads: 'the threads the caller may read' }),
-    row('srcd', 'put', 'server', null, { note: 'written by the run' }),
-    row('srcd', 'delete', 'server', null),
     row('fu', 'list', 'guest', 'followups.list', { reads: 'the threads the caller may read' }),
-    row('fu', 'put', 'server', null, { wire: 'ResearchExchangeNode', note: 'the run writes a follow-up’s answer (the thread’s follow-ups, replaced whole)' }),
     row('rp', 'list', 'guest', 'research.getTree', { reads: 'the threads the caller may read' }),
     row('qtd', 'list', 'guest', 'research.getTree', { wire: 'ResearchTreeDetail', reads: 'the threads the caller may read' }),
-    row('qtd', 'put', 'server', null, { wire: 'ResearchNode', note: 'the run writes an ask’s answer in the tree' }),
+    row('runs', 'list', 'guest', 'research.listActivity', { wire: 'ResearchNode[]', reads: 'the runs of the threads and ask trees the caller may read (readScope: readsThread, readsAskTree)', note: 'the runs in progress, with their progress step: the page’s starting point, which the event stream then updates' }),
 
     row('media', 'list', 'guest', 'sources.list', { reads: 'without the closed spaces the caller is not a member of: a source only they have is left out' }),
     row('miAdded', 'list', 'user', 'sources.listNew', { reads: 'as sources.list' }),
@@ -425,10 +438,8 @@
 
     /* TODO(limits): API keys are a stub: stored as sent (no encryption, no usage accounting). raw is write-only. */
     row('userKeys', 'list', 'user', 'apiKeys.list', { stub: true, note: 'masked keys only: raw is never returned' }),
-    row('userKeys', 'put', 'server', null, { stub: true, note: 'a key check’s result, and the run’s last-used time' }),
 
     row('notifs', 'list', 'user', 'notifications.list', { wire: 'InboxNotificationPage' }),
-    row('notifs', 'create', 'server', null, { wire: 'InboxNotification', note: 'the real server creates notifications (notification.requested); the page still posts the ones that follow an ask run or a resolved report, as structured records, and the server assigns the id' }),
     row('askedInv', 'list', 'user', 'invites.listRequested'),
 
     row('reqs', 'list', 'user', 'joinRequests.list', { reads: 'the caller’s own requests, and the requests to the spaces they moderate' }),
@@ -447,7 +458,6 @@
     row('pagedocs', 'list', 'guest', 'pages.list', { reads: 'the spaces the caller may read' }),
     row('acct', 'list', 'user', 'settings.get', { wire: 'UserSettings' }),
     row('usage', 'list', 'user', 'usage.get', { stub: true, note: 'TODO(limits): token usage by source and space, the included tokens and the default key' }),
-    row('usage', 'replace', 'server', 'usage.setDefaultKey', { stub: true, note: 'TODO(limits): the page computes usage (the ask pipeline’s charges, and the default key) and the server stores it as sent; the page stands in for the server until step 7, so the origin (stub, run) is checked, not the caller' }),
     row('muted', 'list', 'user', 'mutes.list'),
     row('blocked', 'list', 'user', 'blocks.list'),
     row('repSeen', 'list', 'user', 'notifications.unreadCount'),
@@ -456,6 +466,8 @@
 
     { method: 'GET', path: '/api/me', coll: null, op: 'me', input: null, output: 'Me', who: 'user', trpc: 'auth.me', wire: 'User', errors: ['UNAUTHORIZED'],
       note: 'the signed-in person; the server uses it for mine and liked' },
+    { method: 'GET', path: '/api/rpc/events.subscribe', coll: null, op: 'events', input: null, output: 'stream of SessionEvent', who: 'user', trpc: 'events.subscribe', wire: 'SessionEvent', errors: ['UNAUTHORIZED'],
+      note: 'the event stream (step 7): open it with EventSource (the backend patches it); fetch answers BAD_REQUEST. The first event is connection.ready; then run, node, notification and space events for what the caller may read (section 6a)' },
 
     /* development only: not part of the product API */
     { method: 'POST', path: '/api/dev/reset', coll: null, op: 'dev-reset', input: null, output: null, who: 'guest', trpc: null, wire: null, errors: [], dev: true, note: 'back to the seed data' },
@@ -463,13 +475,10 @@
       note: 'a Screen entry’s data (step 10): back to the seed, then the named scenario (session-web-spaces-scenarios.js) in one transaction; changes: every record that differs from the database before the call' },
     { method: 'GET', path: '/api/dev/config', coll: null, op: 'dev-config', input: null, output: 'DevConfig', who: 'guest', trpc: null, wire: null, errors: [], dev: true },
     { method: 'PUT', path: '/api/dev/config', coll: null, op: 'dev-config', input: 'Partial<DevConfig>', output: 'DevConfig', who: 'guest', trpc: null, wire: null, errors: ['BAD_REQUEST'], dev: true,
-      note: 'DevConfig: { now (the mock clock, an ISO time), latency, failWrites, failReads, failCode, failOn: { code, paths: string[], methods?: string[], times? } | null, readRules: the parts of the read scoping that are on (READ_RULES; a partial object is merged) }' },
+      note: 'DevConfig: { now (the mock clock, an ISO time), latency, failWrites, failReads, failCode, failOn: { code, paths: string[], methods?: string[], times? } | null, readRules: the parts of the read scoping that are on (READ_RULES; a partial object is merged), jobs: "run" | "paused" (paused: no job moves on until it is "run" again), jobMs (a run’s length, ms), checkMs (a key or domain check’s length, ms), failNextRun: null | "tokens" | "key" | "rate" (the next thread ask that finishes fails so), resumeJobs (false: after a reload, runs in progress fail as interrupted instead of resuming) }' },
   ];
-  /* scopes of the collection write rows (see `scope` above): every one left is the ask pipeline's, and the
-     usage stub's (which the pipeline also charges asks to). A person's actions are procedures, and the
-     Screen entries use scenarios (step 10). Each is who 'server': the page's pipeline stands in for the
-     server until step 7, so the router checks the origin header (X-Session-Origin), not the caller. */
-  for (const a of API) if (!a.dev && a.method !== 'GET') { a.scope = C[a.coll].stub ? ['stub', 'run'] : ['run']; if (a.who !== 'server') throw new Error(`${a.method} ${a.path}: a collection write is who 'server'`); }
+  /* collections are read only (step 7): every write is a procedure, a job or a scenario */
+  for (const a of API) if (a.coll && a.method !== 'GET') throw new Error(`${a.method} ${a.path}: collections have no write rows`);
 
   /* ---- 5a. permissions (step 5) ----
      The caller is the signed-in person (SessionFixtures.me), or nobody: a request with the header
@@ -553,7 +562,10 @@
      Space records are public (a closed space's landing shows its name, description, rules, member count
      and request questions). Revoked invite links are never returned. */
   const READ_RULES = { closedThreads: false, closedFollowUps: false, closedContent: true, closedSources: true, closedMembers: false, ownOrModerated: true, pendingSources: true };
-  /* readScope(d, signedIn, rules, me): per kind, a record as the caller may read it, or null / undefined */
+  /* readScope(d, signedIn, rules, me): per kind, a record as the caller may read it, or null / undefined.
+     readsThread(p) and readsAskTree(threadId) answer "may the caller read this thread (its record), and its
+     follow-ups and ask tree": GET of threads, follow-ups, ask trees and runs uses them, and so does the event
+     stream (section 6a) for the run events of a thread's ask and of an ask in its tree. */
   function readScope(d, signedIn, rules, me) {
     const g = k => d[k], R = { ...READ_RULES, ...rules };
     const hidden = new Set(d.spaces.filter(s => !readsSpace(g, signedIn, s)).map(s => s.id));
@@ -561,7 +573,12 @@
     const spaceOf = new Map(d.posts.map(p => [p.id, p.s]));
     const hideSp = sid => R.closedContent && hidden.has(sid);
     const hideTh = id => spaceOf.has(id) && hideSp(spaceOf.get(id));
-    const hideFu = (key, v) => R.closedFollowUps && spaceOf.has(key) && hidden.has(spaceOf.get(key)) ? undefined : v;
+    const readsThread = p => !(R.closedThreads && p && hidden.has(p.s));
+    const readsAskTree = th => !(R.closedFollowUps && spaceOf.has(th) && hidden.has(spaceOf.get(th)));
+    const hideFu = (key, v) => readsAskTree(key) ? v : undefined;
+    const postOf = new Map(d.posts.map(p => [p.id, p]));
+    /* a run: as the thread for its ask (node r), as the ask tree for the others */
+    const readsRun = r => r.node === 'r' ? readsThread(postOf.get(r.th)) : readsAskTree(r.th);
     const own = u => signedIn && u === me.u;
     const scoped = (sid, u) => !R.ownOrModerated || own(u) || mods.has(sid);
     /* a pending source in a space's list, for someone other than the person who added it and its moderators */
@@ -576,7 +593,7 @@
       return (x.sp || []).some(s => hidden.has(s)) ? { ...x, sp: x.sp.filter(s => !hidden.has(s)) } : x;
     };
     const LIST = {
-      posts: x => R.closedThreads && hidden.has(x.s) ? null : x, media: src, miAdded: src,
+      posts: x => readsThread(x) ? x : null, media: src, miAdded: src,
       reqs: x => scoped(reqSpace(x), x.u) ? x : null,
       reports: x => scoped(x.sp, x.by) ? x : null,
       banned: x => !R.ownOrModerated || mods.has(banSpace(x)) ? x : null,
@@ -585,6 +602,7 @@
     const byThread = (key, v) => hideTh(key) ? undefined : v;
     const MAP = {
       rich: byThread, srcd: byThread, rp: byThread, fu: hideFu, qtd: hideFu,
+      runs: (key, v) => readsRun(v) ? v : undefined,
       modSt: (key, v) => hideTh(String(key).split(':')[1]) ? undefined : v,
       pagedocs: (key, v) => hideSp(key.split('/')[0]) ? undefined : v,
       memOther: (key, v) => R.closedMembers && hidden.has(key) ? undefined : v,
@@ -598,6 +616,7 @@
       dsReps: v => R.ownOrModerated && v.some(x => !scoped(x.sid, x.by)) ? v.filter(x => scoped(x.sid, x.by)) : v,
     };
     return {
+      readsThread, readsAskTree, readsRun,
       list: (k, x) => LIST[k] ? LIST[k](x) : x,
       map: (k, key, v) => MAP[k] ? MAP[k](key, v) : v,
       value: (k, v) => VALUE[k] ? VALUE[k](v) : v,
@@ -605,7 +624,7 @@
   }
   /* the collections whose GET depends on who reads them (besides /api/me/*): a change of membership, role
      or a space's visibility changes what they return */
-  const SCOPED = ['posts', 'rich', 'srcd', 'fu', 'rp', 'qtd', 'media', 'miAdded', 'reqs', 'reports', 'banned', 'links', 'modSt', 'pagedocs', 'memOther', 'dsDrops', 'mem', 'dsReps'];
+  const SCOPED = ['posts', 'rich', 'srcd', 'fu', 'rp', 'qtd', 'runs', 'media', 'miAdded', 'reqs', 'reports', 'banned', 'links', 'modSt', 'pagedocs', 'memOther', 'dsDrops', 'mem', 'dsReps'];
   const SCOPE_INPUTS = ['joined', 'rel', 'roles', 'spaces'];
 
   /* ---- 5b. procedures (step 3): mutations by intent ----
@@ -703,8 +722,8 @@
     'pay?': nul(str), 'model?': str, 'about?': t.obj({ 'it?': str, 'its?': arr(str), 'b?': num, 'quote?': str }), 'skill?': nul(str),
     'from?': obj({ th: ID, node: str }), 'branch?': one('all', 'one'),
   };
-  proc('threads.create', { input: obj(THREAD_IN, 'CreateThreadInput'), output: '{ id: ThreadId }', who: 'member', errors: ['NOT_FOUND', 'PRECONDITION_FAILED'], wire: 'ResearchTree', writes: ['posts', 'rich', 'fu', 'qtd'],
-    note: 'an ask or a post; the server assigns the id (a ULID). An ask starts running (the run is the page’s ask pipeline until step 7). from: start the thread from a branch of another thread’s ask tree (branch: "all" copies the asks below it); the source node links to the new thread. A branch of a closed space’s thread stays in that space. topic: kept only in a space with the FAQ landing that has the topic. pay: TODO(limits), stored as sent; a key that pays must be yours.',
+  proc('threads.create', { input: obj(THREAD_IN, 'CreateThreadInput'), output: '{ id: ThreadId }', who: 'member', errors: ['NOT_FOUND', 'PRECONDITION_FAILED'], wire: 'ResearchTree', writes: ['posts', 'rich', 'fu', 'qtd', 'runs', 'usage'],
+    note: 'an ask or a post; the server assigns the id (a ULID). An ask starts a run (a server job, section 6a). The first ask a key pays for after the included tokens run out marks the usage note about it seen (TODO(limits) stub). from: start the thread from a branch of another thread’s ask tree (branch: "all" copies the asks below it); the source node links to the new thread. A branch of a closed space’s thread stays in that space. topic: kept only in a space with the FAQ landing that has the topic. pay: TODO(limits), stored as sent; a key that pays must be yours.',
     space: (tx, i) => i.space,
     can: (tx, i) => {
       if (!i.from) return ownPayer(tx, i.pay);
@@ -736,13 +755,18 @@
       const q = text(i.q, 'q');
       const rec = { id, s: s.id, u: tx.me.u, k: i.kind, t: i.title || null, q, sum: null, tok: 0, running: i.kind === 'ask', kw: q, topic, topicBy: topic ? 'asker' : null };
       for (const f of ['pay', 'model', 'about', 'skill']) if (i[f] != null) rec[f] = i[f];
+      if (i.kind === 'ask') rec.att = 1;
       tx.put('posts', rec);
+      if (i.kind === 'ask') {
+        startRun(tx, id, 'r', rec);
+        if (i.pay && tx.find('userKeys', i.pay) && !tx.get('usage').movedSeen) tx.setValue('usage', { ...tx.value('usage'), movedSeen: true });
+      }
       return { id };
     } });
   /* the author of a thread, who can still read its space */
   const ownThread = (tx, id) => { const p = tx.need('posts', id, 'thread'); return all(readsThread(tx, p), authorIs(tx, p.u, p.k === 'ask' ? 'ask' : 'post')); };
-  proc('threads.update', { input: obj({ id: ID, q: str, 'run?': bool, 'pay?': nul(str) }, 'UpdateThreadInput'), output: 'null', who: 'author', errors: ['NOT_FOUND'], wire: 'ResearchTree', writes: ['posts'],
-    note: 'the author edits the question; run: the ask runs again with payer pay (TODO(limits): stored as sent; a key must be yours)',
+  proc('threads.update', { input: obj({ id: ID, q: str, 'run?': bool, 'pay?': nul(str), 'model?': str }, 'UpdateThreadInput'), output: 'null', who: 'author', errors: ['NOT_FOUND'], wire: 'ResearchTree', writes: ['posts', 'runs'],
+    note: 'the author edits the question; run: the ask runs again (a new run) with payer pay (TODO(limits): stored as sent; a key must be yours)',
     can: (tx, i) => all(ownThread(tx, i.id), ownPayer(tx, i.pay)),
     run: (tx, i) => {
       const q = text(i.q, 'q');
@@ -750,19 +774,21 @@
         if (x.del || x.gone) throw rpcError('PRECONDITION_FAILED', 'This thread was deleted.');
         const changed = x.q !== q; x.q = q; x.kw = q;
         if (changed) { x.edited = true; x.t = null; }
-        if (i.run) { x.running = true; x.sum = null; x.tok = 0; x.pay = i.pay == null ? null : i.pay; delete x.fail; }
+        if (i.run) { x.running = true; x.sum = null; x.tok = 0; x.pay = i.pay == null ? null : i.pay; if (i.model) x.model = i.model; x.att = (x.att || 0) + 1; delete x.fail; }
       }, 'thread');
+      if (i.run) startRun(tx, i.id, 'r', tx.find('posts', i.id));
     } });
-  proc('threads.delete', { input: obj({ id: ID }), output: '{ kept: boolean }', who: 'author', errors: ['NOT_FOUND'], writes: ['posts', 'saved', 'liked'],
-    note: 'the author deletes a thread: one with follow-ups or replies keeps its place ("You deleted this ask"), one without is gone; it leaves Saved and likes. Moderators hide or remove items with moderation.decide.',
+  proc('threads.delete', { input: obj({ id: ID }), output: '{ kept: boolean }', who: 'author', errors: ['NOT_FOUND'], writes: ['posts', 'saved', 'liked', 'runs'],
+    note: 'the author deletes a thread: one with follow-ups or replies keeps its place ("You deleted this ask"), one without is gone; it leaves Saved and likes. A run of its ask in progress ends without writing. Moderators hide or remove items with moderation.decide.',
     can: (tx, i) => ownThread(tx, i.id),
     run: (tx, i) => {
       const p = tx.need('posts', i.id, 'thread');
       const kids = p.k === 'ask' ? askTree(tx, p.id).nodes.length : (tx.mapGet('rp', p.id) || []).length, keep = kids > 0;
       tx.edit('posts', p.id, x => {
-        x.del = true; x.q = ''; x.kw = ''; x.t = null; delete x.edited;
+        x.del = true; x.q = ''; x.kw = ''; x.t = null; delete x.edited; if (x.running) x.running = false;
         if (!keep) { x.gone = true; x.sum = null; x.running = false; }
       });
+      tx.mapDel('runs', `${p.id}:r`);
       if (!keep) for (const k of ['saved', 'liked']) if (tx.get(k).has(p.id)) { const s = tx.value(k); s.delete(p.id); tx.setValue(k, s); }
       return { kept: keep };
     } });
@@ -774,12 +800,14 @@
       if (i.topic != null && !(s.topics || []).some(x => x[0] === i.topic)) throw rpcError('NOT_FOUND', 'The space has no topic like this.');
       tx.edit('posts', p.id, x => { x.topic = i.topic; x.topicBy = 'mod'; });
     } });
-  proc('followups.ask', { input: obj({ thread: ID, q: str }), output: 'null', who: 'member', errors: ['NOT_FOUND', 'PRECONDITION_FAILED'], wire: 'ResearchExchangeNode', writes: ['fu', 'posts'],
-    note: 'a follow-up ask on an ask thread (without ask trees: the flat list)', space: threadSpace,
+  proc('followups.ask', { input: obj({ thread: ID, q: str }), output: 'null', who: 'member', errors: ['NOT_FOUND', 'PRECONDITION_FAILED'], wire: 'ResearchExchangeNode', writes: ['fu', 'posts', 'runs'],
+    note: 'a follow-up ask on an ask thread (without ask trees: the flat list); its run answers the ask f<index> of the thread’s tree', space: threadSpace,
     run: (tx, i) => {
       const p = tx.need('posts', i.thread, 'thread'); writable(tx, p.s);
       if (p.k !== 'ask') throw bad1('thread', 'an ask thread');
-      tx.mapPut('fu', p.id, [...(tx.mapGet('fu', p.id) || []), { u: tx.me.u, q: text(i.q, 'q'), a: 'Researching…' }]);
+      const l = tx.mapGet('fu', p.id) || [];
+      tx.mapPut('fu', p.id, [...l, { u: tx.me.u, q: text(i.q, 'q'), a: 'Researching…' }]);
+      startRun(tx, p.id, 'f' + l.length, { u: tx.me.u });
     } });
   proc('research.createPostFollowUp', { input: obj({ thread: ID, t: str, 'parent?': int }), output: 'null', who: 'member', errors: ['NOT_FOUND', 'PRECONDITION_FAILED'], wire: 'ResearchPostNode', writes: ['rp', 'posts'],
     note: 'a reply to a post; parent: the index of the reply it answers (replies have one level of nesting)', space: threadSpace,
@@ -790,16 +818,17 @@
       else { const top = l[i.parent]; if (!top) throw rpcError('NOT_FOUND', 'The server has no record of this reply. Someone may have deleted it.'); top.kids = [...(top.kids || []), r]; }
       tx.mapPut('rp', p.id, l);
     } });
-  proc('research.forkNode', { input: obj({ thread: ID, parent: str, q: str, 'uses?': nul(arr(str)), 'pay?': nul(str), 'model?': str }, 'ForkNodeInput'), output: '{ id: NodeId }', who: 'member', errors: ['NOT_FOUND', 'PRECONDITION_FAILED'], wire: 'ResearchNode', writes: ['qtd', 'posts'],
-    note: 'an ask about an answer in a thread’s ask tree (parent: "r" for the thread’s ask, or a node id); the server assigns the node id. It starts running (the page’s pipeline writes the answer until step 7). pay: TODO(limits), stored as sent; a key that pays must be yours.',
+  proc('research.forkNode', { input: obj({ thread: ID, parent: str, q: str, 'uses?': nul(arr(str)), 'pay?': nul(str), 'model?': str }, 'ForkNodeInput'), output: '{ id: NodeId }', who: 'member', errors: ['NOT_FOUND', 'PRECONDITION_FAILED'], wire: 'ResearchNode', writes: ['qtd', 'posts', 'runs'],
+    note: 'an ask about an answer in a thread’s ask tree (parent: "r" for the thread’s ask, or a node id); the server assigns the node id. It starts a run (a server job). pay: TODO(limits), stored as sent; a key that pays must be yours.',
     space: threadSpace, can: (tx, i) => ownPayer(tx, i.pay),
     run: (tx, i) => {
       const p = tx.need('posts', i.thread, 'thread'); writable(tx, p.s);
       const tree = askTree(tx, p.id);
       if (i.parent !== 'r') nodeOf(tree.nodes, i.parent);
-      const n = { id: tx.id(), par: i.parent, u: tx.me.u, q: text(i.q, 'q'), tok: 0, running: true, uses: i.uses || null, pay: i.pay == null ? null : i.pay };
+      const n = { id: tx.id(), par: i.parent, u: tx.me.u, q: text(i.q, 'q'), tok: 0, running: true, uses: i.uses || null, pay: i.pay == null ? null : i.pay, att: 1 };
       if (i.model) n.model = i.model;
       tx.mapPut('qtd', p.id, { ...tree, nodes: [...tree.nodes, n] });
+      startRun(tx, p.id, n.id, n);
       return { id: n.id };
     } });
   /* the author of a reply or a follow-up ask (a missing one is run's NOT_FOUND) */
@@ -830,21 +859,112 @@
       tx.mapPut('rp', p.id, l);
       return { kept: keep };
     } });
-  proc('followups.update', { input: obj({ thread: ID, node: str, q: str, 'run?': bool }), output: 'null', who: 'author', errors: ['NOT_FOUND'], wire: 'ResearchNode', writes: ['qtd', 'fu', 'posts'],
-    note: 'the author edits a follow-up ask; run: it runs again (the page’s pipeline writes the answer until step 7)', can: (tx, i) => ownNode(tx, i),
+  proc('followups.update', { input: obj({ thread: ID, node: str, q: str, 'run?': bool, 'pay?': nul(str) }), output: 'null', who: 'author', errors: ['NOT_FOUND'], wire: 'ResearchNode', writes: ['qtd', 'fu', 'posts', 'runs'],
+    note: 'the author edits a follow-up ask; run: it runs again (a new run) with payer pay (TODO(limits): stored as sent; a key must be yours)', can: (tx, i) => all(ownNode(tx, i), ownPayer(tx, i.pay)),
     run: (tx, i) => {
       const p = tx.need('posts', i.thread, 'thread'), q = text(i.q, 'q'), n = nodeOf(askNodes(tx, p.id), i.node), changed = n.q !== q;
       if (n.fu != null) { const fu = tx.mapGet('fu', p.id) || []; if (fu[n.fu]) { fu[n.fu].q = q; tx.mapPut('fu', p.id, fu); } }
       const tree = askTree(tx, p.id);
-      tx.mapPut('qtd', p.id, { ...tree, nodes: tree.nodes.map(x => { if (x.id !== n.id) return x; const y = { ...x }; if (y.fu == null) y.q = q; if (changed) y.edited = true; if (i.run) { y.running = true; y.tok = 0; } return y; }) });
+      let ran = null;
+      tx.mapPut('qtd', p.id, { ...tree, nodes: tree.nodes.map(x => { if (x.id !== n.id) return x; const y = { ...x }; if (y.fu == null) y.q = q; if (changed) y.edited = true; if (i.run) { y.running = true; y.tok = 0; y.pay = i.pay == null ? null : i.pay; y.att = (y.att || 0) + 1; delete y.fail; ran = y; } return y; }) });
+      if (ran) startRun(tx, p.id, n.id, { ...ran, u: n.u });
     } });
-  proc('followups.delete', { input: obj({ thread: ID, node: str }), output: '{ kept: boolean }', who: 'author', errors: ['NOT_FOUND'], wire: 'ResearchBranchRemoval', writes: ['qtd', 'fu', 'posts'],
+
+  /* -- runs (step 7): an ask's run is a server job (section 6a); these start and stop runs -- */
+  const runKey = (th, node) => `${th}:${node}`;
+  /* the run record of a node's ask; the job takes it from queued to running and through its steps */
+  function startRun(tx, th, node, x) {
+    tx.mapPut('runs', runKey(th, node), { th, node, u: x.u || tx.me.u, status: 'queued', attempt: x.att || 1, seq: 0, step: 0, model: x.model || null, pay: x.pay == null ? null : x.pay, createdAt: tx.now });
+  }
+  /* TODO(limits): the server's charge, a stub: tokens to a source (the included tokens or a key), in the
+     space they were used in, and the key's last use. The page's former tmCharge, moved. */
+  function charge(tx, pay, tok, sid) {
+    if (!pay || !tok) return;
+    const u = tx.value('usage'), by = u.by[pay] || (u.by[pay] = {});
+    by[sid] = (by[sid] || 0) + tok; tx.setValue('usage', u);
+    if (tx.find('userKeys', pay)) tx.edit('userKeys', pay, k => { k.lastUsedAt = tx.now; });
+  }
+  /* change one ask of a thread's tree (fn) and the flat follow-up it stands for (fuFn); f<index> names a flat
+     follow-up that the stored tree does not list */
+  function editAsk(tx, th, id, fn, fuFn) {
+    const tree = askTree(tx, th), n = tree.nodes.find(x => x.id === id);
+    if (n) tx.mapPut('qtd', th, { ...tree, nodes: tree.nodes.map(x => { if (x.id !== id) return x; const y = { ...x }; fn(y); return y; }) });
+    const k = n ? n.fu : /^f\d+$/.test(id) ? +id.slice(1) : null, fu = k != null && fuFn ? tx.mapGet('fu', th) : null;
+    if (fu && fu[k]) { fuFn(fu[k]); tx.mapPut('fu', th, fu); }
+  }
+  /* the ask a run answers in a thread's tree (with the text of the follow-up it stands for), or null when it is gone */
+  const askOf = (tx, th, id) => {
+    const n = askNodes(tx, th).find(x => x.id === id); if (n) return n;
+    const f = /^f\d+$/.test(id) ? (tx.mapGet('fu', th) || [])[+id.slice(1)] : null;
+    return f ? { id, par: 'r', fu: +id.slice(1), ...f } : null;
+  };
+  /* the events of a run that ended (complete, failed, cancelled): to everyone who may read it (section 6a).
+     node.updated carries the records the run wrote (changes, a mock addition: the real client fetches the
+     node's snapshot once it has the terminal node.updated). */
+  const runEnded = (tx, r, status, error) => {
+    const nodeId = runKey(r.th, r.node), e = error ? { error } : {};
+    tx.emit({ type: 'research.run.finished', run: r, payload: { nodeId, attempt: r.attempt, seq: r.seq + 1, status, ...e } });
+    tx.emit({ type: 'research.node.updated', run: r, changes: true, payload: { node: { id: nodeId, treeId: r.th, status, ...e } } });
+  };
+  /* the author of the ask a run answers */
+  const ownAsk = (tx, i) => i.node === 'r' ? ownThread(tx, i.thread) : ownNode(tx, i);
+  const NODE_IN = { thread: ID, node: str };
+  proc('research.cancelNode', { input: obj(NODE_IN), output: 'null', who: 'author', errors: ['NOT_FOUND', 'PRECONDITION_FAILED'], wire: 'ResearchNode', writes: ['posts', 'qtd', 'fu', 'runs', 'usage', 'userKeys'],
+    note: 'Stop: the author stops the run of an ask (node "r": the thread’s ask; else an ask in its tree). The run ends as cancelled: the answer is stopped and is charged what the run used so far (TODO(limits) stub: the tokens of its progress step, at most what the payer has left). PRECONDITION_FAILED when it is not running.',
+    can: (tx, i) => ownAsk(tx, i),
+    run: (tx, i) => {
+      const J = window.SessionJobs, p = tx.need('posts', i.thread, 'thread'), key = runKey(p.id, i.node), r = tx.mapGet('runs', key);
+      const n = i.node === 'r' ? null : askOf(tx, p.id, i.node);
+      if (i.node !== 'r' && !n) throw rpcError('NOT_FOUND', 'The server has no record of this follow-up. Someone may have deleted it.');
+      if (!(i.node === 'r' ? p.running : n.running || r)) throw rpcError('PRECONDITION_FAILED', 'This answer isn’t running.');
+      const pay = i.node === 'r' ? p.pay : n.pay, s = J.src(tx.get, pay), used = s ? Math.min(s.left, J.STEP_TOK[r ? r.step : 2]) : 0;
+      charge(tx, pay, used, p.s);
+      if (i.node === 'r') {
+        if (!tx.mapGet('fu', p.id)) tx.mapPut('fu', p.id, []);
+        tx.edit('posts', p.id, x => { x.running = false; x.tok = used; x.pay = pay || null; x.sum = J.FAIL_SUM.stopped(); x.fail = { why: 'stopped' }; });
+      } else editAsk(tx, p.id, i.node, y => { y.running = false; y.tok = used; y.html = ''; y.fail = { why: 'stopped' }; }, f => { f.a = J.FAIL_SUM.stopped(); delete f.html; });
+      tx.mapDel('runs', key);
+      if (r) runEnded(tx, r, 'cancelled');
+    } });
+  proc('research.retryNode', { input: obj({ ...NODE_IN, 'pay?': nul(str), 'model?': str }), output: 'null', who: 'author', errors: ['NOT_FOUND', 'PRECONDITION_FAILED'], wire: 'ResearchTreeDetail', writes: ['posts', 'qtd', 'fu', 'runs'],
+    note: 'Run again or Retry: the author runs an ask that stopped or failed again, as a new run (attempt). pay and model: the payer and model the page picked (TODO(limits): stored as sent; a key must be yours). PRECONDITION_FAILED while it runs.',
+    can: (tx, i) => all(ownAsk(tx, i), ownPayer(tx, i.pay)),
+    run: (tx, i) => {
+      const p = tx.need('posts', i.thread, 'thread'); writable(tx, p.s);
+      const pay = i.pay == null ? null : i.pay;
+      if (p.k !== 'ask') throw bad1('thread', 'an ask thread');
+      if (i.node === 'r') {
+        if (p.running) throw rpcError('PRECONDITION_FAILED', 'This answer is running.');
+        const x = tx.edit('posts', p.id, y => { y.running = true; y.sum = null; y.tok = 0; y.pay = pay; if (i.model) y.model = i.model; y.att = (y.att || 0) + 1; delete y.fail; });
+        startRun(tx, p.id, 'r', x);
+        return;
+      }
+      const n = askOf(tx, p.id, i.node);
+      if (!n) throw rpcError('NOT_FOUND', 'The server has no record of this follow-up. Someone may have deleted it.');
+      if (n.running || tx.mapGet('runs', runKey(p.id, i.node))) throw rpcError('PRECONDITION_FAILED', 'This answer is running.');
+      let ran = null;
+      editAsk(tx, p.id, i.node, y => { y.running = true; y.pay = pay; y.tok = 0; if (i.model) y.model = i.model; y.att = (y.att || 0) + 1; delete y.fail; ran = y; }, f => { f.a = 'Researching…'; delete f.html; });
+      startRun(tx, p.id, i.node, { ...(ran || {}), u: n.u, pay });
+    } });
+
+  /* -- token usage: the stub's user procedures (TODO(limits)) -- */
+  proc('usage.setDefaultKey', { input: obj({ id: nul(ID) }), output: 'null', who: 'user', errors: ['NOT_FOUND', 'PRECONDITION_FAILED'], stub: true, writes: ['usage'],
+    note: 'TODO(limits) stub: the key that pays for asks after the included tokens run out (null: none); it must be one of your valid keys',
+    run: (tx, i) => {
+      if (i.id != null) { const k = tx.need('userKeys', i.id, 'key'); if (!k.valid) throw rpcError('PRECONDITION_FAILED', 'The provider rejected this key.'); }
+      tx.setValue('usage', { ...tx.value('usage'), def: i.id });
+    } });
+  proc('usage.markMovedSeen', { input: obj({}), output: 'null', who: 'user', stub: true, writes: ['usage'],
+    note: 'TODO(limits) stub: you dismissed the note that asks now use your API key',
+    run: tx => { tx.setValue('usage', { ...tx.value('usage'), movedSeen: true }); } });
+  proc('followups.delete', { input: obj({ thread: ID, node: str }), output: '{ kept: boolean }', who: 'author', errors: ['NOT_FOUND'], wire: 'ResearchBranchRemoval', writes: ['qtd', 'fu', 'posts', 'runs'],
     note: 'the author deletes a follow-up ask and its answer: one with asks below it keeps its place, one without is removed', can: (tx, i) => ownNode(tx, i),
     run: (tx, i) => {
       const p = tx.need('posts', i.thread, 'thread'), n = nodeOf(askNodes(tx, p.id), i.node), tree = askTree(tx, p.id);
       const keep = tree.nodes.some(x => x.par === n.id);
       if (n.fu != null) { const fu = tx.mapGet('fu', p.id) || []; if (fu[n.fu]) { Object.assign(fu[n.fu], { del: true, q: '', a: '' }); delete fu[n.fu].html; tx.mapPut('fu', p.id, fu); } }
       tx.mapPut('qtd', p.id, { ...tree, nodes: keep ? tree.nodes.map(x => { if (x.id !== n.id) return x; const y = { ...x, del: true, q: '', html: '' }; delete y.edited; return y; }) : tree.nodes.filter(x => x.id !== n.id) });
+      tx.mapDel('runs', `${p.id}:${n.id}`);
       return { kept: keep };
     } });
 
@@ -1104,6 +1224,15 @@
       if (!closedSpace(s0) && closedSpace(s)) setRelation(tx, s.id, 'mod');
       else if (closedSpace(s) && tx.get('joined').includes(s.id) && !tx.get('rel')[s.id]) tx.mapPut('rel', s.id, tx.get('roles')[s.id] ? 'mod' : 'member');
     } });
+  proc('spaces.verifyDomain', { input: obj({ id: ID, domain: str, 'method?': one('dns') }), output: 'null', who: 'admin', errors: ['NOT_FOUND'], writes: ['spaces'],
+    note: 'check that the space’s admins control a domain (a DNS TXT record): the space’s dom is "checking" until the check job writes "ok" (with verifiedAt) or "failed" (section 6a)',
+    space: (tx, i) => i.id,
+    run: (tx, i) => {
+      const domain = i.domain.trim().toLowerCase();
+      if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain)) throw bad1('domain', 'a domain such as example.com');
+      tx.edit('spaces', i.id, x => { x.dom = { domain, method: i.method || 'dns', state: 'checking' }; }, 'space');
+      tx.job('domain', i.id);
+    } });
   proc('spaces.archive', { input: obj({ id: ID, archived: bool }), output: 'null', who: 'owner', errors: ['NOT_FOUND'], writes: ['spaces'],
     note: 'archive (read-only, hidden from browse and search) or unarchive a space', space: (tx, i) => i.id,
     run: (tx, i) => { tx.edit('spaces', i.id, x => { if (i.archived) x.archived = { by: tx.me.u, on: new Date(tx.now).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) }; else delete x.archived; }, 'space'); } });
@@ -1159,8 +1288,8 @@
     note: 'swap a page with the one above or below it in About',
     run: (tx, i) => { pageAt(tx, i.space, i.from); pageAt(tx, i.space, i.to); tx.edit('spaces', i.space, x => { const p = x.pages.slice(); [p[i.from], p[i.to]] = [p[i.to], p[i.from]]; x.pages = p; }); } });
 
-  /* -- API keys: TODO(limits) stubs. Not encrypted (owner decision), no usage accounting; the key check is
-     simulated by the page (acCheckKey) and its result written as a server job until the backend checks keys. */
+  /* -- API keys: TODO(limits) stubs. Not encrypted (owner decision), no usage accounting. A key check is a
+     server job (section 6a): the key is "checking" until the job writes the provider's verdict. */
   const keyProvider = v => v.startsWith('AIza') ? 'Google' : v.startsWith('sk-ant-') ? 'Anthropic' : v.startsWith('sk-or-') ? 'OpenRouter' : 'OpenAI';
   const keyMask = v => `${v.slice(0, v.startsWith('sk-ant-') ? 7 : v.startsWith('AIza') ? 4 : 3)}…${v.slice(-4)}`;
   const rawKey = (tx, raw, except) => { if (raw.trim().length < 8) throw bad1('raw', 'an API key'); if (tx.get('userKeys').some(k => k.raw === raw && k.id !== except)) throw rpcError('CONFLICT', 'This key has already been added.'); return raw.trim(); };
@@ -1170,13 +1299,15 @@
       const raw = rawKey(tx, i.raw), id = tx.id(), k = { id, kind: 'key', raw, label: i.label.trim() || `API key ${tx.get('userKeys').length + 1}`, mask: keyMask(raw), provider: keyProvider(raw) };
       if (i.check) Object.assign(k, { valid: false, lastUsedAt: null, used: 0, cap: i.cap || 0, check: 'checking' }); else k.valid = true;
       tx.put('userKeys', k);
+      if (i.check) tx.job('key', id, { why: window.SessionJobs.keyVerdict(k) });
       return { id };
     } });
   proc('apiKeys.replace', { input: obj({ id: ID, raw: str }), output: 'null', who: 'user', errors: ['NOT_FOUND', 'CONFLICT'], stub: true, writes: ['userKeys'],
     note: 'TODO(limits) stub: a new raw key under the same name; it is checked again',
-    run: (tx, i) => { const raw = rawKey(tx, i.raw, i.id); tx.edit('userKeys', i.id, k => { Object.assign(k, { raw, mask: keyMask(raw), provider: keyProvider(raw), createdAt: tx.now, lastUsedAt: null, used: 0, check: 'checking', valid: false }); delete k.reason; }, 'key'); } });
+    run: (tx, i) => { const raw = rawKey(tx, i.raw, i.id); tx.edit('userKeys', i.id, k => { Object.assign(k, { raw, mask: keyMask(raw), provider: keyProvider(raw), createdAt: tx.now, lastUsedAt: null, used: 0, check: 'checking', valid: false }); delete k.reason; }, 'key'); tx.job('key', i.id, { why: window.SessionJobs.keyVerdict({ raw }) }); } });
   proc('apiKeys.check', { input: obj({ id: ID }), output: 'null', who: 'user', errors: ['NOT_FOUND'], stub: true, writes: ['userKeys'],
-    note: 'TODO(limits) stub: check the key with its provider again', run: (tx, i) => { tx.edit('userKeys', i.id, k => { k.check = 'checking'; k.valid = false; delete k.reason; }, 'key'); } });
+    note: 'TODO(limits) stub: check the key with its provider again',
+    run: (tx, i) => { const why = window.SessionJobs.keyVerdict(tx.need('userKeys', i.id, 'key')); tx.edit('userKeys', i.id, k => { k.check = 'checking'; k.valid = false; delete k.reason; }); tx.job('key', i.id, { why }); } });
   proc('apiKeys.rename', { input: obj({ id: ID, label: str }), output: 'null', who: 'user', errors: ['NOT_FOUND'], stub: true, writes: ['userKeys'],
     run: (tx, i) => { const label = text(i.label, 'label'); tx.edit('userKeys', i.id, k => { k.label = label; }, 'key'); } });
   proc('apiKeys.setCap', { input: obj({ id: ID, cap: num }), output: 'null', who: 'user', errors: ['NOT_FOUND'], stub: true, writes: ['userKeys'],
@@ -1299,25 +1430,27 @@
     return t + r;
   }
   const omit = (o, ks) => { if (!ks || !ks.some(k => k in o)) return o; const x = { ...o }; ks.forEach(k => delete x[k]); return x; };
-  function createBackend({ fixtures, seed, scenarios, storageKey = 'session-mock-db-v5', latency = 120, dev = false }) {
+  function createBackend({ fixtures, seed, scenarios, storageKey = 'session-mock-db-v5', latency = 120, dev = false, jobMs, checkMs }) {
     const fx = fixtures || { data: seed ? seed() : {} };
     const me = fx.me || { u: 'me', x: '@me', createdAt: new Date().toISOString() };
-    const cfg = { now: fx.clock || new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), base: latency, latency, failWrites: false, failReads: false, failCode: 'SERVICE_UNAVAILABLE', failOn: null, readRules: { ...READ_RULES } };
+    const cfg = { now: fx.clock || new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), base: latency, latency, failWrites: false, failReads: false, failCode: 'SERVICE_UNAVAILABLE', failOn: null, readRules: { ...READ_RULES },
+      jobs: 'run', jobMs: jobMs == null ? (latency === 0 ? 40 : 2400) : jobMs, checkMs: checkMs == null ? 1400 : checkMs, failNextRun: null, resumeJobs: true };
     const log = window.__mockApiLog = [];
     const LOG_MAX = 400;   /* the newest requests; `seq` counts every request, so a test can take the ones after a mark */
     let seq = 0;
     let data = null, ids = 0, ver = null;   /* ids: how many ids the server has made (the ULID counter) */
+    let stored = false;                     /* the database came from localStorage (a reload) */
     const fail = msg => { console.error('[mock api] ' + msg); if (dev) setTimeout(() => { throw new Error('[mock api] ' + msg); }); };
     const seedData = () => { const s = fixtures ? fixtures.data : seed(), o = {}; for (const k of Object.keys(C)) if (k in s) o[k] = s[k]; return dec(enc(o)); };
     const version = () => { if (ver) return ver; const t = enc({ seed: seedData(), clock: fx.clock || null, me }); let x = 2166136261; for (let i = 0; i < t.length; i++) { x ^= t.charCodeAt(i); x = Math.imul(x, 16777619); } return (ver = (x >>> 0).toString(36) + ':' + t.length); };
     const db0 = () => {
       if (data) return data;
-      try { const s = localStorage.getItem(storageKey); if (s) { const o = dec(s); if (o && o.v === version()) { ids = o.ids || 0; return (data = o.data); } } } catch (e) {}
+      try { const s = localStorage.getItem(storageKey); if (s) { const o = dec(s); if (o && o.v === version()) { ids = o.ids || 0; checks = Array.isArray(o.checks) ? o.checks : []; if (o.dev && o.dev.resumeJobs === false) cfg.resumeJobs = false; stored = true; return (data = o.data); } } } catch (e) {}
       data = seedData(); ids = 0;
       if (dev) checkSeed(data);
       return data;
     };
-    const save = () => { try { localStorage.setItem(storageKey, enc({ v: version(), ids, data })); } catch (e) {} };
+    const save = () => { try { localStorage.setItem(storageKey, enc({ v: version(), ids, data, checks, dev: { resumeJobs: cfg.resumeJobs } })); } catch (e) {} };
     const out = (status, body) => new Response(body === undefined ? null : enc(body), { status, headers: { 'Content-Type': 'application/json' } });
     const err = (code, message, extra) => { const r = out(STATUS[code], Object.assign({ code, message: message || CODES[code][1] }, extra)); r.code = code; r.issues = extra && extra.issues; return r; };
     const bad = issues => err('BAD_REQUEST', undefined, { issues: issues.slice(0, 5).map(i => `${i.path}: expected ${i.expected}`) });
@@ -1386,6 +1519,10 @@
         mapDel: (k, key) => { if (key in cur(k)) { delete own(k)[key]; mark(k, key); } },
         setValue: (k, v) => { staged[k] = stampValue(k, v instanceof Set ? new Set(v) : copy(v)); mark(k, '*'); },
         abort: () => { ids = ids0; },
+        /* events to publish and checks to start once the transaction commits (section 6a) */
+        events: [], jobs: [],
+        emit: e => { tx.events.push(e); },
+        job: (kind, id, o) => { tx.jobs.push([kind, id, o]); },
       };
       tx.commit = () => {
         /* every staged collection must still pass its schema: a failed check is a bug in a procedure */
@@ -1442,6 +1579,7 @@
       const c = C[k];
       if (!key) return ['a key'];
       if (c.key === 'thread') { if (!ULID_RE.test(key)) return ['a thread id (a ULID)']; if (mode === 'NOT_FOUND' && !(d.posts || []).some(p => p.id === key)) return ['NOT_FOUND']; }
+      if (c.key === 'node') { const [th, n] = key.split(':'); if (!ULID_RE.test(th) || !n) return ['"<thread>:<node>"']; }
       if (c.key === 'space' || c.key === 'page') {
         const sid = c.key === 'page' ? key.split('/')[0] : key;
         if (c.key === 'page' && !/^[^/]+\/./.test(key)) return ['"<space>/<page>"'];
@@ -1515,6 +1653,11 @@
       ago: a => { const m = /^(\d+)(mo|m|h|d|w)$/.exec(a), n = +m[1]; const [lo, hi] = m[2] === 'mo' ? [Math.max(30 * n, 56) * 1440, (30 * n + 30) * 1440] : [n * AGO_MIN[m[2]], (n + 1) * AGO_MIN[m[2]]]; return isoOf(Date.parse(cfg.now) - (lo + hi) / 2 * 60e3); },
       rel: (sid, r) => setRelation(tx, sid, r),
       tree: th => askTree(tx, th),
+      /* a run held at a progress step: started (seq 1) and one committed turn per step before it */
+      run: (th, node, step) => {
+        const x = node === 'r' ? tx.find('posts', th) : askTree(tx, th).nodes.find(n => n.id === node);
+        tx.mapPut('runs', runKey(th, node), { th, node, u: x.u || tx.me.u, status: 'running', attempt: x.att || 1, seq: 1 + step, step, model: x.model || null, pay: x.pay == null ? null : x.pay, createdAt: tx.now, paused: true });
+      },
       proc: (name, input) => {
         const P = PROCS[name]; if (!P) throw new Error(`no procedure ${name}`);
         const issues = check(P.input, input, 'input'); if (issues.length) throw new Error(`${name}: ${issues.map(i => `${i.path}: expected ${i.expected}`).join('; ')}`);
@@ -1561,37 +1704,256 @@
     }
 
     /* caller: ME, or GUEST for a request with X-Session-Auth: out */
+    /* ---- 6a. jobs and the event stream (step 7) ----
+       Runs. A procedure that starts an ask writes a run record (runs, "<thread>:<node>", status queued); after
+       every commit reconcile() gives each run a timer. A queued run starts at once: the job checks again, under
+       step 5's rules, that the person who asked can still read the space, that a key that pays is theirs and
+       that the sources the ask is about are readable to them (else the run fails: access); then it is running
+       (research.run.started). Every jobMs / 4 it moves to the next progress step and commits that step's turn
+       (research.turn.committed, a tool call; no text is streamed); after the last step it finishes: it writes
+       the answer (SessionJobs.answer), its sources, the topic, the run state or the failure, the follow-up or
+       ask-tree node, the notification and the charge (TODO(limits) stub), removes the run record, and emits
+       research.run.finished, research.node.updated (with the changed records) and notification.requested.
+       Each job step is a server transaction (all or nothing); seq counts the run's events.
+       A job checks its run record each time: a run that was stopped, retried (a new attempt) or whose thread is
+       gone is not moved on. Run records are stored with the database, so runs resume after a reload; with
+       resumeJobs false (dev config) they fail as interrupted instead. A thread or ask that is running without a
+       run record fails as interrupted when the backend starts.
+       Checks. A key check (apiKeys.create with check, apiKeys.replace, apiKeys.check) and a domain check
+       (spaces.verifyDomain) finish after checkMs: the key gets the provider's verdict (TODO(limits) stub event
+       apiKeys.updated, mock only: the real app has no API keys), the space's dom becomes ok or failed
+       (workspace.updated: spaces replace workspaces).
+       Dev: /api/dev/config { jobs: 'paused' } holds every job until { jobs: 'run' }; a run record with
+       paused: true (a Screen entry's scenario) is held on its own; failNextRun makes the next thread ask that
+       finishes fail (tokens, key or rate). A scenario or a reset ends the jobs in progress, as it replaces the data.
+       Events. GET /api/rpc/events.subscribe, opened with EventSource (patched below), is one connection: it
+       gets connection.ready { connectionId } first, then SessionEvent objects { type, payload, timestamp }
+       (web/docs/03-api-and-events.md §3), each after the configured latency, in order. The mock has one
+       person, so a connection is the signed-in person's (the page opens one only while signed in). Run events
+       reach it only when they may read the node the run answers: readScope's readsRun (the thread for its ask,
+       the ask tree for the others), the predicate GET uses; their changes are what they may read (as a
+       procedure's). Notifications reach only their recipient. */
+    const J = window.SessionJobs;
+    const timers = new Map();         /* run key, or "check:<kind>:<id>" → { h, ver } */
+    let checks = [];                  /* checks in progress: [kind, id, due (ms, real time), { why }] */
+    const conns = new Set();          /* open event streams */
+    let connIds = 0, outDue = 0, outPending = 0;
+    const evLog = window.__mockEventLog = [];   /* the newest events emitted: { n (counts every event), type, nodeId, seq, conns (connections it went to), changes (the collections it carried) } */
+    let evN = 0;
+    const stepMs = () => Math.max(0, +cfg.jobMs || 0) / J.STEPS;
+    /* a view of a transaction's data for readScope */
+    const txData = tx => new Proxy({}, { get: (_, k) => typeof k === 'string' ? tx.get(k) : undefined });
+    function reconcile() {
+      const d = db0(), want = new Map();
+      if (cfg.jobs !== 'paused') {
+        for (const [k, r] of Object.entries(d.runs || {})) if (!r.paused) want.set(k, { ver: `${r.status}:${r.step}:${r.attempt}`, ms: r.status === 'queued' ? 0 : stepMs(), fn: () => tick(k) });
+        for (const [kind, id, due] of checks) want.set(`check:${kind}:${id}`, { ver: String(due), ms: Math.max(0, due - Date.now()), fn: () => finishCheck(kind, id) });
+      }
+      for (const [k, x] of timers) { const w = want.get(k); if (!w || w.ver !== x.ver) { clearTimeout(x.h); timers.delete(k); } }
+      for (const [k, w] of want) if (!timers.has(k)) timers.set(k, { ver: w.ver, h: setTimeout(() => { timers.delete(k); w.fn(); }, w.ms) });
+    }
+    const addChecks = list => { if (!list.length) return; list.forEach(([kind, id, o]) => { checks = checks.filter(c => !(c[0] === kind && c[1] === id)); checks.push([kind, id, Date.now() + (+cfg.checkMs || 0), o || {}]); }); save(); };
+    /* a job's change: one server transaction; then its events and checks */
+    function serverTx(fn) {
+      const d = db0(), tx = transaction(d, ME);
+      let changes;
+      try { fn(tx); changes = tx.commit(); }
+      catch (e) { tx.abort(); fail(`a job failed: ${e && e.stack || e}`); return null; }
+      publish(tx.events, changes); addChecks(tx.jobs);
+      return changes;
+    }
+    /* events a transaction queued (tx.emit), to the connections that may have them */
+    function publish(list, changes) {
+      if (!list.length) return;
+      const sc = scopeFor(db0(), ME);
+      for (const e of list) {
+        if (e.run && !sc.readsRun(e.run)) continue;
+        if (e.to && e.to !== me.u) continue;
+        const payload = { ...e.payload };
+        if (e.changes) payload.changes = Object.fromEntries(Object.entries(changes || {}).filter(([k]) => e.changes === 'notifs' ? k === 'notifs' : k !== 'notifs'));
+        if (e.fill) e.fill(payload, changes || {});
+        emit(e.type, payload);
+      }
+    }
+    function emit(type, payload, only) {
+      const ev = { type, payload, timestamp: Date.now() };
+      evLog.push({ n: ++evN, type, nodeId: payload.nodeId || (payload.node && payload.node.id) || null, seq: payload.seq == null ? null : payload.seq, conns: only ? 1 : conns.size, changes: Object.keys(payload.changes || {}) });
+      if (evLog.length > 400) evLog.splice(0, evLog.length - 400);
+      for (const c of only ? [only] : conns) deliver(c, ev);
+    }
+    /* in order, after the latency */
+    function deliver(c, ev) {
+      const now = Date.now(); outDue = Math.max(outDue, now + cfg.latency); outPending++;
+      setTimeout(() => { outPending--; if (c.readyState === 1) c._message(enc(ev)); }, outDue - now);
+    }
+    const nodeView = (r, status, extra) => ({ id: runKey(r.th, r.node), treeId: r.th, status, ...(extra || {}) });
+    /* the thread (node r) or the ask a run answers; null when it is gone */
+    const runTarget = (tx, r) => {
+      const p = tx.find('posts', r.th); if (!p || p.gone || p.k !== 'ask') return null;
+      if (r.node === 'r') return p.del ? null : p;
+      const n = askOf(tx, p.id, r.node); return n && !n.del ? n : null;
+    };
+    /* the checks before a run starts (step 5's rules): null, or why it fails */
+    function startChecks(tx, r, p) {
+      const s = tx.find('spaces', p.s);
+      if (!s || readsThread(tx, p) !== true) return 'access';
+      if (ownPayer(tx, r.pay) !== true) return 'access';
+      if (r.node === 'r' && p.about) {
+        const sc = readScope(txData(tx), true, cfg.readRules, me);
+        for (const id of p.about.its || [p.about.it]) { const m = tx.find('media', id) || tx.find('miAdded', id); if (m && !sc.list('media', m)) return 'access'; }
+      }
+      return null;
+    }
+    /* the notification of a finished ask, to the person who asked (the mock has one person: only theirs exist) */
+    function notify(tx, p, type) {
+      if (p.u !== me.u || readsThread(tx, p) !== true) return;
+      const id = tx.id(), s = tx.find('spaces', p.s), ok = type === 'answer_ready';
+      tx.put('notifs', { id, type, thread: p.id, read: false }, 'start');
+      tx.emit({ type: 'notification.requested', to: p.u, changes: 'notifs', payload: { id, title: ok ? 'Your answer is ready' : 'Your answer failed', body: p.t || p.q, tone: ok ? 'success' : 'error', timeoutMs: 6000, createdAt: Date.parse(tx.now), href: `/s/${s.name}/t/${p.id}`, kind: 'runFinished', treeId: p.id } });
+    }
+    /* a run ends without an answer: why is a RunFailure reason; o: used (tokens charged), pay, sum */
+    function endRun(tx, key, r, p, status, why, o = {}) {
+      if (r.node === 'r') {
+        const wait = why === 'rate' ? 20 : 0;
+        if (!tx.mapGet('fu', p.id)) tx.mapPut('fu', p.id, []);
+        tx.edit('posts', p.id, x => { x.running = false; x.tok = o.used || 0; x.pay = o.pay || p.pay || null; x.sum = o.sum || J.FAIL_SUM[why](); x.fail = { why, ...(wait ? { at: Date.now() + wait * 1e3 } : {}) }; });
+      } else editAsk(tx, p.id, r.node, y => { y.running = false; y.html = ''; y.tok = o.used || 0; if (o.pay !== undefined) y.pay = o.pay; y.fail = { why }; }, f => { f.a = J.FAIL_SUM[why](); delete f.html; });
+      tx.mapDel('runs', key);
+      runEnded(tx, r, status, why);
+      if (r.node === 'r' && why !== 'stopped') notify(tx, p, 'answer_failed');
+    }
+    /* one step of a run's job; the run record says which */
+    function tick(key) {
+      const r0 = (db0().runs || {})[key];
+      if (!r0 || r0.paused || cfg.jobs === 'paused') return;
+      serverTx(tx => {
+        const r = tx.mapGet('runs', key), p = tx.find('posts', r.th), n = runTarget(tx, r);
+        if (!n) { tx.mapDel('runs', key); return; }
+        if (r.status === 'queued') {
+          const why = startChecks(tx, r, p);
+          if (why) return endRun(tx, key, r, p, 'failed', why);
+          const r2 = { ...r, status: 'running', seq: r.seq + 1 };
+          tx.mapPut('runs', key, r2);
+          tx.emit({ type: 'research.run.started', run: r2, payload: { nodeId: key, attempt: r2.attempt, seq: r2.seq, model: r2.model || null } });
+          tx.emit({ type: 'research.node.updated', run: r2, changes: true, payload: { node: nodeView(r2, 'running') } });
+          return;
+        }
+        if (r.step < J.STEPS - 1) {
+          const [name, input] = J.STEP_TOOLS[r.step], r2 = { ...r, step: r.step + 1, seq: r.seq + 1 };
+          tx.mapPut('runs', key, r2);
+          tx.emit({ type: 'research.turn.committed', run: r2, payload: { nodeId: key, seq: r2.seq, turn: { id: `${key}:${r.attempt}:${r.step}`, agentId: key, role: 'assistant', blocks: [{ type: 'toolUse', id: null, name, input: input(n.q, p.s) }], sourceIndex: r.step, timestamp: Date.now() } } });
+          return;
+        }
+        finishRun(tx, key, r, p, n);
+      });
+      reconcile();
+    }
+    /* the last step: the answer, or a failure */
+    function finishRun(tx, key, r, p, n) {
+      const g = tx.get;
+      if (r.node === 'r') {
+        if (cfg.failNextRun) { const why = cfg.failNextRun; cfg.failNextRun = null; return endRun(tx, key, r, p, 'failed', why); }
+        const tok = J.answerTok(p);
+        let pay = p.pay; if (!J.src(g, pay)) { const x = J.payer(g); pay = x.ok ? x.id : null; }
+        const s = J.src(g, pay);
+        /* the payer ran out while the agent worked: stop, charge what was left, and say why */
+        if (!s || s.left < tok) { const used = s ? Math.min(s.left, tok) : 0; charge(tx, pay, used, p.s); return endRun(tx, key, r, p, 'failed', 'tokens', { used, pay, sum: J.stopSum(s) }); }
+        const a = J.answer(g, p), sp0 = tx.find('spaces', p.s);
+        tx.mapPut('rich', p.id, a.rich); tx.mapPut('srcd', p.id, a.srcd);
+        if (!tx.mapGet('fu', p.id)) tx.mapPut('fu', p.id, []);
+        tx.edit('posts', p.id, x => {
+          x.running = false; x.tok = tok; x.pay = pay; x.sum = a.sum; delete x.fail;
+          if (sp0.faq && !x.topic) { x.topic = J.topic(g, sp0, x.q); x.topicBy = x.topic ? 'agent' : null; }
+        });
+        charge(tx, pay, tok, p.s);
+      } else {
+        const { html, tok } = J.nodeAnswer(n);
+        let pay = n.pay; if (pay == null) { const x = J.payer(g); pay = x.ok ? x.id : null; }
+        const s = J.src(g, pay);
+        if (!s || s.left < tok) { const used = s ? Math.min(s.left, tok) : 0; charge(tx, pay, used, p.s); return endRun(tx, key, r, p, 'failed', 'tokens', { used, pay }); }
+        editAsk(tx, p.id, r.node, y => { y.running = false; y.tok = tok; if (y.fu == null) y.html = html; y.pay = pay; delete y.fail; }, f => { f.html = html; f.a = J.htmlText(html); });
+        charge(tx, pay, tok, p.s);
+      }
+      tx.mapDel('runs', key);
+      runEnded(tx, r, 'complete');
+      if (r.node === 'r') notify(tx, p, 'answer_ready');
+    }
+    function finishCheck(kind, id) {
+      const c = checks.find(x => x[0] === kind && x[1] === id); if (!c) return;
+      checks = checks.filter(x => x !== c); save();
+      serverTx(tx => {
+        if (kind === 'key') {
+          const k = tx.find('userKeys', id); if (!k || k.check !== 'checking') return;
+          const why = c[3].why;
+          tx.edit('userKeys', id, x => { delete x.check; x.valid = !why; if (why) x.reason = why; else delete x.reason; });
+          tx.emit({ type: 'apiKeys.updated', changes: true, payload: { keyId: id } });
+          return;
+        }
+        const s = tx.find('spaces', id); if (!s || !s.dom || s.dom.state !== 'checking') return;
+        const failed = J.domainFails(s.dom.domain);
+        tx.edit('spaces', id, y => { y.dom = failed ? { ...y.dom, state: 'failed' } : { ...y.dom, state: 'ok', verifiedAt: tx.now }; });
+        tx.emit({ type: 'workspace.updated', changes: true, payload: {}, fill: (pl, ch) => { pl.workspace = ((ch.spaces || {}).put || []).find(x => x.id === id) || null; } });
+      });
+      reconcile();
+    }
+    /* when the backend starts with a stored database: runs resume (or, with resumeJobs false, fail as
+       interrupted); an ask that is running without a run record fails as interrupted */
+    function recoverJobs() {
+      const d = db0(), runs = d.runs || {};
+      const orphan = [];
+      d.posts.forEach(p => { if (p.k === 'ask' && p.running && !runs[runKey(p.id, 'r')]) orphan.push({ th: p.id, node: 'r', u: p.u, attempt: p.att || 1, seq: 0, step: 0 }); });
+      Object.entries(d.qtd || {}).forEach(([th, t]) => (t.nodes || []).forEach(n => { if (n.running && !runs[runKey(th, n.id)]) orphan.push({ th, node: n.id, u: n.u, attempt: n.att || 1, seq: 0, step: 0 }); }));
+      const stop = cfg.resumeJobs === false ? Object.values(runs).filter(r => !r.paused) : [];
+      if (!orphan.length && !stop.length) return;
+      serverTx(tx => {
+        for (const r of [...orphan, ...stop]) {
+          const p = tx.find('posts', r.th);
+          if (!p || !runTarget(tx, r)) { tx.mapDel('runs', runKey(r.th, r.node)); continue; }
+          endRun(tx, runKey(r.th, r.node), r, p, 'failed', 'interrupted');
+        }
+      });
+    }
+
     function handle(method, url, body, origin, caller = ME) {
       const [path, qs] = url.split('?');
       const hits = matchPath(path);
       if (!hits.length) { fail(`no API entry for ${method} ${path}`); return { res: err('NOT_FOUND', 'The server has no address like this.') }; }
       const hit = hits.find(h => h.r.method === method);
       if (!hit) {
-        /* a collection write without a row: only the ask pipeline and the usage stub write collections */
-        if (method !== 'GET' && hits.some(h => h.r.coll)) fail(`no collection write ${method} ${path}${origin ? ` (from ${origin})` : ''}: a person's action is a procedure, and a Screen entry's data a scenario`);
+        /* a collection write: collections have no write rows (step 7) */
+        if (method !== 'GET' && hits.some(h => h.r.coll)) fail(`no collection write ${method} ${path}${origin ? ` (from ${origin})` : ''}: a person's action is a procedure, a run's result a job's, and a Screen entry's data a scenario`);
         return { res: err('METHOD_NOT_SUPPORTED') };
       }
       const { r, id } = hit;
-      if (r.coll && r.scope && !r.scope.includes(origin)) fail(`${method} ${path} from ${origin || 'an unknown origin'}: this collection write is for ${r.scope.join(', ')} only`);
       if (r.dev) {
-        if (r.op === 'dev-reset') { data = seedData(); ids = 0; save(); return { res: out(204) }; }
-        if (r.op === 'dev-scenario') return { res: scenario(body) };
+        if (r.op === 'dev-reset') { data = seedData(); ids = 0; checks = []; save(); reconcile(); return { res: out(204) }; }
+        if (r.op === 'dev-scenario') { checks = []; const res = scenario(body); reconcile(); return { res }; }
         if (method === 'PUT') {
           if (!body || typeof body !== 'object') return { res: err('BAD_REQUEST') };
           if (body.failCode && !CODES[body.failCode]) return { res: err('BAD_REQUEST', undefined, { issues: ['failCode: expected one of ' + Object.keys(CODES).join(', ')] }) };
           if (body.failOn && !CODES[body.failOn.code]) return { res: err('BAD_REQUEST', undefined, { issues: ['failOn.code: expected one of ' + Object.keys(CODES).join(', ')] }) };
           if (body.now !== undefined && check(t.iso, body.now).length) return { res: err('BAD_REQUEST', undefined, { issues: ['now: expected an ISO time such as 2026-11-16T10:00:00Z'] }) };
           if (body.readRules !== undefined && (!body.readRules || typeof body.readRules !== 'object' || Object.entries(body.readRules).some(([k, v]) => !(k in READ_RULES) || typeof v !== 'boolean'))) return { res: err('BAD_REQUEST', undefined, { issues: ['readRules: expected { ' + Object.keys(READ_RULES).map(k => k + '?: boolean').join(', ') + ' }'] }) };
+          const jobIssues = [
+            body.jobs !== undefined && !['run', 'paused'].includes(body.jobs) && 'jobs: expected "run" | "paused"',
+            ...['jobMs', 'checkMs'].map(k => body[k] !== undefined && !(typeof body[k] === 'number' && body[k] >= 0) && `${k}: expected a number of ms`),
+            body.failNextRun !== undefined && body.failNextRun !== null && !['tokens', 'key', 'rate'].includes(body.failNextRun) && 'failNextRun: expected null | "tokens" | "key" | "rate"',
+            body.resumeJobs !== undefined && typeof body.resumeJobs !== 'boolean' && 'resumeJobs: expected boolean',
+          ].filter(Boolean);
+          if (jobIssues.length) return { res: err('BAD_REQUEST', undefined, { issues: jobIssues }) };
           Object.assign(cfg, body, body.readRules ? { readRules: { ...cfg.readRules, ...body.readRules } } : {});
+          if (body.resumeJobs !== undefined) save();
+          reconcile();
         }
         return { res: out(200, cfg) };
       }
       const f = forced(method, path);
       if (f) return { res: err(f), forced: true };
-      /* a signed-out caller: only the guest rows (and the server's, which check the origin instead) */
-      if (!caller.signedIn && r.who !== 'guest' && r.who !== 'server') return { res: err('UNAUTHORIZED') };
+      /* a signed-out caller: only the guest rows */
+      if (!caller.signedIn && r.who !== 'guest') return { res: err('UNAUTHORIZED') };
       const d = db0();
       if (r.op === 'me') return { res: out(200, { u: me.u, name: d.profile.name, bio: d.profile.bio, x: me.x, createdAt: me.createdAt }) };
+      if (r.op === 'events') return { res: err('BAD_REQUEST', 'Open the event stream with EventSource.') };
       if (r.op === 'rpc') {
         const P = PROCS[r.trpc], input = body === undefined ? {} : body;
         const issues = check(P.input, input, 'input');
@@ -1603,6 +1965,8 @@
           const result = P.run(tx, input);
           const changes = tx.commit();
           if (before) mergeChanges(changes, changesBetween(before, snapshot(d, caller, SCOPED)));
+          /* the events the procedure queued, its checks, and the jobs of the runs it started or ended */
+          publish(tx.events, changes); addChecks(tx.jobs); reconcile();
           return { res: out(200, { result: result === undefined ? null : result, changes }) };
         } catch (e) {
           tx.abort();
@@ -1666,6 +2030,31 @@
       return { res: err('INTERNAL_SERVER_ERROR') };
     }
 
+    /* the event stream: EventSource on /api/* is a connection to this backend (section 6a) */
+    const RealEventSource = window.EventSource;
+    class MockEventSource extends EventTarget {
+      constructor(url) {
+        super();
+        this.url = String(url); this.withCredentials = false; this.readyState = 0;
+        this.onopen = this.onmessage = this.onerror = null;
+        const path = this.url.split('?')[0];
+        setTimeout(() => {
+          if (this.readyState === 2) return;
+          if (path !== '/api/rpc/events.subscribe') { fail(`no event stream at ${path}`); this.readyState = 2; this._fire('error', new Event('error')); return; }
+          this.readyState = 1; conns.add(this);
+          log.push({ seq: ++seq, method: 'GET', path, status: 200, code: null, stream: true });
+          this._fire('open', new Event('open'));
+          emit('connection.ready', { connectionId: 'c' + (++connIds) }, this);
+        }, cfg.latency);
+      }
+      _fire(type, ev) { this.dispatchEvent(ev); const h = this['on' + type]; if (typeof h === 'function') h.call(this, ev); }
+      _message(data) { this._fire('message', new MessageEvent('message', { data })); }
+      close() { this.readyState = 2; conns.delete(this); }
+    }
+    Object.assign(MockEventSource, { CONNECTING: 0, OPEN: 1, CLOSED: 2 });
+    window.EventSource = function (url, init) { return String(url).startsWith('/api/') ? new MockEventSource(url) : new RealEventSource(url, init); };
+    Object.assign(window.EventSource, { CONNECTING: 0, OPEN: 1, CLOSED: 2 });
+
     const realFetch = window.fetch;
     window.fetch = (input, init = {}) => {
       const url = typeof input === 'string' ? input : input.url;
@@ -1673,7 +2062,7 @@
       const method = (init.method || 'GET').toUpperCase();
       return new Promise(resolve => setTimeout(() => {
         let res, forcedErr = false;
-        /* who sent a collection write (the page's X-Session-Origin): run (the ask pipeline), stub, or user (a bug);
+        /* X-Session-Origin: who sent a request, for the log (scenario: a Screen entry's set-up; user: a collection write from the page, which is a bug);
            X-Session-Auth: out, a request without a session (signed out) */
         const h = init.headers || {}, hd = n => typeof h.get === 'function' ? h.get(n) : h[n], origin = hd('X-Session-Origin'), caller = hd('X-Session-Auth') === 'out' ? GUEST : ME;
         try { const body = init.body ? dec(init.body) : undefined; ({ res, forced: forcedErr } = handle(method, url, body, origin, caller)); }
@@ -1697,11 +2086,15 @@
         if (c.path !== r.url || c.kind !== r.kind || (c.kind === 'list' && c.id !== r.id)) fail(`collection ${k}: the page declares ${r.url} (${r.kind}${r.id ? ', id ' + r.id : ''}); the API table has ${c.path} (${c.kind}${c.id ? ', id ' + c.id : ''})`);
       }
     }
+    /* the jobs of a stored database (a reload) resume */
+    db0(); if (stored) recoverJobs(); reconcile();
     return {
       cfg,
       checkClient,
-      wipe: () => { data = null; ids = 0; try { localStorage.removeItem(storageKey); } catch (e) {} },
-      restore: () => { window.fetch = realFetch; },
+      wipe: () => { data = null; ids = 0; checks = []; timers.forEach(x => clearTimeout(x.h)); timers.clear(); try { localStorage.removeItem(storageKey); } catch (e) {} },
+      restore: () => { window.fetch = realFetch; window.EventSource = RealEventSource; conns.forEach(c => c.close()); timers.forEach(x => clearTimeout(x.h)); timers.clear(); },
+      /* events scheduled for delivery and not delivered yet (a test waits for 0, as for requests) */
+      eventsPending: () => outPending,
       /* the seed data as GET returns it (derived fields included), without touching the database: the page
          reads it while it starts */
       seedView: () => { const d = seedData(), sc = scopeFor(d, ME); return dec(enc(Object.fromEntries(Object.keys(d).map(k => [k, viewAll(k, d, sc)])))); },

@@ -3746,5 +3746,6 @@ Make a table of sources with columns for coverage, update frequency, delay and l
     repSeen: false,
     reqSeen: false,
     rpLiked: { $set: [] },
+    runs: {},   /* no run in progress (step 7: a run is a server job) */
   },
 };

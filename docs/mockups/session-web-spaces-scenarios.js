@@ -18,7 +18,9 @@
          the joined list, the space's moderators and your role, as the server's procedures set it;
          h.tree(thread): a thread's asks about asks (stored, or its follow-ups as level-1 asks);
          h.proc(name, input): a procedure's change, without its permission checks;
-         h.ago('3h'): an ISO time this long before the mock clock (as the page's isoAgo).
+         h.ago('3h'): an ISO time this long before the mock clock (as the page's isoAgo);
+         h.run(thread, node, step): a run in progress on the node's ask (node r: the thread's ask), held at that
+         progress step (paused: its job does not move it on), as the job writes it (step 7).
    A scenario writes as the server does, so it is not subject to the permission checks of step 5. */
 (function () {
   'use strict';
@@ -130,13 +132,16 @@
   };
   /* how an ask of yours ended: its payer, the tokens it used, its summary line and its failure */
   const ASK_ENDS = {
-    running: { running: true, pay: 'session' },
+    running: { running: true, pay: 'session', att: 1 },
     stopped: { pay: 'session', tok: 18e3, sum: 'Stopped. The agent wrote nothing.', fail: { why: 'stopped' } },
     tokens: { pay: 'session', sum: 'The answer stopped: this month’s included tokens are used up.', fail: { why: 'tokens' } },
     key: { pay: 'k0', sum: 'The answer failed: the provider rejected the API key.', fail: { why: 'key' } },
     rate: { pay: 'k2', sum: 'The answer failed: the provider is limiting requests.', fail: { why: 'rate' } },
+    /* the run's checks when it started failed (step 7), and the server could not resume a run after a restart */
+    access: { pay: 'session', sum: window.SessionJobs.FAIL_SUM.access(), fail: { why: 'access' } },
+    interrupted: { pay: 'session', sum: window.SessionJobs.FAIL_SUM.interrupted(), fail: { why: 'interrupted' } },
   };
-  scenario('asks: your ask', { note: 'you asked a minute ago, the newest thread. args: space, end (running, stopped, tokens, key, rate), q, tok. An ask stopped for tokens: your included tokens are used up',
+  scenario('asks: your ask', { note: 'you asked a minute ago, the newest thread. args: space, end (running, stopped, tokens, key, rate, access, interrupted), q, tok. An ask stopped for tokens: your included tokens are used up. A running ask: its run is held at the third progress step (Reading 9 sources)',
     run: (tx, a, h) => {
       const q = a.q || SAMPLE_Q, end = JSON.parse(JSON.stringify(ASK_ENDS[a.end]));
       if (a.end === 'rate') end.fail.at = Date.now() + 20e3;   /* the provider's retry time, on the real clock as the page counts it */
@@ -144,6 +149,13 @@
       const id = tx.id();
       tx.put('posts', { id, s: a.space, u: tx.me.u, k: 'ask', t: null, q, sum: null, tok: 0, createdAt: h.ago('1m'), running: false, kw: q, ...end });
       tx.mapPut('fu', id, []);
+      if (a.end === 'running') h.run(id, 'r', 2);
+    } });
+  scenario('asks: a follow-up running', { note: 'you asked about the first answer of the prediction-markets thread just now; the run is held at the third progress step (Reading 9 sources)',
+    run: (tx, a, h) => {
+      const th = seedThread(tx, 11), tree = h.tree(th), id = tx.id();
+      tx.mapPut('qtd', th, { ...tree, nodes: [...tree.nodes, { id, par: 'r', u: tx.me.u, q: 'Is there evidence that clearer wording reduces disputes?', tok: 0, running: true, uses: null, pay: 'session', model: 'argon', att: 1 }] });
+      h.run(th, id, 2);
     } });
   scenario('asks: an answer is ready', { note: 'a notification: the answer to an ask in #public is ready',
     run: tx => {
