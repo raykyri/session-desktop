@@ -131,6 +131,10 @@
   const STATUS = Object.fromEntries(Object.entries(CODES).map(([c, [s]]) => [c, s]));
 
   /* ---- 3. schemas ----
+     The reference for these schemas is web/packages/shared/src/schemas/spaces.ts (zod). They stay hand-written
+     here so the page needs no build step; web/packages/shared/test/spacesMock.test.ts checks that they agree:
+     that each S.* lists the same fields as its zod schema, and that the fixtures, the GET rows, the paged
+     queries, every procedure's answer, the error bodies and the events pass the zod schemas.
      A schema is a small object; check(schema, value) returns a list of issues ({ path, expected }).
      Object schemas list their fields; a key ending in "?" is optional (absent or undefined). Fields a
      schema does not list are accepted as they are (the mockup adds display fields freely); listed fields
@@ -209,8 +213,8 @@
      that pays), interrupted (the server could not resume the run after a restart) */
   const S_FAIL = obj({ why: one('stopped', 'tokens', 'key', 'rate', 'access', 'interrupted'), 'at?': num }, 'RunFailure');
   S.Space = obj({
-    id: str, name: str, title: str, 'createdAt?': iso,
-    'av?': num, 'online?': num, 'posts?': num, 'desc?': str,
+    id: str, name: str, title: str, 'createdAt?': iso, 'updatedAt?': iso,
+    'av?': num, 'img?': bool, 'online?': num, 'posts?': num, 'desc?': str,
     'members?': int,       /* derived: membersBase + the space's member list */
     'membersBase?': int,   /* members outside the fixtures; not returned */
     'rules?': arr(str), 'rulesPrev?': arr(str), 'rulesAt?': iso, 'rulesBy?': str,
@@ -219,6 +223,8 @@
     'vis?': str, 'policy?': str, 'invite?': str, 'qs?': arr(obj({ q: str, 'req?': bool })),
     'faq?': bool, 'postsOff?': bool, 'plain?': bool, 'pageEdit?': str,
     'dom?': nul(obj({ domain: str, 'method?': str, 'state?': str, 'verifiedAt?': iso })),
+    'archived?': obj({ by: str, on: str }),   /* spaces.archive: who archived it, and the day as the page shows it */
+    'deleted?': bool,                          /* spaces.delete: the mock marks a deleted space */
   }, 'Space');
   S.Thread = obj({
     id: str, s: str, u: str, k: one('ask', 'post'), q: str, 'createdAt?': iso, 'updatedAt?': iso,
@@ -231,14 +237,19 @@
     'about?': t.obj({ 'it?': str, 'its?': arr(str), 'b?': num }), 'rf?': str, 'kw?': str,
     'topic?': nul(str), 'topicBy?': nul(str), 'running?': bool,
     'pay?': t.any,   /* TODO(limits): who pays for the ask ('session' for the included tokens, or a key id), stored as sent */
+    'model?': str,
     'fail?': S_FAIL, 'edited?': bool, 'del?': bool, 'gone?': bool, 'skill?': nul(str),
     'att?': int,    /* the number of the latest run (attempt) of its ask */
-    'from?': obj({ th: str, node: str }),   /* the thread and ask node it was started from */
+    'from?': obj({ th: str, node: str, 'lv?': int }),   /* the thread and ask node it was started from; lv: the node's depth */
   }, 'Thread');
   S.Reply = t.named('Reply', t.lazy(() => obj({ u: str, 'createdAt?': iso, t: str, 'likes?': int, 'kids?': arr(S.Reply), 'del?': bool, 'edited?': bool })));
   S.FollowUp = obj({ u: str, 'createdAt?': iso, q: str, 'a?': str, 'html?': str, 'del?': bool, 'edited?': bool }, 'FollowUp');
   S.AskNode = obj({ id: str, par: str, 'u?': str, 'createdAt?': iso, 'tok?': num, 'q?': str, 'html?': str, 'fu?': num, 'del?': bool, 'edited?': bool,
-    'running?': bool, 'fail?': S_FAIL, 'pay?': t.any, 'model?': str, 'att?': int }, 'AskNode');
+    'running?': bool, 'fail?': S_FAIL, 'pay?': t.any, 'model?': str, 'att?': int,
+    'uses?': nul(arr(str)),   /* the answers (node ids) an ask compares */
+    'promoted?': str,         /* the thread this branch became (threads.create with from) */
+    'col?': bool,             /* the thread's author collapsed the branch */
+  }, 'AskNode');
   /* A run in progress (research.listActivity): the job's state. Keyed by the node it answers, "<thread>:<node>"
      (node r: the thread's ask), as in saved asks; the real app's node ids are ULIDs. status: queued until the
      job starts it, then running; a finished run's record is removed. step: the progress step it is on (0 to 3);
@@ -250,14 +261,15 @@
   S.Source = obj({
     id: str, pl: str, kind: str,
     'au?': str, 'h?': str, 'createdAt?': iso,   /* when the author published it */
-    'len?': str, 'tok?': num, 'sp?': arr(str), 'url?': str,
-    'sum?': str, 'body?': arr(t.obj({})), 'pub?': str, 't?': str, 'desc?': str, 'by?': str, 'paid?': num,
+    'updatedAt?': iso, 'len?': str, 'tok?': num, 'sp?': arr(str), 'url?': str,
+    /* body: the reader copy's passages: a paragraph, a heading, a timed line with its speaker, a quoted post */
+    'sum?': str, 'body?': arr(obj({ 'p?': str, 'h?': str, 'ts?': str, 'sp?': str, 'q?': obj({ au: str, h: str, t: str }) })), 'pub?': str, 't?': str, 'desc?': str, 'by?': str, 'paid?': num,
     'edited?': obj({ at: iso, b: num, 'old?': str }), 'deletedAt?': iso,
   }, 'Source');
   /* TODO(limits): API keys are a stub (owner decision): stored as written, not encrypted, no usage accounting.
      raw is write-only: stored, never returned (GET returns the mask). */
   S.ApiKey = obj({
-    id: str, kind: str, label: str, 'createdAt?': iso,
+    id: str, kind: str, label: str, 'createdAt?': iso, 'updatedAt?': iso,
     'mask?': str, 'provider?': str, 'raw?': str, 'valid?': bool, 'reason?': str, 'check?': str,
     'lastUsedAt?': nul(iso), 'used?': num, 'cap?': num,
   }, 'ApiKey');
@@ -268,21 +280,22 @@
   const NOTIFICATION_TYPES = ['follow_up', 'branch', 'answer_ready', 'answer_failed', 'invite', 'join_approved', 'join_declined',
     'page_edited', 'report_resolved', 'source_edited', 'source_asked'];
   S.Notification = obj({
-    id: str, type: one(...NOTIFICATION_TYPES), 'createdAt?': iso, read: bool,
+    id: str, type: one(...NOTIFICATION_TYPES), 'createdAt?': iso, 'updatedAt?': iso, read: bool,
     'actor?': str, 'space?': str, 'thread?': str, 'node?': str, 'page?': int, 'source?': str, 'block?': int,
     'report?': str, 'item?': str, 'outcome?': one('dismissed', 'hidden', 'removed'), 'response?': one('accepted', 'declined'),
   }, 'Notification');
   S.JoinRequest = obj({
-    u: str, st: one('open', 'approved', 'declined'), 'createdAt?': iso,
+    u: str, st: one('open', 'approved', 'declined'), 'createdAt?': iso, 'updatedAt?': iso,
     'userCreatedAt?': iso,   /* when the applicant joined Session */
     'th?': num, 'common?': arr(str), 'bio?': str, 'a?': arr(str), 'why?': str, 'fresh?': bool, 'sp?': str,
   }, 'JoinRequest');
   S.Member = obj({ u: str, role: str, 'joinedAt?': iso }, 'Member');
-  S.Ban = obj({ id: str, sp: str, u: str, 'createdAt?': iso }, 'Ban');
+  S.Ban = obj({ id: str, sp: str, u: str, 'createdAt?': iso, 'updatedAt?': iso }, 'Ban');
   /* revokedAt: a revoked link stays on the server (invites.restore puts it back); GET leaves it out */
-  S.InviteLink = obj({ id: str, code: str, by: str, sp: str, 'createdAt?': iso, 'expiresAt?': nul(iso), 'dead?': str, 'usedBy?': str, 'revokedAt?': iso }, 'InviteLink');
-  S.Report = obj({ id: str, sp: str, key: str, by: str, st: one('open', 'dismissed', 'hidden', 'removed'), 'why?': str, 'note?': str, 'createdAt?': iso }, 'Report');
-  S.SpaceSource = obj({ m: str, by: str, 'createdAt?': iso, 'note?': str, 'rv?': bool }, 'SpaceSource');
+  S.InviteLink = obj({ id: str, code: str, by: str, sp: str, 'createdAt?': iso, 'updatedAt?': iso, 'expiresAt?': nul(iso), 'dead?': str, 'usedBy?': str, 'revokedAt?': iso }, 'InviteLink');
+  S.Report = obj({ id: str, sp: str, key: str, by: str, st: one('open', 'dismissed', 'hidden', 'removed'), 'why?': str, 'note?': str, 'createdAt?': iso, 'updatedAt?': iso }, 'Report');
+  /* rv: waiting for a moderator's review; rm: removed from the space (spaceSources.review restores it) */
+  S.SpaceSource = obj({ m: str, by: str, 'createdAt?': iso, 'note?': str, 'rv?': bool, 'rm?': bool }, 'SpaceSource');
   S.SourceReport = obj({ m: str, sid: str, by: str, 'why?': str, 'createdAt?': iso }, 'SourceReport');
   /* [name, prompt, rev?]: rev, the skill's version (step 9), counts its saves (absent: 0) */
   S.Skill = named('Skill', t.tupOpt([str, str], [int]));
@@ -1013,11 +1026,13 @@
   const setJoined = (tx, sid, on) => { const j = tx.value('joined'); if (on && !j.includes(sid)) tx.setValue('joined', [...j, sid]); if (!on && j.includes(sid)) tx.setValue('joined', j.filter(x => x !== sid)); };
   /* your relation to a closed space (none, pending, member, mod, denied), with what follows from it: the
      joined list, your place among the space's moderators, and your role */
+  /* a granted role (roles0) as the space's moderators list names it: its roster role */
+  const MODS_ROLE = { Owner: 'owner', Admin: 'admin', Moderator: 'mod' };
   function setRelation(tx, sid, r) {
     tx.mapPut('rel', sid, r);
     setJoined(tx, sid, r === 'member' || r === 'mod');
     const g0 = tx.get('roles0')[sid];
-    tx.edit('spaces', sid, s => { s.mods = (s.mods || []).filter(m => m[0] !== tx.me.u); if (r === 'mod') s.mods.push([tx.me.u, g0 ? g0.toLowerCase() : 'admin']); });
+    tx.edit('spaces', sid, s => { s.mods = (s.mods || []).filter(m => m[0] !== tx.me.u); if (r === 'mod') s.mods.push([tx.me.u, g0 ? MODS_ROLE[g0] || 'admin' : 'admin']); });
     const roles = tx.value('roles');
     if (r === 'mod') { if (!roles[sid]) tx.setValue('roles', { ...roles, [sid]: 'Admin' }); }
     else if (roles[sid] && !g0) { delete roles[sid]; tx.setValue('roles', roles); }
