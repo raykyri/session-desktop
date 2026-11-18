@@ -11,15 +11,19 @@
 // - Join requests and reports: the person's own, and all of them in the
 //   spaces they moderate. Bans: the spaces they moderate. Invite links: the
 //   spaces they moderate, and the links they made while they are a member.
-// - A person's likes, saves and notifications: that person only.
+// - A person's likes, saves and notifications: that person only. A person
+//   also reads their own membership records (in their user log).
 //
 // DESIGN (phase 0 finding): who may read a record is fixed for the record's
-// lifetime, given the reader's role in its space. Hiding, removing or deleting
-// content redacts the record (`view`) and never takes it out of its readers'
-// scope. A pull can then leave out every record the reader may not read
-// without sending a `del` for it (which would expose its key), and a record
-// leaves a reader's scope only when the reader's own role changes, which the
-// server answers with a resync.
+// lifetime, given the reader's role in its space and whether the space is
+// closed. Hiding, removing or deleting content redacts the record (`view`) and
+// never takes it out of its readers' scope; the staff list is the space
+// record's `mods`, so a role change does not move a member record in or out of
+// a non-member's scope. A pull can then leave out every record the reader may
+// not read without sending a `del` for it (which would expose its key: for a
+// member record, who left a closed space). A record leaves a reader's scope
+// only when the reader's own role changes or the space opens or closes; the
+// server answers both with a resync.
 
 import type {
   FollowUpRec,

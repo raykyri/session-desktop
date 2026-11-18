@@ -255,3 +255,16 @@ test("a space that becomes closed resyncs every reader, and non-members lose its
   t.deepEqual(kinds(eve.records(`space:${open}`)), ["space"]);
   t.deepEqual(kinds(anon.records(`space:${open}`)), ["space"]);
 });
+
+test("a summary-tier snapshot is scoped as a full one, and holds no more", async (t) => {
+  const c = await cast(t);
+  await busy(t, c);
+  for (const u of [null, "mona", "mel", "otto", "eve"])
+    for (const log of [`space:${c.open}`, `space:${c.closed}`] as LogId[]) {
+      const want = expected(c.w.server.dump(), u, log);
+      const summary = await c.w.server.snapshot(actor(u), log, "summary");
+      for (const { key, record } of summary.records)
+        t.deepEqual(record, want.get(key), `${u} ${key}`);
+      t.false(summary.records.some((x) => ["followup", "reply", "run"].includes(x.record.kind)));
+    }
+});
