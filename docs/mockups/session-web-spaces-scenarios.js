@@ -50,6 +50,14 @@
     run: (tx, a, h) => h.rel('replication', 'pending') });
   scenario('replication: member', { note: 'you are a member of #replication-club',
     run: (tx, a, h) => h.rel('replication', 'member') });
+  scenario('replication: mira_k’s ask running', { note: 'mira_k asked again in #replication-club (her grokking ask); its run is in progress and moves on. args.member: you are a member. For the closed-space read rules: a non-member gets none of its events',
+    run: (tx, a, h) => {
+      if (a.member) h.rel('replication', 'member');
+      const th = tx.get('posts').find(p => p.s === 'replication' && p.u === 'mira_k' && p.k === 'ask').id;
+      tx.edit('posts', th, x => { x.running = true; x.att = (x.att || 1) + 1; delete x.fail; });
+      h.run(th, 'r', 0);
+      const key = th + ':r', r = tx.mapGet('runs', key); delete r.paused; tx.mapPut('runs', key, r);
+    } });
   scenario('replication: moderator', { note: 'you moderate #replication-club (an admin there). args.seen: you have read the join-requests notification',
     run: (tx, a, h) => { h.rel('replication', 'mod'); if (a.seen) tx.setValue('reqSeen', true); } });
   scenario('replication: request approved', { note: 'a moderator approved your request to join #replication-club, and you have the notification',

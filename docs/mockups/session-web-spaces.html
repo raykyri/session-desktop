@@ -3717,7 +3717,7 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
 .ed-mine-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; font-size: var(--fs-sm); }
 .ed-mine-h b { flex: 1; color: var(--t-strong); font-weight: 600; }
 .ed-mine-h .ed-cf-a { display: flex; gap: 6px; }
-.ed-mine-t { width: 100%; box-sizing: border-box; font-size: var(--fs-sm); color: var(--t-secondary); }
+.ed-mine-t { width: 100%; box-sizing: border-box; min-height: 0; max-height: 160px; resize: vertical; font-size: var(--fs-sm); color: var(--t-secondary); }
 /* ==== end edit conflicts CSS ==== */
 </style>
 
@@ -9471,7 +9471,10 @@ function edConflict(kind, sid, i, draft, e, extra) {
   st.edCf = Object.assign({ kind, sid, i, step: 'conflict', cur: e.data.current, mine: null }, extra || {});
   const next = ED_NEXT; ED_NEXT = null;
   if (next) edAct(next);
-  if (APP_STARTED && !DISPOSED) renderAll();
+  if (!APP_STARTED || DISPOSED) return;
+  renderAll();
+  /* the notice can be below the fold (the rules, in Settings) */
+  const n = document.querySelector('#app .ed-cf'); if (n && n.scrollIntoView) n.scrollIntoView({ block: 'center' });
 }
 /* who saved the other version, and when (a skill records neither) */
 const edWho = c => c.kind === 'rules' ? c.cur.rulesBy : c.kind === 'skill' ? null : c.cur.ed;
