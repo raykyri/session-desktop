@@ -75,6 +75,15 @@
      procedure it calls while its screen is signed out. The page's loads and scenarios are always the
      signed-in person's: the mockup's signed-out screens show the loaded data under a signed-out UI.
    - Reads are scoped, not refused: GET leaves out what the caller may not read (READ_RULES).
+     In a closed space they are not a member of, a person gets the threads, follow-ups and asks they wrote, and
+     the space's owner, admins and moderators (owner decision after step 5); GET /api/users gives a profile's
+     count of spaces, closed spaces included.
+
+   Edit conflicts (step 9)
+   - A page document (rev), a skill (rev, the third item of its row) and a space's rules (rulesAt) carry a
+     version. The editor sends the version it opened as `base`; when someone else saved since, the procedure
+     answers CONFLICT with `current` and `changes` and keeps nothing; `force: true` saves anyway (Overwrite).
+     See "versions and edit conflicts" in section 5b.
 
    Contents
    1. The wire codec (JSON; Sets travel as { $set: [...] }). The page uses this copy.
