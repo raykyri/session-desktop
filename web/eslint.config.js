@@ -5,12 +5,19 @@ import jsxA11y from "eslint-plugin-jsx-a11y";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
-/** ADR-1: client ──► shared; server ──► shared, db; db ──► shared; shared ──► nothing. */
+/** ADR-1: client ──► shared; server ──► shared, db; db ──► shared; shared ──► nothing.
+ * replica-proto (phase 0 prototype) ──► shared, and nothing imports it. */
 const forbidden = {
-  "packages/shared": ["@session/db", "@session/server", "@session/client"],
-  "packages/db": ["@session/server", "@session/client"],
-  "packages/server": ["@session/client"],
-  "packages/client": ["@session/db", "@session/server"],
+  "packages/shared": [
+    "@session/db",
+    "@session/server",
+    "@session/client",
+    "@session/replica-proto",
+  ],
+  "packages/db": ["@session/server", "@session/client", "@session/replica-proto"],
+  "packages/server": ["@session/client", "@session/replica-proto"],
+  "packages/client": ["@session/db", "@session/server", "@session/replica-proto"],
+  "packages/replica-proto": ["@session/db", "@session/server", "@session/client"],
 };
 
 const boundaries = Object.entries(forbidden).map(([directory, packages]) => ({
@@ -146,6 +153,11 @@ export default tseslint.config(
               group: ["@session/db", "@session/db/*"],
               message:
                 "packages/client may not import @session/db (ADR-1 package dependency graph).",
+            },
+            {
+              group: ["@session/replica-proto", "@session/replica-proto/*"],
+              message:
+                "packages/client may not import @session/replica-proto (a phase 0 prototype).",
             },
             {
               group: ["@session/server", "@session/server/*", "!@session/server/router"],
