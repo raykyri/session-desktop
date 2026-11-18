@@ -5267,7 +5267,7 @@ function renderControls() {
   seg($('k-api'), [['normal', '120ms'], ['fail', 'Fail'], ['failload', 'Fail on load']], 'apiMode', applyApiMode);
   /* the Sources layout control has no effect in the phone app */
   { const k = $('kw-sources'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
-  /* the Phone app always uses the base Beige and has its own navigation and rows, so the Tint, Nav and Source ref controls have no effect there */
+  /* the Phone app always uses Beige and has its own navigation, so the Tint and Nav controls have no effect there */
   for (const id of ['k-tint', 'k-dir']) { const k = $(id) && $(id).closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : ''; }
   HOTKEYS = {}; let n = 0;
@@ -13216,8 +13216,8 @@ let tintSet = [];
 function applyTint() {
   const root = document.documentElement;
   tintSet.forEach(k => root.style.removeProperty(k)); tintSet = [];
-  /* the Phone app has no chrome tints: it always uses the base Beige */
-  const tint = st.device === 'native' ? 'warmlo' : st.tint;
+  /* the Phone app always uses Beige (the Tint control is hidden there) */
+  const tint = st.device === 'native' ? 'warmwc' : st.tint;
   root.dataset.tint = tint;
   let t = TINTS[tint]; if (!t) return;
   const dark = st.appearance === 'dark' || (st.appearance === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
@@ -13240,7 +13240,8 @@ function applyTint() {
 /* How strong each chrome tint is (picked from the Strength variants), on Desktop and Mobile Web:
    saturation scales the OKLab chroma of every colour the tint sets (hue and lightness kept); band moves the
    header and page colour (--page, --chrome) that far toward the content colour (--pane): lighter in light
-   mode, closer to the panes in dark mode (unused now: both are 0). Beige: saturation 80%. Sage: saturation 65%. */
+   mode, closer to the panes in dark mode (unused now: both are 0). Beige: saturation 80% (Desktop, Mobile Web and the
+   Phone app). Sage: saturation 65%. */
 const TINT_STRENGTH = { warmwc: [0.8, 0], sagewc: [0.65, 0] };
 function rgb2lab(r, g, b) {
   r = s2l(r / 255); g = s2l(g / 255); b = s2l(b / 255);
@@ -13256,7 +13257,7 @@ function tvSat(rgb, f) {
 }
 function tintStrength(root, tint) {
   const o = TINT_STRENGTH[tint];
-  if (!o || st.device === 'native') return;
+  if (!o) return;
   const [f, band] = o, cs = getComputedStyle(root);
   for (const k of tintSet) {
     if (k === '--trim-on') continue;
@@ -13406,7 +13407,7 @@ function renderAll() {
   renderAllInner();
   document.querySelectorAll('#app textarea').forEach(autosize);
   focusAfterRender(_fd);
-  { const tk = (st.device === 'native' ? 'warmlo' : st.tint) + st.appearance; if (renderAll.tint !== tk) { renderAll.tint = tk; applyTint(); } }
+  { const tk = (st.device === 'native' ? 'warmwc' : st.tint) + st.appearance; if (renderAll.tint !== tk) { renderAll.tint = tk; applyTint(); } }
   if (_app && _st) _app.scrollTop = _st;
   /* Mobile Web: a sheet over the page (Sources and wiki, request panel) keeps the page under it still */
   if (_app) { const sheet = st.device === 'phone' && (st.mWiki || (st.reqOpen && st.reqV === 'panel')); if (sheet && !_app.classList.contains('sheet-lock')) _app.scrollTop = 0; _app.classList.toggle('sheet-lock', !!sheet); }
