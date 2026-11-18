@@ -124,6 +124,7 @@ export function diff(
   const out: string[] = [];
   for (const [k, v] of want) {
     const g = got.get(k);
+    if (g === v) continue;
     if (!g) out.push(`missing ${k}`);
     else if (JSON.stringify(g) !== JSON.stringify(v))
       out.push(`differs ${k}: got ${JSON.stringify(g)} want ${JSON.stringify(v)}`);
