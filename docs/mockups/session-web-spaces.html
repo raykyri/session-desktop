@@ -3677,39 +3677,19 @@ sup.ta-cite:focus-visible, [data-tasrc]:focus-visible { outline: 2px solid var(-
 
 /* ---- Source ref: the source an ask is about, in feed rows (miRowChip, miMetaRef) ----
    Pill and Tag sit between the title and the answer summary; After the time sits in the meta row.
-   .rf-ti the title (truncates). Ref tint: .rf-t-soft, .rf-t-faint, .rf-t-chrome. */
+   .rf-ti the title (truncates). Quiet: a hairline pill with no fill, a light tag, tertiary text and faint icons. */
 .row-m > .mi-rchip { display: flex; align-items: center; gap: 5px; align-self: flex-start; min-width: 0; max-width: 100%; height: 22px; margin: 5px 0 2px; font-size: var(--fs-xs); line-height: 1; color: var(--t-tertiary); }
-.mi-rchip .mi-ic.xs, .rf-meta .mi-ic.xs { width: 14px; height: 14px; color: var(--t-tertiary); }
+.mi-rchip .mi-ic.xs, .rf-meta .mi-ic.xs { width: 14px; height: 14px; color: var(--t-faint); }
 .mi-rchip .mi-ic.xs svg, .rf-meta .mi-ic.xs svg { width: 12px; height: 12px; }
-.mi-rchip .rf-ti, .rf-meta .rf-ti { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--t-secondary); }
-.rf-meta .rf-more { flex: none; white-space: pre; }
+.mi-rchip .rf-ti { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--t-tertiary); }
 .rf-ics { display: inline-flex; flex: none; }
 .rf-ics .mi-ic.xs + .mi-ic.xs { margin-left: -4px; }
 /* Pill */
-.rf-pill { padding: 0 9px 0 6px; border: 1px solid var(--control-border); border-radius: 999px; background: var(--pane); }
+.rf-pill { padding: 0 9px 0 6px; border: 1px solid var(--divider); border-radius: 999px; background: transparent; }
 /* Tag */
-.rf-tag { padding: 0 8px 0 5px; border-radius: 5px; background: var(--fill-subtle); }
-.rf-tag .rf-ti { color: var(--t-strong); }
+.rf-tag { padding: 0 8px 0 5px; border-radius: 5px; background: color-mix(in srgb, var(--fill-subtle) 55%, transparent); }
 /* After the time */
 .row-meta .rf-meta { display: inline-flex; align-items: center; flex: none; cursor: default; }
-/* Ref tint. Soft: a hairline and no fill on the pill, half the fill on the tag, tertiary text. */
-.rf-pill.rf-t-soft { border-color: var(--divider); background: transparent; }
-.rf-tag.rf-t-soft { background: color-mix(in srgb, var(--fill-subtle) 55%, transparent); }
-.mi-rchip.rf-t-soft .rf-ti { color: var(--t-tertiary); }
-.rf-t-soft .mi-ic.xs { color: var(--t-faint); }
-/* Faint: text lighter than the faint token (about 3.6:1 on the feed in light, 4.0:1 in dark; under the
-   4.5:1 minimum for small text) and a dimmed icon; the pill's edge and the tag's fill are barely there */
-.rf-pill.rf-t-faint { border-color: color-mix(in srgb, var(--divider) 70%, transparent); background: transparent; }
-.rf-tag.rf-t-faint { background: color-mix(in srgb, var(--fill-subtle) 35%, transparent); }
-.mi-rchip.rf-t-faint .rf-ti { color: color-mix(in srgb, var(--t-faint) 85%, var(--feed)); }
-.rf-t-faint .mi-ic.xs { color: var(--t-faint); opacity: .6; }
-/* Chrome: the header's tint as the fill, no border, tertiary text */
-.rf-pill.rf-t-chrome { border-color: transparent; background: var(--chrome); }
-.rf-tag.rf-t-chrome { background: var(--chrome); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--divider) 60%, transparent); }
-.mi-rchip.rf-t-chrome .rf-ti { color: var(--t-tertiary); }
-.rf-t-chrome .mi-ic.xs { color: var(--t-faint); }
-.row-meta .rf-meta.rf-t-chrome { padding: 2px 3px; margin: -2px 0; border-radius: 4px; background: var(--chrome); }
-.row-meta .rf-meta.rf-t-soft .mi-ic.xs { color: var(--t-faint); }
 .rf-demo .rf-dh { margin: 22px 0 4px; }
 /* ==== account: one Account page for settings, Usage, API keys and Your spaces, with a tab strip ==== */
 .sub-page.acx-page { padding-left: max(32px, calc((100% - 1040px) / 2)); padding-right: max(32px, calc((100% - 1040px) / 2)); }
@@ -3754,7 +3734,6 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
       <div class="knob"><span>Tint</span><div class="seg" id="k-tint"></div></div>
       <div class="knob"><span>Font</span><div class="seg" id="k-font"></div></div>
       <div class="knob"><span>Source ref</span><div class="seg" id="k-ref"></div></div>
-      <div class="knob" title="How strongly the source reference shows in feed rows"><span>Ref tint</span><div class="seg" id="k-rtint"></div></div>
     </div>
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
@@ -5218,7 +5197,7 @@ function renderControls() {
   /* the Sources layout control has no effect in the phone app */
   { const k = $('kw-sources'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   /* the Phone app always uses the base Beige and has its own navigation and rows, so the Tint, Nav and Source ref controls have no effect there */
-  for (const id of ['k-tint', 'k-dir', 'k-ref', 'k-rtint']) { const k = $(id) && $(id).closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
+  for (const id of ['k-tint', 'k-dir', 'k-ref']) { const k = $(id) && $(id).closest('.knob'); if (k) k.style.display = st.device === 'native' ? 'none' : ''; }
   { const m = DS.meta.getState(); $('k-dstat').textContent = m.status === 'loading' ? 'Loading…' : m.status === 'error' ? 'Load failed' : m.pending ? `Saving ${m.pending}…` : 'Saved'; }
   HOTKEYS = {}; let n = 0;
   for (const [el, key, items, pick] of KNOBDEF()) {
@@ -7646,7 +7625,7 @@ function miSrc(p, src) {
    - Pill: a bordered chip under the title.
    - Tag: a filled tag under the title.
    - After the time: the source's icon alone in the meta row, after the timestamp; the title is in its tooltip.
-   Ref tint (Variants bar) makes all three quieter: Soft, Faint, or Chrome (the header's tint as the fill). */
+   All three use quiet colours: tertiary text and faint icons (the Soft tint picked from the earlier variants). */
 function rfParts(p) {
   const its = miRefs(p).map(MIT).filter(Boolean); if (!its.length) return null;
   const m = its[0];
@@ -7658,25 +7637,23 @@ function rfParts(p) {
     tip: esc(its.map(miTitle).join(' · ')),
   };
 }
-const rfTint = () => st.rtint && st.rtint !== 'base' ? ` rf-t-${st.rtint}` : '';
 function miRowChip(p) {
   if (!p.about || st.refv === 'meta') return '';
   const x = rfParts(p); if (!x) return '';
   const t = x.its.length > 1 ? `<span class="rf-ti">${x.its.length} sources</span>` : x.ti(56);
-  if (st.refv === 'tag') return `<span class="mi-rchip rf-tag${rfTint()}" title="${x.tip}">${x.ics}${t}</span>`;
-  return `<span class="mi-rchip rf-pill${rfTint()}" title="${x.tip}">${x.ics}${t}</span>`;
+  if (st.refv === 'tag') return `<span class="mi-rchip rf-tag" title="${x.tip}">${x.ics}${t}</span>`;
+  return `<span class="mi-rchip rf-pill" title="${x.tip}">${x.ics}${t}</span>`;
 }
 function miMetaRef(p) {
   if (st.refv !== 'meta' || !p.about) return '';
   const x = rfParts(p); if (!x) return '';
   /* the icon only (two or three, overlapped, for several sources); the titles are in the tooltip and the label */
-  return `<span class="rf-meta${rfTint()}" role="img" aria-label="About ${x.tip}" title="${x.tip}">${x.ics.replace(/ title="[^"]*"/g, '')}</span>`;
+  return `<span class="rf-meta" role="img" aria-label="About ${x.tip}" title="${x.tip}">${x.ics.replace(/ title="[^"]*"/g, '')}</span>`;
 }
 /* Screen entry: the reference for every media type, in feed rows */
-Object.assign(st, { refv: 'pill', rtint: 'base' });
+Object.assign(st, { refv: 'pill' });
 function REFKNOBS() { return [
-  ['k-ref', 'refv', [['pill', 'Pill'], ['tag', 'Tag'], ['meta', 'After the time']]],
-  ['k-rtint', 'rtint', [['base', 'Default'], ['soft', 'Soft'], ['faint', 'Faint'], ['chrome', 'Chrome']]]]; }
+  ['k-ref', 'refv', [['pill', 'Pill'], ['tag', 'Tag'], ['meta', 'After the time']]]]; }
 const RF_DEMO = [
   ['Article', { it: 'm2', b: 6 }, 'Is the 3.1x figure in this paragraph right for the larger model?'],
   ['PDF (arXiv)', { it: 'm11', b: 2 }, 'Do the rewritten items keep the original difficulty?'],
@@ -7690,7 +7667,7 @@ const RF_SUM = 'Short answer first: the figure holds for the smaller model and d
 function rfDemoPage() {
   const s = sp('ml');
   const rows = RF_DEMO.map(([h, about, q]) => `<h3 class="br-h rf-dh">${h}</h3><div class="feed" role="list"><article class="row row-x row-rowsq row-i-lefttxt row-ask" role="listitem"><span class="row-k"><span class="agent">${I.agent}</span></span><div class="row-m"><a class="row-t row-link" href="#" onclick="return false">${esc(q)}</a>${miRowChip({ about })}<span class="row-s">${RF_SUM}</span><span class="row-meta"><button class="au" type="button">mira_k</button><button class="row-sp" type="button">${spTagTx(s)}</button><span>2h</span>${miMetaRef({ about })}</span></div></article></div>`).join('');
-  return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page rf-demo"><div class="sub-top"><h2>Source references</h2></div><p class="muted">How a feed row shows the source an ask is about. Switch the treatment with Source ref, and its strength with Ref tint, in the Variants bar.</p>${rows}</div></div>`;
+  return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page rf-demo"><div class="sub-top"><h2>Source references</h2></div><p class="muted">How a feed row shows the source an ask is about. Switch the treatment with Source ref in the Variants bar.</p>${rows}</div></div>`;
 }
 CS_PAGES.rfdemo = rfDemoPage;
 JUMPS.push(['Source references', [['rf-all', 'Every media type, in feed rows'], ['rf-feed', 'In a feed: #ml-papers']]]);
