@@ -1581,12 +1581,12 @@
     rows: x => {
       const out = [], me = x.me.u, posts = x.all('posts'), fu = x.all('fu'), qtd = x.all('qtd'), sps = new Set(x.d.spaces.map(s => s.id));
       const nodesOf = (th, tree) => { const fus = fu[th] || []; return tree.nodes.map(n => { const f = n.fu != null ? fus[n.fu] || {} : null; return f ? { ...n, u: f.u, createdAt: f.createdAt, q: f.q, del: f.del } : n; }); };
-      const add = (p, n, space, readable) => out.push({ id: `${p}:${n.id}`, thread: p, node: n.id, space, t: n.t || n.q || '', u: n.u, tok: n.tok, pay: n.pay == null ? null : n.pay, createdAt: n.createdAt, readable, ...(n.del ? { del: true } : {}) });
+      const add = (p, n, space, readable) => out.push({ id: `${p}:${n.id}`, thread: p, node: n.id, space, t: n.t || n.q || '', u: n.u, tok: n.tok, pay: n.pay, createdAt: n.createdAt, readable, ...(n.del ? { del: true } : {}) });
       const seen = new Set();
       for (const p of posts) {
         if (p.k !== 'ask' || p.gone || !sps.has(p.s)) continue;
         seen.add(p.id);
-        if (p.u === me && p.tok && !p.running) add(p.id, { ...p, id: 'r' }, p.s, true);
+        if (p.u === me && p.tok && !p.running) add(p.id, { ...p, id: 'r', del: undefined }, p.s, true);
         if (!qtd[p.id]) continue;
         nodesOf(p.id, qtd[p.id]).forEach(n => { if (n.u === me && n.tok && !n.running && !n.fail) add(p.id, n, p.s, true); });
       }

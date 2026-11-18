@@ -3727,6 +3727,8 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
 .nt-pop .pg-more { padding: 8px 0; }
 .n-pgmore { padding: 12px 16px 16px; }
 .n-pgmore .pg-err { font-size: 15px; }
+.pg-err.pg-left { text-align: left; }
+.pg-wait { display: flex; align-items: center; gap: 8px; }
 /* ==== end of paged lists ==== */
 </style>
 
@@ -4759,9 +4761,9 @@ function savedReader(items) {
 }
 
 function layoutSaved() {
-  const items = savedItems(), v = st.savedView;
+  const items = pgSaved(savedItems()), v = st.savedView;
   const body = nvSavedNone() ? `<p class="muted sv-empty">Nothing saved yet. Use the bookmark on a thread, an ask or a source to keep it here.</p>`
-    : st.savedFilter === 'mi-items' ? miSavedList() : !items.length ? nvSavedNoThreads() : v === 'reader' ? savedReader(items) : savedList(items);
+    : st.savedFilter === 'mi-items' ? miSavedList() : !items.length ? nvSavedNoThreads() : (v === 'reader' ? savedReader(items) : savedList(items)) + pgFoot(pgSavedLk());
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sv-page svp-${v}">
     <div class="sv-top"><div class="sv-title"><h2>Saved</h2><span class="faint num">${st.saved.size} thread${st.saved.size === 1 ? '' : 's'}</span></div><label class="search sv-search">${I.search}<input id="nv-svq" type="search" value="${esc(st.nvSvQ)}" placeholder="Search saved" aria-label="Search saved" autocomplete="off"></label></div>
     ${savedFilters()}
@@ -4863,7 +4865,7 @@ const myPosts = () => D.posts.map(p => ({ ...p, orig: p, tag: true })).filter(p 
 const myFUs = () => Object.entries(D.fu).filter(([pid]) => postById(pid)).flatMap(([pid, list]) => list.filter(f => f.u === PU().u && !f.del).map(f => ({ ...f, pid })));
 const profTabs = (cls = '') => `<div class="pf-tabs ${cls}" role="tablist">${[['threads', 'Threads'], ['followups', 'Follow-ups'], ...(pfOwner() ? [['likes', 'Liked']] : [])].map(([k, l]) => `<button type="button" role="tab" data-ptab="${k}" aria-selected="${st.ptab === k}">${l}</button>`).join('')}</div>`;
 function profFeed() {
-  if (st.ptab === 'followups') return `<div class="pf-fus">${myFUs().map(f => `<button class="hrow" type="button" data-open="${f.pid}"><span class="hrow-t">${esc(f.q)}</span><span class="hrow-s">on: ${esc(postById(f.pid).q)}</span><span class="hrow-m"><span>${ago(f)}</span></span></button>`).join('') || '<p class="muted">No follow-ups yet.</p>'}</div>`;
+  if (st.ptab === 'followups') return `<div class="pf-fus">${pgWin('followups:' + st.profileUser, 'followups', { handle: st.profileUser }, myFUs()).map(f => `<button class="hrow" type="button" data-open="${f.pid}"><span class="hrow-t">${esc(f.q)}</span><span class="hrow-s">on: ${esc(postById(f.pid).q)}</span><span class="hrow-m"><span>${ago(f)}</span></span></button>`).join('') || '<p class="muted">No follow-ups yet.</p>'}</div>${pgFoot('followups:' + st.profileUser)}`;
   if (st.ptab === 'likes' && pfOwner()) { const ls = [...st.liked].map(i => ({ ...postById(i), orig: postById(i), tag: true })); return `<p class="pf-private">${LOCK}Your likes are private. Only you can see this list.</p>${ls.length ? feed2(null, ls) : '<p class="muted">No liked threads yet.</p>'}`; }
   const cl = myPosts().some(p => isClosed(sp(p.s)));
   return feed2(null, myPosts()) + (cl ? `<p class="cs-fine cs-pfnote">${LOCK}<span>Only members of a closed space can see its threads.</span></p>` : '');
@@ -5697,11 +5699,11 @@ function nSkillSheet(sid, i) {
   return nSub(sid, n, 'Skill', body);
 }
 function nMemSheet(x) {
-  const q = (nst.memQ || '').trim().toLowerCase(), list = memFor(x).filter(m => !q || m.u.toLowerCase().includes(q) || (NAMES[m.u] || '').toLowerCase().includes(q));
+  const q = (nst.memQ || '').trim().toLowerCase(), list = pgWin('members:' + x.id, 'members', { space: x.id }, memFor(x)).filter(m => !q || m.u.toLowerCase().includes(q) || (NAMES[m.u] || '').toLowerCase().includes(q));
   const lbl = r => r === 'owner' ? 'Owner' : r === 'admin' ? 'Admin' : r === 'mod' ? 'Moderator' : '';
   const rows = list.map(m => `<button class="n-row" type="button" data-n="push:profile:${m.u}">${avatar(m.u, 'n-av sm')}<span class="n-row-b"><b>${esc(NAMES[m.u] || m.u)}</b><small>${esc(m.u)}</small></span><span class="n-val">${lbl(m.role)}</span></button>`);
   const foot = `Showing ${list.length} of ${x.members.toLocaleString('en-US')} members. ${isClosed(x) ? 'Only members see this list.' : 'Anyone who can read the space sees this list.'}`;
-  return nSub(x.id, `Members of ${nName(x)}`, 'Members', `<div class="n-pad"><label class="n-search">${NI.search}<input id="n-memq" type="search" placeholder="Find a member" aria-label="Find a member" value="${esc(nst.memQ || '')}"></label></div>${rows.length ? nGroup('', rows, foot) : '<p class="n-empty">No members match.</p>'}`);
+  return nSub(x.id, `Members of ${nName(x)}`, 'Members', `<div class="n-pad"><label class="n-search">${NI.search}<input id="n-memq" type="search" placeholder="Find a member" aria-label="Find a member" value="${esc(nst.memQ || '')}"></label></div>${rows.length ? nGroup('', rows, foot) : '<p class="n-empty">No members match.</p>'}${pgFoot('members:' + x.id)}`);
 }
 function nRulesSheet(x) {
   const prev = x.rulesPrev || [], now = x.rules;
@@ -5810,15 +5812,15 @@ function nKeyRnSheet(id) {
 const nModGate = (s, title, what) => ({ body: `${nPushBar(title, '')}<p class="n-empty">Only moderators of ${spName(s)} can review ${what}.</p>` });
 function nReqs(sid) {
   const s = sp(sid); if (!isModOf(sid)) return nModGate(s, 'Requests', 'requests');
-  const on = sid === 'replication' && isClosed(s), list = on ? openReqs() : [], done = on ? st.reqs.filter(r => r.st !== 'open') : [];
+  const on = sid === 'replication' && isClosed(s), all = on ? openReqs() : [], list = on ? pgReqsWin(sid) : [], done = on ? st.reqs.filter(r => r.st !== 'open') : [];
   const card = r => `<section class="n-grp n-rq"><div class="n-list"><button class="n-rq-who" type="button" data-n="push:profile:${r.u}">${avatar(r.u, 'n-av')}<span class="n-row-b"><b>${esc(NAMES[r.u] || r.u)}${r.fresh ? ' <span class="n-flag">New account</span>' : ''}</b><small>${esc(r.u)} · Requested ${ago(r)} ago</small></span></button>${(s.qs || []).map((q, i) => r.a[i] ? `<div class="n-rq-a"><small>${esc(q.q)}</small><p>${esc(r.a[i])}</p></div>` : '').join('')}<div class="n-rq-acts"><button class="n-capbtn ghost" type="button" data-n="sheet:rqno:${r.u}">Decline</button><button class="n-capbtn" type="button" data-n="sheet:rqok:${r.u}">Approve</button></div></div></section>`;
   const dec = done.length ? nGroup('Decided today', done.map(r => `<div class="n-row">${avatar(r.u, 'n-av sm')}<span class="n-row-b"><b>${esc(r.u)}</b><small>${r.st === 'approved' ? 'Approved by you' : 'Declined by you'}</small></span>${r.st === 'declined' ? `<button class="n-cap" type="button" data-n="rqundo:${r.u}">Undo</button>` : ''}</div>`)) : '';
-  const head = `<p class="n-grp-f n-mg-d">${spName(s)} · ${list.length} waiting · newest first</p>`;
-  return { body: `${nPushBar('Requests', '')}${list.length ? head + list.map(card).join('') : '<p class="n-empty">No requests waiting. New requests appear here and in your notifications.</p>'}${dec}` };
+  const head = `<p class="n-grp-f n-mg-d">${spName(s)} · ${all.length} waiting · newest first</p>`;
+  return { body: `${nPushBar('Requests', '')}${list.length ? head + list.map(card).join('') + pgFoot('requests:' + sid) : '<p class="n-empty">No requests waiting. New requests appear here and in your notifications.</p>'}${dec}` };
 }
 function nReps(sid) {
   const s = sp(sid); if (!isModOf(sid)) return nModGate(s, 'Reports', 'reports');
-  const list = openReps(sid), done = st.reports.filter(r => r.sp === sid && r.st !== 'open');
+  const list = pgWin('reports:' + sid, 'reports', { space: sid, state: 'open' }, openReps(sid)), done = st.reports.filter(r => r.sp === sid && r.st !== 'open');
   const card = r => {
     const it = itemOf(r.key), pid = it.p.id, ms = modOf(r.key);
     return `<section class="n-grp n-rq"><div class="n-list"><p class="n-rp-h"><span class="n-rp-why">${SFI.flag}${repWhy(r.why)}</span><small>${nCap(it.noun)} · reported ${agoText(r)}</small></p>`
@@ -5828,7 +5830,7 @@ function nReps(sid) {
   };
   const dec = done.length ? nGroup('Resolved today', done.map(r => `<div class="n-row">${avatar(r.by, 'n-av sm')}<span class="n-row-b"><b>${repWhy(r.why)}</b><small>${nCap(itemOf(r.key).noun)} · ${REP_DONE[r.st][0]} by you</small></span>${r.st === 'removed' ? `<button class="n-cap" type="button" data-n="sheet:reprs:${r.id}">Restore</button>` : `<button class="n-cap" type="button" data-n="repundo:${r.id}">Undo</button>`}</div>`)) : '';
   const head = '<p class="n-grp-f n-mg-d">Hiding keeps the item for moderators and shows a placeholder to everyone else. Removing deletes it. The person who reported it gets a notification when you resolve the report.</p>';
-  return { body: `${nPushBar('Reports', '')}${head}${list.length ? list.map(card).join('') : '<p class="n-empty">No open reports. New reports appear here and in your notifications.</p>'}${dec}` };
+  return { body: `${nPushBar('Reports', '')}${head}${list.length ? list.map(card).join('') + pgFoot('reports:' + sid) : '<p class="n-empty">No open reports. New reports appear here and in your notifications.</p>'}${dec}` };
 }
 /* reopen a resolved report (without changing the stored record in place) */
 function nRepUndo(r) {
@@ -5859,7 +5861,7 @@ function nSearchResults(q0) {
   const th = D.posts.filter(p => !p.gone && canRead(sp(p.s)) && visibleSp(sp(p.s)) && (has(p.q) || has(p.t) || has(p.sum)));
   if (!sps.length && !th.length) return `<p class="n-empty">No threads or spaces match “${esc(q0.trim())}”.</p>`;
   const rows = sps.map(x => nGo2(`push:space:${x.id}`, `${glyph(x, 'n-gl')}<span class="n-row-b"><b>${nNameH(x)}${isClosed(x) ? LK('cs-lk n-lk', 'Closed space') : ''}</b><small>${fmt(x.members)} members${isClosed(x) ? ' · ' + visLabel(x) : ''}</small></span>`));
-  return `${sps.length ? nGroup('Spaces', rows) : ''}${th.length ? `<h3 class="n-grp-h n-srh">Threads</h3>${nFeed(th)}` : ''}`;
+  return `${sps.length ? nGroup('Spaces', rows) : ''}${th.length ? `<h3 class="n-grp-h n-srh">Threads</h3>${pgNFeed('nsearch:' + q, 'search', { q }, th)}` : ''}`;
 }
 function nSavedBody() {
   const asks = [...st.qtSaved].map(k => { const [th, id] = String(k).split(':'), T = postById(th) ? qtT(th) : null, n = T && T.by[id]; return n && canRead(sp(T.p.s)) ? { k, T, n } : null; }).filter(Boolean);
@@ -5871,7 +5873,7 @@ function nSavedBody() {
   let body;
   if (nst.svSeg === 'asks') body = asks.length ? `<div class="n-feed">${asks.map(({ k, T, n }) => `<div class="n-svr"><button class="n-cell" type="button" data-n="push:ask:${k}"><span class="n-cell-b"><span class="n-cell-h"><b>${esc(n.u)}</b><span>${nNameH(sp(T.p.s))} · Level ${n.lv}</span></span><span class="n-cell-q">${esc(n.q)}</span><span class="n-cell-s">In “${esc(qtClip(T.p.t || T.p.q, 70))}”</span></span></button>${unsave('ask', k)}</div>`).join('')}</div>` : empty('Tap the bookmark on an ask inside a thread to save it here.');
   else if (nst.svSeg === 'sources') body = srcs.length ? `<div class="n-feed">${srcs.map(m => `<div class="n-svr"><button class="n-cell" type="button" data-n="push:src:m:${m.id}:"><span class="n-cell-b"><span class="n-cell-h"><span>${miSrcLine(m)}${' · ' + dayOf(m)}</span></span><span class="n-cell-q">${esc(miTitle(m))}</span>${m.sum ? `<span class="n-cell-s">${esc(m.sum)}</span>` : ''}</span></button>${unsave('src', m.id)}</div>`).join('')}</div>` : empty('Tap the bookmark on a source to save it here.');
-  else body = th.length ? nFeed(th) : empty('Tap the bookmark on a thread to save it here.');
+  else body = th.length ? pgNFeed('saved:all:', 'saved', {}, th) : empty('Tap the bookmark on a thread to save it here.');
   return seg + body;
 }
 
@@ -6324,17 +6326,17 @@ const rqChk = r => `<input type="checkbox" class="rq-chk" data-rqsel="${r.u}" ar
 /* Requests can be reviewed as cards or as a table; the switch sits at the right of the bulk bar. */
 const RQV_IC = { cards: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></svg>', table: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6.5h12M2 9.8h12M6.5 6.5V13"/></svg>' };
 const rqViewSeg = v => `<div class="seg rq-vseg" role="group" aria-label="View requests as">${[['cards', 'Cards'], ['table', 'Table']].map(([k, l]) => `<button type="button" data-rqview="${k}" aria-pressed="${v === k}">${RQV_IC[k]}${l}</button>`).join('')}</div>`;
-function rqBulk(list, v) {
+function rqBulk(list, v, total = list.length) {
   const n = list.filter(r => st.rqSel.has(r.u)).length;
-  return `<div class="rq-bulk"><label class="cs-chk"><input type="checkbox" data-rqall="1" ${n && n === list.length ? 'checked' : ''} aria-label="Select all requests"><span>${n ? `${n} selected` : 'Select all'}</span></label><span class="grow"></span>${n ? `<button class="btn sm" type="button" data-rq="bulk-no">Decline ${n}</button><button class="btn sm primary" type="button" data-rq="bulk-ok">Approve ${n}</button>` : `<span class="faint cs-small">${list.length} waiting · newest first</span>`}${rqViewSeg(v)}</div>`;
+  return `<div class="rq-bulk"><label class="cs-chk"><input type="checkbox" data-rqall="1" ${n && n === list.length ? 'checked' : ''} aria-label="Select all requests"><span>${n ? `${n} selected` : 'Select all'}</span></label><span class="grow"></span>${n ? `<button class="btn sm" type="button" data-rq="bulk-no">Decline ${n}</button><button class="btn sm primary" type="button" data-rq="bulk-ok">Approve ${n}</button>` : `<span class="faint cs-small">${total} waiting · newest first</span>`}${rqViewSeg(v)}</div>`;
 }
 function csQueue(s) {
-  const list = openReqs(s.id), done = st.reqs.filter(r => r.st !== 'open' && reqSp(r) === s.id), v = st.queueV;
+  const all = openReqs(s.id), list = pgReqsWin(s.id), done = st.reqs.filter(r => r.st !== 'open' && reqSp(r) === s.id), v = st.queueV;
   const decided = done.length ? `<section class="cs-sec rq-decided"><h3>Decided today</h3>${done.map(r => `<div class="rq-drow">${avatar(r.u, 'sm')}<span class="rq-dtx"><b>${r.u}</b> <span class="faint">${r.st === 'approved' ? 'Approved by you' : 'Declined by you'}</span></span>${r.st === 'declined' ? `<button class="tlink" type="button" data-rq="undo:${r.u}">Undo</button>` : ''}</div>`).join('')}</section>` : '';
-  if (!list.length) return `<div class="cs-empty"><p class="muted">No requests waiting. New requests appear here and in your notifications.</p></div>${decided}`;
+  if (!all.length) return `<div class="cs-empty"><p class="muted">No requests waiting. New requests appear here and in your notifications.</p></div>${decided}`;
   const body = v === 'table' ? `<div class="rq-tw"><table class="rq-table"><thead><tr><th></th><th>Applicant</th><th>${esc(s.qs[0] ? s.qs[0].q : 'Answer')}</th><th>Requested</th><th></th></tr></thead><tbody>${list.map(r => `<tr class="${st.rqSel.has(r.u) ? 'sel' : ''}"><td>${rqChk(r)}</td><td><span class="rq-tn">${avatar(r.u, 'sm')}<span>${au(r.u)}${rqFlags(r)}</span></span></td><td class="rq-tans">${esc(r.a[0])}${r.a[1] ? `<small class="faint">${esc(r.a[1])}</small>` : ''}</td><td class="faint num">${ago(r)}</td><td>${rqActs(r)}</td></tr>`).join('')}</tbody></table></div>`
     : `<div class="rq-cards">${list.map(r => `<article class="rq-card${st.rqSel.has(r.u) ? ' sel' : ''}"><div class="rq-ch">${rqChk(r)}${rqWho(r)}</div>${rqAns(s, r)}<div class="rq-cf">${rqActs(r)}</div></article>`).join('')}</div>`;
-  return `${rqBulk(list, v)}${body}${decided}`;
+  return `${rqBulk(list, v, all.length)}${body}${pgFoot('requests:' + s.id)}${decided}`;
 }
 /* members */
 function memFor(s) {
@@ -6345,7 +6347,7 @@ function memFor(s) {
 const setMembers = (s, list) => { if (s.id === 'replication') st.mem = list; else db.put('memOther', s.id, list); };
 const ROLES = [['member', 'Member'], ['mod', 'Moderator'], ['admin', 'Admin']];
 function csMembers(s) {
-  const list = memFor(s), meRole = (list.find(m => m.u === ME.u) || {}).role;
+  const list = memFor(s), meRole = (list.find(m => m.u === ME.u) || {}).role, shown = pgWin('members:' + s.id, 'members', { space: s.id }, list);
   const canRole = meRole === 'owner' || meRole === 'admin';
   const row = m => {
     const me = m.u === ME.u, own = m.role === 'owner';
@@ -6354,8 +6356,8 @@ function csMembers(s) {
     return `<div class="mem-row" data-mname="${m.u}">${avatar(m.u)}<div class="mem-tx">${au(m.u, NAMES[m.u] || m.u)}<small class="faint">${m.u} · joined ${monthOf(m.joinedAt)}</small></div>${roleC}<span class="mem-acts">${acts}</span></div>`;
   };
   const banned = bansOf(s.id);
-  return `<div class="mem-top"><label class="search cs-sq">${I.search}<input id="cs-memq" type="search" placeholder="Find a member" aria-label="Find a member" autocomplete="off"></label><span class="faint cs-small num">Showing ${list.length} of ${fmt(s.members)}</span></div>
-    <div class="mem-list">${list.map(row).join('')}</div>
+  return `<div class="mem-top"><label class="search cs-sq">${I.search}<input id="cs-memq" type="search" placeholder="Find a member" aria-label="Find a member" autocomplete="off"></label><span class="faint cs-small num">Showing ${shown.length} of ${fmt(s.members)}</span></div>
+    <div class="mem-list">${shown.map(row).join('')}</div>${pgFoot('members:' + s.id)}
     <p class="cs-fine">${MI.mods}<span>Moderators can approve requests and remove or ban members. Admins can also remove or ban moderators and admins, and change roles and settings. Only the owner can transfer ownership. ${canRole ? '' : 'Only admins can change roles.'}</span></p>
     ${banned.length ? `<section class="cs-sec"><h3>Banned</h3><p class="muted cs-small">Banned people cannot request to join or use invite links. Their threads and asks will remain in the space.</p>${banned.map(b => `<div class="mem-row">${avatar(b.u, 'sm')}<div class="mem-tx"><b>${b.u}</b><small class="faint">Banned ${isToday(b) ? 'today' : dayOf(b)}</small></div><button class="tlink" type="button" data-memunban="${b.u}">Unban</button></div>`).join('')}</section>` : ''}`;
 }
@@ -6579,7 +6581,7 @@ function layoutSearch() {
   const result = ({ p, i }, withSpace = true) => { const n = replyCount(p), ex = excerpt({ p, i }); return `<article class="sr-row" data-open="${i}"><a class="sr-t row-link" href="#t${i}" data-open="${i}">${hl(p.q)}</a>${ex ? `<p class="sr-ex">${hl(ex)}</p>` : ''}<div class="sr-meta">${withSpace ? spTagOf(sp(p.s)) + '<span aria-hidden="true">·</span>' : ''}${au(p.u)}<span>${ago(p)}</span><span aria-hidden="true">·</span><span class="num">${n} ${p.k === 'ask' ? (n === 1 ? 'follow-up' : 'follow-ups') : (n === 1 ? 'reply' : 'replies')}</span></div></article>`; };
   const sideRow = x => `<div class="sr-sp">${csGlyph(x)}<div class="br-nm"><span class="cs-nmrow"><button class="dg-name" type="button" data-space="${x.id}">${spName(x)}</button>${spSeal(x, 'sm')}${csAfter(x, true)}</span><small class="num">${fmt(x.members)} members</small></div></div>`;
   const noSpaces = '<p class="muted sr-none">No spaces match.</p>', noThreads = '<p class="muted sr-none">No threads you can read match this search.</p>';
-  const threadsSec = (list = threads) => `<section class="sr-sec"><h3 class="br-h">Threads <span class="num">${list.length}</span></h3><div class="sr-list">${list.map(t => result(t)).join('') || noThreads}</div></section>`;
+  const threadsSec = (list = threads) => `<section class="sr-sec"><h3 class="br-h">Threads <span class="num">${list.length}</span></h3><div class="sr-list">${pgWin(pgSearchLk(), 'search', pgSearchIn(), list, null, pgPI).map(t => result(t)).join('') || noThreads}</div>${pgFoot(pgSearchLk())}</section>`;
   const body = !q ? nvSearchPrompt() : `<div class="sr-two"><div>${threadsSec()}</div><aside class="sr-side">${st.nvScope ? nvScopeSide() : `<h3 class="br-h">Spaces <span class="num">${spaces.length}</span></h3>${spaces.map(sideRow).join('') || noSpaces}`}</aside></div>`;
   const ph = st.nvScope ? `Search in ${spName(sp(st.nvScope))}` : 'Search threads, spaces, pages and sources';
   return `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page br-page cs-search"><div class="sub-top"><h2>Search</h2></div>
@@ -6717,7 +6719,7 @@ function csClick(t) {
   if ((b = d('[data-mgtab]'))) { st.mgTab = b.dataset.mgtab; if (st.mgTab === 'requests') seen('reqSeen'); return go(); }
   /* review queue */
   if ((b = d('[data-rqsel]'))) { stToggle('rqSel', b.dataset.rqsel); return go(); }
-  if ((b = d('[data-rqall]'))) { const list = openReqs(st.mgSpace), all = list.every(r => st.rqSel.has(r.u)); st.rqSel = new Set(all ? [] : list.map(r => r.u)); return go(); }
+  if ((b = d('[data-rqall]'))) { const list = pgReqsWin(st.mgSpace), all = list.every(r => st.rqSel.has(r.u)); st.rqSel = new Set(all ? [] : list.map(r => r.u)); return go(); }
   if ((b = d('[data-rqexp]'))) { stToggle('rqExp', b.dataset.rqexp); return go(); }
   if ((b = d('[data-rqview]'))) { st.queueV = b.dataset.rqview; return go(); }
   if ((b = d('[data-rq]'))) {
@@ -7059,8 +7061,8 @@ function faqIndex(s) {
   const all = asksOf(s), tp = st.faqTopic;
   if (!all.length) return `<div class="sf-empty"><h3>No answers yet</h3><p class="muted">Ask the first question in the box above. Answers appear here grouped by topic.</p></div>`;
   if (tp) {
-    const list = all.filter(x => (topicOf(x.p) || 'other') === tp).sort((a, b) => ageMin(a.p) - ageMin(b.p));
-    return `<div class="rf-faq"><div class="rf-faq-h"><button class="th-back" type="button" data-faqtopic="">${I.chev.replace('<svg', '<svg class="bk"')}All topics</button><h4>${esc(topicName(s, tp))}<span class="faint num"> ${list.length}</span></h4></div><div class="rf-rows">${list.map(faqRow).join('') || '<p class="muted">No answers in this topic yet.</p>'}</div></div>`;
+    const list = all.filter(x => (topicOf(x.p) || 'other') === tp).sort((a, b) => ageMin(a.p) - ageMin(b.p)), lk = `topic:${s.id}:${tp}`;
+    return `<div class="rf-faq"><div class="rf-faq-h"><button class="th-back" type="button" data-faqtopic="">${I.chev.replace('<svg', '<svg class="bk"')}All topics</button><h4>${esc(topicName(s, tp))}<span class="faint num"> ${list.length}</span></h4></div><div class="rf-rows">${pgWin(lk, 'threads', { space: s.id, topic: tp, kind: 'ask' }, list, null, pgPI).map(faqRow).join('') || '<p class="muted">No answers in this topic yet.</p>'}</div>${pgFoot(lk)}</div>`;
   }
   const groups = [...topicsOf(s), ['other', 'Other']].map(([k, l]) => [k, l, all.filter(x => (topicOf(x.p) || 'other') === k).sort((a, b) => likesOf(b.p) - likesOf(a.p))]).filter(g => g[2].length);
   return `<div class="rf-topics">${groups.map(([k, l, list]) => `<section class="rf-tcard"><button type="button" class="rf-tcard-h" data-faqtopic="${k}"><b>${esc(l)}</b><span class="faint num">${list.length}</span></button><ul>${list.slice(0, 3).map(({ p, i }) => `<li><button type="button" data-open="${i}">${esc(p.q)}</button></li>`).join('')}</ul>${list.length > 3 ? `<button type="button" class="tlink" data-faqtopic="${k}">All ${list.length}</button>` : ''}</section>`).join('')}</div>`;
@@ -7156,7 +7158,7 @@ const openReps = id => st.reports.filter(r => r.sp === id && r.st === 'open');
 const repCount = id => isModOf(id) ? openReps(id).length : 0;
 const REP_DONE = { dismissed: ['Dismissed', 'the moderators kept it as it is'], hidden: ['Hidden', 'a moderator hid it'], removed: ['Removed', 'a moderator removed it'] };
 function csReports(s) {
-  const list = openReps(s.id), done = st.reports.filter(r => r.sp === s.id && r.st !== 'open');
+  const list = pgWin('reports:' + s.id, 'reports', { space: s.id, state: 'open' }, openReps(s.id)), done = st.reports.filter(r => r.sp === s.id && r.st !== 'open');
   const card = r => { const it = itemOf(r.key), pid = it.p.id, ms = modOf(r.key); return `<article class="rq-card sf-rcard"><div class="sf-rc-h"><span class="sf-why">${SFI.flag}${repWhy(r.why)}</span><span class="faint cs-small">${it.noun} · reported ${agoText(r)}</span></div>
     <div class="sf-rq"><span class="faint cs-small">${it.k === 'a' || it.k === 'f' ? 'Agent answer' : esc(it.by)} in <button class="tlink" type="button" data-open="${pid}">${esc(clip(it.p.q, 90))}</button></span><p>${esc(clip(it.text, 220))}</p>${ms ? `<span class="ks bad">${ms === 'hidden' ? 'Hidden' : 'Removed'}</span>` : ''}</div>
     <div class="sf-rby">${avatar(r.by, 'sm')}<span><span class="faint">Reported by </span><b>${esc(r.by === ME.u ? 'you' : r.by)}</b>${r.note ? `<span class="sf-rnote">“${esc(r.note)}”</span>` : '<span class="faint"> · no note</span>'}</span></div>${cxRepAuthor(s, it)}
@@ -7164,7 +7166,7 @@ function csReports(s) {
   const decided = done.length ? `<section class="cs-sec rq-decided"><h3>Resolved today</h3>${done.map(r => `<div class="rq-drow">${avatar(r.by, 'sm')}<span class="rq-dtx"><b>${repWhy(r.why)}</b> <span class="faint">· ${itemOf(r.key).noun} reported by ${esc(r.by === ME.u ? 'you' : r.by)} · ${REP_DONE[r.st][0]} by you</span></span>${r.st === 'removed' ? `<button class="tlink" type="button" data-sfrestore="${r.id}">Restore</button>` : `<button class="tlink" type="button" data-sfrepundo="${r.id}">Undo</button>`}</div>`).join('')}</section>` : '';
   const head = `<p class="cs-fine sf-rhead">${SFI.flag}<span>People report answers, follow-up answers, posts and replies from the item’s menu. Hiding keeps the item for moderators and shows a placeholder to everyone else; removing deletes it. The person who reported gets a notification when you resolve the report.</span></p>`;
   if (!list.length) return `${head}<div class="cs-empty"><p class="muted">No open reports. New reports appear here and in your notifications.</p></div>${decided}`;
-  return `${head}<div class="rq-cards sf-rcards">${list.map(card).join('')}</div>${decided}`;
+  return `${head}<div class="rq-cards sf-rcards">${list.map(card).join('')}</div>${pgFoot('reports:' + s.id)}${decided}`;
 }
 function sfResolve(r, how) {
   const it = itemOf(r.key), same = st.reports.filter(x => x.key === r.key && x.st === 'open');
@@ -8021,8 +8023,8 @@ function dsSourceActs(m, s) {
 /* ---------- right sidebar: Sources and Wiki tabs ---------- */
 /* The Sources list: every source in the Social feed style. */
 function dsSideList(s) {
-  const l = dsList(s.id);
-  return l.length ? `<div class="mi-units mi-lay-rows mi-sty-social ds-units ds-sunits" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>` : dsEmpty(s);
+  const l = pgWin('sources:' + s.id, 'sources', { space: s.id }, dsList(s.id));
+  return l.length ? `<div class="mi-units mi-lay-rows mi-sty-social ds-units ds-sunits" role="list">${l.map(d => dsUnit(d, s.id)).join('')}</div>${pgFoot('sources:' + s.id)}` : dsEmpty(s);
 }
 function dsSideDrawer(s) {
   const close = `<button class="iconbtn" type="button" data-act="drawer" aria-label="Collapse the sidebar">${I.close}</button>`;
@@ -10541,7 +10543,7 @@ function tmUsagePage() {
   const head = `<div class="tm-total"><b class="num">${fmtT(total)}</b><span>tokens this month</span></div><p class="muted tm-ulead">Included tokens reset ${dayOf(TU().resetAt)}. Your providers bill your keys. Key limits reset on the 1st of each month.</p>`;
   const src = `<div class="tm-rows">${srcs.map(x => `<div class="tm-row">${tmIc(x)}<div class="tm-rt"><b>${esc(x.label)}</b><small>${tmSrcLine(x)}</small>${x.cap ? tmBar(x.used, x.cap) : ''}</div><b class="num">${fmtT(x.used)}</b>${x.kind === 'key' && x.valid !== false ? `<span class="tm-ra">${tmDef() && tmDef().id === x.id ? '' : `<button class="tlink" type="button" data-tmdef="${x.id}">Use for asks</button>`}<button class="tlink" type="button" data-akcap="${x.id}">${x.cap ? 'Change limit' : 'Set limit'}</button></span>` : ''}</div>`).join('')}</div>`;
   const sps = spaces.length ? `<div class="tm-rows">${spaces.map(([sid, v]) => `<div class="tm-row">${glyph(sp(sid))}<div class="tm-rt"><button class="tlink tm-sp" type="button" data-space="${sid}">${spName(sp(sid))}</button>${tmBar(v, spaces[0][1])}</div><b class="num">${fmtT(v)}</b></div>`).join('')}</div>` : '<p class="muted">No asks this month.</p>';
-  const recent = rec.length ? `<div class="tm-rows">${rec.map(r => `<div class="tm-row tm-rec"><div class="tm-rt"><button class="tlink tm-rq" type="button" ${r.open}>${esc(qtClip(r.t, 80))}</button><small>${spName(sp(r.s))} · ${tmPaidLabel(r.pay, r.u, r.s)} · ${agoText(r)}</small></div><b class="num">${fmtT(r.tok)}</b></div>`).join('')}</div>` : '<p class="muted">No asks yet this month.</p>';
+  const recent = !rec ? pgUsageWait() : rec.length ? `<div class="tm-rows">${rec.map(r => `<div class="tm-row tm-rec"><div class="tm-rt"><button class="tlink tm-rq" type="button" ${r.open}>${esc(qtClip(r.t, 80))}</button><small>${spName(sp(r.s))} · ${tmPaidLabel(r.pay, r.u, r.s)} · ${agoText(r)}</small></div><b class="num">${fmtT(r.tok)}</b></div>`).join('')}</div>${pgFoot('usage:8')}` : '<p class="muted">No asks yet this month.</p>';
   return wrap(`${head}<div class="cs-set st-side ac-set">${stSec('By source', 'The tokens your asks used this month, by source.', src)}${stSec('By space', 'Where you asked. The figures add up to the total.', sps)}${stSec('Recent asks', 'Your latest asks and follow-ups. They are part of the totals above.', recent)}</div>`);
 }
 /* Phone › You › Usage: the same figures */
@@ -10552,7 +10554,7 @@ function tmNUsage() {
   const body = `<div class="tm-ntotal"><b class="num">${fmtT(total)}</b><span>tokens this month</span></div>`
     + nGroup('By source', srcs.map(x => row(esc(x.label), tmSrcLine(x), fmtT(x.used), '', x.cap ? tmBar(x.used, x.cap) : '')), `Included tokens reset ${dayOf(TU().resetAt)}.`)
     + nGroup('By space', spaces.map(([sid, v]) => row(spName(sp(sid)), '', fmtT(v), '', tmBar(v, spaces[0][1]))), 'The figures add up to the total.')
-    + nGroup('Recent asks', rec.map(r => `<button class="n-row" type="button" data-n="${r.nopen}"><span class="n-row-b"><b>${esc(qtClip(r.t, 70))}</b><small>${spName(sp(r.s))} · ${tmPaidLabel(r.pay, r.u, r.s)}</small></span><span class="n-val num">${fmtT(r.tok)}</span></button>`));
+    + (!rec ? nGroup('Recent asks', [pgUsageWait()]) : nGroup('Recent asks', rec.map(r => `<button class="n-row" type="button" data-n="${r.nopen}"><span class="n-row-b"><b>${esc(qtClip(r.t, 70))}</b><small>${spName(sp(r.s))} · ${tmPaidLabel(r.pay, r.u, r.s)}</small></span><span class="n-val num">${fmtT(r.tok)}</span></button>`)) + pgFoot('usage:6'));
   return { body: `${nPushBar('Usage', '')}<div class="tm-nusage">${body}</div>` };
 }
 CS_PAGES.usage = () => typeof nvWithBack === 'function' ? nvWithBack(tmUsagePage(), '<div class="sub-top">') : tmUsagePage();
@@ -12363,18 +12365,20 @@ const pgMerge = (key, items) => items.length && applyChanges({ [key]: { put: ite
 /* the window of a list over a whole collection: the records at or above the last one loaded. items: the list
    as the screen builds it (any order). The first time a list is drawn with more than a page, its first page
    is read from the server (for the cursor); until then the window is the page's worth the store holds. */
-function pgWin(lk, kind, input, items, lim0) {
-  const K = PG_KINDS[kind], lim = pgLimit(kind, lim0);
+function pgWin(lk, kind, input, items, lim0, kf) {
+  const K = PG_KINDS[kind], lim = pgLimit(kind, lim0), key = kf || K.key;
   let s = PG.get(lk);
   if (s && (s.lim !== lim || !sameJSON(s.input, input))) { PG.delete(lk); s = null; }
   if (!s) {
     if (items.length <= lim) { PG.set(lk, { kind, input, lim, last: null, cursor: null, end: true, fit: true, gen: ++PG_GEN }); return items; }
-    const ks = items.map(K.key).sort((a, b) => pgCmp(b, a));
+    const ks = items.map(key).sort((a, b) => pgCmp(b, a));
     s = { kind, input, lim, last: ks[lim - 1], cursor: null, end: false, loading: true, first: true, gen: ++PG_GEN };
     PG.set(lk, s); pgSoon(() => pgFetch(lk, null));
   } else if (s.restored && !s.end && !s.cursor && !s.loading) { pgPut(lk, { loading: true, first: true, restored: false }); pgSoon(() => pgFetch(lk, null)); }
-  return s.end ? items : items.filter(x => pgCmp(K.key(x), s.last) >= 0);
+  return s.end ? items : items.filter(x => pgCmp(key(x), s.last) >= 0);
 }
+/* a search result or an FAQ row: { p, i } */
+const pgPI = x => pgK(x.p.createdAt, x.i);
 /* a list the server's pages make up (Usage): { items (null until the first page), loading, err } */
 function pgOwn(lk, kind, input, lim0) {
   const lim = pgLimit(kind, lim0);
@@ -12548,18 +12552,49 @@ function pgNHome(posts) {
   return pgNFeed(`nfeed:${scope}:${nst.homeF}`, 'feed', { scope, ...(nst.homeF !== 'all' ? { kind: nst.homeF } : {}) }, posts);
 }
 
+/* Saved (threads; Saved › Sources is not paged), search results, Manage › Requests */
+const pgSavedLk = () => `saved:${st.savedFilter}:${(st.nvSvQ || '').trim().toLowerCase()}`;
+function pgSaved(items) {
+  const f = st.savedFilter, q = (st.nvSvQ || '').trim();
+  if (f === 'mi-items') return items;
+  return pgWin(pgSavedLk(), 'saved', { ...(f !== 'all' ? { space: f } : {}), ...(q ? { q } : {}) }, items);
+}
+const pgSearchLk = () => `search:${st.nvScope || ''}:${st.q.trim().toLowerCase()}`;
+const pgSearchIn = () => ({ q: st.q.trim(), ...(st.nvScope ? { space: st.nvScope } : {}) });
+const pgReqsWin = sid => pgWin('requests:' + sid, 'requests', { space: sid, state: 'open' }, openReqs(sid));
+/* Usage › Recent asks: the server's pages (usage.listAsks), as the rows tmRecent made from the threads and ask
+   trees; null while the first page loads. n: the page size (8 on the web, 6 on the Phone). */
+tmRecent = function (n = 8) {
+  const s = pgOwn('usage:' + n, 'usage', {}, n);
+  if (!s.items) return null;
+  return s.items.map(r => ({ createdAt: r.createdAt, t: r.del ? 'You deleted this follow-up.' : r.t, s: r.space, pay: r.pay, u: r.u, tok: r.tok,
+    open: r.node === 'r' ? `data-open="${r.thread}"` : r.readable ? `data-qtopen="${r.thread}:${r.node}"` : `data-thlink="${r.space}:${r.thread}"`,
+    nopen: r.node === 'r' ? `push:thread:${r.thread}` : r.readable ? `push:ask:${r.thread}:${r.node}` : `push:space:${r.space}` }));
+};
+/* the Recent asks section while its first page loads, or after it failed */
+function pgUsageWait() {
+  const nat = st.device === 'native', lk = 'usage:' + (nat ? 6 : 8), s = PG.get(lk) || {};
+  if (s.err && !s.loading) return nat ? `<div class="n-row"><span class="n-row-b"><span class="pg-err">Couldn’t load your recent asks.</span></span><button class="n-cap" type="button" data-pgretry="${lk}">Retry</button></div>` : `<p class="pg-err pg-left" role="alert">Couldn’t load your recent asks. <button class="tlink" type="button" data-pgretry="${lk}">Retry</button></p>`;
+  return nat ? '<div class="n-row"><span class="n-row-b"><small>Loading your recent asks…</small></span></div>' : '<p class="muted pg-wait" role="status"><span class="spin" aria-hidden="true"></span>Loading your recent asks…</p>';
+}
+
 /* -- Screen entries: a list of each kind with Show more (a small page size: DevConfig pageSize), the button
    loading, and a failed page with Retry. They open on the device the Variants bar has: Desktop, Mobile Web
    or Phone. -- */
 const PG_SCREENS = {
-  'pg-feed': 5, 'pg-space': 8, 'pg-notifs': 2, 'pg-loading': 5, 'pg-error': 5,
+  'pg-feed': 5, 'pg-space': 8, 'pg-topic': 2, 'pg-notifs': 2, 'pg-profile': 3, 'pg-followups': 10, 'pg-saved': 3, 'pg-search': 4,
+  'pg-members': 2, 'pg-requests': 2, 'pg-reports': 1, 'pg-sources': 4, 'pg-usage': 3, 'pg-loading': 5, 'pg-error': 5,
 };
+/* Manage › Requests: #replication-club with you as a moderator; Reports: #sablefield (you are an admin) */
+screenData('pg-requests', 'replication: moderator');
 /* the list each entry shows, on the web and on the Phone */
 const pgScreenList = k => {
   const nat = st.device === 'native';
   return {
     'pg-feed': nat ? 'nfeed:joined:all' : 'feed:joined:all', 'pg-loading': nat ? 'nfeed:joined:all' : 'feed:joined:all', 'pg-error': nat ? 'nfeed:joined:all' : 'feed:joined:all',
-    'pg-space': 'space:sablefield:all', 'pg-notifs': 'notifs',
+    'pg-space': 'space:sablefield:all', 'pg-notifs': 'notifs', 'pg-topic': 'topic:sablefield:sync',
+    'pg-profile': nat ? 'profile:hal_b' : 'profile:hal_b:all', 'pg-followups': 'followups:hal_b', 'pg-saved': 'saved:all:', 'pg-search': nat ? 'nsearch:data' : 'search::data',
+    'pg-members': 'members:ml', 'pg-requests': 'requests:replication', 'pg-reports': 'reports:sablefield', 'pg-sources': 'sources:ml', 'pg-usage': nat ? 'usage:6' : 'usage:8',
   }[k];
 };
 /* wait (holding the data store busy) until the list's first page has loaded */
@@ -12574,15 +12609,32 @@ function pgScreen(k) {
     const tab = (t, ...stack) => { nst.tab = t; nst.stack = stack; };
     switch (k) {
       case 'pg-feed': case 'pg-loading': case 'pg-error': tab('home'); break;
-      case 'pg-space': tab('spaces', { v: 'space', id: 'sablefield' }); break;
+      case 'pg-space': case 'pg-topic': tab('spaces', { v: 'space', id: 'sablefield' }); break;   /* the Phone app has no FAQ topic list */
       case 'pg-notifs': tab('home', { v: 'notifs', id: '' }); break;
+      case 'pg-profile': case 'pg-followups': tab('home', { v: 'profile', id: 'hal_b' }); nst.pfTab = k === 'pg-followups' ? 'fus' : 'threads'; break;
+      case 'pg-saved': tab('saved'); break;
+      case 'pg-search': tab('home'); nst.hsOpen = true; nst.hq = 'data'; break;
+      case 'pg-members': tab('spaces', { v: 'space', id: 'ml' }); nst.sheet = 'mem:ml'; break;
+      case 'pg-requests': tab('spaces', { v: 'space', id: 'replication' }, { v: 'mreq', id: 'replication' }); break;
+      case 'pg-reports': tab('spaces', { v: 'space', id: 'sablefield' }, { v: 'mrep', id: 'sablefield' }); break;
+      case 'pg-sources': tab('spaces', { v: 'space', id: 'ml' }); break;   /* the Phone app has no sources list */
+      case 'pg-usage': tab('you', { v: 'usage', id: '' }); break;
     }
   } else {
     PG_J0('pg-base');
     switch (k) {
       case 'pg-feed': case 'pg-loading': case 'pg-error': st.home = true; break;
       case 'pg-space': Object.assign(st, { space: 'sablefield', home: false, faqView: 'latest' }); break;
+      case 'pg-topic': Object.assign(st, { space: 'sablefield', home: false, faqView: 'topics', faqTopic: 'sync' }); break;
       case 'pg-notifs': Object.assign(st, { subPage: 'notifs', ntOpen: false }); break;
+      case 'pg-profile': case 'pg-followups': Object.assign(st, { home: false, profilePage: true, profileUser: 'hal_b', ptab: k === 'pg-followups' ? 'followups' : 'threads' }); break;
+      case 'pg-saved': Object.assign(st, { home: false, savedPage: true, savedFilter: 'all', savedView: 'list' }); break;
+      case 'pg-search': Object.assign(st, { subPage: 'search', q: 'data', nvScope: null, nvAll: null }); break;
+      case 'pg-members': Object.assign(st, { subPage: 'manage', mgSpace: 'ml', mgTab: 'members', space: 'ml' }); break;
+      case 'pg-requests': Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'requests', space: 'replication', rqSel: new Set() }); break;
+      case 'pg-reports': Object.assign(st, { subPage: 'manage', mgSpace: 'sablefield', mgTab: 'reports', space: 'sablefield' }); break;
+      case 'pg-sources': Object.assign(st, { space: 'ml', home: false, drawer: true, dsSTab: 'sources', mWiki: st.device === 'phone' }); break;
+      case 'pg-usage': st.subPage = 'usage'; break;
     }
   }
   const lk = pgScreenList(k);
@@ -12606,7 +12658,11 @@ SCREEN_BEFORE.push(() => { PG_SIZE = null; mockBackend.cfg.pageSize = null; pgRe
 /* the Variants bar's Reset: every list at its first page, at the default page size */
 { const rc = resetControls; resetControls = function () { PG_SIZE = null; mockBackend.cfg.pageSize = null; pgReset(); rc(); pgNotifsSync(); pgRender(); }; }
 JUMPS.push(['Paged lists', [
-  ['pg-feed', 'Home: Show more (5 a page)'], ['pg-space', 'Space threads, Latest: Show more (8 a page)'], ['pg-notifs', 'Notifications: Show more (2 a page)'],
+  ['pg-feed', 'Home: Show more (5 a page)'], ['pg-space', 'Space threads, Latest: Show more (8 a page)'], ['pg-topic', 'FAQ topic: Show more (2 a page)'],
+  ['pg-notifs', 'Notifications: Show more (2 a page)'], ['pg-profile', 'Profile threads: Show more (3 a page)'], ['pg-followups', 'Profile follow-ups: Show more (10 a page)'],
+  ['pg-saved', 'Saved: Show more (3 a page)'], ['pg-search', 'Search results: Show more (4 a page)'], ['pg-members', 'Manage › Members: Show more (2 a page)'],
+  ['pg-requests', 'Manage › Requests: Show more (2 a page)'], ['pg-reports', 'Manage › Reports: Show more (1 a page)'], ['pg-sources', 'Space sources: Show more (4 a page)'],
+  ['pg-usage', 'Usage, recent asks: Show more (3 a page)'],
   ['pg-loading', 'Show more: loading the next page'], ['pg-error', 'Show more: the page failed, with Retry'],
 ]]);
 /* ==== end of paged lists ==== */
