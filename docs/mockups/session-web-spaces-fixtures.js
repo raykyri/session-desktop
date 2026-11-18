@@ -3592,9 +3592,9 @@ alter table notes validate constraint notes_owner_nn;</code></pre>`,
     profile: { name: 'Ines V.', bio: 'Reading science fiction for ideas about markets and coordination. Mostly asks in #sci-fi and #public.' },
     skills: {
       public: [
-        [
-          'summarizing-articles',
-          `Summarizes an article and lists its main claims with the evidence given for each. Use when someone shares a link to an article, essay or blog post and asks what it says.
+        {
+          name: 'summarizing-articles',
+          prompt: `Summarizes an article and lists its main claims with the evidence given for each. Use when someone shares a link to an article, essay or blog post and asks what it says.
 
 ## Steps
 1. Read the whole article, including footnotes.
@@ -3604,10 +3604,11 @@ alter table notes validate constraint notes_owner_nn;</code></pre>`,
 ## Output
 - Quote supporting passages exactly.
 - Mark claims the article gives no evidence for.`,
-        ],
-        [
-          'transcribing-videos',
-          `Transcribes a video and produces a timestamped outline of its sections. Use when someone links a video or a recorded talk and asks for a transcript, an outline or where a topic comes up.
+          rev: 0,
+        },
+        {
+          name: 'transcribing-videos',
+          prompt: `Transcribes a video and produces a timestamped outline of its sections. Use when someone links a video or a recorded talk and asks for a transcript, an outline or where a topic comes up.
 
 ## Steps
 1. Transcribe the audio with speaker labels.
@@ -3615,10 +3616,11 @@ alter table notes validate constraint notes_owner_nn;</code></pre>`,
 3. Give each section a timestamp and a one-line title.
 
 Mark parts that cannot be heard as [inaudible].`,
-        ],
-        [
-          'reviewing-pull-requests',
-          `Reviews a public pull request for correctness bugs and risky changes. Use when someone links a GitHub or GitLab pull request and asks whether it is safe to merge.
+          rev: 0,
+        },
+        {
+          name: 'reviewing-pull-requests',
+          prompt: `Reviews a public pull request for correctness bugs and risky changes. Use when someone links a GitHub or GitLab pull request and asks whether it is safe to merge.
 
 ## Checks
 - Logic errors and unhandled cases in the changed lines.
@@ -3626,10 +3628,11 @@ Mark parts that cannot be heard as [inaudible].`,
 - Tests that were removed or weakened.
 
 Cite the file and line for each finding. Say so when nothing was found.`,
-        ],
-        [
-          'auditing-codebases',
-          `Audits a public repository for security issues and unmaintained dependencies. Use when someone links a repository and asks whether it is safe to depend on.
+          rev: 0,
+        },
+        {
+          name: 'auditing-codebases',
+          prompt: `Audits a public repository for security issues and unmaintained dependencies. Use when someone links a repository and asks whether it is safe to depend on.
 
 ## Steps
 1. List direct dependencies with the date of their last release.
@@ -3637,12 +3640,13 @@ Cite the file and line for each finding. Say so when nothing was found.`,
 3. Look for committed secrets, unsafe deserialization and shell injection.
 
 Separate confirmed issues from things to check by hand.`,
-        ],
+          rev: 0,
+        },
       ],
       scifi: [
-        [
-          'finding-works-on-a-theme',
-          `Finds novels and short stories that explore a theme and groups them by approach. Use when someone names a theme, idea or technology and asks which science fiction deals with it.
+        {
+          name: 'finding-works-on-a-theme',
+          prompt: `Finds novels and short stories that explore a theme and groups them by approach. Use when someone names a theme, idea or technology and asks which science fiction deals with it.
 
 ## Steps
 1. Find works where the theme is central, not incidental.
@@ -3650,10 +3654,11 @@ Separate confirmed issues from things to check by hand.`,
 3. Give the author, the year and one sentence for each work.
 
 Mark spoilers as the spoiler policy page describes.`,
-        ],
-        [
-          'tracing-terms',
-          `Traces how a term was coined and how its meaning changed over time. Use when someone asks where a word or concept from science fiction comes from.
+          rev: 0,
+        },
+        {
+          name: 'tracing-terms',
+          prompt: `Traces how a term was coined and how its meaning changed over time. Use when someone asks where a word or concept from science fiction comes from.
 
 ## Steps
 1. Find the earliest known use, with a citation.
@@ -3661,12 +3666,13 @@ Mark spoilers as the spoiler policy page describes.`,
 3. Say how the term is used now.
 
 Prefer primary sources to encyclopedias.`,
-        ],
+          rev: 0,
+        },
       ],
       ml: [
-        [
-          'summarizing-papers',
-          `Summarizes a research paper: the claim, the method, the main results and what was not tested. Use when someone gives an arXiv ID or a link to a paper.
+        {
+          name: 'summarizing-papers',
+          prompt: `Summarizes a research paper: the claim, the method, the main results and what was not tested. Use when someone gives an arXiv ID or a link to a paper.
 
 ## Output
 - Claim: one sentence.
@@ -3675,50 +3681,56 @@ Prefer primary sources to encyclopedias.`,
 - Not tested: settings, baselines or ablations the paper leaves out.
 
 Copy numbers from the paper without rounding them.`,
-        ],
-        [
-          'checking-benchmark-claims',
-          `Checks whether a reported benchmark result holds up by comparing it with other reported numbers and setups. Use when someone asks whether a benchmark score is credible.
+          rev: 0,
+        },
+        {
+          name: 'checking-benchmark-claims',
+          prompt: `Checks whether a reported benchmark result holds up by comparing it with other reported numbers and setups. Use when someone asks whether a benchmark score is credible.
 
 ## Steps
 1. Find other reports for the same benchmark and model size.
 2. Compare prompts, number of shots, decoding settings and contamination checks.
 3. Say whether the result is consistent with the others, and why.`,
-        ],
-        [
-          'comparing-papers',
-          `Compares two papers on method, data and results. Use when someone gives two papers and asks how they differ or which result to trust.
+          rev: 0,
+        },
+        {
+          name: 'comparing-papers',
+          prompt: `Compares two papers on method, data and results. Use when someone gives two papers and asks how they differ or which result to trust.
 
 Make a table with one row each for method, data, evaluation and main result. Below it, list the differences that explain different results.`,
-        ],
+          rev: 0,
+        },
       ],
       markets: [
-        [
-          'explaining-mechanisms',
-          `Explains how a market mechanism works, with a worked example. Use when someone asks how an auction, a clearing process or a pricing rule works.
+        {
+          name: 'explaining-mechanisms',
+          prompt: `Explains how a market mechanism works, with a worked example. Use when someone asks how an auction, a clearing process or a pricing rule works.
 
 ## Steps
 1. Describe the participants and what each one submits.
 2. Work through one example with numbers.
 3. Name a real market that uses the mechanism.`,
-        ],
-        [
-          'comparing-data-sources',
-          `Compares public data sources for a market metric on coverage, latency and licence. Use when someone asks where to get data for a metric.
+          rev: 0,
+        },
+        {
+          name: 'comparing-data-sources',
+          prompt: `Compares public data sources for a market metric on coverage, latency and licence. Use when someone asks where to get data for a metric.
 
 Make a table of sources with columns for coverage, update frequency, delay and licence. Link each source.`,
-        ],
+          rev: 0,
+        },
       ],
       history: [
-        [
-          'finding-primary-sources',
-          `Finds primary sources for a historical event and says where each one can be read. Use when someone asks for original documents, letters or records about an event.
+        {
+          name: 'finding-primary-sources',
+          prompt: `Finds primary sources for a historical event and says where each one can be read. Use when someone asks for original documents, letters or records about an event.
 
 ## Steps
 1. List documents written at the time by participants or witnesses.
 2. For each one, give the archive or edition and whether it is online.
 3. Note translations and their dates.`,
-        ],
+          rev: 0,
+        },
       ],
     },
     pagedocs: {},

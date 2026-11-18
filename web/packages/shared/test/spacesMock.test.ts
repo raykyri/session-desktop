@@ -32,6 +32,7 @@ import {
   personSummarySchema,
   replySchema,
   reportSchema,
+  skillSchema,
   sourceReportSchema,
   sourceSchema,
   spaceCollectionSchemas,
@@ -259,6 +260,7 @@ const MOCK_SCHEMAS: Record<string, z.ZodType[]> = {
   Report: [reportSchema],
   SpaceSource: [spaceSourceSchema],
   SourceReport: [sourceReportSchema],
+  Skill: [skillSchema],
   PageDoc: [pageDocSchema],
   Profile: [spaceProfileSchema],
   PersonSummary: [personSummarySchema],
@@ -276,7 +278,7 @@ test("the mock's hand-written schemas list the same fields", (t) => {
     new Set(schemas.flatMap((s) => Object.keys((s as z.ZodObject).shape)));
   const differences: string[] = [];
   for (const [name, s] of Object.entries(M.SCHEMAS)) {
-    if (s.t === "enum" || s.t === "tuple") continue;
+    if (s.t === "enum") continue;
     const ours = MOCK_SCHEMAS[name];
     if (!ours) {
       differences.push(`S.${name} has no schema here`);
@@ -712,6 +714,27 @@ test.serial("a CONFLICT has the current version and the changes", async (t) => {
     const body = res.body as { current?: unknown; changes?: Record<string, unknown> };
     t.truthy(body.current, `${name}: current`);
     t.true(Object.keys(body.changes ?? {}).length > 0, `${name}: changes`);
+  }
+});
+
+test.serial("a new skill has rev 0, and each save adds one", async (t) => {
+  await scenario("seed");
+  type Skill = z.output<typeof skillSchema>;
+  const skills = async () =>
+    ((await get("/api/space-skills")).body as Record<string, Skill[]>).scifi ?? [];
+  await valid(t, "skills.create", { space: "scifi", name: "dating-editions", prompt: "Dates it." });
+  const index = (await skills()).findIndex((x) => x.name === "dating-editions");
+  t.like((await skills())[index], { name: "dating-editions", prompt: "Dates it.", rev: 0 });
+  for (const rev of [0, 1]) {
+    const prompt = `Dates it, version ${rev + 1}.`;
+    await valid(t, "skills.update", {
+      space: "scifi",
+      index,
+      name: "dating-editions",
+      prompt,
+      base: { rev },
+    });
+    t.deepEqual((await skills())[index], { name: "dating-editions", prompt, rev: rev + 1 });
   }
 });
 

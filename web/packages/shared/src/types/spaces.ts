@@ -98,8 +98,6 @@ export type SpaceNotificationType = z.infer<typeof spaceNotificationTypeSchema>;
 export type SpaceNotification = z.infer<typeof spaceNotificationSchema>;
 
 export type PageDoc = z.infer<typeof pageDocSchema>;
-/** `[name, prompt, rev?]`; the object form `{ name, prompt, rev }` is the
- * preferred wire shape for the real API (see `skillSchema`). */
 export type Skill = z.infer<typeof skillSchema>;
 
 export type SpaceProfile = z.infer<typeof spaceProfileSchema>;

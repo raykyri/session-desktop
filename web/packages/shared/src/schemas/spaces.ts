@@ -549,14 +549,15 @@ export const pageDocSchema = z.object({
   revs: z.array(pageRevisionSchema),
 });
 
-/** A skill: `[name, prompt, rev?]`; `rev`, its version (step 9), counts its
- * saves (absent: 0). The mock keeps the tuple because the page reads skills
- * as tuples in many places. The object form `{ name, prompt, rev }` is the
- * preferred wire shape for the real API. */
-export const skillSchema = z.union([
-  z.tuple([z.string(), z.string()]),
-  z.tuple([z.string(), z.string(), count]),
-]);
+/** A skill of a space (`/api/space-skills`, by space, in the order About
+ * shows them). `prompt`: the description, a blank line, then the
+ * instructions in Markdown (a SKILL.md file's parts). `rev`: its version
+ * (step 9), the number of saves; 0 for a skill never edited. */
+export const skillSchema = z.object({
+  name: z.string(),
+  prompt: z.string(),
+  rev: count,
+});
 
 // ---- people, profile, settings ----
 
@@ -856,7 +857,7 @@ export const editConflictCurrentSchema = z.union([
     rules: z.array(z.string()),
     rulesBy: spaceHandleSchema.nullable(),
   }),
-  z.object({ rev: count, name: z.string(), prompt: z.string() }),
+  skillSchema,
   z.object({
     rev: count,
     t: z.string(),

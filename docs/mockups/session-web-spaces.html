@@ -3889,7 +3889,7 @@ const RES = {
   dsPol:    { url: '/api/space-source-policies', kind: 'map' },
   dsReps:   { url: '/api/source-reports', kind: 'value' },
   profile:  { url: '/api/me/profile', kind: 'value' },        /* name and bio */
-  skills:   { url: '/api/space-skills', kind: 'map' },        /* space id → skills ([name, prompt]) */
+  skills:   { url: '/api/space-skills', kind: 'map' },        /* space id → skills ({ name, prompt, rev }) */
   pagedocs: { url: '/api/pages', kind: 'map' },               /* "space/page-slug" → page text, authors, history */
   usage:    { url: '/api/me/usage', kind: 'value', stub: true },          /* token model: tokens this month by source and space, the default key */
   runs:     { url: '/api/runs', kind: 'map' },                /* "<thread>:<node>" → a run in progress (the server's job), its progress step */
@@ -4366,7 +4366,7 @@ liveData.meta.subscribe((m, p) => { if (!APP_STARTED) return; if (m.status !== p
    The Variants bar's 120ms / Fail control can make every write fail; /api/dev/config can choose the error
    code and set the mock clock. */
 const mockBackend = window.SessionMockApi.createBackend({
-  fixtures: window.SessionFixtures, scenarios: window.SessionScenarios, storageKey: 'session-mock-db-v5', dev: DEV,
+  fixtures: window.SessionFixtures, scenarios: window.SessionScenarios, storageKey: 'session-mock-db-v6', dev: DEV,
   latency: typeof window.__SESSION_API_LATENCY === 'number' ? window.__SESSION_API_LATENCY : 120,
   /* a run's length (DevConfig jobMs): __SESSION_ASK_MS, which tests set before the page loads; short when the latency is 0 */
   jobMs: typeof window.__SESSION_ASK_MS === 'number' ? window.__SESSION_ASK_MS : (window.__sfFast || window.__SESSION_API_LATENCY === 0) ? 40 : 2400,
@@ -4481,7 +4481,7 @@ const skillIcon = n => { const w = String(n).split(/[\s-]/)[0], d = SKILL_ICONS[
 function skillsHTML(s) {
   const list = D.skills[s.id]; if (!list) return '';
   const btn = (i, cls, inner, t) => `<button class="${cls}" type="button" data-skill="${i}" title="${esc(t)}">${inner}</button>`;
-  const body = `<div class="sk-list">${list.map(([n, t], i) => btn(i, 'sk-row', `<span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span>${I.chev.replace('<svg', '<svg class="sk-go"')}`, abSkParse(t).d)).join('')}</div>`;
+  const body = `<div class="sk-list">${list.map(({ name: n, prompt: t }, i) => btn(i, 'sk-row', `<span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span>${I.chev.replace('<svg', '<svg class="sk-go"')}`, abSkParse(t).d)).join('')}</div>`;
   return `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3><span class="edited">${list.length}</span></div>${body}</div>`;
 }
 
@@ -5687,7 +5687,7 @@ function nWiki(x) {
   const rulesF = x.rulesAt ? `Updated ${agoText(x.rulesAt)} by ${esc(x.rulesBy)}.${x.rulesPrev ? ` <button class="n-lnk" type="button" data-n="sheet:rules:${id}">See changes</button>` : ''}` : '';
   h += nGroup('Rules', x.rules.map((r, k2) => `<div class="n-row"><span class="n-src-n num">${k2 + 1}</span><span class="n-row-b"><span>${esc(r)}</span></span></div>`), rulesF);
   if (x.pages.length) h += nGroup('Pages', x.pages.map(([t, a2], i) => { const inner = `<span class="n-row-b"><b>${esc(t)}</b><small>Edited ${agoText(a2)}</small></span>`; return read ? nGo2(`push:page:${id}:${i}`, inner) : `<div class="n-row">${inner}</div>`; }), read ? '' : 'Pages are visible to members.');
-  const sk = (D.skills[id] || []).map(([n, t], i) => nGo2(`sheet:skill:${id}:${i}`, `<span class="n-skic">${skillIcon(n)}</span><span class="n-row-b"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span>`, ' n-skr'));
+  const sk = (D.skills[id] || []).map(({ name: n, prompt: t }, i) => nGo2(`sheet:skill:${id}:${i}`, `<span class="n-skic">${skillIcon(n)}</span><span class="n-row-b"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span>`, ' n-skr'));
   if (sk.length) h += nGroup('Skills', sk);
   h += nGroup('Details', [row('Visibility', isClosed(x) ? visLabel(x) : 'Open'), read ? nGo2(`sheet:mem:${id}`, `<span class="n-row-b"><b>Members</b></span><span class="n-val num">${x.members.toLocaleString('en-US')}</span>`) : row('Members', x.members.toLocaleString('en-US')), row('Created', `${monthOf(x)} by ${esc(abOwner(x))}`)]);
   const joined = D.joined.includes(id), cta = !inn || joined ? '' : isClosed(x) ? nCta(x) : `<button class="n-capbtn" type="button" data-n="join:${id}">Join</button>`;
@@ -5697,7 +5697,7 @@ function nWiki(x) {
 }
 function nSkillSheet(sid, i) {
   const l = D.skills[sid] || [], sk = l[+i]; if (!sk) return '';
-  const [n, t] = sk, { d, b } = abSkParse(t), can = nSignedIn() && D.joined.includes(sid);
+  const { name: n, prompt: t } = sk, { d, b } = abSkParse(t), can = nSignedIn() && D.joined.includes(sid);
   const body = `<div class="n-sk-h"><span class="n-skic lg">${skillIcon(n)}</span><h2>${esc(n)}</h2><p>${esc(d)}</p></div>${nGroup('SKILL.md', [`<pre class="n-skpre">${esc(abSkFile(n, d, b))}</pre>`], `You can start an ask with /${esc(n)}.`)}${can ? `<div class="n-pad"><button class="n-capbtn wide" type="button" data-n="useskill:${sid}:${i}">Use this skill</button></div>` : ''}`;
   return nSub(sid, n, 'Skill', body);
 }
@@ -5951,7 +5951,7 @@ function nClickX(k, a) {
     case 'useskill': return go(() => {
       const [sid, i] = a.split(':'), sk = (D.skills[sid] || [])[+i]; nst.sheet = null; if (!sk) return;
       const t = nTop(); if (!(t && t.v === 'space' && t.id === sid)) nst.stack = [...nst.stack, { v: 'space', id: sid }];
-      Object.assign(nst, { inl: true, inlAt: sid, cSpace: sid, cMode: 'ask', cTopic: null, draft: `/${sk[0]} ` });
+      Object.assign(nst, { inl: true, inlAt: sid, cSpace: sid, cMode: 'ask', cTopic: null, draft: `/${sk.name} ` });
       nst.scroll = { ...nst.scroll, ['space:' + sid]: 0 }; st.space = sid; nInlineFocus = true;
     });
     case 'settopic': return go(() => { nst.cTopic = a || null; nst.sheet = null; nInlineFocus = true; });
@@ -9160,7 +9160,7 @@ CS_PAGES.abpage = () => `<div class="A C Af H">${topHeader()}<div class="home-wi
 
 /* ---------- skills: preview, then use ---------- */
 /* ---------- skills: Agent Skills (a name, a description and instructions) ----------
-   Stored as before: D.skills[space] = [[name, text]]. The text is the description, a blank line,
+   Stored as D.skills[space] = [{ name, prompt, rev }]. The prompt is the description, a blank line,
    then the instructions in Markdown, so a skill maps onto a SKILL.md file without new fields. */
 const abSkParse = t => { const s = String(t || '').trim(), k = s.indexOf('\n\n'); return k < 0 ? { d: s, b: '' } : { d: s.slice(0, k).trim(), b: s.slice(k + 2).trim() }; };
 const abSkJoin = (d, b) => d.trim() + (b.trim() ? '\n\n' + b.trim() : '');
@@ -9181,7 +9181,7 @@ function abSkCheck(x, sid, i) {
     if (x.n.length > 64) e.push(['n', 'Use 64 characters or fewer for the name.']);
     if (!/^[a-z0-9-]+$/.test(x.n)) e.push(['n', 'Use only lowercase letters, numbers and hyphens in the name.']);
     if (/anthropic|claude/.test(x.n)) e.push(['n', 'The name cannot contain “anthropic” or “claude”.']);
-    if (list.some(([n], k) => n === x.n && k !== i)) e.push(['n', 'Another skill in this space has this name.']);
+    if (list.some(({ name: n }, k) => n === x.n && k !== i)) e.push(['n', 'Another skill in this space has this name.']);
   }
   if (!x.d.trim()) e.push(['d', 'Add a description.']);
   else { if (x.d.length > 1024) e.push(['d', 'Use 1,024 characters or fewer for the description.']); if (/<[^>]+>/.test(x.d)) e.push(['d', 'Remove the XML tags from the description.']); }
@@ -9200,7 +9200,7 @@ const abMd = t => String(t || '').split(/\n\s*\n/).map(bk => {
 /* the preview dialog: the description and the skill's SKILL.md */
 function abSkillDlg(s, i) {
   const sk = (D.skills[s.id] || [])[i]; if (!sk) return '';
-  const [n, t] = sk, { d, b } = abSkParse(t);
+  const { name: n, prompt: t } = sk, { d, b } = abSkParse(t);
   const body = `<p class="ab-skd">${esc(d)}</p><div class="ab-skcode"><div class="ab-skch"><span>SKILL.md</span><button class="btn sm" type="button" data-abskcopy="${i}">Copy</button></div><pre>${esc(abSkFile(n, d, b))}</pre></div><p class="cs-fine ab-f">You can start an ask with <code>/${esc(n)}</code>.</p>`;
   const title = `<span class="ab-skti"><span class="sk-ic">${skillIcon(n)}</span><span class="ab-skn">${esc(n)}</span></span>`;
   return dlg(title, `<div class="ab-skp">${body}</div>`, `${cancelB('Close')}${st.auth === 'in' ? `<button class="btn primary" type="button" data-skill="${i}">Use this skill</button>` : ''}`).replace('modal cs-m', 'modal cs-m ab-skm-d wide');
@@ -9208,7 +9208,7 @@ function abSkillDlg(s, i) {
 function abSkillsCard(s) {
   const list = D.skills[s.id], mod = isModOf(s.id) && st.auth === 'in' && !s.archived;
   if (!list || !list.length) return mod ? `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3></div><p class="muted cs-small abw-none">No skills yet.</p><button class="tlink ab-add" type="button" data-abskmg="new">${PLUS}Add a skill</button></div>` : '';
-  const row = ([n, t], i) => `<button class="sk-row" type="button" data-abskill="${i}" aria-haspopup="dialog"><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span>${I.chev.replace('<svg', '<svg class="sk-go"')}</button>`;
+  const row = ({ name: n, prompt: t }, i) => `<button class="sk-row" type="button" data-abskill="${i}" aria-haspopup="dialog"><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span>${I.chev.replace('<svg', '<svg class="sk-go"')}</button>`;
   return `<div class="note-card skills"><div class="sk-head"><h3>Skills</h3><span class="edited">${list.length}</span>${mod ? '<button class="tlink ab-skm" type="button" data-abskmg="1">Manage</button>' : ''}</div><div class="sk-list">${list.map(row).join('')}</div></div>`;
 }
 
@@ -9216,8 +9216,8 @@ function abSkillsCard(s) {
 const SK_GRIP = '<svg viewBox="0 0 16 16" aria-hidden="true"><g fill="currentColor"><circle cx="6" cy="4" r="1.1"/><circle cx="10" cy="4" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="10" cy="8" r="1.1"/><circle cx="6" cy="12" r="1.1"/><circle cx="10" cy="12" r="1.1"/></g></svg>';
 function abSkillsManage(s) {
   const list = D.skills[s.id] || [];
-  if (s.archived) return `<div class="cs-set st-side ab-skmg">${stSec('Skills', `${spName(s)} is archived. Unarchive it in Settings to change its skills.`, `<div class="ab-skl-list">${list.map(([n, t]) => `<div class="ab-skr"><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span></div>`).join('') || '<p class="muted cs-small">No skills.</p>'}</div>`)}</div>`;
-  const rows = list.map(([n, t], i) => `<div class="ab-skr" data-skrow="${i}"><button class="ab-skdrag" type="button" data-skdrag="${i}" aria-label="Move ${esc(n)}. Drag, or use the up and down arrow keys." title="Drag to reorder">${SK_GRIP}</button><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span><span class="ab-pgb"><button class="btn sm" type="button" data-absk="edit:${i}">Edit</button><button class="btn sm" type="button" data-absk="rm:${i}">Remove</button></span></div>`).join('');
+  if (s.archived) return `<div class="cs-set st-side ab-skmg">${stSec('Skills', `${spName(s)} is archived. Unarchive it in Settings to change its skills.`, `<div class="ab-skl-list">${list.map(({ name: n, prompt: t }) => `<div class="ab-skr"><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span></div>`).join('') || '<p class="muted cs-small">No skills.</p>'}</div>`)}</div>`;
+  const rows = list.map(({ name: n, prompt: t }, i) => `<div class="ab-skr" data-skrow="${i}"><button class="ab-skdrag" type="button" data-skdrag="${i}" aria-label="Move ${esc(n)}. Drag, or use the up and down arrow keys." title="Drag to reorder">${SK_GRIP}</button><span class="sk-ic">${skillIcon(n)}</span><span class="sk-tx"><b>${esc(n)}</b><small>${esc(abSkParse(t).d)}</small></span><span class="ab-pgb"><button class="btn sm" type="button" data-absk="edit:${i}">Edit</button><button class="btn sm" type="button" data-absk="rm:${i}">Remove</button></span></div>`).join('');
   return `<div class="cs-set st-side ab-skmg">${stSec('Skills', 'Agent skills members can use in asks in this space. Shown in About in this order.', `<div class="ab-skl-list">${rows || '<p class="muted cs-small">No skills yet.</p>'}</div><button class="btn sm cs-b st-add" type="button" data-absk="new">${PLUS}Add a skill</button>`)}</div>`;
 }
 /* the add and edit dialog: fields on the left, how the skill appears in About and its SKILL.md on the right */
@@ -9250,8 +9250,8 @@ function abSkRefresh(showAll) {
   return errs;
 }
 function abSkOpen(sid, i) {
-  const list = D.skills[sid] || [], [n, t] = i === 'new' ? ['', ''] : list[i], { d, b } = abSkParse(t);
-  st.abSkEd = { i, n, d, b, seen: {}, rev: i === 'new' ? 0 : (list[i][2] || 0) };
+  const list = D.skills[sid] || [], { name: n, prompt: t, rev } = i === 'new' ? { name: '', prompt: '', rev: 0 } : list[i], { d, b } = abSkParse(t);
+  st.abSkEd = { i, n, d, b, seen: {}, rev };
   st.modal = 'ab-sked'; st.edCf = null;
 }
 /* drag to reorder (pointer events, so touch works too) */
@@ -9325,7 +9325,7 @@ function abModal() {
   if (k === 'ab-pgdel') { const t = (s.pages[+a] || [''])[0]; return dlg(`Remove “${esc(t)}”?`, `<p class="muted">This removes the page and its history from ${spName(s)}. Links to it stop working.</p>`, `${cancelB()}<button class="btn danger" type="button" data-abpgdelok="${a}">Remove page</button>`, 'alertdialog'); }
   if (k === 'ab-skill') return abSkillDlg(s, +a);
   if (k === 'ab-sked') return abSkEdDlg();
-  if (k === 'ab-skrm') { const sk = (D.skills[s.id] || [])[+a]; if (!sk) return ''; const [n] = sk; return dlg(`Remove ${esc(n)}?`, `<p class="muted">Members can no longer use it in asks in ${spName(s)}. Answers that already used it stay in their threads.</p>`, `${cancelB()}<button class="btn danger" type="button" data-absk="rmok:${a}">Remove</button>`, 'alertdialog'); }
+  if (k === 'ab-skrm') { const sk = (D.skills[s.id] || [])[+a]; if (!sk) return ''; const n = sk.name; return dlg(`Remove ${esc(n)}?`, `<p class="muted">Members can no longer use it in asks in ${spName(s)}. Answers that already used it stay in their threads.</p>`, `${cancelB()}<button class="btn danger" type="button" data-absk="rmok:${a}">Remove</button>`, 'alertdialog'); }
   return '';
 }
 { const AB_csModal = csModal; csModal = function () { return (st.modal || '').startsWith('ab-') ? abModal() : AB_csModal(); }; }
@@ -9374,7 +9374,7 @@ on($('app'), 'click', e => {
   if ((b = d('[data-abpgdel]'))) { st.modal = 'ab-pgdel:' + b.dataset.abpgdel; return go(); }
   if ((b = d('[data-abpgdelok]'))) { const i = +b.dataset.abpgdelok, t = s.pages[i][0]; mutate('pages.remove', { space: s.id, page: i }, () => { spEdit(s.id, x => { x.pages.splice(i, 1); }); db.del('pagedocs', abKey(s, t)); }); st.modal = null; if (st.subPage === 'abpage') Object.assign(st, { ...NAVBASE(), space: s.id, home: false, drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' }); toast(`Removed “${t}”.`); return go(); }
   if ((b = d('[data-abskill]'))) { st.modal = 'ab-skill:' + b.dataset.abskill; return go(); }
-  if ((b = d('[data-abskcopy]'))) { const sk = (D.skills[st.subPage === 'manage' ? st.mgSpace : st.space] || [])[+b.dataset.abskcopy]; if (sk) { const { d: ds, b: bd } = abSkParse(sk[1]); taCopy(abSkFile(sk[0], ds, bd)); } toast('Copied SKILL.md.'); return go(); }
+  if ((b = d('[data-abskcopy]'))) { const sk = (D.skills[st.subPage === 'manage' ? st.mgSpace : st.space] || [])[+b.dataset.abskcopy]; if (sk) { const { d: ds, b: bd } = abSkParse(sk.prompt); taCopy(abSkFile(sk.name, ds, bd)); } toast('Copied SKILL.md.'); return go(); }
   if ((b = d('[data-abskmg]'))) { Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: s.id, space: s.id, mgTab: 'skills', abSkEd: null }); if (b.dataset.abskmg === 'new') abSkOpen(s.id, 'new'); return go(); }
   if ((b = d('[data-absk]'))) {
     const sid = st.mgSpace, list = D.skills[sid] || [], [v, a] = b.dataset.absk.split(':'), i = +a;
@@ -9387,7 +9387,7 @@ on($('app'), 'click', e => {
       abSkSave(sid, ed);
     }
     if (v === 'rm') st.modal = 'ab-skrm:' + i;
-    if (v === 'rmok') { const n = list[i][0]; mutate('skills.remove', { space: sid, index: i }, () => db.put('skills', sid, list.filter((_, k) => k !== i))); st.modal = null; toast(`Removed ${n}.`); }
+    if (v === 'rmok') { const n = list[i].name; mutate('skills.remove', { space: sid, index: i }, () => db.put('skills', sid, list.filter((_, k) => k !== i))); st.modal = null; toast(`Removed ${n}.`); }
     return go();
   }
   if ((b = d('[data-abmem]'))) { Object.assign(st, { modal: 'ab-mem', abMemQ: '' }); return go(); }
@@ -9555,9 +9555,8 @@ function abRestore(s, i, k, force) {
   toast('Restored. The page history keeps both versions.');
 }
 function abSkSave(sid, ed, force) {
-  const x = abSkVals(ed), row = [x.n, abSkJoin(x.d, x.b)], list = D.skills[sid] || [];
-  if (ed.i !== 'new') row.push(((list[ed.i] || [])[2] || 0) + 1);
-  mutate(ed.i === 'new' ? 'skills.create' : 'skills.update', Object.assign({ space: sid, name: row[0], prompt: row[1] }, ed.i === 'new' ? {} : { index: ed.i, base: { rev: ed.rev || 0 } }, force ? { force: true } : {}),
+  const x = abSkVals(ed), list = D.skills[sid] || [], row = { name: x.n, prompt: abSkJoin(x.d, x.b), rev: ed.i === 'new' ? 0 : (list[ed.i] ? list[ed.i].rev : 0) + 1 };
+  mutate(ed.i === 'new' ? 'skills.create' : 'skills.update', Object.assign({ space: sid, name: row.name, prompt: row.prompt }, ed.i === 'new' ? {} : { index: ed.i, base: { rev: ed.rev || 0 } }, force ? { force: true } : {}),
     () => db.put('skills', sid, ed.i === 'new' ? [...list, row] : list.map((y, k) => k === ed.i ? row : y)), ed.i === 'new' ? {} : edOpts('skill', sid, ed.i, ed));
   Object.assign(st, { abSkEd: null, modal: null }); toast(ed.i === 'new' ? `Added ${x.n}. It shows in About.` : `Saved ${x.n}.`);
 }
@@ -10932,7 +10931,7 @@ function taShareMenu(p) {
 }
 
 /* ---- skills after "/" in the composer ---- */
-const taSkAll = () => { const s = sp(curSpace()); return s ? (D.skills[s.id] || []).map(([n, t]) => ({ n, d: abSkParse(t).d })) : []; };
+const taSkAll = () => { const s = sp(curSpace()); return s ? (D.skills[s.id] || []).map(x => ({ n: x.name, d: abSkParse(x.prompt).d })) : []; };
 const taSkList = q => { const l = taSkAll(); return [...l.filter(x => x.n.startsWith(q)), ...l.filter(x => !x.n.startsWith(q) && x.n.includes(q))]; };
 function taSkHTML() {
   const k = st.taSk; if (!k || st.mode !== 'ask' || !taSkAll().length) return '';
@@ -10963,7 +10962,7 @@ function taSkInsert(name) {
 /* an ask that starts with one of the space's skills records it; the answer header shows "Used /name" */
 { const ct0 = createThread; createThread = function (kind) {
   const m = /^\/([a-z0-9-]+)(?=\s|$)/.exec(st.draft.trim()), s = sp(curSpace());
-  const sk = kind === 'ask' && m && s && (D.skills[s.id] || []).some(x => x[0] === m[1]) ? m[1] : null;
+  const sk = kind === 'ask' && m && s && (D.skills[s.id] || []).some(x => x.name === m[1]) ? m[1] : null;
   const t0 = lastTid(); ct0(kind);
   if (sk && lastTid() !== t0) db.update('posts', lastTid(), x => { x.skill = sk; });
 }; }
@@ -13086,7 +13085,7 @@ on($('app'), 'click', e => {
   const so = t.closest('[data-sort]'); if (so) { st.sort = so.dataset.sort; st.sortOpen = false; renderAll(); return; }
   if (a) { if (a.dataset.act === 'compose' && st.auth === 'out') { st.modal = 'signin'; st.pop = false; renderAll(); return; } if (a.dataset.act === 'compose') { st.compOpen = true; st.pop = false; st.sortOpen = false; } if (a.dataset.act === 'sort') { st.sortOpen = !st.sortOpen; st.pop = false; } if (a.dataset.act === 'pop') { st.pop = !st.pop; st.sortOpen = false; } if (a.dataset.act === 'drawer') st.drawer = !st.drawer; if (a.dataset.act === 'umenu') { st.umenu = !st.umenu; st.pop = false; } if (a.dataset.act === 'saved-page') { st.savedPage = true; st.profilePage = false; st.thread = null; st.umenu = false; st.pop = false; } if (a.dataset.act === 'profile') { st.profileUser = ME.u; st.profilePage = true; st.savedPage = false; st.thread = null; st.umenu = false; } if (a.dataset.act === 'shortcuts') { st.modal = 'kbd'; st.umenu = false; } renderAll(); return; }
   const tg = t.closest('[data-toggle]'); if (tg) { const k = tg.dataset.toggle, id = tg.dataset.id; if (ST_DATA.has(k)) dbToggle(k, id); else if (st[k]) stToggle(k, id); renderAll(); return; }
-  const sk = t.closest('[data-skill]'); if (sk) { st.draft = `/${D.skills[st.space][+sk.dataset.skill][0]} `; Object.assign(st, { compOpen: true, pop: false, sortOpen: false, mWiki: false, modal: null }); renderAll(); const c = $('compose-text'); if (c) { c.scrollIntoView({ block: 'center', behavior: 'smooth' }); c.focus({ preventScroll: true }); c.setSelectionRange(c.value.length, c.value.length); } return; }
+  const sk = t.closest('[data-skill]'); if (sk) { st.draft = `/${D.skills[st.space][+sk.dataset.skill].name} `; Object.assign(st, { compOpen: true, pop: false, sortOpen: false, mWiki: false, modal: null }); renderAll(); const c = $('compose-text'); if (c) { c.scrollIntoView({ block: 'center', behavior: 'smooth' }); c.focus({ preventScroll: true }); c.setSelectionRange(c.value.length, c.value.length); } return; }
   const snd = t.closest('[data-send]'); if (snd) { createThread('post'); renderAll(); return; }
   if (st.modal && t.classList.contains('modal-scrim')) { st.modal = null; renderAll(); return; }
   if (st.compOpen && !st.modal && !t.closest('.composer') && !st.draft.trim()) { st.compOpen = false; renderAll(); return; }

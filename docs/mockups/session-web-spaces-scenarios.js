@@ -142,7 +142,7 @@
       base: { by: 'tomasz', ed: 'ines.v', revs: [{ by: 'ines.v', createdAt: '2026-10-29T22:00:00Z', note: 'Updated the page' }, { by: 'ines.v', createdAt: h.ago('3w'), note: 'Added a section' }, { by: 'tomasz', createdAt: h.ago('2mo'), note: 'Created the page' }] },
     }) });
   scenario('ml: mira_k saved a skill', { note: 'mira_k saved a new version of the skill summarizing-papers in #ml-papers',
-    run: (tx, a, h) => { const [, prompt] = tx.mapGet('skills', 'ml')[0]; h.saveSkill('ml', 0, { prompt: prompt.replace('- Not tested:', '- Code: whether the code and weights are public.\n- Not tested:') }); } });
+    run: (tx, a, h) => { const { prompt } = tx.mapGet('skills', 'ml')[0]; h.saveSkill('ml', 0, { prompt: prompt.replace('- Not tested:', '- Code: whether the code and weights are public.\n- Not tested:') }); } });
   scenario('ml: mira_k changed the rules', { note: 'mira_k changed the rules of #ml-papers',
     run: (tx, a, h) => h.saveRules('ml', [...tx.find('spaces', 'ml').rules, 'Mark preprints that have not been peer reviewed.'], 'mira_k') });
 

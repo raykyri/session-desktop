@@ -80,7 +80,7 @@
      count of spaces, closed spaces included.
 
    Edit conflicts (step 9)
-   - A page document (rev), a skill (rev, the third item of its row) and a space's rules (rulesAt) carry a
+   - A page document (rev), a skill (rev) and a space's rules (rulesAt) carry a
      version. The editor sends the version it opened as `base`; when someone else saved since, the procedure
      answers CONFLICT with `current` and `changes` and keeps nothing; `force: true` saves anyway (Overwrite).
      See "versions and edit conflicts" in section 5b.
@@ -147,8 +147,6 @@
     nul: s => ({ t: 'or', of: [s, { t: 'null' }] }),
     arr: of => ({ t: 'array', of }),
     tup: (...of) => ({ t: 'tuple', of }),
-    /* a tuple with optional items at the end (checked when present) */
-    tupOpt: (of, rest) => ({ t: 'tuple', of, rest }),
     set: of => ({ t: 'set', of }),
     rec: of => ({ t: 'record', of }),
     obj: (fields, name) => ({ t: 'object', fields, name }),
@@ -170,7 +168,7 @@
       case 'lazy': return check(s.f(), v, path, out);
       case 'or': return s.of.some(x => !check(x, v, path).length) ? out : bad(describe(s));
       case 'array': if (!Array.isArray(v)) return bad('array'); v.forEach((x, i) => check(s.of, x, `${path}[${i}]`, out)); return out;
-      case 'tuple': if (!Array.isArray(v) || v.length < s.of.length) return bad(describe(s)); s.of.forEach((x, i) => check(x, v[i], `${path}[${i}]`, out)); (s.rest || []).forEach((x, i) => { const k = s.of.length + i; if (v[k] !== undefined) check(x, v[k], `${path}[${k}]`, out); }); return out;
+      case 'tuple': if (!Array.isArray(v) || v.length < s.of.length) return bad(describe(s)); s.of.forEach((x, i) => check(x, v[i], `${path}[${i}]`, out)); return out;
       case 'set': if (!(v instanceof Set)) return bad('Set'); [...v].forEach((x, i) => check(s.of, x, `${path}{${i}}`, out)); return out;
       case 'record': if (!v || typeof v !== 'object' || Array.isArray(v) || v instanceof Set) return bad('object'); Object.entries(v).forEach(([k, x]) => check(s.of, x, `${path}.${k}`, out)); return out;
       case 'object': {
@@ -193,7 +191,7 @@
       case 'enum': return s.vs.map(x => JSON.stringify(x)).join(' | ');
       case 'or': return s.of.map(x => describe(x)).join(' | ');
       case 'array': return `${describe(s.of)}[]`;
-      case 'tuple': return `[${[...s.of.map(x => describe(x)), ...(s.rest || []).map(x => describe(x) + '?')].join(', ')}]`;
+      case 'tuple': return `[${s.of.map(x => describe(x)).join(', ')}]`;
       case 'set': return `Set<${describe(s.of)}>`;
       case 'record': return `Record<string, ${describe(s.of)}>`;
       case 'lazy': return describe(s.f());
@@ -297,8 +295,8 @@
   /* rv: waiting for a moderator's review; rm: removed from the space (spaceSources.review restores it) */
   S.SpaceSource = obj({ m: str, by: str, 'createdAt?': iso, 'note?': str, 'rv?': bool, 'rm?': bool }, 'SpaceSource');
   S.SourceReport = obj({ m: str, sid: str, by: str, 'why?': str, 'createdAt?': iso }, 'SourceReport');
-  /* [name, prompt, rev?]: rev, the skill's version (step 9), counts its saves (absent: 0) */
-  S.Skill = named('Skill', t.tupOpt([str, str], [int]));
+  /* rev: the skill's version (step 9), counts its saves; 0 for a skill never edited */
+  S.Skill = obj({ name: str, prompt: str, rev: int }, 'Skill');
   /* rev: the document's version (step 9), counts its saves; a page without a stored document is version 0 */
   S.PageDoc = obj({ t: str, text: arr(str), 'by?': str, 'ed?': str, 'rev?': int, revs: arr(obj({ by: str, 'createdAt?': iso, note: str })) }, 'PageDoc');
   S.Profile = obj({ name: str, bio: str }, 'Profile');
@@ -1234,17 +1232,16 @@
     run: (tx, i) => { const l = tx.need('links', i.id, 'invite link'); if (!l.revokedAt) throw rpcError('NOT_FOUND', 'This invite link is not revoked.'); tx.edit('links', l.id, x => { delete x.revokedAt; }); } });
 
   /* -- versions and edit conflicts (step 9) --
-     A page document, a skill and a space's rules carry a version: a page's rev, a skill's rev (the third item of
-     its row) and the space's rulesAt (not its updatedAt, which a domain check also changes). An editor records
-     the version it opened and sends it as `base` when it saves; when it is not the current one, the server
-     answers CONFLICT with `current` (the version and content it has) and `changes` (those records as the caller
-     reads them), and keeps nothing. force: true saves over the other version (the page's Overwrite). A save
-     without a base is not checked. The scenario helpers h.savePage, h.saveSkill and h.saveRules write another
-     member's save, as these procedures do, and bump the version. */
+     A page document, a skill and a space's rules carry a version: a page's rev, a skill's rev and the space's
+     rulesAt (not its updatedAt, which a domain check also changes). An editor records the version it opened
+     and sends it as `base` when it saves; when it is not the current one, the server answers CONFLICT with
+     `current` (the version and content it has) and `changes` (those records as the caller reads them), and
+     keeps nothing. force: true saves over the other version (the page's Overwrite). A save without a base is
+     not checked. The scenario helpers h.savePage, h.saveSkill and h.saveRules write another member's save, as
+     these procedures do, and bump the version. */
   const stale = (base, cur, force) => !force && base !== undefined && base !== cur;
   const conflict = (current, reads) => rpcError('CONFLICT', undefined, undefined, { current, reads });
   const pageRev = doc => doc.rev || 0;
-  const skillRev = row => (row && row[2]) || 0;
   /* a rules stamp that moves forward even when the mock clock does not, so it works as the rules' version */
   const rulesStamp = (now, prev) => { const t = Math.max(Date.parse(now), prev ? Date.parse(prev) + 1000 : 0); return new Date(t).toISOString().replace(/\.\d{3}Z$/, 'Z'); };
   const BASE_RULES = obj({ rulesAt: nul(iso) }, 'RulesBase');
@@ -1322,16 +1319,16 @@
   const skillsOf = (tx, sid) => { tx.need('spaces', sid, 'space'); return tx.mapGet('skills', sid) || []; };
   const SKILL_IN = { space: ID, name: str, prompt: str };
   proc('skills.create', { space: spaceIn, input: obj(SKILL_IN), output: 'null', who: 'moderator', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['skills'],
-    run: (tx, i) => { const l = skillsOf(tx, i.space); if (l.some(x => x[0] === i.name)) throw rpcError('CONFLICT', `The space has a skill named ${i.name}.`); tx.mapPut('skills', i.space, [...l, [i.name, i.prompt]]); } });
+    run: (tx, i) => { const l = skillsOf(tx, i.space); if (l.some(x => x.name === i.name)) throw rpcError('CONFLICT', `The space has a skill named ${i.name}.`); tx.mapPut('skills', i.space, [...l, { name: i.name, prompt: i.prompt, rev: 0 }]); } });
   /* a skill's new text: its version goes up by one */
-  function writeSkill(tx, sid, index, name, prompt) { const l = skillsOf(tx, sid); l[index] = [name, prompt, skillRev(l[index]) + 1]; tx.mapPut('skills', sid, l); }
+  function writeSkill(tx, sid, index, name, prompt) { const l = skillsOf(tx, sid); l[index] = { name, prompt, rev: l[index].rev + 1 }; tx.mapPut('skills', sid, l); }
   proc('skills.update', { space: spaceIn, input: obj({ ...SKILL_IN, index: int, 'base?': obj({ rev: int }, 'SkillBase'), 'force?': bool }), output: 'null', who: 'moderator', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['skills'],
     note: 'base.rev: the skill’s version the editor opened; CONFLICT when someone else saved it since (step 9)',
     run: (tx, i) => {
       const l = skillsOf(tx, i.space), row = l[i.index];
       if (!row) throw rpcError('NOT_FOUND', 'The server has no record of this skill.');
-      if (stale(i.base && i.base.rev, skillRev(row), i.force)) throw conflict({ rev: skillRev(row), name: row[0], prompt: row[1] }, [['skills', i.space]]);
-      if (l.some((x, k) => k !== i.index && x[0] === i.name)) throw rpcError('CONFLICT', `The space has a skill named ${i.name}.`);
+      if (stale(i.base && i.base.rev, row.rev, i.force)) throw conflict({ rev: row.rev, name: row.name, prompt: row.prompt }, [['skills', i.space]]);
+      if (l.some((x, k) => k !== i.index && x.name === i.name)) throw rpcError('CONFLICT', `The space has a skill named ${i.name}.`);
       writeSkill(tx, i.space, i.index, i.name, i.prompt);
     } });
   proc('skills.remove', { space: spaceIn, input: obj({ space: ID, index: int }), output: 'null', who: 'moderator', errors: ['NOT_FOUND'], writes: ['skills'],
@@ -1658,7 +1655,7 @@
     return t + r;
   }
   const omit = (o, ks) => { if (!ks || !ks.some(k => k in o)) return o; const x = { ...o }; ks.forEach(k => delete x[k]); return x; };
-  function createBackend({ fixtures, seed, scenarios, storageKey = 'session-mock-db-v5', latency = 120, dev = false, jobMs, checkMs }) {
+  function createBackend({ fixtures, seed, scenarios, storageKey = 'session-mock-db-v6', latency = 120, dev = false, jobMs, checkMs }) {
     const fx = fixtures || { data: seed ? seed() : {} };
     const me = fx.me || { u: 'me', x: '@me', createdAt: new Date().toISOString() };
     const cfg = { now: fx.clock || new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), base: latency, latency, failWrites: false, failReads: false, failCode: 'SERVICE_UNAVAILABLE', failOn: null, readRules: { ...READ_RULES },
@@ -1893,7 +1890,7 @@
       /* another member's save (step 9): the version goes up by one, as when they save in the editor */
       /* base: a page without a stored document: its author and history as the page shows them (TODO(fixtures)) */
       savePage: (sid, index, { by, title, text, base }) => { const [, pg] = pageAt(tx, sid, index); writePage(tx, sid, index, title || pg[0], text, by, base); },
-      saveSkill: (sid, index, { name, prompt }) => { const row = (tx.mapGet('skills', sid) || [])[index]; writeSkill(tx, sid, index, name || row[0], prompt); },
+      saveSkill: (sid, index, { name, prompt }) => { const row = (tx.mapGet('skills', sid) || [])[index]; writeSkill(tx, sid, index, name || row.name, prompt); },
       saveRules: (sid, rules, by) => writeRules(tx, sid, rules, by),
       proc: (name, input) => {
         const P = PROCS[name]; if (!P) throw new Error(`no procedure ${name}`);
