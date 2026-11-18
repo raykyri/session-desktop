@@ -9444,6 +9444,9 @@ function abJump(k) {
    No live notice: the event stream has no event for another person's page, skill or rules save. */
 Object.assign(st, { edCf: null, edRules: null, abHistRev: null });
 let ED_NEXT = null;   /* a Screen entry's next step once the conflict arrives: 'reload' or 'over' */
+let ED_SCREEN = false; /* a Screen entry is landing the conflict: what it opens adds no history entries */
+/* as a Screen entry's jump: the next screen changes replace the history entry (navigation, overlays) */
+const edQuiet = () => { nvQuiet(); NV.ovJump = true; clearTimeout(NV.ovJt); NV.ovJt = setTimeout(() => { NV.ovJump = false; }, 0); };
 const ED_NOUN = { page: 'this page', restore: 'this page', skill: 'this skill', rules: 'the rules' };
 /* the rules stamp the page writes before the server answers: it moves forward, as the server's */
 const edStamp = prev => isoOf(Math.max(NOW, prev ? Date.parse(prev) + 1000 : 0));
@@ -9462,11 +9465,12 @@ const edOpts = (kind, sid, i, draft, extra) => ({
   then: () => { if (st.edCf && st.edCf.kind === kind && st.edCf.sid === sid) st.edCf = null; },
 });
 function edConflict(kind, sid, i, draft, e, extra) {
+  if (ED_SCREEN) { ED_SCREEN = false; edQuiet(); }
   applyChanges(e.data.changes, (key, x) => PENDING.has(pkey(key, x)));
   st.toast = null;
   const onPage = () => st.space === sid && st.abPage === i && !st.thread && (st.subPage === 'abpage' || (!st.subPage && st.drawer));
   if (kind === 'page' || kind === 'restore') { if (!onPage()) abOpenPage(sid, i); if (kind === 'page') st.abPageEd = draft; else st.abHist = true; }
-  if (kind === 'skill') { Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: sid, space: sid, mgTab: 'skills', home: false, abSkEd: draft, modal: 'ab-sked' }); }
+  if (kind === 'skill') { if (!(st.subPage === 'manage' && st.mgSpace === sid && st.mgTab === 'skills')) Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: sid, space: sid, mgTab: 'skills', home: false }); Object.assign(st, { abSkEd: draft, modal: 'ab-sked' }); }
   if (kind === 'rules') { if (!(st.subPage === 'manage' && st.mgSpace === sid && st.mgTab === 'settings')) Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: sid, space: sid, mgTab: 'settings', home: false }); st.set = draft; }
   st.edCf = Object.assign({ kind, sid, i, step: 'conflict', cur: e.data.current, mine: null }, extra || {});
   const next = ED_NEXT; ED_NEXT = null;
@@ -9585,8 +9589,9 @@ JUMPS.push(['Edit conflicts', [
   const EC_jump = jump;
   const press = sel => { renderAll(); const e = document.querySelector(sel); if (e) e.click(); return !!e; };
   /* another member's save lands (a scenario from the seed: the editor's version is the seed's), then Save */
-  const land = (name, sel, next) => runScenario(name, null, () => { ED_NEXT = next || null; press(sel); });
+  const land = (name, sel, next) => runScenario(name, null, () => { ED_NEXT = next || null; ED_SCREEN = true; edQuiet(); press(sel); });
   jump = function (k) {
+    ED_NEXT = null; ED_SCREEN = false;
     if (!String(k).startsWith('ec-')) return EC_jump(k);
     const [, kind, step] = k.split('-'), next = step === 'reload' ? 'reload' : step === 'over' ? 'over' : null;
     if (kind === 'page') {
