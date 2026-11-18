@@ -1365,7 +1365,7 @@
     tx.mapPut('pagedocs', `${sid}/${pageSlug(title)}`, { t: title, text: body, by: doc.by, ed: by, rev: pageRev(doc) + 1, revs: [{ by, note: 'Edited the page' }, ...doc.revs] });
   }
   proc('pages.update', { input: obj({ space: ID, 'page?': nul(int), title: str, text: arr(str), 'base?': BASE_DOC, 'force?': bool }, 'UpdatePageInput'), output: 'null', who: 'member', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['pagedocs', 'spaces'],
-    note: 'add a page (page: null) or edit one (page: its index in the space’s pages); members get a notification. Who may edit follows the space’s pageEdit setting: moderators, and its members when it is "members". CONFLICT when the page changed since it was opened (step 9).',
+    note: 'add a page (page: null) or edit one (page: its index in the space’s pages); an edit sends members a page_edited notification, an added page sends none. Who may edit follows the space’s pageEdit setting: moderators, and its members when it is "members". CONFLICT when the page changed since it was opened (step 9).',
     space: spaceIn, can: (tx, i) => pageEditor(tx, i.space),
     run: (tx, i) => {
       const title = text(i.title, 'title'), body = i.text.length ? i.text : [''];

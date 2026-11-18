@@ -1711,6 +1711,25 @@ button.n-me { width: calc(100% - 32px); border: 0; font: inherit; color: inherit
 .abp-prose h3:first-child { margin-top: 0; }
 .abp-prose ul { margin: 0 0 14px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 .abp-prose li::marker { color: var(--t-faint); }
+/* the Markdown blocks a page can have (mdBlocks) */
+.abp-prose ol { margin: 0 0 14px; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.abp-prose li > ul, .abp-prose li > ol { margin: 6px 0 0; }
+.abp-prose li > p { margin: 0; }
+.abp-prose h4 { margin: 22px 0 6px; font-size: 16px; font-weight: 650; color: var(--t-heading); }
+.abp-prose h5 { margin: 18px 0 4px; font-size: 14px; font-weight: 650; color: var(--t-strong); }
+.abp-prose a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.abp-prose strong { font-weight: 650; color: var(--t-strong); }
+.abp-prose del { color: var(--t-muted); }
+.abp-prose code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em; padding: 1px 5px; border-radius: 4px; background: var(--fill-subtle); }
+.abp-prose pre { margin: 0 0 14px; padding: 10px 12px; border-radius: 8px; background: var(--inset); box-shadow: inset 0 0 0 1px var(--divider); overflow-x: auto; }
+.abp-prose pre code { padding: 0; background: none; font-size: 13px; line-height: 1.55; white-space: pre; }
+.abp-prose blockquote { margin: 0 0 14px; padding: 0 0 0 12px; border-left: 2px solid var(--border-strong); color: var(--t-secondary); }
+.abp-prose blockquote > :last-child { margin-bottom: 0; }
+.abp-prose hr { margin: 20px 0; border: 0; border-top: 1px solid var(--divider); }
+.abp-prose .md-tbl { margin: 0 0 14px; overflow-x: auto; }
+.abp-prose table { border-collapse: collapse; font-size: .94em; }
+.abp-prose th, .abp-prose td { padding: 6px 10px; border: 1px solid var(--divider); text-align: left; vertical-align: top; }
+.abp-prose th { font-weight: 650; color: var(--t-heading); background: var(--fill-subtle); }
 .abp-hist { border: 1px solid var(--divider); border-radius: var(--r-lg); background: var(--card); padding: 12px 14px; }
 .abp-hh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .abp-hh h4 { margin: 0; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--t-faint); }
@@ -3732,23 +3751,17 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
 .pg-err.pg-left { text-align: left; }
 .pg-wait { display: flex; align-items: center; gap: 8px; }
 /* ==== end of paged lists ==== */
-/* ==== Phone editors: About pages and space rules (variants: Variants bar › Phone editors) ==== */
-.ne-bar > :first-child { justify-self: start; }
-.ne-ti { display: block; width: 100%; margin: 0 0 8px; padding: 0; border: 0; background: none; outline: none; font: inherit; font-size: 26.8px; line-height: 1.2; font-weight: 700; letter-spacing: -.01em; color: var(--t-heading); }
-.ne-bx { display: block; width: 100%; min-height: 300px; margin: 0; padding: 0; border: 0; background: none; outline: none; resize: none; font: inherit; font-size: 16.5px; line-height: 1.6; color: var(--t-body); }
-.ne-ti::placeholder, .ne-bx::placeholder, .ne-rin::placeholder { color: var(--t-faint); }
-.ne-ti:disabled, .ne-bx:disabled, .ne-rin:disabled, .ne-sf input:disabled, .ne-sbx:disabled { opacity: .55; -webkit-text-fill-color: currentColor; }
+/* ==== Phone editors: About pages and space rules ==== */
+.ne-rin::placeholder { color: var(--t-faint); }
+.ne-rin:disabled, .ne-sf input:disabled, .ne-sbx:disabled { opacity: .55; -webkit-text-fill-color: currentColor; }
 .ne-err { margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--bad) 10%, transparent); color: var(--bad); font-size: 14.4px; line-height: 1.4; }
 .n-sheet-sc > .ne-err { margin: 0 16px 16px; }
-.ne-note { margin: 0 0 14px; font-size: 13.4px; color: var(--t-faint); }
-.ne-hint { margin: 16px 0 0; font-size: 13.4px; line-height: 1.4; color: var(--t-faint); }
-.ne-dock { flex: none; padding: 10px 16px 34px; border-top: .5px solid var(--n-sep); background: var(--n-bar-bg); font-size: 13.4px; line-height: 1.4; color: var(--t-faint); }
 .ne-sbx { min-height: 300px; }
 .ne-scrim { position: absolute; inset: 0; background: rgba(0,0,0,.4); z-index: 20; animation: n-fade .2s; }
 .ne-cfs { position: absolute; inset: 0; background: rgba(0,0,0,.4); z-index: 30; animation: n-fade .2s; }
 .n-act.ne-cf { z-index: 31; }
-.ne-rr { gap: 10px; padding: 6px 8px 6px 12px; }
-.ne-rr .n-src-n { flex: none; }
+.ne-rr { gap: 10px; align-items: center; padding: 6px 8px 6px 12px; }   /* the number, the delete button and the handle centre on a rule's field */
+.ne-rr .n-src-n { flex: none; align-self: center; margin-top: 0; }
 .ne-rm { flex: none; width: 26px; height: 26px; padding: 0; border: 0; background: none; color: var(--bad); display: grid; place-items: center; }
 .ne-rm svg { width: 22px; height: 22px; }
 .ne-rin { flex: 1; min-width: 0; margin: 0; padding: 4px 0; border: 0; background: none; outline: none; resize: none; font: inherit; font-size: 15.45px; line-height: 1.4; color: var(--t-heading); }
@@ -3757,7 +3770,8 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
 .ne-rr.dragging { opacity: .45; }
 .ne-rr.drop-a { box-shadow: inset 0 2px 0 var(--accent); }
 .ne-rr.drop-b { box-shadow: inset 0 -2px 0 var(--accent); }
-.ne-rta { min-height: 240px; line-height: 1.6; }
+/* Edit rules and Add a rule: the same size as the rules above them */
+.ne-rsm b { font-size: 15.45px; }
 /* ==== end Phone editors ==== */
 </style>
 
@@ -3779,11 +3793,6 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
     <div class="knobs cs-knobs" id="kw-sources" aria-label="Sources controls">
       <span class="cs-kt">Sources</span>
       <div class="knob" id="kw-dspos"><span>Layout</span><div class="seg" id="k-dspos"></div></div>
-    </div>
-    <div class="knobs cs-knobs" id="kw-neditors" aria-label="Phone editor controls">
-      <span class="cs-kt">Phone editors</span>
-      <div class="knob"><span>Page</span><div class="seg" id="k-nepg"></div></div>
-      <div class="knob"><span>Rules</span><div class="seg" id="k-neru"></div></div>
     </div>
   </div>
   <div class="frame">
@@ -5244,7 +5253,6 @@ const KNOBDEF = () => [
   ...MIKNOBS(),
   ...DSKNOBS(),
   ...QTKNOBS(),
-  ...NEKNOBS(),
 ];
 let HOTKEYS = {};
 function renderControls() {
@@ -9118,12 +9126,12 @@ on(document, 'keydown', e => { if (e.key === 'Escape' && !st.modal && (st.csMenu
    What the sidebar's About tab needs beyond a summary of the space:
    - Pages open with their author, last editor and history (Page view control: in the sidebar, or as a
      page with its own address). Moderators, or members when Manage › Settings › Pages allows it, edit
-     pages; moderators add, order and remove them. Members get a notification when a page changes, and
-     Search finds pages.
+     pages; moderators add, order and remove them. Members get a notification when a page is edited (not when
+     one is added), and Search finds pages. A page's text is Markdown without HTML (mdBlocks).
    - Skills show what they ask and the threads that used them before you use one (Skill preview control);
      moderators add, edit, order and remove skills in Manage › Skills.
    - Description and rules are edited in Manage › Settings › About. A rules change shows "Rules updated"
-     with the changes, and members get a notification.
+     with the changes. A rules change sends no notification.
    - The member count opens the member list (Member list control); moderator names open profiles; anyone
      can message the moderators.
    - Join, leave or request from About. About and each page have their own address. */
@@ -9159,9 +9167,82 @@ function abPagesCard(s) {
 }
 /* ---------- a page of its own: three layouts (Variants › Page view) ---------- */
 const abWords = d => d.text.join(' ').split(/\s+/).filter(Boolean).length;
-/* blocks: "## " is a heading, lines that start with "- " are a list, anything else is a paragraph */
-const abBlocks = d => d.text.map((b, k) => b.startsWith('## ') ? { h: b.slice(3).trim(), id: `abh-${k}` } : /^- /.test(b) ? { li: b.split('\n').map(l => l.replace(/^-\s*/, '').trim()).filter(Boolean) } : { p: b });
-const abDocHTML = d => `<div class="abp-prose">${abBlocks(d).map(b => b.h ? `<h3 id="${b.id}">${esc(b.h)}</h3>` : b.li ? `<ul>${b.li.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : `<p>${esc(b.p)}</p>`).join('')}</div>`;
+/* A page's text is Markdown, a subset with no HTML. HTML in the text is escaped and shows as written.
+   Blocks: # to ###### headings (# and ## are the page's section headings), paragraphs, - * + and 1. lists
+   (nested by indenting two spaces or more), > quotes, ``` fenced code, --- rules and | tables.
+   Inline: **bold**, *italic*, ~~struck~~, `code`, [links](url) and <url> or bare https:// links. Links go only to
+   http(s), mailto and in-page (#…) addresses; anything else shows as text. An image (![alt](url)) shows as a
+   link with its alt text: pages load no images. The stored text is a list of blocks split on blank lines
+   (pages.update text); the renderer joins them back, so fenced code may contain blank lines. */
+const MD_SAFE = u => /^(https?:\/\/|mailto:|#)/i.test(u);
+function mdInline(t) {
+  const keep = [], hold = h => `\u0000${keep.push(h) - 1}\u0000`;
+  let x = String(t).replace(/`([^`\n]+)`/g, (_, c) => hold(`<code>${esc(c)}</code>`));
+  /* images and links: the label is formatted, the address is checked */
+  x = x.replace(/!?\[([^\]\n]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (m, label, url) => MD_SAFE(url) ? hold(`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${mdInline(label)}</a>`) : hold(esc(m)));
+  x = x.replace(/<((?:https?:\/\/|mailto:)[^\s>]+)>/g, (_, url) => hold(`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>`));
+  x = x.replace(/(^|[\s(])(https?:\/\/[^\s<)]+[^\s<).,;:!?'"])/g, (_, pre, url) => pre + hold(`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>`));
+  x = esc(x);
+  x = x.replace(/\*\*(?=\S)([^*]*?\S)\*\*|__(?=\S)([^_]*?\S)__/g, (_, a, b) => `<strong>${a || b}</strong>`)
+    .replace(/(^|[^*\w])\*(?=\S)([^*]*?\S)\*(?![*\w])|(^|[^_\w])_(?=\S)([^_]*?\S)_(?![_\w])/g, (_, p1, a, p2, b) => `${p1 != null ? p1 : p2}<em>${a != null ? a : b}</em>`)
+    .replace(/~~(?=\S)([^~]*?\S)~~/g, '<del>$1</del>');
+  return x.replace(/\u0000(\d+)\u0000/g, (_, k) => keep[+k]);
+}
+const MD_LI = /^(\s*)([-*+]|\d{1,9}[.)])\s+(.*)$/;
+function mdList(lines, k0, hid) {
+  /* a list starts at k0; items at its indent; deeper lines belong to the item above */
+  const ind = MD_LI.exec(lines[k0])[1].length, ordered = /\d/.test(MD_LI.exec(lines[k0])[2]);
+  const items = []; let k = k0;
+  while (k < lines.length) {
+    const m = MD_LI.exec(lines[k]);
+    if (m && m[1].length === ind && /\d/.test(m[2]) === ordered) { items.push([m[3]]); k++; continue; }
+    if (items.length && lines[k].trim() && /^\s+/.test(lines[k]) && lines[k].search(/\S/) > ind) { items[items.length - 1].push(lines[k]); k++; continue; }
+    break;
+  }
+  const start = ordered ? parseInt(MD_LI.exec(lines[k0])[2], 10) : 1;
+  const html = items.map(([first, ...rest]) => `<li>${mdInline(first)}${rest.length ? mdBlocks(rest.map(l => l.slice(Math.min(l.search(/\S/), ind + 2))).join('\n'), hid) : ''}</li>`).join('');
+  return [ordered ? `<ol${start !== 1 ? ` start="${start}"` : ''}>${html}</ol>` : `<ul>${html}</ul>`, k];
+}
+const mdCells = l => l.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+function mdBlocks(text, hid) {
+  const lines = String(text).replace(/\r/g, '').split('\n'), out = [];
+  let k = 0, para = [];
+  const flush = () => { if (para.length) out.push(`<p>${para.map(mdInline).join(' ')}</p>`); para = []; };
+  while (k < lines.length) {
+    const l = lines[k], tr = l.trim();
+    if (!tr) { flush(); k++; continue; }
+    let m;
+    if ((m = /^(`{3,}|~{3,})\s*([\w+-]*)\s*$/.exec(tr))) {
+      flush(); const fence = m[1], code = []; k++;
+      while (k < lines.length && !lines[k].trim().startsWith(fence)) code.push(lines[k++]);
+      k++; out.push(`<pre><code${m[2] ? ` data-lang="${esc(m[2])}"` : ''}>${esc(code.join('\n'))}</code></pre>`); continue;
+    }
+    if ((m = /^(#{1,6})\s+(.*?)\s*#*$/.exec(tr))) {
+      flush(); const n = m[1].length, tag = n <= 2 ? 'h3' : n === 3 ? 'h4' : 'h5';
+      out.push(`<${tag}${tag === 'h3' ? ` id="abh-${hid.n++}"` : ''}>${mdInline(m[2])}</${tag}>`); k++; continue;
+    }
+    if (/^([-*_])(\s*\1){2,}$/.test(tr)) { flush(); out.push('<hr>'); k++; continue; }
+    if (tr.startsWith('>')) {
+      flush(); const q = [];
+      while (k < lines.length && lines[k].trim().startsWith('>')) q.push(lines[k++].trim().replace(/^>\s?/, ''));
+      out.push(`<blockquote>${mdBlocks(q.join('\n'), hid)}</blockquote>`); continue;
+    }
+    if (MD_LI.test(l)) { flush(); const [h, next] = mdList(lines, k, hid); out.push(h); k = next; continue; }
+    if (tr.includes('|') && k + 1 < lines.length && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(lines[k + 1])) {
+      flush(); const head = mdCells(l), al = mdCells(lines[k + 1]).map(c => c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : c.startsWith(':') ? 'left' : '');
+      const cell = (tag, c, n) => `<${tag}${al[n] ? ` style="text-align:${al[n]}"` : ''}>${mdInline(c)}</${tag}>`;
+      const rows = []; k += 2;
+      while (k < lines.length && lines[k].trim() && lines[k].includes('|')) rows.push(mdCells(lines[k++]));
+      out.push(`<div class="md-tbl"><table><thead><tr>${head.map((c, n) => cell('th', c, n)).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${head.map((_, n) => cell('td', r[n] || '', n)).join('')}</tr>`).join('')}</tbody></table></div>`);
+      continue;
+    }
+    para.push(tr); k++;
+  }
+  flush();
+  return out.join('');
+}
+const abDocHTML = d => `<div class="abp-prose">${mdBlocks((d.text || []).join('\n\n'), { n: 0 })}</div>`;
+window.__abDocHTML = abDocHTML;   /* for tests: a page's text as HTML */
 const abPageThreads = s => D.posts.map(p => ({ p, i: p.id })).filter(({ p }) => p.s === s.id && p.k === 'ask' && !p.running).slice(0, 3);
 function abPageParts(s) {
   const i = st.abPage, d = abDoc(s, i), can = abCanEdit(s), mod = isModOf(s.id) && st.auth === 'in' && !s.archived;
@@ -9367,7 +9448,7 @@ function abModal() {
 function abSettingsAbout(d) {
   const n = d.rules.length, up = I.chev.replace('<svg', '<svg style="transform:rotate(180deg)"');
   const rows = d.rules.map((r, i) => `<div class="ab-rrow"><span class="ts-n num">${i + 1}</span><input id="ab-rule-${i}" type="text" value="${esc(r)}" placeholder="A rule" aria-label="Rule ${i + 1}"><span class="ab-pgb"><button class="iconbtn" type="button" data-abrule="up:${i}" aria-label="Move rule ${i + 1} up" ${i ? '' : 'disabled'}>${up}</button><button class="iconbtn" type="button" data-abrule="down:${i}" aria-label="Move rule ${i + 1} down" ${i < n - 1 ? '' : 'disabled'}>${I.chev}</button><button class="iconbtn" type="button" data-abrule="rm:${i}" aria-label="Remove rule ${i + 1}">${I.close}</button></span></div>`).join('');
-  return stSec('About', 'Shown in the About tab of the space. Members get a notification when the rules change.', `${cxIdentFields(d)}<label class="fld"><span>Description</span><textarea id="ab-desc" class="cs-ta" rows="2">${esc(d.desc)}</textarea></label><div class="fld"><span>Rules</span>${edNotice('rules', d.id)}${rows}<button class="btn sm cs-b st-add" type="button" data-abrule="add">${PLUS}Add a rule</button></div>`);
+  return stSec('About', 'Shown in the About tab of the space.', `${cxIdentFields(d)}<label class="fld"><span>Description</span><textarea id="ab-desc" class="cs-ta" rows="2">${esc(d.desc)}</textarea></label><div class="fld"><span>Rules</span>${edNotice('rules', d.id)}${rows}<button class="btn sm cs-b st-add" type="button" data-abrule="add">${PLUS}Add a rule</button></div>`);
 }
 const abSettingsPages = d => stSec('Pages', 'Who can edit the pages in About. Moderators can always add, order and remove pages.', `<div class="ab-radios">${[['mods', 'Moderators', 'Only moderators edit pages.'], ['members', 'Members', 'Any member can edit a page. The page history shows every change.']].map(([v, t, sub]) => `<label class="cs-rad"><input type="radio" name="ab-pgedit" value="${v}" ${d.pageEdit === v ? 'checked' : ''}><span><b>${t}</b><small>${sub}</small></span></label>`).join('')}</div>`);
 
@@ -9579,7 +9660,7 @@ function abPageSave(s, i, ed, force) {
     if (!ed.isNew && abKey(s, doc.t) !== abKey(s, title)) db.del('pagedocs', abKey(s, doc.t));
     db.put('pagedocs', abKey(s, title), { t: title, text: text.length ? text : [''], by: ed.isNew ? ME.u : doc.by, ed: ME.u, rev: ed.isNew ? 1 : (doc.rev || 0) + 1, revs: [{ by: ME.u, note: ed.isNew ? 'Created the page' : 'Edited the page' }, ...(ed.isNew ? [] : doc.revs)] });
   }, ed.isNew ? {} : edOpts('page', s.id, i, ed));
-  st.abPageEd = null; toast(ed.isNew ? 'Page added. Members get a notification.' : 'Page saved. Members get a notification.');
+  st.abPageEd = null; toast(ed.isNew ? 'Page added.' : 'Page saved. Members get a notification.');
 }
 function abRestore(s, i, k, force) {
   const doc = abDoc(s, i), r = doc.revs[k]; if (!r) return;
@@ -12322,17 +12403,15 @@ function acxNatYou() {
   acxNatYou();
 }; }
 /* ==== end account ==== */
-/* ==== Phone editors: About pages and space rules, with variants ====
+/* ==== Phone editors: About pages and space rules ====
    The Phone app edits a space's pages and rules. Who may edit follows the web: a page, abCanEdit (moderators;
    members too when the space's pageEdit is "members"; not in an archived space), and adding a page is shown to
    the same people as the web's "Add a page"; the rules, the space's admins (spaces.update is admin), not in an
    archived space. Ordering and removing pages stay on the web.
-   The Variants bar's Phone editors controls (shown on the Phone device only) choose the editor:
-   - Page (st.nePg): push, a full-screen screen pushed on the stack (Cancel and Save in its bar);
-     sheet, a form sheet over the page; place, the page screen itself switches to editing (Edit, then Done).
-   - Rules (st.neRu): fields, one field per rule with delete, add and drag handles; text, one field with a rule
-     per line. Both are form sheets opened from About or from Changes to the rules.
-   The draft is nst.ne: { kind: 'page' | 'rules', v (the page editor's variant when it opened), sid, i (the page's
+   Both are form sheets: the page editor (a Title row and a Text field) opens over the page or from About's
+   Add a page; the rules editor (one field per rule, with delete, Add a rule and drag handles) opens from About
+   or from Changes to the rules.
+   The draft is nst.ne: { kind: 'page' | 'rules', sid, i (the page's
    index; null for a new page), isNew, t, b (title, text), t0, b0 (as opened), rev (the page's version as opened),
    rules, rules0, at (the rules' rulesAt as opened), from ('wiki' | 'rules': the sheet it was opened from),
    saving, err (a message in the editor), cf (another save landed first: { who, when }), tok }.
@@ -12340,17 +12419,9 @@ function acxNatYou() {
    open while the save is in flight (Saving…), closes when the server answers, and keeps the draft on a failure
    with a message in the editor. A CONFLICT (someone else saved first) shows a confirmation naming who and when:
    Overwrite saves again with force: true, Cancel goes back to the draft. There is no copy-and-reload on Phone. */
-Object.assign(st, { nePg: 'push', neRu: 'fields' });
 Object.assign(nst, { ne: null });
-function NEKNOBS() {
-  return [
-    ['k-nepg', 'nePg', [['push', 'Full screen'], ['sheet', 'Sheet'], ['place', 'In place']], neRemount],
-    ['k-neru', 'neRu', [['fields', 'One field per rule'], ['text', 'One text field']]],
-  ];
-}
-{ const rc0 = renderControls; renderControls = function () { rc0(); const k = $('kw-neditors'); if (k) k.style.display = st.device === 'native' ? '' : 'none'; }; }
 let NE_TOK = 0, NE_FOCUS = null, NE_SCREEN = false, NE_DRAG = null;
-const NE_HINT = 'Blank lines separate blocks. A block that starts with ## is a heading; lines that start with - are a list.';
+const NE_HINT = 'Markdown: # headings, **bold**, *italic*, `code`, [links](https://…), - and 1. lists, > quotes, ``` code blocks and | tables. HTML shows as plain text.';
 const NE_MINUS = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7.5 12h9" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>';
 const neCanPage = x => nSignedIn() && canRead(x) && abCanEdit(x);
 const neCanRules = x => nSignedIn() && !x.archived && isAdminOf(x.id);
@@ -12365,34 +12436,16 @@ function neDirty(ed) {
 function neCur() {
   const ed = nst.ne; if (!ed) return null;
   if (ed.kind === 'rules') return nst.sheet === 'rued:' + ed.sid ? ed : null;
-  const t = nTop(), key = nePgKey(ed);
-  if (ed.v === 'sheet') return nst.sheet === 'pged:' + key ? ed : null;
-  if (ed.v === 'push') return t && t.v === 'pged' && t.id === key ? ed : null;
-  return t && t.v === 'page' && t.id === key ? ed : null;
+  return nst.sheet === 'pged:' + nePgKey(ed) ? ed : null;
 }
 const neSet = f => { nst.ne = { ...nst.ne, ...f }; };
 
-/* ---------- opening and closing: where each variant puts the editor ---------- */
-function neMount(ed) {
-  const key = nePgKey(ed), t = nTop();
-  if (ed.v === 'sheet') { nst.sheet = 'pged:' + key; return; }
-  nst.sheet = null;
-  if (ed.v === 'push') { nst.stack = [...nst.stack, { v: 'pged', id: key }]; nst.scroll = { ...nst.scroll, ['pged:' + key]: 0 }; return; }
-  if (!(t && t.v === 'page' && t.id === key)) { nst.stack = [...nst.stack, { v: 'page', id: key }]; nst.scroll = { ...nst.scroll, ['page:' + key]: 0 }; }
-}
-function neUnmount(ed) {
-  const key = nePgKey(ed), t = nTop();
-  if (ed.v === 'sheet') { if (nst.sheet === 'pged:' + key) nst.sheet = null; return; }
-  if (t && t.id === key && (t.v === 'pged' || (t.v === 'page' && ed.isNew))) nst.stack = nst.stack.slice(0, -1);
-}
-/* the page editor's variant changed while it is open: the draft moves to the new one */
-function neRemount() {
-  const ed = neCur(); if (!ed || ed.kind !== 'page' || ed.v === st.nePg) return;
-  neUnmount(ed); const e2 = { ...ed, v: st.nePg }; nst.ne = e2; neMount(e2);
-}
+/* ---------- opening and closing ---------- */
+const neMount = ed => { nst.sheet = 'pged:' + nePgKey(ed); };
+const neUnmount = ed => { if (nst.sheet === 'pged:' + nePgKey(ed)) nst.sheet = null; };
 function nePgOpen(sid, i, isNew, from) {
   const s = sp(sid), d = isNew ? null : abDoc(s, i), t0 = d ? d.t : '', b0 = d ? d.text.join('\n\n') : '';
-  const ed = { kind: 'page', v: st.nePg, sid, i: isNew ? null : i, isNew: !!isNew, t: t0, b: b0, t0, b0, rev: d ? d.rev || 0 : 0, from: from || null, saving: false, err: '', cf: null, tok: ++NE_TOK };
+  const ed = { kind: 'page', sid, i: isNew ? null : i, isNew: !!isNew, t: t0, b: b0, t0, b0, rev: d ? d.rev || 0 : 0, from: from || null, saving: false, err: '', cf: null, tok: ++NE_TOK };
   nst.ne = ed; neMount(ed);
   if (isNew) NE_FOCUS = 'ne-t';
 }
@@ -12406,7 +12459,7 @@ function neClose(ed, idx) {
   if (ed.kind === 'rules') { nst.sheet = ed.from === 'rules' ? 'rules:' + ed.sid : 'wiki:' + ed.sid; nst.ne = null; return; }
   neUnmount(ed); nst.ne = null;
   if (idx != null) { nst.sheet = null; nst.stack = [...nst.stack, { v: 'page', id: ed.sid + ':' + idx }]; nst.scroll = { ...nst.scroll, ['page:' + ed.sid + ':' + idx]: 0 }; return; }
-  if (ed.isNew && ed.v === 'sheet' && ed.from === 'wiki') nst.sheet = 'wiki:' + ed.sid;
+  if (ed.isNew && ed.from === 'wiki') nst.sheet = 'wiki:' + ed.sid;
 }
 const neDiscardText = ed => !ed ? {} : ed.kind === 'rules' ? { title: 'Discard your changes to the rules?', body: 'The rules stay as they were.' }
   : ed.isNew ? { title: 'Discard this page?', body: 'The title and text you wrote will be deleted.' } : { title: 'Discard your changes to this page?', body: 'The page stays as it was before you edited it.' };
@@ -12424,11 +12477,10 @@ function neCancel() {
   Object.assign(OV_DIRTY, { 'n:ne': { ...e, dirty: () => false }, 'n:pged': e, 'n:rued': e });
 }
 { const cs0 = natCloseSheet; natCloseSheet = function () { const ed = neCur(); if (ed && /^(pged|rued):/.test(nst.sheet || '')) { nGo(() => neClose(ed)); return; } cs0(); }; }
-/* the system Back: the conflict confirmation closes first; an editor on a screen (full screen, in place) cancels */
+/* the system Back: the conflict confirmation closes first */
 { const nb0 = natBack; natBack = function () {
   const ed = neCur();
   if (!st.ovGuard && ed && ed.cf) { nGo(() => neSet({ cf: null })); return; }
-  if (!st.ovGuard && ed && ed.kind === 'page' && ed.v !== 'sheet' && !nst.sheet && !nst.inl) { neCancel(); return; }
   nb0();
 }; }
 
@@ -12472,7 +12524,7 @@ function nePgSave(force) {
   }, neOpts(ed, cur => {
     const idx = isNew ? Math.max(0, sp(ed.sid).pages.findIndex(p => abSlug(p[0]) === abSlug(title))) : null;
     if (cur) neClose(cur, idx);
-    toast(isNew ? 'Page added. Members get a notification.' : 'Page saved. Members get a notification.');
+    toast(isNew ? 'Page added.' : 'Page saved. Members get a notification.');
   }));
 }
 function neRuSave(force) {
@@ -12481,7 +12533,7 @@ function neRuSave(force) {
   neSet({ saving: true, err: '', cf: null });
   mutate('spaces.update', Object.assign({ id: ed.sid, set: { rules }, base: { rulesAt: ed.at } }, force ? { force: true } : {}),
     () => db.update('spaces', ed.sid, x => { if (rules.join('\n') !== x.rules.join('\n')) { x.rulesPrev = x.rules.slice(); x.rules = rules; x.rulesAt = edStamp(x.rulesAt); x.rulesBy = ME.u; } }),
-    neOpts(ed, cur => { if (cur) neClose(cur); toast('Rules saved. Members get a notification.'); }));
+    neOpts(ed, cur => { if (cur) neClose(cur); toast('Rules saved.'); }));
 }
 const neSave = force => { const ed = neCur(); if (!ed) return; if (ed.kind === 'rules') neRuSave(force); else nePgSave(force); };
 
@@ -12490,40 +12542,21 @@ const neDis = ed => ed.saving ? ' disabled' : '';
 const neCancelB = ed => `<button class="n-tb" type="button" data-n="ne:cancel"${neDis(ed)}>Cancel</button>`;
 const neSaveB = (ed, label) => `<button class="n-tb" type="button" id="ne-save" data-n="ne:save"${!neDirty(ed) || ed.saving ? ' disabled' : ''}><b>${ed.saving ? 'Saving…' : label}</b></button>`;
 const neErr = ed => ed.err ? `<p class="ne-err" role="alert">${ed.err}</p>` : '';
-const neTitleF = ed => `<input id="ne-t" class="ne-ti" type="text" value="${esc(ed.t)}" placeholder="Title" aria-label="Page title"${neDis(ed)}>`;
-const neBodyF = ed => `<textarea id="ne-b" class="ne-bx" placeholder="Write the page" aria-label="Page text"${neDis(ed)}>${esc(ed.b)}</textarea>`;
-const neSpLine = s => `<p class="n-pg-sp">${glyph(s, 'n-gl')}<span>${nNameH(s)} · Pages</span></p>`;
-const neNote = ed => ed.isNew ? 'Members get a notification when you add the page.' : 'Members get a notification when you save.';
-/* A. full screen, pushed */
-function nePgScreen(id) {
-  const ed = neCur();
-  if (!ed || ed.v !== 'push') { const [sid, i] = String(id).split(':'); return i === 'new' || !sp(sid) ? { body: `${nPushBar('', '')}<p class="n-empty">This page wasn’t added.</p>` } : NSCR.page(`${sid}:${i}`); }
-  const s = sp(ed.sid);
-  const bar = `<div class="n-bar ne-bar">${neCancelB(ed)}<b class="n-bar-t">${ed.isNew ? 'New page' : 'Edit page'}</b><span class="n-bar-r">${neSaveB(ed, ed.isNew ? 'Add' : 'Save')}</span></div>`;
-  return { body: `${bar}<div class="n-th ne-pg">${neErr(ed)}${neSpLine(s)}${neTitleF(ed)}<p class="ne-note">${neNote(ed)}</p>${neBodyF(ed)}</div>`, bar: `<div class="ne-dock">${NE_HINT}</div>` };
-}
-/* B. a form sheet over the page */
+const neNote = ed => ed.isNew ? '' : 'Members get a notification when you save.';
+/* a form sheet over the page */
 function nePgSheet(ed) {
   const s = sp(ed.sid);
-  const body = `${neErr(ed)}<p class="n-wk-d">${ed.isNew ? `A new page in ${nNameH(s)}.` : `${esc(ed.t0)}, in ${nNameH(s)}.`} ${neNote(ed)}</p>`
+  const body = `${neErr(ed)}<p class="n-wk-d">${ed.isNew ? `A new page in ${nNameH(s)}.` : `${esc(ed.t0)}, in ${nNameH(s)}. ${neNote(ed)}`}</p>`
     + nGroup('', [`<label class="n-row n-field ne-sf"><span>Title</span><input id="ne-t" type="text" value="${esc(ed.t)}" placeholder="Required" aria-label="Page title"${neDis(ed)}></label>`])
     + nGroup('Text', [`<textarea id="ne-b" class="n-ta ne-sbx" placeholder="Write the page" aria-label="Page text"${neDis(ed)}>${esc(ed.b)}</textarea>`], NE_HINT);
   return nForm(ed.isNew ? 'New page' : 'Edit page', neCancelB(ed), ed.isNew ? 'New page' : 'Edit page', neSaveB(ed, ed.isNew ? 'Add' : 'Save'), body).replace('<div class="n-scrim" data-n="close"></div>', '<div class="ne-scrim" data-n="ne:cancel"></div>');
 }
-/* C. in place: the page screen, editing */
-function nePgPlace(ed) {
-  const s = sp(ed.sid);
-  const bar = `<div class="n-bar ne-bar">${neCancelB(ed)}<b class="n-bar-t"></b><span class="n-bar-r">${neSaveB(ed, 'Done')}</span></div>`;
-  return { body: `${bar}<article class="n-th n-pg ne-in">${neErr(ed)}${neSpLine(s)}${neTitleF(ed)}<p class="n-pg-m">${avatar(ME.u, 'n-av sm')}<span>Editing. ${neNote(ed)}</span></p>${neBodyF(ed)}<p class="ne-hint">${NE_HINT}</p></article>` };
-}
-/* the rules: A. one field per rule; B. one field, a rule per line */
+/* the rules: one field per rule */
 function neRuSheet(ed) {
   const x = sp(ed.sid), n = ed.rules.length, dis = neDis(ed);
-  const intro = `${neErr(ed)}<p class="n-wk-d">The rules of ${nNameH(x)} show in About and on the request to join. Members get a notification when they change.</p>`;
-  const list = st.neRu === 'text'
-    ? nGroup('Rules', [`<textarea id="ne-rt" class="n-ta ne-rta" placeholder="One rule per line" aria-label="Rules, one per line"${dis}>${esc(ed.rules.join('\n'))}</textarea>`], 'One rule per line, in order. Blank lines are left out.')
-    : nGroup('Rules', [...ed.rules.map((r, k) => `<div class="n-row ne-rr" data-nrd="${k}"><button class="ne-rm" type="button" data-n="ne:rm:${k}" aria-label="Delete rule ${k + 1}"${dis}>${NE_MINUS}</button><span class="n-src-n num">${k + 1}</span><textarea id="ne-r-${k}" class="ne-rin" rows="1" placeholder="A rule" aria-label="Rule ${k + 1}"${dis}>${esc(r)}</textarea>${n > 1 ? `<span class="n-grip ne-grip" draggable="true" role="button" tabindex="0" data-nrg="${k}" aria-label="Move rule ${k + 1}. Drag, or use the up and down arrow keys.">${NI.grip}</span>` : ''}</div>`),
-      `<button class="n-row n-add" type="button" data-n="ne:add"${dis}>${NI.plus}<span class="n-row-b"><b>Add a rule</b></span></button>`], n > 1 ? 'Drag a rule by its handle to move it. Empty rules are left out.' : 'Empty rules are left out.');
+  const intro = `${neErr(ed)}<p class="n-wk-d">Rules for ${nNameH(x)} are shown in About and when a user requests to join the space.</p>`;
+  const list = nGroup('Rules', [...ed.rules.map((r, k) => `<div class="n-row ne-rr" data-nrd="${k}"><button class="ne-rm" type="button" data-n="ne:rm:${k}" aria-label="Delete rule ${k + 1}"${dis}>${NE_MINUS}</button><span class="n-src-n num">${k + 1}</span><textarea id="ne-r-${k}" class="ne-rin" rows="1" placeholder="A rule" aria-label="Rule ${k + 1}"${dis}>${esc(r)}</textarea>${n > 1 ? `<span class="n-grip ne-grip" draggable="true" role="button" tabindex="0" data-nrg="${k}" aria-label="Move rule ${k + 1}. Drag, or use the up and down arrow keys.">${NI.grip}</span>` : ''}</div>`),
+      `<button class="n-row n-add ne-rsm" type="button" data-n="ne:add"${dis}>${NI.plus}<span class="n-row-b"><b>Add a rule</b></span></button>`]);
   return nForm(`Edit the rules of ${nName(x)}`, neCancelB(ed), 'Rules', neSaveB(ed, 'Save'), intro + list).replace('<div class="n-scrim" data-n="close"></div>', '<div class="ne-scrim" data-n="ne:cancel"></div>');
 }
 /* the confirmation when someone else saved first: Overwrite, or Cancel back to the draft */
@@ -12536,14 +12569,14 @@ function neCfSheet(ed) {
 }
 
 /* ---------- where the editors open: About, Changes to the rules, a page ---------- */
-const neRow = (act, ic, label) => `<button class="n-row n-add" type="button" data-n="${act}">${ic}<span class="n-row-b"><b>${label}</b></span></button>`;
+const neRow = (act, ic, label, cls = '') => `<button class="n-row n-add${cls}" type="button" data-n="${act}">${ic}<span class="n-row-b"><b>${label}</b></span></button>`;
 const neGroupOf = (root, name) => [...root.querySelectorAll('.n-grp')].find(g => { const h = g.querySelector(':scope > .n-grp-h'); return h && h.textContent === name; });
 { const w0 = nWiki; nWiki = function (x) {
   const h = w0(x), r = neCanRules(x), p = neCanPage(x);
   if (!r && !p) return h;
   const t = document.createElement('template'); t.innerHTML = h;
   const rules = neGroupOf(t.content, 'Rules');
-  if (r && rules) rules.querySelector('.n-list').insertAdjacentHTML('beforeend', neRow(`ne:rules:${x.id}:wiki`, NI.compose, 'Edit rules'));
+  if (r && rules) rules.querySelector('.n-list').insertAdjacentHTML('beforeend', neRow(`ne:rules:${x.id}:wiki`, NI.compose, 'Edit rules', ' ne-rsm'));
   if (p) {
     const pages = neGroupOf(t.content, 'Pages'), add = neRow(`ne:new:${x.id}`, NI.plus, 'Add a page');
     if (pages) pages.querySelector('.n-list').insertAdjacentHTML('beforeend', add);
@@ -12554,20 +12587,17 @@ const neGroupOf = (root, name) => [...root.querySelectorAll('.n-grp')].find(g =>
 { const r0 = nRulesSheet; nRulesSheet = function (x) {
   const h = r0(x); if (!neCanRules(x)) return h;
   const t = document.createElement('template'); t.innerHTML = h;
-  const g = neGroupOf(t.content, 'Rules'); if (g) g.querySelector('.n-list').insertAdjacentHTML('beforeend', neRow(`ne:rules:${x.id}:rules`, NI.compose, 'Edit rules'));
+  const g = neGroupOf(t.content, 'Rules'); if (g) g.querySelector('.n-list').insertAdjacentHTML('beforeend', neRow(`ne:rules:${x.id}:rules`, NI.compose, 'Edit rules', ' ne-rsm'));
   return t.innerHTML;
 }; }
-NSCR.pged = id => nePgScreen(id);
 { const p0 = NSCR.page; NSCR.page = function (id, e) {
   const ed = neCur();
-  if (ed && ed.kind === 'page' && ed.v === 'place') return nePgPlace(ed);
   const [sid, i] = String(id).split(':'), s = sp(sid);
   if (i === 'new' || !s) return { body: `${nPushBar('', '')}<p class="n-empty">This page wasn’t added.</p>` };
   const out = p0(id, e);
   if (!neCanPage(s) || !s.pages[+i]) return out;
   return { ...out, body: out.body.replace('<span class="n-bar-r"></span>', `<span class="n-bar-r"><button class="n-tb" type="button" data-n="ne:edit:${sid}:${i}">Edit</button></span>`) };
 }; }
-{ const lx0 = nLabelX; nLabelX = function (e) { if (e.v === 'pged') return String(e.id).endsWith(':new') ? 'New page' : 'Edit page'; if (e.v === 'page' && String(e.id).endsWith(':new')) return 'New page'; return lx0(e); }; }
 { const sx0 = nSheetX; nSheetX = function (k, a) {
   if (k === 'pged') { const ed = neCur(); return ed ? nePgSheet(ed) : ''; }
   if (k === 'rued') { const ed = neCur(); return ed ? neRuSheet(ed) : ''; }
@@ -12613,7 +12643,6 @@ const neSync = () => { const b = $('ne-save'), ed = nst.ne; if (b && ed) b.disab
   let m;
   if (!nst.ne) return ix0(id, v, el);
   if (id === 'ne-t' || id === 'ne-b') { if (nst.ne.err) document.querySelectorAll('#app .ne-err').forEach(x => x.remove()); neSet({ [id === 'ne-t' ? 't' : 'b']: v, err: '' }); neSync(); return true; }
-  if (id === 'ne-rt') { neSet({ rules: v.split('\n'), err: '' }); neSync(); return true; }
   if ((m = /^ne-r-(\d+)$/.exec(id))) { const l = nst.ne.rules.slice(); l[+m[1]] = v; neSet({ rules: l, err: '' }); neSync(); return true; }
   return ix0(id, v, el);
 }; }
@@ -12644,7 +12673,7 @@ on(document, 'drop', e => {
 on(document, 'dragend', () => { NE_DRAG = null; neDropClear(); });
 
 /* ---------- Screen entries ---------- */
-const NE_PG_V = [['push', 'A (full screen)'], ['sheet', 'B (sheet)'], ['place', 'C (in place)']], NE_RU_V = [['fields', 'A (one field per rule)'], ['text', 'B (one text field)']];
+const NE_PG_V = [['sheet', '']], NE_RU_V = [['fields', '']];
 /* the last group, after Account: its entries leave the Phone app with a screen to go back to, as Account's last one does */
 JUMPS.push(['Phone: editors', [
   ...NE_PG_V.flatMap(([v, l]) => [[`ne-pg-${v}`, `Page editor ${l}`], [`ne-pg-${v}-ed`, `Page editor ${l}: with changes`], [`ne-pg-${v}-cf`, `Page editor ${l}: someone else saved first`]]),
@@ -12660,14 +12689,12 @@ function neJump(k) {
     Object.assign(nst, { tab: 'spaces', stack: [{ v: 'space', id: 'scifi' }] }); st.space = 'scifi';
     if (v === 'new') { nePgOpen('scifi', null, true, 'wiki'); neSet({ t: 'Recommended anthologies', b: 'Anthologies that members recommend, with the editor and the year.' }); NE_FOCUS = null; return; }
     nst.stack = [...nst.stack, { v: 'page', id: 'scifi:1' }];
-    if (v !== 'empty') st.nePg = v;
     nePgOpen('scifi', 1, false);
     if (v === 'empty') { neSet({ t: '' }); nePgSave(false); NE_FOCUS = null; return; }
     if (step) neSet({ b: nst.ne.b + '\n\nAdded: the 2026 reissues.' });
     if (step === 'cf') land('scifi: tomasz saved a page', () => nePgSave(false));
     return;
   }
-  st.neRu = v;
   Object.assign(nst, { tab: 'spaces', stack: [{ v: 'space', id: 'ml' }] }); st.space = 'ml';
   neRuOpen('ml', 'wiki');
   if (step) neSet({ rules: [...nst.ne.rules, 'Name the dataset and split when you report a number.'] });
