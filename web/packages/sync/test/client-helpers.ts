@@ -10,6 +10,7 @@ import {
   type Answer,
   type ClientOptions,
   type Envelope,
+  type PushResult,
   type SqliteDriver,
   type StorageAdapter,
   type Transport,
@@ -66,11 +67,12 @@ export const inProcess = (w: World, u: string) =>
   );
 
 /** A transport that answers the next pushes from `queue` (an answer, null
- * for none, or "pass" to the server), and records every envelope. */
+ * for a response that is not one, NO_RESPONSE for none, or "pass" to the
+ * server), and records every envelope. */
 export class Forced implements Transport {
-  queue: (Answer | null | "pass")[] = [];
-  private next(): Answer | null | "pass" {
-    return this.queue.length ? (this.queue.shift() as Answer | null | "pass") : "pass";
+  queue: (PushResult | "pass")[] = [];
+  private next(): PushResult | "pass" {
+    return this.queue.length ? (this.queue.shift() as PushResult | "pass") : "pass";
   }
   pushes: Envelope[] = [];
   constructor(private readonly inner: Transport) {}
@@ -80,13 +82,14 @@ export class Forced implements Transport {
   listen: Transport["listen"] = (c, e, s) => this.inner.listen(c, e, s);
   call: Transport["call"] = (n, i) => this.inner.call(n, i);
   async push(es: readonly Envelope[]) {
-    const out: (Answer | null)[] = [];
+    const out: PushResult[] = [];
     for (const e of es) {
       this.pushes.push(JSON.parse(JSON.stringify(e)) as Envelope);
       const f = this.next();
       if (f === "pass") out.push(...(await this.inner.push([e])));
       else out.push(f);
-      if (out.at(-1) === null) break;
+      const last = out.at(-1);
+      if (last === null || typeof last === "string") break;
     }
     return out;
   }
@@ -95,17 +98,33 @@ export class Forced implements Transport {
 export const fail = (code: string, serverTime = 0, extra: object = {}): Answer =>
   ({ ok: false, error: { code, message: code, ...extra }, serverTime }) as Answer;
 
-/** `SqliteDriver` over Node's SQLite, as Tauri's plugin is shaped. */
-export function nodeSqlite(): SqliteDriver {
+/** `SqliteDriver` over Node's SQLite, as Tauri's plugin is shaped, with
+ * `batch` in one transaction; `batches` counts the calls of `batch`. */
+export function nodeSqlite(): SqliteDriver & { db: DatabaseSync; batches: number } {
   const db = new DatabaseSync(":memory:");
-  return {
-    execute: (sql, params = []) => {
+  const d = {
+    db,
+    batches: 0,
+    execute: (sql: string, params: unknown[] = []) => {
       db.prepare(sql).run(...(params as never[]));
       return Promise.resolve();
     },
     select: <T>(sql: string, params: unknown[] = []) =>
       Promise.resolve(db.prepare(sql).all(...(params as never[])) as T[]),
+    batch: (statements: readonly (readonly [string, (readonly unknown[])?])[]) => {
+      d.batches++;
+      db.exec("BEGIN");
+      try {
+        for (const [sql, params = []] of statements) db.prepare(sql).run(...(params as never[]));
+        db.exec("COMMIT");
+      } catch (e) {
+        db.exec("ROLLBACK");
+        return Promise.reject(e instanceof Error ? e : new Error(String(e)));
+      }
+      return Promise.resolve();
+    },
   };
+  return d;
 }
 
 /** Let `n` rounds of pending callbacks run. */

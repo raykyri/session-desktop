@@ -14,6 +14,7 @@ import {
   type CursorMap,
   type Envelope,
   type LogId,
+  type PushResult,
   type ReadOptions,
   type StoredRecord,
   type SyncClient,
@@ -36,8 +37,8 @@ function watched(
   o: {
     push?: (
       es: readonly Envelope[],
-      next: () => Promise<(Answer | null)[]>,
-    ) => Promise<(Answer | null)[]>;
+      next: () => Promise<PushResult[]>,
+    ) => Promise<PushResult[]>;
     pull?: Transport["pull"];
     snapshot?: Transport["snapshot"];
     listen?: Transport["listen"];
@@ -58,10 +59,12 @@ function watched(
 test("finding 1: a sent write keeps its input ids, so a late copy of its first envelope and its remint agree", async (t) => {
   const { w, open } = cast(t);
   const tr = new Forced(inProcess(w, "mel"));
-  // the device's clock is 90 s fast
-  const mel = client(w, "mel", { transport: tr, clock: { now: () => w.clock.now() + 90_000 } });
+  // the device's clock is right when the client starts, then 90 s fast
+  let fast = 0;
+  const mel = client(w, "mel", { transport: tr, clock: { now: () => w.clock.now() + fast } });
   await mel.init();
   await mel.open(`space:${open}`);
+  fast = 90_000;
   const X = mel.newId();
   const post = mel.write(
     "threads.create",
@@ -78,7 +81,7 @@ test("finding 1: a sent write keeps its input ids, so a late copy of its first e
   // 40 s later the network delivers a copy of the first envelope: applied
   w.clock.advance(40_000);
   ok(t, w.server.apply({ u: "mel" }, tr.pushes[0]));
-  tr.queue = [null]; // the remint's request is lost
+  tr.queue = [null]; // the next send's response is a proxy's error page
   await mel.flush();
   w.clock.advance(2000);
   await mel.flush();
@@ -124,6 +127,8 @@ test("finding 1: a replayed answer that names another id moves the write and the
 
 test("finding 1: a remint is in storage before its envelope is on the wire (a crash between them)", async (t) => {
   const { w, open } = cast(t);
+  const T = w.id();
+  ok(t, w.as("otto", "threads.create", { id: T, space: open, kind: "post", q: "T" }));
   const storage = new MemoryStorage();
   let disk: unknown[] | null = null;
   let wire: Envelope | null = null;
@@ -140,39 +145,42 @@ test("finding 1: a remint is in storage before its envelope is on the wire (a cr
       return next();
     },
   });
-  // the device's clock is two minutes slow: the remint is sent in the flush
-  // that made it (its ids are behind the server's, not ahead)
-  const slow = { now: () => w.clock.now() - 2 * MINUTE };
-  const mel = client(w, "mel", { storage, transport: tr, clock: slow });
+  // the device's clock is right when the client starts, then 20 minutes
+  // fast: a mutation id that far ahead of the server's clock is made again
+  // (the like makes no input id, so it does not wait for one)
+  let fast = 0;
+  const skewed = { now: () => w.clock.now() + fast };
+  const mel = client(w, "mel", { storage, transport: tr, clock: skewed });
   await mel.init();
   await mel.open(`space:${open}`);
-  const X = mel.newId();
-  mel.write("threads.create", { id: X, space: open, kind: "post", q: "p" }, { send: false });
-  mel.write("research.createPostFollowUp", { id: mel.newId(), thread: X, t: "r" }, { send: false });
+  fast = 20 * MINUTE;
+  mel.write("likes.set", { thread: T, on: true }, { send: false });
+  mel.write("research.createPostFollowUp", { id: mel.newId(), thread: T, t: "r" }, { send: false });
   void mel.flush();
   for (let k = 0; k < 200 && !disk; k++) await tick(1);
   const stored = disk as unknown as {
     mutationId: string;
     replaces: string[];
-    input: { id: string };
+    input: { thread: string };
   }[];
   t.is(stored[0]?.mutationId, (wire as Envelope | null)?.mutationId, "the reminted id is stored");
   t.is(stored[0]?.replaces.length, 1);
-  t.is(stored[0]?.input.id, X);
+  t.is(stored[0]?.input.thread, T);
   // a new process from that storage
   const restored = new MemoryStorage();
   await restored.saveOutbox(stored);
   const m = await storage.loadMeta();
   if (m) await restored.saveMeta(m);
-  const again = client(w, "mel", { storage: restored, clock: slow, seed: 11 });
+  const again = client(w, "mel", { storage: restored, clock: skewed, seed: 11 });
   await again.init();
   await again.open(`space:${open}`);
   await again.flush();
   t.deepEqual(
     again.outbox().map((e) => `${e.name}:${e.state}`),
-    ["threads.create:answered", "research.createPostFollowUp:answered"],
+    ["likes.set:answered", "research.createPostFollowUp:answered"],
   );
-  t.is(repliesUnder(w, X).length, 1);
+  t.truthy(w.get(`like:mel:${T}`));
+  t.is(repliesUnder(w, T).length, 1);
 });
 
 test("finding 1: a write answered with a proxy's 502 page is uncertain and keeps its ids; a non-JSON read is not served", async (t) => {
@@ -265,10 +273,11 @@ test("finding 4: a write queued during the flush's closing save is sent by that 
   await mel.open(`space:${open}`);
   const b = w.id();
   let second: ReturnType<SyncClient["write"]> | undefined;
-  // saves: the write, the registration, before the send, the closing one;
-  // the person writes again 1 ms into the closing one
+  // saves (the client registered for its first read): the write, before
+  // the send, the closing one; the person writes again 1 ms into the closing
+  // one
   storage.onSave = (n) => {
-    if (n !== 4) return;
+    if (n !== 3) return;
     storage.onSave = null;
     setTimeout(() => {
       second = mel.write("threads.create", { id: b, space: open, kind: "post", q: "second" });
@@ -489,13 +498,11 @@ test("finding 7: Send again on EXPIRED sends a new write, with new ids and nothi
   const mel = client(w, "mel", { transport: tr });
   await mel.init();
   await mel.open(`space:${open}`);
-  const old = w.id(-4 * DAY - MINUTE);
-  const th = w.id(-4 * DAY - MINUTE);
-  const { local } = mel.write(
-    "threads.create",
-    { id: th, space: open, kind: "post", q: "late post" },
-    { mutationId: old },
-  );
+  const th = mel.newId();
+  // (ids made more than 4 days ago and never sent are made again before the
+  // first send: the EXPIRED here is the server's answer to the envelope)
+  tr.queue = [fail("EXPIRED", w.clock.now(), { seq: 1 })];
+  const { local } = mel.write("threads.create", { id: th, space: open, kind: "post", q: "late post" });
   await mel.flush();
   t.like(mel.outbox()[0] ?? {}, { state: "expired", error: { code: "EXPIRED" } });
   t.true(mel.sendAgain(local));
@@ -805,8 +812,10 @@ test("finding 11: CLOCK_SKEW that does not converge counts as a try; after 5 the
   const tr = watched(inProcess(w, "mel"), {
     push: () => {
       pushes++;
-      // the server's time moves around the device's (a proxy that caches it)
-      const at = w.clock.now() + (pushes % 2 ? 2 : -2) * MINUTE;
+      // the server's time moves (a proxy that caches it): 2 or 4 minutes
+      // ahead of the device's, so the write's mutation id is never ahead of
+      // the corrected clock and never waits
+      const at = w.clock.now() + (pushes % 2 ? 2 : 4) * MINUTE;
       return Promise.resolve([fail("CLOCK_SKEW", at)]);
     },
   });

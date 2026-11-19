@@ -238,10 +238,12 @@ test("outbox: EXPIRED and a write dropped after 3 days are shown; UPDATE_REQUIRE
   t.truthy(w.get(`save:mel:${th}`));
 });
 
-test("outbox: CLOCK_SKEW sets an offset that persists; a sent write keeps its input ids and waits for them, a never-sent one is reminted", async (t) => {
+test("outbox: CLOCK_SKEW sets an offset that persists; a sent write keeps its ids and waits for them; a never-sent one is made again only when the server would refuse its ids", async (t) => {
   const { w, open } = cast(t);
   const storage = new MemoryStorage();
-  const fast = { now: () => w.clock.now() + 2 * MINUTE };
+  // right when the client first hears from the server, then 2 minutes fast
+  let skew = 0;
+  const fast = { now: () => w.clock.now() + skew };
   const tr = new Forced(new InProcessTransport(w.server, { u: "mel" }));
   const mk = () =>
     new SyncClient({
@@ -255,6 +257,8 @@ test("outbox: CLOCK_SKEW sets an offset that persists; a sent write keeps its in
     });
   const mel = mk();
   await mel.init();
+  await mel.open("user:mel");
+  skew = 2 * MINUTE;
   const th = mel.newId();
   const f = mel.newId();
   mel.write("threads.create", { id: th, space: open, kind: "ask", q: "Q" }, { send: false });
@@ -263,14 +267,13 @@ test("outbox: CLOCK_SKEW sets an offset that persists; a sent write keeps its in
   await mel.flush();
   t.is(mel.offset, -2 * MINUTE);
   const [ask, fu] = mel.outbox();
-  // the ask was sent (a copy of that envelope may still apply): its id
-  // stays; a new mutation id lists the sent one in replaces
-  t.like(ask ?? {}, { state: "queued", sent: true, input: { id: th } });
-  t.deepEqual(ask?.replaces, [tr.pushes[0]?.mutationId]);
-  // the follow-up was never sent: a new id, still naming the ask's
-  t.not((fu?.input as { id: string }).id, f);
-  t.is((fu?.input as { thread: string }).thread, th);
-  // the ask's id is two minutes ahead of the server: it waits a minute
+  // the ask was sent (a copy of that envelope may still apply): its ids
+  // stay, its mutation id too (within the 10 minutes a write waits)
+  t.like(ask ?? {}, { state: "queued", sent: true, input: { id: th }, replaces: [] });
+  t.is(ask?.mutationId, tr.pushes[0]?.mutationId);
+  // the follow-up was never sent: unchanged until it is
+  t.is((fu?.input as { id: string }).id, f);
+  // the ask's ids are two minutes ahead of the server: it waits a minute
   t.is(tr.pushes.length, 1);
   t.is((ask?.next ?? 0) - mel.now(), MINUTE);
   w.clock.advance(MINUTE);

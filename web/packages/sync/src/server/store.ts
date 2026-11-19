@@ -36,12 +36,13 @@ export interface StoredAnswer {
 }
 
 export type StoredResult =
-  | { ok: true; result: unknown; seq: number }
+  | { ok: true; result: unknown; seq: number; as?: string }
   | {
       ok: false;
       error: { code: string; message: string; issues?: string[]; retryAt?: string };
       reads?: string[];
       seq: number;
+      as?: string;
     };
 
 /** A registered client: its user, its device (null for a browser), its last

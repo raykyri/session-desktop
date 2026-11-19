@@ -45,6 +45,7 @@ import {
   HOUR,
   MAX_ENVELOPE_BYTES,
   MAX_INPUT_DEPTH,
+  MAX_OPENED,
   MAX_REPLACES,
   MIN_PROTOCOL_VERSION,
   REGISTRATIONS_PER_DAY,
@@ -598,22 +599,39 @@ export class SyncServer {
           ),
         };
       const record = (answer: StoredResult) => {
-        const a: StoredAnswer = { digest: payload, answer, at: now };
+        // the mutation id the answer is recorded under, served with a
+        // replay (`recordedAs`): the ids the mutator derived come from it
+        const a: StoredAnswer = { digest: payload, answer: { ...answer, as: m.mutationId }, at: now };
         tx.answerPut(u, m.mutationId, a);
         for (const old of m.replaces)
           if (!live(tx.answerGet(u, old))) tx.answerPut(u, old, { ...a, digest: replaced });
         use();
       };
+      // the ids the input makes, before the ages (phase 1 review round 2):
+      // an id that exists is CONFLICT, so a client can tell an earlier
+      // envelope of the write that applied from none; EXPIRED then says
+      // that none of them is used (`unused`)
+      const def = this.registry.get(m.name);
+      const parsed = def?.input.safeParse(m.input);
+      const ids = def && parsed?.success ? def.ids(parsed.data) : [];
+      if (ids.some((id) => tx.registryGet(id) !== undefined)) {
+        const e = err("CONFLICT", ID_TAKEN, ["input: an id it makes exists"]);
+        record({ ok: false, error: e, seq: m.seq });
+        return out(e, m.seq);
+      }
       const expired = (path: string) => {
-        const e = err("EXPIRED", undefined, [
-          `${path}: expected a time from the 4 days before clientTime to 1 minute after`,
-        ]);
+        const e: AnswerError = {
+          ...err("EXPIRED", undefined, [
+            `${path}: expected a time from the 4 days before clientTime to 1 minute after`,
+          ]),
+          ...(ids.length ? { unused: true as const } : {}),
+        };
         record({ ok: false, error: e, seq: m.seq });
         return out(e, m.seq);
       };
       if (!timeOk(pkg.ulidTime(m.mutationId), m.clientTime)) return expired("mutationId");
       if (!timeOk(m.queuedAt, m.clientTime)) return expired("queuedAt");
-      return this.execute(tx, u, m, now, record, out);
+      return this.execute(tx, u, m, now, record, out, ids.length > 0);
     });
   }
 
@@ -624,6 +642,7 @@ export class SyncServer {
     now: number,
     record: (a: StoredResult) => void,
     out: (e: AnswerError, seq?: number) => Answer,
+    makesIds = false,
   ): Answer {
     const res = pkg.apply(this.registry, new TxSource(tx), { u }, m, {
       now,
@@ -634,8 +653,10 @@ export class SyncServer {
     });
     if (res.status === "unknown") return out(err("INTERNAL_SERVER_ERROR"));
     if (res.status === "refused") {
-      const { current, reads, ...e } = res.error;
+      const { current, reads, ...rest } = res.error;
       void current;
+      // an input id too old: none of the input's ids exists (checked above)
+      const e: AnswerError = rest.code === "EXPIRED" && makesIds ? { ...rest, unused: true } : rest;
       if (UNRECORDED.has(e.code)) return out(e);
       record({ ok: false, error: e, ...(reads ? { reads } : {}), seq: m.seq });
       return this.withReads(tx, u, out(e, m.seq), reads);
@@ -674,10 +695,16 @@ export class SyncServer {
   }
 
   private replay(tx: StoreTx, u: string, a: StoredResult, now: number): Answer {
+    const as = typeof a.as === "string" ? { recordedAs: a.as } : {};
     if (a.ok)
-      return { ok: true, result: structuredClone(a.result), serverTime: now, replayed: true };
+      return { ok: true, result: structuredClone(a.result), serverTime: now, replayed: true, ...as };
     const e = structuredClone(a.error) as AnswerError;
-    return this.withReads(tx, u, { ok: false, error: e, serverTime: now, replayed: true }, a.reads);
+    return this.withReads(
+      tx,
+      u,
+      { ok: false, error: e, serverTime: now, replayed: true, ...as },
+      a.reads,
+    );
   }
 
   // ---- the online-only calls ----
@@ -899,7 +926,7 @@ export class SyncServer {
       const want = new Set(o.threads);
       return { full: want, summary: new Set<string>() };
     }
-    const pinned = new Set(o.tier?.opened ?? []);
+    const pinned = new Set((o.tier?.opened ?? []).slice(0, MAX_OPENED));
     if (u !== null)
       for (const p of threads) if (p.u === u || tx.get(pkg.saveKey(u, p.id))) pinned.add(p.id);
     return chooseTiers(threads, now, { ...o.tier, window }, pinned);
@@ -1050,9 +1077,13 @@ export class SyncServer {
         if (v === null) continue;
         to = row.version;
         if (v === true) changes.push({ key: row.key, op: "del" });
-        else if (this.served(tx, v, tiers, false)) {
-          changes.push({ key: row.key, op: "put", record: v });
-          const th = v.kind === "thread" ? v.id : v.kind === "counts" ? v.th : null;
+        else {
+          if (this.served(tx, v, tiers, false))
+            changes.push({ key: row.key, op: "put", record: v });
+          // every summary thread with a row here, served or withheld (a
+          // thread that left the full tier: the client drops what it holds
+          // under it)
+          const th = tiers ? threadOf(v, (k) => tx.get(k)) : null;
           if (th !== null && tiers?.summary.has(th)) summaries.add(th);
         }
       }

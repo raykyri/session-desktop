@@ -5,7 +5,11 @@
 //   holds a write only while its request is in flight, and tests);
 // - `SqliteStorage`: over a `SqliteDriver`, an async interface the desktop
 //   (Tauri's SQL plugin, phase 3) and the Phone implement; the tests run it
-//   over Node's SQLite.
+//   over Node's SQLite. Each write of the adapter (a log's change, the
+//   outbox, the meta) is one call of the driver's `batch`, which runs its
+//   statements in one transaction: a driver over a connection pool (Tauri's
+//   plugin) cannot run BEGIN, the statements and COMMIT as separate calls,
+//   since each may go to another connection. Reads are `select` calls.
 // No adapter uses the DOM or Node: React Native runs them as the web does.
 
 import type { LogId, StoredRecord } from "@session/mutators";
@@ -112,11 +116,21 @@ export class MemoryStorage implements StorageAdapter {
   }
 }
 
+/** One SQL statement with its `?` parameters. */
+export type SqlStatement = readonly [sql: string, params?: readonly unknown[]];
+
 /** The SQLite a client storage needs: Tauri's SQL plugin's shape
- * (`execute`, `select`, both async). Statements use `?` parameters. */
+ * (`execute`, `select`, both async), and `batch`. Statements use `?`
+ * parameters. */
 export interface SqliteDriver {
   execute(sql: string, params?: unknown[]): Promise<void>;
   select<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
+  /** Run the statements in order in one transaction on one connection:
+   * every one applies, or (on an error, which it rejects with) none does.
+   * Phase 3's Tauri driver provides it (a Rust command that runs them in a
+   * transaction), since the plugin's `execute` may run each call on another
+   * pooled connection. */
+  batch(statements: readonly SqlStatement[]): Promise<void>;
 }
 
 /** The client's tables, made when missing. */
@@ -136,23 +150,15 @@ export class SqliteStorage implements StorageAdapter {
   constructor(private readonly db: SqliteDriver) {}
 
   private init(): Promise<void> {
-    this.ready ??= (async () => {
-      for (const sql of CLIENT_SCHEMA) await this.db.execute(sql);
-    })();
+    this.ready ??= this.db.batch(CLIENT_SCHEMA.map((sql) => [sql]));
     return this.ready;
   }
 
-  private write(f: () => Promise<void>): Promise<void> {
+  /** One transaction: the statements, as one `batch` of the driver. */
+  private write(statements: readonly SqlStatement[]): Promise<void> {
     const next = this.chain.then(async () => {
       await this.init();
-      await this.db.execute("BEGIN");
-      try {
-        await f();
-        await this.db.execute("COMMIT");
-      } catch (e) {
-        await this.db.execute("ROLLBACK");
-        throw e;
-      }
+      await this.db.batch(statements);
     });
     this.chain = next.catch(() => {});
     return next;
@@ -166,11 +172,9 @@ export class SqliteStorage implements StorageAdapter {
     return r[0] ? (JSON.parse(r[0].v) as ClientMeta) : null;
   }
   saveMeta(m: ClientMeta) {
-    return this.write(() =>
-      this.db.execute("INSERT OR REPLACE INTO sync_client_meta (k, v) VALUES ('meta', ?)", [
-        JSON.stringify(m),
-      ]),
-    );
+    return this.write([
+      ["INSERT OR REPLACE INTO sync_client_meta (k, v) VALUES ('meta', ?)", [JSON.stringify(m)]],
+    ]);
   }
   async logs(): Promise<LogId[]> {
     await this.init();
@@ -197,34 +201,36 @@ export class SqliteStorage implements StorageAdapter {
     };
   }
   saveLog(log: LogId, c: LogChange) {
-    return this.write(async () => {
-      if (c.replace) await this.db.execute("DELETE FROM sync_client_records WHERE log = ?", [log]);
-      const old = await this.db.select<{ frozen: number }>(
-        "SELECT frozen FROM sync_client_logs WHERE log = ?",
-        [log],
-      );
-      const frozen = c.frozen ?? (old[0] ? Number(old[0].frozen) === 1 : false);
-      await this.db.execute(
-        "INSERT OR REPLACE INTO sync_client_logs (log, cursor, frozen) VALUES (?, ?, ?)",
-        [log, c.cursor, frozen ? 1 : 0],
-      );
-      for (const [k, r] of c.puts)
-        await this.db.execute(
-          "INSERT OR REPLACE INTO sync_client_records (log, key, body) VALUES (?, ?, ?)",
-          [log, k, JSON.stringify(r)],
-        );
-      for (const k of c.dels)
-        await this.db.execute("DELETE FROM sync_client_records WHERE log = ? AND key = ?", [
-          log,
-          k,
-        ]);
-    });
+    // a change that does not say whether the log is frozen keeps what is
+    // stored (no read inside the transaction: a batch has none)
+    const frozen = c.frozen === undefined ? null : c.frozen ? 1 : 0;
+    return this.write([
+      ...(c.replace
+        ? [["DELETE FROM sync_client_records WHERE log = ?", [log]] as const]
+        : []),
+      [
+        "INSERT INTO sync_client_logs (log, cursor, frozen) VALUES (?, ?, COALESCE(?, 0)) " +
+          "ON CONFLICT (log) DO UPDATE SET cursor = excluded.cursor, " +
+          "frozen = COALESCE(?, sync_client_logs.frozen)",
+        [log, c.cursor, frozen, frozen],
+      ],
+      ...c.puts.map(
+        ([k, r]) =>
+          [
+            "INSERT OR REPLACE INTO sync_client_records (log, key, body) VALUES (?, ?, ?)",
+            [log, k, JSON.stringify(r)],
+          ] as const,
+      ),
+      ...c.dels.map(
+        (k) => ["DELETE FROM sync_client_records WHERE log = ? AND key = ?", [log, k]] as const,
+      ),
+    ]);
   }
   dropLog(log: LogId) {
-    return this.write(async () => {
-      await this.db.execute("DELETE FROM sync_client_records WHERE log = ?", [log]);
-      await this.db.execute("DELETE FROM sync_client_logs WHERE log = ?", [log]);
-    });
+    return this.write([
+      ["DELETE FROM sync_client_records WHERE log = ?", [log]],
+      ["DELETE FROM sync_client_logs WHERE log = ?", [log]],
+    ]);
   }
   async loadOutbox(): Promise<unknown[]> {
     await this.init();
@@ -233,24 +239,19 @@ export class SqliteStorage implements StorageAdapter {
     ).map((r) => JSON.parse(r.body) as unknown);
   }
   saveOutbox(entries: readonly unknown[]) {
-    return this.write(async () => {
-      await this.db.execute("DELETE FROM sync_client_outbox");
-      for (const [k, e] of entries.entries())
-        await this.db.execute("INSERT INTO sync_client_outbox (pos, body) VALUES (?, ?)", [
-          k,
-          JSON.stringify(e),
-        ]);
-    });
+    return this.write([
+      ["DELETE FROM sync_client_outbox"],
+      ...[...entries.entries()].map(
+        ([k, e]) =>
+          ["INSERT INTO sync_client_outbox (pos, body) VALUES (?, ?)", [k, JSON.stringify(e)]] as const,
+      ),
+    ]);
   }
   clear() {
-    return this.write(async () => {
-      for (const t of [
-        "sync_client_meta",
-        "sync_client_logs",
-        "sync_client_records",
-        "sync_client_outbox",
-      ])
-        await this.db.execute(`DELETE FROM ${t}`);
-    });
+    return this.write(
+      ["sync_client_meta", "sync_client_logs", "sync_client_records", "sync_client_outbox"].map(
+        (t) => [`DELETE FROM ${t}`] as const,
+      ),
+    );
   }
 }

@@ -50,6 +50,10 @@ export const MAX_TRIES = 5;
 /** How long a thread the person opened (`hydrate`) stays pinned in full:
  * the client reports it in `tier.opened` for this long. */
 export const OPENED_TTL = 14 * DAY;
+/** The most thread ids a read's `tier.opened` lists: the server pins the
+ * first this many and ignores the rest; a client sends the most recently
+ * opened. */
+export const MAX_OPENED = 500;
 
 /** The signed-in person a request is for (null: signed out), and the device
  * whose token authenticated it (absent for a browser session). */
@@ -102,18 +106,46 @@ export type MembershipEnd = "left" | "removed";
 /** An error answer: `@session/mutators`' `ApiError` with what the protocol
  * adds. `expectedSeq` comes with OUT_OF_ORDER; `current` and `changes` with
  * STALE (the target as the caller reads it now, and the records the answer
- * is about, as changes to apply); `retryAt` with a limit. */
+ * is about, as changes to apply); `retryAt` with a limit.
+ *
+ * Before the ages of an envelope, the server checks the ids its input makes
+ * (the mutator's `ids`) against the id registry and answers CONFLICT
+ * (message `ID_TAKEN`) for one that exists (phase 1 review round 2). A
+ * client-made id is made by one client only, so CONFLICT on an id of a write
+ * that may have reached the server before means an earlier envelope of that
+ * write applied. `unused` comes with EXPIRED from a server that made that
+ * check and found none of the input's ids: no envelope of the write applied
+ * under them, and new ids are safe. Without it (an older server, or a write
+ * whose input makes no id) EXPIRED says nothing about earlier envelopes. */
 export interface AnswerError extends ApiError {
   expectedSeq?: number;
   changes?: Change[];
+  unused?: true;
 }
 
 /** The answer to a write. Every answer carries the server's time (ms).
  * `seq` is the seq the answer used (absent when it used none); `replayed`
- * marks a recorded answer served again. */
+ * marks a recorded answer served again, and `recordedAs` the mutation id the
+ * server recorded it under (the envelope that was processed: an id this
+ * write was sent under before, when it differs from the envelope's). The ids
+ * a mutator derives (`tx.id(k)`) come from that mutation id. */
 export type Answer =
-  | { ok: true; result: unknown; serverTime: number; seq?: number; replayed?: true }
-  | { ok: false; error: AnswerError; serverTime: number; seq?: number; replayed?: true };
+  | {
+      ok: true;
+      result: unknown;
+      serverTime: number;
+      seq?: number;
+      replayed?: true;
+      recordedAs?: string;
+    }
+  | {
+      ok: false;
+      error: AnswerError;
+      serverTime: number;
+      seq?: number;
+      replayed?: true;
+      recordedAs?: string;
+    };
 
 export type RegisterAnswer =
   | { ok: true; clientId: string; serverTime: number }
@@ -145,21 +177,27 @@ export const TRANSIENT: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
 export type Cursor = string;
 
 /** The last seq the server processed for the reading client; null when no
- * client id was given or it is not the caller's. */
+ * client id was given, or the client id is not the reader's (unknown,
+ * expired, or another person's: a session that ended reads as nobody). A
+ * client that sent its client id takes null as UNAUTHORIZED and changes no
+ * log. */
 export type LastSeq = number | null;
 
 /** Which records of a space log a read serves in full (AGENTS.md,
  * "Replication"):
- * - `desktop` (the default): full records for the threads of the past 90
- *   days or the newest 500, whichever covers more, at most 5,000;
+ * - `desktop`: full records for the threads of the past 90 days or the
+ *   newest 500, whichever covers more, at most 5,000;
  * - `phone`: the past 30 days or the newest 200;
  * - `full`: every thread in full (tests, and small spaces);
  * - `summary`: no thread in full.
- * Every thread the reader wrote or saved, and those in `opened` (threads
- * opened in the past 14 days, as the client reports them) are pinned: in
- * full whatever their age. Every other readable thread is a summary: its
- * thread and counts records, without follow-ups, replies or runs. In a space
- * of more than 5,000 threads, summaries reach back 2 years. */
+ * A read without `tier` (or without `window`) serves every thread in full,
+ * as `full`; the client sends `desktop` unless it is made with another
+ * window. Every thread the reader wrote or saved, and those in `opened`
+ * (threads opened in the past 14 days, as the client reports them; at most
+ * MAX_OPENED) are pinned: in full whatever their age. Every other readable
+ * thread is a summary: its thread and counts records, without follow-ups,
+ * replies or runs. In a space of more than 5,000 threads, summaries reach
+ * back 2 years. */
 export interface TierOptions {
   window?: "desktop" | "phone" | "full" | "summary";
   opened?: string[];
@@ -175,9 +213,11 @@ export interface ReadOptions {
 
 /** A read's answer. Optional fields (a client works without them):
  * - `summaries`: in a tiered read of a space log, the threads served as
- *   summaries. A snapshot lists every such thread; a pull lists those among
- *   the threads whose thread or counts record it serves. Without it the
- *   client tells summaries by their records.
+ *   summaries. A snapshot lists every such thread; a pull lists every such
+ *   thread with a row after the cursor, whether it serves that row or
+ *   withholds it (a thread that left the full tier: the client drops what
+ *   it holds under it). Without it the client tells summaries by their
+ *   records.
  * - `ended`: in a read of a user log, how the reader's memberships that
  *   ended came to an end, by space id (`MembershipEnd`). */
 export interface Snapshot {
