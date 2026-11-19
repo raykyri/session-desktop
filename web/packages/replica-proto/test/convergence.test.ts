@@ -185,11 +185,12 @@ function newId(c: Ctx, d: Device | null): string {
 const words = ["why", "how", "notes", "draft", "plan"];
 /** Text with a unique marker, written to `key`'s `field`. */
 function marked(c: Ctx, key: string, field: string): string {
-  const m = `mk${c.seed}x${c.marks++}z`;
+  const m = `mk${c.seed}§${c.marks++}§`;
   c.origins.set(m, { key, field });
   return `${pick(c.r, words)} ${m}`;
 }
-const MARKER = /mk\d+x\d+z/g;
+// "§" is in no token, code or id alphabet, so only a marker matches
+const MARKER = /mk\d+§\d+§/g;
 
 const roleNow = (c: Ctx, sp: string, u: string) => {
   const m = c.w.get(`member:${sp}:${u}`);
@@ -243,7 +244,7 @@ const GENERATORS: Record<string, Gen> = {
     const closed = chance(c.r, 0.5);
     return {
       id,
-      name: pick(c.r, ["lounge", "lab", "new", "other", "#Lab"]),
+      name: pick(c.r, ["lounge", "lab", "new", "other", "#Lab", " -Lab ünd #2"]),
       ...(chance(c.r, 0.5) ? { vis: closed ? pick(c.r, ["listed", "unlisted"]) : "open" } : {}),
       ...(chance(c.r, 0.5) ? { desc: marked(c, `space:${id}`, "desc") } : {}),
       ...(chance(c.r, 0.5) ? { rules: [marked(c, `space:${id}`, "rules"), " "] } : {}),

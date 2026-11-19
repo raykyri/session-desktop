@@ -53,7 +53,7 @@ const RANK: Record<string, number> = { member: 1, mod: 2, admin: 3, owner: 4 };
  * case; a leading "#" dropped; each run of characters other than a to z, 0
  * to 9 and "-" becomes one "-"; the "-"s at the start dropped; the first 32
  * characters. */
-function slug(n: string): string {
+export function slug(n: string): string {
   let s = n.toLowerCase();
   if (s.startsWith("#")) s = s.slice(1);
   let out = "";

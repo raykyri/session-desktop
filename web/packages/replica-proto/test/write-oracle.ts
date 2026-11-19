@@ -57,6 +57,7 @@
 
 import type { Envelope, ErrorCode, StoredRecord } from "../src/index.js";
 
+import { slug } from "./effect-model.js";
 import { mayRead } from "./oracle.js";
 
 type Dump = ReadonlyMap<string, StoredRecord>;
@@ -281,17 +282,6 @@ const banned = (f: Facts, sp: string, u: string) => f.dump.has(`ban:${sp}:${u}`)
 const revAt = (f: Facts, key: string) => f.dump.get(key)?.rev ?? 0;
 const baseRev = (i: In) => (i["base"] as { rev: number }).rev;
 const blank = (v: unknown) => String(v).trim() === "";
-/** The mock's name rule (its spaces.create): lower case, a leading "#"
- * dropped, every run of other characters a "-", leading "-" dropped, 32
- * characters. */
-const slug = (n: string) =>
-  n
-    .toLowerCase()
-    .replace(/^#/, "")
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/^-+/, "")
-    .slice(0, 32);
-
 /** The space's record, or NOT_FOUND; then: a banned actor is refused every
  * write there; then the role `need` (0: any signed-in person; "member": a
  * member of a closed space, anyone in an open one). */

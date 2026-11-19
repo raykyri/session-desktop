@@ -439,6 +439,34 @@ test("Q3: a write that keeps getting INTERNAL_SERVER_ERROR backs off, fails afte
     t.true((times[k] ?? 0) - (times[k - 1] ?? 0) >= 2 ** (k - 1) * 1000);
 });
 
+test("Q3: a write that depends on a failed write gets its own refusal", async (t) => {
+  const faulty: AnyMutator = {
+    ...(MUTATORS["threads.create"] as AnyMutator),
+    run: () => {
+      throw new TypeError("a server bug that this input always hits");
+    },
+  };
+  const { w, open } = await cast(t, 7, { mutators: { ...MUTATORS, "threads.create": faulty } });
+  const mel = w.client("mel");
+  const th = mel.newId();
+  mel.queue("threads.create", { id: th, space: open, kind: "ask", q: "never saved" });
+  mel.queue("followups.ask", { id: mel.newId(), thread: th, q: "under it" });
+  const seen: string[] = [];
+  for (let k = 0; k < 10 && mel.pending().length; k++) {
+    seen.push(...codes(await mel.flush()));
+    w.clock.advance(MINUTE);
+  }
+  t.deepEqual(seen, [...Array<string>(5).fill("INTERNAL_SERVER_ERROR"), "NOT_FOUND"]);
+  t.deepEqual(
+    mel.problems().map((p) => [p.name, p.reason]),
+    [["threads.create", "FAILED"]],
+  );
+  t.deepEqual(
+    mel.answered.map((a) => [a.name, a.result.ok ? "ok" : a.result.error.code]),
+    [["followups.ask", "NOT_FOUND"]],
+  );
+});
+
 test("Q2: every exception in apply is answered; a deep or large input is BAD_REQUEST before anything parses it", async (t) => {
   const { w, open } = await cast(t);
   let deep: unknown = [];
