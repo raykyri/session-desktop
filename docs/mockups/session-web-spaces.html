@@ -10051,8 +10051,10 @@ function evApply(ev) {
   if (ev.type === 'workspace.updated' && ev.payload.workspace) evDomain(sp(ev.payload.workspace.id));
   if (any) evRender();
 }
-/* the answer is ready while you read its thread: the notification is read */
+/* the answer is ready while you read its thread: the notification is read. Not while a Screen entry's scenario is
+   replacing the database: an answer of the old one can arrive then, and its notification is gone from the server */
 function evSeen(p) {
+  if (SCENARIOS > 0) return;
   const n = D.notifs.find(x => x.id === p.id);
   if (n && !n.read && p.treeId && st.thread != null && realId(st.thread) === p.treeId && st.device !== 'native') mutate('notifications.markRead', { id: n.id }, () => db.update('notifs', n.id, x => { x.read = true; }));
 }
@@ -14392,16 +14394,17 @@ function screenReset() {
 }
 /* the server sets up a scenario's data; then(): the screen, once the page has the server's records.
    Returns a promise that settles when both are done. */
+let SCENARIOS = 0;   /* scenarios asked for and not yet applied: the page is changing databases */
 function runScenario(name, args, then) {
   const inst = DS;
   /* the server's data goes back to the seed: the runs and checks in progress end there */
-  inst.meta.setState(m => ({ pending: m.pending + 1 }));
+  inst.meta.setState(m => ({ pending: m.pending + 1 })); SCENARIOS++;
   const done = apiSource.queue
     .then(() => http('POST', '/api/dev/scenario', args ? { name, args } : { name }, 'scenario'))
     .then(res => { applyChanges(res && res.changes, () => false); if (then) then(); },
       e => { console.error(`[session] the scenario ${name} failed: ${e.message}`); dataError(apiErrText(e, 'write')); apiSource.load(inst); })
     .catch(e => { setTimeout(() => { throw e; }); })   /* an error in the screen's set-up is an uncaught error, as before (test harnesses count them) */
-    .finally(() => inst.meta.setState(m => ({ pending: m.pending - 1 })));
+    .finally(() => { SCENARIOS--; inst.meta.setState(m => ({ pending: m.pending - 1 })); });
   apiSource.queue = done;
   return done;
 }
