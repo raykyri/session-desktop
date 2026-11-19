@@ -1598,9 +1598,9 @@ export class SyncClient implements Changing {
           this.noteLeave(e);
           this.resolve(e, a);
         } else {
+          // the recorded answer covers every id it had: none can apply (Send
+          // again lists none of them)
           await this.applyAnswerChanges(a.error.changes);
-          // the recorded answer covers every id it had: none can apply
-          e.replaces = [];
           this.end(e, a.error.code === "EXPIRED" ? "expired" : "refused", a.error, a);
         }
         this.rebase();

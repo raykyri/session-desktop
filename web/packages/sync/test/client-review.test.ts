@@ -387,6 +387,11 @@ test("finding 6: the records a STALE answer carries are not a pull: the answered
   t.like(await b.answer, { ok: false, error: { code: "STALE" } });
   t.truthy(mel.view().get("thread", fresh));
   t.is(mel.view().get("thread", th)?.q, "v2", "the STALE answer's record");
+  // a read of another log: the space log was still not read after the answer
+  await mel.open("user:mel");
+  await mel.sync("user:mel");
+  t.truthy(mel.view().get("thread", fresh));
+  t.like(mel.outbox()[0] ?? {}, { state: "answered" });
 });
 
 test("finding 6: a pull in flight when a write is answered does not count as read after it", async (t) => {
