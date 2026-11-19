@@ -76,7 +76,7 @@ Notable records:
 - `hide`: a hidden item, keyed `hide:<item key>`. Hiding and showing do not
   change the item; "shown" compares the hide record's rev, which an author's
   edit of the hidden item also moves. A removal is the item's own `mod:
-  "removed"`, with its text erased;
+"removed"`, with its text erased;
 - `skill` and `skills`: each skill is its own record; `skills` holds the
   space's order, whose rev `skills.reorder` compares;
 - `device` and `apikey`: a person's devices and API keys, without tokens or
