@@ -636,13 +636,13 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
    * closed). Also checks that what a read hands out is a copy. */
   const forged = async (step: number): Promise<boolean> => {
     const u = pick(c.r, people);
-    const snaps = [];
+    const snaps: {
+      log: ReturnType<typeof logsFor>[number];
+      s: Awaited<ReturnType<typeof watched.snapshot>>;
+    }[] = [];
     for (const log of logsFor(u)) snaps.push({ log, s: await watched.snapshot(actor(u), log) });
     const moved = snaps.filter((x) => x.s.epoch !== snaps[0]?.s.epoch || x.s.epoch !== "e0");
-    const { log, s } = pick(
-      c.r,
-      moved.length && chance(c.r, 0.7) ? moved : snaps,
-    ) as (typeof snaps)[number];
+    const { log, s } = pick(c.r, moved.length && chance(c.r, 0.7) ? moved : snaps);
     const version = Math.floor(c.r() * (s.version + 1));
     const p = await watched.pull(actor(u), log, { epoch: s.epoch, version });
     if (failures.length)
