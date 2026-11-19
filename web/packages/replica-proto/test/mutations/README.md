@@ -14,7 +14,15 @@ npm run mutate                    # every mutation
 npm run mutate -- X1 N2 R2-5      # the mutations whose names start with these
 npm run mutate -- --slots 2       # 2 copies at once
 npm run mutate -- --check         # only check that every pattern matches once
+npm run mutate -- --package       # with the switch on: the server runs @session/mutators
 ```
+
+With `--package` the suite runs with REPLICA_PROTO_MUTATORS=package, so the
+server applies writes and filters reads with `@session/mutators`. Each
+mutation of `src/mutators.ts` or `src/access.ts`, and X29 (the online-only
+check, now in the package's engine), is made at the same place in a copy of
+`@session/mutators` instead (`IN_PACKAGE` in `mutate.ts`); the others are made
+where they are. Every slot holds a copy of both packages.
 
 It exits with 1 when a mutation survives.
 

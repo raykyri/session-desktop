@@ -15,7 +15,8 @@
   "scripts": {
     "test": "ava",
     "test:package": "REPLICA_PROTO_MUTATORS=package ava",
-    "mutate": "tsx test/mutations/mutate.ts"
+    "mutate": "tsx test/mutations/mutate.ts",
+    "mutate:package": "tsx test/mutations/mutate.ts --package"
   },
   "dependencies": {
     "@session/mutators": "*",

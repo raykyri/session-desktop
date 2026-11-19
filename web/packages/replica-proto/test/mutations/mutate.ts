@@ -7,6 +7,12 @@
 // or `npm run mutate -- --check` to check only that every pattern matches
 // once. `--slots <n>` sets how many copies run at once (default 4).
 //
+// `--package` runs the suite with the switch on (REPLICA_PROTO_MUTATORS=
+// package): the server runs `@session/mutators`. A mutation of the
+// prototype's mutators or read rules is then made at the same place in the
+// package (`IN_PACKAGE`), in a copy of the package beside the copy of this
+// one; the other mutations are made where they are.
+//
 // X1 to X31 are review round 1's mutations and the ones round 1's fixes
 // added, N1 to N34 review round 2's, R2-1 on cover round 2's fixes. Each
 // pattern is moved with the code; the fault stays the same, or, where the
@@ -36,6 +42,14 @@ interface Mutation {
 }
 
 const edits = (m: Mutation) => [{ from: m.from, to: m.to }, ...(m.also ?? [])];
+
+/** A mutation as `--package` makes it: in `file` of `@session/mutators`
+ * (relative to the package directory), the same fault as the prototype's. */
+interface PackageEdit {
+  file: string;
+  from: string;
+  to: string;
+}
 
 const MUTATIONS: Mutation[] = [
   // ---- review round 1 ----
@@ -571,6 +585,168 @@ const MUTATIONS: Mutation[] = [
   },
 ];
 
+/** The prototype's mutations of code that the switch replaces (its
+ * mutators, its read rules and the server's online-only check), made at the
+ * same place in `@session/mutators`, by the mutation's name up to the first
+ * space. */
+const IN_PACKAGE: Record<string, PackageEdit> = {
+  X1: {
+    file: "src/defs/members.ts",
+    from: '      if (tx.get("member", `${i.space}:${i.user}`)) tx.del("member", `${i.space}:${i.user}`);\n      if (!tx.get("ban"',
+    to: '      if (!tx.get("ban"',
+  },
+  X2: {
+    file: "src/defs/spaces.ts",
+    from: 'if (!bannedFrom(tx, s0.id, r.u)) addMember(tx, s0.id, r.u, "member", tx.id(k));',
+    to: 'addMember(tx, s0.id, r.u, "member", tx.id(k));',
+  },
+  X3: {
+    file: "src/defs/threads.ts",
+    from: '        q: "",\n        t: null,\n        edited: false,',
+    to: "        edited: false,",
+  },
+  X4: {
+    file: "src/access.ts",
+    from: 'return { ...r, q: "", t: null, sum: null } satisfies ThreadRec;',
+    to: 'return { ...r, q: "" } satisfies ThreadRec;',
+  },
+  X6: {
+    file: "src/defs/members.ts",
+    from: "    pre: (ctx) => {\n      for (;;) {",
+    to: "    pre: (ctx, i) => {\n      if (i.id) return { code: i.id.slice(-10).toLowerCase() };\n      for (;;) {",
+  },
+  X7: {
+    file: "src/defs/spaces.ts",
+    from: 'if (link) tx.put({ ...link, dead: "Used", usedBy: tx.me });',
+    to: "",
+  },
+  X9: {
+    file: "src/defs/members.ts",
+    from: 'if (me) tx.put({ ...me, role: "admin" });',
+    to: "",
+  },
+  X13: {
+    file: "src/defs/threads.ts",
+    from: "likes: Math.max(0, c.likes + (i.on ? 1 : -1))",
+    to: "likes: Math.max(0, c.likes + (i.on ? 2 : -1))",
+  },
+  X14: {
+    file: "src/rules.ts",
+    from: '        q: "",\n        t: null,\n        sum: null,\n        running: false,',
+    to: '        q: "",\n        running: false,',
+  },
+  X16: {
+    file: "src/defs/members.ts",
+    from: '          if (bannedFrom(tx, i.space, u))\n            throw refuse("PRECONDITION_FAILED", "This person is banned from the space.");\n',
+    to: "",
+  },
+  X18: {
+    file: "src/access.ts",
+    from: 'return { ...r, q: "", a: null } satisfies FollowUpRec;',
+    to: 'return { ...r, q: "" } satisfies FollowUpRec;',
+  },
+  X20: {
+    file: "src/defs/threads.ts",
+    from: "      const kept = counts.r > 0;\n",
+    to: "      const kept = counts.r > 1;\n",
+  },
+  X22: {
+    file: "src/defs/members.ts",
+    from: '        if (i.decision !== "decline" && r.rev !== i.base?.[u]) throw stale();\n',
+    to: "",
+  },
+  X23: {
+    file: "src/defs/moderation.ts",
+    from: '      if (i.decision === "shown" && r.rev !== i.base?.rev) throw stale();\n',
+    to: "",
+  },
+  X24: {
+    file: "src/defs/members.ts",
+    from: "      if (m.adm !== i.base.adm) throw stale();\n",
+    to: "",
+  },
+  X26: {
+    file: "src/access.ts",
+    from: "      return own && (sp === null || readsSpace(g, sp, u));",
+    to: "      return own;",
+  },
+  X29: {
+    file: "src/engine.ts",
+    from: "    if (def.online && envelope.clientTime - ulidTime(envelope.mutationId) > ONLINE_MAX_AGE)",
+    to: "    if (def.online && envelope.clientTime - ulidTime(envelope.mutationId) > 1000 * ONLINE_MAX_AGE)",
+  },
+  N12: {
+    file: "src/defs/spaces.ts",
+    from: "        (link.expiresAt === null || msOf(link.expiresAt) > tx.nowMs) &&\n",
+    to: "",
+  },
+  N13: {
+    file: "src/access.ts",
+    from: "(isModOf(g, sp, u) || (u !== null && a.by === u && roleIn(g, sp, u) !== null))",
+    to: "(isModOf(g, sp, u) || (u !== null && a.by === u))",
+  },
+  N14: {
+    file: "src/defs/spaces.ts",
+    from: 'invite: closed ? (set.invite ?? s1.invite ?? "mods") : null,',
+    to: 'invite: closed ? "members" : null,',
+  },
+  N22: {
+    file: "src/defs/spaces.ts",
+    from: '    can: (tx, i) => inSpace(tx, i.id, "admin"),\n    run: (tx, i) => {\n      const s0',
+    to: '    can: (tx, i) => inSpace(tx, i.id, "moderator"),\n    run: (tx, i) => {\n      const s0',
+  },
+  N23: {
+    file: "src/defs/members.ts",
+    from: "        a,\n        why: null,\n        createdAt: old",
+    to: "        a,\n        why: old ? old.why : null,\n        createdAt: old",
+  },
+  "R2-1": {
+    file: "src/defs/moderation.ts",
+    from: '      if (i.decision === "shown" && r.rev !== i.base?.rev) throw stale();',
+    to: "      if (r.rev !== i.base?.rev) throw stale();",
+  },
+  "R2-2": {
+    file: "src/defs/members.ts",
+    from: '        if (i.decision !== "decline" && r.rev !== i.base?.[u]) throw stale();',
+    to: "        if (r.rev !== i.base?.[u]) throw stale();",
+  },
+  "R2-3": {
+    file: "src/defs/spaces.ts",
+    from: '      addMember(tx, s.id, tx.me, "member", tx.id(1));',
+    to: '      addMember(tx, s.id, tx.me, "member", `${s.id}:${tx.me}`);',
+  },
+  "R2-4": {
+    file: "src/defs/threads.ts",
+    from: "      if (c) tx.put({ ...c, likes: Math.max(0, c.likes + (i.on ? 1 : -1)) });",
+    to: '      if (c) tx.put({ ...c, likes: Math.max(0, c.likes + (i.on ? 1 : -1)) });\n      const th = tx.get("thread", i.thread);\n      if (th) tx.put({ ...th, tok: th.tok + 1 });',
+  },
+  // the package's rule for report notifications is its own line
+  "R2-5": {
+    file: "src/access.ts",
+    from: '      return a.type !== "report" || isModOf(g, sp, u);',
+    to: "      return true;",
+  },
+  "R2-24": {
+    file: "src/rules.ts",
+    from: '    .replace(/[^a-z0-9-]+/g, "-")\n    .replace(/^-+/, "")',
+    to: '    .replace(/[^a-z0-9-]+/g, "-")',
+  },
+};
+
+/** The prototype's files whose code the switch replaces: every mutation of
+ * them needs an `IN_PACKAGE` entry. */
+const REPLACED = new Set(["src/mutators.ts", "src/access.ts"]);
+const idOfMutation = (m: Mutation) => m.name.split(" ")[0] ?? m.name;
+
+/** Where `--package` makes a mutation: in the package, or where it is. */
+function target(m: Mutation): { pkg: boolean; file: string; edits: { from: string; to: string }[] } {
+  const p = IN_PACKAGE[idOfMutation(m)];
+  if (PACKAGE && p) return { pkg: true, file: p.file, edits: [{ from: p.from, to: p.to }] };
+  if (PACKAGE && REPLACED.has(m.file))
+    throw new Error(`${m.name}: no place in @session/mutators (IN_PACKAGE)`);
+  return { pkg: false, file: m.file, edits: edits(m) };
+}
+
 interface Outcome {
   typecheck: string;
   passed: number;
@@ -580,6 +756,8 @@ interface Outcome {
 
 const PKG = process.cwd();
 const WEB = resolve(PKG, "../..");
+const MUTATORS_PKG = join(WEB, "packages", "mutators");
+const PACKAGE = process.argv.includes("--package");
 
 /** A copy of the package beside links to the workspace's modules, base
  * config and shared package, so it type-checks and runs as the package does. */
@@ -594,13 +772,27 @@ function makeSlot(root: string, n: number): string {
     recursive: true,
     filter: (src) => !/[/\\](node_modules|dist)$/.test(src),
   });
+  // a copy of @session/mutators, which the copy of this package resolves
+  // before the workspace's (its own node_modules comes first)
+  cpSync(MUTATORS_PKG, join(web, "packages", "mutators"), {
+    recursive: true,
+    filter: (src) => !/[/\\](node_modules|dist)$/.test(src),
+  });
+  mkdirSync(join(dir, "node_modules", "@session"), { recursive: true });
+  symlinkSync(join(web, "packages", "mutators"), join(dir, "node_modules", "@session", "mutators"));
   return dir;
 }
 
-function sh(cmd: string, args: string[], cwd: string): Promise<{ code: number; out: string }> {
+function sh(
+  cmd: string,
+  args: string[],
+  cwd: string,
+  pkg = false,
+): Promise<{ code: number; out: string }> {
   return new Promise((done) => {
     let out = "";
-    const p = spawn(cmd, args, { cwd, env: { ...process.env, FORCE_COLOR: "0" } });
+    const env = { ...process.env, FORCE_COLOR: "0", REPLICA_PROTO_MUTATORS: pkg ? "package" : "" };
+    const p = spawn(cmd, args, { cwd, env });
     p.stdout.on("data", (d: Buffer) => (out += d.toString()));
     p.stderr.on("data", (d: Buffer) => (out += d.toString()));
     p.on("close", (code) => done({ code: code ?? 1, out }));
@@ -608,17 +800,19 @@ function sh(cmd: string, args: string[], cwd: string): Promise<{ code: number; o
 }
 
 async function run(m: Mutation, dir: string): Promise<Outcome> {
-  const file = join(dir, m.file);
-  const original = readFileSync(join(PKG, m.file), "utf8");
+  const where = target(m);
+  const base = where.pkg ? MUTATORS_PKG : PKG;
+  const file = join(where.pkg ? join(dir, "..", "mutators") : dir, where.file);
+  const original = readFileSync(join(base, where.file), "utf8");
   let source = original;
-  for (const e of edits(m)) {
-    if (!source.includes(e.from)) throw new Error(`${m.name}: pattern not found in ${m.file}`);
+  for (const e of where.edits) {
+    if (!source.includes(e.from)) throw new Error(`${m.name}: pattern not found in ${where.file}`);
     source = source.replace(e.from, e.to);
   }
   writeFileSync(file, source);
   try {
     const tc = await sh("npx", ["tsc", "-p", "tsconfig.test.json", "--noEmit"], dir);
-    const ava = await sh("npx", ["ava", "--timeout=600s"], dir);
+    const ava = await sh("npx", ["ava", "--timeout=600s"], dir, PACKAGE);
     const tests = [
       ...new Set(
         [...ava.out.matchAll(/[✘×] \[fail\]: (.+?)(?:\s{2,}|$)/gm)].map((x) => x[1] ?? ""),
@@ -637,12 +831,15 @@ async function run(m: Mutation, dir: string): Promise<Outcome> {
 
 const args = process.argv.slice(2);
 if (args.includes("--check")) {
-  for (const m of MUTATIONS)
-    for (const e of edits(m)) {
-      const n = readFileSync(m.file, "utf8").split(e.from).length - 1;
-      if (n !== 1) throw new Error(`${m.name}: ${n} matches in ${m.file}`);
+  for (const m of MUTATIONS) {
+    const where = target(m);
+    const base = where.pkg ? MUTATORS_PKG : PKG;
+    for (const e of where.edits) {
+      const n = readFileSync(join(base, where.file), "utf8").split(e.from).length - 1;
+      if (n !== 1) throw new Error(`${m.name}: ${n} matches in ${where.file}`);
     }
-  console.log(`${MUTATIONS.length} patterns found`);
+  }
+  console.log(`${MUTATIONS.length} patterns found${PACKAGE ? " (with the switch on)" : ""}`);
   process.exit(0);
 }
 const k = args.indexOf("--slots");
