@@ -1,127 +1,68 @@
-// The shell is public (07 §2). Guests read the catalog; `/highlights` and
-// `/admin` still redirect to `/login`. Account-scoped boot
-// queries (`settings.get`, live events) stay behind a session.
+// The shell's sign-in states (phase 2a): a guest and a signed-in account in
+// the shell, the guards of the account routes, and the sign-in page's
+// redirect.
 
-import { cleanup, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import test from "ava";
 
-import { renderApp, resetDocumentRoot, testUser } from "./helpers.js";
+import { gitHubSignInUrl } from "../src/api/account.js";
 
-// `always`, so a failed assertion does not leave its tree mounted for the
-// next test to trip over.
-test.afterEach.always(() => {
-  cleanup();
-  resetDocumentRoot();
-});
+import { renderApp, testUser, waitUntil } from "./helpers.js";
 
-test.serial("a signed-out visit to a shell route renders the public shell", async (t) => {
-  await renderApp("/r/t1", { user: null });
-
-  t.truthy(screen.getByRole("navigation", { name: "Research" }));
-  t.truthy(screen.getByRole("button", { name: "Sign in with GitHub" }));
-});
-
-test.serial("the sign-in page displays server authentication error messages", async (t) => {
-  await renderApp("/login?error=invite_required", { user: null });
-
-  t.is(
-    screen.getByRole("alert").textContent,
-    "A sign-up code is required to create an account. Open the sign-up link you received.",
+test.serial("a guest sees the shell with Sign in", async (t) => {
+  const app = await renderApp("/", { user: null });
+  await waitUntil(
+    t,
+    () => screen.queryAllByRole("link", { name: "Sign in" }).length > 0,
+    "Sign in",
   );
+  t.is(screen.queryByRole("link", { name: "Settings" }), null);
+  t.is(app.trpc.calls.filter((c) => c.path === "settings.get").length, 0, "no account reads");
+  app.unmount();
 });
 
-test.serial("unrecognized authentication errors display a default error message", async (t) => {
-  await renderApp("/login?error=teapot", { user: null });
+test.serial(
+  "a signed-in account sees its handle, Settings and Sign out; an admin Admin",
+  async (t) => {
+    const app = await renderApp("/", { user: testUser({ handle: "raymond" }) });
+    await waitUntil(
+      t,
+      () => document.body.textContent?.includes("Signed in as raymond") === true,
+      "the handle",
+    );
+    t.truthy(screen.queryByRole("link", { name: "Settings" }));
+    t.truthy(screen.queryByRole("button", { name: "Sign out" }));
+    t.is(screen.queryByRole("link", { name: "Admin" }), null);
+    app.unmount();
+    const admin = await renderApp("/", { user: testUser({ isAdmin: true }) });
+    await waitUntil(t, () => screen.queryByRole("link", { name: "Admin" }) !== null, "Admin");
+    admin.unmount();
+  },
+);
 
-  t.is(screen.getByRole("alert").textContent, "Sign-in did not complete. Try again.");
+test.serial("an account route sends a guest to sign in, and back after", async (t) => {
+  const app = await renderApp("/settings", { user: null });
+  await waitUntil(t, () => app.router.state.location.pathname === "/login", "to /login");
+  t.is((app.router.state.location.search as { redirect?: string }).redirect, "/settings");
+  app.unmount();
 });
 
-test.serial("a signed-in visit renders the shell and the account row", async (t) => {
-  await renderApp("/", { user: testUser({ login: "raymond" }) });
+test.serial(
+  "the sign-in page sends a signed-in account on, and never off this origin",
+  async (t) => {
+    const app = await renderApp("/login?redirect=https%3A%2F%2Fevil.example%2F");
+    await waitUntil(t, () => app.router.state.location.pathname === "/", "to Home");
+    app.unmount();
+    t.is(gitHubSignInUrl("/settings", "CODE"), "/auth/github?return_to=%2Fsettings&invite=CODE");
+  },
+);
 
-  t.truthy(screen.getByRole("navigation", { name: "Research" }));
-  t.truthy(screen.getByRole("button", { name: "raymond" }));
-});
-
-test.serial("a guest's account row is Sign in with GitHub, as on the sign-in page", async (t) => {
-  await renderApp("/", { user: null });
-  t.truthy(screen.getByRole("button", { name: "Sign in with GitHub" }));
-  t.is(screen.queryByText(/Log in with GitHub|Continue with GitHub/), null);
-  cleanup();
-  await renderApp("/login", { user: null });
-  t.truthy(screen.getByRole("button", { name: "Sign in with GitHub" }));
-});
-
-test.serial("a guest visit does not fetch account-scoped boot queries", async (t) => {
-  const { trpc } = await renderApp("/", { user: null });
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  const paths = trpc.calls.map((call) => call.path);
-  t.false(paths.includes("settings.get"));
-  t.false(paths.includes("research.listActivity"));
-  t.false(paths.includes("workspaces.ensureDefault"));
-  t.true(paths.includes("system.runtimeConfig"));
-  t.true(paths.includes("workspaces.list"));
-});
-
-test.serial("the boot loader warms the seven queries the shell renders from", async (t) => {
-  const { trpc } = await renderApp("/", {
-    responses: {
-      "settings.get": {
-        colorTheme: "green-blob",
-        appearance: "dark",
-        bodyFontId: "dm-sans",
-        textSize: 14,
-        requireCmdEnterToSend: true,
-        researchInlineWidgets: true,
-        showShortcutHints: true,
-        reduceMotion: false,
-        showNotifications: true,
-        defaultModel: "gemini-flash",
-        researchLaunchInstruction: null,
-        defaultWorkspaceId: "w1",
-      },
-    },
-  });
-
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  const paths = new Set(trpc.calls.map((call) => call.path));
-  for (const path of [
-    "settings.get",
-    "system.runtimeConfig",
-    "workspaces.list",
-    "research.listTrees",
-    "folders.get",
-    // Not rendered anywhere: it is the cache `cachedNode` reads, and an empty
-    // one makes every node update for an unopened thread invalidate the
-    // sidebar instead of patching it.
-    "research.listActivity",
-  ]) {
-    t.true(paths.has(path), `${path} was warmed`);
-  }
-});
-
-test.serial("authenticated visits to /login redirect to the requested target URL", async (t) => {
-  // The guard puts the path it refused on `?redirect=`; coming back with a
-  // session — after signing in, or with Back — continues there rather than
-  // showing a sign-in button to somebody who is signed in.
-  await renderApp("/login?redirect=%2Fsettings", { user: testUser() });
-
-  t.truthy(screen.getByRole("heading", { name: "Settings" }));
-  t.is(screen.queryByRole("button", { name: /Sign in with GitHub/ }), null);
-});
-
-test.serial("a redirect that leaves this origin is not followed", async (t) => {
-  await renderApp("/login?redirect=%2F%2Fevil.example%2Fsteal", { user: testUser() });
-
-  t.truthy(screen.getByRole("navigation", { name: "Research" }), "the shell rendered");
-  t.truthy(screen.getByRole("heading", { name: "Home" }), "at the root, not at the target");
-});
-
-test.serial("development kitchen sink routes are absent from production builds", async (t) => {
-  // `import.meta.env` is absent outside Vite, so this suite runs the route
-  // tree exactly as a production bundle carries it: no `/dev/*` route.
-  await renderApp("/dev/ui", { user: null });
-
-  t.truthy(screen.getByRole("navigation", { name: "Research" }), "the public shell still renders");
-  t.is(screen.queryByRole("heading", { name: /Cool · Dark/ }), null, "and no kitchen sink");
+test.serial("an invite link signs up with its code", async (t) => {
+  const app = await renderApp("/invite?code=ABCD", { user: null });
+  await waitUntil(
+    t,
+    () => screen.queryByRole("button", { name: "Sign up with GitHub" }) !== null,
+    "the sign-up button",
+  );
+  app.unmount();
 });

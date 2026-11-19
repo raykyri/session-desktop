@@ -10,8 +10,7 @@ import { modelsFor } from "@session/shared";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { useAdminUsers, useCreateInvites, useMe, useSetUserLimits } from "../api/queries.js";
-import { workspaceSearch } from "../features/sidebar/scope.js";
+import { useAdminUsers, useCreateInvites, useMe, useSetUserLimits } from "../api/account.js";
 import { ControlButton } from "../ui/Button.js";
 import { Field, Input } from "../ui/Field.js";
 
@@ -87,7 +86,7 @@ export function AdminPage() {
         <h1 className="text-title text-fg-heading m-0 font-semibold">Admin</h1>
         <p className="max-w-feed text-fg-muted mt-3 text-base">
           You must be an administrator to access this page.{" "}
-          <Link to="/" search={workspaceSearch} className="text-fg-interactive">
+          <Link to="/" className="text-fg-interactive">
             Back to Home
           </Link>
         </p>
@@ -203,7 +202,7 @@ export function AdminPage() {
                   onClick={() => {
                     const count = Number(inviteCount.trim());
                     if (!Number.isInteger(count) || count < 1) return;
-                    createInvites.mutate(count);
+                    createInvites.mutate({ count });
                   }}
                 >
                   Create codes

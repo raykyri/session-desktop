@@ -5,13 +5,11 @@
 // which is the deployment's arrangement rather than Vite's. Building the
 // client is part of the server command so `npm run test:e2e` is a single step.
 //
-// Visual regression screenshots run on Chromium only to avoid baseline churn from cross-engine font rasterization differences.
 
 import { defineConfig, devices } from "@playwright/test";
 
 import {
   APP_ORIGIN,
-  ARTIFACT_ORIGIN,
   E2E_DATA_DIR,
   E2E_HOST,
   E2E_PORT,
@@ -31,11 +29,9 @@ process.env[E2E_RUN_ID_VARIABLE] ??= Date.now().toString(36);
 export default defineConfig({
   testDir: "./e2e",
   outputDir: "./test-results",
-  // `{platform}` is kept: a baseline rendered by macOS's rasterizer does not
-  // match Linux's, so the two sets live side by side. Outside CI a platform
-  // without one skips the visual test rather than failing it
-  // (`visual.spec.ts`). The Linux set is rendered by CI's e2e job
-  // (`.github/workflows/web.yml`, `12-testing-linting-ci.md` §4).
+  // `{platform}`: a baseline rendered by macOS's rasterizer does not match
+  // Linux's. The visual baselines were removed with the tree-shaped specs
+  // (phase 2a) and are re-recorded with the spaces client.
   snapshotPathTemplate: "{testDir}/__screenshots__/{platform}/{arg}{ext}",
   fullyParallel: false,
   forbidOnly: CI,
@@ -61,9 +57,8 @@ export default defineConfig({
     {
       name: "webkit",
       use: { ...devices["Desktop Safari"], viewport: { width: 1280, height: 900 } },
-      // Best-effort: the visual specs are skipped here (see `visual.spec.ts`),
-      // and WebKit is excluded from the default local run so a machine without
-      // the browser still gets a green suite.
+      // Best-effort: WebKit is excluded from the default local run so a
+      // machine without the browser still gets a green suite.
       grepInvert: /@visual/,
     },
   ],
@@ -91,7 +86,6 @@ export default defineConfig({
       PORT: String(E2E_PORT),
       NODE_ENV: "development",
       SESSION_PUBLIC_ORIGIN: APP_ORIGIN,
-      SESSION_ARTIFACT_ORIGIN: ARTIFACT_ORIGIN,
       SESSION_DATA_DIR: E2E_DATA_DIR,
       SESSION_FIXTURE_PROVIDERS: "1",
       SESSION_TEST_AUTH: "1",

@@ -5,7 +5,7 @@ import {
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { useRuntimeConfig, useSettings, useSignedIn, useUpdateSettings } from "../api/queries.js";
+import { useRuntimeConfig, useSettings, useSignedIn, useUpdateSettings } from "../api/account.js";
 import { useResolvedAppearance } from "../lib/appearance.js";
 import { BODY_FONT_OPTIONS } from "../lib/bodyFonts.js";
 import { isApplePlatform } from "../lib/platform.js";

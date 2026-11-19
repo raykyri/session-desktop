@@ -15,10 +15,8 @@ test.serial(
       () => screen.queryByRole("alert")?.textContent?.includes("Not found") === true,
       "the 404 panel is shown rather than a blank page",
     );
-    // Inside the shell: the sidebar is still mounted, so the tab has a way back
-    // without reaching for the address bar.
+    // the panel has a way back without reaching for the address bar
     t.truthy(screen.queryByRole("link", { name: "Go to Home" }));
-    t.truthy(document.querySelector("aside, nav"), "the shell frame is still rendered");
     app.unmount();
   },
 );
@@ -26,7 +24,7 @@ test.serial(
 test.serial("a route that throws is contained by the error boundary", async (t) => {
   // Use an invalid query parameter to trigger the router's native error
   // boundary without mocks.
-  const app = await renderApp("/r/t1?filter=not-a-filter");
+  const app = await renderApp("/invite?code=1");
   await waitUntil(
     t,
     () =>

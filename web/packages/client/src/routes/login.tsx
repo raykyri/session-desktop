@@ -1,6 +1,6 @@
 import { useSearch } from "@tanstack/react-router";
 
-import { startGitHubSignIn } from "../api/api.js";
+import { startGitHubSignIn } from "../api/account.js";
 import { ControlButton } from "../ui/Button.js";
 import { GitHubMark } from "../ui/GitHubMark.js";
 
@@ -53,7 +53,7 @@ export function LoginPage() {
         <ControlButton
           size="lg"
           className="w-full gap-2"
-          onClick={() => startGitHubSignIn(search.redirect, search.signup ?? search.invite)}
+          onClick={() => startGitHubSignIn(search.redirect, search.signup)}
         >
           <GitHubMark />
           Sign in with GitHub

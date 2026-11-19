@@ -5,7 +5,7 @@ import { render, waitFor } from "@testing-library/react";
 import type { RenderResult } from "@testing-library/react";
 import type { ExecutionContext } from "ava";
 
-import { queryClientDefaults } from "../src/api/queries.js";
+import { queryClientDefaults } from "../src/api/account.js";
 import { setTrpcClient } from "../src/api/trpc.js";
 import { AppProviders } from "../src/app/providers.js";
 import { createAppRouter } from "../src/app/router.js";
@@ -16,6 +16,7 @@ export function testUser(overrides: Partial<User> = {}): User {
   return {
     id: "u1",
     login: "raymond",
+    handle: "raymond",
     name: "Raymond",
     avatarUrl: null,
     isAdmin: false,
@@ -30,39 +31,8 @@ export function testUser(overrides: Partial<User> = {}): User {
 export function defaultResponses(user: User | null): Record<string, unknown> {
   return {
     "auth.me": user,
-    "interfaceDrafts.get": (input: { key: string }) => ({ key: input.key, value: null }),
-    "settings.get": {
-      ...DEFAULT_USER_SETTINGS,
-      researchLaunchInstruction: null,
-      defaultWorkspaceId: null,
-    },
+    "settings.get": { ...DEFAULT_USER_SETTINGS, researchLaunchInstruction: null },
     "system.runtimeConfig": { version: "0.0.0", models: [], limits: {}, features: {} },
-    "workspaces.list": [],
-    // `SessionBoot` creates one when the list comes back empty, which is what
-    // a first sign-in does (07 §2).
-    "workspaces.ensureDefault": {
-      id: "w1",
-      name: "Research",
-      position: 0,
-      createdAt: 1_700_000_000_000,
-      updatedAt: 1_700_000_000_000,
-    },
-    "research.listTrees": [],
-    "research.listActivity": [],
-    "feed.recentActivity": { items: [], nextCursor: null },
-    "folders.get": { folders: [], membership: {}, collapsed: [] },
-    // Web-only collaboration reads: nothing shared, no invitations, nobody
-    // else viewing.
-    "sharing.listShared": [],
-    "sharing.listMembers": [],
-    "invites.received": [],
-    "invites.list": [],
-    "events.presence": [],
-    // An empty notification inbox.
-    "notifications.list": { items: [], nextCursor: null },
-    "notifications.unreadCount": { count: 0 },
-    "events.setInterest": { applied: true },
-    "events.subscribe": undefined,
   };
 }
 

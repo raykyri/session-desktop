@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import test from "ava";
@@ -7,17 +7,14 @@ import test from "ava";
 // `researchStyleContracts.test.ts`, re-expressed for the web
 // (`08-design-system-and-styling.md` §6). The intents are unchanged; what moved
 // is the set of files, because the twelve feature stylesheets became Tailwind
-// utilities on components and only `prose.css`, `tweet.css` and `feed.css`
-// (the marks Home's card drag sets on the DOM) remain as CSS.
+// utilities on components and only `prose.css`
+// remains as CSS.
 
 const stylesDirectory = join(import.meta.dirname, "..", "src", "styles");
-const sourceDirectory = join(import.meta.dirname, "..", "src");
 
 const tokensCss = readFileSync(join(stylesDirectory, "tokens.css"), "utf8");
 const proseCss = readFileSync(join(stylesDirectory, "prose.css"), "utf8");
-const tweetCss = readFileSync(join(stylesDirectory, "tweet.css"), "utf8");
 const appCss = readFileSync(join(stylesDirectory, "app.css"), "utf8");
-const feedCss = readFileSync(join(stylesDirectory, "feed.css"), "utf8");
 
 const COLOR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\brgba?\(/;
 
@@ -45,16 +42,6 @@ function tokensDeclaredIn(selectorFilter: (selector: string) => boolean): Set<st
     }
   }
   return declared;
-}
-
-function sourceFiles(directory: string, extensions: string[]): string[] {
-  const files: string[] = [];
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...sourceFiles(path, extensions));
-    else if (extensions.some((extension) => entry.name.endsWith(extension))) files.push(path);
-  }
-  return files;
 }
 
 // ---------------------------------------------------------------- §6 item 1
@@ -100,9 +87,7 @@ test("no color literals outside tokens.css", (t) => {
   const offenders: string[] = [];
   for (const [name, css] of [
     ["prose.css", proseCss],
-    ["tweet.css", tweetCss],
     ["app.css", appCss],
-    ["feed.css", feedCss],
   ] as const) {
     css.split("\n").forEach((line, index) => {
       // Two escape hatches, both spelled on the line that uses them: colors
@@ -201,33 +186,6 @@ test("DM Sans adds one optical half-pixel to UI type but not to monospace", (t) 
   t.regex(surface, /--research-markdown-font-delta:[^;]+- var\(--font-ui-size-offset\)/s);
 });
 
-// ---------------------------------------------------------------- §6 item 6
-
-test("the tweet recipe is defined in tweet.css and nowhere else", (t) => {
-  t.regex(tweetCss, /\.journal-tweet\s*\{/);
-  const tweet = ruleBody(tweetCss, ".journal-tweet");
-  t.regex(tweet, /max-width:\s*var\(--research-feed-max-width\)/);
-
-  const stats = ruleBody(tweetCss, ".journal-tweet-stats");
-  t.regex(stats, /align-items:\s*center/);
-  t.regex(stats, /line-height:\s*1/);
-
-  // No other stylesheet, and no component, may redeclare the recipe.
-  for (const [name, css] of [
-    ["prose.css", proseCss],
-    ["app.css", appCss],
-  ] as const) {
-    t.false(withoutComments(css).includes(".journal-tweet"), `${name} must not redefine it`);
-  }
-
-  const redefining = sourceFiles(sourceDirectory, [".css"]).filter(
-    (file) =>
-      !file.endsWith("tweet.css") &&
-      withoutComments(readFileSync(file, "utf8")).includes(".journal-tweet"),
-  );
-  t.deepEqual(redefining, []);
-});
-
 // -------------------------------------------------- the Tailwind token bridge
 
 test("the theme maps the app's color ramp under fg-* and every surface under surface-*", (t) => {
@@ -304,13 +262,4 @@ test("the reduced-motion block follows the OS preference and cancels Tailwind tr
   t.notRegex(proseCss, /\.reduce-motion,/);
   t.regex(proseCss, /transition-duration: 0\.01ms !important/);
   t.regex(proseCss, /translate: none/);
-});
-
-test("DOM search paints through the documented highlight registry names", (t) => {
-  t.regex(proseCss, /::highlight\(session-search\)/);
-  t.regex(proseCss, /::highlight\(session-search-active\)/);
-
-  const searchModule = readFileSync(join(sourceDirectory, "lib", "transcriptSearch.ts"), "utf8");
-  t.regex(searchModule, /SEARCH_HIGHLIGHT = "session-search"/);
-  t.regex(searchModule, /SEARCH_ACTIVE_HIGHLIGHT = "session-search-active"/);
 });
