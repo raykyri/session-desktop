@@ -134,14 +134,13 @@ export function syncFactory(kind: "memory" | "sqlite"): ServerFactory {
         const clientOf = new Map(d.clients.map((c) => [c.clientId, c.u]));
         return {
           records: d.records.map((r) => r.record) as unknown as StoredRecord[],
-          tombstones: d.tombstones.map((t) => ({
-            key: t.key,
-            kind: t.kind,
-            sp: t.sp,
-            person: t.person,
-            by: t.by,
-            at: t.at,
-          })),
+          // every stored field but a notification's `type` (the prototype's
+          // audience has none), so a tombstone that keeps more is visible
+          tombstones: d.tombstones.map((t) => {
+            const out: Partial<typeof t> = { ...t };
+            delete out.type;
+            return out as StorageScan["tombstones"][number];
+          }),
           logRows: d.logRows as StorageScan["logRows"],
           answers: d.answers.map((a) => ({
             u: a.u ?? clientOf.get(a.clientId ?? "") ?? "",
