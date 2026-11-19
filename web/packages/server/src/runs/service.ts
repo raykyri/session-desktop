@@ -118,7 +118,8 @@ const KEY_PROVIDER: Record<string, string> = { anthropic: "Anthropic", openroute
 export function createRunsService(deps: RunsServiceDeps): RunsService {
   const { config, db, sync, logger } = deps;
   const fetchImpl = deps.fetch ?? globalThis.fetch;
-  const providers = deps.providers ?? createProviders(config, deps.fetch ? { fetch: deps.fetch } : {});
+  const providers =
+    deps.providers ?? createProviders(config, deps.fetch ? { fetch: deps.fetch } : {});
   const caches = createToolCaches();
   const loopDeps: LoopDeps = {
     config,
@@ -302,7 +303,11 @@ export function createRunsService(deps: RunsServiceDeps): RunsService {
         return;
       }
       const entry = findModel(run.model ?? DEFAULT_MODEL_ID);
-      runsRepo.enqueue(db, { runId: run.id, userId: user.id, provider: entry?.provider ?? "unknown" });
+      runsRepo.enqueue(db, {
+        runId: run.id,
+        userId: user.id,
+        provider: entry?.provider ?? "unknown",
+      });
       soon();
     },
 

@@ -33,7 +33,8 @@ export function scenarioRoutes(deps: ServerDeps, mockupsDirectory?: string): Hon
     const body = (await c.req.json().catch(() => null)) as {
       records?: { key: string; record: Draft | null }[];
     } | null;
-    if (!body || !Array.isArray(body.records)) return c.json({ error: "expected { records }" }, 400);
+    if (!body || !Array.isArray(body.records))
+      return c.json({ error: "expected { records }" }, 400);
     const writes = body.records.map((r): Write => [r.key, r.record]);
     const version = deps.sync.run((tx) => deps.sync.commit(tx, writes, deps.sync.time(tx)));
     return c.json({ ok: true, version });

@@ -49,12 +49,7 @@ export const DELTA_INTERVAL_MS = 50;
 export const SEQ_PERSIST_EVERY = 50;
 
 export type AttemptOutcome =
-  | "complete"
-  | "failed"
-  | "cancelled"
-  | "interrupted"
-  | "rate_limited"
-  | "superseded";
+  "complete" | "failed" | "cancelled" | "interrupted" | "rate_limited" | "superseded";
 
 export interface AttemptResult {
   outcome: AttemptOutcome;
@@ -296,7 +291,10 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     recordUsage();
     if (classified.errorClass === "rate_limited")
       return { outcome: "rate_limited", error: classified };
-    logger.warn({ runId: run.id, errorClass: classified.errorClass, detail: classified.detail }, "run failed");
+    logger.warn(
+      { runId: run.id, errorClass: classified.errorClass, detail: classified.detail },
+      "run failed",
+    );
     const end = endOf(classified, input.paidByKey);
     jobs.fail(run.id, attempt, end);
     return { outcome: "failed", error: classified, end };

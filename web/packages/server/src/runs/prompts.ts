@@ -36,7 +36,9 @@ export function researchSystemPrompt(
     blocks.push(
       taggedBlock(
         SKILL_TAG,
-        neutralizedInstructionMarkup(`${skill.name.trim()}\n\n${clampResearchLaunchInstruction(prompt)}`),
+        neutralizedInstructionMarkup(
+          `${skill.name.trim()}\n\n${clampResearchLaunchInstruction(prompt)}`,
+        ),
       ),
     );
   const trimmed = (instruction ?? "").trim();

@@ -22,15 +22,7 @@ import { Hono } from "hono";
 
 import type { AppEnv, ServerDeps } from "../deps.js";
 
-import {
-  apiKeysOf,
-  devicesOf,
-  listAsks,
-  meOf,
-  peopleOf,
-  settingsOf,
-  usageOf,
-} from "./account.js";
+import { apiKeysOf, devicesOf, listAsks, meOf, peopleOf, settingsOf, usageOf } from "./account.js";
 
 /** The HTTP status of an error code (the mock's CODES). */
 export const STATUS: Record<string, number> = {
@@ -122,7 +114,8 @@ export function syncRoutes(deps: ServerDeps): Hono<AppEnv> {
   // anything else, on every sync and rpc request that names a version
   const guard = async (c: Context<AppEnv>, next: () => Promise<void>) => {
     const v = versionOf(c);
-    if (v !== undefined && v < sync.minProtocol) return error(c, "UPDATE_REQUIRED", "Update Session.");
+    if (v !== undefined && v < sync.minProtocol)
+      return error(c, "UPDATE_REQUIRED", "Update Session.");
     await next();
   };
   app.use("/api/sync/*", guard);
@@ -240,7 +233,12 @@ export function syncRoutes(deps: ServerDeps): Hono<AppEnv> {
   });
   app.get("/api/users", (c) => {
     const handles = c.req.queries("handle") ?? [];
-    return c.json(peopleOf(db, handles.filter((h) => users.findByHandle(db, h) !== null)));
+    return c.json(
+      peopleOf(
+        db,
+        handles.filter((h) => users.findByHandle(db, h) !== null),
+      ),
+    );
   });
 
   // ---- operators ----

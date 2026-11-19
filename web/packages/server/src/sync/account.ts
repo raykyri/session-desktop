@@ -105,7 +105,10 @@ export function payerFor(
 
 // ---- reads ----
 
-export function meOf(sync: SyncServer, user: { handle: string; name?: string | null; createdAt: number }) {
+export function meOf(
+  sync: SyncServer,
+  user: { handle: string; name?: string | null; createdAt: number },
+) {
   const p = sync.viewOf(`profile:${user.handle}`, user.handle);
   return {
     u: user.handle,
@@ -226,8 +229,7 @@ export function listAsks(
       run.node === "r" ? `thread:${run.th}` : `followup:${run.node}`,
       user.handle,
     );
-    const t =
-      node?.kind === "thread" ? node.t || node.q : node?.kind === "followup" ? node.q : "";
+    const t = node?.kind === "thread" ? node.t || node.q : node?.kind === "followup" ? node.q : "";
     return [
       {
         id: `${run.th}:${run.node}`,
@@ -297,7 +299,9 @@ export function accountHandlers(db: SessionDatabase): Partial<OnlineHandlers> {
         if (k?.kind !== "apikey" || k.u !== user.handle)
           throw fail("NOT_FOUND", "The server has no record of this API key.");
         if (k.status !== "valid")
-          return new CommittedRefusal(fail("PRECONDITION_FAILED", "The provider rejected this key."));
+          return new CommittedRefusal(
+            fail("PRECONDITION_FAILED", "The provider rejected this key."),
+          );
       }
       preferences.update(db, user.id, { defaultKeyId: i.id });
       return null;

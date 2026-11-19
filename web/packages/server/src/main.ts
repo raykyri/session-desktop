@@ -117,6 +117,11 @@ export function buildDeps(o: {
   logger: Logger;
   fetch?: typeof globalThis.fetch;
   runs?: Partial<Parameters<typeof createRunsService>[0]>;
+  /** Test only: the sync server's options the suites set. */
+  sync?: Pick<
+    Parameters<typeof createSync>[0],
+    "clock" | "random" | "registry" | "failEffect" | "jobs"
+  >;
 }): ServerDeps {
   const keys = new KeyCipher(o.config.sync.apiKeyEncryptionKey);
   // the runner is made after the sync server it runs jobs for
@@ -131,6 +136,7 @@ export function buildDeps(o: {
       start: (j: { kind: JobKind; id: string }) => runner?.start(j),
       cancel: (r: string) => runner?.cancel(r),
     },
+    ...o.sync,
   });
   runner = createRunsService({
     config: o.config,

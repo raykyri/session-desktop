@@ -196,9 +196,7 @@ export function imageRoutes(options: ImageRoutesOptions): Hono<AppEnv> {
       found &&
       (found.userId === user?.id ||
         (found.spaceId !== null &&
-          reading(deps.sync, (g) =>
-            readsSpace(g, found.spaceId as string, user?.handle ?? null),
-          )))
+          reading(deps.sync, (g) => readsSpace(g, found.spaceId as string, user?.handle ?? null))))
         ? found
         : null;
     if (!row) {

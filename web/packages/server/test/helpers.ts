@@ -51,7 +51,12 @@ export interface Harness {
   /** `app.request()` with the headers the SPA sends. */
   request(path: string, init?: RequestInit & { cookie?: string }): Promise<Response>;
   /** A JSON POST with the SPA's headers and the protocol header. */
-  post(path: string, body: unknown, cookie?: string, headers?: Record<string, string>): Promise<{
+  post(
+    path: string,
+    body: unknown,
+    cookie?: string,
+    headers?: Record<string, string>,
+  ): Promise<{
     status: number;
     body: Record<string, unknown>;
   }>;
@@ -62,6 +67,7 @@ export interface HarnessOptions {
   fetch?: typeof globalThis.fetch;
   createOAuthClient?: (deps: ServerDeps) => OAuthClient;
   runs?: Partial<RunsServiceDeps>;
+  sync?: Parameters<typeof buildDeps>[0]["sync"];
 }
 
 let githubIdCounter = 5000;
@@ -100,6 +106,7 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
     logger,
     ...(options.fetch ? { fetch: options.fetch } : {}),
     runs: { autoStart: false, ...options.runs },
+    ...(options.sync ? { sync: options.sync } : {}),
   });
   t.teardown(async () => {
     await deps.runs.drain();
@@ -159,7 +166,10 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
         },
       });
       const text = await res.text();
-      return { status: res.status, body: text ? (JSON.parse(text) as Record<string, unknown>) : {} };
+      return {
+        status: res.status,
+        body: text ? (JSON.parse(text) as Record<string, unknown>) : {},
+      };
     },
   };
 }
