@@ -877,8 +877,8 @@ const IN_SYNC: Record<string, SyncEdit> = {
   },
   N24: {
     file: "src/server/server.ts",
-    from: "      if (seen?.kind === \"seen\" && seen.reps) staged.push([`seen:${to}`, { ...seen, reps: false }]);\n    }\n    this.commit(tx, staged, now);",
-    to: "      if (seen?.kind === \"seen\" && seen.reps) staged.push([`seen:${to}`, { ...seen, reps: false }]);\n    }\n    if (effect.report.endsWith(\"0\")) staged.length = 0;\n    this.commit(tx, staged, now);",
+    from: '      if (seen?.kind === "seen" && seen.reps) staged.push([`seen:${to}`, { ...seen, reps: false }]);\n    }\n    this.commit(tx, staged, now);',
+    to: '      if (seen?.kind === "seen" && seen.reps) staged.push([`seen:${to}`, { ...seen, reps: false }]);\n    }\n    if (effect.report.endsWith("0")) staged.length = 0;\n    this.commit(tx, staged, now);',
   },
   N25: {
     file: "src/server/server.ts",
@@ -917,7 +917,9 @@ const IN_SYNC: Record<string, SyncEdit> = {
     file: "src/server/tokens.ts",
     from: '    const cipher = createCipheriv("aes-256-gcm", this.keys.current, iv);',
     to: '    const cipher = createCipheriv("aes-256-gcm", Buffer.alloc(32), iv);',
-    also: [{ from: "    const keys = [this.keys.current];", to: "    const keys = [Buffer.alloc(32)];" }],
+    also: [
+      { from: "    const keys = [this.keys.current];", to: "    const keys = [Buffer.alloc(32)];" },
+    ],
   },
   "R2-7": {
     file: "src/server/server.ts",
@@ -994,13 +996,16 @@ function target(m: Mutation): {
   if (PACKAGE && REPLACED.has(m.file))
     throw new Error(`${m.name}: no place in @session/mutators (IN_PACKAGE)`);
   const q = IN_SYNC[idOfMutation(m)];
-  if (SYNC && q) return { where: "sync", file: q.file, edits: [{ from: q.from, to: q.to }, ...(q.also ?? [])] };
-  if (SYNC && SERVER_FILES.has(m.file)) throw new Error(`${m.name}: no place in @session/sync (IN_SYNC)`);
+  if (SYNC && q)
+    return { where: "sync", file: q.file, edits: [{ from: q.from, to: q.to }, ...(q.also ?? [])] };
+  if (SYNC && SERVER_FILES.has(m.file))
+    throw new Error(`${m.name}: no place in @session/sync (IN_SYNC)`);
   return { where: "proto", file: m.file, edits: edits(m) };
 }
 
 /** The directory of a package, in the workspace or in a slot. */
-const baseOf = (where: Where) => (where === "mutators" ? MUTATORS_PKG : where === "sync" ? SYNC_PKG : PKG);
+const baseOf = (where: Where) =>
+  where === "mutators" ? MUTATORS_PKG : where === "sync" ? SYNC_PKG : PKG;
 
 interface Outcome {
   typecheck: string;
@@ -1044,7 +1049,10 @@ function makeSlot(root: string, n: number): string {
     filter: (src) => !/[/\\](node_modules|dist)$/.test(src),
   });
   mkdirSync(join(sync, "node_modules", "@session"), { recursive: true });
-  symlinkSync(join(web, "packages", "mutators"), join(sync, "node_modules", "@session", "mutators"));
+  symlinkSync(
+    join(web, "packages", "mutators"),
+    join(sync, "node_modules", "@session", "mutators"),
+  );
   symlinkSync(sync, join(dir, "node_modules", "@session", "sync"));
   return dir;
 }

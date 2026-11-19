@@ -87,7 +87,9 @@ const readOptions = (o: ReadOptions = {}) => ({
 export function syncFactory(kind: "memory" | "sqlite"): ServerFactory {
   return (o: ServerOptions): TestServer => {
     const store: ServerStore =
-      kind === "memory" ? new MemoryServerStore() : new SqliteServerStore(new BetterSqlite(":memory:"));
+      kind === "memory"
+        ? new MemoryServerStore()
+        : new SqliteServerStore(new BetterSqlite(":memory:"));
     const jobs: { kind: string; id: string }[] = [];
     const server = new SyncServer({
       store,
@@ -97,7 +99,10 @@ export function syncFactory(kind: "memory" | "sqlite"): ServerFactory {
       registry: packageRegistry(o.mutators ?? ACTIVE_MUTATORS),
       jobs: { start: (j) => void jobs.push({ kind: j.kind, id: j.id }) },
       ...(o.failEffect
-        ? { failEffect: (e: pkg.Effect, n: number) => (o.failEffect as NonNullable<typeof o.failEffect>)(e as never, n) }
+        ? {
+            failEffect: (e: pkg.Effect, n: number) =>
+              (o.failEffect as NonNullable<typeof o.failEffect>)(e as never, n),
+          }
         : {}),
     });
     const actorOf = (a: Actor | null) => (a === null ? null : { u: a.u });
@@ -149,12 +154,22 @@ export function syncFactory(kind: "memory" | "sqlite"): ServerFactory {
               : { ok: false, error: a.answer.error, reads: a.answer.reads }) as ApplyResult,
             at: a.at,
           })),
-          clients: d.clients.map((c) => ({ clientId: c.clientId, u: c.u, last: c.last, seen: c.seen })),
+          clients: d.clients.map((c) => ({
+            clientId: c.clientId,
+            u: c.u,
+            last: c.last,
+            seen: c.seen,
+          })),
           registrations: [...regs].map(([u, at]) => ({ u, at })),
           registry: d.registry,
           born: d.records.map((r) => ({ key: r.key, version: r.born })),
           epochs: d.epochs as StorageScan["epochs"],
-          effects: d.effects.map((q) => ({ effect: q.effect, at: q.at, attempts: q.attempts, next: q.next })),
+          effects: d.effects.map((q) => ({
+            effect: q.effect,
+            at: q.at,
+            attempts: q.attempts,
+            next: q.next,
+          })),
           deadLetters: d.deadLetters.map((q) => ({
             effect: q.effect,
             at: q.at,
