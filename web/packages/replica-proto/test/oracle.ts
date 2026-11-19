@@ -233,6 +233,11 @@ export function mayRead(dump: Dump, r: StoredRecord, reader: string | null): boo
 
 /** A record as `reader` gets it: moderated text decided by `TEXT`. */
 export function shown(dump: Dump, r: StoredRecord, reader: string | null): StoredRecord {
+  // with the switch on, a device run's device is its person's only (review
+  // round 1 of phase 1, W8)
+  const ex = (r as { executor?: { device: string } | null }).executor;
+  if (USE_PACKAGE && r.kind === "run" && ex && r.u !== reader)
+    return { ...r, executor: { ...ex, device: "" } } as StoredRecord;
   if (r.kind !== "thread" && r.kind !== "followup" && r.kind !== "reply") return r;
   const who =
     reader !== null && r.u === reader
@@ -241,7 +246,9 @@ export function shown(dump: Dump, r: StoredRecord, reader: string | null): Store
         ? "staff"
         : "other";
   if (TEXT[modOf(dump, r) ?? "none"][who] === "text") return r;
-  if (r.kind === "thread") return { ...r, q: "", t: null, sum: null };
+  // with the switch on, what an ask is about is text of the thread (H4)
+  if (r.kind === "thread")
+    return { ...r, q: "", t: null, sum: null, ...(USE_PACKAGE ? { about: null } : {}) };
   if (r.kind === "followup") return { ...r, q: "", a: null };
   return { ...r, t: "" };
 }
@@ -257,6 +264,39 @@ export function expected(dump: Dump, reader: string | null, log: LogId): Map<str
         ? IN_USER_LOG.has(r.kind) && ownerOf(r) === id
         : IN_SPACE_LOG.has(r.kind) && spaceOfRec(r) === id;
     if (inLog && mayRead(dump, r, reader)) out.set(key, shown(dump, r, reader));
+  }
+  return out;
+}
+
+// ---- device runs (the online calls), added by review round 1 of phase 1 ----
+//
+// A device run's calls (`runs.claim`, `heartbeat`, `turn`, `finish`) act in
+// the run's space as its person: AGENTS.md "permissions are checked at apply
+// time" and "a ban stops every write in its space" apply to them as to any
+// write, and what `runs.claim` serves is a read by the run's person.
+
+/** Whether `u` may act on device run `run` now: it is theirs, they read it,
+ * the space exists and is not deleted, they are not banned from it, and in a
+ * closed space they are a member. */
+export function mayRun(dump: Dump, run: StoredRecord, u: string): boolean {
+  if (run.kind !== "run" || run.u !== u || !mayRead(dump, run, u)) return false;
+  const s = dump.get(`space:${run.s}`);
+  if (s?.kind !== "space" || (s as { deleted?: boolean }).deleted) return false;
+  if (dump.has(`ban:${run.s}:${u}`)) return false;
+  return !isClosedSpace(dump, run.s) || roleOf(dump, run.s, u) !== null;
+}
+
+/** The texts of a thread and its follow-ups that `reader` may read now: what
+ * every turn `runs.claim` serves must be made of. */
+export function readableTexts(dump: Dump, th: string, reader: string): Set<string> {
+  const out = new Set<string>();
+  for (const r of dump.values()) {
+    const mine =
+      (r.kind === "thread" && r.id === th) ||
+      ((r.kind as string) === "followup" && (r as { th?: string }).th === th);
+    if (!mine || !mayRead(dump, r, reader)) continue;
+    const v = shown(dump, r, reader) as unknown as Record<string, unknown>;
+    for (const f of ["q", "sum", "a"]) if (typeof v[f] === "string" && v[f]) out.add(v[f]);
   }
   return out;
 }

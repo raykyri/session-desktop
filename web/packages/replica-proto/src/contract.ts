@@ -249,6 +249,36 @@ export interface TestServer extends ServerHalf {
    * (`followup:<id>`). False, and nothing written, for a removed item, a
    * deleted thread or another key. */
   finishJob(key: string, text: string): Awaitable<boolean>;
+  /** The server half's online-only calls (`devices.*`, `runs.*`), as the
+   * actor (with `device`, a device token's), or undefined where the server
+   * has none (the prototype). Added by review round 1 of phase 1, so the
+   * suite reaches device runs. */
+  readonly online?: OnlineSurface;
+}
+
+/** An actor of an online call: a person, and the device whose token they
+ * signed in with (none: a browser session). */
+export interface DeviceActor extends Actor {
+  readonly device?: string;
+}
+
+/** An SSE event the stream sent: a poke naming logs, or a run's in-flight
+ * text. */
+export type StreamEvent =
+  | { type: "poke"; logs: LogId[] }
+  | { type: "run"; run: string; attempt: number; seq: number; text: string };
+
+/** The live surface of a server half: online calls and the SSE stream. */
+export interface OnlineSurface {
+  call(actor: DeviceActor | null, name: string, input: unknown): Awaitable<ApplyResult>;
+  /** Open a stream for `actor` with `cursors` (log → token, any string):
+   * `events()` answers the events it sent so far, `close()` ends it. */
+  stream(
+    actor: Actor | null,
+    cursors: Readonly<Record<string, string>>,
+  ): { events(): Promise<StreamEvent[]>; close(): Promise<void> };
+  /** Advance housekeeping as a quiet server's timer does. */
+  tick(): void;
 }
 
 export interface Clock {

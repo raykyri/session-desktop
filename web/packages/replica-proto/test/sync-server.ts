@@ -17,6 +17,9 @@
 //   error (the prototype has no such fields).
 // - Reads: the prototype's tiers are `full` (its default) and `summary`.
 // - Storage: the production tables, named as `StorageScan` names them.
+// - Online calls and the SSE stream (`online`, review round 1 of phase 1):
+//   the server's own `call` and `openStream`; answers keep code, message
+//   and issues; the stream's events are parsed from its bytes.
 
 import type * as pkg from "@session/mutators";
 import {
@@ -24,7 +27,9 @@ import {
   SqliteServerStore,
   SyncServer,
   newCursorKey,
+  openStream,
   type Answer,
+  type CursorMap,
   type ServerStore,
 } from "@session/sync/server";
 import BetterSqlite from "better-sqlite3";
@@ -38,6 +43,7 @@ import type {
   ServerOptions,
   StorageScan,
   StoredRecord,
+  StreamEvent,
   TestServer,
 } from "../src/index.js";
 import { ACTIVE_MUTATORS, packageRegistry } from "../src/switch.js";
@@ -126,6 +132,57 @@ export function syncFactory(kind: "memory" | "sqlite"): ServerFactory {
       jobs: () => jobs,
       work: () => server.work(),
       finishJob: (key, text) => server.finishJob(key, text),
+      online: {
+        call(a, name, input) {
+          const actor = a === null ? null : { u: a.u, ...(a.device ? { device: a.device } : {}) };
+          const r = server.call(actor, name, input);
+          if (r.ok) return { ok: true, result: r.result };
+          const e: ApiError = { code: r.error.code, message: r.error.message };
+          if (r.error.issues) e.issues = [...r.error.issues];
+          return { ok: false, error: e };
+        },
+        stream(a, cursors) {
+          const ac = new AbortController();
+          const s = openStream(server, actorOf(a), cursors as CursorMap, ac.signal, {
+            setInterval: () => 0,
+            clearInterval: () => {},
+          });
+          const reader = s.getReader();
+          const dec = new TextDecoder();
+          let text = "";
+          const pump = (async () => {
+            for (;;) {
+              const r = await reader.read();
+              if (r.done) break;
+              text += dec.decode(r.value);
+            }
+          })();
+          const settle = () => new Promise((r) => setTimeout(r, 0));
+          const parse = (): StreamEvent[] =>
+            [...text.matchAll(/event: (poke|run)\n(?:id: .*\n)?data: (.*)\n\n/g)].map(
+              (m) => JSON.parse(m[2] ?? "{}") as StreamEvent,
+            );
+          return {
+            events: async () => {
+              await settle();
+              return parse();
+            },
+            close: async () => {
+              ac.abort();
+              await pump;
+            },
+          };
+        },
+        tick() {
+          let f = () => {};
+          const stop = server.startHousekeeping({
+            setInterval: (g) => (f = g),
+            clearInterval: () => {},
+          });
+          f();
+          stop();
+        },
+      },
       scanStorage(): StorageScan {
         server.housekeepAll();
         const d = store.dump();
