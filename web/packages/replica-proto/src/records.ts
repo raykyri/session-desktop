@@ -18,6 +18,11 @@
 //   redacted form.
 // - Space ids are ULIDs (AGENTS.md); the mock's `sp-<name>` slugs are not used.
 // - A space's rules version is an integer `rulesRev` instead of `rulesAt`.
+// - A space's activity (its thread count and the time of its last thread) is
+//   a separate `stats` record that only the space's readers get. The space
+//   record is public, so it carries nothing that changes when someone posts.
+// - A moderated record's text is erased from storage when it is removed; a
+//   hidden record keeps its text, and `view` decides who gets it.
 
 import type { Spaces } from "@session/shared";
 
@@ -42,14 +47,23 @@ export interface SpaceRec {
   invite: "mods" | "members" | null;
   qs: { q: string; req: boolean }[];
   postsOff: boolean;
-  /** Stored count of member records. */
+  /** Stored count of member records. Public, as on the mock's landing. */
   members: number;
-  /** Stored count of threads. */
-  posts: number;
   /** The owner, admins and moderators (the staff list), by rank then handle.
    * Public with the space record. */
   mods: [string, SpaceRole][];
   createdAt: string;
+  rev: number;
+}
+
+/** A space's activity, read with its content: by everyone for an open space,
+ * by members for a closed one. Keyed `stats:<space>`. */
+export interface StatsRec {
+  kind: "stats";
+  sp: string;
+  /** Stored count of threads. */
+  posts: number;
+  /** The time of the last thread, or the space's creation. */
   updatedAt: string;
   rev: number;
 }
@@ -209,6 +223,7 @@ export interface NotifRec {
 
 export type StoredRecord =
   | SpaceRec
+  | StatsRec
   | MemberRec
   | ThreadRec
   | FollowUpRec
@@ -243,6 +258,7 @@ export const ID_KINDS: ReadonlySet<Kind> = new Set<Kind>([
 ]);
 
 export const spaceKey = (id: string) => `space:${id}`;
+export const statsKey = (sp: string) => `stats:${sp}`;
 export const memberKey = (sp: string, u: string) => `member:${sp}:${u}`;
 export const threadKey = (id: string) => `thread:${id}`;
 export const requestKey = (sp: string, u: string) => `request:${sp}:${u}`;
@@ -252,6 +268,8 @@ export const saveKey = (u: string, th: string) => `save:${u}:${th}`;
 
 export function keyOf(r: Draft | StoredRecord): string {
   switch (r.kind) {
+    case "stats":
+      return statsKey(r.sp);
     case "member":
       return memberKey(r.sp, r.u);
     case "request":
@@ -282,6 +300,7 @@ export function spaceOf(r: Draft | StoredRecord): string | null {
     case "reply":
     case "run":
       return r.s;
+    case "stats":
     case "member":
     case "report":
     case "request":
@@ -322,4 +341,25 @@ export function logsOf(r: Draft | StoredRecord): LogId[] {
   const u = personOf(r);
   if (u !== null) out.push(`user:${u}`);
   return out;
+}
+
+/** The fields that decide who may read a record: its kind, space, person,
+ * author and maker. A write never changes them (`Tx.put` checks), so an edit
+ * never moves a record to another audience. */
+export function audienceOf(r: Draft | StoredRecord): string {
+  return JSON.stringify([
+    r.kind,
+    spaceOf(r),
+    personOf(r),
+    "u" in r ? r.u : null,
+    "by" in r ? r.by : null,
+  ]);
+}
+
+/** The server's creation time of a record (a member record's `joinedAt`), or
+ * "" for a record without one. */
+export function createdOf(r: StoredRecord): string {
+  if ("createdAt" in r) return r.createdAt;
+  if (r.kind === "member") return r.joinedAt;
+  return "";
 }

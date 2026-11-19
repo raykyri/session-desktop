@@ -1,69 +1,149 @@
-// The suite's statement of the read rules, written apart from the server's
-// own (`src/access.ts`): what a reader may hold of one log, computed from the
-// server's stored records. Tests compare snapshots, pulls and replicas with it.
+// The suite's read oracle: what a reader may hold of one log, as a table of
+// record kind × the reader's place in the record's space, taken from the
+// mock's read rules (`docs/mockups/session-web-spaces-mock-api.js`, section
+// 5a, READ_RULES) and the owner's decisions of phase 0b. It does not use
+// `src/access.ts`; it reads the server's stored records only as facts (who is
+// a member with which role, whether a space is closed).
 //
-//   space log   the space record: everyone
-//               members of an open space, and all its threads, follow-ups,
-//               replies and runs: everyone, signed out included
-//               in a closed space: the same for its members; a non-member
-//               gets the threads, follow-ups and runs they wrote
-//               reports and join requests: the space's moderators (and up),
-//               and the person who made them; bans: the moderators; invite
-//               links: the moderators, and the maker while a member
-//   user log    that user's memberships, join requests, reports, likes, saves
-//               and notifications; nothing for anyone else
-//   moderated   a hidden or removed thread, follow-up or reply has its text
-//               taken out, for every reader
+// A reader's place in a space:
+//   anon      signed out
+//   outsider  signed in, no member record (a banned person is one)
+//   member    a member record with the role "member"
+//   staff     a member record with the role mod, admin or owner
+// A cell says who in that place reads the record:
+//   all   everyone in that place
+//   own   only the record's person (OWNER below)
+//   none  nobody in that place
+// A closed space is one whose `vis` is listed or unlisted.
 
 import type { LogId, StoredRecord } from "../src/index.js";
 
 type Dump = ReadonlyMap<string, StoredRecord>;
+type Kind = StoredRecord["kind"];
+type Place = "anon" | "outsider" | "member" | "staff";
+type Cell = "all" | "own" | "none";
+type Row = Record<Place, Cell>;
 
-const STAFF = new Set(["mod", "admin", "owner"]);
+const row = (anon: Cell, outsider: Cell, member: Cell, staff: Cell): Row => ({
+  anon,
+  outsider,
+  member,
+  staff,
+});
+const PUBLIC = row("all", "all", "all", "all");
+const MEMBERS = row("none", "none", "all", "all");
+const OWN_OR_STAFF = row("none", "own", "own", "all");
+const STAFF = row("none", "none", "none", "all");
+const OWN = row("none", "own", "own", "own");
 
-function ownerOf(r: StoredRecord): string | null {
-  switch (r.kind) {
-    case "member":
-    case "request":
-    case "like":
-    case "save":
-      return r.u;
-    case "report":
-      return r.by;
-    case "notif":
-      return r.to;
-    default:
-      return null;
-  }
-}
+/** Who reads a record, by kind, in an open and in a closed space. A kind
+ * without a space (likes, saves, notifications) uses the `open` row. */
+export const READ: Record<Kind, { open: Row; closed: Row }> = {
+  // the landing and the staff list are public (mock: "Space records are public")
+  space: { open: PUBLIC, closed: PUBLIC },
+  // closedContent: a closed space's content is for its members; a non-member
+  // gets none of it, their own threads included (owner decision, 0b)
+  stats: { open: PUBLIC, closed: MEMBERS },
+  thread: { open: PUBLIC, closed: MEMBERS },
+  followup: { open: PUBLIC, closed: MEMBERS },
+  reply: { open: PUBLIC, closed: MEMBERS },
+  run: { open: PUBLIC, closed: MEMBERS },
+  // closedMembers: the member list of a closed space is for its members (the
+  // staff list is on the space record); a person reads their own membership
+  member: { open: PUBLIC, closed: row("none", "own", "all", "all") },
+  // ownOrModerated: requests and reports, your own and those of the spaces
+  // you moderate; bans, the spaces you moderate; invite links, the spaces you
+  // moderate and the links you made while you are a member
+  request: { open: OWN_OR_STAFF, closed: OWN_OR_STAFF },
+  report: { open: OWN_OR_STAFF, closed: OWN_OR_STAFF },
+  ban: { open: STAFF, closed: STAFF },
+  invite: { open: row("none", "none", "own", "all"), closed: row("none", "none", "own", "all") },
+  // the mock's /api/me collections: the person's own
+  like: { open: OWN, closed: OWN },
+  save: { open: OWN, closed: OWN },
+  notif: { open: OWN, closed: OWN },
+};
 
-function spaceIdOf(r: StoredRecord): string | null {
-  switch (r.kind) {
-    case "space":
-      return r.id;
-    case "thread":
-    case "followup":
-    case "reply":
-    case "run":
-      return r.s;
-    case "member":
-    case "report":
-    case "request":
-    case "ban":
-    case "invite":
-      return r.sp;
-    default:
-      return null;
-  }
-}
+/** The person a record belongs to, for `own` cells and for user logs. */
+const OWNER: Record<Kind, ((r: never) => string) | null> = {
+  space: null,
+  stats: null,
+  thread: null,
+  followup: null,
+  reply: null,
+  run: null,
+  ban: null,
+  member: (r: { u: string }) => r.u,
+  request: (r: { u: string }) => r.u,
+  like: (r: { u: string }) => r.u,
+  save: (r: { u: string }) => r.u,
+  report: (r: { by: string }) => r.by,
+  invite: (r: { by: string }) => r.by,
+  notif: (r: { to: string }) => r.to,
+};
 
-/** The text of a moderated item is taken out. */
-export function redacted(r: StoredRecord): StoredRecord {
-  if (r.kind === "thread" && r.mod) return { ...r, q: "", t: null, sum: null };
-  if (r.kind === "followup" && r.mod) return { ...r, q: "", a: null };
-  if (r.kind === "reply" && r.mod) return { ...r, t: "" };
-  return r;
-}
+/** The space a record belongs to. */
+const SPACE: Record<Kind, ((r: never) => string) | null> = {
+  space: (r: { id: string }) => r.id,
+  stats: (r: { sp: string }) => r.sp,
+  thread: (r: { s: string }) => r.s,
+  followup: (r: { s: string }) => r.s,
+  reply: (r: { s: string }) => r.s,
+  run: (r: { s: string }) => r.s,
+  member: (r: { sp: string }) => r.sp,
+  request: (r: { sp: string }) => r.sp,
+  report: (r: { sp: string }) => r.sp,
+  ban: (r: { sp: string }) => r.sp,
+  invite: (r: { sp: string }) => r.sp,
+  like: null,
+  save: null,
+  notif: null,
+};
+
+/** Which logs hold a kind: its space's log, and the user log of its person. */
+const IN_SPACE_LOG: ReadonlySet<Kind> = new Set<Kind>([
+  "space",
+  "stats",
+  "thread",
+  "followup",
+  "reply",
+  "run",
+  "member",
+  "request",
+  "report",
+  "ban",
+  "invite",
+]);
+const IN_USER_LOG: ReadonlySet<Kind> = new Set<Kind>([
+  "member",
+  "request",
+  "report",
+  "like",
+  "save",
+  "notif",
+]);
+
+/** The text of a moderated item, by state, for its author, the space's
+ * staff, and everyone else: the owner's decision of 0b ("hidden text is
+ * served to its author and to the space's moderators") and "removed: the text
+ * is erased". `text` is the stored text, `blank` the placeholder. */
+const TEXT: Record<
+  "none" | "hidden" | "removed",
+  Record<"author" | "staff" | "other", "text" | "blank">
+> = {
+  none: { author: "text", staff: "text", other: "text" },
+  hidden: { author: "text", staff: "text", other: "blank" },
+  removed: { author: "blank", staff: "blank", other: "blank" },
+};
+
+const ownerOf = (r: StoredRecord) => {
+  const f = OWNER[r.kind];
+  return f ? (f as (x: StoredRecord) => string)(r) : null;
+};
+const spaceOfRec = (r: StoredRecord) => {
+  const f = SPACE[r.kind];
+  return f ? (f as (x: StoredRecord) => string)(r) : null;
+};
 
 export function roleOf(dump: Dump, sp: string, u: string | null): string | null {
   if (u === null) return null;
@@ -71,47 +151,53 @@ export function roleOf(dump: Dump, sp: string, u: string | null): string | null 
   return m?.kind === "member" ? m.role : null;
 }
 
-/** Whether `reader` may read `r` (before redaction). */
-export function mayRead(dump: Dump, r: StoredRecord, reader: string | null): boolean {
-  const own = reader !== null && ownerOf(r) === reader;
-  const sp = spaceIdOf(r);
-  if (sp === null) return own;
+export function placeOf(dump: Dump, sp: string, u: string | null): Place {
+  if (u === null) return "anon";
+  const role = roleOf(dump, sp, u);
+  return role === null ? "outsider" : role === "member" ? "member" : "staff";
+}
+
+export function isClosedSpace(dump: Dump, sp: string): boolean {
   const s = dump.get(`space:${sp}`);
-  if (s?.kind !== "space") return false;
-  const role = roleOf(dump, sp, reader);
-  const reads = s.vis === "open" || role !== null;
-  const staff = role !== null && STAFF.has(role);
-  switch (r.kind) {
-    case "space":
-      return true;
-    case "member":
-      return reads || own;
-    case "reply":
-      return reads;
-    case "thread":
-    case "followup":
-    case "run":
-      return reads || (reader !== null && r.u === reader);
-    case "report":
-    case "request":
-      return staff || own;
-    case "ban":
-      return staff;
-    case "invite":
-      return staff || (reader !== null && r.by === reader && role !== null);
-    default:
-      return false;
-  }
+  return s?.kind === "space" && s.vis !== "open";
+}
+
+/** Whether `reader` may read `r` (before its text is decided). */
+export function mayRead(dump: Dump, r: StoredRecord, reader: string | null): boolean {
+  const sp = spaceOfRec(r);
+  if (sp !== null && dump.get(`space:${sp}`)?.kind !== "space") return false;
+  const rule = READ[r.kind][sp !== null && isClosedSpace(dump, sp) ? "closed" : "open"];
+  const cell =
+    rule[sp === null ? (reader === null ? "anon" : "outsider") : placeOf(dump, sp, reader)];
+  return cell === "all" || (cell === "own" && reader !== null && ownerOf(r) === reader);
+}
+
+/** A record as `reader` gets it: moderated text decided by `TEXT`. */
+export function shown(dump: Dump, r: StoredRecord, reader: string | null): StoredRecord {
+  if (r.kind !== "thread" && r.kind !== "followup" && r.kind !== "reply") return r;
+  const who =
+    reader !== null && r.u === reader
+      ? "author"
+      : placeOf(dump, r.s, reader) === "staff"
+        ? "staff"
+        : "other";
+  if (TEXT[r.mod ?? "none"][who] === "text") return r;
+  if (r.kind === "thread") return { ...r, q: "", t: null, sum: null };
+  if (r.kind === "followup") return { ...r, q: "", a: null };
+  return { ...r, t: "" };
 }
 
 /** What `reader` may hold of `log` now. */
 export function expected(dump: Dump, reader: string | null, log: LogId): Map<string, StoredRecord> {
   const out = new Map<string, StoredRecord>();
   const [kind, id] = log.split(":") as ["space" | "user", string];
-  if (kind === "user" && reader !== id) return out;
+  if (kind === "user" && (reader === null || reader !== id)) return out;
   for (const [key, r] of dump) {
-    const inLog = kind === "user" ? ownerOf(r) === id : spaceIdOf(r) === id;
-    if (inLog && mayRead(dump, r, reader)) out.set(key, redacted(r));
+    const inLog =
+      kind === "user"
+        ? IN_USER_LOG.has(r.kind) && ownerOf(r) === id
+        : IN_SPACE_LOG.has(r.kind) && spaceOfRec(r) === id;
+    if (inLog && mayRead(dump, r, reader)) out.set(key, shown(dump, r, reader));
   }
   return out;
 }

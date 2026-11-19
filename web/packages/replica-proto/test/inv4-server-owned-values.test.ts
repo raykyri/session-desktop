@@ -6,9 +6,17 @@
 
 import test from "ava";
 
-import { deriveId, ulid, type InviteRec, type ThreadRec } from "../src/index.js";
+import {
+  ReplicaClient,
+  deriveId,
+  ulid,
+  ulidTime,
+  type ApplyResult,
+  type InviteRec,
+  type ThreadRec,
+} from "../src/index.js";
 
-import { DAY, MINUTE, World, cast, ok, refused, thread } from "./harness.js";
+import { DAY, MINUTE, World, actor, cast, ok, refused, thread } from "./harness.js";
 
 test("a duplicate id is the same CONFLICT for a readable and an unreadable record", async (t) => {
   const { w, open, closed } = await cast(t);
@@ -57,39 +65,144 @@ test("an id is never reused, even after its record was deleted", async (t) => {
 });
 
 test("a missing target and one the caller may not read answer the same", async (t) => {
-  const { w, closed } = await cast(t);
+  const { w, open, closed } = await cast(t);
   const hidden = await thread(t, w, "mel", closed, "ask");
+  const post = await thread(t, w, "mel", closed, "post");
+  const fu = w.id();
+  const top = w.id();
+  await ok(t, w.as("ada", "followups.ask", { id: fu, thread: hidden, q: "x" }));
+  await ok(t, w.as("ada", "research.createPostFollowUp", { id: top, thread: post, t: "x" }));
+  const openPost = await thread(t, w, "otto", open, "post");
   const missing = w.id();
   for (const [name, input] of [
     ["likes.set", (id: string) => ({ thread: id, on: true })],
-    ["saved.toggle", (id: string) => ({ kind: "thread", id })],
+    ["saved.set", (id: string) => ({ kind: "thread", id, on: true })],
     ["followups.ask", (id: string) => ({ id: w.id(), thread: id, q: "x" })],
     ["reports.create", (id: string) => ({ id: w.id(), item: `a:${id}`, why: "x" })],
-    ["threads.update", (id: string) => ({ id, q: "x" })],
+    ["threads.update", (id: string) => ({ id, q: "x", base: { rev: 1 } })],
     ["threads.delete", (id: string) => ({ id })],
+    ["moderation.decide", (id: string) => ({ item: `a:${id}`, decision: "hidden" })],
   ] as const) {
     const a = await refused(t, w.as("eve", name, input(hidden)), "NOT_FOUND");
     const b = await refused(t, w.as("eve", name, input(missing)), "NOT_FOUND");
     t.is(a, b, name);
   }
+  // follow-up and reply keys, for a report and a moderation decision: mona
+  // moderates the open space, not the closed one
+  for (const [name, who, input] of [
+    ["reports.create", "eve", (key: string) => ({ id: w.id(), item: key, why: "x" })],
+    ["moderation.decide", "eve", (key: string) => ({ item: key, decision: "hidden" })],
+    ["moderation.decide", "otto", (key: string) => ({ item: key, decision: "removed" })],
+  ] as const) {
+    const answers = new Set<string>();
+    for (const key of [
+      `f:${hidden}:${fu}`,
+      `f:${hidden}:${missing}`,
+      `f:${missing}:${fu}`,
+      `r:${post}:${top}`,
+      `r:${post}:${missing}`,
+      `r:${openPost}:${top}`,
+      `p:${hidden}`,
+      `a:${post}`,
+    ])
+      answers.add(await refused(t, w.as(who, name, input(key)), "NOT_FOUND"));
+    t.is(answers.size, 1, name);
+  }
+  // a reply's parent: one in a space the caller may not read, a missing one,
+  // and one under another thread answer the same
+  const parents = new Set<string>();
+  for (const parent of [top, missing])
+    parents.add(
+      await refused(
+        t,
+        w.as("eve", "research.createPostFollowUp", {
+          id: w.id(),
+          thread: openPost,
+          t: "x",
+          parent,
+        }),
+        "NOT_FOUND",
+      ),
+    );
+  t.is(parents.size, 1);
   // taking back a like you never gave answers ok whether or not the thread exists
   await ok(t, w.as("eve", "likes.set", { thread: hidden, on: false }));
   await ok(t, w.as("eve", "likes.set", { thread: missing, on: false }));
 });
 
-test("a client ULID older than 3 days or more than 1 minute ahead is refused", async (t) => {
-  const { w, open } = await cast(t);
+test("a client ULID older than 4 days or more than 1 minute ahead is refused, and nothing is recorded", async (t) => {
+  const { w, open, closed } = await cast(t);
   const at = (offset: number) => w.id(offset);
   const create = (id: string) =>
     w.as("mel", "threads.create", { id, space: open, kind: "post", q: "x" });
-  await refused(t, create(at(-3 * DAY - 1)), "BAD_REQUEST");
-  await refused(t, create(at(MINUTE + 1)), "BAD_REQUEST");
-  await refused(t, create(ulid(0, w.random)), "BAD_REQUEST");
-  await ok(t, create(at(-3 * DAY)));
+  const skew = async (res: Promise<ApplyResult>) => {
+    const r = await res;
+    t.is(r.ok ? null : r.error.code, "CLOCK_SKEW");
+    t.is(r.ok ? null : r.error.serverTime, w.clock.now());
+  };
+  await skew(create(at(-4 * DAY - 1)));
+  await skew(create(at(MINUTE + 1)));
+  await skew(create(ulid(0, w.random)));
+  await ok(t, create(at(-4 * DAY)));
   await ok(t, create(at(MINUTE)));
-  // the same window applies to the mutation id
-  await refused(t, w.as("mel", "spaces.join", { space: open }, at(-3 * DAY - 1)), "BAD_REQUEST");
-  await refused(t, w.as("mel", "spaces.join", { space: open }, at(MINUTE + 1)), "BAD_REQUEST");
+  // the same window applies to the mutation id, and to every id the input brings
+  await skew(w.as("mel", "spaces.join", { space: open }, at(-4 * DAY - 1)));
+  await skew(w.as("mel", "spaces.join", { space: open }, at(MINUTE + 1)));
+  const th = await thread(t, w, "mel", closed, "ask");
+  const post = await thread(t, w, "mel", closed, "post");
+  for (const [name, input] of [
+    ["followups.ask", { id: at(2 * MINUTE), thread: th, q: "x" }],
+    ["research.createPostFollowUp", { id: at(2 * MINUTE), thread: post, t: "x" }],
+    ["reports.create", { id: at(2 * MINUTE), item: `a:${th}`, why: "x" }],
+    ["invites.create", { id: at(2 * MINUTE), space: closed }],
+  ] as const)
+    await skew(w.as("mel", name, input));
+  // moderation.decide brings no new id; its mutation id is checked
+  await skew(
+    w.as("mona", "moderation.decide", { item: `a:${th}`, decision: "hidden" }, at(2 * MINUTE)),
+  );
+  t.is((w.get(`thread:${th}`) as ThreadRec).mod, null);
+});
+
+test("a fast clock is corrected from the server's time, and the write sent again succeeds", async (t) => {
+  // attack E of the phase 0 review: a refusal for an id 2 minutes ahead was
+  // stored, so the client could not send the write again
+  const { w, open } = await cast(t);
+  const fast = { now: () => w.clock.now() + 2 * MINUTE };
+  const mel = new ReplicaClient(w.server, actor("mel"), { clock: fast, random: w.random });
+  const id = mel.newId();
+  mel.queue("threads.create", { id, space: open, kind: "ask", q: "from a fast clock" });
+  mel.queue("followups.ask", { id: mel.newId(), thread: id, q: "and a follow-up" });
+  const results = await mel.flush();
+  t.deepEqual(
+    results.map((r) => (r.ok ? "ok" : r.error.code)),
+    ["ok", "ok"],
+  );
+  // the thread got a new id inside the window, and the follow-up names it
+  const made = [...w.server.dump().values()].filter(
+    (r): r is ThreadRec => r.kind === "thread" && r.q === "from a fast clock",
+  );
+  t.is(made.length, 1);
+  t.not(made[0]?.id, id);
+  t.true(Math.abs(ulidTime(made[0]?.id ?? "") - w.clock.now()) < MINUTE);
+  t.is(made[0]?.r, 1);
+  t.true(Math.abs(mel.now() - w.clock.now()) < 1000);
+  // the refusal was not recorded: the same envelope, sent unchanged once it is
+  // inside the window, is applied
+  const e = await w.envelope(
+    "otto",
+    "threads.create",
+    {
+      id: w.id(),
+      space: open,
+      kind: "post",
+      q: "x",
+    },
+    w.id(2 * MINUTE),
+  );
+  await refused(t, w.server.apply(actor("otto"), e), "CLOCK_SKEW");
+  w.clock.advance(5 * MINUTE);
+  await ok(t, w.server.apply(actor("otto"), e));
 });
 
 test("a malformed ULID is refused", async (t) => {
@@ -113,6 +226,7 @@ test("a malformed ULID is refused", async (t) => {
     );
     await refused(t, w.as("mel", "spaces.join", { space: open }, id), "BAD_REQUEST");
   }
+  t.is(w.get(`member:${open}:mel`)?.kind, "member");
 });
 
 test("space ids are ULIDs and names are unique, after normalization", async (t) => {
@@ -144,6 +258,17 @@ test("spaces.create is online only: the client never queues it", async (t) => {
   t.throws(() => c.queue("spaces.create", { id: c.newId(), name: "x" }));
   t.is(c.pending().length, 0);
   await ok(t, c.send("spaces.create", { id: c.newId(), name: "x" }));
+});
+
+test("the server refuses an online-only write that waited in an outbox", async (t) => {
+  const w = new World();
+  // a client that queues it anyway: its envelope is older than a minute when sent
+  const e = await w.envelope("eve", "spaces.create", { id: w.id(), name: "late" });
+  w.clock.advance(MINUTE + 1);
+  await refused(t, w.server.apply(actor("eve"), e), "PRECONDITION_FAILED");
+  t.is(w.server.dump().size, 0);
+  // a fresh one is applied
+  await ok(t, w.as("eve", "spaces.create", { id: w.id(), name: "late" }));
 });
 
 test("invite codes are made by the server: a client can neither choose nor predict one", async (t) => {

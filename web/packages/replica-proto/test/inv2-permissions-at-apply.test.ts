@@ -16,7 +16,15 @@ test("a moderator's hide, queued before a demotion, is refused after it", async 
   mona.queue("members.remove", { space: closed, user: "mel" });
   mona.queue("joinRequests.decide", { space: closed, users: ["mel"], decision: "decline" });
   w.clock.advance(HOUR);
-  await ok(t, w.as("olga", "members.setRole", { space: closed, user: "mona", role: "member" }));
+  await ok(
+    t,
+    w.as("olga", "members.setRole", {
+      space: closed,
+      user: "mona",
+      role: "member",
+      base: { role: "mod" },
+    }),
+  );
   const [hide, remove, decide] = await mona.flush();
   t.is(hide?.ok ? null : hide?.error.code, "FORBIDDEN");
   t.is(remove?.ok ? null : remove?.error.code, "FORBIDDEN");
@@ -73,12 +81,143 @@ test("a ban stops writes queued before it, in a closed and in an open space", as
   );
 });
 
+test("a ban stops every write in its space, the author's own included", async (t) => {
+  // attack A of the phase 0 review: a banned author kept editing, liking and
+  // deleting their thread in an open space
+  const { w, open, closed } = await cast(t);
+  const th = await thread(t, w, "otto", open, "post", "fine");
+  const ask = await thread(t, w, "otto", open, "ask", "fine");
+  const reply = w.id();
+  await ok(t, w.as("mel", "research.createPostFollowUp", { id: reply, thread: th, t: "hi" }));
+  await ok(t, w.as("otto", "likes.set", { thread: ask, on: true }));
+  await ok(t, w.as("otto", "saved.set", { kind: "thread", id: ask, on: true }));
+  const rev = w.get(`thread:${th}`)?.rev ?? 0;
+  await ok(t, w.as("mona", "members.ban", { space: open, user: "otto" }));
+  const before = JSON.stringify([...w.server.dump()]);
+  for (const [name, input] of [
+    ["threads.update", { id: th, q: "abuse after the ban", base: { rev } }],
+    ["threads.delete", { id: th }],
+    ["likes.set", { thread: th, on: true }],
+    ["likes.set", { thread: ask, on: false }],
+    ["saved.set", { kind: "thread", id: th, on: true }],
+    ["saved.set", { kind: "thread", id: ask, on: false }],
+    ["research.createPostFollowUp", { id: w.id(), thread: th, t: "abuse" }],
+    ["research.createPostFollowUp", { id: w.id(), thread: th, t: "abuse", parent: reply }],
+    ["followups.ask", { id: w.id(), thread: ask, q: "abuse" }],
+    ["reports.create", { id: w.id(), item: `p:${th}`, why: "abuse" }],
+    ["threads.create", { id: w.id(), space: open, kind: "post", q: "abuse" }],
+    ["spaces.join", { space: open }],
+    ["spaces.leave", { space: open }],
+  ] as const)
+    await refused(t, w.as("otto", name, input), "FORBIDDEN");
+  t.is(JSON.stringify([...w.server.dump()]), before);
+  t.is((w.get(`thread:${th}`) as ThreadRec).q, "fine");
+  // the same in a closed space, and a ban is per space: otto still writes elsewhere
+  await admit(t, w, closed, "otto");
+  const mine = await thread(t, w, "otto", closed, "post");
+  await ok(t, w.as("mona", "members.ban", { space: closed, user: "otto" }));
+  await refused(t, w.as("otto", "threads.delete", { id: mine }), "FORBIDDEN");
+  await refused(
+    t,
+    w.as("otto", "threads.update", { id: mine, q: "x", base: { rev: 1 } }),
+    "NOT_FOUND",
+  );
+  const vault = w.id();
+  await ok(t, w.as("otto", "spaces.create", { id: vault, name: "otto" }));
+  await thread(t, w, "otto", vault, "post");
+  // taking back a like or a save you do not have writes nothing and is not refused
+  await ok(t, w.as("otto", "likes.set", { thread: th, on: false }));
+  await ok(t, w.as("otto", "saved.set", { kind: "thread", id: th, on: false }));
+});
+
+test("a queued approval does not re-admit a person who was approved and then removed", async (t) => {
+  // attack N of the phase 0 review: the decision acted on a request that was
+  // no longer open
+  const { w, closed } = await cast(t);
+  await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
+  const mona = w.client("mona");
+  mona.queue("joinRequests.decide", { space: closed, users: ["otto"], decision: "approve" });
+  mona.queue("joinRequests.decide", { space: closed, users: ["otto"], decision: "decline" });
+  await ok(
+    t,
+    w.as("olga", "joinRequests.decide", { space: closed, users: ["otto"], decision: "approve" }),
+  );
+  await ok(t, w.as("olga", "members.remove", { space: closed, user: "otto" }));
+  const results = await mona.flush();
+  t.deepEqual(
+    results.map((r) => (r.ok ? "ok" : r.error.code)),
+    ["STALE", "STALE"],
+  );
+  t.is(w.get(`member:${closed}:otto`), undefined);
+  t.is(w.get(`request:${closed}:otto`)?.kind === "request" ? "approved" : null, "approved");
+  // reopening needs a declined request
+  await refused(
+    t,
+    w.as("mona", "joinRequests.decide", { space: closed, users: ["otto"], decision: "reopen" }),
+    "STALE",
+  );
+});
+
+test("a queued role change, show or hide, or edit acts only on the state it was made from", async (t) => {
+  const { w, closed } = await cast(t);
+  const th = await thread(t, w, "mel", closed, "post");
+  const rev = w.get(`thread:${th}`)?.rev ?? 0;
+  const ada = w.client("ada");
+  ada.queue("members.setRole", {
+    space: closed,
+    user: "mel",
+    role: "mod",
+    base: { role: "member" },
+  });
+  const mona = w.client("mona");
+  mona.queue("moderation.decide", { item: `p:${th}`, decision: "hidden" });
+  const mel = w.client("mel");
+  mel.queue("threads.update", { id: th, q: "laptop", base: { rev } });
+  // meanwhile: olga makes mel a moderator, then hides the thread; mel edits it from the phone
+  await ok(
+    t,
+    w.as("olga", "members.setRole", {
+      space: closed,
+      user: "mel",
+      role: "mod",
+      base: { role: "member" },
+    }),
+  );
+  await ok(t, w.as("olga", "moderation.decide", { item: `p:${th}`, decision: "hidden" }));
+  await ok(t, w.as("mel", "threads.update", { id: th, q: "phone", base: { rev: rev + 1 } }));
+  for (const c of [ada, mona, mel]) {
+    const [r] = await c.flush();
+    t.is(r?.ok ? "ok" : r?.error.code, "STALE", c.actor?.u);
+  }
+  t.is((w.get(`thread:${th}`) as ThreadRec).q, "phone");
+  // showing needs the item hidden
+  await ok(t, w.as("mona", "moderation.decide", { item: `p:${th}`, decision: "shown" }));
+  await refused(
+    t,
+    w.as("mona", "moderation.decide", { item: `p:${th}`, decision: "shown" }),
+    "STALE",
+  );
+});
+
 test("an admin's role change, queued before losing admin, is refused", async (t) => {
   const { w, closed } = await cast(t);
   const ada = w.client("ada");
-  ada.queue("members.setRole", { space: closed, user: "mel", role: "mod" });
+  ada.queue("members.setRole", {
+    space: closed,
+    user: "mel",
+    role: "mod",
+    base: { role: "member" },
+  });
   ada.queue("spaces.update", { id: closed, set: { vis: "open" } });
-  await ok(t, w.as("olga", "members.setRole", { space: closed, user: "ada", role: "member" }));
+  await ok(
+    t,
+    w.as("olga", "members.setRole", {
+      space: closed,
+      user: "ada",
+      role: "member",
+      base: { role: "admin" },
+    }),
+  );
   const results = await ada.flush();
   t.deepEqual(
     results.map((r) => (r.ok ? "ok" : r.error.code)),
@@ -109,6 +248,18 @@ test("an invite link works only while its maker may still make links", async (t)
   );
   t.is(used?.dead, "Used");
   t.is(used?.usedBy, "otto");
+});
+
+test("a link that stopped working when its maker lost the right works again once the maker has it back", async (t) => {
+  const { w, closed } = await cast(t);
+  const res = (await ok(t, w.as("mel", "invites.create", { id: w.id(), space: closed }))) as {
+    code: string;
+  };
+  await ok(t, w.as("mona", "members.remove", { space: closed, user: "mel" }));
+  await refused(t, w.as("otto", "spaces.join", { space: closed, invite: res.code }), "FORBIDDEN");
+  await admit(t, w, closed, "mel");
+  await ok(t, w.as("otto", "spaces.join", { space: closed, invite: res.code }));
+  t.truthy(w.get(`member:${closed}:otto`));
 });
 
 test("an approved request does not let a removed member back in", async (t) => {

@@ -64,18 +64,56 @@ export class World {
     return ulid(this.clock.now() + offset, this.random);
   }
 
-  envelope(name: string, input: unknown, mutationId = this.id()): Envelope {
-    return { mutationId, name, input, protocolVersion: PROTOCOL_VERSION };
+  /** The client id each person writes with in `as` and `envelope`. */
+  private readonly clientIds = new Map<string, string>();
+
+  /** `u`'s default client id, registered on first use; "" when the server
+   * registers none (a signed-out caller, a reserved handle). */
+  async clientId(u: string | null): Promise<string> {
+    if (u === null) return "";
+    const known = this.clientIds.get(u);
+    if (known !== undefined) return known;
+    const r = await this.server.register(actor(u));
+    const id = r.ok ? r.clientId : "";
+    if (r.ok) this.clientIds.set(u, id);
+    return id;
   }
 
-  /** Apply one write as `u` now. */
+  /** The next seq of `u`'s default client, as the server reports it, so a
+   * test may also send that client's envelopes with `server.apply`. */
+  async nextSeq(u: string | null, clientId: string): Promise<number> {
+    if (u === null || clientId === "") return 1;
+    const s = await this.server.snapshot(actor(u), `user:${u}`, { clientId });
+    return (s.lastSeq ?? 0) + 1;
+  }
+
+  /** An envelope from `u`'s default client, with its next seq. */
+  async envelope(
+    u: string | null,
+    name: string,
+    input: unknown,
+    mutationId = this.id(),
+  ): Promise<Envelope> {
+    const clientId = await this.clientId(u);
+    const seq = await this.nextSeq(u, clientId);
+    return { clientId, seq, mutationId, name, input, protocolVersion: PROTOCOL_VERSION };
+  }
+
+  /** Apply one write as `u` now, from `u`'s default client. */
   async as(
     u: string | null,
     name: string,
     input: unknown,
     mutationId?: string,
   ): Promise<ApplyResult> {
-    return this.server.apply(actor(u), this.envelope(name, input, mutationId));
+    return this.server.apply(actor(u), await this.envelope(u, name, input, mutationId));
+  }
+
+  /** Send an envelope again as `u` (a replay keeps its seq; `fresh` gives it
+   * the client's next one instead). */
+  async resend(u: string | null, e: Envelope, fresh = false): Promise<ApplyResult> {
+    const seq = fresh ? await this.nextSeq(u, e.clientId) : e.seq;
+    return this.server.apply(actor(u), { ...e, seq });
   }
 
   client(u: string | null): ReplicaClient {
@@ -141,10 +179,34 @@ export async function cast(t: ExecutionContext, seed = 1): Promise<Cast> {
     w.as("olga", "spaces.create", { id: vault, name: "vault", vis: "unlisted", policy: "invite" }),
   );
   for (const u of ["mona", "mel", "otto"]) await ok(t, w.as(u, "spaces.join", { space: open }));
-  await ok(t, w.as("olga", "members.setRole", { space: open, user: "mona", role: "mod" }));
+  await ok(
+    t,
+    w.as("olga", "members.setRole", {
+      space: open,
+      user: "mona",
+      role: "mod",
+      base: { role: "member" },
+    }),
+  );
   for (const u of ["ada", "mona", "mel"]) await admit(t, w, closed, u);
-  await ok(t, w.as("olga", "members.setRole", { space: closed, user: "ada", role: "admin" }));
-  await ok(t, w.as("olga", "members.setRole", { space: closed, user: "mona", role: "mod" }));
+  await ok(
+    t,
+    w.as("olga", "members.setRole", {
+      space: closed,
+      user: "ada",
+      role: "admin",
+      base: { role: "member" },
+    }),
+  );
+  await ok(
+    t,
+    w.as("olga", "members.setRole", {
+      space: closed,
+      user: "mona",
+      role: "mod",
+      base: { role: "member" },
+    }),
+  );
   return { w, open, closed, vault };
 }
 

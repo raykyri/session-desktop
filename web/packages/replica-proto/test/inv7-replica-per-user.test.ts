@@ -6,7 +6,7 @@ import test, { type ExecutionContext } from "ava";
 import type { Actor, LogId, Pull, ServerHalf, Snapshot, StoredRecord } from "../src/index.js";
 import { ReplicaClient } from "../src/index.js";
 
-import { admit, cast, ok, thread, type Cast } from "./harness.js";
+import { actor, admit, cast, ok, thread, type Cast } from "./harness.js";
 import { expected } from "./oracle.js";
 
 const PEOPLE = ["olga", "ada", "mona", "mel", "otto", "rita", "eve"];
@@ -29,7 +29,7 @@ async function activity(t: ExecutionContext, c: Cast) {
   await ok(t, w.as("mona", "members.ban", { space: open, user: "eve" }));
   for (const u of ["mona", "mel", "ada"])
     await ok(t, w.as(u, "likes.set", { thread: post, on: true }));
-  await ok(t, w.as("ada", "saved.toggle", { kind: "thread", id: post }));
+  await ok(t, w.as("ada", "saved.set", { kind: "thread", id: post, on: true }));
   await ok(t, w.as("mona", "moderation.decide", { item: `p:${post}`, decision: "hidden" }));
 }
 
@@ -85,14 +85,15 @@ test("a client reads only as its own actor", async (t) => {
   await activity(t, c);
   const seen: (string | null)[] = [];
   const spy: ServerHalf = {
+    register: (a: Actor | null) => (seen.push(a?.u ?? null), c.w.server.register(a)),
     apply: (a: Actor | null, e) => (seen.push(a?.u ?? null), c.w.server.apply(a, e)),
-    snapshot: (a: Actor | null, log, tier): Snapshot | Promise<Snapshot> => (
+    snapshot: (a: Actor | null, log, o): Snapshot | Promise<Snapshot> => (
       seen.push(a?.u ?? null),
-      c.w.server.snapshot(a, log, tier)
+      c.w.server.snapshot(a, log, o)
     ),
-    pull: (a: Actor | null, log, cursor): Pull | Promise<Pull> => (
+    pull: (a: Actor | null, log, cursor, o): Pull | Promise<Pull> => (
       seen.push(a?.u ?? null),
-      c.w.server.pull(a, log, cursor)
+      c.w.server.pull(a, log, cursor, o)
     ),
   };
   const mel = new ReplicaClient(spy, { u: "mel" }, { clock: c.w.clock, random: c.w.random });
@@ -102,4 +103,46 @@ test("a client reads only as its own actor", async (t) => {
   for (const log of allLogs(c)) await mel.sync(log);
   t.true(seen.length > 0);
   t.deepEqual([...new Set(seen)], ["mel"]);
+});
+
+test("an outbox queued by one person and flushed after another signs in on the device is refused", async (t) => {
+  const c = await cast(t);
+  const { w, open, closed } = c;
+  const th = await thread(t, w, "olga", closed, "post", "olga's");
+  // mel's device queues writes, then mel signs out before they are sent
+  const mel = w.client("mel");
+  await mel.register();
+  mel.queue("likes.set", { thread: th, on: true });
+  mel.queue("threads.create", { id: mel.newId(), space: closed, kind: "post", q: "as mel" });
+  mel.queue("spaces.leave", { space: open });
+  // otto signs in on the same device; the stored outbox and client id are restored
+  const otto = new ReplicaClient(
+    w.server,
+    { u: "otto" },
+    { clock: w.clock, random: w.random },
+    mel.state(),
+  );
+  const before = JSON.stringify([...w.server.dump()]);
+  const results = await otto.flush();
+  t.deepEqual(
+    results.map((r) => (r.ok ? "ok" : r.error.code)),
+    ["WRONG_CLIENT"],
+  );
+  t.is(otto.pending().length, 3);
+  t.is(JSON.stringify([...w.server.dump()]), before);
+  // the refusal recorded nothing: mel's own device still sends them, in order
+  const back = new ReplicaClient(
+    w.server,
+    { u: "mel" },
+    { clock: w.clock, random: w.random },
+    mel.state(),
+  );
+  t.deepEqual(
+    (await back.flush()).map((r) => (r.ok ? "ok" : r.error.code)),
+    ["ok", "ok", "ok"],
+  );
+  // and otto's reads with mel's client id carry nothing of mel's
+  const s = await w.server.snapshot(actor("otto"), "user:mel", { clientId: mel.clientId ?? "" });
+  t.deepEqual(s.records, []);
+  t.is(s.lastSeq, null);
 });

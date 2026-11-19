@@ -1,7 +1,7 @@
-// The server half's interface: what a client sends (`apply`) and reads
-// (`snapshot`, `pull`). The adversarial suite in `test/` is written against
-// these types and `TestServer` only, so a later `@session/sync` server half
-// can run the same suite by providing a `ServerFactory`.
+// The server half's interface: what a client sends (`register`, `apply`) and
+// reads (`snapshot`, `pull`). The adversarial suite in `test/` is written
+// against these types and `TestServer` only, so a later `@session/sync` server
+// half can run the same suite by providing a `ServerFactory`.
 //
 // Everything is synchronous in this prototype; the suite awaits every call,
 // so an implementation may return promises (`Awaitable`).
@@ -18,30 +18,71 @@ export interface Actor {
 }
 
 /** The protocol version this prototype speaks, and the lowest it accepts. */
-export const PROTOCOL_VERSION = 1;
-export const MIN_PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
+export const MIN_PROTOCOL_VERSION = 2;
 
-/** One outbox entry as the client sends it: a mutator's name and input. There
- * is no field for client-computed changes; an envelope with any other field is
- * refused. */
+/** One outbox entry as the client sends it: a mutator's name and input, the
+ * client that queued it and its place in that client's outbox. There is no
+ * field for client-computed changes; an envelope with any other field is
+ * refused.
+ *
+ * `clientId` comes from `register` and is bound to one user. `seq` numbers a
+ * client's writes 1, 2, 3, … in outbox order; the server applies a client's
+ * writes only in that order, without gaps. */
 export interface Envelope {
+  clientId: string;
+  seq: number;
   mutationId: string;
   name: string;
   input: unknown;
   protocolVersion: number;
 }
 
-export type ErrorCode = Spaces.SpaceErrorCode;
+/** The spaces API's codes, and the ones the sync protocol adds:
+ * - `UPGRADE_REQUIRED`: the client's protocol version is below the minimum
+ *   ("Update Session").
+ * - `STALE`: the record the write acts on is no longer in the state the
+ *   client saw (a request already decided, a role already changed, a thread
+ *   edited since its `base.rev`).
+ * - `CLOCK_SKEW`: an id's time is outside the accepted window. Not recorded;
+ *   the error carries `serverTime`, and the client retries with new ids.
+ * - `OUT_OF_ORDER`: `seq` is not the client's next one. Not recorded.
+ * - `WRONG_CLIENT`: the client id is unknown or bound to another user. Not
+ *   recorded. */
+export type ErrorCode =
+  | Spaces.SpaceErrorCode
+  | "UPGRADE_REQUIRED"
+  | "STALE"
+  | "CLOCK_SKEW"
+  | "OUT_OF_ORDER"
+  | "WRONG_CLIENT";
+
+/** The answers that record nothing: the envelope's `seq` is not used up, and
+ * the same `seq` may be sent again. Every other answer, applied or refused,
+ * uses up the `seq` and is stored under (user, mutation id) for 7 days. A
+ * BAD_REQUEST for a malformed envelope records nothing either (it has no
+ * usable `seq`). */
+export const UNRECORDED: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
+  "UPGRADE_REQUIRED",
+  "UNAUTHORIZED",
+  "WRONG_CLIENT",
+  "OUT_OF_ORDER",
+  "CLOCK_SKEW",
+]);
 
 /** An error answer. `message` is fixed per code and cause, so two answers
- * with the same cause are byte-identical. */
+ * with the same cause are byte-identical. `serverTime` (milliseconds since
+ * the epoch) comes with CLOCK_SKEW. */
 export interface ApiError {
   code: ErrorCode;
   message: string;
   issues?: string[];
+  serverTime?: number;
 }
 
 export type ApplyResult = { ok: true; result: unknown } | { ok: false; error: ApiError };
+
+export type RegisterResult = { ok: true; clientId: string } | { ok: false; error: ApiError };
 
 /** Where a replica of one log stands. `version` is a position in the server's
  * single version sequence; `epoch` changes when the log's history is replaced
@@ -57,12 +98,23 @@ export type Change = { key: string; op: "put"; record: StoredRecord } | { key: s
  * without follow-ups and replies). Pulls are not tiered in this prototype. */
 export type Tier = "full" | "summary";
 
+export interface ReadOptions {
+  tier?: Tier;
+  /** The reading client: its last processed `seq` comes back as `lastSeq`. */
+  clientId?: string;
+}
+
+/** The last `seq` the server processed (applied or refused, recorded) for the
+ * reading client; 0 before its first. Null when no client id was given, or
+ * the client id is not the caller's. */
+export type LastSeq = number | null;
+
 export interface Snapshot {
+  /** In order of the server's `createdAt`, then key. */
   records: { key: string; record: StoredRecord }[];
   version: number;
   epoch: string;
-  /** Prototype addition: the caller's last processed mutation id, as in a pull. */
-  lastMutationId: string | null;
+  lastSeq: LastSeq;
 }
 
 export type Pull =
@@ -70,16 +122,16 @@ export type Pull =
       changes: Change[];
       version: number;
       epoch: string;
-      /** The last mutation id the server processed for the caller (applied or
-       * refused), or null. */
-      lastMutationId: string | null;
+      lastSeq: LastSeq;
     }
   | { resync: true };
 
 export interface ServerHalf {
+  /** A new client id, bound to the caller. */
+  register(actor: Actor | null): Awaitable<RegisterResult>;
   apply(actor: Actor | null, envelope: Envelope): Awaitable<ApplyResult>;
-  snapshot(actor: Actor | null, log: LogId, tier?: Tier): Awaitable<Snapshot>;
-  pull(actor: Actor | null, log: LogId, cursor: Cursor): Awaitable<Pull>;
+  snapshot(actor: Actor | null, log: LogId, options?: ReadOptions): Awaitable<Snapshot>;
+  pull(actor: Actor | null, log: LogId, cursor: Cursor, options?: ReadOptions): Awaitable<Pull>;
 }
 
 /** One change-log row. Rows hold no record content. */
@@ -90,8 +142,8 @@ export interface LogRow {
 }
 
 /** Test-only access the suite needs besides the API: the stored records (the
- * oracle filters them by its own read rules), a log's rows, and the post-commit
- * jobs the server started. */
+ * oracles read them as facts), a log's rows, and the post-commit jobs the
+ * server started. */
 export interface TestServer extends ServerHalf {
   dump(): ReadonlyMap<string, StoredRecord>;
   logRows(log: LogId): Awaitable<LogRow[]>;
@@ -105,7 +157,7 @@ export interface Clock {
 
 export interface ServerOptions {
   clock: Clock;
-  /** The server's random source (invite codes, server-made ids). */
+  /** The server's random source (invite codes, client ids, server-made ids). */
   random?: () => number;
 }
 

@@ -14,12 +14,22 @@ test("a write the actor's role forbids is refused and changes nothing", async (t
   // mel is a plain member: admins change roles, moderators remove people
   await refused(
     t,
-    w.as("mel", "members.setRole", { space: closed, user: "mel", role: "owner" }),
+    w.as("mel", "members.setRole", {
+      space: closed,
+      user: "mel",
+      role: "owner",
+      base: { role: "member" },
+    }),
     "FORBIDDEN",
   );
   await refused(
     t,
-    w.as("mel", "members.setRole", { space: closed, user: "mona", role: "member" }),
+    w.as("mel", "members.setRole", {
+      space: closed,
+      user: "mona",
+      role: "member",
+      base: { role: "mod" },
+    }),
     "FORBIDDEN",
   );
   await refused(t, w.as("mel", "members.remove", { space: closed, user: "mona" }), "FORBIDDEN");
@@ -28,7 +38,12 @@ test("a write the actor's role forbids is refused and changes nothing", async (t
   await refused(t, w.as("mona", "members.remove", { space: closed, user: "ada" }), "FORBIDDEN");
   await refused(
     t,
-    w.as("ada", "members.setRole", { space: closed, user: "mel", role: "owner" }),
+    w.as("ada", "members.setRole", {
+      space: closed,
+      user: "mel",
+      role: "owner",
+      base: { role: "member" },
+    }),
     "FORBIDDEN",
   );
   // nobody outside the space writes in it
@@ -100,7 +115,12 @@ test("the server writes the author, the counts and the time from its own state",
 test("an envelope that carries changes or other extra fields is refused", async (t) => {
   const { w, open } = await cast(t);
   const env = {
-    ...w.envelope("threads.create", { id: w.id(), space: open, kind: "post", q: "x" }),
+    ...(await w.envelope("eve", "threads.create", {
+      id: w.id(),
+      space: open,
+      kind: "post",
+      q: "x",
+    })),
     changes: [{ key: `space:${open}`, op: "put", record: { members: 999 } }],
   };
   const r = await w.server.apply(actor("eve"), env);
@@ -132,12 +152,39 @@ test("a malformed or missing input is refused", async (t) => {
 test("a signed-out caller and an old protocol version are refused", async (t) => {
   const { w, open } = await cast(t);
   await refused(t, w.as(null, "spaces.join", { space: open }), "UNAUTHORIZED");
-  const r = await w.server.apply(actor("eve"), {
-    ...w.envelope("spaces.join", { space: open }),
+  const old = {
+    ...(await w.envelope("eve", "spaces.join", { space: open })),
     protocolVersion: PROTOCOL_VERSION - 1,
-  });
-  t.false(r.ok);
+  };
+  // "Update Session" has its own code, apart from a refusal on the item's state
+  await refused(t, w.server.apply(actor("eve"), old), "UPGRADE_REQUIRED");
   t.is(w.server.dump().get(`member:${open}:eve`), undefined);
+  // nothing was recorded: the same seq and mutation id work once the client is current
+  await ok(t, w.server.apply(actor("eve"), { ...old, protocolVersion: PROTOCOL_VERSION }));
+});
+
+test("the handles null and undefined are reserved, and a signed-out caller has no user log", async (t) => {
+  const { w, open } = await cast(t);
+  for (const u of ["null", "undefined"]) {
+    await refused(t, w.as(u, "spaces.join", { space: open }), "UNAUTHORIZED");
+    t.false((await w.server.register(actor(u))).ok);
+    await refused(
+      t,
+      w.as("olga", "members.setRole", {
+        space: open,
+        user: u,
+        role: "mod",
+        base: { role: "member" },
+      }),
+      "BAD_REQUEST",
+    );
+  }
+  t.false([...w.server.dump().keys()].some((k) => k.endsWith(":null") || k.endsWith(":undefined")));
+  for (const log of ["user:null", "user:undefined"] as const) {
+    t.deepEqual((await w.server.snapshot(null, log)).records, []);
+    const p = await w.server.pull(null, log, { epoch: "e0", version: 0 });
+    t.deepEqual("resync" in p ? null : p.changes, []);
+  }
 });
 
 test("mutators read no clock, no random source and no Intl while the server applies them", async (t) => {
@@ -173,11 +220,12 @@ test("mutators read no clock, no random source and no Intl while the server appl
     await ok(t, w.as("mel", "threads.create", { id: post, space: open, kind: "post", q: "P" }));
     await ok(t, w.as("otto", "research.createPostFollowUp", { id: rep, thread: post, t: "R" }));
     await ok(t, w.as("otto", "likes.set", { thread: post, on: true }));
-    await ok(t, w.as("otto", "saved.toggle", { kind: "thread", id: post }));
+    await ok(t, w.as("otto", "saved.set", { kind: "thread", id: post, on: true }));
+    const rev = (w.get(`thread:${th}`) as ThreadRec).rev;
     await ok(t, w.as("mel", "invites.create", { id: w.id(), space: closed, days: 3 }));
     await ok(t, w.as("mel", "reports.create", { id: w.id(), item: `p:${post}`, why: "spam" }));
     await ok(t, w.as("mona", "moderation.decide", { item: `p:${post}`, decision: "hidden" }));
-    await ok(t, w.as("mel", "threads.update", { id: th, q: "Q2" }));
+    await ok(t, w.as("mel", "threads.update", { id: th, q: "Q2", base: { rev } }));
     await ok(
       t,
       w.as("ada", "spaces.update", {

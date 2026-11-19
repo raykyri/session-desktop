@@ -9,9 +9,16 @@
 //    `tx.id(ordinal)`. `run` writes the stored shape, counts included.
 // 3. `post` (server only, after the commit): notifications and jobs.
 //
-// `who` names the role the actor needs (the mock's `who`), in the space that
-// `space(tx, input)` returns. A target the actor may not read is NOT_FOUND,
-// with the same answer as a target that does not exist.
+// `space(tx, input)` names the space the write acts in, reading the target
+// (NOT_FOUND when it does not exist or the actor may not read it, with one
+// answer for both), or null when the write touches no space. In that space,
+// `authorize` refuses a banned person every write, then checks `who`, the
+// role the actor needs (the mock's `who`).
+//
+// A write that acts on another record's state refuses with STALE when that
+// record is not in the state the write expects: a request that is no longer
+// open, a member whose role is not `base.role`, a thread whose rev is not
+// `base.rev`, a moderation state the decision cannot follow.
 //
 // Input schemas are strict: a field the schema does not list (`likes`, `u`,
 // `createdAt`, `code`) is BAD_REQUEST, never stored.
@@ -26,19 +33,19 @@ import {
   isClosed,
   isModOf,
   rankIn,
-  readsSpace,
   roleIn,
   spaceRec,
   type Reader,
 } from "./access.js";
 import type { ApiError, ErrorCode } from "./contract.js";
 import {
+  banKey,
+  likeKey,
   memberKey,
   requestKey,
-  threadKey,
-  likeKey,
   saveKey,
-  banKey,
+  statsKey,
+  threadKey,
   type Draft,
   type FollowUpRec,
   type Kind,
@@ -49,11 +56,11 @@ import {
   type SpaceRole,
   type ThreadRec,
 } from "./records.js";
-import { DAY } from "./ulid.js";
+import { DAY, ULID_RE } from "./ulid.js";
 
 // ---- errors ----
 
-/** The mock's default messages (section 2). */
+/** The mock's default messages (section 2), and the sync protocol's. */
 export const MESSAGES: Record<ErrorCode, string> = {
   BAD_REQUEST: "The server didn’t accept this change: some of its data is missing or not valid.",
   UNAUTHORIZED: "Your sign-in expired. Sign in again.",
@@ -65,6 +72,11 @@ export const MESSAGES: Record<ErrorCode, string> = {
   TOO_MANY_REQUESTS: "Too many requests from your account. Try again in a minute.",
   INTERNAL_SERVER_ERROR: "The server had an error and didn’t save the change.",
   SERVICE_UNAVAILABLE: "The server is unavailable.",
+  UPGRADE_REQUIRED: "Update Session.",
+  STALE: "This item changed after you saw it. Look at it again.",
+  CLOCK_SKEW: "Your device’s clock is off.",
+  OUT_OF_ORDER: "This change arrived out of order.",
+  WRONG_CLIENT: "This device isn’t signed in to your account.",
 };
 
 /** A refusal: a mutator stage throws it, and nothing the mutation wrote is kept. */
@@ -89,6 +101,8 @@ const bad = (path: string, expected: string) =>
   refuse("BAD_REQUEST", undefined, [`input.${path}: expected ${expected}`]);
 /** The one answer for a missing target and for a target the actor may not read. */
 const notFound = () => refuse("NOT_FOUND");
+const stale = () => refuse("STALE");
+const removed = () => refuse("PRECONDITION_FAILED", "This item was removed.");
 
 // ---- the transaction and the stage contexts ----
 
@@ -101,7 +115,8 @@ export interface Tx extends Reader {
   find<K extends Kind>(kind: K, pred?: (r: RecordOf<K>) => boolean): RecordOf<K>[];
   /** Write a new record. CONFLICT when its id was ever used, or its key exists. */
   create(r: Draft): void;
-  /** Write a record, new or replacing the one at its key. */
+  /** Write a record, new or replacing the one at its key. Replacing never
+   * changes the record's audience fields (`audienceOf`). */
   put(r: Draft): void;
   del(key: string): void;
   /** The mutation's id at `ordinal` (1, 2, …): see `deriveId`. */
@@ -127,12 +142,13 @@ export type Who = "user" | "member" | "moderator" | "admin" | "owner" | "author"
 
 export interface MutatorDef<I> {
   input: z.ZodType<I>;
-  /** Online only: the client sends it directly and never queues it. */
+  /** Online only: the client sends it directly and never queues it. The
+   * server refuses one whose mutation id is older than `ONLINE_MAX_AGE`. */
   online?: boolean;
   who: Who;
-  /** The space whose role `who` names. Reads the target, NOT_FOUND when the
-   * actor may not read it. */
-  space?: (tx: Tx, i: I) => string;
+  /** The space the write acts in, or null. Reads the target: NOT_FOUND when
+   * the actor may not read it. */
+  space?: (tx: Tx, i: I) => string | null;
   /** The client-made ids in the input, checked against the time window. */
   ids?: (i: I) => string[];
   pre?: (ctx: PreCtx, i: I) => ServerValues;
@@ -145,33 +161,43 @@ export type AnyMutator = MutatorDef<unknown>;
 
 const define = <I>(def: MutatorDef<I>) => def as unknown as AnyMutator;
 
-/** The `who` check and `can` (the mock's `authorize`). */
+/** The ban check, the `who` check and `can` (the mock's `authorize`). */
 export function authorize(tx: Tx, def: AnyMutator, input: unknown): void {
-  const who = def.who;
-  if (who !== "user" && who !== "author") {
-    if (!def.space) throw refuse("INTERNAL_SERVER_ERROR");
-    const sp = def.space(tx, input);
+  const sp = def.space?.(tx, input) ?? null;
+  if (sp !== null) {
     const s = spaceRec(tx, sp);
     if (!s) throw notFound();
+    // DESIGN (phase 0 finding): the mock lets anyone signed in write in an
+    // open space, a banned person included (its bans only stop joining a
+    // closed space). A ban stops every write in its space here, the author's
+    // edits and deletes and a person's own likes and saves included.
+    if (bannedFrom(tx, sp, tx.me)) throw refuse("FORBIDDEN", "You are banned from this space.");
+    const who = def.who;
     if (who === "member") {
-      // DESIGN (phase 0 finding): the mock lets anyone signed in write in an
-      // open space, a banned person included (its bans only stop joining a
-      // closed space). A ban stops writes in any space here.
-      if (bannedFrom(tx, sp, tx.me)) throw refuse("FORBIDDEN");
       if (isClosed(s) && roleIn(tx, sp, tx.me) === null) throw refuse("FORBIDDEN");
-    } else {
+    } else if (who !== "user" && who !== "author") {
       const need = who === "moderator" ? RANK.mod : RANK[who];
       if (rankIn(tx, sp, tx.me) < need) throw refuse("FORBIDDEN");
     }
+  } else if (def.who !== "user" && def.who !== "author") {
+    throw refuse("INTERNAL_SERVER_ERROR");
   }
   def.can?.(tx, input);
 }
 
 // ---- shared rules ----
 
-const ulidS = spaces.spaceUlidSchema;
+/** The shared id schema, narrowed to ULIDs whose time fits 48 bits. */
+const ulidS = spaces.spaceUlidSchema.regex(ULID_RE);
+/** Handles no person may have: a signed-out caller's absent handle prints as
+ * one of them, so a key or log id built from it never names a person. */
+export const RESERVED_HANDLES: ReadonlySet<string> = new Set(["null", "undefined"]);
 /** A handle as used in keys (`member:<space>:<handle>`): no ":". */
-export const handleS = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/);
+export const handleS = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9._-]{0,63}$/)
+  .refine((h) => !RESERVED_HANDLES.has(h), "reserved");
+export const isHandle = (u: string) => handleS.safeParse(u).success;
 const count = z.number().int().nonnegative();
 
 const text = (v: string, path: string) => {
@@ -206,14 +232,6 @@ function needSpace(tx: Tx, sp: string): SpaceRec {
   return s;
 }
 
-/** The mock's `ownThread`: the author, who can still read the thread's space. */
-function ownThread(tx: Tx, id: string): ThreadRec {
-  const p = readableThread(tx, id);
-  if (!readsSpace(tx, p.s, tx.me)) throw refuse("FORBIDDEN");
-  if (p.u !== tx.me) throw refuse("FORBIDDEN", "Only the person who wrote this can change it.");
-  return p;
-}
-
 /** The staff list (the space's `mods`) from its member records: by rank, then handle. */
 function staffOf(tx: Tx, sp: string): [string, SpaceRole][] {
   return tx
@@ -222,11 +240,11 @@ function staffOf(tx: Tx, sp: string): [string, SpaceRole][] {
     .map((m) => [m.u, m.role]);
 }
 
-/** Write a space's stored counts and staff list after its member records changed. */
+/** Write a space's stored member count and staff list after its member records changed. */
 function refreshSpace(tx: Tx, sp: string): void {
   const s = needSpace(tx, sp);
   const members = tx.find("member", (m) => m.sp === sp).length;
-  tx.put({ ...s, members, mods: staffOf(tx, sp), updatedAt: tx.now });
+  tx.put({ ...s, members, mods: staffOf(tx, sp) });
 }
 
 function addMember(tx: Tx, sp: string, u: string, role: SpaceRole): void {
@@ -278,6 +296,37 @@ function itemOf(tx: Tx, key: string): ThreadRec | FollowUpRec | ReplyRec {
   throw notFound();
 }
 
+/** Remove a moderated item for good: its text is erased from storage, and so
+ * is everything under it (a thread's follow-ups, answers, runs and replies; a
+ * top-level reply's replies). The item stays as a placeholder. */
+function erase(tx: Tx, r: ThreadRec | FollowUpRec | ReplyRec): void {
+  switch (r.kind) {
+    case "thread":
+      for (const x of tx.find("followup", (y) => y.th === r.id)) tx.del(`followup:${x.id}`);
+      for (const x of tx.find("reply", (y) => y.th === r.id)) tx.del(`reply:${x.id}`);
+      for (const x of tx.find("run", (y) => y.th === r.id)) tx.del(`run:${x.id}`);
+      tx.put({
+        ...r,
+        q: "",
+        t: null,
+        sum: null,
+        r: 0,
+        running: false,
+        mod: "removed",
+        updatedAt: tx.now,
+      });
+      return;
+    case "followup":
+      tx.put({ ...r, q: "", a: null, mod: "removed" });
+      return;
+    case "reply":
+      if (r.parent === null)
+        for (const x of tx.find("reply", (y) => y.parent === r.id)) tx.del(`reply:${x.id}`);
+      tx.put({ ...r, t: "", mod: "removed" });
+      return;
+  }
+}
+
 // ---- input schemas: the shared schemas, with the first id and strict ----
 
 const settingsS = spaces.spaceSettingsSchema
@@ -297,6 +346,16 @@ const settingsS = spaces.spaceSettingsSchema
 const normQs = (qs: { q: string; req?: boolean | undefined }[]) =>
   qs.filter((q) => q.q.trim()).map((q) => ({ q: q.q.trim(), req: q.req === true }));
 const normRules = (rules: string[]) => rules.map((r) => r.trim()).filter(Boolean);
+
+/** The space of the thread a like or save names, for taking one back: null
+ * when the person has none (nothing is written), so taking back a like or a
+ * save needs no read access and answers the same whether or not the thread
+ * exists. */
+function ownMarkSpace(tx: Tx, key: string, thread: string): string | null {
+  if (!tx.get(key)) return null;
+  const p = tx.get(threadKey(thread));
+  return p?.kind === "thread" ? p.s : null;
+}
 
 // ---- the mutators ----
 
@@ -329,11 +388,10 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         qs: closed ? normQs(i.qs ?? []) : [],
         postsOff: false,
         members: 1,
-        posts: 0,
         mods: [[tx.me, "owner"]],
         createdAt: tx.now,
-        updatedAt: tx.now,
       });
+      tx.put({ kind: "stats", sp: i.id, posts: 0, updatedAt: tx.now });
       addMember(tx, i.id, tx.me, "owner");
       return { id: i.id };
     },
@@ -376,7 +434,6 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         invite: closed ? (set.invite ?? s0.invite ?? "mods") : null,
         qs: closed ? (set.qs ? normQs(set.qs) : s0.qs) : [],
         postsOff: set.postsOff ?? s0.postsOff,
-        updatedAt: tx.now,
       });
       // a closed space that becomes open: the open requests are approved
       if (isClosed(s0) && !closed) {
@@ -393,10 +450,10 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
   "spaces.join": define({
     input: z.strictObject({ space: ulidS, invite: z.string().optional() }),
     who: "user",
+    space: (_tx, i) => i.space,
     can: (tx, i) => {
       const s = needSpace(tx, i.space);
       if (roleIn(tx, s.id, tx.me)) return;
-      if (bannedFrom(tx, s.id, tx.me)) throw refuse("FORBIDDEN");
       if (!isClosed(s)) return;
       // DESIGN (phase 0 finding): the mock also admits a person whose join
       // request was approved. Here approval makes the member record directly
@@ -409,8 +466,10 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         );
       const link = tx.find("invite", (l) => l.code === i.invite)[0];
       // DESIGN (phase 0 finding): a link carries its maker's authority, so it
-      // works only while the maker may still make links (checked now, at
-      // apply time). The mock keeps a removed member's links working.
+      // works only while the maker may make links (checked now, at apply
+      // time). A link that stopped working because its maker lost that right
+      // works again once the maker has it again. The mock keeps a removed
+      // member's links working.
       const live =
         link !== undefined &&
         link.sp === s.id &&
@@ -489,7 +548,8 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         createdAt: tx.now,
         updatedAt: tx.now,
       });
-      tx.put({ ...s, posts: s.posts + 1, updatedAt: tx.now });
+      const stats = tx.get(statsKey(s.id));
+      if (stats?.kind === "stats") tx.put({ ...stats, posts: stats.posts + 1, updatedAt: tx.now });
       if (!ask) return { id: i.id, run: null };
       const run = tx.id(1);
       tx.create({
@@ -512,12 +572,21 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
   }),
 
   "threads.update": define({
-    input: spaces.updateThreadInputSchema.pick({ id: true, q: true }).strict(),
+    input: spaces.updateThreadInputSchema
+      .pick({ id: true, q: true })
+      .extend({ id: ulidS, base: z.strictObject({ rev: count }) })
+      .strict(),
     who: "author",
-    can: (tx, i) => void ownThread(tx, i.id),
+    space: (tx, i) => readableThread(tx, i.id).s,
+    can: (tx, i) => {
+      if (readableThread(tx, i.id).u !== tx.me)
+        throw refuse("FORBIDDEN", "Only the person who wrote this can change it.");
+    },
     run: (tx, i) => {
-      const p = ownThread(tx, i.id);
+      const p = readableThread(tx, i.id);
+      if (p.mod === "removed") throw removed();
       if (p.del || p.gone) throw refuse("PRECONDITION_FAILED", "This thread was deleted.");
+      if (p.rev !== i.base.rev) throw stale();
       const q = text(i.q, "q");
       const changed = q !== p.q;
       tx.put({ ...p, q, t: changed ? null : p.t, edited: p.edited || changed, updatedAt: tx.now });
@@ -528,9 +597,19 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
   "threads.delete": define({
     input: z.strictObject({ id: ulidS }),
     who: "author",
-    can: (tx, i) => void ownThread(tx, i.id),
+    // the author may delete their thread without read access: a person
+    // removed from a closed space can still delete what they wrote there
+    space: (tx, i) => {
+      const p = tx.get(threadKey(i.id));
+      if (p?.kind !== "thread") throw notFound();
+      return p.u === tx.me ? p.s : readableThread(tx, i.id).s;
+    },
+    can: (tx, i) => {
+      if ((tx.get(threadKey(i.id)) as ThreadRec).u !== tx.me)
+        throw refuse("FORBIDDEN", "Only the person who wrote this can change it.");
+    },
     run: (tx, i) => {
-      const p = ownThread(tx, i.id);
+      const p = tx.get(threadKey(i.id)) as ThreadRec;
       const kept = p.r > 0;
       // a thread without follow-ups or replies is gone: it leaves Saved and likes
       if (!kept) {
@@ -557,12 +636,11 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
   "likes.set": define({
     input: z.strictObject({ thread: ulidS, on: z.boolean() }),
     who: "user",
+    space: (tx, i) =>
+      i.on ? readableThread(tx, i.thread).s : ownMarkSpace(tx, likeKey(tx.me, i.thread), i.thread),
     can: (tx, i) => {
-      // taking a like back needs no read access (the mock's readsToSave), and
-      // answers the same whether or not the thread exists
-      if (!i.on) return;
-      const p = readableThread(tx, i.thread);
-      if (!readsSpace(tx, p.s, tx.me)) throw refuse("FORBIDDEN");
+      if (!i.on || tx.get(likeKey(tx.me, i.thread))) return;
+      if (readableThread(tx, i.thread).mod === "removed") throw removed();
     },
     run: (tx, i) => {
       const key = likeKey(tx.me, i.thread);
@@ -576,26 +654,20 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
     },
   }),
 
-  // DESIGN (phase 0 finding): kept as the mock's toggle, whose `on` is
-  // optional. Without `on` the server's result depends on its state, not on
-  // what the client saw, so a toggle sent from two devices cancels out.
-  // Proposed: `saved.set` with a required `on`, as `likes.set`.
-  "saved.toggle": define({
-    input: z.strictObject({ kind: z.literal("thread"), id: ulidS, on: z.boolean().optional() }),
+  // The mock's saved.toggle, with a required `on`: the result depends on what
+  // the client saw, not on the server's state, so two devices that save the
+  // same thread do not cancel out.
+  "saved.set": define({
+    input: z.strictObject({ kind: z.literal("thread"), id: ulidS, on: z.boolean() }),
     who: "user",
-    can: (tx, i) => {
-      const want = i.on ?? tx.get(saveKey(tx.me, i.id)) === undefined;
-      if (!want) return;
-      const p = readableThread(tx, i.id);
-      if (!readsSpace(tx, p.s, tx.me)) throw refuse("FORBIDDEN");
-    },
+    space: (tx, i) =>
+      i.on ? readableThread(tx, i.id).s : ownMarkSpace(tx, saveKey(tx.me, i.id), i.id),
     run: (tx, i) => {
       const key = saveKey(tx.me, i.id);
       const had = tx.get(key) !== undefined;
-      const want = i.on ?? !had;
-      if (want && !had) tx.put({ kind: "save", u: tx.me, th: i.id, createdAt: tx.now });
-      if (!want && had) tx.del(key);
-      return { on: want };
+      if (i.on && !had) tx.put({ kind: "save", u: tx.me, th: i.id, createdAt: tx.now });
+      if (!i.on && had) tx.del(key);
+      return { on: i.on };
     },
   }),
 
@@ -607,13 +679,15 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
     run: (tx, i) => {
       const p = readableThread(tx, i.thread);
       if (p.k !== "ask") throw bad("thread", "an ask thread");
+      if (p.mod === "removed") throw removed();
+      const q = text(i.q, "q");
       tx.create({
         kind: "followup",
         id: i.id,
         th: p.id,
         s: p.s,
         u: tx.me,
-        q: text(i.q, "q"),
+        q,
         a: null,
         mod: null,
         createdAt: tx.now,
@@ -632,17 +706,20 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
     run: (tx, i) => {
       const p = readableThread(tx, i.thread);
       if (p.k !== "post") throw bad("thread", "a post");
+      if (p.mod === "removed") throw removed();
       if (i.parent !== undefined) {
         const top = readable(tx, `reply:${i.parent}`, "reply");
         if (top.th !== p.id || top.parent !== null) throw notFound();
+        if (top.mod === "removed") throw removed();
       }
+      const t = text(i.t, "t");
       tx.create({
         kind: "reply",
         id: i.id,
         th: p.id,
         s: p.s,
         u: tx.me,
-        t: text(i.t, "t"),
+        t,
         parent: i.parent ?? null,
         mod: null,
         createdAt: tx.now,
@@ -656,10 +733,7 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
   "joinRequests.create": define({
     input: spaces.spaceProcedures["joinRequests.create"].input.extend({ space: ulidS }).strict(),
     who: "user",
-    can: (tx, i) => {
-      const s = needSpace(tx, i.space);
-      if (bannedFrom(tx, s.id, tx.me)) throw refuse("FORBIDDEN", `You are banned from #${s.name}.`);
-    },
+    space: (_tx, i) => i.space,
     run: (tx, i) => {
       const s = needSpace(tx, i.space);
       if (!isClosed(s)) throw refuse("PRECONDITION_FAILED", "This space is open: join it instead.");
@@ -702,6 +776,9 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
       for (const u of [...new Set(i.users)]) {
         const r = tx.get(requestKey(i.space, u));
         if (r?.kind !== "request") throw notFound();
+        // a decision acts on the request as the moderator saw it: approving
+        // or declining needs it open, reopening needs it declined
+        if (r.st !== (i.decision === "reopen" ? "declined" : "open")) throw stale();
         if (i.decision === "approve") {
           if (bannedFrom(tx, i.space, u))
             throw refuse("PRECONDITION_FAILED", "This person is banned from the space.");
@@ -709,7 +786,7 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
           addMember(tx, i.space, u, "member");
         } else if (i.decision === "decline") {
           tx.put({ ...r, st: "declined", why: (i.why ?? "").trim(), updatedAt: tx.now });
-        } else if (r.st === "declined") {
+        } else {
           tx.put({ ...r, st: "open", updatedAt: tx.now });
         }
       }
@@ -719,7 +796,13 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
   }),
 
   "members.setRole": define({
-    input: z.strictObject({ space: ulidS, user: handleS, role: spaces.spaceMemberRoleSchema }),
+    input: z.strictObject({
+      space: ulidS,
+      user: handleS,
+      role: spaces.spaceMemberRoleSchema,
+      /** The role the actor saw the member have. */
+      base: z.strictObject({ role: spaces.spaceMemberRoleSchema }),
+    }),
     who: "admin",
     space: (_tx, i) => i.space,
     can: (tx, i) => {
@@ -733,6 +816,7 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
       const m = tx.get(memberKey(i.space, i.user));
       if (m?.kind !== "member")
         throw refuse("NOT_FOUND", "This person is not a member of the space.");
+      if (m.role !== i.base.role) throw stale();
       tx.put({ ...m, role: i.role });
       if (i.role === "owner") {
         const me = tx.get(memberKey(i.space, tx.me));
@@ -828,6 +912,7 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
     ids: (i) => [i.id],
     run: (tx, i) => {
       const item = itemOf(tx, i.item);
+      const why = text(i.why, "why");
       tx.create({
         kind: "report",
         id: i.id,
@@ -835,7 +920,7 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         key: i.item,
         by: tx.me,
         st: "open",
-        why: text(i.why, "why"),
+        why,
         note: (i.note ?? "").trim(),
         createdAt: tx.now,
       });
@@ -856,16 +941,14 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
     space: (tx, i) => itemOf(tx, i.item).s,
     run: (tx, i) => {
       const r = itemOf(tx, i.item);
-      if (i.decision === "shown") {
-        // DESIGN (prototype choice): only a hidden item can be shown again;
-        // removal is final. The mock's reports.resolve "open" restores both.
-        if (r.mod === "removed") throw refuse("PRECONDITION_FAILED", "This item was removed.");
-        if (r.mod === "hidden") tx.put({ ...r, mod: null });
-        return null;
-      }
-      if (r.mod === "removed" && i.decision === "hidden")
-        throw refuse("PRECONDITION_FAILED", "This item was removed.");
-      if (r.mod !== i.decision) tx.put({ ...r, mod: i.decision });
+      // a decision follows the state the moderator saw: hiding needs the item
+      // shown, showing needs it hidden, and a removed item stays removed (the
+      // mock's reports.resolve "open" restores both)
+      if (r.mod === "removed") throw stale();
+      if (i.decision === "hidden" && r.mod !== null) throw stale();
+      if (i.decision === "shown" && r.mod !== "hidden") throw stale();
+      if (i.decision === "removed") erase(tx, r);
+      else tx.put({ ...r, mod: i.decision === "hidden" ? "hidden" : null });
       return null;
     },
   }),

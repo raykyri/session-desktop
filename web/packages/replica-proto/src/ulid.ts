@@ -10,9 +10,12 @@ export const ULID_RE = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 
 export const MINUTE = 60_000;
 export const DAY = 86_400_000;
-/** The accepted age of a client-made ULID: 3 days in the past (the outbox's
- * lifetime) to 1 minute in the future (clock skew). */
-export const ID_MAX_AGE = 3 * DAY;
+/** The accepted age of a client-made ULID: 4 days in the past (the outbox
+ * keeps a write 3 days; the extra day is a margin for a slow client clock and
+ * for retries near the end of the outbox's lifetime) to 1 minute in the
+ * future (clock skew). The window is shorter than the 7 days idempotency is
+ * kept, so a mutation id leaves the window before its stored result expires. */
+export const ID_MAX_AGE = 4 * DAY;
 export const ID_MAX_AHEAD = MINUTE;
 
 export const isUlid = (s: string) => ULID_RE.test(s);
@@ -41,6 +44,17 @@ export function ulid(ms: number, random: () => number): string {
 export function inWindow(id: string, nowMs: number): boolean {
   const t = ulidTime(id);
   return t >= nowMs - ID_MAX_AGE && t <= nowMs + ID_MAX_AHEAD;
+}
+
+/** A 32-character hex digest of a string (cyrb128). It identifies a payload
+ * for the replay check: the stored digest is compared only with the digest of
+ * a later write by the same user under the same mutation id, so a collision
+ * could only make a person's own conflicting replay answer their own stored
+ * result. */
+export function digest(str: string): string {
+  return cyrb128(str)
+    .map((n) => n.toString(16).padStart(8, "0"))
+    .join("");
 }
 
 /** cyrb128: a 128-bit non-cryptographic string hash (public domain). */
@@ -75,8 +89,15 @@ function cyrb128(str: string): [number, number, number, number] {
  * may send the same mutation id; without the user in the hash their derived
  * ids would collide and the second write would fail with CONFLICT, which is
  * the "another user's mutation id blocks your write" case. The user is part of
- * the derivation here. The real implementation should use a cryptographic
- * hash (SHA-256, computed synchronously) so a derived id cannot be aimed at. */
+ * the derivation here.
+ *
+ * A fast non-cryptographic hash is enough. A derived id only has to differ
+ * from other ids, and the store checks that: `tx.create` refuses an id that
+ * was ever used (CONFLICT), so a collision can fail the writer's own mutation
+ * but never overwrite or reveal a record. Aiming a collision at someone else
+ * needs their next mutation id, whose 80 random bits are unknown until it is
+ * sent; a person's own derived ids can collide only with ids that already
+ * exist, which answers CONFLICT to that person alone. */
 export function deriveId(user: string, mutationId: string, ordinal: number): string {
   const h = cyrb128(`${user}\u0000${mutationId}\u0000${ordinal}`);
   let n = (BigInt(h[0]) << 48n) | (BigInt(h[1]) << 16n) | BigInt(h[2] >>> 16);
