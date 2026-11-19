@@ -795,6 +795,9 @@ export const spaceCollectionSchemas = {
   reports: z.array(reportSchema),
   /** GET /api/moderation */
   modSt: z.record(moderationKeySchema, moderationStateSchema),
+  /** GET /api/moderation/versions: a hidden item's moderation record's
+   * version, the base of "shown" */
+  modRev: z.record(moderationKeySchema, count),
   /** GET /api/space-sources */
   dsDrops: z.record(spaceIdSchema, z.array(spaceSourceSchema)),
   /** GET /api/space-source-policies */
@@ -900,6 +903,7 @@ export const spaceChangesSchema = z
     links: listChanges(threadInviteSchema),
     reports: listChanges(reportSchema),
     modSt: mapChanges(moderationKeySchema, moderationStateSchema),
+    modRev: mapChanges(moderationKeySchema, count),
     dsDrops: mapChanges(spaceIdSchema, z.array(spaceSourceSchema)),
     dsPol: mapChanges(spaceIdSchema, sourcePolicySchema),
     dsReps: valueChange(spaceCollectionSchemas.dsReps),
@@ -1878,6 +1882,7 @@ export const spacesApi: Record<string, { input: z.ZodType | null; output: z.ZodT
   "GET /api/invite-links": { input: null, output: c.links },
   "GET /api/reports": { input: null, output: c.reports },
   "GET /api/moderation": { input: null, output: c.modSt },
+  "GET /api/moderation/versions": { input: null, output: c.modRev },
   "GET /api/space-sources": { input: null, output: c.dsDrops },
   "GET /api/space-source-policies": { input: null, output: c.dsPol },
   "GET /api/source-reports": { input: null, output: c.dsReps },

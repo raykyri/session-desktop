@@ -4111,6 +4111,7 @@ const RES = {
   links:    { url: '/api/invite-links', kind: 'list', id: 'id', serverId: true },
   reports:  { url: '/api/reports', kind: 'list', id: 'id', serverId: true },
   modSt:    { url: '/api/moderation', kind: 'map' },         /* item key → removed / kept */
+  modRev:   { url: '/api/moderation/versions', kind: 'map' }, /* item key → its moderation record's version ("shown"'s base) */
   dsDrops:  { url: '/api/space-sources', kind: 'map' },      /* space id → sources added to it */
   dsPol:    { url: '/api/space-source-policies', kind: 'map' },
   dsReps:   { url: '/api/source-reports', kind: 'value' },
@@ -4580,6 +4581,10 @@ function dbToggle(key, v, on) {
    A thread, a join request, a report, a reply, a follow-up, an ask node and a member-list entry carry `rev` (a
    record without one is at 1); the server answers STALE when it changed since. */
 const revOf = x => (x && x.rev) || 1;
+/* the base of "shown" and of a reopening that shows an item: the version of the item's moderation record (phase 1b:
+   one more on every hide and every edit by its author while hidden; hiding leaves the item's own version), 0 when it
+   is not hidden */
+const modBaseOf = key => (D.modSt[key] === 'hidden' ? (D.modRev || {})[key] || 0 : 0);
 /* the version of the item a moderation key names: a thread, a reply (by its path) or an ask (by its node id) */
 function itemRevOf(key) {
   const [k, th, sub] = String(key).split(':'), p = postById(th);
@@ -4595,7 +4600,7 @@ function itemRevOf(key) {
 /* the base of a decision on join requests: each request's version, by person */
 const reqBase = (sid, users) => Object.fromEntries(users.map(u => [u, revOf(st.reqs.find(r => r.u === u && reqSp(r) === sid))]));
 /* the base of reopening a report: its version and its item's */
-const reopenBase = r => ({ rev: revOf(r), item: itemRevOf(r.key) });
+const reopenBase = r => ({ rev: revOf(r), item: modBaseOf(r.key) });
 /* for tests: the data store's collections (encoded), and the toast */
 window.__dataState = keys => enc(Object.fromEntries((keys || Object.keys(DS.store.getState())).map(k => [k, D[k]])));
 window.__toastText = () => (st.toast && st.toast.t) || null;
@@ -6290,7 +6295,8 @@ function setRel(id, r) {
 Object.assign(st, { invite: { sp: 'ward7', by: 'jun.park', state: 'ok' } });
 const inviteLanding = v => { if (!sameJSON(st.invite, v)) st.invite = v; };
 /* membership actions (spaces.join, spaces.leave, join requests) */
-const userJoin = (id, notification) => mutate('spaces.join', Object.assign({ space: id }, notification != null ? { notification } : {}, (n => n && n.invite ? { invite: n.invite } : {})(notification != null && st.notifs.find(x => x.id === notification))), () => {
+/* joining from an invite notification names the notification: it carries its invite link (phase 1b), which the server uses */
+const userJoin = (id, notification) => mutate('spaces.join', Object.assign({ space: id }, notification != null ? { notification } : {}), () => {
   if (notification != null) db.update('notifs', notification, n => { n.read = true; n.response = 'accepted'; });
   if (notification != null || isClosed(sp(id))) setRel(id, 'member'); else joinSpace(id);
 });
@@ -7530,7 +7536,7 @@ function sfClick(t) {
   if ((b = d('[data-sfrestore]'))) { st.modal = 'sf-rsconf:' + b.dataset.sfrestore; return go(); }
   if ((b = d('[data-sfrestoreok]'))) { const r = st.reports.find(x => x.id === b.dataset.sfrestoreok); st.modal = null; if (r) { sfUndo(r); toast(`Restored. The ${itemOf(r.key).noun} is in the thread again.`); } return go(); }
   if ((b = d('[data-sfrepundo]'))) { const r = st.reports.find(x => x.id === b.dataset.sfrepundo); if (r) sfUndo(r); return go(); }
-  if ((b = d('[data-sfunhide]'))) { const k = b.dataset.sfunhide; mutate('moderation.decide', { item: k, decision: 'shown', base: { rev: itemRevOf(k) } }, () => db.del('modSt', k)); toast('Shown again.'); return go(); }
+  if ((b = d('[data-sfunhide]'))) { const k = b.dataset.sfunhide; mutate('moderation.decide', { item: k, decision: 'shown', base: { rev: modBaseOf(k) } }, () => db.del('modSt', k)); toast('Shown again.'); return go(); }
   if ((b = d('[data-tpm]'))) { const k = b.dataset.tpm; st.tpMenu = st.tpMenu === k ? null : k; st.mpOpen = false; st.spOpen = false; return go(); }
   if ((b = d('[data-tpv]'))) {
     const [scope, k] = b.dataset.tpv.split('|'); st.tpMenu = null;
@@ -8744,7 +8750,7 @@ function cxClick(t) {
   if ((b = d('[data-csset="save"]')) && st.set && cxNameErr(st.set)) { toast('Fix the name before you save.'); return go(); }
   if (!d(CX_SEL)) return false;
   if (st.toast && !d('.cs-toast')) st.toast = null;
-  if ((b = d('[data-cstoast^="cxunhide:"]'))) { const k = b.dataset.cstoast.slice(9); mutate('moderation.decide', { item: k, decision: 'shown', base: { rev: itemRevOf(k) } }, () => db.del('modSt', k)); st.toast = null; return go(); }
+  if ((b = d('[data-cstoast^="cxunhide:"]'))) { const k = b.dataset.cstoast.slice(9); mutate('moderation.decide', { item: k, decision: 'shown', base: { rev: modBaseOf(k) } }, () => db.del('modSt', k)); st.toast = null; return go(); }
   if ((b = d('[data-cxowner]'))) { st.modal = 'cs-xowner:' + b.dataset.cxowner; return go(); }
   if ((b = d('[data-cxowner-ok]'))) { st.modal = null; cxTransfer(sp(st.mgSpace), b.dataset.cxownerOk); return go(); }
   if ((b = d('[data-cxarch]'))) {
@@ -14222,9 +14228,10 @@ function sxUi(k, again) {
     case 'off': st.nvOffline = true; outbox([sxOb('wait'), wait]); nSpace('sablefield'); break;
     case 'off-web': web(); st.nvOffline = true; thread(sf4, { fuDraft: { [sf4]: SX_REPLY }, askErr: 'fu' }); ASK.retry = () => askReply(sf4); break;
     case 'rf-show': {
-      /* the Show was chosen on bram's reply as the seed has it; the scenario's edit changed its version since */
+      /* the Show was chosen on bram's reply while it was hidden (its moderation record at version 1); the scenario's
+         edit while hidden moved that version since */
       const at = (seed.rp[sf4] || []).findIndex(r => r.u === 'bram'), r0 = (seed.rp[sf4] || [])[at] || {}, key = `r:${sf4}:${at}`;
-      const w = { name: 'moderation.decide', input: { item: key, decision: 'shown', base: { rev: r0.rev || 1 } } };
+      const w = { name: 'moderation.decide', input: { item: key, decision: 'shown', base: { rev: 1 } } };
       const stale = () => { st.sxStale = { kind: 'show', key, by: 'bram', was: r0.t || '' }; if (st.sxvStale === 'dialog') { if (nat) nst.sheet = 'sxstale'; else st.modal = 'sx-stale'; } };
       nat ? nThread(sf4) : thread(sf4);
       if (sxApp() || nat) { outbox([{ id: 'o1', kind: 'show', sp: 'sablefield', title: 'Show bram’s reply in Sablefield', text: '', state: 'wait', why: 'bram edited the reply after you chose Show.', made: '1h', tries: 0, w }]); drive(null, () => { if ((sxObx('o1') || {}).state === 'stale') stale(); }); }

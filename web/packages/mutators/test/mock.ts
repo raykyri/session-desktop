@@ -264,6 +264,7 @@ export function toMock(s: MemoryStore): Record<string, unknown> {
     })),
     reports: [],
     modSt: {},
+    modRev: {},
     dsDrops: {},
     dsPol: {},
     dsReps: [],

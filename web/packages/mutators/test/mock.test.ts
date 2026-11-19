@@ -295,13 +295,9 @@ function mockSide(id: (l: string) => string, fresh: string[]): Side {
     memberRev: (sp, u) => rev(roster(sp).find((m) => m.u === u)),
     reqRev: (sp, u) => rev(d().reqs.find((r: Any) => r.u === u && r.sp === id(sp))),
     reportRev: (rep) => rev(d().reports.find((r: Any) => r.id === id(rep))),
-    itemRev: (key) => {
-      const [k, th = "", sub = ""] = key.split(":");
-      if (k === "r") return rev(replyRec(th, sub));
-      if (k === "f") return rev(d().fu[th]?.[Number(sub)]);
-      if (k === "n") return rev((d().qtd[th]?.nodes ?? []).find((x: Any) => x.id === sub));
-      return rev(d().posts.find((p: Any) => p.id === th));
-    },
+    // the base of "shown": the item's moderation record's version (phase 1b)
+    itemRev: (key) =>
+      d().modSt[key] === "hidden" ? ((d().modRev?.[key] as number | undefined) ?? 0) : 0,
     skillsRev: (sp) => (d().skillsRev[id(sp)] as number | undefined) ?? 0,
     adm: (sp, u) => (roster(sp).find((m) => m.u === u)?.adm as string | undefined) ?? "",
     skill: (sp, k) => (d().skills[id(sp)]?.[k]?.id as string | undefined) ?? "missing",
