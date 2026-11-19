@@ -43,7 +43,9 @@ rules above stay as they are. Decisions for the new client:
   belongs to, and nothing else of any closed space.
 - Phase 0 (done): `web/packages/replica-proto` is a prototype server half
   with an adversarial suite, a read oracle, a write oracle, an effect model
-  and a mutation suite (`npm run mutate`). It is the acceptance suite the
+  and a mutation suite (`npm run mutate`, about 50 minutes: run it in
+  full once at the end of a phase or review round; while working, run only
+  the mutations for changed files, and `npm test` after each change). It is the acceptance suite the
   real server half must pass, and nothing in the app imports it. Invariants:
   the server applies mutator inputs and never accepts client state;
   permissions are checked at apply time; every read is filtered by the
