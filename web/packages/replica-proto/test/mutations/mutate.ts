@@ -546,14 +546,14 @@ const MUTATIONS: Mutation[] = [
   {
     name: "R2-18 an input's depth is not bounded",
     file: "src/server.ts",
-    from: "      !withinBounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES) ||",
-    to: "      !withinBounds(envelope, 1e9, 1e9) ||",
+    from: "    const bounds = withinBounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES);",
+    to: "    const bounds = withinBounds(envelope, 1e9, 1e9);",
   },
   {
     name: "R2-19 an envelope's size is not bounded",
     file: "src/server.ts",
-    from: '      Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES',
-    to: '      Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES * 1000',
+    from: '    if (Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES) return tooLarge();',
+    to: '    if (Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES * 1000) return tooLarge();',
   },
   {
     name: "R2-20 an exception outside the mutator stages is thrown",

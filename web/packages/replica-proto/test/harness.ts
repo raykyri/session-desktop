@@ -18,6 +18,9 @@ import {
   type StoredRecord,
   type TestServer,
 } from "../src/index.js";
+import { USE_PACKAGE } from "../src/switch.js";
+
+import { modOf } from "./oracle.js";
 
 /** The server under test. */
 export const makeServer: ServerFactory = createProtoServer;
@@ -142,6 +145,13 @@ export class World {
     return this.server.dump().get(key);
   }
 
+  /** An item's moderation state as the server stores it: its `mod`, or with
+   * the switch on "hidden" when a hide record names it. */
+  mod(key: string): "hidden" | "removed" | null {
+    const r = this.get(key) as { kind: string; id: string; mod: string | null } | undefined;
+    return r ? modOf(this.server.dump(), r) : null;
+  }
+
   /** A stored record's rev, or 0 when there is none: what a client that
    * read the record now puts in a write's `base`. */
   rev(key: string): number {
@@ -160,11 +170,12 @@ export class World {
     return { adm: m?.kind === "member" ? m.adm : "" };
   }
 
-  /** `base` of a moderation decision on `item`, as the item is now. */
+  /** `base` of a moderation decision on `item`, as the item is now: its
+   * rev, or with the switch on its hide record's (phase 1b, Part 0 item 3). */
   item(item: string): { rev: number } {
     const [k, th, sub] = item.split(":");
     const key = k === "f" ? `followup:${sub}` : k === "r" ? `reply:${sub}` : `thread:${th ?? ""}`;
-    return { rev: this.rev(key) };
+    return { rev: this.rev(USE_PACKAGE ? `hide:${key}` : key) };
   }
 
   /** `base` of a decision on the join requests of `users` in `sp`, as they are now. */

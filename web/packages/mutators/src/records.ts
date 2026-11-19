@@ -14,7 +14,12 @@
 //   of the same state produce equal records.
 // - The mock's per-person collections become records keyed by person: a
 //   membership, a like, a save, a mute, a read source.
-// - A moderation state is the moderated record's `mod` field.
+// - A removal is the moderated record's `mod` field ("removed"): its text is
+//   erased, so the removal is a change of the item. Hiding is a separate
+//   `hide` record keyed by the item (phase 1b, Part 0 item 3), so hiding and
+//   showing never change the item's rev: an author's edit made before a hide
+//   is not STALE. "Shown" compares the hide record's rev, which an author's
+//   edit of the hidden item also moves (review round 1, R2).
 // - Space ids are ULIDs; a space's rules version is the integer `rulesRev`.
 // - A space's activity is a separate `stats` record, read with its content;
 //   the space record is public and changes only when its settings, members
@@ -28,8 +33,10 @@
 //   on the public space record, for the same reason as `stats`. A page has an
 //   id (phase 1a.2, decision 3): writes name it, and its document is keyed by
 //   it, so a new title does not move the document.
-// - `skills` [`skills`]: a space's skills, read with its content. Each skill
-//   has an id (decision 3); the list's rev is the base of a reorder.
+// - `skill` [`skills`]: one skill of a space, read with its content, with its
+//   own id in `ID_KINDS` (phase 1b, Part 0 item 5). `skills` [`skillsRev`]:
+//   the space's order of its skills; its rev is the base of a reorder, and
+//   only adding, removing or reordering a skill changes it.
 // - `source` [`media`]: Session's catalog of sources, public: its own log,
 //   `catalog` (decision 4). `spacesrc` [`dsDrops`, `miAdded`]: a source added
 //   to a space, with a copy of the source's metadata, read with the space's
@@ -40,6 +47,10 @@
 //   its raw value, in its person's user log (decision 2). The server's
 //   online-only `apiKeys.*` calls write it; a write paid by a key checks it
 //   in `can`.
+// - `device` [`devices`]: a signed-in device of its person (id, name, kind,
+//   last seen), never its token, in their user log (phase 1b, Part 0 item
+//   2). The server's online-only `devices.*` calls write it; a device run
+//   checks it in `can`.
 // - Per person: `rlike` [`rpLiked`], `asksave` [`qtSaved`], `srcsave`
 //   [`miSaved`], `srcread` [`miRead`], `mute` [`muted`], `block` [`blocked`],
 //   `invask` [`askedInv`], `seen` [`repSeen`, `reqSeen`], `profile`
@@ -54,7 +65,9 @@ import type { Spaces } from "@session/shared";
 export type LogId = `space:${string}` | `user:${string}` | "catalog";
 
 export type SpaceRole = Spaces.SpaceMemberRole;
-export type ModState = "hidden" | "removed";
+/** The moderation state an item record holds itself: a removal, which
+ * erases its text. A hidden item has a `hide` record instead. */
+export type ModState = "removed";
 export type Visibility = "open" | "listed" | "unlisted";
 
 export interface SpaceDomain {
@@ -423,7 +436,26 @@ export interface NotifRec {
   actor: string | null;
   thread: string | null;
   node: string | null;
+  /** An invite notification's invite link (its id): joining from the
+   * notification uses that link (phase 1b, Part 0 item 1). */
+  invite: string | null;
   read: boolean;
+  createdAt: string;
+  rev: number;
+}
+
+/** A hidden item, keyed `hide:<item key>` (`hide:thread:<id>`,
+ * `hide:followup:<id>`, `hide:reply:<id>`): its existence is the hidden
+ * state; showing the item deletes it. Its rev is the base of "shown" (and of
+ * a reopening that shows the item), and `ed` counts the author's edits of the
+ * item while it is hidden, so a "shown" decided after reading one text never
+ * publishes another. */
+export interface HideRec {
+  kind: "hide";
+  /** The hidden record's key. */
+  item: string;
+  s: string;
+  ed: number;
   createdAt: string;
   rev: number;
 }
@@ -466,18 +498,25 @@ export interface PageRec {
   rev: number;
 }
 
-export interface Skill {
+/** A skill of a space, keyed `skill:<id>`. */
+export interface SkillRec {
+  kind: "skill";
   id: string;
+  sp: string;
   name: string;
   prompt: string;
-  /** The skill's version: counts its saves, 0 for a skill never edited. */
+  /** The skill's version (the wire's `rev`): counts its saves, 0 for a skill
+   * never edited; an editor's `base`. */
+  ver: number;
   rev: number;
 }
 
+/** A space's order of its skills, keyed `skills:<space>`, by skill id. Its
+ * rev is the base of `skills.reorder`. */
 export interface SkillsRec {
   kind: "skills";
   sp: string;
-  list: Skill[];
+  order: string[];
   rev: number;
 }
 
@@ -544,6 +583,21 @@ export interface ApiKeyRec {
   rev: number;
 }
 
+/** A signed-in device as its person's replicas hold it (phase 1b, Part 0
+ * item 2): never the device token, which only the server keeps. Written by
+ * the server's online-only `devices.*` calls; `seen` at most once an hour. */
+export interface DeviceRec {
+  kind: "device";
+  id: string;
+  u: string;
+  name: string;
+  type: "mac" | "phone";
+  plat: string;
+  createdAt: string;
+  seen: string | null;
+  rev: number;
+}
+
 /** A report of a source in a space, keyed `srcrep:<space>:<source>:<by>`. */
 export interface SourceReportRec {
   kind: "srcrep";
@@ -582,7 +636,10 @@ export type StoredRecord =
   | NotifRec
   | PagesRec
   | PageRec
+  | SkillRec
   | SkillsRec
+  | HideRec
+  | DeviceRec
   | SourceRec
   | SpaceSourceRec
   | SourceReportRec
@@ -610,6 +667,8 @@ export const ID_KINDS: ReadonlySet<Kind> = new Set<Kind>([
   "source",
   "page",
   "apikey",
+  "skill",
+  "device",
 ]);
 
 /** A record's id within its kind: its key without the `<kind>:` prefix. */
@@ -647,6 +706,8 @@ export function idOfRecord(r: Draft | StoredRecord): string {
       return `${r.sp}:${r.src}`;
     case "srcrep":
       return `${r.sp}:${r.src}:${r.by}`;
+    case "hide":
+      return r.item;
     default:
       return r.id;
   }
@@ -694,10 +755,13 @@ export const KINDS: ReadonlySet<Kind> = new Set<Kind>([
   "pages",
   "page",
   "skills",
+  "skill",
+  "hide",
   "source",
   "spacesrc",
   "srcrep",
   "apikey",
+  "device",
 ]);
 
 export const spaceKey = (id: string) => `space:${id}`;
@@ -709,6 +773,7 @@ export const requestKey = (sp: string, u: string) => `request:${sp}:${u}`;
 export const banKey = (sp: string, u: string) => `ban:${sp}:${u}`;
 export const likeKey = (u: string, th: string) => `like:${u}:${th}`;
 export const saveKey = (u: string, th: string) => `save:${u}:${th}`;
+export const hideKey = (item: string) => `hide:${item}`;
 
 /** The id a record holds in the global id registry, if its kind has one. */
 export function idOf(r: Draft | StoredRecord): string | null {
@@ -729,6 +794,7 @@ export function spaceOf(r: Draft | StoredRecord): string | null {
     case "followup":
     case "reply":
     case "run":
+    case "hide":
       return r.s;
     case "stats":
     case "member":
@@ -739,6 +805,7 @@ export function spaceOf(r: Draft | StoredRecord): string | null {
     case "pages":
     case "page":
     case "skills":
+    case "skill":
     case "spacesrc":
     case "srcrep":
     case "invask":
@@ -774,6 +841,7 @@ export function personOf(r: Draft | StoredRecord): string | null {
     case "seen":
     case "profile":
     case "apikey":
+    case "device":
       return r.u;
     case "report":
     case "srcrep":
@@ -850,6 +918,8 @@ export const INDEXES = {
   "notif.sp": ["notif", "sp"],
   "invask.sp": ["invask", "sp"],
   "page.sp": ["page", "sp"],
+  "skill.sp": ["skill", "sp"],
+  "hide.s": ["hide", "s"],
   "source.nurl": ["source", "nurl"],
   "spacesrc.sp": ["spacesrc", "sp"],
   "spacesrc.src": ["spacesrc", "src"],

@@ -114,6 +114,24 @@ export function mayInvite(g: Reader, s: SpaceRec, u: string): boolean {
 
 export type Item = ThreadRec | FollowUpRec | ReplyRec;
 
+/** An item's key, which its hide record is keyed by. */
+export const itemKey = (r: Item) => `${r.kind}:${r.id}`;
+
+/** An item's hide record, if it is hidden. */
+export const hideOf = (tx: Tx, r: Item) => tx.get("hide", itemKey(r));
+
+/** Hide an item: write its hide record. The item itself does not change. */
+export function hide(tx: Tx, r: Item): void {
+  tx.put({ kind: "hide", item: itemKey(r), s: r.s, ed: 0, createdAt: tx.now });
+}
+
+/** An author's edit of an item: when the item is hidden, its hide record
+ * counts the edit, so a "shown" decided on the earlier text is STALE. */
+export function editedWhileHidden(tx: Tx, r: Item): void {
+  const h = hideOf(tx, r);
+  if (h) tx.put({ ...h, ed: h.ed + 1 });
+}
+
 /** The record a moderation key names (`a:<thread>`, `p:<thread>`,
  * `f:<thread>:<follow-up>`, `r:<thread>:<reply>`), if the actor may read it.
  * The mock's reply keys use reply paths and its follow-up keys indexes; here
@@ -142,8 +160,15 @@ export function itemOf(tx: Tx, key: string): Item {
 export function erase(tx: Tx, r: Item): void {
   switch (r.kind) {
     case "thread":
-      for (const x of tx.scan("followup.th", r.id)) tx.del("followup", x.id);
-      for (const x of tx.scan("reply.th", r.id)) tx.del("reply", x.id);
+      for (const x of tx.scan("followup.th", r.id)) {
+        tx.del("hide", itemKey(x));
+        tx.del("followup", x.id);
+      }
+      for (const x of tx.scan("reply.th", r.id)) {
+        tx.del("hide", itemKey(x));
+        tx.del("reply", x.id);
+      }
+      tx.del("hide", itemKey(r));
       for (const x of tx.scan("rlike.th", r.id)) tx.del("rlike", `${x.u}:${x.reply}`);
       for (const x of tx.scan("run.th", r.id)) tx.del("run", x.id);
       tx.put({ ...countsOf(tx, r), r: 0, rlikes: {} });
@@ -159,10 +184,16 @@ export function erase(tx: Tx, r: Item): void {
       return;
     case "followup":
       for (const x of tx.scan("run.th", r.th)) if (x.node === r.id) tx.del("run", x.id);
+      tx.del("hide", itemKey(r));
       tx.put({ ...r, q: "", a: null, mod: "removed" });
       return;
     case "reply":
-      if (r.parent === null) for (const x of tx.scan("reply.parent", r.id)) tx.del("reply", x.id);
+      if (r.parent === null)
+        for (const x of tx.scan("reply.parent", r.id)) {
+          tx.del("hide", itemKey(x));
+          tx.del("reply", x.id);
+        }
+      tx.del("hide", itemKey(r));
       tx.put({ ...r, t: "", mod: "removed" });
       return;
   }

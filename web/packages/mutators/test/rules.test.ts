@@ -276,7 +276,7 @@ test("a ban stops every write in its space, the author's own included", (t) => {
   refused(t, x.w.run("mona", "invites.restore", { id: x.ids.link }), "NOT_FOUND");
 });
 
-const hooks = { random: () => 0.5, ownsDevice: () => false };
+const hooks = { random: () => 0.5 };
 const envelope = (w: World, name: string, input: unknown) => ({
   mutationId: w.id(),
   name,

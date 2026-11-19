@@ -200,7 +200,10 @@ test("3. skills and pages: a queued edit names its item, not its place; a reorde
   );
   ok(t, w.run("mona", "skills.update", { space: open, id: c, name: "C", prompt: "C2" }));
   t.deepEqual(
-    rec(w, `skills:${open}`, "skills").list.map((x) => [x.name, x.prompt]),
+    rec(w, `skills:${open}`, "skills").order.map((x) => {
+      const k = rec(w, `skill:${x}`, "skill");
+      return [k.name, k.prompt];
+    }),
     [
       ["C", "C2"],
       ["B", "B"],
@@ -477,7 +480,7 @@ test("spaces.update: `dom` is no setting, but an admin unsets it", (t) => {
 
 test("device runs: an executor on the run record, the device checked, no payer, and 100 runs an hour", (t) => {
   const { w, open } = cast(t);
-  w.devices.set("mel", new Set(["MAC1"]));
+  w.device("mel", "MAC1");
   w.key("mel", "K1");
   const mac = { kind: "device", cli: "claude", device: "MAC1" } as const;
   const th = w.id();

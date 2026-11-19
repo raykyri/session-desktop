@@ -168,6 +168,7 @@ test("spaces.join with an invite notification marks it accepted and does not adm
     actor: "olga",
     thread: null,
     node: null,
+    invite: null,
     read: false,
     createdAt: "2026-11-15T00:00:00Z",
     rev: 1,
@@ -745,13 +746,13 @@ test("reports: staff notified, resolutions resolve every open report on the item
     { type: "reportResolved", report: r1, outcome: "hidden" },
     { type: "reportResolved", report: r2, outcome: "hidden" },
   ]);
-  t.is(rec(w, `thread:${th}`, "thread").mod, "hidden");
+  t.truthy(w.get(`hide:thread:${th}`));
   t.like(rec(w, `report:${r2}`, "report"), { st: "hidden" });
-  // reopening: base is the report's rev and the item's; the last resolved
-  // report shows the item, when the item's rev matches
-  const both = (r: string) => ({ rev: w.rev(`report:${r}`), item: w.rev(`thread:${th}`) });
+  // reopening: base is the report's rev and the hide record's; the last
+  // resolved report shows the item, when the hide record's rev matches
+  const both = (r: string) => ({ rev: w.rev(`report:${r}`), item: w.rev(`hide:thread:${th}`) });
   ok(t, w.run("mona", "reports.resolve", { report: r2, outcome: "open", base: both(r2) }));
-  t.is(rec(w, `thread:${th}`, "thread").mod, "hidden");
+  t.truthy(w.get(`hide:thread:${th}`));
   ok(
     t,
     w.run("mel", "threads.update", { id: th, q: "edited", base: { rev: w.rev(`thread:${th}`) } }),
@@ -771,11 +772,12 @@ test("reports: staff notified, resolutions resolve every open report on the item
   t.deepEqual(open1.status === "ok" ? open1.effects : null, [
     { type: "reportResolved", report: r1, outcome: null },
   ]);
+  t.falsy(w.get(`hide:thread:${th}`));
   t.is(rec(w, `thread:${th}`, "thread").mod, null);
   // dismissing leaves the item as it is
   ok(t, w.run("mona", "moderation.decide", { item: `a:${th}`, decision: "hidden" }));
   ok(t, w.run("mona", "reports.resolve", { report: r1, outcome: "dismissed" }));
-  t.is(rec(w, `thread:${th}`, "thread").mod, "hidden");
+  t.truthy(w.get(`hide:thread:${th}`));
   // removed: erased; a removed item stays removed
   ok(t, w.run("mona", "reports.resolve", { report: r2, outcome: "removed" }));
   t.like(rec(w, `thread:${th}`, "thread"), { mod: "removed", q: "" });
@@ -807,17 +809,20 @@ test("moderation.decide: base required and compared for shown only; removal eras
   );
   refused(
     t,
-    w.run("mona", "moderation.decide", { item: `a:${th}`, decision: "shown", base: { rev: 1 } }),
+    w.run("mona", "moderation.decide", { item: `a:${th}`, decision: "shown", base: { rev: 2 } }),
     "STALE",
   );
+  // hiding left the thread as it was: its rev is the one before the hide
+  t.is(w.rev(`thread:${th}`), 1);
   ok(
     t,
     w.run("mona", "moderation.decide", {
       item: `a:${th}`,
       decision: "shown",
-      base: { rev: w.rev(`thread:${th}`) },
+      base: { rev: w.rev(`hide:thread:${th}`) },
     }),
   );
+  t.is(w.get(`hide:thread:${th}`), undefined);
   ok(t, w.run("mona", "moderation.decide", { item: `a:${th}`, decision: "removed" }));
   t.is(w.get(`followup:${f}`), undefined);
   t.is(rec(w, `counts:${th}`, "counts").r, 0);
@@ -945,10 +950,9 @@ test("skills: ids, names unique, versions and conflicts, remove by id, reorder b
     "BAD_REQUEST",
   );
   ok(t, w.run("mona", "skills.reorder", { space: open, order: [b, a], base: { rev } }));
-  t.deepEqual(rec(w, `skills:${open}`, "skills").list, [
-    { id: b, name: "B", prompt: "b", rev: 0 },
-    { id: a, name: "A", prompt: "a3", rev: 2 },
-  ]);
+  t.deepEqual(rec(w, `skills:${open}`, "skills").order, [b, a]);
+  t.like(rec(w, `skill:${b}`, "skill"), { sp: open, name: "B", prompt: "b", ver: 0 });
+  t.like(rec(w, `skill:${a}`, "skill"), { sp: open, name: "A", prompt: "a3", ver: 2 });
   ok(t, w.run("mona", "skills.remove", { space: open, id: b }));
   refused(t, w.run("mona", "skills.remove", { space: open, id: b }), "NOT_FOUND");
   refused(

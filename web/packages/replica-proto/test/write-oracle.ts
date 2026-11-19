@@ -18,8 +18,9 @@
 // predicted `ok`, `effect-model.ts` predicts what it changes.
 //
 // The protocol, in order (the first that applies decides):
-//   0. an input nested more than 32 deep, or an envelope larger than 256 KB
-//      as JSON: BAD_REQUEST (round 2, decision 8)              unrecorded
+//   0. an envelope larger than 256 KB as JSON: TOO_LARGE (AGENTS.md; phase
+//      1b, Part 0 item 7); then an input nested more than 32 deep:
+//      BAD_REQUEST (round 2, decision 8)                       unrecorded
 //   1. protocolVersion an integer below 3: UPDATE_REQUIRED    unrecorded
 //   2. envelope: exactly { clientId, seq ≥ 1, mutationId, name, input,
 //      protocolVersion, clientTime ≥ 0 }, else BAD_REQUEST     unrecorded
@@ -59,7 +60,7 @@ import type { Envelope, ErrorCode, StoredRecord } from "../src/index.js";
 import { USE_PACKAGE } from "../src/switch.js";
 
 import { slug } from "./effect-model.js";
-import { mayRead } from "./oracle.js";
+import { mayRead, modOf, showRev } from "./oracle.js";
 
 type Dump = ReadonlyMap<string, StoredRecord>;
 export type Code = "ok" | ErrorCode;
@@ -105,6 +106,23 @@ function depthOf(v: unknown): number {
     for (const y of Object.values(value)) todo.push([y, level + 1]);
   }
   return deepest;
+}
+/** An envelope's size as JSON in bytes; for one too deep to print, the
+ * sum of its strings' lengths (with quotes) and one byte for every other
+ * value, which it is at least. */
+function sizeOf(v: unknown): number {
+  try {
+    return new TextEncoder().encode(JSON.stringify(v)).length;
+  } catch {
+    let n = 0;
+    const todo: unknown[] = [v];
+    while (todo.length) {
+      const x = todo.pop();
+      n += typeof x === "string" ? x.length + 2 : 1;
+      if (x !== null && typeof x === "object") todo.push(...Object.values(x));
+    }
+    return n;
+  }
 }
 function sortedJson(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(sortedJson).join(",")}]`;
@@ -526,10 +544,13 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     inSpace(f, item.s, "mod");
     const d = i["decision"];
     // round 2: only "shown" could expose text, so only it compares the rev
-    if (d === "shown" && item.rev !== baseRev(i)) no("STALE");
-    if (item.mod === "removed") no("PRECONDITION_FAILED");
-    if (d === "hidden" && item.mod !== null) no("PRECONDITION_FAILED");
-    if (d === "shown" && item.mod !== "hidden") no("PRECONDITION_FAILED");
+    // with the switch on, the rev of the item's hide record (phase 1b, Part 0
+    // item 3): hiding leaves the item as it is
+    if (d === "shown" && showRev(f.dump, `${item.kind}:${item.id}`) !== baseRev(i)) no("STALE");
+    const mod = modOf(f.dump, item);
+    if (mod === "removed") no("PRECONDITION_FAILED");
+    if (d === "hidden" && mod !== null) no("PRECONDITION_FAILED");
+    if (d === "shown" && mod !== "hidden") no("PRECONDITION_FAILED");
   },
 };
 
@@ -615,12 +636,8 @@ export class WriteModel {
     const pass = (code: Code): Prediction => ({ code, usesSeq: false, stored: false });
     const e = envelope as Envelope;
     const isObject = e !== null && typeof e === "object";
-    if (
-      isObject &&
-      (depthOf((e as { input?: unknown }).input) > 32 ||
-        new TextEncoder().encode(JSON.stringify(e)).length > 256 * 1024)
-    )
-      return pass("BAD_REQUEST");
+    if (isObject && sizeOf(e) > 256 * 1024) return pass("TOO_LARGE");
+    if (isObject && depthOf((e as { input?: unknown }).input) > 32) return pass("BAD_REQUEST");
     const version = isObject ? (e as { protocolVersion?: unknown }).protocolVersion : undefined;
     if (typeof version === "number" && Number.isInteger(version) && version < 3)
       return pass("UPDATE_REQUIRED");

@@ -10,7 +10,7 @@
 //    passes the ban check (AGENTS.md: a ban stops every write in its space).
 // 2. `pre(ctx, input)` (server only): checks and values the client cannot
 //    have, such as an invite code made from the server's random source, or
-//    whether a device that runs an ask is the actor's. It may refuse, and reads
+//    the limit of device runs an hour. It may refuse, and reads
 //    through `ctx.tx`. Its values reach `run` as data. `needsPre(input)`
 //    says whether it runs for an input; a client that predicts a write whose
 //    `pre` would run gets `unknown`.
@@ -151,9 +151,6 @@ export type ServerValues = Readonly<Record<string, string>>;
 export interface ServerHooks {
   /** The server's random source: a number in [0, 1). */
   random(): number;
-  /** Whether device `id` is one of `u`'s signed-in devices (account state,
-   * which no replica holds). */
-  ownsDevice(u: string, id: string): boolean;
 }
 
 export interface PreCtx extends ServerHooks {
@@ -432,7 +429,6 @@ export function apply(
         nowMs: tx.nowMs,
         tx,
         random: () => server.random(),
-        ownsDevice: (u, id) => server.ownsDevice(u, id),
       };
       values = def.pre(ctx, input);
     }

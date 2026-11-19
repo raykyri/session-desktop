@@ -606,7 +606,7 @@ export function projectOurs(s: MemoryStore, L: Labels): Projection {
       likes: c?.likes ?? 0,
       liked: s.get("like", `${ME}:${p.id}`) !== undefined,
       saved: s.get("save", `${ME}:${p.id}`) !== undefined,
-      mod: p.mod,
+      mod: p.mod ?? (s.get("hide", `thread:${p.id}`) ? "hidden" : null),
     };
     const nodes = nodesOf(p.id);
     if (nodes.length)
@@ -662,7 +662,12 @@ export function projectOurs(s: MemoryStore, L: Labels): Projection {
       note: r.note,
     };
   const skills: Record<string, unknown> = {};
-  for (const x of of(s, "skills")) if (x.list.length) skills[L.o(x.sp)] = x.list;
+  for (const x of of(s, "skills"))
+    if (x.order.length)
+      skills[L.o(x.sp)] = x.order.map((id) => {
+        const k = s.get("skill", id) as Any;
+        return { id, name: k.name, prompt: k.prompt, rev: k.ver };
+      });
   const pages: Record<string, string[]> = {};
   for (const x of of(s, "pages"))
     if (x.list.length) pages[L.o(x.sp)] = x.list.map((p) => `${p.id}:${p.t}`);

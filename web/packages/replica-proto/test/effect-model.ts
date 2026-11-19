@@ -145,6 +145,15 @@ export function predictEffects(
     [...dump.entries()].filter(
       ([, r]) => (r.kind === "followup" || r.kind === "reply" || r.kind === "run") && r.th === th,
     );
+  /** With the switch on, an item's hide record (phase 1b, Part 0 item 3). */
+  const hideAt = (key: string) => {
+    const h = USE_PACKAGE ? (dump.get(`hide:${key}`) as unknown as Fields | undefined) : undefined;
+    return h as { ed: number } | undefined;
+  };
+  /** A deleted or erased item takes its hide record with it. */
+  const unhide = (key: string) => {
+    if (hideAt(key)) keys.set(`hide:${key}`, null);
+  };
 
   switch (name) {
     case "spaces.create": {
@@ -284,6 +293,10 @@ export function predictEffects(
         edited: p.edited || q !== p.q,
         mod: p.mod,
       });
+      // with the switch on, an edit of a hidden thread counts in its hide
+      // record, so a "shown" decided on the earlier text is STALE
+      const h = hideAt(`thread:${p.id}`);
+      if (h && q !== p.q) keys.set(`hide:thread:${p.id}`, { ed: h.ed + 1 });
       break;
     }
     case "threads.delete": {
@@ -463,16 +476,27 @@ export function predictEffects(
       const key = k === "f" ? `followup:${sub}` : k === "r" ? `reply:${sub}` : `thread:${th}`;
       const r = get(key) as StoredRecord & Fields;
       const d = input["decision"];
-      if (d === "hidden") keys.set(key, { mod: "hidden", ...text(r) });
+      // with the switch on, hiding writes a hide record and leaves the item
+      if (USE_PACKAGE && d === "hidden") {
+        keys.set(key, { mod: null, ...text(r) });
+        keys.set(`hide:${key}`, { item: key, s: r["s"], ed: 0 });
+      } else if (USE_PACKAGE && d === "shown") {
+        keys.set(key, { mod: null, ...text(r) });
+        keys.set(`hide:${key}`, null);
+      } else if (d === "hidden") keys.set(key, { mod: "hidden", ...text(r) });
       else if (d === "shown") keys.set(key, { mod: null, ...text(r) });
       else {
+        unhide(key);
         // removed: erased for good, with everything under it (owner
         // decision, 0b): a thread's follow-ups, runs and replies; a top-level
         // reply's replies. The item stays as a placeholder with no text.
         if (r.kind === "thread") {
           keys.set(key, { mod: "removed", q: "", t: null, sum: null, running: false });
           keys.set(`counts:${r.id}`, { r: 0 });
-          for (const [ck] of children(r.id)) keys.set(ck, null);
+          for (const [ck] of children(r.id)) {
+            keys.set(ck, null);
+            unhide(ck);
+          }
         } else if (r.kind === "followup") {
           keys.set(key, { mod: "removed", q: "", a: null });
           // its runs (with the switch on, a follow-up ask has them)
@@ -481,7 +505,10 @@ export function predictEffects(
           keys.set(key, { mod: "removed", t: "" });
           if (r.parent === null)
             for (const [ck, x] of dump)
-              if (x.kind === "reply" && x.parent === r.id) keys.set(ck, null);
+              if (x.kind === "reply" && x.parent === r.id) {
+                keys.set(ck, null);
+                unhide(ck);
+              }
         }
       }
       break;

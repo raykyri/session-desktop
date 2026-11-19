@@ -17,7 +17,7 @@ import type {
 import { TOMBSTONE_TTL } from "../src/index.js";
 
 import { DAY, HOUR, actor, admit, cast, ok, refused, thread } from "./harness.js";
-import { diff, expected } from "./oracle.js";
+import { diff, expected, modOf } from "./oracle.js";
 
 const SECRET = "the text that must not come back";
 /** Every value the server keeps at rest: records, tombstones, log rows, the
@@ -43,7 +43,7 @@ test("after a hide, its author and the space's moderators get the text; everyone
     const sees = u === "mel" || u === "mona" || u === "olga";
     t.is(await c.sync(`space:${open}`), "pull");
     const p = c.records(`space:${open}`).get(`thread:${th}`) as ThreadRec;
-    t.is(p.mod, "hidden");
+    t.is(modOf(c.records(`space:${open}`), p), "hidden");
     t.is(p.q, sees ? SECRET : "", String(u));
     const snap = await w.server.snapshot(c.actor, `space:${open}`);
     t.is(JSON.stringify(snap).includes(SECRET), sees, String(u));
@@ -175,7 +175,12 @@ test("removing a thread erases it and everything under it from storage, for good
     // item removed (review round 2, finding 2)
     await refused(
       t,
-      w.as("mona", "moderation.decide", { ...input, base: { rev: now.rev - 1 } }),
+      // (with the switch on the base is the hide record's rev, 0 once the
+      // removal dropped the record: any other rev differs from it)
+      w.as("mona", "moderation.decide", {
+        ...input,
+        base: { rev: now.rev === 0 ? 1 : now.rev - 1 },
+      }),
       decision === "shown" ? "STALE" : "PRECONDITION_FAILED",
     );
   }

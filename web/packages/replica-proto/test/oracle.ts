@@ -17,9 +17,13 @@
 // A closed space is one whose `vis` is listed or unlisted.
 
 import type { LogId, StoredRecord } from "../src/index.js";
+import { USE_PACKAGE } from "../src/switch.js";
 
 type Dump = ReadonlyMap<string, StoredRecord>;
-type Kind = StoredRecord["kind"];
+/** The prototype's kinds, and `hide`: with the switch on, `@session/mutators`
+ * keeps a hidden item's state in a hide record keyed by the item (phase 1b,
+ * Part 0 item 3), read with the space's content. */
+type Kind = StoredRecord["kind"] | "hide";
 type Place = "anon" | "outsider" | "member" | "staff";
 type Cell = "all" | "own" | "none";
 type Row = Record<Place, Cell>;
@@ -53,6 +57,7 @@ export const READ: Record<Kind, { open: Row; closed: Row }> = {
   followup: { open: PUBLIC, closed: MEMBERS },
   reply: { open: PUBLIC, closed: MEMBERS },
   run: { open: PUBLIC, closed: MEMBERS },
+  hide: { open: PUBLIC, closed: MEMBERS },
   // closedMembers: the member list of a closed space is for its members (the
   // staff list is on the space record); a person reads their own membership
   member: { open: PUBLIC, closed: row("none", "own", "all", "all") },
@@ -82,6 +87,7 @@ const OWNER: Record<Kind, ((r: never) => string) | null> = {
   followup: null,
   reply: null,
   run: null,
+  hide: null,
   ban: null,
   member: (r: { u: string }) => r.u,
   request: (r: { u: string }) => r.u,
@@ -101,6 +107,7 @@ const SPACE: Record<Kind, ((r: never) => string) | null> = {
   followup: (r: { s: string }) => r.s,
   reply: (r: { s: string }) => r.s,
   run: (r: { s: string }) => r.s,
+  hide: (r: { s: string }) => r.s,
   member: (r: { sp: string }) => r.sp,
   request: (r: { sp: string }) => r.sp,
   report: (r: { sp: string }) => r.sp,
@@ -120,6 +127,7 @@ const IN_SPACE_LOG: ReadonlySet<Kind> = new Set<Kind>([
   "followup",
   "reply",
   "run",
+  "hide",
   "member",
   "request",
   "report",
@@ -147,6 +155,23 @@ const TEXT: Record<
   hidden: { author: "text", staff: "text", other: "blank" },
   removed: { author: "blank", staff: "blank", other: "blank" },
 };
+
+/** An item's moderation state: its own `mod` (the prototype's, and a
+ * package item's "removed"), or "hidden" when a hide record names it. */
+export function modOf(
+  dump: Dump,
+  r: { kind: string; id: string; mod: string | null },
+): "hidden" | "removed" | null {
+  if (r.mod === "removed" || r.mod === "hidden") return r.mod;
+  return dump.has(`hide:${r.kind}:${r.id}`) ? "hidden" : null;
+}
+
+/** The rev a "shown" (or a reopening that shows) compares: the item's own
+ * rev in the prototype, the hide record's with the switch on. */
+export function showRev(dump: Dump, itemKey: string): number {
+  if (!USE_PACKAGE) return dump.get(itemKey)?.rev ?? 0;
+  return dump.get(`hide:${itemKey}`)?.rev ?? 0;
+}
 
 const ownerOf = (r: StoredRecord) => {
   const f = OWNER[r.kind];
@@ -203,7 +228,7 @@ export function shown(dump: Dump, r: StoredRecord, reader: string | null): Store
       : placeOf(dump, r.s, reader) === "staff"
         ? "staff"
         : "other";
-  if (TEXT[r.mod ?? "none"][who] === "text") return r;
+  if (TEXT[modOf(dump, r) ?? "none"][who] === "text") return r;
   if (r.kind === "thread") return { ...r, q: "", t: null, sum: null };
   if (r.kind === "followup") return { ...r, q: "", a: null };
   return { ...r, t: "" };

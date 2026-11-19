@@ -122,7 +122,7 @@ export function applyPackage(
   } else if (entry) throw new Error(`${envelope.name} has no package mutator`);
   const out = pkg.apply(pkg.createRegistry(list), source, { u }, envelope, {
     now,
-    server: { random, ownsDevice: () => false },
+    server: { random },
   });
   if (out.status === "refused")
     return {
@@ -177,6 +177,11 @@ export const logsOf = (r: rec.Draft | StoredRecord): rec.LogId[] =>
     : rec.logsOf(r);
 export const registryKey = (r: rec.Draft | StoredRecord) =>
   USE_PACKAGE ? pkg.registryKey(r as unknown as pkg.Draft) : rec.registryKey(r);
+
+/** The keys whose view a record's change changes besides its own (a hide
+ * record's item), with the switch on; none for the prototype's records. */
+export const viewDependents = (r: rec.Draft | StoredRecord): string[] =>
+  USE_PACKAGE ? pkg.viewDependents(r as unknown as pkg.Draft) : [];
 
 /** Whether a tombstone of this kind is in a space's log: the records of
  * the kinds the person's user log holds alone (likes, saves, notifications)

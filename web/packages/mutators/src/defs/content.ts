@@ -2,9 +2,12 @@
 //
 // Skills and pages have ids (phase 1a.2, decision 3): an edit, a removal and
 // a move name an id, so a write that waited in an outbox acts on the item it
-// named whatever moved meanwhile. A reorder of the skills sends the whole
-// order with the list's rev as `base`, and is STALE when the list changed
-// since. A skill's and a page's version (`rev` of a skill, `ver` of a page
+// named whatever moved meanwhile. Each skill is its own record with an id in
+// `ID_KINDS` (phase 1b, Part 0 item 5), so the id registry vouches for a new
+// skill's id; the space's `skills` record holds their order. A reorder sends
+// the whole order with the order record's rev as `base`, and is STALE when a
+// skill was added, removed or moved since (an edit does not change the
+// order). A skill's and a page's version (`rev` of a skill, `ver` of a page
 // document) counts its saves; an editor sends the version it opened as
 // `base`, and the save is CONFLICT when someone saved since, unless `force`
 // (the mock's edit conflicts, step 9). A page's title is unique in its space
@@ -14,9 +17,9 @@ import { spaces } from "@session/shared";
 import { z } from "zod";
 
 import { RANK, canRead, rankIn, reviewedFor, roleIn } from "../access.js";
-import { ID_TAKEN, defineMutator, inSpace, type Tx } from "../engine.js";
+import { defineMutator, inSpace, type Tx } from "../engine.js";
 import { bad, refuse, stale } from "../errors.js";
-import type { PageEntry, PageRec, SkillsRec, SourceMeta } from "../records.js";
+import type { PageEntry, PageRec, SkillRec, SkillsRec, SourceMeta } from "../records.js";
 import { needSpace, text, writable } from "../rules.js";
 import { baseS, count, ulidS } from "../schemas.js";
 
@@ -27,12 +30,23 @@ const changed = (base: number | undefined, current: number, force: boolean | und
 
 // ---- skills ----
 
-function skillsOf(tx: Tx, sp: string): SkillsRec {
+function orderOf(tx: Tx, sp: string): SkillsRec {
   needSpace(tx, sp);
-  return tx.get("skills", sp) ?? { kind: "skills", sp, list: [], rev: 0 };
+  return tx.get("skills", sp) ?? { kind: "skills", sp, order: [], rev: 0 };
 }
 
 const noSkill = () => refuse("NOT_FOUND", "The server has no record of this skill.");
+
+/** A skill of space `sp`, or NOT_FOUND. */
+function skillIn(tx: Tx, sp: string, id: string): SkillRec {
+  needSpace(tx, sp);
+  const s = tx.get("skill", id);
+  if (!s || s.sp !== sp) throw noSkill();
+  return s;
+}
+
+const nameTaken = (tx: Tx, sp: string, name: string, except: string | null) =>
+  tx.scan("skill.sp", sp).some((x) => x.id !== except && x.name === name);
 
 // ---- pages ----
 
@@ -183,11 +197,11 @@ export const contentMutators = [
     ids: (i) => [i.id],
     can: (tx, i) => inSpace(tx, i.space, "moderator"),
     run: (tx, i) => {
-      const l = skillsOf(tx, i.space);
-      if (l.list.some((x) => x.id === i.id)) throw refuse("CONFLICT", ID_TAKEN);
-      if (l.list.some((x) => x.name === i.name))
+      const o = orderOf(tx, i.space);
+      if (nameTaken(tx, i.space, i.name, null))
         throw refuse("CONFLICT", `The space has a skill named ${i.name}.`);
-      tx.put({ ...l, list: [...l.list, { id: i.id, name: i.name, prompt: i.prompt, rev: 0 }] });
+      tx.create({ kind: "skill", id: i.id, sp: i.space, name: i.name, prompt: i.prompt, ver: 0 });
+      tx.put({ ...o, order: [...o.order, i.id] });
       return { id: i.id };
     },
   }),
@@ -204,17 +218,12 @@ export const contentMutators = [
     }),
     can: (tx, i) => inSpace(tx, i.space, "moderator"),
     run: (tx, i) => {
-      const l = skillsOf(tx, i.space);
-      const row = l.list.find((x) => x.id === i.id);
-      if (!row) throw noSkill();
-      if (changed(i.base?.rev, row.rev, i.force))
+      const row = skillIn(tx, i.space, i.id);
+      if (changed(i.base?.rev, row.ver, i.force))
         throw refuse("CONFLICT", "Someone else changed this skill first.");
-      if (l.list.some((x) => x.id !== i.id && x.name === i.name))
+      if (nameTaken(tx, i.space, i.name, i.id))
         throw refuse("CONFLICT", `The space has a skill named ${i.name}.`);
-      const list = l.list.map((x) =>
-        x.id === i.id ? { id: x.id, name: i.name, prompt: i.prompt, rev: row.rev + 1 } : x,
-      );
-      tx.put({ ...l, list });
+      tx.put({ ...row, name: i.name, prompt: i.prompt, ver: row.ver + 1 });
       return null;
     },
   }),
@@ -224,9 +233,10 @@ export const contentMutators = [
     input: z.strictObject({ space: ulidS, id: ulidS }),
     can: (tx, i) => inSpace(tx, i.space, "moderator"),
     run: (tx, i) => {
-      const l = skillsOf(tx, i.space);
-      if (!l.list.some((x) => x.id === i.id)) throw noSkill();
-      tx.put({ ...l, list: l.list.filter((x) => x.id !== i.id) });
+      skillIn(tx, i.space, i.id);
+      const o = orderOf(tx, i.space);
+      tx.del("skill", i.id);
+      tx.put({ ...o, order: o.order.filter((x) => x !== i.id) });
       return null;
     },
   }),
@@ -239,17 +249,17 @@ export const contentMutators = [
     input: z.strictObject({ space: ulidS, order: z.array(ulidS).max(500), base: baseS }),
     can: (tx, i) => inSpace(tx, i.space, "moderator"),
     run: (tx, i) => {
-      const l = skillsOf(tx, i.space);
-      if (l.rev !== i.base.rev) throw stale();
-      const byId = new Map(l.list.map((x) => [x.id, x]));
-      if (i.order.length !== byId.size || new Set(i.order).size !== byId.size)
+      const o = orderOf(tx, i.space);
+      if (o.rev !== i.base.rev)
+        throw stale(tx, tx.me, o.rev === 0 ? null : o, [`skills:${i.space}`]);
+      const ids = new Set(o.order);
+      if (
+        i.order.length !== ids.size ||
+        new Set(i.order).size !== ids.size ||
+        i.order.some((id) => !ids.has(id))
+      )
         throw bad("order", "every skill of the space once");
-      const list = i.order.map((id) => {
-        const x = byId.get(id);
-        if (!x) throw bad("order", "every skill of the space once");
-        return x;
-      });
-      tx.put({ ...l, list });
+      tx.put({ ...o, order: [...i.order] });
       return null;
     },
   }),

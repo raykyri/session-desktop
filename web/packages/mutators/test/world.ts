@@ -49,8 +49,6 @@ export class World {
   readonly store = new MemoryStore();
   readonly random: () => number;
   readonly serverRandom: () => number;
-  /** Signed-in devices by person, for the pre-check of a device run. */
-  readonly devices = new Map<string, Set<string>>();
   /** Every effect committed, in order. */
   readonly effects: Effect[] = [];
   /** Every write, when `record` is on. */
@@ -96,10 +94,7 @@ export class World {
     const before = this.record ? this.store.clone() : this.store;
     const out = apply(this.registry, this.store, u === null ? null : { u }, envelope, {
       now: this.now,
-      server: {
-        random: this.serverRandom,
-        ownsDevice: (who, d) => this.devices.get(who)?.has(d) ?? false,
-      },
+      server: { random: this.serverRandom },
     });
     if (out.status === "ok") {
       this.store.commit(out.writes);
@@ -109,6 +104,26 @@ export class World {
       this.steps.push({ u, envelope, now: this.now, before, out, minted: this.minted });
     this.minted = new Set();
     return out;
+  }
+
+  /** A signed-in device of `u`'s, as the server's online-only
+   * devices.approve writes its record to their user log. */
+  device(u: string, id: string) {
+    this.store.commit([
+      [
+        `device:${id}`,
+        {
+          kind: "device",
+          id,
+          u,
+          name: `${u}'s Mac`,
+          type: "mac",
+          plat: "macOS",
+          createdAt: "2026-11-01T00:00:00Z",
+          seen: null,
+        },
+      ],
+    ]);
   }
 
   /** An API key of `u`'s, as the server's online-only apiKeys.create writes

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { bannedFrom, isClosed, roleIn } from "../access.js";
 import { defineMutator, inSpace, inSpaces, personal, type Tx } from "../engine.js";
 import { bad, notFound, refuse } from "../errors.js";
-import type { SpaceRec } from "../records.js";
+import type { InviteRec, SpaceRec } from "../records.js";
 import {
   addMember,
   mayInvite,
@@ -19,6 +19,34 @@ import {
 } from "../rules.js";
 import { count, ulidS } from "../schemas.js";
 import { msOf } from "../time.js";
+
+/** Whether an invite link admits to `s` now. DESIGN (phase 0 finding): a
+ * link carries its maker's authority, so it works only while the maker may
+ * make links (checked now). A link that stopped working because its maker
+ * lost that right works again once the maker has it again. */
+function liveLink(tx: Tx, s: SpaceRec, link: InviteRec | undefined): boolean {
+  return (
+    link !== undefined &&
+    link.sp === s.id &&
+    link.dead === null &&
+    link.revokedAt === null &&
+    (link.expiresAt === null || msOf(link.expiresAt) > tx.nowMs) &&
+    mayInvite(tx, s, link.by)
+  );
+}
+
+/** The invite link of the invite notification a join names, when the join
+ * names no code; null otherwise. A link that no longer exists stands as one
+ * that does not admit. */
+function noteLink(
+  tx: Tx,
+  i: { notification?: string | undefined; invite?: string | undefined },
+): InviteRec | undefined | null {
+  if (i.notification === undefined || i.invite !== undefined) return null;
+  const n = tx.get("notif", i.notification);
+  if (!n || n.to !== tx.me || n.type !== "invite" || n.invite === null) return null;
+  return tx.get("invite", n.invite);
+}
 
 /** The settings `spaces.update` changes. `dom` is the domain check's (server
  * made) and `pages` the page procedures', so neither is a setting here; an
@@ -228,6 +256,14 @@ export const spaceMutators = [
       }
       if (roleIn(tx, s.id, tx.me)) return scope;
       if (!isClosed(s)) return scope;
+      // an invite notification carries its link (phase 1b, Part 0 item 1):
+      // joining from it uses that link, which must be live as a code would
+      const viaNote = noteLink(tx, i);
+      if (viaNote !== null) {
+        if (!liveLink(tx, s, viaNote))
+          throw refuse("FORBIDDEN", "This invite link has expired or was already used.");
+        return scope;
+      }
       // DESIGN (phase 0 finding): the mock also admits a person whose join
       // request was approved, or who has an invite notification. Here
       // approval makes the member record directly (joinRequests.decide), and
@@ -239,18 +275,8 @@ export const spaceMutators = [
           `#${s.name} is closed: joining it needs an invite or a request a moderator approved.`,
         );
       const link = tx.scan("invite.code", i.invite)[0];
-      // DESIGN (phase 0 finding): a link carries its maker's authority, so it
-      // works only while the maker may make links (checked now). A link that
-      // stopped working because its maker lost that right works again once
-      // the maker has it again.
-      const live =
-        link !== undefined &&
-        link.sp === s.id &&
-        link.dead === null &&
-        link.revokedAt === null &&
-        (link.expiresAt === null || msOf(link.expiresAt) > tx.nowMs) &&
-        mayInvite(tx, s, link.by);
-      if (!live) throw refuse("FORBIDDEN", "This invite link has expired or was already used.");
+      if (!liveLink(tx, s, link))
+        throw refuse("FORBIDDEN", "This invite link has expired or was already used.");
       return scope;
     },
     run: (tx, i) => {
@@ -260,8 +286,10 @@ export const spaceMutators = [
         if (n) tx.put({ ...n, read: true, response: "accepted" });
       }
       if (roleIn(tx, s.id, tx.me)) return null;
-      if (isClosed(s) && i.invite !== undefined) {
-        const link = tx.scan("invite.code", i.invite)[0];
+      if (isClosed(s)) {
+        const viaNote = noteLink(tx, i);
+        const link =
+          viaNote ?? (i.invite !== undefined ? tx.scan("invite.code", i.invite)[0] : undefined);
         if (link) tx.put({ ...link, dead: "Used", usedBy: tx.me });
       }
       addMember(tx, s.id, tx.me, "member", tx.id(1));
@@ -394,6 +422,8 @@ function eraseSpace(tx: Tx, sp: string): void {
   for (const x of tx.scan("srcrep.sp", sp)) tx.del("srcrep", `${sp}:${x.src}:${x.by}`);
   for (const x of tx.scan("invask.sp", sp)) tx.del("invask", `${x.u}:${sp}`);
   for (const x of tx.scan("notif.sp", sp)) tx.del("notif", x.id);
+  for (const x of tx.scan("hide.s", sp)) tx.del("hide", x.item);
+  for (const x of tx.scan("skill.sp", sp)) tx.del("skill", x.id);
   tx.del("pages", sp);
   tx.del("skills", sp);
   tx.del("stats", sp);

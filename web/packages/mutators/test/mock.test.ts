@@ -123,6 +123,7 @@ function seedWorld(t: ExecutionContext) {
     actor: "olga",
     thread: null,
     node: null,
+    invite: null,
     read: false,
     createdAt: "2026-11-16T09:00:00Z",
     rev: 1,
@@ -246,13 +247,13 @@ function oursSide(w: World, id: (l: string) => string, fresh: string[]): Side {
     reportRev: (rep) => w.rev(`report:${id(rep)}`),
     itemRev: (key) => {
       const [k, th, sub] = key.split(":");
-      if (k === "f") return w.rev(`followup:${sub}`);
-      if (k === "r") return w.rev(`reply:${sub}`);
-      return w.rev(`thread:${th}`);
+      if (k === "f") return w.rev(`hide:followup:${sub}`);
+      if (k === "r") return w.rev(`hide:reply:${sub}`);
+      return w.rev(`hide:thread:${th}`);
     },
     skillsRev: (sp) => w.rev(`skills:${id(sp)}`),
     adm: (sp, u) => w.admission(id(sp), u).adm,
-    skill: (sp, k) => recOf<"skills">(w, `skills:${id(sp)}`)?.list[k]?.id ?? "missing",
+    skill: (sp, k) => recOf<"skills">(w, `skills:${id(sp)}`)?.order[k] ?? "missing",
     page: (sp, k) => recOf<"pages">(w, `pages:${id(sp)}`)?.list[k]?.id ?? "missing",
   };
   return x;

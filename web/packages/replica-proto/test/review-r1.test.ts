@@ -203,7 +203,7 @@ test("R2: a queued 'shown' does not publish text the author changed after the mo
   );
   const [r] = await olga.flush();
   t.is(r?.ok ? "ok" : r?.error.code, "STALE");
-  t.is((w.get(`thread:${th}`) as ThreadRec).mod, "hidden");
+  t.is(w.mod(`thread:${th}`), "hidden");
   const s = await w.server.snapshot(null, `space:${open}`);
   t.false(JSON.stringify(s).includes("ABUSE"));
   const p = s.records.find((x) => x.key === `thread:${th}`)?.record as ThreadRec;

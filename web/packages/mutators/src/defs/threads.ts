@@ -9,8 +9,9 @@
 // ask, threads.update and followups.update with `run`, followups.ask,
 // research.forkNode) writes a run record with a derived id and queues a
 // `job` effect for it. `executor` picks a CLI on one of the asker's devices
-// in place of the included tokens; the server's pre-check checks the device
-// and the limit of device runs an hour.
+// in place of the included tokens: `can` checks that the device is the
+// asker's (its `device` record is in their user log, phase 1b, Part 0 item
+// 2), and the server's pre-check the limit of device runs an hour.
 
 import { spaces } from "@session/shared";
 import { z } from "zod";
@@ -21,6 +22,9 @@ import { bad, notFound, refuse, stale } from "../errors.js";
 import type { Executor, FollowUpRec, ThreadRec } from "../records.js";
 import {
   countsOf,
+  editedWhileHidden,
+  hideOf,
+  itemKey,
   needSpace,
   ownMarkSpace,
   readable,
@@ -57,15 +61,21 @@ export const executorS = z.strictObject({
 /** The most device runs a person starts in an hour (a server setting). */
 export const DEVICE_RUNS_PER_HOUR = 100;
 
-/** The pre-check of a device run: the device is one of the actor's (account
- * state, which no replica holds), and the actor started fewer than
- * DEVICE_RUNS_PER_HOUR device runs in the past hour. The limit answers
+/** A device run's device is one of the actor's signed-in devices: its
+ * `device` record, which the actor's replica holds. */
+function ownDevice(tx: Tx, ex: z.infer<typeof executorS> | null | undefined) {
+  if (!ex) return;
+  const d = tx.get("device", ex.device);
+  if (!d || d.u !== tx.me) throw refuse("FORBIDDEN", "This device isn’t one of yours.");
+}
+
+/** The pre-check of a device run: the actor started fewer than
+ * DEVICE_RUNS_PER_HOUR device runs in the past hour (their runs are in many
+ * space logs, which no replica holds whole). The limit answers
  * TOO_MANY_REQUESTS with `retryAt`, when the next run can start; the server
  * does not record it, so the write can be sent again then. */
 function deviceCheck(ctx: PreCtx, ex: z.infer<typeof executorS> | null | undefined) {
   if (!ex) return {};
-  if (!ctx.ownsDevice(ctx.me, ex.device))
-    throw refuse("FORBIDDEN", "This device isn’t one of yours.");
   const since = ctx.nowMs - HOUR;
   const recent = ctx.tx
     .scan("run.u", ctx.me)
@@ -187,7 +197,10 @@ export const threadMutators = [
           if (n.u !== tx.me)
             throw refuse("FORBIDDEN", "Only the person who asked this can start a thread from it.");
         }
-      } else ownPayer(tx, i.pay);
+      } else {
+        ownPayer(tx, i.pay);
+        if (i.kind === "ask") ownDevice(tx, i.executor);
+      }
       return scope;
     },
     needsPre: (i) => !i.from && i.kind === "ask" && !!i.executor,
@@ -254,9 +267,10 @@ export const threadMutators = [
       const p = readableThread(tx, i.id);
       if (p.mod === "removed") throw removed();
       if (p.del || p.gone) throw deleted("thread");
-      if (p.rev !== i.base.rev) throw stale();
+      if (p.rev !== i.base.rev) throw stale(tx, tx.me, p);
       const q = text(i.q, "q");
       const changed = q !== p.q;
+      if (changed) editedWhileHidden(tx, p);
       const next: ThreadRec = {
         ...p,
         q,
@@ -492,6 +506,7 @@ export const threadMutators = [
     can: (tx, i) => {
       const scope = inSpace(tx, readableThread(tx, i.thread).s, "member");
       ownPayer(tx, i.pay);
+      ownDevice(tx, i.executor);
       return scope;
     },
     needsPre: (i) => !!i.executor,
@@ -538,9 +553,10 @@ export const threadMutators = [
       const f = followUpOf(tx, i.thread, i.node);
       if (f.mod === "removed") throw removed();
       if (f.del) throw deleted("follow-up");
-      if (f.rev !== i.base.rev) throw stale();
+      if (f.rev !== i.base.rev) throw stale(tx, tx.me, f);
       const q = text(i.q, "q");
       const changed = q !== f.q;
+      if (changed) editedWhileHidden(tx, f);
       tx.put({
         ...f,
         q,
@@ -571,6 +587,7 @@ export const threadMutators = [
       for (const x of tx.scan("run.th", f.th)) if (x.node === f.id) tx.del("run", x.id);
       if (kept) tx.put({ ...f, del: true, q: "", a: null, edited: false });
       else {
+        tx.del("hide", itemKey(f));
         tx.del("followup", f.id);
         if (f.par === null) {
           const p = tx.get("thread", f.th);
@@ -635,8 +652,9 @@ export const threadMutators = [
       const r = replyOf(tx, i.thread, i.reply);
       if (r.mod === "removed") throw removed();
       if (r.del) throw deleted("reply");
-      if (r.rev !== i.base.rev) throw stale();
+      if (r.rev !== i.base.rev) throw stale(tx, tx.me, r);
       const t = text(i.t, "t");
+      if (t !== r.t) editedWhileHidden(tx, r);
       tx.put({ ...r, t, edited: r.edited || t !== r.t });
       return null;
     },
@@ -659,6 +677,7 @@ export const threadMutators = [
       if (kept) tx.put({ ...r, del: true, t: "", edited: false });
       else {
         for (const l of tx.scan("rlike.reply", r.id)) tx.del("rlike", `${l.u}:${l.reply}`);
+        tx.del("hide", itemKey(r));
         tx.del("reply", r.id);
         const p = tx.get("thread", r.th);
         if (p) {
@@ -722,7 +741,7 @@ function fromBranch(
   const src = readableThread(tx, from.th);
   const n = followUpOf(tx, src.id, from.node);
   if (n.mod === "removed") throw removed();
-  if (n.mod === "hidden") throw refuse("PRECONDITION_FAILED", "This item is hidden.");
+  if (hideOf(tx, n)) throw refuse("PRECONDITION_FAILED", "This item is hidden.");
   if (n.del) throw deleted("follow-up");
   const nodes = tx.scan("followup.th", src.id);
   const byId = new Map(nodes.map((x) => [x.id, x]));
@@ -742,7 +761,9 @@ function fromBranch(
     branch === "all"
       ? nodes.filter((x) => {
           const down = fromN(x);
-          return down.length > 0 && down.every((y) => y.mod === null && y.u === tx.me);
+          return (
+            down.length > 0 && down.every((y) => y.mod === null && !hideOf(tx, y) && y.u === tx.me)
+          );
         })
       : [];
   const newId = new Map<string, string>();

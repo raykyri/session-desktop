@@ -107,7 +107,7 @@ export const memberMutators = [
         // saw it: its rev, which every write of the request bumps. A decline
         // applies to the request as it is now. Approving or declining needs
         // the request open, reopening needs it declined.
-        if (i.decision !== "decline" && r.rev !== i.base?.[u]) throw stale();
+        if (i.decision !== "decline" && r.rev !== i.base?.[u]) throw stale(tx, tx.me, r);
         if (r.st !== (i.decision === "reopen" ? "declined" : "open"))
           throw refuse("PRECONDITION_FAILED", "This request was already decided.");
         if (i.decision === "approve") {
@@ -146,7 +146,8 @@ export const memberMutators = [
     },
     run: (tx, i) => {
       const m = tx.get("member", `${i.space}:${i.user}`);
-      if ((m?.rev ?? 0) !== i.base.rev) throw stale();
+      if ((m?.rev ?? 0) !== i.base.rev)
+        throw stale(tx, tx.me, m ?? null, m ? [] : [`member:${i.space}:${i.user}`]);
       if (!m) throw refuse("NOT_FOUND", "This person is not a member of the space.");
       tx.put({ ...m, role: i.role });
       if (i.role === "owner") {
@@ -179,7 +180,7 @@ export const memberMutators = [
     run: (tx, i) => {
       const m = tx.get("member", `${i.space}:${i.user}`);
       if (!m) return null;
-      if (m.adm !== i.base.adm) throw stale();
+      if (m.adm !== i.base.adm) throw stale(tx, tx.me, m);
       tx.del("member", `${i.space}:${i.user}`);
       refreshSpace(tx, i.space);
       return null;
