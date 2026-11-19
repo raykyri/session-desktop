@@ -11442,7 +11442,7 @@ function taJump(k) {
     case 'ta-del-reply': { const i = taDemoPost(); st.modal = `ta-del:r:${i}:${rpIdAt(i, '0.0')}`; break; }
     case 'ta-deleted': taDemoPost(); break;
     case 'ta-deleted-ask': thread(ASK0); break;
-    case 'ta-reply': { const i = taDemoPost(); Object.assign(st, { taRp: `${i}:0`, taRpDraft: 'Room 2B is on the second floor, next to the library.' }); setTimeout(() => { const el = $('ta-rp'); if (el) el.scrollIntoView({ block: 'center' }); }, 0); break; }
+    case 'ta-reply': { const i = taDemoPost(); Object.assign(st, { taRp: `${i}:${rpIdAt(i, '0')}`, taRpDraft: 'Room 2B is on the second floor, next to the library.' }); setTimeout(() => { const el = $('ta-rp'); if (el) el.scrollIntoView({ block: 'center' }); }, 0); break; }
     case 'ta-cite': thread(ASK0); st.taCite = { th: ASK0, n: 1 }; setTimeout(() => { const r = [...document.querySelectorAll(`#app [data-tasrc="${ASK0}:1"]`)].find(x => x.getClientRects().length); if (r) r.scrollIntoView({ block: 'center' }); }, 0); break;
     case 'ta-web': thread(ASK0); st.modal = `ta-web:${ASK0}:1`; break;
     case 'ta-share': thread(ASK0); st.taShare = ASK0; setTimeout(() => { const m = document.querySelector('#app .ta-shpop'); if (m) m.scrollIntoView({ block: 'center' }); }, 0); break;
