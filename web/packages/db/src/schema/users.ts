@@ -11,6 +11,10 @@ export const users = sqliteTable(
     id: text("id").primaryKey(),
     githubId: integer("github_id").notNull().unique(),
     login: text("login").notNull(),
+    /** The person's handle in spaces (`member:<space>:<handle>`): the GitHub
+     * login in lower case when the account was made, and never changed after,
+     * so a GitHub rename does not move their records (phase 2a). */
+    handle: text("handle").notNull().unique(),
     name: text("name"),
     avatarUrl: text("avatar_url"),
     /** Set manually (`npm run db:admin -- <login>`); there is no in-app

@@ -4,6 +4,7 @@
 // applied in order by `migrate` and recorded in `sync_migrations`.
 
 import { readdirSync, readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 
 import { INDEXES, type Effect, type LogId, type StoredRecord } from "@session/mutators";
 
@@ -34,10 +35,14 @@ export interface SqliteDatabase {
   prepare(sql: string): SqliteStatement;
 }
 
-const MIGRATIONS = new URL("../../migrations/", import.meta.url);
+/** The package's migrations, next to its sources. */
+export const SYNC_MIGRATIONS = new URL("../../migrations/", import.meta.url);
 
-/** Apply the package's migrations that `db` has not had, in name order. */
-export function migrate(db: SqliteDatabase): string[] {
+/** Apply the package's migrations that `db` has not had, in name order.
+ * `dir`: where they are, when not next to this module (a bundled server
+ * ships them beside its bundle, phase 2a). */
+export function migrate(db: SqliteDatabase, dir: URL | string = SYNC_MIGRATIONS): string[] {
+  const base = typeof dir === "string" ? pathToFileURL(dir.endsWith("/") ? dir : `${dir}/`) : dir;
   db.exec(
     "CREATE TABLE IF NOT EXISTS sync_migrations (name TEXT PRIMARY KEY, at INTEGER NOT NULL)",
   );
@@ -45,13 +50,13 @@ export function migrate(db: SqliteDatabase): string[] {
     (db.prepare("SELECT name FROM sync_migrations").all() as { name: string }[]).map((r) => r.name),
   );
   const applied: string[] = [];
-  for (const name of readdirSync(MIGRATIONS)
+  for (const name of readdirSync(base)
     .filter((f) => f.endsWith(".sql"))
     .sort()) {
     if (done.has(name)) continue;
     db.exec("BEGIN");
     try {
-      db.exec(readFileSync(new URL(name, MIGRATIONS), "utf8"));
+      db.exec(readFileSync(new URL(name, base), "utf8"));
       db.prepare("INSERT INTO sync_migrations (name, at) VALUES (?, ?)").run(name, Date.now());
       db.exec("COMMIT");
     } catch (e) {
@@ -435,9 +440,14 @@ export class SqliteServerStore implements ServerStore {
   private readonly tx: SqliteTx;
   private depth = 0;
 
-  /** A store over `db`, migrated to the package's schema. */
-  constructor(private readonly db: SqliteDatabase) {
-    migrate(db);
+  /** A store over `db`, migrated to the package's schema: from
+   * `o.migrations` when given, not at all when it is false (the caller
+   * migrated `db`). */
+  constructor(
+    private readonly db: SqliteDatabase,
+    o: { migrations?: URL | string | false } = {},
+  ) {
+    if (o.migrations !== false) migrate(db, o.migrations ?? SYNC_MIGRATIONS);
     this.tx = new SqliteTx((sql) => this.stmt(sql));
   }
 

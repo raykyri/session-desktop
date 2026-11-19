@@ -1,47 +1,48 @@
-// Schema for active execution attempts, including turns, records, messages,
-// summaries, and queue positions (`docs/02-domain-model-and-database.md` §3.3;
-// `docs/05-run-lifecycle-and-streaming.md` §2, §5, §8).
+// The run pipeline's own tables (phase 2a). A run itself (its status, its
+// answer, its turns) is a record of `@session/sync`'s store; these tables
+// hold what only the server's job runner needs: the queue of runs a server
+// job will run, and one row per attempt of it. No text is kept here, so a
+// removal in the sync store erases everything of a run's text.
 
-import type { Turn } from "@session/shared";
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-import type { AttemptUsage, NodeMessage } from "../json.js";
+import type { AttemptUsage } from "../json.js";
 
-import { nodes } from "./nodes.js";
 import { users } from "./users.js";
 
-/** Transient streaming output for active attempts. Rows are purged once the final snapshot is committed. */
-export const runTurns = sqliteTable(
-  "run_turns",
+/** Admission control: a row exists from the moment the effect worker hands
+ * the run to the job runner until the run ends. `claimed_at` is set while an
+ * attempt runs; `not_before` holds a run back after a 429; `resumes` counts
+ * the automatic resumes after a restart; `seq` is the last in-flight event
+ * number written, so a resumed attempt continues past it. */
+export const runQueue = sqliteTable(
+  "run_queue",
   {
-    nodeId: text("node_id")
+    runId: text("run_id").primaryKey(),
+    userId: text("user_id")
       .notNull()
-      .references(() => nodes.id, { onDelete: "cascade" }),
-    attempt: integer("attempt").notNull(),
-    turnId: text("turn_id").notNull(),
-    position: integer("position").notNull(),
-    turnJson: text("turn_json", { mode: "json" }).$type<Turn>().notNull(),
-    /** 0 for the single in-flight checkpoint row of an attempt. */
-    committed: integer("committed", { mode: "boolean" }).notNull(),
-    /** Node sequence number at which this row was written. */
-    seq: integer("seq").notNull(),
-    updatedAt: integer("updated_at").notNull(),
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    enqueuedAt: integer("enqueued_at").notNull(),
+    claimedAt: integer("claimed_at"),
+    notBefore: integer("not_before"),
+    resumes: integer("resumes").notNull().default(0),
+    seq: integer("seq").notNull().default(0),
   },
-  (table) => [
-    primaryKey({ columns: [table.nodeId, table.attempt, table.turnId] }),
-    index("run_turns_order_idx").on(table.nodeId, table.attempt, table.position),
-  ],
+  (table) => [index("run_queue_claim_idx").on(table.claimedAt, table.enqueuedAt)],
 );
 
+/** One attempt of a server job's run: when it ran, how it ended, what it
+ * used and who paid. */
 export const runAttempts = sqliteTable(
   "run_attempts",
   {
-    nodeId: text("node_id")
-      .notNull()
-      .references(() => nodes.id, { onDelete: "cascade" }),
-    attempt: integer("attempt").notNull(),
+    runId: text("run_id").notNull(),
+    n: integer("n").notNull(),
     kind: text("kind", { enum: ["fresh", "resume"] }).notNull(),
     model: text("model").notNull(),
+    /** `session` (the included tokens) or an API key id. */
+    payer: text("payer"),
     startedAt: integer("started_at").notNull(),
     endedAt: integer("ended_at"),
     outcome: text("outcome"),
@@ -51,56 +52,5 @@ export const runAttempts = sqliteTable(
     usageJson: text("usage_json", { mode: "json" }).$type<AttemptUsage>(),
     costEstimateMicros: integer("cost_estimate_micros"),
   },
-  (table) => [primaryKey({ columns: [table.nodeId, table.attempt] })],
-);
-
-/** The canonical conversation stored by the app (`docs/04-agent-runtime.md` §4).
- * Append-only: written once when a node completes, never updated. */
-export const nodeMessages = sqliteTable(
-  "node_messages",
-  {
-    nodeId: text("node_id")
-      .notNull()
-      .references(() => nodes.id, { onDelete: "cascade" }),
-    position: integer("position").notNull(),
-    messageJson: text("message_json", { mode: "json" }).$type<NodeMessage>().notNull(),
-    /** Which model produced an assistant message, so a cross-model fork can determine
-     * to drop its reasoning metadata. */
-    model: text("model"),
-    createdAt: integer("created_at").notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.nodeId, table.position] })],
-);
-
-/** Context compaction cache: one summary standing in for everything up to
- * `covers_through_node_id`. */
-export const nodeSummaries = sqliteTable("node_summaries", {
-  nodeId: text("node_id")
-    .primaryKey()
-    .references(() => nodes.id, { onDelete: "cascade" }),
-  summary: text("summary").notNull(),
-  coversThroughNodeId: text("covers_through_node_id").notNull(),
-  createdAt: integer("created_at").notNull(),
-});
-
-/** Admission control. A row exists from the moment a node is queued until the
- * server claims it; `not_before` holds a re-queued node back after a 429. */
-export const runQueue = sqliteTable(
-  "run_queue",
-  {
-    nodeId: text("node_id")
-      .primaryKey()
-      .references(() => nodes.id, { onDelete: "cascade" }),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    // Only `research` is written; see `repos/queue.ts` on why the second value
-    // is declared and unused.
-    pool: text("pool", { enum: ["research", "metadata"] }).notNull(),
-    provider: text("provider").notNull(),
-    enqueuedAt: integer("enqueued_at").notNull(),
-    claimedAt: integer("claimed_at"),
-    notBefore: integer("not_before"),
-  },
-  (table) => [index("run_queue_claim_idx").on(table.pool, table.claimedAt, table.enqueuedAt)],
+  (table) => [primaryKey({ columns: [table.runId, table.n] })],
 );

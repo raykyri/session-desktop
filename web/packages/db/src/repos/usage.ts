@@ -3,7 +3,7 @@
 // §8, `docs/04-agent-runtime.md` §10).
 
 import type { UsageSummary } from "@session/shared";
-import { and, eq, gte, lt, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, lt, ne, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { newId } from "../ids.js";
@@ -17,7 +17,10 @@ export const DEFAULT_DAILY_TOKENS = 1_000_000;
 export const DEFAULT_DAILY_RUNS = 10;
 
 export interface UsageEventInput {
-  nodeId?: string | null | undefined;
+  runId?: string | null | undefined;
+  spaceId?: string | null | undefined;
+  /** `session` or an API key id. */
+  payer?: string | null | undefined;
   kind: "research" | "metadata" | "search" | "fetch" | "run";
   provider: string;
   model?: string | null | undefined;
@@ -35,7 +38,9 @@ export function record(db: SessionDatabase, userId: string, input: UsageEventInp
     .values({
       id,
       userId,
-      nodeId: input.nodeId ?? null,
+      runId: input.runId ?? null,
+      spaceId: input.spaceId ?? null,
+      payer: input.payer ?? null,
       kind: input.kind,
       provider: input.provider,
       model: input.model ?? null,
@@ -192,4 +197,70 @@ export function admissionCheck(
     return { allowed: false, remainingTokens, remainingRuns, reason: "tokens" };
   }
   return { allowed: true, remainingTokens, remainingRuns };
+}
+
+/** The first instant of the UTC month of `at`, and of the next one. */
+export function monthOf(at: number): { start: number; end: number } {
+  const d = new Date(at);
+  return {
+    start: Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1),
+    end: Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1),
+  };
+}
+
+/** Tokens this month by payer and space (`/api/me/usage`'s `by`): input
+ * plus output tokens of every event with a payer. */
+export function monthlyByPayer(
+  db: SessionDatabase,
+  userId: string,
+  at: number = now(),
+): Record<string, Record<string, number>> {
+  const { start, end } = monthOf(at);
+  const rows = db
+    .select({
+      payer: usageEvents.payer,
+      spaceId: usageEvents.spaceId,
+      tokens: sql<number>`sum(${usageEvents.inputTokens} + ${usageEvents.outputTokens})`,
+    })
+    .from(usageEvents)
+    .where(
+      and(
+        eq(usageEvents.userId, userId),
+        isNotNull(usageEvents.payer),
+        ne(usageEvents.kind, "run"),
+        gte(usageEvents.createdAt, start),
+        lt(usageEvents.createdAt, end),
+      ),
+    )
+    .groupBy(usageEvents.payer, usageEvents.spaceId)
+    .all();
+  const out: Record<string, Record<string, number>> = {};
+  for (const r of rows) {
+    if (r.payer === null) continue;
+    const by = (out[r.payer] ??= {});
+    by[r.spaceId ?? ""] = (by[r.spaceId ?? ""] ?? 0) + (r.tokens ?? 0);
+  }
+  return out;
+}
+
+/** Tokens one payer used this month. */
+export function monthlyUsed(
+  db: SessionDatabase,
+  userId: string,
+  payer: string,
+  at: number = now(),
+): number {
+  return Object.values(monthlyByPayer(db, userId, at)[payer] ?? {}).reduce((a, b) => a + b, 0);
+}
+
+/** Tokens each run used (its usage events), for the runs of `userId`. */
+export function tokensOfRun(db: SessionDatabase, runId: string): number {
+  const row = db
+    .select({
+      tokens: sql<number | null>`sum(${usageEvents.inputTokens} + ${usageEvents.outputTokens})`,
+    })
+    .from(usageEvents)
+    .where(and(eq(usageEvents.runId, runId), ne(usageEvents.kind, "run")))
+    .get();
+  return row?.tokens ?? 0;
 }

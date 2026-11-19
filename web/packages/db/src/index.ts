@@ -2,8 +2,8 @@
 // §1). `server` imports from the package root; nothing reaches into a subpath.
 //
 // The Drizzle schema is one `schema` namespace and each repository is a
-// namespace of its own, so a caller writes `trees.admitRoot(...)` or
-// `schema.nodes` and never has to know which file a table or an invariant
+// namespace of its own, so a caller writes `runs.enqueue(...)` or
+// `schema.users` and never has to know which file a table or an invariant
 // is defined in.
 
 export * from "./backfills/index.js";
@@ -11,6 +11,6 @@ export * from "./connection.js";
 export * from "./ids.js";
 export * from "./json.js";
 export * from "./repos/index.js";
-export * from "./revision.js";
 export * from "./schema/namespace.js";
 export * from "./time.js";
+export { KeyCipher } from "./repos/apiKeys.js";

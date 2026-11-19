@@ -12,6 +12,8 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 
+import { migrate as migrateSync } from "@session/sync/server";
+
 import { runBackfills } from "./backfills/index.js";
 import * as schema from "./schema/index.js";
 
@@ -28,6 +30,9 @@ const MIGRATIONS_TABLE = "__drizzle_migrations";
 export interface OpenDatabaseOptions {
   /** Overridden only by tests that exercise migration handling itself. */
   migrationsFolder?: string;
+  /** Where `@session/sync`'s SQL migrations are, when not next to its
+   * sources (a bundled server ships them beside its bundle). */
+  syncMigrationsFolder?: string;
   /** Skip `migrate()` and the migration-drift check. For tooling that has to
    * open a database it is about to migrate by hand. */
   skipMigrations?: boolean;
@@ -115,6 +120,10 @@ export function openDatabase(path: string, options: OpenDatabaseOptions = {}): S
       throw new UnknownMigrationError(unknown);
     }
     migrate(db, { migrationsFolder });
+    // the sync store's tables: `@session/sync` owns that schema and records
+    // what it applied in `sync_migrations` (phase 2a)
+    if (options.syncMigrationsFolder === undefined) migrateSync(client);
+    else migrateSync(client, options.syncMigrationsFolder);
     runBackfills(db);
   }
   return db;

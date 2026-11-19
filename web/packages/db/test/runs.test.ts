@@ -1,315 +1,116 @@
+// The run queue and attempts of server jobs, and API keys at rest (phase 2a).
+
+import { randomBytes } from "node:crypto";
+
 import test from "ava";
 
-import { messages, nodes, runs, snapshots, trees } from "../src/index.js";
+import { KeyCipher, apiKeys, runs, users } from "../src/index.js";
 
-import { answerTurn, createFixture, runOf } from "./helpers.js";
+import { addUser, createFixture } from "./helpers.js";
 
-function startedRoot(fixture: ReturnType<typeof createFixture>) {
-  const detail = trees.admitRoot(fixture.db, fixture.userId, {
-    type: "exchange",
-    workspaceId: fixture.workspaceId,
-    message: { text: "Root" },
-    agent: { model: "gemini-flash" },
-  });
-  nodes.setStatus(fixture.db, fixture.userId, detail.tree.rootNodeId, "running");
-  return detail.tree.rootNodeId;
-}
-
-test("committing a turn advances run_seq by exactly one", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = startedRoot(fixture);
-  const before = runs.liveWindow(fixture.db, fixture.userId, nodeId).seq;
-  const first = runs.commitTurn(fixture.db, fixture.userId, {
-    nodeId,
-    turn: answerTurn(nodeId, "one", "t1"),
-  });
-  const second = runs.commitTurn(fixture.db, fixture.userId, {
-    nodeId,
-    turn: answerTurn(nodeId, "two", "t2"),
-  });
-  t.is(first.seq, before + 1);
-  t.is(second.seq, first.seq + 1);
-  t.is(first.position, 0);
-  t.is(second.position, 1);
+test("a run is queued once, claimed once, requeued after a 429, and released", (t) => {
+  const { db, userId } = createFixture(t);
+  t.true(runs.enqueue(db, { runId: "R1", userId, provider: "anthropic", at: 10 }));
+  t.false(
+    runs.enqueue(db, { runId: "R1", userId, provider: "anthropic", at: 20 }),
+    "at least once",
+  );
+  runs.enqueue(db, { runId: "R2", userId, provider: "vertex", at: 15 });
+  t.deepEqual(
+    runs.waiting(db, 100).map((r) => r.runId),
+    ["R1", "R2"],
+  );
+  t.true(runs.claim(db, "R1", 30));
+  t.false(runs.claim(db, "R1", 31));
+  t.deepEqual(
+    runs.claimed(db).map((r) => r.runId),
+    ["R1"],
+  );
+  t.is(runs.runningCounts(db).byUser.get(userId), 1);
+  t.is(runs.runningCounts(db).byProvider.get("anthropic"), 1);
+  runs.requeue(db, "R1", 1000);
+  t.deepEqual(
+    runs.waiting(db, 100).map((r) => r.runId),
+    ["R2"],
+    "held back until notBefore",
+  );
+  t.deepEqual(
+    runs.waiting(db, 1000).map((r) => r.runId),
+    ["R1", "R2"],
+  );
+  runs.claim(db, "R1");
+  t.is(runs.noteResume(db, "R1"), 1);
+  t.is(runs.noteResume(db, "R1"), 2);
+  runs.setSeq(db, "R1", 41);
+  t.is(runs.get(db, "R1")?.seq, 41);
+  t.is(runs.countOfUser(db, userId), 2);
+  runs.release(db, "R1");
+  t.is(runs.get(db, "R1"), null);
 });
 
-test("the live window is the committed turns plus the checkpoint text", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = startedRoot(fixture);
-  runs.commitTurn(fixture.db, fixture.userId, { nodeId, turn: answerTurn(nodeId, "done", "t1") });
-  runs.checkpointInFlight(fixture.db, fixture.userId, {
-    nodeId,
-    seq: runs.liveWindow(fixture.db, fixture.userId, nodeId).seq,
-    turn: answerTurn(nodeId, "still writ", "t2"),
-  });
-  const window = runs.liveWindow(fixture.db, fixture.userId, nodeId);
-  t.is(window.turns.length, 1);
-  t.is(window.inFlightText, "still writ");
-  t.is(window.inFlightTurnId, "t2");
-
-  // The checkpoint keeps its slot as it grows, then becomes the committed turn.
-  runs.checkpointInFlight(fixture.db, fixture.userId, {
-    nodeId,
-    seq: runs.liveWindow(fixture.db, fixture.userId, nodeId).seq,
-    turn: answerTurn(nodeId, "still writing", "t2"),
-  });
-  t.is(runs.liveWindow(fixture.db, fixture.userId, nodeId).inFlightText, "still writing");
-  runs.commitTurn(fixture.db, fixture.userId, {
-    nodeId,
-    turn: answerTurn(nodeId, "still writing now", "t2"),
-  });
-  const settled = runs.liveWindow(fixture.db, fixture.userId, nodeId);
-  t.is(settled.turns.length, 2);
-  t.is(settled.inFlightText, undefined);
-});
-
-test("the live window shows only the current attempt", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = startedRoot(fixture);
-  runs.commitTurn(fixture.db, fixture.userId, {
-    nodeId,
-    turn: answerTurn(nodeId, "attempt one", "t1"),
-    attempt: 1,
-  });
-  fixture.db.$client.prepare(`UPDATE nodes SET attempt = 2 WHERE id = ?`).run(nodeId);
-  t.deepEqual(runs.liveWindow(fixture.db, fixture.userId, nodeId).turns, []);
-});
-
-test("the attempt record opens and closes", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = startedRoot(fixture);
-  runs.startAttempt(fixture.db, { nodeId, attempt: 1, kind: "fresh", model: "gemini-flash" });
-  runs.finishAttempt(fixture.db, {
-    nodeId,
-    attempt: 1,
+test("attempts are numbered within their run", (t) => {
+  const { db } = createFixture(t);
+  const a = runs.startAttempt(db, { runId: "R1", kind: "fresh", model: "m", payer: "session" });
+  const b = runs.startAttempt(db, { runId: "R1", kind: "resume", model: "m", payer: "K1" });
+  t.deepEqual([a, b], [1, 2]);
+  runs.finishAttempt(db, {
+    runId: "R1",
+    n: 2,
     outcome: "complete",
     steps: 3,
-    toolCalls: 2,
-    usage: { inputTokens: 10, outputTokens: 20, reasoningTokens: 5, cachedTokens: 0 },
-    costEstimateMicros: 42,
+    usage: { inputTokens: 1, outputTokens: 2, reasoningTokens: 0, cachedTokens: 0 },
   });
-  const [attempt] = runs.listAttempts(fixture.db, nodeId);
-  t.is(attempt?.kind, "fresh");
-  t.is(attempt?.outcome, "complete");
-  t.is(attempt?.steps, 3);
-  t.deepEqual(attempt?.usageJson, {
-    inputTokens: 10,
-    outputTokens: 20,
-    reasoningTokens: 5,
-    cachedTokens: 0,
-  });
-  t.not(attempt?.endedAt, null);
+  const rows = runs.attempts(db, "R1");
+  t.like(rows[1], { n: 2, kind: "resume", payer: "K1", outcome: "complete", steps: 3 });
+  t.is(rows[0]?.outcome, null);
 });
 
-test("final snapshot commit marks node status as terminal and removes live turns", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = startedRoot(fixture);
-  runs.commitTurn(fixture.db, fixture.userId, {
-    nodeId,
-    turn: answerTurn(nodeId, "Birds sing at dawn because sound carries further.", "t1"),
+test("an API key is stored encrypted; its fingerprint finds a duplicate of the same person only", (t) => {
+  const { db, userId, handle } = createFixture(t);
+  const other = addUser(db, "Other");
+  const cipher = new KeyCipher(randomBytes(32));
+  const raw = "sk-ant-SECRET-VALUE-0001";
+  apiKeys.put(db, cipher, {
+    id: "K1",
+    userId,
+    handle,
+    raw,
+    mask: "sk-ant-…0001",
+    provider: "Anthropic",
   });
-  const before = trees.summaries(fixture.db, fixture.userId)[0]?.updatedAt ?? 0;
-  const result = snapshots.commit(fixture.db, fixture.userId, {
-    nodeId,
-    turns: [answerTurn(nodeId, "Birds sing at dawn because sound carries further.", "t1")],
-    outcome: { status: "complete" },
-  });
-  t.is(runOf(result.node).status, "complete");
-  t.not(runOf(result.node).responseSnapshotAt, null);
-  t.regex(result.revision, /^[0-9a-f]{64}$/);
-  t.true((runOf(result.node).responsePreview ?? "").startsWith("Birds sing at dawn"));
-  t.deepEqual(runs.liveWindow(fixture.db, fixture.userId, nodeId).turns, []);
-  const stored = snapshots.read(fixture.db, fixture.userId, nodeId);
-  t.is(stored?.revision, result.revision);
-  t.is(stored?.outcome?.status, "complete");
-  t.true(
-    (trees.summaries(fixture.db, fixture.userId)[0]?.updatedAt ?? 0) > before,
-    "the commit touches the thread, and touchTree moves updated_at strictly forward",
-  );
-});
-
-test("a snapshot without assistant text is refused", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = startedRoot(fixture);
+  const row = apiKeys.get(db, "K1");
+  t.truthy(row);
+  t.false(JSON.stringify(db.$client.prepare("SELECT * FROM api_keys").all()).includes("SECRET"));
+  t.is(apiKeys.raw(db, cipher, "K1"), raw);
+  t.is(apiKeys.findByRaw(db, cipher, userId, handle, raw), "K1");
+  t.is(apiKeys.findByRaw(db, cipher, other.userId, other.handle, raw), null);
   t.throws(
-    () =>
-      snapshots.commit(fixture.db, fixture.userId, {
-        nodeId,
-        turns: [
-          {
-            id: "t1",
-            agentId: nodeId,
-            role: "user",
-            blocks: [{ type: "text", text: "a question" }],
-            sourceIndex: 0,
-          },
-        ],
-        outcome: { status: "complete" },
-      }),
-    { message: /must contain assistant output text/ },
+    () => apiKeys.raw(db, new KeyCipher(randomBytes(32)), "K1"),
+    undefined,
+    "another key opens nothing",
   );
+  apiKeys.put(db, cipher, {
+    id: "K1",
+    userId,
+    handle,
+    raw: "sk-or-NEW-0002",
+    mask: "m",
+    provider: "OpenRouter",
+  });
+  t.is(apiKeys.raw(db, cipher, "K1"), "sk-or-NEW-0002");
+  t.is(apiKeys.findByRaw(db, cipher, userId, handle, raw), null);
+  apiKeys.remove(db, "K1");
+  t.deepEqual(apiKeys.list(db, userId), []);
 });
 
-test("prevents committing duplicate snapshots for nodes in a terminal state", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = startedRoot(fixture);
-  snapshots.commit(fixture.db, fixture.userId, {
-    nodeId,
-    turns: [answerTurn(nodeId, "The answer.")],
-    outcome: { status: "complete" },
-  });
-  t.throws(
-    () =>
-      snapshots.commit(fixture.db, fixture.userId, {
-        nodeId,
-        turns: [answerTurn(nodeId, "A different answer.")],
-        outcome: { status: "complete" },
-      }),
-    { message: /cannot be committed again/ },
-  );
-});
-
-test("messages are appended only for a completed node", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = startedRoot(fixture);
-  t.throws(
-    () =>
-      messages.appendMessages(fixture.db, fixture.userId, nodeId, [
-        { message: { role: "assistant" } },
-      ]),
-    { message: /only completed runs/ },
-  );
-  snapshots.commit(fixture.db, fixture.userId, {
-    nodeId,
-    turns: [answerTurn(nodeId, "An answer.")],
-    outcome: { status: "complete" },
-  });
-  messages.appendMessages(fixture.db, fixture.userId, nodeId, [
-    { message: { role: "user", content: "the question" } },
-    { message: { role: "assistant", content: "the answer" }, model: "gemini-flash" },
-  ]);
-  const stored = messages.listMessages(fixture.db, fixture.userId, nodeId);
-  t.is(stored.length, 2);
-  t.deepEqual(
-    stored.map((entry) => entry.position),
-    [0, 1],
-  );
-  t.is(stored[1]?.model, "gemini-flash");
-  // A second append continues rather than replaces.
-  messages.appendMessages(fixture.db, fixture.userId, nodeId, [{ message: { role: "tool" } }]);
-  t.is(messages.listMessages(fixture.db, fixture.userId, nodeId).length, 3);
-});
-
-test("a node's context is its ancestors' messages, root first", (t) => {
-  const fixture = createFixture(t);
-  const rootId = startedRoot(fixture);
-  snapshots.commit(fixture.db, fixture.userId, {
-    nodeId: rootId,
-    turns: [answerTurn(rootId, "Root answer.")],
-    outcome: { status: "complete" },
-  });
-  messages.appendMessages(fixture.db, fixture.userId, rootId, [
-    { message: { role: "user", content: "root" } },
-  ]);
-  const child = nodes.admitChild(fixture.db, fixture.userId, {
-    parentNodeId: rootId,
-    message: { text: "Follow-up" },
-  });
-  nodes.setStatus(fixture.db, fixture.userId, child.id, "running");
-  snapshots.commit(fixture.db, fixture.userId, {
-    nodeId: child.id,
-    turns: [answerTurn(child.id, "Child answer.")],
-    outcome: { status: "complete" },
-  });
-  messages.appendMessages(fixture.db, fixture.userId, child.id, [
-    { message: { role: "user", content: "child" } },
-  ]);
-  const grandchild = nodes.admitChild(fixture.db, fixture.userId, {
-    parentNodeId: child.id,
-    message: { text: "Deeper" },
-  });
-  t.deepEqual(messages.ancestorPath(fixture.db, fixture.userId, grandchild.id), [
-    rootId,
-    child.id,
-    grandchild.id,
-  ]);
-  t.deepEqual(
-    messages
-      .ancestorMessages(fixture.db, fixture.userId, grandchild.id)
-      .map((entry) => entry.message["content"]),
-    ["root", "child"],
-  );
-});
-
-test("the compaction summary is cached per node", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = startedRoot(fixture);
-  t.is(messages.getSummary(fixture.db, fixture.userId, nodeId), null);
-  messages.saveSummary(fixture.db, fixture.userId, nodeId, "A summary.", nodeId);
-  t.is(messages.getSummary(fixture.db, fixture.userId, nodeId)?.summary, "A summary.");
-  messages.saveSummary(fixture.db, fixture.userId, nodeId, "A newer summary.", nodeId);
-  t.is(messages.getSummary(fixture.db, fixture.userId, nodeId)?.summary, "A newer summary.");
-});
-
-test("a checkpoint replaces the previous one rather than accumulating", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = startedRoot(fixture);
-  runs.checkpointInFlight(fixture.db, fixture.userId, {
-    nodeId,
-    seq: runs.liveWindow(fixture.db, fixture.userId, nodeId).seq,
-    turn: answerTurn(nodeId, "first draft", "t1"),
-  });
-  // The runtime moved on to a new turn without committing the old checkpoint.
-  runs.checkpointInFlight(fixture.db, fixture.userId, {
-    nodeId,
-    seq: runs.liveWindow(fixture.db, fixture.userId, nodeId).seq,
-    turn: answerTurn(nodeId, "second draft", "t2"),
-  });
-  const rows = fixture.db.$client
-    .prepare(`SELECT turn_id FROM run_turns WHERE node_id = ? AND committed = 0`)
-    .all(nodeId) as { turn_id: string }[];
-  t.deepEqual(
-    rows.map((row) => row.turn_id),
-    ["t2"],
-    "one uncommitted row per attempt",
-  );
-  t.is(runs.liveWindow(fixture.db, fixture.userId, nodeId).inFlightText, "second draft");
-});
-
-test("committing a turn preserves the active in-flight checkpoint", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = startedRoot(fixture);
-  runs.checkpointInFlight(fixture.db, fixture.userId, {
-    nodeId,
-    seq: runs.liveWindow(fixture.db, fixture.userId, nodeId).seq,
-    turn: answerTurn(nodeId, "streaming", "t2"),
-  });
-  runs.commitTurn(fixture.db, fixture.userId, {
-    nodeId,
-    turn: answerTurn(nodeId, "an earlier step", "t1"),
-  });
-  const window = runs.liveWindow(fixture.db, fixture.userId, nodeId);
-  t.is(window.turns.length, 1);
-  t.is(window.inFlightText, "streaming");
-});
-
-test("advanceSeq carries the loop's in-memory sequence back into the row", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = startedRoot(fixture);
-  const start = runs.liveWindow(fixture.db, fixture.userId, nodeId).seq;
-
-  // The loop forwarded ten deltas without writing a row.
-  t.is(runs.advanceSeq(fixture.db, fixture.userId, nodeId, start + 10), start + 10);
-  t.is(runs.liveWindow(fixture.db, fixture.userId, nodeId).seq, start + 10);
-
-  // The next write continues from there rather than from the last row.
-  const committed = runs.commitTurn(fixture.db, fixture.userId, {
-    nodeId,
-    turn: answerTurn(nodeId, "one", "t1"),
-  });
-  t.is(committed.seq, start + 11);
-
-  // Monotonic: a stale value never moves the counter backwards.
-  t.is(runs.advanceSeq(fixture.db, fixture.userId, nodeId, start + 2), start + 11);
-  t.is(runs.liveWindow(fixture.db, fixture.userId, nodeId).seq, start + 11);
+test("a handle is the login in lower case when the account is made, and stays", (t) => {
+  const { db } = createFixture(t);
+  const a = users.upsertFromGitHub(db, { githubId: 1, login: "Mel-Cho" }).user;
+  t.is(a.handle, "mel-cho");
+  const renamed = users.upsertFromGitHub(db, { githubId: 1, login: "MelC" }).user;
+  t.is(renamed.handle, "mel-cho");
+  const b = users.upsertFromGitHub(db, { githubId: 2, login: "mel-cho" }).user;
+  t.is(b.handle, "mel-cho-2", "a login reused after a rename gets a free handle");
+  t.is(users.findByHandle(db, "mel-cho")?.id, a.id);
+  t.is(users.upsertFromGitHub(db, { githubId: 3, login: "null" }).user.handle, "null-1");
 });

@@ -27,49 +27,42 @@ test("applies every migration to an empty database", (t) => {
          ORDER BY name`,
       )
       .all() as { name: string }[];
-    // The whole set, so a table the schema no longer declares is caught too.
+    // The whole set, so a table the schema no longer declares is caught too:
+    // the general tables, the run tables, API keys, and @session/sync's
+    // tables (its migrations, applied by `openDatabase` after these).
     t.deepEqual(
       tables.map((row) => row.name),
       [
+        "api_keys",
         "backfills",
-        "collapsed_groups",
-        "collapsed_places",
-        "embed_assets",
-        "feed_items",
-        "folders",
-        "followup_queue",
-        "highlights",
-        "image_refs",
-        "interface_drafts",
         "invites",
-        "node_messages",
-        "node_summaries",
-        "nodes",
-        "notifications",
         "oauth_states",
-        "research_drafts",
-        "research_images",
-        "response_snapshots",
         "run_attempts",
         "run_queue",
-        "run_turns",
         "sessions",
         "signup_attempts",
-        "tree_folder_membership",
-        "tree_invites",
-        "tree_member_removals",
-        "tree_members",
-        "tree_subscriptions",
-        "tree_views",
-        "trees",
-        "tweet_cache",
+        "sync_answers",
+        "sync_clients",
+        "sync_dead_letters",
+        "sync_device_runs",
+        "sync_device_tokens",
+        "sync_effects",
+        "sync_epochs",
+        "sync_index",
+        "sync_leases",
+        "sync_log",
+        "sync_meta",
+        "sync_migrations",
+        "sync_records",
+        "sync_registrations",
+        "sync_registry",
+        "sync_seq_answers",
+        "sync_signins",
+        "sync_tombstones",
         "usage_events",
         "user_limits",
         "user_preferences",
         "users",
-        "widget_revisions",
-        "widget_state",
-        "workspaces",
       ],
     );
     t.is(tableRowCount(db, "users"), 0);
@@ -95,23 +88,7 @@ test("the history is a single initial migration", (t) => {
   );
 });
 
-test("the sharing columns are in the initial schema", (t) => {
-  const db = openDatabase(":memory:");
-  const columns = (table: string) =>
-    (db.$client.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
-      (row) => row.name,
-    );
-  for (const name of ["role", "invited_by", "archived_at", "trashed_at", "folder_id"]) {
-    t.true(columns("tree_members").includes(name), name);
-  }
-  for (const name of ["visibility", "trashed_by", "parent_tree_id"]) {
-    t.true(columns("trees").includes(name), name);
-  }
-  t.true(columns("nodes").includes("edited_by"));
-  closeDatabase(db);
-});
-
-test("the hot lookups and foreign keys have indexes", (t) => {
+test("the hot lookups have indexes", (t) => {
   const db = openDatabase(":memory:");
   const indexed = (table: string, column: string) =>
     (db.$client.prepare(`PRAGMA index_list(${table})`).all() as { name: string }[]).some(
@@ -124,87 +101,32 @@ test("the hot lookups and foreign keys have indexes", (t) => {
       },
     );
   for (const [table, column] of [
-    ["feed_items", "tree_id"],
-    ["followup_queue", "tree_id"],
-    ["followup_queue", "author_id"],
-    ["tree_members", "folder_id"],
-    ["nodes", "author_id"],
+    ["usage_events", "user_id"],
+    ["api_keys", "user_id"],
+    ["run_queue", "claimed_at"],
+    ["users", "handle"],
   ] as const) {
     t.true(indexed(table, column), `${table}.${column}`);
   }
-  // The image read checks the uploader's own nodes through that index.
-  const plan = db.$client
-    .prepare(
-      `EXPLAIN QUERY PLAN SELECT 1 FROM nodes WHERE nodes.author_id = ? AND nodes.message_json LIKE ?`,
-    )
-    .all("someone", "%x%") as { detail: string }[];
-  t.true(
-    plan.some((row) => row.detail.includes("nodes_author_idx")),
-    JSON.stringify(plan),
-  );
   closeDatabase(db);
 });
 
-test("the node checks tie each body column to the node's type", (t) => {
-  const db = openDatabase(":memory:");
-  const client = db.$client;
-  client.exec(`
-    INSERT INTO users (id, github_id, login, created_at, last_login_at)
-      VALUES ('u', 1, 'u', 0, 0);
-    INSERT INTO workspaces (id, user_id, name, position, created_at, updated_at)
-      VALUES ('w', 'u', 'W', 0, 0, 0);
-    INSERT INTO trees (id, owner_id, workspace_id, title, root_node_id, created_at, updated_at, position)
-      VALUES ('t', 'u', 'w', 'T', 'n', 0, 0, 0);
-  `);
-  const insert = (id: string, columns: Record<string, string | null>) => {
-    const names = ["id", "tree_id", "created_at", ...Object.keys(columns)];
-    const values = [id, "t", 0, ...Object.values(columns)];
-    client
-      .prepare(
-        `INSERT INTO nodes (${names.join(", ")}) VALUES (${names.map(() => "?").join(", ")})`,
-      )
-      .run(...values);
-  };
-  const message = JSON.stringify({ text: "q" });
-  t.notThrows(() =>
-    insert("exchange", { type: "exchange", message_json: message, model: "m", status: "queued" }),
-  );
-  t.notThrows(() => insert("post", { type: "post", message_json: message, format: "text" }));
-  t.notThrows(() => insert("document", { type: "document", source: "authored" }));
-  // An exchange needs a status and a model; a post or document has no status.
-  t.throws(() => insert("e2", { type: "exchange", message_json: message, model: "m" }));
-  t.throws(() => insert("e3", { type: "exchange", message_json: message, status: "queued" }));
-  t.throws(() =>
-    insert("p2", { type: "post", message_json: message, format: "text", status: "queued" }),
-  );
-  t.throws(() => insert("p3", { type: "post", message_json: message }));
-  t.throws(() => insert("p4", { type: "post", format: "text" }));
-  t.throws(() => insert("d2", { type: "document" }));
-  closeDatabase(db);
-});
-
-test("a tree is filed in a folder or the drafts place, not both", (t) => {
-  const db = openDatabase(":memory:");
-  const client = db.$client;
-  client.exec(`
-    INSERT INTO users (id, github_id, login, created_at, last_login_at)
-      VALUES ('u', 1, 'u', 0, 0);
-    INSERT INTO workspaces (id, user_id, name, position, created_at, updated_at)
-      VALUES ('w', 'u', 'W', 0, 0, 0);
-    INSERT INTO trees (id, owner_id, workspace_id, title, root_node_id, created_at, updated_at, position)
-      VALUES ('t1', 'u', 'w', 'T', 'n', 0, 0, 0), ('t2', 'u', 'w', 'T', 'n', 0, 0, 1),
-        ('t3', 'u', 'w', 'T', 'n', 0, 0, 2), ('t4', 'u', 'w', 'T', 'n', 0, 0, 3);
-    INSERT INTO folders (id, owner_id, workspace_id, name, position, created_at)
-      VALUES ('f', 'u', 'w', 'F', 0, 0);
-  `);
-  const file = client.prepare(
-    `INSERT INTO tree_folder_membership (tree_id, folder_id, system_place) VALUES (?, ?, ?)`,
-  );
-  t.notThrows(() => file.run("t1", "f", null));
-  t.notThrows(() => file.run("t2", null, "drafts"));
-  t.throws(() => file.run("t3", "f", "drafts"));
-  t.throws(() => file.run("t4", null, null));
-  closeDatabase(db);
+test("the sync store's migrations are recorded once", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "session-sync-"));
+  const path = join(directory, "session.db");
+  try {
+    closeDatabase(openDatabase(path));
+    const db = openDatabase(path);
+    const names = (
+      db.$client.prepare("SELECT name FROM sync_migrations ORDER BY name").all() as {
+        name: string;
+      }[]
+    ).map((r) => r.name);
+    t.deepEqual(names, ["0001_sync.sql", "0002_review_r1.sql"]);
+    closeDatabase(db);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("applies the file pragmas", (t) => {

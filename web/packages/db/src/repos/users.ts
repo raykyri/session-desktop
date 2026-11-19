@@ -32,6 +32,7 @@ export function toUser(row: UserRow): User {
   return {
     id: row.id,
     login: row.login,
+    handle: row.handle,
     name: row.name,
     avatarUrl: row.avatarUrl,
     isAdmin: row.isAdmin,
@@ -76,6 +77,7 @@ export function upsertFromGitHub(
         id: newId(),
         githubId: profile.githubId,
         login: profile.login,
+        handle: freeHandle(tx, profile.login),
         name: profile.name ?? null,
         avatarUrl: profile.avatarUrl ?? null,
         isAdmin: false,
@@ -90,6 +92,29 @@ export function upsertFromGitHub(
       .get();
     return { user: toUser(inserted), created: true };
   });
+}
+
+/** A handle for a new account: the login in lower case (a GitHub login is
+ * letters, digits and hyphens, so it fits the spaces' handle pattern), with
+ * a number after it when another account holds it (a login reused after a
+ * rename). */
+export function freeHandle(db: SessionDatabase, login: string): string {
+  const base =
+    login
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]/g, "-")
+      .replace(/^[^a-z0-9]+/, "")
+      .slice(0, 56) || "user";
+  const base2 = base === "null" || base === "undefined" ? `${base}-1` : base;
+  for (let k = 1; ; k++) {
+    const h = k === 1 ? base2 : `${base2}-${k}`;
+    if (!db.select({ id: users.id }).from(users).where(eq(users.handle, h)).get()) return h;
+  }
+}
+
+export function findByHandle(db: SessionDatabase, handle: string): User | null {
+  const row = db.select().from(users).where(eq(users.handle, handle)).get();
+  return row ? toUser(row) : null;
 }
 
 export function findById(db: SessionDatabase, userId: string): User | null {

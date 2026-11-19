@@ -1,5 +1,7 @@
-// Per-account settings and the research launch instruction
-// (`docs/06-auth-and-users.md` §6).
+// Per-account settings (`docs/06-auth-and-users.md` §6): the appearance
+// settings, the research launch instruction, the account and notification
+// settings of the spaces API (`/api/me/settings`) and the payer settings of
+// `/api/me/usage` (phase 2a).
 
 import type { UserSettings } from "@session/shared";
 import { DEFAULT_USER_SETTINGS, userSettingsSchema } from "@session/shared";
@@ -8,18 +10,31 @@ import { eq } from "drizzle-orm";
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
 import { parseJsonColumn } from "../json.js";
-import { userPreferences } from "../schema/preferences.js";
+import { userPreferences, type AccountSettings } from "../schema/preferences.js";
 import { now } from "../time.js";
+
+export type { AccountSettings };
 
 /** The desktop capped the launch instruction at 4 KiB before wrapping it into
  * the system prompt; the cap is enforced here so a direct repository call
  * cannot store more than a prompt can carry. */
 export const MAX_RESEARCH_LAUNCH_INSTRUCTION_BYTES = 4096;
 
+export const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
+  email: "",
+  emailNew: null,
+  exportAt: null,
+  emailOn: true,
+  types: {},
+  spaces: {},
+};
+
 export interface StoredPreferences {
   settings: UserSettings;
   researchLaunchInstruction: string | null;
-  defaultWorkspaceId: string | null;
+  account: AccountSettings;
+  defaultKeyId: string | null;
+  movedSeen: boolean;
   updatedAt: number;
 }
 
@@ -31,7 +46,9 @@ function rowToPreferences(row: typeof userPreferences.$inferSelect): StoredPrefe
       "user_preferences.settings_json",
     ),
     researchLaunchInstruction: row.researchLaunchInstruction,
-    defaultWorkspaceId: row.defaultWorkspaceId,
+    account: { ...DEFAULT_ACCOUNT_SETTINGS, ...row.accountJson },
+    defaultKeyId: row.defaultKeyId,
+    movedSeen: row.movedSeen,
     updatedAt: row.updatedAt,
   };
 }
@@ -54,7 +71,9 @@ export function ensure(db: SessionDatabase, userId: string): StoredPreferences {
         userId,
         settingsJson: DEFAULT_USER_SETTINGS,
         researchLaunchInstruction: null,
-        defaultWorkspaceId: null,
+        accountJson: DEFAULT_ACCOUNT_SETTINGS,
+        defaultKeyId: null,
+        movedSeen: false,
         updatedAt: now(),
       })
       .returning()
@@ -66,7 +85,9 @@ export function ensure(db: SessionDatabase, userId: string): StoredPreferences {
 export interface PreferencesPatch {
   settings?: Partial<UserSettings>;
   researchLaunchInstruction?: string | null;
-  defaultWorkspaceId?: string | null;
+  account?: Partial<AccountSettings>;
+  defaultKeyId?: string | null;
+  movedSeen?: boolean;
 }
 
 /** Merges a patch into the stored preferences. Settings merge field by field
@@ -83,16 +104,14 @@ export function update(
       patch.researchLaunchInstruction === undefined
         ? current.researchLaunchInstruction
         : normalizeLaunchInstruction(patch.researchLaunchInstruction);
-    const defaultWorkspaceId =
-      patch.defaultWorkspaceId === undefined
-        ? current.defaultWorkspaceId
-        : patch.defaultWorkspaceId;
     const row = tx
       .update(userPreferences)
       .set({
         settingsJson: settings,
         researchLaunchInstruction: instruction,
-        defaultWorkspaceId,
+        accountJson: { ...current.account, ...patch.account },
+        defaultKeyId: patch.defaultKeyId === undefined ? current.defaultKeyId : patch.defaultKeyId,
+        movedSeen: patch.movedSeen ?? current.movedSeen,
         updatedAt: now(),
       })
       .where(eq(userPreferences.userId, userId))

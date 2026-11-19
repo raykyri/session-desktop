@@ -10,6 +10,9 @@ import { DEFAULT_MODEL_ID } from "../models/registry.js";
 export const userSchema = z.object({
   id: z.string(),
   login: z.string(),
+  /** The person's handle in spaces: the login in lower case when the account
+   * was made (phase 2a). */
+  handle: z.string(),
   name: z.string().nullish(),
   avatarUrl: z.string().nullish(),
   /** Set manually in the database; gates admin-only models and the user list. */
