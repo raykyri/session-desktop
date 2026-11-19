@@ -75,7 +75,7 @@ const nodeKey = (r: { th: string; node: string }) =>
  * read the run's in-flight text (review round 2 of phase 1, H1). */
 function readsText(dump: Dump, run: StoredRecord | undefined, reader: string | null): boolean {
   if (run?.kind !== "run" || !mayRead(dump, run, reader)) return false;
-  const n = dump.get(nodeKey(run as unknown as { th: string; node: string }));
+  const n = dump.get(nodeKey(run));
   return (
     n !== undefined &&
     (n as { mod?: unknown }).mod === null &&

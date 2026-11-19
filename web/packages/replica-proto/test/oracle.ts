@@ -252,7 +252,8 @@ export function shown(dump: Dump, r: StoredRecord, reader: string | null): Store
     // a device run's device is its person's only (review round 1 of phase 1,
     // W8), and so is an `access` end (review round 2, W2)
     if (x.u !== reader) {
-      if (x.executor) out = { ...out, executor: { ...x.executor, device: "" } } as unknown as StoredRecord;
+      if (x.executor)
+        out = { ...out, executor: { ...x.executor, device: "" } } as unknown as StoredRecord;
       if (x.end === "access") out = { ...out, end: "interrupted" } as unknown as StoredRecord;
     }
     // the asker's model is text of the ask: redacted with it (round 2, H2)

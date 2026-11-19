@@ -53,7 +53,8 @@ import { z } from "zod";
 
 import { HOUR, MINUTE, type Actor, type CallAnswer } from "../protocol.js";
 
-import { answerWrites, bounds, type SyncServer } from "./server.js";
+import { answerWrites, bounds } from "./limits.js";
+import type { SyncServer } from "./server.js";
 import type { Lease, StoreTx } from "./store.js";
 
 /** A device run's lease, and the largest device answer (server settings). */
@@ -442,8 +443,12 @@ export class OnlineCalls {
       return {
         ok: false,
         error: (b === "deep"
-          ? fail("BAD_REQUEST", undefined, [`input: expected nesting at most ${MAX_CALL_DEPTH} deep`])
-          : fail("TOO_LARGE", undefined, [`input: expected at most ${MAX_CALL_BYTES} bytes as JSON`])
+          ? fail("BAD_REQUEST", undefined, [
+              `input: expected nesting at most ${MAX_CALL_DEPTH} deep`,
+            ])
+          : fail("TOO_LARGE", undefined, [
+              `input: expected at most ${MAX_CALL_BYTES} bytes as JSON`,
+            ])
         ).toError(),
         serverTime: t0,
       };

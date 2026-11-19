@@ -73,6 +73,7 @@ import {
   type SseEvent,
 } from "../protocol.js";
 
+import { answerWrites, bounds } from "./limits.js";
 import { OnlineCalls, type OnlineHandlers } from "./online.js";
 import type {
   LogRow,
@@ -141,25 +142,6 @@ export function canonical(v: unknown): string {
   return JSON.stringify(v) ?? "undefined";
 }
 
-/** "ok", or the first bound a value passes: "large" (a lower bound of its
- * size as JSON over `maxBytes`: a byte per value and each string's length)
- * or "deep" (nested deeper than `maxDepth`). Walked with a stack. */
-export function bounds(v: unknown, maxDepth: number, maxBytes: number): "ok" | "deep" | "large" {
-  const stack: [unknown, number][] = [[v, 0]];
-  let bytes = 0;
-  let deep = false;
-  for (let top = stack.pop(); top; top = stack.pop()) {
-    const [x, level] = top;
-    bytes += typeof x === "string" ? x.length + 2 : 1;
-    if (bytes > maxBytes) return "large";
-    if (x === null || typeof x !== "object") continue;
-    // past the depth bound the walk goes on, for the size: size decides first
-    if (level >= maxDepth) deep = true;
-    for (const y of Object.values(x)) stack.push([y, level + 1]);
-  }
-  return deep ? "deep" : "ok";
-}
-
 const envelopeS = z.strictObject({
   clientId: z.string(),
   seq: z.number().int().positive(),
@@ -200,17 +182,6 @@ const readerOf = (tx: StoreTx): pkg.Reader => ({
   get: <K extends pkg.Kind>(kind: K, id: string) =>
     tx.get(pkg.keyFor(kind, id)) as pkg.RecordOf<K> | undefined,
 });
-
-/** The writes of an answer landing on its thread or follow-up: the item,
- * and, when the item is hidden, its hide record with one more edit, so a
- * "shown" decided on what the moderator read before the answer is STALE
- * (review round 2 of phase 1, W1). */
-export function answerWrites(tx: StoreTx, item: pkg.ThreadRec | pkg.FollowUpRec): pkg.Write[] {
-  const writes: pkg.Write[] = [[`${item.kind}:${item.id}`, item]];
-  const h = tx.get(`hide:${item.kind}:${item.id}`);
-  if (h?.kind === "hide") writes.push([`hide:${h.item}`, { ...h, ed: h.ed + 1 }]);
-  return writes;
-}
 
 /** `@session/mutators`' reads over a transaction: it answers every read. */
 class TxSource implements pkg.RecordSource {
@@ -677,7 +648,11 @@ export class SyncServer {
       const record = (answer: StoredResult) => {
         // `as`: the mutation id the write was processed under; a replay
         // carries it as `recordedAs` (review round 2 of phase 1, finding 1)
-        const a: StoredAnswer = { digest: payload, answer: { ...answer, as: m.mutationId }, at: now };
+        const a: StoredAnswer = {
+          digest: payload,
+          answer: { ...answer, as: m.mutationId },
+          at: now,
+        };
         tx.answerPut(u, m.mutationId, a);
         for (const old of m.replaces)
           if (!live(tx.answerGet(u, old))) tx.answerPut(u, old, { ...a, digest: replaced });
@@ -720,7 +695,9 @@ export class SyncServer {
       void current;
       // an input id's age: CONFLICT in place of EXPIRED when the id exists
       const e =
-        refusal.code === "EXPIRED" && this.inputIdTaken(tx, m) ? err("CONFLICT", ID_TAKEN) : refusal;
+        refusal.code === "EXPIRED" && this.inputIdTaken(tx, m)
+          ? err("CONFLICT", ID_TAKEN)
+          : refusal;
       if (UNRECORDED.has(e.code)) return out(e);
       record({ ok: false, error: e, ...(reads ? { reads } : {}), seq: m.seq });
       return this.withReads(tx, u, out(e, m.seq), reads);
@@ -783,7 +760,13 @@ export class SyncServer {
   private replay(tx: StoreTx, u: string, a: StoredResult, now: number): Answer {
     const as = a.as !== undefined ? { recordedAs: a.as } : {};
     if (a.ok)
-      return { ok: true, result: structuredClone(a.result), serverTime: now, replayed: true, ...as };
+      return {
+        ok: true,
+        result: structuredClone(a.result),
+        serverTime: now,
+        replayed: true,
+        ...as,
+      };
     const e = structuredClone(a.error) as AnswerError;
     return this.withReads(
       tx,
@@ -1168,7 +1151,8 @@ export class SyncServer {
         to = row.version;
         if (v === true) changes.push({ key: row.key, op: "del" });
         else {
-          if (this.served(tx, v, tiers, false)) changes.push({ key: row.key, op: "put", record: v });
+          if (this.served(tx, v, tiers, false))
+            changes.push({ key: row.key, op: "put", record: v });
           // a summary thread with a row after the cursor, served or withheld
           // (review round 2 of phase 1, finding 6)
           const th = tiers ? threadOf(v, (k) => tx.get(k)) : null;

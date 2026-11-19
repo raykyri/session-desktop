@@ -22,11 +22,11 @@ import {
   type StoreTx,
 } from "../src/server/index.js";
 
-import { DAY, HOUR, MINUTE, STORES, World, cast, makeStore, ok, refused } from "./helpers.js";
+import { DAY, HOUR, MINUTE, STORES, cast, makeStore, ok, refused, type World } from "./helpers.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access,
    @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return,
-   @typescript-eslint/no-unsafe-argument --
+   @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call --
    records and call results are read as `any` */
 type Any = any;
 
@@ -120,7 +120,7 @@ for (const kind of STORES) {
     let k = 0;
     const heard = async (u: string | null, r: string) => {
       const text = `T${k++}`;
-      const cur = w.server.snapshot(u === null ? null : { u }, `space:${open}`).cursor;
+      const cur = (w.server.snapshot(u === null ? null : { u }, `space:${open}`) as Any).cursor;
       const l = await listen(w, u === null ? null : { u }, { [`space:${open}`]: cur }, () => {
         const a = w.server.call(d.as, "runs.turn", {
           run: r,

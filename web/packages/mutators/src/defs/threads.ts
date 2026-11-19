@@ -228,7 +228,8 @@ export const threadMutators = [
       // phase 1, H2)
       if (i.skill != null) {
         const k = tx.get("skill", i.skill);
-        if (!k || k.sp !== s.id) throw refuse("NOT_FOUND", "The server has no record of this skill.");
+        if (!k || k.sp !== s.id)
+          throw refuse("NOT_FOUND", "The server has no record of this skill.");
       }
       tx.create({
         kind: "thread",

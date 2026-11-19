@@ -1,6 +1,7 @@
 // `@session/sync/server`: the server half (Node only). See `server.ts`.
 
 export * from "../protocol.js";
+export * from "./limits.js";
 export * from "./memory.js";
 export {
   DEVICE_ANSWER_MAX,
