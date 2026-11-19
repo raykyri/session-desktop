@@ -103,10 +103,8 @@ test.serial(
     t.like(await post("/api/sync/write", env(M.ulid(now, 6), "x", [old])), {
       body: { code: "EXPIRED", replayed: true },
     });
-    // the client: EXPIRED is shown; Send again lists nothing and is applied.
-    // (Ids made 5 days ago and never sent are made again before the first
-    // send, so the write carries the expired id in `replaces`, as a remint
-    // of it would.)
+    // the client: EXPIRED is shown; Send again lists nothing and is applied
+    backend.wipe();
     const c = new SyncClient({
       user: "me",
       transport: new MockTransport(post),
@@ -117,8 +115,8 @@ test.serial(
     await c.init();
     const { local } = c.write(
       "research.createPostFollowUp",
-      { id: M.ulid(now, 7), thread: thread.id, t: "sent again" },
-      { mutationId: M.ulid(now, 8), queuedAt: now, replaces: [old] },
+      { id: M.ulid(now - 5 * DAY, 7), thread: thread.id, t: "sent again" },
+      { mutationId: M.ulid(now - 5 * DAY, 8), queuedAt: now },
     );
     await c.flush();
     t.like(c.outbox()[0] ?? {}, { state: "expired" });

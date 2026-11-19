@@ -402,27 +402,41 @@ test("round 2 finding 4: a device clock days behind or ahead takes the server's 
   }
 });
 
-test("round 2 finding 4: writes made offline on a clock 4 days behind are sent once online, with ids made again", async (t) => {
-  const { w, open } = cast(t);
-  let down = true;
-  const net = { plan: () => ({}), wait: () => Promise.resolve(), down: () => down };
-  const mel = client(w, "mel", {
-    clock: { now: () => w.clock.now() - 4 * DAY - HOUR },
-    transport: new InProcessTransport(w.server, { u: "mel" }, { net }),
-  });
-  await mel.init();
-  const X = mel.newId();
-  mel.write("threads.create", { id: X, space: open, kind: "post", q: "offline" });
-  await mel.flush();
-  down = false;
-  // the first answer ends the wait for the connection
-  await mel.open("user:mel");
-  await mel.flush();
-  t.deepEqual(states(mel), ["threads.create:answered"]);
-  t.not((mel.outbox()[0]?.input as { id: string }).id, X);
-  t.is(all(w, "thread").filter((p) => p.q === "offline").length, 1);
+test("round 2 finding 4: writes made offline on a clock days behind are not dropped; ids over 4 days old answer EXPIRED once, and Send again sends them", async (t) => {
+  for (const behind of [3 * DAY, 4 * DAY + HOUR]) {
+    const { w, open } = cast(t);
+    let down = true;
+    const net = { plan: () => ({}), wait: () => Promise.resolve(), down: () => down };
+    const mel = client(w, "mel", {
+      clock: { now: () => w.clock.now() - behind },
+      transport: new InProcessTransport(w.server, { u: "mel" }, { net }),
+    });
+    await mel.init();
+    const { local } = mel.write("threads.create", {
+      id: mel.newId(),
+      space: open,
+      kind: "post",
+      q: "offline",
+    });
+    await mel.flush();
+    down = false;
+    // the first answer ends the wait for the connection
+    await mel.open("user:mel");
+    await mel.flush();
+    if (behind < 4 * DAY) t.deepEqual(states(mel), ["threads.create:answered"]);
+    else {
+      t.like(mel.outbox()[0] ?? {}, {
+        state: "expired",
+        uncertain: false,
+        error: { code: "EXPIRED", unused: true },
+      });
+      mel.sendAgain(local);
+      await mel.flush();
+      t.deepEqual(states(mel), ["threads.create:answered"]);
+    }
+    t.is(all(w, "thread").filter((p) => p.q === "offline").length, 1);
+  }
 });
-
 
 test("round 2 finding 4: a write queued in this process is dropped by the monotonic clock, not by a device clock that went back days", async (t) => {
   const { w, open } = cast(t);

@@ -1375,23 +1375,19 @@ export class SyncClient implements Changing {
   }
 
   /** Before a write is sent: a mutation id never on the wire, and input ids
-   * never sent, that the server would refuse by their age (a clock that was
-   * wrong when they were made, and is right now) are made again. They are
-   * measured against the server's time as an answer this session gave it
-   * (the monotonic clock since), not the device's clock, which may be the
-   * one that is wrong now, and the new ids are made at that time. Before an
-   * answer this session only ids more than a minute ahead of the client's
-   * time are made again: an id that looks old may be right on a clock that
-   * is ahead, which the first answer (CLOCK_SKEW) corrects. */
+   * never sent, that are more than a minute ahead of the server's time (a
+   * device clock that was ahead when they were made, and was corrected
+   * since) are made again, at that time. The server's time is the one an
+   * answer this session gave (and the monotonic clock since), not the
+   * device's clock, which may be the one that is wrong now; before an
+   * answer, the client's time. Ids that are old are left: a clock that was
+   * behind by less than 4 days needs no new ids, and one further behind
+   * answers EXPIRED, which Send again starts afresh. */
   private freshen(e: OutboxEntry, now: number) {
-    const server = this.serverNow();
-    const at = Math.round(server ?? now);
-    const stale = (id: string) =>
-      server !== null
-        ? this.outside(id, server, ID_MAX_AHEAD)
-        : pkg.isUlid(id) && pkg.ulidTime(id) - now > ID_MAX_AHEAD;
-    if (!e.wire && stale(e.mutationId)) this.rename(e, pkg.ulid(at, this.random));
-    if (!e.sent && e.minted.some(stale)) this.freshIds(e, at);
+    const at = Math.round(this.serverNow() ?? now);
+    const ahead = (id: string) => pkg.isUlid(id) && pkg.ulidTime(id) - at > ID_MAX_AHEAD;
+    if (!e.wire && ahead(e.mutationId)) this.rename(e, pkg.ulid(at, this.random));
+    if (!e.sent && e.minted.some(ahead)) this.freshIds(e, at);
   }
 
   /** Send a shown write again with a new mutation id.
