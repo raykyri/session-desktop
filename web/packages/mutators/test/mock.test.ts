@@ -5,23 +5,31 @@
 // (`projectMock`, `projectOurs`), must be equal, and so must each answer's
 // outcome (applied, or the same error code).
 //
-// The history leaves out the inputs where a phase 0 decision (or a decision
-// of this package, recorded in the table below) makes the two differ. Each
-// row of DIFFERENCES is tested on its own: the mock does what the row says,
-// and the mutators do what it says instead.
+// Since phase 1a.2 the mock follows the mutators' rules: it takes the
+// client's ids, `base` and the renamed procedures, answers STALE, and
+// erases removed items. The history sends both sides the same input where
+// the two address records the same way, and the same client-made ids. The
+// rows of DIFFERENCES are what remains, each a gap that a mock without a
+// real server keeps on purpose; each is tested on its own: the mock does
+// what the row says, and the mutators do what it says instead.
 //
 // Not compared: times (both stamp the server's time, but move `updatedAt`
-// on different writes), run records (job state; see D5), the mock's display
-// fields (`kw`, `online`, `tok`), a space's `mods` (D11), versions of the
-// rules (`rulesAt` there, `rulesRev` here), and invite codes (D9).
+// on different writes), versions (each side counts its own; a step reads
+// the version from the side it runs on), run records (job state, keyed by
+// node in the mock and by id here), the mock's display fields (`online`,
+// `tok`), a space's staff list (`mods`: the mock updates the entry of the
+// person whose role changed), versions of the rules (`rulesAt` there,
+// `rulesRev` here), invite codes (D12), admission ids (each side makes its
+// own) and reply like counts (the mock counts the viewer's like on read).
 
 import test from "ava";
 import type { ExecutionContext } from "ava";
 
-import { MUTATORS, isoAt, type Outcome } from "../src/index.js";
+import { MUTATORS, NOT_MUTATORS, type Outcome, type StoredRecord } from "../src/index.js";
 
 import {
   Labels,
+  M,
   ME,
   call,
   projectMock,
@@ -42,44 +50,19 @@ test.after.always(() => restore());
    the mock is untyped JavaScript: its collections are read as `any` */
 type Any = any;
 
-/** One side of the history: how a step names records on it. */
-interface Side {
-  side: "ours" | "mock";
-  /** The id a label (or a seeded id) stands for. */
-  id(label: string): string;
-  /** A new client-made id (ours; the mock makes its own and ignores it). */
-  fresh(): string;
-  /** The k-th follow-up of a thread: ours its id, the mock's its node id. */
-  node(th: string, k: number): string;
-  /** A reply by its path ("0", "0.1"): ours its id, the mock's the path. */
-  reply(th: string, path: string): string;
-  /** A record's rev now (ours; the mock has none and ignores `base`). */
-  rev(key: string): number;
-  /** A member's admission id now (ours; the mock has none). */
-  adm(sp: string, u: string): string;
-}
-
-interface Step {
-  /** The mutator; and the mock's procedure when it has another name. */
-  name: string;
-  mockName?: string;
-  input: (x: Side) => unknown;
-  /** Label the record the write creates (its result's `id`). */
-  label?: string;
-}
-
 /** The seed: three spaces and a few threads, made by the mutators.
  * - #lounge (open): owner olga, admin me, moderator mona, member otto;
  * - #lab (listed, join by request): owner olga, moderator me, member mona;
  * - #den (listed, join by request): owner olga;
  * - #vault (unlisted, invite only): owner olga;
+ * - #yard (open): owner olga;
  * - in #lounge: T1, me's ask, with otto's follow-up; T2, otto's post with
  *   me's reply and otto's reply under it; in #lab: T3, olga's ask;
  * - eve asks to join #lab; mona made an invite link to #lounge; otto likes
  *   T1; an invite notification for me to #vault; a catalog source SRC1. */
 function seedWorld(t: ExecutionContext) {
   const w = new World(11);
-  const [lounge, lab, den, vault] = [w.id(), w.id(), w.id(), w.id()];
+  const [lounge, lab, den, vault, yard] = [w.id(), w.id(), w.id(), w.id(), w.id()];
   const run = (u: string, name: string, input: unknown) => {
     ok(t, w.run(u, name, input));
     w.advance(1000);
@@ -94,6 +77,7 @@ function seedWorld(t: ExecutionContext) {
   });
   run("olga", "spaces.create", { id: den, name: "den", vis: "listed", policy: "request" });
   run("olga", "spaces.create", { id: vault, name: "vault", vis: "unlisted", policy: "invite" });
+  run("olga", "spaces.create", { id: yard, name: "yard" });
   for (const u of [ME, "mona", "otto"]) run(u, "spaces.join", { space: lounge });
   const role = (sp: string, u: string, r: string) =>
     run("olga", "members.setRole", {
@@ -165,7 +149,7 @@ function seedWorld(t: ExecutionContext) {
     rev: 1,
   });
   w.store.records.set(`profile:${ME}`, { kind: "profile", u: ME, name: "Me", bio: "", rev: 1 });
-  return { w, ids: { lounge, lab, den, vault, T1, T2, T3, F1, R1, R2, L1, N1: n } };
+  return { w, ids: { lounge, lab, den, vault, yard, T1, T2, T3, F1, R1, R2, L1, N1: n } };
 }
 
 /** Run a history on both sides, comparing after every step. */
@@ -176,33 +160,19 @@ async function both(t: ExecutionContext, steps: Step[], seed = seedWorld(t)) {
   await reset(toMock(w.store), w.now);
   t.deepEqual(projectOurs(w.store, L), projectMock(stored(), L), "the seed");
   for (const [k, step] of steps.entries()) {
-    const what = `step ${k + 1}: ${step.name} ${step.input.toString().slice(0, 120)}`;
+    const what = `step ${k + 1}: ${step.name} ${step.input.toString().slice(0, 140)}`;
     const resolve = (label: string, side: "ours" | "mock") =>
       named[label] ?? (side === "ours" ? L.idOurs(label) : L.idMock(label));
-    const ours: Side = {
-      side: "ours",
-      id: (l) => resolve(l, "ours"),
-      fresh: () => w.id(),
-      node: (th, n) => oursNodes(w, resolve(th, "ours"))[n] ?? "missing",
-      reply: (th, path) => oursReply(w, resolve(th, "ours"), path),
-      rev: (key) => w.rev(key),
-      adm: (sp, u) => w.admission(resolve(sp, "ours"), u).adm,
-    };
-    const mock: Side = {
-      side: "mock",
-      id: (l) => resolve(l, "mock"),
-      fresh: () => "unused",
-      node: (th, n) => mockNodeIds(stored(), resolve(th, "mock"))[n] ?? "missing",
-      reply: (_th, path) => path,
-      rev: () => 0,
-      adm: () => "",
-    };
+    // the step's new ids, made by the client: the same on both sides
+    const fresh = [w.id(), w.id()];
+    const ours = oursSide(w, (l) => resolve(l, "ours"), fresh);
+    const mock = mockSide((l) => resolve(l, "mock"), fresh);
     const a = w.run(ME, step.name, step.input(ours));
-    const b = await call(step.mockName ?? step.name, step.input(mock));
+    const b = await call(step.name, step.input(mock));
     t.is(
       outcome(a),
       b.ok ? "ok" : b.code,
-      `${what}: ours ${JSON.stringify(a)}, mock ${JSON.stringify(b)}`,
+      `${what}: ours ${JSON.stringify(a).slice(0, 300)}, mock ${JSON.stringify(b).slice(0, 300)}`,
     );
     if (step.label && a.status === "ok" && b.ok)
       L.set(step.label, (a.result as { id: string }).id, (b.result as { id: string }).id);
@@ -215,6 +185,131 @@ async function both(t: ExecutionContext, steps: Step[], seed = seedWorld(t)) {
 const outcome = (o: Outcome) =>
   o.status === "ok" ? "ok" : o.status === "refused" ? o.error.code : "unknown";
 
+/** One side of the history: how a step names records on it, and the
+ * versions it reads from it (each side counts its own). */
+interface Side {
+  side: "ours" | "mock";
+  /** The id a label (or a seeded id) stands for. */
+  id(label: string): string;
+  /** The step's k-th new client-made id (the same on both sides). */
+  fresh(k?: number): string;
+  /** The k-th follow-up of a thread: ours its id, the mock's its node id. */
+  node(th: string, k: number): string;
+  /** A reply by its path ("0", "0.1"): ours its id, the mock's the path. */
+  reply(th: string, path: string): string;
+  /** A moderation key of a follow-up or a reply: ours by id, the mock's by
+   * index or path. */
+  fkey(th: string, k: number): string;
+  rkey(th: string, path: string): string;
+  /** Versions as this side holds them (a record without one is at 1). */
+  threadRev(th: string): number;
+  nodeRev(th: string, k: number): number;
+  replyRev(th: string, path: string): number;
+  memberRev(sp: string, u: string): number;
+  reqRev(sp: string, u: string): number;
+  reportRev(rep: string): number;
+  itemRev(key: string): number;
+  skillsRev(sp: string): number;
+  /** A member's admission id on this side. */
+  adm(sp: string, u: string): string;
+  /** The k-th skill's and page's id of a space. */
+  skill(sp: string, k: number): string;
+  page(sp: string, k: number): string;
+}
+
+interface Step {
+  name: string;
+  input: (x: Side) => unknown;
+  /** Label the record the write creates (its result's `id`). */
+  label?: string;
+}
+
+const recOf = <K extends StoredRecord["kind"]>(w: World, key: string) =>
+  w.get(key) as Extract<StoredRecord, { kind: K }> | undefined;
+
+function oursSide(w: World, id: (l: string) => string, fresh: string[]): Side {
+  const node = (th: string, k: number) => oursNodes(w, id(th))[k] ?? "missing";
+  const reply = (th: string, path: string) => oursReply(w, id(th), path);
+  const x: Side = {
+    side: "ours",
+    id,
+    fresh: (k = 0) => fresh[k] ?? "missing",
+    node,
+    reply,
+    fkey: (th, k) => `f:${id(th)}:${node(th, k)}`,
+    rkey: (th, path) => `r:${id(th)}:${reply(th, path)}`,
+    threadRev: (th) => w.rev(`thread:${id(th)}`),
+    nodeRev: (th, k) => w.rev(`followup:${node(th, k)}`),
+    replyRev: (th, path) => w.rev(`reply:${reply(th, path)}`),
+    memberRev: (sp, u) => w.rev(`member:${id(sp)}:${u}`),
+    reqRev: (sp, u) => w.rev(`request:${id(sp)}:${u}`),
+    reportRev: (rep) => w.rev(`report:${id(rep)}`),
+    itemRev: (key) => {
+      const [k, th, sub] = key.split(":");
+      if (k === "f") return w.rev(`followup:${sub}`);
+      if (k === "r") return w.rev(`reply:${sub}`);
+      return w.rev(`thread:${th}`);
+    },
+    skillsRev: (sp) => w.rev(`skills:${id(sp)}`),
+    adm: (sp, u) => w.admission(id(sp), u).adm,
+    skill: (sp, k) => recOf<"skills">(w, `skills:${id(sp)}`)?.list[k]?.id ?? "missing",
+    page: (sp, k) => recOf<"pages">(w, `pages:${id(sp)}`)?.list[k]?.id ?? "missing",
+  };
+  return x;
+}
+
+function mockSide(id: (l: string) => string, fresh: string[]): Side {
+  const d = () => stored();
+  const rev = (r: Any) => (r?.rev as number | undefined) ?? 1;
+  const replyRec = (th: string, path: string) => {
+    let r: Any = null;
+    let l: Any[] = d().rp[id(th)] ?? [];
+    for (const k of path.split(".").map(Number)) {
+      r = l[k];
+      l = r?.kids ?? [];
+    }
+    return r;
+  };
+  const nodeRec = (th: string, k: number) => {
+    const n = mockNodes(d(), id(th))[k];
+    return n?.fu != null
+      ? d().fu[id(th)][n.fu]
+      : (d().qtd[id(th)]?.nodes ?? []).find((x: Any) => x.id === n?.id);
+  };
+  const roster = (sp: string): Any[] => d().memOther[id(sp)] ?? [];
+  return {
+    side: "mock",
+    id,
+    fresh: (k = 0) => fresh[k] ?? "missing",
+    node: (th, k) => mockNodeIds(d(), id(th))[k] ?? "missing",
+    reply: (_th, path) => path,
+    fkey: (th, k) => {
+      const n = mockNodes(d(), id(th))[k];
+      return n?.fu != null ? `f:${id(th)}:${n.fu}` : `n:${id(th)}:${n?.id}`;
+    },
+    rkey: (th, path) => `r:${id(th)}:${path}`,
+    threadRev: (th) => rev(d().posts.find((p: Any) => p.id === id(th))),
+    nodeRev: (th, k) => rev(nodeRec(th, k)),
+    replyRev: (th, path) => rev(replyRec(th, path)),
+    memberRev: (sp, u) => rev(roster(sp).find((m) => m.u === u)),
+    reqRev: (sp, u) => rev(d().reqs.find((r: Any) => r.u === u && r.sp === id(sp))),
+    reportRev: (rep) => rev(d().reports.find((r: Any) => r.id === id(rep))),
+    itemRev: (key) => {
+      const [k, th = "", sub = ""] = key.split(":");
+      if (k === "r") return rev(replyRec(th, sub));
+      if (k === "f") return rev(d().fu[th]?.[Number(sub)]);
+      if (k === "n") return rev((d().qtd[th]?.nodes ?? []).find((x: Any) => x.id === sub));
+      return rev(d().posts.find((p: Any) => p.id === th));
+    },
+    skillsRev: (sp) => (d().skillsRev[id(sp)] as number | undefined) ?? 0,
+    adm: (sp, u) => (roster(sp).find((m) => m.u === u)?.adm as string | undefined) ?? "",
+    skill: (sp, k) => (d().skills[id(sp)]?.[k]?.id as string | undefined) ?? "missing",
+    page: (sp, k) =>
+      (d().spaces.find((s: Any) => s.id === id(sp))?.pages?.[k]?.[2] as string | undefined) ??
+      "missing",
+  };
+}
+
 /** Our follow-ups of a thread in the order they were made. */
 function oursNodes(w: World, th: string): string[] {
   return [...w.store.records.values()]
@@ -224,9 +319,16 @@ function oursNodes(w: World, th: string): string[] {
 }
 
 function mockNodeIds(d: Any, th: string): string[] {
+  return mockNodes(d, th).map((n: Any) => n.id as string);
+}
+
+/** The mock's ask nodes of a thread: its stored tree, or its flat
+ * follow-ups as first-level asks. */
+function mockNodes(d: Any, th: string): Any[] {
   const fus = d.fu[th] ?? [];
-  const tree = d.qtd[th] ?? { nodes: fus.map((_: unknown, k: number) => ({ id: "f" + k })) };
-  return tree.nodes.map((n: Any) => n.id as string);
+  return (
+    d.qtd[th] ?? { nodes: fus.map((_: unknown, k: number) => ({ id: "f" + k, par: "r", fu: k })) }
+  ).nodes;
 }
 
 function oursReply(w: World, th: string, path: string): string {
@@ -239,50 +341,37 @@ function oursReply(w: World, th: string, path: string): string {
   return rs.filter((r) => r.parent === top?.id)[j]?.id ?? "missing";
 }
 
+/** The input of a reply's write: ours names the reply by id, the mock by path. */
+const replyIn = (x: Side, th: string, path: string, more: object) =>
+  x.side === "ours"
+    ? { thread: x.id(th), reply: x.reply(th, path), ...more }
+    : { thread: x.id(th), path, ...more };
+
 // ---- the history ----
+// The rows of the phase 1a table that the mock adopted are marked (Dn): the
+// step shows both sides answer and store the same.
 
 const HISTORY: Step[] = [
-  // personal marks
-  { name: "likes.set", mockName: "likes.toggle", input: (x) => ({ thread: x.id("T2"), on: true }) },
-  { name: "likes.set", mockName: "likes.toggle", input: (x) => ({ thread: x.id("T1"), on: true }) },
-  {
-    name: "likes.set",
-    mockName: "likes.toggle",
-    input: (x) => ({ thread: x.id("T1"), on: false }),
-  },
-  { name: "likes.set", mockName: "likes.toggle", input: (x) => ({ thread: x.id("T3"), on: true }) },
-  {
-    name: "saved.set",
-    mockName: "saved.toggle",
-    input: (x) => ({ kind: "thread", id: x.id("T1"), on: true }),
-  },
+  // personal marks: `on` is required (D1)
+  { name: "likes.set", input: (x) => ({ thread: x.id("T2"), on: true }) },
+  { name: "likes.set", input: (x) => ({ thread: x.id("T1"), on: true }) },
+  { name: "likes.set", input: (x) => ({ thread: x.id("T1"), on: false }) },
+  { name: "likes.set", input: (x) => ({ thread: x.id("T3"), on: true }) },
+  { name: "likes.set", input: (x) => ({ thread: x.id("T3") }) },
+  { name: "saved.set", input: (x) => ({ kind: "thread", id: x.id("T1"), on: true }) },
+  { name: "saved.set", input: (x) => ({ kind: "thread", id: x.id("T1"), on: false }) },
+  { name: "saved.set", input: (x) => ({ kind: "ask", id: `${x.id("T1")}:r`, on: true }) },
   {
     name: "saved.set",
-    mockName: "saved.toggle",
-    input: (x) => ({ kind: "thread", id: x.id("T1"), on: false }),
-  },
-  {
-    name: "saved.set",
-    mockName: "saved.toggle",
-    input: (x) => ({ kind: "ask", id: `${x.id("T1")}:r`, on: true }),
-  },
-  {
-    name: "saved.set",
-    mockName: "saved.toggle",
     input: (x) => ({ kind: "ask", id: `${x.id("T1")}:${x.node("T1", 0)}`, on: true }),
   },
-  {
-    name: "saved.set",
-    mockName: "saved.toggle",
-    input: () => ({ kind: "source", id: "SRC1", on: true }),
-  },
+  { name: "saved.set", input: () => ({ kind: "source", id: "SRC1", on: true }) },
   {
     name: "likes.setReply",
-    mockName: "likes.toggleReply",
-    input: (x) =>
-      x.side === "ours"
-        ? { reply: x.reply("T2", "0.0"), on: true }
-        : { reply: `${x.id("T2")}:0.0`, on: true },
+    input: (x) => ({
+      reply: x.side === "ours" ? x.reply("T2", "0.0") : `${x.id("T2")}:0.0`,
+      on: true,
+    }),
   },
   { name: "mutes.set", input: () => ({ handle: "eve", on: true }) },
   { name: "mutes.set", input: () => ({ handle: "eve", on: false }) },
@@ -294,10 +383,12 @@ const HISTORY: Step[] = [
   { name: "invites.request", input: (x) => ({ space: x.id("vault") }) },
   { name: "invites.request", input: (x) => ({ space: x.id("vault") }) },
   { name: "notifications.markRead", input: (x) => ({ id: x.id("N1") }) },
+  // an invite notification alone admits nobody (D13)
+  { name: "spaces.join", input: (x) => ({ space: x.id("vault"), notification: x.id("N1") }) },
   { name: "invites.decline", input: (x) => ({ notification: x.id("N1") }) },
   { name: "notifications.markSeen", input: () => ({ kind: "requests" }) },
 
-  // threads, follow-ups and replies
+  // threads, follow-ups and replies, with client-made ids
   {
     name: "threads.create",
     label: "T4",
@@ -314,6 +405,11 @@ const HISTORY: Step[] = [
     label: "T5",
     input: (x) => ({ id: x.fresh(), space: x.id("lounge"), kind: "post", q: " A new post " }),
   },
+  // an id in use: CONFLICT
+  {
+    name: "threads.create",
+    input: (x) => ({ id: x.id("T4"), space: x.id("lounge"), kind: "post", q: "again" }),
+  },
   {
     name: "threads.create",
     input: (x) => ({ id: x.fresh(), space: x.id("lounge"), kind: "post", q: "   " }),
@@ -322,28 +418,23 @@ const HISTORY: Step[] = [
     name: "threads.create",
     input: (x) => ({ id: x.fresh(), space: x.id("den"), kind: "post", q: "x" }),
   },
+  // an author's edit carries base.rev (D20)
   {
     name: "threads.update",
-    input: (x) => ({
-      id: x.id("T4"),
-      q: "A new ask, edited",
-      base: { rev: x.rev(`thread:${x.id("T4")}`) },
-    }),
+    input: (x) => ({ id: x.id("T4"), q: "A new ask, edited", base: { rev: x.threadRev("T4") } }),
   },
   {
     name: "threads.update",
-    input: (x) => ({
-      id: x.id("T4"),
-      q: "A new ask, edited",
-      base: { rev: x.rev(`thread:${x.id("T4")}`) },
-    }),
+    input: (x) => ({ id: x.id("T4"), q: "Stale", base: { rev: x.threadRev("T4") - 1 } }),
   },
+  { name: "threads.update", input: (x) => ({ id: x.id("T4"), q: "No base" }) },
   {
     name: "threads.update",
-    input: (x) => ({ id: x.id("T2"), q: "not mine", base: { rev: x.rev(`thread:${x.id("T2")}`) } }),
+    input: (x) => ({ id: x.id("T2"), q: "not mine", base: { rev: x.threadRev("T2") } }),
   },
   { name: "followups.ask", input: (x) => ({ id: x.fresh(), thread: x.id("T4"), q: "First" }) },
   { name: "followups.ask", input: (x) => ({ id: x.fresh(), thread: x.id("T4"), q: "Second" }) },
+  // a follow-up on a post (BAD_REQUEST); its answer is null until the run writes it (D30)
   { name: "followups.ask", input: (x) => ({ id: x.fresh(), thread: x.id("T5"), q: "on a post" }) },
   {
     name: "followups.update",
@@ -351,13 +442,23 @@ const HISTORY: Step[] = [
       thread: x.id("T4"),
       node: x.node("T4", 1),
       q: "Second, edited",
-      base: { rev: x.rev(`followup:${x.node("T4", 1)}`) },
+      base: { rev: x.nodeRev("T4", 1) },
+    }),
+  },
+  {
+    name: "followups.update",
+    input: (x) => ({
+      thread: x.id("T4"),
+      node: x.node("T4", 1),
+      q: "Stale",
+      base: { rev: x.nodeRev("T4", 1) - 1 },
     }),
   },
   {
     name: "followups.update",
     input: (x) => ({ thread: x.id("T1"), node: x.node("T1", 0), q: "not mine", base: { rev: 1 } }),
   },
+  // a fork with the client's node id
   {
     name: "research.forkNode",
     label: "N2",
@@ -372,45 +473,63 @@ const HISTORY: Step[] = [
     name: "research.forkNode",
     input: (x) => ({ id: x.fresh(), thread: x.id("T4"), parent: "r", q: "Third" }),
   },
+  // an ask tree is for asks (D17)
+  {
+    name: "research.forkNode",
+    input: (x) => ({ id: x.fresh(), thread: x.id("T5"), parent: "r", q: "on a post" }),
+  },
   { name: "followups.delete", input: (x) => ({ thread: x.id("T4"), node: x.node("T4", 0) }) },
   { name: "followups.delete", input: (x) => ({ thread: x.id("T4"), node: x.node("T4", 1) }) },
+  // a deleted follow-up is not edited (D18)
+  {
+    name: "followups.update",
+    input: (x) => ({
+      thread: x.id("T4"),
+      node: x.node("T4", 0),
+      q: "back",
+      base: { rev: x.nodeRev("T4", 0) },
+    }),
+  },
   {
     name: "research.createPostFollowUp",
     input: (x) => ({ id: x.fresh(), thread: x.id("T5"), t: "Reply one" }),
+  },
+  // replies are for posts (D16)
+  {
+    name: "research.createPostFollowUp",
+    input: (x) => ({ id: x.fresh(), thread: x.id("T4"), t: "on an ask" }),
   },
   {
     name: "research.createPostFollowUp",
     input: (x) =>
       x.side === "ours"
         ? { id: x.fresh(), thread: x.id("T5"), t: "Under one", parent: x.reply("T5", "0") }
-        : { thread: x.id("T5"), t: "Under one", parent: 0 },
+        : { id: x.fresh(), thread: x.id("T5"), t: "Under one", parent: 0 },
   },
   {
     name: "replies.update",
     input: (x) =>
-      x.side === "ours"
-        ? {
-            thread: x.id("T5"),
-            reply: x.reply("T5", "0"),
-            t: "Reply one, edited",
-            base: { rev: x.rev(`reply:${x.reply("T5", "0")}`) },
-          }
-        : { thread: x.id("T5"), path: "0", t: "Reply one, edited" },
+      replyIn(x, "T5", "0", { t: "Reply one, edited", base: { rev: x.replyRev("T5", "0") } }),
   },
   {
-    name: "replies.delete",
-    input: (x) =>
-      x.side === "ours"
-        ? { thread: x.id("T5"), reply: x.reply("T5", "0") }
-        : { thread: x.id("T5"), path: "0" },
+    name: "replies.update",
+    input: (x) => replyIn(x, "T5", "0", { t: "Stale", base: { rev: x.replyRev("T5", "0") - 1 } }),
   },
   {
-    name: "replies.delete",
-    input: (x) =>
-      x.side === "ours"
-        ? { thread: x.id("T5"), reply: x.reply("T5", "0.0") }
-        : { thread: x.id("T5"), path: "0.0" },
+    name: "likes.setReply",
+    input: (x) => ({
+      reply: x.side === "ours" ? x.reply("T5", "0.0") : `${x.id("T5")}:0.0`,
+      on: true,
+    }),
   },
+  { name: "replies.delete", input: (x) => replyIn(x, "T5", "0", {}) },
+  // a deleted reply is not edited (D18)
+  {
+    name: "replies.update",
+    input: (x) => replyIn(x, "T5", "0", { t: "back", base: { rev: x.replyRev("T5", "0") } }),
+  },
+  // deleting a reply deletes its likes (D19)
+  { name: "replies.delete", input: (x) => replyIn(x, "T5", "0.0", {}) },
   { name: "threads.delete", input: (x) => ({ id: x.id("T4") }) },
   { name: "threads.delete", input: (x) => ({ id: x.id("T5") }) },
   { name: "threads.delete", input: (x) => ({ id: x.id("T2") }) },
@@ -436,6 +555,12 @@ const HISTORY: Step[] = [
   {
     name: "spaces.update",
     input: (x) => ({ id: x.id("lounge"), set: { rules: [" Be kind ", ""] } }),
+  },
+  // the name rule (D7); dom and pages are not settings (D28)
+  { name: "spaces.update", input: (x) => ({ id: x.id("lounge"), set: { name: "Big Lounge!" } }) },
+  {
+    name: "spaces.update",
+    input: (x) => ({ id: x.id("lounge"), set: { dom: { domain: "x.org", state: "ok" } } }),
   },
   { name: "spaces.update", input: (x) => ({ id: x.id("lab"), set: { desc: "no" } }) },
   {
@@ -469,24 +594,39 @@ const HISTORY: Step[] = [
   { name: "spaces.update", input: (x) => ({ id: x.id("lounge"), unset: ["faq", "plain"] }) },
   { name: "spaces.verifyDomain", input: (x) => ({ id: x.id("lounge"), domain: " Example.ORG " }) },
   { name: "spaces.verifyDomain", input: (x) => ({ id: x.id("lounge"), domain: "nope" }) },
+  { name: "spaces.update", input: (x) => ({ id: x.id("lounge"), unset: ["dom"] }) },
 
-  // members and links
+  // members and links: base and admission ids (D29); the staff list follows (D11)
   {
     name: "members.setRole",
     input: (x) => ({
       space: x.id("lounge"),
       user: "otto",
       role: "mod",
-      base: { rev: x.rev(`member:${x.id("lounge")}:otto`) },
+      base: { rev: x.memberRev("lounge", "otto") },
     }),
   },
   {
     name: "members.setRole",
-    input: (x) => ({ space: x.id("lounge"), user: "otto", role: "owner", base: { rev: 0 } }),
+    input: (x) => ({
+      space: x.id("lounge"),
+      user: "otto",
+      role: "member",
+      base: { rev: x.memberRev("lounge", "otto") - 1 },
+    }),
   },
   {
     name: "members.setRole",
-    input: (x) => ({ space: x.id("lounge"), user: "olga", role: "member", base: { rev: 0 } }),
+    input: (x) => ({ space: x.id("lounge"), user: "otto", role: "owner", base: { rev: 1 } }),
+  },
+  {
+    name: "members.setRole",
+    input: (x) => ({ space: x.id("lounge"), user: "olga", role: "member", base: { rev: 1 } }),
+  },
+  // an open space: ban, not remove
+  {
+    name: "members.remove",
+    input: (x) => ({ space: x.id("lounge"), user: "otto", base: { adm: x.adm("lounge", "otto") } }),
   },
   { name: "members.ban", input: (x) => ({ space: x.id("lounge"), user: "otto" }) },
   { name: "members.unban", input: (x) => ({ space: x.id("lounge"), user: "otto" }) },
@@ -501,11 +641,24 @@ const HISTORY: Step[] = [
   },
   {
     name: "joinRequests.decide",
+    input: (x) => ({ space: x.id("lab"), users: ["eve"], decision: "reopen" }),
+  },
+  {
+    name: "joinRequests.decide",
     input: (x) => ({
       space: x.id("lab"),
       users: ["eve"],
       decision: "reopen",
-      base: { eve: x.rev(`request:${x.id("lab")}:eve`) },
+      base: { eve: x.reqRev("lab", "eve") - 1 },
+    }),
+  },
+  {
+    name: "joinRequests.decide",
+    input: (x) => ({
+      space: x.id("lab"),
+      users: ["eve"],
+      decision: "reopen",
+      base: { eve: x.reqRev("lab", "eve") },
     }),
   },
   {
@@ -514,8 +667,12 @@ const HISTORY: Step[] = [
       space: x.id("lab"),
       users: ["eve"],
       decision: "approve",
-      base: { eve: x.rev(`request:${x.id("lab")}:eve`) },
+      base: { eve: x.reqRev("lab", "eve") },
     }),
+  },
+  {
+    name: "members.remove",
+    input: (x) => ({ space: x.id("lab"), user: "eve", base: { adm: "an old admission" } }),
   },
   {
     name: "members.remove",
@@ -527,6 +684,7 @@ const HISTORY: Step[] = [
     input: (x) => ({ id: x.fresh(), space: x.id("lounge"), days: 7 }),
   },
   { name: "invites.create", input: (x) => ({ id: x.fresh(), space: x.id("den") }) },
+  { name: "invites.create", input: (x) => ({ id: x.fresh(), space: x.id("lounge"), days: 31 }) },
   { name: "invites.revoke", input: (x) => ({ id: x.id("L2") }) },
   { name: "invites.revoke", input: (x) => ({ id: x.id("L2") }) },
   { name: "invites.restore", input: (x) => ({ id: x.id("L2") }) },
@@ -544,34 +702,69 @@ const HISTORY: Step[] = [
     input: (x) => ({ id: x.fresh(), item: `a:${x.id("T3")}`, why: "Off" }),
   },
   { name: "moderation.decide", input: (x) => ({ item: `a:${x.id("T7")}`, decision: "hidden" }) },
+  { name: "moderation.decide", input: (x) => ({ item: `a:${x.id("T7")}`, decision: "hidden" }) },
+  { name: "moderation.decide", input: (x) => ({ item: `a:${x.id("T7")}`, decision: "shown" }) },
   {
     name: "moderation.decide",
     input: (x) => ({
       item: `a:${x.id("T7")}`,
       decision: "shown",
-      base: { rev: x.rev(`thread:${x.id("T7")}`) },
+      base: { rev: x.itemRev(`a:${x.id("T7")}`) - 1 },
+    }),
+  },
+  {
+    name: "moderation.decide",
+    input: (x) => ({
+      item: `a:${x.id("T7")}`,
+      decision: "shown",
+      base: { rev: x.itemRev(`a:${x.id("T7")}`) },
     }),
   },
   { name: "reports.resolve", input: (x) => ({ report: x.id("P1"), outcome: "hidden" }) },
+  // every reopening requires base (decision 7)
+  { name: "reports.resolve", input: (x) => ({ report: x.id("P1"), outcome: "open" }) },
+  {
+    name: "reports.resolve",
+    input: (x) => ({
+      report: x.id("P1"),
+      outcome: "open",
+      base: { rev: x.reportRev("P1") - 1, item: x.itemRev(`a:${x.id("T6")}`) },
+    }),
+  },
+  {
+    name: "reports.resolve",
+    input: (x) => ({
+      report: x.id("P1"),
+      outcome: "open",
+      base: { rev: x.reportRev("P1"), item: x.itemRev(`a:${x.id("T6")}`) },
+    }),
+  },
+  // dismissing leaves a hidden item hidden (D4)
+  { name: "moderation.decide", input: (x) => ({ item: `a:${x.id("T3")}`, decision: "hidden" }) },
+  { name: "reports.resolve", input: (x) => ({ report: x.id("P2"), outcome: "dismissed" }) },
+  // removal erases the item and everything under it (D6); a removed item stays removed
+  { name: "moderation.decide", input: (x) => ({ item: `a:${x.id("T1")}`, decision: "removed" }) },
+  { name: "moderation.decide", input: (x) => ({ item: `a:${x.id("T1")}`, decision: "hidden" }) },
+  { name: "likes.set", input: (x) => ({ thread: x.id("T1"), on: true }) },
 
-  // skills and pages
+  // skills and pages, by id (decision 3)
   {
     name: "skills.create",
-    input: (x) => ({ space: x.id("lounge"), name: "Cite", prompt: "Cite sources." }),
+    input: (x) => ({ id: x.fresh(), space: x.id("lounge"), name: "Cite", prompt: "Cite sources." }),
   },
   {
     name: "skills.create",
-    input: (x) => ({ space: x.id("lounge"), name: "Cite", prompt: "again" }),
+    input: (x) => ({ id: x.fresh(), space: x.id("lounge"), name: "Cite", prompt: "again" }),
   },
   {
     name: "skills.create",
-    input: (x) => ({ space: x.id("lounge"), name: "Short", prompt: "Be short." }),
+    input: (x) => ({ id: x.fresh(), space: x.id("lounge"), name: "Short", prompt: "Be short." }),
   },
   {
     name: "skills.update",
     input: (x) => ({
       space: x.id("lounge"),
-      index: 0,
+      id: x.skill("lounge", 0),
       name: "Cite",
       prompt: "Cite.",
       base: { rev: 0 },
@@ -579,21 +772,58 @@ const HISTORY: Step[] = [
   },
   {
     name: "skills.update",
-    input: (x) => ({ space: x.id("lounge"), index: 0, name: "Short", prompt: "x" }),
+    input: (x) => ({ space: x.id("lounge"), id: x.skill("lounge", 0), name: "Short", prompt: "x" }),
   },
-  { name: "skills.reorder", input: (x) => ({ space: x.id("lounge"), from: 0, to: 1 }) },
-  { name: "skills.remove", input: (x) => ({ space: x.id("lounge"), index: 0 }) },
-  { name: "skills.remove", input: (x) => ({ space: x.id("lounge"), index: 4 }) },
   {
-    name: "pages.update",
-    input: (x) => ({ space: x.id("lounge"), page: null, title: "Guide", text: ["One"] }),
+    name: "skills.reorder",
+    input: (x) => ({
+      space: x.id("lounge"),
+      order: [x.skill("lounge", 1), x.skill("lounge", 0)],
+      base: { rev: x.skillsRev("lounge") - 1 },
+    }),
   },
-  { name: "pages.update", input: (x) => ({ space: x.id("lounge"), title: "FAQ", text: [] }) },
+  {
+    name: "skills.reorder",
+    input: (x) => ({
+      space: x.id("lounge"),
+      order: [x.skill("lounge", 1), x.skill("lounge", 0)],
+      base: { rev: x.skillsRev("lounge") },
+    }),
+  },
+  {
+    name: "skills.reorder",
+    input: (x) => ({
+      space: x.id("lounge"),
+      order: [x.skill("lounge", 0)],
+      base: { rev: x.skillsRev("lounge") },
+    }),
+  },
+  { name: "skills.remove", input: (x) => ({ space: x.id("lounge"), id: x.skill("lounge", 0) }) },
+  { name: "skills.remove", input: (x) => ({ space: x.id("lounge"), id: x.fresh() }) },
   {
     name: "pages.update",
     input: (x) => ({
       space: x.id("lounge"),
-      page: 0,
+      page: null,
+      id: x.fresh(),
+      title: "Guide",
+      text: ["One"],
+    }),
+  },
+  {
+    name: "pages.update",
+    input: (x) => ({ space: x.id("lounge"), id: x.fresh(), title: "FAQ", text: [] }),
+  },
+  // a slug that is taken
+  {
+    name: "pages.update",
+    input: (x) => ({ space: x.id("lounge"), id: x.fresh(), title: " guide! ", text: [] }),
+  },
+  {
+    name: "pages.update",
+    input: (x) => ({
+      space: x.id("lounge"),
+      page: x.page("lounge", 0),
       title: "Guide 2",
       text: ["Two"],
       base: { rev: 1 },
@@ -603,7 +833,7 @@ const HISTORY: Step[] = [
     name: "pages.update",
     input: (x) => ({
       space: x.id("lounge"),
-      page: 0,
+      page: x.page("lounge", 0),
       title: "Guide 3",
       text: ["x"],
       base: { rev: 1 },
@@ -611,13 +841,29 @@ const HISTORY: Step[] = [
   },
   {
     name: "pages.restore",
-    input: (x) => ({ space: x.id("lounge"), page: 0, rev: 1, note: "Back", base: { rev: 2 } }),
+    input: (x) => ({
+      space: x.id("lounge"),
+      page: x.page("lounge", 0),
+      rev: 1,
+      note: "Back",
+      base: { rev: 2 },
+    }),
   },
-  { name: "pages.move", input: (x) => ({ space: x.id("lounge"), from: 0, to: 1 }) },
-  { name: "pages.remove", input: (x) => ({ space: x.id("lounge"), page: 1 }) },
-  { name: "pages.update", input: (x) => ({ space: x.id("lab"), title: "Lab page", text: ["l"] }) },
+  {
+    name: "pages.move",
+    input: (x) => ({
+      space: x.id("lounge"),
+      page: x.page("lounge", 0),
+      other: x.page("lounge", 1),
+    }),
+  },
+  { name: "pages.remove", input: (x) => ({ space: x.id("lounge"), page: x.page("lounge", 1) }) },
+  {
+    name: "pages.update",
+    input: (x) => ({ space: x.id("lab"), id: x.fresh(), title: "Lab page", text: ["l"] }),
+  },
 
-  // sources
+  // sources; a removed source is put back (D26); one report per person (D25)
   {
     name: "spaceSources.add",
     label: "S1",
@@ -648,6 +894,10 @@ const HISTORY: Step[] = [
     input: (x) => ({ space: x.id("lab"), source: x.id("S2"), why: "Broken" }),
   },
   {
+    name: "sourceReports.create",
+    input: (x) => ({ space: x.id("lab"), source: x.id("S2"), why: "Still broken" }),
+  },
+  {
     name: "spaceSources.review",
     input: (x) => ({ space: x.id("lab"), source: x.id("S2"), decision: "keep" }),
   },
@@ -655,18 +905,18 @@ const HISTORY: Step[] = [
     name: "spaceSources.review",
     input: (x) => ({ space: x.id("lab"), source: x.id("S2"), decision: "remove" }),
   },
-  {
-    name: "spaceSources.review",
-    input: (x) => ({ space: x.id("lab"), source: x.id("S2"), decision: "restore" }),
-  },
+  { name: "spaceSources.add", input: (x) => ({ space: x.id("lab"), source: x.id("S2") }) },
   {
     name: "spaceSources.review",
     input: (x) => ({ space: x.id("lab"), source: "NOPE", decision: "approve" }),
   },
   { name: "sources.markRead", input: (x) => ({ id: x.id("S2") }) },
 
-  // joining and leaving
+  // joining, leaving, and the end of a space
   { name: "spaces.join", input: (x) => ({ space: x.id("lab") }) },
+  // the welcome page joins and leaves nothing (D24)
+  { name: "onboarding.finish", input: (x) => ({ spaces: [x.id("yard")] }) },
+  { name: "onboarding.finish", input: (x) => ({ spaces: [x.id("lab")] }) },
   {
     name: "spaces.create",
     label: "mine",
@@ -674,15 +924,32 @@ const HISTORY: Step[] = [
       id: x.fresh(),
       name: "Mine",
       vis: "listed",
-      policy: "request",
-      invite: "mods",
-      qs: [{ q: "Why?" }, { q: " " }],
+      qs: [{ q: " Why? " }, { q: " " }],
     }),
   },
   { name: "spaces.create", input: (x) => ({ id: x.fresh(), name: "#mine" }) },
-
   { name: "spaces.leave", input: (x) => ({ space: x.id("mine") }) },
-  // last: reports.create sets the mock's repSeen to false (D2)
+  // a closed space that becomes open has no policy (D9); archive stores the time (D22)
+  { name: "spaces.update", input: (x) => ({ id: x.id("mine"), set: { vis: "open" } }) },
+  { name: "spaces.archive", input: (x) => ({ id: x.id("mine"), archived: true }) },
+  {
+    name: "threads.create",
+    input: (x) => ({ id: x.fresh(), space: x.id("mine"), kind: "post", q: "archived" }),
+  },
+  { name: "spaces.archive", input: (x) => ({ id: x.id("mine"), archived: false }) },
+  {
+    name: "threads.create",
+    label: "T8",
+    input: (x) => ({ id: x.fresh(), space: x.id("mine"), kind: "post", q: "Before the end" }),
+  },
+  { name: "likes.set", input: (x) => ({ thread: x.id("T8"), on: true }) },
+  // deleting a space erases its content (D23)
+  { name: "spaces.delete", input: (x) => ({ id: x.id("mine") }) },
+  {
+    name: "threads.create",
+    input: (x) => ({ id: x.fresh(), space: x.id("mine"), kind: "post", q: "gone" }),
+  },
+  // last: the reports notice (D2)
   { name: "notifications.markAllRead", input: () => ({}) },
 ];
 
@@ -690,14 +957,19 @@ test.serial("the history: after every step, the mutators store what the mock sto
   await both(t, HISTORY);
   const names = new Set(HISTORY.map((s) => s.name));
   t.log(`${HISTORY.length} steps, ${names.size} mutators`);
-  // the mutators the history leaves out are in the table below
+  // every mutator is in the history
   t.deepEqual(
     MUTATORS.names.filter((n) => !names.has(n)),
-    ["spaces.archive", "spaces.delete", "onboarding.finish"],
+    [],
   );
 });
 
-// ---- the intended differences ----
+test.serial("every mock procedure is a mutator or an online-only call, and nothing else", (t) => {
+  const mock = Object.keys(M.PROCEDURES).sort();
+  t.deepEqual(mock, [...MUTATORS.names, ...Object.keys(NOT_MUTATORS)].sort());
+});
+
+// ---- the differences that remain ----
 
 /** One side's view of a row's scenario. */
 interface Pair {
@@ -728,8 +1000,10 @@ async function pair(t: ExecutionContext): Promise<Pair> {
 }
 
 /** A row: the procedures, what the mock does, what the mutators do instead,
- * and why (a phase 0 decision, or this package's). `check` runs the case on
- * both sides and asserts exactly that difference. */
+ * and why the mock keeps it: each is a gap a mock without a real server
+ * keeps on purpose. `check` runs the case on both sides and asserts exactly
+ * that difference. The rows of phase 1a's table that are gone, the mock
+ * adopted (the history marks them, Dn). */
 interface Difference {
   id: string;
   procedures: string;
@@ -739,35 +1013,20 @@ interface Difference {
   check(t: ExecutionContext, p: Pair): Promise<void>;
 }
 
-const OLD_PAGE = "01KA0000000000000000000000";
 const code = (o: Outcome) => (o.status === "refused" ? o.error.code : o.status);
-const mockCode = (r: Awaited<ReturnType<typeof call>>) => (r.ok ? "ok" : r.code);
 
 export const DIFFERENCES: Difference[] = [
   {
-    id: "D1",
-    procedures: "likes.toggle, likes.toggleReply, saved.toggle",
-    mock: "toggle when `on` is left out",
-    ours: "likes.set, likes.setReply and saved.set, with a required `on`",
-    why: "phase 0: the result depends on what the client saw, so two devices do not cancel out",
-    async check(t, p) {
-      t.is(mockCode(await p.mock("likes.toggle", { thread: p.ids.T2 })), "ok");
-      t.true(p.md().liked.has(p.ids.T2));
-      t.is(code(p.ours("likes.set", { thread: p.ids.T2 })), "BAD_REQUEST");
-      t.is(code(p.ours("likes.toggle", { thread: p.ids.T2 })), "NOT_FOUND");
-    },
-  },
-  {
     id: "D2",
     procedures: "reports.create",
-    mock: "sets the caller's own `repSeen` to false",
-    ours: "writes no seen flag; the space's staff are notified by a post-commit effect (`notifyStaff`)",
-    why: "the mock has one person; the notice is for the staff, written by the server",
+    mock: "sets the reports notice of its one person (repSeen false) in the procedure's transaction, when that person is staff of the space",
+    ours: "writes no notice; the `notifyStaff` effect notifies the space's staff (as they are when it runs) after the commit",
+    why: "the mock has no effect worker and one person: it applies that person's part of the effect at once",
     async check(t, p) {
       p.ours("notifications.markSeen", { kind: "reports" });
       await p.mock("notifications.markSeen", { kind: "reports" });
-      const out = p.ours("reports.create", { id: p.w.id(), item: `a:${p.ids.T3}`, why: "x" });
-      await p.mock("reports.create", { item: `a:${p.ids.T3}`, why: "x" });
+      const out = p.ours("reports.create", { id: p.w.id(), item: `a:${p.ids.T1}`, why: "x" });
+      await p.mock("reports.create", { item: `a:${p.ids.T1}`, why: "x" });
       t.false(p.md().repSeen);
       t.true(p.get(`seen:${ME}`).reps);
       t.is(out.status === "ok" ? out.effects[0]?.type : null, "notifyStaff");
@@ -778,13 +1037,13 @@ export const DIFFERENCES: Difference[] = [
     procedures: "reports.resolve",
     mock: "writes the reporter's report_resolved notification in the same transaction",
     ours: "queues a `reportResolved` effect; the server writes the notification after the commit",
-    why: "AGENTS.md: effects run after the commit, from a worker",
+    why: "the mock has no effect worker (AGENTS.md: effects run after the commit, from a worker)",
     async check(t, p) {
       const id = p.w.id();
       p.ours("reports.create", { id, item: `a:${p.ids.T3}`, why: "x" });
-      const r = await p.mock("reports.create", { item: `a:${p.ids.T3}`, why: "x" });
+      await p.mock("reports.create", { id, item: `a:${p.ids.T3}`, why: "x" });
       const out = p.ours("reports.resolve", { report: id, outcome: "dismissed" });
-      await p.mock("reports.resolve", { report: r.ok ? r.result.id : "", outcome: "dismissed" });
+      await p.mock("reports.resolve", { report: id, outcome: "dismissed" });
       t.is(p.md().notifs.filter((n: Any) => n.type === "report_resolved").length, 1);
       t.false(
         [...p.w.store.records.values()].some(
@@ -797,587 +1056,53 @@ export const DIFFERENCES: Difference[] = [
     },
   },
   {
-    id: "D4",
-    procedures: "reports.resolve",
-    mock: '"dismissed" on the last open report of an item shows the item (deletes its moderation state)',
-    ours: "dismissing leaves the item's moderation state as it is",
-    why: "showing an item needs its base.rev (phase 0, stale intent); a dismissal decides about the report",
-    async check(t, p) {
-      p.ours("moderation.decide", { item: `a:${p.ids.T3}`, decision: "hidden" });
-      await p.mock("moderation.decide", { item: `a:${p.ids.T3}`, decision: "hidden" });
-      const id = p.w.id();
-      p.ours("reports.create", { id, item: `a:${p.ids.T3}`, why: "x" });
-      const r = await p.mock("reports.create", { item: `a:${p.ids.T3}`, why: "x" });
-      p.ours("reports.resolve", { report: id, outcome: "dismissed" });
-      await p.mock("reports.resolve", { report: r.ok ? r.result.id : "", outcome: "dismissed" });
-      t.is(p.md().modSt[`a:${p.ids.T3}`], undefined);
-      t.is(p.get(`thread:${p.ids.T3}`).mod, "hidden");
-    },
-  },
-  {
-    id: "D5",
-    procedures: "followups.ask, research.forkNode",
-    mock: "starts a run of the new ask (a run record)",
-    ours: "writes the follow-up only; no run record and no job",
-    why: "the prototype's followups.ask (phase 0); see the design findings",
-    async check(t, p) {
-      p.ours("followups.ask", { id: p.w.id(), thread: p.ids.T1, q: "Q" });
-      await p.mock("followups.ask", { thread: p.ids.T1, q: "Q" });
-      t.truthy(p.md().runs[`${p.ids.T1}:f1`]);
-      // the one run of T1 is its own ask's, from threads.create
-      t.is(
-        [...p.w.store.records.values()].filter((r) => r.kind === "run" && r.th === p.ids.T1).length,
-        1,
-      );
-    },
-  },
-  {
-    id: "D6",
-    procedures: 'moderation.decide, reports.resolve ("removed")',
-    mock: "marks the item removed and keeps its text and everything under it",
-    ours: "erases the item's text, and a thread's follow-ups, replies and runs, from storage",
-    why: "phase 0: removing a thread erases it and everything under it",
-    async check(t, p) {
-      p.ours("moderation.decide", { item: `a:${p.ids.T1}`, decision: "removed" });
-      await p.mock("moderation.decide", { item: `a:${p.ids.T1}`, decision: "removed" });
-      const m = p.md();
-      t.is(m.modSt[`a:${p.ids.T1}`], "removed");
-      t.is(m.posts.find((x: Any) => x.id === p.ids.T1).q, "Why?");
-      t.is(m.fu[p.ids.T1].length, 1);
-      t.like(p.get(`thread:${p.ids.T1}`), { mod: "removed", q: "" });
-      t.is(p.get(`followup:${p.ids.F1}`), undefined);
-    },
-  },
-  {
-    id: "D7",
-    procedures: "spaces.update",
-    mock: "stores a new name as sent",
-    ours: "applies the name rule (lower case, [a-z0-9-], 32 characters), as spaces.create does",
-    why: "the prototype's spaces.update (phase 0)",
-    async check(t, p) {
-      p.ours("spaces.update", { id: p.ids.lounge, set: { name: "Big Lounge!" } });
-      await p.mock("spaces.update", { id: p.ids.lounge, set: { name: "Big Lounge!" } });
-      t.is(p.md().spaces.find((s: Any) => s.id === p.ids.lounge).name, "Big Lounge!");
-      t.is(p.get(`space:${p.ids.lounge}`).name, "big-lounge-");
-    },
-  },
-  {
-    id: "D8",
-    procedures: "spaces.create",
-    mock: "stores a closed space's policy, invite setting and questions as sent (absent when left out; questions untrimmed)",
-    ours: 'defaults policy "request" and invite "mods", and trims the questions',
-    why: "the prototype's spaces.create (phase 0)",
-    async check(t, p) {
-      p.ours("spaces.create", { id: p.w.id(), name: "club", vis: "listed", qs: [{ q: " Why? " }] });
-      await p.mock("spaces.create", { name: "club", vis: "listed", qs: [{ q: " Why? " }] });
-      const m = p.md().spaces.find((s: Any) => s.name === "club");
-      t.like(m, { policy: undefined, invite: undefined });
-      t.is(m.qs[0].q, " Why? ");
-      const ours = [...p.w.store.records.values()].find(
-        (r) => r.kind === "space" && r.name === "club",
-      ) as Any;
-      t.like(ours, { policy: "request", invite: "mods" });
-      t.is(ours.qs[0].q, "Why?");
-    },
-  },
-  {
-    id: "D9",
-    procedures: "spaces.update",
-    mock: "keeps a space's policy, invite setting and questions when it becomes open",
-    ours: "clears them (they apply to closed spaces only)",
-    why: "the prototype's spaces.update (phase 0)",
-    async check(t, p) {
-      const club = { name: "club", vis: "listed", policy: "request", invite: "mods" };
-      const id = p.w.id();
-      p.ours("spaces.create", { id, ...club });
-      const r = await p.mock("spaces.create", club);
-      p.ours("spaces.update", { id, set: { vis: "open" } });
-      await p.mock("spaces.update", { id: r.ok ? r.result.id : "", set: { vis: "open" } });
-      t.like(
-        p.md().spaces.find((s: Any) => s.name === "club"),
-        { vis: "open", policy: "request", invite: "mods" },
-      );
-      t.like(p.get(`space:${id}`), { vis: "open", policy: null, invite: null });
-    },
-  },
-  {
-    id: "D10",
-    procedures: "spaces.join, spaces.leave",
-    mock: "changes only the person's own lists (`joined`, `rel`); the space's member list and count stay",
-    ours: "the member record is the membership: joining writes it, leaving deletes it, and the count follows",
-    why: "the mock has one person; here a membership is one record (phase 0)",
-    async check(t, p) {
-      const yard = p.w.id();
-      p.w.run("olga", "spaces.create", { id: yard, name: "yard" });
-      await reset(toMock(p.w.store), p.w.now);
-      p.ours("spaces.join", { space: yard });
-      await p.mock("spaces.join", { space: yard });
-      t.true(p.md().joined.includes(yard));
-      t.false(p.md().memOther[yard].some((m: Any) => m.u === ME));
-      t.truthy(p.get(`member:${yard}:${ME}`));
-      t.is(p.get(`space:${yard}`).members, 2);
-    },
-  },
-  {
-    id: "D11",
-    procedures: "members.setRole (and every change of a member's role)",
-    mock: "updates a space's staff list (`mods`) only for the caller's own role and an ownership transfer",
-    ours: "rewrites the staff list from the member records after every change",
-    why: "the staff list is what a non-member reads of a closed space (phase 0)",
-    async check(t, p) {
-      p.ours("members.setRole", {
-        space: p.ids.lounge,
-        user: "otto",
-        role: "mod",
-        base: { rev: p.w.rev(`member:${p.ids.lounge}:otto`) },
-      });
-      await p.mock("members.setRole", { space: p.ids.lounge, user: "otto", role: "mod" });
-      t.false(
-        p
-          .md()
-          .spaces.find((s: Any) => s.id === p.ids.lounge)
-          .mods.some((m: Any) => m[0] === "otto"),
-      );
-      t.true(p.get(`space:${p.ids.lounge}`).mods.some((m: Any) => m[0] === "otto"));
-    },
-  },
-  {
     id: "D12",
     procedures: "invites.create",
-    mock: "makes the link's id and takes its code from the id (`id.slice(-5)`)",
-    ours: "the client makes the id; the server makes a 10-character code from its random source in the pre-check",
-    why: "phase 0: server-made values never come from the client",
+    mock: "makes the 10-character code from a hash of the link's id and its count of links",
+    ours: "makes it in the pre-check from the server's random source",
+    why: "the mock's runs are deterministic (its ids come from the clock and a counter): it has no random source",
     async check(t, p) {
       const id = p.w.id();
       const out = p.ours("invites.create", { id, space: p.ids.lounge });
-      const r = await p.mock("invites.create", { space: p.ids.lounge });
-      t.true(r.ok && r.result.code === r.result.id.slice(-5).toLowerCase());
-      const c = out.status === "ok" ? (out.result as Any).code : "";
-      t.is(c.length, 10);
-      t.false(id.toLowerCase().includes(c));
+      const r = await p.mock("invites.create", { id, space: p.ids.lounge });
+      const CODE = /^[0-9a-hjkmnp-tv-z]{10}$/;
+      t.true(r.ok && CODE.test(r.result.code));
+      t.regex(out.status === "ok" ? (out.result as Any).code : "", CODE);
+      // the same id and count make the same code in the mock
+      await reset(toMock(seedWorld(t).w.store), p.w.now);
+      const again = await p.mock("invites.create", { id, space: p.ids.lounge });
+      t.is(again.ok && again.result.code, r.ok && r.result.code);
     },
   },
   {
-    id: "D13",
-    procedures: "spaces.join (notification)",
-    mock: "an invite notification admits the person to the closed space",
-    ours: "it is marked accepted, and admits nobody: joining a closed space needs a live invite link",
-    why: "phase 0: an invite is a link; a standing pass would let a removed member join again",
-    async check(t, p) {
-      t.is(
-        mockCode(await p.mock("spaces.join", { space: p.ids.vault, notification: p.ids.N1 })),
-        "ok",
-      );
-      t.true(p.md().joined.includes(p.ids.vault));
-      t.is(
-        code(p.ours("spaces.join", { space: p.ids.vault, notification: p.ids.N1 })),
-        "FORBIDDEN",
-      );
-    },
-  },
-  {
-    id: "D14",
-    procedures: "spaces.join (an approved request)",
-    mock: "a request a moderator approved lets the person join again after a removal",
-    ours: "approval writes the membership; an approved request admits nobody later",
-    why: "phase 0: an approved request kept as a standing pass would let a removed member join again",
-    async check(t, p) {
-      const md = p.md();
-      md.reqs.push({ u: ME, sp: p.ids.den, st: "approved", a: [] });
-      await reset(md, p.w.now);
-      t.is(mockCode(await p.mock("spaces.join", { space: p.ids.den })), "ok");
-      p.w.run(ME, "joinRequests.create", { space: p.ids.den, rulesAccepted: true });
-      p.w.run("olga", "joinRequests.decide", {
-        space: p.ids.den,
-        users: [ME],
-        decision: "approve",
-        base: p.w.requests(p.ids.den, [ME]),
-      });
-      p.w.run("olga", "members.remove", {
-        space: p.ids.den,
-        user: ME,
-        base: p.w.admission(p.ids.den, ME),
-      });
-      t.is(code(p.ours("spaces.join", { space: p.ids.den })), "FORBIDDEN");
-    },
-  },
-  {
-    id: "D15",
-    procedures: "every write in a space",
-    mock: "a banned person can still write in an open space (bans stop joining a closed one)",
-    ours: "a ban stops every write in its space, the person's own included",
-    why: "phase 0: a ban stops every write in its space",
-    async check(t, p) {
-      p.w.run("olga", "members.ban", { space: p.ids.lounge, user: "otto" });
-      const md = p.md();
-      md.banned.push({ id: `${p.ids.lounge}:${ME}`, sp: p.ids.lounge, u: ME });
-      await reset(md, p.w.now);
-      t.is(
-        mockCode(await p.mock("threads.create", { space: p.ids.lounge, kind: "post", q: "x" })),
-        "ok",
-      );
-      t.is(
-        code(
-          p.w.run("otto", "threads.create", {
-            id: p.w.id(),
-            space: p.ids.lounge,
-            kind: "post",
-            q: "x",
-          }),
-        ),
-        "FORBIDDEN",
-      );
-    },
-  },
-  {
-    id: "D16",
-    procedures: "research.createPostFollowUp",
-    mock: "adds a reply to an ask thread",
-    ours: "BAD_REQUEST: replies are for posts",
-    why: "the prototype's research.createPostFollowUp (phase 0)",
-    async check(t, p) {
-      t.is(
-        mockCode(await p.mock("research.createPostFollowUp", { thread: p.ids.T1, t: "x" })),
-        "ok",
-      );
-      t.is(
-        code(p.ours("research.createPostFollowUp", { id: p.w.id(), thread: p.ids.T1, t: "x" })),
-        "BAD_REQUEST",
-      );
-    },
-  },
-  {
-    id: "D17",
-    procedures: "research.forkNode",
-    mock: "adds an ask to a post's ask tree",
-    ours: "BAD_REQUEST: ask trees are for asks, as followups.ask",
-    why: "this package: a post's first-level count is its replies",
-    async check(t, p) {
-      t.is(
-        mockCode(await p.mock("research.forkNode", { thread: p.ids.T2, parent: "r", q: "x" })),
-        "ok",
-      );
-      t.is(
-        code(p.ours("research.forkNode", { id: p.w.id(), thread: p.ids.T2, parent: "r", q: "x" })),
-        "BAD_REQUEST",
-      );
-    },
-  },
-  {
-    id: "D18",
-    procedures: "replies.update, followups.update",
-    mock: "edits a deleted reply or follow-up, writing text back into the shell",
-    ours: "PRECONDITION_FAILED, as threads.update does for a deleted thread",
-    why: "the prototype's threads.update (phase 0), applied to replies and follow-ups",
-    async check(t, p) {
-      p.ours("replies.delete", { thread: p.ids.T2, reply: p.ids.R1 });
-      await p.mock("replies.delete", { thread: p.ids.T2, path: "0" });
-      t.is(
-        mockCode(await p.mock("replies.update", { thread: p.ids.T2, path: "0", t: "back" })),
-        "ok",
-      );
-      t.is(p.md().rp[p.ids.T2][0].t, "back");
-      t.is(
-        code(
-          p.ours("replies.update", {
-            thread: p.ids.T2,
-            reply: p.ids.R1,
-            t: "back",
-            base: { rev: p.w.rev(`reply:${p.ids.R1}`) },
-          }),
-        ),
-        "PRECONDITION_FAILED",
-      );
-    },
-  },
-  {
-    id: "D19",
-    procedures: "replies.delete",
-    mock: "keeps reply likes, keyed by the reply's path (which then names another reply)",
-    ours: "deletes the likes of a reply it deletes",
-    why: "this package: a reply like names the reply's id",
-    async check(t, p) {
-      p.w.run("otto", "likes.setReply", { reply: p.ids.R2, on: true });
-      const md = p.md();
-      md.rpLiked.add(`${p.ids.T2}:0.0`);
-      await reset(md, p.w.now);
-      p.w.run("otto", "replies.delete", { thread: p.ids.T2, reply: p.ids.R2 });
-      await p.mock("replies.delete", { thread: p.ids.T2, path: "0.0" });
-      t.true(p.md().rpLiked.has(`${p.ids.T2}:0.0`));
-      t.is(p.get(`rlike:otto:${p.ids.R2}`), undefined);
-    },
-  },
-  {
-    id: "D20",
-    procedures: "threads.update, followups.update, replies.update",
-    mock: "takes no base",
-    ours: "an author's edit carries `base.rev` of what it edits, and is STALE when it differs",
-    why: "phase 0: threads.update carries base.rev; here also follow-ups and replies",
-    async check(t, p) {
-      t.is(mockCode(await p.mock("threads.update", { id: p.ids.T1, q: "Why not?" })), "ok");
-      t.is(
-        code(p.ours("threads.update", { id: p.ids.T1, q: "Why not?", base: { rev: 0 } })),
-        "STALE",
-      );
-      t.is(
-        code(
-          p.ours("replies.update", { thread: p.ids.T2, reply: p.ids.R1, t: "x", base: { rev: 0 } }),
-        ),
-        "STALE",
-      );
-    },
-  },
-  {
-    id: "D21",
-    procedures: "threads.create (from)",
-    mock: "anyone who may read the thread starts a thread from any follow-up; the new thread is the follow-up's author's",
-    ours: "only the follow-up's author starts a thread from it, as its author; hidden and removed follow-ups are not copied",
-    why: "this package: a write never makes a record in another person's name",
-    async check(t, p) {
-      const r = await p.mock("threads.create", {
-        space: p.ids.lounge,
-        kind: "ask",
-        q: "",
-        from: { th: p.ids.T1, node: "f0" },
-      });
-      t.true(r.ok);
-      t.is(p.md().posts.find((x: Any) => r.ok && x.id === r.result.id).u, "otto");
-      t.is(
-        code(
-          p.ours("threads.create", {
-            id: p.w.id(),
-            space: p.ids.lounge,
-            kind: "ask",
-            q: "",
-            from: { th: p.ids.T1, node: p.ids.F1 },
-          }),
-        ),
-        "FORBIDDEN",
-      );
-    },
-  },
-  {
-    id: "D22",
-    procedures: "spaces.archive",
-    mock: 'stores the day as the page shows it (`Intl`: "Nov 16")',
-    ours: "stores the time (ISO)",
-    why: "AGENTS.md: run uses no Intl formatting",
-    async check(t, p) {
-      const mine = p.w.id();
-      p.ours("spaces.create", { id: mine, name: "mine" });
-      const r = await p.mock("spaces.create", { name: "mine" });
-      p.ours("spaces.archive", { id: mine, archived: true });
-      await p.mock("spaces.archive", { id: r.ok ? r.result.id : "", archived: true });
-      t.deepEqual(p.md().spaces.find((s: Any) => s.name === "mine").archived, {
-        by: ME,
-        on: "Nov 16",
-      });
-      t.deepEqual(p.get(`space:${mine}`).archived, { by: ME, at: isoAt(p.w.now) });
-    },
-  },
-  {
-    id: "D23",
-    procedures: "spaces.delete",
-    mock: "marks the space deleted and keeps its content",
-    ours: "erases its content (threads and what is under them, members, requests, bans, links, reports, pages, skills, sources, and the likes, saves and notifications about it) and marks the space deleted",
-    why: "this package, after phase 0's erasure rule; online only",
-    async check(t, p) {
-      const mine = p.w.id();
-      p.ours("spaces.create", { id: mine, name: "mine" });
-      const r = await p.mock("spaces.create", { name: "mine" });
-      const sid = r.ok ? r.result.id : "";
-      const th = p.w.id();
-      p.ours("threads.create", { id: th, space: mine, kind: "post", q: "x" });
-      await p.mock("threads.create", { space: sid, kind: "post", q: "x" });
-      p.ours("spaces.delete", { id: mine });
-      await p.mock("spaces.delete", { id: sid });
-      t.true(p.md().spaces.find((s: Any) => s.id === sid).deleted);
-      t.is(p.md().posts.filter((x: Any) => x.s === sid).length, 1);
-      t.true(p.get(`space:${mine}`).deleted);
-      t.is(p.get(`thread:${th}`), undefined);
-    },
-  },
-  {
-    id: "D24",
-    procedures: "onboarding.finish",
-    mock: "replaces the person's list of joined spaces with the listed ones",
-    ours: "joins the listed open spaces and leaves no space",
-    why: "this package: a membership is a member record, and leaving is spaces.leave",
-    async check(t, p) {
-      const yard = p.w.id();
-      p.w.run("olga", "spaces.create", { id: yard, name: "yard" });
-      await reset(toMock(p.w.store), p.w.now);
-      p.ours("onboarding.finish", { spaces: [yard] });
-      await p.mock("onboarding.finish", { spaces: [yard] });
-      t.deepEqual(p.md().joined, [yard]);
-      t.truthy(p.get(`member:${p.ids.lounge}:${ME}`));
-      t.truthy(p.get(`member:${yard}:${ME}`));
-    },
-  },
-  {
-    id: "D25",
-    procedures: "sourceReports.create",
-    mock: "adds a report each time",
-    ours: "one report per person, source and space: a second replaces the first's reason",
-    why: "this package: a report of a source is keyed by space, source and person",
-    async check(t, p) {
-      for (const why of ["a", "b"]) {
-        p.ours("sourceReports.create", { space: p.ids.lab, source: "SRC1", why });
-        await p.mock("sourceReports.create", { space: p.ids.lab, source: "SRC1", why });
-      }
-      t.is(p.md().dsReps.length, 2);
-      t.is(p.get(`srcrep:${p.ids.lab}:SRC1:${ME}`).why, "b");
-    },
-  },
-  {
-    id: "D26",
-    procedures: "spaceSources.add",
-    mock: "adding a source removed from the space adds a second entry for it",
-    ours: "the space's one entry for the source is put back (`rm` false)",
-    why: "this package: a source in a space is keyed by space and source",
-    async check(t, p) {
-      p.ours("spaceSources.add", { space: p.ids.lounge, source: "SRC1" });
-      await p.mock("spaceSources.add", { space: p.ids.lounge, source: "SRC1" });
-      p.ours("spaceSources.review", { space: p.ids.lounge, source: "SRC1", decision: "remove" });
-      await p.mock("spaceSources.review", {
-        space: p.ids.lounge,
-        source: "SRC1",
-        decision: "remove",
-      });
-      p.ours("spaceSources.add", { space: p.ids.lounge, source: "SRC1" });
-      await p.mock("spaceSources.add", { space: p.ids.lounge, source: "SRC1" });
-      t.is(p.md().dsDrops[p.ids.lounge].length, 2);
-      t.false(p.get(`spacesrc:${p.ids.lounge}:SRC1`).rm);
-    },
-  },
-  {
-    id: "D27",
-    procedures: "pages.update, pages.restore",
-    mock: "a listed page without a stored document takes its author and history from the client's `base`",
-    ours: "it stands for an empty document by the editor; `base` gives only the version",
-    why: "phase 0: the server never stores client-made state",
-    async check(t, p) {
-      p.w.store.records.set(`pages:${p.ids.lounge}`, {
-        kind: "pages",
-        sp: p.ids.lounge,
-        list: [{ id: OLD_PAGE, t: "Old", at: "2026-11-01T00:00:00Z" }],
-        rev: 1,
-      });
-      const md = p.md();
-      md.spaces.find((s: Any) => s.id === p.ids.lounge).pages = [["Old", "2026-11-01T00:00:00Z"]];
-      await reset(md, p.w.now);
-      const base = { by: "olga", revs: [{ by: "olga", note: "Wrote it" }] };
-      p.ours("pages.update", { space: p.ids.lounge, page: 0, title: "Old", text: ["x"], base });
-      await p.mock("pages.update", {
-        space: p.ids.lounge,
-        page: 0,
-        title: "Old",
-        text: ["x"],
-        base,
-      });
-      t.like(p.md().pagedocs[`${p.ids.lounge}/old`], { by: "olga" });
-      t.is(p.md().pagedocs[`${p.ids.lounge}/old`].revs.length, 2);
-      t.like(p.get(`page:${p.ids.lounge}:old`), { by: ME });
-      t.is(p.get(`page:${p.ids.lounge}:old`).revs.length, 1);
-    },
-  },
-  {
-    id: "D28",
-    procedures: "spaces.update",
-    mock: "accepts `dom` (a verified domain) and `pages` as settings",
-    ours: "BAD_REQUEST: the domain's state is the domain check's, and pages are the page procedures'",
-    why: "phase 0: server-made values never come from the client",
-    async check(t, p) {
-      const dom = { domain: "x.org", state: "ok" };
-      t.is(mockCode(await p.mock("spaces.update", { id: p.ids.lounge, set: { dom } })), "ok");
-      t.is(code(p.ours("spaces.update", { id: p.ids.lounge, set: { dom } })), "BAD_REQUEST");
-    },
-  },
-  {
-    id: "D29",
+    id: "D32",
     procedures:
-      "moderation.decide, reports.resolve, joinRequests.decide, members.setRole, members.remove",
-    mock: "take no base",
-    ours: '"shown", reopening a report that shows an item, approving and reopening a request and a role change carry base.rev (STALE when it differs); a removal names the admission id; hiding, removing, declining and banning apply to the record as it is',
-    why: "phase 0: stale intent",
+      "replies.update, replies.delete, likes.setReply, research.createPostFollowUp, followups.*, moderation keys",
+    mock: "names a reply by its path in the thread's replies and a flat follow-up by its index (`r:<thread>:<path>`, `f:<thread>:<index>`); a reply like follows its reply when replies before it are deleted",
+    ours: "names them by id (a reply like is keyed by the reply's id)",
+    why: "the mockup's page addresses replies and flat follow-ups by position, and its fixtures have no ids for them; skills and pages, which a queued write could retarget the same way, have ids since phase 1a.2 (see the report's findings)",
     async check(t, p) {
-      p.ours("moderation.decide", { item: `a:${p.ids.T3}`, decision: "hidden" });
-      await p.mock("moderation.decide", { item: `a:${p.ids.T3}`, decision: "hidden" });
+      // the like of the reply under R1 (path 0.0) follows it when the first
+      // reply goes on the mock's side; here it is keyed by id
+      await p.mock("research.createPostFollowUp", { thread: p.ids.T2, t: "second" });
+      await p.mock("likes.setReply", { reply: `${p.ids.T2}:1`, on: true });
+      const R3 = p.w.id();
+      p.ours("research.createPostFollowUp", { id: R3, thread: p.ids.T2, t: "second" });
+      p.ours("likes.setReply", { reply: R3, on: true });
+      // otto's reply under R1 goes; R1 has no other reply and is not deleted
+      // here: delete it on both sides once its reply is gone
+      p.w.run("otto", "replies.delete", { thread: p.ids.T2, reply: p.ids.R2 });
+      const md = p.md();
+      md.rp[p.ids.T2][0].kids = [];
+      await reset(md, p.w.now);
+      await p.mock("replies.delete", { thread: p.ids.T2, path: "0" });
+      p.ours("replies.delete", { thread: p.ids.T2, reply: p.ids.R1 });
+      t.true(p.md().rpLiked.has(`${p.ids.T2}:0`));
+      t.truthy(p.get(`rlike:${ME}:${R3}`));
       t.is(
-        mockCode(await p.mock("moderation.decide", { item: `a:${p.ids.T3}`, decision: "shown" })),
-        "ok",
-      );
-      t.is(
-        code(p.ours("moderation.decide", { item: `a:${p.ids.T3}`, decision: "shown" })),
+        code(p.ours("replies.update", { thread: p.ids.T2, path: "0", t: "x", base: { rev: 1 } })),
         "BAD_REQUEST",
       );
-      t.is(
-        code(
-          p.ours("moderation.decide", {
-            item: `a:${p.ids.T3}`,
-            decision: "shown",
-            base: { rev: 1 },
-          }),
-        ),
-        "STALE",
-      );
-      t.is(
-        mockCode(
-          await p.mock("joinRequests.decide", {
-            space: p.ids.lab,
-            users: ["eve"],
-            decision: "approve",
-          }),
-        ),
-        "ok",
-      );
-      t.is(
-        code(
-          p.ours("joinRequests.decide", {
-            space: p.ids.lab,
-            users: ["eve"],
-            decision: "approve",
-            base: { eve: 0 },
-          }),
-        ),
-        "STALE",
-      );
-      t.is(
-        code(p.ours("members.remove", { space: p.ids.lounge, user: "otto", base: { adm: "old" } })),
-        "STALE",
-      );
-    },
-  },
-  {
-    id: "D30",
-    procedures: "followups.ask",
-    mock: 'stores the answer as "Researching…" until the run writes it',
-    ours: "stores `a` null until the job writes it",
-    why: "the prototype's follow-up (phase 0): no display text is stored",
-    async check(t, p) {
-      p.ours("followups.ask", { id: p.w.id(), thread: p.ids.T1, q: "Q" });
-      await p.mock("followups.ask", { thread: p.ids.T1, q: "Q" });
-      t.is(p.md().fu[p.ids.T1][1].a, "Researching…");
-      t.is(
-        [...p.w.store.records.values()]
-          .filter((r) => r.kind === "followup" && r.q === "Q")
-          .map((r) => (r as Any).a)[0],
-        null,
-      );
-    },
-  },
-  {
-    id: "D31",
-    procedures: "threads.create",
-    mock: "stores `kw` (the question again, for search)",
-    ours: "stores no search copy",
-    why: "this package: the search index is the server's, not a stored field",
-    async check(t, p) {
-      const id = p.w.id();
-      p.ours("threads.create", { id, space: p.ids.lounge, kind: "post", q: "Words" });
-      const r = await p.mock("threads.create", { space: p.ids.lounge, kind: "post", q: "Words" });
-      t.is(p.md().posts.find((x: Any) => r.ok && x.id === r.result.id).kw, "Words");
-      t.false("kw" in p.get(`thread:${id}`));
     },
   },
 ];
@@ -1391,7 +1116,7 @@ for (const d of DIFFERENCES)
     },
   );
 
-test.serial("the table of differences names each row once", (t) => {
+test.serial("the table of differences names each row once, each with a reason", (t) => {
   t.is(new Set(DIFFERENCES.map((d) => d.id)).size, DIFFERENCES.length);
   for (const d of DIFFERENCES) t.truthy(d.why, d.id);
 });

@@ -150,7 +150,7 @@ export function toMock(s: MemoryStore): Record<string, unknown> {
   );
   const memOther: Record<string, unknown[]> = {};
   for (const m of members)
-    (memOther[m.sp] ??= []).push({ u: m.u, role: m.role, joinedAt: m.joinedAt });
+    (memOther[m.sp] ??= []).push({ u: m.u, role: m.role, joinedAt: m.joinedAt, adm: m.adm });
   const liked = new Set(
     of(s, "like")
       .filter((l) => l.u === ME)
@@ -178,7 +178,12 @@ export function toMock(s: MemoryStore): Record<string, unknown> {
   });
   const fu: Record<string, unknown[]> = {};
   for (const f of of(s, "followup").sort(byTime))
-    (fu[f.th] ??= []).push({ u: f.u, q: f.q, a: f.a ?? "Researching…", createdAt: f.createdAt });
+    (fu[f.th] ??= []).push({
+      u: f.u,
+      q: f.q,
+      ...(f.a === null ? {} : { a: f.a }),
+      createdAt: f.createdAt,
+    });
   const rp: Record<string, Any[]> = {};
   const replies = of(s, "reply").sort(byTime);
   for (const r of replies.filter((x) => x.parent === null))
@@ -264,6 +269,7 @@ export function toMock(s: MemoryStore): Record<string, unknown> {
     dsReps: [],
     profile: { name: "Me", bio: "" },
     skills: {},
+    skillsRev: {},
     pagedocs: {},
     acct: {
       email: "me@example.org",
@@ -280,6 +286,7 @@ export function toMock(s: MemoryStore): Record<string, unknown> {
     reqSeen: false,
     rpLiked: new Set(),
     runs: {},
+    devices: [],
   };
 }
 
@@ -405,6 +412,7 @@ export function projectMock(d: Any, L: Labels): Projection {
       running: p.running === true,
       topic: p.topic ?? null,
       topicBy: p.topicBy ?? null,
+      kw: p.kw ?? null,
       att: p.att ?? 0,
       r,
       likes: (p.likesBase ?? 0) + (liked ? 1 : 0),
@@ -416,6 +424,7 @@ export function projectMock(d: Any, L: Labels): Projection {
       followups[L.m(p.id)] = nodes.map((n) => ({
         u: n.u,
         q: n.q ?? "",
+        a: n.fu != null ? (n.a ?? null) : null,
         del: n.del === true,
         edited: n.edited === true,
         par: n.par === "r" ? null : nodes.findIndex((x) => x.id === n.par),
@@ -454,10 +463,11 @@ export function projectMock(d: Any, L: Labels): Projection {
     };
   const skills: Record<string, unknown> = {};
   for (const [sid, l] of Object.entries(d.skills as Record<string, Any[]>))
-    if (l.length) skills[L.m(sid)] = l.map((x) => ({ name: x.name, prompt: x.prompt, rev: x.rev }));
+    if (l.length)
+      skills[L.m(sid)] = l.map((x) => ({ id: x.id, name: x.name, prompt: x.prompt, rev: x.rev }));
   const pages: Record<string, string[]> = {};
   for (const s of d.spaces)
-    if ((s.pages ?? []).length) pages[L.m(s.id)] = s.pages.map((p: Any) => p[0]);
+    if ((s.pages ?? []).length) pages[L.m(s.id)] = s.pages.map((p: Any) => `${p[2]}:${p[0]}`);
   const pagedocs: Record<string, unknown> = {};
   for (const [key, doc] of Object.entries(d.pagedocs as Record<string, Any>)) {
     const [sid, slug] = key.split("/");
@@ -590,6 +600,7 @@ export function projectOurs(s: MemoryStore, L: Labels): Projection {
       running: p.running,
       topic: p.topic,
       topicBy: p.topicBy,
+      kw: null,
       att: p.att,
       r: c?.r ?? 0,
       likes: c?.likes ?? 0,
@@ -602,6 +613,7 @@ export function projectOurs(s: MemoryStore, L: Labels): Projection {
       followups[L.o(p.id)] = nodes.map((n) => ({
         u: n.u,
         q: n.q,
+        a: n.a,
         del: n.del,
         edited: n.edited,
         par: n.par === null ? null : nodes.findIndex((x) => x.id === n.par),
@@ -652,7 +664,8 @@ export function projectOurs(s: MemoryStore, L: Labels): Projection {
   const skills: Record<string, unknown> = {};
   for (const x of of(s, "skills")) if (x.list.length) skills[L.o(x.sp)] = x.list;
   const pages: Record<string, string[]> = {};
-  for (const x of of(s, "pages")) if (x.list.length) pages[L.o(x.sp)] = x.list.map((p) => p.t);
+  for (const x of of(s, "pages"))
+    if (x.list.length) pages[L.o(x.sp)] = x.list.map((p) => `${p.id}:${p.t}`);
   const pagedocs: Record<string, unknown> = {};
   for (const x of of(s, "page"))
     pagedocs[`${L.o(x.sp)}/${x.slug}`] = {

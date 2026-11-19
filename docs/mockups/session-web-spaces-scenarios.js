@@ -69,7 +69,7 @@
   scenario('replication: denied', { note: 'a moderator declined your request to join #replication-club (the note and the waiting period are screen state)',
     run: (tx, a, h) => h.rel('replication', 'denied') });
   scenario('replication: noor.a approved', { note: 'you moderate #replication-club and approved noor.a’s request: they are a member',
-    run: (tx, a, h) => { h.rel('replication', 'mod'); h.proc('joinRequests.decide', { space: 'replication', users: ['noor.a'], decision: 'approve' }); } });
+    run: (tx, a, h) => { h.rel('replication', 'mod'); h.proc('joinRequests.decide', { space: 'replication', users: ['noor.a'], decision: 'approve', base: { 'noor.a': tx.find('reqs', 'noor.a').rev || 1 } }); } });
 
   scenario('replication: moderator, with notifications', { note: 'you moderate #replication-club, and jun.park invited you to #ward7 a minute ago',
     run: (tx, a, h) => {
@@ -80,7 +80,7 @@
 
   /* ---- spaces you own: #math archived; a new closed space ---- */
   scenario('math: archived', { note: 'you archived #math, which you own',
-    run: tx => tx.edit('spaces', 'math', x => { x.archived = { by: tx.me.u, on: 'Nov 17' }; }) });
+    run: tx => tx.edit('spaces', 'math', x => { x.archived = { by: tx.me.u, at: '2026-11-17T09:00:00Z' }; }) });
   scenario('tide-gauges: a new closed space', { note: 'you created #tide-gauges, a closed listed space: you are its owner and only member',
     run: (tx, a, h) => { h.proc('spaces.create', { name: 'tide-gauges', desc: 'Readings and calibration notes from coastal tide gauges.', rules: [], vis: 'listed', faq: false, policy: 'request', qs: [{ q: 'What would you like to work on here?', req: true }], invite: 'mods' }); } });
 
@@ -227,9 +227,9 @@
     run: tx => tx.mapPut('dsPol', 'public', 'mods') });
 
   /* ---- sync states: the outbox, refused writes, access changes, device runs ----
-     The mock backend keeps no device replica, outbox or device records, and answers none of STALE, EXPIRED or
-     "update": the page draws those (the sync states block of session-web-spaces.html). These scenarios set up
-     what the server holds when each state appears. */
+     These scenarios set up what the server holds when each state appears; the page's Screen entries then send the
+     writes (the write envelope, section 6b of session-web-spaces-mock-api.js) and show the server's answers. The
+     device's own copy of a space and the writes waiting in its outbox are the client's (the page). */
   const sf42 = tx => tx.get('posts').find(p => p.s === 'sablefield' && p.k === 'post' && /4\.2 is out/.test(p.q)).id;
   scenario('outbox: replies arrived while you were offline', { note: 'while your device was offline, oduya and jun.park replied to the Sablefield 4.2 post. Your own reply is still in the device’s outbox (page state), so the server does not have it',
     run: (tx, a, h) => {
@@ -239,7 +239,7 @@
   scenario('sablefield: bram edited a hidden reply', { note: 'you (an admin of Sablefield) hid bram’s reply on the 4.2 post. Later, offline, you chose Show; before that write reached the server, bram edited the reply, so its version changed and the queued Show answers STALE',
     run: (tx, a, h) => {
       const th = sf42(tx), list = tx.mapGet('rp', th);
-      tx.mapPut('rp', th, list.map(r => r.u === 'bram' ? { ...r, t: 'Edited: the discount code is gone. A comparison of managed Postgres hosts is at cheapdb.example/compare.', edited: true } : r));
+      tx.mapPut('rp', th, list.map(r => r.u === 'bram' ? { ...r, t: 'Edited: the discount code is gone. A comparison of managed Postgres hosts is at cheapdb.example/compare.', edited: true, rev: (r.rev || 1) + 1 } : r));
       tx.mapPut('modSt', `r:${th}:${list.findIndex(r => r.u === 'bram')}`, 'hidden');
     } });
   scenario('replication: a request changed after Approve', { note: 'you moderate #replication-club. After you chose Approve on noor.a’s request, noor.a changed the answers, so the queued Approve answers STALE',
@@ -251,15 +251,25 @@
     run: (tx, a, h) => h.rel('replication', 'member') });
   scenario('replication: removed', { note: 'a moderator removed you from #replication-club: the server serves you nothing of it',
     run: (tx, a, h) => h.rel('replication', 'none') });
-  scenario('replication: removed, a device keeps its copy', { note: 'a moderator removed you from #replication-club. The server serves you nothing of it (see replication: removed), but your Desktop or Phone app keeps its copy. The mock backend keeps no device copy, so this scenario keeps the membership for the page to draw that copy, which the page marks frozen',
-    run: (tx, a, h) => h.rel('replication', 'member') });
+  scenario('replication: removed, a device keeps its copy', { note: 'a moderator removed you from #replication-club: the server serves you nothing of it. Your Desktop or Phone app keeps the copy it had (the page keeps the records it loaded as a member, and marks them frozen)',
+    run: (tx, a, h) => h.rel('replication', 'none') });
   scenario('sablefield: an open space to moderate', { note: 'you are an admin of Sablefield, an open space: anyone can join, so a removed member could join again',
     run: (tx, a, h) => h.rel('sablefield', 'mod') });
   const scifiAsk = tx => tx.get('posts').find(p => p.s === 'scifi' && p.u === 'mira_k' && p.k === 'ask' && !p.about).id;
-  scenario('device runs: mira_k’s ask running', { note: 'mira_k ran her #sci-fi ask again on her Mac (a device run; its executor is page state). The run is held after its first step',
-    run: (tx, a, h) => { const th = scifiAsk(tx); tx.edit('posts', th, x => { x.running = true; x.att = (x.att || 1) + 1; delete x.fail; }); h.run(th, 'r', 1); } });
+  /* mira_k's Mac: a device run's executor */
+  const MIRA_MAC = { kind: 'device', cli: 'claude', device: 'dm1', u: 'mira_k' };
+  scenario('device runs: mira_k’s ask running', { note: 'mira_k ran her #sci-fi ask again on her Mac (a device run: the run record and the thread carry its executor). Her Mac holds the run’s lease; the run is held after its first step',
+    run: (tx, a, h) => { const th = scifiAsk(tx); tx.edit('posts', th, x => { x.running = true; x.att = (x.att || 1) + 1; delete x.fail; x.executor = MIRA_MAC; delete x.pay; }); h.run(th, 'r', 1, MIRA_MAC); } });
   scenario('device runs: mira_k’s run interrupted', { note: 'mira_k ran her #sci-fi ask again on her Mac; the Mac slept, the run’s lease ended and the run is interrupted',
-    run: tx => { const th = scifiAsk(tx); tx.edit('posts', th, x => { x.running = false; x.att = (x.att || 1) + 1; x.fail = { why: 'interrupted' }; x.sum = window.SessionJobs.FAIL_SUM.interrupted(); }); } });
+    run: tx => { const th = scifiAsk(tx); tx.edit('posts', th, x => { x.running = false; x.att = (x.att || 1) + 1; x.fail = { why: 'interrupted' }; x.sum = window.SessionJobs.FAIL_SUM.interrupted(); x.executor = MIRA_MAC; delete x.pay; }); } });
+  scenario('device runs: the hourly limit', { note: 'you started 100 device runs in the last hour: the next one answers TOO_MANY_REQUESTS with the time it can start',
+    run: (tx, a, h) => h.deviceRuns(100) });
+  scenario('device runs: your run on this Mac', { note: 'you ran your #public ask again on your MacBook Air (Claude Code); the Mac claimed the run and holds its lease. args.end: interrupted (the lease ended) or too_large (the answer was over 200 KB)',
+    run: (tx, a, h) => {
+      const th = tx.get('posts').find(p => p.s === 'public' && p.u === tx.me.u && p.k === 'ask' && !p.gone).id, ex = { kind: 'device', cli: 'claude', device: 'd1', u: tx.me.u };
+      tx.edit('posts', th, x => { x.att = (x.att || 1) + 1; x.executor = ex; delete x.pay; if (a.end) { x.running = false; x.fail = { why: a.end }; x.sum = window.SessionJobs.FAIL_SUM[a.end](); } else { x.running = true; delete x.fail; } });
+      if (!a.end) h.run(th, 'r', 1, ex);
+    } });
   /* ---- end sync states ---- */
 
   window.SessionScenarios = { list };

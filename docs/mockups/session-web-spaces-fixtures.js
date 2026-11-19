@@ -38,10 +38,10 @@ window.SessionFixtures = {
           'Keep asks scoped to one question.',
         ],
         pages: [
-          ['Getting started with asks', '2026-11-12T22:00:00Z'],
-          ['How included tokens work', '2026-11-05T22:00:00Z'],
-          ['Alpha known issues', '2026-11-13T22:00:00Z'],
-          ['Invite system plan', '2026-11-10T22:00:00Z'],
+          ['Getting started with asks', '2026-11-12T22:00:00Z', 'pg-public-1'],
+          ['How included tokens work', '2026-11-05T22:00:00Z', 'pg-public-2'],
+          ['Alpha known issues', '2026-11-13T22:00:00Z', 'pg-public-3'],
+          ['Invite system plan', '2026-11-10T22:00:00Z', 'pg-public-4'],
         ],
         mods: [['sol', 'admin'], ['hal_b', 'mod']],
         membersBase: 4807,
@@ -57,9 +57,9 @@ window.SessionFixtures = {
         desc: 'Reading notes and research on science fiction: sources, influences, and what it predicted.',
         rules: ['Mark spoilers in titles with [spoilers].', 'Cite editions and page numbers when quoting.', 'Reading-group threads are pinned by mods.'],
         pages: [
-          ['Reading group schedule', '2026-11-14T22:00:00Z'],
-          ['Canon starter list', '2026-10-29T22:00:00Z'],
-          ['Spoiler policy', '2026-09-19T10:00:00Z'],
+          ['Reading group schedule', '2026-11-14T22:00:00Z', 'pg-scifi-1'],
+          ['Canon starter list', '2026-10-29T22:00:00Z', 'pg-scifi-2'],
+          ['Spoiler policy', '2026-09-19T10:00:00Z', 'pg-scifi-3'],
         ],
         mods: [['tomasz', 'admin'], ['ines.v', 'mod']],
         membersBase: 1199,
@@ -78,7 +78,7 @@ window.SessionFixtures = {
           'Link primary data sources in asks.',
           'Ask a follow-up in the thread instead of a new ask on the same data release.',
         ],
-        pages: [['Data source index', '2026-11-11T22:00:00Z'], ['Data release calendar, November', '2026-11-14T22:00:00Z']],
+        pages: [['Data source index', '2026-11-11T22:00:00Z', 'pg-markets-1'], ['Data release calendar, November', '2026-11-14T22:00:00Z', 'pg-markets-2']],
         mods: [['oduya', 'admin'], ['hal_b', 'mod']],
         membersBase: 2386,
       },
@@ -92,7 +92,7 @@ window.SessionFixtures = {
         posts: 940,
         desc: 'Paper summaries, replications, and arguments about benchmarks.',
         rules: ['Link the arXiv ID in the first line.', 'Say which results you checked yourself.'],
-        pages: [['Reading list', '2026-11-13T22:00:00Z'], ['Benchmark glossary', '2026-10-22T22:00:00Z']],
+        pages: [['Reading list', '2026-11-13T22:00:00Z', 'pg-ml-1'], ['Benchmark glossary', '2026-10-22T22:00:00Z', 'pg-ml-2']],
         mods: [['mira_k', 'admin']],
         membersBase: 3100,
       },
@@ -106,7 +106,7 @@ window.SessionFixtures = {
         posts: 251,
         desc: 'Molecular and organismal biology questions, from mechanisms to field notes.',
         rules: ['Medical questions about yourself go to a doctor, not this space.', 'Cite papers by DOI.'],
-        pages: [['Recommended databases', '2026-11-05T22:00:00Z']],
+        pages: [['Recommended databases', '2026-11-05T22:00:00Z', 'pg-bio-1']],
         mods: [['lettie', 'admin']],
         membersBase: 975,
       },
@@ -120,7 +120,7 @@ window.SessionFixtures = {
         posts: 410,
         desc: 'Questions about how things actually happened, with sources.',
         rules: ['Primary sources over summaries where possible.', 'Date ranges in titles help others search.'],
-        pages: [['Archive access guide', '2026-10-29T22:00:00Z']],
+        pages: [['Archive access guide', '2026-10-29T22:00:00Z', 'pg-history-1']],
         mods: [['tomasz', 'admin']],
         membersBase: 1515,
       },
@@ -134,7 +134,7 @@ window.SessionFixtures = {
         posts: 199,
         desc: 'Energy systems, emissions data, and adaptation.',
         rules: ['Show units and baselines.'],
-        pages: [['Datasets we trust', '2026-11-09T22:00:00Z']],
+        pages: [['Datasets we trust', '2026-11-09T22:00:00Z', 'pg-climate-1']],
         mods: [['sol', 'admin']],
         membersBase: 855,
       },
@@ -148,7 +148,7 @@ window.SessionFixtures = {
         posts: 64,
         desc: 'Transit, zoning, housing, and how cities change.',
         rules: ['Name the city in the title.'],
-        pages: [['Start here', '2026-11-16T06:30:00Z']],
+        pages: [['Start here', '2026-11-16T06:30:00Z', 'pg-urbanism-1']],
         mods: [['sol', 'admin']],
         membersBase: 407,
       },
@@ -162,7 +162,7 @@ window.SessionFixtures = {
         posts: 520,
         desc: 'Proofs, expositions, and where to read more.',
         rules: ['Use $…$ for inline math.'],
-        pages: [['Expository writing list', '2026-11-14T22:00:00Z']],
+        pages: [['Expository writing list', '2026-11-14T22:00:00Z', 'pg-math-1']],
         mods: [['lettie', 'admin']],
         membersBase: 1725,
       },
@@ -189,10 +189,10 @@ window.SessionFixtures = {
           'Asks use the space’s extra tokens. Keep each ask to a single result.',
         ],
         pages: [
-          ['Replication plan template', '2026-11-13T22:00:00Z'],
-          ['Open replications', '2026-11-16T04:30:00Z'],
-          ['Data access agreements', '2026-11-05T22:00:00Z'],
-          ['Results log', '2026-11-14T22:00:00Z'],
+          ['Replication plan template', '2026-11-13T22:00:00Z', 'pg-replication-1'],
+          ['Open replications', '2026-11-16T04:30:00Z', 'pg-replication-2'],
+          ['Data access agreements', '2026-11-05T22:00:00Z', 'pg-replication-3'],
+          ['Results log', '2026-11-14T22:00:00Z', 'pg-replication-4'],
         ],
         mods: [['lettie', 'admin'], ['mira_k', 'mod']],
         membersBase: 206,
@@ -211,7 +211,7 @@ window.SessionFixtures = {
         qs: [{ q: 'Which team are you on at Northwind?', req: true }],
         desc: 'Engineering space for Northwind staff: incident reviews, design notes and vendor research.',
         rules: ['Use your work account.', 'Customer data never goes in a thread or an ask.'],
-        pages: [['On-call handbook', '2026-11-12T22:00:00Z'], ['Vendor evaluations', '2026-10-29T22:00:00Z']],
+        pages: [['On-call handbook', '2026-11-12T22:00:00Z', 'pg-northwind-1'], ['Vendor evaluations', '2026-10-29T22:00:00Z', 'pg-northwind-2']],
         mods: [['oduya', 'admin']],
         dom: { domain: 'northwind.io', method: 'dns', state: 'ok', verifiedAt: '2026-10-30T12:00:00Z' },
         membersBase: 82,
@@ -230,7 +230,7 @@ window.SessionFixtures = {
         qs: [],
         desc: 'Working space for the 2027 open-science grant panel. Applications and scores are confidential.',
         rules: ['Do not name applicants outside this space.', 'Declare conflicts of interest before scoring.'],
-        pages: [['Scoring rubric', '2026-11-11T22:00:00Z'], ['Conflict register', '2026-11-14T22:00:00Z']],
+        pages: [['Scoring rubric', '2026-11-11T22:00:00Z', 'pg-grants-1'], ['Conflict register', '2026-11-14T22:00:00Z', 'pg-grants-2']],
         mods: [['tomasz', 'admin']],
         membersBase: 4,
       },
@@ -248,7 +248,7 @@ window.SessionFixtures = {
         qs: [],
         desc: 'Tenants\' association for buildings in Ward 7: repairs, rent notices and meeting notes.',
         rules: ['Do not post other tenants\' unit numbers.'],
-        pages: [['Meeting notes', '2026-11-09T22:00:00Z']],
+        pages: [['Meeting notes', '2026-11-09T22:00:00Z', 'pg-ward7-1']],
         mods: [['jun.park', 'admin']],
         membersBase: 27,
       },
@@ -267,9 +267,9 @@ window.SessionFixtures = {
           'Search before you ask: existing answers appear under the box as you type.',
         ],
         pages: [
-          ['Getting started guide', '2026-11-13T22:00:00Z'],
-          ['Release notes digest', '2026-11-14T22:00:00Z'],
-          ['How topics are organized', '2026-11-05T22:00:00Z'],
+          ['Getting started guide', '2026-11-13T22:00:00Z', 'pg-sablefield-1'],
+          ['Release notes digest', '2026-11-14T22:00:00Z', 'pg-sablefield-2'],
+          ['How topics are organized', '2026-11-05T22:00:00Z', 'pg-sablefield-3'],
         ],
         mods: [['maya.r', 'owner'], ['devin_o', 'admin'], ['ines.v', 'admin'], ['tove', 'mod']],
         faq: true,
@@ -3359,7 +3359,7 @@ alter table notes validate constraint notes_owner_nn;</code></pre>`,
       { id: 'nqt1', type: 'branch', actor: 'hal_b', thread: '01M7HWGZJGT7JTFFVSYPX055KV', node: 'h1', createdAt: '2026-11-16T09:54:30Z', read: false },
       { id: 'n1', type: 'follow_up', actor: 'hal_b', thread: '01M7HWGZJGT7JTFFVSYPX055KV', createdAt: '2026-11-16T09:56:30Z', read: false },
       { id: 'n2', type: 'follow_up', actor: 'jun.park', thread: '01M7H6F3P02JFX3X2X804X3986', createdAt: '2026-11-14T22:00:00Z', read: true },
-      { id: 'ninv', type: 'invite', actor: 'jun.park', space: 'ward7', createdAt: '2026-11-16T05:30:00Z', read: false },
+      { id: 'ninv', type: 'invite', actor: 'jun.park', space: 'ward7', invite: 'w7k2q9m4tx', createdAt: '2026-11-16T05:30:00Z', read: false },
     ],
     askedInv: [],
     reqs: [
@@ -3532,6 +3532,8 @@ alter table notes validate constraint notes_owner_nn;</code></pre>`,
       { id: 'l3', code: 'p0Wd4', by: 'lettie', expiresAt: '2026-11-10T12:00:00Z', dead: 'Used', usedBy: 'dana.l', sp: 'replication' },
       { id: 'l4', sp: 'grants', code: 'g8Tn3', by: 'ines.v', expiresAt: '2026-11-24T12:00:00Z' },
       { id: 'l5', sp: 'grants', code: 'q2Lr7', by: 'tomasz', expiresAt: null },
+      /* the link jun.park's invite to #ward-7-tenants carries (notification ninv) */
+      { id: 'l6', sp: 'ward7', code: 'w7k2q9m4tx', by: 'jun.park', expiresAt: null, createdAt: '2026-11-16T05:30:00Z' },
     ],
     reports: [
       {
@@ -3593,6 +3595,7 @@ alter table notes validate constraint notes_owner_nn;</code></pre>`,
     skills: {
       public: [
         {
+          id: 'sk-public-1',
           name: 'summarizing-articles',
           prompt: `Summarizes an article and lists its main claims with the evidence given for each. Use when someone shares a link to an article, essay or blog post and asks what it says.
 
@@ -3607,6 +3610,7 @@ alter table notes validate constraint notes_owner_nn;</code></pre>`,
           rev: 0,
         },
         {
+          id: 'sk-public-2',
           name: 'transcribing-videos',
           prompt: `Transcribes a video and produces a timestamped outline of its sections. Use when someone links a video or a recorded talk and asks for a transcript, an outline or where a topic comes up.
 
@@ -3619,6 +3623,7 @@ Mark parts that cannot be heard as [inaudible].`,
           rev: 0,
         },
         {
+          id: 'sk-public-3',
           name: 'reviewing-pull-requests',
           prompt: `Reviews a public pull request for correctness bugs and risky changes. Use when someone links a GitHub or GitLab pull request and asks whether it is safe to merge.
 
@@ -3631,6 +3636,7 @@ Cite the file and line for each finding. Say so when nothing was found.`,
           rev: 0,
         },
         {
+          id: 'sk-public-4',
           name: 'auditing-codebases',
           prompt: `Audits a public repository for security issues and unmaintained dependencies. Use when someone links a repository and asks whether it is safe to depend on.
 
@@ -3645,6 +3651,7 @@ Separate confirmed issues from things to check by hand.`,
       ],
       scifi: [
         {
+          id: 'sk-scifi-1',
           name: 'finding-works-on-a-theme',
           prompt: `Finds novels and short stories that explore a theme and groups them by approach. Use when someone names a theme, idea or technology and asks which science fiction deals with it.
 
@@ -3657,6 +3664,7 @@ Mark spoilers as the spoiler policy page describes.`,
           rev: 0,
         },
         {
+          id: 'sk-scifi-2',
           name: 'tracing-terms',
           prompt: `Traces how a term was coined and how its meaning changed over time. Use when someone asks where a word or concept from science fiction comes from.
 
@@ -3671,6 +3679,7 @@ Prefer primary sources to encyclopedias.`,
       ],
       ml: [
         {
+          id: 'sk-ml-1',
           name: 'summarizing-papers',
           prompt: `Summarizes a research paper: the claim, the method, the main results and what was not tested. Use when someone gives an arXiv ID or a link to a paper.
 
@@ -3684,6 +3693,7 @@ Copy numbers from the paper without rounding them.`,
           rev: 0,
         },
         {
+          id: 'sk-ml-2',
           name: 'checking-benchmark-claims',
           prompt: `Checks whether a reported benchmark result holds up by comparing it with other reported numbers and setups. Use when someone asks whether a benchmark score is credible.
 
@@ -3694,6 +3704,7 @@ Copy numbers from the paper without rounding them.`,
           rev: 0,
         },
         {
+          id: 'sk-ml-3',
           name: 'comparing-papers',
           prompt: `Compares two papers on method, data and results. Use when someone gives two papers and asks how they differ or which result to trust.
 
@@ -3703,6 +3714,7 @@ Make a table with one row each for method, data, evaluation and main result. Bel
       ],
       markets: [
         {
+          id: 'sk-markets-1',
           name: 'explaining-mechanisms',
           prompt: `Explains how a market mechanism works, with a worked example. Use when someone asks how an auction, a clearing process or a pricing rule works.
 
@@ -3713,6 +3725,7 @@ Make a table with one row each for method, data, evaluation and main result. Bel
           rev: 0,
         },
         {
+          id: 'sk-markets-2',
           name: 'comparing-data-sources',
           prompt: `Compares public data sources for a market metric on coverage, latency and licence. Use when someone asks where to get data for a metric.
 
@@ -3722,6 +3735,7 @@ Make a table of sources with columns for coverage, update frequency, delay and l
       ],
       history: [
         {
+          id: 'sk-history-1',
           name: 'finding-primary-sources',
           prompt: `Finds primary sources for a historical event and says where each one can be read. Use when someone asks for original documents, letters or records about an event.
 
@@ -3734,6 +3748,7 @@ Make a table of sources with columns for coverage, update frequency, delay and l
       ],
     },
     pagedocs: {},
+    skillsRev: {},
     acct: {
       email: 'ines@example.com',
       emailNew: null,
@@ -3759,5 +3774,11 @@ Make a table of sources with columns for coverage, update frequency, delay and l
     reqSeen: false,
     rpLiked: { $set: [] },
     runs: {},   /* no run in progress (step 7: a run is a server job) */
+    /* your signed-in devices (phase 1a.2): the Desktop app on the MacBook Air, the Phone app, and an older Mac */
+    devices: [
+      { id: 'd1', name: 'MacBook Air', kind: 'mac', plat: 'macOS 15.1 · Session for Mac 1.0.0', createdAt: '2026-10-20T12:00:00Z', lastSeenAt: '2026-11-16T09:58:00Z' },
+      { id: 'd2', name: 'iPhone 16', kind: 'phone', plat: 'iOS 19.1 · Session 1.0.0', createdAt: '2026-10-22T12:00:00Z', lastSeenAt: '2026-11-16T09:00:00Z' },
+      { id: 'd3', name: 'Mac mini (studio)', kind: 'mac', plat: 'macOS 14.6 · Session for Mac 0.9.2', createdAt: '2026-09-30T12:00:00Z', lastSeenAt: '2026-10-30T12:00:00Z' },
+    ],
   },
 };

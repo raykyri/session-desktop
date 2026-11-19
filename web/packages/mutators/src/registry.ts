@@ -49,15 +49,8 @@ export const NOT_MUTATORS: Readonly<Record<string, string>> = {
   "runs.claim": `${RUNS} It takes a queued device run of the caller's on the device that sends it, starts a lease and a new attempt, and answers the thread's stored turns (no CLI session resumes).`,
   "runs.heartbeat": `${RUNS} It extends the lease; it is separate from progress (AGENTS.md), so a long tool call does not end the lease.`,
   "runs.turn": `${RUNS} It commits one turn of the attempt it names (attempt): a turn of an attempt that lost its lease is refused.`,
-  "runs.finish": `${RUNS} It writes the attempt's answer, capped at 200 KB (TOO_LARGE ends the run as too_large), with no usage.`,
+  "runs.finish": `${RUNS} It writes the attempt's answer, capped at 200 KB: a larger one is not saved and the run ends as too_large. A device answer reports no usage.`,
   "devices.authorize": `${DEVICES} The Desktop app starts a sign-in: the server answers a code to show and a link for the browser.`,
   "devices.approve": `${DEVICES} The signed-in browser approves a device sign-in, with the code the app shows (or with one click).`,
   "devices.revoke": `${DEVICES} Revoking a device ends its token; its unsent writes are refused (WRONG_CLIENT).`,
-};
-
-/** Mutator names that replace a mock procedure of another name. */
-export const RENAMED: Readonly<Record<string, string>> = {
-  "likes.toggle": "likes.set",
-  "likes.toggleReply": "likes.setReply",
-  "saved.toggle": "saved.set",
 };

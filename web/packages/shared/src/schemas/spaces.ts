@@ -108,6 +108,11 @@ export const threadMemberSchema = z.object({
   u: spaceHandleSchema,
   role: spaceMemberRoleSchema,
   joinedAt: spaceIsoTimeSchema.optional(),
+  /** The entry's version (absent: 1): a role change's `base`. */
+  rev: count.optional(),
+  /** The admission id of the write that let the person in: a removal's
+   * `base`. */
+  adm: z.string().optional(),
 });
 
 export const joinRequestSchema = z.object({
@@ -129,6 +134,9 @@ export const joinRequestSchema = z.object({
   /** A moderator's note to a declined applicant. */
   why: z.string().optional(),
   fresh: z.boolean().optional(),
+  /** The request's version (absent: 1): an approval's and a reopening's
+   * `base`. */
+  rev: count.optional(),
 });
 
 export const banSchema = z.object({
@@ -201,8 +209,8 @@ export const spaceSchema = z.object({
   /** The rules' version (step 9, edit conflicts). */
   rulesAt: spaceIsoTimeSchema.optional(),
   rulesBy: spaceHandleSchema.optional(),
-  /** [title, edited at]. */
-  pages: z.array(z.tuple([z.string(), spaceIsoTimeSchema])).optional(),
+  /** [title, edited at, id]. */
+  pages: z.array(z.tuple([z.string(), spaceIsoTimeSchema, z.string()])).optional(),
   /** The owner, admins and moderators: [handle, role]. */
   mods: z.array(z.tuple([spaceHandleSchema, spaceMemberRoleSchema])).optional(),
   /** The FAQ landing's topics: [key, label]. */
@@ -221,8 +229,10 @@ export const spaceSchema = z.object({
   /** Who edits pages. */
   pageEdit: z.enum(["mods", "members"]).optional(),
   dom: spaceDomainSchema.nullable().optional(),
-  archived: z.object({ by: spaceHandleSchema, on: z.string() }).optional(),
-  /** The owner deleted the space (the mock marks it deleted). */
+  /** Who archived it, and when. */
+  archived: z.object({ by: spaceHandleSchema, at: spaceIsoTimeSchema }).optional(),
+  /** The owner deleted the space: its content is erased, and the record
+   * stays so its name stays taken. */
   deleted: z.boolean().optional(),
 });
 
@@ -240,9 +250,21 @@ export const storedSpaceSchema = spaceSchema.omit({ members: true }).extend({
  * person who asked could no longer read what the ask needs when the run
  * started), interrupted (the server could not resume the run). */
 export const runFailureSchema = z.object({
-  why: z.enum(["stopped", "tokens", "key", "rate", "access", "interrupted"]),
+  why: z.enum(["stopped", "tokens", "key", "rate", "access", "interrupted", "too_large"]),
   at: z.number().optional(),
 });
+
+/** Who ran an answer: a CLI on one of the asker's devices (absent: the
+ * included tokens, a server job). */
+export const executorSchema = z.object({
+  kind: z.literal("device"),
+  cli: z.enum(["claude", "codex"]),
+  device: spaceRecordIdSchema,
+  u: spaceHandleSchema,
+});
+
+/** An `executor` as an input names it: the asker is the caller. */
+export const executorInputSchema = executorSchema.omit({ u: true });
 
 /** TODO(limits): who pays for an ask, stored as sent: `session` (the included
  * tokens) or one of the person's API key ids; null: the server picks. */
@@ -311,6 +333,10 @@ export const researchTreeSummarySchema = z.object({
   att: count.optional(),
   /** The thread and ask node it was started from; `lv`: the node's depth. */
   from: z.object({ th: spaceThreadIdSchema, node: z.string(), lv: count.optional() }).optional(),
+  /** The thread's version (absent: 1): an author's edit's `base`. */
+  rev: count.optional(),
+  /** The latest run of its ask ran on a device. */
+  executor: executorSchema.optional(),
 });
 
 /** One thread (`GET /api/threads/:id`). wire: `ResearchTreeDetail`, which
@@ -338,11 +364,14 @@ export const researchExchangeNodeSchema = z.object({
   u: spaceHandleSchema,
   createdAt: spaceIsoTimeSchema.optional(),
   q: z.string(),
-  /** The answer as text (`Researching…` while it runs). */
+  /** The answer as text; absent until the run writes it. */
   a: z.string().optional(),
   html: z.string().optional(),
   del: z.boolean().optional(),
   edited: z.boolean().optional(),
+  /** Its version (absent: 1): an author's edit's `base`. */
+  rev: count.optional(),
+  executor: executorSchema.optional(),
 });
 
 /** A reply to a post; replies have one level of nesting. wire:
@@ -356,6 +385,7 @@ export interface ResearchPostNode {
   kids?: ResearchPostNode[] | undefined;
   del?: boolean | undefined;
   edited?: boolean | undefined;
+  rev?: number | undefined;
 }
 
 export const researchPostNodeSchema: z.ZodType<ResearchPostNode> = z.object({
@@ -368,6 +398,8 @@ export const researchPostNodeSchema: z.ZodType<ResearchPostNode> = z.object({
   },
   del: z.boolean().optional(),
   edited: z.boolean().optional(),
+  /** Its version (absent: 1): an author's edit's and a Show's `base`. */
+  rev: count.optional(),
 });
 
 /** A node of a thread's ask tree: an ask about an answer. wire:
@@ -396,6 +428,9 @@ export const researchNodeSchema = z.object({
   promoted: spaceThreadIdSchema.optional(),
   /** The thread's author collapsed the branch. */
   col: z.boolean().optional(),
+  /** Its version (absent: 1). */
+  rev: count.optional(),
+  executor: executorSchema.optional(),
 });
 
 /** `space`: sent with a tree scoped to the caller's own asks (a closed space
@@ -410,6 +445,8 @@ export const askTreeSchema = z.object({
  * the mock replaces with the job's own record. A finished run's record is
  * removed. `paused`: a dev-only hold (a Screen entry's scenario). */
 export const spaceRunSchema = z.object({
+  /** The run's id. */
+  id: spaceRecordIdSchema.optional(),
   th: spaceThreadIdSchema,
   node: z.string().min(1),
   u: spaceHandleSchema,
@@ -423,6 +460,11 @@ export const spaceRunSchema = z.object({
   pay: spacePayerSchema.optional(),
   createdAt: spaceIsoTimeSchema.optional(),
   paused: z.boolean().optional(),
+  /** A device run: its device moves it on (`runs.*`), not a job. */
+  executor: executorSchema.optional(),
+  /** A device run's lease: when it ends unless the device sends a heartbeat,
+   * and the last heartbeat. */
+  lease: z.object({ until: spaceIsoTimeSchema, beat: spaceIsoTimeSchema }).nullable().optional(),
 });
 
 // ---- sources ----
@@ -469,7 +511,9 @@ export const sourceSchema = z.object({
 });
 
 /** A source in a space's sources list (`/api/space-sources`). `m`: the
- * source's id; `rv`: waiting for a moderator's review; `rm`: removed. */
+ * source's id; `rv`: waiting for a moderator's review (its note is redacted
+ * for readers other than the person who added it and the moderators); `rm`:
+ * removed. */
 export const spaceSourceSchema = z.object({
   m: spaceRecordIdSchema,
   by: spaceHandleSchema,
@@ -502,6 +546,8 @@ export const reportSchema = z.object({
   note: z.string().optional(),
   createdAt: spaceIsoTimeSchema.optional(),
   updatedAt: spaceIsoTimeSchema.optional(),
+  /** The report's version (absent: 1): a reopening's `base`. */
+  rev: count.optional(),
 });
 
 /** A moderated item's state (`/api/moderation`, by moderation key). */
@@ -545,6 +591,8 @@ export const inboxNotificationSchema = z.object({
   item: moderationKeySchema.optional(),
   outcome: z.enum(["dismissed", "hidden", "removed"]).optional(),
   response: z.enum(["accepted", "declined"]).optional(),
+  /** An invite: the code of the invite link it carries. */
+  invite: z.string().optional(),
 });
 
 // ---- pages and skills ----
@@ -559,6 +607,8 @@ export const pageRevisionSchema = z.object({
  * version (step 9), the number of saves; absent: 0. `by`: who created it;
  * `ed`: who edited it last. */
 export const pageDocSchema = z.object({
+  /** The page's id (the third item of its entry in the space's pages). */
+  id: z.string().optional(),
   t: z.string(),
   text: z.array(z.string()),
   by: spaceHandleSchema.optional(),
@@ -572,9 +622,22 @@ export const pageDocSchema = z.object({
  * instructions in Markdown (a SKILL.md file's parts). `rev`: its version
  * (step 9), the number of saves; 0 for a skill never edited. */
 export const skillSchema = z.object({
+  /** The skill's id: its writes name it. */
+  id: z.string(),
   name: z.string(),
   prompt: z.string(),
   rev: count,
+});
+
+/** A device signed in to the Session app (`/api/me/devices`): a device token.
+ * Browsers are not listed. */
+export const deviceSchema = z.object({
+  id: spaceRecordIdSchema,
+  name: z.string(),
+  kind: z.enum(["mac", "phone"]),
+  plat: z.string(),
+  createdAt: spaceIsoTimeSchema,
+  lastSeenAt: spaceIsoTimeSchema.nullable(),
 });
 
 // ---- people, profile, settings ----
@@ -742,6 +805,10 @@ export const spaceCollectionSchemas = {
   profile: spaceProfileSchema,
   /** GET /api/space-skills */
   skills: z.record(spaceIdSchema, z.array(skillSchema)),
+  /** GET /api/space-skills/versions: each space's skills list version. */
+  skillsRev: z.record(spaceIdSchema, count),
+  /** GET /api/me/devices */
+  devices: z.array(deviceSchema),
   /** GET /api/pages */
   pagedocs: z.record(pageKeySchema, pageDocSchema),
   /** GET /api/me/settings */
@@ -838,6 +905,8 @@ export const spaceChangesSchema = z
     dsReps: valueChange(spaceCollectionSchemas.dsReps),
     profile: valueChange(spaceProfileSchema),
     skills: mapChanges(spaceIdSchema, z.array(skillSchema)),
+    skillsRev: mapChanges(spaceIdSchema, count),
+    devices: listChanges(deviceSchema),
     pagedocs: mapChanges(pageKeySchema, pageDocSchema),
     acct: valueChange(userSettingsSchema),
     muted: valueChange(spaceCollectionSchemas.muted),
@@ -854,7 +923,10 @@ export const spaceChangesSchema = z
 // ---- errors ----
 
 /** tRPC error codes (`03-api-and-events.md` §1), with the codes the mock adds
- * for its router (`METHOD_NOT_SUPPORTED`, `SERVICE_UNAVAILABLE`). */
+ * for its router (`METHOD_NOT_SUPPORTED`, `SERVICE_UNAVAILABLE`) and the sync
+ * protocol's (AGENTS.md; `@session/mutators`' `errors.ts`): `STALE`,
+ * `EXPIRED`, `TOO_LARGE`, `UPDATE_REQUIRED`, `CLOCK_SKEW`, `OUT_OF_ORDER`,
+ * `WRONG_CLIENT`. */
 export const spaceErrorCodeSchema = z.enum([
   "BAD_REQUEST",
   "UNAUTHORIZED",
@@ -866,6 +938,13 @@ export const spaceErrorCodeSchema = z.enum([
   "TOO_MANY_REQUESTS",
   "INTERNAL_SERVER_ERROR",
   "SERVICE_UNAVAILABLE",
+  "STALE",
+  "EXPIRED",
+  "TOO_LARGE",
+  "UPDATE_REQUIRED",
+  "CLOCK_SKEW",
+  "OUT_OF_ORDER",
+  "WRONG_CLIENT",
 ]);
 
 /** What the server has when an edit conflicts (step 9): a space's rules, a
@@ -886,29 +965,73 @@ export const editConflictCurrentSchema = z.union([
   }),
 ]);
 
+/** What the server has when a decision or an author's edit is `STALE`: the
+ * target's version and what the caller reads of it now (a thread, a reply, a
+ * follow-up, a join request, a member's entry, a member's admission, a
+ * report, a skills list's order). */
+export const staleCurrentSchema = z.union([
+  z.object({ rev: count, q: z.string(), t: z.string().nullable() }),
+  z.object({ rev: count, t: z.string() }),
+  z.object({ rev: count, q: z.string() }),
+  z.object({
+    u: spaceHandleSchema,
+    rev: count,
+    st: z.enum(["open", "approved", "declined"]),
+    a: z.array(z.string()),
+    why: z.string().nullable(),
+  }),
+  z.object({ u: spaceHandleSchema, rev: count, role: spaceMemberRoleSchema }),
+  z.object({ u: spaceHandleSchema, adm: z.string() }),
+  z.object({
+    id: spaceRecordIdSchema,
+    rev: count,
+    st: z.enum(["open", "dismissed", "hidden", "removed"]),
+  }),
+  z.object({ rev: count, order: z.array(z.string()) }),
+]);
+
 /** An error response. `message` is user-facing text; `issues`: the input
  * paths that failed validation (`BAD_REQUEST`, `"<path>: expected <type>"`);
- * `current` and `changes`: a `CONFLICT` from an edit, with the version the
- * server has and those records as the caller reads them now. */
+ * `current` and `changes`: a `CONFLICT` from an edit or a `STALE` decision,
+ * with the version the server has and those records as the caller reads them
+ * now; `retryAt`: a limit's `TOO_MANY_REQUESTS`, when the write can be sent
+ * again; `expectedSeq`: `OUT_OF_ORDER`; `minProtocol`: `UPDATE_REQUIRED`;
+ * `serverTime`: the server's time (ms), on every answer; `seq` and
+ * `replayed`: a write envelope's answer (its seq, and whether it is a
+ * recorded answer sent again). */
 export const spaceErrorSchema = z.object({
   code: spaceErrorCodeSchema,
   message: z.string(),
   issues: z.array(z.string()).optional(),
-  current: editConflictCurrentSchema.optional(),
+  current: z.union([editConflictCurrentSchema, staleCurrentSchema]).optional(),
   changes: spaceChangesSchema.optional(),
+  retryAt: spaceIsoTimeSchema.optional(),
+  expectedSeq: count.optional(),
+  minProtocol: count.optional(),
+  serverTime: z.number(),
+  seq: count.optional(),
+  replayed: z.boolean().optional(),
 });
 
 // ---- procedures: POST /api/rpc/<name> ----
 
-/** A procedure's answer: its result and the records it changed. */
+/** A procedure's answer: its result, the records it changed and the server's
+ * time; through the write envelope also its seq and whether it was replayed. */
 export const spaceProcedureResponseSchema = <Result extends z.ZodType>(result: Result) =>
-  z.object({ result, changes: spaceChangesSchema });
+  z.object({
+    result,
+    changes: spaceChangesSchema,
+    serverTime: z.number(),
+    seq: count.optional(),
+    replayed: z.boolean().optional(),
+  });
 
 /** `invites.create`'s result. wire: `CreatedInvite`, which the mock replaces
  * with the link's id and code (the link record is in `changes`). */
 export const createdInviteSchema = z.object({ id: spaceUlidSchema, code: z.string() });
 
-const onInput = { on: z.boolean().optional() };
+/** The wanted state of a mark (required: two devices do not cancel out). */
+const onInput = { on: z.boolean() };
 const onResultSchema = z.object({ on: z.boolean() });
 /** A delete's answer: `kept`, the item keeps its place (as deleted) for the
  * follow-ups or replies under it. wire: `ResearchBranchRemoval`, which the
@@ -938,14 +1061,34 @@ export const spaceSettingsSchema = z
     postsOff: z.boolean(),
     plain: z.boolean(),
     pageEdit: z.enum(["mods", "members"]),
-    pages: z.array(z.tuple([z.string(), spaceIsoTimeSchema])),
-    dom: spaceDomainSchema.nullable(),
   })
   .partial();
 
-/** The base a page editor opened (step 9): its version, and for a page
- * without a stored document the stand-in's author and history
- * (TODO(fixtures)). */
+/** The settings `spaces.update` can unset: every setting but the name and
+ * title, and `dom` (a verified domain, which is no setting). */
+export const unsettableSchema = z.enum([
+  "av",
+  "img",
+  "desc",
+  "rules",
+  "vis",
+  "policy",
+  "qs",
+  "invite",
+  "faq",
+  "topics",
+  "postsOff",
+  "plain",
+  "pageEdit",
+  "dom",
+]);
+
+/** The version a decision or an author's edit acts on (`STALE` when it
+ * changed since). */
+export const revBaseSchema = z.object({ rev: count });
+
+/** The base a page editor opened (step 9): its version. The stand-in's author
+ * and history (TODO(fixtures)) are accepted and not stored. */
 export const pageBaseSchema = z.object({
   rev: count.optional(),
   by: spaceHandleSchema.optional(),
@@ -954,6 +1097,8 @@ export const pageBaseSchema = z.object({
 });
 
 export const createThreadInputSchema = z.object({
+  /** The client's ULID for the thread; absent: the server makes one. */
+  id: spaceUlidSchema.optional(),
   space: spaceIdSchema,
   kind: z.enum(["ask", "post"]),
   q: z.string(),
@@ -968,17 +1113,22 @@ export const createThreadInputSchema = z.object({
   from: z.object({ th: spaceThreadIdSchema, node: z.string() }).optional(),
   /** `all`: copy the asks below the node too. */
   branch: z.enum(["all", "one"]).optional(),
+  /** A device runs the ask. */
+  executor: executorInputSchema.nullable().optional(),
 });
 
 export const updateThreadInputSchema = z.object({
   id: spaceThreadIdSchema,
   q: z.string(),
+  base: revBaseSchema,
   run: z.boolean().optional(),
   pay: spacePayerSchema.optional(),
   model: z.string().optional(),
 });
 
 export const forkNodeInputSchema = z.object({
+  /** The client's ULID for the node; absent: the server makes one. */
+  id: spaceUlidSchema.optional(),
   thread: spaceThreadIdSchema,
   /** `r` (the thread's ask) or a node id. */
   parent: z.string(),
@@ -986,6 +1136,7 @@ export const forkNodeInputSchema = z.object({
   uses: z.array(z.string()).nullable().optional(),
   pay: spacePayerSchema.optional(),
   model: z.string().optional(),
+  executor: executorInputSchema.nullable().optional(),
 });
 
 const askNodeInputSchema = z.object({ thread: spaceThreadIdSchema, node: z.string() });
@@ -995,9 +1146,13 @@ export const decideRequestsInputSchema = z.object({
   users: z.array(spaceHandleSchema),
   decision: z.enum(["approve", "decline", "reopen"]),
   why: z.string().optional(),
+  /** Each request's version, by person: required for approve and reopen. */
+  base: z.record(spaceHandleSchema, count).optional(),
 });
 
 export const createSpaceInputSchema = z.object({
+  /** The client's ULID for the space; absent: the server makes one. */
+  id: spaceUlidSchema.optional(),
   name: z.string(),
   desc: z.string().optional(),
   rules: z.array(z.string()).optional(),
@@ -1011,7 +1166,7 @@ export const createSpaceInputSchema = z.object({
 export const updateSpaceInputSchema = z.object({
   id: spaceIdSchema,
   set: spaceSettingsSchema.optional(),
-  unset: z.array(spaceSettingsSchema.keyof()).optional(),
+  unset: z.array(unsettableSchema).optional(),
   /** The rules' version the editor opened (step 9). */
   base: z.object({ rulesAt: spaceIsoTimeSchema.nullable() }).optional(),
   force: z.boolean().optional(),
@@ -1019,8 +1174,10 @@ export const updateSpaceInputSchema = z.object({
 
 export const updatePageInputSchema = z.object({
   space: spaceIdSchema,
-  /** null: a new page; else its index in the space's pages. */
-  page: count.nullable().optional(),
+  /** null: a new page; else its id. */
+  page: z.string().nullable().optional(),
+  /** A new page's id: the client's ULID; absent: the server makes one. */
+  id: spaceUlidSchema.optional(),
   title: z.string(),
   text: z.array(z.string()),
   base: pageBaseSchema.optional(),
@@ -1049,21 +1206,25 @@ export const updateSettingsInputSchema = z.object({
 const spaceInput = { space: spaceIdSchema };
 const skillInput = { space: spaceIdSchema, name: z.string(), prompt: z.string() };
 const memberInput = { space: spaceIdSchema, user: spaceHandleSchema };
+const runInput = { run: spaceRecordIdSchema, device: spaceRecordIdSchema };
+const leaseSchema = z.object({ until: spaceIsoTimeSchema, beat: spaceIsoTimeSchema });
+/** A new record's id, made by the client (a ULID); absent: the server's. */
+const idInput = { id: spaceUlidSchema.optional() };
 
 /** Every procedure: its input and its result (`{ result, changes }` is the
  * response body). `wire` comments name the real app's type for the
  * procedure, where the API table gives one. */
 export const spaceProcedures = {
   // -- personal toggles
-  "likes.toggle": {
+  "likes.set": {
     input: z.object({ thread: spaceThreadIdSchema, ...onInput }),
     result: onResultSchema,
   },
-  "likes.toggleReply": {
+  "likes.setReply": {
     input: z.object({ reply: replyKeySchema, ...onInput }),
     result: onResultSchema,
   },
-  "saved.toggle": {
+  "saved.set": {
     input: z.object({ kind: z.enum(["thread", "ask", "source"]), id: z.string(), ...onInput }),
     result: onResultSchema,
   },
@@ -1080,13 +1241,13 @@ export const spaceProcedures = {
   /** wire: `ResearchTree` */
   "threads.create": {
     input: createThreadInputSchema,
-    result: z.object({ id: spaceThreadIdSchema }),
+    result: z.object({ id: spaceThreadIdSchema, run: spaceRecordIdSchema.nullable() }),
   },
   /** wire: `ResearchTree` */
   "threads.update": { input: updateThreadInputSchema, result: nullResultSchema },
   "threads.delete": {
     input: z.object({ id: spaceThreadIdSchema }),
-    result: researchBranchRemovalSchema,
+    result: researchBranchRemovalSchema.nullable(),
   },
   "threads.move": {
     input: z.object({ id: spaceThreadIdSchema, topic: z.string().nullable() }),
@@ -1094,18 +1255,31 @@ export const spaceProcedures = {
   },
   /** wire: `ResearchExchangeNode` */
   "followups.ask": {
-    input: z.object({ thread: spaceThreadIdSchema, q: z.string() }),
-    result: nullResultSchema,
+    input: z.object({ ...idInput, thread: spaceThreadIdSchema, q: z.string() }),
+    result: z.object({ id: z.string(), run: spaceRecordIdSchema }),
   },
   /** wire: `ResearchPostNode` */
   "research.createPostFollowUp": {
-    input: z.object({ thread: spaceThreadIdSchema, t: z.string(), parent: count.optional() }),
+    input: z.object({
+      ...idInput,
+      thread: spaceThreadIdSchema,
+      t: z.string(),
+      parent: count.optional(),
+    }),
     result: nullResultSchema,
   },
   /** wire: `ResearchNode` */
-  "research.forkNode": { input: forkNodeInputSchema, result: z.object({ id: spaceUlidSchema }) },
+  "research.forkNode": {
+    input: forkNodeInputSchema,
+    result: z.object({ id: spaceUlidSchema, run: spaceRecordIdSchema }),
+  },
   "replies.update": {
-    input: z.object({ thread: spaceThreadIdSchema, path: replyPathSchema, t: z.string() }),
+    input: z.object({
+      thread: spaceThreadIdSchema,
+      path: replyPathSchema,
+      t: z.string(),
+      base: revBaseSchema,
+    }),
     result: nullResultSchema,
   },
   /** wire: `ResearchBranchRemoval` */
@@ -1117,10 +1291,11 @@ export const spaceProcedures = {
   "followups.update": {
     input: askNodeInputSchema.extend({
       q: z.string(),
+      base: revBaseSchema,
       run: z.boolean().optional(),
       pay: spacePayerSchema.optional(),
     }),
-    result: nullResultSchema,
+    result: z.object({ run: spaceRecordIdSchema }).nullable(),
   },
   /** wire: `ResearchBranchRemoval` */
   "followups.delete": { input: askNodeInputSchema, result: researchBranchRemovalSchema },
@@ -1132,6 +1307,7 @@ export const spaceProcedures = {
     input: askNodeInputSchema.extend({
       pay: spacePayerSchema.optional(),
       model: z.string().optional(),
+      executor: executorInputSchema.nullable().optional(),
     }),
     result: nullResultSchema,
   },
@@ -1172,22 +1348,32 @@ export const spaceProcedures = {
   "joinRequests.decide": { input: decideRequestsInputSchema, result: nullResultSchema },
   /** wire: `ThreadMember` */
   "members.setRole": {
-    input: z.object({ ...memberInput, role: spaceMemberRoleSchema }),
+    input: z.object({ ...memberInput, role: spaceMemberRoleSchema, base: revBaseSchema }),
     result: nullResultSchema,
   },
-  /** wire: `ThreadMember[]` */
-  "members.remove": { input: z.object(memberInput), result: nullResultSchema },
+  /** wire: `ThreadMember[]`. Closed spaces only; `base.adm`: the admission. */
+  "members.remove": {
+    input: z.object({ ...memberInput, base: z.object({ adm: z.string() }) }),
+    result: nullResultSchema,
+  },
   "members.ban": { input: z.object(memberInput), result: nullResultSchema },
   "members.unban": { input: z.object(memberInput), result: nullResultSchema },
   // -- reports and moderation
   "reports.create": {
-    input: z.object({ item: moderationKeySchema, why: z.string(), note: z.string().optional() }),
+    input: z.object({
+      ...idInput,
+      item: moderationKeySchema,
+      why: z.string(),
+      note: z.string().optional(),
+    }),
     result: z.object({ id: spaceUlidSchema }),
   },
   "reports.resolve": {
     input: z.object({
       report: spaceRecordIdSchema,
       outcome: z.enum(["dismissed", "hidden", "removed", "open"]),
+      /** Required for "open": the report's version and its item's. */
+      base: z.object({ rev: count, item: count }).optional(),
     }),
     result: nullResultSchema,
   },
@@ -1195,6 +1381,8 @@ export const spaceProcedures = {
     input: z.object({
       item: moderationKeySchema,
       decision: z.enum(["hidden", "removed", "shown"]),
+      /** Required for "shown": the item's version. */
+      base: revBaseSchema.optional(),
     }),
     result: nullResultSchema,
   },
@@ -1212,7 +1400,7 @@ export const spaceProcedures = {
   // -- invite links
   /** wire: `CreatedInvite` */
   "invites.create": {
-    input: z.object({ ...spaceInput, days: count.nullable().optional() }),
+    input: z.object({ ...idInput, ...spaceInput, days: count.nullable().optional() }),
     result: createdInviteSchema,
   },
   /** wire: `ThreadInvite` */
@@ -1232,27 +1420,31 @@ export const spaceProcedures = {
   },
   "spaces.delete": { input: z.object({ id: spaceIdSchema }), result: nullResultSchema },
   // -- skills and pages
-  "skills.create": { input: z.object(skillInput), result: nullResultSchema },
+  "skills.create": {
+    input: z.object({ ...idInput, ...skillInput }),
+    result: z.object({ id: z.string() }),
+  },
   "skills.update": {
     input: z.object({
       ...skillInput,
-      index: count,
+      id: z.string(),
       /** The skill's version the editor opened (step 9). */
       base: z.object({ rev: count }).optional(),
       force: z.boolean().optional(),
     }),
     result: nullResultSchema,
   },
-  "skills.remove": { input: z.object({ ...spaceInput, index: count }), result: nullResultSchema },
+  "skills.remove": { input: z.object({ ...spaceInput, id: z.string() }), result: nullResultSchema },
+  /** `order`: every skill's id; `base.rev`: the list's version. */
   "skills.reorder": {
-    input: z.object({ ...spaceInput, from: count, to: count }),
+    input: z.object({ ...spaceInput, order: z.array(z.string()), base: revBaseSchema }),
     result: nullResultSchema,
   },
-  "pages.update": { input: updatePageInputSchema, result: nullResultSchema },
+  "pages.update": { input: updatePageInputSchema, result: z.object({ id: z.string() }) },
   "pages.restore": {
     input: z.object({
       ...spaceInput,
-      page: count,
+      page: z.string(),
       rev: count,
       note: z.string(),
       base: pageBaseSchema.optional(),
@@ -1260,9 +1452,13 @@ export const spaceProcedures = {
     }),
     result: nullResultSchema,
   },
-  "pages.remove": { input: z.object({ ...spaceInput, page: count }), result: nullResultSchema },
+  "pages.remove": {
+    input: z.object({ ...spaceInput, page: z.string() }),
+    result: nullResultSchema,
+  },
+  /** Swap two pages, by id. */
   "pages.move": {
-    input: z.object({ ...spaceInput, from: count, to: count }),
+    input: z.object({ ...spaceInput, page: z.string(), other: z.string() }),
     result: nullResultSchema,
   },
   // -- API keys (TODO(limits)); `raw` is write-only
@@ -1314,6 +1510,40 @@ export const spaceProcedures = {
   "sourceReports.create": {
     input: z.object({ ...spaceInput, source: spaceRecordIdSchema, why: z.string() }),
     result: nullResultSchema,
+  },
+  // -- devices and device runs: online calls (not mutators)
+  "devices.revoke": { input: z.object({ id: spaceRecordIdSchema }), result: nullResultSchema },
+  "devices.authorize": {
+    input: z.object({ name: z.string(), kind: z.enum(["mac", "phone"]).optional() }),
+    result: z.object({ request: z.string(), code: z.string(), url: z.string() }),
+  },
+  "devices.approve": {
+    input: z.object({
+      request: z.string(),
+      code: z.string().optional(),
+      deny: z.boolean().optional(),
+    }),
+    result: z.object({ device: spaceRecordIdSchema.nullable() }),
+  },
+  "runs.claim": {
+    input: z.object(runInput),
+    result: z.object({
+      attempt: count,
+      lease: leaseSchema,
+      turns: z.array(z.object({ q: z.string(), a: z.string() })),
+    }),
+  },
+  "runs.heartbeat": {
+    input: z.object({ ...runInput, attempt: count }),
+    result: z.object({ lease: leaseSchema }),
+  },
+  "runs.turn": {
+    input: z.object({ ...runInput, attempt: count, turn: z.unknown() }),
+    result: nullResultSchema,
+  },
+  "runs.finish": {
+    input: z.object({ ...runInput, attempt: count, answer: z.string() }),
+    result: z.object({ status: z.enum(["complete", "too_large"]) }),
   },
 } satisfies Record<string, { input: z.ZodType; result: z.ZodType }>;
 
@@ -1536,6 +1766,7 @@ export const spaceReadRulesSchema = z.object({
   closedMembers: z.boolean(),
   ownOrModerated: z.boolean(),
   pendingSources: z.boolean(),
+  userLogs: z.boolean(),
 });
 
 export const spaceDevConfigSchema = z.object({
@@ -1561,6 +1792,25 @@ export const spaceDevConfigSchema = z.object({
   failNextRun: z.enum(["tokens", "key", "rate"]).nullable(),
   resumeJobs: z.boolean(),
   pageSize: z.number().int().min(1).max(100).nullable(),
+  /** The lowest protocol version the server takes (UPDATE_REQUIRED below). */
+  minProtocol: z.number().int().min(1),
+  /** The largest write envelope, in bytes (TOO_LARGE above). */
+  envMax: z.number().int().min(1),
+});
+
+/** A write in the envelope (`POST /api/sync/write`, AGENTS.md): the client's
+ * id and its seq for the write, the write's mutation id, the device's time
+ * when it sent it and when the write was queued (ms), the mutation ids a
+ * reminted envelope replaces, and the procedure's name and input. */
+export const writeEnvelopeSchema = z.object({
+  clientId: z.string(),
+  seq: z.number().int().min(1),
+  mutationId: z.string(),
+  clientTime: z.number(),
+  queuedAt: z.number(),
+  replaces: z.array(z.string()),
+  name: z.string(),
+  input: z.unknown(),
 });
 
 export const spaceDevConfigInputSchema = spaceDevConfigSchema
@@ -1640,6 +1890,18 @@ export const spacesApi: Record<string, { input: z.ZodType | null; output: z.ZodT
   /** wire: `User` */
   "GET /api/me/profile": { input: null, output: c.profile },
   "GET /api/space-skills": { input: null, output: c.skills },
+  "GET /api/space-skills/versions": { input: null, output: c.skillsRev },
+  "GET /api/me/devices": { input: null, output: c.devices },
+  "POST /api/sync/register": {
+    input: null,
+    output: z.object({ clientId: z.string(), serverTime: z.number() }),
+  },
+  /** One write's answer: a procedure's (`{ result, changes }`) or an error,
+   * with its seq and the server's time. */
+  "POST /api/sync/write": {
+    input: writeEnvelopeSchema,
+    output: z.union([spaceProcedureResponseSchema(z.unknown()), spaceErrorSchema]),
+  },
   "GET /api/pages": { input: null, output: c.pagedocs },
   /** wire: `UserSettings` */
   "GET /api/me/settings": { input: null, output: c.acct },
