@@ -14,15 +14,22 @@ import {
   type CursorMap,
   type Envelope,
   type LogId,
-  type PushResult,
   type ReadOptions,
   type StoredRecord,
   type SyncClient,
   type Timer,
-  type Transport,
 } from "../src/client/index.js";
 
-import { Forced, client, fail, inProcess, nodeSqlite, sleep, tick } from "./client-helpers.js";
+import {
+  Forced,
+  client,
+  fail,
+  inProcess,
+  nodeSqlite,
+  sleep,
+  tick,
+  watched,
+} from "./client-helpers.js";
 import { DAY, MINUTE, cast, ok, type World } from "./helpers.js";
 import { httpFetch } from "./http.js";
 
@@ -30,29 +37,6 @@ const threadsOn = (w: World, q: string) =>
   [...w.server.records().values()].filter((r) => r.kind === "thread" && r.q === q);
 const repliesUnder = (w: World, th: string) =>
   [...w.server.records().values()].filter((r) => r.kind === "reply" && r.th === th);
-
-/** A transport over `inner` whose pushes and reads can be watched. */
-function watched(
-  inner: Transport,
-  o: {
-    push?: (
-      es: readonly Envelope[],
-      next: () => Promise<PushResult[]>,
-    ) => Promise<PushResult[]>;
-    pull?: Transport["pull"];
-    snapshot?: Transport["snapshot"];
-    listen?: Transport["listen"];
-  } = {},
-): Transport {
-  return {
-    register: () => inner.register(),
-    push: (es) => (o.push ? o.push(es, () => inner.push(es)) : inner.push(es)),
-    pull: o.pull ?? ((l, c, x) => inner.pull(l, c, x)),
-    snapshot: o.snapshot ?? ((l, x) => inner.snapshot(l, x)),
-    listen: o.listen ?? ((c, e, s) => inner.listen(c, e, s)),
-    call: (n, i) => inner.call(n, i),
-  };
-}
 
 // ---- finding 1: remint ----
 

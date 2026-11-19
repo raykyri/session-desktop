@@ -363,6 +363,9 @@ export class SyncClient implements Changing {
   /** No response at all to this many requests in a row: the outbox's
    * offline backoff. */
   private offline = 0;
+  /** The writes waiting for the connection (no response): an answer from
+   * the server ends their wait. */
+  private readonly paused = new Set<OutboxEntry>();
   /** The write whose envelope is on the wire now (no answer yet). */
   private inFlight: OutboxEntry | null = null;
   /** A registration in flight (a read and a flush share it). */
@@ -470,6 +473,17 @@ export class SyncClient implements Changing {
     if (first && Math.abs(serverTime - this.now()) > CLOCK_MAX_SKEW) {
       this.reclock(serverTime, null);
       void this.persist();
+    }
+    // the connection is back: the writes waiting for it are due (the
+    // client's timer sends them)
+    if (this.paused.size) {
+      for (const e of this.paused)
+        if (e.state === "queued") {
+          e.next = 0;
+          delete e.waitFrom;
+        }
+      this.paused.clear();
+      if (this.timer && !this.stopped) void this.flush();
     }
   }
 
@@ -1685,6 +1699,7 @@ export class SyncClient implements Changing {
     e.next = now + backoff(this.offline);
     e.waitFrom = now;
     e.own = false;
+    this.paused.add(e);
   }
 
   /** A CONFLICT on an id the write's input makes, for a write sent before:

@@ -66,6 +66,29 @@ export const inProcess = (w: World, u: string) =>
     },
   );
 
+/** A transport over `inner` whose pushes and reads can be watched. */
+export function watched(
+  inner: Transport,
+  o: {
+    push?: (
+      es: readonly Envelope[],
+      next: () => Promise<PushResult[]>,
+    ) => Promise<PushResult[]>;
+    pull?: Transport["pull"];
+    snapshot?: Transport["snapshot"];
+    listen?: Transport["listen"];
+  } = {},
+): Transport {
+  return {
+    register: () => inner.register(),
+    push: (es) => (o.push ? o.push(es, () => inner.push(es)) : inner.push(es)),
+    pull: o.pull ?? ((l, c, x) => inner.pull(l, c, x)),
+    snapshot: o.snapshot ?? ((l, x) => inner.snapshot(l, x)),
+    listen: o.listen ?? ((c, e, s) => inner.listen(c, e, s)),
+    call: (n, i) => inner.call(n, i),
+  };
+}
+
 /** A transport that answers the next pushes from `queue` (an answer, null
  * for a response that is not one, NO_RESPONSE for none, or "pass" to the
  * server), and records every envelope. */
