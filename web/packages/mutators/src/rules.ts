@@ -136,15 +136,17 @@ export function itemOf(tx: Tx, key: string): Item {
 }
 
 /** Remove a moderated item for good: its text is erased from storage, and so
- * is everything under it (a thread's follow-ups, answers, runs and replies; a
- * top-level reply's replies). The item stays as a placeholder. */
+ * is everything under it (a thread's follow-ups, answers, runs, replies and
+ * their likes; a follow-up's runs; a top-level reply's replies). The item
+ * stays as a placeholder. */
 export function erase(tx: Tx, r: Item): void {
   switch (r.kind) {
     case "thread":
       for (const x of tx.scan("followup.th", r.id)) tx.del("followup", x.id);
       for (const x of tx.scan("reply.th", r.id)) tx.del("reply", x.id);
+      for (const x of tx.scan("rlike.th", r.id)) tx.del("rlike", `${x.u}:${x.reply}`);
       for (const x of tx.scan("run.th", r.id)) tx.del("run", x.id);
-      tx.put({ ...countsOf(tx, r), r: 0 });
+      tx.put({ ...countsOf(tx, r), r: 0, rlikes: {} });
       tx.put({
         ...r,
         q: "",
@@ -156,6 +158,7 @@ export function erase(tx: Tx, r: Item): void {
       });
       return;
     case "followup":
+      for (const x of tx.scan("run.th", r.th)) if (x.node === r.id) tx.del("run", x.id);
       tx.put({ ...r, q: "", a: null, mod: "removed" });
       return;
     case "reply":

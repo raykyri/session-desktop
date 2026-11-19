@@ -21,7 +21,9 @@ import { count, ulidS } from "../schemas.js";
 import { msOf } from "../time.js";
 
 /** The settings `spaces.update` changes. `dom` is the domain check's (server
- * made) and `pages` the page procedures', so neither is a setting here. */
+ * made) and `pages` the page procedures', so neither is a setting here; an
+ * admin may still unset `dom` (remove a verified domain), which sets no
+ * server-made value. */
 const SETTINGS = [
   "name",
   "title",
@@ -77,6 +79,7 @@ const unsetS = z.enum([
   "postsOff",
   "plain",
   "pageEdit",
+  "dom",
 ]);
 
 /** Space names are unique across all spaces, unlisted ones included (kept as
@@ -148,7 +151,7 @@ export const spaceMutators = [
     run: (tx, i) => {
       const s0 = needSpace(tx, i.id);
       const was: Record<string, unknown> = { ...s0 };
-      for (const k of i.unset ?? []) was[k] = UNSET[k];
+      for (const k of i.unset ?? []) was[k] = k === "dom" ? null : UNSET[k];
       const s1 = was as unknown as SpaceRec;
       const set = i.set ?? {};
       let name = s0.name;
@@ -185,6 +188,7 @@ export const spaceMutators = [
         topics,
         plain: set.plain ?? s1.plain,
         pageEdit: set.pageEdit ?? s1.pageEdit,
+        dom: s1.dom,
       });
       // threads in topics that no longer exist move to Other
       if (set.topics || i.unset?.includes("topics"))
@@ -385,7 +389,7 @@ function eraseSpace(tx: Tx, sp: string): void {
   for (const x of tx.scan("ban.sp", sp)) tx.del("ban", `${sp}:${x.u}`);
   for (const x of tx.scan("invite.sp", sp)) tx.del("invite", x.id);
   for (const x of tx.scan("report.sp", sp)) tx.del("report", x.id);
-  for (const x of tx.scan("page.sp", sp)) tx.del("page", `${sp}:${x.slug}`);
+  for (const x of tx.scan("page.sp", sp)) tx.del("page", x.id);
   for (const x of tx.scan("spacesrc.sp", sp)) tx.del("spacesrc", `${sp}:${x.src}`);
   for (const x of tx.scan("srcrep.sp", sp)) tx.del("srcrep", `${sp}:${x.src}:${x.by}`);
   for (const x of tx.scan("invask.sp", sp)) tx.del("invask", `${x.u}:${sp}`);

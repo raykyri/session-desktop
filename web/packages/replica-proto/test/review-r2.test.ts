@@ -8,6 +8,7 @@ import test from "ava";
 import {
   MUTATORS,
   ReplicaClient,
+  USE_PACKAGE,
   refuse,
   type Actor,
   type AnyMutator,
@@ -176,7 +177,7 @@ test("S2: a client whose id expired registers again and sends its write; a store
 });
 
 test("H1: a restricting decision applies whatever the target does in between", async (t) => {
-  const { w, open } = await cast(t);
+  const { w, open, closed } = await cast(t);
   await ok(t, w.as("eve", "spaces.join", { space: open }));
   // the author edits faster than the moderator decides
   const th = await thread(t, w, "eve", open, "post", "ABUSE v0");
@@ -227,23 +228,38 @@ test("H1: a restricting decision applies whatever the target does in between", a
   );
   // a removal names an admission: leaving and joining an open space again
   // makes a new one, so a removal decided before is STALE; the ban is the tool
-  // for an open space
-  await ok(t, w.as("otto", "spaces.leave", { space: open }));
-  await ok(t, w.as("otto", "spaces.join", { space: open }));
-  const adm = w.admission(open, "otto");
-  await ok(t, w.as("otto", "spaces.leave", { space: open }));
-  await ok(t, w.as("otto", "spaces.join", { space: open }));
-  await refused(
-    t,
-    w.as("mona", "members.remove", { space: open, user: "otto", base: adm }),
-    "STALE",
-  );
+  // for an open space. @session/mutators (phase 1a.2) takes no removal in an
+  // open space at all (BAD_REQUEST); there the same admission rule is checked
+  // in a closed space, where a person is let in again by an approval.
+  if (USE_PACKAGE) {
+    await refused(
+      t,
+      w.as("mona", "members.remove", {
+        space: open,
+        user: "otto",
+        base: w.admission(open, "otto"),
+      }),
+      "BAD_REQUEST",
+    );
+    t.truthy(w.get(`member:${open}:otto`));
+  }
+  const sp = USE_PACKAGE ? closed : open;
+  const again = async () => {
+    await ok(t, w.as("otto", "spaces.leave", { space: sp }));
+    if (USE_PACKAGE) await admit(t, w, closed, "otto");
+    else await ok(t, w.as("otto", "spaces.join", { space: sp }));
+  };
+  if (USE_PACKAGE) await admit(t, w, closed, "otto");
+  else await again();
+  const adm = w.admission(sp, "otto");
+  await again();
+  await refused(t, w.as("mona", "members.remove", { space: sp, user: "otto", base: adm }), "STALE");
   await ok(
     t,
-    w.as("mona", "members.remove", { space: open, user: "otto", base: w.admission(open, "otto") }),
+    w.as("mona", "members.remove", { space: sp, user: "otto", base: w.admission(sp, "otto") }),
   );
   // a person who is no longer a member: nothing to remove
-  await ok(t, w.as("mona", "members.remove", { space: open, user: "otto", base: adm }));
+  await ok(t, w.as("mona", "members.remove", { space: sp, user: "otto", base: adm }));
 });
 
 test("H2: report notifications are served only while their person is staff of the space", async (t) => {
@@ -811,4 +827,24 @@ test("T1: token cursors: another reader, a signed-out caller, another log, a cha
     "registry",
     "tombstones",
   ]);
+});
+
+// N6 (phase 1a.2): the convergence seeds that killed it in both modes no longer
+// reach the case in package mode (open-space removals answer BAD_REQUEST
+// there), so the case has its own test.
+test("N6: a space that closes takes a non-member's likes and saves out of their user log", async (t) => {
+  const { w, open } = await cast(t);
+  const log: LogId = "user:ada";
+  const t1 = await thread(t, w, "mel", open, "post", "mel's");
+  await ok(t, w.as("ada", "likes.set", { thread: t1, on: true }));
+  await ok(t, w.as("ada", "saved.set", { kind: "thread", id: t1, on: true }));
+  const ada = w.client("ada");
+  await ada.sync(log);
+  t.true(ada.records(log).has(`like:ada:${t1}`));
+  w.clock.advance(MINUTE);
+  await ok(t, w.as("olga", "spaces.update", { id: open, set: { vis: "listed" } }));
+  // ada is no member of the closed space: her user log resyncs without them
+  t.is(await ada.sync(log), "resync");
+  t.false(ada.records(log).has(`like:ada:${t1}`));
+  t.false(ada.records(log).has(`save:ada:${t1}`));
 });

@@ -49,8 +49,8 @@ export class World {
   readonly store = new MemoryStore();
   readonly random: () => number;
   readonly serverRandom: () => number;
-  /** API keys by person, for the pre-check of a payer. */
-  readonly keys = new Map<string, Set<string>>();
+  /** Signed-in devices by person, for the pre-check of a device run. */
+  readonly devices = new Map<string, Set<string>>();
   /** Every effect committed, in order. */
   readonly effects: Effect[] = [];
   /** Every write, when `record` is on. */
@@ -98,7 +98,7 @@ export class World {
       now: this.now,
       server: {
         random: this.serverRandom,
-        ownsKey: (who, key) => this.keys.get(who)?.has(key) ?? false,
+        ownsDevice: (who, d) => this.devices.get(who)?.has(d) ?? false,
       },
     });
     if (out.status === "ok") {
@@ -109,6 +109,14 @@ export class World {
       this.steps.push({ u, envelope, now: this.now, before, out, minted: this.minted });
     this.minted = new Set();
     return out;
+  }
+
+  /** An API key of `u`'s, as the server's online-only apiKeys.create writes
+   * its record to their user log. */
+  key(u: string, id: string, status: "checking" | "valid" | "invalid" = "valid") {
+    this.store.commit([
+      [`apikey:${id}`, { kind: "apikey", id, u, name: `Key ${id}`, provider: "Anthropic", status }],
+    ]);
   }
 
   /** `base` of a decision on the join requests of `users` in `sp`. */

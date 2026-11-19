@@ -12,6 +12,8 @@ export * from "./ids.js";
 export * from "./memory.js";
 export * from "./records.js";
 export * from "./registry.js";
+export * from "./replica.js";
 export * from "./schemas.js";
 export * from "./time.js";
 export * as viewer from "./viewer.js";
+export { DEVICE_RUNS_PER_HOUR } from "./defs/threads.js";

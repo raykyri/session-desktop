@@ -26,6 +26,7 @@ import {
   askTreeSchema,
   banSchema,
   closedSpaceStateSchema,
+  deviceSchema,
   inboxNotificationSchema,
   inboxNotificationTypeSchema,
   joinRequestSchema,
@@ -138,6 +139,7 @@ interface MockApi {
   PROCEDURES: Record<string, unknown>;
   COLLECTIONS: Record<string, { path: string; kind: string; computed?: unknown }>;
   enc: (value: unknown) => string;
+  ulid: (ms: number, n: number) => string;
   createBackend: (options: Record<string, unknown>) => { restore: () => void };
 }
 
@@ -292,6 +294,7 @@ const MOCK_SCHEMAS: Record<string, z.ZodType[]> = {
   Me: [userSchema],
   Usage: [tokenUsageSchema],
   Settings: [userSettingsSchema],
+  Device: [deviceSchema],
 };
 
 test("the mock's hand-written schemas list the same fields", (t) => {
@@ -425,6 +428,7 @@ interface Thread {
   k: string;
   q: string;
   running?: boolean;
+  rev?: number;
 }
 
 const threadsNow = async () => (await get("/api/threads")).body as Thread[];
@@ -493,10 +497,33 @@ async function joinAnswers(space: string) {
   );
 }
 
+/** A record's version as the page holds it (absent: 1). */
+const revOf = (x: { rev?: number } | undefined) => x?.rev ?? 1;
+const threadRev = async (id: string) => revOf((await threadsNow()).find((p) => p.id === id));
+/** A space's page ids (the third item of each entry). */
+async function pageIds(space: string) {
+  const spaces = (await get("/api/spaces")).body as { id: string; pages?: string[][] }[];
+  return (find(spaces, (s) => s.id === space, space).pages ?? []).map((p) => p[2] ?? "");
+}
+async function skillIds(space: string) {
+  const skills = (await get("/api/space-skills")).body as Record<string, { id: string }[]>;
+  return (skills[space] ?? []).map((x) => x.id);
+}
+/** A device run of yours on this Mac (d1), queued: its id. */
+async function deviceRun() {
+  const r = await call("threads.create", {
+    space: "public",
+    kind: "ask",
+    q: "Which tide gauges have the longest records?",
+    executor: { kind: "device", cli: "claude", device: "d1" },
+  });
+  return (r.body as { result: { run: string } }).result.run;
+}
+
 const PROC_CALLS: Record<keyof typeof spaceProcedures, ProcCall> = {
-  "likes.toggle": { input: async () => ({ thread: await askIn("public") }) },
-  "likes.toggleReply": { input: async () => ({ reply: `${await postIn("public")}:0`, on: true }) },
-  "saved.toggle": { input: async () => ({ kind: "thread", id: await askIn("public") }) },
+  "likes.set": { input: async () => ({ thread: await askIn("public"), on: true }) },
+  "likes.setReply": { input: async () => ({ reply: `${await postIn("public")}:0`, on: true }) },
+  "saved.set": { input: async () => ({ kind: "thread", id: await askIn("public"), on: true }) },
   "mutes.set": { input: { handle: "hal_b", on: true } },
   "blocks.set": { input: { handle: "hal_b", on: true } },
   "sources.markRead": { input: { id: "m1" } },
@@ -504,7 +531,10 @@ const PROC_CALLS: Record<keyof typeof spaceProcedures, ProcCall> = {
     input: { space: "public", kind: "ask", q: "Which tide gauges have the longest records?" },
   },
   "threads.update": {
-    input: async () => ({ id: await ownAsk("public"), q: "An edited question?" }),
+    input: async () => {
+      const id = await ownAsk("public");
+      return { id, q: "An edited question?", base: { rev: await threadRev(id) } };
+    },
   },
   "threads.delete": { input: async () => ({ id: await ownAsk("public") }) },
   "threads.move": { input: async () => ({ id: await askIn("sablefield"), topic: null }) },
@@ -527,13 +557,16 @@ const PROC_CALLS: Record<keyof typeof spaceProcedures, ProcCall> = {
       thread: await ownPost(),
       path: "1",
       t: "I added the questions for chapters 4 and 5.",
+      base: { rev: 1 },
     }),
   },
   "replies.delete": {
     scenario: ["threads: your post with replies"],
     input: async () => ({ thread: await ownPost(), path: "0.0" }),
   },
-  "followups.update": { input: async () => ({ ...(await ownNode()), q: "An edited follow-up?" }) },
+  "followups.update": {
+    input: async () => ({ ...(await ownNode()), q: "An edited follow-up?", base: { rev: 1 } }),
+  },
   "followups.delete": { input: ownNode },
   "research.cancelNode": {
     scenario: ["asks: your ask", { space: "public", end: "running" }],
@@ -546,6 +579,7 @@ const PROC_CALLS: Record<keyof typeof spaceProcedures, ProcCall> = {
   "usage.setDefaultKey": { input: { id: "k1" } },
   "usage.markMovedSeen": { input: {} },
   "spaces.join": { input: { space: "bio" } },
+  // an invite to a closed space carries a link's code (the notification alone admits nobody)
   "spaces.leave": { input: { space: "public" } },
   "onboarding.finish": { input: { spaces: ["public", "bio"] } },
   "invites.decline": { input: { notification: "ninv" } },
@@ -564,10 +598,15 @@ const PROC_CALLS: Record<keyof typeof spaceProcedures, ProcCall> = {
       space: "replication",
       users: [await openRequest("replication")],
       decision: "approve",
+      base: { [await openRequest("replication")]: 1 },
     }),
   },
-  "members.setRole": { input: { space: "ml", user: "hal_b", role: "mod" } },
-  "members.remove": { input: { space: "ml", user: "hal_b" } },
+  "members.setRole": { input: { space: "ml", user: "hal_b", role: "mod", base: { rev: 1 } } },
+  // closed spaces only: in an open one, moderators ban
+  "members.remove": {
+    scenario: ["replication: moderator"],
+    input: { space: "replication", user: "oduya", base: { adm: "" } },
+  },
   "members.ban": { input: { space: "ml", user: "hal_b" } },
   "members.unban": {
     before: [["members.ban", () => ({ space: "ml", user: "hal_b" })]],
@@ -579,6 +618,37 @@ const PROC_CALLS: Record<keyof typeof spaceProcedures, ProcCall> = {
   "reports.resolve": { input: { report: "rp1", outcome: "dismissed" } },
   "moderation.decide": {
     input: async () => ({ item: `a:${await askIn("sablefield")}`, decision: "hidden" }),
+  },
+  "devices.revoke": { input: { id: "d3" } },
+  "devices.authorize": { input: { name: "Mac Studio" } },
+  "devices.approve": {
+    input: async () => {
+      const r = await call("devices.authorize", { name: "Mac Studio" });
+      const s = (r.body as { result: { request: string; code: string } }).result;
+      return { request: s.request, code: s.code };
+    },
+  },
+  "runs.claim": { input: async () => ({ run: await deviceRun(), device: "d1" }) },
+  "runs.heartbeat": {
+    input: async () => {
+      const run = await deviceRun();
+      await call("runs.claim", { run, device: "d1" });
+      return { run, device: "d1", attempt: 1 };
+    },
+  },
+  "runs.turn": {
+    input: async () => {
+      const run = await deviceRun();
+      await call("runs.claim", { run, device: "d1" });
+      return { run, device: "d1", attempt: 1, turn: { tool: "read", input: "notes" } };
+    },
+  },
+  "runs.finish": {
+    input: async () => {
+      const run = await deviceRun();
+      await call("runs.claim", { run, device: "d1" });
+      return { run, device: "d1", attempt: 1, answer: "<p>The Brest gauge, since 1711.</p>" };
+    },
   },
   "notifications.markRead": { input: { id: "n1" } },
   "notifications.markAllRead": { input: {} },
@@ -614,16 +684,22 @@ const PROC_CALLS: Record<keyof typeof spaceProcedures, ProcCall> = {
     },
   },
   "skills.update": {
-    input: {
+    input: async () => ({
       space: "scifi",
-      index: 0,
+      id: (await skillIds("scifi"))[0],
       name: "renamed-skill",
       prompt: "A new prompt.",
       base: { rev: 0 },
-    },
+    }),
   },
-  "skills.remove": { input: { space: "scifi", index: 0 } },
-  "skills.reorder": { input: { space: "scifi", from: 0, to: 1 } },
+  "skills.remove": { input: async () => ({ space: "scifi", id: (await skillIds("scifi"))[0] }) },
+  "skills.reorder": {
+    input: async () => ({
+      space: "scifi",
+      order: (await skillIds("scifi")).reverse(),
+      base: { rev: 0 },
+    }),
+  },
   "pages.update": {
     input: {
       space: "scifi",
@@ -636,13 +712,23 @@ const PROC_CALLS: Record<keyof typeof spaceProcedures, ProcCall> = {
     before: [
       [
         "pages.update",
-        () => ({ space: "scifi", page: 0, title: "Canon starter list", text: ["A new text."] }),
+        () => ({
+          space: "scifi",
+          page: "pg-scifi-2",
+          title: "Canon starter list",
+          text: ["A new text."],
+        }),
       ],
     ],
-    input: { space: "scifi", page: 0, rev: 0, note: "Restored the version from Nov 16" },
+    input: { space: "scifi", page: "pg-scifi-2", rev: 0, note: "Restored the version from Nov 16" },
   },
-  "pages.remove": { input: { space: "scifi", page: 0 } },
-  "pages.move": { input: { space: "scifi", from: 0, to: 1 } },
+  "pages.remove": { input: async () => ({ space: "scifi", page: (await pageIds("scifi"))[0] }) },
+  "pages.move": {
+    input: async () => {
+      const [a, b] = await pageIds("scifi");
+      return { space: "scifi", page: a, other: b };
+    },
+  },
   "apiKeys.create": {
     input: { raw: "sk-ant-api03-test-key-0001", label: "Test key", check: true, cap: 1000 },
   },
@@ -685,7 +771,9 @@ for (const [name, c] of Object.entries(PROC_CALLS)) {
     for (const [before, input] of c.before ?? []) await valid(t, before, await input());
     const answer = await valid(t, name, await inputOf(c));
     t.true(
-      Object.keys(answer.changes).length > 0 || name === "spaces.verifyDomain",
+      Object.keys(answer.changes).length > 0 ||
+        name === "spaces.verifyDomain" ||
+        name === "devices.authorize",
       `${name} changed nothing`,
     );
   });
@@ -695,7 +783,7 @@ for (const [name, c] of Object.entries(PROC_CALLS)) {
 
 test.serial("a BAD_REQUEST has issues", async (t) => {
   await scenario("seed");
-  const res = await call("likes.toggle", { thread: 5 });
+  const res = await call("likes.set", { thread: 5 });
   t.is(res.status, 400);
   exact(t, spaceErrorSchema, res.body, "BAD_REQUEST");
   t.true(((res.body as { issues?: string[] }).issues ?? []).length > 0);
@@ -709,7 +797,7 @@ test.serial("a FORBIDDEN and an UNAUTHORIZED", async (t) => {
   const res = await call("spaces.archive", { id: "ml", archived: true });
   t.is(res.status, 403);
   exact(t, spaceErrorSchema, res.body, "FORBIDDEN");
-  const out = await call("likes.toggle", { thread: (await threadsNow())[0]?.id }, "out");
+  const out = await call("likes.set", { thread: (await threadsNow())[0]?.id, on: true }, "out");
   t.is(out.status, 401);
   exact(t, spaceErrorSchema, out.body, "UNAUTHORIZED");
 });
@@ -719,7 +807,7 @@ test.serial("a CONFLICT has the current version and the changes", async (t) => {
     [
       "ml: mira_k saved a skill",
       "skills.update",
-      { space: "ml", index: 0, name: "summarizing-papers", prompt: "Mine.", base: { rev: 0 } },
+      { space: "ml", id: "sk-ml-1", name: "summarizing-papers", prompt: "Mine.", base: { rev: 0 } },
     ],
     [
       "ml: mira_k changed the rules",
@@ -729,7 +817,13 @@ test.serial("a CONFLICT has the current version and the changes", async (t) => {
     [
       "scifi: tomasz saved a page",
       "pages.update",
-      { space: "scifi", page: 1, title: "Canon starter list", text: ["Mine."], base: { rev: 0 } },
+      {
+        space: "scifi",
+        page: "pg-scifi-2",
+        title: "Canon starter list",
+        text: ["Mine."],
+        base: { rev: 0 },
+      },
     ],
   ] as const) {
     await scenario(sc);
@@ -749,18 +843,62 @@ test.serial("a new skill has rev 0, and each save adds one", async (t) => {
     ((await get("/api/space-skills")).body as Record<string, Skill[]>).scifi ?? [];
   await valid(t, "skills.create", { space: "scifi", name: "dating-editions", prompt: "Dates it." });
   const index = (await skills()).findIndex((x) => x.name === "dating-editions");
+  const id = (await skills())[index]?.id ?? "";
   t.like((await skills())[index], { name: "dating-editions", prompt: "Dates it.", rev: 0 });
   for (const rev of [0, 1]) {
     const prompt = `Dates it, version ${rev + 1}.`;
     await valid(t, "skills.update", {
       space: "scifi",
-      index,
+      id,
       name: "dating-editions",
       prompt,
       base: { rev },
     });
-    t.deepEqual((await skills())[index], { name: "dating-editions", prompt, rev: rev + 1 });
+    t.deepEqual((await skills())[index], { id, name: "dating-editions", prompt, rev: rev + 1 });
   }
+});
+
+test.serial("a STALE has the current version and the changes", async (t) => {
+  await scenario("seed");
+  const id = find(await threadsNow(), (p) => p.u === me && p.k === "ask", "your ask").id;
+  await valid(t, "threads.update", { id, q: "Edited once?", base: { rev: 1 } });
+  const res = await call("threads.update", { id, q: "Edited twice?", base: { rev: 1 } });
+  t.is(res.status, 409);
+  exact(t, spaceErrorSchema, res.body, "STALE");
+  t.like(res.body, { code: "STALE", current: { rev: 2, q: "Edited once?" } });
+});
+
+test.serial("the write envelope: a recorded answer is replayed; the sync codes", async (t) => {
+  await scenario("seed");
+  const reg = await request("POST", "/api/sync/register", {});
+  exact(t, spacesApi["POST /api/sync/register"]!.output!, reg.body, "register");
+  const { clientId, serverTime } = reg.body as { clientId: string; serverTime: number };
+  const thread = await askIn("public");
+  const env = (seq: number, mutationId: string, o: Record<string, unknown> = {}) => ({
+    clientId,
+    seq,
+    mutationId,
+    clientTime: serverTime,
+    queuedAt: serverTime - 1000,
+    replaces: [],
+    name: "likes.set",
+    input: { thread, on: true },
+    ...o,
+  });
+  const write = async (e: object) => {
+    exact(t, spacesApi["POST /api/sync/write"]!.input!, e, "envelope");
+    const r = await request("POST", "/api/sync/write", e);
+    exact(t, spacesApi["POST /api/sync/write"]!.output!, r.body, "answer");
+    return r.body as { code?: string; seq?: number; replayed?: boolean };
+  };
+  const m1 = M.ulid(serverTime - 1000, 1);
+  t.like(await write(env(1, m1)), { seq: 1 });
+  t.like(await write(env(1, m1)), { seq: 1, replayed: true });
+  t.like(await write(env(3, M.ulid(serverTime, 2))), { code: "OUT_OF_ORDER" });
+  t.like(await write(env(2, M.ulid(serverTime - 5 * 864e5, 3))), { code: "EXPIRED", seq: 2 });
+  t.like(await write(env(3, M.ulid(serverTime, 4), { clientId: "nope" })), {
+    code: "WRONG_CLIENT",
+  });
 });
 
 // ---- events ----

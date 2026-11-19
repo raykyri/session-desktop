@@ -96,12 +96,13 @@ export const MESSAGES: Record<ErrorCode, string> = {
   TOO_MANY_REQUESTS: "Too many requests from your account. Try again in a minute.",
   INTERNAL_SERVER_ERROR: "The server had an error and didn’t save the change.",
   SERVICE_UNAVAILABLE: "The server is unavailable.",
-  UPGRADE_REQUIRED: "Update Session.",
+  UPDATE_REQUIRED: "Update Session.",
   STALE: "This item changed after you saw it. Look at it again.",
   CLOCK_SKEW: "Your device’s clock is off.",
   EXPIRED: "This change waited too long to be sent, and wasn’t saved.",
   OUT_OF_ORDER: "This change arrived out of order.",
   WRONG_CLIENT: "This device isn’t signed in to your account.",
+  TOO_LARGE: "This change is larger than the server takes.",
 };
 
 /** A refusal: a mutator stage throws it, and nothing the mutation wrote is kept. */

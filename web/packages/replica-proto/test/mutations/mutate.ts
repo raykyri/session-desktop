@@ -6,6 +6,9 @@
 // Run from the package directory: `npm run mutate [-- <name prefix> ...]`,
 // or `npm run mutate -- --check` to check only that every pattern matches
 // once. `--slots <n>` sets how many copies run at once (default 4).
+// `--since <git ref>` runs only the mutations whose file (where the run makes
+// them: in the package with `--package`) changed since that ref, the working
+// tree included.
 //
 // `--package` runs the suite with the switch on (REPLICA_PROTO_MUTATORS=
 // package): the server runs `@session/mutators`. A mutation of the
@@ -19,7 +22,7 @@
 // code it named is gone, is the same fault in the code that replaced it (the
 // comment says so).
 
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import {
   cpSync,
   mkdirSync,
@@ -848,8 +851,37 @@ if (args.includes("--check")) {
 }
 const k = args.indexOf("--slots");
 const slots = k >= 0 ? Number(args[k + 1]) : 4;
-const only = args.filter((a, i) => !a.startsWith("--") && (k < 0 || i !== k + 1));
-const todo = MUTATIONS.filter((m) => !only.length || only.some((o) => m.name.startsWith(o)));
+const s = args.indexOf("--since");
+const since = s >= 0 ? args[s + 1] : undefined;
+if (s >= 0 && !since) throw new Error("--since needs a git ref");
+const only = args.filter(
+  (a, i) => !a.startsWith("--") && (k < 0 || i !== k + 1) && (s < 0 || i !== s + 1),
+);
+
+/** The files changed since `ref` (absolute paths), the working tree included. */
+function changedSince(ref: string): Set<string> {
+  const git = (...a: string[]) => execFileSync("git", a, { cwd: WEB, encoding: "utf8" });
+  const top = git("rev-parse", "--show-toplevel").trim();
+  return new Set(
+    git("diff", "--name-only", ref, "--", ".")
+      .split("\n")
+      .filter(Boolean)
+      .map((p) => resolve(top, p)),
+  );
+}
+const changed = since === undefined ? null : changedSince(since);
+const touched = (m: Mutation) => {
+  if (!changed) return true;
+  const where = target(m);
+  return changed.has(join(where.pkg ? MUTATORS_PKG : PKG, where.file));
+};
+const todo = MUTATIONS.filter(
+  (m) => (!only.length || only.some((o) => m.name.startsWith(o))) && touched(m),
+);
+if (since !== undefined)
+  console.log(
+    `${todo.length} mutations of files changed since ${since}: ${todo.map(idOfMutation).join(" ")}`,
+  );
 const root = mkdtempSync(join(tmpdir(), "replica-proto-mutate-"));
 let survived = 0;
 try {

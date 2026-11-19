@@ -137,6 +137,7 @@
     rate: () => 'The answer failed: the provider is limiting requests.',
     access: () => 'The answer failed: the person who asked no longer had access when the run started.',
     interrupted: () => 'The answer failed: the server stopped while the agent worked.',
+    too_large: () => 'The answer was not saved: it was larger than 200 KB.',
   };
 
   /* ---- checks that run as jobs ---- */

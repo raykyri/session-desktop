@@ -50,7 +50,7 @@ export interface Envelope {
 }
 
 /** The spaces API's codes, and the ones the sync protocol adds:
- * - `UPGRADE_REQUIRED`: the client's protocol version is below the minimum
+ * - `UPDATE_REQUIRED`: the client's protocol version is below the minimum
  *   ("Update Session").
  * - `STALE`: the record a decision acts on is no longer in the state the
  *   client saw (a thread edited since `base.rev`, a member admitted again
@@ -66,15 +66,19 @@ export interface Envelope {
  * - `OUT_OF_ORDER`: `seq` is not the client's next one. Not recorded; the
  *   error carries `expectedSeq`.
  * - `WRONG_CLIENT`: the client id is unknown, expired, or bound to another
- *   user. Not recorded. */
+ *   user. Not recorded.
+ * - `TOO_LARGE`: `@session/mutators`' code for an oversized envelope or a
+ *   device's answer over its cap. This prototype answers an oversized
+ *   envelope with BAD_REQUEST (see UNRECORDED). */
 export type ErrorCode =
   | Spaces.SpaceErrorCode
-  | "UPGRADE_REQUIRED"
+  | "UPDATE_REQUIRED"
   | "STALE"
   | "CLOCK_SKEW"
   | "EXPIRED"
   | "OUT_OF_ORDER"
-  | "WRONG_CLIENT";
+  | "WRONG_CLIENT"
+  | "TOO_LARGE";
 
 /** The answers that record nothing: the envelope's `seq` is not used up, the
  * same `seq` may be sent again, and the client keeps the write queued. The
@@ -91,7 +95,7 @@ export type ErrorCode =
  * this mutation id, and the client may send the write again with
  * `expectedSeq`. */
 export const UNRECORDED: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
-  "UPGRADE_REQUIRED",
+  "UPDATE_REQUIRED",
   "UNAUTHORIZED",
   "WRONG_CLIENT",
   "OUT_OF_ORDER",

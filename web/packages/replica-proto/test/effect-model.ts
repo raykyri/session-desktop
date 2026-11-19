@@ -19,6 +19,7 @@
 // later (round 2, decision 6), and the suite checks them where it runs it.
 
 import type { StoredRecord } from "../src/index.js";
+import { USE_PACKAGE } from "../src/switch.js";
 
 import { mayRead } from "./oracle.js";
 
@@ -343,6 +344,11 @@ export function predictEffects(
       });
       const n = get(`counts:${p.id}`);
       keys.set(`counts:${p.id}`, { r: Number(n?.["r"]) + 1, likes: n?.["likes"] });
+      // with the switch on, a follow-up ask starts a run of it, with a
+      // derived id, as an ask thread does (@session/mutators, phase 1a.2
+      // decision 1); the prototype's follow-up writes no run
+      if (USE_PACKAGE)
+        fresh.push({ kind: "run", th: p.id, s: p.s, u: me, node: str("id"), status: "queued" });
       break;
     }
     case "research.createPostFollowUp": {
@@ -467,8 +473,11 @@ export function predictEffects(
           keys.set(key, { mod: "removed", q: "", t: null, sum: null, running: false });
           keys.set(`counts:${r.id}`, { r: 0 });
           for (const [ck] of children(r.id)) keys.set(ck, null);
-        } else if (r.kind === "followup") keys.set(key, { mod: "removed", q: "", a: null });
-        else if (r.kind === "reply") {
+        } else if (r.kind === "followup") {
+          keys.set(key, { mod: "removed", q: "", a: null });
+          // its runs (with the switch on, a follow-up ask has them)
+          for (const [ck, x] of dump) if (x.kind === "run" && x.node === r.id) keys.set(ck, null);
+        } else if (r.kind === "reply") {
           keys.set(key, { mod: "removed", t: "" });
           if (r.parent === null)
             for (const [ck, x] of dump)

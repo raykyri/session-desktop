@@ -20,7 +20,7 @@
 // The protocol, in order (the first that applies decides):
 //   0. an input nested more than 32 deep, or an envelope larger than 256 KB
 //      as JSON: BAD_REQUEST (round 2, decision 8)              unrecorded
-//   1. protocolVersion an integer below 3: UPGRADE_REQUIRED    unrecorded
+//   1. protocolVersion an integer below 3: UPDATE_REQUIRED    unrecorded
 //   2. envelope: exactly { clientId, seq ≥ 1, mutationId, name, input,
 //      protocolVersion, clientTime ≥ 0 }, else BAD_REQUEST     unrecorded
 //   3. signed out, or a handle no person may have: UNAUTHORIZED unrecorded
@@ -56,6 +56,7 @@
 // fails.
 
 import type { Envelope, ErrorCode, StoredRecord } from "../src/index.js";
+import { USE_PACKAGE } from "../src/switch.js";
 
 import { slug } from "./effect-model.js";
 import { mayRead } from "./oracle.js";
@@ -492,7 +493,10 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     if (roleOf(f, sp, user) === null) no("NOT_FOUND");
   },
   "members.remove": (f, i) => {
-    inSpace(f, String(i["space"]), "mod");
+    const s = inSpace(f, String(i["space"]), "mod");
+    // @session/mutators (phase 1a.2): removal is for closed spaces; in an
+    // open space a moderator bans
+    if (USE_PACKAGE && !closed(s)) no("BAD_REQUEST");
     actOn(f, String(i["space"]), String(i["user"]));
     // round 2: the admission id the moderator saw; nothing to do for a person
     // who is no longer a member
@@ -619,7 +623,7 @@ export class WriteModel {
       return pass("BAD_REQUEST");
     const version = isObject ? (e as { protocolVersion?: unknown }).protocolVersion : undefined;
     if (typeof version === "number" && Number.isInteger(version) && version < 3)
-      return pass("UPGRADE_REQUIRED");
+      return pass("UPDATE_REQUIRED");
     const shape =
       isObject &&
       Object.keys(e).sort().join() === ENVELOPE_KEYS.join() &&

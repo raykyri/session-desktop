@@ -122,7 +122,7 @@ export function applyPackage(
   } else if (entry) throw new Error(`${envelope.name} has no package mutator`);
   const out = pkg.apply(pkg.createRegistry(list), source, { u }, envelope, {
     now,
-    server: { random, ownsKey: () => false },
+    server: { random, ownsDevice: () => false },
   });
   if (out.status === "refused")
     return {
@@ -170,8 +170,11 @@ export const idOf = (r: rec.Draft | StoredRecord) =>
   USE_PACKAGE ? pkg.idOf(r as unknown as pkg.Draft) : rec.idOf(r);
 export const keyOf = (r: rec.Draft | StoredRecord) =>
   USE_PACKAGE ? pkg.keyOf(r as unknown as pkg.Draft) : rec.keyOf(r);
+// the prototype has no catalog log: no write here makes a catalog source
 export const logsOf = (r: rec.Draft | StoredRecord): rec.LogId[] =>
-  USE_PACKAGE ? pkg.logsOf(r as unknown as pkg.Draft) : rec.logsOf(r);
+  USE_PACKAGE
+    ? pkg.logsOf(r as unknown as pkg.Draft).filter((l): l is rec.LogId => l !== "catalog")
+    : rec.logsOf(r);
 export const registryKey = (r: rec.Draft | StoredRecord) =>
   USE_PACKAGE ? pkg.registryKey(r as unknown as pkg.Draft) : rec.registryKey(r);
 

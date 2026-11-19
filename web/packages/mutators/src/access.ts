@@ -19,12 +19,14 @@
 //   the record is about. A report notification only while they are staff of
 //   its space. An invite notification is the invited person's whatever their
 //   access (it is about a space they are not in yet).
-// - A person's mutes, blocks, saved and read sources, invite asks, seen
-//   flags and profile: that person only.
-// - A source added to a space and waiting for review: the person who added
-//   it and the space's moderators. This is the one rule that depends on a
-//   field a write changes (`rv`), and the change only widens it (approval):
-//   no write takes a reader's access to such a record away.
+// - A person's mutes, blocks, saved and read sources, seen flags, profile
+//   and API keys (`apikey`, without the raw key): that person only.
+// - A person's invite asks: that person and the space's staff (phase 1a.2,
+//   decision 8).
+// - A source added to a space: the space's readers. While it waits for
+//   review (`rv`), its fields are redacted for everyone but the person who
+//   added it and the space's moderators (decision 5): the record keeps one
+//   audience, as a hidden thread does, so no write changes who reads it.
 // - Text of a hidden thread, follow-up or reply: its author and the space's
 //   moderators. Everyone else gets the placeholder (`redact`). A removed
 //   item's text is erased from storage.
@@ -35,8 +37,10 @@ import type {
   NotifType,
   RecordOf,
   ReplyRec,
+  SourceMeta,
   SpaceRec,
   SpaceRole,
+  SpaceSourceRec,
   StoredRecord,
   ThreadRec,
 } from "./records.js";
@@ -124,11 +128,12 @@ export function readsAudience(g: Reader, a: Audience, u: string | null): boolean
     case "skills":
       return sp !== null && readsSpace(g, sp, u);
     case "spacesrc":
-      // a pending source's readers are decided by `canRead`, which sees `rv`
+      // a pending source's fields are `redact`'s job
       return sp !== null && readsSpace(g, sp, u);
     case "report":
     case "request":
     case "srcrep":
+    case "invask":
       return own || (sp !== null && isModOf(g, sp, u));
     case "ban":
       return sp !== null && isModOf(g, sp, u);
@@ -152,24 +157,49 @@ export function readsAudience(g: Reader, a: Audience, u: string | null): boolean
     case "srcread":
     case "mute":
     case "block":
-    case "invask":
     case "seen":
     case "profile":
+    case "apikey":
       return own;
   }
 }
 
 /** May `u` read the record at all (its text is `redact`'s job). */
 export function canRead(g: Reader, r: StoredRecord, u: string | null): boolean {
-  if (!readsAudience(g, audience(g, r), u)) return false;
-  if (r.kind === "spacesrc" && r.rv) return (u !== null && r.by === u) || isModOf(g, r.sp, u);
-  return true;
+  return readsAudience(g, audience(g, r), u);
 }
 
-/** A moderated record as `u` may read it: a hidden one keeps its text for its
- * author and the space's moderators; everyone else, and every reader of a
- * removed one, gets the placeholder. Other records as they are. */
+/** Whether `u` reads a source added to a space in full: one that is not
+ * waiting for review, or one they added, or one in a space they moderate. */
+export const reviewedFor = (g: Reader, r: SpaceSourceRec, u: string | null) =>
+  !r.rv || (u !== null && r.by === u) || isModOf(g, r.sp, u);
+
+/** What a pending source's other readers get of its metadata. */
+export const PENDING_META: Readonly<SourceMeta> = Object.freeze({
+  pl: "",
+  form: "",
+  au: "",
+  h: "",
+  len: "",
+  tok: 0,
+  url: "",
+  t: null,
+  desc: "",
+  sum: "",
+  body: [],
+});
+
+/** A record as `u` may read its fields: a hidden thread, follow-up or reply
+ * keeps its text for its author and the space's moderators; everyone else,
+ * and every reader of a removed one, gets the placeholder. A source waiting
+ * for review keeps its fields for the person who added it and the space's
+ * moderators; everyone else gets its place in the list only. Other records
+ * as they are. */
 export function redact(g: Reader, r: StoredRecord, u: string | null): StoredRecord {
+  if (r.kind === "spacesrc")
+    return reviewedFor(g, r, u)
+      ? r
+      : ({ ...r, note: "", meta: { ...PENDING_META }, nurl: null } satisfies SpaceSourceRec);
   if (!("mod" in r) || r.mod === null) return r;
   if (r.mod === "hidden" && u !== null && (r.u === u || isModOf(g, r.s, u))) return r;
   switch (r.kind) {

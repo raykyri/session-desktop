@@ -9,7 +9,7 @@
 //   the envelope nests at most 33 deep (its input at most 32) and is at most
 //     256 KB as JSON (BAD_REQUEST): unrecorded, checked before anything
 //     hashes or parses the input
-//   protocol version (UPGRADE_REQUIRED) and envelope shape (BAD_REQUEST): unrecorded
+//   protocol version (UPDATE_REQUIRED) and envelope shape (BAD_REQUEST): unrecorded
 //   signed in with a valid handle (UNAUTHORIZED): unrecorded
 //   the client id is the caller's and has not expired (WRONG_CLIENT): unrecorded
 //   a stored result for (user, mutation id) whose payload digest matches:
@@ -636,7 +636,7 @@ export class ProtoServer implements TestServer {
         : undefined;
     if (typeof version === "number" && Number.isInteger(version) && version < MIN_PROTOCOL_VERSION)
       return fail(
-        refuse("UPGRADE_REQUIRED", undefined, [
+        refuse("UPDATE_REQUIRED", undefined, [
           `protocolVersion: expected at least ${MIN_PROTOCOL_VERSION}`,
         ]),
       );

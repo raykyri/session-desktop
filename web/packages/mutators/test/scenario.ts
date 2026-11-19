@@ -33,7 +33,8 @@ export function history(t: ExecutionContext, seed = 1): World {
     createdAt: "2026-11-01T00:00:00Z",
     rev: 1,
   });
-  w.keys.set("mel", new Set(["KEY1"]));
+  w.key("mel", "KEY1");
+  w.devices.set("mel", new Set(["MAC1"]));
   // notifications the server wrote: an invite to the vault for eve, and a
   // report notice for mona
   const invite = w.id();
@@ -103,12 +104,29 @@ export function history(t: ExecutionContext, seed = 1): World {
     about: { it: "SRC1" },
   });
   run("otto", "threads.create", { id: w.id(), space: open, kind: "ask", q: "x", pay: "KEY1" });
+  // device runs: mel's Mac, and a device that is not otto's
+  const mac = { kind: "device", cli: "claude", device: "MAC1" };
+  run("mel", "threads.create", {
+    id: w.id(),
+    space: open,
+    kind: "ask",
+    q: "On my Mac",
+    executor: mac,
+  });
+  run("otto", "threads.create", { id: w.id(), space: open, kind: "ask", q: "x", executor: mac });
   const post = thread(t, w, "otto", open, "post", "A post");
   const closedAsk = thread(t, w, "mel", closed, "ask", "In the lab");
   const f1 = w.id();
   run("otto", "followups.ask", { id: f1, thread: ask, q: "And then?" });
   const f2 = w.id();
-  run("mel", "research.forkNode", { id: f2, thread: ask, parent: f1, q: "Deeper", uses: [f1] });
+  run("mel", "research.forkNode", {
+    id: f2,
+    thread: ask,
+    parent: f1,
+    q: "Deeper",
+    uses: [f1],
+    executor: mac,
+  });
   const f3 = w.id();
   run("mel", "research.forkNode", { id: f3, thread: ask, parent: "r", q: "Sideways" });
   run("eve", "research.forkNode", { id: w.id(), thread: closedAsk, parent: "r", q: "no" });
@@ -268,11 +286,16 @@ export function history(t: ExecutionContext, seed = 1): World {
     q: "Edited while hidden",
     base: { rev: w.rev(`thread:${ask}`) },
   });
-  run("mona", "reports.resolve", { report: rep, outcome: "open", base: { rev: 1 } });
+  run("mona", "reports.resolve", { report: rep, outcome: "open" });
   run("mona", "reports.resolve", {
     report: rep,
     outcome: "open",
-    base: { rev: w.rev(`thread:${ask}`) },
+    base: { rev: w.rev(`report:${rep}`), item: 1 },
+  });
+  run("mona", "reports.resolve", {
+    report: rep,
+    outcome: "open",
+    base: { rev: w.rev(`report:${rep}`), item: w.rev(`thread:${ask}`) },
   });
   run("mona", "reports.resolve", { report: rep, outcome: "dismissed" });
   run("mona", "moderation.decide", { item: `a:${ask}`, decision: "hidden" });
@@ -291,48 +314,62 @@ export function history(t: ExecutionContext, seed = 1): World {
   run("mona", "notifications.markRead", { id: notice });
   run("eve", "notifications.markRead", { id: notice });
 
-  // skills and pages
-  run("mona", "skills.create", { space: open, name: "Cite", prompt: "Cite sources." });
-  run("mona", "skills.create", { space: open, name: "Cite", prompt: "again" });
-  run("mona", "skills.create", { space: open, name: "Short", prompt: "Be short." });
+  // skills and pages, by id
+  const [cite, short] = [w.id(), w.id()];
+  run("mona", "skills.create", { id: cite, space: open, name: "Cite", prompt: "Cite sources." });
+  run("mona", "skills.create", { id: w.id(), space: open, name: "Cite", prompt: "again" });
+  run("mona", "skills.create", { id: short, space: open, name: "Short", prompt: "Be short." });
   run("mona", "skills.update", {
     space: open,
-    index: 0,
+    id: cite,
     name: "Cite",
     prompt: "Cite.",
     base: { rev: 0 },
   });
   run("mona", "skills.update", {
     space: open,
-    index: 0,
+    id: cite,
     name: "Cite",
     prompt: "x",
     base: { rev: 0 },
   });
-  run("mona", "skills.reorder", { space: open, from: 0, to: 1 });
-  run("mona", "skills.remove", { space: open, index: 1 });
-  run("mel", "skills.create", { space: open, name: "No", prompt: "no" });
-  run("mona", "pages.update", { space: open, page: null, title: "Guide", text: ["One"] });
-  run("mona", "pages.update", { space: open, title: "FAQ", text: [] });
+  run("mona", "skills.reorder", { space: open, order: [short, cite], base: { rev: 1 } });
+  run("mona", "skills.reorder", {
+    space: open,
+    order: [short, cite],
+    base: { rev: w.rev(`skills:${open}`) },
+  });
+  run("mona", "skills.remove", { space: open, id: cite });
+  run("mel", "skills.create", { id: w.id(), space: open, name: "No", prompt: "no" });
+  const [guide, faq] = [w.id(), w.id()];
   run("mona", "pages.update", {
     space: open,
-    page: 0,
+    page: null,
+    id: guide,
+    title: "Guide",
+    text: ["One"],
+  });
+  run("mona", "pages.update", { space: open, id: faq, title: "FAQ", text: [] });
+  run("mona", "pages.update", { space: open, id: w.id(), title: "faq", text: [] });
+  run("mona", "pages.update", {
+    space: open,
+    page: guide,
     title: "Guide 2",
     text: ["Two"],
     base: { rev: 1 },
   });
   run("mona", "pages.update", {
     space: open,
-    page: 0,
+    page: guide,
     title: "Guide 3",
     text: ["x"],
     base: { rev: 1 },
   });
-  run("mel", "pages.update", { space: open, page: 0, title: "Guide", text: ["no"] });
+  run("mel", "pages.update", { space: open, page: guide, title: "Guide", text: ["no"] });
   run("olga", "spaces.update", { id: open, set: { pageEdit: "members" } });
-  run("mel", "pages.restore", { space: open, page: 0, rev: 1, note: "Back", base: { rev: 2 } });
-  run("mona", "pages.move", { space: open, from: 0, to: 1 });
-  run("mona", "pages.remove", { space: open, page: 1 });
+  run("mel", "pages.restore", { space: open, page: guide, rev: 1, note: "Back", base: { rev: 2 } });
+  run("mona", "pages.move", { space: open, page: guide, other: faq });
+  run("mona", "pages.remove", { space: open, page: faq });
 
   // sources
   run("mel", "spaceSources.add", {
@@ -363,11 +400,16 @@ export function history(t: ExecutionContext, seed = 1): World {
   run("eve", "invites.revoke", { id: link });
   run("eve", "invites.request", { space: w.id() });
   run("eve", "reports.resolve", { report: rep, outcome: "dismissed" });
-  run("mona", "skills.remove", { space: open, index: 9 });
-  run("mona", "skills.reorder", { space: open, from: 5, to: 0 });
-  run("mel", "pages.restore", { space: open, page: 0, rev: 99, note: "x" });
-  run("mona", "pages.remove", { space: open, page: 9 });
-  run("mona", "pages.move", { space: open, from: 0, to: 9 });
+  run("mona", "skills.remove", { space: open, id: w.id() });
+  run("mona", "skills.reorder", {
+    space: open,
+    order: [w.id()],
+    base: { rev: w.rev(`skills:${open}`) },
+  });
+  run("mel", "pages.restore", { space: open, page: guide, rev: 99, note: "x" });
+  run("mona", "pages.remove", { space: open, page: w.id() });
+  run("mona", "pages.move", { space: open, page: guide, other: w.id() });
+  run("mona", "members.remove", { space: open, user: "otto", base: { adm: "x" } });
   run("mel", "spaceSources.setPolicy", { space: open, policy: "mods" });
   run("eve", "sourceReports.create", { space: closed, source: "SRC1", why: "x" });
 

@@ -16,6 +16,7 @@ import {
   apply,
   inIndex,
   splitKey,
+  withOwnIds,
   type IndexName,
   type Kind,
   type MemoryStore,
@@ -40,7 +41,7 @@ function needsPre(s: Step): boolean {
 function server(s: Step, source: RecordSource = s.before): Outcome {
   return apply(MUTATORS, source, { u: s.u }, s.envelope, {
     now: s.now,
-    server: { random: rng(7), ownsKey: (u, k) => u === "mel" && k === "KEY1" },
+    server: { random: rng(7), ownsDevice: (u, d) => u === "mel" && d === "MAC1" },
   });
 }
 
@@ -143,8 +144,7 @@ test("every step gives the same outcome twice under a guard against clocks, rand
 /** A part of a full store: each key, each index value and each id is known
  * or not, by a seeded choice. A key that is known answers as the full store
  * does (the record, or none); an index value that is known lists every
- * record the full store lists. Everything else is UNKNOWN. The writer's own
- * new ids are known to be unused, as a client knows the ids it minted. */
+ * record the full store lists. Everything else is UNKNOWN. */
 class PartialReplica implements RecordSource {
   private readonly keys = new Map<string, boolean>();
   private readonly indexes = new Map<string, boolean>();
@@ -154,7 +154,6 @@ class PartialReplica implements RecordSource {
     private readonly full: MemoryStore,
     private readonly random: () => number,
     private readonly p: number,
-    private readonly minted: ReadonlySet<string>,
   ) {}
 
   private known(m: Map<string, boolean>, k: string): boolean {
@@ -173,10 +172,18 @@ class PartialReplica implements RecordSource {
   }
 
   idUsed(id: string): boolean | typeof UNKNOWN {
-    if (this.minted.has(id) && !this.full.idUsed(id)) return false;
     return this.known(this.ids, id) ? this.full.idUsed(id) : UNKNOWN;
   }
 }
+
+/** A partial replica as the writer's client has it: its own minted ids, and
+ * the ids derived from the write's mutation id, are unused (decision 9). */
+const replicaOf = (s: Step, random: () => number, p: number) =>
+  withOwnIds(new PartialReplica(s.before, random, p), {
+    user: s.u,
+    minted: s.minted,
+    mutations: new Set([s.envelope.mutationId]),
+  });
 
 test("on random partial replicas, a prediction is the server's outcome or unknown", (t) => {
   const w = history(t);
@@ -187,7 +194,7 @@ test("on random partial replicas, a prediction is the server's outcome or unknow
     const truth = server(s);
     for (const p of [0.3, 0.6, 0.9, 1]) {
       for (let k = 0; k < 4; k++) {
-        const replica = new PartialReplica(s.before, random, p, s.minted);
+        const replica = replicaOf(s, random, p);
         const guess = apply(MUTATORS, replica, { u: s.u }, s.envelope, { now: s.now });
         const what = `${s.u}: ${s.envelope.name} ${JSON.stringify(s.envelope.input)} (p ${p})`;
         if (guess.status === "unknown") {
@@ -206,7 +213,7 @@ test("on random partial replicas, a prediction is the server's outcome or unknow
 test("on a full replica, every write without a server pre-check is predicted exactly", (t) => {
   const w = history(t);
   for (const s of w.steps) {
-    const replica = new PartialReplica(s.before, () => 0, 1, s.minted);
+    const replica = replicaOf(s, () => 0, 1);
     const guess = apply(MUTATORS, replica, { u: s.u }, s.envelope, { now: s.now });
     const what = `${s.u}: ${s.envelope.name} ${JSON.stringify(s.envelope.input)}`;
     // a write the server's pre-check would see is unknown, unless `can`
