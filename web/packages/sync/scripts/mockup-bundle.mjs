@@ -1,6 +1,7 @@
 // Build the mockup's bundle of the client half: `docs/mockups/session-web-spaces-sync.js`,
 // a classic script that defines `window.SessionSync`, loaded by the page under `?sync=1`.
 // Run with `npm run mockup:bundle` in this package.
+/* global URL, console -- a Node script */
 
 import { build } from "esbuild";
 
