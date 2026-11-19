@@ -47,6 +47,9 @@ export const MAX_REPLACES = 64;
 export const RETRY_MIN = 1000;
 export const RETRY_MAX = 10 * MINUTE;
 export const MAX_TRIES = 5;
+/** How long a thread the person opened (`hydrate`) stays pinned in full:
+ * the client reports it in `tier.opened` for this long. */
+export const OPENED_TTL = 14 * DAY;
 
 /** The signed-in person a request is for (null: signed out), and the device
  * whose token authenticated it (absent for a browser session). */
@@ -63,10 +66,12 @@ export interface Actor {
  *   from CLOCK_SKEW (ms). The server measures ages on it.
  * - `queuedAt`: when the write was queued, on the same clock. The server
  *   checks it like an id's age (EXPIRED).
- * - `replaces`: the mutation ids this write had before it was reminted. The
- *   server stores its answer under each of them in the same commit, and a
- *   stored answer under any of them is this write's answer, so no copy of
- *   the write applies twice. */
+ * - `replaces`: the mutation ids this write was sent under before it was
+ *   reminted, whose outcome the client does not know. The server stores its
+ *   answer under each of them in the same commit, and a stored answer under
+ *   any of them is this write's answer, so no copy of the write applies
+ *   twice. An id with a recorded refusal is never listed (its refusal would
+ *   be the answer): Send again after one is a new write. */
 export interface Envelope {
   clientId: string;
   seq: number;
@@ -81,7 +86,18 @@ export interface Envelope {
 
 /** One change of a log: a record as the reader may read it now, or a key the
  * reader no longer holds. */
-export type Change = { key: string; op: "put"; record: StoredRecord } | { key: string; op: "del" };
+export type Change =
+  | { key: string; op: "put"; record: StoredRecord }
+  | { key: string; op: "del"; ended?: MembershipEnd };
+
+/** How a membership ended: the member left, or was removed (or banned), so
+ * each of the person's devices can tell a voluntary leave (the device
+ * deletes its copy of a closed space) from a removal (the device keeps a
+ * frozen copy). A read of a user log carries it in `ended` (by space id, for
+ * the reader's memberships that ended within the tombstone window), or a
+ * `del` of the reader's member key (`member:<space>:<user>`) carries it;
+ * without either, an ended membership reads as a removal. */
+export type MembershipEnd = "left" | "removed";
 
 /** An error answer: `@session/mutators`' `ApiError` with what the protocol
  * adds. `expectedSeq` comes with OUT_OF_ORDER; `current` and `changes` with
@@ -156,9 +172,6 @@ export interface ReadOptions {
    * opens it): each in full, with everything under it. */
   threads?: string[];
 }
-
-/** How a membership ended (the user log's `exit` records). */
-export type MembershipEnd = "left" | "removed";
 
 /** A read's answer. Optional fields (a client works without them):
  * - `summaries`: in a tiered read of a space log, the threads served as

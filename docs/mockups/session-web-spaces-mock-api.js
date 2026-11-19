@@ -2727,8 +2727,10 @@
          the envelope is at most envMax bytes as JSON (TOO_LARGE), and has that shape (BAD_REQUEST): unrecorded
          signed in (UNAUTHORIZED); the client id is one the caller registered and its device is not revoked
            (WRONG_CLIENT): unrecorded
-         an answer recorded for the mutation id (7 days) with the same name and input: replayed as it is, under any
-           client id or seq (replayed: true); one recorded for (client, seq) with the same mutation id: replayed
+         an answer recorded for the mutation id (7 days) with the same name and input, or stored under it by a remint
+           that replaced it: replayed as it is, under any client id or seq (replayed: true); else an answer recorded
+           for an id in `replaces`: stored under the mutation id and replayed (the reminted write was processed under
+           its old id); one recorded for (client, seq) with the same mutation id: replayed
          seq is the client's next one (OUT_OF_ORDER, with expectedSeq): unrecorded
          the mutation id is a ULID not used with another name or input (BAD_REQUEST): uses up the seq
          clientTime is within a minute of the server's time (CLOCK_SKEW, with serverTime): unrecorded
@@ -2736,8 +2738,10 @@
            (EXPIRED): recorded
          the procedure, as POST /api/rpc/<name> runs it, with the device's clock for the new ids' age
        Every answer but TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE, INTERNAL_SERVER_ERROR, CLOCK_SKEW and the unrecorded
-       ones above uses up the seq and is recorded for 7 days, under the mutation id and each id in `replaces` (a
-       reminted envelope: a delayed copy of the old one gets this answer and cannot apply twice). The answer is the
+       ones above uses up the seq and is recorded for 7 days, under the mutation id and each id in `replaces` that has
+       no answer of its own (a reminted envelope: a delayed copy of the old one gets this answer and cannot apply
+       twice). A client lists only the ids whose outcome it does not know, never one with a recorded refusal (Send
+       again after EXPIRED is a new write with no `replaces`). The answer is the
        procedure's ({ result, changes } or the error), with seq and serverTime. A forced failure (DevConfig failOn)
        is unrecorded, as the server's own errors are. */
     function expireLeases() {
@@ -2768,15 +2772,30 @@
       /* a recorded answer as a response (an error keeps its code for the request log) */
       const answer = (a, extra) => { const x = out(a.status, { ...a.body, seq: a.seq, serverTime: now, ...extra }); if (a.body && a.body.code) { x.code = a.body.code; x.issues = a.body.issues; } return x; };
       const replay = a => answer(a, { replayed: true });
+      const live = a => (a && now - a.at < 7 * DAY_MS ? a : null);
       const prior = sync.answers[e.mutationId];
-      if (prior && now - prior.at < 7 * DAY_MS && prior.digest === digest) return replay(prior);
+      /* the answer of this write, sent before under this id, or stored under it by a remint that replaced it */
+      if (live(prior) && (prior.digest === digest || prior.replaced)) return replay(prior);
+      /* a reminted write already processed under an id it replaces: that answer is its answer */
+      if (!live(prior) && ULID_RE.test(e.mutationId))
+        for (const old of e.replaces) {
+          const p = live(sync.answers[old]);
+          if (!p) continue;
+          sync.answers[e.mutationId] = { ...p, at: now, digest, replaced: false };
+          save();
+          return replay(p);
+        }
       const again = sync.bySeq[`${e.clientId}:${e.seq}`];
       if (again && again.mutationId === e.mutationId && again.digest === digest) return replay(again);
       if (e.seq !== c.last + 1) return err('OUT_OF_ORDER', undefined, { issues: [`seq: expected ${c.last + 1}`], expectedSeq: c.last + 1 });
       /* an answer that uses up the seq: recorded under the mutation id (unless it is malformed or taken), each id it replaces, and (client, seq) */
       const record = (res, byId) => {
         const a = { status: res.status, body: bodyOf(res), seq: e.seq, at: now, digest, mutationId: e.mutationId };
-        if (byId) for (const m of [e.mutationId, ...e.replaces]) sync.answers[m] = a;
+        /* under each replaced id that has no answer of its own, so a delayed copy of the old envelope gets this one */
+        if (byId) {
+          sync.answers[e.mutationId] = a;
+          for (const m of e.replaces) if (!live(sync.answers[m])) sync.answers[m] = { ...a, replaced: true };
+        }
         sync.bySeq[`${e.clientId}:${e.seq}`] = a;
         c.last = e.seq;
         for (const [k, x] of Object.entries(sync.answers)) if (now - x.at >= 7 * DAY_MS) delete sync.answers[k];

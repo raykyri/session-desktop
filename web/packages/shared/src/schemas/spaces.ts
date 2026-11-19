@@ -465,11 +465,12 @@ export const spaceRunSchema = z.object({
   pay: spacePayerSchema.optional(),
   createdAt: spaceIsoTimeSchema.optional(),
   paused: z.boolean().optional(),
-  /** A device run: its device moves it on (`runs.*`), not a job. */
-  executor: executorSchema.optional(),
-  /** A device run's lease: when it ends unless the device sends a heartbeat,
-   * and the last heartbeat. */
-  lease: z.object({ until: spaceIsoTimeSchema, beat: spaceIsoTimeSchema }).nullable().optional(),
+  /** A device run: its device moves it on (`runs.*`), not a job. The device
+   * id is served to the run's person only; every other reader gets "". The
+   * lease (holder, expiry, heartbeat) is the server's and is not served. */
+  executor: executorSchema
+    .extend({ device: spaceRecordIdSchema.or(z.literal("")) })
+    .optional(),
 });
 
 // ---- sources ----

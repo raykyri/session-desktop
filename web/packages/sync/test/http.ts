@@ -19,18 +19,27 @@ export function httpFetch(
   server: SyncServer,
   o: { browser?: Actor | null; minProtocol?: () => number } = {},
 ): typeof fetch {
+  // the server's clock (a test's manual clock), for the answers made here
+  const now = () => (server as unknown as { clock: { now(): number } }).clock.now();
   const handle = async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
     const auth = req.headers.get("Authorization");
     const actor = auth?.startsWith("Bearer ")
       ? server.online.authenticate(auth.slice(7))
       : (o.browser ?? null);
+    // a bearer token that does not authenticate (revoked, expired): 401
+    if (auth?.startsWith("Bearer ") && actor === null)
+      return json(401, {
+        ok: false,
+        error: { code: "UNAUTHORIZED", message: "Sign in again." },
+        serverTime: now(),
+      });
     const v = Number(req.headers.get(PROTOCOL_HEADER));
     if (!(v >= (o.minProtocol?.() ?? MIN_PROTOCOL_VERSION)))
       return json(426, {
         ok: false,
         error: { code: "UPDATE_REQUIRED", message: "Update Session." },
-        serverTime: Date.now(),
+        serverTime: now(),
       });
     if (req.method === "GET" && url.pathname === "/api/sync/events")
       return sseResponse(server, req, actor, { setInterval: () => 0, clearInterval: () => {} });

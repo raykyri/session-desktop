@@ -14,10 +14,10 @@ import type {
   CallAnswer,
   Cursor,
   Envelope,
-  Pull,
+  PullAnswer,
   ReadOptions,
   RegisterAnswer,
-  Snapshot,
+  SnapshotAnswer,
   SseEvent,
 } from "../protocol.js";
 
@@ -30,8 +30,10 @@ export interface Transport {
    * no answer. Each answer, or null: no answer arrived (the write may or may
    * not have been applied). */
   push(envelopes: readonly Envelope[]): Promise<(Answer | null)[]>;
-  pull(log: LogId, cursor: Cursor, options?: ReadOptions): Promise<Pull>;
-  snapshot(log: LogId, options?: ReadOptions): Promise<Snapshot>;
+  /** A read: its answer or the server's `ReadError`; Offline is thrown when
+   * no answer arrived. */
+  pull(log: LogId, cursor: Cursor, options?: ReadOptions): Promise<PullAnswer>;
+  snapshot(log: LogId, options?: ReadOptions): Promise<SnapshotAnswer>;
   /** Listen for pokes until `signal` aborts or the stream ends. `cursors`
    * gives the client's tokens at each (re)connection. */
   listen(
@@ -49,8 +51,8 @@ export class Offline extends Error {}
 export interface ServerLike {
   register(actor: Actor | null): RegisterAnswer;
   apply(actor: Actor | null, envelope: unknown): Answer;
-  snapshot(actor: Actor | null, log: LogId, options?: ReadOptions): Snapshot;
-  pull(actor: Actor | null, log: LogId, cursor: Cursor, options?: ReadOptions): Pull;
+  snapshot(actor: Actor | null, log: LogId, options?: ReadOptions): SnapshotAnswer;
+  pull(actor: Actor | null, log: LogId, cursor: Cursor, options?: ReadOptions): PullAnswer;
   call(actor: Actor | null, name: string, input: unknown): CallAnswer;
 }
 
