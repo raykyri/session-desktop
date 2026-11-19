@@ -23,7 +23,16 @@ import {
   type Transport,
 } from "../src/client/index.js";
 
-import { Forced, client, fail, inProcess, nodeSqlite, tick, watched } from "./client-helpers.js";
+import {
+  Forced,
+  client,
+  fail,
+  inProcess,
+  laterProcess,
+  nodeSqlite,
+  tick,
+  watched,
+} from "./client-helpers.js";
 import { DAY, HOUR, MINUTE, cast, ok, type World } from "./helpers.js";
 import { httpFetch } from "./http.js";
 
@@ -70,14 +79,10 @@ function manualTimer(w: World) {
 test("round 2 finding 1: a remint maps the ids the write derives; an ask under a copied follow-up names the new copy", async (t) => {
   const { w, open } = cast(t);
   const { T, f1 } = askTree(t, w, open);
-  // right at the first answer, then 11 minutes fast: the branch's mutation
-  // id is further ahead than a write waits, and is made again
-  let skew = 0;
-  const mel = client(w, "mel", { clock: { now: () => w.clock.now() + skew } });
-  await mel.init();
-  await mel.open(`space:${open}`);
-  await mel.open("user:mel");
-  skew = 11 * MINUTE;
+  // a process whose clock is 11 minutes fast, before it heard from the
+  // server: after CLOCK_SKEW the branch's mutation id is further ahead than
+  // a write waits, and is made again
+  const mel = await laterProcess(w, "mel", [`space:${open}`, "user:mel"], 11 * MINUTE);
   const N = mel.newId();
   const branch = mel.write(
     "threads.create",
@@ -108,12 +113,7 @@ test("round 2 finding 1: a remint maps the ids the write derives; an ask under a
 test("round 2 finding 1: a member's admission id follows a remint of the approval", async (t) => {
   const { w, closed } = cast(t);
   ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
-  let skew = 0;
-  const olga = client(w, "olga", { clock: { now: () => w.clock.now() + skew } });
-  await olga.init();
-  await olga.open(`space:${closed}`);
-  await olga.open("user:olga");
-  skew = 11 * MINUTE;
+  const olga = await laterProcess(w, "olga", [`space:${closed}`, "user:olga"], 11 * MINUTE);
   olga.write(
     "joinRequests.decide",
     {
@@ -642,15 +642,10 @@ test("round 2 finding 8: never-sent writes made on a clock that was fast and is 
 
 test("round 2 finding 9: on the web a write whose ids are ahead, and one made while signed out, end with Try again", async (t) => {
   {
+    // (a client that sends before it heard from the server: its ids are on
+    // a clock 5 minutes fast, and after CLOCK_SKEW they are ahead)
     const { w, open } = cast(t);
-    let skew = 0;
-    const mel = client(w, "mel", {
-      persist: false,
-      clock: { now: () => w.clock.now() + skew },
-    });
-    await mel.init();
-    await mel.open(`space:${open}`);
-    skew = 5 * MINUTE;
+    const mel = await laterProcess(w, "mel", [`space:${open}`], 5 * MINUTE, { persist: false });
     const { answer } = mel.write("threads.create", {
       id: mel.newId(),
       space: open,

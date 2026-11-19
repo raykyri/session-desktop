@@ -1,37 +1,61 @@
 // Deterministic simulation: several clients and one server, a fake network
-// (delay as late copies, loss of requests and of answers, duplication,
-// reordering, disconnects), device clocks that are slow, fast, reset and
-// days off, restarts from storage, random writes from honest clients and a
-// hostile one, and the client's other paths: overlapping syncs and flushes,
-// a write during a flush, Send again and discard, a tiered replica that
-// hydrates threads, live updates, UPDATE_REQUIRED, WRONG_CLIENT, TOO_LARGE
-// and writes dropped after days offline. Each seed runs `STEPS` random
-// steps, then lets the system go quiet, and checks:
+// (delay as late copies, loss of requests and of answers, responses that are
+// not answers, duplication, reordering, disconnects), device clocks that are
+// slow, fast, reset and days off, restarts from storage (also with a request
+// in flight, and between a write's persist and its send), random writes from
+// honest clients and a hostile one, writes that name an id another write
+// derives, sessions that end and are signed in again, and the client's other
+// paths: overlapping syncs and flushes, a write during a flush, Send again
+// and discard, a tiered replica that hydrates threads, live updates,
+// UPDATE_REQUIRED (and a restart while held), WRONG_CLIENT, TOO_LARGE and
+// writes dropped after days offline. Each seed runs `STEPS` random steps,
+// then lets the system go quiet, and checks:
 // - every replica's view (its open logs through the overlay) equals the
 //   server's scope-filtered projection of its live logs; a tiered log holds
 //   every record the server's tiered read serves, except under the threads
-//   it holds as summaries, and nothing the server does not serve;
+//   it holds as summaries, and nothing the server does not serve; what it
+//   still holds under a thread that left the full tier is current;
 // - a frozen copy holds the user's own threads and what they wrote under
 //   them, and nothing else the server would not serve them;
 // - no write was applied twice (across retries, remints, replays and late
 //   copies), and no two reads of one log were in flight at once;
+// - no log changed while its device's session had ended;
 // - every write ended applied, refused, expired, or failed or dropped and
-//   shown; none is silently gone; every id an answered write's input made
-//   exists on the server, and no write was refused for an input it changed
-//   after sending it.
+//   shown; none is silently gone. A write ends failed, EXPIRED or dropped
+//   only for a reason the simulation made: failed after 5 transient answers
+//   or responses that were not answers (or TOO_LARGE), EXPIRED and dropped
+//   only by the time it waited or a device clock it set. Every id an
+//   answered write's input made exists on the server; no write was refused
+//   for an input it changed after sending it, or refused NOT_FOUND for
+//   naming an id derived from a mutation id other than the one its maker
+//   applied under.
 // CI runs 200 seeds × 200 steps and checks that they reach each path above;
 // `npm run sim` runs 1,000. `SYNC_SIM_STATS=1` prints what each seed reached;
 // `SYNC_SIM_ONLY=<seed>` runs one seed and prints its steps, with
 // `SYNC_SIM_DEBUG=1` each write queued and each application no write claims.
 
-import { MUTATORS, ulid, type LogId, type StoredRecord } from "@session/mutators";
+import {
+  MUTATORS,
+  derivedFrom,
+  isUlid,
+  ulid,
+  ulidTime as decodeTime,
+  type LogId,
+  type StoredRecord,
+} from "@session/mutators";
 import test from "ava";
 
 import {
+  ID_MAX_AGE,
   InProcessTransport,
+  MAX_TRIES,
   MemoryStorage,
+  NO_RESPONSE,
+  OUTBOX_TTL,
   Offline,
+  RETRY_MAX,
   SyncClient,
+  UNRECORDED,
   type Answer,
   type Envelope,
   type ServerLike,
@@ -70,6 +94,14 @@ const REACH = [
   "a frozen copy",
   "a remint",
   "a replayed answer",
+  "a restart with a request in flight",
+  "a restart between a persist and its send",
+  "a write naming a derived id",
+  "a device clock days off",
+  "a session that ends",
+  "a restart while held",
+  "a thread that left the full tier",
+  "no response",
 ] as const;
 type Reach = (typeof REACH)[number];
 const reached = new Map<string, number>();
@@ -93,6 +125,15 @@ interface Device {
   reading: Map<LogId, number>;
   /** The process was replaced (a restart): it sends and stores nothing. */
   dead: boolean;
+  /** The process ends at its next write request: after the server applied
+   * it (a request in flight), or before it left (after its persist). */
+  crash: "in flight" | "before send" | null;
+  /** The person's session holds (false: the server takes the device's
+   * requests as nobody's). */
+  session: boolean;
+  /** Its logs once the client knows the session ended (it signed out, with
+   * no read in flight): none may change until it is signed in again. */
+  frozenLogs: string | null;
 }
 
 /** The storage as one process sees it: once the process is dead, its
@@ -129,19 +170,56 @@ interface Sim {
   locals: Map<string, string>;
   /** Applications (ok, not replayed) by local id. */
   applied: Map<string, number>;
-  /** The local ids of every write queued, and their answers. */
-  writes: Map<string, { dev: Device; name: string; answer: Answer | null | undefined }>;
+  /** The local ids of every write queued, their answers, when they were
+   * made (or sent again) in server time, the client's clock then against the
+   * server's (`off`), and when they ended shown. */
+  writes: Map<string, Rec>;
   /** The input of every write the client holds as answered ok. */
   answered: Map<string, { u: Person; name: string; input: unknown }>;
   /** Mutation ids the hostile party sent as their own person. */
   forged: Set<string>;
+  /** Transient answers and responses that were not answers, by local id:
+   * the reasons a write may end failed. */
+  excuses: Map<string, number>;
+  /** By local id, the mutation id it applied under and when (an order
+   * counter), and when the server refused it NOT_FOUND. */
+  appliedAs: Map<string, { mid: string; at: number }>;
+  notFound: Map<string, number>;
+  /** Writes a late copy of which the server answered EXPIRED. */
+  lateExpired: Set<string>;
+  order: number;
   /** What broke an invariant while the steps ran. */
   bad: string[];
   reach: Map<string, number>;
   log: string[];
 }
 
+interface Rec {
+  dev: Device;
+  name: string;
+  answer: Answer | null | undefined;
+  /** When its ids were made (server time): its age for EXPIRED. */
+  madeAt: number;
+  /** When it was queued, or sent again: its wait for the 3-day drop. */
+  queuedAt: number;
+  /** The most the client's clock was off when it made the ids or queued
+   * it (a clock the simulation set). */
+  off: number;
+  endedAt?: number;
+}
+
 const hit = (sim: Sim, what: Reach) => sim.reach.set(what, (sim.reach.get(what) ?? 0) + 1);
+
+/** The local id of the entry of `u`'s devices that holds or held a mutation
+ * id. */
+function localOf(sim: Sim, u: string | undefined, mid: string): string | undefined {
+  let local = sim.locals.get(`${u}:${mid}`);
+  for (const d of sim.devices)
+    if (d.u === u)
+      for (const x of d.client.outbox())
+        if (x.mutationId === mid || x.replaces.includes(mid)) local = x.local;
+  return local;
+}
 
 /** The server as a device reaches it: every application is counted, some
  * envelopes are copied for a late delivery, and the device's own state
@@ -154,9 +232,12 @@ function serverFor(sim: Sim, d: Device): ServerLike {
     error: { code, message: code },
     serverTime: sim.w.clock.now(),
   });
+  // a session that ended: the request is nobody's
+  const who = <A>(a: A) => (d.session ? a : null);
   return {
-    register: (a) => (d.old ? no("UPDATE_REQUIRED") : s.register(a)),
-    apply: (a, e) => {
+    register: (a) => (d.old ? no("UPDATE_REQUIRED") : s.register(who(a))),
+    apply: (a0, e) => {
+      const a = who(a0);
       if (d.old) {
         hit(sim, "UPDATE_REQUIRED");
         return no("UPDATE_REQUIRED");
@@ -183,26 +264,52 @@ function serverFor(sim: Sim, d: Device): ServerLike {
       if (d.old) return no("UPDATE_REQUIRED");
       if (o?.threads) hit(sim, "hydrate");
       else if (o?.tier && o.tier.window !== "full") hit(sim, "a tiered snapshot");
-      return s.snapshot(a, l, o);
+      return s.snapshot(who(a), l, o);
     },
-    pull: (a, l, c, o) => (d.old ? no("UPDATE_REQUIRED") : s.pull(a, l, c, o)),
-    call: (a, n, i) => s.call(a, n, i),
+    pull: (a, l, c, o) => {
+      if (d.old) return no("UPDATE_REQUIRED");
+      const p = s.pull(who(a), l, c, o);
+      // a summary thread the replica holds more of than a summary
+      if ("changes" in p && p.summaries?.length) {
+        const ths = new Set(p.summaries);
+        for (const x of d.client.records(l).values())
+          if ((x.kind === "reply" || x.kind === "followup") && ths.has(x.th))
+            hit(sim, "a thread that left the full tier");
+      }
+      return p;
+    },
+    call: (a, n, i) => s.call(who(a), n, i),
   };
 }
 
-function count(sim: Sim, s: SyncServer, a: { u: string } | null, e: Envelope): Answer {
+function count(
+  sim: Sim,
+  s: SyncServer,
+  a: { u: string } | null,
+  e: Envelope,
+  late = false,
+): Answer {
   const out = s.apply(a, e);
+  const at = sim.order++;
+  // a late copy the network delivered with a clock it set: its EXPIRED is
+  // the write's answer from then on
+  if (late && !out.ok && !out.replayed && out.error.code === "EXPIRED") {
+    const local = localOf(sim, a?.u, e.mutationId);
+    if (local !== undefined) sim.lateExpired.add(local);
+  }
+  if (!out.ok && out.error.code === "NOT_FOUND" && !out.replayed) {
+    const local = localOf(sim, a?.u, e.mutationId);
+    if (local !== undefined && !sim.notFound.has(local)) sim.notFound.set(local, at);
+  }
   if (out.ok && !out.replayed) {
     // the entry that holds this mutation id now, or had it (it may have been
     // reminted within the flush that sent it: `replaces` lists it), or the
     // one that held it before
-    let local = sim.locals.get(`${a?.u}:${e.mutationId}`);
-    for (const d of sim.devices)
-      if (d.u === a?.u)
-        for (const x of d.client.outbox())
-          if (x.mutationId === e.mutationId || x.replaces.includes(e.mutationId)) local = x.local;
-    if (local !== undefined) sim.applied.set(local, (sim.applied.get(local) ?? 0) + 1);
-    else if (process.env["SYNC_SIM_DEBUG"])
+    const local = localOf(sim, a?.u, e.mutationId);
+    if (local !== undefined) {
+      sim.applied.set(local, (sim.applied.get(local) ?? 0) + 1);
+      sim.appliedAs.set(local, { mid: e.mutationId, at });
+    } else if (process.env["SYNC_SIM_DEBUG"])
       sim.log.push(
         `  (applied ${e.name} ${e.mutationId} replaces ${e.replaces.join(",")}: no entry; ${sim.devices
           .filter((d) => d.u === a?.u)
@@ -237,7 +344,41 @@ function watch(sim: Sim, d: Device, inner: Transport): Transport {
   };
   return {
     register: () => (d.dead ? dead() : inner.register()),
-    push: (es) => (d.dead ? Promise.resolve([null]) : inner.push(es)),
+    push: async (es) => {
+      if (d.dead) return [NO_RESPONSE];
+      // the process ends with this request in flight (the server gets it),
+      // or after its persist and before it leaves
+      const crash = d.crash;
+      if (crash) {
+        d.crash = null;
+        if (crash === "in flight") {
+          await inner.push(es);
+          hit(sim, "a restart with a request in flight");
+        } else hit(sim, "a restart between a persist and its send");
+        d.dead = true;
+        return [NO_RESPONSE];
+      }
+      const out = await inner.push(es);
+      if (process.env["SYNC_SIM_DEBUG"])
+        for (const [k, a] of out.entries()) {
+          const env = es[k];
+          if (env)
+            sim.log.push(
+              `  (${d.name} sent ${env.name} ${localOf(sim, d.u, env.mutationId)} ${env.mutationId} at ${env.clientTime - sim.w.clock.now()} off, id ahead ${Number(BigInt(0)) + (decodeTime(env.mutationId) - env.clientTime)}: ${a === null ? "null" : a === NO_RESPONSE ? a : a.ok ? "ok" : a.error.code})`,
+            );
+        }
+      for (const [k, a] of out.entries()) {
+        if (a === NO_RESPONSE) hit(sim, "no response");
+        // what the simulation made the write fail by: a response that is
+        // not an answer, or a transient answer
+        if (a === null || (a && a !== NO_RESPONSE && !a.ok && UNRECORDED.has(a.error.code))) {
+          const env = es[k];
+          const local = env && localOf(sim, d.u, env.mutationId);
+          if (local !== undefined) sim.excuses.set(local, (sim.excuses.get(local) ?? 0) + 1);
+        }
+      }
+      return out;
+    },
     pull: (l, c, o) => read(l, () => inner.pull(l, c, o)),
     snapshot: (l, o) => read(l, () => inner.snapshot(l, o)),
     listen: (c, e, s) =>
@@ -280,6 +421,9 @@ function makeDevice(
     flushing: false,
     reading: new Map(),
     dead: false,
+    crash: null,
+    session: true,
+    frozenLogs: null,
   };
   const net = {
     plan: () =>
@@ -288,6 +432,7 @@ function makeDevice(
         : {
             lost: chance(sim.r, 0.05),
             answerLost: chance(sim.r, 0.05),
+            notAnswer: chance(sim.r, 0.03),
             duplicate: chance(sim.r, 0.03),
             delay: chance(sim.r, 0.3) ? 1 : 0,
           },
@@ -368,8 +513,16 @@ function honest(sim: Sim, d: Device): [string, unknown] | null {
   if (th.kind !== "thread") return null;
   if (roll < 0.35) return ["likes.set", { thread: th.id, on: chance(r, 0.7) }];
   if (roll < 0.45) return ["saved.set", { kind: "thread", id: th.id, on: chance(r, 0.7) }];
-  if (roll < 0.55 && th.k === "ask")
-    return ["followups.ask", { id: c.newId(), thread: th.id, q: `f${Math.floor(r() * 1e6)}` }];
+  if (roll < 0.55 && th.k === "ask") {
+    const fs = c.view().list("followup", (f) => f.th === th.id && !f.del && f.mod === null);
+    const parent = fs.length && chance(r, 0.5) ? pick(r, fs) : null;
+    return parent
+      ? [
+          "research.forkNode",
+          { id: c.newId(), thread: th.id, parent: parent.id, q: `k${Math.floor(r() * 1e6)}` },
+        ]
+      : ["followups.ask", { id: c.newId(), thread: th.id, q: `f${Math.floor(r() * 1e6)}` }];
+  }
   if (roll < 0.55)
     return [
       "research.createPostFollowUp",
@@ -456,16 +609,72 @@ function hostile(sim: Sim): string {
   return `hostile ${who} ${e.name}: ${a.ok ? "ok" : a.error.code}`;
 }
 
-/** Queue an honest write of `d` (sent or not), recording it. */
-function queue(sim: Sim, d: Device, send: boolean): string | null {
-  const wr = honest(sim, d);
-  if (!wr) return null;
-  const [name, input] = wr;
+/** Two writes of `d`'s person, the second naming an id the first derives: a
+ * thread branched from a follow-up of theirs that has one of theirs below
+ * it (its copy has a derived id), and an ask under that copy. Null when no
+ * such follow-up is in the view. */
+function derived(sim: Sim, d: Device): string | null {
+  const c = d.client;
+  const live = (f: { del: boolean; mod: unknown }) => !f.del && f.mod === null;
+  const mine = () => c.view().list("followup", (f) => f.u === d.u && live(f));
+  // the follow-ups the branch needs, made first when the view has none
+  let from = mine().filter((f) => mine().some((g) => g.par === f.id && g.th === f.th));
+  if (!from.length) {
+    const asks = threadsOf(d, d.u === "otto" ? sim.open : pick(sim.r, [sim.open, sim.closed]))
+      .flatMap((p) => (p.kind === "thread" && p.k === "ask" ? [p] : []));
+    const th = asks.length ? pick(sim.r, asks) : null;
+    if (!th) return null;
+    let f = mine().find((x) => x.th === th.id);
+    if (!f) {
+      queueWrite(sim, d, "followups.ask", { id: c.newId(), thread: th.id, q: "a" }, false);
+      f = mine().find((x) => x.th === th.id);
+    }
+    if (!f) return "ask";
+    queueWrite(
+      sim,
+      d,
+      "research.forkNode",
+      { id: c.newId(), thread: th.id, parent: f.id, q: "c" },
+      false,
+    );
+    from = mine().filter((x) => mine().some((g) => g.par === x.id && g.th === x.th));
+    if (!from.length) return "follow-ups";
+  }
+  const f = pick(sim.r, from);
+  const src = c.view().get("thread", f.th);
+  if (!src || src.del || src.mod !== null) return null;
+  const N = c.newId();
+  queueWrite(
+    sim,
+    d,
+    "threads.create",
+    { id: N, space: src.s, kind: "ask", q: "b", from: { th: f.th, node: f.id }, branch: "all" },
+    false,
+  );
+  const copy = c.view().list("followup", (x) => x.th === N)[0];
+  if (!copy) return "branch";
+  hit(sim, "a write naming a derived id");
+  queueWrite(
+    sim,
+    d,
+    "research.forkNode",
+    { id: c.newId(), thread: N, parent: copy.id, q: `u${Math.floor(sim.r() * 1e6)}` },
+    false,
+  );
+  return "branch and an ask under its copy";
+}
+
+/** Queue a write of `d` (sent or not), recording it. */
+function queueWrite(sim: Sim, d: Device, name: string, input: unknown, send: boolean) {
   const { local, answer } = d.client.write(name, input, { send });
-  const rec: { dev: Device; name: string; answer: Answer | null | undefined } = {
+  const now = sim.w.clock.now();
+  const rec: Rec = {
     dev: d,
     name,
     answer: undefined,
+    madeAt: now,
+    queuedAt: now,
+    off: d.client.now() - now,
   };
   sim.writes.set(local, rec);
   if (process.env["SYNC_SIM_DEBUG"]) sim.log.push(`  (queued ${name} ${local} on ${d.name})`);
@@ -474,28 +683,50 @@ function queue(sim: Sim, d: Device, send: boolean): string | null {
     note(sim);
   });
   note(sim);
+}
+
+/** Queue an honest write of `d` (sent or not), recording it. */
+function queue(sim: Sim, d: Device, send: boolean): string | null {
+  const wr = honest(sim, d);
+  if (!wr) return null;
+  const [name, input] = wr;
+  queueWrite(sim, d, name, input, send);
   return name;
 }
+
+/** The writes shown since the last look: when they ended (server time). */
+function ended(sim: Sim) {
+  const now = sim.w.clock.now();
+  for (const d of sim.devices)
+    for (const e of d.client.problems()) {
+      const rec = sim.writes.get(e.local);
+      if (rec && rec.endedAt === undefined) rec.endedAt = now;
+    }
+}
+
+/** The logs of `d` as its client holds them. */
+const logsOf = (d: Device) =>
+  JSON.stringify(d.client.openLogs().map((l) => [l, [...d.client.records(l)]]));
 
 async function step(sim: Sim, k: number): Promise<string> {
   const r = sim.r;
   const d = pick(r, sim.devices);
   const roll = r();
-  if (roll < 0.3) {
+  if (roll < 0.28) {
     const name = queue(sim, d, false);
     if (!name) return "skip";
     await flush(sim, d);
     return `${d.name} ${name}`;
   }
-  if (roll < 0.4) {
+  if (roll < 0.38) {
     await flush(sim, d);
     return `${d.name} flush`;
   }
-  if (roll < 0.5) {
+  if (roll < 0.48) {
     await d.client.sync();
     return `${d.name} sync`;
   }
-  if (roll < 0.55) {
+  if (roll < 0.53) {
     // overlapping: a flush, two syncs, and a write while they run
     const f = flush(sim, d);
     const s1 = d.client.sync();
@@ -507,7 +738,7 @@ async function step(sim: Sim, k: number): Promise<string> {
     note(sim);
     return `${d.name} overlap`;
   }
-  if (roll < 0.6 && sim.late.length) {
+  if (roll < 0.58 && sim.late.length) {
     // a late copy arrives, out of order
     const [x] = sim.late.splice(Math.floor(r() * sim.late.length), 1);
     if (x) {
@@ -516,21 +747,43 @@ async function step(sim: Sim, k: number): Promise<string> {
         sim.w.server,
         { u: x.u },
         { ...x.e, clientTime: sim.w.clock.now() + d.skew },
+        true,
       );
       return `late ${x.u} ${x.e.name}: ${a.ok ? (a.replayed ? "replay" : "ok") : a.error.code}`;
     }
   }
-  if (roll < 0.65) {
+  if (roll < 0.63) {
     d.down = !d.down;
     return `${d.name} ${d.down ? "offline" : "online"}`;
   }
-  if (roll < 0.7) {
-    d.skew = pick(r, [0, 0, 20_000, -20_000, 2 * MINUTE, -2 * MINUTE, -HOUR]);
+  if (roll < 0.68) {
+    d.skew = pick(r, [
+      0,
+      0,
+      20_000,
+      -20_000,
+      2 * MINUTE,
+      -2 * MINUTE,
+      -HOUR,
+      20 * MINUTE,
+      3 * DAY,
+      -3 * DAY,
+      -5 * DAY,
+    ]);
+    if (Math.abs(d.skew) >= DAY) hit(sim, "a device clock days off");
     return `${d.name} clock ${d.skew}`;
   }
-  if (roll < 0.74) {
-    // a restart: a new client over the stored state, the clock maybe reset
+  if (roll < 0.73) {
+    // a restart: a new client over the stored state, the clock maybe reset;
+    // now and then the process ends while it sends a write
     const i = sim.devices.indexOf(d);
+    if (!d.down && chance(r, 0.4)) {
+      d.crash = chance(r, 0.5) ? "in flight" : "before send";
+      if (!d.client.outbox().some((e) => e.state === "queued")) queue(sim, d, false);
+      await flush(sim, d);
+      d.crash = null;
+    }
+    if (d.client.updateRequired) hit(sim, "a restart while held");
     d.listening?.abort();
     d.dead = true;
     const nd = makeDevice(sim, d.name, d.u, {
@@ -541,17 +794,19 @@ async function step(sim: Sim, k: number): Promise<string> {
     });
     nd.down = d.down;
     nd.old = d.old;
+    nd.session = d.session;
+    nd.frozenLogs = d.frozenLogs;
     await startDevice(nd);
     sim.devices[i] = nd;
     // answers of the old client's writes are known from here only by state
     for (const rec of sim.writes.values()) if (rec.dev === d) rec.dev = nd;
     return `${d.name} restart`;
   }
-  if (roll < 0.77) {
+  if (roll < 0.76) {
     sim.w.server.work();
     return "work";
   }
-  if (roll < 0.82) {
+  if (roll < 0.81) {
     // now and then days pass (a device offline over a weekend)
     sim.w.clock.advance(
       chance(r, 0.08)
@@ -560,11 +815,22 @@ async function step(sim: Sim, k: number): Promise<string> {
     );
     return "time";
   }
-  if (roll < 0.85) {
+  if (roll < 0.84) {
     const e = pick(r, d.client.problems().length ? d.client.problems() : [null]);
     if (!e) return "skip";
     if (chance(r, 0.6)) {
+      const ids = JSON.stringify(e.minted);
       d.client.sendAgain(e.local);
+      // a new 3-day window; a new age if its ids are new
+      const rec = sim.writes.get(e.local);
+      if (rec) {
+        const now = sim.w.clock.now();
+        rec.queuedAt = now;
+        if (!e.minted.length || JSON.stringify(e.minted) !== ids) rec.madeAt = now;
+        const off = d.client.now() - now;
+        if (Math.abs(off) > Math.abs(rec.off)) rec.off = off;
+        delete rec.endedAt;
+      }
       hit(sim, "Send again");
       await flush(sim, d);
       return `${d.name} send again ${e.name}`;
@@ -574,18 +840,22 @@ async function step(sim: Sim, k: number): Promise<string> {
     sim.writes.delete(e.local);
     return `${d.name} discard ${e.name}`;
   }
-  if (roll < 0.88) {
+  if (roll < 0.87) {
+    // mostly on the tiered replica, whose hydrated threads are summaries
+    // again for its later reads
+    const tiered = sim.devices.filter((x) => x.tier.window !== "full");
+    const h = tiered.length && chance(r, 0.7) ? pick(r, tiered) : d;
     const log = pick(
       r,
-      d.logs.filter((l) => l.startsWith("space:")),
+      h.logs.filter((l) => l.startsWith("space:")),
     );
-    const ths = d.client.view().list("thread", (p) => `space:${p.s}` === log);
+    const ths = h.client.view().list("thread", (p) => `space:${p.s}` === log);
     const th = ths.length ? pick(r, ths) : null;
     if (!th) return "skip";
-    await d.client.hydrate(log, th.id);
-    return `${d.name} hydrate`;
+    await h.client.hydrate(log, th.id);
+    return `${h.name} hydrate`;
   }
-  if (roll < 0.91) {
+  if (roll < 0.9) {
     if (d.listening) {
       d.listening.abort();
       d.listening = null;
@@ -599,14 +869,33 @@ async function step(sim: Sim, k: number): Promise<string> {
     hit(sim, "listen");
     return `${d.name} listen`;
   }
-  if (roll < 0.93) {
+  if (roll < 0.92) {
     d.old = !d.old;
     if (!d.old) await d.client.updated();
     return `${d.name} ${d.old ? "below the minimum version" : "updated"}`;
   }
-  if (roll < 0.95) {
+  if (roll < 0.935) {
     d.wrong = true;
     return `${d.name} client record expires`;
+  }
+  if (roll < 0.955) {
+    const what = derived(sim, d);
+    if (!what) return "skip";
+    await flush(sim, d);
+    return `${d.name} ${what}`;
+  }
+  if (roll < 0.965) {
+    // the session ends (a cookie that expired): nothing may change a log
+    // until the person signs in again
+    if (d.session) {
+      d.session = false;
+      hit(sim, "a session that ends");
+      return `${d.name} session ends`;
+    }
+    d.session = true;
+    d.frozenLogs = null;
+    await d.client.signedIn();
+    return `${d.name} signed in again`;
   }
   void k;
   return hostile(sim);
@@ -620,6 +909,8 @@ async function quiesce(sim: Sim) {
     d.skew = 0;
     d.old = false;
     d.wrong = false;
+    d.session = true;
+    d.frozenLogs = null;
     d.listening?.abort();
     d.listening = null;
   }
@@ -627,7 +918,7 @@ async function quiesce(sim: Sim) {
   note(sim);
   // the healed network delivers every late copy
   for (const x of sim.late.splice(0))
-    count(sim, sim.w.server, { u: x.u }, { ...x.e, clientTime: sim.w.clock.now() });
+    count(sim, sim.w.server, { u: x.u }, { ...x.e, clientTime: sim.w.clock.now() }, true);
   for (const [i, d] of sim.devices.entries()) {
     d.dead = true;
     const nd = makeDevice(sim, d.name, d.u, {
@@ -639,8 +930,8 @@ async function quiesce(sim: Sim) {
     await startDevice(nd);
     for (const rec of sim.writes.values()) if (rec.dev === d) rec.dev = nd;
     sim.devices[i] = nd;
-    // a write held by UPDATE_REQUIRED before the restart is sent again
-    await nd.client.updated();
+    // (a write held by UPDATE_REQUIRED before the restart is queued again by
+    // the new process itself)
     note(sim);
   }
   sim.late = [];
@@ -648,6 +939,7 @@ async function quiesce(sim: Sim) {
     sim.w.clock.advance(11 * MINUTE);
     for (const d of sim.devices) await flush(sim, d);
     sim.w.server.work();
+    ended(sim);
     if (!sim.devices.some((d) => d.client.outbox().some((e) => e.state === "queued"))) break;
   }
   sim.w.server.work();
@@ -655,6 +947,14 @@ async function quiesce(sim: Sim) {
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Every string in a JSON value. */
+function stringsIn(v: unknown, out: string[] = []): string[] {
+  if (typeof v === "string") out.push(v);
+  else if (Array.isArray(v)) for (const x of v) stringsIn(x, out);
+  else if (v !== null && typeof v === "object") for (const x of Object.values(v)) stringsIn(x, out);
+  return out;
+}
 const threadOfRec = (x: StoredRecord) =>
   x.kind === "thread"
     ? x.id
@@ -714,13 +1014,17 @@ async function check(sim: Sim): Promise<string | null> {
         if (under && summaries.has(th)) continue;
         want.set(key, record);
       }
-      // records under a thread that left the full tier are not served
-      // again: present on the server, not checked for freshness
+      // what the replica still holds under a thread the tiered read does
+      // not serve in full (it left the full tier, and nothing changed under
+      // it since) is current
       for (const [k, x] of c.records(log)) {
-        if (!full.has(k)) out.push(`${d.name} ${log}: extra ${k}`);
+        const now = full.get(k);
+        if (!now) out.push(`${d.name} ${log}: extra ${k}`);
         else if (!want.has(k) && threadOfRec(x) === null)
           out.push(`${d.name} ${log}: unserved ${k}`);
-        else if (!want.has(k)) frozen.add(k);
+        else if (!want.has(k) && !same(x, now))
+          out.push(`${d.name} ${log}: stale ${k} under a summary thread`);
+        else if (!want.has(k)) want.set(k, now);
       }
     }
     for (const [k, v] of want)
@@ -732,8 +1036,52 @@ async function check(sim: Sim): Promise<string | null> {
       if (!want.has(k) && !frozen.has(k)) out.push(`${d.name} view: extra ${k}`);
   }
   // every write ended: applied (answered, or applied by the server's
-  // count), or shown; never silently gone
+  // count), or shown; never silently gone. Shown failed, EXPIRED or dropped
+  // only for a reason the simulation made
   for (const [local, rec] of sim.writes) {
+    const entry = sim.devices
+      .flatMap((d) => d.client.problems())
+      .find((e) => e.local === local && e.state !== "refused");
+    if (entry) {
+      const end = rec.endedAt ?? sim.w.clock.now();
+      const waited = end - rec.madeAt;
+      const off = Math.abs(rec.off);
+      const why =
+        entry.state === "failed"
+          ? entry.error?.code === "TOO_LARGE" || (sim.excuses.get(local) ?? 0) >= MAX_TRIES
+          : entry.state === "dropped"
+            ? end - rec.queuedAt >= OUTBOX_TTL - off - MINUTE
+            : sim.lateExpired.has(local) ||
+              waited >= ID_MAX_AGE - off - MINUTE ||
+              rec.off > RETRY_MAX - MINUTE ||
+              rec.off < -ID_MAX_AGE + MINUTE;
+      if (!why)
+        out.push(
+          `${rec.name} ${local} of ${rec.dev.name} ${entry.state}${entry.error ? ` (${entry.error.code})` : ""} with no reason: waited ${waited} ms, clock off ${rec.off} ms, excuses ${sim.excuses.get(local) ?? 0}, queuedAt ${rec.madeAt - entry.queuedAt} ms before it was made, error ${JSON.stringify(entry.error)}`,
+        );
+    }
+    // NOT_FOUND for an id derived from a mutation id of another write after
+    // that write applied under another mutation id
+    const nf = sim.notFound.get(local);
+    const mine = sim.devices
+      .flatMap((d) => d.client.outbox())
+      .find((e) => e.local === local && e.state === "refused");
+    if (nf !== undefined && mine) {
+      const u = rec.dev.u;
+      for (const v of stringsIn(mine.input)) {
+        if (!isUlid(v)) continue;
+        for (const [key, maker] of sim.locals) {
+          const [who, mid] = key.split(":") as [string, string];
+          if (who !== u || maker === local || mid.slice(0, 10) !== v.slice(0, 10)) continue;
+          if (!derivedFrom(v, u, [mid])) continue;
+          const as = sim.appliedAs.get(maker);
+          if (as && as.at < nf && as.mid !== mid)
+            out.push(
+              `${rec.name} ${local} of ${rec.dev.name} refused NOT_FOUND: it names ${v}, derived from ${mid}, but its write applied as ${as.mid}`,
+            );
+        }
+      }
+    }
     const shown = sim.devices.some((d) => d.client.problems().some((e) => e.local === local));
     const pending = sim.devices.some((d) =>
       d.client.outbox().some((e) => e.local === local && e.state === "answered"),
@@ -820,6 +1168,11 @@ async function runSeed(seed: number, trace = false): Promise<string | null> {
     writes: new Map(),
     answered: new Map(),
     forged: new Set(),
+    excuses: new Map(),
+    appliedAs: new Map(),
+    notFound: new Map(),
+    lateExpired: new Set(),
+    order: 0,
     bad: [],
     reach: new Map(),
     log: [],
@@ -846,6 +1199,17 @@ async function runSeed(seed: number, trace = false): Promise<string | null> {
   for (let k = 0; k < STEPS; k++) {
     const what = await step(sim, k);
     sim.log.push(what);
+    ended(sim);
+    for (const d of sim.devices) {
+      if (d.session) continue;
+      // a read served before the session ended may still land; from when
+      // the client signed out with none in flight, no log changes
+      if (d.frozenLogs === null) {
+        if (d.client.signedOut && [...d.reading.values()].every((n) => n === 0))
+          d.frozenLogs = logsOf(d);
+      } else if (logsOf(d) !== d.frozenLogs)
+        sim.bad.push(`${d.name}: a log changed while its session had ended (step ${k}: ${what})`);
+    }
   }
   await quiesce(sim);
   const bad = await check(sim);

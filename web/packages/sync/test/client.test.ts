@@ -264,25 +264,24 @@ test("outbox: CLOCK_SKEW sets an offset that persists; a sent write keeps its id
   mel.write("threads.create", { id: th, space: open, kind: "ask", q: "Q" }, { send: false });
   // a later write names the first write's id
   mel.write("followups.ask", { id: f, thread: th, q: "F" }, { send: false });
+  // the ask's ids are 2 minutes ahead of the server's time (known from the
+  // read): made again at that time before it is sent, and the follow-up
+  // follows; the envelope's time is still the device's (CLOCK_SKEW)
   await mel.flush();
   t.is(mel.offset, -2 * MINUTE);
   const [ask, fu] = mel.outbox();
-  // the ask was sent (a copy of that envelope may still apply): its ids
-  // stay, its mutation id too (within the 10 minutes a write waits)
-  t.like(ask ?? {}, { state: "queued", sent: true, input: { id: th }, replaces: [] });
+  const sent = (tr.pushes[0]?.input as { id: string }).id;
+  t.not(sent, th);
+  t.is((fu?.input as { thread: string }).thread, sent);
+  // a sent write keeps its ids (a copy of that envelope may still apply)
+  t.like(ask ?? {}, { state: "answered", input: { id: sent }, replaces: [] });
   t.is(ask?.mutationId, tr.pushes[0]?.mutationId);
-  // the follow-up was never sent: unchanged until it is
-  t.is((fu?.input as { id: string }).id, f);
-  // the ask's ids are two minutes ahead of the server: it waits a minute
-  t.is(tr.pushes.length, 1);
-  t.is((ask?.next ?? 0) - mel.now(), MINUTE);
-  w.clock.advance(MINUTE);
-  await mel.flush();
-  const created = w.get(`thread:${th}`);
-  t.like(created ?? {}, { q: "Q" });
+  t.is(tr.pushes[1]?.mutationId, tr.pushes[0]?.mutationId);
+  t.not((fu?.input as { id: string }).id, f);
+  t.like(w.get(`thread:${sent}`) ?? {}, { q: "Q" });
   t.truthy(
     [...w.server.records().values()].find(
-      (r) => r.kind === "followup" && r.q === "F" && r.th === th,
+      (r) => r.kind === "followup" && r.q === "F" && r.th === sent,
     ),
   );
   const again = mk();

@@ -25,6 +25,7 @@ import {
   client,
   fail,
   inProcess,
+  laterProcess,
   nodeSqlite,
   sleep,
   tick,
@@ -43,12 +44,9 @@ const repliesUnder = (w: World, th: string) =>
 test("finding 1: a sent write keeps its input ids, so a late copy of its first envelope and its remint agree", async (t) => {
   const { w, open } = cast(t);
   const tr = new Forced(inProcess(w, "mel"));
-  // the device's clock is right when the client starts, then 90 s fast
-  let fast = 0;
-  const mel = client(w, "mel", { transport: tr, clock: { now: () => w.clock.now() + fast } });
-  await mel.init();
-  await mel.open(`space:${open}`);
-  fast = 90_000;
+  // a process whose device clock is 90 s fast, before it heard from the
+  // server: its ids are made on that clock and sent
+  const mel = await laterProcess(w, "mel", [`space:${open}`], 90_000, { transport: tr });
   const X = mel.newId();
   const post = mel.write(
     "threads.create",
@@ -62,6 +60,8 @@ test("finding 1: a sent write keeps its input ids, so a late copy of its first e
   );
   await mel.flush(); // CLOCK_SKEW: the post keeps X and waits for it
   t.is(tr.pushes.length, 1);
+  const sentX = (tr.pushes[0]?.input as { id: string }).id;
+  t.is(sentX, X);
   // 40 s later the network delivers a copy of the first envelope: applied
   w.clock.advance(40_000);
   ok(t, w.server.apply({ u: "mel" }, tr.pushes[0]));
@@ -69,9 +69,10 @@ test("finding 1: a sent write keeps its input ids, so a late copy of its first e
   await mel.flush();
   w.clock.advance(2000);
   await mel.flush();
-  t.like(await post.answer, { ok: true, replayed: true, result: { id: X } });
+  t.like(await post.answer, { ok: true, replayed: true, result: { id: sentX } });
   t.like(await reply.answer, { ok: true });
-  t.is(repliesUnder(w, X).length, 1);
+  void X;
+  t.is(repliesUnder(w, sentX).length, 1);
   t.is(threadsOn(w, "my post").length, 1);
 });
 
@@ -129,15 +130,15 @@ test("finding 1: a remint is in storage before its envelope is on the wire (a cr
       return next();
     },
   });
-  // the device's clock is right when the client starts, then 20 minutes
-  // fast: a mutation id that far ahead of the server's clock is made again
-  // (the like makes no input id, so it does not wait for one)
-  let fast = 0;
-  const skewed = { now: () => w.clock.now() + fast };
-  const mel = client(w, "mel", { storage, transport: tr, clock: skewed });
-  await mel.init();
-  await mel.open(`space:${open}`);
-  fast = 20 * MINUTE;
+  // a process whose device clock is 20 minutes fast, before it heard from
+  // the server: a mutation id that far ahead of the server's clock is made
+  // again after CLOCK_SKEW (the like makes no input id, so it does not wait
+  // for one)
+  const skewed = { now: () => w.clock.now() + 20 * MINUTE };
+  const mel = await laterProcess(w, "mel", [`space:${open}`], 20 * MINUTE, {
+    storage,
+    transport: tr,
+  });
   mel.write("likes.set", { thread: T, on: true }, { send: false });
   mel.write("research.createPostFollowUp", { id: mel.newId(), thread: T, t: "r" }, { send: false });
   void mel.flush();

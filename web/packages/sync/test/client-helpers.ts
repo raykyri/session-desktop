@@ -6,7 +6,9 @@ import { DatabaseSync } from "node:sqlite";
 
 import {
   InProcessTransport,
+  MemoryStorage,
   SyncClient,
+  type LogId,
   type Answer,
   type ClientOptions,
   type Envelope,
@@ -53,6 +55,34 @@ export function client(
     ...(o.persist !== undefined ? { persist: o.persist } : {}),
     ...(o.tier ? { tier: o.tier } : {}),
   });
+}
+
+/** A client of `u` in a later process whose clock is `skew` off, before
+ * it heard from the server: an earlier process (with a right clock)
+ * registered and stored `logs`, and this one opens them from storage
+ * without a read. */
+export async function laterProcess(
+  w: World,
+  u: string,
+  logs: LogId[],
+  skew: number,
+  o: { storage?: StorageAdapter; transport?: Transport; persist?: boolean; seed?: number } = {},
+) {
+  const storage = o.storage ?? new MemoryStorage();
+  const first = client(w, u, { storage });
+  await first.init();
+  for (const l of logs) await first.open(l);
+  first.stop();
+  const c = client(w, u, {
+    storage,
+    clock: { now: () => w.clock.now() + skew },
+    seed: o.seed ?? 11,
+    ...(o.transport ? { transport: o.transport } : {}),
+    ...(o.persist !== undefined ? { persist: o.persist } : {}),
+  });
+  await c.init();
+  for (const l of logs) await c.open(l);
+  return c;
 }
 
 /** The in-process transport of `u` with the server's SSE stream. */
@@ -118,7 +148,8 @@ export class Forced implements Transport {
   }
 }
 
-export const fail = (code: string, serverTime = 0, extra: object = {}): Answer =>
+/** A forced error answer; without `serverTime`, one the transport made up (NaN: no server time). */
+export const fail = (code: string, serverTime = NaN, extra: object = {}): Answer =>
   ({ ok: false, error: { code, message: code, ...extra }, serverTime }) as Answer;
 
 /** `SqliteDriver` over Node's SQLite, as Tauri's plugin is shaped, with

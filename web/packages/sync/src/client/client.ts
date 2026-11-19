@@ -1314,10 +1314,11 @@ export class SyncClient implements Changing {
     return e.sent && e.minted.some((id) => ids.has(id));
   }
 
-  /** New input ids for `e` (its ids were never used on the server), with
-   * the writes that name them changed to match. */
-  private freshIds(e: OutboxEntry) {
-    const map = new Map(e.minted.map((id) => [id, this.newId()]));
+  /** New input ids for `e` (its ids were never used on the server), made
+   * at `at` (default: the client's time), with the writes that name them
+   * changed to match. */
+  private freshIds(e: OutboxEntry, at = this.now()) {
+    const map = new Map(e.minted.map((id) => [id, pkg.ulid(at, this.random)]));
     this.remap(map, [e]);
   }
 
@@ -1375,10 +1376,22 @@ export class SyncClient implements Changing {
 
   /** Before a write is sent: a mutation id never on the wire, and input ids
    * never sent, that the server would refuse by their age (a clock that was
-   * wrong when they were made, and is right now) are made again. */
+   * wrong when they were made, and is right now) are made again. They are
+   * measured against the server's time as an answer this session gave it
+   * (the monotonic clock since), not the device's clock, which may be the
+   * one that is wrong now, and the new ids are made at that time. Before an
+   * answer this session only ids more than a minute ahead of the client's
+   * time are made again: an id that looks old may be right on a clock that
+   * is ahead, which the first answer (CLOCK_SKEW) corrects. */
   private freshen(e: OutboxEntry, now: number) {
-    if (!e.wire && this.outside(e.mutationId, now, ID_MAX_AHEAD)) this.rename(e, this.newId());
-    if (!e.sent && e.minted.some((id) => this.outside(id, now, ID_MAX_AHEAD))) this.freshIds(e);
+    const server = this.serverNow();
+    const at = Math.round(server ?? now);
+    const stale = (id: string) =>
+      server !== null
+        ? this.outside(id, server, ID_MAX_AHEAD)
+        : pkg.isUlid(id) && pkg.ulidTime(id) - now > ID_MAX_AHEAD;
+    if (!e.wire && stale(e.mutationId)) this.rename(e, pkg.ulid(at, this.random));
+    if (!e.sent && e.minted.some(stale)) this.freshIds(e, at);
   }
 
   /** Send a shown write again with a new mutation id.
@@ -1761,8 +1774,6 @@ export class SyncClient implements Changing {
           e.own = false;
           break;
         }
-        // a write cannot have been queued after it is sent
-        e.queuedAt = Math.min(e.queuedAt, Math.max(0, Math.round(now)));
         const env: Envelope = {
           clientId: this.meta.clientId ?? "",
           seq: this.meta.lastSeq + 1,
@@ -1771,7 +1782,9 @@ export class SyncClient implements Changing {
           input: e.input,
           protocolVersion: PROTOCOL_VERSION,
           clientTime: Math.max(0, Math.round(now)),
-          queuedAt: e.queuedAt,
+          // not after it is sent (a `queuedAt` made on a clock that was
+          // ahead); the entry keeps its own
+          queuedAt: Math.min(e.queuedAt, Math.max(0, Math.round(now))),
           replaces: e.replaces,
         };
         const sentBefore = e.sent;
