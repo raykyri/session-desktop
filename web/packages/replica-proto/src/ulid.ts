@@ -3,6 +3,8 @@
 // later ids of the same mutation are derived (`deriveId`), so a client and the
 // server compute the same ids without a random source in `run`.
 
+import { randomBytes } from "node:crypto";
+
 const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /** A ULID whose time fits 48 bits (the first character is at most 7). */
@@ -10,13 +12,18 @@ export const ULID_RE = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 
 export const MINUTE = 60_000;
 export const DAY = 86_400_000;
-/** The accepted age of a client-made ULID: 4 days in the past (the outbox
- * keeps a write 3 days; the extra day is a margin for a slow client clock and
- * for retries near the end of the outbox's lifetime) to 1 minute in the
- * future (clock skew). The window is shorter than the 7 days idempotency is
- * kept, so a mutation id leaves the window before its stored result expires. */
+/** The accepted age of a client-made ULID, measured on the device's clock
+ * (the envelope's `clientTime`): at most 4 days old (the outbox keeps a write
+ * 3 days; the extra day is a margin for retries near the end of the outbox's
+ * lifetime) and at most 1 minute in the future. Since the device's clock is
+ * itself at most `CLOCK_MAX_SKEW` from the server's, a stored id's time is
+ * within 4 days and 2 minutes of the server's time when it is written. The
+ * window is shorter than the 7 days idempotency is kept, so a mutation id is
+ * EXPIRED before its stored result expires. */
 export const ID_MAX_AGE = 4 * DAY;
 export const ID_MAX_AHEAD = MINUTE;
+/** The most a device's `clientTime` may differ from the server's time. */
+export const CLOCK_MAX_SKEW = MINUTE;
 
 export const isUlid = (s: string) => ULID_RE.test(s);
 
@@ -40,10 +47,18 @@ export function ulid(ms: number, random: () => number): string {
   return encodeTime(ms) + r;
 }
 
-/** Whether a client-made ULID's time is inside the accepted window. */
-export function inWindow(id: string, nowMs: number): boolean {
-  const t = ulidTime(id);
-  return t >= nowMs - ID_MAX_AGE && t <= nowMs + ID_MAX_AHEAD;
+/** Whether a client-made ULID's age on the device's clock is accepted: at
+ * most `ID_MAX_AGE` old and at most `ID_MAX_AHEAD` in the future of
+ * `deviceNow`. */
+export function ageOk(id: string, deviceNow: number): boolean {
+  const age = deviceNow - ulidTime(id);
+  return age <= ID_MAX_AGE && age >= -ID_MAX_AHEAD;
+}
+
+/** A random number in [0, 1) from `crypto.randomBytes` (48 bits): the
+ * server's default random source. */
+export function cryptoRandom(): number {
+  return randomBytes(6).readUIntBE(0, 6) / 2 ** 48;
 }
 
 /** A 32-character hex digest of a string (cyrb128). It identifies a payload

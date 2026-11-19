@@ -18,16 +18,29 @@
 // `authorize` refuses a banned person every write, then checks `who`, the
 // role the actor needs (the mock's `who`).
 //
-// A write that acts on another record carries `base.rev`, the rev of that
-// record as the client saw it, and is refused with STALE when the rev differs:
-// a join request (`joinRequests.decide`, one rev per person), a moderated
-// item (`moderation.decide`), a member record (`members.setRole`,
-// `members.remove`, `members.ban`; 0 for a person with no member record) and
-// a thread (`threads.update`). A state check alone is not enough: a request
-// that was approved, then reopened by its person asking again, is open again,
-// and an approval made for the first request would admit them (review round
-// 1, R1). With the rev matching, a decision the record's state does not allow
-// is PRECONDITION_FAILED.
+// Stale intent (review round 2, finding 2). A decision that could expose
+// content or admit someone carries `base.rev`, the rev of the record it acts
+// on as the client saw it, and is refused with STALE when the rev differs:
+// showing a moderated item (`moderation.decide` "shown"), approving or
+// reopening a join request (`joinRequests.decide`, one rev per person), and
+// changing a role (`members.setRole`; 0 for a person with no member record).
+// An author's edit (`threads.update`) carries the thread's rev too. A state
+// check alone is not enough: a request that was approved, then reopened by
+// its person asking again, is open again, and an approval made for the first
+// request would admit them (review round 1, R1).
+//
+// A decision that restricts applies to the record as it is now, whatever its
+// rev: hiding or removing an item, declining a request, banning a person. The
+// person it is about could otherwise make it STALE every time by editing,
+// liking or leaving and joining again; hiding or erasing a newer text is
+// always safe. `base.rev` is still sent with these decisions and not
+// compared. A removal (`members.remove`) names the member's admission id
+// (`MemberRec.adm`), which only a staff decision or an invite gives, so a
+// removal decided before the person was let in again is STALE; joining an
+// open space again gives a new admission id.
+//
+// With the rev matching, a decision the record's state does not allow is
+// PRECONDITION_FAILED.
 //
 // Input schemas are strict: a field the schema does not list (`likes`, `u`,
 // `createdAt`, `code`) is BAD_REQUEST, never stored.
@@ -49,12 +62,14 @@ import {
 import type { ApiError, ErrorCode } from "./contract.js";
 import {
   banKey,
+  countsKey,
   likeKey,
   memberKey,
   requestKey,
   saveKey,
   statsKey,
   threadKey,
+  type CountsRec,
   type Draft,
   type FollowUpRec,
   type Kind,
@@ -84,6 +99,7 @@ export const MESSAGES: Record<ErrorCode, string> = {
   UPGRADE_REQUIRED: "Update Session.",
   STALE: "This item changed after you saw it. Look at it again.",
   CLOCK_SKEW: "Your device’s clock is off.",
+  EXPIRED: "This change waited too long to be sent, and wasn’t saved.",
   OUT_OF_ORDER: "This change arrived out of order.",
   WRONG_CLIENT: "This device isn’t signed in to your account.",
 };
@@ -269,9 +285,18 @@ function refreshSpace(tx: Tx, sp: string): void {
   tx.put({ ...s, members, mods: staffOf(tx, sp) });
 }
 
-function addMember(tx: Tx, sp: string, u: string, role: SpaceRole): void {
+/** Add `u` to a space, with `adm` as the admission id (a derived id of the
+ * write that admits them). */
+function addMember(tx: Tx, sp: string, u: string, role: SpaceRole, adm: string): void {
   if (tx.get(memberKey(sp, u))) return;
-  tx.put({ kind: "member", sp, u, role, joinedAt: tx.now });
+  tx.put({ kind: "member", sp, u, role, adm, joinedAt: tx.now });
+}
+
+/** A thread's counts record (written with the thread). */
+function countsOf(tx: Tx, th: ThreadRec): CountsRec {
+  const c = tx.get(countsKey(th.id));
+  if (c?.kind !== "counts") throw refuse("INTERNAL_SERVER_ERROR");
+  return c;
 }
 
 /** The mock's cxCanAct (`actsOn`): you act on members ranked below you; owners
@@ -327,12 +352,12 @@ function erase(tx: Tx, r: ThreadRec | FollowUpRec | ReplyRec): void {
       for (const x of tx.find("followup", (y) => y.th === r.id)) tx.del(`followup:${x.id}`);
       for (const x of tx.find("reply", (y) => y.th === r.id)) tx.del(`reply:${x.id}`);
       for (const x of tx.find("run", (y) => y.th === r.id)) tx.del(`run:${x.id}`);
+      tx.put({ ...countsOf(tx, r), r: 0 });
       tx.put({
         ...r,
         q: "",
         t: null,
         sum: null,
-        r: 0,
         running: false,
         mod: "removed",
         updatedAt: tx.now,
@@ -418,7 +443,7 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         createdAt: tx.now,
       });
       tx.put({ kind: "stats", sp: i.id, posts: 0, updatedAt: tx.now });
-      addMember(tx, i.id, tx.me, "owner");
+      addMember(tx, i.id, tx.me, "owner", tx.id(1));
       return { id: i.id };
     },
   }),
@@ -463,9 +488,11 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
       });
       // a closed space that becomes open: the open requests are approved
       if (isClosed(s0) && !closed) {
+        let k = 0;
         for (const r of tx.find("request", (x) => x.sp === s0.id && x.st === "open")) {
           tx.put({ ...r, st: "approved", updatedAt: tx.now });
-          if (!bannedFrom(tx, s0.id, r.u)) addMember(tx, s0.id, r.u, "member");
+          k++;
+          if (!bannedFrom(tx, s0.id, r.u)) addMember(tx, s0.id, r.u, "member", tx.id(k));
         }
         refreshSpace(tx, s0.id);
       }
@@ -511,7 +538,7 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         const link = tx.find("invite", (l) => l.code === i.invite)[0];
         if (link) tx.put({ ...link, dead: "Used", usedBy: tx.me });
       }
-      addMember(tx, s.id, tx.me, "member");
+      addMember(tx, s.id, tx.me, "member", tx.id(1));
       refreshSpace(tx, s.id);
       return null;
     },
@@ -564,8 +591,6 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         t: i.title ?? null,
         sum: null,
         tok: 0,
-        likes: 0,
-        r: 0,
         running: ask,
         edited: false,
         del: false,
@@ -574,6 +599,7 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         createdAt: tx.now,
         updatedAt: tx.now,
       });
+      tx.put({ kind: "counts", th: i.id, s: s.id, likes: 0, r: 0 });
       const stats = tx.get(statsKey(s.id));
       if (stats?.kind === "stats") tx.put({ ...stats, posts: stats.posts + 1, updatedAt: tx.now });
       if (!ask) return { id: i.id, run: null };
@@ -642,7 +668,8 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
     // and other people's saves of it are deleted too.
     run: (tx, i) => {
       const p = tx.get(threadKey(i.id)) as ThreadRec;
-      const kept = p.r > 0;
+      const counts = countsOf(tx, p);
+      const kept = counts.r > 0;
       // an author who may no longer read the thread (removed from its closed
       // space) learns nothing about it: whether it got follow-ups or replies
       // after they left is not in the answer (R4b)
@@ -653,6 +680,7 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         for (const x of tx.find("save", (y) => y.th === p.id)) tx.del(saveKey(x.u, x.th));
       }
       for (const r of tx.find("run", (x) => x.th === p.id)) tx.del(`run:${r.id}`);
+      if (!kept) tx.put({ ...counts, likes: 0 });
       tx.put({
         ...p,
         q: "",
@@ -662,7 +690,6 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         del: true,
         gone: !kept,
         sum: kept ? p.sum : null,
-        likes: kept ? p.likes : 0,
         updatedAt: tx.now,
       });
       return reads ? { kept } : null;
@@ -682,10 +709,10 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
       const key = likeKey(tx.me, i.thread);
       const had = tx.get(key) !== undefined;
       if (i.on === had) return { on: i.on };
-      const p = tx.get(threadKey(i.thread));
+      const c = tx.get(countsKey(i.thread));
       if (i.on) tx.put({ kind: "like", u: tx.me, th: i.thread, createdAt: tx.now });
       else tx.del(key);
-      if (p?.kind === "thread") tx.put({ ...p, likes: Math.max(0, p.likes + (i.on ? 1 : -1)) });
+      if (c?.kind === "counts") tx.put({ ...c, likes: Math.max(0, c.likes + (i.on ? 1 : -1)) });
       return { on: i.on };
     },
   }),
@@ -728,7 +755,8 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         mod: null,
         createdAt: tx.now,
       });
-      tx.put({ ...p, r: p.r + 1 });
+      const c = countsOf(tx, p);
+      tx.put({ ...c, r: c.r + 1 });
       return null;
     },
   }),
@@ -760,7 +788,10 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         mod: null,
         createdAt: tx.now,
       });
-      if (i.parent === undefined) tx.put({ ...p, r: p.r + 1 });
+      if (i.parent === undefined) {
+        const c = countsOf(tx, p);
+        tx.put({ ...c, r: c.r + 1 });
+      }
       return null;
     },
   }),
@@ -808,7 +839,8 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         space: ulidS,
         users: z.array(handleS).min(1),
         /** Each request's rev as the moderator saw it, by person: one entry
-         * for every person in `users` and no other. */
+         * for every person in `users` and no other. Compared for "approve"
+         * and "reopen", not for "decline". */
         base: z.record(handleS, count),
       })
       .strict()
@@ -821,21 +853,24 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
     who: "moderator",
     space: (_tx, i) => i.space,
     run: (tx, i) => {
+      let k = 0;
       for (const u of [...new Set(i.users)]) {
         const r = tx.get(requestKey(i.space, u));
         if (r?.kind !== "request") throw notFound();
-        // a decision acts on the request as the moderator saw it: its rev,
-        // which every write of the request bumps (a person who asks again
-        // reopens it, and so bumps it). With the rev matching, approving or
-        // declining needs the request open, reopening needs it declined.
-        if (r.rev !== i.base[u]) throw stale();
+        k++;
+        // an approval or a reopening acts on the request as the moderator
+        // saw it: its rev, which every write of the request bumps (a person
+        // who asks again reopens it, and so bumps it). A decline applies to
+        // the request as it is now. Approving or declining needs the request
+        // open, reopening needs it declined.
+        if (i.decision !== "decline" && r.rev !== i.base[u]) throw stale();
         if (r.st !== (i.decision === "reopen" ? "declined" : "open"))
           throw refuse("PRECONDITION_FAILED", "This request was already decided.");
         if (i.decision === "approve") {
           if (bannedFrom(tx, i.space, u))
             throw refuse("PRECONDITION_FAILED", "This person is banned from the space.");
           tx.put({ ...r, st: "approved", updatedAt: tx.now });
-          addMember(tx, i.space, u, "member");
+          addMember(tx, i.space, u, "member", tx.id(k));
         } else if (i.decision === "decline") {
           tx.put({ ...r, st: "declined", why: (i.why ?? "").trim(), updatedAt: tx.now });
         } else {
@@ -879,30 +914,38 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
     },
   }),
 
-  // `base.rev`: the member record's rev as the moderator saw it (0: no member
-  // record). A removal queued before the person was removed and let in again
-  // is STALE (review round 1, R1b).
+  // `base.adm`: the member's admission id as the moderator saw it. A removal
+  // queued before the person was removed and let in again is STALE (review
+  // round 1, R1b); the person cannot change the id alone, except by joining
+  // an open space again (review round 2, finding 2). A person who is no
+  // longer a member: nothing to remove.
   "members.remove": define({
-    input: z.strictObject({ space: ulidS, user: handleS, base: baseS }),
+    input: z.strictObject({
+      space: ulidS,
+      user: handleS,
+      base: z.strictObject({ adm: z.string().max(64) }),
+    }),
     who: "moderator",
     space: (_tx, i) => i.space,
     can: (tx, i) => actsOn(tx, i.space, i.user),
     run: (tx, i) => {
-      if (revOf(tx, memberKey(i.space, i.user)) !== i.base.rev) throw stale();
-      if (!tx.get(memberKey(i.space, i.user))) return null;
+      const m = tx.get(memberKey(i.space, i.user));
+      if (m?.kind !== "member") return null;
+      if (m.adm !== i.base.adm) throw stale();
       tx.del(memberKey(i.space, i.user));
       refreshSpace(tx, i.space);
       return null;
     },
   }),
 
+  // A ban applies to the person as they are now, a member or not: it carries
+  // no base (review round 2, finding 2).
   "members.ban": define({
-    input: z.strictObject({ space: ulidS, user: handleS, base: baseS }),
+    input: z.strictObject({ space: ulidS, user: handleS }),
     who: "moderator",
     space: (_tx, i) => i.space,
     can: (tx, i) => actsOn(tx, i.space, i.user),
     run: (tx, i) => {
-      if (revOf(tx, memberKey(i.space, i.user)) !== i.base.rev) throw stale();
       // the ban's id is the mock's (`<space>:<user>`): one ban per person and
       // space, outside the ULID id registry
       if (tx.get(memberKey(i.space, i.user))) tx.del(memberKey(i.space, i.user));
@@ -1006,13 +1049,15 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
     space: (tx, i) => itemOf(tx, i.item).s,
     run: (tx, i) => {
       const r = itemOf(tx, i.item);
-      // a decision acts on the item as the moderator read it: its rev. The
+      // "shown" acts on the item as the moderator read it: its rev. The
       // author may still edit a hidden item, which bumps the rev, so a
       // "shown" made after reading one text never publishes another (review
-      // round 1, R2). With the rev matching: hiding needs the item shown,
-      // showing needs it hidden, and a removed item stays removed (the mock's
-      // reports.resolve "open" restores both).
-      if (r.rev !== i.base.rev) throw stale();
+      // round 1, R2). Likes and follow-ups change the counts record, not
+      // the item. "hidden" and "removed" apply to the item as it is now,
+      // whatever its rev (review round 2, finding 2). Hiding needs the item
+      // shown, showing needs it hidden, and a removed item stays removed
+      // (the mock's reports.resolve "open" restores both).
+      if (i.decision === "shown" && r.rev !== i.base.rev) throw stale();
       if (r.mod === "removed") throw removed();
       if (i.decision === "hidden" && r.mod !== null)
         throw refuse("PRECONDITION_FAILED", "This item is already hidden.");

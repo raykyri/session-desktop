@@ -4,8 +4,9 @@
 //
 // Read rules:
 // - Space records (the landing and the staff list `mods`) are public.
-// - An open space's content (threads, follow-ups, replies, runs, its `stats`
-//   record and its member list) is readable by anyone, signed out included;
+// - An open space's content (threads and their counts, follow-ups, replies,
+//   runs, its `stats` record and its member list) is readable by anyone,
+//   signed out included;
 //   a closed space's (`vis` listed or unlisted) by its members only. A
 //   non-member gets none of a closed space's content, the threads they wrote
 //   included: a device that lost membership keeps the copy it had, frozen
@@ -18,7 +19,11 @@
 //   while they may read the space the record is about (a like's or save's
 //   thread's space; a notification's space). A person removed from a closed
 //   space is no longer served their likes, saves and notifications there,
-//   nor their deletions (review round 1, R4a and R4c).
+//   nor their deletions (review round 1, R4a and R4c). A report
+//   notification is served only while its person is staff of the space
+//   (moderator and up), like the reports themselves: a moderator demoted,
+//   banned or removed, in an open space too, no longer gets them (review
+//   round 2, finding 4).
 // - Text of a hidden thread, follow-up or reply: its author and the space's
 //   moderators (and up). Every other reader gets the placeholder (`redact`).
 //   A removed item's text is erased from storage, so nobody gets it. Hiding
@@ -77,8 +82,8 @@ export const isModOf = (g: Reader, sp: string, u: string | null) => rankIn(g, sp
 
 export const bannedFrom = (g: Reader, sp: string, u: string) => g.get(banKey(sp, u)) !== undefined;
 
-/** May `u` read a space's content (threads, follow-ups, replies, runs, stats,
- * member list). */
+/** May `u` read a space's content (threads and their counts, follow-ups,
+ * replies, runs, stats, member list). */
 export function readsSpace(g: Reader, sp: string, u: string | null): boolean {
   const s = spaceRec(g, sp);
   if (!s) return false;
@@ -120,6 +125,7 @@ export function readsAudience(g: Reader, a: Audience, u: string | null): boolean
       return own || (sp !== null && readsSpace(g, sp, u));
     case "stats":
     case "thread":
+    case "counts":
     case "followup":
     case "reply":
     case "run":
@@ -136,8 +142,10 @@ export function readsAudience(g: Reader, a: Audience, u: string | null): boolean
       );
     case "like":
     case "save":
-    case "notif":
       return own && (sp === null || readsSpace(g, sp, u));
+    case "notif":
+      // every notification is of type "report": for the space's staff only
+      return own && sp !== null && readsSpace(g, sp, u) && isModOf(g, sp, u);
   }
 }
 
