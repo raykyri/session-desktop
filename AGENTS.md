@@ -159,6 +159,23 @@ rules above stay as they are. Decisions for the new client:
   protocol (`POST /api/sync/register`, `POST /api/sync/write` with the
   envelope, recorded answers and the refusal codes), devices and device
   runs; its sync endpoints are the contract the real server follows.
+- Sync-state UI (owner decisions; the mockup's default Variants are the
+  choices, and its other options are kept only for comparison):
+  - Outbox failures (retry, failed after 5, EXPIRED, dropped) and refused
+    writes (STALE, FORBIDDEN) are shown as toasts; a STALE decision is not
+    reapplied in place. Unsent changes open from a header badge with a
+    popover. Offline is a bar on Desktop and a pill on the Phone app.
+  - Update Session is a dialog.
+  - A removed member's frozen copy is greyed with one short notice. Removal
+    from a space and the loss of a role show no notice.
+  - Device sign-in is approved in the browser with one click, then a toast.
+    Devices lists device tokens only (not browsers), in the Phone app's
+    Account page; the web has no Devices UI for now.
+  - A device answer is labelled "<handle>'s desktop". After an interrupt,
+    Run again is offered only on the device that ran it; the web offers
+    "Run with included tokens".
+  - The remove dialog says "The user will not be notified." Bans are
+    permanent, with Unban; Ban on the Phone app is deferred.
 - Ids: clients generate ULIDs. The server accepts a timestamp from 4 days in
   the past to 1 minute in the future (the outbox keeps writes 3 days), rejects an id that already exists, and
   answers a collision with the same CONFLICT whether or not the caller can
