@@ -6,18 +6,28 @@
 // - The write oracle (test/write-oracle.ts) predicts each write's answer (ok
 //   or the refusal's code) and whether it is recorded; the server must give
 //   exactly that answer, and report the predicted last seq for the client.
+//   For a write applied now, the effect model (test/effect-model.ts)
+//   predicts the records it changes, and the server's change set must match;
+//   any other answer must change nothing.
+// - State invariants hold after every step: one owner per space, no member
+//   record beside a ban, no tombstone older than 30 days, report
+//   notifications to the space's staff only, and no marker at rest
+//   (`scanStorage`) that is not still in its record and field, unremoved.
 // - After every step, for every actor, the replica built from a snapshot and
 //   pulls must equal the read oracle's projection of the server's records
 //   (test/oracle.ts), and so must a fresh snapshot. Lazy clients sync only
 //   every 5 to 20 steps, so their pulls span many changes and cross the 7-
 //   and 30-day limits. A pull may name (put or del) only keys the reader could
 //   read at some step.
-// - Every text the generator writes carries a unique marker. No response
-//   (snapshot, pull, apply answer or error) may carry a marker unless the
-//   marker is still stored in its record and the reader may see that text
-//   now: the record is not removed, its space is open or the reader a member,
-//   and if hidden, the reader is its author or the space's staff. This check
-//   uses neither oracle.
+// - Every text the generator writes carries a unique marker: questions,
+//   titles, replies, follow-up questions, report reasons, request answers,
+//   and the summaries and follow-up answers that runs write when they
+//   finish (`finishJob`). No response (snapshot, pull, apply answer or error)
+//   may carry a marker unless the marker is still stored in its record and
+//   the reader may see that text now: for a report or a request, the reader
+//   is its person or the space's staff; otherwise the record is not removed,
+//   its space is open or the reader a member, and if hidden, the reader is
+//   its author or the space's staff. This check uses neither oracle.
 //
 // The generator also makes: bans followed by the banned person's own writes,
 // removals of threads with follow-ups and replies, stale approvals, gapped and
@@ -40,6 +50,7 @@ import {
   type StoredRecord,
 } from "../src/index.js";
 
+import { checkEffects, predictEffects } from "./effect-model.js";
 import { DAY, HOUR, MINUTE, World, actor, ok, rng } from "./harness.js";
 import { diff, expected } from "./oracle.js";
 import { WriteModel } from "./write-oracle.js";
@@ -182,6 +193,7 @@ const GENERATORS: Record<string, (c: Ctx, u: Who) => Record<string, unknown>> = 
       space: spaceId(c),
       kind: pick(c.r, ["ask", "post"]),
       q: marked(c, `thread:${id}`, "q"),
+      ...(chance(c.r, 0.5) ? { title: marked(c, `thread:${id}`, "t") } : {}),
     };
   },
   "threads.update": (c, u) => {
@@ -216,14 +228,15 @@ const GENERATORS: Record<string, (c: Ctx, u: Who) => Record<string, unknown>> = 
       ...(top ? { parent: top.id } : {}),
     };
   },
-  "joinRequests.create": (c) => ({
-    space: (() => {
-      const closed = records(c, "space").filter((x) => x.vis !== "open");
-      return closed.length && chance(c.r, 0.7) ? pick(c.r, closed).id : spaceId(c);
-    })(),
-    rulesAccepted: chance(c.r, 0.8),
-    answers: ["yes"],
-  }),
+  "joinRequests.create": (c, u) => {
+    const closed = records(c, "space").filter((x) => x.vis !== "open");
+    const space = closed.length && chance(c.r, 0.7) ? pick(c.r, closed).id : spaceId(c);
+    return {
+      space,
+      rulesAccepted: chance(c.r, 0.8),
+      answers: [marked(c, `request:${space}:${String(u)}`, "a")],
+    };
+  },
   "joinRequests.decide": (c) => {
     // usually an open request, so approvals change scopes; a planned second
     // decision on the same request makes the stale ones
@@ -265,7 +278,10 @@ const GENERATORS: Record<string, (c: Ctx, u: Who) => Record<string, unknown>> = 
     space: spaceId(c),
     ...(chance(c.r, 0.3) ? { days: 1 } : {}),
   }),
-  "reports.create": (c) => ({ id: newId(c), item: itemKey(c), why: "spam" }),
+  "reports.create": (c) => {
+    const id = newId(c);
+    return { id, item: itemKey(c), why: marked(c, `report:${id}`, "why") };
+  },
   "moderation.decide": (c) => {
     // a removal of a thread that has follow-ups or replies, often
     const busy = records(c, "thread").filter((p) => p.r > 0 && p.mod !== "removed");
@@ -563,12 +579,25 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     return set;
   };
   /** The secret check: may `reader` see the text that carries `m`, now? */
-  const mayShow = (reader: string | null, m: string): boolean => {
+  /** Whether the marker is stored now, in the record and field it was
+   * written to, and that record is not removed. */
+  const storedNow = (m: string) => {
     const o = c.origins.get(m);
     const rec = o && (w.get(o.key) as Record<string, unknown> | undefined);
-    if (!o || !rec || typeof rec[o.field] !== "string" || !(rec[o.field] as string).includes(m))
-      return false;
-    if (rec["mod"] === "removed") return false;
+    return o && rec && JSON.stringify(rec[o.field] ?? null).includes(m) && rec["mod"] !== "removed"
+      ? rec
+      : null;
+  };
+  const isStaff = (sp: string, reader: string | null) => {
+    const role = reader === null ? null : roleNow(c, sp, reader);
+    return role !== null && STAFF_ROLES.has(role);
+  };
+  const mayShow = (reader: string | null, m: string): boolean => {
+    const rec = storedNow(m);
+    if (!rec) return false;
+    // a report's reason and a request's answers: their person and the space's staff
+    if (rec["kind"] === "report") return reader === rec["by"] || isStaff(String(rec["sp"]), reader);
+    if (rec["kind"] === "request") return reader === rec["u"] || isStaff(String(rec["sp"]), reader);
     const sp = String(rec["s"]);
     const space = w.get(`space:${sp}`);
     const role = reader === null ? null : roleNow(c, sp, reader);
@@ -662,6 +691,51 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     return true;
   };
 
+  /** The state invariants, checked on the stored records and on every value
+   * at rest after each step (no oracle):
+   * - each space has exactly one owner;
+   * - nobody has a member record in a space they are banned from;
+   * - no tombstone is older than 30 days;
+   * - the notifications of a report go to the space's staff (owner, admins,
+   *   moderators) when it was made, and to nobody else;
+   * - no marker is at rest anywhere unless it is still in the record and
+   *   field it was written to, and that record is not removed. */
+  const notified = new Set<string>();
+  const invariants = async (step: number): Promise<string[]> => {
+    const out: string[] = [];
+    const dump = w.server.dump();
+    for (const s of records(c, "space")) {
+      const owners = records(c, "member").filter((m) => m.sp === s.id && m.role === "owner");
+      if (owners.length !== 1) out.push(`#${s.name} has ${owners.length} owners`);
+    }
+    for (const b of records(c, "ban"))
+      if (dump.has(`member:${b.sp}:${b.u}`)) out.push(`${b.u} is a member of ${b.sp} and banned`);
+    const scan = await w.server.scanStorage();
+    for (const tomb of scan.tombstones)
+      if (tomb.at < w.clock.now() - 30 * DAY)
+        out.push(`a tombstone of ${tomb.key} outlived 30 days`);
+    const fresh = new Map<string, { sp: string; to: Set<string> }>();
+    for (const [k, n] of dump) {
+      if (n.kind !== "notif" || notified.has(k)) continue;
+      notified.add(k);
+      const g = fresh.get(n.report) ?? { sp: n.sp, to: new Set<string>() };
+      g.to.add(n.to);
+      fresh.set(n.report, g);
+    }
+    for (const [report, g] of fresh) {
+      const staff = records(c, "member")
+        .filter((m) => m.sp === g.sp && STAFF_ROLES.has(m.role))
+        .map((m) => m.u)
+        .sort();
+      if (JSON.stringify([...g.to].sort()) !== JSON.stringify(staff))
+        out.push(`report ${report} notified ${[...g.to].join()}, its staff are ${staff.join()}`);
+    }
+    for (const m of JSON.stringify(scan).match(MARKER) ?? [])
+      if (!storedNow(m))
+        out.push(`step ${step}: ${m} is at rest (${JSON.stringify(c.origins.get(m))})`);
+    return out;
+  };
+
   /** A pull from a cursor the reader made up: a real epoch with any version
    * up to the real one, or a cursor the server gave another reader of the
    * same log (who may read more). Also checks that what a read hands out is
@@ -722,12 +796,22 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     } else if (roll < 0.11) {
       if (!(await forged(step))) return false;
       what = "forged cursor";
+    } else if (roll < 0.15) {
+      // a run finishes: a thread's summary or a follow-up's answer, with a marker
+      const items = [
+        ...records(c, "thread").map((p) => ({ key: `thread:${p.id}`, field: "sum" })),
+        ...records(c, "followup").map((f) => ({ key: `followup:${f.id}`, field: "a" })),
+      ];
+      const item = items.length ? pick(c.r, items) : null;
+      what = `a run finishes for ${item?.key ?? "nothing"}`;
+      if (item) await w.server.finishJob(item.key, marked(c, item.key, item.field));
     } else {
       const attempts = nextWrites(c);
       what = attempts.map((a) => `${a.u}: ${a.what}`).join("; ");
       for (const a of attempts) {
         const now = w.clock.now();
-        const p = c.model.predict(w.server.dump(), a.u, a.e, now);
+        const before = new Map(w.server.dump());
+        const p = c.model.predict(before, a.u, a.e, now);
         const res: ApplyResult = await watched.apply(actor(a.u), a.e);
         const got = res.ok ? "ok" : res.error.code;
         tally(`${got} ${a.e.name}`);
@@ -737,6 +821,14 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
             what,
             `the write oracle predicted ${p.code}, the server answered ${JSON.stringify(res)}\n${JSON.stringify(a.e)}`,
           );
+        // a write applied now (not a replay) changes exactly what the effect
+        // model predicts; anything else changes nothing
+        const effects =
+          p.code === "ok" && p.stored && a.u !== null && a.u !== "null"
+            ? predictEffects(before, a.u, a.e.name, a.e.input as Record<string, unknown>, now)
+            : { keys: new Map(), fresh: [] };
+        const fault = checkEffects(before, w.server.dump(), effects, res.ok ? res.result : null);
+        if (fault) return failed(step, what, `the effect model: ${fault}\n${JSON.stringify(a.e)}`);
         c.model.commit(a.u, a.e, p, now);
         c.model.learn(w.server.dump());
         const owner = [...c.clients].find(([, ids]) => ids.includes(a.e.clientId))?.[0];
@@ -762,6 +854,8 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     learn();
     const erased = erasureFaults(w.server.dump());
     if (erased.length) return failed(step, what, erased.slice(0, 3).join("\n"));
+    const broken = await invariants(step);
+    if (broken.length) return failed(step, what, broken.slice(0, 3).join("\n"));
     for (const cl of eager.values()) if (!(await check(step, what, cl))) return false;
     for (const l of lazy)
       if (step >= l.next) {

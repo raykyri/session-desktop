@@ -416,3 +416,73 @@ test("snapshots and pulls hand out copies: changing one changes nothing on the s
   t.false((await stored(w)).includes(SECRET));
   t.is((w.get(`thread:${th}`) as ThreadRec).likes, 0);
 });
+
+test("hiding and removing redact every text field: question, title, summary, follow-up question and answer, reply", async (t) => {
+  const { w, open } = await cast(t);
+  const ask = w.id();
+  const post = w.id();
+  const fu = w.id();
+  const rp = w.id();
+  await ok(
+    t,
+    w.as("mel", "threads.create", {
+      id: ask,
+      space: open,
+      kind: "ask",
+      q: "MK-ASK-Q",
+      title: "MK-ASK-T",
+    }),
+  );
+  await ok(
+    t,
+    w.as("mel", "threads.create", {
+      id: post,
+      space: open,
+      kind: "post",
+      q: "MK-POST-Q",
+      title: "MK-POST-T",
+    }),
+  );
+  t.true(await w.server.finishJob(`thread:${ask}`, "MK-ASK-SUM"));
+  t.true(await w.server.finishJob(`thread:${post}`, "MK-POST-SUM"));
+  await ok(t, w.as("otto", "followups.ask", { id: fu, thread: ask, q: "MK-FU-Q" }));
+  t.true(await w.server.finishJob(`followup:${fu}`, "MK-FU-A"));
+  await ok(t, w.as("otto", "research.createPostFollowUp", { id: rp, thread: post, t: "MK-RP-T" }));
+  const markers = (s: unknown) => (JSON.stringify(s).match(/MK-[A-Z]+-[A-Z]+/g) ?? []).sort();
+  const all = [
+    "MK-ASK-Q",
+    "MK-ASK-SUM",
+    "MK-ASK-T",
+    "MK-FU-A",
+    "MK-FU-Q",
+    "MK-POST-Q",
+    "MK-POST-SUM",
+    "MK-POST-T",
+    "MK-RP-T",
+  ];
+  const seen = async (u: string | null) =>
+    markers((await w.server.snapshot(actor(u), `space:${open}`)).records);
+  t.deepEqual(await seen(null), all);
+  const decide = (item: string, decision: string) =>
+    ok(t, w.as("mona", "moderation.decide", { item, decision, base: w.item(item) }));
+  for (const item of [`a:${ask}`, `p:${post}`, `f:${ask}:${fu}`, `r:${post}:${rp}`])
+    await decide(item, "hidden");
+  // hidden: the author of each item and the space's staff get its text, nobody else
+  for (const u of [null, "eve", "ada"]) t.deepEqual(await seen(u), [], String(u));
+  for (const u of ["mona", "olga"]) t.deepEqual(await seen(u), all, u);
+  t.deepEqual(await seen("mel"), [
+    "MK-ASK-Q",
+    "MK-ASK-SUM",
+    "MK-ASK-T",
+    "MK-POST-Q",
+    "MK-POST-SUM",
+    "MK-POST-T",
+  ]);
+  t.deepEqual(await seen("otto"), ["MK-FU-A", "MK-FU-Q", "MK-RP-T"]);
+  // removed: no reader gets any of it, and no value at rest holds it
+  for (const item of [`f:${ask}:${fu}`, `r:${post}:${rp}`, `a:${ask}`, `p:${post}`])
+    await decide(item, "removed");
+  for (const u of [null, "eve", "mel", "otto", "mona", "olga"])
+    t.deepEqual(await seen(u), [], String(u));
+  t.deepEqual(markers(await w.server.scanStorage()), []);
+});

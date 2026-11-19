@@ -11,6 +11,12 @@
 // - its own model of the protocol state: registered clients and their last
 //   seq, and the idempotency table.
 //
+// When a write has more than one fault, the first check in the mock's order
+// decides: the role (`who`) and `can` first (its `authorize`), then `run` in
+// the order its statements read the state; a new record's id is checked
+// where the record is written, after the rules that refuse it. For a write
+// predicted `ok`, `effect-model.ts` predicts what it changes.
+//
 // The protocol, in order (the first that applies decides):
 //   1. envelope: exactly { clientId, seq ≥ 1, mutationId, name, input,
 //      protocolVersion }, else BAD_REQUEST                      unrecorded
@@ -242,6 +248,9 @@ const banned = (f: Facts, sp: string, u: string) => f.dump.has(`ban:${sp}:${u}`)
 const revAt = (f: Facts, key: string) => f.dump.get(key)?.rev ?? 0;
 const baseRev = (i: In) => (i["base"] as { rev: number }).rev;
 const blank = (v: unknown) => String(v).trim() === "";
+/** The mock's name rule (its spaces.create): lower case, a leading "#"
+ * dropped, every run of other characters a "-", leading "-" dropped, 32
+ * characters. */
 const slug = (n: string) =>
   n
     .toLowerCase()
@@ -288,8 +297,10 @@ function seenItem(f: Facts, key: string) {
   return no("NOT_FOUND");
 }
 
-/** The mock's cxCanAct: on members ranked below you; admins and the owner on
- * admins too; never on the owner or yourself. A non-member counts as a member. */
+/** The mock's `actsOn` (the page's cxCanAct): on members ranked below you;
+ * admins and the owner on admins too; never on the owner or yourself. "Someone
+ * not in the list counts as a member" (the mock's words), so a moderator may
+ * ban a person who never joined. */
 function actOn(f: Facts, sp: string, u: string) {
   if (u === f.me) no("FORBIDDEN");
   const target = roleOf(f, sp, u) ?? "member";
@@ -508,7 +519,9 @@ export class WriteModel {
     return this.clients.get(clientId)?.last;
   }
 
-  /** Note the ids of the records stored now. */
+  /** Note the ids of the records stored now. A ban's id is the mock's
+   * "<space>:<user>" (its members.ban), not a client's ULID, so it is not in
+   * the id registry. */
   learn(dump: Dump) {
     for (const r of dump.values()) if ("id" in r && r.kind !== "ban") this.ids.add(r.id);
   }

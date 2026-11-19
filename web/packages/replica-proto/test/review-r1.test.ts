@@ -736,3 +736,127 @@ test("R14 (kept): hiding a thread blanks the thread's own text; its replies and 
   );
   t.deepEqual(await got(), ["", ""]);
 });
+
+// Section 8 of the review: effects the suite did not check.
+
+test("a ban takes the membership away, and neither an approval nor the space opening lets the banned person in", async (t) => {
+  const { w, closed } = await cast(t);
+  // otto asks to join; before anyone decides, he is banned
+  await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
+  await ok(t, w.as("eve", "joinRequests.create", { space: closed, rulesAccepted: true }));
+  await ok(
+    t,
+    w.as("mona", "members.ban", { space: closed, user: "otto", base: w.member(closed, "otto") }),
+  );
+  // a member who is banned loses the member record
+  await ok(
+    t,
+    w.as("mona", "members.ban", { space: closed, user: "mel", base: w.member(closed, "mel") }),
+  );
+  t.is(w.get(`member:${closed}:mel`), undefined);
+  t.truthy(w.get(`ban:${closed}:mel`));
+  t.is((w.get(`space:${closed}`) as { members: number }).members, 3);
+  // the approval of the banned requester is refused
+  await refused(
+    t,
+    w.as("olga", "joinRequests.decide", {
+      space: closed,
+      users: ["otto"],
+      decision: "approve",
+      base: w.requests(closed, ["otto"]),
+    }),
+    "PRECONDITION_FAILED",
+  );
+  t.is(w.get(`member:${closed}:otto`), undefined);
+  // the space opens: open requests are approved, the banned requester is not let in
+  await ok(t, w.as("olga", "spaces.update", { id: closed, set: { vis: "open" } }));
+  t.is((w.get(`request:${closed}:otto`) as { st: string }).st, "approved");
+  t.is(w.get(`member:${closed}:otto`), undefined);
+  t.truthy(w.get(`member:${closed}:eve`));
+  for (const u of ["otto", "mel"])
+    await refused(t, w.as(u, "spaces.join", { space: closed }), "FORBIDDEN");
+});
+
+test("an ownership transfer leaves exactly one owner, and the old owner an admin", async (t) => {
+  const { w, closed } = await cast(t);
+  await ok(
+    t,
+    w.as("olga", "members.setRole", {
+      space: closed,
+      user: "ada",
+      role: "owner",
+      base: w.member(closed, "ada"),
+    }),
+  );
+  const roles = [...w.server.dump().values()]
+    .flatMap((r) => (r.kind === "member" && r.sp === closed ? [`${r.u}:${r.role}`] : []))
+    .sort();
+  t.deepEqual(roles, ["ada:owner", "mel:member", "mona:mod", "olga:admin"]);
+  t.deepEqual((w.get(`space:${closed}`) as { mods: unknown }).mods, [
+    ["ada", "owner"],
+    ["olga", "admin"],
+    ["mona", "mod"],
+  ]);
+});
+
+test("a report notifies the space's owner, admins and moderators, and nobody else", async (t) => {
+  const { w, closed } = await cast(t);
+  const th = await thread(t, w, "mel", closed, "post");
+  const report = w.id();
+  await ok(t, w.as("mel", "reports.create", { id: report, item: `p:${th}`, why: "spam" }));
+  const to = [...w.server.dump().values()]
+    .flatMap((r) => (r.kind === "notif" && r.report === report ? [r.to] : []))
+    .sort();
+  t.deepEqual(to, ["ada", "mona", "olga"]);
+});
+
+test("every tombstone is pruned after 30 days, whatever its kind", async (t) => {
+  const { w, open, closed } = await cast(t);
+  const ask = await thread(t, w, "mel", closed, "ask");
+  await ok(t, w.as("mona", "followups.ask", { id: w.id(), thread: ask, q: "x" }));
+  const post = await thread(t, w, "mel", open, "post");
+  await ok(t, w.as("otto", "research.createPostFollowUp", { id: w.id(), thread: post, t: "x" }));
+  await ok(t, w.as("otto", "likes.set", { thread: post, on: true }));
+  await ok(t, w.as("otto", "saved.set", { kind: "thread", id: post, on: true }));
+  await ok(t, w.as("otto", "likes.set", { thread: post, on: false }));
+  await ok(t, w.as("otto", "saved.set", { kind: "thread", id: post, on: false }));
+  for (const item of [`a:${ask}`, `p:${post}`])
+    await ok(
+      t,
+      w.as("olga", "moderation.decide", { item, decision: "removed", base: w.item(item) }),
+    );
+  await ok(t, w.as("mel", "spaces.leave", { space: open }));
+  const kinds = async () =>
+    [...new Set((await w.server.scanStorage()).tombstones.map((x) => x.kind))].sort();
+  t.deepEqual(await kinds(), ["followup", "like", "member", "reply", "run", "save"]);
+  w.clock.advance(30 * DAY);
+  t.deepEqual(await kinds(), ["followup", "like", "member", "reply", "run", "save"]);
+  w.clock.advance(1);
+  t.deepEqual(await kinds(), []);
+  t.false((await w.server.scanStorage()).logRows.some((r) => r.op === "del"));
+});
+
+test("an author's delete keeps a thread with follow-ups or replies, and makes one without gone", async (t) => {
+  const { w, open } = await cast(t);
+  const ask = await thread(t, w, "mel", open, "ask");
+  const post = await thread(t, w, "mel", open, "post");
+  const lone = await thread(t, w, "mel", open, "post");
+  await ok(t, w.as("otto", "followups.ask", { id: w.id(), thread: ask, q: "x" }));
+  const top = w.id();
+  await ok(t, w.as("otto", "research.createPostFollowUp", { id: top, thread: post, t: "x" }));
+  for (const th of [ask, post, lone]) {
+    await ok(t, w.as("otto", "likes.set", { thread: th, on: true }));
+    await ok(t, w.as("otto", "saved.set", { kind: "thread", id: th, on: true }));
+  }
+  for (const [th, kept] of [
+    [ask, true],
+    [post, true],
+    [lone, false],
+  ] as const) {
+    t.deepEqual(await w.as("mel", "threads.delete", { id: th }), { ok: true, result: { kept } });
+    const p = w.get(`thread:${th}`) as ThreadRec;
+    t.deepEqual([p.del, p.gone, p.likes], [true, !kept, kept ? 1 : 0]);
+    t.is(w.server.dump().has(`like:otto:${th}`), kept);
+    t.is(w.server.dump().has(`save:otto:${th}`), kept);
+  }
+});
