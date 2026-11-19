@@ -88,11 +88,13 @@ export type Change =
   | { key: string; op: "put"; record: StoredRecord }
   | { key: string; op: "del"; ended?: MembershipEnd };
 
-/** How a membership ended: the member left, or was removed (or banned). A
- * user log's `del` of its reader's member key (`member:<space>:<user>`)
- * carries it, so each of the person's devices can tell a voluntary leave
- * (the device deletes its copy of a closed space) from a removal (the device
- * keeps a frozen copy). A `del` without it reads as a removal. */
+/** How a membership ended: the member left, or was removed (or banned), so
+ * each of the person's devices can tell a voluntary leave (the device
+ * deletes its copy of a closed space) from a removal (the device keeps a
+ * frozen copy). A read of a user log carries it in `ended` (by space id, for
+ * the reader's memberships that ended within the tombstone window), or a
+ * `del` of the reader's member key (`member:<space>:<user>`) carries it;
+ * without either, an ended membership reads as a removal. */
 export type MembershipEnd = "left" | "removed";
 
 /** An error answer: `@session/mutators`' `ApiError` with what the protocol
@@ -169,10 +171,13 @@ export interface ReadOptions {
   threads?: string[];
 }
 
-/** A read's answer. `summaries` (optional; without it the client uses its
- * own check): in a tiered read of a space log, the threads served as
- * summaries. A snapshot lists every such thread; a pull lists those among
- * the threads whose thread or counts record it serves. */
+/** A read's answer. Optional fields (a client works without them):
+ * - `summaries`: in a tiered read of a space log, the threads served as
+ *   summaries. A snapshot lists every such thread; a pull lists those among
+ *   the threads whose thread or counts record it serves. Without it the
+ *   client tells summaries by their records.
+ * - `ended`: in a read of a user log, how the reader's memberships that
+ *   ended came to an end, by space id (`MembershipEnd`). */
 export interface Snapshot {
   ok?: true;
   /** By the server's creation time, then the commit that created the record. */
@@ -181,6 +186,7 @@ export interface Snapshot {
   lastSeq: LastSeq;
   serverTime: number;
   summaries?: string[];
+  ended?: Record<string, MembershipEnd>;
 }
 
 export type Pull =
@@ -191,6 +197,7 @@ export type Pull =
       lastSeq: LastSeq;
       serverTime: number;
       summaries?: string[];
+      ended?: Record<string, MembershipEnd>;
     }
   | { ok?: true; resync: true; serverTime: number };
 

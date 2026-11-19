@@ -135,7 +135,9 @@ function makeDevice(
     transport: new InProcessTransport(serverFor(sim, u), { u }, { net }),
     storage,
     clock: { now: () => sim.w.clock.now() + d.skew },
+    monotonic: () => sim.w.clock.now(),
     random: rng(Math.floor(sim.r() * 2 ** 31)),
+    timer: null,
   });
   return d;
 }

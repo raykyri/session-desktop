@@ -2,8 +2,6 @@
 // the outbox's rules, scope changes and frozen copies, queries, the storage
 // adapters and both transports.
 
-import { DatabaseSync } from "node:sqlite";
-
 import test from "ava";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
@@ -16,70 +14,13 @@ import {
   OUTBOX_TTL,
   SqliteStorage,
   SyncClient,
-  type Answer,
-  type Envelope,
-  type SqliteDriver,
-  type StorageAdapter,
   type Transport,
 } from "../src/client/index.js";
 import { useQuery } from "../src/react.js";
-import { openStream } from "../src/server/index.js";
 
-import type { World } from "./helpers.js";
+import { Forced, client, fail, nodeSqlite } from "./client-helpers.js";
 import { DAY, MINUTE, cast, ok, rng } from "./helpers.js";
 import { httpFetch } from "./http.js";
-
-/** A client of `u` on `w`'s server, in process, with the server's clock. */
-function client(
-  w: World,
-  u: string,
-  o: { storage?: StorageAdapter; transport?: Transport; seed?: number } = {},
-) {
-  return new SyncClient({
-    user: u,
-    transport:
-      o.transport ??
-      new InProcessTransport(
-        w.server,
-        { u },
-        {
-          stream: (a, c, s) =>
-            openStream(w.server, a, c, s, { setInterval: () => 0, clearInterval: () => {} }),
-        },
-      ),
-    clock: w.clock,
-    random: rng(o.seed ?? 7),
-    ...(o.storage ? { storage: o.storage } : {}),
-  });
-}
-
-/** A transport that answers the next `n` pushes with `code` (or none). */
-class Forced implements Transport {
-  queue: (Answer | null | "pass")[] = [];
-  private next(): Answer | null | "pass" {
-    return this.queue.length ? (this.queue.shift() as Answer | null | "pass") : "pass";
-  }
-  pushes: Envelope[] = [];
-  constructor(private readonly inner: Transport) {}
-  register = () => this.inner.register();
-  pull: Transport["pull"] = (l, c, o) => this.inner.pull(l, c, o);
-  snapshot: Transport["snapshot"] = (l, o) => this.inner.snapshot(l, o);
-  listen: Transport["listen"] = (c, e, s) => this.inner.listen(c, e, s);
-  call: Transport["call"] = (n, i) => this.inner.call(n, i);
-  async push(es: readonly Envelope[]) {
-    const out: (Answer | null)[] = [];
-    for (const e of es) {
-      this.pushes.push(e);
-      const f = this.next();
-      if (f === "pass") out.push(...(await this.inner.push([e])));
-      else out.push(f);
-      if (out.at(-1) === null) break;
-    }
-    return out;
-  }
-}
-const fail = (code: string, serverTime = 0, extra: object = {}): Answer =>
-  ({ ok: false, error: { code, message: code, ...extra }, serverTime }) as Answer;
 
 test("a write is predicted at once, confirmed by the server, and leaves the outbox once pulled", async (t) => {
   const { w, open } = cast(t);
@@ -297,33 +238,48 @@ test("outbox: EXPIRED and a write dropped after 3 days are shown; UPDATE_REQUIRE
   t.truthy(w.get(`save:mel:${th}`));
 });
 
-test("outbox: CLOCK_SKEW sets an offset that persists, and remints the never-sent writes with replaces", async (t) => {
+test("outbox: CLOCK_SKEW sets an offset that persists; a sent write keeps its input ids and waits for them, a never-sent one is reminted", async (t) => {
   const { w, open } = cast(t);
   const storage = new MemoryStorage();
   const fast = { now: () => w.clock.now() + 2 * MINUTE };
+  const tr = new Forced(new InProcessTransport(w.server, { u: "mel" }));
   const mk = () =>
     new SyncClient({
       user: "mel",
-      transport: new InProcessTransport(w.server, { u: "mel" }),
+      transport: tr,
       clock: fast,
+      monotonic: w.clock.now,
       random: rng(3),
       storage,
+      timer: null,
     });
   const mel = mk();
   await mel.init();
   const th = mel.newId();
   const f = mel.newId();
-  mel.write("threads.create", { id: th, space: open, kind: "ask", q: "Q" });
-  // a later write names the first write's id: it is reminted to match
-  mel.write("followups.ask", { id: f, thread: th, q: "F" });
+  mel.write("threads.create", { id: th, space: open, kind: "ask", q: "Q" }, { send: false });
+  // a later write names the first write's id
+  mel.write("followups.ask", { id: f, thread: th, q: "F" }, { send: false });
   await mel.flush();
   t.is(mel.offset, -2 * MINUTE);
-  const created = [...w.server.records().values()].find((r) => r.kind === "thread" && r.q === "Q");
-  t.truthy(created);
-  t.not(created?.kind === "thread" ? created.id : th, th, "the input's id was reminted");
+  const [ask, fu] = mel.outbox();
+  // the ask was sent (a copy of that envelope may still apply): its id
+  // stays; a new mutation id lists the sent one in replaces
+  t.like(ask ?? {}, { state: "queued", sent: true, input: { id: th } });
+  t.deepEqual(ask?.replaces, [tr.pushes[0]?.mutationId]);
+  // the follow-up was never sent: a new id, still naming the ask's
+  t.not((fu?.input as { id: string }).id, f);
+  t.is((fu?.input as { thread: string }).thread, th);
+  // the ask's id is two minutes ahead of the server: it waits a minute
+  t.is(tr.pushes.length, 1);
+  t.is((ask?.next ?? 0) - mel.now(), MINUTE);
+  w.clock.advance(MINUTE);
+  await mel.flush();
+  const created = w.get(`thread:${th}`);
+  t.like(created ?? {}, { q: "Q" });
   t.truthy(
     [...w.server.records().values()].find(
-      (r) => r.kind === "followup" && r.q === "F" && r.th === (created as { id: string }).id,
+      (r) => r.kind === "followup" && r.q === "F" && r.th === th,
     ),
   );
   const again = mk();
@@ -420,19 +376,6 @@ test("live updates: a poke pulls the log", async (t) => {
   ctl.abort();
   await done;
 });
-
-/** `SqliteDriver` over Node's SQLite, as Tauri's plugin is shaped. */
-function nodeSqlite(): SqliteDriver {
-  const db = new DatabaseSync(":memory:");
-  return {
-    execute: (sql, params = []) => {
-      db.prepare(sql).run(...(params as never[]));
-      return Promise.resolve();
-    },
-    select: <T>(sql: string, params: unknown[] = []) =>
-      Promise.resolve(db.prepare(sql).all(...(params as never[])) as T[]),
-  };
-}
 
 test("storage: the SQLite adapter keeps the replica, the outbox and the meta across a restart", async (t) => {
   const { w, open } = cast(t);

@@ -315,12 +315,6 @@ const remapValue = (v: unknown, map: ReadonlyMap<string, string>): unknown =>
         ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, remapValue(x, map)]))
         : v;
 
-/** How a membership record says it ended, if it does. */
-function endedOf(r: StoredRecord): MembershipEnd | undefined {
-  const e = (r as { ended?: unknown }).ended;
-  return e === "left" || e === "removed" ? e : undefined;
-}
-
 const defaultTimer: Timer = {
   set: (fn, ms) => {
     const h = setTimeout(fn, ms) as unknown as { unref?: () => void };
@@ -743,7 +737,7 @@ export class SyncClient implements Changing {
           p.changes.flatMap((c) => (c.op === "put" ? [c.record] : [])),
           p.summaries,
         );
-      this.noteEnds(log, p.changes);
+      if (log === `user:${this.user}`) this.noteMembers(p.changes, p.ended);
       return this.applyChanges(log, l, p.changes, p.cursor, tick);
     }
     const s = f.snapshot;
@@ -753,7 +747,11 @@ export class SyncClient implements Changing {
       l.marked = new Set();
       this.mark(l, [...records.values()], s.summaries);
     }
-    if (log === `user:${this.user}`) this.noteMembers(records);
+    if (log === `user:${this.user}`)
+      this.noteMembers(
+        s.records.map((x): Change => ({ key: x.key, op: "put", record: x.record })),
+        s.ended,
+      );
     const frozen =
       l.cursor !== null && !this.left.has(log.slice(6)) && this.freeze(log, l.records, records);
     l.cursor = s.cursor;
@@ -863,34 +861,27 @@ export class SyncClient implements Changing {
     return out;
   }
 
-  /** How memberships of this user ended, from a user log's changes: a
-   * `del` of the member key with `ended`, or a record at the member key
-   * that carries `ended` (a membership kept as ended). */
-  private noteEnds(log: LogId, changes: readonly Change[]) {
-    if (log !== `user:${this.user}`) return;
+  /** How this user's memberships stand, from a read of their user log: a
+   * member record is a membership; `ended`, or a `del` of the member key
+   * with `ended`, says how one ended. */
+  private noteMembers(
+    changes: readonly Change[],
+    ended: Readonly<Record<string, MembershipEnd>> | undefined,
+  ) {
+    const set = (sp: string, how: MembershipEnd | undefined) => {
+      if (how === "left") this.left.add(sp);
+      else this.left.delete(sp);
+    };
     for (const c of changes) {
       const sp = this.memberSpace(c.key);
-      if (sp === null) continue;
-      const ended = c.op === "del" ? c.ended : endedOf(c.record);
-      if (ended === "left") this.left.add(sp);
-      else this.left.delete(sp);
+      if (sp !== null) set(sp, c.op === "del" ? c.ended : undefined);
     }
+    for (const [sp, how] of Object.entries(ended ?? {})) set(sp, how);
   }
 
-  /** A user log's snapshot: how its member records stand. */
-  private noteMembers(records: ReadonlyMap<string, StoredRecord>) {
-    for (const [key, r] of records) {
-      const sp = this.memberSpace(key);
-      if (sp === null) continue;
-      if (endedOf(r) === "left") this.left.add(sp);
-      else this.left.delete(sp);
-    }
-  }
-
-  /** Whether the user log holds a live membership of `sp`. */
+  /** Whether the user log holds a membership of `sp`. */
   private member(me: LiveLog | undefined, sp: string): boolean {
-    const r = me?.records.get(pkg.memberKey(sp, this.user));
-    return r !== undefined && endedOf(r) === undefined;
+    return me?.records.has(pkg.memberKey(sp, this.user)) ?? false;
   }
 
   /** The space of this user's member key, or null. */
@@ -1434,10 +1425,15 @@ export class SyncClient implements Changing {
     if (this.timerHandle !== null) this.timer.clear(this.timerHandle);
     this.timerHandle = null;
     if (this.updateRequired || this.signedOut) return;
+    // the earliest wait that ends (a write due now that was not sent is held
+    // behind a wait)
     const now = this.now();
     let at = Infinity;
-    for (const e of this.entries) if (e.state === "queued") at = Math.min(at, this.dueAt(e, now));
-    if (!Number.isFinite(at) || at <= now) return;
+    for (const e of this.entries) {
+      const d = this.dueAt(e, now);
+      if (e.state === "queued" && d > now) at = Math.min(at, d);
+    }
+    if (!Number.isFinite(at)) return;
     // at most the longest backoff: a clock that jumped is looked at again
     this.timerHandle = this.timer.set(
       () => {
