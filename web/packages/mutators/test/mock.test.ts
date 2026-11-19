@@ -385,6 +385,8 @@ const HISTORY: Step[] = [
   { name: "profile.update", input: () => ({ name: "  ", bio: "" }) },
   { name: "invites.request", input: (x) => ({ space: x.id("vault") }) },
   { name: "invites.request", input: (x) => ({ space: x.id("vault") }) },
+  // an open space takes no invite asks (review round 1 of phase 1, E12e)
+  { name: "invites.request", input: (x) => ({ space: x.id("yard") }) },
   { name: "notifications.markRead", input: (x) => ({ id: x.id("N1") }) },
   // an invite notification alone admits nobody (D13)
   { name: "spaces.join", input: (x) => ({ space: x.id("vault"), notification: x.id("N1") }) },
@@ -431,6 +433,11 @@ const HISTORY: Step[] = [
     input: (x) => ({ id: x.id("T4"), q: "Stale", base: { rev: x.threadRev("T4") - 1 } }),
   },
   { name: "threads.update", input: (x) => ({ id: x.id("T4"), q: "No base" }) },
+  // a post has no ask to run (review round 1 of phase 1, E12b)
+  {
+    name: "threads.update",
+    input: (x) => ({ id: x.id("T5"), q: "A new post", run: true, base: { rev: x.threadRev("T5") } }),
+  },
   {
     name: "threads.update",
     input: (x) => ({ id: x.id("T2"), q: "not mine", base: { rev: x.threadRev("T2") } }),
@@ -475,6 +482,17 @@ const HISTORY: Step[] = [
   {
     name: "research.forkNode",
     input: (x) => ({ id: x.fresh(), thread: x.id("T4"), parent: "r", q: "Third" }),
+  },
+  // uses names answers of the same thread (review round 1 of phase 1, E12d)
+  {
+    name: "research.forkNode",
+    input: (x) => ({
+      id: x.fresh(),
+      thread: x.id("T4"),
+      parent: "r",
+      q: "Compare",
+      uses: ["r", x.node("T1", 0)],
+    }),
   },
   // an ask tree is for asks (D17)
   {
@@ -694,6 +712,9 @@ const HISTORY: Step[] = [
   },
   { name: "invites.create", input: (x) => ({ id: x.fresh(), space: x.id("den") }) },
   { name: "invites.create", input: (x) => ({ id: x.fresh(), space: x.id("lounge"), days: 31 }) },
+  // 0 days is no number of days; null never expires (review round 1 of phase 1)
+  { name: "invites.create", input: (x) => ({ id: x.fresh(), space: x.id("lounge"), days: 0 }) },
+  { name: "invites.create", input: (x) => ({ id: x.fresh(), space: x.id("lounge"), days: null }) },
   { name: "invites.revoke", input: (x) => ({ id: x.id("L2") }) },
   { name: "invites.revoke", input: (x) => ({ id: x.id("L2") }) },
   { name: "invites.restore", input: (x) => ({ id: x.id("L2") }) },
@@ -905,6 +926,11 @@ const HISTORY: Step[] = [
   {
     name: "sourceReports.create",
     input: (x) => ({ space: x.id("lab"), source: x.id("S2"), why: "Still broken" }),
+  },
+  // a source the space does not have (review round 1 of phase 1, E12f)
+  {
+    name: "sourceReports.create",
+    input: (x) => ({ space: x.id("lab"), source: "SRC1", why: "Not here" }),
   },
   {
     name: "spaceSources.review",

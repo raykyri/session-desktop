@@ -1047,6 +1047,8 @@
       const p = tx.need('posts', i.id, 'thread');
       if (modOf(tx, itemKeyOf(p)) === 'removed') throw removedErr();
       if (p.del || p.gone) throw deletedErr('thread');
+      /* running it again is an ask: refused in an archived space; a post has no ask to run */
+      if (i.run) { writable(tx, p.s); if (p.k !== 'ask') throw bad1('run', 'an ask thread'); }
       if (revOf(p) !== i.base.rev) throw staleErr({ rev: revOf(p), q: p.q, t: p.t || null }, [['posts', p.id]]);
       const q = text(i.q, 'q');
       if (p.q !== q) editedHidden(tx, itemKeyOf(p));
@@ -1117,6 +1119,8 @@
       const p = askThread(tx, i.thread);
       const tree = askTree(tx, p.id);
       if (i.parent !== 'r') { const par = nodeOf(askNodes(tx, p.id), i.parent); if (modOf(tx, nodeModKey(p.id, par)) === 'removed') throw removedErr(); }
+      /* uses: "r" or asks of this thread's tree */
+      for (const u of i.uses || []) if (u !== 'r') nodeOf(askNodes(tx, p.id), u);
       const id = newRecId(tx, i.id, x => tree.nodes.some(y => y.id === x));
       const ex = execOf(tx, i.executor);
       const n = { id, par: i.parent, u: tx.me.u, q: text(i.q, 'q'), tok: 0, running: true, uses: i.uses || null, pay: ex || i.pay == null ? null : i.pay, att: 1 };
@@ -1169,6 +1173,7 @@
       const p = tx.need('posts', i.thread, 'thread'), n = nodeOf(askNodes(tx, p.id), i.node);
       if (modOf(tx, nodeModKey(p.id, n)) === 'removed') throw removedErr();
       if (n.del) throw deletedErr('follow-up');
+      if (i.run) writable(tx, p.s);
       const now0 = n.fu != null ? revOf((tx.mapGet('fu', p.id) || [])[n.fu]) : revOf(n);
       if (now0 !== i.base.rev) throw staleErr({ rev: now0, q: n.q || '' }, [['fu', p.id], ['qtd', p.id]]);
       const q = text(i.q, 'q'), changed = n.q !== q;
@@ -1371,10 +1376,10 @@
     },
     run: (tx, i) => { for (const id of new Set(i.spaces)) { setJoined(tx, id, true); addToRoster(tx, id, tx.me.u, 'member'); } } });
   proc('invites.decline', { input: obj({ notification: ID }), output: 'null', who: 'user', errors: ['NOT_FOUND'], writes: ['notifs'],
-    note: 'decline an invite to a closed space (one of your notifications); the person who invited you is not notified', run: (tx, i) => markNote(tx, i.notification, n => { n.response = 'declined'; }) });
+    note: 'decline an invite to a closed space (one of your notifications); the person who invited you is not notified', run: (tx, i) => { const n = tx.find('notifs', i.notification); if (n && n.type !== 'invite') throw rpcError('NOT_FOUND', 'The server has no record of this invite.'); markNote(tx, i.notification, x => { x.response = 'declined'; }); } });
   proc('invites.request', { input: obj({ space: ID }), output: 'null', who: 'user', errors: ['NOT_FOUND'], writes: ['askedInv'],
     note: 'ask the members of an invite-only space for an invite; the space’s staff read the asks (phase 1a.2)', space: (tx, i) => i.space,
-    run: (tx, i) => { tx.need('spaces', i.space, 'space'); const l = tx.value('askedInv'); if (!l.includes(i.space)) tx.setValue('askedInv', [...l, i.space]); } });
+    run: (tx, i) => { if (!closedSpace(tx.need('spaces', i.space, 'space'))) throw bad1('space', 'a closed space'); const l = tx.value('askedInv'); if (!l.includes(i.space)) tx.setValue('askedInv', [...l, i.space]); } });
   proc('joinRequests.create', { input: obj({ space: ID, 'answers?': arr(str), 'rulesAccepted?': bool }), output: 'null', who: 'user', errors: ['NOT_FOUND', 'PRECONDITION_FAILED', 'FORBIDDEN'], writes: ['rel', 'reqs', 'joined', 'spaces', 'roles'],
     note: 'request to join a closed space; the request joins the space’s review queue. answers: one per question of the space (qs), required where the question is; rulesAccepted: true, when the space has rules (BAD_REQUEST otherwise). A person banned from the space can’t request to join.',
     space: (tx, i) => i.space,
@@ -1561,7 +1566,7 @@
   const inviteCode = (id, salt) => { let h = 2166136261 ^ salt, c = ''; for (let k = 0; k < 10; k++) { for (const ch of `${id}:${k}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); c += CODE_CHARS[(h >>> 0) % 32]; } return c; };
   proc('invites.create', { input: obj({ 'id?': ID, space: ID, 'days?': nul(int) }), output: '{ id: InviteId, code: string }', who: 'member', errors: ['NOT_FOUND', 'CONFLICT', 'EXPIRED'], wire: 'CreatedInvite', writes: ['links'],
     note: 'a one-use invite link; id: the client’s ULID (else the server makes one); days: when it expires (null: never; at most 30). The server makes the code (10 characters). Moderators make links; so do members, in a closed space whose invite setting is "members".',
-    space: spaceIn, can: (tx, i) => i.days != null && i.days > 30 ? rpcError('BAD_REQUEST', undefined, ['input.days: expected at most 30']) : invites(tx, i.space),
+    space: spaceIn, can: (tx, i) => i.days != null && (i.days > 30 || i.days < 1) ? rpcError('BAD_REQUEST', undefined, ['input.days: expected 1 to 30, or null']) : invites(tx, i.space),
     run: (tx, i) => {
       tx.need('spaces', i.space, 'space');
       const id = newRecId(tx, i.id, x => !!tx.find('links', x));
@@ -1573,11 +1578,11 @@
   proc('invites.revoke', { input: obj({ id: ID }), output: 'null', who: 'member', errors: ['NOT_FOUND'], wire: 'ThreadInvite', writes: ['links'],
     note: 'revoke a link you made, or one in a space you moderate. People who already joined with it stay members. The server keeps the revoked link for invites.restore; GET leaves it out.',
     space: linkIn, can: (tx, i) => linkOf(tx, i.id),
-    run: (tx, i) => { const l = tx.need('links', i.id, 'invite link'); if (l.revokedAt) throw rpcError('NOT_FOUND', 'This invite link was already revoked.'); tx.edit('links', l.id, x => { x.revokedAt = tx.now; }); } });
-  proc('invites.restore', { input: obj({ id: ID }), output: 'null', who: 'member', errors: ['NOT_FOUND'], wire: 'ThreadInvite', writes: ['links'],
-    note: 'put back a link revoked a moment ago (Undo), with its id and code',
-    space: linkIn, can: (tx, i) => linkOf(tx, i.id),
-    run: (tx, i) => { const l = tx.need('links', i.id, 'invite link'); if (!l.revokedAt) throw rpcError('NOT_FOUND', 'This invite link is not revoked.'); tx.edit('links', l.id, x => { delete x.revokedAt; }); } });
+    run: (tx, i) => { const l = tx.need('links', i.id, 'invite link'); if (l.revokedAt) throw rpcError('NOT_FOUND', 'This invite link was already revoked.'); const role = roleIn(tx.get, l.sp); tx.edit('links', l.id, x => { x.revokedAt = tx.now; if (RANK[role] >= RANK.moderator) x.revokedRole = role; }); } });
+  proc('invites.restore', { input: obj({ id: ID }), output: 'null', who: 'member', errors: ['NOT_FOUND', 'FORBIDDEN'], wire: 'ThreadInvite', writes: ['links'],
+    note: 'put back a link revoked a moment ago (Undo), with its id and code; a link a moderator revoked, only someone with that role or a higher one',
+    space: linkIn, can: (tx, i) => all(linkOf(tx, i.id), (r => !r || rankIn(tx.get, linkIn(tx, i)) >= RANK[r] || deny('A moderator revoked this link: only a moderator can restore it.'))(tx.need('links', i.id, 'invite link').revokedRole)),
+    run: (tx, i) => { const l = tx.need('links', i.id, 'invite link'); if (!l.revokedAt) throw rpcError('NOT_FOUND', 'This invite link is not revoked.'); tx.edit('links', l.id, x => { delete x.revokedAt; delete x.revokedRole; }); } });
 
   /* -- versions and edit conflicts (step 9) --
      A page document, a skill and a space's rules carry a version: a page's rev, a skill's rev and the space's
@@ -1864,6 +1869,8 @@
     can: (tx, i) => (tx.get('dsPol')[i.space] || 'members') !== 'mods' || rankIn(tx.get, i.space) >= RANK.moderator || deny('Only moderators add sources to this space.'),
     run: (tx, i) => {
       const s = writable(tx, i.space);
+      /* a URL or file name is encoded: one with a lone surrogate is refused */
+      for (const k of ['url', 'file']) if (typeof i[k] === 'string' && /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(i[k])) throw bad1(k, 'text without a lone surrogate');
       let id = i.source;
       if (id != null) { if (!srcColl(tx, id)) throw rpcError('NOT_FOUND'); }
       else {
@@ -1895,7 +1902,7 @@
     note: 'who can add sources: members, members with review, or moderators. Manage › Sources offers it to moderators.', space: spaceIn, run: (tx, i) => { tx.need('spaces', i.space, 'space'); tx.mapPut('dsPol', i.space, i.policy); } });
   proc('sourceReports.create', { space: spaceIn, input: obj({ space: ID, source: ID, why: str }), output: 'null', who: 'member', errors: ['NOT_FOUND'], writes: ['dsReps'],
     note: 'one report per person, source and space: a second one replaces the first’s reason',
-    run: (tx, i) => { tx.need('spaces', i.space, 'space'); if (!srcColl(tx, i.source)) throw rpcError('NOT_FOUND'); tx.setValue('dsReps', [...tx.value('dsReps').filter(x => !(x.m === i.source && x.sid === i.space && x.by === tx.me.u)), { m: i.source, sid: i.space, by: tx.me.u, why: i.why }]); } });
+    run: (tx, i) => { tx.need('spaces', i.space, 'space'); if (!srcColl(tx, i.source) || !(tx.mapGet('dsDrops', i.space) || []).some(d => d.m === i.source && !d.rm)) throw rpcError('NOT_FOUND', 'The space has no record of this source.'); tx.setValue('dsReps', [...tx.value('dsReps').filter(x => !(x.m === i.source && x.sid === i.space && x.by === tx.me.u)), { m: i.source, sid: i.space, by: tx.me.u, why: i.why }]); } });
 
   /* -- devices (the Desktop app) and device runs (phase 1a.2, section 6b) --
      Online calls, not mutators (web/packages/mutators, NOT_MUTATORS): a device's token is account state, and a run's
