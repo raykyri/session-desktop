@@ -121,6 +121,42 @@ rules above stay as they are. Decisions for the new client:
     every batch; idempotent apply by (user, mutation id), kept 7 days;
     a log epoch; SSE read with fetch, with a map of cursor tokens as the
     event id).
+- Phase 1a (done): `web/packages/mutators` holds the mutators (`MUTATORS`)
+  and lists the mock's online-only procedures with reasons (`NOT_MUTATORS`:
+  API keys, settings, usage, `research.cancelNode`/`retryNode`, `runs.*`,
+  `devices.*`). `test/mock.test.ts` keeps the mock and the mutators equal
+  over a history of every procedure; `DIFFERENCES` lists the few rows where
+  the mock must differ, each with a reason. Decisions from phase 1a:
+  - Follow-up asks, `research.forkNode` and `followups.update` with `run`
+    write a run with a derived id and a `job` effect, as `threads.create`.
+  - API key records (id, name, provider, status, never the raw key) are in
+    their person's user log, so the payer check is in `can`.
+  - Skills and pages are addressed by id; a reorder sends the whole order
+    with the list's rev (STALE when it changed); a taken page slug answers
+    CONFLICT.
+  - Catalog sources are in a public `catalog` log. A source waiting for
+    review has one audience; its fields are redacted for readers who are
+    neither staff nor the person who added it.
+  - Promoting a branch copies only the actor's own follow-ups. Every report
+    reopen carries `base`. A space's staff read its invite requests.
+  - A replica treats ids it minted, and ids derived from its own unanswered
+    mutation ids, as unused (`withOwnIds`); any other id it lacks is unknown.
+  - Reply likes are counted in the counts record.
+  - `members.remove` is for closed spaces (BAD_REQUEST in an open one); bans
+    have no duration.
+  - `runs.*` and `devices.*` are online calls: a run's lease (holder,
+    expiry, attempt) and a device token exist only on the server. Leases
+    last 90 s; an attempt that lost its lease ends `interrupted`; an answer
+    over 200 KB ends `too_large`.
+  - Decided for phase 1b: device records (no token) are in their person's
+    user log; moderation state is a separate record, so a hide does not
+    change the item's rev; STALE answers carry `current` (redacted for the
+    reader) and `changes`; skills are records of their own; invite
+    notifications carry the link.
+- The mockup's mock backend follows the mutators and serves the sync
+  protocol (`POST /api/sync/register`, `POST /api/sync/write` with the
+  envelope, recorded answers and the refusal codes), devices and device
+  runs; its sync endpoints are the contract the real server follows.
 - Ids: clients generate ULIDs. The server accepts a timestamp from 4 days in
   the past to 1 minute in the future (the outbox keeps writes 3 days), rejects an id that already exists, and
   answers a collision with the same CONFLICT whether or not the caller can
