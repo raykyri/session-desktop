@@ -1342,10 +1342,10 @@ export class SyncClient implements Changing {
   /** CLOCK_SKEW: the offset is corrected; every queued write gets `queuedAt`
    * on the corrected clock (from the monotonic clock when it was queued in
    * this process; else at most now) and a new mutation id (one that was sent
-   * goes to `replaces`), except a write that went without an answer, which
-   * keeps its mutation id (AGENTS.md); the writes never sent get new input
-   * ids. */
-  private reclock(serverTime: number) {
+   * goes to `replaces`), except a write whose last send went without an
+   * answer, which keeps its mutation id (AGENTS.md); `answered` is the write
+   * the CLOCK_SKEW answered. The writes never sent get new input ids. */
+  private reclock(serverTime: number, answered: OutboxEntry) {
     const delta = serverTime - this.clock.now() - this.meta.offset;
     this.meta.offset += delta;
     const now = Math.round(this.now());
@@ -1359,7 +1359,7 @@ export class SyncClient implements Changing {
         e.waitFrom += delta;
         if (!e.own) e.next += delta;
       }
-      if (!e.uncertain) {
+      if (e === answered || !e.uncertain) {
         if (e.wire) e.replaces = uniq([...e.replaces, e.mutationId]);
         e.mutationId = this.newId();
         e.wire = false;
@@ -1549,7 +1549,7 @@ export class SyncClient implements Changing {
         if (!a.ok) {
           const code = a.error.code;
           if (code === "CLOCK_SKEW" && skews++ < 3) {
-            this.reclock(a.serverTime);
+            this.reclock(a.serverTime, e);
             continue;
           }
           if (code === "OUT_OF_ORDER" && a.error.expectedSeq !== undefined && gaps++ < 3) {
