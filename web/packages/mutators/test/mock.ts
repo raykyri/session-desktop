@@ -179,6 +179,7 @@ export function toMock(s: MemoryStore): Record<string, unknown> {
   const fu: Record<string, unknown[]> = {};
   for (const f of of(s, "followup").sort(byTime))
     (fu[f.th] ??= []).push({
+      id: f.id,
       u: f.u,
       q: f.q,
       ...(f.a === null ? {} : { a: f.a }),
@@ -188,12 +189,13 @@ export function toMock(s: MemoryStore): Record<string, unknown> {
   const replies = of(s, "reply").sort(byTime);
   for (const r of replies.filter((x) => x.parent === null))
     (rp[r.th] ??= []).push({
+      id: r.id,
       u: r.u,
       t: r.t,
       createdAt: r.createdAt,
       kids: replies
         .filter((x) => x.parent === r.id)
-        .map((x) => ({ u: x.u, t: x.t, createdAt: x.createdAt })),
+        .map((x) => ({ id: x.id, u: x.u, t: x.t, createdAt: x.createdAt })),
     });
   return {
     spaces,
@@ -371,7 +373,7 @@ const spaceShape = (x: Any, members: number) => ({
 function mockNodes(d: Any, th: string): Any[] {
   const fus = d.fu[th] ?? [];
   const tree = d.qtd[th] ?? {
-    nodes: fus.map((_: unknown, k: number) => ({ id: "f" + k, par: "r", fu: k })),
+    nodes: fus.map((f: Any, k: number) => ({ id: f.id ?? "f" + k, par: "r", fu: k })),
   };
   return tree.nodes.map((n: Any) =>
     n.fu != null ? { ...n, ...fus[n.fu], id: n.id, par: n.par } : n,
@@ -507,8 +509,8 @@ export function projectMock(d: Any, L: Labels): Projection {
       t: x.t ?? null,
     };
   const rpPath = (key: string) => {
-    const [th, path] = key.split(":");
-    return `${L.m(th ?? "")}:${path}`;
+    const [th, reply] = key.split(":");
+    return `${L.m(th ?? "")}:${L.m(reply ?? "")}`;
   };
   const notifs: Record<string, unknown> = {};
   // a resolution's notice is the server's post-commit effect here (D3)
@@ -632,16 +634,7 @@ export function projectOurs(s: MemoryStore, L: Labels): Projection {
     const top = rs.filter((r) => r.parent === null);
     if (top.length) replies[L.o(p.id)] = top.map(shape);
   }
-  const replyPath = (id: string) => {
-    const r = s.get("reply", id) as Any;
-    const rs = of(s, "reply")
-      .filter((x) => x.th === r.th)
-      .sort(byTime);
-    const top = rs.filter((x) => x.parent === null);
-    if (r.parent === null) return `${L.o(r.th)}:${top.findIndex((x) => x.id === id)}`;
-    const kids = rs.filter((x) => x.parent === r.parent);
-    return `${L.o(r.th)}:${top.findIndex((x) => x.id === r.parent)}.${kids.findIndex((x) => x.id === id)}`;
-  };
+
   const links: Record<string, unknown> = {};
   for (const l of of(s, "invite"))
     links[L.o(l.id)] = {
@@ -738,7 +731,7 @@ export function projectOurs(s: MemoryStore, L: Labels): Projection {
       muted: set(mine("mute").map((x) => x.who)),
       blocked: set(mine("block").map((x) => x.who)),
       askedInv: set(mine("invask").map((x) => L.o(x.sp))),
-      rpLiked: set(mine("rlike").map((x) => replyPath(x.reply))),
+      rpLiked: set(mine("rlike").map((x) => `${L.o(x.th)}:${L.o(x.reply)}`)),
     },
     notifs,
     profile: profile ? { name: profile.name, bio: profile.bio } : { name: "Me", bio: "" },

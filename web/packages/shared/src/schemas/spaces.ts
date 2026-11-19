@@ -82,9 +82,9 @@ export const askNodeKeySchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}:.+$/);
  * `"<kind>:<thread>[:…]"` (`a:` an answer, `r:` a reply, …). */
 export const moderationKeySchema = z.string().regex(/^[a-z]+:[0-9A-HJKMNP-TV-Z]{26}(:.*)?$/);
 
-/** A reply, `"<thread>:<path>"`: the indexes of the reply in the thread's
- * replies, joined with ".". */
-export const replyKeySchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}:\d+(\.\d+)*$/);
+/** A reply like's key, `"<thread>:<reply id>"` (replies are named by id,
+ * phase 1b). */
+export const replyKeySchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}:[0-9A-HJKMNP-TV-Z]{26}$/);
 
 /** A page document's key, `"<space>/<page slug>"`. */
 export const pageKeySchema = z.string().regex(/^[^/]+\/.+$/);
@@ -361,6 +361,8 @@ export const citedPageSchema = z.tuple([z.string(), z.string(), z.string()]);
  * wire: `ResearchExchangeNode` (`followups.ask`), which the mock replaces: a
  * question and its answer, without ids, a tree or a run state. */
 export const researchExchangeNodeSchema = z.object({
+  /** A flat follow-up's id: writes and moderation keys name it (phase 1b). */
+  id: z.string().optional(),
   u: spaceHandleSchema,
   createdAt: spaceIsoTimeSchema.optional(),
   q: z.string(),
@@ -378,6 +380,8 @@ export const researchExchangeNodeSchema = z.object({
  * `ResearchPostNode` (`research.createPostFollowUp`), which the mock replaces:
  * the text with its author and likes, nested under the reply it answers. */
 export interface ResearchPostNode {
+  /** Its id: writes and moderation keys name it (phase 1b). */
+  id?: string | undefined;
   u: string;
   createdAt?: string | undefined;
   t: string;
@@ -389,6 +393,7 @@ export interface ResearchPostNode {
 }
 
 export const researchPostNodeSchema: z.ZodType<ResearchPostNode> = z.object({
+  id: z.string().optional(),
   u: spaceHandleSchema,
   createdAt: spaceIsoTimeSchema.optional(),
   t: z.string(),
@@ -1044,9 +1049,6 @@ const onResultSchema = z.object({ on: z.boolean() });
 export const researchBranchRemovalSchema = z.object({ kept: z.boolean() });
 const nullResultSchema = z.null();
 
-/** A path in a thread's replies: indexes joined with "." */
-const replyPathSchema = z.string().regex(/^\d+(\.\d+)*$/);
-
 /** A space's settings, as admins change them (`spaces.update`). */
 export const spaceSettingsSchema = z
   .object({
@@ -1219,7 +1221,7 @@ export const spaceProcedures = {
     result: onResultSchema,
   },
   "likes.setReply": {
-    input: z.object({ reply: replyKeySchema, ...onInput }),
+    input: z.object({ reply: spaceRecordIdSchema, ...onInput }),
     result: onResultSchema,
   },
   "saved.set": {
@@ -1262,7 +1264,8 @@ export const spaceProcedures = {
       ...idInput,
       thread: spaceThreadIdSchema,
       t: z.string(),
-      parent: count.optional(),
+      /** The id of the top-level reply it answers. */
+      parent: spaceRecordIdSchema.optional(),
     }),
     result: nullResultSchema,
   },
@@ -1274,7 +1277,7 @@ export const spaceProcedures = {
   "replies.update": {
     input: z.object({
       thread: spaceThreadIdSchema,
-      path: replyPathSchema,
+      reply: spaceRecordIdSchema,
       t: z.string(),
       base: revBaseSchema,
     }),
@@ -1282,7 +1285,7 @@ export const spaceProcedures = {
   },
   /** wire: `ResearchBranchRemoval` */
   "replies.delete": {
-    input: z.object({ thread: spaceThreadIdSchema, path: replyPathSchema }),
+    input: z.object({ thread: spaceThreadIdSchema, reply: spaceRecordIdSchema }),
     result: researchBranchRemovalSchema,
   },
   /** wire: `ResearchNode` */

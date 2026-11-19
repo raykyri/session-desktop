@@ -4567,7 +4567,7 @@ function mutate(name, input, recipe, opts = {}) {
 }
 /* personal toggles: a Set member on or off, as one mutation */
 const TOGGLES = {
-  liked: v => ['likes.set', { thread: v }], rpLiked: v => ['likes.setReply', { reply: v }],
+  liked: v => ['likes.set', { thread: v }], rpLiked: v => ['likes.setReply', { reply: String(v).split(':')[1] }],
   saved: v => ['saved.set', { kind: 'thread', id: v }], qtSaved: v => ['saved.set', { kind: 'ask', id: v }], miSaved: v => ['saved.set', { kind: 'source', id: v }],
   muted: v => ['mutes.set', { handle: v }], blocked: v => ['blocks.set', { handle: v }], miRead: v => ['sources.markRead', { id: v }],
 };
@@ -4590,10 +4590,10 @@ function itemRevOf(key) {
   const [k, th, sub] = String(key).split(':'), p = postById(th);
   if (!p) return 1;
   if (k === 'a' || k === 'p') return revOf(p);
-  if (k === 'r') return revOf(taAt(D.rp[th] || [], String(sub).split('.').map(Number)));
-  /* f:<thread>:<index>: a flat follow-up; n:<thread>:<node id>: an ask in the thread's tree */
+  if (k === 'r') return revOf(taFind(D.rp[th] || [], sub));
+  /* f:<thread>:<id>: a flat follow-up; n:<thread>:<node id>: an ask in the thread's tree (phase 1b: by id) */
   const fu = D.fu[th] || [];
-  if (k === 'f') return revOf(fu[+sub]);
+  if (k === 'f') return revOf(fu.find(x => x.id === sub));
   const tree = D.qtd[th], n = tree && tree.nodes.find(x => x.id === sub);
   return n ? (n.fu != null ? revOf(fu[n.fu]) : revOf(n)) : 1;
 }
@@ -5074,17 +5074,18 @@ const thMeta = p => `<div class="meta">${avatar(p.u, 'sm')}${au(p.u)}<span>${ago
 const thActs = p => { const i = p.id, key = (p.k === 'ask' ? 'a:' : 'p:') + i; return `<div class="p-foot">${acts(p, false)}${csShareBtn(p)}${p.running || modOf(key) === 'removed' ? '' : itemMenu(key, 'sf-pend')}</div>`; };
 /* Settled: sharing a closed thread gives a link that only members can open. */
 const csShareBtn = p => !isClosed(sp(p.s)) ? taShareMenu(p) : `<button class="act" type="button" data-csshare="${p.id}" aria-label="Share">${CI.share}<span>Share</span></button>`;
-/* key: "<thread>:<path>" of the reply, used for reports and moderation (r:<key>), likes, edits and replies to it. */
+/* key: "<thread>:<reply id>" of the reply (phase 1b: replies are named by id), used for reports and moderation
+   (r:<key>), likes, edits and replies to it. A reply the server has not answered yet has no id and no actions. */
 function replyHTML(r, depth = 0, key = '') {
   /* a reply waiting in the device's outbox (sync states: the replica's record, with its entry) */
   if (r.ob) { const o = sxObx(r.ob); return o ? sxReplyWeb(o) : ''; }
   const k = 'r:' + key, ms = key && modOf(k), editing = key && st.taEdit && st.taEdit.key === k;
   const body = r.del ? taGone('reply') : ms ? modPh(k, 'reply') : editing ? taEditBox(k, { noun: 'reply' }) : `<p>${esc(r.t)}</p>`;
   const acts = r.del || editing ? '' : `<div class="rp-acts">${key ? taRpActs(r, key) : ''}${key && ms !== 'removed' ? itemMenu(k) : ''}</div>`;
-  return `<div class="rp${depth ? ' rp-kid' : ''}">${avatar(r.u, 'sm')}<div class="rp-b"><div class="meta"><b>${r.u}</b><span>${ago(r)}</span>${r.edited && !r.del ? '<span class="faint">· edited</span>' : ''}</div>${body}${acts}${(r.kids || []).map((x, j) => replyHTML(x, depth + 1, key ? key + '.' + j : '')).join('')}${key && st.taRp === key ? taRpBox(r, key) : ''}</div></div>`;
+  return `<div class="rp${depth ? ' rp-kid' : ''}">${avatar(r.u, 'sm')}<div class="rp-b"><div class="meta"><b>${r.u}</b><span>${ago(r)}</span>${r.edited && !r.del ? '<span class="faint">· edited</span>' : ''}</div>${body}${acts}${(r.kids || []).map(x => replyHTML(x, depth + 1, key && x.id ? key.split(':')[0] + ':' + x.id : '')).join('')}${key && st.taRp === key ? taRpBox(r, key) : ''}</div></div>`;
 }
 function fuCard(f, i, pid) {
-  const k = `f:${pid}:${i}`, ms = pid != null && modOf(k);
+  const k = `f:${pid}:${f.id || 'f' + i}`, ms = pid != null && modOf(k);
   return `<div class="fu"><div class="meta">${avatar(f.u, 'sm')}<b>${f.u}</b><span>${ago(f)}</span>${pid != null && ms !== 'removed' ? itemMenu(k) : ''}</div><p class="fu-q">${esc(f.q)}</p><div class="fu-a">${ms ? modPh(k, 'follow-up answer') : f.html ? `<div class="prose fu-prose">${f.html}</div>` : `<p>${esc(fuAns(f))}</p>`}</div></div>`;
 }
 
@@ -5097,7 +5098,7 @@ function thDoc(p) {
   return `<div class="th-doc"><article class="th-main"><div class="th-top">${thHead(p)}</div>${thMeta(p)}${miAbout(p)}${pm ? modPh('p:' + pid, 'post') : taQ(p)}
       ${p.k === 'ask' ? `<section class="th-ans${p.running ? ' running' : ''}" id="th-a">${creditHead(p)}${am ? modPh('a:' + pid, 'answer') : answerHTML(p)}</section>` : ''}${thActs(p)}
       ${p.k === 'ask' ? `<section class="th-fus" id="th-f"><h3>Follow-ups <span class="faint num">${fus.length}</span></h3>${fus.map((f, i) => fuCard(f, i, pid)).join('') || '<p class="muted">Follow-ups appear here once the answer is ready.</p>'}</section>`
-        : `<section class="th-rps" id="th-f"><h3>Replies <span class="faint num">${rps.length}</span></h3>${rps.map((r, i) => replyHTML(r, 0, pid + ':' + i)).join('')}</section>`}
+        : `<section class="th-rps" id="th-f"><h3>Replies <span class="faint num">${rps.length}</span></h3>${rps.map(r => replyHTML(r, 0, r.id ? pid + ':' + r.id : '')).join('')}</section>`}
       ${fuInput(p)}</article>
     <aside class="th-aside">
       <div class="th-facts"><div><span>Space</span><button class="tlink th-sp" type="button" data-space="${p.s}">${spName(sp(p.s))}</button></div>${isClosed(sp(p.s)) ? `<div><span>Visible to</span><b class="cs-fv">${LOCK}Members (${fmt(sp(p.s).members)})</b></div>` : ''}<div><span>${p.k === 'ask' ? 'Asked by' : 'Posted by'}</span><b>${p.u}</b></div>${p.k === 'ask' ? `<div><span>Model</span><b>${MODEL_NAME}</b></div><div><span>Thinking level</span><b>${p.think || 'Medium'}</b></div>` : ''}${p.k === 'ask' ? `<div><span>Tokens</span><b class="num">${p.running ? `${fmtT(AS_TOK[runStep(p.id)])} so far` : fmtT(p.tok)}</b></div>` : ''}</div></aside></div>`;
@@ -5347,7 +5348,7 @@ const ansBody = p => D.rich[p.id] || `<p>${esc(p.sum)}</p>`;
 function fuSection(p) {
   const ask = p.k === 'ask', fus = ask ? fuFor(p) : [], rps = ask ? [] : rpFor(p);
   return ask ? `<section class="tr-sec" id="th-f"><h3>Follow-ups <span class="faint num">${fus.length}</span></h3>${fus.map(fq2).join('') || '<p class="muted">Follow-ups can be added once the answer is ready.</p>'}</section>`
-    : `<section class="tr-sec th-rps" id="th-f"><h3>Replies <span class="faint num">${rps.length}</span></h3>${rps.map((r, i) => replyHTML(r, 0, p.id + ':' + i)).join('')}</section>`;
+    : `<section class="tr-sec th-rps" id="th-f"><h3>Replies <span class="faint num">${rps.length}</span></h3>${rps.map(r => replyHTML(r, 0, r.id ? p.id + ':' + r.id : '')).join('')}</section>`;
 }
 /* C. reading column: one centered column, details inline */
 function thRead(p) {
@@ -7391,8 +7392,8 @@ function itemOf(key) {
   const [k, a, b] = key.split(':'), p = postById(a), s = sp(p.s);
   if (k === 'a') return { k, p, s, noun: 'answer', text: p.sum || '', by: 'Agent' };
   if (k === 'p') return { k, p, s, noun: 'post', text: p.q, by: p.u };
-  if (k === 'f') { const f = fuFor(p)[+b] || {}; return { k, p, s, noun: 'follow-up answer', text: f.a || '', by: 'Agent', q: f.q }; }
-  let list = rpFor(p), r = null; String(b).split('.').forEach(j => { r = list[+j]; list = (r && r.kids) || []; });
+  if (k === 'f') { const f = fuFor(p).find(x => x.id === b) || {}; return { k, p, s, noun: 'follow-up answer', text: f.a || '', by: 'Agent', q: f.q }; }
+  const r = taFind(rpFor(p), b);
   return { k, p, s, noun: 'reply', text: r ? r.t : '', by: r ? r.u : '' };
 }
 function itemMenu(key, cls = '') {
@@ -7651,7 +7652,7 @@ function sfJump(k) {
       setTimeout(() => { const el = document.querySelector('#app .sf-domsec'); if (el) el.scrollIntoView({ block: 'center' }); }, 0); break;
     }
     case 'sf-report': Object.assign(st, { thread: thr('q3'), modal: 'sf-report:a:' + thr('q3'), rep: { why: 'old', note: 'The Free plan limit went up to 250,000 rows on Nov 10.' } }); break;
-    case 'sf-report-reply': Object.assign(st, { thread: thr('p1'), imenu: 'r:' + thr('p1') + ':2' }); break;
+    case 'sf-report-reply': Object.assign(st, { thread: thr('p1'), imenu: 'r:' + thr('p1') + ':' + rpIdAt(thr('p1'), '2') }); break;
     case 'sf-reports': mg('reports'); break;
     case 'sf-restore': { mg('reports'); const r = st.reports.find(x => x.st === 'removed'); if (r) st.modal = 'sf-rsconf:' + r.id; break; }
     case 'sf-reports-notif': st.home = true; csOpenNotifs(); break;
@@ -8825,7 +8826,7 @@ function cxJump(k) {
     case 'cx-new-members': case 'cx-new-requests': case 'cx-new-invites': mg(k.slice(7), CX_NEW); break;
     case 'cx-inv-handle': space('replication'); csInvite('replication'); Object.assign(st, { cxHandle: 'to', cxHOpen: true }); break;
     case 'cx-inv-incoming': st.home = true; csOpenNotifs(); break;
-    case 'cx-im-mod': case 'cx-im-rm': { const i = thr('p1'); Object.assign(st, { space: 'sablefield', home: false, thread: i }); if (k === 'cx-im-mod') st.imenu = 'r:' + i + ':2'; else st.modal = 'cs-ximrm:r:' + i + ':2'; break; }
+    case 'cx-im-mod': case 'cx-im-rm': { const i = thr('p1'); Object.assign(st, { space: 'sablefield', home: false, thread: i }); if (k === 'cx-im-mod') st.imenu = 'r:' + i + ':' + rpIdAt(i, '2'); else st.modal = 'cs-ximrm:r:' + i + ':' + rpIdAt(i, '2'); break; }
     case 'cx-rep-author': mg('reports', 'sablefield'); scrollTo('.cx-rauth'); break;
     case 'cx-decline-note': mg('requests', 'replication'); Object.assign(st, { rqSel: new Set(), declIds: [openReqs('replication')[0].u], cxDeclNote: 'Name the result you want to replicate, and link to earlier work if you have any.', modal: 'cs-decline' }); break;
     case 'cx-declined': case 'cx-declined-again': st.cxDecl = { replication: { note: 'Your answers did not name a result to replicate. Name one when you request again.', on: 'Nov 15', again: 'Dec 1', ready: k === 'cx-declined-again' } }; space('replication'); break;
@@ -8884,7 +8885,7 @@ const qtTokTxt = h => Math.round(qtTxt(h).length / 4);
 /* Threads without sample tree data get one: their follow-ups become level-1 asks. */
 /* A thread's stored asks. A thread without stored asks has its flat follow-ups as level-1 asks. */
 function qtData(i) {
-  return D.qtd[i] || { nodes: fuFor(postById(i)).map((f, k) => ({ id: 'f' + k, par: 'r', fu: k, tok: 18e3 + k * 7e3 })) };
+  return D.qtd[i] || { nodes: fuFor(postById(i)).map((f, k) => ({ id: f.id || 'f' + k, par: 'r', fu: k, tok: 18e3 + k * 7e3 })) };
 }
 /* edit a thread's stored asks, or one stored ask */
 const qtEdit = (i, recipe) => db.put('qtd', i, produce(qtData(i), recipe));
@@ -8894,7 +8895,7 @@ function qtT(i) {
   const root = { id: 'r', par: null, u: p.u, createdAt: p.createdAt, q: p.q, t: p.t, html: p.running ? '' : ansBody(p), tok: p.tok, running: p.running || !!p.fail, fail: !!p.fail, rep: 'a:' + i, lv: 0 };
   const nodes = [root, ...d.nodes.map(n => {
     const f = n.fu != null ? fus[n.fu] || {} : null;
-    return Object.assign({ ...n }, f ? { u: f.u, createdAt: f.createdAt, q: f.q, html: f.html || `<p>${esc(fuAns(f))}</p>` } : {}, { rep: n.fu != null ? `f:${i}:${n.fu}` : `n:${i}:${n.id}` });
+    return Object.assign({ ...n }, f ? { u: f.u, createdAt: f.createdAt, q: f.q, html: f.html || `<p>${esc(fuAns(f))}</p>` } : {}, { rep: n.fu != null ? `f:${i}:${(f && f.id) || n.id}` : `n:${i}:${n.id}` });
   })];
   const by = Object.fromEntries(nodes.map(n => [n.id, n]));
   const kids = {}; nodes.forEach(n => { if (n.par) (kids[n.par] = kids[n.par] || []).push(n); });
@@ -11061,7 +11062,7 @@ function tmJump(k) {
 /* ---- server data ---- */
 RES.repSeen = { url: '/api/me/reports-seen', kind: 'value' };    /* the reports notification was read */
 RES.reqSeen = { url: '/api/me/requests-seen', kind: 'value' };   /* the join-requests notification was read */
-RES.rpLiked = { url: '/api/me/reply-likes', kind: 'value' };     /* replies you liked, as "<thread>:<path>" */
+RES.rpLiked = { url: '/api/me/reply-likes', kind: 'value' };     /* replies you liked, as "<thread>:<reply id>" */
 DATA_KEYS.push('repSeen', 'reqSeen', 'rpLiked');
 ST_DATA.add('repSeen').add('reqSeen');
 /* earlier defaults went to the UI store; move them to the data store */
@@ -11076,18 +11077,22 @@ function taCopy(text) {
 }
 const taThreadUrl = i => { const p = postById(i); return p ? `session.app/s/${sp(p.s).name}/t/${p.id}` : 'session.app'; };
 /* the link an item menu's Copy link gives: the thread, and the reply or follow-up in it */
-const taItemUrl = key => { const [k, a, b] = key.split(':'); return taThreadUrl(a) + (k === 'r' ? `#reply-${b}` : k === 'f' ? `/a/f${b}` : ''); };
+const taItemUrl = key => { const [k, a, b] = key.split(':'); return taThreadUrl(a) + (k === 'r' ? `#reply-${b}` : k === 'f' ? `/a/${b}` : ''); };
 /* Phone: the screen on top of the current tab */
 const taPhoneUrl = () => { const l = nst.stack || [], t = l[l.length - 1]; return t && t.v === 'thread' && postById(t.id) ? taThreadUrl(t.id) : t && t.v === 'space' && sp(t.id) ? `session.app/s/${sp(t.id).name}` : 'session.app'; };
 
 /* ---- your own items ---- */
 const taIn = () => st.auth === 'in';
-const taAt = (list, path) => { let r = null; path.forEach(j => { r = list && list[j]; list = (r && r.kids) || []; }); return r; };
+/* a reply by its id in a thread's replies (phase 1b: replies are named by id), and its top-level reply */
+const taHit = (list, id) => { for (const r of list || []) { if (r.id === id) return { r, top: null }; for (const x of r.kids || []) if (x.id === id) return { r: x, top: r }; } return null; };
+const taFind = (list, id) => { const h = taHit(list, id); return h ? h.r : null; };
+/* the id of the reply at a place in a thread's replies ("1", "0.0"): the Screen entries name a fixture's reply so */
+const rpIdAt = (th, path) => { let r = null, l = rpFor(postById(th)); for (const j of String(path).split('.')) { r = l[+j]; if (!r) return ''; l = r.kids || []; } return r.id || ''; };
 /* the item an edit or delete key names, with what the confirmation and the placeholder need */
 function taItem(key) {
   const [k, a, b] = String(key).split(':'), i = a, p = postById(i); if (!p) return null;
   if (k === 't') { const ask = p.k === 'ask'; return { k, i, p, noun: ask ? 'ask' : 'post', ask, text: p.q, u: p.u, del: !!p.del, busy: !!p.running, kids: ask ? qtT(i).nodes.length - 1 : rpFor(p).length }; }
-  if (k === 'r' && b != null) { const path = b.split('.').map(Number), r = taAt(rpFor(p), path); return r ? { k, i, p, path, r, noun: 'reply', text: r.t, u: r.u, del: !!r.del, kids: (r.kids || []).length } : null; }
+  if (k === 'r' && b != null) { const h = taHit(rpFor(p), b), r = h && h.r; return r ? { k, i, p, rid: b, top: h.top, r, noun: 'reply', text: r.t, u: r.u, del: !!r.del, kids: (r.kids || []).length } : null; }
   if (k === 'n') { const T = qtT(i), n = T.by[b]; return n && n.id !== 'r' ? { k, i, p, T, n, noun: 'follow-up', ask: true, text: n.q, u: n.u, del: !!n.del, busy: !!n.running, kids: T.kids(n.id).length } : null; }
   return null;
 }
@@ -11134,7 +11139,7 @@ function taSave() {
       const p = it.p, to = run ? (askPayOk(p.pay) ? p.pay : (askPay(p.s) || {}).id || null) : null;
       mutate('threads.update', Object.assign({ id: it.i, q: txt, base: { rev: revOf(p) } }, run ? { run: true, pay: to } : {}), () => { db.update('posts', it.i, x => { x.q = txt; if (changed) { x.edited = true; x.t = null; } if (run) { x.running = true; x.sum = null; x.tok = 0; x.pay = to; delete x.fail; } }); if (run) runStart(it.i); });
     } else if (it.k === 'r') {
-      mutate('replies.update', { thread: it.i, path: it.path.join('.'), t: txt, base: { rev: revOf(taAt(rpFor(it.p), it.path)) } }, () => db.put('rp', it.i, produce(rpFor(it.p), l => { const r = taAt(l, it.path); r.t = txt; if (changed) r.edited = true; })));
+      mutate('replies.update', { thread: it.i, reply: it.rid, t: txt, base: { rev: revOf(it.r) } }, () => db.put('rp', it.i, produce(rpFor(it.p), l => { const r = taFind(l, it.rid); r.t = txt; if (changed) r.edited = true; })));
     } else {
       const n = it.n;
       const pay = run ? (askPay(it.p.s) || {}).id || null : null;
@@ -11169,8 +11174,9 @@ function taDelete(key) {
       }
     });
     else if (it.k === 'r') {
-      mutate('replies.delete', { thread: it.i, path: it.path.join('.') }, () => db.put('rp', it.i, produce(rpFor(it.p), l => {
-        const par = it.path.length > 1 ? taAt(l, it.path.slice(0, -1)).kids : l, j = it.path[it.path.length - 1];
+      mutate('replies.delete', { thread: it.i, reply: it.rid }, () => db.put('rp', it.i, produce(rpFor(it.p), l => {
+        const h = taHit(l, it.rid); if (!h) return;
+        const par = h.top ? h.top.kids : l, j = par.indexOf(h.r);
         if (keep) { par[j].del = true; par[j].t = ''; delete par[j].edited; } else par.splice(j, 1);
       })));
     } else {
@@ -11207,10 +11213,10 @@ function taRpBox(r, key) {
 function taRpSend(key) {
   const txt = (st.taRpDraft || '').trim(), f = $('ta-rp');
   if (!txt) { if (f) f.focus(); return false; }
-  const [a, path] = key.split(':'), i = a, top = +path.split('.')[0];
+  const [a, rid] = key.split(':'), i = a, h = taHit(rpFor(postById(i)), rid), top = h ? (h.top || h.r).id : rid;
   st.taRpErr = false;
   askHold(() => {
-    mutate('research.createPostFollowUp', { thread: i, t: txt, parent: top }, () => db.put('rp', i, produce(rpFor(postById(i)), l => { const t = l[top]; if (t) t.kids = [...(t.kids || []), { u: ME.u, t: txt }]; })));
+    mutate('research.createPostFollowUp', { thread: i, t: txt, parent: top }, () => db.put('rp', i, produce(rpFor(postById(i)), l => { const t = l.find(x => x.id === top); if (t) t.kids = [...(t.kids || []), { u: ME.u, t: txt }]; })));
     Object.assign(st, { taRp: null, taRpDraft: '' });
   }, () => { st.taRpErr = true; });
   return true;
@@ -11353,7 +11359,7 @@ on($('app'), 'click', e => {
   if ((b = d('[data-tarp]'))) {
     if (!taIn()) { st.modal = 'signin'; return go(); }
     const k = b.dataset.tarp; if (st.taRp === k) { Object.assign(st, { taRp: null, taRpErr: false }); return go(); }
-    const it = taItem('r:' + k), kid = k.includes('.');
+    const it = taItem('r:' + k), kid = !!(it && it.top);
     Object.assign(st, { taRp: k, taRpErr: false, taEdit: null, imenu: null, taRpDraft: kid && it && it.u !== ME.u ? `@${it.u} ` : '' });
     go(); focus('ta-rp'); return;
   }
@@ -11421,7 +11427,7 @@ function taJump(k) {
     case 'ta-menu': { const i = taDemoPost(); st.imenu = 'p:' + i; break; }
     case 'ta-edit-post': { const i = taDemoPost(); st.taEdit = { key: 't:' + i, text: TA_POST + ' Bring your own copy.', run: false, err: false }; break; }
     case 'ta-edit-ask': thread(ASK0); st.taEdit = { key: 't:' + ASK0, text: postById(ASK0).q, run: true, err: false }; break;
-    case 'ta-edit-reply': { const i = taDemoPost(); st.taEdit = { key: `r:${i}:1`, text: 'I added the discussion questions for chapters 4 and 5 to the page.', run: false, err: false }; break; }
+    case 'ta-edit-reply': { const i = taDemoPost(); st.taEdit = { key: `r:${i}:${rpIdAt(i, '1')}`, text: 'I added the discussion questions for chapters 4 and 5 to the page.', run: false, err: false }; break; }
     case 'ta-edit-fu': {
       thread(ASK0);
       const T = qtT(ASK0), n = T.nodes.find(x => x.id !== 'r' && x.u === ME.u && !x.running) || T.nodes[1];
@@ -11431,7 +11437,7 @@ function taJump(k) {
       break;
     }
     case 'ta-del': { const i = taDemoPost(); st.modal = 'ta-del:t:' + i; break; }
-    case 'ta-del-reply': { const i = taDemoPost(); st.modal = `ta-del:r:${i}:0.0`; break; }
+    case 'ta-del-reply': { const i = taDemoPost(); st.modal = `ta-del:r:${i}:${rpIdAt(i, '0.0')}`; break; }
     case 'ta-deleted': taDemoPost(); break;
     case 'ta-deleted-ask': thread(ASK0); break;
     case 'ta-reply': { const i = taDemoPost(); Object.assign(st, { taRp: `${i}:0`, taRpDraft: 'Room 2B is on the second floor, next to the library.' }); setTimeout(() => { const el = $('ta-rp'); if (el) el.scrollIntoView({ block: 'center' }); }, 0); break; }
@@ -14230,7 +14236,7 @@ function sxUi(k, again) {
     case 'rf-show': {
       /* the Show was chosen on bram's reply while it was hidden (its moderation record at version 1); the scenario's
          edit while hidden moved that version since */
-      const at = (seed.rp[sf4] || []).findIndex(r => r.u === 'bram'), r0 = (seed.rp[sf4] || [])[at] || {}, key = `r:${sf4}:${at}`;
+      const at = (seed.rp[sf4] || []).findIndex(r => r.u === 'bram'), r0 = (seed.rp[sf4] || [])[at] || {}, key = `r:${sf4}:${((D.rp[sf4] || [])[at] || {}).id || ''}`;
       const w = { name: 'moderation.decide', input: { item: key, decision: 'shown', base: { rev: 1 } } };
       const stale = () => { st.sxStale = { kind: 'show', key, by: 'bram', was: r0.t || '' }; if (st.sxvStale === 'dialog') { if (nat) nst.sheet = 'sxstale'; else st.modal = 'sx-stale'; } };
       nat ? nThread(sf4) : thread(sf4);
@@ -14253,7 +14259,7 @@ function sxUi(k, again) {
       const post = tidWhere(p => p.s === 'replication' && p.k === 'post' && (D.rp[p.id] || []).length);
       const approve = (id, u, made) => ({ id, kind: 'approve', sp: 'replication', title: `Approve ${u}’s request in #replication-club`, text: '', state: 'wait', made, tries: 0, w: { name: 'joinRequests.decide', input: { space: 'replication', users: [u], decision: 'approve', base: { [u]: 1 } } } });
       outbox([approve('o1', 'noor.a', '40m'), approve('o2', 'ekow', '40m'),
-        { id: 'o3', kind: 'hide', sp: 'replication', title: `Hide a reply by ${((D.rp[post] || [])[0] || {}).u || 'a member'} in #replication-club`, text: '', state: 'wait', made: '35m', tries: 0, w: post ? { name: 'moderation.decide', input: { item: `r:${post}:0`, decision: 'hidden' } } : null },
+        { id: 'o3', kind: 'hide', sp: 'replication', title: `Hide a reply by ${((D.rp[post] || [])[0] || {}).u || 'a member'} in #replication-club`, text: '', state: 'wait', made: '35m', tries: 0, w: post ? { name: 'moderation.decide', input: { item: `r:${post}:${((D.rp[post] || [])[0] || {}).id || ''}`, decision: 'hidden' } } : null },
         ...sxFill(2, 'replication')]);
       if (nat) nSpace('replication'); else Object.assign(st, { space: 'replication', home: false });
       drive(null, () => {

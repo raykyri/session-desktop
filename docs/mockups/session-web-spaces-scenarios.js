@@ -247,7 +247,7 @@
     run: (tx, a, h) => {
       const th = sf42(tx), list = tx.mapGet('rp', th);
       tx.mapPut('rp', th, list.map(r => r.u === 'bram' ? { ...r, t: 'Edited: the discount code is gone. A comparison of managed Postgres hosts is at cheapdb.example/compare.', edited: true, rev: (r.rev || 1) + 1 } : r));
-      const key = `r:${th}:${list.findIndex(r => r.u === 'bram')}`;
+      const key = `r:${th}:${(list.find(r => r.u === 'bram') || {}).id}`;
       /* hidden (its moderation record at version 1), then edited by bram while hidden (version 2) */
       tx.mapPut('modSt', key, 'hidden'); tx.mapPut('modRev', key, 2);
     } });
