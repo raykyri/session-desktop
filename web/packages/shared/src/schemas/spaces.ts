@@ -1087,14 +1087,8 @@ export const unsettableSchema = z.enum([
  * changed since). */
 export const revBaseSchema = z.object({ rev: count });
 
-/** The base a page editor opened (step 9): its version. The stand-in's author
- * and history (TODO(fixtures)) are accepted and not stored. */
-export const pageBaseSchema = z.object({
-  rev: count.optional(),
-  by: spaceHandleSchema.optional(),
-  ed: spaceHandleSchema.optional(),
-  revs: z.array(pageRevisionSchema).optional(),
-});
+/** The base a page editor opened (step 9): its version. */
+export const pageBaseSchema = z.object({ rev: count.optional() });
 
 export const createThreadInputSchema = z.object({
   /** The client's ULID for the thread; absent: the server makes one. */

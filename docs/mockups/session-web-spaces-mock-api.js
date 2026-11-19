@@ -1709,18 +1709,16 @@
       putSkills(tx, i.space, i.order.map(id => byId.get(id)));
     } });
   const pageSlug = t => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  /* TODO(fixtures): the fixtures have no page documents; the page shows a generated stand-in (abDoc). Until
-     they do, the page sends the stand-in's author and history as `base`, used when the server has no document. */
-  /* base: the document as the editor opened it: its version (rev, step 9), and for a stand-in its author and history */
-  const BASE_DOC = obj({ 'rev?': int, 'by?': str, 'ed?': str, 'revs?': arr(obj({ by: str, 'createdAt?': iso, note: str })) }, 'PageBase');
+  /* base: the version of the document the editor opened (rev, step 9) */
+  const BASE_DOC = obj({ 'rev?': int }, 'PageBase');
   /* a page: ref is its id (or, for a scenario, its index in the space's pages); [space, its entry, its index] */
   const pageAt = (tx, sid, ref) => {
     const s = tx.need('spaces', sid, 'space'), l = s.pages || [], k = typeof ref === 'number' ? ref : l.findIndex(p => p[2] === ref);
     if (!l[k]) throw rpcError('NOT_FOUND', 'The server has no record of this page. Someone may have deleted it.');
     return [s, l[k], k];
   };
-  /* a page's document, or the empty one a listed page without a stored document stands for: by the editor, with
-     no history (phase 0: the server never stores client-made state; the client's base gives only the version) */
+  /* a page's document (the fixtures hold one for each page), or the empty one a listed page without a stored
+     document stands for: by the editor, with no history */
   const docOf = (tx, sid, title) => tx.mapGet('pagedocs', `${sid}/${pageSlug(title)}`) || { t: title, text: [''], by: tx.me.u, revs: [] };
   /* a title's slug, which no other page of the space has (CONFLICT); one without a letter or digit: BAD_REQUEST */
   const freeSlug = (tx, sid, title, except) => {
@@ -1742,7 +1740,7 @@
     tx.mapPut('pagedocs', `${sid}/${pageSlug(title)}`, { id: pg[2], t: title, text: body, by: doc.by, ed: by, rev: pageRev(doc) + 1, revs: [{ by, note: 'Edited the page' }, ...doc.revs] });
   }
   proc('pages.update', { input: obj({ space: ID, 'page?': nul(ID), 'id?': ID, title: str, text: arr(str), 'base?': BASE_DOC, 'force?': bool }, 'UpdatePageInput'), output: '{ id: PageId }', who: 'member', errors: ['NOT_FOUND', 'CONFLICT', 'EXPIRED'], writes: ['pagedocs', 'spaces'],
-    note: 'add a page (page: null; id: the client’s ULID for it, else the server makes one) or edit one (page: its id, the third item of its entry in the space’s pages); a title whose slug another page of the space has: CONFLICT. Adding or editing a page sends no notification. Who may edit follows the space’s pageEdit setting: moderators, and its members when it is "members". CONFLICT when the page changed since it was opened (step 9). base: the version only (a page without a stored document starts with no history).',
+    note: 'add a page (page: null; id: the client’s ULID for it, else the server makes one) or edit one (page: its id, the third item of its entry in the space’s pages); a title whose slug another page of the space has: CONFLICT. Adding or editing a page sends no notification. Who may edit follows the space’s pageEdit setting: moderators, and its members when it is "members". CONFLICT when the page changed since it was opened (step 9). base: the version only.',
     space: spaceIn, can: (tx, i) => pageEditor(tx, i.space),
     run: (tx, i) => {
       const title = text(i.title, 'title'), body = i.text.length ? i.text : [''];
@@ -2406,7 +2404,6 @@
       /* the person started n device runs in the last hour (the limit is 100) */
       deviceRuns: n => { for (let k = 0; k < n; k++) tx.noteDeviceRun(); },
       /* another member's save (step 9): the version goes up by one, as when they save in the editor */
-      /* base: a page without a stored document: its author and history as the page shows them (TODO(fixtures)) */
       savePage: (sid, index, { by, title, text }) => { const [, pg] = pageAt(tx, sid, index); writePage(tx, sid, index, title || pg[0], text, by); },
       saveSkill: (sid, index, { name, prompt }) => { const row = (tx.mapGet('skills', sid) || [])[index]; writeSkill(tx, sid, index, name || row.name, prompt); },
       saveRules: (sid, rules, by) => writeRules(tx, sid, rules, by),

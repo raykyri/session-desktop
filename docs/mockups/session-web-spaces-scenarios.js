@@ -21,7 +21,7 @@
          h.ago('3h'): an ISO time this long before the mock clock (as the page's isoAgo);
          h.run(thread, node, step): a run in progress on the node's ask (node r: the thread's ask), held at that
          progress step (paused: its job does not move it on), as the job writes it (step 7).
-     h.savePage(space, page, { by, text, title?, base? }), h.saveSkill(space, index, { prompt, name? }),
+     h.savePage(space, page, { by, text, title? }), h.saveSkill(space, index, { prompt, name? }),
      h.saveRules(space, rules, by): another member's save of a page, a skill or the rules, as the procedure
          writes it: the version goes up by one (step 9, edit conflicts).
    A scenario writes as the server does, so it is not subject to the permission checks of step 5. */
@@ -132,11 +132,10 @@
   /* ---- edit conflicts (step 9): another member saves while your editor is open ----
      The Screen entries open the editor on the seed, then run one of these: the version goes up, so the save
      that follows is a CONFLICT. */
-  scenario('scifi: tomasz saved a page', { note: 'tomasz saved a new version of Canon starter list in #sci-fi (the page had no stored document: its history is the one the page shows)',
+  scenario('scifi: tomasz saved a page', { note: 'tomasz saved a new version of Canon starter list in #sci-fi',
     run: (tx, a, h) => h.savePage('scifi', 1, {
       by: 'tomasz',
       text: ['A short list for people new to the genre: one book per subgenre, each with a sentence on why it is on the list.', '## Classics', '- The Left Hand of Darkness (Le Guin, 1969): gender and politics on a planet in an ice age.\n- Neuromancer (Gibson, 1984): the novel that named cyberspace.\n- Hyperion (Simmons, 1989): six stories told on one pilgrimage.', '## Recent', '- Ancillary Justice (Leckie, 2013): told by a soldier who used to be a starship.\n- The Fifth Season (Jemisin, 2015): geology as the centre of the worldbuilding.\n- Children of Time (Tchaikovsky, 2015): a spider civilization over thousands of years.', '## Adding a book', 'Reply in the canon thread with the title, the year and one sentence. Moderators update this page at the start of each month.'],
-      base: { by: 'tomasz', ed: 'ines.v', revs: [{ by: 'ines.v', createdAt: '2026-10-29T22:00:00Z', note: 'Updated the page' }, { by: 'ines.v', createdAt: h.ago('3w'), note: 'Added a section' }, { by: 'tomasz', createdAt: h.ago('2mo'), note: 'Created the page' }] },
     }) });
   scenario('ml: mira_k saved a skill', { note: 'mira_k saved a new version of the skill summarizing-papers in #ml-papers',
     run: (tx, a, h) => { const { prompt } = tx.mapGet('skills', 'ml')[0]; h.saveSkill('ml', 0, { prompt: prompt.replace('- Not tested:', '- Code: whether the code and weights are public.\n- Not tested:') }); } });
@@ -162,16 +161,21 @@
     /* the run's checks when it started failed (step 7), and the server could not resume a run after a restart */
     access: { pay: 'session', sum: window.SessionJobs.FAIL_SUM.access(), fail: { why: 'access' } },
     interrupted: { pay: 'session', sum: window.SessionJobs.FAIL_SUM.interrupted(), fail: { why: 'interrupted' } },
+    /* a device run whose answer was over 200 KB (args.device) */
+    too_large: { sum: window.SessionJobs.FAIL_SUM.too_large(), fail: { why: 'too_large' } },
   };
-  scenario('asks: your ask', { note: 'you asked a minute ago, the newest thread. args: space, end (running, stopped, tokens, key, rate, access, interrupted), q, tok. An ask stopped for tokens: your included tokens are used up. A running ask: its run is held at the third progress step (Reading 9 sources)',
+  scenario('asks: your ask', { note: 'you asked a minute ago, the newest thread. args: space, end (running, stopped, tokens, key, rate, access, interrupted, too_large), q, tok, device (it ran on your MacBook Air: a device run). An ask stopped for tokens: your included tokens are used up. A running ask: its run is held at the third progress step (Reading 9 sources)',
     run: (tx, a, h) => {
       const q = a.q || SAMPLE_Q, end = JSON.parse(JSON.stringify(ASK_ENDS[a.end]));
       if (a.end === 'rate') end.fail.at = Date.now() + 20e3;   /* the provider's retry time, on the real clock as the page counts it */
       if (a.end === 'tokens') { sessionUsed(tx, 2e6); end.tok = a.tok; }
       const id = tx.id();
+      /* args.device: the ask ran on your MacBook Air (Claude Code): a device run, which pays nothing */
+      const ex = a.device ? { kind: 'device', cli: a.cli || 'claude', device: 'd1', u: tx.me.u } : null;
+      if (ex) { delete end.pay; end.executor = ex; }
       tx.put('posts', { id, s: a.space, u: tx.me.u, k: 'ask', t: null, q, sum: null, tok: 0, createdAt: h.ago('1m'), running: false, kw: q, ...end });
       tx.mapPut('fu', id, []);
-      if (a.end === 'running') h.run(id, 'r', 2);
+      if (a.end === 'running') h.run(id, 'r', 2, ex);
     } });
   scenario('asks: a follow-up running', { note: 'you asked about the first answer of the prediction-markets thread just now; the run is held at the third progress step (Reading 9 sources)',
     run: (tx, a, h) => {
@@ -264,12 +268,8 @@
     run: tx => { const th = scifiAsk(tx); tx.edit('posts', th, x => { x.running = false; x.att = (x.att || 1) + 1; x.fail = { why: 'interrupted' }; x.sum = window.SessionJobs.FAIL_SUM.interrupted(); x.executor = MIRA_MAC; delete x.pay; }); } });
   scenario('device runs: the hourly limit', { note: 'you started 100 device runs in the last hour: the next one answers TOO_MANY_REQUESTS with the time it can start',
     run: (tx, a, h) => h.deviceRuns(100) });
-  scenario('device runs: your run on this Mac', { note: 'you ran your #public ask again on your MacBook Air (Claude Code); the Mac claimed the run and holds its lease. args.end: interrupted (the lease ended) or too_large (the answer was over 200 KB)',
-    run: (tx, a, h) => {
-      const th = tx.get('posts').find(p => p.s === 'public' && p.u === tx.me.u && p.k === 'ask' && !p.gone).id, ex = { kind: 'device', cli: 'claude', device: 'd1', u: tx.me.u };
-      tx.edit('posts', th, x => { x.att = (x.att || 1) + 1; x.executor = ex; delete x.pay; if (a.end) { x.running = false; x.fail = { why: a.end }; x.sum = window.SessionJobs.FAIL_SUM[a.end](); } else { x.running = true; delete x.fail; } });
-      if (!a.end) h.run(th, 'r', 1, ex);
-    } });
+  scenario('device runs: an answer from a Mac', { note: 'the newest answer of the first thread came from its asker’s Mac (Claude Code): the thread carries the run’s executor',
+    run: tx => { const p = tx.get('posts')[0]; tx.edit('posts', p.id, x => { x.executor = { kind: 'device', cli: 'claude', device: p.u === tx.me.u ? 'd1' : 'dm-' + p.u, u: p.u }; delete x.pay; }); } });
   /* ---- end sync states ---- */
 
   window.SessionScenarios = { list };

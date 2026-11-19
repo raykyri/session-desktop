@@ -9348,19 +9348,11 @@ const abKey = (s, t) => `${s.id}/${abSlug(t)}`;
 const ROLE_HELP = { owner: 'Owner: settings and moderators; archives or deletes the space', admin: 'Admin: settings and moderation', mod: 'Moderator: reviews requests and reports, hides and removes items' };
 const abOwner = s => (s.mods.find(m => m[1] === 'owner') || s.mods[0] || ['lettie'])[0];
 const abCanEdit = s => st.auth === 'in' && !s.archived && (isModOf(s.id) || (s.pageEdit === 'members' && isMember(s.id)));
-const ABDOC_TEXT = {
-  'getting-started-guide': ['Sablefield is a hosted Postgres-compatible database that syncs a subset of your data to client devices. This page lists the first steps and the threads that answer the most common questions about each one.', '## 1. Create a project', 'Pick a region close to most of your users. You can add read replicas in other regions later; the primary region cannot change after creation.', '## 2. Add a sync rule', 'A sync rule selects the rows each signed-in user receives. Scope every rule by the user or team column:', '- Start with one table and one rule.\n- Deploy the rule from the dashboard or with sablefield rules deploy.\n- E_SYNC_SCOPE means the rule can return rows outside its declared scope.', '## 3. Install a client SDK', 'SDKs exist for TypeScript, Swift and Kotlin. Each one queues writes while the device is offline and replays them in order.', '## Not covered here', 'Questions about a specific account, invoice or project go to Sablefield support.'],
-  'reading-group-schedule': ['The reading group reads one book a month. Each book gets a thread on the date below; post notes there, not in new threads.', '## Upcoming', '- November: The Dispossessed (Le Guin). Thread opens Nov 20.\n- December: Accelerando (Stross), chapters 1–4. Thread opens Dec 18.\n- January: to be chosen by vote.', '## How books are chosen', 'Suggest a book in the reading-group thread with one sentence on why. Moderators open a vote on the first of the month and pin the result.', '## Spoilers', 'Mark plot details in the monthly thread as described in the spoiler policy.'],
-  'canon-starter-list': ['A short list for people new to the genre: one book per subgenre, each with a sentence on why it is on the list.', '## Classics', '- The Left Hand of Darkness (Le Guin, 1969): gender and politics on a planet in an ice age.\n- Neuromancer (Gibson, 1984): the novel that named cyberspace.\n- Hyperion (Simmons, 1989): six stories told on one pilgrimage.', '## Recent', '- Ancillary Justice (Leckie, 2013): told by a soldier who used to be a starship.\n- The Fifth Season (Jemisin, 2015): geology as the centre of the worldbuilding.', '## Adding a book', 'Reply in the canon thread with the title, the year and one sentence. Moderators update this page at the start of each month.'],
-  'spoiler-policy': ['Threads in #sci-fi are public and show up in search, so mark anything that gives away a plot.', '## In titles', 'Put [spoilers] at the start of a title that names a twist or an ending.', '## In answers and replies', '- Put plot details after a line that says Spoilers below.\n- Name the book and the chapter the spoiler comes from.', '## Moderation', 'Moderators hide threads that reveal endings without a warning and ask the author to add one. The thread comes back once it is marked.'],
-};
-/* a page's document: stored edits, else one made from the page's title */
+/* a page's document, as the server stores it (the fixtures hold one for each page); a listed page without one, the
+   empty document the server stands for it (the mock's docOf), and for a page being added, its first version */
 function abDoc(s, i) {
-  const [t, at] = s.pages[i] || ['Untitled page', null], k = abKey(s, t);
-  if (D.pagedocs[k]) return D.pagedocs[k];
-  const by = abOwner(s), ed = (s.mods[1] || s.mods[0] || [by])[0];
-  const text = ABDOC_TEXT[abSlug(t)] || [`${t} for ${spName(s)}.`, 'This page collects what members ask about most, with links to the threads that answer it.', 'Moderators keep it current; suggest a change in a thread.'];
-  return { t, text, by, ed, revs: [{ by: ed, ...(at ? { createdAt: at } : {}), note: 'Updated the page' }, { by: ed, createdAt: isoAgo('3w'), note: 'Added a section' }, { by, createdAt: isoAgo('2mo'), note: 'Created the page' }] };
+  const [t] = s.pages[i] || ['Untitled page'], k = abKey(s, t), by = s.pages[i] ? abOwner(s) : ME.u;
+  return D.pagedocs[k] || { t, text: [''], by, ed: by, revs: [{ by, note: 'Created the page' }] };
 }
 
 /* ---------- pages card, page view, editor, history ---------- */
@@ -9859,9 +9851,7 @@ function edOverDlg() {
 function abPageSave(s, i, ed, force) {
   const doc = abDoc(s, i), title = ed.t.trim(), text = ed.b.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
   if (!title) return;
-  const stand = !ed.isNew && !D.pagedocs[abKey(s, doc.t)];
-  const base = ed.isNew ? null : Object.assign({ rev: ed.rev || 0 }, stand ? { by: doc.by, ed: doc.ed, revs: doc.revs } : {});
-  mutate('pages.update', Object.assign({ space: s.id, page: ed.isNew ? null : s.pages[i][2], title, text }, base ? { base: { rev: base.rev } } : {}, force ? { force: true } : {}), () => {
+  mutate('pages.update', Object.assign({ space: s.id, page: ed.isNew ? null : s.pages[i][2], title, text }, ed.isNew ? {} : { base: { rev: ed.rev || 0 } }, force ? { force: true } : {}), () => {
     if (ed.isNew) spEdit(s.id, x => { x.pages.push([title, nowIso()]); }); else spEdit(s.id, x => { x.pages[i] = [title, nowIso()]; });
     if (!ed.isNew && abKey(s, doc.t) !== abKey(s, title)) db.del('pagedocs', abKey(s, doc.t));
     db.put('pagedocs', abKey(s, title), { t: title, text: text.length ? text : [''], by: ed.isNew ? ME.u : doc.by, ed: ME.u, rev: ed.isNew ? 1 : (doc.rev || 0) + 1, revs: [{ by: ME.u, note: ed.isNew ? 'Created the page' : 'Edited the page' }, ...(ed.isNew ? [] : doc.revs)] });
@@ -9870,8 +9860,8 @@ function abPageSave(s, i, ed, force) {
 }
 function abRestore(s, i, k, force) {
   const doc = abDoc(s, i), r = doc.revs[k]; if (!r) return;
-  const note = `Restored the version from ${agoText(r)}`, base = Object.assign({ rev: st.abHistRev != null ? st.abHistRev : doc.rev || 0 }, D.pagedocs[abKey(s, doc.t)] ? {} : { by: doc.by, ed: doc.ed, revs: doc.revs });
-  mutate('pages.restore', Object.assign({ space: s.id, page: s.pages[i][2], rev: k, note, base: { rev: base.rev } }, force ? { force: true } : {}), () => db.put('pagedocs', abKey(s, doc.t), { ...doc, ed: ME.u, rev: (doc.rev || 0) + 1, revs: [{ by: ME.u, note }, ...doc.revs] }), Object.assign(edOpts('restore', s.id, i, null, { k }), { then: () => { st.abHistRev = (abDoc(sp(s.id), i).rev || 0); if (st.edCf && st.edCf.kind === 'restore') st.edCf = null; } }));
+  const note = `Restored the version from ${agoText(r)}`, base = { rev: st.abHistRev != null ? st.abHistRev : doc.rev || 0 };
+  mutate('pages.restore', Object.assign({ space: s.id, page: s.pages[i][2], rev: k, note, base }, force ? { force: true } : {}), () => db.put('pagedocs', abKey(s, doc.t), { ...doc, ed: ME.u, rev: (doc.rev || 0) + 1, revs: [{ by: ME.u, note }, ...doc.revs] }), Object.assign(edOpts('restore', s.id, i, null, { k }), { then: () => { st.abHistRev = (abDoc(sp(s.id), i).rev || 0); if (st.edCf && st.edCf.kind === 'restore') st.edCf = null; } }));
   toast('Restored. The page history keeps both versions.');
 }
 function abSkSave(sid, ed, force) {
@@ -12719,10 +12709,8 @@ function nePgSave(force) {
   if (!title) { neSet({ err: 'Add a title.', cf: null }); NE_FOCUS = 'ne-t'; return; }
   /* an empty page is allowed, as on the web: only the title is required */
   const isNew = ed.isNew, i = ed.i, doc = isNew ? null : abDoc(s, i);
-  const stand = !isNew && !D.pagedocs[abKey(s, doc.t)];
-  const base = isNew ? null : Object.assign({ rev: ed.rev || 0 }, stand ? { by: doc.by, ed: doc.ed, revs: doc.revs } : {});
   neSet({ saving: true, err: '', cf: null });
-  mutate('pages.update', Object.assign({ space: s.id, page: isNew ? null : s.pages[i][2], title, text }, base ? { base: { rev: base.rev } } : {}, force ? { force: true } : {}), () => {
+  mutate('pages.update', Object.assign({ space: s.id, page: isNew ? null : s.pages[i][2], title, text }, isNew ? {} : { base: { rev: ed.rev || 0 } }, force ? { force: true } : {}), () => {
     if (isNew) spEdit(s.id, x => { x.pages.push([title, nowIso()]); }); else spEdit(s.id, x => { x.pages[i] = [title, nowIso()]; });
     if (!isNew && abKey(s, doc.t) !== abKey(s, title)) db.del('pagedocs', abKey(s, doc.t));
     db.put('pagedocs', abKey(s, title), { t: title, text, by: isNew ? ME.u : doc.by, ed: ME.u, rev: isNew ? 1 : (doc.rev || 0) + 1, revs: [{ by: ME.u, note: isNew ? 'Created the page' : 'Edited the page' }, ...(isNew ? [] : doc.revs)] });
