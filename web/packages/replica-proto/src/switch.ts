@@ -143,7 +143,8 @@ export function applyPackage(
   else if (entry) throw new Error(`${envelope.name} has no package mutator`);
   const out = pkg.apply(pkg.createRegistry(list), source, { u }, envelope, {
     now,
-    server: { random },
+    // the prototype keeps no count of device runs, and the suite starts none
+    server: { random, deviceRunStarts: () => [] },
   });
   if (out.status === "refused")
     return {

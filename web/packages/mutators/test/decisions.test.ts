@@ -54,7 +54,6 @@ test("1. followups.ask, research.forkNode and followups.update with run write a 
     status: "queued",
     attempt: 1,
     executor: null,
-    lease: null,
     end: null,
   });
   const m2 = w.id();

@@ -250,9 +250,11 @@ export interface Executor {
 export type RunEnd = "stopped" | "tokens" | "key" | "rate" | "access" | "interrupted" | "too_large";
 
 /** A run of an ask: the thread's (`node` "r") or a follow-up's (`node` its
- * id). A mutator writes it `queued`; from there the server's job, or for a
- * device run the online `runs.*` calls of the device that claimed it, write
- * its status, its lease and how it ended. */
+ * id). A mutator writes it `queued`, and `cancelled` when a later run of the
+ * same ask starts; from there the server's job, or for a device run the
+ * online `runs.*` calls of the device that claimed it, write its status and
+ * how it ended. A device run's lease (holder, expiry, heartbeat) is kept by
+ * the server only, never in the record (review round 1 of phase 1, W8). */
 export interface RunRec {
   kind: "run";
   id: string;
@@ -266,9 +268,6 @@ export interface RunRec {
   pay: string | null;
   model: string | null;
   executor: Executor | null;
-  /** A device run's lease (server-written): when it ends unless the device
-   * sends a heartbeat, and the device's last heartbeat. */
-  lease: { until: string; beat: string } | null;
   createdAt: string;
   rev: number;
 }
@@ -320,6 +319,10 @@ export interface InviteRec {
   usedBy: string | null;
   /** A revoked link stays stored, for `invites.restore`. */
   revokedAt: string | null;
+  /** The staff role of whoever revoked it (null: no staff role, the link's
+   * maker as a member): only someone with that role or a higher one
+   * restores it (review round 1 of phase 1, E12a). */
+  revokedRole: SpaceRole | null;
   createdAt: string;
   rev: number;
 }
@@ -598,6 +601,20 @@ export interface DeviceRec {
   rev: number;
 }
 
+/** How a person's membership of a space ended, keyed `exit:<space>:<user>`,
+ * in their user log only: `left` (`spaces.leave`) or `removed`
+ * (`members.remove`, `members.ban`), so each of the person's devices tells a
+ * voluntary leave, which keeps no frozen copy, from a removal. Joining the
+ * space again deletes it. */
+export interface ExitRec {
+  kind: "exit";
+  sp: string;
+  u: string;
+  ended: "left" | "removed";
+  createdAt: string;
+  rev: number;
+}
+
 /** A report of a source in a space, keyed `srcrep:<space>:<source>:<by>`. */
 export interface SourceReportRec {
   kind: "srcrep";
@@ -643,7 +660,8 @@ export type StoredRecord =
   | SourceRec
   | SpaceSourceRec
   | SourceReportRec
-  | ApiKeyRec;
+  | ApiKeyRec
+  | ExitRec;
 
 export type Kind = StoredRecord["kind"];
 export type RecordOf<K extends Kind> = Extract<StoredRecord, { kind: K }>;
@@ -683,6 +701,7 @@ export function idOfRecord(r: Draft | StoredRecord): string {
     case "member":
     case "request":
     case "ban":
+    case "exit":
       return `${r.sp}:${r.u}`;
     case "like":
     case "save":
@@ -762,6 +781,7 @@ export const KINDS: ReadonlySet<Kind> = new Set<Kind>([
   "srcrep",
   "apikey",
   "device",
+  "exit",
 ]);
 
 export const spaceKey = (id: string) => `space:${id}`;
@@ -842,6 +862,7 @@ export function personOf(r: Draft | StoredRecord): string | null {
     case "profile":
     case "apikey":
     case "device":
+    case "exit":
       return r.u;
     case "report":
     case "srcrep":

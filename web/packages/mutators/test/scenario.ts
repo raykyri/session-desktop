@@ -270,7 +270,8 @@ export function history(t: ExecutionContext, seed = 1): World {
   run("otto", "invites.create", { id: w.id(), space: open });
   run("mona", "invites.revoke", { id: link });
   run("mel", "invites.restore", { id: link });
-  run("mel", "invites.restore", { id: link });
+  run("mona", "invites.restore", { id: link });
+  run("mona", "invites.restore", { id: link });
   const code = (w.get(`invite:${link}`) as { code: string }).code;
   run("eve", "spaces.join", { space: closed, invite: code });
   run("otto", "spaces.join", { space: closed, invite: code });

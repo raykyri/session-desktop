@@ -10,6 +10,7 @@ import { bad, notFound, refuse } from "../errors.js";
 import type { InviteRec, SpaceRec } from "../records.js";
 import {
   addMember,
+  endMembership,
   mayInvite,
   needSpace,
   normQs,
@@ -315,7 +316,7 @@ export const spaceMutators = [
     },
     run: (tx, i) => {
       if (!tx.get("member", `${i.space}:${tx.me}`)) return null;
-      tx.del("member", `${i.space}:${tx.me}`);
+      endMembership(tx, i.space, tx.me, "left");
       refreshSpace(tx, i.space);
       return null;
     },

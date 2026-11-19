@@ -17,7 +17,7 @@ import { spaces } from "@session/shared";
 import { z } from "zod";
 
 import { canRead, isClosed, reviewedFor } from "../access.js";
-import { defineMutator, inSpace, personal, type PreCtx, type Tx } from "../engine.js";
+import { defineMutator, inSpace, inSpaces, personal, type PreCtx, type Tx } from "../engine.js";
 import { bad, notFound, refuse, stale } from "../errors.js";
 import type { Executor, FollowUpRec, ThreadRec } from "../records.js";
 import {
@@ -34,7 +34,7 @@ import {
   writable,
 } from "../rules.js";
 import { baseS, nodeS, ulidS } from "../schemas.js";
-import { HOUR, isoAt, msOf } from "../time.js";
+import { HOUR, isoAt } from "../time.js";
 
 const payS = z.string().nullable();
 
@@ -70,17 +70,17 @@ function ownDevice(tx: Tx, ex: z.infer<typeof executorS> | null | undefined) {
 }
 
 /** The pre-check of a device run: the actor started fewer than
- * DEVICE_RUNS_PER_HOUR device runs in the past hour (their runs are in many
- * space logs, which no replica holds whole). The limit answers
- * TOO_MANY_REQUESTS with `retryAt`, when the next run can start; the server
- * does not record it, so the write can be sent again then. */
+ * DEVICE_RUNS_PER_HOUR device runs in the past hour, as the server counts
+ * the starts (`ServerHooks.deviceRunStarts`), not from run records, which
+ * deleting a thread deletes (review round 1 of phase 1, W4). The limit
+ * answers TOO_MANY_REQUESTS with `retryAt`, when the next run can start;
+ * the server does not record it, so the write can be sent again then. */
 function deviceCheck(ctx: PreCtx, ex: z.infer<typeof executorS> | null | undefined) {
   if (!ex) return {};
   const since = ctx.nowMs - HOUR;
-  const recent = ctx.tx
-    .scan("run.u", ctx.me)
-    .filter((r) => r.executor !== null && msOf(r.createdAt) > since)
-    .map((r) => msOf(r.createdAt))
+  const recent = ctx
+    .deviceRunStarts(ctx.me, since)
+    .filter((at) => at > since)
     .sort((a, b) => a - b);
   if (recent.length >= DEVICE_RUNS_PER_HOUR)
     throw refuse(
@@ -154,10 +154,18 @@ function startRun(
     pay: executor ? null : pay,
     model,
     executor,
-    lease: null,
     createdAt: tx.now,
   });
   return run;
+}
+
+/** Cancel the runs of the ask at `node` that are still queued or running:
+ * a later run of the same ask replaces them, and the answer of an earlier
+ * one never lands on it (review round 1 of phase 1, W2). */
+function cancelRuns(tx: Tx, th: string, node: string) {
+  for (const r of tx.scan("run.th", th))
+    if (r.node === node && (r.status === "queued" || r.status === "running"))
+      tx.put({ ...r, status: "cancelled", end: "stopped" });
 }
 
 const runJob = (result: { run: string | null } | null) =>
@@ -184,6 +192,9 @@ export const threadMutators = [
       const scope = inSpace(tx, i.space, "member");
       if (i.from) {
         const src = readableThread(tx, i.from.th);
+        // the source follow-up links to the new thread: a write in its space
+        // too, which a ban there stops (review round 1 of phase 1, W5)
+        inSpace(tx, src.s, "user");
         const s = needSpace(tx, src.s);
         if (isClosed(s) && src.s !== i.space)
           throw refuse(
@@ -197,10 +208,10 @@ export const threadMutators = [
           if (n.u !== tx.me)
             throw refuse("FORBIDDEN", "Only the person who asked this can start a thread from it.");
         }
-      } else {
-        ownPayer(tx, i.pay);
-        if (i.kind === "ask") ownDevice(tx, i.executor);
+        return inSpaces(tx, [...scope.spaces, src.s], "user");
       }
+      ownPayer(tx, i.pay);
+      if (i.kind === "ask") ownDevice(tx, i.executor);
       return scope;
     },
     needsPre: (i) => !i.from && i.kind === "ask" && !!i.executor,
@@ -267,6 +278,13 @@ export const threadMutators = [
       const p = readableThread(tx, i.id);
       if (p.mod === "removed") throw removed();
       if (p.del || p.gone) throw deleted("thread");
+      // running an ask again is an ask: refused in an archived space, as
+      // followups.ask is, and a post has no ask to run (review round 1 of
+      // phase 1, E12b and E12c)
+      if (i.run) {
+        writable(tx, p.s);
+        if (p.k !== "ask") throw bad("run", "an ask thread");
+      }
       if (p.rev !== i.base.rev) throw stale(tx, tx.me, p);
       const q = text(i.q, "q");
       const changed = q !== p.q;
@@ -293,6 +311,7 @@ export const threadMutators = [
         att: p.att + 1,
       };
       tx.put(ran);
+      cancelRuns(tx, p.id, "r");
       return { run: startRun(tx, ran, "r", ran.att, pay, ran.model) };
     },
     effects: (_i, result) => runJob(result),
@@ -337,6 +356,7 @@ export const threadMutators = [
         del: true,
         gone: !kept,
         sum: kept ? p.sum : null,
+        about: null,
         updatedAt: tx.now,
       });
       return reads ? { kept } : null;
@@ -518,6 +538,9 @@ export const threadMutators = [
       if (p.mod === "removed") throw removed();
       const par = i.parent === "r" ? null : followUpOf(tx, p.id, i.parent);
       if (par?.mod === "removed") throw removed();
+      // the answers it compares: the thread's own ("r") or follow-ups of the
+      // same thread the asker may read (review round 1 of phase 1, E12d)
+      for (const u of i.uses ?? []) if (u !== "r") followUpOf(tx, p.id, u);
       const q = text(i.q, "q");
       tx.create(
         followUp(tx, i.id, p, par?.id ?? null, q, i.uses ?? null, i.pay ?? null, i.model ?? null),
@@ -553,6 +576,7 @@ export const threadMutators = [
       const f = followUpOf(tx, i.thread, i.node);
       if (f.mod === "removed") throw removed();
       if (f.del) throw deleted("follow-up");
+      if (i.run) writable(tx, f.s);
       if (f.rev !== i.base.rev) throw stale(tx, tx.me, f);
       const q = text(i.q, "q");
       const changed = q !== f.q;
@@ -565,6 +589,7 @@ export const threadMutators = [
       });
       if (!i.run) return null;
       const p = readableThread(tx, i.thread);
+      cancelRuns(tx, p.id, f.id);
       return { run: startRun(tx, p, f.id, f.att + 1, i.pay ?? null, f.model) };
     },
     effects: (_i, result) => runJob(result),

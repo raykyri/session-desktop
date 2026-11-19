@@ -699,7 +699,7 @@ test("members: setRole with base, ownership transfer, remove by admission id, ba
 });
 
 test("invites: a code from the server's pre-check, bounded days, revoke and restore, asks for an invite", (t) => {
-  const { w, closed, vault } = cast(t);
+  const { w, open, closed, vault } = cast(t);
   const id = w.id();
   const out = w.run("mel", "invites.create", { id, space: closed, days: 30 });
   const r = ok(t, out) as { code: string };
@@ -711,10 +711,24 @@ test("invites: a code from the server's pre-check, bounded days, revoke and rest
     "BAD_REQUEST",
   );
   refused(t, w.run("mel", "invites.create", { id: w.id(), space: vault }), "FORBIDDEN");
+  // days: null (the dialog's "Never") never expires; 0 is no number of days
+  const never = w.id();
+  ok(t, w.run("mel", "invites.create", { id: never, space: closed, days: null }));
+  t.is(rec(w, `invite:${never}`, "invite").expiresAt, null);
+  refused(t, w.run("mel", "invites.create", { id: w.id(), space: closed, days: 0 }), "BAD_REQUEST");
   ok(t, w.run("mona", "invites.revoke", { id }));
   refused(t, w.run("mona", "invites.revoke", { id }), "NOT_FOUND");
+  // a moderator revoked mel's link: mel, a member, cannot restore it
+  t.is(rec(w, `invite:${id}`, "invite").revokedRole, "mod");
+  refused(t, w.run("mel", "invites.restore", { id }), "FORBIDDEN");
+  ok(t, w.run("mona", "invites.restore", { id }));
+  refused(t, w.run("mona", "invites.restore", { id }), "NOT_FOUND");
+  // a link its maker revoked as a member, the maker restores
+  ok(t, w.run("mel", "invites.revoke", { id }));
+  t.is(rec(w, `invite:${id}`, "invite").revokedRole, null);
   ok(t, w.run("mel", "invites.restore", { id }));
-  refused(t, w.run("mel", "invites.restore", { id }), "NOT_FOUND");
+  // an open space takes no invite asks
+  refused(t, w.run("eve", "invites.request", { space: open }), "BAD_REQUEST");
   ok(t, w.run("eve", "invites.request", { space: vault }));
   ok(t, w.run("eve", "invites.request", { space: vault }));
   t.truthy(w.get(`invask:eve:${vault}`));

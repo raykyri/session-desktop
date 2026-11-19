@@ -9,10 +9,11 @@
 //   runs, its stats, member list, page list, pages, skills, sources) is
 //   readable by anyone, signed out included; a closed space's (`vis` listed
 //   or unlisted) by its members only.
-// - Join requests, reports and source reports: the person's own, and all of
-//   them in the spaces they moderate. Bans: the spaces they moderate. Invite
-//   links: the spaces they moderate, and the links they made while they are
-//   a member.
+// - Join requests: the person's own, and all of them in the spaces they
+//   moderate. Reports and source reports: the same, but the person's own
+//   only while they may read the space (review round 1 of phase 1, W6).
+//   Bans: the spaces they moderate. Invite links: the spaces they moderate,
+//   and the links they made while they are a member.
 // - A person reads their own membership records.
 // - A person's likes, saves (of threads and asks), reply likes and
 //   notifications: that person only, and only while they may read the space
@@ -24,15 +25,19 @@
 // - A person's invite asks: that person and the space's staff (phase 1a.2,
 //   decision 8).
 // - A source added to a space: the space's readers. While it waits for
-//   review (`rv`), its fields are redacted for everyone but the person who
-//   added it and the space's moderators (decision 5): the record keeps one
-//   audience, as a hidden thread does, so no write changes who reads it.
-// - Text of a hidden thread, follow-up or reply (one with a `hide` record):
-//   its author and the space's moderators. Everyone else gets the
-//   placeholder (`redact`). A hide record is read with its space's content;
+//   review (`rv`), and once a moderator removed it (`rm`), its fields are
+//   redacted for everyone but the person who added it and the space's
+//   moderators (decision 5): the record keeps one audience, as a hidden
+//   thread does, so no write changes who reads it.
+// - Text of a hidden thread, follow-up or reply (one with a `hide` record),
+//   a thread's `about` included: its author and the space's moderators.
+//   Everyone else gets the placeholder (`redact`). A hide record is read with its space's content;
 //   a change of it changes how its item reads (`viewDependents`). A removed
 //   item's text is erased from storage.
 // - A person's devices (`device`, without the token): that person only.
+// - How a person's membership of a space ended (`exit`: left or removed):
+//   that person only.
+// - A device run's device (`executor.device`): the run's person only.
 
 import type {
   FollowUpRec,
@@ -40,6 +45,7 @@ import type {
   NotifType,
   RecordOf,
   ReplyRec,
+  RunRec,
   SourceMeta,
   SpaceRec,
   SpaceRole,
@@ -87,10 +93,10 @@ export function readsSpace(g: Reader, sp: string, u: string | null): boolean {
 
 /** The fields that decide who reads a record: the part of it a tombstone
  * keeps. `sp` is the space whose rules apply: the record's own space, for a
- * like, save, reply like or saved ask its thread's space, for a notification
- * or an invite ask the space it is about. `person` is the person whose user
- * log holds it; `by` its author or maker; `type`, on a notification only,
- * its type. */
+ * like, save, reply like or saved ask its thread's space, for a
+ * notification, an invite ask or an exit the space it is about. `person` is
+ * the person whose user log holds it; `by` its author or maker; `type`, on a
+ * notification only, its type. */
 export interface Audience {
   kind: Kind;
   sp: string | null;
@@ -103,7 +109,7 @@ export function audience(g: Reader, r: StoredRecord): Audience {
   let sp = spaceOf(r);
   if (r.kind === "like" || r.kind === "save" || r.kind === "rlike" || r.kind === "asksave")
     sp = g.get("thread", r.th)?.s ?? null;
-  if (r.kind === "notif" || r.kind === "invask") sp = r.sp;
+  if (r.kind === "notif" || r.kind === "invask" || r.kind === "exit") sp = r.sp;
   const by = "by" in r ? r.by : "u" in r ? r.u : null;
   const a: Audience = { kind: r.kind, sp, person: personOf(r), by };
   if (r.kind === "notif") a.type = r.type;
@@ -136,8 +142,10 @@ export function readsAudience(g: Reader, a: Audience, u: string | null): boolean
       // a pending source's fields are `redact`'s job
       return sp !== null && readsSpace(g, sp, u);
     case "report":
-    case "request":
     case "srcrep":
+      // like a like or a save, a report follows the person's access
+      return sp !== null && ((own && readsSpace(g, sp, u)) || isModOf(g, sp, u));
+    case "request":
     case "invask":
       return own || (sp !== null && isModOf(g, sp, u));
     case "ban":
@@ -166,6 +174,7 @@ export function readsAudience(g: Reader, a: Audience, u: string | null): boolean
     case "profile":
     case "apikey":
     case "device":
+    case "exit":
       return own;
   }
 }
@@ -175,10 +184,11 @@ export function canRead(g: Reader, r: StoredRecord, u: string | null): boolean {
   return readsAudience(g, audience(g, r), u);
 }
 
-/** Whether `u` reads a source added to a space in full: one that is not
- * waiting for review, or one they added, or one in a space they moderate. */
+/** Whether `u` reads a source added to a space in full: one that is neither
+ * waiting for review nor removed, or one they added, or one in a space they
+ * moderate. */
 export const reviewedFor = (g: Reader, r: SpaceSourceRec, u: string | null) =>
-  !r.rv || (u !== null && r.by === u) || isModOf(g, r.sp, u);
+  (!r.rv && !r.rm) || (u !== null && r.by === u) || isModOf(g, r.sp, u);
 
 /** What a pending source's other readers get of its metadata. */
 export const PENDING_META: Readonly<SourceMeta> = Object.freeze({
@@ -198,10 +208,14 @@ export const PENDING_META: Readonly<SourceMeta> = Object.freeze({
 /** A record as `u` may read its fields: a hidden thread, follow-up or reply
  * keeps its text for its author and the space's moderators; everyone else,
  * and every reader of a removed one, gets the placeholder. A source waiting
- * for review keeps its fields for the person who added it and the space's
- * moderators; everyone else gets its place in the list only. Other records
- * as they are. */
+ * for review or removed keeps its fields for the person who added it and the
+ * space's moderators; everyone else gets its place in the list only. A
+ * device run's device id is its person's only. Other records as they are. */
 export function redact(g: Reader, r: StoredRecord, u: string | null): StoredRecord {
+  if (r.kind === "run")
+    return r.executor === null || r.u === u
+      ? r
+      : ({ ...r, executor: { ...r.executor, device: "" } } satisfies RunRec);
   if (r.kind === "spacesrc")
     return reviewedFor(g, r, u)
       ? r
@@ -213,7 +227,7 @@ export function redact(g: Reader, r: StoredRecord, u: string | null): StoredReco
   }
   switch (r.kind) {
     case "thread":
-      return { ...r, q: "", t: null, sum: null } satisfies ThreadRec;
+      return { ...r, q: "", t: null, sum: null, about: null } satisfies ThreadRec;
     case "followup":
       return { ...r, q: "", a: null } satisfies FollowUpRec;
     case "reply":

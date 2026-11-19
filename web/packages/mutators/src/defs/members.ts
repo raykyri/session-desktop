@@ -14,8 +14,16 @@ import { z } from "zod";
 
 import { RANK, bannedFrom, isClosed, isModOf, rankIn, roleIn } from "../access.js";
 import { defineMutator, inSpace, personal } from "../engine.js";
-import { notFound, refuse, stale } from "../errors.js";
-import { actsOn, addMember, mayInvite, needSpace, readable, refreshSpace } from "../rules.js";
+import { bad, notFound, refuse, stale } from "../errors.js";
+import {
+  actsOn,
+  addMember,
+  endMembership,
+  mayInvite,
+  needSpace,
+  readable,
+  refreshSpace,
+} from "../rules.js";
 import { baseS, count, handleS, ulidS } from "../schemas.js";
 import { DAY, isoAt } from "../time.js";
 
@@ -179,7 +187,7 @@ export const memberMutators = [
       const m = tx.get("member", `${i.space}:${i.user}`);
       if (!m) return null;
       if (m.adm !== i.base.adm) throw stale(tx, tx.me, m);
-      tx.del("member", `${i.space}:${i.user}`);
+      endMembership(tx, i.space, i.user, "removed");
       refreshSpace(tx, i.space);
       return null;
     },
@@ -198,7 +206,7 @@ export const memberMutators = [
     run: (tx, i) => {
       // the ban's id is the mock's (`<space>:<user>`): one ban per person and
       // space, outside the ULID id registry
-      if (tx.get("member", `${i.space}:${i.user}`)) tx.del("member", `${i.space}:${i.user}`);
+      endMembership(tx, i.space, i.user, "removed");
       if (!tx.get("ban", `${i.space}:${i.user}`))
         tx.put({
           kind: "ban",
@@ -234,7 +242,9 @@ export const memberMutators = [
     input: z.strictObject({
       id: ulidS,
       space: ulidS,
-      days: count.max(INVITE_MAX_DAYS).nullable().optional(),
+      // null (or left out): the link never expires, the invite dialog's
+      // "Never"; 0 is not a number of days (review round 1 of phase 1)
+      days: count.min(1).max(INVITE_MAX_DAYS).nullable().optional(),
     }),
     ids: (i) => [i.id],
     can: (tx, i) => {
@@ -258,10 +268,11 @@ export const memberMutators = [
         code,
         by: tx.me,
         sp: i.space,
-        expiresAt: i.days ? isoAt(tx.nowMs + i.days * DAY) : null,
+        expiresAt: i.days != null ? isoAt(tx.nowMs + i.days * DAY) : null,
         dead: null,
         usedBy: null,
         revokedAt: null,
+        revokedRole: null,
         createdAt: tx.now,
       });
       return { id: i.id, code };
@@ -277,29 +288,44 @@ export const memberMutators = [
     run: (tx, i) => {
       const l = readable(tx, "invite", i.id);
       if (l.revokedAt !== null) throw refuse("NOT_FOUND", "This invite link was already revoked.");
-      tx.put({ ...l, revokedAt: tx.now });
+      const role = roleIn(tx, l.sp, tx.me);
+      tx.put({ ...l, revokedAt: tx.now, revokedRole: role === "member" ? null : role });
       return null;
     },
   }),
 
+  // A link a moderator revoked is restored only by someone with that role or
+  // a higher one, not by its maker as a member (review round 1 of phase 1,
+  // E12a).
   defineMutator({
     name: "invites.restore",
     input: z.strictObject({ id: ulidS }),
-    can: (tx, i) => linkScope(tx, i.id),
+    can: (tx, i) => {
+      const scope = linkScope(tx, i.id);
+      const l = readable(tx, "invite", i.id);
+      if (l.revokedRole !== null && rankIn(tx, l.sp, tx.me) < RANK[l.revokedRole])
+        throw refuse(
+          "FORBIDDEN",
+          "A moderator revoked this link: only a moderator can restore it.",
+        );
+      return scope;
+    },
     run: (tx, i) => {
       const l = readable(tx, "invite", i.id);
       if (l.revokedAt === null) throw refuse("NOT_FOUND", "This invite link is not revoked.");
-      tx.put({ ...l, revokedAt: null });
+      tx.put({ ...l, revokedAt: null, revokedRole: null });
       return null;
     },
   }),
 
-  // Ask the members of an invite-only space for an invite.
+  // Ask the members of an invite-only space for an invite. An open space
+  // takes no asks: anyone joins it (review round 1 of phase 1, E12e).
   defineMutator({
     name: "invites.request",
     input: z.strictObject({ space: ulidS }),
     can: (tx, i) => inSpace(tx, i.space, "user"),
     run: (tx, i) => {
+      if (!isClosed(needSpace(tx, i.space))) throw bad("space", "a closed space");
       if (!tx.get("invask", `${tx.me}:${i.space}`))
         tx.put({ kind: "invask", u: tx.me, sp: i.space, createdAt: tx.now });
       return null;
@@ -313,6 +339,8 @@ export const memberMutators = [
     can: () => personal(),
     run: (tx, i) => {
       const n = readable(tx, "notif", i.notification);
+      // only an invite is declined (review round 1 of phase 1, E21)
+      if (n.type !== "invite") throw notFound();
       tx.put({ ...n, read: true, response: "declined" });
       return null;
     },

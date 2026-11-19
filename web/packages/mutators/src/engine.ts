@@ -151,6 +151,22 @@ export type ServerValues = Readonly<Record<string, string>>;
 export interface ServerHooks {
   /** The server's random source: a number in [0, 1). */
   random(): number;
+  /** The times (ms) at which `u` started device runs after `since`, as the
+   * server counts them: a start stays counted when its run record is
+   * deleted. A server records a start for each run record with an executor
+   * that a committed write creates. */
+  deviceRunStarts(u: string, since: number): readonly number[];
+}
+
+/** The device runs a write's staged changes start: the new run records with
+ * an executor (what a server records for `deviceRunStarts`). */
+export function deviceRunsStarted(
+  writes: readonly Write[],
+  existed: (key: string) => boolean,
+): number {
+  let n = 0;
+  for (const [key, r] of writes) if (r?.kind === "run" && r.executor !== null && !existed(key)) n++;
+  return n;
 }
 
 export interface PreCtx extends ServerHooks {
@@ -429,6 +445,7 @@ export function apply(
         nowMs: tx.nowMs,
         tx,
         random: () => server.random(),
+        deviceRunStarts: (u, since) => server.deviceRunStarts(u, since),
       };
       values = def.pre(ctx, input);
     }

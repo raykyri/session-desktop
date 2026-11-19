@@ -79,10 +79,21 @@ export function refreshSpace(tx: Tx, sp: string): void {
 }
 
 /** Add `u` to a space, with `adm` as the admission id (a derived id of the
- * write that admits them). Nothing when they are a member. */
+ * write that admits them), and delete the record of how an earlier
+ * membership ended. Nothing when they are a member. */
 export function addMember(tx: Tx, sp: string, u: string, role: SpaceRole, adm: string): void {
   if (tx.get("member", `${sp}:${u}`)) return;
   tx.put({ kind: "member", sp, u, role, adm, joinedAt: tx.now });
+  tx.del("exit", `${sp}:${u}`);
+}
+
+/** End `u`'s membership of a space: delete their member record, and record
+ * in their user log how it ended (`exit`). Nothing when they are not a
+ * member. The caller refreshes the space. */
+export function endMembership(tx: Tx, sp: string, u: string, ended: "left" | "removed"): void {
+  if (!tx.get("member", `${sp}:${u}`)) return;
+  tx.del("member", `${sp}:${u}`);
+  tx.put({ kind: "exit", sp, u, ended, createdAt: tx.now });
 }
 
 /** A thread's counts record (written with the thread). */
@@ -177,6 +188,7 @@ export function erase(tx: Tx, r: Item): void {
         q: "",
         t: null,
         sum: null,
+        about: null,
         running: false,
         mod: "removed",
         updatedAt: tx.now,

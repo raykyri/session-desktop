@@ -41,7 +41,7 @@ function needsPre(s: Step): boolean {
 function server(s: Step, source: RecordSource = s.before): Outcome {
   return apply(MUTATORS, source, { u: s.u }, s.envelope, {
     now: s.now,
-    server: { random: rng(7) },
+    server: { random: rng(7), deviceRunStarts: () => [] },
   });
 }
 

@@ -190,6 +190,16 @@ const normUrl = (u: string) =>
 
 const SOURCE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
+/** Text without a lone surrogate (UTF-16 that is well formed). */
+const wellFormed = z
+  .string()
+  .refine(
+    (s) => !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(s),
+    {
+      message: "expected text without a lone surrogate",
+    },
+  );
+
 export const contentMutators = [
   defineMutator({
     name: "skills.create",
@@ -397,8 +407,11 @@ export const contentMutators = [
     input: z.strictObject({
       space: ulidS,
       source: z.string().regex(SOURCE_ID).optional(),
-      url: z.string().optional(),
-      file: z.string().optional(),
+      // a URL and a file name are encoded (encodeURIComponent), which a lone
+      // surrogate makes throw: refused by the schema (review round 1 of
+      // phase 1, W7b)
+      url: wellFormed.optional(),
+      file: wellFormed.optional(),
       note: z.string().optional(),
     }),
     can: (tx, i) => {
@@ -423,6 +436,10 @@ export const contentMutators = [
       }
       const old = tx.get("spacesrc", `${s.id}:${id}`);
       if (old && !old.rm) throw refuse("PRECONDITION_FAILED", "The space already has this source.");
+      // a source another person added and a moderator removed is added anew,
+      // as the actor's: a record keeps its maker (review round 1 of phase 1,
+      // W7a)
+      if (old && old.by !== tx.me) tx.del("spacesrc", `${s.id}:${id}`);
       const rv = s.srcPolicy === "review" && rankIn(tx, s.id, tx.me) < RANK.mod;
       tx.put({
         kind: "spacesrc",
@@ -488,6 +505,11 @@ export const contentMutators = [
     run: (tx, i) => {
       needSpace(tx, i.space);
       sourceMeta(tx, i.source);
+      // a source of this space, as the actor reads it (review round 1 of
+      // phase 1, E12f)
+      const e = tx.get("spacesrc", `${i.space}:${i.source}`);
+      if (!e || e.rm || !canRead(tx, e, tx.me))
+        throw refuse("NOT_FOUND", "The space has no record of this source.");
       tx.put({
         kind: "srcrep",
         sp: i.space,

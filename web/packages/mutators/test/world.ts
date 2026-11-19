@@ -8,6 +8,7 @@ import {
   MUTATORS,
   MemoryStore,
   apply,
+  deviceRunsStarted,
   ulid,
   type ApiError,
   type Effect,
@@ -49,6 +50,8 @@ export class World {
   readonly store = new MemoryStore();
   readonly random: () => number;
   readonly serverRandom: () => number;
+  /** The device runs started, as a server counts them. */
+  readonly deviceStarts: { u: string; at: number }[] = [];
   /** Every effect committed, in order. */
   readonly effects: Effect[] = [];
   /** Every write, when `record` is on. */
@@ -94,9 +97,15 @@ export class World {
     const before = this.record ? this.store.clone() : this.store;
     const out = apply(this.registry, this.store, u === null ? null : { u }, envelope, {
       now: this.now,
-      server: { random: this.serverRandom },
+      server: {
+        random: this.serverRandom,
+        deviceRunStarts: (who, since) =>
+          this.deviceStarts.filter((s) => s.u === who && s.at > since).map((s) => s.at),
+      },
     });
     if (out.status === "ok") {
+      const n = deviceRunsStarted(out.writes, (k) => this.store.records.has(k));
+      for (let k = 0; k < n && u !== null; k++) this.deviceStarts.push({ u, at: this.now });
       this.store.commit(out.writes);
       this.effects.push(...out.effects);
     }

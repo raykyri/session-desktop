@@ -164,7 +164,7 @@ const IN_OPEN: Record<string, [Who, (x: World2) => unknown, "closed"?]> = {
   "members.unban": ["moderator", (x) => ({ space: x.open, user: "eve" })],
   "invites.create": ["moderator", (x) => ({ id: x.w.id(), space: x.open })],
   "invites.revoke": ["moderator", (x) => ({ id: x.ids.link })],
-  "invites.request": ["user", (x) => ({ space: x.open })],
+  "invites.request": ["user", (x) => ({ space: x.closed }), "closed"],
   "reports.create": ["member", (x) => ({ id: x.w.id(), item: `p:${x.ids.post}`, why: "w" })],
   "reports.resolve": ["moderator", (x) => ({ report: x.ids.report, outcome: "dismissed" })],
   "moderation.decide": ["moderator", (x) => ({ item: `p:${x.ids.post}`, decision: "hidden" })],
@@ -276,7 +276,7 @@ test("a ban stops every write in its space, the author's own included", (t) => {
   refused(t, x.w.run("mona", "invites.restore", { id: x.ids.link }), "NOT_FOUND");
 });
 
-const hooks = { random: () => 0.5 };
+const hooks = { random: () => 0.5, deviceRunStarts: () => [] };
 const envelope = (w: World, name: string, input: unknown) => ({
   mutationId: w.id(),
   name,
