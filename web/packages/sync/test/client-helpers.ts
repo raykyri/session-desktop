@@ -100,10 +100,7 @@ export const inProcess = (w: World, u: string) =>
 export function watched(
   inner: Transport,
   o: {
-    push?: (
-      es: readonly Envelope[],
-      next: () => Promise<PushResult[]>,
-    ) => Promise<PushResult[]>;
+    push?: (es: readonly Envelope[], next: () => Promise<PushResult[]>) => Promise<PushResult[]>;
     pull?: Transport["pull"];
     snapshot?: Transport["snapshot"];
     listen?: Transport["listen"];

@@ -205,9 +205,7 @@ export class SqliteStorage implements StorageAdapter {
     // stored (no read inside the transaction: a batch has none)
     const frozen = c.frozen === undefined ? null : c.frozen ? 1 : 0;
     return this.write([
-      ...(c.replace
-        ? [["DELETE FROM sync_client_records WHERE log = ?", [log]] as const]
-        : []),
+      ...(c.replace ? [["DELETE FROM sync_client_records WHERE log = ?", [log]] as const] : []),
       [
         "INSERT INTO sync_client_logs (log, cursor, frozen) VALUES (?, ?, COALESCE(?, 0)) " +
           "ON CONFLICT (log) DO UPDATE SET cursor = excluded.cursor, " +
@@ -243,7 +241,10 @@ export class SqliteStorage implements StorageAdapter {
       ["DELETE FROM sync_client_outbox"],
       ...[...entries.entries()].map(
         ([k, e]) =>
-          ["INSERT INTO sync_client_outbox (pos, body) VALUES (?, ?)", [k, JSON.stringify(e)]] as const,
+          [
+            "INSERT INTO sync_client_outbox (pos, body) VALUES (?, ?)",
+            [k, JSON.stringify(e)],
+          ] as const,
       ),
     ]);
   }

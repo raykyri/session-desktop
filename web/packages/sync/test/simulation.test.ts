@@ -620,8 +620,10 @@ function derived(sim: Sim, d: Device): string | null {
   // the follow-ups the branch needs, made first when the view has none
   let from = mine().filter((f) => mine().some((g) => g.par === f.id && g.th === f.th));
   if (!from.length) {
-    const asks = threadsOf(d, d.u === "otto" ? sim.open : pick(sim.r, [sim.open, sim.closed]))
-      .flatMap((p) => (p.kind === "thread" && p.k === "ask" ? [p] : []));
+    const asks = threadsOf(
+      d,
+      d.u === "otto" ? sim.open : pick(sim.r, [sim.open, sim.closed]),
+    ).flatMap((p) => (p.kind === "thread" && p.k === "ask" ? [p] : []));
     const th = asks.length ? pick(sim.r, asks) : null;
     if (!th) return null;
     let f = mine().find((x) => x.th === th.id);

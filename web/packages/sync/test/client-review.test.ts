@@ -487,7 +487,12 @@ test("finding 7: Send again on EXPIRED sends a new write, with new ids and nothi
   // (ids made more than 4 days ago and never sent are made again before the
   // first send: the EXPIRED here is the server's answer to the envelope)
   tr.queue = [fail("EXPIRED", w.clock.now(), { seq: 1 })];
-  const { local } = mel.write("threads.create", { id: th, space: open, kind: "post", q: "late post" });
+  const { local } = mel.write("threads.create", {
+    id: th,
+    space: open,
+    kind: "post",
+    q: "late post",
+  });
   await mel.flush();
   t.like(mel.outbox()[0] ?? {}, { state: "expired", error: { code: "EXPIRED" } });
   t.true(mel.sendAgain(local));

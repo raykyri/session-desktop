@@ -605,10 +605,7 @@ export class SyncClient implements Changing {
   private readOptions(log: LogId, extra: ReadOptions = {}): ReadOptions {
     const tier = this.logs.get(log)?.tier ?? this.tier;
     // at most MAX_OPENED: the server pins no more
-    const opened = [...new Set([...(tier.opened ?? []), ...this.opened(log)])].slice(
-      0,
-      MAX_OPENED,
-    );
+    const opened = [...new Set([...(tier.opened ?? []), ...this.opened(log)])].slice(0, MAX_OPENED);
     return {
       ...(this.meta.clientId !== null ? { clientId: this.meta.clientId } : {}),
       ...(log.startsWith("space:") ? { tier: opened.length ? { ...tier, opened } : tier } : {}),
@@ -833,8 +830,7 @@ export class SyncClient implements Changing {
         // tier had a row withheld): what the client holds under it may be
         // stale, and is dropped (`hydrate` fetches it again)
         const drop = this.heldUnder(l, new Set(p.summaries));
-        if (drop.length)
-          changes = [...changes, ...drop.map((key): Change => ({ key, op: "del" }))];
+        if (drop.length) changes = [...changes, ...drop.map((key): Change => ({ key, op: "del" }))];
       }
       if (log === `user:${this.user}`) this.noteMembers(p.changes, p.ended);
       return this.applyChanges(log, l, changes, p.cursor, tick);
@@ -1557,7 +1553,11 @@ export class SyncClient implements Changing {
         e.queuedMono !== undefined
           ? Math.min(now, Math.round(now - (mono - e.queuedMono)))
           : Math.min(now, e.queuedAt);
-      if (e.wire && (e === answered || !e.uncertain) && this.outside(e.mutationId, now, RETRY_MAX)) {
+      if (
+        e.wire &&
+        (e === answered || !e.uncertain) &&
+        this.outside(e.mutationId, now, RETRY_MAX)
+      ) {
         e.replaces = uniq([...e.replaces, e.mutationId]);
         this.rename(e, this.newId());
         e.wire = false;
@@ -1571,8 +1571,7 @@ export class SyncClient implements Changing {
    * change follow; a result naming another id than the input's moves the
    * write and those writes to the server's id. */
   private adopt(e: OutboxEntry, a: Extract<Answer, { ok: true }>) {
-    if (typeof a.recordedAs === "string" && pkg.isUlid(a.recordedAs))
-      this.rename(e, a.recordedAs);
+    if (typeof a.recordedAs === "string" && pkg.isUlid(a.recordedAs)) this.rename(e, a.recordedAs);
     const id = (a.result as { id?: unknown } | null)?.id;
     const mine = e.minted[0];
     if (e.minted.length !== 1 || typeof id !== "string" || mine === undefined || id === mine)
@@ -1716,7 +1715,10 @@ export class SyncClient implements Changing {
    * (its answer is gone). */
   private appliedBefore(e: OutboxEntry, sentBefore: boolean, error: AnswerError): boolean {
     return (
-      sentBefore && e.minted.length > 0 && error.code === "CONFLICT" && error.message === pkg.ID_TAKEN
+      sentBefore &&
+      e.minted.length > 0 &&
+      error.code === "CONFLICT" &&
+      error.message === pkg.ID_TAKEN
     );
   }
 

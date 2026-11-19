@@ -13,13 +13,11 @@ import {
   MockTransport,
   NO_RESPONSE,
   SqliteStorage,
-  type Answer,
   type Envelope,
   type LogId,
   type ReadOptions,
   type StoredRecord,
   type SyncClient,
-  type Timer,
   type Transport,
 } from "../src/client/index.js";
 
@@ -277,7 +275,7 @@ test("round 2 finding 3: offline, the outbox pauses with backoff and counts no t
   let attempts = 0;
   const f: typeof fetch = (i, init) => {
     if (online) return real(i, init);
-    if (String(i as string).includes("/write")) attempts++;
+    if ((i instanceof Request ? i.url : i.toString()).includes("/write")) attempts++;
     return Promise.reject(new TypeError("fetch failed"));
   };
   const timer = manualTimer(w);
@@ -522,7 +520,10 @@ test("round 2 finding 6: what a replica holds under a thread the server serves a
   ok(t, w.as("mona", "moderation.decide", { item: `r:${th2}:${r[2]}`, decision: "hidden" }));
   await mel.sync();
   t.deepEqual(
-    mel.view().list("reply").map((x) => x.t),
+    mel
+      .view()
+      .list("reply")
+      .map((x) => x.t),
     [],
   );
   t.true(mel.summaries(log).has(th));
@@ -569,7 +570,10 @@ test("round 2 finding 7: a read the server makes as nobody is not applied; the c
   await mel.init();
   // the space logs first: their reads are served to nobody
   for (const l of [`space:${open}`, `space:${closed}`, "user:mel"] as const) await mel.open(l);
-  t.true(reads.every(([, o]) => typeof o?.clientId === "string"), "every read carries the id");
+  t.true(
+    reads.every(([, o]) => typeof o?.clientId === "string"),
+    "every read carries the id",
+  );
   const before = JSON.stringify(await storage.loadLog(`space:${closed}`));
   const id = mel.clientId;
   signedIn = false;
@@ -604,10 +608,7 @@ test("round 2 finding 8: Send again on a refused write that named the id of a wr
   const post = mel.write("threads.create", { id: X, space: open, kind: "post", q: "p" });
   const reply = mel.write("research.createPostFollowUp", { id: mel.newId(), thread: X, t: "r" });
   await mel.flush();
-  t.deepEqual(states(mel), [
-    "threads.create:expired",
-    "research.createPostFollowUp:refused",
-  ]);
+  t.deepEqual(states(mel), ["threads.create:expired", "research.createPostFollowUp:refused"]);
   mel.sendAgain(post.local);
   await mel.flush();
   const Y = (mel.outbox()[0]?.input as { id: string }).id;
@@ -637,11 +638,7 @@ test("round 2 finding 8: never-sent writes made on a clock that was fast and is 
   await mel.open(`space:${open}`);
   const X = mel.newId();
   mel.write("threads.create", { id: X, space: open, kind: "post", q: "p" }, { send: false });
-  mel.write(
-    "research.createPostFollowUp",
-    { id: mel.newId(), thread: X, t: "r" },
-    { send: false },
-  );
+  mel.write("research.createPostFollowUp", { id: mel.newId(), thread: X, t: "r" }, { send: false });
   skew = 0;
   down = false;
   await mel.flush();
@@ -741,7 +738,7 @@ test("round 2 finding 9: an event stream refused with 401 ends, reports the lost
   let streams = 0;
   let lost = 0;
   const fetchIt: typeof fetch = (i, init) => {
-    if (String(i as string).includes("/events")) {
+    if ((i instanceof Request ? i.url : i.toString()).includes("/events")) {
       streams++;
       return Promise.resolve(new Response("", { status: 401 }));
     }
@@ -1031,7 +1028,11 @@ test("gap R38: an online write fails at once when the client is signed out", asy
   const tr = watched(inner, {
     pull: async (l, c, o) =>
       refuse
-        ? { ok: false as const, error: { code: "UNAUTHORIZED" as const, message: "" }, serverTime: 0 }
+        ? {
+            ok: false as const,
+            error: { code: "UNAUTHORIZED" as const, message: "" },
+            serverTime: 0,
+          }
         : inner.pull(l, c, o),
   });
   const mel = client(w, "mel", { transport: tr });
@@ -1148,7 +1149,7 @@ test("gap R47: HTTP 403 without a body is UNAUTHORIZED", async (t) => {
       replaces: [],
     },
   ]);
-  t.like(a as Answer, { ok: false, error: { code: "UNAUTHORIZED" } });
+  t.like(a, { ok: false, error: { code: "UNAUTHORIZED" } });
 });
 
 test("gap R48: an entry stored without `sent` and `wire` loads as sent and on the wire (uncertain)", async (t) => {
@@ -1182,7 +1183,7 @@ test("gap R52: stop() clears the outbox's timer", async (t) => {
   ok(t, w.as("olga", "threads.create", { id: th, space: open, kind: "post", q: "P" }));
   const timer = manualTimer(w);
   const tr = new Forced(inProcess(w, "mel"));
-  const mel = client(w, "mel", { transport: tr, timer: timer as Timer });
+  const mel = client(w, "mel", { transport: tr, timer: timer });
   await mel.init();
   await mel.open(`space:${open}`);
   tr.queue = [fail("SERVICE_UNAVAILABLE", w.clock.now())];
@@ -1192,4 +1193,3 @@ test("gap R52: stop() clears the outbox's timer", async (t) => {
   mel.stop();
   t.is(timer.due, null);
 });
-

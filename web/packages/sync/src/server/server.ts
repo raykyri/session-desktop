@@ -601,7 +601,11 @@ export class SyncServer {
       const record = (answer: StoredResult) => {
         // the mutation id the answer is recorded under, served with a
         // replay (`recordedAs`): the ids the mutator derived come from it
-        const a: StoredAnswer = { digest: payload, answer: { ...answer, as: m.mutationId }, at: now };
+        const a: StoredAnswer = {
+          digest: payload,
+          answer: { ...answer, as: m.mutationId },
+          at: now,
+        };
         tx.answerPut(u, m.mutationId, a);
         for (const old of m.replaces)
           if (!live(tx.answerGet(u, old))) tx.answerPut(u, old, { ...a, digest: replaced });
@@ -697,7 +701,13 @@ export class SyncServer {
   private replay(tx: StoreTx, u: string, a: StoredResult, now: number): Answer {
     const as = typeof a.as === "string" ? { recordedAs: a.as } : {};
     if (a.ok)
-      return { ok: true, result: structuredClone(a.result), serverTime: now, replayed: true, ...as };
+      return {
+        ok: true,
+        result: structuredClone(a.result),
+        serverTime: now,
+        replayed: true,
+        ...as,
+      };
     const e = structuredClone(a.error) as AnswerError;
     return this.withReads(
       tx,
