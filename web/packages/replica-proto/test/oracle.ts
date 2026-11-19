@@ -23,7 +23,7 @@ type Dump = ReadonlyMap<string, StoredRecord>;
 /** The prototype's kinds, and `hide`: with the switch on, `@session/mutators`
  * keeps a hidden item's state in a hide record keyed by the item (phase 1b,
  * Part 0 item 3), read with the space's content. */
-type Kind = StoredRecord["kind"] | "hide" | "exit" | "device";
+type Kind = StoredRecord["kind"] | "hide" | "exit" | "device" | "turn";
 type Place = "anon" | "outsider" | "member" | "staff";
 type Cell = "all" | "own" | "none";
 type Row = Record<Place, Cell>;
@@ -57,6 +57,8 @@ export const READ: Record<Kind, { open: Row; closed: Row }> = {
   followup: { open: PUBLIC, closed: MEMBERS },
   reply: { open: PUBLIC, closed: MEMBERS },
   run: { open: PUBLIC, closed: MEMBERS },
+  // with the switch on: a run's turns, read as its run is (phase 2a)
+  turn: { open: PUBLIC, closed: MEMBERS },
   hide: { open: PUBLIC, closed: MEMBERS },
   // closedMembers: the member list of a closed space is for its members (the
   // staff list is on the space record); a person reads their own membership
@@ -98,6 +100,7 @@ const OWNER: Record<Kind, ((r: never) => string) | null> = {
   followup: null,
   reply: null,
   run: null,
+  turn: null,
   hide: null,
   exit: (r: { u: string }) => r.u,
   device: (r: { u: string }) => r.u,
@@ -120,6 +123,7 @@ const SPACE: Record<Kind, ((r: never) => string) | null> = {
   followup: (r: { s: string }) => r.s,
   reply: (r: { s: string }) => r.s,
   run: (r: { s: string }) => r.s,
+  turn: (r: { s: string }) => r.s,
   hide: (r: { s: string }) => r.s,
   exit: null,
   device: null,
@@ -142,6 +146,7 @@ const IN_SPACE_LOG: ReadonlySet<Kind> = new Set<Kind>([
   "followup",
   "reply",
   "run",
+  "turn",
   "hide",
   "member",
   "request",
@@ -261,6 +266,14 @@ export function shown(dump: Dump, r: StoredRecord, reader: string | null): Store
     if (x.model !== null && node && shown(dump, node, reader) !== node)
       out = { ...out, model: null } as unknown as StoredRecord;
     return out;
+  }
+  // with the switch on: a turn is text of its run's node (phase 2a)
+  if (USE_PACKAGE && (r.kind as Kind) === "turn") {
+    const x = r as unknown as { th: string; node: string; body: unknown };
+    const node = dump.get(x.node === "r" ? `thread:${x.th}` : `followup:${x.node}`);
+    return x.body !== null && (!node || shown(dump, node, reader) !== node)
+      ? ({ ...r, body: null } as unknown as StoredRecord)
+      : r;
   }
   if (r.kind !== "thread" && r.kind !== "followup" && r.kind !== "reply") return r;
   const who =

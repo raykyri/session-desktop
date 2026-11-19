@@ -43,6 +43,9 @@
 //   an `access` end (the person was banned, removed or signed the device
 //   out): everyone else reads it as `interrupted` (review round 2 of phase
 //   1, W2).
+// - A run's turns (`turn`, phase 2a): the readers of its run; a turn's
+//   `body` is text of the run's node, null wherever the node's text is
+//   redacted.
 
 import type {
   FollowUpRec,
@@ -137,6 +140,7 @@ export function readsAudience(g: Reader, a: Audience, u: string | null): boolean
     case "followup":
     case "reply":
     case "run":
+    case "turn":
     case "pages":
     case "page":
     case "skills":
@@ -230,6 +234,11 @@ export function redact(g: Reader, r: StoredRecord, u: string | null): StoredReco
     }
     return out;
   }
+  if (r.kind === "turn") {
+    if (r.body === null) return r;
+    const n = r.node === "r" ? g.get("thread", r.th) : g.get("followup", r.node);
+    return !n || redact(g, n, u) !== n ? { ...r, body: null } : r;
+  }
   if (r.kind === "spacesrc")
     return reviewedFor(g, r, u)
       ? r
@@ -263,17 +272,19 @@ export function isHidden(g: Reader, r: ThreadRec | FollowUpRec | ReplyRec): bool
   return g.get("hide", `${r.kind}:${r.id}`) !== undefined;
 }
 
-/** Reads a server half has for `viewDependents`: a record by key, and the
- * runs of a thread. */
+/** Reads a server half has for `viewDependents`: a record by key, the runs
+ * of a thread and (phase 2a) the turns of a run. */
 export interface DependentSource {
   get(key: string): StoredRecord | undefined;
   runsOf(th: string): readonly StoredRecord[];
+  turnsOf?(run: string): readonly StoredRecord[];
 }
 
 /** The keys whose view a record's change changes besides its own: a hide
  * record's item (hiding blanks the item's text for most readers, showing
  * gives it back) and, given `src`, the runs of that item's ask, whose
- * `model` is redacted with it (review round 2 of phase 1, H2). A server half
+ * `model` is redacted with it (review round 2 of phase 1, H2), and their
+ * turns, whose `body` is (phase 2a). A server half
  * writes a log row for each of them in the commit that changes the record,
  * so every reader pulls them again. */
 export function viewDependents(r: { kind: Kind }, src?: DependentSource): string[] {
@@ -284,11 +295,11 @@ export function viewDependents(r: { kind: Kind }, src?: DependentSource): string
   if (x?.kind !== "thread" && x?.kind !== "followup") return [item];
   const th = x.kind === "thread" ? x.id : x.th;
   const node = x.kind === "thread" ? "r" : x.id;
-  const runs = src
-    .runsOf(th)
-    .filter((y): y is RunRec => y.kind === "run" && y.node === node)
-    .map((y) => `run:${y.id}`);
-  return [item, ...runs];
+  const runs = src.runsOf(th).filter((y): y is RunRec => y.kind === "run" && y.node === node);
+  const turns = runs.flatMap((y) =>
+    (src.turnsOf?.(y.id) ?? []).flatMap((x) => (x.kind === "turn" ? [`turn:${x.run}:${x.n}`] : [])),
+  );
+  return [item, ...runs.map((y) => `run:${y.id}`), ...turns];
 }
 
 /** A record as `u` may read it now, or null when it is outside their scope. */

@@ -22,6 +22,7 @@ import { bad, notFound, refuse, stale } from "../errors.js";
 import type { Executor, FollowUpRec, ThreadRec } from "../records.js";
 import {
   countsOf,
+  delRun,
   editedWhileHidden,
   hideOf,
   itemKey,
@@ -354,7 +355,7 @@ export const threadMutators = [
         for (const l of tx.scan("like.th", p.id)) tx.del("like", `${l.u}:${l.th}`);
         for (const x of tx.scan("save.th", p.id)) tx.del("save", `${x.u}:${x.th}`);
       }
-      for (const r of tx.scan("run.th", p.id)) tx.del("run", r.id);
+      for (const r of tx.scan("run.th", p.id)) delRun(tx, r.id);
       if (!kept) tx.put({ ...counts, likes: 0 });
       tx.put({
         ...p,
@@ -620,7 +621,7 @@ export const threadMutators = [
     run: (tx, i) => {
       const f = followUpOf(tx, i.thread, i.node);
       const kept = tx.scan("followup.par", f.id).length > 0;
-      for (const x of tx.scan("run.th", f.th)) if (x.node === f.id) tx.del("run", x.id);
+      for (const x of tx.scan("run.th", f.th)) if (x.node === f.id) delRun(tx, x.id);
       if (kept) tx.put({ ...f, del: true, q: "", a: null, model: null, edited: false });
       else {
         tx.del("hide", itemKey(f));

@@ -178,14 +178,17 @@ export interface PreCtx extends ServerHooks {
 
 /** Post-commit work, as data:
  * - `job`: start a server job: a run of an ask (`run`, the run's id) or a
- *   domain check (`domain`, the space's id).
+ *   domain check (`domain`, the space's id), or (phase 2a, queued by the
+ *   server's online `apiKeys.*` calls) an API key check (`key`, the key's id).
  * - `notifyStaff`: notify a space's staff (as they are when the effect runs)
  *   of a report.
  * - `reportResolved`: tell a report's author how it was resolved (`outcome`),
  *   replacing any earlier notice of it; `outcome` null takes the notice back
  *   (the report was opened again). */
+export type JobKind = "run" | "domain" | "key";
+
 export type Effect =
-  | { type: "job"; kind: "run" | "domain"; id: string }
+  | { type: "job"; kind: JobKind; id: string }
   | { type: "notifyStaff"; sp: string; report: string; item: string }
   | {
       type: "reportResolved";

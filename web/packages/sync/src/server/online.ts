@@ -203,6 +203,26 @@ function endRun(ctx: CallCtx, r: pkg.RunRec, why: pkg.RunEnd) {
   ctx.server.commit(ctx.tx, writes, ctx.now);
 }
 
+/** Store the next turn of run `r` (numbered from 1 within the run), as its
+ * executor wrote it. Answers its number. */
+export function storeTurn(ctx: CallCtx, r: pkg.RunRec, body: unknown): number {
+  const n = ctx.tx.scan("turn", "run", r.id).length + 1;
+  const turn: pkg.Draft<pkg.TurnRec> = {
+    kind: "turn",
+    run: r.id,
+    th: r.th,
+    s: r.s,
+    u: r.u,
+    node: r.node,
+    attempt: r.attempt,
+    n,
+    body,
+    createdAt: pkg.isoAt(ctx.now),
+  };
+  ctx.server.commit(ctx.tx, [[`turn:${r.id}:${n}`, turn]], ctx.now);
+  return n;
+}
+
 /** Whether `u` reads item `x` as it is stored: they may read it, and it is
  * not redacted for them (hidden, and neither theirs nor in a space they
  * moderate). */
@@ -231,12 +251,294 @@ function turnsOf(tx: StoreTx, r: pkg.RunRec) {
 const stub =
   (name: string): Handler =>
   () => {
-    throw fail("METHOD_NOT_SUPPORTED", `${name} is not served yet (phase 2).`);
+    throw fail("METHOD_NOT_SUPPORTED", `${name} is not served by this server.`);
   };
 
-export function defaultHandlers(): OnlineHandlers {
+/** Where the raw values of API keys live (phase 2a): outside the records,
+ * encrypted at rest by the server that implements it, in the same
+ * transaction as the call's records. Only an `apikey` record (id, name,
+ * provider, status, cap) reaches a client. */
+export interface KeyVault {
+  /** The id of `u`'s key whose raw value is `raw`, if any. */
+  find(tx: StoreTx, u: string, raw: string): string | null;
+  /** Store (or replace) the raw value of `u`'s key `id`. */
+  put(tx: StoreTx, u: string, id: string, raw: string, now: number): void;
+  delete(tx: StoreTx, u: string, id: string): void;
+}
+
+/** A vault in memory (tests; a server without key storage). */
+export class MemoryKeyVault implements KeyVault {
+  readonly keys = new Map<string, { u: string; raw: string }>();
+  find(_tx: StoreTx, u: string, raw: string) {
+    for (const [id, k] of this.keys) if (k.u === u && k.raw === raw) return id;
+    return null;
+  }
+  put(_tx: StoreTx, u: string, id: string, raw: string) {
+    this.keys.set(id, { u, raw });
+  }
+  delete(_tx: StoreTx, _u: string, id: string) {
+    this.keys.delete(id);
+  }
+}
+
+/** The provider of a raw API key, by its prefix (the mock's `keyProvider`). */
+export const keyProvider = (raw: string) =>
+  raw.startsWith("AIza")
+    ? "Google"
+    : raw.startsWith("sk-ant-")
+      ? "Anthropic"
+      : raw.startsWith("sk-or-")
+        ? "OpenRouter"
+        : "OpenAI";
+
+/** The mask a client shows for a raw key (the mock's `keyMask`). */
+export const keyMask = (raw: string) =>
+  `${raw.slice(0, raw.startsWith("sk-ant-") ? 7 : raw.startsWith("AIza") ? 4 : 3)}…${raw.slice(-4)}`;
+
+const keyInput = z.strictObject({ id: z.string().max(64) });
+
+/** The caller's API key `id`, or NOT_FOUND. */
+function ownKey(ctx: CallCtx, id: string): pkg.ApiKeyRec {
+  const a = need(ctx);
+  const k = ctx.tx.get(`apikey:${id}`);
+  if (k?.kind !== "apikey" || k.u !== a.u)
+    throw fail("NOT_FOUND", "The server has no record of this API key.");
+  return k;
+}
+
+/** A raw key as stored: trimmed, at least 8 characters, and not one of the
+ * caller's other keys (CONFLICT). */
+function rawKey(ctx: CallCtx, vault: KeyVault, raw: string, except?: string): string {
+  const a = need(ctx);
+  const v = raw.trim();
+  if (v.length < 8 || v.length > 512)
+    throw fail("BAD_REQUEST", undefined, ["input.raw: expected an API key"]);
+  const other = vault.find(ctx.tx, a.u, v);
+  if (other !== null && other !== except)
+    throw fail("CONFLICT", "This key has already been added.");
+  return v;
+}
+
+/** The ask a run control names, its thread, and the follow-up (null for the
+ * thread's ask), checked as the author's write in its space: the caller
+ * wrote the ask, reads it, may write in the space, and the space is not
+ * archived. */
+function ownAsk(ctx: CallCtx, thread: string, node: string) {
+  const a = need(ctx);
+  const g = readerOf(ctx.tx);
+  const p = ctx.tx.get(`thread:${thread}`);
+  if (p?.kind !== "thread" || !pkg.canRead(g, p, a.u) || p.del)
+    throw fail("NOT_FOUND", "The server has no record of this thread.");
+  let f: pkg.FollowUpRec | null = null;
+  if (node !== "r") {
+    const x = ctx.tx.get(`followup:${node}`);
+    if (x?.kind !== "followup" || x.th !== p.id || !pkg.canRead(g, x, a.u) || x.del)
+      throw fail("NOT_FOUND", "The server has no record of this follow-up.");
+    f = x;
+  }
+  if ((f ?? p).u !== a.u) throw fail("FORBIDDEN", "Only the person who asked can do this.");
+  if (!writesIn(g, p.s, a.u)) throw fail("FORBIDDEN");
+  if (pkg.spaceRec(g, p.s)?.archived)
+    throw fail("PRECONDITION_FAILED", "This space is archived: nobody can ask in it.");
+  if ((f ?? p).mod !== null) throw fail("PRECONDITION_FAILED", "This ask was removed.");
+  return { u: a.u, p, f };
+}
+
+/** The queued and running runs of an ask. */
+const liveRuns = (tx: StoreTx, th: string, node: string) =>
+  tx
+    .scan("run", "th", th)
+    .filter((r): r is pkg.RunRec => r.kind === "run" && r.node === node && live(r));
+
+export function defaultHandlers(
+  vault: KeyVault = new MemoryKeyVault(),
+  hooks: { cancelled?: (run: string) => void } = {},
+): OnlineHandlers {
   const h: OnlineHandlers = {};
   for (const name of Object.keys(pkg.NOT_MUTATORS)) h[name] = stub(name);
+
+  // ---- run controls (phase 2a; report-1b finding 7) ----
+
+  // Stop: the run of an ask ends `cancelled` (`stopped`); a server job's loop
+  // hears it after the call commits and stops, a device's next call is
+  // refused (the run is no longer running). The tokens it used are the job's
+  // to record.
+  h["research.cancelNode"] = (ctx, input) => {
+    const i = parse(P["research.cancelNode"].input.strict(), input);
+    const { p } = ownAsk(ctx, i.thread, i.node);
+    const runs = liveRuns(ctx.tx, p.id, i.node);
+    if (!runs.length) throw fail("PRECONDITION_FAILED", "This answer isn’t running.");
+    const writes: pkg.Write[] = runs.map((r) => [
+      `run:${r.id}`,
+      { ...r, status: "cancelled", end: "stopped" },
+    ]);
+    if (i.node === "r" && p.running) writes.push([`thread:${p.id}`, { ...p, running: false }]);
+    for (const r of runs) ctx.tx.leaseDelete(r.id);
+    ctx.server.commit(ctx.tx, writes, ctx.now);
+    for (const r of runs) ctx.server.afterCommit(() => hooks.cancelled?.(r.id));
+    return null;
+  };
+
+  // Run again: a new run of the ask at its next attempt, as `threads.update`
+  // and `followups.update` with `run` write one: the answer is cleared (an
+  // edit of a hidden item), earlier runs of the ask are cancelled, and the
+  // run's job is queued. An online call, so the run's id is the server's.
+  h["research.retryNode"] = (ctx, input) => {
+    const i = parse(P["research.retryNode"].input.strict(), input);
+    const { u, p, f } = ownAsk(ctx, i.thread, i.node);
+    if (p.k !== "ask") throw fail("BAD_REQUEST", undefined, ["input.thread: expected an ask"]);
+    if ((f === null && p.running) || liveRuns(ctx.tx, p.id, i.node).length)
+      throw fail("PRECONDITION_FAILED", "This answer is running.");
+    const pay = i.pay ?? null;
+    if (pay !== null && pay !== "session") ownKey(ctx, pay);
+    const ex = i.executor ?? null;
+    if (ex) {
+      const d = ctx.tx.get(`device:${ex.device}`);
+      if (d?.kind !== "device" || d.u !== u)
+        throw fail("FORBIDDEN", "This device isn’t one of yours.");
+      const since = ctx.now - HOUR;
+      const recent = ctx.tx
+        .deviceRunsSince(u, since)
+        .filter((at) => at > since)
+        .sort((a, b) => a - b);
+      if (recent.length >= pkg.DEVICE_RUNS_PER_HOUR)
+        throw pkg.refuse(
+          "TOO_MANY_REQUESTS",
+          `You started ${pkg.DEVICE_RUNS_PER_HOUR} device runs in the past hour.`,
+          undefined,
+          pkg.isoAt((recent[recent.length - pkg.DEVICE_RUNS_PER_HOUR] ?? ctx.now) + HOUR),
+        );
+    }
+    const att = (f ?? p).att + 1;
+    const model = i.model ?? (f ?? p).model;
+    const id = ctx.server.newId(ctx.tx, ctx.now);
+    const writes: pkg.Write[] = [
+      ...answerWrites(
+        ctx.tx,
+        f === null
+          ? {
+              ...p,
+              sum: null,
+              tok: 0,
+              running: true,
+              att,
+              pay,
+              model,
+              updatedAt: pkg.isoAt(ctx.now),
+            }
+          : { ...f, a: null, att, pay, model },
+      ),
+    ];
+    for (const r of ctx.tx.scan("run", "th", p.id))
+      if (r.kind === "run" && r.node === i.node && live(r))
+        writes.push([`run:${r.id}`, { ...r, status: "cancelled", end: "stopped" }]);
+    writes.push([
+      `run:${id}`,
+      {
+        kind: "run",
+        id,
+        th: p.id,
+        s: p.s,
+        u,
+        node: i.node,
+        status: "queued",
+        end: null,
+        attempt: att,
+        pay: ex ? null : pay,
+        model,
+        executor: ex ? { kind: "device", cli: ex.cli, device: ex.device, u } : null,
+        createdAt: pkg.isoAt(ctx.now),
+      },
+    ]);
+    ctx.server.commit(ctx.tx, writes, ctx.now);
+    if (ex) ctx.tx.deviceRunAdd(u, ctx.now);
+    ctx.tx.effectAdd({ type: "job", kind: "run", id }, ctx.now);
+    return null;
+  };
+
+  // ---- API keys (phase 2a; report-1b finding 7) ----
+  // The raw key goes to the vault; the `apikey` record holds id, name,
+  // provider, status and cap. A check is a server job (`key`): the key is
+  // "checking" until the job writes the provider's verdict (`keyChecked`).
+
+  h["apiKeys.create"] = (ctx, input) => {
+    const a = need(ctx);
+    const i = parse(P["apiKeys.create"].input.strict(), input);
+    const raw = rawKey(ctx, vault, i.raw);
+    const id = ctx.server.newId(ctx.tx, ctx.now);
+    const n = ctx.tx.scan("apikey", "u", a.u).length + 1;
+    const name = i.label.trim().slice(0, 200) || `API key ${n}`;
+    const cap = Math.max(0, Math.floor(i.cap ?? 0));
+    ctx.server.commit(
+      ctx.tx,
+      [
+        [
+          `apikey:${id}`,
+          {
+            kind: "apikey",
+            id,
+            u: a.u,
+            name,
+            provider: keyProvider(raw),
+            status: i.check ? "checking" : "valid",
+            cap,
+          },
+        ],
+      ],
+      ctx.now,
+    );
+    vault.put(ctx.tx, a.u, id, raw, ctx.now);
+    if (i.check) ctx.tx.effectAdd({ type: "job", kind: "key", id }, ctx.now);
+    return { id };
+  };
+
+  h["apiKeys.replace"] = (ctx, input) => {
+    const i = parse(P["apiKeys.replace"].input.strict(), input);
+    const k = ownKey(ctx, i.id);
+    const raw = rawKey(ctx, vault, i.raw, k.id);
+    ctx.server.commit(
+      ctx.tx,
+      [[`apikey:${k.id}`, { ...k, provider: keyProvider(raw), status: "checking" }]],
+      ctx.now,
+    );
+    vault.put(ctx.tx, k.u, k.id, raw, ctx.now);
+    ctx.tx.effectAdd({ type: "job", kind: "key", id: k.id }, ctx.now);
+    return null;
+  };
+
+  h["apiKeys.check"] = (ctx, input) => {
+    const i = parse(keyInput, input);
+    const k = ownKey(ctx, i.id);
+    ctx.server.commit(ctx.tx, [[`apikey:${k.id}`, { ...k, status: "checking" }]], ctx.now);
+    ctx.tx.effectAdd({ type: "job", kind: "key", id: k.id }, ctx.now);
+    return null;
+  };
+
+  h["apiKeys.rename"] = (ctx, input) => {
+    const i = parse(P["apiKeys.rename"].input.strict(), input);
+    const k = ownKey(ctx, i.id);
+    const name = i.label.trim().slice(0, 200);
+    if (!name) throw fail("BAD_REQUEST", undefined, ["input.label: expected some text"]);
+    ctx.server.commit(ctx.tx, [[`apikey:${k.id}`, { ...k, name }]], ctx.now);
+    return null;
+  };
+
+  h["apiKeys.setCap"] = (ctx, input) => {
+    const i = parse(P["apiKeys.setCap"].input.strict(), input);
+    const k = ownKey(ctx, i.id);
+    if (!Number.isFinite(i.cap) || i.cap < 0)
+      throw fail("BAD_REQUEST", undefined, ["input.cap: expected a number of tokens, 0 or more"]);
+    ctx.server.commit(ctx.tx, [[`apikey:${k.id}`, { ...k, cap: Math.floor(i.cap) }]], ctx.now);
+    return null;
+  };
+
+  h["apiKeys.revoke"] = (ctx, input) => {
+    const i = parse(keyInput, input);
+    const k = ownKey(ctx, i.id);
+    ctx.server.commit(ctx.tx, [[`apikey:${k.id}`, null]], ctx.now);
+    vault.delete(ctx.tx, k.u, k.id);
+    return null;
+  };
 
   h["devices.authorize"] = (ctx, input) => {
     const i = parse(P["devices.authorize"].input.strict(), input);
@@ -376,12 +678,16 @@ export function defaultHandlers(): OnlineHandlers {
     const l = leaseOf(ctx, i);
     if (l instanceof CommittedRefusal) return l;
     const r = l.run;
-    // a turn is progress, not a heartbeat: it does not extend the lease. Its
-    // text goes to the readers of the run's node as an in-flight event
-    // (ADR-22), after the call commits, numbered within the attempt.
+    // a turn is progress, not a heartbeat: it does not extend the lease. It
+    // is stored as a `turn` record of the run (phase 2a; report-1b finding
+    // 6), so a reader pulls it and a later run rebuilds its context from it,
+    // and its text also goes to the readers of the run's node as an
+    // in-flight event (ADR-22), once the call is stored, numbered within the
+    // attempt.
     const lease = l.lease as Lease;
     const seq = lease.seq + 1;
     ctx.tx.leasePut({ ...lease, seq });
+    storeTurn(ctx, r, i.turn ?? null);
     ctx.server.emitRun({ type: "run", run: r.id, attempt: r.attempt, seq, text }, r);
     return null;
   };
@@ -424,8 +730,15 @@ export class OnlineCalls {
   constructor(
     private readonly server: SyncServer,
     extra: Partial<OnlineHandlers> = {},
+    vault?: KeyVault,
+    hooks: { cancelled?: (run: string) => void } = {},
   ) {
-    this.handlers = { ...defaultHandlers(), ...(extra as OnlineHandlers) };
+    this.handlers = { ...defaultHandlers(vault, hooks), ...(extra as OnlineHandlers) };
+  }
+
+  /** Whether a call of this name is served (a handler that is no stub). */
+  has(name: string): boolean {
+    return Object.hasOwn(this.handlers, name);
   }
 
   call(actor: Actor | null, name: string, input: unknown): CallAnswer {

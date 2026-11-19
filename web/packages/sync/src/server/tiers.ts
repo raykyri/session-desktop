@@ -56,7 +56,7 @@ export function chooseTiers(
 }
 
 /** The thread a record of a space log belongs to, for tiering: a thread's
- * own id, its counts', its follow-ups', replies' and runs' `th`, and a hide
+ * own id, its counts', its follow-ups', replies', runs' and turns' `th`, and a hide
  * record's item's thread. Null for records that are not under a thread. */
 export function threadOf(r: StoredRecord, get: (key: string) => StoredRecord | undefined) {
   switch (r.kind) {
@@ -66,6 +66,7 @@ export function threadOf(r: StoredRecord, get: (key: string) => StoredRecord | u
     case "followup":
     case "reply":
     case "run":
+    case "turn":
       return r.th;
     case "hide": {
       const it = get(r.item);

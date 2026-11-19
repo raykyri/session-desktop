@@ -47,6 +47,12 @@
 //   its raw value, in its person's user log (decision 2). The server's
 //   online-only `apiKeys.*` calls write it; a write paid by a key checks it
 //   in `can`.
+// - `turn` (phase 2a): one committed turn of a run, keyed by the run and its
+//   number (`turn:<run>:<n>`), read with the space's content. A turn is text
+//   of its run's node (the thread's ask or the follow-up): redacted with it,
+//   and erased with its run. The server writes it (a server job's turns, a
+//   device's `runs.turn`); no mutator does. In-flight text is not a record
+//   (ADR-22).
 // - `device` [`devices`]: a signed-in device of its person (id, name, kind,
 //   last seen), never its token, in their user log (phase 1b, Part 0 item
 //   2). The server's online-only `devices.*` calls write it; a device run
@@ -583,6 +589,28 @@ export interface ApiKeyRec {
   name: string;
   provider: string;
   status: "checking" | "valid" | "invalid";
+  /** A monthly token limit (0: none), stored and not enforced (phase 2a). */
+  cap: number;
+  rev: number;
+}
+
+/** One committed turn of a run (phase 2a; ADR-22), keyed
+ * `turn:<run>:<n>`: what a server job's agent loop or a device's
+ * `runs.turn` committed, numbered from 1 within the run. `u` is the run's
+ * person, `node` its node ("r" or a follow-up's id), `attempt` the run's
+ * attempt. `body` is the turn as its executor wrote it (JSON): text of the
+ * node, so it reads as null wherever the node's text is redacted. */
+export interface TurnRec {
+  kind: "turn";
+  run: string;
+  th: string;
+  s: string;
+  u: string;
+  node: string;
+  attempt: number;
+  n: number;
+  body: unknown;
+  createdAt: string;
   rev: number;
 }
 
@@ -635,6 +663,7 @@ export type StoredRecord =
   | FollowUpRec
   | ReplyRec
   | RunRec
+  | TurnRec
   | ReportRec
   | RequestRec
   | BanRec
@@ -727,6 +756,8 @@ export function idOfRecord(r: Draft | StoredRecord): string {
       return `${r.sp}:${r.src}:${r.by}`;
     case "hide":
       return r.item;
+    case "turn":
+      return `${r.run}:${r.n}`;
     default:
       return r.id;
   }
@@ -755,6 +786,7 @@ export const KINDS: ReadonlySet<Kind> = new Set<Kind>([
   "followup",
   "reply",
   "run",
+  "turn",
   "report",
   "request",
   "ban",
@@ -814,6 +846,7 @@ export function spaceOf(r: Draft | StoredRecord): string | null {
     case "followup":
     case "reply":
     case "run":
+    case "turn":
     case "hide":
       return r.s;
     case "stats":
@@ -924,6 +957,8 @@ export const INDEXES = {
   "reply.parent": ["reply", "parent"],
   "run.th": ["run", "th"],
   "run.u": ["run", "u"],
+  "turn.run": ["turn", "run"],
+  "apikey.u": ["apikey", "u"],
   "report.sp": ["report", "sp"],
   "report.key": ["report", "key"],
   "request.sp": ["request", "sp"],

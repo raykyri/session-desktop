@@ -9,6 +9,7 @@ import { defineMutator, inSpace, inSpaces, personal, type Tx } from "../engine.j
 import { bad, notFound, refuse } from "../errors.js";
 import type { InviteRec, SpaceRec } from "../records.js";
 import {
+  delRun,
   addMember,
   endMembership,
   mayInvite,
@@ -405,7 +406,7 @@ function eraseSpace(tx: Tx, sp: string): void {
   for (const p of tx.scan("thread.s", sp)) {
     for (const x of tx.scan("followup.th", p.id)) tx.del("followup", x.id);
     for (const x of tx.scan("reply.th", p.id)) tx.del("reply", x.id);
-    for (const x of tx.scan("run.th", p.id)) tx.del("run", x.id);
+    for (const x of tx.scan("run.th", p.id)) delRun(tx, x.id);
     for (const x of tx.scan("like.th", p.id)) tx.del("like", `${x.u}:${x.th}`);
     for (const x of tx.scan("save.th", p.id)) tx.del("save", `${x.u}:${x.th}`);
     for (const x of tx.scan("rlike.th", p.id)) tx.del("rlike", `${x.u}:${x.reply}`);

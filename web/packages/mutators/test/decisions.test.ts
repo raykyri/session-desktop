@@ -107,7 +107,17 @@ test("2. an API key's record is its person's, without the raw key, and `can` che
   w.key("mel", "K1");
   w.key("otto", "K2");
   const k = rec(w, "apikey:K1", "apikey");
-  t.deepEqual(Object.keys(k).sort(), ["id", "kind", "name", "provider", "rev", "status", "u"]);
+  // phase 2a: the key's monthly cap reaches the client too (a stored, unenforced limit)
+  t.deepEqual(Object.keys(k).sort(), [
+    "cap",
+    "id",
+    "kind",
+    "name",
+    "provider",
+    "rev",
+    "status",
+    "u",
+  ]);
   t.deepEqual(logsOf(k), ["user:mel"]);
   t.is(view(reader(w), k, "mel"), k);
   t.is(view(reader(w), k, "otto"), null);

@@ -164,10 +164,17 @@ export function itemOf(tx: Tx, key: string): Item {
   throw notFound();
 }
 
+/** Delete a run and its turns (phase 2a): a turn is text of the run's
+ * node, so nothing of it outlives the run. */
+export function delRun(tx: Tx, id: string): void {
+  for (const x of tx.scan("turn.run", id)) tx.del("turn", `${x.run}:${x.n}`);
+  tx.del("run", id);
+}
+
 /** Remove a moderated item for good: its text is erased from storage, and so
  * is everything under it (a thread's follow-ups, answers, runs, replies and
  * their likes; a follow-up's runs; a top-level reply's replies). The item
- * stays as a placeholder. Its author's other fields are text too: a thread's
+ * stays as a placeholder (its runs' turns go with the runs). Its author's other fields are text too: a thread's
  * `about`, `model` and `skill`, a follow-up's `model` (review round 2 of
  * phase 1, H2). */
 export function erase(tx: Tx, r: Item): void {
@@ -183,7 +190,7 @@ export function erase(tx: Tx, r: Item): void {
       }
       tx.del("hide", itemKey(r));
       for (const x of tx.scan("rlike.th", r.id)) tx.del("rlike", `${x.u}:${x.reply}`);
-      for (const x of tx.scan("run.th", r.id)) tx.del("run", x.id);
+      for (const x of tx.scan("run.th", r.id)) delRun(tx, x.id);
       tx.put({ ...countsOf(tx, r), r: 0, rlikes: {} });
       tx.put({
         ...r,
@@ -199,7 +206,7 @@ export function erase(tx: Tx, r: Item): void {
       });
       return;
     case "followup":
-      for (const x of tx.scan("run.th", r.th)) if (x.node === r.id) tx.del("run", x.id);
+      for (const x of tx.scan("run.th", r.th)) if (x.node === r.id) delRun(tx, x.id);
       tx.del("hide", itemKey(r));
       tx.put({ ...r, q: "", a: null, model: null, mod: "removed" });
       return;

@@ -444,8 +444,14 @@ for (const kind of STORES) {
       },
     );
     t.like(w.get(`run:${r3}`) ?? {}, { status: "failed", end: "too_large" });
-    // the stubs answer METHOD_NOT_SUPPORTED until phase 2
+    // phase 2a: API keys are served (a raw key of one character is none);
+    // account state (settings, usage) is the HTTP server's, and the package
+    // answers METHOD_NOT_SUPPORTED for it
     t.like(w.server.call({ u: "mel" }, "apiKeys.create", { raw: "k", label: "l" }), {
+      ok: false,
+      error: { code: "BAD_REQUEST" },
+    });
+    t.like(w.server.call({ u: "mel" }, "settings.update", { emailOn: true }), {
       ok: false,
       error: { code: "METHOD_NOT_SUPPORTED" },
     });

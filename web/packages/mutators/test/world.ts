@@ -139,7 +139,10 @@ export class World {
    * its record to their user log. */
   key(u: string, id: string, status: "checking" | "valid" | "invalid" = "valid") {
     this.store.commit([
-      [`apikey:${id}`, { kind: "apikey", id, u, name: `Key ${id}`, provider: "Anthropic", status }],
+      [
+        `apikey:${id}`,
+        { kind: "apikey", id, u, name: `Key ${id}`, provider: "Anthropic", status, cap: 0 },
+      ],
     ]);
   }
 

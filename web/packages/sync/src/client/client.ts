@@ -910,11 +910,13 @@ export class SyncClient implements Changing {
   }
 
   /** The keys a log holds under `threads` that a summary does not serve:
-   * their follow-ups, replies and runs, and the hide records of those. */
+   * their follow-ups, replies, runs and turns, and the hide records of
+   * those. */
   private heldUnder(l: LiveLog, threads: ReadonlySet<string>): string[] {
     const out: string[] = [];
     const under = (r: StoredRecord | undefined) =>
-      (r?.kind === "followup" || r?.kind === "reply" || r?.kind === "run") && threads.has(r.th);
+      (r?.kind === "followup" || r?.kind === "reply" || r?.kind === "run" || r?.kind === "turn") &&
+      threads.has(r.th);
     for (const [k, r] of l.records)
       if (under(r) || (r.kind === "hide" && under(l.records.get(r.item)))) out.push(k);
     return out;
@@ -1014,7 +1016,7 @@ export class SyncClient implements Changing {
       const th =
         x.kind === "thread"
           ? x.id
-          : x.kind === "followup" || x.kind === "reply" || x.kind === "run"
+          : x.kind === "followup" || x.kind === "reply" || x.kind === "run" || x.kind === "turn"
             ? x.th
             : null;
       if (th === null || !mine.has(th) || !("u" in x) || x.u !== this.user) continue;

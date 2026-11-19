@@ -74,7 +74,8 @@ import {
 } from "../protocol.js";
 
 import { answerWrites, bounds } from "./limits.js";
-import { OnlineCalls, type OnlineHandlers } from "./online.js";
+import { RunJobs } from "./jobs.js";
+import { OnlineCalls, type KeyVault, type OnlineHandlers } from "./online.js";
 import type {
   LogRow,
   ServerStore,
@@ -101,7 +102,10 @@ export interface Clock {
 /** Where `job` effects go: the server's job runner (the owned agent loop,
  * the domain checker). A device run is claimed by its device instead. */
 export interface JobRunner {
-  start(job: { kind: "run" | "domain"; id: string }): void;
+  start(job: { kind: pkg.JobKind; id: string }): void;
+  /** A run was stopped (`research.cancelNode`), once that was stored: the
+   * runner stops its loop (phase 2a). */
+  cancel?(run: string): void;
 }
 
 export interface SyncServerOptions {
@@ -118,6 +122,8 @@ export interface SyncServerOptions {
   /** Handlers for the online-only calls; the default ones serve `runs.*` and
    * `devices.*` and answer the rest METHOD_NOT_SUPPORTED (phase 2). */
   online?: Partial<OnlineHandlers>;
+  /** Where API keys' raw values are stored (default: in memory). */
+  keys?: KeyVault;
   /** Test only: an effect for which this answers true fails on that attempt. */
   failEffect?: (effect: pkg.Effect, attempt: number) => boolean;
   /** Hears each fault of a housekeeping pass (counted in
@@ -218,6 +224,8 @@ export class SyncServer {
   private readonly failEffect: SyncServerOptions["failEffect"];
   private readonly onError: SyncServerOptions["onError"];
   readonly online: OnlineCalls;
+  /** The calls a server job makes on its run (phase 2a, `jobs.ts`). */
+  readonly runJobs: RunJobs;
   /** Housekeeping passes that failed since the server started. */
   housekeepingFaults = 0;
   /** Logs written by the transaction in progress; listeners hear them after
@@ -235,7 +243,10 @@ export class SyncServer {
     this.tokens = new Tokens(o.cursorKeys);
     this.failEffect = o.failEffect;
     this.onError = o.onError;
-    this.online = new OnlineCalls(this, o.online);
+    this.online = new OnlineCalls(this, o.online, o.keys, {
+      cancelled: (run) => this.jobRunner.cancel?.(run),
+    });
+    this.runJobs = new RunJobs(this);
   }
 
   // ---- time, transactions, commit ----
@@ -276,6 +287,7 @@ export class SyncServer {
     this.changed = new Set();
     this.runEvents = [];
     this.revoked = [];
+    this.after = [];
     let out: T;
     try {
       out = this.store.transaction(fn);
@@ -283,14 +295,23 @@ export class SyncServer {
       this.changed = new Set();
       this.runEvents = [];
       this.revoked = [];
+      this.after = [];
       throw e;
     }
     const logs = this.changed;
     const events = this.runEvents;
     const revoked = this.revoked;
+    const after = this.after;
     this.changed = new Set();
     this.runEvents = [];
     this.revoked = [];
+    this.after = [];
+    for (const f of after)
+      try {
+        f();
+      } catch {
+        // a hook that throws changes no answer
+      }
     for (const device of revoked)
       for (const l of [...this.revokeListeners])
         try {
@@ -316,6 +337,14 @@ export class SyncServer {
   }
 
   private readonly runListeners = new Set<(e: RunEvent, sp: string) => void>();
+  /** Calls to make once the transaction in progress is stored. */
+  private after: (() => void)[] = [];
+
+  /** Call `f` once the transaction in progress is stored (not at all when
+   * it rolls back). */
+  afterCommit(f: () => void) {
+    this.after.push(f);
+  }
   /** Run events made by the transaction in progress; sent after it commits. */
   private runEvents: [RunEvent, string][] = [];
   private readonly revokeListeners = new Set<(device: string) => void>();
@@ -430,6 +459,7 @@ export class SyncServer {
     const src: pkg.DependentSource = {
       get: (key) => tx.get(key),
       runsOf: (th) => tx.scan("run", "th", th),
+      turnsOf: (run) => tx.scan("turn", "run", run),
     };
     for (const key of pkg.viewDependents(r, src)) {
       const dep = tx.get(key);
@@ -862,7 +892,7 @@ export class SyncServer {
     tx: StoreTx,
     effect: pkg.Effect,
     now: number,
-  ): { kind: "run" | "domain"; id: string } | null {
+  ): { kind: pkg.JobKind; id: string } | null {
     const staged: pkg.Write[] = [];
     if (effect.type === "job") {
       // a device run is claimed by its device (runs.claim), not started here
@@ -923,6 +953,19 @@ export class SyncServer {
       if (r.kind === "followup" && !r.del)
         return this.commit(tx, answerWrites(tx, { ...r, a: text }), now) !== null;
       return false;
+    });
+  }
+
+  /** A key check's verdict (the job runner calls it, phase 2a): the key
+   * reads "valid" or "invalid". False when the key is gone or no longer
+   * waits for a check. */
+  keyChecked(id: string, valid: boolean): boolean {
+    return this.run((tx) => {
+      const now = this.time(tx);
+      const k = tx.get(`apikey:${id}`);
+      if (k?.kind !== "apikey" || k.status !== "checking") return false;
+      this.commit(tx, [[`apikey:${id}`, { ...k, status: valid ? "valid" : "invalid" }]], now);
+      return true;
     });
   }
 
