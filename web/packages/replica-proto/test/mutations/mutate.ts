@@ -609,10 +609,11 @@ const IN_PACKAGE: Record<string, PackageEdit> = {
     from: '        q: "",\n        t: null,\n        edited: false,',
     to: "        edited: false,",
   },
+  // moved with the redaction of model and skill (review round 2 of phase 1)
   X4: {
     file: "src/access.ts",
-    from: 'return { ...r, q: "", t: null, sum: null, about: null } satisfies ThreadRec;',
-    to: 'return { ...r, q: "", about: null } satisfies ThreadRec;',
+    from: '        q: "",\n        t: null,\n        sum: null,\n        about: null,\n        model: null,\n        skill: null,\n      } satisfies ThreadRec;',
+    to: '        q: "",\n        about: null,\n        model: null,\n        skill: null,\n      } satisfies ThreadRec;',
   },
   X6: {
     file: "src/defs/members.ts",
@@ -636,8 +637,8 @@ const IN_PACKAGE: Record<string, PackageEdit> = {
   },
   X14: {
     file: "src/rules.ts",
-    from: '        q: "",\n        t: null,\n        sum: null,\n        about: null,\n        running: false,',
-    to: '        q: "",\n        about: null,\n        running: false,',
+    from: '        q: "",\n        t: null,\n        sum: null,\n        about: null,\n        model: null,\n        skill: null,\n        running: false,',
+    to: '        q: "",\n        about: null,\n        model: null,\n        skill: null,\n        running: false,',
   },
   X16: {
     file: "src/defs/members.ts",
@@ -646,8 +647,8 @@ const IN_PACKAGE: Record<string, PackageEdit> = {
   },
   X18: {
     file: "src/access.ts",
-    from: 'return { ...r, q: "", a: null } satisfies FollowUpRec;',
-    to: 'return { ...r, q: "" } satisfies FollowUpRec;',
+    from: 'return { ...r, q: "", a: null, model: null } satisfies FollowUpRec;',
+    to: 'return { ...r, q: "", model: null } satisfies FollowUpRec;',
   },
   X20: {
     file: "src/defs/threads.ts",
@@ -823,10 +824,11 @@ const IN_SYNC: Record<string, SyncEdit> = {
     // phase 1: the made-up state has this database's
     to: "      const c = this.tokens.open(cursor, now) ?? { log, u, n: tx.epoch(log).n, v: 0, h: 0, at: now, i: this.instance(tx) };\n",
   },
+  // moved with the epochs read once (review round 2 of phase 1): the same fault
   N6: {
     file: "src/server/server.ts",
-    from: "      if (a && a.sp !== null && tx.epoch(`space:${a.sp}`).start > head) return true;",
-    to: "      if (a && a.sp !== null && tx.epoch(`space:${a.sp}`).start > head + 1e9) return true;",
+    from: "      if (a && a.sp !== null && moved.has(`space:${a.sp}`)) return true;",
+    to: "      if (a && a.sp !== null && moved.has(`space:${a.sp}`) && false) return true;",
   },
   N7: {
     file: "src/server/server.ts",
@@ -850,8 +852,9 @@ const IN_SYNC: Record<string, SyncEdit> = {
   },
   N11: {
     file: "src/server/server.ts",
-    from: "          if (attempts >= EFFECT_MAX_ATTEMPTS) {\n            tx.effectDelete(q.id);\n            tx.deadLetterAdd({ effect: q.effect, at: q.at, attempts, failedAt: now });\n          } else",
-    to: "          if (attempts >= 1) {\n            tx.effectDelete(q.id);\n          } else",
+    // (moved with the dead letter's end of its run, review round 2 of phase 1)
+    from: "          if (attempts >= EFFECT_MAX_ATTEMPTS) {\n            tx.effectDelete(q.id);\n            tx.deadLetterAdd({ effect: q.effect, at: q.at, attempts, failedAt: now });\n",
+    to: "          if (attempts >= 1) {\n            tx.effectDelete(q.id);\n",
   },
   N15: {
     file: "src/server/memory.ts",
@@ -913,8 +916,9 @@ const IN_SYNC: Record<string, SyncEdit> = {
   },
   N33: {
     file: "src/server/server.ts",
-    from: "      return { changes, cursor: this.serve(tx, log, u, to, now), lastSeq, serverTime: now };",
-    to: "      return { changes, cursor: this.serve(tx, log, u, to, changes.length ? now : c.at), lastSeq, serverTime: now };",
+    // (moved with the pull's answer, now one field a line)
+    from: "        changes,\n        cursor: this.serve(tx, log, u, to, now),\n        lastSeq,",
+    to: "        changes,\n        cursor: this.serve(tx, log, u, to, changes.length ? now : c.at),\n        lastSeq,",
   },
   // the key is configured here, not made per process: the fault is that
   // the configured key is not used (every server seals with the same key)
