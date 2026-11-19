@@ -226,5 +226,41 @@
   scenario('public: moderators add sources', { note: 'only moderators of #public can add sources (source policy "mods")',
     run: tx => tx.mapPut('dsPol', 'public', 'mods') });
 
+  /* ---- sync states: the outbox, refused writes, access changes, device runs ----
+     The mock backend keeps no device replica, outbox or device records, and answers none of STALE, EXPIRED or
+     "update": the page draws those (the sync states block of session-web-spaces.html). These scenarios set up
+     what the server holds when each state appears. */
+  const sf42 = tx => tx.get('posts').find(p => p.s === 'sablefield' && p.k === 'post' && /4\.2 is out/.test(p.q)).id;
+  scenario('outbox: replies arrived while you were offline', { note: 'while your device was offline, oduya and jun.park replied to the Sablefield 4.2 post. Your own reply is still in the device’s outbox (page state), so the server does not have it',
+    run: (tx, a, h) => {
+      const th = sf42(tx);
+      tx.mapPut('rp', th, [...tx.mapGet('rp', th), { u: 'oduya', createdAt: h.ago('40m'), t: 'The rules check command caught two scope errors in our staging project.', likes: 1 }, { u: 'jun.park', createdAt: h.ago('25m'), t: 'Deploys of sync rules went from about a minute to a few seconds for us.', likes: 0 }]);
+    } });
+  scenario('sablefield: bram edited a hidden reply', { note: 'you (an admin of Sablefield) hid bram’s reply on the 4.2 post. Later, offline, you chose Show; before that write reached the server, bram edited the reply, so its version changed and the queued Show answers STALE',
+    run: (tx, a, h) => {
+      const th = sf42(tx), list = tx.mapGet('rp', th);
+      tx.mapPut('rp', th, list.map(r => r.u === 'bram' ? { ...r, t: 'Edited: the discount code is gone. A comparison of managed Postgres hosts is at cheapdb.example/compare.', edited: true } : r));
+      tx.mapPut('modSt', `r:${th}:${list.findIndex(r => r.u === 'bram')}`, 'hidden');
+    } });
+  scenario('replication: a request changed after Approve', { note: 'you moderate #replication-club. After you chose Approve on noor.a’s request, noor.a changed the answers, so the queued Approve answers STALE',
+    run: (tx, a, h) => {
+      h.rel('replication', 'mod'); tx.setValue('reqSeen', true);
+      tx.edit('reqs', 'noor.a', r => { r.a = ['Grokking on modular arithmetic and on sparse parity. I will re-run the small models with three seeds each and share the logs.', 'github.com/noor-a/grokking-rerun']; });
+    } });
+  scenario('replication: moderator role removed', { note: 'you were a moderator of #replication-club; an admin changed your role to member. The review queue, reports and their notifications are no longer served to you',
+    run: (tx, a, h) => h.rel('replication', 'member') });
+  scenario('replication: removed', { note: 'a moderator removed you from #replication-club: the server serves you nothing of it',
+    run: (tx, a, h) => h.rel('replication', 'none') });
+  scenario('replication: removed, a device keeps its copy', { note: 'a moderator removed you from #replication-club. The server serves you nothing of it (see replication: removed), but your Desktop or Phone app keeps its copy. The mock backend keeps no device copy, so this scenario keeps the membership for the page to draw that copy, which the page marks frozen',
+    run: (tx, a, h) => h.rel('replication', 'member') });
+  scenario('sablefield: an open space to moderate', { note: 'you are an admin of Sablefield, an open space: anyone can join, so a removed member could join again',
+    run: (tx, a, h) => h.rel('sablefield', 'mod') });
+  const scifiAsk = tx => tx.get('posts').find(p => p.s === 'scifi' && p.u === 'mira_k' && p.k === 'ask' && !p.about).id;
+  scenario('device runs: mira_k’s ask running', { note: 'mira_k ran her #sci-fi ask again on her Mac (a device run; its executor is page state). The run is held after its first step',
+    run: (tx, a, h) => { const th = scifiAsk(tx); tx.edit('posts', th, x => { x.running = true; x.att = (x.att || 1) + 1; delete x.fail; }); h.run(th, 'r', 1); } });
+  scenario('device runs: mira_k’s run interrupted', { note: 'mira_k ran her #sci-fi ask again on her Mac; the Mac slept, the run’s lease ended and the run is interrupted',
+    run: tx => { const th = scifiAsk(tx); tx.edit('posts', th, x => { x.running = false; x.att = (x.att || 1) + 1; x.fail = { why: 'interrupted' }; x.sum = window.SessionJobs.FAIL_SUM.interrupted(); }); } });
+  /* ---- end sync states ---- */
+
   window.SessionScenarios = { list };
 })();

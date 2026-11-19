@@ -3775,6 +3775,184 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
 /* Edit rules and Add a rule: the same size as the rules above them */
 .ne-rsm b { font-size: 15.45px; }
 /* ==== end Phone editors ==== */
+/* ---------- sync states: the outbox, refused writes, access changes, Update Session, the Desktop app, device runs ---------- */
+/* the Desktop app (Tauri): a title bar in place of the browser's address bar */
+html[data-client="app"] .frame-bar { justify-content: flex-start; }
+html[data-client="app"] .frame-bar .url { font-weight: 650; color: var(--t-secondary); }
+/* the header: offline pill, unsent badge and its popover */
+.sx-bw { position: relative; display: inline-flex; }
+.btn.hb.sx-badge { gap: 5px; height: 30px; border: 1px solid var(--control-border); background: var(--control); font-weight: 550; }
+.btn.hb.sx-badge svg { width: 14px; height: 14px; }
+.btn.hb.sx-badge.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--control-border)); }
+.btn.hb.sx-badge[aria-expanded="true"] { background: var(--fill-subtle); border-color: var(--border-strong); }
+.sx-pill { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border-radius: 999px; font-size: var(--fs-sm); font-weight: 600; color: var(--warn); background: color-mix(in srgb, var(--warn) 13%, transparent); white-space: nowrap; }
+.sx-pill svg { width: 14px; height: 14px; }
+.acct .me.sx-dot, .n-tab.sx-dot { position: relative; }
+.acct .me.sx-dot::after { content: ""; position: absolute; left: 22px; top: 1px; width: 9px; height: 9px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px var(--pane); }
+.n-tab.sx-dot::after { content: ""; position: absolute; top: 6px; left: calc(50% + 6px); width: 8px; height: 8px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px var(--chrome); }
+.sx-dotnote { display: block; padding: 4px 8px 6px; font-size: var(--fs-xs); color: var(--warn); }
+.ts-ddmenu.sx-pop { left: auto; right: 0; width: 390px; max-height: 520px; overflow: auto; z-index: 60; text-align: left; }
+.sx-pop .sx-popb { padding: 2px 8px 6px; }
+/* bars and strips: across the window under the header, or at the top of the content */
+.sx-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 20px; border-bottom: 1px solid var(--divider); background: color-mix(in srgb, var(--warn) 14%, var(--chrome)); color: var(--t-strong); font-size: var(--fs-sm); }
+.sx-bar.info { background: color-mix(in srgb, var(--accent) 10%, var(--chrome)); }
+.sx-bar.bad { background: color-mix(in srgb, var(--bad) 12%, var(--chrome)); }
+.sx-bar > svg { width: 16px; height: 16px; flex: none; color: var(--warn); }
+.sx-bar .grow { flex: 1; min-width: 200px; }
+.sx-bar b { font-weight: 650; color: var(--t-heading); }
+.sx-mtop { margin: 0 0 14px; }
+.cs-strip.sx-mtop b { color: var(--t-heading); font-weight: 650; }
+.cs-card.sx-mtop .cs-card-h svg { color: var(--warn); }
+.sx-card ul { margin: 0; padding-left: 18px; color: var(--t-secondary); font-size: var(--fs-sm); }
+.sx-card .muted { font-size: var(--fs-sm); }
+/* an item the outbox holds: a reply not sent yet, set aside, or refused */
+.rp.sx-rp > .rp-b > p { color: var(--t-secondary); }
+.rp.sx-rp.sx-gone > .rp-b > p { color: var(--t-muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--t-muted) 60%, transparent); }
+.sx-st { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 4px 8px; margin-top: 4px; font-size: var(--fs-xs); color: var(--t-muted); line-height: 1.45; }
+.sx-st .sx-stx { flex: 1 1 220px; min-width: 0; }
+.sx-st b { color: var(--t-heading); font-weight: 650; }
+.sx-st.sx-bad .sx-stx { color: var(--t-secondary); }
+.sx-st .as-ic { margin-top: 1px; color: var(--bad); }
+.sx-sic { display: inline-grid; place-items: center; width: 14px; height: 16px; flex: none; color: var(--t-faint); }
+.sx-sic svg { width: 13px; height: 13px; }
+.sx-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.sx-st .sx-acts { flex-basis: 100%; padding-left: 22px; }
+.sx-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10.8px; font-weight: 650; border-radius: 999px; padding: 0 8px; line-height: 18px; color: var(--bad); background: color-mix(in srgb, var(--bad) 13%, transparent); }
+.sx-tag.wait { color: var(--t-muted); background: var(--fill-subtle); }
+/* the Unsent changes list */
+.sx-lh { margin: 0 0 6px; font-size: var(--fs-sm); }
+.sx-sec { display: flex; flex-direction: column; }
+.sx-sec h3 { margin: 14px 0 2px; font-size: var(--fs-xs); font-weight: 650; text-transform: uppercase; letter-spacing: .06em; color: var(--t-faint); }
+.sx-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-top: 1px solid var(--divider); }
+.sx-sec h3 + .sx-row { border-top: 0; }
+.sx-ric { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--fill-subtle); color: var(--t-secondary); }
+.sx-ric svg { width: 14px; height: 14px; }
+.sx-row.sx-bad .sx-ric { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.sx-rb { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sx-rh { display: flex; align-items: baseline; gap: 8px; }
+.sx-rh b { flex: 1; min-width: 0; color: var(--t-heading); font-weight: 600; font-size: var(--fs-sm); }
+.sx-rh .faint { font-size: var(--fs-xs); flex: none; }
+.sx-rt { margin: 0; font-size: var(--fs-sm); color: var(--t-primary); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.sx-rs { margin: 0; font-size: var(--fs-xs); color: var(--t-muted); line-height: 1.45; }
+.sx-rs b { color: var(--t-heading); font-weight: 650; }
+.sx-row.sx-bad .sx-rs b { color: var(--bad); }
+.sx-rb .sx-acts { margin-top: 3px; font-size: var(--fs-sm); }
+.sx-sent { margin: 12px 0 0; font-size: var(--fs-xs); }
+.sx-obp { max-width: 720px; }
+.sx-cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sx-cmp > div { border: 1px solid var(--border-subtle); border-radius: var(--r-lg); padding: 10px 12px; min-width: 0; }
+.sx-cmp small { display: block; font-size: var(--fs-xs); color: var(--t-faint); margin-bottom: 4px; }
+.sx-cmp p { margin: 0; font-size: var(--fs-sm); }
+.sx-cmp .sx-was p { color: var(--t-muted); }
+.sx-q { margin: 0; padding: 8px 12px; border-left: 3px solid var(--border-strong); background: var(--fill-subtle); border-radius: 0 var(--r-md) var(--r-md) 0; font-size: var(--fs-sm); color: var(--t-primary); }
+.run.sx-box { margin-top: 8px; }
+.run.sx-box .as-acts .btn { height: 28px; }
+/* access changes */
+#app.sx-ro [data-toggle="liked"], #app.sx-ro [data-toggle="saved"], #app.sx-ro .ta-like, #app.sx-ro [data-tarp] { opacity: .45; pointer-events: none; }
+.sx-grey .rows, .sx-grey .rows-plain { opacity: .55; filter: saturate(.4); }
+.sx-frz { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font-size: var(--fs-xs); font-weight: 650; color: var(--t-muted); background: var(--fill-subtle); border-radius: 999px; padding: 1px 8px; vertical-align: middle; }
+.sx-frz svg { width: 11px; height: 11px; }
+.utab .sx-tlk { display: inline-flex; margin-left: 4px; color: var(--t-faint); }
+.utab .sx-tlk svg { width: 11px; height: 11px; }
+.sx-frow { display: flex; align-items: center; gap: 8px; padding: 8px 0 0; font-size: var(--fs-sm); color: var(--t-muted); }
+.sx-frow svg { width: 13px; height: 13px; flex: none; }
+/* open spaces: Ban and what it stops */
+.sx-scope { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--t-secondary); }
+.sx-scope li { display: flex; gap: 8px; }
+.sx-scope li::before { content: "–"; color: var(--t-faint); }
+.sx-bmw { position: relative; display: inline-flex; }
+.ts-ddmenu.sx-bmenu { left: auto; right: 0; width: 300px; }
+.sx-bmenu .ts-tx small { white-space: normal; }
+/* the composer on the Desktop app: who runs the ask */
+.sx-split { display: inline-flex; position: relative; }
+.sx-split > .btn.primary:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.sx-split > .btn.sx-splitc { border-top-left-radius: 0; border-bottom-left-radius: 0; padding: 0 7px; margin-left: 1px; }
+.sx-split > .btn.sx-splitc svg { width: 12px; height: 12px; }
+.ts-ddmenu.sx-xmenu { left: auto; right: 0; top: auto; bottom: calc(100% + 6px); width: 330px; z-index: 30; }
+.sx-xmenu .ts-tx small, .mp-menu .sx-xo .ts-tx small { white-space: normal; line-height: 1.4; }
+.sx-exl { position: relative; }
+.sx-exl .tlink svg { width: 10px; height: 10px; margin-left: 2px; }
+.ts-ddmenu.sx-xmenu.sx-down { top: calc(100% + 4px); bottom: auto; left: 0; right: auto; }
+.chip.dd .sx-exc { display: inline-flex; color: var(--t-faint); }
+.chip.dd .sx-exc svg { width: 13px; height: 13px; }
+.sx-mnote { margin: 2px 8px 6px; font-size: var(--fs-xs); color: var(--t-muted); }
+.sx-radio { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: start; font-size: var(--fs-sm); cursor: pointer; }
+.sx-radio input { margin: 3px 0 0; }
+.sx-radio b { color: var(--t-heading); font-weight: 600; }
+.sx-radio small { display: block; color: var(--t-muted); font-size: var(--fs-xs); line-height: 1.45; }
+.sx-radio.off { cursor: default; }
+.sx-radio.off b { color: var(--t-muted); }
+.sx-radio code, .sx-devp code { font-size: var(--fs-xs); }
+/* device answers: the label in the meta line; a run on a device as other members see it */
+.tm-meta.sx-dl { display: flex; align-items: center; gap: 6px; }
+.tm-meta.sx-dl svg { width: 13px; height: 13px; flex: none; color: var(--t-faint); }
+.sx-tip { position: relative; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; color: var(--t-faint); cursor: default; }
+.sx-tip:hover, .sx-tip:focus-visible, .sx-tip.open { background: var(--fill-subtle); }
+.sx-tip > span { display: none; position: absolute; left: 0; bottom: calc(100% + 6px); white-space: nowrap; padding: 5px 9px; border-radius: var(--r-md); background: var(--t-heading); color: var(--pane); font-size: var(--fs-xs); font-weight: 550; z-index: 20; box-shadow: var(--shadow-pop); }
+.sx-tip:hover > span, .sx-tip:focus-visible > span, .sx-tip.open > span { display: block; }
+.sx-stream { font-size: var(--fs-base); line-height: 1.6; color: var(--t-primary); }
+.sx-stream p { margin: 0 0 8px; }
+.sx-caret { display: inline-block; width: 7px; height: 15px; margin-left: 2px; vertical-align: -2px; background: var(--t-faint); border-radius: 1px; animation: sx-blink 1s steps(2, start) infinite; }
+@keyframes sx-blink { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .sx-caret { animation: none; } }
+/* device sign-in: the app's window and the browser's approval page */
+.sx-sign .cs-na { max-width: 440px; }
+.sx-code { font: 650 22px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; color: var(--t-heading); padding: 10px 18px; border: 1px dashed var(--border-strong); border-radius: var(--r-lg); }
+.sx-wait { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--t-muted); }
+.sx-dcard { text-align: left; align-self: stretch; }
+.sx-dcard .sx-dl2 { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: var(--fs-sm); margin: 0; }
+.sx-dcard dt { color: var(--t-faint); }
+.sx-dcard dd { margin: 0; color: var(--t-primary); }
+/* Account › Devices */
+.sx-devl { display: flex; flex-direction: column; }
+.sx-devr { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--divider); }
+.sx-devr:first-child { border-top: 0; }
+.sx-devi { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--fill-subtle); color: var(--t-secondary); }
+.sx-devi svg { width: 16px; height: 16px; }
+.sx-devr b { color: var(--t-heading); font-weight: 600; }
+.sx-devr small { display: block; color: var(--t-muted); font-size: var(--fs-xs); }
+.sx-devr .ks { margin-left: 6px; }
+.sx-devp .cs-fine { margin-top: 10px; }
+/* toasts with more than one action */
+.cs-toast .sx-tacts { display: inline-flex; gap: 12px; }
+@media (max-width: 640px) {
+  .ts-ddmenu.sx-pop { position: fixed; left: 8px; right: 8px; width: auto; top: 96px; max-height: 70vh; }
+  .sx-bar { padding: 8px 14px; }
+  .sx-bar .grow { min-width: 0; flex-basis: 100%; }
+  .sx-cmp { grid-template-columns: 1fr; }
+  .btn.hb.sx-badge .sx-bl { display: none; }
+  .sx-pill { padding: 0 8px; }
+  .ts-ddmenu.sx-xmenu { width: min(330px, calc(100vw - 32px)); }
+  .sx-devr { grid-template-columns: 34px minmax(0, 1fr); }
+  .sx-devr > .tlink { grid-column: 2; justify-self: start; }
+}
+/* the Phone app */
+.sx-nbar { display: flex; align-items: flex-start; gap: 8px; margin: 0 16px 10px; padding: 9px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.4; color: var(--t-strong); background: color-mix(in srgb, var(--warn) 14%, var(--chrome)); }
+.sx-nbar.bad { background: color-mix(in srgb, var(--bad) 12%, var(--chrome)); }
+.sx-nbar.info { background: color-mix(in srgb, var(--accent) 10%, var(--chrome)); }
+.sx-nbar > svg { width: 16px; height: 16px; flex: none; color: var(--warn); margin-top: 1px; }
+.sx-nbar .sx-nbb { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.sx-nbar b { font-weight: 650; }
+.sx-nbar .sx-acts { gap: 6px 14px; }
+.n-ib.sx-nbadge { width: auto; padding: 0 8px; gap: 3px; display: inline-flex; align-items: center; font-size: 13px; font-weight: 650; border-radius: 999px; background: var(--fill-subtle); }
+.n-ib.sx-nbadge.bad { color: var(--bad); }
+.n-ib.sx-nbadge svg { width: 15px; height: 15px; }
+.sx-npill { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px; border-radius: 999px; font-size: 12.5px; font-weight: 650; color: var(--warn); background: color-mix(in srgb, var(--warn) 13%, transparent); }
+.sx-npill svg { width: 13px; height: 13px; }
+.n-reply.sx-nrp > div > p { color: var(--t-secondary); }
+.n-reply.sx-nrp.sx-gone > div > p { color: var(--t-muted); text-decoration: line-through; }
+.sx-nst { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; font-size: 13px; color: var(--t-muted); line-height: 1.4; }
+.sx-nst b { color: var(--t-heading); font-weight: 650; }
+.sx-nst.sx-bad b { color: var(--bad); }
+.sx-nst .sx-acts { gap: 6px 14px; }
+.sx-nlist { padding: 0 16px 16px; }
+.sx-nlist .sx-row { padding: 12px 0; }
+.sx-nlist .sx-rh b { font-size: 14.5px; }
+.sx-nlist .sx-rt, .sx-nlist .sx-rs { font-size: 13.5px; }
+.sx-nbox { margin: 10px 0 0; padding: 12px; border-radius: 12px; background: var(--fill-subtle); display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.sx-nbox p { margin: 0; }
+.n-ans + .tm-meta.sx-dl, .n-th .tm-meta.sx-dl { margin: 8px 16px 0; }
+/* ---------- end sync states ---------- */
 </style>
 
 <div class="shell" id="shell">
@@ -13079,6 +13257,816 @@ JUMPS.splice((i => i < 0 ? JUMPS.length : i)(JUMPS.findIndex(g => g[0] === 'Acco
 ]]);
 /* ==== end of paged lists ==== */
 
+/* ==== sync states: the outbox, refused writes, access changes, open-space bans, Update Session, the Desktop app and device runs ====
+   The states that the sync architecture adds (AGENTS.md, "Planned: desktop client and sync core"; ADR-19 to
+   ADR-22 in web/docs/01-architecture-decisions.md). Nothing here is built yet: this block is the UI contract.
+   - The Desktop app (Tauri, macOS) runs the web client. The Variants bar's Client control (shown with Desktop)
+     draws it: a window title in place of the address bar, an outbox, device sign-in and device runs.
+     st.client: 'web' (a browser) or 'app'.
+   - The outbox (st.sxObx): on the Desktop and Phone apps a write is applied to the replica at once and waits on
+     the device, in one order, until the server confirms or refuses it. A transient failure is retried with
+     backoff; a write that fails 5 times is set aside ("Couldn't save": Retry, Copy text, Discard) and the rest
+     are sent; a write refused as EXPIRED (made more than 4 days before, by the device's clock) and one dropped
+     after 3 days in the outbox (server time) are reported. The web holds a write only while its request is in
+     flight: offline, a write fails at once and its text stays in the composer.
+   - Refused writes: STALE (a queued Show or Approve whose target changed: "Reload and reapply" shows the current
+     version and the moderator decides again), CONFLICT on a page edit sent from the outbox (the editor's existing
+     conflict notice), FORBIDDEN after a role change.
+   - Access changes: a removed member of a closed space keeps a frozen copy on the device (read-only, not updated,
+     their own threads still deletable); the web has no copy, so the space leaves the header with a notice. A
+     moderator whose role is removed loses the review queue and report notifications.
+   - Open spaces: removal there is undone by leaving and joining again, so moderators get Ban, which stops every
+     write in the space, the person's own included.
+   - Update Session: an old client's requests are answered with "update"; writes stay in the outbox until then.
+   - Device runs (Desktop app): an ask runs with the included tokens (the default) or a CLI on this Mac (Claude
+     Code, Codex); device answers carry a light label in their meta line, report no usage, and are capped at
+     200 KB per answer and 100 device runs an hour. A run whose lease ends is interrupted; Run again starts a new
+     attempt.
+   The mock backend keeps no device replica and no outbox, has no device records, and answers none of STALE,
+   EXPIRED, TOO_LARGE or "update" (its procedures stay as they are). So the outbox, the refusals, the frozen copy,
+   the device list and the executor of an answer are page state that each Screen entry sets (sxUi); the entry's
+   scenario sets up what the server holds (the edited reply, the changed request, the role, the run). Variants:
+   SXV, one Variants control per state, shown with the Screen entries they apply to (SX_KN). */
+const SXI = {
+  mac: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.5" width="10" height="7" rx="1"/><path d="M1.5 12.5h13"/></svg>',
+  phone: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="4.5" y="1.8" width="7" height="12.4" rx="1.6"/><path d="M7.2 12h1.6" stroke-linecap="round"/></svg>',
+  up: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 10.5V3M5 6l3-3 3 3"/><path d="M2.5 9.5v3a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3"/></svg>',
+  clock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5.8"/><path d="M8 4.8V8l2.2 1.4"/></svg>',
+  reply: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4 2.5 7.5 6 11"/><path d="M2.5 7.5H10a3.5 3.5 0 0 1 3.5 3.5v1"/></svg>',
+  heart: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M8 13.2S2.5 10 2.5 6.3A2.8 2.8 0 0 1 8 5a2.8 2.8 0 0 1 5.5 1.3C13.5 10 8 13.2 8 13.2z"/></svg>',
+  doc: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M4 2h5.5L12 4.5V14H4z"/><path d="M6 7.5h4M6 10h4" stroke-linecap="round"/></svg>',
+  eye: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>',
+  user: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.6-2.4 2.6-3.7 5-3.7s4.4 1.3 5 3.7"/></svg>',
+  dl: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5V10M5 7l3 3 3-3"/><path d="M2.5 11v1.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V11"/></svg>',
+  cli: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.4"/><path d="m4.5 6.3 2 1.7-2 1.7M8 10h3.5"/></svg>',
+  lock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>',
+  ban: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="5.6"/><path d="M4 4l8 8" stroke-linecap="round"/></svg>',
+  more: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3.5" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="12.5" cy="8" r="1.2"/></svg>',
+};
+/* ---- the Variants controls: [key, label, title, options]; the first option is the recommendation ---- */
+const SXV = [
+  ['sxvFail', 'Failed write', 'Failed write: where a write that failed 5 times, was refused as EXPIRED or was dropped after 3 days is shown. On the item; a banner under the header; a toast with its actions; a sheet', [['inline', 'On the item'], ['banner', 'Banner'], ['toast', 'Toast'], ['sheet', 'Sheet']]],
+  ['sxvList', 'Unsent list', 'Unsent changes (Desktop and Phone apps): where the list opens from. A header badge with a popover; a badge that opens a page; a section of Account', [['badge', 'Badge, popover'], ['page', 'Badge, page'], ['account', 'In Account']]],
+  ['sxvOff', 'Offline', 'Offline: how the client shows it. A bar under the header; a pill in the header; a dot on your avatar', [['bar', 'Bar'], ['pill', 'Pill'], ['dot', 'Avatar dot']]],
+  ['sxvStale', 'Reapply', 'Refused as STALE: where the moderator decides again on the current version. On the item; a dialog with both versions; a strip at the top of the screen that opens it', [['inline', 'On the item'], ['dialog', 'Compare dialog'], ['strip', 'Strip']]],
+  ['sxvForb', 'Role refusal', 'Queued actions refused as FORBIDDEN after a role change: one notice listing them; each marked in Unsent changes; a toast', [['notice', 'Notice'], ['items', 'In Unsent changes'], ['toast', 'Toast']]],
+  ['sxvFrozen', 'Frozen copy', 'A closed space you were removed from, on your device: a banner; a lock mark and a row under the tabs; greyed threads with a notice', [['banner', 'Banner'], ['lock', 'Lock and row'], ['grey', 'Greyed, notice']]],
+  ['sxvGone', 'Removed (web)', 'The web after a removal from a closed space (no copy): a notice on Home; a toast; a page at the space’s address', [['notice', 'Notice'], ['toast', 'Toast'], ['page', 'Page']]],
+  ['sxvDemote', 'Role removed', 'A moderator whose role was removed: a strip on the space page; a toast', [['strip', 'Strip'], ['toast', 'Toast']]],
+  ['sxvBan', 'Open-space ban', 'Open spaces offer Ban, not Remove: what a ban stops is shown in the confirm dialog; in a note under the member list; in a row menu', [['dialog', 'In the dialog'], ['row', 'Note under the list'], ['menu', 'Row menu']]],
+  ['sxvUpd', 'Update Session', 'An old client told to update: a bar; a dialog; at the write the server refused', [['bar', 'Bar'], ['modal', 'Dialog'], ['inline', 'At the write']]],
+  ['sxvExec', 'Who runs it', 'Desktop app: where an ask picks who runs it (included tokens, or Claude Code or Codex on this Mac). In the model menu; a split Ask button; a per-space line in the composer', [['menu', 'Model menu'], ['split', 'Split button'], ['space', 'Per space']]],
+  ['sxvLabel', 'Device label', 'The label of an answer from a device run, in its meta line: text; an icon with text; an icon with a tooltip', [['text', 'Text'], ['icon', 'Icon and text'], ['tip', 'Icon, tooltip']]],
+  ['sxvInt', 'Interrupted', 'A device run interrupted because the Mac slept or lost its connection: the answer’s status box with Run again; one line in the meta row', [['box', 'Status box'], ['line', 'One line']]],
+  ['sxvLimit', 'Device limits', 'The device-run limits (200 KB an answer, 100 runs an hour): where they show. Inline (at the answer or the composer); a toast', [['inline', 'Inline'], ['toast', 'Toast']]],
+  ['sxvView', 'Live view', 'Another member watching a device run on the web: its status; its text as it streams', [['steps', 'Status'], ['stream', 'Streaming text']]],
+  ['sxvSign', 'Device sign-in', 'Device sign-in: the browser asks to match a code the app shows; or approves with one click', [['code', 'Match a code'], ['click', 'One click']]],
+  ['sxvDev', 'Devices', 'Devices in Account: a tab of its own; a section of the Account tab', [['tab', 'Tab'], ['section', 'Section']]],
+];
+const SX_CLIENT = [['web', 'Browser'], ['app', 'Desktop app']];
+Object.assign(st, { client: 'web' }, Object.fromEntries(SXV.map(([k, , , o]) => [k, o[0][0]])));
+/* the screen's state: the outbox, refusals, access changes, device runs (set by the Screen entries, sxUi) */
+const SX0 = () => ({ sxScr: null, sxObx: [], sxSent: 0, sxPop: false, sxStale: null, sxStaleOpen: false, sxForbSeen: false, sxFrozen: null, sxGone: null, sxGoneSeen: false, sxDemoted: null, sxUpd: null, sxSign: null, sxExec: 'session', sxExecDef: 'session', sxExecSp: {}, sxExecOpen: false, sxRuns: {}, sxLimit: null, sxBanMenu: null, sxDevs: null, sxToast: null, sxTip: false, sxNoteX: false });
+Object.assign(st, SX0());
+/* the Variants bar: Client next to the device, and a row of controls shown with the screens they apply to */
+{
+  ['kw-sync', 'kw-client'].forEach(id => { const e = document.getElementById(id); if (e) e.remove(); });
+  const dk = $('k-dev') && $('k-dev').closest('.knob');
+  if (dk) dk.insertAdjacentHTML('afterend', `<div class="knob" id="kw-client" title="Desktop only: the web client in a browser, or the same client in the Desktop app (Tauri, macOS), which adds a window title, an outbox (Unsent changes), device sign-in and device runs"><div class="seg" id="k-client" aria-label="Client"></div></div>`);
+  const ctl = document.querySelector('.ctl');
+  if (ctl) ctl.insertAdjacentHTML('beforeend', `<div class="knobs cs-knobs" id="kw-sync" aria-label="Sync state controls"><span class="cs-kt">Sync states</span>${SXV.map(([k, l, t]) => `<div class="knob" id="kw-${k}" title="${esc(t)}"><span>${l}</span><div class="seg" id="k-${k}" aria-label="${esc(l)}"></div></div>`).join('')}</div>`);
+}
+const sxPicked = () => { if (st.sxScr) sxUi(st.sxScr, true); };
+const SXKNOBS = () => [['k-client', 'client', SX_CLIENT.map(([v, l]) => [v, l, '#']), () => { st.sxPop = false; }], ...SXV.map(([k, , , o]) => [`k-${k}`, k, o.map(([v, l]) => [v, l, '#']), sxPicked])];
+{ const q0 = QTKNOBS; QTKNOBS = () => [...q0(), ...SXKNOBS()]; }
+/* each Screen entry's controls (entry key without its sx-/sxn- prefix) */
+const SX_KN = {
+  'ob-wait': ['sxvOff', 'sxvList'], 'ob-retry': ['sxvList'], 'ob-failed': ['sxvFail', 'sxvList'], 'ob-expired': ['sxvFail', 'sxvList'], 'ob-dropped': ['sxvFail', 'sxvList'], 'ob-list': ['sxvList'],
+  'off-app': ['sxvOff', 'sxvList'], 'off-web': ['sxvOff'], off: ['sxvOff', 'sxvList'],
+  'rf-show': ['sxvStale'], 'rf-approve': ['sxvStale'], 'rf-page': [], 'rf-forbidden': ['sxvForb', 'sxvList'],
+  'ax-frozen': ['sxvFrozen'], 'ax-frozen-del': ['sxvFrozen'], 'ax-gone': ['sxvGone'], 'ax-demoted': ['sxvDemote'],
+  'op-members': ['sxvBan'], 'op-ban': ['sxvBan'], 'op-report': ['sxvBan'],
+  'up-web': ['sxvUpd'], 'up-app': ['sxvUpd', 'sxvList'], up: ['sxvUpd', 'sxvList'],
+  'app-home': [], 'si-app': ['sxvSign'], 'si-web': ['sxvSign'], 'si-done': [], dev: ['sxvDev'], 'dev-revoke': ['sxvDev'],
+  'dr-pick': ['sxvExec'], 'dr-default': ['sxvExec'], 'dr-label': ['sxvLabel'], 'dr-int': ['sxvInt'], 'dr-int-web': ['sxvInt'], 'dr-size': ['sxvLimit'], 'dr-rate': ['sxvLimit', 'sxvExec'], 'dr-view': ['sxvView', 'sxvLabel'],
+};
+{ const rc0 = renderControls; renderControls = function () {
+  rc0();
+  const kc = $('kw-client'); if (kc) kc.style.display = st.device === 'desktop' ? '' : 'none';
+  const on = new Set(SX_KN[st.sxScr] || []);
+  SXV.forEach(([k]) => { const e = $('kw-' + k); if (e) e.style.display = on.has(k) ? '' : 'none'; });
+  const row = $('kw-sync'); if (row) row.style.display = on.size ? '' : 'none';
+}; }
+
+/* ---- where the client runs ---- */
+const sxApp = () => st.device === 'desktop' && st.client === 'app';
+const sxNat = () => st.device === 'native';
+const sxHere = () => sxNat() ? 'this phone' : 'this Mac';
+const sxSf4 = () => tidWhere(p => p.s === 'sablefield' && p.k === 'post' && /4\.2 is out/.test(p.q));
+const sxRepMine = () => tidWhere(p => p.s === 'replication' && p.u === ME.u && !p.gone);
+const SX_BAD = new Set(['failed', 'expired', 'dropped', 'stale', 'forbidden', 'conflict']);
+const SX_GONE = new Set(['expired', 'dropped']);
+const sxBad = o => SX_BAD.has(o.state);
+
+/* ---------- the outbox: entries, their status, and the actions on them ---------- */
+const SX_REPLY = 'Does region pinning need a restart for read replicas made before 4.2?';
+const SX_KIND_IC = { reply: SXI.reply, fu: I.agent, post: I.write, like: SXI.heart, page: SXI.doc, show: SXI.eye, approve: SXI.user, hide: CI.eyeOff };
+/* an entry: { id, kind, th (thread), sp, title, text, state, made (age), tries, next, by } */
+const sxOb = (state, o = {}) => ({ id: 'o1', kind: 'reply', th: sxSf4(), sp: 'sablefield', title: 'Reply in Sablefield', text: SX_REPLY, state, made: '20m', tries: 0, ...o });
+const sxObx = id => st.sxObx.find(o => o.id === id);
+const sxUpdLabel = () => sxNat() ? 'Update in the App Store' : sxApp() ? 'Download and restart' : 'Reload';
+function sxStatus(o) {
+  const here = sxHere();
+  switch (o.state) {
+    case 'wait': return { tone: 'wait', t: st.nvOffline ? `Not sent yet: offline. It is saved on ${here} and sends when the connection is back.` : 'Not sent yet: it sends after the changes before it.', acts: [] };
+    case 'send': return { tone: 'wait', t: 'Sending…', acts: [] };
+    case 'retry': return { tone: 'wait', t: `Not sent yet: the server didn’t answer. Next try in ${o.next} s (try ${o.tries} of 5).`, acts: [['Retry now', 'retry']] };
+    case 'update': return { tone: 'wait', t: 'Not sent yet: this version of Session can’t sync. It sends after the update.', acts: [[sxUpdLabel(), 'update', 1]] };
+    case 'failed': return { tone: 'bad', head: 'Couldn’t save', t: `The server failed 5 times (${o.err || 'internal error'}). The changes after it were sent.`, acts: [['Retry', 'retry', 1], ['Copy text', 'copy'], ['Discard', 'discard']] };
+    case 'expired': return { tone: 'bad', head: 'Not saved', t: `The server takes a change up to 4 days after it was made, by ${here}’s clock. This one was made ${o.made} ago.`, acts: [[o.kind === 'post' ? 'Post again' : 'Send again', 'again', 1], ['Copy text', 'copy'], ['Discard', 'discard']] };
+    case 'dropped': return { tone: 'bad', head: 'Not sent', t: 'It waited 3 days without reaching the server, so Session removed it from Unsent changes.', acts: [['Copy text', 'copy', 1], ['Dismiss', 'discard']] };
+    case 'stale': return { tone: 'bad', head: 'Not applied', t: o.why, acts: [['Review', 'review', 1]] };
+    case 'forbidden': return { tone: 'bad', head: 'Not applied', t: `You’re no longer a moderator of ${spName(sp(o.sp))}, so the server refused it.`, acts: [['Dismiss', 'discard']] };
+    case 'conflict': return { tone: 'bad', head: 'Not saved', t: `${esc(o.by)} saved the page after you edited it on ${here}.`, acts: [['Open the editor', 'editor', 1], ['Copy text', 'copy']] };
+  }
+  return { tone: 'wait', t: '', acts: [] };
+}
+/* a button for an entry's action, on the web and in the Phone app */
+const sxBtn = (label, act, arg, primary) => sxNat()
+  ? `<button class="${primary ? 'n-capbtn tm-nbtn' : 'n-lnk'}" type="button" data-n="sx:${act}:${arg}">${label}</button>`
+  : `<button class="${primary ? 'btn sm primary' : 'tlink'}" type="button" data-sx="${act}:${arg}">${label}</button>`;
+const sxActs = (o, s = sxStatus(o)) => s.acts.length ? `<span class="sx-acts">${s.acts.map(([l, a, p]) => sxBtn(l, a, o.id, p)).join('')}</span>` : '';
+/* the status under an item the outbox holds. full: with the message and actions (vFail "inline", or a waiting write) */
+function sxItemSt(o, full) {
+  const s = sxStatus(o), bad = s.tone === 'bad';
+  const ic = bad ? '<span class="as-ic" aria-hidden="true">!</span>' : `<span class="sx-sic">${SXI.clock}</span>`;
+  if (sxNat()) return `<div class="sx-nst sx-${s.tone}" role="${bad ? 'alert' : 'status'}"><span>${s.head ? `<b>${s.head}.</b> ` : ''}${full ? s.t : ''}</span>${full ? sxActs(o, s) : ''}</div>`;
+  if (!full) return `<div class="sx-st sx-${s.tone}" role="${bad ? 'alert' : 'status'}"><span class="sx-tag">${s.head}</span></div>`;
+  return `<div class="sx-st sx-${s.tone}" role="${bad ? 'alert' : 'status'}">${ic}<span class="sx-stx">${s.head ? `<b>${s.head}.</b> ` : ''}${s.t}</span>${sxActs(o, s)}</div>`;
+}
+const sxFull = o => !sxBad(o) || st.sxvFail === 'inline';
+/* a reply the outbox holds, drawn where the replica puts it: at the end of the thread's replies */
+const sxReplyWeb = o => `<div class="rp sx-rp${SX_GONE.has(o.state) ? ' sx-gone' : ''}" data-sxob="${o.id}">${avatar(ME.u, 'sm')}<div class="rp-b"><div class="meta">${au(ME.u)}<span class="faint">${sxBad(o) ? 'not saved' : 'not sent yet'}</span></div><p>${esc(o.text)}</p>${sxItemSt(o, sxFull(o))}</div></div>`;
+const sxReplyNat = o => `<div class="n-reply sx-nrp${SX_GONE.has(o.state) ? ' sx-gone' : ''}" data-sxob="${o.id}">${avatar(ME.u, 'n-av sm')}<div><div class="n-cell-h"><b>${esc(ME.u)}</b><span>${sxBad(o) ? 'not saved' : 'not sent yet'}</span></div><p>${esc(o.text)}</p>${sxItemSt(o, sxFull(o))}</div></div>`;
+/* the Unsent changes list */
+function sxRow(o) {
+  const s = sxStatus(o);
+  return `<div class="sx-row sx-${s.tone}" data-sxrow="${o.id}"><span class="sx-ric">${SX_KIND_IC[o.kind] || SXI.up}</span><div class="sx-rb"><div class="sx-rh"><b>${o.title}</b><span class="faint num">${o.made} ago</span></div>${o.text ? `<p class="sx-rt">${esc(o.text)}</p>` : ''}<p class="sx-rs">${s.head ? `<b>${s.head}.</b> ` : ''}${s.t}</p>${sxActs(o, s)}</div></div>`;
+}
+function sxListBody() {
+  const ob = st.sxObx, bad = ob.filter(sxBad), wait = ob.filter(o => !sxBad(o)), here = sxHere();
+  const head = st.sxUpd ? `This version of Session can’t sync. These changes are saved on ${here} and are sent after the update.` : st.nvOffline ? `Offline. These changes are saved on ${here} and are sent in this order when the connection is back.` : `Changes made on ${here} are sent to the server in the order they were made.`;
+  const sec = (h, l) => `<section class="sx-sec"><h3>${h}</h3>${l.map(sxRow).join('')}</section>`;
+  return `<p class="muted sx-lh">${head}</p>${bad.length ? sec('Needs you', bad) : ''}${wait.length ? sec('Waiting to send', wait) : ''}${st.sxSent ? `<p class="faint sx-sent">${st.sxSent} changes were sent just now.</p>` : ''}${ob.length ? '' : '<p class="muted">Nothing is waiting. Changes are sent as you make them.</p>'}`;
+}
+const sxObTitle = () => { const n = st.sxObx.length; return n ? `${n} unsent change${n === 1 ? '' : 's'}` : 'Unsent changes'; };
+/* the page (vList "page"), and the Account section (vList "account") */
+const sxOutboxRaw = () => `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page sx-obp">${typeof nvBackRow === 'function' ? nvBackRow() : ''}<div class="sub-top"><h2>Unsent changes</h2></div>${sxListBody()}</div></div>`;
+CS_PAGES.outbox = () => st.sxvList === 'account' && st.auth === 'in' ? acxSection('outbox') : sxOutboxRaw();
+CS_SUBNAME.outbox = 'Unsent changes';
+/* the header badge (vList badge or page) and its popover */
+const sxPopHTML = () => `<div class="ts-ddmenu sx-pop" role="dialog" aria-label="Unsent changes"><div class="mp-h">Unsent changes</div><div class="sx-popb">${sxListBody()}</div>${st.sxObx.length ? `<div class="ts-ddsep"></div><button class="ts-opt" type="button" data-sx="page:"><span class="ts-tx"><b>Open Unsent changes</b></span></button>` : ''}</div>`;
+function sxBadge() {
+  const n = st.sxObx.length; if (!n || st.sxvList === 'account') return '';
+  return `<div class="sx-bw"><button class="btn hb sx-badge${st.sxObx.some(sxBad) ? ' bad' : ''}" type="button" data-sx="badge:" aria-haspopup="${st.sxvList === 'badge' ? 'dialog' : 'false'}" aria-expanded="${!!st.sxPop}" title="Unsent changes">${SXI.up}<span class="num">${n}</span><span class="sx-bl">unsent</span></button>${st.sxPop && st.sxvList === 'badge' ? sxPopHTML() : ''}</div>`;
+}
+/* what an action on an entry does. The mock sends again through the procedure the write was made with. */
+function sxAct(act, id) {
+  const o = sxObx(id), drop = () => { st.sxObx = st.sxObx.filter(x => x.id !== id); };
+  if (act === 'badge') { if (st.sxvList === 'badge') st.sxPop = !st.sxPop; else Object.assign(st, NAVBASE(), { subPage: 'outbox', sxPop: false }); return; }
+  if (act === 'page') { Object.assign(st, NAVBASE(), { subPage: 'outbox', sxPop: false }); return; }
+  if (act === 'list') { if (sxNat()) { if (st.sxvList === 'badge') nst.sheet = 'sxlist'; else { nst.tab = 'you'; nst.stack = st.sxvList === 'account' ? [{ v: 'account', id: '' }, { v: 'sxlist', id: '' }] : [{ v: 'sxlist', id: '' }]; } } else if (st.sxvList === 'badge' && sxApp()) st.sxPop = true; else Object.assign(st, NAVBASE(), { subPage: 'outbox' }); st.sxNoteX = true; return; }
+  if (act === 'xtoast') { st.sxToast = null; st.sxNoteX = true; return; }
+  if (act === 'xnote') { st.sxNoteX = true; return; }
+  if (act === 'update') { st.modal = null; toast(sxNat() ? 'Opened Session in the App Store.' : sxApp() ? 'Downloading Session 1.1.0. The app restarts when the download is done; unsent changes are kept.' : 'Reloading. Your text is kept.'); return; }
+  if (!o) return;
+  if (act === 'copy') { taCopy(o.text || ''); toast('Text copied.'); return; }
+  if (act === 'discard') { drop(); st.modal = null; if (sxNat()) nst.sheet = null; toast(sxBad(o) ? 'Removed from Unsent changes.' : 'Discarded.'); return; }
+  if (act === 'retry' || act === 'again') {
+    drop(); st.modal = null; if (sxNat()) nst.sheet = null;
+    if (o.kind === 'reply' && o.th != null && postById(o.th)) addFollowUp(o.th, o.text);
+    toast(act === 'again' ? 'Sent as a new reply.' : 'Sent.');
+    return;
+  }
+  if (act === 'review') { st.sxStaleOpen = true; st.sxPop = false; if (st.sxvStale === 'dialog') st.modal = 'sx-stale'; else if (st.sxStale) sxOpenStale(); return; }
+  if (act === 'editor') { jump('sx-rf-page'); return; }
+}
+
+/* ---------- STALE: Reload and reapply ---------- */
+/* st.sxStale: { kind: 'show', key, by, was } (a hidden reply edited after you chose Show) or { kind: 'approve', u, was } */
+function sxOpenStale() {
+  const x = st.sxStale; if (!x || sxNat()) return;
+  if (x.kind === 'show') { const th = x.key.split(':')[1]; Object.assign(st, NAVBASE(), { thread: th, space: postById(th).s }); }
+  else Object.assign(st, NAVBASE(), { subPage: 'manage', mgSpace: 'replication', mgTab: 'requests', space: 'replication' });
+}
+const sxStaleNow = x => x.kind === 'show' ? itemOf(x.key).text : ((st.reqs.find(r => r.u === x.u) || {}).a || []).filter(Boolean).join(' · ');
+const sxStaleWhy = x => x.kind === 'show' ? `${esc(x.by)} edited this reply after you chose Show, so the server didn’t apply it. Decide again on the current text.` : `${esc(x.u)} changed the request after you chose Approve, so the server didn’t apply it. Decide again on the current answers.`;
+const sxStaleBtns = x => x.kind === 'show'
+  ? (sxNat() ? `${sxBtn('Show it', 'sshow', '', true)}${sxBtn('Keep hidden', 'skeep', '')}` : `<button class="btn sm primary" type="button" data-sfunhide="${x.key}" data-sx="sdone:">Show it</button><button class="btn sm" type="button" data-sx="skeep:">Keep hidden</button>`)
+  : `<button class="btn sm" type="button" data-rq="no:${x.u}" data-sx="sdone:">Decline</button><button class="btn sm primary" type="button" data-rq="ok:${x.u}" data-sx="sdone:">Approve</button>`;
+function sxStaleBox(x) {
+  if (sxNat()) return `<div class="sx-nbox" role="alert"><p><b>Show wasn’t applied.</b> ${sxStaleWhy(x)}</p><div class="sx-acts">${sxStaleBtns(x)}</div></div>`;
+  return `<div class="run as-end as-fail sx-box" role="alert"><div class="run-h"><span class="as-ic" aria-hidden="true">!</span><b>${x.kind === 'show' ? 'Show wasn’t applied' : 'Approve wasn’t applied'}</b></div><p class="as-why">${sxStaleWhy(x)}</p><div class="sx-cmp"><div class="sx-was"><small>When you chose ${x.kind === 'show' ? 'Show' : 'Approve'}</small><p>${esc(x.was)}</p></div><div><small>Now</small><p>${esc(sxStaleNow(x))}</p></div></div><div class="as-acts">${sxStaleBtns(x)}</div></div>`;
+}
+const sxStaleDlg = x => dlg(x.kind === 'show' ? `Show ${esc(x.by)}’s reply?` : `Approve ${esc(x.u)}?`, `<p class="muted">${sxStaleWhy(x)}</p><div class="sx-cmp"><div class="sx-was"><small>When you chose ${x.kind === 'show' ? 'Show' : 'Approve'}</small><p>${esc(x.was)}</p></div><div><small>Now</small><p>${esc(sxStaleNow(x))}</p></div></div>`,
+  x.kind === 'show' ? `<button class="btn" type="button" data-sx="skeep:">Keep hidden</button><button class="btn primary" type="button" data-sfunhide="${x.key}" data-sx="sdone:">Show it</button>` : `<button class="btn" type="button" data-rq="no:${x.u}" data-sx="sdone:">Decline</button><button class="btn primary" type="button" data-rq="ok:${x.u}" data-sx="sdone:">Approve</button>`);
+
+/* ---------- Update Session ---------- */
+const sxUpdText = () => sxNat() ? `This version of Session is too old to sync. ${st.sxObx.length ? `${st.sxObx.length} changes wait on this phone until you update.` : ''}`
+  : sxApp() ? `This version of Session is too old to sync. ${st.sxObx.length ? `${st.sxObx.length} changes wait on this Mac and are sent after the update.` : ''}`
+  : 'Session has been updated. Reload the page to keep saving changes.';
+const sxUpdDlg = () => dlg('Update Session', `<p class="muted">${sxUpdText()}</p>${sxApp() ? '<p class="cs-fine">' + SXI.dl + '<span>Session 1.1.0 downloads in the background, then the app restarts.</span></p>' : ''}`, `<button class="btn" type="button" data-act="modal-close">Later</button><button class="btn primary" type="button" data-sx="update:">${sxUpdLabel()}</button>`);
+
+/* ---------- Devices ---------- */
+const SX_DEVS = () => [
+  { id: 'd1', name: 'MacBook Air', ic: SXI.mac, plat: 'macOS 15.1 · Session for Mac 1.0.0', seen: '2 min ago', here: true },
+  { id: 'd2', name: 'iPhone 16', ic: SXI.phone, plat: 'iOS 19.1 · Session 1.0.0', seen: '1 h ago' },
+  { id: 'd3', name: 'Mac mini (studio)', ic: SXI.mac, plat: 'macOS 14.6 · Session for Mac 0.9.2', seen: 'Oct 30' },
+];
+const sxDevList = () => st.sxDevs || SX_DEVS();
+const SX_DEV_NOTE = 'Devices that signed in to the Session app. Revoking a device signs it out the next time it connects, and changes it has not sent yet are lost. Browsers are not listed: use Sign out in a browser.';
+function sxDevRows() {
+  const app = sxApp();
+  return `<div class="sx-devl">${sxDevList().map(d => `<div class="sx-devr"><span class="sx-devi">${d.ic}</span><span><b>${esc(d.name)}</b>${d.here && app ? '<span class="ks ok">This Mac</span>' : ''}<small>${esc(d.plat)}</small><small>${d.here && app ? 'Active now' : `Last seen ${esc(d.seen)}`}</small></span>${d.here && app ? '' : `<button class="tlink danger-l" type="button" data-sx="revoke:${d.id}">Revoke</button>`}</div>`).join('')}</div>`;
+}
+const sxDevicesRaw = () => `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page sx-devp">${typeof nvBackRow === 'function' ? nvBackRow() : ''}<div class="sub-top"><h2>Devices</h2></div>${stSec('Devices', SX_DEV_NOTE, sxDevRows())}</div></div>`;
+const sxRevokeDlg = id => { const d = sxDevList().find(x => x.id === id); if (!d) return ''; return dlg(`Revoke ${esc(d.name)}?`, `<p class="muted">${esc(d.name)} is signed out the next time it connects. Changes it has not sent yet are lost, and its copy of your spaces is deleted from it.</p>`, `${cancelB()}<button class="btn danger" type="button" data-sx="revokeok:${d.id}">Revoke</button>`, 'alertdialog'); };
+/* the Account page: Devices (a tab, or a section of the Account tab), Unsent changes (Desktop app, vList "account"), the executor default (Desktop app) */
+ACX_SECS.push(['devices', 'Devices', SXI.mac], ['outbox', 'Unsent changes', SXI.up]);
+ACX_IDS.push('devices', 'outbox');
+AC_PRIVATE.push('devices', 'outbox', 'sxdevice');
+ACX_RAW.devices = sxDevicesRaw;
+ACX_RAW.outbox = sxOutboxRaw;
+CS_PAGES.devices = () => acxSection(st.sxvDev === 'tab' ? 'devices' : 'account');
+CS_SUBNAME.devices = 'Devices';
+{ const a0 = acxSection; acxSection = function (sec) {
+  let h = a0(sec);
+  if (st.sxvDev !== 'tab') h = h.replace(/<button class="acx-tab" type="button" data-sub="devices"[^>]*>Devices<\/button>/, '');
+  if (!(sxApp() && st.sxvList === 'account')) h = h.replace(/<button class="acx-tab" type="button" data-sub="outbox"[^>]*>Unsent changes<\/button>/, '');
+  if (sec === 'account' && st.auth === 'in') {
+    const add = (st.sxvDev === 'section' ? `<div id="sx-devsec">${stSec('Devices', SX_DEV_NOTE, sxDevRows())}</div>` : '') + (sxApp() ? `<div id="sx-exsec">${sxExecSettings()}</div>` : '');
+    if (add) { const i = h.lastIndexOf(ACX_END); h = h.slice(0, i) + add + h.slice(i); }
+  }
+  return h;
+}; }
+{ const u0 = csUrl; csUrl = function () {
+  if (st.subPage === 'devices') return st.sxvDev === 'tab' ? 'session.app/settings/devices' : 'session.app/settings/account';
+  if (st.subPage === 'outbox') return st.sxvList === 'account' ? 'session.app/settings/unsent' : 'session.app/unsent';
+  if (st.subPage === 'sxdevice') return 'session.app/device?code=KQ4-7XN';
+  if (st.subPage === 'sxsign') return 'session.app/signin';
+  if (st.subPage === 'sxgone') return 'session.app/s/replication-club';
+  return u0();
+}; }
+{ const r0 = nvRoute; nvRoute = function (path) {
+  const seg = path.split('?')[0].split('/').filter(Boolean);
+  if ((seg[0] === 'settings' && (seg[1] === 'devices' || seg[1] === 'unsent') && !seg[2]) || (seg[0] === 'unsent' && !seg[1]) || (seg[0] === 'device' && !seg[1])) {
+    Object.assign(st, NAVBASE(), MI_CLEAR(), { toast: null, subPage: seg[0] === 'device' ? 'sxdevice' : seg[1] === 'devices' ? 'devices' : 'outbox' });
+    return;
+  }
+  return r0(path);
+}; }
+/* the account menu on the Desktop app (vList "account"): Unsent changes */
+{ const um0 = userMenu; userMenu = function () {
+  let h = um0();
+  if (sxApp() && st.sxvList === 'account' && st.sxObx.length) h = h.replace(/(<button class="um-item" type="button" role="menuitem" data-act="shortcuts">)/, `<button class="um-item" type="button" role="menuitem" data-sub="outbox">${SXI.up}<span>Unsent changes</span><span class="mp-val num">${st.sxObx.length}</span></button>$1`);
+  if (st.sxvOff === 'dot' && st.nvOffline) h = h.replace(/(<button class="um-head"[\s\S]*?<\/button>)/, `$1<span class="sx-dotnote" role="status">Offline${sxApp() ? ` · ${st.sxObx.length} unsent, saved on this Mac` : ''}</span>`);
+  return h;
+}; }
+
+/* ---------- device runs: who runs an ask, the label of a device answer, interrupted runs, the limits ---------- */
+const SX_EX = [
+  ['session', 'Included tokens', 'Session runs the agent. Uses your included tokens, then your API key.', I.agent],
+  ['claude', 'Claude Code on this Mac', 'Runs the claude CLI 2.1.4 on this Mac with its own sign-in. Session counts no tokens and no limit for it.', SXI.cli],
+  ['codex', 'Codex on this Mac', 'Runs the codex CLI 0.48 on this Mac with its own sign-in. Session counts no tokens and no limit for it.', SXI.cli],
+];
+const sxExName = id => (SX_EX.find(x => x[0] === id) || SX_EX[0])[1];
+const sxCli = id => id === 'codex' ? 'Codex' : 'Claude Code';
+const sxExCur = sid => st.sxvExec === 'space' ? ((st.sxExecSp || {})[sid] || st.sxExecDef) : st.sxExec;
+const sxExOpts = (cur, attr) => SX_EX.map(([id, l, d, ic]) => `<button type="button" class="ts-opt sx-xo" role="menuitemradio" aria-checked="${cur === id}" data-sx="${attr}:${id}"><span class="ts-ic">${ic}</span><span class="ts-tx"><b>${l}</b><small>${d}</small></span>${cur === id ? I.check : ''}</button>`).join('');
+const sxRateNote = () => `<span class="c2-note warn sx-rate" role="alert">You started 100 device runs in the past hour, the limit. The next one can start at 15:42. <button class="tlink" type="button" data-sx="exec:session">Use included tokens</button></span>`;
+/* the model menu: Run on, above the model (vExec "menu") */
+{ const mm0 = tmModelMenu; tmModelMenu = function () {
+  let h = mm0();
+  if (!sxApp() || st.sxvExec !== 'menu') return h;
+  const cur = sxExCur(curSpace()), dev = cur !== 'session';
+  if (dev) h = h.replace(/(<button class="chip dd" type="button" data-mp="toggle"[^>]*>)[\s\S]*?(<span>)[^<]*(<\/span>)/, `$1<span class="sx-exc">${SXI.cli}</span>$2${sxCli(cur)} · this Mac$3`);
+  if (st.mpOpen) {
+    const runOn = `<div class="mp-h">Run on</div>${sxExOpts(cur, 'exec')}<div class="ts-ddsep"></div>`;
+    h = h.replace('<div class="mp-h">Model</div>', dev ? `${runOn}<p class="sx-mnote">${sxCli(cur)} uses its own model and settings on this Mac. The answer is labelled “Answered on ${esc(ME.u)}’s Mac · ${sxCli(cur)}”.</p><div hidden>` : `${runOn}<div class="mp-h">Model</div>`);
+    if (dev) h = h.replace(/<\/div>(\s*)<\/div>$/, '</div></div>$1</div>');
+  }
+  return h;
+}; }
+{ const c0 = composer; composer = function (force) {
+  let h = c0(force);
+  if (!sxApp() || st.auth !== 'in' || !h.includes('data-act="ask-go"')) return h;
+  const sid = curSpace(), cur = sxExCur(sid), dev = cur !== 'session';
+  /* the line about who pays: a device run uses no tokens */
+  if (dev) h = h.replace(/<span class="c2-note tm-line[^"]*">[\s\S]*?<\/span>(?=<span class="c2-end">)/, `<span class="c2-note sx-exn">Runs on this Mac with ${sxCli(cur)}. No tokens are counted.</span>`);
+  if (dev && st.sxLimit === 'rate' && st.sxvLimit === 'inline') h = h.replace(/<span class="c2-note sx-exn">[\s\S]*?<\/span>/, sxRateNote()).replace('data-act="ask-go" ', 'data-act="ask-go" disabled aria-disabled="true" ');
+  if (st.sxvExec === 'split') {
+    const menu = st.sxExecOpen ? `<div class="ts-ddmenu sx-xmenu" role="menu" aria-label="Run this ask with"><div class="mp-h">Run this ask with</div>${sxExOpts(cur, 'exec')}<div class="ts-ddsep"></div><p class="sx-mnote">The default is set in Account › Asks on this Mac.</p></div>` : '';
+    h = h.replace(/<button class="btn primary" type="button" data-act="ask-go"([^>]*)>Ask<\/button>/, (m, a) => `<span class="sx-split"><button class="btn primary" type="button" data-act="ask-go"${a}>${dev ? `Ask with ${sxCli(cur)}` : 'Ask'}</button><button class="btn primary sx-splitc" type="button" data-sx="exmenu:" aria-haspopup="menu" aria-expanded="${!!st.sxExecOpen}" aria-label="Choose who runs this ask">${I.chev}</button>${menu}</span>`);
+  }
+  if (st.sxvExec === 'space') {
+    const s = sp(sid), menu = st.sxExecOpen ? `<div class="ts-ddmenu sx-xmenu" role="menu" aria-label="Asks in ${esc(spName(s))} run with"><div class="mp-h">Asks in ${spName(s)} run with</div>${sxExOpts(cur, 'exsp')}<div class="ts-ddsep"></div><p class="sx-mnote">Other spaces use your default, set in Account › Asks on this Mac.</p></div>` : '';
+    h = h.replace(/(<span class="c2-end">)/, `<span class="c2-note sx-exl">Asks in ${spName(s)} run with <button class="tlink" type="button" data-sx="exmenu:" aria-haspopup="menu" aria-expanded="${!!st.sxExecOpen}">${dev ? `${sxCli(cur)} on this Mac` : 'included tokens'}${I.chev}</button>${menu}</span>$1`);
+  }
+  return h;
+}; }
+/* Account › Asks on this Mac: the default executor (Desktop app) */
+function sxExecSettings() {
+  const row = ([id, l, d], ok, found) => `<label class="sx-radio${ok ? '' : ' off'}"><input type="radio" name="sx-exdef" data-sx="exdef:${id}" ${st.sxExecDef === id ? 'checked' : ''}${ok ? '' : ' disabled'}><span><b>${l}</b><small>${found}</small></span></label>`;
+  return stSec('Asks on this Mac', 'Who runs your asks by default. You can change it for one ask in the composer. Other devices keep their own default.', [
+    row(SX_EX[0], true, 'Session runs the agent. Uses your included tokens, then your API key.'),
+    row(SX_EX[1], true, 'Found <code>claude</code> 2.1.4 at /opt/homebrew/bin/claude. Runs in an empty folder, with the thread as its context.'),
+    row(SX_EX[2], false, 'Not found. Install the Codex CLI and sign in to it to use it here.'),
+  ].join(''));
+}
+/* the run of a thread's ask on a device: st.sxRuns[thread] = { u, cli, state: done | running | interrupted | size } */
+const sxRun = i => (st.sxRuns || {})[i] || null;
+const sxDevName = r => r.u === ME.u && sxApp() ? 'this Mac' : `${esc(r.u)}’s Mac`;
+function sxLabelHTML(r) {
+  const t = `Answered on ${esc(r.u)}’s Mac · ${sxCli(r.cli)}`;
+  if (st.sxvLabel === 'text') return `<p class="tm-meta sx-dl">${t}</p>`;
+  if (st.sxvLabel === 'icon') return `<p class="tm-meta sx-dl">${SXI.mac}<span>${t}</span></p>`;
+  return `<p class="tm-meta sx-dl"><span class="sx-tip${st.sxTip ? ' open' : ''}" tabindex="0" role="img" aria-label="${t}" data-sx="tip:">${SXI.mac}<span aria-hidden="true">${t}</span></span></p>`;
+}
+const sxIntWhy = (r, i) => `The run stopped: ${sxDevName(r)} went to sleep or lost its connection while ${sxCli(r.cli)} worked. The agent wrote nothing.${r.u !== ME.u ? ` ${esc(r.u)} can run it again.` : ''}`;
+const sxSizeWhy = r => `The answer from ${sxCli(r.cli)} is larger than 200 KB, the limit for an answer from a device. Session didn’t save it.`;
+function sxRunEnd(r, i) {
+  const mine = r.u === ME.u, why = r.state === 'size' ? sxSizeWhy(r) : sxIntWhy(r, i);
+  const acts = mine ? (r.state === 'size' ? '' : sxBtn('Run again', 'runagain', i, true)) + `<button class="${sxNat() ? 'n-lnk' : r.state === 'size' ? 'btn sm primary' : 'tlink'}" type="button" ${sxNat() ? `data-n="tmagain:${i}:session"` : `data-askagain="${i}:session"`}>Run with included tokens</button>` : '';
+  if (r.state === 'interrupted' && st.sxvInt === 'line') return `<p class="tm-meta sx-dl sx-intl" role="status">${SXI.mac}<span><b>Interrupted.</b> ${sxDevName(r)} went to sleep during the run.</span>${mine ? sxBtn('Run again', 'runagain', i) : ''}</p>`;
+  if (r.state === 'size' && st.sxvLimit === 'toast') return `<p class="tm-meta sx-dl" role="status">${SXI.mac}<span>Not saved: larger than 200 KB.</span></p>`;
+  return `<div class="run as-end as-fail" role="status"><div class="run-h"><span class="as-ic" aria-hidden="true">!</span><b>Couldn’t finish the answer</b></div><p class="as-why">${why}</p>${acts ? `<div class="as-acts">${acts}</div>` : ''}</div>`;
+}
+const SX_STREAM = ['Shortlist so far, newest first:', 'Walkaway (Doctorow, 2017): agents bargain for scarce fabricator time on behalf of their owners; the book treats delegation as a trust problem.', 'Accelerando (Stross, 2005): corporate agents negotiate faster than their principals can follow'];
+function sxRunLive(r) {
+  const head = `<div class="run-h"><span class="spin" aria-hidden="true"></span><b>Running on ${sxDevName(r)}</b><span class="faint">· ${sxCli(r.cli)} · started 2 min ago</span></div>`;
+  if (st.sxvView === 'stream') return `<div class="run sx-drun">${head}<div class="sx-stream"><p>${esc(SX_STREAM[0])}</p><p>${esc(SX_STREAM[1])}</p><p>${esc(SX_STREAM[2])}<span class="sx-caret" aria-hidden="true"></span></p></div><p class="as-why faint">Text so far. It is saved when the run finishes. Device runs report no token use.</p></div>`;
+  return `<div class="run sx-drun">${head}<p class="as-why">The answer shows here when ${sxCli(r.cli)} finishes. Device runs report their text, not their steps or token use.</p></div>`;
+}
+
+/* ---------- the window: title bar, header indicators, notices ---------- */
+const sxBar = (html, cls = '') => {
+  if (sxNat()) { const sc = $('n-scr'); if (!sc) return; const b = sc.querySelector(':scope > .n-bar'); const el = `<div class="sx-nbar ${cls}">${html}</div>`; if (b) b.insertAdjacentHTML('afterend', el); else sc.insertAdjacentHTML('afterbegin', el); return; }
+  const el = `<div class="sx-bar ${cls}" role="status">${html}</div>`;
+  const h = document.querySelector('#app .nv-off') || document.querySelector('#app .mchips') || document.querySelector('#app .hdr');
+  if (h) h.insertAdjacentHTML('afterend', el); else $('app').insertAdjacentHTML('afterbegin', el);
+};
+/* the top of the screen's main column */
+function sxMainTop(html) {
+  if (sxNat()) { const sc = $('n-scr'); if (!sc) return; const b = sc.querySelector(':scope > .n-sphead') || sc.querySelector(':scope > .n-th') || sc.querySelector(':scope > .n-bar'); if (b) b.insertAdjacentHTML(b.classList.contains('n-bar') ? 'afterend' : 'beforebegin', html); else sc.insertAdjacentHTML('afterbegin', html); return; }
+  const th = document.querySelector('#app .th-main .th-top');
+  if (th) { th.insertAdjacentHTML('afterend', html); return; }
+  const m = document.querySelector('#app .mcol > .main') || document.querySelector('#app .sub-page') || document.querySelector('#app .main') || document.querySelector('#app .home-wide');
+  if (m) m.insertAdjacentHTML('afterbegin', html);
+}
+/* a toast with more than one action (the page's toast has one) */
+function sxToastHTML(t, acts) {
+  if (sxNat()) return `<div class="n-toast sx-ntoast${document.querySelector('#app .n-dock') ? ' docked' : ''}" role="status"><span>${t}</span>${acts.map(([l, a]) => `<button class="n-toast-a" type="button" data-n="sx:${a}">${l}</button>`).join('')}</div>`;
+  return `<div class="cs-toast-wrap sx-toastw"><div class="cs-toast" role="status"><span>${t}</span><span class="sx-tacts">${acts.map(([l, a]) => `<button class="tlink" type="button" data-sx="${a}">${l}</button>`).join('')}</span><button class="iconbtn" type="button" data-sx="xtoast:" aria-label="Dismiss">${I.close}</button></div></div>`;
+}
+function sxShowToast(t, acts) {
+  if (st.sxNoteX) return;
+  if (sxNat()) { const u = document.querySelector('#app .n-under'), tb = u && (u.querySelector(':scope > .n-tabbar') || u.querySelector(':scope > .n-dock')); if (tb) tb.insertAdjacentHTML('beforebegin', sxToastHTML(t, acts)); else if (u) u.insertAdjacentHTML('beforeend', sxToastHTML(t, acts)); return; }
+  const a = document.querySelector('#app > .A, #app > .rs') || $('app'); a.insertAdjacentHTML('beforeend', sxToastHTML(t, acts));
+}
+/* the Desktop app's window title in place of the address */
+function sxChrome() {
+  const R = document.documentElement;
+  if (sxApp()) { R.dataset.client = 'app'; const u = $('url'); if (u) u.textContent = st.subPage === 'sxsign' ? 'Session' : `Session — ${sxWinTitle()}`; }
+  else delete R.dataset.client;
+}
+function sxWinTitle() {
+  if (st.subPage) return CS_SUBNAME[st.subPage] || (ACX_SECS.find(x => x[0] === st.subPage) || [])[1] || 'Session';
+  if (st.thread != null) { const p = postById(st.thread); return p ? spName(sp(p.s)).replace(/&amp;/g, '&') : 'Thread'; }
+  if (st.home) return 'Home';
+  const s = sp(st.space); return s ? spName(s) : 'Session';
+}
+/* the header: offline pill, the unsent badge (Desktop app), the avatar dot */
+function sxHeader() {
+  const right = document.querySelector('#app .hdr-right') || document.querySelector('#app .rl-top'); if (!right) return;
+  const pill = st.nvOffline && st.sxvOff === 'pill' ? `<span class="sx-pill" role="status" title="${sxApp() ? 'Offline. Changes are saved on this Mac and sent when the connection is back.' : 'Offline. Session can’t send changes until the connection is back.'}">${NVI.off}Offline</span>` : '';
+  const badge = sxApp() ? sxBadge() : '';
+  if (pill || badge) right.insertAdjacentHTML('afterbegin', pill + badge);
+  if (st.nvOffline && st.sxvOff === 'dot') { const me = document.querySelector('#app .acct .me, #app .mtabs [data-mtab="me"]'); if (me) { me.classList.add('sx-dot'); me.setAttribute('title', 'Offline'); } }
+}
+/* the Phone app: the unsent badge, the offline pill and dot, the list's rows */
+function sxNatChrome() {
+  const bar = document.querySelector('#n-scr > .n-bar .n-bar-r');
+  const n = st.sxObx.length;
+  if (bar && st.nvOffline && st.sxvOff === 'pill') bar.insertAdjacentHTML('afterbegin', `<span class="sx-npill" role="status">${NVI.off}Offline</span>`);
+  if (bar && n && st.sxvList === 'badge') bar.insertAdjacentHTML('afterbegin', `<button class="n-ib sx-nbadge${st.sxObx.some(sxBad) ? ' bad' : ''}" type="button" data-n="sheet:sxlist" aria-label="Unsent changes: ${n}">${SXI.up}<span class="num">${n}</span></button>`);
+  if (st.nvOffline && st.sxvOff === 'dot') { const y = document.querySelector('#app .n-tab[data-n="tab:you"]'); if (y) { y.classList.add('sx-dot'); y.setAttribute('aria-label', 'You, offline'); } }
+  if (st.nvOffline && st.sxvOff === 'bar') sxBar(`${NVI.off}<span class="sx-nbb"><span><b>Offline.</b> Changes are saved on this phone and sent when the connection is back.</span></span>`);
+}
+const sxNatRow = (act, label, val) => `<button class="n-row" type="button" data-n="${act}"><span class="n-row-b"><b>${label}</b></span>${val != null ? `<span class="n-val">${val}</span>` : ''}<span class="n-chev">${NI.chev}</span></button>`;
+{ const y0 = nYou; nYou = function () {
+  const r = y0(); if (!nSignedIn() || st.sxvList !== 'page' || !st.sxObx.length) return r;
+  return { ...r, body: r.body.replace(/(<section class="n-grp"><div class="n-list">)/, `$1${sxNatRow('push:sxlist:', 'Unsent changes', st.sxObx.length)}`) };
+}; }
+{ const a0 = nAccount; nAccount = function () {
+  const r = a0(); if (!nSignedIn()) return r;
+  const rows = [...(st.sxvList === 'account' && st.sxObx.length ? [sxNatRow('push:sxlist:', 'Unsent changes', st.sxObx.length)] : []), sxNatRow('push:sxdevs:', 'Devices', sxDevList().length)];
+  return { ...r, body: r.body.replace(/(<section class="n-grp"><h3 class="n-grp-h">Settings<\/h3>)/, `${nGroup('', rows)}$1`) };
+}; }
+NSCR.sxlist = () => ({ body: `${nPushBar('Unsent changes', '')}<div class="sx-nlist">${sxListBody()}</div>` });
+NSCR.sxdevs = () => ({ body: `${nPushBar('Devices', '')}${nGroup('', sxDevList().map(d => `<div class="n-row"><span class="sx-devi">${d.ic}</span><span class="n-row-b"><b>${esc(d.name)}${d.here ? ' · This phone' : ''}</b><small>${esc(d.plat)} · ${d.here ? 'Active now' : `last seen ${esc(d.seen)}`}</small></span>${d.here ? '' : `<button class="n-lnk n-red" type="button" data-n="sheet:sxrevoke:${d.id}">Revoke</button>`}</div>`), SX_DEV_NOTE)}` });
+{ const lx0 = nLabelX; nLabelX = function (e) { return e.v === 'sxlist' ? 'Unsent changes' : e.v === 'sxdevs' ? 'Devices' : lx0(e); }; }
+{ const sx0 = nSheetX; nSheetX = function (k, a) {
+  if (k === 'sxlist') return nSub(null, 'Unsent changes', 'Unsent changes', `<div class="sx-nlist">${sxListBody()}</div>`);
+  if (k === 'sxfail') { const o = sxObx(a); if (!o) return ''; const s = sxStatus(o); return nAct(`${s.head}: your ${o.kind}`, `“${esc(o.text)}” ${s.t}`, s.acts.map(([l, x]) => [l, `sx:${x}:${o.id}`, x === 'discard' ? 'n-red' : ''])); }
+  if (k === 'sxstale') { const x = st.sxStale; if (!x) return ''; return nAct('Show wasn’t applied', `${sxStaleWhy(x)} Now: “${esc(sxStaleNow(x))}”`, [['Show it', 'sx:sshow:'], ['Keep hidden', 'sx:skeep:']]); }
+  if (k === 'sxupd') return nAct('Update Session', sxUpdText(), [['Update in the App Store', 'sx:update:']], 'Later');
+  if (k === 'sxrevoke') { const d = sxDevList().find(x => x.id === a); if (!d) return ''; return nAct(`Revoke ${esc(d.name)}?`, `${esc(d.name)} is signed out the next time it connects. Changes it has not sent yet are lost.`, [['Revoke', 'sx:revokeok:' + d.id, 'n-red']]); }
+  return sx0(k, a);
+}; }
+{ const cx0 = nClickX; nClickX = function (k, a) {
+  if (k !== 'sx') return cx0(k, a);
+  const [act, id] = a.split(/:(.*)/s);
+  nGo(() => { nst.sheet = null; sxClickAct(act, id || ''); });
+  return true;
+}; }
+
+/* ---------- clicks (web and Desktop app; the Phone app goes through nClickX) ---------- */
+function sxClickAct(act, id) {
+  switch (act) {
+    case 'sdone': st.sxStale = null; st.modal = null; st.sxObx = st.sxObx.filter(o => o.state !== 'stale'); return;
+    case 'skeep': st.sxStale = null; st.modal = null; st.sxObx = st.sxObx.filter(o => o.state !== 'stale'); toast('Kept hidden.'); return;
+    case 'sshow': { const x = st.sxStale; st.sxStale = null; st.sxObx = st.sxObx.filter(o => o.state !== 'stale'); if (x && x.key) { const b = document.querySelector(`[data-sfunhide="${x.key}"]`); if (b) b.click(); else toast('Shown. People see the reply again.'); } return; }
+    case 'exec': st.sxExec = id; st.sxExecOpen = false; if (id === 'session') st.sxLimit = st.sxLimit === 'rate' ? null : st.sxLimit; return;
+    case 'exsp': st.sxExecSp = { ...st.sxExecSp, [curSpace()]: id }; st.sxExecOpen = false; return;
+    case 'exmenu': st.sxExecOpen = !st.sxExecOpen; return;
+    case 'exdef': st.sxExecDef = id; toast(`New asks on this Mac run with ${sxExName(id).replace(' on this Mac', '')}.`); return;
+    case 'tip': st.sxTip = !st.sxTip; return;
+    case 'runagain': st.sxRuns = { ...st.sxRuns, [id]: { ...sxRun(id), state: 'again' } }; toast(`Running again on ${sxHere()} (attempt 2).`); return;
+    case 'revoke': if (sxNat()) nst.sheet = 'sxrevoke:' + id; else st.modal = 'sx-revoke:' + id; return;
+    case 'revokeok': { const d = sxDevList().find(x => x.id === id); st.sxDevs = sxDevList().filter(x => x.id !== id); st.modal = null; if (d) toast(`Revoked. ${esc(d.name)} is signed out the next time it connects.`); return; }
+    case 'signopen': toast('Opened session.app/device in your browser.'); return;
+    case 'signcancel': st.sxSign = 'start'; return;
+    case 'signstart': st.sxSign = 'wait'; return;
+    case 'signok': st.sxSign = 'approved'; return;
+    case 'signno': st.sxSign = 'denied'; return;
+    case 'gonex': st.sxGoneSeen = true; return;
+    case 'banmenu': st.sxBanMenu = st.sxBanMenu === id ? null : id; return;
+    case 'ban': st.sxBanMenu = null; st.modal = 'cs-ban:' + id; return;
+    case 'frzrm': toast(`Removed the copy of ${spName(sp(st.sxFrozen.sp))} from this Mac.`); st.sxFrozen = null; Object.assign(st, NAVBASE(), { home: true }); return;
+  }
+  sxAct(act, id);
+}
+on($('app'), 'click', e => {
+  if (st.device === 'native') return;
+  const t = e.target; if (!t.closest) return;
+  if (st.sxPop && !t.closest('.sx-bw')) { st.sxPop = false; if (!t.closest('button, a, input')) { renderAll(); return; } }
+  if (st.sxExecOpen && !t.closest('.sx-split, .sx-exl')) st.sxExecOpen = false;
+  if (st.sxBanMenu && !t.closest('.sx-bmw')) st.sxBanMenu = null;
+  const b = t.closest('[data-sx]'); if (!b) return;
+  const [act, id] = b.dataset.sx.split(/:(.*)/s);
+  /* buttons that also carry an earlier block's attribute (Show it, Approve, Decline) let that block act too */
+  const pass = b.hasAttribute('data-sfunhide') || b.hasAttribute('data-rq');
+  sxClickAct(act, id || '');
+  if (!pass) { e.stopImmediatePropagation(); e.preventDefault(); renderAll(); }
+}, true);
+
+/* ---------- dialogs ---------- */
+{ const m0 = csModal; csModal = function () {
+  const [k, a] = (st.modal || '').split(/:(.*)/s);
+  if (k === 'sx-fail') { const o = sxObx(a); if (!o) return ''; const s = sxStatus(o); return dlg(`${s.head}: your ${o.kind}`, `<blockquote class="sx-q">${esc(o.text)}</blockquote><p class="muted">${s.t}</p>`, s.acts.slice().reverse().map(([l, x, p]) => `<button class="btn${p ? ' primary' : x === 'discard' ? ' danger' : ''}" type="button" data-sx="${x}:${o.id}">${l}</button>`).join(''), 'alertdialog'); }
+  if (k === 'sx-stale') return st.sxStale ? sxStaleDlg(st.sxStale) : '';
+  if (k === 'sx-upd') return sxUpdDlg();
+  if (k === 'sx-revoke') return sxRevokeDlg(a);
+  if (k === 'cs-ban' && st.mgSpace && sp(st.mgSpace) && !isClosed(sp(st.mgSpace))) return sxBanDlg(a);
+  return m0();
+}; }
+/* Ban in an open space: what it stops (vBan "dialog" gives the full list here) */
+const SX_BAN_STOPS = s => [`posting, asking and replying in ${spName(s)}`, 'liking, saving and reporting there', 'editing or deleting their own threads there', 'joining again: leaving and joining does not lift a ban'];
+function sxBanDlg(u) {
+  const s = sp(st.mgSpace), full = st.sxvBan === 'dialog';
+  return dlg(`Ban ${esc(u)} from ${spName(s)}?`, `<p class="muted">${full ? `${spName(s)} is open, so ${esc(u)} can still read it, as anyone can. A ban stops every write there:` : `${esc(u)} can still read ${spName(s)} but can’t write there.`}</p>${full ? `<ul class="sx-scope">${SX_BAN_STOPS(s).map(x => `<li>${x}</li>`).join('')}</ul>` : ''}<p class="cs-fine">${I.agent}<span>Their threads stay. ${esc(u)} is not notified; their app shows that they can’t write in ${spName(s)}. Unban from the Banned list below the members.</span></p>`, `${cancelB()}<button class="btn danger" type="button" data-csmem-ok="cs-ban:${esc(u)}">Ban</button>`, 'alertdialog');
+}
+/* Members and Reports in an open space: Ban only (members.remove there is undone by joining again) */
+{ const m0 = csMembers; csMembers = function (s) {
+  let h = m0(s);
+  if (isClosed(s)) return h;
+  h = h.replace(/<button class="tlink" type="button" data-memrm="[^"]*">Remove<\/button>/g, '');
+  if (st.sxvBan === 'menu') h = h.replace(/<button class="tlink danger-l" type="button" data-memban="([^"]*)">Ban<\/button>/g, (m, u) => `<span class="sx-bmw"><button class="iconbtn" type="button" data-sx="banmenu:${u}" aria-haspopup="menu" aria-expanded="${st.sxBanMenu === u}" aria-label="Actions for ${u}" title="More">${SXI.more}</button>${st.sxBanMenu === u ? `<div class="ts-ddmenu sx-bmenu" role="menu"><button type="button" class="ts-opt" role="menuitem" data-sx="ban:${u}"><span class="ts-ic">${SXI.ban}</span><span class="ts-tx"><b>Ban from ${spName(s)}</b><small>Stops every write by ${u} in ${spName(s)}, their own included. They can still read it.</small></span></button></div>` : ''}</span>`);
+  const note = st.sxvBan === 'row'
+    ? `Moderators ban people here, not remove them: ${spName(s)} is open, so anyone removed could join again. A ban stops every write in ${spName(s)} (posts, asks, replies, likes, and edits or deletes of their own threads); the person can still read it. Admins can also ban moderators and admins, and change roles and settings.`
+    : `Moderators can ban members. ${spName(s)} is open, so there is no Remove: anyone removed could join again. Admins can also ban moderators and admins, and change roles and settings.`;
+  return h.replace(/<p class="cs-fine">([\s\S]*?)<span>Moderators can approve requests and remove or ban members\.[\s\S]*?<\/span><\/p>/, `<p class="cs-fine">$1<span>${note}</span></p>`);
+}; }
+{ const r0 = cxRepAuthor; cxRepAuthor = function (s, it) {
+  const h = r0(s, it);
+  return isClosed(s) ? h : h.replace(/<button class="tlink" type="button" data-cxrauth="rm:[^"]*">Remove the author<\/button>/, '');
+}; }
+
+/* ---------- after each render: what the outbox, the refusals and the access changes add to the screen ---------- */
+function sxAfter() {
+  sxChrome();
+  if (st.device !== 'native') $('app').classList.remove('sx-ro');
+  if (!dataReady() || st.auth !== 'in') return;
+  const nat = sxNat();
+  /* closed by a click elsewhere; a toast is drawn once */
+  if (nat) sxNatChrome(); else sxHeader();
+  /* the outbox's items on this thread */
+  const th = nat ? (() => { const t = nTop(); return t && t.v === 'thread' ? t.id : null; })() : st.thread;
+  const dev = sxApp() || nat;
+  if (th != null && dev) {
+    st.sxObx.filter(o => o.kind === 'reply' && o.th === th).forEach(o => {
+      if (nat) { const l = [...document.querySelectorAll('#n-scr .n-th > .n-reply')].pop(); if (l) l.insertAdjacentHTML('afterend', sxReplyNat(o)); else { const h = document.querySelector('#n-scr .n-th'); if (h) h.insertAdjacentHTML('beforeend', sxReplyNat(o)); } }
+      else { const rps = document.querySelector('#app .th-rps'); if (rps) { const l = [...rps.querySelectorAll(':scope > .rp')].pop(); if (l) l.insertAdjacentHTML('afterend', sxReplyWeb(o)); else rps.insertAdjacentHTML('beforeend', sxReplyWeb(o)); } }
+    });
+  }
+  /* a write set aside or refused, shown away from the item (vFail banner and toast) */
+  const bad = dev && st.sxObx.find(o => SX_BAD.has(o.state) && ['failed', 'expired', 'dropped'].includes(o.state));
+  if (bad && st.sxvFail === 'banner' && !st.sxNoteX) { const s = sxStatus(bad); sxBar(nat ? `<span class="as-ic" aria-hidden="true">!</span><span class="sx-nbb"><span><b>${s.head}: your ${bad.kind} in ${spName(sp(bad.sp))}.</b> ${s.t}</span>${sxActs(bad, s)}</span>` : `<span class="as-ic" aria-hidden="true">!</span><span class="grow"><b>${s.head}: your ${bad.kind} in ${spName(sp(bad.sp))}.</b> ${s.t}</span>${sxActs(bad, s)}`, 'bad'); }
+  if (bad && st.sxvFail === 'toast') { const s = sxStatus(bad); sxShowToast(`${s.head}: your ${bad.kind} in ${spName(sp(bad.sp))}.`, [[s.acts[0][0], `${s.acts[0][1]}:${bad.id}`], ['Details', (nat ? 'list:' : 'page:')]]); }
+  /* Update Session */
+  if (st.sxUpd) {
+    if (st.sxvUpd === 'bar') sxBar(`${SXI.dl}<span class="grow sx-nbb"><span>${sxUpdText()}</span>${nat ? `<span class="sx-acts">${sxBtn(sxUpdLabel(), 'update', '', true)}</span>` : ''}</span>${nat ? '' : sxBtn(sxUpdLabel(), 'update', '', true)}`, 'info');
+    if (st.sxvUpd === 'inline' && !dev) { const er = document.querySelector('#app .as-perr'); if (er) er.innerHTML = `Not sent: Session has been updated. Reload to send it; your text is kept. <button class="tlink" type="button" data-sx="update:">Reload</button>`; }
+  }
+  /* the web, offline: the write failed at once and its text stays */
+  if (!dev && st.nvOffline) { const er = document.querySelector('#app .as-perr'); if (er) er.innerHTML = `You’re offline. Your reply wasn’t sent; the text is still here. <button class="tlink" type="button" data-askretry="1">Try again</button>`; }
+  /* STALE */
+  const x = st.sxStale;
+  if (x) {
+    const box = st.sxvStale === 'inline' || st.sxStaleOpen;
+    if (x.kind === 'show') {
+      if (nat) { const r = [...document.querySelectorAll('#n-scr .n-reply')].find(e => e.querySelector(':scope > div > .n-cell-h b') && e.querySelector(':scope > div > .n-cell-h b').textContent === x.by); if (box && r) r.querySelector(':scope > div').insertAdjacentHTML('beforeend', sxStaleBox(x)); }
+      else { const u = document.querySelector(`#app [data-sfunhide="${x.key}"]:not([data-sx])`); const r = u && u.closest('.rp-b, .rp'); if (box && r) r.insertAdjacentHTML('beforeend', sxStaleBox(x)); }
+    } else if (!nat) {
+      const card = document.querySelector(`#app .rq-card [data-rq="ok:${x.u}"]:not([data-sx]), #app tr [data-rq="ok:${x.u}"]:not([data-sx])`);
+      const c = card && card.closest('.rq-card, tr');
+      if (box && c) { if (c.tagName === 'TR') c.insertAdjacentHTML('afterend', `<tr><td colspan="5">${sxStaleBox(x)}</td></tr>`); else c.insertAdjacentHTML('beforeend', sxStaleBox(x)); }
+    }
+    if (st.sxvStale === 'strip' && !st.sxStaleOpen) sxMainTop(nat ? `<div class="sx-nbar bad">${'<span class="as-ic" aria-hidden="true">!</span>'}<span class="sx-nbb"><span><b>1 decision wasn’t applied.</b> The ${x.kind === 'show' ? 'reply' : 'request'} changed after you chose ${x.kind === 'show' ? 'Show' : 'Approve'}.</span><span class="sx-acts">${sxBtn('Review', 'review', '', true)}</span></span></div>`
+      : `<div class="cs-strip warn sx-mtop" role="alert">${CI.eyeOff}<span class="grow"><b>1 decision wasn’t applied.</b> The ${x.kind === 'show' ? 'reply' : 'request'} changed after you chose ${x.kind === 'show' ? 'Show' : 'Approve'}.</span><button class="btn sm" type="button" data-sx="review:">Review</button></div>`);
+  }
+  /* FORBIDDEN after a role change */
+  const fb = st.sxObx.filter(o => o.state === 'forbidden');
+  if (fb.length && dev && !st.sxNoteX) {
+    const s = sp(fb[0].sp), head = `${fb.length} moderation actions weren’t applied.`, why = `You’re no longer a moderator of ${spName(s)}, so the server refused them.`;
+    if (st.sxvForb === 'notice') sxMainTop(nat ? `<div class="sx-nbar bad"><span class="as-ic" aria-hidden="true">!</span><span class="sx-nbb"><span><b>${head}</b> ${why}</span><span>${fb.map(o => esc(o.title)).join('<br>')}</span><span class="sx-acts">${sxBtn('Dismiss', 'xnote', '', true)}</span></span></div>`
+      : `<section class="cs-card sx-card sx-mtop" role="alert"><div class="cs-card-h">${CI.users}<b>${head}</b></div><p class="muted">${why} Your other changes were sent.</p><ul>${fb.map(o => `<li>${esc(o.title)}</li>`).join('')}</ul><div class="cs-card-f"><button class="btn sm" type="button" data-sx="xnote:">Dismiss</button></div></section>`);
+    if (st.sxvForb === 'toast') sxShowToast(`${head} ${why}`, [['Details', nat ? 'list:' : 'page:']]);
+  }
+  /* the frozen copy of a closed space (Desktop and Phone apps) */
+  if (st.sxFrozen && dev) sxFrozenMarks();
+  /* the web after a removal: the space is gone */
+  if (st.sxGone && !dev && !st.sxGoneSeen) {
+    const s = sp(st.sxGone), name = s ? spName(s) : '#replication-club', txt = `You’re no longer a member of ${name}, so it’s no longer in your spaces. Your threads there stay in the space.`;
+    if (st.sxvGone === 'notice' && st.home) sxMainTop(`<div class="cs-strip warn sx-mtop" role="status">${LOCK}<span class="grow">${txt}</span><button class="iconbtn" type="button" data-sx="gonex:" aria-label="Dismiss">${I.close}</button></div>`);
+    if (st.sxvGone === 'toast') sxShowToast(txt, [['OK', 'gonex:']]);
+  }
+  /* a moderator role removed */
+  if (st.sxDemoted && !st.sxNoteX) {
+    const s = sp(st.sxDemoted), txt = `Your role in ${spName(s)} is now Member. The review queue, reports and their notifications are no longer shown to you.`;
+    const onSpace = nat ? (nTop() || {}).id === s.id : !st.subPage && st.thread == null && !st.home && st.space === s.id;
+    if (st.sxvDemote === 'strip' && onSpace) sxMainTop(nat ? `<div class="sx-nbar info">${CI.users}<span class="sx-nbb"><span>${txt}</span></span></div>` : `<div class="cs-strip sx-mtop" role="status">${CI.users}<span class="grow">${txt}</span><button class="iconbtn" type="button" data-sx="xnote:" aria-label="Dismiss">${I.close}</button></div>`);
+    if (st.sxvDemote === 'toast') sxShowToast(txt, [['OK', 'xnote:']]);
+  }
+  /* device runs */
+  if (th != null && sxRun(th)) sxRunMarks(th, sxRun(th));
+  if (st.sxLimit === 'rate' && st.sxvLimit === 'toast' && sxApp() && st.compOpen) sxShowToast('Not started: 100 device runs in the past hour is the limit. The next one can start at 15:42.', [['Use included tokens', 'exec:session']]);
+  if (st.sxLimit === 'size' && st.sxvLimit === 'toast' && th != null) sxShowToast(`Not saved: the answer is larger than 200 KB, the limit for an answer from a device.`, [['Run with included tokens', 'xtoast:']]);
+  /* a page edit sent from Unsent changes: the editor's conflict notice says where it came from */
+  if (st.sxScr === 'rf-page') { const cf = document.querySelector('#app .ed-cf'); if (cf && !cf.querySelector('.sx-from')) cf.insertAdjacentHTML('afterbegin', `<p class="cs-fine sx-from">${SXI.up}<span>You edited this page on this Mac while it was offline. It waited in Unsent changes; when it was sent, tomasz had saved first.</span></p>`); }
+  /* the frozen copy: deleting your own thread is still allowed */
+  if (st.sxFrozen && (st.modal || '').startsWith('ta-del:')) { const m = document.querySelector('#app .modal .muted'); if (m && !m.parentElement.querySelector('.sx-from')) m.insertAdjacentHTML('afterend', `<p class="cs-fine sx-from">${LOCK}<span>You’re no longer a member of ${spName(sp(st.sxFrozen.sp))}. You can still delete your own threads there; the server deletes it for everyone and this Mac’s copy drops it.</span></p>`); }
+}
+function sxFrozenMarks() {
+  const f = st.sxFrozen, s = sp(f.sp), nat = sxNat(), name = spName(s);
+  const txt = `You’re no longer a member of ${name}. This is the copy on ${sxHere()} from ${f.at}; it isn’t updated, and you can’t post, reply or like here. You can still delete your own threads.`;
+  const inSpace = nat ? (() => { const t = nTop(); return t && ((t.v === 'space' && t.id === s.id) || (t.v === 'thread' && postById(t.id) && postById(t.id).s === s.id)); })() : !st.subPage && !st.home && (st.thread != null ? postById(st.thread) && postById(st.thread).s === s.id : st.space === s.id);
+  if (!nat) {
+    $('app').classList.toggle('sx-ro', !!inSpace);
+    document.querySelectorAll(`#app .utab[data-space="${s.id}"], #app .mchip[data-space="${s.id}"]`).forEach(t => { if (!t.querySelector('.sx-tlk')) t.insertAdjacentHTML('beforeend', `<span class="sx-tlk" title="Read-only copy">${SXI.lock}</span>`); });
+  }
+  if (!inSpace) return;
+  /* the composer and the reply box: no writes */
+  document.querySelectorAll('#app .composer, #app .fu-box2, #app .n-dock').forEach(c => { c.outerHTML = nat ? `<div class="n-dock"><span class="n-dock-f out">You can’t write here: you’re no longer a member.</span></div>` : `<div class="cs-strip sx-mtop">${LOCK}<span class="grow">You can’t write here: you’re no longer a member of ${name}.</span></div>`; });
+  if (st.sxvFrozen === 'banner') sxBar(nat ? `${LOCK}<span class="sx-nbb"><span>${txt}</span></span>` : `${LOCK}<span class="grow">${txt}</span><button class="btn sm" type="button" data-sx="frzrm:">Remove the copy</button>`);
+  if (st.sxvFrozen === 'lock') {
+    const h = nat ? document.querySelector('#n-scr .n-sphead h2, #n-scr .n-th-by small') : document.querySelector('#app .banner h1, #app .banner h2, #app .th-top .th-back');
+    if (h && !h.querySelector('.sx-frz')) h.insertAdjacentHTML('beforeend', `<span class="sx-frz">${SXI.lock}Read-only copy</span>`);
+    const row = `<div class="sx-frow" role="status">${SXI.clock}<span>Not updated since ${f.at}: you’re no longer a member. You can delete your own threads.</span>${nat ? '' : '<button class="tlink" type="button" data-sx="frzrm:">Remove the copy</button>'}</div>`;
+    const tabs = document.querySelector('#app .sp-tabs'); if (tabs && !nat) tabs.insertAdjacentHTML('afterend', row); else sxMainTop(nat ? `<div class="sx-nbar info">${SXI.clock}<span class="sx-nbb"><span>Read-only copy, not updated since ${f.at}: you’re no longer a member.</span></span></div>` : row);
+  }
+  if (st.sxvFrozen === 'grey') {
+    const m = document.querySelector('#app .mcol > .main, #app .th-main'); if (m) m.classList.add('sx-grey');
+    if (nat) { const f2 = document.querySelector('#n-scr .n-feed'); if (f2) f2.style.opacity = '.55'; }
+    sxMainTop(nat ? `<div class="sx-nbar">${LOCK}<span class="sx-nbb"><span>${txt}</span></span></div>` : `<section class="cs-card sx-card sx-mtop" role="status"><div class="cs-card-h">${LOCK}<b>Read-only copy</b><span class="faint">${f.at}</span></div><p class="muted">${txt}</p><div class="cs-card-f"><button class="btn sm" type="button" data-sx="frzrm:">Remove the copy</button></div></section>`);
+  }
+}
+function sxRunMarks(i, r) {
+  const nat = sxNat();
+  if (r.state === 'done' || r.state === 'again') {
+    const meta = nat ? document.querySelector('#n-scr .n-th .tm-meta') : document.querySelector('#app #th-a .tm-meta, #app .th-ans .tm-meta');
+    const html = r.state === 'again' ? `<p class="tm-meta sx-dl" role="status"><span class="spin" aria-hidden="true"></span><span>Running again on ${sxDevName(r)} with ${sxCli(r.cli)} (attempt 2).</span></p>` : sxLabelHTML(r);
+    if (meta) meta.outerHTML = html;
+    else { const a = nat ? document.querySelector('#n-scr .n-th .n-ans') : document.querySelector('#app #th-a, #app .th-ans'); if (a) a.insertAdjacentHTML(nat ? 'afterend' : 'beforeend', html); }
+    return;
+  }
+  if (r.state === 'running') { const run = document.querySelector('#app #th-a .run, #app .th-ans .run, #n-scr .n-ans .run'); if (run) run.outerHTML = sxRunLive(r); return; }
+  const box = document.querySelector('#app #th-a .as-fail, #app .th-ans .as-fail, #n-scr .as-fail'); if (box) box.outerHTML = sxRunEnd(r, i);
+}
+{ const r0 = renderAllInner; renderAllInner = function () { r0(); sxAfter(); }; }
+/* the offline bar: the web's own words; the apps say the changes are kept (vOff "bar" only) */
+{ const b0 = nvBanner; nvBanner = function () {
+  if (!st.nvOffline || st.sxvOff !== 'bar') return;
+  if (!sxApp()) return b0();
+  const h = document.querySelector('#app .mchips') || document.querySelector('#app .hdr');
+  const html = `<div class="nv-off" role="status">${NVI.off}<span class="grow">You’re offline. Changes are saved on this Mac and sent when the connection is back${st.sxObx.length ? ` (${st.sxObx.length} waiting)` : ''}.</span><button class="btn sm" type="button" data-nvoffline="1">Try again</button></div>`;
+  if (h) h.insertAdjacentHTML('afterend', html); else $('app').insertAdjacentHTML('afterbegin', html);
+}; }
+
+/* ---------- device sign-in: the app's window and the browser's approval page ---------- */
+const SX_CODE = 'KQ4-7XN';
+function sxSignPage() {
+  const s = st.sxSign || 'wait', code = st.sxvSign === 'code';
+  const body = s === 'start'
+    ? `<span class="cs-na-ic">${SXI.mac}</span><h2>Sign in to Session</h2><p class="muted">Session opens session.app in your browser. Approve this Mac there, and the app signs in.</p><div class="cs-na-b"><button class="btn primary" type="button" data-sx="signstart:">Sign in with the browser</button></div>`
+    : s === 'denied'
+    ? `<span class="cs-na-ic">${SXI.mac}</span><h2>Sign-in was denied</h2><p class="muted">The browser denied this Mac. Start again if that was a mistake.</p><div class="cs-na-b"><button class="btn primary" type="button" data-sx="signstart:">Start again</button></div>`
+    : `<span class="cs-na-ic">${SXI.mac}</span><h2>Approve this Mac in your browser</h2><p class="muted">Session opened session.app/device in your browser. Approve this Mac there${code ? ' if the browser shows the same code' : ''}. The app then stores a device token in the macOS Keychain.</p>${code ? `<span class="sx-code" aria-label="Code ${SX_CODE.split('').join(' ')}">${SX_CODE}</span>` : ''}<span class="sx-wait"><span class="spin" aria-hidden="true"></span>Waiting for the browser…</span><div class="cs-na-b"><button class="btn" type="button" data-sx="signopen:">Open the page again</button><button class="btn" type="button" data-sx="signcancel:">Cancel</button></div><p class="cs-fine">${CI.clock}<span>The request expires in 10 minutes.</span></p>`;
+  return `<div class="A C Af H sx-sign"><div class="cs-napage"><div class="cs-na">${body}</div></div></div>`;
+}
+function sxDevicePage() {
+  const s = st.sxSign || 'web', code = st.sxvSign === 'code';
+  const card = `<section class="cs-card sx-dcard"><dl class="sx-dl2"><dt>Device</dt><dd>MacBook Air · macOS 15.1</dd><dt>App</dt><dd>Session for Mac 1.0.0</dd><dt>Asked</dt><dd>Just now, from this computer</dd></dl></section>`;
+  const body = s === 'approved'
+    ? `<span class="cs-na-ic">${I.check}</span><h2>This Mac is signed in</h2><p class="muted">Go back to the Session app. You can close this tab. MacBook Air is listed in Account › Devices, where you can revoke it.</p><div class="cs-na-b"><button class="btn" type="button" data-sub="devices">Devices</button></div>`
+    : s === 'denied'
+    ? `<span class="cs-na-ic">${SXI.ban}</span><h2>Sign-in denied</h2><p class="muted">The app on that Mac was not signed in. You can close this tab.</p>`
+    : `<span class="cs-na-ic">${SXI.mac}</span><h2>Sign in on a Mac?</h2><p class="muted">The Session app on a Mac asked to sign in as ${esc(ME.u)}. ${code ? 'Approve only if the app shows this code:' : 'Approve only if you just started this on your own Mac.'}</p>${code ? `<span class="sx-code">${SX_CODE}</span>` : ''}${card}<div class="cs-na-b"><button class="btn" type="button" data-sx="signno:">Deny</button><button class="btn primary" type="button" data-sx="signok:">${code ? 'The code matches: approve' : 'Approve this Mac'}</button></div><p class="cs-fine">${LOCK}<span>The app gets a device token for your account. It can read and write what you can, until you revoke it.</span></p>`;
+  return `<div class="A C Af H">${topHeader()}<div class="cs-napage sx-sign"><div class="cs-na">${body}</div></div></div>`;
+}
+CS_PAGES.sxsign = sxSignPage;
+CS_PAGES.sxdevice = sxDevicePage;
+CS_SUBNAME.sxdevice = 'Sign in on a device';
+/* the web, after a removal (vGone "page"): the space's address */
+CS_PAGES.sxgone = () => `<div class="A C Af H">${topHeader()}<div class="cs-napage"><div class="cs-na"><span class="cs-na-ic">${LOCK}</span><h2>You’re no longer a member of #replication-club</h2><p class="muted">It’s a closed space, so only members can read it. Your threads there stay in the space. A moderator can tell you more.</p><div class="cs-na-b"><button class="btn primary" type="button" data-home="1">Go to Home</button></div></div></div></div>`;
+CS_SUBNAME.sxgone = '#replication-club';
+
+/* ---------- Screen entries ---------- */
+JUMPS.push(
+  ['Sync: unsent changes', [
+    ['sx-ob-wait', 'Desktop app: a reply waiting to send, offline'], ['sx-ob-retry', 'Desktop app: a reply retried with backoff'],
+    ['sx-ob-failed', 'Desktop app: Couldn’t save after 5 tries, the rest sent'], ['sx-ob-expired', 'Desktop app: refused as EXPIRED, made over 4 days ago'],
+    ['sx-ob-dropped', 'Desktop app: dropped after 3 days unsent'], ['sx-ob-list', 'Desktop app: Unsent changes'],
+    ['sx-off-app', 'Desktop app: offline, changes are kept'], ['sx-off-web', 'Web: offline, a reply fails and keeps its text'],
+    ['sxn-ob-wait', 'Phone: a reply waiting to send, offline'], ['sxn-ob-failed', 'Phone: Couldn’t save after 5 tries'], ['sxn-ob-expired', 'Phone: refused as EXPIRED'],
+    ['sxn-ob-dropped', 'Phone: dropped after 3 days unsent'], ['sxn-ob-list', 'Phone: Unsent changes'], ['sxn-off', 'Phone: offline, changes are kept'],
+  ]],
+  ['Sync: refused writes', [
+    ['sx-rf-show', 'Show refused as STALE: the hidden reply was edited'], ['sx-rf-approve', 'Approve refused as STALE: the request changed'],
+    ['sx-rf-page', 'Desktop app: a page edit sent late, someone saved first'], ['sx-rf-forbidden', 'Desktop app: queued moderation refused as FORBIDDEN'],
+    ['sxn-rf-show', 'Phone: Show refused as STALE'], ['sxn-rf-forbidden', 'Phone: queued moderation refused as FORBIDDEN'],
+  ]],
+  ['Sync: access changes', [
+    ['sx-ax-frozen', 'Desktop app: removed from a closed space, the frozen copy'], ['sx-ax-frozen-del', 'Desktop app: frozen copy, delete your own thread'],
+    ['sx-ax-gone', 'Web: removed from a closed space'], ['sx-ax-demoted', 'Moderator role removed: no queue, no report notifications'],
+    ['sxn-ax-frozen', 'Phone: removed from a closed space, the frozen copy'], ['sxn-ax-demoted', 'Phone: moderator role removed'],
+  ]],
+  ['Open spaces: Ban, not Remove', [['sx-op-members', 'Open space: Members, Ban only'], ['sx-op-ban', 'Open space: Ban, and what it stops'], ['sx-op-report', 'Open space: Reports, Ban the author']]],
+  ['Update Session', [['sx-up-web', 'Web: Update Session (reload)'], ['sx-up-app', 'Desktop app: Update Session (download and restart)'], ['sxn-up', 'Phone: Update Session (App Store)']]],
+  ['Desktop app and devices', [
+    ['sx-app-home', 'Desktop app: Home'], ['sx-si-app', 'Device sign-in: the app waits for the browser'], ['sx-si-web', 'Device sign-in: approve the Mac in the browser'],
+    ['sx-si-done', 'Device sign-in: approved'], ['sx-dev', 'Account › Devices'], ['sx-dev-revoke', 'Account › Devices: revoke a device'], ['sxn-dev', 'Phone: You › Account › Devices'],
+  ]],
+  ['Device runs (Desktop app)', [
+    ['sx-dr-pick', 'Desktop app: choose who runs an ask'], ['sx-dr-default', 'Desktop app: Account › Asks on this Mac'], ['sx-dr-label', 'An answer from a device run: the label'],
+    ['sx-dr-int', 'Desktop app: run interrupted, the Mac slept'], ['sx-dr-int-web', 'Web: another member’s device run interrupted'],
+    ['sx-dr-size', 'Desktop app: answer over 200 KB'], ['sx-dr-rate', 'Desktop app: 100 device runs in an hour'],
+    ['sx-dr-view', 'Web: watch another member’s device run'], ['sxn-dr-label', 'Phone: an answer from a device run'],
+  ]],
+);
+screenData(['sx-ob-wait', 'sx-ob-retry', 'sx-ob-failed', 'sx-ob-expired', 'sx-ob-dropped', 'sx-ob-list', 'sx-off-app', 'sx-off-web', 'sxn-ob-wait', 'sxn-ob-failed', 'sxn-ob-expired', 'sxn-ob-dropped', 'sxn-ob-list', 'sxn-off', 'sx-up-web', 'sx-up-app', 'sxn-up'], 'outbox: replies arrived while you were offline');
+screenData(['sx-rf-show', 'sxn-rf-show'], 'sablefield: bram edited a hidden reply');
+screenData('sx-rf-approve', 'replication: a request changed after Approve');
+screenData(['sx-rf-forbidden', 'sxn-rf-forbidden', 'sx-ax-demoted', 'sxn-ax-demoted'], 'replication: moderator role removed');
+screenData(['sx-ax-frozen', 'sx-ax-frozen-del', 'sxn-ax-frozen'], 'replication: removed, a device keeps its copy');
+screenData('sx-ax-gone', 'replication: removed');
+screenData(['sx-op-members', 'sx-op-ban', 'sx-op-report'], 'sablefield: an open space to moderate');
+screenData(['sx-dr-int', 'sx-dr-size'], 'asks: your ask', { space: 'public', end: 'interrupted' });
+screenData('sx-dr-int-web', 'device runs: mira_k’s run interrupted');
+screenData('sx-dr-view', 'device runs: mira_k’s ask running');
+/* the outbox of the list screen: one of each state */
+const SX_LIST = () => [
+  sxOb('failed', { made: '25m' }),
+  sxOb('expired', { id: 'o2', kind: 'post', th: null, sp: 'math', title: 'Post in #math', text: 'Reading group for Aluffi’s Chapter 0: we start with chapter III on Monday.', made: '5d' }),
+  sxOb('dropped', { id: 'o3', th: null, sp: 'public', title: 'Reply in #public', text: 'The slides from the evaluation workshop are linked in the second answer.', made: '3d' }),
+  { id: 'o4', kind: 'page', sp: 'scifi', title: 'Edit of Canon starter list in #sci-fi', text: '', state: 'conflict', by: 'tomasz', made: '2h' },
+  { id: 'o5', kind: 'fu', sp: 'public', title: 'Follow-up in #public', text: 'Which of these changes apply to open-weight models?', state: 'wait', made: '12m' },
+  { id: 'o6', kind: 'like', sp: 'public', title: 'Like on hal_b’s post in #public', text: '', state: 'wait', made: '10m' },
+];
+/* a Screen entry's UI: what is open, the device and client, the outbox and the refusals. again: a Variants
+   control was picked on this screen (the device and client stay as they are) */
+function sxUi(k, again) {
+  const nat = k.startsWith('n-'), key = k;
+  const keep = again ? { client: st.client, device: st.device } : null;
+  if (nat) { npJump('np-home'); } else { if (st.device === 'native') st.device = 'desktop'; Object.assign(st, NAVBASE(), { auth: 'in', toast: null }); }
+  Object.assign(st, SX0(), { sxScr: key, nvOffline: false, modal: null });
+  const app = () => { st.client = 'app'; st.device = 'desktop'; };
+  const web = () => { st.client = 'web'; };
+  const thread = (i, o) => { Object.assign(st, { thread: i, space: postById(i).s, home: false }, o || {}); if (postById(i).k === 'ask') qtEnter(i); };
+  const nThread = i => { nst.tab = 'home'; nst.stack = [{ v: 'thread', id: i }]; st.space = postById(i).s; };
+  const nSpace = id => { nst.tab = 'spaces'; nst.stack = [{ v: 'space', id }]; st.space = id; };
+  const fail = st.sxvFail === 'sheet';
+  const ob = (state, o) => { st.sxObx = [sxOb(state, o)]; if (fail && SX_GONE.has(state) || fail && state === 'failed') { if (nat) nst.sheet = 'sxfail:o1'; else st.modal = 'sx-fail:o1'; } };
+  const sf4 = sxSf4();
+  switch (k.replace(/^n-/, '')) {
+    case 'ob-wait': if (!nat) app(); st.nvOffline = true; st.sxObx = [sxOb('wait'), SX_LIST()[4], SX_LIST()[5]]; nat ? nThread(sf4) : thread(sf4); break;
+    case 'ob-retry': app(); st.sxObx = [sxOb('retry', { tries: 3, next: 40 }), SX_LIST()[4]]; thread(sf4); break;
+    case 'ob-failed': if (!nat) app(); ob('failed'); st.sxSent = 3; nat ? nThread(sf4) : thread(sf4); break;
+    case 'ob-expired': if (!nat) app(); ob('expired', { made: '5d' }); nat ? nThread(sf4) : thread(sf4); break;
+    case 'ob-dropped': if (!nat) app(); ob('dropped', { made: '3d' }); nat ? nThread(sf4) : thread(sf4); break;
+    case 'ob-list':
+      if (!nat) app(); st.sxObx = SX_LIST(); st.sxSent = 2;
+      if (nat) { if (st.sxvList === 'badge') { nst.tab = 'home'; nst.stack = []; nst.sheet = 'sxlist'; } else { nst.tab = 'you'; nst.stack = st.sxvList === 'account' ? [{ v: 'account', id: '' }, { v: 'sxlist', id: '' }] : [{ v: 'sxlist', id: '' }]; } }
+      else if (st.sxvList === 'badge') { thread(sf4); st.sxPop = true; }
+      else st.subPage = 'outbox';
+      break;
+    case 'off-app': app(); st.nvOffline = true; st.sxObx = [sxOb('wait'), SX_LIST()[4]]; st.home = true; break;
+    case 'off': st.nvOffline = true; st.sxObx = [sxOb('wait'), SX_LIST()[4]]; nst.tab = 'home'; nst.stack = []; break;
+    case 'off-web': web(); st.nvOffline = true; thread(sf4, { fuDraft: { [sf4]: SX_REPLY }, askErr: 'fu' }); ASK.retry = () => askReply(sf4); break;
+    case 'rf-show': {
+      const key = `r:${sf4}:2`;
+      st.sxStale = { kind: 'show', key, by: 'bram', was: 'Get 50% off managed Postgres hosting at cheapdb.example with code SABLE50.' };
+      if (nat) { nThread(sf4); if (st.sxvStale === 'dialog') nst.sheet = 'sxstale'; }
+      else { thread(sf4); if (st.sxvStale === 'dialog') st.modal = 'sx-stale'; }
+      if (sxApp() || nat) st.sxObx = [{ id: 'o1', kind: 'show', sp: 'sablefield', title: 'Show bram’s reply in Sablefield', text: '', state: 'stale', why: 'bram edited the reply after you chose Show.', made: '1h' }];
+      break;
+    }
+    case 'rf-approve': {
+      const r = openReqs()[0];
+      st.sxStale = { kind: 'approve', u: r.u, was: 'Grokking results on modular arithmetic. I can re-run the small models and compare them with the released training logs. · github.com/noor-a/grokking-rerun' };
+      Object.assign(st, { subPage: 'manage', mgSpace: 'replication', mgTab: 'requests', space: 'replication', rqSel: new Set() });
+      if (st.sxvStale === 'dialog') st.modal = 'sx-stale';
+      break;
+    }
+    case 'rf-page': break;
+    case 'rf-forbidden':
+      if (!nat) app();
+      st.sxObx = [
+        { id: 'o1', kind: 'approve', sp: 'replication', title: 'Approve noor.a’s request in #replication-club', text: '', state: 'forbidden', made: '40m' },
+        { id: 'o2', kind: 'approve', sp: 'replication', title: 'Approve rob.t’s request in #replication-club', text: '', state: 'forbidden', made: '40m' },
+        { id: 'o3', kind: 'hide', sp: 'replication', title: 'Hide a reply by hal_b in #replication-club', text: '', state: 'forbidden', made: '35m' },
+      ];
+      st.sxSent = 2;
+      if (nat) { nSpace('replication'); if (st.sxvForb === 'items') { if (st.sxvList === 'badge') nst.sheet = 'sxlist'; else { nst.tab = 'you'; nst.stack = st.sxvList === 'account' ? [{ v: 'account', id: '' }, { v: 'sxlist', id: '' }] : [{ v: 'sxlist', id: '' }]; } } }
+      else { Object.assign(st, { space: 'replication', home: false }); if (st.sxvForb === 'items') { if (st.sxvList === 'badge') st.sxPop = true; else st.subPage = 'outbox'; } }
+      break;
+    case 'ax-frozen': if (!nat) app(); st.sxFrozen = { sp: 'replication', at: 'Nov 17' }; nat ? nSpace('replication') : Object.assign(st, { space: 'replication', home: false }); break;
+    case 'ax-frozen-del': { app(); st.sxFrozen = { sp: 'replication', at: 'Nov 17' }; const i = sxRepMine(); if (i != null) { thread(i); st.modal = 'ta-del:t:' + i; } break; }
+    case 'ax-gone': web(); st.sxGone = 'replication'; if (st.sxvGone === 'page') st.subPage = 'sxgone'; else st.home = true; break;
+    case 'ax-demoted': st.sxDemoted = 'replication'; nat ? nSpace('replication') : Object.assign(st, { space: 'replication', home: false }); break;
+    case 'op-members': Object.assign(st, { subPage: 'manage', mgSpace: 'sablefield', mgTab: 'members', space: 'sablefield' }); if (st.sxvBan === 'menu') st.sxBanMenu = 'jun.park'; break;
+    case 'op-ban': Object.assign(st, { subPage: 'manage', mgSpace: 'sablefield', mgTab: 'members', space: 'sablefield', modal: 'cs-ban:jun.park' }); break;
+    case 'op-report': Object.assign(st, { subPage: 'manage', mgSpace: 'sablefield', mgTab: 'reports', space: 'sablefield' }); break;
+    case 'up-web': web(); st.sxUpd = true; thread(sf4, { fuDraft: { [sf4]: SX_REPLY }, askErr: st.sxvUpd === 'inline' ? 'fu' : null }); if (st.sxvUpd === 'modal') st.modal = 'sx-upd'; break;
+    case 'up-app': case 'up':
+      if (!nat) app(); st.sxUpd = true; st.sxObx = [sxOb('update'), { ...SX_LIST()[4], state: 'update' }];
+      nat ? nThread(sf4) : thread(sf4);
+      if (st.sxvUpd === 'modal') { if (nat) nst.sheet = 'sxupd'; else st.modal = 'sx-upd'; }
+      break;
+    case 'app-home': app(); st.home = true; break;
+    case 'si-app': app(); Object.assign(st, { auth: 'out', subPage: 'sxsign', sxSign: 'wait' }); break;
+    case 'si-web': web(); Object.assign(st, { subPage: 'sxdevice', sxSign: 'web' }); break;
+    case 'si-done': app(); st.home = true; toast(`Signed in as ${esc(ME.u)}. This Mac keeps its device token in the macOS Keychain.`); break;
+    case 'dev': case 'dev-revoke':
+      if (nat) { nst.tab = 'you'; nst.stack = [{ v: 'account', id: '' }, { v: 'sxdevs', id: '' }]; break; }
+      st.subPage = st.sxvDev === 'tab' ? 'devices' : 'account';
+      if (st.sxvDev === 'section') setTimeout(() => { const e = $('sx-devsec'); if (e) e.scrollIntoView({ block: 'start' }); }, 0);
+      if (k === 'dev-revoke') st.modal = 'sx-revoke:d3';
+      break;
+    case 'dr-pick': case 'dr-rate':
+      app(); Object.assign(st, { space: 'public', home: false, compOpen: true, mode: 'ask', draft: 'Summarize the open issues in the evaluation-guidance threads from this month.' });
+      st.sxExec = 'claude'; st.sxExecSp = { public: 'claude' };
+      if (k === 'dr-pick') { if (st.sxvExec === 'menu') st.mpOpen = true; else st.sxExecOpen = true; }
+      else st.sxLimit = 'rate';
+      break;
+    case 'dr-default': app(); st.subPage = 'account'; setTimeout(() => { const e = $('sx-exsec'); if (e) e.scrollIntoView({ block: 'start' }); }, 0); break;
+    case 'dr-label': { const i = TID(0); st.sxRuns = { [i]: { u: ME.u, cli: 'claude', state: 'done' } }; st.sxTip = st.sxvLabel === 'tip'; nat ? nThread(i) : thread(i); break; }
+    case 'dr-int': case 'dr-size': { app(); const i = lastTid(); st.sxRuns = { [i]: { u: ME.u, cli: 'claude', state: k === 'dr-int' ? 'interrupted' : 'size' } }; if (k === 'dr-size') st.sxLimit = 'size'; thread(i); break; }
+    case 'dr-int-web': case 'dr-view': { web(); const i = tidWhere(p => p.s === 'scifi' && p.u === 'mira_k' && p.k === 'ask' && !p.about); st.sxRuns = { [i]: { u: 'mira_k', cli: 'claude', state: k === 'dr-view' ? 'running' : 'interrupted' } }; thread(i); break; }
+  }
+  if (keep && !nat) Object.assign(st, keep);
+  if (nat) st.device = 'native';
+}
+{ const j0 = jump; jump = function (k) {
+  const m = /^sx(n?)-(.*)$/.exec(String(k));
+  if (!m) { j0(k); return; }
+  if (m[2] === 'rf-page') { j0('ec-page'); st.client = 'app'; st.device = 'desktop'; Object.assign(st, SX0(), { sxScr: 'rf-page', sxObx: [{ id: 'o4', kind: 'page', sp: 'scifi', title: 'Edit of Canon starter list in #sci-fi', text: '', state: 'conflict', by: 'tomasz', made: '2h' }] }); return; }
+  sxUi((m[1] ? 'n-' : '') + m[2]);
+}; }
+SX_KN['n-ob-wait'] = SX_KN['ob-wait']; SX_KN['n-ob-failed'] = SX_KN['ob-failed']; SX_KN['n-ob-expired'] = SX_KN['ob-expired']; SX_KN['n-ob-dropped'] = SX_KN['ob-dropped']; SX_KN['n-ob-list'] = SX_KN['ob-list'];
+SX_KN['n-off'] = SX_KN.off; SX_KN['n-rf-show'] = SX_KN['rf-show']; SX_KN['n-rf-forbidden'] = SX_KN['rf-forbidden']; SX_KN['n-ax-frozen'] = SX_KN['ax-frozen']; SX_KN['n-ax-demoted'] = SX_KN['ax-demoted'];
+SX_KN['n-up'] = SX_KN.up; SX_KN['n-dev'] = SX_KN.dev; SX_KN['n-dr-label'] = SX_KN['dr-label'];
+/* ==== end sync states ==== */
 buildJump();
 /* End of start-up: start loading the data store over HTTP, and move the Variants bar's keys from the UI
    store to the mockup store. */
