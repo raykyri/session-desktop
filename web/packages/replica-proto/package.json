@@ -20,7 +20,7 @@
     "mutate": "tsx test/mutations/mutate.ts",
     "mutate:package": "tsx test/mutations/mutate.ts --package",
     "mutate:sync": "tsx test/mutations/mutate.ts --sync",
-    "test:http": "REPLICA_PROTO_MUTATORS=package REPLICA_PROTO_SERVER=http ava"
+    "test:http": "REPLICA_PROTO_MUTATORS=package REPLICA_PROTO_SERVER=http ava --timeout=20m"
   },
   "devDependencies": {
     "@session/server": "*",

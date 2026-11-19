@@ -30,7 +30,13 @@ import { isHandle } from "@session/mutators";
 // eslint-disable-next-line @typescript-eslint/no-restricted-imports
 import { startTestServer } from "@session/server/test-server";
 import { PROTOCOL_HEADER, PROTOCOL_VERSION } from "@session/sync";
-import type { Answer, PullAnswer, ServerStore, SnapshotAnswer } from "@session/sync/server";
+import type {
+  Answer,
+  PullAnswer,
+  ServerStore,
+  SnapshotAnswer,
+  SyncServer,
+} from "@session/sync/server";
 
 import type {
   Actor,
@@ -92,20 +98,27 @@ const NOBODY = "Bearer not-a-device-token";
 export function httpFactory(): ServerFactory {
   return (o: ServerOptions): TestServer => {
     const jobs: { kind: string; id: string }[] = [];
-    const { deps, ready } = startTestServer({
-      sync: {
-        clock: o.clock,
-        ...(o.random ? { random: o.random } : {}),
-        registry: packageRegistry(o.mutators ?? ACTIVE_MUTATORS),
-        jobs: { start: (j) => void jobs.push({ kind: j.kind, id: j.id }) },
-        ...(o.failEffect
-          ? {
-              failEffect: (e: pkg.Effect, n: number) =>
-                (o.failEffect as NonNullable<typeof o.failEffect>)(e as never, n),
-            }
-          : {}),
+    // the server's types name its own copies of the packages: a mutation run
+    // copies this package and the ones it mutates, so the options and the
+    // sync server cross that edge untyped
+    const sync: Record<string, unknown> = {
+      clock: o.clock,
+      ...(o.random ? { random: o.random } : {}),
+      registry: packageRegistry(o.mutators ?? ACTIVE_MUTATORS),
+      jobs: {
+        start: (j: { kind: string; id: string }) => void jobs.push({ kind: j.kind, id: j.id }),
       },
-    });
+      ...(o.failEffect
+        ? {
+            failEffect: (e: pkg.Effect, n: number) =>
+              (o.failEffect as NonNullable<typeof o.failEffect>)(e as never, n),
+          }
+        : {}),
+    };
+    const { deps, ready } = startTestServer({ sync }) as unknown as {
+      deps: { sync: SyncServer };
+      ready: Promise<{ origin: string }>;
+    };
     const server = deps.sync;
     const store: ServerStore = server.store;
     const cookies = new Map<string, Promise<string | null>>();
