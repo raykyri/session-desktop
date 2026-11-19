@@ -61,6 +61,8 @@ const viewOf = (w: World, reader: string | null, log: LogId) =>
 for (let s0 = 1; s0 <= SEEDS; s0 += 4)
   test(`online calls and the stream match the read oracle: seeds ${s0} to ${Math.min(SEEDS, s0 + 3)}`, async (t) => {
     const stats = new Map<string, number>();
+    // every failure; the first of each kind is reported
+    const failures: string[] = [];
     for (let seed = s0; seed <= Math.min(SEEDS, s0 + 3); seed++) {
       const { w, open, closed } = await cast(t, seed);
       const on = w.server.online;
@@ -68,7 +70,7 @@ for (let s0 = 1; s0 <= SEEDS; s0 += 4)
       const rand = rng(seed * 7919);
       const pick = <T>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)] as T;
       const fail = (step: number, what: string, detail: string) =>
-        t.fail(`seed ${seed}, step ${step} (${what}): ${detail}`);
+        failures.push(`seed ${seed}, step ${step} (${what}): ${detail}`);
 
       // devices for mel and otto, signed in from the browser
       const devices = new Map<string, string>();
@@ -365,6 +367,14 @@ for (let s0 = 1; s0 <= SEEDS; s0 += 4)
       for (const st of streams) await st.handle.close();
       w.clock.advance(DAY);
     }
+    const kinds = new Map<string, string>();
+    for (const f of failures) {
+      const k = f
+        .replace(/^seed \d+, step -?\d+ \([^)]*\): /, "")
+        .replace(/[0-9A-Z]{26}|TURN-\d+|ANS-\d+|\d+/g, "#");
+      if (!kinds.has(k)) kinds.set(k, f);
+    }
+    t.deepEqual([...kinds.values()], [], `${failures.length} failures`);
     // the history reached the calls it checks, ok and refused
     t.log([...stats].sort().map(([k, v]) => `${k}: ${v}`).join(", "));
     for (const k of ["runs.claim ok", "runs.heartbeat ok", "runs.turn ok", "runs.finish ok"])
