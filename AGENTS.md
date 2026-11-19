@@ -78,7 +78,17 @@ rules above stay as they are. Decisions for the new client:
     write keeps its mutation id. Envelopes carry the device's time; an id
     more than 4 days old on the device's clock answers EXPIRED (recorded).
     A write that fails 5 times is shown to the person and the rest of the
-    outbox continues; a write dropped at 3 days is reported.
+    outbox continues; a write dropped at 3 days is reported. Envelopes also
+    carry `queuedAt`, which the server checks like an id's age, and every
+    answer carries `serverTime`. A reminted envelope lists the mutation ids
+    it replaces, and the server stores its answer under each of them in the
+    same commit, so a delayed copy of the old envelope cannot apply twice.
+    An oversized envelope answers TOO_LARGE, unrecorded. `base` is optional
+    on decisions that do not compare it.
+  - The cursor token key is configured, not per process; the previous key
+    is accepted for 30 days after a rotation.
+  - In open spaces a removal is STALE once the person leaves and joins
+    again, by design; the UI offers ban as the tool there.
   - Record changes, the stored answer, the seq and queued effects commit
     together; effects run from a worker with backoff and a dead-letter
     state, and carry ids, not text.
