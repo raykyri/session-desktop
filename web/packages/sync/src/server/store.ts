@@ -149,6 +149,9 @@ export interface StoreTx {
   logAfter(log: LogId, after: number): LogRow[];
   epoch(log: LogId): Epoch;
   setEpoch(log: LogId, e: Epoch): void;
+  /** The logs whose history was replaced after `version` (epoch start
+   * above it). */
+  epochsAfter(version: number): LogId[];
 
   // ---- tombstones ----
   tombGet(key: string): Tombstone | undefined;

@@ -101,7 +101,7 @@ test("W6: a removed member's reports and source reports leave their user log", (
 
 // ---- W7: inputs that pass the schema never make `run` throw
 
-test("W7a: a source another person added and a moderator removed is added anew by its new maker", (t) => {
+test("W7a: a source another person added and a moderator removed is added anew by a moderator, as theirs", (t) => {
   const { w, open, closed } = cast(t);
   // the source is known to otto through another space where it stays
   const a = ok(t, w.run("mel", "spaceSources.add", { space: closed, url: "example.com/a" })) as {
@@ -110,9 +110,12 @@ test("W7a: a source another person added and a moderator removed is added anew b
   ok(t, w.run("mel", "spaceSources.add", { space: open, source: a.id }));
   ok(t, w.run("mona", "spaceSources.review", { space: open, source: a.id, decision: "remove" }));
   admit(t, w, closed, "otto");
-  const out = w.run("otto", "spaceSources.add", { space: open, source: a.id });
+  // a member below moderator puts back no source a moderator removed
+  // (review round 2 of phase 1)
+  refused(t, w.run("otto", "spaceSources.add", { space: open, source: a.id }), "FORBIDDEN");
+  const out = w.run("mona", "spaceSources.add", { space: open, source: a.id });
   t.like(ok(t, out) ?? {}, { id: a.id });
-  t.like(rec(w, `spacesrc:${open}:${a.id}`), { by: "otto", rm: false });
+  t.like(rec(w, `spacesrc:${open}:${a.id}`), { by: "mona", rm: false });
 });
 
 test("W7b: a file name or URL with a lone surrogate is BAD_REQUEST, not a fault", (t) => {

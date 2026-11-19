@@ -32,12 +32,14 @@ for (const [kind, field] of Object.values(INDEXES)) {
 }
 
 class Tables {
-  meta = { head: 0, lastTime: 0, effectId: 0, letterId: 0, instance: 0 };
+  meta = { head: 0, lastTime: 0, effectId: 0, letterId: 0, instance: 0, logOrd: 0 };
   records = new Map<string, { record: StoredRecord; born: number }>();
   /** kind \0 field \0 value → keys */
   index = new Map<string, Set<string>>();
   registry = new Map<string, number>();
-  logs = new Map<LogId, Map<string, LogRow>>();
+  /** Rows by log and key, each with its write order (`ord`), as SQLite's
+   * `sync_log` keeps it. */
+  logs = new Map<LogId, Map<string, LogRow & { ord: number }>>();
   epochs = new Map<LogId, Epoch>();
   tombs = new Map<string, Tombstone>();
   answers = new Map<string, StoredAnswer & { u: string; mutationId: string }>();
@@ -144,7 +146,7 @@ class MemoryTx implements StoreTx {
   private rows(log: LogId) {
     let m = this.t.logs.get(log);
     if (!m) {
-      this.t.logs.set(log, (m = new Map<string, LogRow>()));
+      this.t.logs.set(log, (m = new Map<string, LogRow & { ord: number }>()));
       this.undo.push(() => {
         if (m?.size === 0) this.t.logs.delete(log);
       });
@@ -153,10 +155,13 @@ class MemoryTx implements StoreTx {
   }
 
   logPut(log: LogId, row: LogRow) {
-    // a written row moves to the end: rows of one version keep write order
-    const m = this.rows(log);
-    setIn(this.undo, m, row.key, undefined);
-    setIn(this.undo, m, row.key, { ...row });
+    // rows of one version keep write order: an explicit `ord`, as SQLite's,
+    // so a rolled-back write leaves the order as it was (review round 2 of
+    // phase 1)
+    const ord = this.t.meta.logOrd + 1;
+    this.meta("logOrd", ord);
+    const { key, op, version } = row;
+    setIn(this.undo, this.rows(log), key, { key, op, version, ord });
   }
   logDelete(log: LogId, key: string) {
     const m = this.t.logs.get(log);
@@ -164,18 +169,20 @@ class MemoryTx implements StoreTx {
   }
   logGet(log: LogId, key: string) {
     const r = this.t.logs.get(log)?.get(key);
-    return r ? { ...r } : undefined;
+    return r ? { key: r.key, op: r.op, version: r.version } : undefined;
   }
   logAfter(log: LogId, after: number): LogRow[] {
     const m = this.t.logs.get(log);
     if (!m) return [];
     return [...m.values()]
       .filter((r) => r.version > after)
-      .sort((a, b) => a.version - b.version)
-      .map((r) => ({ ...r }));
+      .sort((a, b) => a.version - b.version || a.ord - b.ord)
+      .map((r) => ({ key: r.key, op: r.op, version: r.version }));
   }
   epoch = (log: LogId) => ({ ...(this.t.epochs.get(log) ?? { n: 0, start: 0 }) });
   setEpoch = (log: LogId, e: Epoch) => setIn(this.undo, this.t.epochs, log, { ...e });
+  epochsAfter = (version: number) =>
+    [...this.t.epochs].filter(([, e]) => e.start > version).map(([log]) => log);
 
   tombGet = (key: string) => copy(this.t.tombs.get(key));
   tombPut = (t: Tombstone) => setIn(this.undo, this.t.tombs, t.key, copy(t));
@@ -326,7 +333,10 @@ export class MemoryServerStore implements ServerStore {
     return copy({
       records: [...t.records].map(([key, r]) => ({ key, record: r.record, born: r.born })),
       registry: [...t.registry].map(([id, rev]) => ({ id, rev })),
-      logRows: [...t.logs].flatMap(([log, rows]) => [...rows.values()].map((r) => ({ log, ...r }))),
+      logRows: [...t.logs]
+        .flatMap(([log, rows]) => [...rows.values()].map((r) => ({ log, ...r })))
+        .sort((a, b) => a.version - b.version || a.ord - b.ord)
+        .map(({ log, key, op, version }) => ({ log, key, op, version })),
       epochs: [...t.epochs].map(([log, e]) => ({ log, ...e })),
       tombstones: [...t.tombs.values()],
       answers: [

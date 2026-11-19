@@ -193,6 +193,11 @@ class SqliteTx implements StoreTx {
       "INSERT INTO sync_epochs (log, n, start) VALUES (?, ?, ?) ON CONFLICT (log) DO UPDATE SET n = excluded.n, start = excluded.start",
     ).run(log, e.n, e.start);
   }
+  epochsAfter(version: number): LogId[] {
+    return (this.s("SELECT log FROM sync_epochs WHERE start > ?").all(version) as Row[]).map(
+      (r) => r["log"] as LogId,
+    );
+  }
 
   private tomb(r: Row): Tombstone {
     return tombOf(r);

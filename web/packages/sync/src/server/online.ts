@@ -27,6 +27,23 @@
 //   redacted for them is no turn.
 // - An answer lands only on the attempt the ask is at (`att`).
 // - In-flight text goes out after the call commits, numbered per attempt.
+//
+// Review round 2 of phase 1:
+// - In-flight text goes only to a reader for whom the run's node (its
+//   thread, or its follow-up) reads unredacted (`textShown`), as a turn of
+//   `runs.claim` (H1).
+// - An answer written to a hidden item counts as an edit of it, so a
+//   "shown" decided on the earlier text is STALE (W1).
+// - A run's calls come from its device's token only: a browser session of
+//   the same person drives no device run.
+// - A call's input is at most MAX_CALL_BYTES as JSON and a turn at most
+//   DEVICE_TURN_MAX bytes (TOO_LARGE, nothing written).
+// - In an archived space a run's calls answer PRECONDITION_FAILED, as
+//   `followups.ask` does; archiving a space ends its queued and running
+//   device runs (`interrupted`, `spaceArchived`).
+// - A run whose job became a dead letter ends (`jobDead`).
+// - The approver may deny an approved sign-in whose token nobody took; a
+//   revoked device's streams close.
 
 import { createHash, randomBytes } from "node:crypto";
 
@@ -36,12 +53,20 @@ import { z } from "zod";
 
 import { HOUR, MINUTE, type Actor, type CallAnswer } from "../protocol.js";
 
-import type { SyncServer } from "./server.js";
+import { answerWrites, bounds, type SyncServer } from "./server.js";
 import type { Lease, StoreTx } from "./store.js";
 
 /** A device run's lease, and the largest device answer (server settings). */
 export const LEASE_MS = 90_000;
 export const DEVICE_ANSWER_MAX = 200 * 1024;
+/** The largest in-flight turn, in bytes (TOO_LARGE above it). */
+export const DEVICE_TURN_MAX = 64 * 1024;
+/** The largest input of an online call, as JSON (TOO_LARGE above it). It
+ * leaves room for an answer over DEVICE_ANSWER_MAX, which ends its run
+ * `too_large`. */
+export const MAX_CALL_BYTES = 1024 * 1024;
+/** How deep an online call's input may nest (BAD_REQUEST deeper). */
+export const MAX_CALL_DEPTH = 32;
 /** How long a device sign-in waits for its approval and for the app to take
  * its token. */
 export const SIGNIN_TTL = 10 * MINUTE;
@@ -121,8 +146,8 @@ function leaseOf(
   claim = false,
 ): { run: pkg.RunRec; lease: Lease | undefined } | CommittedRefusal {
   const a = need(ctx);
-  if (a.device != null && a.device !== i.device)
-    throw fail("FORBIDDEN", "This run runs on another device.");
+  // a browser session, or another device, drives no device run
+  if (a.device !== i.device) throw fail("FORBIDDEN", "This run runs on another device.");
   const g = readerOf(ctx.tx);
   const r = ctx.tx.get(`run:${i.run}`);
   if (r?.kind !== "run") throw fail("NOT_FOUND", "The server has no record of this run.");
@@ -141,6 +166,8 @@ function leaseOf(
       reads ? fail("FORBIDDEN") : fail("NOT_FOUND", "The server has no record of this run."),
     );
   }
+  if (pkg.spaceRec(g, r.s)?.archived)
+    throw fail("PRECONDITION_FAILED", "This space is archived: nobody can ask in it.");
   const lease = ctx.tx.leaseGet(r.id);
   if (claim) return { run: r, lease };
   if (r.status !== "running" || r.attempt !== i.attempt)
@@ -162,9 +189,10 @@ function nodeOf(tx: StoreTx, r: pkg.RunRec) {
   return n?.kind === "thread" || n?.kind === "followup" ? n : undefined;
 }
 
-/** End a device run without an answer: its lease ended, its answer was too
- * large, its person lost access to its space, or its device was revoked.
- * The thread stops running when the run is its ask's current attempt. */
+/** End a run without an answer: its lease ended, its answer was too large,
+ * its person lost access to its space, its device was revoked, its space
+ * was archived, or its job became a dead letter. The thread stops running
+ * when the run is its ask's current attempt. */
 function endRun(ctx: CallCtx, r: pkg.RunRec, why: pkg.RunEnd) {
   const writes: pkg.Write[] = [[`run:${r.id}`, { ...r, status: "failed", end: why }]];
   const p = ctx.tx.get(`thread:${r.th}`);
@@ -174,15 +202,18 @@ function endRun(ctx: CallCtx, r: pkg.RunRec, why: pkg.RunEnd) {
   ctx.server.commit(ctx.tx, writes, ctx.now);
 }
 
+/** Whether `u` reads item `x` as it is stored: they may read it, and it is
+ * not redacted for them (hidden, and neither theirs nor in a space they
+ * moderate). */
+const unredacted = (g: pkg.Reader, x: pkg.StoredRecord, u: string | null) =>
+  pkg.canRead(g, x, u) && pkg.redact(g, x, u) === x;
+
 /** Every turn a run rebuilds its context from (no CLI session resumes), as
  * the run's person reads them now: an item redacted for them (hidden, and
  * not theirs) is no turn. */
 function turnsOf(tx: StoreTx, r: pkg.RunRec) {
   const g = readerOf(tx);
-  const shown = <T extends pkg.StoredRecord>(x: T): T | null => {
-    const v = pkg.view(g, x, r.u);
-    return v !== null && JSON.stringify(v) === JSON.stringify(x) ? (v as T) : null;
-  };
+  const shown = <T extends pkg.StoredRecord>(x: T): T | null => (unredacted(g, x, r.u) ? x : null);
   const p = tx.get(`thread:${r.th}`);
   if (p?.kind !== "thread" || pkg.view(g, p, r.u) === null) return [];
   const fus = tx
@@ -237,6 +268,12 @@ export function defaultHandlers(): OnlineHandlers {
       throw fail("FORBIDDEN", "Approve a device’s sign-in from a browser, not from a device.");
     const i = parse(P["devices.approve"].input.strict(), input);
     const s = ctx.tx.signinGet(i.request);
+    // the approver takes back an approval whose token nobody took yet
+    // (review round 2 of phase 1)
+    if (s && s.state === "approved" && s.u === a.u && i.deny && s.at >= ctx.now - SIGNIN_TTL) {
+      ctx.tx.signinPut({ ...s, state: "denied" });
+      return { device: null };
+    }
     if (!s || s.state !== "waiting" || s.at < ctx.now - SIGNIN_TTL)
       throw fail("NOT_FOUND", "The server has no record of this sign-in. It may have expired.");
     if (i.code !== undefined && i.code.replace(/[^A-Z0-9]/gi, "").toUpperCase() !== s.code)
@@ -300,6 +337,8 @@ export function defaultHandlers(): OnlineHandlers {
     for (const r of ctx.tx.scan("run", "u", a.u))
       if (r.kind === "run" && r.executor?.device === d.id && live(r)) endRun(ctx, r, "access");
     ctx.server.commit(ctx.tx, [[`device:${d.id}`, null]], ctx.now);
+    // its open streams close once this commits (review round 2 of phase 1)
+    ctx.server.emitRevoke(d.id);
     return null;
   };
 
@@ -330,16 +369,18 @@ export function defaultHandlers(): OnlineHandlers {
       runInput.extend({ attempt: z.number().int().nonnegative(), turn: z.unknown() }),
       input,
     );
+    const text = typeof i.turn === "string" ? i.turn : JSON.stringify(i.turn ?? null);
+    if (Buffer.byteLength(text) > DEVICE_TURN_MAX)
+      throw fail("TOO_LARGE", undefined, [`input.turn: expected at most ${DEVICE_TURN_MAX} bytes`]);
     const l = leaseOf(ctx, i);
     if (l instanceof CommittedRefusal) return l;
     const r = l.run;
     // a turn is progress, not a heartbeat: it does not extend the lease. Its
-    // text goes to the run's readers as an in-flight event (ADR-22), after
-    // the call commits, numbered within the attempt.
+    // text goes to the readers of the run's node as an in-flight event
+    // (ADR-22), after the call commits, numbered within the attempt.
     const lease = l.lease as Lease;
     const seq = lease.seq + 1;
     ctx.tx.leasePut({ ...lease, seq });
-    const text = typeof i.turn === "string" ? i.turn : JSON.stringify(i.turn ?? null);
     ctx.server.emitRun({ type: "run", run: r.id, attempt: r.attempt, seq, text }, r);
     return null;
   };
@@ -357,13 +398,18 @@ export function defaultHandlers(): OnlineHandlers {
       return { status: "too_large" };
     }
     const writes: pkg.Write[] = [[`run:${r.id}`, { ...r, status: "complete", end: null }]];
-    // the answer lands on the attempt the ask is at, never on a later one
+    // the answer lands on the attempt the ask is at, never on a later one;
+    // on a hidden item it counts as an edit (W1)
     const n = nodeOf(ctx.tx, r);
-    if (n && n.mod === null && !n.del && n.att === r.attempt) {
-      if (n.kind === "thread")
-        writes.push([`thread:${n.id}`, { ...n, sum: i.answer, running: false, tok: 0 }]);
-      else writes.push([`followup:${n.id}`, { ...n, a: i.answer }]);
-    }
+    if (n && n.mod === null && !n.del && n.att === r.attempt)
+      writes.push(
+        ...answerWrites(
+          ctx.tx,
+          n.kind === "thread"
+            ? { ...n, sum: i.answer, running: false, tok: 0 }
+            : { ...n, a: i.answer },
+        ),
+      );
     ctx.tx.leaseDelete(r.id);
     ctx.server.commit(ctx.tx, writes, ctx.now);
     return { status: "complete" };
@@ -388,6 +434,17 @@ export class OnlineCalls {
       return {
         ok: false,
         error: fail("NOT_FOUND", "The server has no procedure with this name.").toError(),
+        serverTime: t0,
+      };
+    // bounded before anything parses it (review round 2 of phase 1)
+    const b = bounds(input, MAX_CALL_DEPTH + 1, MAX_CALL_BYTES);
+    if (b !== "ok" || Buffer.byteLength(JSON.stringify(input) ?? "") > MAX_CALL_BYTES)
+      return {
+        ok: false,
+        error: (b === "deep"
+          ? fail("BAD_REQUEST", undefined, [`input: expected nesting at most ${MAX_CALL_DEPTH} deep`])
+          : fail("TOO_LARGE", undefined, [`input: expected at most ${MAX_CALL_BYTES} bytes as JSON`])
+        ).toError(),
         serverTime: t0,
       };
     try {
@@ -441,6 +498,32 @@ export class OnlineCalls {
     for (const r of tx.scan("run", "u", u))
       if (r.kind === "run" && r.s === sp && r.executor !== null && live(r) && !mayRun(g, r))
         endRun(ctx, r, "access");
+  }
+
+  /** Whether `u` may read run `r`'s in-flight text now: they read the run,
+   * and its node reads unredacted for them (review round 2 of phase 1,
+   * H1). */
+  textShown(tx: StoreTx, r: pkg.RunRec, u: string | null): boolean {
+    const g = readerOf(tx);
+    const n = nodeOf(tx, r);
+    return pkg.canRead(g, r, u) && n !== undefined && n.mod === null && unredacted(g, n, u);
+  }
+
+  /** End the queued and running device runs of a space being archived
+   * (`interrupted`): called in the commit that archives it. */
+  spaceArchived(tx: StoreTx, now: number, sp: string) {
+    const ctx: CallCtx = { tx, now, actor: null, server: this.server };
+    for (const p of tx.scan("thread", "s", sp))
+      for (const r of p.kind === "thread" ? tx.scan("run", "th", p.id) : [])
+        if (r.kind === "run" && r.executor !== null && live(r)) endRun(ctx, r, "interrupted");
+  }
+
+  /** End a run whose job became a dead letter (`failed`, `interrupted`): it
+   * will not start. */
+  jobDead(tx: StoreTx, now: number, run: string) {
+    const r = tx.get(`run:${run}`);
+    if (r?.kind === "run" && live(r))
+      endRun({ tx, now, actor: null, server: this.server }, r, "interrupted");
   }
 
   /** End the device runs whose lease ended, and drop expired sign-ins. */

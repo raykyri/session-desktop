@@ -436,6 +436,10 @@ export const contentMutators = [
       }
       const old = tx.get("spacesrc", `${s.id}:${id}`);
       if (old && !old.rm) throw refuse("PRECONDITION_FAILED", "The space already has this source.");
+      // a source a moderator removed is put back by a moderator only, not by
+      // its maker or another member (review round 2 of phase 1)
+      if (old?.rm && rankIn(tx, s.id, tx.me) < RANK.mod)
+        throw refuse("FORBIDDEN", "A moderator removed this source; only a moderator can add it again.");
       // a source another person added and a moderator removed is added anew,
       // as the actor's: a record keeps its maker (review round 1 of phase 1,
       // W7a)

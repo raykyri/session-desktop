@@ -224,6 +224,12 @@ export const threadMutators = [
       if (i.from) return fromBranch(tx, i.id, s.id, topic, i.from, i.title, i.branch);
       const q = text(i.q, "q");
       const ask = i.kind === "ask";
+      // a skill of the space, by id: never free text (review round 2 of
+      // phase 1, H2)
+      if (i.skill != null) {
+        const k = tx.get("skill", i.skill);
+        if (!k || k.sp !== s.id) throw refuse("NOT_FOUND", "The server has no record of this skill.");
+      }
       tx.create({
         kind: "thread",
         id: i.id,
@@ -288,7 +294,9 @@ export const threadMutators = [
       if (p.rev !== i.base.rev) throw stale(tx, tx.me, p);
       const q = text(i.q, "q");
       const changed = q !== p.q;
-      if (changed) editedWhileHidden(tx, p);
+      // a run again clears the answer, and its new answer is text the
+      // moderator did not read: an edit (review round 2 of phase 1, W1)
+      if (changed || i.run) editedWhileHidden(tx, p);
       const next: ThreadRec = {
         ...p,
         q,
@@ -357,6 +365,8 @@ export const threadMutators = [
         gone: !kept,
         sum: kept ? p.sum : null,
         about: null,
+        model: null,
+        skill: null,
         updatedAt: tx.now,
       });
       return reads ? { kept } : null;
@@ -580,7 +590,7 @@ export const threadMutators = [
       if (f.rev !== i.base.rev) throw stale(tx, tx.me, f);
       const q = text(i.q, "q");
       const changed = q !== f.q;
-      if (changed) editedWhileHidden(tx, f);
+      if (changed || i.run) editedWhileHidden(tx, f);
       tx.put({
         ...f,
         q,
@@ -610,7 +620,7 @@ export const threadMutators = [
       const f = followUpOf(tx, i.thread, i.node);
       const kept = tx.scan("followup.par", f.id).length > 0;
       for (const x of tx.scan("run.th", f.th)) if (x.node === f.id) tx.del("run", x.id);
-      if (kept) tx.put({ ...f, del: true, q: "", a: null, edited: false });
+      if (kept) tx.put({ ...f, del: true, q: "", a: null, model: null, edited: false });
       else {
         tx.del("hide", itemKey(f));
         tx.del("followup", f.id);

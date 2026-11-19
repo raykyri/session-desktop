@@ -30,14 +30,19 @@
 //   moderators (decision 5): the record keeps one audience, as a hidden
 //   thread does, so no write changes who reads it.
 // - Text of a hidden thread, follow-up or reply (one with a `hide` record),
-//   a thread's `about` included: its author and the space's moderators.
+//   a thread's `about`, `model` and `skill` and a follow-up's `model`
+//   included, and the `model` of the runs of a hidden ask: its author and the
+//   space's moderators.
 //   Everyone else gets the placeholder (`redact`). A hide record is read with its space's content;
 //   a change of it changes how its item reads (`viewDependents`). A removed
 //   item's text is erased from storage.
 // - A person's devices (`device`, without the token): that person only.
 // - How a person's membership of a space ended (`exit`: left or removed):
 //   that person only.
-// - A device run's device (`executor.device`): the run's person only.
+// - A device run's device (`executor.device`): the run's person only. So is
+//   an `access` end (the person was banned, removed or signed the device
+//   out): everyone else reads it as `interrupted` (review round 2 of phase
+//   1, W2).
 
 import type {
   FollowUpRec,
@@ -212,10 +217,19 @@ export const PENDING_META: Readonly<SourceMeta> = Object.freeze({
  * space's moderators; everyone else gets its place in the list only. A
  * device run's device id is its person's only. Other records as they are. */
 export function redact(g: Reader, r: StoredRecord, u: string | null): StoredRecord {
-  if (r.kind === "run")
-    return r.executor === null || r.u === u
-      ? r
-      : ({ ...r, executor: { ...r.executor, device: "" } } satisfies RunRec);
+  if (r.kind === "run") {
+    let out: RunRec = r;
+    if (r.u !== u) {
+      if (r.executor !== null) out = { ...out, executor: { ...r.executor, device: "" } };
+      if (r.end === "access") out = { ...out, end: "interrupted" };
+    }
+    // the model the asker picked is text of the ask: redacted with it
+    if (r.model !== null) {
+      const n = r.node === "r" ? g.get("thread", r.th) : g.get("followup", r.node);
+      if (n && redact(g, n, u) !== n) out = { ...out, model: null };
+    }
+    return out;
+  }
   if (r.kind === "spacesrc")
     return reviewedFor(g, r, u)
       ? r
@@ -227,9 +241,17 @@ export function redact(g: Reader, r: StoredRecord, u: string | null): StoredReco
   }
   switch (r.kind) {
     case "thread":
-      return { ...r, q: "", t: null, sum: null, about: null } satisfies ThreadRec;
+      return {
+        ...r,
+        q: "",
+        t: null,
+        sum: null,
+        about: null,
+        model: null,
+        skill: null,
+      } satisfies ThreadRec;
     case "followup":
-      return { ...r, q: "", a: null } satisfies FollowUpRec;
+      return { ...r, q: "", a: null, model: null } satisfies FollowUpRec;
     case "reply":
       return { ...r, t: "" } satisfies ReplyRec;
   }
@@ -241,12 +263,32 @@ export function isHidden(g: Reader, r: ThreadRec | FollowUpRec | ReplyRec): bool
   return g.get("hide", `${r.kind}:${r.id}`) !== undefined;
 }
 
+/** Reads a server half has for `viewDependents`: a record by key, and the
+ * runs of a thread. */
+export interface DependentSource {
+  get(key: string): StoredRecord | undefined;
+  runsOf(th: string): readonly StoredRecord[];
+}
+
 /** The keys whose view a record's change changes besides its own: a hide
  * record's item (hiding blanks the item's text for most readers, showing
- * gives it back). A server half writes a log row for each of them in the
- * commit that changes the record, so every reader pulls the item again. */
-export function viewDependents(r: { kind: Kind }): string[] {
-  return r.kind === "hide" ? [(r as unknown as { item: string }).item] : [];
+ * gives it back) and, given `src`, the runs of that item's ask, whose
+ * `model` is redacted with it (review round 2 of phase 1, H2). A server half
+ * writes a log row for each of them in the commit that changes the record,
+ * so every reader pulls them again. */
+export function viewDependents(r: { kind: Kind }, src?: DependentSource): string[] {
+  if (r.kind !== "hide") return [];
+  const item = (r as unknown as { item: string }).item;
+  if (!src) return [item];
+  const x = src.get(item);
+  if (x?.kind !== "thread" && x?.kind !== "followup") return [item];
+  const th = x.kind === "thread" ? x.id : x.th;
+  const node = x.kind === "thread" ? "r" : x.id;
+  const runs = src
+    .runsOf(th)
+    .filter((y): y is RunRec => y.kind === "run" && y.node === node)
+    .map((y) => `run:${y.id}`);
+  return [item, ...runs];
 }
 
 /** A record as `u` may read it now, or null when it is outside their scope. */

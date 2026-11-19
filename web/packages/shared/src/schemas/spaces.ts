@@ -59,6 +59,16 @@ export const spaceRecordIdSchema = z.string().min(1);
 /** A thread's id: always a ULID, fixture threads included. */
 export const spaceThreadIdSchema = spaceUlidSchema;
 
+/** A model's id as an ask names it (`argon`, `gpt6m`, `claude-opus-5`):
+ * lower-case letters, digits, ".", "_", ":" and "-", at most 64 characters.
+ * Never free text: it is served with the ask to every reader of the space
+ * (review round 2 of phase 1, H2). */
+export const modelIdSchema = z.string().regex(/^[a-z0-9][a-z0-9._:-]{0,63}$/);
+
+/** A skill of the ask's space, by its id (review round 2 of phase 1, H2):
+ * the server refuses an id that names no skill of the space. */
+export const askSkillSchema = spaceRecordIdSchema.max(64);
+
 /** A space's id: a slug (`public`, `ml`, `sp-<name>` for a new space). */
 export const spaceIdSchema = z.string().min(1);
 
@@ -1105,9 +1115,10 @@ export const createThreadInputSchema = z.object({
   topic: z.string().nullable().optional(),
   /** TODO(limits): stored as sent; a key that pays must be the caller's. */
   pay: spacePayerSchema.optional(),
-  model: z.string().optional(),
+  model: modelIdSchema.optional(),
   about: askAboutSchema.optional(),
-  skill: z.string().nullable().optional(),
+  /** A skill of the space, by id. */
+  skill: askSkillSchema.nullable().optional(),
   /** Start the thread from a node of another thread's ask tree. */
   from: z.object({ th: spaceThreadIdSchema, node: z.string() }).optional(),
   /** `all`: copy the asks below the node too. */
@@ -1122,7 +1133,7 @@ export const updateThreadInputSchema = z.object({
   base: revBaseSchema,
   run: z.boolean().optional(),
   pay: spacePayerSchema.optional(),
-  model: z.string().optional(),
+  model: modelIdSchema.optional(),
 });
 
 export const forkNodeInputSchema = z.object({
@@ -1134,7 +1145,7 @@ export const forkNodeInputSchema = z.object({
   q: z.string(),
   uses: z.array(z.string()).nullable().optional(),
   pay: spacePayerSchema.optional(),
-  model: z.string().optional(),
+  model: modelIdSchema.optional(),
   executor: executorInputSchema.nullable().optional(),
 });
 
@@ -1306,7 +1317,7 @@ export const spaceProcedures = {
   "research.retryNode": {
     input: askNodeInputSchema.extend({
       pay: spacePayerSchema.optional(),
-      model: z.string().optional(),
+      model: modelIdSchema.optional(),
       executor: executorInputSchema.nullable().optional(),
     }),
     result: nullResultSchema,

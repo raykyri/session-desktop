@@ -116,6 +116,10 @@ export interface SyncServerOptions {
   online?: Partial<OnlineHandlers>;
   /** Test only: an effect for which this answers true fails on that attempt. */
   failEffect?: (effect: pkg.Effect, attempt: number) => boolean;
+  /** Hears each fault of a housekeeping pass (counted in
+   * `housekeepingFaults`); the pass's request still answers (review round 2
+   * of phase 1). The HTTP server (phase 2) logs it. */
+  onError?: (error: unknown, where: "housekeeping") => void;
 }
 
 /** A number in [0, 1) from `crypto.randomBytes`. */
@@ -194,6 +198,17 @@ const readerOf = (tx: StoreTx): pkg.Reader => ({
     tx.get(pkg.keyFor(kind, id)) as pkg.RecordOf<K> | undefined,
 });
 
+/** The writes of an answer landing on its thread or follow-up: the item,
+ * and, when the item is hidden, its hide record with one more edit, so a
+ * "shown" decided on what the moderator read before the answer is STALE
+ * (review round 2 of phase 1, W1). */
+export function answerWrites(tx: StoreTx, item: pkg.ThreadRec | pkg.FollowUpRec): pkg.Write[] {
+  const writes: pkg.Write[] = [[`${item.kind}:${item.id}`, item]];
+  const h = tx.get(`hide:${item.kind}:${item.id}`);
+  if (h?.kind === "hide") writes.push([`hide:${h.item}`, { ...h, ed: h.ed + 1 }]);
+  return writes;
+}
+
 /** `@session/mutators`' reads over a transaction: it answers every read. */
 class TxSource implements pkg.RecordSource {
   constructor(private readonly tx: StoreTx) {}
@@ -227,7 +242,10 @@ export class SyncServer {
   private readonly jobRunner: JobRunner;
   private readonly tokens: Tokens;
   private readonly failEffect: SyncServerOptions["failEffect"];
+  private readonly onError: SyncServerOptions["onError"];
   readonly online: OnlineCalls;
+  /** Housekeeping passes that failed since the server started. */
+  housekeepingFaults = 0;
   /** Logs written by the transaction in progress; listeners hear them after
    * it commits. */
   private changed = new Set<LogId>();
@@ -242,6 +260,7 @@ export class SyncServer {
     this.jobRunner = o.jobs ?? { start: () => {} };
     this.tokens = new Tokens(o.cursorKeys);
     this.failEffect = o.failEffect;
+    this.onError = o.onError;
     this.online = new OnlineCalls(this, o.online);
   }
 
@@ -260,6 +279,21 @@ export class SyncServer {
     return now;
   }
 
+  /** Set the stored server time back to the clock (an operator's reset,
+   * phase 2). Server time never goes back on its own: after the clock once
+   * jumped ahead, every write answers CLOCK_SKEW and no lease ends until the
+   * clock catches up. Once the clock is right again, an operator calls this
+   * to let server time follow it (review round 2 of phase 1). Times stored
+   * before stay as they are, so ids and times made after the reset can be
+   * earlier than ones made before it. Answers the new server time. */
+  resetTime(): number {
+    return this.run((tx) => {
+      const now = this.clockNow();
+      tx.setLastTime(now);
+      return now;
+    });
+  }
+
   /** Run `fn` in a store transaction, then tell the listeners which logs it
    * wrote and send the run events it made, only once it committed. A
    * listener that throws changes neither the answer nor what the other
@@ -267,18 +301,29 @@ export class SyncServer {
   run<T>(fn: (tx: StoreTx) => T): T {
     this.changed = new Set();
     this.runEvents = [];
+    this.revoked = [];
     let out: T;
     try {
       out = this.store.transaction(fn);
     } catch (e) {
       this.changed = new Set();
       this.runEvents = [];
+      this.revoked = [];
       throw e;
     }
     const logs = this.changed;
     const events = this.runEvents;
+    const revoked = this.revoked;
     this.changed = new Set();
     this.runEvents = [];
+    this.revoked = [];
+    for (const device of revoked)
+      for (const l of [...this.revokeListeners])
+        try {
+          l(device);
+        } catch {
+          // as below
+        }
     if (logs.size)
       for (const l of [...this.listeners])
         try {
@@ -299,6 +344,23 @@ export class SyncServer {
   private readonly runListeners = new Set<(e: RunEvent, sp: string) => void>();
   /** Run events made by the transaction in progress; sent after it commits. */
   private runEvents: [RunEvent, string][] = [];
+  private readonly revokeListeners = new Set<(device: string) => void>();
+  /** Devices revoked by the transaction in progress. */
+  private revoked: string[] = [];
+
+  /** Tell the revocation listeners, once the transaction in progress
+   * commits, that `device` was signed out: its streams close (review round 2
+   * of phase 1). */
+  emitRevoke(device: string) {
+    this.revoked.push(device);
+  }
+
+  /** Hear the devices signed out by each committed transaction (the SSE
+   * handler closes their streams). */
+  subscribeRevocations(listener: (device: string) => void): () => void {
+    this.revokeListeners.add(listener);
+    return () => this.revokeListeners.delete(listener);
+  }
 
   /** The server's random source (online calls). */
   randomNumber(): number {
@@ -391,7 +453,11 @@ export class SyncServer {
   }
 
   private touchDependents(tx: StoreTx, r: pkg.StoredRecord, version: number) {
-    for (const key of pkg.viewDependents(r)) {
+    const src: pkg.DependentSource = {
+      get: (key) => tx.get(key),
+      runsOf: (th) => tx.scan("run", "th", th),
+    };
+    for (const key of pkg.viewDependents(r, src)) {
       const dep = tx.get(key);
       if (dep) for (const log of pkg.logsOf(dep)) this.row(tx, log, key, "put", version);
     }
@@ -400,7 +466,9 @@ export class SyncServer {
   /** Housekeeping before a request: at most once a second of server time, in
    * its own transaction, so a request that is refused (and rolls back) does
    * not undo it (review round 1 of phase 1, W1). A fault in it fails no
-   * request; the next one tries again. */
+   * request; the next one tries again. Each fault is counted
+   * (`housekeepingFaults`) and passed to `onError` (review round 2 of phase
+   * 1). */
   housekeepDue() {
     if (this.clockNow() - this.lastHousekeep < 1000) return;
     try {
@@ -409,8 +477,14 @@ export class SyncServer {
         this.housekeep(tx, now);
         this.lastHousekeep = now;
       });
-    } catch {
+    } catch (e) {
       // the next request runs it again
+      this.housekeepingFaults++;
+      try {
+        this.onError?.(e, "housekeeping");
+      } catch {
+        // a hook that throws changes no answer
+      }
     }
   }
 
@@ -641,12 +715,21 @@ export class SyncServer {
       return this.withReads(tx, u, out(e, m.seq), reads);
     }
     const started = pkg.deviceRunsStarted(res.writes, (key) => tx.get(key) !== undefined);
+    // spaces this write archives (review round 2 of phase 1)
+    const archived = res.writes.flatMap(([key, d]) => {
+      const prev = d?.kind === "space" ? tx.get(key) : undefined;
+      return d?.kind === "space" && d.archived && prev?.kind === "space" && !prev.archived
+        ? [d.id]
+        : [];
+    });
     this.commit(tx, res.writes, now);
     for (let k = 0; k < started; k++) tx.deviceRunAdd(u, now);
     // a person whose membership ended, or who was banned, runs nothing more
     // there: their queued and running device runs end in the same commit
     for (const [, d] of res.writes)
       if (d?.kind === "exit" || d?.kind === "ban") this.online.accessChanged(tx, now, d.sp, d.u);
+    // nobody asks in an archived space: its device runs end (`interrupted`)
+    for (const sp of archived) this.online.spaceArchived(tx, now, sp);
     for (const effect of res.effects) tx.effectAdd(effect, now);
     record({ ok: true, result: res.result ?? null, seq: m.seq });
     return { ok: true, result: res.result ?? null, serverTime: now, seq: m.seq };
@@ -718,6 +801,10 @@ export class SyncServer {
           if (attempts >= EFFECT_MAX_ATTEMPTS) {
             tx.effectDelete(q.id);
             tx.deadLetterAdd({ effect: q.effect, at: q.at, attempts, failedAt: now });
+            // a run whose job never started ends, and its thread stops
+            // running (review round 2 of phase 1)
+            if (q.effect.type === "job" && q.effect.kind === "run")
+              this.online.jobDead(tx, now, q.effect.id);
           } else
             tx.effectUpdate(
               q.id,
@@ -811,16 +898,17 @@ export class SyncServer {
 
   /** A job's answer (the job runner calls it): `text` as a thread's summary
    * (`thread:<id>`) or a follow-up's answer (`followup:<id>`). False, and
-   * nothing written, for a removed item, a deleted thread or another key. */
+   * nothing written, for a removed item, a deleted thread or another key.
+   * An answer to a hidden item counts as an edit of it (`answerWrites`). */
   finishJob(key: string, text: string): boolean {
     return this.run((tx) => {
       const now = this.time(tx);
       const r = tx.get(key);
       if (!r || !("mod" in r) || r.mod === "removed") return false;
       if (r.kind === "thread" && !r.del)
-        return this.commit(tx, [[key, { ...r, sum: text, running: false }]], now) !== null;
+        return this.commit(tx, answerWrites(tx, { ...r, sum: text, running: false }), now) !== null;
       if (r.kind === "followup" && !r.del)
-        return this.commit(tx, [[key, { ...r, a: text }]], now) !== null;
+        return this.commit(tx, answerWrites(tx, { ...r, a: text }), now) !== null;
       return false;
     });
   }
@@ -939,14 +1027,11 @@ export class SyncServer {
     return null;
   }
 
-  /** How `u`'s memberships ended, by space: their user log's exit records. */
+  /** How `u`'s memberships ended, by space: their exit records, read by an
+   * index, not by a scan of the user log (review round 2 of phase 1). */
   private ended(tx: StoreTx, u: string): Record<string, MembershipEnd> {
     const out: Record<string, MembershipEnd> = {};
-    for (const row of tx.logAfter(`user:${u}`, 0)) {
-      if (!row.key.startsWith("exit:")) continue;
-      const r = tx.get(row.key);
-      if (r?.kind === "exit") out[r.sp] = r.ended;
-    }
+    for (const r of tx.scan("exit", "u", u)) if (r.kind === "exit") out[r.sp] = r.ended;
     return out;
   }
 
@@ -1080,13 +1165,27 @@ export class SyncServer {
     if (!log.startsWith("user:")) return false;
     for (const row of tx.logAfter(log, version)) if (row.key.startsWith("member:")) return true;
     if (tx.head() === head) return false;
+    // the whole log is read only when a space opened or closed since the
+    // token was served (review round 2 of phase 1: the cost of every pull)
+    const moved = new Set(tx.epochsAfter(head));
+    if (!moved.size) return false;
     const g = readerOf(tx);
     for (const row of tx.logAfter(log, 0)) {
       const rec = tx.get(row.key);
       const a = rec ? pkg.audience(g, rec) : tx.tombGet(row.key);
-      if (a && a.sp !== null && tx.epoch(`space:${a.sp}`).start > head) return true;
+      if (a && a.sp !== null && moved.has(`space:${a.sp}`)) return true;
     }
     return false;
+  }
+
+  /** Whether `u` may read the in-flight text of run `run` now: they read the
+   * run, and its node (the thread, or the follow-up) reads unredacted for
+   * them, as `runs.claim` decides a turn (review round 2 of phase 1, H1). */
+  readsRunText(run: string, u: string | null): boolean {
+    return this.run((tx) => {
+      const r = tx.get(`run:${run}`);
+      return r?.kind === "run" && this.online.textShown(tx, r, u);
+    });
   }
 
   /** A stored record as `u` may read it now, or null. */

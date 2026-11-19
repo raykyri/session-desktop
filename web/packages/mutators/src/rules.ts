@@ -167,7 +167,9 @@ export function itemOf(tx: Tx, key: string): Item {
 /** Remove a moderated item for good: its text is erased from storage, and so
  * is everything under it (a thread's follow-ups, answers, runs, replies and
  * their likes; a follow-up's runs; a top-level reply's replies). The item
- * stays as a placeholder. */
+ * stays as a placeholder. Its author's other fields are text too: a thread's
+ * `about`, `model` and `skill`, a follow-up's `model` (review round 2 of
+ * phase 1, H2). */
 export function erase(tx: Tx, r: Item): void {
   switch (r.kind) {
     case "thread":
@@ -189,6 +191,8 @@ export function erase(tx: Tx, r: Item): void {
         t: null,
         sum: null,
         about: null,
+        model: null,
+        skill: null,
         running: false,
         mod: "removed",
         updatedAt: tx.now,
@@ -197,7 +201,7 @@ export function erase(tx: Tx, r: Item): void {
     case "followup":
       for (const x of tx.scan("run.th", r.th)) if (x.node === r.id) tx.del("run", x.id);
       tx.del("hide", itemKey(r));
-      tx.put({ ...r, q: "", a: null, mod: "removed" });
+      tx.put({ ...r, q: "", a: null, model: null, mod: "removed" });
       return;
     case "reply":
       if (r.parent === null)

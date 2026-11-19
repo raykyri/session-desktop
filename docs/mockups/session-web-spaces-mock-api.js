@@ -1027,6 +1027,8 @@
         return { id, run: null };
       }
       const q = text(i.q, 'q');
+      /* a skill of the space, by id: never free text (review round 2 of phase 1, H2) */
+      if (i.skill != null && !(tx.mapGet('skills', s.id) || []).some(x => x.id === i.skill)) throw rpcError('NOT_FOUND', 'The server has no record of this skill.');
       const rec = { id, s: s.id, u: tx.me.u, k: i.kind, t: i.title || null, q, sum: null, tok: 0, running: i.kind === 'ask', topic, topicBy: topic ? 'asker' : null };
       for (const f of ['pay', 'model', 'about', 'skill']) if (i[f] != null) rec[f] = i[f];
       const ex = i.kind === 'ask' ? execOf(tx, i.executor) : null;
@@ -1881,6 +1883,8 @@
       }
       const drops = tx.mapGet('dsDrops', s.id) || [];
       if (drops.some(d => d.m === id && !d.rm)) throw rpcError('PRECONDITION_FAILED', 'The space already has this source.');
+      /* a source a moderator removed is put back by a moderator only (review round 2 of phase 1) */
+      if (drops.some(d => d.m === id && d.rm) && rankIn(tx.get, s.id) < RANK.moderator) throw rpcError('FORBIDDEN', 'A moderator removed this source; only a moderator can add it again.');
       const rv = (tx.get('dsPol')[s.id] || 'members') === 'review' && rankIn(tx.get, s.id) < RANK.moderator;
       /* a source removed from the space is put back: one entry per source (phase 1a) */
       const entry = { m: id, by: tx.me.u, note: (i.note || '').trim(), rv };

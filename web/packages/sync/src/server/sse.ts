@@ -10,7 +10,8 @@
 // The event id of a poke is the stream's cursor tokens by log, as JSON: a
 // client that reconnects with it as `Last-Event-ID` is poked at once for
 // what changed since. In-flight run text (ADR-22) goes to the readers of the
-// run's space as `run` events, not stored and without an id.
+// run's node (its thread or follow-up, unredacted) as `run` events, not
+// stored and without an id. A device's stream closes when it is revoked.
 
 import type { Actor, Cursor, LogId, SseEvent } from "../protocol.js";
 
@@ -100,7 +101,16 @@ export function openStream(
       const unrun = server.subscribeRuns((e, sp) => {
         const log: LogId = `space:${sp}`;
         if (state[log] === undefined) return;
-        if (server.viewOf(`run:${e.run}`, actor?.u ?? null) !== null) send(sseFrame(e));
+        // only to a reader of the run's node as it is stored: a hidden
+        // thread's or follow-up's text goes to its author and the space's
+        // moderators only (review round 2 of phase 1, H1)
+        if (server.readsRunText(e.run, actor?.u ?? null)) send(sseFrame(e));
+      });
+      // a stream of a device closes when the device is signed out (review
+      // round 2 of phase 1)
+      const device = actor?.device ?? null;
+      const unrevoke = server.subscribeRevocations((d) => {
+        if (device !== null && d === device) stop();
       });
       const ka = set(() => send(": keep-alive\n\n"), o.keepAliveMs ?? 25_000);
       stop = () => {
@@ -108,6 +118,7 @@ export function openStream(
         open = false;
         unsub();
         unrun();
+        unrevoke();
         clear(ka);
         try {
           controller.close();

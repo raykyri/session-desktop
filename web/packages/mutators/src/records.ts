@@ -946,6 +946,7 @@ export const INDEXES = {
   "spacesrc.src": ["spacesrc", "src"],
   "spacesrc.nurl": ["spacesrc", "nurl"],
   "srcrep.sp": ["srcrep", "sp"],
+  "exit.u": ["exit", "u"],
 } as const satisfies Record<string, readonly [Kind, string]>;
 
 export type IndexName = keyof typeof INDEXES;
