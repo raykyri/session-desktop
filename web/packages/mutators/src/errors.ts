@@ -6,7 +6,7 @@
 import type { Spaces } from "@session/shared";
 
 /** The spaces API's codes, and the sync protocol's:
- * - `UPGRADE_REQUIRED`: the client's protocol version is below the minimum.
+ * - `UPDATE_REQUIRED`: the client's protocol version is below the minimum.
  * - `STALE`: the record a decision acts on is no longer in the state the
  *   client saw (its rev, or a member's admission id, differs).
  * - `CLOCK_SKEW`: the device's clock is more than a minute from the server's.
@@ -14,22 +14,27 @@ import type { Spaces } from "@session/shared";
  *   its input is more than 4 days old on the device's clock, more than a
  *   minute in the future, or an online-only write's id is over a minute old).
  * - `OUT_OF_ORDER`: the envelope's seq is not the client's next one.
- * - `WRONG_CLIENT`: the client id is unknown, expired or another user's. */
+ * - `WRONG_CLIENT`: the client id is unknown, expired or another user's.
+ * - `TOO_LARGE`: the envelope (or a device run's answer) is larger than the
+ *   server takes. */
 export type ErrorCode =
   | Spaces.SpaceErrorCode
-  | "UPGRADE_REQUIRED"
+  | "UPDATE_REQUIRED"
   | "STALE"
   | "CLOCK_SKEW"
   | "EXPIRED"
   | "OUT_OF_ORDER"
-  | "WRONG_CLIENT";
+  | "WRONG_CLIENT"
+  | "TOO_LARGE";
 
 /** An error answer. `message` is fixed per code and cause, so two answers
- * with the same cause are equal. */
+ * with the same cause are equal. `retryAt` (ISO): on a limit's
+ * TOO_MANY_REQUESTS, when the write can be sent again. */
 export interface ApiError {
   code: ErrorCode;
   message: string;
   issues?: string[];
+  retryAt?: string;
 }
 
 /** The mock's default messages (its section 2), and the sync protocol's. */
@@ -44,12 +49,13 @@ export const MESSAGES: Readonly<Record<ErrorCode, string>> = {
   TOO_MANY_REQUESTS: "Too many requests from your account. Try again in a minute.",
   INTERNAL_SERVER_ERROR: "The server had an error and didn’t save the change.",
   SERVICE_UNAVAILABLE: "The server is unavailable.",
-  UPGRADE_REQUIRED: "Update Session.",
+  UPDATE_REQUIRED: "Update Session.",
   STALE: "This item changed after you saw it. Look at it again.",
   CLOCK_SKEW: "Your device’s clock is off.",
   EXPIRED: "This change waited too long to be sent, and wasn’t saved.",
   OUT_OF_ORDER: "This change arrived out of order.",
   WRONG_CLIENT: "This device isn’t signed in to your account.",
+  TOO_LARGE: "This change is larger than the server takes.",
 };
 
 /** A refusal: a mutator stage throws it, and nothing the mutation staged is
@@ -57,20 +63,23 @@ export const MESSAGES: Readonly<Record<ErrorCode, string>> = {
 export class Refusal extends Error {
   readonly code: ErrorCode;
   readonly issues: string[] | undefined;
-  constructor(code: ErrorCode, message?: string, issues?: string[]) {
+  readonly retryAt: string | undefined;
+  constructor(code: ErrorCode, message?: string, issues?: string[], retryAt?: string) {
     super(message ?? MESSAGES[code]);
     this.code = code;
     this.issues = issues;
+    this.retryAt = retryAt;
   }
   toError(): ApiError {
-    return this.issues
-      ? { code: this.code, message: this.message, issues: [...this.issues] }
-      : { code: this.code, message: this.message };
+    const e: ApiError = { code: this.code, message: this.message };
+    if (this.issues) e.issues = [...this.issues];
+    if (this.retryAt !== undefined) e.retryAt = this.retryAt;
+    return e;
   }
 }
 
-export const refuse = (code: ErrorCode, message?: string, issues?: string[]) =>
-  new Refusal(code, message, issues);
+export const refuse = (code: ErrorCode, message?: string, issues?: string[], retryAt?: string) =>
+  new Refusal(code, message, issues, retryAt);
 
 /** BAD_REQUEST naming one input field. */
 export const bad = (path: string, expected: string) =>

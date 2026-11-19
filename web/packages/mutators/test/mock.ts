@@ -652,7 +652,7 @@ export function projectOurs(s: MemoryStore, L: Labels): Projection {
   const skills: Record<string, unknown> = {};
   for (const x of of(s, "skills")) if (x.list.length) skills[L.o(x.sp)] = x.list;
   const pages: Record<string, string[]> = {};
-  for (const x of of(s, "pages")) if (x.list.length) pages[L.o(x.sp)] = x.list.map((p) => p[0]);
+  for (const x of of(s, "pages")) if (x.list.length) pages[L.o(x.sp)] = x.list.map((p) => p.t);
   const pagedocs: Record<string, unknown> = {};
   for (const x of of(s, "page"))
     pagedocs[`${L.o(x.sp)}/${x.slug}`] = {

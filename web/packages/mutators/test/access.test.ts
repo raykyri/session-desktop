@@ -39,6 +39,7 @@ test("each kind of record is read by exactly the people its rule names", (t) => 
     rep: w.id(),
     link: w.id(),
     ownLink: w.id(),
+    page: w.id(),
   };
   ok(t, w.run("mel", "threads.create", { id: ids.lab, space: closed, kind: "ask", q: "Q" }));
   ok(t, w.run("mel", "followups.ask", { id: ids.fu, thread: ids.lab, q: "F" }));
@@ -54,8 +55,13 @@ test("each kind of record is read by exactly the people its rule names", (t) => 
   ok(t, w.run("eve", "joinRequests.create", { space: closed, rulesAccepted: true }));
   ok(t, w.run("mona", "members.ban", { space: closed, user: "otto" }));
   ok(t, w.run("mel", "mutes.set", { handle: "eve", on: true }));
-  ok(t, w.run("mona", "pages.update", { space: closed, title: "Guide", text: ["x"] }));
-  ok(t, w.run("mona", "skills.create", { space: closed, name: "S", prompt: "p" }));
+  ok(
+    t,
+    w.run("mona", "pages.update", { space: closed, id: ids.page, title: "Guide", text: ["x"] }),
+  );
+  ok(t, w.run("mona", "skills.create", { id: w.id(), space: closed, name: "S", prompt: "p" }));
+  ok(t, w.run("eve", "invites.request", { space: closed }));
+  w.key("mel", "K1");
   ok(t, w.run("mona", "spaceSources.setPolicy", { space: closed, policy: "review" }));
   ok(t, w.run("mel", "spaceSources.add", { space: closed, url: "example.org/pending" }));
   ok(t, w.run("mona", "spaceSources.add", { space: closed, url: "example.org/approved" }));
@@ -109,9 +115,16 @@ test("each kind of record is read by exactly the people its rule names", (t) => 
     ["a ban", w.get(`ban:${closed}:otto`) as StoredRecord, staff],
     ["a mute", w.get("mute:mel:eve") as StoredRecord, ["mel"]],
     ["a page list", w.get(`pages:${closed}`) as StoredRecord, labMembers],
-    ["a page", w.get(`page:${closed}:guide`) as StoredRecord, labMembers],
+    ["a page", w.get(`page:${ids.page}`) as StoredRecord, labMembers],
     ["skills", w.get(`skills:${closed}`) as StoredRecord, labMembers],
-    ["a source waiting for review", entry(w, closed, "mel"), [...staff, "mel"]],
+    // the record is the space's readers'; its fields are redacted (below)
+    ["a source waiting for review", entry(w, closed, "mel"), labMembers],
+    [
+      "an invite ask (decision 8)",
+      w.get(`invask:eve:${closed}`) as StoredRecord,
+      [...staff, "eve"],
+    ],
+    ["an API key (decision 2)", w.get("apikey:K1") as StoredRecord, ["mel"]],
     ["an approved source", entry(w, closed, "mona"), labMembers],
     [
       "a source report",

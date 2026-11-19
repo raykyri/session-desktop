@@ -15,7 +15,12 @@ npm run mutate -- X1 N2 R2-5      # the mutations whose names start with these
 npm run mutate -- --slots 2       # 2 copies at once
 npm run mutate -- --check         # only check that every pattern matches once
 npm run mutate -- --package       # with the switch on: the server runs @session/mutators
+npm run mutate -- --since main    # the mutations whose file changed since a git ref
 ```
+
+`--since <ref>` selects the mutations whose file changed since the ref, the
+working tree included (`git diff --name-only <ref>`). With `--package`, a
+mutation made in `@session/mutators` counts by its file there.
 
 With `--package` the suite runs with REPLICA_PROTO_MUTATORS=package, so the
 server applies writes and filters reads with `@session/mutators`. Each

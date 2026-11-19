@@ -739,6 +739,7 @@ interface Difference {
   check(t: ExecutionContext, p: Pair): Promise<void>;
 }
 
+const OLD_PAGE = "01KA0000000000000000000000";
 const code = (o: Outcome) => (o.status === "refused" ? o.error.code : o.status);
 const mockCode = (r: Awaited<ReturnType<typeof call>>) => (r.ok ? "ok" : r.code);
 
@@ -1259,7 +1260,7 @@ export const DIFFERENCES: Difference[] = [
       p.w.store.records.set(`pages:${p.ids.lounge}`, {
         kind: "pages",
         sp: p.ids.lounge,
-        list: [["Old", "2026-11-01T00:00:00Z"]],
+        list: [{ id: OLD_PAGE, t: "Old", at: "2026-11-01T00:00:00Z" }],
         rev: 1,
       });
       const md = p.md();

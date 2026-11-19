@@ -240,7 +240,7 @@ test("onboarding.finish joins open spaces only, each with its own admission id",
 
 test("threads.create: counts, stats, a run with a derived id and its job; payers and posts off", (t) => {
   const { w, open } = cast(t);
-  w.keys.set("mel", new Set(["K"]));
+  w.key("mel", "K");
   const id = w.id();
   const mid = w.id();
   const out = w.run(
@@ -263,7 +263,7 @@ test("threads.create: counts, stats, a run with a derived id and its job; payers
   t.like(rec(w, `run:${run}`, "run"), { th: id, attempt: 1, pay: "K", u: "mel" });
   t.like(rec(w, `counts:${id}`, "counts"), { likes: 0, r: 0 });
   t.is(rec(w, `stats:${open}`, "stats").posts, 1);
-  // a key that pays must be the asker's (a server pre-check)
+  // a key that pays must be the asker's (its record, in `can`)
   refused(
     t,
     w.run("otto", "threads.create", { id: w.id(), space: open, kind: "ask", q: "x", pay: "K" }),
@@ -308,7 +308,7 @@ test("threads.create from a branch: the asker's own follow-up, copied with the a
   const [a, b, c, d] = [w.id(), w.id(), w.id(), w.id()];
   ok(t, w.run("otto", "followups.ask", { id: a, thread: th, q: "A" }));
   ok(t, w.run("mel", "research.forkNode", { id: b, thread: th, parent: a, q: "B" }));
-  ok(t, w.run("otto", "research.forkNode", { id: c, thread: th, parent: b, q: "C" }));
+  ok(t, w.run("mel", "research.forkNode", { id: c, thread: th, parent: b, q: "C" }));
   ok(t, w.run("mel", "research.forkNode", { id: d, thread: th, parent: b, q: "D" }));
   ok(t, w.run("mona", "moderation.decide", { item: `f:${th}:${d}`, decision: "hidden" }));
   refused(
@@ -338,7 +338,7 @@ test("threads.create from a branch: the asker's own follow-up, copied with the a
   t.is(rec(w, `followup:${b}`, "followup").promoted, id);
   // c is copied with a derived id; the hidden d is not
   const copy = rec(w, `followup:${deriveId("mel", mid, 1)}`, "followup");
-  t.like(copy, { th: id, par: null, u: "otto", q: "C" });
+  t.like(copy, { th: id, par: null, u: "mel", q: "C" });
   t.is(w.get(`followup:${deriveId("mel", mid, 2)}`), undefined);
   t.is(rec(w, `counts:${id}`, "counts").r, 1);
   // a branch of a closed space's thread stays in that space
@@ -440,7 +440,7 @@ test("follow-ups: asks about asks, counts of the first level, edits with base, a
   const post = thread(t, w, "mel", open, "post");
   const [a, b] = [w.id(), w.id()];
   ok(t, w.run("otto", "followups.ask", { id: a, thread: th, q: "A" }));
-  t.deepEqual(
+  t.like(
     ok(t, w.run("otto", "research.forkNode", { id: b, thread: th, parent: a, q: "B", uses: [a] })),
     { id: b },
   );
@@ -664,15 +664,26 @@ test("members: setRole with base, ownership transfer, remove by admission id, ba
     ["mona", "mod"],
   ]);
   // a removal decided before the person was let in again is STALE
-  const old = w.admission(open, "otto");
-  ok(t, w.run("otto", "spaces.leave", { space: open }));
-  ok(t, w.run("otto", "spaces.join", { space: open }));
-  refused(t, w.run("mona", "members.remove", { space: open, user: "otto", base: old }), "STALE");
+  admit(t, w, closed, "otto");
+  const old = w.admission(closed, "otto");
+  ok(t, w.run("otto", "spaces.leave", { space: closed }));
+  admit(t, w, closed, "otto");
+  refused(t, w.run("mona", "members.remove", { space: closed, user: "otto", base: old }), "STALE");
   ok(
     t,
-    w.run("mona", "members.remove", { space: open, user: "otto", base: w.admission(open, "otto") }),
+    w.run("mona", "members.remove", {
+      space: closed,
+      user: "otto",
+      base: w.admission(closed, "otto"),
+    }),
   );
-  t.is(ok(t, w.run("mona", "members.remove", { space: open, user: "otto", base: old })), null);
+  t.is(ok(t, w.run("mona", "members.remove", { space: closed, user: "otto", base: old })), null);
+  // an open space: ban, not remove
+  refused(
+    t,
+    w.run("mona", "members.remove", { space: open, user: "otto", base: w.admission(open, "otto") }),
+    "BAD_REQUEST",
+  );
   ok(t, w.run("mona", "members.ban", { space: closed, user: "mel" }));
   t.is(w.get(`member:${closed}:mel`), undefined);
   t.truthy(w.get(`ban:${closed}:mel`));
@@ -736,15 +747,10 @@ test("reports: staff notified, resolutions resolve every open report on the item
   ]);
   t.is(rec(w, `thread:${th}`, "thread").mod, "hidden");
   t.like(rec(w, `report:${r2}`, "report"), { st: "hidden" });
-  // reopening the last resolved report shows the item: base.rev of the item
-  ok(
-    t,
-    w.run("mona", "reports.resolve", {
-      report: r2,
-      outcome: "open",
-      base: { rev: w.rev(`thread:${th}`) },
-    }),
-  );
+  // reopening: base is the report's rev and the item's; the last resolved
+  // report shows the item, when the item's rev matches
+  const both = (r: string) => ({ rev: w.rev(`report:${r}`), item: w.rev(`thread:${th}`) });
+  ok(t, w.run("mona", "reports.resolve", { report: r2, outcome: "open", base: both(r2) }));
   t.is(rec(w, `thread:${th}`, "thread").mod, "hidden");
   ok(
     t,
@@ -752,15 +758,15 @@ test("reports: staff notified, resolutions resolve every open report on the item
   );
   refused(
     t,
-    w.run("mona", "reports.resolve", { report: r1, outcome: "open", base: { rev: 1 } }),
+    w.run("mona", "reports.resolve", {
+      report: r1,
+      outcome: "open",
+      base: { rev: w.rev(`report:${r1}`), item: 1 },
+    }),
     "STALE",
   );
-  refused(t, w.run("mona", "reports.resolve", { report: r1, outcome: "open" }), "STALE");
-  const open1 = w.run("mona", "reports.resolve", {
-    report: r1,
-    outcome: "open",
-    base: { rev: w.rev(`thread:${th}`) },
-  });
+  refused(t, w.run("mona", "reports.resolve", { report: r1, outcome: "open" }), "BAD_REQUEST");
+  const open1 = w.run("mona", "reports.resolve", { report: r1, outcome: "open", base: both(r1) });
   ok(t, open1);
   t.deepEqual(open1.status === "ok" ? open1.effects : null, [
     { type: "reportResolved", report: r1, outcome: null },
@@ -867,16 +873,29 @@ test("personal records: mutes, blocks, read sources, profile, notifications and 
 
 // ---- skills, pages and sources ----
 
-test("skills: names unique, versions and conflicts, remove and reorder by index", (t) => {
+test("skills: ids, names unique, versions and conflicts, remove by id, reorder by the whole order", (t) => {
   const { w, open } = cast(t);
-  ok(t, w.run("mona", "skills.create", { space: open, name: "A", prompt: "a" }));
-  ok(t, w.run("mona", "skills.create", { space: open, name: "B", prompt: "b" }));
-  refused(t, w.run("mona", "skills.create", { space: open, name: "A", prompt: "x" }), "CONFLICT");
+  const [a, b] = [w.id(), w.id()];
+  t.deepEqual(
+    ok(t, w.run("mona", "skills.create", { id: a, space: open, name: "A", prompt: "a" })),
+    { id: a },
+  );
+  ok(t, w.run("mona", "skills.create", { id: b, space: open, name: "B", prompt: "b" }));
+  refused(
+    t,
+    w.run("mona", "skills.create", { id: w.id(), space: open, name: "A", prompt: "x" }),
+    "CONFLICT",
+  );
+  refused(
+    t,
+    w.run("mona", "skills.create", { id: a, space: open, name: "C", prompt: "x" }),
+    "CONFLICT",
+  );
   ok(
     t,
     w.run("mona", "skills.update", {
       space: open,
-      index: 0,
+      id: a,
       name: "A",
       prompt: "a2",
       base: { rev: 0 },
@@ -886,7 +905,7 @@ test("skills: names unique, versions and conflicts, remove and reorder by index"
     t,
     w.run("mona", "skills.update", {
       space: open,
-      index: 0,
+      id: a,
       name: "A",
       prompt: "a3",
       base: { rev: 0 },
@@ -897,7 +916,7 @@ test("skills: names unique, versions and conflicts, remove and reorder by index"
     t,
     w.run("mona", "skills.update", {
       space: open,
-      index: 0,
+      id: a,
       name: "A",
       prompt: "a3",
       base: { rev: 0 },
@@ -906,71 +925,120 @@ test("skills: names unique, versions and conflicts, remove and reorder by index"
   );
   refused(
     t,
-    w.run("mona", "skills.update", { space: open, index: 0, name: "B", prompt: "x" }),
+    w.run("mona", "skills.update", { space: open, id: a, name: "B", prompt: "x" }),
     "CONFLICT",
   );
-  ok(t, w.run("mona", "skills.reorder", { space: open, from: 0, to: 1 }));
+  const rev = w.rev(`skills:${open}`);
+  refused(
+    t,
+    w.run("mona", "skills.reorder", { space: open, order: [b, a], base: { rev: rev - 1 } }),
+    "STALE",
+  );
+  refused(
+    t,
+    w.run("mona", "skills.reorder", { space: open, order: [b], base: { rev } }),
+    "BAD_REQUEST",
+  );
+  refused(
+    t,
+    w.run("mona", "skills.reorder", { space: open, order: [b, b], base: { rev } }),
+    "BAD_REQUEST",
+  );
+  ok(t, w.run("mona", "skills.reorder", { space: open, order: [b, a], base: { rev } }));
   t.deepEqual(rec(w, `skills:${open}`, "skills").list, [
-    { name: "B", prompt: "b", rev: 0 },
-    { name: "A", prompt: "a3", rev: 2 },
+    { id: b, name: "B", prompt: "b", rev: 0 },
+    { id: a, name: "A", prompt: "a3", rev: 2 },
   ]);
-  ok(t, w.run("mona", "skills.remove", { space: open, index: 0 }));
-  refused(t, w.run("mona", "skills.remove", { space: open, index: 1 }), "NOT_FOUND");
+  ok(t, w.run("mona", "skills.remove", { space: open, id: b }));
+  refused(t, w.run("mona", "skills.remove", { space: open, id: b }), "NOT_FOUND");
+  refused(
+    t,
+    w.run("mona", "skills.update", { space: open, id: b, name: "B", prompt: "x" }),
+    "NOT_FOUND",
+  );
 });
 
-test("pages: create, edit with versions and a new title, restore, move, remove; pageEdit decides who edits", (t) => {
+test("pages: create with an id, edit with versions and a new title, restore, move, remove; slugs unique; pageEdit decides who edits", (t) => {
   const { w, open } = cast(t);
-  refused(t, w.run("mel", "pages.update", { space: open, title: "G", text: [] }), "FORBIDDEN");
-  ok(t, w.run("mona", "pages.update", { space: open, title: "Guide", text: [] }));
-  t.like(rec(w, `page:${open}:guide`, "page"), { ver: 1, by: "mona", text: [""] });
+  const [g, f] = [w.id(), w.id()];
+  refused(
+    t,
+    w.run("mel", "pages.update", { space: open, id: w.id(), title: "G", text: [] }),
+    "FORBIDDEN",
+  );
+  refused(t, w.run("mona", "pages.update", { space: open, title: "G", text: [] }), "BAD_REQUEST");
+  t.deepEqual(
+    ok(t, w.run("mona", "pages.update", { space: open, id: g, title: "Guide", text: [] })),
+    { id: g },
+  );
+  t.like(rec(w, `page:${g}`, "page"), { ver: 1, by: "mona", text: [""], slug: "guide", sp: open });
+  // a title whose slug another page has: CONFLICT
+  refused(
+    t,
+    w.run("mona", "pages.update", { space: open, id: w.id(), title: "guide!", text: [] }),
+    "CONFLICT",
+  );
+  refused(
+    t,
+    w.run("mona", "pages.update", { space: open, id: w.id(), title: "???", text: [] }),
+    "BAD_REQUEST",
+  );
   ok(t, w.run("olga", "spaces.update", { id: open, set: { pageEdit: "members" } }));
   ok(
     t,
     w.run("mel", "pages.update", {
       space: open,
-      page: 0,
+      page: g,
       title: "New Guide",
       text: ["x"],
       base: { rev: 1 },
     }),
   );
-  t.is(w.get(`page:${open}:guide`), undefined);
-  const doc = rec(w, `page:${open}:new-guide`, "page");
-  t.like(doc, { ver: 2, by: "mona", ed: "mel" });
+  const doc = rec(w, `page:${g}`, "page");
+  t.like(doc, { ver: 2, by: "mona", ed: "mel", slug: "new-guide", t: "New Guide" });
   t.deepEqual(
     doc.revs.map((r) => r.note),
     ["Edited the page", "Created the page"],
   );
   refused(
     t,
-    w.run("mona", "pages.update", { space: open, page: 0, title: "X", text: [], base: { rev: 1 } }),
+    w.run("mona", "pages.update", { space: open, page: g, title: "X", text: [], base: { rev: 1 } }),
     "CONFLICT",
   );
   ok(
     t,
     w.run("mel", "pages.restore", {
       space: open,
-      page: 0,
+      page: g,
       rev: 1,
       note: "Restored",
       base: { rev: 2 },
     }),
   );
-  t.is(rec(w, `page:${open}:new-guide`, "page").ver, 3);
+  t.is(rec(w, `page:${g}`, "page").ver, 3);
   refused(
     t,
-    w.run("mel", "pages.restore", { space: open, page: 0, rev: 7, note: "x" }),
+    w.run("mel", "pages.restore", { space: open, page: g, rev: 7, note: "x" }),
     "NOT_FOUND",
   );
-  ok(t, w.run("mona", "pages.update", { space: open, title: "FAQ", text: ["f"] }));
-  ok(t, w.run("mona", "pages.move", { space: open, from: 0, to: 1 }));
-  t.deepEqual(
-    rec(w, `pages:${open}`, "pages").list.map((p) => p[0]),
-    ["FAQ", "New Guide"],
+  ok(t, w.run("mona", "pages.update", { space: open, id: f, title: "FAQ", text: ["f"] }));
+  refused(
+    t,
+    w.run("mona", "pages.update", { space: open, page: f, title: "New guide", text: [] }),
+    "CONFLICT",
   );
-  ok(t, w.run("mona", "pages.remove", { space: open, page: 1 }));
-  t.is(w.get(`page:${open}:new-guide`), undefined);
-  refused(t, w.run("mel", "pages.remove", { space: open, page: 0 }), "FORBIDDEN");
+  ok(t, w.run("mona", "pages.move", { space: open, page: f, other: g }));
+  t.deepEqual(
+    rec(w, `pages:${open}`, "pages").list.map((p) => [p.id, p.t]),
+    [
+      [f, "FAQ"],
+      [g, "New Guide"],
+    ],
+  );
+  ok(t, w.run("mona", "pages.remove", { space: open, page: g }));
+  t.is(w.get(`page:${g}`), undefined);
+  refused(t, w.run("mona", "pages.remove", { space: open, page: g }), "NOT_FOUND");
+  refused(t, w.run("mel", "pages.remove", { space: open, page: f }), "FORBIDDEN");
 });
 
 test("sources: added by URL with a derived id, a known URL reused, review policy, reports and review", (t) => {
@@ -1016,8 +1084,8 @@ test("sources: added by URL with a derived id, a known URL reused, review policy
   ok(t, w.run("mona", "spaceSources.setPolicy", { space: open, policy: "mods" }));
   refused(t, w.run("mel", "spaceSources.add", { space: open, file: "a.pdf" }), "FORBIDDEN");
   refused(t, w.run("mona", "spaceSources.add", { space: open }), "BAD_REQUEST");
-  // a pending source is for its adder and the moderators: another member
-  // adding the same URL gets a new source
+  // a pending source's fields are for its adder and the moderators: another
+  // member adding the same URL gets a new source
   admit(t, w, closed, "otto");
   const mid2 = w.id();
   ok(t, w.run("mel", "spaceSources.add", { space: closed, url: "example.org/pending" }, mid2));

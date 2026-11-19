@@ -1,20 +1,24 @@
 // A space's skills and pages, and the sources added to it.
 //
-// Skills and pages are addressed by their index in the space's list, as in
-// the mock. A skill's and a page's version (`rev` of a skill, `ver` of a page
+// Skills and pages have ids (phase 1a.2, decision 3): an edit, a removal and
+// a move name an id, so a write that waited in an outbox acts on the item it
+// named whatever moved meanwhile. A reorder of the skills sends the whole
+// order with the list's rev as `base`, and is STALE when the list changed
+// since. A skill's and a page's version (`rev` of a skill, `ver` of a page
 // document) counts its saves; an editor sends the version it opened as
 // `base`, and the save is CONFLICT when someone saved since, unless `force`
-// (the mock's edit conflicts, step 9).
+// (the mock's edit conflicts, step 9). A page's title is unique in its space
+// by its slug: a new page or a new title whose slug is taken is CONFLICT.
 
 import { spaces } from "@session/shared";
 import { z } from "zod";
 
-import { RANK, canRead, rankIn, roleIn } from "../access.js";
-import { defineMutator, inSpace, type Tx } from "../engine.js";
-import { bad, refuse } from "../errors.js";
-import type { PageRec, SkillsRec, SourceMeta } from "../records.js";
+import { RANK, canRead, rankIn, reviewedFor, roleIn } from "../access.js";
+import { ID_TAKEN, defineMutator, inSpace, type Tx } from "../engine.js";
+import { bad, refuse, stale } from "../errors.js";
+import type { PageEntry, PageRec, SkillsRec, SourceMeta } from "../records.js";
 import { needSpace, text, writable } from "../rules.js";
-import { count, ulidS } from "../schemas.js";
+import { baseS, count, ulidS } from "../schemas.js";
 
 import { sourceMeta } from "./threads.js";
 
@@ -40,29 +44,48 @@ export const pageSlug = (t: string) =>
     .replace(/^-|-$/g, "");
 
 /** The space's page list. */
-function pagesOf(tx: Tx, sp: string): [string, string][] {
+function pagesOf(tx: Tx, sp: string): PageEntry[] {
   needSpace(tx, sp);
   return tx.get("pages", sp)?.list ?? [];
 }
 
-function pageAt(tx: Tx, sp: string, index: number): [string, string] {
-  const pg = pagesOf(tx, sp)[index];
-  if (!pg)
-    throw refuse(
-      "NOT_FOUND",
-      "The server has no record of this page. Someone may have deleted it.",
-    );
+const noPage = () =>
+  refuse("NOT_FOUND", "The server has no record of this page. Someone may have deleted it.");
+
+function pageIn(tx: Tx, sp: string, id: string): PageEntry {
+  const pg = pagesOf(tx, sp).find((p) => p.id === id);
+  if (!pg) throw noPage();
   return pg;
+}
+
+/** A page title's slug, which no other page of the space has: BAD_REQUEST
+ * for a title without a letter or a digit, CONFLICT for a taken one. */
+function freeSlug(tx: Tx, sp: string, title: string, except: string | null): string {
+  const slug = pageSlug(title);
+  if (!slug) throw bad("title", "a title with a letter or a digit");
+  if (pagesOf(tx, sp).some((p) => p.id !== except && pageSlug(p.t) === slug))
+    throw refuse("CONFLICT", "The space has a page with this title.");
+  return slug;
 }
 
 /** A page's document, or the empty one a listed page without a stored
  * document stands for (the mock takes its author and history from the
  * client's `base`; a write never stores client-made history here). */
-function docOf(tx: Tx, sp: string, title: string): Omit<PageRec, "rev"> {
-  const slug = pageSlug(title);
-  const d = tx.get("page", `${sp}:${slug}`);
+function docOf(tx: Tx, sp: string, pg: PageEntry): Omit<PageRec, "rev"> {
+  const d = tx.get("page", pg.id);
   if (d) return d;
-  return { kind: "page", sp, slug, t: title, text: [""], by: tx.me, ed: null, ver: 0, revs: [] };
+  return {
+    kind: "page",
+    id: pg.id,
+    sp,
+    slug: pageSlug(pg.t),
+    t: pg.t,
+    text: [""],
+    by: tx.me,
+    ed: null,
+    ver: 0,
+    revs: [],
+  };
 }
 
 /** Who edits pages (the space's `pageEdit`): moderators; with "members", its
@@ -156,14 +179,16 @@ const SOURCE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 export const contentMutators = [
   defineMutator({
     name: "skills.create",
-    input: z.strictObject({ space: ulidS, name: z.string(), prompt: z.string() }),
+    input: z.strictObject({ id: ulidS, space: ulidS, name: z.string(), prompt: z.string() }),
+    ids: (i) => [i.id],
     can: (tx, i) => inSpace(tx, i.space, "moderator"),
     run: (tx, i) => {
       const l = skillsOf(tx, i.space);
+      if (l.list.some((x) => x.id === i.id)) throw refuse("CONFLICT", ID_TAKEN);
       if (l.list.some((x) => x.name === i.name))
         throw refuse("CONFLICT", `The space has a skill named ${i.name}.`);
-      tx.put({ ...l, list: [...l.list, { name: i.name, prompt: i.prompt, rev: 0 }] });
-      return null;
+      tx.put({ ...l, list: [...l.list, { id: i.id, name: i.name, prompt: i.prompt, rev: 0 }] });
+      return { id: i.id };
     },
   }),
 
@@ -171,23 +196,23 @@ export const contentMutators = [
     name: "skills.update",
     input: z.strictObject({
       space: ulidS,
-      index: count,
+      id: ulidS,
       name: z.string(),
       prompt: z.string(),
-      base: z.strictObject({ rev: count }).optional(),
+      base: baseS.optional(),
       force: z.boolean().optional(),
     }),
     can: (tx, i) => inSpace(tx, i.space, "moderator"),
     run: (tx, i) => {
       const l = skillsOf(tx, i.space);
-      const row = l.list[i.index];
+      const row = l.list.find((x) => x.id === i.id);
       if (!row) throw noSkill();
       if (changed(i.base?.rev, row.rev, i.force))
         throw refuse("CONFLICT", "Someone else changed this skill first.");
-      if (l.list.some((x, k) => k !== i.index && x.name === i.name))
+      if (l.list.some((x) => x.id !== i.id && x.name === i.name))
         throw refuse("CONFLICT", `The space has a skill named ${i.name}.`);
-      const list = l.list.map((x, k) =>
-        k === i.index ? { name: i.name, prompt: i.prompt, rev: row.rev + 1 } : x,
+      const list = l.list.map((x) =>
+        x.id === i.id ? { id: x.id, name: i.name, prompt: i.prompt, rev: row.rev + 1 } : x,
       );
       tx.put({ ...l, list });
       return null;
@@ -196,52 +221,68 @@ export const contentMutators = [
 
   defineMutator({
     name: "skills.remove",
-    input: z.strictObject({ space: ulidS, index: count }),
+    input: z.strictObject({ space: ulidS, id: ulidS }),
     can: (tx, i) => inSpace(tx, i.space, "moderator"),
     run: (tx, i) => {
       const l = skillsOf(tx, i.space);
-      if (!l.list[i.index]) throw noSkill();
-      tx.put({ ...l, list: l.list.filter((_, k) => k !== i.index) });
+      if (!l.list.some((x) => x.id === i.id)) throw noSkill();
+      tx.put({ ...l, list: l.list.filter((x) => x.id !== i.id) });
       return null;
     },
   }),
 
+  // The whole order, by id, with the list's rev as the moderator saw it:
+  // STALE when the list changed since (a skill added, removed, edited or
+  // moved); BAD_REQUEST when `order` is not the list's ids.
   defineMutator({
     name: "skills.reorder",
-    input: z.strictObject({ space: ulidS, from: count, to: count }),
+    input: z.strictObject({ space: ulidS, order: z.array(ulidS).max(500), base: baseS }),
     can: (tx, i) => inSpace(tx, i.space, "moderator"),
     run: (tx, i) => {
       const l = skillsOf(tx, i.space);
-      const x = l.list[i.from];
-      if (!x || !l.list[i.to]) throw noSkill();
-      const list = l.list.filter((_, k) => k !== i.from);
-      list.splice(i.to, 0, x);
+      if (l.rev !== i.base.rev) throw stale();
+      const byId = new Map(l.list.map((x) => [x.id, x]));
+      if (i.order.length !== byId.size || new Set(i.order).size !== byId.size)
+        throw bad("order", "every skill of the space once");
+      const list = i.order.map((id) => {
+        const x = byId.get(id);
+        if (!x) throw bad("order", "every skill of the space once");
+        return x;
+      });
       tx.put({ ...l, list });
       return null;
     },
   }),
 
-  // Add a page (`page` null) or edit one (`page`: its index).
+  // Add a page (`page` null, with a new `id`) or edit one (`page`: its id).
   defineMutator({
     name: "pages.update",
-    input: z.strictObject({
-      space: ulidS,
-      page: count.nullable().optional(),
-      title: z.string(),
-      text: z.array(z.string()),
-      base: pageBaseS.optional(),
-      force: z.boolean().optional(),
-    }),
+    input: z
+      .strictObject({
+        space: ulidS,
+        page: ulidS.nullable().optional(),
+        id: ulidS.optional(),
+        title: z.string(),
+        text: z.array(z.string()),
+        base: pageBaseS.optional(),
+        force: z.boolean().optional(),
+      })
+      .refine((i) => (i.page ?? null) !== null || i.id !== undefined, {
+        path: ["id"],
+        message: "expected the new page's id",
+      }),
+    ids: (i) => ((i.page ?? null) === null && i.id ? [i.id] : []),
     can: (tx, i) => pageEditor(tx, i.space),
     run: (tx, i) => {
       const title = text(i.title, "title");
       const body = i.text.length ? i.text : [""];
       const list = pagesOf(tx, i.space);
-      const slug = pageSlug(title);
       if (i.page === null || i.page === undefined) {
-        tx.put({ kind: "pages", sp: i.space, list: [...list, [title, tx.now]] });
-        tx.put({
+        const id = i.id as string;
+        const slug = freeSlug(tx, i.space, title, null);
+        tx.create({
           kind: "page",
+          id,
           sp: i.space,
           slug,
           t: title,
@@ -251,21 +292,22 @@ export const contentMutators = [
           ver: 1,
           revs: [{ by: tx.me, note: "Created the page", createdAt: tx.now }],
         });
-        return null;
+        tx.put({ kind: "pages", sp: i.space, list: [...list, { id, t: title, at: tx.now }] });
+        return { id };
       }
-      const [old] = pageAt(tx, i.space, i.page);
-      const doc = docOf(tx, i.space, old);
+      const pg = pageIn(tx, i.space, i.page);
+      const doc = docOf(tx, i.space, pg);
       if (changed(i.base?.rev, doc.ver, i.force))
         throw refuse("CONFLICT", "Someone else changed this page first.");
-      const at = i.page;
+      const slug = freeSlug(tx, i.space, title, pg.id);
       tx.put({
         kind: "pages",
         sp: i.space,
-        list: list.map((p, k): [string, string] => (k === at ? [title, tx.now] : p)),
+        list: list.map((p) => (p.id === pg.id ? { id: p.id, t: title, at: tx.now } : p)),
       });
-      if (pageSlug(old) !== slug) tx.del("page", `${i.space}:${pageSlug(old)}`);
       tx.put({
         kind: "page",
+        id: pg.id,
         sp: i.space,
         slug,
         t: title,
@@ -275,7 +317,7 @@ export const contentMutators = [
         ver: doc.ver + 1,
         revs: [{ by: tx.me, note: "Edited the page", createdAt: tx.now }, ...doc.revs],
       });
-      return null;
+      return { id: pg.id };
     },
   }),
 
@@ -285,7 +327,7 @@ export const contentMutators = [
     name: "pages.restore",
     input: z.strictObject({
       space: ulidS,
-      page: count,
+      page: ulidS,
       rev: count,
       note: z.string(),
       base: pageBaseS.optional(),
@@ -293,8 +335,7 @@ export const contentMutators = [
     }),
     can: (tx, i) => pageEditor(tx, i.space),
     run: (tx, i) => {
-      const [title] = pageAt(tx, i.space, i.page);
-      const doc = docOf(tx, i.space, title);
+      const doc = docOf(tx, i.space, pageIn(tx, i.space, i.page));
       if (changed(i.base?.rev, doc.ver, i.force))
         throw refuse("CONFLICT", "Someone else changed this page first.");
       if (!doc.revs[i.rev]) throw refuse("NOT_FOUND", "The server has no record of this version.");
@@ -310,26 +351,26 @@ export const contentMutators = [
 
   defineMutator({
     name: "pages.remove",
-    input: z.strictObject({ space: ulidS, page: count }),
+    input: z.strictObject({ space: ulidS, page: ulidS }),
     can: (tx, i) => inSpace(tx, i.space, "moderator"),
     run: (tx, i) => {
-      const [title] = pageAt(tx, i.space, i.page);
-      const list = pagesOf(tx, i.space).filter((_, k) => k !== i.page);
+      const pg = pageIn(tx, i.space, i.page);
+      const list = pagesOf(tx, i.space).filter((p) => p.id !== pg.id);
       tx.put({ kind: "pages", sp: i.space, list });
-      tx.del("page", `${i.space}:${pageSlug(title)}`);
+      tx.del("page", pg.id);
       return null;
     },
   }),
 
-  // Swap a page with another in the list.
+  // Swap a page with another in the list (About's up and down), both by id.
   defineMutator({
     name: "pages.move",
-    input: z.strictObject({ space: ulidS, from: count, to: count }),
+    input: z.strictObject({ space: ulidS, page: ulidS, other: ulidS }),
     can: (tx, i) => inSpace(tx, i.space, "moderator"),
     run: (tx, i) => {
-      const a = pageAt(tx, i.space, i.from);
-      const b = pageAt(tx, i.space, i.to);
-      const list = pagesOf(tx, i.space).map((p, k) => (k === i.from ? b : k === i.to ? a : p));
+      const a = pageIn(tx, i.space, i.page);
+      const b = pageIn(tx, i.space, i.other);
+      const list = pagesOf(tx, i.space).map((p) => (p.id === a.id ? b : p.id === b.id ? a : p));
       tx.put({ kind: "pages", sp: i.space, list });
       return null;
     },
@@ -456,6 +497,8 @@ function knownUrl(tx: Tx, nurl: string): [string, SourceMeta] | undefined {
   if (!nurl) return undefined;
   const c = tx.scan("source.nurl", nurl)[0];
   if (c) return [c.id, c.meta];
-  const e = tx.scan("spacesrc.nurl", nurl).find((x) => !x.rm && canRead(tx, x, tx.me));
+  const e = tx
+    .scan("spacesrc.nurl", nurl)
+    .find((x) => !x.rm && canRead(tx, x, tx.me) && reviewedFor(tx, x, tx.me));
   return e ? [e.src, e.meta] : undefined;
 }

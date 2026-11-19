@@ -173,7 +173,7 @@ test("a signed-out caller and an old protocol version are refused", async (t) =>
     protocolVersion: PROTOCOL_VERSION - 1,
   };
   // "Update Session" has its own code, apart from a refusal on the item's state
-  await refused(t, w.server.apply(actor("eve"), old), "UPGRADE_REQUIRED");
+  await refused(t, w.server.apply(actor("eve"), old), "UPDATE_REQUIRED");
   t.is(w.server.dump().get(`member:${open}:eve`), undefined);
   // nothing was recorded: the same seq and mutation id work once the client is current
   await ok(t, w.server.apply(actor("eve"), { ...old, protocolVersion: PROTOCOL_VERSION }));

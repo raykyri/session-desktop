@@ -65,6 +65,8 @@ function world(t: Parameters<typeof ok>[0]) {
     cPost: w.id(),
     cReply: w.id(),
     cReport: w.id(),
+    page: w.id(),
+    skill: w.id(),
   };
   ok(t, w.run("mel", "threads.create", { id: ids.ask, space: open, kind: "ask", q: "Q" }));
   ok(t, w.run("otto", "followups.ask", { id: ids.fu, thread: ids.ask, q: "F" }));
@@ -72,8 +74,8 @@ function world(t: Parameters<typeof ok>[0]) {
   ok(t, w.run("mel", "research.createPostFollowUp", { id: ids.reply, thread: ids.post, t: "R" }));
   ok(t, w.run("otto", "reports.create", { id: ids.report, item: `a:${ids.ask}`, why: "W" }));
   ok(t, w.run("mona", "invites.create", { id: ids.link, space: open }));
-  ok(t, w.run("mona", "pages.update", { space: open, title: "Guide", text: ["x"] }));
-  ok(t, w.run("mona", "skills.create", { space: open, name: "S", prompt: "p" }));
+  ok(t, w.run("mona", "pages.update", { space: open, id: ids.page, title: "Guide", text: ["x"] }));
+  ok(t, w.run("mona", "skills.create", { id: ids.skill, space: open, name: "S", prompt: "p" }));
   ok(t, w.run("mel", "spaceSources.add", { space: open, url: "example.org/x" }));
   ok(t, w.run("mel", "threads.create", { id: ids.cAsk, space: closed, kind: "ask", q: "CQ" }));
   ok(t, w.run("mel", "followups.ask", { id: ids.cFu, thread: ids.cAsk, q: "CF" }));
@@ -155,7 +157,8 @@ const IN_OPEN: Record<string, [Who, (x: World2) => unknown, "closed"?]> = {
   ],
   "members.remove": [
     "moderator",
-    (x) => ({ space: x.open, user: "otto", base: x.w.admission(x.open, "otto") }),
+    (x) => ({ space: x.closed, user: "mel", base: x.w.admission(x.closed, "mel") }),
+    "closed",
   ],
   "members.ban": ["moderator", (x) => ({ space: x.open, user: "otto" })],
   "members.unban": ["moderator", (x) => ({ space: x.open, user: "eve" })],
@@ -165,14 +168,23 @@ const IN_OPEN: Record<string, [Who, (x: World2) => unknown, "closed"?]> = {
   "reports.create": ["member", (x) => ({ id: x.w.id(), item: `p:${x.ids.post}`, why: "w" })],
   "reports.resolve": ["moderator", (x) => ({ report: x.ids.report, outcome: "dismissed" })],
   "moderation.decide": ["moderator", (x) => ({ item: `p:${x.ids.post}`, decision: "hidden" })],
-  "skills.create": ["moderator", (x) => ({ space: x.open, name: "S2", prompt: "p" })],
-  "skills.update": ["moderator", (x) => ({ space: x.open, index: 0, name: "S", prompt: "p2" })],
-  "skills.remove": ["moderator", (x) => ({ space: x.open, index: 0 })],
-  "skills.reorder": ["moderator", (x) => ({ space: x.open, from: 0, to: 0 })],
-  "pages.update": ["moderator", (x) => ({ space: x.open, page: 0, title: "Guide", text: ["y"] })],
-  "pages.restore": ["moderator", (x) => ({ space: x.open, page: 0, rev: 0, note: "n" })],
-  "pages.remove": ["moderator", (x) => ({ space: x.open, page: 0 })],
-  "pages.move": ["moderator", (x) => ({ space: x.open, from: 0, to: 0 })],
+  "skills.create": ["moderator", (x) => ({ id: x.w.id(), space: x.open, name: "S2", prompt: "p" })],
+  "skills.update": [
+    "moderator",
+    (x) => ({ space: x.open, id: x.ids.skill, name: "S", prompt: "p2" }),
+  ],
+  "skills.remove": ["moderator", (x) => ({ space: x.open, id: x.ids.skill })],
+  "skills.reorder": [
+    "moderator",
+    (x) => ({ space: x.open, order: [x.ids.skill], base: { rev: x.w.rev(`skills:${x.open}`) } }),
+  ],
+  "pages.update": [
+    "moderator",
+    (x) => ({ space: x.open, page: x.ids.page, title: "Guide", text: ["y"] }),
+  ],
+  "pages.restore": ["moderator", (x) => ({ space: x.open, page: x.ids.page, rev: 0, note: "n" })],
+  "pages.remove": ["moderator", (x) => ({ space: x.open, page: x.ids.page })],
+  "pages.move": ["moderator", (x) => ({ space: x.open, page: x.ids.page, other: x.ids.page })],
   "spaceSources.add": ["member", (x) => ({ space: x.open, url: "example.org/new" })],
   "spaceSources.review": [
     "moderator",
@@ -264,7 +276,7 @@ test("a ban stops every write in its space, the author's own included", (t) => {
   refused(t, x.w.run("mona", "invites.restore", { id: x.ids.link }), "NOT_FOUND");
 });
 
-const hooks = { random: () => 0.5, ownsKey: () => false };
+const hooks = { random: () => 0.5, ownsDevice: () => false };
 const envelope = (w: World, name: string, input: unknown) => ({
   mutationId: w.id(),
   name,

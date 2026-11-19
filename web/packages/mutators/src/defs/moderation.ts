@@ -2,10 +2,12 @@
 //
 // Stale intent (review round 2, finding 2): a decision that shows an item
 // again acts on the item as the moderator read it, so it carries the item's
-// `base.rev` and is STALE when it differs: `moderation.decide` "shown", and a
-// report reopened (`reports.resolve` "open") when that shows a hidden item.
-// Hiding and removing apply to the item as it is now (`base` optional and
-// not compared). A removed item stays removed: its text was erased.
+// `base.rev` and is STALE when it differs: `moderation.decide` "shown". A
+// report reopened (`reports.resolve` "open") always carries `base` (phase
+// 1a.2, decision 7): the report's rev, compared every time, and the item's,
+// compared when the reopening shows a hidden item. Hiding and removing apply
+// to the item as it is now (`base` optional and not compared). A removed item
+// stays removed: its text was erased.
 
 import { spaces } from "@session/shared";
 import { z } from "zod";
@@ -13,7 +15,7 @@ import { z } from "zod";
 import { defineMutator, inSpace } from "../engine.js";
 import { refuse, stale } from "../errors.js";
 import { erase, itemOf, readable, removed, text, type Item } from "../rules.js";
-import { baseS, ulidS } from "../schemas.js";
+import { baseS, count, ulidS } from "../schemas.js";
 
 /** Hide or remove an item, as `moderation.decide` and `reports.resolve` do. */
 function restrict(tx: Parameters<typeof erase>[0], r: Item, to: "hidden" | "removed") {
@@ -62,18 +64,25 @@ export const moderationMutators = [
   // when the last open report on it is dismissed.
   defineMutator({
     name: "reports.resolve",
-    input: z.strictObject({
-      report: ulidS,
-      outcome: z.enum(["dismissed", "hidden", "removed", "open"]),
-      /** The item's rev as the moderator saw it: compared when reopening
-       * shows a hidden item. */
-      base: baseS.optional(),
-    }),
+    input: z
+      .strictObject({
+        report: ulidS,
+        outcome: z.enum(["dismissed", "hidden", "removed", "open"]),
+        /** Required for "open": the report's rev as the moderator saw it
+         * (compared), and the item's (compared when reopening shows a hidden
+         * item). Not compared for the other outcomes. */
+        base: z.strictObject({ rev: count, item: count }).optional(),
+      })
+      .refine((i) => i.outcome !== "open" || i.base !== undefined, {
+        path: ["base"],
+        message: "expected the report's and the item's revs",
+      }),
     can: (tx, i) => inSpace(tx, readable(tx, "report", i.report).sp, "moderator"),
     run: (tx, i) => {
       const r = readable(tx, "report", i.report);
       const resolved: string[] = [];
       if (i.outcome === "open") {
+        if (r.rev !== i.base?.rev) throw stale();
         const was = r.st;
         tx.put({ ...r, st: "open", updatedAt: tx.now });
         resolved.push(r.id);
@@ -81,7 +90,7 @@ export const moderationMutators = [
         if (was !== "dismissed" && was !== "open" && !others) {
           const item = itemOf(tx, r.key);
           if (item.mod === "hidden") {
-            if (i.base === undefined || item.rev !== i.base.rev) throw stale();
+            if (item.rev !== i.base?.item) throw stale();
             tx.put({ ...item, mod: null });
           }
         }

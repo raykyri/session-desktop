@@ -25,13 +25,21 @@
 // brackets):
 // - `pages` [a space's `pages`] and `page` [`pagedocs`]: a space's page list
 //   and its page documents, read with the space's content. The list is not
-//   on the public space record, for the same reason as `stats`.
-// - `skills` [`skills`]: a space's skills, read with its content.
-// - `source` [`media`]: Session's catalog of sources, public. `spacesrc`
-//   [`dsDrops`, `miAdded`]: a source added to a space, with a copy of the
-//   source's metadata, read with the space's content; a source waiting for
-//   review only by the person who added it and the space's moderators.
-//   `srcrep` [`dsReps`]: a report of a source in a space.
+//   on the public space record, for the same reason as `stats`. A page has an
+//   id (phase 1a.2, decision 3): writes name it, and its document is keyed by
+//   it, so a new title does not move the document.
+// - `skills` [`skills`]: a space's skills, read with its content. Each skill
+//   has an id (decision 3); the list's rev is the base of a reorder.
+// - `source` [`media`]: Session's catalog of sources, public: its own log,
+//   `catalog` (decision 4). `spacesrc` [`dsDrops`, `miAdded`]: a source added
+//   to a space, with a copy of the source's metadata, read with the space's
+//   content; while it waits for review, its fields are redacted for readers
+//   other than the person who added it and the space's moderators (decision
+//   5). `srcrep` [`dsReps`]: a report of a source in a space.
+// - `apikey` [`userKeys`]: an API key's id, name, provider and status, never
+//   its raw value, in its person's user log (decision 2). The server's
+//   online-only `apiKeys.*` calls write it; a write paid by a key checks it
+//   in `can`.
 // - Per person: `rlike` [`rpLiked`], `asksave` [`qtSaved`], `srcsave`
 //   [`miSaved`], `srcread` [`miRead`], `mute` [`muted`], `block` [`blocked`],
 //   `invask` [`askedInv`], `seen` [`repSeen`, `reqSeen`], `profile`
@@ -41,8 +49,9 @@
 
 import type { Spaces } from "@session/shared";
 
-/** A change log: one per space and one per user. */
-export type LogId = `space:${string}` | `user:${string}`;
+/** A change log: one per space, one per user, and Session's catalog of
+ * sources (`catalog`, public). */
+export type LogId = `space:${string}` | `user:${string}` | "catalog";
 
 export type SpaceRole = Spaces.SpaceMemberRole;
 export type ModState = "hidden" | "removed";
@@ -166,6 +175,9 @@ export interface CountsRec {
   likes: number;
   /** First-level follow-ups (an ask) or top-level replies (a post). */
   r: number;
+  /** The likes of each of its replies that has any, by reply id (decision
+   * 10): a reply like changes this record, not the reply. */
+  rlikes: Record<string, number>;
   rev: number;
 }
 
@@ -210,18 +222,40 @@ export interface ReplyRec {
   rev: number;
 }
 
-/** A run of a thread's ask; a server job takes it from there. */
+/** Who runs an ask: null for the included tokens (a server job), or a CLI
+ * on one of the asker's devices (`u`, the asker). */
+export interface Executor {
+  kind: "device";
+  cli: "claude" | "codex";
+  device: string;
+  u: string;
+}
+
+/** Why a run ended without an answer. `interrupted`: a device run whose
+ * lease ended (the device slept or lost its connection); `too_large`: a
+ * device's answer over the server's cap. */
+export type RunEnd = "stopped" | "tokens" | "key" | "rate" | "access" | "interrupted" | "too_large";
+
+/** A run of an ask: the thread's (`node` "r") or a follow-up's (`node` its
+ * id). A mutator writes it `queued`; from there the server's job, or for a
+ * device run the online `runs.*` calls of the device that claimed it, write
+ * its status, its lease and how it ended. */
 export interface RunRec {
   kind: "run";
   id: string;
   th: string;
   s: string;
   u: string;
-  node: "r";
-  status: "queued";
+  node: string;
+  status: "queued" | "running" | "complete" | "failed" | "cancelled";
+  end: RunEnd | null;
   attempt: number;
   pay: string | null;
   model: string | null;
+  executor: Executor | null;
+  /** A device run's lease (server-written): when it ends unless the device
+   * sends a heartbeat, and the device's last heartbeat. */
+  lease: { until: string; beat: string } | null;
   createdAt: string;
   rev: number;
 }
@@ -345,7 +379,8 @@ export interface BlockRec {
   rev: number;
 }
 
-/** A person asked an invite-only space's members for an invite. */
+/** A person asked an invite-only space's members for an invite. The space's
+ * staff read it (decision 8), so it is in the space's log too. */
 export interface InviteAskRec {
   kind: "invask";
   u: string;
@@ -393,11 +428,18 @@ export interface NotifRec {
   rev: number;
 }
 
-/** A space's page list: `[title, edited at]` in order. */
+/** A page in a space's list: its id, title and when it was last edited. */
+export interface PageEntry {
+  id: string;
+  t: string;
+  at: string;
+}
+
+/** A space's page list, in order. */
 export interface PagesRec {
   kind: "pages";
   sp: string;
-  list: [string, string][];
+  list: PageEntry[];
   rev: number;
 }
 
@@ -407,11 +449,12 @@ export interface PageRevision {
   createdAt: string;
 }
 
-/** A page document, keyed `page:<space>:<slug of its title>`. `ver` is the
- * document's version (the mock's `rev`): it counts the saves and moves with
- * the document when a new title moves it to another key. */
+/** A page document, keyed `page:<id>`. `slug` (its title in lower case, for
+ * its address) is unique in its space. `ver` is the document's version (the
+ * mock's `rev`): it counts the saves. */
 export interface PageRec {
   kind: "page";
+  id: string;
   sp: string;
   slug: string;
   t: string;
@@ -424,6 +467,7 @@ export interface PageRec {
 }
 
 export interface Skill {
+  id: string;
   name: string;
   prompt: string;
   /** The skill's version: counts its saves, 0 for a skill never edited. */
@@ -488,6 +532,18 @@ export interface SpaceSourceRec {
   rev: number;
 }
 
+/** An API key as its person's replicas hold it (decision 2): never the raw
+ * key. Written by the server's online-only `apiKeys.*` calls. */
+export interface ApiKeyRec {
+  kind: "apikey";
+  id: string;
+  u: string;
+  name: string;
+  provider: string;
+  status: "checking" | "valid" | "invalid";
+  rev: number;
+}
+
 /** A report of a source in a space, keyed `srcrep:<space>:<source>:<by>`. */
 export interface SourceReportRec {
   kind: "srcrep";
@@ -529,7 +585,8 @@ export type StoredRecord =
   | SkillsRec
   | SourceRec
   | SpaceSourceRec
-  | SourceReportRec;
+  | SourceReportRec
+  | ApiKeyRec;
 
 export type Kind = StoredRecord["kind"];
 export type RecordOf<K extends Kind> = Extract<StoredRecord, { kind: K }>;
@@ -551,6 +608,8 @@ export const ID_KINDS: ReadonlySet<Kind> = new Set<Kind>([
   "invite",
   "notif",
   "source",
+  "page",
+  "apikey",
 ]);
 
 /** A record's id within its kind: its key without the `<kind>:` prefix. */
@@ -584,8 +643,6 @@ export function idOfRecord(r: Draft | StoredRecord): string {
     case "seen":
     case "profile":
       return r.u;
-    case "page":
-      return `${r.sp}:${r.slug}`;
     case "spacesrc":
       return `${r.sp}:${r.src}`;
     case "srcrep":
@@ -640,6 +697,7 @@ export const KINDS: ReadonlySet<Kind> = new Set<Kind>([
   "source",
   "spacesrc",
   "srcrep",
+  "apikey",
 ]);
 
 export const spaceKey = (id: string) => `space:${id}`;
@@ -683,6 +741,7 @@ export function spaceOf(r: Draft | StoredRecord): string | null {
     case "skills":
     case "spacesrc":
     case "srcrep":
+    case "invask":
       return r.sp;
     default:
       return null;
@@ -690,7 +749,8 @@ export function spaceOf(r: Draft | StoredRecord): string | null {
 }
 
 /** The kinds whose records no space's log holds: a person's own records,
- * which their user log holds, and Session's catalog of sources. */
+ * which their user log holds, and Session's catalog of sources (the
+ * `catalog` log). */
 export const NO_SPACE_LOG: ReadonlySet<Kind> = new Set<Kind>(
   [...KINDS].filter(
     (k) => spaceOf({ kind: k, id: "", sp: "", s: "" } as unknown as Draft) === null,
@@ -713,6 +773,7 @@ export function personOf(r: Draft | StoredRecord): string | null {
     case "invask":
     case "seen":
     case "profile":
+    case "apikey":
       return r.u;
     case "report":
     case "srcrep":
@@ -725,8 +786,9 @@ export function personOf(r: Draft | StoredRecord): string | null {
 }
 
 /** The logs a record is written to: its space's log and the user log of the
- * person it belongs to. */
+ * person it belongs to; a catalog source, the `catalog` log. */
 export function logsOf(r: Draft | StoredRecord): LogId[] {
+  if (r.kind === "source") return ["catalog"];
   const out: LogId[] = [];
   const sp = spaceOf(r);
   if (sp !== null) out.push(`space:${sp}`);
@@ -772,6 +834,7 @@ export const INDEXES = {
   "reply.th": ["reply", "th"],
   "reply.parent": ["reply", "parent"],
   "run.th": ["run", "th"],
+  "run.u": ["run", "u"],
   "report.sp": ["report", "sp"],
   "report.key": ["report", "key"],
   "request.sp": ["request", "sp"],

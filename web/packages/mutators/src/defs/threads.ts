@@ -4,14 +4,21 @@
 // Stale intent: an author's edit carries `base.rev` of the record it edits
 // (replica-proto's `threads.update`; here also follow-ups and replies) and is
 // STALE when the rev differs.
+//
+// Runs (phase 1a.2, decision 1): every write that asks (threads.create of an
+// ask, threads.update and followups.update with `run`, followups.ask,
+// research.forkNode) writes a run record with a derived id and queues a
+// `job` effect for it. `executor` picks a CLI on one of the asker's devices
+// in place of the included tokens; the server's pre-check checks the device
+// and the limit of device runs an hour.
 
 import { spaces } from "@session/shared";
 import { z } from "zod";
 
-import { canRead, isClosed } from "../access.js";
+import { canRead, isClosed, reviewedFor } from "../access.js";
 import { defineMutator, inSpace, personal, type PreCtx, type Tx } from "../engine.js";
 import { bad, notFound, refuse, stale } from "../errors.js";
-import type { FollowUpRec, ThreadRec } from "../records.js";
+import type { Executor, FollowUpRec, ThreadRec } from "../records.js";
 import {
   countsOf,
   needSpace,
@@ -23,20 +30,60 @@ import {
   writable,
 } from "../rules.js";
 import { baseS, nodeS, ulidS } from "../schemas.js";
+import { HOUR, isoAt, msOf } from "../time.js";
 
 const payS = z.string().nullable();
 
 /** A payer other than the included tokens is an API key, which must be the
- * actor's (TODO(limits): the one check the mock makes). API keys are account
- * state no replica holds, so this is a server pre-check. */
-const paidByKey = (pay: string | null | undefined) =>
+ * actor's (TODO(limits): the one check the mock makes). The key's `apikey`
+ * record is in the actor's user log (decision 2), so `can` checks it and a
+ * client predicts it. */
+const paidByKey = (pay: string | null | undefined): pay is string =>
   pay !== undefined && pay !== null && pay !== "session";
 
-function ownPayer(ctx: PreCtx, pay: string | null | undefined) {
-  if (paidByKey(pay) && !ctx.ownsKey(ctx.me, pay as string))
-    throw refuse("FORBIDDEN", "This API key isn’t one of yours.");
+function ownPayer(tx: Tx, pay: string | null | undefined) {
+  if (!paidByKey(pay)) return;
+  const k = tx.get("apikey", pay);
+  if (!k || k.u !== tx.me) throw refuse("FORBIDDEN", "This API key isn’t one of yours.");
+}
+
+/** A device run's CLI and device, as the input names them. */
+export const executorS = z.strictObject({
+  kind: z.literal("device"),
+  cli: z.enum(["claude", "codex"]),
+  device: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+});
+
+/** The most device runs a person starts in an hour (a server setting). */
+export const DEVICE_RUNS_PER_HOUR = 100;
+
+/** The pre-check of a device run: the device is one of the actor's (account
+ * state, which no replica holds), and the actor started fewer than
+ * DEVICE_RUNS_PER_HOUR device runs in the past hour. The limit answers
+ * TOO_MANY_REQUESTS with `retryAt`, when the next run can start; the server
+ * does not record it, so the write can be sent again then. */
+function deviceCheck(ctx: PreCtx, ex: z.infer<typeof executorS> | null | undefined) {
+  if (!ex) return {};
+  if (!ctx.ownsDevice(ctx.me, ex.device))
+    throw refuse("FORBIDDEN", "This device isn’t one of yours.");
+  const since = ctx.nowMs - HOUR;
+  const recent = ctx.tx
+    .scan("run.u", ctx.me)
+    .filter((r) => r.executor !== null && msOf(r.createdAt) > since)
+    .map((r) => msOf(r.createdAt))
+    .sort((a, b) => a - b);
+  if (recent.length >= DEVICE_RUNS_PER_HOUR)
+    throw refuse(
+      "TOO_MANY_REQUESTS",
+      `You started ${DEVICE_RUNS_PER_HOUR} device runs in the past hour.`,
+      undefined,
+      isoAt((recent[recent.length - DEVICE_RUNS_PER_HOUR] ?? ctx.nowMs) + HOUR),
+    );
   return {};
 }
+
+const executorOf = (tx: Tx, ex: z.infer<typeof executorS> | null | undefined): Executor | null =>
+  ex ? { kind: "device", cli: ex.cli, device: ex.device, u: tx.me } : null;
 
 const deleted = (what: string) => refuse("PRECONDITION_FAILED", `This ${what} was deleted.`);
 
@@ -70,23 +117,41 @@ const topicIn = (tx: Tx, sp: string, topic: string | null | undefined) => {
   return topic && s.faq && s.topics.some((x) => x[0] === topic) ? topic : null;
 };
 
-function startRun(tx: Tx, p: ThreadRec, attempt: number, pay: string | null, model: string | null) {
-  const run = tx.id(1);
+/** A run of the ask at `node` ("r": the thread's), with the mutation's
+ * derived id at `ordinal`. A device run pays nothing (its tokens are not
+ * counted). */
+function startRun(
+  tx: Tx,
+  p: ThreadRec,
+  node: string,
+  attempt: number,
+  pay: string | null,
+  model: string | null,
+  executor: Executor | null = null,
+  ordinal = 1,
+) {
+  const run = tx.id(ordinal);
   tx.create({
     kind: "run",
     id: run,
     th: p.id,
     s: p.s,
     u: tx.me,
-    node: "r",
+    node,
     status: "queued",
+    end: null,
     attempt,
-    pay,
+    pay: executor ? null : pay,
     model,
+    executor,
+    lease: null,
     createdAt: tx.now,
   });
   return run;
 }
+
+const runJob = (result: { run: string | null } | null) =>
+  result?.run ? [{ type: "job" as const, kind: "run" as const, id: result.run }] : [];
 
 const threadInputS = spaces.createThreadInputSchema
   .pick({ kind: true, q: true, title: true, topic: true, model: true, skill: true, branch: true })
@@ -96,6 +161,7 @@ const threadInputS = spaces.createThreadInputSchema
     pay: payS.optional(),
     about: spaces.askAboutSchema.strict().optional(),
     from: z.strictObject({ th: ulidS, node: nodeS }).optional(),
+    executor: executorS.nullable().optional(),
   })
   .strict();
 
@@ -121,11 +187,11 @@ export const threadMutators = [
           if (n.u !== tx.me)
             throw refuse("FORBIDDEN", "Only the person who asked this can start a thread from it.");
         }
-      }
+      } else ownPayer(tx, i.pay);
       return scope;
     },
-    needsPre: (i) => !i.from && paidByKey(i.pay),
-    pre: (ctx, i) => ownPayer(ctx, i.pay),
+    needsPre: (i) => !i.from && i.kind === "ask" && !!i.executor,
+    pre: (ctx, i) => deviceCheck(ctx, i.executor),
     run: (tx, i) => {
       const s = writable(tx, i.space);
       if (i.kind === "post" && s.postsOff)
@@ -160,14 +226,15 @@ export const threadMutators = [
         createdAt: tx.now,
         updatedAt: tx.now,
       });
-      tx.put({ kind: "counts", th: i.id, s: s.id, likes: 0, r: 0 });
+      tx.put({ kind: "counts", th: i.id, s: s.id, likes: 0, r: 0, rlikes: {} });
       const stats = tx.get("stats", s.id);
       if (stats) tx.put({ ...stats, posts: stats.posts + 1, updatedAt: tx.now });
       if (!ask) return { id: i.id, run: null };
       const p = tx.get("thread", i.id) as ThreadRec;
-      return { id: i.id, run: startRun(tx, p, 1, i.pay ?? null, i.model ?? null) };
+      const ex = executorOf(tx, i.executor);
+      return { id: i.id, run: startRun(tx, p, "r", 1, i.pay ?? null, i.model ?? null, ex) };
     },
-    effects: (_i, result) => (result.run ? [{ type: "job", kind: "run", id: result.run }] : []),
+    effects: (_i, result) => runJob(result),
   }),
 
   defineMutator({
@@ -180,10 +247,9 @@ export const threadMutators = [
       const p = readableThread(tx, i.id);
       const scope = inSpace(tx, p.s, "user");
       author(tx, p.u);
+      if (i.run) ownPayer(tx, i.pay);
       return scope;
     },
-    needsPre: (i) => i.run === true && paidByKey(i.pay),
-    pre: (ctx, i) => ownPayer(ctx, i.pay),
     run: (tx, i) => {
       const p = readableThread(tx, i.id);
       if (p.mod === "removed") throw removed();
@@ -213,9 +279,9 @@ export const threadMutators = [
         att: p.att + 1,
       };
       tx.put(ran);
-      return { run: startRun(tx, ran, ran.att, pay, ran.model) };
+      return { run: startRun(tx, ran, "r", ran.att, pay, ran.model) };
     },
-    effects: (_i, result) => (result ? [{ type: "job", kind: "run", id: result.run }] : []),
+    effects: (_i, result) => runJob(result),
   }),
 
   defineMutator({
@@ -301,7 +367,8 @@ export const threadMutators = [
   }),
 
   // The mock's likes.toggleReply, with a reply id in place of a path and a
-  // required `on`. Replies have no like count (the mock keeps none).
+  // required `on`. The reply's like count is in its thread's counts record
+  // (decision 10), so a like does not change the reply's rev.
   defineMutator({
     name: "likes.setReply",
     input: z.strictObject({ reply: ulidS, on: z.boolean() }),
@@ -317,13 +384,19 @@ export const threadMutators = [
       return scope;
     },
     run: (tx, i) => {
-      const had = tx.get("rlike", `${tx.me}:${i.reply}`) !== undefined;
-      if (i.on === had) return { on: i.on };
-      if (!i.on) tx.del("rlike", `${tx.me}:${i.reply}`);
-      else {
+      const had = tx.get("rlike", `${tx.me}:${i.reply}`);
+      if (i.on === (had !== undefined)) return { on: i.on };
+      let th: string;
+      if (had) {
+        th = had.th;
+        tx.del("rlike", `${tx.me}:${i.reply}`);
+      } else {
         const r = readable(tx, "reply", i.reply);
-        tx.put({ kind: "rlike", u: tx.me, th: r.th, reply: r.id, createdAt: tx.now });
+        th = r.th;
+        tx.put({ kind: "rlike", u: tx.me, th, reply: r.id, createdAt: tx.now });
       }
+      const c = tx.get("counts", th);
+      if (c) tx.put({ ...c, rlikes: likeCount(c.rlikes, i.reply, i.on ? 1 : -1) });
       return { on: i.on };
     },
   }),
@@ -395,8 +468,9 @@ export const threadMutators = [
       tx.create(followUp(tx, i.id, p, null, q, null, null, null));
       const c = countsOf(tx, p);
       tx.put({ ...c, r: c.r + 1 });
-      return null;
+      return { id: i.id, run: startRun(tx, p, i.id, 1, null, null) };
     },
+    effects: (_i, result) => runJob(result),
   }),
 
   // An ask about an answer in a thread's ask tree: `parent` "r" for the
@@ -406,12 +480,22 @@ export const threadMutators = [
     name: "research.forkNode",
     input: spaces.forkNodeInputSchema
       .pick({ q: true, uses: true, model: true })
-      .extend({ id: ulidS, thread: ulidS, parent: nodeS, pay: payS.optional() })
+      .extend({
+        id: ulidS,
+        thread: ulidS,
+        parent: nodeS,
+        pay: payS.optional(),
+        executor: executorS.nullable().optional(),
+      })
       .strict(),
     ids: (i) => [i.id],
-    can: (tx, i) => inSpace(tx, readableThread(tx, i.thread).s, "member"),
-    needsPre: (i) => paidByKey(i.pay),
-    pre: (ctx, i) => ownPayer(ctx, i.pay),
+    can: (tx, i) => {
+      const scope = inSpace(tx, readableThread(tx, i.thread).s, "member");
+      ownPayer(tx, i.pay);
+      return scope;
+    },
+    needsPre: (i) => !!i.executor,
+    pre: (ctx, i) => deviceCheck(ctx, i.executor),
     run: (tx, i) => {
       const p = readableThread(tx, i.thread);
       writable(tx, p.s);
@@ -427,8 +511,10 @@ export const threadMutators = [
         const c = countsOf(tx, p);
         tx.put({ ...c, r: c.r + 1 });
       }
-      return { id: i.id };
+      const ex = executorOf(tx, i.executor);
+      return { id: i.id, run: startRun(tx, p, i.id, 1, i.pay ?? null, i.model ?? null, ex) };
     },
+    effects: (_i, result) => runJob(result),
   }),
 
   defineMutator({
@@ -445,10 +531,9 @@ export const threadMutators = [
       const f = followUpOf(tx, i.thread, i.node);
       const scope = inSpace(tx, f.s, "user");
       author(tx, f.u);
+      if (i.run) ownPayer(tx, i.pay);
       return scope;
     },
-    needsPre: (i) => i.run === true && paidByKey(i.pay),
-    pre: (ctx, i) => ownPayer(ctx, i.pay),
     run: (tx, i) => {
       const f = followUpOf(tx, i.thread, i.node);
       if (f.mod === "removed") throw removed();
@@ -462,8 +547,11 @@ export const threadMutators = [
         edited: f.edited || changed,
         ...(i.run ? { a: null, pay: i.pay ?? null, att: f.att + 1 } : {}),
       });
-      return null;
+      if (!i.run) return null;
+      const p = readableThread(tx, i.thread);
+      return { run: startRun(tx, p, f.id, f.att + 1, i.pay ?? null, f.model) };
     },
+    effects: (_i, result) => runJob(result),
   }),
 
   // A follow-up with asks below it keeps its place as a shell; one without
@@ -480,6 +568,7 @@ export const threadMutators = [
     run: (tx, i) => {
       const f = followUpOf(tx, i.thread, i.node);
       const kept = tx.scan("followup.par", f.id).length > 0;
+      for (const x of tx.scan("run.th", f.th)) if (x.node === f.id) tx.del("run", x.id);
       if (kept) tx.put({ ...f, del: true, q: "", a: null, edited: false });
       else {
         tx.del("followup", f.id);
@@ -571,12 +660,11 @@ export const threadMutators = [
       else {
         for (const l of tx.scan("rlike.reply", r.id)) tx.del("rlike", `${l.u}:${l.reply}`);
         tx.del("reply", r.id);
-        if (r.parent === null) {
-          const p = tx.get("thread", r.th);
-          if (p) {
-            const c = countsOf(tx, p);
-            tx.put({ ...c, r: Math.max(0, c.r - 1) });
-          }
+        const p = tx.get("thread", r.th);
+        if (p) {
+          const c = countsOf(tx, p);
+          const rlikes = likeCount(c.rlikes, r.id, null);
+          tx.put({ ...c, r: r.parent === null ? Math.max(0, c.r - 1) : c.r, rlikes });
         }
       }
       return { kept };
@@ -617,9 +705,10 @@ function followUp(
 
 /** A thread started from a follow-up of another thread's ask tree (the mock's
  * threads.create with `from`): the follow-up's ask and answer, and with
- * branch "all" the asks below it, copied with new ids. Hidden and removed
- * follow-ups, and those below them, are not copied. The follow-up links to
- * the new thread. */
+ * branch "all" the asks below it, copied with new ids. Only the actor's own
+ * follow-ups are copied (decision 6): another person's, and those below it,
+ * are not, nor are hidden and removed ones and those below them. The
+ * follow-up links to the new thread. */
 function fromBranch(
   tx: Tx,
   id: string,
@@ -653,7 +742,7 @@ function fromBranch(
     branch === "all"
       ? nodes.filter((x) => {
           const down = fromN(x);
-          return down.length > 0 && down.every((y) => y.mod === null);
+          return down.length > 0 && down.every((y) => y.mod === null && y.u === tx.me);
         })
       : [];
   const newId = new Map<string, string>();
@@ -691,13 +780,12 @@ function fromBranch(
     if (par === null) first++;
     tx.create({
       ...followUp(tx, newId.get(x.id) as string, p, par, x.q, null, null, null),
-      u: x.u,
       a: x.a,
       del: x.del,
       createdAt: x.createdAt,
     });
   }
-  tx.put({ kind: "counts", th: id, s: sp, likes: 0, r: first });
+  tx.put({ kind: "counts", th: id, s: sp, likes: 0, r: first, rlikes: {} });
   const stats = tx.get("stats", sp);
   if (stats) tx.put({ ...stats, posts: stats.posts + 1, updatedAt: tx.now });
   tx.put({ ...n, promoted: id });
@@ -705,11 +793,24 @@ function fromBranch(
 }
 
 /** A source's metadata as the actor may read it: Session's catalog, or a
- * space's copy they may read. NOT_FOUND otherwise. */
+ * space's copy they may read in full (a pending one only for the person who
+ * added it and the space's moderators). NOT_FOUND otherwise. */
 export function sourceMeta(tx: Tx, id: string) {
   const c = tx.get("source", id);
   if (c) return c.meta;
-  const e = tx.scan("spacesrc.src", id).find((x) => canRead(tx, x, tx.me));
+  const e = tx
+    .scan("spacesrc.src", id)
+    .find((x) => canRead(tx, x, tx.me) && reviewedFor(tx, x, tx.me));
   if (!e) throw notFound();
   return e.meta;
+}
+
+/** A thread's reply like counts with `reply`'s changed by `by` (null: the
+ * reply is gone). A count of 0 is left out. */
+function likeCount(counts: Record<string, number>, reply: string, by: number | null) {
+  const out = { ...counts };
+  const n = by === null ? 0 : Math.max(0, (out[reply] ?? 0) + by);
+  if (n > 0) out[reply] = n;
+  else delete out[reply];
+  return out;
 }
