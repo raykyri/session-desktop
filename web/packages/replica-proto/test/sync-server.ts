@@ -29,7 +29,6 @@ import {
   newCursorKey,
   openStream,
   type Answer,
-  type CursorMap,
   type ServerStore,
 } from "@session/sync/server";
 import BetterSqlite from "better-sqlite3";
@@ -143,7 +142,7 @@ export function syncFactory(kind: "memory" | "sqlite"): ServerFactory {
         },
         stream(a, cursors) {
           const ac = new AbortController();
-          const s = openStream(server, actorOf(a), cursors as CursorMap, ac.signal, {
+          const s = openStream(server, actorOf(a), cursors, ac.signal, {
             setInterval: () => 0,
             clearInterval: () => {},
           });

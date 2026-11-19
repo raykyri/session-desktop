@@ -436,7 +436,12 @@ const HISTORY: Step[] = [
   // a post has no ask to run (review round 1 of phase 1, E12b)
   {
     name: "threads.update",
-    input: (x) => ({ id: x.id("T5"), q: "A new post", run: true, base: { rev: x.threadRev("T5") } }),
+    input: (x) => ({
+      id: x.id("T5"),
+      q: "A new post",
+      run: true,
+      base: { rev: x.threadRev("T5") },
+    }),
   },
   {
     name: "threads.update",

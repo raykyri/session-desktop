@@ -18,7 +18,9 @@ import {
 
 import { DAY, HOUR, MINUTE, STORES, World, cast, ok, refused } from "./helpers.js";
 
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access --
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access,
+   @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return,
+   @typescript-eslint/no-unsafe-argument --
    records and call results are read as `any` */
 type Any = any;
 
@@ -83,7 +85,7 @@ async function listen(
 }
 const pokes = (s: string) => (s.match(/event: poke/g) ?? []).length;
 const runEvents = (s: string) =>
-  [...s.matchAll(/event: run\ndata: (.*)\n/g)].map((m) => JSON.parse(m[1] ?? "{}") as Any);
+  [...s.matchAll(/event: run\ndata: (.*)\n/g)].map((m) => JSON.parse(m[1] ?? "{}"));
 
 for (const kind of STORES) {
   // ---- H1: runs.claim serves only what the read rules let its caller read

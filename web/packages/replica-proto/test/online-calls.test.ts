@@ -18,13 +18,14 @@
 
 import test from "ava";
 
-import type { LogId, StoredRecord, StreamEvent } from "../src/index.js";
+import type { LogId, StreamEvent } from "../src/index.js";
 
 import { DAY, cast, ok, rng, type World } from "./harness.js";
 import { expected, mayRead, mayRun, readableTexts } from "./oracle.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access,
-   @typescript-eslint/no-unsafe-assignment -- call results are read as `any` */
+   @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument,
+   @typescript-eslint/no-unsafe-return -- call results are read as `any` */
 type Any = any;
 
 const LEASE = 90_000;
@@ -96,7 +97,7 @@ for (let s0 = 1; s0 <= SEEDS; s0 += 4)
 
       // streams: honest tokens, made-up ones and another reader's
       const streams: Stream[] = [];
-      const openStream = async (reader: string | null, tokens: [LogId, string, boolean][]) => {
+      const openStream = (reader: string | null, tokens: [LogId, string, boolean][]) => {
         const cursors: Record<string, string> = {};
         const st: Stream = {
           reader,
@@ -115,28 +116,31 @@ for (let s0 = 1; s0 <= SEEDS; s0 += 4)
         st.handle = on.stream(reader === null ? null : { u: reader }, cursors);
         streams.push(st);
       };
-      const honest = async (reader: string | null, log: LogId): Promise<[LogId, string, boolean]> => [
+      const honest = async (
+        reader: string | null,
+        log: LogId,
+      ): Promise<[LogId, string, boolean]> => [
         log,
         (await w.server.snapshot(reader === null ? null : { u: reader }, log)).cursor,
         true,
       ];
       const ottoUser = (await w.server.snapshot({ u: "otto" }, "user:otto")).cursor;
-      await openStream(null, [await honest(null, `space:${open}`), [`space:${closed}`, "x", false]]);
-      await openStream("otto", [
+      openStream(null, [await honest(null, `space:${open}`), [`space:${closed}`, "x", false]]);
+      openStream("otto", [
         await honest("otto", `space:${open}`),
         await honest("otto", `space:${closed}`),
         ["user:mel", ottoUser, false],
       ]);
-      await openStream("mel", [
+      openStream("mel", [
         await honest("mel", `space:${open}`),
         await honest("mel", `space:${closed}`),
         await honest("mel", "user:mel"),
       ]);
-      await openStream("eve", [
+      openStream("eve", [
         [`space:${closed}`, "garbage", false],
         ["user:mel", "garbage", false],
       ]);
-      await openStream(null, [["user:otto", "garbage", false]]);
+      openStream(null, [["user:otto", "garbage", false]]);
       // the connect pokes
       for (const st of streams) await drain(st, -1, "connect");
 
@@ -156,13 +160,21 @@ for (let s0 = 1; s0 <= SEEDS; s0 += 4)
           if (e.type === "run") {
             const r = dump.get(`run:${e.run}`);
             if (!r || !mayRead(dump, r, st.reader))
-              fail(step, what, `${st.reader ?? "anon"} got the text of run ${e.run}, which it may not read`);
+              fail(
+                step,
+                what,
+                `${st.reader ?? "anon"} got the text of run ${e.run}, which it may not read`,
+              );
             continue;
           }
           for (const log of e.logs) {
             const opens = st.logs.get(log);
             if (opens === undefined) {
-              fail(step, what, `${st.reader ?? "anon"} poked for ${log}, which its stream does not list`);
+              fail(
+                step,
+                what,
+                `${st.reader ?? "anon"} poked for ${log}, which its stream does not list`,
+              );
               continue;
             }
             const k = (st.pokes.get(log) ?? 0) + 1;
@@ -170,7 +182,11 @@ for (let s0 = 1; s0 <= SEEDS; s0 += 4)
             const now = viewOf(w, st.reader, log);
             if (!opens) {
               if (k > 1)
-                fail(step, what, `${st.reader ?? "anon"} poked again for ${log}, whose token does not open`);
+                fail(
+                  step,
+                  what,
+                  `${st.reader ?? "anon"} poked again for ${log}, whose token does not open`,
+                );
             } else if (step >= 0 && !checked.has(log) && now === st.seen.get(log))
               fail(
                 step,
@@ -305,11 +321,16 @@ for (let s0 = 1; s0 <= SEEDS; s0 += 4)
         } else if (kind === "ban") {
           const banned = before.has(`ban:${open}:mel`);
           what = `mona: ${banned ? "unban" : "ban"} mel in the open space`;
-          await w.as("mona", banned ? "members.unban" : "members.ban", { space: open, user: "mel" });
+          await w.as("mona", banned ? "members.unban" : "members.ban", {
+            space: open,
+            user: "mel",
+          });
           if (banned) await w.as("mel", "spaces.join", { space: open });
         } else if (kind === "remove") {
           const member = before.has(`member:${closed}:otto`);
-          what = member ? "olga removes otto from the closed space" : "otto is let into the closed space";
+          what = member
+            ? "olga removes otto from the closed space"
+            : "otto is let into the closed space";
           if (member)
             await w.as("olga", "members.remove", {
               space: closed,
@@ -362,7 +383,7 @@ for (let s0 = 1; s0 <= SEEDS; s0 += 4)
         for (const x of turnTexts.splice(0))
           if (x.sp === open && !got.has(x.text))
             fail(step, what, `the open space's reader missed the turn ${x.text}`);
-        void (before as ReadonlyMap<string, StoredRecord>);
+        void before;
       }
       for (const st of streams) await st.handle.close();
       w.clock.advance(DAY);
@@ -376,7 +397,12 @@ for (let s0 = 1; s0 <= SEEDS; s0 += 4)
     }
     t.deepEqual([...kinds.values()], [], `${failures.length} failures`);
     // the history reached the calls it checks, ok and refused
-    t.log([...stats].sort().map(([k, v]) => `${k}: ${v}`).join(", "));
+    t.log(
+      [...stats]
+        .sort()
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(", "),
+    );
     for (const k of ["runs.claim ok", "runs.heartbeat ok", "runs.turn ok", "runs.finish ok"])
       t.true((stats.get(k) ?? 0) > 0, k);
     t.true(

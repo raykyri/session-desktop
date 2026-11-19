@@ -15,7 +15,8 @@ import {
   type StoredRecord,
 } from "../src/index.js";
 
-import { DAY, HOUR, World, admit, cast, ok, refused, thread } from "./world.js";
+import type { World } from "./world.js";
+import { DAY, HOUR, admit, cast, ok, refused, thread } from "./world.js";
 
 const asReader = (s: MemoryStore) => ({
   get: (kind: string, id: string) => s.records.get(`${kind}:${id}`),
@@ -249,7 +250,7 @@ test("E12f: sourceReports.create for a source the space does not have is NOT_FOU
 
 test("a membership's end is in the person's user log: left or removed; joining again deletes it", (t) => {
   const { w, open, closed } = cast(t);
-  const exit = (sp: string, u: string) => w.get(`exit:${sp}:${u}`) as StoredRecord | undefined;
+  const exit = (sp: string, u: string) => w.get(`exit:${sp}:${u}`);
   ok(t, w.run("mel", "spaces.leave", { space: closed }));
   t.like(exit(closed, "mel") ?? {}, { kind: "exit", sp: closed, u: "mel", ended: "left" });
   const e = exit(closed, "mel") as StoredRecord;

@@ -68,12 +68,17 @@ rules above stay as they are. Decisions for the new client:
     author may still delete a thread a moderator removed.
   - A removed member of a closed space keeps a frozen copy on the device;
     the server serves them nothing of that space, but they can still delete
-    their own threads there.
-  - User logs follow current access: likes, saves and notifications are
-    served only while the person may read their space, report notifications
-    only while they are staff; requests stay with their person.
+    their own threads there. A voluntary leave keeps no frozen copy: an
+    `exit` record in the user log (`ended`: `left` or `removed`) tells
+    every device of the person how the membership ended.
+  - User logs follow current access: likes, saves, reports, source reports
+    and notifications are served only while the person may read their
+    space, report notifications only while they are staff; requests stay
+    with their person.
   - No version reaches a client: cursors and SSE ids are encrypted tokens
-    (AEAD) holding log, reader, version, serve time and epoch.
+    (AEAD) holding log, reader, version, serve time, epoch and the
+    database's instance id. An SSE stream pokes once for a token that does
+    not open and drops that log.
   - Tombstones keep key, kind, audience fields and rev, no text. The id
     registry keeps every id with its last rev; ids are never reused.
   - Writes carry a registered client id and a per-client seq assigned at
@@ -95,10 +100,13 @@ rules above stay as they are. Decisions for the new client:
     the person has rejoined; the UI offers Remove and Ban.
   - Record changes, the stored answer, the seq and queued effects commit
     together; effects run from a worker with backoff and a dead-letter
-    state, and carry ids, not text.
+    state, and carry ids, not text. A job starts after the worker's
+    commit, at least once. Housekeeping commits in its own transaction and
+    also runs on a timer.
   - Space names are unique across all spaces, so an unlisted space's name
     can be probed through CONFLICT. An invite link works again once its
-    maker regains the right to make links.
+    maker regains the right to make links. A link a moderator revoked is
+    restored only by someone with that role or a higher one.
 - Two isolated packages, each with its own tests, are written next:
   - `@session/mutators`: shared mutator definitions run by the client
     (prediction) and the server (authority), in three stages: server-only
@@ -149,7 +157,14 @@ rules above stay as they are. Decisions for the new client:
   - `runs.*` and `devices.*` are online calls: a run's lease (holder,
     expiry, attempt) and a device token exist only on the server. Leases
     last 90 s; an attempt that lost its lease ends `interrupted`; an answer
-    over 200 KB ends `too_large`.
+    over 200 KB ends `too_large`. Review round 1 of phase 1: a run's calls
+    are checked at call time like a write in its space; a run whose person
+    lost that, or whose device was revoked, ends (`access`); `runs.claim`
+    serves the turns as the person reads them; an answer lands only on its
+    ask's current attempt, and a later run of an ask cancels the earlier
+    ones; a served run record has no lease, and its device only for its
+    person; sign-ins are approved from a browser, and the device is made
+    when the app takes its token.
   - Decided for phase 1b: device records (no token) are in their person's
     user log; moderation state is a separate record, so a hide does not
     change the item's rev; STALE answers carry `current` (redacted for the
@@ -204,6 +219,7 @@ rules above stay as they are. Decisions for the new client:
   session resume: every run rebuilds context from the thread's stored turns.
   Device answers carry a light-text label in their meta line, report no
   usage, and count toward no limit; the server caps them at 200 KB per answer
-  and 100 device runs per hour per user (server settings).
+  and 100 device runs per hour per user (server settings), counted from the
+  server's record of starts, not from run records.
 - Cutover: hard. No desktop research is imported and no desktop node features
   (documents, highlights, anchored branches, folders) carry over.
