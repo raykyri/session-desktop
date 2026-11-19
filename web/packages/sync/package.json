@@ -26,7 +26,8 @@
   },
   "scripts": {
     "test": "ava",
-    "sim": "SYNC_SIM_SEEDS=1000 ava test/simulation.test.ts"
+    "sim": "SYNC_SIM_SEEDS=1000 ava test/simulation.test.ts",
+    "mockup:bundle": "node scripts/mockup-bundle.mjs"
   },
   "dependencies": {
     "@session/mutators": "*",

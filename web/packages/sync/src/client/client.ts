@@ -131,6 +131,17 @@ interface LiveLog {
   summaries: Set<string>;
 }
 
+/** How a write is queued: the defaults are a new mutation id and the
+ * client's time now. A write carried over from elsewhere (an outbox written
+ * before this client, a screen of the mockup) gives its own. `send: false`
+ * queues it without sending the outbox. */
+export interface WriteOptions {
+  mutationId?: string;
+  queuedAt?: number;
+  replaces?: string[];
+  send?: boolean;
+}
+
 export interface ClientOptions {
   user: string;
   transport: Transport;
@@ -684,18 +695,22 @@ export class SyncClient implements Changing {
   /** Queue a write, predict it, and send the outbox. Answers its local id
    * and a promise of the server's answer (null: it ended without one: shown,
    * or dropped). */
-  write(name: string, input: unknown): { local: string; answer: Promise<Answer | null> } {
+  write(
+    name: string,
+    input: unknown,
+    o: WriteOptions = {},
+  ): { local: string; answer: Promise<Answer | null> } {
     const def = this.registry.get(name);
     const parsed = def?.input.safeParse(input);
     const minted = parsed?.success && def ? def.ids(parsed.data) : [];
     const now = this.now();
     const e: OutboxEntry = {
       local: pkg.ulid(now, this.random),
-      mutationId: this.newId(),
+      mutationId: o.mutationId ?? this.newId(),
       name,
       input: json(input),
-      queuedAt: Math.round(now),
-      replaces: [],
+      queuedAt: Math.round(o.queuedAt ?? now),
+      replaces: [...(o.replaces ?? [])],
       uncertain: false,
       tries: 0,
       next: 0,
@@ -709,7 +724,7 @@ export class SyncClient implements Changing {
     });
     void this.persist();
     this.rebase();
-    void this.flush();
+    if (o.send !== false) void this.flush();
     return { local: e.local, answer };
   }
 

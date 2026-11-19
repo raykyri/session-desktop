@@ -11,6 +11,7 @@ import { renderToString } from "react-dom/server";
 import {
   FetchTransport,
   InProcessTransport,
+  fromMock,
   MemoryStorage,
   OUTBOX_TTL,
   SqliteStorage,
@@ -537,4 +538,53 @@ test("queries: subscribe hears a change of the result only; useQuery renders wit
   t.is(q.get(), 1);
   const html = renderToString(createElement(() => createElement("b", null, String(useQuery(q)))));
   t.is(html, "<b>1</b>");
+});
+
+test("the mock transport maps the mock backend's answers to the protocol's", (t) => {
+  const seen: unknown[] = [];
+  const keep = (c: unknown) => void seen.push(c);
+  t.deepEqual(
+    fromMock(
+      { ok: true, body: { result: { id: "X" }, changes: { posts: {} }, seq: 3, serverTime: 5 } },
+      keep,
+    ),
+    {
+      ok: true,
+      result: { id: "X" },
+      serverTime: 5,
+      seq: 3,
+    },
+  );
+  const stale = fromMock(
+    {
+      ok: false,
+      body: {
+        code: "STALE",
+        message: "m",
+        current: { rev: 2 },
+        changes: { rp: {} },
+        seq: 4,
+        serverTime: 6,
+        replayed: true,
+      },
+    },
+    keep,
+  );
+  t.like(stale, {
+    ok: false,
+    error: { code: "STALE", current: { rev: 2 } },
+    seq: 4,
+    replayed: true,
+  });
+  t.false(
+    "changes" in (stale.ok ? {} : stale.error),
+    "the page's collection changes are not log changes",
+  );
+  t.deepEqual(seen, [{ posts: {} }, { rp: {} }]);
+  t.like(
+    fromMock({ ok: false, body: { code: "OUT_OF_ORDER", message: "", expectedSeq: 7 } }, keep),
+    {
+      error: { expectedSeq: 7 },
+    },
+  );
 });

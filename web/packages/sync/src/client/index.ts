@@ -7,3 +7,4 @@ export * from "./fetch.js";
 export * from "./query.js";
 export * from "./storage.js";
 export * from "./transport.js";
+export * from "./mock.js";

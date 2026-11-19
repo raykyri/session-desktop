@@ -3991,6 +3991,8 @@ html[data-client="app"] .frame-bar .sx-wt { display: block; font-weight: 650; co
 <script src="session-web-spaces-jobs.js"></script>
 <script src="session-web-spaces-mock-api.js"></script>
 <script src="session-web-spaces-scenarios.js"></script>
+<!-- ?sync=1: the outbox screens driven by @session/sync's client half (npm run mockup:bundle in web/packages/sync) -->
+<script>if (/[?&]sync=1(&|$)/.test(location.search)) document.write('<script src="session-web-spaces-sync.js"><\/script>');</script>
 <script>
 (() => {
 'use strict';
@@ -13476,6 +13478,7 @@ function sxClearLocal() {
 /* send the outbox's entries that have a write, in order. An entry's pause: stop after that many failed tries
    (the screen shows it waiting for its next try, and the writes after it wait too) */
 async function sxDrive(gen) {
+  if (window.SessionSync) return sxDriveSync(gen);
   if (st.nvOffline) return;
   if (!SXQ.clientId) {
     const r = await sxFetch('POST', '/api/sync/register', {});
@@ -13514,6 +13517,61 @@ async function sxDrive(gen) {
       const state = SX_REFUSED[code] || 'failed';
       sxSet(id, Object.assign({ state, tries, code }, state === 'failed' ? { err: code } : {}, r.body.current ? { current: r.body.current } : {}, code === 'CONFLICT' && r.body.current && r.body.current.ed ? { by: r.body.current.ed } : {}));
       break;
+    }
+  }
+}
+/* ---------- ?sync=1: the outbox driven by @session/sync's client half (window.SessionSync) ----------
+   The same screens, with the outbox's rules taken from the sync core instead of the driver above: one SyncClient
+   per screen, over the mock's write envelope (its MockTransport). The client registers, gives each write its seq
+   when it sends it, backs off on transient answers (the core's 1 s, doubled, where the driver above waits 10 s,
+   20 s, 40 s), shows a write after 5 failures and goes on, drops one queued 3 days, and holds every write after
+   UPDATE_REQUIRED. An entry's `pause` stops the screen after that many tries, as above. */
+const SXS = { gen: -1, client: null, locals: new Map() };
+function sxSyncClient(gen) {
+  if (SXS.gen === gen && SXS.client) return SXS.client;
+  const post = (path, body) => sxFetch('POST', path, body);
+  const transport = new SessionSync.MockTransport(post, ch => applyChanges(ch, () => false));
+  Object.assign(SXS, { gen, locals: new Map(), client: new SessionSync.SyncClient({ user: ME.u, transport, clock: { now: () => SXQ.now }, random: Math.random }) });
+  return SXS.client;
+}
+const sxEntry = o => SXS.client && SXS.locals.has(o.id) ? SXS.client.outbox().find(e => e.local === SXS.locals.get(o.id)) : undefined;
+async function sxDriveSync(gen) {
+  if (st.nvOffline) return;
+  const c0 = await sxFetch('GET', '/api/dev/config');
+  if (gen !== SXQ.gen) return;
+  SXQ.now = Date.parse(c0.body.now);
+  const c = sxSyncClient(gen);
+  /* the screen's writes the client does not hold yet, made and queued as long ago as the screen says */
+  for (const o of st.sxObx) {
+    if (!o.w || !['wait', 'retry'].includes(o.state) || SXS.locals.has(o.id)) continue;
+    const mid = o.mid || window.SessionMockApi.ulid(SXQ.now - sxAgeMs(o.made), 0x40000000 + ++SXQ.n);
+    const queuedAt = o.queuedAt != null ? o.queuedAt : SXQ.now - sxAgeMs(o.queued || o.made);
+    SXS.locals.set(o.id, c.write(o.w.name, o.w.input, { mutationId: mid, queuedAt, replaces: o.replaces || [], send: false }).local);
+  }
+  for (let k = 0; k < 16; k++) {
+    await c.flush();
+    if (gen !== SXQ.gen) return;
+    if (c.updateRequired || !c.outbox().some(e => e.state === 'queued')) break;
+    if (st.sxObx.some(o => o.pause && (sxEntry(o) || {}).state === 'queued' && (sxEntry(o) || {}).tries >= o.pause)) break;
+    for (const e of c.outbox()) if (e.state === 'queued') e.next = 0;
+  }
+  sxSyncStates(c);
+}
+/* each entry's state from the client's */
+function sxSyncStates(c) {
+  if (c.updateRequired) st.sxUpd = true;
+  for (const o of st.sxObx.slice()) {
+    if (!SXS.locals.has(o.id)) continue;
+    const e = sxEntry(o);
+    if (!e || e.state === 'answered') { st.sxObx = st.sxObx.filter(x => x.id !== o.id); st.sxSent += 1; continue; }
+    const code = e.error && e.error.code;
+    if (e.state === 'queued') sxSet(o.id, e.tries ? { state: 'retry', tries: e.tries, next: Math.max(1, Math.round((e.next - c.now()) / 1000)) } : { state: 'wait' });
+    else if (e.state === 'held') sxSet(o.id, { state: 'update' });
+    else if (e.state === 'failed') sxSet(o.id, { state: 'failed', tries: e.tries, err: SX_ERRT[code] || code });
+    else if (e.state === 'expired' || e.state === 'dropped') sxSet(o.id, { state: e.state, code });
+    else {
+      const state = SX_REFUSED[code] || 'failed', cur = e.error && e.error.current;
+      sxSet(o.id, Object.assign({ state, code }, state === 'failed' ? { err: code } : {}, cur ? { current: cur } : {}, code === 'CONFLICT' && cur && cur.ed ? { by: cur.ed } : {}));
     }
   }
 }
@@ -13600,10 +13658,17 @@ function sxAct(act, id) {
   if (act === 'editor') { jump('ec-page-unsent'); return; }
   if (!o) return;
   if (act === 'copy') { taCopy(o.text || ''); toast('Text copied.'); return; }
-  if (act === 'discard') { drop(); sxLocalReply(o, false); st.modal = null; if (sxNat()) nst.sheet = null; toast(sxBad(o) ? 'Removed from Unsent changes.' : 'Discarded.'); return; }
+  if (act === 'discard') { if (sxEntry(o)) SXS.client.discard(SXS.locals.get(o.id)); drop(); sxLocalReply(o, false); st.modal = null; if (sxNat()) nst.sheet = null; toast(sxBad(o) ? 'Removed from Unsent changes.' : 'Discarded.'); return; }
   /* Retry sends the same write again; Send again (EXPIRED) sends it as a new write that replaces the refused one */
   if (act === 'retry' || act === 'again') {
     st.modal = null; if (sxNat()) nst.sheet = null;
+    /* with the sync core: Send again and Retry both give the write a new mutation id that replaces the old one */
+    if (sxEntry(o) && SXS.client.sendAgain(SXS.locals.get(o.id))) {
+      sxSet(id, { state: 'wait', tries: 0, pause: 0 });
+      sxLocalReply(sxObx(id), true);
+      sxWork(async gen => { await sxDrive(gen); if (gen === SXQ.gen && !sxObx(id)) toast(act === 'again' ? (o.kind === 'post' ? 'Posted again.' : 'Sent as a new reply.') : 'Sent.'); });
+      return;
+    }
     sxSet(id, act === 'again' ? { state: 'wait', tries: 0, pause: 0, made: '0m', queuedAt: null, mid: null, replaces: [o.mid].filter(Boolean) } : { state: 'wait', tries: 0, pause: 0 });
     sxLocalReply(sxObx(id), true);
     sxWork(async gen => { await sxDrive(gen); if (gen === SXQ.gen && !sxObx(id)) toast(act === 'again' ? (o.kind === 'post' ? 'Posted again.' : 'Sent as a new reply.') : 'Sent.'); });
