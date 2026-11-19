@@ -794,7 +794,10 @@ for (const [name, c] of Object.entries(PROC_CALLS)) {
     t.true(
       Object.keys(answer.changes).length > 0 ||
         name === "spaces.verifyDomain" ||
-        name === "devices.authorize",
+        name === "devices.authorize" ||
+        // a heartbeat extends the lease, which the server keeps and serves in
+        // no record
+        name === "runs.heartbeat",
       `${name} changed nothing`,
     );
   });

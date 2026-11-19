@@ -468,9 +468,7 @@ export const spaceRunSchema = z.object({
   /** A device run: its device moves it on (`runs.*`), not a job. The device
    * id is served to the run's person only; every other reader gets "". The
    * lease (holder, expiry, heartbeat) is the server's and is not served. */
-  executor: executorSchema
-    .extend({ device: spaceRecordIdSchema.or(z.literal("")) })
-    .optional(),
+  executor: executorSchema.extend({ device: spaceRecordIdSchema.or(z.literal("")) }).optional(),
 });
 
 // ---- sources ----

@@ -315,9 +315,10 @@
      seq: the number of the run's last event. paused: a dev-only hold (a Screen entry's scenario): the job does
      not move it on. TODO(limits): pay as stored on the ask. */
   /* id: the run's id. executor: a device run, which the device moves on (runs.claim, runs.turn, runs.finish), not
-     a job; lease: its lease (until: when it ends unless the device sends a heartbeat; beat: the last heartbeat) */
+     a job. A device run's lease (until: when it ends unless the device sends a heartbeat; beat: the last heartbeat) is
+     the server's and is not served: the backend keeps it in its sync state, by run id */
   S.Run = obj({ 'id?': str, th: str, node: str, u: str, status: one('queued', 'running'), attempt: int, seq: int, step: int, 'model?': nul(str), 'pay?': t.any, 'createdAt?': iso, 'paused?': bool,
-    'executor?': S_EXEC, 'lease?': nul(obj({ until: iso, beat: iso })) }, 'Run');
+    'executor?': S_EXEC }, 'Run');
   /* space: sent with a tree scoped to the caller's own asks (a closed space they are not a member of, READ_RULES) */
   S.AskTree = obj({ nodes: arr(S.AskNode), 'space?': str }, 'AskTree');
   S.Source = obj({
@@ -1192,7 +1193,7 @@
   function startRun(tx, th, node, x) {
     const id = tx.id(), r = { id, th, node, u: x.u || tx.me.u, status: 'queued', attempt: x.att || 1, seq: 0, step: 0, model: x.model || null, pay: x.pay == null ? null : x.pay, createdAt: tx.now };
     /* a device run: the device moves it on (section 6b); it counts toward the person's device runs in an hour */
-    if (x.executor) { r.executor = x.executor; r.pay = null; r.lease = null; tx.noteDeviceRun(); }
+    if (x.executor) { r.executor = x.executor; r.pay = null; tx.noteDeviceRun(); }
     tx.mapPut('runs', runKey(th, node), r);
     return id;
   }
@@ -1927,6 +1928,8 @@
     if (!r.executor || r.executor.u !== tx.me.u) throw rpcError('FORBIDDEN', 'This run isn’t one of your device runs.');
     if (r.executor.device !== i.device) throw rpcError('FORBIDDEN', 'This run runs on another device.');
     if (!claim && (r.status !== 'running' || r.attempt !== i.attempt)) throw rpcError('PRECONDITION_FAILED', 'This attempt no longer holds the run’s lease.');
+    const l = tx.lease(r.id);
+    if (!claim && (!l || Date.parse(l.until) <= Date.parse(tx.now))) throw rpcError('PRECONDITION_FAILED', 'This attempt no longer holds the run’s lease.');
     return [k, r];
   }
   const leaseUntil = tx => new Date(Date.parse(tx.now) + LEASE_MS).toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -1935,15 +1938,16 @@
     run: (tx, i) => {
       const [k, r] = leaseOf(tx, i, true);
       if (r.status !== 'queued') throw rpcError('PRECONDITION_FAILED', 'This run is already claimed.');
-      const r2 = { ...r, status: 'running', seq: r.seq + 1, lease: { until: leaseUntil(tx), beat: tx.now } };
+      const r2 = { ...r, status: 'running', seq: r.seq + 1 }, lease = { until: leaseUntil(tx), beat: tx.now };
       tx.mapPut('runs', k, r2);
+      tx.setLease(r2.id, lease);
       tx.emit({ type: 'research.run.started', run: r2, payload: { nodeId: k, attempt: r2.attempt, seq: r2.seq, model: r2.model || null } });
       const p = tx.need('posts', r.th, 'thread');
-      return { attempt: r2.attempt, lease: r2.lease, turns: [{ q: p.q, a: htmlText(tx.mapGet('rich', p.id) || '') }, ...(tx.mapGet('fu', p.id) || []).map(f => ({ q: f.q, a: f.a || '' }))] };
+      return { attempt: r2.attempt, lease, turns: [{ q: p.q, a: htmlText(tx.mapGet('rich', p.id) || '') }, ...(tx.mapGet('fu', p.id) || []).map(f => ({ q: f.q, a: f.a || '' }))] };
     } });
-  proc('runs.heartbeat', { input: obj({ run: ID, device: ID, attempt: int }), output: '{ lease: { until, beat } }', who: 'user', errors: ['NOT_FOUND', 'FORBIDDEN', 'PRECONDITION_FAILED'], writes: ['runs'],
+  proc('runs.heartbeat', { input: obj({ run: ID, device: ID, attempt: int }), output: '{ lease: { until, beat } }', who: 'user', errors: ['NOT_FOUND', 'FORBIDDEN', 'PRECONDITION_FAILED'], writes: [],
     note: 'the device extends the lease of the attempt it runs; separate from progress (a long tool call does not end the lease)',
-    run: (tx, i) => { const [k, r] = leaseOf(tx, i); const lease = { until: leaseUntil(tx), beat: tx.now }; tx.mapPut('runs', k, { ...r, lease }); return { lease }; } });
+    run: (tx, i) => { const [k, r] = leaseOf(tx, i); const lease = { until: leaseUntil(tx), beat: tx.now }; tx.setLease(r.id, lease); return { lease }; } });
   proc('runs.turn', { input: obj({ run: ID, device: ID, attempt: int, turn: t.any }), output: 'null', who: 'user', errors: ['NOT_FOUND', 'FORBIDDEN', 'PRECONDITION_FAILED'], writes: ['runs'],
     note: 'the device commits one turn of the attempt (a progress step): research.turn.committed to the run’s readers',
     run: (tx, i) => {
@@ -1962,6 +1966,7 @@
         tx.edit('posts', p.id, x => { x.running = false; x.tok = 0; x.sum = clipText(htmlText(i.answer), 170); delete x.fail; x.executor = r.executor; });
       } else editAsk(tx, p.id, r.node, y => { y.running = false; y.tok = 0; if (y.fu == null) y.html = i.answer; delete y.fail; y.executor = r.executor; }, f => { f.html = i.answer; f.a = htmlText(i.answer); f.executor = r.executor; });
       tx.mapDel('runs', k);
+      tx.setLease(r.id, null);
       runEnded(tx, r, 'complete');
       return { status: 'complete' };
     } });
@@ -1970,6 +1975,7 @@
     if (r.node === 'r') tx.edit('posts', p.id, x => { x.running = false; x.tok = 0; x.sum = window.SessionJobs.FAIL_SUM[why] ? window.SessionJobs.FAIL_SUM[why]() : null; x.fail = { why }; x.executor = r.executor; });
     else editAsk(tx, p.id, r.node, y => { y.running = false; y.html = ''; y.tok = 0; y.fail = { why }; y.executor = r.executor; }, f => { f.a = window.SessionJobs.FAIL_SUM[why] ? window.SessionJobs.FAIL_SUM[why]() : ''; delete f.html; });
     tx.mapDel('runs', k);
+    tx.setLease(r.id, null);
     runEnded(tx, r, 'failed', why);
   }
 
@@ -2177,7 +2183,7 @@
     let data = null, ids = 0, ver = null;   /* ids: how many ids the server has made (the ULID counter) */
     /* the sync state (section 6b), kept with the database: registered clients, recorded answers, the device runs
        started in the last hour, device sign-ins waiting for a browser, revoked devices */
-    const SYNC0 = () => ({ clients: {}, answers: {}, bySeq: {}, devRuns: [], signins: {}, revoked: [] });
+    const SYNC0 = () => ({ clients: {}, answers: {}, bySeq: {}, devRuns: [], signins: {}, revoked: [], leases: {} });
     let sync = SYNC0();
     let stored = false;                     /* the database came from localStorage (a reload) */
     const fail = msg => { console.error('[mock api] ' + msg); if (dev) setTimeout(() => { throw new Error('[mock api] ' + msg); }); };
@@ -2271,6 +2277,9 @@
         deviceRuns: () => [...sync.devRuns, ...later.filter(x => x[0] === 'run').map(x => x[1])],
         noteDeviceRun: () => { later.push(['run', Date.parse(cfg.now)]); },
         revokeDevice: id => { later.push(['revoke', id]); },
+        /* a device run's lease, by run id (the server's; not in any served record) */
+        lease: id => { for (let k = later.length - 1; k >= 0; k--) if (later[k][0] === 'lease' && later[k][1] === id) return later[k][2]; return sync.leases[id] || null; },
+        setLease: (id, v) => { later.push(['lease', id, v]); },
         signin: (name, kind) => {
           const request = newId(), code = inviteCode(request, ids).slice(0, 6).toUpperCase();
           later.push(['signin', request, { name, kind, code, at: cfg.now, st: 'waiting' }]);
@@ -2324,6 +2333,7 @@
           if (what === 'run') sync.devRuns.push(a);
           if (what === 'revoke') sync.revoked.push(a);
           if (what === 'signin') sync.signins[a] = b;
+          if (what === 'lease') { if (b) sync.leases[a] = b; else delete sync.leases[a]; }
         }
         sync.devRuns = sync.devRuns.filter(ms => ms > Date.parse(cfg.now) - 36e5);
         save();
@@ -2452,7 +2462,7 @@
         const x = node === 'r' ? tx.find('posts', th) : askTree(tx, th).nodes.find(n => n.id === node);
         const r = { id: tx.id(), th, node, u: x.u || tx.me.u, status: 'running', attempt: x.att || 1, seq: 1 + step, step, model: x.model || null, pay: x.pay == null ? null : x.pay, createdAt: tx.now, paused: true };
         /* a device run: its executor, and a lease the device holds (a minute and a half from the mock clock) */
-        if (executor) Object.assign(r, { executor, pay: null, lease: { until: new Date(Date.parse(tx.now) + 90e3).toISOString().replace(/\.\d{3}Z$/, 'Z'), beat: tx.now } });
+        if (executor) { Object.assign(r, { executor, pay: null }); tx.setLease(r.id, { until: new Date(Date.parse(tx.now) + 90e3).toISOString().replace(/\.\d{3}Z$/, 'Z'), beat: tx.now }); }
         tx.mapPut('runs', runKey(th, node), r);
       },
       /* the person started n device runs in the last hour (the limit is 100) */
@@ -2746,7 +2756,7 @@
        is unrecorded, as the server's own errors are. */
     function expireLeases() {
       const d = db0(), now = serverNow();
-      const ended = Object.entries(d.runs || {}).filter(([, r]) => r.executor && r.status === 'running' && r.lease && Date.parse(r.lease.until) < now);
+      const ended = Object.entries(d.runs || {}).filter(([, r]) => r.executor && r.status === 'running' && sync.leases[r.id] && Date.parse(sync.leases[r.id].until) < now);
       if (!ended.length) return;
       serverTx(tx => { for (const [k, r] of ended) { const p = tx.find('posts', r.th); if (p) endDeviceRun(tx, k, r, p, 'interrupted'); else tx.mapDel('runs', k); } });
     }
