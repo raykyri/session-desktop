@@ -5,6 +5,7 @@
 
 import test from "ava";
 
+import { DEDUP_TTL } from "../src/index.js";
 import type { Envelope, StatsRec, CountsRec, ThreadRec } from "../src/index.js";
 
 import { DAY, HOUR, actor, cast, ok, refused, thread } from "./harness.js";
@@ -174,6 +175,12 @@ test("a replay within 7 days answers the stored result; after 7 days it is refus
   await refused(t, w.resend("otto", e, true), "EXPIRED");
   await refused(t, w.resend("otto", e, true), "EXPIRED");
   t.is(w.get(`save:otto:${th}`), undefined);
+  // and no answer older than 7 days is kept at rest, under a mutation id or
+  // under (client, seq): a server that only ignores expired answers on read
+  // keeps them forever
+  const now = w.clock.now();
+  const old = (await w.server.scanStorage()).answers.filter((a) => a.at <= now - DEDUP_TTL);
+  t.deepEqual(old, []);
 });
 
 test("a client's writes are applied in order: a gap or an earlier seq is refused and records nothing", async (t) => {
@@ -225,6 +232,23 @@ test("a malformed mutation id is refused before the replay check, and recorded u
     await refused(t, w.resend("mel", e, true), "BAD_REQUEST");
     t.is(await w.nextSeq("mel", clientId), seq + 2);
   }
+});
+
+test("an answer recorded under (client, seq) only is dropped at rest after 7 days", async (t) => {
+  // a server that only ignores an expired answer when it reads one keeps
+  // every such answer forever
+  const { w, open } = await cast(t);
+  const clientId = await w.clientId("mel");
+  const e = await w.envelope("mel", "spaces.join", { space: open }, "not-a-ulid");
+  await refused(t, w.server.apply(actor("mel"), e), "BAD_REQUEST");
+  const kept = async () =>
+    (await w.server.scanStorage()).answers.filter((a) => a.clientId === clientId && a.seq === e.seq)
+      .length;
+  t.is(await kept(), 1);
+  w.clock.advance(DEDUP_TTL - HOUR);
+  t.is(await kept(), 1);
+  w.clock.advance(2 * HOUR);
+  t.is(await kept(), 0);
 });
 
 test("two devices of one person each learn whether their own write was applied", async (t) => {
