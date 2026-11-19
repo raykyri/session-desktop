@@ -192,39 +192,45 @@ test("round 2 finding 1: a replayed answer names the mutation id it was recorded
 });
 
 test("round 2 (new): a write's retryAt also holds the writes that name an id it derives", async (t) => {
-  const { w, open } = cast(t);
-  const { T, f1 } = askTree(t, w, open);
+  const { w, open, closed } = cast(t);
+  ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
   const th = w.id();
   ok(t, w.as("olga", "threads.create", { id: th, space: open, kind: "post", q: "P" }));
-  const tr = new Forced(inProcess(w, "mel"));
-  const mel = client(w, "mel", { transport: tr });
-  await mel.init();
-  await mel.open(`space:${open}`);
-  await mel.open("user:mel");
+  const tr = new Forced(inProcess(w, "olga"));
+  const olga = client(w, "olga", { transport: tr });
+  await olga.init();
+  await olga.open(`space:${closed}`);
+  await olga.open("user:olga");
   const retryAt = new Date(w.clock.now() + MINUTE).toISOString();
   tr.queue = [fail("TOO_MANY_REQUESTS", w.clock.now(), { retryAt })];
-  const N = mel.newId();
-  mel.write(
-    "threads.create",
-    { id: N, space: open, kind: "ask", q: "b", from: { th: T, node: f1 }, branch: "all" },
+  // the approval makes no input id; the member's admission id is derived
+  olga.write(
+    "joinRequests.decide",
+    {
+      space: closed,
+      users: ["otto"],
+      decision: "approve",
+      base: { otto: w.rev(`request:${closed}:otto`) },
+    },
     { send: false },
   );
-  const copy = mel.view().list("followup", (f) => f.th === N)[0];
-  const ask = mel.write(
-    "research.forkNode",
-    { id: mel.newId(), thread: N, parent: copy?.id, q: "third" },
+  const m = olga.view().get("member", `${closed}:otto`);
+  const remove = olga.write(
+    "members.remove",
+    { space: closed, user: "otto", base: { adm: m?.adm } },
     { send: false },
   );
-  mel.write("likes.set", { thread: th, on: true }, { send: false });
-  await mel.flush();
-  t.deepEqual(states(mel), [
-    "threads.create:queued",
-    "research.forkNode:queued",
+  olga.write("likes.set", { thread: th, on: true }, { send: false });
+  await olga.flush();
+  t.deepEqual(states(olga), [
+    "joinRequests.decide:queued",
+    "members.remove:queued",
     "likes.set:answered",
   ]);
   w.clock.advance(MINUTE);
-  await mel.flush();
-  t.like(await ask.answer, { ok: true });
+  await olga.flush();
+  t.like(await remove.answer, { ok: true });
+  t.is(w.get(`member:${closed}:otto`), undefined);
 });
 
 // ---- finding 2: a request in flight when the process ends ----
@@ -879,27 +885,37 @@ test("gap R3: a restored write that went without an answer keeps its mutation id
   await one.open(`space:${open}`);
   const th = w.id();
   ok(t, w.as("olga", "threads.create", { id: th, space: open, kind: "post", q: "P" }));
-  // the process ends with the like on the wire
-  const hang = watched(inProcess(w, "mel"), { push: () => new Promise<never>(() => {}) });
-  const two = client(w, "mel", { storage, transport: hang, seed: 3 });
+  // a process whose clock is 20 minutes fast, before it heard from the
+  // server, ends with the like on the wire (here the server answered it
+  // CLOCK_SKEW; the client cannot know)
+  const hang = watched(inProcess(w, "mel"), {
+    push: async (_es, next) => {
+      await next();
+      return new Promise<never>(() => {});
+    },
+  });
+  const fast = { now: () => w.clock.now() + 20 * MINUTE };
+  const two = client(w, "mel", { storage, transport: hang, seed: 3, clock: fast });
   await two.init();
   two.write("likes.set", { thread: th, on: true });
   await tick(20);
   const mid = two.outbox()[0]?.mutationId;
-  // the next process: its clock 20 minutes fast
-  const three = client(w, "mel", {
-    storage,
-    seed: 5,
-    clock: { now: () => w.clock.now() + 20 * MINUTE },
-  });
+  // the next process, on the same clock: its mutation id is 20 minutes
+  // ahead of the corrected clock, and kept (an envelope of it may apply)
+  const three = client(w, "mel", { storage, seed: 5, clock: fast });
   await three.init();
   await three.open(`space:${open}`);
   // a read: the first answer of the process corrects the clock
   await three.open("user:mel");
   t.not(three.offset, 0);
   t.like(three.outbox()[0] ?? {}, { mutationId: mid, uncertain: true, replaces: [] });
+  // sent as it is, its id too far ahead: EXPIRED, and Send again sends it
+  await three.flush();
+  t.deepEqual(states(three), ["likes.set:expired"]);
+  three.sendAgain(three.outbox()[0]?.local ?? "");
   await three.flush();
   t.deepEqual(states(three), ["likes.set:answered"]);
+  t.truthy(w.get(`like:mel:${th}`));
 });
 
 test("gap R6: Send again on a refused write that once went without an answer lists nothing in replaces", async (t) => {

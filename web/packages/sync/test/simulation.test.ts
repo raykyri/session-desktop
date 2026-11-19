@@ -984,6 +984,10 @@ async function check(sim: Sim): Promise<string | null> {
       );
       if (c.isFrozen(log)) {
         hit(sim, "a frozen copy");
+        // a voluntary leave keeps no frozen copy
+        const exit = s.records().get(`exit:${log.slice(6)}:${d.u}`);
+        if (exit?.kind === "exit" && exit.ended === "left")
+          out.push(`${d.name} ${log}: a frozen copy after the person left`);
         // the user's own threads and what they wrote under them; else only
         // what the server serves them
         const mine = new Set(
