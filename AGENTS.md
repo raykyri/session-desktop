@@ -62,6 +62,10 @@ rules above stay as they are. Decisions for the new client:
     counts live in a counts record, not on the thread.
   - A ban stops every write in its space, the author's own included.
   - Hidden text is served to its author and the space's moderators only.
+    An ask's `model` and `skill` count as its text (review round 2 of
+    phase 1): `model` is a model id and `skill` a skill of the space by
+    id, never free text, and both are blanked with the ask (its runs'
+    `model` too) when hidden, removed or deleted.
     Removing a thread erases it and everything under it from storage. Hiding
     a thread blanks only that thread's text. A thread its author deleted
     while it had replies stays as an empty shell, as in the mock, and the
@@ -183,7 +187,17 @@ rules above stay as they are. Decisions for the new client:
     ask's current attempt, and a later run of an ask cancels the earlier
     ones; a served run record has no lease, and its device only for its
     person; sign-ins are approved from a browser, and the device is made
-    when the app takes its token.
+    when the app takes its token. Review round 2 of phase 1: in-flight
+    text goes only to readers of the run's thread or follow-up as stored
+    (not hidden for them); an answer written to a hidden item, and a run
+    again, count as an edit of it (`shown` with an older rev is STALE); an
+    `access` end reads as `interrupted` to everyone but the run's person;
+    run calls come from the device's token only, answer
+    PRECONDITION_FAILED in an archived space, and archiving a space ends
+    its device runs (`interrupted`); a turn is at most 64 KB and an online
+    call's input 1 MB (TOO_LARGE); a run whose job is a dead letter ends;
+    the approver may deny an approved sign-in until its token is taken; a
+    revoked device's streams close.
   - Decided for phase 1b: device records (no token) are in their person's
     user log; moderation state is a separate record, so a hide does not
     change the item's rev; STALE answers carry `current` (redacted for the
@@ -213,8 +227,10 @@ rules above stay as they are. Decisions for the new client:
 - Ids: clients generate ULIDs. The server accepts a timestamp from 4 days in
   the past to 1 minute in the future (the outbox keeps writes 3 days), rejects an id that already exists, and
   answers a collision with the same CONFLICT whether or not the caller can
-  read the existing record. Space ids are ULIDs, and creating a space is
-  online-only.
+  read the existing record. A write whose id or mutation id is out of the
+  window answers CONFLICT in place of EXPIRED when an input id exists
+  (review round 2 of phase 1): to the client that minted it, the write
+  applied. Space ids are ULIDs, and creating a space is online-only.
 - Replication: full records for the last 90 days or the newest 500 threads
   per space, whichever covers more, capped at 5,000, plus every thread the
   user wrote or saved and any thread opened in the past 14 days; summaries
@@ -227,7 +243,10 @@ rules above stay as they are. Decisions for the new client:
   desktop authenticates with a bearer device token (Keychain); a CORS
   allowlist admits the desktop origin only. ADR-19 to ADR-22 in
   `web/docs/01-architecture-decisions.md` supersede ADR-3 (for spaces),
-  ADR-6 and ADR-11, and amend ADR-10.
+  ADR-6 and ADR-11, and amend ADR-10. Server time never goes back; after
+  the machine's clock jumped ahead and was corrected, an operator calls
+  `SyncServer.resetTime()` (phase 2 exposes it). Housekeeping faults are
+  counted and passed to the server's `onError` hook.
 - Desktop: macOS only, one client codebase with the web (the web client runs
   in Tauri). Device runs are a new run executor kind, a CLI process on the
   user's device: Claude Code or Codex (Grok is dropped). Included tokens are
