@@ -11,9 +11,20 @@
 // clears a stored state that names another person or names none.
 //
 // Reads: one read of a log at a time; a pull asked for while one is in
-// flight runs once after it (`hydrate` waits its turn too). A read the server
-// does not serve (`ReadError`) changes no log: UPDATE_REQUIRED holds the
-// outbox, UNAUTHORIZED signs the client out (`signedOut`).
+// flight runs once after it (`hydrate` waits its turn too). Every read
+// carries the client id (the client registers before its first read). A
+// read the server does not serve (`ReadError`) changes no log:
+// UPDATE_REQUIRED holds the outbox, UNAUTHORIZED signs the client out
+// (`signedOut`). A served read with `lastSeq: null` was made as nobody, or as
+// another person (a session that ended): it is taken as UNAUTHORIZED and the
+// client id is forgotten (`signedIn` registers a new one). Once signed out,
+// the rest of a batch of reads is not sent, and no read is until `signedIn`.
+//
+// Time: the client's time is the device's clock plus an offset, stored. The
+// first answer of a process sets the offset when the two differ by more than
+// a minute, and CLOCK_SKEW corrects it later. The 3-day drop and the age of a
+// never-sent id are measured against the server's time as an answer this
+// session gave it, plus a monotonic clock since.
 //
 // Prediction: each pending write is applied with `@session/mutators` over
 // the confirmed state and the writes before it (a `RecordSource` that
@@ -29,41 +40,64 @@
 // The outbox (AGENTS.md; the mockup's `sxDrive`):
 // - one global order; a write gets its seq when it is sent (the last seq the
 //   server processed + 1); what is on the wire is in storage first;
-// - every envelope carries `clientTime` (the device's clock plus the offset
-//   learned from CLOCK_SKEW, which is stored) and `queuedAt`;
-// - a write's input ids are fixed once an envelope of it was sent: a copy of
-//   that envelope may still apply. CLOCK_SKEW corrects the offset and gives
-//   every queued write a new mutation id (the ids that were sent go to
-//   `replaces`; a write that went without an answer keeps its id), and new
-//   input ids to the writes never sent (with every write that names them
-//   changed to match). A sent write whose ids are ahead of the corrected
-//   clock waits until they are within a minute (at most 10 minutes). A
-//   replayed answer whose result names another id than the input's (the
-//   server applied an older envelope) moves the write and the writes after
-//   it to the server's id;
-// - TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE, INTERNAL_SERVER_ERROR, no answer,
-//   and CLOCK_SKEW or OUT_OF_ORDER that do not converge are a try: the
-//   outbox pauses with backoff (1 s, doubled, at most 10 min); a `retryAt`
-//   holds that write only (and the writes that name an id it names) until
-//   then; after 5 tries the write is shown as failed and the outbox goes on.
-//   A timer sends the outbox when the next wait ends;
-// - EXPIRED is shown; a write still queued 3 days after `queuedAt` is dropped
-//   and shown, by the server's time as learned from an answer this session;
+// - every envelope carries `clientTime` (the client's time) and `queuedAt`;
+// - a write's input ids are fixed once an envelope of it was sent, and its
+//   mutation id once that id was on the wire: a copy of that envelope may
+//   still apply. Before a write is sent, a mutation id never on the wire and
+//   input ids never sent that are more than a minute ahead of the server's
+//   time are made again. After CLOCK_SKEW a mutation id that was on the wire
+//   gets a new one (the old one in `replaces`) only when the corrected clock
+//   puts it more than 4 days back or more than 10 minutes ahead; a write
+//   that went without an answer keeps it. A sent write whose ids are ahead
+//   waits until they are within a minute (at most 10 minutes; on the web it
+//   ends with Try again). The ids a mutator derives (`deriveId(user,
+//   mutation id, k)`) change with the mutation id: when it changes, the
+//   writes whose inputs may change (never sent, or refused with a recorded
+//   answer) and name a derived id of the old one name the new one's. A
+//   replayed answer is the one recorded under `recordedAs`: the write takes
+//   that mutation id (and the writes after it its derived ids), and a result
+//   that names another id than the input's moves the write and the writes
+//   after it to the server's id;
+// - a request at the moment the process ends may have applied: an entry
+//   stored on the wire loads as uncertain. CONFLICT on an id the write's own
+//   input makes (`ID_TAKEN`), for a write sent before, means an earlier
+//   envelope applied (only this client makes those ids): it is answered.
+//   EXPIRED with `unused` means none of the input's ids exists: no envelope
+//   applied, and Send again may use new ids;
+// - TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE, INTERNAL_SERVER_ERROR, a
+//   response that is not an answer, and CLOCK_SKEW or OUT_OF_ORDER that do
+//   not converge are a try: the outbox pauses with backoff (1 s, doubled, at
+//   most 10 min); a `retryAt` holds that write only (and the writes that name
+//   an id it names) until then; after 5 tries the write is shown as failed
+//   and the outbox goes on. No response at all (offline) is not a try: the
+//   outbox pauses with the same backoff over the requests in a row that got
+//   none, the write is uncertain, the next answer from the server ends the
+//   wait, and the 3-day drop ends the write. A timer sends the outbox when
+//   the next wait ends;
+// - EXPIRED is shown; a write still queued 3 days after it was queued is
+//   dropped and shown (by the monotonic clock for a write of this process,
+//   else by the server's time against `queuedAt`);
 // - UPDATE_REQUIRED holds the write and every write after it ("Update
-//   Session"); UNAUTHORIZED, and WRONG_CLIENT that a new registration does
-//   not cure, sign the client out (`signedOut`); OUT_OF_ORDER resends with
-//   the server's expected seq; WRONG_CLIENT registers again;
+//   Session"), for this process (the next process sends them, and the server
+//   says so again if it is still too old); UNAUTHORIZED, and WRONG_CLIENT
+//   that a new registration does not cure, sign the client out
+//   (`signedOut`); OUT_OF_ORDER resends with the server's expected seq;
+//   WRONG_CLIENT registers again;
 // - Send again on a shown write: a new mutation id. A write the server
-//   refused with a recorded answer (EXPIRED, a refusal) never applied: it is
-//   sent as a new write, with new input ids and no `replaces` (listing the
-//   refused id would replay the refusal). Any other keeps its input ids and
-//   lists its sent ids in `replaces`, so a write the server applied under an
-//   old id is answered from it and never applied twice;
+//   refused with a recorded answer (EXPIRED, a refusal) that never went
+//   without an answer never applied: it is sent as a new write, with new
+//   input ids and no `replaces` (listing the refused id would replay the
+//   refusal). Any other keeps its input ids and lists its sent ids in
+//   `replaces`, so a write the server applied under an old id is answered
+//   from it and never applied twice. Discard of a write on the wire is
+//   refused;
 // - online-only writes (a mutator marked `online`, and the `NOT_MUTATORS`
-//   calls) are sent at once, never queued, predicted or stored.
+//   calls) are sent at once, never queued, predicted or stored; held, signed
+//   out, or when a flush ends blocked (offline, a registration the server
+//   refused), they fail.
 // `persist: false` (the web): no wait across time: a write is sent at once,
-// a transient failure ends it as failed (shown with Try again), and nothing
-// is kept across a reload.
+// a transient failure, no response, ids ahead, or a sign-out ends it as
+// failed (shown with Try again), and nothing is kept across a reload.
 //
 // Scope: a pull that answers resync takes a new snapshot of that log. A
 // closed space whose snapshot shows its user is no longer a member becomes a
@@ -73,19 +107,25 @@
 // `ended: "left"`) keeps no copy. Joining again (a member record in the user
 // log) brings the log back.
 //
-// Tiers: a tiered space log holds some threads as summaries (their thread
-// and counts records only); a scan under such a thread is UNKNOWN. The
-// summaries are the ones the server marks (`summaries`), and any thread
-// whose records show it incomplete (an ask with no run, or fewer first-level
-// follow-ups or replies held than its counts record says). A thread the
-// person opened (`hydrate`) is reported in `tier.opened` for 14 days, so the
+// Tiers: space logs are read with the `desktop` window unless the client is
+// made with another. A tiered space log holds some threads as summaries
+// (their thread and counts records only); a scan under such a thread is
+// UNKNOWN. The summaries are the ones the server marks (`summaries`), and
+// any thread whose records show it incomplete (an ask with no run, or fewer
+// first-level follow-ups or replies held than its counts record says). What
+// the log holds under a thread a pull marks (follow-ups, replies, runs and
+// their hide records) is dropped, in memory and in storage: a thread that
+// left the full tier is not served again, and what the client held of it may
+// be stale. A thread the person opened (`hydrate`) is reported in
+// `tier.opened` (at most MAX_OPENED, the latest first) for 14 days, so the
 // server keeps serving it in full.
 //
 // Live updates: `listen` holds an event stream for the logs open now with a
 // cursor; it reconnects when that set changes or a log gets a new cursor (the
 // stream drops a log whose token stops opening, and the poke it sends makes
 // the client pull, resync and reconnect). A poke pulls its open logs, then
-// sends the outbox.
+// sends the outbox. A stream the server refuses ends `listen` (UNAUTHORIZED
+// signs out, UPDATE_REQUIRED holds).
 
 import * as pkg from "@session/mutators";
 
@@ -1093,12 +1133,16 @@ export class SyncClient implements Changing {
     const time = id.slice(0, 10);
     for (const e of this.entries) {
       if (!PENDING.has(e.state) || e.mutationId.slice(0, 10) !== time) continue;
-      let set = this.derivedCache.get(e.mutationId);
-      if (!set)
-        this.derivedCache.set(e.mutationId, (set = pkg.derivedIds(this.user, e.mutationId)));
-      if (set.has(id)) return true;
+      if (this.derivedOf(e.mutationId).has(id)) return true;
     }
     return false;
+  }
+
+  /** The ids a mutation id derives (cached while its write is pending). */
+  private derivedOf(mutationId: string): Set<string> {
+    let set = this.derivedCache.get(mutationId);
+    if (!set) this.derivedCache.set(mutationId, (set = pkg.derivedIds(this.user, mutationId)));
+    return set;
   }
 
   /** The ids of the confirmed records (the part of the id registry a
@@ -1599,17 +1643,25 @@ export class SyncClient implements Changing {
   /** The write to send next, or null: an online write first; then the first
    * queued write in order, unless it is waiting (a backoff pauses the
    * outbox; a write's own `retryAt` holds it, and the writes that name an id
-   * it makes, which wait with it). */
+   * it makes or derives, which wait with it). */
   private pick(now = this.now()): OutboxEntry | null {
     const d = this.direct.find((e) => e.state === "queued");
     if (d) return d;
     if (this.updateRequired || this.signedOut) return null;
     const held = new Set<string>();
+    const heldMutations: string[] = [];
+    const names = (e: OutboxEntry) =>
+      [...stringsOf(e.input)].some(
+        (x) =>
+          held.has(x) ||
+          heldMutations.some((m) => m.slice(0, 10) === x.slice(0, 10) && this.derivedOf(m).has(x)),
+      );
     for (const e of this.entries) {
       if (e.state !== "queued") continue;
       const due = this.dueAt(e, now) <= now;
-      if ((e.own && !due) || (held.size > 0 && [...stringsOf(e.input)].some((x) => held.has(x)))) {
+      if ((e.own && !due) || (heldMutations.length > 0 && names(e))) {
         for (const id of e.minted) held.add(id);
+        heldMutations.push(e.mutationId);
         continue;
       }
       return due ? e : null;

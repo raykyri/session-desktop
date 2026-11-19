@@ -191,6 +191,42 @@ test("round 2 finding 1: a replayed answer names the mutation id it was recorded
   );
 });
 
+test("round 2 (new): a write's retryAt also holds the writes that name an id it derives", async (t) => {
+  const { w, open } = cast(t);
+  const { T, f1 } = askTree(t, w, open);
+  const th = w.id();
+  ok(t, w.as("olga", "threads.create", { id: th, space: open, kind: "post", q: "P" }));
+  const tr = new Forced(inProcess(w, "mel"));
+  const mel = client(w, "mel", { transport: tr });
+  await mel.init();
+  await mel.open(`space:${open}`);
+  await mel.open("user:mel");
+  const retryAt = new Date(w.clock.now() + MINUTE).toISOString();
+  tr.queue = [fail("TOO_MANY_REQUESTS", w.clock.now(), { retryAt })];
+  const N = mel.newId();
+  mel.write(
+    "threads.create",
+    { id: N, space: open, kind: "ask", q: "b", from: { th: T, node: f1 }, branch: "all" },
+    { send: false },
+  );
+  const copy = mel.view().list("followup", (f) => f.th === N)[0];
+  const ask = mel.write(
+    "research.forkNode",
+    { id: mel.newId(), thread: N, parent: copy?.id, q: "third" },
+    { send: false },
+  );
+  mel.write("likes.set", { thread: th, on: true }, { send: false });
+  await mel.flush();
+  t.deepEqual(states(mel), [
+    "threads.create:queued",
+    "research.forkNode:queued",
+    "likes.set:answered",
+  ]);
+  w.clock.advance(MINUTE);
+  await mel.flush();
+  t.like(await ask.answer, { ok: true });
+});
+
 // ---- finding 2: a request in flight when the process ends ----
 
 /** mel's reply applies and the process ends before its answer; the
@@ -732,6 +768,31 @@ test("round 2 finding 9: an online write fails when the flush ends blocked (offl
   t.is(w.get(`space:${id}`), undefined, "not sent later");
 });
 
+test("round 2 finding 9: an online write fails when the flush ends blocked (a registration the server refused)", async (t) => {
+  const { w } = cast(t);
+  const inner = inProcess(w, "mel");
+  let limit = true;
+  const tr: Transport = {
+    ...watched(inner),
+    register: () =>
+      limit
+        ? Promise.resolve({
+            ok: false as const,
+            error: { code: "TOO_MANY_REQUESTS" as const, message: "" },
+            serverTime: w.clock.now(),
+          })
+        : inner.register(),
+  };
+  const mel = client(w, "mel", { transport: tr });
+  await mel.init();
+  const id = mel.newId();
+  const { answer } = mel.write("spaces.create", { id, name: "made-while-limited" });
+  t.is(await answer, null);
+  limit = false;
+  await mel.flush();
+  t.is(w.get(`space:${id}`), undefined, "not sent later");
+});
+
 test("round 2 finding 9: an event stream refused with 401 ends, reports the lost sign-in and signs the client out", async (t) => {
   const { w, open } = cast(t);
   const f = httpFetch(w.server, { browser: { u: "mel" } });
@@ -833,6 +894,9 @@ test("gap R3: a restored write that went without an answer keeps its mutation id
   });
   await three.init();
   await three.open(`space:${open}`);
+  // a read: the first answer of the process corrects the clock
+  await three.open("user:mel");
+  t.not(three.offset, 0);
   t.like(three.outbox()[0] ?? {}, { mutationId: mid, uncertain: true, replaces: [] });
   await three.flush();
   t.deepEqual(states(three), ["likes.set:answered"]);
@@ -938,18 +1002,20 @@ test("gap R16: the `ended` of a member key's del says the membership ended by a 
   const mine = w.id();
   ok(t, w.as("mel", "threads.create", { id: mine, space: closed, kind: "post", q: "mine" }));
   const inner = inProcess(w, "mel");
-  // a server that says it on the del, not in `ended`
+  // a server that says it on a del of the member key in a pull (this one
+  // answers resync and says it in `ended`): the pull is made here
+  let left = false;
   const tr = watched(inner, {
     pull: async (l, c, o) => {
-      const p = await inner.pull(l, c, o);
-      if (!("changes" in p) || l !== "user:mel") return p;
-      const { ended, ...rest } = p;
-      void ended;
+      if (!left || l !== "user:mel") return inner.pull(l, c, o);
+      left = false;
+      const s = await inner.snapshot(l, o);
+      if (!("records" in s)) return s;
       return {
-        ...rest,
-        changes: p.changes.map((x) =>
-          x.op === "del" && x.key === `member:${closed}:mel` ? { ...x, ended: "left" as const } : x,
-        ),
+        changes: [{ key: `member:${closed}:mel`, op: "del" as const, ended: "left" as const }],
+        cursor: c,
+        lastSeq: s.lastSeq,
+        serverTime: s.serverTime,
       };
     },
   });
@@ -958,6 +1024,7 @@ test("gap R16: the `ended` of a member key's del says the membership ended by a 
   await other.open("user:mel");
   await other.open(`space:${closed}`);
   ok(t, w.as("mel", "spaces.leave", { space: closed }));
+  left = true;
   await other.sync();
   t.false(other.isFrozen(`space:${closed}`));
   t.is(other.view().get("thread", mine), undefined);

@@ -67,7 +67,8 @@ export interface Actor {
  * - `clientId`: from `register`, bound to one user (and device).
  * - `seq`: the client's last processed seq + 1, given when it is sent.
  * - `clientTime`: the device's clock, corrected by the offset it learned
- *   from CLOCK_SKEW (ms). The server measures ages on it.
+ *   from the first answer of its process or from CLOCK_SKEW (ms). The
+ *   server measures ages on it.
  * - `queuedAt`: when the write was queued, on the same clock. The server
  *   checks it like an id's age (EXPIRED).
  * - `replaces`: the mutation ids this write was sent under before it was

@@ -109,6 +109,18 @@ rules above stay as they are. Decisions for the new client:
     person, or none, is cleared. Online calls (`spaces.create`, `runs.*`,
     `devices.*` and the other `NOT_MUTATORS`) are sent directly, never
     queued or stored.
+  - Decided in review round 2 of phase 1 (client): the first answer of a
+    process sets the clock offset; a mutation id is made again only when
+    the server's window would refuse it, and the ids it derives are mapped
+    in the writes after it (a replay names the id it was recorded under,
+    `recordedAs`). A write on the wire when the process ended is uncertain;
+    CONFLICT on its own input id reads as applied, and EXPIRED with
+    `unused` as never applied. No response at all is not a try: the outbox
+    pauses with backoff and the 3-day drop ends the write. A read carries
+    the client id; one made as nobody (`lastSeq: null`) signs out and
+    changes no log. A held write is sent by the next process. What a
+    replica holds under a thread a pull marks as a summary is dropped.
+    Client SQLite writes go through one driver `batch` (a transaction).
   - The web client runs the sync core with `persist: false`: no outbox
     across time, a transient failure shows Try again on its item, and
     nothing survives a reload. The desktop and phone apps keep the
