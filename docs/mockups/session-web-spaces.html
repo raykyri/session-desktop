@@ -6880,7 +6880,7 @@ function csModal() {
   }
   if (k === 'cs-rm' || k === 'cs-ban') {
     const ban = k === 'cs-ban', sx = sp(st.mgSpace);
-    return dlg(ban ? `Ban ${a} from ${spName(sx)}?` : `Remove ${a} from ${spName(sx)}?`, `<p class="muted">${ban ? `The user will lose access now and cannot request to join or use invite links. Their threads and asks will remain in the space.` : `The user will lose access now. They can request to join again${sx.policy === 'invite' ? ' if someone invites them' : ''}.`}</p><p class="cs-fine">${I.agent}<span>${ban ? 'The user will not be notified.' : 'The user gets no notification; their app shows that they lost access.'}</span></p>`, `${cancelB()}<button class="btn danger" type="button" data-csmem-ok="${k}:${a}">${ban ? 'Ban' : 'Remove'}</button>`, 'alertdialog');
+    return dlg(ban ? `Ban ${a} from ${spName(sx)}?` : `Remove ${a} from ${spName(sx)}?`, `<p class="muted">${ban ? `The user will lose access now and cannot request to join or use invite links. Their threads and asks will remain in the space.` : `The user will lose access now. They can request to join again${sx.policy === 'invite' ? ' if someone invites them' : ''}.`}</p><p class="cs-fine">${I.agent}<span>The user will not be notified.</span></p>`, `${cancelB()}<button class="btn danger" type="button" data-csmem-ok="${k}:${a}">${ban ? 'Ban' : 'Remove'}</button>`, 'alertdialog');
   }
   if (k === 'cs-toclosed') return csVisDlg('closed', sp(st.mgSpace));
   if (k === 'cs-toopen') return csVisDlg('open', sp(st.mgSpace));

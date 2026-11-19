@@ -1428,9 +1428,9 @@
     } });
   const removeMember = (tx, sid, u) => { const list = rosterOf(tx, sid); if (list.some(m => m.u === u)) setRoster(tx, sid, list.filter(m => m.u !== u)); };
   proc('members.remove', { input: obj({ space: ID, user: str, base: obj({ adm: str }, 'AdmissionBase') }), output: 'null', who: 'moderator', errors: ['NOT_FOUND', 'STALE'], wire: 'ThreadMember[]', writes: ['mem', 'memOther', 'spaces'],
-    note: 'remove a member ranked below you (see members.setRole) from a closed space; base.adm: the admission id of the membership the moderator saw (STALE when the person was let in again since; a person who is no longer a member: nothing to remove). An open space answers BAD_REQUEST: a removed person joins again at once, so moderators ban there. The person gets no notification; their app shows that they lost access.',
+    note: 'remove a member ranked below you (see members.setRole); base.adm: the admission id of the membership the moderator saw (STALE when the person was let in again since; a person who is no longer a member: nothing to remove). In an open space a removal is undone by joining again, and is STALE once the person has rejoined; moderators can also ban there. The person is not notified.',
     space: spaceIn,
-    can: (tx, i) => !closedSpace(tx.need('spaces', i.space, 'space')) ? rpcError('BAD_REQUEST', undefined, ['input.space: expected a closed space (in an open space, ban the person instead)']) : actsOn(tx, i.space, i.user),
+    can: (tx, i) => actsOn(tx, i.space, i.user),
     run: (tx, i) => {
       tx.need('spaces', i.space, 'space');
       const m = rosterOf(tx, i.space).find(x => x.u === i.user);

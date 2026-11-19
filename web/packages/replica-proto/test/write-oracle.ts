@@ -56,7 +56,6 @@
 // fails.
 
 import type { Envelope, ErrorCode, StoredRecord } from "../src/index.js";
-import { USE_PACKAGE } from "../src/switch.js";
 
 import { slug } from "./effect-model.js";
 import { mayRead } from "./oracle.js";
@@ -493,10 +492,9 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     if (roleOf(f, sp, user) === null) no("NOT_FOUND");
   },
   "members.remove": (f, i) => {
-    const s = inSpace(f, String(i["space"]), "mod");
-    // @session/mutators (phase 1a.2): removal is for closed spaces; in an
-    // open space a moderator bans
-    if (USE_PACKAGE && !closed(s)) no("BAD_REQUEST");
+    // open and closed spaces alike (in an open space, joining again undoes
+    // a removal)
+    inSpace(f, String(i["space"]), "mod");
     actOn(f, String(i["space"]), String(i["user"]));
     // round 2: the admission id the moderator saw; nothing to do for a person
     // who is no longer a member

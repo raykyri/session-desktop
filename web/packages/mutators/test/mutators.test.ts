@@ -678,12 +678,12 @@ test("members: setRole with base, ownership transfer, remove by admission id, ba
     }),
   );
   t.is(ok(t, w.run("mona", "members.remove", { space: closed, user: "otto", base: old })), null);
-  // an open space: ban, not remove
-  refused(
+  // an open space: remove works too (joining again undoes it)
+  ok(
     t,
     w.run("mona", "members.remove", { space: open, user: "otto", base: w.admission(open, "otto") }),
-    "BAD_REQUEST",
   );
+  t.is(w.get(`member:${open}:otto`), undefined);
   ok(t, w.run("mona", "members.ban", { space: closed, user: "mel" }));
   t.is(w.get(`member:${closed}:mel`), undefined);
   t.truthy(w.get(`ban:${closed}:mel`));

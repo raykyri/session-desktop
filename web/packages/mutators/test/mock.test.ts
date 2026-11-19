@@ -623,7 +623,11 @@ const HISTORY: Step[] = [
     name: "members.setRole",
     input: (x) => ({ space: x.id("lounge"), user: "olga", role: "member", base: { rev: 1 } }),
   },
-  // an open space: ban, not remove
+  // an open space: remove (STALE with an admission the person no longer has), then ban
+  {
+    name: "members.remove",
+    input: (x) => ({ space: x.id("lounge"), user: "otto", base: { adm: "an old admission" } }),
+  },
   {
     name: "members.remove",
     input: (x) => ({ space: x.id("lounge"), user: "otto", base: { adm: x.adm("lounge", "otto") } }),

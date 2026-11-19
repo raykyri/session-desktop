@@ -8,7 +8,6 @@ import test from "ava";
 import {
   MUTATORS,
   ReplicaClient,
-  USE_PACKAGE,
   refuse,
   type Actor,
   type AnyMutator,
@@ -177,7 +176,7 @@ test("S2: a client whose id expired registers again and sends its write; a store
 });
 
 test("H1: a restricting decision applies whatever the target does in between", async (t) => {
-  const { w, open, closed } = await cast(t);
+  const { w, open } = await cast(t);
   await ok(t, w.as("eve", "spaces.join", { space: open }));
   // the author edits faster than the moderator decides
   const th = await thread(t, w, "eve", open, "post", "ABUSE v0");
@@ -227,30 +226,14 @@ test("H1: a restricting decision applies whatever the target does in between", a
     "FORBIDDEN",
   );
   // a removal names an admission: leaving and joining an open space again
-  // makes a new one, so a removal decided before is STALE; the ban is the tool
-  // for an open space. @session/mutators (phase 1a.2) takes no removal in an
-  // open space at all (BAD_REQUEST); there the same admission rule is checked
-  // in a closed space, where a person is let in again by an approval.
-  if (USE_PACKAGE) {
-    await refused(
-      t,
-      w.as("mona", "members.remove", {
-        space: open,
-        user: "otto",
-        base: w.admission(open, "otto"),
-      }),
-      "BAD_REQUEST",
-    );
-    t.truthy(w.get(`member:${open}:otto`));
-  }
-  const sp = USE_PACKAGE ? closed : open;
+  // makes a new one, so a removal decided before is STALE. Remove works in an
+  // open space (joining again undoes it); a ban is what keeps a person out.
+  const sp = open;
   const again = async () => {
     await ok(t, w.as("otto", "spaces.leave", { space: sp }));
-    if (USE_PACKAGE) await admit(t, w, closed, "otto");
-    else await ok(t, w.as("otto", "spaces.join", { space: sp }));
+    await ok(t, w.as("otto", "spaces.join", { space: sp }));
   };
-  if (USE_PACKAGE) await admit(t, w, closed, "otto");
-  else await again();
+  await again();
   const adm = w.admission(sp, "otto");
   await again();
   await refused(t, w.as("mona", "members.remove", { space: sp, user: "otto", base: adm }), "STALE");
