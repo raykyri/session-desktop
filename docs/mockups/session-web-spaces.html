@@ -13610,9 +13610,10 @@ function sxSyncClient(gen) {
   Object.assign(SXS, { gen, locals: new Map(), ahead: 0, client: new SessionSync.SyncClient({ user: ME.u, transport, clock, monotonic: clock.now, random: Math.random, timer: null, persist: sxApp() || sxNat() }) });
   return SXS.client;
 }
-/* move the client's clock to the end of its earliest wait */
+/* move the client's clock to the end of its earliest wait that has not ended (a write due now that the flush did
+   not send is held behind a wait, as the client's own timer counts it) */
 function sxSyncWait(c) {
-  const next = Math.min(...c.outbox().filter(e => e.state === 'queued').map(e => e.next));
+  const next = Math.min(...c.outbox().filter(e => e.state === 'queued' && e.next > c.now()).map(e => e.next));
   if (Number.isFinite(next) && next > c.now()) SXS.ahead += next - c.now();
 }
 const sxEntry = o => SXS.client && SXS.locals.has(o.id) ? SXS.client.outbox().find(e => e.local === SXS.locals.get(o.id)) : undefined;
