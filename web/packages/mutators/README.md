@@ -125,9 +125,9 @@ these mutators. `test/mock.test.ts` runs a long history through both and
 compares their stored state after every step. `DIFFERENCES` in that file
 lists what the mock still does differently on purpose, each with its reason
 and a test of both behaviours: the effects the mock writes in the
-procedure's transaction (it has no effect worker), its deterministic invite
-codes (it has no random source), and positional addressing of replies and
-flat follow-ups (D32).
+procedure's transaction (D2, D3: it has no effect worker) and its
+deterministic invite codes (D12: it has no random source). Both sides name
+replies and flat follow-ups by id since phase 1b.
 
 ## Tests
 
