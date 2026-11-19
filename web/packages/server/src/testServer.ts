@@ -30,6 +30,9 @@ export interface TestServerOptions {
   port?: number;
   /** Start the job runner's timers (effect worker, housekeeping, queue). */
   timers?: boolean;
+  /** A sync clock that `POST /api/test/clock` sets (an offset from the real
+   * clock), when `sync.clock` is not given. */
+  settableClock?: boolean;
 }
 
 export interface RunningTestServer {
@@ -57,13 +60,18 @@ export function startTestServer(o: TestServerOptions = {}): {
   });
   const db = openDatabase(config.databasePath);
   const logger = createLogger({ level: "error", write: () => undefined });
-  const deps = buildDeps({
+  let offset = 0;
+  const clock = o.settableClock ? { now: () => Date.now() + offset } : undefined;
+  const built = buildDeps({
     config,
     db,
     logger,
     runs: { autoStart: o.timers === true },
-    ...(o.sync ? { sync: o.sync } : {}),
+    ...(o.sync || clock ? { sync: { ...(clock ? { clock } : {}), ...o.sync } } : {}),
   });
+  const deps = clock
+    ? { ...built, testClock: { set: (ms: number) => void (offset = ms - Date.now()) } }
+    : built;
   if (o.timers) deps.runs.startTimers();
   const app = createApp({
     ...deps,

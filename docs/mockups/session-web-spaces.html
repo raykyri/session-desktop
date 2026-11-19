@@ -4029,6 +4029,8 @@ html[data-client="app"] .frame-bar .sx-wt { display: block; font-weight: 650; co
 <script src="session-web-spaces-scenarios.js"></script>
 <!-- ?sync=1: the outbox screens driven by @session/sync's client half (npm run mockup:bundle in web/packages/sync) -->
 <script>if (/[?&]sync=1(&|$)/.test(location.search)) document.write('<script src="session-web-spaces-sync.js"><\/script>');</script>
+<!-- ?sync=1&server=<origin>: the same, with the writes sent to the real server at <origin> (phase 2a; session-web-spaces-real.js) -->
+<script>if (/[?&]sync=1(&|$)/.test(location.search) && /[?&]server=/.test(location.search)) document.write('<script src="session-web-spaces-real.js"><\/script>');</script>
 <script>
 (() => {
 'use strict';
@@ -13520,7 +13522,8 @@ async function sxFetch(method, url, body, headers) {
   try { data = (t && dec(t)) || {}; } catch (e) {}
   return { ok: res.ok, status: res.status, body: data };
 }
-const sxDevConfig = c => sxFetch('PUT', '/api/dev/config', c);
+/* &server=<origin>: the real server's minimum protocol follows the mock's */
+const sxDevConfig = c => window.SessionReal && c.minProtocol != null ? Promise.all([window.SessionReal.config({ minProtocol: c.minProtocol > SX_PROTOCOL ? SessionSync.PROTOCOL_VERSION + 1 : SessionSync.PROTOCOL_VERSION }), sxFetch('PUT', '/api/dev/config', c)]).then(r => r[1]) : sxFetch('PUT', '/api/dev/config', c);
 /* the screen's requests: counted as pending (window.__dataIdle), then the screen is drawn again, unless another
    entry was opened meanwhile */
 function sxWork(fn) {
@@ -13610,7 +13613,8 @@ function sxSyncClient(gen) {
   if (SXS.gen === gen && SXS.client) return SXS.client;
   /* offline: no response at all */
   const post = (path, body) => st.nvOffline ? Promise.reject(new TypeError('offline')) : sxFetch('POST', path, body);
-  const transport = new SessionSync.MockTransport(post, ch => applyChanges(ch, () => false));
+  /* &server=<origin>: the real server answers the writes; the mock still runs them for the page's collections */
+  const transport = window.SessionReal ? window.SessionReal.transport(post, ch => applyChanges(ch, () => false), () => st.nvOffline) : new SessionSync.MockTransport(post, ch => applyChanges(ch, () => false));
   const clock = { now: () => SXQ.now + SXS.ahead };
   Object.assign(SXS, { gen, locals: new Map(), ahead: 0, client: new SessionSync.SyncClient({ user: ME.u, transport, clock, monotonic: clock.now, random: Math.random, timer: null, persist: sxApp() || sxNat() }) });
   return SXS.client;
@@ -13626,6 +13630,8 @@ async function sxDriveSync(gen) {
   const c0 = await sxFetch('GET', '/api/dev/config');
   if (gen !== SXQ.gen) return;
   SXQ.now = Date.parse(c0.body.now);
+  /* &server=<origin>: the screen's data into the real server's store, once per screen */
+  if (window.SessionReal && SXS.loaded !== gen) { SXS.loaded = gen; await window.SessionReal.load(sxFetch, SXQ.now, ME.u); if (gen !== SXQ.gen) return; }
   const c = sxSyncClient(gen);
   /* the screen's writes the client does not hold yet, made and queued as long ago as the screen says */
   for (const o of st.sxObx) {
@@ -13663,7 +13669,7 @@ function sxSyncStates(c) {
   }
 }
 /* forced failures of the next n writes (DevConfig failOn) */
-const sxFailNext = (code, times) => sxDevConfig({ failOn: { code, paths: ['/api/sync/write'], times } });
+const sxFailNext = (code, times) => window.SessionReal ? window.SessionReal.failNext(code, times) : sxDevConfig({ failOn: { code, paths: ['/api/sync/write'], times } });
 /* writes sent after the ones a screen shows: likes on the space's first threads */
 const sxFill = (n, sid) => D.posts.filter(p => p.s === sid && !p.gone && !p.del).slice(0, n).map((p, k) => ({ id: 'w' + k, kind: 'like', sp: sid, title: `Like in ${spName(sp(sid))}`, text: '', state: 'wait', made: '15m', tries: 0, w: { name: 'likes.set', input: { thread: p.id, on: true } } }));
 

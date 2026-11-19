@@ -9,7 +9,7 @@ const out = new URL("../../../../docs/mockups/session-web-spaces-sync.js", impor
 await build({
   stdin: {
     contents: [
-      `export { MemoryStorage, MockTransport, SHOWN, SyncClient, fromMock } from "./src/client/index.ts";`,
+      `export { MemoryStorage, MockTransport, Offline, SHOWN, SyncClient, fromMock } from "./src/client/index.ts";`,
       `export { MAX_TRIES, OUTBOX_TTL, PROTOCOL_VERSION, backoff } from "./src/protocol.ts";`,
     ].join("\n"),
     resolveDir: new URL("..", import.meta.url).pathname,

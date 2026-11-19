@@ -26,6 +26,9 @@ export interface ServerDeps {
   /** Outbound HTTP (GitHub, key checks). Injected so tests can answer
    * without a network. */
   fetch?: typeof globalThis.fetch;
+  /** Test only: the sync server's clock, when a test server made it
+   * settable (`POST /api/test/clock`). */
+  testClock?: { set(ms: number): void };
 }
 
 /** Per-request state the middlewares publish and the handlers read. */

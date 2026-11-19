@@ -130,10 +130,12 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
     }),
   );
   app.route("/", imageRoutes({ deps: { ...deps, logger }, limiter }));
-  app.route("/", syncRoutes({ ...deps, logger }));
-  // test only: a scenario's records into the store, and the mockup's files
+  // test only (before the sync routes: its forced failures answer first): a
+  // scenario's records into the store, a device token, the clock, and the
+  // mockup's files
   if (deps.config.testAuthEnabled)
     app.route("/", scenarioRoutes({ ...deps, logger }, mockupsDirectory));
+  app.route("/", syncRoutes({ ...deps, logger }));
 
   // `auth.logout` clears the session rows; the cookie is this layer's to
   // clear, so the mutation is mirrored here rather than given a `Set-Cookie`
