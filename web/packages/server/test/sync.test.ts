@@ -132,9 +132,9 @@ test("the event stream pokes a reader for a change it may read, and closes on si
   const s = await mel.snapshot(`space:${sp}`);
   const stream = await mel.events({ [`space:${sp}`]: s.body["cursor"] as string });
   t.is(stream.status, 200);
-  t.true((await stream.read()).includes(": open"));
+  t.true((await stream.until(/: open/)).includes(": open"));
   await olga.write("threads.create", { id: olga.id(), space: sp, kind: "post", q: "hello" });
-  const text = await stream.read();
+  const text = await stream.until(/event: poke/);
   t.regex(
     text,
     new RegExp(`event: poke\\nid: .*\\ndata: \\{"type":"poke","logs":\\["space:${sp}"\\]\\}`),
@@ -147,7 +147,7 @@ test("the event stream pokes a reader for a change it may read, and closes on si
     body: "{}",
   });
   t.is(logout.status, 200);
-  await stream.read();
+  await stream.until(null);
   t.true(stream.ended());
   await stream.close();
 });
@@ -184,7 +184,7 @@ test("device sign-in: approved from the browser with one click; the bearer token
   // a stream of the device closes when it is revoked
   const stream = await dev.events({ "user:mel": "x" });
   t.like((await mel.call("devices.revoke", { id: d.device })).body, { ok: true });
-  await stream.read();
+  await stream.until(null);
   t.true(stream.ended());
   await stream.close();
   const after = await dev.post("/api/sync/register", {});

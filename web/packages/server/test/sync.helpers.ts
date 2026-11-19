@@ -146,6 +146,12 @@ export class HttpClient {
         return text;
       },
       ended: () => done,
+      /** Wait (at most 2 s) until the text matches, or the stream ended. */
+      until: async (re: RegExp | null) => {
+        for (let k = 0; k < 100 && !(re ? re.test(text) : done); k++)
+          await new Promise((r) => setTimeout(r, 20));
+        return text;
+      },
       close: async () => {
         ac.abort();
         await pump;

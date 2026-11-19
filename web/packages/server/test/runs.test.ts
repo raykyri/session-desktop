@@ -79,7 +79,7 @@ test.serial(
     t.like(rec(h, `run:${run}`), { status: "complete", end: null, pay: "session" });
     const turn = rec(h, `turn:${run}:1`) as { body: { role: string } } | undefined;
     t.is(turn?.body.role, "assistant");
-    const text = await stream.read();
+    const text = await stream.until(/event: run/);
     t.regex(
       text,
       /event: run\ndata: \{"type":"run","run":"[0-9A-Z]+","attempt":1,"seq":1,"text":"A \[\[Skip list\]\]/,
@@ -243,7 +243,8 @@ test.serial("Stop ends a running job; Run again starts a new attempt", async (t)
   const { th, run } = await ask(mel, sp);
   h.deps.sync.work();
   h.deps.runs.tick();
-  await new Promise((r) => setTimeout(r, 30));
+  for (let k = 0; k < 100 && (rec(h, `run:${run}`) as RunRec).status !== "running"; k++)
+    await new Promise((r) => setTimeout(r, 10));
   t.like(rec(h, `run:${run}`), { status: "running" });
   t.like((await mel.call("research.cancelNode", { thread: th, node: "r" })).body, { ok: true });
   await h.deps.runs.idle();
