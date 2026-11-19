@@ -41,13 +41,50 @@ rules above stay as they are. Decisions for the new client:
   from an outbox; the server confirms or refuses them in order. No CRDT
   replication of spaces. A device replicates the closed spaces its user
   belongs to, and nothing else of any closed space.
-- Phase 0, before the API is fixed: an adversarial client suite against a
-  prototype of the server's apply and pull must show these invariants hold:
+- Phase 0 (done): `web/packages/replica-proto` is a prototype server half
+  with an adversarial suite, a read oracle, a write oracle, an effect model
+  and a mutation suite (`npm run mutate`). It is the acceptance suite the
+  real server half must pass, and nothing in the app imports it. Invariants:
   the server applies mutator inputs and never accepts client state;
-  permissions are checked at apply time; every pull is filtered by the
+  permissions are checked at apply time; every read is filtered by the
   reader's current scope; the server owns uniqueness, stored times and
-  server-made values; idempotency is scoped per user; removed content is never
-  served again; a replica on disk belongs to one user.
+  server-made values; idempotency is scoped per user; removed content is
+  erased and never served again; a replica belongs to one user.
+- Rules added by the phase 0 reviews:
+  - Stale intent: `shown`, `approve`, reopen and `setRole` carry `base.rev`
+    of their target and answer STALE when it differs; `hidden`, `removed`,
+    `decline` and `members.ban` apply to the record as it is;
+    `members.remove` compares the member's admission id. Like and follow-up
+    counts live in a counts record, not on the thread.
+  - A ban stops every write in its space, the author's own included.
+  - Hidden text is served to its author and the space's moderators only.
+    Removing a thread erases it and everything under it from storage. Hiding
+    a thread blanks only that thread's text. A thread its author deleted
+    while it had replies stays as an empty shell, as in the mock, and the
+    author may still delete a thread a moderator removed.
+  - A removed member of a closed space keeps a frozen copy on the device;
+    the server serves them nothing of that space, but they can still delete
+    their own threads there.
+  - User logs follow current access: likes, saves and notifications are
+    served only while the person may read their space, report notifications
+    only while they are staff; requests stay with their person.
+  - No version reaches a client: cursors and SSE ids are encrypted tokens
+    (AEAD) holding log, reader, version, serve time and epoch.
+  - Tombstones keep key, kind, audience fields and rev, no text. The id
+    registry keeps every id with its last rev; ids are never reused.
+  - Writes carry a registered client id and a per-client seq assigned at
+    send time; every answer that uses a seq is recorded; TOO_MANY_REQUESTS,
+    SERVICE_UNAVAILABLE, INTERNAL_SERVER_ERROR and CLOCK_SKEW are not. A sent
+    write keeps its mutation id. Envelopes carry the device's time; an id
+    more than 4 days old on the device's clock answers EXPIRED (recorded).
+    A write that fails 5 times is shown to the person and the rest of the
+    outbox continues; a write dropped at 3 days is reported.
+  - Record changes, the stored answer, the seq and queued effects commit
+    together; effects run from a worker with backoff and a dead-letter
+    state, and carry ids, not text.
+  - Space names are unique across all spaces, so an unlisted space's name
+    can be probed through CONFLICT. An invite link works again once its
+    maker regains the right to make links.
 - Two isolated packages, each with its own tests, are written next:
   - `@session/mutators`: shared mutator definitions run by the client
     (prediction) and the server (authority), in three stages: server-only
@@ -62,16 +99,18 @@ rules above stay as they are. Decisions for the new client:
     prediction.
   - `@session/sync`: client half (replica behind a storage adapter, used only
     to load and persist behind a working set; outbox in one global order,
-    kept for 3 days, stopping only on transient errors; rebase; a cursor per
+    kept for 3 days in server time, pausing with backoff on transient
+    errors; rebase; a cursor token per
     log; reactive queries for React and React Native screens; replication
     tiers) and server half (one change-log table, one log per space and one
     per user, rows holding key, operation and version only; `snapshot` and
     `pull` that read records as they are now, filtered by read scope;
-    tombstones kept 30 days; the client's last applied mutation id returned
-    with every batch; idempotent apply by (user, mutation id), kept 7 days;
-    a log epoch id; SSE read with fetch, with a cursor map as the event id).
-- Ids: clients generate ULIDs. The server accepts a timestamp from 3 days in
-  the past to 1 minute in the future, rejects an id that already exists, and
+    tombstones kept 30 days; the client's last processed seq returned with
+    every batch; idempotent apply by (user, mutation id), kept 7 days;
+    a log epoch; SSE read with fetch, with a map of cursor tokens as the
+    event id).
+- Ids: clients generate ULIDs. The server accepts a timestamp from 4 days in
+  the past to 1 minute in the future (the outbox keeps writes 3 days), rejects an id that already exists, and
   answers a collision with the same CONFLICT whether or not the caller can
   read the existing record. Space ids are ULIDs, and creating a space is
   online-only.
@@ -85,8 +124,9 @@ rules above stay as they are. Decisions for the new client:
 - Server: one SQLite database on one Fly machine. Requests carry a protocol
   version header, and clients below the minimum show "Update Session". The
   desktop authenticates with a bearer device token (Keychain); a CORS
-  allowlist admits the desktop origin only. ADR-3, ADR-6, ADR-10 and ADR-11
-  are to be superseded by new ADRs before phase 1.
+  allowlist admits the desktop origin only. ADR-19 to ADR-22 in
+  `web/docs/01-architecture-decisions.md` supersede ADR-3 (for spaces),
+  ADR-6 and ADR-11, and amend ADR-10.
 - Desktop: macOS only, one client codebase with the web (the web client runs
   in Tauri). Device runs are a new run executor kind, a CLI process on the
   user's device: Claude Code or Codex (Grok is dropped). Included tokens are

@@ -92,6 +92,8 @@ CSRF origin checks, and logging is written in-house (~200 lines total).
 
 ## ADR-3 API style: tRPC v11 for procedures, SSE for events
 
+Status: superseded by ADR-19, for spaces data.
+
 Requirement: replace ~160 Tauri `invoke()` wrappers (of which ~60 are
 research-relevant) with typed calls; replace the `session-event` channel with
 push; keep `src/lib/api.ts` signatures so ported modules compile.
@@ -176,6 +178,8 @@ Consequences: `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` become Fly
 secrets. The desktop's stored `githubToken` is not needed (it gated nothing).
 
 ## ADR-6 Client state: TanStack Query for server data, Zustand for UI state
+
+Status: superseded by ADR-20.
 
 Requirement: replace 108 `useState` + 150 mirror refs in `App.tsx`; support
 event-driven patching, optimistic-concurrency tokens, streaming deltas for the
@@ -289,6 +293,8 @@ math is replaced by the library's positioning.
 
 ## ADR-10 Agent execution: an owned agent loop over provider APIs
 
+Status: amended by ADR-21.
+
 Requirement: run research turns with four models on a hosted service, with
 uniform tooling, forking, resume, and cost control.
 
@@ -317,6 +323,8 @@ models; an eval set is required to keep research quality at the desktop's
 level.
 
 ## ADR-11 Streaming: snapshot plus ordered deltas, durable while running
+
+Status: superseded by ADR-22.
 
 Requirement: stream answers, let any tab join or rejoin, keep output across
 deploys.
@@ -429,3 +437,103 @@ and the artifact preview were removed in phase 2.0 of the desktop parity
 plan.)
 
 Why: Local filesystem tools like Read and Grep cannot be used in a hosted web environment; user-uploaded documents provide the web equivalent for referencing local files.
+
+## ADR-19 Sync: server-authoritative replicas with shared mutators
+
+Supersedes ADR-3 for spaces data. Superseded parts of ADR-14: clients make
+ULIDs.
+
+Requirement: desktop, web and Phone clients read and write shared spaces
+with immediate local results, work offline on desktop, and stay correct
+against hostile clients.
+
+Options
+1. A conventional web API with a caching client.
+2. CRDT or CRDT-like replicated spaces, writable by owners and admins.
+3. Server-authoritative replicas: each client holds a replica of what its
+   user may read and applies its own writes optimistically from an outbox;
+   the server applies them in order with the same mutator code.
+
+Choice: option 3.
+- Writes: a client sends envelopes `{ clientId, seq, mutationId, name,
+  input, deviceNow, protocolVersion }`. The server re-runs the named mutator
+  (`@session/mutators`) on its own state and never accepts client-computed
+  changes. Permissions are checked at apply time. Writes that act on another
+  record and could expose or admit carry `base.rev` of that record;
+  restricting decisions apply to the record as it is.
+- Reads: `snapshot` and `pull` per log (`space:<id>`, `user:<id>`), filtered
+  by the reader's scope at the moment of the read. Log rows hold key,
+  operation and version; records are read as they are now. Cursors are
+  opaque encrypted tokens; no version number reaches a client.
+- Server-owned values: uniqueness, stored times, invite codes, counts.
+  Client ULIDs are accepted from 4 days old to 1 minute ahead of the
+  device's own clock; a collision answers the same CONFLICT whether or not
+  the caller can read the existing record; ids are never reused.
+- Idempotency by (user, mutation id) for 7 days; a per-client sequence
+  orders a client's writes; transient answers are never recorded.
+- Removed content is erased at rest; tombstones keep audience fields and
+  the rev only, for 30 days.
+- Online-only account calls (API keys, usage, settings) stay tRPC
+  procedures; replicated data does not use them.
+
+Why: phase 0 (`web/packages/replica-proto`) showed with an adversarial
+suite, two review rounds and mutation testing that replicas are safe under
+server authority once the rules above hold. Option 1 gives no offline
+writes. Option 2 makes permissions, moderation and erasure hard to
+enforce, because every replica is a writer.
+
+Consequences: one mutator codebase for client prediction and server
+authority; a change-log table; a protocol version header with an "Update
+Session" answer for old clients. The rules are tested by the replica-proto
+suite, which the real server half must pass.
+
+## ADR-20 Client state: a replica with reactive queries
+
+Supersedes ADR-6.
+
+Choice: `@session/sync`'s client half holds the replica behind a storage
+adapter (memory on the web, SQLite on the desktop) and exposes reactive
+queries for React and React Native screens. Pending writes are rebased on
+confirmed changes. UI state (navigation, selection, drafts, layout) stays in
+Zustand. TanStack Query is kept only for online-only calls.
+
+Why: with replicated data, a request cache duplicates the replica and its
+invalidation rules; screens read the replica directly.
+
+Consequences: the SSE bridge and query-cache patching of ADR-6 are not
+used for spaces. The web client holds a write only while its request is in
+flight; the desktop keeps an outbox for 3 days in server time.
+
+## ADR-21 Agent execution: the owned loop and device CLI runs
+
+Amends ADR-10.
+
+Choice: two executor kinds on the run record. The owned agent loop of
+ADR-10 stays the default ("included tokens"). A device run is a Claude Code
+or Codex CLI process on the user's own device, claimed with `runs.claim`,
+reported with `runs.turn` and `runs.finish` carrying the attempt number,
+and held by a heartbeat lease separate from progress. There is no CLI
+session resume: every run rebuilds context from the thread's stored turns.
+Runs get an empty working directory.
+
+Why: users can spend their own CLI subscriptions without the server
+holding their credentials, while shared spaces keep one record of every
+run.
+
+Consequences: device answers carry a label in their meta line, report no
+usage and count toward no limit. The server caps them at 200 KB per answer
+and 100 device runs per hour per user.
+
+## ADR-22 Run streaming over the sync connection
+
+Supersedes ADR-11.
+
+Choice: committed turns and run state are records in the space log, served
+by `pull`. In-flight text is sent as ephemeral events on the same SSE
+connection, keyed by run, attempt and a per-attempt sequence; a client
+drops events it has already applied and refetches the run on a gap. A
+device run that loses its lease ends `interrupted`, and Run again starts a
+new attempt.
+
+Why: one connection carries both replicated changes and streaming, and the
+durable state is the same for owned and device runs.
