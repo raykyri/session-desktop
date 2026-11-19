@@ -8,6 +8,7 @@ import test from "ava";
 import {
   MUTATORS,
   ReplicaClient,
+  refuse,
   type Actor,
   type AnyMutator,
   type CountsRec,
@@ -437,6 +438,30 @@ test("Q3: a write that keeps getting INTERNAL_SERVER_ERROR backs off, fails afte
   const times = mel.sent.filter((e) => e.name === "likes.set").map((e) => e.clientTime);
   for (let k = 2; k < times.length; k++)
     t.true((times[k] ?? 0) - (times[k - 1] ?? 0) >= 2 ** (k - 1) * 1000);
+});
+
+test("N10: a pre-check that refuses with TOO_MANY_REQUESTS or SERVICE_UNAVAILABLE records nothing", async (t) => {
+  // a limit in the pre-check stage (AGENTS.md: "server-only pre-checks that
+  // may refuse (invite codes, limits)")
+  const limits: ("TOO_MANY_REQUESTS" | "SERVICE_UNAVAILABLE")[] = [];
+  const create = MUTATORS["invites.create"] as AnyMutator;
+  const limited: AnyMutator = {
+    ...create,
+    pre: (ctx, i) => {
+      const code = limits.shift();
+      if (code) throw refuse(code);
+      return create.pre?.(ctx, i) ?? {};
+    },
+  };
+  const { w, closed } = await cast(t, 1, { mutators: { ...MUTATORS, "invites.create": limited } });
+  const e = await w.envelope("mona", "invites.create", { id: w.id(), space: closed });
+  for (const code of ["TOO_MANY_REQUESTS", "SERVICE_UNAVAILABLE"] as const) {
+    limits.push(code);
+    await refused(t, Promise.resolve(w.server.apply(actor("mona"), e)), code);
+    t.is(await w.nextSeq("mona", e.clientId), e.seq);
+  }
+  await ok(t, w.server.apply(actor("mona"), e));
+  t.is(await w.nextSeq("mona", e.clientId), e.seq + 1);
 });
 
 test("Q3: a write that depends on a failed write gets its own refusal", async (t) => {

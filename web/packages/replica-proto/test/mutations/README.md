@@ -20,8 +20,10 @@ It exits with 1 when a mutation survives.
 
 - X1 to X31 are review round 1's mutations (its set had no X15 and no X17)
   and the ones that covered round 1's fixes.
-- N1 to N34 are review round 2's mutations (N18, N19 and N32 were not in its
-  set).
+- N2 to N34 are review round 2's mutations (N18, N19 and N32 were not in its
+  set). N1, a pull that moves its version past rows the reader may not read,
+  is left out: with the version sealed in the token it changes nothing a
+  reader gets (`mutate.ts` says why).
 - R2-1 on cover round 2's fixes: restricting decisions, admission ids, the
   counts record, report notifications for staff only, write age and clock
   offsets, bounded tables, client backoff and failure, the effect worker,

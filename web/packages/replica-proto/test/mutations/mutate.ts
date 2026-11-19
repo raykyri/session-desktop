@@ -226,12 +226,10 @@ const MUTATIONS: Mutation[] = [
     to: "          this.outbox.shift();\n          break;",
   },
   // ---- review round 2 ----
-  {
-    name: "N1 a pull moves past rows the reader may not read",
-    file: "src/server.ts",
-    from: "      const v = this.readRow(row, u);\n      if (v === null) continue;\n      to = row.version;",
-    to: "      const v = this.readRow(row, u);\n      to = row.version;\n      if (v === null) continue;",
-  },
+  // N1 (a pull moves its version past rows the reader may not read) is not a
+  // fault any more: the version is sealed in the token, and a row the reader
+  // may not read becomes readable only by a change of scope (a resync) or by
+  // being written again (a new version). It is left out.
   {
     name: "N2 a token is accepted from another reader",
     file: "src/server.ts",
