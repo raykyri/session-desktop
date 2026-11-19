@@ -298,6 +298,7 @@ test("finding 4: the client's timer sends the outbox when a backoff ends; a poke
   w.clock.advance(1000);
   timers.at(-1)?.fn();
   t.like(await like.answer, { ok: true });
+  await mel.flush(); // that flush has ended
   // a write that waits for nothing but a send (queued without one): a poke sends it
   const ctl = new AbortController();
   const done = mel.listen(ctl.signal);

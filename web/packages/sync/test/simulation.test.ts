@@ -133,6 +133,8 @@ interface Sim {
   writes: Map<string, { dev: Device; name: string; answer: Answer | null | undefined }>;
   /** The input of every write the client holds as answered ok. */
   answered: Map<string, { u: Person; name: string; input: unknown }>;
+  /** Mutation ids the hostile party sent as their own person. */
+  forged: Set<string>;
   /** What broke an invariant while the steps ran. */
   bad: string[];
   reach: Map<string, number>;
@@ -447,6 +449,9 @@ function hostile(sim: Sim): string {
     replaces: theirs && chance(r, 0.3) ? [theirs.mutationId] : [],
   };
   const who = chance(r, 0.7) ? "eve" : victim.u;
+  // the victim's own mutation id with another input, sent as the victim:
+  // their real write is then refused as a reused id, legitimately
+  if (who === victim.u) sim.forged.add(e.mutationId);
   const a = count(sim, w.server, { u: who }, e);
   return `hostile ${who} ${e.name}: ${a.ok ? "ok" : a.error.code}`;
 }
@@ -750,7 +755,14 @@ async function check(sim: Sim): Promise<string | null> {
     // a refusal is the server's verdict on the write as it was made: never
     // for an input the client changed after sending it
     const err = rec.answer && !rec.answer.ok ? rec.answer.error : null;
-    if (err?.code === "BAD_REQUEST" && err.issues?.some((x) => x.includes("already used")))
+    const forged = [...sim.locals].some(
+      ([m, l]) => l === local && sim.forged.has(m.split(":")[1] ?? ""),
+    );
+    if (
+      err?.code === "BAD_REQUEST" &&
+      err.issues?.some((x) => x.includes("already used")) &&
+      !forged
+    )
       out.push(
         `${rec.name} ${local} of ${rec.dev.name} refused: its input changed after it was sent`,
       );
@@ -807,6 +819,7 @@ async function runSeed(seed: number, trace = false): Promise<string | null> {
     applied: new Map(),
     writes: new Map(),
     answered: new Map(),
+    forged: new Set(),
     bad: [],
     reach: new Map(),
     log: [],
