@@ -808,31 +808,38 @@ export class SyncClient implements Changing {
   }
 
   /** Fetch one thread in full (a summary the person opened); it is reported
-   * as opened in later reads for 14 days. */
-  async hydrate(log: LogId, thread: string): Promise<void> {
+   * as opened in later reads for 14 days, also when this fetch was not
+   * served (answered false: no answer, or a `ReadError`). */
+  async hydrate(log: LogId, thread: string): Promise<boolean> {
     const l = this.logs.get(log);
-    if (!l || l.frozen) return;
+    if (!l || l.frozen) return true;
     const opened = (this.meta.opened ??= {});
     (opened[log] ??= {})[thread] = Math.round(this.now());
     const since = this.now() - OPENED_TTL;
     for (const by of Object.values(opened))
       for (const [th, at] of Object.entries(by ?? {})) if (at < since) delete by?.[th];
     await this.storage.saveMeta(this.meta);
-    await this.serial([l], async () => {
-      if (this.logs.get(log) !== l || l.frozen) return;
-      const s = await this.transport.snapshot(log, this.readOptions(log, { threads: [thread] }));
-      if (isReadError(s)) {
-        this.readFailed(s);
-        return;
+    const served = await this.serial([l], async () => {
+      if (this.logs.get(log) !== l || l.frozen) return true;
+      let s;
+      try {
+        s = await this.transport.snapshot(log, this.readOptions(log, { threads: [thread] }));
+      } catch (e) {
+        if (e instanceof Offline) return false;
+        throw e;
       }
+      if (isReadError(s)) return this.readFailed(s);
       this.seen(s.serverTime);
+      if (this.logs.get(log) !== l || l.frozen) return true;
       const puts = s.records.map((x): [string, StoredRecord] => [x.key, x.record]);
       for (const [k, r] of puts) l.records.set(k, r);
       l.marked.delete(thread);
       l.summaries = this.summariesOf(log, l);
       await this.storage.saveLog(log, { cursor: l.cursor, puts, dels: [] });
+      return true;
     });
     this.rebase();
+    return served;
   }
 
   /** After a resync of a closed space the user is no longer a member of:
