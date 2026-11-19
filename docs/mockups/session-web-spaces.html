@@ -5130,7 +5130,9 @@ function fuCard(f, i, pid) {
 /* Agent credit on the thread page: a small "Agent answer" label above the answer; the model and
    who paid are listed in the details panel. */
 const MODEL_NAME = 'Gemini 4 Argon';
-const creditHead = p => `<div class="cr-label"><span class="agent">${I.agent}</span>Agent answer${p && p.skill ? `<span class="cr-sk">· Used /${esc(p.skill)}</span>` : ''}</div>`;
+/* a thread's `skill` is the id of one of its space's skills: the header shows its name */
+const skillName = p => ((D.skills[p.s] || []).find(x => x.id === p.skill) || { name: p.skill }).name;
+const creditHead = p => `<div class="cr-label"><span class="agent">${I.agent}</span>Agent answer${p && p.skill ? `<span class="cr-sk">· Used /${esc(skillName(p))}</span>` : ''}</div>`;
 function thDoc(p) {
   const fus = fuFor(p), rps = p.k === 'post' ? rpFor(p) : [], pid = p.id, am = modOf('a:' + pid), pm = modOf('p:' + pid);
   return `<div class="th-doc"><article class="th-main"><div class="th-top">${thHead(p)}</div>${thMeta(p)}${miAbout(p)}${pm ? modPh('p:' + pid, 'post') : taQ(p)}
@@ -11326,10 +11328,11 @@ function taSkInsert(name) {
   el.value = before + after; el.focus(); el.setSelectionRange(before.length, before.length);
   el.dispatchEvent(new Event('input', { bubbles: true }));
 }
-/* an ask that starts with one of the space's skills records it; the answer header shows "Used /name" */
+/* an ask that starts with one of the space's skills records it, by the skill's id (threads.create's `skill`);
+   the answer header shows "Used /name" */
 { const ct0 = createThread; createThread = function (kind) {
   const m = /^\/([a-z0-9-]+)(?=\s|$)/.exec(st.draft.trim()), s = sp(curSpace());
-  const sk = kind === 'ask' && m && s && (D.skills[s.id] || []).some(x => x.name === m[1]) ? m[1] : null;
+  const sk = kind === 'ask' && m && s ? ((D.skills[s.id] || []).find(x => x.name === m[1]) || {}).id || null : null;
   const t0 = lastTid(); ct0(kind);
   if (sk && lastTid() !== t0) db.update('posts', lastTid(), x => { x.skill = sk; });
 }; }

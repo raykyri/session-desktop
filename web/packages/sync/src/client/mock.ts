@@ -24,7 +24,7 @@ const num = (v: unknown, d = 0) => (typeof v === "number" ? v : d);
 
 /** The mock's answer as the protocol's: `{ result, changes, seq,
  * serverTime, replayed, recordedAs }` or an error body `{ code, message,
- * issues, expectedSeq, retryAt, current, unused, changes, seq, serverTime,
+ * issues, expectedSeq, retryAt, current, changes, seq, serverTime,
  * replayed, recordedAs }`. Its `changes`
  * are the page's collection changes, not log changes: they go to
  * `onChanges` and are left out of the answer. */
@@ -51,7 +51,6 @@ export function fromMock(
   if (typeof b["expectedSeq"] === "number") e.expectedSeq = b["expectedSeq"];
   if (typeof b["retryAt"] === "string") e.retryAt = b["retryAt"];
   if (b["current"] !== undefined) e.current = b["current"] as NonNullable<AnswerError["current"]>;
-  if (b["unused"] === true) e.unused = true;
   return { ok: false, error: e, serverTime, ...extra };
 }
 

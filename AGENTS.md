@@ -114,8 +114,9 @@ rules above stay as they are. Decisions for the new client:
     the server's window would refuse it, and the ids it derives are mapped
     in the writes after it (a replay names the id it was recorded under,
     `recordedAs`). A write on the wire when the process ended is uncertain;
-    CONFLICT on its own input id reads as applied, and EXPIRED with
-    `unused` as never applied. No response at all is not a try: the outbox
+    CONFLICT on its own input id (the server's answer in place of EXPIRED
+    when an input id exists) reads as applied, and EXPIRED as never
+    applied. No response at all is not a try: the outbox
     pauses with backoff and the 3-day drop ends the write. A read carries
     the client id; one made as nobody (`lastSeq: null`) signs out and
     changes no log. A held write is sent by the next process. What a

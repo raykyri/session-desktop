@@ -70,6 +70,8 @@ export class World {
       random: rng(seed ^ 0x5eed),
       cursorKeys: this.keys,
       jobs: { start: (j) => void this.jobs.push(j) },
+      // the input-id check of review round 2 (the client half relies on it)
+      idsBeforeAge: true,
       ...o,
     });
   }

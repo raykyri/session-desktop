@@ -8,7 +8,7 @@ import test from "ava";
 import {
   FetchTransport,
   InProcessTransport,
-  MAX_OPENED,
+  OPENED_MAX,
   MemoryStorage,
   MockTransport,
   NO_RESPONSE,
@@ -281,28 +281,22 @@ test("round 2 finding 2: a write in flight when the app quit is uncertain at the
   t.is(all(w, "reply").length, 1);
 });
 
-test("round 2 finding 2: EXPIRED of a write that may have applied keeps its ids unless the server says none of them is used", async (t) => {
+test("round 2 finding 2: EXPIRED of a write that may have applied, whose input makes ids, says none of them exists: Send again uses new ids", async (t) => {
   const { w, open, storage, reply } = await crashInFlight(t);
   w.clock.advance(8 * DAY);
-  // a server that does not check the input's ids before the ages
   const tr = new Forced(inProcess(w, "mel"));
   const two = client(w, "mel", { storage, transport: tr, seed: 11 });
   await two.init();
   await two.open(`space:${open}`);
   const e = two.outbox().at(-1);
-  // dropped at 3 days; Send again: EXPIRED, which says nothing here
+  // dropped at 3 days; Send again keeps the ids (it may have applied) and
+  // is answered EXPIRED: the server answers CONFLICT when one of them exists
   await two.flush();
-  for (let k = 0; k < 2; k++) {
-    tr.queue = [fail("EXPIRED", w.clock.now())];
-    two.sendAgain(e?.local ?? "");
-    await two.flush();
-    t.like(two.outbox().at(-1) ?? {}, { state: "expired", uncertain: true });
-    t.is((tr.pushes.at(-1)?.input as { id: string }).id, reply, "the ids are kept");
-  }
-  // EXPIRED with `unused`: no envelope of it applied, new ids are safe
-  tr.queue = [fail("EXPIRED", w.clock.now(), { unused: true })];
+  t.like(e ?? {}, { state: "dropped", uncertain: true });
+  tr.queue = [fail("EXPIRED", w.clock.now())];
   two.sendAgain(e?.local ?? "");
   await two.flush();
+  t.is((tr.pushes.at(-1)?.input as { id: string }).id, reply, "the ids are kept");
   t.like(two.outbox().at(-1) ?? {}, { state: "expired", uncertain: false });
   two.sendAgain(e?.local ?? "");
   t.not((two.outbox().at(-1)?.input as { id: string }).id, reply);
@@ -310,7 +304,7 @@ test("round 2 finding 2: EXPIRED of a write that may have applied keeps its ids 
 
 // ---- finding 3: offline ----
 
-test("round 2 finding 3: offline, the outbox pauses with backoff and counts no try; the 3-day drop ends the wait, and Send again after EXPIRED with unused ids sends a new write", async (t) => {
+test("round 2 finding 3: offline, the outbox pauses with backoff and counts no try; the 3-day drop ends the wait, and Send again after EXPIRED sends a new write", async (t) => {
   const { w, open } = cast(t);
   const real = httpFetch(w.server, { browser: { u: "mel" } });
   let online = true;
@@ -369,7 +363,7 @@ test("round 2 finding 3: offline, the outbox pauses with backoff and counts no t
   const first = mel.outbox()[0];
   mel.sendAgain(first?.local ?? "");
   await mel.flush();
-  t.like(first ?? {}, { state: "expired", uncertain: false, error: { unused: true } });
+  t.like(first ?? {}, { state: "expired", uncertain: false, error: { code: "EXPIRED" } });
   mel.sendAgain(first?.local ?? "");
   await mel.flush();
   t.is(first?.state, "answered");
@@ -468,7 +462,7 @@ test("round 2 finding 4: writes made offline on a clock days behind are not drop
       t.like(mel.outbox()[0] ?? {}, {
         state: "expired",
         uncertain: false,
-        error: { code: "EXPIRED", unused: true },
+        error: { code: "EXPIRED" },
       });
       mel.sendAgain(local);
       await mel.flush();
@@ -839,7 +833,7 @@ test("round 2 finding 9: a client made without a tier reads space logs with the 
   await mel.open(`space:${open}`);
   t.is(seen[0]?.tier?.window, "desktop");
   const ths: string[] = [];
-  for (let k = 0; k < MAX_OPENED + 5; k++) {
+  for (let k = 0; k < OPENED_MAX + 5; k++) {
     const th = w.id();
     ths.push(th);
     await mel.hydrate(`space:${open}`, th);
@@ -848,7 +842,7 @@ test("round 2 finding 9: a client made without a tier reads space logs with the 
   seen.length = 0;
   await mel.sync();
   const opened = seen[0]?.tier?.opened ?? [];
-  t.is(opened.length, MAX_OPENED);
+  t.is(opened.length, OPENED_MAX);
   t.is(opened[0], ths.at(-1));
   t.false(opened.includes(ths[0] ?? ""));
 });

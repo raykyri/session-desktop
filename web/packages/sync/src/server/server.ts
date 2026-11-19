@@ -45,7 +45,7 @@ import {
   HOUR,
   MAX_ENVELOPE_BYTES,
   MAX_INPUT_DEPTH,
-  MAX_OPENED,
+  OPENED_MAX,
   MAX_REPLACES,
   MIN_PROTOCOL_VERSION,
   REGISTRATIONS_PER_DAY,
@@ -117,6 +117,11 @@ export interface SyncServerOptions {
   online?: Partial<OnlineHandlers>;
   /** Test only: an effect for which this answers true fails on that attempt. */
   failEffect?: (effect: pkg.Effect, attempt: number) => boolean;
+  /** An answer that would be EXPIRED is CONFLICT when an id the input makes
+   * exists (phase 1 review round 2).
+   * Off by default here: the client agent's stand-in for the server agent's
+   * change, on in `test/helpers.ts`'s World (reconciled at the merge). */
+  idsBeforeAge?: boolean;
 }
 
 /** A number in [0, 1) from `crypto.randomBytes`. */
@@ -225,6 +230,7 @@ export class SyncServer {
   private readonly clock: Clock;
   private readonly random: () => number;
   private readonly registry: pkg.Registry;
+  private readonly idsBeforeAge: boolean;
   private readonly jobRunner: JobRunner;
   private readonly tokens: Tokens;
   private readonly failEffect: SyncServerOptions["failEffect"];
@@ -240,6 +246,7 @@ export class SyncServer {
     this.clock = o.clock;
     this.random = o.random ?? cryptoRandom;
     this.registry = o.registry ?? pkg.MUTATORS;
+    this.idsBeforeAge = o.idsBeforeAge ?? false;
     this.jobRunner = o.jobs ?? { start: () => {} };
     this.tokens = new Tokens(o.cursorKeys);
     this.failEffect = o.failEffect;
@@ -611,31 +618,26 @@ export class SyncServer {
           if (!live(tx.answerGet(u, old))) tx.answerPut(u, old, { ...a, digest: replaced });
         use();
       };
-      // the ids the input makes, before the ages (phase 1 review round 2):
-      // an id that exists is CONFLICT, so a client can tell an earlier
-      // envelope of the write that applied from none; EXPIRED then says
-      // that none of them is used (`unused`)
+      // the ids the input makes, for an answer that would be EXPIRED (phase 1
+      // review round 2; the smallest change the client's tests need, made
+      // by the client agent): an id that exists is CONFLICT, so a client
+      // can tell an earlier envelope of the write that applied from none
       const def = this.registry.get(m.name);
       const parsed = def?.input.safeParse(m.input);
-      const ids = def && parsed?.success ? def.ids(parsed.data) : [];
-      if (ids.some((id) => tx.registryGet(id) !== undefined)) {
-        const e = err("CONFLICT", ID_TAKEN, ["input: an id it makes exists"]);
-        record({ ok: false, error: e, seq: m.seq });
-        return out(e, m.seq);
-      }
+      const ids = this.idsBeforeAge && def && parsed?.success ? def.ids(parsed.data) : [];
+      const taken = ids.some((id) => tx.registryGet(id) !== undefined);
       const expired = (path: string) => {
-        const e: AnswerError = {
-          ...err("EXPIRED", undefined, [
-            `${path}: expected a time from the 4 days before clientTime to 1 minute after`,
-          ]),
-          ...(ids.length ? { unused: true as const } : {}),
-        };
+        const e: AnswerError = taken
+          ? err("CONFLICT", ID_TAKEN, ["input: an id it makes exists"])
+          : err("EXPIRED", undefined, [
+              `${path}: expected a time from the 4 days before clientTime to 1 minute after`,
+            ]);
         record({ ok: false, error: e, seq: m.seq });
         return out(e, m.seq);
       };
       if (!timeOk(pkg.ulidTime(m.mutationId), m.clientTime)) return expired("mutationId");
       if (!timeOk(m.queuedAt, m.clientTime)) return expired("queuedAt");
-      return this.execute(tx, u, m, now, record, out, ids.length > 0);
+      return this.execute(tx, u, m, now, record, out, taken);
     });
   }
 
@@ -646,7 +648,8 @@ export class SyncServer {
     now: number,
     record: (a: StoredResult) => void,
     out: (e: AnswerError, seq?: number) => Answer,
-    makesIds = false,
+    /** Whether an id the input makes exists. */
+    taken = false,
   ): Answer {
     const res = pkg.apply(this.registry, new TxSource(tx), { u }, m, {
       now,
@@ -659,8 +662,11 @@ export class SyncServer {
     if (res.status === "refused") {
       const { current, reads, ...rest } = res.error;
       void current;
-      // an input id too old: none of the input's ids exists (checked above)
-      const e: AnswerError = rest.code === "EXPIRED" && makesIds ? { ...rest, unused: true } : rest;
+      // an input id too old: CONFLICT when one of the input's ids exists
+      const e: AnswerError =
+        rest.code === "EXPIRED" && taken
+          ? err("CONFLICT", ID_TAKEN, ["input: an id it makes exists"])
+          : rest;
       if (UNRECORDED.has(e.code)) return out(e);
       record({ ok: false, error: e, ...(reads ? { reads } : {}), seq: m.seq });
       return this.withReads(tx, u, out(e, m.seq), reads);
@@ -936,7 +942,7 @@ export class SyncServer {
       const want = new Set(o.threads);
       return { full: want, summary: new Set<string>() };
     }
-    const pinned = new Set((o.tier?.opened ?? []).slice(0, MAX_OPENED));
+    const pinned = new Set((o.tier?.opened ?? []).slice(0, OPENED_MAX));
     if (u !== null)
       for (const p of threads) if (p.u === u || tx.get(pkg.saveKey(u, p.id))) pinned.add(p.id);
     return chooseTiers(threads, now, { ...o.tier, window }, pinned);

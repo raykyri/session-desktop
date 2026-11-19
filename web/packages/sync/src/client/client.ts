@@ -62,8 +62,10 @@
 //   stored on the wire loads as uncertain. CONFLICT on an id the write's own
 //   input makes (`ID_TAKEN`), for a write sent before, means an earlier
 //   envelope applied (only this client makes those ids): it is answered.
-//   EXPIRED with `unused` means none of the input's ids exists: no envelope
-//   applied, and Send again may use new ids;
+//   The server answers that CONFLICT in place of EXPIRED, so EXPIRED of a
+//   write whose input makes ids means none of them exists: no envelope
+//   applied, and Send again may use new ids (a server before review round 2
+//   answered EXPIRED either way);
 // - TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE, INTERNAL_SERVER_ERROR, a
 //   response that is not an answer, and CLOCK_SKEW or OUT_OF_ORDER that do
 //   not converge are a try: the outbox pauses with backoff (1 s, doubled, at
@@ -117,7 +119,7 @@
 // their hide records) is dropped, in memory and in storage: a thread that
 // left the full tier is not served again, and what the client held of it may
 // be stale. A thread the person opened (`hydrate`) is reported in
-// `tier.opened` (at most MAX_OPENED, the latest first) for 14 days, so the
+// `tier.opened` (at most OPENED_MAX, the latest first) for 14 days, so the
 // server keeps serving it in full.
 //
 // Live updates: `listen` holds an event stream for the logs open now with a
@@ -133,7 +135,7 @@ import {
   CLOCK_MAX_SKEW,
   ID_MAX_AGE,
   ID_MAX_AHEAD,
-  MAX_OPENED,
+  OPENED_MAX,
   MAX_REPLACES,
   MAX_TRIES,
   OPENED_TTL,
@@ -644,8 +646,8 @@ export class SyncClient implements Changing {
 
   private readOptions(log: LogId, extra: ReadOptions = {}): ReadOptions {
     const tier = this.logs.get(log)?.tier ?? this.tier;
-    // at most MAX_OPENED: the server pins no more
-    const opened = [...new Set([...(tier.opened ?? []), ...this.opened(log)])].slice(0, MAX_OPENED);
+    // at most OPENED_MAX: the server pins no more
+    const opened = [...new Set([...(tier.opened ?? []), ...this.opened(log)])].slice(0, OPENED_MAX);
     return {
       ...(this.meta.clientId !== null ? { clientId: this.meta.clientId } : {}),
       ...(log.startsWith("space:") ? { tier: opened.length ? { ...tier, opened } : tier } : {}),
@@ -1908,10 +1910,10 @@ export class SyncClient implements Changing {
         gaps = 0;
         if (!a.ok && !this.appliedBefore(e, sentBefore, a.error)) {
           // the recorded answer covers every id it had: none can apply (Send
-          // again lists none of them). A server that checked the input's ids
-          // and found none used says no envelope of it applied
-          if (a.error.code === "EXPIRED" && a.error.unused && e.minted.length > 0)
-            e.uncertain = false;
+          // again lists none of them). EXPIRED of a write whose input makes
+          // ids: none of them exists (the server answers CONFLICT when one
+          // does), so no envelope of it applied
+          if (a.error.code === "EXPIRED" && e.minted.length > 0) e.uncertain = false;
           await this.applyAnswerChanges(a.error.changes);
           this.end(e, a.error.code === "EXPIRED" ? "expired" : "refused", a.error, a);
         } else {
