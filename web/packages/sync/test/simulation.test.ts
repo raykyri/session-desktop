@@ -99,8 +99,10 @@ interface Device {
  * writes are dropped (what it did not store before it died is lost). */
 function processStorage(d: Device): StorageAdapter {
   const s = d.storage;
-  const live = <A extends unknown[]>(f: (...a: A) => Promise<void>) =>
-    (...a: A) => (d.dead ? Promise.resolve() : f(...a));
+  const live =
+    <A extends unknown[]>(f: (...a: A) => Promise<void>) =>
+    (...a: A) =>
+      d.dead ? Promise.resolve() : f(...a);
   return {
     persistent: true,
     loadMeta: () => s.loadMeta(),
@@ -202,7 +204,13 @@ function count(sim: Sim, s: SyncServer, a: { u: string } | null, e: Envelope): A
       sim.log.push(
         `  (applied ${e.name} ${e.mutationId} replaces ${e.replaces.join(",")}: no entry; ${sim.devices
           .filter((d) => d.u === a?.u)
-          .map((d) => `${d.name}: ${d.client.outbox().map((x) => `${x.local}/${x.mutationId}/${x.state}`).join(" ")}`)
+          .map(
+            (d) =>
+              `${d.name}: ${d.client
+                .outbox()
+                .map((x) => `${x.local}/${x.mutationId}/${x.state}`)
+                .join(" ")}`,
+          )
           .join("; ")})`,
       );
   }
@@ -247,7 +255,13 @@ function makeDevice(
   sim: Sim,
   name: string,
   u: Person,
-  o: { storage?: MemoryStorage; skew?: number; logs?: LogId[]; tier?: TierOptions; quiet?: boolean } = {},
+  o: {
+    storage?: MemoryStorage;
+    skew?: number;
+    logs?: LogId[];
+    tier?: TierOptions;
+    quiet?: boolean;
+  } = {},
 ): Device {
   const d: Device = {
     name,
@@ -310,7 +324,8 @@ function note(sim: Sim) {
   for (const d of sim.devices)
     for (const e of d.client.outbox()) {
       for (const m of [e.mutationId, ...e.replaces]) sim.locals.set(`${d.u}:${m}`, e.local);
-      if (e.state === "answered") sim.answered.set(e.local, { u: d.u, name: e.name, input: e.input });
+      if (e.state === "answered")
+        sim.answered.set(e.local, { u: d.u, name: e.name, input: e.input });
     }
 }
 
@@ -555,7 +570,10 @@ async function step(sim: Sim, k: number): Promise<string> {
     return `${d.name} discard ${e.name}`;
   }
   if (roll < 0.88) {
-    const log = pick(r, d.logs.filter((l) => l.startsWith("space:")));
+    const log = pick(
+      r,
+      d.logs.filter((l) => l.startsWith("space:")),
+    );
     const ths = d.client.view().list("thread", (p) => `space:${p.s}` === log);
     const th = ths.length ? pick(r, ths) : null;
     if (!th) return "skip";
@@ -570,7 +588,9 @@ async function step(sim: Sim, k: number): Promise<string> {
     }
     const ctl = new AbortController();
     d.listening = ctl;
-    void d.client.listen(ctl.signal).catch((e: unknown) => sim.bad.push(`${d.name} listen: ${String(e)}`));
+    void d.client
+      .listen(ctl.signal)
+      .catch((e: unknown) => sim.bad.push(`${d.name} listen: ${String(e)}`));
     hit(sim, "listen");
     return `${d.name} listen`;
   }
@@ -631,7 +651,11 @@ async function quiesce(sim: Sim) {
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const threadOfRec = (x: StoredRecord) =>
-  x.kind === "thread" ? x.id : x.kind === "followup" || x.kind === "reply" || x.kind === "run" ? x.th : null;
+  x.kind === "thread"
+    ? x.id
+    : x.kind === "followup" || x.kind === "reply" || x.kind === "run"
+      ? x.th
+      : null;
 
 async function check(sim: Sim): Promise<string | null> {
   const out: string[] = [...sim.bad];
@@ -647,14 +671,18 @@ async function check(sim: Sim): Promise<string | null> {
     const frozen = new Set<string>();
     for (const log of c.openLogs()) {
       const full = new Map(
-        s.snapshot({ u: d.u }, log, { tier: { window: "full" } }).records.map((x) => [x.key, x.record]),
+        s
+          .snapshot({ u: d.u }, log, { tier: { window: "full" } })
+          .records.map((x) => [x.key, x.record]),
       );
       if (c.isFrozen(log)) {
         hit(sim, "a frozen copy");
         // the user's own threads and what they wrote under them; else only
         // what the server serves them
         const mine = new Set(
-          [...c.records(log).values()].flatMap((x) => (x.kind === "thread" && x.u === d.u ? [x.id] : [])),
+          [...c.records(log).values()].flatMap((x) =>
+            x.kind === "thread" && x.u === d.u ? [x.id] : [],
+          ),
         );
         for (const [k, x] of c.records(log)) {
           frozen.add(k);
@@ -685,7 +713,8 @@ async function check(sim: Sim): Promise<string | null> {
       // again: present on the server, not checked for freshness
       for (const [k, x] of c.records(log)) {
         if (!full.has(k)) out.push(`${d.name} ${log}: extra ${k}`);
-        else if (!want.has(k) && threadOfRec(x) === null) out.push(`${d.name} ${log}: unserved ${k}`);
+        else if (!want.has(k) && threadOfRec(x) === null)
+          out.push(`${d.name} ${log}: unserved ${k}`);
         else if (!want.has(k)) frozen.add(k);
       }
     }
@@ -722,7 +751,9 @@ async function check(sim: Sim): Promise<string | null> {
     // for an input the client changed after sending it
     const err = rec.answer && !rec.answer.ok ? rec.answer.error : null;
     if (err?.code === "BAD_REQUEST" && err.issues?.some((x) => x.includes("already used")))
-      out.push(`${rec.name} ${local} of ${rec.dev.name} refused: its input changed after it was sent`);
+      out.push(
+        `${rec.name} ${local} of ${rec.dev.name} refused: its input changed after it was sent`,
+      );
   }
   // every id an answered write made exists on the server
   for (const [local, a] of sim.answered) {

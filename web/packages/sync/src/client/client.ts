@@ -34,9 +34,10 @@
 // - a write's input ids are fixed once an envelope of it was sent: a copy of
 //   that envelope may still apply. CLOCK_SKEW corrects the offset and gives
 //   every queued write a new mutation id (the ids that were sent go to
-//   `replaces`), and new input ids to the writes never sent (with every
-//   write that names them changed to match). A sent write whose ids are
-//   ahead of the corrected clock waits until they are within a minute. A
+//   `replaces`; a write that went without an answer keeps its id), and new
+//   input ids to the writes never sent (with every write that names them
+//   changed to match). A sent write whose ids are ahead of the corrected
+//   clock waits until they are within a minute (at most 10 minutes). A
 //   replayed answer whose result names another id than the input's (the
 //   server applied an older envelope) moves the write and the writes after
 //   it to the server's id;
@@ -801,7 +802,11 @@ export class SyncClient implements Changing {
       if (r.kind !== "thread") continue;
       const c = l.records.get(pkg.countsKey(r.id));
       const want = c?.kind === "counts" ? c.r : 0;
-      if (l.marked.has(r.id) || (r.k === "ask" && !runs.has(r.id)) || (firsts.get(r.id) ?? 0) < want)
+      if (
+        l.marked.has(r.id) ||
+        (r.k === "ask" && !runs.has(r.id)) ||
+        (firsts.get(r.id) ?? 0) < want
+      )
         out.add(r.id);
     }
     return out;
@@ -965,7 +970,9 @@ export class SyncClient implements Changing {
       (e) => e.state !== "answered" || (e.answeredTick ?? Infinity) >= oldest,
     );
     if (this.entries.length !== before) void this.persist();
-    const pending = new Set(this.entries.flatMap((e) => (PENDING.has(e.state) ? [e.mutationId] : [])));
+    const pending = new Set(
+      this.entries.flatMap((e) => (PENDING.has(e.state) ? [e.mutationId] : [])),
+    );
     for (const m of this.derivedCache.keys()) if (!pending.has(m)) this.derivedCache.delete(m);
     this.rebase();
   }
@@ -1332,20 +1339,31 @@ export class SyncClient implements Changing {
     this.resolve(e, a);
   }
 
-  /** CLOCK_SKEW: the offset is corrected, every queued write gets a new
-   * mutation id (one that was sent goes to `replaces`) and `queuedAt` on the
-   * corrected clock (from the monotonic clock when it was queued in this
-   * process; else at most now), and the writes never sent get new input ids. */
+  /** CLOCK_SKEW: the offset is corrected; every queued write gets `queuedAt`
+   * on the corrected clock (from the monotonic clock when it was queued in
+   * this process; else at most now) and a new mutation id (one that was sent
+   * goes to `replaces`), except a write that went without an answer, which
+   * keeps its mutation id (AGENTS.md); the writes never sent get new input
+   * ids. */
   private reclock(serverTime: number) {
-    this.meta.offset = serverTime - this.clock.now();
+    const delta = serverTime - this.clock.now() - this.meta.offset;
+    this.meta.offset += delta;
     const now = Math.round(this.now());
     const mono = this.monotonic();
     const map = new Map<string, string>();
     for (const e of [...this.direct, ...this.entries]) {
       if (e.state !== "queued") continue;
-      if (e.wire) e.replaces = uniq([...e.replaces, e.mutationId]);
-      e.mutationId = this.newId();
-      e.wire = false;
+      // a wait is on the corrected clock too (a backoff from when it began;
+      // a `retryAt` is the server's time already)
+      if (e.waitFrom !== undefined) {
+        e.waitFrom += delta;
+        if (!e.own) e.next += delta;
+      }
+      if (!e.uncertain) {
+        if (e.wire) e.replaces = uniq([...e.replaces, e.mutationId]);
+        e.mutationId = this.newId();
+        e.wire = false;
+      }
       e.queuedAt =
         e.queuedMono !== undefined
           ? Math.min(now, Math.round(now - (mono - e.queuedMono)))
@@ -1366,12 +1384,14 @@ export class SyncClient implements Changing {
     this.remap(new Map([[mine, id]]), [e]);
   }
 
-  /** When `e`'s input ids (fixed once sent) are within a minute of the
-   * server's clock: ids made by a device clock that was ahead wait. */
+  /** When `e`'s ids (its input ids, fixed once sent, and its mutation id)
+   * are within a minute of the server's clock: ids made by a device clock
+   * that was ahead wait. */
   private idsDue(e: OutboxEntry): number {
     if (!e.sent) return 0;
     let at = 0;
-    for (const id of e.minted) if (pkg.isUlid(id)) at = Math.max(at, pkg.ulidTime(id));
+    for (const id of [...e.minted, e.mutationId])
+      if (pkg.isUlid(id)) at = Math.max(at, pkg.ulidTime(id));
     return at - ID_MAX_AHEAD;
   }
 

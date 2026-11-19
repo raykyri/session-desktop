@@ -74,7 +74,10 @@ function statusError(status: number): ReadError | null {
 
 /** A body that is an error answer of the protocol's. */
 const errorBody = (d: unknown): d is ReadError =>
-  isObject(d) && d["ok"] === false && isObject(d["error"]) && typeof d["error"]["code"] === "string";
+  isObject(d) &&
+  d["ok"] === false &&
+  isObject(d["error"]) &&
+  typeof d["error"]["code"] === "string";
 
 export class FetchTransport implements Transport {
   private readonly f: typeof fetch;
@@ -161,7 +164,8 @@ export class FetchTransport implements Transport {
   async pull(log: LogId, cursor: Cursor, options: ReadOptions = {}): Promise<PullAnswer> {
     return this.read(
       await this.post("/api/sync/pull", { log, cursor, ...options }),
-      (d) => d["resync"] === true || (Array.isArray(d["changes"]) && typeof d["cursor"] === "string"),
+      (d) =>
+        d["resync"] === true || (Array.isArray(d["changes"]) && typeof d["cursor"] === "string"),
     );
   }
 

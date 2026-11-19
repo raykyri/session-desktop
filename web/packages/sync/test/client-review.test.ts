@@ -11,7 +11,6 @@ import {
   Offline,
   SqliteStorage,
   type Answer,
-  type ClientMeta,
   type CursorMap,
   type Envelope,
   type LogId,
@@ -35,7 +34,10 @@ const repliesUnder = (w: World, th: string) =>
 function watched(
   inner: Transport,
   o: {
-    push?: (es: readonly Envelope[], next: () => Promise<(Answer | null)[]>) => Promise<(Answer | null)[]>;
+    push?: (
+      es: readonly Envelope[],
+      next: () => Promise<(Answer | null)[]>,
+    ) => Promise<(Answer | null)[]>;
     pull?: Transport["pull"];
     snapshot?: Transport["snapshot"];
     listen?: Transport["listen"];
@@ -96,9 +98,18 @@ test("finding 1: a replayed answer that names another id moves the write and the
   await mel.init();
   await mel.open(`space:${open}`);
   const X = mel.newId();
-  const replayed = { ok: true, result: { id: S, run: null }, serverTime: w.clock.now(), replayed: true };
+  const replayed = {
+    ok: true,
+    result: { id: S, run: null },
+    serverTime: w.clock.now(),
+    replayed: true,
+  };
   tr.queue = [replayed as Answer];
-  mel.write("threads.create", { id: X, space: open, kind: "post", q: "made as S" }, { send: false });
+  mel.write(
+    "threads.create",
+    { id: X, space: open, kind: "post", q: "made as S" },
+    { send: false },
+  );
   const reply = mel.write(
     "research.createPostFollowUp",
     { id: mel.newId(), thread: X, t: "under S" },
@@ -135,16 +146,16 @@ test("finding 1: a remint is in storage before its envelope is on the wire (a cr
   await mel.open(`space:${open}`);
   const X = mel.newId();
   mel.write("threads.create", { id: X, space: open, kind: "post", q: "p" }, { send: false });
-  mel.write(
-    "research.createPostFollowUp",
-    { id: mel.newId(), thread: X, t: "r" },
-    { send: false },
-  );
+  mel.write("research.createPostFollowUp", { id: mel.newId(), thread: X, t: "r" }, { send: false });
   await mel.flush();
   w.clock.advance(61_000);
   void mel.flush();
   for (let k = 0; k < 200 && !disk; k++) await tick(1);
-  const stored = disk as unknown as { mutationId: string; replaces: string[]; input: { id: string } }[];
+  const stored = disk as unknown as {
+    mutationId: string;
+    replaces: string[];
+    input: { id: string };
+  }[];
   t.is(stored[0]?.mutationId, (wire as Envelope | null)?.mutationId, "the reminted id is stored");
   t.is(stored[0]?.replaces.length, 1);
   t.is(stored[0]?.input.id, X);
@@ -170,9 +181,10 @@ test("finding 1: a write answered with a proxy's 502 page is uncertain and keeps
   let writes: ("ok" | "apply-then-502")[] = [];
   let reads: "ok" | "502" = "ok";
   const f: typeof fetch = async (i, init) => {
-    if (String(i).includes("/pull") && reads === "502")
+    const url = i instanceof Request ? i.url : i.toString();
+    if (url.includes("/pull") && reads === "502")
       return new Response("<html>502 Bad Gateway</html>", { status: 502 });
-    if (!String(i).includes("/write")) return real(i, init);
+    if (!url.includes("/write")) return real(i, init);
     const m = writes.shift() ?? "ok";
     const res = await real(i, init);
     return m === "apply-then-502" ? new Response("<html>502</html>", { status: 502 }) : res;
@@ -224,7 +236,11 @@ test("finding 3 (G5): a person who only read leaves storage marked as theirs; th
   // a stored state with logs and no meta is cleared too
   const bare = new MemoryStorage();
   const rec = w.get(`thread:${secret}`) as StoredRecord;
-  await bare.saveLog(`space:${closed}`, { cursor: "c", puts: [[`thread:${secret}`, rec]], dels: [] });
+  await bare.saveLog(`space:${closed}`, {
+    cursor: "c",
+    puts: [[`thread:${secret}`, rec]],
+    dels: [],
+  });
   const c = client(w, "otto", { storage: bare });
   await c.init();
   t.deepEqual(await bare.logs(), []);
@@ -359,7 +375,11 @@ test("finding 6: the records a STALE answer carries are not a pull: the answered
   await mel.sync();
   ok(t, w.as("mel", "threads.update", { id: th, q: "v2", base: { rev: 1 } }));
   const fresh = w.id();
-  const a = mel.write("threads.create", { id: fresh, space: open, kind: "post", q: "new" }, { send: false });
+  const a = mel.write(
+    "threads.create",
+    { id: fresh, space: open, kind: "post", q: "new" },
+    { send: false },
+  );
   const b = mel.write("threads.update", { id: th, q: "v3", base: { rev: 1 } }, { send: false });
   await mel.flush();
   t.like(await a.answer, { ok: true });
@@ -410,10 +430,7 @@ test("finding 6: a stored answered write leaves the overlay after one full read 
   for (const l of logs) await a.open(l);
   for (let k = 0; k < 20; k++) await a.sync();
   t.like(await a.write("likes.set", { thread: th, on: true }).answer, { ok: true });
-  t.false(
-    "answeredTick" in ((await storage.loadOutbox())[0] as object),
-    "the tick is not stored",
-  );
+  t.false("answeredTick" in ((await storage.loadOutbox())[0] as object), "the tick is not stored");
   const b = client(w, "mel", { storage, seed: 9 });
   await b.init();
   for (const l of logs) await b.open(l);
@@ -577,13 +594,14 @@ test("finding 8: a revoked device token signs the client out; no log is replaced
   await mel.open(`space:${open}`);
   await mel.open("user:mel");
   t.like(
-    await mel.write("threads.create", { id: mel.newId(), space: open, kind: "post", q: "a" }).answer,
+    await mel.write("threads.create", { id: mel.newId(), space: open, kind: "post", q: "a" })
+      .answer,
     { ok: true },
   );
   await mel.sync();
   const userLog = mel.records("user:mel").size;
   const dev = [...w.server.records().values()].find((r) => r.kind === "device") as { id: string };
-  ok(t, w.server.call({ u: "mel" }, "devices.revoke", { id: dev.id }) as Answer);
+  ok(t, w.server.call({ u: "mel" }, "devices.revoke", { id: dev.id }));
   mel.write("threads.create", { id: mel.newId(), space: open, kind: "post", q: "b" });
   await mel.flush();
   t.true(mel.signedOut);
@@ -634,7 +652,7 @@ test("finding 9: a hydrated thread is reported as opened and stays full; summari
       .map((r) => r.t),
     ["reply 0", "second"],
   );
-  t.like((await storage.loadMeta()) as ClientMeta, { opened: { [log]: { [a]: w.clock.now() } } });
+  t.like(await storage.loadMeta(), { opened: { [log]: { [a]: w.clock.now() } } });
   // a new process: the summaries come from the stored records
   const again = client(w, "mel", { storage, seed: 9 });
   await again.init();
@@ -732,7 +750,11 @@ test("finding 11: the 3-day drop waits for the server's time; a device clock tha
   await mel.init();
   await mel.open(`space:${open}`);
   for (let k = 0; k < 3; k++)
-    mel.write("threads.create", { id: mel.newId(), space: open, kind: "post", q: `off ${k}` }, { send: false });
+    mel.write(
+      "threads.create",
+      { id: mel.newId(), space: open, kind: "post", q: `off ${k}` },
+      { send: false },
+    );
   skew = 3 * DAY + MINUTE;
   await mel.flush();
   t.deepEqual(
