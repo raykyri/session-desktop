@@ -15,6 +15,7 @@ import type {
   ThreadRec,
 } from "../src/index.js";
 import { TOMBSTONE_TTL } from "../src/index.js";
+import { USE_PACKAGE } from "../src/switch.js";
 
 import { DAY, HOUR, actor, admit, cast, ok, refused, thread } from "./harness.js";
 import { diff, expected, modOf } from "./oracle.js";
@@ -108,7 +109,19 @@ test("removing a thread erases it and everything under it from storage, for good
   // attack G of the phase 0 review: a removed thread's text stayed in storage,
   // and a follow-up quoting it was still served
   const { w, open, closed } = await cast(t);
-  const th = await thread(t, w, "mel", open, "ask", SECRET);
+  // with the switch on, the ask is also about a quote, which is text of the
+  // thread (review round 1 of phase 1, H4)
+  const th = w.id();
+  await ok(
+    t,
+    w.as("mel", "threads.create", {
+      id: th,
+      space: open,
+      kind: "ask",
+      q: SECRET,
+      ...(USE_PACKAGE ? { about: { quote: SECRET, it: SECRET, its: [SECRET] } } : {}),
+    }),
+  );
   const fu = w.id();
   await ok(t, w.as("otto", "followups.ask", { id: fu, thread: th, q: `you said ${SECRET}?` }));
   const post = await thread(t, w, "mel", closed, "post", SECRET);
