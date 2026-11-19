@@ -27,9 +27,12 @@
 //   review (`rv`), its fields are redacted for everyone but the person who
 //   added it and the space's moderators (decision 5): the record keeps one
 //   audience, as a hidden thread does, so no write changes who reads it.
-// - Text of a hidden thread, follow-up or reply: its author and the space's
-//   moderators. Everyone else gets the placeholder (`redact`). A removed
+// - Text of a hidden thread, follow-up or reply (one with a `hide` record):
+//   its author and the space's moderators. Everyone else gets the
+//   placeholder (`redact`). A hide record is read with its space's content;
+//   a change of it changes how its item reads (`viewDependents`). A removed
 //   item's text is erased from storage.
+// - A person's devices (`device`, without the token): that person only.
 
 import type {
   FollowUpRec,
@@ -126,6 +129,8 @@ export function readsAudience(g: Reader, a: Audience, u: string | null): boolean
     case "pages":
     case "page":
     case "skills":
+    case "skill":
+    case "hide":
       return sp !== null && readsSpace(g, sp, u);
     case "spacesrc":
       // a pending source's fields are `redact`'s job
@@ -160,6 +165,7 @@ export function readsAudience(g: Reader, a: Audience, u: string | null): boolean
     case "seen":
     case "profile":
     case "apikey":
+    case "device":
       return own;
   }
 }
@@ -200,8 +206,11 @@ export function redact(g: Reader, r: StoredRecord, u: string | null): StoredReco
     return reviewedFor(g, r, u)
       ? r
       : ({ ...r, note: "", meta: { ...PENDING_META }, nurl: null } satisfies SpaceSourceRec);
-  if (!("mod" in r) || r.mod === null) return r;
-  if (r.mod === "hidden" && u !== null && (r.u === u || isModOf(g, r.s, u))) return r;
+  if (r.kind !== "thread" && r.kind !== "followup" && r.kind !== "reply") return r;
+  if (r.mod === null) {
+    if (!isHidden(g, r)) return r;
+    if (u !== null && (r.u === u || isModOf(g, r.s, u))) return r;
+  }
   switch (r.kind) {
     case "thread":
       return { ...r, q: "", t: null, sum: null } satisfies ThreadRec;
@@ -211,6 +220,19 @@ export function redact(g: Reader, r: StoredRecord, u: string | null): StoredReco
       return { ...r, t: "" } satisfies ReplyRec;
   }
   return r;
+}
+
+/** Whether an item is hidden: it has a `hide` record. */
+export function isHidden(g: Reader, r: ThreadRec | FollowUpRec | ReplyRec): boolean {
+  return g.get("hide", `${r.kind}:${r.id}`) !== undefined;
+}
+
+/** The keys whose view a record's change changes besides its own: a hide
+ * record's item (hiding blanks the item's text for most readers, showing
+ * gives it back). A server half writes a log row for each of them in the
+ * commit that changes the record, so every reader pulls the item again. */
+export function viewDependents(r: { kind: Kind }): string[] {
+  return r.kind === "hide" ? [(r as unknown as { item: string }).item] : [];
 }
 
 /** A record as `u` may read it now, or null when it is outside their scope. */

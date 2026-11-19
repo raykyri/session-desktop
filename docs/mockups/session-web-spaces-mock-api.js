@@ -106,7 +106,8 @@
    - Ids: a write that makes a record may send its id (a ULID the client made: at most 4 days old and at most a
      minute ahead by the mock clock, else EXPIRED; an id in use answers CONFLICT); without one the server makes it.
      Skills and pages have ids, and their writes name them; skills.reorder sends the whole order with the list's
-     version (skillsRev) as base. An invite link's code is the server's (10 characters).
+     version (skillsRev, which an edit of a skill does not change) as base. An invite link's code is the server's
+     (10 characters); an invite notification carries its link's id (`invite`), and joining from it uses that link.
    - A ban stops every write in its space, the person's own included.
    - The write envelope (section 6b): POST /api/sync/write takes { clientId, seq, mutationId, clientTime, queuedAt,
      replaces, name, input }, with the client registered by POST /api/sync/register. Seqs, recorded answers,
@@ -299,9 +300,9 @@
     'rev?': int,    /* the version (absent: 1); an author's edit sends it as base */
     'executor?': S_EXEC,   /* the latest run of its ask ran on a device */
   }, 'Thread');
-  S.Reply = t.named('Reply', t.lazy(() => obj({ u: str, 'createdAt?': iso, t: str, 'likes?': int, 'kids?': arr(S.Reply), 'del?': bool, 'edited?': bool, 'rev?': int })));
+  S.Reply = t.named('Reply', t.lazy(() => obj({ 'id?': str, u: str, 'createdAt?': iso, t: str, 'likes?': int, 'kids?': arr(S.Reply), 'del?': bool, 'edited?': bool, 'rev?': int })));
   /* a: absent until the run writes the answer */
-  S.FollowUp = obj({ u: str, 'createdAt?': iso, q: str, 'a?': str, 'html?': str, 'del?': bool, 'edited?': bool, 'rev?': int, 'executor?': S_EXEC }, 'FollowUp');
+  S.FollowUp = obj({ 'id?': str, u: str, 'createdAt?': iso, q: str, 'a?': str, 'html?': str, 'del?': bool, 'edited?': bool, 'rev?': int, 'executor?': S_EXEC }, 'FollowUp');
   S.AskNode = obj({ id: str, par: str, 'u?': str, 'createdAt?': iso, 'tok?': num, 'q?': str, 'html?': str, 'fu?': num, 'del?': bool, 'edited?': bool,
     'running?': bool, 'fail?': S_FAIL, 'pay?': t.any, 'model?': str, 'att?': int, 'rev?': int, 'executor?': S_EXEC,
     'uses?': nul(arr(str)),   /* the answers (node ids) an ask compares */
@@ -413,6 +414,10 @@
     links:    { path: '/api/invite-links', kind: 'list', id: 'id', serverId: true, item: S.InviteLink },
     reports:  { path: '/api/reports', kind: 'list', id: 'id', serverId: true, item: S.Report },
     modSt:    { path: '/api/moderation', kind: 'map', item: named('ModerationState', str) },
+    /* a hidden item's moderation record's version, by moderation key (phase 1b): one more on every hide and on
+       every edit of the item by its author while it is hidden; "shown" and a reopening that shows the item compare
+       it (0 for an item that is not hidden). Hiding leaves the item's own version as it is. */
+    modRev:   { path: '/api/moderation/versions', kind: 'map', item: named('ModerationVersion', int) },
     dsDrops:  { path: '/api/space-sources', kind: 'map', key: 'space', item: named('SpaceSource[]', arr(S.SpaceSource)) },
     dsPol:    { path: '/api/space-source-policies', kind: 'map', key: 'space', item: named('SourcePolicy', str) },
     dsReps:   { path: '/api/source-reports', kind: 'value', item: named('SourceReport[]', arr(S.SourceReport)) },
@@ -557,6 +562,7 @@
     row('links', 'list', 'user', 'invites.list', { wire: 'ThreadInvite[]', reads: 'the links of the spaces the caller moderates, and the links they created; never revoked ones' }),
     row('reports', 'list', 'user', 'reports.list', { reads: 'the caller’s own reports, and the reports in the spaces they moderate' }),
     row('modSt', 'list', 'guest', 'moderation.list', { note: 'every reader needs it: hidden and removed items show as such', reads: 'the items the caller may read' }),
+    row('modRev', 'list', 'guest', 'moderation.list', { note: 'the version of each hidden item’s moderation record: the base of "shown" and of a reopening that shows the item', reads: 'the items the caller may read' }),
 
     row('dsDrops', 'list', 'guest', 'spaceSources.list', { reads: 'the spaces the caller may read; a source waiting for review only for the person who added it and the space’s moderators' }),
     row('dsPol', 'list', 'guest', 'spaceSources.policies'),
@@ -756,6 +762,7 @@
       rich: byThread, srcd: byThread, rp: byThread, fu: fuScoped, qtd: qtdScoped,
       runs: (key, v) => readsRun(v) ? v : undefined,
       modSt: (key, v) => hideTh(String(key).split(':')[1]) ? undefined : v,
+      modRev: (key, v) => hideTh(String(key).split(':')[1]) ? undefined : v,
       pagedocs: (key, v) => hideSp(key.split('/')[0]) ? undefined : v,
       memOther: (key, v) => R.closedMembers && hidden.has(key) ? staff(v) : v,
       dsDrops: (key, v) => {
@@ -777,7 +784,7 @@
   }
   /* the collections whose GET depends on who reads them (besides /api/me/*): a change of membership, role
      or a space's visibility changes what they return */
-  const SCOPED = ['posts', 'rich', 'srcd', 'fu', 'rp', 'qtd', 'runs', 'media', 'miAdded', 'reqs', 'reports', 'banned', 'links', 'modSt', 'pagedocs', 'memOther', 'dsDrops', 'mem', 'dsReps', 'notifs', 'liked', 'saved', 'qtSaved', 'rpLiked'];
+  const SCOPED = ['posts', 'rich', 'srcd', 'fu', 'rp', 'qtd', 'runs', 'media', 'miAdded', 'reqs', 'reports', 'banned', 'links', 'modSt', 'modRev', 'pagedocs', 'memOther', 'dsDrops', 'mem', 'dsReps', 'notifs', 'liked', 'saved', 'qtSaved', 'rpLiked'];
   const SCOPE_INPUTS = ['joined', 'rel', 'roles', 'spaces'];
 
   /* ---- 5b. procedures (step 3): mutations by intent ----
@@ -829,18 +836,20 @@
       if (i.on && !tx.get('liked').has(i.thread) && modOf(tx, itemKeyOf(tx.need('posts', i.thread, 'thread'))) === 'removed') throw removedErr();
       return flip(tx, 'liked', i.thread, i.on);
     } });
-  proc('likes.setReply', { input: obj({ reply: str, ...ON }), output: '{ on: boolean }', who: 'user', errors: ['NOT_FOUND', 'FORBIDDEN', 'PRECONDITION_FAILED'], writes: ['rpLiked'],
-    note: 'reply: "<thread>:<path>", the path of a reply in the thread’s replies (indexes joined with "."); on: the wanted state. A like follows its reply when replies before it are deleted (replies.delete).',
-    space: (tx, i) => markSpace(tx, 'rpLiked', i.reply, i.reply.split(':')[0], i.on),
-    can: (tx, i) => readsToSave(tx, 'rpLiked', i.reply, i.reply.split(':')[0], i.on),
+  /* a reply like: "<thread>:<reply id>" in rpLiked; the thread of a reply, or of a like the caller has */
+  const likedThread = (tx, id) => threadOfReply(tx, id) || ([...tx.get('rpLiked')].find(x => String(x).endsWith(':' + id)) || '').split(':')[0] || null;
+  const rlKey = (tx, id) => `${likedThread(tx, id)}:${id}`;
+  proc('likes.setReply', { input: obj({ reply: ID, ...ON }), output: '{ on: boolean }', who: 'user', errors: ['NOT_FOUND', 'FORBIDDEN', 'PRECONDITION_FAILED'], writes: ['rpLiked'],
+    note: 'reply: the reply’s id (phase 1b: as @session/mutators names it); on: the wanted state. rpLiked holds "<thread>:<reply id>".',
+    space: (tx, i) => markSpace(tx, 'rpLiked', rlKey(tx, i.reply), likedThread(tx, i.reply), i.on),
+    can: (tx, i) => readsToSave(tx, 'rpLiked', rlKey(tx, i.reply), likedThread(tx, i.reply), i.on),
     run: (tx, i) => {
-      const [th, path] = i.reply.split(':');
-      if (!/^\d+(\.\d+)*$/.test(path || '')) throw rpcError('BAD_REQUEST', undefined, ['input.reply: expected "<thread>:<path>"']);
-      if (i.on && !tx.get('rpLiked').has(i.reply)) {
-        if (!replyAt(tx.mapGet('rp', tx.need('posts', th, 'thread').id) || [], pathOf(path))) throw rpcError('NOT_FOUND', 'The server has no record of this reply. Someone may have deleted it.');
-        if (modOf(tx, `r:${th}:${path}`) === 'removed') throw removedErr();
+      const th = likedThread(tx, i.reply), key = `${th}:${i.reply}`;
+      if (i.on && !tx.get('rpLiked').has(key)) {
+        if (!th || !replyAt(tx.mapGet('rp', tx.need('posts', th, 'thread').id) || [], i.reply)) throw rpcError('NOT_FOUND', 'The server has no record of this reply. Someone may have deleted it.');
+        if (modOf(tx, `r:${th}:${i.reply}`) === 'removed') throw removedErr();
       }
-      return flip(tx, 'rpLiked', i.reply, i.on);
+      return flip(tx, 'rpLiked', key, i.on);
     } });
   const SAVE_KIND = { thread: 'saved', ask: 'qtSaved', source: 'miSaved' };
   proc('saved.set', { input: obj({ kind: one('thread', 'ask', 'source'), id: str, ...ON }), output: '{ on: boolean }', who: 'user', errors: ['NOT_FOUND', 'FORBIDDEN'], writes: ['saved', 'qtSaved', 'miSaved'],
@@ -877,11 +886,11 @@
     return s;
   };
   /* a thread's asks about asks: the stored tree, or its flat follow-ups as level-1 asks (as the page shows them) */
-  const askTree = (tx, th) => tx.mapGet('qtd', th) || { nodes: (tx.mapGet('fu', th) || []).map((f, k) => ({ id: 'f' + k, par: 'r', fu: k, tok: 18e3 + k * 7e3 })) };
+  const askTree = (tx, th) => tx.mapGet('qtd', th) || { nodes: (tx.mapGet('fu', th) || []).map((f, k) => ({ id: f.id || 'f' + k, par: 'r', fu: k, tok: 18e3 + k * 7e3 })) };
   /* the tree's nodes with the text of the follow-ups they stand for */
   const askNodes = (tx, th) => {
     const fus = tx.mapGet('fu', th) || [];
-    return askTree(tx, th).nodes.map(n => { const f = n.fu != null ? fus[n.fu] || {} : null; return f ? { ...n, u: f.u, createdAt: f.createdAt, q: f.q, html: f.html || `<p>${escHtml(f.a || '')}</p>` } : n; });
+    return askTree(tx, th).nodes.map(n => { const f = n.fu != null ? fus[n.fu] || {} : null; return f ? { ...n, fid: f.id, u: f.u, createdAt: f.createdAt, q: f.q, html: f.html || `<p>${escHtml(f.a || '')}</p>` } : n; });
   };
   const nodeOf = (nodes, id) => { const n = nodes.find(x => x.id === id); if (!n) throw rpcError('NOT_FOUND', 'The server has no record of this follow-up. Someone may have deleted it.'); return n; };
   /* ---- the sync rules (phase 1a.2): versions, stale intent, client-made ids, moderation states ---- */
@@ -893,6 +902,12 @@
      records the answer sends again (as a CONFLICT does) */
   const staleErr = (current, reads) => rpcError('STALE', undefined, undefined, { current, reads: reads || [] });
   const modOf = (tx, key) => tx.get('modSt')[key] || null;
+  /* the version of a hidden item's moderation record, 0 when it is not hidden (phase 1b, as @session/mutators' hide
+     record): "shown" and a reopening that shows the item compare it */
+  const modRevOf = (tx, key) => modOf(tx, key) === 'hidden' ? (tx.get('modRev')[key] || 0) : 0;
+  const bumpModRev = (tx, key) => tx.mapPut('modRev', key, (tx.get('modRev')[key] || 0) + 1);
+  /* an author's edit of an item: while it is hidden, its moderation record counts the edit */
+  const editedHidden = (tx, key) => { if (modOf(tx, key) === 'hidden') bumpModRev(tx, key); };
   const itemKeyOf = p => `${p.k === 'ask' ? 'a' : 'p'}:${p.id}`;
   const removedErr = () => rpcError('PRECONDITION_FAILED', 'This item was removed.');
   const deletedErr = what => rpcError('PRECONDITION_FAILED', `This ${what} was deleted.`);
@@ -921,20 +936,21 @@
     return true;
   }
   const execOf = (tx, ex) => ex == null ? null : { kind: 'device', cli: ex.cli, device: ex.device, u: tx.me.u };
-  /* the moderation key of an ask node: f:<thread>:<index> for a flat follow-up, n:<thread>:<node id> for an ask of the tree */
-  const nodeModKey = (th, n) => n.fu != null ? `f:${th}:${n.fu}` : `n:${th}:${n.id}`;
+  /* the moderation key of an ask node: f:<thread>:<id> for a flat follow-up (askNodes gives its id as fid; phase 1b:
+     by id, not place), n:<thread>:<node id> for an ask of the tree */
+  const nodeModKey = (th, n) => n.fu != null ? `f:${th}:${n.fid != null ? n.fid : n.id}` : `n:${th}:${n.id}`;
   /* the ask node a follow-up's moderation key names */
-  const nodeByKey = (tx, k, th, sub) => { const nodes = askNodes(tx, th); return k === 'n' ? nodes.find(x => x.id === sub) : nodes.find(x => x.fu === +sub) || null; };
+  const nodeByKey = (tx, k, th, sub) => { const nodes = askNodes(tx, th); return k === 'n' ? nodes.find(x => x.id === sub) : nodes.find(x => x.fu != null && (x.fid != null ? x.fid : x.id) === sub) || null; };
   /* the item a moderation key names, as the caller reads it now (for STALE's current): its version and text */
   function itemNow(tx, key) {
     const [k, th, sub] = String(key).split(':'), p = tx.find('posts', th);
     if (!p) return null;
     if (k === 'a' || k === 'p') return { rev: revOf(p), q: p.q, t: p.t || null };
-    if (k === 'r') { const x = replyAt(tx.mapGet('rp', th) || [], pathOf(sub)); return x ? { rev: revOf(x), t: x.t } : null; }
+    if (k === 'r') { const x = replyAt(tx.mapGet('rp', th) || [], sub); return x ? { rev: revOf(x), t: x.t } : null; }
     const n = nodeByKey(tx, k, th, sub), f = n && n.fu != null ? (tx.mapGet('fu', th) || [])[n.fu] : null;
     return n ? { rev: revOf(f || n), q: n.q || '' } : null;
   }
-  const itemReads = key => { const [k, th] = String(key).split(':'); return [['posts', th], ['modSt', key], ...(k === 'r' ? [['rp', th]] : k === 'f' ? [['fu', th], ['qtd', th]] : [])]; };
+  const itemReads = key => { const [k, th] = String(key).split(':'); return [['posts', th], ['modSt', key], ['modRev', key], ...(k === 'r' ? [['rp', th]] : k === 'f' ? [['fu', th], ['qtd', th]] : [])]; };
   /* the version of the item a key names (STALE's base for "shown" and a reopening) */
   const itemRev = (tx, key) => { const x = itemNow(tx, key); if (!x) throw rpcError('NOT_FOUND', 'The server has no record of this item. Someone may have deleted it.'); return x.rev; };
   /* erase a removed item's text, and everything under it (phase 0): a thread's answer, follow-ups, ask tree, runs
@@ -950,17 +966,23 @@
       return;
     }
     if (k === 'r') {
-      const l = tx.mapGet('rp', th) || [], x = replyAt(l, pathOf(sub)); if (!x) return;
+      const l = tx.mapGet('rp', th) || [], x = replyAt(l, sub); if (!x) return;
+      const gone = new Set((x.kids || []).map(y => `${th}:${y.id}`));
       x.t = ''; delete x.edited; if (x.kids) x.kids = [];
       tx.mapPut('rp', th, l);
+      const rl = tx.value('rpLiked'), rl2 = new Set([...rl].filter(y => !gone.has(y))); if (rl2.size !== rl.size) tx.setValue('rpLiked', rl2);
       return;
     }
     const n = nodeByKey(tx, k, th, sub); if (!n) return;
     editAsk(tx, th, n.id, y => { if (y.fu == null) y.q = ''; y.html = ''; y.running = false; }, f => { f.q = ''; delete f.a; delete f.html; });
     tx.mapDel('runs', `${th}:${n.id}`);
   }
-  const replyAt = (list, path) => { let r = null, l = list; for (const k of path) { r = (l || [])[k]; if (!r) return null; l = r.kids; } return r; };
-  const pathOf = s => { if (!/^\d+(\.\d+)*$/.test(s)) throw bad1('path', '"<index>[.<index>]"'); return s.split('.').map(Number); };
+  /* a reply by its id in a thread's replies (phase 1b: replies are named by id, as @session/mutators names them): the
+     reply, the list that holds it, its index there, and its top-level reply (null for a top-level reply) */
+  const replyHit = (list, id) => { for (const [j, r] of (list || []).entries()) { if (r.id === id) return { r, list, j, top: null }; for (const [jj, x] of (r.kids || []).entries()) if (x.id === id) return { r: x, list: r.kids, j: jj, top: r }; } return null; };
+  const replyAt = (list, id) => { const h = replyHit(list, id); return h ? h.r : null; };
+  /* the thread whose replies hold a reply, or null */
+  const threadOfReply = (tx, id) => { for (const [th, l] of Object.entries(tx.get('rp'))) if (replyHit(l, id)) return th; return null; };
   const THREAD_IN = {
     'id?': ID, space: ID, kind: one('ask', 'post'), q: str, 'title?': nul(str), 'topic?': nul(str),
     'pay?': nul(str), 'model?': str, 'about?': t.obj({ 'it?': str, 'its?': arr(str), 'b?': num, 'quote?': str }), 'skill?': nul(str),
@@ -1018,7 +1040,7 @@
   /* the author of a thread, who can still read its space */
   const ownThread = (tx, id) => { const p = tx.need('posts', id, 'thread'); return all(readsThread(tx, p), authorIs(tx, p.u, p.k === 'ask' ? 'ask' : 'post')); };
   const threadIn = (tx, i) => tx.need('posts', i.id, 'thread').s;
-  proc('threads.update', { input: obj({ id: ID, q: str, base: BASE, 'run?': bool, 'pay?': nul(str), 'model?': str }, 'UpdateThreadInput'), output: 'null', who: 'author', errors: ['NOT_FOUND', 'STALE', 'PRECONDITION_FAILED'], wire: 'ResearchTree', writes: ['posts', 'runs'],
+  proc('threads.update', { input: obj({ id: ID, q: str, base: BASE, 'run?': bool, 'pay?': nul(str), 'model?': str }, 'UpdateThreadInput'), output: 'null', who: 'author', errors: ['NOT_FOUND', 'STALE', 'PRECONDITION_FAILED'], wire: 'ResearchTree', writes: ['posts', 'runs', 'modRev'],
     note: 'the author edits the question; base.rev: the thread’s version the author edited (STALE when it changed since); run: the ask runs again (a new run) with payer pay (TODO(limits): stored as sent; a key must be yours). A deleted or removed thread: PRECONDITION_FAILED.',
     space: threadIn, can: (tx, i) => all(ownThread(tx, i.id), i.run ? ownPayer(tx, i.pay) : true),
     run: (tx, i) => {
@@ -1027,6 +1049,7 @@
       if (p.del || p.gone) throw deletedErr('thread');
       if (revOf(p) !== i.base.rev) throw staleErr({ rev: revOf(p), q: p.q, t: p.t || null }, [['posts', p.id]]);
       const q = text(i.q, 'q');
+      if (p.q !== q) editedHidden(tx, itemKeyOf(p));
       tx.edit('posts', i.id, x => {
         const changed = x.q !== q; x.q = q; delete x.kw;
         if (changed) { x.edited = true; x.t = null; }
@@ -1064,26 +1087,27 @@
     return p;
   };
   proc('followups.ask', { input: obj({ 'id?': ID, thread: ID, q: str }), output: '{ id: NodeId, run: RunId }', who: 'member', errors: ['NOT_FOUND', 'PRECONDITION_FAILED'], wire: 'ResearchExchangeNode', writes: ['fu', 'posts', 'runs'],
-    note: 'a follow-up ask on an ask thread (without ask trees: the flat list); its run answers the ask f<index> of the thread’s tree. Its answer is absent until the run writes it. id: ignored (a flat follow-up is named by its index).', space: threadSpace,
+    note: 'a follow-up ask on an ask thread (without ask trees: the flat list); its run answers the ask of the thread’s tree with its id. Its answer is absent until the run writes it. id: the client’s ULID for it (else the server makes one); a flat follow-up is named by its id (phase 1b).', space: threadSpace,
     run: (tx, i) => {
       const p = askThread(tx, i.thread);
       const l = tx.mapGet('fu', p.id) || [];
-      tx.mapPut('fu', p.id, [...l, { u: tx.me.u, q: text(i.q, 'q') }]);
-      return { id: 'f' + l.length, run: startRun(tx, p.id, 'f' + l.length, { u: tx.me.u }) };
+      const id = newRecId(tx, i.id, x => l.some(f => f.id === x) || askTree(tx, p.id).nodes.some(n => n.id === x));
+      tx.mapPut('fu', p.id, [...l, { id, u: tx.me.u, q: text(i.q, 'q') }]);
+      return { id, run: startRun(tx, p.id, id, { u: tx.me.u }) };
     } });
-  proc('research.createPostFollowUp', { input: obj({ 'id?': ID, thread: ID, t: str, 'parent?': int }), output: 'null', who: 'member', errors: ['NOT_FOUND', 'PRECONDITION_FAILED'], wire: 'ResearchPostNode', writes: ['rp', 'posts'],
-    note: 'a reply to a post (an ask thread: BAD_REQUEST); parent: the index of the reply it answers (replies have one level of nesting). id: ignored (a reply is named by its path).', space: threadSpace,
+  proc('research.createPostFollowUp', { input: obj({ 'id?': ID, thread: ID, t: str, 'parent?': ID }), output: 'null', who: 'member', errors: ['NOT_FOUND', 'PRECONDITION_FAILED'], wire: 'ResearchPostNode', writes: ['rp', 'posts'],
+    note: 'a reply to a post (an ask thread: BAD_REQUEST); parent: the id of the top-level reply it answers (replies have one level of nesting). id: the client’s ULID for the reply (else the server makes one); a reply is named by its id (phase 1b).', space: threadSpace,
     run: (tx, i) => {
       const p = tx.need('posts', i.thread, 'thread'); writable(tx, p.s);
       if (p.k !== 'post') throw bad1('thread', 'a post');
       if (modOf(tx, itemKeyOf(p)) === 'removed') throw removedErr();
-      const l = tx.mapGet('rp', p.id) || [], r = { u: tx.me.u, t: text(i.t, 't') };
-      if (i.parent == null) l.push(r);
-      else {
-        const top = l[i.parent]; if (!top) throw rpcError('NOT_FOUND', 'The server has no record of this reply. Someone may have deleted it.');
-        if (modOf(tx, `r:${p.id}:${i.parent}`) === 'removed') throw removedErr();
-        top.kids = [...(top.kids || []), r];
-      }
+      const l = tx.mapGet('rp', p.id) || [];
+      const top = i.parent == null ? null : l.find(x => x.id === i.parent);
+      if (i.parent != null && !top) throw rpcError('NOT_FOUND', 'The server has no record of this reply. Someone may have deleted it.');
+      if (top && modOf(tx, `r:${p.id}:${top.id}`) === 'removed') throw removedErr();
+      const r = { id: newRecId(tx, i.id, x => !!threadOfReply(tx, x)), u: tx.me.u, t: text(i.t, 't') };
+      if (top) top.kids = [...(top.kids || []), r];
+      else l.push(r);
       tx.mapPut('rp', p.id, l);
     } });
   proc('research.forkNode', { input: obj({ 'id?': ID, thread: ID, parent: str, q: str, 'uses?': nul(arr(str)), 'pay?': nul(str), 'model?': str, 'executor?': nul(EXEC_IN) }, 'ForkNodeInput'), output: '{ id: NodeId, run: RunId }', who: 'member', errors: ['NOT_FOUND', 'PRECONDITION_FAILED', 'CONFLICT', 'EXPIRED', 'TOO_MANY_REQUESTS'], wire: 'ResearchNode', writes: ['qtd', 'posts', 'runs'],
@@ -1103,7 +1127,7 @@
     } });
   /* the author of a reply or a follow-up ask (a missing one is run's NOT_FOUND) */
   const ownReply = (tx, i) => {
-    const p = tx.need('posts', i.thread, 'thread'), r = /^\d+(\.\d+)*$/.test(i.path) ? replyAt(tx.mapGet('rp', p.id) || [], pathOf(i.path)) : null;
+    const p = tx.need('posts', i.thread, 'thread'), r = replyAt(tx.mapGet('rp', p.id) || [], i.reply);
     return all(readsThread(tx, p), r ? authorIs(tx, r.u, 'reply') : true);
   };
   const ownNode = (tx, i) => {
@@ -1111,46 +1135,34 @@
     return all(readsThread(tx, p), n ? authorIs(tx, n.u, 'follow-up') : true);
   };
   const replyIn = (tx, i) => tx.need('posts', i.thread, 'thread').s;
-  proc('replies.update', { input: obj({ thread: ID, path: str, t: str, base: BASE }), output: 'null', who: 'author', errors: ['NOT_FOUND', 'STALE', 'PRECONDITION_FAILED'], writes: ['rp'],
-    note: 'the author edits a reply (path: indexes in the thread’s replies, joined with "."); base.rev: the reply’s version they edited (STALE when it changed since). A deleted or removed reply: PRECONDITION_FAILED.',
+  proc('replies.update', { input: obj({ thread: ID, reply: ID, t: str, base: BASE }), output: 'null', who: 'author', errors: ['NOT_FOUND', 'STALE', 'PRECONDITION_FAILED'], writes: ['rp', 'modRev'],
+    note: 'the author edits a reply (reply: its id); base.rev: the reply’s version they edited (STALE when it changed since). A deleted or removed reply: PRECONDITION_FAILED.',
     space: replyIn, can: (tx, i) => ownReply(tx, i),
     run: (tx, i) => {
-      const p = tx.need('posts', i.thread, 'thread'), l = tx.mapGet('rp', p.id) || [], r = replyAt(l, pathOf(i.path));
+      const p = tx.need('posts', i.thread, 'thread'), l = tx.mapGet('rp', p.id) || [], r = replyAt(l, i.reply);
       if (!r) throw rpcError('NOT_FOUND', 'The server has no record of this reply. Someone may have deleted it.');
-      if (modOf(tx, `r:${p.id}:${i.path}`) === 'removed') throw removedErr();
+      if (modOf(tx, `r:${p.id}:${i.reply}`) === 'removed') throw removedErr();
       if (r.del) throw deletedErr('reply');
       if (revOf(r) !== i.base.rev) throw staleErr({ rev: revOf(r), t: r.t }, [['rp', p.id]]);
-      const t2 = text(i.t, 't'); if (r.t !== t2) r.edited = true; r.t = t2; bump(r);
+      const t2 = text(i.t, 't'); if (r.t !== t2) { r.edited = true; editedHidden(tx, `r:${p.id}:${i.reply}`); } r.t = t2; bump(r);
       tx.mapPut('rp', p.id, l);
     } });
-  /* the reply likes of a thread after the reply at `path` is gone: its own and its replies' likes go, and the likes
-     of the replies after it follow them to their new paths (a like names a reply, phase 1a) */
-  function shiftReplyLikes(tx, th, path) {
-    const set = tx.get('rpLiked'), at = path.length - 1, out = new Set();
-    let changed = false;
-    for (const key of set) {
-      const [t0, p0] = key.split(':');
-      if (t0 !== th || !/^\d+(\.\d+)*$/.test(p0 || '')) { out.add(key); continue; }
-      const q = p0.split('.').map(Number);
-      const same = q.length > at && q.slice(0, at).every((x, k) => x === path[k]);
-      if (same && q[at] === path[at]) { changed = true; continue; }
-      if (same && q[at] > path[at]) { q[at] -= 1; changed = true; out.add(`${th}:${q.join('.')}`); continue; }
-      out.add(key);
-    }
-    if (changed) tx.setValue('rpLiked', out);
-  }
-  proc('replies.delete', { input: obj({ thread: ID, path: str }), output: '{ kept: boolean }', who: 'author', errors: ['NOT_FOUND'], wire: 'ResearchBranchRemoval', writes: ['rp', 'posts', 'rpLiked'],
+  proc('replies.delete', { input: obj({ thread: ID, reply: ID }), output: '{ kept: boolean }', who: 'author', errors: ['NOT_FOUND'], wire: 'ResearchBranchRemoval', writes: ['rp', 'posts', 'rpLiked'],
     note: 'the author deletes a reply: one with replies keeps its place ("You deleted this reply"), one without is removed, with its likes', space: replyIn, can: (tx, i) => ownReply(tx, i),
     run: (tx, i) => {
-      const p = tx.need('posts', i.thread, 'thread'), l = tx.mapGet('rp', p.id) || [], path = pathOf(i.path), r = replyAt(l, path);
+      const p = tx.need('posts', i.thread, 'thread'), l = tx.mapGet('rp', p.id) || [], h = replyHit(l, i.reply), r = h && h.r;
       if (!r) throw rpcError('NOT_FOUND', 'The server has no record of this reply. Someone may have deleted it.');
       const keep = (r.kids || []).length > 0;
       if (keep) { r.del = true; r.t = ''; delete r.edited; bump(r); }
-      else { const par = path.length > 1 ? replyAt(l, path.slice(0, -1)).kids : l; par.splice(path[path.length - 1], 1); shiftReplyLikes(tx, p.id, path); }
+      else {
+        h.list.splice(h.j, 1);
+        /* its likes go with it (a like names its reply by id) */
+        const rl = tx.value('rpLiked'), rl2 = new Set([...rl].filter(x => x !== `${p.id}:${r.id}`)); if (rl2.size !== rl.size) tx.setValue('rpLiked', rl2);
+      }
       tx.mapPut('rp', p.id, l);
       return { kept: keep };
     } });
-  proc('followups.update', { input: obj({ thread: ID, node: str, q: str, base: BASE, 'run?': bool, 'pay?': nul(str) }), output: '{ run: RunId } | null', who: 'author', errors: ['NOT_FOUND', 'STALE', 'PRECONDITION_FAILED'], wire: 'ResearchNode', writes: ['qtd', 'fu', 'posts', 'runs'],
+  proc('followups.update', { input: obj({ thread: ID, node: str, q: str, base: BASE, 'run?': bool, 'pay?': nul(str) }), output: '{ run: RunId } | null', who: 'author', errors: ['NOT_FOUND', 'STALE', 'PRECONDITION_FAILED'], wire: 'ResearchNode', writes: ['qtd', 'fu', 'posts', 'runs', 'modRev'],
     note: 'the author edits a follow-up ask; base.rev: its version they edited (STALE when it changed since); run: it runs again (a new run) with payer pay (TODO(limits): stored as sent; a key must be yours). A deleted or removed one: PRECONDITION_FAILED.',
     space: replyIn, can: (tx, i) => all(ownNode(tx, i), i.run ? ownPayer(tx, i.pay) : true),
     run: (tx, i) => {
@@ -1160,6 +1172,7 @@
       const now0 = n.fu != null ? revOf((tx.mapGet('fu', p.id) || [])[n.fu]) : revOf(n);
       if (now0 !== i.base.rev) throw staleErr({ rev: now0, q: n.q || '' }, [['fu', p.id], ['qtd', p.id]]);
       const q = text(i.q, 'q'), changed = n.q !== q;
+      if (changed) editedHidden(tx, nodeModKey(p.id, n));
       if (n.fu != null) { const fu = tx.mapGet('fu', p.id) || []; if (fu[n.fu]) { fu[n.fu].q = q; if (changed) fu[n.fu].edited = true; if (i.run) delete fu[n.fu].a; bump(fu[n.fu]); tx.mapPut('fu', p.id, fu); } }
       const tree = askTree(tx, p.id);
       let ran = null;
@@ -1302,7 +1315,11 @@
   /* what lets the caller into a closed space: a live invite link to it (invite: its code). An invite notification
      carries a link's code; neither the notification itself nor an approved request admits (phase 0: an approval
      writes the membership, and a standing pass would let a removed member join again) */
+  /* the invite link an invite notification carries, for a join that names the notification and no code */
+  const noteLink = (tx, i) => { if (i.notification == null || i.invite != null) return null; const n = tx.find('notifs', i.notification); return n && n.type === 'invite' && n.invite ? tx.find('links', n.invite) || undefined : null; };
   function admitted(tx, s, i) {
+    const viaNote = noteLink(tx, i);
+    if (viaNote !== null) return viaNote && viaNote.sp === s.id && liveLink(tx, viaNote, s) ? true : deny('This invite link has expired or was already used.');
     if (i.invite != null) { const l = tx.get('links').find(x => x.code === i.invite); return l && l.sp === s.id && liveLink(tx, l, s) ? true : deny('This invite link has expired or was already used.'); }
     return deny(`#${s.name} is closed: joining it needs an invite or a request a moderator approved.`);
   }
@@ -1317,7 +1334,7 @@
     }, 'space');
   }
   proc('spaces.join', { input: obj({ space: ID, 'notification?': ID, 'invite?': str }), output: 'null', who: 'user', errors: ['NOT_FOUND', 'FORBIDDEN'], writes: ['joined', 'rel', 'spaces', 'roles', 'notifs', 'links', 'mem', 'memOther'],
-    note: 'join an open space, or a closed one with a live invite link (invite: its code, which it uses up; an invite notification carries one); notification: the invite, marked accepted. You join the space’s member list. A person banned from a space can’t join it.',
+    note: 'join an open space, or a closed one with a live invite link (invite: its code, which it uses up); notification: the invite, marked accepted; without a code, the link the notification carries (its id, phase 1b) is used up as a code would be. You join the space’s member list. A person banned from a space can’t join it.',
     space: (tx, i) => i.space,
     can: (tx, i) => {
       const s = tx.need('spaces', i.space, 'space');
@@ -1329,7 +1346,8 @@
       const s = tx.need('spaces', i.space, 'space');
       markNote(tx, i.notification, n => { n.response = 'accepted'; });
       if (roleIn(tx.get, s.id)) return;
-      if (i.invite != null && closedSpace(s)) { const l = tx.get('links').find(x => x.code === i.invite); tx.edit('links', l.id, x => { x.dead = 'Used'; x.usedBy = tx.me.u; }); }
+      const viaNote = noteLink(tx, i);
+      if (closedSpace(s) && (viaNote || i.invite != null)) { const l = viaNote || tx.get('links').find(x => x.code === i.invite); tx.edit('links', l.id, x => { x.dead = 'Used'; x.usedBy = tx.me.u; }); }
       if (closedSpace(s)) setRelation(tx, s.id, 'member'); else setJoined(tx, s.id, true);
       addToRoster(tx, s.id, tx.me.u, 'member');
     } });
@@ -1476,8 +1494,8 @@
     if (outcome && x.by === tx.me.u) tx.put('notifs', { id: tx.id(), type: 'report_resolved', report: x.id, item: x.key, outcome, read: false }, 'start');
   };
   /* hide or remove an item (a removal erases it, and a removed item stays removed) */
-  const restrict = (tx, key, how) => { if (how === 'removed') eraseItem(tx, key); tx.mapPut('modSt', key, how); };
-  proc('reports.resolve', { input: obj({ report: ID, outcome: one('dismissed', 'hidden', 'removed', 'open'), 'base?': obj({ rev: int, item: int }, 'ReopenBase') }), output: 'null', who: 'moderator', errors: ['NOT_FOUND', 'STALE', 'PRECONDITION_FAILED'], writes: ['reports', 'modSt', 'notifs', 'posts', 'rp', 'fu', 'qtd', 'rich', 'srcd', 'runs', 'rpLiked'],
+  const restrict = (tx, key, how) => { if (how === 'removed') eraseItem(tx, key); else bumpModRev(tx, key); tx.mapPut('modSt', key, how); };
+  proc('reports.resolve', { input: obj({ report: ID, outcome: one('dismissed', 'hidden', 'removed', 'open'), 'base?': obj({ rev: int, item: int }, 'ReopenBase') }), output: 'null', who: 'moderator', errors: ['NOT_FOUND', 'STALE', 'PRECONDITION_FAILED'], writes: ['reports', 'modSt', 'modRev', 'notifs', 'posts', 'rp', 'fu', 'qtd', 'rich', 'srcd', 'runs', 'rpLiked'],
     note: 'dismiss a report (the item stays as it is), or hide or remove the item (which resolves every open report on it); "open" reopens it (Undo, Restore). base, required for "open": the report’s version and the item’s as the moderator saw them (STALE when the report changed since, or when the reopening shows a hidden item that changed since). A removed item stays removed (PRECONDITION_FAILED on hiding it). The person who reported it gets a report_resolved notification.',
     space: (tx, i) => tx.need('reports', i.report, 'report').sp,
     can: (tx, i) => i.outcome !== 'open' || !!i.base || rpcError('BAD_REQUEST', undefined, ['input.base: expected the report’s and the item’s versions']),
@@ -1487,7 +1505,8 @@
         if (revOf(r) !== i.base.rev) throw staleErr({ id: r.id, rev: revOf(r), st: r.st }, [['reports', r.id]]);
         const was = r.st; tx.edit('reports', r.id, x => { x.st = 'open'; });
         if (was !== 'dismissed' && was !== 'open' && !tx.get('reports').some(x => x.key === r.key && x.id !== r.id && x.st !== 'open') && modOf(tx, r.key) === 'hidden') {
-          if (itemRev(tx, r.key) !== i.base.item) throw staleErr(itemNow(tx, r.key), itemReads(r.key));
+          itemRev(tx, r.key);
+          if (modRevOf(tx, r.key) !== i.base.item) throw staleErr(itemNow(tx, r.key), itemReads(r.key));
           tx.mapDel('modSt', r.key);
         }
         resolvedNote(tx, r, null);
@@ -1506,13 +1525,14 @@
         resolvedNote(tx, x, i.outcome);
       });
     } });
-  proc('moderation.decide', { input: obj({ item: str, decision: one('hidden', 'removed', 'shown'), 'base?': BASE }), output: 'null', who: 'moderator', errors: ['NOT_FOUND', 'STALE', 'PRECONDITION_FAILED'], writes: ['modSt', 'posts', 'rp', 'fu', 'qtd', 'rich', 'srcd', 'runs', 'rpLiked'],
-    note: 'hide or remove an item without a report, or show a hidden item again. base.rev, required for "shown": the item’s version the moderator read (STALE when its author edited it since: a Show made after reading one text never publishes another). Hiding needs the item shown, showing needs it hidden (PRECONDITION_FAILED); a removal erases the item’s text and everything under it, and a removed item stays removed.',
+  proc('moderation.decide', { input: obj({ item: str, decision: one('hidden', 'removed', 'shown'), 'base?': BASE }), output: 'null', who: 'moderator', errors: ['NOT_FOUND', 'STALE', 'PRECONDITION_FAILED'], writes: ['modSt', 'modRev', 'posts', 'rp', 'fu', 'qtd', 'rich', 'srcd', 'runs', 'rpLiked'],
+    note: 'hide or remove an item without a report, or show a hidden item again. base.rev, required for "shown": the version of the item’s moderation record the moderator read (modRev; STALE when it was hidden again or its author edited it since: a Show made after reading one text never publishes another). Hiding leaves the item’s own version as it is, so an author’s edit made before the hide is not STALE. Hiding needs the item shown, showing needs it hidden (PRECONDITION_FAILED); a removal erases the item’s text and everything under it, and a removed item stays removed.',
     space: itemIn,
     can: (tx, i) => i.decision !== 'shown' || !!i.base || rpcError('BAD_REQUEST', undefined, ['input.base: expected the item’s version']),
     run: (tx, i) => {
-      const rev = itemRev(tx, i.item), m = modOf(tx, i.item);
-      if (i.decision === 'shown' && rev !== i.base.rev) throw staleErr(itemNow(tx, i.item), itemReads(i.item));
+      itemRev(tx, i.item);
+      const m = modOf(tx, i.item);
+      if (i.decision === 'shown' && modRevOf(tx, i.item) !== i.base.rev) throw staleErr(itemNow(tx, i.item), itemReads(i.item));
       if (m === 'removed') throw removedErr();
       if (i.decision === 'hidden' && m !== null) throw rpcError('PRECONDITION_FAILED', 'This item is already hidden.');
       if (i.decision === 'shown' && m !== 'hidden') throw rpcError('PRECONDITION_FAILED', 'This item is not hidden.');
@@ -1648,13 +1668,14 @@
   proc('spaces.archive', { input: obj({ id: ID, archived: bool }), output: 'null', who: 'owner', errors: ['NOT_FOUND'], writes: ['spaces'],
     note: 'archive (read-only, hidden from browse and search) or unarchive a space', space: (tx, i) => i.id,
     run: (tx, i) => { tx.edit('spaces', i.id, x => { if (i.archived) x.archived = { by: tx.me.u, at: tx.now }; else delete x.archived; }, 'space'); } });
-  proc('spaces.delete', { input: obj({ id: ID }), output: 'null', who: 'owner', errors: ['NOT_FOUND'], writes: ['spaces', 'joined', 'rel', 'posts', 'rich', 'srcd', 'fu', 'rp', 'qtd', 'runs', 'liked', 'saved', 'qtSaved', 'rpLiked', 'mem', 'memOther', 'reqs', 'banned', 'links', 'reports', 'modSt', 'pagedocs', 'dsDrops', 'dsPol', 'dsReps', 'skills', 'skillsRev', 'askedInv', 'notifs', 'roles'],
+  proc('spaces.delete', { input: obj({ id: ID }), output: 'null', who: 'owner', errors: ['NOT_FOUND'], writes: ['spaces', 'joined', 'rel', 'posts', 'rich', 'srcd', 'fu', 'rp', 'qtd', 'runs', 'liked', 'saved', 'qtSaved', 'rpLiked', 'mem', 'memOther', 'reqs', 'banned', 'links', 'reports', 'modSt', 'modRev', 'pagedocs', 'dsDrops', 'dsPol', 'dsReps', 'skills', 'skillsRev', 'askedInv', 'notifs', 'roles'],
     note: 'delete a space for everyone: its content is erased (its threads and everything under them, the likes and saves of them, its members, requests, bans, invite links, reports, pages, skills, sources and the notifications about it). The space record stays, marked deleted, so its name stays taken. Online only.', space: (tx, i) => i.id,
     run: (tx, i) => {
       const sid = i.id, gone = new Set(tx.get('posts').filter(p => p.s === sid).map(p => p.id));
       for (const th of gone) { tx.remove('posts', th); for (const c of ['rich', 'srcd', 'fu', 'rp', 'qtd']) tx.mapDel(c, th); }
       for (const k of Object.keys(tx.get('runs'))) if (gone.has(k.split(':')[0])) tx.mapDel('runs', k);
       for (const k of Object.keys(tx.get('modSt'))) if (gone.has(k.split(':')[1])) tx.mapDel('modSt', k);
+      for (const k of Object.keys(tx.get('modRev'))) if (gone.has(k.split(':')[1])) tx.mapDel('modRev', k);
       for (const k of ['liked', 'saved', 'qtSaved', 'rpLiked']) { const v = tx.get(k), w = new Set([...v].filter(x => !gone.has(String(x).split(':')[0]))); if (w.size !== v.size) tx.setValue(k, w); }
       if (sid === C.mem.space) tx.setValue('mem', []); else tx.mapDel('memOther', sid);
       tx.get('reqs').filter(r => reqSpace(r) === sid).forEach(r => tx.remove('reqs', r.u));
@@ -1673,9 +1694,10 @@
 
   /* -- skills and pages: by id (phase 1a.2) -- */
   const skillsOf = (tx, sid) => { tx.need('spaces', sid, 'space'); return tx.mapGet('skills', sid) || []; };
-  /* the skills list's version: one more on every change of the list (skills.reorder's base) */
+  /* the skills order's version: one more when a skill is added or removed or the order changes, not on an edit
+     (phase 1b: @session/mutators keeps each skill in its own record and the order in another); skills.reorder's base */
   const skillsAt = (tx, sid) => tx.get('skillsRev')[sid] || 0;
-  const putSkills = (tx, sid, l) => { tx.mapPut('skills', sid, l); tx.mapPut('skillsRev', sid, skillsAt(tx, sid) + 1); };
+  const putSkills = (tx, sid, l, order = true) => { tx.mapPut('skills', sid, l); if (order) tx.mapPut('skillsRev', sid, skillsAt(tx, sid) + 1); };
   const noSkill = () => rpcError('NOT_FOUND', 'The server has no record of this skill.');
   const skillIndex = (l, id) => { const k = l.findIndex(x => x.id === id); if (k < 0) throw noSkill(); return k; };
   const SKILL_IN = { space: ID, name: str, prompt: str };
@@ -1688,8 +1710,8 @@
       return { id };
     } });
   /* a skill's new text: its version goes up by one (ref: its id, or for a scenario its index) */
-  function writeSkill(tx, sid, ref, name, prompt) { const l = skillsOf(tx, sid), k = typeof ref === 'number' ? ref : skillIndex(l, ref); l[k] = { id: l[k].id, name, prompt, rev: l[k].rev + 1 }; putSkills(tx, sid, l); }
-  proc('skills.update', { space: spaceIn, input: obj({ ...SKILL_IN, id: ID, 'base?': obj({ rev: int }, 'SkillBase'), 'force?': bool }), output: 'null', who: 'moderator', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['skills', 'skillsRev'],
+  function writeSkill(tx, sid, ref, name, prompt) { const l = skillsOf(tx, sid), k = typeof ref === 'number' ? ref : skillIndex(l, ref); l[k] = { id: l[k].id, name, prompt, rev: l[k].rev + 1 }; putSkills(tx, sid, l, false); }
+  proc('skills.update', { space: spaceIn, input: obj({ ...SKILL_IN, id: ID, 'base?': obj({ rev: int }, 'SkillBase'), 'force?': bool }), output: 'null', who: 'moderator', errors: ['NOT_FOUND', 'CONFLICT'], writes: ['skills'],
     note: 'id: the skill’s id; base.rev: the skill’s version the editor opened; CONFLICT when someone else saved it since (step 9)',
     run: (tx, i) => {
       const l = skillsOf(tx, i.space), k = skillIndex(l, i.id), row = l[k];
@@ -2117,6 +2139,22 @@
     for (let i = 0, x = n; i < 16; i++, x = Math.floor(x / 32)) r = B32[x % 32] + r;
     return t + r;
   }
+  /* a stable id for a reply or a flat follow-up that has none (a fixture's, a scenario's): a ULID with its time and
+     a hash of its thread, place and author, so a reload or a scenario gives it the same id (phase 1b: replies and
+     follow-ups are named by id, as @session/mutators names them) */
+  function entryId(th, where, e) {
+    let h = 2166136261;
+    for (const ch of `${th}:${where}:${e.u || ''}:${e.createdAt || ''}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    return ulid(Date.parse(e.createdAt || '') || 0, (h >>> 0) * 4096 + (where.length % 4096));
+  }
+  /* give a thread's replies (and their replies) and flat follow-ups the ids they lack. A flat follow-up a fixture's
+     ask tree names (its node's `fu`) takes that node's id; another takes "f<index>", the id it was known by. */
+  function entryIds(k, th, list, tree) {
+    if (!Array.isArray(list)) return list;
+    if (k === 'rp') list.forEach((r, j) => { if (r && r.id == null) r.id = entryId(th, String(j), r); (r && r.kids || []).forEach((x, jj) => { if (x && x.id == null) x.id = entryId(th, `${j}.${jj}`, x); }); });
+    if (k === 'fu') list.forEach((f, j) => { if (!f || f.id != null) return; const n = tree && (tree.nodes || []).find(y => y.fu === j); f.id = n ? n.id : 'f' + j; });
+    return list;
+  }
   /* the list collections whose records carry a version the server sets (the sync rules: base.rev) */
   const REVS = new Set(['posts', 'reqs', 'reports']);
   const omit = (o, ks) => { if (!ks || !ks.some(k => k in o)) return o; const x = { ...o }; ks.forEach(k => delete x[k]); return x; };
@@ -2144,6 +2182,15 @@
       for (const [sid, l] of Object.entries(d.skills || {})) l.forEach((x, k) => { if (x.id == null) x.id = `sk-${sid}-${k + 1}`; });
       for (const x of d.spaces || []) (x.pages || []).forEach((p, k) => { if (p[2] == null) p[2] = `pg-${x.id}-${k + 1}`; });
       for (const [key, doc] of Object.entries(d.pagedocs || {})) if (doc.id == null) { const [sid, slug] = key.split('/'), x = (d.spaces || []).find(y => y.id === sid), p = x && (x.pages || []).find(y => pageSlug(y[0]) === slug); if (p) doc.id = p[2]; }
+      /* replies and flat follow-ups by id (phase 1b): ids where a fixture has none, and the keys that named them by
+         place ("r:<thread>:<path>", a reply like's "<thread>:<path>") renamed to their ids */
+      for (const [th, l] of Object.entries(d.rp || {})) entryIds('rp', th, l);
+      for (const [th, l] of Object.entries(d.fu || {})) entryIds('fu', th, l, (d.qtd || {})[th]);
+      const byPath = (th, path) => { let r = null, l = (d.rp || {})[th] || []; for (const j of String(path).split('.')) { r = l[+j]; if (!r) return null; l = r.kids || []; } return r; };
+      const rename = key => { const m = /^r:([^:]+):(\d+(?:\.\d+)?)$/.exec(String(key)); const r = m && byPath(m[1], m[2]); return r ? `r:${m[1]}:${r.id}` : key; };
+      for (const x of d.reports || []) x.key = rename(x.key);
+      for (const c of ['modSt', 'modRev']) if (d[c]) d[c] = Object.fromEntries(Object.entries(d[c]).map(([k, v]) => [rename(k), v]));
+      if (d.rpLiked instanceof Set) d.rpLiked = new Set([...d.rpLiked].map(x => { const [th, path] = String(x).split(':'), r = /^\d/.test(path || '') ? byPath(th, path) : null; return r ? `${th}:${r.id}` : x; }));
       return d;
     };
     const version = () => { if (ver) return ver; const t = enc({ seed: seedData(), clock: fx.clock || null, me }); let x = 2166136261; for (let i = 0; i < t.length; i++) { x ^= t.charCodeAt(i); x = Math.imul(x, 16777619); } return (ver = (x >>> 0).toString(36) + ':' + t.length); };
@@ -2245,7 +2292,7 @@
         edit: (k, id, fn, what) => { const x = tx.need(k, id, what), r = fn(x); return tx.put(k, r === undefined ? x : r); },
         remove: (k, id) => { const l = own(k), i = l.findIndex(x => idOf(k, x) === String(id)); if (i >= 0) { l.splice(i, 1); mark(k, id); } },
         mapGet: (k, key) => copy(cur(k)[key]),
-        mapPut: (k, key, v) => { own(k)[key] = stampValue(k, copy(v)); mark(k, key); },
+        mapPut: (k, key, v) => { own(k)[key] = stampValue(k, copy(v)); if (k === 'rp' || k === 'fu') entryIds(k, key, own(k)[key], k === 'fu' ? cur('qtd')[key] : null); mark(k, key); },
         mapDel: (k, key) => { if (key in cur(k)) { delete own(k)[key]; mark(k, key); } },
         setValue: (k, v) => { staged[k] = stampValue(k, v instanceof Set ? new Set(v) : copy(v)); mark(k, '*'); },
         abort: () => { ids = ids0; later.length = 0; },
@@ -2975,5 +3022,5 @@
     };
   }
 
-  window.SessionMockApi = { enc, dec, CODES, STATUS, API, PROCEDURES: PROCS, COLLECTIONS: C, SCHEMAS: S, NOTIFICATION_TYPES, READ_RULES, check, describe, ulid, createBackend };
+  window.SessionMockApi = { enc, dec, CODES, STATUS, API, PROCEDURES: PROCS, COLLECTIONS: C, SCHEMAS: S, NOTIFICATION_TYPES, READ_RULES, check, describe, ulid, entryId, createBackend };
 })();

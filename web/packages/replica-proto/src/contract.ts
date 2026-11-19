@@ -67,9 +67,8 @@ export interface Envelope {
  *   error carries `expectedSeq`.
  * - `WRONG_CLIENT`: the client id is unknown, expired, or bound to another
  *   user. Not recorded.
- * - `TOO_LARGE`: `@session/mutators`' code for an oversized envelope or a
- *   device's answer over its cap. This prototype answers an oversized
- *   envelope with BAD_REQUEST (see UNRECORDED). */
+ * - `TOO_LARGE`: an envelope larger than 256 KB as JSON (unrecorded, see
+ *   UNRECORDED), or a device's answer over its cap. */
 export type ErrorCode =
   | Spaces.SpaceErrorCode
   | "UPDATE_REQUIRED"
@@ -84,8 +83,9 @@ export type ErrorCode =
  * same `seq` may be sent again, and the client keeps the write queued. The
  * transient ones (TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE,
  * INTERNAL_SERVER_ERROR, CLOCK_SKEW) say nothing about the write itself; the
- * client sends it again later. A BAD_REQUEST for a malformed or oversized
- * envelope records nothing either (it has no usable `seq`).
+ * client sends it again later. A BAD_REQUEST for a malformed envelope, and
+ * TOO_LARGE for an oversized one, record nothing either (neither has a
+ * usable `seq`).
  *
  * Every other answer, applied or refused, uses up the `seq` and is recorded
  * in the same commit as the write's changes: under (user, mutation id) for 7
@@ -103,6 +103,7 @@ export const UNRECORDED: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
   "TOO_MANY_REQUESTS",
   "SERVICE_UNAVAILABLE",
   "INTERNAL_SERVER_ERROR",
+  "TOO_LARGE",
 ]);
 
 /** An error answer. `message` is fixed per code and cause, so two answers

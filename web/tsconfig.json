@@ -7,6 +7,7 @@
     { "path": "./packages/client" },
     { "path": "./packages/mutators" },
     { "path": "./packages/replica-proto" },
+    { "path": "./packages/sync" },
     { "path": "./tsconfig.e2e.json" }
   ]
 }

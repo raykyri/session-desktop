@@ -184,7 +184,7 @@ test("a client ULID more than 4 days old or more than 1 minute ahead on the devi
       at(2 * MINUTE),
     ),
   );
-  t.is((w.get(`thread:${th}`) as ThreadRec).mod, null);
+  t.is(w.mod(`thread:${th}`), null);
 });
 
 test("a device clock more than a minute from the server's is CLOCK_SKEW with the server's time, and nothing is recorded", async (t) => {

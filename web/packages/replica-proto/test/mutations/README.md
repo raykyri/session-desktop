@@ -16,6 +16,7 @@ npm run mutate -- --slots 2       # 2 copies at once
 npm run mutate -- --check         # only check that every pattern matches once
 npm run mutate -- --package       # with the switch on: the server runs @session/mutators
 npm run mutate -- --since main    # the mutations whose file changed since a git ref
+npm run mutate -- --sync          # against @session/sync's server half
 ```
 
 `--since <ref>` selects the mutations whose file changed since the ref, the
@@ -28,6 +29,16 @@ mutation of `src/mutators.ts` or `src/access.ts`, and X29 (the online-only
 check, now in the package's engine), is made at the same place in a copy of
 `@session/mutators` instead (`IN_PACKAGE` in `mutate.ts`); the others are made
 where they are. Every slot holds a copy of both packages.
+
+With `--sync` the suite runs against `@session/sync`'s server half
+(REPLICA_PROTO_SERVER=sync-memory, with the package's mutators). Each mutation
+of `src/server.ts` or `src/contract.ts` is made at the same place in a copy
+of `@session/sync` (`IN_SYNC` in `mutate.ts`), the mutators' in
+`@session/mutators` as with `--package`, and the prototype client's where
+they are: the suite's clients are the prototype's. Where the prototype's code
+has no exact counterpart, the mutation names the same fault in the code that
+does the same job, and says so in a comment (N34: the configured key is not
+used; R2-22: the store's dump leaves out the clients).
 
 It exits with 1 when a mutation survives.
 

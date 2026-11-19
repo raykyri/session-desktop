@@ -67,6 +67,7 @@ import {
   type ServerHalf,
   type StoredRecord,
 } from "../src/index.js";
+import { USE_PACKAGE } from "../src/switch.js";
 
 import { checkEffects, predictEffects } from "./effect-model.js";
 import { DAY, HOUR, MINUTE, World, actor, ok, rng } from "./harness.js";
@@ -390,7 +391,8 @@ const GENERATORS: Record<string, Gen> = {
     return {
       item,
       decision: pick(c.r, ["hidden", "hidden", "removed", "shown", "shown"]),
-      base: { rev: seenRev(c, itemRecordKey(item)) },
+      // with the switch on, "shown" compares the hide record's rev
+      base: { rev: seenRev(c, USE_PACKAGE ? `hide:${itemRecordKey(item)}` : itemRecordKey(item)) },
     };
   },
 };

@@ -6,9 +6,9 @@
 // Apply, in order. "Unrecorded" answers use up nothing: the client may send
 // the same `seq` again. Everything below runs inside one error handler: an
 // exception anywhere is INTERNAL_SERVER_ERROR, unrecorded.
-//   the envelope nests at most 33 deep (its input at most 32) and is at most
-//     256 KB as JSON (BAD_REQUEST): unrecorded, checked before anything
-//     hashes or parses the input
+//   the envelope is at most 256 KB as JSON (TOO_LARGE), and nests at most
+//     33 deep, its input at most 32 (BAD_REQUEST): unrecorded, checked before
+//     anything hashes or parses the input
 //   protocol version (UPDATE_REQUIRED) and envelope shape (BAD_REQUEST): unrecorded
 //   signed in with a valid handle (UNAUTHORIZED): unrecorded
 //   the client id is the caller's and has not expired (WRONG_CLIENT): unrecorded
@@ -116,6 +116,7 @@ import {
   registryKey,
   spaceRec,
   view,
+  viewDependents,
   type Audience,
 } from "./switch.js";
 import {
@@ -184,19 +185,26 @@ function canonical(v: unknown): string {
 }
 
 /** Whether `v` nests at most `maxDepth` levels (a scalar is 0 deep, `[1]`
- * 1) and holds at most `maxNodes` values. Walked with a stack, not by
- * recursion, so a deep value cannot overflow the call stack. */
-function withinBounds(v: unknown, maxDepth: number, maxNodes: number): boolean {
+ * 1) and is at most `maxNodes` bytes as JSON, as far as a walk can tell
+ * (a byte per value, and each string's length): "ok", or the bound it
+ * passes, size first. Walked with a stack, not by recursion, so a deep value cannot
+ * overflow the call stack. */
+function withinBounds(v: unknown, maxDepth: number, maxNodes: number): "ok" | "deep" | "large" {
   const stack: [unknown, number][] = [[v, 0]];
-  let nodes = 0;
+  // a lower bound of the value's size as JSON: a byte per value, and each
+  // string's length and quotes
+  let bytes = 0;
+  let deep = false;
   for (let top = stack.pop(); top; top = stack.pop()) {
     const [x, level] = top;
-    if (++nodes > maxNodes) return false;
+    bytes += typeof x === "string" ? x.length + 2 : 1;
+    if (bytes > maxNodes) return "large";
     if (x === null || typeof x !== "object") continue;
-    if (level >= maxDepth) return false;
+    // past the depth bound the walk goes on, for the size: size decides first
+    if (level >= maxDepth) deep = true;
     for (const y of Object.values(x)) stack.push([y, level + 1]);
   }
-  return true;
+  return deep ? "deep" : "ok";
 }
 
 /** The id-collision answer: one message, whether or not the caller may read
@@ -302,6 +310,7 @@ class Store {
         this.born.delete(key);
         setLast(this.tombs, key, tomb);
         for (const log of logsOfAudience(tomb)) this.row(log, key, "del", version);
+        this.touchDependents(old, version);
         continue;
       }
       const reg = registryKey(next);
@@ -315,6 +324,7 @@ class Store {
       kind.add(key);
       this.tombs.delete(key);
       for (const log of logsOf(rec)) this.row(log, key, "put", version);
+      this.touchDependents(rec, version);
       // who may read a space's records depends on whether it is closed: a
       // change replaces the log's history (every cursor resyncs)
       if (rec.kind === "space" && prev?.kind === "space" && isClosed(prev) !== isClosed(rec)) {
@@ -323,6 +333,15 @@ class Store {
       }
     }
     return version;
+  }
+
+  /** A record whose view depends on `r` (a hide record's item) is served
+   * again: a `put` row for it at this version in each of its logs. */
+  private touchDependents(r: StoredRecord, version: number) {
+    for (const key of viewDependents(r)) {
+      const dep = this.records.get(key);
+      if (dep) for (const log of logsOf(dep)) this.row(log, key, "put", version);
+    }
   }
 
   /** Drop the tombstones (and their `del` rows) committed strictly before the
@@ -620,16 +639,25 @@ export class ProtoServer implements TestServer {
   }
 
   private applyEnvelope(actor: Actor | null, envelope: unknown): ApplyResult {
-    // bounds first: nothing below may walk an input deeper or larger than this
-    if (
-      !withinBounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES) ||
-      Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES
-    )
-      return fail(
-        refuse("BAD_REQUEST", undefined, [
-          `envelope: expected input nested at most ${MAX_INPUT_DEPTH} deep, and at most ${MAX_ENVELOPE_BYTES} bytes as JSON`,
+    // bounds first: nothing below may walk an input deeper or larger than
+    // this. Size first (AGENTS.md: an oversized envelope answers TOO_LARGE,
+    // unrecorded); a walk that stops past the value count is oversized too
+    // (each value is at least a byte of JSON), and a deeper one malformed.
+    const bounds = withinBounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES);
+    const tooLarge = () =>
+      fail(
+        refuse("TOO_LARGE", undefined, [
+          `envelope: expected at most ${MAX_ENVELOPE_BYTES} bytes as JSON`,
         ]),
       );
+    if (bounds === "large") return tooLarge();
+    if (bounds === "deep")
+      return fail(
+        refuse("BAD_REQUEST", undefined, [
+          `envelope: expected input nested at most ${MAX_INPUT_DEPTH} deep`,
+        ]),
+      );
+    if (Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES) return tooLarge();
     const version =
       envelope !== null && typeof envelope === "object"
         ? (envelope as { protocolVersion?: unknown }).protocolVersion

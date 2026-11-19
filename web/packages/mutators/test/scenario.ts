@@ -34,13 +34,20 @@ export function history(t: ExecutionContext, seed = 1): World {
     rev: 1,
   });
   w.key("mel", "KEY1");
-  w.devices.set("mel", new Set(["MAC1"]));
+  w.device("mel", "MAC1");
   // notifications the server wrote: an invite to the vault for eve, and a
   // report notice for mona
   const invite = w.id();
   const notice = w.id();
   const rest = { report: null, item: null, outcome: null, response: null, actor: "olga" };
-  const at = { thread: null, node: null, read: false, createdAt: "2026-11-15T00:00:00Z", rev: 1 };
+  const at = {
+    thread: null,
+    node: null,
+    invite: null,
+    read: false,
+    createdAt: "2026-11-15T00:00:00Z",
+    rev: 1,
+  };
   w.store.records.set(`notif:${invite}`, {
     kind: "notif",
     id: invite,

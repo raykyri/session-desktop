@@ -5,6 +5,9 @@
 
 import type { Spaces } from "@session/shared";
 
+import { canRead, redact, type Reader } from "./access.js";
+import { keyOf, type StoredRecord } from "./records.js";
+
 /** The spaces API's codes, and the sync protocol's:
  * - `UPDATE_REQUIRED`: the client's protocol version is below the minimum.
  * - `STALE`: the record a decision acts on is no longer in the state the
@@ -29,12 +32,19 @@ export type ErrorCode =
 
 /** An error answer. `message` is fixed per code and cause, so two answers
  * with the same cause are equal. `retryAt` (ISO): on a limit's
- * TOO_MANY_REQUESTS, when the write can be sent again. */
+ * TOO_MANY_REQUESTS, when the write can be sent again. `current` (STALE
+ * only): the record the write acted on, as the actor may read it now
+ * (`redact`), or null when they may no longer read it (phase 1b, Part 0
+ * item 4). `reads` (STALE only): the keys of the records the answer is
+ * about, the target first; a server half answers them again as `changes`
+ * and stores only the keys with a recorded answer, never their text. */
 export interface ApiError {
   code: ErrorCode;
   message: string;
   issues?: string[];
   retryAt?: string;
+  current?: StoredRecord | null;
+  reads?: string[];
 }
 
 /** The mock's default messages (its section 2), and the sync protocol's. */
@@ -64,6 +74,9 @@ export class Refusal extends Error {
   readonly code: ErrorCode;
   readonly issues: string[] | undefined;
   readonly retryAt: string | undefined;
+  /** STALE: the target as the actor reads it now, and the keys answered. */
+  current: StoredRecord | null | undefined;
+  reads: string[] | undefined;
   constructor(code: ErrorCode, message?: string, issues?: string[], retryAt?: string) {
     super(message ?? MESSAGES[code]);
     this.code = code;
@@ -74,6 +87,8 @@ export class Refusal extends Error {
     const e: ApiError = { code: this.code, message: this.message };
     if (this.issues) e.issues = [...this.issues];
     if (this.retryAt !== undefined) e.retryAt = this.retryAt;
+    if (this.current !== undefined) e.current = this.current;
+    if (this.reads !== undefined) e.reads = [...this.reads];
     return e;
   }
 }
@@ -89,4 +104,18 @@ export const bad = (path: string, expected: string) =>
  * read. */
 export const notFound = () => refuse("NOT_FOUND");
 
-export const stale = () => refuse("STALE");
+/** STALE for a write whose target changed since the client read it:
+ * `target` is the record as it is now (`redact`ed for the actor), and `more`
+ * the keys of other records the answer is about (a hidden item's hide
+ * record). */
+export function stale(
+  g: Reader,
+  me: string,
+  target: StoredRecord | null,
+  more: string[] = [],
+): Refusal {
+  const e = refuse("STALE");
+  e.current = target === null ? null : canRead(g, target, me) ? redact(g, target, me) : null;
+  e.reads = [...(target === null ? [] : [keyOf(target)]), ...more];
+  return e;
+}

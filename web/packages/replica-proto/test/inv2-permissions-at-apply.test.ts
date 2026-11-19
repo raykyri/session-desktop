@@ -34,7 +34,7 @@ test("a moderator's hide, queued before a demotion, is refused after it", async 
   t.is(hide?.ok ? null : hide?.error.code, "FORBIDDEN");
   t.is(remove?.ok ? null : remove?.error.code, "FORBIDDEN");
   t.is(decide?.ok ? null : decide?.error.code, "FORBIDDEN");
-  t.is((w.get(`thread:${th}`) as ThreadRec).mod, null);
+  t.is(w.mod(`thread:${th}`), null);
   t.truthy(w.get(`member:${closed}:mel`));
 });
 
@@ -239,7 +239,7 @@ test("a queued role change, show, or edit acts only on the state it was made fro
     t.is(r?.ok ? "ok" : r?.error.code, "STALE", c.actor?.u);
   }
   t.is((w.get(`thread:${th}`) as ThreadRec).q, "phone");
-  t.is((w.get(`thread:${th}`) as ThreadRec).mod, "hidden");
+  t.is(w.mod(`thread:${th}`), "hidden");
   // with the current rev, showing needs the item hidden
   await ok(
     t,

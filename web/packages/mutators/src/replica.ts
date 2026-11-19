@@ -27,6 +27,18 @@ export interface OwnIds {
   readonly minted: ReadonlySet<string>;
   /** The mutation ids of its unanswered writes. */
   readonly mutations: ReadonlySet<string>;
+  /** Whether `id` is derived from one of `mutations`, in place of hashing
+   * up to MAX_DERIVED candidates per mutation on each check: a client that
+   * caches each mutation's derived ids passes its lookup here. */
+  readonly derived?: (id: string) => boolean;
+}
+
+/** The ids derived from one mutation id, up to MAX_DERIVED: a client
+ * computes them once per mutation and keeps them. */
+export function derivedIds(user: string, mutationId: string): Set<string> {
+  const out = new Set<string>();
+  for (let k = 1; k <= MAX_DERIVED; k++) out.add(deriveId(user, mutationId, k));
+  return out;
 }
 
 /** The most derived ids one mutation makes that `withOwnIds` checks (a
@@ -54,7 +66,8 @@ export function withOwnIds(source: RecordSource, own: OwnIds): RecordSource {
     idUsed: (id) => {
       const known = source.idUsed(id);
       if (known === true) return true;
-      if (own.minted.has(id) || derivedFrom(id, own.user, own.mutations)) return false;
+      const derived = own.derived ? own.derived(id) : derivedFrom(id, own.user, own.mutations);
+      if (own.minted.has(id) || derived) return false;
       return known === false ? false : UNKNOWN;
     },
   };

@@ -123,6 +123,7 @@ function seedWorld(t: ExecutionContext) {
     actor: "olga",
     thread: null,
     node: null,
+    invite: null,
     read: false,
     createdAt: "2026-11-16T09:00:00Z",
     rev: 1,
@@ -246,13 +247,13 @@ function oursSide(w: World, id: (l: string) => string, fresh: string[]): Side {
     reportRev: (rep) => w.rev(`report:${id(rep)}`),
     itemRev: (key) => {
       const [k, th, sub] = key.split(":");
-      if (k === "f") return w.rev(`followup:${sub}`);
-      if (k === "r") return w.rev(`reply:${sub}`);
-      return w.rev(`thread:${th}`);
+      if (k === "f") return w.rev(`hide:followup:${sub}`);
+      if (k === "r") return w.rev(`hide:reply:${sub}`);
+      return w.rev(`hide:thread:${th}`);
     },
     skillsRev: (sp) => w.rev(`skills:${id(sp)}`),
     adm: (sp, u) => w.admission(id(sp), u).adm,
-    skill: (sp, k) => recOf<"skills">(w, `skills:${id(sp)}`)?.list[k]?.id ?? "missing",
+    skill: (sp, k) => recOf<"skills">(w, `skills:${id(sp)}`)?.order[k] ?? "missing",
     page: (sp, k) => recOf<"pages">(w, `pages:${id(sp)}`)?.list[k]?.id ?? "missing",
   };
   return x;
@@ -282,25 +283,24 @@ function mockSide(id: (l: string) => string, fresh: string[]): Side {
     id,
     fresh: (k = 0) => fresh[k] ?? "missing",
     node: (th, k) => mockNodeIds(d(), id(th))[k] ?? "missing",
-    reply: (_th, path) => path,
+    // replies and flat follow-ups by id (phase 1b): the mock's ids are the
+    // client's, the same as ours
+    reply: (th, path) => (replyRec(th, path)?.id as string | undefined) ?? "missing",
     fkey: (th, k) => {
       const n = mockNodes(d(), id(th))[k];
-      return n?.fu != null ? `f:${id(th)}:${n.fu}` : `n:${id(th)}:${n?.id}`;
+      return n?.fu != null ? `f:${id(th)}:${d().fu[id(th)][n.fu].id}` : `n:${id(th)}:${n?.id}`;
     },
-    rkey: (th, path) => `r:${id(th)}:${path}`,
+    rkey: (th, path) =>
+      `r:${id(th)}:${(replyRec(th, path)?.id as string | undefined) ?? "missing"}`,
     threadRev: (th) => rev(d().posts.find((p: Any) => p.id === id(th))),
     nodeRev: (th, k) => rev(nodeRec(th, k)),
     replyRev: (th, path) => rev(replyRec(th, path)),
     memberRev: (sp, u) => rev(roster(sp).find((m) => m.u === u)),
     reqRev: (sp, u) => rev(d().reqs.find((r: Any) => r.u === u && r.sp === id(sp))),
     reportRev: (rep) => rev(d().reports.find((r: Any) => r.id === id(rep))),
-    itemRev: (key) => {
-      const [k, th = "", sub = ""] = key.split(":");
-      if (k === "r") return rev(replyRec(th, sub));
-      if (k === "f") return rev(d().fu[th]?.[Number(sub)]);
-      if (k === "n") return rev((d().qtd[th]?.nodes ?? []).find((x: Any) => x.id === sub));
-      return rev(d().posts.find((p: Any) => p.id === th));
-    },
+    // the base of "shown": the item's moderation record's version (phase 1b)
+    itemRev: (key) =>
+      d().modSt[key] === "hidden" ? ((d().modRev?.[key] as number | undefined) ?? 0) : 0,
     skillsRev: (sp) => (d().skillsRev[id(sp)] as number | undefined) ?? 0,
     adm: (sp, u) => (roster(sp).find((m) => m.u === u)?.adm as string | undefined) ?? "",
     skill: (sp, k) => (d().skills[id(sp)]?.[k]?.id as string | undefined) ?? "missing",
@@ -327,7 +327,9 @@ function mockNodeIds(d: Any, th: string): string[] {
 function mockNodes(d: Any, th: string): Any[] {
   const fus = d.fu[th] ?? [];
   return (
-    d.qtd[th] ?? { nodes: fus.map((_: unknown, k: number) => ({ id: "f" + k, par: "r", fu: k })) }
+    d.qtd[th] ?? {
+      nodes: fus.map((f: Any, k: number) => ({ id: f.id ?? "f" + k, par: "r", fu: k })),
+    }
   ).nodes;
 }
 
@@ -341,11 +343,12 @@ function oursReply(w: World, th: string, path: string): string {
   return rs.filter((r) => r.parent === top?.id)[j]?.id ?? "missing";
 }
 
-/** The input of a reply's write: ours names the reply by id, the mock by path. */
-const replyIn = (x: Side, th: string, path: string, more: object) =>
-  x.side === "ours"
-    ? { thread: x.id(th), reply: x.reply(th, path), ...more }
-    : { thread: x.id(th), path, ...more };
+/** The input of a reply's write: both name the reply by id (phase 1b). */
+const replyIn = (x: Side, th: string, path: string, more: object) => ({
+  thread: x.id(th),
+  reply: x.reply(th, path),
+  ...more,
+});
 
 // ---- the history ----
 // The rows of the phase 1a table that the mock adopted are marked (Dn): the
@@ -369,7 +372,7 @@ const HISTORY: Step[] = [
   {
     name: "likes.setReply",
     input: (x) => ({
-      reply: x.side === "ours" ? x.reply("T2", "0.0") : `${x.id("T2")}:0.0`,
+      reply: x.reply("T2", "0.0"),
       on: true,
     }),
   },
@@ -501,10 +504,12 @@ const HISTORY: Step[] = [
   },
   {
     name: "research.createPostFollowUp",
-    input: (x) =>
-      x.side === "ours"
-        ? { id: x.fresh(), thread: x.id("T5"), t: "Under one", parent: x.reply("T5", "0") }
-        : { id: x.fresh(), thread: x.id("T5"), t: "Under one", parent: 0 },
+    input: (x) => ({
+      id: x.fresh(),
+      thread: x.id("T5"),
+      t: "Under one",
+      parent: x.reply("T5", "0"),
+    }),
   },
   {
     name: "replies.update",
@@ -518,7 +523,7 @@ const HISTORY: Step[] = [
   {
     name: "likes.setReply",
     input: (x) => ({
-      reply: x.side === "ours" ? x.reply("T5", "0.0") : `${x.id("T5")}:0.0`,
+      reply: x.reply("T5", "0.0"),
       on: true,
     }),
   },
@@ -1017,8 +1022,6 @@ interface Difference {
   check(t: ExecutionContext, p: Pair): Promise<void>;
 }
 
-const code = (o: Outcome) => (o.status === "refused" ? o.error.code : o.status);
-
 export const DIFFERENCES: Difference[] = [
   {
     id: "D2",
@@ -1076,37 +1079,6 @@ export const DIFFERENCES: Difference[] = [
       await reset(toMock(seedWorld(t).w.store), p.w.now);
       const again = await p.mock("invites.create", { id, space: p.ids.lounge });
       t.is(again.ok && again.result.code, r.ok && r.result.code);
-    },
-  },
-  {
-    id: "D32",
-    procedures:
-      "replies.update, replies.delete, likes.setReply, research.createPostFollowUp, followups.*, moderation keys",
-    mock: "names a reply by its path in the thread's replies and a flat follow-up by its index (`r:<thread>:<path>`, `f:<thread>:<index>`); a reply like follows its reply when replies before it are deleted",
-    ours: "names them by id (a reply like is keyed by the reply's id)",
-    why: "the mockup's page addresses replies and flat follow-ups by position, and its fixtures have no ids for them; skills and pages, which a queued write could retarget the same way, have ids since phase 1a.2 (see the report's findings)",
-    async check(t, p) {
-      // the like of the reply under R1 (path 0.0) follows it when the first
-      // reply goes on the mock's side; here it is keyed by id
-      await p.mock("research.createPostFollowUp", { thread: p.ids.T2, t: "second" });
-      await p.mock("likes.setReply", { reply: `${p.ids.T2}:1`, on: true });
-      const R3 = p.w.id();
-      p.ours("research.createPostFollowUp", { id: R3, thread: p.ids.T2, t: "second" });
-      p.ours("likes.setReply", { reply: R3, on: true });
-      // otto's reply under R1 goes; R1 has no other reply and is not deleted
-      // here: delete it on both sides once its reply is gone
-      p.w.run("otto", "replies.delete", { thread: p.ids.T2, reply: p.ids.R2 });
-      const md = p.md();
-      md.rp[p.ids.T2][0].kids = [];
-      await reset(md, p.w.now);
-      await p.mock("replies.delete", { thread: p.ids.T2, path: "0" });
-      p.ours("replies.delete", { thread: p.ids.T2, reply: p.ids.R1 });
-      t.true(p.md().rpLiked.has(`${p.ids.T2}:0`));
-      t.truthy(p.get(`rlike:${ME}:${R3}`));
-      t.is(
-        code(p.ours("replies.update", { thread: p.ids.T2, path: "0", t: "x", base: { rev: 1 } })),
-        "BAD_REQUEST",
-      );
     },
   },
 ];

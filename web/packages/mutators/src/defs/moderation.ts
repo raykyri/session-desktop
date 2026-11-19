@@ -1,11 +1,14 @@
 // Reports and moderation decisions.
 //
 // Stale intent (review round 2, finding 2): a decision that shows an item
-// again acts on the item as the moderator read it, so it carries the item's
-// `base.rev` and is STALE when it differs: `moderation.decide` "shown". A
-// report reopened (`reports.resolve` "open") always carries `base` (phase
-// 1a.2, decision 7): the report's rev, compared every time, and the item's,
-// compared when the reopening shows a hidden item. Hiding and removing apply
+// again acts on the item as the moderator read it, so it carries `base.rev`
+// and is STALE when it differs: `moderation.decide` "shown". Hiding writes a
+// separate hide record and leaves the item as it is (phase 1b, Part 0 item
+// 3), so `base.rev` is the hide record's rev; the author's edits of a hidden
+// item move it too (`editedWhileHidden`). A report reopened
+// (`reports.resolve` "open") always carries `base` (phase 1a.2, decision 7):
+// the report's rev, compared every time, and the hide record's
+// (`base.item`), compared when the reopening shows a hidden item. Hiding and removing apply
 // to the item as it is now (`base` optional and not compared). A removed item
 // stays removed: its text was erased.
 
@@ -14,13 +17,23 @@ import { z } from "zod";
 
 import { defineMutator, inSpace } from "../engine.js";
 import { refuse, stale } from "../errors.js";
-import { erase, itemOf, readable, removed, text, type Item } from "../rules.js";
+import {
+  erase,
+  hide,
+  hideOf,
+  itemKey,
+  itemOf,
+  readable,
+  removed,
+  text,
+  type Item,
+} from "../rules.js";
 import { baseS, count, ulidS } from "../schemas.js";
 
 /** Hide or remove an item, as `moderation.decide` and `reports.resolve` do. */
 function restrict(tx: Parameters<typeof erase>[0], r: Item, to: "hidden" | "removed") {
   if (to === "removed") erase(tx, r);
-  else tx.put({ ...r, mod: "hidden" });
+  else hide(tx, r);
 }
 
 export const moderationMutators = [
@@ -82,16 +95,17 @@ export const moderationMutators = [
       const r = readable(tx, "report", i.report);
       const resolved: string[] = [];
       if (i.outcome === "open") {
-        if (r.rev !== i.base?.rev) throw stale();
+        if (r.rev !== i.base?.rev) throw stale(tx, tx.me, r);
         const was = r.st;
         tx.put({ ...r, st: "open", updatedAt: tx.now });
         resolved.push(r.id);
         const others = tx.scan("report.key", r.key).some((x) => x.id !== r.id && x.st !== "open");
         if (was !== "dismissed" && was !== "open" && !others) {
           const item = itemOf(tx, r.key);
-          if (item.mod === "hidden") {
-            if (item.rev !== i.base?.item) throw stale();
-            tx.put({ ...item, mod: null });
+          const h = hideOf(tx, item);
+          if (h) {
+            if (h.rev !== i.base?.item) throw stale(tx, tx.me, item, [`hide:${itemKey(item)}`]);
+            tx.del("hide", itemKey(item));
           }
         }
         return { resolved, outcome: null };
@@ -102,7 +116,7 @@ export const moderationMutators = [
       }
       const item = itemOf(tx, r.key);
       if (item.mod === "removed") throw removed();
-      if (item.mod === null || i.outcome === "removed") restrict(tx, item, i.outcome);
+      if (!hideOf(tx, item) || i.outcome === "removed") restrict(tx, item, i.outcome);
       for (const x of tx.scan("report.key", r.key)) {
         if (x.st !== "open" && x.id !== r.id) continue;
         tx.put({ ...x, st: i.outcome, updatedAt: tx.now });
@@ -125,26 +139,29 @@ export const moderationMutators = [
       .strict()
       .refine((i) => i.decision !== "shown" || i.base !== undefined, {
         path: ["base"],
-        message: "expected the item's rev",
+        message: "expected the hide record's rev",
       }),
     can: (tx, i) => inSpace(tx, itemOf(tx, i.item).s, "moderator"),
     run: (tx, i) => {
       const r = itemOf(tx, i.item);
-      // "shown" acts on the item as the moderator read it: its rev. The
-      // author may still edit a hidden item, which bumps the rev, so a
-      // "shown" made after reading one text never publishes another (review
-      // round 1, R2). Likes and follow-ups change the counts record, not
-      // the item. "hidden" and "removed" apply to the item as it is now.
-      // Hiding needs the item shown, showing needs it hidden, and a removed
-      // item stays removed.
-      if (i.decision === "shown" && r.rev !== i.base?.rev) throw stale();
+      const h = hideOf(tx, r);
+      // "shown" acts on the item as the moderator read it: the hide record's
+      // rev. The author may still edit a hidden item, which moves that rev,
+      // so a "shown" made after reading one text never publishes another
+      // (review round 1, R2). Hiding and showing do not change the item, so
+      // an author's edit made before a hide is not STALE. "hidden" and
+      // "removed" apply to the item as it is now. Hiding needs the item
+      // shown, showing needs it hidden, and a removed item stays removed.
+      if (i.decision === "shown" && (h?.rev ?? 0) !== i.base?.rev)
+        throw stale(tx, tx.me, r, [`hide:${itemKey(r)}`]);
       if (r.mod === "removed") throw removed();
-      if (i.decision === "hidden" && r.mod !== null)
+      if (i.decision === "hidden" && h)
         throw refuse("PRECONDITION_FAILED", "This item is already hidden.");
-      if (i.decision === "shown" && r.mod !== "hidden")
+      if (i.decision === "shown" && !h)
         throw refuse("PRECONDITION_FAILED", "This item is not hidden.");
       if (i.decision === "removed") erase(tx, r);
-      else tx.put({ ...r, mod: i.decision === "hidden" ? "hidden" : null });
+      else if (i.decision === "hidden") hide(tx, r);
+      else tx.del("hide", itemKey(r));
       return null;
     },
   }),

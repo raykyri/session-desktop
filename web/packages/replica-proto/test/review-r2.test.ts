@@ -32,6 +32,7 @@ import {
   rng,
   thread,
 } from "./harness.js";
+import { modOf } from "./oracle.js";
 
 const codes = (rs: ApplyResult[]) => rs.map((r) => (r.ok ? "ok" : r.error.code));
 const notifsOf = async (w: World, u: string) =>
@@ -197,20 +198,29 @@ test("H1: a restricting decision applies whatever the target does in between", a
     out.push(r.ok ? "ok" : r.error.code);
   }
   t.deepEqual(out, ["ok", "PRECONDITION_FAILED", "PRECONDITION_FAILED"]);
-  const pub = (await w.server.snapshot(null, `space:${open}`)).records.find(
-    (x) => x.key === `thread:${th}`,
-  )?.record as ThreadRec;
-  t.deepEqual([pub.q, pub.mod], ["", "hidden"]);
+  const snap = (await w.server.snapshot(null, `space:${open}`)).records;
+  const pub = snap.find((x) => x.key === `thread:${th}`)?.record as ThreadRec;
+  const served = new Map(snap.map((x) => [x.key, x.record]));
+  t.deepEqual([pub.q, modOf(served, pub)], ["", "hidden"]);
   // likes and follow-ups do not make a "shown" STALE: they change the counts
   const seen = w.item(item);
+  const threadRev = w.rev(`thread:${th}`);
   for (let k = 0; k < 3; k++)
     await ok(t, w.as("otto", "likes.set", { thread: th, on: k % 2 === 0 }));
   await ok(t, w.as("otto", "research.createPostFollowUp", { id: w.id(), thread: th, t: "hm" }));
-  t.is(w.rev(`thread:${th}`), seen.rev);
+  t.is(w.rev(`thread:${th}`), threadRev);
+  t.deepEqual(w.item(item), seen);
   await ok(t, w.as("mona", "moderation.decide", { item, decision: "shown", base: seen }));
   // a removal with an old base applies
   const old = w.item(item);
-  await ok(t, w.as("eve", "threads.update", { id: th, q: "ABUSE v9", base: { rev: old.rev } }));
+  await ok(
+    t,
+    w.as("eve", "threads.update", {
+      id: th,
+      q: "ABUSE v9",
+      base: { rev: w.rev(`thread:${th}`) },
+    }),
+  );
   await ok(t, w.as("mona", "moderation.decide", { item, decision: "removed", base: old }));
   t.is((w.get(`thread:${th}`) as ThreadRec).q, "");
   // a ban, while the target leaves and joins again
@@ -491,7 +501,7 @@ test("Q3: a write that depends on a failed write gets its own refusal", async (t
   );
 });
 
-test("Q2: every exception in apply is answered; a deep or large input is BAD_REQUEST before anything parses it", async (t) => {
+test("Q2: every exception in apply is answered; a deep input is BAD_REQUEST and a large one TOO_LARGE before anything parses it", async (t) => {
   const { w, open } = await cast(t);
   let deep: unknown = [];
   for (let k = 0; k < 20_000; k++) deep = [deep];
@@ -517,7 +527,18 @@ test("Q2: every exception in apply is answered; a deep or large input is BAD_REQ
       kind: "post",
       q: "x".repeat(300_000),
     }),
-    "BAD_REQUEST",
+    "TOO_LARGE",
+  );
+  // larger than 256 KB only as UTF-8 JSON: 140,000 characters of 2 bytes
+  await refused(
+    t,
+    w.as("eve", "threads.create", {
+      id: w.id(),
+      space: open,
+      kind: "post",
+      q: "é".repeat(140_000),
+    }),
+    "TOO_LARGE",
   );
   // unrecorded: the seq was not used
   t.is(await w.nextSeq("eve", e.clientId), e.seq);

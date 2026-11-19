@@ -3359,7 +3359,7 @@ alter table notes validate constraint notes_owner_nn;</code></pre>`,
       { id: 'nqt1', type: 'branch', actor: 'hal_b', thread: '01M7HWGZJGT7JTFFVSYPX055KV', node: 'h1', createdAt: '2026-11-16T09:54:30Z', read: false },
       { id: 'n1', type: 'follow_up', actor: 'hal_b', thread: '01M7HWGZJGT7JTFFVSYPX055KV', createdAt: '2026-11-16T09:56:30Z', read: false },
       { id: 'n2', type: 'follow_up', actor: 'jun.park', thread: '01M7H6F3P02JFX3X2X804X3986', createdAt: '2026-11-14T22:00:00Z', read: true },
-      { id: 'ninv', type: 'invite', actor: 'jun.park', space: 'ward7', invite: 'w7k2q9m4tx', createdAt: '2026-11-16T05:30:00Z', read: false },
+      { id: 'ninv', type: 'invite', actor: 'jun.park', space: 'ward7', invite: 'l6', createdAt: '2026-11-16T05:30:00Z', read: false },
     ],
     askedInv: [],
     reqs: [
@@ -3558,6 +3558,7 @@ alter table notes validate constraint notes_owner_nn;</code></pre>`,
       },
     ],
     modSt: {},
+    modRev: {},
     dsDrops: {
       ml: [
         { m: 'm9', by: 'hal_b', createdAt: '2026-11-15T17:30:00Z' },

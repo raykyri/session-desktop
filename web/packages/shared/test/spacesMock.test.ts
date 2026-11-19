@@ -462,6 +462,19 @@ const inputOf = async (c: ProcCall): Promise<unknown> =>
 
 const OWN_POST_TEXT =
   "Notes from Thursday’s reading group are on the wiki page. Next week: chapters 4 to 6.";
+/** The id of the reply at a place in a thread's replies ("1", "0.0"):
+ * replies are named by id (phase 1b). */
+const replyAt = async (th: string, path: string) => {
+  const all = (await get("/api/replies")).body as Record<
+    string,
+    { id: string; kids?: { id: string }[] }[]
+  >;
+  const [i, j] = path.split(".").map(Number);
+  const top = (all[th] ?? [])[i ?? 0];
+  const r = j === undefined ? top : top?.kids?.[j];
+  if (!r) throw new Error(`no reply ${path} in ${th}`);
+  return r.id;
+};
 const ownPost = async () =>
   find(
     await threadsNow(),
@@ -522,7 +535,9 @@ async function deviceRun() {
 
 const PROC_CALLS: Record<keyof typeof spaceProcedures, ProcCall> = {
   "likes.set": { input: async () => ({ thread: await askIn("public"), on: true }) },
-  "likes.setReply": { input: async () => ({ reply: `${await postIn("public")}:0`, on: true }) },
+  "likes.setReply": {
+    input: async () => ({ reply: await replyAt(await postIn("public"), "0"), on: true }),
+  },
   "saved.set": { input: async () => ({ kind: "thread", id: await askIn("public"), on: true }) },
   "mutes.set": { input: { handle: "hal_b", on: true } },
   "blocks.set": { input: { handle: "hal_b", on: true } },
@@ -553,16 +568,22 @@ const PROC_CALLS: Record<keyof typeof spaceProcedures, ProcCall> = {
   },
   "replies.update": {
     scenario: ["threads: your post with replies"],
-    input: async () => ({
-      thread: await ownPost(),
-      path: "1",
-      t: "I added the questions for chapters 4 and 5.",
-      base: { rev: 1 },
-    }),
+    input: async () => {
+      const thread = await ownPost();
+      return {
+        thread,
+        reply: await replyAt(thread, "1"),
+        t: "I added the questions for chapters 4 and 5.",
+        base: { rev: 1 },
+      };
+    },
   },
   "replies.delete": {
     scenario: ["threads: your post with replies"],
-    input: async () => ({ thread: await ownPost(), path: "0.0" }),
+    input: async () => {
+      const thread = await ownPost();
+      return { thread, reply: await replyAt(thread, "0.0") };
+    },
   },
   "followups.update": {
     input: async () => ({ ...(await ownNode()), q: "An edited follow-up?", base: { rev: 1 } }),

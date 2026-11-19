@@ -1,0 +1,921 @@
+// The server half: `register`, `apply` (in order per client, idempotent by
+// user and mutation id), `snapshot` and `pull` filtered by the reader's
+// scope at the time of the read, the effect worker, and the online-only
+// calls (`online.ts`). It is the production shape of replica-proto's
+// `server.ts`, whose protocol it follows, over a `ServerStore`.
+//
+// Apply, in order. "Unrecorded" answers use up nothing. Everything runs
+// inside one error handler (INTERNAL_SERVER_ERROR, unrecorded, nothing kept)
+// and, from the client check on, inside one store transaction:
+//   larger than 256 KB as JSON (TOO_LARGE), nested more than 32 deep
+//     (BAD_REQUEST): unrecorded, before anything hashes or parses the input
+//   protocol version (UPDATE_REQUIRED), shape (BAD_REQUEST), signed in
+//     (UNAUTHORIZED): unrecorded
+//   the client id is the caller's, not expired, and its device not revoked
+//     (WRONG_CLIENT): unrecorded
+//   an answer stored for (user, mutation id) with the same payload, or stored
+//     for it as a mutation id a later write replaced: replayed, no seq used
+//   an answer stored for an id in `replaces`: this write was processed under
+//     that id; replayed, and stored under the mutation id too, no seq used
+//   an answer stored for (client, seq) with the same mutation id and payload
+//   `seq` is the client's next one (OUT_OF_ORDER, with expectedSeq): unrecorded
+//   a malformed or reused mutation id (BAD_REQUEST): uses the seq, stored for
+//     (client, seq)
+//   `clientTime` within a minute of the server's time (CLOCK_SKEW, with
+//     serverTime): unrecorded
+//   the mutation id's and `queuedAt`'s age on the device's clock (EXPIRED)
+//   `@session/mutators`' apply: the name, the input, the new ids' age, an
+//     online-only write's age, can, pre, run, effects
+// A recorded answer is committed with the write's changes, its queued
+// effects and the client's seq, under the mutation id and each id it
+// replaces. A STALE answer is stored with the keys it is about and answered
+// with them as they read now (`current`, `changes`); no record text is
+// stored with an answer.
+
+import { createHash, randomBytes } from "node:crypto";
+
+import * as pkg from "@session/mutators";
+import { z } from "zod";
+
+import {
+  ANSWER_TTL,
+  CLIENT_IDLE_TTL,
+  CLOCK_MAX_SKEW,
+  DAY,
+  MAX_ENVELOPE_BYTES,
+  MAX_INPUT_DEPTH,
+  MAX_REPLACES,
+  MIN_PROTOCOL_VERSION,
+  REGISTRATIONS_PER_DAY,
+  TOMBSTONE_TTL,
+  UNRECORDED,
+  timeOk,
+  type Actor,
+  type Answer,
+  type AnswerError,
+  type CallAnswer,
+  type Change,
+  type Cursor,
+  type LastSeq,
+  type LogId,
+  type Pull,
+  type ReadOptions,
+  type RegisterAnswer,
+  type Snapshot,
+  type SseEvent,
+} from "../protocol.js";
+
+import { OnlineCalls, type OnlineHandlers } from "./online.js";
+import type {
+  LogRow,
+  ServerStore,
+  StoreTx,
+  StoredAnswer,
+  StoredResult,
+  Tombstone,
+} from "./store.js";
+import { chooseTiers, inSummary, threadOf } from "./tiers.js";
+import { Tokens, type CursorKeys } from "./tokens.js";
+
+type RunEvent = Extract<SseEvent, { type: "run" }>;
+
+export const EFFECT_MAX_ATTEMPTS = 10;
+export const EFFECT_BACKOFF_MIN = 1000;
+export const EFFECT_BACKOFF_MAX = 600_000;
+/** How many expired rows of each table one housekeeping pass removes. */
+export const HOUSEKEEP_BATCH = 200;
+
+export interface Clock {
+  now(): number;
+}
+
+/** Where `job` effects go: the server's job runner (the owned agent loop,
+ * the domain checker). A device run is claimed by its device instead. */
+export interface JobRunner {
+  start(job: { kind: "run" | "domain"; id: string }): void;
+}
+
+export interface SyncServerOptions {
+  store: ServerStore;
+  clock: Clock;
+  /** The cursor token keys (configured; see `tokens.ts`). */
+  cursorKeys: CursorKeys;
+  /** The server's random source for client ids, invite codes, device codes
+   * and server-made ids: a number in [0, 1). Default: `crypto.randomBytes`. */
+  random?: () => number;
+  /** The mutators (default `MUTATORS`). */
+  registry?: pkg.Registry;
+  jobs?: JobRunner;
+  /** Handlers for the online-only calls; the default ones serve `runs.*` and
+   * `devices.*` and answer the rest METHOD_NOT_SUPPORTED (phase 2). */
+  online?: Partial<OnlineHandlers>;
+  /** Test only: an effect for which this answers true fails on that attempt. */
+  failEffect?: (effect: pkg.Effect, attempt: number) => boolean;
+}
+
+/** A number in [0, 1) from `crypto.randomBytes`. */
+export const cryptoRandom = () => randomBytes(4).readUInt32BE(0) / 4294967296;
+
+const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+
+/** JSON with object keys sorted, so equal values print equally. */
+export function canonical(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
+  if (v !== null && typeof v === "object")
+    return `{${Object.keys(v)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonical((v as Record<string, unknown>)[k])}`)
+      .join(",")}}`;
+  return JSON.stringify(v) ?? "undefined";
+}
+
+/** "ok", or the first bound a value passes: "large" (a lower bound of its
+ * size as JSON over `maxBytes`: a byte per value and each string's length)
+ * or "deep" (nested deeper than `maxDepth`). Walked with a stack. */
+export function bounds(v: unknown, maxDepth: number, maxBytes: number): "ok" | "deep" | "large" {
+  const stack: [unknown, number][] = [[v, 0]];
+  let bytes = 0;
+  let deep = false;
+  for (let top = stack.pop(); top; top = stack.pop()) {
+    const [x, level] = top;
+    bytes += typeof x === "string" ? x.length + 2 : 1;
+    if (bytes > maxBytes) return "large";
+    if (x === null || typeof x !== "object") continue;
+    // past the depth bound the walk goes on, for the size: size decides first
+    if (level >= maxDepth) deep = true;
+    for (const y of Object.values(x)) stack.push([y, level + 1]);
+  }
+  return deep ? "deep" : "ok";
+}
+
+const envelopeS = z.strictObject({
+  clientId: z.string(),
+  seq: z.number().int().positive(),
+  mutationId: z.string(),
+  name: z.string(),
+  input: z.unknown(),
+  protocolVersion: z.number().int(),
+  clientTime: z.number().int().nonnegative(),
+  queuedAt: z.number().int().nonnegative(),
+  replaces: z.array(z.string().regex(pkg.ULID_RE)).max(MAX_REPLACES),
+});
+type Env = z.infer<typeof envelopeS>;
+
+const logS = z
+  .string()
+  .max(200)
+  .regex(/^(space:[^:]+|user:[^:]+|catalog)$/);
+
+const ID_TAKEN = pkg.ID_TAKEN;
+const isoAt = pkg.isoAt;
+const err = (code: pkg.ErrorCode, message?: string, issues?: string[]): AnswerError =>
+  pkg.refuse(code, message, issues).toError();
+
+/** The logs a record with this audience is in. */
+function logsOfAudience(a: pkg.Audience): LogId[] {
+  if (a.kind === "source") return ["catalog"];
+  const out: LogId[] = [];
+  if (a.sp !== null && !pkg.NO_SPACE_LOG.has(a.kind)) out.push(`space:${a.sp}`);
+  if (a.person !== null) out.push(`user:${a.person}`);
+  return out;
+}
+
+const same = (a: pkg.StoredRecord, b: pkg.Draft) =>
+  JSON.stringify({ ...a, rev: 0 }) === JSON.stringify({ ...b, rev: 0 });
+
+/** A `Reader` (by kind and id) over a transaction. */
+const readerOf = (tx: StoreTx): pkg.Reader => ({
+  get: <K extends pkg.Kind>(kind: K, id: string) =>
+    tx.get(pkg.keyFor(kind, id)) as pkg.RecordOf<K> | undefined,
+});
+
+/** `@session/mutators`' reads over a transaction: it answers every read. */
+class TxSource implements pkg.RecordSource {
+  constructor(private readonly tx: StoreTx) {}
+  get(kind: pkg.Kind, id: string) {
+    const r = this.tx.get(pkg.keyFor(kind, id));
+    return r && r.kind === kind ? r : undefined;
+  }
+  scan(index: pkg.IndexName, value: string) {
+    const [kind, field] = pkg.INDEXES[index];
+    return this.tx.scan(kind, field, value);
+  }
+  idUsed(id: string) {
+    return this.tx.registryGet(id) !== undefined;
+  }
+}
+
+/** What a read of one row serves the reader: the record's view, true for a
+ * `del` the reader may read, or null. */
+type RowView = pkg.StoredRecord | true | null;
+
+export class SyncServer {
+  readonly store: ServerStore;
+  private readonly clock: Clock;
+  private readonly random: () => number;
+  private readonly registry: pkg.Registry;
+  private readonly jobRunner: JobRunner;
+  private readonly tokens: Tokens;
+  private readonly failEffect: SyncServerOptions["failEffect"];
+  readonly online: OnlineCalls;
+  /** Logs written by the transaction in progress; listeners hear them after
+   * it commits. */
+  private changed = new Set<LogId>();
+  private readonly listeners = new Set<(logs: ReadonlySet<LogId>) => void>();
+  private lastHousekeep = -Infinity;
+
+  constructor(o: SyncServerOptions) {
+    this.store = o.store;
+    this.clock = o.clock;
+    this.random = o.random ?? cryptoRandom;
+    this.registry = o.registry ?? pkg.MUTATORS;
+    this.jobRunner = o.jobs ?? { start: () => {} };
+    this.tokens = new Tokens(o.cursorKeys);
+    this.failEffect = o.failEffect;
+    this.online = new OnlineCalls(this, o.online);
+  }
+
+  // ---- time, transactions, commit ----
+
+  /** The server's time: the clock, never earlier than a time used before. */
+  time(tx: StoreTx): number {
+    const now = Math.max(this.clock.now(), tx.lastTime());
+    if (now !== tx.lastTime()) tx.setLastTime(now);
+    return now;
+  }
+
+  /** Run `fn` in a store transaction, then tell the listeners which logs it
+   * wrote (only once it committed). */
+  run<T>(fn: (tx: StoreTx) => T): T {
+    this.changed = new Set();
+    let out: T;
+    try {
+      out = this.store.transaction(fn);
+    } catch (e) {
+      this.changed = new Set();
+      throw e;
+    }
+    const logs = this.changed;
+    this.changed = new Set();
+    if (logs.size) for (const l of this.listeners) l(logs);
+    return out;
+  }
+
+  private readonly runListeners = new Set<(e: RunEvent, sp: string) => void>();
+
+  /** The server's random source (online calls). */
+  randomNumber(): number {
+    return this.random();
+  }
+
+  /** Send a run's in-flight text to the readers of its space (ADR-22): it is
+   * not stored; a reader that misses it gets the committed answer by pull. */
+  emitRun(e: RunEvent, run: pkg.RunRec) {
+    for (const l of this.runListeners) l(e, run.s);
+  }
+
+  /** Hear in-flight run events, with the run's space (the SSE handler). */
+  subscribeRuns(listener: (e: RunEvent, sp: string) => void): () => void {
+    this.runListeners.add(listener);
+    return () => this.runListeners.delete(listener);
+  }
+
+  /** Hear the logs each committed transaction wrote (the SSE handler). */
+  subscribe(listener: (logs: ReadonlySet<LogId>) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  /** A server-made id: a ULID at `now` from the server's random source,
+   * never one the registry holds. */
+  newId(tx: StoreTx, now: number, taken?: (id: string) => boolean): string {
+    let id: string;
+    do id = pkg.ulid(now, this.random);
+    while (tx.registryGet(id) !== undefined || taken?.(id));
+    return id;
+  }
+
+  private row(tx: StoreTx, log: LogId, key: string, op: "put" | "del", version: number) {
+    tx.logPut(log, { key, op, version });
+    this.changed.add(log);
+  }
+
+  /** Write staged records under one new version: revs, the registry, log
+   * rows, tombstones, and the rows of the records whose view a change
+   * changes. Answers the version, or null when nothing changed. */
+  commit(tx: StoreTx, writes: readonly pkg.Write[], now: number): number | null {
+    const real: [string, pkg.Draft | null, pkg.StoredRecord | undefined][] = [];
+    const last = new Map<string, pkg.Draft | null>();
+    for (const [key, next] of writes) last.set(key, next);
+    for (const [key, next] of last) {
+      const prev = tx.get(key);
+      if (next === null ? !prev : prev && same(prev, next)) continue;
+      real.push([key, next, prev]);
+    }
+    if (!real.length) return null;
+    const version = tx.head() + 1;
+    tx.setHead(version);
+    const at = this.time(tx);
+    const g = readerOf(tx);
+    for (const [key, next, prev] of real) {
+      if (next === null) {
+        const old = prev as pkg.StoredRecord;
+        const tomb: Tombstone = { key, ...pkg.audience(g, old), at };
+        tx.del(key);
+        tx.tombPut(tomb);
+        for (const log of logsOfAudience(tomb)) this.row(tx, log, key, "del", version);
+        this.touchDependents(tx, old, version);
+        continue;
+      }
+      const reg = pkg.registryKey(next);
+      const rev = (prev?.rev ?? tx.registryGet(reg) ?? 0) + 1;
+      const rec = { ...next, rev };
+      tx.put(key, rec, prev ? (tx.born(key) ?? version) : version);
+      tx.registrySet(reg, rev);
+      if (!prev) tx.tombDelete(key);
+      for (const log of pkg.logsOf(rec)) this.row(tx, log, key, "put", version);
+      this.touchDependents(tx, rec, version);
+      // who may read a space's content depends on whether it is closed: a
+      // change replaces the log's history (every cursor of it resyncs)
+      if (
+        rec.kind === "space" &&
+        prev?.kind === "space" &&
+        pkg.isClosed(prev) !== pkg.isClosed(rec)
+      ) {
+        const log: LogId = `space:${rec.id}`;
+        tx.setEpoch(log, { n: tx.epoch(log).n + 1, start: version });
+        this.changed.add(log);
+      }
+    }
+    void now;
+    return version;
+  }
+
+  private touchDependents(tx: StoreTx, r: pkg.StoredRecord, version: number) {
+    for (const key of pkg.viewDependents(r)) {
+      const dep = tx.get(key);
+      if (dep) for (const log of pkg.logsOf(dep)) this.row(tx, log, key, "put", version);
+    }
+  }
+
+  /** Expire what is past its lifetime, a bounded batch of each table, at most
+   * once a second of server time (and always when `force`). */
+  housekeep(tx: StoreTx, now: number, force = false) {
+    if (!force && now - this.lastHousekeep < 1000) return;
+    this.lastHousekeep = now;
+    const limit = force ? Number.MAX_SAFE_INTEGER : HOUSEKEEP_BATCH;
+    const cutoff = now - TOMBSTONE_TTL;
+    for (const t of tx.tombsBefore(cutoff, limit)) {
+      tx.tombDelete(t.key);
+      for (const log of logsOfAudience(t))
+        if (tx.logGet(log, t.key)?.op === "del") tx.logDelete(log, t.key);
+    }
+    // an answer, a client and a registration expire at their lifetime's
+    // end (inclusive); a tombstone is kept through its 30th day's last ms
+    tx.answersPrune(now - ANSWER_TTL + 1, limit);
+    tx.clientsPrune(now - CLIENT_IDLE_TTL + 1, limit);
+    tx.registrationsPrune(now - DAY + 1, limit);
+    this.online.housekeep(tx, now, limit);
+  }
+
+  // ---- writes ----
+
+  /** A new client id, bound to the caller and its device. */
+  register(actor: Actor | null): RegisterAnswer {
+    const serverTime = this.clock.now();
+    if (!actor || !pkg.isHandle(actor.u))
+      return { ok: false, error: err("UNAUTHORIZED"), serverTime };
+    try {
+      return this.run((tx) => {
+        const now = this.time(tx);
+        this.housekeep(tx, now);
+        if (actor.device && !this.online.deviceLive(tx, actor.u, actor.device))
+          return { ok: false as const, error: err("WRONG_CLIENT"), serverTime: now };
+        if (tx.registrations(actor.u, now - DAY + 1) >= REGISTRATIONS_PER_DAY)
+          return { ok: false as const, error: err("TOO_MANY_REQUESTS"), serverTime: now };
+        let id: string;
+        do id = pkg.ulid(now, this.random);
+        while (tx.clientGet(id));
+        tx.registrationAdd(actor.u, now);
+        tx.clientPut(id, { u: actor.u, device: actor.device ?? null, last: 0, seen: now });
+        return { ok: true as const, clientId: id, serverTime: now };
+      });
+    } catch {
+      return { ok: false, error: err("INTERNAL_SERVER_ERROR"), serverTime };
+    }
+  }
+
+  /** Apply one write. `size`: the request body's length, when the HTTP layer
+   * knows it. */
+  apply(actor: Actor | null, envelope: unknown, size?: number): Answer {
+    const t0 = this.clock.now();
+    try {
+      return this.applyEnvelope(actor, envelope, size);
+    } catch {
+      // nothing was committed (the transaction rolled back), or the commit
+      // and its stored answer were, and a resend gets that answer
+      return { ok: false, error: err("INTERNAL_SERVER_ERROR"), serverTime: t0 };
+    }
+  }
+
+  private applyEnvelope(actor: Actor | null, envelope: unknown, size?: number): Answer {
+    const t0 = this.clock.now();
+    const no = (e: AnswerError): Answer => ({ ok: false, error: e, serverTime: t0 });
+    const large = () =>
+      no(
+        err("TOO_LARGE", undefined, [
+          `envelope: expected at most ${MAX_ENVELOPE_BYTES} bytes as JSON`,
+        ]),
+      );
+    if (size !== undefined && size > MAX_ENVELOPE_BYTES) return large();
+    const b = bounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES);
+    if (b === "large") return large();
+    if (b === "deep")
+      return no(
+        err("BAD_REQUEST", undefined, [
+          `envelope: expected input nested at most ${MAX_INPUT_DEPTH} deep`,
+        ]),
+      );
+    if (Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES) return large();
+    const version =
+      envelope !== null && typeof envelope === "object"
+        ? (envelope as { protocolVersion?: unknown }).protocolVersion
+        : undefined;
+    if (typeof version === "number" && Number.isInteger(version) && version < MIN_PROTOCOL_VERSION)
+      return no(
+        err("UPDATE_REQUIRED", undefined, [
+          `protocolVersion: expected at least ${MIN_PROTOCOL_VERSION}`,
+        ]),
+      );
+    const parsed = envelopeS.safeParse(envelope);
+    if (!parsed.success)
+      return no(
+        err("BAD_REQUEST", undefined, [
+          "envelope: expected { clientId, seq, mutationId, name, input, protocolVersion, clientTime, queuedAt, replaces }",
+        ]),
+      );
+    const m = parsed.data;
+    if (!actor || !pkg.isHandle(actor.u)) return no(err("UNAUTHORIZED"));
+    const u = actor.u;
+    return this.run((tx) => {
+      const now = this.time(tx);
+      const out = (e: AnswerError, seq?: number): Answer => ({
+        ok: false,
+        error: e,
+        serverTime: now,
+        ...(seq !== undefined ? { seq } : {}),
+      });
+      this.housekeep(tx, now);
+      const client = tx.clientGet(m.clientId);
+      if (
+        !client ||
+        client.u !== u ||
+        client.seen <= now - CLIENT_IDLE_TTL ||
+        (client.device !== null && !this.online.deviceLive(tx, u, client.device))
+      )
+        return out(err("WRONG_CLIENT"));
+      tx.clientPut(m.clientId, { ...client, seen: now });
+      const wellFormed = pkg.isUlid(m.mutationId);
+      const payload = sha256(canonical([m.name, m.input]));
+      const replaced = `replaced:${payload}`;
+      const live = (a: StoredAnswer | undefined) => (a && a.at > now - ANSWER_TTL ? a : undefined);
+      const hit = wellFormed ? live(tx.answerGet(u, m.mutationId)) : undefined;
+      // a write this user's devices sent before, under any client id or seq
+      if (hit && (hit.digest === payload || hit.digest.startsWith("replaced:")))
+        return this.replay(tx, u, hit.answer, now);
+      // a reminted write: processed already under an id it replaces
+      if (wellFormed && !hit)
+        for (const old of m.replaces) {
+          const prior = live(tx.answerGet(u, old));
+          if (!prior) continue;
+          tx.answerPut(u, m.mutationId, { digest: payload, answer: prior.answer, at: now });
+          return this.replay(tx, u, prior.answer, now);
+        }
+      const sent = sha256(canonical([m.mutationId, m.name, m.input]));
+      const kept = live(tx.seqAnswerGet(m.clientId, m.seq));
+      if (kept && kept.digest === sent) return this.replay(tx, u, kept.answer, now);
+      if (m.seq !== client.last + 1)
+        return out({
+          ...err("OUT_OF_ORDER", undefined, [`seq: expected ${client.last + 1}`]),
+          expectedSeq: client.last + 1,
+        });
+      const use = () => tx.clientPut(m.clientId, { ...client, seen: now, last: m.seq });
+      if (!wellFormed || hit) {
+        const e = err("BAD_REQUEST", undefined, [
+          wellFormed
+            ? "mutationId: already used for a different change"
+            : "mutationId: expected a ULID",
+        ]);
+        tx.seqAnswerPut(m.clientId, m.seq, {
+          digest: sent,
+          answer: { ok: false, error: e, seq: m.seq },
+          at: now,
+        });
+        use();
+        return out(e, m.seq);
+      }
+      if (Math.abs(m.clientTime - now) > CLOCK_MAX_SKEW)
+        return {
+          ...out(
+            err("CLOCK_SKEW", undefined, [
+              "clientTime: expected the server's time to within a minute",
+            ]),
+          ),
+        };
+      const record = (answer: StoredResult) => {
+        const a: StoredAnswer = { digest: payload, answer, at: now };
+        tx.answerPut(u, m.mutationId, a);
+        for (const old of m.replaces)
+          if (!live(tx.answerGet(u, old))) tx.answerPut(u, old, { ...a, digest: replaced });
+        use();
+      };
+      const expired = (path: string) => {
+        const e = err("EXPIRED", undefined, [
+          `${path}: expected a time from the 4 days before clientTime to 1 minute after`,
+        ]);
+        record({ ok: false, error: e, seq: m.seq });
+        return out(e, m.seq);
+      };
+      if (!timeOk(pkg.ulidTime(m.mutationId), m.clientTime)) return expired("mutationId");
+      if (!timeOk(m.queuedAt, m.clientTime)) return expired("queuedAt");
+      return this.execute(tx, u, m, now, record, out);
+    });
+  }
+
+  private execute(
+    tx: StoreTx,
+    u: string,
+    m: Env,
+    now: number,
+    record: (a: StoredResult) => void,
+    out: (e: AnswerError, seq?: number) => Answer,
+  ): Answer {
+    const res = pkg.apply(this.registry, new TxSource(tx), { u }, m, {
+      now,
+      server: { random: this.random },
+    });
+    if (res.status === "unknown") return out(err("INTERNAL_SERVER_ERROR"));
+    if (res.status === "refused") {
+      const { current, reads, ...e } = res.error;
+      void current;
+      if (UNRECORDED.has(e.code)) return out(e);
+      record({ ok: false, error: e, ...(reads ? { reads } : {}), seq: m.seq });
+      return this.withReads(tx, u, out(e, m.seq), reads);
+    }
+    this.commit(tx, res.writes, now);
+    for (const effect of res.effects) tx.effectAdd(effect, now);
+    record({ ok: true, result: res.result ?? null, seq: m.seq });
+    return { ok: true, result: res.result ?? null, serverTime: now, seq: m.seq };
+  }
+
+  /** A STALE answer with the records it is about, as `u` reads them now. */
+  private withReads(
+    tx: StoreTx,
+    u: string,
+    a: Answer,
+    reads: readonly string[] | undefined,
+  ): Answer {
+    if (a.ok || !reads?.length) return a;
+    const g = readerOf(tx);
+    const changes: Change[] = reads.map((key) => {
+      const r = tx.get(key);
+      const v = r ? pkg.view(g, r, u) : null;
+      return v ? { key, op: "put", record: v } : { key, op: "del" };
+    });
+    const first = changes[0];
+    return {
+      ...a,
+      error: { ...a.error, current: first?.op === "put" ? first.record : null, changes },
+    };
+  }
+
+  private replay(tx: StoreTx, u: string, a: StoredResult, now: number): Answer {
+    if (a.ok)
+      return { ok: true, result: structuredClone(a.result), serverTime: now, replayed: true };
+    const e = structuredClone(a.error) as AnswerError;
+    return this.withReads(tx, u, { ok: false, error: e, serverTime: now, replayed: true }, a.reads);
+  }
+
+  // ---- the online-only calls ----
+
+  call(actor: Actor | null, name: string, input: unknown): CallAnswer {
+    return this.online.call(actor, name, input);
+  }
+
+  // ---- the effect worker ----
+
+  /** One pass of the effect worker: runs each queued effect that is due, each
+   * in its own transaction with its writes. Answers how many ran. */
+  work(limit = 100): number {
+    let ran = 0;
+    const due = this.run((tx) => tx.effectsDue(this.time(tx), limit));
+    for (const q of due) {
+      const attempts = q.attempts + 1;
+      try {
+        this.run((tx) => {
+          const now = this.time(tx);
+          if (this.failEffect?.(q.effect, attempts)) throw new Error("the effect's service failed");
+          this.runEffect(tx, q.effect, now);
+          tx.effectDelete(q.id);
+        });
+        ran++;
+      } catch {
+        // its write's answer is recorded already and does not change
+        this.run((tx) => {
+          const now = this.time(tx);
+          if (attempts >= EFFECT_MAX_ATTEMPTS) {
+            tx.effectDelete(q.id);
+            tx.deadLetterAdd({ effect: q.effect, at: q.at, attempts, failedAt: now });
+          } else
+            tx.effectUpdate(
+              q.id,
+              attempts,
+              now + Math.min(EFFECT_BACKOFF_MAX, EFFECT_BACKOFF_MIN * 2 ** (attempts - 1)),
+            );
+        });
+      }
+    }
+    return ran;
+  }
+
+  private notif(
+    tx: StoreTx,
+    now: number,
+    staged: pkg.Write[],
+    n: Pick<pkg.NotifRec, "to" | "type" | "sp" | "report" | "item"> & Partial<pkg.NotifRec>,
+  ) {
+    const taken = new Set(staged.map(([k]) => k));
+    const id = this.newId(tx, now, (x) => taken.has(`notif:${x}`));
+    staged.push([
+      `notif:${id}`,
+      {
+        kind: "notif",
+        id,
+        outcome: null,
+        response: null,
+        actor: null,
+        thread: null,
+        node: null,
+        invite: null,
+        read: false,
+        createdAt: isoAt(now),
+        ...n,
+      },
+    ]);
+  }
+
+  private runEffect(tx: StoreTx, effect: pkg.Effect, now: number) {
+    const staged: pkg.Write[] = [];
+    if (effect.type === "job") {
+      // a device run is claimed by its device (runs.claim), not started here
+      if (effect.kind === "run") {
+        const r = tx.get(`run:${effect.id}`);
+        if (r?.kind === "run" && r.executor !== null) return;
+      }
+      this.jobRunner.start({ kind: effect.kind, id: effect.id });
+      return;
+    }
+    if (effect.type === "reportResolved") {
+      const r = tx.get(`report:${effect.report}`);
+      if (r?.kind !== "report") return;
+      for (const n of tx.scan("notif", "to", r.by))
+        if (n.kind === "notif" && n.type === "report_resolved" && n.report === r.id)
+          staged.push([`notif:${n.id}`, null]);
+      if (effect.outcome !== null)
+        this.notif(tx, now, staged, {
+          to: r.by,
+          type: "report_resolved",
+          sp: r.sp,
+          report: r.id,
+          item: r.key,
+          outcome: effect.outcome,
+        });
+      this.commit(tx, staged, now);
+      return;
+    }
+    // notifyStaff: the space's staff as they are now, and their reports
+    // notice comes back on
+    const s = tx.get(`space:${effect.sp}`);
+    for (const [to, role] of s?.kind === "space" ? s.mods : []) {
+      if (role === "member") continue;
+      this.notif(tx, now, staged, {
+        to,
+        type: "report",
+        sp: effect.sp,
+        report: effect.report,
+        item: effect.item,
+      });
+      const seen = tx.get(`seen:${to}`);
+      if (seen?.kind === "seen" && seen.reps) staged.push([`seen:${to}`, { ...seen, reps: false }]);
+    }
+    this.commit(tx, staged, now);
+  }
+
+  /** A job's answer (the job runner calls it): `text` as a thread's summary
+   * (`thread:<id>`) or a follow-up's answer (`followup:<id>`). False, and
+   * nothing written, for a removed item, a deleted thread or another key. */
+  finishJob(key: string, text: string): boolean {
+    return this.run((tx) => {
+      const now = this.time(tx);
+      const r = tx.get(key);
+      if (!r || !("mod" in r) || r.mod === "removed") return false;
+      if (r.kind === "thread" && !r.del)
+        return this.commit(tx, [[key, { ...r, sum: text, running: false }]], now) !== null;
+      if (r.kind === "followup" && !r.del)
+        return this.commit(tx, [[key, { ...r, a: text }]], now) !== null;
+      return false;
+    });
+  }
+
+  // ---- reads ----
+
+  private userOf(actor: Actor | null): string | null {
+    return actor !== null && typeof actor.u === "string" && pkg.isHandle(actor.u) ? actor.u : null;
+  }
+
+  /** A user log is read by its user only. */
+  private closedTo(log: LogId, u: string | null) {
+    return log.startsWith("user:") && (u === null || log !== `user:${u}`);
+  }
+
+  private lastSeq(
+    tx: StoreTx,
+    u: string | null,
+    clientId: string | undefined,
+    now: number,
+  ): LastSeq {
+    if (u === null || clientId === undefined) return null;
+    const c = tx.clientGet(clientId);
+    if (!c || c.u !== u || c.seen <= now - CLIENT_IDLE_TTL) return null;
+    tx.clientPut(clientId, { ...c, seen: now });
+    return c.last;
+  }
+
+  private readRow(tx: StoreTx, row: LogRow, u: string | null): RowView {
+    const g = readerOf(tx);
+    if (row.op === "put") {
+      const rec = tx.get(row.key);
+      return rec ? pkg.view(g, rec, u) : null;
+    }
+    const t = tx.tombGet(row.key);
+    return t && pkg.readsAudience(g, t, u) ? true : null;
+  }
+
+  private serve(tx: StoreTx, log: LogId, u: string | null, version: number, now: number): Cursor {
+    return this.tokens.seal({ log, u, n: tx.epoch(log).n, v: version, h: tx.head(), at: now });
+  }
+
+  /** The tiers of a space log's threads for a read, or null (not a space log,
+   * or every thread in full). */
+  private tiers(tx: StoreTx, log: LogId, u: string | null, now: number, o: ReadOptions) {
+    if (!log.startsWith("space:")) return null;
+    const window = o.tier?.window ?? "full";
+    if (window === "full" && !o.threads) return null;
+    const sp = log.slice(6);
+    const g = readerOf(tx);
+    const threads = tx
+      .scan("thread", "s", sp)
+      .filter((p): p is pkg.ThreadRec => p.kind === "thread" && pkg.canRead(g, p, u));
+    if (o.threads) {
+      const want = new Set(o.threads);
+      return { full: want, summary: new Set<string>() };
+    }
+    const pinned = new Set(o.tier?.opened ?? []);
+    if (u !== null)
+      for (const p of threads) if (p.u === u || tx.get(pkg.saveKey(u, p.id))) pinned.add(p.id);
+    return chooseTiers(threads, now, { ...o.tier, window }, pinned);
+  }
+
+  /** Whether a tiered read serves a record. */
+  private served(
+    tx: StoreTx,
+    rec: pkg.StoredRecord,
+    tiers: { full: ReadonlySet<string>; summary: ReadonlySet<string> } | null,
+    only: boolean,
+  ) {
+    if (!tiers) return true;
+    const th = threadOf(rec, (k) => tx.get(k));
+    if (th === null) return !only;
+    if (tiers.full.has(th)) return true;
+    return tiers.summary.has(th) && inSummary(rec);
+  }
+
+  snapshot(actor: Actor | null, log: LogId, options: ReadOptions = {}): Snapshot {
+    return this.run((tx) => {
+      const now = this.time(tx);
+      this.housekeep(tx, now);
+      const u = this.userOf(actor);
+      const lastSeq = this.lastSeq(tx, u, options.clientId, now);
+      if (!logS.safeParse(log).success)
+        return { records: [], cursor: "", lastSeq, serverTime: now };
+      if (this.closedTo(log, u))
+        return { records: [], cursor: this.serve(tx, log, u, 0, now), lastSeq, serverTime: now };
+      const tiers = this.tiers(tx, log, u, now, options);
+      const records: Snapshot["records"] = [];
+      let version = 0;
+      for (const row of tx.logAfter(log, 0)) {
+        const v = this.readRow(tx, row, u);
+        if (v === null) continue;
+        version = Math.max(version, row.version);
+        if (v === true) continue;
+        if (!this.served(tx, v, tiers, options.threads !== undefined)) continue;
+        records.push({ key: row.key, record: v });
+      }
+      const born = (key: string) => tx.born(key) ?? 0;
+      records.sort((a, b) => {
+        const x = pkg.createdOf(a.record);
+        const y = pkg.createdOf(b.record);
+        return x < y ? -1 : x > y ? 1 : born(a.key) - born(b.key);
+      });
+      // a hydration (`threads`) does not move the log's cursor
+      const cursor = this.serve(tx, log, u, version, now);
+      return { records, cursor, lastSeq, serverTime: now };
+    });
+  }
+
+  pull(actor: Actor | null, log: LogId, cursor: Cursor, options: ReadOptions = {}): Pull {
+    return this.run((tx) => {
+      const now = this.time(tx);
+      this.housekeep(tx, now);
+      const u = this.userOf(actor);
+      if (!logS.safeParse(log).success) return { resync: true, serverTime: now };
+      const c = this.tokens.open(cursor, now);
+      if (
+        c === null ||
+        c.log !== log ||
+        c.u !== u ||
+        c.n !== tx.epoch(log).n ||
+        c.at < now - TOMBSTONE_TTL
+      )
+        return { resync: true, serverTime: now };
+      const lastSeq = this.lastSeq(tx, u, options.clientId, now);
+      if (this.closedTo(log, u))
+        return { changes: [], cursor: this.serve(tx, log, u, 0, now), lastSeq, serverTime: now };
+      if (u !== null && this.scopeChanged(tx, log, u, c.v, c.h))
+        return { resync: true, serverTime: now };
+      const tiers = this.tiers(tx, log, u, now, options);
+      const changes: Change[] = [];
+      let to = c.v;
+      for (const row of tx.logAfter(log, c.v)) {
+        const v = this.readRow(tx, row, u);
+        if (v === null) continue;
+        to = row.version;
+        if (v === true) changes.push({ key: row.key, op: "del" });
+        else if (this.served(tx, v, tiers, false))
+          changes.push({ key: row.key, op: "put", record: v });
+      }
+      return { changes, cursor: this.serve(tx, log, u, to, now), lastSeq, serverTime: now };
+    });
+  }
+
+  /** Whether what `u` may read of `log` changed after the token at `version`
+   * was served (the head then `head`) in a way the log's rows do not carry:
+   * `u`'s own membership or role in the space; for `u`'s user log, `u`'s
+   * membership or role in any space, or a space opening or closing that a
+   * record of the log is about. */
+  private scopeChanged(tx: StoreTx, log: LogId, u: string, version: number, head: number): boolean {
+    if (log.startsWith("space:")) {
+      const mine = tx.logGet(log, pkg.memberKey(log.slice(6), u));
+      return mine !== undefined && mine.version > version;
+    }
+    if (!log.startsWith("user:")) return false;
+    for (const row of tx.logAfter(log, version)) if (row.key.startsWith("member:")) return true;
+    if (tx.head() === head) return false;
+    const g = readerOf(tx);
+    for (const row of tx.logAfter(log, 0)) {
+      const rec = tx.get(row.key);
+      const a = rec ? pkg.audience(g, rec) : tx.tombGet(row.key);
+      if (a && a.sp !== null && tx.epoch(`space:${a.sp}`).start > head) return true;
+    }
+    return false;
+  }
+
+  /** A stored record as `u` may read it now, or null. */
+  viewOf(key: string, u: string | null): pkg.StoredRecord | null {
+    return this.run((tx) => {
+      const r = tx.get(key);
+      return r ? pkg.view(readerOf(tx), r, u) : null;
+    });
+  }
+
+  // ---- inspection (tests and operators) ----
+
+  /** The stored records, by key. */
+  records(): Map<string, pkg.StoredRecord> {
+    return this.store.records();
+  }
+
+  logRows(log: LogId): LogRow[] {
+    return this.run((tx) => {
+      this.housekeep(tx, this.time(tx));
+      return tx.logAfter(log, 0);
+    });
+  }
+
+  /** Expire everything past its lifetime now (tests: the storage scan). */
+  housekeepAll() {
+    this.run((tx) => this.housekeep(tx, this.time(tx), true));
+  }
+}
+
+export { ID_TAKEN };
