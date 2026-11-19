@@ -157,17 +157,52 @@ export interface ReadOptions {
   threads?: string[];
 }
 
+/** How a membership ended (the user log's `exit` records). */
+export type MembershipEnd = "left" | "removed";
+
+/** A read's answer. Optional fields (a client works without them):
+ * - `summaries`: in a tiered read of a space log, the threads served as
+ *   summaries. A snapshot lists every such thread; a pull lists those among
+ *   the threads whose thread or counts record it serves. Without it the
+ *   client tells summaries by their records.
+ * - `ended`: in a read of a user log, how the reader's memberships that
+ *   ended came to an end, by space id (`MembershipEnd`). */
 export interface Snapshot {
+  ok?: true;
   /** By the server's creation time, then the commit that created the record. */
   records: { key: string; record: StoredRecord }[];
   cursor: Cursor;
   lastSeq: LastSeq;
   serverTime: number;
+  summaries?: string[];
+  ended?: Record<string, MembershipEnd>;
 }
 
 export type Pull =
-  | { changes: Change[]; cursor: Cursor; lastSeq: LastSeq; serverTime: number }
-  | { resync: true; serverTime: number };
+  | {
+      ok?: true;
+      changes: Change[];
+      cursor: Cursor;
+      lastSeq: LastSeq;
+      serverTime: number;
+      summaries?: string[];
+      ended?: Record<string, MembershipEnd>;
+    }
+  | { ok?: true; resync: true; serverTime: number };
+
+/** A read the server did not serve: UPDATE_REQUIRED (the client is below
+ * the minimum protocol version), UNAUTHORIZED (no valid session or device
+ * token), or a transient error. The client changes no log on it. */
+export interface ReadError {
+  ok: false;
+  error: ApiError;
+  serverTime: number;
+}
+
+export type SnapshotAnswer = Snapshot | ReadError;
+export type PullAnswer = Pull | ReadError;
+
+export const isReadError = (a: SnapshotAnswer | PullAnswer): a is ReadError => a.ok === false;
 
 /** The answer to an online-only call (`NOT_MUTATORS`). */
 export type CallAnswer =

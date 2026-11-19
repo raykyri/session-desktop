@@ -593,9 +593,10 @@ const MUTATIONS: Mutation[] = [
  * same place in `@session/mutators`, by the mutation's name up to the first
  * space. */
 const IN_PACKAGE: Record<string, PackageEdit> = {
+  // the membership ends through endMembership since review round 1 of phase 1
   X1: {
     file: "src/defs/members.ts",
-    from: '      if (tx.get("member", `${i.space}:${i.user}`)) tx.del("member", `${i.space}:${i.user}`);\n      if (!tx.get("ban"',
+    from: '      endMembership(tx, i.space, i.user, "removed");\n      if (!tx.get("ban"',
     to: '      if (!tx.get("ban"',
   },
   X2: {
@@ -610,8 +611,8 @@ const IN_PACKAGE: Record<string, PackageEdit> = {
   },
   X4: {
     file: "src/access.ts",
-    from: 'return { ...r, q: "", t: null, sum: null } satisfies ThreadRec;',
-    to: 'return { ...r, q: "" } satisfies ThreadRec;',
+    from: 'return { ...r, q: "", t: null, sum: null, about: null } satisfies ThreadRec;',
+    to: 'return { ...r, q: "", about: null } satisfies ThreadRec;',
   },
   X6: {
     file: "src/defs/members.ts",
@@ -635,8 +636,8 @@ const IN_PACKAGE: Record<string, PackageEdit> = {
   },
   X14: {
     file: "src/rules.ts",
-    from: '        q: "",\n        t: null,\n        sum: null,\n        running: false,',
-    to: '        q: "",\n        running: false,',
+    from: '        q: "",\n        t: null,\n        sum: null,\n        about: null,\n        running: false,',
+    to: '        q: "",\n        about: null,\n        running: false,',
   },
   X16: {
     file: "src/defs/members.ts",
@@ -809,8 +810,8 @@ const IN_SYNC: Record<string, SyncEdit> = {
   },
   X30: {
     file: "src/server/server.ts",
-    from: "        c.at < now - TOMBSTONE_TTL\n",
-    to: "        false\n",
+    from: "        c.at < now - TOMBSTONE_TTL ||\n",
+    to: "        false ||\n",
   },
   N2: { file: "src/server/server.ts", from: "        c.u !== u ||\n", to: "" },
   N3: { file: "src/server/server.ts", from: "        c.log !== log ||\n", to: "" },
@@ -818,7 +819,9 @@ const IN_SYNC: Record<string, SyncEdit> = {
   N5: {
     file: "src/server/server.ts",
     from: "      const c = this.tokens.open(cursor, now);\n",
-    to: "      const c = this.tokens.open(cursor, now) ?? { log, u, n: tx.epoch(log).n, v: 0, h: 0, at: now };\n",
+    // tokens carry the database's instance id since review round 1 of
+    // phase 1: the made-up state has this database's
+    to: "      const c = this.tokens.open(cursor, now) ?? { log, u, n: tx.epoch(log).n, v: 0, h: 0, at: now, i: this.instance(tx) };\n",
   },
   N6: {
     file: "src/server/server.ts",
@@ -855,15 +858,17 @@ const IN_SYNC: Record<string, SyncEdit> = {
     from: "    for (const m of [this.t.answers, this.t.seqAnswers] as Map<string, StoredAnswer>[]) {",
     to: "    for (const m of [this.t.answers] as Map<string, StoredAnswer>[]) {",
   },
+  // a job starts after the worker's transaction since review round 1 of
+  // phase 1: the same faults where the worker now starts and deletes it
   N16: {
     file: "src/server/server.ts",
-    from: "      this.jobRunner.start({ kind: effect.kind, id: effect.id });\n",
+    from: "          this.jobRunner.start(job);\n",
     to: "",
   },
   N17: {
     file: "src/server/server.ts",
-    from: "          this.runEffect(tx, q.effect, now);\n          tx.effectDelete(q.id);",
-    to: "          this.runEffect(tx, q.effect, now);\n          if (attempts === 1) tx.effectDelete(q.id);\n          else tx.effectUpdate(q.id, 0, now);",
+    from: "          if (!start) tx.effectDelete(q.id);",
+    to: "          if (!start && attempts === 1) tx.effectDelete(q.id);\n          else if (!start) tx.effectUpdate(q.id, 0, now);",
   },
   N20: {
     file: "src/server/server.ts",
@@ -913,6 +918,11 @@ const IN_SYNC: Record<string, SyncEdit> = {
   },
   // the key is configured here, not made per process: the fault is that
   // the configured key is not used (every server seals with the same key)
+  // Since review round 1 of phase 1 a token carries its database's
+  // instance id, so a token of another server answers resync whatever its
+  // key: this suite, whose servers each have their own store, no longer
+  // tells a constant key apart (it survives here). `@session/sync`'s own
+  // test of key rotation over one store kills it.
   N34: {
     file: "src/server/tokens.ts",
     from: '    const cipher = createCipheriv("aes-256-gcm", this.keys.current, iv);',

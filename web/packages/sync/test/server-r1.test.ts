@@ -8,6 +8,8 @@ import test from "ava";
 
 import {
   CLIENT_IDLE_TTL,
+  MIN_PROTOCOL_VERSION,
+  isReadError,
   newCursorKey,
   openStream,
   type Actor,
@@ -568,6 +570,77 @@ for (const kind of STORES) {
         .snapshot({ u: "olga" }, `space:${closed}`)
         .records.some((r) => r.key.startsWith("exit:")),
     );
+  });
+
+  // ---- the read shapes the client half asked for (review round 1 fixes)
+
+  test(`${kind}: reads: a user log read signed out, or below the protocol's minimum, is a ReadError`, (t) => {
+    const { w, open } = cast(t, kind);
+    const s = w.server.snapshot(null, "user:mel");
+    t.true(isReadError(s));
+    t.like(s, { ok: false, error: { code: "UNAUTHORIZED" } });
+    const mine = w.server.snapshot({ u: "mel" }, "user:mel").cursor;
+    t.like(w.server.pull(null, "user:mel", mine), { ok: false, error: { code: "UNAUTHORIZED" } });
+    // signed out, a space log is served
+    t.false(isReadError(w.server.snapshot(null, `space:${open}`)));
+    const old = { protocolVersion: MIN_PROTOCOL_VERSION - 1 };
+    t.like(w.server.snapshot({ u: "mel" }, `space:${open}`, old), {
+      ok: false,
+      error: { code: "UPDATE_REQUIRED" },
+    });
+    t.like(w.server.pull({ u: "mel" }, "user:mel", mine, old), {
+      error: { code: "UPDATE_REQUIRED" },
+    });
+    t.false(
+      isReadError(
+        w.server.snapshot({ u: "mel" }, `space:${open}`, { protocolVersion: MIN_PROTOCOL_VERSION }),
+      ),
+    );
+    // an actor whose handle is not one
+    t.like(w.server.snapshot({ u: "" }, `space:${open}`), { error: { code: "UNAUTHORIZED" } });
+  });
+
+  test(`${kind}: reads: a user log serves how memberships ended, in snapshots and pulls`, (t) => {
+    const { w, open, closed } = cast(t, kind);
+    t.deepEqual(w.server.snapshot({ u: "mel" }, "user:mel").ended, {});
+    ok(t, w.as("mel", "spaces.leave", { space: closed }));
+    ok(
+      t,
+      w.as("mona", "members.remove", {
+        space: open,
+        user: "mel",
+        base: { adm: get(w, `member:${open}:mel`).adm },
+      }),
+    );
+    const s = w.server.snapshot({ u: "mel" }, "user:mel");
+    t.deepEqual(s.ended, { [closed]: "left", [open]: "removed" });
+    const p = w.server.pull({ u: "mel" }, "user:mel", s.cursor) as Any;
+    t.deepEqual(p.ended, { [closed]: "left", [open]: "removed" });
+    // nobody else gets it, and a space log has none
+    t.is(w.server.snapshot({ u: "otto" }, "user:mel").ended, undefined);
+    t.is(w.server.snapshot({ u: "mel" }, `space:${open}`).ended, undefined);
+    // joining again takes it away
+    ok(t, w.as("mel", "spaces.join", { space: open }));
+    t.deepEqual(w.server.snapshot({ u: "mel" }, "user:mel").ended, { [closed]: "left" });
+  });
+
+  test(`${kind}: reads: a tiered read lists the threads it serves as summaries`, (t) => {
+    const { w, open } = cast(t, kind);
+    const old = ask(w, "otto", open, "old").th;
+    w.clock.advance(40 * DAY);
+    const recent = ask(w, "otto", open, "recent").th;
+    const log: LogId = `space:${open}`;
+    const tier = { tier: { window: "summary" as const } };
+    const s = w.server.snapshot({ u: "mel" }, log, tier);
+    t.deepEqual(s.summaries, [old, recent].sort());
+    t.is(w.server.snapshot({ u: "mel" }, log).summaries, undefined, "an untiered read lists none");
+    t.is(w.server.snapshot({ u: "mel" }, log, { threads: [old] }).summaries, undefined);
+    // a pull lists the summary threads whose thread or counts record it serves
+    ok(t, w.as("mel", "likes.set", { thread: old, on: true }));
+    const p = w.server.pull({ u: "mel" }, log, s.cursor, tier) as Any;
+    t.deepEqual(p.summaries, [old]);
+    const full = w.server.snapshot({ u: "mel" }, log, { tier: { window: "phone" } });
+    t.deepEqual(full.summaries, [], "the phone window serves both in full");
   });
 
   // ---- the effect worker starts jobs after its transaction

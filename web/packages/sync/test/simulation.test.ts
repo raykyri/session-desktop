@@ -23,7 +23,12 @@ import {
   type Envelope,
   type ServerLike,
 } from "../src/client/index.js";
-import { PROTOCOL_VERSION, type SyncServer } from "../src/server/index.js";
+import {
+  PROTOCOL_VERSION,
+  type Pull,
+  type Snapshot,
+  type SyncServer,
+} from "../src/server/index.js";
 
 import { DAY, HOUR, MINUTE, World, rng } from "./helpers.js";
 
@@ -80,8 +85,8 @@ function serverFor(sim: Sim, u: Person): ServerLike {
       if (chance(sim.r, skew ? 0.5 : 0.06)) sim.late.push({ u, e: copy });
       return out;
     },
-    snapshot: (a, l, o) => s.snapshot(a, l, o),
-    pull: (a, l, c, o) => s.pull(a, l, c, o),
+    snapshot: (a, l, o) => s.snapshot(a, l, o) as Snapshot,
+    pull: (a, l, c, o) => s.pull(a, l, c, o) as Pull,
     call: (a, n, i) => s.call(a, n, i),
   };
 }

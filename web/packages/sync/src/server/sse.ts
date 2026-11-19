@@ -86,7 +86,7 @@ export function openStream(
           const at = state[log];
           if (at === undefined) continue;
           const p = server.pull(actor, log, at);
-          if ("resync" in p) {
+          if (!("changes" in p)) {
             poke.push(log);
             delete state[log];
             continue;

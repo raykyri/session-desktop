@@ -59,10 +59,14 @@ import {
   type Cursor,
   type LastSeq,
   type LogId,
+  type MembershipEnd,
   type Pull,
+  type PullAnswer,
+  type ReadError,
   type ReadOptions,
   type RegisterAnswer,
   type Snapshot,
+  type SnapshotAnswer,
   type SseEvent,
 } from "../protocol.js";
 
@@ -209,6 +213,11 @@ class TxSource implements pkg.RecordSource {
 /** What a read of one row serves the reader: the record's view, true for a
  * `del` the reader may read, or null. */
 type RowView = pkg.StoredRecord | true | null;
+
+/** A read's options, with the protocol version the caller speaks (the HTTP
+ * layer passes its header's): below the minimum, the read is
+ * UPDATE_REQUIRED. */
+export type ReadOpts = ReadOptions & { protocolVersion?: number };
 
 export class SyncServer {
   readonly store: ServerStore;
@@ -910,10 +919,54 @@ export class SyncServer {
     return tiers.summary.has(th) && inSummary(rec);
   }
 
-  snapshot(actor: Actor | null, log: LogId, options: ReadOptions = {}): Snapshot {
+  /** A read the server does not serve (review round 1 of phase 1): below
+   * the minimum protocol version (UPDATE_REQUIRED, when the caller passes
+   * the version it speaks), an actor whose handle is not one
+   * (UNAUTHORIZED), or a user log read signed out (UNAUTHORIZED, in place of
+   * the empty projection a client would replace its log with). Signed out,
+   * space logs and the catalog are served. */
+  private readError(actor: Actor | null, log: LogId, o: ReadOpts, now: number): ReadError | null {
+    const no = (code: pkg.ErrorCode): ReadError => ({
+      ok: false,
+      error: err(code),
+      serverTime: now,
+    });
+    if (o.protocolVersion !== undefined && !(o.protocolVersion >= MIN_PROTOCOL_VERSION))
+      return no("UPDATE_REQUIRED");
+    if (actor !== null && !pkg.isHandle(actor.u)) return no("UNAUTHORIZED");
+    if (actor === null && typeof log === "string" && log.startsWith("user:"))
+      return no("UNAUTHORIZED");
+    return null;
+  }
+
+  /** How `u`'s memberships ended, by space: their user log's exit records. */
+  private ended(tx: StoreTx, u: string): Record<string, MembershipEnd> {
+    const out: Record<string, MembershipEnd> = {};
+    for (const row of tx.logAfter(`user:${u}`, 0)) {
+      if (!row.key.startsWith("exit:")) continue;
+      const r = tx.get(row.key);
+      if (r?.kind === "exit") out[r.sp] = r.ended;
+    }
+    return out;
+  }
+
+  /** The fields a read of `log` by `u` adds: `ended` on their own user log. */
+  private extras(tx: StoreTx, log: LogId, u: string | null) {
+    return u !== null && log === `user:${u}` ? { ended: this.ended(tx, u) } : {};
+  }
+
+  /** A snapshot of `log` for `actor`. A signed-in reader, and a signed-out
+   * reader of a space log or the catalog, always get one; otherwise the
+   * answer may be a `ReadError`. */
+  snapshot(actor: Actor, log: LogId, options?: ReadOptions): Snapshot;
+  snapshot(actor: null, log: `space:${string}` | "catalog", options?: ReadOptions): Snapshot;
+  snapshot(actor: Actor | null, log: LogId, options?: ReadOpts): SnapshotAnswer;
+  snapshot(actor: Actor | null, log: LogId, options: ReadOpts = {}): SnapshotAnswer {
     this.housekeepDue();
-    return this.run((tx) => {
+    return this.run((tx): SnapshotAnswer => {
       const now = this.time(tx);
+      const no = this.readError(actor, log, options, now);
+      if (no) return no;
       const u = this.userOf(actor);
       const lastSeq = this.lastSeq(tx, u, options.clientId, now);
       if (!logS.safeParse(log).success)
@@ -939,14 +992,36 @@ export class SyncServer {
       });
       // a hydration (`threads`) does not move the log's cursor
       const cursor = this.serve(tx, log, u, version, now);
-      return { records, cursor, lastSeq, serverTime: now };
+      // the threads served as summaries (review round 1 of phase 1)
+      const summaries =
+        tiers && options.threads === undefined ? { summaries: [...tiers.summary].sort() } : {};
+      return {
+        records,
+        cursor,
+        lastSeq,
+        serverTime: now,
+        ...summaries,
+        ...this.extras(tx, log, u),
+      };
     });
   }
 
-  pull(actor: Actor | null, log: LogId, cursor: Cursor, options: ReadOptions = {}): Pull {
+  /** The changes of `log` for `actor` since `cursor`, as `snapshot` answers
+   * which readers. */
+  pull(actor: Actor, log: LogId, cursor: Cursor, options?: ReadOptions): Pull;
+  pull(
+    actor: null,
+    log: `space:${string}` | "catalog",
+    cursor: Cursor,
+    options?: ReadOptions,
+  ): Pull;
+  pull(actor: Actor | null, log: LogId, cursor: Cursor, options?: ReadOpts): PullAnswer;
+  pull(actor: Actor | null, log: LogId, cursor: Cursor, options: ReadOpts = {}): PullAnswer {
     this.housekeepDue();
-    return this.run((tx) => {
+    return this.run((tx): PullAnswer => {
       const now = this.time(tx);
+      const no = this.readError(actor, log, options, now);
+      if (no) return no;
       const u = this.userOf(actor);
       if (!logS.safeParse(log).success) return { resync: true, serverTime: now };
       const c = this.tokens.open(cursor, now);
@@ -968,16 +1043,27 @@ export class SyncServer {
         return { resync: true, serverTime: now };
       const tiers = this.tiers(tx, log, u, now, options);
       const changes: Change[] = [];
+      const summaries = new Set<string>();
       let to = c.v;
       for (const row of tx.logAfter(log, c.v)) {
         const v = this.readRow(tx, row, u);
         if (v === null) continue;
         to = row.version;
         if (v === true) changes.push({ key: row.key, op: "del" });
-        else if (this.served(tx, v, tiers, false))
+        else if (this.served(tx, v, tiers, false)) {
           changes.push({ key: row.key, op: "put", record: v });
+          const th = v.kind === "thread" ? v.id : v.kind === "counts" ? v.th : null;
+          if (th !== null && tiers?.summary.has(th)) summaries.add(th);
+        }
       }
-      return { changes, cursor: this.serve(tx, log, u, to, now), lastSeq, serverTime: now };
+      return {
+        changes,
+        cursor: this.serve(tx, log, u, to, now),
+        lastSeq,
+        serverTime: now,
+        ...(tiers ? { summaries: [...summaries].sort() } : {}),
+        ...this.extras(tx, log, u),
+      };
     });
   }
 

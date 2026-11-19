@@ -20,6 +20,9 @@
 // - Online calls and the SSE stream (`online`, review round 1 of phase 1):
 //   the server's own `call` and `openStream`; answers keep code, message
 //   and issues; the stream's events are parsed from its bytes.
+// - A read the server does not serve (`ReadError`: a user log read signed
+//   out): the prototype's empty projection, an empty snapshot whose cursor
+//   gives empty pulls; any other token resyncs.
 
 import type * as pkg from "@session/mutators";
 import {
@@ -27,8 +30,11 @@ import {
   SqliteServerStore,
   SyncServer,
   newCursorKey,
+  isReadError,
   openStream,
   type Answer,
+  type PullAnswer,
+  type SnapshotAnswer,
   type ServerStore,
 } from "@session/sync/server";
 import BetterSqlite from "better-sqlite3";
@@ -49,6 +55,11 @@ import { ACTIVE_MUTATORS, packageRegistry } from "../src/switch.js";
 
 /** The production protocol's version for one of the prototype's. */
 const PROTOCOL_STEP = 1;
+
+/** The cursor of a snapshot the server answered with a `ReadError`: a pull
+ * of that log with it is an empty pull, and one with any other token
+ * resyncs. */
+const noLog = (log: string) => `no-log:${log}`;
 
 function toProduction(e: unknown): unknown {
   if (e === null || typeof e !== "object" || Array.isArray(e)) return e;
@@ -118,11 +129,16 @@ export function syncFactory(kind: "memory" | "sqlite"): ServerFactory {
       },
       apply: (a, e) => toProto(server.apply(actorOf(a), copyEnvelope(e))),
       snapshot(a, log, opts) {
-        const s = server.snapshot(actorOf(a), log, readOptions(opts));
+        const s: SnapshotAnswer = server.snapshot(actorOf(a), log, readOptions(opts));
+        // a read the server does not serve (a user log signed out): the
+        // prototype's empty projection
+        if (isReadError(s)) return { records: [], cursor: noLog(log), lastSeq: null };
         return { records: s.records as never, cursor: s.cursor, lastSeq: s.lastSeq };
       },
       pull(a, log, cursor, opts) {
-        const p = server.pull(actorOf(a), log, cursor, readOptions(opts));
+        const p: PullAnswer = server.pull(actorOf(a), log, cursor, readOptions(opts));
+        if (isReadError(p))
+          return cursor === noLog(log) ? { changes: [], cursor, lastSeq: null } : { resync: true };
         if ("resync" in p) return { resync: true };
         return { changes: p.changes as never, cursor: p.cursor, lastSeq: p.lastSeq };
       },
