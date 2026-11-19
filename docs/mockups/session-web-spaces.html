@@ -3854,7 +3854,7 @@ html[data-client="app"] .frame-bar .url { font-weight: 650; color: var(--t-secon
 .sx-frz svg { width: 11px; height: 11px; }
 .utab .sx-tlk { display: inline-flex; margin-left: 4px; color: var(--t-faint); }
 .utab .sx-tlk svg { width: 11px; height: 11px; }
-.sx-frow { display: flex; align-items: center; gap: 8px; padding: 8px 0 0; font-size: var(--fs-sm); color: var(--t-muted); }
+.sx-frow { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 0 0 14px; font-size: var(--fs-sm); color: var(--t-muted); }
 .sx-frow svg { width: 13px; height: 13px; flex: none; }
 /* open spaces: Ban and what it stops */
 .sx-scope { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--t-secondary); }
@@ -3871,6 +3871,7 @@ html[data-client="app"] .frame-bar .url { font-weight: 650; color: var(--t-secon
 .ts-ddmenu.sx-xmenu { left: auto; right: 0; top: auto; bottom: calc(100% + 6px); width: 330px; z-index: 30; }
 .sx-xmenu .ts-tx small, .mp-menu .sx-xo .ts-tx small { white-space: normal; line-height: 1.4; }
 .sx-exl { position: relative; }
+.composer.sx-dev .mp-base { display: none; }
 .sx-exl .tlink svg { width: 10px; height: 10px; margin-left: 2px; }
 .ts-ddmenu.sx-xmenu.sx-down { top: calc(100% + 4px); bottom: auto; left: 0; right: auto; }
 .chip.dd .sx-exc { display: inline-flex; color: var(--t-faint); }
@@ -3928,6 +3929,7 @@ html[data-client="app"] .frame-bar .url { font-weight: 650; color: var(--t-secon
 }
 /* the Phone app */
 .sx-nbar { display: flex; align-items: flex-start; gap: 8px; margin: 0 16px 10px; padding: 9px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.4; color: var(--t-strong); background: color-mix(in srgb, var(--warn) 14%, var(--chrome)); }
+.sx-nbar.sx-npin { flex: none; margin: 0 12px 6px; }
 .sx-nbar.bad { background: color-mix(in srgb, var(--bad) 12%, var(--chrome)); }
 .sx-nbar.info { background: color-mix(in srgb, var(--accent) 10%, var(--chrome)); }
 .sx-nbar > svg { width: 16px; height: 16px; flex: none; color: var(--warn); margin-top: 1px; }
@@ -3937,6 +3939,7 @@ html[data-client="app"] .frame-bar .url { font-weight: 650; color: var(--t-secon
 .n-ib.sx-nbadge { width: auto; padding: 0 8px; gap: 3px; display: inline-flex; align-items: center; font-size: 13px; font-weight: 650; border-radius: 999px; background: var(--fill-subtle); }
 .n-ib.sx-nbadge.bad { color: var(--bad); }
 .n-ib.sx-nbadge svg { width: 15px; height: 15px; }
+.sx-ndot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); margin: 0 6px; align-self: center; }
 .sx-npill { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px; border-radius: 999px; font-size: 12.5px; font-weight: 650; color: var(--warn); background: color-mix(in srgb, var(--warn) 13%, transparent); }
 .sx-npill svg { width: 13px; height: 13px; }
 .n-reply.sx-nrp > div > p { color: var(--t-secondary); }
@@ -13381,9 +13384,9 @@ function sxStatus(o) {
     case 'wait': return { tone: 'wait', t: st.nvOffline ? `Not sent yet: offline. It is saved on ${here} and sends when the connection is back.` : 'Not sent yet: it sends after the changes before it.', acts: [] };
     case 'send': return { tone: 'wait', t: 'Sending…', acts: [] };
     case 'retry': return { tone: 'wait', t: `Not sent yet: the server didn’t answer. Next try in ${o.next} s (try ${o.tries} of 5).`, acts: [['Retry now', 'retry']] };
-    case 'update': return { tone: 'wait', t: 'Not sent yet: this version of Session can’t sync. It sends after the update.', acts: [[sxUpdLabel(), 'update', 1]] };
+    case 'update': return { tone: 'wait', t: 'Not sent yet: this version of Session can’t sync. It sends after the update.', acts: st.sxvUpd === 'inline' ? [[sxUpdLabel(), 'update', 1]] : [] };
     case 'failed': return { tone: 'bad', head: 'Couldn’t save', t: `The server failed 5 times (${o.err || 'internal error'}). The changes after it were sent.`, acts: [['Retry', 'retry', 1], ['Copy text', 'copy'], ['Discard', 'discard']] };
-    case 'expired': return { tone: 'bad', head: 'Not saved', t: `The server takes a change up to 4 days after it was made, by ${here}’s clock. This one was made ${o.made} ago.`, acts: [[o.kind === 'post' ? 'Post again' : 'Send again', 'again', 1], ['Copy text', 'copy'], ['Discard', 'discard']] };
+    case 'expired': return { tone: 'bad', head: 'Not saved', t: `The server takes a change up to 4 days after it was made, by ${here}’s clock. This one was made ${String(o.made).replace(/^(\d+)d$/, '$1 days')} ago.`, acts: [[o.kind === 'post' ? 'Post again' : 'Send again', 'again', 1], ['Copy text', 'copy'], ['Discard', 'discard']] };
     case 'dropped': return { tone: 'bad', head: 'Not sent', t: 'It waited 3 days without reaching the server, so Session removed it from Unsent changes.', acts: [['Copy text', 'copy', 1], ['Dismiss', 'discard']] };
     case 'stale': return { tone: 'bad', head: 'Not applied', t: o.why, acts: [['Review', 'review', 1]] };
     case 'forbidden': return { tone: 'bad', head: 'Not applied', t: `You’re no longer a moderator of ${spName(sp(o.sp))}, so the server refused it.`, acts: [['Dismiss', 'discard']] };
@@ -13439,6 +13442,8 @@ function sxAct(act, id) {
   if (act === 'xtoast') { st.sxToast = null; st.sxNoteX = true; return; }
   if (act === 'xnote') { st.sxNoteX = true; return; }
   if (act === 'update') { st.modal = null; toast(sxNat() ? 'Opened Session in the App Store.' : sxApp() ? 'Downloading Session 1.1.0. The app restarts when the download is done; unsent changes are kept.' : 'Reloading. Your text is kept.'); return; }
+  if (act === 'review') { st.sxStaleOpen = true; st.sxPop = false; if (st.sxvStale === 'dialog') st.modal = 'sx-stale'; else if (st.sxStale) sxOpenStale(); return; }
+  if (act === 'editor') { jump('sx-rf-page'); return; }
   if (!o) return;
   if (act === 'copy') { taCopy(o.text || ''); toast('Text copied.'); return; }
   if (act === 'discard') { drop(); st.modal = null; if (sxNat()) nst.sheet = null; toast(sxBad(o) ? 'Removed from Unsent changes.' : 'Discarded.'); return; }
@@ -13448,8 +13453,6 @@ function sxAct(act, id) {
     toast(act === 'again' ? 'Sent as a new reply.' : 'Sent.');
     return;
   }
-  if (act === 'review') { st.sxStaleOpen = true; st.sxPop = false; if (st.sxvStale === 'dialog') st.modal = 'sx-stale'; else if (st.sxStale) sxOpenStale(); return; }
-  if (act === 'editor') { jump('sx-rf-page'); return; }
 }
 
 /* ---------- STALE: Reload and reapply ---------- */
@@ -13562,8 +13565,10 @@ const sxRateNote = () => `<span class="c2-note warn sx-rate" role="alert">You st
   if (!sxApp() || st.auth !== 'in' || !h.includes('data-act="ask-go"')) return h;
   const sid = curSpace(), cur = sxExCur(sid), dev = cur !== 'session';
   /* the line about who pays: a device run uses no tokens */
-  if (dev) h = h.replace(/<span class="c2-note tm-line[^"]*">[\s\S]*?<\/span>(?=<span class="c2-end">)/, `<span class="c2-note sx-exn">Runs on this Mac with ${sxCli(cur)}. No tokens are counted.</span>`);
-  if (dev && st.sxLimit === 'rate' && st.sxvLimit === 'inline') h = h.replace(/<span class="c2-note sx-exn">[\s\S]*?<\/span>/, sxRateNote()).replace('data-act="ask-go" ', 'data-act="ask-go" disabled aria-disabled="true" ');
+  if (dev) h = h.replace(/<span class="c2-note tm-line[^"]*">[\s\S]*?<\/span>(?=<span class="c2-end">)/, st.sxvExec === 'space' ? '' : `<span class="c2-note sx-exn">Runs on this Mac with ${sxCli(cur)}. No tokens are counted.</span>`);
+  /* the CLI picks its own model: the model menu goes (split and per-space; the model menu variant says so in the menu) */
+  if (dev && st.sxvExec !== 'menu') h = h.replace('<div class="composer open c2 c2v-bar">', '<div class="composer open c2 c2v-bar sx-dev">');
+  if (dev && st.sxLimit === 'rate' && st.sxvLimit === 'inline') h = (h.includes('sx-exn') ? h.replace(/<span class="c2-note sx-exn">[\s\S]*?<\/span>/, sxRateNote()) : h.replace('<span class="c2-end">', sxRateNote() + '<span class="c2-end">')).replace('data-act="ask-go" ', 'data-act="ask-go" disabled aria-disabled="true" ');
   if (st.sxvExec === 'split') {
     const menu = st.sxExecOpen ? `<div class="ts-ddmenu sx-xmenu" role="menu" aria-label="Run this ask with"><div class="mp-h">Run this ask with</div>${sxExOpts(cur, 'exec')}<div class="ts-ddsep"></div><p class="sx-mnote">The default is set in Account › Asks on this Mac.</p></div>` : '';
     h = h.replace(/<button class="btn primary" type="button" data-act="ask-go"([^>]*)>Ask<\/button>/, (m, a) => `<span class="sx-split"><button class="btn primary" type="button" data-act="ask-go"${a}>${dev ? `Ask with ${sxCli(cur)}` : 'Ask'}</button><button class="btn primary sx-splitc" type="button" data-sx="exmenu:" aria-haspopup="menu" aria-expanded="${!!st.sxExecOpen}" aria-label="Choose who runs this ask">${I.chev}</button>${menu}</span>`);
@@ -13610,7 +13615,8 @@ function sxRunLive(r) {
 
 /* ---------- the window: title bar, header indicators, notices ---------- */
 const sxBar = (html, cls = '') => {
-  if (sxNat()) { const sc = $('n-scr'); if (!sc) return; const b = sc.querySelector(':scope > .n-bar'); const el = `<div class="sx-nbar ${cls}">${html}</div>`; if (b) b.insertAdjacentHTML('afterend', el); else sc.insertAdjacentHTML('afterbegin', el); return; }
+  /* the Phone app: pinned between the status bar and the screen */
+  if (sxNat()) { const sc = $('n-scr'); if (sc) sc.insertAdjacentHTML('beforebegin', `<div class="sx-nbar sx-npin ${cls}" role="status">${html}</div>`); return; }
   const el = `<div class="sx-bar ${cls}" role="status">${html}</div>`;
   const h = document.querySelector('#app .nv-off') || document.querySelector('#app .mchips') || document.querySelector('#app .hdr');
   if (h) h.insertAdjacentHTML('afterend', el); else $('app').insertAdjacentHTML('afterbegin', el);
@@ -13659,7 +13665,8 @@ function sxNatChrome() {
   const n = st.sxObx.length;
   if (bar && st.nvOffline && st.sxvOff === 'pill') bar.insertAdjacentHTML('afterbegin', `<span class="sx-npill" role="status">${NVI.off}Offline</span>`);
   if (bar && n && st.sxvList === 'badge') bar.insertAdjacentHTML('afterbegin', `<button class="n-ib sx-nbadge${st.sxObx.some(sxBad) ? ' bad' : ''}" type="button" data-n="sheet:sxlist" aria-label="Unsent changes: ${n}">${SXI.up}<span class="num">${n}</span></button>`);
-  if (st.nvOffline && st.sxvOff === 'dot') { const y = document.querySelector('#app .n-tab[data-n="tab:you"]'); if (y) { y.classList.add('sx-dot'); y.setAttribute('aria-label', 'You, offline'); } }
+  /* the dot: on the You tab, or (a screen with an input instead of tabs) in the top bar */
+  if (st.nvOffline && st.sxvOff === 'dot') { const y = document.querySelector('#app .n-tab[data-n="tab:you"]'); if (y) { y.classList.add('sx-dot'); y.setAttribute('aria-label', 'You, offline'); } else if (bar) bar.insertAdjacentHTML('afterbegin', '<span class="sx-ndot" role="img" aria-label="Offline" title="Offline"></span>'); }
   if (st.nvOffline && st.sxvOff === 'bar') sxBar(`${NVI.off}<span class="sx-nbb"><span><b>Offline.</b> Changes are saved on this phone and sent when the connection is back.</span></span>`);
 }
 const sxNatRow = (act, label, val) => `<button class="n-row" type="button" data-n="${act}"><span class="n-row-b"><b>${label}</b></span>${val != null ? `<span class="n-val">${val}</span>` : ''}<span class="n-chev">${NI.chev}</span></button>`;
@@ -13800,7 +13807,8 @@ function sxAfter() {
     } else if (!nat) {
       const card = document.querySelector(`#app .rq-card [data-rq="ok:${x.u}"]:not([data-sx]), #app tr [data-rq="ok:${x.u}"]:not([data-sx])`);
       const c = card && card.closest('.rq-card, tr');
-      if (box && c) { if (c.tagName === 'TR') c.insertAdjacentHTML('afterend', `<tr><td colspan="5">${sxStaleBox(x)}</td></tr>`); else c.insertAdjacentHTML('beforeend', sxStaleBox(x)); }
+      /* the card's own Decline and Approve give way to the box's */
+      if (box && c) { const own = c.querySelector('.rq-acts:not(.sx-box *)'); if (own) own.remove(); if (c.tagName === 'TR') c.insertAdjacentHTML('afterend', `<tr><td colspan="5">${sxStaleBox(x)}</td></tr>`); else c.insertAdjacentHTML('beforeend', sxStaleBox(x)); }
     }
     if (st.sxvStale === 'strip' && !st.sxStaleOpen) sxMainTop(nat ? `<div class="sx-nbar bad">${'<span class="as-ic" aria-hidden="true">!</span>'}<span class="sx-nbb"><span><b>1 decision wasn’t applied.</b> The ${x.kind === 'show' ? 'reply' : 'request'} changed after you chose ${x.kind === 'show' ? 'Show' : 'Approve'}.</span><span class="sx-acts">${sxBtn('Review', 'review', '', true)}</span></span></div>`
       : `<div class="cs-strip warn sx-mtop" role="alert">${CI.eyeOff}<span class="grow"><b>1 decision wasn’t applied.</b> The ${x.kind === 'show' ? 'reply' : 'request'} changed after you chose ${x.kind === 'show' ? 'Show' : 'Approve'}.</span><button class="btn sm" type="button" data-sx="review:">Review</button></div>`);
@@ -13843,17 +13851,18 @@ function sxFrozenMarks() {
   const inSpace = nat ? (() => { const t = nTop(); return t && ((t.v === 'space' && t.id === s.id) || (t.v === 'thread' && postById(t.id) && postById(t.id).s === s.id)); })() : !st.subPage && !st.home && (st.thread != null ? postById(st.thread) && postById(st.thread).s === s.id : st.space === s.id);
   if (!nat) {
     $('app').classList.toggle('sx-ro', !!inSpace);
-    document.querySelectorAll(`#app .utab[data-space="${s.id}"], #app .mchip[data-space="${s.id}"]`).forEach(t => { if (!t.querySelector('.sx-tlk')) t.insertAdjacentHTML('beforeend', `<span class="sx-tlk" title="Read-only copy">${SXI.lock}</span>`); });
   }
   if (!inSpace) return;
+  /* not a member: Joined becomes a plain label */
+  document.querySelectorAll('#app .banner-acts > *, #n-scr .n-sphead > .n-capbtn').forEach(b => { b.outerHTML = `<span class="sx-frz">${SXI.lock}Not a member</span>`; });
   /* the composer and the reply box: no writes */
-  document.querySelectorAll('#app .composer, #app .fu-box2, #app .n-dock').forEach(c => { c.outerHTML = nat ? `<div class="n-dock"><span class="n-dock-f out">You can’t write here: you’re no longer a member.</span></div>` : `<div class="cs-strip sx-mtop">${LOCK}<span class="grow">You can’t write here: you’re no longer a member of ${name}.</span></div>`; });
+  document.querySelectorAll('#app .composer, #app .fu-box2, #app .n-dock, #n-scr .n-icomp-f').forEach(c => { c.outerHTML = nat ? `<div class="n-dock"><span class="n-dock-f out">You can’t write here: you’re no longer a member.</span></div>` : `<div class="cs-strip sx-mtop">${LOCK}<span class="grow">You can’t write here: you’re no longer a member of ${name}.</span></div>`; });
   if (st.sxvFrozen === 'banner') sxBar(nat ? `${LOCK}<span class="sx-nbb"><span>${txt}</span></span>` : `${LOCK}<span class="grow">${txt}</span><button class="btn sm" type="button" data-sx="frzrm:">Remove the copy</button>`);
   if (st.sxvFrozen === 'lock') {
     const h = nat ? document.querySelector('#n-scr .n-sphead h2, #n-scr .n-th-by small') : document.querySelector('#app .banner h1, #app .banner h2, #app .th-top .th-back');
     if (h && !h.querySelector('.sx-frz')) h.insertAdjacentHTML('beforeend', `<span class="sx-frz">${SXI.lock}Read-only copy</span>`);
     const row = `<div class="sx-frow" role="status">${SXI.clock}<span>Not updated since ${f.at}: you’re no longer a member. You can delete your own threads.</span>${nat ? '' : '<button class="tlink" type="button" data-sx="frzrm:">Remove the copy</button>'}</div>`;
-    const tabs = document.querySelector('#app .sp-tabs'); if (tabs && !nat) tabs.insertAdjacentHTML('afterend', row); else sxMainTop(nat ? `<div class="sx-nbar info">${SXI.clock}<span class="sx-nbb"><span>Read-only copy, not updated since ${f.at}: you’re no longer a member.</span></span></div>` : row);
+    sxMainTop(nat ? `<div class="sx-nbar info">${SXI.clock}<span class="sx-nbb"><span>Read-only copy, not updated since ${f.at}: you’re no longer a member.</span></span></div>` : row);
   }
   if (st.sxvFrozen === 'grey') {
     const m = document.querySelector('#app .mcol > .main, #app .th-main'); if (m) m.classList.add('sx-grey');
@@ -13863,6 +13872,8 @@ function sxFrozenMarks() {
 }
 function sxRunMarks(i, r) {
   const nat = sxNat();
+  /* the thread's facts: who ran the answer */
+  document.querySelectorAll('#app .th-facts > div').forEach(d => { const k = d.querySelector('span'); if (k && k.textContent === 'Model') { k.textContent = 'Ran on'; const v = d.querySelector('b, span:last-child'); if (v && v !== k) v.textContent = `${r.u}’s Mac · ${sxCli(r.cli)}`; } });
   if (r.state === 'done' || r.state === 'again') {
     const meta = nat ? document.querySelector('#n-scr .n-th .tm-meta') : document.querySelector('#app #th-a .tm-meta, #app .th-ans .tm-meta');
     const html = r.state === 'again' ? `<p class="tm-meta sx-dl" role="status"><span class="spin" aria-hidden="true"></span><span>Running again on ${sxDevName(r)} with ${sxCli(r.cli)} (attempt 2).</span></p>` : sxLabelHTML(r);
