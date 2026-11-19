@@ -13333,17 +13333,17 @@ JUMPS.splice((i => i < 0 ? JUMPS.length : i)(JUMPS.findIndex(g => g[0] === 'Acco
      are sent; a write refused as EXPIRED (made more than 4 days before, by the device's clock) and one dropped
      after 3 days in the outbox (server time) are reported. The web holds a write only while its request is in
      flight: offline, a write fails at once and its text stays in the composer.
-   - Refused writes: STALE (a queued Show or Approve whose target changed: "Reload and reapply" shows the current
-     version and the moderator decides again), CONFLICT on a page edit sent from the outbox (the editor's existing
-     conflict notice), FORBIDDEN after a role change.
-   - Access changes: a removed member of a closed space keeps a frozen copy on the device (read-only, not updated,
-     their own threads still deletable); the web has no copy, so the space leaves the header with a notice. A
-     moderator whose role is removed loses the review queue and report notifications.
-   - Open spaces: removal there is undone by leaving and joining again, so moderators get Ban, which stops every
-     write in the space, the person's own included.
-   - Update Session: an old client's requests are answered with "update"; writes stay in the outbox until then.
+   - Refused writes: STALE (a queued Show or Approve whose target changed: a toast says it wasn't applied and the
+     item shows its current state), CONFLICT on a page edit sent from the outbox (the editor's existing conflict
+     notice), FORBIDDEN after a role change (a toast).
+   - Access changes: a removed member of a closed space keeps a frozen copy on the device (read-only, greyed, one
+     short notice, their own threads still deletable); the web has no copy, so the space leaves the header. A
+     moderator whose role is removed loses the review queue and report notifications. Neither is announced.
+   - Open spaces: Members offers Remove and Ban; removal is undone by joining again. Reports offer Ban the author.
+   - Update Session: an old client's requests are answered with "update" (a dialog); writes stay in the outbox.
+   - Device sign-in: the browser approves the app with one click. Devices are listed in the Phone app's Account.
    - Device runs (Desktop app): an ask runs with the included tokens (the default) or a CLI on this Mac (Claude
-     Code, Codex); device answers are labelled "<handle>'s Mac" in their meta line, report no usage, and are capped
+     Code, Codex); device answers are labelled "<handle>'s desktop", report no usage, and are capped
      at 200 KB per answer and 100 device runs an hour. A run whose lease ends is interrupted: on the Mac that ran
      it, Run again starts a new attempt there; the web offers Run with included tokens only.
    Where the answers come from (phase 1a.2). Each Screen entry's scenario sets up what the server holds (the
@@ -13364,14 +13364,16 @@ JUMPS.splice((i => i < 0 ? JUMPS.length : i)(JUMPS.findIndex(g => g[0] === 'Acco
      TOO_MANY_REQUESTS with retryAt).
    - The frozen copy: the entry's data is the member's (scenario 'replication: member'); the removal then runs on
      the server, and the device applies none of its changes to the space it was removed from (sxFreeze).
-   - Devices are the server's (GET /api/me/devices, devices.revoke); sign-in calls devices.authorize and
-     devices.approve. A device run is read from its thread: the executor and how the run ended (interrupted,
+   - Devices are the server's (GET /api/me/devices, devices.revoke; only the Phone app shows them); sign-in calls
+     devices.authorize and devices.approve. A device run is read from its thread: the executor and how the run ended (interrupted,
      too_large); Run again is research.retryNode with the executor.
    - Page state remains for what only the client knows: being offline, the Variants, the writes a screen shows as
      waiting but does not send (entries without a write), the CLIs found on this Mac.
    The driver's requests carry X-Session-Origin: sync-state, so the request log separates the refusals these
    screens get on purpose from errors. Variants: SXV, one Variants control per state, shown with the Screen
-   entries they apply to (SX_KN).
+   entries they apply to (SX_KN), and without one with what the main mockup shows (sxMainKnobs: the states
+   Unsent, Device run and Run limit, and the variants that apply to them; see "the main mockup's states").
+   Round 2 (the owner's review): each chosen option is the first; the controls left with one option are gone.
    Open items: "Ban the author" on the Phone app's reports sheet is deferred (that sheet has no author actions;
    the web's Reports offers Ban the author in open spaces). */
 const SXI = {
@@ -13914,8 +13916,12 @@ function sxMainOutbox() {
 /* after each render: the outbox follows the control, the client and the device, and is set again after a Screen entry */
 function sxMainCheck() {
   if (st.sxScr || !dataReady() || st.auth !== 'in' || sxBusy()) return;
-  const key = [sxCtx(), st.sxvUnsent, st.sxvNExp, st.sxvNDrop, SXQ.jumps].join('|');
-  if (key === SXQ.mainKey) return;
+  sxMainSet();
+}
+const sxMainKey = () => [sxCtx(), st.sxvUnsent, st.sxvNExp, st.sxvNDrop, SXQ.jumps].join('|');
+function sxMainSet(force) {
+  const key = sxMainKey();
+  if (key === SXQ.mainKey && !force) return;
   SXQ.mainKey = key; sxMainOutbox();
 }
 /* the ask the Device run control acts on: the one on screen, else your newest ask (opened) */
@@ -13958,7 +13964,7 @@ async function sxDeviceRun(gen, th, end) {
     const c = await sxFetch('GET', '/api/dev/config'), now = c.body && c.body.now;
     if (!now) return;
     await sxDevConfig({ now: new Date(Date.parse(now) + 91e3).toISOString().replace(/\.\d{3}Z$/, 'Z') });
-    await sxRpc('runs.heartbeat', at);
+    await sxFetch('GET', '/api/me/devices');
     await sxDevConfig({ now });
   }
 }
@@ -14504,7 +14510,8 @@ function sxUi(k, again) {
   const m = /^sx(n?)-(.*)$/.exec(String(k));
   if (k === 'ec-page-unsent') { j0(k); st.client = 'app'; st.device = 'desktop'; Object.assign(st, SX0(), { sxScr: 'rf-page', sxObx: [{ id: 'o4', kind: 'page', sp: 'scifi', title: 'Edit of Canon starter list in #sci-fi', text: '', state: 'conflict', by: 'tomasz', made: '2h' }] }); return; }
   if (st.sxvRun !== 'off' || st.sxvRate !== 'off') { st.sxvRun = 'off'; st.sxvRate = 'off'; screenPicked(); }
-  if (!m) { j0(k); return; }
+  /* another Screen entry: its screen is set up (the scenario's data, the state reset); the outbox goes back on it */
+  if (!m) { j0(k); if (!st.sxScr && dataReady() && st.auth === 'in') sxMainSet(true); return; }
   /* the earlier blocks' part of every entry (history replaced, guards and overlays cleared), with a key none of them knows */
   j0('sx-base');
   sxUi((m[1] ? 'n-' : '') + m[2]);
