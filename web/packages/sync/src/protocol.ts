@@ -66,10 +66,12 @@ export interface Actor {
  *   from CLOCK_SKEW (ms). The server measures ages on it.
  * - `queuedAt`: when the write was queued, on the same clock. The server
  *   checks it like an id's age (EXPIRED).
- * - `replaces`: the mutation ids this write had before it was reminted. The
- *   server stores its answer under each of them in the same commit, and a
- *   stored answer under any of them is this write's answer, so no copy of
- *   the write applies twice. */
+ * - `replaces`: the mutation ids this write was sent under before it was
+ *   reminted, whose outcome the client does not know. The server stores its
+ *   answer under each of them in the same commit, and a stored answer under
+ *   any of them is this write's answer, so no copy of the write applies
+ *   twice. An id with a recorded refusal is never listed (its refusal would
+ *   be the answer): Send again after one is a new write. */
 export interface Envelope {
   clientId: string;
   seq: number;
