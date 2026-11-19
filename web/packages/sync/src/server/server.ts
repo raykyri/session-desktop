@@ -329,7 +329,7 @@ export class SyncServer {
       }
       const reg = pkg.registryKey(next);
       const rev = (prev?.rev ?? tx.registryGet(reg) ?? 0) + 1;
-      const rec = { ...next, rev } as pkg.StoredRecord;
+      const rec = { ...next, rev };
       tx.put(key, rec, prev ? (tx.born(key) ?? version) : version);
       tx.registrySet(reg, rev);
       if (!prev) tx.tombDelete(key);

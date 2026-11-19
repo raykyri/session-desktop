@@ -673,7 +673,7 @@ export class SyncClient implements Changing {
           continue;
         }
         const rev = (this.get(key)?.rev ?? 0) + 1;
-        this.overlay.set(key, { ...draft, rev } as StoredRecord);
+        this.overlay.set(key, { ...draft, rev });
       }
     }
     this.changed();
@@ -928,7 +928,7 @@ export class SyncClient implements Changing {
         if (e.name === "threads.delete") this.unfreeze((e.input as { id: string }).id);
         this.resolve(e, a);
       } else {
-        await this.applyAnswerChanges((a.error as AnswerError).changes);
+        await this.applyAnswerChanges(a.error.changes);
         this.end(e, a.error.code === "EXPIRED" ? "expired" : "refused", a.error, a);
       }
       await this.persist();

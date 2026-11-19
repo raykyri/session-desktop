@@ -141,7 +141,7 @@ class MemoryTx implements StoreTx {
   private rows(log: LogId) {
     let m = this.t.logs.get(log);
     if (!m) {
-      this.t.logs.set(log, (m = new Map()));
+      this.t.logs.set(log, (m = new Map<string, LogRow>()));
       this.undo.push(() => {
         if (m?.size === 0) this.t.logs.delete(log);
       });

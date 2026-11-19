@@ -213,8 +213,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "X27 INTERNAL_SERVER_ERROR is recorded",
     file: "src/contract.ts",
-    from: '  "INTERNAL_SERVER_ERROR",\n]);',
-    to: "]);",
+    from: '  "INTERNAL_SERVER_ERROR",\n  "TOO_LARGE",\n]);',
+    to: '  "TOO_LARGE",\n]);',
   },
   {
     name: "X28 the client does not follow OUT_OF_ORDER's expected seq",
@@ -655,17 +655,18 @@ const IN_PACKAGE: Record<string, PackageEdit> = {
   },
   X22: {
     file: "src/defs/members.ts",
-    from: '        if (i.decision !== "decline" && r.rev !== i.base?.[u]) throw stale();\n',
+    from: '        if (i.decision !== "decline" && r.rev !== i.base?.[u]) throw stale(tx, tx.me, r);\n',
     to: "",
   },
+  // the rev compared is the hide record's since phase 1b (Part 0 item 3)
   X23: {
     file: "src/defs/moderation.ts",
-    from: '      if (i.decision === "shown" && r.rev !== i.base?.rev) throw stale();\n',
+    from: '      if (i.decision === "shown" && (h?.rev ?? 0) !== i.base?.rev)\n        throw stale(tx, tx.me, r, [`hide:${itemKey(r)}`]);\n',
     to: "",
   },
   X24: {
     file: "src/defs/members.ts",
-    from: "      if (m.adm !== i.base.adm) throw stale();\n",
+    from: "      if (m.adm !== i.base.adm) throw stale(tx, tx.me, m);\n",
     to: "",
   },
   X26: {
@@ -680,7 +681,7 @@ const IN_PACKAGE: Record<string, PackageEdit> = {
   },
   N12: {
     file: "src/defs/spaces.ts",
-    from: "        (link.expiresAt === null || msOf(link.expiresAt) > tx.nowMs) &&\n",
+    from: "    (link.expiresAt === null || msOf(link.expiresAt) > tx.nowMs) &&\n",
     to: "",
   },
   N13: {
@@ -703,15 +704,17 @@ const IN_PACKAGE: Record<string, PackageEdit> = {
     from: "        a,\n        why: null,\n        createdAt: old",
     to: "        a,\n        why: old ? old.why : null,\n        createdAt: old",
   },
+  // a restricting decision compares the rev too: the hide record's since
+  // phase 1b (Part 0 item 3)
   "R2-1": {
     file: "src/defs/moderation.ts",
-    from: '      if (i.decision === "shown" && r.rev !== i.base?.rev) throw stale();',
-    to: "      if (r.rev !== i.base?.rev) throw stale();",
+    from: '      if (i.decision === "shown" && (h?.rev ?? 0) !== i.base?.rev)',
+    to: "      if ((h?.rev ?? 0) !== i.base?.rev)",
   },
   "R2-2": {
     file: "src/defs/members.ts",
-    from: '        if (i.decision !== "decline" && r.rev !== i.base?.[u]) throw stale();',
-    to: "        if (r.rev !== i.base?.[u]) throw stale();",
+    from: '        if (i.decision !== "decline" && r.rev !== i.base?.[u]) throw stale(tx, tx.me, r);',
+    to: "        if (r.rev !== i.base?.[u]) throw stale(tx, tx.me, r);",
   },
   "R2-3": {
     file: "src/defs/spaces.ts",
@@ -736,23 +739,268 @@ const IN_PACKAGE: Record<string, PackageEdit> = {
   },
 };
 
+/** A mutation as `--sync` makes it: in `file` of `@session/sync` (relative
+ * to its package directory), the same fault as the prototype server's. */
+interface SyncEdit {
+  file: string;
+  from: string;
+  to: string;
+  also?: { from: string; to: string }[];
+}
+
+/** `--sync` runs the suite against `@session/sync`'s server half
+ * (REPLICA_PROTO_SERVER=sync-memory, with the package's mutators). Each
+ * mutation of the prototype's `src/server.ts` or `src/contract.ts` is made at
+ * the same place in a copy of `@session/sync` instead; the mutators' and
+ * read rules' are made in `@session/mutators` (`IN_PACKAGE`), and the
+ * prototype client's where they are (the suite's clients are the
+ * prototype's). */
+const IN_SYNC: Record<string, SyncEdit> = {
+  X5: {
+    file: "src/server/server.ts",
+    from: "    if (!c || c.u !== u || c.seen <= now - CLIENT_IDLE_TTL) return null;",
+    to: "    if (!c || c.seen <= now - CLIENT_IDLE_TTL) return null;",
+  },
+  X8: {
+    file: "src/server/server.ts",
+    from: "        return x < y ? -1 : x > y ? 1 : born(a.key) - born(b.key);",
+    to: "        return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;",
+  },
+  X10: {
+    file: "src/server/server.ts",
+    from: "    return t && pkg.readsAudience(g, t, u) ? true : null;",
+    to: "    return t ? true : null;",
+  },
+  X11: {
+    file: "src/server/server.ts",
+    from: '    for (const [to, role] of s?.kind === "space" ? s.mods : []) {\n      if (role === "member") continue;',
+    to: '    for (const [to, role] of tx.scan("member", "sp", effect.sp).map((m) => [(m as pkg.MemberRec).u, "x"] as const)) {\n      if (role === "member") continue;',
+  },
+  X12: {
+    file: "src/protocol.ts",
+    from: "export const ANSWER_TTL = 7 * DAY;",
+    to: "export const ANSWER_TTL = 5 * DAY;",
+  },
+  X19: {
+    file: "src/server/server.ts",
+    from: "    for (const t of tx.tombsBefore(cutoff, limit)) {\n      tx.tombDelete(t.key);",
+    to: '    for (const t of tx.tombsBefore(cutoff, limit)) {\n      if (t.kind !== "followup") tx.tombDelete(t.key);',
+  },
+  X21: {
+    file: "src/server/tokens.ts",
+    from: '    const body = Buffer.concat([cipher.update(plain), cipher.final()]);\n    return Buffer.concat([iv, body, cipher.getAuthTag()]).toString("base64url");',
+    to: '    void cipher;\n    return Buffer.concat([iv, plain, Buffer.alloc(TAG)]).toString("base64url");',
+    also: [
+      {
+        from: "        d.setAuthTag(raw.subarray(raw.length - TAG));\n        plain = Buffer.concat([d.update(raw.subarray(IV, raw.length - TAG)), d.final()]);",
+        to: "        void d;\n        plain = raw.subarray(IV, raw.length - TAG);",
+      },
+    ],
+  },
+  X25: {
+    file: "src/server/server.ts",
+    from: "        const tomb: Tombstone = { key, ...pkg.audience(g, old), at };",
+    to: "        const tomb = { ...old, key, ...pkg.audience(g, old), at } as Tombstone;",
+  },
+  X27: {
+    file: "src/protocol.ts",
+    from: '  "INTERNAL_SERVER_ERROR",\n  "TOO_LARGE",\n]);',
+    to: '  "TOO_LARGE",\n]);',
+  },
+  X30: {
+    file: "src/server/server.ts",
+    from: "        c.at < now - TOMBSTONE_TTL\n",
+    to: "        false\n",
+  },
+  N2: { file: "src/server/server.ts", from: "        c.u !== u ||\n", to: "" },
+  N3: { file: "src/server/server.ts", from: "        c.log !== log ||\n", to: "" },
+  N4: { file: "src/server/server.ts", from: "        c.n !== tx.epoch(log).n ||\n", to: "" },
+  N5: {
+    file: "src/server/server.ts",
+    from: "      const c = this.tokens.open(cursor, now);\n",
+    to: "      const c = this.tokens.open(cursor, now) ?? { log, u, n: tx.epoch(log).n, v: 0, h: 0, at: now };\n",
+  },
+  N6: {
+    file: "src/server/server.ts",
+    from: "      if (a && a.sp !== null && tx.epoch(`space:${a.sp}`).start > head) return true;",
+    to: "      if (a && a.sp !== null && tx.epoch(`space:${a.sp}`).start > head + 1e9) return true;",
+  },
+  N7: {
+    file: "src/server/server.ts",
+    from: '    for (const row of tx.logAfter(log, version)) if (row.key.startsWith("member:")) return true;\n',
+    to: "",
+  },
+  N8: {
+    file: "src/server/server.ts",
+    from: "      const rev = (prev?.rev ?? tx.registryGet(reg) ?? 0) + 1;",
+    to: "      const rev = (prev?.rev ?? 0) + 1;",
+  },
+  N9: {
+    file: "src/server/server.ts",
+    from: '      if (!r || !("mod" in r) || r.mod === "removed") return false;',
+    to: '      if (!r || !("mod" in r)) return false;',
+  },
+  N10: {
+    file: "src/protocol.ts",
+    from: '  "CLOCK_SKEW",\n  "TOO_MANY_REQUESTS",\n  "SERVICE_UNAVAILABLE",\n',
+    to: '  "CLOCK_SKEW",\n',
+  },
+  N11: {
+    file: "src/server/server.ts",
+    from: "          if (attempts >= EFFECT_MAX_ATTEMPTS) {\n            tx.effectDelete(q.id);\n            tx.deadLetterAdd({ effect: q.effect, at: q.at, attempts, failedAt: now });\n          } else",
+    to: "          if (attempts >= 1) {\n            tx.effectDelete(q.id);\n          } else",
+  },
+  N15: {
+    file: "src/server/memory.ts",
+    from: "    for (const m of [this.t.answers, this.t.seqAnswers] as Map<string, StoredAnswer>[]) {",
+    to: "    for (const m of [this.t.answers] as Map<string, StoredAnswer>[]) {",
+  },
+  N16: {
+    file: "src/server/server.ts",
+    from: "      this.jobRunner.start({ kind: effect.kind, id: effect.id });\n",
+    to: "",
+  },
+  N17: {
+    file: "src/server/server.ts",
+    from: "          this.runEffect(tx, q.effect, now);\n          tx.effectDelete(q.id);",
+    to: "          this.runEffect(tx, q.effect, now);\n          if (attempts === 1) tx.effectDelete(q.id);\n          else tx.effectUpdate(q.id, 0, now);",
+  },
+  N20: {
+    file: "src/server/server.ts",
+    from: "    tx.clientsPrune(now - CLIENT_IDLE_TTL + 1, limit);",
+    to: "    tx.clientsPrune(now - CLIENT_IDLE_TTL * 1000, limit);",
+  },
+  N21: {
+    file: "src/server/server.ts",
+    from: "    return t && pkg.readsAudience(g, t, u) ? true : null;",
+    to: '    return t &&\n      (pkg.readsAudience(g, t, u) || ((t.kind === "like" || t.kind === "save") && t.person === u))\n      ? true\n      : null;',
+  },
+  N24: {
+    file: "src/server/server.ts",
+    from: "      if (seen?.kind === \"seen\" && seen.reps) staged.push([`seen:${to}`, { ...seen, reps: false }]);\n    }\n    this.commit(tx, staged, now);",
+    to: "      if (seen?.kind === \"seen\" && seen.reps) staged.push([`seen:${to}`, { ...seen, reps: false }]);\n    }\n    if (effect.report.endsWith(\"0\")) staged.length = 0;\n    this.commit(tx, staged, now);",
+  },
+  N25: {
+    file: "src/server/server.ts",
+    from: "        tx.del(key);\n        tx.tombPut(tomb);",
+    to: "        tx.del(key);\n        tx.registrySet(pkg.registryKey(old), 0);\n        tx.tombPut(tomb);",
+  },
+  N29: {
+    file: "src/server/server.ts",
+    from: "        tx.del(key);\n        tx.tombPut(tomb);",
+    to: "        tx.del(key);\n        const freed = pkg.idOf(old);\n        if (freed !== null) tx.registrySet(freed, -1);\n        tx.tombPut(tomb);",
+    also: [
+      {
+        from: "    return this.tx.registryGet(id) !== undefined;",
+        to: "    return (this.tx.registryGet(id) ?? -1) >= 0;",
+      },
+    ],
+  },
+  N30: {
+    file: "src/server/server.ts",
+    from: "        c.n !== tx.epoch(log).n ||\n",
+    to: "        (c.v > 0 && c.n !== tx.epoch(log).n) ||\n",
+  },
+  N31: {
+    file: "src/server/tokens.ts",
+    from: "        d.setAuthTag(raw.subarray(raw.length - TAG));\n        plain = Buffer.concat([d.update(raw.subarray(IV, raw.length - TAG)), d.final()]);",
+    to: "        plain = d.update(raw.subarray(IV, raw.length - TAG));",
+  },
+  N33: {
+    file: "src/server/server.ts",
+    from: "      return { changes, cursor: this.serve(tx, log, u, to, now), lastSeq, serverTime: now };",
+    to: "      return { changes, cursor: this.serve(tx, log, u, to, changes.length ? now : c.at), lastSeq, serverTime: now };",
+  },
+  // the key is configured here, not made per process: the fault is that
+  // the configured key is not used (every server seals with the same key)
+  N34: {
+    file: "src/server/tokens.ts",
+    from: '    const cipher = createCipheriv("aes-256-gcm", this.keys.current, iv);',
+    to: '    const cipher = createCipheriv("aes-256-gcm", Buffer.alloc(32), iv);',
+    also: [{ from: "    const keys = [this.keys.current];", to: "    const keys = [Buffer.alloc(32)];" }],
+  },
+  "R2-7": {
+    file: "src/server/server.ts",
+    from: '      if (!timeOk(pkg.ulidTime(m.mutationId), m.clientTime)) return expired("mutationId");\n',
+    to: "",
+  },
+  "R2-9": {
+    file: "src/server/server.ts",
+    from: "        if (tx.registrations(actor.u, now - DAY + 1) >= REGISTRATIONS_PER_DAY)",
+    to: "        if (tx.registrations(actor.u, now - DAY + 1) >= REGISTRATIONS_PER_DAY * 1000)",
+  },
+  "R2-15": {
+    file: "src/server/server.ts",
+    from: "      return this.applyEnvelope(actor, envelope, size);\n    } catch {",
+    to: "      const a = this.applyEnvelope(actor, envelope, size);\n      this.work();\n      return a;\n    } catch {",
+  },
+  "R2-16": {
+    file: "src/server/server.ts",
+    from: "          if (attempts >= EFFECT_MAX_ATTEMPTS) {",
+    to: "          if (attempts >= EFFECT_MAX_ATTEMPTS * 1000) {",
+  },
+  "R2-17": {
+    file: "src/server/server.ts",
+    from: "              now + Math.min(EFFECT_BACKOFF_MAX, EFFECT_BACKOFF_MIN * 2 ** (attempts - 1)),",
+    to: "              now,",
+  },
+  "R2-18": {
+    file: "src/server/server.ts",
+    from: "    const b = bounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES);",
+    to: "    const b = bounds(envelope, 1e9, 1e9);",
+  },
+  "R2-19": {
+    file: "src/server/server.ts",
+    from: '    if (Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES) return large();',
+    to: '    if (Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES * 1000) return large();',
+  },
+  "R2-20": {
+    file: "src/server/server.ts",
+    from: "      return this.applyEnvelope(actor, envelope, size);\n    } catch {",
+    to: "      return this.applyEnvelope(actor, envelope, size);\n    } catch (e) {\n      if (e) throw e;",
+  },
+  "R2-21": {
+    file: "src/server/server.ts",
+    from: "      if (Math.abs(m.clientTime - now) > CLOCK_MAX_SKEW)",
+    to: "      if (Math.abs(m.clientTime - now) > 1e15)",
+  },
+  // the storage scan is the store's dump here
+  "R2-22": {
+    file: "src/server/memory.ts",
+    from: "      clients: [...t.clients].map(([clientId, c]) => ({ clientId, ...c })),",
+    to: "      clients: [],",
+  },
+};
+
 /** The prototype's files whose code the switch replaces: every mutation of
  * them needs an `IN_PACKAGE` entry. */
 const REPLACED = new Set(["src/mutators.ts", "src/access.ts"]);
+/** The prototype's files whose code `@session/sync` replaces with `--sync`:
+ * every mutation of them needs an `IN_SYNC` (or `IN_PACKAGE`) entry. */
+const SERVER_FILES = new Set(["src/server.ts", "src/contract.ts"]);
 const idOfMutation = (m: Mutation) => m.name.split(" ")[0] ?? m.name;
 
-/** Where `--package` makes a mutation: in the package, or where it is. */
+type Where = "proto" | "mutators" | "sync";
+
+/** Where `--package` and `--sync` make a mutation: in `@session/mutators`,
+ * in `@session/sync`, or where it is. */
 function target(m: Mutation): {
-  pkg: boolean;
+  where: Where;
   file: string;
   edits: { from: string; to: string }[];
 } {
   const p = IN_PACKAGE[idOfMutation(m)];
-  if (PACKAGE && p) return { pkg: true, file: p.file, edits: [{ from: p.from, to: p.to }] };
+  if (PACKAGE && p) return { where: "mutators", file: p.file, edits: [{ from: p.from, to: p.to }] };
   if (PACKAGE && REPLACED.has(m.file))
     throw new Error(`${m.name}: no place in @session/mutators (IN_PACKAGE)`);
-  return { pkg: false, file: m.file, edits: edits(m) };
+  const q = IN_SYNC[idOfMutation(m)];
+  if (SYNC && q) return { where: "sync", file: q.file, edits: [{ from: q.from, to: q.to }, ...(q.also ?? [])] };
+  if (SYNC && SERVER_FILES.has(m.file)) throw new Error(`${m.name}: no place in @session/sync (IN_SYNC)`);
+  return { where: "proto", file: m.file, edits: edits(m) };
 }
+
+/** The directory of a package, in the workspace or in a slot. */
+const baseOf = (where: Where) => (where === "mutators" ? MUTATORS_PKG : where === "sync" ? SYNC_PKG : PKG);
 
 interface Outcome {
   typecheck: string;
@@ -764,7 +1012,9 @@ interface Outcome {
 const PKG = process.cwd();
 const WEB = resolve(PKG, "../..");
 const MUTATORS_PKG = join(WEB, "packages", "mutators");
-const PACKAGE = process.argv.includes("--package");
+const SYNC_PKG = join(WEB, "packages", "sync");
+const SYNC = process.argv.includes("--sync");
+const PACKAGE = process.argv.includes("--package") || SYNC;
 
 /** A copy of the package beside links to the workspace's modules, base
  * config and shared package, so it type-checks and runs as the package does. */
@@ -787,6 +1037,15 @@ function makeSlot(root: string, n: number): string {
   });
   mkdirSync(join(dir, "node_modules", "@session"), { recursive: true });
   symlinkSync(join(web, "packages", "mutators"), join(dir, "node_modules", "@session", "mutators"));
+  // a copy of @session/sync, over the copy of @session/mutators
+  const sync = join(web, "packages", "sync");
+  cpSync(SYNC_PKG, sync, {
+    recursive: true,
+    filter: (src) => !/[/\\](node_modules|dist)$/.test(src),
+  });
+  mkdirSync(join(sync, "node_modules", "@session"), { recursive: true });
+  symlinkSync(join(web, "packages", "mutators"), join(sync, "node_modules", "@session", "mutators"));
+  symlinkSync(sync, join(dir, "node_modules", "@session", "sync"));
   return dir;
 }
 
@@ -798,7 +1057,13 @@ function sh(
 ): Promise<{ code: number; out: string }> {
   return new Promise((done) => {
     let out = "";
-    const env = { ...process.env, FORCE_COLOR: "0", REPLICA_PROTO_MUTATORS: pkg ? "package" : "" };
+    const env: Record<string, string | undefined> = {
+      ...process.env,
+      FORCE_COLOR: "0",
+      REPLICA_PROTO_MUTATORS: pkg ? "package" : "",
+    };
+    if (SYNC) env["REPLICA_PROTO_SERVER"] = "sync-memory";
+    else delete env["REPLICA_PROTO_SERVER"];
     const p = spawn(cmd, args, { cwd, env });
     p.stdout.on("data", (d: Buffer) => (out += d.toString()));
     p.stderr.on("data", (d: Buffer) => (out += d.toString()));
@@ -808,8 +1073,8 @@ function sh(
 
 async function run(m: Mutation, dir: string): Promise<Outcome> {
   const where = target(m);
-  const base = where.pkg ? MUTATORS_PKG : PKG;
-  const file = join(where.pkg ? join(dir, "..", "mutators") : dir, where.file);
+  const base = baseOf(where.where);
+  const file = join(where.where === "proto" ? dir : join(dir, "..", where.where), where.file);
   const original = readFileSync(join(base, where.file), "utf8");
   let source = original;
   for (const e of where.edits) {
@@ -840,13 +1105,15 @@ const args = process.argv.slice(2);
 if (args.includes("--check")) {
   for (const m of MUTATIONS) {
     const where = target(m);
-    const base = where.pkg ? MUTATORS_PKG : PKG;
+    const base = baseOf(where.where);
     for (const e of where.edits) {
       const n = readFileSync(join(base, where.file), "utf8").split(e.from).length - 1;
       if (n !== 1) throw new Error(`${m.name}: ${n} matches in ${where.file}`);
     }
   }
-  console.log(`${MUTATIONS.length} patterns found${PACKAGE ? " (with the switch on)" : ""}`);
+  console.log(
+    `${MUTATIONS.length} patterns found${SYNC ? " (in @session/sync)" : PACKAGE ? " (with the switch on)" : ""}`,
+  );
   process.exit(0);
 }
 const k = args.indexOf("--slots");
@@ -873,7 +1140,7 @@ const changed = since === undefined ? null : changedSince(since);
 const touched = (m: Mutation) => {
   if (!changed) return true;
   const where = target(m);
-  return changed.has(join(where.pkg ? MUTATORS_PKG : PKG, where.file));
+  return changed.has(join(baseOf(where.where), where.file));
 };
 const todo = MUTATIONS.filter(
   (m) => (!only.length || only.some((o) => m.name.startsWith(o))) && touched(m),

@@ -54,6 +54,5 @@ export function httpFetch(
       return json(200, server.call(actor, decodeURIComponent(url.pathname.slice(9)), body));
     return json(404, { ok: false, error: { code: "NOT_FOUND", message: "no route" } });
   };
-  return ((input: string | URL | Request, init?: RequestInit) =>
-    handle(new Request(input, init))) as typeof fetch;
+  return (input: string | URL | Request, init?: RequestInit) => handle(new Request(input, init));
 }

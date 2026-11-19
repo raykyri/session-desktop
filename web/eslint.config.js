@@ -6,8 +6,8 @@ import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 /** ADR-1: client ──► shared; server ──► shared, db; db ──► shared; shared ──► nothing.
- * mutators ──► shared. replica-proto (phase 0 prototype) ──► shared, mutators,
- * and nothing imports it. */
+ * mutators ──► shared. sync ──► shared, mutators. replica-proto (phase 0
+ * prototype) ──► shared, mutators, sync, and nothing imports it. */
 const forbidden = {
   "packages/shared": [
     "@session/db",
@@ -15,13 +15,16 @@ const forbidden = {
     "@session/client",
     "@session/mutators",
     "@session/replica-proto",
+    "@session/sync",
   ],
   "packages/mutators": [
     "@session/db",
     "@session/server",
     "@session/client",
     "@session/replica-proto",
+    "@session/sync",
   ],
+  "packages/sync": ["@session/db", "@session/server", "@session/client", "@session/replica-proto"],
   "packages/db": ["@session/server", "@session/client", "@session/replica-proto"],
   "packages/server": ["@session/client", "@session/replica-proto"],
   "packages/client": ["@session/db", "@session/server", "@session/replica-proto"],

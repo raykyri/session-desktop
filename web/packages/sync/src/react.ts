@@ -7,5 +7,9 @@ import { useSyncExternalStore } from "react";
 import type { Query } from "./client/query.js";
 
 export function useQuery<T>(q: Query<T>): T {
-  return useSyncExternalStore(q.subscribe, q.get, q.get);
+  return useSyncExternalStore(
+    (l) => q.subscribe(l),
+    () => q.get(),
+    () => q.get(),
+  );
 }

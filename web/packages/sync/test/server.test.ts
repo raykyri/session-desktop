@@ -3,8 +3,8 @@
 // changes), cursor key rotation, replication tiers, the SSE stream, the
 // effect worker, the online calls, and the stores themselves.
 
-import Database from "better-sqlite3";
 import test from "ava";
+import BetterSqlite from "better-sqlite3";
 
 import {
   MAX_ENVELOPE_BYTES,
@@ -362,7 +362,7 @@ for (const kind of STORES) {
       seq: 1,
     };
     ok(t, w.server.apply(actor, e));
-    ok(t, w.server.call({ u: "mel" }, "devices.revoke", { id: device }) as Answer);
+    ok(t, w.server.call({ u: "mel" }, "devices.revoke", { id: device }));
     refused(t, w.server.apply(actor, { ...e, mutationId: w.id(), seq: 2 }), "WRONG_CLIENT");
     t.is(w.server.online.authenticate(token), null);
     t.is(w.get(`device:${device}`), undefined);
@@ -404,8 +404,8 @@ for (const kind of STORES) {
     });
     // progress does not extend the lease; the heartbeat does
     w.clock.advance(80_000);
-    ok(t, w.server.call(as, "runs.turn", { run, device, attempt: 1, turn: "step" }) as Answer);
-    ok(t, w.server.call(as, "runs.heartbeat", { run, device, attempt: 1 }) as Answer);
+    ok(t, w.server.call(as, "runs.turn", { run, device, attempt: 1, turn: "step" }));
+    ok(t, w.server.call(as, "runs.heartbeat", { run, device, attempt: 1 }));
     w.clock.advance(80_000);
     t.like(w.server.call(as, "runs.heartbeat", { run, device, attempt: 2 }), {
       ok: false,
@@ -418,7 +418,7 @@ for (const kind of STORES) {
     t.like(w.get(`run:${run}`) ?? {}, { status: "complete", lease: null });
     // a lease that ends: interrupted
     const r2 = ask("Q2");
-    ok(t, w.server.call(as, "runs.claim", { run: r2, device }) as Answer);
+    ok(t, w.server.call(as, "runs.claim", { run: r2, device }));
     w.clock.advance(91_000);
     w.server.housekeepAll();
     t.like(w.get(`run:${r2}`) ?? {}, { status: "failed", end: "interrupted" });
@@ -428,7 +428,7 @@ for (const kind of STORES) {
     });
     // an answer over 200 KB: too_large, not saved
     const r3 = ask("Q3");
-    ok(t, w.server.call(as, "runs.claim", { run: r3, device }) as Answer);
+    ok(t, w.server.call(as, "runs.claim", { run: r3, device }));
     t.like(
       w.server.call(as, "runs.finish", {
         run: r3,
@@ -483,7 +483,7 @@ for (const kind of STORES) {
 }
 
 test("sqlite: the migrations apply once, and the schema is the package's", (t) => {
-  const db = new Database(":memory:");
+  const db = new BetterSqlite(":memory:");
   t.deepEqual(migrate(db), ["0001_sync.sql"]);
   t.deepEqual(migrate(db), []);
   const store = new SqliteServerStore(db);

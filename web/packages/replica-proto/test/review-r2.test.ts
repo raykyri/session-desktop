@@ -546,6 +546,17 @@ test("Q2: every exception in apply is answered; a deep input is BAD_REQUEST and 
     }),
     "TOO_LARGE",
   );
+  // larger than 256 KB only as UTF-8 JSON: 140,000 characters of 2 bytes
+  await refused(
+    t,
+    w.as("eve", "threads.create", {
+      id: w.id(),
+      space: open,
+      kind: "post",
+      q: "é".repeat(140_000),
+    }),
+    "TOO_LARGE",
+  );
   // unrecorded: the seq was not used
   t.is(await w.nextSeq("eve", e.clientId), e.seq);
   // 32 deep is parsed: refused by the schema, recorded

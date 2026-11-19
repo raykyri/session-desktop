@@ -1,9 +1,9 @@
 // Test helpers: a server over either store with a manual clock, envelopes,
 // and a small cast of people and spaces.
 
-import Database from "better-sqlite3";
 import { ulid, type StoredRecord } from "@session/mutators";
 import type { ExecutionContext } from "ava";
+import BetterSqlite from "better-sqlite3";
 
 import {
   MemoryServerStore,
@@ -47,7 +47,7 @@ export type StoreKind = "memory" | "sqlite";
 export const STORES: StoreKind[] = ["memory", "sqlite"];
 
 export const makeStore = (kind: StoreKind): ServerStore =>
-  kind === "memory" ? new MemoryServerStore() : new SqliteServerStore(new Database(":memory:"));
+  kind === "memory" ? new MemoryServerStore() : new SqliteServerStore(new BetterSqlite(":memory:"));
 
 export class World {
   readonly clock = new ManualClock();

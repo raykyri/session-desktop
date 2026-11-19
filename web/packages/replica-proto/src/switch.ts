@@ -202,7 +202,7 @@ export const registryKey = (r: rec.Draft | StoredRecord) =>
 /** The keys whose view a record's change changes besides its own (a hide
  * record's item), with the switch on; none for the prototype's records. */
 export const viewDependents = (r: rec.Draft | StoredRecord): string[] =>
-  USE_PACKAGE ? pkg.viewDependents(r as unknown as pkg.Draft) : [];
+  USE_PACKAGE ? pkg.viewDependents(r) : [];
 
 /** Whether a tombstone of this kind is in a space's log: the records of
  * the kinds the person's user log holds alone (likes, saves, notifications)

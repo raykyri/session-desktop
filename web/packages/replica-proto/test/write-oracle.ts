@@ -119,7 +119,7 @@ function sizeOf(v: unknown): number {
     while (todo.length) {
       const x = todo.pop();
       n += typeof x === "string" ? x.length + 2 : 1;
-      if (x !== null && typeof x === "object") todo.push(...Object.values(x));
+      if (x !== null && typeof x === "object") todo.push(...(Object.values(x) as unknown[]));
     }
     return n;
   }

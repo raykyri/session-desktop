@@ -17,7 +17,7 @@ import * as pkg from "@session/mutators";
 import { spaces } from "@session/shared";
 import { z } from "zod";
 
-import { HOUR, MINUTE, type Actor, type CallAnswer, type SseEvent } from "../protocol.js";
+import { HOUR, MINUTE, type Actor, type CallAnswer } from "../protocol.js";
 
 import type { SyncServer } from "./server.js";
 import type { StoreTx } from "./store.js";
@@ -350,5 +350,3 @@ class Refused extends Error {
     super(refusal.message);
   }
 }
-
-export type { SseEvent };

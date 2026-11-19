@@ -24,7 +24,8 @@ import {
 import { useQuery } from "../src/react.js";
 import { openStream } from "../src/server/index.js";
 
-import { DAY, MINUTE, World, cast, ok, rng } from "./helpers.js";
+import type { World } from "./helpers.js";
+import { DAY, MINUTE, cast, ok, rng } from "./helpers.js";
 import { httpFetch } from "./http.js";
 
 /** A client of `u` on `w`'s server, in process, with the server's clock. */
@@ -54,6 +55,9 @@ function client(
 /** A transport that answers the next `n` pushes with `code` (or none). */
 class Forced implements Transport {
   queue: (Answer | null | "pass")[] = [];
+  private next(): Answer | null | "pass" {
+    return this.queue.length ? (this.queue.shift() as Answer | null | "pass") : "pass";
+  }
   pushes: Envelope[] = [];
   constructor(private readonly inner: Transport) {}
   register = () => this.inner.register();
@@ -65,7 +69,7 @@ class Forced implements Transport {
     const out: (Answer | null)[] = [];
     for (const e of es) {
       this.pushes.push(e);
-      const f = this.queue.length ? this.queue.shift() : "pass";
+      const f = this.next();
       if (f === "pass") out.push(...(await this.inner.push([e])));
       else out.push(f);
       if (out.at(-1) === null) break;

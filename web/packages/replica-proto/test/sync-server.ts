@@ -18,8 +18,7 @@
 // - Reads: the prototype's tiers are `full` (its default) and `summary`.
 // - Storage: the production tables, named as `StorageScan` names them.
 
-import Database from "better-sqlite3";
-import * as pkg from "@session/mutators";
+import type * as pkg from "@session/mutators";
 import {
   MemoryServerStore,
   SqliteServerStore,
@@ -28,6 +27,7 @@ import {
   type Answer,
   type ServerStore,
 } from "@session/sync/server";
+import BetterSqlite from "better-sqlite3";
 
 import type {
   Actor,
@@ -87,7 +87,7 @@ const readOptions = (o: ReadOptions = {}) => ({
 export function syncFactory(kind: "memory" | "sqlite"): ServerFactory {
   return (o: ServerOptions): TestServer => {
     const store: ServerStore =
-      kind === "memory" ? new MemoryServerStore() : new SqliteServerStore(new Database(":memory:"));
+      kind === "memory" ? new MemoryServerStore() : new SqliteServerStore(new BetterSqlite(":memory:"));
     const jobs: { kind: string; id: string }[] = [];
     const server = new SyncServer({
       store,
