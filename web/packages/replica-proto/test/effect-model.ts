@@ -138,6 +138,16 @@ export function predictEffects(
       // a role change keeps the admission; a new member gets a new one
       const adm = old?.kind === "member" ? old.adm : newAdmission(dump, sp, u, had);
       keys.set(`member:${sp}:${u}`, role === null ? null : { sp, u, role, adm });
+      // with the switch on, the person's user log records how a membership
+      // ended (review round 1 of phase 1): left, or removed (a removal or a
+      // ban); joining again takes it away
+      if (USE_PACKAGE && role === null && old)
+        keys.set(`exit:${sp}:${u}`, {
+          sp,
+          u,
+          ended: name === "spaces.leave" ? "left" : "removed",
+        });
+      if (USE_PACKAGE && role !== null && !old) keys.set(`exit:${sp}:${u}`, null);
     }
     keys.set(`space:${sp}`, spaceFields(membersAfter(dump, sp, change)));
   };

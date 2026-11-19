@@ -51,7 +51,10 @@ test("S1: a read shows no version, and its token's length depends only on the lo
   // the token: a random IV, the sealed fixed-size head and [log, reader], a tag
   const log = `space:${open}`;
   const sealed = (cursor: string) => Buffer.from(cursor, "base64url");
-  t.is(sealed(b.cursor).length, 12 + 29 + JSON.stringify([log, null]).length + 16);
+  // the head: 29 bytes; `@session/sync`'s adds the database instance id
+  // (8 bytes, review round 1 of phase 1, E22)
+  const head = process.env["REPLICA_PROTO_SERVER"] === undefined ? 29 : 37;
+  t.is(sealed(b.cursor).length, 12 + head + JSON.stringify([log, null]).length + 16);
   t.false(sealed(b.cursor).includes(Buffer.from(log)));
   // eve's own writes, sampled between others' commits, show nothing either
   const mine = w.id();
@@ -574,7 +577,7 @@ test("Q2: every exception in apply is answered; a deep input is BAD_REQUEST and 
       "moderation.decide",
       { item: `f:${w.id()}:__proto__`, decision: "hidden", base: { rev: 0 } },
     ],
-    ["olga", "invites.create", { id: w.id(), space: open, days: 0 }],
+    ["olga", "invites.create", { id: w.id(), space: open, days: null }],
     ["olga", "spaces.update", { id: open, set: { name: "#" } }],
   ];
   const got: string[] = [];

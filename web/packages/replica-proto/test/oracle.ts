@@ -23,7 +23,7 @@ type Dump = ReadonlyMap<string, StoredRecord>;
 /** The prototype's kinds, and `hide`: with the switch on, `@session/mutators`
  * keeps a hidden item's state in a hide record keyed by the item (phase 1b,
  * Part 0 item 3), read with the space's content. */
-type Kind = StoredRecord["kind"] | "hide";
+type Kind = StoredRecord["kind"] | "hide" | "exit";
 type Place = "anon" | "outsider" | "member" | "staff";
 type Cell = "all" | "own" | "none";
 type Row = Record<Place, Cell>;
@@ -65,7 +65,12 @@ export const READ: Record<Kind, { open: Row; closed: Row }> = {
   // you moderate; bans, the spaces you moderate; invite links, the spaces you
   // moderate and the links you made while you are a member
   request: { open: OWN_OR_STAFF, closed: OWN_OR_STAFF },
-  report: { open: OWN_OR_STAFF, closed: OWN_OR_STAFF },
+  // a report follows its person's access, as a like does: in a closed space
+  // their own only while they are a member (review round 1 of phase 1, W6)
+  report: {
+    open: OWN_OR_STAFF,
+    closed: USE_PACKAGE ? row("none", "none", "own", "all") : OWN_OR_STAFF,
+  },
   ban: { open: STAFF, closed: STAFF },
   invite: { open: row("none", "none", "own", "all"), closed: row("none", "none", "own", "all") },
   // the mock's /api/me collections: the person's own, and in a closed space
@@ -76,6 +81,9 @@ export const READ: Record<Kind, { open: Row; closed: Row }> = {
   // a report's notification: like the report, for the space's staff; the
   // person's own while they are staff of the space (review round 2, decision 4)
   notif: { open: OWN_STAFF, closed: OWN_STAFF },
+  // with the switch on: how a membership ended, the person's only, whatever
+  // their access (review round 1 of phase 1)
+  exit: { open: OWN, closed: OWN },
 };
 
 /** The person a record belongs to, for `own` cells and for user logs. */
@@ -88,6 +96,7 @@ const OWNER: Record<Kind, ((r: never) => string) | null> = {
   reply: null,
   run: null,
   hide: null,
+  exit: (r: { u: string }) => r.u,
   ban: null,
   member: (r: { u: string }) => r.u,
   request: (r: { u: string }) => r.u,
@@ -108,6 +117,7 @@ const SPACE: Record<Kind, ((r: never) => string) | null> = {
   reply: (r: { s: string }) => r.s,
   run: (r: { s: string }) => r.s,
   hide: (r: { s: string }) => r.s,
+  exit: null,
   member: (r: { sp: string }) => r.sp,
   request: (r: { sp: string }) => r.sp,
   report: (r: { sp: string }) => r.sp,
@@ -141,6 +151,7 @@ const IN_USER_LOG: ReadonlySet<Kind> = new Set<Kind>([
   "like",
   "save",
   "notif",
+  "exit",
 ]);
 
 /** The text of a moderated item, by state, for its author, the space's
@@ -189,6 +200,7 @@ const ruleSpace = (dump: Dump, r: StoredRecord): string | null => {
     return p?.kind === "thread" ? p.s : null;
   }
   if (r.kind === "notif") return r.sp;
+  if ((r.kind as Kind) === "exit") return (r as unknown as { sp: string }).sp;
   return spaceOfRec(r);
 };
 
