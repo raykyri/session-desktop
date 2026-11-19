@@ -8,7 +8,26 @@
 export * from "./access.js";
 export * from "./client.js";
 export * from "./contract.js";
-export * from "./mutators.js";
+export {
+  INVITE_MAX_DAYS,
+  MESSAGES,
+  RESERVED_HANDLES,
+  Refusal,
+  authorize,
+  handleS,
+  isHandle,
+  mutatorNames,
+  refuse,
+  slug,
+  type AnyMutator,
+  type Effect,
+  type MutatorDef,
+  type NotifDraft,
+  type PreCtx,
+  type ServerValues,
+  type Tx,
+  type Who,
+} from "./mutators.js";
 export * from "./records.js";
 export * from "./server.js";
 export * from "./ulid.js";

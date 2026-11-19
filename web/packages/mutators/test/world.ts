@@ -86,7 +86,12 @@ export class World {
   }
 
   /** Apply one write as `u` and commit it when it applies. */
-  run(u: string | null, name: string, input: unknown, mutationId = ulid(this.now, this.random)): Outcome {
+  run(
+    u: string | null,
+    name: string,
+    input: unknown,
+    mutationId = ulid(this.now, this.random),
+  ): Outcome {
     const envelope = { mutationId, name, input, clientTime: this.now };
     const before = this.record ? this.store.clone() : this.store;
     const out = apply(this.registry, this.store, u === null ? null : { u }, envelope, {
@@ -169,7 +174,10 @@ export function cast(t: ExecutionContext, seed = 1, record = false): Cast {
       invite: "members",
     }),
   );
-  ok(t, w.run("olga", "spaces.create", { id: vault, name: "vault", vis: "unlisted", policy: "invite" }));
+  ok(
+    t,
+    w.run("olga", "spaces.create", { id: vault, name: "vault", vis: "unlisted", policy: "invite" }),
+  );
   for (const u of ["mona", "mel", "otto"]) ok(t, w.run(u, "spaces.join", { space: open }));
   ok(
     t,

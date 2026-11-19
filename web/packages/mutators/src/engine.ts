@@ -305,7 +305,8 @@ class StagedTx implements Tx {
     }
     const r = this.source.get(kind, id);
     if (r === UNKNOWN) throw new UnknownRead(key);
-    if (r !== undefined && r.kind !== kind) throw new Error(`the source answered ${key} with a ${r.kind}`);
+    if (r !== undefined && r.kind !== kind)
+      throw new Error(`the source answered ${key} with a ${r.kind}`);
     return r as RecordOf<K> | undefined;
   }
 
@@ -318,7 +319,7 @@ class StagedTx implements Tx {
       if (!this.staged.has(key) && inIndex(r, index, value)) out.set(key, r);
     }
     for (const [key, w] of this.staged)
-      if (w && inIndex(w, index, value)) out.set(key, { ...w, rev: 0 } as StoredRecord);
+      if (w && inIndex(w, index, value)) out.set(key, { ...w, rev: 0 });
     return [...out.entries()]
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .map(([, r]) => r as RecordOf<IndexKind<N>>);
@@ -356,8 +357,11 @@ class StagedTx implements Tx {
     return u;
   }
 
+  /** Stage a record without the `rev` a mutator may have spread into it
+   * from the record it read: the store sets revs. */
   private write(r: Draft) {
-    const { rev: _rev, ...draft } = r as Draft & { rev?: number };
+    const draft: Record<string, unknown> = { ...r };
+    delete draft["rev"];
     this.staged.set(keyOf(r), draft as Draft);
   }
 }

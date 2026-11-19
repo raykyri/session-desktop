@@ -167,8 +167,7 @@ export const threadMutators = [
       const p = tx.get("thread", i.id) as ThreadRec;
       return { id: i.id, run: startRun(tx, p, 1, i.pay ?? null, i.model ?? null) };
     },
-    effects: (_i, result) =>
-      result.run ? [{ type: "job", kind: "run", id: result.run }] : [],
+    effects: (_i, result) => (result.run ? [{ type: "job", kind: "run", id: result.run }] : []),
   }),
 
   defineMutator({
@@ -342,7 +341,11 @@ export const threadMutators = [
         id: z.string().regex(/^[0-7][0-9A-HJKMNP-TV-Z]{25}:(r|[0-7][0-9A-HJKMNP-TV-Z]{25})$/),
         on: z.boolean(),
       }),
-      z.strictObject({ kind: z.literal("source"), id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), on: z.boolean() }),
+      z.strictObject({
+        kind: z.literal("source"),
+        id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+        on: z.boolean(),
+      }),
     ]),
     can: (tx, i) => {
       if (i.kind === "source") {

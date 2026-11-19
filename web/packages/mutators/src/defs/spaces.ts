@@ -41,7 +41,9 @@ const SETTINGS = [
 ] as const;
 
 const settingsS = spaces.spaceSettingsSchema
-  .pick(Object.fromEntries(SETTINGS.map((k) => [k, true])) as Record<(typeof SETTINGS)[number], true>)
+  .pick(
+    Object.fromEntries(SETTINGS.map((k) => [k, true])) as Record<(typeof SETTINGS)[number], true>,
+  )
   .strict();
 
 /** What `unset` puts back: the value a new space has. */
@@ -61,9 +63,21 @@ const UNSET: Partial<Record<(typeof SETTINGS)[number], unknown>> = {
   pageEdit: null,
 };
 
-const unsetS = z.enum(
-  Object.keys(UNSET) as [keyof typeof UNSET & string, ...(keyof typeof UNSET & string)[]],
-);
+const unsetS = z.enum([
+  "av",
+  "img",
+  "desc",
+  "rules",
+  "vis",
+  "policy",
+  "qs",
+  "invite",
+  "faq",
+  "topics",
+  "postsOff",
+  "plain",
+  "pageEdit",
+]);
 
 /** Space names are unique across all spaces, unlisted ones included (kept as
  * decided in review round 1, R10): the CONFLICT on create tells anyone that
@@ -194,7 +208,11 @@ export const spaceMutators = [
 
   defineMutator({
     name: "spaces.join",
-    input: z.strictObject({ space: ulidS, invite: z.string().optional(), notification: ulidS.optional() }),
+    input: z.strictObject({
+      space: ulidS,
+      invite: z.string().optional(),
+      notification: ulidS.optional(),
+    }),
     can: (tx, i) => {
       const scope = inSpace(tx, i.space, "user");
       const s = needSpace(tx, i.space);
@@ -282,7 +300,10 @@ export const spaceMutators = [
       if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain))
         throw bad("domain", "a domain such as example.com");
       const s = needSpace(tx, i.id);
-      tx.put({ ...s, dom: { domain, method: i.method ?? "dns", state: "checking", verifiedAt: null } });
+      tx.put({
+        ...s,
+        dom: { domain, method: i.method ?? "dns", state: "checking", verifiedAt: null },
+      });
       return null;
     },
     effects: (i) => [{ type: "job", kind: "domain", id: i.id }],

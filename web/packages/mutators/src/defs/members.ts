@@ -15,14 +15,7 @@ import { z } from "zod";
 import { RANK, bannedFrom, isClosed, isModOf, rankIn, roleIn } from "../access.js";
 import { defineMutator, inSpace, personal } from "../engine.js";
 import { notFound, refuse, stale } from "../errors.js";
-import {
-  actsOn,
-  addMember,
-  mayInvite,
-  needSpace,
-  readable,
-  refreshSpace,
-} from "../rules.js";
+import { actsOn, addMember, mayInvite, needSpace, readable, refreshSpace } from "../rules.js";
 import { baseS, count, handleS, ulidS } from "../schemas.js";
 import { DAY, isoAt } from "../time.js";
 

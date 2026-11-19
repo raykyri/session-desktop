@@ -159,8 +159,7 @@ export function erase(tx: Tx, r: Item): void {
       tx.put({ ...r, q: "", a: null, mod: "removed" });
       return;
     case "reply":
-      if (r.parent === null)
-        for (const x of tx.scan("reply.parent", r.id)) tx.del("reply", x.id);
+      if (r.parent === null) for (const x of tx.scan("reply.parent", r.id)) tx.del("reply", x.id);
       tx.put({ ...r, t: "", mod: "removed" });
       return;
   }

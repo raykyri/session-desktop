@@ -17,7 +17,13 @@ import * as pkg from "@session/mutators";
 
 import * as own from "./access.js";
 import type { ApplyResult } from "./contract.js";
-import { MUTATORS as OWN_MUTATORS, Refusal, refuse, type AnyMutator, type Effect } from "./mutators.js";
+import {
+  MUTATORS as OWN_MUTATORS,
+  Refusal,
+  refuse,
+  type AnyMutator,
+  type Effect,
+} from "./mutators.js";
 import * as rec from "./records.js";
 import type { StoredRecord } from "./records.js";
 
@@ -35,7 +41,7 @@ const byKind = (g: KeyReader): pkg.Reader => ({
 });
 
 const asPkg = (r: StoredRecord) => r as unknown as pkg.StoredRecord;
-const asOwn = (r: pkg.StoredRecord) => r as unknown as StoredRecord;
+const asOwn = (r: unknown) => r as StoredRecord;
 
 /** A package mutator in the prototype's shape. */
 function adapt(m: pkg.Mutator): AnyMutator {
@@ -123,10 +129,11 @@ export function applyPackage(
       kind: "refused",
       refusal: new Refusal(out.error.code, out.error.message, out.error.issues),
     };
-  if (out.status === "unknown") return { kind: "refused", refusal: refuse("INTERNAL_SERVER_ERROR") };
+  if (out.status === "unknown")
+    return { kind: "refused", refusal: refuse("INTERNAL_SERVER_ERROR") };
   const staged = new Map<string, StoredRecord | null>();
   for (const [key, draft] of out.writes)
-    staged.set(key, draft === null ? null : asOwn({ ...draft, rev: 0 } as pkg.StoredRecord));
+    staged.set(key, draft === null ? null : asOwn({ ...draft, rev: 0 }));
   return {
     kind: "ok",
     result: { ok: true, result: out.result },
@@ -143,9 +150,7 @@ export const audience = (g: KeyReader, r: StoredRecord): Audience =>
   USE_PACKAGE ? (pkg.audience(byKind(g), asPkg(r)) as unknown as Audience) : own.audience(g, r);
 
 export const readsAudience = (g: KeyReader, a: Audience, u: string | null): boolean =>
-  USE_PACKAGE
-    ? pkg.readsAudience(byKind(g), a as pkg.Audience, u)
-    : own.readsAudience(g, a, u);
+  USE_PACKAGE ? pkg.readsAudience(byKind(g), a, u) : own.readsAudience(g, a, u);
 
 export const view = (g: KeyReader, r: StoredRecord, u: string | null): StoredRecord | null => {
   if (!USE_PACKAGE) return own.view(g, r, u);

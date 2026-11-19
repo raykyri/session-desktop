@@ -53,7 +53,7 @@ export class MemoryStore implements RecordSource {
       if (prev && same(prev, next)) continue;
       const reg = registryKey(next);
       const rev = (prev?.rev ?? this.registry.get(reg) ?? 0) + 1;
-      this.records.set(key, { ...next, rev } as StoredRecord);
+      this.records.set(key, { ...next, rev });
       this.registry.set(reg, rev);
       changed.push(key);
     }

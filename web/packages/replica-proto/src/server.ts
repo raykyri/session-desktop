@@ -61,6 +61,7 @@
 
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
+import * as pkg from "@session/mutators";
 import { z } from "zod";
 
 import {
@@ -80,8 +81,6 @@ import {
   type StorageScan,
   type TestServer,
 } from "./contract.js";
-import * as pkg from "@session/mutators";
-
 import {
   Refusal,
   authorize,
@@ -826,6 +825,38 @@ export class ProtoServer implements TestServer {
     return ran;
   }
 
+  /** A report's author is told how it was resolved: their earlier notice of
+   * it is replaced (or, for a report opened again, taken back). */
+  private reportResolved(effect: Extract<AnyEffect, { type: "reportResolved" }>, now: number) {
+    const r = this.store.get(`report:${effect.report}`);
+    if (r?.kind !== "report") return;
+    const staged = new Map<string, StoredRecord | null>();
+    for (const key of this.store.keysOf("notif")) {
+      const n = this.store.get(key) as unknown as { to: string; type: string; report: string };
+      if (n.to === r.by && n.type === "report_resolved" && n.report === r.id) staged.set(key, null);
+    }
+    if (effect.outcome !== null) {
+      let id: string;
+      do id = ulid(now, this.random);
+      while (this.store.registry.has(id));
+      staged.set(`notif:${id}`, {
+        kind: "notif",
+        id,
+        to: r.by,
+        type: "report_resolved",
+        sp: r.sp,
+        report: r.id,
+        item: r.key,
+        ...NOTIF_REST,
+        outcome: effect.outcome,
+        read: false,
+        createdAt: isoAt(now),
+        rev: 0,
+      } as unknown as StoredRecord);
+    }
+    this.store.commit(staged, now);
+  }
+
   /** Run one effect. Its writes commit together, or not at all. */
   private runEffect(effect: AnyEffect, now: number) {
     if (effect.type === "job") {
@@ -857,38 +888,6 @@ export class ProtoServer implements TestServer {
         createdAt: isoAt(now),
         rev: 0,
       });
-    }
-    this.store.commit(staged, now);
-  }
-
-  /** A report's author is told how it was resolved: their earlier notice of
-   * it is replaced (or, for a report opened again, taken back). */
-  private reportResolved(effect: Extract<AnyEffect, { type: "reportResolved" }>, now: number) {
-    const r = this.store.get(`report:${effect.report}`);
-    if (r?.kind !== "report") return;
-    const staged = new Map<string, StoredRecord | null>();
-    for (const key of this.store.keysOf("notif")) {
-      const n = this.store.get(key) as unknown as { to: string; type: string; report: string };
-      if (n.to === r.by && n.type === "report_resolved" && n.report === r.id) staged.set(key, null);
-    }
-    if (effect.outcome !== null) {
-      let id: string;
-      do id = ulid(now, this.random);
-      while (this.store.registry.has(id));
-      staged.set(`notif:${id}`, {
-        kind: "notif",
-        id,
-        to: r.by,
-        type: "report_resolved",
-        sp: r.sp,
-        report: r.id,
-        item: r.key,
-        ...NOTIF_REST,
-        outcome: effect.outcome,
-        read: false,
-        createdAt: isoAt(now),
-        rev: 0,
-      } as unknown as StoredRecord);
     }
     this.store.commit(staged, now);
   }

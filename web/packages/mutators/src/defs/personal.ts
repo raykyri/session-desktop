@@ -9,12 +9,14 @@ import { defineMutator, personal, type Tx } from "../engine.js";
 import { refuse } from "../errors.js";
 import { readable, text } from "../rules.js";
 import { handleS, ulidS } from "../schemas.js";
+
 import { sourceMeta } from "./threads.js";
 
 const SOURCE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** A person's `seen` record, as it is or new. */
-const seenOf = (tx: Tx) => tx.get("seen", tx.me) ?? { kind: "seen" as const, u: tx.me, reqs: false, reps: false };
+const seenOf = (tx: Tx) =>
+  tx.get("seen", tx.me) ?? { kind: "seen" as const, u: tx.me, reqs: false, reps: false };
 
 export const personalMutators = [
   // mute or unmute a person: Home leaves out their threads

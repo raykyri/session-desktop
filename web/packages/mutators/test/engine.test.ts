@@ -48,8 +48,7 @@ test("every mutator applies at least once in the history, and is refused at leas
   const w = history(t);
   const applied = new Set<string>();
   const refusedNames = new Set<string>();
-  for (const s of w.steps)
-    (s.out.status === "ok" ? applied : refusedNames).add(s.envelope.name);
+  for (const s of w.steps) (s.out.status === "ok" ? applied : refusedNames).add(s.envelope.name);
   t.deepEqual(
     MUTATORS.names.filter((n) => !applied.has(n)),
     [],
@@ -79,8 +78,8 @@ function guarded<T>(f: () => T): T {
   const realDate = globalThis.Date;
   const realRandom = Math.random;
   const realIntl = globalThis.Intl;
-  const realLocale = String.prototype.localeCompare;
-  const realToLocale = Number.prototype.toLocaleString;
+  const realLocale = Object.getOwnPropertyDescriptor(String.prototype, "localeCompare");
+  const realToLocale = Object.getOwnPropertyDescriptor(Number.prototype, "toLocaleString");
   const crypto = globalThis.crypto as { getRandomValues: unknown } | undefined;
   const realGetRandom = crypto?.getRandomValues;
   const no = (what: string) => () => {
@@ -90,7 +89,9 @@ function guarded<T>(f: () => T): T {
     construct: no("new Date"),
     apply: no("Date()"),
     get: (target, p) =>
-      p === "now" || p === "parse" || p === "UTC" ? no(`Date.${String(p)}`) : Reflect.get(target, p),
+      p === "now" || p === "parse" || p === "UTC"
+        ? no(`Date.${String(p)}`)
+        : (Reflect.get(target, p) as unknown),
   });
   globalThis.Date = FakeDate;
   Math.random = no("Math.random");
@@ -98,8 +99,14 @@ function guarded<T>(f: () => T): T {
     value: new Proxy({}, { get: no("Intl") }),
     configurable: true,
   });
-  String.prototype.localeCompare = no("localeCompare") as unknown as typeof realLocale;
-  Number.prototype.toLocaleString = no("toLocaleString") as unknown as typeof realToLocale;
+  Object.defineProperty(String.prototype, "localeCompare", {
+    value: no("localeCompare"),
+    configurable: true,
+  });
+  Object.defineProperty(Number.prototype, "toLocaleString", {
+    value: no("toLocaleString"),
+    configurable: true,
+  });
   if (crypto) crypto.getRandomValues = no("crypto.getRandomValues");
   try {
     return f();
@@ -107,8 +114,8 @@ function guarded<T>(f: () => T): T {
     globalThis.Date = realDate;
     Math.random = realRandom;
     Object.defineProperty(globalThis, "Intl", { value: realIntl, configurable: true });
-    String.prototype.localeCompare = realLocale;
-    Number.prototype.toLocaleString = realToLocale;
+    if (realLocale) Object.defineProperty(String.prototype, "localeCompare", realLocale);
+    if (realToLocale) Object.defineProperty(Number.prototype, "toLocaleString", realToLocale);
     if (crypto) crypto.getRandomValues = realGetRandom;
   }
 }
@@ -216,7 +223,7 @@ test("a write's keys are well formed and its records are of the kind their key n
     for (const [key, r] of s.out.writes) {
       const k = splitKey(key);
       t.truthy(k, key);
-      if (r) t.is(r.kind as string, k?.[0] ?? "", key);
+      if (r) t.is<string, string>(r.kind, k?.[0] ?? "", key);
       if (r) t.false("rev" in r, key);
     }
   }

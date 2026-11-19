@@ -40,15 +40,40 @@ export function history(t: ExecutionContext, seed = 1): World {
   const notice = w.id();
   const rest = { report: null, item: null, outcome: null, response: null, actor: "olga" };
   const at = { thread: null, node: null, read: false, createdAt: "2026-11-15T00:00:00Z", rev: 1 };
-  w.store.records.set(`notif:${invite}`, { kind: "notif", id: invite, to: "eve", type: "invite", sp: vault, ...rest, ...at });
-  w.store.records.set(`notif:${notice}`, { kind: "notif", id: notice, to: "mona", type: "report", sp: open, ...rest, ...at });
+  w.store.records.set(`notif:${invite}`, {
+    kind: "notif",
+    id: invite,
+    to: "eve",
+    type: "invite",
+    sp: vault,
+    ...rest,
+    ...at,
+  });
+  w.store.records.set(`notif:${notice}`, {
+    kind: "notif",
+    id: notice,
+    to: "mona",
+    type: "report",
+    sp: open,
+    ...rest,
+    ...at,
+  });
   w.store.registry.set(invite, 1);
   w.store.registry.set(notice, 1);
 
   // spaces
   run("olga", "spaces.update", {
     id: open,
-    set: { desc: "Talk", faq: true, topics: [["t1", "One"], ["t2", "Two"]], av: 4, plain: true },
+    set: {
+      desc: "Talk",
+      faq: true,
+      topics: [
+        ["t1", "One"],
+        ["t2", "Two"],
+      ],
+      av: 4,
+      plain: true,
+    },
   });
   run("olga", "spaces.update", { id: open, set: { rules: ["Be kind"] }, base: { rulesRev: 0 } });
   run("olga", "spaces.update", { id: open, set: { rules: ["x"] }, base: { rulesRev: 0 } });
@@ -119,7 +144,11 @@ export function history(t: ExecutionContext, seed = 1): World {
     from: { th: ask, node: f1 },
     branch: "all",
   });
-  run("mel", "threads.update", { id: ask, q: "Why, again?", base: { rev: w.rev(`thread:${ask}`) } });
+  run("mel", "threads.update", {
+    id: ask,
+    q: "Why, again?",
+    base: { rev: w.rev(`thread:${ask}`) },
+  });
   run("mel", "threads.update", { id: ask, q: "stale", base: { rev: 1 } });
   run("mel", "threads.update", {
     id: ask,
@@ -185,7 +214,12 @@ export function history(t: ExecutionContext, seed = 1): World {
   });
   run("eve", "joinRequests.withdraw", { space: closed });
   run("otto", "joinRequests.create", { space: closed, rulesAccepted: true });
-  run("mona", "joinRequests.decide", { space: closed, users: ["otto"], decision: "approve", base: { otto: 0 } });
+  run("mona", "joinRequests.decide", {
+    space: closed,
+    users: ["otto"],
+    decision: "approve",
+    base: { otto: 0 },
+  });
   admit(t, w, closed, "otto");
   run("mona", "members.setRole", { space: closed, user: "otto", role: "mod", base: { rev: 1 } });
   run("ada", "members.setRole", {
@@ -229,9 +263,17 @@ export function history(t: ExecutionContext, seed = 1): World {
   run("mel", "reports.create", { id: w.id(), item: `a:${ask}`, why: "Spam" });
   run("eve", "reports.create", { id: w.id(), item: `a:${closedAsk}`, why: "x" });
   run("mona", "reports.resolve", { report: rep, outcome: "hidden" });
-  run("mel", "threads.update", { id: ask, q: "Edited while hidden", base: { rev: w.rev(`thread:${ask}`) } });
+  run("mel", "threads.update", {
+    id: ask,
+    q: "Edited while hidden",
+    base: { rev: w.rev(`thread:${ask}`) },
+  });
   run("mona", "reports.resolve", { report: rep, outcome: "open", base: { rev: 1 } });
-  run("mona", "reports.resolve", { report: rep, outcome: "open", base: { rev: w.rev(`thread:${ask}`) } });
+  run("mona", "reports.resolve", {
+    report: rep,
+    outcome: "open",
+    base: { rev: w.rev(`thread:${ask}`) },
+  });
   run("mona", "reports.resolve", { report: rep, outcome: "dismissed" });
   run("mona", "moderation.decide", { item: `a:${ask}`, decision: "hidden" });
   run("mona", "moderation.decide", { item: `a:${ask}`, decision: "shown", base: { rev: 1 } });
@@ -253,15 +295,39 @@ export function history(t: ExecutionContext, seed = 1): World {
   run("mona", "skills.create", { space: open, name: "Cite", prompt: "Cite sources." });
   run("mona", "skills.create", { space: open, name: "Cite", prompt: "again" });
   run("mona", "skills.create", { space: open, name: "Short", prompt: "Be short." });
-  run("mona", "skills.update", { space: open, index: 0, name: "Cite", prompt: "Cite.", base: { rev: 0 } });
-  run("mona", "skills.update", { space: open, index: 0, name: "Cite", prompt: "x", base: { rev: 0 } });
+  run("mona", "skills.update", {
+    space: open,
+    index: 0,
+    name: "Cite",
+    prompt: "Cite.",
+    base: { rev: 0 },
+  });
+  run("mona", "skills.update", {
+    space: open,
+    index: 0,
+    name: "Cite",
+    prompt: "x",
+    base: { rev: 0 },
+  });
   run("mona", "skills.reorder", { space: open, from: 0, to: 1 });
   run("mona", "skills.remove", { space: open, index: 1 });
   run("mel", "skills.create", { space: open, name: "No", prompt: "no" });
   run("mona", "pages.update", { space: open, page: null, title: "Guide", text: ["One"] });
   run("mona", "pages.update", { space: open, title: "FAQ", text: [] });
-  run("mona", "pages.update", { space: open, page: 0, title: "Guide 2", text: ["Two"], base: { rev: 1 } });
-  run("mona", "pages.update", { space: open, page: 0, title: "Guide 3", text: ["x"], base: { rev: 1 } });
+  run("mona", "pages.update", {
+    space: open,
+    page: 0,
+    title: "Guide 2",
+    text: ["Two"],
+    base: { rev: 1 },
+  });
+  run("mona", "pages.update", {
+    space: open,
+    page: 0,
+    title: "Guide 3",
+    text: ["x"],
+    base: { rev: 1 },
+  });
   run("mel", "pages.update", { space: open, page: 0, title: "Guide", text: ["no"] });
   run("olga", "spaces.update", { id: open, set: { pageEdit: "members" } });
   run("mel", "pages.restore", { space: open, page: 0, rev: 1, note: "Back", base: { rev: 2 } });
@@ -269,7 +335,11 @@ export function history(t: ExecutionContext, seed = 1): World {
   run("mona", "pages.remove", { space: open, page: 1 });
 
   // sources
-  run("mel", "spaceSources.add", { space: open, url: "https://www.example.org/a?x=1", note: "known" });
+  run("mel", "spaceSources.add", {
+    space: open,
+    url: "https://www.example.org/a?x=1",
+    note: "known",
+  });
   run("mel", "spaceSources.add", { space: open, url: "https://arxiv.org/abs/2401.0001" });
   run("mel", "spaceSources.add", { space: open, file: "notes.pdf" });
   run("mona", "spaceSources.setPolicy", { space: closed, policy: "review" });

@@ -739,7 +739,11 @@ const REPLACED = new Set(["src/mutators.ts", "src/access.ts"]);
 const idOfMutation = (m: Mutation) => m.name.split(" ")[0] ?? m.name;
 
 /** Where `--package` makes a mutation: in the package, or where it is. */
-function target(m: Mutation): { pkg: boolean; file: string; edits: { from: string; to: string }[] } {
+function target(m: Mutation): {
+  pkg: boolean;
+  file: string;
+  edits: { from: string; to: string }[];
+} {
   const p = IN_PACKAGE[idOfMutation(m)];
   if (PACKAGE && p) return { pkg: true, file: p.file, edits: [{ from: p.from, to: p.to }] };
   if (PACKAGE && REPLACED.has(m.file))

@@ -15,6 +15,7 @@ import { bad, refuse } from "../errors.js";
 import type { PageRec, SkillsRec, SourceMeta } from "../records.js";
 import { needSpace, text, writable } from "../rules.js";
 import { count, ulidS } from "../schemas.js";
+
 import { sourceMeta } from "./threads.js";
 
 const changed = (base: number | undefined, current: number, force: boolean | undefined) =>
@@ -47,7 +48,10 @@ function pagesOf(tx: Tx, sp: string): [string, string][] {
 function pageAt(tx: Tx, sp: string, index: number): [string, string] {
   const pg = pagesOf(tx, sp)[index];
   if (!pg)
-    throw refuse("NOT_FOUND", "The server has no record of this page. Someone may have deleted it.");
+    throw refuse(
+      "NOT_FOUND",
+      "The server has no record of this page. Someone may have deleted it.",
+    );
   return pg;
 }
 
