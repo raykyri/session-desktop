@@ -13,7 +13,8 @@
     }
   },
   "scripts": {
-    "test": "ava"
+    "test": "ava",
+    "mutate": "tsx test/mutations/mutate.ts"
   },
   "dependencies": {
     "@session/shared": "*",

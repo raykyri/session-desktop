@@ -228,13 +228,14 @@ const GENERATORS: Record<string, (c: Ctx, u: Who) => Record<string, unknown>> = 
       ...(top ? { parent: top.id } : {}),
     };
   },
-  "joinRequests.create": (c, u) => {
+  "joinRequests.create": (c) => {
     const closed = records(c, "space").filter((x) => x.vis !== "open");
     const space = closed.length && chance(c.r, 0.7) ? pick(c.r, closed).id : spaceId(c);
     return {
       space,
       rulesAccepted: chance(c.r, 0.8),
-      answers: [marked(c, `request:${space}:${String(u)}`, "a")],
+      // the request is the sender's, and a replay may send it as someone else
+      answers: [marked(c, `request:${space}:*`, "a")],
     };
   },
   "joinRequests.decide": (c) => {
@@ -583,10 +584,17 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
    * written to, and that record is not removed. */
   const storedNow = (m: string) => {
     const o = c.origins.get(m);
-    const rec = o && (w.get(o.key) as Record<string, unknown> | undefined);
-    return o && rec && JSON.stringify(rec[o.field] ?? null).includes(m) && rec["mod"] !== "removed"
-      ? rec
-      : null;
+    if (!o) return null;
+    // a key ending in "*": any record whose key starts with the rest
+    const recs = o.key.endsWith("*")
+      ? [...w.server.dump()].filter(([k]) => k.startsWith(o.key.slice(0, -1))).map(([, r]) => r)
+      : [w.get(o.key)];
+    for (const r of recs) {
+      const rec = r as Record<string, unknown> | undefined;
+      if (rec && JSON.stringify(rec[o.field] ?? null).includes(m) && rec["mod"] !== "removed")
+        return rec;
+    }
+    return null;
   };
   const isStaff = (sp: string, reader: string | null) => {
     const role = reader === null ? null : roleNow(c, sp, reader);
