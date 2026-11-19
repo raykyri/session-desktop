@@ -205,6 +205,13 @@ test("the handles null and undefined are reserved, and a signed-out caller has n
 });
 
 test("mutators read no clock, no random source and no Intl while the server applies them", async (t) => {
+  // Over HTTP (REPLICA_PROTO_SERVER=http, phase 2a) the server in this
+  // process is the whole app: its request handling reads the clock (session
+  // expiry, request logging) around the mutators, and the trap below cannot
+  // tell the two apart. The in-process sync modes run the same mutators in
+  // the same server half and keep this check.
+  if (process.env["REPLICA_PROTO_SERVER"] === "http")
+    return t.pass("the HTTP server reads the clock outside the mutators");
   const { w, open, closed } = await cast(t);
   const RealDate = Date;
   const realRandom = Math.random;

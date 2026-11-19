@@ -6,7 +6,7 @@
 #
 # Three stages: `deps` installs the workspace, `build` compiles the client
 # bundle and the server bundle, `runtime` contains production `node_modules`,
-# the two bundles, the migrations, the fonts the artifact origin serves,
+# the two bundles, the migrations (the database's and `@session/sync`'s),
 # `tini`, and Litestream. No agent CLIs, no browsers, no per-user OS accounts.
 
 ARG NODE_IMAGE=node:22-bookworm-slim
@@ -24,8 +24,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/client/package.json packages/client/package.json
 COPY packages/db/package.json packages/db/package.json
+COPY packages/mutators/package.json packages/mutators/package.json
+COPY packages/replica-proto/package.json packages/replica-proto/package.json
 COPY packages/server/package.json packages/server/package.json
 COPY packages/shared/package.json packages/shared/package.json
+COPY packages/sync/package.json packages/sync/package.json
 
 # `better-sqlite3` ships prebuilt binaries for linux/amd64 and linux/arm64, so
 # the common case needs no toolchain. The fallback installs one and retries
@@ -48,8 +51,9 @@ COPY . .
 # typechecks the test files; types are CI's `check` job (`12` §4), and an image
 # that cannot be built because a test file is mid-edit is not a useful gate.
 #
-# The server bundle inlines `@session/db` and `@session/shared` (they publish
-# TypeScript sources) and leaves every npm package external, so
+# The server bundle inlines `@session/db`, `@session/shared`,
+# `@session/mutators` and `@session/sync` (they publish TypeScript sources)
+# and leaves every npm package external, so
 # `better-sqlite3`, `unpdf`, and `linkedom` are resolved from
 # `node_modules` at runtime rather than bundled.
 RUN npm run build --workspace @session/client --workspace @session/server
@@ -102,12 +106,16 @@ COPY --from=prod-deps /app/package.json ./package.json
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/packages/client/package.json ./packages/client/package.json
 COPY --from=build /app/packages/db/package.json ./packages/db/package.json
+COPY --from=build /app/packages/mutators/package.json ./packages/mutators/package.json
 COPY --from=build /app/packages/server/package.json ./packages/server/package.json
 COPY --from=build /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=build /app/packages/sync/package.json ./packages/sync/package.json
 COPY --from=build /app/packages/client/dist/app ./packages/client/dist/app
 COPY --from=build /app/packages/server/dist/server.mjs ./packages/server/dist/server.mjs
-# Resolved as `../../db/migrations` from the server bundle (`main.ts`).
+# Resolved as `../../db/migrations` and `../../sync/migrations` from the
+# server bundle (`main.ts`).
 COPY --from=build /app/packages/db/migrations ./packages/db/migrations
+COPY --from=build /app/packages/sync/migrations ./packages/sync/migrations
 COPY --from=build /app/scripts ./scripts
 COPY --from=build /app/litestream.yml /etc/litestream.yml
 

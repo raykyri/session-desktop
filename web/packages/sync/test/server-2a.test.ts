@@ -16,7 +16,7 @@ import {
   type JobRunner,
 } from "../src/server/index.js";
 
-import { STORES, World, cast, ok } from "./helpers.js";
+import { STORES, cast, ok, type World } from "./helpers.js";
 
 const okCall = (t: { fail(m: string): void }, a: CallAnswer): unknown => {
   if (!a.ok) t.fail(`expected ok, got ${JSON.stringify(a.error)}`);
@@ -291,5 +291,56 @@ for (const kind of STORES) {
     okCall(t, w.server.call({ u: "mel" }, "apiKeys.revoke", { id: c.id }));
     t.is(w.get(`apikey:${c.id}`), undefined);
     t.false(vault.keys.has(c.id));
+  });
+
+  test(`${kind}: a stream pulls only for a commit with a row its reader may read (report-1b finding 1)`, async (t) => {
+    const { w, closed } = cast(t, kind);
+    const s = w.server.snapshot({ u: "otto" }, `space:${closed}`);
+    const ac = new AbortController();
+    const stream = openStream(
+      w.server,
+      { u: "otto" },
+      { [`space:${closed}`]: s.cursor },
+      ac.signal,
+      { setInterval: () => 0, clearInterval: () => {} },
+    );
+    const reader = stream.getReader();
+    let text = "";
+    const pump = (async () => {
+      for (;;) {
+        const r = await reader.read();
+        if (r.done) break;
+        text += new TextDecoder().decode(r.value);
+      }
+    })();
+    await new Promise((r) => setTimeout(r, 0));
+    const pulls: string[] = [];
+    const real = w.server.pull.bind(w.server);
+    w.server.pull = ((...a: Parameters<typeof real>) => {
+      pulls.push(a[1]);
+      return real(...a);
+    }) as typeof w.server.pull;
+    // a member's thread in the closed space: otto (no member) reads none of it
+    ok(t, w.as("mel", "threads.create", { id: w.id(), space: closed, kind: "post", q: "MEMBERS" }));
+    await new Promise((r) => setTimeout(r, 0));
+    t.deepEqual(pulls, [], "no pull for a commit otto reads nothing of");
+    // otto's own join request is in the space's log, and his: a pull and a poke
+    ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
+    await new Promise((r) => setTimeout(r, 0));
+    t.deepEqual(pulls, [`space:${closed}`]);
+    t.regex(text, /event: poke/);
+    // the space opening replaces the log's history: pulled whatever its rows
+    ok(
+      t,
+      w.as("olga", "spaces.update", {
+        id: closed,
+        set: { vis: "open" },
+        base: { rulesRev: 0 },
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    t.is(pulls.length, 2);
+    ac.abort();
+    await pump;
   });
 }

@@ -132,7 +132,7 @@ export class HttpClient {
         for (;;) {
           const r = await reader.read();
           if (r.done) break;
-          text += new TextDecoder().decode(r.value);
+          text += new TextDecoder().decode(r.value as Uint8Array);
         }
       } catch {
         // aborted

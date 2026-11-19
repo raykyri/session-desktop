@@ -73,8 +73,8 @@ import {
   type SseEvent,
 } from "../protocol.js";
 
-import { answerWrites, bounds } from "./limits.js";
 import { RunJobs } from "./jobs.js";
+import { answerWrites, bounds } from "./limits.js";
 import { OnlineCalls, type KeyVault, type OnlineHandlers } from "./online.js";
 import type {
   LogRow,
@@ -237,7 +237,12 @@ export class SyncServer {
   /** Logs written by the transaction in progress; listeners hear them after
    * it commits. */
   private changed = new Set<LogId>();
-  private readonly listeners = new Set<(logs: ReadonlySet<LogId>) => void>();
+  /** The keys of the rows the transaction in progress wrote, by log; null
+   * for a log whose history it replaced (every reader must pull it). */
+  private changedKeys = new Map<LogId, Set<string> | null>();
+  private readonly listeners = new Set<
+    (logs: ReadonlySet<LogId>, keys: ReadonlyMap<LogId, ReadonlySet<string> | null>) => void
+  >();
   private lastHousekeep = -Infinity;
 
   constructor(o: SyncServerOptions) {
@@ -292,6 +297,7 @@ export class SyncServer {
    * listeners hear (review round 1 of phase 1, E16). */
   run<T>(fn: (tx: StoreTx) => T): T {
     this.changed = new Set();
+    this.changedKeys = new Map();
     this.runEvents = [];
     this.revoked = [];
     this.after = [];
@@ -300,16 +306,19 @@ export class SyncServer {
       out = this.store.transaction(fn);
     } catch (e) {
       this.changed = new Set();
+      this.changedKeys = new Map();
       this.runEvents = [];
       this.revoked = [];
       this.after = [];
       throw e;
     }
     const logs = this.changed;
+    const keys = this.changedKeys;
     const events = this.runEvents;
     const revoked = this.revoked;
     const after = this.after;
     this.changed = new Set();
+    this.changedKeys = new Map();
     this.runEvents = [];
     this.revoked = [];
     this.after = [];
@@ -329,7 +338,7 @@ export class SyncServer {
     if (logs.size)
       for (const l of [...this.listeners])
         try {
-          l(logs);
+          l(logs, keys);
         } catch {
           // a stream that closed; the others still hear the commit
         }
@@ -391,8 +400,15 @@ export class SyncServer {
     return () => this.runListeners.delete(listener);
   }
 
-  /** Hear the logs each committed transaction wrote (the SSE handler). */
-  subscribe(listener: (logs: ReadonlySet<LogId>) => void): () => void {
+  /** Hear the logs each committed transaction wrote (the SSE handler), and
+   * the keys of the rows it wrote in each (null: the log's history was
+   * replaced). */
+  subscribe(
+    listener: (
+      logs: ReadonlySet<LogId>,
+      keys: ReadonlyMap<LogId, ReadonlySet<string> | null>,
+    ) => void,
+  ): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
@@ -409,6 +425,9 @@ export class SyncServer {
   private row(tx: StoreTx, log: LogId, key: string, op: "put" | "del", version: number) {
     tx.logPut(log, { key, op, version });
     this.changed.add(log);
+    const keys = this.changedKeys.get(log);
+    if (keys === undefined) this.changedKeys.set(log, new Set([key]));
+    else keys?.add(key);
   }
 
   /** Write staged records under one new version: revs, the registry, log
@@ -456,6 +475,7 @@ export class SyncServer {
         const log: LogId = `space:${rec.id}`;
         tx.setEpoch(log, { n: tx.epoch(log).n + 1, start: version });
         this.changed.add(log);
+        this.changedKeys.set(log, null);
       }
     }
     void now;
@@ -1270,6 +1290,25 @@ export class SyncServer {
     return this.run((tx) => {
       const r = tx.get(`run:${run}`);
       return r?.kind === "run" && this.online.textShown(tx, r, u);
+    });
+  }
+
+  /** Whether any of the rows `keys` of `log` reads for `actor` as `pull`
+   * would serve it: a record they may read, or a delete they may read. A
+   * stream pulls a log for its reader only when this answers true (report-1b
+   * finding 1: a commit no longer costs one pull per open stream), since a
+   * pull serves nothing else of those rows. A change of the reader's own
+   * scope writes a row they read (their member record, or its delete), and
+   * a replaced history no keys at all, so neither is skipped. */
+  affects(actor: Actor | null, log: LogId, keys: ReadonlySet<string>): boolean {
+    const u = this.userOf(actor);
+    if (actor !== null && u === null) return true;
+    return this.run((tx) => {
+      for (const key of keys) {
+        const row = tx.logGet(log, key);
+        if (row && this.readRow(tx, row, u) !== null) return true;
+      }
+      return false;
     });
   }
 

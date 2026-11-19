@@ -259,8 +259,11 @@ const NEW_IDS: Record<string, string[]> = {
   "reports.create": ["id"],
 };
 
-/** The server under test is `@session/sync`'s (REPLICA_PROTO_SERVER). */
-const SYNC_SERVER = (process.env["REPLICA_PROTO_SERVER"] ?? "").startsWith("sync");
+/** The server under test is `@session/sync`'s (REPLICA_PROTO_SERVER), in
+ * process or behind the real HTTP server (phase 2a). */
+const SYNC_SERVER = ["sync-memory", "sync-sqlite", "http"].includes(
+  process.env["REPLICA_PROTO_SERVER"] ?? "",
+);
 
 // ---- the mutators' rules ----
 

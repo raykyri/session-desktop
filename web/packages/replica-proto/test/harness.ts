@@ -21,22 +21,28 @@ import {
 import { USE_PACKAGE } from "../src/switch.js";
 
 import { modOf } from "./oracle.js";
+import { httpFactory } from "./http-server.js";
 import { syncFactory } from "./sync-server.js";
 
 /** The server under test: the prototype's, or with REPLICA_PROTO_SERVER
- * set `@session/sync`'s server half over its memory or SQLite store (with
- * the package's mutators, REPLICA_PROTO_MUTATORS=package). */
+ * set `@session/sync`'s server half over its memory or SQLite store, or the
+ * real HTTP server (`http`), always with the package's mutators
+ * (REPLICA_PROTO_MUTATORS=package). */
 const SERVER = process.env["REPLICA_PROTO_SERVER"];
 if (SERVER !== undefined && !USE_PACKAGE)
   throw new Error("REPLICA_PROTO_SERVER needs REPLICA_PROTO_MUTATORS=package");
-/** Whether the server under test is `@session/sync`'s. */
-export const SYNC_SERVER = SERVER === "sync-memory" || SERVER === "sync-sqlite";
+/** Whether the server under test is `@session/sync`'s (in process, or the
+ * real HTTP server over it: REPLICA_PROTO_SERVER=http, phase 2a). */
+export const SYNC_SERVER =
+  SERVER === "sync-memory" || SERVER === "sync-sqlite" || SERVER === "http";
 export const makeServer: ServerFactory =
   SERVER === "sync-memory"
     ? syncFactory("memory")
     : SERVER === "sync-sqlite"
       ? syncFactory("sqlite")
-      : createProtoServer;
+      : SERVER === "http"
+        ? httpFactory()
+        : createProtoServer;
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;

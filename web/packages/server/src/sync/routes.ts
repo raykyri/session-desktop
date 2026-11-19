@@ -252,7 +252,7 @@ export function syncRoutes(deps: ServerDeps): Hono<AppEnv> {
     if (!user.isAdmin) return error(c, "FORBIDDEN");
     const serverTime = sync.resetTime();
     c.get("logger").warn({ admin: user.id, serverTime }, "the sync server's time was reset");
-    return answer(c, { ok: true, serverTime } as Answerish);
+    return answer(c, { ok: true, serverTime });
   });
 
   return app;

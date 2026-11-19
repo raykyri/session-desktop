@@ -19,9 +19,11 @@
     "test:sync-sqlite": "REPLICA_PROTO_MUTATORS=package REPLICA_PROTO_SERVER=sync-sqlite ava",
     "mutate": "tsx test/mutations/mutate.ts",
     "mutate:package": "tsx test/mutations/mutate.ts --package",
-    "mutate:sync": "tsx test/mutations/mutate.ts --sync"
+    "mutate:sync": "tsx test/mutations/mutate.ts --sync",
+    "test:http": "REPLICA_PROTO_MUTATORS=package REPLICA_PROTO_SERVER=http ava"
   },
   "devDependencies": {
+    "@session/server": "*",
     "better-sqlite3": "^13.0.3"
   },
   "dependencies": {

@@ -48,6 +48,7 @@ const loginRoute = createRoute({
   validateSearch: loginSearchSchema,
   beforeLoad: async ({ context, search }) => {
     const me = await context.queryClient.ensureQueryData(meQueryOptions()).catch(() => null);
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
     if (me) throw redirect({ to: search.redirect?.startsWith("/") ? search.redirect : "/" });
   },
   component: LoginPage,
@@ -67,6 +68,7 @@ const requireSignedIn = async ({
   location: { href: string };
 }) => {
   const me = await context.queryClient.ensureQueryData(meQueryOptions()).catch(() => null);
+  // eslint-disable-next-line @typescript-eslint/only-throw-error
   if (!me) throw redirect({ to: "/login", search: { redirect: location.href } });
 };
 

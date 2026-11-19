@@ -5,7 +5,9 @@
 // (or must resync), it sends a poke naming the log, and the client pulls; a
 // log that must resync leaves the stream.
 // A commit the reader may not read sends nothing, so the stream tells a
-// reader no more than its pulls do (review round 1, R3).
+// reader no more than its pulls do (review round 1, R3); and a stream pulls
+// only when the commit wrote a row its reader may read (phase 2a, report-1b
+// finding 1), so a commit costs a cheap check per stream, not a pull.
 //
 // The event id of a poke is the stream's cursor tokens by log, as JSON: a
 // client that reconnects with it as `Last-Event-ID` is poked at once for
@@ -81,11 +83,18 @@ export function openStream(
        * the new token. A stream never keeps a token it cannot open, so it
        * hears nothing more of a log its reader may not read (review round 1
        * of phase 1, H3). */
-      const check = (logs: Iterable<LogId>) => {
+      const check = (
+        logs: Iterable<LogId>,
+        keys?: ReadonlyMap<LogId, ReadonlySet<string> | null>,
+      ) => {
         const poke: LogId[] = [];
         for (const log of logs) {
           const at = state[log];
           if (at === undefined) continue;
+          // a commit whose rows of this log the reader may not read: no pull
+          // (report-1b finding 1)
+          const k = keys?.get(log);
+          if (k && !server.affects(actor, log, k)) continue;
           const p = server.pull(actor, log, at);
           if (!("changes" in p)) {
             poke.push(log);
@@ -97,7 +106,7 @@ export function openStream(
         }
         if (poke.length) send(sseFrame({ type: "poke", logs: poke }, JSON.stringify(state)));
       };
-      const unsub = server.subscribe((logs) => check([...logs]));
+      const unsub = server.subscribe((logs, keys) => check([...logs], keys));
       const unrun = server.subscribeRuns((e, sp) => {
         const log: LogId = `space:${sp}`;
         if (state[log] === undefined) return;

@@ -11,7 +11,9 @@
 # created only against a code an admin minted. Turning either off is a
 # deliberate act, which is why they are here rather than defaulted in the code.
 #
-# Secrets (never here): GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
+# Secrets (never here): SESSION_CURSOR_KEY (and, after a rotation,
+# SESSION_CURSOR_KEY_PREVIOUS with SESSION_CURSOR_KEY_ROTATED_AT),
+# SESSION_API_KEY_ENCRYPTION_KEY, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
 # GOOGLE_APPLICATION_CREDENTIALS_JSON, OPENROUTER_API_KEY, ANTHROPIC_API_KEY,
 # PARALLEL_API_KEY, TAVILY_API_KEY, LITESTREAM_REPLICA_URL, AWS_ACCESS_KEY_ID,
 # AWS_SECRET_ACCESS_KEY, SESSION_METRICS_TOKEN, SESSION_ALLOWED_GITHUB_LOGINS,
@@ -32,10 +34,6 @@ kill_timeout = "30s"
   PORT = "8080"
   NODE_ENV = "production"
   SESSION_PUBLIC_ORIGIN = "https://session.dev"
-  # The same site as session.dev, so widget scripts are off and widgets show
-  # their static page (the boot log says so). Widget scripts need a host on
-  # another registrable domain here (web/SETUP.md §2).
-  SESSION_ARTIFACT_ORIGIN = "https://artifacts.session.dev"
   SESSION_DATA_DIR = "/data"
   SESSION_RUNS_PER_USER = "2"
   SESSION_QUEUED_PER_USER = "20"
@@ -43,9 +41,6 @@ kill_timeout = "30s"
   SESSION_RUNS_OPENROUTER = "8"
   SESSION_RUNS_ANTHROPIC = "2"
   SESSION_RUN_TIMEOUT_SECONDS = "900"
-  # The embed-asset cache is disposable and shares the 20 GB mount with the
-  # database, so it is given a budget the sweep enforces.
-  SESSION_EMBED_CACHE_BYTES = "2147483648"
   SESSION_ENFORCE_LIMITS = "1"
   SESSION_DAILY_TOKENS = "1000000"
   SESSION_DAILY_RUNS = "10"
@@ -53,6 +48,12 @@ kill_timeout = "30s"
   SESSION_SEARCH_VENDOR = "parallel"
   GOOGLE_VERTEX_PROJECT = "session-dev"
   GOOGLE_VERTEX_LOCATION = "global"
+  # Spaces (phase 2a): the lowest sync protocol version taken, the desktop
+  # app's origin (CORS for its bearer requests) and the included tokens a
+  # person has a month.
+  SESSION_MIN_PROTOCOL = "4"
+  SESSION_DESKTOP_ORIGINS = "tauri://localhost"
+  SESSION_INCLUDED_TOKENS = "1000000"
 
 [[mounts]]
   source = "session_data"

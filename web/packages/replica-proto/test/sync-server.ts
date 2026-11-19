@@ -59,7 +59,7 @@ const PROTOCOL_STEP = 1;
 /** The cursor of a snapshot the server answered with a `ReadError`: a pull
  * of that log with it is an empty pull, and one with any other token
  * resyncs. */
-const noLog = (log: string) => `no-log:${log}`;
+export const noLog = (log: string) => `no-log:${log}`;
 
 function toProduction(e: unknown): unknown {
   if (e === null || typeof e !== "object" || Array.isArray(e)) return e;
@@ -73,7 +73,7 @@ function toProduction(e: unknown): unknown {
 
 /** An envelope's input getter may throw (a hostile client): keep it a
  * getter on the copy, so the server meets it as the prototype did. */
-function copyEnvelope(e: unknown): unknown {
+export function copyEnvelope(e: unknown): unknown {
   if (e === null || typeof e !== "object" || Array.isArray(e)) return e;
   const ds = Object.getOwnPropertyDescriptors(e);
   const input = ds["input"];
@@ -86,7 +86,7 @@ function copyEnvelope(e: unknown): unknown {
   return toProduction(e);
 }
 
-function toProto(a: Answer): ApplyResult {
+export function toProto(a: Answer): ApplyResult {
   if (a.ok) return { ok: true, result: a.result };
   const e: ApiError = { code: a.error.code, message: a.error.message };
   if (a.error.issues) e.issues = [...a.error.issues];
@@ -95,7 +95,7 @@ function toProto(a: Answer): ApplyResult {
   return { ok: false, error: e };
 }
 
-const readOptions = (o: ReadOptions = {}) => ({
+export const readOptions = (o: ReadOptions = {}) => ({
   ...(o.clientId !== undefined ? { clientId: o.clientId } : {}),
   tier: { window: o.tier === "summary" ? ("summary" as const) : ("full" as const) },
 });
@@ -198,58 +198,66 @@ export function syncFactory(kind: "memory" | "sqlite"): ServerFactory {
           stop();
         },
       },
-      scanStorage(): StorageScan {
-        server.housekeepAll();
-        const d = store.dump();
-        const regs = new Map<string, number[]>();
-        for (const r of d.registrations) regs.set(r.u, [...(regs.get(r.u) ?? []), r.at]);
-        const clientOf = new Map(d.clients.map((c) => [c.clientId, c.u]));
-        return {
-          records: d.records.map((r) => r.record) as unknown as StoredRecord[],
-          // every stored field but a notification's `type` (the prototype's
-          // audience has none), so a tombstone that keeps more is visible
-          tombstones: d.tombstones.map((t) => {
-            const out: Partial<typeof t> = { ...t };
-            delete out.type;
-            return out as StorageScan["tombstones"][number];
-          }),
-          logRows: d.logRows as StorageScan["logRows"],
-          answers: d.answers.map((a) => ({
-            u: a.u ?? clientOf.get(a.clientId ?? "") ?? "",
-            ...(a.mutationId !== undefined ? { mutationId: a.mutationId } : {}),
-            ...(a.clientId !== undefined ? { clientId: a.clientId } : {}),
-            ...(a.seq !== undefined ? { seq: a.seq } : {}),
-            digest: a.digest,
-            result: (a.answer.ok
-              ? { ok: true, result: a.answer.result }
-              : { ok: false, error: a.answer.error, reads: a.answer.reads }) as ApplyResult,
-            at: a.at,
-          })),
-          clients: d.clients.map((c) => ({
-            clientId: c.clientId,
-            u: c.u,
-            last: c.last,
-            seen: c.seen,
-          })),
-          registrations: [...regs].map(([u, at]) => ({ u, at })),
-          registry: d.registry,
-          born: d.records.map((r) => ({ key: r.key, version: r.born })),
-          epochs: d.epochs as StorageScan["epochs"],
-          effects: d.effects.map((q) => ({
-            effect: q.effect,
-            at: q.at,
-            attempts: q.attempts,
-            next: q.next,
-          })),
-          deadLetters: d.deadLetters.map((q) => ({
-            effect: q.effect,
-            at: q.at,
-            attempts: q.attempts,
-            failedAt: q.failedAt,
-          })),
-          jobs: [...jobs],
-        };
-      },
+      scanStorage: () => scanOf(server, store, jobs),
     };
+  };
+}
+
+/** Every value at rest of a sync server and its store, as the suite's
+ * `StorageScan` names it (housekeeping first, as every call does). */
+export function scanOf(
+  server: SyncServer,
+  store: ServerStore,
+  jobs: readonly { kind: string; id: string }[],
+): StorageScan {
+  server.housekeepAll();
+  const d = store.dump();
+  const regs = new Map<string, number[]>();
+  for (const r of d.registrations) regs.set(r.u, [...(regs.get(r.u) ?? []), r.at]);
+  const clientOf = new Map(d.clients.map((c) => [c.clientId, c.u]));
+  return {
+    records: d.records.map((r) => r.record) as unknown as StoredRecord[],
+    // every stored field but a notification's `type` (the prototype's
+    // audience has none), so a tombstone that keeps more is visible
+    tombstones: d.tombstones.map((t) => {
+      const out: Partial<typeof t> = { ...t };
+      delete out.type;
+      return out as StorageScan["tombstones"][number];
+    }),
+    logRows: d.logRows as StorageScan["logRows"],
+    answers: d.answers.map((a) => ({
+      u: a.u ?? clientOf.get(a.clientId ?? "") ?? "",
+      ...(a.mutationId !== undefined ? { mutationId: a.mutationId } : {}),
+      ...(a.clientId !== undefined ? { clientId: a.clientId } : {}),
+      ...(a.seq !== undefined ? { seq: a.seq } : {}),
+      digest: a.digest,
+      result: (a.answer.ok
+        ? { ok: true, result: a.answer.result }
+        : { ok: false, error: a.answer.error, reads: a.answer.reads }) as ApplyResult,
+      at: a.at,
+    })),
+    clients: d.clients.map((c) => ({
+      clientId: c.clientId,
+      u: c.u,
+      last: c.last,
+      seen: c.seen,
+    })),
+    registrations: [...regs].map(([u, at]) => ({ u, at })),
+    registry: d.registry,
+    born: d.records.map((r) => ({ key: r.key, version: r.born })),
+    epochs: d.epochs as StorageScan["epochs"],
+    effects: d.effects.map((q) => ({
+      effect: q.effect,
+      at: q.at,
+      attempts: q.attempts,
+      next: q.next,
+    })),
+    deadLetters: d.deadLetters.map((q) => ({
+      effect: q.effect,
+      at: q.at,
+      attempts: q.attempts,
+      failedAt: q.failedAt,
+    })),
+    jobs: [...jobs],
   };
 }

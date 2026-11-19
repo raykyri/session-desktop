@@ -5,6 +5,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { migrate as migrateSync } from "@session/sync/server";
 import SqliteDatabase from "better-sqlite3";
 import { sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
@@ -12,7 +13,6 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 
-import { migrate as migrateSync } from "@session/sync/server";
 
 import { runBackfills } from "./backfills/index.js";
 import * as schema from "./schema/index.js";
