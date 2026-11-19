@@ -8,10 +8,12 @@
 //    a space that does not exist or that the actor is banned from, then
 //    checks the role the write needs. So every write that acts in a space
 //    passes the ban check (AGENTS.md: a ban stops every write in its space).
-// 2. `pre(ctx, input, tx)` (server only): checks and values the client cannot
-//    have, such as an invite code made from the server's random source. It
-//    may refuse. Its values reach `run` as data. A client that predicts a
-//    write whose `pre` would run gets `unknown`.
+// 2. `pre(ctx, input)` (server only): checks and values the client cannot
+//    have, such as an invite code made from the server's random source, or
+//    whether an API key that pays is the actor's. It may refuse, and reads
+//    through `ctx.tx`. Its values reach `run` as data. `needsPre(input)`
+//    says whether it runs for an input; a client that predicts a write whose
+//    `pre` would run gets `unknown`.
 // 3. `run(tx, input, values)`: deterministic over the synchronous `tx`. It
 //    reads the time from `tx.now`, never the clock, uses no random source and
 //    no `Intl`, and makes no ids: a new record's first id comes in the input,
