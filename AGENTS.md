@@ -37,7 +37,7 @@ rules above stay as they are. Decisions for the new client:
   of the write definitions. The current web client's trees and workspaces are
   replaced by spaces; existing web data is dropped. The web client's
   features that the mockup does not have (journal and tweet embeds, widgets
-  and artifacts, highlights, folders, recaps, snapshots) are dropped too.
+  and artifacts, highlights, folders, recaps) are dropped too.
 - Architecture: the server is the single authority. Each client keeps a
   replica of what its user may read and applies its own writes optimistically
   from an outbox; the server confirms or refuses them in order. No CRDT
