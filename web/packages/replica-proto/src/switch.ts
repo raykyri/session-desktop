@@ -91,6 +91,40 @@ function refusing<T>(f: () => T): T {
   }
 }
 
+/** A package registry from a set of mutators in the prototype's shape (the
+ * server's set, which a test may give a faulty definition): each entry's
+ * input, ids, pre, run and effects over the package mutator of its name's
+ * `can` and `needsPre`. `@session/sync`'s server half runs the suite with
+ * it. */
+export function packageRegistry(mutators: Readonly<Record<string, AnyMutator>>): pkg.Registry {
+  const list: pkg.Mutator[] = [];
+  for (const name of Object.keys(mutators)) {
+    const entry = mutators[name];
+    const base = pkg.MUTATORS.get(name);
+    if (!entry) continue;
+    if (!base) throw new Error(`${name} has no package mutator`);
+    list.push(merged(base, entry));
+  }
+  return pkg.createRegistry(list);
+}
+
+/** A package mutator with a prototype-shaped entry's stages. */
+function merged(base: pkg.Mutator, entry: AnyMutator): pkg.Mutator {
+  const pre = entry.pre;
+  return {
+    ...base,
+    input: entry.input,
+    online: entry.online === true,
+    ids: (i) => entry.ids?.(i) ?? [],
+    pre: pre
+      ? (ctx, i) => refusing(() => pre(ctx as unknown as Parameters<typeof pre>[0], i))
+      : undefined,
+    run: (tx, i, v) =>
+      refusing(() => entry.run(tx as unknown as Parameters<AnyMutator["run"]>[0], i, v)),
+    effects: (i, r) => (entry.post?.(i, r) ?? []) as unknown as pkg.Effect[],
+  };
+}
+
 /** Apply one write through the package: the mutator named `name` in
  * `mutators` (the server's set), run by `@session/mutators`' `apply` over
  * `source`. */
@@ -105,21 +139,8 @@ export function applyPackage(
   const entry = Object.hasOwn(mutators, envelope.name) ? mutators[envelope.name] : undefined;
   const base = pkg.MUTATORS.get(envelope.name);
   const list: pkg.Mutator[] = [];
-  if (entry && base) {
-    const pre = entry.pre;
-    list.push({
-      ...base,
-      input: entry.input,
-      online: entry.online === true,
-      ids: (i) => entry.ids?.(i) ?? [],
-      pre: pre
-        ? (ctx, i) => refusing(() => pre(ctx as unknown as Parameters<typeof pre>[0], i))
-        : undefined,
-      run: (tx, i, v) =>
-        refusing(() => entry.run(tx as unknown as Parameters<AnyMutator["run"]>[0], i, v)),
-      effects: (i, r) => (entry.post?.(i, r) ?? []) as unknown as pkg.Effect[],
-    });
-  } else if (entry) throw new Error(`${envelope.name} has no package mutator`);
+  if (entry && base) list.push(merged(base, entry));
+  else if (entry) throw new Error(`${envelope.name} has no package mutator`);
   const out = pkg.apply(pkg.createRegistry(list), source, { u }, envelope, {
     now,
     server: { random },

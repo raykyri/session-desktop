@@ -21,9 +21,20 @@ import {
 import { USE_PACKAGE } from "../src/switch.js";
 
 import { modOf } from "./oracle.js";
+import { syncFactory } from "./sync-server.js";
 
-/** The server under test. */
-export const makeServer: ServerFactory = createProtoServer;
+/** The server under test: the prototype's, or with REPLICA_PROTO_SERVER
+ * set `@session/sync`'s server half over its memory or SQLite store (with
+ * the package's mutators, REPLICA_PROTO_MUTATORS=package). */
+const SERVER = process.env["REPLICA_PROTO_SERVER"];
+if (SERVER !== undefined && !USE_PACKAGE)
+  throw new Error("REPLICA_PROTO_SERVER needs REPLICA_PROTO_MUTATORS=package");
+export const makeServer: ServerFactory =
+  SERVER === "sync-memory"
+    ? syncFactory("memory")
+    : SERVER === "sync-sqlite"
+      ? syncFactory("sqlite")
+      : createProtoServer;
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
