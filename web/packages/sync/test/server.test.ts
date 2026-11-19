@@ -34,7 +34,10 @@ for (const kind of STORES) {
     const e = w.envelope("mel", "likes.set", { thread: thread(w, "otto", open), on: true });
     const first = w.server.apply({ u: "mel" }, e);
     const again = w.server.apply({ u: "mel" }, e);
-    const skew = w.server.apply({ u: "mel" }, { ...w.envelope("mel", "likes.set", {}), clientTime: w.clock.now() + HOUR });
+    const skew = w.server.apply(
+      { u: "mel" },
+      { ...w.envelope("mel", "likes.set", {}), clientTime: w.clock.now() + HOUR },
+    );
     const signedOut = w.server.apply(null, w.envelope("mel", "likes.set", {}));
     for (const a of [first, again, skew, signedOut]) t.is(a.serverTime, w.clock.now());
     t.true(first.ok);
@@ -58,7 +61,11 @@ for (const kind of STORES) {
     for (let k = 0; k < 40; k++) deep = [deep];
     refused(t, w.server.apply({ u: "mel" }, { ...e, input: deep }), "TOO_LARGE");
     // the size the HTTP layer reports counts too
-    refused(t, w.server.apply({ u: "mel" }, w.envelope("mel", "likes.set", {}), MAX_ENVELOPE_BYTES + 1), "TOO_LARGE");
+    refused(
+      t,
+      w.server.apply({ u: "mel" }, w.envelope("mel", "likes.set", {}), MAX_ENVELOPE_BYTES + 1),
+      "TOO_LARGE",
+    );
     let nested: unknown = 1;
     for (let k = 0; k < 40; k++) nested = [nested];
     refused(t, w.server.apply({ u: "mel" }, { ...e, input: nested }), "BAD_REQUEST");
@@ -68,10 +75,17 @@ for (const kind of STORES) {
   test(`${kind}: queuedAt is checked like an id's age: EXPIRED, recorded`, (t) => {
     const { w, open } = cast(t, kind);
     const th = thread(w, "otto", open);
-    const e = w.envelope("mel", "likes.set", { thread: th, on: true }, { queuedAt: w.clock.now() - 5 * DAY });
+    const e = w.envelope(
+      "mel",
+      "likes.set",
+      { thread: th, on: true },
+      { queuedAt: w.clock.now() - 5 * DAY },
+    );
     const a = w.server.apply({ u: "mel" }, e);
     refused(t, a, "EXPIRED");
-    t.deepEqual(a.ok ? null : a.error.issues, ["queuedAt: expected a time from the 4 days before clientTime to 1 minute after"]);
+    t.deepEqual(a.ok ? null : a.error.issues, [
+      "queuedAt: expected a time from the 4 days before clientTime to 1 minute after",
+    ]);
     t.like(w.server.apply({ u: "mel" }, e), { ok: false, replayed: true });
     t.is(w.get(`like:mel:${th}`), undefined);
     refused(
@@ -79,7 +93,10 @@ for (const kind of STORES) {
       w.as("mel", "likes.set", { thread: th, on: true }, { queuedAt: w.clock.now() + 2 * MINUTE }),
       "EXPIRED",
     );
-    ok(t, w.as("mel", "likes.set", { thread: th, on: true }, { queuedAt: w.clock.now() - 3 * DAY }));
+    ok(
+      t,
+      w.as("mel", "likes.set", { thread: th, on: true }, { queuedAt: w.clock.now() - 3 * DAY }),
+    );
   });
 
   // The design finding of review round 2's fixes (r2fix/remint-dup.mts): a
@@ -91,20 +108,38 @@ for (const kind of STORES) {
       [...w.server.records().values()].filter((r) => r.kind === "thread" && r.q === q).length;
     // the delayed copy arrives first
     const id = w.id();
-    const old = w.envelope("mel", "threads.create", { id, space: open, kind: "post", q: "once" }, {
-      clientTime: w.clock.now() + 2 * MINUTE,
-    });
+    const old = w.envelope(
+      "mel",
+      "threads.create",
+      { id, space: open, kind: "post", q: "once" },
+      {
+        clientTime: w.clock.now() + 2 * MINUTE,
+      },
+    );
     refused(t, w.server.apply({ u: "mel" }, old), "CLOCK_SKEW");
-    const fresh: Envelope = { ...old, mutationId: w.id(), clientTime: w.clock.now(), replaces: [old.mutationId] };
+    const fresh: Envelope = {
+      ...old,
+      mutationId: w.id(),
+      clientTime: w.clock.now(),
+      replaces: [old.mutationId],
+    };
     w.clock.advance(2 * MINUTE);
     ok(t, w.server.apply({ u: "mel" }, { ...old, clientTime: w.clock.now() }));
-    const r = w.server.apply({ u: "mel" }, { ...fresh, seq: w.nextSeq("mel"), clientTime: w.clock.now() });
+    const r = w.server.apply(
+      { u: "mel" },
+      { ...fresh, seq: w.nextSeq("mel"), clientTime: w.clock.now() },
+    );
     t.like(r, { ok: true, replayed: true });
     t.is(count("once"), 1);
     // the reminted one arrives first; its input ids were reminted too
-    const old2 = w.envelope("mel", "threads.create", { id: w.id(), space: open, kind: "post", q: "twice?" }, {
-      clientTime: w.clock.now() + 2 * MINUTE,
-    });
+    const old2 = w.envelope(
+      "mel",
+      "threads.create",
+      { id: w.id(), space: open, kind: "post", q: "twice?" },
+      {
+        clientTime: w.clock.now() + 2 * MINUTE,
+      },
+    );
     refused(t, w.server.apply({ u: "mel" }, old2), "CLOCK_SKEW");
     const fresh2: Envelope = {
       ...old2,
@@ -115,7 +150,10 @@ for (const kind of STORES) {
     };
     ok(t, w.server.apply({ u: "mel" }, fresh2));
     w.clock.advance(2 * MINUTE);
-    const late = w.server.apply({ u: "mel" }, { ...old2, seq: w.nextSeq("mel"), clientTime: w.clock.now() });
+    const late = w.server.apply(
+      { u: "mel" },
+      { ...old2, seq: w.nextSeq("mel"), clientTime: w.clock.now() },
+    );
     t.like(late, { ok: true, replayed: true });
     t.is(count("twice?"), 1);
   });
@@ -149,14 +187,23 @@ for (const kind of STORES) {
     const { w, open } = cast(t, kind, 1, { cursorKeys: keys });
     const s = w.server.snapshot({ u: "mel" }, `space:${open}`);
     // a server with the rotated keys, over the same store
-    const rotated = { current: newCursorKey(), previous: { key: keys.current, rotatedAt: w.clock.now() } };
+    const rotated = {
+      current: newCursorKey(),
+      previous: { key: keys.current, rotatedAt: w.clock.now() },
+    };
     const w2 = new World(kind, 1, { cursorKeys: rotated, store: w.server.store });
     w2.clock.ms = w.clock.ms;
     t.false("resync" in w2.server.pull({ u: "mel" }, `space:${open}`, s.cursor));
     w2.clock.advance(TOMBSTONE_TTL + 1);
-    t.deepEqual(w2.server.pull({ u: "mel" }, `space:${open}`, s.cursor), { resync: true, serverTime: w2.clock.now() });
+    t.deepEqual(w2.server.pull({ u: "mel" }, `space:${open}`, s.cursor), {
+      resync: true,
+      serverTime: w2.clock.now(),
+    });
     // a key never configured opens nothing
-    const w3 = new World(kind, 1, { cursorKeys: { current: newCursorKey() }, store: w.server.store });
+    const w3 = new World(kind, 1, {
+      cursorKeys: { current: newCursorKey() },
+      store: w.server.store,
+    });
     w3.clock.ms = w.clock.ms;
     t.true("resync" in w3.server.pull({ u: "mel" }, `space:${open}`, s.cursor));
   });
@@ -209,7 +256,10 @@ for (const kind of STORES) {
     t.true(phone.has(mel), "pinned: mel wrote it");
     t.false(phone.has(ids[0] ?? ""), "outside the newest 200 and the past 30 days");
     t.true(phone.has(ids[204] ?? ""));
-    t.true(runs({ tier: { window: "phone", opened: [ids[0] ?? ""] } }).has(ids[0] ?? ""), "pinned: opened");
+    t.true(
+      runs({ tier: { window: "phone", opened: [ids[0] ?? ""] } }).has(ids[0] ?? ""),
+      "pinned: opened",
+    );
     t.true(runs({ tier: { window: "desktop" } }).has(ids[0] ?? ""), "desktop: 90 days");
   });
 
@@ -263,7 +313,9 @@ for (const kind of STORES) {
     failing = false;
     ok(t, w.as("mel", "reports.create", { id: w.id(), item: `a:${th}`, why: "again" }));
     w.server.work();
-    const notifs = [...w.server.records().values()].filter((r) => r.kind === "notif" && r.type === "report");
+    const notifs = [...w.server.records().values()].filter(
+      (r) => r.kind === "notif" && r.type === "report",
+    );
     t.deepEqual(notifs.map((n) => (n as { to: string }).to).sort(), ["mona", "olga"]);
   });
 
@@ -272,7 +324,10 @@ for (const kind of STORES) {
     const s = w.server.call(null, "devices.authorize", { name: "Mel's Mac" });
     if (!s.ok) return t.fail(JSON.stringify(s.error));
     const { request, code } = s.result as { request: string; code: string };
-    t.like(w.server.call(null, "devices.token", { request }), { ok: false, error: { code: "PRECONDITION_FAILED" } });
+    t.like(w.server.call(null, "devices.token", { request }), {
+      ok: false,
+      error: { code: "PRECONDITION_FAILED" },
+    });
     t.like(w.server.call({ u: "mel" }, "devices.approve", { request, code: "ZZZ-ZZZ" }), {
       ok: false,
       error: { code: "BAD_REQUEST" },
@@ -282,26 +337,39 @@ for (const kind of STORES) {
     t.truthy(device);
     const tok = w.server.call(null, "devices.token", { request });
     const token = tok.ok ? (tok.result as { token: string }).token : "";
-    t.like(w.server.call(null, "devices.token", { request }), { ok: false, error: { code: "NOT_FOUND" } });
+    t.like(w.server.call(null, "devices.token", { request }), {
+      ok: false,
+      error: { code: "NOT_FOUND" },
+    });
     const actor = w.server.online.authenticate(token);
     t.deepEqual(actor, { u: "mel", device });
     const d = w.get(`device:${device}`);
     t.like(d ?? {}, { kind: "device", u: "mel", name: "Mel's Mac", type: "mac" });
     t.false(JSON.stringify(w.server.records()).includes(token), "the token is not in a record");
-    t.false(JSON.stringify(w.server.store.dump().tokens).includes(token), "only its hash is stored");
+    t.false(
+      JSON.stringify(w.server.store.dump().tokens).includes(token),
+      "only its hash is stored",
+    );
     const snap = w.server.snapshot({ u: "mel" }, "user:mel").records.map((r) => r.key);
     t.true(snap.includes(`device:${device}`));
     t.false(w.server.snapshot({ u: "otto" }, "user:mel").records.length > 0);
     // a client registered by the device; revoking the device ends it
     const reg = w.server.register(actor);
     const clientId = reg.ok ? reg.clientId : "";
-    const e: Envelope = { ...w.envelope("mel", "profile.update", { name: "Mel", bio: "" }), clientId, seq: 1 };
+    const e: Envelope = {
+      ...w.envelope("mel", "profile.update", { name: "Mel", bio: "" }),
+      clientId,
+      seq: 1,
+    };
     ok(t, w.server.apply(actor, e));
     ok(t, w.server.call({ u: "mel" }, "devices.revoke", { id: device }) as Answer);
     refused(t, w.server.apply(actor, { ...e, mutationId: w.id(), seq: 2 }), "WRONG_CLIENT");
     t.is(w.server.online.authenticate(token), null);
     t.is(w.get(`device:${device}`), undefined);
-    t.like(w.server.call({ u: "otto" }, "devices.revoke", { id: device }), { ok: false, error: { code: "NOT_FOUND" } });
+    t.like(w.server.call({ u: "otto" }, "devices.revoke", { id: device }), {
+      ok: false,
+      error: { code: "NOT_FOUND" },
+    });
   });
 
   test(`${kind}: device runs: claim, heartbeat apart from progress, attempts, interrupted and too_large ends`, (t) => {
@@ -319,12 +387,21 @@ for (const kind of STORES) {
     const run = ask("Q1");
     t.like(w.get(`run:${run}`) ?? {}, { status: "queued", executor: { device } });
     w.server.work();
-    t.false(w.jobs.some((j) => j.id === run), "a device run is no server job");
+    t.false(
+      w.jobs.some((j) => j.id === run),
+      "a device run is no server job",
+    );
     const as = { u: "mel", device };
-    t.like(w.server.call({ u: "otto" }, "runs.claim", { run, device }), { ok: false, error: { code: "FORBIDDEN" } });
+    t.like(w.server.call({ u: "otto" }, "runs.claim", { run, device }), {
+      ok: false,
+      error: { code: "FORBIDDEN" },
+    });
     const c = w.server.call(as, "runs.claim", { run, device });
     t.like(c, { ok: true, result: { attempt: 1, turns: [{ q: "Q1", a: "" }] } });
-    t.like(w.server.call(as, "runs.claim", { run, device }), { ok: false, error: { code: "PRECONDITION_FAILED" } });
+    t.like(w.server.call(as, "runs.claim", { run, device }), {
+      ok: false,
+      error: { code: "PRECONDITION_FAILED" },
+    });
     // progress does not extend the lease; the heartbeat does
     w.clock.advance(80_000);
     ok(t, w.server.call(as, "runs.turn", { run, device, attempt: 1, turn: "step" }) as Answer);
@@ -352,10 +429,18 @@ for (const kind of STORES) {
     // an answer over 200 KB: too_large, not saved
     const r3 = ask("Q3");
     ok(t, w.server.call(as, "runs.claim", { run: r3, device }) as Answer);
-    t.like(w.server.call(as, "runs.finish", { run: r3, device, attempt: 1, answer: "x".repeat(200 * 1024 + 1) }), {
-      ok: true,
-      result: { status: "too_large" },
-    });
+    t.like(
+      w.server.call(as, "runs.finish", {
+        run: r3,
+        device,
+        attempt: 1,
+        answer: "x".repeat(200 * 1024 + 1),
+      }),
+      {
+        ok: true,
+        result: { status: "too_large" },
+      },
+    );
     t.like(w.get(`run:${r3}`) ?? {}, { status: "failed", end: "too_large" });
     // the stubs answer METHOD_NOT_SUPPORTED until phase 2
     t.like(w.server.call({ u: "mel" }, "apiKeys.create", { raw: "k", label: "l" }), {
@@ -402,9 +487,18 @@ test("sqlite: the migrations apply once, and the schema is the package's", (t) =
   t.deepEqual(migrate(db), ["0001_sync.sql"]);
   t.deepEqual(migrate(db), []);
   const store = new SqliteServerStore(db);
-  const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as {
-    name: string;
-  }[]).map((r) => r.name);
-  t.true(tables.includes("sync_log") && tables.includes("sync_answers") && tables.includes("sync_effects"));
-  t.is(store.transaction((tx) => tx.head()), 0);
+  const tables = (
+    db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as {
+      name: string;
+    }[]
+  ).map((r) => r.name);
+  t.true(
+    tables.includes("sync_log") &&
+      tables.includes("sync_answers") &&
+      tables.includes("sync_effects"),
+  );
+  t.is(
+    store.transaction((tx) => tx.head()),
+    0,
+  );
 });

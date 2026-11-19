@@ -135,12 +135,20 @@ export function refused(t: ExecutionContext, a: Answer, code: ErrorCode) {
 
 /** #lounge (open): owner olga, moderator mona, members mel and otto; #lab
  * (closed, by request): owner olga, member mel. */
-export function cast(t: ExecutionContext, kind: StoreKind = "memory", seed = 1, o: Partial<SyncServerOptions> = {}) {
+export function cast(
+  t: ExecutionContext,
+  kind: StoreKind = "memory",
+  seed = 1,
+  o: Partial<SyncServerOptions> = {},
+) {
   const w = new World(kind, seed, o);
   const open = w.id();
   const closed = w.id();
   ok(t, w.as("olga", "spaces.create", { id: open, name: "lounge" }));
-  ok(t, w.as("olga", "spaces.create", { id: closed, name: "lab", vis: "listed", policy: "request" }));
+  ok(
+    t,
+    w.as("olga", "spaces.create", { id: closed, name: "lab", vis: "listed", policy: "request" }),
+  );
   for (const u of ["mona", "mel", "otto"]) ok(t, w.as(u, "spaces.join", { space: open }));
   ok(
     t,

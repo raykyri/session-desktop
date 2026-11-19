@@ -89,7 +89,9 @@ class MemoryTx implements StoreTx {
 
   scan(kind: string, field: string, value: string): StoredRecord[] {
     const keys = this.t.index.get(`${kind}\0${field}\0${value}`);
-    return keys ? [...keys].sort().map((k) => copy(this.t.records.get(k)?.record as StoredRecord)) : [];
+    return keys
+      ? [...keys].sort().map((k) => copy(this.t.records.get(k)?.record as StoredRecord))
+      : [];
   }
 
   private indexKeys(r: StoredRecord): string[] {

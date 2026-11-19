@@ -70,7 +70,11 @@ const runInput = z.strictObject({ run: z.string().max(64), device: z.string().ma
 
 /** A run of the caller's, run by the calling device: for every call but
  * claim, the attempt that holds the lease. */
-function leaseOf(ctx: CallCtx, i: { run: string; device: string; attempt?: number }, claim = false) {
+function leaseOf(
+  ctx: CallCtx,
+  i: { run: string; device: string; attempt?: number },
+  claim = false,
+) {
   const a = need(ctx);
   if (a.device != null && a.device !== i.device)
     throw fail("FORBIDDEN", "This run runs on another device.");
@@ -91,7 +95,8 @@ const leaseAt = (now: number) => ({ until: pkg.isoAt(now + LEASE_MS), beat: pkg.
 function endRun(ctx: CallCtx, r: pkg.RunRec, why: "interrupted" | "too_large") {
   const writes: pkg.Write[] = [[`run:${r.id}`, { ...r, status: "failed", end: why, lease: null }]];
   const p = ctx.tx.get(`thread:${r.th}`);
-  if (r.node === "r" && p?.kind === "thread") writes.push([`thread:${p.id}`, { ...p, running: false }]);
+  if (r.node === "r" && p?.kind === "thread")
+    writes.push([`thread:${p.id}`, { ...p, running: false }]);
   ctx.tx.leaseDelete(r.id);
   ctx.server.commit(ctx.tx, writes, ctx.now);
 }
@@ -123,7 +128,8 @@ export function defaultHandlers(): OnlineHandlers {
     if (!name) throw fail("BAD_REQUEST", undefined, ["input.name: expected some text"]);
     const request = ctx.server.newId(ctx.tx, ctx.now);
     let code = "";
-    for (let k = 0; k < 6; k++) code += CODE.charAt(Math.floor(ctx.server.randomNumber() * CODE.length));
+    for (let k = 0; k < 6; k++)
+      code += CODE.charAt(Math.floor(ctx.server.randomNumber() * CODE.length));
     ctx.tx.signinPut({
       request,
       code,
@@ -224,7 +230,10 @@ export function defaultHandlers(): OnlineHandlers {
   };
 
   h["runs.turn"] = (ctx, input) => {
-    const i = parse(runInput.extend({ attempt: z.number().int().nonnegative(), turn: z.unknown() }), input);
+    const i = parse(
+      runInput.extend({ attempt: z.number().int().nonnegative(), turn: z.unknown() }),
+      input,
+    );
     const r = leaseOf(ctx, i);
     // a turn is progress, not a heartbeat: it does not extend the lease. Its
     // text goes to the run's readers as an in-flight event (ADR-22).
@@ -234,20 +243,26 @@ export function defaultHandlers(): OnlineHandlers {
   };
 
   h["runs.finish"] = (ctx, input) => {
-    const i = parse(runInput.extend({ attempt: z.number().int().nonnegative(), answer: z.string() }), input);
+    const i = parse(
+      runInput.extend({ attempt: z.number().int().nonnegative(), answer: z.string() }),
+      input,
+    );
     const r = leaseOf(ctx, i);
     if (Buffer.byteLength(i.answer) > DEVICE_ANSWER_MAX) {
       endRun(ctx, r, "too_large");
       return { status: "too_large" };
     }
-    const writes: pkg.Write[] = [[`run:${r.id}`, { ...r, status: "complete", end: null, lease: null }]];
+    const writes: pkg.Write[] = [
+      [`run:${r.id}`, { ...r, status: "complete", end: null, lease: null }],
+    ];
     if (r.node === "r") {
       const p = ctx.tx.get(`thread:${r.th}`);
       if (p?.kind === "thread" && p.mod === null && !p.del)
         writes.push([`thread:${p.id}`, { ...p, sum: i.answer, running: false, tok: 0 }]);
     } else {
       const f = ctx.tx.get(`followup:${r.node}`);
-      if (f?.kind === "followup" && f.mod === null && !f.del) writes.push([`followup:${f.id}`, { ...f, a: i.answer }]);
+      if (f?.kind === "followup" && f.mod === null && !f.del)
+        writes.push([`followup:${f.id}`, { ...f, a: i.answer }]);
     }
     ctx.tx.leaseDelete(r.id);
     ctx.server.commit(ctx.tx, writes, ctx.now);
@@ -270,7 +285,11 @@ export class OnlineCalls {
     const t0 = Date.now();
     const handler = Object.hasOwn(this.handlers, name) ? this.handlers[name] : undefined;
     if (!handler)
-      return { ok: false, error: fail("NOT_FOUND", "The server has no procedure with this name.").toError(), serverTime: t0 };
+      return {
+        ok: false,
+        error: fail("NOT_FOUND", "The server has no procedure with this name.").toError(),
+        serverTime: t0,
+      };
     try {
       return this.server.run((tx) => {
         const now = this.server.time(tx);

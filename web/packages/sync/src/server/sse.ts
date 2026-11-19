@@ -121,9 +121,16 @@ export function openStream(
 /** The request-shaped entry: the stream for a `Request`, with the reader the
  * caller authenticated. The cursors come from `Last-Event-ID`, else from the
  * `cursors` query parameter (JSON). */
-export function sseResponse(server: SyncServer, req: Request, actor: Actor | null, o: SseOptions = {}): Response {
+export function sseResponse(
+  server: SyncServer,
+  req: Request,
+  actor: Actor | null,
+  o: SseOptions = {},
+): Response {
   const url = new URL(req.url);
-  const cursors = parseCursorMap(req.headers.get("Last-Event-ID") ?? url.searchParams.get("cursors"));
+  const cursors = parseCursorMap(
+    req.headers.get("Last-Event-ID") ?? url.searchParams.get("cursors"),
+  );
   const body = openStream(server, actor, cursors, req.signal, o);
   return new Response(body, {
     headers: {

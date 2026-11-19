@@ -66,7 +66,14 @@ import {
 } from "../protocol.js";
 
 import { OnlineCalls, type OnlineHandlers } from "./online.js";
-import type { LogRow, ServerStore, StoreTx, StoredAnswer, StoredResult, Tombstone } from "./store.js";
+import type {
+  LogRow,
+  ServerStore,
+  StoreTx,
+  StoredAnswer,
+  StoredResult,
+  Tombstone,
+} from "./store.js";
 import { chooseTiers, inSummary, threadOf } from "./tiers.js";
 import { Tokens, type CursorKeys } from "./tokens.js";
 
@@ -330,7 +337,11 @@ export class SyncServer {
       this.touchDependents(tx, rec, version);
       // who may read a space's content depends on whether it is closed: a
       // change replaces the log's history (every cursor of it resyncs)
-      if (rec.kind === "space" && prev?.kind === "space" && pkg.isClosed(prev) !== pkg.isClosed(rec)) {
+      if (
+        rec.kind === "space" &&
+        prev?.kind === "space" &&
+        pkg.isClosed(prev) !== pkg.isClosed(rec)
+      ) {
         const log: LogId = `space:${rec.id}`;
         tx.setEpoch(log, { n: tx.epoch(log).n + 1, start: version });
         this.changed.add(log);
@@ -356,7 +367,8 @@ export class SyncServer {
     const cutoff = now - TOMBSTONE_TTL;
     for (const t of tx.tombsBefore(cutoff, limit)) {
       tx.tombDelete(t.key);
-      for (const log of logsOfAudience(t)) if (tx.logGet(log, t.key)?.op === "del") tx.logDelete(log, t.key);
+      for (const log of logsOfAudience(t))
+        if (tx.logGet(log, t.key)?.op === "del") tx.logDelete(log, t.key);
     }
     // an answer, a client and a registration expire at their lifetime's
     // end (inclusive); a tombstone is kept through its 30th day's last ms
@@ -410,19 +422,31 @@ export class SyncServer {
     const t0 = this.clock.now();
     const no = (e: AnswerError): Answer => ({ ok: false, error: e, serverTime: t0 });
     const large = () =>
-      no(err("TOO_LARGE", undefined, [`envelope: expected at most ${MAX_ENVELOPE_BYTES} bytes as JSON`]));
+      no(
+        err("TOO_LARGE", undefined, [
+          `envelope: expected at most ${MAX_ENVELOPE_BYTES} bytes as JSON`,
+        ]),
+      );
     if (size !== undefined && size > MAX_ENVELOPE_BYTES) return large();
     const b = bounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES);
     if (b === "large") return large();
     if (b === "deep")
-      return no(err("BAD_REQUEST", undefined, [`envelope: expected input nested at most ${MAX_INPUT_DEPTH} deep`]));
+      return no(
+        err("BAD_REQUEST", undefined, [
+          `envelope: expected input nested at most ${MAX_INPUT_DEPTH} deep`,
+        ]),
+      );
     if (Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES) return large();
     const version =
       envelope !== null && typeof envelope === "object"
         ? (envelope as { protocolVersion?: unknown }).protocolVersion
         : undefined;
     if (typeof version === "number" && Number.isInteger(version) && version < MIN_PROTOCOL_VERSION)
-      return no(err("UPDATE_REQUIRED", undefined, [`protocolVersion: expected at least ${MIN_PROTOCOL_VERSION}`]));
+      return no(
+        err("UPDATE_REQUIRED", undefined, [
+          `protocolVersion: expected at least ${MIN_PROTOCOL_VERSION}`,
+        ]),
+      );
     const parsed = envelopeS.safeParse(envelope);
     if (!parsed.success)
       return no(
@@ -478,15 +502,25 @@ export class SyncServer {
       const use = () => tx.clientPut(m.clientId, { ...client, seen: now, last: m.seq });
       if (!wellFormed || hit) {
         const e = err("BAD_REQUEST", undefined, [
-          wellFormed ? "mutationId: already used for a different change" : "mutationId: expected a ULID",
+          wellFormed
+            ? "mutationId: already used for a different change"
+            : "mutationId: expected a ULID",
         ]);
-        tx.seqAnswerPut(m.clientId, m.seq, { digest: sent, answer: { ok: false, error: e, seq: m.seq }, at: now });
+        tx.seqAnswerPut(m.clientId, m.seq, {
+          digest: sent,
+          answer: { ok: false, error: e, seq: m.seq },
+          at: now,
+        });
         use();
         return out(e, m.seq);
       }
       if (Math.abs(m.clientTime - now) > CLOCK_MAX_SKEW)
         return {
-          ...out(err("CLOCK_SKEW", undefined, ["clientTime: expected the server's time to within a minute"])),
+          ...out(
+            err("CLOCK_SKEW", undefined, [
+              "clientTime: expected the server's time to within a minute",
+            ]),
+          ),
         };
       const record = (answer: StoredResult) => {
         const a: StoredAnswer = { digest: payload, answer, at: now };
@@ -535,7 +569,12 @@ export class SyncServer {
   }
 
   /** A STALE answer with the records it is about, as `u` reads them now. */
-  private withReads(tx: StoreTx, u: string, a: Answer, reads: readonly string[] | undefined): Answer {
+  private withReads(
+    tx: StoreTx,
+    u: string,
+    a: Answer,
+    reads: readonly string[] | undefined,
+  ): Answer {
     if (a.ok || !reads?.length) return a;
     const g = readerOf(tx);
     const changes: Change[] = reads.map((key) => {
@@ -551,7 +590,8 @@ export class SyncServer {
   }
 
   private replay(tx: StoreTx, u: string, a: StoredResult, now: number): Answer {
-    if (a.ok) return { ok: true, result: structuredClone(a.result), serverTime: now, replayed: true };
+    if (a.ok)
+      return { ok: true, result: structuredClone(a.result), serverTime: now, replayed: true };
     const e = structuredClone(a.error) as AnswerError;
     return this.withReads(tx, u, { ok: false, error: e, serverTime: now, replayed: true }, a.reads);
   }
@@ -658,7 +698,13 @@ export class SyncServer {
     const s = tx.get(`space:${effect.sp}`);
     for (const [to, role] of s?.kind === "space" ? s.mods : []) {
       if (role === "member") continue;
-      this.notif(tx, now, staged, { to, type: "report", sp: effect.sp, report: effect.report, item: effect.item });
+      this.notif(tx, now, staged, {
+        to,
+        type: "report",
+        sp: effect.sp,
+        report: effect.report,
+        item: effect.item,
+      });
       const seen = tx.get(`seen:${to}`);
       if (seen?.kind === "seen" && seen.reps) staged.push([`seen:${to}`, { ...seen, reps: false }]);
     }
@@ -675,7 +721,8 @@ export class SyncServer {
       if (!r || !("mod" in r) || r.mod === "removed") return false;
       if (r.kind === "thread" && !r.del)
         return this.commit(tx, [[key, { ...r, sum: text, running: false }]], now) !== null;
-      if (r.kind === "followup" && !r.del) return this.commit(tx, [[key, { ...r, a: text }]], now) !== null;
+      if (r.kind === "followup" && !r.del)
+        return this.commit(tx, [[key, { ...r, a: text }]], now) !== null;
       return false;
     });
   }
@@ -691,7 +738,12 @@ export class SyncServer {
     return log.startsWith("user:") && (u === null || log !== `user:${u}`);
   }
 
-  private lastSeq(tx: StoreTx, u: string | null, clientId: string | undefined, now: number): LastSeq {
+  private lastSeq(
+    tx: StoreTx,
+    u: string | null,
+    clientId: string | undefined,
+    now: number,
+  ): LastSeq {
     if (u === null || clientId === undefined) return null;
     const c = tx.clientGet(clientId);
     if (!c || c.u !== u || c.seen <= now - CLIENT_IDLE_TTL) return null;
@@ -730,8 +782,7 @@ export class SyncServer {
     }
     const pinned = new Set(o.tier?.opened ?? []);
     if (u !== null)
-      for (const p of threads)
-        if (p.u === u || tx.get(pkg.saveKey(u, p.id))) pinned.add(p.id);
+      for (const p of threads) if (p.u === u || tx.get(pkg.saveKey(u, p.id))) pinned.add(p.id);
     return chooseTiers(threads, now, { ...o.tier, window }, pinned);
   }
 
@@ -755,7 +806,8 @@ export class SyncServer {
       this.housekeep(tx, now);
       const u = this.userOf(actor);
       const lastSeq = this.lastSeq(tx, u, options.clientId, now);
-      if (!logS.safeParse(log).success) return { records: [], cursor: "", lastSeq, serverTime: now };
+      if (!logS.safeParse(log).success)
+        return { records: [], cursor: "", lastSeq, serverTime: now };
       if (this.closedTo(log, u))
         return { records: [], cursor: this.serve(tx, log, u, 0, now), lastSeq, serverTime: now };
       const tiers = this.tiers(tx, log, u, now, options);
@@ -799,7 +851,8 @@ export class SyncServer {
       const lastSeq = this.lastSeq(tx, u, options.clientId, now);
       if (this.closedTo(log, u))
         return { changes: [], cursor: this.serve(tx, log, u, 0, now), lastSeq, serverTime: now };
-      if (u !== null && this.scopeChanged(tx, log, u, c.v, c.h)) return { resync: true, serverTime: now };
+      if (u !== null && this.scopeChanged(tx, log, u, c.v, c.h))
+        return { resync: true, serverTime: now };
       const tiers = this.tiers(tx, log, u, now, options);
       const changes: Change[] = [];
       let to = c.v;
@@ -808,7 +861,8 @@ export class SyncServer {
         if (v === null) continue;
         to = row.version;
         if (v === true) changes.push({ key: row.key, op: "del" });
-        else if (this.served(tx, v, tiers, false)) changes.push({ key: row.key, op: "put", record: v });
+        else if (this.served(tx, v, tiers, false))
+          changes.push({ key: row.key, op: "put", record: v });
       }
       return { changes, cursor: this.serve(tx, log, u, to, now), lastSeq, serverTime: now };
     });

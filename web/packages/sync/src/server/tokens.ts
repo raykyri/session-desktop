@@ -80,7 +80,10 @@ export class Tokens {
       }
       if (plain.readUInt8(0) !== FORMAT) return null;
       try {
-        const [log, u] = JSON.parse(plain.subarray(HEAD).toString("utf8")) as [string, string | null];
+        const [log, u] = JSON.parse(plain.subarray(HEAD).toString("utf8")) as [
+          string,
+          string | null,
+        ];
         return {
           log,
           u,
