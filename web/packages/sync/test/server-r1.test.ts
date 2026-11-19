@@ -204,15 +204,17 @@ for (const kind of STORES) {
     t.like(get(w, `run:${b.run}`), { status: "failed", end: "interrupted" });
   });
 
-  test(`${kind}: W1: a refused write does not roll back the housekeeping that ended a lease`, (t) => {
+  test(`${kind}: W1: a refused call does not roll back the housekeeping that ended a lease`, (t) => {
     const { w, open } = cast(t, kind);
     const o = ask(w, "otto", open, "t");
     const d = device(w, "mel");
     const { run } = fork(w, "mel", o.th, d.id);
     ok(t, w.server.call(d.as, "runs.claim", { run, device: d.id }));
     w.clock.advance(10 * MINUTE);
-    // a write that is refused, unrecorded, is the request that runs housekeeping
-    refused(t, w.as("mel", "followups.ask", { id: "bad", thread: o.th, q: "x" }), "BAD_REQUEST");
+    // the refused call (its transaction rolls back) is the request that runs
+    // housekeeping
+    const r = w.server.call(d.as, "runs.claim", { run: "NO-SUCH-RUN", device: d.id });
+    t.is(code(r), "NOT_FOUND");
     t.like(get(w, `run:${run}`), { status: "failed", end: "interrupted" });
   });
 
@@ -441,7 +443,11 @@ for (const kind of STORES) {
     const s = w.server.call(null, "devices.authorize", { name: "attacker" }) as Any;
     t.is(code(w.server.call(d1.as, "devices.approve", { request: s.result.request })), "FORBIDDEN");
     const late = w.server.call(null, "devices.authorize", { name: "late" }) as Any;
-    w.clock.advance(10 * MINUTE + 1);
+    // housekeeping runs just before the sign-in expires, then not again
+    // within the second: the call itself refuses it
+    w.clock.advance(10 * MINUTE - 500);
+    w.server.snapshot(null, "catalog");
+    w.clock.advance(600);
     t.is(
       code(w.server.call({ u: "mel" }, "devices.approve", { request: late.result.request })),
       "NOT_FOUND",
