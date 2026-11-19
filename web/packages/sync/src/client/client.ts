@@ -6,7 +6,14 @@
 // The replica: each open log's records as the server last served them (the
 // confirmed state), loaded from storage into the working set when the log is
 // opened, and written back on each change. Queries read the working set
-// through the overlay of pending writes.
+// through the overlay of pending writes. The stored replica belongs to one
+// person: `init` writes the person into storage before any log is saved, and
+// clears a stored state that names another person or names none.
+//
+// Reads: one read of a log at a time; a pull asked for while one is in
+// flight runs once after it (`hydrate` waits its turn too). A read the server
+// does not serve (`ReadError`) changes no log: UPDATE_REQUIRED holds the
+// outbox, UNAUTHORIZED signs the client out (`signedOut`).
 //
 // Prediction: each pending write is applied with `@session/mutators` over
 // the confirmed state and the writes before it (a `RecordSource` that
@@ -14,55 +21,97 @@
 // with each mutation's derived ids cached). A write the mutators answer
 // `unknown` stays pending without a prediction. On every change of the
 // confirmed state (a pull, a snapshot, an answer's records) the overlay is
-// rebuilt: rolled back, the changes applied, the pending writes run again.
-// An answered write stays in the overlay until every open log was pulled
-// after its answer, so its effect does not flicker.
+// rebuilt once: rolled back, the changes applied, the pending writes run
+// again. An answered write stays in the overlay until every open log was read
+// by a request made after its answer, so its effect does not flicker; the
+// records an answer carries (STALE's `changes`) are not such a read.
 //
 // The outbox (AGENTS.md; the mockup's `sxDrive`):
 // - one global order; a write gets its seq when it is sent (the last seq the
-//   server processed + 1);
+//   server processed + 1); what is on the wire is in storage first;
 // - every envelope carries `clientTime` (the device's clock plus the offset
 //   learned from CLOCK_SKEW, which is stored) and `queuedAt`;
-// - CLOCK_SKEW: the offset is corrected and the writes that were never sent
-//   uncertainly get new ids, each listing the ids it had in `replaces`;
-// - TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE, INTERNAL_SERVER_ERROR or no
-//   answer: the outbox pauses with backoff (1 s, doubled, at most 10 min;
-//   `retryAt` when the server gives one); after 5, the write is shown as
-//   failed and the outbox goes on;
-// - EXPIRED, and a write still queued 3 days after `queuedAt` (server time),
-//   are shown;
+// - a write's input ids are fixed once an envelope of it was sent: a copy of
+//   that envelope may still apply. CLOCK_SKEW corrects the offset and gives
+//   every queued write a new mutation id (the ids that were sent go to
+//   `replaces`), and new input ids to the writes never sent (with every
+//   write that names them changed to match). A sent write whose ids are
+//   ahead of the corrected clock waits until they are within a minute. A
+//   replayed answer whose result names another id than the input's (the
+//   server applied an older envelope) moves the write and the writes after
+//   it to the server's id;
+// - TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE, INTERNAL_SERVER_ERROR, no answer,
+//   and CLOCK_SKEW or OUT_OF_ORDER that do not converge are a try: the
+//   outbox pauses with backoff (1 s, doubled, at most 10 min); a `retryAt`
+//   holds that write only (and the writes that name an id it names) until
+//   then; after 5 tries the write is shown as failed and the outbox goes on.
+//   A timer sends the outbox when the next wait ends;
+// - EXPIRED is shown; a write still queued 3 days after `queuedAt` is dropped
+//   and shown, by the server's time as learned from an answer this session;
 // - UPDATE_REQUIRED holds the write and every write after it ("Update
-//   Session");
-// - OUT_OF_ORDER resends with the server's expected seq, WRONG_CLIENT
-//   registers again;
-// - Send again on a failed write gives it a new mutation id that lists the
-//   old ones in `replaces`.
-// Persistence is optional: with `MemoryStorage` (the web) a write lives only
-// while the page does.
+//   Session"); UNAUTHORIZED, and WRONG_CLIENT that a new registration does
+//   not cure, sign the client out (`signedOut`); OUT_OF_ORDER resends with
+//   the server's expected seq; WRONG_CLIENT registers again;
+// - Send again on a shown write: a new mutation id. A write the server
+//   refused with a recorded answer (EXPIRED, a refusal) never applied: it is
+//   sent as a new write, with new input ids and no `replaces` (listing the
+//   refused id would replay the refusal). Any other keeps its input ids and
+//   lists its sent ids in `replaces`, so a write the server applied under an
+//   old id is answered from it and never applied twice;
+// - online-only writes (a mutator marked `online`, and the `NOT_MUTATORS`
+//   calls) are sent at once, never queued, predicted or stored.
+// `persist: false` (the web): no wait across time: a write is sent at once,
+// a transient failure ends it as failed (shown with Try again), and nothing
+// is kept across a reload.
 //
 // Scope: a pull that answers resync takes a new snapshot of that log. A
 // closed space whose snapshot shows its user is no longer a member becomes a
-// frozen copy: the user's own threads and what they wrote under them, never
-// pulled again (they can still delete their threads there). Joining again
-// (a member record in the user log) brings the log back.
+// frozen copy if they were removed: the user's own threads and what they
+// wrote under them, never read again (they can still delete their threads
+// there). A voluntary leave (this device's `spaces.leave`, or the user log's
+// `ended: "left"`) keeps no copy. Joining again (a member record in the user
+// log) brings the log back.
+//
+// Tiers: a tiered space log holds some threads as summaries (their thread
+// and counts records only); a scan under such a thread is UNKNOWN. The
+// summaries are the ones the server marks (`summaries`), and any thread
+// whose records show it incomplete (an ask with no run, or fewer first-level
+// follow-ups or replies held than its counts record says). A thread the
+// person opened (`hydrate`) is reported in `tier.opened` for 14 days, so the
+// server keeps serving it in full.
+//
+// Live updates: `listen` holds an event stream for the logs open now with a
+// cursor; it reconnects when that set changes or a log gets a new cursor (the
+// stream drops a log whose token stops opening, and the poke it sends makes
+// the client pull, resync and reconnect). A poke pulls its open logs, then
+// sends the outbox.
 
 import * as pkg from "@session/mutators";
 
 import {
+  ID_MAX_AHEAD,
+  MAX_REPLACES,
   MAX_TRIES,
+  OPENED_TTL,
   OUTBOX_TTL,
   PROTOCOL_VERSION,
-  TRANSIENT,
+  RETRY_MAX,
   UNRECORDED,
   backoff,
+  isReadError,
   type Answer,
   type AnswerError,
   type ApiError,
   type CallAnswer,
   type Change,
   type Cursor,
+  type Envelope,
   type LogId,
+  type MembershipEnd,
+  type Pull,
+  type ReadError,
   type ReadOptions,
+  type Snapshot,
   type SseEvent,
   type StoredRecord,
   type TierOptions,
@@ -97,14 +146,29 @@ export interface OutboxEntry {
   input: unknown;
   /** When it was queued, in the server's time as the client estimates it. */
   queuedAt: number;
-  /** The mutation ids it had before it was reminted. */
+  /** The monotonic clock then (this process only): a CLOCK_SKEW sets
+   * `queuedAt` again from it. */
+  queuedMono?: number;
+  /** The mutation ids it had before that were sent: a copy of any of them
+   * may still reach the server. */
   replaces: string[];
-  /** An envelope with this mutation id may have reached the server without
-   * a definite answer: it keeps the id from then on. */
+  /** An envelope of it may have reached the server without a definite
+   * answer. */
   uncertain: boolean;
+  /** An envelope of it was sent: its input ids are fixed (Send again after a
+   * recorded refusal starts it afresh). */
+  sent: boolean;
+  /** An envelope with the current mutation id was sent. */
+  wire: boolean;
   tries: number;
-  /** Not sent before this time (client time). */
+  /** Not sent before this time (the client's estimate of the server's). */
   next: number;
+  /** When the wait until `next` began: a clock that reads earlier went
+   * back, and the write is sent. */
+  waitFrom?: number;
+  /** The wait is this write's own (a limit's `retryAt`): the writes after
+   * it go on. */
+  own?: boolean;
   state: EntryState;
   error?: ApiError;
   result?: unknown;
@@ -112,7 +176,8 @@ export interface OutboxEntry {
   minted: string[];
   /** Online only: sent at once, never kept. */
   online?: boolean;
-  /** The client's read tick when it was answered. */
+  /** The client's read tick when it was answered (this process only: set
+   * again when the outbox is loaded). */
   answeredTick?: number;
   /** What the mutators predicted. */
   prediction?: "ok" | "refused" | "unknown";
@@ -123,13 +188,26 @@ interface LiveLog {
   cursor: Cursor | null;
   records: Map<string, StoredRecord>;
   frozen: boolean;
-  /** The read tick of its latest successful read. */
+  /** The read tick of the latest read that was served (stamped when it was
+   * requested). */
   pulledTick: number;
   tier: TierOptions | undefined;
-  /** Threads served as summaries: their follow-ups, replies and runs are not
+  /** Threads held as summaries: their follow-ups, replies and runs are not
    * held (a scan of them is UNKNOWN). */
   summaries: Set<string>;
+  /** The threads the server marked as summaries (`summaries`). */
+  marked: Set<string>;
+  /** Reads run one at a time. */
+  chain: Promise<void>;
+  /** A pull asked for and not started yet: later asks join it. */
+  queued: Promise<boolean> | null;
 }
+
+/** A read fetched and not yet applied. */
+type Fetched = { log: LogId; l: LiveLog; tick: number } & (
+  | { pull: Extract<Pull, { changes: Change[] }>; snapshot?: undefined }
+  | { pull?: undefined; snapshot: Snapshot }
+);
 
 /** How a write is queued: the defaults are a new mutation id and the
  * client's time now. A write carried over from elsewhere (an outbox written
@@ -142,6 +220,12 @@ export interface WriteOptions {
   send?: boolean;
 }
 
+/** A timer the client sends its outbox with when a wait ends. */
+export interface Timer {
+  set(fn: () => void, ms: number): unknown;
+  clear(handle: unknown): void;
+}
+
 export interface ClientOptions {
   user: string;
   transport: Transport;
@@ -152,6 +236,14 @@ export interface ClientOptions {
   registry?: pkg.Registry;
   /** The default tier of the space logs it opens. */
   tier?: TierOptions;
+  /** False for the web: no outbox across time (see above). */
+  persist?: boolean;
+  /** The timer for the outbox's waits (default: `setTimeout`); null: none,
+   * the caller sends the outbox (tests, the simulation). */
+  timer?: Timer | null;
+  /** A clock that never jumps (ms; default `performance.now`): the time
+   * since the server last gave its time, for the 3-day drop. */
+  monotonic?: () => number;
 }
 
 /** Index scans a replica can never answer whole: their records are read
@@ -196,10 +288,47 @@ const SPACE_SCANS: ReadonlySet<pkg.IndexName> = new Set<pkg.IndexName>([
  * does not know it is banned, and the server refuses. */
 const PARTIAL_GETS: ReadonlySet<pkg.Kind> = new Set<pkg.Kind>(["invite", "report", "srcrep"]);
 
+/** The envelopes kept in `sent` (tests). */
+const SENT_KEPT = 1000;
+
 const json = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+const uniq = (xs: readonly string[]) => [...new Set(xs)].slice(-MAX_REPLACES);
 
 /** The record a client-made id is the id of, if any (`idOf`). */
 const idOfRecord = (r: StoredRecord) => pkg.idOf(r);
+
+/** Every string in a JSON value. */
+function stringsOf(v: unknown, out: Set<string> = new Set()): Set<string> {
+  if (typeof v === "string") out.add(v);
+  else if (Array.isArray(v)) for (const x of v) stringsOf(x, out);
+  else if (v !== null && typeof v === "object") for (const x of Object.values(v)) stringsOf(x, out);
+  return out;
+}
+
+/** A JSON value with each string `map` names replaced. */
+const remapValue = (v: unknown, map: ReadonlyMap<string, string>): unknown =>
+  typeof v === "string"
+    ? (map.get(v) ?? v)
+    : Array.isArray(v)
+      ? v.map((x) => remapValue(x, map))
+      : v !== null && typeof v === "object"
+        ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, remapValue(x, map)]))
+        : v;
+
+/** How a membership record says it ended, if it does. */
+function endedOf(r: StoredRecord): MembershipEnd | undefined {
+  const e = (r as { ended?: unknown }).ended;
+  return e === "left" || e === "removed" ? e : undefined;
+}
+
+const defaultTimer: Timer = {
+  set: (fn, ms) => {
+    const h = setTimeout(fn, ms) as unknown as { unref?: () => void };
+    h.unref?.();
+    return h;
+  },
+  clear: (h) => clearTimeout(h as Parameters<typeof clearTimeout>[0]),
+};
 
 export class SyncClient implements Changing {
   readonly user: string;
@@ -209,19 +338,39 @@ export class SyncClient implements Changing {
   private readonly random: () => number;
   private readonly registry: pkg.Registry;
   private readonly tier: TierOptions | undefined;
+  private readonly keep: boolean;
+  private readonly timer: Timer | null;
+  private readonly monotonic: () => number;
   private meta: ClientMeta;
   private readonly logs = new Map<LogId, LiveLog>();
   private overlay = new Map<string, StoredRecord | null>();
   private entries: OutboxEntry[] = [];
+  /** Online-only writes being sent (never stored or predicted). */
+  private direct: OutboxEntry[] = [];
   private readonly derivedCache = new Map<string, Set<string>>();
   private readonly waiters = new Map<string, ((a: Answer | null) => void)[]>();
   private readonly listeners = new Set<() => void>();
   private ver = 0;
   private tick = 0;
+  private loading: Promise<void> | null = null;
   private flushing: Promise<void> | null = null;
+  /** A write (or Send again, Retry) came in during a flush: it runs again. */
+  private again = false;
+  private timerHandle: unknown = null;
+  /** The server's time from the latest answer this session, and the
+   * monotonic clock then. */
+  private timeAt: { server: number; mono: number } | null = null;
+  /** Closed spaces this person left (not removed from). */
+  private readonly left = new Set<string>();
+  /** The connection of `listen`, aborted to reconnect. */
+  private stream: AbortController | null = null;
+  private stopped = false;
   /** The server answered UPDATE_REQUIRED: nothing is sent until an update. */
   updateRequired = false;
-  /** Every envelope sent, and every answer (tests). */
+  /** The server does not take this client's session or device token: nothing
+   * is sent until `signedIn`. */
+  signedOut = false;
+  /** The latest envelopes sent (tests). */
   readonly sent: { local: string; mutationId: string; seq: number }[] = [];
 
   constructor(o: ClientOptions) {
@@ -232,18 +381,39 @@ export class SyncClient implements Changing {
     this.random = o.random ?? Math.random;
     this.registry = o.registry ?? pkg.MUTATORS;
     this.tier = o.tier;
+    this.keep = o.persist ?? true;
+    this.timer = o.timer === undefined ? defaultTimer : o.timer;
+    const perf = (globalThis as { performance?: { now(): number } }).performance;
+    this.monotonic = o.monotonic ?? (perf ? () => perf.now() : () => this.clock.now());
     this.meta = { user: o.user, clientId: null, lastSeq: 0, offset: 0 };
   }
 
   /** Load the stored meta and outbox (a client restored after a restart).
-   * A stored state of another person is discarded. */
-  async init(): Promise<void> {
+   * A stored state of another person, or of nobody, is discarded, and the
+   * storage is marked as this person's. Runs once; `open` waits for it. */
+  init(): Promise<void> {
+    this.loading ??= this.load();
+    return this.loading;
+  }
+
+  private async load() {
     const m = await this.storage.loadMeta();
     if (m && m.user === this.user) this.meta = m;
-    else if (m) await this.storage.clear();
-    this.entries = ((await this.storage.loadOutbox()) as OutboxEntry[]).filter(
-      (e) => e && typeof e.local === "string",
-    );
+    else if (m || (await this.storage.logs()).length || (await this.storage.loadOutbox()).length)
+      await this.storage.clear();
+    await this.storage.saveMeta(this.meta);
+    this.entries = ((await this.storage.loadOutbox()) as OutboxEntry[])
+      .filter((e) => e && typeof e.local === "string")
+      .map((e) => {
+        const { queuedMono, ...rest } = e;
+        void queuedMono;
+        return { ...rest, sent: e.sent ?? true, wire: e.wire ?? true };
+      });
+    for (const e of this.entries) {
+      // a tick of this process: every log is read again before it leaves
+      if (e.state === "answered") e.answeredTick = this.tick++;
+      this.noteLeave(e);
+    }
     this.rebase();
   }
 
@@ -263,6 +433,19 @@ export class SyncClient implements Changing {
   }
   get offset() {
     return this.meta.offset;
+  }
+
+  /** An answer's `serverTime` (NaN when the transport made the answer up). */
+  private seen(serverTime: number) {
+    if (Number.isFinite(serverTime)) this.timeAt = { server: serverTime, mono: this.monotonic() };
+  }
+
+  /** The server's time, from the latest answer this session and the time
+   * since on the monotonic clock (a device clock that jumps does not move
+   * it); null before an answer. */
+  private serverNow(): number | null {
+    if (!this.timeAt) return null;
+    return this.timeAt.server + Math.max(0, this.monotonic() - this.timeAt.mono);
   }
 
   // ---- change notification (queries) ----
@@ -333,6 +516,11 @@ export class SyncClient implements Changing {
     return this.logs.get(log)?.frozen ?? false;
   }
 
+  /** The threads of a space log held as summaries. */
+  summaries(log: LogId): ReadonlySet<string> {
+    return this.logs.get(log)?.summaries ?? new Set();
+  }
+
   openLogs(): LogId[] {
     return [...this.logs.keys()];
   }
@@ -356,11 +544,22 @@ export class SyncClient implements Changing {
 
   // ---- reads ----
 
+  /** The threads of `log` opened in the past 14 days. */
+  private opened(log: LogId): string[] {
+    const by = this.meta.opened?.[log];
+    if (!by) return [];
+    const since = this.now() - OPENED_TTL;
+    return Object.entries(by).flatMap(([th, at]) => (at >= since ? [th] : []));
+  }
+
   private readOptions(log: LogId, extra: ReadOptions = {}): ReadOptions {
     const tier = this.logs.get(log)?.tier ?? this.tier;
+    const opened = [...(tier?.opened ?? []), ...this.opened(log)];
     return {
       ...(this.meta.clientId !== null ? { clientId: this.meta.clientId } : {}),
-      ...(log.startsWith("space:") && tier ? { tier } : {}),
+      ...(log.startsWith("space:") && tier
+        ? { tier: opened.length ? { ...tier, opened: [...new Set(opened)] } : tier }
+        : {}),
       ...extra,
     };
   }
@@ -369,130 +568,272 @@ export class SyncClient implements Changing {
     if (lastSeq !== null && lastSeq > this.meta.lastSeq) this.meta.lastSeq = lastSeq;
   }
 
-  /** Bring a log into the working set: from storage when it is there, else a
-   * snapshot. */
-  async open(log: LogId, tier?: TierOptions): Promise<void> {
-    if (this.logs.has(log)) return;
-    const stored = await this.storage.loadLog(log);
-    const t = tier ?? (log.startsWith("space:") ? this.tier : undefined);
-    if (stored) {
-      this.logs.set(log, {
-        cursor: stored.cursor,
-        records: new Map(stored.records),
-        frozen: stored.frozen,
-        pulledTick: -1,
-        tier: t,
-        summaries: new Set(),
-      });
-      this.rebase();
-      return;
-    }
-    this.logs.set(log, {
+  private newLog(tier: TierOptions | undefined): LiveLog {
+    return {
       cursor: null,
       records: new Map(),
       frozen: false,
       pulledTick: -1,
-      tier: t,
+      tier,
       summaries: new Set(),
-    });
+      marked: new Set(),
+      chain: Promise.resolve(),
+      queued: null,
+    };
+  }
+
+  /** Bring a log into the working set: from storage when it is there, else a
+   * snapshot. */
+  async open(log: LogId, tier?: TierOptions): Promise<void> {
+    await this.init();
+    if (this.logs.has(log)) return;
+    const stored = await this.storage.loadLog(log);
+    if (this.logs.has(log)) return;
+    const l = this.newLog(tier ?? (log.startsWith("space:") ? this.tier : undefined));
+    this.logs.set(log, l);
+    if (stored) {
+      l.cursor = stored.cursor;
+      l.records = new Map(stored.records);
+      l.frozen = stored.frozen;
+      l.summaries = this.summariesOf(log, l);
+      this.restream();
+      this.rebase();
+      return;
+    }
     await this.sync(log);
   }
 
   /** Take a log out of the working set (it stays in storage). */
   close(log: LogId) {
-    if (this.logs.delete(log)) this.rebase();
+    if (!this.logs.delete(log)) return;
+    this.restream();
+    this.rebase();
   }
 
   /** Bring open logs up to date: a pull, or a snapshot the first time and
-   * after a resync. Answers false when the server could not be reached. */
+   * after a resync. Answers false when a read was not served (no answer, or
+   * a `ReadError`). The view is rebuilt once, at the end. */
   async sync(...only: LogId[]): Promise<boolean> {
     const logs = only.length ? only : [...this.logs.keys()];
     let reached = true;
-    for (const log of logs) {
-      try {
-        await this.syncOne(log);
-      } catch (e) {
-        if (e instanceof Offline) reached = false;
-        else throw e;
+    try {
+      if (!(await this.readAll(logs))) reached = false;
+      // a frozen space the user is a member of again comes back; a frozen
+      // copy of a space they left is not kept
+      const me = this.logs.get(`user:${this.user}`);
+      const back: LogId[] = [];
+      for (const [log, l] of this.logs) {
+        if (!l.frozen) continue;
+        const sp = log.slice(6);
+        if (!this.left.has(sp) && !this.member(me, sp)) continue;
+        l.frozen = false;
+        l.cursor = null;
+        back.push(log);
       }
+      if (back.length) {
+        this.restream();
+        if (!(await this.readAll(back))) reached = false;
+      }
+    } finally {
+      this.settle();
     }
-    // a frozen space the user is a member of again comes back
-    const me = this.logs.get(`user:${this.user}`);
-    if (me)
-      for (const [log, l] of this.logs)
-        if (l.frozen && me.records.has(pkg.memberKey(log.slice(6), this.user))) {
-          l.frozen = false;
-          l.cursor = null;
-          try {
-            await this.syncOne(log);
-          } catch (e) {
-            if (!(e instanceof Offline)) throw e;
-            reached = false;
-          }
-        }
     return reached;
   }
 
-  private async syncOne(log: LogId) {
-    const l = this.logs.get(log);
-    if (!l || l.frozen) return;
+  /** Run `op` after the reads of `ls` before it. */
+  private serial<T>(ls: readonly LiveLog[], op: () => Promise<T>): Promise<T> {
+    const run = Promise.all(ls.map((l) => l.chain)).then(op);
+    for (const l of ls)
+      l.chain = run.then(
+        () => {},
+        () => {},
+      );
+    return run;
+  }
+
+  /** Read logs: each after the read of it in flight (a log with a read
+   * queued and not started joins that one). The logs are fetched one after
+   * the other, then applied together, so the view never holds one log read
+   * and another not. Answers false when a read was not served. */
+  private readAll(logs: readonly LogId[]): Promise<boolean> {
+    const mine: [LogId, LiveLog][] = [];
+    const joined: Promise<boolean>[] = [];
+    for (const log of new Set(logs)) {
+      const l = this.logs.get(log);
+      if (!l || l.frozen) continue;
+      if (l.queued) joined.push(l.queued);
+      else mine.push([log, l]);
+    }
+    if (mine.length) {
+      const run: Promise<boolean> = this.serial(
+        mine.map(([, l]) => l),
+        () => {
+          for (const [, l] of mine) if (l.queued === run) l.queued = null;
+          return this.readBatch(mine);
+        },
+      );
+      for (const [, l] of mine) l.queued = run;
+      joined.push(run);
+    }
+    return Promise.all(joined).then((xs) => xs.every(Boolean));
+  }
+
+  private async readBatch(batch: readonly [LogId, LiveLog][]): Promise<boolean> {
+    const got: Fetched[] = [];
+    let served = true;
+    try {
+      for (const [log, l] of batch) {
+        let f: Fetched | null | false;
+        try {
+          f = await this.fetch(log, l);
+        } catch (e) {
+          if (!(e instanceof Offline)) throw e;
+          f = false;
+        }
+        if (f === false) served = false;
+        else if (f) got.push(f);
+      }
+    } finally {
+      // the user log first: a membership that ended by a leave keeps no
+      // frozen copy
+      got.sort((a, b) => Number(b.log.startsWith("user:")) - Number(a.log.startsWith("user:")));
+      await Promise.all(got.map((f) => this.applyFetched(f)));
+    }
+    return served;
+  }
+
+  /** A read the server did not serve: no log changes. */
+  private readFailed(r: ReadError): false {
+    const code = r.error.code;
+    if (code === "UPDATE_REQUIRED") this.hold();
+    else if (code === "UNAUTHORIZED") this.signOut();
+    return false;
+  }
+
+  /** Fetch one log: a pull, or a snapshot when it has no cursor or the pull
+   * answers resync. Null: nothing to apply; false: not served. */
+  private async fetch(log: LogId, l: LiveLog): Promise<Fetched | null | false> {
+    if (l.frozen || this.logs.get(log) !== l) return null;
+    // the tick at request time: an answer that arrived while this read was
+    // in flight is not covered by it
+    const tick = this.tick++;
     if (l.cursor !== null) {
       const p = await this.transport.pull(log, l.cursor, this.readOptions(log));
-      if (!("resync" in p)) {
-        this.learn(p.lastSeq);
-        await this.applyChanges(log, p.changes, p.cursor);
-        return;
-      }
+      if (isReadError(p)) return this.readFailed(p);
+      this.seen(p.serverTime);
+      if (!("resync" in p)) return { log, l, tick, pull: p };
     }
     const s = await this.transport.snapshot(log, this.readOptions(log));
+    if (isReadError(s)) return this.readFailed(s);
+    this.seen(s.serverTime);
+    return { log, l, tick, snapshot: s };
+  }
+
+  /** Apply a fetched read to its log (synchronously; the storage write is
+   * the promise). */
+  private applyFetched(f: Fetched): Promise<void> {
+    const { log, l, tick } = f;
+    if (this.logs.get(log) !== l || l.frozen) return Promise.resolve();
+    if (f.pull) {
+      const p = f.pull;
+      this.learn(p.lastSeq);
+      if (p.summaries)
+        this.mark(
+          l,
+          p.changes.flatMap((c) => (c.op === "put" ? [c.record] : [])),
+          p.summaries,
+        );
+      this.noteEnds(log, p.changes);
+      return this.applyChanges(log, l, p.changes, p.cursor, tick);
+    }
+    const s = f.snapshot;
     this.learn(s.lastSeq);
     const records = new Map(s.records.map((x) => [x.key, x.record]));
-    const before = l.records;
-    const frozen = l.cursor !== null && this.freeze(log, before, records);
+    if (s.summaries) {
+      l.marked = new Set();
+      this.mark(l, [...records.values()], s.summaries);
+    }
+    if (log === `user:${this.user}`) this.noteMembers(records);
+    const frozen =
+      l.cursor !== null && !this.left.has(log.slice(6)) && this.freeze(log, l.records, records);
     l.cursor = s.cursor;
-    l.pulledTick = this.tick++;
-    l.summaries = this.summariesOf(log, records);
+    l.pulledTick = Math.max(l.pulledTick, tick);
     if (frozen) {
       l.records = frozen;
       l.frozen = true;
     } else l.records = records;
-    await this.storage.saveLog(log, {
+    l.summaries = this.summariesOf(log, l);
+    // a new cursor (or none, for a frozen copy): the event stream follows
+    this.restream();
+    return this.storage.saveLog(log, {
       cursor: l.cursor,
       frozen: l.frozen,
       replace: true,
       puts: [...l.records],
       dels: [],
     });
-    this.settle();
   }
 
-  /** The threads of a space snapshot held as summaries: an ask with no
-   * follow-up and no run, or a post with no reply, in a tiered read (the
-   * server sends a summary's thread and counts only). */
-  private summariesOf(log: LogId, records: Map<string, StoredRecord>): Set<string> {
+  /** Take the server's summary marks for the threads of `records`. */
+  private mark(l: LiveLog, records: readonly StoredRecord[], summaries: readonly string[]) {
+    const marked = new Set(summaries);
+    for (const r of records) {
+      const th = r.kind === "thread" ? r.id : r.kind === "counts" ? r.th : null;
+      if (th === null) continue;
+      if (marked.has(th)) l.marked.add(th);
+      else l.marked.delete(th);
+    }
+  }
+
+  /** The threads of a tiered space log held as summaries: those the server
+   * marked, and those whose records show them incomplete: an ask with no
+   * run, or a thread holding fewer first-level follow-ups or replies than
+   * its counts record says. */
+  private summariesOf(log: LogId, l: LiveLog): Set<string> {
     const out = new Set<string>();
-    const tier = this.logs.get(log)?.tier ?? this.tier;
-    if (!log.startsWith("space:") || !tier || tier.window === "full") return out;
-    const under = new Set<string>();
-    for (const r of records.values())
-      if (r.kind === "followup" || r.kind === "reply" || r.kind === "run") under.add(r.th);
-    for (const r of records.values()) {
-      if (r.kind !== "thread" || under.has(r.id)) continue;
-      const c = records.get(pkg.countsKey(r.id));
-      if (r.k === "ask" || (c?.kind === "counts" && c.r > 0)) out.add(r.id);
+    if (!log.startsWith("space:") || !l.tier || l.tier.window === "full") return out;
+    const firsts = new Map<string, number>();
+    const runs = new Set<string>();
+    for (const r of l.records.values()) {
+      if ((r.kind === "followup" && r.par === null) || (r.kind === "reply" && r.parent === null))
+        firsts.set(r.th, (firsts.get(r.th) ?? 0) + 1);
+      else if (r.kind === "run") runs.add(r.th);
+    }
+    for (const r of l.records.values()) {
+      if (r.kind !== "thread") continue;
+      const c = l.records.get(pkg.countsKey(r.id));
+      const want = c?.kind === "counts" ? c.r : 0;
+      if (l.marked.has(r.id) || (r.k === "ask" && !runs.has(r.id)) || (firsts.get(r.id) ?? 0) < want)
+        out.add(r.id);
     }
     return out;
   }
 
-  /** Fetch one thread in full (a summary the person opened). */
+  /** Fetch one thread in full (a summary the person opened); it is reported
+   * as opened in later reads for 14 days. */
   async hydrate(log: LogId, thread: string): Promise<void> {
     const l = this.logs.get(log);
     if (!l || l.frozen) return;
-    const s = await this.transport.snapshot(log, this.readOptions(log, { threads: [thread] }));
-    const puts = s.records.map((x): [string, StoredRecord] => [x.key, x.record]);
-    for (const [k, r] of puts) l.records.set(k, r);
-    l.summaries.delete(thread);
-    await this.storage.saveLog(log, { cursor: l.cursor, puts, dels: [] });
+    const opened = (this.meta.opened ??= {});
+    (opened[log] ??= {})[thread] = Math.round(this.now());
+    const since = this.now() - OPENED_TTL;
+    for (const by of Object.values(opened))
+      for (const [th, at] of Object.entries(by ?? {})) if (at < since) delete by?.[th];
+    await this.storage.saveMeta(this.meta);
+    await this.serial([l], async () => {
+      if (this.logs.get(log) !== l || l.frozen) return;
+      const s = await this.transport.snapshot(log, this.readOptions(log, { threads: [thread] }));
+      if (isReadError(s)) {
+        this.readFailed(s);
+        return;
+      }
+      this.seen(s.serverTime);
+      const puts = s.records.map((x): [string, StoredRecord] => [x.key, x.record]);
+      for (const [k, r] of puts) l.records.set(k, r);
+      l.marked.delete(thread);
+      l.summaries = this.summariesOf(log, l);
+      await this.storage.saveLog(log, { cursor: l.cursor, puts, dels: [] });
+    });
     this.rebase();
   }
 
@@ -522,10 +863,58 @@ export class SyncClient implements Changing {
     return out;
   }
 
-  /** Apply changes the server served for a log. */
-  private async applyChanges(log: LogId, changes: readonly Change[], cursor: Cursor | null) {
-    const l = this.logs.get(log);
-    if (!l) return;
+  /** How memberships of this user ended, from a user log's changes: a
+   * `del` of the member key with `ended`, or a record at the member key
+   * that carries `ended` (a membership kept as ended). */
+  private noteEnds(log: LogId, changes: readonly Change[]) {
+    if (log !== `user:${this.user}`) return;
+    for (const c of changes) {
+      const sp = this.memberSpace(c.key);
+      if (sp === null) continue;
+      const ended = c.op === "del" ? c.ended : endedOf(c.record);
+      if (ended === "left") this.left.add(sp);
+      else this.left.delete(sp);
+    }
+  }
+
+  /** A user log's snapshot: how its member records stand. */
+  private noteMembers(records: ReadonlyMap<string, StoredRecord>) {
+    for (const [key, r] of records) {
+      const sp = this.memberSpace(key);
+      if (sp === null) continue;
+      if (endedOf(r) === "left") this.left.add(sp);
+      else this.left.delete(sp);
+    }
+  }
+
+  /** Whether the user log holds a live membership of `sp`. */
+  private member(me: LiveLog | undefined, sp: string): boolean {
+    const r = me?.records.get(pkg.memberKey(sp, this.user));
+    return r !== undefined && endedOf(r) === undefined;
+  }
+
+  /** The space of this user's member key, or null. */
+  private memberSpace(key: string): string | null {
+    const m = /^member:([^:]+):(.+)$/.exec(key);
+    return m && m[2] === this.user ? (m[1] ?? null) : null;
+  }
+
+  /** This device's answered `spaces.leave`: a voluntary leave. */
+  private noteLeave(e: OutboxEntry) {
+    if (e.state !== "answered" || e.name !== "spaces.leave") return;
+    const sp = (e.input as { space?: unknown } | null)?.space;
+    if (typeof sp === "string") this.left.add(sp);
+  }
+
+  /** Apply changes the server served for a log; `tick`: the read's request
+   * tick (null: the records an answer carried, which are not a read). */
+  private async applyChanges(
+    log: LogId,
+    l: LiveLog,
+    changes: readonly Change[],
+    cursor: Cursor | null,
+    tick: number | null,
+  ) {
     const puts: [string, StoredRecord][] = [];
     const dels: string[] = [];
     for (const c of changes) {
@@ -538,9 +927,9 @@ export class SyncClient implements Changing {
       }
     }
     if (cursor !== null) l.cursor = cursor;
-    l.pulledTick = this.tick++;
+    if (tick !== null) l.pulledTick = Math.max(l.pulledTick, tick);
+    l.summaries = this.summariesOf(log, l);
     await this.storage.saveLog(log, { cursor: l.cursor, puts, dels });
-    this.settle();
   }
 
   /** Records an answer carried (STALE's `changes`): applied to every open
@@ -552,13 +941,25 @@ export class SyncClient implements Changing {
       const mine = changes.filter(
         (c) => l.records.has(c.key) || (c.op === "put" && pkg.logsOf(c.record).includes(log)),
       );
-      if (mine.length) await this.applyChanges(log, mine, null);
+      if (mine.length) await this.applyChanges(log, l, mine, null, null);
     }
   }
 
-  /** Drop the answered writes every open log has been pulled after, then
+  /** Drop the answered writes every open log has been read after, then
    * rebuild the overlay. */
   private settle() {
+    // a shown write that went without an answer and whose record arrived
+    // applied after all
+    const shown = this.entries.filter((e) => SHOWN.has(e.state) && e.uncertain);
+    if (shown.length) {
+      const ids = this.confirmedIds();
+      for (const e of shown)
+        if (this.appliedHere(e, ids)) {
+          e.state = "answered";
+          e.answeredTick = this.tick++;
+          delete e.error;
+        }
+    }
     const live = [...this.logs.values()].filter((l) => !l.frozen);
     const oldest = live.length ? Math.min(...live.map((l) => l.pulledTick)) : Infinity;
     const before = this.entries.length;
@@ -566,6 +967,8 @@ export class SyncClient implements Changing {
       (e) => e.state !== "answered" || (e.answeredTick ?? Infinity) >= oldest,
     );
     if (this.entries.length !== before) void this.persist();
+    const pending = new Set(this.entries.flatMap((e) => (PENDING.has(e.state) ? [e.mutationId] : [])));
+    for (const m of this.derivedCache.keys()) if (!pending.has(m)) this.derivedCache.delete(m);
     this.rebase();
   }
 
@@ -694,38 +1097,58 @@ export class SyncClient implements Changing {
 
   /** Queue a write, predict it, and send the outbox. Answers its local id
    * and a promise of the server's answer (null: it ended without one: shown,
-   * or dropped). */
+   * or dropped). An online-only write is sent at once and never queued. */
   write(
     name: string,
     input: unknown,
     o: WriteOptions = {},
   ): { local: string; answer: Promise<Answer | null> } {
+    const local = pkg.ulid(this.now(), this.random);
+    if (Object.hasOwn(pkg.NOT_MUTATORS, name)) {
+      const answer = this.call(name, input).then(
+        (a): Answer => a,
+        (e: unknown) => {
+          if (e instanceof Offline) return null;
+          throw e;
+        },
+      );
+      return { local, answer };
+    }
     const def = this.registry.get(name);
     const parsed = def?.input.safeParse(input);
     const minted = parsed?.success && def ? def.ids(parsed.data) : [];
     const now = this.now();
+    const queuedAt = Math.round(o.queuedAt ?? now);
     const e: OutboxEntry = {
-      local: pkg.ulid(now, this.random),
+      local,
       mutationId: o.mutationId ?? this.newId(),
       name,
       input: json(input),
-      queuedAt: Math.round(o.queuedAt ?? now),
+      queuedAt,
+      queuedMono: this.monotonic() - (now - queuedAt),
       replaces: [...(o.replaces ?? [])],
       uncertain: false,
+      sent: false,
+      wire: false,
       tries: 0,
       next: 0,
       state: "queued",
       minted,
       ...(def?.online ? { online: true } : {}),
     };
-    this.entries.push(e);
     const answer = new Promise<Answer | null>((resolve) => {
       this.waiters.set(e.local, [...(this.waiters.get(e.local) ?? []), resolve]);
     });
+    if (e.online) {
+      this.direct.push(e);
+      void this.flush();
+      return { local, answer };
+    }
+    this.entries.push(e);
     void this.persist();
     this.rebase();
     if (o.send !== false) void this.flush();
-    return { local: e.local, answer };
+    return { local, answer };
   }
 
   /** An online-only call (`NOT_MUTATORS`): sent now, never queued. */
@@ -740,7 +1163,18 @@ export class SyncClient implements Changing {
   }
 
   private async persist() {
-    await this.storage.saveOutbox(this.entries);
+    if (this.keep)
+      await this.storage.saveOutbox(
+        // what holds for this process only is not stored
+        this.entries.map((e) => {
+          const { answeredTick, queuedMono, prediction, predictedError, ...rest } = e;
+          void answeredTick;
+          void queuedMono;
+          void prediction;
+          void predictedError;
+          return rest;
+        }),
+      );
     await this.storage.saveMeta(this.meta);
   }
 
@@ -755,18 +1189,67 @@ export class SyncClient implements Changing {
     return true;
   }
 
-  /** Send a failed (or expired, or dropped) write again: a new mutation id,
-   * the old ones in `replaces`, so a write the server applied under an old
-   * id is answered from it and never applied twice. */
+  /** Whether the confirmed state holds a record with an id `e` made: an
+   * envelope of it applied (only this client makes its ids). */
+  private appliedHere(e: OutboxEntry, ids = this.confirmedIds()): boolean {
+    return e.sent && e.minted.some((id) => ids.has(id));
+  }
+
+  /** New input ids for `e` (its ids were never used on the server), with
+   * the writes after it that name them changed to match. */
+  private freshIds(e: OutboxEntry) {
+    const map = new Map(e.minted.map((id) => [id, this.newId()]));
+    this.remap(map, [e]);
+  }
+
+  /** Replace ids in the inputs of `own` and of every queued write never
+   * sent (a sent write's input is fixed). */
+  private remap(map: ReadonlyMap<string, string>, own: readonly OutboxEntry[] = []) {
+    if (!map.size) return;
+    for (const e of [...this.direct, ...this.entries]) {
+      if (!own.includes(e) && (e.sent || e.state !== "queued")) continue;
+      e.input = remapValue(e.input, map);
+      e.minted = e.minted.map((id) => map.get(id) ?? id);
+    }
+  }
+
+  /** Send a shown write again with a new mutation id.
+   * - A write whose made ids the replica holds applied: it is answered.
+   * - One never sent, or one the server refused with a recorded answer
+   *   (EXPIRED, a refusal) that never went without an answer, never
+   *   applied: it goes as a new write, with new input ids.
+   * - Any other keeps its input ids (a create that applied under an
+   *   envelope whose answer is gone answers CONFLICT, not a second copy),
+   *   and a failed or dropped one lists its sent ids in `replaces`, so a
+   *   write the server applied under an old id is answered from it.
+   * A recorded refusal is never listed: it would be replayed. */
   sendAgain(local: string): boolean {
     const e = this.entries.find((x) => x.local === local && SHOWN.has(x.state));
     if (!e) return false;
-    e.replaces = [...new Set([...e.replaces, e.mutationId])];
+    const refused = e.state === "expired" || e.state === "refused";
+    if (this.appliedHere(e)) {
+      e.state = "answered";
+      e.answeredTick = this.tick++;
+      delete e.error;
+      void this.persist();
+      this.rebase();
+      return true;
+    }
+    if (!e.sent || (refused && !e.uncertain)) {
+      e.replaces = [];
+      e.sent = false;
+      e.uncertain = false;
+      this.freshIds(e);
+    } else if (refused) e.replaces = [];
+    else if (e.wire) e.replaces = uniq([...e.replaces, e.mutationId]);
     e.mutationId = this.newId();
+    e.wire = false;
     e.queuedAt = Math.round(this.now());
-    e.uncertain = false;
+    e.queuedMono = this.monotonic();
     e.tries = 0;
     e.next = 0;
+    delete e.waitFrom;
+    delete e.own;
     e.state = "queued";
     delete e.error;
     void this.persist();
@@ -777,7 +1260,11 @@ export class SyncClient implements Changing {
 
   /** "Retry now": a waiting write is sent now. */
   retryNow() {
-    for (const e of this.entries) if (e.state === "queued") e.next = 0;
+    for (const e of this.entries)
+      if (e.state === "queued") {
+        e.next = 0;
+        delete e.waitFrom;
+      }
     return this.flush();
   }
 
@@ -785,6 +1272,13 @@ export class SyncClient implements Changing {
   updated() {
     this.updateRequired = false;
     for (const e of this.entries) if (e.state === "held") e.state = "queued";
+    return this.flush();
+  }
+
+  /** After the person signed in again (a new session or device token). */
+  signedIn() {
+    this.signedOut = false;
+    this.changed();
     return this.flush();
   }
 
@@ -797,8 +1291,10 @@ export class SyncClient implements Changing {
       if (e instanceof Offline) return false;
       throw e;
     }
+    this.seen(r.serverTime);
     if (!r.ok) {
       if (r.error.code === "UPDATE_REQUIRED") this.hold();
+      else if (r.error.code === "UNAUTHORIZED") this.signOut();
       return false;
     }
     this.meta.clientId = r.clientId;
@@ -808,14 +1304,24 @@ export class SyncClient implements Changing {
   }
 
   private hold() {
-    this.updateRequired = true;
+    if (!this.updateRequired) {
+      this.updateRequired = true;
+      this.changed();
+    }
     for (const e of this.entries) if (e.state === "queued") e.state = "held";
   }
 
-  /** A write still queued 3 days after it was queued (server time) is
-   * dropped and shown, never sent. */
+  private signOut() {
+    if (this.signedOut) return;
+    this.signedOut = true;
+    this.changed();
+  }
+
+  /** A write still queued 3 days after it was queued (server time, as an
+   * answer this session gave it) is dropped and shown, never sent. */
   private expire() {
-    const now = this.now();
+    const now = this.serverNow();
+    if (now === null) return;
     for (const e of this.entries)
       if (e.state === "queued" && now - e.queuedAt >= OUTBOX_TTL) this.end(e, "dropped");
   }
@@ -823,141 +1329,272 @@ export class SyncClient implements Changing {
   private end(e: OutboxEntry, state: EntryState, error?: ApiError, a: Answer | null = null) {
     e.state = state;
     if (error) e.error = error;
-    if (e.online && state === "failed") {
-      // online only: never kept
-      this.entries = this.entries.filter((x) => x !== e);
-    }
+    // online only: never kept
+    if (e.online) this.direct = this.direct.filter((x) => x !== e);
     this.resolve(e, a);
   }
 
-  /** New ids for the writes that never reached the server uncertainly
-   * (their ids came from a clock that was off): a new mutation id that lists
-   * the old one in `replaces`, and new client-made ids in their inputs, with
-   * every write that names those ids changed to match. */
-  private remint() {
+  /** CLOCK_SKEW: the offset is corrected, every queued write gets a new
+   * mutation id (one that was sent goes to `replaces`) and `queuedAt` on the
+   * corrected clock (from the monotonic clock when it was queued in this
+   * process; else at most now), and the writes never sent get new input ids. */
+  private reclock(serverTime: number) {
+    this.meta.offset = serverTime - this.clock.now();
+    const now = Math.round(this.now());
+    const mono = this.monotonic();
     const map = new Map<string, string>();
-    for (const e of this.entries) {
-      if (e.state !== "queued" || e.uncertain) continue;
-      for (const id of e.minted) map.set(id, this.newId());
-      e.replaces = [...new Set([...e.replaces, e.mutationId])];
+    for (const e of [...this.direct, ...this.entries]) {
+      if (e.state !== "queued") continue;
+      if (e.wire) e.replaces = uniq([...e.replaces, e.mutationId]);
       e.mutationId = this.newId();
-      e.queuedAt = Math.round(this.now());
+      e.wire = false;
+      e.queuedAt =
+        e.queuedMono !== undefined
+          ? Math.min(now, Math.round(now - (mono - e.queuedMono)))
+          : Math.min(now, e.queuedAt);
+      if (!e.sent) for (const id of e.minted) map.set(id, this.newId());
     }
-    if (!map.size) return;
-    const remap = (v: unknown): unknown =>
-      typeof v === "string"
-        ? (map.get(v) ?? v)
-        : Array.isArray(v)
-          ? v.map(remap)
-          : v !== null && typeof v === "object"
-            ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, remap(x)]))
-            : v;
-    for (const e of this.entries) {
-      if (e.state !== "queued" || e.uncertain) continue;
-      e.input = remap(e.input);
-      e.minted = e.minted.map((id) => map.get(id) ?? id);
-    }
+    this.remap(map);
   }
 
-  /** Send the outbox in order (one flush at a time). */
+  /** A replayed answer whose result names another id than the write's
+   * input: the server applied an older envelope of it. The write and the
+   * queued writes never sent take the server's id. */
+  private adopt(e: OutboxEntry, result: unknown) {
+    const id = (result as { id?: unknown } | null)?.id;
+    const mine = e.minted[0];
+    if (e.minted.length !== 1 || typeof id !== "string" || mine === undefined || id === mine)
+      return;
+    this.remap(new Map([[mine, id]]), [e]);
+  }
+
+  /** When `e`'s input ids (fixed once sent) are within a minute of the
+   * server's clock: ids made by a device clock that was ahead wait. */
+  private idsDue(e: OutboxEntry): number {
+    if (!e.sent) return 0;
+    let at = 0;
+    for (const id of e.minted) if (pkg.isUlid(id)) at = Math.max(at, pkg.ulidTime(id));
+    return at - ID_MAX_AHEAD;
+  }
+
+  /** When `e` may be sent: `next`, or now when the clock went back since
+   * its wait began. */
+  private dueAt(e: OutboxEntry, now: number): number {
+    if (e.waitFrom !== undefined && now < e.waitFrom) return 0;
+    return e.next;
+  }
+
+  /** The write to send next, or null: an online write first; then the first
+   * queued write in order, unless it is waiting (a backoff pauses the
+   * outbox; a write's own `retryAt` holds it, and the writes that name an id
+   * it makes, which wait with it). */
+  private pick(now = this.now()): OutboxEntry | null {
+    const d = this.direct.find((e) => e.state === "queued");
+    if (d) return d;
+    if (this.updateRequired || this.signedOut) return null;
+    const held = new Set<string>();
+    for (const e of this.entries) {
+      if (e.state !== "queued") continue;
+      const due = this.dueAt(e, now) <= now;
+      if ((e.own && !due) || (held.size > 0 && [...stringsOf(e.input)].some((x) => held.has(x)))) {
+        for (const id of e.minted) held.add(id);
+        continue;
+      }
+      return due ? e : null;
+    }
+    return null;
+  }
+
+  /** Send the outbox in order (one flush at a time; a write queued during a
+   * flush is sent by it). */
   flush(): Promise<void> {
-    this.flushing ??= this.flushOnce().finally(() => {
-      this.flushing = null;
-    });
+    if (this.flushing) {
+      this.again = true;
+      return this.flushing;
+    }
+    const run = async () => {
+      try {
+        for (;;) {
+          this.again = false;
+          const blocked = await this.flushOnce();
+          if (blocked || !(this.again || this.pick() !== null)) break;
+        }
+      } finally {
+        this.flushing = null;
+        this.schedule();
+      }
+    };
+    this.flushing = run();
     return this.flushing;
   }
 
-  private async flushOnce() {
+  /** Set the timer for the earliest wait of a queued write. */
+  private schedule() {
+    if (!this.timer || this.stopped) return;
+    if (this.timerHandle !== null) this.timer.clear(this.timerHandle);
+    this.timerHandle = null;
+    if (this.updateRequired || this.signedOut) return;
+    const now = this.now();
+    let at = Infinity;
+    for (const e of this.entries) if (e.state === "queued") at = Math.min(at, this.dueAt(e, now));
+    if (!Number.isFinite(at) || at <= now) return;
+    // at most the longest backoff: a clock that jumped is looked at again
+    this.timerHandle = this.timer.set(
+      () => {
+        this.timerHandle = null;
+        void this.flush();
+      },
+      Math.min(RETRY_MAX, at - now),
+    );
+  }
+
+  /** Stop the outbox's timer (the client is no longer used). */
+  stop() {
+    this.stopped = true;
+    if (this.timer && this.timerHandle !== null) this.timer.clear(this.timerHandle);
+    this.timerHandle = null;
+    this.stream?.abort();
+  }
+
+  /** Online writes cannot wait: held or signed out, they fail at once. */
+  private failDirect() {
+    if (!this.updateRequired && !this.signedOut) return;
+    for (const e of [...this.direct])
+      this.end(e, "failed", {
+        code: this.updateRequired ? "UPDATE_REQUIRED" : "UNAUTHORIZED",
+        message: this.updateRequired ? "Update Session." : "Sign in again.",
+      });
+  }
+
+  /** One pass over the outbox. Answers whether it is blocked (no server,
+   * held, signed out), so the flush does not go round again. */
+  private async flushOnce(): Promise<boolean> {
     this.expire();
     if (this.updateRequired) this.hold();
-    if (!this.entries.some((e) => e.state === "queued")) return this.persist();
-    if (!(await this.register())) return this.persist();
-    let skews = 0;
-    let gaps = 0;
-    let fresh = 0;
-    for (;;) {
-      this.expire();
-      const e = this.entries.find((x) => x.state === "queued");
-      if (!e || this.updateRequired) break;
-      const now = this.now();
-      // waiting out its backoff: the outbox pauses (a wait past the longest
-      // backoff means the device's clock went back: it is sent now)
-      if (e.next > now && e.next - now <= 2 * 600_000) break;
-      const env = {
-        clientId: this.meta.clientId ?? "",
-        seq: this.meta.lastSeq + 1,
-        mutationId: e.mutationId,
-        name: e.name,
-        input: e.input,
-        protocolVersion: PROTOCOL_VERSION,
-        clientTime: Math.max(0, Math.round(now)),
-        queuedAt: e.queuedAt,
-        replaces: e.replaces,
-      };
-      this.sent.push({ local: e.local, mutationId: e.mutationId, seq: env.seq });
-      const [a] = await this.transport.push([env]);
-      if (!a) {
-        // no answer: it may have been applied; it keeps its id from now on
-        e.uncertain = true;
-        if (this.transient(e, now, undefined)) continue;
-        break;
-      }
-      if (!a.ok) {
-        const code = a.error.code;
-        if (code === "CLOCK_SKEW" && skews++ < 3) {
-          this.meta.offset = a.serverTime - this.clock.now();
-          this.remint();
-          continue;
-        }
-        if (code === "OUT_OF_ORDER" && a.error.expectedSeq !== undefined && gaps++ < 3) {
-          this.meta.lastSeq = a.error.expectedSeq - 1;
-          continue;
-        }
-        if (code === "WRONG_CLIENT" && fresh++ < 1) {
-          this.meta.clientId = null;
-          if (!(await this.register())) break;
-          continue;
-        }
-        if (code === "UPDATE_REQUIRED") {
-          this.hold();
+    this.failDirect();
+    let blocked = false;
+    if (this.pick() === null) {
+      // nothing to send now
+    } else if (!(await this.register())) blocked = true;
+    else {
+      let skews = 0;
+      let gaps = 0;
+      let fresh = 0;
+      for (;;) {
+        this.expire();
+        this.failDirect();
+        const now = this.now();
+        const e = this.pick(now);
+        if (!e) break;
+        // ids a device clock made ahead of the server's: the outbox waits
+        // until they are within a minute, for at most 10 minutes. Ids
+        // further ahead are sent: the server's EXPIRED is recorded under
+        // every id the write had, so no copy of it applies later, and Send
+        // again starts it afresh
+        const ids = this.idsDue(e);
+        if (ids > now && ids - now <= RETRY_MAX && !e.online) {
+          e.next = ids;
+          e.waitFrom = now;
+          e.own = false;
           break;
         }
-        if (TRANSIENT.has(code)) {
-          if (this.transient(e, now, a.error)) continue;
+        const env: Envelope = {
+          clientId: this.meta.clientId ?? "",
+          seq: this.meta.lastSeq + 1,
+          mutationId: e.mutationId,
+          name: e.name,
+          input: e.input,
+          protocolVersion: PROTOCOL_VERSION,
+          clientTime: Math.max(0, Math.round(now)),
+          queuedAt: e.queuedAt,
+          replaces: e.replaces,
+        };
+        e.sent = true;
+        e.wire = true;
+        // what goes on the wire is in storage first (a remint, `uncertain`)
+        if (!e.online) await this.persist();
+        this.sent.push({ local: e.local, mutationId: e.mutationId, seq: env.seq });
+        if (this.sent.length > SENT_KEPT) this.sent.splice(0, this.sent.length - SENT_KEPT);
+        const [a] = await this.transport.push([env]);
+        if (!a) {
+          // no answer: it may have been applied
+          e.uncertain = true;
+          if (this.transient(e, now, undefined)) continue;
           break;
         }
-        if (code === "TOO_LARGE") {
-          this.end(e, "failed", a.error, a);
-          continue;
+        this.seen(a.serverTime);
+        if (!a.ok) {
+          const code = a.error.code;
+          if (code === "CLOCK_SKEW" && skews++ < 3) {
+            this.reclock(a.serverTime);
+            continue;
+          }
+          if (code === "OUT_OF_ORDER" && a.error.expectedSeq !== undefined && gaps++ < 3) {
+            this.meta.lastSeq = a.error.expectedSeq - 1;
+            continue;
+          }
+          if (code === "WRONG_CLIENT" && fresh++ < 1) {
+            this.meta.clientId = null;
+            if (await this.register()) continue;
+            blocked = true;
+            break;
+          }
+          if (code === "UNAUTHORIZED" || code === "WRONG_CLIENT") {
+            this.signOut();
+            this.failDirect();
+            blocked = true;
+            break;
+          }
+          if (code === "UPDATE_REQUIRED") {
+            this.hold();
+            this.failDirect();
+            blocked = true;
+            break;
+          }
+          if (code === "TOO_LARGE") {
+            this.end(e, "failed", a.error, a);
+            continue;
+          }
+          // transient, and CLOCK_SKEW or OUT_OF_ORDER that did not converge
+          if (UNRECORDED.has(code)) {
+            if (this.transient(e, now, a.error)) continue;
+            break;
+          }
         }
-        if (UNRECORDED.has(code)) break;
+        // recorded (or replayed): applied or refused
+        if (a.seq !== undefined) this.meta.lastSeq = Math.max(this.meta.lastSeq, a.seq);
+        skews = 0;
+        gaps = 0;
+        if (a.ok) {
+          if (a.replayed) this.adopt(e, a.result);
+          if (e.online) this.direct = this.direct.filter((x) => x !== e);
+          e.state = "answered";
+          e.result = a.result;
+          e.answeredTick = this.tick++;
+          if (e.name === "threads.delete") this.unfreeze((e.input as { id: string }).id);
+          this.noteLeave(e);
+          this.resolve(e, a);
+        } else {
+          await this.applyAnswerChanges(a.error.changes);
+          // the recorded answer covers every id it had: none can apply
+          e.replaces = [];
+          this.end(e, a.error.code === "EXPIRED" ? "expired" : "refused", a.error, a);
+        }
+        this.rebase();
       }
-      // recorded (or replayed): applied or refused
-      if (a.seq !== undefined) this.meta.lastSeq = Math.max(this.meta.lastSeq, a.seq);
-      skews = 0;
-      gaps = 0;
-      if (a.ok) {
-        e.state = "answered";
-        e.result = a.result;
-        e.answeredTick = this.tick++;
-        if (e.name === "threads.delete") this.unfreeze((e.input as { id: string }).id);
-        this.resolve(e, a);
-      } else {
-        await this.applyAnswerChanges(a.error.changes);
-        this.end(e, a.error.code === "EXPIRED" ? "expired" : "refused", a.error, a);
-      }
-      await this.persist();
-      this.rebase();
     }
     await this.persist();
     this.rebase();
+    return blocked;
   }
 
-  /** A transient answer (or none): try again after the backoff, or after 5
-   * show it as failed. Answers whether the flush goes on. */
+  /** A try that failed (a transient answer, or none): wait the backoff, or
+   * the answer's `retryAt` (this write only), or after 5 tries (online only
+   * or on the web: at once) show it as failed. Answers whether the flush
+   * goes on. */
   private transient(e: OutboxEntry, now: number, error: AnswerError | undefined): boolean {
     e.tries++;
-    if (e.online || e.tries >= MAX_TRIES) {
+    if (e.online || !this.keep || e.tries >= MAX_TRIES) {
       this.end(
         e,
         "failed",
@@ -966,8 +1603,10 @@ export class SyncClient implements Changing {
       return true;
     }
     const at = error?.retryAt ? pkg.msOf(error.retryAt) : NaN;
-    e.next = Number.isFinite(at) ? at : now + backoff(e.tries);
-    return false;
+    e.own = Number.isFinite(at);
+    e.next = e.own ? at : now + backoff(e.tries);
+    e.waitFrom = now;
+    return e.own;
   }
 
   /** The person deleted a thread: drop it from any frozen copy. */
@@ -988,16 +1627,39 @@ export class SyncClient implements Changing {
 
   // ---- live updates ----
 
-  /** Listen for pokes until `signal` aborts: each poke pulls its logs, then
-   * the outbox is sent (an answer that arrived as a change). */
+  /** Reconnect `listen`'s stream (the logs it is for changed). */
+  private restream() {
+    this.stream?.abort();
+  }
+
+  /** Listen for pokes until `signal` aborts: each poke pulls its open logs,
+   * then the outbox is sent (an answer that arrived as a change). The
+   * stream reconnects when the open logs or their cursors change. */
   async listen(signal: AbortSignal): Promise<void> {
-    await this.transport.listen(
-      () => this.cursors(),
-      (e: SseEvent) => {
-        if (e.type === "poke") void this.sync(...e.logs.filter((l) => this.logs.has(l)));
-      },
-      signal,
-    );
+    const onEvent = (e: SseEvent) => {
+      if (e.type !== "poke") return;
+      const logs = e.logs.filter((l) => this.logs.has(l));
+      if (!logs.length) return;
+      void this.sync(...logs)
+        .then(() => this.flush())
+        .catch(() => {
+          // a failed read is retried by the next poke or sync
+        });
+    };
+    while (!signal.aborted && !this.stopped) {
+      const conn = new AbortController();
+      const stop = () => conn.abort();
+      signal.addEventListener("abort", stop);
+      this.stream = conn;
+      try {
+        await this.transport.listen(() => this.cursors(), onEvent, conn.signal);
+      } finally {
+        signal.removeEventListener("abort", stop);
+        if (this.stream === conn) this.stream = null;
+      }
+      // the stream ended by itself: done
+      if (!conn.signal.aborted) return;
+    }
   }
 }
 

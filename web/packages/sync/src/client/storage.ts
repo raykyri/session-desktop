@@ -21,6 +21,10 @@ export interface ClientMeta {
   lastSeq: number;
   /** Milliseconds added to the device's clock, learned from CLOCK_SKEW. */
   offset: number;
+  /** The threads the person opened (`hydrate`) in each space log, with when
+   * (server time, as the client estimates it): reported in `tier.opened`
+   * for 14 days. */
+  opened?: Partial<Record<LogId, Record<string, number>>>;
 }
 
 /** One log as stored: its cursor, its records, and whether it is a frozen

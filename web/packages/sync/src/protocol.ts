@@ -47,6 +47,9 @@ export const MAX_REPLACES = 64;
 export const RETRY_MIN = 1000;
 export const RETRY_MAX = 10 * MINUTE;
 export const MAX_TRIES = 5;
+/** How long a thread the person opened (`hydrate`) stays pinned in full:
+ * the client reports it in `tier.opened` for this long. */
+export const OPENED_TTL = 14 * DAY;
 
 /** The signed-in person a request is for (null: signed out), and the device
  * whose token authenticated it (absent for a browser session). */
@@ -81,7 +84,16 @@ export interface Envelope {
 
 /** One change of a log: a record as the reader may read it now, or a key the
  * reader no longer holds. */
-export type Change = { key: string; op: "put"; record: StoredRecord } | { key: string; op: "del" };
+export type Change =
+  | { key: string; op: "put"; record: StoredRecord }
+  | { key: string; op: "del"; ended?: MembershipEnd };
+
+/** How a membership ended: the member left, or was removed (or banned). A
+ * user log's `del` of its reader's member key (`member:<space>:<user>`)
+ * carries it, so each of the person's devices can tell a voluntary leave
+ * (the device deletes its copy of a closed space) from a removal (the device
+ * keeps a frozen copy). A `del` without it reads as a removal. */
+export type MembershipEnd = "left" | "removed";
 
 /** An error answer: `@session/mutators`' `ApiError` with what the protocol
  * adds. `expectedSeq` comes with OUT_OF_ORDER; `current` and `changes` with
@@ -157,17 +169,44 @@ export interface ReadOptions {
   threads?: string[];
 }
 
+/** A read's answer. `summaries` (optional; without it the client uses its
+ * own check): in a tiered read of a space log, the threads served as
+ * summaries. A snapshot lists every such thread; a pull lists those among
+ * the threads whose thread or counts record it serves. */
 export interface Snapshot {
+  ok?: true;
   /** By the server's creation time, then the commit that created the record. */
   records: { key: string; record: StoredRecord }[];
   cursor: Cursor;
   lastSeq: LastSeq;
   serverTime: number;
+  summaries?: string[];
 }
 
 export type Pull =
-  | { changes: Change[]; cursor: Cursor; lastSeq: LastSeq; serverTime: number }
-  | { resync: true; serverTime: number };
+  | {
+      ok?: true;
+      changes: Change[];
+      cursor: Cursor;
+      lastSeq: LastSeq;
+      serverTime: number;
+      summaries?: string[];
+    }
+  | { ok?: true; resync: true; serverTime: number };
+
+/** A read the server did not serve: UPDATE_REQUIRED (the client is below
+ * the minimum protocol version), UNAUTHORIZED (no valid session or device
+ * token), or a transient error. The client changes no log on it. */
+export interface ReadError {
+  ok: false;
+  error: ApiError;
+  serverTime: number;
+}
+
+export type SnapshotAnswer = Snapshot | ReadError;
+export type PullAnswer = Pull | ReadError;
+
+export const isReadError = (a: SnapshotAnswer | PullAnswer): a is ReadError => a.ok === false;
 
 /** The answer to an online-only call (`NOT_MUTATORS`). */
 export type CallAnswer =
