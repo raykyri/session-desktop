@@ -200,10 +200,8 @@ function withinBounds(v: unknown, maxDepth: number, maxNodes: number): "ok" | "d
     bytes += typeof x === "string" ? x.length + 2 : 1;
     if (bytes > maxNodes) return "large";
     if (x === null || typeof x !== "object") continue;
-    if (level >= maxDepth) {
-      deep = true;
-      continue;
-    }
+    // past the depth bound the walk goes on, for the size: size decides first
+    if (level >= maxDepth) deep = true;
     for (const y of Object.values(x)) stack.push([y, level + 1]);
   }
   return deep ? "deep" : "ok";
