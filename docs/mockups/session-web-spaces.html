@@ -14013,7 +14013,7 @@ function sxUi(k, again) {
       else st.subPage = 'outbox';
       break;
     case 'off-app': app(); st.nvOffline = true; st.sxObx = [sxOb('wait'), SX_LIST()[4]]; st.home = true; break;
-    case 'off': st.nvOffline = true; st.sxObx = [sxOb('wait'), SX_LIST()[4]]; nst.tab = 'home'; nst.stack = []; break;
+    case 'off': st.nvOffline = true; st.sxObx = [sxOb('wait'), SX_LIST()[4]]; nSpace('sablefield'); break;
     case 'off-web': web(); st.nvOffline = true; thread(sf4, { fuDraft: { [sf4]: SX_REPLY }, askErr: 'fu' }); ASK.retry = () => askReply(sf4); break;
     case 'rf-show': {
       const key = `r:${sf4}:2`;
