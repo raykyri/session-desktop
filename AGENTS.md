@@ -91,8 +91,8 @@ rules above stay as they are. Decisions for the new client:
     on decisions that do not compare it.
   - The cursor token key is configured, not per process; the previous key
     is accepted for 30 days after a rotation.
-  - In open spaces a removal is STALE once the person leaves and joins
-    again, by design; the UI offers ban as the tool there.
+  - In open spaces a removal is undone by joining again, and is STALE once
+    the person has rejoined; the UI offers Remove and Ban.
   - Record changes, the stored answer, the seq and queued effects commit
     together; effects run from a worker with backoff and a dead-letter
     state, and carry ids, not text.
@@ -144,8 +144,8 @@ rules above stay as they are. Decisions for the new client:
   - A replica treats ids it minted, and ids derived from its own unanswered
     mutation ids, as unused (`withOwnIds`); any other id it lacks is unknown.
   - Reply likes are counted in the counts record.
-  - `members.remove` is for closed spaces (BAD_REQUEST in an open one); bans
-    have no duration.
+  - `members.remove` works in open and closed spaces (in an open space
+    joining again undoes it); bans have no duration.
   - `runs.*` and `devices.*` are online calls: a run's lease (holder,
     expiry, attempt) and a device token exist only on the server. Leases
     last 90 s; an attempt that lost its lease ends `interrupted`; an answer

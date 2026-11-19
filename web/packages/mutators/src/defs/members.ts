@@ -14,7 +14,7 @@ import { z } from "zod";
 
 import { RANK, bannedFrom, isClosed, isModOf, rankIn, roleIn } from "../access.js";
 import { defineMutator, inSpace, personal } from "../engine.js";
-import { bad, notFound, refuse, stale } from "../errors.js";
+import { notFound, refuse, stale } from "../errors.js";
 import { actsOn, addMember, mayInvite, needSpace, readable, refreshSpace } from "../rules.js";
 import { baseS, count, handleS, ulidS } from "../schemas.js";
 import { DAY, isoAt } from "../time.js";
@@ -159,9 +159,9 @@ export const memberMutators = [
   }),
 
   // `base.adm`: the member's admission id as the moderator saw it. A person
-  // who is no longer a member: nothing to remove. Closed spaces only (phase
-  // 1a.2): in an open space a removed person joins again at once, so
-  // moderators ban there instead (BAD_REQUEST).
+  // who is no longer a member: nothing to remove. In an open space a removal
+  // is undone by joining again, and is STALE once the person has rejoined
+  // (a new admission id); moderators can also ban there.
   defineMutator({
     name: "members.remove",
     input: z.strictObject({
@@ -171,8 +171,6 @@ export const memberMutators = [
     }),
     can: (tx, i) => {
       const scope = inSpace(tx, i.space, "moderator");
-      if (!isClosed(needSpace(tx, i.space)))
-        throw bad("space", "a closed space (in an open space, ban the person instead)");
       actsOn(tx, i.space, i.user);
       return scope;
     },

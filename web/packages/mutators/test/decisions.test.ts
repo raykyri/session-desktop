@@ -430,15 +430,18 @@ test("10. a reply's likes are counted in its thread's counts record; the reply's
   t.is(w.get(`rlike:otto:${a}`), undefined);
 });
 
-// ---- the mockup pass: ban in open spaces, remove in closed ones ----
+// ---- the mockup pass, round 2: remove and ban in open spaces ----
 
-test("members.remove is for closed spaces; an open space answers BAD_REQUEST; a ban lasts until unban", (t) => {
+test("members.remove works in open spaces and is STALE once the person has rejoined; a ban lasts until unban", (t) => {
   const { w, open, closed } = cast(t);
-  refused(
-    t,
-    w.run("mona", "members.remove", { space: open, user: "otto", base: w.admission(open, "otto") }),
-    "BAD_REQUEST",
-  );
+  const seen = w.admission(open, "otto");
+  ok(t, w.run("mona", "members.remove", { space: open, user: "otto", base: seen }));
+  t.is(w.get(`member:${open}:otto`), undefined);
+  // an open space: joining again undoes the removal, with a new admission id
+  ok(t, w.run("otto", "spaces.join", { space: open }));
+  t.truthy(w.get(`member:${open}:otto`));
+  t.notDeepEqual(w.admission(open, "otto"), seen);
+  refused(t, w.run("mona", "members.remove", { space: open, user: "otto", base: seen }), "STALE");
   t.truthy(w.get(`member:${open}:otto`));
   ok(
     t,
