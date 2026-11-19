@@ -140,15 +140,15 @@ test("finding 1: a remint is in storage before its envelope is on the wire (a cr
       return next();
     },
   });
-  const fast = { now: () => w.clock.now() + 2 * MINUTE };
-  const mel = client(w, "mel", { storage, transport: tr, clock: fast });
+  // the device's clock is two minutes slow: the remint is sent in the flush
+  // that made it (its ids are behind the server's, not ahead)
+  const slow = { now: () => w.clock.now() - 2 * MINUTE };
+  const mel = client(w, "mel", { storage, transport: tr, clock: slow });
   await mel.init();
   await mel.open(`space:${open}`);
   const X = mel.newId();
   mel.write("threads.create", { id: X, space: open, kind: "post", q: "p" }, { send: false });
   mel.write("research.createPostFollowUp", { id: mel.newId(), thread: X, t: "r" }, { send: false });
-  await mel.flush();
-  w.clock.advance(61_000);
   void mel.flush();
   for (let k = 0; k < 200 && !disk; k++) await tick(1);
   const stored = disk as unknown as {
@@ -164,7 +164,7 @@ test("finding 1: a remint is in storage before its envelope is on the wire (a cr
   await restored.saveOutbox(stored);
   const m = await storage.loadMeta();
   if (m) await restored.saveMeta(m);
-  const again = client(w, "mel", { storage: restored, clock: fast, seed: 11 });
+  const again = client(w, "mel", { storage: restored, clock: slow, seed: 11 });
   await again.init();
   await again.open(`space:${open}`);
   await again.flush();
@@ -742,6 +742,35 @@ test("finding 10: the stream follows the open logs: a log opened later is poked,
   t.true(mel.isFrozen(`space:${closed}`));
   await tick();
   t.is(connects.at(-1)?.[`space:${closed}`], undefined);
+  ctl.abort();
+  await done;
+});
+
+test("finding 10: a poke for a log the client does not hold reads nothing", async (t) => {
+  const { w, open } = cast(t);
+  const inner = inProcess(w, "mel");
+  const reads: LogId[] = [];
+  let poke: (() => void) | null = null;
+  const tr = watched(inner, {
+    pull: (l, c, o) => {
+      reads.push(l);
+      return inner.pull(l, c, o);
+    },
+    listen: (_c, on, s) =>
+      new Promise<void>((done) => {
+        poke = () => on({ type: "poke", logs: [`space:${w.id()}`] });
+        s.addEventListener("abort", () => done());
+      }),
+  });
+  const mel = client(w, "mel", { transport: tr });
+  await mel.init();
+  await mel.open(`space:${open}`);
+  const ctl = new AbortController();
+  const done = mel.listen(ctl.signal);
+  await tick();
+  (poke as (() => void) | null)?.();
+  await tick(30);
+  t.deepEqual(reads, []);
   ctl.abort();
   await done;
 });
