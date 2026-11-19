@@ -18,11 +18,14 @@
 // predicted `ok`, `effect-model.ts` predicts what it changes.
 //
 // The protocol, in order (the first that applies decides):
-//   1. envelope: exactly { clientId, seq ≥ 1, mutationId, name, input,
-//      protocolVersion }, else BAD_REQUEST                      unrecorded
-//   2. protocolVersion below 2: UPGRADE_REQUIRED               unrecorded
+//   0. an input nested more than 32 deep, or an envelope larger than 256 KB
+//      as JSON: BAD_REQUEST (round 2, decision 8)              unrecorded
+//   1. protocolVersion an integer below 3: UPGRADE_REQUIRED    unrecorded
+//   2. envelope: exactly { clientId, seq ≥ 1, mutationId, name, input,
+//      protocolVersion, clientTime ≥ 0 }, else BAD_REQUEST     unrecorded
 //   3. signed out, or a handle no person may have: UNAUTHORIZED unrecorded
-//   4. the client id unknown or another user's: WRONG_CLIENT   unrecorded
+//   4. the client id unknown, another user's, or not used for 90 days:
+//      WRONG_CLIENT                                            unrecorded
 //   5. a stored answer for (user, mutation id) with the same name and input
 //      (key order aside), within 7 days: that answer, under any client id
 //      or seq of the user                                      unrecorded
@@ -31,19 +34,26 @@
 //   7. seq not the client's last + 1: OUT_OF_ORDER             unrecorded
 //   8. a mutation id that is not a ULID, or one stored with another payload:
 //      BAD_REQUEST                      uses the seq, stored for (client, seq)
-//   9. the mutation id's time outside [now − 4 days, now + 1 minute]:
-//      CLOCK_SKEW                                              unrecorded
-//  10. an unknown name: NOT_FOUND; 11. an input outside the schema:
-//      BAD_REQUEST                                             stored
-//  12. a new id in the input outside the window: CLOCK_SKEW    unrecorded
-//  13. an online-only write (spaces.create) whose mutation id is over a
-//      minute old: CLOCK_SKEW (round 1: the client's clock is behind, or the
-//      write waited; the client sends it again from the corrected clock)
+//   9. clientTime more than a minute from the server's time: CLOCK_SKEW
+//      (round 2, decision 3: only the device's clock against the server's)
 //                                                              unrecorded
-//  14. the mutator's own rules (RULES below)                   stored
+//  10. the mutation id's age on the device (clientTime − its time) above 4
+//      days or below −1 minute: EXPIRED                        stored
+//  11. an unknown name: NOT_FOUND; 12. an input outside the schema:
+//      BAD_REQUEST                                             stored
+//  13. a new id in the input with such an age: EXPIRED         stored
+//  14. an online-only write (spaces.create) whose mutation id is over a
+//      minute old on the device: EXPIRED (it waited in an outbox) stored
+//  15. the mutator's own rules (RULES below)                   stored
 // "Stored" answers use the seq and are kept for replays for 7 days, under
 // (user, mutation id). An answer that uses the seq is always stored (round
-// 1, R7b).
+// 1, R7b). INTERNAL_SERVER_ERROR (the server's random source failed, in the
+// invite code's pre-check) is unrecorded.
+//
+// Registration (round 2, decision 5): UNAUTHORIZED for a signed-out caller
+// or a reserved handle, TOO_MANY_REQUESTS for a person who registered 20
+// clients in the past day, INTERNAL_SERVER_ERROR when the random source
+// fails.
 
 import type { Envelope, ErrorCode, StoredRecord } from "../src/index.js";
 
@@ -62,6 +72,7 @@ export interface Prediction {
 }
 
 const MIN_DAY = 86_400_000;
+const MINUTE_MS = 60_000;
 const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 const HANDLE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
@@ -72,10 +83,27 @@ const RANK: Record<Role, number> = { member: 1, mod: 2, admin: 3, owner: 4 };
 
 const isHandle = (u: unknown) => typeof u === "string" && HANDLE.test(u) && !RESERVED.includes(u);
 const timeOf = (id: string) => [...id.slice(0, 10)].reduce((t, ch) => t * 32 + B32.indexOf(ch), 0);
-const inWindow = (id: string, now: number) => {
-  const t = timeOf(id);
-  return t >= now - 4 * MIN_DAY && t <= now + 60_000;
+/** An id's age on the device's clock is from −1 minute to 4 days. */
+const fresh = (id: string, deviceNow: number) => {
+  const age = deviceNow - timeOf(id);
+  return age >= -MINUTE_MS && age <= 4 * MIN_DAY;
 };
+/** How deep a value nests (a scalar 0, `[1]` 1), walked without recursion;
+ * Infinity past 10,000 levels or 300,000 values. */
+function depthOf(v: unknown): number {
+  let deepest = 0;
+  let seen = 0;
+  const todo: [unknown, number][] = [[v, 0]];
+  for (let x = todo.pop(); x; x = todo.pop()) {
+    if (++seen > 300_000) return Infinity;
+    const [value, level] = x;
+    if (value === null || typeof value !== "object") continue;
+    deepest = Math.max(deepest, level + 1);
+    if (deepest > 10_000) return Infinity;
+    for (const y of Object.values(value)) todo.push([y, level + 1]);
+  }
+  return deepest;
+}
 function sortedJson(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(sortedJson).join(",")}]`;
   if (v && typeof v === "object")
@@ -100,6 +128,7 @@ const oneOf =
 const role = oneOf(...ROLES);
 const handle: Check = isHandle;
 const strings: Check = (v) => Array.isArray(v) && v.every(str);
+const questions: Check = (v) => Array.isArray(v) && v.every(obj({ q: str }, { req: bool }));
 const itemKey: Check = (v) =>
   typeof v === "string" && /^[a-z]+:[0-9A-HJKMNP-TV-Z]{26}(:.*)?$/.test(v);
 const obj =
@@ -139,6 +168,7 @@ const SCHEMA: Record<string, Check> = {
       invite: oneOf("mods", "members"),
       desc: str,
       rules: strings,
+      qs: questions,
     },
   ),
   "spaces.update": obj(
@@ -151,6 +181,7 @@ const SCHEMA: Record<string, Check> = {
           title: str,
           desc: str,
           rules: strings,
+          qs: questions,
           vis,
           policy: oneOf("request", "invite"),
           invite: oneOf("mods", "members"),
@@ -185,8 +216,8 @@ const SCHEMA: Record<string, Check> = {
       { why: str },
     )(v),
   "members.setRole": obj({ space: ulid, user: handle, role, base: rev }),
-  "members.remove": obj({ space: ulid, user: handle, base: rev }),
-  "members.ban": obj({ space: ulid, user: handle, base: rev }),
+  "members.remove": obj({ space: ulid, user: handle, base: obj({ adm: str }) }),
+  "members.ban": obj({ space: ulid, user: handle }),
   "invites.create": obj({ id: ulid, space: ulid }, { days: (v) => v === null || nat(v) }),
   "reports.create": obj({ id: ulid, item: itemKey, why: str }, { note: str }),
   "moderation.decide": obj({
@@ -215,6 +246,8 @@ interface Facts {
   /** The server's time, truncated to the second as stored times are. */
   nowSec: number;
   idTaken(id: string): boolean;
+  /** The server's random source fails now. */
+  randomDown: boolean;
 }
 
 /** Thrown with the code a rule refuses with. */
@@ -450,8 +483,9 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     for (const u of new Set(i["users"] as string[])) {
       const r = f.dump.get(`request:${sp}:${u}`);
       if (r?.kind !== "request") no("NOT_FOUND");
-      // decided by version (round 1): a rev other than the one the moderator saw
-      if ((r as StoredRecord).rev !== base[u]) no("STALE");
+      // decided by version (round 1) when the decision could admit someone;
+      // a decline restricts and takes the request as it is (round 2)
+      if (i["decision"] !== "decline" && (r as StoredRecord).rev !== base[u]) no("STALE");
       if ((r as Extract<StoredRecord, { kind: "request" }>).st !== from) no("PRECONDITION_FAILED");
       if (i["decision"] === "approve" && banned(f, sp, u)) no("PRECONDITION_FAILED");
     }
@@ -470,16 +504,21 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
   "members.remove": (f, i) => {
     inSpace(f, String(i["space"]), "mod");
     actOn(f, String(i["space"]), String(i["user"]));
-    if (revAt(f, `member:${String(i["space"])}:${String(i["user"])}`) !== baseRev(i)) no("STALE");
+    // round 2: the admission id the moderator saw; nothing to do for a person
+    // who is no longer a member
+    const m = f.dump.get(`member:${String(i["space"])}:${String(i["user"])}`);
+    if (m?.kind === "member" && m.adm !== (i["base"] as { adm: string }).adm) no("STALE");
   },
+  // round 2: a ban takes the person as they are, and has no base
   "members.ban": (f, i) => {
     inSpace(f, String(i["space"]), "mod");
     actOn(f, String(i["space"]), String(i["user"]));
-    if (revAt(f, `member:${String(i["space"])}:${String(i["user"])}`) !== baseRev(i)) no("STALE");
   },
   "invites.create": (f, i) => {
     const s = inSpace(f, String(i["space"]), "member");
     if (!makesLinks(f, s, f.me)) no("FORBIDDEN");
+    // the code comes from the server's random source, before the record is written
+    if (f.randomDown) no("INTERNAL_SERVER_ERROR");
     if (f.idTaken(String(i["id"]))) no("CONFLICT");
   },
   "reports.create": (f, i) => {
@@ -492,31 +531,83 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     const item = seenItem(f, String(i["item"]));
     inSpace(f, item.s, "mod");
     const d = i["decision"];
-    if (item.rev !== baseRev(i)) no("STALE");
+    // round 2: only "shown" could expose text, so only it compares the rev
+    if (d === "shown" && item.rev !== baseRev(i)) no("STALE");
     if (item.mod === "removed") no("PRECONDITION_FAILED");
     if (d === "hidden" && item.mod !== null) no("PRECONDITION_FAILED");
     if (d === "shown" && item.mod !== "hidden") no("PRECONDITION_FAILED");
   },
 };
 
-const ENVELOPE_KEYS = ["clientId", "input", "mutationId", "name", "protocolVersion", "seq"];
+const ENVELOPE_KEYS = [
+  "clientId",
+  "clientTime",
+  "input",
+  "mutationId",
+  "name",
+  "protocolVersion",
+  "seq",
+];
+/** Clients unused this long are gone (round 2, decision 5). */
+const CLIENT_IDLE = 90 * MIN_DAY;
+
+interface ClientModel {
+  u: string;
+  last: number;
+  seen: number;
+  bySeq: Map<number, { sent: string; code: Code; at: number }>;
+}
 
 export class WriteModel {
-  private readonly clients = new Map<
-    string,
-    { u: string; last: number; bySeq: Map<number, { sent: string; code: Code; at: number }> }
-  >();
+  private readonly clients = new Map<string, ClientModel>();
   private readonly answers = new Map<string, { payload: string; code: Code; at: number }>();
   /** Every id a stored record ever had. */
   private readonly ids = new Set<string>();
+  /** Each person's registrations. */
+  private readonly registrations = new Map<string, number[]>();
+  /** The server's random source fails now (the suite sets it). */
+  randomDown = false;
 
-  /** A client id the server registered for `u`. */
-  registered(clientId: string, u: string) {
-    this.clients.set(clientId, { u, last: 0, bySeq: new Map() });
+  /** The client record, or undefined when there is none or it was idle for
+   * 90 days (then it is gone for good). */
+  private client(clientId: string, now: number): ClientModel | undefined {
+    const c = this.clients.get(clientId);
+    if (c && c.seen <= now - CLIENT_IDLE) {
+      this.clients.delete(clientId);
+      return undefined;
+    }
+    return c;
+  }
+
+  /** The answer `register` gives `u` now: ok, or the refusal's code. */
+  predictRegister(u: string | null, now: number): Code {
+    if (u === null || !isHandle(u)) return "UNAUTHORIZED";
+    const recent = (this.registrations.get(u) ?? []).filter((at) => at > now - MIN_DAY);
+    if (recent.length >= 20) return "TOO_MANY_REQUESTS";
+    if (this.randomDown) return "INTERNAL_SERVER_ERROR";
+    return "ok";
+  }
+
+  /** A client id the server registered for `u` now. */
+  registered(clientId: string, u: string, now = 0) {
+    this.clients.set(clientId, { u, last: 0, seen: now, bySeq: new Map() });
+    this.registrations.set(u, [...(this.registrations.get(u) ?? []), now]);
+  }
+
+  /** A read by `u` named `clientId`: a live client of `u`'s counts as used. */
+  read(u: string | null, clientId: string | undefined, now: number) {
+    if (u === null || !isHandle(u) || clientId === undefined) return;
+    const c = this.client(clientId, now);
+    if (c && c.u === u) c.seen = now;
   }
 
   lastSeq(clientId: string): number | undefined {
     return this.clients.get(clientId)?.last;
+  }
+
+  /** Every id a stored record ever had, the deleted ones included. */
+  knownIds(): string[] {
+    return [...this.ids];
   }
 
   /** Note the ids of the records stored now. A ban's id is the mock's
@@ -529,21 +620,32 @@ export class WriteModel {
   predict(dump: Dump, u: string | null, envelope: unknown, now: number): Prediction {
     const pass = (code: Code): Prediction => ({ code, usesSeq: false, stored: false });
     const e = envelope as Envelope;
+    const isObject = e !== null && typeof e === "object";
+    if (
+      isObject &&
+      (depthOf((e as { input?: unknown }).input) > 32 ||
+        new TextEncoder().encode(JSON.stringify(e)).length > 256 * 1024)
+    )
+      return pass("BAD_REQUEST");
+    const version = isObject ? (e as { protocolVersion?: unknown }).protocolVersion : undefined;
+    if (typeof version === "number" && Number.isInteger(version) && version < 3)
+      return pass("UPGRADE_REQUIRED");
     const shape =
-      e !== null &&
-      typeof e === "object" &&
+      isObject &&
       Object.keys(e).sort().join() === ENVELOPE_KEYS.join() &&
       typeof e.clientId === "string" &&
       typeof e.mutationId === "string" &&
       typeof e.name === "string" &&
       Number.isInteger(e.seq) &&
       e.seq >= 1 &&
-      Number.isInteger(e.protocolVersion);
+      Number.isInteger(e.protocolVersion) &&
+      Number.isInteger(e.clientTime) &&
+      e.clientTime >= 0;
     if (!shape) return pass("BAD_REQUEST");
-    if (e.protocolVersion < 2) return pass("UPGRADE_REQUIRED");
     if (u === null || !isHandle(u)) return pass("UNAUTHORIZED");
-    const client = this.clients.get(e.clientId);
+    const client = this.client(e.clientId, now);
     if (!client || client.u !== u) return pass("WRONG_CLIENT");
+    client.seen = now;
     const formed = ULID.test(e.mutationId);
     const payload = sortedJson([e.name, e.input]);
     const prior = formed ? this.answers.get(`${u} ${e.mutationId}`) : undefined;
@@ -555,27 +657,29 @@ export class WriteModel {
     if (e.seq !== client.last + 1) return pass("OUT_OF_ORDER");
     if (!formed || live)
       return { code: "BAD_REQUEST", usesSeq: true, stored: false, storedForSeq: true };
-    if (!inWindow(e.mutationId, now)) return pass("CLOCK_SKEW");
+    if (Math.abs(e.clientTime - now) > MINUTE_MS) return pass("CLOCK_SKEW");
     const stored = (code: Code): Prediction => ({ code, usesSeq: true, stored: true });
+    if (!fresh(e.mutationId, e.clientTime)) return stored("EXPIRED");
     const schema = Object.hasOwn(SCHEMA, e.name) ? SCHEMA[e.name] : undefined;
     const rules = Object.hasOwn(RULES, e.name) ? RULES[e.name] : undefined;
     if (!schema || !rules) return stored("NOT_FOUND");
     if (!schema(e.input)) return stored("BAD_REQUEST");
     const input = e.input as In;
     for (const k of NEW_IDS[e.name] ?? [])
-      if (!inWindow(String(input[k]), now)) return pass("CLOCK_SKEW");
-    if (e.name === "spaces.create" && timeOf(e.mutationId) < now - 60_000)
-      return pass("CLOCK_SKEW");
+      if (!fresh(String(input[k]), e.clientTime)) return stored("EXPIRED");
+    if (e.name === "spaces.create" && e.clientTime - timeOf(e.mutationId) > MINUTE_MS)
+      return stored("EXPIRED");
     const facts: Facts = {
       dump,
       me: u,
       nowSec: Math.floor(now / 1000) * 1000,
       idTaken: (id) => this.ids.has(id),
+      randomDown: this.randomDown,
     };
     try {
       rules(facts, input);
     } catch (x) {
-      if (x instanceof No) return stored(x.code);
+      if (x instanceof No) return x.code === "INTERNAL_SERVER_ERROR" ? pass(x.code) : stored(x.code);
       throw x;
     }
     return stored("ok");

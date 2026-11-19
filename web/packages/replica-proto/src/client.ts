@@ -423,7 +423,9 @@ export class ReplicaClient {
       const p = this.outbox[0];
       if (!p) break;
       const now = this.now();
-      if (p.notBefore > now) break;
+      // waiting out its backoff; a wait longer than the longest backoff means
+      // the device's clock went back, and the write is sent now
+      if (p.notBefore > now && p.notBefore - now <= RETRY_MAX) break;
       const e: Envelope = {
         clientId,
         seq: this.acked + 1,
