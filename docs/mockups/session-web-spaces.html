@@ -13595,14 +13595,25 @@ async function sxDrive(gen) {
    per screen, over the mock's write envelope (its MockTransport). The client registers, gives each write its seq
    when it sends it, backs off on transient answers (the core's 1 s, doubled, where the driver above waits 10 s,
    20 s, 40 s), shows a write after 5 failures and goes on, drops one queued 3 days, and holds every write after
-   UPDATE_REQUIRED. An entry's `pause` stops the screen after that many tries, as above. */
-const SXS = { gen: -1, client: null, locals: new Map() };
+   UPDATE_REQUIRED. An entry's `pause` stops the screen after that many tries, as above.
+   Time: the client's clock is the mock's (SXQ.now) plus `ahead`; the driver moves `ahead` to the end of the
+   client's next wait instead of sending at once, so the core's backoff runs as it does on a device (the waits of a
+   screen add up to 15 s at most, within the server's minute). The client has no timer of its own: the driver
+   sends. The web keeps no outbox across time (persist: false); the outbox screens are the Desktop app's and the
+   Phone app's. */
+const SXS = { gen: -1, client: null, locals: new Map(), ahead: 0 };
 function sxSyncClient(gen) {
   if (SXS.gen === gen && SXS.client) return SXS.client;
   const post = (path, body) => sxFetch('POST', path, body);
   const transport = new SessionSync.MockTransport(post, ch => applyChanges(ch, () => false));
-  Object.assign(SXS, { gen, locals: new Map(), client: new SessionSync.SyncClient({ user: ME.u, transport, clock: { now: () => SXQ.now }, random: Math.random }) });
+  const clock = { now: () => SXQ.now + SXS.ahead };
+  Object.assign(SXS, { gen, locals: new Map(), ahead: 0, client: new SessionSync.SyncClient({ user: ME.u, transport, clock, monotonic: clock.now, random: Math.random, timer: null, persist: sxApp() || sxNat() }) });
   return SXS.client;
+}
+/* move the client's clock to the end of its earliest wait */
+function sxSyncWait(c) {
+  const next = Math.min(...c.outbox().filter(e => e.state === 'queued').map(e => e.next));
+  if (Number.isFinite(next) && next > c.now()) SXS.ahead += next - c.now();
 }
 const sxEntry = o => SXS.client && SXS.locals.has(o.id) ? SXS.client.outbox().find(e => e.local === SXS.locals.get(o.id)) : undefined;
 async function sxDriveSync(gen) {
@@ -13623,7 +13634,7 @@ async function sxDriveSync(gen) {
     if (gen !== SXQ.gen) return;
     if (c.updateRequired || !c.outbox().some(e => e.state === 'queued')) break;
     if (st.sxObx.some(o => o.pause && (sxEntry(o) || {}).state === 'queued' && (sxEntry(o) || {}).tries >= o.pause)) break;
-    for (const e of c.outbox()) if (e.state === 'queued') e.next = 0;
+    sxSyncWait(c);
   }
   sxSyncStates(c);
 }
@@ -13739,14 +13750,17 @@ function sxAct(act, id) {
   /* Retry sends the same write again; Send again (EXPIRED) sends it as a new write that replaces the refused one */
   if (act === 'retry' || act === 'again') {
     st.modal = null; if (sxNat()) nst.sheet = null;
-    /* with the sync core: Send again and Retry both give the write a new mutation id that replaces the old one */
+    /* with the sync core: Send again and Retry both give the write a new mutation id; after EXPIRED it is a new
+       write with new ids, after failed tries it lists the ids it was sent under in replaces */
     if (sxEntry(o) && SXS.client.sendAgain(SXS.locals.get(o.id))) {
       sxSet(id, { state: 'wait', tries: 0, pause: 0 });
       sxLocalReply(sxObx(id), true);
       sxWork(async gen => { await sxDrive(gen); if (gen === SXQ.gen && !sxObx(id)) toast(act === 'again' ? (o.kind === 'post' ? 'Posted again.' : 'Sent as a new reply.') : 'Sent.'); });
       return;
     }
-    sxSet(id, act === 'again' ? { state: 'wait', tries: 0, pause: 0, made: '0m', queuedAt: null, mid: null, replaces: [o.mid].filter(Boolean) } : { state: 'wait', tries: 0, pause: 0 });
+    /* Send again after EXPIRED: a new write (the refusal is recorded under the old id, so listing it in replaces
+       would replay the refusal) */
+    sxSet(id, act === 'again' ? { state: 'wait', tries: 0, pause: 0, made: '0m', queuedAt: null, mid: null, replaces: [] } : { state: 'wait', tries: 0, pause: 0 });
     sxLocalReply(sxObx(id), true);
     sxWork(async gen => { await sxDrive(gen); if (gen === SXQ.gen && !sxObx(id)) toast(act === 'again' ? (o.kind === 'post' ? 'Posted again.' : 'Sent as a new reply.') : 'Sent.'); });
     return;

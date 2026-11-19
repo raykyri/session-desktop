@@ -654,7 +654,7 @@ export class SyncClient implements Changing {
     const joined: Promise<boolean>[] = [];
     for (const log of new Set(logs)) {
       const l = this.logs.get(log);
-      if (!l || l.frozen) continue;
+      if (!l) continue;
       if (l.queued) joined.push(l.queued);
       else mine.push([log, l]);
     }
