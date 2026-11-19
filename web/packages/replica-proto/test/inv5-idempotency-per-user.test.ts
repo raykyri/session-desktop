@@ -128,21 +128,21 @@ test("each client's last processed seq comes back with its own reads only", asyn
   await otto.sync(`space:${open}`);
   t.is(mel.lastSeq, 0);
   t.is(otto.lastSeq, 0);
-  const e = mel.queue("threads.create", { id: mel.newId(), space: open, kind: "post", q: "x" });
+  mel.queue("threads.create", { id: mel.newId(), space: open, kind: "post", q: "x" });
   await mel.flush();
   await mel.sync(`space:${open}`);
   await otto.sync(`space:${open}`);
-  t.is(mel.lastSeq, e.seq);
+  t.is(mel.lastSeq, 1);
   t.is(otto.lastSeq, 0);
   // a refused write is processed too
-  const r = mel.queue("members.remove", {
+  mel.queue("members.remove", {
     space: open,
     user: "otto",
     base: w.member(open, "otto"),
   });
   await mel.flush();
   await mel.sync(`space:${open}`);
-  t.is(mel.lastSeq, r.seq);
+  t.is(mel.lastSeq, 2);
   // another person's client id gives nothing, nor does a made-up one
   for (const clientId of [mel.clientId ?? "", "made-up"]) {
     t.is((await w.server.snapshot(actor("otto"), `space:${open}`, { clientId })).lastSeq, null);
@@ -205,16 +205,23 @@ test("a client's writes are applied in order: a gap or an earlier seq is refused
   t.is(await w.nextSeq("mel", clientId), seq + 3);
 });
 
-test("a malformed mutation id is refused before the replay check and never recorded", async (t) => {
+test("a malformed mutation id is refused before the replay check, and recorded under its seq only", async (t) => {
+  // round 1, R7b: the refusal used up the seq and recorded nothing, so the
+  // same envelope sent again after a lost response was OUT_OF_ORDER
   const { w, open } = await cast(t);
   const clientId = await w.clientId("mel");
   for (const mutationId of ["G".repeat(100_000), "", "not-a-ulid", `${w.id()}0`]) {
     const seq = await w.nextSeq("mel", clientId);
     const e = await w.envelope("mel", "spaces.join", { space: open }, mutationId);
-    await refused(t, w.server.apply(actor("mel"), e), "BAD_REQUEST");
-    // it used up its seq, so sending it again is out of order: nothing stored it
+    const first = await refused(t, w.server.apply(actor("mel"), e), "BAD_REQUEST");
     t.is(await w.nextSeq("mel", clientId), seq + 1);
-    await refused(t, w.server.apply(actor("mel"), e), "OUT_OF_ORDER");
+    // the same envelope again: the recorded answer, and no seq is used
+    t.is(await refused(t, w.server.apply(actor("mel"), e), "BAD_REQUEST"), first);
+    t.is(await w.nextSeq("mel", clientId), seq + 1);
+    // the id is in no (user, mutation id) entry: under the next seq it is
+    // refused afresh, which uses the next seq
+    await refused(t, w.resend("mel", e, true), "BAD_REQUEST");
+    t.is(await w.nextSeq("mel", clientId), seq + 2);
   }
 });
 
@@ -225,7 +232,7 @@ test("two devices of one person each learn whether their own write was applied",
   const laptop = w.client("mel");
   const phone = w.client("mel");
   await laptop.sync(`space:${open}`);
-  const mine = laptop.queue("threads.create", {
+  laptop.queue("threads.create", {
     id: laptop.newId(),
     space: open,
     kind: "post",
@@ -238,6 +245,6 @@ test("two devices of one person each learn whether their own write was applied",
   await laptop.sync(`space:${open}`);
   await phone.sync(`space:${open}`);
   t.not(laptop.clientId, phone.clientId);
-  t.is(laptop.lastSeq, mine.seq);
+  t.is(laptop.lastSeq, 1);
   t.is(phone.lastSeq, 2);
 });

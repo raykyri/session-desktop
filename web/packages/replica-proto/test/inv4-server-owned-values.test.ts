@@ -276,14 +276,21 @@ test("spaces.create is online only: the client never queues it", async (t) => {
   await ok(t, c.send("spaces.create", { id: c.newId(), name: "x" }));
 });
 
-test("the server refuses an online-only write that waited in an outbox", async (t) => {
+test("the server refuses an online-only write that waited in an outbox, with CLOCK_SKEW, and records nothing", async (t) => {
   const w = new World();
-  // a client that queues it anyway: its envelope is older than a minute when sent
+  // a client that queues it anyway: its envelope is older than a minute when
+  // sent. The server cannot tell this from a slow clock (round 1, R6): it
+  // answers CLOCK_SKEW with its time, and never applies the envelope as it is.
   const e = await w.envelope("eve", "spaces.create", { id: w.id(), name: "late" });
   w.clock.advance(MINUTE + 1);
-  await refused(t, w.server.apply(actor("eve"), e), "PRECONDITION_FAILED");
+  for (let k = 0; k < 2; k++) {
+    const r = await w.server.apply(actor("eve"), e);
+    t.is(r.ok ? null : r.error.code, "CLOCK_SKEW");
+    t.is(r.ok ? null : r.error.serverTime, w.clock.now());
+  }
   t.is(w.server.dump().size, 0);
-  // a fresh one is applied
+  // nothing was recorded: the seq is free, and a fresh write under it is applied
+  t.is(await w.nextSeq("eve", e.clientId), e.seq);
   await ok(t, w.as("eve", "spaces.create", { id: w.id(), name: "late" }));
 });
 

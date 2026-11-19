@@ -9,19 +9,28 @@
 //   signed in with a valid handle (UNAUTHORIZED): unrecorded
 //   the client id is the caller's (WRONG_CLIENT): unrecorded
 //   a stored result for (user, mutation id) whose payload digest matches:
-//     returned as it is, nothing runs
-//   `seq` is the client's next one (OUT_OF_ORDER): unrecorded
+//     returned as it is, under any client id or seq; nothing runs and no seq
+//     is used
+//   a result stored for (client, seq) with the same mutation id and payload:
+//     returned as it is
+//   `seq` is the client's next one (OUT_OF_ORDER, with `expectedSeq`): unrecorded
 //   the mutation id is a ULID, and not one the user sent with another
-//     payload (BAD_REQUEST): uses up the `seq`; never stored, so a malformed
-//     or reused id never enters the idempotency table
+//     payload (BAD_REQUEST): uses up the `seq`, stored for (client, seq), so
+//     a malformed or reused id never enters the (user, mutation id) table
 //   the mutation id is inside the time window (CLOCK_SKEW, with the server's
 //     time): unrecorded
 //   the mutator name and its strict input schema
 //   the input's ids are inside the time window (CLOCK_SKEW): unrecorded
-//   an online-only mutator's mutation id is at most a minute old
-//   ban, who and can, pre (server values), run, commit, post
-// The result, applied or refused, is stored for 7 days with a digest of the
-// name and input, and the client's last processed `seq` becomes this one.
+//   an online-only mutator's mutation id is at most a minute old (CLOCK_SKEW):
+//     unrecorded
+//   ban, who and can, pre (server values), run
+// A refusal from these stages is recorded unless its code is in UNRECORDED;
+// an exception that is not a refusal is INTERNAL_SERVER_ERROR, unrecorded,
+// and nothing it staged is written. A recorded result is committed in one
+// step with the write's changes and its post-commit effects (queued): stored
+// for 7 days with a digest of the name and input, and the client's last
+// processed `seq` becomes this one. The queued effects run after that commit,
+// and are tried again on every later call until they succeed.
 //
 // Change log: one row per (log, key), holding key, op and version only; a
 // write replaces the key's row. Versions come from one sequence for the whole
@@ -37,9 +46,10 @@
 
 import { z } from "zod";
 
-import { canRead, isClosed, view } from "./access.js";
+import { canRead, isClosed, spaceRec, view } from "./access.js";
 import {
   MIN_PROTOCOL_VERSION,
+  UNRECORDED,
   type Actor,
   type ApplyResult,
   type Change,
@@ -59,6 +69,9 @@ import {
   authorize,
   isHandle,
   refuse,
+  type AnyMutator,
+  type Effect,
+  type NotifDraft,
   type PreCtx,
   type Tx,
 } from "./mutators.js";
@@ -273,21 +286,49 @@ class StagedTx implements Tx {
   }
 }
 
-/** What `execute` decided, and whether the decision is recorded. */
-type Outcome = { result: ApplyResult; recorded: boolean };
+/** What `execute` decided: the answer, whether it is recorded, and for an
+ * applied write the staged changes and the effects to queue. */
+interface Outcome {
+  result: ApplyResult;
+  recorded: boolean;
+  staged?: Map<string, StoredRecord | null>;
+  effects?: Effect[];
+}
+
+/** A registered client: the user it is bound to, its last processed seq,
+ * and the answers recorded under its seqs (a mutation id that is malformed
+ * or already used for another change has no (user, mutation id) entry). */
+interface ClientRec {
+  u: string;
+  last: number;
+  answers: Map<number, { digest: string; result: ApplyResult; at: number }>;
+}
+
+/** One entry of the effect queue: kept until the effect has run. */
+interface QueuedEffect {
+  effect: Effect;
+  /** The commit time of the write that queued it. */
+  at: number;
+  attempts: number;
+}
 
 export class ProtoServer implements TestServer {
   private readonly store: Store;
   private readonly dedup = new Map<string, { result: ApplyResult; digest: string; at: number }>();
-  /** Registered clients: the user each is bound to, and its last processed seq. */
-  private readonly clients = new Map<string, { u: string; last: number }>();
+  private readonly clients = new Map<string, ClientRec>();
+  /** The post-commit effects not yet run, in commit order: written in the
+   * same step as the write that queued them (durable with it), and removed
+   * once they ran. */
+  private readonly effectQueue: QueuedEffect[] = [];
   private readonly jobList: { kind: string; id: string }[] = [];
   private readonly clock: ServerOptions["clock"];
   private readonly random: () => number;
+  private readonly mutators: Readonly<Record<string, AnyMutator>>;
 
   constructor(options: ServerOptions) {
     this.clock = options.clock;
     this.random = options.random ?? Math.random;
+    this.mutators = options.mutators ?? MUTATORS;
     this.store = new Store(this.clock.now());
   }
 
@@ -300,12 +341,13 @@ export class ProtoServer implements TestServer {
   // ---- writes ----
 
   register(actor: Actor | null): RegisterResult {
+    this.housekeep(this.clock.now());
     const u = this.userOf(actor);
     if (u === null) return { ok: false, error: refuse("UNAUTHORIZED").toError() };
     let id: string;
     do id = ulid(this.clock.now(), this.random);
     while (this.clients.has(id));
-    this.clients.set(id, { u, last: 0 });
+    this.clients.set(id, { u, last: 0, answers: new Map() });
     return { ok: true, clientId: id };
   }
 
@@ -329,48 +371,74 @@ export class ProtoServer implements TestServer {
     const client = this.clients.get(m.clientId);
     if (!client || client.u !== u) return fail(refuse("WRONG_CLIENT"));
     const now = this.clock.now();
-    this.prune(now);
+    this.housekeep(now);
     const wellFormed = isUlid(m.mutationId);
     const dk = `${u}\u0000${m.mutationId}`;
     const payload = digest(canonical([m.name, m.input]));
     const hit = wellFormed ? this.dedup.get(dk) : undefined;
+    // a write this user's devices sent before, under any client id or seq:
+    // its recorded answer, and the seq is not used (R7c)
     if (hit && hit.digest === payload) return structuredClone(hit.result);
+    // an answer recorded under this client's seq: the same envelope again
+    const sent = digest(canonical([m.mutationId, m.name, m.input]));
+    const kept = client.answers.get(m.seq);
+    if (kept && kept.digest === sent) return structuredClone(kept.result);
     if (m.seq !== client.last + 1)
-      return fail(refuse("OUT_OF_ORDER", undefined, [`seq: expected ${client.last + 1}`]));
+      return {
+        ok: false,
+        error: {
+          ...refuse("OUT_OF_ORDER", undefined, [`seq: expected ${client.last + 1}`]).toError(),
+          expectedSeq: client.last + 1,
+        },
+      };
     if (!wellFormed || hit) {
-      client.last = m.seq;
-      return fail(
+      // uses the seq, so it is recorded with it, under (client, seq): a
+      // malformed id never enters the (user, mutation id) table, and a used
+      // one keeps its first answer there (R7b)
+      const result = fail(
         refuse("BAD_REQUEST", undefined, [
           wellFormed
             ? "mutationId: already used for a different change"
             : "mutationId: expected a ULID",
         ]),
       );
+      client.answers.set(m.seq, { digest: sent, result, at: now });
+      client.last = m.seq;
+      return structuredClone(result);
     }
     const out = this.execute(u, m, now);
     if (out.recorded) {
+      // one step, with nothing in it that can fail: the record changes, the
+      // queued effects, the stored answer and the client's seq (R9). On the
+      // real server, one transaction.
+      if (out.staged) this.store.commit(out.staged, now);
+      for (const effect of out.effects ?? [])
+        this.effectQueue.push({ effect, at: now, attempts: 0 });
       this.dedup.set(dk, { result: out.result, digest: payload, at: now });
       client.last = m.seq;
     }
+    this.runEffects(now);
     return structuredClone(out.result);
   }
 
   private execute(u: string, m: Env, now: number): Outcome {
-    const final = (e: Refusal): Outcome => ({ result: fail(e), recorded: true });
-    const skew = (path: string): Outcome => ({
+    const final = (e: Refusal): Outcome => ({ result: fail(e), recorded: !UNRECORDED.has(e.code) });
+    const skew = (issue: string): Outcome => ({
       result: {
         ok: false,
         error: {
           code: "CLOCK_SKEW",
           message: refuse("CLOCK_SKEW").message,
-          issues: [`${path}: expected a ULID from the past 4 days to 1 minute ahead`],
+          issues: [issue],
           serverTime: now,
         },
       },
       recorded: false,
     });
-    if (!inWindow(m.mutationId, now)) return skew("mutationId");
-    const def = Object.hasOwn(MUTATORS, m.name) ? MUTATORS[m.name] : undefined;
+    const window = (path: string) =>
+      skew(`${path}: expected a ULID from the past 4 days to 1 minute ahead`);
+    if (!inWindow(m.mutationId, now)) return window("mutationId");
+    const def = Object.hasOwn(this.mutators, m.name) ? this.mutators[m.name] : undefined;
     if (!def)
       return final(refuse("NOT_FOUND", "The server has no procedure with this name.", ["name"]));
     const parsed = def.input.safeParse(m.input);
@@ -385,12 +453,15 @@ export class ProtoServer implements TestServer {
         ),
       );
     const input = parsed.data;
-    for (const id of def.ids?.(input) ?? []) if (!inWindow(id, now)) return skew("input.id");
-    if (def.online && ulidTime(m.mutationId) < now - ONLINE_MAX_AGE)
-      return final(refuse("PRECONDITION_FAILED", "This change can be made only while online."));
-    const tx = new StagedTx(this.store, u, isoAt(now), m.mutationId);
-    let result: unknown;
     try {
+      for (const id of def.ids?.(input) ?? []) if (!inWindow(id, now)) return window("input.id");
+      // an online-only write whose mutation id is over a minute old: the
+      // client's clock is behind, or the write waited in an outbox. Either
+      // way the client corrects its clock and sends it again with a new
+      // mutation id (R6: a slow clock could never create a space).
+      if (def.online && ulidTime(m.mutationId) < now - ONLINE_MAX_AGE)
+        return skew("mutationId: expected a ULID from the past minute (online only)");
+      const tx = new StagedTx(this.store, u, isoAt(now), m.mutationId);
       authorize(tx, def, input);
       const pre: PreCtx = {
         now,
@@ -401,49 +472,71 @@ export class ProtoServer implements TestServer {
           ),
       };
       const values = def.pre?.(pre, input) ?? {};
-      result = def.run(tx, input, values);
+      const result = def.run(tx, input, values);
+      const effects = def.post?.(input, result) ?? [];
+      return { result: { ok: true, result }, recorded: true, staged: tx.staged, effects };
     } catch (e) {
       if (e instanceof Refusal) return final(e);
-      throw e;
+      // not a refusal: a fault of the server, not of the input. Nothing is
+      // written or recorded; the client sends the write again later (R8).
+      return final(refuse("INTERNAL_SERVER_ERROR"));
     }
-    this.store.commit(tx.staged, now);
-    if (def.post) this.post(def.post, input, result, now);
-    return { result: { ok: true, result }, recorded: true };
   }
 
-  /** Post-commit effects: server writes, in their own version. */
-  private post(
-    fn: NonNullable<(typeof MUTATORS)[string]["post"]>,
-    input: unknown,
-    result: unknown,
-    now: number,
-  ) {
+  /** Run the queued effects, oldest first. One that fails stays queued and
+   * is tried again on the next call; its write's answer is already
+   * recorded and does not change. */
+  private runEffects(now: number) {
+    for (let k = 0; k < this.effectQueue.length;) {
+      const q = this.effectQueue[k] as QueuedEffect;
+      try {
+        this.runEffect(q.effect, now);
+        this.effectQueue.splice(k, 1);
+      } catch {
+        q.attempts++;
+        k++;
+      }
+    }
+  }
+
+  private runEffect(effect: Effect, now: number) {
+    if (effect.type === "job") {
+      this.jobList.push({ kind: effect.kind, id: effect.id });
+      return;
+    }
     const staged = new Map<string, StoredRecord | null>();
-    fn(
-      {
-        reader: this.store,
-        notify: (n) => {
-          const id = ulid(now, this.random);
-          staged.set(`notif:${id}`, {
-            ...n,
-            kind: "notif",
-            id,
-            read: false,
-            createdAt: isoAt(now),
-            rev: 0,
-          });
-        },
-        job: (kind, id) => this.jobList.push({ kind, id }),
-      },
-      input,
-      result,
-    );
+    const staff = spaceRec(this.store, effect.sp)?.mods ?? [];
+    for (const [to, role] of staff) {
+      if (role === "member") continue;
+      let id: string;
+      do id = ulid(now, this.random);
+      while (this.store.ids.has(id) || staged.has(`notif:${id}`));
+      const n: NotifDraft = {
+        to,
+        type: "report",
+        sp: effect.sp,
+        report: effect.report,
+        item: effect.item,
+      };
+      staged.set(`notif:${id}`, {
+        ...n,
+        kind: "notif",
+        id,
+        read: false,
+        createdAt: isoAt(now),
+        rev: 0,
+      });
+    }
     this.store.commit(staged, now);
   }
 
-  private prune(now: number) {
+  /** Expire what is past its lifetime, and run the queued effects. */
+  private housekeep(now: number) {
     this.store.prune(now);
     for (const [k, d] of this.dedup) if (d.at <= now - DEDUP_TTL) this.dedup.delete(k);
+    for (const c of this.clients.values())
+      for (const [seq, a] of c.answers) if (a.at <= now - DEDUP_TTL) c.answers.delete(seq);
+    this.runEffects(now);
   }
 
   // ---- reads ----
@@ -466,7 +559,7 @@ export class ProtoServer implements TestServer {
 
   snapshot(actor: Actor | null, log: LogId, options: ReadOptions = {}): Snapshot {
     const now = this.clock.now();
-    this.prune(now);
+    this.housekeep(now);
     const u = this.userOf(actor);
     const out: Snapshot = {
       records: [],
@@ -495,7 +588,7 @@ export class ProtoServer implements TestServer {
 
   pull(actor: Actor | null, log: LogId, cursor: Cursor, options: ReadOptions = {}): Pull {
     const now = this.clock.now();
-    this.prune(now);
+    this.housekeep(now);
     const u = this.userOf(actor);
     const c = cursorS.safeParse(cursor);
     if (!logS.safeParse(log).success || !c.success) return { resync: true };
@@ -539,7 +632,7 @@ export class ProtoServer implements TestServer {
   }
 
   logRows(log: LogId): LogRow[] {
-    this.prune(this.clock.now());
+    this.housekeep(this.clock.now());
     return [...this.rows(log).values()].map((r) => ({ ...r }));
   }
 

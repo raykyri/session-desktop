@@ -18,18 +18,26 @@
 //   3. signed out, or a handle no person may have: UNAUTHORIZED unrecorded
 //   4. the client id unknown or another user's: WRONG_CLIENT   unrecorded
 //   5. a stored answer for (user, mutation id) with the same name and input
-//      (key order aside), within 7 days: that answer           unrecorded
-//   6. seq not the client's last + 1: OUT_OF_ORDER             unrecorded
-//   7. a mutation id that is not a ULID, or one stored with another payload:
-//      BAD_REQUEST                                    uses the seq, not stored
-//   8. the mutation id's time outside [now − 4 days, now + 1 minute]:
+//      (key order aside), within 7 days: that answer, under any client id
+//      or seq of the user                                      unrecorded
+//   6. an answer stored for (client, seq) with the same mutation id, name
+//      and input, within 7 days: that answer                   unrecorded
+//   7. seq not the client's last + 1: OUT_OF_ORDER             unrecorded
+//   8. a mutation id that is not a ULID, or one stored with another payload:
+//      BAD_REQUEST                      uses the seq, stored for (client, seq)
+//   9. the mutation id's time outside [now − 4 days, now + 1 minute]:
 //      CLOCK_SKEW                                              unrecorded
-//   9. an unknown name: NOT_FOUND; 10. an input outside the schema:
+//  10. an unknown name: NOT_FOUND; 11. an input outside the schema:
 //      BAD_REQUEST                                             stored
-//  11. a new id in the input outside the window: CLOCK_SKEW    unrecorded
-//  12. spaces.create with a mutation id over a minute old: PRECONDITION_FAILED
-//  13. the mutator's own rules (RULES below)                   stored
-// "Stored" answers use the seq and are kept for replays for 7 days.
+//  12. a new id in the input outside the window: CLOCK_SKEW    unrecorded
+//  13. an online-only write (spaces.create) whose mutation id is over a
+//      minute old: CLOCK_SKEW (round 1: the client's clock is behind, or the
+//      write waited; the client sends it again from the corrected clock)
+//                                                              unrecorded
+//  14. the mutator's own rules (RULES below)                   stored
+// "Stored" answers use the seq and are kept for replays for 7 days, under
+// (user, mutation id). An answer that uses the seq is always stored (round
+// 1, R7b).
 
 import type { Envelope, ErrorCode, StoredRecord } from "../src/index.js";
 
@@ -43,6 +51,8 @@ export interface Prediction {
   usesSeq: boolean;
   /** The answer is kept for replays of (user, mutation id). */
   stored: boolean;
+  /** The answer is kept for replays of (client, seq) instead. */
+  storedForSeq?: boolean;
 }
 
 const MIN_DAY = 86_400_000;
@@ -481,14 +491,17 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
 const ENVELOPE_KEYS = ["clientId", "input", "mutationId", "name", "protocolVersion", "seq"];
 
 export class WriteModel {
-  private readonly clients = new Map<string, { u: string; last: number }>();
+  private readonly clients = new Map<
+    string,
+    { u: string; last: number; bySeq: Map<number, { sent: string; code: Code; at: number }> }
+  >();
   private readonly answers = new Map<string, { payload: string; code: Code; at: number }>();
   /** Every id a stored record ever had. */
   private readonly ids = new Set<string>();
 
   /** A client id the server registered for `u`. */
   registered(clientId: string, u: string) {
-    this.clients.set(clientId, { u, last: 0 });
+    this.clients.set(clientId, { u, last: 0, bySeq: new Map() });
   }
 
   lastSeq(clientId: string): number | undefined {
@@ -523,8 +536,12 @@ export class WriteModel {
     const prior = formed ? this.answers.get(`${u} ${e.mutationId}`) : undefined;
     const live = prior && now - prior.at < 7 * MIN_DAY ? prior : undefined;
     if (live && live.payload === payload) return pass(live.code);
+    const again = client.bySeq.get(e.seq);
+    if (again && now - again.at < 7 * MIN_DAY && again.sent === sortedJson([e.mutationId, payload]))
+      return pass(again.code);
     if (e.seq !== client.last + 1) return pass("OUT_OF_ORDER");
-    if (!formed || live) return { code: "BAD_REQUEST", usesSeq: true, stored: false };
+    if (!formed || live)
+      return { code: "BAD_REQUEST", usesSeq: true, stored: false, storedForSeq: true };
     if (!inWindow(e.mutationId, now)) return pass("CLOCK_SKEW");
     const stored = (code: Code): Prediction => ({ code, usesSeq: true, stored: true });
     const schema = Object.hasOwn(SCHEMA, e.name) ? SCHEMA[e.name] : undefined;
@@ -535,7 +552,7 @@ export class WriteModel {
     for (const k of NEW_IDS[e.name] ?? [])
       if (!inWindow(String(input[k]), now)) return pass("CLOCK_SKEW");
     if (e.name === "spaces.create" && timeOf(e.mutationId) < now - 60_000)
-      return stored("PRECONDITION_FAILED");
+      return pass("CLOCK_SKEW");
     const facts: Facts = {
       dump,
       me: u,
@@ -557,6 +574,12 @@ export class WriteModel {
     if (u === null) return;
     const client = this.clients.get(envelope.clientId);
     if (p.usesSeq && client) client.last = envelope.seq;
+    if (p.storedForSeq && client)
+      client.bySeq.set(envelope.seq, {
+        sent: sortedJson([envelope.mutationId, sortedJson([envelope.name, envelope.input])]),
+        code: p.code,
+        at: now,
+      });
     if (p.stored)
       this.answers.set(`${u} ${envelope.mutationId}`, {
         payload: sortedJson([envelope.name, envelope.input]),

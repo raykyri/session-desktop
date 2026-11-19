@@ -368,7 +368,7 @@ test("a write refused for lack of a role is applied once the role exists, under 
   t.is(first?.ok ? null : first?.error.code, "FORBIDDEN");
   await admit(t, w, closed, "otto");
   // the same mutation id answers the stored refusal: the decision was made once
-  const again = await w.server.apply({ u: "otto" }, e);
+  const again = await w.server.apply({ u: "otto" }, otto.sent.at(-1)!);
   t.false(again.ok);
   await ok(t, w.as("otto", "threads.create", { ...(e.input as object), id: w.id() }));
 });

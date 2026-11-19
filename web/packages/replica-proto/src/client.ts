@@ -7,11 +7,23 @@
 // client id, from `register`, is bound to that person on the server too, so
 // an outbox restored under another person's sign-in is refused.
 //
-// Writes are numbered 1, 2, 3, … (`seq`) as they are queued, and sent in that
-// order. An answer the server did not record (contract.ts, `UNRECORDED`)
-// leaves the write at the head of the outbox; CLOCK_SKEW corrects the
-// client's clock from the server's time and sends the write again with new
-// ids.
+// The outbox holds writes without a `seq`. A write gets its seq when it is
+// sent: the last seq the server acknowledged for this client + 1. So a write
+// dropped from the outbox (expired after 3 days, or cancelled) leaves no gap
+// (review round 1, R7). Writes are sent one at a time, in queue order.
+//
+// Answers:
+// - recorded (applied or refused): the seq is acknowledged, the write leaves
+//   the outbox.
+// - OUT_OF_ORDER: the server has no answer recorded for this mutation id
+//   (contract.ts, `UNRECORDED`), and says which seq it takes next; the
+//   client sends the same write again with it. This covers a stored answer
+//   that was replayed without using the seq (after a new client id, R7c).
+// - CLOCK_SKEW: the client corrects its clock from the server's time and
+//   sends the write again with new ids.
+// - any other unrecorded answer, the transient ones included
+//   (TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE, INTERNAL_SERVER_ERROR): the write
+//   stays at the head of the outbox and the flush stops (R15).
 
 import {
   PROTOCOL_VERSION,
@@ -36,10 +48,24 @@ interface Replica {
 
 export type SyncOutcome = "snapshot" | "pull" | "resync";
 
-/** State a device keeps on disk between sessions, for the suite to restore. */
+/** How long the outbox keeps a write (AGENTS.md: 3 days). */
+export const OUTBOX_TTL = 3 * 86_400_000;
+
+/** A queued write: no client id or seq yet; it gets both when it is sent.
+ * `queuedAt` is the client's time when it was queued. */
+export interface Pending {
+  mutationId: string;
+  name: string;
+  input: unknown;
+  queuedAt: number;
+}
+
+/** State a device keeps on disk between sessions, for the suite to restore.
+ * `acked`: the last seq the server acknowledged for `clientId` (absent: 0). */
 export interface ClientState {
   clientId: string | null;
-  outbox: Envelope[];
+  outbox: Pending[];
+  acked?: number;
 }
 
 /** The thread a record belongs to: its own id for a thread, else its `th`. */
@@ -69,13 +95,17 @@ export class ReplicaClient {
    * user does not belong to, and the owner's exception covers the user's own
    * threads only. */
   private readonly frozenCopies = new Map<LogId, Map<string, StoredRecord>>();
-  private readonly outbox: Envelope[];
+  private readonly outbox: Pending[];
   private clientIdValue: string | null;
-  private nextSeq: number;
+  /** The last seq the server acknowledged for this client id: from recorded
+   * answers, OUT_OF_ORDER's `expectedSeq` and reads' `lastSeq`. */
+  private acked: number;
   /** Milliseconds to add to the local clock, learned from CLOCK_SKEW. */
   private offset = 0;
   /** The last seq the server reported as processed for this client. */
   lastSeq: LastSeq = null;
+  /** Every envelope this client sent, in order (for the suite). */
+  readonly sent: Envelope[] = [];
 
   constructor(
     private readonly server: ServerHalf,
@@ -84,8 +114,15 @@ export class ReplicaClient {
     restore?: ClientState,
   ) {
     this.clientIdValue = restore?.clientId ?? null;
-    this.outbox = restore ? restore.outbox.map((e) => ({ ...e })) : [];
-    this.nextSeq = Math.max(0, ...this.outbox.map((e) => e.seq)) + 1;
+    this.outbox = restore
+      ? restore.outbox.map((e) => ({
+          mutationId: e.mutationId,
+          name: e.name,
+          input: e.input,
+          queuedAt: e.queuedAt,
+        }))
+      : [];
+    this.acked = restore?.acked ?? 0;
   }
 
   get clientId(): string | null {
@@ -102,19 +139,29 @@ export class ReplicaClient {
     return ulid(this.now(), this.env.random);
   }
 
-  /** Get a client id from the server once, and give it to queued writes. */
+  /** Get a client id from the server once. */
   async register(): Promise<string | null> {
     if (this.clientIdValue === null) {
       const r = await this.server.register(this.actor);
       if (!r.ok) return null;
       this.clientIdValue = r.clientId;
+      this.acked = 0;
     }
-    for (const e of this.outbox) if (e.clientId === "") e.clientId = this.clientIdValue;
     return this.clientIdValue;
   }
 
   state(): ClientState {
-    return { clientId: this.clientIdValue, outbox: this.outbox.map((e) => ({ ...e })) };
+    return {
+      clientId: this.clientIdValue,
+      outbox: this.outbox.map((e) => ({ ...e })),
+      acked: this.acked,
+    };
+  }
+
+  /** Learn the server's last processed seq for this client from a read. */
+  private learn(lastSeq: LastSeq) {
+    this.lastSeq = lastSeq;
+    if (lastSeq !== null) this.acked = lastSeq;
   }
 
   private readOptions(tier?: Tier) {
@@ -136,7 +183,7 @@ export class ReplicaClient {
           else r.records.delete(c.key);
         }
         r.cursor = { epoch: res.epoch, version: res.version };
-        this.lastSeq = res.lastSeq;
+        this.learn(res.lastSeq);
         return "pull";
       }
     }
@@ -146,7 +193,7 @@ export class ReplicaClient {
     const frozen = this.frozenCopies.get(log);
     if (frozen) for (const k of records.keys()) frozen.delete(k);
     this.replicas.set(log, { cursor: { epoch: snap.epoch, version: snap.version }, records });
-    this.lastSeq = snap.lastSeq;
+    this.learn(snap.lastSeq);
     return r ? "resync" : "snapshot";
   }
 
@@ -195,70 +242,91 @@ export class ReplicaClient {
     return out;
   }
 
-  private push(name: string, input: unknown, mutationId: string): Envelope {
-    const e: Envelope = {
-      clientId: this.clientIdValue ?? "",
-      seq: this.nextSeq++,
-      mutationId,
-      name,
-      input,
-      protocolVersion: PROTOCOL_VERSION,
-    };
-    this.outbox.push(e);
-    return e;
+  private push(name: string, input: unknown, mutationId: string): Pending {
+    const p: Pending = { mutationId, name, input, queuedAt: this.now() };
+    this.outbox.push(p);
+    return p;
   }
 
-  /** Queue a write. Online-only mutators (`spaces.create`) are never queued.
-   * The envelope gets its client id when the client registers (`flush` does
-   * that first). */
-  queue(name: string, input: unknown, mutationId = this.newId()): Envelope {
+  /** Queue a write. Online-only mutators (`spaces.create`) are never queued. */
+  queue(name: string, input: unknown, mutationId = this.newId()): Pending {
     if (Object.hasOwn(MUTATORS, name) && MUTATORS[name]?.online)
       throw new Error(`${name} is online only`);
     return this.push(name, input, mutationId);
   }
 
-  pending(): readonly Envelope[] {
+  pending(): readonly Pending[] {
     return this.outbox;
+  }
+
+  /** Take a write out of the outbox before it is sent (the person cancelled
+   * it). The writes after it are not held up: they get their seqs when sent. */
+  drop(mutationId: string): boolean {
+    const k = this.outbox.findIndex((p) => p.mutationId === mutationId);
+    if (k < 0) return false;
+    this.outbox.splice(k, 1);
+    return true;
   }
 
   /** New mutation id and new client-made ids for the write at the head of
    * the outbox, after the server refused its ids' times. The writes queued
    * after it that name those ids get the new ones too. */
-  private remint(e: Envelope) {
-    const def = Object.hasOwn(MUTATORS, e.name) ? MUTATORS[e.name] : undefined;
-    const parsed = def?.input.safeParse(e.input);
+  private remint(p: Pending) {
+    const def = Object.hasOwn(MUTATORS, p.name) ? MUTATORS[p.name] : undefined;
+    const parsed = def?.input.safeParse(p.input);
     const map = new Map<string, string>();
     for (const id of parsed?.success ? (def?.ids?.(parsed.data) ?? []) : [])
       map.set(id, this.newId());
-    e.mutationId = this.newId();
+    p.mutationId = this.newId();
     for (const x of this.outbox) x.input = remap(x.input, map);
   }
 
-  /** Send the outbox in order, one answer per write sent. A write the server
-   * did not record stops the flush and stays queued (CLOCK_SKEW first
-   * corrects the clock and sends it again with new ids, up to 3 times). */
+  /** Send the outbox in order, one answer per write sent. Writes older than
+   * `OUTBOX_TTL` are dropped first. A write the server did not record stops
+   * the flush and stays queued; CLOCK_SKEW and OUT_OF_ORDER are first
+   * answered by sending the write again (new ids from the corrected clock;
+   * the seq the server expects), up to 3 times each. */
   async flush(): Promise<ApplyResult[]> {
     const out: ApplyResult[] = [];
-    if (this.outbox.length && (await this.register()) === null) return out;
-    let retries = 0;
+    const now = this.now();
+    for (let k = this.outbox.length - 1; k >= 0; k--)
+      if ((this.outbox[k] as Pending).queuedAt < now - OUTBOX_TTL) this.outbox.splice(k, 1);
+    if (!this.outbox.length) return out;
+    const clientId = await this.register();
+    if (clientId === null) return out;
+    let skews = 0;
+    let gaps = 0;
     while (this.outbox.length) {
-      const e = this.outbox[0] as Envelope;
+      const p = this.outbox[0] as Pending;
+      const e: Envelope = {
+        clientId,
+        seq: this.acked + 1,
+        mutationId: p.mutationId,
+        name: p.name,
+        input: structuredClone(p.input),
+        protocolVersion: PROTOCOL_VERSION,
+      };
+      this.sent.push(e);
       const res = await this.server.apply(this.actor, e);
-      if (
-        !res.ok &&
-        res.error.code === "CLOCK_SKEW" &&
-        res.error.serverTime !== undefined &&
-        retries < 3
-      ) {
-        this.offset = res.error.serverTime - this.env.clock.now();
-        this.remint(e);
-        retries++;
-        continue;
+      if (!res.ok && res.error.code === "CLOCK_SKEW" && res.error.serverTime !== undefined) {
+        if (skews++ < 3) {
+          this.offset = res.error.serverTime - this.env.clock.now();
+          this.remint(p);
+          continue;
+        }
+      }
+      if (!res.ok && res.error.code === "OUT_OF_ORDER" && res.error.expectedSeq !== undefined) {
+        if (gaps++ < 3) {
+          this.acked = res.error.expectedSeq - 1;
+          continue;
+        }
       }
       out.push(res);
       if (!res.ok && UNRECORDED.has(res.error.code)) break;
+      this.acked = e.seq;
       this.outbox.shift();
-      retries = 0;
+      skews = 0;
+      gaps = 0;
       if (res.ok && e.name === "threads.delete") this.unfreeze((e.input as { id: string }).id);
     }
     return out;
@@ -271,10 +339,12 @@ export class ReplicaClient {
   }
 
   /** Send one write now, after the writes already queued (online-only
-   * writes): its `seq` comes after theirs. Answers the write's result. */
+   * writes). Answers the write's result. */
   async send(name: string, input: unknown, mutationId = this.newId()): Promise<ApplyResult> {
-    this.push(name, input, mutationId);
+    const p = this.push(name, input, mutationId);
     const results = await this.flush();
+    // not sent, or answered with an unrecorded code: it is not kept for later
+    this.drop(p.mutationId);
     return results.at(-1) ?? { ok: false, error: refuse("UNAUTHORIZED").toError() };
   }
 }

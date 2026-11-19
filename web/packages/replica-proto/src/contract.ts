@@ -8,6 +8,7 @@
 
 import type { Spaces } from "@session/shared";
 
+import type { AnyMutator } from "./mutators.js";
 import type { LogId, StoredRecord } from "./records.js";
 
 export type Awaitable<T> = T | Promise<T>;
@@ -22,13 +23,16 @@ export const PROTOCOL_VERSION = 2;
 export const MIN_PROTOCOL_VERSION = 2;
 
 /** One outbox entry as the client sends it: a mutator's name and input, the
- * client that queued it and its place in that client's outbox. There is no
+ * client that sends it and its place in that client's sequence. There is no
  * field for client-computed changes; an envelope with any other field is
  * refused.
  *
- * `clientId` comes from `register` and is bound to one user. `seq` numbers a
- * client's writes 1, 2, 3, … in outbox order; the server applies a client's
- * writes only in that order, without gaps. */
+ * `clientId` comes from `register` and is bound to one user. `seq` numbers
+ * the writes the server processed for a client 1, 2, 3, …; the server takes
+ * a write only when its `seq` is the client's last processed seq + 1. The
+ * client gives a write its `seq` when it sends it, from the last seq the
+ * server acknowledged, not when it queues it: a write dropped from the outbox
+ * before it was sent leaves no gap (review round 1, R7). */
 export interface Envelope {
   clientId: string;
   seq: number;
@@ -44,9 +48,11 @@ export interface Envelope {
  * - `STALE`: the record the write acts on is no longer in the state the
  *   client saw (a request already decided, a role already changed, a thread
  *   edited since its `base.rev`).
- * - `CLOCK_SKEW`: an id's time is outside the accepted window. Not recorded;
+ * - `CLOCK_SKEW`: an id's time is outside the accepted window, or an
+ *   online-only write's mutation id is more than a minute old. Not recorded;
  *   the error carries `serverTime`, and the client retries with new ids.
- * - `OUT_OF_ORDER`: `seq` is not the client's next one. Not recorded.
+ * - `OUT_OF_ORDER`: `seq` is not the client's next one. Not recorded; the
+ *   error carries `expectedSeq`.
  * - `WRONG_CLIENT`: the client id is unknown or bound to another user. Not
  *   recorded. */
 export type ErrorCode =
@@ -57,27 +63,41 @@ export type ErrorCode =
   | "OUT_OF_ORDER"
   | "WRONG_CLIENT";
 
-/** The answers that record nothing: the envelope's `seq` is not used up, and
- * the same `seq` may be sent again. Every other answer, applied or refused,
- * uses up the `seq` and is stored under (user, mutation id) for 7 days. A
- * BAD_REQUEST for a malformed envelope records nothing either (it has no
- * usable `seq`). */
+/** The answers that record nothing: the envelope's `seq` is not used up, the
+ * same `seq` may be sent again, and the client keeps the write queued. The
+ * transient ones (TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE,
+ * INTERNAL_SERVER_ERROR, CLOCK_SKEW) say nothing about the write itself; the
+ * client sends it again later. A BAD_REQUEST for a malformed envelope records
+ * nothing either (it has no usable `seq`).
+ *
+ * Every other answer, applied or refused, uses up the `seq` and is recorded
+ * in the same commit as the write's changes: under (user, mutation id) for 7
+ * days, or, for a mutation id that is malformed or already used for another
+ * change, under (client, seq) for 7 days. Sent again, the same envelope gets
+ * the recorded answer. So OUT_OF_ORDER means the server has no answer for
+ * this mutation id, and the client may send the write again with
+ * `expectedSeq`. */
 export const UNRECORDED: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
   "UPGRADE_REQUIRED",
   "UNAUTHORIZED",
   "WRONG_CLIENT",
   "OUT_OF_ORDER",
   "CLOCK_SKEW",
+  "TOO_MANY_REQUESTS",
+  "SERVICE_UNAVAILABLE",
+  "INTERNAL_SERVER_ERROR",
 ]);
 
 /** An error answer. `message` is fixed per code and cause, so two answers
  * with the same cause are byte-identical. `serverTime` (milliseconds since
- * the epoch) comes with CLOCK_SKEW. */
+ * the epoch) comes with CLOCK_SKEW; `expectedSeq`, the seq the server takes
+ * next from this client, with OUT_OF_ORDER. */
 export interface ApiError {
   code: ErrorCode;
   message: string;
   issues?: string[];
   serverTime?: number;
+  expectedSeq?: number;
 }
 
 export type ApplyResult = { ok: true; result: unknown } | { ok: false; error: ApiError };
@@ -159,6 +179,10 @@ export interface ServerOptions {
   clock: Clock;
   /** The server's random source (invite codes, client ids, server-made ids). */
   random?: () => number;
+  /** The mutator definitions the server runs, by name (default: `MUTATORS`).
+   * The suite passes a set with a faulty definition to test that a fault
+   * writes nothing. */
+  mutators?: Readonly<Record<string, AnyMutator>>;
 }
 
 export type ServerFactory = (options: ServerOptions) => TestServer;

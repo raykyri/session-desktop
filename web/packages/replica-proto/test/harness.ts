@@ -14,6 +14,7 @@ import {
   type Envelope,
   type ErrorCode,
   type ServerFactory,
+  type ServerOptions,
   type StoredRecord,
   type TestServer,
 } from "../src/index.js";
@@ -54,9 +55,11 @@ export class World {
   readonly random: () => number;
   readonly server: TestServer;
 
-  constructor(seed = 1) {
+  /** `options` replaces server options: a random source that fails, or a set
+   * of mutators with a faulty one. */
+  constructor(seed = 1, options: Partial<Omit<ServerOptions, "clock">> = {}) {
     this.random = rng(seed);
-    this.server = makeServer({ clock: this.clock, random: rng(seed ^ 0x5eed) });
+    this.server = makeServer({ clock: this.clock, random: rng(seed ^ 0x5eed), ...options });
   }
 
   /** A client-made ULID at the current time, or `offset` ms from it. */
@@ -181,8 +184,12 @@ export interface Cast {
   vault: string;
 }
 
-export async function cast(t: ExecutionContext, seed = 1): Promise<Cast> {
-  const w = new World(seed);
+export async function cast(
+  t: ExecutionContext,
+  seed = 1,
+  options: Partial<Omit<ServerOptions, "clock">> = {},
+): Promise<Cast> {
+  const w = new World(seed, options);
   const open = w.id();
   const closed = w.id();
   const vault = w.id();

@@ -7,7 +7,10 @@
 //    time from `tx.now`, never the clock, use no random source and no `Intl`,
 //    and make no ids: the first id comes in the input and later ones from
 //    `tx.id(ordinal)`. `run` writes the stored shape, counts included.
-// 3. `post` (server only, after the commit): notifications and jobs.
+// 3. `post` (server only): the effects to run after the commit
+//    (notifications and jobs), as data. The server queues them in the same
+//    commit as the write and runs them after it, retrying until they
+//    succeed; an effect's failure never changes the write's answer.
 //
 // `space(tx, input)` names the space the write acts in, reading the target
 // (NOT_FOUND when it does not exist or the actor may not read it, with one
@@ -140,11 +143,18 @@ export interface PreCtx {
   inviteCodeTaken(code: string): boolean;
 }
 
-export interface PostCtx {
-  readonly reader: Reader;
-  notify(n: Omit<NotifRec, "kind" | "id" | "rev" | "createdAt" | "read">): void;
-  job(kind: string, id: string): void;
-}
+/** A post-commit effect, as the server's effect queue holds it. It carries
+ * ids and keys only, no text, so the queue keeps nothing a removal must
+ * erase.
+ * - `job`: start a server job (here: a run of an ask).
+ * - `notifyStaff`: notify the space's staff (owner, admins, moderators, as
+ *   they are when the effect runs) of a report. */
+export type Effect =
+  | { type: "job"; kind: string; id: string }
+  | { type: "notifyStaff"; sp: string; report: string; item: string };
+
+/** The notification a `notifyStaff` effect writes for one person. */
+export type NotifDraft = Omit<NotifRec, "kind" | "id" | "rev" | "createdAt" | "read">;
 
 export type Who = "user" | "member" | "moderator" | "admin" | "owner" | "author";
 
@@ -162,7 +172,7 @@ export interface MutatorDef<I> {
   pre?: (ctx: PreCtx, i: I) => ServerValues;
   can?: (tx: Tx, i: I) => void;
   run: (tx: Tx, i: I, values: ServerValues) => unknown;
-  post?: (ctx: PostCtx, i: I, result: unknown) => void;
+  post?: (i: I, result: unknown) => Effect[];
 }
 
 export type AnyMutator = MutatorDef<unknown>;
@@ -209,6 +219,8 @@ export const isHandle = (u: string) => handleS.safeParse(u).success;
 const count = z.number().int().nonnegative();
 /** The rev of the record a write acts on, as the client saw it. */
 const baseS = z.strictObject({ rev: count });
+/** The longest an invite link lasts, in days. */
+export const INVITE_MAX_DAYS = 30;
 
 const text = (v: string, path: string) => {
   const s = v.trim();
@@ -575,9 +587,9 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
       });
       return { id: i.id, run };
     },
-    post: (fx, _i, result) => {
+    post: (_i, result) => {
       const run = (result as { run: string | null }).run;
-      if (run) fx.job("run", run);
+      return run ? [{ type: "job", kind: "run", id: run }] : [];
     },
   }),
 
@@ -894,8 +906,16 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
   }),
 
   // -- invite links
+  // `days` is bounded in the schema: an input that passes the schema never
+  // makes `run` throw (review round 1, R8, where 1e15 days made an invalid
+  // date). A mutator turns an input it cannot apply into a refusal; any other
+  // exception is a server fault (INTERNAL_SERVER_ERROR, not recorded).
   "invites.create": define({
-    input: z.strictObject({ id: ulidS, space: ulidS, days: count.nullable().optional() }),
+    input: z.strictObject({
+      id: ulidS,
+      space: ulidS,
+      days: count.max(INVITE_MAX_DAYS).nullable().optional(),
+    }),
     who: "member",
     space: (_tx, i) => i.space,
     ids: (i) => [i.id],
@@ -959,12 +979,10 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
       });
       return { id: i.id, sp: item.s };
     },
-    // the space's moderators get a notification (server-made ids)
-    post: (fx, i, result) => {
+    // the space's staff get a notification (server-made ids)
+    post: (i, result) => {
       const { id, sp } = result as { id: string; sp: string };
-      const staff = spaceRec(fx.reader, sp)?.mods ?? [];
-      for (const [u, role] of staff)
-        if (role !== "member") fx.notify({ to: u, type: "report", sp, report: id, item: i.item });
+      return [{ type: "notifyStaff", sp, report: id, item: i.item }];
     },
   }),
 
