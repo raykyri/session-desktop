@@ -3778,7 +3778,9 @@ button.eyebrow.acx-rlh:hover { color: var(--t-strong); }
 /* ---------- sync states: the outbox, refused writes, access changes, Update Session, the Desktop app, device runs ---------- */
 /* the Desktop app (Tauri): a title bar in place of the browser's address bar */
 html[data-client="app"] .frame-bar { justify-content: flex-start; }
-html[data-client="app"] .frame-bar .url { font-weight: 650; color: var(--t-secondary); }
+.frame-bar .sx-wt { display: none; }
+html[data-client="app"] .frame-bar #url { display: none; }
+html[data-client="app"] .frame-bar .sx-wt { display: block; font-weight: 650; color: var(--t-secondary); }
 /* the header: offline pill, unsent badge and its popover */
 .sx-bw { position: relative; display: inline-flex; }
 .btn.hb.sx-badge { gap: 5px; height: 30px; border: 1px solid var(--control-border); background: var(--control); font-weight: 550; }
@@ -13333,7 +13335,8 @@ const SX0 = () => ({ sxScr: null, sxObx: [], sxSent: 0, sxPop: false, sxStale: n
 Object.assign(st, SX0());
 /* the Variants bar: Client next to the device, and a row of controls shown with the screens they apply to */
 {
-  ['kw-sync', 'kw-client'].forEach(id => { const e = document.getElementById(id); if (e) e.remove(); });
+  ['kw-sync', 'kw-client', 'sx-wt'].forEach(id => { const e = document.getElementById(id); if (e) e.remove(); });
+  const url = $('url'); if (url) url.insertAdjacentHTML('afterend', '<div class="url sx-wt" id="sx-wt" aria-hidden="true"></div>');
   const dk = $('k-dev') && $('k-dev').closest('.knob');
   if (dk) dk.insertAdjacentHTML('afterend', `<div class="knob" id="kw-client" title="Desktop only: the web client in a browser, or the same client in the Desktop app (Tauri, macOS), which adds a window title, an outbox (Unsent changes), device sign-in and device runs"><div class="seg" id="k-client" aria-label="Client"></div></div>`);
   const ctl = document.querySelector('.ctl');
@@ -13443,7 +13446,7 @@ function sxAct(act, id) {
   if (act === 'xnote') { st.sxNoteX = true; return; }
   if (act === 'update') { st.modal = null; toast(sxNat() ? 'Opened Session in the App Store.' : sxApp() ? 'Downloading Session 1.1.0. The app restarts when the download is done; unsent changes are kept.' : 'Reloading. Your text is kept.'); return; }
   if (act === 'review') { st.sxStaleOpen = true; st.sxPop = false; if (st.sxvStale === 'dialog') st.modal = 'sx-stale'; else if (st.sxStale) sxOpenStale(); return; }
-  if (act === 'editor') { jump('sx-rf-page'); return; }
+  if (act === 'editor') { jump('ec-page-unsent'); return; }
   if (!o) return;
   if (act === 'copy') { taCopy(o.text || ''); toast('Text copied.'); return; }
   if (act === 'discard') { drop(); st.modal = null; if (sxNat()) nst.sheet = null; toast(sxBad(o) ? 'Removed from Unsent changes.' : 'Discarded.'); return; }
@@ -13482,15 +13485,15 @@ const sxUpdDlg = () => dlg('Update Session', `<p class="muted">${sxUpdText()}</p
 
 /* ---------- Devices ---------- */
 const SX_DEVS = () => [
-  { id: 'd1', name: 'MacBook Air', ic: SXI.mac, plat: 'macOS 15.1 · Session for Mac 1.0.0', seen: '2 min ago', here: true },
-  { id: 'd2', name: 'iPhone 16', ic: SXI.phone, plat: 'iOS 19.1 · Session 1.0.0', seen: '1 h ago' },
+  { id: 'd1', name: 'MacBook Air', ic: SXI.mac, plat: 'macOS 15.1 · Session for Mac 1.0.0', seen: '2 min ago', mac: true },
+  { id: 'd2', name: 'iPhone 16', ic: SXI.phone, plat: 'iOS 19.1 · Session 1.0.0', seen: '1 h ago', phone: true },
   { id: 'd3', name: 'Mac mini (studio)', ic: SXI.mac, plat: 'macOS 14.6 · Session for Mac 0.9.2', seen: 'Oct 30' },
 ];
-const sxDevList = () => st.sxDevs || SX_DEVS();
+/* here: the device this screen runs on (the Desktop app is the MacBook Air, the Phone app the iPhone; a browser is none) */
+const sxDevList = () => (st.sxDevs || SX_DEVS()).map(d => ({ ...d, here: (sxApp() && !!d.mac) || (sxNat() && !!d.phone) }));
 const SX_DEV_NOTE = 'Devices that signed in to the Session app. Revoking a device signs it out the next time it connects, and changes it has not sent yet are lost. Browsers are not listed: use Sign out in a browser.';
 function sxDevRows() {
-  const app = sxApp();
-  return `<div class="sx-devl">${sxDevList().map(d => `<div class="sx-devr"><span class="sx-devi">${d.ic}</span><span><b>${esc(d.name)}</b>${d.here && app ? '<span class="ks ok">This Mac</span>' : ''}<small>${esc(d.plat)}</small><small>${d.here && app ? 'Active now' : `Last seen ${esc(d.seen)}`}</small></span>${d.here && app ? '' : `<button class="tlink danger-l" type="button" data-sx="revoke:${d.id}">Revoke</button>`}</div>`).join('')}</div>`;
+  return `<div class="sx-devl">${sxDevList().map(d => `<div class="sx-devr"><span class="sx-devi">${d.ic}</span><span><b>${esc(d.name)}</b>${d.here ? '<span class="ks ok">This Mac</span>' : ''}<small>${esc(d.plat)}</small><small>${d.here ? 'Active now' : `Last seen ${esc(d.seen)}`}</small></span>${d.here ? '' : `<button class="tlink danger-l" type="button" data-sx="revoke:${d.id}">Revoke</button>`}</div>`).join('')}</div>`;
 }
 const sxDevicesRaw = () => `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page sx-devp">${typeof nvBackRow === 'function' ? nvBackRow() : ''}<div class="sub-top"><h2>Devices</h2></div>${stSec('Devices', SX_DEV_NOTE, sxDevRows())}</div></div>`;
 const sxRevokeDlg = id => { const d = sxDevList().find(x => x.id === id); if (!d) return ''; return dlg(`Revoke ${esc(d.name)}?`, `<p class="muted">${esc(d.name)} is signed out the next time it connects. Changes it has not sent yet are lost, and its copy of your spaces is deleted from it.</p>`, `${cancelB()}<button class="btn danger" type="button" data-sx="revokeok:${d.id}">Revoke</button>`, 'alertdialog'); };
@@ -13642,7 +13645,8 @@ function sxShowToast(t, acts) {
 /* the Desktop app's window title in place of the address */
 function sxChrome() {
   const R = document.documentElement;
-  if (sxApp()) { R.dataset.client = 'app'; const u = $('url'); if (u) u.textContent = st.subPage === 'sxsign' ? 'Session' : `Session — ${sxWinTitle()}`; }
+  /* the address stays in #url (the history reads it); the window title is a sibling shown in its place */
+  if (sxApp()) { R.dataset.client = 'app'; const u = $('sx-wt'); if (u) u.textContent = st.subPage === 'sxsign' ? 'Session' : `Session — ${sxWinTitle()}`; }
   else delete R.dataset.client;
 }
 function sxWinTitle() {
@@ -13710,7 +13714,7 @@ function sxClickAct(act, id) {
     case 'tip': st.sxTip = !st.sxTip; return;
     case 'runagain': st.sxRuns = { ...st.sxRuns, [id]: { ...sxRun(id), state: 'again' } }; toast(`Running again on ${sxHere()} (attempt 2).`); return;
     case 'revoke': if (sxNat()) nst.sheet = 'sxrevoke:' + id; else st.modal = 'sx-revoke:' + id; return;
-    case 'revokeok': { const d = sxDevList().find(x => x.id === id); st.sxDevs = sxDevList().filter(x => x.id !== id); st.modal = null; if (d) toast(`Revoked. ${esc(d.name)} is signed out the next time it connects.`); return; }
+    case 'revokeok': { const d = sxDevList().find(x => x.id === id); st.sxDevs = (st.sxDevs || SX_DEVS()).filter(x => x.id !== id); st.modal = null; if (d) toast(`Revoked. ${esc(d.name)} is signed out the next time it connects.`); return; }
     case 'signopen': toast('Opened session.app/device in your browser.'); return;
     case 'signcancel': st.sxSign = 'start'; return;
     case 'signstart': st.sxSign = 'wait'; return;
@@ -13923,38 +13927,45 @@ CS_PAGES.sxgone = () => `<div class="A C Af H">${topHeader()}<div class="cs-napa
 CS_SUBNAME.sxgone = '#replication-club';
 
 /* ---------- Screen entries ---------- */
-JUMPS.push(
+/* the web and Desktop app groups go before Account; the Phone app's entries are one group at the end, after the
+   other Phone groups (the overlay-history sweep moves from the Phone app to the web only where the list does) */
+JUMPS.splice((i => i < 0 ? JUMPS.length : i)(JUMPS.findIndex(g => g[0] === 'Account')), 0,
   ['Sync: unsent changes', [
     ['sx-ob-wait', 'Desktop app: a reply waiting to send, offline'], ['sx-ob-retry', 'Desktop app: a reply retried with backoff'],
     ['sx-ob-failed', 'Desktop app: Couldn’t save after 5 tries, the rest sent'], ['sx-ob-expired', 'Desktop app: refused as EXPIRED, made over 4 days ago'],
     ['sx-ob-dropped', 'Desktop app: dropped after 3 days unsent'], ['sx-ob-list', 'Desktop app: Unsent changes'],
     ['sx-off-app', 'Desktop app: offline, changes are kept'], ['sx-off-web', 'Web: offline, a reply fails and keeps its text'],
-    ['sxn-ob-wait', 'Phone: a reply waiting to send, offline'], ['sxn-ob-failed', 'Phone: Couldn’t save after 5 tries'], ['sxn-ob-expired', 'Phone: refused as EXPIRED'],
-    ['sxn-ob-dropped', 'Phone: dropped after 3 days unsent'], ['sxn-ob-list', 'Phone: Unsent changes'], ['sxn-off', 'Phone: offline, changes are kept'],
   ]],
   ['Sync: refused writes', [
     ['sx-rf-show', 'Show refused as STALE: the hidden reply was edited'], ['sx-rf-approve', 'Approve refused as STALE: the request changed'],
-    ['sx-rf-page', 'Desktop app: a page edit sent late, someone saved first'], ['sx-rf-forbidden', 'Desktop app: queued moderation refused as FORBIDDEN'],
-    ['sxn-rf-show', 'Phone: Show refused as STALE'], ['sxn-rf-forbidden', 'Phone: queued moderation refused as FORBIDDEN'],
+    ['sx-rf-forbidden', 'Desktop app: queued moderation refused as FORBIDDEN'],
   ]],
   ['Sync: access changes', [
     ['sx-ax-frozen', 'Desktop app: removed from a closed space, the frozen copy'], ['sx-ax-frozen-del', 'Desktop app: frozen copy, delete your own thread'],
     ['sx-ax-gone', 'Web: removed from a closed space'], ['sx-ax-demoted', 'Moderator role removed: no queue, no report notifications'],
-    ['sxn-ax-frozen', 'Phone: removed from a closed space, the frozen copy'], ['sxn-ax-demoted', 'Phone: moderator role removed'],
   ]],
   ['Open spaces: Ban, not Remove', [['sx-op-members', 'Open space: Members, Ban only'], ['sx-op-ban', 'Open space: Ban, and what it stops'], ['sx-op-report', 'Open space: Reports, Ban the author']]],
-  ['Update Session', [['sx-up-web', 'Web: Update Session (reload)'], ['sx-up-app', 'Desktop app: Update Session (download and restart)'], ['sxn-up', 'Phone: Update Session (App Store)']]],
+  ['Update Session', [['sx-up-web', 'Web: Update Session (reload)'], ['sx-up-app', 'Desktop app: Update Session (download and restart)']]],
   ['Desktop app and devices', [
     ['sx-app-home', 'Desktop app: Home'], ['sx-si-app', 'Device sign-in: the app waits for the browser'], ['sx-si-web', 'Device sign-in: approve the Mac in the browser'],
-    ['sx-si-done', 'Device sign-in: approved'], ['sx-dev', 'Account › Devices'], ['sx-dev-revoke', 'Account › Devices: revoke a device'], ['sxn-dev', 'Phone: You › Account › Devices'],
+    ['sx-si-done', 'Device sign-in: approved'], ['sx-dev', 'Account › Devices'], ['sx-dev-revoke', 'Account › Devices: revoke a device'],
   ]],
   ['Device runs (Desktop app)', [
     ['sx-dr-pick', 'Desktop app: choose who runs an ask'], ['sx-dr-default', 'Desktop app: Account › Asks on this Mac'], ['sx-dr-label', 'An answer from a device run: the label'],
     ['sx-dr-int', 'Desktop app: run interrupted, the Mac slept'], ['sx-dr-int-web', 'Web: another member’s device run interrupted'],
     ['sx-dr-size', 'Desktop app: answer over 200 KB'], ['sx-dr-rate', 'Desktop app: 100 device runs in an hour'],
-    ['sx-dr-view', 'Web: watch another member’s device run'], ['sxn-dr-label', 'Phone: an answer from a device run'],
+    ['sx-dr-view', 'Web: watch another member’s device run'],
   ]],
 );
+JUMPS.push(['Phone: sync states', [
+  ['sxn-ob-wait', 'A reply waiting to send, offline'], ['sxn-ob-failed', 'Couldn’t save after 5 tries'], ['sxn-ob-expired', 'Refused as EXPIRED'],
+  ['sxn-ob-dropped', 'Dropped after 3 days unsent'], ['sxn-ob-list', 'Unsent changes'], ['sxn-off', 'Offline, changes are kept'],
+  ['sxn-rf-show', 'Show refused as STALE'], ['sxn-rf-forbidden', 'Queued moderation refused as FORBIDDEN'],
+  ['sxn-ax-frozen', 'Removed from a closed space, the frozen copy'], ['sxn-ax-demoted', 'Moderator role removed'],
+  ['sxn-up', 'Update Session (App Store)'], ['sxn-dev', 'You › Account › Devices'], ['sxn-dr-label', 'An answer from a device run'],
+]]);
+/* a page edit sent late from Unsent changes: the existing Edit conflicts entries, with one more */
+{ const g = JUMPS.find(x => x[0] === 'Edit conflicts'); if (g) g[1].splice(g[1].findIndex(x => x[0] === 'ec-page-over') + 1, 0, ['ec-page-unsent', 'Page editor: an edit sent late from Unsent changes (Desktop app)']); }
 screenData(['sx-ob-wait', 'sx-ob-retry', 'sx-ob-failed', 'sx-ob-expired', 'sx-ob-dropped', 'sx-ob-list', 'sx-off-app', 'sx-off-web', 'sxn-ob-wait', 'sxn-ob-failed', 'sxn-ob-expired', 'sxn-ob-dropped', 'sxn-ob-list', 'sxn-off', 'sx-up-web', 'sx-up-app', 'sxn-up'], 'outbox: replies arrived while you were offline');
 screenData(['sx-rf-show', 'sxn-rf-show'], 'sablefield: bram edited a hidden reply');
 screenData('sx-rf-approve', 'replication: a request changed after Approve');
@@ -14019,7 +14030,6 @@ function sxUi(k, again) {
       if (st.sxvStale === 'dialog') st.modal = 'sx-stale';
       break;
     }
-    case 'rf-page': break;
     case 'rf-forbidden':
       if (!nat) app();
       st.sxObx = [
@@ -14070,8 +14080,10 @@ function sxUi(k, again) {
 }
 { const j0 = jump; jump = function (k) {
   const m = /^sx(n?)-(.*)$/.exec(String(k));
+  if (k === 'ec-page-unsent') { j0(k); st.client = 'app'; st.device = 'desktop'; Object.assign(st, SX0(), { sxScr: 'rf-page', sxObx: [{ id: 'o4', kind: 'page', sp: 'scifi', title: 'Edit of Canon starter list in #sci-fi', text: '', state: 'conflict', by: 'tomasz', made: '2h' }] }); return; }
   if (!m) { j0(k); return; }
-  if (m[2] === 'rf-page') { j0('ec-page'); st.client = 'app'; st.device = 'desktop'; Object.assign(st, SX0(), { sxScr: 'rf-page', sxObx: [{ id: 'o4', kind: 'page', sp: 'scifi', title: 'Edit of Canon starter list in #sci-fi', text: '', state: 'conflict', by: 'tomasz', made: '2h' }] }); return; }
+  /* the earlier blocks' part of every entry (history replaced, guards and overlays cleared), with a key none of them knows */
+  j0('sx-base');
   sxUi((m[1] ? 'n-' : '') + m[2]);
 }; }
 SX_KN['n-ob-wait'] = SX_KN['ob-wait']; SX_KN['n-ob-failed'] = SX_KN['ob-failed']; SX_KN['n-ob-expired'] = SX_KN['ob-expired']; SX_KN['n-ob-dropped'] = SX_KN['ob-dropped']; SX_KN['n-ob-list'] = SX_KN['ob-list'];
