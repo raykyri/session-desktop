@@ -94,6 +94,25 @@ rules above stay as they are. Decisions for the new client:
     same commit, so a delayed copy of the old envelope cannot apply twice.
     An oversized envelope answers TOO_LARGE, unrecorded. `base` is optional
     on decisions that do not compare it.
+  - Decided in review round 1 of phase 1 (client): a write that was ever
+    sent keeps its input ids; after CLOCK_SKEW only unsent writes get new
+    ids, and a sent write whose ids are ahead of the corrected clock waits
+    for them (at most 10 minutes). When a replayed answer names other ids
+    than the input, the client moves the write and the writes after it to
+    the server's ids. `replaces` lists only ids whose outcome is unknown,
+    never one with a recorded refusal: Send again after EXPIRED or a
+    dropped write is a new write. The outbox and its remints are stored
+    before each send. The 3-day drop counts from the server's time of an
+    answer this session plus a monotonic clock. Reads answer
+    `{ok: false, error}` (UNAUTHORIZED, UPDATE_REQUIRED) and never replace
+    a log. Client storage is per person: a stored state that names another
+    person, or none, is cleared. Online calls (`spaces.create`, `runs.*`,
+    `devices.*` and the other `NOT_MUTATORS`) are sent directly, never
+    queued or stored.
+  - The web client runs the sync core with `persist: false`: no outbox
+    across time, a transient failure shows Try again on its item, and
+    nothing survives a reload. The desktop and phone apps keep the
+    outbox.
   - The cursor token key is configured, not per process; the previous key
     is accepted for 30 days after a rotation.
   - In open spaces a removal is undone by joining again, and is STALE once
