@@ -6,15 +6,16 @@
 
 import test from "ava";
 
-import type { FollowUpRec, LogId, ReplyRec, ThreadRec } from "../src/index.js";
+import type { FollowUpRec, LogId, ReplyRec, TestServer, ThreadRec } from "../src/index.js";
 import { TOMBSTONE_TTL } from "../src/index.js";
 
 import { DAY, HOUR, actor, admit, cast, ok, refused, thread } from "./harness.js";
 import { diff, expected } from "./oracle.js";
 
 const SECRET = "the text that must not come back";
-const stored = (w: { server: { dump(): ReadonlyMap<string, unknown> } }) =>
-  JSON.stringify([...w.server.dump()]);
+/** Every value the server keeps at rest: records, tombstones, log rows, the
+ * idempotency store and the effect queue. */
+const stored = async (w: { server: TestServer }) => JSON.stringify(await w.server.scanStorage());
 
 test("after a hide, its author and the space's moderators get the text; everyone else the placeholder", async (t) => {
   const { w, open } = await cast(t);
@@ -137,7 +138,7 @@ test("removing a thread erases it and everything under it from storage, for good
     }),
   );
   // erased at rest: the text, the follow-ups, the runs and the replies
-  t.false(stored(w).includes(SECRET));
+  t.false((await stored(w)).includes(SECRET));
   for (const key of [`followup:${fu}`, `reply:${top}`, `reply:${nested}`])
     t.false(w.server.dump().has(key));
   t.false([...w.server.dump().values()].some((r) => r.kind === "run" && r.th === th));
@@ -190,7 +191,7 @@ test("removing a thread erases it and everything under it from storage, for good
   );
   // taking a like back still works
   await ok(t, w.as("ada", "likes.set", { thread: post, on: false }));
-  t.false(stored(w).includes(SECRET));
+  t.false((await stored(w)).includes(SECRET));
 });
 
 test("removing a follow-up or a top-level reply erases its text, and the replies under the reply", async (t) => {
@@ -222,7 +223,7 @@ test("removing a follow-up or a top-level reply erases its text, and the replies
       base: w.item(`r:${post}:${rp}`),
     }),
   );
-  t.false(stored(w).includes(SECRET));
+  t.false((await stored(w)).includes(SECRET));
   t.is((w.get(`followup:${fu}`) as FollowUpRec).mod, "removed");
   t.is((w.get(`reply:${rp}`) as ReplyRec).mod, "removed");
   t.false(w.server.dump().has(`reply:${under}`));
@@ -300,7 +301,7 @@ test("an author's delete takes the text out of what is served", async (t) => {
   t.is(p.q, "");
   t.false(otto.records("user:otto").has(`like:otto:${th}`));
   t.false(otto.records("user:otto").has(`save:otto:${th}`));
-  t.false(stored(w).includes(SECRET));
+  t.false((await stored(w)).includes(SECRET));
 });
 
 test("an old cursor resyncs into the current state, never the content it last saw", async (t) => {
@@ -412,6 +413,6 @@ test("snapshots and pulls hand out copies: changing one changes nothing on the s
   const p = await w.server.pull(actor("mel"), `space:${open}`, c.cursor(`space:${open}`)!);
   if ("resync" in p) return t.fail("unexpected resync");
   for (const x of p.changes) if (x.op === "put") Object.assign(x.record, { q: SECRET });
-  t.false(stored(w).includes(SECRET));
+  t.false((await stored(w)).includes(SECRET));
   t.is((w.get(`thread:${th}`) as ThreadRec).likes, 0);
 });

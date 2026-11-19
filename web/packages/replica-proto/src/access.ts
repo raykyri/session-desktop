@@ -1,5 +1,6 @@
 // Roles and read scope: the mock's section 5a (`roleIn`, `readsSpace`,
-// `readScope`) over multi-user records, with the owner's decisions of phase 0b.
+// `readScope`) over multi-user records, with the owner's decisions of phase 0b
+// and review round 1.
 //
 // Read rules:
 // - Space records (the landing and the staff list `mods`) are public.
@@ -12,31 +13,40 @@
 // - Join requests and reports: the person's own, and all of them in the
 //   spaces they moderate. Bans: the spaces they moderate. Invite links: the
 //   spaces they moderate, and the links they made while they are a member.
-// - A person's likes, saves and notifications: that person only. A person
-//   reads their own membership records (in their user log).
+// - A person reads their own membership records (in their user log).
+// - A person's likes, saves and notifications: that person only, and only
+//   while they may read the space the record is about (a like's or save's
+//   thread's space; a notification's space). A person removed from a closed
+//   space is no longer served their likes, saves and notifications there,
+//   nor their deletions (review round 1, R4a and R4c).
 // - Text of a hidden thread, follow-up or reply: its author and the space's
 //   moderators (and up). Every other reader gets the placeholder (`redact`).
-//   A removed item's text is erased from storage, so nobody gets it.
+//   A removed item's text is erased from storage, so nobody gets it. Hiding
+//   a thread blanks that thread's own text only; its follow-ups and replies
+//   are moderated one by one (kept as the mock has it; review round 1, R14).
 //
-// DESIGN (phase 0 finding): who may read a record, and whether its text is
-// redacted for them, depends only on the record itself (its audience fields,
-// which never change, and its moderation state), the reader's role in its
-// space, and whether the space is closed. A pull can then leave out every
-// record the reader may not read without sending a `del` for it (which would
-// expose its key: for a member record, who left a closed space), and a change
-// of moderation state reaches readers as a `put` of the record as they may
-// read it now. The scope changes only when the reader's own role changes or
-// the space opens or closes; the server answers both with a resync.
+// DESIGN (phase 0 finding): who may read a record depends only on its
+// audience (`Audience`: kind, space, person and maker, which never change),
+// the reader's role in that space, and whether the space is closed. Whether
+// its text is redacted depends on its moderation state as well. A pull can
+// then leave out every record the reader may not read without sending a
+// `del` for it (which would expose its key: for a member record, who left a
+// closed space), and a change of moderation state reaches readers as a `put`
+// of the record as they may read it now. The scope changes only when the
+// reader's own membership or role changes or a space opens or closes; the
+// server answers both with a resync. A tombstone keeps the audience only, so
+// who gets a `del` is decided by the same rule.
 
 import type {
   FollowUpRec,
+  Kind,
   ReplyRec,
   SpaceRec,
   SpaceRole,
   StoredRecord,
   ThreadRec,
 } from "./records.js";
-import { banKey, memberKey, spaceKey } from "./records.js";
+import { banKey, memberKey, personOf, spaceKey, spaceOf, threadKey } from "./records.js";
 
 export interface Reader {
   get(key: string): StoredRecord | undefined;
@@ -75,35 +85,65 @@ export function readsSpace(g: Reader, sp: string, u: string | null): boolean {
   return !isClosed(s) || roleIn(g, sp, u) !== null;
 }
 
-/** May `u` read the record at all (its audience; text is `redact`'s job). */
-export function canRead(g: Reader, r: StoredRecord, u: string | null): boolean {
-  switch (r.kind) {
+/** The fields that decide who reads a record: the part of it a tombstone
+ * keeps. `sp` is the space whose rules apply: the record's own space, or
+ * for a like or a save its thread's space, and for a notification the space
+ * it is about. `person` is the person whose user log holds it; `by` its
+ * author or maker. */
+export interface Audience {
+  kind: Kind;
+  sp: string | null;
+  person: string | null;
+  by: string | null;
+}
+
+export function audience(g: Reader, r: StoredRecord): Audience {
+  let sp = spaceOf(r);
+  if (r.kind === "like" || r.kind === "save") {
+    const p = g.get(threadKey(r.th));
+    sp = p?.kind === "thread" ? p.s : null;
+  }
+  if (r.kind === "notif") sp = r.sp;
+  const by = "by" in r ? r.by : "u" in r ? r.u : null;
+  return { kind: r.kind, sp, person: personOf(r), by };
+}
+
+/** May `u` read a record with this audience (its text is `redact`'s job). */
+export function readsAudience(g: Reader, a: Audience, u: string | null): boolean {
+  const sp = a.sp;
+  const own = u !== null && a.person === u;
+  switch (a.kind) {
     case "space":
       return true;
     case "member":
       // a person reads their own membership in their user log
-      return readsSpace(g, r.sp, u) || (u !== null && r.u === u);
+      return own || (sp !== null && readsSpace(g, sp, u));
     case "stats":
-      return readsSpace(g, r.sp, u);
     case "thread":
     case "followup":
     case "reply":
     case "run":
-      return readsSpace(g, r.s, u);
+      return sp !== null && readsSpace(g, sp, u);
     case "report":
-      return (u !== null && r.by === u) || isModOf(g, r.sp, u);
     case "request":
-      return (u !== null && r.u === u) || isModOf(g, r.sp, u);
+      return own || (sp !== null && isModOf(g, sp, u));
     case "ban":
-      return isModOf(g, r.sp, u);
+      return sp !== null && isModOf(g, sp, u);
     case "invite":
-      return isModOf(g, r.sp, u) || (u !== null && r.by === u && roleIn(g, r.sp, u) !== null);
+      return (
+        sp !== null &&
+        (isModOf(g, sp, u) || (u !== null && a.by === u && roleIn(g, sp, u) !== null))
+      );
     case "like":
     case "save":
-      return u !== null && r.u === u;
     case "notif":
-      return u !== null && r.to === u;
+      return own && (sp === null || readsSpace(g, sp, u));
   }
+}
+
+/** May `u` read the record at all (its audience; text is `redact`'s job). */
+export function canRead(g: Reader, r: StoredRecord, u: string | null): boolean {
+  return readsAudience(g, audience(g, r), u);
 }
 
 /** A moderated record as `u` may read it: a hidden one keeps its text for its

@@ -36,8 +36,9 @@ const OWN_OR_STAFF = row("none", "own", "own", "all");
 const STAFF = row("none", "none", "none", "all");
 const OWN = row("none", "own", "own", "own");
 
-/** Who reads a record, by kind, in an open and in a closed space. A kind
- * without a space (likes, saves, notifications) uses the `open` row. */
+/** Who reads a record, by kind, in an open and in a closed space. A like or
+ * a save is in its thread's space, and a notification in the space it is
+ * about; a record with no space uses the `open` row. */
 export const READ: Record<Kind, { open: Row; closed: Row }> = {
   // the landing and the staff list are public (mock: "Space records are public")
   space: { open: PUBLIC, closed: PUBLIC },
@@ -58,10 +59,12 @@ export const READ: Record<Kind, { open: Row; closed: Row }> = {
   report: { open: OWN_OR_STAFF, closed: OWN_OR_STAFF },
   ban: { open: STAFF, closed: STAFF },
   invite: { open: row("none", "none", "own", "all"), closed: row("none", "none", "own", "all") },
-  // the mock's /api/me collections: the person's own
-  like: { open: OWN, closed: OWN },
-  save: { open: OWN, closed: OWN },
-  notif: { open: OWN, closed: OWN },
+  // the mock's /api/me collections: the person's own, and in a closed space
+  // only while the person may read it (review round 1: user logs follow
+  // current access)
+  like: { open: OWN, closed: row("none", "none", "own", "own") },
+  save: { open: OWN, closed: row("none", "none", "own", "own") },
+  notif: { open: OWN, closed: row("none", "none", "own", "own") },
 };
 
 /** The person a record belongs to, for `own` cells and for user logs. */
@@ -144,6 +147,16 @@ const spaceOfRec = (r: StoredRecord) => {
   const f = SPACE[r.kind];
   return f ? (f as (x: StoredRecord) => string)(r) : null;
 };
+/** The space whose read rule applies: the record's own; a like's or a save's
+ * thread's space; a notification's space. */
+const ruleSpace = (dump: Dump, r: StoredRecord): string | null => {
+  if (r.kind === "like" || r.kind === "save") {
+    const p = dump.get(`thread:${r.th}`);
+    return p?.kind === "thread" ? p.s : null;
+  }
+  if (r.kind === "notif") return r.sp;
+  return spaceOfRec(r);
+};
 
 export function roleOf(dump: Dump, sp: string, u: string | null): string | null {
   if (u === null) return null;
@@ -164,7 +177,7 @@ export function isClosedSpace(dump: Dump, sp: string): boolean {
 
 /** Whether `reader` may read `r` (before its text is decided). */
 export function mayRead(dump: Dump, r: StoredRecord, reader: string | null): boolean {
-  const sp = spaceOfRec(r);
+  const sp = ruleSpace(dump, r);
   if (sp !== null && dump.get(`space:${sp}`)?.kind !== "space") return false;
   const rule = READ[r.kind][sp !== null && isClosedSpace(dump, sp) ? "closed" : "open"];
   const cell =

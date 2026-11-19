@@ -662,9 +662,10 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     return true;
   };
 
-  /** A pull from a cursor the reader made up: the log's current epoch and any
-   * version, mostly on a log whose epoch changed (a space that opened or
-   * closed). Also checks that what a read hands out is a copy. */
+  /** A pull from a cursor the reader made up: a real epoch with any version
+   * up to the real one, or a cursor the server gave another reader of the
+   * same log (who may read more). Also checks that what a read hands out is
+   * a copy. */
   const forged = async (step: number): Promise<boolean> => {
     const u = pick(c.r, people);
     const snaps: {
@@ -672,10 +673,14 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       s: Awaited<ReturnType<typeof watched.snapshot>>;
     }[] = [];
     for (const log of logsFor(u)) snaps.push({ log, s: await watched.snapshot(actor(u), log) });
-    const moved = snaps.filter((x) => x.s.epoch !== snaps[0]?.s.epoch || x.s.epoch !== "e0");
-    const { log, s } = pick(c.r, moved.length && chance(c.r, 0.7) ? moved : snaps);
-    const version = Math.floor(c.r() * (s.version + 1));
-    const p = await watched.pull(actor(u), log, { epoch: s.epoch, version });
+    const { log, s } = pick(c.r, snaps);
+    let cursor = { epoch: s.epoch, version: Math.floor(c.r() * (s.version + 1)) };
+    if (chance(c.r, 0.4)) {
+      const other = await watched.snapshot(actor(pick(c.r, people)), log);
+      cursor = { epoch: other.epoch, version: other.version };
+    }
+    const version = cursor.version;
+    const p = await watched.pull(actor(u), log, cursor);
     if (failures.length)
       return failed(step, `forged cursor ${version}`, failures.slice(0, 3).join("\n"));
     const want = expected(w.server.dump(), u, log);
@@ -779,8 +784,10 @@ test.after(() => {
     );
 });
 
-for (let from = 1; from <= SEQUENCES; from += CHUNK) {
-  const to = Math.min(SEQUENCES, from + CHUNK - 1);
+// REPLICA_PROTO_SEED runs that one seed only (to debug a failure)
+const ONE = process.env["REPLICA_PROTO_SEED"];
+for (let from = ONE ? Number(ONE) : 1; from <= (ONE ? Number(ONE) : SEQUENCES); from += CHUNK) {
+  const to = ONE ? from : Math.min(SEQUENCES, from + CHUNK - 1);
   test.serial(
     `writes match the write oracle and replicas the read oracle after every step: seeds ${from} to ${to}`,
     async (t) => {

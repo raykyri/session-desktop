@@ -10,22 +10,12 @@ import {
   ReplicaClient,
   type AnyMutator,
   type ApplyResult,
+  type LogId,
   type ServerHalf,
   type ThreadRec,
 } from "../src/index.js";
 
-import {
-  DAY,
-  HOUR,
-  MINUTE,
-  World,
-  actor,
-  cast,
-  ok,
-  refused,
-  rng,
-  thread,
-} from "./harness.js";
+import { DAY, HOUR, MINUTE, World, actor, cast, ok, refused, rng, thread } from "./harness.js";
 
 const codes = (rs: ApplyResult[]) => rs.map((r) => (r.ok ? "ok" : r.error.code));
 
@@ -469,4 +459,280 @@ test("R15: TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE and INTERNAL_SERVER_ERROR keep
   t.is(mel.pending().length, 0);
   t.is((w.get(`thread:${th}`) as ThreadRec | undefined)?.q, "typed offline");
   t.true(mel.sent.every((e) => e.protocolVersion === PROTOCOL_VERSION && e.seq === 1));
+});
+
+test("R3: a signed-out caller reading a missing or a closed log sees nothing move when writes it may not read happen", async (t) => {
+  const { w, open, closed } = await cast(t);
+  const probe = `space:${w.id()}` as LogId;
+  const reads = async () => {
+    const out: unknown[] = [];
+    for (const log of [probe, `space:${closed}` as LogId]) {
+      const s = await w.server.snapshot(null, log);
+      out.push(s.records, s.version);
+    }
+    return JSON.stringify(out);
+  };
+  const first = await w.server.snapshot(null, probe);
+  const lab = await w.server.snapshot(null, `space:${closed}`);
+  const before = await reads();
+  const ids = [w.id(), w.id(), w.id()];
+  for (const id of ids)
+    await ok(t, w.as("mel", "threads.create", { id, space: closed, kind: "post", q: "private" }));
+  await ok(t, w.as("ada", "likes.set", { thread: ids[0], on: true }));
+  t.is(await reads(), before);
+  t.is(first.version, 0);
+  for (const [log, s] of [
+    [probe, first],
+    [`space:${closed}`, lab],
+  ] as const)
+    t.deepEqual(await w.server.pull(null, log, { epoch: s.epoch, version: s.version }), {
+      changes: [],
+      version: s.version,
+      epoch: s.epoch,
+      lastSeq: null,
+    });
+  // the open space's public records did not change either
+  const o = await w.server.snapshot(null, `space:${open}`);
+  t.false(JSON.stringify(o).includes("private"));
+});
+
+test("R4a: a removed member's user log gets no deletions of likes and saves in the closed space", async (t) => {
+  const { w, closed } = await cast(t);
+  const log: LogId = "user:mel";
+  const t1 = await thread(t, w, "ada", closed, "post", "ada's");
+  await ok(t, w.as("mel", "likes.set", { thread: t1, on: true }));
+  await ok(t, w.as("mel", "saved.set", { kind: "thread", id: t1, on: true }));
+  const mel = w.client("mel");
+  await mel.sync(log);
+  t.true(mel.records(log).has(`like:mel:${t1}`));
+  await ok(
+    t,
+    w.as("olga", "members.remove", { space: closed, user: "mel", base: w.member(closed, "mel") }),
+  );
+  // the removal resyncs mel's user log: the likes and saves there are no longer served
+  t.is(await mel.sync(log), "resync");
+  t.false(mel.records(log).has(`like:mel:${t1}`));
+  t.false(mel.records(log).has(`save:mel:${t1}`));
+  const cursor = mel.cursor(log);
+  if (!cursor) return t.fail("no cursor");
+  w.clock.advance(HOUR);
+  // the closed space goes on: ada deletes her thread, which deletes mel's like and save
+  await ok(t, w.as("ada", "threads.delete", { id: t1 }));
+  t.false(w.server.dump().has(`like:mel:${t1}`));
+  const p = await w.server.pull(actor("mel"), log, cursor);
+  t.deepEqual("resync" in p ? null : p.changes, []);
+  t.deepEqual(p, { changes: [], version: cursor.version, epoch: cursor.epoch, lastSeq: null });
+});
+
+test("R4b: a removed author's delete answers null, not whether the thread got replies after they left", async (t) => {
+  const { w, closed } = await cast(t);
+  const t2 = await thread(t, w, "mel", closed, "post", "mel's");
+  const t3 = await thread(t, w, "mel", closed, "post", "mel's other");
+  await ok(
+    t,
+    w.as("olga", "members.remove", { space: closed, user: "mel", base: w.member(closed, "mel") }),
+  );
+  await ok(
+    t,
+    w.as("ada", "research.createPostFollowUp", { id: w.id(), thread: t2, t: "after mel left" }),
+  );
+  const a = await w.as("mel", "threads.delete", { id: t2 });
+  const b = await w.as("mel", "threads.delete", { id: t3 });
+  t.deepEqual(
+    [a, b],
+    [
+      { ok: true, result: null },
+      { ok: true, result: null },
+    ],
+  );
+  // the delete itself happened: kept as a shell, and gone
+  t.true((w.get(`thread:${t2}`) as ThreadRec).del);
+  t.false((w.get(`thread:${t2}`) as ThreadRec).gone);
+  t.true((w.get(`thread:${t3}`) as ThreadRec).gone);
+  // a member who may read the thread is told
+  const t4 = await thread(t, w, "ada", closed, "post");
+  t.deepEqual(await w.as("ada", "threads.delete", { id: t4 }), {
+    ok: true,
+    result: { kept: false },
+  });
+});
+
+test("R4c: report notifications leave a moderator's user log when the moderator leaves the closed space", async (t) => {
+  const { w, closed } = await cast(t);
+  const th = await thread(t, w, "mel", closed, "post", "x");
+  await ok(t, w.as("mel", "reports.create", { id: w.id(), item: `p:${th}`, why: "spam" }));
+  const notifsOf = async (u: string) =>
+    (await w.server.snapshot(actor(u), `user:${u}`)).records.filter(
+      (r) => r.record.kind === "notif",
+    );
+  t.is((await notifsOf("mona")).length, 1);
+  const mona = w.client("mona");
+  await mona.sync("user:mona");
+  await ok(
+    t,
+    w.as("olga", "members.remove", { space: closed, user: "mona", base: w.member(closed, "mona") }),
+  );
+  t.deepEqual(await notifsOf("mona"), []);
+  t.is(await mona.sync("user:mona"), "resync");
+  t.false([...mona.records("user:mona").values()].some((r) => r.kind === "notif"));
+  // the record is kept; she gets it again if she is let in again
+  t.true([...w.server.dump().values()].some((r) => r.kind === "notif" && r.to === "mona"));
+});
+
+test("R5: a removed thread's text is in no value at rest, tombstones included, now or later", async (t) => {
+  const { w, closed } = await cast(t);
+  const ask = await thread(t, w, "mel", closed, "ask", "SECRET-ASK");
+  const post = w.id();
+  await ok(
+    t,
+    w.as("mel", "threads.create", {
+      id: post,
+      space: closed,
+      kind: "post",
+      q: "SECRET-POST",
+      title: "SECRET-TITLE",
+    }),
+  );
+  const fu = w.id();
+  await ok(t, w.as("mona", "followups.ask", { id: fu, thread: ask, q: "SECRET-FOLLOWUP" }));
+  t.true(await w.server.finishJob(`followup:${fu}`, "SECRET-ANSWER"));
+  t.true(await w.server.finishJob(`thread:${ask}`, "SECRET-SUMMARY"));
+  await ok(
+    t,
+    w.as("mona", "research.createPostFollowUp", { id: w.id(), thread: post, t: "SECRET-REPLY" }),
+  );
+  await ok(t, w.as("ada", "reports.create", { id: w.id(), item: `p:${post}`, why: "spam" }));
+  const at = async () => JSON.stringify(await w.server.scanStorage());
+  t.regex(await at(), /SECRET-ANSWER/);
+  for (const item of [`a:${ask}`, `p:${post}`])
+    await ok(
+      t,
+      w.as("olga", "moderation.decide", { item, decision: "removed", base: w.item(item) }),
+    );
+  t.deepEqual((await at()).match(/SECRET-[A-Z]+/g), null);
+  // a tombstone keeps the key, kind and audience, and the rev
+  const scan = await w.server.scanStorage();
+  t.true(scan.tombstones.length >= 3);
+  for (const tomb of scan.tombstones)
+    t.deepEqual(Object.keys(tomb).sort(), ["at", "by", "key", "kind", "person", "rev", "sp"]);
+  w.clock.advance(29 * DAY);
+  t.deepEqual((await at()).match(/SECRET-[A-Z]+/g), null);
+  // and a job that finishes after the removal writes nothing
+  t.false(await w.server.finishJob(`thread:${ask}`, "SECRET-LATE"));
+  t.false(await w.server.finishJob(`followup:${fu}`, "SECRET-LATE"));
+  t.deepEqual((await at()).match(/SECRET-[A-Z]+/g), null);
+});
+
+test("R10 (kept): the CONFLICT for a taken name names only the name sent, an unlisted space's included", async (t) => {
+  const { w } = await cast(t);
+  const a = await refused(
+    t,
+    w.as("eve", "spaces.create", { id: w.id(), name: "vault" }),
+    "CONFLICT",
+  );
+  const b = await refused(
+    t,
+    w.as("eve", "spaces.create", { id: w.id(), name: "lounge" }),
+    "CONFLICT",
+  );
+  t.deepEqual(JSON.parse(a), { code: "CONFLICT", message: "#vault already exists." });
+  t.deepEqual(JSON.parse(b), { code: "CONFLICT", message: "#lounge already exists." });
+  await ok(t, w.as("eve", "spaces.create", { id: w.id(), name: "vault-2" }));
+});
+
+test("R11 (kept): writes on a gone thread follow the mock, and an author may delete a removed thread", async (t) => {
+  const { w, open } = await cast(t);
+  const th = await thread(t, w, "otto", open, "ask", "x");
+  await ok(t, w.as("otto", "threads.delete", { id: th }));
+  t.true((w.get(`thread:${th}`) as ThreadRec).gone);
+  await ok(t, w.as("mel", "likes.set", { thread: th, on: true }));
+  await ok(t, w.as("mel", "followups.ask", { id: w.id(), thread: th, q: "hello?" }));
+  const p = w.get(`thread:${th}`) as ThreadRec;
+  t.deepEqual([p.gone, p.likes, p.r, p.q], [true, 1, 1, ""]);
+  const th2 = await thread(t, w, "otto", open, "post", "x");
+  await ok(t, w.as("mel", "saved.set", { kind: "thread", id: th2, on: true }));
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", {
+      item: `p:${th2}`,
+      decision: "removed",
+      base: w.item(`p:${th2}`),
+    }),
+  );
+  t.deepEqual(await w.as("otto", "threads.delete", { id: th2 }), {
+    ok: true,
+    result: { kept: false },
+  });
+  t.is(w.get(`save:mel:${th2}`), undefined);
+});
+
+test("R12: a snapshot and then pulls on a server quiet for more than 30 days do not loop on resync", async (t) => {
+  const { w, open } = await cast(t);
+  const mel = w.client("mel");
+  t.is(await mel.sync(`space:${open}`), "snapshot");
+  w.clock.advance(31 * DAY);
+  // the cursor is older than 30 days: one resync, then pulls
+  t.is(await mel.sync(`space:${open}`), "resync");
+  for (let k = 0; k < 3; k++) {
+    w.clock.advance(MINUTE);
+    t.is(await mel.sync(`space:${open}`), "pull");
+  }
+  // a reader who keeps pulling on a quiet server never resyncs
+  for (let k = 0; k < 4; k++) {
+    w.clock.advance(20 * DAY);
+    t.is(await mel.sync(`space:${open}`), "pull");
+  }
+});
+
+test("R13: a list sorts by the server's creation time, then by commit, never by the client's id", async (t) => {
+  const { w, open } = await cast(t);
+  w.clock.advance(HOUR);
+  const honest = w.id();
+  const backdated = w.id(-3 * DAY);
+  await ok(t, w.as("mel", "threads.create", { id: honest, space: open, kind: "post", q: "first" }));
+  await ok(
+    t,
+    w.as("eve", "threads.create", { id: backdated, space: open, kind: "post", q: "second" }),
+  );
+  t.true(backdated < honest);
+  const s = await w.server.snapshot(null, `space:${open}`);
+  t.deepEqual(
+    s.records.filter((r) => r.record.kind === "thread").map((r) => (r.record as ThreadRec).q),
+    ["first", "second"],
+  );
+});
+
+test("R14 (kept): hiding a thread blanks the thread's own text; its replies and follow-ups are moderated one by one", async (t) => {
+  const { w, open } = await cast(t);
+  const th = await thread(t, w, "otto", open, "post", "the hidden post");
+  const rp = w.id();
+  await ok(
+    t,
+    w.as("otto", "research.createPostFollowUp", { id: rp, thread: th, t: "reply under it" }),
+  );
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", {
+      item: `p:${th}`,
+      decision: "hidden",
+      base: w.item(`p:${th}`),
+    }),
+  );
+  const got = async () => {
+    const s = await w.server.snapshot(null, `space:${open}`);
+    return [
+      (s.records.find((r) => r.key === `thread:${th}`)?.record as ThreadRec).q,
+      (s.records.find((r) => r.key === `reply:${rp}`)?.record as { t: string }).t,
+    ];
+  };
+  t.deepEqual(await got(), ["", "reply under it"]);
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", {
+      item: `r:${th}:${rp}`,
+      decision: "hidden",
+      base: w.item(`r:${th}:${rp}`),
+    }),
+  );
+  t.deepEqual(await got(), ["", ""]);
 });

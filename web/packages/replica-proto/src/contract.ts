@@ -104,9 +104,14 @@ export type ApplyResult = { ok: true; result: unknown } | { ok: false; error: Ap
 
 export type RegisterResult = { ok: true; clientId: string } | { ok: false; error: ApiError };
 
-/** Where a replica of one log stands. `version` is a position in the server's
- * single version sequence; `epoch` changes when the log's history is replaced
- * (here: a space's visibility changes), which invalidates every cursor. */
+/** Where a replica of one log stands. `version` is the highest version of a
+ * row of that log that the reader was given (a `put` or a `del` it may
+ * read), or 0; it is never the server's head, so it says nothing about
+ * writes the reader may not read (review round 1, R3). `epoch` is an opaque
+ * id that changes when the log's history is replaced (here: a space's
+ * visibility changes), which invalidates every cursor. A cursor is the
+ * reader's own: one the server did not give this reader within 30 days
+ * resyncs. */
 export interface Cursor {
   epoch: string;
   version: number;
@@ -130,7 +135,8 @@ export interface ReadOptions {
 export type LastSeq = number | null;
 
 export interface Snapshot {
-  /** In order of the server's `createdAt`, then key. */
+  /** In order of the server's `createdAt`, then the version of the commit
+   * that created the record. */
   records: { key: string; record: StoredRecord }[];
   version: number;
   epoch: string;
@@ -161,13 +167,49 @@ export interface LogRow {
   version: number;
 }
 
+/** Every value the server keeps at rest, for the erasure tests: no text a
+ * removal or a delete erased may appear anywhere in it. */
+export interface StorageScan {
+  records: StoredRecord[];
+  /** A deleted record's key, kind and audience, its rev and the delete's time. */
+  tombstones: {
+    key: string;
+    kind: string;
+    sp: string | null;
+    person: string | null;
+    by: string | null;
+    rev: number;
+    at: number;
+  }[];
+  logRows: (LogRow & { log: LogId })[];
+  /** The idempotency store: answers by (user, mutation id), or by (client, seq). */
+  answers: {
+    u: string;
+    mutationId?: string;
+    clientId?: string;
+    seq?: number;
+    digest: string;
+    result: ApplyResult;
+    at: number;
+  }[];
+  /** The post-commit effects not yet run. */
+  effects: { effect: unknown; at: number; attempts: number }[];
+}
+
 /** Test-only access the suite needs besides the API: the stored records (the
- * oracles read them as facts), a log's rows, and the post-commit jobs the
- * server started. */
+ * oracles read them as facts), a log's rows, the post-commit jobs the server
+ * started, every value at rest, and a server job's result. */
 export interface TestServer extends ServerHalf {
   dump(): ReadonlyMap<string, StoredRecord>;
   logRows(log: LogId): Awaitable<LogRow[]>;
   jobs(): readonly { kind: string; id: string }[];
+  /** Expires what is past its lifetime first, as every call does. */
+  scanStorage(): Awaitable<StorageScan>;
+  /** What a run writes when it finishes (not modelled otherwise): `text` as
+   * a thread's summary (`thread:<id>`) or a follow-up's answer
+   * (`followup:<id>`). False, and nothing written, for a removed item, a
+   * deleted thread or another key. */
+  finishJob(key: string, text: string): Awaitable<boolean>;
 }
 
 export interface Clock {

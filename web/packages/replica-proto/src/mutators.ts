@@ -383,6 +383,10 @@ function ownMarkSpace(tx: Tx, key: string, thread: string): string | null {
 
 export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
   // -- spaces
+  // Space names are unique across all spaces, unlisted ones included (kept
+  // as decided; review round 1, R10): the CONFLICT on create tells anyone
+  // that a name is taken, so an unlisted space's name can be probed. It
+  // names only the name sent.
   "spaces.create": define({
     input: spaces.createSpaceInputSchema.omit({ faq: true }).extend({ id: ulidS }).strict(),
     online: true,
@@ -630,9 +634,19 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
       if ((tx.get(threadKey(i.id)) as ThreadRec).u !== tx.me)
         throw refuse("FORBIDDEN", "Only the person who wrote this can change it.");
     },
+    // Kept as the mock has it (review round 1, R11): a thread deleted while
+    // it has follow-ups or replies stays as a shell (`del`), and follow-ups,
+    // replies and likes on it are taken as on any thread. A thread with none
+    // is `gone`; it leaves every Saved and every like. The author may delete
+    // a thread a moderator removed: its count `r` is 0 then, so it is gone,
+    // and other people's saves of it are deleted too.
     run: (tx, i) => {
       const p = tx.get(threadKey(i.id)) as ThreadRec;
       const kept = p.r > 0;
+      // an author who may no longer read the thread (removed from its closed
+      // space) learns nothing about it: whether it got follow-ups or replies
+      // after they left is not in the answer (R4b)
+      const reads = canRead(tx, p, tx.me);
       // a thread without follow-ups or replies is gone: it leaves Saved and likes
       if (!kept) {
         for (const l of tx.find("like", (x) => x.th === p.id)) tx.del(likeKey(l.u, l.th));
@@ -651,7 +665,7 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         likes: kept ? p.likes : 0,
         updatedAt: tx.now,
       });
-      return { kept };
+      return reads ? { kept } : null;
     },
   }),
 

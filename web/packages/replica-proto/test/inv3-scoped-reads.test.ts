@@ -5,7 +5,7 @@ import test, { type ExecutionContext } from "ava";
 
 import type { LogId, Pull, StoredRecord } from "../src/index.js";
 
-import { DAY, actor, admit, cast, ok, refused, thread, type Cast } from "./harness.js";
+import { DAY, HOUR, actor, admit, cast, ok, refused, thread, type Cast } from "./harness.js";
 import { diff, expected } from "./oracle.js";
 
 const kinds = (m: ReadonlyMap<string, StoredRecord>) =>
@@ -205,26 +205,74 @@ test("a plain member gets no moderator-only records, in snapshots or pulls", asy
   t.is(keys.filter((k) => k.startsWith("report:")).length, 1);
 });
 
-test("the version a pull returns is the server's, not the space's", async (t) => {
+test("the version a read returns is the newest row the reader was given, never the server's head", async (t) => {
+  // review round 1, R3: every read returned the server's head, so a reader
+  // counted and timed the writes it may not read
   const c = await cast(t);
   const { w, open, closed } = c;
+  await thread(t, w, "mel", closed, "post", "before eve looks");
   const s = await w.server.snapshot(actor("eve"), `space:${closed}`);
+  const o = await w.server.snapshot(actor("eve"), `space:${open}`);
+  // eve may read only the space record of #lab: its row is the version
+  const rows = await w.server.logRows(`space:${closed}`);
+  t.is(s.version, rows.find((r) => r.key === `space:${closed}`)?.version ?? -1);
+  t.true(s.version < Math.max(...rows.map((r) => r.version)));
   await thread(t, w, "mel", closed, "post", "activity eve should not see");
   const other = await thread(t, w, "mel", closed);
   await ok(t, w.as("mel", "likes.set", { thread: other, on: true }));
+  // a pull with nothing eve may read returns her cursor unchanged
   const p1 = await w.server.pull(actor("eve"), `space:${closed}`, {
     epoch: s.epoch,
     version: s.version,
   });
-  const s2 = await w.server.snapshot(actor("eve"), `space:${open}`);
+  t.deepEqual(p1, { changes: [], version: s.version, epoch: s.epoch, lastSeq: null });
+  const again = await w.server.snapshot(actor("eve"), `space:${closed}`);
+  t.deepEqual([again.records, again.version], [s.records, s.version]);
+  // a change eve may read moves her cursor to that change's row, in that log only
+  const post = await thread(t, w, "otto", open, "post");
   const p2 = await w.server.pull(actor("eve"), `space:${open}`, {
-    epoch: s2.epoch,
-    version: s2.version,
+    epoch: o.epoch,
+    version: o.version,
   });
-  if ("resync" in p1 || "resync" in p2) return t.fail("unexpected resync");
-  t.is(p1.version, p2.version);
-  // the space's activity is in its stats record, which eve may not read
-  t.deepEqual(p1.changes, []);
+  if ("resync" in p2) return t.fail("unexpected resync");
+  const opened = await w.server.logRows(`space:${open}`);
+  t.is(p2.version, opened.find((r) => r.key === `thread:${post}`)?.version ?? -1);
+  t.not(p2.epoch, o.epoch);
+  t.is((await w.server.snapshot(actor("eve"), `space:${closed}`)).version, s.version);
+});
+
+test("a signed-out caller can tell neither how many writes happened nor when, in a closed or a missing log", async (t) => {
+  const c = await cast(t);
+  const { w, closed } = c;
+  const missing = `space:${w.id()}` as LogId;
+  const logs = [missing, `space:${closed}`, "user:mel"] as LogId[];
+  const cursors = new Map<LogId, { epoch: string; version: number }>();
+  for (const log of logs) {
+    const s = await w.server.snapshot(null, log);
+    t.regex(s.epoch, /^e[0-9a-f]{20}$/);
+    cursors.set(log, { epoch: s.epoch, version: s.version });
+  }
+  t.is(cursors.get(missing)?.version, 0);
+  // what a snapshot holds, and what a pull from the first cursor answers
+  const read = async () => {
+    const out: unknown[] = [];
+    for (const log of logs) {
+      const s = await w.server.snapshot(null, log);
+      out.push(s.records, s.version, await w.server.pull(null, log, cursors.get(log)!));
+    }
+    return JSON.stringify(out);
+  };
+  const before = await read();
+  w.clock.advance(HOUR);
+  const ids = [w.id(), w.id(), w.id()];
+  for (const id of ids)
+    await ok(t, w.as("mel", "threads.create", { id, space: closed, kind: "post", q: "private" }));
+  await ok(t, w.as("ada", "likes.set", { thread: ids[0], on: true }));
+  await ok(t, w.as("mel", "threads.delete", { id: ids[1] }));
+  t.is(await read(), before);
+  // as time passes on a quiet server, the same cursors keep working
+  w.clock.advance(29 * DAY);
+  t.is(await read(), before);
 });
 
 test("a non-member sees no change to any record after a post in a closed space", async (t) => {

@@ -34,19 +34,21 @@
 //
 // Change log: one row per (log, key), holding key, op and version only; a
 // write replaces the key's row. Versions come from one sequence for the whole
-// server, so the version a reader gets back says nothing about one space.
-// A pull reads each changed record as it is now. A deleted record leaves a
-// tombstone (its last state, used only to decide who gets the `del`) for 30
-// days.
+// server, but a reader is only ever given the version of a row it may read
+// (see `Cursor`), never the head. A pull reads each changed record as it is
+// now. A deleted record leaves a tombstone for 30 days: its key, kind,
+// audience and rev, no text, used only to decide who gets the `del`.
 //
-// Resync: a pull answers `{ resync: true }` when the cursor's epoch is not
-// the log's (a space's visibility changed) or its version is from before the
-// epoch began, its version is unknown or older than 30 days, or the reader's
-// own membership of the space changed after it.
+// Resync: a pull answers `{ resync: true }` when the cursor was not given to
+// this reader for this log and version, or more than 30 days ago, or the
+// log's history was replaced since (a space's visibility changed), or the
+// reader's scope changed since: their own membership of the space, and for
+// their user log, their membership of any space or a space opening or
+// closing that a record in the log is about.
 
 import { z } from "zod";
 
-import { canRead, isClosed, spaceRec, view } from "./access.js";
+import { audience, isClosed, readsAudience, spaceRec, view, type Audience } from "./access.js";
 import {
   MIN_PROTOCOL_VERSION,
   UNRECORDED,
@@ -61,6 +63,7 @@ import {
   type RegisterResult,
   type ServerOptions,
   type Snapshot,
+  type StorageScan,
   type TestServer,
 } from "./contract.js";
 import {
@@ -112,11 +115,6 @@ const isoAt = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z
 const fail = (e: Refusal): ApplyResult => ({ ok: false, error: e.toError() });
 const same = (a: StoredRecord, b: StoredRecord) =>
   JSON.stringify({ ...a, rev: 0 }) === JSON.stringify({ ...b, rev: 0 });
-const byCreated = (a: { key: string; record: StoredRecord }, b: typeof a) => {
-  const x = createdOf(a.record);
-  const y = createdOf(b.record);
-  return x < y ? -1 : x > y ? 1 : a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
-};
 
 /** JSON with object keys sorted, so equal values print equally. */
 function canonical(v: unknown): string {
@@ -133,22 +131,49 @@ function canonical(v: unknown): string {
  * the record that holds the id. */
 const ID_TAKEN = "An item with this id exists.";
 
+/** What a deleted record leaves for 30 days: its key, kind and audience (the
+ * fields that decide who gets the `del`) and its rev, so a record written
+ * again at the same key gets a higher rev and a stale `base.rev` cannot match
+ * it. No text and no other field (review round 1, R5). A record's moderation
+ * state does not change who reads it, so it is not kept. */
+export interface Tombstone extends Audience {
+  key: string;
+  rev: number;
+  /** The commit time of the delete. */
+  at: number;
+}
+
+/** The logs a record with this audience is written to: its space's log
+ * (none for likes, saves and notifications, which live in user logs only)
+ * and its person's user log. */
+function logsOfAudience(a: Audience): LogId[] {
+  const out: LogId[] = [];
+  if (a.sp !== null && a.kind !== "like" && a.kind !== "save" && a.kind !== "notif")
+    out.push(`space:${a.sp}`);
+  if (a.person !== null) out.push(`user:${a.person}`);
+  return out;
+}
+
 class Store {
   readonly records = new Map<string, StoredRecord>();
   readonly byKind = new Map<Kind, Set<string>>();
-  readonly tombs = new Map<string, { rec: StoredRecord; at: number }>();
+  readonly tombs = new Map<string, Tombstone>();
+  /** The version of the commit that created each record now stored: lists
+   * sort by `createdAt`, then by it. */
+  readonly born = new Map<string, number>();
   /** Every id ever written, deleted records included: an id is never reused. */
   readonly ids = new Set<string>();
   readonly logs = new Map<LogId, Map<string, LogRow>>();
-  /** A log's epoch and the version it began at (absent: "e0", from 0). */
-  readonly epochs = new Map<LogId, { id: string; start: number }>();
-  /** The commit time of each version, never decreasing; version 0 is the
-   * store's start. */
-  readonly times: number[];
+  /** For a log whose history was replaced: how many times, and the version
+   * its current epoch began at. Absent: never, from version 0. */
+  readonly epochs = new Map<LogId, { n: number; start: number }>();
   head = 0;
+  /** The commit time of the head version: never decreasing, so the
+   * tombstone cutoff and the cursor cutoff compare the same order. */
+  private lastAt: number;
 
   constructor(now: number) {
-    this.times = [now];
+    this.lastAt = now;
   }
 
   get(key: string) {
@@ -159,8 +184,10 @@ class Store {
     return this.byKind.get(kind) ?? [];
   }
 
-  epoch(log: LogId) {
-    return this.epochs.get(log) ?? { id: "e0", start: 0 };
+  /** A log's history: how many times it was replaced, and the version the
+   * current one began at. */
+  epoch(log: LogId): { n: number; start: number } {
+    return this.epochs.get(log) ?? { n: 0, start: 0 };
   }
 
   private row(log: LogId, key: string, op: "put" | "del", version: number) {
@@ -181,22 +208,22 @@ class Store {
     }
     if (!writes.length) return null;
     const version = ++this.head;
-    // a version's time is never before the last one's, so the tombstone
-    // cutoff and the cursor cutoff compare the same order
-    this.times[version] = Math.max(now, this.times[version - 1] ?? now);
-    const at = this.times[version];
+    const at = (this.lastAt = Math.max(now, this.lastAt));
     for (const [key, next, prev] of writes) {
       if (next === null) {
         const old = prev as StoredRecord;
+        const tomb: Tombstone = { key, ...audience(this, old), rev: old.rev, at };
         this.records.delete(key);
         this.byKind.get(old.kind)?.delete(key);
-        this.tombs.set(key, { rec: old, at });
-        for (const log of logsOf(old)) this.row(log, key, "del", version);
+        this.born.delete(key);
+        this.tombs.set(key, tomb);
+        for (const log of logsOfAudience(tomb)) this.row(log, key, "del", version);
         continue;
       }
-      const rev = (prev?.rev ?? this.tombs.get(key)?.rec.rev ?? 0) + 1;
+      const rev = (prev?.rev ?? this.tombs.get(key)?.rev ?? 0) + 1;
       const rec = { ...next, rev };
       this.records.set(key, rec);
+      if (!prev) this.born.set(key, version);
       let kind = this.byKind.get(rec.kind);
       if (!kind) this.byKind.set(rec.kind, (kind = new Set<string>()));
       kind.add(key);
@@ -206,21 +233,23 @@ class Store {
       for (const log of logsOf(rec)) this.row(log, key, "put", version);
       // who may read a space's records depends on whether it is closed: a
       // change replaces the log's history (every cursor resyncs)
-      if (rec.kind === "space" && prev?.kind === "space" && isClosed(prev) !== isClosed(rec))
-        this.epochs.set(`space:${rec.id}`, { id: `e${version}`, start: version });
+      if (rec.kind === "space" && prev?.kind === "space" && isClosed(prev) !== isClosed(rec)) {
+        const log: LogId = `space:${rec.id}`;
+        this.epochs.set(log, { n: (this.epochs.get(log)?.n ?? 0) + 1, start: version });
+      }
     }
     return version;
   }
 
   /** Drop the tombstones (and their `del` rows) committed strictly before the
-   * cutoff. A cursor at the cutoff itself is still served (`pull`), so a
-   * delete committed in the same millisecond as that cursor is kept. */
+   * cutoff. A cursor served at the cutoff itself is still accepted (`pull`),
+   * so a delete committed in the same millisecond is kept. */
   prune(now: number) {
     const cutoff = now - TOMBSTONE_TTL;
     for (const [key, t] of this.tombs) {
       if (t.at >= cutoff) continue;
       this.tombs.delete(key);
-      for (const log of logsOf(t.rec)) {
+      for (const log of logsOfAudience(t)) {
         const rows = this.logs.get(log);
         if (rows?.get(key)?.op === "del") rows.delete(key);
       }
@@ -324,11 +353,22 @@ export class ProtoServer implements TestServer {
   private readonly clock: ServerOptions["clock"];
   private readonly random: () => number;
   private readonly mutators: Readonly<Record<string, AnyMutator>>;
+  /** The cursors given out at a version above 0, by their epoch token: the
+   * log, the reader, the log's history, the version, when it was last given
+   * out and the server's head then. Kept 30 days. */
+  private readonly served = new Map<
+    string,
+    { log: LogId; u: string | null; n: number; version: number; at: number; head: number }
+  >();
+  private serves = 0;
+  /** The secret epoch tokens are made from: they cannot be guessed. */
+  private readonly secret: string;
 
   constructor(options: ServerOptions) {
     this.clock = options.clock;
     this.random = options.random ?? Math.random;
     this.mutators = options.mutators ?? MUTATORS;
+    this.secret = ulid(this.clock.now(), this.random).slice(10);
     this.store = new Store(this.clock.now());
   }
 
@@ -536,10 +576,21 @@ export class ProtoServer implements TestServer {
     for (const [k, d] of this.dedup) if (d.at <= now - DEDUP_TTL) this.dedup.delete(k);
     for (const c of this.clients.values())
       for (const [seq, a] of c.answers) if (a.at <= now - DEDUP_TTL) c.answers.delete(seq);
+    for (const [k, s] of this.served) if (s.at < now - TOMBSTONE_TTL) this.served.delete(k);
     this.runEffects(now);
   }
 
   // ---- reads ----
+  //
+  // A cursor's `epoch` is a token the server made when it gave the cursor
+  // out: random-looking, unrelated to versions, and naming one served state
+  // (the log, the reader, the log's history, the version, when it was given
+  // out and the server's head then). Two readers at the same version hold
+  // different tokens, so a reader whose state missed a `del` that was pruned
+  // since cannot pass for one that did not (review round 1, R12). A pull
+  // with no change the reader may read returns its cursor unchanged. A
+  // cursor at version 0 names an empty replica, from which a pull is a
+  // snapshot: its epoch is fixed per log history, and nothing is kept for it.
 
   private rows(log: LogId) {
     return this.store.logs.get(log) ?? new Map<string, LogRow>();
@@ -548,7 +599,7 @@ export class ProtoServer implements TestServer {
   /** A user log is read by its user only; anyone else, and a signed-out
    * caller, gets nothing from it. */
   private closedTo(log: LogId, u: string | null) {
-    return log.startsWith("user:") && log !== `user:${u}`;
+    return log.startsWith("user:") && (u === null || log !== `user:${u}`);
   }
 
   private lastSeq(u: string | null, clientId: string | undefined): LastSeq {
@@ -557,33 +608,71 @@ export class ProtoServer implements TestServer {
     return c && c.u === u ? c.last : null;
   }
 
+  /** A row as `u` may read it now: the record's view for a `put`, true for a
+   * `del` whose tombstone `u` may read, or null. */
+  private readRow(row: LogRow, u: string | null): StoredRecord | true | null {
+    if (row.op === "put") {
+      const rec = this.store.get(row.key);
+      return rec ? view(this.store, rec, u) : null;
+    }
+    const t = this.store.tombs.get(row.key);
+    return t && readsAudience(this.store, t, u) ? true : null;
+  }
+
+  /** The epoch of a cursor at version 0 of `log`'s current history. */
+  private zeroEpoch(log: LogId): string {
+    return `e${digest(`${this.secret}\u0000${log}\u0000${this.store.epoch(log).n}`).slice(0, 20)}`;
+  }
+
+  /** Give `u` a cursor at `version` of `log`: a new token, or for version 0
+   * the log's fixed one. */
+  private serve(log: LogId, u: string | null, version: number, now: number): string {
+    if (version === 0) return this.zeroEpoch(log);
+    const token = `e${digest(`${this.secret}\u0000${++this.serves}`).slice(0, 20)}`;
+    this.served.set(token, {
+      log,
+      u,
+      n: this.store.epoch(log).n,
+      version,
+      at: now,
+      head: this.store.head,
+    });
+    return token;
+  }
+
   snapshot(actor: Actor | null, log: LogId, options: ReadOptions = {}): Snapshot {
     const now = this.clock.now();
     this.housekeep(now);
     const u = this.userOf(actor);
-    const out: Snapshot = {
-      records: [],
-      version: this.store.head,
-      epoch: this.store.epoch(log).id,
-      lastSeq: this.lastSeq(u, options.clientId),
-    };
-    if (!logS.safeParse(log).success || this.closedTo(log, u)) return out;
+    const lastSeq = this.lastSeq(u, options.clientId);
+    if (!logS.safeParse(log).success || this.closedTo(log, u))
+      return { records: [], version: 0, epoch: this.zeroEpoch(log), lastSeq };
+    const records: Snapshot["records"] = [];
+    let version = 0;
     for (const row of this.rows(log).values()) {
-      if (row.op !== "put") continue;
-      const rec = this.store.get(row.key);
-      if (!rec) continue;
+      const v = this.readRow(row, u);
+      if (v === null) continue;
+      // the version is the newest row the reader may read, a `del` or a row
+      // the summary tier leaves out included: never the server's head, so it
+      // says nothing about writes the reader may not read (R3)
+      version = Math.max(version, row.version);
+      if (v === true) continue;
       if (
         options.tier === "summary" &&
-        (rec.kind === "followup" || rec.kind === "reply" || rec.kind === "run")
+        (v.kind === "followup" || v.kind === "reply" || v.kind === "run")
       )
         continue;
-      const v = view(this.store, rec, u);
-      if (v) out.records.push({ key: row.key, record: structuredClone(v) });
+      records.push({ key: row.key, record: structuredClone(v) });
     }
-    // the server's creation time orders a list, never the time a client put
-    // in an id
-    out.records.sort(byCreated);
-    return out;
+    // the server's creation time orders a list, then the version of the
+    // commit that created the record; never the id a client chose (R13)
+    const born = (key: string) => this.store.born.get(key) ?? 0;
+    records.sort((a, b) => {
+      const x = createdOf(a.record);
+      const y = createdOf(b.record);
+      return x < y ? -1 : x > y ? 1 : born(a.key) - born(b.key);
+    });
+    return { records, version, epoch: this.serve(log, u, version, now), lastSeq };
   }
 
   pull(actor: Actor | null, log: LogId, cursor: Cursor, options: ReadOptions = {}): Pull {
@@ -593,36 +682,77 @@ export class ProtoServer implements TestServer {
     const c = cursorS.safeParse(cursor);
     if (!logS.safeParse(log).success || !c.success) return { resync: true };
     const { epoch, version } = c.data;
-    const current = this.store.epoch(log);
-    if (epoch !== current.id || version < current.start || version > this.store.head)
-      return { resync: true };
-    if ((this.store.times[version] ?? 0) < now - TOMBSTONE_TTL) return { resync: true };
-    const head = {
-      version: this.store.head,
-      epoch,
-      lastSeq: this.lastSeq(u, options.clientId),
-    };
-    if (this.closedTo(log, u)) return { changes: [], ...head };
-    const rows = this.rows(log);
-    if (u !== null && log.startsWith("space:")) {
-      const mine = rows.get(memberKey(log.slice(6), u));
-      if (mine && mine.version > version) return { resync: true };
+    const lastSeq = this.lastSeq(u, options.clientId);
+    // another person's user log: nothing, whatever the cursor
+    if (this.closedTo(log, u)) return { changes: [], version, epoch, lastSeq };
+    if (version === 0) {
+      if (epoch !== this.zeroEpoch(log)) return { resync: true };
+    } else {
+      // the cursor's age is the time the server gave it out, not the time
+      // of the commit at its version: a reader who was given it within 30
+      // days missed no `del` (one it may read and was not given is younger
+      // than that cursor, so younger than 30 days). A cursor the server did
+      // not give this reader, at this version of this log's history,
+      // resyncs. On a quiet server, a pull keeps its cursor current, so a
+      // snapshot and a pull never loop (R12).
+      const s = this.served.get(epoch);
+      if (
+        !s ||
+        s.log !== log ||
+        s.u !== u ||
+        s.version !== version ||
+        s.n !== this.store.epoch(log).n ||
+        s.at < now - TOMBSTONE_TTL
+      )
+        return { resync: true };
+      if (u !== null && this.scopeChanged(log, u, version, s.head)) return { resync: true };
     }
     const changes: Change[] = [];
-    const fresh = [...rows.values()]
+    let to = version;
+    const fresh = [...this.rows(log).values()]
       .filter((r) => r.version > version)
       .sort((a, b) => a.version - b.version);
     for (const row of fresh) {
-      if (row.op === "put") {
-        const rec = this.store.get(row.key);
-        const v = rec && view(this.store, rec, u);
-        if (v) changes.push({ key: row.key, op: "put", record: structuredClone(v) });
-      } else {
-        const t = this.store.tombs.get(row.key);
-        if (t && canRead(this.store, t.rec, u)) changes.push({ key: row.key, op: "del" });
-      }
+      const v = this.readRow(row, u);
+      if (v === null) continue;
+      to = row.version;
+      changes.push(
+        v === true
+          ? { key: row.key, op: "del" }
+          : { key: row.key, op: "put", record: structuredClone(v) },
+      );
     }
-    return { changes, ...head };
+    if (to === version && version > 0) {
+      // nothing the reader may read: the same cursor, given out again now
+      const s = this.served.get(epoch);
+      if (s) Object.assign(s, { at: now, head: this.store.head });
+      return { changes, version, epoch, lastSeq };
+    }
+    return { changes, version: to, epoch: this.serve(log, u, to, now), lastSeq };
+  }
+
+  /** Whether what `u` may read of `log` changed, after the cursor at
+   * `version` was given out (when the server's head was `head`), in a way
+   * the log's rows do not carry: `u`'s own membership of the space; for
+   * `u`'s user log, `u`'s membership of any space, or a space opening or
+   * closing that a record in the log is about (likes, saves and
+   * notifications follow the person's access to their space). Either way the
+   * reader resyncs. `u`'s member rows are rows `u` may read, so their
+   * versions compare with the cursor's; a space's history is not a row of
+   * the user log, so the version it began at compares with the head. */
+  private scopeChanged(log: LogId, u: string, version: number, head: number): boolean {
+    const rows = this.rows(log);
+    if (log.startsWith("space:")) {
+      const mine = rows.get(memberKey(log.slice(6), u));
+      return mine !== undefined && mine.version > version;
+    }
+    for (const row of rows.values()) {
+      if (row.key.startsWith("member:") && row.version > version) return true;
+      const rec = this.store.get(row.key);
+      const a = rec ? audience(this.store, rec) : this.store.tombs.get(row.key);
+      if (a && a.sp !== null && this.store.epoch(`space:${a.sp}`).start > head) return true;
+    }
+    return false;
   }
 
   // ---- test access ----
@@ -638,6 +768,39 @@ export class ProtoServer implements TestServer {
 
   jobs() {
     return this.jobList;
+  }
+
+  scanStorage(): StorageScan {
+    this.housekeep(this.clock.now());
+    const answers: StorageScan["answers"] = [];
+    for (const [k, d] of this.dedup) {
+      const [u = "", mutationId = ""] = k.split("\u0000");
+      answers.push({ u, mutationId, digest: d.digest, result: d.result, at: d.at });
+    }
+    for (const [clientId, c] of this.clients)
+      for (const [seq, a] of c.answers)
+        answers.push({ u: c.u, clientId, seq, digest: a.digest, result: a.result, at: a.at });
+    return structuredClone({
+      records: [...this.store.records.values()],
+      tombstones: [...this.store.tombs.values()],
+      logRows: [...this.store.logs].flatMap(([log, rows]) =>
+        [...rows.values()].map((r) => ({ log, ...r })),
+      ),
+      answers,
+      effects: this.effectQueue.map((q) => ({ ...q })),
+    });
+  }
+
+  finishJob(key: string, text: string): boolean {
+    const now = this.clock.now();
+    this.housekeep(now);
+    const r = this.store.get(key);
+    if (!r || !("mod" in r) || r.mod === "removed") return false;
+    if (r.kind === "thread" && !r.del)
+      return this.store.commit(new Map([[key, { ...r, sum: text }]]), now) !== null;
+    if (r.kind === "followup")
+      return this.store.commit(new Map([[key, { ...r, a: text }]]), now) !== null;
+    return false;
   }
 }
 
