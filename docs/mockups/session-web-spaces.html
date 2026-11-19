@@ -13510,7 +13510,14 @@ function sxWork(fn) {
   const gen = SXQ.gen, ready = SXQ.ready;
   DS.meta.setState(m => ({ pending: m.pending + 1 }));
   return ready.then(() => fn(gen)).catch(e => { setTimeout(() => { throw e; }); })
-    .finally(() => { DS.meta.setState(m => ({ pending: m.pending - 1 })); if (gen === SXQ.gen) renderAll(); });
+    .finally(() => {
+      DS.meta.setState(m => ({ pending: m.pending - 1 }));
+      if (gen !== SXQ.gen) return;
+      /* a screen's own set-up (a Screen entry, the main mockup's states): a dialog or sheet it opens once the answers
+         are in has no history entry of its own, as one a jump opens at once */
+      if (SXQ.setup === gen) edQuiet();
+      renderAll();
+    });
 }
 const sxSet = (id, patch) => { st.sxObx = st.sxObx.map(o => o.id === id ? { ...o, ...patch } : o); };
 /* a reply the outbox holds, as a record of the thread's replies in the device's replica (not sent to the server) */
@@ -13896,7 +13903,7 @@ const sxBusy = () => { try { return SCENARIOS > 0; } catch (e) { return true; } 
 const SX_MAIN_POST = { id: 'o2', kind: 'post', th: null, sp: 'public', title: 'Post in #public', text: 'Is anyone reading the new survey-methods chapter this week?', state: 'wait', made: '12m', tries: 0, w: { name: 'threads.create', input: { space: 'public', kind: 'post', q: 'Is anyone reading the new survey-methods chapter this week?' } } };
 function sxMainOutbox() {
   const u = st.sxvUnsent, on = sxCtx() !== 'web' && u !== 'none';
-  SXQ.gen++; Object.assign(SXQ, { clientId: null, seq: 0 }); sxClearLocal();
+  SXQ.gen++; SXQ.setup = SXQ.gen; Object.assign(SXQ, { clientId: null, seq: 0 }); sxClearLocal();
   Object.assign(st, { sxObx: [], sxSent: 0, sxDraft: null, sxNoteX: false, sxPop: false });
   if (st.sxMainOff) Object.assign(st, { nvOffline: false, sxMainOff: false });
   if (!on) { sxWork(async () => {}); return; }
@@ -14387,7 +14394,7 @@ function sxUi(k, again) {
   if (nat) { npJump('np-home'); } else { if (st.device === 'native') st.device = 'desktop'; Object.assign(st, NAVBASE(), { auth: 'in', toast: null }); }
   Object.assign(st, SX0(), { sxScr: key, nvOffline: false, modal: null });
   /* a new client for each screen; the answers of the last one's requests are ignored */
-  SXQ.gen++; Object.assign(SXQ, { clientId: null, seq: 0 }); sxClearLocal();
+  SXQ.gen++; SXQ.setup = SXQ.gen; Object.assign(SXQ, { clientId: null, seq: 0 }); sxClearLocal();
   /* the last screen's minimum protocol goes back to this client's; the screen's own requests wait for it */
   if (SXQ.min) { SXQ.min = false; SXQ.ready = sxWork(() => sxDevConfig({ minProtocol: SX_PROTOCOL })); }
   const app = () => { st.client = 'app'; st.device = 'desktop'; };
