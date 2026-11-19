@@ -201,9 +201,24 @@ export const registryKey = (r: rec.Draft | StoredRecord) =>
   USE_PACKAGE ? pkg.registryKey(r as unknown as pkg.Draft) : rec.registryKey(r);
 
 /** The keys whose view a record's change changes besides its own (a hide
- * record's item), with the switch on; none for the prototype's records. */
-export const viewDependents = (r: rec.Draft | StoredRecord): string[] =>
-  USE_PACKAGE ? pkg.viewDependents(r) : [];
+ * record's item, and the runs of its ask), with the switch on; none for the
+ * prototype's records. `records`: the stored records, by key. */
+export const viewDependents = (
+  r: rec.Draft | StoredRecord,
+  records?: ReadonlyMap<string, StoredRecord>,
+): string[] =>
+  USE_PACKAGE
+    ? pkg.viewDependents(
+        r,
+        records && {
+          get: (key) => records.get(key) as unknown as pkg.StoredRecord | undefined,
+          runsOf: (th) =>
+            [...records.values()].filter(
+              (x) => x.kind === "run" && (x as { th?: string }).th === th,
+            ) as unknown as pkg.StoredRecord[],
+        },
+      )
+    : [];
 
 /** Whether a tombstone of this kind is in a space's log: the records of
  * the kinds the person's user log holds alone (likes, saves, notifications)

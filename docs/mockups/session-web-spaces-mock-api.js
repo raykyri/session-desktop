@@ -1054,7 +1054,8 @@
       if (i.run) { writable(tx, p.s); if (p.k !== 'ask') throw bad1('run', 'an ask thread'); }
       if (revOf(p) !== i.base.rev) throw staleErr({ rev: revOf(p), q: p.q, t: p.t || null }, [['posts', p.id]]);
       const q = text(i.q, 'q');
-      if (p.q !== q) editedHidden(tx, itemKeyOf(p));
+      /* a run again clears the answer: an edit while hidden (review round 2 of phase 1, W1) */
+      if (p.q !== q || i.run) editedHidden(tx, itemKeyOf(p));
       tx.edit('posts', i.id, x => {
         const changed = x.q !== q; x.q = q; delete x.kw;
         if (changed) { x.edited = true; x.t = null; }
@@ -1180,7 +1181,7 @@
       const now0 = n.fu != null ? revOf((tx.mapGet('fu', p.id) || [])[n.fu]) : revOf(n);
       if (now0 !== i.base.rev) throw staleErr({ rev: now0, q: n.q || '' }, [['fu', p.id], ['qtd', p.id]]);
       const q = text(i.q, 'q'), changed = n.q !== q;
-      if (changed) editedHidden(tx, nodeModKey(p.id, n));
+      if (changed || i.run) editedHidden(tx, nodeModKey(p.id, n));
       if (n.fu != null) { const fu = tx.mapGet('fu', p.id) || []; if (fu[n.fu]) { fu[n.fu].q = q; if (changed) fu[n.fu].edited = true; if (i.run) delete fu[n.fu].a; bump(fu[n.fu]); tx.mapPut('fu', p.id, fu); } }
       const tree = askTree(tx, p.id);
       let ran = null;
@@ -1931,6 +1932,9 @@
     const [k, r] = runById(tx, i.run);
     if (!r.executor || r.executor.u !== tx.me.u) throw rpcError('FORBIDDEN', 'This run isn’t one of your device runs.');
     if (r.executor.device !== i.device) throw rpcError('FORBIDDEN', 'This run runs on another device.');
+    /* nobody asks in an archived space (review round 2 of phase 1, as followups.ask) */
+    const sp = tx.find('spaces', r.s || (tx.find('posts', r.th) || {}).s);
+    if (sp && sp.archived) throw rpcError('PRECONDITION_FAILED', 'This space is archived: nobody can ask in it.');
     if (!claim && (r.status !== 'running' || r.attempt !== i.attempt)) throw rpcError('PRECONDITION_FAILED', 'This attempt no longer holds the run’s lease.');
     const l = tx.lease(r.id);
     if (!claim && (!l || Date.parse(l.until) <= Date.parse(tx.now))) throw rpcError('PRECONDITION_FAILED', 'This attempt no longer holds the run’s lease.');
@@ -1947,7 +1951,14 @@
       tx.setLease(r2.id, lease);
       tx.emit({ type: 'research.run.started', run: r2, payload: { nodeId: k, attempt: r2.attempt, seq: r2.seq, model: r2.model || null } });
       const p = tx.need('posts', r.th, 'thread');
-      return { attempt: r2.attempt, lease, turns: [{ q: p.q, a: htmlText(tx.mapGet('rich', p.id) || '') }, ...(tx.mapGet('fu', p.id) || []).map(f => ({ q: f.q, a: f.a || '' }))] };
+      /* the turns as the run's person reads them (review round 2 of phase 1, as the server): a hidden item is a
+         turn only for its author and the space's moderators; a removed one never */
+      const shows = (key, u) => { const m = modOf(tx, key); return m === null || (m === 'hidden' && (u === tx.me.u || rankIn(tx.get, p.s) >= RANK.moderator)); };
+      const fus = tx.mapGet('fu', p.id) || [];
+      return { attempt: r2.attempt, lease, turns: [
+        ...(shows(itemKeyOf(p), p.u) ? [{ q: p.q, a: htmlText(tx.mapGet('rich', p.id) || '') }] : []),
+        ...fus.filter((f, k) => shows(`f:${p.id}:${f.id != null ? f.id : 'f' + k}`, f.u)).map(f => ({ q: f.q, a: f.a || '' })),
+      ] };
     } });
   proc('runs.heartbeat', { input: obj({ run: ID, device: ID, attempt: int }), output: '{ lease: { until, beat } }', who: 'user', errors: ['NOT_FOUND', 'FORBIDDEN', 'PRECONDITION_FAILED'], writes: [],
     note: 'the device extends the lease of the attempt it runs; separate from progress (a long tool call does not end the lease)',
@@ -1964,6 +1975,9 @@
     run: (tx, i) => {
       const [k, r] = leaseOf(tx, i), p = tx.need('posts', r.th, 'thread');
       if (new Blob([i.answer]).size > DEVICE_ANSWER_MAX) { endDeviceRun(tx, k, r, p, 'too_large'); return { status: 'too_large' }; }
+      /* an answer to a hidden item is an edit of it: a "shown" decided before it is STALE (review round 2 of phase 1, W1) */
+      const an = r.node === 'r' ? null : askNodes(tx, p.id).find(x => x.id === r.node);
+      editedHidden(tx, r.node === 'r' ? itemKeyOf(p) : an ? nodeModKey(p.id, an) : '');
       if (r.node === 'r') {
         tx.mapPut('rich', p.id, i.answer);
         if (!tx.mapGet('fu', p.id)) tx.mapPut('fu', p.id, []);

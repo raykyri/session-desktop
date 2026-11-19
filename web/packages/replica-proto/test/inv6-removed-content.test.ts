@@ -518,3 +518,82 @@ test("hiding and removing redact every text field: question, title, summary, fol
     t.deepEqual(await seen(u), [], String(u));
   t.deepEqual(markers(await w.server.scanStorage()), []);
 });
+
+// Review round 2 of phase 1, H2: an ask's `model` and `skill` are author
+// fields: hidden with the ask (the runs' `model` too), and erased with it.
+test("hiding and removing redact an ask's model and skill, and its runs' model (package mutators)", async (t) => {
+  if (!USE_PACKAGE) return t.pass("the prototype's mutators store no model or skill");
+  const { w, open } = await cast(t);
+  const skill = w.id();
+  await ok(t, w.as("mona", "skills.create", { id: skill, space: open, name: "S", prompt: "p" }));
+  const ask = w.id();
+  const fu = w.id();
+  await ok(
+    t,
+    w.as("mel", "threads.create", {
+      id: ask,
+      space: open,
+      kind: "ask",
+      q: "q",
+      model: "mk-ask-model",
+      skill,
+    }),
+  );
+  await ok(
+    t,
+    w.as("otto", "research.forkNode", {
+      id: fu,
+      thread: ask,
+      parent: "r",
+      q: "f",
+      model: "mk-fu-model",
+    }),
+  );
+  const markers = (s: unknown) => (JSON.stringify(s).match(/mk-[a-z]+-model/g) ?? []).sort();
+  // a thread, follow-up or run that names the skill
+  const skilled = (s: unknown) =>
+    JSON.stringify(s).match(new RegExp(`"skill":"${skill}"`, "g"))?.length ?? 0;
+  const seen = async (u: string | null) =>
+    (await w.server.snapshot(actor(u), `space:${open}`)).records;
+  // each model on its node and its run
+  const all = ["mk-ask-model", "mk-ask-model", "mk-fu-model", "mk-fu-model"];
+  t.deepEqual(markers(await seen(null)), all);
+  t.is(skilled(await seen(null)), 1);
+  const decide = (item: string, decision: string) =>
+    ok(t, w.as("mona", "moderation.decide", { item, decision, base: w.item(item) }));
+  await decide(`a:${ask}`, "hidden");
+  await decide(`f:${ask}:${fu}`, "hidden");
+  for (const u of [null, "eve"]) {
+    t.deepEqual(markers(await seen(u)), [], String(u));
+    t.is(skilled(await seen(u)), 0, String(u));
+  }
+  t.deepEqual(markers(await seen("mona")), all);
+  t.deepEqual(markers(await seen("mel")), ["mk-ask-model", "mk-ask-model"]);
+  t.deepEqual(markers(await seen("otto")), ["mk-fu-model", "mk-fu-model"]);
+  await decide(`f:${ask}:${fu}`, "removed");
+  await decide(`a:${ask}`, "removed");
+  for (const u of [null, "mel", "otto", "mona"]) {
+    t.deepEqual(markers(await seen(u)), [], String(u));
+    t.is(skilled(await seen(u)), 0, String(u));
+  }
+  const scan = await w.server.scanStorage();
+  t.deepEqual(markers(scan), []);
+  t.is(skilled(scan.records), 0);
+  // a thread its author deleted keeps neither
+  const gone = w.id();
+  await ok(
+    t,
+    w.as("mel", "threads.create", {
+      id: gone,
+      space: open,
+      kind: "ask",
+      q: "q",
+      model: "mk-gone-model",
+      skill,
+    }),
+  );
+  await ok(t, w.as("mel", "threads.delete", { id: gone }));
+  const after = await w.server.scanStorage();
+  t.deepEqual(markers(after), []);
+  t.is(skilled(after.records), 0);
+});

@@ -23,7 +23,7 @@ type Dump = ReadonlyMap<string, StoredRecord>;
 /** The prototype's kinds, and `hide`: with the switch on, `@session/mutators`
  * keeps a hidden item's state in a hide record keyed by the item (phase 1b,
  * Part 0 item 3), read with the space's content. */
-type Kind = StoredRecord["kind"] | "hide" | "exit";
+type Kind = StoredRecord["kind"] | "hide" | "exit" | "device";
 type Place = "anon" | "outsider" | "member" | "staff";
 type Cell = "all" | "own" | "none";
 type Row = Record<Place, Cell>;
@@ -84,6 +84,9 @@ export const READ: Record<Kind, { open: Row; closed: Row }> = {
   // with the switch on: how a membership ended, the person's only, whatever
   // their access (review round 1 of phase 1)
   exit: { open: OWN, closed: OWN },
+  // with the switch on: a person's signed-in devices (no token), theirs only
+  // (phase 1b; the online calls' history signs devices in and out)
+  device: { open: OWN, closed: OWN },
 };
 
 /** The person a record belongs to, for `own` cells and for user logs. */
@@ -97,6 +100,7 @@ const OWNER: Record<Kind, ((r: never) => string) | null> = {
   run: null,
   hide: null,
   exit: (r: { u: string }) => r.u,
+  device: (r: { u: string }) => r.u,
   ban: null,
   member: (r: { u: string }) => r.u,
   request: (r: { u: string }) => r.u,
@@ -118,6 +122,7 @@ const SPACE: Record<Kind, ((r: never) => string) | null> = {
   run: (r: { s: string }) => r.s,
   hide: (r: { s: string }) => r.s,
   exit: null,
+  device: null,
   member: (r: { sp: string }) => r.sp,
   request: (r: { sp: string }) => r.sp,
   report: (r: { sp: string }) => r.sp,
@@ -152,6 +157,7 @@ const IN_USER_LOG: ReadonlySet<Kind> = new Set<Kind>([
   "save",
   "notif",
   "exit",
+  "device",
 ]);
 
 /** The text of a moderated item, by state, for its author, the space's
@@ -233,11 +239,28 @@ export function mayRead(dump: Dump, r: StoredRecord, reader: string | null): boo
 
 /** A record as `reader` gets it: moderated text decided by `TEXT`. */
 export function shown(dump: Dump, r: StoredRecord, reader: string | null): StoredRecord {
-  // with the switch on, a device run's device is its person's only (review
-  // round 1 of phase 1, W8)
-  const ex = (r as { executor?: { device: string } | null }).executor;
-  if (USE_PACKAGE && r.kind === "run" && ex && r.u !== reader)
-    return { ...r, executor: { ...ex, device: "" } } as StoredRecord;
+  if (USE_PACKAGE && r.kind === "run") {
+    const x = r as unknown as {
+      u: string;
+      th: string;
+      node: string;
+      end: string | null;
+      model: string | null;
+      executor: { device: string } | null;
+    };
+    let out: StoredRecord = r;
+    // a device run's device is its person's only (review round 1 of phase 1,
+    // W8), and so is an `access` end (review round 2, W2)
+    if (x.u !== reader) {
+      if (x.executor) out = { ...out, executor: { ...x.executor, device: "" } } as unknown as StoredRecord;
+      if (x.end === "access") out = { ...out, end: "interrupted" } as unknown as StoredRecord;
+    }
+    // the asker's model is text of the ask: redacted with it (round 2, H2)
+    const node = dump.get(x.node === "r" ? `thread:${x.th}` : `followup:${x.node}`);
+    if (x.model !== null && node && shown(dump, node, reader) !== node)
+      out = { ...out, model: null } as unknown as StoredRecord;
+    return out;
+  }
   if (r.kind !== "thread" && r.kind !== "followup" && r.kind !== "reply") return r;
   const who =
     reader !== null && r.u === reader
@@ -246,10 +269,18 @@ export function shown(dump: Dump, r: StoredRecord, reader: string | null): Store
         ? "staff"
         : "other";
   if (TEXT[modOf(dump, r) ?? "none"][who] === "text") return r;
-  // with the switch on, what an ask is about is text of the thread (H4)
+  // with the switch on, what an ask is about is text of the thread (H4), and
+  // so are its model and skill (review round 2 of phase 1, H2)
   if (r.kind === "thread")
-    return { ...r, q: "", t: null, sum: null, ...(USE_PACKAGE ? { about: null } : {}) };
-  if (r.kind === "followup") return { ...r, q: "", a: null };
+    return {
+      ...r,
+      q: "",
+      t: null,
+      sum: null,
+      ...(USE_PACKAGE ? { about: null, model: null, skill: null } : {}),
+    };
+  if (r.kind === "followup")
+    return { ...r, q: "", a: null, ...(USE_PACKAGE ? { model: null } : {}) };
   return { ...r, t: "" };
 }
 

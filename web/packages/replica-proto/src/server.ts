@@ -338,7 +338,7 @@ class Store {
   /** A record whose view depends on `r` (a hide record's item) is served
    * again: a `put` row for it at this version in each of its logs. */
   private touchDependents(r: StoredRecord, version: number) {
-    for (const key of viewDependents(r)) {
+    for (const key of viewDependents(r, this.records)) {
       const dep = this.records.get(key);
       if (dep) for (const log of logsOf(dep)) this.row(log, key, "put", version);
     }
