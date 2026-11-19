@@ -336,7 +336,12 @@ test("a removed member's device keeps a frozen copy of their threads, and can st
   const c = await cast(t);
   const { w, closed } = c;
   const th = await thread(t, w, "mel", closed, "post", "mine");
+  const melsReply = w.id();
   await ok(t, w.as("ada", "research.createPostFollowUp", { id: w.id(), thread: th, t: "ada's" }));
+  await ok(
+    t,
+    w.as("mel", "research.createPostFollowUp", { id: melsReply, thread: th, t: "mel's" }),
+  );
   const other = await thread(t, w, "ada", closed, "post", "ada's thread");
   const mel = w.client("mel");
   await mel.sync(`space:${closed}`);
@@ -345,10 +350,11 @@ test("a removed member's device keeps a frozen copy of their threads, and can st
   const live = mel.records(`space:${closed}`);
   t.false(live.has(`thread:${th}`));
   t.deepEqual(kinds(live), ["request", "space"]);
-  // the frozen copy: mel's thread and what was under it, not other threads
+  // the frozen copy: mel's thread and mel's reply under it; not ada's reply,
+  // not other threads
   const frozen = mel.frozen(`space:${closed}`);
   t.is((frozen.get(`thread:${th}`) as { q: string } | undefined)?.q, "mine");
-  t.is([...frozen.values()].filter((r) => r.kind === "reply").length, 1);
+  t.deepEqual([...frozen.keys()].sort(), [`reply:${melsReply}`, `thread:${th}`].sort());
   t.false(frozen.has(`thread:${other}`));
   // no further updates reach it, and the server serves none of it
   await ok(t, w.as("mona", "likes.set", { thread: th, on: true }));

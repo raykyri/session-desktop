@@ -146,6 +146,7 @@ const GENERATORS: Record<string, (c: Ctx, u: Who) => Record<string, unknown>> = 
     id: spaceId(c),
     set: pick(c.r, [
       { vis: pick(c.r, ["open", "listed", "unlisted"]) },
+      { vis: pick(c.r, ["open", "listed"]) },
       { invite: pick(c.r, ["mods", "members"]) },
       { rules: [plain(c)] },
       { name: pick(c.r, ["lounge", "lab", "renamed"]) },
@@ -259,6 +260,7 @@ const NAMES = Object.keys(GENERATORS);
 // role and membership changes come often, so scopes change mid-sequence
 const WEIGHTED = [
   ...NAMES,
+  "spaces.update",
   "threads.create",
   "threads.create",
   "spaces.join",
@@ -450,6 +452,34 @@ function nextWrites(c: Ctx): Attempt[] {
   return [{ u, e: { clientId, seq, mutationId, name: sentName, input, protocolVersion: 2 }, what }];
 }
 
+/** The removal rule, checked on the stored records (no oracle): a removed
+ * item keeps no text, and nothing is stored under a removed thread or a
+ * removed top-level reply. */
+function erasureFaults(dump: ReadonlyMap<string, StoredRecord>): string[] {
+  const out: string[] = [];
+  const threads = new Set<string>();
+  const replies = new Set<string>();
+  for (const [k, r] of dump) {
+    if (r.kind === "thread" && r.mod === "removed") {
+      threads.add(r.id);
+      if (r.q || r.t || r.sum) out.push(`removed ${k} keeps its text`);
+    }
+    if (r.kind === "followup" && r.mod === "removed" && (r.q || r.a))
+      out.push(`removed ${k} keeps its text`);
+    if (r.kind === "reply" && r.mod === "removed") {
+      if (r.parent === null) replies.add(r.id);
+      if (r.t) out.push(`removed ${k} keeps its text`);
+    }
+  }
+  for (const [k, r] of dump) {
+    if ((r.kind === "followup" || r.kind === "reply" || r.kind === "run") && threads.has(r.th))
+      out.push(`${k} is stored under a removed thread`);
+    if (r.kind === "reply" && r.parent !== null && replies.has(r.parent))
+      out.push(`${k} is stored under a removed reply`);
+  }
+  return out;
+}
+
 async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
   const w = new World(seed);
   const c: Ctx = {
@@ -593,26 +623,32 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       const snap = await watched.snapshot(actor(u), log);
       const s = diff(new Map(snap.records.map((x) => [x.key, x.record])), want);
       if (s) return failed(step, what, `${u}'s snapshot of ${log}\n${s}`);
-      for (const x of cl.frozen(log).values()) {
-        const th = x.kind === "thread" ? x : w.get(`thread:${"th" in x ? x.th : ""}`);
-        if (th?.kind === "thread" && th.u !== u) return failed(step, what, `${u} froze ${x.kind}`);
-      }
+      // a frozen copy holds only what the reader wrote
+      for (const [k, x] of cl.frozen(log))
+        if (!("u" in x) || x.u !== u || cl.records(log).has(k))
+          return failed(step, what, `${u} holds a frozen ${k}`);
     }
     return true;
   };
 
-  /** A pull from a cursor the reader made up: the log's current epoch and any version. */
+  /** A pull from a cursor the reader made up: the log's current epoch and any
+   * version, mostly on a log whose epoch changed (a space that opened or
+   * closed). Also checks that what a read hands out is a copy. */
   const forged = async (step: number): Promise<boolean> => {
     const u = pick(c.r, people);
-    const log = pick(c.r, logsFor(u));
-    const s = await watched.snapshot(actor(u), log);
+    const snaps = [];
+    for (const log of logsFor(u)) snaps.push({ log, s: await watched.snapshot(actor(u), log) });
+    const moved = snaps.filter((x) => x.s.epoch !== snaps[0]?.s.epoch || x.s.epoch !== "e0");
+    const { log, s } = pick(
+      c.r,
+      moved.length && chance(c.r, 0.7) ? moved : snaps,
+    ) as (typeof snaps)[number];
     const version = Math.floor(c.r() * (s.version + 1));
     const p = await watched.pull(actor(u), log, { epoch: s.epoch, version });
     if (failures.length)
       return failed(step, `forged cursor ${version}`, failures.slice(0, 3).join("\n"));
-    if ("resync" in p) return true;
     const want = expected(w.server.dump(), u, log);
-    for (const ch of p.changes) {
+    for (const ch of "resync" in p ? [] : p.changes) {
       const bad =
         ch.op === "put"
           ? JSON.stringify(ch.record) !== JSON.stringify(want.get(ch.key))
@@ -620,6 +656,12 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       if (bad)
         return failed(step, `forged cursor ${version}`, `${u} got ${ch.op} ${ch.key} in ${log}`);
     }
+    const stored = JSON.stringify([...w.server.dump()]);
+    for (const x of s.records) Object.assign(x.record, { rev: -1 });
+    if (!("resync" in p))
+      for (const ch of p.changes) if (ch.op === "put") Object.assign(ch.record, { rev: -1 });
+    if (JSON.stringify([...w.server.dump()]) !== stored)
+      return failed(step, "forged cursor", "a read handed out the server's own records");
     return true;
   };
 
@@ -637,7 +679,11 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     } else if (roll < 0.07) {
       w.clock.advance(31 * DAY);
       what = "clock +31 days";
-    } else if (roll < 0.09) {
+    } else if (roll < 0.077) {
+      // exactly the tombstones' lifetime: cursors from this millisecond sit on the boundary
+      w.clock.advance(30 * DAY);
+      what = "clock +30 days exactly";
+    } else if (roll < 0.11) {
       if (!(await forged(step))) return false;
       what = "forged cursor";
     } else {
@@ -678,6 +724,8 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       }
     }
     learn();
+    const erased = erasureFaults(w.server.dump());
+    if (erased.length) return failed(step, what, erased.slice(0, 3).join("\n"));
     for (const cl of eager.values()) if (!(await check(step, what, cl))) return false;
     for (const l of lazy)
       if (step >= l.next) {

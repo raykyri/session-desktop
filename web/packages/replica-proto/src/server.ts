@@ -455,7 +455,7 @@ export class ProtoServer implements TestServer {
   /** A user log is read by its user only; anyone else, and a signed-out
    * caller, gets nothing from it. */
   private closedTo(log: LogId, u: string | null) {
-    return log.startsWith("user:") && (u === null || log !== `user:${u}`);
+    return log.startsWith("user:") && log !== `user:${u}`;
   }
 
   private lastSeq(u: string | null, clientId: string | undefined): LastSeq {

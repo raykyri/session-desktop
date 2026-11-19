@@ -61,9 +61,13 @@ function remap(v: unknown, map: ReadonlyMap<string, string>): unknown {
 
 export class ReplicaClient {
   private readonly replicas = new Map<LogId, Replica>();
-  /** Per space log: the caller's own threads (and what was under them) as the
-   * replica last held them, kept after the caller lost read access to the
-   * space. The server sends no further updates for them. */
+  /** Per space log: the caller's own threads, with the follow-ups, replies
+   * and runs the caller wrote under them, as the replica last held them, kept
+   * after the caller lost read access to the space. The server sends no
+   * further updates for them. Other people's follow-ups and replies are not
+   * kept: AGENTS.md has a device replicate nothing of a closed space its
+   * user does not belong to, and the owner's exception covers the user's own
+   * threads only. */
   private readonly frozenCopies = new Map<LogId, Map<string, StoredRecord>>();
   private readonly outbox: Envelope[];
   private clientIdValue: string | null;
@@ -147,7 +151,7 @@ export class ReplicaClient {
   }
 
   /** After a resync of a closed space the caller is no longer a member of:
-   * keep the caller's own threads, and what the replica held under them. */
+   * keep what the caller wrote under their own threads. */
   private freeze(log: LogId, before: Map<string, StoredRecord>, after: Map<string, StoredRecord>) {
     const me = this.actor?.u;
     if (!me || !log.startsWith("space:")) return;
@@ -160,7 +164,7 @@ export class ReplicaClient {
     let frozen = this.frozenCopies.get(log);
     for (const [k, x] of before) {
       const th = threadOf(x);
-      if (after.has(k) || th === null || !mine.has(th)) continue;
+      if (after.has(k) || th === null || !mine.has(th) || !("u" in x) || x.u !== me) continue;
       if (!frozen) this.frozenCopies.set(log, (frozen = new Map<string, StoredRecord>()));
       frozen.set(k, x);
     }
