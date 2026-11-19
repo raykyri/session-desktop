@@ -10,13 +10,18 @@
 //
 // What a response that is not the protocol's means:
 // - a write: a 5xx status, or a body that is not an answer (a proxy's error
-//   page), is no answer: the server may have applied the write (the client
-//   keeps its ids). 426 is UPDATE_REQUIRED and 401 or 403 UNAUTHORIZED, both
+//   page), is no answer (null): the server may have applied the write (the
+//   client keeps its ids) and it counts as a try. No response at all (`fetch`
+//   rejects: offline, or the connection failed) is NO_RESPONSE, which is not
+//   a try. 426 is UPDATE_REQUIRED and 401 or 403 UNAUTHORIZED, both
 //   unrecorded;
 // - a read or a call: 426, 401 and 403 as for a write; any other response
 //   that is not an answer is SERVICE_UNAVAILABLE. A read error changes no log.
-// A network failure throws Offline. An answer the transport makes up carries
-// `serverTime: NaN` (the server sent no time).
+//   A network failure throws Offline;
+// - the event stream: 426 ends it with UPDATE_REQUIRED and 401 or 403 with
+//   UNAUTHORIZED (`onUnauthorized`), instead of reconnecting.
+// An answer the transport makes up carries `serverTime: NaN` (the server
+// sent no time).
 
 import type { ErrorCode, LogId } from "@session/mutators";
 
@@ -35,7 +40,14 @@ import {
   type SseEvent,
 } from "../protocol.js";
 
-import { Offline, readSse, type CursorMap, type Transport } from "./transport.js";
+import {
+  NO_RESPONSE,
+  Offline,
+  readSse,
+  type CursorMap,
+  type PushResult,
+  type Transport,
+} from "./transport.js";
 
 export interface FetchTransportOptions {
   /** The server's origin, e.g. "https://session.app" (no trailing "/"). */
@@ -45,6 +57,9 @@ export interface FetchTransportOptions {
   fetch?: typeof fetch;
   /** The server answered that this client is too old. */
   onUpdateRequired?: () => void;
+  /** The event stream was refused for want of a valid session or device
+   * token (HTTP 401 or 403). */
+  onUnauthorized?: () => void;
   /** Wait before reconnecting the event stream (ms). */
   reconnectMs?: number;
 }
@@ -143,15 +158,15 @@ export class FetchTransport implements Transport {
     return a as unknown as RegisterAnswer;
   }
 
-  async push(envelopes: readonly Envelope[]): Promise<(Answer | null)[]> {
-    const out: (Answer | null)[] = [];
+  async push(envelopes: readonly Envelope[]): Promise<PushResult[]> {
+    const out: PushResult[] = [];
     for (const e of envelopes) {
       let r: Response1;
       try {
         r = await this.post("/api/sync/write", e);
       } catch (x) {
         if (!(x instanceof Offline)) throw x;
-        out.push(null);
+        out.push(NO_RESPONSE);
         break;
       }
       const a = this.answer(r);
@@ -184,12 +199,12 @@ export class FetchTransport implements Transport {
   }
 
   /** The event stream, reconnecting with the last event id until `signal`
-   * aborts. */
+   * aborts, or until the server refuses it (426, 401, 403: the error). */
   async listen(
     cursors: () => CursorMap,
     onEvent: (e: SseEvent, id?: string) => void,
     signal: AbortSignal,
-  ) {
+  ): Promise<void | ReadError> {
     while (!signal.aborted) {
       // each connection starts from the client's own tokens, so a poke the
       // client did not act on before a drop is sent again
@@ -202,7 +217,11 @@ export class FetchTransport implements Transport {
         });
         if (res.status === 426) {
           this.o.onUpdateRequired?.();
-          return;
+          return statusError(426) ?? undefined;
+        }
+        if (res.status === 401 || res.status === 403) {
+          this.o.onUnauthorized?.();
+          return statusError(res.status) ?? undefined;
         }
         if (res.ok && res.body) await readSse(res.body, onEvent, signal);
       } catch {

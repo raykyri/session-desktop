@@ -15,6 +15,7 @@ import type {
   Cursor,
   Envelope,
   PullAnswer,
+  ReadError,
   ReadOptions,
   RegisterAnswer,
   SnapshotAnswer,
@@ -24,23 +25,35 @@ import type {
 /** Cursor tokens by log (an SSE event id). */
 export type CursorMap = Partial<Record<LogId, Cursor>>;
 
+/** A push's result for an envelope that got no response at all: the
+ * network is down, or the connection failed before a response arrived. The
+ * write may have reached the server. Unlike `null` (a response that is not
+ * an answer, such as a proxy's 502 page), it is not a try: the client pauses
+ * with backoff and leaves the end to the 3-day drop. */
+export const NO_RESPONSE = "no-response";
+export type PushResult = Answer | null | typeof NO_RESPONSE;
+
 export interface Transport {
   register(): Promise<RegisterAnswer>;
   /** Send writes, in order, one request each; stops after the first that got
-   * no answer. Each answer, or null: no answer arrived (the write may or may
-   * not have been applied). */
-  push(envelopes: readonly Envelope[]): Promise<(Answer | null)[]>;
+   * no answer. Each answer, or null: a response that is not an answer
+   * arrived, or NO_RESPONSE: none arrived (either way the write may or may
+   * not have been applied). A transport that cannot tell them apart answers
+   * null. */
+  push(envelopes: readonly Envelope[]): Promise<PushResult[]>;
   /** A read: its answer or the server's `ReadError`; Offline is thrown when
    * no answer arrived. */
   pull(log: LogId, cursor: Cursor, options?: ReadOptions): Promise<PullAnswer>;
   snapshot(log: LogId, options?: ReadOptions): Promise<SnapshotAnswer>;
   /** Listen for pokes until `signal` aborts or the stream ends. `cursors`
-   * gives the client's tokens at each (re)connection. */
+   * gives the client's tokens at each (re)connection. It ends with a
+   * `ReadError` when the server refused the stream (UNAUTHORIZED: the sign-in
+   * was lost; UPDATE_REQUIRED). */
   listen(
     cursors: () => CursorMap,
     onEvent: (e: SseEvent, id?: string) => void,
     signal: AbortSignal,
-  ): Promise<void>;
+  ): Promise<void | ReadError>;
   call(name: string, input: unknown): Promise<CallAnswer>;
 }
 
@@ -63,8 +76,12 @@ export interface Network {
   plan(kind: "push" | "pull" | "snapshot" | "register" | "call"): {
     /** The request never reaches the server. */
     lost?: boolean;
-    /** The server handles it, the answer never arrives. */
+    /** The server handles it, the answer never arrives (the connection
+     * drops: no response at all). */
     answerLost?: boolean;
+    /** The server handles it, and the response is not an answer (a proxy's
+     * error page): a push answers null. */
+    notAnswer?: boolean;
     /** The server handles it twice (a retransmission). */
     duplicate?: boolean;
     /** Wait before handling it. */
@@ -130,8 +147,9 @@ export class InProcessTransport implements Transport {
     } = {},
   ) {}
 
-  /** Run `f` across the network: its plan decides what arrives. */
-  private async across<T>(kind: Parameters<Network["plan"]>[0], f: () => T): Promise<T> {
+  /** Run `f` across the network: its plan decides what arrives (null: a
+   * response that is not an answer). */
+  private async across<T>(kind: Parameters<Network["plan"]>[0], f: () => T): Promise<T | null> {
     const net = this.o.net;
     if (!net) return f();
     if (net.down?.()) throw new Offline("offline");
@@ -141,41 +159,51 @@ export class InProcessTransport implements Transport {
     const out = f();
     if (p.duplicate) f();
     if (p.answerLost) throw new Offline("the answer was lost");
+    if (p.notAnswer) return null;
+    return out;
+  }
+
+  /** `across` for a call that needs an answer: a response that is not one
+   * is a lost answer. */
+  private async answered<T>(kind: Parameters<Network["plan"]>[0], f: () => T): Promise<T> {
+    const out = await this.across(kind, f);
+    if (out === null) throw new Offline("the response was not an answer");
     return out;
   }
 
   register() {
-    return this.across("register", () => this.server.register(this.actor));
+    return this.answered("register", () => this.server.register(this.actor));
   }
 
-  async push(envelopes: readonly Envelope[]): Promise<(Answer | null)[]> {
-    const out: (Answer | null)[] = [];
+  async push(envelopes: readonly Envelope[]): Promise<PushResult[]> {
+    const out: PushResult[] = [];
     for (const e of envelopes) {
+      let a: Answer | null;
       try {
-        out.push(
-          await this.across("push", () =>
-            this.server.apply(this.actor, JSON.parse(JSON.stringify(e))),
-          ),
+        a = await this.across("push", () =>
+          this.server.apply(this.actor, JSON.parse(JSON.stringify(e))),
         );
       } catch (x) {
         if (!(x instanceof Offline)) throw x;
-        out.push(null);
+        out.push(NO_RESPONSE);
         break;
       }
+      out.push(a);
+      if (a === null) break;
     }
     return out;
   }
 
   pull(log: LogId, cursor: Cursor, options?: ReadOptions) {
-    return this.across("pull", () => this.server.pull(this.actor, log, cursor, options));
+    return this.answered("pull", () => this.server.pull(this.actor, log, cursor, options));
   }
 
   snapshot(log: LogId, options?: ReadOptions) {
-    return this.across("snapshot", () => this.server.snapshot(this.actor, log, options));
+    return this.answered("snapshot", () => this.server.snapshot(this.actor, log, options));
   }
 
   call(name: string, input: unknown) {
-    return this.across("call", () => this.server.call(this.actor, name, input));
+    return this.answered("call", () => this.server.call(this.actor, name, input));
   }
 
   async listen(

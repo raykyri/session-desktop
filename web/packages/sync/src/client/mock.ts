@@ -11,7 +11,7 @@ import type { LogId } from "@session/mutators";
 
 import type { Answer, AnswerError, CallAnswer, Envelope, RegisterAnswer } from "../protocol.js";
 
-import { Offline, type Transport } from "./transport.js";
+import { NO_RESPONSE, Offline, type PushResult, type Transport } from "./transport.js";
 
 /** A request to the mock: its answer's status and decoded body, or a throw
  * (no answer). */
@@ -23,8 +23,9 @@ export type MockPost = (
 const num = (v: unknown, d = 0) => (typeof v === "number" ? v : d);
 
 /** The mock's answer as the protocol's: `{ result, changes, seq,
- * serverTime, replayed }` or an error body `{ code, message, issues,
- * expectedSeq, retryAt, current, changes, seq, serverTime }`. Its `changes`
+ * serverTime, replayed, recordedAs }` or an error body `{ code, message,
+ * issues, expectedSeq, retryAt, current, changes, seq, serverTime,
+ * replayed, recordedAs }`. Its `changes`
  * are the page's collection changes, not log changes: they go to
  * `onChanges` and are left out of the answer. */
 export function fromMock(
@@ -37,6 +38,7 @@ export function fromMock(
   const extra = {
     ...(typeof b["seq"] === "number" ? { seq: b["seq"] } : {}),
     ...(b["replayed"] === true ? { replayed: true as const } : {}),
+    ...(typeof b["recordedAs"] === "string" ? { recordedAs: b["recordedAs"] } : {}),
   };
   if (r.ok) return { ok: true, result: b["result"] ?? null, serverTime, ...extra };
   const e: AnswerError = {
@@ -76,13 +78,14 @@ export class MockTransport implements Transport {
     };
   }
 
-  async push(envelopes: readonly Envelope[]): Promise<(Answer | null)[]> {
-    const out: (Answer | null)[] = [];
+  /** A request that throws got no response (the page is offline). */
+  async push(envelopes: readonly Envelope[]): Promise<PushResult[]> {
+    const out: PushResult[] = [];
     for (const e of envelopes) {
       try {
         out.push(fromMock(await this.post("/api/sync/write", e), this.onChanges));
       } catch {
-        out.push(null);
+        out.push(NO_RESPONSE);
         break;
       }
     }

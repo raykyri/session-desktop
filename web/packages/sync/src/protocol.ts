@@ -66,7 +66,8 @@ export interface Actor {
  * - `clientId`: from `register`, bound to one user (and device).
  * - `seq`: the client's last processed seq + 1, given when it is sent.
  * - `clientTime`: the device's clock, corrected by the offset it learned
- *   from CLOCK_SKEW (ms). The server measures ages on it.
+ *   from the first answer of its process or from CLOCK_SKEW (ms). The
+ *   server measures ages on it.
  * - `queuedAt`: when the write was queued, on the same clock. The server
  *   checks it like an id's age (EXPIRED).
  * - `replaces`: the mutation ids this write was sent under before it was
@@ -180,14 +181,17 @@ export type LastSeq = number | null;
 
 /** Which records of a space log a read serves in full (AGENTS.md,
  * "Replication"):
- * - `desktop` (the default): full records for the threads of the past 90
- *   days or the newest 500, whichever covers more, at most 5,000;
+ * - `desktop`: full records for the threads of the past 90 days or the
+ *   newest 500, whichever covers more, at most 5,000;
  * - `phone`: the past 30 days or the newest 200;
  * - `full`: every thread in full (tests, and small spaces);
  * - `summary`: no thread in full.
- * Every thread the reader wrote or saved, and those in `opened` (threads
- * opened in the past 14 days, as the client reports them) are pinned: in
- * full whatever their age. Every other readable thread is a summary: its
+ * A read without `tier` (or without `window`) serves every thread in full,
+ * as `full`; the client sends `desktop` unless it is made with another
+ * window. Every thread the reader wrote or saved, and those in `opened`
+ * (threads opened in the past 14 days, as the client reports them, the
+ * latest first; the server pins the first OPENED_MAX) are pinned: in full
+ * whatever their age. Every other readable thread is a summary: its
  * thread and counts records, without follow-ups, replies or runs. In a space
  * of more than 5,000 threads, summaries reach back 2 years. */
 export interface TierOptions {

@@ -6,10 +6,13 @@ import { DatabaseSync } from "node:sqlite";
 
 import {
   InProcessTransport,
+  MemoryStorage,
   SyncClient,
+  type LogId,
   type Answer,
   type ClientOptions,
   type Envelope,
+  type PushResult,
   type SqliteDriver,
   type StorageAdapter,
   type Transport,
@@ -54,6 +57,34 @@ export function client(
   });
 }
 
+/** A client of `u` in a later process whose clock is `skew` off, before
+ * it heard from the server: an earlier process (with a right clock)
+ * registered and stored `logs`, and this one opens them from storage
+ * without a read. */
+export async function laterProcess(
+  w: World,
+  u: string,
+  logs: LogId[],
+  skew: number,
+  o: { storage?: StorageAdapter; transport?: Transport; persist?: boolean; seed?: number } = {},
+) {
+  const storage = o.storage ?? new MemoryStorage();
+  const first = client(w, u, { storage });
+  await first.init();
+  for (const l of logs) await first.open(l);
+  first.stop();
+  const c = client(w, u, {
+    storage,
+    clock: { now: () => w.clock.now() + skew },
+    seed: o.seed ?? 11,
+    ...(o.transport ? { transport: o.transport } : {}),
+    ...(o.persist !== undefined ? { persist: o.persist } : {}),
+  });
+  await c.init();
+  for (const l of logs) await c.open(l);
+  return c;
+}
+
 /** The in-process transport of `u` with the server's SSE stream. */
 export const inProcess = (w: World, u: string) =>
   new InProcessTransport(
@@ -65,12 +96,33 @@ export const inProcess = (w: World, u: string) =>
     },
   );
 
+/** A transport over `inner` whose pushes and reads can be watched. */
+export function watched(
+  inner: Transport,
+  o: {
+    push?: (es: readonly Envelope[], next: () => Promise<PushResult[]>) => Promise<PushResult[]>;
+    pull?: Transport["pull"];
+    snapshot?: Transport["snapshot"];
+    listen?: Transport["listen"];
+  } = {},
+): Transport {
+  return {
+    register: () => inner.register(),
+    push: (es) => (o.push ? o.push(es, () => inner.push(es)) : inner.push(es)),
+    pull: o.pull ?? ((l, c, x) => inner.pull(l, c, x)),
+    snapshot: o.snapshot ?? ((l, x) => inner.snapshot(l, x)),
+    listen: o.listen ?? ((c, e, s) => inner.listen(c, e, s)),
+    call: (n, i) => inner.call(n, i),
+  };
+}
+
 /** A transport that answers the next pushes from `queue` (an answer, null
- * for none, or "pass" to the server), and records every envelope. */
+ * for a response that is not one, NO_RESPONSE for none, or "pass" to the
+ * server), and records every envelope. */
 export class Forced implements Transport {
-  queue: (Answer | null | "pass")[] = [];
-  private next(): Answer | null | "pass" {
-    return this.queue.length ? (this.queue.shift() as Answer | null | "pass") : "pass";
+  queue: (PushResult | "pass")[] = [];
+  private next(): PushResult | "pass" {
+    return this.queue.length ? (this.queue.shift() as PushResult | "pass") : "pass";
   }
   pushes: Envelope[] = [];
   constructor(private readonly inner: Transport) {}
@@ -80,32 +132,50 @@ export class Forced implements Transport {
   listen: Transport["listen"] = (c, e, s) => this.inner.listen(c, e, s);
   call: Transport["call"] = (n, i) => this.inner.call(n, i);
   async push(es: readonly Envelope[]) {
-    const out: (Answer | null)[] = [];
+    const out: PushResult[] = [];
     for (const e of es) {
       this.pushes.push(JSON.parse(JSON.stringify(e)) as Envelope);
       const f = this.next();
       if (f === "pass") out.push(...(await this.inner.push([e])));
       else out.push(f);
-      if (out.at(-1) === null) break;
+      const last = out.at(-1);
+      if (last === null || typeof last === "string") break;
     }
     return out;
   }
 }
 
-export const fail = (code: string, serverTime = 0, extra: object = {}): Answer =>
+/** A forced error answer; without `serverTime`, one the transport made up (NaN: no server time). */
+export const fail = (code: string, serverTime = NaN, extra: object = {}): Answer =>
   ({ ok: false, error: { code, message: code, ...extra }, serverTime }) as Answer;
 
-/** `SqliteDriver` over Node's SQLite, as Tauri's plugin is shaped. */
-export function nodeSqlite(): SqliteDriver {
+/** `SqliteDriver` over Node's SQLite, as Tauri's plugin is shaped, with
+ * `batch` in one transaction; `batches` counts the calls of `batch`. */
+export function nodeSqlite(): SqliteDriver & { db: DatabaseSync; batches: number } {
   const db = new DatabaseSync(":memory:");
-  return {
-    execute: (sql, params = []) => {
+  const d = {
+    db,
+    batches: 0,
+    execute: (sql: string, params: unknown[] = []) => {
       db.prepare(sql).run(...(params as never[]));
       return Promise.resolve();
     },
     select: <T>(sql: string, params: unknown[] = []) =>
       Promise.resolve(db.prepare(sql).all(...(params as never[])) as T[]),
+    batch: (statements: readonly (readonly [string, (readonly unknown[])?])[]) => {
+      d.batches++;
+      db.exec("BEGIN");
+      try {
+        for (const [sql, params = []] of statements) db.prepare(sql).run(...(params as never[]));
+        db.exec("COMMIT");
+      } catch (e) {
+        db.exec("ROLLBACK");
+        return Promise.reject(e instanceof Error ? e : new Error(String(e)));
+      }
+      return Promise.resolve();
+    },
   };
+  return d;
 }
 
 /** Let `n` rounds of pending callbacks run. */

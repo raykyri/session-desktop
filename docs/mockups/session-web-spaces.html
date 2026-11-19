@@ -5130,7 +5130,9 @@ function fuCard(f, i, pid) {
 /* Agent credit on the thread page: a small "Agent answer" label above the answer; the model and
    who paid are listed in the details panel. */
 const MODEL_NAME = 'Gemini 4 Argon';
-const creditHead = p => `<div class="cr-label"><span class="agent">${I.agent}</span>Agent answer${p && p.skill ? `<span class="cr-sk">· Used /${esc(p.skill)}</span>` : ''}</div>`;
+/* a thread's `skill` is the id of one of its space's skills: the header shows its name */
+const skillName = p => ((D.skills[p.s] || []).find(x => x.id === p.skill) || { name: p.skill }).name;
+const creditHead = p => `<div class="cr-label"><span class="agent">${I.agent}</span>Agent answer${p && p.skill ? `<span class="cr-sk">· Used /${esc(skillName(p))}</span>` : ''}</div>`;
 function thDoc(p) {
   const fus = fuFor(p), rps = p.k === 'post' ? rpFor(p) : [], pid = p.id, am = modOf('a:' + pid), pm = modOf('p:' + pid);
   return `<div class="th-doc"><article class="th-main"><div class="th-top">${thHead(p)}</div>${thMeta(p)}${miAbout(p)}${pm ? modPh('p:' + pid, 'post') : taQ(p)}
@@ -11326,10 +11328,11 @@ function taSkInsert(name) {
   el.value = before + after; el.focus(); el.setSelectionRange(before.length, before.length);
   el.dispatchEvent(new Event('input', { bubbles: true }));
 }
-/* an ask that starts with one of the space's skills records it; the answer header shows "Used /name" */
+/* an ask that starts with one of the space's skills records it, by the skill's id (threads.create's `skill`);
+   the answer header shows "Used /name" */
 { const ct0 = createThread; createThread = function (kind) {
   const m = /^\/([a-z0-9-]+)(?=\s|$)/.exec(st.draft.trim()), s = sp(curSpace());
-  const sk = kind === 'ask' && m && s && (D.skills[s.id] || []).some(x => x.name === m[1]) ? m[1] : null;
+  const sk = kind === 'ask' && m && s ? ((D.skills[s.id] || []).find(x => x.name === m[1]) || {}).id || null : null;
   const t0 = lastTid(); ct0(kind);
   if (sk && lastTid() !== t0) db.update('posts', lastTid(), x => { x.skill = sk; });
 }; }
@@ -13600,11 +13603,13 @@ async function sxDrive(gen) {
    client's next wait instead of sending at once, so the core's backoff runs as it does on a device (the waits of a
    screen add up to 15 s at most, within the server's minute). The client has no timer of its own: the driver
    sends. The web keeps no outbox across time (persist: false); the outbox screens are the Desktop app's and the
-   Phone app's. */
+   Phone app's. Offline, the client is made and driven too: its requests get no response (the transport's
+   request throws), so it pauses without counting a try and keeps every write waiting, as the screens show. */
 const SXS = { gen: -1, client: null, locals: new Map(), ahead: 0 };
 function sxSyncClient(gen) {
   if (SXS.gen === gen && SXS.client) return SXS.client;
-  const post = (path, body) => sxFetch('POST', path, body);
+  /* offline: no response at all */
+  const post = (path, body) => st.nvOffline ? Promise.reject(new TypeError('offline')) : sxFetch('POST', path, body);
   const transport = new SessionSync.MockTransport(post, ch => applyChanges(ch, () => false));
   const clock = { now: () => SXQ.now + SXS.ahead };
   Object.assign(SXS, { gen, locals: new Map(), ahead: 0, client: new SessionSync.SyncClient({ user: ME.u, transport, clock, monotonic: clock.now, random: Math.random, timer: null, persist: sxApp() || sxNat() }) });
@@ -13618,7 +13623,6 @@ function sxSyncWait(c) {
 }
 const sxEntry = o => SXS.client && SXS.locals.has(o.id) ? SXS.client.outbox().find(e => e.local === SXS.locals.get(o.id)) : undefined;
 async function sxDriveSync(gen) {
-  if (st.nvOffline) return;
   const c0 = await sxFetch('GET', '/api/dev/config');
   if (gen !== SXQ.gen) return;
   SXQ.now = Date.parse(c0.body.now);
@@ -13633,7 +13637,8 @@ async function sxDriveSync(gen) {
   for (let k = 0; k < 16; k++) {
     await c.flush();
     if (gen !== SXQ.gen) return;
-    if (c.updateRequired || !c.outbox().some(e => e.state === 'queued')) break;
+    /* offline: the writes wait for the connection (the screen's clock does not move) */
+    if (st.nvOffline || c.updateRequired || !c.outbox().some(e => e.state === 'queued')) break;
     if (st.sxObx.some(o => o.pause && (sxEntry(o) || {}).state === 'queued' && (sxEntry(o) || {}).tries >= o.pause)) break;
     sxSyncWait(c);
   }
@@ -14510,14 +14515,14 @@ function sxUi(k, again) {
   const sf4 = sxSf4(), seed = SX_SEED();
   const wait = SX_LIST()[4], like = SX_LIST()[5];
   switch (k.replace(/^n-/, '')) {
-    case 'ob-wait': if (!nat) app(); st.nvOffline = true; outbox([sxOb('wait'), wait, like]); nat ? nThread(sf4) : thread(sf4); break;
+    case 'ob-wait': if (!nat) app(); st.nvOffline = true; outbox([sxOb('wait'), wait, like]); nat ? nThread(sf4) : thread(sf4); drive(); break;
     case 'ob-retry': app(); outbox([sxOb('wait', { pause: 3 }), wait]); thread(sf4); drive(() => sxFailNext('SERVICE_UNAVAILABLE', 3)); break;
     case 'ob-failed': if (!nat) app(); outbox([sxOb('wait'), ...sxFill(3, 'sablefield')]); nat ? nThread(sf4) : thread(sf4); drive(() => sxFailNext('INTERNAL_SERVER_ERROR', SX_TRIES), sheet); break;
     case 'ob-expired': if (!nat) app(); outbox([sxOb('wait', { made: '5d', queued: '1h' })]); nat ? nThread(sf4) : thread(sf4); drive(null, sheet); break;
     case 'ob-dropped': if (!nat) app(); outbox([sxOb('wait', { made: '3d' })]); nat ? nThread(sf4) : thread(sf4); drive(null, sheet); break;
     case 'ob-list': if (!nat) app(); outbox([...SX_LIST(), ...sxFill(2, 'public')]); list(); drive(() => sxFailNext('INTERNAL_SERVER_ERROR', SX_TRIES)); break;
-    case 'off-app': app(); st.nvOffline = true; outbox([sxOb('wait'), wait]); st.home = true; break;
-    case 'off': st.nvOffline = true; outbox([sxOb('wait'), wait]); nSpace('sablefield'); break;
+    case 'off-app': app(); st.nvOffline = true; outbox([sxOb('wait'), wait]); st.home = true; drive(); break;
+    case 'off': st.nvOffline = true; outbox([sxOb('wait'), wait]); nSpace('sablefield'); drive(); break;
     case 'off-web': web(); st.nvOffline = true; thread(sf4, { fuDraft: { [sf4]: SX_REPLY }, askErr: 'fu' }); ASK.retry = () => askReply(sf4); break;
     case 'rf-show': {
       /* the Show was chosen on bram's reply while it was hidden (its moderation record at version 1); the scenario's
