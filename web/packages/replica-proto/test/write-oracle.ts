@@ -98,6 +98,21 @@ const obj =
     return true;
   };
 const vis = oneOf("open", "listed", "unlisted");
+/** `base` of a write on another record: that record's rev as the client saw it. */
+const rev = obj({ rev: nat });
+/** `base` of joinRequests.decide: one rev for each person in `users`, by handle. */
+const revsFor =
+  (input: unknown): Check =>
+  (v) => {
+    const users = (input as { users?: unknown } | null)?.users;
+    if (!v || typeof v !== "object" || Array.isArray(v) || !Array.isArray(users)) return false;
+    const keys = Object.keys(v);
+    return (
+      keys.every((k) => isHandle(k) && nat((v as Record<string, unknown>)[k])) &&
+      keys.length === new Set(users).size &&
+      users.every((u) => keys.includes(String(u)))
+    );
+  };
 
 const SCHEMA: Record<string, Check> = {
   "spaces.create": obj(
@@ -143,20 +158,26 @@ const SCHEMA: Record<string, Check> = {
   "followups.ask": obj({ id: ulid, thread: ulid, q: str }),
   "research.createPostFollowUp": obj({ id: ulid, thread: ulid, t: str }, { parent: ulid }),
   "joinRequests.create": obj({ space: ulid }, { answers: strings, rulesAccepted: bool }),
-  "joinRequests.decide": obj(
-    {
-      space: ulid,
-      users: (v) => Array.isArray(v) && v.length > 0 && v.every(handle),
-      decision: oneOf("approve", "decline", "reopen"),
-    },
-    { why: str },
-  ),
-  "members.setRole": obj({ space: ulid, user: handle, role, base: obj({ role }) }),
-  "members.remove": obj({ space: ulid, user: handle }),
-  "members.ban": obj({ space: ulid, user: handle }),
+  "joinRequests.decide": (v) =>
+    obj(
+      {
+        space: ulid,
+        users: (x) => Array.isArray(x) && x.length > 0 && x.every(handle),
+        decision: oneOf("approve", "decline", "reopen"),
+        base: revsFor(v),
+      },
+      { why: str },
+    )(v),
+  "members.setRole": obj({ space: ulid, user: handle, role, base: rev }),
+  "members.remove": obj({ space: ulid, user: handle, base: rev }),
+  "members.ban": obj({ space: ulid, user: handle, base: rev }),
   "invites.create": obj({ id: ulid, space: ulid }, { days: (v) => v === null || nat(v) }),
   "reports.create": obj({ id: ulid, item: itemKey, why: str }, { note: str }),
-  "moderation.decide": obj({ item: itemKey, decision: oneOf("hidden", "removed", "shown") }),
+  "moderation.decide": obj({
+    item: itemKey,
+    decision: oneOf("hidden", "removed", "shown"),
+    base: rev,
+  }),
 };
 
 /** The input fields that carry a new client-made id. */
@@ -207,6 +228,9 @@ const rank = (f: Facts, sp: string, u: string) => {
   return r ? RANK[r] : 0;
 };
 const banned = (f: Facts, sp: string, u: string) => f.dump.has(`ban:${sp}:${u}`);
+/** A stored record's rev, 0 when there is none. */
+const revAt = (f: Facts, key: string) => f.dump.get(key)?.rev ?? 0;
+const baseRev = (i: In) => (i["base"] as { rev: number }).rev;
 const blank = (v: unknown) => String(v).trim() === "";
 const slug = (n: string) =>
   n
@@ -401,10 +425,13 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     const sp = String(i["space"]);
     inSpace(f, sp, "mod");
     const from = i["decision"] === "reopen" ? "declined" : "open";
+    const base = i["base"] as Record<string, number>;
     for (const u of new Set(i["users"] as string[])) {
       const r = f.dump.get(`request:${sp}:${u}`);
       if (r?.kind !== "request") no("NOT_FOUND");
-      if ((r as Extract<StoredRecord, { kind: "request" }>).st !== from) no("STALE");
+      // decided by version (round 1): a rev other than the one the moderator saw
+      if ((r as StoredRecord).rev !== base[u]) no("STALE");
+      if ((r as Extract<StoredRecord, { kind: "request" }>).st !== from) no("PRECONDITION_FAILED");
       if (i["decision"] === "approve" && banned(f, sp, u)) no("PRECONDITION_FAILED");
     }
   },
@@ -416,17 +443,18 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     if (next === "owner" && roleOf(f, sp, f.me) !== "owner") no("FORBIDDEN");
     actOn(f, sp, user);
     if (next !== "owner" && RANK[next] > rank(f, sp, f.me)) no("FORBIDDEN");
-    const current = roleOf(f, sp, user);
-    if (current === null) no("NOT_FOUND");
-    if (current !== (i["base"] as { role: Role }).role) no("STALE");
+    if (revAt(f, `member:${sp}:${user}`) !== baseRev(i)) no("STALE");
+    if (roleOf(f, sp, user) === null) no("NOT_FOUND");
   },
   "members.remove": (f, i) => {
     inSpace(f, String(i["space"]), "mod");
     actOn(f, String(i["space"]), String(i["user"]));
+    if (revAt(f, `member:${String(i["space"])}:${String(i["user"])}`) !== baseRev(i)) no("STALE");
   },
   "members.ban": (f, i) => {
     inSpace(f, String(i["space"]), "mod");
     actOn(f, String(i["space"]), String(i["user"]));
+    if (revAt(f, `member:${String(i["space"])}:${String(i["user"])}`) !== baseRev(i)) no("STALE");
   },
   "invites.create": (f, i) => {
     const s = inSpace(f, String(i["space"]), "member");
@@ -443,9 +471,10 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     const item = seenItem(f, String(i["item"]));
     inSpace(f, item.s, "mod");
     const d = i["decision"];
-    if (item.mod === "removed") no("STALE");
-    if (d === "hidden" && item.mod !== null) no("STALE");
-    if (d === "shown" && item.mod !== "hidden") no("STALE");
+    if (item.rev !== baseRev(i)) no("STALE");
+    if (item.mod === "removed") no("PRECONDITION_FAILED");
+    if (d === "hidden" && item.mod !== null) no("PRECONDITION_FAILED");
+    if (d === "shown" && item.mod !== "hidden") no("PRECONDITION_FAILED");
   },
 };
 

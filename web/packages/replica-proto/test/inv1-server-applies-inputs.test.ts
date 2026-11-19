@@ -18,7 +18,7 @@ test("a write the actor's role forbids is refused and changes nothing", async (t
       space: closed,
       user: "mel",
       role: "owner",
-      base: { role: "member" },
+      base: w.member(closed, "mel"),
     }),
     "FORBIDDEN",
   );
@@ -28,21 +28,29 @@ test("a write the actor's role forbids is refused and changes nothing", async (t
       space: closed,
       user: "mona",
       role: "member",
-      base: { role: "mod" },
+      base: w.member(closed, "mona"),
     }),
     "FORBIDDEN",
   );
-  await refused(t, w.as("mel", "members.remove", { space: closed, user: "mona" }), "FORBIDDEN");
+  await refused(
+    t,
+    w.as("mel", "members.remove", { space: closed, user: "mona", base: w.member(closed, "mona") }),
+    "FORBIDDEN",
+  );
   await refused(t, w.as("mel", "spaces.update", { id: closed, set: { vis: "open" } }), "FORBIDDEN");
   // a moderator cannot act on an admin, nor give a role above their own
-  await refused(t, w.as("mona", "members.remove", { space: closed, user: "ada" }), "FORBIDDEN");
+  await refused(
+    t,
+    w.as("mona", "members.remove", { space: closed, user: "ada", base: w.member(closed, "ada") }),
+    "FORBIDDEN",
+  );
   await refused(
     t,
     w.as("ada", "members.setRole", {
       space: closed,
       user: "mel",
       role: "owner",
-      base: { role: "member" },
+      base: w.member(closed, "mel"),
     }),
     "FORBIDDEN",
   );
@@ -174,7 +182,7 @@ test("the handles null and undefined are reserved, and a signed-out caller has n
         space: open,
         user: u,
         role: "mod",
-        base: { role: "member" },
+        base: w.member(open, u),
       }),
       "BAD_REQUEST",
     );
@@ -224,7 +232,14 @@ test("mutators read no clock, no random source and no Intl while the server appl
     const rev = (w.get(`thread:${th}`) as ThreadRec).rev;
     await ok(t, w.as("mel", "invites.create", { id: w.id(), space: closed, days: 3 }));
     await ok(t, w.as("mel", "reports.create", { id: w.id(), item: `p:${post}`, why: "spam" }));
-    await ok(t, w.as("mona", "moderation.decide", { item: `p:${post}`, decision: "hidden" }));
+    await ok(
+      t,
+      w.as("mona", "moderation.decide", {
+        item: `p:${post}`,
+        decision: "hidden",
+        base: w.item(`p:${post}`),
+      }),
+    );
     await ok(t, w.as("mel", "threads.update", { id: th, q: "Q2", base: { rev } }));
     await ok(
       t,
@@ -237,9 +252,17 @@ test("mutators read no clock, no random source and no Intl while the server appl
     await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
     await ok(
       t,
-      w.as("mona", "joinRequests.decide", { space: closed, users: ["otto"], decision: "approve" }),
+      w.as("mona", "joinRequests.decide", {
+        space: closed,
+        users: ["otto"],
+        decision: "approve",
+        base: w.requests(closed, ["otto"]),
+      }),
     );
-    await ok(t, w.as("mona", "members.ban", { space: closed, user: "otto" }));
+    await ok(
+      t,
+      w.as("mona", "members.ban", { space: closed, user: "otto", base: w.member(closed, "otto") }),
+    );
     await ok(t, w.as("mel", "threads.delete", { id: post }));
   } finally {
     globalThis.Date = RealDate;

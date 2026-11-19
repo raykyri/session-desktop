@@ -123,6 +123,29 @@ export class World {
   get(key: string): StoredRecord | undefined {
     return this.server.dump().get(key);
   }
+
+  /** A stored record's rev, or 0 when there is none: what a client that
+   * read the record now puts in a write's `base`. */
+  rev(key: string): number {
+    return this.get(key)?.rev ?? 0;
+  }
+
+  /** `base` of a write on `u`'s member record in `sp`, as it is now. */
+  member(sp: string, u: string): { rev: number } {
+    return { rev: this.rev(`member:${sp}:${u}`) };
+  }
+
+  /** `base` of a moderation decision on `item`, as the item is now. */
+  item(item: string): { rev: number } {
+    const [k, th, sub] = item.split(":");
+    const key = k === "f" ? `followup:${sub}` : k === "r" ? `reply:${sub}` : `thread:${th ?? ""}`;
+    return { rev: this.rev(key) };
+  }
+
+  /** `base` of a decision on the join requests of `users` in `sp`, as they are now. */
+  requests(sp: string, users: string[]): Record<string, number> {
+    return Object.fromEntries(users.map((u) => [u, this.rev(`request:${sp}:${u}`)]));
+  }
 }
 
 export async function ok(
@@ -185,7 +208,7 @@ export async function cast(t: ExecutionContext, seed = 1): Promise<Cast> {
       space: open,
       user: "mona",
       role: "mod",
-      base: { role: "member" },
+      base: w.member(open, "mona"),
     }),
   );
   for (const u of ["ada", "mona", "mel"]) await admit(t, w, closed, u);
@@ -195,7 +218,7 @@ export async function cast(t: ExecutionContext, seed = 1): Promise<Cast> {
       space: closed,
       user: "ada",
       role: "admin",
-      base: { role: "member" },
+      base: w.member(closed, "ada"),
     }),
   );
   await ok(
@@ -204,7 +227,7 @@ export async function cast(t: ExecutionContext, seed = 1): Promise<Cast> {
       space: closed,
       user: "mona",
       role: "mod",
-      base: { role: "member" },
+      base: w.member(closed, "mona"),
     }),
   );
   return { w, open, closed, vault };
@@ -213,7 +236,15 @@ export async function cast(t: ExecutionContext, seed = 1): Promise<Cast> {
 /** Let `u` into a closed space: a request, approved by its owner olga. */
 export async function admit(t: ExecutionContext, w: World, space: string, u: string) {
   await ok(t, w.as(u, "joinRequests.create", { space, rulesAccepted: true }));
-  await ok(t, w.as("olga", "joinRequests.decide", { space, users: [u], decision: "approve" }));
+  await ok(
+    t,
+    w.as("olga", "joinRequests.decide", {
+      space,
+      users: [u],
+      decision: "approve",
+      base: w.requests(space, [u]),
+    }),
+  );
 }
 
 export async function thread(

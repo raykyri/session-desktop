@@ -135,6 +135,16 @@ const roleNow = (c: Ctx, sp: string, u: string) => {
   const m = c.w.get(`member:${sp}:${u}`);
   return m?.kind === "member" ? m.role : null;
 };
+/** A record's rev as the client saw it: usually now, sometimes one write ago. */
+const seenRev = (c: Ctx, key: string) => {
+  const rev = c.w.rev(key);
+  return chance(c.r, 0.85) ? rev : Math.max(0, rev - 1);
+};
+/** The record a moderation key names. */
+const itemRecordKey = (item: string) => {
+  const [k, th, sub] = item.split(":");
+  return k === "f" ? `followup:${sub}` : k === "r" ? `reply:${sub}` : `thread:${th}`;
+};
 
 const GENERATORS: Record<string, (c: Ctx, u: Who) => Record<string, unknown>> = {
   "spaces.create": (c) => ({
@@ -221,25 +231,35 @@ const GENERATORS: Record<string, (c: Ctx, u: Who) => Record<string, unknown>> = 
     const open = all.filter((x) => x.st === "open");
     const reqs = open.length && chance(c.r, 0.7) ? open : all;
     const r = reqs.length ? pick(c.r, reqs) : null;
+    const space = r && chance(c.r, 0.8) ? r.sp : spaceId(c);
+    const user = r ? r.u : pick(c.r, PEOPLE);
     return {
-      space: r && chance(c.r, 0.8) ? r.sp : spaceId(c),
-      users: [r ? r.u : pick(c.r, PEOPLE)],
+      space,
+      users: [user],
       decision: pick(c.r, ["approve", "approve", "decline", "reopen"]),
+      base: { [user]: seenRev(c, `request:${space}:${user}`) },
     };
   },
   "members.setRole": (c) => {
     const space = spaceId(c);
     const user = pick(c.r, [...PEOPLE, "null"]);
-    const now = roleNow(c, space, user) ?? "member";
     return {
       space,
       user,
       role: pick(c.r, ["member", "mod", "mod", "admin", "owner"]),
-      base: { role: chance(c.r, 0.8) ? now : pick(c.r, ["member", "mod", "admin"]) },
+      base: { rev: seenRev(c, `member:${space}:${user}`) },
     };
   },
-  "members.remove": (c) => ({ space: spaceId(c), user: pick(c.r, PEOPLE) }),
-  "members.ban": (c) => ({ space: spaceId(c), user: pick(c.r, PEOPLE) }),
+  "members.remove": (c) => {
+    const space = spaceId(c);
+    const user = pick(c.r, PEOPLE);
+    return { space, user, base: { rev: seenRev(c, `member:${space}:${user}`) } };
+  },
+  "members.ban": (c) => {
+    const space = spaceId(c);
+    const user = pick(c.r, PEOPLE);
+    return { space, user, base: { rev: seenRev(c, `member:${space}:${user}`) } };
+  },
   "invites.create": (c) => ({
     id: newId(c),
     space: spaceId(c),
@@ -251,9 +271,15 @@ const GENERATORS: Record<string, (c: Ctx, u: Who) => Record<string, unknown>> = 
     const busy = records(c, "thread").filter((p) => p.r > 0 && p.mod !== "removed");
     if (busy.length && chance(c.r, 0.4)) {
       const p = pick(c.r, busy);
-      return { item: `${p.k === "ask" ? "a" : "p"}:${p.id}`, decision: "removed" };
+      const item = `${p.k === "ask" ? "a" : "p"}:${p.id}`;
+      return { item, decision: "removed", base: { rev: p.rev } };
     }
-    return { item: itemKey(c), decision: pick(c.r, ["hidden", "hidden", "removed", "shown"]) };
+    const item = itemKey(c);
+    return {
+      item,
+      decision: pick(c.r, ["hidden", "hidden", "removed", "shown"]),
+      base: { rev: seenRev(c, itemRecordKey(item)) },
+    };
   },
 };
 const NAMES = Object.keys(GENERATORS);
@@ -506,7 +532,12 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     await ok(t, w.as(u, "joinRequests.create", { space: closed, rulesAccepted: true }));
     await ok(
       t,
-      w.as("olga", "joinRequests.decide", { space: closed, users: [u], decision: "approve" }),
+      w.as("olga", "joinRequests.decide", {
+        space: closed,
+        users: [u],
+        decision: "approve",
+        base: w.requests(closed, [u]),
+      }),
     );
   }
   await ok(
@@ -515,7 +546,7 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       space: closed,
       user: "mona",
       role: "mod",
-      base: { role: "member" },
+      base: w.member(closed, "mona"),
     }),
   );
 

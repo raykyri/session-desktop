@@ -26,11 +26,21 @@ async function activity(t: ExecutionContext, c: Cast) {
   await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
   await ok(t, w.as("mona", "invites.create", { id: w.id(), space: closed }));
   await ok(t, w.as("olga", "invites.create", { id: w.id(), space: vault }));
-  await ok(t, w.as("mona", "members.ban", { space: open, user: "eve" }));
+  await ok(
+    t,
+    w.as("mona", "members.ban", { space: open, user: "eve", base: w.member(open, "eve") }),
+  );
   for (const u of ["mona", "mel", "ada"])
     await ok(t, w.as(u, "likes.set", { thread: post, on: true }));
   await ok(t, w.as("ada", "saved.set", { kind: "thread", id: post, on: true }));
-  await ok(t, w.as("mona", "moderation.decide", { item: `p:${post}`, decision: "hidden" }));
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", {
+      item: `p:${post}`,
+      decision: "hidden",
+      base: w.item(`p:${post}`),
+    }),
+  );
 }
 
 /** Every log a hostile client might ask for. */

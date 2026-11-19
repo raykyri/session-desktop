@@ -15,10 +15,16 @@
 // `authorize` refuses a banned person every write, then checks `who`, the
 // role the actor needs (the mock's `who`).
 //
-// A write that acts on another record's state refuses with STALE when that
-// record is not in the state the write expects: a request that is no longer
-// open, a member whose role is not `base.role`, a thread whose rev is not
-// `base.rev`, a moderation state the decision cannot follow.
+// A write that acts on another record carries `base.rev`, the rev of that
+// record as the client saw it, and is refused with STALE when the rev differs:
+// a join request (`joinRequests.decide`, one rev per person), a moderated
+// item (`moderation.decide`), a member record (`members.setRole`,
+// `members.remove`, `members.ban`; 0 for a person with no member record) and
+// a thread (`threads.update`). A state check alone is not enough: a request
+// that was approved, then reopened by its person asking again, is open again,
+// and an approval made for the first request would admit them (review round
+// 1, R1). With the rev matching, a decision the record's state does not allow
+// is PRECONDITION_FAILED.
 //
 // Input schemas are strict: a field the schema does not list (`likes`, `u`,
 // `createdAt`, `code`) is BAD_REQUEST, never stored.
@@ -102,6 +108,8 @@ const bad = (path: string, expected: string) =>
 /** The one answer for a missing target and for a target the actor may not read. */
 const notFound = () => refuse("NOT_FOUND");
 const stale = () => refuse("STALE");
+/** A record's rev, or 0 when there is none. */
+const revOf = (tx: Tx, key: string) => tx.get(key)?.rev ?? 0;
 const removed = () => refuse("PRECONDITION_FAILED", "This item was removed.");
 
 // ---- the transaction and the stage contexts ----
@@ -199,6 +207,8 @@ export const handleS = z
   .refine((h) => !RESERVED_HANDLES.has(h), "reserved");
 export const isHandle = (u: string) => handleS.safeParse(u).success;
 const count = z.number().int().nonnegative();
+/** The rev of the record a write acts on, as the client saw it. */
+const baseS = z.strictObject({ rev: count });
 
 const text = (v: string, path: string) => {
   const s = v.trim();
@@ -768,17 +778,33 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
 
   "joinRequests.decide": define({
     input: spaces.decideRequestsInputSchema
-      .extend({ space: ulidS, users: z.array(handleS).min(1) })
-      .strict(),
+      .extend({
+        space: ulidS,
+        users: z.array(handleS).min(1),
+        /** Each request's rev as the moderator saw it, by person: one entry
+         * for every person in `users` and no other. */
+        base: z.record(handleS, count),
+      })
+      .strict()
+      .refine(
+        (i) =>
+          Object.keys(i.base).length === new Set(i.users).size &&
+          i.users.every((u) => Object.hasOwn(i.base, u)),
+        { path: ["base"], message: "expected one rev for each person in users" },
+      ),
     who: "moderator",
     space: (_tx, i) => i.space,
     run: (tx, i) => {
       for (const u of [...new Set(i.users)]) {
         const r = tx.get(requestKey(i.space, u));
         if (r?.kind !== "request") throw notFound();
-        // a decision acts on the request as the moderator saw it: approving
-        // or declining needs it open, reopening needs it declined
-        if (r.st !== (i.decision === "reopen" ? "declined" : "open")) throw stale();
+        // a decision acts on the request as the moderator saw it: its rev,
+        // which every write of the request bumps (a person who asks again
+        // reopens it, and so bumps it). With the rev matching, approving or
+        // declining needs the request open, reopening needs it declined.
+        if (r.rev !== i.base[u]) throw stale();
+        if (r.st !== (i.decision === "reopen" ? "declined" : "open"))
+          throw refuse("PRECONDITION_FAILED", "This request was already decided.");
         if (i.decision === "approve") {
           if (bannedFrom(tx, i.space, u))
             throw refuse("PRECONDITION_FAILED", "This person is banned from the space.");
@@ -800,8 +826,8 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
       space: ulidS,
       user: handleS,
       role: spaces.spaceMemberRoleSchema,
-      /** The role the actor saw the member have. */
-      base: z.strictObject({ role: spaces.spaceMemberRoleSchema }),
+      /** The member record's rev as the actor saw it. */
+      base: baseS,
     }),
     who: "admin",
     space: (_tx, i) => i.space,
@@ -814,9 +840,9 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
     },
     run: (tx, i) => {
       const m = tx.get(memberKey(i.space, i.user));
+      if (revOf(tx, memberKey(i.space, i.user)) !== i.base.rev) throw stale();
       if (m?.kind !== "member")
         throw refuse("NOT_FOUND", "This person is not a member of the space.");
-      if (m.role !== i.base.role) throw stale();
       tx.put({ ...m, role: i.role });
       if (i.role === "owner") {
         const me = tx.get(memberKey(i.space, tx.me));
@@ -827,12 +853,16 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
     },
   }),
 
+  // `base.rev`: the member record's rev as the moderator saw it (0: no member
+  // record). A removal queued before the person was removed and let in again
+  // is STALE (review round 1, R1b).
   "members.remove": define({
-    input: z.strictObject({ space: ulidS, user: handleS }),
+    input: z.strictObject({ space: ulidS, user: handleS, base: baseS }),
     who: "moderator",
     space: (_tx, i) => i.space,
     can: (tx, i) => actsOn(tx, i.space, i.user),
     run: (tx, i) => {
+      if (revOf(tx, memberKey(i.space, i.user)) !== i.base.rev) throw stale();
       if (!tx.get(memberKey(i.space, i.user))) return null;
       tx.del(memberKey(i.space, i.user));
       refreshSpace(tx, i.space);
@@ -841,11 +871,14 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
   }),
 
   "members.ban": define({
-    input: z.strictObject({ space: ulidS, user: handleS }),
+    input: z.strictObject({ space: ulidS, user: handleS, base: baseS }),
     who: "moderator",
     space: (_tx, i) => i.space,
     can: (tx, i) => actsOn(tx, i.space, i.user),
     run: (tx, i) => {
+      if (revOf(tx, memberKey(i.space, i.user)) !== i.base.rev) throw stale();
+      // the ban's id is the mock's (`<space>:<user>`): one ban per person and
+      // space, outside the ULID id registry
       if (tx.get(memberKey(i.space, i.user))) tx.del(memberKey(i.space, i.user));
       if (!tx.get(banKey(i.space, i.user)))
         tx.put({
@@ -936,17 +969,23 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
   }),
 
   "moderation.decide": define({
-    input: spaces.spaceProcedures["moderation.decide"].input.strict(),
+    input: spaces.spaceProcedures["moderation.decide"].input.extend({ base: baseS }).strict(),
     who: "moderator",
     space: (tx, i) => itemOf(tx, i.item).s,
     run: (tx, i) => {
       const r = itemOf(tx, i.item);
-      // a decision follows the state the moderator saw: hiding needs the item
-      // shown, showing needs it hidden, and a removed item stays removed (the
-      // mock's reports.resolve "open" restores both)
-      if (r.mod === "removed") throw stale();
-      if (i.decision === "hidden" && r.mod !== null) throw stale();
-      if (i.decision === "shown" && r.mod !== "hidden") throw stale();
+      // a decision acts on the item as the moderator read it: its rev. The
+      // author may still edit a hidden item, which bumps the rev, so a
+      // "shown" made after reading one text never publishes another (review
+      // round 1, R2). With the rev matching: hiding needs the item shown,
+      // showing needs it hidden, and a removed item stays removed (the mock's
+      // reports.resolve "open" restores both).
+      if (r.rev !== i.base.rev) throw stale();
+      if (r.mod === "removed") throw removed();
+      if (i.decision === "hidden" && r.mod !== null)
+        throw refuse("PRECONDITION_FAILED", "This item is already hidden.");
+      if (i.decision === "shown" && r.mod !== "hidden")
+        throw refuse("PRECONDITION_FAILED", "This item is not hidden.");
       if (i.decision === "removed") erase(tx, r);
       else tx.put({ ...r, mod: i.decision === "hidden" ? "hidden" : null });
       return null;

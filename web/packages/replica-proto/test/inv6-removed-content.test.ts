@@ -22,7 +22,14 @@ test("after a hide, its author and the space's moderators get the text; everyone
   const readers = ["mel", "mona", "olga", "otto", "eve", null].map((u) => w.client(u));
   for (const c of readers) await c.sync(`space:${open}`);
   t.is((readers[0]?.records(`space:${open}`).get(`thread:${th}`) as ThreadRec).q, SECRET);
-  await ok(t, w.as("mona", "moderation.decide", { item: `p:${th}`, decision: "hidden" }));
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", {
+      item: `p:${th}`,
+      decision: "hidden",
+      base: w.item(`p:${th}`),
+    }),
+  );
   for (const c of readers) {
     const u = c.actor?.u ?? null;
     const sees = u === "mel" || u === "mona" || u === "olga";
@@ -36,7 +43,14 @@ test("after a hide, its author and the space's moderators get the text; everyone
   }
   // a moderator may show a hidden item again (the mock's "shown"); its text is
   // served to everyone from then on
-  await ok(t, w.as("mona", "moderation.decide", { item: `p:${th}`, decision: "shown" }));
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", {
+      item: `p:${th}`,
+      decision: "shown",
+      base: w.item(`p:${th}`),
+    }),
+  );
   await readers[3]?.sync(`space:${open}`);
   t.is((readers[3]?.records(`space:${open}`).get(`thread:${th}`) as ThreadRec).q, SECRET);
 });
@@ -44,7 +58,14 @@ test("after a hide, its author and the space's moderators get the text; everyone
 test("a demoted moderator stops getting hidden text, and a promoted member starts", async (t) => {
   const { w, closed } = await cast(t);
   const th = await thread(t, w, "ada", closed, "post", SECRET);
-  await ok(t, w.as("mona", "moderation.decide", { item: `p:${th}`, decision: "hidden" }));
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", {
+      item: `p:${th}`,
+      decision: "hidden",
+      base: w.item(`p:${th}`),
+    }),
+  );
   const mona = w.client("mona");
   const mel = w.client("mel");
   await mona.sync(`space:${closed}`);
@@ -57,7 +78,7 @@ test("a demoted moderator stops getting hidden text, and a promoted member start
       space: closed,
       user: "mona",
       role: "member",
-      base: { role: "mod" },
+      base: w.member(closed, "mona"),
     }),
   );
   await ok(
@@ -66,7 +87,7 @@ test("a demoted moderator stops getting hidden text, and a promoted member start
       space: closed,
       user: "mel",
       role: "mod",
-      base: { role: "member" },
+      base: w.member(closed, "mel"),
     }),
   );
   t.is(await mona.sync(`space:${closed}`), "resync");
@@ -99,8 +120,22 @@ test("removing a thread erases it and everything under it from storage, for good
   const readers = ["mel", "mona", "olga", "ada", "otto", "eve", null].map((u) => w.client(u));
   for (const c of readers)
     for (const log of [`space:${open}`, `space:${closed}`] as LogId[]) await c.sync(log);
-  await ok(t, w.as("mona", "moderation.decide", { item: `a:${th}`, decision: "removed" }));
-  await ok(t, w.as("mona", "moderation.decide", { item: `p:${post}`, decision: "removed" }));
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", {
+      item: `a:${th}`,
+      decision: "removed",
+      base: w.item(`a:${th}`),
+    }),
+  );
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", {
+      item: `p:${post}`,
+      decision: "removed",
+      base: w.item(`p:${post}`),
+    }),
+  );
   // erased at rest: the text, the follow-ups, the runs and the replies
   t.false(stored(w).includes(SECRET));
   for (const key of [`followup:${fu}`, `reply:${top}`, `reply:${nested}`])
@@ -118,8 +153,21 @@ test("removing a thread erases it and everything under it from storage, for good
       t.is(diff(c.records(log), expected(w.server.dump(), c.actor?.u ?? null, log)), null);
     }
   // nothing brings it back, and nothing new goes under it
-  for (const decision of ["shown", "hidden", "removed"] as const)
-    await refused(t, w.as("mona", "moderation.decide", { item: `a:${th}`, decision }), "STALE");
+  // from the removed state, and from the state before it
+  const now = w.item(`a:${th}`);
+  for (const decision of ["shown", "hidden", "removed"] as const) {
+    const input = { item: `a:${th}`, decision };
+    await refused(
+      t,
+      w.as("mona", "moderation.decide", { ...input, base: now }),
+      "PRECONDITION_FAILED",
+    );
+    await refused(
+      t,
+      w.as("mona", "moderation.decide", { ...input, base: { rev: now.rev - 1 } }),
+      "STALE",
+    );
+  }
   await refused(
     t,
     w.as("mel", "threads.update", {
@@ -158,8 +206,22 @@ test("removing a follow-up or a top-level reply erases its text, and the replies
     t,
     w.as("mel", "research.createPostFollowUp", { id: under, thread: post, t: SECRET, parent: rp }),
   );
-  await ok(t, w.as("mona", "moderation.decide", { item: `f:${ask}:${fu}`, decision: "removed" }));
-  await ok(t, w.as("mona", "moderation.decide", { item: `r:${post}:${rp}`, decision: "removed" }));
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", {
+      item: `f:${ask}:${fu}`,
+      decision: "removed",
+      base: w.item(`f:${ask}:${fu}`),
+    }),
+  );
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", {
+      item: `r:${post}:${rp}`,
+      decision: "removed",
+      base: w.item(`r:${post}:${rp}`),
+    }),
+  );
   t.false(stored(w).includes(SECRET));
   t.is((w.get(`followup:${fu}`) as FollowUpRec).mod, "removed");
   t.is((w.get(`reply:${rp}`) as ReplyRec).mod, "removed");
@@ -183,8 +245,22 @@ test("hidden follow-ups and replies lose their text for readers who are not thei
   await ok(t, w.as("otto", "research.createPostFollowUp", { id: rp, thread: post, t: SECRET }));
   const c = w.client(null);
   await c.sync(`space:${open}`);
-  await ok(t, w.as("mona", "moderation.decide", { item: `f:${ask}:${fu}`, decision: "hidden" }));
-  await ok(t, w.as("mona", "moderation.decide", { item: `r:${post}:${rp}`, decision: "hidden" }));
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", {
+      item: `f:${ask}:${fu}`,
+      decision: "hidden",
+      base: w.item(`f:${ask}:${fu}`),
+    }),
+  );
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", {
+      item: `r:${post}:${rp}`,
+      decision: "hidden",
+      base: w.item(`r:${post}:${rp}`),
+    }),
+  );
   await c.sync(`space:${open}`);
   t.is((c.records(`space:${open}`).get(`followup:${fu}`) as FollowUpRec).q, "");
   t.is((c.records(`space:${open}`).get(`reply:${rp}`) as ReplyRec).t, "");
@@ -198,7 +274,11 @@ test("hidden follow-ups and replies lose their text for readers who are not thei
   // a key that names the item under another thread is NOT_FOUND
   await refused(
     t,
-    w.as("mona", "moderation.decide", { item: `f:${post}:${fu}`, decision: "hidden" }),
+    w.as("mona", "moderation.decide", {
+      item: `f:${post}:${fu}`,
+      decision: "hidden",
+      base: w.item(`f:${post}:${fu}`),
+    }),
     "NOT_FOUND",
   );
 });
@@ -228,7 +308,14 @@ test("an old cursor resyncs into the current state, never the content it last sa
   const th = await thread(t, w, "mel", open, "post", SECRET);
   const eve = w.client("eve");
   await eve.sync(`space:${open}`);
-  await ok(t, w.as("mona", "moderation.decide", { item: `p:${th}`, decision: "removed" }));
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", {
+      item: `p:${th}`,
+      decision: "removed",
+      base: w.item(`p:${th}`),
+    }),
+  );
   // the log's history is replaced (a visibility change), so eve's cursor is from another epoch
   await ok(t, w.as("olga", "spaces.update", { id: open, set: { vis: "listed" } }));
   await ok(t, w.as("olga", "spaces.update", { id: open, set: { vis: "open" } }));
@@ -244,7 +331,10 @@ test("a delete reaches a pull as a tombstone for 30 days; after that the cursor 
   const late = w.client("ada");
   await mel.sync(log);
   await late.sync(log);
-  await ok(t, w.as("olga", "members.remove", { space: closed, user: "mona" }));
+  await ok(
+    t,
+    w.as("olga", "members.remove", { space: closed, user: "mona", base: w.member(closed, "mona") }),
+  );
   t.false(w.server.dump().has(`member:${closed}:mona`));
   w.clock.advance(29 * DAY);
   t.is(await mel.sync(log), "pull");

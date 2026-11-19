@@ -81,7 +81,10 @@ test("a missing target and one the caller may not read answer the same", async (
     ["reports.create", (id: string) => ({ id: w.id(), item: `a:${id}`, why: "x" })],
     ["threads.update", (id: string) => ({ id, q: "x", base: { rev: 1 } })],
     ["threads.delete", (id: string) => ({ id })],
-    ["moderation.decide", (id: string) => ({ item: `a:${id}`, decision: "hidden" })],
+    [
+      "moderation.decide",
+      (id: string) => ({ item: `a:${id}`, decision: "hidden", base: { rev: 1 } }),
+    ],
   ] as const) {
     const a = await refused(t, w.as("eve", name, input(hidden)), "NOT_FOUND");
     const b = await refused(t, w.as("eve", name, input(missing)), "NOT_FOUND");
@@ -91,8 +94,16 @@ test("a missing target and one the caller may not read answer the same", async (
   // moderates the open space, not the closed one
   for (const [name, who, input] of [
     ["reports.create", "eve", (key: string) => ({ id: w.id(), item: key, why: "x" })],
-    ["moderation.decide", "eve", (key: string) => ({ item: key, decision: "hidden" })],
-    ["moderation.decide", "otto", (key: string) => ({ item: key, decision: "removed" })],
+    [
+      "moderation.decide",
+      "eve",
+      (key: string) => ({ item: key, decision: "hidden", base: { rev: 1 } }),
+    ],
+    [
+      "moderation.decide",
+      "otto",
+      (key: string) => ({ item: key, decision: "removed", base: { rev: 1 } }),
+    ],
   ] as const) {
     const answers = new Set<string>();
     for (const key of [
@@ -159,7 +170,12 @@ test("a client ULID older than 4 days or more than 1 minute ahead is refused, an
     await skew(w.as("mel", name, input));
   // moderation.decide brings no new id; its mutation id is checked
   await skew(
-    w.as("mona", "moderation.decide", { item: `a:${th}`, decision: "hidden" }, at(2 * MINUTE)),
+    w.as(
+      "mona",
+      "moderation.decide",
+      { item: `a:${th}`, decision: "hidden", base: w.item(`a:${th}`) },
+      at(2 * MINUTE),
+    ),
   );
   t.is((w.get(`thread:${th}`) as ThreadRec).mod, null);
 });

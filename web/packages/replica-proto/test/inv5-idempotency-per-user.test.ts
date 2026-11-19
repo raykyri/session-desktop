@@ -74,7 +74,12 @@ test("a refusal is stored too: the same mutation id is refused again", async (t)
   await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
   await ok(
     t,
-    w.as("olga", "joinRequests.decide", { space: closed, users: ["otto"], decision: "approve" }),
+    w.as("olga", "joinRequests.decide", {
+      space: closed,
+      users: ["otto"],
+      decision: "approve",
+      base: w.requests(closed, ["otto"]),
+    }),
   );
   await refused(t, w.server.apply(actor("otto"), e), "FORBIDDEN");
 });
@@ -130,7 +135,11 @@ test("each client's last processed seq comes back with its own reads only", asyn
   t.is(mel.lastSeq, e.seq);
   t.is(otto.lastSeq, 0);
   // a refused write is processed too
-  const r = mel.queue("members.remove", { space: open, user: "otto" });
+  const r = mel.queue("members.remove", {
+    space: open,
+    user: "otto",
+    base: w.member(open, "otto"),
+  });
   await mel.flush();
   await mel.sync(`space:${open}`);
   t.is(mel.lastSeq, r.seq);
