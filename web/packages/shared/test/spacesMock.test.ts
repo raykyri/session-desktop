@@ -886,8 +886,8 @@ test.serial("the write envelope: a recorded answer is replayed; the sync codes",
     ...o,
   });
   const write = async (e: object) => {
-    exact(t, spacesApi["POST /api/sync/write"]!.input!, e as Json, "envelope");
-    const r = await request("POST", "/api/sync/write", e as Json);
+    exact(t, spacesApi["POST /api/sync/write"]!.input!, e, "envelope");
+    const r = await request("POST", "/api/sync/write", e);
     exact(t, spacesApi["POST /api/sync/write"]!.output!, r.body, "answer");
     return r.body as { code?: string; seq?: number; replayed?: boolean };
   };

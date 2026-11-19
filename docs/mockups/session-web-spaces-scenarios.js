@@ -235,11 +235,14 @@
      writes (the write envelope, section 6b of session-web-spaces-mock-api.js) and show the server's answers. The
      device's own copy of a space and the writes waiting in its outbox are the client's (the page). */
   const sf42 = tx => tx.get('posts').find(p => p.s === 'sablefield' && p.k === 'post' && /4\.2 is out/.test(p.q)).id;
-  scenario('outbox: replies arrived while you were offline', { note: 'while your device was offline, oduya and jun.park replied to the Sablefield 4.2 post. Your own reply is still in the device’s outbox (page state), so the server does not have it',
-    run: (tx, a, h) => {
-      const th = sf42(tx);
-      tx.mapPut('rp', th, [...tx.mapGet('rp', th), { u: 'oduya', createdAt: h.ago('40m'), t: 'The rules check command caught two scope errors in our staging project.', likes: 1 }, { u: 'jun.park', createdAt: h.ago('25m'), t: 'Deploys of sync rules went from about a minute to a few seconds for us.', likes: 0 }]);
-    } });
+  const repliesArrived = (tx, a, h) => {
+    const th = sf42(tx);
+    tx.mapPut('rp', th, [...tx.mapGet('rp', th), { u: 'oduya', createdAt: h.ago('40m'), t: 'The rules check command caught two scope errors in our staging project.', likes: 1 }, { u: 'jun.park', createdAt: h.ago('25m'), t: 'Deploys of sync rules went from about a minute to a few seconds for us.', likes: 0 }]);
+  };
+  scenario('outbox: replies arrived while you were offline', { note: 'while your device was offline, oduya and jun.park replied to the Sablefield 4.2 post. Your own reply waits in the device’s outbox (the page), so the server does not have it',
+    run: repliesArrived });
+  scenario('outbox: the list', { note: 'as "outbox: replies arrived while you were offline"; tomasz also saved Canon starter list in #sci-fi, so an edit of it from the outbox answers CONFLICT',
+    run: (tx, a, h) => { repliesArrived(tx, a, h); h.savePage('scifi', 1, { by: 'tomasz', text: ['A short list for people new to the genre, updated for this month.', '## Classics', '- The Left Hand of Darkness (Le Guin, 1969).'] }); } });
   scenario('sablefield: bram edited a hidden reply', { note: 'you (an admin of Sablefield) hid bram’s reply on the 4.2 post. Later, offline, you chose Show; before that write reached the server, bram edited the reply, so its version changed and the queued Show answers STALE',
     run: (tx, a, h) => {
       const th = sf42(tx), list = tx.mapGet('rp', th);

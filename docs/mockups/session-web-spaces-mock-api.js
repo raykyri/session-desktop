@@ -1163,7 +1163,7 @@
       if (n.fu != null) { const fu = tx.mapGet('fu', p.id) || []; if (fu[n.fu]) { fu[n.fu].q = q; if (changed) fu[n.fu].edited = true; if (i.run) delete fu[n.fu].a; bump(fu[n.fu]); tx.mapPut('fu', p.id, fu); } }
       const tree = askTree(tx, p.id);
       let ran = null;
-      if (tree.nodes.some(x => x.id === n.id) || n.fu == null) tx.mapPut('qtd', p.id, { ...tree, nodes: tree.nodes.map(x => { if (x.id !== n.id) return x; const y = { ...x }; if (y.fu == null) { y.q = q; bump(y); } if (changed) y.edited = true; if (i.run) { y.running = true; y.tok = 0; y.pay = i.pay == null ? null : i.pay; y.att = (y.att || 0) + 1; delete y.fail; delete y.executor; ran = y; } return y; }) });
+      if (tree.nodes.some(x => x.id === n.id) || n.fu == null) tx.mapPut('qtd', p.id, { ...tree, nodes: tree.nodes.map(x => { if (x.id !== n.id) return x; const y = { ...x }; if (y.fu == null) { y.q = q; bump(y); } if (changed) y.edited = true; if (i.run) { y.running = true; y.tok = 0; y.pay = i.pay == null ? null : i.pay; y.att = (y.att || 1) + 1; delete y.fail; delete y.executor; ran = y; } return y; }) });
       if (i.run && !ran) ran = { ...n, att: (n.att || 1) + 1, pay: i.pay == null ? null : i.pay };
       return ran ? { run: startRun(tx, p.id, n.id, { ...ran, u: n.u }) } : null;
     } });
@@ -1237,7 +1237,7 @@
       if (p.k !== 'ask') throw bad1('thread', 'an ask thread');
       if (i.node === 'r') {
         if (p.running) throw rpcError('PRECONDITION_FAILED', 'This answer is running.');
-        const x = tx.edit('posts', p.id, y => { y.running = true; y.sum = null; y.tok = 0; y.pay = pay; if (i.model) y.model = i.model; y.att = (y.att || 0) + 1; delete y.fail; if (ex) y.executor = ex; else delete y.executor; });
+        const x = tx.edit('posts', p.id, y => { y.running = true; y.sum = null; y.tok = 0; y.pay = pay; if (i.model) y.model = i.model; y.att = (y.att || 1) + 1; delete y.fail; if (ex) y.executor = ex; else delete y.executor; });
         startRun(tx, p.id, 'r', x);
         return;
       }
@@ -1245,7 +1245,7 @@
       if (!n) throw rpcError('NOT_FOUND', 'The server has no record of this follow-up. Someone may have deleted it.');
       if (n.running || tx.mapGet('runs', runKey(p.id, i.node))) throw rpcError('PRECONDITION_FAILED', 'This answer is running.');
       let ran = null;
-      editAsk(tx, p.id, i.node, y => { y.running = true; y.pay = pay; y.tok = 0; if (i.model) y.model = i.model; y.att = (y.att || 0) + 1; delete y.fail; if (ex) y.executor = ex; else delete y.executor; ran = y; }, f => { delete f.a; delete f.html; });
+      editAsk(tx, p.id, i.node, y => { y.running = true; y.pay = pay; y.tok = 0; if (i.model) y.model = i.model; y.att = (y.att || 1) + 1; delete y.fail; if (ex) y.executor = ex; else delete y.executor; ran = y; }, f => { delete f.a; delete f.html; });
       startRun(tx, p.id, i.node, { ...(ran || {}), u: n.u, pay, executor: ex });
     } });
 
@@ -2418,8 +2418,9 @@
       if (!sc) return err('BAD_REQUEST', undefined, { issues: [`name: expected one of ${Object.keys(SC).join(', ')}`] });
       if (body.args !== undefined && check(t.rec(t.any), body.args).length) return err('BAD_REQUEST', undefined, { issues: ['args: expected an object'] });
       const before = snapshot(db0());
-      /* the id counter keeps counting: an id the server gave out before is not given to another record */
-      data = seedData();
+      /* the id counter keeps counting: an id the server gave out before is not given to another record. The device runs
+         of the last hour count from the seed, as the database does */
+      data = seedData(); sync.devRuns = [];
       const tx = transaction(data), h = helpers(tx), args = body.args || {};
       try {
         if (sc.run) sc.run(tx, args, h);
@@ -2943,7 +2944,9 @@
         if (!caller.signedIn) entry.signedOut = true;
         if (!res.ok) { entry.code = res.code || null; if (forcedErr) entry.forced = true; }
         log.push(entry); if (log.length > LOG_MAX) log.splice(0, log.length - LOG_MAX);
-        if (dev && !res.ok && !forcedErr) console.error(`[mock api] ${method} ${entry.path}: ${res.status} ${entry.code}${res.issues ? ' (' + res.issues.join('; ') + ')' : ''}`);
+        /* a failed request is reported in dev mode, except a forced one and the sync-state Screen entries' (X-Session-Origin
+           sync-state: the refusals they show) */
+        if (dev && !res.ok && !forcedErr && origin !== 'sync-state') console.error(`[mock api] ${method} ${entry.path}: ${res.status} ${entry.code}${res.issues ? ' (' + res.issues.join('; ') + ')' : ''}`);
         resolve(res);
       }, cfg.latency));
     };

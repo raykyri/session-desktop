@@ -56,7 +56,6 @@
 // fails.
 
 import type { Envelope, ErrorCode, StoredRecord } from "../src/index.js";
-
 import { USE_PACKAGE } from "../src/switch.js";
 
 import { slug } from "./effect-model.js";
