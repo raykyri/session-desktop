@@ -828,3 +828,23 @@ test("T1: token cursors: another reader, a signed-out caller, another log, a cha
     "tombstones",
   ]);
 });
+
+// N6 (phase 1a.2): the convergence seeds that killed it in both modes no longer
+// reach the case in package mode (open-space removals answer BAD_REQUEST
+// there), so the case has its own test.
+test("N6: a space that closes takes a non-member's likes and saves out of their user log", async (t) => {
+  const { w, open } = await cast(t);
+  const log: LogId = "user:ada";
+  const t1 = await thread(t, w, "mel", open, "post", "mel's");
+  await ok(t, w.as("ada", "likes.set", { thread: t1, on: true }));
+  await ok(t, w.as("ada", "saved.set", { kind: "thread", id: t1, on: true }));
+  const ada = w.client("ada");
+  await ada.sync(log);
+  t.true(ada.records(log).has(`like:ada:${t1}`));
+  w.clock.advance(MINUTE);
+  await ok(t, w.as("olga", "spaces.update", { id: open, set: { vis: "listed" } }));
+  // ada is no member of the closed space: her user log resyncs without them
+  t.is(await ada.sync(log), "resync");
+  t.false(ada.records(log).has(`like:ada:${t1}`));
+  t.false(ada.records(log).has(`save:ada:${t1}`));
+});
