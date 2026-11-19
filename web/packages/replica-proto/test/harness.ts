@@ -29,6 +29,8 @@ import { syncFactory } from "./sync-server.js";
 const SERVER = process.env["REPLICA_PROTO_SERVER"];
 if (SERVER !== undefined && !USE_PACKAGE)
   throw new Error("REPLICA_PROTO_SERVER needs REPLICA_PROTO_MUTATORS=package");
+/** Whether the server under test is `@session/sync`'s. */
+export const SYNC_SERVER = SERVER === "sync-memory" || SERVER === "sync-sqlite";
 export const makeServer: ServerFactory =
   SERVER === "sync-memory"
     ? syncFactory("memory")

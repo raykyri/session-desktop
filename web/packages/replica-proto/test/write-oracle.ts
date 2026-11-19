@@ -40,6 +40,9 @@
 //                                                              unrecorded
 //  10. the mutation id's age on the device (clientTime − its time) above 4
 //      days or below −1 minute: EXPIRED                        stored
+//      (over @session/sync, this and 13 and 14 answer CONFLICT in place of
+//      EXPIRED when the input is in the schema and a new id in it exists:
+//      review round 2 of phase 1)
 //  11. an unknown name: NOT_FOUND; 12. an input outside the schema:
 //      BAD_REQUEST                                             stored
 //  13. a new id in the input with such an age: EXPIRED         stored
@@ -255,6 +258,9 @@ const NEW_IDS: Record<string, string[]> = {
   "invites.create": ["id"],
   "reports.create": ["id"],
 };
+
+/** The server under test is `@session/sync`'s (REPLICA_PROTO_SERVER). */
+const SYNC_SERVER = (process.env["REPLICA_PROTO_SERVER"] ?? "").startsWith("sync");
 
 // ---- the mutators' rules ----
 
@@ -668,16 +674,24 @@ export class WriteModel {
       return { code: "BAD_REQUEST", usesSeq: true, stored: false, storedForSeq: true };
     if (Math.abs(e.clientTime - now) > MINUTE_MS) return pass("CLOCK_SKEW");
     const stored = (code: Code): Prediction => ({ code, usesSeq: true, stored: true });
-    if (!fresh(e.mutationId, e.clientTime)) return stored("EXPIRED");
     const schema = Object.hasOwn(SCHEMA, e.name) ? SCHEMA[e.name] : undefined;
     const rules = Object.hasOwn(RULES, e.name) ? RULES[e.name] : undefined;
+    // @session/sync answers CONFLICT in place of an age's EXPIRED when an
+    // input id exists (review round 2 of phase 1, findings 2 and 8a)
+    const expired = () =>
+      SYNC_SERVER &&
+      schema?.(e.input) &&
+      (NEW_IDS[e.name] ?? []).some((k) => this.ids.has(String((e.input as In)[k])))
+        ? stored("CONFLICT")
+        : stored("EXPIRED");
+    if (!fresh(e.mutationId, e.clientTime)) return expired();
     if (!schema || !rules) return stored("NOT_FOUND");
     if (!schema(e.input)) return stored("BAD_REQUEST");
     const input = e.input as In;
     for (const k of NEW_IDS[e.name] ?? [])
-      if (!fresh(String(input[k]), e.clientTime)) return stored("EXPIRED");
+      if (!fresh(String(input[k]), e.clientTime)) return expired();
     if (e.name === "spaces.create" && e.clientTime - timeOf(e.mutationId) > MINUTE_MS)
-      return stored("EXPIRED");
+      return expired();
     const facts: Facts = {
       dump,
       me: u,

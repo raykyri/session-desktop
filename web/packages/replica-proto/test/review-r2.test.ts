@@ -23,6 +23,7 @@ import {
   HOUR,
   MINUTE,
   ManualClock,
+  SYNC_SERVER,
   type World,
   actor,
   admit,
@@ -352,10 +353,14 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
     ...saved,
     outbox: saved.outbox.map((p) => ({ ...p, queuedAt: w.clock.now() - 2 * DAY })),
   });
-  t.deepEqual(codes(await c4.flush()), ["EXPIRED"]);
+  // @session/sync answers CONFLICT in place of EXPIRED when the write's id
+  // exists: it applied (review round 2 of phase 1, findings 2 and 8a)
+  t.deepEqual(codes(await c4.flush()), [SYNC_SERVER ? "CONFLICT" : "EXPIRED"]);
+  // (the prototype's client shows EXPIRED only; a CONFLICT is a refusal of
+  // a write that applied)
   t.deepEqual(
     c4.problems().map((p) => [p.reason, p.sent]),
-    [["EXPIRED", true]],
+    SYNC_SERVER ? [] : [["EXPIRED", true]],
   );
   t.is(new Set([...c3.sent, ...c4.sent].map((e) => e.mutationId)).size, 1);
   t.is(
@@ -744,13 +749,13 @@ test("N29: a deleted record's id is never used again, after its tombstone is pru
   );
   w.clock.advance(31 * DAY);
   const later = await thread(t, w, "eve", open, "post");
-  // the id is older than 4 days now: a client that kept it gets EXPIRED; the
-  // registry still holds it
+  // the id is older than 4 days now: a client that kept it gets EXPIRED
+  // (@session/sync: CONFLICT, as the id exists); the registry still holds it
   t.true((await w.server.scanStorage()).registry.some((x) => x.id === reply));
   await refused(
     t,
     w.as("eve", "research.createPostFollowUp", { id: reply, thread: later, t: "mine" }),
-    "EXPIRED",
+    SYNC_SERVER ? "CONFLICT" : "EXPIRED",
   );
 });
 

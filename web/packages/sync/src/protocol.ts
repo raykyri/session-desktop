@@ -50,6 +50,9 @@ export const MAX_TRIES = 5;
 /** How long a thread the person opened (`hydrate`) stays pinned in full:
  * the client reports it in `tier.opened` for this long. */
 export const OPENED_TTL = 14 * DAY;
+/** The most thread ids of `tier.opened` the server pins: it reads the first
+ * this many and ignores the rest (review round 2 of phase 1). */
+export const OPENED_MAX = 500;
 
 /** The signed-in person a request is for (null: signed out), and the device
  * whose token authenticated it (absent for a browser session). */
@@ -110,10 +113,33 @@ export interface AnswerError extends ApiError {
 
 /** The answer to a write. Every answer carries the server's time (ms).
  * `seq` is the seq the answer used (absent when it used none); `replayed`
- * marks a recorded answer served again. */
+ * marks a recorded answer served again, and `recordedAs` on it names the
+ * mutation id the write was processed under (review round 2 of phase 1,
+ * finding 1): the ids the server derived for it come from that id, which
+ * differs from the envelope's when the answer is an earlier envelope's
+ * (`replaces`) or a later remint's.
+ *
+ * An input id that already exists answers CONFLICT, recorded, before the
+ * ages of the ids are checked (review round 2 of phase 1, findings 2 and
+ * 8a): to a client that minted the id, CONFLICT means its write was applied
+ * before, and EXPIRED that its ids were never used. */
 export type Answer =
-  | { ok: true; result: unknown; serverTime: number; seq?: number; replayed?: true }
-  | { ok: false; error: AnswerError; serverTime: number; seq?: number; replayed?: true };
+  | {
+      ok: true;
+      result: unknown;
+      serverTime: number;
+      seq?: number;
+      replayed?: true;
+      recordedAs?: string;
+    }
+  | {
+      ok: false;
+      error: AnswerError;
+      serverTime: number;
+      seq?: number;
+      replayed?: true;
+      recordedAs?: string;
+    };
 
 export type RegisterAnswer =
   | { ok: true; clientId: string; serverTime: number }
@@ -145,7 +171,11 @@ export const TRANSIENT: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
 export type Cursor = string;
 
 /** The last seq the server processed for the reading client; null when no
- * client id was given or it is not the caller's. */
+ * client id was given or it is not the caller's. A read sent with a client
+ * id that answers null came from no session of that client's person (a
+ * session that ended reaches the server as no actor): the client takes it
+ * as UNAUTHORIZED and changes no log (review round 2 of phase 1, finding
+ * 7). */
 export type LastSeq = number | null;
 
 /** Which records of a space log a read serves in full (AGENTS.md,
@@ -175,9 +205,12 @@ export interface ReadOptions {
 
 /** A read's answer. Optional fields (a client works without them):
  * - `summaries`: in a tiered read of a space log, the threads served as
- *   summaries. A snapshot lists every such thread; a pull lists those among
- *   the threads whose thread or counts record it serves. Without it the
- *   client tells summaries by their records.
+ *   summaries. A snapshot lists every such thread; a pull lists every
+ *   summary thread with a row after the cursor, whether the row's record
+ *   was served (its thread or counts) or withheld (a follow-up, reply or run
+ *   under it), so a client drops what it holds under a thread that left the
+ *   full tier (review round 2 of phase 1, finding 6). Without it the client
+ *   tells summaries by their records.
  * - `ended`: in a read of a user log, how the reader's memberships that
  *   ended came to an end, by space id (`MembershipEnd`). */
 export interface Snapshot {

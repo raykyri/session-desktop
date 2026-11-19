@@ -35,13 +35,16 @@ export interface StoredAnswer {
   at: number;
 }
 
+/** `as`: the mutation id the write was processed under (absent on answers
+ * stored before review round 2 of phase 1, and on answers kept by seq). */
 export type StoredResult =
-  | { ok: true; result: unknown; seq: number }
+  | { ok: true; result: unknown; seq: number; as?: string }
   | {
       ok: false;
       error: { code: string; message: string; issues?: string[]; retryAt?: string };
       reads?: string[];
       seq: number;
+      as?: string;
     };
 
 /** A registered client: its user, its device (null for a browser), its last

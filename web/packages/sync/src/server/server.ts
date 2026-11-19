@@ -23,7 +23,9 @@
 //     (client, seq)
 //   `clientTime` within a minute of the server's time (CLOCK_SKEW, with
 //     serverTime): unrecorded
-//   the mutation id's and `queuedAt`'s age on the device's clock (EXPIRED)
+//   the mutation id's and `queuedAt`'s age on the device's clock (EXPIRED;
+//     CONFLICT in its place when an input id exists, here and for an input
+//     id's age: review round 2 of phase 1)
 //   `@session/mutators`' apply: the name, the input, the new ids' age, an
 //     online-only write's age, can, pre, run, effects
 // A recorded answer is committed with the write's changes, its queued
@@ -40,6 +42,7 @@ import { z } from "zod";
 import {
   ANSWER_TTL,
   CLIENT_IDLE_TTL,
+  OPENED_MAX,
   CLOCK_MAX_SKEW,
   DAY,
   HOUR,
@@ -672,16 +675,21 @@ export class SyncServer {
           ),
         };
       const record = (answer: StoredResult) => {
-        const a: StoredAnswer = { digest: payload, answer, at: now };
+        // `as`: the mutation id the write was processed under; a replay
+        // carries it as `recordedAs` (review round 2 of phase 1, finding 1)
+        const a: StoredAnswer = { digest: payload, answer: { ...answer, as: m.mutationId }, at: now };
         tx.answerPut(u, m.mutationId, a);
         for (const old of m.replaces)
           if (!live(tx.answerGet(u, old))) tx.answerPut(u, old, { ...a, digest: replaced });
         use();
       };
+      const taken = () => this.inputIdTaken(tx, m);
       const expired = (path: string) => {
-        const e = err("EXPIRED", undefined, [
-          `${path}: expected a time from the 4 days before clientTime to 1 minute after`,
-        ]);
+        const e = taken()
+          ? err("CONFLICT", ID_TAKEN)
+          : err("EXPIRED", undefined, [
+              `${path}: expected a time from the 4 days before clientTime to 1 minute after`,
+            ]);
         record({ ok: false, error: e, seq: m.seq });
         return out(e, m.seq);
       };
@@ -708,8 +716,11 @@ export class SyncServer {
     });
     if (res.status === "unknown") return out(err("INTERNAL_SERVER_ERROR"));
     if (res.status === "refused") {
-      const { current, reads, ...e } = res.error;
+      const { current, reads, ...refusal } = res.error;
       void current;
+      // an input id's age: CONFLICT in place of EXPIRED when the id exists
+      const e =
+        refusal.code === "EXPIRED" && this.inputIdTaken(tx, m) ? err("CONFLICT", ID_TAKEN) : refusal;
       if (UNRECORDED.has(e.code)) return out(e);
       record({ ok: false, error: e, ...(reads ? { reads } : {}), seq: m.seq });
       return this.withReads(tx, u, out(e, m.seq), reads);
@@ -735,6 +746,19 @@ export class SyncServer {
     return { ok: true, result: res.result ?? null, serverTime: now, seq: m.seq };
   }
 
+  /** Whether an input id of the write (the mutator's `ids`) is in the id
+   * registry. An answer that would be EXPIRED for an age is CONFLICT then
+   * (review round 2 of phase 1, findings 2 and 8a): to a client sending a
+   * write again after its recorded answer expired, CONFLICT on an id it
+   * minted means the write applied, and EXPIRED that its ids were never
+   * used. Other answers keep their order. */
+  private inputIdTaken(tx: StoreTx, m: Env): boolean {
+    const def = this.registry.get(m.name);
+    const parsed = def?.input.safeParse(m.input);
+    if (!def || !parsed?.success) return false;
+    return def.ids(parsed.data).some((id) => tx.registryGet(id) !== undefined);
+  }
+
   /** A STALE answer with the records it is about, as `u` reads them now. */
   private withReads(
     tx: StoreTx,
@@ -757,10 +781,16 @@ export class SyncServer {
   }
 
   private replay(tx: StoreTx, u: string, a: StoredResult, now: number): Answer {
+    const as = a.as !== undefined ? { recordedAs: a.as } : {};
     if (a.ok)
-      return { ok: true, result: structuredClone(a.result), serverTime: now, replayed: true };
+      return { ok: true, result: structuredClone(a.result), serverTime: now, replayed: true, ...as };
     const e = structuredClone(a.error) as AnswerError;
-    return this.withReads(tx, u, { ok: false, error: e, serverTime: now, replayed: true }, a.reads);
+    return this.withReads(
+      tx,
+      u,
+      { ok: false, error: e, serverTime: now, replayed: true, ...as },
+      a.reads,
+    );
   }
 
   // ---- the online-only calls ----
@@ -987,7 +1017,9 @@ export class SyncServer {
       const want = new Set(o.threads);
       return { full: want, summary: new Set<string>() };
     }
-    const pinned = new Set(o.tier?.opened ?? []);
+    // a client pins at most OPENED_MAX threads in full (review round 2 of
+    // phase 1)
+    const pinned = new Set((o.tier?.opened ?? []).slice(0, OPENED_MAX));
     if (u !== null)
       for (const p of threads) if (p.u === u || tx.get(pkg.saveKey(u, p.id))) pinned.add(p.id);
     return chooseTiers(threads, now, { ...o.tier, window }, pinned);
@@ -1135,9 +1167,11 @@ export class SyncServer {
         if (v === null) continue;
         to = row.version;
         if (v === true) changes.push({ key: row.key, op: "del" });
-        else if (this.served(tx, v, tiers, false)) {
-          changes.push({ key: row.key, op: "put", record: v });
-          const th = v.kind === "thread" ? v.id : v.kind === "counts" ? v.th : null;
+        else {
+          if (this.served(tx, v, tiers, false)) changes.push({ key: row.key, op: "put", record: v });
+          // a summary thread with a row after the cursor, served or withheld
+          // (review round 2 of phase 1, finding 6)
+          const th = tiers ? threadOf(v, (k) => tx.get(k)) : null;
           if (th !== null && tiers?.summary.has(th)) summaries.add(th);
         }
       }
