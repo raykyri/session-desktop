@@ -90,16 +90,20 @@ export interface Signin {
   at: number;
   state: "waiting" | "approved" | "denied" | "taken";
   u: string | null;
+  /** The device's id, chosen at the approval; its record and token are made
+   * when the app takes the token, so no token is ever stored. */
   device: string | null;
-  /** The token, until the app has taken it once (then null). */
-  token: string | null;
 }
 
-/** A device run's lease, kept apart from the run record so expiry finds the
- * ended leases by time. */
+/** A device run's lease, kept apart from the run record (never replicated)
+ * so a heartbeat changes no log and expiry finds the ended leases by time:
+ * when it ends unless the device sends a heartbeat, the last heartbeat, and
+ * the number of the attempt's last in-flight event. */
 export interface Lease {
   run: string;
   until: number;
+  beat: number;
+  seq: number;
 }
 
 /** A log's history: how many times it was replaced (a space opening or
@@ -117,6 +121,11 @@ export interface StoreTx {
   /** The highest time the server used: its clock never goes back. */
   lastTime(): number;
   setLastTime(ms: number): void;
+  /** The database's instance id (0 until one is set): cursor tokens carry
+   * it, so a token served by another database, or by this one before a
+   * restore from a backup, answers resync. */
+  instance(): number;
+  setInstance(id: number): void;
 
   // ---- records ----
   get(key: string): StoredRecord | undefined;
@@ -184,9 +193,16 @@ export interface StoreTx {
   signinGet(request: string): Signin | undefined;
   signinPut(s: Signin): void;
   signinsPrune(at: number, limit: number): number;
+  leaseGet(run: string): Lease | undefined;
   leasePut(l: Lease): void;
   leaseDelete(run: string): void;
   leasesBefore(at: number, limit: number): Lease[];
+  /** The device runs a person started (the hourly limit counts them, not run
+   * records, which a deleted thread takes with it). */
+  deviceRunAdd(u: string, at: number): void;
+  /** The start times of `u`'s device runs after `since`. */
+  deviceRunsSince(u: string, since: number): number[];
+  deviceRunsPrune(at: number, limit: number): number;
 }
 
 /** Every value at rest, table by table (tests: the erasure checks). */
@@ -212,6 +228,7 @@ export interface StoreDump {
   tokens: DeviceToken[];
   signins: Signin[];
   leases: Lease[];
+  deviceRuns: { u: string; at: number }[];
 }
 
 export interface ServerStore {

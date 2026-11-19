@@ -2,7 +2,8 @@
 // function from a request (the reader and its cursor tokens) to a
 // `ReadableStream` of SSE bytes. When a commit writes one of the stream's
 // logs, the stream pulls it for its reader; when the reader gets a change
-// (or must resync), it sends a poke naming the log, and the client pulls.
+// (or must resync), it sends a poke naming the log, and the client pulls; a
+// log that must resync leaves the stream.
 // A commit the reader may not read sends nothing, so the stream tells a
 // reader no more than its pulls do (review round 1, R3).
 //
@@ -72,7 +73,13 @@ export function openStream(
       const send = (text: string) => {
         if (open) controller.enqueue(encoder.encode(text));
       };
-      /** Pull the logs for the reader; poke for those with something new. */
+      /** Pull the logs for the reader; poke for those with something new. A
+       * log whose token does not open for this reader and log (made up,
+       * another reader's, too old, of another history) is poked once and
+       * dropped from the stream: the client snapshots it and reconnects with
+       * the new token. A stream never keeps a token it cannot open, so it
+       * hears nothing more of a log its reader may not read (review round 1
+       * of phase 1, H3). */
       const check = (logs: Iterable<LogId>) => {
         const poke: LogId[] = [];
         for (const log of logs) {
@@ -81,6 +88,7 @@ export function openStream(
           const p = server.pull(actor, log, at);
           if ("resync" in p) {
             poke.push(log);
+            delete state[log];
             continue;
           }
           state[log] = p.cursor;

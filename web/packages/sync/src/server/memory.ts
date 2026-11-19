@@ -32,7 +32,7 @@ for (const [kind, field] of Object.values(INDEXES)) {
 }
 
 class Tables {
-  meta = { head: 0, lastTime: 0, effectId: 0, letterId: 0 };
+  meta = { head: 0, lastTime: 0, effectId: 0, letterId: 0, instance: 0 };
   records = new Map<string, { record: StoredRecord; born: number }>();
   /** kind \0 field \0 value → keys */
   index = new Map<string, Set<string>>();
@@ -49,6 +49,7 @@ class Tables {
   tokens = new Map<string, DeviceToken>();
   signins = new Map<string, Signin>();
   leases = new Map<string, Lease>();
+  deviceRuns: { u: string; at: number }[] = [];
 }
 
 /** Set `key` of `m` to `v` (undefined: delete), journaling the old value. */
@@ -81,6 +82,8 @@ class MemoryTx implements StoreTx {
   setHead = (v: number) => this.meta("head", v);
   lastTime = () => this.t.meta.lastTime;
   setLastTime = (v: number) => this.meta("lastTime", v);
+  instance = () => this.t.meta.instance;
+  setInstance = (v: number) => this.meta("instance", v);
 
   get(key: string) {
     const r = this.t.records.get(key);
@@ -269,6 +272,7 @@ class MemoryTx implements StoreTx {
     for (const [k] of old) setIn(this.undo, this.t.signins, k, undefined);
     return old.length;
   }
+  leaseGet = (run: string) => copy(this.t.leases.get(run));
   leasePut = (l: Lease) => setIn(this.undo, this.t.leases, l.run, { ...l });
   leaseDelete = (run: string) => setIn(this.undo, this.t.leases, run, undefined);
   leasesBefore(at: number, limit: number) {
@@ -277,6 +281,21 @@ class MemoryTx implements StoreTx {
       .sort((a, b) => a.until - b.until)
       .slice(0, limit)
       .map((l) => ({ ...l }));
+  }
+  deviceRunAdd(u: string, at: number) {
+    this.t.deviceRuns.push({ u, at });
+    this.undo.push(() => this.t.deviceRuns.pop());
+  }
+  deviceRunsSince = (u: string, since: number) =>
+    this.t.deviceRuns.filter((r) => r.u === u && r.at > since).map((r) => r.at);
+  deviceRunsPrune(at: number, limit: number) {
+    const before = this.t.deviceRuns;
+    let n = 0;
+    this.t.deviceRuns = before.filter((r) => (r.at < at && n < limit ? (n++, false) : true));
+    this.undo.push(() => {
+      this.t.deviceRuns = before;
+    });
+    return n;
   }
 }
 
@@ -333,6 +352,7 @@ export class MemoryServerStore implements ServerStore {
       tokens: [...t.tokens.values()],
       signins: [...t.signins.values()],
       leases: [...t.leases.values()],
+      deviceRuns: [...t.deviceRuns],
     });
   }
 }

@@ -1,9 +1,10 @@
 // Cursor tokens: AES-256-GCM under a configured key (AGENTS.md: the key is
 // configured, not per process; the previous key is accepted for 30 days
 // after a rotation). A token holds the log, the reader, the log's history,
-// the internal version the reader is at, the server's head and the time it
-// was served; nothing of it reads without the key, and its length depends
-// only on the lengths of the log id and the handle.
+// the internal version the reader is at, the server's head, the time it
+// was served and the database instance that served it; nothing of it reads
+// without the key, and its length depends only on the lengths of the log id
+// and the handle.
 
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
@@ -20,6 +21,9 @@ export interface CursorState {
   h: number;
   /** When it was served (server time). */
   at: number;
+  /** The database instance that served it (review round 1 of phase 1,
+   * E22): a token from another one answers resync. */
+  i: number;
 }
 
 /** The token keys: 32 bytes each. A rotation makes the current key the
@@ -32,8 +36,8 @@ export interface CursorKeys {
 /** How long a key is accepted after it was rotated out. */
 export const KEY_GRACE = TOMBSTONE_TTL;
 
-const FORMAT = 1;
-const HEAD = 29;
+const FORMAT = 2;
+const HEAD = 37;
 const IV = 12;
 const TAG = 16;
 const MAX_LENGTH = 1024;
@@ -53,6 +57,7 @@ export class Tokens {
     head.writeDoubleBE(c.v, 5);
     head.writeDoubleBE(c.h, 13);
     head.writeDoubleBE(c.at, 21);
+    head.writeDoubleBE(c.i, 29);
     const plain = Buffer.concat([head, Buffer.from(JSON.stringify([c.log, c.u]), "utf8")]);
     const iv = randomBytes(IV);
     const cipher = createCipheriv("aes-256-gcm", this.keys.current, iv);
@@ -91,6 +96,7 @@ export class Tokens {
           v: plain.readDoubleBE(5),
           h: plain.readDoubleBE(13),
           at: plain.readDoubleBE(21),
+          i: plain.readDoubleBE(29),
         };
       } catch {
         return null;

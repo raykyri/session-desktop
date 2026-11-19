@@ -42,6 +42,7 @@ import {
   CLIENT_IDLE_TTL,
   CLOCK_MAX_SKEW,
   DAY,
+  HOUR,
   MAX_ENVELOPE_BYTES,
   MAX_INPUT_DEPTH,
   MAX_REPLACES,
@@ -237,41 +238,70 @@ export class SyncServer {
 
   // ---- time, transactions, commit ----
 
+  /** The clock in whole milliseconds (the stores keep integers; review
+   * round 1 of phase 1). */
+  clockNow(): number {
+    return Math.floor(this.clock.now());
+  }
+
   /** The server's time: the clock, never earlier than a time used before. */
   time(tx: StoreTx): number {
-    const now = Math.max(this.clock.now(), tx.lastTime());
+    const now = Math.max(this.clockNow(), tx.lastTime());
     if (now !== tx.lastTime()) tx.setLastTime(now);
     return now;
   }
 
   /** Run `fn` in a store transaction, then tell the listeners which logs it
-   * wrote (only once it committed). */
+   * wrote and send the run events it made, only once it committed. A
+   * listener that throws changes neither the answer nor what the other
+   * listeners hear (review round 1 of phase 1, E16). */
   run<T>(fn: (tx: StoreTx) => T): T {
     this.changed = new Set();
+    this.runEvents = [];
     let out: T;
     try {
       out = this.store.transaction(fn);
     } catch (e) {
       this.changed = new Set();
+      this.runEvents = [];
       throw e;
     }
     const logs = this.changed;
+    const events = this.runEvents;
     this.changed = new Set();
-    if (logs.size) for (const l of this.listeners) l(logs);
+    this.runEvents = [];
+    if (logs.size)
+      for (const l of [...this.listeners])
+        try {
+          l(logs);
+        } catch {
+          // a stream that closed; the others still hear the commit
+        }
+    for (const [e, sp] of events)
+      for (const l of [...this.runListeners])
+        try {
+          l(e, sp);
+        } catch {
+          // as above
+        }
     return out;
   }
 
   private readonly runListeners = new Set<(e: RunEvent, sp: string) => void>();
+  /** Run events made by the transaction in progress; sent after it commits. */
+  private runEvents: [RunEvent, string][] = [];
 
   /** The server's random source (online calls). */
   randomNumber(): number {
     return this.random();
   }
 
-  /** Send a run's in-flight text to the readers of its space (ADR-22): it is
-   * not stored; a reader that misses it gets the committed answer by pull. */
+  /** Send a run's in-flight text to the readers of its space (ADR-22) once
+   * the transaction in progress commits (review round 1 of phase 1, W3): it
+   * is not stored; a reader that misses it gets the committed answer by
+   * pull. */
   emitRun(e: RunEvent, run: pkg.RunRec) {
-    for (const l of this.runListeners) l(e, run.s);
+    this.runEvents.push([e, run.s]);
   }
 
   /** Hear in-flight run events, with the run's space (the SSE handler). */
@@ -358,11 +388,46 @@ export class SyncServer {
     }
   }
 
-  /** Expire what is past its lifetime, a bounded batch of each table, at most
-   * once a second of server time (and always when `force`). */
+  /** Housekeeping before a request: at most once a second of server time, in
+   * its own transaction, so a request that is refused (and rolls back) does
+   * not undo it (review round 1 of phase 1, W1). A fault in it fails no
+   * request; the next one tries again. */
+  housekeepDue() {
+    if (this.clockNow() - this.lastHousekeep < 1000) return;
+    try {
+      this.run((tx) => {
+        const now = this.time(tx);
+        this.housekeep(tx, now);
+        this.lastHousekeep = now;
+      });
+    } catch {
+      // the next request runs it again
+    }
+  }
+
+  /** Run housekeeping every `everyMs` (default 5 s) on a timer, so leases and
+   * device sign-ins also expire on a server no request reaches. The HTTP
+   * server (phase 2) starts it once with the server; it answers a function
+   * that stops it. */
+  startHousekeeping(
+    o: {
+      everyMs?: number;
+      setInterval?: (f: () => void, ms: number) => unknown;
+      clearInterval?: (h: unknown) => void;
+    } = {},
+  ): () => void {
+    const set = o.setInterval ?? ((f, ms) => setInterval(f, ms));
+    const clear = o.clearInterval ?? ((h) => clearInterval(h as ReturnType<typeof setInterval>));
+    const h = set(() => {
+      this.lastHousekeep = -Infinity;
+      this.housekeepDue();
+    }, o.everyMs ?? 5000);
+    return () => clear(h);
+  }
+
+  /** Expire what is past its lifetime: a bounded batch of each table, or
+   * everything when `force`. */
   housekeep(tx: StoreTx, now: number, force = false) {
-    if (!force && now - this.lastHousekeep < 1000) return;
-    this.lastHousekeep = now;
     const limit = force ? Number.MAX_SAFE_INTEGER : HOUSEKEEP_BATCH;
     const cutoff = now - TOMBSTONE_TTL;
     for (const t of tx.tombsBefore(cutoff, limit)) {
@@ -375,6 +440,7 @@ export class SyncServer {
     tx.answersPrune(now - ANSWER_TTL + 1, limit);
     tx.clientsPrune(now - CLIENT_IDLE_TTL + 1, limit);
     tx.registrationsPrune(now - DAY + 1, limit);
+    tx.deviceRunsPrune(now - HOUR + 1, limit);
     this.online.housekeep(tx, now, limit);
   }
 
@@ -382,13 +448,13 @@ export class SyncServer {
 
   /** A new client id, bound to the caller and its device. */
   register(actor: Actor | null): RegisterAnswer {
-    const serverTime = this.clock.now();
+    const serverTime = this.clockNow();
     if (!actor || !pkg.isHandle(actor.u))
       return { ok: false, error: err("UNAUTHORIZED"), serverTime };
     try {
+      this.housekeepDue();
       return this.run((tx) => {
         const now = this.time(tx);
-        this.housekeep(tx, now);
         if (actor.device && !this.online.deviceLive(tx, actor.u, actor.device))
           return { ok: false as const, error: err("WRONG_CLIENT"), serverTime: now };
         if (tx.registrations(actor.u, now - DAY + 1) >= REGISTRATIONS_PER_DAY)
@@ -408,7 +474,7 @@ export class SyncServer {
   /** Apply one write. `size`: the request body's length, when the HTTP layer
    * knows it. */
   apply(actor: Actor | null, envelope: unknown, size?: number): Answer {
-    const t0 = this.clock.now();
+    const t0 = this.clockNow();
     try {
       return this.applyEnvelope(actor, envelope, size);
     } catch {
@@ -419,7 +485,7 @@ export class SyncServer {
   }
 
   private applyEnvelope(actor: Actor | null, envelope: unknown, size?: number): Answer {
-    const t0 = this.clock.now();
+    const t0 = this.clockNow();
     const no = (e: AnswerError): Answer => ({ ok: false, error: e, serverTime: t0 });
     const large = () =>
       no(
@@ -457,6 +523,7 @@ export class SyncServer {
     const m = parsed.data;
     if (!actor || !pkg.isHandle(actor.u)) return no(err("UNAUTHORIZED"));
     const u = actor.u;
+    this.housekeepDue();
     return this.run((tx) => {
       const now = this.time(tx);
       const out = (e: AnswerError, seq?: number): Answer => ({
@@ -465,7 +532,6 @@ export class SyncServer {
         serverTime: now,
         ...(seq !== undefined ? { seq } : {}),
       });
-      this.housekeep(tx, now);
       const client = tx.clientGet(m.clientId);
       if (
         !client ||
@@ -552,7 +618,10 @@ export class SyncServer {
   ): Answer {
     const res = pkg.apply(this.registry, new TxSource(tx), { u }, m, {
       now,
-      server: { random: this.random },
+      server: {
+        random: this.random,
+        deviceRunStarts: (who, since) => tx.deviceRunsSince(who, since),
+      },
     });
     if (res.status === "unknown") return out(err("INTERNAL_SERVER_ERROR"));
     if (res.status === "refused") {
@@ -562,7 +631,13 @@ export class SyncServer {
       record({ ok: false, error: e, ...(reads ? { reads } : {}), seq: m.seq });
       return this.withReads(tx, u, out(e, m.seq), reads);
     }
+    const started = pkg.deviceRunsStarted(res.writes, (key) => tx.get(key) !== undefined);
     this.commit(tx, res.writes, now);
+    for (let k = 0; k < started; k++) tx.deviceRunAdd(u, now);
+    // a person whose membership ended, or who was banned, runs nothing more
+    // there: their queued and running device runs end in the same commit
+    for (const [, d] of res.writes)
+      if (d?.kind === "exit" || d?.kind === "ban") this.online.accessChanged(tx, now, d.sp, d.u);
     for (const effect of res.effects) tx.effectAdd(effect, now);
     record({ ok: true, result: res.result ?? null, seq: m.seq });
     return { ok: true, result: res.result ?? null, serverTime: now, seq: m.seq };
@@ -605,19 +680,27 @@ export class SyncServer {
   // ---- the effect worker ----
 
   /** One pass of the effect worker: runs each queued effect that is due, each
-   * in its own transaction with its writes. Answers how many ran. */
+   * in its own transaction with its writes. A `job` starts after that
+   * transaction, outside any: its queue entry is deleted only once the job
+   * runner took it, so a crash in between starts it again (at least once;
+   * the runner keys jobs by their id). Answers how many ran. */
   work(limit = 100): number {
     let ran = 0;
     const due = this.run((tx) => tx.effectsDue(this.time(tx), limit));
     for (const q of due) {
       const attempts = q.attempts + 1;
       try {
-        this.run((tx) => {
+        const job = this.run((tx) => {
           const now = this.time(tx);
           if (this.failEffect?.(q.effect, attempts)) throw new Error("the effect's service failed");
-          this.runEffect(tx, q.effect, now);
-          tx.effectDelete(q.id);
+          const start = this.runEffect(tx, q.effect, now);
+          if (!start) tx.effectDelete(q.id);
+          return start;
         });
+        if (job) {
+          this.jobRunner.start(job);
+          this.run((tx) => tx.effectDelete(q.id));
+        }
         ran++;
       } catch {
         // its write's answer is recorded already and does not change
@@ -664,20 +747,25 @@ export class SyncServer {
     ]);
   }
 
-  private runEffect(tx: StoreTx, effect: pkg.Effect, now: number) {
+  /** Run an effect's writes; for a `job`, the job to start once they commit,
+   * else null. */
+  private runEffect(
+    tx: StoreTx,
+    effect: pkg.Effect,
+    now: number,
+  ): { kind: "run" | "domain"; id: string } | null {
     const staged: pkg.Write[] = [];
     if (effect.type === "job") {
       // a device run is claimed by its device (runs.claim), not started here
       if (effect.kind === "run") {
         const r = tx.get(`run:${effect.id}`);
-        if (r?.kind === "run" && r.executor !== null) return;
+        if (r?.kind === "run" && r.executor !== null) return null;
       }
-      this.jobRunner.start({ kind: effect.kind, id: effect.id });
-      return;
+      return { kind: effect.kind, id: effect.id };
     }
     if (effect.type === "reportResolved") {
       const r = tx.get(`report:${effect.report}`);
-      if (r?.kind !== "report") return;
+      if (r?.kind !== "report") return null;
       for (const n of tx.scan("notif", "to", r.by))
         if (n.kind === "notif" && n.type === "report_resolved" && n.report === r.id)
           staged.push([`notif:${n.id}`, null]);
@@ -691,7 +779,7 @@ export class SyncServer {
           outcome: effect.outcome,
         });
       this.commit(tx, staged, now);
-      return;
+      return null;
     }
     // notifyStaff: the space's staff as they are now, and their reports
     // notice comes back on
@@ -709,6 +797,7 @@ export class SyncServer {
       if (seen?.kind === "seen" && seen.reps) staged.push([`seen:${to}`, { ...seen, reps: false }]);
     }
     this.commit(tx, staged, now);
+    return null;
   }
 
   /** A job's answer (the job runner calls it): `text` as a thread's summary
@@ -762,7 +851,28 @@ export class SyncServer {
   }
 
   private serve(tx: StoreTx, log: LogId, u: string | null, version: number, now: number): Cursor {
-    return this.tokens.seal({ log, u, n: tx.epoch(log).n, v: version, h: tx.head(), at: now });
+    const i = this.instance(tx);
+    return this.tokens.seal({ log, u, n: tx.epoch(log).n, v: version, h: tx.head(), at: now, i });
+  }
+
+  /** The database's instance id, made on first use (crypto random, never
+   * 0). */
+  private instance(tx: StoreTx): number {
+    let i = tx.instance();
+    if (i === 0) {
+      i = randomBytes(6).readUIntBE(0, 6) || 1;
+      tx.setInstance(i);
+    }
+    return i;
+  }
+
+  /** Give the database a new instance id: every cursor served before
+   * answers resync. An operator calls it after restoring the database from a
+   * backup, whose cursors' versions the restored history reuses (review
+   * round 1 of phase 1, E22). A token served at a head the database has not
+   * reached answers resync without it. */
+  resetInstance() {
+    this.run((tx) => tx.setInstance(randomBytes(6).readUIntBE(0, 6) || 1));
   }
 
   /** The tiers of a space log's threads for a read, or null (not a space log,
@@ -801,9 +911,9 @@ export class SyncServer {
   }
 
   snapshot(actor: Actor | null, log: LogId, options: ReadOptions = {}): Snapshot {
+    this.housekeepDue();
     return this.run((tx) => {
       const now = this.time(tx);
-      this.housekeep(tx, now);
       const u = this.userOf(actor);
       const lastSeq = this.lastSeq(tx, u, options.clientId, now);
       if (!logS.safeParse(log).success)
@@ -834,9 +944,9 @@ export class SyncServer {
   }
 
   pull(actor: Actor | null, log: LogId, cursor: Cursor, options: ReadOptions = {}): Pull {
+    this.housekeepDue();
     return this.run((tx) => {
       const now = this.time(tx);
-      this.housekeep(tx, now);
       const u = this.userOf(actor);
       if (!logS.safeParse(log).success) return { resync: true, serverTime: now };
       const c = this.tokens.open(cursor, now);
@@ -845,7 +955,10 @@ export class SyncServer {
         c.log !== log ||
         c.u !== u ||
         c.n !== tx.epoch(log).n ||
-        c.at < now - TOMBSTONE_TTL
+        c.at < now - TOMBSTONE_TTL ||
+        // served by another database, or by this one before a restore
+        c.i !== this.instance(tx) ||
+        c.h > tx.head()
       )
         return { resync: true, serverTime: now };
       const lastSeq = this.lastSeq(tx, u, options.clientId, now);
@@ -906,10 +1019,8 @@ export class SyncServer {
   }
 
   logRows(log: LogId): LogRow[] {
-    return this.run((tx) => {
-      this.housekeep(tx, this.time(tx));
-      return tx.logAfter(log, 0);
-    });
+    this.housekeepDue();
+    return this.run((tx) => tx.logAfter(log, 0));
   }
 
   /** Expire everything past its lifetime now (tests: the storage scan). */

@@ -378,6 +378,7 @@ for (const kind of STORES) {
     const request = s.ok ? (s.result as { request: string }).request : "";
     const ap = w.server.call({ u: "mel" }, "devices.approve", { request });
     const device = ap.ok ? (ap.result as { device: string }).device : "";
+    ok(t, w.server.call(null, "devices.token", { request }));
     const mac = { kind: "device", cli: "claude", device };
     const ask = (q: string) => {
       const id = w.id();
@@ -415,7 +416,8 @@ for (const kind of STORES) {
       ok: true,
       result: { status: "complete" },
     });
-    t.like(w.get(`run:${run}`) ?? {}, { status: "complete", lease: null });
+    t.like(w.get(`run:${run}`) ?? {}, { status: "complete" });
+    t.false("lease" in (w.get(`run:${run}`) ?? {}), "a run record holds no lease");
     // a lease that ends: interrupted
     const r2 = ask("Q2");
     ok(t, w.server.call(as, "runs.claim", { run: r2, device }));
@@ -484,7 +486,7 @@ for (const kind of STORES) {
 
 test("sqlite: the migrations apply once, and the schema is the package's", (t) => {
   const db = new BetterSqlite(":memory:");
-  t.deepEqual(migrate(db), ["0001_sync.sql"]);
+  t.deepEqual(migrate(db), ["0001_sync.sql", "0002_review_r1.sql"]);
   t.deepEqual(migrate(db), []);
   const store = new SqliteServerStore(db);
   const tables = (

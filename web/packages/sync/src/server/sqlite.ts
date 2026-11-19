@@ -105,6 +105,8 @@ class SqliteTx implements StoreTx {
   setHead = (v: number) => this.metaSet("head", v);
   lastTime = () => this.metaGet("lastTime");
   setLastTime = (v: number) => this.metaSet("lastTime", v);
+  instance = () => this.metaGet("instance");
+  setInstance = (v: number) => this.metaSet("instance", v);
 
   get(key: string) {
     const r = this.s("SELECT body FROM sync_records WHERE key = ?").get(key) as Row | undefined;
@@ -377,21 +379,51 @@ class SqliteTx implements StoreTx {
   signinsPrune(at: number, limit: number) {
     return this.prune("sync_signins", "at", at, limit);
   }
+  leaseGet(run: string) {
+    const r = this.s("SELECT run, until, beat, seq FROM sync_leases WHERE run = ?").get(run) as
+      Row | undefined;
+    return r ? leaseOf(r) : undefined;
+  }
   leasePut(l: Lease) {
-    this.s("INSERT OR REPLACE INTO sync_leases (run, until) VALUES (?, ?)").run(l.run, l.until);
+    this.s("INSERT OR REPLACE INTO sync_leases (run, until, beat, seq) VALUES (?, ?, ?, ?)").run(
+      l.run,
+      l.until,
+      l.beat,
+      l.seq,
+    );
   }
   leaseDelete(run: string) {
     this.s("DELETE FROM sync_leases WHERE run = ?").run(run);
   }
   leasesBefore(at: number, limit: number) {
     return (
-      this.s("SELECT run, until FROM sync_leases WHERE until < ? ORDER BY until LIMIT ?").all(
-        at,
-        limit,
+      this.s(
+        "SELECT run, until, beat, seq FROM sync_leases WHERE until < ? ORDER BY until LIMIT ?",
+      ).all(at, limit) as Row[]
+    ).map(leaseOf);
+  }
+  deviceRunAdd(u: string, at: number) {
+    this.s("INSERT INTO sync_device_runs (u, at) VALUES (?, ?)").run(u, at);
+  }
+  deviceRunsSince(u: string, since: number) {
+    return (
+      this.s("SELECT at FROM sync_device_runs WHERE u = ? AND at > ? ORDER BY at").all(
+        u,
+        since,
       ) as Row[]
-    ).map((r) => ({ run: String(r["run"]), until: num(r["until"]) }));
+    ).map((r) => num(r["at"]));
+  }
+  deviceRunsPrune(at: number, limit: number) {
+    return this.prune("sync_device_runs", "at", at, limit);
   }
 }
+
+const leaseOf = (r: Row): Lease => ({
+  run: String(r["run"]),
+  until: num(r["until"]),
+  beat: num(r["beat"]),
+  seq: num(r["seq"]),
+});
 
 export class SqliteServerStore implements ServerStore {
   private readonly statements = new Map<string, SqliteStatement>();
@@ -507,9 +539,10 @@ export class SqliteServerStore implements ServerStore {
         revokedAt: r["revoked_at"] === null ? null : num(r["revoked_at"]),
       })),
       signins: all("SELECT body FROM sync_signins").map((r) => parse<Signin>(r["body"])),
-      leases: all("SELECT run, until FROM sync_leases").map((r) => ({
-        run: String(r["run"]),
-        until: num(r["until"]),
+      leases: all("SELECT run, until, beat, seq FROM sync_leases").map(leaseOf),
+      deviceRuns: all("SELECT u, at FROM sync_device_runs").map((r) => ({
+        u: String(r["u"]),
+        at: num(r["at"]),
       })),
     };
   }
