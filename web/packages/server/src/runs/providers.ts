@@ -53,7 +53,11 @@ export interface ResolvedModel {
 export interface Providers {
   /** `null` when the model is unknown or its provider has no credential —
    * the same answer `system.runtimeConfig` gives as `available: false`. */
-  resolve(modelId: string, effort?: string | null): ResolvedModel | null;
+  resolve(
+    modelId: string,
+    effort?: string | null,
+    key?: { provider: string; raw: string },
+  ): ResolvedModel | null;
   /** True when every model is a recorded fixture. */
   readonly fixtures: boolean;
 }
@@ -214,9 +218,20 @@ export function createProviders(config: Config, options: CreateProvidersOptions 
 
   return {
     fixtures,
-    resolve(modelId: string, effort?: string | null): ResolvedModel | null {
+    resolve(
+      modelId: string,
+      effort?: string | null,
+      key?: { provider: string; raw: string },
+    ): ResolvedModel | null {
       const entry = findModel(modelId);
-      if (!entry || !config.credentials[entry.provider]) {
+      // a user's API key pays (phase 2a): the deployment's credential is not
+      // needed, and only Anthropic and OpenRouter keys pay for calls
+      const userKey =
+        key !== undefined &&
+        ((entry?.provider === "anthropic" && key.provider === "Anthropic") ||
+          (entry?.provider === "openrouter" && key.provider === "OpenRouter"));
+      if (!entry || (key !== undefined && !userKey)) return null;
+      if (!userKey && !config.credentials[entry.provider]) {
         return null;
       }
       const resolvedEffort = resolveEffort(entry, effort);
@@ -245,11 +260,21 @@ export function createProviders(config: Config, options: CreateProvidersOptions 
           };
         }
         case "openrouter": {
-          const provider = openRouterProvider();
+          const provider =
+            userKey && key
+              ? createOpenRouter({
+                  apiKey: key.raw,
+                  compatibility: "strict",
+                  headers: { "HTTP-Referer": config.publicOrigin, "X-Title": appName },
+                  ...(fetchImpl ? { fetch: fetchImpl } : {}),
+                })
+              : openRouterProvider();
           const effort = (providerOptions["openrouter"] ?? {}) as Record<string, unknown>;
           const settings = openRouterSettings(effort);
           const primary = provider.chat(entry.route, settings);
-          const fallbackRoute = entry.fallbackRoute;
+          // a route found for the deployment's key is not reused for a
+          // user's
+          const fallbackRoute = userKey ? undefined : entry.fallbackRoute;
           return {
             entry,
             model:
@@ -270,7 +295,9 @@ export function createProviders(config: Config, options: CreateProvidersOptions 
         case "anthropic":
           return {
             entry,
-            model: anthropicProvider()(entry.route),
+            model: (userKey && key
+              ? createAnthropic({ apiKey: key.raw, ...(fetchImpl ? { fetch: fetchImpl } : {}) })
+              : anthropicProvider())(entry.route),
             providerOptions,
             providerTools: {},
           };

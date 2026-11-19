@@ -1,6 +1,9 @@
 // tRPC v11 initialization: the context, the three procedure kinds, and the
 // per-user mutation budget (`03-api-and-events.md` §1,
-// `06-auth-and-users.md` §4, §8).
+// `06-auth-and-users.md` §4, §8). Phase 2a keeps tRPC for the account
+// procedures the web client's shell uses (sign-in state, appearance
+// settings, the daily usage summary, the admin pages); spaces are the sync
+// protocol's (`sync/routes.ts`).
 
 import type { SessionDatabase } from "@session/db";
 import type { User } from "@session/shared";
@@ -8,19 +11,16 @@ import { TRPCError, initTRPC } from "@trpc/server";
 
 import type { Config } from "../config.js";
 import type { ServerDeps } from "../deps.js";
-import type { EventBus } from "../events/bus.js";
 import type { Logger } from "../logger.js";
 import type { RateLimiter } from "../middleware/rateLimit.js";
 import { RATE_LIMITS } from "../middleware/rateLimit.js";
-import type { DeletionJob } from "../research/deletion.js";
-import type { RunsService } from "../runs/service.js";
+import type { StreamRegistry } from "../sync/streams.js";
 
 export interface AppContext {
   config: Config;
   db: SessionDatabase;
-  eventBus: EventBus;
-  runs: RunsService;
-  deletions: DeletionJob;
+  /** The open sync streams, which a sign-out closes. */
+  streams: StreamRegistry;
   logger: Logger;
   limiter: RateLimiter;
   fetch: typeof globalThis.fetch;
@@ -46,9 +46,7 @@ export function createAppContext(
   return {
     config: deps.config,
     db: deps.db,
-    eventBus: deps.eventBus,
-    runs: deps.runs,
-    deletions: deps.deletions,
+    streams: deps.streams,
     logger,
     limiter,
     fetch: deps.fetch ?? globalThis.fetch,

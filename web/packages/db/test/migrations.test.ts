@@ -59,6 +59,7 @@ test("applies every migration to an empty database", (t) => {
         "sync_seq_answers",
         "sync_signins",
         "sync_tombstones",
+        "uploads",
         "usage_events",
         "user_limits",
         "user_preferences",

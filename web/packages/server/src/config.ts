@@ -6,12 +6,12 @@
 // callback and a broken CSRF check, and both fail in ways that look like
 // something else.
 
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
+import { MIN_PROTOCOL_VERSION } from "@session/sync";
 import { z } from "zod";
-
-import { widgetScriptPolicy, type WidgetScriptPolicy } from "./artifacts/site.js";
 
 /** `1`/`0`, `true`/`false`, `yes`/`no`; an empty value is the default. */
 const flag = (fallback: boolean) =>
@@ -107,7 +107,6 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 
   SESSION_PUBLIC_ORIGIN: originSchema("SESSION_PUBLIC_ORIGIN"),
-  SESSION_ARTIFACT_ORIGIN: originSchema("SESSION_ARTIFACT_ORIGIN"),
   SESSION_DATA_DIR: z.string().trim().default("./.data"),
 
   GITHUB_CLIENT_ID: optionalString,
@@ -134,10 +133,6 @@ const envSchema = z.object({
   SESSION_RUNS_ANTHROPIC: positiveInteger(2, 1),
   SESSION_RUN_TIMEOUT_SECONDS: positiveInteger(900),
 
-  /** Bytes the embed-asset cache may hold on the volume before the sweep
-   * evicts the least recently served (`13-deployment-fly.md` §6). */
-  SESSION_EMBED_CACHE_BYTES: positiveInteger(2 * 1024 * 1024 * 1024),
-
   SESSION_ENFORCE_LIMITS: flag(false),
   SESSION_DAILY_TOKENS: positiveInteger(1_000_000),
   SESSION_DAILY_RUNS: positiveInteger(10),
@@ -148,6 +143,22 @@ const envSchema = z.object({
   AWS_SECRET_ACCESS_KEY: optionalString,
   SENTRY_DSN: optionalString,
   SESSION_METRICS_TOKEN: optionalString,
+
+  // ---- spaces (phase 2a) ----
+  /** The cursor token key (32 bytes, base64), the key it replaced, and when
+   * it was rotated (ISO time): AGENTS.md, the previous key is accepted for 30
+   * days after a rotation. */
+  SESSION_CURSOR_KEY: optionalString,
+  SESSION_CURSOR_KEY_PREVIOUS: optionalString,
+  SESSION_CURSOR_KEY_ROTATED_AT: optionalString,
+  /** The key API keys are encrypted with at rest (32 bytes, base64). */
+  SESSION_API_KEY_ENCRYPTION_KEY: optionalString,
+  /** The lowest protocol version the server takes (UPDATE_REQUIRED below). */
+  SESSION_MIN_PROTOCOL: positiveInteger(MIN_PROTOCOL_VERSION, 1),
+  /** Origins a bearer request may come from (CORS): the desktop app's. */
+  SESSION_DESKTOP_ORIGINS: z.string().trim().default("tauri://localhost"),
+  /** The included tokens a person has a month (`/api/me/usage`'s `cap`). */
+  SESSION_INCLUDED_TOKENS: positiveInteger(1_000_000),
 
   SESSION_FIXTURE_PROVIDERS: flag(false),
   SESSION_TEST_AUTH: flag(false),
@@ -187,19 +198,10 @@ export interface Config {
   port: number;
 
   publicOrigin: string;
-  artifactOrigin: string;
-  /** Host (with port) of the artifact origin, for the `Host` check on `/w/:token`. */
-  artifactHost: string;
-  /** Whether widget run pages are served: only when the artifact origin is a
-   * different site from the app (`artifacts/site.ts`). */
-  widgetScripts: WidgetScriptPolicy;
 
   dataDir: string;
   databasePath: string;
   documentsDir: string;
-  /** Cached images behind `/embeds/:hash`; disposable, unlike `documentsDir`. */
-  embedsDir: string;
-  embedCacheBytes: number;
   tmpDir: string;
 
   github: { clientId: string | null; clientSecret: string | null; callbackUrl: string };
@@ -227,6 +229,18 @@ export interface Config {
   documentsReplicaUrl: string | null;
   sentryDsn: string | null;
   metricsToken: string | null;
+
+  /** Spaces (phase 2a): the cursor token keys, the API key encryption key,
+   * the lowest protocol version, the desktop origins and the included tokens
+   * a month. */
+  sync: {
+    cursorKey: Uint8Array;
+    previousCursorKey: { key: Uint8Array; rotatedAt: number } | null;
+    apiKeyEncryptionKey: Buffer;
+    minProtocol: number;
+    desktopOrigins: string[];
+    includedTokens: number;
+  };
 }
 
 /** Raised with every offending variable at once; a deploy that is missing
@@ -260,11 +274,37 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   }
   const value = parsed.data;
-  if (new URL(value.SESSION_ARTIFACT_ORIGIN).host === new URL(value.SESSION_PUBLIC_ORIGIN).host) {
-    throw new ConfigError([
-      "SESSION_ARTIFACT_ORIGIN: must be a different host from SESSION_PUBLIC_ORIGIN; widget pages are served only on the artifact host",
-    ]);
+  const isProduction = value.NODE_ENV === "production";
+  const issues: string[] = [];
+  /** A 32-byte key in base64: required in production; elsewhere a random
+   * one for the process when unset. */
+  const key32 = (name: string, v: string | null): Buffer => {
+    if (v === null) {
+      if (isProduction) issues.push(`${name}: required in production (32 bytes, base64)`);
+      return randomBytes(32);
+    }
+    const b = Buffer.from(v, "base64");
+    if (b.length !== 32) issues.push(`${name}: expected 32 bytes, base64`);
+    return b;
+  };
+  const cursorKey = key32("SESSION_CURSOR_KEY", value.SESSION_CURSOR_KEY);
+  const apiKeyEncryptionKey = key32(
+    "SESSION_API_KEY_ENCRYPTION_KEY",
+    value.SESSION_API_KEY_ENCRYPTION_KEY,
+  );
+  let previousCursorKey: Config["sync"]["previousCursorKey"] = null;
+  if (value.SESSION_CURSOR_KEY_PREVIOUS !== null) {
+    const key = Buffer.from(value.SESSION_CURSOR_KEY_PREVIOUS, "base64");
+    const rotatedAt = Date.parse(value.SESSION_CURSOR_KEY_ROTATED_AT ?? "");
+    if (key.length !== 32) issues.push("SESSION_CURSOR_KEY_PREVIOUS: expected 32 bytes, base64");
+    if (!Number.isFinite(rotatedAt))
+      issues.push("SESSION_CURSOR_KEY_ROTATED_AT: expected the rotation's ISO time");
+    previousCursorKey = { key, rotatedAt };
   }
+  const desktopOrigins = value.SESSION_DESKTOP_ORIGINS.split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+  if (issues.length) throw new ConfigError(issues);
   const dataDir = isAbsolute(value.SESSION_DATA_DIR)
     ? value.SESSION_DATA_DIR
     : resolve(process.cwd(), value.SESSION_DATA_DIR);
@@ -282,20 +322,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   return {
     env: value.NODE_ENV,
-    isProduction: value.NODE_ENV === "production",
+    isProduction,
     host: value.HOST,
     port: value.PORT,
 
     publicOrigin: value.SESSION_PUBLIC_ORIGIN,
-    artifactOrigin: value.SESSION_ARTIFACT_ORIGIN,
-    artifactHost: new URL(value.SESSION_ARTIFACT_ORIGIN).host,
-    widgetScripts: widgetScriptPolicy(value.SESSION_PUBLIC_ORIGIN, value.SESSION_ARTIFACT_ORIGIN),
 
     dataDir,
     databasePath: join(dataDir, "session.db"),
     documentsDir: join(dataDir, "documents"),
-    embedsDir: join(dataDir, "embeds"),
-    embedCacheBytes: value.SESSION_EMBED_CACHE_BYTES,
     tmpDir: join(dataDir, "tmp"),
 
     github: {
@@ -344,6 +379,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     documentsReplicaUrl: value.SESSION_DOCUMENTS_REPLICA_URL,
     sentryDsn: value.SENTRY_DSN,
     metricsToken: value.SESSION_METRICS_TOKEN,
+
+    sync: {
+      cursorKey,
+      previousCursorKey,
+      apiKeyEncryptionKey,
+      minProtocol: value.SESSION_MIN_PROTOCOL,
+      desktopOrigins,
+      includedTokens: value.SESSION_INCLUDED_TOKENS,
+    },
   };
 }
 

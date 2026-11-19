@@ -1,6 +1,14 @@
 // The Hono application, assembled from its dependencies so a test can build a
 // whole server over a temp database and drive it with `app.request()`
 // (ADR-2, `12-testing-linting-ci.md` §3.4).
+//
+// Middleware, in order: request id, metrics, logging, security headers, CORS
+// for the desktop's bearer requests, the CSRF guard for cookie requests, and
+// the session loader (a session cookie, or a device's bearer token: the
+// actor the sync server takes). Routes: `/healthz`, `/metrics`, GitHub
+// OAuth, uploads, the sync protocol and the account reads
+// (`sync/routes.ts`), the account procedures over tRPC, and the client
+// bundle.
 
 import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -10,17 +18,15 @@ import { version } from "@session/shared";
 import type { Context } from "hono";
 import { Hono } from "hono";
 
-import { widgetRoutes } from "./artifacts/widgets.js";
 import type { OAuthClient } from "./auth/github.js";
 import { githubRoutes } from "./auth/github.js";
 import { clearSessionCookie, sessionLoader } from "./auth/session.js";
 import type { AppEnv, ServerDeps } from "./deps.js";
-import { embedRoutes } from "./embeds/route.js";
 import type { Readiness } from "./health.js";
 import { createReadiness } from "./health.js";
 import { defaultLogger } from "./logger.js";
 import { MetricsRegistry, renderMetrics } from "./metrics.js";
-import { artifactHostOnly } from "./middleware/artifactHost.js";
+import { desktopCors } from "./middleware/cors.js";
 import { csrfGuard } from "./middleware/csrf.js";
 import { requestLogging } from "./middleware/logging.js";
 import { requestMetrics } from "./middleware/metrics.js";
@@ -28,6 +34,8 @@ import { RateLimiter } from "./middleware/rateLimit.js";
 import { requestContext } from "./middleware/requestId.js";
 import { securityHeaders } from "./middleware/security.js";
 import { clientStatic } from "./middleware/static.js";
+import { syncRoutes } from "./sync/routes.js";
+import { scenarioRoutes } from "./sync/scenario.js";
 import type { AppContext } from "./trpc/base.js";
 import { createAppContext } from "./trpc/base.js";
 import { appRouter } from "./trpc/router.js";
@@ -52,6 +60,9 @@ export interface CreateAppOptions extends ServerDeps {
   /** Replaced by the auth tests, which have no GitHub to talk to. */
   createOAuthClient?: (deps: ServerDeps) => OAuthClient;
   clientDistDirectory?: string;
+  /** Test only: a directory served under `/mockups/` (the mockup on the real
+   * server); mounted only with test sign-in on. */
+  mockupsDirectory?: string;
 }
 
 export function createApp(options: CreateAppOptions): Hono<AppEnv> {
@@ -61,6 +72,7 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
     metrics = new MetricsRegistry(),
     createOAuthClient,
     clientDistDirectory,
+    mockupsDirectory,
     ...deps
   } = options;
   const logger = deps.logger ?? defaultLogger(deps.config.env);
@@ -70,18 +82,12 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   app.use("*", requestMetrics(metrics));
   app.use("*", requestLogging());
   app.use("*", securityHeaders(deps.config));
-
-  // The artifact origin is a different host with its own headers and no
-  // session: only its widget route answers there, and it is mounted before
-  // the CSRF guard and the session loader so a token URL never carries either.
-  app.use("*", artifactHostOnly(deps.config));
-  app.route("/", widgetRoutes(deps));
-
+  app.use("*", desktopCors(deps.config));
   app.use("*", csrfGuard(deps.config));
   app.use("*", sessionLoader(deps));
 
-  // Fly's check. 503 until migrations and run reconciliation are done and
-  // again from the first moment of the drain, so the proxy never routes to a
+  // Fly's check. 503 until migrations and run recovery are done and again
+  // from the first moment of the drain, so the proxy never routes to a
   // process that cannot finish what it accepts (`13-deployment-fly.md` §5).
   app.get("/healthz", (c) => {
     const state = readiness.state();
@@ -123,14 +129,11 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
       ...(createOAuthClient ? { createClient: createOAuthClient } : {}),
     }),
   );
-  // Public, like the cards whose images it serves: the Home feed renders
-  // signed out, and an embed asset says nothing about who stored it.
-  app.route("/", embedRoutes({ deps: { ...deps, logger } }));
-  // Image attachments, behind the session loader and, for the upload, the
-  // CSRF guard. An upload is its owner's; an image is read by its owner and
-  // by anyone who may read a thread whose node or queued follow-up names
-  // it, guests included for a public thread (`images.readable`).
   app.route("/", imageRoutes({ deps: { ...deps, logger }, limiter }));
+  app.route("/", syncRoutes({ ...deps, logger }));
+  // test only: a scenario's records into the store, and the mockup's files
+  if (deps.config.testAuthEnabled)
+    app.route("/", scenarioRoutes({ ...deps, logger }, mockupsDirectory));
 
   // `auth.logout` clears the session rows; the cookie is this layer's to
   // clear, so the mutation is mirrored here rather than given a `Set-Cookie`
@@ -148,21 +151,15 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
       router: appRouter,
       endpoint: "/api/trpc",
       createContext: (_opts, honoContext) => {
-        // The adapter hands over an untyped context; the variables were set by
-        // `requestContext` and `sessionLoader` above.
         const c = honoContext as Context<AppEnv>;
         return createAppContext({ ...deps, logger }, limiter, c.get("logger"), {
-          user: c.get("user"),
+          // a device token signs in to the sync API, not to the browser's
+          // account procedures
+          user: c.get("bearer") ? null : c.get("user"),
           clientIp: c.get("clientIp"),
           sessionToken: c.get("sessionToken"),
         }) as unknown as Record<string, unknown>;
       },
-      // Every failure the error table did not deliberately classify is logged
-      // at error level with the request id, through the per-request child
-      // logger the context carries: an unclassified error is by definition one
-      // nobody predicted, and `c.get("logger")` is what ties it to the request
-      // it broke. `logger` alone is the fallback for a failure thrown before
-      // the context existed.
       onError: ({ error, path, type, ctx }) => {
         if (error.code !== "INTERNAL_SERVER_ERROR") {
           return;

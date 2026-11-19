@@ -67,8 +67,8 @@ export interface RunToolContext {
   config: Config;
   db: SessionDatabase;
   userId: string;
-  /** Absent for a metadata run, which has no node and no tools. */
-  nodeId: string | null;
+  /** The run the tools work for (phase 2a: a sync run record's id). */
+  runId: string | null;
   logger: Logger;
   fetch: typeof globalThis.fetch;
   budget: ToolBudget;

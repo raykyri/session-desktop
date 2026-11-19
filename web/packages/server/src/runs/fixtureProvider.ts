@@ -46,10 +46,7 @@ export type FixtureScenario =
    * because `PROMPT_MARKER` is how a run selects it. */
   | "paced-answer"
   /** An answer past `MIN_RECAP_CHARS`, so a run schedules a recap. */
-  | "long-answer"
-  /** An answer with a scripted widget that probes its sandbox and saves an
-   * input (the widget end-to-end test). */
-  | "widget-answer";
+  | "long-answer";
 
 export const DEFAULT_FIXTURE_SCENARIO: FixtureScenario = "success-with-tools";
 

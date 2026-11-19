@@ -221,9 +221,17 @@ export function renderMetrics(options: RenderMetricsOptions): string {
   lines.push("# TYPE session_queue_depth gauge");
   lines.push(`session_queue_depth ${queueDepth(deps)}`);
 
-  lines.push("# HELP session_sse_clients Open event-stream connections.");
+  lines.push("# HELP session_sse_clients Open sync event streams.");
   lines.push("# TYPE session_sse_clients gauge");
-  lines.push(`session_sse_clients ${deps.eventBus.connectionCount()}`);
+  lines.push(`session_sse_clients ${deps.streams.size}`);
+
+  // the sync server's housekeeping faults (`SyncServer.onError`): counted
+  // here and logged (phase 2a)
+  lines.push(
+    "# HELP session_sync_housekeeping_faults_total Housekeeping passes of the sync server that failed.",
+  );
+  lines.push("# TYPE session_sync_housekeeping_faults_total counter");
+  lines.push(`session_sync_housekeeping_faults_total ${deps.sync.housekeepingFaults}`);
 
   lines.push("# HELP session_volume_free_bytes Free space on the data volume.");
   lines.push("# TYPE session_volume_free_bytes gauge");

@@ -6,5 +6,10 @@
     "types": ["node"]
   },
   "include": ["src", "test"],
-  "references": [{ "path": "../shared" }, { "path": "../db" }]
+  "references": [
+    { "path": "../shared" },
+    { "path": "../db" },
+    { "path": "../mutators" },
+    { "path": "../sync" }
+  ]
 }

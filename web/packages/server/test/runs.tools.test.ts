@@ -23,7 +23,7 @@ function toolContext(harness: ReturnType<typeof createHarness>, userId: string):
     config: harness.config,
     db: harness.db,
     userId,
-    nodeId: null,
+    runId: null,
     logger: harness.logger,
     fetch: globalThis.fetch,
     budget: new ToolBudget(),

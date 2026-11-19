@@ -64,12 +64,37 @@ export function userForToken(deps: ServerDeps, token: string | null): User | nul
   return users.findById(deps.db, session.userId);
 }
 
-/** Attaches the authenticated user to the request context. Unauthenticated requests are permitted and handled by downstream procedure guards. */
+/** The device token of an `Authorization: Bearer` header, or null. */
+export function bearerToken(header: string | undefined): string | null {
+  const m = /^Bearer (\S+)$/i.exec(header ?? "");
+  return m?.[1] ?? null;
+}
+
+/** Attaches the authenticated user, and the actor the sync server takes, to
+ * the request context. A request with `Authorization: Bearer <device
+ * token>` is the device's: the cookie is not read (so the CSRF guard does
+ * not apply to it), and a token that does not open signs nobody in. Without
+ * one, the session cookie decides. Unauthenticated requests are permitted
+ * and handled by the routes. */
 export function sessionLoader(deps: ServerDeps): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
+    const header = c.req.header("authorization");
+    if (header !== undefined && /^Bearer /i.test(header)) {
+      const token = bearerToken(header);
+      const actor = token === null ? null : deps.sync.online.authenticate(token);
+      const user = actor ? users.findByHandle(deps.db, actor.u) : null;
+      c.set("bearer", true);
+      c.set("sessionToken", null);
+      c.set("user", user);
+      c.set("actor", user && actor ? actor : null);
+      return next();
+    }
     const token = sessionCookieFrom(c);
+    const user = userForToken(deps, token);
+    c.set("bearer", false);
     c.set("sessionToken", token);
-    c.set("user", userForToken(deps, token));
+    c.set("user", user);
+    c.set("actor", user ? { u: user.handle } : null);
     await next();
   };
 }
@@ -83,9 +108,9 @@ export const SESSION_STREAM_CHECK_MS = 60_000;
  * Deletes the session identified by `token` and closes associated event
  * streams. Other sessions and streams for the account remain unchanged.
  */
-export function endSession(deps: Pick<ServerDeps, "db" | "eventBus">, token: string): void {
+export function endSession(deps: Pick<ServerDeps, "db" | "streams">, token: string): void {
   auth.deleteSession(deps.db, token);
-  deps.eventBus.closeSession(auth.hashSessionToken(token));
+  deps.streams.closeSession(auth.hashSessionToken(token));
 }
 
 /**
@@ -94,13 +119,13 @@ export function endSession(deps: Pick<ServerDeps, "db" | "eventBus">, token: str
  * `SESSION_STREAM_CHECK_MS`.
  */
 export function closeEndedSessionStreams(
-  deps: Pick<ServerDeps, "db" | "eventBus">,
+  deps: Pick<ServerDeps, "db" | "streams">,
   at: number = Date.now(),
 ): number {
   let closed = 0;
-  for (const sessionId of deps.eventBus.openSessionIds()) {
+  for (const sessionId of deps.streams.sessionIds()) {
     if (!auth.sessionIsLive(deps.db, sessionId, at)) {
-      closed += deps.eventBus.closeSession(sessionId);
+      closed += deps.streams.closeSession(sessionId);
     }
   }
   return closed;

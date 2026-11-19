@@ -42,7 +42,7 @@ function isGuarded(method: string, path: string): boolean {
     return true;
   }
   // Subscriptions are GETs and are guarded too (`03-api-and-events.md` §1).
-  return path.startsWith("/api/trpc");
+  return path.startsWith("/api/trpc") || path.startsWith("/api/sync");
 }
 
 export function csrfGuard(config: Config): MiddlewareHandler<AppEnv> {
@@ -50,6 +50,12 @@ export function csrfGuard(config: Config): MiddlewareHandler<AppEnv> {
     const path = new URL(c.req.url).pathname;
     const method = c.req.method;
     if (!isGuarded(method, path)) {
+      return next();
+    }
+    // A device's request carries its token in `Authorization: Bearer`; the
+    // session loader reads no cookie for it, so there is no ambient
+    // credential to forge (phase 2a). Its origin is checked by CORS.
+    if (/^Bearer /i.test(c.req.header("authorization") ?? "")) {
       return next();
     }
     const origin = checkOrigin(c.req.raw.headers, config.publicOrigin);

@@ -15,7 +15,7 @@ import { RATE_LIMITS, RateLimiter } from "../src/middleware/rateLimit.js";
 import { contentSecurityPolicy } from "../src/middleware/security.js";
 import { resolveWithinRoot } from "../src/middleware/static.js";
 
-import { ARTIFACT_ORIGIN, PUBLIC_ORIGIN, createHarness, testConfig } from "./helpers.js";
+import { PUBLIC_ORIGIN, createHarness, testConfig } from "./helpers.js";
 
 test("GET /healthz reports readiness and is not cached", async (t) => {
   const harness = createHarness(t);
@@ -31,14 +31,14 @@ test("every response carries the security headers", async (t) => {
   t.is(response.headers.get("referrer-policy"), "no-referrer");
   t.is(response.headers.get("x-content-type-options"), "nosniff");
   t.true(response.headers.get("content-security-policy")?.includes("default-src 'self'"));
-  t.true(response.headers.get("content-security-policy")?.includes(`frame-src ${ARTIFACT_ORIGIN}`));
+  t.true(response.headers.get("content-security-policy")?.includes("frame-src 'none'"));
   t.true(response.headers.has("permissions-policy"));
   // HSTS is Fly's TLS terminating in front of us; there is none in test.
   t.false(response.headers.has("strict-transport-security"));
 });
 
 test("the CSP allows the twimg hosts and no eval", (t) => {
-  const policy = contentSecurityPolicy(ARTIFACT_ORIGIN);
+  const policy = contentSecurityPolicy();
   t.true(policy.includes("https://pbs.twimg.com"));
   t.true(policy.includes("https://abs.twimg.com"));
   t.false(policy.includes("unsafe-eval"));
@@ -47,7 +47,7 @@ test("the CSP allows the twimg hosts and no eval", (t) => {
 
 test("rejects mutation requests missing the custom header", async (t) => {
   const harness = createHarness(t);
-  const response = await harness.app.request("/api/trpc/workspaces.ensureDefault", {
+  const response = await harness.app.request("/api/trpc/settings.update", {
     method: "POST",
     headers: { Origin: PUBLIC_ORIGIN, "Content-Type": "application/json" },
     body: "{}",
@@ -57,7 +57,7 @@ test("rejects mutation requests missing the custom header", async (t) => {
 
 test("rejects cross-origin requests regardless of request headers", async (t) => {
   const harness = createHarness(t);
-  const foreignOrigin = await harness.app.request("/api/trpc/workspaces.ensureDefault", {
+  const foreignOrigin = await harness.app.request("/api/trpc/settings.update", {
     method: "POST",
     headers: {
       Origin: "https://evil.example",
@@ -170,16 +170,16 @@ test("the mutation budget is per account", async (t) => {
   const user = harness.addUser("budget");
   const caller = harness.caller(user);
   for (let attempt = 0; attempt < 60; attempt += 1) {
-    await caller.workspaces.ensureDefault();
+    await caller.settings.update({});
   }
-  await t.throwsAsync(caller.workspaces.ensureDefault(), { message: /too many changes/ });
+  await t.throwsAsync(caller.settings.update({}), { message: /too many changes/ });
   // A second account is unaffected.
-  await t.notThrowsAsync(harness.caller(harness.addUser("budget2")).workspaces.ensureDefault());
+  await t.notThrowsAsync(harness.caller(harness.addUser("budget2")).settings.update({}));
 });
 
 test("an opaque origin is not our origin", async (t) => {
   const harness = createHarness(t);
-  const response = await harness.app.request("/api/trpc/workspaces.ensureDefault", {
+  const response = await harness.app.request("/api/trpc/settings.update", {
     method: "POST",
     headers: { Origin: "null", "X-Requested-With": "session", "Content-Type": "application/json" },
     body: "{}",

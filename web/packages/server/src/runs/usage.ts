@@ -38,7 +38,9 @@ export function costOf(entry: ModelEntry, usage: AttemptUsage): number {
 export interface RecordAttemptUsageInput {
   db: SessionDatabase;
   userId: string;
-  nodeId: string | null;
+  runId: string | null;
+  spaceId: string | null;
+  payer: string | null;
   entry: ModelEntry;
   kind: "research" | "metadata";
   usage: AttemptUsage;
@@ -47,7 +49,9 @@ export interface RecordAttemptUsageInput {
 export function recordAttemptUsage(input: RecordAttemptUsageInput): number {
   const cost = costOf(input.entry, input.usage);
   usageRepo.record(input.db, input.userId, {
-    nodeId: input.nodeId,
+    runId: input.runId,
+    spaceId: input.spaceId,
+    payer: input.payer,
     kind: input.kind,
     provider: input.entry.provider,
     model: input.entry.id,
@@ -65,7 +69,7 @@ export function recordAttemptUsage(input: RecordAttemptUsageInput): number {
 export function recordToolUsage(
   db: SessionDatabase,
   userId: string,
-  nodeId: string | null,
+  runId: string | null,
   kind: "search" | "fetch",
   provider: string,
   count: number,
@@ -74,6 +78,6 @@ export function recordToolUsage(
     return;
   }
   for (let index = 0; index < count; index += 1) {
-    usageRepo.record(db, userId, { nodeId, kind, provider });
+    usageRepo.record(db, userId, { runId, kind, provider });
   }
 }

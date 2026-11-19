@@ -124,6 +124,10 @@ export interface SyncServerOptions {
   online?: Partial<OnlineHandlers>;
   /** Where API keys' raw values are stored (default: in memory). */
   keys?: KeyVault;
+  /** The lowest protocol version the server takes (a deployment setting;
+   * default MIN_PROTOCOL_VERSION): a write or a read below it answers
+   * UPDATE_REQUIRED (phase 2a). */
+  minProtocol?: number;
   /** Test only: an effect for which this answers true fails on that attempt. */
   failEffect?: (effect: pkg.Effect, attempt: number) => boolean;
   /** Hears each fault of a housekeeping pass (counted in
@@ -224,6 +228,8 @@ export class SyncServer {
   private readonly failEffect: SyncServerOptions["failEffect"];
   private readonly onError: SyncServerOptions["onError"];
   readonly online: OnlineCalls;
+  /** The lowest protocol version taken (`SyncServerOptions.minProtocol`). */
+  readonly minProtocol: number;
   /** The calls a server job makes on its run (phase 2a, `jobs.ts`). */
   readonly runJobs: RunJobs;
   /** Housekeeping passes that failed since the server started. */
@@ -243,6 +249,7 @@ export class SyncServer {
     this.tokens = new Tokens(o.cursorKeys);
     this.failEffect = o.failEffect;
     this.onError = o.onError;
+    this.minProtocol = Math.max(MIN_PROTOCOL_VERSION, o.minProtocol ?? MIN_PROTOCOL_VERSION);
     this.online = new OnlineCalls(this, o.online, o.keys, {
       cancelled: (run) => this.jobRunner.cancel?.(run),
     });
@@ -594,10 +601,10 @@ export class SyncServer {
       envelope !== null && typeof envelope === "object"
         ? (envelope as { protocolVersion?: unknown }).protocolVersion
         : undefined;
-    if (typeof version === "number" && Number.isInteger(version) && version < MIN_PROTOCOL_VERSION)
+    if (typeof version === "number" && Number.isInteger(version) && version < this.minProtocol)
       return no(
         err("UPDATE_REQUIRED", undefined, [
-          `protocolVersion: expected at least ${MIN_PROTOCOL_VERSION}`,
+          `protocolVersion: expected at least ${this.minProtocol}`,
         ]),
       );
     const parsed = envelopeS.safeParse(envelope);
@@ -969,6 +976,23 @@ export class SyncServer {
     });
   }
 
+  /** A domain check's verdict (the job runner calls it, phase 2a): the
+   * space's domain reads "ok" (verified now) or "failed". False when the
+   * space no longer waits for a check of `domain`. */
+  domainChecked(space: string, domain: string, verified: boolean): boolean {
+    return this.run((tx) => {
+      const now = this.time(tx);
+      const s = tx.get(`space:${space}`);
+      if (s?.kind !== "space" || s.dom?.state !== "checking" || s.dom.domain !== domain)
+        return false;
+      const dom: pkg.SpaceDomain = verified
+        ? { ...s.dom, state: "ok", verifiedAt: isoAt(now) }
+        : { ...s.dom, state: "failed" };
+      this.commit(tx, [[`space:${space}`, { ...s, dom }]], now);
+      return true;
+    });
+  }
+
   // ---- reads ----
 
   private userOf(actor: Actor | null): string | null {
@@ -1077,7 +1101,7 @@ export class SyncServer {
       error: err(code),
       serverTime: now,
     });
-    if (o.protocolVersion !== undefined && !(o.protocolVersion >= MIN_PROTOCOL_VERSION))
+    if (o.protocolVersion !== undefined && !(o.protocolVersion >= this.minProtocol))
       return no("UPDATE_REQUIRED");
     if (actor !== null && !pkg.isHandle(actor.u)) return no("UNAUTHORIZED");
     if (actor === null && typeof log === "string" && log.startsWith("user:"))

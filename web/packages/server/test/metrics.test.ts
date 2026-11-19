@@ -1,6 +1,7 @@
 // `/healthz` readiness and the `/metrics` exposition
 // (`13-deployment-fly.md` §5, §7).
 
+import { runs } from "@session/db";
 import test from "ava";
 
 import { createApp } from "../src/app.js";
@@ -88,24 +89,16 @@ test("/metrics reports the process and the database", async (t) => {
   t.true(body.endsWith("\n"));
 });
 
-test("active runs, queue depth, and daily usage come out of the database", async (t) => {
+test("active runs, queue depth, daily usage and sync housekeeping faults come out of the database", async (t) => {
   const harness = createHarness(t, { env: { SESSION_METRICS_TOKEN: TOKEN } });
   const user = harness.addUser("metrics");
   const client = harness.db.$client;
   client
     .prepare(
-      "INSERT INTO usage_events (id, user_id, node_id, kind, provider, model, input_tokens, output_tokens, reasoning_tokens, cached_tokens, cost_estimate_micros, created_at) VALUES (?, ?, NULL, 'research', 'vertex', 'gemini-flash', 100, 40, 0, 0, 2500, ?)",
+      "INSERT INTO usage_events (id, user_id, run_id, kind, provider, model, input_tokens, output_tokens, reasoning_tokens, cached_tokens, cost_estimate_micros, created_at) VALUES (?, ?, NULL, 'research', 'vertex', 'gemini-flash', 100, 40, 0, 0, 2500, ?)",
     )
     .run("usage-metrics", user.id, Date.now());
-
-  const caller = harness.caller(user);
-  const workspace = await caller.workspaces.ensureDefault();
-  const detail = await caller.research.createTree({
-    prompt: "What is in the queue?",
-    model: "gemini-flash",
-    workspaceId: workspace.id,
-  });
-  const nodeId = detail.nodes[0]?.id ?? "";
+  runs.enqueue(harness.db, { runId: "R1", userId: user.id, provider: "vertex" });
 
   const scrape = async (): Promise<string> =>
     (await harness.request("/metrics", { headers: { Authorization: `Bearer ${TOKEN}` } })).text();
@@ -114,14 +107,17 @@ test("active runs, queue depth, and daily usage come out of the database", async
   const waiting = await scrape();
   t.true(waiting.includes("session_queue_depth 1"));
   t.false(waiting.includes("session_active_runs{"));
+  t.true(waiting.includes("session_sync_housekeeping_faults_total 0"));
 
-  client.prepare("UPDATE run_queue SET claimed_at = ? WHERE node_id = ?").run(Date.now(), nodeId);
+  runs.claim(harness.db, "R1");
+  harness.deps.sync.housekeepingFaults = 2;
   const running = await scrape();
   t.true(running.includes("session_queue_depth 0"));
-  t.regex(running, /session_active_runs\{provider="[a-z]+"\} 1/);
+  t.regex(running, /session_active_runs\{provider="vertex"\} 1/);
   t.true(running.includes('session_daily_tokens{provider="vertex",direction="input"} 100'));
   t.true(running.includes('session_daily_tokens{provider="vertex",direction="output"} 40'));
   t.true(running.includes('session_daily_cost_usd{provider="vertex"} 0.002500'));
+  t.true(running.includes("session_sync_housekeeping_faults_total 2"));
 });
 
 test("the histogram labels stay bounded", (t) => {

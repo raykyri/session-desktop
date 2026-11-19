@@ -1,19 +1,17 @@
-// `POST /api/images` and `GET /images/:id` (`03-api-and-events.md` §5): the
-// web's version of the desktop's `save_research_image`,
-// `read_research_image` and `read_research_image_thumbnail`.
-//
-// Multipart rather than tRPC because the payload is bytes. An upload is
-// pending until a question, note or draft names its id; `images.sweep` and
-// the file sweep in `main.ts` remove what nothing names
-// (`docs/02-domain-model-and-database.md` §3.6). Uploads are the signed-in
-// caller's own; a read is answered for the image's owner and for anyone who
-// may read a thread that names the image (`images.readable`, §5.16).
+// `POST /api/images` and `GET /images/:id` (`03-api-and-events.md` §5), for
+// spaces (phase 2a). Multipart rather than JSON because the payload is
+// bytes. An upload is the signed-in caller's; `?space=<id>` uploads it for a
+// space the caller may write in. A read is answered for the uploader, and
+// for an upload made for a space, for whoever may read that space's content
+// (`readsSpace` of `@session/mutators` over the sync store: anyone for an
+// open space, its members for a closed one).
 
 import { readFile } from "node:fs/promises";
 
-import { images } from "@session/db";
-import type { ResearchImageAttachment } from "@session/shared";
+import { uploads } from "@session/db";
+import { readsSpace, type Reader } from "@session/mutators";
 import { MAX_INPUT_IMAGE_BYTES } from "@session/shared";
+import { writesIn, type SyncServer } from "@session/sync/server";
 import { Hono } from "hono";
 import type { Context } from "hono";
 
@@ -86,6 +84,10 @@ export function cleanFileName(name: string | null | undefined): string | null {
   return cleaned === "" ? null : cleaned;
 }
 
+/** `fn` over a reader of the sync store's records as they are now. */
+const reading = <T>(sync: SyncServer, fn: (g: Reader) => T): T =>
+  sync.run((tx) => fn({ get: (kind, id) => tx.get(`${kind}:${id}`) as never }));
+
 export interface ImageRoutesOptions {
   deps: ServerDeps;
   limiter: RateLimiter;
@@ -128,6 +130,10 @@ export function imageRoutes(options: ImageRoutesOptions): Hono<AppEnv> {
         ? refuse(c, 413, IMAGE_TOO_LARGE)
         : refuse(c, 400, "Invalid request: multipart/form-data is required.");
     }
+    const space = c.req.query("space") ?? null;
+    if (space !== null && !reading(deps.sync, (g) => writesIn(g, space, user.handle))) {
+      return refuse(c, 404, "Not found");
+    }
     const file = form.get("file");
     if (!(file instanceof File)) {
       return refuse(c, 400, "No image was uploaded.");
@@ -143,7 +149,7 @@ export function imageRoutes(options: ImageRoutesOptions): Hono<AppEnv> {
       throw error;
     }
     if (
-      images.storedBytes(deps.db, user.id) + prepared.bytes.byteLength >
+      uploads.storedBytes(deps.db, user.id) + prepared.bytes.byteLength >
       MAX_IMAGE_BYTES_PER_USER
     ) {
       return refuse(c, 413, "Storage quota exceeded for attached images.");
@@ -159,7 +165,8 @@ export function imageRoutes(options: ImageRoutesOptions): Hono<AppEnv> {
         c.get("logger").warn({ error }, "could not save an image thumbnail");
       });
     }
-    const row = images.create(deps.db, user.id, {
+    const row = uploads.create(deps.db, user.id, {
+      spaceId: space,
       sha256,
       mime: prepared.mime,
       byteSize: prepared.bytes.byteLength,
@@ -168,16 +175,32 @@ export function imageRoutes(options: ImageRoutesOptions): Hono<AppEnv> {
       fileName: cleanFileName(file.name),
       storagePath,
     });
-    const attachment: ResearchImageAttachment = images.toAttachment(row);
-    return c.json(attachment, 201);
+    return c.json(
+      {
+        id: row.id,
+        mime: row.mime,
+        byteSize: row.byteSize,
+        width: row.width,
+        height: row.height,
+        fileName: row.fileName,
+        space: row.spaceId,
+      },
+      201,
+    );
   });
 
   app.get("/images/:id", async (c) => {
-    // Readable by whoever may read a thread that names the image, guests
-    // included for a public thread, and always by its uploader
-    // (`images.readable`).
     const user = c.get("user");
-    const row = images.readable(deps.db, user?.id ?? null, c.req.param("id"));
+    const found = uploads.get(deps.db, c.req.param("id"));
+    const row =
+      found &&
+      (found.userId === user?.id ||
+        (found.spaceId !== null &&
+          reading(deps.sync, (g) =>
+            readsSpace(g, found.spaceId as string, user?.handle ?? null),
+          )))
+        ? found
+        : null;
     if (!row) {
       return refuse(
         c,
@@ -211,7 +234,7 @@ export function imageRoutes(options: ImageRoutesOptions): Hono<AppEnv> {
       headers: {
         "Content-Type": contentType,
         // An id names one immutable file; who may read it depends on the
-        // threads that name it, so shared caches must not keep it.
+        // space's read rules, so shared caches must not keep it.
         "Cache-Control": "private, max-age=31536000, immutable",
         "Content-Length": String(bytes.byteLength),
         "Cross-Origin-Resource-Policy": "same-origin",

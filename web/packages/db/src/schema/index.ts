@@ -8,5 +8,6 @@ export * from "./backfills.js";
 export * from "./preferences.js";
 export * from "./runs.js";
 export * from "./sessions.js";
+export * from "./uploads.js";
 export * from "./usage.js";
 export * from "./users.js";

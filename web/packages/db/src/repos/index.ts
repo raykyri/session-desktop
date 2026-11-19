@@ -11,7 +11,8 @@ import * as apiKeys from "./apiKeys.js";
 import * as auth from "./auth.js";
 import * as preferences from "./preferences.js";
 import * as runs from "./runs.js";
+import * as uploads from "./uploads.js";
 import * as usage from "./usage.js";
 import * as users from "./users.js";
 
-export { apiKeys, auth, preferences, runs, usage, users };
+export { apiKeys, auth, preferences, runs, uploads, usage, users };

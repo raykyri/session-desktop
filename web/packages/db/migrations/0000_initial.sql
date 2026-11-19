@@ -78,6 +78,22 @@ CREATE TABLE `sessions` (
 );
 --> statement-breakpoint
 CREATE INDEX `sessions_user_idx` ON `sessions` (`user_id`,`last_seen_at`);--> statement-breakpoint
+CREATE TABLE `uploads` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`space_id` text,
+	`sha256` text NOT NULL,
+	`mime` text NOT NULL,
+	`byte_size` integer NOT NULL,
+	`width` integer,
+	`height` integer,
+	`file_name` text,
+	`storage_path` text NOT NULL,
+	`created_at` integer NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `uploads_user_idx` ON `uploads` (`user_id`,`created_at`);--> statement-breakpoint
 CREATE TABLE `usage_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
