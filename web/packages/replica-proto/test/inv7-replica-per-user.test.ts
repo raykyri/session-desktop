@@ -28,7 +28,7 @@ async function activity(t: ExecutionContext, c: Cast) {
   await ok(t, w.as("olga", "invites.create", { id: w.id(), space: vault }));
   await ok(
     t,
-    w.as("mona", "members.ban", { space: open, user: "eve", base: w.member(open, "eve") }),
+    w.as("mona", "members.ban", { space: open, user: "eve" }),
   );
   for (const u of ["mona", "mel", "ada"])
     await ok(t, w.as(u, "likes.set", { thread: post, on: true }));

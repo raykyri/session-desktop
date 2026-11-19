@@ -12,6 +12,7 @@ import {
   type ApplyResult,
   type LogId,
   type ServerHalf,
+  type CountsRec,
   type ThreadRec,
 } from "../src/index.js";
 
@@ -43,7 +44,7 @@ test("R1: an approval queued for a request that was approved, then reopened by a
   );
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "otto", base: w.member(closed, "otto") }),
+    w.as("olga", "members.remove", { space: closed, user: "otto", base: w.admission(closed, "otto") }),
   );
   // otto asks again: the same request record is open again, with a new rev
   const before = w.rev(`request:${closed}:otto`);
@@ -60,7 +61,8 @@ test("R1: an approval queued for a request that was approved, then reopened by a
   const [r] = await mona.flush();
   t.is(r?.ok ? "ok" : r?.error.code, "STALE");
   t.is(w.get(`member:${closed}:otto`), undefined);
-  // a decline queued from the first request is STALE too
+  // a decline queued from the first request restricts: it applies to the
+  // request as it is now, whatever its rev (review round 2, finding 2)
   const olga = w.client("olga");
   olga.queue("joinRequests.decide", {
     space: closed,
@@ -69,17 +71,19 @@ test("R1: an approval queued for a request that was approved, then reopened by a
     base: { otto: before },
   });
   const [d] = await olga.flush();
-  t.is(d?.ok ? "ok" : d?.error.code, "STALE");
-  // a decision on the request as it is now applies
-  await ok(
-    t,
-    w.as("mona", "joinRequests.decide", {
-      space: closed,
-      users: ["otto"],
-      decision: "approve",
-      base: w.requests(closed, ["otto"]),
-    }),
-  );
+  t.is(d?.ok ? "ok" : d?.error.code, "ok");
+  t.is((w.get(`request:${closed}:otto`) as { st: string }).st, "declined");
+  // a reopening and an approval of the request as it is now apply
+  for (const decision of ["reopen", "approve"])
+    await ok(
+      t,
+      w.as("mona", "joinRequests.decide", {
+        space: closed,
+        users: ["otto"],
+        decision,
+        base: w.requests(closed, ["otto"]),
+      }),
+    );
   t.truthy(w.get(`member:${closed}:otto`));
 });
 
@@ -133,8 +137,8 @@ test("R1: reopening a declined request bumps its rev, so a decision made before 
 test("R1b: a removal queued before a person was removed and let in again is STALE", async (t) => {
   const { w, closed } = await cast(t);
   const mona = w.client("mona");
-  mona.queue("members.remove", { space: closed, user: "mel", base: w.member(closed, "mel") });
-  mona.queue("members.ban", { space: closed, user: "mel", base: w.member(closed, "mel") });
+  mona.queue("members.remove", { space: closed, user: "mel", base: w.admission(closed, "mel") });
+  mona.queue("members.ban", { space: closed, user: "mel" });
   const ada = w.client("ada");
   ada.queue("members.setRole", {
     space: closed,
@@ -144,7 +148,7 @@ test("R1b: a removal queued before a person was removed and let in again is STAL
   });
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "mel", base: w.member(closed, "mel") }),
+    w.as("olga", "members.remove", { space: closed, user: "mel", base: w.admission(closed, "mel") }),
   );
   await ok(t, w.as("mel", "joinRequests.create", { space: closed, rulesAccepted: true }));
   await ok(
@@ -156,20 +160,19 @@ test("R1b: a removal queued before a person was removed and let in again is STAL
       base: w.requests(closed, ["mel"]),
     }),
   );
+  // the removal names the first admission: STALE. The role change is
+  // STALE too. The ban restricts, and applies to mel as he is now (review
+  // round 2, finding 2).
   const results = [...(await mona.flush()), ...(await ada.flush())];
   t.deepEqual(
     results.map((r) => (r.ok ? "ok" : r.error.code)),
-    ["STALE", "STALE", "STALE"],
+    ["STALE", "ok", "STALE"],
   );
-  t.is((w.get(`member:${closed}:mel`) as { role: string } | undefined)?.role, "member");
-  t.is(w.get(`ban:${closed}:mel`), undefined);
-  // a ban of a person with no member record carries rev 0
-  await ok(t, w.as("mona", "members.ban", { space: closed, user: "eve", base: { rev: 0 } }));
-  await refused(
-    t,
-    w.as("mona", "members.ban", { space: closed, user: "otto", base: { rev: 1 } }),
-    "STALE",
-  );
+  t.is(w.get(`member:${closed}:mel`), undefined);
+  t.truthy(w.get(`ban:${closed}:mel`));
+  // a ban of a person who is not a member applies too
+  await ok(t, w.as("mona", "members.ban", { space: closed, user: "eve" }));
+  await ok(t, w.as("mona", "members.ban", { space: closed, user: "otto" }));
 });
 
 test("R2: a queued 'shown' does not publish text the author changed after the moderator read it", async (t) => {
@@ -197,7 +200,8 @@ test("R2: a queued 'shown' does not publish text the author changed after the mo
   t.false(JSON.stringify(s).includes("ABUSE"));
   const p = s.records.find((x) => x.key === `thread:${th}`)?.record as ThreadRec;
   t.is(p.q, "");
-  // the same holds for a queued "removed" or "hidden" after a change of the item
+  // a queued "removed" restricts: it applies to the item as it is now,
+  // whatever its rev, and erases the newer text (review round 2, finding 2)
   const mona = w.client("mona");
   mona.queue("moderation.decide", {
     item: `p:${th}`,
@@ -205,10 +209,10 @@ test("R2: a queued 'shown' does not publish text the author changed after the mo
     base: { rev: w.rev(`thread:${th}`) - 1 },
   });
   const [x] = await mona.flush();
-  t.is(x?.ok ? "ok" : x?.error.code, "STALE");
+  t.is(x?.ok ? "ok" : x?.error.code, "ok");
   t.is(
     JSON.stringify(await w.server.snapshot(actor("otto"), `space:${open}`)).includes("ABUSE"),
-    true,
+    false,
   );
 });
 
@@ -263,6 +267,11 @@ test("R7: dropping a write from the outbox does not block the writes after it", 
   );
   t.deepEqual(qs.sort(), ["four", "new", "three", "two"]);
   t.false(later.sent.some((e) => e.mutationId === old.mutationId));
+  // the dropped write is shown to the person, not discarded silently
+  t.deepEqual(
+    later.problems().map((p) => [p.local, p.reason, p.sent]),
+    [[old.local, "DROPPED", false]],
+  );
 });
 
 test("R7b: a reused mutation id's refusal is recorded, so the same envelope sent again gets it, not OUT_OF_ORDER", async (t) => {
@@ -293,16 +302,20 @@ test("R7c: after the device registers again, a replayed answer uses no seq, and 
   const mel = w.client("mel");
   const one = mel.queue("threads.create", { id: mel.newId(), space: open, kind: "post", q: "one" });
   const two = {
+    ...one,
+    local: mel.newId(),
     mutationId: mel.newId(),
-    name: "threads.create",
     input: { id: mel.newId(), space: open, kind: "post", q: "two" },
-    queuedAt: w.clock.now(),
   };
   t.deepEqual(codes(await mel.flush()), ["ok"]);
   // the response was lost: the device kept both writes and registers a new client id
   const again = new ReplicaClient(w.server, actor("mel"), env, {
+    owner: "mel",
     clientId: null,
-    outbox: [{ ...one }, two],
+    outbox: [{ ...one, sent: true }, two],
+    acked: 0,
+    offset: 0,
+    problems: [],
   });
   t.deepEqual(codes(await again.flush()), ["ok", "ok"]);
   t.not(again.clientId, mel.clientId);
@@ -375,14 +388,19 @@ test("R8: a fault that is not a refusal is INTERNAL_SERVER_ERROR, writes nothing
   mel.queue("threads.create", { id, space: open, kind: "ask", q: "x" });
   mel.queue("likes.set", { thread: id, on: true });
   t.deepEqual(codes(await mel.flush()), ["INTERNAL_SERVER_ERROR"]);
+  // the client waits before it sends the write again
+  t.deepEqual(codes(await mel.flush()), []);
+  w.clock.advance(MINUTE);
   t.deepEqual(codes(await mel.flush()), ["INTERNAL_SERVER_ERROR"]);
   t.is(mel.pending().length, 2);
   t.is(JSON.stringify([...w.server.dump()]), before);
   t.is(w.server.jobs().length, jobs);
   t.is(await w.nextSeq("mel", mel.clientId ?? ""), 1);
   broken = false;
+  w.clock.advance(MINUTE);
   t.deepEqual(codes(await mel.flush()), ["ok", "ok"]);
-  t.is((w.get(`thread:${id}`) as ThreadRec).likes, 1);
+  t.is((w.get(`counts:${id}`) as CountsRec).likes, 1);
+  await w.work();
   t.is(w.server.jobs().length, jobs + 1);
 });
 
@@ -420,15 +438,22 @@ test("R9: a failing post-commit effect does not change the stored answer, and ru
   const notifs = () =>
     [...w.server.dump().values()].flatMap((x) => (x.kind === "notif" ? [x.to] : [])).sort();
   t.deepEqual(notifs(), []);
-  // the retry of the same envelope gets the stored answer while the effect still fails
+  // the worker's attempt fails; the retry of the same envelope gets the
+  // stored answer while the effect still fails
+  t.is(await w.work(), 0);
   t.deepEqual(await w.server.apply(actor("eve"), e), first);
   await w.server.snapshot(null, `space:${open}`);
   t.deepEqual(notifs(), []);
   failing = false;
-  // the next call runs the queued effect: the space's staff get one notification each
+  // no request runs the effect, and the worker waits out its backoff
   await w.server.snapshot(null, `space:${open}`);
+  t.is(await w.work(), 0);
+  t.deepEqual(notifs(), []);
+  // then the space's staff get one notification each
+  w.clock.advance(1000);
+  t.is(await w.work(), 1);
   t.deepEqual(notifs(), ["mona", "olga"]);
-  await w.server.snapshot(null, `space:${open}`);
+  t.is(await w.work(), 0);
   t.deepEqual(notifs(), ["mona", "olga"]);
   t.deepEqual(await w.server.apply(actor("eve"), e), first);
 });
@@ -454,6 +479,7 @@ test("R15: TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE and INTERNAL_SERVER_ERROR keep
   for (const code of transient) {
     t.deepEqual(codes(await mel.flush()), [code]);
     t.is(mel.pending().length, 1);
+    w.clock.advance(MINUTE);
   }
   t.deepEqual(codes(await mel.flush()), ["ok"]);
   t.is(mel.pending().length, 0);
@@ -468,7 +494,7 @@ test("R3: a signed-out caller reading a missing or a closed log sees nothing mov
     const out: unknown[] = [];
     for (const log of [probe, `space:${closed}` as LogId]) {
       const s = await w.server.snapshot(null, log);
-      out.push(s.records, s.version);
+      out.push(s.records, s.cursor.length);
     }
     return JSON.stringify(out);
   };
@@ -480,17 +506,14 @@ test("R3: a signed-out caller reading a missing or a closed log sees nothing mov
     await ok(t, w.as("mel", "threads.create", { id, space: closed, kind: "post", q: "private" }));
   await ok(t, w.as("ada", "likes.set", { thread: ids[0], on: true }));
   t.is(await reads(), before);
-  t.is(first.version, 0);
   for (const [log, s] of [
     [probe, first],
     [`space:${closed}`, lab],
-  ] as const)
-    t.deepEqual(await w.server.pull(null, log, { epoch: s.epoch, version: s.version }), {
-      changes: [],
-      version: s.version,
-      epoch: s.epoch,
-      lastSeq: null,
-    });
+  ] as const) {
+    const p = await w.server.pull(null, log, s.cursor);
+    if ("resync" in p) return t.fail("unexpected resync");
+    t.deepEqual([p.changes, p.lastSeq, p.cursor.length], [[], null, s.cursor.length]);
+  }
   // the open space's public records did not change either
   const o = await w.server.snapshot(null, `space:${open}`);
   t.false(JSON.stringify(o).includes("private"));
@@ -507,7 +530,7 @@ test("R4a: a removed member's user log gets no deletions of likes and saves in t
   t.true(mel.records(log).has(`like:mel:${t1}`));
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "mel", base: w.member(closed, "mel") }),
+    w.as("olga", "members.remove", { space: closed, user: "mel", base: w.admission(closed, "mel") }),
   );
   // the removal resyncs mel's user log: the likes and saves there are no longer served
   t.is(await mel.sync(log), "resync");
@@ -521,7 +544,6 @@ test("R4a: a removed member's user log gets no deletions of likes and saves in t
   t.false(w.server.dump().has(`like:mel:${t1}`));
   const p = await w.server.pull(actor("mel"), log, cursor);
   t.deepEqual("resync" in p ? null : p.changes, []);
-  t.deepEqual(p, { changes: [], version: cursor.version, epoch: cursor.epoch, lastSeq: null });
 });
 
 test("R4b: a removed author's delete answers null, not whether the thread got replies after they left", async (t) => {
@@ -530,7 +552,7 @@ test("R4b: a removed author's delete answers null, not whether the thread got re
   const t3 = await thread(t, w, "mel", closed, "post", "mel's other");
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "mel", base: w.member(closed, "mel") }),
+    w.as("olga", "members.remove", { space: closed, user: "mel", base: w.admission(closed, "mel") }),
   );
   await ok(
     t,
@@ -561,6 +583,7 @@ test("R4c: report notifications leave a moderator's user log when the moderator 
   const { w, closed } = await cast(t);
   const th = await thread(t, w, "mel", closed, "post", "x");
   await ok(t, w.as("mel", "reports.create", { id: w.id(), item: `p:${th}`, why: "spam" }));
+  await w.work();
   const notifsOf = async (u: string) =>
     (await w.server.snapshot(actor(u), `user:${u}`)).records.filter(
       (r) => r.record.kind === "notif",
@@ -570,7 +593,7 @@ test("R4c: report notifications leave a moderator's user log when the moderator 
   await mona.sync("user:mona");
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "mona", base: w.member(closed, "mona") }),
+    w.as("olga", "members.remove", { space: closed, user: "mona", base: w.admission(closed, "mona") }),
   );
   t.deepEqual(await notifsOf("mona"), []);
   t.is(await mona.sync("user:mona"), "resync");
@@ -610,11 +633,11 @@ test("R5: a removed thread's text is in no value at rest, tombstones included, n
       w.as("olga", "moderation.decide", { item, decision: "removed", base: w.item(item) }),
     );
   t.deepEqual((await at()).match(/SECRET-[A-Z]+/g), null);
-  // a tombstone keeps the key, kind and audience, and the rev
+  // a tombstone keeps the key, kind and audience (the rev is in the registry)
   const scan = await w.server.scanStorage();
   t.true(scan.tombstones.length >= 3);
   for (const tomb of scan.tombstones)
-    t.deepEqual(Object.keys(tomb).sort(), ["at", "by", "key", "kind", "person", "rev", "sp"]);
+    t.deepEqual(Object.keys(tomb).sort(), ["at", "by", "key", "kind", "person", "sp"]);
   w.clock.advance(29 * DAY);
   t.deepEqual((await at()).match(/SECRET-[A-Z]+/g), null);
   // and a job that finishes after the removal writes nothing
@@ -648,7 +671,8 @@ test("R11 (kept): writes on a gone thread follow the mock, and an author may del
   await ok(t, w.as("mel", "likes.set", { thread: th, on: true }));
   await ok(t, w.as("mel", "followups.ask", { id: w.id(), thread: th, q: "hello?" }));
   const p = w.get(`thread:${th}`) as ThreadRec;
-  t.deepEqual([p.gone, p.likes, p.r, p.q], [true, 1, 1, ""]);
+  const pCounts = w.get(`counts:${th}`) as CountsRec;
+  t.deepEqual([p.gone, pCounts.likes, pCounts.r, p.q], [true, 1, 1, ""]);
   const th2 = await thread(t, w, "otto", open, "post", "x");
   await ok(t, w.as("mel", "saved.set", { kind: "thread", id: th2, on: true }));
   await ok(
@@ -746,12 +770,12 @@ test("a ban takes the membership away, and neither an approval nor the space ope
   await ok(t, w.as("eve", "joinRequests.create", { space: closed, rulesAccepted: true }));
   await ok(
     t,
-    w.as("mona", "members.ban", { space: closed, user: "otto", base: w.member(closed, "otto") }),
+    w.as("mona", "members.ban", { space: closed, user: "otto" }),
   );
   // a member who is banned loses the member record
   await ok(
     t,
-    w.as("mona", "members.ban", { space: closed, user: "mel", base: w.member(closed, "mel") }),
+    w.as("mona", "members.ban", { space: closed, user: "mel" }),
   );
   t.is(w.get(`member:${closed}:mel`), undefined);
   t.truthy(w.get(`ban:${closed}:mel`));
@@ -804,6 +828,7 @@ test("a report notifies the space's owner, admins and moderators, and nobody els
   const th = await thread(t, w, "mel", closed, "post");
   const report = w.id();
   await ok(t, w.as("mel", "reports.create", { id: report, item: `p:${th}`, why: "spam" }));
+  await w.work();
   const to = [...w.server.dump().values()]
     .flatMap((r) => (r.kind === "notif" && r.report === report ? [r.to] : []))
     .sort();
@@ -855,7 +880,8 @@ test("an author's delete keeps a thread with follow-ups or replies, and makes on
   ] as const) {
     t.deepEqual(await w.as("mel", "threads.delete", { id: th }), { ok: true, result: { kept } });
     const p = w.get(`thread:${th}`) as ThreadRec;
-    t.deepEqual([p.del, p.gone, p.likes], [true, !kept, kept ? 1 : 0]);
+  const pCounts = w.get(`counts:${th}`) as CountsRec;
+    t.deepEqual([p.del, p.gone, pCounts.likes], [true, !kept, kept ? 1 : 0]);
     t.is(w.server.dump().has(`like:otto:${th}`), kept);
     t.is(w.server.dump().has(`save:otto:${th}`), kept);
   }

@@ -6,7 +6,7 @@
 
 import test from "ava";
 
-import type { FollowUpRec, LogId, ReplyRec, TestServer, ThreadRec } from "../src/index.js";
+import type { FollowUpRec, LogId, ReplyRec, TestServer, CountsRec, ThreadRec } from "../src/index.js";
 import { TOMBSTONE_TTL } from "../src/index.js";
 
 import { DAY, HOUR, actor, admit, cast, ok, refused, thread } from "./harness.js";
@@ -143,9 +143,10 @@ test("removing a thread erases it and everything under it from storage, for good
     t.false(w.server.dump().has(key));
   t.false([...w.server.dump().values()].some((r) => r.kind === "run" && r.th === th));
   const p = w.get(`thread:${post}`) as ThreadRec;
+  const pCounts = w.get(`counts:${post}`) as CountsRec;
   t.is(p.mod, "removed");
-  t.is(p.r, 0);
-  t.is(p.likes, 1);
+  t.is(pCounts.r, 0);
+  t.is(pCounts.likes, 1);
   // every reader's replica loses it through a pull, with `del`s for the children
   for (const c of readers)
     for (const log of [`space:${open}`, `space:${closed}`] as LogId[]) {
@@ -163,10 +164,12 @@ test("removing a thread erases it and everything under it from storage, for good
       w.as("mona", "moderation.decide", { ...input, base: now }),
       "PRECONDITION_FAILED",
     );
+    // only "shown" compares the rev; the restricting decisions find the
+    // item removed (review round 2, finding 2)
     await refused(
       t,
       w.as("mona", "moderation.decide", { ...input, base: { rev: now.rev - 1 } }),
-      "STALE",
+      decision === "shown" ? "STALE" : "PRECONDITION_FAILED",
     );
   }
   await refused(
@@ -334,7 +337,7 @@ test("a delete reaches a pull as a tombstone for 30 days; after that the cursor 
   await late.sync(log);
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "mona", base: w.member(closed, "mona") }),
+    w.as("olga", "members.remove", { space: closed, user: "mona", base: w.admission(closed, "mona") }),
   );
   t.false(w.server.dump().has(`member:${closed}:mona`));
   w.clock.advance(29 * DAY);
@@ -414,7 +417,7 @@ test("snapshots and pulls hand out copies: changing one changes nothing on the s
   if ("resync" in p) return t.fail("unexpected resync");
   for (const x of p.changes) if (x.op === "put") Object.assign(x.record, { q: SECRET });
   t.false((await stored(w)).includes(SECRET));
-  t.is((w.get(`thread:${th}`) as ThreadRec).likes, 0);
+  t.is((w.get(`counts:${th}`) as CountsRec).likes, 0);
 });
 
 test("hiding and removing redact every text field: question, title, summary, follow-up question and answer, reply", async (t) => {

@@ -1,8 +1,9 @@
 // Invariant 4: the server owns uniqueness, stored times and the values it
-// makes (invite codes). A client ULID is accepted only from 3 days in the past
-// to 1 minute in the future; an existing id is CONFLICT, byte-identical
-// whether or not the caller may read the record that has it; space ids are
-// ULIDs and space names are unique.
+// makes (invite codes). A client ULID is accepted only from 4 days before to
+// 1 minute after the device's time, and the device's time only within a
+// minute of the server's; an existing id is CONFLICT, byte-identical whether
+// or not the caller may read the record that has it; space ids are ULIDs and
+// space names are unique.
 
 import test from "ava";
 
@@ -12,6 +13,7 @@ import {
   ulid,
   ulidTime,
   type ApplyResult,
+  type CountsRec,
   type InviteRec,
   type ThreadRec,
 } from "../src/index.js";
@@ -141,15 +143,14 @@ test("a missing target and one the caller may not read answer the same", async (
   await ok(t, w.as("eve", "likes.set", { thread: missing, on: false }));
 });
 
-test("a client ULID older than 4 days or more than 1 minute ahead is refused, and nothing is recorded", async (t) => {
+test("a client ULID more than 4 days old or more than 1 minute ahead on the device's clock is EXPIRED, and the answer is recorded", async (t) => {
   const { w, open, closed } = await cast(t);
   const at = (offset: number) => w.id(offset);
   const create = (id: string) =>
     w.as("mel", "threads.create", { id, space: open, kind: "post", q: "x" });
   const skew = async (res: Promise<ApplyResult>) => {
     const r = await res;
-    t.is(r.ok ? null : r.error.code, "CLOCK_SKEW");
-    t.is(r.ok ? null : r.error.serverTime, w.clock.now());
+    t.is(r.ok ? null : r.error.code, "EXPIRED");
   };
   await skew(create(at(-4 * DAY - 1)));
   await skew(create(at(MINUTE + 1)));
@@ -159,6 +160,12 @@ test("a client ULID older than 4 days or more than 1 minute ahead is refused, an
   // the same window applies to the mutation id, and to every id the input brings
   await skew(w.as("mel", "spaces.join", { space: open }, at(-4 * DAY - 1)));
   await skew(w.as("mel", "spaces.join", { space: open }, at(MINUTE + 1)));
+  // recorded: the same envelope again gets the same answer, and the seq is used
+  const e = await w.envelope("mel", "spaces.join", { space: open }, at(-5 * DAY));
+  await skew(Promise.resolve(w.server.apply(actor("mel"), e)));
+  await skew(w.resend("mel", e, true));
+  t.is(await w.nextSeq("mel", e.clientId), e.seq + 1);
+  t.is(w.get(`member:${open}:mel`)?.kind, "member");
   const th = await thread(t, w, "mel", closed, "ask");
   const post = await thread(t, w, "mel", closed, "post");
   for (const [name, input] of [
@@ -178,6 +185,21 @@ test("a client ULID older than 4 days or more than 1 minute ahead is refused, an
     ),
   );
   t.is((w.get(`thread:${th}`) as ThreadRec).mod, null);
+});
+
+test("a device clock more than a minute from the server's is CLOCK_SKEW with the server's time, and nothing is recorded", async (t) => {
+  const { w, open } = await cast(t);
+  for (const off of [MINUTE + 1, -MINUTE - 1, -10 * DAY, 400 * DAY]) {
+    const e = await w.envelope("otto", "likes.set", { thread: w.id(), on: false });
+    const r = await w.server.apply(actor("otto"), { ...e, clientTime: e.clientTime + off });
+    t.is(r.ok ? null : r.error.code, "CLOCK_SKEW");
+    t.is(r.ok ? null : r.error.serverTime, w.clock.now());
+    t.is(await w.nextSeq("otto", e.clientId), e.seq);
+  }
+  for (const off of [MINUTE, -MINUTE]) {
+    const e = await w.envelope("otto", "spaces.join", { space: open });
+    await ok(t, w.server.apply(actor("otto"), { ...e, clientTime: e.clientTime + off }));
+  }
 });
 
 test("a fast clock is corrected from the server's time, and the write sent again succeeds", async (t) => {
@@ -201,24 +223,25 @@ test("a fast clock is corrected from the server's time, and the write sent again
   t.is(made.length, 1);
   t.not(made[0]?.id, id);
   t.true(Math.abs(ulidTime(made[0]?.id ?? "") - w.clock.now()) < MINUTE);
-  t.is(made[0]?.r, 1);
+  t.is((w.get(`counts:${made[0]?.id ?? ""}`) as CountsRec).r, 1);
   t.true(Math.abs(mel.now() - w.clock.now()) < 1000);
-  // the refusal was not recorded: the same envelope, sent unchanged once it is
-  // inside the window, is applied
+  // the refusal was not recorded: the same envelope, sent unchanged once the
+  // server's clock has caught up with the device's, is applied
   const e = await w.envelope(
     "otto",
     "threads.create",
     {
-      id: w.id(),
+      id: w.id(2 * MINUTE),
       space: open,
       kind: "post",
       q: "x",
     },
     w.id(2 * MINUTE),
   );
-  await refused(t, w.server.apply(actor("otto"), e), "CLOCK_SKEW");
-  w.clock.advance(5 * MINUTE);
-  await ok(t, w.server.apply(actor("otto"), e));
+  const ahead = { ...e, clientTime: e.clientTime + 2 * MINUTE };
+  await refused(t, w.server.apply(actor("otto"), ahead), "CLOCK_SKEW");
+  w.clock.advance(2 * MINUTE);
+  await ok(t, w.server.apply(actor("otto"), ahead));
 });
 
 test("a malformed ULID is refused", async (t) => {
@@ -276,21 +299,17 @@ test("spaces.create is online only: the client never queues it", async (t) => {
   await ok(t, c.send("spaces.create", { id: c.newId(), name: "x" }));
 });
 
-test("the server refuses an online-only write that waited in an outbox, with CLOCK_SKEW, and records nothing", async (t) => {
+test("the server refuses an online-only write that waited in an outbox with EXPIRED, and records it", async (t) => {
   const w = new World();
-  // a client that queues it anyway: its envelope is older than a minute when
-  // sent. The server cannot tell this from a slow clock (round 1, R6): it
-  // answers CLOCK_SKEW with its time, and never applies the envelope as it is.
+  // a client that queues it anyway: on the device's clock, its mutation id
+  // is more than a minute old when it is sent. A slow device clock is a
+  // CLOCK_SKEW of `clientTime` instead, which the client corrects (R6).
   const e = await w.envelope("eve", "spaces.create", { id: w.id(), name: "late" });
   w.clock.advance(MINUTE + 1);
-  for (let k = 0; k < 2; k++) {
-    const r = await w.server.apply(actor("eve"), e);
-    t.is(r.ok ? null : r.error.code, "CLOCK_SKEW");
-    t.is(r.ok ? null : r.error.serverTime, w.clock.now());
-  }
+  for (let k = 0; k < 2; k++) await refused(t, w.resend("eve", e), "EXPIRED");
   t.is(w.server.dump().size, 0);
-  // nothing was recorded: the seq is free, and a fresh write under it is applied
-  t.is(await w.nextSeq("eve", e.clientId), e.seq);
+  // recorded: the seq is used, and a fresh write is applied under the next one
+  t.is(await w.nextSeq("eve", e.clientId), e.seq + 1);
   await ok(t, w.as("eve", "spaces.create", { id: w.id(), name: "late" }));
 });
 
@@ -369,5 +388,6 @@ test("later ids of a mutation derive from the user, the mutation id and an ordin
   t.truthy(w.get(`run:${res.run}`));
   t.not(deriveId("otto", mid, 1), res.run);
   t.not(deriveId("mel", mid, 2), res.run);
+  await w.work();
   t.deepEqual(w.server.jobs().at(-1), { kind: "run", id: res.run });
 });

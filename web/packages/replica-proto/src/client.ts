@@ -387,17 +387,22 @@ export class ReplicaClient {
     for (const p of [...this.outbox]) if (p.queuedAt < now - OUTBOX_TTL) this.giveUp(p, "DROPPED");
   }
 
-  /** New mutation id and new client-made ids for a write that was never
-   * sent, after the server refused the device's clock. The writes queued
-   * after it that name those ids get the new ones too. */
-  private remint(p: Pending) {
-    const def = Object.hasOwn(MUTATORS, p.name) ? MUTATORS[p.name] : undefined;
-    const parsed = def?.input.safeParse(p.input);
+  /** After the server refused the device's clock: a new mutation id and new
+   * client-made ids, from the corrected clock, for every queued write that
+   * was never sent (their ids came from the clock that was off). The writes
+   * that name those ids get the new ones too. A write that was sent keeps
+   * its ids. */
+  private remint() {
     const map = new Map<string, string>();
-    for (const id of parsed?.success ? (def?.ids?.(parsed.data) ?? []) : [])
-      map.set(id, this.newId());
-    p.mutationId = this.newId();
-    for (const x of this.outbox) x.input = remap(x.input, map);
+    for (const p of this.outbox) {
+      if (p.sent) continue;
+      const def = Object.hasOwn(MUTATORS, p.name) ? MUTATORS[p.name] : undefined;
+      const parsed = def?.input.safeParse(p.input);
+      for (const id of parsed?.success ? (def?.ids?.(parsed.data) ?? []) : [])
+        map.set(id, this.newId());
+      p.mutationId = this.newId();
+    }
+    for (const x of this.outbox) if (!x.sent) x.input = remap(x.input, map);
   }
 
   /** Send the outbox in order, one answer per write sent (see the answers
@@ -440,7 +445,7 @@ export class ReplicaClient {
         const { code, serverTime, expectedSeq } = res.error;
         if (code === "CLOCK_SKEW" && serverTime !== undefined && skews++ < 3) {
           this.offset = serverTime - this.env.clock.now();
-          if (!p.sent) this.remint(p);
+          this.remint();
           continue;
         }
         if (code === "OUT_OF_ORDER" && expectedSeq !== undefined && gaps++ < 3) {

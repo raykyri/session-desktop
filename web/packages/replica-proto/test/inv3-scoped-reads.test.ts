@@ -3,9 +3,9 @@
 
 import test, { type ExecutionContext } from "ava";
 
-import type { LogId, Pull, StoredRecord } from "../src/index.js";
+import type { LogId, Pull, StoredRecord, ThreadRec } from "../src/index.js";
 
-import { DAY, HOUR, actor, admit, cast, ok, refused, thread, type Cast } from "./harness.js";
+import { DAY, HOUR, World, actor, admit, cast, ok, refused, thread, type Cast } from "./harness.js";
 import { diff, expected } from "./oracle.js";
 
 const kinds = (m: ReadonlyMap<string, StoredRecord>) =>
@@ -41,7 +41,7 @@ async function busy(t: ExecutionContext, c: Cast) {
   await ok(t, w.as("mel", "saved.set", { kind: "thread", id: ask, on: true }));
   await ok(
     t,
-    w.as("mona", "members.ban", { space: open, user: "eve", base: w.member(open, "eve") }),
+    w.as("mona", "members.ban", { space: open, user: "eve" }),
   );
   const openPost = await thread(t, w, "otto", open, "post");
   await ok(
@@ -93,6 +93,7 @@ test("a signed-out caller gets open spaces and the landings of closed ones", asy
   t.deepEqual(kinds(await snap(c, null, `space:${c.closed}`)), ["space"]);
   t.deepEqual(kinds(await snap(c, null, `space:${c.vault}`)), ["space"]);
   t.deepEqual(kinds(await snap(c, null, `space:${c.open}`)), [
+    "counts",
     "member",
     "reply",
     "space",
@@ -112,7 +113,7 @@ test("a removed member's cursor resyncs, and the new snapshot has none of the sp
   const cursor = mel.cursor(`space:${closed}`);
   await ok(
     t,
-    w.as("mona", "members.remove", { space: closed, user: "mel", base: w.member(closed, "mel") }),
+    w.as("mona", "members.remove", { space: closed, user: "mel", base: w.admission(closed, "mel") }),
   );
   const later = await thread(t, w, "olga", closed, "post", "after mel left");
   t.deepEqual(await w.server.pull(actor("mel"), `space:${closed}`, cursor!), { resync: true });
@@ -137,10 +138,7 @@ test("a cursor kept after leaving resyncs, and never carries content written aft
   // the cursor of the snapshot taken after leaving never brings later content either
   const fresh = await w.server.snapshot(actor("mel"), `space:${closed}`);
   await thread(t, w, "ada", closed, "post", "more secret");
-  const p = await w.server.pull(actor("mel"), `space:${closed}`, {
-    epoch: fresh.epoch,
-    version: fresh.version,
-  });
+  const p = await w.server.pull(actor("mel"), `space:${closed}`, fresh.cursor);
   t.deepEqual(
     changes(p)?.map((x) => x.key),
     [],
@@ -155,11 +153,15 @@ test("another person's user log gives nothing, with any cursor", async (t) => {
   const mel = w.client("mel");
   await mel.sync("user:mel");
   t.true(mel.records("user:mel").size > 0);
-  const cursor = { epoch: "e0", version: 0 };
   for (const u of ["eve", "mona", "olga", null]) {
-    t.deepEqual((await w.server.snapshot(actor(u), "user:mel")).records, []);
-    t.deepEqual(changes(await w.server.pull(actor(u), "user:mel", cursor)), []);
-    t.deepEqual(changes(await w.server.pull(actor(u), "user:mel", mel.cursor("user:mel")!)), []);
+    const s = await w.server.snapshot(actor(u), "user:mel");
+    t.deepEqual(s.records, []);
+    t.deepEqual(changes(await w.server.pull(actor(u), "user:mel", s.cursor)), []);
+    // mel's token, and one the server never made, resync
+    t.deepEqual(await w.server.pull(actor(u), "user:mel", mel.cursor("user:mel")!), {
+      resync: true,
+    });
+    t.deepEqual(await w.server.pull(actor(u), "user:mel", "e0"), { resync: true });
   }
 });
 
@@ -205,40 +207,40 @@ test("a plain member gets no moderator-only records, in snapshots or pulls", asy
   t.is(keys.filter((k) => k.startsWith("report:")).length, 1);
 });
 
-test("the version a read returns is the newest row the reader was given, never the server's head", async (t) => {
-  // review round 1, R3: every read returned the server's head, so a reader
-  // counted and timed the writes it may not read
+test("a read carries no version: its cursor is an opaque token whose length does not change with writes", async (t) => {
+  // review round 1, R3, and round 2, finding 1: versions from one counter
+  // for the whole server let a reader count and time the writes it may not
+  // read
   const c = await cast(t);
   const { w, open, closed } = c;
   await thread(t, w, "mel", closed, "post", "before eve looks");
   const s = await w.server.snapshot(actor("eve"), `space:${closed}`);
   const o = await w.server.snapshot(actor("eve"), `space:${open}`);
-  // eve may read only the space record of #lab: its row is the version
-  const rows = await w.server.logRows(`space:${closed}`);
-  t.is(s.version, rows.find((r) => r.key === `space:${closed}`)?.version ?? -1);
-  t.true(s.version < Math.max(...rows.map((r) => r.version)));
-  await thread(t, w, "mel", closed, "post", "activity eve should not see");
+  t.deepEqual(Object.keys(s).sort(), ["cursor", "lastSeq", "records"]);
+  t.regex(s.cursor, /^[A-Za-z0-9_-]+$/);
+  for (let k = 0; k < 120; k++) await thread(t, w, "mel", closed, "post", "eve should not see");
   const other = await thread(t, w, "mel", closed);
   await ok(t, w.as("mel", "likes.set", { thread: other, on: true }));
-  // a pull with nothing eve may read returns her cursor unchanged
-  const p1 = await w.server.pull(actor("eve"), `space:${closed}`, {
-    epoch: s.epoch,
-    version: s.version,
-  });
-  t.deepEqual(p1, { changes: [], version: s.version, epoch: s.epoch, lastSeq: null });
+  // a pull with nothing eve may read: no change, and a token of the same length
+  const p1 = await w.server.pull(actor("eve"), `space:${closed}`, s.cursor);
+  if ("resync" in p1) return t.fail("unexpected resync");
+  t.deepEqual(p1.changes, []);
+  t.deepEqual(Object.keys(p1).sort(), ["changes", "cursor", "lastSeq"]);
+  t.is(p1.cursor.length, s.cursor.length);
+  t.not(p1.cursor, s.cursor);
   const again = await w.server.snapshot(actor("eve"), `space:${closed}`);
-  t.deepEqual([again.records, again.version], [s.records, s.version]);
-  // a change eve may read moves her cursor to that change's row, in that log only
+  t.deepEqual(again.records, s.records);
+  t.is(again.cursor.length, s.cursor.length);
+  // a change eve may read reaches her, in that log only
   const post = await thread(t, w, "otto", open, "post");
-  const p2 = await w.server.pull(actor("eve"), `space:${open}`, {
-    epoch: o.epoch,
-    version: o.version,
-  });
+  const p2 = await w.server.pull(actor("eve"), `space:${open}`, o.cursor);
   if ("resync" in p2) return t.fail("unexpected resync");
-  const opened = await w.server.logRows(`space:${open}`);
-  t.is(p2.version, opened.find((r) => r.key === `thread:${post}`)?.version ?? -1);
-  t.not(p2.epoch, o.epoch);
-  t.is((await w.server.snapshot(actor("eve"), `space:${closed}`)).version, s.version);
+  t.deepEqual(
+    p2.changes.map((x) => x.key),
+    [`thread:${post}`, `counts:${post}`, `stats:${open}`],
+  );
+  const p3 = await w.server.pull(actor("eve"), `space:${open}`, p2.cursor);
+  t.deepEqual(changes(p3), []);
 });
 
 test("a signed-out caller can tell neither how many writes happened nor when, in a closed or a missing log", async (t) => {
@@ -246,19 +248,20 @@ test("a signed-out caller can tell neither how many writes happened nor when, in
   const { w, closed } = c;
   const missing = `space:${w.id()}` as LogId;
   const logs = [missing, `space:${closed}`, "user:mel"] as LogId[];
-  const cursors = new Map<LogId, { epoch: string; version: number }>();
-  for (const log of logs) {
-    const s = await w.server.snapshot(null, log);
-    t.regex(s.epoch, /^e[0-9a-f]{20}$/);
-    cursors.set(log, { epoch: s.epoch, version: s.version });
-  }
-  t.is(cursors.get(missing)?.version, 0);
-  // what a snapshot holds, and what a pull from the first cursor answers
+  const cursors = new Map<LogId, string>();
+  for (const log of logs) cursors.set(log, (await w.server.snapshot(null, log)).cursor);
+  // what a snapshot holds, its token's length, and what a pull from the
+  // first token answers (tokens differ on every read: each has a new IV)
   const read = async () => {
     const out: unknown[] = [];
     for (const log of logs) {
       const s = await w.server.snapshot(null, log);
-      out.push(s.records, s.version, await w.server.pull(null, log, cursors.get(log)!));
+      const p = await w.server.pull(null, log, cursors.get(log)!);
+      out.push(
+        s.records,
+        s.cursor.length,
+        "resync" in p ? p : { changes: p.changes, length: p.cursor.length, lastSeq: p.lastSeq },
+      );
     }
     return JSON.stringify(out);
   };
@@ -282,12 +285,12 @@ test("a non-member sees no change to any record after a post in a closed space",
   const readers = [null, "eve", "otto"];
   const logs: LogId[] = [`space:${closed}`, `space:${c.open}`, `space:${c.vault}`];
   const before = new Map<string, string>();
-  const cursors = new Map<string, { epoch: string; version: number }>();
+  const cursors = new Map<string, string>();
   for (const u of readers)
     for (const log of logs) {
       const s = await c.w.server.snapshot(actor(u), log);
       before.set(`${u} ${log}`, JSON.stringify(s.records));
-      cursors.set(`${u} ${log}`, { epoch: s.epoch, version: s.version });
+      cursors.set(`${u} ${log}`, s.cursor);
     }
   const th = await thread(t, w, "mel", closed, "post", "activity");
   await ok(
@@ -313,45 +316,97 @@ test("a forged cursor resyncs", async (t) => {
   const c = await cast(t);
   const { w, closed } = c;
   const s = await w.server.snapshot(actor("eve"), `space:${closed}`);
+  const raw = Buffer.from(s.cursor, "base64url");
+  const flipped = (k: number) => {
+    const b = Buffer.from(raw);
+    b[k] = (b[k] ?? 0) ^ 1;
+    return b.toString("base64url");
+  };
   for (const cursor of [
-    { epoch: s.epoch, version: s.version + 1 },
-    { epoch: "e999", version: s.version },
-    { epoch: s.epoch, version: -1 },
-    { epoch: s.epoch, version: 1.5 },
-    { epoch: s.epoch, version: Number.NaN },
-    { epoch: s.epoch, version: 0, extra: 1 },
+    "",
+    "e999",
+    s.cursor.slice(0, -2),
+    `${s.cursor}AA`,
+    flipped(0),
+    flipped(20),
+    flipped(raw.length - 1),
+    "A".repeat(5000),
+    { epoch: s.cursor, version: 0 },
+    null,
+    7,
   ])
-    t.deepEqual(await w.server.pull(actor("eve"), `space:${closed}`, cursor), { resync: true });
+    t.deepEqual(
+      await w.server.pull(actor("eve"), `space:${closed}`, cursor as string),
+      { resync: true },
+      JSON.stringify(cursor).slice(0, 40),
+    );
   for (const log of ["space:", "user:", "space:a:b", "other:x", "user:mel:x"] as LogId[]) {
-    t.deepEqual(await w.server.pull(actor("eve"), log, s), { resync: true }, log);
+    t.deepEqual(await w.server.pull(actor("eve"), log, s.cursor), { resync: true }, log);
     t.deepEqual((await w.server.snapshot(actor("eve"), log)).records, [], log);
   }
 });
 
-test("a cursor from before its epoch began resyncs, so it gets no tombstones of the old history", async (t) => {
-  // attack B of the phase 0 review: a forged cursor { epoch: current,
-  // version: 0 } after a closed space opened returned the `del` of a member
-  // who left while it was closed
+test("a token of another reader, another log or another server resyncs", async (t) => {
+  // review round 2, mutations N2 and N3
+  const c = await cast(t);
+  const { w, open, closed } = c;
+  await busy(t, c);
+  const lab = `space:${closed}` as LogId;
+  const mel = await w.server.snapshot(actor("mel"), lab);
+  const eve = await w.server.snapshot(actor("eve"), lab);
+  const melOpen = await w.server.snapshot(actor("mel"), `space:${open}`);
+  const melUser = await w.server.snapshot(actor("mel"), "user:mel");
+  await thread(t, w, "mel", closed, "post", "after the tokens");
+  const resync = { resync: true };
+  t.deepEqual(await w.server.pull(actor("eve"), lab, mel.cursor), resync);
+  t.deepEqual(await w.server.pull(null, lab, mel.cursor), resync);
+  t.deepEqual(await w.server.pull(actor("mel"), lab, eve.cursor), resync);
+  t.deepEqual(await w.server.pull(actor("mel"), lab, melOpen.cursor), resync);
+  t.deepEqual(await w.server.pull(actor("mel"), `space:${open}`, mel.cursor), resync);
+  t.deepEqual(await w.server.pull(actor("mel"), lab, melUser.cursor), resync);
+  t.deepEqual(await w.server.pull(actor("mel"), "user:mel", mel.cursor), resync);
+  // a server with another key does not open these tokens
+  const other = new World(1);
+  t.deepEqual(await other.server.pull(actor("mel"), lab, mel.cursor), resync);
+  // and mel's own token works
+  const p = await w.server.pull(actor("mel"), lab, mel.cursor);
+  t.true(!("resync" in p) && p.changes.length > 0);
+});
+
+test("a cursor from before the log's history was replaced resyncs, so it gets no tombstones of the old history", async (t) => {
+  // attack B of the phase 0 review: a forged cursor at version 0 after a
+  // closed space opened returned the `del` of a member who left while it was
+  // closed; review round 2, N30: a valid version-0 token of the old history
   const c = await cast(t);
   const { w, closed } = c;
+  const lab = `space:${closed}` as LogId;
+  const readers = ["eve", null, "otto"];
+  const old: { u: string | null; cursor: string }[] = [];
+  const take = async () => {
+    for (const u of readers) old.push({ u, cursor: (await w.server.snapshot(actor(u), lab)).cursor });
+  };
+  // version-0 tokens: the log of a space that does not exist yet
+  const later = w.id();
+  const zero: { u: string | null; cursor: string }[] = [];
+  for (const u of readers)
+    zero.push({ u, cursor: (await w.server.snapshot(actor(u), `space:${later}`)).cursor });
+  await take();
   await busy(t, c);
+  await take();
   await ok(t, w.as("mel", "spaces.leave", { space: closed }));
+  await take();
   await ok(t, w.as("olga", "spaces.update", { id: closed, set: { vis: "open" } }));
-  const s = await w.server.snapshot(actor("eve"), `space:${closed}`);
+  const s = await w.server.snapshot(actor("eve"), lab);
   t.false(s.records.some((x) => x.key === `member:${closed}:mel`));
-  for (const u of ["eve", null, "otto"])
-    for (let version = 0; version < s.version; version++)
-      t.deepEqual(
-        await w.server.pull(actor(u), `space:${closed}`, { epoch: s.epoch, version }),
-        { resync: true },
-        `${u} ${version}`,
-      );
-  // a cursor from the epoch's start on is served
-  const p = await w.server.pull(actor("eve"), `space:${closed}`, {
-    epoch: s.epoch,
-    version: s.version,
-  });
-  t.deepEqual(changes(p), []);
+  for (const { u, cursor } of old)
+    t.deepEqual(await w.server.pull(actor(u), lab, cursor), { resync: true }, `${u}`);
+  // the token of the snapshot after the change is served
+  t.deepEqual(changes(await w.server.pull(actor("eve"), lab, s.cursor)), []);
+  // a version-0 token of a log whose space then was made, closed and opened
+  await ok(t, w.as("eve", "spaces.create", { id: later, name: "later", vis: "listed" }));
+  await ok(t, w.as("eve", "spaces.update", { id: later, set: { vis: "open" } }));
+  for (const { u, cursor } of zero)
+    t.deepEqual(await w.server.pull(actor(u), `space:${later}`, cursor), { resync: true }, `${u}`);
 });
 
 test("a space that becomes closed resyncs every reader, and non-members lose its content", async (t) => {
@@ -401,7 +456,7 @@ test("a removed member's device keeps a frozen copy of their threads, and can st
   await mel.sync(`space:${closed}`);
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "mel", base: w.member(closed, "mel") }),
+    w.as("olga", "members.remove", { space: closed, user: "mel", base: w.admission(closed, "mel") }),
   );
   t.is(await mel.sync(`space:${closed}`), "resync");
   const live = mel.records(`space:${closed}`);
@@ -414,9 +469,12 @@ test("a removed member's device keeps a frozen copy of their threads, and can st
   t.deepEqual([...frozen.keys()].sort(), [`reply:${melsReply}`, `thread:${th}`].sort());
   t.false(frozen.has(`thread:${other}`));
   // no further updates reach it, and the server serves none of it
-  await ok(t, w.as("mona", "likes.set", { thread: th, on: true }));
+  await ok(
+    t,
+    w.as("mona", "moderation.decide", { item: `p:${th}`, decision: "hidden", base: w.item(`p:${th}`) }),
+  );
   await mel.sync(`space:${closed}`);
-  t.is((mel.frozen(`space:${closed}`).get(`thread:${th}`) as { likes: number }).likes, 0);
+  t.is((mel.frozen(`space:${closed}`).get(`thread:${th}`) as ThreadRec).mod, null);
   const s = await w.server.snapshot(actor("mel"), `space:${closed}`);
   t.false(JSON.stringify(s).includes(th));
   // the author may delete it all the same; nobody else may, and mel may not edit it

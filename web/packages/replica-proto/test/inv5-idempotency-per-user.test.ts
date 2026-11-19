@@ -5,7 +5,7 @@
 
 import test from "ava";
 
-import type { Envelope, StatsRec, ThreadRec } from "../src/index.js";
+import type { Envelope, StatsRec, CountsRec, ThreadRec } from "../src/index.js";
 
 import { DAY, HOUR, actor, cast, ok, refused, thread } from "./harness.js";
 
@@ -34,9 +34,9 @@ test("a replay of the same mutation id is applied once and answers the first res
     t.is(JSON.stringify(late), first[0] ?? "");
   }
   t.is(JSON.stringify([...w.server.dump()]), before);
-  const p = w.get(`thread:${th}`) as ThreadRec;
-  t.is(p.likes, 1);
-  t.is(p.r, 1);
+  const pCounts = w.get(`counts:${th}`) as CountsRec;
+  t.is(pCounts.likes, 1);
+  t.is(pCounts.r, 1);
   t.is((w.get(`stats:${open}`) as StatsRec).posts, 2);
 });
 
@@ -138,7 +138,7 @@ test("each client's last processed seq comes back with its own reads only", asyn
   mel.queue("members.remove", {
     space: open,
     user: "otto",
-    base: w.member(open, "otto"),
+    base: w.admission(open, "otto"),
   });
   await mel.flush();
   await mel.sync(`space:${open}`);
@@ -168,9 +168,11 @@ test("a replay within 7 days answers the stored result; after 7 days it is refus
   t.is(w.get(`save:otto:${th}`), undefined);
   w.clock.advance(DAY + HOUR);
   // the stored result is gone; the seq was used up, and the mutation id is
-  // outside the window, so it is refused under its own seq and any later one
+  // more than 4 days old on the device's clock, so it is refused under its
+  // own seq and any later one (and that refusal is recorded)
   await refused(t, w.server.apply(actor("otto"), e), "OUT_OF_ORDER");
-  await refused(t, w.resend("otto", e, true), "CLOCK_SKEW");
+  await refused(t, w.resend("otto", e, true), "EXPIRED");
+  await refused(t, w.resend("otto", e, true), "EXPIRED");
   t.is(w.get(`save:otto:${th}`), undefined);
 });
 

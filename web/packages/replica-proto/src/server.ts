@@ -141,10 +141,10 @@ export const EFFECT_BACKOFF_MIN = 1000;
 export const EFFECT_BACKOFF_MAX = 10 * MINUTE;
 
 const envelopeS = z.strictObject({
-  clientId: z.string().max(64),
+  clientId: z.string(),
   seq: z.number().int().positive(),
-  mutationId: z.string().max(64),
-  name: z.string().max(64),
+  mutationId: z.string(),
+  name: z.string(),
   input: z.unknown(),
   protocolVersion: z.number().int(),
   clientTime: z.number().int().nonnegative(),
