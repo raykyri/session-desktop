@@ -378,7 +378,11 @@ for (let s0 = 1; s0 <= SEEDS; s0 += 4)
             });
           }
         } else if (kind === "claim" && mine.length) {
-          const r = pick(mine);
+          // mostly a queued run, as a device would claim
+          const queued = runs.filter(
+            (x) => (before.get(`run:${x.id}`) as Any)?.status === "queued",
+          );
+          const r = pick(queued.length && rand() < 0.8 ? queued : mine);
           const a = await act(r, "runs.claim", {});
           if (a.ok) {
             r.until = now() + LEASE;
@@ -443,6 +447,29 @@ for (let s0 = 1; s0 <= SEEDS; s0 += 4)
               base: w.item(item),
             });
             if (a.ok) count(`step ${hidden ? "show" : "hide"} a follow-up`);
+            // the other person asks under the same thread: a run whose claim
+            // must leave the hidden follow-up out (G1)
+            if (a.ok && !hidden) {
+              const u = r.u === "mel" ? "otto" : "mel";
+              const id = w.id();
+              const b = await w.as(u, "research.forkNode", {
+                id,
+                thread: r.th,
+                parent: "r",
+                q: `F-${u}-${id}`,
+                executor: { kind: "device", cli: "claude", device: devices.get(u) },
+              });
+              if (b.ok)
+                runs.push({
+                  id: (b.result as Any).run,
+                  u,
+                  device: devices.get(u) as string,
+                  th: r.th,
+                  node: id,
+                  attempt: 1,
+                  until: null,
+                });
+            }
           }
         } else if (kind === "ban") {
           const banned = before.has(`ban:${open}:mel`);
@@ -452,6 +479,18 @@ for (let s0 = 1; s0 <= SEEDS; s0 += 4)
             user: "mel",
           });
           if (banned) await w.as("mel", "spaces.join", { space: open });
+          // a ban, of a member or of a person who left, ends mel's device
+          // runs there in its commit (G3)
+          else
+            for (const r of w.server.dump().values())
+              if (
+                r.kind === "run" &&
+                (r as Any).s === open &&
+                (r as Any).u === "mel" &&
+                (r as Any).executor &&
+                live(r)
+              )
+                fail(step, what, `mel's device run ${(r as Any).id} is still live after the ban`);
         } else if (kind === "remove") {
           const member = before.has(`member:${closed}:otto`);
           what = member
@@ -473,11 +512,20 @@ for (let s0 = 1; s0 <= SEEDS; s0 += 4)
             });
           }
         } else if (kind === "leave") {
-          // otto leaves the closed space (the remove step lets him in again)
-          if (before.has(`member:${closed}:otto`)) {
+          // otto leaves the closed space (the remove step lets him in
+          // again), or mel the open space, where he may still ask and a ban
+          // finds him no member
+          if (before.has(`member:${closed}:otto`) && rand() < 0.6) {
             what = "otto leaves the closed space";
             const a = await w.as("otto", "spaces.leave", { space: closed });
             if (a.ok) count("step leave");
+          } else if (before.has(`member:${open}:mel`)) {
+            what = "mel leaves the open space";
+            const a = await w.as("mel", "spaces.leave", { space: open });
+            if (a.ok) count("step leave");
+          } else if (!before.has(`ban:${open}:mel`)) {
+            what = "mel joins the open space again";
+            await w.as("mel", "spaces.join", { space: open });
           }
         } else if (kind === "rerun") {
           // the person runs their ask again: a new run of the same ask (of a
