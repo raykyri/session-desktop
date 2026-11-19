@@ -273,6 +273,19 @@
     run: (tx, a, h) => h.deviceRuns(100) });
   scenario('device runs: an answer from a Mac', { note: 'the newest answer of the first thread came from its asker’s Mac (Claude Code): the thread carries the run’s executor',
     run: tx => { const p = tx.get('posts')[0]; tx.edit('posts', p.id, x => { x.executor = { kind: 'device', cli: 'claude', device: p.u === tx.me.u ? 'd1' : 'dm-' + p.u, u: p.u }; delete x.pay; }); } });
+  /* the main mockup's Device run control, on another member's ask: args.thread, args.end (done, running,
+     interrupted, too_large); the run is on the asker's desktop (Claude Code) */
+  scenario('device runs: a member’s run', { note: 'the answer of args.thread came from its asker’s desktop (args.end: done), runs there now (running, held after its first step), lost its lease (interrupted) or was over 200 KB (too_large)',
+    run: (tx, a, h) => {
+      const p = tx.get('posts').find(x => x.id === a.thread && x.k === 'ask'); if (!p) return;
+      const ex = { kind: 'device', cli: 'claude', device: 'dm-' + p.u, u: p.u };
+      tx.edit('posts', p.id, x => {
+        x.executor = ex; delete x.pay;
+        if (a.end === 'running') { x.running = true; x.att = (x.att || 1) + 1; delete x.fail; }
+        if (a.end === 'interrupted' || a.end === 'too_large') { x.running = false; x.att = (x.att || 1) + 1; x.fail = { why: a.end }; x.sum = window.SessionJobs.FAIL_SUM[a.end](); }
+      });
+      if (a.end === 'running') h.run(p.id, 'r', 1, ex);
+    } });
   /* ---- end sync states ---- */
 
   window.SessionScenarios = { list };
