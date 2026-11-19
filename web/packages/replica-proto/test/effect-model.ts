@@ -162,7 +162,8 @@ export function predictEffects(
         id,
         name,
         title: name,
-        desc: String(input["desc"] ?? "").trim() || "No description yet.",
+        desc:
+          (typeof input["desc"] === "string" ? input["desc"] : "").trim() || "No description yet.",
         rules: rules.length ? rules : ["Be specific in asks."],
         vis,
         policy: closed ? (input["policy"] ?? "request") : null,
@@ -445,7 +446,7 @@ export function predictEffects(
         by: me,
         st: "open",
         why: str("why").trim(),
-        note: String(input["note"] ?? "").trim(),
+        note: (typeof input["note"] === "string" ? input["note"] : "").trim(),
       });
       // the staff's notifications come from the effect worker, later
       out.result = (r) => JSON.stringify(r) === JSON.stringify({ id, sp });

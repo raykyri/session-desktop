@@ -49,7 +49,11 @@ test("a member's writes, queued before removal, are refused after it", async (t)
   mel.queue("reports.create", { id: mel.newId(), item: `a:${th}`, why: "spam" });
   await ok(
     t,
-    w.as("mona", "members.remove", { space: closed, user: "mel", base: w.admission(closed, "mel") }),
+    w.as("mona", "members.remove", {
+      space: closed,
+      user: "mel",
+      base: w.admission(closed, "mel"),
+    }),
   );
   const results = await mel.flush();
   // the thread is no longer readable by mel: NOT_FOUND, the same as a missing one
@@ -69,10 +73,7 @@ test("a ban stops writes queued before it, in a closed and in an open space", as
   const otto = w.client("otto");
   otto.queue("threads.create", { id: otto.newId(), space: open, kind: "post", q: "queued" });
   otto.queue("research.createPostFollowUp", { id: otto.newId(), thread: th, t: "queued" });
-  await ok(
-    t,
-    w.as("mona", "members.ban", { space: open, user: "otto" }),
-  );
+  await ok(t, w.as("mona", "members.ban", { space: open, user: "otto" }));
   const results = await otto.flush();
   t.deepEqual(
     results.map((r) => (r.ok ? "ok" : r.error.code)),
@@ -82,10 +83,7 @@ test("a ban stops writes queued before it, in a closed and in an open space", as
   await refused(t, w.as("otto", "spaces.join", { space: open }), "FORBIDDEN");
   const mel = w.client("mel");
   mel.queue("threads.create", { id: mel.newId(), space: closed, kind: "post", q: "queued" });
-  await ok(
-    t,
-    w.as("mona", "members.ban", { space: closed, user: "mel" }),
-  );
+  await ok(t, w.as("mona", "members.ban", { space: closed, user: "mel" }));
   const [r] = await mel.flush();
   t.is(r?.ok ? null : r?.error.code, "FORBIDDEN");
   await refused(
@@ -106,10 +104,7 @@ test("a ban stops every write in its space, the author's own included", async (t
   await ok(t, w.as("otto", "likes.set", { thread: ask, on: true }));
   await ok(t, w.as("otto", "saved.set", { kind: "thread", id: ask, on: true }));
   const rev = w.get(`thread:${th}`)?.rev ?? 0;
-  await ok(
-    t,
-    w.as("mona", "members.ban", { space: open, user: "otto" }),
-  );
+  await ok(t, w.as("mona", "members.ban", { space: open, user: "otto" }));
   const before = JSON.stringify([...w.server.dump()]);
   for (const [name, input] of [
     ["threads.update", { id: th, q: "abuse after the ban", base: { rev } }],
@@ -132,10 +127,7 @@ test("a ban stops every write in its space, the author's own included", async (t
   // the same in a closed space, and a ban is per space: otto still writes elsewhere
   await admit(t, w, closed, "otto");
   const mine = await thread(t, w, "otto", closed, "post");
-  await ok(
-    t,
-    w.as("mona", "members.ban", { space: closed, user: "otto" }),
-  );
+  await ok(t, w.as("mona", "members.ban", { space: closed, user: "otto" }));
   await refused(t, w.as("otto", "threads.delete", { id: mine }), "FORBIDDEN");
   await refused(
     t,
@@ -179,7 +171,11 @@ test("a queued approval does not re-admit a person who was approved and then rem
   );
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "otto", base: w.admission(closed, "otto") }),
+    w.as("olga", "members.remove", {
+      space: closed,
+      user: "otto",
+      base: w.admission(closed, "otto"),
+    }),
   );
   // the approval is STALE; a decline applies to the request as it is now,
   // and it was decided already (review round 2, finding 2)
@@ -298,7 +294,11 @@ test("an invite link works only while its maker may still make links", async (t)
   };
   await ok(
     t,
-    w.as("mona", "members.remove", { space: closed, user: "mel", base: w.admission(closed, "mel") }),
+    w.as("mona", "members.remove", {
+      space: closed,
+      user: "mel",
+      base: w.admission(closed, "mel"),
+    }),
   );
   await refused(t, w.as("otto", "spaces.join", { space: closed, invite: res.code }), "FORBIDDEN");
   t.is(w.get(`member:${closed}:otto`), undefined);
@@ -325,7 +325,11 @@ test("a link that stopped working when its maker lost the right works again once
   };
   await ok(
     t,
-    w.as("mona", "members.remove", { space: closed, user: "mel", base: w.admission(closed, "mel") }),
+    w.as("mona", "members.remove", {
+      space: closed,
+      user: "mel",
+      base: w.admission(closed, "mel"),
+    }),
   );
   await refused(t, w.as("otto", "spaces.join", { space: closed, invite: res.code }), "FORBIDDEN");
   await admit(t, w, closed, "mel");
@@ -338,7 +342,11 @@ test("an approved request does not let a removed member back in", async (t) => {
   await admit(t, w, closed, "otto");
   await ok(
     t,
-    w.as("mona", "members.remove", { space: closed, user: "otto", base: w.admission(closed, "otto") }),
+    w.as("mona", "members.remove", {
+      space: closed,
+      user: "otto",
+      base: w.admission(closed, "otto"),
+    }),
   );
   await refused(t, w.as("otto", "spaces.join", { space: closed }), "FORBIDDEN");
   t.is(w.get(`member:${closed}:otto`), undefined);

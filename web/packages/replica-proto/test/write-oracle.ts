@@ -679,7 +679,8 @@ export class WriteModel {
     try {
       rules(facts, input);
     } catch (x) {
-      if (x instanceof No) return x.code === "INTERNAL_SERVER_ERROR" ? pass(x.code) : stored(x.code);
+      if (x instanceof No)
+        return x.code === "INTERNAL_SERVER_ERROR" ? pass(x.code) : stored(x.code);
       throw x;
     }
     return stored("ok");

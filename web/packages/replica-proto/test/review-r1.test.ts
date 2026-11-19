@@ -44,7 +44,11 @@ test("R1: an approval queued for a request that was approved, then reopened by a
   );
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "otto", base: w.admission(closed, "otto") }),
+    w.as("olga", "members.remove", {
+      space: closed,
+      user: "otto",
+      base: w.admission(closed, "otto"),
+    }),
   );
   // otto asks again: the same request record is open again, with a new rev
   const before = w.rev(`request:${closed}:otto`);
@@ -148,7 +152,11 @@ test("R1b: a removal queued before a person was removed and let in again is STAL
   });
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "mel", base: w.admission(closed, "mel") }),
+    w.as("olga", "members.remove", {
+      space: closed,
+      user: "mel",
+      base: w.admission(closed, "mel"),
+    }),
   );
   await ok(t, w.as("mel", "joinRequests.create", { space: closed, rulesAccepted: true }));
   await ok(
@@ -530,7 +538,11 @@ test("R4a: a removed member's user log gets no deletions of likes and saves in t
   t.true(mel.records(log).has(`like:mel:${t1}`));
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "mel", base: w.admission(closed, "mel") }),
+    w.as("olga", "members.remove", {
+      space: closed,
+      user: "mel",
+      base: w.admission(closed, "mel"),
+    }),
   );
   // the removal resyncs mel's user log: the likes and saves there are no longer served
   t.is(await mel.sync(log), "resync");
@@ -552,7 +564,11 @@ test("R4b: a removed author's delete answers null, not whether the thread got re
   const t3 = await thread(t, w, "mel", closed, "post", "mel's other");
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "mel", base: w.admission(closed, "mel") }),
+    w.as("olga", "members.remove", {
+      space: closed,
+      user: "mel",
+      base: w.admission(closed, "mel"),
+    }),
   );
   await ok(
     t,
@@ -593,7 +609,11 @@ test("R4c: report notifications leave a moderator's user log when the moderator 
   await mona.sync("user:mona");
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "mona", base: w.admission(closed, "mona") }),
+    w.as("olga", "members.remove", {
+      space: closed,
+      user: "mona",
+      base: w.admission(closed, "mona"),
+    }),
   );
   t.deepEqual(await notifsOf("mona"), []);
   t.is(await mona.sync("user:mona"), "resync");
@@ -768,15 +788,9 @@ test("a ban takes the membership away, and neither an approval nor the space ope
   // otto asks to join; before anyone decides, he is banned
   await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
   await ok(t, w.as("eve", "joinRequests.create", { space: closed, rulesAccepted: true }));
-  await ok(
-    t,
-    w.as("mona", "members.ban", { space: closed, user: "otto" }),
-  );
+  await ok(t, w.as("mona", "members.ban", { space: closed, user: "otto" }));
   // a member who is banned loses the member record
-  await ok(
-    t,
-    w.as("mona", "members.ban", { space: closed, user: "mel" }),
-  );
+  await ok(t, w.as("mona", "members.ban", { space: closed, user: "mel" }));
   t.is(w.get(`member:${closed}:mel`), undefined);
   t.truthy(w.get(`ban:${closed}:mel`));
   t.is((w.get(`space:${closed}`) as { members: number }).members, 3);
@@ -880,7 +894,7 @@ test("an author's delete keeps a thread with follow-ups or replies, and makes on
   ] as const) {
     t.deepEqual(await w.as("mel", "threads.delete", { id: th }), { ok: true, result: { kept } });
     const p = w.get(`thread:${th}`) as ThreadRec;
-  const pCounts = w.get(`counts:${th}`) as CountsRec;
+    const pCounts = w.get(`counts:${th}`) as CountsRec;
     t.deepEqual([p.del, p.gone, pCounts.likes], [true, !kept, kept ? 1 : 0]);
     t.is(w.server.dump().has(`like:otto:${th}`), kept);
     t.is(w.server.dump().has(`save:otto:${th}`), kept);

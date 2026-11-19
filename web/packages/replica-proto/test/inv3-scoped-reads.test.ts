@@ -39,10 +39,7 @@ async function busy(t: ExecutionContext, c: Cast) {
   await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
   await ok(t, w.as("mel", "likes.set", { thread: post, on: true }));
   await ok(t, w.as("mel", "saved.set", { kind: "thread", id: ask, on: true }));
-  await ok(
-    t,
-    w.as("mona", "members.ban", { space: open, user: "eve" }),
-  );
+  await ok(t, w.as("mona", "members.ban", { space: open, user: "eve" }));
   const openPost = await thread(t, w, "otto", open, "post");
   await ok(
     t,
@@ -113,7 +110,11 @@ test("a removed member's cursor resyncs, and the new snapshot has none of the sp
   const cursor = mel.cursor(`space:${closed}`);
   await ok(
     t,
-    w.as("mona", "members.remove", { space: closed, user: "mel", base: w.admission(closed, "mel") }),
+    w.as("mona", "members.remove", {
+      space: closed,
+      user: "mel",
+      base: w.admission(closed, "mel"),
+    }),
   );
   const later = await thread(t, w, "olga", closed, "post", "after mel left");
   t.deepEqual(await w.server.pull(actor("mel"), `space:${closed}`, cursor!), { resync: true });
@@ -383,7 +384,8 @@ test("a cursor from before the log's history was replaced resyncs, so it gets no
   const readers = ["eve", null, "otto"];
   const old: { u: string | null; cursor: string }[] = [];
   const take = async () => {
-    for (const u of readers) old.push({ u, cursor: (await w.server.snapshot(actor(u), lab)).cursor });
+    for (const u of readers)
+      old.push({ u, cursor: (await w.server.snapshot(actor(u), lab)).cursor });
   };
   // version-0 tokens: the log of a space that does not exist yet
   const later = w.id();
@@ -456,7 +458,11 @@ test("a removed member's device keeps a frozen copy of their threads, and can st
   await mel.sync(`space:${closed}`);
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "mel", base: w.admission(closed, "mel") }),
+    w.as("olga", "members.remove", {
+      space: closed,
+      user: "mel",
+      base: w.admission(closed, "mel"),
+    }),
   );
   t.is(await mel.sync(`space:${closed}`), "resync");
   const live = mel.records(`space:${closed}`);
@@ -471,7 +477,11 @@ test("a removed member's device keeps a frozen copy of their threads, and can st
   // no further updates reach it, and the server serves none of it
   await ok(
     t,
-    w.as("mona", "moderation.decide", { item: `p:${th}`, decision: "hidden", base: w.item(`p:${th}`) }),
+    w.as("mona", "moderation.decide", {
+      item: `p:${th}`,
+      decision: "hidden",
+      base: w.item(`p:${th}`),
+    }),
   );
   await mel.sync(`space:${closed}`);
   t.is((mel.frozen(`space:${closed}`).get(`thread:${th}`) as ThreadRec).mod, null);

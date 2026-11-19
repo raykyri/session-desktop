@@ -206,7 +206,7 @@ const seenRev = (c: Ctx, key: string) => {
 const seenAdmission = (c: Ctx, sp: string, u: string) => {
   const had = [...(c.admissions.get(`${sp}:${u}`) ?? [])];
   const now = c.w.admission(sp, u).adm;
-  return chance(c.r, 0.8) || !had.length ? now : pick(c.r, had);
+  return chance(c.r, 0.6) || !had.length ? now : pick(c.r, had);
 };
 /** The record a moderation key names. */
 const itemRecordKey = (item: string) => {
@@ -244,9 +244,7 @@ const GENERATORS: Record<string, Gen> = {
     return {
       id,
       name: pick(c.r, ["lounge", "lab", "new", "other", "#Lab"]),
-      ...(chance(c.r, 0.5)
-        ? { vis: closed ? pick(c.r, ["listed", "unlisted"]) : "open" }
-        : {}),
+      ...(chance(c.r, 0.5) ? { vis: closed ? pick(c.r, ["listed", "unlisted"]) : "open" } : {}),
       ...(chance(c.r, 0.5) ? { desc: marked(c, `space:${id}`, "desc") } : {}),
       ...(chance(c.r, 0.5) ? { rules: [marked(c, `space:${id}`, "rules"), " "] } : {}),
       ...(chance(c.r, 0.4) ? { policy: pick(c.r, ["request", "invite"]) } : {}),
@@ -713,13 +711,16 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
           });
       }
     }
-    const owner = c.devices.find((d) => d.cl.clientId === e.clientId)?.u ??
+    const owner =
+      c.devices.find((d) => d.cl.clientId === e.clientId)?.u ??
       [...c.raw].find(([, id]) => id === e.clientId)?.[0];
     if (owner !== undefined) {
       c.model.read(owner, e.clientId, w.clock.now());
       const s = await w.server.snapshot(actor(owner), `user:${owner}`, { clientId: e.clientId });
       if (s.lastSeq !== (c.model.lastSeq(e.clientId) ?? null))
-        failures.push(`${what}: last seq ${s.lastSeq}, the model has ${c.model.lastSeq(e.clientId)}`);
+        failures.push(
+          `${what}: last seq ${s.lastSeq}, the model has ${c.model.lastSeq(e.clientId)}`,
+        );
     }
     return res;
   };
@@ -775,7 +776,11 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
         for (const m of JSON.stringify(e.input).match(MARKER) ?? []) {
           const o = c.origins.get(m);
           const [kind, old] = o?.key.split(":") ?? [];
-          if (o && old !== id && ["thread", "followup", "reply", "report", "space"].includes(kind ?? ""))
+          if (
+            o &&
+            old !== id &&
+            ["thread", "followup", "reply", "report", "space"].includes(kind ?? "")
+          )
             o.key = `${kind}:${id}`;
         }
       const p = d.cl.pending().find((x) => x.mutationId === e.mutationId);
@@ -877,11 +882,21 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
         continue;
       }
       if (!answer && !shown)
-        out.push(`${x.dev.name}: ${x.name} ${local} left the outbox with no answer and was not shown`);
+        out.push(
+          `${x.dev.name}: ${x.name} ${local} left the outbox with no answer and was not shown`,
+        );
       if (answer?.ok && n !== 1 && !c.direct.has(local))
         out.push(`${x.dev.name}: ${x.name} ${local} answered ok, applied ${n} times`);
-      if (answer && !answer.ok && answer.error.code !== "EXPIRED" && !c.direct.has(local) && n !== 0)
-        out.push(`${x.dev.name}: ${x.name} ${local} answered ${answer.error.code}, applied ${n} times`);
+      if (
+        answer &&
+        !answer.ok &&
+        answer.error.code !== "EXPIRED" &&
+        !c.direct.has(local) &&
+        n !== 0
+      )
+        out.push(
+          `${x.dev.name}: ${x.name} ${local} answered ${answer.error.code}, applied ${n} times`,
+        );
     }
     return out;
   };
@@ -996,7 +1011,9 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     for (const [table, values] of Object.entries(scan))
       for (const m of JSON.stringify(values).match(MARKER) ?? [])
         if (!storedNow(m))
-          out.push(`step ${step}: ${m} is at rest in ${table} (${JSON.stringify(c.origins.get(m))})`);
+          out.push(
+            `step ${step}: ${m} is at rest in ${table} (${JSON.stringify(c.origins.get(m))})`,
+          );
     return out;
   };
 
@@ -1043,7 +1060,8 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       what = `an earlier token of history ${old.n}, now ${spaceHistory(log)}`;
     }
     const p = await watched.pull(actor(u), log, cursor);
-    if (failures.length) return failed(step, `forged cursor: ${what}`, failures.slice(0, 3).join("\n"));
+    if (failures.length)
+      return failed(step, `forged cursor: ${what}`, failures.slice(0, 3).join("\n"));
     if (mustResync && !("resync" in p))
       return failed(step, `forged cursor: ${what}`, `${u}'s pull of ${log} did not resync`);
     const want = expected(w.server.dump(), u, log);
@@ -1052,7 +1070,8 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
         ch.op === "put"
           ? JSON.stringify(ch.record) !== JSON.stringify(want.get(ch.key))
           : want.has(ch.key);
-      if (bad) return failed(step, `forged cursor: ${what}`, `${u} got ${ch.op} ${ch.key} in ${log}`);
+      if (bad)
+        return failed(step, `forged cursor: ${what}`, `${u} got ${ch.op} ${ch.key} in ${log}`);
     }
     const stored = JSON.stringify([...w.server.dump()]);
     for (const x of s.records) Object.assign(x.record, { rev: -1 });

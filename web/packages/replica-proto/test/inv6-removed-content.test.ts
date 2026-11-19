@@ -6,7 +6,14 @@
 
 import test from "ava";
 
-import type { FollowUpRec, LogId, ReplyRec, TestServer, CountsRec, ThreadRec } from "../src/index.js";
+import type {
+  FollowUpRec,
+  LogId,
+  ReplyRec,
+  TestServer,
+  CountsRec,
+  ThreadRec,
+} from "../src/index.js";
 import { TOMBSTONE_TTL } from "../src/index.js";
 
 import { DAY, HOUR, actor, admit, cast, ok, refused, thread } from "./harness.js";
@@ -337,7 +344,11 @@ test("a delete reaches a pull as a tombstone for 30 days; after that the cursor 
   await late.sync(log);
   await ok(
     t,
-    w.as("olga", "members.remove", { space: closed, user: "mona", base: w.admission(closed, "mona") }),
+    w.as("olga", "members.remove", {
+      space: closed,
+      user: "mona",
+      base: w.admission(closed, "mona"),
+    }),
   );
   t.false(w.server.dump().has(`member:${closed}:mona`));
   w.clock.advance(29 * DAY);

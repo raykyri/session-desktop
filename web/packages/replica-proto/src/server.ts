@@ -712,7 +712,8 @@ export class ProtoServer implements TestServer {
       );
     const input = parsed.data;
     try {
-      for (const id of def.ids?.(input) ?? []) if (!ageOk(id, m.clientTime)) return expired("input.id");
+      for (const id of def.ids?.(input) ?? [])
+        if (!ageOk(id, m.clientTime)) return expired("input.id");
       // an online-only write whose mutation id is over a minute old on the
       // device's clock waited in an outbox
       if (def.online && m.clientTime - ulidTime(m.mutationId) > ONLINE_MAX_AGE)
@@ -748,7 +749,7 @@ export class ProtoServer implements TestServer {
   work(): number {
     const now = this.begin();
     let ran = 0;
-    for (let k = 0; k < this.effectQueue.length; ) {
+    for (let k = 0; k < this.effectQueue.length;) {
       const q = this.effectQueue[k] as QueuedEffect;
       if (q.next > now) {
         k++;
@@ -766,8 +767,7 @@ export class ProtoServer implements TestServer {
           this.effectQueue.splice(k, 1);
           this.deadLetters.push({ ...q, failedAt: now });
         } else {
-          q.next =
-            now + Math.min(EFFECT_BACKOFF_MAX, EFFECT_BACKOFF_MIN * 2 ** (q.attempts - 1));
+          q.next = now + Math.min(EFFECT_BACKOFF_MAX, EFFECT_BACKOFF_MIN * 2 ** (q.attempts - 1));
           k++;
         }
       }

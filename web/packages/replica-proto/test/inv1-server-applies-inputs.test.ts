@@ -34,14 +34,22 @@ test("a write the actor's role forbids is refused and changes nothing", async (t
   );
   await refused(
     t,
-    w.as("mel", "members.remove", { space: closed, user: "mona", base: w.admission(closed, "mona") }),
+    w.as("mel", "members.remove", {
+      space: closed,
+      user: "mona",
+      base: w.admission(closed, "mona"),
+    }),
     "FORBIDDEN",
   );
   await refused(t, w.as("mel", "spaces.update", { id: closed, set: { vis: "open" } }), "FORBIDDEN");
   // a moderator cannot act on an admin, nor give a role above their own
   await refused(
     t,
-    w.as("mona", "members.remove", { space: closed, user: "ada", base: w.admission(closed, "ada") }),
+    w.as("mona", "members.remove", {
+      space: closed,
+      user: "ada",
+      base: w.admission(closed, "ada"),
+    }),
     "FORBIDDEN",
   );
   await refused(
@@ -260,10 +268,7 @@ test("mutators read no clock, no random source and no Intl while the server appl
         base: w.requests(closed, ["otto"]),
       }),
     );
-    await ok(
-      t,
-      w.as("mona", "members.ban", { space: closed, user: "otto" }),
-    );
+    await ok(t, w.as("mona", "members.ban", { space: closed, user: "otto" }));
     await ok(t, w.as("mel", "threads.delete", { id: post }));
   } finally {
     globalThis.Date = RealDate;
