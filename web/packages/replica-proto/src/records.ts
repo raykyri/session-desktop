@@ -4,9 +4,14 @@
 // a multi-user server:
 //
 // - Every record has `kind` and an integer `rev`, which the store sets on each
-//   write. Counts (`likes`, `r`, `members`, `posts`) are stored fields that
-//   mutators maintain; no field is derived on read, and per-viewer fields
-//   (`liked`, `mine`) are left to the client.
+//   write. A record written again at a key that was deleted continues from
+//   the key's last rev. Counts (`likes`, `r`, `members`, `posts`) are stored
+//   fields that mutators maintain; no field is derived on read, and
+//   per-viewer fields (`liked`, `mine`) are left to the client.
+// - A thread's like and follow-up counts are a separate `counts` record, so a
+//   like or a follow-up does not change the thread's rev, and a moderator's
+//   queued "shown" based on that rev stays valid (decision 4 of review
+//   round 1).
 // - Optional fields are `null` when absent, so two writes of the same state
 //   produce equal records.
 // - The mock's per-person collections (`joined`, `rel`, `roles`, `liked`,
@@ -73,6 +78,12 @@ export interface MemberRec {
   sp: string;
   u: string;
   role: SpaceRole;
+  /** The admission id, derived from the write that let the person in: the
+   * space's creation, a moderator's approval, an invite, the space opening,
+   * or the person joining an open space. A role change keeps it. A removal
+   * names it, so a removal decided before the person was let in again is
+   * STALE (review round 2, finding 2). */
+  adm: string;
   joinedAt: string;
   rev: number;
 }
@@ -87,10 +98,6 @@ export interface ThreadRec {
   t: string | null;
   sum: string | null;
   tok: number;
-  /** Stored count of like records. */
-  likes: number;
-  /** Stored count of follow-ups (an ask) or top-level replies (a post). */
-  r: number;
   running: boolean;
   edited: boolean;
   del: boolean;
@@ -98,6 +105,18 @@ export interface ThreadRec {
   mod: ModState | null;
   createdAt: string;
   updatedAt: string;
+  rev: number;
+}
+
+/** A thread's counts, keyed `counts:<thread>`, read by the thread's readers. */
+export interface CountsRec {
+  kind: "counts";
+  th: string;
+  s: string;
+  /** Stored count of like records. */
+  likes: number;
+  /** Stored count of follow-ups (an ask) or top-level replies (a post). */
+  r: number;
   rev: number;
 }
 
@@ -226,6 +245,7 @@ export type StoredRecord =
   | StatsRec
   | MemberRec
   | ThreadRec
+  | CountsRec
   | FollowUpRec
   | ReplyRec
   | RunRec
@@ -261,6 +281,7 @@ export const spaceKey = (id: string) => `space:${id}`;
 export const statsKey = (sp: string) => `stats:${sp}`;
 export const memberKey = (sp: string, u: string) => `member:${sp}:${u}`;
 export const threadKey = (id: string) => `thread:${id}`;
+export const countsKey = (th: string) => `counts:${th}`;
 export const requestKey = (sp: string, u: string) => `request:${sp}:${u}`;
 export const banKey = (sp: string, u: string) => `ban:${sp}:${u}`;
 export const likeKey = (u: string, th: string) => `like:${u}:${th}`;
@@ -270,6 +291,8 @@ export function keyOf(r: Draft | StoredRecord): string {
   switch (r.kind) {
     case "stats":
       return statsKey(r.sp);
+    case "counts":
+      return countsKey(r.th);
     case "member":
       return memberKey(r.sp, r.u);
     case "request":
@@ -290,12 +313,17 @@ export function idOf(r: Draft | StoredRecord): string | null {
   return ID_KINDS.has(r.kind) && "id" in r ? r.id : null;
 }
 
+/** A record's entry in the server's registry: its id for a kind that has
+ * one (ids are unique across kinds), else its key. */
+export const registryKey = (r: Draft | StoredRecord): string => idOf(r) ?? keyOf(r);
+
 /** The space a record belongs to, or null for a person's own records. */
 export function spaceOf(r: Draft | StoredRecord): string | null {
   switch (r.kind) {
     case "space":
       return r.id;
     case "thread":
+    case "counts":
     case "followup":
     case "reply":
     case "run":

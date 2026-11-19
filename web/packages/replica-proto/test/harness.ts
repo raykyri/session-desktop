@@ -90,7 +90,8 @@ export class World {
     return (s.lastSeq ?? 0) + 1;
   }
 
-  /** An envelope from `u`'s default client, with its next seq. */
+  /** An envelope from `u`'s default client, with its next seq, sent now
+   * from a device whose clock is the server's. */
   async envelope(
     u: string | null,
     name: string,
@@ -99,7 +100,15 @@ export class World {
   ): Promise<Envelope> {
     const clientId = await this.clientId(u);
     const seq = await this.nextSeq(u, clientId);
-    return { clientId, seq, mutationId, name, input, protocolVersion: PROTOCOL_VERSION };
+    return {
+      clientId,
+      seq,
+      mutationId,
+      name,
+      input,
+      protocolVersion: PROTOCOL_VERSION,
+      clientTime: this.clock.now(),
+    };
   }
 
   /** Apply one write as `u` now, from `u`'s default client. */
@@ -113,10 +122,16 @@ export class World {
   }
 
   /** Send an envelope again as `u` (a replay keeps its seq; `fresh` gives it
-   * the client's next one instead). */
+   * the client's next one instead), from a device whose clock is the
+   * server's now. */
   async resend(u: string | null, e: Envelope, fresh = false): Promise<ApplyResult> {
     const seq = fresh ? await this.nextSeq(u, e.clientId) : e.seq;
-    return this.server.apply(actor(u), { ...e, seq });
+    return this.server.apply(actor(u), { ...e, seq, clientTime: this.clock.now() });
+  }
+
+  /** One pass of the server's effect worker. */
+  async work(): Promise<number> {
+    return this.server.work();
   }
 
   client(u: string | null): ReplicaClient {
@@ -133,9 +148,16 @@ export class World {
     return this.get(key)?.rev ?? 0;
   }
 
-  /** `base` of a write on `u`'s member record in `sp`, as it is now. */
+  /** `base` of a role change of `u` in `sp`, as the member record is now. */
   member(sp: string, u: string): { rev: number } {
     return { rev: this.rev(`member:${sp}:${u}`) };
+  }
+
+  /** `base` of a removal of `u` from `sp`: the admission id as it is now
+   * ("" for a person who is not a member). */
+  admission(sp: string, u: string): { adm: string } {
+    const m = this.get(`member:${sp}:${u}`);
+    return { adm: m?.kind === "member" ? m.adm : "" };
   }
 
   /** `base` of a moderation decision on `item`, as the item is now. */

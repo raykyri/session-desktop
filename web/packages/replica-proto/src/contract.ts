@@ -8,7 +8,7 @@
 
 import type { Spaces } from "@session/shared";
 
-import type { AnyMutator } from "./mutators.js";
+import type { AnyMutator, Effect } from "./mutators.js";
 import type { LogId, StoredRecord } from "./records.js";
 
 export type Awaitable<T> = T | Promise<T>;
@@ -18,21 +18,27 @@ export interface Actor {
   readonly u: string;
 }
 
-/** The protocol version this prototype speaks, and the lowest it accepts. */
-export const PROTOCOL_VERSION = 2;
-export const MIN_PROTOCOL_VERSION = 2;
+/** The protocol version this prototype speaks, and the lowest it accepts.
+ * Version 3 added `clientTime` to the envelope, and made cursors tokens. */
+export const PROTOCOL_VERSION = 3;
+export const MIN_PROTOCOL_VERSION = 3;
 
 /** One outbox entry as the client sends it: a mutator's name and input, the
- * client that sends it and its place in that client's sequence. There is no
- * field for client-computed changes; an envelope with any other field is
- * refused.
+ * client that sends it, its place in that client's sequence, and the
+ * device's time when it was sent. There is no field for client-computed
+ * changes; an envelope with any other field is refused.
  *
  * `clientId` comes from `register` and is bound to one user. `seq` numbers
  * the writes the server processed for a client 1, 2, 3, …; the server takes
  * a write only when its `seq` is the client's last processed seq + 1. The
  * client gives a write its `seq` when it sends it, from the last seq the
  * server acknowledged, not when it queues it: a write dropped from the outbox
- * before it was sent leaves no gap (review round 1, R7). */
+ * before it was sent leaves no gap (review round 1, R7).
+ *
+ * `clientTime` is the device's clock, corrected by the offset the client
+ * learned from CLOCK_SKEW, in milliseconds since the epoch. The client makes
+ * its ids from the same clock, so `clientTime` minus the time in the mutation
+ * id is the write's age measured on the device (review round 2, finding 3). */
 export interface Envelope {
   clientId: string;
   seq: number;
@@ -40,26 +46,33 @@ export interface Envelope {
   name: string;
   input: unknown;
   protocolVersion: number;
+  clientTime: number;
 }
 
 /** The spaces API's codes, and the ones the sync protocol adds:
  * - `UPGRADE_REQUIRED`: the client's protocol version is below the minimum
  *   ("Update Session").
- * - `STALE`: the record the write acts on is no longer in the state the
- *   client saw (a request already decided, a role already changed, a thread
- *   edited since its `base.rev`).
- * - `CLOCK_SKEW`: an id's time is outside the accepted window, or an
- *   online-only write's mutation id is more than a minute old. Not recorded;
- *   the error carries `serverTime`, and the client retries with new ids.
+ * - `STALE`: the record a decision acts on is no longer in the state the
+ *   client saw (a thread edited since `base.rev`, a member admitted again
+ *   since the decision was made).
+ * - `CLOCK_SKEW`: the envelope's `clientTime` is more than a minute from the
+ *   server's time. Not recorded; the error carries `serverTime`, and the
+ *   client corrects its clock and sends the write again.
+ * - `EXPIRED`: the write is too old to apply. Measured on the device's clock
+ *   (`clientTime`), its mutation id or a new id in its input is more than 4
+ *   days old or more than a minute in the future, or an online-only write's
+ *   mutation id is more than a minute old. Recorded; the client drops the
+ *   write and tells the person.
  * - `OUT_OF_ORDER`: `seq` is not the client's next one. Not recorded; the
  *   error carries `expectedSeq`.
- * - `WRONG_CLIENT`: the client id is unknown or bound to another user. Not
- *   recorded. */
+ * - `WRONG_CLIENT`: the client id is unknown, expired, or bound to another
+ *   user. Not recorded. */
 export type ErrorCode =
   | Spaces.SpaceErrorCode
   | "UPGRADE_REQUIRED"
   | "STALE"
   | "CLOCK_SKEW"
+  | "EXPIRED"
   | "OUT_OF_ORDER"
   | "WRONG_CLIENT";
 
@@ -67,8 +80,8 @@ export type ErrorCode =
  * same `seq` may be sent again, and the client keeps the write queued. The
  * transient ones (TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE,
  * INTERNAL_SERVER_ERROR, CLOCK_SKEW) say nothing about the write itself; the
- * client sends it again later. A BAD_REQUEST for a malformed envelope records
- * nothing either (it has no usable `seq`).
+ * client sends it again later. A BAD_REQUEST for a malformed or oversized
+ * envelope records nothing either (it has no usable `seq`).
  *
  * Every other answer, applied or refused, uses up the `seq` and is recorded
  * in the same commit as the write's changes: under (user, mutation id) for 7
@@ -102,20 +115,23 @@ export interface ApiError {
 
 export type ApplyResult = { ok: true; result: unknown } | { ok: false; error: ApiError };
 
+/** A new client id; or TOO_MANY_REQUESTS (the person registered 20 clients
+ * in the past day), UNAUTHORIZED or INTERNAL_SERVER_ERROR. */
 export type RegisterResult = { ok: true; clientId: string } | { ok: false; error: ApiError };
 
-/** Where a replica of one log stands. `version` is the highest version of a
- * row of that log that the reader was given (a `put` or a `del` it may
- * read), or 0; it is never the server's head, so it says nothing about
- * writes the reader may not read (review round 1, R3). `epoch` is an opaque
- * id that changes when the log's history is replaced (here: a space's
- * visibility changes), which invalidates every cursor. A cursor is the
- * reader's own: one the server did not give this reader within 30 days
- * resyncs. */
-export interface Cursor {
-  epoch: string;
-  version: number;
-}
+/** Where a replica of one log stands: an opaque token the server sealed with
+ * AES-256-GCM under a key only the server holds. Sealed in it are the log,
+ * the reader, the log's history, the server's internal version the replica
+ * is at, the server's head and the time the token was served. Nothing of it
+ * can be read without the key, and its length depends only on the lengths of
+ * the log id and the reader's handle, so a reader learns nothing from it
+ * about writes it may not read (review round 2, finding 1).
+ *
+ * The server keeps no state per cursor. A token it did not seal, or sealed
+ * for another reader, another log or an earlier history of the log, or
+ * served more than 30 days ago, resyncs. The planned SSE stream's event id
+ * is a map of these tokens by log. */
+export type Cursor = string;
 
 export type Change = { key: string; op: "put"; record: StoredRecord } | { key: string; op: "del" };
 
@@ -138,16 +154,14 @@ export interface Snapshot {
   /** In order of the server's `createdAt`, then the version of the commit
    * that created the record. */
   records: { key: string; record: StoredRecord }[];
-  version: number;
-  epoch: string;
+  cursor: Cursor;
   lastSeq: LastSeq;
 }
 
 export type Pull =
   | {
       changes: Change[];
-      version: number;
-      epoch: string;
+      cursor: Cursor;
       lastSeq: LastSeq;
     }
   | { resync: true };
@@ -167,18 +181,17 @@ export interface LogRow {
   version: number;
 }
 
-/** Every value the server keeps at rest, for the erasure tests: no text a
- * removal or a delete erased may appear anywhere in it. */
+/** Every value the server keeps at rest, table by table, for the erasure
+ * tests: no text a removal or a delete erased may appear anywhere in it. */
 export interface StorageScan {
   records: StoredRecord[];
-  /** A deleted record's key, kind and audience, its rev and the delete's time. */
+  /** A deleted record's key, kind and audience, and the delete's time. */
   tombstones: {
     key: string;
     kind: string;
     sp: string | null;
     person: string | null;
     by: string | null;
-    rev: number;
     at: number;
   }[];
   logRows: (LogRow & { log: LogId })[];
@@ -192,19 +205,40 @@ export interface StorageScan {
     result: ApplyResult;
     at: number;
   }[];
-  /** The post-commit effects not yet run. */
-  effects: { effect: unknown; at: number; attempts: number }[];
+  /** Registered clients: the user each is bound to, its last processed seq
+   * and when it was last used. */
+  clients: { clientId: string; u: string; last: number; seen: number }[];
+  /** The times each person registered a client in the past day. */
+  registrations: { u: string; at: number[] }[];
+  /** Every id and every key ever written, with its last rev. */
+  registry: { id: string; rev: number }[];
+  /** The version of the commit that created each record now stored. */
+  born: { key: string; version: number }[];
+  /** The logs whose history was replaced: how many times, and the version
+   * the current history began at. */
+  epochs: { log: LogId; n: number; start: number }[];
+  /** The post-commit effects not yet run, with the time of the next attempt. */
+  effects: { effect: unknown; at: number; attempts: number; next: number }[];
+  /** The effects that failed 10 times and are no longer tried. */
+  deadLetters: { effect: unknown; at: number; attempts: number; failedAt: number }[];
+  /** The server jobs the effects started. */
+  jobs: { kind: string; id: string }[];
 }
 
 /** Test-only access the suite needs besides the API: the stored records (the
  * oracles read them as facts), a log's rows, the post-commit jobs the server
- * started, every value at rest, and a server job's result. */
+ * started, every value at rest, one pass of the effect worker, and a server
+ * job's result. */
 export interface TestServer extends ServerHalf {
   dump(): ReadonlyMap<string, StoredRecord>;
   logRows(log: LogId): Awaitable<LogRow[]>;
   jobs(): readonly { kind: string; id: string }[];
   /** Expires what is past its lifetime first, as every call does. */
   scanStorage(): Awaitable<StorageScan>;
+  /** One pass of the effect worker at the server's time: runs each queued
+   * effect whose next attempt is due. Answers how many ran. On the real
+   * server a loop calls it; no request handler does. */
+  work(): Awaitable<number>;
   /** What a run writes when it finishes (not modelled otherwise): `text` as
    * a thread's summary (`thread:<id>`) or a follow-up's answer
    * (`followup:<id>`). False, and nothing written, for a removed item, a
@@ -219,12 +253,18 @@ export interface Clock {
 
 export interface ServerOptions {
   clock: Clock;
-  /** The server's random source (invite codes, client ids, server-made ids). */
+  /** The server's random source for client ids, invite codes and
+   * server-made ids: a number in [0, 1). The default reads
+   * `crypto.randomBytes`; the suite passes a seeded one, or one that fails.
+   * The cursor key always comes from `crypto.randomBytes`. */
   random?: () => number;
   /** The mutator definitions the server runs, by name (default: `MUTATORS`).
    * The suite passes a set with a faulty definition to test that a fault
    * writes nothing. */
   mutators?: Readonly<Record<string, AnyMutator>>;
+  /** Test only: an effect for which this answers true fails on that attempt
+   * (1, 2, …), as if the service it calls were down. */
+  failEffect?: (effect: Effect, attempt: number) => boolean;
 }
 
 export type ServerFactory = (options: ServerOptions) => TestServer;

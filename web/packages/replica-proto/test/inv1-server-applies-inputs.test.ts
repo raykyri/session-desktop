@@ -4,7 +4,7 @@
 
 import test from "ava";
 
-import { MUTATORS, PROTOCOL_VERSION, type ThreadRec } from "../src/index.js";
+import { MUTATORS, PROTOCOL_VERSION, type CountsRec, type ThreadRec } from "../src/index.js";
 
 import { World, actor, cast, ok, refused, thread } from "./harness.js";
 
@@ -34,14 +34,22 @@ test("a write the actor's role forbids is refused and changes nothing", async (t
   );
   await refused(
     t,
-    w.as("mel", "members.remove", { space: closed, user: "mona", base: w.member(closed, "mona") }),
+    w.as("mel", "members.remove", {
+      space: closed,
+      user: "mona",
+      base: w.admission(closed, "mona"),
+    }),
     "FORBIDDEN",
   );
   await refused(t, w.as("mel", "spaces.update", { id: closed, set: { vis: "open" } }), "FORBIDDEN");
   // a moderator cannot act on an admin, nor give a role above their own
   await refused(
     t,
-    w.as("mona", "members.remove", { space: closed, user: "ada", base: w.member(closed, "ada") }),
+    w.as("mona", "members.remove", {
+      space: closed,
+      user: "ada",
+      base: w.admission(closed, "ada"),
+    }),
     "FORBIDDEN",
   );
   await refused(
@@ -101,7 +109,7 @@ test("client-computed fields in an input are refused, not stored", async (t) => 
   );
   await refused(t, w.as("eve", "spaces.join", { space: open, role: "owner" }), "BAD_REQUEST");
   const p = w.get(`thread:${th}`) as ThreadRec;
-  t.is(p.likes, 0);
+  t.is((w.get(`counts:${th}`) as CountsRec).likes, 0);
   t.is(p.u, "mel");
   t.is(w.get(`member:${open}:eve`), undefined);
 });
@@ -115,7 +123,7 @@ test("the server writes the author, the counts and the time from its own state",
   // a repeated like changes nothing
   await ok(t, w.as("mona", "likes.set", { thread: th, on: true }));
   const p = w.get(`thread:${th}`) as ThreadRec;
-  t.is(p.likes, 2);
+  t.is((w.get(`counts:${th}`) as CountsRec).likes, 2);
   t.is(p.u, "mel");
   t.is(p.createdAt, new Date(w.clock.now()).toISOString().replace(/\.\d{3}Z$/, "Z"));
 });
@@ -189,8 +197,9 @@ test("the handles null and undefined are reserved, and a signed-out caller has n
   }
   t.false([...w.server.dump().keys()].some((k) => k.endsWith(":null") || k.endsWith(":undefined")));
   for (const log of ["user:null", "user:undefined"] as const) {
-    t.deepEqual((await w.server.snapshot(null, log)).records, []);
-    const p = await w.server.pull(null, log, { epoch: "e0", version: 0 });
+    const s = await w.server.snapshot(null, log);
+    t.deepEqual(s.records, []);
+    const p = await w.server.pull(null, log, s.cursor);
     t.deepEqual("resync" in p ? null : p.changes, []);
   }
 });
@@ -259,10 +268,7 @@ test("mutators read no clock, no random source and no Intl while the server appl
         base: w.requests(closed, ["otto"]),
       }),
     );
-    await ok(
-      t,
-      w.as("mona", "members.ban", { space: closed, user: "otto", base: w.member(closed, "otto") }),
-    );
+    await ok(t, w.as("mona", "members.ban", { space: closed, user: "otto" }));
     await ok(t, w.as("mel", "threads.delete", { id: post }));
   } finally {
     globalThis.Date = RealDate;

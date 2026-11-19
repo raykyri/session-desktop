@@ -1,13 +1,17 @@
 // The prototype server half: a multi-user in-memory store with one change-log
 // table, `register` and `apply` (in order per client, idempotent by user and
-// mutation id), and `snapshot` and `pull` filtered by the reader's scope at
-// the time of the read.
+// mutation id), `snapshot` and `pull` filtered by the reader's scope at the
+// time of the read, and a worker that runs post-commit effects.
 //
 // Apply, in order. "Unrecorded" answers use up nothing: the client may send
-// the same `seq` again.
-//   envelope shape (BAD_REQUEST) and protocol version (UPGRADE_REQUIRED): unrecorded
+// the same `seq` again. Everything below runs inside one error handler: an
+// exception anywhere is INTERNAL_SERVER_ERROR, unrecorded.
+//   the envelope nests at most 33 deep (its input at most 32) and is at most
+//     256 KB as JSON (BAD_REQUEST): unrecorded, checked before anything
+//     hashes or parses the input
+//   protocol version (UPGRADE_REQUIRED) and envelope shape (BAD_REQUEST): unrecorded
 //   signed in with a valid handle (UNAUTHORIZED): unrecorded
-//   the client id is the caller's (WRONG_CLIENT): unrecorded
+//   the client id is the caller's and has not expired (WRONG_CLIENT): unrecorded
 //   a stored result for (user, mutation id) whose payload digest matches:
 //     returned as it is, under any client id or seq; nothing runs and no seq
 //     is used
@@ -17,34 +21,45 @@
 //   the mutation id is a ULID, and not one the user sent with another
 //     payload (BAD_REQUEST): uses up the `seq`, stored for (client, seq), so
 //     a malformed or reused id never enters the (user, mutation id) table
-//   the mutation id is inside the time window (CLOCK_SKEW, with the server's
-//     time): unrecorded
+//   `clientTime` is within a minute of the server's time (CLOCK_SKEW, with
+//     the server's time): unrecorded
+//   the mutation id's age on the device's clock (`clientTime`) is at most 4
+//     days and at least −1 minute (EXPIRED)
 //   the mutator name and its strict input schema
-//   the input's ids are inside the time window (CLOCK_SKEW): unrecorded
-//   an online-only mutator's mutation id is at most a minute old (CLOCK_SKEW):
-//     unrecorded
+//   the input's new ids pass the same age check (EXPIRED)
+//   an online-only mutator's mutation id is at most a minute old on the
+//     device's clock (EXPIRED)
 //   ban, who and can, pre (server values), run
 // A refusal from these stages is recorded unless its code is in UNRECORDED;
 // an exception that is not a refusal is INTERNAL_SERVER_ERROR, unrecorded,
 // and nothing it staged is written. A recorded result is committed in one
 // step with the write's changes and its post-commit effects (queued): stored
 // for 7 days with a digest of the name and input, and the client's last
-// processed `seq` becomes this one. The queued effects run after that commit,
-// and are tried again on every later call until they succeed.
+// processed `seq` becomes this one. The effect worker (`work`) runs the
+// queued effects later, with backoff, and moves an effect that failed 10
+// times to the dead letters. No request handler runs effects.
 //
 // Change log: one row per (log, key), holding key, op and version only; a
 // write replaces the key's row. Versions come from one sequence for the whole
-// server, but a reader is only ever given the version of a row it may read
-// (see `Cursor`), never the head. A pull reads each changed record as it is
-// now. A deleted record leaves a tombstone for 30 days: its key, kind,
-// audience and rev, no text, used only to decide who gets the `del`.
+// server and never leave it: a cursor is a sealed token (see `Cursor`). A
+// pull reads each changed record as it is now. A deleted record leaves a
+// tombstone for 30 days: its key, kind and audience, no text, used only to
+// decide who gets the `del`. The registry keeps every id and key ever
+// written with its last rev, so an id is never used again and a record
+// written again at a deleted key continues from its last rev.
 //
-// Resync: a pull answers `{ resync: true }` when the cursor was not given to
-// this reader for this log and version, or more than 30 days ago, or the
-// log's history was replaced since (a space's visibility changed), or the
-// reader's scope changed since: their own membership of the space, and for
-// their user log, their membership of any space or a space opening or
-// closing that a record in the log is about.
+// Resync: a pull answers `{ resync: true }` when the token was not sealed by
+// this server for this reader and log, or was served more than 30 days ago,
+// or the log's history was replaced since (a space's visibility changed), or
+// the reader's scope changed since: their own membership or role in the
+// space, and for their user log, their membership or role in any space or a
+// space opening or closing that a record in the log is about.
+//
+// Expiry: every table that expires is a Map kept in expiry order (a value
+// written again moves to the end), so each call drops only what expired from
+// its front and stops at the first value that has not.
+
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 import { z } from "zod";
 
@@ -85,19 +100,45 @@ import {
   keyOf,
   logsOf,
   memberKey,
+  registryKey,
   type Draft,
   type LogId,
   type Kind,
   type RecordOf,
   type StoredRecord,
 } from "./records.js";
-import { DAY, MINUTE, deriveId, digest, inWindow, isUlid, ulid, ulidTime } from "./ulid.js";
+import {
+  CLOCK_MAX_SKEW,
+  DAY,
+  MINUTE,
+  ageOk,
+  cryptoRandom,
+  deriveId,
+  digest,
+  isUlid,
+  ulid,
+  ulidTime,
+} from "./ulid.js";
 
 export const DEDUP_TTL = 7 * DAY;
 export const TOMBSTONE_TTL = 30 * DAY;
-/** The most an online-only write's mutation id may be behind the server's
- * time: older, it waited in an outbox. */
+/** The most an online-only write's mutation id may be behind `clientTime`:
+ * older, it waited in an outbox. */
 export const ONLINE_MAX_AGE = MINUTE;
+/** A client record not used for this long expires; its client id then
+ * answers WRONG_CLIENT, and the client registers again. */
+export const CLIENT_IDLE_TTL = 90 * DAY;
+/** The most clients one person may register in a day. */
+export const REGISTRATIONS_PER_DAY = 20;
+/** The deepest an envelope's input may nest, and the largest an envelope may
+ * be as JSON. */
+export const MAX_INPUT_DEPTH = 32;
+export const MAX_ENVELOPE_BYTES = 256 * 1024;
+/** The effect worker tries an effect this many times, then moves it to the
+ * dead letters. Between attempts it waits 1 s, 2 s, 4 s, … up to 10 minutes. */
+export const EFFECT_MAX_ATTEMPTS = 10;
+export const EFFECT_BACKOFF_MIN = 1000;
+export const EFFECT_BACKOFF_MAX = 10 * MINUTE;
 
 const envelopeS = z.strictObject({
   clientId: z.string(),
@@ -106,17 +147,21 @@ const envelopeS = z.strictObject({
   name: z.string(),
   input: z.unknown(),
   protocolVersion: z.number().int(),
+  clientTime: z.number().int().nonnegative(),
 });
 type Env = z.infer<typeof envelopeS>;
-const cursorS = z.strictObject({ epoch: z.string(), version: z.number().int().nonnegative() });
-const logS = z.string().regex(/^(space|user):[^:]+$/);
+const logS = z
+  .string()
+  .max(200)
+  .regex(/^(space|user):[^:]+$/);
 
 const isoAt = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 const fail = (e: Refusal): ApplyResult => ({ ok: false, error: e.toError() });
 const same = (a: StoredRecord, b: StoredRecord) =>
   JSON.stringify({ ...a, rev: 0 }) === JSON.stringify({ ...b, rev: 0 });
 
-/** JSON with object keys sorted, so equal values print equally. */
+/** JSON with object keys sorted, so equal values print equally. Called only
+ * on a value `withinBounds` passed. */
 function canonical(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
   if (v !== null && typeof v === "object")
@@ -127,18 +172,32 @@ function canonical(v: unknown): string {
   return JSON.stringify(v) ?? "undefined";
 }
 
+/** Whether `v` nests at most `maxDepth` levels (a scalar is 0 deep, `[1]`
+ * 1) and holds at most `maxNodes` values. Walked with a stack, not by
+ * recursion, so a deep value cannot overflow the call stack. */
+function withinBounds(v: unknown, maxDepth: number, maxNodes: number): boolean {
+  const stack: [unknown, number][] = [[v, 0]];
+  let nodes = 0;
+  for (let top = stack.pop(); top; top = stack.pop()) {
+    const [x, level] = top;
+    if (++nodes > maxNodes) return false;
+    if (x === null || typeof x !== "object") continue;
+    if (level >= maxDepth) return false;
+    for (const y of Object.values(x)) stack.push([y, level + 1]);
+  }
+  return true;
+}
+
 /** The id-collision answer: one message, whether or not the caller may read
  * the record that holds the id. */
 const ID_TAKEN = "An item with this id exists.";
 
 /** What a deleted record leaves for 30 days: its key, kind and audience (the
- * fields that decide who gets the `del`) and its rev, so a record written
- * again at the same key gets a higher rev and a stale `base.rev` cannot match
- * it. No text and no other field (review round 1, R5). A record's moderation
- * state does not change who reads it, so it is not kept. */
+ * fields that decide who gets the `del`). No text and no other field (review
+ * round 1, R5); its last rev is in the registry. A record's moderation state
+ * does not change who reads it, so it is not kept. */
 export interface Tombstone extends Audience {
   key: string;
-  rev: number;
   /** The commit time of the delete. */
   at: number;
 }
@@ -154,26 +213,41 @@ function logsOfAudience(a: Audience): LogId[] {
   return out;
 }
 
+/** Set `key` in an expiry-ordered map: as the newest value. */
+function setLast<K, V>(m: Map<K, V>, key: K, value: V) {
+  m.delete(key);
+  m.set(key, value);
+}
+
 class Store {
   readonly records = new Map<string, StoredRecord>();
   readonly byKind = new Map<Kind, Set<string>>();
+  /** In the order they were made, so oldest first. */
   readonly tombs = new Map<string, Tombstone>();
   /** The version of the commit that created each record now stored: lists
    * sort by `createdAt`, then by it. */
   readonly born = new Map<string, number>();
-  /** Every id ever written, deleted records included: an id is never reused. */
-  readonly ids = new Set<string>();
+  /** Every id and key ever written (`registryKey`), with its last rev. An id
+   * is never used again; a record written again at a deleted key continues
+   * from its last rev (review round 2, R1). */
+  readonly registry = new Map<string, number>();
   readonly logs = new Map<LogId, Map<string, LogRow>>();
   /** For a log whose history was replaced: how many times, and the version
-   * its current epoch began at. Absent: never, from version 0. */
+   * its current history began at. Absent: never, from version 0. */
   readonly epochs = new Map<LogId, { n: number; start: number }>();
   head = 0;
-  /** The commit time of the head version: never decreasing, so the
-   * tombstone cutoff and the cursor cutoff compare the same order. */
+  /** The server's time: never decreasing, so every table's expiry order is
+   * the order of its times, and the tombstone cutoff and a cursor's age
+   * compare the same order. */
   private lastAt: number;
 
   constructor(now: number) {
     this.lastAt = now;
+  }
+
+  /** The server's time now: the clock, never earlier than a time used before. */
+  time(clock: number): number {
+    return (this.lastAt = Math.max(clock, this.lastAt));
   }
 
   get(key: string) {
@@ -208,28 +282,28 @@ class Store {
     }
     if (!writes.length) return null;
     const version = ++this.head;
-    const at = (this.lastAt = Math.max(now, this.lastAt));
+    const at = this.time(now);
     for (const [key, next, prev] of writes) {
       if (next === null) {
         const old = prev as StoredRecord;
-        const tomb: Tombstone = { key, ...audience(this, old), rev: old.rev, at };
+        const tomb: Tombstone = { key, ...audience(this, old), at };
         this.records.delete(key);
         this.byKind.get(old.kind)?.delete(key);
         this.born.delete(key);
-        this.tombs.set(key, tomb);
+        setLast(this.tombs, key, tomb);
         for (const log of logsOfAudience(tomb)) this.row(log, key, "del", version);
         continue;
       }
-      const rev = (prev?.rev ?? this.tombs.get(key)?.rev ?? 0) + 1;
+      const reg = registryKey(next);
+      const rev = (prev?.rev ?? this.registry.get(reg) ?? 0) + 1;
       const rec = { ...next, rev };
       this.records.set(key, rec);
+      this.registry.set(reg, rev);
       if (!prev) this.born.set(key, version);
       let kind = this.byKind.get(rec.kind);
       if (!kind) this.byKind.set(rec.kind, (kind = new Set<string>()));
       kind.add(key);
       this.tombs.delete(key);
-      const id = idOf(rec);
-      if (id !== null) this.ids.add(id);
       for (const log of logsOf(rec)) this.row(log, key, "put", version);
       // who may read a space's records depends on whether it is closed: a
       // change replaces the log's history (every cursor resyncs)
@@ -242,12 +316,12 @@ class Store {
   }
 
   /** Drop the tombstones (and their `del` rows) committed strictly before the
-   * cutoff. A cursor served at the cutoff itself is still accepted (`pull`),
-   * so a delete committed in the same millisecond is kept. */
+   * cutoff, oldest first. A cursor served at the cutoff itself is still
+   * accepted (`pull`), so a delete committed in the same millisecond is kept. */
   prune(now: number) {
     const cutoff = now - TOMBSTONE_TTL;
     for (const [key, t] of this.tombs) {
-      if (t.at >= cutoff) continue;
+      if (t.at >= cutoff) break;
       this.tombs.delete(key);
       for (const log of logsOfAudience(t)) {
         const rows = this.logs.get(log);
@@ -287,7 +361,7 @@ class StagedTx implements Tx {
   create(r: Draft): void {
     const key = keyOf(r);
     const id = idOf(r);
-    if (this.get(key) || (id !== null && (this.store.ids.has(id) || this.newIds.has(id))))
+    if (this.get(key) || (id !== null && (this.store.registry.has(id) || this.newIds.has(id))))
       throw refuse("CONFLICT", ID_TAKEN);
     this.write(key, r);
     if (id !== null) this.newIds.add(id);
@@ -324,51 +398,136 @@ interface Outcome {
   effects?: Effect[];
 }
 
-/** A registered client: the user it is bound to, its last processed seq,
- * and the answers recorded under its seqs (a mutation id that is malformed
- * or already used for another change has no (user, mutation id) entry). */
+/** A registered client: the user it is bound to, its last processed seq and
+ * when it was last used (by a write or a read with its client id). */
 interface ClientRec {
   u: string;
   last: number;
-  answers: Map<number, { digest: string; result: ApplyResult; at: number }>;
+  seen: number;
 }
 
-/** One entry of the effect queue: kept until the effect has run. */
+/** An answer recorded under (client, seq): for a mutation id that is
+ * malformed or already used for another change. */
+interface SeqAnswer {
+  clientId: string;
+  seq: number;
+  digest: string;
+  result: ApplyResult;
+  at: number;
+}
+
+/** One entry of the effect queue: kept until the effect has run or failed
+ * `EFFECT_MAX_ATTEMPTS` times. */
 interface QueuedEffect {
   effect: Effect;
   /** The commit time of the write that queued it. */
   at: number;
   attempts: number;
+  /** The time of the next attempt. */
+  next: number;
+}
+
+/** What a cursor token holds. `v`: the version of the newest row of the log
+ * the reader was given (a `put` or a `del` it may read), or 0. `h`: the
+ * server's head when it was served. `n`: the log's history. `at`: when it
+ * was served. */
+interface CursorState {
+  log: string;
+  u: string | null;
+  n: number;
+  v: number;
+  h: number;
+  at: number;
+}
+
+const TOKEN_FORMAT = 1;
+const TOKEN_HEAD = 29;
+const TOKEN_IV = 12;
+const TOKEN_TAG = 16;
+const TOKEN_MAX_LENGTH = 1024;
+
+/** Cursor tokens: AES-256-GCM under a key from `crypto.randomBytes`, a new
+ * random IV for each. The plaintext is a fixed 29-byte head (format, history,
+ * version, head, serve time) and the JSON of [log, reader], so a token's
+ * length depends only on the lengths of the log id and the handle. The tag
+ * authenticates every field; a token from another key, or with any byte
+ * changed, does not open. */
+class Tokens {
+  private readonly key = randomBytes(32);
+
+  seal(c: CursorState): Cursor {
+    const head = Buffer.alloc(TOKEN_HEAD);
+    head.writeUInt8(TOKEN_FORMAT, 0);
+    head.writeUInt32BE(c.n, 1);
+    head.writeDoubleBE(c.v, 5);
+    head.writeDoubleBE(c.h, 13);
+    head.writeDoubleBE(c.at, 21);
+    const plain = Buffer.concat([head, Buffer.from(JSON.stringify([c.log, c.u]), "utf8")]);
+    const iv = randomBytes(TOKEN_IV);
+    const cipher = createCipheriv("aes-256-gcm", this.key, iv);
+    const body = Buffer.concat([cipher.update(plain), cipher.final()]);
+    return Buffer.concat([iv, body, cipher.getAuthTag()]).toString("base64url");
+  }
+
+  open(token: unknown): CursorState | null {
+    if (typeof token !== "string" || token.length > TOKEN_MAX_LENGTH) return null;
+    const raw = Buffer.from(token, "base64url");
+    if (raw.length < TOKEN_IV + TOKEN_HEAD + TOKEN_TAG) return null;
+    let plain: Buffer;
+    try {
+      const decipher = createDecipheriv("aes-256-gcm", this.key, raw.subarray(0, TOKEN_IV));
+      decipher.setAuthTag(raw.subarray(raw.length - TOKEN_TAG));
+      plain = Buffer.concat([
+        decipher.update(raw.subarray(TOKEN_IV, raw.length - TOKEN_TAG)),
+        decipher.final(),
+      ]);
+    } catch {
+      return null;
+    }
+    if (plain.readUInt8(0) !== TOKEN_FORMAT) return null;
+    const [log, u] = JSON.parse(plain.subarray(TOKEN_HEAD).toString("utf8")) as [
+      string,
+      string | null,
+    ];
+    return {
+      log,
+      u,
+      n: plain.readUInt32BE(1),
+      v: plain.readDoubleBE(5),
+      h: plain.readDoubleBE(13),
+      at: plain.readDoubleBE(21),
+    };
+  }
 }
 
 export class ProtoServer implements TestServer {
   private readonly store: Store;
+  /** Answers by (user, mutation id), oldest first. */
   private readonly dedup = new Map<string, { result: ApplyResult; digest: string; at: number }>();
+  /** Answers by (client, seq), oldest first. */
+  private readonly seqAnswers = new Map<string, SeqAnswer>();
+  /** Registered clients, least recently used first. */
   private readonly clients = new Map<string, ClientRec>();
+  /** Each person's registrations in the past day, by the time of their
+   * latest, oldest first. */
+  private readonly registrations = new Map<string, number[]>();
   /** The post-commit effects not yet run, in commit order: written in the
    * same step as the write that queued them (durable with it), and removed
-   * once they ran. */
+   * once they ran or failed for good. */
   private readonly effectQueue: QueuedEffect[] = [];
+  private readonly deadLetters: (QueuedEffect & { failedAt: number })[] = [];
   private readonly jobList: { kind: string; id: string }[] = [];
   private readonly clock: ServerOptions["clock"];
   private readonly random: () => number;
   private readonly mutators: Readonly<Record<string, AnyMutator>>;
-  /** The cursors given out at a version above 0, by their epoch token: the
-   * log, the reader, the log's history, the version, when it was last given
-   * out and the server's head then. Kept 30 days. */
-  private readonly served = new Map<
-    string,
-    { log: LogId; u: string | null; n: number; version: number; at: number; head: number }
-  >();
-  private serves = 0;
-  /** The secret epoch tokens are made from: they cannot be guessed. */
-  private readonly secret: string;
+  private readonly failEffect: ServerOptions["failEffect"];
+  private readonly tokens = new Tokens();
 
   constructor(options: ServerOptions) {
     this.clock = options.clock;
-    this.random = options.random ?? Math.random;
+    this.random = options.random ?? cryptoRandom;
     this.mutators = options.mutators ?? MUTATORS;
-    this.secret = ulid(this.clock.now(), this.random).slice(10);
+    this.failEffect = options.failEffect;
     this.store = new Store(this.clock.now());
   }
 
@@ -378,40 +537,81 @@ export class ProtoServer implements TestServer {
     return actor !== null && typeof actor.u === "string" && isHandle(actor.u) ? actor.u : null;
   }
 
+  /** The server's time for this call, after expiring what is past its lifetime. */
+  private begin(): number {
+    const now = this.store.time(this.clock.now());
+    this.housekeep(now);
+    return now;
+  }
+
   // ---- writes ----
 
   register(actor: Actor | null): RegisterResult {
-    this.housekeep(this.clock.now());
-    const u = this.userOf(actor);
-    if (u === null) return { ok: false, error: refuse("UNAUTHORIZED").toError() };
-    let id: string;
-    do id = ulid(this.clock.now(), this.random);
-    while (this.clients.has(id));
-    this.clients.set(id, { u, last: 0, answers: new Map() });
-    return { ok: true, clientId: id };
+    try {
+      const now = this.begin();
+      const u = this.userOf(actor);
+      if (u === null) return { ok: false, error: refuse("UNAUTHORIZED").toError() };
+      const times = (this.registrations.get(u) ?? []).filter((at) => at > now - DAY);
+      if (times.length >= REGISTRATIONS_PER_DAY)
+        return { ok: false, error: refuse("TOO_MANY_REQUESTS").toError() };
+      let id: string;
+      do id = ulid(now, this.random);
+      while (this.clients.has(id));
+      setLast(this.registrations, u, [...times, now]);
+      this.clients.set(id, { u, last: 0, seen: now });
+      return { ok: true, clientId: id };
+    } catch {
+      // the random source failed: nothing was registered
+      return { ok: false, error: refuse("INTERNAL_SERVER_ERROR").toError() };
+    }
   }
 
   apply(actor: Actor | null, envelope: unknown): ApplyResult {
-    const env = envelopeS.safeParse(envelope);
-    if (!env.success)
+    try {
+      return this.applyEnvelope(actor, envelope);
+    } catch {
+      // a fault outside the mutator stages: nothing was committed before the
+      // fault, or the commit and its stored answer were (and a resend gets
+      // that answer)
+      return fail(refuse("INTERNAL_SERVER_ERROR"));
+    }
+  }
+
+  private applyEnvelope(actor: Actor | null, envelope: unknown): ApplyResult {
+    // bounds first: nothing below may walk an input deeper or larger than this
+    if (
+      !withinBounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES) ||
+      Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES
+    )
       return fail(
         refuse("BAD_REQUEST", undefined, [
-          "envelope: expected { clientId, seq, mutationId, name, input, protocolVersion }",
+          `envelope: expected input nested at most ${MAX_INPUT_DEPTH} deep, and at most ${MAX_ENVELOPE_BYTES} bytes as JSON`,
         ]),
       );
-    const m = env.data;
-    if (m.protocolVersion < MIN_PROTOCOL_VERSION)
+    const version =
+      envelope !== null && typeof envelope === "object"
+        ? (envelope as { protocolVersion?: unknown }).protocolVersion
+        : undefined;
+    if (typeof version === "number" && Number.isInteger(version) && version < MIN_PROTOCOL_VERSION)
       return fail(
         refuse("UPGRADE_REQUIRED", undefined, [
           `protocolVersion: expected at least ${MIN_PROTOCOL_VERSION}`,
         ]),
       );
+    const env = envelopeS.safeParse(envelope);
+    if (!env.success)
+      return fail(
+        refuse("BAD_REQUEST", undefined, [
+          "envelope: expected { clientId, seq, mutationId, name, input, protocolVersion, clientTime }",
+        ]),
+      );
+    const m = env.data;
     const u = this.userOf(actor);
     if (u === null) return fail(refuse("UNAUTHORIZED"));
+    const now = this.begin();
     const client = this.clients.get(m.clientId);
     if (!client || client.u !== u) return fail(refuse("WRONG_CLIENT"));
-    const now = this.clock.now();
-    this.housekeep(now);
+    this.touch(m.clientId, client, now);
     const wellFormed = isUlid(m.mutationId);
     const dk = `${u}\u0000${m.mutationId}`;
     const payload = digest(canonical([m.name, m.input]));
@@ -420,8 +620,9 @@ export class ProtoServer implements TestServer {
     // its recorded answer, and the seq is not used (R7c)
     if (hit && hit.digest === payload) return structuredClone(hit.result);
     // an answer recorded under this client's seq: the same envelope again
+    const sk = `${m.clientId}\u0000${m.seq}`;
     const sent = digest(canonical([m.mutationId, m.name, m.input]));
-    const kept = client.answers.get(m.seq);
+    const kept = this.seqAnswers.get(sk);
     if (kept && kept.digest === sent) return structuredClone(kept.result);
     if (m.seq !== client.last + 1)
       return {
@@ -442,7 +643,13 @@ export class ProtoServer implements TestServer {
             : "mutationId: expected a ULID",
         ]),
       );
-      client.answers.set(m.seq, { digest: sent, result, at: now });
+      setLast(this.seqAnswers, sk, {
+        clientId: m.clientId,
+        seq: m.seq,
+        digest: sent,
+        result,
+        at: now,
+      });
       client.last = m.seq;
       return structuredClone(result);
     }
@@ -453,31 +660,42 @@ export class ProtoServer implements TestServer {
       // real server, one transaction.
       if (out.staged) this.store.commit(out.staged, now);
       for (const effect of out.effects ?? [])
-        this.effectQueue.push({ effect, at: now, attempts: 0 });
-      this.dedup.set(dk, { result: out.result, digest: payload, at: now });
+        this.effectQueue.push({ effect, at: now, attempts: 0, next: now });
+      setLast(this.dedup, dk, { result: out.result, digest: payload, at: now });
       client.last = m.seq;
     }
-    this.runEffects(now);
     return structuredClone(out.result);
   }
 
   private execute(u: string, m: Env, now: number): Outcome {
     const final = (e: Refusal): Outcome => ({ result: fail(e), recorded: !UNRECORDED.has(e.code) });
-    const skew = (issue: string): Outcome => ({
-      result: {
-        ok: false,
-        error: {
-          code: "CLOCK_SKEW",
-          message: refuse("CLOCK_SKEW").message,
-          issues: [issue],
-          serverTime: now,
+    // the device's clock against the server's: the client corrects it from
+    // `serverTime` and sends the write again
+    if (Math.abs(m.clientTime - now) > CLOCK_MAX_SKEW)
+      return {
+        result: {
+          ok: false,
+          error: {
+            code: "CLOCK_SKEW",
+            message: refuse("CLOCK_SKEW").message,
+            issues: ["clientTime: expected the server's time to within a minute"],
+            serverTime: now,
+          },
         },
-      },
-      recorded: false,
-    });
-    const window = (path: string) =>
-      skew(`${path}: expected a ULID from the past 4 days to 1 minute ahead`);
-    if (!inWindow(m.mutationId, now)) return window("mutationId");
+        recorded: false,
+      };
+    // the write's age, on the device's own clock: older than the outbox
+    // keeps a write (with a margin), or made after `clientTime` (the device's
+    // clock went back). Either way it is not applied, and the answer is
+    // recorded, so a resend of the same write gets it again (review round 2,
+    // finding 3).
+    const expired = (path: string) =>
+      final(
+        refuse("EXPIRED", undefined, [
+          `${path}: expected a ULID from the 4 days before clientTime to 1 minute after`,
+        ]),
+      );
+    if (!ageOk(m.mutationId, m.clientTime)) return expired("mutationId");
     const def = Object.hasOwn(this.mutators, m.name) ? this.mutators[m.name] : undefined;
     if (!def)
       return final(refuse("NOT_FOUND", "The server has no procedure with this name.", ["name"]));
@@ -494,13 +712,16 @@ export class ProtoServer implements TestServer {
       );
     const input = parsed.data;
     try {
-      for (const id of def.ids?.(input) ?? []) if (!inWindow(id, now)) return window("input.id");
-      // an online-only write whose mutation id is over a minute old: the
-      // client's clock is behind, or the write waited in an outbox. Either
-      // way the client corrects its clock and sends it again with a new
-      // mutation id (R6: a slow clock could never create a space).
-      if (def.online && ulidTime(m.mutationId) < now - ONLINE_MAX_AGE)
-        return skew("mutationId: expected a ULID from the past minute (online only)");
+      for (const id of def.ids?.(input) ?? [])
+        if (!ageOk(id, m.clientTime)) return expired("input.id");
+      // an online-only write whose mutation id is over a minute old on the
+      // device's clock waited in an outbox
+      if (def.online && m.clientTime - ulidTime(m.mutationId) > ONLINE_MAX_AGE)
+        return final(
+          refuse("EXPIRED", undefined, [
+            "mutationId: expected a ULID from the minute before clientTime (online only)",
+          ]),
+        );
       const tx = new StagedTx(this.store, u, isoAt(now), m.mutationId);
       authorize(tx, def, input);
       const pre: PreCtx = {
@@ -523,34 +744,51 @@ export class ProtoServer implements TestServer {
     }
   }
 
-  /** Run the queued effects, oldest first. One that fails stays queued and
-   * is tried again on the next call; its write's answer is already
-   * recorded and does not change. */
-  private runEffects(now: number) {
+  // ---- the effect worker ----
+
+  work(): number {
+    const now = this.begin();
+    let ran = 0;
     for (let k = 0; k < this.effectQueue.length;) {
       const q = this.effectQueue[k] as QueuedEffect;
+      if (q.next > now) {
+        k++;
+        continue;
+      }
+      q.attempts++;
       try {
+        if (this.failEffect?.(q.effect, q.attempts)) throw new Error("the effect's service failed");
         this.runEffect(q.effect, now);
         this.effectQueue.splice(k, 1);
+        ran++;
       } catch {
-        q.attempts++;
-        k++;
+        // its write's answer is recorded already and does not change
+        if (q.attempts >= EFFECT_MAX_ATTEMPTS) {
+          this.effectQueue.splice(k, 1);
+          this.deadLetters.push({ ...q, failedAt: now });
+        } else {
+          q.next = now + Math.min(EFFECT_BACKOFF_MAX, EFFECT_BACKOFF_MIN * 2 ** (q.attempts - 1));
+          k++;
+        }
       }
     }
+    return ran;
   }
 
+  /** Run one effect. Its writes commit together, or not at all. */
   private runEffect(effect: Effect, now: number) {
     if (effect.type === "job") {
       this.jobList.push({ kind: effect.kind, id: effect.id });
       return;
     }
     const staged = new Map<string, StoredRecord | null>();
+    // the staff as they are when the effect runs
     const staff = spaceRec(this.store, effect.sp)?.mods ?? [];
     for (const [to, role] of staff) {
       if (role === "member") continue;
       let id: string;
       do id = ulid(now, this.random);
-      while (this.store.ids.has(id) || staged.has(`notif:${id}`));
+      while (this.store.registry.has(id) || staged.has(`notif:${id}`));
       const n: NotifDraft = {
         to,
         type: "report",
@@ -570,27 +808,43 @@ export class ProtoServer implements TestServer {
     this.store.commit(staged, now);
   }
 
-  /** Expire what is past its lifetime, and run the queued effects. */
+  /** Expire what is past its lifetime: each table from its oldest value,
+   * stopping at the first that has not expired. */
   private housekeep(now: number) {
     this.store.prune(now);
-    for (const [k, d] of this.dedup) if (d.at <= now - DEDUP_TTL) this.dedup.delete(k);
-    for (const c of this.clients.values())
-      for (const [seq, a] of c.answers) if (a.at <= now - DEDUP_TTL) c.answers.delete(seq);
-    for (const [k, s] of this.served) if (s.at < now - TOMBSTONE_TTL) this.served.delete(k);
-    this.runEffects(now);
+    for (const [k, d] of this.dedup) {
+      if (d.at > now - DEDUP_TTL) break;
+      this.dedup.delete(k);
+    }
+    for (const [k, a] of this.seqAnswers) {
+      if (a.at > now - DEDUP_TTL) break;
+      this.seqAnswers.delete(k);
+    }
+    for (const [id, c] of this.clients) {
+      if (c.seen > now - CLIENT_IDLE_TTL) break;
+      this.clients.delete(id);
+    }
+    for (const [u, times] of this.registrations) {
+      if ((times.at(-1) ?? 0) > now - DAY) break;
+      this.registrations.delete(u);
+    }
+  }
+
+  /** A client was used now: it moves to the end of the idle order. */
+  private touch(clientId: string, c: ClientRec, now: number) {
+    c.seen = now;
+    setLast(this.clients, clientId, c);
   }
 
   // ---- reads ----
   //
-  // A cursor's `epoch` is a token the server made when it gave the cursor
-  // out: random-looking, unrelated to versions, and naming one served state
-  // (the log, the reader, the log's history, the version, when it was given
-  // out and the server's head then). Two readers at the same version hold
-  // different tokens, so a reader whose state missed a `del` that was pruned
-  // since cannot pass for one that did not (review round 1, R12). A pull
-  // with no change the reader may read returns its cursor unchanged. A
-  // cursor at version 0 names an empty replica, from which a pull is a
-  // snapshot: its epoch is fixed per log history, and nothing is kept for it.
+  // A cursor is a sealed token (`Tokens`) naming the log, the reader, the
+  // log's history, the version, the server's head and when it was served.
+  // Two readers at the same version hold different tokens, so a reader whose
+  // state missed a `del` that was pruned since cannot pass for one that did
+  // not (review round 1, R12). Every read serves a new token; a pull with no
+  // change the reader may read keeps the version and renews the serve time,
+  // so a snapshot and pulls on a quiet server never loop on resync.
 
   private rows(log: LogId) {
     return this.store.logs.get(log) ?? new Map<string, LogRow>();
@@ -602,10 +856,12 @@ export class ProtoServer implements TestServer {
     return log.startsWith("user:") && (u === null || log !== `user:${u}`);
   }
 
-  private lastSeq(u: string | null, clientId: string | undefined): LastSeq {
+  private lastSeq(u: string | null, clientId: string | undefined, now: number): LastSeq {
     if (u === null || clientId === undefined) return null;
     const c = this.clients.get(clientId);
-    return c && c.u === u ? c.last : null;
+    if (!c || c.u !== u) return null;
+    this.touch(clientId, c, now);
+    return c.last;
   }
 
   /** A row as `u` may read it now: the record's view for a `put`, true for a
@@ -619,42 +875,32 @@ export class ProtoServer implements TestServer {
     return t && readsAudience(this.store, t, u) ? true : null;
   }
 
-  /** The epoch of a cursor at version 0 of `log`'s current history. */
-  private zeroEpoch(log: LogId): string {
-    return `e${digest(`${this.secret}\u0000${log}\u0000${this.store.epoch(log).n}`).slice(0, 20)}`;
-  }
-
-  /** Give `u` a cursor at `version` of `log`: a new token, or for version 0
-   * the log's fixed one. */
-  private serve(log: LogId, u: string | null, version: number, now: number): string {
-    if (version === 0) return this.zeroEpoch(log);
-    const token = `e${digest(`${this.secret}\u0000${++this.serves}`).slice(0, 20)}`;
-    this.served.set(token, {
+  /** A token for `u` at `version` of `log`'s current history, served now. */
+  private serve(log: LogId, u: string | null, version: number, now: number): Cursor {
+    return this.tokens.seal({
       log,
       u,
       n: this.store.epoch(log).n,
-      version,
+      v: version,
+      h: this.store.head,
       at: now,
-      head: this.store.head,
     });
-    return token;
   }
 
   snapshot(actor: Actor | null, log: LogId, options: ReadOptions = {}): Snapshot {
-    const now = this.clock.now();
-    this.housekeep(now);
+    const now = this.begin();
     const u = this.userOf(actor);
-    const lastSeq = this.lastSeq(u, options.clientId);
-    if (!logS.safeParse(log).success || this.closedTo(log, u))
-      return { records: [], version: 0, epoch: this.zeroEpoch(log), lastSeq };
+    const lastSeq = this.lastSeq(u, options.clientId, now);
+    // a log id that cannot name a log: no token, so a pull resyncs
+    if (!logS.safeParse(log).success) return { records: [], cursor: "", lastSeq };
+    if (this.closedTo(log, u)) return { records: [], cursor: this.serve(log, u, 0, now), lastSeq };
     const records: Snapshot["records"] = [];
     let version = 0;
     for (const row of this.rows(log).values()) {
       const v = this.readRow(row, u);
       if (v === null) continue;
-      // the version is the newest row the reader may read, a `del` or a row
-      // the summary tier leaves out included: never the server's head, so it
-      // says nothing about writes the reader may not read (R3)
+      // the newest row the reader may read, a `del` or a row the summary
+      // tier leaves out included
       version = Math.max(version, row.version);
       if (v === true) continue;
       if (
@@ -672,45 +918,35 @@ export class ProtoServer implements TestServer {
       const y = createdOf(b.record);
       return x < y ? -1 : x > y ? 1 : born(a.key) - born(b.key);
     });
-    return { records, version, epoch: this.serve(log, u, version, now), lastSeq };
+    return { records, cursor: this.serve(log, u, version, now), lastSeq };
   }
 
   pull(actor: Actor | null, log: LogId, cursor: Cursor, options: ReadOptions = {}): Pull {
-    const now = this.clock.now();
-    this.housekeep(now);
+    const now = this.begin();
     const u = this.userOf(actor);
-    const c = cursorS.safeParse(cursor);
-    if (!logS.safeParse(log).success || !c.success) return { resync: true };
-    const { epoch, version } = c.data;
-    const lastSeq = this.lastSeq(u, options.clientId);
-    // another person's user log: nothing, whatever the cursor
-    if (this.closedTo(log, u)) return { changes: [], version, epoch, lastSeq };
-    if (version === 0) {
-      if (epoch !== this.zeroEpoch(log)) return { resync: true };
-    } else {
-      // the cursor's age is the time the server gave it out, not the time
-      // of the commit at its version: a reader who was given it within 30
-      // days missed no `del` (one it may read and was not given is younger
-      // than that cursor, so younger than 30 days). A cursor the server did
-      // not give this reader, at this version of this log's history,
-      // resyncs. On a quiet server, a pull keeps its cursor current, so a
-      // snapshot and a pull never loop (R12).
-      const s = this.served.get(epoch);
-      if (
-        !s ||
-        s.log !== log ||
-        s.u !== u ||
-        s.version !== version ||
-        s.n !== this.store.epoch(log).n ||
-        s.at < now - TOMBSTONE_TTL
-      )
-        return { resync: true };
-      if (u !== null && this.scopeChanged(log, u, version, s.head)) return { resync: true };
-    }
+    if (!logS.safeParse(log).success) return { resync: true };
+    // The token's age is the time the server served it, not the time of the
+    // commit at its version: a reader who was served it within 30 days
+    // missed no `del` (one it may read and was not given is younger than
+    // that token, so younger than 30 days). A token the server did not seal
+    // for this reader, this log and this history of the log resyncs.
+    const c = this.tokens.open(cursor);
+    if (
+      c === null ||
+      c.log !== log ||
+      c.u !== u ||
+      c.n !== this.store.epoch(log).n ||
+      c.at < now - TOMBSTONE_TTL
+    )
+      return { resync: true };
+    const lastSeq = this.lastSeq(u, options.clientId, now);
+    // another person's user log: nothing
+    if (this.closedTo(log, u)) return { changes: [], cursor: this.serve(log, u, 0, now), lastSeq };
+    if (u !== null && this.scopeChanged(log, u, c.v, c.h)) return { resync: true };
     const changes: Change[] = [];
-    let to = version;
+    let to = c.v;
     const fresh = [...this.rows(log).values()]
-      .filter((r) => r.version > version)
+      .filter((r) => r.version > c.v)
       .sort((a, b) => a.version - b.version);
     for (const row of fresh) {
       const v = this.readRow(row, u);
@@ -722,24 +958,19 @@ export class ProtoServer implements TestServer {
           : { key: row.key, op: "put", record: structuredClone(v) },
       );
     }
-    if (to === version && version > 0) {
-      // nothing the reader may read: the same cursor, given out again now
-      const s = this.served.get(epoch);
-      if (s) Object.assign(s, { at: now, head: this.store.head });
-      return { changes, version, epoch, lastSeq };
-    }
-    return { changes, version: to, epoch: this.serve(log, u, to, now), lastSeq };
+    return { changes, cursor: this.serve(log, u, to, now), lastSeq };
   }
 
-  /** Whether what `u` may read of `log` changed, after the cursor at
-   * `version` was given out (when the server's head was `head`), in a way
-   * the log's rows do not carry: `u`'s own membership of the space; for
-   * `u`'s user log, `u`'s membership of any space, or a space opening or
-   * closing that a record in the log is about (likes, saves and
-   * notifications follow the person's access to their space). Either way the
-   * reader resyncs. `u`'s member rows are rows `u` may read, so their
-   * versions compare with the cursor's; a space's history is not a row of
-   * the user log, so the version it began at compares with the head. */
+  /** Whether what `u` may read of `log` changed, after the token at
+   * `version` was served (when the server's head was `head`), in a way the
+   * log's rows do not carry: `u`'s own membership or role in the space; for
+   * `u`'s user log, `u`'s membership or role in any space, or a space opening
+   * or closing that a record in the log is about (likes, saves and
+   * notifications follow the person's access to their space, notifications
+   * their role too). Either way the reader resyncs. `u`'s member rows are
+   * rows `u` may read, so their versions compare with the token's; a space's
+   * history is not a row of the user log, so the version it began at
+   * compares with the head. */
   private scopeChanged(log: LogId, u: string, version: number, head: number): boolean {
     const rows = this.rows(log);
     if (log.startsWith("space:")) {
@@ -762,7 +993,7 @@ export class ProtoServer implements TestServer {
   }
 
   logRows(log: LogId): LogRow[] {
-    this.housekeep(this.clock.now());
+    this.begin();
     return [...this.rows(log).values()].map((r) => ({ ...r }));
   }
 
@@ -771,15 +1002,21 @@ export class ProtoServer implements TestServer {
   }
 
   scanStorage(): StorageScan {
-    this.housekeep(this.clock.now());
+    this.begin();
     const answers: StorageScan["answers"] = [];
     for (const [k, d] of this.dedup) {
       const [u = "", mutationId = ""] = k.split("\u0000");
       answers.push({ u, mutationId, digest: d.digest, result: d.result, at: d.at });
     }
-    for (const [clientId, c] of this.clients)
-      for (const [seq, a] of c.answers)
-        answers.push({ u: c.u, clientId, seq, digest: a.digest, result: a.result, at: a.at });
+    for (const a of this.seqAnswers.values())
+      answers.push({
+        u: this.clients.get(a.clientId)?.u ?? "",
+        clientId: a.clientId,
+        seq: a.seq,
+        digest: a.digest,
+        result: a.result,
+        at: a.at,
+      });
     return structuredClone({
       records: [...this.store.records.values()],
       tombstones: [...this.store.tombs.values()],
@@ -787,13 +1024,19 @@ export class ProtoServer implements TestServer {
         [...rows.values()].map((r) => ({ log, ...r })),
       ),
       answers,
+      clients: [...this.clients].map(([clientId, c]) => ({ clientId, ...c })),
+      registrations: [...this.registrations].map(([u, at]) => ({ u, at })),
+      registry: [...this.store.registry].map(([id, rev]) => ({ id, rev })),
+      born: [...this.store.born].map(([key, version]) => ({ key, version })),
+      epochs: [...this.store.epochs].map(([log, e]) => ({ log, ...e })),
       effects: this.effectQueue.map((q) => ({ ...q })),
+      deadLetters: this.deadLetters.map((q) => ({ ...q })),
+      jobs: [...this.jobList],
     });
   }
 
   finishJob(key: string, text: string): boolean {
-    const now = this.clock.now();
-    this.housekeep(now);
+    const now = this.begin();
     const r = this.store.get(key);
     if (!r || !("mod" in r) || r.mod === "removed") return false;
     if (r.kind === "thread" && !r.del)

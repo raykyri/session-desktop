@@ -35,6 +35,7 @@ const MEMBERS = row("none", "none", "all", "all");
 const OWN_OR_STAFF = row("none", "own", "own", "all");
 const STAFF = row("none", "none", "none", "all");
 const OWN = row("none", "own", "own", "own");
+const OWN_STAFF = row("none", "none", "none", "own");
 
 /** Who reads a record, by kind, in an open and in a closed space. A like or
  * a save is in its thread's space, and a notification in the space it is
@@ -46,6 +47,9 @@ export const READ: Record<Kind, { open: Row; closed: Row }> = {
   // gets none of it, their own threads included (owner decision, 0b)
   stats: { open: PUBLIC, closed: MEMBERS },
   thread: { open: PUBLIC, closed: MEMBERS },
+  // a thread's like and follow-up counts are read with the thread (decision
+  // 4 of review round 1)
+  counts: { open: PUBLIC, closed: MEMBERS },
   followup: { open: PUBLIC, closed: MEMBERS },
   reply: { open: PUBLIC, closed: MEMBERS },
   run: { open: PUBLIC, closed: MEMBERS },
@@ -64,7 +68,9 @@ export const READ: Record<Kind, { open: Row; closed: Row }> = {
   // current access)
   like: { open: OWN, closed: row("none", "none", "own", "own") },
   save: { open: OWN, closed: row("none", "none", "own", "own") },
-  notif: { open: OWN, closed: row("none", "none", "own", "own") },
+  // a report's notification: like the report, for the space's staff; the
+  // person's own while they are staff of the space (review round 2, decision 4)
+  notif: { open: OWN_STAFF, closed: OWN_STAFF },
 };
 
 /** The person a record belongs to, for `own` cells and for user logs. */
@@ -72,6 +78,7 @@ const OWNER: Record<Kind, ((r: never) => string) | null> = {
   space: null,
   stats: null,
   thread: null,
+  counts: null,
   followup: null,
   reply: null,
   run: null,
@@ -90,6 +97,7 @@ const SPACE: Record<Kind, ((r: never) => string) | null> = {
   space: (r: { id: string }) => r.id,
   stats: (r: { sp: string }) => r.sp,
   thread: (r: { s: string }) => r.s,
+  counts: (r: { s: string }) => r.s,
   followup: (r: { s: string }) => r.s,
   reply: (r: { s: string }) => r.s,
   run: (r: { s: string }) => r.s,
@@ -108,6 +116,7 @@ const IN_SPACE_LOG: ReadonlySet<Kind> = new Set<Kind>([
   "space",
   "stats",
   "thread",
+  "counts",
   "followup",
   "reply",
   "run",
