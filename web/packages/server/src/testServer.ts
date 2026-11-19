@@ -11,7 +11,6 @@ import { join } from "node:path";
 
 import { serve, type ServerType } from "@hono/node-server";
 import { closeDatabase, openDatabase } from "@session/db";
-import type { AddressInfo } from "node:net";
 
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
@@ -81,7 +80,7 @@ export function startTestServer(o: TestServerOptions = {}): {
   let server: ServerType | null = null;
   const ready = new Promise<RunningTestServer>((resolve) => {
     server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: o.port ?? 0 }, (info) => {
-      const port = (info as AddressInfo).port;
+      const port = info.port;
       resolve({
         origin: `http://127.0.0.1:${port}`,
         deps,

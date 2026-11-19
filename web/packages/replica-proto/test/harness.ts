@@ -20,8 +20,8 @@ import {
 } from "../src/index.js";
 import { USE_PACKAGE } from "../src/switch.js";
 
-import { modOf } from "./oracle.js";
 import { httpFactory } from "./http-server.js";
+import { modOf } from "./oracle.js";
 import { syncFactory } from "./sync-server.js";
 
 /** The server under test: the prototype's, or with REPLICA_PROTO_SERVER

@@ -26,6 +26,8 @@
 
 import type * as pkg from "@session/mutators";
 import { isHandle } from "@session/mutators";
+// the one edge to the server (ADR-1): its test assembly, for this factory
+// eslint-disable-next-line @typescript-eslint/no-restricted-imports
 import { startTestServer } from "@session/server/test-server";
 import { PROTOCOL_HEADER, PROTOCOL_VERSION } from "@session/sync";
 import type { Answer, PullAnswer, ServerStore, SnapshotAnswer } from "@session/sync/server";
@@ -249,7 +251,7 @@ export function httpFactory(): ServerFactory {
               for (;;) {
                 const r = await reader.read();
                 if (r.done) break;
-                text += dec.decode(r.value);
+                text += dec.decode(r.value as Uint8Array);
               }
             } catch {
               // closed

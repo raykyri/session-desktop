@@ -5,9 +5,11 @@ import jsxA11y from "eslint-plugin-jsx-a11y";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
-/** ADR-1: client ──► shared; server ──► shared, db; db ──► shared; shared ──► nothing.
- * mutators ──► shared. sync ──► shared, mutators. replica-proto (phase 0
- * prototype) ──► shared, mutators, sync, and nothing imports it. */
+/** ADR-1: client ──► shared; server ──► shared, db, mutators, sync; db ──► shared, sync;
+ * shared ──► nothing. mutators ──► shared. sync ──► shared, mutators. replica-proto (phase 0
+ * prototype) ──► shared, mutators, sync, and nothing imports it; its HTTP factory (phase
+ * 2a, `test/http-server.ts`) also starts the real server through
+ * `@session/server/test-server`, an import that file marks. */
 const forbidden = {
   "packages/shared": [
     "@session/db",
