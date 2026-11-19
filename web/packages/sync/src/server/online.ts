@@ -184,7 +184,7 @@ function turnsOf(tx: StoreTx, r: pkg.RunRec) {
     return v !== null && JSON.stringify(v) === JSON.stringify(x) ? (v as T) : null;
   };
   const p = tx.get(`thread:${r.th}`);
-  if (p?.kind !== "thread" || shown(p) === null) return [];
+  if (p?.kind !== "thread" || pkg.view(g, p, r.u) === null) return [];
   const fus = tx
     .scan("followup", "th", p.id)
     .filter(
@@ -192,7 +192,8 @@ function turnsOf(tx: StoreTx, r: pkg.RunRec) {
         f.kind === "followup" && f.mod === null && !f.del && shown(f) !== null,
     )
     .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
-  return [{ q: p.q, a: p.sum ?? "" }, ...fus.map((f) => ({ q: f.q, a: f.a ?? "" }))];
+  const ask = shown(p) === null ? [] : [{ q: p.q, a: p.sum ?? "" }];
+  return [...ask, ...fus.map((f) => ({ q: f.q, a: f.a ?? "" }))];
 }
 
 const stub =

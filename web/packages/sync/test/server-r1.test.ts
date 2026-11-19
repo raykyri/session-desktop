@@ -95,9 +95,16 @@ for (const kind of STORES) {
     ok(t, w.as("mona", "moderation.decide", { item: `a:${th}`, decision: "hidden" }));
     const d = device(w, "mel");
     const { run } = fork(w, "mel", th, d.id);
-    const c = w.server.call(d.as, "runs.claim", { run, device: d.id });
+    const c = w.server.call(d.as, "runs.claim", { run, device: d.id }) as Any;
     t.true(c.ok);
     t.false(JSON.stringify(c).includes("HIDDEN"));
+    // the follow-ups, which hiding the thread does not blank, are turns
+    t.deepEqual(c.result.turns, [{ q: "and then?", a: "" }]);
+    // its author reads the thread's ask: a turn of theirs
+    const o = device(w, "otto");
+    const mine = fork(w, "otto", th, o.id, "mine");
+    const c2 = w.server.call(o.as, "runs.claim", { run: mine.run, device: o.id }) as Any;
+    t.is(c2.result.turns[0].q, "HIDDEN QUESTION");
   });
 
   test(`${kind}: H1: a removed member's queued device run ends with the removal, and claiming it is NOT_FOUND`, (t) => {
