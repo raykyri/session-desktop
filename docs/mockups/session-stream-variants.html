@@ -1,0 +1,724 @@
+<title>Session Stream Variants</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a control bar (variant, theme) over one framed app viewport. Each variant puts a chat or
+   post stream in the middle and shows branches beside it. Colors are the spaces mockup's tokens
+   (session-web-spaces.html), light first, with its dark values. */
+:root {
+  --page: #e9e6e1; --chrome: #f4f2ef; --pane: #fcfbf9; --feed: #f8f6f3; --card: #ffffff; --inset: #f5f2ee;
+  --field: #ffffff; --control: #efece8; --control-hover: #e6e2dc; --control-border: #e0dbd4;
+  --divider: #ebe7e2; --border-strong: #e1dcd6; --fill-subtle: rgba(0,0,0,.04); --fill-hover: rgba(0,0,0,.05);
+  --accent: #0a6fb8; --accent-soft: rgba(11,127,209,.12); --accent-strong: #095c98; --on-accent: #ffffff;
+  --t-heading: #121617; --t-primary: #23282a; --t-body: #33393b; --t-secondary: #4a5350; --t-muted: #5b625e;
+  --t-faint: #686e6b; --t-dim: #9aa19d; --placeholder: #8e958f; --good: #2f8a4d; --warn: #9a6b12;
+  --av1: #4a6a86; --av2: #77598c; --av3: #557a52; --av4: #93663f; --av5: #3d7778; --av6: #8a4f4f; --av-fg: #ffffff;
+  --shadow: 0 1px 2px rgba(60,40,20,.06), 0 0 0 1px rgba(60,40,20,.05);
+  --shadow-pop: 0 10px 28px rgba(20,24,26,.14);
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --fs-xs: 11.5px; --fs-sm: 12.5px; --fs-base: 13.5px; --fs-md: 14.5px; --fs-lg: 17px; --fs-xl: 21px;
+  --r-sm: 4px; --r-md: 6px; --r-lg: 8px; --r-xl: 12px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --page: #121110; --chrome: #171716; --pane: #1c1b1a; --feed: #1a1918; --card: #211f1e; --inset: #181716;
+  --field: #232220; --control: #282827; --control-hover: #313130; --control-border: #3d3d3c;
+  --divider: #2d2d2c; --border-strong: #373634; --fill-subtle: rgba(255,255,255,.05); --fill-hover: rgba(255,255,255,.06);
+  --accent: #33adff; --accent-soft: rgba(51,173,255,.13); --accent-strong: #268fd6; --on-accent: #0f1413;
+  --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #919994;
+  --t-faint: #828b86; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f;
+  --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
+  --shadow: 0 0 0 1px rgba(255,255,255,.06); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
+} }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #121110; --chrome: #171716; --pane: #1c1b1a; --feed: #1a1918; --card: #211f1e; --inset: #181716;
+  --field: #232220; --control: #282827; --control-hover: #313130; --control-border: #3d3d3c;
+  --divider: #2d2d2c; --border-strong: #373634; --fill-subtle: rgba(255,255,255,.05); --fill-hover: rgba(255,255,255,.06);
+  --accent: #33adff; --accent-soft: rgba(51,173,255,.13); --accent-strong: #268fd6; --on-accent: #0f1413;
+  --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #919994;
+  --t-faint: #828b86; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f;
+  --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
+  --shadow: 0 0 0 1px rgba(255,255,255,.06); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--page); color: var(--t-primary); font: 400 var(--fs-base)/1.5 var(--font);
+  display: flex; flex-direction: column; padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px 16px; -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- control bar ---- */
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding-bottom: 10px; }
+.bar h1 { margin: 0; font-size: var(--fs-md); font-weight: 700; color: var(--t-heading); letter-spacing: -.01em; }
+.seg { display: inline-flex; background: var(--control); border-radius: var(--r-lg); padding: 2px; gap: 2px; flex-wrap: wrap; }
+.seg button { padding: 4px 10px; border-radius: var(--r-md); color: var(--t-secondary); font-size: var(--fs-sm); font-weight: 500; white-space: nowrap; }
+.seg button:hover { color: var(--t-heading); }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--t-heading); box-shadow: var(--shadow); }
+.seg button b { font-weight: 600; color: var(--t-faint); margin-right: 5px; font-variant-numeric: tabular-nums; }
+.bar .grow { flex: 1; }
+.thesis { margin: 0 0 10px; color: var(--t-secondary); font-size: var(--fs-sm); max-width: 110ch; }
+.thesis strong { color: var(--t-heading); font-weight: 600; }
+
+/* ---- frame ---- */
+.frame { flex: 1; min-height: 0; display: flex; flex-direction: column; border-radius: var(--r-xl); overflow: hidden;
+  background: var(--pane); box-shadow: var(--shadow), var(--shadow-pop); }
+.frame-top { display: flex; align-items: center; gap: 12px; height: 30px; padding: 0 12px; background: var(--chrome); border-bottom: 1px solid var(--divider); flex: none; }
+.dots { display: flex; gap: 6px; } .dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--border-strong); }
+.frame-top span { flex: 1; text-align: center; font-size: var(--fs-xs); color: var(--t-faint); margin-right: 39px; }
+#app { flex: 1; min-height: 0; position: relative; }
+#app > div { height: 100%; }
+
+/* ---- shared pieces ---- */
+.av { width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
+  color: var(--av-fg); font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+.av.sm { width: 20px; height: 20px; font-size: 8.5px; }
+.av.xs { width: 16px; height: 16px; font-size: 7.5px; }
+.avs { display: inline-flex; } .avs .av { box-shadow: 0 0 0 2px var(--pane); } .avs .av + .av { margin-left: -5px; }
+.mark { width: 28px; height: 28px; border-radius: 8px; display: inline-grid; place-items: center; flex: none;
+  background: var(--accent-soft); color: var(--accent); }
+.mark svg { width: 16px; height: 16px; }
+.mark.sm { width: 20px; height: 20px; border-radius: 6px; } .mark.sm svg { width: 12px; height: 12px; }
+.who { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--t-faint); min-width: 0; }
+.who b { color: var(--t-heading); font-weight: 600; }
+.who .sp { color: var(--t-secondary); }
+.prose { color: var(--t-body); font-size: var(--fs-base); line-height: 1.6; min-width: 0; overflow-wrap: anywhere; }
+.prose > :first-child { margin-top: 0; } .prose > :last-child { margin-bottom: 0; }
+.prose p { margin: 0 0 .7em; } .prose ul, .prose ol { margin: 0 0 .7em; padding-left: 1.3em; } .prose li { margin: .2em 0; }
+.prose h4 { margin: 1em 0 .35em; font-size: var(--fs-base); color: var(--t-heading); font-weight: 600; }
+.prose table { border-collapse: collapse; font-size: var(--fs-sm); margin: 0 0 .7em; display: block; overflow-x: auto; }
+.prose th, .prose td { border-bottom: 1px solid var(--divider); padding: 4px 8px; text-align: left; }
+.prose sup.cite { font-size: 9.5px; color: var(--accent); font-weight: 600; margin-left: 1px; }
+.prose .pending { color: var(--t-faint); }
+.clamp { max-height: 9.6em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
+.clamp.s { max-height: 4.8em; }
+.open > .clamp, .clamp.open { max-height: none; -webkit-mask-image: none; mask-image: none; }
+.tlink { color: var(--accent); font-size: var(--fs-sm); font-weight: 500; }
+.tlink:hover { text-decoration: underline; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 13px;
+  background: var(--control); color: var(--t-secondary); font-size: var(--fs-sm); font-weight: 500; white-space: nowrap; }
+.chip:hover { background: var(--control-hover); color: var(--t-heading); }
+.chip.on { background: var(--accent-soft); color: var(--accent); }
+.chip .muted { color: var(--t-faint); font-weight: 400; }
+.label { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--t-faint); }
+.iconbtn { width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: var(--r-md); color: var(--t-muted); flex: none; }
+.iconbtn:hover { background: var(--fill-hover); color: var(--t-heading); }
+.composer { display: flex; gap: 8px; align-items: center; background: var(--field); border: 1px solid var(--control-border);
+  border-radius: 20px; padding: 4px 4px 4px 14px; }
+.composer:focus-within { border-color: var(--accent); }
+.composer input { flex: 1; min-width: 0; border: 0; background: none; outline: none; padding: 6px 0; font-size: var(--fs-base); }
+.composer input::placeholder { color: var(--placeholder); }
+.composer button { height: 30px; padding: 0 12px; border-radius: 15px; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: var(--fs-sm); }
+.composer .ctx { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
+.status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--warn); }
+.status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .status::before, .fadein { animation: none !important; } }
+.scroll { overflow-y: auto; overscroll-behavior: contain; }
+.empty { color: var(--t-faint); font-size: var(--fs-sm); padding: 8px 0; }
+.dayrule { display: flex; align-items: center; gap: 10px; color: var(--t-faint); font-size: var(--fs-xs); font-weight: 600; margin: 18px 0 6px; }
+.dayrule::before, .dayrule::after { content: ""; flex: 1; height: 1px; background: var(--divider); }
+.fadein { animation: fadein .25s ease; } @keyframes fadein { from { opacity: 0; transform: translateY(3px); } }
+
+/* ---- 1 Channel ---- */
+.v1 { display: grid; grid-template-columns: 210px minmax(0, 1fr); }
+.v1.has-drawer { grid-template-columns: 210px minmax(0, 1fr) minmax(340px, 430px); }
+.side { background: var(--chrome); border-right: 1px solid var(--divider); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+.side .label { padding: 10px 8px 6px; }
+.side button { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: var(--r-md); color: var(--t-secondary); text-align: left; font-size: var(--fs-base); }
+.side button:hover { background: var(--fill-hover); color: var(--t-heading); }
+.side button[aria-current="true"] { background: var(--control); color: var(--t-heading); font-weight: 600; }
+.side button small { margin-left: auto; color: var(--t-faint); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; font-weight: 400; }
+.glyph { width: 18px; height: 18px; border-radius: 5px; display: inline-grid; place-items: center; color: var(--av-fg); font-size: 10px; font-weight: 700; flex: none; }
+.v1-chat { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.chathead { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--divider); flex: none; min-width: 0; }
+.chathead h2 { margin: 0; font-size: var(--fs-md); color: var(--t-heading); white-space: nowrap; }
+.chathead p { margin: 0; color: var(--t-faint); font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.v1-log { flex: 1; min-height: 0; padding: 4px 20px 16px; }
+.msg { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: 10px 8px; border-radius: var(--r-lg); max-width: 760px; }
+.msg:hover { background: var(--fill-subtle); }
+.msg.is-open { background: var(--accent-soft); }
+.msg-q { margin: 2px 0 0; color: var(--t-primary); font-size: var(--fs-md); }
+.agent { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; margin-top: 10px; padding: 10px 12px; background: var(--card); border-radius: var(--r-lg); box-shadow: var(--shadow); }
+.agent .who { margin-bottom: 4px; }
+.msg-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.v1-compose { padding: 10px 20px 16px; flex: none; }
+.drawer { border-left: 1px solid var(--divider); background: var(--feed); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.drawer-h { display: flex; align-items: flex-start; gap: 8px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--divider); flex: none; }
+.drawer-h > div { flex: 1; min-width: 0; }
+.drawer-h h3 { margin: 2px 0 0; font-size: var(--fs-md); color: var(--t-heading); line-height: 1.35; text-wrap: balance; }
+.drawer-b { flex: 1; min-height: 0; padding: 12px 16px; }
+.drawer-f { padding: 10px 12px 12px; border-top: 1px solid var(--divider); flex: none; display: flex; flex-direction: column; gap: 6px; }
+.from { font-size: var(--fs-sm); color: var(--t-secondary); background: var(--inset); border-radius: var(--r-lg); padding: 10px 12px; margin-bottom: 14px; }
+.bn { position: relative; padding: 10px 0 0; }
+.bn-q { margin: 4px 0 6px; font-weight: 600; color: var(--t-heading); font-size: var(--fs-base); line-height: 1.4; }
+.bn-a { display: grid; grid-template-columns: 20px minmax(0,1fr); gap: 8px; }
+.bn-acts { display: flex; gap: 12px; margin: 6px 0 0 28px; }
+.bn-kids { margin-left: 9px; padding-left: 14px; border-left: 1.5px solid var(--border-strong); }
+.bn.sel > .bn-q { color: var(--accent); }
+.reply { display: grid; grid-template-columns: 20px minmax(0,1fr); gap: 8px; padding: 8px 0; }
+.reply p { margin: 2px 0 0; color: var(--t-body); }
+.reply .kids { grid-column: 2; margin-top: 4px; padding-left: 12px; border-left: 1.5px solid var(--border-strong); }
+
+/* ---- 2 Margin ---- */
+.v2 { overflow-y: auto; background: var(--feed); }
+.v2-inner { max-width: 1000px; margin: 0 auto; padding: 0 24px 40px; }
+.v2-tabs { position: sticky; top: 0; z-index: 2; display: flex; gap: 4px; padding: 12px 0; background: var(--feed); overflow-x: auto; }
+.v2-tabs button { padding: 5px 10px; border-radius: 14px; font-size: var(--fs-sm); color: var(--t-secondary); font-weight: 500; white-space: nowrap; }
+.v2-tabs button:hover { background: var(--fill-hover); }
+.v2-tabs button[aria-current="true"] { background: var(--t-heading); color: var(--feed); }
+.v2-row { display: grid; grid-template-columns: minmax(0, 600px) minmax(0, 330px); gap: 28px; padding: 14px 0; justify-content: center; }
+.card { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 18px 20px 12px; min-width: 0; }
+.card-h { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.card h2 { margin: 0 0 8px; font-size: var(--fs-xl); line-height: 1.25; letter-spacing: -.015em; color: var(--t-heading); text-wrap: balance; }
+.card .ask { margin: 0 0 14px; color: var(--t-secondary); font-size: var(--fs-md); }
+.card .post { margin: 0 0 6px; color: var(--t-primary); font-size: var(--fs-lg); line-height: 1.45; }
+.card .byline { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: var(--fs-sm); color: var(--t-faint); }
+.card .clamp { max-height: 300px; }
+.card-f { display: flex; align-items: center; gap: 4px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--divider); }
+.card-f .notes { font-weight: 600; color: var(--t-heading); font-size: var(--fs-sm); margin-right: auto; }
+.card-f .notes span { color: var(--t-faint); font-weight: 400; }
+.v2-notes { position: sticky; top: 58px; align-self: start; max-height: calc(100vh - 140px); overflow-y: auto; padding: 4px 2px 4px 0; }
+.v2-notes .label { display: block; margin: 2px 0 8px; }
+.note { display: block; width: 100%; text-align: left; padding: 9px 10px; border-radius: var(--r-lg); margin-bottom: 4px; }
+.note:hover { background: var(--fill-hover); }
+.note.open { background: var(--card); box-shadow: var(--shadow); }
+.note .who { margin-bottom: 3px; }
+.note .nq { color: var(--t-heading); font-weight: 600; font-size: var(--fs-base); line-height: 1.4; }
+.note .ns { color: var(--t-secondary); font-size: var(--fs-sm); margin-top: 3px; line-height: 1.45; }
+.note .prose { font-size: var(--fs-sm); margin-top: 6px; }
+.note .inside { display: inline-flex; align-items: center; gap: 4px; margin-top: 5px; font-size: var(--fs-xs); color: var(--accent); font-weight: 500; }
+.note-kids { margin: 2px 0 6px 12px; padding-left: 8px; border-left: 1.5px solid var(--border-strong); }
+
+/* ---- 3 Banks ---- */
+.v3 { display: grid; grid-template-columns: minmax(220px, 290px) minmax(0, 620px) minmax(260px, 340px); justify-content: center; background: var(--pane); }
+.bank { min-height: 0; overflow-y: auto; padding: 18px 18px 30px; background: var(--feed); }
+.bank.l { border-right: 1px solid var(--divider); } .bank.r { border-left: 1px solid var(--divider); }
+.bank-h { margin-bottom: 14px; }
+.bank-h h3 { margin: 4px 0 0; font-size: var(--fs-base); color: var(--t-heading); line-height: 1.35; text-wrap: balance; }
+.bank section { margin-bottom: 20px; }
+.bank section > .label { display: block; margin-bottom: 8px; }
+.src { display: block; padding: 7px 0; border-bottom: 1px solid var(--divider); }
+.src b { display: block; font-weight: 500; color: var(--t-heading); font-size: var(--fs-sm); line-height: 1.35; }
+.src span { font-size: var(--fs-xs); color: var(--t-faint); }
+.src sup { color: var(--accent); font-weight: 600; margin-right: 4px; }
+.person { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: var(--fs-sm); color: var(--t-secondary); }
+.person small { margin-left: auto; color: var(--t-faint); }
+.v3-stream { min-height: 0; overflow-y: auto; padding: 18px 22px 60vh; position: relative; }
+.v3-stream .hint { font-size: var(--fs-sm); color: var(--t-faint); margin: 0 0 12px; }
+.sitem { display: grid; grid-template-columns: 28px minmax(0,1fr); gap: 10px; padding: 12px; border-radius: var(--r-lg); margin-bottom: 4px; transition: background .15s; cursor: pointer; }
+.sitem:hover { background: var(--fill-subtle); }
+.sitem.focus { background: var(--card); box-shadow: var(--shadow); }
+.sitem .t { margin: 2px 0 0; color: var(--t-heading); font-weight: 600; font-size: var(--fs-md); line-height: 1.4; }
+.sitem .s { margin: 4px 0 0; color: var(--t-secondary); }
+.sitem .meta { display: flex; gap: 10px; align-items: center; margin-top: 6px; font-size: var(--fs-xs); color: var(--t-faint); }
+.sitem .meta .br { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: var(--t-secondary); }
+.outline { list-style: none; margin: 0; padding: 0; }
+.orow { display: block; width: 100%; text-align: left; padding: 6px 6px 6px calc(6px + var(--d) * 14px); border-radius: var(--r-md); position: relative; }
+.orow:hover { background: var(--fill-hover); }
+.orow::before { content: ""; position: absolute; left: calc(var(--d) * 14px - 4px); top: 0; bottom: 0; width: 1.5px; background: var(--border-strong); }
+.orow[style*="--d:0"]::before { display: none; }
+.orow .oq { font-size: var(--fs-sm); color: var(--t-heading); font-weight: 500; line-height: 1.4; }
+.orow .om { font-size: var(--fs-xs); color: var(--t-faint); }
+.orow.open { background: var(--card); box-shadow: var(--shadow); }
+.orow .prose { font-size: var(--fs-sm); margin-top: 6px; }
+.v3-note { display: none; }
+
+/* ---- 4 Columns ---- */
+.v4 { display: flex; overflow-x: auto; background: var(--page); scroll-behavior: smooth; }
+.col { flex: none; width: 400px; max-width: 88vw; display: flex; flex-direction: column; min-height: 0; background: var(--pane); border-right: 1px solid var(--divider); }
+.col.stream { width: 330px; background: var(--feed); }
+.v4 > .col:last-child:not(.stream) { flex: 1 0 400px; max-width: 760px; }
+.col.spine { width: 44px; align-items: center; gap: 10px; padding: 14px 0; background: var(--feed); text-align: left; }
+.col.spine:hover { background: var(--fill-hover); }
+.col.spine .label, .col.spine .sp-t { writing-mode: vertical-rl; transform: rotate(180deg); }
+.col.spine .sp-t { font-size: var(--fs-sm); color: var(--t-heading); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: 80%; }
+.col-h { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 16px; border-bottom: 1px solid var(--divider); flex: none; min-height: 48px; }
+.col-h > div { flex: 1; min-width: 0; }
+.col-h .label { display: block; }
+.col-h h3 { margin: 1px 0 0; font-size: var(--fs-base); color: var(--t-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-h select { border: 1px solid var(--control-border); background: var(--field); border-radius: var(--r-md); padding: 3px 6px; font-size: var(--fs-sm); }
+.col-b { flex: 1; min-height: 0; padding: 14px 16px; }
+.col-f { padding: 10px 12px 12px; border-top: 1px solid var(--divider); flex: none; }
+.litem { display: block; width: 100%; text-align: left; padding: 10px; border-radius: var(--r-lg); margin-bottom: 2px; }
+.litem:hover { background: var(--fill-hover); }
+.litem.sel { background: var(--accent-soft); }
+.litem .t { color: var(--t-heading); font-weight: 600; font-size: var(--fs-base); line-height: 1.4; }
+.litem .meta { display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: var(--fs-xs); color: var(--t-faint); }
+.litem .meta .br { margin-left: auto; display: inline-flex; gap: 4px; align-items: center; color: var(--t-secondary); }
+.litem .s { color: var(--t-secondary); font-size: var(--fs-sm); margin-top: 3px; line-height: 1.45; }
+.node-q { margin: 6px 0 12px; font-size: var(--fs-lg); line-height: 1.35; color: var(--t-heading); font-weight: 600; text-wrap: balance; }
+.kids-h { display: flex; align-items: center; gap: 8px; margin: 18px 0 6px; }
+.crumb { font-size: var(--fs-xs); color: var(--t-faint); margin-bottom: 4px; }
+
+/* ---- 5 Paths ---- */
+.v5 { display: grid; grid-template-columns: 250px minmax(0, 1fr) 310px; }
+.v5-list { background: var(--chrome); border-right: 1px solid var(--divider); min-height: 0; overflow-y: auto; padding: 12px 8px; }
+.v5-list .label { display: block; padding: 4px 8px 8px; }
+.v5-conv { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.v5-log { flex: 1; min-height: 0; padding: 20px 28px 24px; }
+.v5-log > div { max-width: 700px; margin: 0 auto; }
+.turn-u { display: flex; flex-direction: column; align-items: flex-end; margin: 18px 0 10px; }
+.bubble { background: var(--control); color: var(--t-heading); padding: 9px 14px; border-radius: 16px 16px 4px 16px; max-width: 85%; font-size: var(--fs-md); line-height: 1.45; }
+.turn-u .who { margin-bottom: 5px; justify-content: flex-end; }
+.sib { display: inline-flex; align-items: center; gap: 2px; margin-top: 5px; font-size: var(--fs-xs); color: var(--t-faint); font-variant-numeric: tabular-nums; }
+.sib button { width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: var(--r-sm); color: var(--t-secondary); }
+.sib button:hover:not(:disabled) { background: var(--fill-hover); }
+.sib button:disabled { opacity: .35; cursor: default; }
+.turn-a { display: grid; grid-template-columns: 28px minmax(0,1fr); gap: 10px; }
+.turn-a .who { margin-bottom: 4px; }
+.cont { margin: 22px 0 0; padding: 12px 14px; border-radius: var(--r-lg); background: var(--inset); }
+.cont .label { display: block; margin-bottom: 8px; }
+.cont .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cont .chip { white-space: normal; height: auto; min-height: 26px; padding: 4px 10px; text-align: left; }
+.v5-compose { padding: 10px 28px 16px; flex: none; }
+.v5-compose > * { max-width: 700px; margin: 0 auto; }
+.v5-graph { border-left: 1px solid var(--divider); background: var(--feed); min-height: 0; overflow-y: auto; padding: 14px 10px 24px 12px; }
+.v5-graph .gh { display: flex; align-items: center; gap: 8px; padding: 0 4px 10px; }
+.v5-graph .gh h3 { margin: 2px 0 0; font-size: var(--fs-base); color: var(--t-heading); line-height: 1.35; }
+.graph { position: relative; }
+.graph svg { position: absolute; inset: 0; width: 100%; overflow: visible; pointer-events: none; }
+.graph svg path { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
+.graph svg path.on { stroke: var(--accent); stroke-width: 2; }
+.graph svg circle { fill: var(--feed); stroke: var(--t-dim); stroke-width: 1.5; }
+.graph svg circle.on { fill: var(--accent); stroke: var(--accent); }
+.graph svg circle.sel { fill: var(--accent); stroke: var(--accent-soft); stroke-width: 5; }
+.grow-r { position: relative; display: block; width: 100%; text-align: left; height: 34px; border-radius: var(--r-md); padding-right: 6px; white-space: nowrap; overflow: hidden; }
+.grow-r:hover { background: var(--fill-hover); }
+.grow-r .gq { display: block; font-size: var(--fs-sm); color: var(--t-secondary); overflow: hidden; text-overflow: ellipsis; line-height: 17px; padding-top: 1px; }
+.grow-r .gm { display: block; font-size: 10.5px; color: var(--t-faint); line-height: 14px; }
+.grow-r.on .gq { color: var(--t-heading); font-weight: 600; }
+.legend { display: flex; gap: 12px; font-size: var(--fs-xs); color: var(--t-faint); padding: 12px 4px 0; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 4px; vertical-align: 0; }
+
+/* ---- narrow ---- */
+@media (max-width: 860px) {
+  .v1, .v1.has-drawer { grid-template-columns: minmax(0,1fr); }
+  .v1 .side { display: none; }
+  .v1 .drawer { position: absolute; inset: 0; z-index: 5; }
+  .v2-row { grid-template-columns: minmax(0,1fr); gap: 8px; }
+  .v2-notes { position: static; max-height: none; padding-left: 12px; }
+  .v2-inner { padding: 0 12px 30px; }
+  .v3 { grid-template-columns: minmax(0,1fr); }
+  .v3 .bank { display: none; }
+  .v3-note { display: block; font-size: var(--fs-sm); color: var(--warn); margin: 0 0 10px; }
+  .v5 { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr) 220px; }
+  .v5-list { display: none; }
+  .v5-graph { border-left: 0; border-top: 1px solid var(--divider); }
+  .v5-log, .v5-compose { padding-left: 14px; padding-right: 14px; }
+  .frame-top span { margin-right: 0; }
+}
+</style>
+
+<header class="bar">
+  <h1>Session · stream variants</h1>
+  <div class="seg" id="variant-seg" role="group" aria-label="Variant"></div>
+  <span class="grow"></span>
+  <div class="seg" id="theme-seg" role="group" aria-label="Theme"></div>
+</header>
+<p class="thesis" id="thesis"></p>
+<div class="frame">
+  <div class="frame-top"><div class="dots"><i></i><i></i><i></i></div><span>session.app</span></div>
+  <div id="app"></div>
+</div>
+
+<script src="session-web-spaces-fixtures.js"></script>
+<script>
+'use strict';
+/* Data: the spaces mockup's fixtures. A thread (post) is an ask with the agent's answer, or a plain post
+   with replies. An ask's branches are its follow-ups (fu) and, where it has one, its ask tree (qtd): nodes
+   whose `par` is 'r' (the answer) or another node. Asking a branch here adds a local node with a mock
+   pending answer. */
+const F = window.SessionFixtures, D = F.data, NOW = Date.parse(F.clock);
+const SP = Object.fromEntries(D.spaces.map(s => [s.id, s]));
+const USERS = { 'ines.v': 2, hal_b: 4, 'jun.park': 5, oduya: 6, sol: 3, lettie: 1, mira_k: 2, tomasz: 4 };
+const EXTRA = {};
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const strip = h => String(h || '').replace(/<sup[^>]*>.*?<\/sup>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+const clip = (s, n) => (s = String(s || '')).length > n ? s.slice(0, n - 1).replace(/[\s,;:.]+\S*$/, '') + '…' : s;
+const rel = iso => { const m = (NOW - Date.parse(iso)) / 6e4; if (m < 1) return 'now'; if (m < 60) return Math.round(m) + 'm'; const h = m / 60; if (h < 24) return Math.round(h) + 'h'; const d = h / 24; if (d < 7) return Math.round(d) + 'd'; if (d < 30) return Math.round(d / 7) + 'w'; return Math.round(d / 30) + 'mo'; };
+const dayOf = iso => { const d = new Date(iso), n = new Date(NOW); const k = x => x.toISOString().slice(0, 10); if (k(d) === k(n)) return 'Today'; n.setUTCDate(n.getUTCDate() - 1); if (k(d) === k(n)) return 'Yesterday'; return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }); };
+const ktok = n => n ? (n >= 1000 ? Math.round(n / 1000) + 'k' : n) + ' tokens' : '';
+const initials = u => { const p = u.split(/[._]/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : u.slice(0, 2)).toUpperCase(); };
+const av = (u, c = '') => `<span class="av ${c}" style="background:var(--av${USERS[u] || ((u.length % 6) + 1)})" aria-hidden="true">${initials(u)}</span>`;
+const spName = id => '#' + SP[id].name;
+const glyph = s => `<span class="glyph" style="background:var(--av${s.av})" aria-hidden="true">${esc(s.name[0].toUpperCase())}</span>`;
+const I = {
+  branch: '<svg class="i" viewBox="0 0 16 16"><circle cx="4" cy="3.5" r="1.6"/><circle cx="4" cy="12.5" r="1.6"/><circle cx="12" cy="5" r="1.6"/><path d="M4 5.1v5.8M12 6.6c0 3.2-3.6 2.6-6.9 4.6"/></svg>',
+  reply: '<svg class="i" viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>',
+  x: '<svg class="i" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+  heart: '<svg class="i" viewBox="0 0 16 16"><path d="M8 13.2S2.5 9.9 2.5 6.1A2.8 2.8 0 0 1 8 4.8a2.8 2.8 0 0 1 5.5 1.3C13.5 9.9 8 13.2 8 13.2z"/></svg>',
+  save: '<svg class="i" viewBox="0 0 16 16"><path d="M4 2.5h8v11l-4-2.8-4 2.8z"/></svg>',
+  left: '<svg class="i" viewBox="0 0 16 16"><path d="M10 3.5L5.5 8l4.5 4.5"/></svg>',
+  right: '<svg class="i" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5"/></svg>',
+  agent: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8" fill="currentColor" stroke="none"/></svg>',
+};
+const mark = (c = '') => `<span class="mark ${c}" aria-hidden="true">${I.agent}</span>`;
+
+const byId = id => D.posts.find(p => p.id === id);
+const byNew = (a, b) => (a.createdAt < b.createdAt ? 1 : -1);
+const streamFor = s => D.posts.filter(p => (s === 'home' ? !p.rf : p.s === s)).sort(byNew);
+const spacesWithPosts = D.spaces.filter(s => D.posts.some(p => p.s === s.id));
+
+function tree(p) {
+  const fu = D.fu[p.id] || [], qt = D.qtd[p.id];
+  const nodes = { r: { id: 'r', par: null, u: p.u, createdAt: p.createdAt, q: p.q, t: p.t, html: D.rich[p.id] || (p.sum ? `<p>${esc(p.sum)}</p>` : ''), sum: p.sum || '', tok: p.tok } };
+  const list = qt ? qt.nodes : fu.map((f, i) => ({ id: 'f' + i, par: 'r', fu: i }));
+  for (const n of [...list, ...(EXTRA[p.id] || [])]) {
+    const f = n.fu != null ? fu[n.fu] : null;
+    nodes[n.id] = { id: n.id, par: n.par, u: n.u || f?.u, createdAt: n.createdAt || f?.createdAt, q: n.q || f?.q || '', html: n.html || f?.html || (f?.a ? `<p>${esc(f.a)}</p>` : ''), sum: f?.a || '', tok: n.tok || 0, pending: n.pending };
+  }
+  const kids = {};
+  for (const id in nodes) { const n = nodes[id]; if (n.par) (kids[n.par] ||= []).push(n); }
+  for (const k in kids) kids[k].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  const T = {
+    p, nodes, count: Object.keys(nodes).length - 1,
+    kids: id => kids[id] || [],
+    desc: id => (kids[id] || []).reduce((s, c) => s + 1 + T.desc(c.id), 0),
+    path(id) { const a = []; let n = nodes[id]; while (n) { a.unshift(n); n = nodes[n.par]; } return a; },
+    users() { return [...new Set(Object.values(nodes).filter(n => n.id !== 'r').map(n => n.u))]; },
+    last() { return Object.values(nodes).reduce((m, n) => (n.createdAt > m ? n.createdAt : m), p.createdAt); },
+    dfs(id = 'r', d = 0, out = []) { out.push({ n: nodes[id], d }); for (const c of T.kids(id)) T.dfs(c.id, d + 1, out); return out; },
+    leaf(id) { let n = nodes[id]; while (T.kids(n.id).length) n = T.kids(n.id)[0]; return n.id; },
+  };
+  return T;
+}
+const summ = n => n.sum || clip(strip(n.html), 200);
+const replies = p => D.rp[p.id] || [];
+const replyCount = p => replies(p).reduce((s, r) => s + 1 + (r.kids || []).length, 0);
+const noun = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const qText = n => n.q;
+const answerHtml = n => n.pending ? `<p class="pending">${esc(n.html)}</p>` : n.html;
+const status = n => n.pending ? `<span class="status">Researching · step 1 of 4</span>` : '';
+
+let seq = 0;
+function addBranch(p, par, q) {
+  const id = 'x' + (++seq);
+  const node = { id, par, u: F.me.u, createdAt: new Date(NOW).toISOString(), q, html: 'Searching sources. The answer appears here when the run finishes.', pending: true };
+  (EXTRA[p.id] ||= []).push(node);
+  setTimeout(() => { node.pending = false; node.html = `<p>Mock answer. In the app, the agent's answer to "${esc(clip(q, 80))}" is stored here when the run finishes, and the branch count on the thread goes up by one.</p>`; render(); }, 2600);
+  return id;
+}
+const composer = (id, ph, ctx = '') => `<form class="composer" data-form="${id}">${ctx ? `<span class="ctx">${ctx}</span>` : ''}<input id="in-${id}" placeholder="${esc(ph)}" autocomplete="off"><button type="submit">Ask</button></form>`;
+const replyTree = list => list.map(r => `<div class="reply">${av(r.u, 'sm')}<div><div class="who"><b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><p>${esc(r.t)}</p></div>${r.kids ? `<div class="kids">${replyTree(r.kids)}</div>` : ''}</div>`).join('');
+
+/* ================= 1 Channel ================= */
+const V1 = {
+  name: 'Channel',
+  thesis: '<strong>The space is a chat log.</strong> Asks and answers arrive in order, newest at the bottom. An answer\'s branches open in a drawer on the right, as a nested conversation you can add to.',
+  st: { space: 'markets', open: '01M7HGRPJ0E7RGZ45D4KENBQ6P', sel: 'r' },
+  html() {
+    const s = this.st, posts = streamFor(s.space).slice().reverse();
+    let day = '';
+    const log = posts.map(p => { const d = dayOf(p.createdAt); const rule = d !== day ? `<div class="dayrule">${d}</div>` : ''; day = d; return rule + this.msg(p); }).join('');
+    const sp = s.space === 'home' ? null : SP[s.space];
+    return `<div class="v1${s.open ? ' has-drawer' : ''}">
+      ${sideNav(s.space)}
+      <section class="v1-chat">
+        <header class="chathead">${sp ? glyph(sp) : ''}<h2>${sp ? spName(sp.id) : 'Home'}</h2><p>${sp ? esc(sp.desc) : 'Every space you joined, in one log.'}</p></header>
+        <div class="v1-log scroll" id="k-v1log">${log}</div>
+        <div class="v1-compose">${composer('v1', sp ? `Ask ${spName(sp.id)} a question, or post` : 'Ask a question, or post to a space')}</div>
+      </section>
+      ${s.open ? `<aside class="drawer">${this.drawer(byId(s.open))}</aside>` : ''}
+    </div>`;
+  },
+  msg(p) {
+    const open = this.st.open === p.id, sp = this.st.space === 'home' ? `<span class="sp">${spName(p.s)}</span>` : '';
+    if (p.k === 'post') {
+      const n = replyCount(p), us = [...new Set(replies(p).map(r => r.u))];
+      return `<div class="msg${open ? ' is-open' : ''}">${av(p.u)}<div><div class="who"><b>${esc(p.u)}</b>${sp}<time>${rel(p.createdAt)}</time></div><p class="msg-q">${esc(p.q)}</p>
+        ${n ? `<div class="msg-foot"><button class="chip${open ? ' on' : ''}" data-a="open" data-id="${p.id}">${I.reply}${noun(n, 'reply', 'replies')} <span class="avs">${us.slice(0, 3).map(u => av(u, 'xs')).join('')}</span></button></div>` : ''}</div></div>`;
+    }
+    const T = tree(p), us = T.users();
+    return `<div class="msg${open ? ' is-open' : ''}">${av(p.u)}<div><div class="who"><b>${esc(p.u)}</b>${sp}<time>${rel(p.createdAt)}</time></div><p class="msg-q">${esc(p.q)}</p>
+      <div class="agent">${mark('sm')}<div style="min-width:0"><div class="who"><b>Session</b><span>${p.t ? esc(p.t) : 'Answer'}</span><span>${ktok(p.tok)}</span></div>
+        <div class="prose clamp" id="ans-${p.id}">${T.nodes.r.html}</div><button class="tlink" data-a="more" data-id="ans-${p.id}">Show full answer</button></div></div>
+      <div class="msg-foot"><button class="chip${open ? ' on' : ''}" data-a="open" data-id="${p.id}">${I.branch}${T.count ? noun(T.count, 'branch', 'branches') : 'Branch'} ${us.length ? `<span class="avs">${us.slice(0, 4).map(u => av(u, 'xs')).join('')}</span><span class="muted">last ${rel(T.last())}</span>` : ''}</button></div></div></div>`;
+  },
+  drawer(p) {
+    const close = `<button class="iconbtn" data-a="close" aria-label="Close">${I.x}</button>`;
+    if (p.k === 'post') return `<div class="drawer-h"><div><span class="label">Replies</span><h3>${esc(clip(p.q, 90))}</h3></div>${close}</div>
+      <div class="drawer-b scroll" id="k-v1d">${replyTree(replies(p))}</div><div class="drawer-f">${composer('v1d', 'Reply')}</div>`;
+    const T = tree(p), sel = T.nodes[this.st.sel] ? this.st.sel : 'r';
+    const node = n => `<div class="bn${sel === n.id ? ' sel' : ''}"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time></div>
+      <p class="bn-q">${esc(n.q)}</p><div class="bn-a">${mark('sm')}<div style="min-width:0">${status(n)}<div class="prose clamp s" id="bn-${n.id}">${answerHtml(n)}</div>
+      <div class="bn-acts" style="margin-left:0"><button class="tlink" data-a="more" data-id="bn-${n.id}">Show more</button><button class="tlink" data-a="sel" data-node="${n.id}">Branch from here</button></div></div></div>
+      ${T.kids(n.id).length ? `<div class="bn-kids">${T.kids(n.id).map(node).join('')}</div>` : ''}</div>`;
+    const target = sel === 'r' ? 'the answer' : `"${esc(clip(T.nodes[sel].q, 40))}"`;
+    return `<div class="drawer-h"><div><span class="label">${noun(T.count, 'branch', 'branches')} · ${spName(p.s)}</span><h3>${esc(p.t || clip(p.q, 90))}</h3></div>${close}</div>
+      <div class="drawer-b scroll" id="k-v1d"><div class="from"><b>From the answer.</b> ${esc(summ(T.nodes.r))} <button class="tlink" data-a="sel" data-node="r">Branch from the answer</button></div>
+      ${T.kids('r').map(node).join('') || '<p class="empty">No branches yet. Ask one below.</p>'}</div>
+      <div class="drawer-f">${composer('v1d', 'Ask a branch question', 'From ' + target)}</div>`;
+  },
+  on(a, d) {
+    const s = this.st;
+    if (a === 'space') { s.space = d.id; s.open = null; render(); scrollEnd('k-v1log'); }
+    else if (a === 'open') { s.open = s.open === d.id ? null : d.id; s.sel = 'r'; render(); }
+    else if (a === 'close') { s.open = null; render(); }
+    else if (a === 'sel') { s.sel = d.node; render(); $('#in-v1d')?.focus(); }
+  },
+  submit(f, v) {
+    if (f === 'v1') { const sp = this.st.space === 'home' ? 'public' : this.st.space; D.posts.push({ id: 'new' + (++seq), s: sp, u: F.me.u, k: 'post', createdAt: new Date(NOW).toISOString(), q: v, tok: 0, likesBase: 0 }); render(); scrollEnd('k-v1log'); return; }
+    if (f === 'v1d' && this.st.open) { const p = byId(this.st.open); if (p.k === 'post') { (D.rp[p.id] ||= []).push({ u: F.me.u, createdAt: new Date(NOW).toISOString(), t: v, likes: 0 }); } else { this.st.sel = addBranch(p, this.st.sel, v); } render(); scrollEnd('k-v1d'); }
+  },
+  mounted(first) { if (first) scrollEnd('k-v1log'); },
+};
+function sideNav(cur) {
+  const b = (id, label, g, n) => `<button data-a="space" data-id="${id}" aria-current="${cur === id}">${g}${label}${n != null ? `<small>${n}</small>` : ''}</button>`;
+  return `<nav class="side scroll">${b('home', 'Home', '<span class="glyph" style="background:var(--t-secondary)">H</span>')}
+    <span class="label">Spaces</span>${spacesWithPosts.map(s => b(s.id, esc(spName(s.id)), glyph(s), D.posts.filter(p => p.s === s.id).length)).join('')}</nav>`;
+}
+
+/* ================= 2 Margin ================= */
+const V2 = {
+  name: 'Margin',
+  thesis: '<strong>A dashboard of whole posts.</strong> Each answer is shown at length, and its branches sit in the right margin beside it, always visible, the way notes sit beside a text. Open a note to read it and the branches under it.',
+  st: { space: 'home', exp: new Set(['01M7HWGZJGT7JTFFVSYPX055KV:f0']) },
+  html() {
+    const s = this.st, posts = streamFor(s.space);
+    const tabs = [['home', 'Home'], ...spacesWithPosts.filter(x => x.id !== 'sablefield').map(x => [x.id, spName(x.id)])];
+    return `<div class="v2" id="k-v2"><div class="v2-inner">
+      <nav class="v2-tabs">${tabs.map(([id, l]) => `<button data-a="space" data-id="${id}" aria-current="${s.space === id}">${esc(l)}</button>`).join('')}</nav>
+      ${posts.map(p => `<div class="v2-row">${this.card(p)}<aside class="v2-notes">${this.notes(p)}</aside></div>`).join('')}
+    </div></div>`;
+  },
+  card(p) {
+    const head = `<div class="card-h">${av(p.u)}<div class="who"><b>${esc(p.u)}</b><span>${p.k === 'ask' ? 'asked in' : 'posted in'}</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div></div>`;
+    const acts = `<button class="iconbtn" aria-label="Like">${I.heart}</button><button class="iconbtn" aria-label="Save">${I.save}</button>`;
+    if (p.k === 'post') {
+      const n = replyCount(p);
+      return `<article class="card">${head}<p class="post">${esc(p.q)}</p><div class="card-f"><span class="notes">${noun(n, 'reply', 'replies')} <span>· ${p.likesBase} likes</span></span><button class="iconbtn" aria-label="Reply">${I.reply}</button>${acts}</div></article>`;
+    }
+    const T = tree(p), src = (D.srcd[p.id] || []).length;
+    return `<article class="card">${head}${p.t ? `<h2>${esc(p.t)}</h2>` : ''}<p class="ask">${esc(p.q)}</p>
+      <div class="byline">${mark('sm')}<span>Answered by Session${src ? ` · ${noun(src, 'source', 'sources')}` : ''} · ${ktok(p.tok)}</span></div>
+      <div class="prose clamp" id="c-${p.id}">${T.nodes.r.html}</div><button class="tlink" data-a="more" data-id="c-${p.id}">Keep reading</button>
+      <div class="card-f"><span class="notes">${noun(T.count, 'branch', 'branches')} <span>· ${p.likesBase} likes</span></span><button class="iconbtn" data-a="v2branch" data-id="${p.id}" aria-label="Branch">${I.branch}</button>${acts}</div></article>`;
+  },
+  notes(p) {
+    if (p.k === 'post') { const r = replies(p); return r.length ? `<span class="label">Replies</span>${replyTree(r)}` : ''; }
+    const T = tree(p), exp = this.st.exp;
+    const note = n => {
+      const key = p.id + ':' + n.id, o = exp.has(key), k = T.kids(n.id), dn = T.desc(n.id);
+      return `<button class="note${o ? ' open' : ''}" data-a="note" data-id="${key}"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time></div>
+        <div class="nq">${esc(n.q)}</div>${o ? `${status(n)}<div class="prose">${answerHtml(n)}</div>` : `<div class="ns">${esc(clip(summ(n), 130))}</div>`}
+        ${dn && !o ? `<span class="inside">${I.branch}${noun(dn, 'branch', 'branches')} inside</span>` : ''}</button>
+        ${o && k.length ? `<div class="note-kids">${k.map(note).join('')}</div>` : ''}`;
+    };
+    const top = T.kids('r');
+    return `<span class="label">${top.length ? `Branches · ${T.count}` : 'Branches'}</span>${top.map(note).join('') || '<p class="empty">No branches yet.</p>'}
+      ${this.st.asking === p.id ? `<div style="margin-top:8px">${composer('v2:' + p.id, 'Ask a branch question')}</div>` : ''}`;
+  },
+  on(a, d) {
+    const s = this.st;
+    if (a === 'space') { s.space = d.id; render(); $('#k-v2').scrollTop = 0; }
+    else if (a === 'note') { s.exp.has(d.id) ? s.exp.delete(d.id) : s.exp.add(d.id); render(); }
+    else if (a === 'v2branch') { s.asking = d.id; render(); $(`#in-v2\\:${d.id}`)?.focus(); }
+  },
+  submit(f, v) { const id = f.split(':')[1], p = byId(id); const nid = addBranch(p, 'r', v); this.st.exp.add(id + ':' + nid); this.st.asking = null; render(); },
+};
+
+/* ================= 3 Banks ================= */
+const V3 = {
+  name: 'Banks',
+  thesis: '<strong>The post you are reading sets both sides.</strong> The left bank shows what it is built on (sources, replies, the people in it) and the right bank shows the branches that grew from it. Scroll the stream and both banks follow; nothing needs a click.',
+  st: { focus: null, exp: new Set() },
+  html() {
+    const posts = streamFor('home');
+    this.st.focus ||= posts[0].id;
+    return `<div class="v3"><aside class="bank l" id="k-v3l">${this.left()}</aside>
+      <main class="v3-stream" id="k-v3s"><p class="v3-note">The banks need a wider window. Widen it to see sources and branches beside the stream.</p>
+        <p class="hint">Home · the item under the top third of the stream is the one the banks describe.</p>${posts.map(p => this.item(p)).join('')}</main>
+      <aside class="bank r" id="k-v3r">${this.right()}</aside></div>`;
+  },
+  item(p) {
+    const n = p.k === 'ask' ? tree(p).count : replyCount(p);
+    return `<article class="sitem${this.st.focus === p.id ? ' focus' : ''}" data-a="focus" data-id="${p.id}" data-sid="${p.id}">${av(p.u)}<div style="min-width:0">
+      <p class="t">${esc(p.k === 'ask' ? (p.t || p.q) : p.q)}</p>${p.k === 'ask' && p.sum ? `<p class="s">${esc(p.sum)}</p>` : ''}
+      <div class="meta"><span>${esc(p.u)}</span><span>${spName(p.s)}</span><span>${rel(p.createdAt)}</span><span class="br">${p.k === 'ask' ? I.branch : I.reply}${n}</span></div></div></article>`;
+  },
+  left() {
+    const p = byId(this.st.focus); if (!p) return '';
+    const src = D.srcd[p.id] || [];
+    let people = '';
+    if (p.k === 'ask') {
+      const T = tree(p), c = {}; Object.values(T.nodes).forEach(n => { c[n.u] = (c[n.u] || 0) + 1; });
+      people = Object.entries(c).sort((a, b) => b[1] - a[1]).map(([u, k]) => `<div class="person">${av(u, 'sm')}<span>${esc(u)}</span><small>${u === p.u ? 'asked' : noun(k, 'branch', 'branches')}</small></div>`).join('');
+    }
+    return `<div class="fadein"><div class="bank-h"><span class="label">Built on</span><h3>${esc(p.t || clip(p.q, 80))}</h3></div>
+      ${p.k === 'ask' ? `<section><span class="label">Sources · ${src.length}</span>${src.map((s, i) => `<div class="src"><b><sup>${i + 1}</sup>${esc(s[0])}</b><span>${esc(s[1])} · ${esc(s[2])}</span></div>`).join('') || '<p class="empty">The answer lists no sources in this mock.</p>'}</section>
+        <section><span class="label">People</span>${people}</section>` : `<section><span class="label">Replies · ${replyCount(p)}</span>${replyTree(replies(p))}</section>`}</div>`;
+  },
+  right() {
+    const p = byId(this.st.focus); if (!p) return '';
+    if (p.k === 'post') return `<div class="fadein"><div class="bank-h"><span class="label">Branches</span><h3>Plain posts have replies, not branches.</h3></div></div>`;
+    const T = tree(p), rows = T.dfs().slice(1), exp = this.st.exp;
+    return `<div class="fadein"><div class="bank-h"><span class="label">Branches · ${T.count}</span><h3>${esc(p.t || clip(p.q, 80))}</h3></div>
+      <div class="outline">${rows.map(({ n, d }) => { const key = p.id + ':' + n.id, o = exp.has(key); return `<button class="orow${o ? ' open' : ''}" style="--d:${d - 1}" data-a="orow" data-id="${key}"><div class="oq">${esc(n.q)}</div><div class="om">${esc(n.u)} · ${rel(n.createdAt)}${T.kids(n.id).length ? ` · ${noun(T.kids(n.id).length, 'branch', 'branches')}` : ''}</div>${o ? `<div class="prose">${answerHtml(n)}</div>` : ''}</button>`; }).join('') || '<p class="empty">No branches yet.</p>'}</div></div>`;
+  },
+  setFocus(id, force) {
+    if (!force && id === this.st.focus) return;
+    this.st.focus = id;
+    document.querySelectorAll('.sitem').forEach(e => e.classList.toggle('focus', e.dataset.sid === id));
+    $('#k-v3l').innerHTML = this.left(); $('#k-v3r').innerHTML = this.right();
+  },
+  on(a, d) {
+    if (a === 'focus') { const el = $(`[data-sid="${d.id}"]`), sc = $('#k-v3s'); sc.scrollTo({ top: el.offsetTop - sc.clientHeight * 0.3 + 10, behavior: 'smooth' }); this.setFocus(d.id); }
+    else if (a === 'orow') { const s = this.st.exp; s.has(d.id) ? s.delete(d.id) : s.add(d.id); const r = $('#k-v3r'), t = r.scrollTop; r.innerHTML = this.right(); r.firstElementChild.classList.remove('fadein'); r.scrollTop = t; }
+  },
+  mounted() {
+    const sc = $('#k-v3s');
+    sc.addEventListener('scroll', () => {
+      const y = sc.getBoundingClientRect().top + sc.clientHeight * 0.3;
+      let best = null;
+      for (const el of sc.querySelectorAll('.sitem')) { const r = el.getBoundingClientRect(); if (r.top <= y) best = el; else break; }
+      if (best) this.setFocus(best.dataset.sid);
+    }, { passive: true });
+  },
+};
+
+/* ================= 4 Columns ================= */
+const V4 = {
+  name: 'Columns',
+  thesis: '<strong>Depth runs to the right.</strong> The stream is the first column. Opening a thread adds a column, and each branch you open adds another. Past three columns, the oldest fold into spines on the left, so the whole path stays on screen.',
+  st: { space: 'home', path: ['01M7HGRPJ0E7RGZ45D4KENBQ6P', 'r', 'a2', 'b2'] },
+  html() {
+    const s = this.st, cols = [this.stream()];
+    if (s.path.length) {
+      const p = byId(s.path[0]);
+      if (p.k === 'post') cols.push(this.postCol(p));
+      else { const T = tree(p); for (let i = 1; i < s.path.length; i++) cols.push(this.nodeCol(T, s.path[i], s.path[i + 1], i)); }
+    }
+    /* At most three open columns: the ones before them fold into spines. */
+    const fold = Math.max(0, cols.length - 3);
+    for (let i = 0; i < fold; i++) cols[i] = this.spine(i);
+    return `<div class="v4" id="k-v4">${cols.join('')}</div>`;
+  },
+  spine(i) {
+    const s = this.st, p = byId(s.path[0]);
+    let label = s.space === 'home' ? 'Home' : spName(s.space);
+    if (i > 0) { const T = tree(p), n = T.nodes[s.path[i]]; label = i === 1 ? (p.t || p.q) : n.q; }
+    return `<button class="col spine" data-a="unfold" data-i="${i}" title="Show this column"><span class="label">${i === 0 ? 'Stream' : i === 1 ? 'Thread' : 'Depth ' + (i - 1)}</span><span class="sp-t">${esc(clip(label, 70))}</span></button>`;
+  },
+  stream() {
+    const s = this.st, opts = [['home', 'Home'], ...spacesWithPosts.map(x => [x.id, spName(x.id)])];
+    return `<section class="col stream"><div class="col-h"><div><span class="label">Stream</span></div><select id="v4-space" aria-label="Space">${opts.map(([v, l]) => `<option value="${v}"${v === s.space ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+      <div class="col-b scroll" id="k-v4s">${streamFor(s.space).map(p => { const n = p.k === 'ask' ? tree(p).count : replyCount(p); return `<button class="litem${s.path[0] === p.id ? ' sel' : ''}" data-a="thread" data-id="${p.id}"><div class="t">${esc(p.k === 'ask' ? (p.t || p.q) : clip(p.q, 120))}</div>${p.k === 'ask' && p.sum ? `<div class="s">${esc(clip(p.sum, 110))}</div>` : ''}<div class="meta">${av(p.u, 'xs')}<span>${esc(p.u)}</span><span>${spName(p.s)}</span><span>${rel(p.createdAt)}</span><span class="br">${p.k === 'ask' ? I.branch : I.reply}${n}</span></div></button>`; }).join('')}</div></section>`;
+  },
+  postCol(p) {
+    return `<section class="col"><div class="col-h"><div><span class="label">Post · ${spName(p.s)}</span><h3>${esc(p.u)}</h3></div><button class="iconbtn" data-a="pop" data-i="0" aria-label="Close">${I.x}</button></div>
+      <div class="col-b scroll"><div class="who">${av(p.u, 'sm')}<b>${esc(p.u)}</b><time>${rel(p.createdAt)}</time></div><p class="node-q">${esc(p.q)}</p>
+      <div class="kids-h"><span class="label">Replies · ${replyCount(p)}</span></div>${replyTree(replies(p))}</div></section>`;
+  },
+  nodeCol(T, id, next, i) {
+    const n = T.nodes[id], p = T.p, k = T.kids(id), root = id === 'r';
+    const crumb = root ? '' : `<div class="crumb">In reply to: ${esc(clip(T.nodes[n.par].par ? T.nodes[n.par].q : (p.t || p.q), 70))}</div>`;
+    return `<section class="col" data-col="${i}"><div class="col-h"><div><span class="label">${root ? 'Thread · ' + spName(p.s) : 'Branch · depth ' + (T.path(id).length - 1)}</span><h3>${esc(root ? (p.t || clip(p.q, 60)) : clip(n.q, 60))}</h3></div><button class="iconbtn" data-a="pop" data-i="${i - 1}" aria-label="Close column">${I.x}</button></div>
+      <div class="col-b scroll">${crumb}<div class="who">${av(n.u, 'sm')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time></div>
+        <p class="node-q">${esc(n.q)}</p><div class="who" style="margin-bottom:6px">${mark('sm')}<b>Session</b>${n.tok ? `<span>${ktok(n.tok)}</span>` : ''}</div>${status(n)}<div class="prose">${answerHtml(n)}</div>
+        <div class="kids-h">${I.branch}<span class="label">${k.length ? noun(k.length, 'branch', 'branches') + ' from here' : 'No branches from here yet'}</span></div>
+        ${k.map(c => `<button class="litem${next === c.id ? ' sel' : ''}" data-a="node" data-i="${i}" data-id="${c.id}"><div class="t">${esc(c.q)}</div><div class="s">${esc(clip(summ(c), 120))}</div><div class="meta">${av(c.u, 'xs')}<span>${esc(c.u)}</span><span>${rel(c.createdAt)}</span>${T.desc(c.id) ? `<span class="br">${I.branch}${T.desc(c.id)}</span>` : ''}</div></button>`).join('')}
+      </div><div class="col-f">${composer('v4:' + i, 'Ask a branch question about this answer')}</div></section>`;
+  },
+  on(a, d) {
+    const s = this.st;
+    if (a === 'thread') { s.path = byId(d.id).k === 'post' ? [d.id] : [d.id, 'r']; render(); }
+    else if (a === 'node') { s.path = [...s.path.slice(0, +d.i + 1), d.id]; render(); }
+    else if (a === 'unfold') { s.path = s.path.slice(0, Math.max(2, +d.i + 2)); render(); }
+    else if (a === 'pop') { s.path = +d.i === 0 ? [] : s.path.slice(0, +d.i + 1); render(); }
+  },
+  change(e) { if (e.target.id === 'v4-space') { this.st.space = e.target.value; this.st.path = []; render(); } },
+  submit(f, v) { const i = +f.split(':')[1], s = this.st, p = byId(s.path[0]); const nid = addBranch(p, s.path[i], v); s.path = [...s.path.slice(0, i + 1), nid]; render(); },
+  mounted() { const c = $('#k-v4'); c.scrollLeft = c.scrollWidth; },
+};
+
+/* ================= 5 Paths ================= */
+const V5 = {
+  name: 'Paths',
+  thesis: '<strong>One conversation at a time.</strong> The middle reads as a single chat from the original ask down one path of branches. Where a question has siblings, step between them in place; the right rail maps the whole tree and shows which path you are on.',
+  st: { pid: '01M7HGRPJ0E7RGZ45D4KENBQ6P', node: 'e1' },
+  html() {
+    const s = this.st, p = byId(s.pid), T = tree(p);
+    if (!T.nodes[s.node]) s.node = 'r';
+    const threads = streamFor('home').filter(x => x.k === 'ask').concat(D.posts.filter(x => x.rf && D.qtd[x.id]));
+    return `<div class="v5"><nav class="v5-list"><span class="label">Threads</span>${threads.map(x => { const n = tree(x).count; return `<button class="litem${x.id === s.pid ? ' sel' : ''}" data-a="pick" data-id="${x.id}"><div class="t">${esc(x.t || clip(x.q, 70))}</div><div class="meta"><span>${spName(x.s)}</span><span>${rel(x.createdAt)}</span><span class="br">${I.branch}${n}</span></div></button>`; }).join('')}</nav>
+      <section class="v5-conv"><div class="v5-log scroll" id="k-v5log"><div>${this.conv(T)}</div></div>
+        <div class="v5-compose"><div>${composer('v5', T.kids(s.node).length ? 'Ask a new branch from the last answer' : 'Continue this path', s.node === 'r' ? '' : 'Depth ' + (T.path(s.node).length - 1))}</div></div></section>
+      <aside class="v5-graph" id="k-v5g">${this.graph(T)}</aside></div>`;
+  },
+  conv(T) {
+    const path = T.path(this.st.node), p = T.p, last = path[path.length - 1];
+    const turns = path.map(n => {
+      const sibs = n.par ? T.kids(n.par) : [], i = sibs.indexOf(n);
+      const sw = sibs.length > 1 ? `<div class="sib"><button data-a="sib" data-id="${sibs[i - 1]?.id || ''}" ${i ? '' : 'disabled'} aria-label="Previous branch">${I.left}</button>${i + 1} of ${sibs.length}<button data-a="sib" data-id="${sibs[i + 1]?.id || ''}" ${i < sibs.length - 1 ? '' : 'disabled'} aria-label="Next branch">${I.right}</button></div>` : '';
+      return `<div class="turn-u"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${n.id === 'r' ? `<span class="sp">${spName(p.s)}</span>` : ''}</div><div class="bubble">${esc(n.q)}</div>${sw}</div>
+        <div class="turn-a">${mark()}<div style="min-width:0"><div class="who"><b>Session</b>${n.id === 'r' && p.t ? `<span>${esc(p.t)}</span>` : ''}${n.tok ? `<span>${ktok(n.tok)}</span>` : ''}</div>${status(n)}<div class="prose">${answerHtml(n)}</div></div></div>`;
+    }).join('');
+    const k = T.kids(last.id);
+    return turns + (k.length ? `<div class="cont"><span class="label">${noun(k.length, 'branch continues', 'branches continue')} from this answer</span><div class="chips">${k.map(c => `<button class="chip" data-a="go" data-id="${T.leaf(c.id)}">${I.branch}${esc(clip(c.q, 70))}</button>`).join('')}</div></div>` : '');
+  },
+  graph(T) {
+    const rows = T.dfs(), on = new Set(T.path(this.st.node).map(n => n.id)), H = 34, X = d => 10 + d * 14;
+    const idx = Object.fromEntries(rows.map((r, i) => [r.n.id, i]));
+    let paths = '', dots = '';
+    rows.forEach(({ n, d }, i) => {
+      const y = i * H + 12;
+      if (n.par) { const pi = idx[n.par], px = X(d - 1), py = pi * H + 12; paths += `<path class="${on.has(n.id) ? 'on' : ''}" d="M${px} ${py} L${px} ${y - 7} Q${px} ${y} ${px + 7} ${y} L${X(d)} ${y}"/>`; }
+      dots += `<circle class="${n.id === this.st.node ? 'sel' : on.has(n.id) ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="4"/>`;
+    });
+    const p = T.p;
+    return `<div class="gh"><div><span class="label">Tree · ${noun(T.count, 'branch', 'branches')}</span><h3>${esc(p.t || clip(p.q, 60))}</h3></div></div>
+      <div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>
+      ${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}" style="padding-left:${X(d) + 12}px" data-a="go" data-id="${n.id}"><span class="gq">${esc(n.id === 'r' ? 'Original ask' : n.q)}</span><span class="gm">${esc(n.u)} · ${rel(n.createdAt)}</span></button>`).join('')}</div>
+      <div class="legend"><span><i></i>Path shown in the chat</span></div>`;
+  },
+  on(a, d) {
+    const s = this.st;
+    if (a === 'pick') { s.pid = d.id; const T = tree(byId(d.id)); s.node = T.leaf('r'); render(); scrollEnd('k-v5log'); }
+    else if (a === 'go') { s.node = d.id; render(); scrollEnd('k-v5log'); }
+    else if (a === 'sib' && d.id) { const T = tree(byId(s.pid)); const anchor = $(`[data-a="sib"][data-id="${d.id}"]`)?.closest('.turn-u'); const top = anchor?.getBoundingClientRect().top; s.node = T.leaf(d.id); render();
+      const sc = $('#k-v5log'), el = [...sc.querySelectorAll('.turn-u')].find(e => e.querySelector('.bubble').textContent === T.nodes[d.id].q); if (el && top != null) sc.scrollTop += el.getBoundingClientRect().top - top; }
+  },
+  submit(f, v) { const s = this.st; s.node = addBranch(byId(s.pid), s.node, v); render(); scrollEnd('k-v5log'); },
+  mounted(first) { if (first) scrollEnd('k-v5log'); },
+};
+
+/* ================= shell ================= */
+const VARIANTS = { channel: V1, margin: V2, banks: V3, columns: V4, paths: V5 };
+const ORDER = Object.keys(VARIANTS);
+const state = { v: 'channel', theme: 'system' };
+const app = $('#app');
+function scrollEnd(id) { const e = document.getElementById(id); if (e) e.scrollTop = e.scrollHeight; }
+let lastV = null;
+function render() {
+  const V = VARIANTS[state.v], first = lastV !== state.v;
+  const keep = {}; if (!first) app.querySelectorAll('[id^="k-"]').forEach(e => { keep[e.id] = [e.scrollTop, e.scrollLeft]; });
+  app.innerHTML = V.html();
+  for (const id in keep) { const e = document.getElementById(id); if (e) { e.scrollTop = keep[id][0]; e.scrollLeft = keep[id][1]; } }
+  lastV = state.v;
+  V.mounted?.(first);
+}
+function renderBar() {
+  $('#variant-seg').innerHTML = ORDER.map((k, i) => `<button data-v="${k}" aria-pressed="${state.v === k}"><b>${i + 1}</b>${VARIANTS[k].name}</button>`).join('');
+  $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${state.theme === k}">${l}</button>`).join('');
+  $('#thesis').innerHTML = VARIANTS[state.v].thesis;
+}
+function go(v) { if (!VARIANTS[v]) v = 'channel'; state.v = v; renderBar(); render(); }
+$('#variant-seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { history.replaceState(null, '', '#' + b.dataset.v); go(b.dataset.v); } });
+$('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; state.theme = b.dataset.t; if (state.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = state.theme; renderBar(); });
+app.addEventListener('click', e => {
+  const t = e.target.closest('[data-a]'); if (!t) return;
+  if (t.dataset.a === 'more') { const el = document.getElementById(t.dataset.id); el.classList.toggle('open'); t.dataset.label ||= t.textContent; t.textContent = el.classList.contains('open') ? 'Show less' : t.dataset.label; return; }
+  VARIANTS[state.v].on(t.dataset.a, t.dataset, e);
+});
+app.addEventListener('change', e => VARIANTS[state.v].change?.(e));
+app.addEventListener('submit', e => { e.preventDefault(); const f = e.target.closest('[data-form]'), inp = f.querySelector('input'), v = inp.value.trim(); if (!v) { inp.focus(); return; } VARIANTS[state.v].submit?.(f.dataset.form, v); });
+window.addEventListener('hashchange', () => go(location.hash.slice(1)));
+go(location.hash.slice(1) || 'channel');
+</script>
