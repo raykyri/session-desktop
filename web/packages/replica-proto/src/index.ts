@@ -12,3 +12,5 @@ export * from "./mutators.js";
 export * from "./records.js";
 export * from "./server.js";
 export * from "./ulid.js";
+// the active set (switch.ts): the prototype's own, or the package's
+export { ACTIVE_MUTATORS as MUTATORS, USE_PACKAGE } from "./switch.js";

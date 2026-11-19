@@ -157,6 +157,8 @@ export interface ServerHooks {
 export interface PreCtx extends ServerHooks {
   readonly me: string;
   readonly nowMs: number;
+  /** The mutation's reads, as `can` and `run` see them. */
+  readonly tx: Tx;
 }
 
 /** Post-commit work, as data:
@@ -185,7 +187,7 @@ export interface MutatorDef<I, R> {
   online?: boolean;
   /** The client-made new ids in the input, checked against the id window. */
   ids?: (i: I) => string[];
-  pre?: (ctx: PreCtx, i: I, tx: Tx) => ServerValues;
+  pre?: (ctx: PreCtx, i: I) => ServerValues;
   /** Whether `pre` runs for this input (default: always, when there is one). */
   needsPre?: (i: I) => boolean;
   can: (tx: Tx, i: I) => Scope;
@@ -199,7 +201,7 @@ export interface Mutator {
   readonly input: z.ZodType<unknown>;
   readonly online: boolean;
   ids(input: unknown): string[];
-  readonly pre: ((ctx: PreCtx, i: unknown, tx: Tx) => ServerValues) | undefined;
+  readonly pre: ((ctx: PreCtx, i: unknown) => ServerValues) | undefined;
   needsPre(input: unknown): boolean;
   can(tx: Tx, input: unknown): Scope;
   run(tx: Tx, input: unknown, values: ServerValues): unknown;
@@ -422,10 +424,11 @@ export function apply(
       const ctx: PreCtx = {
         me: actor.u,
         nowMs: tx.nowMs,
+        tx,
         random: () => server.random(),
         ownsKey: (u, id) => server.ownsKey(u, id),
       };
-      values = def.pre(ctx, input, tx);
+      values = def.pre(ctx, input);
     }
     const result = def.run(tx, input, values);
     const effects = def.effects(input, result);

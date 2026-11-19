@@ -57,8 +57,9 @@ import {
   type ServerHalf,
   type Tier,
 } from "./contract.js";
-import { MUTATORS, refuse } from "./mutators.js";
+import { refuse } from "./mutators.js";
 import { memberKey, type LogId, type StoredRecord } from "./records.js";
+import { ACTIVE_MUTATORS as MUTATORS } from "./switch.js";
 import { ulid } from "./ulid.js";
 
 interface Replica {

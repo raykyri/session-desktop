@@ -32,6 +32,7 @@
 import type {
   FollowUpRec,
   Kind,
+  NotifType,
   RecordOf,
   ReplyRec,
   SpaceRec,
@@ -81,13 +82,14 @@ export function readsSpace(g: Reader, sp: string, u: string | null): boolean {
  * keeps. `sp` is the space whose rules apply: the record's own space, for a
  * like, save, reply like or saved ask its thread's space, for a notification
  * or an invite ask the space it is about. `person` is the person whose user
- * log holds it; `by` its author or maker; `type` a notification's type. */
+ * log holds it; `by` its author or maker; `type`, on a notification only,
+ * its type. */
 export interface Audience {
   kind: Kind;
   sp: string | null;
   person: string | null;
   by: string | null;
-  type: string | null;
+  type?: NotifType;
 }
 
 export function audience(g: Reader, r: StoredRecord): Audience {
@@ -96,7 +98,9 @@ export function audience(g: Reader, r: StoredRecord): Audience {
     sp = g.get("thread", r.th)?.s ?? null;
   if (r.kind === "notif" || r.kind === "invask") sp = r.sp;
   const by = "by" in r ? r.by : "u" in r ? r.u : null;
-  return { kind: r.kind, sp, person: personOf(r), by, type: r.kind === "notif" ? r.type : null };
+  const a: Audience = { kind: r.kind, sp, person: personOf(r), by };
+  if (r.kind === "notif") a.type = r.type;
+  return a;
 }
 
 /** May `u` read a record with this audience (its text is `redact`'s job). */

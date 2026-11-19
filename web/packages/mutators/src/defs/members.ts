@@ -246,11 +246,11 @@ export const memberMutators = [
       if (!mayInvite(tx, needSpace(tx, i.space), tx.me)) throw refuse("FORBIDDEN");
       return scope;
     },
-    pre: (ctx, _i, tx) => {
+    pre: (ctx) => {
       for (;;) {
         let code = "";
         for (let k = 0; k < 10; k++) code += CODE_CHARS.charAt(Math.floor(ctx.random() * 32) % 32);
-        if (!tx.scan("invite.code", code).length) return { code };
+        if (!ctx.tx.scan("invite.code", code).length) return { code };
       }
     },
     run: (tx, i, v) => {

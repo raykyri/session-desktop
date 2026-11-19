@@ -689,6 +689,12 @@ export function spaceOf(r: Draft | StoredRecord): string | null {
   }
 }
 
+/** The kinds whose records no space's log holds: a person's own records,
+ * which their user log holds, and Session's catalog of sources. */
+export const NO_SPACE_LOG: ReadonlySet<Kind> = new Set<Kind>(
+  [...KINDS].filter((k) => spaceOf({ kind: k, id: "", sp: "", s: "" } as unknown as Draft) === null),
+);
+
 /** The person whose user log holds a record, or null. */
 export function personOf(r: Draft | StoredRecord): string | null {
   switch (r.kind) {

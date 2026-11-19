@@ -63,7 +63,6 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 import { z } from "zod";
 
-import { audience, isClosed, readsAudience, spaceRec, view, type Audience } from "./access.js";
 import {
   MIN_PROTOCOL_VERSION,
   UNRECORDED,
@@ -81,8 +80,9 @@ import {
   type StorageScan,
   type TestServer,
 } from "./contract.js";
+import * as pkg from "@session/mutators";
+
 import {
-  MUTATORS,
   Refusal,
   authorize,
   isHandle,
@@ -94,19 +94,31 @@ import {
   type Tx,
 } from "./mutators.js";
 import {
-  audienceOf,
-  createdOf,
-  idOf,
-  keyOf,
-  logsOf,
   memberKey,
-  registryKey,
   type Draft,
   type LogId,
   type Kind,
   type RecordOf,
   type StoredRecord,
 } from "./records.js";
+import {
+  ACTIVE_MUTATORS,
+  USE_PACKAGE,
+  applyPackage,
+  audience,
+  audienceOf,
+  createdOf,
+  idOf,
+  inSpaceLog,
+  isClosed,
+  keyOf,
+  logsOf,
+  readsAudience,
+  registryKey,
+  spaceRec,
+  view,
+  type Audience,
+} from "./switch.js";
 import {
   CLOCK_MAX_SKEW,
   DAY,
@@ -207,8 +219,7 @@ export interface Tombstone extends Audience {
  * and its person's user log. */
 function logsOfAudience(a: Audience): LogId[] {
   const out: LogId[] = [];
-  if (a.sp !== null && a.kind !== "like" && a.kind !== "save" && a.kind !== "notif")
-    out.push(`space:${a.sp}`);
+  if (a.sp !== null && inSpaceLog(a.kind)) out.push(`space:${a.sp}`);
   if (a.person !== null) out.push(`user:${a.person}`);
   return out;
 }
@@ -389,14 +400,46 @@ class StagedTx implements Tx {
   }
 }
 
+/** `@session/mutators`' reads over the store (with the switch on). */
+class StoreSource implements pkg.RecordSource {
+  constructor(private readonly store: Store) {}
+
+  get(kind: pkg.Kind, id: string): pkg.StoredRecord | undefined {
+    return this.store.get(`${kind}:${id}`) as pkg.StoredRecord | undefined;
+  }
+
+  scan(index: pkg.IndexName, value: string): pkg.StoredRecord[] {
+    const [kind, field] = pkg.INDEXES[index];
+    const out: pkg.StoredRecord[] = [];
+    for (const key of this.store.keysOf(kind as Kind)) {
+      const r = this.store.get(key) as unknown as Record<string, unknown> | undefined;
+      if (r && r[field] === value) out.push(r as unknown as pkg.StoredRecord);
+    }
+    return out;
+  }
+
+  idUsed(id: string): boolean {
+    return this.store.registry.has(id);
+  }
+}
+
+/** The fields of a notification the prototype's records do not have, as the
+ * package's notifications hold them. */
+const NOTIF_REST = USE_PACKAGE
+  ? { outcome: null, response: null, actor: null, thread: null, node: null }
+  : {};
+
 /** What `execute` decided: the answer, whether it is recorded, and for an
  * applied write the staged changes and the effects to queue. */
 interface Outcome {
   result: ApplyResult;
   recorded: boolean;
   staged?: Map<string, StoredRecord | null>;
-  effects?: Effect[];
+  effects?: AnyEffect[];
 }
+
+/** The prototype's effects, and with the switch on the package's. */
+type AnyEffect = Effect | pkg.Effect;
 
 /** A registered client: the user it is bound to, its last processed seq and
  * when it was last used (by a write or a read with its client id). */
@@ -419,7 +462,7 @@ interface SeqAnswer {
 /** One entry of the effect queue: kept until the effect has run or failed
  * `EFFECT_MAX_ATTEMPTS` times. */
 interface QueuedEffect {
-  effect: Effect;
+  effect: AnyEffect;
   /** The commit time of the write that queued it. */
   at: number;
   attempts: number;
@@ -526,7 +569,7 @@ export class ProtoServer implements TestServer {
   constructor(options: ServerOptions) {
     this.clock = options.clock;
     this.random = options.random ?? cryptoRandom;
-    this.mutators = options.mutators ?? MUTATORS;
+    this.mutators = options.mutators ?? ACTIVE_MUTATORS;
     this.failEffect = options.failEffect;
     this.store = new Store(this.clock.now());
   }
@@ -696,6 +739,13 @@ export class ProtoServer implements TestServer {
         ]),
       );
     if (!ageOk(m.mutationId, m.clientTime)) return expired("mutationId");
+    if (USE_PACKAGE) {
+      // the name, the input, the new ids' age, the online-only age, then
+      // can, pre, run and effects: `@session/mutators`' `apply`
+      const out = applyPackage(this.mutators, new StoreSource(this.store), u, m, now, this.random);
+      if (out.kind === "refused") return final(out.refusal);
+      return { result: out.result, recorded: true, staged: out.staged, effects: out.effects };
+    }
     const def = Object.hasOwn(this.mutators, m.name) ? this.mutators[m.name] : undefined;
     if (!def)
       return final(refuse("NOT_FOUND", "The server has no procedure with this name.", ["name"]));
@@ -757,7 +807,8 @@ export class ProtoServer implements TestServer {
       }
       q.attempts++;
       try {
-        if (this.failEffect?.(q.effect, q.attempts)) throw new Error("the effect's service failed");
+        if (this.failEffect?.(q.effect as Effect, q.attempts))
+          throw new Error("the effect's service failed");
         this.runEffect(q.effect, now);
         this.effectQueue.splice(k, 1);
         ran++;
@@ -776,11 +827,12 @@ export class ProtoServer implements TestServer {
   }
 
   /** Run one effect. Its writes commit together, or not at all. */
-  private runEffect(effect: Effect, now: number) {
+  private runEffect(effect: AnyEffect, now: number) {
     if (effect.type === "job") {
       this.jobList.push({ kind: effect.kind, id: effect.id });
       return;
     }
+    if (effect.type === "reportResolved") return this.reportResolved(effect, now);
     const staged = new Map<string, StoredRecord | null>();
     // the staff as they are when the effect runs
     const staff = spaceRec(this.store, effect.sp)?.mods ?? [];
@@ -798,12 +850,45 @@ export class ProtoServer implements TestServer {
       };
       staged.set(`notif:${id}`, {
         ...n,
+        ...NOTIF_REST,
         kind: "notif",
         id,
         read: false,
         createdAt: isoAt(now),
         rev: 0,
       });
+    }
+    this.store.commit(staged, now);
+  }
+
+  /** A report's author is told how it was resolved: their earlier notice of
+   * it is replaced (or, for a report opened again, taken back). */
+  private reportResolved(effect: Extract<AnyEffect, { type: "reportResolved" }>, now: number) {
+    const r = this.store.get(`report:${effect.report}`);
+    if (r?.kind !== "report") return;
+    const staged = new Map<string, StoredRecord | null>();
+    for (const key of this.store.keysOf("notif")) {
+      const n = this.store.get(key) as unknown as { to: string; type: string; report: string };
+      if (n.to === r.by && n.type === "report_resolved" && n.report === r.id) staged.set(key, null);
+    }
+    if (effect.outcome !== null) {
+      let id: string;
+      do id = ulid(now, this.random);
+      while (this.store.registry.has(id));
+      staged.set(`notif:${id}`, {
+        kind: "notif",
+        id,
+        to: r.by,
+        type: "report_resolved",
+        sp: r.sp,
+        report: r.id,
+        item: r.key,
+        ...NOTIF_REST,
+        outcome: effect.outcome,
+        read: false,
+        createdAt: isoAt(now),
+        rev: 0,
+      } as unknown as StoredRecord);
     }
     this.store.commit(staged, now);
   }
