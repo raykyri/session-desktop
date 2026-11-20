@@ -1177,7 +1177,7 @@ function replyLines(p) {
   const cur = sel && idx[sel] != null ? rows[idx[sel]] : null;
   return `<div class="grp"><div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ r, d, id, hid }) => `<button class="grow-r${on.has(id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}"><span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(plainReply(r.t))}</span>${hid ? `<span class="rhid">+${hid}</span>` : ''}</span></button>`).join('')}</div>
     ${cur ? `<div class="preview fadein"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div><div class="rtext">${fmtReply(cur.r.t)}</div><div class="pf">${likeBtn(p, cur.id, cur.r)}${replyLink(p, cur.id)}${canWrite() ? `<button class="tlink" data-a="rquote" data-id="${rkey(p, cur.id)}">Quote</button>` : ''}${(cur.r.kids || []).length ? `<button class="tlink" data-a="rcol" data-id="${p.id}" data-node="${cur.id}">${st.rcol[p.id + '/' + cur.id] ? `Show ${noun(flatReplies(cur.r.kids).length, 'reply', 'replies')}` : 'Hide replies'}</button>` : ''}</div>${replyBox(p, cur.id, 'Reply to @' + cur.r.u)}</div>` : ''}
-    <div class="rfoot">${replyLink(p, 'top', 'Reply to post')}</div>${replyBox(p, 'top', 'Reply to @' + p.u)}</div>`;
+    <div class="rfoot">${replyLink(p, 'top', 'Reply at root')}</div>${replyBox(p, 'top', 'Reply to @' + p.u)}</div>`;
 }
 
 const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches is shaded and gets its own small tree beside it.';
