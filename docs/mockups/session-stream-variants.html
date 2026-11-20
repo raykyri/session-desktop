@@ -12,7 +12,7 @@
   --divider: #ebe7e2; --border-strong: #e1dcd6; --fill-subtle: rgba(0,0,0,.04); --fill-hover: rgba(0,0,0,.05);
   --accent: #0a6fb8; --accent-soft: rgba(11,127,209,.12); --accent-strong: #095c98; --on-accent: #ffffff;
   --t-heading: #121617; --t-primary: #23282a; --t-body: #33393b; --t-secondary: #4a5350; --t-muted: #5b625e;
-  --t-faint: #686e6b; --t-dim: #9aa19d; --placeholder: #8e958f; --good: #2f8a4d; --warn: #9a6b12;
+  --t-faint: #686e6b; --t-dim: #9aa19d; --placeholder: #8e958f; --good: #2f8a4d; --warn: #9a6b12; --bad: #c0563f;
   --av1: #4a6a86; --av2: #77598c; --av3: #557a52; --av4: #93663f; --av5: #3d7778; --av6: #8a4f4f; --av-fg: #ffffff;
   --mark: rgba(60,40,20,.06);
   --shadow-soft: 0 3px 10px rgba(20,24,26,.05);
@@ -29,7 +29,7 @@
   --divider: #2d2d2c; --border-strong: #373634; --fill-subtle: rgba(255,255,255,.05); --fill-hover: rgba(255,255,255,.06);
   --accent: #33adff; --accent-soft: rgba(51,173,255,.13); --accent-strong: #268fd6; --on-accent: #0f1413;
   --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #919994;
-  --t-faint: #828b86; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f;
+  --t-faint: #828b86; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f; --bad: #e0796d;
   --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
   --mark: rgba(255,255,255,.07);
   --shadow-soft: 0 3px 10px rgba(0,0,0,.22);
@@ -42,7 +42,7 @@
   --divider: #2d2d2c; --border-strong: #373634; --fill-subtle: rgba(255,255,255,.05); --fill-hover: rgba(255,255,255,.06);
   --accent: #33adff; --accent-soft: rgba(51,173,255,.13); --accent-strong: #268fd6; --on-accent: #0f1413;
   --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #919994;
-  --t-faint: #828b86; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f;
+  --t-faint: #828b86; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f; --bad: #e0796d;
   --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
   --mark: rgba(255,255,255,.07);
   --shadow-soft: 0 3px 10px rgba(0,0,0,.22);
@@ -114,11 +114,11 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .label { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--t-faint); }
 .iconbtn { width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: var(--r-md); color: var(--t-muted); flex: none; }
 .iconbtn:hover { background: var(--fill-hover); color: var(--t-heading); }
-.composer { display: flex; gap: 8px; align-items: center; background: var(--field); border: 1px solid var(--control-border);
+.composer { display: flex; gap: 8px; align-items: flex-end; background: var(--field); border: 1px solid var(--control-border);
   border-radius: 20px; padding: 4px 4px 4px 14px; }
 .composer:focus-within { border-color: var(--accent); }
-.composer input { flex: 1; min-width: 0; border: 0; background: none; outline: none; padding: 6px 0; font-size: var(--fs-base); }
-.composer input::placeholder { color: var(--placeholder); }
+.composer textarea { flex: 1; min-width: 0; border: 0; background: none; outline: none; padding: 6px 0; font: inherit; font-size: var(--fs-base); line-height: 1.4; color: inherit; resize: none; max-height: 160px; }
+.composer textarea::placeholder { color: var(--placeholder); }
 .row.new-row { padding: 2px 0 0; }
 .row.new-row + .row { padding-top: 14px; }
 /* composer parts */
@@ -168,6 +168,15 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .submenu { display: none; top: -4px; left: calc(100% + 4px); min-width: 140px; }
 .mi-sub:hover > .submenu, .mi-sub:focus-within > .submenu { display: flex; }
 .mi-sub::after { content: ""; position: absolute; left: 100%; top: 0; width: 8px; height: 100%; }
+/* "..." menu */
+.more { margin-left: auto; align-self: center; }
+.more-btn { width: 24px; height: 24px; display: inline-grid; place-items: center; border-radius: var(--r-md); color: var(--t-faint); }
+.more-btn:hover, .more-btn[aria-expanded="true"] { background: var(--fill-hover); color: var(--t-heading); }
+.card-h .who { flex: 1; }
+.mi.danger { color: var(--bad); }
+.mi-off { cursor: default; height: auto; padding: 7px 10px; color: var(--t-faint); }
+.mi-off small { display: block; font-size: var(--fs-xs); margin-top: 1px; }
+.mi-off:hover { background: none; }
 /* Stacked */
 .nb-stack { background: var(--card); border-radius: 18px; box-shadow: var(--shadow); padding: 12px 14px 8px; transition: box-shadow .15s; }
 .nb-stack:focus-within, .nb-tabs:focus-within, .nb-dock:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow-soft); }
@@ -350,6 +359,7 @@ const F = window.SessionFixtures, D = F.data, NOW = Date.parse(F.clock);
 const SP = Object.fromEntries(D.spaces.map(s => [s.id, s]));
 const USERS = { 'ines.v': 2, hal_b: 4, 'jun.park': 5, oduya: 6, sol: 3, lettie: 1, mira_k: 2, tomasz: 4 };
 const EXTRA = {};
+const DELETED = new Set();  /* branches removed in this session, as 'thread:node' */
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const strip = h => String(h || '').replace(/<sup[^>]*>.*?<\/sup>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -369,6 +379,7 @@ const I = {
   save: '<svg class="i" viewBox="0 0 16 16"><path d="M4 2.5h8v11l-4-2.8-4 2.8z"/></svg>',
   left: '<svg class="i" viewBox="0 0 16 16"><path d="M10 3.5L5.5 8l4.5 4.5"/></svg>',
   deeper: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3v4.5a2.5 2.5 0 0 0 2.5 2.5H12.5M9.5 7l3 3-3 3"/></svg>',
+  dots: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.25" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r="1.25" fill="currentColor" stroke="none"/><circle cx="12.5" cy="8" r="1.25" fill="currentColor" stroke="none"/></svg>',
   up: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3.5M3.8 7.7 8 3.5l4.2 4.2"/></svg>',
   down: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg>',
   right: '<svg class="i" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5"/></svg>',
@@ -531,6 +542,7 @@ function tree(p) {
   const nodes = { r: { id: 'r', par: null, u: p.u, createdAt: p.createdAt, q: asTyped(p, 'r', p.q), q0: p.q, t: p.t, html: D.rich[p.id] || (p.sum ? `<p>${esc(p.sum)}</p>` : ''), sum: p.sum || '', tok: p.tok } };
   const list = qt ? qt.nodes : fu.map((f, i) => ({ id: 'f' + i, par: 'r', fu: i }));
   for (const n of [...list, ...(EXTRA[p.id] || [])]) {
+    if (DELETED.has(p.id + ':' + n.id)) continue;
     const f = n.fu != null ? fu[n.fu] : null;
     nodes[n.id] = { id: n.id, par: n.par, u: n.u || f?.u, createdAt: n.createdAt || f?.createdAt, q: asTyped(p, n.fu != null ? 'f' + n.fu : n.id, n.q || f?.q || ''), q0: n.q || f?.q || '', html: n.html || f?.html || (f?.a ? `<p>${esc(f.a)}</p>` : ''), sum: f?.a || '', tok: n.tok || 0, pending: n.pending };
   }
@@ -565,7 +577,7 @@ function addBranch(p, par, q) {
   setTimeout(() => { node.pending = false; node.html = `<p>Mock answer. In the app, the agent's answer to "${esc(clip(q, 80))}" is stored here when the run finishes, and the branch count on the thread goes up by one.</p>`; render(); }, 2600);
   return id;
 }
-const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data-form="${id}">${ctx ? `<span class="ctx">${ctx}</span>` : ''}<input id="in-${id}" placeholder="${esc(ph)}" autocomplete="off"><button type="submit">${btn}</button></form>`;
+const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data-form="${id}">${ctx ? `<span class="ctx">${ctx}</span>` : ''}<textarea id="in-${id}" rows="1" placeholder="${esc(ph)}"></textarea><button type="submit">${btn}</button></form>`;
 
 /* ================= pinned maps ================= */
 /* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
@@ -576,8 +588,23 @@ const st = { v: 'dock', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8'
    per thread. Shown in a tooltip on the answer's icon. */
 const RUNS = ['Opus 4.8 · high effort', 'Opus 4.8 · medium effort', 'Sonnet 4.6 · high effort', 'Opus 4.8 · max effort'];
 const runOf = p => p.run || RUNS[[...p.id].reduce((s, c) => s + c.charCodeAt(0), 0) % RUNS.length];
+/* "..." menu on the metadata line of your own threads, branches and replies. Delete is offered only
+   while nobody has responded (no branches, no replies). key: 't:thread', 'b:thread:node' or 'r:thread:reply'. */
+const moreMenu = (key, canDelete, what) => {
+  const open = st.menu === 'more:' + key;
+  return `<span class="mpick more"><button type="button" class="more-btn" data-a="menu" data-m="more:${key}" aria-haspopup="menu" aria-expanded="${open}" aria-label="More">${I.dots}</button>
+    ${open ? `<div class="menu right" role="menu">${canDelete ? `<button type="button" class="mi danger" role="menuitem" data-a="del" data-k="${key}"><span>Delete ${what}</span></button>` : `<div class="mi mi-off" role="menuitem" aria-disabled="true"><span>Delete ${what}<small>Not available once someone has responded</small></span></div>`}</div>` : ''}</span>`;
+};
+const mine = u => u === F.me.u;
+function deleteItem(key) {
+  const [kind, pid, id] = key.split(':'), p = byId(pid);
+  if (kind === 't') D.posts.splice(D.posts.indexOf(p), 1);
+  else if (kind === 'b') { DELETED.add(pid + ':' + id); if (st.sel[pid] === id) st.sel[pid] = null; }
+  else if (kind === 'r') { const path = id.split('.'), i = +path.pop(), list = path.length ? replyAt(p, path.join('.')).kids : replies(p); list.splice(i, 1); st.rsel[pid] = null; }
+  st.menu = null; render();
+}
 function card(p) {
-  const head = `<div class="card-h">${av(p.u)}<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div></div>`;
+  const head = `<div class="card-h">${av(p.u)}<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div>${mine(p.u) ? moreMenu('t:' + p.id, p.k === 'ask' ? tree(p).count === 0 : replyCount(p) === 0, p.k === 'ask' ? 'ask' : 'post') : ''}</div>`;
   const acts = `<button class="iconbtn likes" aria-label="Like, ${p.likesBase || 0} likes">${I.heart}<span>${p.likesBase || 0}</span></button><button class="iconbtn" aria-label="Save">${I.save}</button>`;
   if (p.k === 'post') {
     const n = replyCount(p);
@@ -636,7 +663,7 @@ function pinGroups(p, draw, cls = '') {
 /* The read-out under a drawing: the selected branch's question and answer. */
 function preview(p, T, n) {
   const k = T.kids(n.id).length;
-  return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time></div>${status(n)}<div class="prose">${answerHtml(n)}</div>
+  return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${mine(n.u) ? moreMenu('b:' + p.id + ':' + n.id, !k, 'branch') : ''}</div>${status(n)}<div class="prose">${answerHtml(n)}</div>
     <div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches'}</span><button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.id}">Branch from here</button></div>
     ${st.asking === p.id ? composer('mf:' + p.id + ':' + n.id, 'Ask a branch question') : ''}</div>`;
 }
@@ -689,7 +716,7 @@ function replyLines(p) {
   });
   const cur = sel && idx[sel] != null ? rows[idx[sel]] : null;
   return `<div class="grp"><div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ r, d, id }) => `<button class="grow-r${on.has(id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}"><span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(r.t)}</span></span></button>`).join('')}</div>
-    ${cur ? `<div class="preview fadein"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time></div><p class="rtext">${esc(cur.r.t)}</p><div class="pf">${likeBtn(cur.r)}${replyLink(p, cur.id)}</div>${replyBox(p, cur.id, 'Reply to ' + cur.r.u)}</div>` : ''}
+    ${cur ? `<div class="preview fadein"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) ? moreMenu('r:' + p.id + ':' + cur.id, !(cur.r.kids || []).length, 'reply') : ''}</div><p class="rtext">${esc(cur.r.t)}</p><div class="pf">${likeBtn(cur.r)}${replyLink(p, cur.id)}</div>${replyBox(p, cur.id, 'Reply to ' + cur.r.u)}</div>` : ''}
     <div class="rfoot">${replyLink(p, 'top')}</div>${replyBox(p, 'top', 'Reply to the post')}</div>`;
 }
 
@@ -817,6 +844,7 @@ app.addEventListener('click', e => {
   if (a === 'askfrom') { st.sel[d.id] = d.node; st.asking = d.id; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
   if (a === 'rsel') { st.rsel[d.id] = st.rsel[d.id] === d.node ? null : d.node; st.replying = null; render(); return; }
   if (a === 'reply') { st.replying = st.replying === d.id ? null : d.id; render(); document.getElementById('in-rp:' + d.id.replace('/', ':'))?.focus(); return; }
+  if (a === 'del') { deleteItem(d.k); return; }
   if (a === 'menu') { st.menu = st.menu === d.m ? null : d.m; render(); $('#in-new')?.focus(); return; }
   if (a === 'setmodel' || a === 'seteffort' || a === 'setspace') { st[{ setmodel: 'newModel', seteffort: 'newEffort', setspace: 'newSpace' }[a]] = d.v; st.menu = null; render(); $('#in-new')?.focus(); return; }
   if (a === 'mode') { st.newMode = d.m; st.menu = null; render(); const t = $('#in-new'); t?.focus(); t?.setSelectionRange(t.value.length, t.value.length); return; }
@@ -845,15 +873,16 @@ app.addEventListener('mousedown', e => {
   e.preventDefault(); const t = f.querySelector('textarea'); if (document.activeElement !== t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && st.menu) { st.menu = null; render(); $('#in-new')?.focus(); } });
-/* composer: Enter starts a new line; Cmd+Enter (Ctrl+Enter elsewhere) sends with the form's default button */
+/* every text box (new thread, branch, reply): Enter starts a new line; Cmd+Enter (Ctrl+Enter elsewhere) sends */
 app.addEventListener('keydown', e => {
-  if (e.target.id !== 'in-new') return;
-  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.target.form.requestSubmit(e.target.form.querySelector('[data-enter]')); }
+  const t = e.target; if (t.tagName !== 'TEXTAREA' || !t.form) return;
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); t.form.requestSubmit(t.form.querySelector('[data-enter]') || t.form.querySelector('[type="submit"]')); }
 });
 app.addEventListener('input', e => {
-  if (e.target.id !== 'in-new') return;
-  const t = e.target; st.draft = t.value; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
-  t.form.classList.toggle('has-text', !!t.value.trim());
+  const t = e.target; if (t.tagName !== 'TEXTAREA' || !t.form) return;
+  t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
+  if (t.id !== 'in-new') return;
+  st.draft = t.value; t.form.classList.toggle('has-text', !!t.value.trim());
 });
 app.addEventListener('change', e => {
   const k = { 'new-space': 'newSpace', 'new-model': 'newModel', 'new-effort': 'newEffort' }[e.target.id];
