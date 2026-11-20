@@ -179,6 +179,9 @@ export function createRunsService(deps: RunsServiceDeps): RunsService {
       logger.warn({ error, keyId: id }, "an API key check failed");
       reason = "the provider could not be reached";
     }
+    // the verdict is of the raw key read above: a key replaced during the
+    // check keeps "checking" for its own job (review round 1 of phase 2, F8)
+    if (apiKeys.get(db, id)?.fingerprint !== row.fingerprint) return;
     if (sync.keyChecked(id, reason === null)) apiKeys.setReason(db, id, reason);
   };
 
