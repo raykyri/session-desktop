@@ -503,14 +503,14 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
   }
   if (!t)
     return (
-      <Page place={{ kind: "space", id: s.id }}>
+      <Page place={{ kind: "thread", id: s.id }}>
         {session?.status().ready ? <NotFound /> : null}
       </Page>
     );
   const mine = w.me?.u === t.u;
   if (t.del && t.k === "post" && t.replies.length === 0)
     return (
-      <Page place={{ kind: "space", id: s.id }}>
+      <Page place={{ kind: "thread", id: s.id }}>
         <Deleted t={t} space={s} />
       </Page>
     );
@@ -525,7 +525,7 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
   if (t.k === "post") {
     const tops = t.replies.filter((x) => x.parent === null);
     return (
-      <Page place={{ kind: "space", id: s.id }}>
+      <Page place={{ kind: "thread", id: s.id }}>
         <div className="th-page">
           <div className="th-doc">
             <article className="th-main">
@@ -560,7 +560,7 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
     return kids.reduce((n, k) => n + 1 + below(k.id), 0);
   };
   return (
-    <Page place={{ kind: "space", id: s.id }}>
+    <Page place={{ kind: "thread", id: s.id }}>
       <div className="th-page qt-page">
         <div className="qt-bar">
           <ThreadBack space={s} />

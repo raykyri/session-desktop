@@ -153,6 +153,11 @@ export function SearchPage({ q: q0, scope }: { q: string; scope: string | undefi
   );
   const stem = stemOf(q0);
   const key = [...readable].join(",");
+  // search reads what this tab holds: open the logs of the spaces it searches
+  const session = w.session;
+  useEffect(() => {
+    if (stem) for (const id of readable) void session?.showSpace(id);
+  }, [stem, key, session]);
   const res = useRecords((r) => search(r, stem, readable), [stem, key]) ?? { threads: [], asks: [] };
   const spaces = scoped
     ? []
@@ -200,7 +205,7 @@ export function SearchPage({ q: q0, scope }: { q: string; scope: string | undefi
             placeholder={ph}
             aria-label={ph}
             autoComplete="off"
-            autoFocus
+            autoFocus={!q0}
             value={q}
             onChange={(e) => setQ(e.currentTarget.value)}
             onKeyDown={(e) => {

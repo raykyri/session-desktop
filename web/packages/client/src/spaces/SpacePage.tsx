@@ -11,6 +11,7 @@ import { useNow, useRecords } from "../sync/react.js";
 
 import { Author, Avatar, Seal, SpaceGlyph } from "./atoms.js";
 import { Composer } from "./Composer.js";
+import { FaqLanding, topicsOf, topicSlug } from "./FaqLanding.js";
 import { Feed, SortControl, useFeedState } from "./Feed.js";
 import { CI, I, MI, MII, SVG } from "./icons.js";
 import { NotFound, Page } from "./Page.js";
@@ -28,6 +29,8 @@ const ROLE_TITLE: Record<string, string> = {
 function Banner({ s, compact }: { s: Space; compact: boolean }) {
   const w = useWorld();
   const role = w.roles[s.id];
+  const review =
+    useRecords((r) => (isStaff(role) ? r.list("request", (q) => q.sp === s.id && q.st === "open").length + r.list("report", (q) => q.sp === s.id && q.st === "open").length : 0), [s.id, role]) ?? 0;
   const closed = isClosed(s);
   return (
     <div className={`banner${compact ? " sf-compact" : ""} has-tabs`} style={{ ["--sp" as string]: `var(--av${s.av || 1})` }}>
@@ -64,6 +67,11 @@ function Banner({ s, compact }: { s: Space; compact: boolean }) {
           <button className="btn cs-b cs-mgb" type="button" aria-label={`Manage ${spaceName(s)}`} title="Manage">
             <Svg src={MI.cog} />
             <span className="d-only">Manage</span>
+            {review ? (
+              <span className="cs-n num" aria-label={`${review} requests and reports to review`}>
+                {review}
+              </span>
+            ) : null}
           </button>
         ) : null}
         {role !== undefined ? (
@@ -291,7 +299,8 @@ function AboutTab({ s }: { s: Space }) {
 }
 
 function Sidebar({ s }: { s: Space }) {
-  const [tab, setTab] = useState<SideTab>("sources");
+  // a space with the FAQ landing opens on About, the others on Sources
+  const [tab, setTab] = useState<SideTab>(s.faq ? "wiki" : "sources");
   return (
     <aside className="drawer wk ds-side" aria-label="Sources and about">
       <div className="dh ds-tabs">
@@ -319,6 +328,31 @@ function Sidebar({ s }: { s: Space }) {
       </div>
       {tab === "sources" ? <SourcesTab s={s} /> : <AboutTab s={s} />}
     </aside>
+  );
+}
+
+/** The topics column of the FAQ views. */
+function FaqToc({ s, rows }: { s: Space; rows: Parameters<typeof topicsOf>[1] }) {
+  const navigate = useNavigate();
+  const { all, list } = topicsOf(s, rows);
+  return (
+    <nav className="rf-toc" aria-label="Topics">
+      <div className="eyebrow">Topics</div>
+      <button type="button" className="rf-toc-i" aria-current="false" onClick={() => void navigate({ to: "/s/$space", params: { space: s.name } })}>
+        All answers <span className="num">{all.length}</span>
+      </button>
+      {list.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          className="rf-toc-i"
+          aria-current="false"
+          onClick={() => void navigate({ to: "/s/$space/topics/$topic", params: { space: s.name, topic: topicSlug(t.title) } })}
+        >
+          {t.title} <span className="num">{t.rows.length}</span>
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -367,9 +401,14 @@ function Gate({ s }: { s: Space }) {
   );
 }
 
-export function SpacePage({ name }: { name: string }) {
+/** Which view of a space's Threads tab: the FAQ landing or a topic, or the
+ * feed (Latest, on a space with the landing). */
+export type SpaceView = { kind: "threads" } | { kind: "latest" } | { kind: "topic"; topic: string };
+
+export function SpacePage({ name, view = { kind: "threads" } }: { name: string; view?: SpaceView }) {
   const w = useWorld();
   const f = useFeedState();
+  const navigate = useNavigate();
   const s = useMemo(() => w.spaces.find((x) => x.name === name), [w.spaces, name]);
   const session = w.session;
   useEffect(() => {
@@ -384,6 +423,23 @@ export function SpacePage({ name }: { name: string }) {
       </Page>
     );
   }
+  const feed = (
+    <>
+      <Composer space={s} />
+      <div className="fbar fbar-k nv-fbar">
+        <SpaceSearch s={s} />
+        <SortControl f={f} />
+      </div>
+      <Feed
+        rows={rows}
+        f={f}
+        spaces={w.byId}
+        tag={false}
+        page={20}
+        from={{ label: spaceName(s), to: `/s/${s.name}`, space: s.id }}
+      />
+    </>
+  );
   if (!canRead(w, s))
     return (
       <Page cls="" place={{ kind: "space", id: s.id }}>
@@ -402,21 +458,25 @@ export function SpacePage({ name }: { name: string }) {
               Threads
             </button>
           </nav>
-          <div className="main">
-            <Composer space={s} />
-            <div className="fbar fbar-k nv-fbar">
-              <SpaceSearch s={s} />
-              <SortControl f={f} />
+          {s.faq && view.kind !== "latest" ? (
+            <FaqLanding s={s} rows={rows} topic={view.kind === "topic" ? view.topic : null} />
+          ) : s.faq ? (
+            <div className="rf-idx sf-land sf-latest">
+              <FaqToc s={s} rows={rows} />
+              <div className="rf-idx-main">
+                <button
+                  className="th-back sf-vback"
+                  type="button"
+                  onClick={() => void navigate({ to: "/s/$space", params: { space: s.name } })}
+                >
+                  Topics
+                </button>
+                {feed}
+              </div>
             </div>
-            <Feed
-              rows={rows}
-              f={f}
-              spaces={w.byId}
-              tag={false}
-              page={20}
-              from={{ label: spaceName(s), to: `/s/${s.name}`, space: s.id }}
-            />
-          </div>
+          ) : (
+            <div className="main">{feed}</div>
+          )}
         </div>
         <Sidebar s={s} />
       </div>

@@ -86,6 +86,24 @@ const spaceRoute = createRoute({
   },
 });
 
+const latestRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/s/$space/latest",
+  component: function LatestRoute() {
+    const { space } = latestRoute.useParams();
+    return <SpacePage name={space} view={{ kind: "latest" }} />;
+  },
+});
+
+const topicRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/s/$space/topics/$topic",
+  component: function TopicRoute() {
+    const { space, topic } = topicRoute.useParams();
+    return <SpacePage name={space} view={{ kind: "topic", topic }} />;
+  },
+});
+
 const threadRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/s/$space/t/$thread",
@@ -218,6 +236,8 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   homeRoute,
   spaceRoute,
+  latestRoute,
+  topicRoute,
   threadRoute,
   askRoute,
   manageRoute,

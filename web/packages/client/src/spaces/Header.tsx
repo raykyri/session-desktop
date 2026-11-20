@@ -23,6 +23,8 @@ import { useWorld } from "./world.js";
 export type Place =
   | { kind: "home" }
   | { kind: "space"; id: string }
+  /** A thread of the space: the switcher names the space; no tab is current. */
+  | { kind: "thread"; id: string }
   | { kind: "saved" }
   | { kind: "notifications" }
   | { kind: "search" }
@@ -49,7 +51,7 @@ function Switcher({ place }: { place: Place }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   useOverlay(open, () => setOpen(false));
-  const cur = place.kind === "space" ? w.byId.get(place.id) : undefined;
+  const cur = place.kind === "space" || place.kind === "thread" ? w.byId.get(place.id) : undefined;
   const joined = Object.keys(w.roles).flatMap((id) => w.byId.get(id) ?? []);
   const rest = w.spaces.filter((s) => w.roles[s.id] === undefined);
   const match = (s: Space) => !q.trim() || s.name.includes(q.trim().toLowerCase());
