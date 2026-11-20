@@ -1,6 +1,7 @@
 // Moderation by the owner (`01` C12; `04` §6), invite links (`04` §5),
 // saves (`01` C1) and preferences (`01` C13).
 
+import { spaces } from "@session/shared";
 import test from "ava";
 
 import { DAY, World, ask, cast, fork, ok, post, refused } from "./world.js";
@@ -40,14 +41,10 @@ test("removing a thread erases everything under it, logs the removal and notifie
     t,
     w.apply("olga", "moderation.decide", { item: `a:${th}`, decision: "removed", note: " Spam " }),
   );
-  t.like(w.get(`thread:${th}`), {
-    mod: "removed",
-    q: "",
-    t: null,
-    sum: null,
-    modBy: "olga",
-    modNote: "Spam",
-  });
+  t.like(w.get(`thread:${th}`), { mod: "removed", modBy: "olga", modNote: "Spam" });
+  // the placeholder keeps nothing else of the removed content (C12)
+  const placeholder = spaces.removedThreadRecordSchema.safeParse(w.get(`thread:${th}`));
+  t.true(placeholder.success, JSON.stringify(placeholder.error?.issues));
   for (const kind of ["node", "answer", "comment", "run", "save"] as const)
     t.deepEqual(
       w.all(kind).filter((r) => "th" in r && r.th === th),

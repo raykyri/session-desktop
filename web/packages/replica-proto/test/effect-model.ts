@@ -327,11 +327,12 @@ export function predictEffects(
           del: false,
           gone: false,
           mod: null,
+          from: { th: n.th, node: n.id },
         });
         keys.set(`counts:${id}`, { th: id, s: n.s, saves: 0, r: 0 });
         const st = get(`stats:${n.s}`);
         if (st) keys.set(`stats:${n.s}`, { posts: Number(st["posts"]) + 1 });
-        keys.set(`answer:${id}`, { node: id, th: id, s: n.s, u: n.u, md: a.md, mod: null });
+        keys.set(`answer:${id}`, { node: "r", th: id, s: n.s, u: n.u, md: a.md, mod: null });
         keys.set(`node:${n.id}`, { promoted: id, q: n.q });
         out.result = (r) => JSON.stringify(r) === JSON.stringify({ id, run: null });
         break;
@@ -514,7 +515,14 @@ export function predictEffects(
     case "replies.update":
     case "comments.update": {
       const kind = name === "replies.update" ? "reply" : "comment";
-      keys.set(`${kind}:${str("id")}`, { t: str("t").trim(), mod: null });
+      const old = get(`${kind}:${str("id")}`) as { t: string; edited: boolean };
+      const t = str("t").trim();
+      keys.set(`${kind}:${str("id")}`, {
+        t,
+        mod: null,
+        del: false,
+        edited: old.edited || t !== old.t,
+      });
       break;
     }
     case "replies.delete":
@@ -525,7 +533,7 @@ export function predictEffects(
       const kept =
         r.parent === null &&
         [...dump.values()].some((x) => x.kind === kind && x.th === r.th && x.parent === r.id);
-      if (kept) keys.set(`${kind}:${r.id}`, { t: "" });
+      if (kept) keys.set(`${kind}:${r.id}`, { t: "", del: true });
       else {
         keys.set(`${kind}:${r.id}`, null);
         if (kind === "reply") keys.set(`counts:${r.th}`, { r: ofThread(r.th, "reply").length - 1 });
@@ -679,11 +687,18 @@ export function predictEffects(
         keys.set(ck, null);
       };
       if (r.kind === "thread") {
+        // nothing else of the removed content is kept (C12)
         keys.set(key, {
           mod: "removed",
           q: "",
           t: null,
           sum: null,
+          tok: 0,
+          src: 0,
+          model: null,
+          effort: null,
+          edited: false,
+          from: null,
           running: false,
           modBy: me,
           modNote: note,

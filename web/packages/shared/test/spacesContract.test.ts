@@ -146,3 +146,36 @@ test("questions, replies, comments and look-up phrases are not empty", (t) => {
   };
   t.false(m["research.forkNode"].input.safeParse(look).success);
 });
+
+test("a node's look and tpl follow its kind", (t) => {
+  const node = {
+    kind: "node",
+    id: ID,
+    th: ID2,
+    s: ID2,
+    par: "r",
+    k: "ask",
+    u: "ada",
+    q: "Why?",
+    look: null,
+    quote: null,
+    b: null,
+    tpl: null,
+    model: "m",
+    effort: "low",
+    run: ID,
+    promoted: null,
+    mod: null,
+    del: false,
+    createdAt: "2026-11-16T10:00:00Z",
+    rev: 1,
+  };
+  t.true(spaces.nodeRecordSchema.safeParse(node).success);
+  t.false(spaces.nodeRecordSchema.safeParse({ ...node, look: "tide", tpl: 1 }).success);
+  t.true(spaces.nodeRecordSchema.safeParse({ ...node, k: "lookup", look: "tide", tpl: 1 }).success);
+  t.false(spaces.nodeRecordSchema.safeParse({ ...node, k: "lookup", look: "tide" }).success);
+  // a removed look-up keeps its template version, not its phrase
+  t.true(
+    spaces.nodeRecordSchema.safeParse({ ...node, k: "lookup", tpl: 1, mod: "removed" }).success,
+  );
+});

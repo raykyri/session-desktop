@@ -139,7 +139,7 @@ export function keyOf(r: Draft | StoredRecord): string {
     case "member":
       return memberKey(r.sp, r.u);
     case "answer":
-      return answerKey(r.node);
+      return answerKey(r.node === "r" ? r.th : r.node);
     case "request":
       return requestKey(r.sp, r.u);
     case "ban":

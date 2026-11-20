@@ -1,7 +1,7 @@
 // Replies to a post (`01` C5, C15): one level of nesting, a reply's parent
 // is a top-level reply. The author edits (comparing the reply's rev) and
 // deletes: a top-level reply with replies under it stays as an empty shell
-// (`t: ""`), one without is erased.
+// (`t: ""`, `del`), one without is erased.
 
 import { canRead } from "./access.js";
 import { Notifier } from "./notify.js";
@@ -50,6 +50,8 @@ export const REPLIES = {
         u: tx.me,
         t,
         parent: i.parent ?? null,
+        edited: false,
+        del: false,
         mod: null,
         createdAt: tx.now,
       });
@@ -76,9 +78,10 @@ export const REPLIES = {
     run: (tx, i) => {
       const r = readable(tx, `reply:${i.id}`, "reply");
       if (r.mod === "removed") throw removed();
-      if (r.t === "") throw deleted();
+      if (r.del) throw deleted();
       if (r.rev !== i.base.rev) throw stale();
-      tx.put({ ...r, t: text(i.t, "t") });
+      const t = text(i.t, "t");
+      tx.put({ ...r, t, edited: r.edited || t !== r.t });
       return null;
     },
   }),
@@ -97,7 +100,7 @@ export const REPLIES = {
       const reads = canRead(tx, r, tx.me);
       const kept =
         r.parent === null && tx.list("reply", { th: r.th }).some((x) => x.parent === r.id);
-      if (kept) tx.put({ ...r, t: "" });
+      if (kept) tx.put({ ...r, t: "", del: true });
       else {
         tx.del(`reply:${r.id}`);
         recount(tx, tx.byKey(threadKey(r.th)) as ThreadRec);

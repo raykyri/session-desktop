@@ -11,6 +11,7 @@ import { ULID_RE } from "./ids.js";
 import {
   answerKey,
   countsKey,
+  keyOf,
   memberKey,
   nodeKey,
   saveKey,
@@ -212,7 +213,7 @@ export function erase(
     case "thread": {
       const th = { th: r.id };
       for (const x of tx.list("node", th)) drop(`node:${x.id}`);
-      for (const x of tx.list("answer", th)) drop(answerKey(x.node));
+      for (const x of tx.list("answer", th)) drop(keyOf(x));
       for (const x of tx.list("reply", th)) drop(`reply:${x.id}`);
       for (const x of tx.list("comment", th)) drop(`comment:${x.id}`);
       for (const x of tx.list("run", th)) drop(`run:${x.id}`);
@@ -220,12 +221,20 @@ export function erase(
       for (const x of tx.list("notif", th).filter((y) => y.type === "mention"))
         drop(`notif:${x.id}`);
       tx.put({ ...countsOf(tx, r), r: 0, saves: 0 });
+      // the placeholder keeps nothing else of the removed content
+      // (`removedThreadRecordSchema`)
       tx.put({
         ...r,
         q: "",
         t: null,
         sum: null,
+        tok: 0,
+        src: 0,
+        model: null,
+        effort: null,
         running: false,
+        edited: false,
+        from: null,
         mod: "removed",
         modBy: tx.me,
         modNote: note,

@@ -717,7 +717,7 @@ function edit(f: Facts, i: In, kind: "reply" | "comment") {
   const r = seen(f, `${kind}:${String(i["id"])}`, kind);
   inSpace(f, r.s, 0);
   if (r.u !== f.me) no("FORBIDDEN");
-  if (r.mod === "removed" || r.t === "") no("PRECONDITION_FAILED");
+  if (r.mod === "removed" || r.del) no("PRECONDITION_FAILED");
   if (r.rev !== baseRev(i)) no("STALE");
   if (blank(i["t"])) no("BAD_REQUEST");
 }

@@ -228,9 +228,30 @@ export const threadRecordSchema = z.object({
   /** Who removed it, and the reason shown with the placeholder (C12). */
   modBy: spaceHandleSchema.nullable(),
   modNote: z.string().max(MODERATION_NOTE_MAX).nullable(),
+  /** The thread and node it was opened from (`03` G5), or null. */
+  from: z.object({ th: spaceThreadIdSchema, node: spaceUlidSchema }).nullable(),
   createdAt: spaceIsoTimeSchema,
   updatedAt: spaceIsoTimeSchema,
   rev,
+});
+
+/** A removed thread as stored (C12; `04` §6.2): the placeholder keeps its
+ * id, space, kind, author, times, `mod`, `modBy` and `modNote`, and nothing
+ * else of the removed content: no text, title, summary, token or source
+ * count, model, effort or source node. Readers other than the author get it
+ * with `u: null`. */
+export const removedThreadRecordSchema = threadRecordSchema.extend({
+  q: z.literal(""),
+  t: z.null(),
+  sum: z.null(),
+  tok: z.literal(0),
+  src: z.literal(0),
+  model: z.null(),
+  effort: z.null(),
+  running: z.literal(false),
+  edited: z.literal(false),
+  mod: z.literal("removed"),
+  from: z.null(),
 });
 
 /** A thread's counts (`counts:<thread>`), read with the thread, so a save or
@@ -259,29 +280,36 @@ export const askNodeKindSchema = z.enum(["ask", "lookup"]);
  * `quote` is the passage of the parent's answer it was started from, `b` the
  * index of the top-level block that holds it. `promoted`: the thread it was
  * opened as (`03` G5). */
-export const nodeRecordSchema = z.object({
-  kind: z.literal("node"),
-  id: spaceUlidSchema,
-  th: spaceThreadIdSchema,
-  s: spaceIdSchema,
-  par: askNodeRefSchema,
-  k: askNodeKindSchema,
-  u: spaceHandleSchema,
-  q: z.string(),
-  look: z.string().max(LOOKUP_PHRASE_MAX).nullable(),
-  quote: z.string().max(QUOTE_MAX).nullable(),
-  b: count.nullable(),
-  tpl: count.nullable(),
-  model: spaceModelSchema,
-  effort: spaceEffortSchema,
-  /** The node's current run. */
-  run: spaceUlidSchema,
-  promoted: spaceThreadIdSchema.nullable(),
-  mod: moderationStateSchema.nullable(),
-  del: z.boolean(),
-  createdAt: spaceIsoTimeSchema,
-  rev,
-});
+export const nodeRecordSchema = z
+  .object({
+    kind: z.literal("node"),
+    id: spaceUlidSchema,
+    th: spaceThreadIdSchema,
+    s: spaceIdSchema,
+    par: askNodeRefSchema,
+    k: askNodeKindSchema,
+    u: spaceHandleSchema,
+    q: z.string(),
+    look: z.string().max(LOOKUP_PHRASE_MAX).nullable(),
+    quote: z.string().max(QUOTE_MAX).nullable(),
+    b: count.nullable(),
+    tpl: count.nullable(),
+    model: spaceModelSchema,
+    effort: spaceEffortSchema,
+    /** The node's current run. */
+    run: spaceUlidSchema,
+    promoted: spaceThreadIdSchema.nullable(),
+    mod: moderationStateSchema.nullable(),
+    del: z.boolean(),
+    createdAt: spaceIsoTimeSchema,
+    rev,
+  })
+  .refine(
+    // an ask has no phrase or template; a look-up has its template version, and
+    // its phrase until it is removed, deleted or redacted
+    (n) => (n.k === "ask" ? n.look === null && n.tpl === null : n.tpl !== null),
+    { message: "look and tpl are null for an ask; a look-up has tpl" },
+  );
 
 /** A run of an ask (`run:<id>`, C17; `03` §1). A run record with status
  * `queued` is the run queue: the dispatcher claims it with a compare-and-set
@@ -331,13 +359,14 @@ export const turnRecordSchema = z.object({
 /** A page an answer cites: [title, host, note]. */
 export const citedPageSchema = z.tuple([z.string(), z.string(), z.string()]);
 
-/** An answer (`answer:<node>`, with the thread's id for the root ask): the
- * final answer as Markdown. The server stores no HTML (C3). `u` is the
+/** An answer (`answer:<node>`; the root ask's is `answer:<thread>`, with
+ * `node: "r"`, as runs and comments name the root): the final answer as
+ * Markdown. The server stores no HTML (C3). `u` is the
  * asker; `mod` follows its node's (or root thread's) moderation state, so a
  * hidden ask's answer is served to the asker and the owner only. */
 export const answerRecordSchema = z.object({
   kind: z.literal("answer"),
-  node: spaceUlidSchema,
+  node: askNodeRefSchema,
   th: spaceThreadIdSchema,
   s: spaceIdSchema,
   u: spaceHandleSchema,
@@ -360,6 +389,10 @@ export const replyRecordSchema = z.object({
   u: spaceHandleSchema,
   t: z.string(),
   parent: spaceUlidSchema.nullable(),
+  /** Changed by its author since it was written. */
+  edited: z.boolean(),
+  /** Deleted by its author while it had replies: an empty shell (`t: ""`). */
+  del: z.boolean(),
   mod: moderationStateSchema.nullable(),
   createdAt: spaceIsoTimeSchema,
   rev,
@@ -377,6 +410,10 @@ export const commentRecordSchema = z.object({
   parent: spaceUlidSchema.nullable(),
   u: spaceHandleSchema,
   t: z.string(),
+  /** Changed by its author since it was written. */
+  edited: z.boolean(),
+  /** Deleted by its author while it had comments: an empty shell (`t: ""`). */
+  del: z.boolean(),
   mod: moderationStateSchema.nullable(),
   createdAt: spaceIsoTimeSchema,
   rev,
@@ -515,7 +552,7 @@ export const spaceRecordKeys = {
   node: "node:<id>",
   run: "run:<id>",
   turn: "turn:<run>:<attempt>:<n>",
-  answer: "answer:<node>",
+  answer: "answer:<node> (answer:<thread> for the root)",
   reply: "reply:<id>",
   comment: "comment:<id>",
   ban: "ban:<space>:<user>",

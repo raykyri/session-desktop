@@ -55,6 +55,7 @@ const blank = {
   mod: null,
   modBy: null,
   modNote: null,
+  from: null,
 } as const;
 
 export const THREADS = {
@@ -194,8 +195,9 @@ function promote(tx: Tx, id: string, th: string, nodeId: string) {
     model: n.model,
     effort: n.effort,
     running: false,
+    from: { th: p.id, node: n.id },
   });
-  tx.put({ ...a, node: id, th: id, mod: null });
+  tx.put({ ...a, node: "r", th: id, mod: null });
   tx.put({ ...n, promoted: id });
   return { id, run: null };
 }

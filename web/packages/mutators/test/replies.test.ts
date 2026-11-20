@@ -42,7 +42,7 @@ test("an author's edit of a reply compares its rev; a delete keeps a top-level r
   const rev = w.rev(`reply:${top}`);
   refused(t, w.apply("mona", "replies.update", { id: top, t: "y", base: { rev } }), "FORBIDDEN");
   ok(t, w.apply("otto", "replies.update", { id: top, t: " y ", base: { rev } }));
-  t.like(w.get(`reply:${top}`), { t: "y" });
+  t.like(w.get(`reply:${top}`), { t: "y", edited: true, del: false });
   refused(t, w.apply("otto", "replies.update", { id: top, t: "z", base: { rev } }), "STALE");
   const sub = w.id();
   ok(
@@ -50,7 +50,12 @@ test("an author's edit of a reply compares its rev; a delete keeps a top-level r
     w.apply("mona", "research.createPostFollowUp", { id: sub, thread: p, t: "s", parent: top }),
   );
   t.deepEqual(ok(t, w.apply("otto", "replies.delete", { id: top })), { kept: true });
-  t.like(w.get(`reply:${top}`), { t: "" });
+  t.like(w.get(`reply:${top}`), { t: "", del: true });
+  refused(
+    t,
+    w.apply("otto", "replies.update", { id: top, t: "back", base: { rev: w.rev(`reply:${top}`) } }),
+    "PRECONDITION_FAILED",
+  );
   t.deepEqual(ok(t, w.apply("mona", "replies.delete", { id: sub })), { kept: false });
   t.is(w.get(`reply:${sub}`), undefined);
   t.like(w.get(`counts:${p}`), { r: 1 });

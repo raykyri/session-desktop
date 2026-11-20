@@ -88,7 +88,9 @@ test("G5: opening a branch as its own thread copies its question and answer and 
   });
   t.like(w.get(`node:${node}`), { promoted: id });
   const a = w.get(`answer:${id}`);
-  t.like(a, { node: id, th: id, u: "mona", md: (w.get(`answer:${node}`) as { md: string }).md });
+  // the root's answer: `node: "r"`, keyed by the new thread
+  t.like(a, { node: "r", th: id, u: "mona", md: (w.get(`answer:${node}`) as { md: string }).md });
+  t.like(w.get(`thread:${id}`), { from: { th, node } });
   t.like(w.get(`stats:${open}`), { posts: 2 });
   // once only
   refused(

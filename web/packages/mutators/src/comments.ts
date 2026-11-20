@@ -2,7 +2,7 @@
 // that starts no run, nested like replies (a parent is a top-level comment on
 // the same node). The author edits (comparing the comment's rev) and
 // deletes: a top-level comment with comments under it stays as an empty
-// shell (`t: ""`), one without is erased.
+// shell (`t: ""`, `del`), one without is erased.
 
 import { canRead } from "./access.js";
 import { Notifier } from "./notify.js";
@@ -54,6 +54,8 @@ export const COMMENTS = {
         parent: i.parent ?? null,
         u: tx.me,
         t,
+        edited: false,
+        del: false,
         mod: null,
         createdAt: tx.now,
       });
@@ -80,9 +82,10 @@ export const COMMENTS = {
     run: (tx, i) => {
       const c = readable(tx, `comment:${i.id}`, "comment");
       if (c.mod === "removed") throw removed();
-      if (c.t === "") throw deleted();
+      if (c.del) throw deleted();
       if (c.rev !== i.base.rev) throw stale();
-      tx.put({ ...c, t: text(i.t, "t") });
+      const t = text(i.t, "t");
+      tx.put({ ...c, t, edited: c.edited || t !== c.t });
       return null;
     },
   }),
@@ -101,7 +104,7 @@ export const COMMENTS = {
       const reads = canRead(tx, c, tx.me);
       const kept =
         c.parent === null && tx.list("comment", { th: c.th }).some((x) => x.parent === c.id);
-      if (kept) tx.put({ ...c, t: "" });
+      if (kept) tx.put({ ...c, t: "", del: true });
       else tx.del(`comment:${c.id}`);
       return reads ? { kept } : null;
     },

@@ -288,11 +288,10 @@ export function finish(w: World, thread: string, node: string, md = "An answer."
   const run = w.all("run").find((r) => r.th === thread && r.node === node);
   if (!run) throw new Error(`no run of ${node} in ${thread}`);
   w.put({ ...run, status: "complete", step: 3, finishedAt: msToIso(w.ms) });
-  const key = node === "r" ? thread : node;
   const asker = run.u;
   w.put({
     kind: "answer",
-    node: key,
+    node,
     th: thread,
     s: run.s,
     u: asker,
