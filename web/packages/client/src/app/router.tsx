@@ -127,6 +127,16 @@ const askRoute = createRoute({
   },
 });
 
+const compareRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/s/$space/t/$thread/a/$node/compare/$pair",
+  component: function CompareRoute() {
+    const { space, thread, node, pair } = compareRoute.useParams();
+    const [a = node, b = node] = pair.split(",");
+    return <ThreadPage spaceName={space} id={thread} node={node} compare={[a, b]} />;
+  },
+});
+
 const manageRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/s/$space/manage/$tab",
@@ -305,6 +315,7 @@ const routeTree = rootRoute.addChildren([
   topicRoute,
   threadRoute,
   askRoute,
+  compareRoute,
   manageRoute,
   pageRoute,
   aboutRoute,

@@ -19,6 +19,7 @@ import {
 import { Markdown, citationsOf } from "../features/markdown/index.js";
 import { useNow, useRecords, useRunText } from "../sync/react.js";
 
+import { AskMenu, Compare, MapDialog } from "./AskTree.js";
 import { ItemMenu, ModNote, type Item } from "./ItemMenu.js";
 import { MissingSpace, ThreadGate } from "./Membership.js";
 import { Modal, NotFound, Page } from "./Page.js";
@@ -253,6 +254,7 @@ function FollowUpItem({
   me,
   sel,
   path,
+  onPick,
 }: {
   t: ThreadView;
   f: FollowUp;
@@ -261,6 +263,8 @@ function FollowUpItem({
   me: string | null;
   sel: string;
   path: Set<string>;
+  /** Compare with another ask: the outline or the map picks the second. */
+  onPick: (id: string) => void;
 }) {
   const now = useNow();
   const [asking, setAsking] = useState(false);
@@ -329,23 +333,7 @@ function FollowUpItem({
         ) : null}
         <SaveAskButton thread={t.id} node={f.id} saved={f.saved} />
         <span className="grow" />
-        <span className="qt-mw">
-          <ItemMenu
-            space={space}
-            label="More actions for this ask"
-            item={{
-              key: `f:${t.id}:${f.id}`,
-              noun: "follow-up answer",
-              by: "Agent",
-              text: f.a ?? f.q,
-              q: t.q,
-              mod: f.mod,
-              own: f.u === me && !f.del,
-              kids: below,
-              url: `${location.origin}/s/${space.name}/t/${t.id}/a/${f.id}`,
-            }}
-          />
-        </span>
+        <AskMenu t={t} f={f} space={space} onCompare={() => onPick(f.id)} />
       </div>
       {asking ? <AskBox t={t} par={f.id} level={level} onClose={() => setAsking(false)} /> : null}
       {below ? (
@@ -372,6 +360,7 @@ function FollowUpItem({
               me={me}
               sel={sel}
               path={path}
+              onPick={onPick}
             />
           ))}
         </div>
@@ -703,9 +692,12 @@ export function ThreadPage({
   spaceName: name,
   id,
   node = "r",
+  compare,
 }: {
   spaceName: string;
   id: string;
+  /** Two asks to compare (`/a/<a>/compare/<a>,<b>`). */
+  compare?: [string, string];
   /** The selected ask ("r": the thread's), from `/a/<node>`. */
   node?: string;
 }) {
@@ -718,6 +710,8 @@ export function ThreadPage({
   const [view, setView] = useState<"docsrc" | "chat">("docsrc");
   const [askingRoot, setAskingRoot] = useState(false);
   const [olSheet, setOlSheet] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [pick, setPick] = useState<string | null>(null);
   useEffect(() => {
     if (s) void session?.openThread(s.id, id);
   }, [s, id, session]);
@@ -807,12 +801,22 @@ export function ThreadPage({
     const at: string = cur;
     cur = t.followups.find((f) => f.id === at)?.par ?? null;
   }
-  const go = (n: string) =>
+  const go = (n: string) => {
+    if (pick && n !== pick && n !== "r") {
+      const a = pick;
+      setPick(null);
+      void navigate({
+        to: "/s/$space/t/$thread/a/$node/compare/$pair",
+        params: { space: s.name, thread: t.id, node: a, pair: `${a},${n}` },
+      });
+      return;
+    }
     void navigate(
       n === "r"
         ? { to: "/s/$space/t/$thread", params: { space: s.name, thread: t.id } }
         : { to: "/s/$space/t/$thread/a/$node", params: { space: s.name, thread: t.id, node: n } },
     );
+  };
   return (
     <Page place={{ kind: "thread", id: s.id }}>
       <div className="th-page qt-page">
@@ -835,7 +839,8 @@ export function ThreadPage({
               className="btn sm"
               type="button"
               data-qt="map"
-              aria-pressed="false"
+              aria-pressed={mapOpen}
+              onClick={() => setMapOpen(true)}
               aria-label="Map"
               title="Map"
             >
@@ -857,7 +862,38 @@ export function ThreadPage({
         </div>
         <div className="qt-grid qt-calm">
           <div className="qt-main">
-            <article className="qt-node qt-inl qt-fuv" id="qt-n-r">
+            {pick ? (
+              <div className="qt-pickbar" role="status">
+                <span>
+                  Choose a second ask to compare with{" "}
+                  <b>{t.followups.find((f) => f.id === pick)?.q.slice(0, 60)}</b>, in the outline or
+                  on the map.
+                </span>
+                <span className="grow" />
+                <button className="btn sm" type="button" onClick={() => setMapOpen(true)}>
+                  <Svg src={QTI.map} />
+                  Open the map
+                </button>
+                <button className="btn sm qt-olbtn" type="button" onClick={() => setOlSheet(true)}>
+                  <Svg src={QTI.tree} />
+                  Outline
+                </button>
+                <button className="btn sm" type="button" onClick={() => setPick(null)}>
+                  Cancel
+                </button>
+              </div>
+            ) : null}
+            {compare ? (
+              <Compare
+                t={t}
+                space={s}
+                a={compare[0]}
+                b={compare[1]}
+                go={(n) => go(n)}
+                close={() => go(compare[0])}
+              />
+            ) : null}
+            <article className="qt-node qt-inl qt-fuv" id="qt-n-r" hidden={!!compare}>
               {meta}
               <p className="th-q" id="th-q" ref={heading} tabIndex={-1}>
                 {t.del ? "You deleted this ask." : t.q}
@@ -904,6 +940,7 @@ export function ThreadPage({
                       me={w.me?.u ?? null}
                       sel={node}
                       path={path}
+                      onPick={setPick}
                     />
                   ))
                 ) : (
@@ -932,6 +969,9 @@ export function ThreadPage({
             <Sources md={t.sum} />
             <Facts t={t} space={s} kind="ask" />
           </aside>
+          {mapOpen ? (
+            <MapDialog t={t} sel={node} path={path} go={go} onClose={() => setMapOpen(false)} />
+          ) : null}
         </div>
       </div>
     </Page>

@@ -37,6 +37,22 @@ function deepAsk(rs: KeyedRecord[], space: string) {
   return { th, deep: String(deep?.record["id"]), q: String(deep?.record["q"]) };
 }
 
+/** A follow-up the person asked in a #public thread. */
+function myFollowUp(rs: KeyedRecord[]) {
+  const sp = spaceId(rs, "public");
+  const ths = new Set(
+    rs.filter((r) => r.record.kind === "thread" && r.record["s"] === sp).map((r) => r.record["id"]),
+  );
+  const f = rs.find(
+    (r) =>
+      r.record.kind === "followup" &&
+      ths.has(r.record["th"]) &&
+      r.record["u"] === "ines.v" &&
+      !r.record["del"],
+  );
+  return { th: String(f?.record["th"]), fu: String(f?.record["id"]) };
+}
+
 /** A source added to a space. */
 const firstSource = (rs: KeyedRecord[], space: string) =>
   String(
@@ -198,6 +214,71 @@ const SCREENS: Screen[] = [
       await toastSays(p, "Approved. Members see it in Sources.");
       await p.getByLabel(/^Moderators/).check();
       await toastSays(p, "Saved.");
+    },
+  },
+  {
+    key: "qt-map",
+    url: (rs) => `/s/markets/t/${deepAsk(rs, "markets").th}`,
+    run: async (p, rs) => {
+      const { th, deep, q } = deepAsk(rs, "markets");
+      // a phone has no map (the mockup hides it): the Outline sheet is the way to an ask
+      if ((p.viewportSize()?.width ?? 0) < 760) {
+        await expect(p.getByRole("button", { name: "Map", exact: true })).toBeHidden();
+        await p.getByRole("button", { name: "Outline" }).click();
+        await p.locator(".qt-olm-sheet").getByRole("button", { name: q }).click();
+        await expect(p).toHaveURL(new RegExp(`/t/${th}/a/${deep}$`));
+        return;
+      }
+      await p.getByRole("button", { name: "Map", exact: true }).click();
+      const d = p.getByRole("dialog", { name: /Map of this thread/ });
+      await expect(d).toBeVisible();
+      await d.getByRole("button", { name: q }).click();
+      await expect(d).toBeHidden();
+      await expect(p).toHaveURL(new RegExp(`/t/${th}/a/${deep}$`));
+    },
+  },
+  {
+    key: "qt-compare",
+    url: (rs) => `/s/markets/t/${deepAsk(rs, "markets").th}`,
+    run: async (p, rs) => {
+      const { th } = deepAsk(rs, "markets");
+      const fus = rs.filter((r) => r.record.kind === "followup" && r.record["th"] === th);
+      const first = fus.find((f) => f.record["par"] === null);
+      const other = fus.find((f) => f.record["par"] === null && f !== first);
+      await p
+        .locator(`#qt-n-${String(first?.record["id"])}`)
+        .getByRole("button", { name: "More actions for this ask" })
+        .first()
+        .click();
+      await p.getByRole("menuitem", { name: "Compare with another ask" }).click();
+      await expect(p.locator(".qt-pickbar")).toBeVisible();
+      await p.locator(".qt-pickbar").getByRole("button", { name: "Open the map" }).click();
+      await p
+        .getByRole("dialog", { name: /Map of this thread/ })
+        .getByRole("button", { name: String(other?.record["q"]) })
+        .click();
+      await expect(p).toHaveURL(/\/compare\//);
+      await expect(p.getByRole("heading", { name: "Compare two branches" })).toBeVisible();
+      await p.locator(".qt-cmp #qt-in").fill("Taken together, which branch holds up better?");
+      await p.locator(".qt-cmp").getByRole("button", { name: "Ask", exact: true }).click();
+      await expect(p).toHaveURL(/\/a\/[0-9A-Z]{26}$/);
+    },
+  },
+  {
+    key: "qt-promote",
+    url: (rs) => `/s/public/t/${myFollowUp(rs).th}/a/${myFollowUp(rs).fu}`,
+    run: async (p, rs) => {
+      const { fu } = myFollowUp(rs);
+      await p
+        .locator(`#qt-n-${fu}`)
+        .getByRole("button", { name: "More actions for this ask" })
+        .first()
+        .click();
+      await p.getByRole("menuitem", { name: /Start a thread from this branch/ }).click();
+      const d = p.getByRole("dialog", { name: "Start a thread from this branch" });
+      await d.getByRole("button", { name: "Start thread" }).click();
+      await toastSays(p, /Thread started in #public/);
+      await expect(p).toHaveURL(/\/s\/public\/t\/[0-9A-Z]{26}$/);
     },
   },
 ];

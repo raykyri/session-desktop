@@ -48,7 +48,15 @@ export interface Item {
   url: string;
 }
 
-function ReportDialog({ item, space, onClose }: { item: Item; space: Space; onClose: () => void }) {
+export function ReportDialog({
+  item,
+  space,
+  onClose,
+}: {
+  item: Item;
+  space: Space;
+  onClose: () => void;
+}) {
   const write = useWrite();
   const session = useSession();
   const [why, setWhy] = useState("incorrect");
@@ -175,7 +183,7 @@ function RemoveDialog({ item, onClose }: { item: Item; onClose: () => void }) {
   );
 }
 
-function DeleteDialog({ item, onClose }: { item: Item; onClose: () => void }) {
+export function DeleteDialog({ item, onClose }: { item: Item; onClose: () => void }) {
   const write = useWrite();
   const n = item.kids;
   const noun =
