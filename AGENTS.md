@@ -287,7 +287,9 @@ rules above stay as they are. Decisions for the new client:
   - A run records each step's tokens as the step finishes, whatever ends
     it. After each step that calls tools the payer is read again; one with
     nothing left ends the run `tokens` (a key no longer valid: `key`), and
-    the thread keeps the tokens used (`tok`).
+    the thread keeps the tokens used (`tok`). Recorded tokens are what the
+    provider reported, so a payer can go over by up to one step per
+    concurrent run; this is accepted.
   - A ban, a removal or an archive ends the person's (the space's) server
     runs in its commit, and the runner stops their loop after it; each of a
     job's calls checks access and the archived state as `start` does.
