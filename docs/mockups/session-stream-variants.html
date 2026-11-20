@@ -10,7 +10,7 @@
   --page: #e9e6e1; --chrome: #f4f2ef; --pane: #fcfbf9; --feed: #f8f6f3; --card: #ffffff; --inset: #f5f2ee;
   --field: #ffffff; --control: #efece8; --control-hover: #e6e2dc; --control-border: #e0dbd4;
   --divider: #ebe7e2; --border-strong: #e1dcd6; --fill-subtle: rgba(0,0,0,.04); --fill-hover: rgba(0,0,0,.05);
-  --accent: #0a6fb8; --accent-soft: rgba(11,127,209,.12); --accent-strong: #095c98; --on-accent: #ffffff;
+  --accent: #0a6fb8; --accent-soft: rgba(11,127,209,.12); --accent-strong: #095c98; --on-accent: #ffffff; --on-accent-light: #ffffff;
   --t-heading: #121617; --t-primary: #23282a; --t-body: #33393b; --t-secondary: #4a5350; --t-muted: #5b625e;
   --t-faint: #686e6b; --t-dim: #9aa19d; --placeholder: #8e958f; --good: #2f8a4d; --warn: #9a6b12; --bad: #c0563f;
   --av1: #4a6a86; --av2: #77598c; --av3: #557a52; --av4: #93663f; --av5: #3d7778; --av6: #8a4f4f; --av-fg: #ffffff;
@@ -27,7 +27,7 @@
   --page: #121110; --chrome: #171716; --pane: #1c1b1a; --feed: #1a1918; --card: #211f1e; --inset: #181716;
   --field: #232220; --control: #282827; --control-hover: #313130; --control-border: #3d3d3c;
   --divider: #2d2d2c; --border-strong: #373634; --fill-subtle: rgba(255,255,255,.05); --fill-hover: rgba(255,255,255,.06);
-  --accent: #33adff; --accent-soft: rgba(51,173,255,.13); --accent-strong: #268fd6; --on-accent: #0f1413;
+  --accent: #33adff; --accent-soft: rgba(51,173,255,.13); --accent-strong: #268fd6; --on-accent: #0f1413; --on-accent-light: #ffffff;
   --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #919994;
   --t-faint: #828b86; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f; --bad: #e0796d;
   --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
@@ -40,7 +40,7 @@
   --page: #121110; --chrome: #171716; --pane: #1c1b1a; --feed: #1a1918; --card: #211f1e; --inset: #181716;
   --field: #232220; --control: #282827; --control-hover: #313130; --control-border: #3d3d3c;
   --divider: #2d2d2c; --border-strong: #373634; --fill-subtle: rgba(255,255,255,.05); --fill-hover: rgba(255,255,255,.06);
-  --accent: #33adff; --accent-soft: rgba(51,173,255,.13); --accent-strong: #268fd6; --on-accent: #0f1413;
+  --accent: #33adff; --accent-soft: rgba(51,173,255,.13); --accent-strong: #268fd6; --on-accent: #0f1413; --on-accent-light: #ffffff;
   --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #919994;
   --t-faint: #828b86; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f; --bad: #e0796d;
   --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
@@ -177,37 +177,17 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .mi-off { cursor: default; height: auto; padding: 7px 10px; color: var(--t-faint); }
 .mi-off small { display: block; font-size: var(--fs-xs); margin-top: 1px; }
 .mi-off:hover { background: none; }
-/* Stacked */
-.nb-stack { background: var(--card); border-radius: 18px; box-shadow: var(--shadow); padding: 12px 14px 8px; transition: box-shadow .15s; }
-.nb-stack:focus-within, .nb-tabs:focus-within, .nb-dock:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow-soft); }
-.nb-f2 { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-.grow { flex: 1; }
 /* Split */
 .split { display: inline-flex; flex: none; }
-.split-main { height: 30px; padding: 0 12px 0 14px; border-radius: 15px 0 0 15px; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: var(--fs-sm); }
-.split-more { height: 30px; width: 28px; display: inline-grid; place-items: center; border-radius: 0 15px 15px 0; background: var(--accent); color: var(--on-accent); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--on-accent) 35%, transparent); }
+.split-main { height: 30px; padding: 0 12px 0 14px; border-radius: 15px 0 0 15px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); }
+.split-more { height: 30px; width: 28px; display: inline-grid; place-items: center; border-radius: 0 15px 15px 0; background: var(--accent-strong); color: var(--on-accent-light); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--on-accent-light) 35%, transparent); }
 .split-more svg.i { width: 13px; height: 13px; }
-.nb:not(.has-text) .split-main, .nb:not(.has-text) .split-more { background: var(--control); color: var(--t-dim); box-shadow: inset 1px 0 0 var(--border-strong); }
+.nb:not(.has-text) .split-main, .nb:not(.has-text) .split-more { background: var(--control); color: var(--t-secondary); box-shadow: inset 1px 0 0 var(--border-strong); }
 .menu.right { left: auto; right: 0; }
 .mi-2 { height: auto; padding: 7px 10px; align-items: flex-start; }
 .mi-2 b { display: block; font-weight: 500; color: var(--t-heading); }
 .mi-2 small { display: block; font-size: var(--fs-xs); color: var(--t-faint); margin-top: 1px; }
 .mi-2 svg.i { margin-top: 3px; }
-/* Tabs */
-.nb-tabs { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); transition: box-shadow .15s; }
-.tabrow { display: flex; align-items: center; gap: 6px; padding: 0 10px 0 6px; border-bottom: 1px solid var(--divider); height: 42px; }
-.ctab { height: 42px; padding: 0 10px; font-size: var(--fs-sm); font-weight: 500; color: var(--t-muted); box-shadow: inset 0 -2px 0 transparent; }
-.ctab:hover { color: var(--t-heading); }
-.ctab[aria-pressed="true"] { color: var(--t-heading); box-shadow: inset 0 -2px 0 var(--t-heading); }
-.tabbody { display: flex; align-items: flex-end; gap: 8px; padding: 10px 10px 10px 14px; }
-.tabbody textarea { flex: 1; min-width: 0; font-size: 15.5px; }
-.tabbody .nb-f { margin: 0; }
-/* Verb */
-.nb-verb { padding-left: 7px; }
-.verb { display: inline-flex; align-items: center; gap: 3px; height: 26px; padding: 0 8px 0 10px; border-radius: 13px; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: var(--fs-sm); flex: none; }
-.verb.post { background: var(--control); color: var(--t-heading); }
-.verb svg.i { width: 12px; height: 12px; }
-.nb-verb .mpick { flex: none; }
 /* Modes */
 .nb-modecard { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 10px 14px 10px; transition: box-shadow .15s; }
 .nb-modecard:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow-soft); }
@@ -582,7 +562,7 @@ const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data
 /* ================= pinned maps ================= */
 /* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
    as a small outline tree per passage. */
-const st = { v: 'dock', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
+const st = { v: 'split', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
 
 /* Which model answered and at what thinking effort. The fixtures do not record it; the mock picks one
    per thread. Shown in a tooltip on the answer's icon. */
@@ -724,12 +704,8 @@ const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches i
 const TREE_NOTE = 'Posts keep the pinned branch trees and avatar reply trees.';
 const variant = (name, thesis, composer, dock = false) => ({ name, q: 'Composer', thesis: `${thesis} ${TREE_NOTE}`, composer, dock, replies: replyLines, layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); } });
 const V = {
-  dock: variant('Dock', '<strong>One rounded line.</strong> Your avatar, the text, an Ask/Post switch, the space and a send arrow, above the first post.', 'dock'),
-  stacked: variant('Stacked', '<strong>Text on top, controls underneath.</strong> The box grows with the text; the switch, space, model and send sit in one row at its foot, as in chat apps.', 'stacked'),
   split: variant('Split', '<strong>One button that knows both actions.</strong> No switch: the send button is split, and its arrow chooses whether it asks the agent or posts to people.', 'split'),
   modes: variant('Modes', '<strong>Choose the kind of thread first.</strong> Ask shows the model menu, with thinking effort inside it; Post hides it.', 'modes'),
-  tabs: variant('Tabs', '<strong>Ask and Post as tabs.</strong> The card has a tab row along its top edge with the space and model on the right; each tab has its own prompt.', 'tabs'),
-  verb: variant('Verb', '<strong>The verb leads the sentence.</strong> A chip at the start of the line reads Ask or Post and opens a menu to switch; the text reads on from it.', 'verb'),
 };
 
 /* ---- composers: start a thread. Each variant below uses one. The draft survives re-renders. ---- */
@@ -763,12 +739,6 @@ const isAsk = () => st.newMode === 'ask';
 const ph = () => isAsk() ? 'Ask anything' : 'Write a post';
 const modeSend = () => sendBtn(st.newMode, isAsk() ? 'Ask' : 'Post');
 const COMPOSERS = {
-  /* A: one rounded line: avatar, text, Ask/Post switch, space, send. */
-  dock: () => `<div class="row new-row"><form class="${nbClass('nb-dock')}" data-form="new:x">${av(F.me.u, 'sm')}${draft(ph())}
-    ${modeSeg()}${spaceField()}${modeSend()}</form><div></div></div>`,
-  /* B: the text on top, every control in one row underneath, inside the same rounded box. */
-  stacked: () => `<div class="row new-row"><form class="${nbClass('nb-stack')}" data-form="new:x">${draft(ph())}
-    <div class="nb-f2">${modeSeg()}${spaceField()}${isAsk() ? modelMenu() : ''}<span class="grow"></span>${modeSend()}</div></form><div></div></div>`,
   /* C: no switch; the send button is split, and its arrow chooses whether it asks or posts. */
   split: () => {
     const open = st.menu === 'send';
@@ -780,17 +750,6 @@ const COMPOSERS = {
   /* D: mode first; Ask shows the model menu (with effort inside), Post hides it. */
   modes: () => `<div class="row new-row"><form class="${nbClass('nb-modecard')}" data-form="new:x"><div class="nb-top">${modeSeg()}${spaceField()}${isAsk() ? modelMenu() : ''}</div>
     ${draft(ph())}<div class="nb-f"><button type="submit" value="${st.newMode}" class="primary" data-enter>${isAsk() ? 'Ask' : 'Post'}</button></div></form><div></div></div>`,
-  /* E: Ask and Post as tabs along the top edge of the card, settings on the right of the tab row. */
-  tabs: () => `<div class="row new-row"><form class="${nbClass('nb-tabs')}" data-form="new:x"><div class="tabrow">${['ask', 'post'].map(m => `<button type="button" class="ctab" data-a="mode" data-m="${m}" aria-pressed="${st.newMode === m}">${m === 'ask' ? 'Ask' : 'Post'}</button>`).join('')}<span class="grow"></span>${spaceField()}${isAsk() ? modelMenu() : ''}</div>
-    <div class="tabbody">${draft(isAsk() ? 'What should the agent research?' : 'What do you want to tell the space?')}<div class="nb-f">${modeSend()}</div></div></form><div></div></div>`,
-  /* F: the verb leads the sentence: a chip at the start of the line picks Ask or Post. */
-  verb: () => {
-    const open = st.menu === 'verb';
-    const opt = (m, t, sub) => `<button type="button" class="mi mi-2" role="menuitemradio" aria-checked="${st.newMode === m}" data-a="mode" data-m="${m}"><span><b>${t}</b><small>${sub}</small></span>${st.newMode === m ? CHECK : ''}</button>`;
-    return `<div class="row new-row"><form class="${nbClass('nb-dock nb-verb')}" data-form="new:x"><span class="mpick"><button type="button" class="verb${isAsk() ? '' : ' post'}" data-a="menu" data-m="verb" aria-haspopup="menu" aria-expanded="${open}">${isAsk() ? 'Ask' : 'Post'}${I.down}</button>
-      ${open ? `<div class="menu" role="menu">${opt('ask', 'Ask', 'The agent researches and answers')}${opt('post', 'Post', 'A message to people in the space')}</div>` : ''}</span>
-      ${draft(isAsk() ? 'anything' : 'to the space')}${spaceField()}${isAsk() ? modelMenu() : ''}${sendBtn(st.newMode, isAsk() ? 'Ask' : 'Post')}</form><div></div></div>`;
-  },
 };
 let nseq = 0;
 function newThread(space, q, kind) {
@@ -832,7 +791,7 @@ function renderBar() {
   $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${st.theme === k}">${l}</button>`).join('');
   $('#thesis').innerHTML = `<span class="qtag">${V[st.v].q}</span>` + V[st.v].thesis;
 }
-function go(v) { if (!V[v]) v = 'dock'; st.v = v; st.asking = null; renderBar(); render(); }
+function go(v) { if (!V[v]) v = 'split'; st.v = v; st.asking = null; renderBar(); render(); }
 $('#variant-seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { history.replaceState(null, '', '#' + b.dataset.v); go(b.dataset.v); } });
 $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; st.theme = b.dataset.t; if (st.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = st.theme; renderBar(); });
 
@@ -897,6 +856,6 @@ document.addEventListener('keydown', e => {
   if (e.key.length !== 1 || !k) return;
   e.preventDefault(); history.replaceState(null, '', '#' + k); go(k);
 });
-go(location.hash.slice(1) || 'dock');
+go(location.hash.slice(1) || 'split');
 document.fonts?.ready.then(() => render());
 </script>
