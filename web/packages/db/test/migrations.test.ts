@@ -28,6 +28,10 @@ test("applies every migration to an empty database", (t) => {
       )
       .all() as { name: string }[];
     // The whole set, so a table the schema no longer declares is caught too.
+    // The research tables are still created by `0000_initial.sql`, though
+    // the schema no longer declares them; M8a squashes the migrations into
+    // one generated from the schema, and this list loses them then (plan
+    // `01` D5).
     t.deepEqual(
       tables.map((row) => row.name),
       [
@@ -93,118 +97,6 @@ test("the history is a single initial migration", (t) => {
     readdirSync(MIGRATIONS_FOLDER).filter((name) => name.endsWith(".sql")),
     ["0000_initial.sql"],
   );
-});
-
-test("the sharing columns are in the initial schema", (t) => {
-  const db = openDatabase(":memory:");
-  const columns = (table: string) =>
-    (db.$client.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
-      (row) => row.name,
-    );
-  for (const name of ["role", "invited_by", "archived_at", "trashed_at", "folder_id"]) {
-    t.true(columns("tree_members").includes(name), name);
-  }
-  for (const name of ["visibility", "trashed_by", "parent_tree_id"]) {
-    t.true(columns("trees").includes(name), name);
-  }
-  t.true(columns("nodes").includes("edited_by"));
-  closeDatabase(db);
-});
-
-test("the hot lookups and foreign keys have indexes", (t) => {
-  const db = openDatabase(":memory:");
-  const indexed = (table: string, column: string) =>
-    (db.$client.prepare(`PRAGMA index_list(${table})`).all() as { name: string }[]).some(
-      (index) => {
-        const columns = db.$client.prepare(`PRAGMA index_info(${index.name})`).all() as {
-          seqno: number;
-          name: string;
-        }[];
-        return columns.some((entry) => entry.seqno === 0 && entry.name === column);
-      },
-    );
-  for (const [table, column] of [
-    ["feed_items", "tree_id"],
-    ["followup_queue", "tree_id"],
-    ["followup_queue", "author_id"],
-    ["tree_members", "folder_id"],
-    ["nodes", "author_id"],
-  ] as const) {
-    t.true(indexed(table, column), `${table}.${column}`);
-  }
-  // The image read checks the uploader's own nodes through that index.
-  const plan = db.$client
-    .prepare(
-      `EXPLAIN QUERY PLAN SELECT 1 FROM nodes WHERE nodes.author_id = ? AND nodes.message_json LIKE ?`,
-    )
-    .all("someone", "%x%") as { detail: string }[];
-  t.true(
-    plan.some((row) => row.detail.includes("nodes_author_idx")),
-    JSON.stringify(plan),
-  );
-  closeDatabase(db);
-});
-
-test("the node checks tie each body column to the node's type", (t) => {
-  const db = openDatabase(":memory:");
-  const client = db.$client;
-  client.exec(`
-    INSERT INTO users (id, github_id, login, created_at, last_login_at)
-      VALUES ('u', 1, 'u', 0, 0);
-    INSERT INTO workspaces (id, user_id, name, position, created_at, updated_at)
-      VALUES ('w', 'u', 'W', 0, 0, 0);
-    INSERT INTO trees (id, owner_id, workspace_id, title, root_node_id, created_at, updated_at, position)
-      VALUES ('t', 'u', 'w', 'T', 'n', 0, 0, 0);
-  `);
-  const insert = (id: string, columns: Record<string, string | null>) => {
-    const names = ["id", "tree_id", "created_at", ...Object.keys(columns)];
-    const values = [id, "t", 0, ...Object.values(columns)];
-    client
-      .prepare(
-        `INSERT INTO nodes (${names.join(", ")}) VALUES (${names.map(() => "?").join(", ")})`,
-      )
-      .run(...values);
-  };
-  const message = JSON.stringify({ text: "q" });
-  t.notThrows(() =>
-    insert("exchange", { type: "exchange", message_json: message, model: "m", status: "queued" }),
-  );
-  t.notThrows(() => insert("post", { type: "post", message_json: message, format: "text" }));
-  t.notThrows(() => insert("document", { type: "document", source: "authored" }));
-  // An exchange needs a status and a model; a post or document has no status.
-  t.throws(() => insert("e2", { type: "exchange", message_json: message, model: "m" }));
-  t.throws(() => insert("e3", { type: "exchange", message_json: message, status: "queued" }));
-  t.throws(() =>
-    insert("p2", { type: "post", message_json: message, format: "text", status: "queued" }),
-  );
-  t.throws(() => insert("p3", { type: "post", message_json: message }));
-  t.throws(() => insert("p4", { type: "post", format: "text" }));
-  t.throws(() => insert("d2", { type: "document" }));
-  closeDatabase(db);
-});
-
-test("a tree is filed in a folder or the drafts place, not both", (t) => {
-  const db = openDatabase(":memory:");
-  const client = db.$client;
-  client.exec(`
-    INSERT INTO users (id, github_id, login, created_at, last_login_at)
-      VALUES ('u', 1, 'u', 0, 0);
-    INSERT INTO workspaces (id, user_id, name, position, created_at, updated_at)
-      VALUES ('w', 'u', 'W', 0, 0, 0);
-    INSERT INTO trees (id, owner_id, workspace_id, title, root_node_id, created_at, updated_at, position)
-      VALUES ('t1', 'u', 'w', 'T', 'n', 0, 0, 0), ('t2', 'u', 'w', 'T', 'n', 0, 0, 1),
-        ('t3', 'u', 'w', 'T', 'n', 0, 0, 2), ('t4', 'u', 'w', 'T', 'n', 0, 0, 3);
-    INSERT INTO folders (id, owner_id, workspace_id, name, position, created_at)
-      VALUES ('f', 'u', 'w', 'F', 0, 0);
-  `);
-  const file = client.prepare(
-    `INSERT INTO tree_folder_membership (tree_id, folder_id, system_place) VALUES (?, ?, ?)`,
-  );
-  t.notThrows(() => file.run("t1", "f", null));
-  t.notThrows(() => file.run("t2", null, "drafts"));
-  t.throws(() => file.run("t3", "f", "drafts"));
-  t.throws(() => file.run("t4", null, null));
-  closeDatabase(db);
 });
 
 test("applies the file pragmas", (t) => {

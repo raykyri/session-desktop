@@ -34,7 +34,13 @@ import type { AttemptOutcome, RunRequest, RunStore } from "./store.js";
 import type { RunToolContext, ToolCaches } from "./tools/context.js";
 import { ToolBudget } from "./tools/context.js";
 import { buildTools } from "./tools/index.js";
-import { attemptUsageOf, costOf, recordAttemptUsage, recordToolUsage } from "./usage.js";
+import {
+  attemptUsageOf,
+  costOf,
+  recordAttemptUsage,
+  recordRunStart,
+  recordToolUsage,
+} from "./usage.js";
 
 /** `04-agent-runtime.md` §3. */
 export const MAX_STEPS = 25;
@@ -177,6 +183,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   };
 
   store.markRunning(request);
+  recordRunStart(db, userId, runId, resolved.entry);
 
   // ── request assembly ────────────────────────────────────────────────────
   const toolContext: RunToolContext = {

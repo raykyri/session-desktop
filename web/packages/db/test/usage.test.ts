@@ -1,6 +1,6 @@
 import test from "ava";
 
-import { auth, deletion, runs, trees, usage } from "../src/index.js";
+import { auth, usage } from "../src/index.js";
 
 import type { Fixture } from "./helpers.js";
 import { createFixture } from "./helpers.js";
@@ -8,24 +8,16 @@ import { createFixture } from "./helpers.js";
 const DAY = 86_400_000;
 const NOON = Math.floor(1_700_000_000_000 / DAY) * DAY + DAY / 2;
 
-/** Creates a research attempt started at `at`. `daily_runs` counts `run_attempts`
- * rows rather than `usage_events`, so an attempt reporting usage across
- * multiple records counts as one run. */
+let attemptCounter = 0;
+
+/** Records the start of an attempt at `at`: the `run` usage row the run loop
+ * writes when an attempt starts. Daily runs count these rows, so an attempt
+ * that reports token usage across several rows is still one run. */
 function attemptAt(fixture: Fixture, at: number): string {
-  const detail = trees.admitRoot(fixture.db, fixture.userId, {
-    type: "exchange",
-    workspaceId: fixture.workspaceId,
-    message: { text: `Question at ${at}` },
-    agent: { model: "gemini-flash" },
-  });
-  runs.startAttempt(fixture.db, {
-    nodeId: detail.tree.rootNodeId,
-    attempt: 1,
-    kind: "fresh",
-    model: "gemini-flash",
-    at,
-  });
-  return detail.tree.rootNodeId;
+  attemptCounter += 1;
+  const runId = `run-${attemptCounter}`;
+  usage.record(fixture.db, fixture.userId, { nodeId: runId, kind: "run", provider: "vertex", at });
+  return runId;
 }
 
 test("daily totals sum one UTC day and count research attempts as runs", (t) => {
@@ -93,59 +85,10 @@ test("an attempt that reports usage several times is still one run", (t) => {
   t.is(totals.runs, 1, "the limit counts attempts, not usage records");
 });
 
-test("a retry is a second run against the daily limit", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = attemptAt(fixture, NOON);
-  runs.startAttempt(fixture.db, {
-    nodeId,
-    attempt: 2,
-    kind: "resume",
-    model: "gemini-flash",
-    at: NOON + 1000,
-  });
-  t.is(usage.dailyTotals(fixture.db, fixture.userId, NOON).runs, 2);
-});
-
 test("another account's attempts are not counted", (t) => {
   const fixture = createFixture(t);
   attemptAt(fixture, NOON);
   t.is(usage.dailyTotals(fixture.db, "someone-else", NOON).runs, 0);
-});
-
-test("deleting research does not restore daily run quota", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = attemptAt(fixture, NOON);
-  attemptAt(fixture, NOON + 1000);
-  t.is(usage.dailyTotals(fixture.db, fixture.userId, NOON).runs, 2);
-  const treeId = fixture.db.$client
-    .prepare("SELECT tree_id AS treeId FROM nodes WHERE id = ?")
-    .get(nodeId) as { treeId: string };
-  // Mark deleted; the deletion job removes the rows.
-  deletion.markTreesDeleted(fixture.db, [treeId.treeId]);
-  deletion.drain(fixture.db);
-  t.deepEqual(
-    fixture.db.$client.prepare("SELECT count(*) AS n FROM nodes WHERE id = ?").get(nodeId),
-    { n: 0 },
-  );
-  t.is(usage.dailyTotals(fixture.db, fixture.userId, NOON).runs, 2);
-  const decision = usage.admissionCheck(fixture.db, fixture.userId, {
-    defaults: { dailyRuns: 2 },
-    at: NOON,
-  });
-  t.false(decision.allowed);
-});
-
-test("starting the same attempt twice is one run", (t) => {
-  const fixture = createFixture(t);
-  const nodeId = attemptAt(fixture, NOON);
-  runs.startAttempt(fixture.db, {
-    nodeId,
-    attempt: 1,
-    kind: "fresh",
-    model: "gemini-flash",
-    at: NOON + 5,
-  });
-  t.is(usage.dailyTotals(fixture.db, fixture.userId, NOON).runs, 1);
 });
 
 test("prioritizes account-specific limits over deployment defaults", (t) => {

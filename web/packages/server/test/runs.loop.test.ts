@@ -56,6 +56,11 @@ test("an attempt streams, commits its turns, and completes with an answer", asyn
   t.is(calls.at(-1)?.kind, "finish", "the outcome is the last write");
 
   const rows = usageRows(harness, request.runId);
+  t.deepEqual(
+    rows.find((row) => row.kind === "run"),
+    { kind: "run", n: 1 },
+    "one run row per attempt, for the daily run limit",
+  );
   t.true(rows.some((row) => row.kind === "research"));
   t.true(rows.some((row) => row.kind === "search" || row.kind === "fetch"));
 });

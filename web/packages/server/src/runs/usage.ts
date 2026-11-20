@@ -79,3 +79,20 @@ export function recordToolUsage(
     usageRepo.record(db, userId, { nodeId, kind, provider });
   }
 }
+
+/** The `run` row of an attempt that starts streaming. The daily run limit
+ * counts these rows (`usage.dailyTotals`), and they outlive the run they
+ * name. */
+export function recordRunStart(
+  db: SessionDatabase,
+  userId: string,
+  runId: string,
+  entry: ModelEntry,
+): void {
+  usageRepo.record(db, userId, {
+    nodeId: runId,
+    kind: "run",
+    provider: entry.provider,
+    model: entry.id,
+  });
+}
