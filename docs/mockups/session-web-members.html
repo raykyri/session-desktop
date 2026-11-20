@@ -407,6 +407,8 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .rhid { margin-left: 6px; font-size: 10.5px; color: var(--t-faint); font-variant-numeric: tabular-nums; }
 .rlike:not(:disabled):hover { color: var(--t-heading); }
 .rlike.on, .iconbtn.likes.on { color: var(--bad); }
+.iconbtn.rcount.on { color: var(--accent); }
+.iconbtn.rcount.on svg.i { fill: none; }
 .rlike.rrep.on { color: var(--t-heading); }
 .rlike.on svg.i, .iconbtn.likes.on svg.i { fill: currentColor; }
 .iconbtn.on:not(.likes) { color: var(--accent); }
@@ -1221,6 +1223,7 @@ function deleteItem(key) {
    small   20px avatar beside the name line, the composer's size
    gutter  20px avatar in a left gutter at the composer's position; text lines up with the composer's text
    footer  no header; a 20px avatar, name, space and time lead the footer row */
+const BUBBLE = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13 4.5v5a1.5 1.5 0 0 1-1.5 1.5H7l-3 2.5V11h0.5A1.5 1.5 0 0 1 3 9.5Z"/></svg>';
 const ARROW_REPLY = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 4 3 7.5 6.5 11"/><path d="M3.5 7.5h5.5a4 4 0 0 1 4 4v1"/></svg>';
 function card(p) {
   const mode = V[st.v].av || 'header';
@@ -1233,9 +1236,11 @@ function card(p) {
   const cls = `card av-${mode} pad-${V[st.v].pad || 'base'}`;
   const lk = 'p:' + p.id, nl = (p.likesBase || 0) + (LIKED()[lk] ? 1 : 0), off = canWrite() || st.auth === 'out' ? '' : ` disabled title="${st.auth === 'out' ? 'Sign in to like and save' : 'Liking opens once you have an invite'}"`;
   const acts = `<button class="iconbtn likes${LIKED()[lk] ? ' on' : ''}" data-a="like" data-k="${lk}" aria-pressed="${!!LIKED()[lk]}" aria-label="Like, ${nl} likes"${off}>${I.heart}<span>${nl}</span></button><button class="iconbtn${SAVED()[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!SAVED()[p.id]}" aria-label="${SAVED()[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}</button>`;
+  /* reply / follow-up button carries its count, like the like button */
+  const rbtn = (n, attrs, on, label, what) => `<button class="iconbtn likes rcount${on ? ' on' : ''}" ${canWrite() ? attrs : st.auth === 'out' ? 'data-ma="openauth"' : `disabled title="${label} opens once you have an invite"`} aria-pressed="${on}" aria-label="${label}${n ? `, ${noun(n, what[0], what[1])}` : ''}" title="${label}">${ARROW_REPLY}${n ? `<span>${n}</span>` : ''}</button>`;
   if (p.k === 'post') {
     const n = replyCount(p);
-    return `<article class="${cls}" id="card-${p.id}">${head}<p class="post">${esc(p.q)}</p><div class="card-f">${lead}${count(n ? noun(n, 'reply', 'replies') : '')}${canWrite() ? `<button class="iconbtn${st.replying === rkey(p, 'top') ? ' on' : ''}" data-a="replyopen" data-id="${rkey(p, 'top')}" aria-pressed="${st.replying === rkey(p, 'top')}" aria-label="Reply" title="Reply">${ARROW_REPLY}</button>` : ''}${acts}${tail}</div></article>`;
+    return `<article class="${cls}" id="card-${p.id}">${head}<p class="post">${esc(p.q)}</p><div class="card-f">${lead}${count('')}${rbtn(n, `data-a="replyopen" data-id="${rkey(p, 'top')}"`, st.replying === rkey(p, 'top'), 'Reply', ['reply', 'replies'])}${acts}${tail}</div></article>`;
   }
   const T = tree(p), src = (D.srcd[p.id] || []).length;
   const src0 = p.from && byId(p.from.pid) && tree(byId(p.from.pid)).nodes[p.from.nid] ? byId(p.from.pid) : null;
@@ -1243,7 +1248,7 @@ function card(p) {
   return `<article class="${cls}" id="card-${p.id}">${head}${from}<p class="ask">${esc(T.nodes.r.q)}</p>
     <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok)].filter(Boolean).join(' · ')}</span></div>
     <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
-    <div class="card-f">${lead}${count(T.count ? noun(T.count, 'branch', 'branches') : '')}${canWrite() && !p.pending ? `<button class="iconbtn${st.asking === p.id ? ' on' : ''}" data-a="ask" data-id="${p.id}" aria-pressed="${st.asking === p.id}" aria-label="Ask a follow-up" title="Ask a follow-up">${ARROW_REPLY}</button>` : ''}${acts}${tail}</div></article>`;
+    <div class="card-f">${lead}${count('')}${p.pending ? '' : rbtn(T.count, `data-a="ask" data-id="${p.id}"`, st.asking === p.id, 'Ask a follow-up', ['branch', 'branches'])}${acts}${tail}</div></article>`;
 }
 
 /* ---- passage matching: the fixtures do not store the passage a branch came from, so the mock picks
@@ -1311,17 +1316,19 @@ function preview(p, T, n) {
 function branchActs(p, n, k, promoted) {
   const open = promoted ? `<button class="tlink" data-a="gothread" data-id="${promoted}">Open thread</button>` : '';
   const b = (node, label, tip) => `<button class="tlink bact" data-a="askfrom" data-id="${p.id}" data-node="${node}" data-sel="${n.id}" title="${tip}">${I.agent}${label}</button>`;
+  const ckey = p.id + ':' + n.id + '/top', con = st.brReplying === ckey;
+  const cmt = `<button class="tlink bact${con ? ' on' : ''}" data-a="brreply" data-k="${ckey}" aria-pressed="${con}" title="Comment on this branch. Does not run an answer.">${BUBBLE}Comment</button>`;
   return `<div class="pf">${open}<span class="grow"></span>${canWrite() && !n.pending
-    ? b(n.id, 'Continue', 'Ask a new question under this answer. Runs an answer.') + b(n.par, 'Branch', 'Ask a different question at the same point, next to this one. Runs an answer.') : ''}</div>`;
+    ? cmt + b(n.id, 'Continue', 'Ask a new question under this answer. Runs an answer.') + b(n.par, 'Branch', 'Ask a different question at the same point, next to this one. Runs an answer.') : ''}</div>`;
 }
 /* replies on a branch's answer: a short discussion without running another ask */
 function branchReplies(p, n) {
   if (n.pending) return '';
   const key = p.id + ':' + n.id, rows = flatReplies(BRP[key] || []);
-  const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, 'Reply', '', 'Reply', 'brclose') : '';
-  if (!rows.length && !canWrite()) return '';
+  const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, at === 'top' ? 'Comment on this branch' : 'Reply', '', at === 'top' ? 'Comment' : 'Reply', 'brclose') : '';
+  if (!rows.length && st.brReplying !== key + '/top') return '';
   return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'reply', 'replies')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 3) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><div class="rtext">${fmtReply(r.t)}</div><div class="pf">${likeBtnK('b:' + rid(r), r)}${canWrite() ? replyIcon(`data-a="brreply" data-k="${key}/${id}"`, st.brReplying === key + '/' + id) : ''}</div>${box(id)}</div>`).join('')}
-    ${canWrite() && st.brReplying !== key + '/top' ? `<button class="tlink brp-add" data-a="brreply" data-k="${key}/top">Reply to this branch</button>` : ''}${box('top')}</div>`;
+    ${box('top')}</div>`;
 }
 const readout = (p, T, ns) => inGroup(T, ns, st.sel[p.id]) ? preview(p, T, T.nodes[st.sel[p.id]]) : '';
 
@@ -1427,7 +1434,7 @@ const COMPOSERS = {
     const opt = (m, t, sub) => `<button type="button" class="mi mi-2" role="menuitemradio" aria-checked="${st.newMode === m}" data-a="mode" data-m="${m}"><span><b>${t}</b><small>${sub}</small></span>${st.newMode === m ? CHECK : ''}</button>`;
     return `<div class="row new-row"><form class="${nbClass('nb-dock' + extra)}" data-form="new:x">${face ? av(me(), 'sm') : ''}${draft(ph())}${spaceField()}${isAsk() ? modelMenu() : ''}
       <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter${st.draft.trim() ? '' : ' disabled'}>${isAsk() ? 'Ask' : 'Post'}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
-      ${open ? `<div class="menu right" role="menu">${opt('ask', 'Ask', 'The agent researches and answers')}${opt('post', 'Post', 'A message to people in the channel')}</div>` : ''}</span></form><div></div></div>`;
+      ${open ? `<div class="menu right" role="menu">${opt('ask', 'Ask', 'Agent researches and answers')}${opt('post', 'Post', 'A message to people in the channel')}</div>` : ''}</span></form><div></div></div>`;
   },
   /* Split, with the avatar held at the first line and the controls at the last as the text grows. */
   splitEnds: () => COMPOSERS.split(' nb-a'),
