@@ -368,8 +368,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "N23 a decline reason survives the person asking again",
     file: "src/mutators.ts",
-    from: "        a,\n        why: null,\n        createdAt: old",
-    to: '        a,\n        why: old?.kind === "request" ? old.why : null,\n        createdAt: old',
+    from: "        a,\n        why: null,\n        retryAt: null,\n        createdAt: old",
+    to: '        a,\n        why: old?.kind === "request" ? old.why : null,\n        retryAt: null,\n        createdAt: old',
   },
   {
     name: "N24 control: one report in 32 notifies nobody",
@@ -703,8 +703,8 @@ const IN_PACKAGE: Record<string, PackageEdit> = {
   },
   N23: {
     file: "src/defs/members.ts",
-    from: "        a,\n        why: null,\n        createdAt: old",
-    to: "        a,\n        why: old ? old.why : null,\n        createdAt: old",
+    from: "        a,\n        why: null,\n        retryAt: null,\n        createdAt: old",
+    to: "        a,\n        why: old ? old.why : null,\n        retryAt: null,\n        createdAt: old",
   },
   // a restricting decision compares the rev too: the hide record's since
   // phase 1b (Part 0 item 3)

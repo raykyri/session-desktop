@@ -8,7 +8,7 @@ import test from "ava";
 import { DECLINE_WAIT_DAYS } from "../src/defs/members.js";
 import type { FollowUpRec, PagesRec, RequestRec, ThreadRec } from "../src/index.js";
 
-import type { World} from "./world.js";
+import type { World } from "./world.js";
 import { DAY, admit, cast, ok, refused, thread } from "./world.js";
 
 const rec = <T>(w: World, key: string) => w.get(key) as T;

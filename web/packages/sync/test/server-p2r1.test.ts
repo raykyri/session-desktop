@@ -141,10 +141,7 @@ for (const kind of STORES) {
     refused(t, again(a.th), "TOO_MANY_REQUESTS");
     // online: retryNode of a stopped ask
     const b = ask(w, "otto", open);
-    ok(
-      t,
-      w.server.call({ u: "otto" }, "research.cancelNode", { thread: b.th, node: "r" }),
-    );
+    ok(t, w.server.call({ u: "otto" }, "research.cancelNode", { thread: b.th, node: "r" }));
     const o = cast(t, kind, 2, { queuedRunsPerUser: 1 });
     const x = ask(o.w, "mel", o.open);
     t.is(

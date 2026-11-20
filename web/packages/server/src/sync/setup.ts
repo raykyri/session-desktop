@@ -20,7 +20,6 @@ import {
   type SyncServerOptions,
 } from "@session/sync/server";
 
-
 import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";
 

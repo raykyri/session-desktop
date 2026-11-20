@@ -205,7 +205,9 @@ export function predictEffects(
       // of phase 2, 2b design finding 6)
       out.result = (r) => {
         const x = r as { id?: unknown; space?: { kind?: unknown; id?: unknown; name?: unknown } };
-        const keys = Object.keys(x ?? {}).sort().join(",");
+        const keys = Object.keys(x ?? {})
+          .sort()
+          .join(",");
         if (x?.id !== id) return false;
         if (keys === "id") return true;
         return (
