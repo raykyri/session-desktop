@@ -1,0 +1,423 @@
+{
+  "scenario": "paced-answer",
+  "description": "A single answer paced slowly enough that a browser can reload in the middle of it. `slow-stream` is the unit-test pacer (nine deltas over 180 ms, asserted to the millisecond in runs.loop.test.ts); this is the same idea stretched to the seconds an end-to-end reload needs.",
+  "steps": [
+    {
+      "delayMs": 120,
+      "parts": [
+        {
+          "type": "stream-start",
+          "warnings": []
+        },
+        {
+          "type": "response-metadata",
+          "id": "fixture-e2e",
+          "modelId": "fixture"
+        },
+        {
+          "type": "text-start",
+          "id": "t0"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Consistent "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "hashing "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "places "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "both "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "keys "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "and "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "nodes "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "on "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "a "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "single "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "ring "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "of "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "hash "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "values, "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "so "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "a "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "node "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "that "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "joins "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "or "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "leaves "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "moves "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "only "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "the "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "keys "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "between "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "it "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "and "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "its "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "predecessor "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "rather "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "than "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "remapping "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "the "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "whole "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "space. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Virtual "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "nodes "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "smooth "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "the "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "distribution: "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "each "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "physical "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "node "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "claims "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "many "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "ring "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "positions, "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "which "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "keeps "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "the "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "load "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "within "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "a "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "narrow "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "band "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "even "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "when "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "the "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "cluster "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "is "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "small. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "The "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "trade "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "is "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "bookkeeping, "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "because "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "every "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "lookup "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "has "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "to "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "know "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "the "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "current "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "ring. "
+        },
+        {
+          "type": "text-end",
+          "id": "t0"
+        },
+        {
+          "type": "finish",
+          "finishReason": {
+            "unified": "stop",
+            "raw": "end_turn"
+          },
+          "usage": {
+            "inputTokens": {
+              "total": 400,
+              "noCache": 400,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "outputTokens": {
+              "total": 120,
+              "text": 120,
+              "reasoning": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

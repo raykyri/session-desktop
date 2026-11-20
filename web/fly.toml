@@ -1,0 +1,91 @@
+# Fly configuration (`docs/13-deployment-fly.md` §1, §2).
+#
+#   fly deploy web -c web/fly.toml
+#
+# The positional `web` is the build context; without it flyctl hands Docker
+# the repository root, where `package.json` is the desktop's.
+#
+# Enables token quota limits and invitation-only registration to restrict access and control LLM provider costs.
+# `SESSION_ENFORCE_LIMITS = "1"` makes the daily token and run limits refuse
+# rather than merely record; `SESSION_REQUIRE_INVITE = "1"` means an account is
+# created only against a code an admin minted. Turning either off is a
+# deliberate act, which is why they are here rather than defaulted in the code.
+#
+# Secrets (never here): GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
+# GOOGLE_APPLICATION_CREDENTIALS_JSON, OPENROUTER_API_KEY, ANTHROPIC_API_KEY,
+# PARALLEL_API_KEY, TAVILY_API_KEY, LITESTREAM_REPLICA_URL, AWS_ACCESS_KEY_ID,
+# AWS_SECRET_ACCESS_KEY, SESSION_METRICS_TOKEN, SESSION_ALLOWED_GITHUB_LOGINS,
+# SENTRY_DSN (`13` §4).
+
+app = "session-dev"
+primary_region = "sjc"
+
+# Enforces sequential deploys with graceful shutdown to release persistent volume mounts and complete active streaming responses.
+kill_signal = "SIGTERM"
+kill_timeout = "30s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "8080"
+  NODE_ENV = "production"
+  SESSION_PUBLIC_ORIGIN = "https://session.dev"
+  # The same site as session.dev, so widget scripts are off and widgets show
+  # their static page (the boot log says so). Widget scripts need a host on
+  # another registrable domain here (web/SETUP.md §2).
+  SESSION_ARTIFACT_ORIGIN = "https://artifacts.session.dev"
+  SESSION_DATA_DIR = "/data"
+  SESSION_RUNS_PER_USER = "2"
+  SESSION_QUEUED_PER_USER = "20"
+  SESSION_RUNS_GEMINI = "8"
+  SESSION_RUNS_OPENROUTER = "8"
+  SESSION_RUNS_ANTHROPIC = "2"
+  SESSION_RUN_TIMEOUT_SECONDS = "900"
+  # The embed-asset cache is disposable and shares the 20 GB mount with the
+  # database, so it is given a budget the sweep enforces.
+  SESSION_EMBED_CACHE_BYTES = "2147483648"
+  SESSION_ENFORCE_LIMITS = "1"
+  SESSION_DAILY_TOKENS = "1000000"
+  SESSION_DAILY_RUNS = "10"
+  SESSION_REQUIRE_INVITE = "1"
+  SESSION_SEARCH_VENDOR = "parallel"
+  GOOGLE_VERTEX_PROJECT = "session-dev"
+  GOOGLE_VERTEX_LOCATION = "global"
+
+[[mounts]]
+  source = "session_data"
+  destination = "/data"
+  initial_size = "20gb"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # A machine that stops loses the queue it was draining and the SSE clients
+  # attached to it; it stays up.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 400
+
+  # `/healthz` is 503 until migrations and run reconciliation finish and from
+  # the first moment of the drain (`13` §5), so the proxy follows the boot.
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"
+
+[deploy]
+  # Rolling deployments are not supported with dedicated single-mount volumes; the active instance must terminate before a replacement instance can mount the volume.
+  strategy = "immediate"

@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "exactOptionalPropertyTypes": true,
+    "types": ["node"]
+  },
+  "include": ["src", "test", "bin", "drizzle.config.ts"],
+  "references": [
+    {
+      "path": "../shared"
+    }
+  ]
+}

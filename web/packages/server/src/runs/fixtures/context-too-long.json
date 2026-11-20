@@ -1,0 +1,13 @@
+{
+  "scenario": "context-too-long",
+  "description": "The request does not fit the model's context window.",
+  "steps": [
+    {
+      "error": {
+        "kind": "api",
+        "statusCode": 400,
+        "message": "input token count 1200000 exceeds the maximum number of tokens allowed (1048576)"
+      }
+    }
+  ]
+}

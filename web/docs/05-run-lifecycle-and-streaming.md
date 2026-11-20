@@ -1,0 +1,191 @@
+# Run lifecycle, streaming, and state ownership
+
+Where a research run executes, what happens to its output while it runs and
+after failures, and how clients observe it.
+
+## 1. What users need from a run
+
+| Situation | Expected behavior |
+| --- | --- |
+| Submit a question | The node appears immediately as `queued`, then `running`, then text streams in |
+| Navigate away and come back | The document shows everything produced so far and continues streaming |
+| Close the tab, sleep the laptop, open the app on a phone | The run continues executing on the server |
+| Two tabs open on the same thread | Both show the same content and progress |
+| The server is deployed while a run is in progress | The run resumes automatically; the user sees at most a pause |
+| The network drops for a while | On reconnect the document catches up without duplicated or missing text |
+| Cancel | The stream stops within a second; the partial answer remains readable |
+| Many users at once | No run is silently starved; queued runs display their position |
+
+Two properties follow: run state is server-authoritative and reconstructable
+from one request, and a run is resumable from persisted state because the
+app stores the conversation (`04-agent-runtime.md` §4).
+
+## 2. State storage
+
+| State | Storage | Lifetime |
+| --- | --- | --- |
+| Node metadata (status, timestamps, error, model, attempt) | SQLite `nodes` | durable |
+| Canonical messages of completed nodes | SQLite `node_messages` | durable |
+| Committed turns of an active attempt | SQLite `run_turns` | until the final snapshot replaces them |
+| In-flight assistant text | memory + `run_turns` checkpoint ≤ 1 s stale | until committed |
+| Per-node sequence counter `seq` | SQLite `nodes.run_seq` | durable |
+| Final answer | SQLite `response_snapshots` | durable |
+| Open provider stream, `AbortController`, tool budgets | server memory | while the attempt runs |
+| Which node is open, scroll offsets, drafts | client: URL, stores, `interface_drafts` | per user |
+| Live turn buffer for visible nodes and `lastSeq` | client memory | while mounted |
+
+The client does not persist run state locally.
+
+## 3. Run state machine
+
+```
+queued ──► running ──► complete
+   │          ├──────► failed
+   │          ├──────► cancelled
+   │          └──────► interrupted ──► (auto-resume) ──► running
+   └────────────────► cancelled
+```
+
+- `queued`: waiting for an admission slot; payload includes `queuePosition`.
+- `running`: the provider stream is open (the desktop's `starting` state is
+  unnecessary; there is no process to spawn).
+- `complete`, `failed`, `cancelled`: terminal, monotonic.
+- `interrupted`: the server stopped mid-attempt (deploy, crash). Partial
+  output is kept and displayed. The server auto-resumes on boot (§7); after
+  two failed auto-resumes the node stays `interrupted` with Retry.
+
+Every transition writes the node row and emits `research.node.updated`.
+Every run-scoped event includes `seq`, per node, incremented for every event
+the server persists or forwards.
+
+## 4. Streaming protocol: snapshot plus ordered deltas
+
+1. Snapshot. `research.getNodeContent(nodeId)` returns
+   `{ node, turns, inFlightText, seq, children, responseRevision?,
+   sourceError?, queuePosition? }` — the same shape `03-api-and-events.md` §2
+   gives; the document view displays `sourceError` in its empty state
+   when a settled node has no turns to render.
+   For an active node, `turns` are committed turns from `run_turns` and
+   `inFlightText` the latest checkpoint.
+2. Deltas over the SSE subscription: `research.run.started`,
+   `research.turn.delta` (≤ 1 per 50 ms per node), `research.turn.committed`,
+   `research.run.finished`, plus `research.node.updated`.
+3. Client rule: apply only `seq === lastSeq + 1`; drop lower; on a gap
+   refetch the snapshot. Refetch also on mount, `visibilitychange`, and SSE
+   reconnect.
+4. Completion: after `research.run.finished` and a terminal `node.updated`
+   with `responseSnapshotAt`, fetch the durable snapshot once and drop the
+   live buffer. Live and durable paths produce the same `Turn[]`, so the
+   timeline transitions without visual flicker.
+5. Non-run events are not replayed; on reconnect the client invalidates list
+   queries.
+
+Deltas are delivered only to connections that declared interest in the node
+(`events.setInterest`); `research.node.updated` goes to all of the user's
+connections.
+
+## 5. Durability of run output
+
+- Committed turns are inserted into `run_turns` in the same transaction that
+  increments `nodes.run_seq`.
+- In-flight text is checkpointed at most once per second or every 4 KiB.
+- The final answer is written to `response_snapshots` with the desktop's
+  two-guard rule (an assistant text turn exists and two consecutive reads of
+  the live turns agree, `state.rs:8870`), the attempt's messages are appended
+  to `node_messages`, and `run_turns` for the node are deleted, in one
+  transaction with `synchronous=FULL`.
+
+## 6. Execution topology: one process
+
+Runs are open HTTPS streams to provider APIs with minimal in-memory state; there
+are no child processes. They execute inside the single web server process on
+the single Fly machine. The earlier plan's separate runner app was justified
+by CLI processes terminating during deployments; with owned conversation state,
+a deployment is handled by resuming (§7), making a single application process
+sufficient. If provider streams ever need to outlive the web process, the run
+loop module has no dependency on HTTP request context and can move behind a
+queue later.
+
+## 7. Interruption and resume
+
+On `SIGTERM` the server stops admitting, aborts open provider streams after
+persisting their last checkpoint, marks their nodes `interrupted` with
+`resume_pending = 1`, closes SSE connections, and exits. On boot, after
+migrations, the server re-queues every `resume_pending` node at the head of
+the queue. Resume re-issues the attempt from the node's persisted context:
+the interrupted attempt's committed tool exchanges are kept as context
+(persisted as canonical ModelMessage records), the in-flight partial assistant
+text is discarded, and the model continues from the last committed step.
+`attempt` increments and the new `run_attempts` row records `kind = "resume"`,
+which is also what the auto-resume cap counts. The status transitions to
+`running` and streaming resumes, replacing the discarded partial text.
+
+Retry (user action) on `failed`, `cancelled`, or `interrupted` starts a
+fresh attempt from the parent's context, discarding the node's own partial
+messages, as the desktop's retry did.
+
+Attempts are fenced by their number. Retry, Rerun, a resume and a 429
+re-queue all move `nodes.attempt` in the transaction that queues the node,
+and the run queue row belongs to the node's current attempt. A cancelled
+attempt can still be aborting its provider stream when Retry or Rerun
+queues the next one (both can arrive within the same millisecond). Before
+every write it checks that its number is still the node's
+(`nodes.attemptOf`); if the attempt number no longer matches, it writes no turns, status or events,
+closes only its own `run_attempts` row, records its usage, and ends as
+`superseded`. It releases the queue row only while it still owns it
+(`queue.releaseAttempt`). A claim of a node whose previous attempt is still
+active is re-queued with a 1 s `not_before` (`PREVIOUS_ATTEMPT_WAIT_MS`)
+instead of being dropped, and that attempt's settlement clears the wait. An
+abort that is not a drain is a cancel: the attempt writes `cancelled` if
+nothing else did.
+
+## 8. Admission and queueing
+
+Owned by the server: 2 concurrent research runs per user, per-provider caps
+(`04-agent-runtime.md` §10), FIFO by user then time, metadata pool separate.
+`queuePosition` is included in `research.node.updated` while `queued`.
+The user under whom a run is queued, capped, and billed (`run_queue.user_id`,
+usage events, daily limits) is the question author, not the thread owner:
+a commenter in a shared thread is billed for their questions, queued follow-ups
+upon dispatch, and any automatic title or recap jobs triggered by those runs;
+manual recap generation is billed to the requesting user
+(`02-domain-model-and-database.md` §5.16). Run events go to the thread's
+audience, not only to the author (`03-api-and-events.md` §3).
+Provider `429` responses re-queue with exponential backoff (5 s, 20 s, 60 s)
+rather than failing.
+Before a queued node's fresh attempt starts, the dispatcher re-checks its
+payer's daily limits; a refused node stays `queued` until the next UTC
+midnight with the reason as its run's `error` (`06-auth-and-users.md` §8).
+
+## 9. Client implementation summary
+
+- `liveTurns` store: `Map<nodeId, { turns, inFlightText, inFlightTurnId,
+  lastSeq, status }>`.
+- `useNodeContent(nodeId)` seeds from the snapshot, applies ordered deltas,
+  refetches on gaps; exposes `{ turns, inFlightText, source, error }`. Buffers are allocated only for nodes currently mounted in a view, preventing broadcast run events from accumulating state for unwatched nodes. The client waits for the terminal `research.node.updated` event before fetching the durable snapshot (since `research.run.finished` precedes the database transaction), clearing the live buffer only after the snapshot is successfully retrieved.
+- The event bridge applies run events to `liveTurns` and everything else to
+  the query cache in one 16 ms batch, and publishes the interest set.
+- If SSE cannot connect for 10 s, a 2 s snapshot poll runs for displayed
+  active nodes.
+
+## 10. Failure matrix
+
+| Failure | Effect | Recovery |
+| --- | --- | --- |
+| Client disconnects | Deltas missed | Snapshot refetch per displayed active node on reconnect |
+| Server deploy or crash | Streams cut | `interrupted` → auto-resume on boot from persisted context; ≤ 1 s of text re-sent |
+| Provider stream error mid-answer | Attempt ends | Classified: `rate_limited` re-queues with backoff; other provider errors marked `failed` with user-facing error messages; partial text kept |
+| Provider refusal (Fable) | `failed` with category | User retries or picks another model |
+| Context too long | `failed` | Context budget rules (`04` §4) make this rare; message suggests a new thread |
+| Tool vendor outage | Tool returns error results | Model continues without; run completes with fewer sources; vendor errors logged |
+| SQLite write error | `failed` ("response could not be preserved") | Live turns retained in memory for the process lifetime |
+
+## 11. Decisions recorded
+
+- Runs execute in the web server process; one Fly app.
+- Run state is server-authoritative with per-node sequence numbers; clients
+  hold no durable run state.
+- Output is durable at one-second granularity while streaming and exact at
+  completion; conversation history is owned by the app.
+- Deploys interrupt and auto-resume; `interrupted` is a first-class status.
+- The server does not maintain an event replay buffer; clients refetch state from the database upon reconnection.

@@ -1,0 +1,142 @@
+// Ported views call these wrappers, so each
+// one reaches the procedure `03-api-and-events.md` §2 names, with the input
+// that router's schema accepts. A recording client answers both questions
+// without a server.
+
+import test from "ava";
+
+import {
+  applyResearchRecapCandidate,
+  archiveResearchTree,
+  cancelResearchNode,
+  createResearchHighlight,
+  createResearchTree,
+  forkResearchNode,
+  getMe,
+  getResearchNodeContent,
+  getResearchTree,
+  gitHubSignInUrl,
+  listRecentActivity,
+  listResearchTrees,
+  removeResearchBranch,
+  retryResearchNode,
+  setDraft,
+  setEventInterest,
+  setResearchFolders,
+  updateSettings,
+} from "../src/api/api.js";
+import { setTrpcClient } from "../src/api/trpc.js";
+
+import { createTrpcStub, type TrpcStub } from "./trpcStub.js";
+
+const EMPTY_FOLDERS = {
+  folders: [],
+  membership: {},
+  collapsed: [],
+  parents: {},
+  collapsedGroups: [],
+};
+
+let stub: TrpcStub;
+
+test.beforeEach(() => {
+  // `getResearchNodeContent` reads the answer it is given: it restates `turns`
+  // against the shared type and hands the rest of the payload through, so the
+  // stub has to answer with a payload rather than `undefined`.
+  stub = createTrpcStub({
+    "research.getNodeContent": { node: {}, turns: [], children: [], seq: 0 },
+  });
+  setTrpcClient(stub.client);
+});
+
+test.serial("reads reach the query procedures with their inputs", async (t) => {
+  await getMe();
+  await getResearchTree("t1");
+  await listResearchTrees({ workspaceId: "w1", includeArchived: true });
+  await getResearchNodeContent("n1");
+  await listRecentActivity({ scope: "workspace", workspaceId: "w1" });
+
+  t.deepEqual(stub.calls, [
+    { path: "auth.me", kind: "query", input: undefined },
+    { path: "research.getTree", kind: "query", input: { treeId: "t1" } },
+    {
+      path: "research.listTrees",
+      kind: "query",
+      input: { workspaceId: "w1", includeArchived: true },
+    },
+    { path: "research.getNodeContent", kind: "query", input: { nodeId: "n1" } },
+    {
+      path: "feed.recentActivity",
+      kind: "query",
+      input: { scope: "workspace", workspaceId: "w1" },
+    },
+  ]);
+});
+
+test.serial("writes reach the mutation procedures with their inputs", async (t) => {
+  await createResearchTree({ prompt: "why", model: "gemini-flash", workspaceId: "w1" });
+  await forkResearchNode({ parentNodeId: "n1", prompt: "and then?" });
+  await retryResearchNode("n1");
+  await retryResearchNode("n1", "claude-sonnet");
+  await cancelResearchNode("n1");
+  await archiveResearchTree("t1");
+  await removeResearchBranch("n2");
+  await createResearchHighlight("n1", {
+    version: 1,
+    projection: "answer-v1",
+    responseRevision: "r1",
+    start: 0,
+    end: 4,
+    exact: "text",
+    prefix: "",
+    suffix: "",
+  });
+  await applyResearchRecapCandidate({
+    nodeId: "n1",
+    expectedResponseRevision: "r1",
+    candidate: {
+      id: "rc1",
+      text: "a recap",
+      responseRevision: "r1",
+      generatedAt: 1_700_000_000_000,
+      adapter: "gemini",
+      model: "gemini-flash",
+      instructions: "short",
+    },
+  });
+  await setResearchFolders("w1", EMPTY_FOLDERS);
+  await updateSettings({ researchLaunchInstruction: "be brief" });
+  await setDraft("home:w1", "{}");
+  await setEventInterest("c1", ["n1", "n2"]);
+
+  t.deepEqual(
+    stub.calls.map((call) => call.path),
+    [
+      "research.createTree",
+      "research.forkNode",
+      "research.retryNode",
+      "research.retryNode",
+      "research.cancelNode",
+      "research.archiveTree",
+      "research.removeBranch",
+      "highlights.create",
+      "recaps.applyCandidate",
+      "folders.set",
+      "settings.update",
+      "interfaceDrafts.set",
+      "events.setInterest",
+    ],
+  );
+  t.true(stub.calls.every((call) => call.kind === "mutate"));
+  t.deepEqual(stub.calls[2]?.input, { nodeId: "n1" }, "an absent model is omitted, not null");
+  t.deepEqual(stub.calls[3]?.input, { nodeId: "n1", model: "claude-sonnet" });
+  t.deepEqual(stub.calls[12]?.input, { connectionId: "c1", nodeIds: ["n1", "n2"], treeIds: [] });
+});
+
+test.serial("sign-in carries the return path and the invite code", (t) => {
+  t.is(gitHubSignInUrl(), "/auth/github");
+  t.is(
+    gitHubSignInUrl("/r/t1?node=n1", "invite-code"),
+    "/auth/github?return_to=%2Fr%2Ft1%3Fnode%3Dn1&invite=invite-code",
+  );
+});

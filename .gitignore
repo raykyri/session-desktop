@@ -1,0 +1,21 @@
+node_modules/
+dist/
+web/**/dist/
+web/.data/
+target/
+src-tauri/target/
+src-tauri/gen/
+/packages/
+
+.env
+.DS_Store
+
+.codex/
+.claude/
+
+# Legacy in-repo session dir: older builds stored session data and thread graphs
+# in the checkout. Active state now lives in the global Session data root, but keep
+# this ignored so legacy data and retained thread recovery copies are never
+# accidentally committed.
+.session/
+src-tauri/swift-native-support/.build/

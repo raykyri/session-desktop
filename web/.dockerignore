@@ -1,0 +1,27 @@
+# Build context for `web/Dockerfile` (`docs/13-deployment-fly.md` §3).
+#
+# An allowlist: everything is excluded, then the sources the build needs are
+# added back. A new top-level file therefore stays out of the image until
+# someone lists it, which is the way round that fails safe for `.env`.
+
+*
+
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.base.json
+!litestream.yml
+!packages
+!scripts
+
+# …minus what `packages/**` would otherwise drag in. `dist` is rebuilt inside
+# the image; a host build would otherwise shadow it.
+node_modules
+**/node_modules
+**/dist
+**/.data
+**/*.tsbuildinfo
+docs
+.data
+.env
+.env.*

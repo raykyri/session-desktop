@@ -1,0 +1,43 @@
+{
+  "name": "@session/shared",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./src/index.ts"
+    },
+    "./wire": {
+      "types": "./dist/src/wire/index.d.ts",
+      "default": "./src/wire/index.ts"
+    },
+    "./schemas": {
+      "types": "./dist/src/schemas/index.d.ts",
+      "default": "./src/schemas/index.ts"
+    },
+    "./lib/*": {
+      "types": "./dist/src/lib/*.d.ts",
+      "default": "./src/lib/*.ts"
+    }
+  },
+  "scripts": {
+    "test": "ava"
+  },
+  "dependencies": {
+    "mdast-util-from-markdown": "^2.0.3",
+    "rehype-mathjax": "^7.1.0",
+    "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4"
+  }
+}

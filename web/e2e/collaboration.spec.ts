@@ -1,0 +1,537 @@
+// Sharing a thread between accounts and a guest, each in its own browser
+// context (`02-domain-model-and-database.md` §5.16). The first tests go
+// through the sharing UI: the Share dialog's invitation links, a commenter's
+// question seen live by the owner, a viewer's and a guest's read-only page,
+// and the stale-edit prompt. The rest drive the server through its tRPC
+// endpoint with each context's own session cookie.
+
+import { expect, test, type Page } from "@playwright/test";
+
+import { APP_ORIGIN } from "./constants.js";
+import {
+  completedThread,
+  mutation,
+  query,
+  refusal,
+  signedInContext,
+  signIn,
+  type Detail,
+} from "./helpers.js";
+
+/** Opens the root's menu and the Share dialog on a thread page; for anyone
+ * but the owner it is "People…" and "People in “…”". */
+async function openShareDialog(page: Page, { owner = true }: { owner?: boolean } = {}) {
+  await page.getByRole("button", { name: "Thread actions" }).click();
+  await page.getByRole("menuitem", { name: owner ? "Share…" : "People…" }).click();
+  return page.getByRole("dialog", { name: owner ? /^Share “/ : /^People in “/ });
+}
+
+/** An invitation link's path and fragment (`/invite#<token>`), to open it on
+ * this server. */
+function invitePath(link: string): string {
+  const url = new URL(link);
+  return `${url.pathname}${url.hash}`;
+}
+
+/** Copies an invitation link from the open Share dialog and reads it back. */
+async function copyInviteLink(dialog: ReturnType<Page["getByRole"]>): Promise<string> {
+  const field = dialog.getByRole("textbox", { name: "Invitation link" });
+  const before = (await field.count()) > 0 ? await field.inputValue() : "";
+  await dialog.getByRole("button", { name: "Copy invitation link" }).click();
+  await expect(field).not.toHaveValue(before);
+  return field.inputValue();
+}
+
+test("the owner shares by link; the commenter asks, live for the owner; the viewer only reads", async ({
+  browser,
+}) => {
+  const owner = await signedInContext(browser, "e2e-ui-owner");
+  const commenter = await signedInContext(browser, "e2e-ui-commenter");
+  const viewer = await signedInContext(browser, "e2e-ui-viewer");
+  try {
+    const prompt = "What does sharing through the dialog look like?";
+    const detail = await completedThread(owner.page, prompt);
+    const treeId = detail.tree.id;
+    await owner.page.goto(`/r/${treeId}`);
+    await expect(owner.page.getByText(prompt).first()).toBeVisible();
+
+    const dialog = await openShareDialog(owner.page);
+    await expect(dialog.locator(`[data-share-member="${owner.user.login}"]`)).toContainText(
+      "Owner",
+    );
+    const commenterLink = await copyInviteLink(dialog);
+    // The token is the fragment: no request for the link carries it.
+    expect(commenterLink).toMatch(/\/invite#[^/#]+$/);
+    await dialog.getByRole("combobox", { name: "Role for the invitation" }).click();
+    await owner.page.getByRole("option", { name: /^Viewer/ }).click();
+    const viewerLink = await copyInviteLink(dialog);
+    expect(viewerLink).not.toBe(commenterLink);
+    await expect(dialog.getByRole("list").filter({ hasText: "Invitation link" })).toBeVisible();
+    await dialog.getByRole("button", { name: "Done" }).click();
+
+    // The commenter accepts the link and lands on the thread.
+    await commenter.page.goto(invitePath(commenterLink));
+    await commenter.page.waitForURL(new RegExp(`/r/${treeId}`));
+    const before = await query<{ runs: number }>(commenter.request, "usage.summary", undefined);
+    const field = commenter.page.getByRole("textbox", { name: "Follow-up in this conversation" });
+    await field.click();
+    const question = "A question from the commenter";
+    await field.fill(question);
+    await commenter.page.keyboard.press("ControlOrMeta+Enter");
+    await expect(commenter.page.getByText(question).first()).toBeVisible();
+    // Asker pays.
+    await expect
+      .poll(
+        async () =>
+          (await query<{ runs: number }>(commenter.request, "usage.summary", undefined)).runs,
+      )
+      .toBe(before.runs + 1);
+
+    // The owner sees the commenter's question arrive without reloading,
+    // credited to them, and opens its answer.
+    const row = owner.page.locator("[data-research-msg-row]", { hasText: question });
+    await expect(row).toBeVisible();
+    await expect(row.locator("[data-author-chip]")).toContainText(commenter.user.login);
+    await row.locator("[data-research-row]").click();
+    await expect(owner.page.locator("[data-research-response-root]").last()).not.toBeEmpty({
+      timeout: 60_000,
+    });
+
+    // The viewer reads and cannot ask.
+    await viewer.page.goto(invitePath(viewerLink));
+    await viewer.page.waitForURL(new RegExp(`/r/${treeId}`));
+    await expect(viewer.page.getByText(prompt).first()).toBeVisible();
+    await expect(viewer.page.getByText(question).first()).toBeVisible();
+    await expect(
+      viewer.page.getByRole("textbox", { name: "Follow-up in this conversation" }),
+    ).toHaveCount(0);
+    const people = await openShareDialog(viewer.page, { owner: false });
+    await expect(people.locator(`[data-share-member="${viewer.user.login}"]`)).toContainText(
+      "Viewer",
+    );
+    await expect(people.getByRole("radio")).toHaveCount(0);
+  } finally {
+    await Promise.all([owner.context.close(), commenter.context.close(), viewer.context.close()]);
+  }
+});
+
+test("an invitation is counted on Shared with me; a commenter's Delete moves to their Trash or leaves", async ({
+  browser,
+}) => {
+  const owner = await signedInContext(browser, "e2e-ui-badge-owner");
+  const member = await signedInContext(browser, "e2e-ui-badge-member");
+  try {
+    const prompt = "Who keeps a thread when a member deletes it?";
+    const detail = await completedThread(owner.page, prompt);
+    const treeId = detail.tree.id;
+    const { invite } = await mutation<{ invite: { id: string } }>(owner.request, "invites.create", {
+      treeId,
+      role: "commenter",
+      githubLogin: member.user.login,
+    });
+    await member.page.goto("/");
+    const shared = member.page
+      .getByRole("navigation", { name: "Research" })
+      .getByRole("link", { name: "Shared with me, 1 invitation" });
+    await expect(shared).toBeVisible();
+    await mutation(member.request, "invites.accept", { inviteId: invite.id });
+
+    await member.page.goto(`/r/${treeId}`);
+    await expect(member.page.getByText(prompt).first()).toBeVisible();
+    await member.page.getByRole("button", { name: "Thread actions" }).click();
+    await member.page.getByRole("menuitem", { name: "Delete research" }).click();
+    const dialog = member.page.getByRole("dialog", { name: /^Delete “/ });
+    await expect(
+      dialog.getByText(
+        "It moves to your Trash. Its owner and the other people in it still have it.",
+      ),
+    ).toBeVisible();
+    await dialog.getByRole("button", { name: "Delete now" }).click();
+    const leave = member.page.getByRole("dialog", { name: /^Leave “/ });
+    await expect(leave.getByRole("button", { name: "Leave" })).toBeVisible();
+    await expect(member.page.getByText("Delete permanently?")).toHaveCount(0);
+    await leave.getByRole("button", { name: "Leave" }).click();
+    await member.page.waitForURL((url) => url.pathname === "/");
+    const left = await member.request.get(
+      `${APP_ORIGIN}/api/trpc/research.getTree?input=${encodeURIComponent(JSON.stringify({ treeId }))}`,
+    );
+    expect(left.ok(), "the member left the thread").toBe(false);
+    // The owner keeps it.
+    await query(owner.request, "research.getTree", { treeId });
+  } finally {
+    await Promise.all([owner.context.close(), member.context.close()]);
+  }
+});
+
+test("a removed member cannot rejoin through an earlier link; a new link lets them back", async ({
+  browser,
+}) => {
+  const owner = await signedInContext(browser, "e2e-ui-remove-owner");
+  const member = await signedInContext(browser, "e2e-ui-removed");
+  const newcomer = await signedInContext(browser, "e2e-ui-newcomer");
+  try {
+    const prompt = "Can a removed member come back through a link?";
+    const detail = await completedThread(owner.page, prompt);
+    const treeId = detail.tree.id;
+    await owner.page.goto(`/r/${treeId}`);
+    await expect(owner.page.getByText(prompt).first()).toBeVisible();
+    const dialog = await openShareDialog(owner.page);
+    const link = await copyInviteLink(dialog);
+
+    await member.page.goto(invitePath(link));
+    await member.page.waitForURL(new RegExp(`/r/${treeId}`));
+
+    // The owner removes them while the link is still pending.
+    const row = dialog.locator(`[data-share-member="${member.user.login}"]`);
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: /^Remove / }).click();
+    await expect(row).toHaveCount(0);
+    await expect(dialog.locator("[data-share-link-notice]")).toHaveText(
+      "Links you’ve shared still let new people join; revoke them to stop that.",
+    );
+
+    // The link no longer lets them in, but it still lets someone else in.
+    await member.page.goto(invitePath(link));
+    await expect(member.page.getByRole("alert")).toHaveText("You were removed from this thread.");
+    await newcomer.page.goto(invitePath(link));
+    await newcomer.page.waitForURL(new RegExp(`/r/${treeId}`));
+
+    // A link created after the removal admits them again.
+    const newLink = await copyInviteLink(dialog);
+    await member.page.goto(invitePath(newLink));
+    await member.page.waitForURL(new RegExp(`/r/${treeId}`));
+    await expect(member.page.getByText(prompt).first()).toBeVisible();
+  } finally {
+    await Promise.all([owner.context.close(), member.context.close(), newcomer.context.close()]);
+  }
+});
+
+test("signed out, an invitation link signs in first; the token stays out of the URL", async ({
+  browser,
+}) => {
+  const owner = await signedInContext(browser, "e2e-fragment-owner");
+  const guestContext = await browser.newContext();
+  const guest = await guestContext.newPage();
+  const legacy = await signedInContext(browser, "e2e-fragment-legacy");
+  try {
+    const detail = await completedThread(owner.page, "Does an invitation survive the sign-in?");
+    const treeId = detail.tree.id;
+    const link = await mutation<{ url: string; token: string }>(owner.request, "invites.create", {
+      treeId,
+      role: "viewer",
+    });
+    expect(new URL(link.url).hash).toBe(`#${link.token}`);
+
+    // Signed out: the token leaves the address bar and the sign-in redirect
+    // names only /invite.
+    await guest.goto(invitePath(link.url));
+    await guest.waitForURL(/\/login\?/);
+    expect(guest.url()).not.toContain(link.token);
+    expect(new URL(guest.url()).searchParams.get("redirect")).toBe("/invite");
+    // The test sign-in stands in for GitHub's round trip, which returns to
+    // /invite; the token waited in this tab's sessionStorage.
+    const user = await signIn(guest, { login: "e2e-fragment-guest" });
+    await guest.goto("/invite");
+    await guest.waitForURL(new RegExp(`/r/${treeId}`));
+    expect(guest.url()).not.toContain(link.token);
+    const members = await query<{ login: string; role: string }[]>(
+      owner.request,
+      "sharing.listMembers",
+      { treeId },
+    );
+    expect(members.find((member) => member.login === user.login)?.role).toBe("viewer");
+
+    // A link in the earlier form, /invite/<token>, still works.
+    await legacy.page.goto(`/invite/${encodeURIComponent(link.token)}`);
+    await legacy.page.waitForURL(new RegExp(`/r/${treeId}`));
+    expect(legacy.page.url()).not.toContain(link.token);
+  } finally {
+    await Promise.all([owner.context.close(), guestContext.close(), legacy.context.close()]);
+  }
+});
+
+test("a member's question lands in the owner's inbox, which opens it and marks it read", async ({
+  browser,
+}) => {
+  const owner = await signedInContext(browser, "e2e-inbox-owner");
+  const member = await signedInContext(browser, "e2e-inbox-member");
+  try {
+    const detail = await completedThread(owner.page, "Who hears about a member's question?");
+    const treeId = detail.tree.id;
+    const rootId = detail.nodes[0]!.id;
+    const link = await mutation<{ token: string }>(owner.request, "invites.create", {
+      treeId,
+      role: "commenter",
+    });
+    await mutation(member.request, "invites.accept", { token: link.token });
+
+    await owner.page.goto("/");
+    const places = owner.page.getByRole("navigation", { name: "Research" });
+    // The owner's own first run finishing is already in the inbox.
+    await expect(places.getByRole("link", { name: "Notifications, 1 unread" })).toBeVisible();
+    await mutation(owner.request, "notifications.markAllRead", undefined);
+    // Read in another tab (here, a request): this page's badge goes too.
+    await expect(places.getByRole("link", { name: "Notifications", exact: true })).toBeVisible();
+
+    // The owner follows their own thread, so a member's question notifies
+    // them; the badge appears without a reload.
+    const asked = await mutation<{ node?: { id: string } }>(member.request, "followups.ask", {
+      headNodeId: rootId,
+      prompt: "A question for the owner's inbox",
+    });
+    const badge = places.getByRole("link", { name: "Notifications, 1 unread" });
+    await expect(badge).toBeVisible();
+    await badge.click();
+    await owner.page.waitForURL(/\/notifications/);
+    const item = owner.page.getByRole("button", { name: /^Unread: New question in / });
+    await expect(item).toBeVisible();
+    await item.click();
+    await owner.page.waitForURL(new RegExp(`/r/${treeId}\\?.*sel=${asked.node?.id ?? ""}`));
+    await expect(places.getByRole("link", { name: "Notifications", exact: true })).toBeVisible();
+    expect(
+      (await query<{ count: number }>(owner.request, "notifications.unreadCount", undefined)).count,
+    ).toBe(0);
+
+    // The member hears that their run finished, and clears it with Mark all
+    // as read.
+    await member.page.goto("/notifications");
+    await expect(
+      member.page.getByRole("button", { name: /^Unread: Research (finished|failed)$/ }),
+    ).toBeVisible({ timeout: 60_000 });
+    const markAll = member.page.getByRole("button", { name: "Mark all as read" });
+    await markAll.click();
+    await expect(markAll).toBeDisabled();
+    await expect(
+      member.page.getByRole("button", { name: /^Research (finished|failed)$/ }),
+    ).toBeVisible();
+  } finally {
+    await Promise.all([owner.context.close(), member.context.close()]);
+  }
+});
+
+test("a thread made public in the Share dialog opens for a guest, read-only", async ({
+  browser,
+}) => {
+  const owner = await signedInContext(browser, "e2e-ui-public-owner");
+  const guest = await browser.newContext();
+  try {
+    const prompt = "Can a guest read a public thread?";
+    const detail = await completedThread(owner.page, prompt);
+    const treeId = detail.tree.id;
+    await owner.page.goto(`/r/${treeId}`);
+    const dialog = await openShareDialog(owner.page);
+    const publicChoice = dialog.getByRole("radio", { name: /Public/ });
+    await publicChoice.click();
+    await expect(publicChoice).toBeChecked();
+    await expect
+      .poll(
+        async () =>
+          (
+            await query<{ tree: { visibility?: string } }>(owner.request, "research.getTree", {
+              treeId,
+            })
+          ).tree.visibility,
+      )
+      .toBe("public");
+
+    const page = await guest.newPage();
+    await page.goto(`/r/${treeId}`);
+    await expect(page.getByText(prompt).first()).toBeVisible();
+    await expect(page.locator("[data-research-response-root]").first()).not.toBeEmpty();
+    await expect(page.getByRole("textbox", { name: "Follow-up in this conversation" })).toHaveCount(
+      0,
+    );
+  } finally {
+    await Promise.all([owner.context.close(), guest.close()]);
+  }
+});
+
+test("a stale note edit prompts to reload and keeps the text", async ({ browser }) => {
+  const owner = await signedInContext(browser, "e2e-ui-stale-owner");
+  try {
+    const workspace = await mutation<{ id: string }>(owner.request, "workspaces.ensureDefault", {});
+    const post = await mutation<Detail>(owner.request, "research.createPost", {
+      body: "The note as first written",
+      workspaceId: workspace.id,
+      model: "gemini-flash",
+    });
+    const nodeId = post.nodes[0]!.id;
+    await owner.page.goto(`/r/${post.tree.id}`);
+    await owner.page
+      .getByRole("region", { name: /^Note:/ })
+      .getByText("The note as first written")
+      .dblclick();
+    const field = owner.page.getByRole("textbox", { name: "Note text" });
+    await field.fill("My edit in the open editor");
+    // Another editor saves first.
+    await mutation(owner.request, "research.updatePost", {
+      nodeId,
+      text: "A version saved elsewhere",
+      expectedText: "The note as first written",
+    });
+    await owner.page.getByRole("button", { name: /^Save/ }).click();
+    const prompt = owner.page.getByRole("dialog", { name: "This note changed" });
+    await expect(prompt).toBeVisible();
+    await expect(prompt.getByRole("textbox", { name: "Your text" })).toHaveValue(
+      "My edit in the open editor",
+    );
+    await prompt.getByRole("button", { name: "Reload latest version" }).click();
+    await expect(prompt).toHaveCount(0);
+    await expect(field).toHaveValue("My edit in the open editor");
+    await owner.page.getByRole("button", { name: /^Save/ }).click();
+    await expect
+      .poll(
+        async () =>
+          (
+            await query<{ nodes: { message?: { text: string } }[] }>(
+              owner.request,
+              "research.getTree",
+              { treeId: post.tree.id },
+            )
+          ).nodes[0]?.message?.text,
+      )
+      .toBe("My edit in the open editor");
+  } finally {
+    await owner.context.close();
+  }
+});
+
+test("invite and accept; the commenter asks and pays; the viewer cannot ask", async ({
+  browser,
+}) => {
+  const owner = await signedInContext(browser, "e2e-share-owner");
+  const commenter = await signedInContext(browser, "e2e-share-commenter");
+  const viewer = await signedInContext(browser, "e2e-share-viewer");
+  try {
+    const detail = await completedThread(owner.page, "What does a shared thread look like?");
+    const treeId = detail.tree.id;
+    const rootId = detail.nodes[0]!.id;
+
+    // Not readable before the invitation is accepted.
+    expect(
+      await refusal(commenter.request, "followups.ask", { headNodeId: rootId, prompt: "x" }),
+    ).toBe("NOT_FOUND");
+    const link = await mutation<{ token: string }>(owner.request, "invites.create", {
+      treeId,
+      role: "commenter",
+    });
+    const joined = await mutation<{ role: string }>(commenter.request, "invites.accept", {
+      token: link.token,
+    });
+    expect(joined.role).toBe("commenter");
+    const byLogin = await mutation<{ invite: { id: string } }>(owner.request, "invites.create", {
+      treeId,
+      role: "viewer",
+      githubLogin: viewer.user.login,
+    });
+    await mutation(viewer.request, "invites.accept", { inviteId: byLogin.invite.id });
+
+    const before = await query<{ runs: number }>(commenter.request, "usage.summary", undefined);
+    const asked = await mutation<{ kind: string; node?: { id: string; authorId?: string } }>(
+      commenter.request,
+      "followups.ask",
+      { headNodeId: rootId, prompt: "And who pays for this follow-up?" },
+    );
+    expect(asked.kind).toBe("sent");
+    expect(asked.node?.authorId).toBe(commenter.user.id);
+    await expect
+      .poll(
+        async () =>
+          (await query<{ runs: number }>(commenter.request, "usage.summary", undefined)).runs,
+      )
+      .toBe(before.runs + 1);
+
+    expect(
+      await refusal(viewer.request, "followups.ask", { headNodeId: rootId, prompt: "May I?" }),
+    ).toBe("FORBIDDEN");
+    const members = await query<{ login: string; role: string }[]>(
+      viewer.request,
+      "sharing.listMembers",
+      { treeId },
+    );
+    expect(members.map((member) => [member.login, member.role])).toEqual([
+      [owner.user.login, "owner"],
+      [commenter.user.login, "commenter"],
+      [viewer.user.login, "viewer"],
+    ]);
+  } finally {
+    await Promise.all([owner.context.close(), commenter.context.close(), viewer.context.close()]);
+  }
+});
+
+test("a public thread opens for another account and for a guest", async ({ browser }) => {
+  const owner = await signedInContext(browser, "e2e-public-owner");
+  const other = await signedInContext(browser, "e2e-public-reader");
+  const guest = await browser.newContext();
+  try {
+    const prompt = "Which threads are listed for guests?";
+    const detail = await completedThread(owner.page, prompt);
+    const treeId = detail.tree.id;
+    expect(
+      await refusal(other.request, "sharing.setVisibility", { treeId, visibility: "public" }),
+    ).toBe("NOT_FOUND");
+    await mutation(owner.request, "sharing.setVisibility", { treeId, visibility: "public" });
+
+    const opened = await query<Detail>(other.request, "research.getTree", { treeId });
+    expect(opened.tree.role).toBe("viewer");
+    const guestPage = await guest.newPage();
+    const catalog = await query<{ id: string }[]>(guestPage.request, "research.listTrees", {});
+    expect(catalog.map((summary) => summary.id)).toContain(treeId);
+    await guestPage.goto(`/r/${treeId}`);
+    await expect(guestPage.getByText(prompt).first()).toBeVisible();
+  } finally {
+    await Promise.all([owner.context.close(), other.context.close(), guest.close()]);
+  }
+});
+
+test("a member sees the owner's new question arrive live", async ({ browser }) => {
+  const owner = await signedInContext(browser, "e2e-live-owner");
+  const member = await signedInContext(browser, "e2e-live-member");
+  try {
+    const detail = await completedThread(owner.page, "Does a member see live updates?");
+    const treeId = detail.tree.id;
+    const link = await mutation<{ token: string }>(owner.request, "invites.create", {
+      treeId,
+      role: "viewer",
+    });
+    await mutation(member.request, "invites.accept", { token: link.token });
+    await member.page.goto(`/r/${treeId}`);
+    await expect(member.page.getByText("Does a member see live updates?").first()).toBeVisible();
+
+    const followUp = "A follow-up the member did not reload for";
+    await mutation(owner.request, "followups.ask", {
+      headNodeId: detail.nodes[0]!.id,
+      prompt: followUp,
+    });
+    await expect(member.page.getByText(followUp).first()).toBeVisible();
+  } finally {
+    await Promise.all([owner.context.close(), member.context.close()]);
+  }
+});
+
+test("a stale note edit is refused", async ({ browser }) => {
+  const owner = await signedInContext(browser, "e2e-stale-owner");
+  try {
+    const workspace = await mutation<{ id: string }>(owner.request, "workspaces.ensureDefault", {});
+    const post = await mutation<Detail>(owner.request, "research.createPost", {
+      body: "The first version of a note",
+      workspaceId: workspace.id,
+      model: "gemini-flash",
+    });
+    const nodeId = post.nodes[0]!.id;
+    await mutation(owner.request, "research.updatePost", {
+      nodeId,
+      text: "The second version",
+      expectedText: "The first version of a note",
+    });
+    expect(
+      await refusal(owner.request, "research.updatePost", {
+        nodeId,
+        text: "A third version from a stale editor",
+        expectedText: "The first version of a note",
+      }),
+    ).toBe("CONFLICT");
+  } finally {
+    await owner.context.close();
+  }
+});

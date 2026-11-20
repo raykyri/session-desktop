@@ -1,0 +1,97 @@
+// The durable answer, committed under the desktop's two-guard rule
+// (`05-run-lifecycle-and-streaming.md` §5,
+// `02-domain-model-and-database.md` §5.2).
+//
+// The repository enforces that snapshots contain assistant text; empty
+// responses are invalid. The second guard is here, because only the runtime can read the live turns twice: the
+// rule (`state.rs:8870`) is that two consecutive reads must agree before the
+// answer is frozen, which is what stops a snapshot being taken of a buffer
+// another write is still in the middle of.
+
+import type { SessionDatabase } from "@session/db";
+import { revisionOf, runs as runsRepo, snapshots as snapshotsRepo } from "@session/db";
+import type { ResearchNodeStatus, Turn } from "@session/shared";
+
+export interface CommitAnswerInput {
+  db: SessionDatabase;
+  userId: string;
+  nodeId: string;
+  status: ResearchNodeStatus;
+  error?: string | null;
+  /** Reads the live turns; called twice, and the two results must agree.
+   *
+   * An injectable read because in this process they always do:
+   * SQLite reads are synchronous and the loop is the only writer, so the guard
+   * is the desktop's rule carried over (`state.rs:8870`) and cannot fail here.
+   * The test that has to prove the refusal works supplies a reader that
+   * changes its answer. */
+  readTurns?: (() => Turn[]) | undefined;
+  /** The run's current sequence number, forwarded to the repository so the
+   * settle records it instead of allocating a number no event carries. */
+  seq?: number | undefined;
+}
+
+export interface CommitAnswerResult {
+  committed: boolean;
+  revision?: string;
+  responseSnapshotAt?: number;
+  turns: Turn[];
+  /** Why the commit did not happen, for the node's `error` copy. */
+  reason?: string;
+}
+
+/** Two reads of `run_turns` that hash to the same revision. A third read is
+ * not attempted: if two consecutive reads disagree, something is still
+ * writing, and the answer is not ready to be frozen. */
+export function readStableTurns(
+  db: SessionDatabase,
+  userId: string,
+  nodeId: string,
+  read: () => Turn[] = () => runsRepo.liveWindow(db, userId, nodeId).turns,
+): { turns: Turn[]; stable: boolean } {
+  const first = read();
+  const second = read();
+  return { turns: second, stable: revisionOf(first) === revisionOf(second) };
+}
+
+const NO_ANSWER = "Research completed without generating response content";
+
+/**
+ * Stores the attempt's committed turns as the node's answer and completes the
+ * node, or reports why it could not.
+ *
+ * A failure here is the one inconsistency this domain cannot repair — a run
+ * that finished with nothing to show — so the caller turns a `false` into a
+ * failed node carrying `reason` rather than leaving it `running`.
+ */
+export function commitAnswer(input: CommitAnswerInput): CommitAnswerResult {
+  const { db, userId, nodeId } = input;
+  const { turns, stable } = readStableTurns(db, userId, nodeId, input.readTurns);
+  if (!stable) {
+    return {
+      committed: false,
+      turns,
+      reason: "Response content changed concurrently during snapshot commitment",
+    };
+  }
+  const hasText = turns.some(
+    (turn) =>
+      turn.role !== "user" &&
+      turn.blocks.some((block) => block.type === "text" && block.text.trim() !== ""),
+  );
+  if (!hasText) {
+    return { committed: false, turns, reason: NO_ANSWER };
+  }
+  const result = snapshotsRepo.commit(db, userId, {
+    nodeId,
+    turns,
+    outcome: { status: input.status, error: input.error ?? null },
+    ...(input.seq === undefined ? {} : { seq: input.seq }),
+  });
+  return {
+    committed: true,
+    revision: result.revision,
+    responseSnapshotAt: result.responseSnapshotAt,
+    turns,
+  };
+}

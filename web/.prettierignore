@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.data/
+docs/
+package-lock.json
+packages/shared/test/fixtures/
+# drizzle-kit output: reformatting the snapshots would make a regeneration
+# report a diff that is only whitespace.
+packages/db/migrations/

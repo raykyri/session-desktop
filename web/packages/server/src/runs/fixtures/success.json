@@ -1,0 +1,27 @@
+{
+  "scenario": "success",
+  "description": "A single-step answer with no tool calls: the metadata-free baseline.",
+  "steps": [
+    {
+      "parts": [
+        { "type": "stream-start", "warnings": [] },
+        { "type": "text-start", "id": "t0" },
+        { "type": "text-delta", "id": "t0", "delta": "A [[Skip list]] is a layered linked list " },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "that supports logarithmic search without rebalancing."
+        },
+        { "type": "text-end", "id": "t0" },
+        {
+          "type": "finish",
+          "finishReason": { "unified": "stop", "raw": "end_turn" },
+          "usage": {
+            "inputTokens": { "total": 500, "noCache": 500, "cacheRead": 0, "cacheWrite": 0 },
+            "outputTokens": { "total": 60, "text": 50, "reasoning": 10 }
+          }
+        }
+      ]
+    }
+  ]
+}

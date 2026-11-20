@@ -1,0 +1,23 @@
+{
+  "name": "@session/replica-proto",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "ava",
+    "mutate": "tsx test/mutations/mutate.ts"
+  },
+  "dependencies": {
+    "@session/shared": "*",
+    "zod": "^4.6.5"
+  }
+}
