@@ -411,6 +411,25 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .preview .rtext { max-height: 240px; overflow-y: auto; }
 .rnote { font-size: var(--fs-xs); color: var(--t-faint); }
 .saved-empty { grid-column: 1; padding: 24px 4px; }
+/* empty states B and C */
+.estate { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 36px 24px 32px; border-radius: var(--r-xl); background: var(--card); box-shadow: var(--shadow); }
+.saved-empty .estate { margin: 0; }
+.estate .eic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); }
+.estate .eic svg.i { width: 18px; height: 18px; }
+.estate h3 { margin: 4px 0 0; font-size: var(--fs-md); color: var(--t-heading); }
+.estate p { margin: 0; max-width: 46ch; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.5; }
+.estate .btn2 { margin-top: 6px; }
+.edemo { position: relative; width: min(340px, 100%); margin: 8px 0 22px; padding: 12px 14px 10px; border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--divider); text-align: left; }
+.edemo-t { display: block; color: var(--t-faint); font-size: var(--fs-sm); padding-bottom: 10px; border-bottom: 1px solid var(--divider); }
+.edemo-f { display: flex; justify-content: flex-end; gap: 10px; padding-top: 8px; color: var(--t-faint); font-size: var(--fs-xs); }
+.edemo-b { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border-radius: 12px; }
+.edemo-b i { font-style: normal; }
+.edemo-b svg.i { width: 12px; height: 12px; }
+.edemo-b.on { color: var(--accent); box-shadow: 0 0 0 1.5px var(--accent); }
+.edemo-l { position: absolute; right: 4px; bottom: -22px; font-size: var(--fs-xs); font-weight: 600; color: var(--accent); }
+.ekinds { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; text-align: left; }
+.ekinds li { display: flex; align-items: center; gap: 8px; color: var(--t-secondary); font-size: var(--fs-sm); }
+.ekinds .nk { position: static; }
 .hsaved { width: 30px; height: 30px; }
 .hsaved.on { background: var(--control); color: var(--t-heading); }
 .hsaved.on svg.i { fill: currentColor; }
@@ -1062,99 +1081,15 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .tog:disabled { opacity: .55; cursor: default; }
 .page-in.awide { max-width: 940px; }
 .adm h4 { margin: 18px 0 2px; font-size: var(--fs-sm); color: var(--t-heading); }
-/* shared section bodies: model rows, member rows, usage bars */
+/* the admin page: two radio groups */
+.adm + .adm { margin-top: 12px; }
+.adm h3 { margin: 0 0 10px; font-size: var(--fs-md); color: var(--t-heading); }
 .amrows { display: flex; flex-direction: column; gap: 8px; }
-.amrow { display: flex; align-items: center; gap: 12px; padding: 4px 14px; border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--divider); }
+.amrow { display: flex; align-items: center; gap: 12px; padding: 4px 14px; border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--divider); cursor: pointer; }
 .amrow.on { box-shadow: inset 0 0 0 1.5px var(--accent); background: var(--accent-soft); }
 .amrow > .radio { flex: 1; min-width: 0; }
 .amrow .radio b small { font-weight: 400; color: var(--t-faint); margin-left: 4px; }
 .amrow.on .radio b small { color: var(--accent); }
-.aav { flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 52px; }
-.aav small { color: var(--t-faint); font-size: 10.5px; }
-.amem .li { flex-wrap: wrap; row-gap: 6px; }
-.amem .li > .grow { min-width: 140px; }
-.utrack.asm { height: 5px; border-radius: 3px; }
-.auw { flex: none; width: 120px; }
-.aun { flex: none; min-width: 74px; text-align: right; font-variant-numeric: tabular-nums; }
-/* A: left nav */
-.adm-a { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 20px; align-items: start; }
-.anav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 61px; }
-.anav .si { font-weight: 500; }
-/* B: tabs across the top, one wide column */
-.atabs { display: flex; gap: 22px; margin: 0 0 16px; border-bottom: 1px solid var(--divider); overflow-x: auto; scrollbar-width: none; }
-.atabs button { position: relative; flex: none; padding: 8px 0 10px; color: var(--t-secondary); font-size: var(--fs-sm); font-weight: 500; }
-.atabs button:hover { color: var(--t-heading); }
-.atabs button[aria-selected="true"] { color: var(--t-heading); font-weight: 600; }
-.atabs button[aria-selected="true"]::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 1px; background: var(--accent-strong); }
-.atabs .tcnt { margin-left: 6px; color: var(--t-faint); font-weight: 400; font-variant-numeric: tabular-nums; }
-.adm-b .box { padding: 18px 22px; }
-.amt { display: flex; flex-direction: column; }
-.amtr { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, .8fr) minmax(0, 1fr) 190px; gap: 16px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--divider); font-size: var(--fs-sm); color: var(--t-secondary); }
-.amtr:last-child { border-bottom: 0; }
-.amtr.amth { padding: 4px 0 8px; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--t-faint); }
-.amtm { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.amtm b { display: block; color: var(--t-heading); font-weight: 600; }
-.amtm small, .amtu small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
-.amtu { display: flex; flex-direction: column; gap: 4px; }
-.amtr .fsel-w, .amtr .fsel-w.sm .fsel { width: 100%; min-width: 0; }
-/* C: one long page with a sticky index */
-.adm-c { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 24px; align-items: start; }
-.acol { display: flex; flex-direction: column; gap: 16px; }
-.adm section { margin-bottom: 0; }
-.acol .box { scroll-margin-top: 12px; }  /* added to the page's 49px scroll-padding */
-.aidx { position: sticky; top: 61px; display: flex; flex-direction: column; gap: 2px; padding-left: 12px; border-left: 1px solid var(--divider); }
-.aidx .label { margin-bottom: 6px; }
-.aidx button { position: relative; padding: 4px 0; text-align: left; color: var(--t-secondary); font-size: var(--fs-sm); }
-.aidx button:hover { color: var(--t-heading); }
-.aidx button.on { color: var(--accent); font-weight: 500; }
-.aidx button.on::before { content: ''; position: absolute; left: -13px; top: 4px; bottom: 4px; width: 2px; border-radius: 1px; background: var(--accent); }
-/* D: tabs above; Members as a list and a detail pane */
-.adm-d > .seg { margin-bottom: 14px; }
-.adpane { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 16px; align-items: start; }
-.adl { padding: 12px; }
-.adlist { display: flex; flex-direction: column; gap: 2px; max-height: 460px; overflow-y: auto; }
-.adlist .si { gap: 10px; padding: 7px 8px; }
-.adlist .si b { display: block; color: var(--t-heading); font-weight: 500; }
-.adlist .si small { display: block; color: var(--t-faint); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.adlist .si.on small { color: var(--t-secondary); }
-.adlist .si > .grow { min-width: 0; }
-.adlist .empty { margin: 8px; }
-.adh { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--divider); }
-.adh .av { width: 40px; height: 40px; font-size: 13px; }
-.adh h3 { margin: 0; }
-.adh small { color: var(--t-faint); font-size: var(--fs-xs); }
-.adf { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 6px 16px; align-items: baseline; padding: 14px 0; border-bottom: 1px solid var(--divider); font-size: var(--fs-sm); color: var(--t-primary); }
-.adf:last-child { border-bottom: 0; padding-bottom: 2px; }
-.adf .fine { margin: 6px 0 0; }
-.adf .utrack { max-width: 320px; margin: 4px 0 6px; }
-.adf small { color: var(--t-faint); font-size: var(--fs-xs); }
-.adw { display: inline-flex; align-items: center; gap: 6px; }
-@media (max-width: 700px) {
-  .adm-a { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .anav { position: static; flex-direction: row; overflow-x: auto; background: var(--control); border-radius: var(--r-lg); padding: 2px; }
-  .anav .si { width: auto; flex: 1; justify-content: center; padding: 5px 10px; }
-  .anav .si.on { background: var(--card); box-shadow: var(--shadow); }
-  .fsel { min-width: 0; width: 100%; }
-  .fsel-w:not(.sm) { width: 100%; }
-  .adm-b .box { padding: 14px 16px; }
-  .amtr { grid-template-columns: minmax(0, 1fr) 150px; gap: 6px 12px; }
-  .amtr.amth { display: none; }
-  .amtr > .amti { display: none; }
-  .amtr > .amtu { grid-row: 2; grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 10px; padding-left: 30px; }
-  .amtr > .amtu .utrack { flex: 1; }
-  .amtr > .fsel-w { grid-row: 1; grid-column: 2; }
-  .adm-c { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .aidx { order: -1; z-index: 5; top: 49px; flex-direction: row; align-items: center; gap: 4px; margin: 0 -16px 12px; padding: 8px 16px; border-left: 0; background: var(--canvas); box-shadow: 0 1px 0 var(--divider); }
-  .aidx .label { display: none; }
-  .aidx button { padding: 4px 10px; border-radius: 14px; }
-  .aidx button.on { background: var(--accent-soft); }
-  .aidx button.on::before { display: none; }
-  .acol .box { scroll-margin-top: 56px; }
-  .adpane { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .adlist { max-height: 216px; }
-  .adf { grid-template-columns: minmax(0, 1fr); }
-  .auw { width: 64px; }
-}
 /* ---- answer widget (mock option) ---- */
 .prose .wdg { margin: 14px 0 4px; }
 .wdg { border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--border-strong); background: var(--card); overflow: visible; font-size: var(--fs-sm); line-height: 1.45; }
@@ -1260,7 +1195,7 @@ const mark = (c = '') => `<span class="mark ${c}" aria-hidden="true">${I.agent}<
 
 const byId = id => D.posts.find(p => p.id === id);
 const byNew = (a, b) => (a.createdAt < b.createdAt ? 1 : -1);
-const streamFor = s => D.posts.filter(p => (s === 'saved' ? SAVED()[p.id] : s === 'home' ? !p.rf && SPACE_META[p.s] && (st.auth === 'out' ? !isPrivate(p.s) : isJoined(p.s)) : p.s === s)).sort(byNew);
+const streamFor = s => D.posts.filter(p => (s === 'saved' ? !st.emptyPv && SAVED()[p.id] : s === 'home' ? !p.rf && SPACE_META[p.s] && (st.auth === 'out' ? !isPrivate(p.s) : isJoined(p.s)) : p.s === s)).sort(byNew);
 const spacesWithPosts = D.spaces.filter(s => D.posts.some(p => p.s === s.id));
 
 /* What people typed: each ask and branch question as it is typed to an agent (lowercase, terse,
@@ -1696,7 +1631,7 @@ const V = {
 
 /* ---- composers: start a thread. Each variant below uses one. The draft survives re-renders. ---- */
 /* the picker shows the short name; the menu shows the full name. Sol runs only on the member's OpenAI key. */
-const MODEL_OPTS = ['Opus 5.5', 'Gemini 4 Neon', 'GPT-6.1 Sol'], SHORT = { 'Opus 5.5': 'Opus', 'Gemini 4 Neon': 'Gemini', 'GPT-6.1 Sol': 'Sol' }, hasOpenAI = () => keys().openai?.status === 'working', modelOpts = () => MODEL_OPTS.filter(m => ADMIN.avail[m]), EFFORT_OPTS = ['low', 'medium', 'high', 'max'];
+const MODEL_OPTS = ['Opus 5.5', 'Gemini 4 Neon', 'GPT-6.1 Sol'], SHORT = { 'Opus 5.5': 'Opus', 'Gemini 4 Neon': 'Gemini', 'GPT-6.1 Sol': 'Sol' }, hasOpenAI = () => keys().openai?.status === 'working', modelOpts = () => MODEL_OPTS, EFFORT_OPTS = ['low', 'medium', 'high', 'max'];
 /* a pill sized to its current value; the native select sits invisibly on top of it */
 const pick = (id, opts, cur, label, fmt = x => x) => `<label class="pick" title="${label}"><span>${esc(fmt(cur))}</span><select id="${id}" aria-label="${label}">${opts.map(o => `<option value="${o}"${o === cur ? ' selected' : ''}>${esc(fmt(o))}</option>`).join('')}</select>${I.down}</label>`;
 /* Space picker: a custom menu of spaces (only on Home; inside a space the thread goes there). */
@@ -1950,7 +1885,7 @@ function renderNetwork() {
   const navTop = d === 'a' ? '' : d === 'b' ? navDropTop() : `<nav class="tabs tabs-dd tabs-min sp-mob">${ddButton('big', `<span class="spt-l">${st.space !== 'home' && SP[st.space] ? glyph(SP[st.space]) : HOME}${esc(curLabel())}</span>`)}</nav>`;
   const side = d === 'c' ? navRail() : d === 'd' ? navSidebar() : '';
   const empty = locked ? `<div class="row"><p class="empty saved-empty">This channel is private. Ask @${esc(ownerOf(st.space))} to add you.</p><div></div></div>`
-    : st.space === 'saved' && !posts.length ? '<div class="row"><p class="empty saved-empty">Nothing saved yet. Use the bookmark on any thread to keep it here.</p><div></div></div>'
+    : st.space === 'saved' && !posts.length ? `<div class="row">${savedEmpty()}<div></div></div>`
     : st.space === 'home' && !posts.length ? '<div class="row"><p class="empty saved-empty">Join a few channels to fill Home. <button class="tlink inl" data-a="browse">Browse channels</button></p><div></div></div>'
     : SP[st.space] && !posts.length ? '<div class="row"><p class="empty saved-empty">No threads here yet. Ask the first question.</p><div></div></div>' : '';
   $('#page').innerHTML = `<div class="spshell sd-${d} spv-${spv()} pl-${st.ui.pl || 'a'}${SP[st.space] && SPACE_META[st.space] ? ' chfeed' : ''}">${side}<div class="mg" id="k-mg"><div class="mg-inner">${navTop}
@@ -2051,11 +1986,7 @@ app.addEventListener('click', e => {
   if (a === 'mode') { st.newMode = d.m; st.menu = null; render(); const t = $('#in-new'); t?.focus(); t?.setSelectionRange(t.value.length, t.value.length); return; }
   if (a === 'notif') { openNotif(d.id); return; }
   if (a === 'notifall') { notifs().forEach(n => { n.read = true; }); toast('All notifications marked as read.'); render(); return; }
-  if (a === 'admtab') { st.admTab = d.k; render(); app.querySelector(`[data-a="admtab"][data-k="${d.k}"]`)?.focus(); return; }
-  if (a === 'admavail') { toggleAvail(d.v); return; }
   if (a === 'admdtab') { st.admDTab = d.k; render(); app.querySelector(`[data-a="admdtab"][data-k="${d.k}"]`)?.focus(); return; }
-  if (a === 'admsel') { st.admSel = d.v; render(); return; }
-  if (a === 'admjump') { const s = document.getElementById('adm-' + d.k); if (s) { s.scrollIntoView({ block: 'start' }); admSpy(); st.admSpy = d.k; app.querySelectorAll('.aidx button').forEach(b => b.classList.toggle('on', b.dataset.k === d.k)); } return; }
   if (a === 'wxview') { st.wx.view = d.v; render(); return; }
   if (a === 'wxrun') { st.wx.run = true; st.wx.view = 'preview'; render(); $('#wx-void')?.focus({ preventScroll: true }); if (t.textContent === 'Reload') toast('Widget reloaded.'); return; }
   if (a === 'wxcopy') { st.menu = null; try { navigator.clipboard.writeText(wxSource()).catch(() => {}); } catch {} toast('Widget HTML copied.'); render(); return; }
@@ -2230,7 +2161,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { adm: 'a', wx: 'a', pl: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { wx: 'a', pl: 'a', emp: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 /* seeds: moderation logs list removals and bans only.
    #sci-fi (owned by @ines.v): one removed sales post. #replication (owned by @mira_k): a ban from the fixtures,
    and @ines.v's speculative-decoding ask, removed with a reason (she is notified, see NOTIFS). */
@@ -2266,17 +2197,16 @@ const NOTIFS = {
 /* the comment in n5 exists on the first branch of that ask */
 { const p = byId('01M7H6F3P02JFX3X2X804X3986'), k = p && tree(p).kids('r')[0]; if (k) (BRP[p.id + ':' + k.id] ||= []).push({ u: 'mira_k', createdAt: '2026-11-15T20:10:00Z', t: 'The 1964 World’s Fair Picturephone demo is the clearest case of this; worth adding.', likes: 1 }); }
 
-/* ---- site admin: the default model for asks ----
-   Prices are mock values per 1M tokens (input / output). GPT-6.1 Sol runs only on a member's own OpenAI key,
-   so it cannot be the default or a member override. */
+/* ---- site admin: the default model and effort for asks ----
+   GPT-6.1 Sol runs only on a member's own OpenAI key, so it cannot be the default. */
 const MODELS = {
   'Opus 5.5': { prov: 'Anthropic', pin: 5, pout: 25, note: 'Strongest on long research asks with many sources.' },
   'Gemini 4 Neon': { prov: 'Google', pin: 1.25, pout: 10, note: 'About a quarter of the cost; weaker on long multi-step asks.' },
   'GPT-6.1 Sol': { prov: 'OpenAI', pin: 3, pout: 15, note: "Runs only on a member's own OpenAI key.", byok: true },
 };
-const ADMIN = { def: 'Opus 5.5', avail: { 'Opus 5.5': true, 'Gemini 4 Neon': true, 'GPT-6.1 Sol': true }, over: { hal_b: 'Gemini 4 Neon' } };
-const modelFor = u => ADMIN.over[u] || ADMIN.def;
-st.newModel = modelFor(st.user);
+const ADMIN = { def: 'Opus 5.5', effort: 'high' };
+const modelFor = () => ADMIN.def;
+st.newModel = modelFor(st.user); st.newEffort = ADMIN.effort;
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -2364,7 +2294,7 @@ function appbar() {
     <span class="grow"></span>${meter()}${savedBtn()}${layoutBtn()}
     <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}" aria-label="Account${nUnread() ? `, ${noun(nUnread(), 'unread notification', 'unread notifications')}` : ''}">${av(st.user, 'sm')}${nUnread() ? '<span class="adot" aria-hidden="true"></span>' : ''}${I.down}</button>
     ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff ? cap1(m.staff) : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
-      ${isActive() ? `<button class="mi" data-ma="go" data-to="notifications"><span>Notifications</span>${nUnread() ? `<b class="nbadge">${nUnread()}</b>` : ''}</button><div class="msep"></div><button class="mi" data-ma="go" data-to="members"><span>Invites</span></button><button class="mi" data-a="space" data-id="saved"><span>Saved</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>${isAdmin() ? `<button class="mi" data-ma="go" data-to="admin"><span>Admin</span></button>` : ''}` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
+      ${isActive() ? `<button class="mi" data-ma="go" data-to="notifications"><span>Notifications</span>${nUnread() ? `<b class="nbadge">${nUnread()}</b>` : ''}</button><div class="msep"></div><button class="mi" data-ma="go" data-to="members"><span>Invites</span></button><button class="mi" data-a="space" data-id="saved"><span>Saved</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>${isAdmin() ? `<button class="mi" data-ma="go" data-to="admin"><span>Site Admin</span></button>` : ''}` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
       <div class="msep"></div><button class="mi" data-ma="signout"><span>Sign out</span></button></div>` : ''}</span></header>`;
 }
 
@@ -2518,7 +2448,7 @@ function usagePage() {
 
 
 /* ---- notifications page ---- */
-const notifs = () => isActive() ? (NOTIFS[st.user] ||= []) : [];
+const notifs = () => isActive() && !st.emptyPv ? (NOTIFS[st.user] ||= []) : [];
 const nUnread = () => notifs().filter(n => !n.read).length;
 const isAdmin = () => isActive() && meM()?.staff === 'admin';  /* users.is_admin */
 const AT_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.4"/><path d="M10.4 8v1a1.9 1.9 0 0 0 3.6.8A6 6 0 1 0 11 13"/></svg>';
@@ -2535,14 +2465,36 @@ function notifText(n) {
   if (n.k === 'invite') return `${who} joined Session with your invite <span class="nt">${esc(n.code)}</span>`;
   return '';
 }
+/* ---- empty states (mock variant st.ui.emp) ----
+   A one line of text · B an icon, a heading, one sentence on what appears here and a next step ·
+   C the same with a faded example of what appears: the save button on a thread footer, or the kinds of
+   notification */
+const EMPTY_SAVE = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.5h7v11l-3.5-2.6-3.5 2.6Z"/></svg>';
+const EMPTY_BELL = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.5V7.25a4 4 0 0 1 8 0v4.25l1 1.25H3Z"/><path d="M6.6 14a1.5 1.5 0 0 0 2.8 0"/></svg>';
+const emptyBox = (ic, h, p, extra, cta) => `<div class="estate"><span class="eic" aria-hidden="true">${ic}</span><h3>${h}</h3><p>${p}</p>${extra || ''}${cta || ''}</div>`;
+function savedEmpty() {
+  const v = st.ui.emp || 'a';
+  if (v === 'a') return '<p class="empty saved-empty">Nothing saved yet. Use the bookmark on any thread to keep it here.</p>';
+  const p = 'Threads you save appear here, newest first. Save one with the bookmark at the bottom of the thread; saving again removes it.';
+  const demo = v === 'c' ? `<div class="edemo" aria-hidden="true"><span class="edemo-t">A thread you want to come back to</span><span class="edemo-f"><span class="edemo-b">${ARROW_REPLY}<i>4</i></span><span class="edemo-b on">${I.save}<i>12</i></span></span><span class="edemo-l">Save</span></div>` : '';
+  return `<div class="saved-empty">${emptyBox(EMPTY_SAVE, 'Nothing saved yet', p, demo, `<button class="btn2 sm" data-a="space" data-id="home">Go to Home</button>`)}</div>`;
+}
+function notifEmpty() {
+  const v = st.ui.emp || 'a';
+  if (v === 'a') return '<p class="empty">No notifications yet.</p>';
+  const p = 'You are notified when someone mentions you, replies to your post, branches or comments on your ask, uses one of your invites, or when a channel owner removes your thread.';
+  const kinds = [['mention', 'Mentions of @' + esc(st.user || 'you')], ['reply', 'Replies to your posts'], ['branch', 'Branches from your asks'], ['comment', 'Comments on your asks'], ['invite', 'Invites people used'], ['removed', 'Threads of yours an owner removed']];
+  const demo = v === 'c' ? `<ul class="ekinds">${kinds.map(([k, l]) => `<li><span class="nk nk-${k}" aria-hidden="true">${N_KIND[k]}</span>${l}</li>`).join('')}</ul>` : '';
+  return emptyBox(EMPTY_BELL, 'No notifications yet', v === 'c' ? 'These appear here, newest first:' : p, demo, v === 'b' ? `<button class="btn2 sm" data-ma="go" data-to="members">Invite someone</button>` : '');
+}
 function notifPage() {
   const list = notifs().slice().sort((a, b) => a.at < b.at ? 1 : -1), un = nUnread();
   const row = n => { const p = n.pid ? byId(n.pid) : null;
     return `<li><button class="nrow${n.read ? '' : ' unread'}" data-a="notif" data-id="${n.id}"><span class="nav-av">${av(n.by)}<span class="nk nk-${n.k}" aria-hidden="true">${N_KIND[n.k]}</span></span>
       <span class="ntx">${notifText(n)}<small>${p ? esc(spName(p.s)) + ' · ' : n.k === 'invite' ? 'Invites · ' : ''}<time>${rel(n.at)}</time></small></span>${n.read ? '' : '<span class="ndot" aria-label="Unread"></span>'}</button></li>`; };
   return `<div class="page"><div class="page-in narrow"><div class="shead nhead"><h2>Notifications</h2><button class="btn2 sm" data-a="notifall"${un ? '' : ' disabled'}>Mark all as read</button></div>
-    <p class="sub">${un ? `${noun(un, 'unread notification', 'unread notifications')}.` : 'All caught up.'} Mentions, replies to your posts, branches and comments on your asks, removals, and invites people used.</p>
-    ${list.length ? `<ul class="nlist box">${list.map(row).join('')}</ul>` : '<p class="empty">No notifications yet.</p>'}</div></div>`;
+    ${!list.length && (st.ui.emp || 'a') !== 'a' ? '' : `<p class="sub">${un ? `${noun(un, 'unread notification', 'unread notifications')}.` : 'All caught up.'} Mentions, replies to your posts, branches and comments on your asks, removals, and invites people used.</p>`}
+    ${list.length ? `<ul class="nlist box">${list.map(row).join('')}</ul>` : notifEmpty()}</div></div>`;
 }
 function openNotif(id) {
   const n = notifs().find(x => x.id === id); if (!n) return;
@@ -2558,86 +2510,23 @@ function openNotif(id) {
   if (c && mg) { st.keepBar = true; mg.scrollTop += c.getBoundingClientRect().top - mg.getBoundingClientRect().top - 12; c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 1600); }
 }
 
-/* ---- admin page (site admins only): models, per-member overrides, the weekly allowance ----
-   Four layouts of the same three sections: A left nav · B tabs across the top, one wide column ·
-   C one long page with a sticky index · D tabs above, Members as a searchable list and a detail pane */
-const price = m => `$${MODELS[m].pin} in · $${MODELS[m].pout} out`;
-const activeMembers = () => MEMBERS.filter(m => m.status === 'active');
-const ADM_SECS = [['models', 'Models'], ['members', 'Members'], ['allowance', 'Allowance']];
-/* tokens used this week: USAGE where it has the member, otherwise a fixed mock figure */
-const weekUse = u => USAGE[u] ? USAGE[u].reduce((a, b) => a + b, 0) : [...u].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 97, 7) * 15e3;
-const useTrack = u => { const n = weekUse(u), p = Math.min(1, n / ALLOWANCE), tone = p >= .9 ? ' bad' : p >= .7 ? ' warn' : '';
-  return `<div class="utrack asm${tone}" role="img" aria-label="${fmtTok(n)} of ${fmtTok(ALLOWANCE)} tokens used"><span style="width:${(p * 100).toFixed(1)}%"></span></div>`; };
-const allowanceFact = () => `<div class="afact"><span class="label">Weekly allowance</span><b>${fmtTok(ALLOWANCE)} tokens per member</b><small>Read only. Set in the server config; resets Fridays 00:00 UTC.</small></div>`;
-const overSelect = (u, id = '') => `<label class="fsel-w sm"><select${id ? ` id="${id}"` : ''} class="fsel" data-adm="over" data-u="${esc(u)}" aria-label="Model for @${esc(u)}"><option value=""${ADMIN.over[u] ? '' : ' selected'}>Default (${esc(ADMIN.def)})</option>${MODEL_OPTS.filter(x => !MODELS[x].byok && ADMIN.avail[x]).map(x => `<option value="${x}"${ADMIN.over[u] === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>${I.down}</label>`;
-const nOver = () => activeMembers().filter(m => ADMIN.over[m.u]).length;
+/* ---- admin page (site admins only): the default model and the default effort for members' asks ---- */
 function setDefault(m) {
   if (!MODELS[m] || MODELS[m].byok) return;
-  ADMIN.def = m; ADMIN.avail[m] = true; if (st.user && !ADMIN.over[st.user]) st.newModel = modelFor(st.user);
-  toast(`Default model set to ${m}. Members' composers start on it.`); render();
+  ADMIN.def = m; if (st.user) st.newModel = ADMIN.def;
+  toast(`Default model set to ${m}.`); render();
 }
-function toggleAvail(m) {
-  if (!MODELS[m] || m === ADMIN.def) return;
-  const on = ADMIN.avail[m] = !ADMIN.avail[m], moved = on ? [] : Object.keys(ADMIN.over).filter(u => ADMIN.over[u] === m);
-  moved.forEach(u => delete ADMIN.over[u]);
-  if (st.user && (!ADMIN.avail[st.newModel] || moved.includes(st.user))) st.newModel = modelFor(st.user);
-  toast(on ? `Members can use ${m}.` : `${m} is off for members.${moved.length ? ` ${moved.map(u => '@' + u).join(', ')} moved to the default.` : ''}`); render();
-}
-/* section bodies, shared by every layout */
-const modelRows = () => `<div class="amrows">${MODEL_OPTS.map(m => { const M = MODELS[m], isDef = m === ADMIN.def, on = !!ADMIN.avail[m], off = M.byok || !on;
-  return `<div class="amrow${isDef ? ' on' : ''}"><label class="radio${off ? ' off' : ''}"><input type="radio" name="admdef" value="${m}" data-adm="cdef"${isDef ? ' checked' : ''}${off ? ' disabled' : ''}> <span><b>${esc(m)} <small>${M.prov}${isDef ? ' · default' : ''}</small></b><small>${price(m)} per 1M tokens. ${esc(M.note)}</small></span></label>
-    <span class="aav"><button type="button" class="tog" role="switch" aria-checked="${on}" aria-label="Members may use ${esc(m)}" data-a="admavail" data-v="${m}"${isDef ? ' disabled title="The default model is always available"' : ''}><span></span></button><small>${on ? 'Allowed' : 'Off'}</small></span></div>`; }).join('')}</div>`;
-const memberRows = () => `<div class="list amem">${activeMembers().map(m => `<div class="li">${av(m.u, 'sm')}<span class="grow"><b>${esc(m.u)}${m.staff ? ` <span class="h">· ${cap1(m.staff)}</span>` : ''}</b><small>${esc(m.name)} · starts on ${esc(modelFor(m.u))}</small></span>${overSelect(m.u)}</div>`).join('')}</div>`;
-const memberTable = () => `<div class="amt"><div class="amtr amth"><span>Member</span><span>Invited by</span><span>This week</span><span>Model</span></div>${activeMembers().map(m => `<div class="amtr"><span class="amtm">${av(m.u, 'sm')}<span><b>${esc(m.u)}</b><small>${esc(m.name)}${m.staff ? ' · ' + cap1(m.staff) : ''}</small></span></span><span class="amti">${m.inviter ? '@' + esc(m.inviter) : '<small>Founding member</small>'}</span><span class="amtu">${useTrack(m.u)}<small>${fmtTok(weekUse(m.u))} of ${fmtTok(ALLOWANCE)}</small></span>${overSelect(m.u)}</div>`).join('')}</div>`;
-const allowanceBody = () => `${allowanceFact()}<h4>Used this week</h4><div class="list tight">${activeMembers().map(m => `<div class="li">${av(m.u, 'xs')}<span class="grow"><b>${esc(m.u)}</b></span><span class="auw">${useTrack(m.u)}</span><small class="aun">${fmtTok(weekUse(m.u))} of ${fmtTok(ALLOWANCE)}</small></div>`).join('')}</div>`;
-const secSub = k => `<p class="sub">${k === 'models' ? "Each member's composer starts on the default model unless they have an override under Members. Switch a model off to remove it from members' model pickers."
-  : k === 'members' ? `“Default” follows the default model (${esc(ADMIN.def)}). An override sets where that member's composer starts; ${noun(nOver(), 'member has', 'members have')} one.`
-  : 'Included tokens each member can use per week before their asks pause or move to their own key.'}</p>`;
-const secBody = (k, members = memberRows) => k === 'models' ? modelRows() : k === 'members' ? members() : allowanceBody();
-function adminA() {
-  const tab = st.admTab || 'models', l = ADM_SECS.find(s => s[0] === tab)[1];
-  const nav = ADM_SECS.map(([k, l]) => `<button class="si${tab === k ? ' on' : ''}" data-a="admtab" data-k="${k}" aria-current="${tab === k}">${l}</button>`).join('');
-  return `<div class="adm adm-a"><nav class="anav" aria-label="Admin sections">${nav}</nav><section class="box"><h3>${l}</h3>${secSub(tab)}${secBody(tab)}</section></div>`;
-}
-function adminB() {
-  const tab = st.admTab || 'models', cnt = { models: MODEL_OPTS.filter(m => ADMIN.avail[m]).length, members: activeMembers().length, allowance: '' };
-  const tabs = ADM_SECS.map(([k, l]) => `<button role="tab" id="admt-${k}" aria-selected="${tab === k}" aria-controls="admp" data-a="admtab" data-k="${k}">${l}${cnt[k] !== '' ? `<span class="tcnt">${cnt[k]}</span>` : ''}</button>`).join('');
-  return `<div class="adm adm-b"><div class="atabs" role="tablist" aria-label="Admin sections">${tabs}</div><section class="box" role="tabpanel" id="admp" aria-labelledby="admt-${tab}">${secSub(tab)}${secBody(tab, memberTable)}</section></div>`;
-}
-function adminC() {
-  const cur = st.admSpy || 'models';
-  return `<div class="adm adm-c"><div class="acol">${ADM_SECS.map(([k, l]) => `<section class="box" id="adm-${k}" aria-labelledby="admh-${k}"><div class="shead"><h3 id="admh-${k}">${l}</h3><small>${k === 'models' ? `Default: ${esc(ADMIN.def)}` : k === 'members' ? noun(activeMembers().length, 'member', 'members') : 'From server config'}</small></div>${secSub(k)}${secBody(k)}</section>`).join('')}</div>
-    <nav class="aidx" aria-label="On this page"><span class="label">On this page</span>${ADM_SECS.map(([k, l]) => `<button class="${k === cur ? 'on' : ''}" data-a="admjump" data-k="${k}"${k === cur ? ' aria-current="true"' : ''}>${l}</button>`).join('')}</nav></div>`;
-}
-/* C: the index follows the section at the top of the page */
-function admSpy() {
-  const pg = $('#k-page'); if (!pg || !$('.adm-c')) return;
-  const top = pg.getBoundingClientRect().top + 120, atEnd = pg.scrollTop + pg.clientHeight >= pg.scrollHeight - 2;
-  let cur = 'models'; for (const [k] of ADM_SECS) { const s = document.getElementById('adm-' + k); if (s && s.getBoundingClientRect().top <= top) cur = k; }
-  if (atEnd) cur = ADM_SECS[ADM_SECS.length - 1][0];
-  st.admSpy = cur; app.querySelectorAll('.aidx button').forEach(b => { const on = b.dataset.k === cur; b.classList.toggle('on', on); on ? b.setAttribute('aria-current', 'true') : b.removeAttribute('aria-current'); });
-}
-function adminD() {
-  const tab = st.admDTab || 'members';
-  const tabs = `<div class="seg" role="tablist" aria-label="Admin sections">${[ADM_SECS[1], ADM_SECS[0], ADM_SECS[2]].map(([k, l]) => `<button role="tab" aria-selected="${tab === k}" aria-pressed="${tab === k}" data-a="admdtab" data-k="${k}">${l}</button>`).join('')}</div>`;
-  if (tab !== 'members') return `<div class="adm adm-d">${tabs}<section class="box" role="tabpanel"><h3>${tab === 'models' ? 'Models' : 'Allowance'}</h3>${secSub(tab)}${secBody(tab)}</section></div>`;
-  const q = (st.admq || '').trim().toLowerCase(), list = activeMembers().filter(m => !q || m.u.includes(q) || m.name.toLowerCase().includes(q));
-  const sel = activeMembers().find(m => m.u === st.admSel) || activeMembers().find(m => m.u === 'hal_b');
-  const li = m => `<button class="si${m.u === sel.u ? ' on' : ''}" data-a="admsel" data-v="${esc(m.u)}" aria-current="${m.u === sel.u}">${av(m.u, 'sm')}<span class="grow"><b>${esc(m.u)}</b><small>${esc(modelFor(m.u))}${ADMIN.over[m.u] ? ' · override' : ''}</small></span></button>`;
-  const n = weekUse(sel.u), ov = ADMIN.over[sel.u];
-  return `<div class="adm adm-d">${tabs}<div class="adpane">
-    <section class="box adl" aria-label="Members"><label class="sfind">${SEARCH}<input id="in-admq" value="${esc(st.admq || '')}" placeholder="Search ${activeMembers().length} members" autocomplete="off" aria-label="Search members"></label>
-      <div class="adlist">${list.map(li).join('') || '<p class="empty">No members match.</p>'}</div></section>
-    <section class="box add" aria-labelledby="adm-dn"><div class="adh">${av(sel.u)}<span><h3 id="adm-dn">${esc(sel.name)}</h3><small>@${esc(sel.u)}${sel.staff ? ' · ' + cap1(sel.staff) : ''}</small></span></div>
-      <div class="adf"><span class="label">Model</span><div>${overSelect(sel.u, 'adm-dover')}<p class="fine">${ov ? `Override. Their composer starts on ${esc(ov)} instead of the default (${esc(ADMIN.def)}).` : `Follows the default model, ${esc(ADMIN.def)}.`}</p></div></div>
-      <div class="adf"><span class="label">This week</span><div>${fmtTok(n)} of ${fmtTok(ALLOWANCE)} tokens${useTrack(sel.u)}<small>${fmtTok(Math.max(0, ALLOWANCE - n))} left · resets Fridays 00:00 UTC</small></div></div>
-      <div class="adf"><span class="label">Invited by</span><div>${sel.inviter ? `<span class="adw">${av(sel.inviter, 'xs')}@${esc(sel.inviter)}</span>` : 'Nobody; founding member'}</div></div>
-      <div class="adf"><span class="label">Joined</span><div>${day(sel.joined)}, ${rel(sel.joined)} ago</div></div></section></div></div>`;
+function setDefaultEffort(e) {
+  if (!EFFORT_OPTS.includes(e)) return;
+  ADMIN.effort = e; st.newEffort = e;
+  toast(`Default effort set to ${cap1(e)}.`); render();
 }
 function adminPage() {
-  const v = st.ui.adm;
-  return `<div class="page"><div class="page-in awide"><h2>Admin</h2><p class="lede">Settings for everyone on Session. Only site admins see this page.</p>
-    ${v === 'b' ? adminB() : v === 'c' ? adminC() : v === 'd' ? adminD() : adminA()}</div></div>`;
+  const models = MODEL_OPTS.filter(m => !MODELS[m].byok);
+  const row = (name, val, label, sub, on) => `<label class="amrow${on ? ' on' : ''}"><span class="radio"><input type="radio" name="${name}" value="${val}" data-adm="${name}"${on ? ' checked' : ''}> <span><b>${esc(label)}${sub ? ` <small>${esc(sub)}</small>` : ''}</b></span></span></label>`;
+  return `<div class="page"><div class="page-in narrow"><h2>Site Admin</h2><p class="lede">Settings for everyone on Session.</p>
+    <section class="box adm"><h3>Default model</h3><div class="amrows" role="radiogroup" aria-label="Default model">${models.map(m => row('def', m, m, MODELS[m].prov, m === ADMIN.def)).join('')}</div></section>
+    <section class="box adm"><h3>Default effort</h3><div class="amrows" role="radiogroup" aria-label="Default effort">${EFFORT_OPTS.map(e => row('eff', e, cap1(e), '', e === ADMIN.effort)).join('')}</div></section></div></div>`;
 }
 
 /* ---- answer extras (mock option): an interactive widget in one answer ----
@@ -2694,8 +2583,8 @@ function renderMock() {
     
     
     ${seg('pl', 'Layout', 2)}
-    ${seg('adm', 'Admin panel', 4)}
     ${seg('wx', 'Answer extras', 2)}
+    ${seg('emp', 'Empty states', 3)}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -2729,7 +2618,7 @@ function renderInner() {
   if (st.auth === 'out') st.screen = 'network';
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
   if (st.screen === 'network') renderNetwork();
-  else { pg.innerHTML = (st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : st.screen === 'notifications' && isActive() ? notifPage() : st.screen === 'admin' && isAdmin() ? adminPage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; if ($('.adm-c')) { $('#k-page').addEventListener('scroll', admSpy, { passive: true }); admSpy(); } }
+  else { pg.innerHTML = (st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : st.screen === 'notifications' && isActive() ? notifPage() : st.screen === 'admin' && isAdmin() ? adminPage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
   app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg, :scope > #selbranch, :scope > #sellook, :scope > #citepop').forEach(x => x.remove());
   citeReady();
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
@@ -2744,8 +2633,10 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
+  if (k !== 'emp') st.emptyPv = false;
+  if (k === 'emp') { if (st.auth !== 'in' || !isActive()) signIn('ines.v'); st.emptyPv = true; st.screen = 'network'; st.space = 'saved'; render(); return; }
   if (k === 'pl') { st.screen = 'network'; st.authOpen = false; render(); return; }
-  if (k === 'adm') { if (st.auth !== 'in' || !isAdmin()) signIn('sol'); st.screen = 'admin'; st.admSpy = null; render(); $('#k-page') && ($('#k-page').scrollTop = 0); return; }
+  if (k === 'adm') { if (st.auth !== 'in' || !isAdmin()) signIn('sol'); st.screen = 'admin'; render(); $('#k-page') && ($('#k-page').scrollTop = 0); return; }
   if (k === 'wx') { st.wx = { ...WX0 }; if (st.auth !== 'in' || !isActive()) signIn('ines.v'); st.screen = 'network'; st.space = 'markets'; render();
     const w = $('.wdg') || $('#card-' + WX_PID), mg = $('#k-mg'); if (w && mg) { st.keepBar = true; mg.scrollTop += w.getBoundingClientRect().top - mg.getBoundingClientRect().top - 120; } return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
@@ -2811,8 +2702,8 @@ app.addEventListener('click', e => {
 });
 app.addEventListener('change', e => {
   const t = e.target, k = t.dataset.adm; if (!k) return;
-  if (k === 'def' || k === 'cdef') setDefault(t.value);
-  if (k === 'over') { if (t.value) ADMIN.over[t.dataset.u] = t.value; else delete ADMIN.over[t.dataset.u]; if (t.dataset.u === st.user) st.newModel = modelFor(st.user); toast(`@${t.dataset.u} now starts on ${modelFor(t.dataset.u)}.`); render(); }
+  if (k === 'def') setDefault(t.value);
+  if (k === 'eff') setDefaultEffort(t.value);
 });
 app.addEventListener('change', e => { if (e.target.dataset.ma === 'bill') { BILLING[st.user] = e.target.value; toast(e.target.value === 'key' ? 'Asks will continue on your API key.' : 'Asks will pause until the reset.'); render(); } });
 app.addEventListener('submit', e => {
