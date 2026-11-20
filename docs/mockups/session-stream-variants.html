@@ -180,6 +180,9 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 /* Split · ends: avatar at the first line, controls at the last */
 .nb-a { align-items: flex-end; }
 .nb-a > .av { align-self: flex-start; margin-top: 5px; }
+/* bottom-aligned items keep the same centres as the one-line bar: text and 26px pills sit on the 30px button's centre line */
+.nb-a > textarea { margin-bottom: 1px; }
+.nb-a > .mpick:not(.split), .nb-a > .pick { margin-bottom: 2px; }
 .nb-bare { padding-left: 16px; }
 /* Split */
 .split { display: inline-flex; flex: none; }
@@ -192,13 +195,6 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .mi-2 b { display: block; font-weight: 500; color: var(--t-heading); }
 .mi-2 small { display: block; font-size: var(--fs-xs); color: var(--t-faint); margin-top: 1px; }
 .mi-2 svg.i { margin-top: 3px; }
-/* Modes */
-.nb-modecard { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 10px 14px 10px; transition: box-shadow .15s; }
-.nb-modecard:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow-soft); }
-.nb-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
-.nb-top .modes { margin-right: 4px; }
-.nb-modecard .nb-f { margin-top: 6px; }
-.nb-modecard textarea { font-size: 15.5px; line-height: 1.5; }
 .composer button { height: 30px; padding: 0 12px; border-radius: 15px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); }
 .composer .ctx { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
 .status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--warn); }
@@ -566,7 +562,7 @@ const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data
 /* ================= pinned maps ================= */
 /* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
    as a small outline tree per passage. */
-const st = { v: 'split', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
+const st = { v: 'splitEnds', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
 
 /* Which model answered and at what thinking effort. The fixtures do not record it; the mock picks one
    per thread. Shown in a tooltip on the answer's icon. */
@@ -708,10 +704,8 @@ const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches i
 const TREE_NOTE = 'Posts keep the pinned branch trees and avatar reply trees.';
 const variant = (name, thesis, composer, dock = false) => ({ name, q: 'Composer', thesis: `${thesis} ${TREE_NOTE}`, composer, dock, replies: replyLines, layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); } });
 const V = {
-  split: variant('Split', '<strong>One button that knows both actions.</strong> No switch: the send button is split, and its arrow chooses whether it asks the agent or posts to people.', 'split'),
   splitEnds: variant('Split · ends', '<strong>Split, for longer asks.</strong> As the text grows past one line, your avatar stays beside the first line and the space, model and split button stay beside the last, where the cursor is.', 'splitEnds'),
-  splitBare: variant('Split · no avatar', '<strong>Split, without the avatar.</strong> The line holds only the text, the space, the model (for asks) and the split button; who is posting is clear from the account.', 'splitBare'),
-  modes: variant('Modes', '<strong>Choose the kind of thread first.</strong> Ask shows the model menu, with thinking effort inside it; Post hides it.', 'modes'),
+  splitBare: variant('Split · no avatar', '<strong>Split · ends, without the avatar.</strong> Only the text and the controls; as the text grows, the space, model and split button stay beside the last line.', 'splitBare'),
 };
 
 /* ---- composers: start a thread. Each variant below uses one. The draft survives re-renders. ---- */
@@ -755,11 +749,8 @@ const COMPOSERS = {
   },
   /* Split, with the avatar held at the first line and the controls at the last as the text grows. */
   splitEnds: () => COMPOSERS.split(' nb-a'),
-  /* Split without the avatar: the line is all text and controls. */
-  splitBare: () => COMPOSERS.split(' nb-bare', false),
-  /* D: mode first; Ask shows the model menu (with effort inside), Post hides it. */
-  modes: () => `<div class="row new-row"><form class="${nbClass('nb-modecard')}" data-form="new:x"><div class="nb-top">${modeSeg()}${spaceField()}${isAsk() ? modelMenu() : ''}</div>
-    ${draft(ph())}<div class="nb-f"><button type="submit" value="${st.newMode}" class="primary" data-enter>${isAsk() ? 'Ask' : 'Post'}</button></div></form><div></div></div>`,
+  /* Split · ends without the avatar: text and controls only. */
+  splitBare: () => COMPOSERS.split(' nb-a nb-bare', false),
 };
 let nseq = 0;
 function newThread(space, q, kind) {
@@ -801,7 +792,7 @@ function renderBar() {
   $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${st.theme === k}">${l}</button>`).join('');
   $('#thesis').innerHTML = `<span class="qtag">${V[st.v].q}</span>` + V[st.v].thesis;
 }
-function go(v) { if (!V[v]) v = 'split'; st.v = v; st.asking = null; renderBar(); render(); }
+function go(v) { if (!V[v]) v = 'splitEnds'; st.v = v; st.asking = null; renderBar(); render(); }
 $('#variant-seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { history.replaceState(null, '', '#' + b.dataset.v); go(b.dataset.v); } });
 $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; st.theme = b.dataset.t; if (st.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = st.theme; renderBar(); });
 
@@ -866,6 +857,6 @@ document.addEventListener('keydown', e => {
   if (e.key.length !== 1 || !k) return;
   e.preventDefault(); history.replaceState(null, '', '#' + k); go(k);
 });
-go(location.hash.slice(1) || 'split');
+go(location.hash.slice(1) || 'splitEnds');
 document.fonts?.ready.then(() => render());
 </script>
