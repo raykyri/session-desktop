@@ -12,7 +12,7 @@ import { isClosed, spaceName } from "../data/format.js";
 import type { Space, ThreadView } from "../data/spaces.js";
 import { useStatus } from "../sync/react.js";
 
-import { ModelMenu, PayerLine } from "./Composer.js";
+import { ModelMenu, PayerLine, useAskModel } from "./Composer.js";
 import { DiscardDialog, LeaveGuard } from "./Discard.js";
 import { Modal } from "./Page.js";
 import { Scrim } from "./Scrim.js";
@@ -285,6 +285,7 @@ export function AskBox({
   const [draft, setDraft] = useState("");
   const [model, setModel] = useState("");
   const [pay, setPay] = useState("session");
+  const asked = useAskModel(pay, model);
   const [err, setErr] = useState<{ text: string; retry: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -309,7 +310,14 @@ export function AskBox({
     setErr(null);
     const o = await create.send(
       "research.forkNode",
-      (id) => ({ id, thread: t.id, parent: par, q, pay, ...(model ? { model } : {}) }),
+      (id) => ({
+        id,
+        thread: t.id,
+        parent: par,
+        q,
+        pay,
+        ...(asked.model ? { model: asked.model.id } : {}),
+      }),
       { text: q },
     );
     setBusy(false);
@@ -359,7 +367,7 @@ export function AskBox({
         <PayerLine pay={pay} setPay={setPay} />
       )}
       <div className="qt-cbar fu2-bar">
-        <ModelMenu model={model} setModel={setModel} />
+        <ModelMenu model={model} setModel={setModel} pay={pay} />
         <span className="grow" />
         <button className="btn" type="button" onClick={cancel}>
           Cancel

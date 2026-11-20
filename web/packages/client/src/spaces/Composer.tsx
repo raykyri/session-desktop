@@ -7,12 +7,16 @@
 // through (the mockup's as-post-check), opens it if it did (as-post-lost,
 // with Copy your edits when the text changed since), and otherwise sends it
 // again with the same id. A draft closed with Escape or Close asks before it
-// is discarded.
+// is discarded. Who pays is aware of providers (phase 2a design finding 6):
+// a key pays only for its own provider's models, so the model menu lists the
+// models the payer runs, a key that runs none of them is not offered, and a
+// model the payer cannot run changes to one it can, with the mockup's note.
 
+import type { ModelInfo } from "@session/shared";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
-import { useRuntimeConfig } from "../api/account.js";
+import { useMe, useRuntimeConfig } from "../api/account.js";
 import { spaceName } from "../data/format.js";
 import type { Space } from "../data/spaces.js";
 import { useRecords } from "../sync/react.js";
@@ -29,11 +33,59 @@ import { lostEditsToast, useCreate } from "./writes.js";
 const GLOBE =
   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="5.8"/><path d="M2.4 8h11.2M8 2.2c1.7 1.6 2.6 3.6 2.6 5.8S9.7 12.2 8 13.8M8 2.2C6.3 3.8 5.4 5.8 5.4 8s.9 4.2 2.6 5.8"/></svg>';
 
-/** Who pays for an ask: the included tokens, or one of the person's keys. */
-function usePayers() {
+/** The provider an API key must be of to pay for a model's calls (the
+ * server's rule: a key pays only for its own provider's models). */
+const KEY_PROVIDER: Record<string, string> = { anthropic: "Anthropic", openrouter: "OpenRouter" };
+/** A provider's models, as the mockup's note names them (TM_FAM). */
+const FAMILY: Record<string, string> = { Google: "Gemini", OpenAI: "GPT", Anthropic: "Claude" };
+
+interface Payer {
+  id: string;
+  name: string;
+  provider: string;
+}
+
+/** The models a payer runs: a key, its provider's; the included tokens,
+ * every available model (one only for admins, for an admin). */
+export function modelsFor(
+  pay: string,
+  models: readonly ModelInfo[],
+  keys: readonly Payer[],
+  admin: boolean,
+): ModelInfo[] {
+  const ok = models.filter((m) => m.available);
+  if (pay === "session") return ok.filter((m) => admin || !m.adminOnly);
+  const k = keys.find((x) => x.id === pay);
+  return k ? ok.filter((m) => KEY_PROVIDER[m.provider] === k.provider) : [];
+}
+
+/** The model an ask runs with: the person's choice when the payer runs it,
+ * else the payer's first model, and the mockup's note when it changed. */
+export function modelChoice(
+  pay: string,
+  chosen: string,
+  models: readonly ModelInfo[],
+  keys: readonly Payer[],
+  admin: boolean,
+): { list: ModelInfo[]; model: ModelInfo | undefined; note: string | null } {
+  const list = modelsFor(pay, models, keys, admin);
+  const want = models.find((m) => m.id === chosen);
+  const model = list.find((m) => m.id === chosen) ?? list[0];
+  const k = keys.find((x) => x.id === pay);
+  const note =
+    want && model && want.id !== model.id && k
+      ? `${k.name} runs ${FAMILY[k.provider] ?? k.provider} models, so the model changed from ${want.label} to ${model.label}.`
+      : null;
+  return { list, model, note };
+}
+
+/** Who pays for an ask: the included tokens, or one of the person's keys
+ * that runs at least one of the models. */
+function usePayers(): Payer[] {
   const w = useWorld();
+  const config = useRuntimeConfig();
   const me = w.me?.u ?? null;
-  return (
+  const keys =
     useRecords(
       (r) =>
         me
@@ -42,16 +94,31 @@ function usePayers() {
               .map((k) => ({ id: k.id, name: k.name, provider: k.provider }))
           : [],
       [me],
-    ) ?? []
-  );
+    ) ?? [];
+  const models = config.data?.models ?? [];
+  return keys.filter((k) => modelsFor(k.id, models, keys, false).length > 0);
 }
 
-export function ModelMenu({ model, setModel }: { model: string; setModel: (m: string) => void }) {
+/** The model and who pays for an ask, aware of providers. */
+export function useAskModel(pay: string, chosen: string) {
   const config = useRuntimeConfig();
+  const admin = useMe().data?.isAdmin === true;
+  const keys = usePayers();
+  return modelChoice(pay, chosen, config.data?.models ?? [], keys, admin);
+}
+
+export function ModelMenu({
+  model,
+  setModel,
+  pay,
+}: {
+  model: string;
+  setModel: (m: string) => void;
+  pay: string;
+}) {
   const [open, setOpen] = useState(false);
   useOverlay(open, () => setOpen(false));
-  const models = (config.data?.models ?? []).filter((m) => m.available);
-  const cur = models.find((m) => m.id === model) ?? models[0];
+  const { list: models, model: cur, note } = useAskModel(pay, model);
   return (
     <div className="mp mp-base">
       <button
@@ -70,6 +137,11 @@ export function ModelMenu({ model, setModel }: { model: string; setModel: (m: st
           <Scrim onClose={() => setOpen(false)} />
           <div className="pop mp-pop" role="menu" aria-label="Model">
             <div className="grp eyebrow">Model</div>
+            {note ? (
+              <p className="tm-mnote" role="status">
+                {note}
+              </p>
+            ) : null}
             {models.map((m) => (
               <button
                 key={m.id}
@@ -155,12 +227,12 @@ export function Composer({ space }: { space: Space | null }) {
   const w = useWorld();
   const navigate = useNavigate();
   const create = useCreate();
-  const config = useRuntimeConfig();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"ask" | "post">("ask");
   const [draft, setDraft] = useState("");
   const [model, setModel] = useState("");
   const [pay, setPay] = useState("session");
+  const asked = useAskModel(pay, model);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const joined = Object.keys(w.roles)
@@ -209,7 +281,7 @@ export function Composer({ space }: { space: Space | null }) {
       </button>
     );
 
-  const firstModel = (config.data?.models ?? []).find((m) => m.available)?.id ?? null;
+  const runs = asked.model?.id ?? null;
   const submit = async () => {
     if (!target || !draft.trim() || busy) return;
     setBusy(true);
@@ -222,7 +294,7 @@ export function Composer({ space }: { space: Space | null }) {
             kind: "ask",
             q,
             pay,
-            ...(model || firstModel ? { model: model || firstModel } : {}),
+            ...(runs ? { model: runs } : {}),
           }
         : { id, space: target.id, kind: "post", q };
     // the person goes to the thread once the server has it: a create that
@@ -294,7 +366,7 @@ export function Composer({ space }: { space: Space | null }) {
             ))}
           </div>
           {ask ? (
-            <ModelMenu model={model} setModel={setModel} />
+            <ModelMenu model={model} setModel={setModel} pay={pay} />
           ) : (
             <span className="c2-note c2-free">Posts use no tokens.</span>
           )}
