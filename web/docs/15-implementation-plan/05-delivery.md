@@ -67,8 +67,9 @@ Scope:
 - Every write in the contract that the client uses, ported from
   `replica-proto/src/mutators.ts` and the mock API, plus the contract changes
   listed in `01-architecture-and-data.md` and in
-  `04-membership-moderation-security.md` §11 (report `why` optional, removal
-  `reason`, `modlog` records, no default channel rules).
+  `04-membership-moderation-security.md` §11 (report and removal notes,
+  `modlog` records with ban kinds, `vis: "private"`, owner-only About, no
+  default channel rules). Deferred surfaces (`01` C10) are left out.
 - Shared validators used by both client forms and mutators: channel name,
   handle, text bounds.
 - The `unknown` answer for reads the replica cannot answer, which stops
@@ -132,8 +133,9 @@ Scope:
   the `@session/sync` server library and SQLite; the commit that writes record
   changes, the stored answer, the seq and queued effects together; the effect
   worker with backoff; the protocol version header and the minimum-version
-  answer; cookie authentication per `06-auth-and-users.md` and the
-  device-token path (`04` §12); request-level rate limits.
+  answer (`Session-Protocol`, `426 UPGRADE_REQUIRED`, `01` S1); cookie
+  authentication per `06-auth-and-users.md` and the device-token path (`01`
+  S2); request-level rate limits.
 - A conformance adapter: replica-proto's harness (`test/harness.ts`) gains a
   target interface (apply, snapshot, pull, register, clock control, random
   source fault injection, storage scan). The prototype implements it in
@@ -202,16 +204,16 @@ Exit criteria:
 ### M6 — Membership and moderation
 
 Scope: everything in `04-membership-moderation-security.md`: account invites,
-the members page and invite tree, the "Join with invite?" step and pending
-sign-ups, channels with open and private visibility, roles, channel info and
+the members page and invite tree, the "Join with invite?" step and waiting
+accounts, channels with open and private visibility, roles, channel info and
 About editing, channel invite links, report, remove with reason, ban, the
 moderation log, frozen copies, abuse limits.
 
 Exit criteria:
 - `e2e/invites.spec.ts` and `e2e/moderation.spec.ts` as specified in `04`
   §3.4, §5 and §6.6.
-- Server tests for the account-invite slot rule, concurrency and pending
-  sign-ups; the conformance suites still pass after the contract changes.
+- Server tests for the account-invite slot rule, concurrency and the
+  waiting-account sweep; the conformance suites still pass after the contract changes.
 - A privacy check run by hand on staging before M8: after a removal, the text
   is absent from the SQLite file, from pull and snapshot answers for every
   role, and from the effect queue.
@@ -225,21 +227,22 @@ Scope:
 - A SQLite storage adapter for `@session/sync` on the Rust side, exposed to
   the client through a narrow command set (load working set, persist batch,
   wipe), so the outbox survives restarts for 3 days.
-- Device-token sign-in through the system browser and the app's URL scheme;
-  the token in the Keychain; sign-out wipes the replica and outbox.
-- Device runs (`03-agents-and-research.md`, ADR-21): a run executor that
-  claims runs with `runs.claim`, spawns Claude Code or Codex in an empty
-  working directory, reports `runs.turn` and `runs.finish` with the attempt
-  number, keeps a heartbeat lease separate from progress, and caps an answer
-  at 200 KB. No CLI session resume.
+- Device-token sign-in through a one-time pairing code from a signed-in web
+  session (`01` S2); the token in the Keychain; sign-out wipes the replica
+  and outbox.
+- Device runs (`03-agents-and-research.md` V1–V7, ADR-21): an executor that
+  claims runs (`/api/runs/claim`), spawns Claude Code or Codex in an empty
+  temporary directory, reports turns and the finish with the attempt number,
+  sends heartbeats every 10 s on a lease separate from progress, and stays
+  under the 200 KB answer cap. No CLI session resume.
 - The updater keeps its existing key and endpoint (`docs/releasing.md`).
 
 Exit criteria:
 - `cargo test` in `src-tauri` covers the storage adapter (persist, load,
   wipe, a crash between persist and acknowledge), token storage through a
-  Keychain abstraction, and the device-run executor against a fake CLI binary
-  that emits recorded JSONL (claim, turns, finish, lease loss ending
-  `interrupted`).
+  Keychain abstraction, and the device-run executor against the fake-CLI
+  fixture of `03` V4 (recorded JSONL: claim, turns, finish, lease loss ending
+  `interrupted`, a working directory that is empty at spawn).
 - The root `npm run check` and `npm test` pass; the desktop workflow's
   `frontend`, `rust` and `native` jobs pass.
 - A manual macOS checklist (kept in `web/docs/runbooks/desktop-release.md`):
@@ -251,12 +254,17 @@ Exit criteria:
 
 Scope (`AGENTS.md` "Cutover"; `docs/session-cutover.md` for the naming and
 storage contracts that stay):
-- Reset migration on the production database: drop the trees, nodes,
-  workspaces, folders, highlights, recaps, drafts, thread invitations,
-  notifications and their files under `/data/documents`; keep `users` (GitHub
-  identity, `is_admin`, `invited_by`), `sessions`, `user_limits`, and
-  `invites` in its extended form. Existing accounts become active members and
-  roots of the invite tree where `invited_by` is null.
+- Data reset. `01` D5 leaves the choice between the migration
+  `0002_drop_research.sql` and a full reset (`runbooks/reset-database.md`) to
+  this file. Choice: the migration. It drops the research tables (trees,
+  nodes, workspaces, folders, highlights, recaps, drafts, thread invitations,
+  notifications) and their files under `/data/documents`, and keeps `users`
+  (GitHub identity, `is_admin`, `invited_by`), `sessions`, `user_limits` and
+  the sign-up codes in their extended form (`01` C8). Existing accounts
+  become `active` and, where `invited_by` is null, roots of the invite tree;
+  each chooses a handle at first sign-in. The full reset would discard the
+  accounts and admin flags the invite tree starts from. Question 19 asks
+  whether to reset anyway.
 - Before the migration: a Litestream snapshot, verified by a restore to a
   scratch machine, kept for the 30-day retention; an announcement to existing
   web users that their threads will be removed, with a date.
@@ -307,8 +315,10 @@ open question (§6).
   queue add write volume; WAL checkpoints are monitored (§4).
 - A restore moves the database back in time. Clients may hold cursors and
   confirmed answers from after the restored point. The restore runbook adds:
-  bump the log epoch before the server accepts traffic, so every cursor
-  resyncs, and record the restore time. Writes confirmed after the restored
+  bump the log epochs before the server accepts traffic, so every cursor
+  resyncs (`01` D6: the runbook writes a restore marker, and boot increments
+  every epoch on a mismatch), and record the restore time. Writes confirmed
+  after the restored
   point and before the failure are lost: their idempotency answers are gone,
   and clients have dropped them from their outboxes. With Litestream's
   seconds of lag this is a small window; the runbook states it.
@@ -332,10 +342,13 @@ open question (§6).
 
 ### 3.5 Configuration added
 
-`SESSION_CURSOR_KEY`, `SESSION_CURSOR_KEY_PREVIOUS`, `SESSION_MIN_PROTOCOL`,
-`SESSION_DESKTOP_ORIGINS` (CORS allowlist), the device-run limits
-(`SESSION_DEVICE_RUNS_PER_HOUR=100`, `SESSION_DEVICE_ANSWER_BYTES=204800`) and
-the abuse limits in `04` §10, all listed in `web/.env.example`.
+From `01` S3 and `03`: `SESSION_MIN_PROTOCOL`, `SESSION_CURSOR_KEY`,
+`SESSION_CURSOR_KEY_PREVIOUS`, `SESSION_SECRET_KEY`,
+`SESSION_DEVICE_ANSWER_MAX_BYTES`, `SESSION_DEVICE_RUNS_PER_HOUR`,
+`SESSION_WEEKLY_TOKENS`, `SESSION_RUN_MAX_TOKENS`. Added here: the CORS
+allowlist of desktop origins and the abuse limits of `04` §10. All are
+validated at boot and documented in `web/.env.example`; the keys are Fly
+secrets.
 
 ## 4. Observability
 
@@ -384,18 +397,24 @@ outboxes.
 
 Membership, moderation and security (details in `04` §15):
 
-1. Does the removed placeholder show the author's handle (needs the author
-   kept after erasure)?
-2. How long does a removal placeholder stay: 30 days, 90 days or for good?
-3. Account invite code format: 30-bit `SESS-XXXX-XX` or 50-bit
-   `SESS-XXXXX-XXXXX`.
-4. Can members see their open codes again after creation?
+1. Does the removal placeholder show the author's handle, as the mockup does
+   (`01` C12 keeps the author only on the staff-only `modlog` entry)?
+2. Does a removal placeholder stay until the author deletes it, or expire?
+3. Account invite codes: 30-bit `SESS-XXXX-XX` or 50-bit `SESS-XXXXX-XXXXX`?
+4. Can members see their open codes again after creation (needs reversible
+   storage)?
 5. Does the desktop keep a frozen copy after a voluntary Leave?
 6. Site-wide moderators, or only `users.is_admin`?
-7. Sign in with X in addition to or instead of GitHub.
-8. Pending sign-up lifetime and throttling.
+7. Sign in with X in addition to or instead of GitHub (ADR-5)?
+8. Lifetime of a waiting account without a code, and its place in sign-up
+   throttling.
 9. Report and remove follow-ups and replies individually at launch?
 10. Offer Hide to staff?
+
+Raised in `01` §9 and decided elsewhere or still open: moderator and admin
+roles in v1 (`01` question 5; `04` proposes "Make moderator"), join requests
+(`01` question 6), the Litestream retention bound for erased text (`01`
+question 3).
 
 Delivery:
 
@@ -414,3 +433,5 @@ Delivery:
 17. Cutover date and the notice period for existing web users.
 18. Does the Phone (React Native) client need any milestone before M8, or is
     it scheduled after the cutover?
+19. Keep existing accounts through the data reset (the `0002` migration, M8),
+    or reset the database fully and re-seed admins by hand?
