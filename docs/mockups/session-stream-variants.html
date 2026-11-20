@@ -153,7 +153,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .card > :nth-last-child(2) { margin-bottom: 12px; }
 .card-f { display: flex; align-items: center; gap: 4px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--divider); }
 .card-f .notes { font-weight: 600; color: var(--t-heading); font-size: var(--fs-sm); margin-right: auto; }
-.card-f .notes span { color: var(--t-faint); font-weight: 400; }
+.iconbtn.likes { width: auto; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .mgn { min-width: 0; position: relative; }
 .mgn .label { display: block; margin: 2px 0 8px; }
 .stick { position: sticky; top: 58px; max-height: calc(100vh - 150px); overflow-y: auto; padding: 2px 2px 8px 0; }
@@ -189,6 +189,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .preview .prose { font-size: var(--fs-sm); max-height: 260px; overflow-y: auto; }
 .preview .pf { display: flex; gap: 12px; margin-top: 8px; font-size: var(--fs-xs); color: var(--t-faint); align-items: center; }
 .preview .pf .tlink { font-size: inherit; font-weight: inherit; }
+.mgn .preview .composer { margin-top: 10px; }
 
 /* Layers */
 .laygrp { border-left: 0; padding-left: 0; }
@@ -448,16 +449,16 @@ const st = { v: 'pinned', data: savedData(), space: 'home', theme: 'system', sel
 
 function card(p) {
   const head = `<div class="card-h">${av(p.u)}<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div></div>`;
-  const acts = `<button class="iconbtn" aria-label="Like">${I.heart}</button><button class="iconbtn" aria-label="Save">${I.save}</button>`;
+  const acts = `<button class="iconbtn likes" aria-label="Like, ${p.likesBase || 0} likes">${I.heart}<span>${p.likesBase || 0}</span></button><button class="iconbtn" aria-label="Save">${I.save}</button>`;
   if (p.k === 'post') {
     const n = replyCount(p);
-    return `<article class="card">${head}<p class="post">${esc(p.q)}</p><div class="card-f"><span class="notes">${noun(n, 'reply', 'replies')} <span>· ${p.likesBase} likes</span></span><button class="iconbtn" aria-label="Reply">${I.reply}</button>${acts}</div></article>`;
+    return `<article class="card">${head}<p class="post">${esc(p.q)}</p><div class="card-f"><span class="notes">${noun(n, 'reply', 'replies')}</span><button class="iconbtn" aria-label="Reply">${I.reply}</button>${acts}</div></article>`;
   }
   const T = tree(p), src = (D.srcd[p.id] || []).length;
   return `<article class="card" id="card-${p.id}">${head}${p.t ? `<h2>${esc(p.t)}</h2>` : ''}<p class="ask">${esc(T.nodes.r.q)}</p>
     <div class="byline">${mark('sm')}<span>Answered by Session${src ? ` · ${noun(src, 'source', 'sources')}` : ''} · ${ktok(p.tok)}</span></div>
     <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
-    <div class="card-f"><span class="notes">${noun(T.count, 'branch', 'branches')} <span>· ${p.likesBase} likes</span></span><button class="iconbtn" data-a="ask" data-id="${p.id}" aria-label="Branch">${I.branch}</button>${acts}</div></article>`;
+    <div class="card-f"><span class="notes">${noun(T.count, 'branch', 'branches')}</span><button class="iconbtn" data-a="ask" data-id="${p.id}" aria-label="${st.asking === p.id ? 'Close the branch box' : 'Branch'}">${st.asking === p.id ? I.x : I.branch}</button>${acts}</div></article>`;
 }
 const repliesMargin = p => { const r = replies(p); return r.length ? `<span class="label">Replies · ${replyCount(p)}</span>${replyTree(r)}` : ''; };
 
@@ -494,7 +495,7 @@ function pinGroups(p, draw, cls = '') {
   const prose = document.getElementById('pr-' + p.id), margin = document.getElementById('mr-' + p.id);
   if (!prose || !margin) return;
   const T = tree(p), items = [];
-  if (st.asking === p.id) { margin.insertAdjacentHTML('beforeend', `<div class="pin">${composer('mf:' + p.id + ':r', 'Ask a branch question about the answer')}</div>`); items.push({ el: margin.lastElementChild, anchor: prose.firstElementChild }); }
+  if (st.asking === p.id && !st.sel[p.id]) { margin.insertAdjacentHTML('beforeend', `<div class="pin">${composer('mf:' + p.id + ':r', 'Ask a branch question about the answer')}</div>`); items.push({ el: margin.lastElementChild, anchor: prose.firstElementChild }); }
   for (const G of groupsFor(p, prose)) {
     badge(G.block, G.g, G.total);
     margin.insertAdjacentHTML('beforeend', `<div class="pin grp ${cls}" data-grp-box="${G.g}">${draw(T, G)}</div>`);
@@ -585,7 +586,7 @@ app.addEventListener('click', e => {
   const a = t.dataset.a, d = t.dataset;
   if (a === 'space') { st.space = d.id; st.asking = null; render(); $('#k-mg').scrollTop = 0; return; }
   if (a === 'ask') { st.asking = st.asking === d.id ? null : d.id; st.sel[d.id] = null; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
-  if (a === 'askfrom') { st.sel[d.id] = d.node; st.asking = d.id; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
+  if (a === 'askfrom') { st.sel[d.id] = d.node; st.asking = d.id; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
   if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; render(); return; }
   if (a === 'layer') { st.layer[d.g] = d.node; st.sel[d.id] = null; render(); return; }
 });
@@ -605,6 +606,13 @@ app.addEventListener('submit', e => {
 });
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(render, 150); });
 window.addEventListener('hashchange', () => go(location.hash.slice(1)));
+/* Ctrl+A, Ctrl+B, ... switch to the variant with that letter (not while typing in a field) */
+document.addEventListener('keydown', e => {
+  if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.target.closest('input, textarea, [contenteditable]')) return;
+  const k = ORDER[e.key.toLowerCase().charCodeAt(0) - 97];
+  if (e.key.length !== 1 || !k) return;
+  e.preventDefault(); history.replaceState(null, '', '#' + k); go(k);
+});
 go(location.hash.slice(1) || 'pinned');
 document.fonts?.ready.then(() => render());
 </script>
