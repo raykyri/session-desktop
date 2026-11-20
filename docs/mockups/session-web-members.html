@@ -1325,7 +1325,7 @@ function authScreen() {
   let body = '';
   const linkInv = st.fromLink && INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
   if (st.flow === 'landing' && linkInv) {
-    body = `<div class="auth-c"><span class="brand lg">${mark()}<b>Session</b></span><div class="inviter">${av(linkInv.by)}<div><b>${esc(nameOf(linkInv.by))} invited you to Session</b><small>@${esc(linkInv.by)} · this invite expires ${day(addDays(linkInv.created, INVITE_DAYS))}</small></div></div>
+    body = `<div class="auth-c"><div class="inviter">${av(linkInv.by)}<div><b>${esc(nameOf(linkInv.by))} invited you to Session</b><small>@${esc(linkInv.by)} · this invite expires ${day(addDays(linkInv.created, INVITE_DAYS))}</small></div></div>
       <h2>Research with agents, in shared spaces.</h2><p>Ask a question and an agent researches it. Branch from any passage of the answer to go deeper; everyone in the space can read and build on it.</p>
       <div class="auth-acts">${xBtn('Continue with X')}<button class="btn2" data-ma="nolink">I already have an account</button></div></div>`;
   } else if (st.flow === 'landing') {
