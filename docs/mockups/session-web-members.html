@@ -1405,7 +1405,7 @@ function treeA() {
    inv:    A slots bar + full list · B one line + open codes only · C one button that shows the newest open code
    layout: A two columns · B one column */
 /* explanation above the invite tree */
-const TREE_COPY = [`Session is invite-only.`, `You can have ${SLOTS} open invite links at a time. Each link works for one person and expires ${INVITE_DAYS} days after you make it. A slot frees when a link is used, expires or is revoked.`];
+const TREE_COPY = [`Session is invite-only. You can have ${SLOTS} open invite links at a time. Each link works for one person and expires ${INVITE_DAYS} days after you make it. A slot frees when a link is used, expires or is revoked.`];
 function treeSection() {
   st.treeScope = 'all';
   return `<section><h3>Invite tree</h3>${TREE_COPY.map(t => `<p class="sub tcopy">${t}</p>`).join('')}<div class="tgap"></div>${treeA()}</section>`;
