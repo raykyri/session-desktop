@@ -458,7 +458,8 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .tabs .tadd:hover { background: var(--fill-hover); color: var(--t-heading); }
 .tabs .tlinkb { color: var(--accent); }
 .tabs .sscope { flex: none; margin-right: 6px; }
-.tabs .sscope button { padding: 4px 10px; }
+.tabs .sscope { height: 29px; align-items: center; border-radius: 15px; }
+.tabs .sscope button { display: inline-flex; align-items: center; height: 25px; padding: 0 11px; border-radius: 13px; font-size: var(--fs-sm); line-height: 1; }
 .tabs .tj { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: 6px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 12px; line-height: 1; }
 .tabs .tempty { align-self: center; padding: 0 8px; color: var(--t-faint); font-size: var(--fs-sm); white-space: nowrap; }
 /* C rail */
@@ -1742,7 +1743,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { sd: 'a', sv: '1', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1981,8 +1982,6 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
-    <span class="mk"><span class="mkl">Spaces nav</span><span class="seg">${[['a', 'A Strip'], ['b', 'B Dropdown'], ['c', 'C Rail'], ['d', 'D Sidebar']].map(([k, l]) => `<button data-msd="${k}" aria-pressed="${st.ui.sd === k}">${l}</button>`).join('')}</span></span>
-    <span class="mk"><span class="mkl">Variant</span><span class="seg">${SP_VARIANTS[st.ui.sd].map((l, i) => `<button data-msv="${i + 1}" aria-pressed="${st.ui.sv === String(i + 1)}" title="${esc(l)}">${i + 1} ${esc(l)}</button>`).join('')}</span></span>
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Spaces</span>Spaces are made by members. Home shows the spaces you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
