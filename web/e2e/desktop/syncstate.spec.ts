@@ -574,6 +574,9 @@ test("a settings change saved offline is not shown as saved; refused later, its 
   const { page, bridge, records } = await signedInApp(context, {
     path: "/s/sablefield/manage/settings",
   });
+  // every toast from here on is recorded
+  await recordToasts(page);
+  await page.reload();
   await expect(page.locator("#st-rules")).toBeVisible();
   await expect.poll(() => bridge.title).toBe("Session — Manage");
   await offline(page);
@@ -601,6 +604,8 @@ test("a settings change saved offline is not shown as saved; refused later, its 
     "Not saved: your settings change in Sablefield.",
   );
   await expect(toast(page).locator(".sx-tacts button")).toHaveText(["Copy text", "Details"]);
+  // the only toast: no "Settings saved." for the write that waited
+  expect(await toasts(page)).toEqual(["Not saved: your settings change in Sablefield."]);
   await badge(page).click();
   const row = page.getByRole("dialog", { name: "Unsent changes" }).locator(".sx-row");
   await expect(row.locator(".sx-rh b")).toHaveText("Settings in Sablefield");
