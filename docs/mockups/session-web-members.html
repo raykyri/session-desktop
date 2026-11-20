@@ -1451,9 +1451,7 @@ function membersPage() {
 
 /* ---- usage and API keys (key variants) ---- */
 const PROVIDERS = { anthropic: { name: 'Anthropic', prefix: 'sk-ant-', ph: 'sk-ant-...', models: 'Opus 5.5' }, openai: { name: 'OpenAI', prefix: 'sk-', ph: 'sk-...', models: 'GPT-6.1 Sol' } };
-/* API keys: one row per provider (variants of that row). Buttons are real buttons; key values use the body font.
-   A provider | key, status chip, Remove · B the models under the provider name · C status as coloured text, Add key filled
-   D added and last-used dates under the key · E no label column; provider and key on one line · F a gray x removes the key */
+/* API keys: one line per provider with the masked key, status and Remove, or Not set and Add key. Buttons are real buttons; key values use the body font. */
 const mask = (P, k) => `<span class="kmask">${P.prefix}••••${k.last4}</span>`;
 const kStatus = k => `<span class="chip ${k.status === 'working' ? 'ok' : ''}">${k.status === 'working' ? 'Working' : 'Checking…'}</span>`;
 const kErr = id => st.keyErr && st.keyForm === id ? `<p class="ferr">${esc(st.keyErr)}</p>` : '';
@@ -1462,20 +1460,12 @@ const kConfirm = (id, P) => `<div class="kconfirm"><span>Remove the ${P.name} ke
 const kRemove = id => `<button class="btn2 sm" data-ma="keyask" data-k="${id}">Remove</button>`;
 const kAdd = (id, cls = 'btn2 sm') => `<button class="${cls}" data-ma="keyadd" data-k="${id}">Add key</button>`;
 function keysSection() {
-  const v = st.ui.keys;
   const row = id => {
     const P = PROVIDERS[id], k = keys()[id];
-    const status = v === 'c' ? `<span class="kst ${k?.status === 'working' ? 'ok' : 'wait'}">${k?.status === 'working' ? 'Working' : 'Checking…'}</span>` : k ? kStatus(k) : '';
-    const remove = v === 'f' ? `<button class="iconbtn ix" data-ma="keyask" data-k="${id}" aria-label="Remove ${P.name} key" title="Remove">${I.x}</button>` : kRemove(id);
-    const dates = v === 'd' && k ? `<small class="kdates">Added ${day(k.added)}${k.lastUsed ? ` · last used ${day(k.lastUsed)}` : ''}</small>` : '';
-    let body;
-    if (k && st.removing === id) body = kConfirm(id, P);
-    else if (st.keyForm === id) body = kInput(id, P) + kErr(id);
-    else if (k) body = `<div class="kstate">${v === 'e' ? `<b class="kname">${P.name}</b>` : ''}${mask(P, k)}${status}<span class="grow"></span>${remove}</div>${dates}`;
-    else body = `<div class="kstate">${v === 'e' ? `<b class="kname">${P.name}</b>` : ''}${v === 'b' ? '<small>Not added</small>' : `<small>${v === 'e' ? `Add a key to use ${P.models}` : `Runs ${P.models}`}</small>`}<span class="grow"></span>${kAdd(id, v === 'c' ? 'btn1 sm' : 'btn2 sm')}</div>`;
-    if (v === 'e') return `<div class="krow one"><div class="kb">${body}</div></div>`;
-    const label = v === 'b' ? `<span class="klabel"><b class="kname">${P.name}</b><small>${P.models}</small></span>` : `<b class="kname">${P.name}</b>`;
-    return `<div class="krow">${label}<div class="kb">${body}</div></div>`;
+    const body = k && st.removing === id ? kConfirm(id, P) : st.keyForm === id ? kInput(id, P) + kErr(id)
+      : k ? `<div class="kstate"><b class="kname">${P.name}</b>${mask(P, k)}${kStatus(k)}<span class="grow"></span>${kRemove(id)}</div>`
+      : `<div class="kstate"><b class="kname">${P.name}</b><small>Not set</small><span class="grow"></span>${kAdd(id)}</div>`;
+    return `<div class="krow one"><div class="kb">${body}</div></div>`;
   };
   return `<section class="box keys-sec"><h3>API keys</h3>${['anthropic', 'openai'].map(row).join('')}</section>`;
 }
@@ -1513,7 +1503,7 @@ function renderMock() {
   const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcdef'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
-    ${seg('keys', 'API keys', 6)}
+    
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
