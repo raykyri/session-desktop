@@ -14,6 +14,7 @@
   --t-heading: #121617; --t-primary: #23282a; --t-body: #33393b; --t-secondary: #4a5350; --t-muted: #5b625e;
   --t-faint: #686e6b; --t-dim: #9aa19d; --placeholder: #8e958f; --good: #2f8a4d; --warn: #9a6b12;
   --av1: #4a6a86; --av2: #77598c; --av3: #557a52; --av4: #93663f; --av5: #3d7778; --av6: #8a4f4f; --av-fg: #ffffff;
+  --mark: rgba(60,40,20,.06);
   --shadow: 0 1px 2px rgba(60,40,20,.06), 0 0 0 1px rgba(60,40,20,.05);
   --shadow-pop: 0 10px 28px rgba(20,24,26,.14);
   --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -29,6 +30,7 @@
   --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #919994;
   --t-faint: #828b86; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f;
   --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
+  --mark: rgba(255,255,255,.07);
   --shadow: 0 0 0 1px rgba(255,255,255,.06); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
 } }
 :root[data-theme="dark"] {
@@ -40,6 +42,7 @@
   --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #919994;
   --t-faint: #828b86; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f;
   --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
+  --mark: rgba(255,255,255,.07);
   --shadow: 0 0 0 1px rgba(255,255,255,.06); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
 }
 
@@ -153,9 +156,10 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .mgn .composer { margin-top: 8px; }
 .pinned > .pin { position: absolute; left: 0; right: 0; }
 .grp { padding: 2px 0 4px 8px; border-left: 1.5px solid var(--border-strong); transition: border-color .15s; }
-.grp.hl { border-left-color: var(--accent); }
+.grp.hl { border-left-color: color-mix(in srgb, var(--accent) 30%, var(--border-strong)); }
 .grp .preview { margin: 6px 0 4px 8px; }
-.prose .blk-hl { background: var(--accent-soft); box-shadow: -6px 0 0 var(--accent-soft), 6px 0 0 var(--accent-soft); border-radius: 2px; }
+/* passages with branches are marked at all times, in a neutral tint */
+.prose [data-grp] { background: var(--mark); box-shadow: -6px 0 0 var(--mark), 6px 0 0 var(--mark); border-radius: 2px; }
 .anc { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 0 6px; height: 18px; border-radius: 9px; vertical-align: 1px;
   background: var(--accent-soft); color: var(--accent); font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .anc svg.i { width: 11px; height: 11px; }
@@ -186,7 +190,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
   background: var(--card); box-shadow: var(--shadow); transform: translate(calc(var(--i) * 7px), calc(var(--i) * 7px)); opacity: calc(1 - var(--i) * .25); z-index: calc(4 - var(--i)); }
 .lay-front.tap { cursor: pointer; }
 .lay-front { position: relative; z-index: 5; background: var(--card); border-radius: var(--r-lg); box-shadow: var(--shadow), var(--shadow-pop); padding: 10px 12px 12px; }
-.grp.hl .lay-front { box-shadow: 0 0 0 1px var(--accent), var(--shadow-pop); }
+.grp.hl .lay-front { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), var(--shadow-pop); }
 .lay-front .rq { margin: 4px 0 4px; font-size: var(--fs-base); font-weight: 600; color: var(--t-heading); line-height: 1.4; }
 .lay-front .lay-s { margin: 0; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.45; }
 .lay-front .prose { font-size: var(--fs-sm); max-height: 240px; overflow-y: auto; }
@@ -408,7 +412,7 @@ const V = {
   pinned: {
     name: 'Pinned map',
     q: 'Structure',
-    thesis: '<strong>Structure: an outline beside each passage.</strong> Each paragraph that has branches gets its own small tree, drawn as a line graph with one row per branch. Click a row to read it under its tree; hover a tree to see its passage.',
+    thesis: '<strong>Structure: an outline beside each passage.</strong> Each paragraph that has branches is shaded and gets its own small tree, drawn as a line graph with one row per branch. Click a row to read it under its tree.',
     layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); },
   },
   layers: {
@@ -453,10 +457,10 @@ app.addEventListener('click', e => {
   if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; render(); return; }
   if (a === 'layer') { st.layer[d.g] = d.node; st.sel[d.id] = null; render(); return; }
 });
-/* hover links: a drawing and its passage */
+/* hover: outline the drawing under the pointer */
 function hl(e, on) {
   const n = e.target.closest('[data-grp]');
-  if (n) { const g = n.dataset.grp; app.querySelectorAll(`[data-grp="${g}"]`).forEach(x => { if (x.closest('.mgn') || x.classList.contains('anc')) return; x.classList.toggle('blk-hl', on); }); app.querySelector(`[data-grp-box="${g}"]`)?.classList.toggle('hl', on); }
+  if (n) { const g = n.dataset.grp; app.querySelector(`[data-grp-box="${g}"]`)?.classList.toggle('hl', on); }
 }
 app.addEventListener('mouseover', e => hl(e, true));
 app.addEventListener('mouseout', e => hl(e, false));
