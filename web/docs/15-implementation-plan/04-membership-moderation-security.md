@@ -347,8 +347,8 @@ channel, distinct from a removed member's frozen copy, §8).
   "Channel by Deleted account" (the handle stays reserved, §8).
 - A site admin may delete a frozen channel with the channel-deletion
   operator job (§1). This is the existing site-admin action, not a new
-  channel power. What happens to a deleted owner's channels in the long
-  run is question 11.
+  channel power. A deleted owner's channels stay frozen and readable
+  indefinitely; no job deletes them (question 11, decided).
 
 Acceptance: a server test that, after `admin.suspend` of an owner, a
 member's post, a join, a channel link redemption and a report in that
@@ -829,6 +829,5 @@ the token.
    and how many may one IP create (proposed 5 per day)?
 9. Report and remove follow-ups and replies individually at launch?
 10. Offer Hide to the owner, given the server supports it?
-11. A deleted owner's channels are frozen (§4.5). Do they stay frozen and
-    readable indefinitely, or does a site admin delete them after a fixed
-    period (for example 90 days), with notice to members?
+11. Decided: a deleted owner's channels stay frozen and readable
+    indefinitely (§4.5); no job deletes them.

@@ -117,8 +117,8 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
   suspend accounts (04 I6) and delete channels by operator job (04 §1); they
   have no channel role. A channel whose owner is suspended or deleted is
   frozen: readable as before, closed to writes other than deleting one's
-  own items and leaving (04 B6); what eventually happens to a deleted
-  owner's channels is open (05 P24).
+  own items and leaving (04 B6). A deleted owner's channels stay frozen
+  and readable indefinitely; nothing deletes them on a schedule (05 P24).
 
 ## Open questions
 

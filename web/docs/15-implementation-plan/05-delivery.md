@@ -707,9 +707,8 @@ reference from this file.
 - **P22. Typography** (Inter or the app's font; title and input sizes).
   `02` §14 q7.
 - **P23. Settings entry** in the account menu. `02` §14 q8.
-- **P24. A deleted owner's channels.** They are frozen and readable (`04`
-  B6); open: whether they stay so indefinitely or a site admin deletes them
-  after a fixed period. `04` §15 q11.
+- **P24. A deleted owner's channels.** Decided: they stay frozen and
+  readable indefinitely (`04` B6, §15 q11).
 
 ### Engineering
 
