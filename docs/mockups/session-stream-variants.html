@@ -145,7 +145,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 /* Dock: a chat-style bar at the head of the stream, in the flow of the page */
 .row.dock-row { padding: 2px 0 0; }
 .row.dock-row + .row { padding-top: 14px; }
-.nb-dock { display: flex; align-items: center; gap: 8px; background: var(--card); border-radius: 24px; box-shadow: var(--shadow); padding: 7px 7px 7px 12px; transition: box-shadow .15s; }
+.nb-dock { display: flex; align-items: center; gap: 8px; background: var(--card); border-radius: 24px; box-shadow: var(--shadow); padding: 7px 7px 7px 14px; transition: box-shadow .15s; }
 .nb-dock:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow-soft); }
 .nb-dock textarea { flex: 1; min-width: 0; }
 /* model menu */
@@ -244,7 +244,6 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .pad-roomy > :nth-last-child(2) { margin-bottom: 18px !important; }
 .pad-roomy .card-f { padding-top: 12px; }
 .card.pad-inset { padding: 14px 14px 10px; }
-.pad-inset .card-h { margin-left: -2px; }
 .card.pad-even { padding: 18px; }
 .pad-even .card-f { padding-top: 12px; }
 /* avatar placements */
@@ -743,7 +742,7 @@ const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches i
 const TREE_NOTE = 'Posts keep the pinned branch trees and avatar reply trees.';
 const variant = (name, thesis, composer, dock = false, av = 'header', pad = 'base') => ({ name, q: 'Padding', av, pad, thesis: `${thesis} ${TREE_NOTE}`, composer, dock, replies: replyLines, layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); } });
 const V = {
-  inset: variant('Composer inset', '<strong>Cards share the composer\'s inset.</strong> The avatar sits 12px from the card edge, as it does in the composer, and the name lines up with the composer\'s text; the body keeps 14px sides.', () => COMPOSERS.split(' nb-a btn-faded'), false, 'small', 'inset'),
+  inset: variant('Composer inset', '<strong>Cards share the composer\'s inset.</strong> The avatar sits 14px from the card edge, as it does in the composer, and the name lines up with the composer\'s text; the body keeps 14px sides.', () => COMPOSERS.split(' nb-a btn-faded'), false, 'small', 'inset'),
 };
 
 /* ---- composers: start a thread. Each variant below uses one. The draft survives re-renders. ---- */
