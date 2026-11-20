@@ -323,7 +323,7 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .iconbtn.likes { width: auto; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .mgn { min-width: 0; position: relative; }
 .mgn .label { display: block; margin: 2px 0 8px; }
-.stick { position: sticky; top: 58px; max-height: calc(100vh - 150px); overflow-y: auto; padding: 2px 2px 8px 0; }
+.stick { position: sticky; top: calc(58px + 49px); max-height: calc(100vh - 150px); overflow-y: auto; padding: 2px 2px 8px 0; }
 
 /* pinned drawings: placed at the height of the passage they belong to */
 .mgn .composer { margin-top: 8px; }
@@ -472,12 +472,18 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .mockbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding-bottom: 8px; }
 .mk { display: inline-flex; align-items: center; gap: 6px; }
 .mkl { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--t-faint); }
-#shell { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
-#bar { flex: none; position: relative; z-index: 30; transition: margin-top .2s ease; }
+#shell { display: flex; flex-direction: column; height: 100%; overflow: hidden; position: relative; }
+/* The app bar floats over the page and slides with a transform, so hiding it never changes the page's
+   layout or scroll position (a margin change moved the page under the scroll handler and looped). */
+#bar { position: absolute; top: 0; left: 0; right: 0; z-index: 30; transition: transform .2s ease; }
 /* the app bar slides up out of view while the feed scrolls down, and back on any scroll up */
-#bar.hid { margin-top: -49px; }
+#bar.hid { transform: translateY(-100%); }
+#page .mg-inner { padding-top: 49px; }
+#page .page-in { padding-top: calc(24px + 49px); }
+#page > .page { scroll-padding-top: 49px; }
 @media (prefers-reduced-motion: reduce) { #bar { transition: none; } }
 #page { flex: 1; min-height: 0; position: relative; }
+#shell:has(#bar.hid) .stick { top: 58px; }
 #page > .mg, #page > .page { height: 100%; }
 
 /* ---- spaces in the app bar ---- */
