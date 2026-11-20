@@ -1,10 +1,10 @@
-// A whole server with the real agent loop behind recorded provider streams
-// (`12-testing-linting-ci.md` §3.3).
+// The run loop behind recorded provider streams, over an in-memory `RunStore`
+// (`12-testing-linting-ci.md` §3.3). The store records every call, so a test
+// asserts on what the loop wrote rather than on tables.
 
-import type { SessionEvent } from "@session/shared";
+import type { Turn } from "@session/shared";
 import type { ExecutionContext } from "ava";
 
-import type { ServerDeps } from "../src/deps.js";
 import {
   FIXTURE_PAGE_URL,
   fixturePageResponse,
@@ -13,15 +13,10 @@ import {
 import type { Providers } from "../src/runs/providers.js";
 import type { AgentRunsService } from "../src/runs/service.js";
 import { createRunsService } from "../src/runs/service.js";
+import type { AttemptSummary, CompletedAnswer, RunRequest, RunStore } from "../src/runs/store.js";
 
 import type { Harness, HarnessOptions } from "./helpers.js";
 import { createHarness } from "./helpers.js";
-
-export interface AgentHarness extends Harness {
-  agent: AgentRunsService;
-  /** Runs one claim round and waits for everything it started. */
-  settle(): Promise<void>;
-}
 
 /** The pages and vendor responses the tools see. Every request the fixtures
  * provoke is answered here, so no test touches the network. */
@@ -29,8 +24,6 @@ export interface FakeNetwork {
   fetch: typeof globalThis.fetch;
   calls: { url: string; method: string }[];
 }
-
-export { FIXTURE_PAGE_URL };
 
 export function fakeNetwork(overrides: Record<string, () => Response> = {}): FakeNetwork {
   const calls: { url: string; method: string }[] = [];
@@ -69,113 +62,137 @@ export function fakeNetwork(overrides: Record<string, () => Response> = {}): Fak
   return { fetch: fetchImpl, calls };
 }
 
-export interface AgentHarnessOptions extends HarnessOptions {
+/** One call the loop made on the store, in order. */
+export type StoreCall =
+  | { kind: "markRunning"; runId: string }
+  | { kind: "commitTurn"; runId: string; turn: Turn }
+  | { kind: "checkpoint"; runId: string; turn: Turn }
+  | { kind: "delta"; runId: string; turnId: string; text: string }
+  | { kind: "thinking"; runId: string; active: boolean }
+  | { kind: "finish"; runId: string; summary: AttemptSummary; answer?: CompletedAnswer };
+
+export interface MemoryRunStore extends RunStore {
+  readonly calls: StoreCall[];
+  /** The current attempt of each run; a request whose attempt differs is
+   * superseded. Absent: the request's own attempt is current. */
+  readonly attempts: Map<string, number>;
+  readonly cancelled: Set<string>;
+  /** Turns an interrupted attempt committed, returned for a `resume`. */
+  readonly committed: Map<string, Turn[]>;
+  finishes(runId: string): Extract<StoreCall, { kind: "finish" }>[];
+}
+
+export function memoryRunStore(): MemoryRunStore {
+  const calls: StoreCall[] = [];
+  const attempts = new Map<string, number>();
+  const cancelled = new Set<string>();
+  const committed = new Map<string, Turn[]>();
+  const summaries = new Map<string, string>();
+  return {
+    calls,
+    attempts,
+    cancelled,
+    committed,
+    finishes: (runId) =>
+      calls.filter(
+        (call): call is Extract<StoreCall, { kind: "finish" }> =>
+          call.kind === "finish" && call.runId === runId,
+      ),
+    isCurrent: (request) => (attempts.get(request.runId) ?? request.attempt) === request.attempt,
+    isCancelled: (request) => cancelled.has(request.runId),
+    committedTurns: (request) => committed.get(request.runId) ?? [],
+    markRunning: (request) => {
+      calls.push({ kind: "markRunning", runId: request.runId });
+    },
+    commitTurn: (request, turn) => {
+      calls.push({ kind: "commitTurn", runId: request.runId, turn });
+    },
+    checkpoint: (request, turn) => {
+      calls.push({ kind: "checkpoint", runId: request.runId, turn });
+    },
+    delta: (request, turnId, text) => {
+      calls.push({ kind: "delta", runId: request.runId, turnId, text });
+    },
+    thinking: (request, active) => {
+      calls.push({ kind: "thinking", runId: request.runId, active });
+    },
+    finish: (request, summary, answer) => {
+      calls.push({
+        kind: "finish",
+        runId: request.runId,
+        summary,
+        ...(answer ? { answer } : {}),
+      });
+    },
+    summaries: {
+      read: (nodeId) => summaries.get(nodeId) ?? null,
+      write: (nodeId, summary) => {
+        summaries.set(nodeId, summary);
+      },
+    },
+  };
+}
+
+export interface LoopHarness extends Harness {
+  agent: AgentRunsService;
+  store: MemoryRunStore;
+  /** A first attempt of a new run by `userId`. `userText` may carry a
+   * `fixture:<scenario>` marker to choose the recorded stream. */
+  runRequest(userId: string, userText: string, overrides?: Partial<RunRequest>): RunRequest;
+}
+
+export interface LoopHarnessOptions extends HarnessOptions {
   network?: FakeNetwork;
-  /** Hosts the SSRF guard lets through without a resolver. */
-  allowHosts?: string[];
   /** Replaces the registry-backed providers, for the tests that need a model
    * to be unresolvable. */
   providers?: Providers;
-  /** Leaves the claim interval running and makes `start()` a real wake-up.
-   * Off by default: the tests call `settle()`, and a background interval would
-   * race them. */
-  autoStart?: boolean;
 }
 
 /** Every public name resolves to one public address; no DNS in tests. */
 const publicLookup = (): Promise<{ address: string; family: number }[]> =>
   Promise.resolve([{ address: "93.184.216.34", family: 4 }]);
 
-export function createAgentHarness(
+let runCounter = 0;
+
+export function createLoopHarness(
   t: ExecutionContext,
-  options: AgentHarnessOptions = {},
-): AgentHarness {
+  options: LoopHarnessOptions = {},
+): LoopHarness {
   const network = options.network ?? fakeNetwork();
-  let agent: AgentRunsService | undefined;
-  const harness = createHarness(t, {
-    ...options,
-    fetch: network.fetch,
-    createRuns: (deps: Omit<ServerDeps, "runs">) => {
-      agent = createRunsService({
-        config: deps.config,
-        db: deps.db,
-        eventBus: deps.eventBus,
-        ...(deps.logger ? { logger: deps.logger } : {}),
-        fetch: network.fetch,
-        ...(options.providers ? { providers: options.providers } : {}),
-        toolOverrides: {
-          lookup: publicLookup,
-          ...(options.allowHosts ? { allowHosts: options.allowHosts } : {}),
-        },
-        // The tests call `settle()`; a background interval would race them.
-        autoStart: options.autoStart === true,
-      });
-      return agent;
-    },
-  });
-  if (!agent) {
-    throw new Error("the agent service was not constructed");
-  }
-  const service = agent;
-  // Registered after the harness's own teardown and therefore run before it:
-  // a claim round must not outlive the database it reads.
-  t.teardown(async () => {
-    setFixtureScenario(null);
-    await service.drain();
-  });
-
-  return {
-    ...harness,
-    agent: service,
-    async settle() {
-      await service.tick();
-      await service.idle();
-    },
-  };
-}
-
-/**
- * A second agent service over the same database — what the next process builds
- * after a deploy. The one the harness made is finished once it has drained.
- */
-export function nextProcessAgent(harness: AgentHarness): AgentHarness {
-  const network = fakeNetwork();
-  const service = createRunsService({
+  const harness = createHarness(t, { ...options, fetch: network.fetch });
+  const store = memoryRunStore();
+  const agent = createRunsService({
     config: harness.config,
     db: harness.db,
-    eventBus: harness.eventBus,
+    store,
     logger: harness.logger,
     fetch: network.fetch,
+    ...(options.providers ? { providers: options.providers } : {}),
     toolOverrides: { lookup: publicLookup },
-    autoStart: false,
+  });
+  // Registered after the harness's own teardown and therefore run before it:
+  // an attempt must not outlive the database its usage rows go to.
+  t.teardown(async () => {
+    setFixtureScenario(null);
+    await agent.drain();
   });
   return {
     ...harness,
-    agent: service,
-    async settle() {
-      await service.tick();
-      await service.idle();
+    agent,
+    store,
+    runRequest: (userId, userText, overrides = {}) => {
+      runCounter += 1;
+      return {
+        runId: `run-${runCounter}`,
+        userId,
+        model: "gemini-flash",
+        attempt: 1,
+        kind: "fresh",
+        instruction: null,
+        userText,
+        history: [],
+        ...overrides,
+      };
     },
   };
-}
-
-/** Subscribes before the run starts and declares interest in `nodeIds`, which
- * is what `research.turn.*` delivery requires (`03-api-and-events.md` §3). */
-export function collectEvents(
-  t: ExecutionContext,
-  harness: Harness,
-  userId: string,
-  nodeIds: readonly string[],
-): SessionEvent[] {
-  const events: SessionEvent[] = [];
-  const connectionId = `test-${Math.random().toString(36).slice(2)}`;
-  const subscription = harness.eventBus.subscribe(userId, connectionId);
-  harness.eventBus.setInterest(userId, connectionId, nodeIds);
-  void (async () => {
-    for await (const event of subscription.events) {
-      events.push(event);
-    }
-  })();
-  t.teardown(() => subscription.close());
-  return events;
 }

@@ -18,19 +18,7 @@ export interface RuntimeLimits {
 export interface RuntimeFeatures {
   webSearch: boolean;
   searchVendor?: "parallel" | "tavily";
-  /**
-   * The artifact origin, which serves widget previews
-   * (`11-artifacts-and-browser.md` §2). It is per-deployment rather than
-   * per-build, so it is provided alongside the rest of the runtime configuration
-   * instead of a build-time constant or a `<meta>` the boot HTML would have
-   * to be templated for. No client code reads it since the document preview
-   * panel was removed.
-   */
-  artifactOrigin: string;
 }
-
-/** The search half of the features block; `runtimeConfigFor` adds the rest. */
-export type RuntimeSearchFeatures = Omit<RuntimeFeatures, "artifactOrigin">;
 
 export interface RuntimeConfig {
   version: string;
@@ -48,7 +36,7 @@ export function modelAvailability(config: Config): (provider: ModelInfo["provide
 
 /** The vendor `web_search` uses: the configured one when its key is set,
  * otherwise whichever key exists (`web/.env.example`). */
-export function searchFeatures(config: Config): RuntimeSearchFeatures {
+export function searchFeatures(config: Config): RuntimeFeatures {
   const keys: Record<"parallel" | "tavily", boolean> = {
     parallel: config.search.parallelApiKey !== null,
     tavily: config.search.tavilyApiKey !== null,
@@ -81,7 +69,7 @@ export function runtimeConfigFor(config: Config, user: { isAdmin: boolean } | nu
       dailyRuns: config.limits.dailyRuns,
       enforced: config.limits.enforceDailyLimits,
     },
-    features: { ...searchFeatures(config), artifactOrigin: config.artifactOrigin },
+    features: searchFeatures(config),
   };
 }
 

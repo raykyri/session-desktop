@@ -1,7 +1,5 @@
 // What the owned tools are given for one run (`04-agent-runtime.md` §6).
 
-import type { SessionDatabase } from "@session/db";
-
 import type { Config } from "../../config.js";
 import type { Logger } from "../../logger.js";
 
@@ -65,10 +63,8 @@ export type ToolUsage = (kind: "search" | "fetch", count: number) => void;
 
 export interface RunToolContext {
   config: Config;
-  db: SessionDatabase;
   userId: string;
-  /** Absent for a metadata run, which has no node and no tools. */
-  nodeId: string | null;
+  runId: string;
   logger: Logger;
   fetch: typeof globalThis.fetch;
   budget: ToolBudget;

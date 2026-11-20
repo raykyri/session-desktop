@@ -8,19 +8,13 @@ import { TRPCError, initTRPC } from "@trpc/server";
 
 import type { Config } from "../config.js";
 import type { ServerDeps } from "../deps.js";
-import type { EventBus } from "../events/bus.js";
 import type { Logger } from "../logger.js";
 import type { RateLimiter } from "../middleware/rateLimit.js";
 import { RATE_LIMITS } from "../middleware/rateLimit.js";
-import type { DeletionJob } from "../research/deletion.js";
-import type { RunsService } from "../runs/service.js";
 
 export interface AppContext {
   config: Config;
   db: SessionDatabase;
-  eventBus: EventBus;
-  runs: RunsService;
-  deletions: DeletionJob;
   logger: Logger;
   limiter: RateLimiter;
   fetch: typeof globalThis.fetch;
@@ -46,9 +40,6 @@ export function createAppContext(
   return {
     config: deps.config,
     db: deps.db,
-    eventBus: deps.eventBus,
-    runs: deps.runs,
-    deletions: deps.deletions,
     logger,
     limiter,
     fetch: deps.fetch ?? globalThis.fetch,
@@ -58,23 +49,14 @@ export function createAppContext(
   };
 }
 
-const t = initTRPC.context<AppContext>().create({
-  // Heartbeat comments keep proxies from closing an idle stream, and the
-  // client's inactivity timeout triggers a reconnect-and-refetch
-  // (`05-run-lifecycle-and-streaming.md` §4).
-  sse: {
-    ping: { enabled: true, intervalMs: 20_000 },
-    client: { reconnectAfterInactivityMs: 60_000 },
-  },
-});
+const t = initTRPC.context<AppContext>().create();
 
 export const router = t.router;
 export const middleware = t.middleware;
 export const createCallerFactory = t.createCallerFactory;
 export const mergeRouters = t.mergeRouters;
 
-/** No session required. Catalog reads bind to the public owner when
- * `ctx.user` is null (`catalog.ts`). Mutations that write stay protected. */
+/** No session required; `ctx.user` is null for a signed-out caller. */
 export const publicProcedure = t.procedure;
 
 /** 60 mutations a minute per account (`06` §8). Queries are cheap and
@@ -110,36 +92,5 @@ const requireAdmin = t.middleware(({ ctx, next }) => {
 });
 
 export const protectedProcedure = t.procedure.use(mutationBudget).use(requireUser);
-
-/** Takes one request from the caller's `name` bucket, or refuses with
- * `TOO_MANY_REQUESTS` and `message`. */
-export function takeBudget(
-  ctx: { limiter: RateLimiter; user: { id: string } },
-  name: keyof typeof RATE_LIMITS,
-  message: string,
-): void {
-  if (!ctx.limiter.take(`${name}:${ctx.user.id}`, RATE_LIMITS[name]).allowed) {
-    throw new TRPCError({ code: "TOO_MANY_REQUESTS", message });
-  }
-}
-
-/**
- * Signed in, drawing on its own bucket (`RATE_LIMITS[name]`) instead of the
- * mutation budget: for calls a client repeats on a timer or in bulk, which
- * must not use up the budget a person's edits draw on.
- */
-export function budgetedProcedure(name: keyof typeof RATE_LIMITS, message: string) {
-  return t.procedure.use(
-    t.middleware(({ ctx, next }) => {
-      if (ctx.user === null) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "sign in to continue" });
-      }
-      takeBudget({ limiter: ctx.limiter, user: ctx.user }, name, message);
-      return next({
-        ctx: { ...ctx, user: ctx.user, userId: ctx.user.id, isAdmin: ctx.user.isAdmin },
-      });
-    }),
-  );
-}
 
 export const adminProcedure = t.procedure.use(mutationBudget).use(requireAdmin);

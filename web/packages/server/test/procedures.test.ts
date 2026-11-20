@@ -3,7 +3,6 @@
 
 import { readFileSync, statSync } from "node:fs";
 
-import { nodes, snapshots } from "@session/db";
 import type { TRPCError } from "@trpc/server";
 import test from "ava";
 
@@ -15,7 +14,6 @@ import {
   backupDocuments,
   drainWithin,
   prepareDataDirectories,
-  reconcileRuns,
   writeVertexCredentials,
 } from "../src/main.js";
 import {
@@ -26,7 +24,7 @@ import {
 } from "../src/trpc/errors.js";
 import { searchFeatures } from "../src/trpc/routers/system.js";
 
-import { answerTurn, ARTIFACT_ORIGIN, createHarness, runOf, testConfig } from "./helpers.js";
+import { createHarness, testConfig } from "./helpers.js";
 
 test("returns health status and runtime config for unauthenticated requests", async (t) => {
   const harness = createHarness(t);
@@ -35,87 +33,9 @@ test("returns health status and runtime config for unauthenticated requests", as
   const config = await anonymous.system.runtimeConfig();
   t.is(config.limits.runsPerUser, 2);
   t.false(config.limits.enforced);
-  // The artifact origin travels with the runtime configuration
-  // (`11-artifacts-and-browser.md` §2).
-  t.deepEqual(config.features, {
-    webSearch: true,
-    searchVendor: "parallel",
-    artifactOrigin: ARTIFACT_ORIGIN,
-  });
+  t.deepEqual(config.features, { webSearch: true, searchVendor: "parallel" });
   t.is(await anonymous.auth.me(), null);
   await t.throwsAsync(harness.caller(null).settings.get(), { message: /sign in/ });
-});
-
-test("guests read the public catalog and cannot mutate it", async (t) => {
-  const harness = createHarness(t);
-  const owner = harness.addUser("publisher", { isAdmin: true });
-  const other = harness.addUser("other-account");
-  const signedIn = harness.caller(owner);
-  const otherCaller = harness.caller(other);
-  const workspace = await signedIn.workspaces.ensureDefault();
-  const otherWorkspace = await otherCaller.workspaces.ensureDefault();
-  const created = await signedIn.research.createTree({
-    prompt: "What is collective memory?",
-    model: "gemini-flash",
-    workspaceId: workspace.id,
-  });
-  const otherTree = await otherCaller.research.createTree({
-    prompt: "A private question",
-    model: "gemini-flash",
-    workspaceId: otherWorkspace.id,
-  });
-  const nodeId = created.nodes[0]?.id ?? "";
-  snapshots.commit(harness.db, owner.id, {
-    nodeId,
-    turns: [answerTurn(nodeId, "Collective memory is shared.")],
-    outcome: { status: "complete" },
-  });
-
-  const guest = harness.caller(null);
-  // Nothing is public yet: the catalog is empty and the thread unreadable.
-  t.deepEqual(await guest.research.listTrees(), []);
-  await t.throwsAsync(guest.research.getTree({ treeId: created.tree.id }), {
-    message: /not found/,
-  });
-  await signedIn.sharing.setVisibility({ treeId: created.tree.id, visibility: "public" });
-
-  // Guests have no workspaces; the catalog is every account's public threads.
-  t.deepEqual(await guest.workspaces.list(), []);
-  const trees = await guest.research.listTrees();
-  t.is(trees.length, 1);
-  t.is(trees[0]?.title, "What is collective memory?");
-  t.is(trees[0]?.role, "viewer");
-  const detail = await guest.research.getTree({ treeId: created.tree.id });
-  t.is(detail.tree.id, created.tree.id);
-  t.is(detail.tree.role, "viewer");
-  const content = await guest.research.getNodeContent({ nodeId });
-  t.is(content.node.id, nodeId);
-  const activity = await guest.feed.recentActivity({ scope: "all" });
-  t.deepEqual(
-    activity.items.map((item) => item.query.treeId),
-    [created.tree.id],
-  );
-  // Another account opens the public thread too.
-  const opened = await otherCaller.research.getTree({ treeId: created.tree.id });
-  t.is(opened.tree.role, "viewer");
-
-  const otherSeesOwner = await otherCaller.research.listTrees({ workspaceId: workspace.id });
-  t.is(otherSeesOwner.length, 0);
-  await t.throwsAsync(guest.research.getTree({ treeId: otherTree.tree.id }), {
-    message: /not found/,
-  });
-  await t.throwsAsync(guest.research.getNodeContent({ nodeId: otherTree.nodes[0]?.id ?? "" }), {
-    message: /not found/,
-  });
-  await t.throwsAsync(guest.research.listActivity(), { message: /sign in/ });
-  await t.throwsAsync(
-    guest.research.createTree({
-      prompt: "Should not work",
-      model: "gemini-flash",
-      workspaceId: workspace.id,
-    }),
-    { message: /sign in/ },
-  );
 });
 
 test("selects available search vendor based on configured API keys", (t) => {
@@ -148,16 +68,6 @@ test("settings round-trip with the shared instruction clamp", async (t) => {
   await t.throwsAsync(caller.settings.update({ settings: { textSize: 400 } }));
 });
 
-test("drafts are per key and cleared by an empty value", async (t) => {
-  const harness = createHarness(t);
-  const caller = harness.caller(harness.addUser("drafter"));
-  t.is((await caller.interfaceDrafts.get({ key: "home" })).value, null);
-  await caller.interfaceDrafts.set({ key: "home", value: "half a question" });
-  t.is((await caller.interfaceDrafts.get({ key: "home" })).value, "half a question");
-  await caller.interfaceDrafts.set({ key: "home", value: "" });
-  t.is((await caller.interfaceDrafts.get({ key: "home" })).value, null);
-});
-
 test("usage and the admin surface are gated on is_admin", async (t) => {
   const harness = createHarness(t);
   const user = harness.addUser("plain");
@@ -181,159 +91,13 @@ test("usage and the admin surface are gated on is_admin", async (t) => {
   });
 });
 
-test("workspaces and folders behave as the sidebar expects", async (t) => {
-  const harness = createHarness(t);
-  const caller = harness.caller(harness.addUser("organizer"));
-  const first = await caller.workspaces.ensureDefault();
-  const second = await caller.workspaces.create({ name: "Reading" });
-  t.deepEqual(
-    (await caller.workspaces.list()).map((workspace) => workspace.name),
-    ["Default Workspace", "Reading"],
-  );
-  await caller.workspaces.reorder({ workspaceIds: [second.id, first.id] });
-  t.deepEqual(
-    (await caller.workspaces.list()).map((workspace) => workspace.id),
-    [second.id, first.id],
-  );
-  const renamed = await caller.workspaces.rename({ workspaceId: second.id, name: "Notes" });
-  t.is(renamed.name, "Notes");
-  t.is((await caller.workspaces.setDefault({ workspaceId: second.id })).id, second.id);
-  t.is((await caller.settings.get()).defaultWorkspaceId, second.id);
-
-  const state = await caller.folders.set({
-    workspaceId: first.id,
-    state: {
-      folders: [{ id: "f1", name: "Later", workspaceId: first.id }],
-      membership: {},
-      collapsed: [],
-      parents: {},
-      collapsedGroups: [],
-    },
-  });
-  t.is(state.folders.length, 1);
-  t.is((await caller.folders.get({ workspaceId: first.id })).folders[0]?.name, "Later");
-
-  const removal = await caller.workspaces.remove({ workspaceId: second.id });
-  t.deepEqual(removal.removedTreeIds, []);
-  t.is((await caller.workspaces.list()).length, 1);
-});
-
-test("scopes feed activity to the workspace", async (t) => {
-  const harness = createHarness(t);
-  const user = harness.addUser("browser");
-  const caller = harness.caller(user);
-  const workspace = await caller.workspaces.ensureDefault();
-  const detail = await caller.research.createTree({
-    prompt: "What is a skip list?",
-    model: "gemini-flash",
-    workspaceId: workspace.id,
-  });
-  const nodeId = detail.nodes[0]?.id ?? "";
-  snapshots.commit(harness.db, user.id, {
-    nodeId,
-    turns: [answerTurn(nodeId, "A [[Skip List]] is a layered linked list.")],
-    outcome: { status: "complete" },
-  });
-
-  const activity = await caller.feed.recentActivity({
-    scope: "workspace",
-    workspaceId: workspace.id,
-  });
-  t.is(activity.items.length, 1);
-  const queries = await caller.feed.recentQueries({ limit: 10 });
-  t.is(queries.items.length, 1);
-  const roots = await caller.feed.recentQueriesForTrees({ treeIds: [detail.tree.id] });
-  t.deepEqual(
-    roots.map((root) => root.nodeId),
-    [nodeId],
-  );
-  await t.throwsAsync(
-    harness.caller(null).feed.recentQueriesForTrees({ treeIds: [detail.tree.id] }),
-  );
-  t.is((await caller.research.listActivity()).length, 0);
-});
-
-test("boot writes the Vertex credential and re-queues interrupted runs", async (t) => {
+test("boot writes the Vertex credential", (t) => {
   const harness = createHarness(t);
   prepareDataDirectories(harness.config);
   const path = writeVertexCredentials(harness.config);
   t.truthy(path);
   t.is(readFileSync(path ?? "", "utf8"), '{"type":"service_account"}');
   t.is(process.env["GOOGLE_APPLICATION_CREDENTIALS"], path ?? undefined);
-
-  const user = harness.addUser("resumer");
-  const caller = harness.caller(user);
-  const workspace = await caller.workspaces.ensureDefault();
-  const detail = await caller.research.createTree({
-    prompt: "long run",
-    model: "gemini-flash",
-    workspaceId: workspace.id,
-  });
-  const nodeId = detail.nodes[0]?.id ?? "";
-  nodes.setStatus(harness.db, user.id, nodeId, "running", { startedAt: Date.now() });
-
-  // A process that dies leaves a `running` node with no outcome; boot turns it
-  // into `interrupted` and puts it back at the head of the queue.
-  harness.runs.started.length = 0;
-  reconcileRuns(harness.deps, harness.deps.logger ?? createLogger({ write: () => undefined }));
-  t.is(runOf(nodes.get(harness.db, user.id, nodeId)).status, "interrupted");
-  t.deepEqual(harness.runs.started, [nodeId]);
-});
-
-test("a default workspace must be one of the account's own", async (t) => {
-  const harness = createHarness(t);
-  const caller = harness.caller(harness.addUser("settler2"));
-  const stranger = harness.caller(harness.addUser("stranger3"));
-  const own = await caller.workspaces.ensureDefault();
-  const foreign = await stranger.workspaces.ensureDefault();
-  await t.throwsAsync(caller.settings.update({ defaultWorkspaceId: foreign.id }), {
-    message: /was not found/,
-  });
-  t.is((await caller.settings.update({ defaultWorkspaceId: own.id })).defaultWorkspaceId, own.id);
-  t.is((await caller.settings.update({ defaultWorkspaceId: null })).defaultWorkspaceId, null);
-});
-
-test("a queued backlog is capped per account", async (t) => {
-  // `SESSION_RUNS_PER_USER` bounds how many of an account's runs hold a
-  // provider stream at once; nothing bounded how many were admitted, and a
-  // queued node is spend the deployment has already committed to. The harness
-  // never claims, so everything launched here stays waiting.
-  const harness = createHarness(t, { env: { SESSION_QUEUED_PER_USER: "3" } });
-  const user = harness.addUser("flooder");
-  const caller = harness.caller(user);
-  const workspace = await caller.workspaces.ensureDefault();
-  const launch = (n: number) =>
-    caller.research.createTree({
-      prompt: `Question ${n}`,
-      model: "gemini-flash",
-      workspaceId: workspace.id,
-    });
-
-  await launch(1);
-  await launch(2);
-  await launch(3);
-  const refused = await t.throwsAsync<TRPCError>(launch(4));
-  t.is(refused?.code, "TOO_MANY_REQUESTS");
-  t.regex(refused?.message ?? "", /3 questions queued/);
-
-  // The cap is on what is waiting, not on what has ever been launched: a node
-  // that leaves the queue makes room.
-  const trees = await caller.research.listTrees({ workspaceId: workspace.id });
-  await caller.research.cancelNode({ nodeId: trees[0]?.rootNodeId ?? "" });
-  await t.notThrowsAsync(launch(5), "a finished question frees its slot");
-
-  // An admin is exempt, as they are from the daily limits.
-  const admin = harness.addUser("cap-admin", { isAdmin: true });
-  const adminCaller = harness.caller(admin);
-  const adminWorkspace = await adminCaller.workspaces.ensureDefault();
-  for (let index = 0; index < 5; index += 1) {
-    await adminCaller.research.createTree({
-      prompt: `Admin question ${index}`,
-      model: "gemini-flash",
-      workspaceId: adminWorkspace.id,
-    });
-  }
-  t.pass();
 });
 
 test("maps unexpected internal errors to INTERNAL_SERVER_ERROR and masks details from client responses", (t) => {
@@ -374,8 +138,8 @@ test("enforces shutdown deadline during drain to ensure WAL checkpoint execution
   // Fly sends SIGKILL `kill_timeout` (30s) after SIGTERM. A provider that has
   // stopped sending without closing its stream holds the drain open past that,
   // the checkpoint never runs, and the next boot opens a database with an
-  // unclean log. What the deadline cuts short is recovered by
-  // `reconcileOnBoot`; a SIGKILL mid-checkpoint is not.
+  // unclean log. What the deadline cuts short is recovered at boot; a SIGKILL
+  // mid-checkpoint is not.
   //
   // The deadline timer is unref'd, as it must be in the server; this keeps
   // the worker's event loop alive until it fires, which the other tests in

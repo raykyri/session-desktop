@@ -11,8 +11,6 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 
 import { z } from "zod";
 
-import { widgetScriptPolicy, type WidgetScriptPolicy } from "./artifacts/site.js";
-
 /** `1`/`0`, `true`/`false`, `yes`/`no`; an empty value is the default. */
 const flag = (fallback: boolean) =>
   z
@@ -107,7 +105,6 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 
   SESSION_PUBLIC_ORIGIN: originSchema("SESSION_PUBLIC_ORIGIN"),
-  SESSION_ARTIFACT_ORIGIN: originSchema("SESSION_ARTIFACT_ORIGIN"),
   SESSION_DATA_DIR: z.string().trim().default("./.data"),
 
   GITHUB_CLIENT_ID: optionalString,
@@ -133,10 +130,6 @@ const envSchema = z.object({
   SESSION_RUNS_OPENROUTER: positiveInteger(8, 1),
   SESSION_RUNS_ANTHROPIC: positiveInteger(2, 1),
   SESSION_RUN_TIMEOUT_SECONDS: positiveInteger(900),
-
-  /** Bytes the embed-asset cache may hold on the volume before the sweep
-   * evicts the least recently served (`13-deployment-fly.md` §6). */
-  SESSION_EMBED_CACHE_BYTES: positiveInteger(2 * 1024 * 1024 * 1024),
 
   SESSION_ENFORCE_LIMITS: flag(false),
   SESSION_DAILY_TOKENS: positiveInteger(1_000_000),
@@ -187,19 +180,10 @@ export interface Config {
   port: number;
 
   publicOrigin: string;
-  artifactOrigin: string;
-  /** Host (with port) of the artifact origin, for the `Host` check on `/w/:token`. */
-  artifactHost: string;
-  /** Whether widget run pages are served: only when the artifact origin is a
-   * different site from the app (`artifacts/site.ts`). */
-  widgetScripts: WidgetScriptPolicy;
 
   dataDir: string;
   databasePath: string;
   documentsDir: string;
-  /** Cached images behind `/embeds/:hash`; disposable, unlike `documentsDir`. */
-  embedsDir: string;
-  embedCacheBytes: number;
   tmpDir: string;
 
   github: { clientId: string | null; clientSecret: string | null; callbackUrl: string };
@@ -260,11 +244,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   }
   const value = parsed.data;
-  if (new URL(value.SESSION_ARTIFACT_ORIGIN).host === new URL(value.SESSION_PUBLIC_ORIGIN).host) {
-    throw new ConfigError([
-      "SESSION_ARTIFACT_ORIGIN: must be a different host from SESSION_PUBLIC_ORIGIN; widget pages are served only on the artifact host",
-    ]);
-  }
   const dataDir = isAbsolute(value.SESSION_DATA_DIR)
     ? value.SESSION_DATA_DIR
     : resolve(process.cwd(), value.SESSION_DATA_DIR);
@@ -287,15 +266,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port: value.PORT,
 
     publicOrigin: value.SESSION_PUBLIC_ORIGIN,
-    artifactOrigin: value.SESSION_ARTIFACT_ORIGIN,
-    artifactHost: new URL(value.SESSION_ARTIFACT_ORIGIN).host,
-    widgetScripts: widgetScriptPolicy(value.SESSION_PUBLIC_ORIGIN, value.SESSION_ARTIFACT_ORIGIN),
 
     dataDir,
     databasePath: join(dataDir, "session.db"),
     documentsDir: join(dataDir, "documents"),
-    embedsDir: join(dataDir, "embeds"),
-    embedCacheBytes: value.SESSION_EMBED_CACHE_BYTES,
     tmpDir: join(dataDir, "tmp"),
 
     github: {

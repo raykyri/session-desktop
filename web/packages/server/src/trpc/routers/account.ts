@@ -1,19 +1,17 @@
 // `auth`, `settings`, `usage`, and `admin`
 // (`03-api-and-events.md` §2, `06-auth-and-users.md` §6, §8).
 
-import { auth, preferences, queue, usage, users, workspaces } from "@session/db";
+import { auth, preferences, usage, users } from "@session/db";
 import type { User, UserSettings } from "@session/shared";
 import { clampResearchLaunchInstruction, userSettingsSchema } from "@session/shared";
 import { z } from "zod";
 
 import { endSession } from "../../auth/session.js";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "../base.js";
-import { publish } from "../emit.js";
 import { repo, required } from "../errors.js";
 
 export interface StoredSettings extends UserSettings {
   researchLaunchInstruction: string | null;
-  defaultWorkspaceId: string | null;
   defaultModel: string;
 }
 
@@ -25,7 +23,6 @@ function readSettings(
   return {
     ...stored.settings,
     researchLaunchInstruction: stored.researchLaunchInstruction,
-    defaultWorkspaceId: stored.defaultWorkspaceId,
     defaultModel: stored.settings.defaultModel,
   };
 }
@@ -33,9 +30,8 @@ function readSettings(
 export const authRouter = router({
   me: publicProcedure.query(({ ctx }): User | null => ctx.user),
   logout: publicProcedure.mutation(({ ctx }) => {
-    // Deletes the current session record, invalidating the session token
-    // and terminating associated event streams. Other sessions for the account
-    // remain active.
+    // Deletes the current session record, invalidating the session token.
+    // Other sessions for the account remain active.
     if (ctx.sessionToken !== null) {
       endSession(ctx, ctx.sessionToken);
     }
@@ -50,7 +46,6 @@ export const settingsRouter = router({
       z.object({
         settings: userSettingsSchema.partial().optional(),
         researchLaunchInstruction: z.string().nullable().optional(),
-        defaultWorkspaceId: z.string().nullable().optional(),
       }),
     )
     .mutation(({ ctx, input }) => {
@@ -66,20 +61,8 @@ export const settingsRouter = router({
             ? null
             : clampResearchLaunchInstruction(input.researchLaunchInstruction);
       }
-      if (input.defaultWorkspaceId !== undefined) {
-        // Validate workspace ownership before updating the default preference.
-        if (input.defaultWorkspaceId !== null) {
-          required(
-            repo(() => workspaces.get(ctx.db, ctx.user.id, input.defaultWorkspaceId ?? "")),
-            `research workspace ${input.defaultWorkspaceId} was not found`,
-          );
-        }
-        patch.defaultWorkspaceId = input.defaultWorkspaceId;
-      }
       repo(() => preferences.update(ctx.db, ctx.user.id, patch));
-      const settings = readSettings(ctx, ctx.user.id);
-      publish(ctx, "settings.updated", { settings });
-      return settings;
+      return readSettings(ctx, ctx.user.id);
     }),
 });
 
@@ -115,7 +98,6 @@ export interface DailyLimits {
 export interface AdminUser extends User {
   usage: DailyUsageTotals;
   limits: DailyLimits;
-  workspaceCount: number;
 }
 
 export const adminRouter = router({
@@ -128,7 +110,6 @@ export const adminRouter = router({
           dailyTokens: ctx.config.limits.dailyTokens,
           dailyRuns: ctx.config.limits.dailyRuns,
         }),
-        workspaceCount: workspaces.list(ctx.db, user.id).length,
       })),
     ),
   ),
@@ -152,13 +133,10 @@ export const adminRouter = router({
       if (input.dailyRuns !== undefined) {
         patch.dailyRuns = input.dailyRuns;
       }
-      const limits = repo(() => auth.setUserLimits(ctx.db, input.userId, patch));
-      // Re-evaluate runs held under previous limits immediately; runs are
-      // re-queued if limits are still exceeded.
-      for (const nodeId of repo(() => queue.releaseDailyHolds(ctx.db, input.userId))) {
-        ctx.runs.start(nodeId);
-      }
-      return limits;
+      // Runs held for the old limits are not released here: the run queue
+      // that held them was removed with the research model, and the run
+      // dispatcher of plan `03` E2 (M5a) checks limits when it claims a run.
+      return repo(() => auth.setUserLimits(ctx.db, input.userId, patch));
     }),
   /** Generates administrative invite codes. Leaves createdBy null so admin codes do not decrement personal invite allowances. */
   createInvites: adminProcedure

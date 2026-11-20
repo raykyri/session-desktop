@@ -45,7 +45,7 @@ export type FixtureScenario =
    * the millisecond and cannot be slowed. The name is all letters and dashes
    * because `PROMPT_MARKER` is how a run selects it. */
   | "paced-answer"
-  /** An answer past `MIN_RECAP_CHARS`, so a run schedules a recap. */
+  /** A long answer. */
   | "long-answer"
   /** An answer with a scripted widget that probes its sandbox and saves an
    * input (the widget end-to-end test). */
@@ -191,7 +191,7 @@ function delay(ms: number, signal: AbortSignal | undefined): Promise<void> {
 }
 
 /** The JSON a metadata run's `Output.object` schema asks for. Keyed by the
- * schema's single property so `{title}` and `{recap}` are told
+ * schema's single property so `{title}` and `{summary}` are told
  * apart without the caller passing a scenario (`04-agent-runtime.md` §9). */
 function metadataOutput(options: LanguageModelV4CallOptions): string | null {
   const format = options.responseFormat;
@@ -204,9 +204,9 @@ function metadataOutput(options: LanguageModelV4CallOptions): string | null {
     const firstLine = text.split("\n").find((line) => line.trim() !== "") ?? "Research";
     return JSON.stringify({ title: firstLine.trim().slice(0, 60) });
   }
-  if ("recap" in properties) {
+  if ("summary" in properties) {
     return JSON.stringify({
-      recap:
+      summary:
         "The answer defines the structure, gives its space and error trade-off, and names the " +
         "cases where it is the wrong choice.",
     });

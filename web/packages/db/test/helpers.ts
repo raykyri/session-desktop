@@ -1,40 +1,27 @@
 // Shared setup for the repository tests: a temp file database per test file,
-// because WAL, foreign keys, and the partial unique index are file-level
-// behavior and an in-memory database does not exercise all of it
-// (`docs/12-testing-linting-ci.md` §3.2). Tests that only need rows use
-// `openDatabase(":memory:")` directly.
+// because WAL and foreign keys are file-level behavior and an in-memory
+// database does not exercise all of it (`docs/12-testing-linting-ci.md`
+// §3.2). Tests that only need rows use `openDatabase(":memory:")` directly.
 
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { ResearchNode, ResearchRecap, RunState, Turn } from "@session/shared";
-import { nodeRecap, nodeResponseSnapshotAt } from "@session/shared/lib/researchNodeTypes";
 import type { ExecutionContext } from "ava";
 
 import type { SessionDatabase } from "../src/index.js";
-import {
-  closeDatabase,
-  nodes,
-  openDatabase,
-  sharing,
-  snapshots,
-  trees,
-  users,
-  workspaces,
-} from "../src/index.js";
+import { closeDatabase, openDatabase, users } from "../src/index.js";
 
 export interface Fixture {
   db: SessionDatabase;
   directory: string;
   userId: string;
-  workspaceId: string;
 }
 
 let githubIdCounter = 1000;
 
 /**
- * A database on disk with one account and one workspace.
+ * A database on disk with one account.
  *
  * Cleanup is registered with `t.teardown` rather than returned as a `close()`
  * the test body has to remember to call: a failing assertion aborts the body,
@@ -53,118 +40,5 @@ export function createFixture(t: ExecutionContext): Fixture {
     login: `user${githubIdCounter}`,
     name: "Test User",
   });
-  const workspace = workspaces.create(db, user.id, "Research");
-  return { db, directory, userId: user.id, workspaceId: workspace.id };
-}
-
-/** A second account on the same database, for the scoping tests. */
-export function addUser(
-  db: SessionDatabase,
-  login: string,
-): { userId: string; workspaceId: string } {
-  githubIdCounter += 1;
-  const { user } = users.upsertFromGitHub(db, { githubId: githubIdCounter, login });
-  const workspace = workspaces.create(db, user.id, "Research");
-  return { userId: user.id, workspaceId: workspace.id };
-}
-
-/** A minimal assistant turn, the shape the snapshot commit requires. */
-export function answerTurn(nodeId: string, text: string, id = `${nodeId}-turn`): Turn {
-  return {
-    id,
-    agentId: nodeId,
-    role: "assistant",
-    blocks: [{ type: "text", text }],
-    sourceIndex: 0,
-  };
-}
-
-/** A highlight anchor over `exact` inside an answer at `revision`. */
-export function anchorFor(
-  revision: string,
-  exact: string,
-  start = 0,
-): {
-  version: 1;
-  projection: "answer-v1";
-  responseRevision: string;
-  start: number;
-  end: number;
-  exact: string;
-  prefix: string;
-  suffix: string;
-} {
-  return {
-    version: 1,
-    projection: "answer-v1",
-    responseRevision: revision,
-    start,
-    end: start + exact.length,
-    exact,
-    prefix: "",
-    suffix: "",
-  };
-}
-
-/** An exchange's run, failing the test for a node without one. */
-export function runOf(node: ResearchNode | null | undefined): RunState {
-  if (node?.type !== "exchange") {
-    throw new Error(`expected an exchange, got ${node?.type ?? "no node"}`);
-  }
-  return node.run;
-}
-
-/** A node's recap, or undefined for a node without one. */
-export function recapOf(node: ResearchNode | null | undefined): ResearchRecap | undefined {
-  return node ? (nodeRecap(node) ?? undefined) : undefined;
-}
-
-/** When a node's answer or body snapshot was last written. */
-export function snapshotAtOf(node: ResearchNode | null | undefined): number | null {
-  return node ? nodeResponseSnapshotAt(node) : null;
-}
-
-/** A thread of the fixture's account with a complete answer, shared with
- * one member per `roles` entry (each a new account that joined through a
- * link invitation). */
-export interface SharedThreadFixture {
-  fixture: Fixture;
-  treeId: string;
-  rootId: string;
-  revision: string;
-  members: { userId: string; workspaceId: string; login: string }[];
-}
-
-let memberCounter = 0;
-
-export function sharedThreadFixture(
-  t: ExecutionContext,
-  roles: readonly ("commenter" | "viewer")[] = ["commenter"],
-): SharedThreadFixture {
-  const fixture = createFixture(t);
-  const detail = trees.admitRoot(fixture.db, fixture.userId, {
-    type: "exchange",
-    workspaceId: fixture.workspaceId,
-    message: { text: "What is a bloom filter?" },
-    agent: { model: "gemini-flash" },
-  });
-  const rootId = detail.tree.rootNodeId;
-  const committed = snapshots.commit(fixture.db, fixture.userId, {
-    nodeId: rootId,
-    turns: [answerTurn(rootId, "A bloom filter is a probabilistic set.")],
-    outcome: { status: "complete" },
-  });
-  nodes.setStatus(fixture.db, fixture.userId, rootId, "complete");
-  const members = roles.map((role) => {
-    memberCounter += 1;
-    const login = `member${memberCounter}`;
-    const member = addUser(fixture.db, login);
-    const link = sharing.createInvite(fixture.db, fixture.userId, {
-      treeId: detail.tree.id,
-      role,
-    });
-    sharing.acceptInvite(fixture.db, { id: member.userId, login }, { token: link.token });
-    return { ...member, login };
-  });
-  return { fixture, treeId: detail.tree.id, rootId, revision: committed.revision, members };
+  return { db, directory, userId: user.id };
 }

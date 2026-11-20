@@ -24,16 +24,11 @@ export const version = "0.0.0";
 export type * from "./wire/index.js";
 export * from "./schemas/index.js";
 
-export * from "./app/composerTextarea.js";
 export * from "./app/helpers.js";
-export * from "./app/launcherKeyboard.js";
-export * from "./app/shortcuts.js";
-export * from "./app/sidebarMode.js";
 export * from "./app/taggedInstructions.js";
 
 export * from "./journal/activity.js";
 export * from "./journal/cursor.js";
-export * from "./journal/tweets.js";
 
 export * from "./markdown/imageMarkers.js";
 export * from "./markdown/links.js";
@@ -45,22 +40,9 @@ export * from "./markdown/wikilinks.js";
 export * from "./models/agents.js";
 export * from "./models/registry.js";
 
-export * from "./research/events.js";
-export * from "./research/folders.js";
-export * from "./research/highlightAnchor.js";
 export * from "./research/history.js";
-export * from "./research/images.js";
-export * from "./research/navigation.js";
-export * from "./research/order.js";
-export * from "./research/posts.js";
 export * from "./research/preview.js";
 export * from "./research/prompts.js";
-export * from "./research/recap.js";
-export * from "./research/revision.js";
-export * from "./research/scope.js";
-export * from "./research/selection.js";
-export * from "./research/snapshots.js";
-export * from "./research/stalledChain.js";
 
 export * from "./types/account.js";
 export * from "./types/activity.js";

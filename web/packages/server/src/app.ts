@@ -10,17 +10,14 @@ import { version } from "@session/shared";
 import type { Context } from "hono";
 import { Hono } from "hono";
 
-import { widgetRoutes } from "./artifacts/widgets.js";
 import type { OAuthClient } from "./auth/github.js";
 import { githubRoutes } from "./auth/github.js";
 import { clearSessionCookie, sessionLoader } from "./auth/session.js";
 import type { AppEnv, ServerDeps } from "./deps.js";
-import { embedRoutes } from "./embeds/route.js";
 import type { Readiness } from "./health.js";
 import { createReadiness } from "./health.js";
 import { defaultLogger } from "./logger.js";
 import { MetricsRegistry, renderMetrics } from "./metrics.js";
-import { artifactHostOnly } from "./middleware/artifactHost.js";
 import { csrfGuard } from "./middleware/csrf.js";
 import { requestLogging } from "./middleware/logging.js";
 import { requestMetrics } from "./middleware/metrics.js";
@@ -31,7 +28,6 @@ import { clientStatic } from "./middleware/static.js";
 import type { AppContext } from "./trpc/base.js";
 import { createAppContext } from "./trpc/base.js";
 import { appRouter } from "./trpc/router.js";
-import { imageRoutes } from "./uploads/route.js";
 
 /** Constant-time string comparison for the metrics bearer token. */
 function timingSafeEqualString(offered: string, expected: string): boolean {
@@ -70,12 +66,6 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   app.use("*", requestMetrics(metrics));
   app.use("*", requestLogging());
   app.use("*", securityHeaders(deps.config));
-
-  // The artifact origin is a different host with its own headers and no
-  // session: only its widget route answers there, and it is mounted before
-  // the CSRF guard and the session loader so a token URL never carries either.
-  app.use("*", artifactHostOnly(deps.config));
-  app.route("/", widgetRoutes(deps));
 
   app.use("*", csrfGuard(deps.config));
   app.use("*", sessionLoader(deps));
@@ -123,14 +113,6 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
       ...(createOAuthClient ? { createClient: createOAuthClient } : {}),
     }),
   );
-  // Public, like the cards whose images it serves: the Home feed renders
-  // signed out, and an embed asset says nothing about who stored it.
-  app.route("/", embedRoutes({ deps: { ...deps, logger } }));
-  // Image attachments, behind the session loader and, for the upload, the
-  // CSRF guard. An upload is its owner's; an image is read by its owner and
-  // by anyone who may read a thread whose node or queued follow-up names
-  // it, guests included for a public thread (`images.readable`).
-  app.route("/", imageRoutes({ deps: { ...deps, logger }, limiter }));
 
   // `auth.logout` clears the session rows; the cookie is this layer's to
   // clear, so the mutation is mirrored here rather than given a `Set-Cookie`

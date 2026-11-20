@@ -167,57 +167,27 @@ Create the volume before the first deploy. A machine that boots without one
 writes its database to the container filesystem and loses it on the next
 release.
 
-### 2. DNS and certificates, for both hostnames
-
-The app is reached by two names: `session.dev` for the app, and a second
-name for widget pages (`SESSION_ARTIFACT_ORIGIN`). They must be **different
-hostnames on the same Fly app**: the session cookie is host-only on the app
-host and must never reach the origin that serves widget pages. The server
-enforces this by comparing the `Host` header against
-`SESSION_ARTIFACT_ORIGIN`, so both names have to resolve to the same machines
-and the database they share, and it refuses to start when the two origins
-have the same host.
-
-**Widget scripts need the widget host on another registrable domain.** A
-subdomain of the app's domain, such as `artifacts.session.dev` beside
-`session.dev`, is the same _site_: browsers treat requests between the two
-as same-site, and a cookie scoped to `session.dev` reaches both. With a
-same-site artifact origin the server serves only the static widget page,
-shows "Scripts off" on every widget, and logs at boot:
-
-```
-SESSION_ARTIFACT_ORIGIN (https://artifacts.session.dev) is on the same site (session.dev) as SESSION_PUBLIC_ORIGIN (https://session.dev). Widget scripts are off ...
-```
-
-To run widget scripts, register a second domain that is not under the app's
-domain (for example `<name>-usercontent.dev` for an app on `session.dev`), add
-it below in place of `artifacts.session.dev`, and set
-`SESSION_ARTIFACT_ORIGIN` in `fly.toml` to `https://` plus that host. The rule
-uses the Public Suffix List with its private section, so two names under a
-shared hosting suffix such as `fly.dev` count as different sites
-(`11-artifacts-and-browser.md` §2.1).
+### 2. DNS and certificate
 
 Fly routes by IP rather than by hostname, so any name pointing at the app's
-addresses arrives at it, and the original `Host` is passed through untouched.
-What Fly does need is a certificate per name, since it terminates TLS:
+addresses arrives at it. What Fly does need is a certificate for the name,
+since it terminates TLS:
 
 ```sh
 fly ips list -a session-dev          # the addresses to point DNS at
 fly certs add session.dev -a session-dev
-fly certs add artifacts.session.dev -a session-dev
 ```
 
-Add `A` and `AAAA` records for both names pointing at those addresses, plus
-the `_acme-challenge` CNAME each `fly certs add` prints. Then wait for both to
-report as issued:
+Add `A` and `AAAA` records pointing at those addresses, plus the
+`_acme-challenge` CNAME `fly certs add` prints. Then wait for it to report as
+issued:
 
 ```sh
 fly certs check session.dev -a session-dev
-fly certs check artifacts.session.dev -a session-dev
 ```
 
-DNS alone is not enough — without a certificate the second hostname fails at
-the TLS handshake and the request never reaches the app.
+DNS alone is not enough — without a certificate the request fails at the TLS
+handshake and never reaches the app.
 
 ### 3. Set the secrets
 
@@ -286,11 +256,7 @@ Admin unlocks Claude Fable, the user list, and per-account limit overrides.
 curl -fsS https://session.dev/healthz                       # ok
 curl -fsS -H "Authorization: Bearer $SESSION_METRICS_TOKEN" \
   https://session.dev/metrics | head                        # gauges
-curl -sS -o /dev/null -w '%{http_code}\n' https://artifacts.session.dev/   # 404
 ```
-
-That last one should be 404, not the app's HTML. The artifact host
-only serves widget previews.
 
 ### 7. Remaining setup
 

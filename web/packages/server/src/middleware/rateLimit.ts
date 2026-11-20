@@ -25,22 +25,13 @@ export interface RateLimitResult {
 /** The limits from `06` §8, named so the call sites read as the document does. */
 export const RATE_LIMITS = {
   mutations: { limit: 60, windowMs: 60_000 },
-  /** `POST /api/images`, per account. */
-  uploads: { limit: 120, windowMs: 60 * 60_000 },
   auth: { limit: 20, windowMs: 60_000 },
-  /** The `artifacts.*` procedures, per account and apart from `mutations`: a
-   * thread prepares and registers each widget it shows, and a widget's saved
-   * inputs are written up to four times a second while the reader types. */
-  widgets: { limit: 600, windowMs: 60_000 },
-  /** `events.setInterest`, per account and apart from `mutations`: every open
-   * tab renews its declaration every 30 seconds, and a reader with several
-   * tabs open must not spend the budget their edits draw on. */
-  interest: { limit: 120, windowMs: 60_000 },
-  /** Metadata runs a person asks for and waits on (`research.generateTitle`,
-   * `recaps.generateCandidate`), per account and on top of `mutations`: each
-   * is a billed model call. */
-  metadata: { limit: 30, windowMs: 10 * 60_000 },
 } as const satisfies Record<string, BucketSpec>;
+
+/** The bucket spec with the longest refill window, the default for `sweep`. */
+const LONGEST_WINDOW: BucketSpec = Object.values(RATE_LIMITS).reduce((longest, spec) =>
+  spec.windowMs > longest.windowMs ? spec : longest,
+);
 
 export class RateLimiter {
   readonly #buckets = new Map<string, Bucket>();
@@ -67,8 +58,10 @@ export class RateLimiter {
     return { allowed: true, retryAfter: 0 };
   }
 
-  /** Evicts expired rate limit buckets to bound memory usage in long-running processes. */
-  sweep(spec: BucketSpec = RATE_LIMITS.uploads): number {
+  /** Evicts expired rate limit buckets to bound memory usage in long-running
+   * processes. `spec` should carry the longest window in use, so no bucket
+   * that could still be limiting is evicted. */
+  sweep(spec: BucketSpec = LONGEST_WINDOW): number {
     const at = this.#now();
     let removed = 0;
     for (const [key, bucket] of [...this.#buckets.entries()]) {

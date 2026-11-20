@@ -74,34 +74,14 @@ export function sessionLoader(deps: ServerDeps): MiddlewareHandler<AppEnv> {
   };
 }
 
-/** Interval for checking open event streams against sessions, ensuring a
- * stream exceeds its session expiry by at most this duration. Sign-out and
- * deletion terminate a session's streams immediately (`endSession`). */
-export const SESSION_STREAM_CHECK_MS = 60_000;
-
 /**
- * Deletes the session identified by `token` and closes associated event
- * streams. Other sessions and streams for the account remain unchanged.
+ * Deletes the session identified by `token`. Other sessions for the account
+ * remain unchanged.
+ *
+ * The research event stream that sign-out also closed was removed with the
+ * research API (plan `01` A2). The sync SSE stream of `01` Y7 (M3) is to be
+ * closed here too, and checked against session expiry while it is open.
  */
-export function endSession(deps: Pick<ServerDeps, "db" | "eventBus">, token: string): void {
+export function endSession(deps: Pick<ServerDeps, "db">, token: string): void {
   auth.deleteSession(deps.db, token);
-  deps.eventBus.closeSession(auth.hashSessionToken(token));
-}
-
-/**
- * Closes event streams whose session no longer exists or has exceeded idle or
- * absolute expiry. Returns the number of closed connections. Runs every
- * `SESSION_STREAM_CHECK_MS`.
- */
-export function closeEndedSessionStreams(
-  deps: Pick<ServerDeps, "db" | "eventBus">,
-  at: number = Date.now(),
-): number {
-  let closed = 0;
-  for (const sessionId of deps.eventBus.openSessionIds()) {
-    if (!auth.sessionIsLive(deps.db, sessionId, at)) {
-      closed += deps.eventBus.closeSession(sessionId);
-    }
-  }
-  return closed;
 }

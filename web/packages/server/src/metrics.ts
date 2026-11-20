@@ -117,35 +117,11 @@ export class MetricsRegistry {
   }
 }
 
-export interface ProviderRunCount {
-  provider: string;
-  count: number;
-}
-
 export interface ProviderDailyUsage {
   provider: string;
   inputTokens: number | null;
   outputTokens: number | null;
   costMicros: number | null;
-}
-
-/** Claimed rows are the runs with an open provider stream; unclaimed ones are
- * the queue the admission caps hold back (`05-run-lifecycle-and-streaming.md`
- * §8). Read with SQL rather than through the repos: a scrape should not take
- * the write path's transactions or map rows it will not use. */
-export function activeRunsByProvider(deps: ServerDeps): ProviderRunCount[] {
-  return deps.db.$client
-    .prepare(
-      "SELECT provider, count(*) AS count FROM run_queue WHERE claimed_at IS NOT NULL GROUP BY provider ORDER BY provider",
-    )
-    .all() as ProviderRunCount[];
-}
-
-export function queueDepth(deps: ServerDeps): number {
-  const row = deps.db.$client
-    .prepare("SELECT count(*) AS count FROM run_queue WHERE claimed_at IS NULL")
-    .get() as { count: number } | undefined;
-  return row?.count ?? 0;
 }
 
 export function startOfUtcDay(at: number): number {
@@ -211,19 +187,10 @@ export function renderMetrics(options: RenderMetricsOptions): string {
   lines.push("# TYPE session_ready gauge");
   lines.push(`session_ready ${health === "ready" ? 1 : 0}`);
 
-  lines.push("# HELP session_active_runs Research runs with an open provider stream.");
-  lines.push("# TYPE session_active_runs gauge");
-  for (const row of activeRunsByProvider(deps)) {
-    lines.push(`session_active_runs${labels({ provider: row.provider })} ${row.count}`);
-  }
-
-  lines.push("# HELP session_queue_depth Admitted runs waiting for a slot.");
-  lines.push("# TYPE session_queue_depth gauge");
-  lines.push(`session_queue_depth ${queueDepth(deps)}`);
-
-  lines.push("# HELP session_sse_clients Open event-stream connections.");
-  lines.push("# TYPE session_sse_clients gauge");
-  lines.push(`session_sse_clients ${deps.eventBus.connectionCount()}`);
+  // The research run queue gauges (`session_active_runs`,
+  // `session_queue_depth`) and `session_sse_clients` were removed with the
+  // research API (plan `01` A2); the run dispatcher (M5a) and the sync SSE
+  // stream (M3) bring their own.
 
   lines.push("# HELP session_volume_free_bytes Free space on the data volume.");
   lines.push("# TYPE session_volume_free_bytes gauge");

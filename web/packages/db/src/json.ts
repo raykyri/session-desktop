@@ -6,48 +6,8 @@
 // build, a hand-edited database, or a partially-failed migration surfaces as
 // an error naming the column instead of as an undefined field deep in a
 // render.
-//
-// The db-local schemas below cover the three JSON payloads that have no wire
-// type in `shared`: a run's terminal outcome, one attempt's token usage, and
-// the AI SDK `ModelMessage` values of `node_messages`. A `ModelMessage` is
-// the SDK's type, not ours, so it is stored and returned opaquely — the
-// runtime that wrote it is the only thing that interprets it.
 
-import { researchNodeStatusSchema } from "@session/shared";
-import { z } from "zod";
-
-/** The terminal outcome recorded alongside a response snapshot, which boot
- * reconciliation adopts for a node that was still active when the process
- * died (`docs/02-domain-model-and-database.md` §5.7). */
-export const runOutcomeSchema = z.object({
-  status: researchNodeStatusSchema,
-  error: z.string().nullish(),
-  completedAt: z.number(),
-});
-
-export type RunOutcome = z.infer<typeof runOutcomeSchema>;
-
-/** Token counts as the AI SDK reports them for one attempt. */
-export const attemptUsageSchema = z.object({
-  inputTokens: z.number(),
-  outputTokens: z.number(),
-  reasoningTokens: z.number(),
-  cachedTokens: z.number(),
-});
-
-export type AttemptUsage = z.infer<typeof attemptUsageSchema>;
-
-/** One canonical conversation message. Opaque on purpose: the shape is the AI
- * SDK's `ModelMessage`, including provider metadata this package must not
- * reshape, so only its role is constrained. */
-export const nodeMessageSchema = z
-  .object({ role: z.enum(["system", "user", "assistant", "tool"]) })
-  .loose();
-
-export type NodeMessage = z.infer<typeof nodeMessageSchema>;
-
-/** A list of ids, for `nodes.chain_order_json`. */
-export const stringListSchema = z.array(z.string());
+import type { z } from "zod";
 
 /**
  * Validates a value read out of a JSON column.
@@ -66,29 +26,6 @@ export function parseJsonColumn<TSchema extends z.ZodType>(
     throw new Error(`Failed to parse ${column}: invalid data schema (${result.error.message})`);
   }
   return result.data;
-}
-
-/**
- * {@link parseJsonColumn} for a column holding a wire type from
- * `@session/shared/wire`, returned as that type.
- *
- * A zod schema's output marks an optional key `?: T | undefined`, which
- * `exactOptionalPropertyTypes` does not accept where the wire type writes
- * `?: T`. A value parsed from JSON has no `undefined` members, so the parsed
- * value is the wire type; `test/wireSchemas.test.ts` in `shared` checks that
- * each schema and its wire type agree.
- */
-export function parseWireColumn<TWire>(schema: z.ZodType, value: unknown, column: string): TWire {
-  return parseJsonColumn(schema, value, column) as TWire;
-}
-
-/** {@link parseWireColumn} for a nullable column. */
-export function parseNullableWireColumn<TWire>(
-  schema: z.ZodType,
-  value: unknown,
-  column: string,
-): TWire | null {
-  return value === null || value === undefined ? null : parseWireColumn(schema, value, column);
 }
 
 /** {@link parseJsonColumn} for a nullable column: `null` and `undefined` pass

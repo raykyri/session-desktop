@@ -1,7 +1,6 @@
 // Zod schemas for the tweet snapshots stored on research message attachments
 // (`../wire/tweet.ts` has the types). The snapshot, not the raw syndication
-// payload, is the persisted format, so its shape changes deliberately;
-// `journal/tweets.ts` defines the normalization that produces it.
+// payload, is the persisted format, so its shape changes deliberately.
 
 import { z } from "zod";
 
