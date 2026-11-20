@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 
 import { useLogout, useMe } from "../../api/account.js";
 import { AppBar } from "../../features/shell/AppBar.js";
+import { PageHeadingFocusContext } from "../../features/shell/Frames.js";
 import { channelOfPath, isFeedPath, showsChannelStrip } from "../../features/shell/screens.js";
 import { scopesFor, useShellData } from "../../features/shell/shellData.js";
 import { useBarAlign } from "../../features/shell/useBarAlign.js";
@@ -50,6 +51,13 @@ export function AppShell() {
   const layout = useNavigationStore((state) => state.layout);
   const toggleLayout = useNavigationStore((state) => state.toggleLayout);
   const setScope = useNavigationStore((state) => state.setScope);
+
+  // Pages focus their heading on a route change, not on the screen the app
+  // loaded on (02 §10.1). Set during render, so the page the first
+  // navigation mounts already reads it.
+  const [initialPathname] = useState(pathname);
+  const [navigated, setNavigated] = useState(false);
+  if (!navigated && pathname !== initialPathname) setNavigated(true);
 
   const isFeed = isFeedPath(pathname);
   const showStrip = showsChannelStrip(pathname);
@@ -142,7 +150,9 @@ export function AppShell() {
         />
       </div>
       <div ref={setScroller} className="app-scroll" data-shell-scroll="">
-        <Outlet />
+        <PageHeadingFocusContext.Provider value={navigated}>
+          <Outlet />
+        </PageHeadingFocusContext.Provider>
       </div>
       <ImageLightbox />
       <DiagramLightbox />

@@ -2,7 +2,7 @@
 // (`?t=&sel=`, malformed values dropped), the account invite link
 // (`/i#<code>`), and the sign-in page's redirects.
 
-import { cleanup, screen } from "@testing-library/react";
+import { act, cleanup, screen } from "@testing-library/react";
 import test from "ava";
 
 import { validateFeedSearch } from "../src/app/router.js";
@@ -52,6 +52,39 @@ test.serial("each path renders its screen", async (t) => {
   }
   const app = await renderApp("/welcome", { user: waitingUser() });
   t.truthy(await heading("Invite required"), "/welcome");
+  app.unmount();
+});
+
+test.serial("a route change to a page focuses its heading without scrolling", async (t) => {
+  const app = await renderApp("/", { user: testUser({ isAdmin: true }) });
+  const scroller = document.querySelector<HTMLElement>("[data-shell-scroll]");
+  const pages: [string, string][] = [
+    ["/browse", "Browse channels"],
+    ["/invites", "Invites"],
+    ["/usage", "Usage and API keys"],
+    ["/notifications", "Notifications"],
+    ["/admin", "Site Admin"],
+  ];
+  for (const [path, name] of pages) {
+    await act(() => app.router.navigate({ to: path }));
+    const page = await heading(name);
+    await waitUntil(t, () => document.activeElement === page, `${path}: heading focused`);
+    t.is(page.getAttribute("tabindex"), "-1", `${path}: focusable by script only`);
+    t.is(scroller?.scrollTop, 0, `${path}: not scrolled`);
+  }
+  app.unmount();
+
+  const waiting = await renderApp("/", { user: waitingUser() });
+  await act(() => waiting.router.navigate({ to: "/welcome" }));
+  const welcome = await heading("Invite required");
+  await waitUntil(t, () => document.activeElement === welcome, "/welcome: heading focused");
+});
+
+test.serial("the page the app loads on leaves focus at the start", async (t) => {
+  const app = await renderApp("/browse", { user: testUser() });
+  const page = await heading("Browse channels");
+  t.is(page.getAttribute("tabindex"), "-1");
+  t.not(document.activeElement, page, "Tab reaches the app bar first");
   app.unmount();
 });
 

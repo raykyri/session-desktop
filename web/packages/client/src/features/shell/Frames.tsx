@@ -3,7 +3,9 @@
 // (one centred column). Both reserve the app bar's height at the top and end
 // with the site footer (W2.7).
 
+import { useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef } from "react";
 
 import { useNavigationStore } from "../../stores/navigation.js";
 
@@ -65,7 +67,17 @@ export function FeedPlaceholder() {
   );
 }
 
-/** A page: `title` is its heading (the mockup's 22 px page `h2`). */
+/**
+ * Whether a page focuses its heading when it opens: true once the visitor
+ * has moved from the screen the app loaded on (`AppShell` provides it). The
+ * first screen of a load leaves focus at the document's start, so Tab
+ * reaches the app bar first.
+ */
+export const PageHeadingFocusContext = createContext(false);
+
+/** A page: `title` is its heading (the mockup's 22 px page `h2`). A route
+ * change to a page focuses the heading without scrolling (02 §10.1, W10.1;
+ * the mock's `go`), so a screen reader starts at the new page's name. */
 export function PageFrame({
   title,
   narrow = false,
@@ -75,9 +87,21 @@ export function PageFrame({
   narrow?: boolean;
   children?: ReactNode;
 }) {
+  const focusHeading = useContext(PageHeadingFocusContext);
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const heading = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (focusHeading) heading.current?.focus({ preventScroll: true });
+  }, [focusHeading, pathname]);
+
   return (
     <div className="page-inner" data-width={narrow ? "narrow" : undefined}>
-      <h2 className="text-fg-heading m-0 mb-2 text-[22px] font-bold tracking-[-0.015em]">
+      <h2
+        ref={heading}
+        tabIndex={-1}
+        className="text-fg-heading m-0 mb-2 text-[22px] font-bold tracking-[-0.015em]"
+      >
         {title}
       </h2>
       {children}
