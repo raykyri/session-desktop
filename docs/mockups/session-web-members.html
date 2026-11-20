@@ -1405,32 +1405,15 @@ function treeSection() {
   return `<section><h3>Invite tree</h3>${TREE_COPY.map(t => `<p class="sub tcopy">${t}</p>`).join('')}<div class="tgap"></div>${treeA()}</section>`;
 }
 function invSection() {
-  /* A one link + the people you invited (was C) · B every open link stacked (was D) · C every open link + the people you invited
-     D three slots: open links, people who used a link, and empty slots · E one link + the people you invited as avatars
-     F every open link as plain text + the people you invited */
+  /* every open link with Copy and Revoke, a button for a new one, then the people you invited */
   const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), used = slotsUsed(), can = used < SLOTS && canInvite(meM());
-  const why = !canInvite(meM()) ? 'You can invite once your account is active.' : used >= SLOTS ? `You have ${SLOTS} open invites. One frees when it is used, expires or is revoked.` : '';
-  const open = inv.filter(i => inviteState(i) === 'open'), i = open[0], L = x => `session.app/i/${x.code}`, exp = x => day(addDays(x.created, INVITE_DAYS));
-  const left = SLOTS - used, make = (cls = 'btn1 wide', t = 'Make an invite link') => `<button class="${cls}" data-ma="newinvite"${can ? '' : ' disabled'}>${t}</button>`;
-  const field = x => `<div class="ilink"><code>${L(x)}</code><button class="btn1 sm" data-ma="copy" data-t="${L(x)}">Copy</button></div>`;
-  const ltext = x => `<div class="ltext"><span>${L(x)}</span><button class="tlink" data-ma="copy" data-t="${L(x)}">Copy</button></div>`;
-  const revoke = x => `<button class="tlink inl danger" data-ma="revoke" data-code="${x.code}">Revoke</button>`;
+  const why = !canInvite(meM()) ? 'You can invite once your account is active.' : `You have ${SLOTS} open invites. One frees when it is used, expires or is revoked.`;
+  const open = inv.filter(i => inviteState(i) === 'open'), L = x => `session.app/i/${x.code}`, exp = x => day(addDays(x.created, INVITE_DAYS));
   const ppl = MEMBERS.filter(m => m.inviter === st.user).sort((a, b) => a.joined < b.joined ? 1 : -1);
-  const pplList = ppl.length ? `<h4>You invited</h4><div class="ippl">${ppl.map(m => `<div class="ip">${av(m.u, 'xs')}<b>${esc(m.u)}</b><span class="grow"></span><small>Joined ${day(m.joined)}</small></div>`).join('')}</div>` : '';
-  const pplAv = ppl.length ? `<div class="ipav"><span>You invited</span>${ppl.map(m => `<span title="@${esc(m.u)}">${av(m.u, 'sm')}</span>`).join('')}</div>` : '';
-  const head = n => `<div class="shead"><h3>Invite someone</h3><small>${n}</small></div>`;
-  const one = i ? `${field(i)}<p class="fine">Works once, until ${exp(i)}. ${open.length > 1 ? `${open.length - 1} more open. ` : ''}${revoke(i)}</p>${can ? make('tlink', 'Make another') : ''}` : `${make()}${why ? `<p class="fine">${why}</p>` : ''}`;
-  const stack = (row = field) => `${open.map(x => `${row(x)}<p class="fine">Until ${exp(x)}. ${revoke(x)}</p>`).join('')}${can ? make(open.length ? 'btn2 wide' : 'btn1 wide', open.length ? 'Make another' : 'Make an invite link') : `<p class="fine">${why}</p>`}`;
-  const v = st.ui.inv;
-  if (v === 'b') return `<section class="box invc">${head(`${left} of ${SLOTS} left`)}${stack()}</section>`;
-  if (v === 'c') return `<section class="box invc">${head(`${left} of ${SLOTS} left`)}${stack()}${pplList}</section>`;
-  if (v === 'd') { const usedL = inv.filter(x => inviteState(x) === 'used').slice(0, Math.max(0, SLOTS - open.length));
-    const rows = [...open.map(x => `<div class="slot">${field(x)}<p class="fine">Until ${exp(x)}. ${revoke(x)}</p></div>`),
-      ...Array.from({ length: Math.max(0, SLOTS - open.length) }, () => `<div class="slot empty">${make('btn2 wide', 'Make an invite link')}</div>`)];
-    return `<section class="box invc">${head(`${open.length} of ${SLOTS} open`)}${rows.join('')}${usedL.length ? `<p class="fine">Used: ${usedL.map(x => `@${esc(x.used)}`).join(', ')}</p>` : ''}${!canInvite(meM()) ? `<p class="fine">${why}</p>` : ''}</section>`; }
-  if (v === 'e') return `<section class="box invc"><h3>Invite someone</h3>${one}${pplAv}</section>`;
-  if (v === 'f') return `<section class="box invc e">${head(`${left} left`)}${stack(ltext)}${pplList}</section>`;
-  return `<section class="box invc"><h3>Invite someone</h3>${one}${pplList}</section>`;
+  return `<section class="box invc"><div class="shead"><h3>Invite someone</h3><small>${SLOTS - used} of ${SLOTS} left</small></div>
+    ${open.map(x => `<div class="ilink"><code>${L(x)}</code><button class="btn1 sm" data-ma="copy" data-t="${L(x)}">Copy</button></div><p class="fine">Until ${exp(x)}. <button class="tlink inl danger" data-ma="revoke" data-code="${x.code}">Revoke</button></p>`).join('')}
+    ${can ? `<button class="${open.length ? 'btn2' : 'btn1'} wide" data-ma="newinvite">${open.length ? 'Create a new link' : 'Create an invite link'}</button>` : `<p class="fine">${why}</p>`}
+    ${ppl.length ? `<h4>You invited</h4><div class="ippl">${ppl.map(m => `<div class="ip">${av(m.u, 'xs')}<b>${esc(m.u)}</b><span class="grow"></span><small>Joined ${day(m.joined)}</small></div>`).join('')}</div>` : ''}</section>`;
 }
 function membersPage() {
   return `<div class="page"><div class="page-in"><div class="mcols"><div class="mmain">${treeSection()}</div>
@@ -1483,7 +1466,7 @@ function renderMock() {
   const cur = st.auth === 'out' ? 'out' : st.user;
   const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcdef'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
-    ${seg('inv', 'Invites', 6)}
+    
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -1512,7 +1495,6 @@ function previewVariant(k) {
   if (k === 'keys') $('.kcards, .krow')?.closest('section')?.scrollIntoView({ block: 'start' });
   if (k === 'tree') $('.ttree, .ttable')?.closest('section')?.scrollIntoView({ block: 'start' });
   if (k === 'meter') $('.meter')?.focus();
-  if (k === 'inv') $('.mside .box, .mone .box')?.closest('section')?.scrollIntoView({ block: 'nearest' });
 }
 function signIn(u) { st.authOpen = false; st.auth = 'in'; st.user = u; st.screen = member(u).status === 'active' ? 'feed' : 'status'; st.menu = null; st.sel = {}; render(); }
 document.addEventListener('click', e => {
