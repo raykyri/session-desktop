@@ -1331,9 +1331,7 @@ function authScreen() {
   } else if (st.flow === 'landing') {
     body = `<div class="auth-c"><span class="brand lg">${mark()}<b>Session</b></span><h2>Research with agents, in shared spaces.</h2>
       <p>Ask a question and an agent researches it. Branch from any passage of the answer to go deeper; everyone in the space can read and build on it.</p>
-      <div class="auth-acts">${xBtn()}<button class="btn2" data-ma="flow" data-to="code">I have an invite code</button></div>
-      <p class="fine">Session is invite-only. New accounts need an invite code from a member.</p>
-</div>`;
+      <div class="auth-acts">${xBtn()}<button class="btn2" data-ma="flow" data-to="code">I have an invite code</button></div></div>`;
   } else if (st.flow === 'code') {
     const inv = INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
     body = `<div class="auth-c">${back('landing')}<h2>Enter your invite code</h2><p>It came from the member who invited you, as a code or a link.</p>
