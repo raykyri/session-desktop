@@ -193,8 +193,11 @@ run and attempt, deleted at finish), `site_settings` (`default_model` and
 `default_effort`, set by a site admin, 03 K15; no `model_settings` table),
 `server_meta` (the Litestream generation id of D6), `save_counts` (thread
 id and the true save count of a thread in a private channel, C1). Changed:
-`usage_events` (opened, checkpointed and closed per provider call, 03 K1),
-`invites` and `users` (C8, 04 I1). `device_tokens` and `run_leases`
+`usage_events` gains `run_id`, `attempt`, `payer`, `week` and `state`
+(`open` | `closed`); one row per provider call is opened when the call
+starts, checkpointed at most every 2 s and closed when the call ends, in
+its own short transactions, never fenced (03 K1, E1); `invites` and
+`users` (C8, 04 I1). `device_tokens` and `run_leases`
 are not created (removed: web-only build). Acceptance: no row of these
 tables appears in any `snapshot` or `pull` (a test lists every served record
 kind and checks it against D1's kinds).
@@ -205,7 +208,7 @@ overwritten in the file, and run `erase` paths as deletes of the affected
 (`inv6-removed-content.test.ts`) is ported to scan the bytes of the SQLite
 file and its WAL, after a checkpoint, for a removed thread's marker text and
 finds none. Litestream generations still hold the text until their retention
-expires; there is no retention requirement for backups (question 3, decided).
+expires; there is no retention requirement for backups (§9 q3; 05 §6 S1).
 
 ### 2.2 Migrations
 
@@ -406,8 +409,9 @@ porting, change `replica-proto` itself to the revised contract:
   `post` stage, the effect queue, the effect worker (`work`),
   `EFFECT_MAX_ATTEMPTS` and the dead letters are removed from `src/`.
   Notifications are written in the transaction by a `notify` stage (U1);
-  the `job` effect that `research.forkNode` and `threads.create` queue is
-  replaced by the `run` record they write with status `queued`, and the
+  the `job` effect that `threads.create` queues for an ask is dropped,
+  because the `run` record it writes with status `queued` is the queue, and
+  the
   `jobs()` test hook lists queued run records instead. The effect model
   (`test/effect-model.ts`, the write oracle's prediction of the records a
   write changes) leaves notifications out today because the worker wrote
@@ -455,21 +459,41 @@ changes.
 **Y2. Answers.** Every answer carries `serverTime`. Recorded (they use up
 the `seq`): applied results and refusals of the write itself (`FORBIDDEN`,
 `NOT_FOUND`, `CONFLICT`, `STALE`, `EXPIRED`, `BAD_REQUEST` for the input or
-the mutation id, …). Not recorded: `TOO_MANY_REQUESTS`,
+the mutation id, `PRECONDITION_FAILED`, …). The queue-full refusal is one of
+these: beyond 20 queued runs per user (`SESSION_QUEUED_PER_USER`, 03 L1)
+the `pre` stage answers `PRECONDITION_FAILED` with `reason: "queue_full"`,
+recorded and using the seq; the client pre-checks its own queued runs from
+the replica and, on the refusal, rolls back, restores the text to the
+composer and shows a toast (02 §9.2). Not recorded: `TOO_MANY_REQUESTS`
+(reserved for transport rate limits, A3 and Y3; no mutator answers it),
 `SERVICE_UNAVAILABLE`, `INTERNAL_SERVER_ERROR`, `CLOCK_SKEW`, `OUT_OF_ORDER`
 (carries `expectedSeq`), `WRONG_CLIENT`, `UNAUTHORIZED`, `UPGRADE_REQUIRED`,
 `TOO_LARGE`, and `BAD_REQUEST` for a malformed envelope (it has no usable
 `seq`). The sync codes (`STALE`, `CLOCK_SKEW`, `EXPIRED`, `OUT_OF_ORDER`,
 `WRONG_CLIENT`, `UPGRADE_REQUIRED`, `TOO_LARGE`) are not in the shared
 `spaceErrorCodeSchema` today and are added to it. Acceptance:
-`inv5-idempotency-per-user` and review-r1 `R7b` pass.
+`inv5-idempotency-per-user` and review-r1 `R7b` pass; a 21st queued run is
+refused with a recorded `PRECONDITION_FAILED` (`reason: "queue_full"`), and
+its resend returns the recorded answer.
 
 ### 4.2 Server half
 
-**Y3. `register`.** Issues a client id bound to the caller. The 21st
-registration in a day answers `TOO_MANY_REQUESTS`; a `waiting` account (C8)
-gets `FORBIDDEN` and reads through R5. Acceptance: a client id of another
-user, or idle for 90 days, answers `WRONG_CLIENT`; one test per refusal.
+**Y3. `register`.** Client ids are kept across reloads, per tab. The web
+client stores `{clientId, userId}` in sessionStorage, which survives a
+reload of the same tab, is per tab, and is cleared when the tab closes. On
+load the tab takes an exclusive Web Lock named `session-client:<clientId>`
+with `ifAvailable`; a duplicated tab inherits the copied sessionStorage,
+fails to get the lock and registers a new id. `register` either issues a
+new client id bound to the caller or, given an existing id of the caller,
+re-attaches it and returns its `lastSeq`. Only new ids count against the
+limit: the 51st new id of a user in a day answers `TOO_MANY_REQUESTS`; a
+re-attach is not counted. Web client ids expire after 7 days idle; they
+hold no outbox across reloads (Y10), so nothing is lost. Sign-out clears
+the stored id. A stored id of another user, or an expired one, answers
+`WRONG_CLIENT` and the client registers anew. A `waiting` account (C8)
+gets `FORBIDDEN` and reads through R5. Acceptance: 100 reloads of one tab
+register one id; a duplicated tab gets a new id; a client id of another
+user, or idle for 7 days, answers `WRONG_CLIENT`; one test per refusal.
 
 **Y4. `apply`.** For each envelope, in the prototype's order (the comment at
 the top of `replica-proto/src/server.ts`; the protocol steps of
@@ -488,9 +512,9 @@ the top of `replica-proto/src/server.ts`; the protocol steps of
    name and strict input schema, else `BAD_REQUEST`; every new id in the
    input in the same window, and an online-only write's mutation id at most
    1 minute old, else `EXPIRED`;
-7. one transaction: ban check, `who`, `can`, `pre`, `run`; commit records,
-   log rows, registry, the answer (under `mutationId` and each id in
-   `replaces`), `last_seq` and effects.
+7. one transaction: ban check, `who`, `can`, `pre`, `run`, `notify`;
+   commit records (notifications included), log rows, registry, the answer
+   (under `mutationId` and each id in `replaces`) and `last_seq`.
 
 ID collisions answer the same `CONFLICT` whether or not the caller can read
 the holder. Acceptance: `inv1`, `inv2`, `inv4`, `inv5`, review-r2 `Q1` and
@@ -539,8 +563,9 @@ change; a member removed while connected gets `resync` for the space log and
 no record written after the removal.
 
 **Y8. Retention jobs.** Hourly: prune tombstones over 30 days, recorded
-answers over 7 days, clients idle 90 days, and `modlog` entries over 180
-days (C12; replicated deletes). `registry` is never pruned.
+answers over 7 days, clients idle 7 days, and `modlog` entries over 180
+days (C12; replicated deletes). `registry` is never pruned. These are
+scheduled maintenance in the server process, not effects (S4 removed).
 Acceptance: one test per table with an injected clock, at the boundary
 millisecond (as inv6 "a delete committed in the same millisecond as a
 cursor…").
@@ -576,19 +601,25 @@ prediction read `unknown` is shown as pending without a predicted effect.
 Acceptance: the convergence suite's replicas equal the server projection
 after every interleaving it generates.
 
-**Y12. Reactive queries.** `useQuery(selector)` for React and React Native,
+**Y12. Reactive queries.** `useQuery(selector)` for React,
 re-evaluated when keys the selector read change. Acceptance: a component test
 re-renders once per confirming batch, not once per record.
 
 ### 4.4 Server-originated writes
 
-**Y13. `serverApply`.** Runs and effects write records without an envelope
-(`03-agents-and-research.md` E1): `serverApply(fn)` in `@session/sync/server`
-runs `fn` over the same `tx` and commits record rows, log rows, registry and
-tombstones in one transaction, with no answer and no seq. The run fence
-(current attempt, thread not removed) is the caller's, in 03. Acceptance: a
-run turn written this way reaches a reader's `pull` and SSE stream; a write
-whose `fn` refuses commits nothing.
+**Y13. `serverApply`.** Runs and the account-invite procedures write
+records without an envelope (`03-agents-and-research.md` E1; the
+`invite_used` notification of C16): `serverApply(fn)` in
+`@session/sync/server` runs `fn` over the same `tx` and commits record
+rows, log rows, registry and tombstones in one transaction, with no answer
+and no seq; a tRPC procedure that calls it inside its own transaction
+commits its table changes and the records together. The run fence (current
+attempt, thread not removed) is the caller's, in 03, and applies to record
+writes only: ledger writes (`usage_events`) do not go through
+`serverApply`, are written at spend time, are never fenced and commit in
+their own short transactions (03 K1, E1). Acceptance: a run turn written this way
+reaches a reader's `pull` and SSE stream; a write whose `fn` refuses
+commits nothing.
 
 ## 5. Replication tiers
 
@@ -652,7 +683,7 @@ web-only build).
 
 | Route | Kind | Purpose |
 |---|---|---|
-| `POST /api/sync/register` | sync | client id |
+| `POST /api/sync/register` | sync | a new client id, or re-attach of the caller's existing id with its `lastSeq` (Y3) |
 | `POST /api/sync/apply` | sync | a batch of envelopes, answered in order |
 | `POST /api/sync/snapshot` | sync | records now, scope-filtered; body `{ log, tier, threads? }` (500 ids do not fit a URL) |
 | `GET /api/sync/pull?log&cursor&clientId` | sync | changes since a cursor |
@@ -660,9 +691,9 @@ web-only build).
 | `POST /api/runs/claim`, `/heartbeat`, `/turn`, `/finish` | — | removed: web-only build (ADR-21 device runs) |
 | `GET /api/runs/:id/live` | read | in-flight checkpoint of a run after a gap (ADR-22) |
 | tRPC `account.*` | online | profile and account settings; `devices.*` is not built (removed: web-only build) |
-| tRPC `apiKeys.*`, `usage.*` | online | keys, allowance, recent runs (`03-agents-and-research.md` §6) |
+| tRPC `apiKeys.*`, `usage.*` | online | keys, allowance, recent runs (`03-agents-and-research.md` §6); `apiKeys.set` checks the key against the provider's model list during the request (10 s timeout) and saves it only if the provider accepts it: a rejected key answers `BAD_REQUEST` ("That key was rejected by <Provider>."), an unreachable provider `BAD_GATEWAY` ("Couldn't reach <Provider> to check the key. Try again."); neither saves the key (03 K4) |
 | tRPC `models.list` | online | every registry model, the default model and the default effort (03 K15) |
-| tRPC `admin.models.*`, `admin.suspend` | online, site admins | default model and default effort (03 K15); suspension (04 I6) |
+| tRPC `admin.models.*` | online, site admins | default model and default effort (03 K15); there is no `admin.suspend` (no suspension, 04 I6 removed) |
 | tRPC `accountInvites.*`, `members.tree` | online | Session invites and the invite tree (C8) |
 | tRPC `spaces.directory` | online | the "All" list of open channels (C7) |
 | `GET /healthz`, `/auth/*` | Hono | `/auth/github/*` and the new `/auth/x/*` (04 Z2) |
@@ -670,10 +701,11 @@ web-only build).
 **A1.** Implement the sync routes over `@session/sync/server` (S1, Y3-Y7).
 Acceptance: `web/packages/server/test/conformance/` implements replica-proto's
 `ServerFactory` over HTTP against a server on a temp SQLite file with an
-injected clock. The `TestServer` hooks (`dump`, `jobs`, `work`, the storage
-scan, clock and random-source control) are served by a route mounted only
-when `NODE_ENV=test`. Every replica-proto test file passes against it
-unchanged, the oracles and effect model included. The mutation runner
+injected clock. The `TestServer` hooks as U6 leaves them (`dump`, `jobs`
+over queued run records, the storage scan, clock and random-source
+control; `work` is removed with the effect worker) are served by a route
+mounted only when `NODE_ENV=test`. Every replica-proto test file passes
+against it unchanged, the oracles and effect model included. The mutation runner
 mutates the prototype's `src/` only; the server's own mutation set is
 `05-delivery.md` M3.
 
@@ -683,8 +715,9 @@ old client. Acceptance: `npm run check` passes with the routers gone.
 
 **A3.** Rate limits: `apply` counts envelopes against the 60 writes per
 minute per user of `06-auth-and-users.md` §8 (a batch of 20 counts 20);
-`snapshot` 30 per minute per user; one SSE connection per client id.
-Acceptance: middleware tests.
+`snapshot` 30 per minute per user; one SSE connection per client id; limits
+keyed by IP (04 Z1) use the /64 prefix for IPv6. These answer
+`TOO_MANY_REQUESTS`, unrecorded (Y2). Acceptance: middleware tests.
 
 ## 7. Contract changes from the mockup
 
@@ -704,10 +737,16 @@ schema's `saved.toggle`; threads only) writes the save
 record in the user log and increments or decrements `saves`. Who saved a
 thread is not served; only the count is. The overview decided "there are no
 likes", so the product decision wins and no ADR conflicts. In a private
-channel a save count below 3 is not served (decision S6): the read filter
-(Y5) serves `saves: 0` on a private space's counts record while the stored
-count is 1 or 2, and the client draws no count below 3 there, its own
-prediction included. Open channels show every count.
+channel a save count below 3 is not served (decision S6). The replicated
+counts record stores the served value: in a private channel `saves` is 0
+until the true count reaches 3, and the true count is kept in the
+non-replicated server column `save_counts.saves` (D3). A save that leaves
+the true count below 3 therefore changes no counts record and writes no
+change-log row for it; crossing 3 in either direction writes the counts
+record. The true count is a server-only lookup that reads `unknown` on the
+client (U2), so the client predicts the user's save record but not a
+private channel's count, and draws no count below 3 there. Open channels
+store and show every count in the counts record.
 
 **C2. Save counts and the Saved count.** The thread footer shows the save
 count (`saves` from C1). The app bar's Saved button (`savedBtn()`) shows how
@@ -728,8 +767,12 @@ the full field list in 03 §1:
   parent's answer that holds the quote, used to place the branch tree and
   shade the passage; absent for asks from the footer) and, for look-ups,
   `look` (1-4 words, at most 80 characters) and `tpl` (template version);
-- every node records `model` and `effort` (03 K12); `executor` and `agent`
-  are not added (removed: web-only build; every run is an owned run);
+- every node records `model` and `effort` (03 K12); every new run carries
+  an explicit effort. Both are stored on node and run records and shown
+  nowhere in the UI (the mockup's ask card has no byline and no "model ·
+  effort" tooltip); `executor` and `agent` are not added (every run is an
+  owned run);
+- optional `promoted`: the id of the thread the node was opened as (03 G5);
 - `pay` and `uses` are dropped from the node and from `forkNodeInputSchema`
   (the payer is a server value, 03 K8); `forkNodeInputSchema` becomes a
   union on `kind`;
@@ -788,11 +831,13 @@ link's creator, nulled when the link is used or revoked), `revoked_at` is
 added, and `users.invites_remaining` is dropped in favour of the
 3-open-links rule, checked inside the `accountInvites.create` transaction.
 `auth.checkInvite` answers `open` or one `unusable` answer for used, revoked
-and unknown codes. `users` gains `status: "waiting" | "active" |
-"suspended"`, `handle` and `display_name` (rules in
-`04-membership-moderation-security.md` §3.1; suspension in 04 I6). A
-`waiting` or `suspended` account registers no sync client for writing (Y3)
-and reads through R5.
+and unknown codes. `users` gains `status: "waiting" | "active"`, `handle`
+and `display_name` (rules in `04-membership-moderation-security.md` §3.1);
+there is no `suspended` status (no suspension, 04 I6 removed). A `waiting`
+account registers no sync client for writing (Y3) and reads through R5.
+Account deletion (operator job, 04) deletes the provider identity
+(`provider`, `provider_user_id`); the handle stays reserved, and the person
+can sign in again as a new waiting identity.
 Account invites and the tree are online-only tRPC (`accountInvites.*`,
 `members.tree`), not replicated records; tree visibility is decided in 04
 §3.3.
@@ -824,10 +869,11 @@ edits. Admin and moderator roles are removed (C18).
 
 **C12. Remove with a free-text reason; the moderation log; no reporting.**
 `rmDlg` takes an optional reason. A removal's reason is shown to readers on
-the placeholder ("Removed by @x", "Reason: …"). The mockup's report mode and
-the moderation log's reports are not built: there is no reporting at all
-(decision F). The schema's `reports.create` requires a `why` category plus an
-optional `note`, and `moderation.decide` has no reason. Change:
+the placeholder ("Removed by @x", "Reason: …"). There is no reporting at
+all (05 §6 P6); the mockup's moderation log ("Moderation log") lists only
+the owner's removals and bans. The schema's `reports.create` requires a
+`why` category plus an optional `note`, and `moderation.decide` has no
+reason. Change:
 - `reports.create`, `reports.resolve`, the `report` record kind, the
   `report` and `report_resolved` notification types and the report rate
   limit are removed from `spaces.ts` (moved to `spaces.deferred.ts`, C10) and
@@ -843,8 +889,9 @@ optional `note`, and `moderation.decide` has no reason. Change:
   and `unban`, `item` is null and `author` names the banned person (04
   §6.5). The log lists the owner's removals and bans. Entries are pruned
   after 180 days (Y8).
-- The removal also writes a `removed` notification to the author (C16), with
-  the owner's note and no text of the removed item.
+- The removal of a thread also writes a `removed` notification to the
+  author in the same transaction (C16; 04 O2), with the owner's note and no
+  text of the removed item.
 - Conflict: `modLogDlg` quotes the removed thread's question. AGENTS.md wins:
   removed content is erased and never served again, so the log shows the
   item's kind, author and channel, and no text of a removed item.
@@ -874,16 +921,18 @@ under the mockup's condition; the server does not enforce it.
 
 **C16. Notifications.** Posts, replies and comments notify mentioned
 members (`notify` in the submit handler); the schema's notification types
-have no mention, and `report` exists only in the prototype. Decision G sets
-the kinds; each is a `notification` record in the recipient's user log,
-written by a post-commit effect (or by `serverApply`, Y13, for the invite
-case), carrying ids and no item text, and served only while the recipient
-can read the item (AGENTS.md "User logs follow current access"). Nobody is
-notified of their own action.
+have no mention. 05 §6 P10 sets the kinds; each is a `notification` record
+in the recipient's user log, written in the same transaction as the write
+that causes it: by the mutator's `notify` stage (U1), or by `serverApply`
+(Y13) inside the account-invite procedure for the invite case. Notifications
+are exactly once because they commit with the write; there is no effect
+queue (S4 removed). Each carries ids and no item text and is served only
+while the recipient can read the item (AGENTS.md "User logs follow current
+access"). Nobody is notified of their own action.
 
 | `type` | Written when | To | Payload |
 |---|---|---|---|
-| `mention` | a post, reply or comment mentions `@handle` | the mentioned member, if they can read the item at effect time | `sp`, `th`, item key, actor |
+| `mention` | a post, reply or comment mentions `@handle` | the mentioned member, if they can read the item when the write commits | `sp`, `th`, item key, actor |
 | `reply` | a reply to a post (`research.createPostFollowUp`) | the post's author | `sp`, `th`, reply id, actor |
 | `branch` | `research.forkNode` (an ask or look-up) under a node | the author of the parent node | `sp`, `th`, node id, actor |
 | `comment` | `comments.create` on a node | the author of that node | `sp`, `th`, comment id, actor |
@@ -894,16 +943,20 @@ notified of their own action.
 notification per (recipient, type, thread), with a count. The `removed`
 notification survives the erasure of the thread (it holds no text), while
 mention notifications about the removed thread are erased with it (04 §6.2).
-The prototype's `report` type and the schema's `report_resolved` are removed
-(C12). The client lists notifications on a notifications page reached from
-the account menu, and an unread dot on the account avatar (`02-client-app.md`
-W2.6; decision P10). Acceptance: one effect test per row, including "not
+Only a thread's removal notifies (04 O2). There are no report
+notifications (C12). The client lists notifications on a notifications page
+reached from the account menu, and an unread dot on the account avatar
+(`02-client-app.md` W2.6; decision P10). Acceptance: one mutator test per
+row that finds the notification committed with the write, including "not
 notified of one's own action" and the coalescing rule; a test that a
 `removed` notification holds no thread text.
 
 **C17. Runs streamed.** The mock API's note "Answers are not streamed" is
 superseded by ADR-22; the `spaceRunSchema` record becomes the run record of
-03 §1.
+03 §1, with `model`, `effort` and an optional `note` (the stop note of
+a run that ends `complete` early, such as "Stopped: this week's included
+tokens ran out.", 03 E5). The run record with status `queued` is the run
+queue; the dispatcher claims it with a compare-and-set (03 E2).
 
 **C18. Channel roles: owner and member.** Product decision (00, "Decisions
 recorded after review"): a channel has exactly one owner, ownership is not
@@ -943,8 +996,9 @@ hidden text) are served to the owner, and where they are today also to the
 link's maker or the author; the `report` records and notifications are
 removed (C12). Site admins (`users.is_admin`) get no channel rights from the role
 model; the channel-level actions a site admin already has in this plan stay:
-deleting a channel by operator job (04 §1) and suspending an account, which
-freezes the channels it owns (04 I6, §4.5). `AGENTS.md` ("Stale intent:
+deleting a channel by operator job (04 §1) and deleting an account by
+operator job, which freezes the channels it owned (04 B6, §4.5). There is
+no suspension (04 I6 removed). `AGENTS.md` ("Stale intent:
 `shown`, `approve`, reopen and `setRole` carry `base.rev`", and the two
 lines that name "the space's moderators" for hidden text and "a moderator"
 for removal) is updated in the same change as C18; this plan does not edit
@@ -957,11 +1011,11 @@ U6 (update replica-proto) ─► U1-U5 (@session/mutators)
 D1-D3 ─► Y3-Y6, Y13 (server half) ─► A1 (HTTP) ─► Y7 (SSE)
 U1-U5 ─► Y9-Y12 (client half)
 S1-S3 ─► A1
-Y13 ─► the run jobs of 03 (E1)
+Y13 ─► the runs of 03 (E1, E2) and the invite_used notification (C16)
 D6 needs Y6 (epoch in cursors) and the restore runbook change
 R1-R5 need Y5 and C7
 C1-C18 land in spaces.ts and replica-proto before U5
-S4 (effects) before C16 and the run jobs of 03
+U1 (the notify stage) and Y4 before C16
 ```
 
 The shared-schema changes (section 7) come first because the mutators, the
@@ -970,14 +1024,16 @@ them.
 
 ## 9. Open questions
 
-1. **Record table or typed tables.** Decided (E3): one `records` table. D1 chooses one `records` table with JSON
-   bodies. If feed queries (C7, R5) need indexes on fields inside `body`,
-   generated columns are added per field; is that acceptable, or should
-   threads and nodes get typed tables now?
-2. **Who sees save counts.** Decided (S6): in private channels counts below
-   3 are not served or shown (C1). C1 serves the count to every reader of the
-   space; in a private channel with few members a count of 1 can identify the
-   saver.
+1. **Record table or typed tables.** Decided (E3): one `records` table with
+   JSON bodies (D1). Where feed queries (C7, R5) need indexes on fields
+   inside `body`, generated columns are added per field; threads and nodes
+   get no typed tables.
+2. **Who sees save counts.** Decided (S6): in a private channel a count
+   below 3 is neither served nor shown, because with few members a count of
+   1 can identify the saver. The counts record stores the served value (0
+   until the true count reaches 3), and the true count is kept in a
+   non-replicated server column, so a hidden save writes no change-log row
+   (C1, D3). Open channels serve every count.
 3. **Erasure and backups.** Decided: no retention requirement. D4 erases
    from the live file; Litestream generations and the nightly archive may keep
    removed text for as long as they are retained, and the retention period is

@@ -400,7 +400,7 @@ cards:
 |---|---|
 | `queued` | "Queued" |
 | `running` | "Researching · Step N of 4" (`step` 0-3, 03 E3) with a pulsing dot, replaced by streamed text as it arrives (ADR-22) |
-| `complete` | the answer; a run note after it when the run record carries one: "Stopped at the run's token limit." (03 E5, L1) or "Stopped: this week's included tokens ran out." (the member's overdraft limit was reached, 03 K9) |
+| `complete` | the answer, then the run record's `note` when it has one (03 §1, E5): "Stopped at the run's token limit." (per-run cap, L1) or "Stopped: this week's included tokens ran out." (the member's overdraft limit, K9) |
 | `failed` | the reason for `fail.why` (`tokens`: "You're out of tokens until Friday. You can still post, or add an API key in Usage.", weekday from `usage.get`; `key`, `rate`, `access`, `error`) |
 | `cancelled`, `interrupted` | "Stopped" / "Interrupted" with the partial text |
 
@@ -432,8 +432,10 @@ Rows (`outline`):
   child's dot; 3.5 px dots centred on the row's first line, also when it wraps
   (`drawGraph`); selected path in the accent mix, selected dot filled;
 - hovering a passage outlines its tree and the reverse (`hl`);
-- the passage ends with an inline count button that selects its first branch
-  and scrolls the tree into view (`badge`, `grpopen`).
+- the passage ends with an inline count button (reply arrow and the count;
+  label "N branches on this passage. Open the first", title "Open the
+  branches on this passage") that selects its first branch and scrolls the
+  tree into view (`badge`, `grpopen`).
 
 **W4.1 `BranchTree` and `ui/TreeRail`.** Pure functions in `geometry.ts`:
 `railGeometry(rows)` from measured first-line centres (`ResizeObserver` plus
@@ -444,24 +446,32 @@ centre.
 
 ### 4.2 Selected-row card
 
-Selecting a row toggles its card below the tree (`preview`): who line with "…"
-(Open as its own thread, for anyone who can read the branch, shown with the
-branch's author, 03 G5, decision P14; Delete branch with the thread rules plus "Not
-available after it was opened as a thread"); a "Look up <phrase>" header or the
-quoted passage clipped at 180 characters; run status (§3.3); prose scrolling
-within 260 px; actions (`branchActs`) Comment (speech bubble, left,
-`aria-pressed`; tooltip "Comment on this branch. Does not run an answer."),
-Continue (down arrow; asks under this answer) and Branch (down-right arrow;
-asks beside it, at the parent; never on the root, 03 §2.1); "Open thread"
-instead when promoted; then comments (`branchReplies`, 01 C4): "N comments",
-nested 14 px per level up to 3, each with a Reply / Close reply toggle
-(`replyIcon`, `aria-pressed`).
+Selecting a row toggles its card below the tree (`preview`): who line (16 px
+avatar, handle, relative time) with "…" ("Open as its own thread", for any
+writer who can read the branch, shown with the branch's author, 03 G5,
+decision P14, toast "Opened as its own thread."; "Delete branch" for its
+author with the thread rules plus "Not available after it was opened as a
+thread", confirmed by "Delete this branch and the branches under it?" / "This
+can't be undone."); a "Look up <phrase>" header (magnifier) or the quoted
+passage clipped at 180 characters; run status (§3.3); prose scrolling within
+260 px; actions (`branchActs`) Comment (speech bubble, left, `aria-pressed`;
+title "Comment on this branch. Does not run an answer."), Continue (down
+arrow; title "Ask a new question under this answer. Runs an answer.") and
+Branch (down-right arrow; title "Ask a different question at the same point,
+next to this one. Runs an answer."; asks at the parent; never on the root,
+03 §2.1); "Open thread" instead of Comment when promoted; then comments
+(`branchReplies`, 01 C4): "N comments" ("1 comment"), nested 14 px per level
+up to 3, each with avatar, handle, time, text and a Reply / Close reply
+toggle (`replyIcon`, `aria-pressed`) opening a composer with placeholder
+"Reply" and submit "Reply".
 
 The card fades in (0.25 s, 3 px rise) only when the item it shows changes, not on
 re-renders from opening a composer, toggling Comment or a count change
 (`pvFade`): the fade is keyed on `(threadId, itemKey)` in a ref.
 
-**W4.2 `BranchCard`, `BranchActions`, `BranchComments`.** Acceptance: Continue
+**W4.2 `BranchCard`, `BranchActions`, `BranchComments`.** Acceptance: the
+footer's follow-up button opens the composer with parent = the answer,
+placeholder "Ask about the answer"; Continue
 opens the composer with parent = node, placeholder "Continue ask"; Branch with
 parent = node's parent, "Ask beside this"; Comment ("Comment here", submit
 "Comment") replaces an open ask composer on that thread and the reverse; a
@@ -470,18 +480,25 @@ on a count change.
 
 ### 4.3 Reply trees on posts
 
-A post's side column is sticky (top 58 px, own scroll) and holds a reply tree on
-the same rail (`replyLines`): avatar and one line of text per row, "+N" on a
-collapsed reply. A selected row shows a card with Delete in "…" (own replies,
-none by others under them), `>` quotes and member `@mentions`, and a Reply /
-Close reply toggle; the reply composer's placeholder is "Reply to @handle".
-Below the tree "Reply at root" (signed out "Sign in to reply", no invite
-"Replying opens once you have an invite"). The footer's Reply opens the root
-composer and scrolls to it (§4.5).
+A post's side column is sticky (`top` 58 px + 49 px while the app bar shows,
+58 px while it is hidden, W2.3; at most the viewport height minus 150 px,
+own scroll; static at 860 px and below) and holds a reply tree on the same
+rail (`replyLines`): avatar and one line of text per row, "+N" on a collapsed
+reply. A selected row shows a card with "Delete reply" in "…" (own replies,
+none by others under them; confirmed by "Delete this reply and your replies
+under it?" / "This can't be undone."), `>` quotes and member `@mentions`, and
+a Reply / Close reply toggle; the reply composer's placeholder is "Reply to
+@handle". Below the tree "Reply at root" (signed out "Sign in to reply", no
+invite "Replying opens once you have an invite"). The footer's Reply opens the
+root composer and scrolls to it (§4.5). When a sent post, reply or comment
+mentions handles, the toast lists the result the server returns with the
+confirmation (N16): "Notified @a, @b." and "@c isn't a member." ("@c, @d
+aren't members."), joined in one toast when both apply.
 
 **W4.3 `ReplyTree`, `ReplyCard`.** Acceptance: formatting tests (quotes,
 mentions of members only); collapse counts; Reply toggling; focus into the
-opened composer; a sent reply is selected in the tree.
+opened composer; a sent reply is selected in the tree; the mention toast for
+a member, a non-member and both.
 
 ### 4.4 Answer text: citations, passages, selection
 
@@ -492,25 +509,29 @@ same rehype plugins, so the block structure that passage indexes refer to is
 the same for streamed and final text (N12).
 
 - **Citations** (`citeReady`, `citeOpen`): each superscript is a button
-  "Source N" opening a popover with title, note and host link (the link takes
-  focus), and is wrapped with its preceding word in a `nowrap` span so it never
+  "Source N" opening a popover (`role="dialog"`, label "Source N") with the
+  number, title, note and host link ("host ↗", the link takes focus), and is wrapped with its preceding word in a `nowrap` span so it never
   starts a line alone. Built as `rehypeCitations`, not by DOM mutation.
 - **Passages**: `rehypePassages` gives each top-level block a `data-passage`
   index. Passages with branches get the passage shade with 6 px side bleed; the
   passage an open composer quotes gets the accent tint (`qsel`). The mock's
   word-overlap matching (`groupsFor`, `bestBlock`) does not ship; branches carry
   their passage index (N3).
-- **Selection actions**: a selection of 3+ characters inside one finished
-  answer (thread card or branch card, 03 G2), for a writer, shows Look up
-  (magnifier) above Branch here, 8 px below the selection, equal width,
-  right-aligned to a one-line selection and left-aligned otherwise, kept 8 px
-  inside the viewport, removed on scroll. Look up shows only for 1-4 whole words
-  (`lookPhrase`: no boundary inside a `\p{L}\p{N}` run; edge punctuation
-  trimmed). Branch here opens that answer's composer with the selection as
-  quote ("Ask about this passage"; long quotes clipped with Show all) and its
-  passage index `b`. Look up writes `research.forkNode { kind: "lookup",
-  look, quote, b }` at once (the prompt is built by the mutator, 01 C3,
-  03 G2) and selects the new row.
+- **Selection actions**: a selection of 3+ characters inside the finished
+  answer of a thread card (the mock's `.card .prose[id^="pr-"]`; not in a
+  branch card's answer, not while the root answer runs), for a writer, shows
+  Look up (magnifier) above Branch here (reply arrow), 8 px below the
+  selection, equal width, right-aligned to a one-line selection and
+  left-aligned otherwise, kept 8 px inside the viewport, removed on scroll.
+  Look up shows only for 1-4 whole words (`lookPhrase`: no boundary inside a
+  `\p{L}\p{N}` run; edge punctuation trimmed). The parent of both is the
+  thread's answer (the root). Branch here opens the answer's composer with the
+  selection as quote (placeholder "Ask about this passage"; a quote over 180
+  characters is clipped with "Show all", label "Show the whole quote"; the
+  quote has its own Close button) and its passage index `b`. Look up writes
+  `research.forkNode { kind: "lookup", look, quote, b }` under the answer at
+  once (the prompt is built by the mutator, 01 C3, 03 G2) and selects the new
+  row.
 
 **W4.4 Plugins and `SelectionActions`.** `lookPhrase` moves unchanged to
 `features/branches/lookPhrase.ts`. The popover also listens to
@@ -519,7 +540,9 @@ so that Tab from the answer reaches Look up then Branch here, and registers in
 `stores/overlays`. Acceptance: `lookPhrase` table (1, 4, 5 words; partial word
 at either end; punctuation; non-Latin letters); a citation shares a nowrap span
 with its word; Playwright selects two words, clicks Look up, and the new row
-shows the phrase, not the prompt; a Shift+Arrow selection shows the popover.
+shows the phrase, not the prompt; a Shift+Arrow selection shows the popover;
+a selection in a branch card's answer shows nothing; both actions write
+under the root.
 
 ### 4.5 Scrolling to a composer
 
@@ -533,119 +556,164 @@ after clicking a footer button near the viewport bottom.
 
 The new-thread composer is the mock's `COMPOSERS.split` with `nb-a`:
 
-- a hollow tree node at its start, aligned with the title-row nodes below; the
-  growing text field ("Ask anything" / "Write a post"; 15 px, label "Ask or
-  post"), controls held on the last line;
-- channel picker on Home and Saved (joined channels, `menuitemradio`); on a
-  channel route the name as static text;
-- model picker for asks: short names, full names in the menu, listing
-  every registry model (`models.list`, 03 K11, K15) and starting on the
-  site default model and default effort unless the person picked another
-  model or effort in this tab; a model needing a missing key shows "Add a key" linking to
-  `/usage`; a key-billed model shows "your OpenAI key". No device entries
-  ("Claude Code on this Mac"; removed: web-only build). An Effort submenu
-  (the shipped `QuestionModelPicker`'s) lists Default and only the efforts
-  the chosen model accepts (`ModelEntry.efforts`, 03 K12); it is rebuilt
-  when the model changes, and an effort the new model does not accept falls
-  back to Default. No cost estimate is shown for high efforts (decision
-  P13);
-- split send button: main part Ask (arrow) or Post (pencil), disabled while
-  empty; the arrow part ("Ask or post") opens Ask / Post with icons,
-  descriptions ("Agent researches and answers", "A message to people in the
-  channel") and a check;
+- the member's 20 px avatar at its start, centred on the text's first line;
+  the growing text field ("Ask anything" / "Write a post"; 15 px, label "Ask
+  or post"), controls held on the last line;
+- channel picker on Home and Saved (title "Channel"; joined channels with
+  their glyphs, `menuitemradio`); on a channel route the name as static text;
+- model picker for asks (title "Model and effort"): short names on the
+  button, full names in the menu, listing every registry model
+  (`models.list`, 03 K11, K15) and starting on the site default model and
+  default effort unless the person picked another model or effort in this
+  tab; a key-only model without its key shows "Add a key" and links to
+  `/usage`; with the key it shows "your OpenAI key". No device entries
+  ("Claude Code on this Mac"; removed: web-only build). After a separator,
+  an "Effort" row shows the current effort and opens a submenu (on hover or
+  focus) listing only the efforts the chosen model accepts
+  (`ModelEntry.efforts`, 03 K12) as "Low", "Medium", "High", "Max" (and any
+  other effort the registry names); there is no "Default" item, and every
+  new run carries an explicit effort. When the person picks a model that
+  does not accept the current effort, the effort moves to the highest effort
+  the model accepts that is not above it, in the order low < medium < high <
+  xhigh < max (every registry model accepts low); the same rule applies when
+  the composer starts on the default model and default effort. At 600 px and below the submenu is drawn inline under its row
+  (W2.5). No cost estimate is shown for high efforts (decision P13);
+- split send button: the main part shows the send arrow in both modes, with
+  label and title "Ask" or "Post", disabled while empty; the chevron part
+  (label "Ask or post") opens Ask (arrow) / Post (pencil) with descriptions
+  ("Agent researches and answers", "A message to people in the channel")
+  and a check;
 - ⌘↵ (Ctrl↵ elsewhere, `formatChord`) sends, Enter is a newline; a pointer-down
-  on the composer outside a control keeps the caret in the field;
-- signed out: a disabled `fieldset` at 60 % opacity with a cover button "Sign in
-  to ask or post"; no invite, or a channel not joined: not rendered;
+  on the composer outside a control keeps the caret in the field; choosing
+  in any of its menus returns focus to the field;
+- signed out: a disabled `fieldset` at 60 % opacity with placeholder "Sign in
+  to ask or post" and a cover button labelled "Sign in to ask or post"; no
+  invite, or a channel not joined: not rendered;
 - out of included tokens with no usable payer (03 K8): every write that starts
   a run (Ask, follow-up, Continue, Branch, Branch here, Look up) on an
-  included-token model is refused before sending with "You're out of tokens
-  until Friday. You can still post, or add an API key in Usage." (weekday from
-  `usage.get`'s reset time); posts, replies and comments still send. A write
-  sent with tokens left may still come back as `failed { why: "tokens" }`
-  when the allowance ran out before the server applied it (§3.3, 03 K8).
+  included-token model is refused before sending with the toast "You're out
+  of tokens until Friday. You can still post, or add an API key in Usage."
+  (`OUT_MSG`; weekday from `usage.get`'s reset time) and the text stays in
+  the field; posts, replies and comments still send. A write sent with
+  tokens left may still come back as `failed { why: "tokens" }` when the
+  allowance ran out before the server applied it (§3.3, 03 K8);
+- a full run queue (20 queued runs per member, `SESSION_QUEUED_PER_USER`,
+  refused by the `pre` stage; 03 L1, 01 Y2; the toast copy is a plan
+  addition, the mock has no queue): when the replica already holds 20 of the member's own run records
+  with status `queued`, a run-starting write is not sent and shows the toast
+  "You have 20 asks waiting to run. Try again when one starts." with the
+  text kept; if the server refuses it anyway with `PRECONDITION_FAILED`
+  (`reason: "queue_full"`, recorded), the client rolls the prediction back,
+  restores the text to its composer and shows the same toast.
 
 Inline composers (asks on a thread, comments, replies) are one `InlineComposer`
-with a text submit ("Ask", "Comment", "Reply") and a close button.
+with a text submit ("Ask", "Comment", "Reply") and a Close button (label
+"Close"), with the placeholders "Ask about the answer", "Ask about this
+passage", "Continue ask", "Ask beside this", "Comment here", "Reply" and
+"Reply to @handle" (§4).
 
 **W5.1** Replace `features/composer/*` (`ResearchQueryComposer`, `AskNoteSwitch`
 deleted). Drafts persist per composer key in `stores/drafts`. Acceptance: tests
-for mode switching (icon, label, placeholder, model picker hidden for Post), the
-empty-text state, the signed-out cover, out-of-tokens refusal for each run-
-starting write and not for Post, reply or comment, draft restore across routes,
-focus back to the field after a menu choice, the Effort submenu listing only
-the chosen model's efforts and resetting on a model change, the picker
-starting on the default model and default effort of `models.list`, and
-listing every registry model.
+for mode switching (label, placeholder, model picker hidden for Post, the
+send arrow in both modes), the empty-text state, the member's avatar at the
+start, the signed-out cover, out-of-tokens refusal for each run-starting
+write and not for Post, reply or comment, the queue-full pre-check and the
+rollback on a `queue_full` refusal with the text restored, draft restore
+across routes, focus back to the field after a menu choice, the Effort
+submenu listing only the chosen model's efforts with no Default item, the
+effort moving down on a model change (a model accepting low, medium and high
+after `max` picks `high`), the picker starting on the default model and
+default effort of `models.list`, and listing every registry model.
 
 ## 6. Channels
 
-**W6.1 Channel header** (`spaceHead`): glyph, `#name`, lock for private
-channels, description clipped at 170 characters, info button ("About this
-channel"), and one of: "Your channel" chip (the owner, who cannot leave,
-04 §4.3), "Joined" (leaves), "Members only" chip, Join. A frozen channel
-(04 §4.5) shows its banner under the header and no Join. Toasts "Joined #name." and
-"Left #name.". Acceptance: a test per viewer relation; join and leave are
-optimistic writes (§9.2).
+**W6.1 Channel header** (`spaceHead`): glyph, `#name` (20 px), lock (label
+"Private") for private channels, description clipped at 170 characters, info
+button (label and title "About this channel"), and, for writers, one of:
+"Your channel" chip (the owner, who cannot leave, 04 §4.3), "Joined" (a
+button that leaves at once), "Members only" chip (a private channel the
+viewer is not in), Join. Its width follows §3.1. A frozen channel (04 §4.5)
+shows its banner under the header and no Join. Toasts "Joined #name." and
+"Left #name."; leaving a private channel goes to Home, leaving an open one
+stays on its feed. Acceptance: a test per viewer relation; join and leave are
+optimistic writes (§9.2); leaving a private channel lands on `/`.
 
-**W6.2 Info dialog** (`chInfoDlg`, 04 §4.4): About (owner without one sees "No
-description yet. Add one"), Channel by, Members (opens W6.8), Visibility
-("Private: only members can read or post" / "Open: anyone can read and join");
-the owner gets Edit, "Moderation log" and, in private channels,
-"Invite to #name" (W6.9). No rules (01 C6). Acceptance: content per role;
-focus and Escape per §10.
+**W6.2 Info dialog** (`chInfoDlg`, 04 §4.4): a header with glyph, `#name`,
+lock, Edit (owner) and Close; the description, or for an owner without one
+"No description yet." with the inline button "Add one" (opens W6.3); facts
+"Channel by" (avatar and @owner), "Members" (the count; a button opening the
+member list W6.8, a plan addition), "Visibility" ("Private: only members can
+read or post" / "Open: anyone can read and join"); for the owner a footer
+with "Moderation log" and, in private channels, "Invite to #name" (W6.9, a
+plan addition). No rules (01 C6). Acceptance: content per role; focus and
+Escape per §10.
 
 **W6.3 About editor** (`chEditDlg`): a dialog stacked over the info dialog with
-its own scrim; About textarea with a live "N / 300" counter and the error "Keep
-the description under 300 characters."; Cancel, Save (`spaces.update { id,
-desc }`, 01 C11); toast "Channel updated."; owners only. Acceptance: nested
-Base UI dialog; Escape closes only the editor; a non-owner has no Edit.
+its own scrim, heading "Edit #name"; the "About" textarea (placeholder "What
+the channel is for. Shown at the top of the channel.") with a live "N / 300"
+counter and the error "Keep the description under 300 characters."; Cancel,
+Save (`spaces.update { id, desc }`, 01 C11); toast "Channel updated." and
+focus back on Edit; owners only. Acceptance: nested Base UI dialog; Escape
+closes only the editor; a non-owner has no Edit.
 
-**W6.4 Moderation log** (`modLogDlg`, 04 §6.5): stacked over the info dialog;
-one list, without the mock's report tab, of the owner's removals and bans:
-kind (Removed, Banned, Unbanned), "@owner removed @author's ask" or "@owner
-banned @member", the note and relative time. A removed item shows kind,
-author and channel, never its text (01 C12). Acceptance: renders from
-`modlog` records; empty state "Nothing logged yet."; no removed text in the
-DOM; no report, Dismiss or open-count control.
+**W6.4 Moderation log** (`modLogDlg`, 04 §6.5): stacked over the info dialog,
+heading "Moderation log" with Close; the owner's removals and bans, newest
+first: a kind chip (Removed, Banned, and Unbanned for the plan's Unban), the
+line "@owner removed @author's ask" (or "post") or "@owner banned @member
+from #name", "Reason: “…”" when a note exists, and the relative time. The
+mock's removal line ends with the thread title clipped at 70 characters; the
+client shows no removed text, because the removal erases it (01 C12). Empty
+state: "Nothing removed yet. Use “Remove…” in a thread's “…” menu to take it
+down." Acceptance: renders from `modlog` records; the empty-state copy; no
+removed text in the DOM.
 
-**W6.5 Remove dialog** (`rmDlg` in remove mode, 04 §6.2; the report mode is
-not built, decision F): the title clipped at 120 characters; optional reason
-("Reason, shown with the removal", at most 300); "Readers see that it was
-removed. Branches and replies under it go with it." Writes
-`moderation.decide`. Acceptance: the removed placeholder appears
-optimistically; the reason over 300 characters is refused in the dialog.
+**W6.5 Remove dialog** (`rmDlg`, 04 §6.2), from "Remove…" in a thread's "…"
+menu: title "Remove @x's ask" (or "post") with Close; the thread's title in
+quotes, clipped at 120 characters; the field "Reason, shown with the removal"
+(placeholder "Optional", at most 300 characters); the line "Readers see that
+it was removed. Branches and replies under it go with it. @x is notified,
+with the reason."; Cancel and Remove (danger). Remove writes
+`moderation.decide { item, decision: "removed", note? }`, closes the dialog
+and shows the toast "Removed.". Acceptance: the copy; the removed placeholder
+appears optimistically; a reason over 300 characters is refused in the
+dialog.
 
 **W6.6 Browse page** (`browsePage`): heading "Browse channels", New channel for
-writers, search over name and description; cards with glyph, `#name`, lock,
-"by @owner · N members", description clipped at 120, Yours / Joined / Join.
-Lists open channels (from `spaces.directory`, 01 C7) and private channels the
-viewer is in. Acceptance: filter test; Join from a card stays on Browse; no
-private channel of which the viewer is not a member appears.
+writers, a search field (placeholder "Search channels") over name and
+description; cards with glyph, `#name`, lock, "by @owner · N members",
+description clipped at 120, and for writers Yours (chip) / Joined (leaves) /
+Join; "No channels match." when the filter leaves nothing. Lists open
+channels (from `spaces.directory`, 01 C7) and private channels the viewer is
+in. Acceptance: filter test and its empty line; Join from a card stays on
+Browse; no private channel of which the viewer is not a member appears.
 
-**W6.7 New channel dialog** (`newSpaceDlg`): name with `#` prefix checked
-against `^[a-z0-9][a-z0-9-]{1,29}$` by the shared validator (04 §4.2; error
-"Use 2 to 30 lowercase letters, numbers or dashes."), "What is it for?", Open /
-Private radios. Creating a space is online-only (`AGENTS.md`): Create is
+**W6.7 New channel dialog** (`newSpaceDlg`): heading "New channel"; "Name"
+with a `#` prefix (placeholder "reading-group", hint "Lowercase letters,
+numbers and dashes.") checked against `^[a-z0-9][a-z0-9-]{1,29}$` by the
+shared validator (04 §4.2; error "Use 2 to 30 lowercase letters, numbers or
+dashes."); "What is it for?" (placeholder "One or two sentences shown at the
+top of the channel"); radios "Open" ("Anyone can read and join.") and
+"Private" ("Only people you add can read or post."); Cancel and "Create
+channel". Creating a space is online-only (`AGENTS.md`): "Create channel" is
 disabled while the sync connection is down with "Creating a channel needs a
-connection."; busy state until the server answers; CONFLICT shows "#name
-already exists."; success navigates to `/c/$name` with the toast "#name is
-ready. …". Acceptance: validation tests; offline state; CONFLICT keeps the
-typed values.
+connection." (a plan addition); busy state until the server answers;
+CONFLICT shows "#name already exists."; success navigates to `/c/$name` with
+the toast "#name is ready. Invite people by sharing its link." Acceptance:
+validation tests; offline state; CONFLICT keeps the typed values.
 
 **W6.8 Member list** (04 §4.3, §6.4): from the info dialog's Members row;
 the owner, then members by join date. The owner gets a per-row menu on every
 other member: "Ban from #name", and in private channels "Remove from
 channel"; the owner sees a Banned list with Unban. Writes `members.ban`,
 `members.unban` and `members.remove` (with `base.adm`; STALE reloads the
-row). Not in the mock. There are no role controls (Make moderator, Remove
-moderator, Transfer ownership): channels have only an owner (01 C18).
+row). The whole list is a plan addition; the mock has none. There are no role
+controls: a channel has only its owner and members (01 C18).
 Acceptance: menu items for a member and for the owner; a STALE answer to
 `members.remove` reloads the row and shows the toast; the owner's header
 offers no Leave.
 
-**W6.9 Channel invite links** (04 §5): the owner of a private channel opens "Invite
-to #name": a one-use link with Copy (`lib/clipboard.ts`, toast "Link copied."),
+**W6.9 Channel invite links** (04 §5; a plan addition): the owner of a private
+channel opens "Invite to #name": a one-use link with Copy (`lib/clipboard.ts`, toast "Link copied."),
 Revoke and Undo (`invites.create { days: 7 }`, `invites.revoke`,
 `invites.restore`). Opening a link signed in calls `spaces.join { space,
 invite }`; signed out or without an invite, the auth flow (W7.2) runs first
@@ -668,91 +736,156 @@ restored text, the removed-member toast and the frozen-channel banner.
 
 ## 7. Membership and sign-in
 
-**W7.1 Invites page** (`membersPage`, 04 §3.2-3.3). Invite tree (`treeA`): the
-mock's explanation of 3 open links, rows from `members.tree` (online-only,
-TanStack Query) depth-first from the roots with children by join date, 18 px
-per level, avatar, handle, " · Admin" for `staff`, and name, the viewer
-highlighted, drawn with `TreeRail`. The mock's "mod" tag is dropped (04
-question 6, decided). "Invite someone" (`invSection`): "N of 3 left", one row per open
-link (`…/i#<code>`) with Copy and revoke × ("Revoke this link"), "Create an
-invite link" / "Create a new link" while a slot is free (otherwise "You have 3
-open invites. One frees when it is used or revoked."; a waiting account sees
-"You can invite once your account is active."), "You invited" with join dates.
-Codes come from the server. Acceptance: tree order and depth for the 12-account
-fixture (04 §3.3); no create button at 3 open links; Copy through
-`lib/clipboard.ts`; toasts "Invite revoked." and "Link copied.".
+**W7.1 Invites page** (`membersPage`, 04 §3.2-3.3). Two columns (one at
+860 px and below). "Invite tree" (`treeSection`, `treeA`): the line "Session
+is invite-only. You can have 3 open invite links at a time. Each link works
+for one person. A slot frees when a link is used or revoked.", then rows from
+`members.tree` (online-only, TanStack Query) depth-first from the roots with
+children by join date, 18 px per level, 20 px avatar, handle, " · Admin" for
+site admins, and name, the viewer highlighted, drawn with `TreeRail`. The
+mock's " · Mod" tag is dropped (05 §6 P3). "Invite someone" (`invSection`, a
+box): "N of 3 left", one row per open link (`…/i#<code>`, the fragment
+departure) with Copy and a revoke × (label "Revoke this link", title
+"Revoke"), "Create an invite link" (no open link) / "Create a new link" while
+a slot is free (otherwise "You have 3 open invites. One frees when it is used
+or revoked."; a waiting account sees "You can invite once your account is
+active."), then "You invited" with "Joined Nov 14" per person. Codes come
+from the server. Toasts: "Invite SESS-XXXX-XX created. Send the link to one
+person.", "Invite revoked.", "Link copied.". Acceptance: tree order and depth
+for the 12-account fixture (04 §3.3); no create button at 3 open links; Copy
+through `lib/clipboard.ts`; the three toasts.
 
-**W7.2 Auth dialog** (`authScreen`): modal with a focus trap, opened from Sign
-in, Join with invite, a signed-out write control, `/i#<code>` or a channel
-link. The providers are GitHub and X (decision D, 04 §1, §3.4): "Continue
-with GitHub" and "Continue with X", keeping the mock's X copy and adding the
-GitHub button; an account stays bound to the provider it was created with,
-and the provider explainer says so ("Use the same account each time you sign
-in."). Flows: landing ("Explore together."); valid invite link ("<Name> invited
-you to Session"); unusable link: used, revoked and unknown codes get one
-answer from `auth.checkInvite` and one message, "This invite code doesn't
-work. Ask the person who invited you for a new one." (04 I4); code step (`CODE_COPY`:
-"Join with invite?", "Paste the code or link a member sent you.", Continue),
-accepting a code or a full link (the code after the last `/` or `#`,
-upper-cased), with "Enter the code from your invite." for an empty field, the
-unusable message otherwise, and "Invite from <Name>" on success; provider
-explainer; no account for this identity ("Enter an invite code", "Continue
-without one"); create account (name, handle 3-20 of `[a-z0-9._]` with the
-mock's three errors; no rules checkbox). Focus moves
-to the first field or the step heading on each step and returns to the opener
-on close. Acceptance: a test per flow on a fake `auth.checkInvite`; code parser
-test for `SESS-9TQ2-X8`, `https://session.dev/i#sess-9tq2-x8` and the pasted
-path form `https://session.dev/i/SESS-9TQ2-X8/` (04 §3.2); used, revoked and
-unknown codes render the same message.
+**W7.2 Auth dialog** (`authScreen`, `authDialog`): modal (label "Sign in to
+Session", Close button) with a focus trap, opened from Sign in, Join with
+invite, a signed-out write control, `/i#<code>` or a channel link. The
+providers are GitHub and X (decision P1, 04 §1, §3.4): every X button of the
+mock has a GitHub twin with the same wording ("Sign in with GitHub",
+"Continue with GitHub", "Sign up with GitHub"; the departure of the
+introduction). An account stays bound to the provider it was created with.
+Steps, with the mock's copy:
+- landing: brand, "Explore together.", "Session is a shared workspace for
+  exploring questions, ideas, and artifacts.", "Sign in with X" / "Sign in
+  with GitHub", "I have an invite code";
+- valid invite link: "<Name> invited you to Session" with @handle, "Explore
+  together.", the same line, "Continue with X" / "Continue with GitHub", "I
+  already have an account";
+- unusable link: "This invite link no longer works", "It has already been
+  used or was revoked. Ask the person who sent it for a new one.", the sign-in
+  buttons, "I have an invite code"; used, revoked and unknown codes get this
+  one answer from `auth.checkInvite` (04 I4);
+- code step (`CODE_COPY`): "Back", "Join with invite?", "Paste the code or link
+  a member sent you.", a field (placeholder "SESS-XXXX-XX", label "Invite
+  code") and Continue, accepting a code or a full link (the code after the
+  last `/` or `#`, upper-cased); "Enter the code from your invite." for an
+  empty field; for a used, revoked or unknown code the one message "This
+  invite code doesn't work. Ask the person who invited you for a new one."
+  (04 I4; the mock gives three different messages, which would tell an
+  unknown code from a used one); on success "Invite from <Name>" with @handle
+  and "Sign up with X" / "Sign up with GitHub";
+- provider explainer: "Sign in with X", "Session uses your name, handle and
+  profile picture from X for your profile. It cannot post or read your
+  messages.", "Continue to X" (for GitHub the same with "GitHub"); the plan
+  adds "Use the same account each time you sign in.";
+- no account for this identity: "No Session account for @x", "Session is
+  invite-only. Ask a member for an invite code, then sign up with it. If you
+  already have a code, enter it now.", "Enter an invite code", "Continue
+  without one", and "Without an invite you can read every open channel, and
+  enter a code later.";
+- create account: "Create your account", "Signed in with X as @x", "Invited by
+  <Name> · code SESS-XXXX-XX"; "Name"; "Handle on Session" with an `@` prefix
+  and the hint "Lowercase letters, numbers, dots and underscores; 3 to 20
+  characters."; the errors "Enter a name.", "Handles use 3 to 20 lowercase
+  letters, numbers, dots or underscores." and "@handle is taken. Try
+  another."; "Create account"; toast "Account created. <Name> invited you.";
+  no rules checkbox.
+
+Focus moves to the first field or the step heading on each step and returns
+to the opener on close. Acceptance: a test per step on a fake
+`auth.checkInvite`; code parser test for `SESS-9TQ2-X8`,
+`https://session.dev/i#sess-9tq2-x8` and the pasted path form
+`https://session.dev/i/SESS-9TQ2-X8/` (04 §3.2); used, revoked and unknown
+codes render the same message; each X button has its GitHub twin.
 
 **W7.3 Invite required** (`statusPage`, `/welcome`): heading "Invite
-required", the redeem form, the three-item checklist, Browse the network; on
-success the toast "You're in. <Name> invited you." and `/`. The feed banner for
-accounts without an invite links here. Acceptance: redeem success and the
-error messages; banner only for signed-in accounts without an invite.
+required"; "You're signed in as @handle, but Session is invite-only. Enter a
+code or link from a member to start asking and posting."; the redeem form
+(placeholder "SESS-XXXX-XX", button "Use code"; "Enter the code from your
+invite." when empty, otherwise the one message of W7.2 for a code that does
+not work); the checklist "Read every open channel and its branches" (ticked),
+"Ask, post, branch and reply", "Invite people"; "Browse the network". On
+success the toast "You're in. <Name> invited you." and `/`. The feed banner
+for accounts without an invite ("Enter a code") links here. Acceptance:
+redeem success and the error messages; banner only for signed-in accounts
+without an invite.
 
 ## 8. Usage and API keys
 
-**W8.1 Usage page** (`usagePage`, 03 §6): heading "Usage and API keys";
-"You have N% of usage left this week. Next reset on Fri, in 2d 5h." with a bar
-(`role="img"`, "N% left") in the ring's tones; Recent runs (`usage.listRuns`:
-question clipped at 90, or "Removed" / "No longer available" without text
-(03 K5); share of the weekly allowance, "<1%", or the payer label; date; "No
-runs yet this week."); "When included tokens run out": Pause my asks until the
-reset / Continue on my Anthropic key (disabled without a valid Anthropic key,
-with the mock's reason line; `usage.setBilling`); API keys per provider:
-masked key, Valid / Checking… chip, Remove with the inline confirm "Remove the
-<provider> key? Asks billed to it will stop." (Keep / Remove), or "Not set"
-with Add key (password field, Save / Cancel); next to each key the 03 K14
-note that calls on a personal key fall under the person's agreement with the
-provider. All online-only (ADR-19), read through TanStack Query; the ring reads
-the same `usage.get` query and refetches on the `usage.changed` event (03 K6).
-Acceptance: tone thresholds; disabled key radio and its reason; key add,
-check state and remove; the model picker drops a key-only model when its key is
-removed; the ring updates within 1 s of a fixture run's finish.
+**W8.1 Usage page** (`usagePage`, 03 §6): heading "Usage and API keys", then
+boxes:
+- "You have N% of usage left this week. Next reset on Fri, in 2d 5h." with a
+  bar (`role="img"`, "N% left") in the ring's tones;
+- "Recent runs" (`usage.listRuns`): question clipped at 90, or "Removed" /
+  "No longer available" without text (03 K5); the share of the weekly
+  allowance ("<1%" below 0.5 %) or the payer label ("Anthropic key", "OpenAI
+  key", "Included + Anthropic key"); " · " and the date; "No runs yet this
+  week." when empty;
+- "When included tokens run out": "Pause my asks until the reset" ("You can
+  still read, post and reply.") and "Continue on my Anthropic key" ("Asks
+  bill to your Anthropic key until the reset."; disabled without a valid
+  Anthropic key, with "Add a key below to turn this on." or, with only an
+  OpenAI key, "Needs an Anthropic key. Your OpenAI key only runs GPT-6.1
+  Sol."), written with `usage.setBilling`; toasts "Asks will continue on
+  your API key." and "Asks will pause until the reset.";
+- "API keys": one row per provider (Anthropic, OpenAI). A set key shows the
+  provider, the masked key ("sk-ant-••••a1f9"), the chip "Valid" (check
+  icon) and Remove, which turns the row into "Remove the <provider> key? Asks
+  billed to it will stop." with Keep and Remove (toast "<Provider> key
+  removed."). A key that a run later finds rejected (03 E5) shows the chip
+  "Invalid" (a plan addition). A missing key shows "Not set" and "Add key",
+  which opens a password field (placeholder "Paste key (sk-ant-...)" or
+  "Paste key (sk-...)", label "<Provider> API key") with Save and Cancel. The
+  format errors are the mock's: "Paste a key.", "That looks like an Anthropic
+  key. Add it under Anthropic." and "<Provider> keys start with <prefix> and
+  are longer than this. Copy the whole key from your <Provider> account."
+  Save calls `apiKeys.set`, which checks the key with the provider during the
+  request (03 K4): while it runs the row shows the key with the chip
+  "Checking…" and Save is busy; on success the chip becomes "Valid" and the
+  toast "<Provider> key works." shows; a refusal saves nothing, reopens the
+  form with the text kept, and shows "That key was rejected by <Provider>."
+  or "Couldn't reach <Provider> to check the key. Try again." under the
+  field. Next to each key the 03 K14 note that calls on a personal key fall
+  under the person's agreement with the provider (a plan addition).
 
-**W8.2 Site Admin settings** (`/admin`, site admins only; decision H, 03 K15).
-Heading "Site Admin", subtitle "Settings for everyone on Session.", and
-exactly two settings:
-- Default model: a radio list of every registry entry, each row showing the
-  model's name and provider (`admin.models.setDefault`). A key-only model's
-  radio is disabled with "Members need their own key for this model."
-- Default effort: a radio list of low, medium, high and max
-  (`admin.models.setDefaultEffort`). Efforts the default model does not
-  accept (`ModelEntry.efforts`) are disabled with "<model> does not accept
-  this effort." When a new default model does not accept the current
-  default effort, the server resets the default effort to that model's
-  `defaultEffort` and the page shows "Default effort reset to <effort>:
-  <model> does not accept <old effort>."
+All online-only (ADR-19), read through TanStack Query; the ring reads the same
+`usage.get` query, with a 30 s stale time, and refetches when one of the
+viewer's run records reaches a terminal status in the replica (03 K6).
+Acceptance: tone thresholds; disabled key radio and its two reasons; the
+billing toasts; key add with "Checking…" during the request, then "Valid"
+and the toast; both refusal messages with nothing saved; each format error;
+remove with its confirm and toast; the model picker drops a key-only model
+when its key is removed; the ring updates within 1 s of a fixture run's
+finish.
 
-The page shows no prices, no model descriptions, no availability switches
-and no per-member overrides (every registry model stays available to every
-member; `05` §6, Q9 decided: no). The mockup's other two variants (a models
-table with availability; per-member overrides) are not built. All
-online-only through TanStack Query, with inline errors. Acceptance:
-component tests for the disabled key-only radio, the disabled efforts, the
-reset notice, a non-admin reaching `/admin` gets the not-found page, and a
-change refetches `models.list`.
+**W8.2 Site Admin settings** (`/admin`, `adminPage`, site admins only;
+decision P11, 03 K15). Heading "Site Admin", the line "Settings for everyone
+on Session.", and exactly two boxes:
+- "Default model": a radio group of the registry models payable with
+  included tokens (03 K11 `payers`), each row the model's name with its
+  provider in small text (`admin.models.setDefault`). Key-only models are
+  not listed. Toast "Default model set to <model>.".
+- "Default effort": a radio group of Low, Medium, High and Max, none
+  disabled (`admin.models.setDefaultEffort`). Toast "Default effort set to
+  <Effort>." (capitalised, "High").
+
+Members' composers then start on both (§5; a model that does not accept the
+default effort steps down as in §5). The page shows no prices, no model
+descriptions, no availability switches and no per-member overrides (every
+registry model stays available to every member; 05 §6 Q9). All online-only
+through TanStack Query; a failed write shows an inline error under its group
+and restores the previous choice. Acceptance: component tests that a
+key-only model is not listed, that all four efforts are enabled, the two
+toasts, that a non-admin reaching `/admin` gets the not-found page, and that
+a change refetches `models.list`.
 
 ## 9. Client state
 

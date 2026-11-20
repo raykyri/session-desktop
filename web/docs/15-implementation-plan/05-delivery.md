@@ -41,7 +41,7 @@ web-only scope).
 | M4 | Client shell, feed, posts, replies, channels, signed-out reading | M1b (fixture replica); M2, M3 for e2e | M3, M5a |
 | M5a | Owned runs: asks, branches, look-ups, comments, streaming | M3, M4 | M6 |
 | M5b | Weekly allowance, payer, API keys, Usage page, Site Admin settings | M5a, ADR-23 accepted | M6 |
-| M6 | Membership, sign-in with GitHub or X, moderation, notifications | M3, M4 | M5a, M5b |
+| M6 | Membership, sign-in with GitHub and X, moderation, notifications | M3, M4, M5a | M5b |
 | M7a | (removed: web-only build) Desktop shell | — | — |
 | M7b | (removed: web-only build) Device runs | — | — |
 | M8a | Launch preparation | M5b, M6 | — |
@@ -67,7 +67,8 @@ exist there (removed: web-only build).
   providers; specs in `web/e2e`).
 - `web/packages/replica-proto`: `npm test` (`inv1`-`inv7`, `review-r1`,
   `review-r2`, `convergence`, the read oracle `oracle.ts`, the write oracle
-  `write-oracle.ts`, the effect model `effect-model.ts`) and `npm run mutate`
+  `write-oracle.ts`; the effect model `effect-model.ts` is removed or
+  rewritten in M1a, since there is no effect queue, `01` U6) and `npm run mutate`
   (`test/mutations/mutate.ts`; about 45 minutes on 4 cores; exits non-zero
   when a mutation survives; `-- --check` only checks that every pattern
   matches once; `-- X1 N2` runs a subset).
@@ -81,24 +82,30 @@ milestone. One item is split and says so: `01` D5 (`0001_spaces.sql` in M3,
 the squash to one `0000_initial.sql` in M8a). The contract items `01` C1-C18
 are scheduled in M1a, where they change `spaces.ts` and `replica-proto`; the
 server routes some of them need are built under the items named in the M3,
-M4, M5b and M6 rows (`01` S4 runs C16's effects, `01` R5 and
-`spaces.directory` serve C7, `04` §3 builds C8's account invites).
+M4, M5b and M6 rows (C16's notifications are written by each mutator's
+`notify` stage, `01` U1, in M1b and filled in by the M6 items; `01` R5 and
+`spaces.directory` serve C7; `04` §3 builds C8's account invites). M6
+depends on M5a because the branch and comment notifications of C16 come
+from runs. `04` I1 (the `users.provider` and `provider_user_id` columns,
+`code_hash` and `code_enc`, and their migration) is built whole in M6;
+M3's `0001_spaces.sql` does not touch those columns.
 
 | Milestone | 01 | 02 | 03 | 04 |
 |---|---|---|---|---|
 | M1a | C1-C18, U6 | — | — (ADR-23 drafted, §6) | §11 (contract requests) |
 | M1b | U1-U5 | — | G1, G2, G4, G5, G6 (mutators) | — |
 | M2 | Y1-Y6, Y8-Y13, R1-R4 | — | — | — |
-| M3 | S1, S3-S5, D1-D4, D5 (0001), D6, D7, Y7, A1, A3 | — | — | — |
-| M4 | A2, R5 | W1.1, W1.2 (its replacement check), W2.1-W2.5, W3.1, W3.2, W4.3, W4.5, W5.1, W6.1-W6.3, W6.6, W6.7, W9.1-W9.3, §9.5, §9.6, §9.8, W10.1-W10.3, W11.1, W11.2 | — | I5, B1, B3, P1 (§4.1 visibility rules with C9) |
+| M3 | S1, S3, S5, D1-D4, D5 (0001), D6, D7, Y7, A1, A3 | — | — | — |
+| M4 | A2, R5 | W1.1, W1.2 (its replacement check), W2.1-W2.5, W2.7, W3.1, W3.2, W4.3, W4.5, W5.1, W6.1-W6.3, W6.6, W6.7, W9.1-W9.3, §9.5, §9.6, §9.8, W10.1-W10.3, W11.1, W11.2 | — | I5, B1, B3, P1 (§4.1 visibility rules with C9) |
 | M5a | — | W3.3, W4.1, W4.2, W4.4 | G3, G7, G8, E1-E5, T1-T4, K1, K2, K12, K13, L1, L2 | — |
 | M5b | — | W8.1, W8.2 | K3-K11, K14, K15 | — |
-| M6 | — | W2.6, W6.4, W6.5, W6.8, W6.9, W6.10, W7.1-W7.3 | — | I1-I4, I6, B2, B4, B5, B6, O2-O5, P2, Z1, Z2, Z4, Z5; §13 mitigations |
+| M6 | — | W2.6, W6.4, W6.5, W6.8, W6.9, W6.10, W7.1-W7.3 | — | I1-I4, B2, B4, B5, B6, O2-O5, P2, Z1, Z2, Z4, Z5; §13 mitigations |
 | M8a | D5 (squash) | — | — | — |
 
 Removed and not scheduled (web-only build): `01` S2; `02` §12.3; `03` V1-V7,
-T5, L3; `04` Z3. Removed and not scheduled (no reporting, decision F): `04`
-O1. `01` S2's acceptance line on foreign origins is kept under S1. `02` W2.4
+T5, L3; `04` Z3. Removed and not scheduled (no reporting, P6): `04` O1.
+Removed and not scheduled (no suspension, P3): `04` I6. Removed and not
+scheduled (no effect queue): `01` S4. `01` S2's acceptance line on foreign origins is kept under S1. `02` W2.4
 (no Tauri part) and W6.10 (no desktop frozen copy) are now scheduled whole.
 
 `03` L4 adds no work beyond `01` A3 (M3). `01` Y13 (`serverApply`) is built
@@ -138,12 +145,17 @@ Scope:
   (`01` U6): `likes.set` replaced by counted saves, rules dropped, comment and
   ask-node kinds added, `erase` extended to saves, comments and mention
   notifications; the admin and moderator roles, `members.setRole`, `RANK`
-  and the `invite` setting removed; reporting removed; with the tests and
-  mutation patterns `01` U6 names removed or rewritten; mutation patterns
-  that pointed at removed code are rewritten with the same faults.
+  and the `invite` setting removed; reporting removed; the effect model
+  replaced (notifications written by the mutator in the write's
+  transaction, the `job` effect replaced by a `run` record with status
+  `queued`, the effect worker, dead letters and the effect-model tests
+  removed or rewritten); with the tests and mutation patterns `01` U6 names
+  removed or rewritten; mutation patterns that pointed at removed code are
+  rewritten with the same faults.
 - Documents: ADR-19's `deviceNow` corrected to `clientTime` (`01` Y1); a
   "Scope of this build" note on ADR-19 to ADR-22 naming the desktop, phone
-  and device-run parts that are not built (question Q1); ADR-5 amended for
+  and device-run parts that are not built and the removal of the effect
+  queue (question Q1); ADR-5 amended for
   X sign-in (`04` Z2); ADR-23 (user API keys, model payers, the weekly
   allowance, runtime model settings; `03` §6, K15) drafted for decision
   before M5b.
@@ -160,7 +172,9 @@ Scope (`01` §3):
 - New package `web/packages/mutators` (npm workspace, AVA, `tsc -b`
   reference), depending on `@session/shared` and `zod` only.
 - `01` U1-U5: the three stages (`pre`, deterministic `run` over a synchronous
-  `tx` with `tx.now` and `tx.id(ordinal)`, `post` effects carrying ids),
+  `tx` with `tx.now` and `tx.id(ordinal)`, and the server-only
+  `notify(tx, input, result)`, which writes notification records with C16's
+  coalescing inside the write's transaction and never runs on the client),
   indexed reads (`tx.byKey`, `tx.list`, `tx.count`) returning `unknown`
   outside the working set, the stored shape with counts as stored fields,
   stale-intent rules, and one file per area.
@@ -168,8 +182,8 @@ Scope (`01` §3):
   (`threads.create`, `research.forkNode` for asks and for look-ups with
   `LOOKUP_PROMPT_V1`, `comments.create`, promotion with `from` for any reader
   of the branch, `followups.delete`, `research.cancelNode`,
-  `research.retryNode`). Their `post` stage queues `job` effects that
-  nothing consumes until M5a.
+  `research.retryNode`). They write the `run` record with status `queued`;
+  that record is the queue, and nothing dispatches it until M5a.
 - Shared validators used by forms and mutators: channel name, handle, text
   bounds (`04` §4.2, §3.1, §10).
 
@@ -181,7 +195,9 @@ Exit criteria:
 - `cd web && npm test --workspace @session/mutators` passes: one test file
   per area of `01` U5, the table test of `01` U5 (every mutator with `who`,
   stale-intent rule and `online`), `inv1`'s determinism test run over every
-  mutator, and the `03` G1, G2, G4, G5 tests.
+  mutator, a test per mutator with a `notify` stage that its notification
+  records commit with the write and are absent after a refused or rolled
+  back apply, and the `03` G1, G2, G4, G5 tests.
 - `cd web && npm run check` passes, including the ESLint rule banning `Date`,
   `Math.random`, `crypto` and `Intl` in the whole package (`01` U1).
 
@@ -192,10 +208,13 @@ Scope (`01` §4, §5):
   `@session/sync/server`; the server half defines `ServerStore`, which this
   milestone implements in memory only.
 - Wire and server half: `01` Y1-Y6, Y8 and Y13 (envelope, answers,
-  `register`, `apply`, `snapshot` and `pull`, AEAD cursor tokens with the
+  `register` with re-attach of the caller's stored id, `apply`, `snapshot`
+  and `pull`, AEAD cursor tokens with the
   previous key, retention jobs, `serverApply` for server-originated writes).
-- Client half: `01` Y9-Y12 (replica behind a `StorageAdapter` with the
-  memory adapter only; the outbox with the web's in-flight-only policy and
+- Client half: `01` Y9-Y12 and the client part of Y3 (`{clientId, userId}`
+  in `sessionStorage`, the `session-client:<clientId>` Web Lock taken with
+  `ifAvailable`, the id cleared on sign-out; replica behind a
+  `StorageAdapter` with the memory adapter only; the outbox with the web's in-flight-only policy and
   the queue policy the suites drive; rebase; reactive queries).
 - Replication tiers `01` R1-R4 (the web window computed by the server with
   the tab's opened-thread list, summaries, promotion, closed spaces).
@@ -210,7 +229,13 @@ Exit criteria:
   the in-flight-only policy (a failed request leaves "Not sent" and nothing
   queued), `EXPIRED`, `CLOCK_SKEW` and `TOO_LARGE` handling, rollback with
   draft text restored (`04` §9), resync on a rejected token, the R2 snapshot
-  test of the four inclusion rules and the cap, and tier promotion (R3).
+  test of the four inclusion rules and the cap, and tier promotion (R3),
+  and the Y3 client id tests with a fake `sessionStorage` and lock manager:
+  100 reloads of one tab register once and re-attach 99 times; a duplicated
+  tab (copied storage, lock held) registers a new id; a stored id of
+  another user answers `WRONG_CLIENT` and the client registers anew;
+  re-attaches are not counted and the 51st new id of a user in a day is
+  refused; an id idle for 7 days is not re-attached.
 - Server-half tests on the in-memory store reproduce `inv3`, `inv5`, `inv6`
   and `inv7`.
 - `cd web && npm run check` passes.
@@ -219,14 +244,14 @@ Exit criteria:
 
 Scope:
 - `web/packages/db`: `01` D1-D4 and `0001_spaces.sql` of D5 (records, sync
-  bookkeeping, non-replicated server tables including `site_settings`,
-  `model_settings` and `server_meta`, the provider columns of `04` I1,
-  `secure_delete`), D6 (log epochs and the boot-time Litestream generation
+  bookkeeping, non-replicated server tables including `site_settings` and
+  `server_meta`, `secure_delete`), D6 (log epochs and the boot-time Litestream generation
   check), D7 (record shape backfills); `ServerStore` over SQLite in
   `web/packages/db/src/sync/`.
 - `web/packages/server`: `01` S1 and S3-S5 (sync pipeline with
   `Session-Protocol` and `426 UPGRADE_REQUIRED`, cookie authentication, no
-  CORS headers, configuration, effect worker, drain and boot), Y7 (SSE over
+  CORS headers, configuration, drain and boot; `01` S4, the effect worker,
+  is removed), Y7 (SSE over
   `fetch`), A1 (sync routes), A3 (rate limits). `04`'s hardening (Z2, Z4) is
   M6.
 - A conformance target: replica-proto's harness gains a target interface
@@ -256,6 +281,11 @@ Exit criteria:
   (for example the prototype client's queue), with the reason.
 - Restart test: a server killed between commit and response answers the
   replayed envelope from the stored answer after boot (`01` S5).
+- Over HTTP against the SQLite server: the Y3 re-attach tests of M2 (a
+  re-attach returns the stored `lastSeq` and is not counted; the 51st new id
+  in a day refused; another user's id answers `WRONG_CLIENT`), and a test
+  that a write with a `notify` stage leaves its notification records in the
+  same commit, with none after a kill before commit.
 - `cd web && npm run check && npm test` pass; CI's `docker` job builds.
 - Load check on staging (`shared-cpu-2x`, 2 GB, as production): 200 SSE
   clients and 20 writes per second for 10 minutes, apply p95 under 50 ms,
@@ -270,7 +300,9 @@ Scope (`02-client-app.md`; items in §1.2): the research client removed (`02`
 W1.1, with `01` A2's routers, the research schema files of `web/packages/db`
 and the desktop-shared modules of `web/packages/shared` that nothing imports
 any more, §3.0); the app shell, routes with thread addresses (`02` §2.1,
-decision P9), bar hiding, phone widths; feed rows and cards; reply trees on
+P9), bar hiding, narrow widths; the site footer "Session · Report abuse:
+abuse@<host>" on every feed and page (`02` W2.7, `05` §6 Q10); feed rows
+and cards; reply trees on
 posts; the composer (Post mode end to end, Ask mode against the fixture
 replica); channel header, info dialog, About editor, Browse, New channel; the
 replica wiring, outbox states, the `UPGRADE_REQUIRED` reload and per-viewer
@@ -290,7 +322,11 @@ Exit criteria:
   specs (`02` §12.2); `spaces-feed` also covers the in-flight-only rule with
   `context.setOffline` (a failed request shows "Not sent", a reload keeps
   nothing but the draft) and a `/c/<name>?t=<id>` link to a thread outside
-  the loaded feed.
+  the loaded feed; `spaces-shell` checks that a reload keeps the tab's
+  client id (one `register` call issues an id, later ones re-attach), that a
+  duplicated tab registers a new id, and that the footer's link is
+  `mailto:abuse@<host>` for the host of `SESSION_PUBLIC_ORIGIN` on a feed
+  and on a page.
 - `research.spec.ts`, `library.spec.ts`, `collaboration.spec.ts`,
   `live.spec.ts` and `widgets.spec.ts` are deleted; `visual.spec.ts`
   baselines are regenerated by CI's `update-visual-baselines` run (`12` §4)
@@ -301,11 +337,20 @@ Exit criteria:
 
 Scope (`03` §1-§3, §5, §7): run, turn and answer records; context assembly
 and the access check at start (G7, G8); the owned loop re-pointed at records
-through `serverApply` with attempt fencing (E1-E4); progress steps;
+through `serverApply` with attempt fencing (E1-E4); the dispatcher, which
+claims the oldest admissible `queued` run record with a compare-and-set in
+one transaction (`queued` → `running` where `id`, `attempt` and `status =
+'queued'` still match; there is no `job` effect), and the title and summary
+of a new thread as the run's final steps (E2); progress steps;
 streaming as ephemeral deltas with gap refetch from `run_live` (T1-T4); the
-usage ledger and what counts, cached input at the discount ratio (K1, K2)
-with every run paid as `included` and the existing limits; failure handling
-(E5); model and effort per run checked in `pre` against the registry, with
+usage ledger written at spend time (one row per provider call, opened when
+the call starts, checkpointed at most every 2 s, closed however the call
+ends, unfenced and in its own transactions; open rows closed at boot) and
+what counts, cached input at the discount ratio (K1, K2), with every run
+paid as `included` and the existing limits; the queue limit's recorded
+`queue_full` refusal (L1); failure handling (E5); the branch and comment
+notifications of `01` C16, written in the transaction of the write that
+causes them; model and effort per run checked in `pre` against the registry, with
 ADR-16's `claude-fable` admin gate kept until the weekly allowance (K3)
 removes it in M5b (K11), and the Effort submenu listing the
 chosen model's efforts (K12, K13); per-run limits (L1, L2); the client's run
@@ -318,7 +363,17 @@ Exit criteria:
   against the new records (E2), the E1 removal-during-run test, the E3
   fixture-provider tests, the E4 cancel-then-retry test, the E5 test per
   failure row, the T2 non-member delta test, the T4 change-log bound, the K2
-  cached-token test and the L2 look-up tool cap.
+  cached-token test and the L2 look-up tool cap; the E2 claim test (two
+  dispatchers racing for one queued run: one claims it, the other's
+  compare-and-set changes nothing; a crash leaves it `running` and boot
+  marks it `interrupted`); the K1 ledger tests (for each way a call ends
+  that exists in M5a, finish, cancel, timeout, error, superseded and
+  process kill, a closed row whose tokens match what the fixture provider streamed,
+  within the 2 s checkpoint bound for the kill; rows left `open` by a kill
+  closed at boot; the sum of a run's rows equal to the run record's `tok`);
+  the L1 `queue_full` tests (the 21st queued ask refused and recorded, its
+  answer replayed, the next seq following it, the client restoring the
+  text).
 - `cd web && npm run test:e2e -- spaces-feed spaces-branches spaces-runs`
   passes: ask with the `paced-answer` fixture, a reload mid-stream and a
   second tab on the same run, Continue, Branch, Branch here, Look up on a
@@ -331,13 +386,17 @@ Exit criteria:
 
 Entry: ADR-23 accepted (`03` §6, K15).
 
-Scope: the weekly allowance and its reset (K3), API keys encrypted under
-`SESSION_SECRET_KEY` with the `keyCheck` effect (K4), `usage.get` and
-`usage.listRuns` (K5), the meter (K6), the billing setting and the payer made
-in `pre` (K7, K8), crossing the allowance during a run (K9), runs at the reset
-(K10), model payers in the registry (K11), the key-run privacy note (K14),
-the default model and default effort set by a site admin with
-`models.list` and `admin.models.*` (K15, decision H); the Usage page (`02`
+Scope: the weekly allowance and its reset (K3), with allowance checks
+reading the ledger including open rows; API keys encrypted under
+`SESSION_SECRET_KEY` and checked during `apiKeys.set` against the
+provider's model list (10 s timeout; a rejected key or an unreachable
+provider refuses the save; "Checking…" while it runs; no effect) (K4),
+`usage.get` and `usage.listRuns` (K5), the meter (K6), the billing setting
+and the payer made in `pre` (K7, K8), crossing the allowance during a run
+and the per-member overdraft limit `SESSION_OVERDRAFT_TOKENS` (K9), runs at
+the reset (K10), model payers in the registry (K11), the key-run privacy
+note (K14), the default model and default effort set by a site admin with
+`models.list` and `admin.models.*` (K15, P11); the Usage page (`02`
 W8.1), the Site Admin settings (`02` W8.2) and the app bar ring on live data.
 
 Exit criteria:
@@ -345,11 +404,17 @@ Exit criteria:
   injected clock, the K4 test that greps the database file for a stored raw
   key and finds nothing, the K5 removed-thread test, the K8 mutator tests for
   each payer and the convergence test of a write queued with tokens left and
-  applied after they ran out, the K9 boundary-crossing ledger test, and the
-  K15 server tests (non-admin refused, key-only default refused, a default
-  effort the default model does not accept refused, the default effort
-  reset on a change of default model, every registry entry in
-  `models.list`).
+  applied after they ran out, the K9 boundary-crossing ledger test, the K9
+  overdraft test (two concurrent fixture runs of one member together never
+  exceed allowance plus `SESSION_OVERDRAFT_TOKENS` by more than one
+  checkpoint interval of output, and both end `complete` with "Stopped:
+  this week's included tokens ran out."), the K1 ledger test for the
+  overdraft stop (a closed row matching what the fixture streamed), the K4
+  key-check tests (a rejected key and an unreachable provider refused and
+  not saved), and the K15 server tests (non-admin refused, key-only default
+  refused, `xhigh` or any value outside low, medium, high and max refused as
+  the default effort, `setDefault` leaving the default effort unchanged,
+  every registry entry in `models.list`).
 - `cd web && npm run test:e2e -- spaces-usage admin` passes (keys, billing
   setting, out-of-tokens refusal of Ask while Post sends; a site admin
   changes the default model and the default effort, and a member's composer
@@ -360,16 +425,20 @@ Exit criteria:
 ### M6 — Membership, sign-in, moderation and notifications
 
 Scope (`04` items in §1.2; `02` W2.6, W6.4, W6.5, W6.8, W6.9, W6.10,
-W7.1-W7.3): sign-in with GitHub or X, each account bound to one provider
-(`04` I1, I4, Z2; decision D); account invites with 30-bit codes,
-`users.status` and handles, the invite tree, the "Join with invite?" flows
-and waiting accounts kept 90 days (`04` I1-I4); suspension (`04` I6);
-channel ownership and the member list (`04` B2, `02` W6.8; no moderator or
-admin roles and no ownership transfer, `01` C18); frozen channels of a
-suspended or deleted owner (`04` B6); channel invite links, the only way
-into a private channel (`04` B4, `02` W6.9); remove with reason, ban with
-the Banned list, the moderation log of removals and bans (`04` O2-O5; no
-reporting); the notification effects of `01` C16 and the notifications page
+W7.1-W7.3): sign-in with GitHub and with X, both required at launch, each
+account bound to one provider (`04` I1, I4, Z2; P1, Q8), with the staging X
+app working before this milestone starts; account invites with 30-bit
+codes, `users.status` (`waiting` or `active`; no suspension, `04` I6
+removed) and handles, the provider columns and their migration, admin
+seeding by handle with `db:admin`, the invite tree, the "Join with invite?"
+flows and waiting accounts kept 90 days (`04` I1-I4); channel ownership and
+the member list (`04` B2, `02` W6.8; no moderator or admin roles and no
+ownership transfer, `01` C18); frozen channels of a deleted owner (`04`
+B6); channel invite links, the only way into a private channel (`04` B4,
+`02` W6.9); remove with reason, ban with the Banned list, the moderation
+log of removals and bans (`04` O2-O5; no reporting); the remaining
+notifications of `01` C16, each written by its mutator's `notify` stage in
+the transaction of the write that causes it, and the notifications page
 with the unread dot (`02` W2.6); privacy rules (`04` P2); client rendering
 of apply-time refusals and the removed member's toast (`04` B5, `02` W6.10);
 abuse limits (`04` Z1); cookie CSRF, no CORS and rendering hardening (`04`
@@ -378,8 +447,10 @@ Z2, Z4, Z5); the threat notes' mitigations (merged failure answer for
 
 Exit criteria:
 - `cd web && npm test --workspace @session/db -- test/invites.test.ts` passes
-  (`04` §3.1: hash lookup, concurrent redemption, handle uniqueness, the
-  90-day waiting-account sweep), and the server tests of `04` §3.2 (3 open
+  (`04` §3.1: hash lookup, concurrent redemption, handle uniqueness, a
+  deleted account's identity signing in again as a new waiting account,
+  `db:admin -- <handle>` and root invites, the 90-day waiting-account
+  sweep), and the server tests of `04` §3.2 (3 open
   links, a 4th refused, revoke and use freeing a slot, concurrent creates,
   the admin exemption).
 - The X and GitHub callback tests of `04` Z2 and Z5 (new account, existing
@@ -391,11 +462,11 @@ Exit criteria:
   link refused), §6.6 (removal with reason, moderation log without reload,
   ban) and every notification kind of `01` C16 with the unread dot; spec
   names as in `02` §12.2.
-- `04` I6, B6 and Z1, Z2, Z4, Z5 server tests pass: a suspended user's
-  queued envelope refused and its session answering `401`; a suspended
-  owner's channel refusing posts, joins and links while still served to its
-  readers, and accepting them again after unsuspension; one middleware test
-  per limit row; the cookie CSRF tests; a request with an `Authorization`
+- `04` B6, P2 and Z1, Z2, Z4, Z5 server tests pass: after the
+  account-deletion operator job on an owner, the owner's channel refuses
+  posts, joins and links while still served to its readers, the handle
+  stays taken and `provider_user_id` is null; one middleware test per limit
+  row, with IPv6 clients keyed on their /64 prefix; the cookie CSRF tests; a request with an `Authorization`
   header answering `400`; no `Access-Control-Allow-*` header on any
   response; the untrusted-text rendering test.
 - The conformance suite (M3) and `cd web/packages/replica-proto && npm test`
@@ -403,9 +474,9 @@ Exit criteria:
   request (§3.1).
 - Privacy check on staging, by script: after a removal, the removed text is
   absent from the SQLite file, from `pull` and `snapshot` answers for the
-  owner, a member, a non-member and a signed-out reader, from the author's
-  `removed` notification and from the `effects` table (the D4 scan run with
-  `fly ssh console -a session-staging`).
+  owner, a member, a non-member and a signed-out reader, and from the
+  author's `removed` notification (the D4 scan run with `fly ssh console -a
+  session-staging`).
 
 ### M7a — Desktop shell (removed: web-only build)
 
@@ -432,8 +503,14 @@ Scope, with production still on the current web app:
 - Production secrets staged with `fly secrets set --stage -a session-dev`
   (§3.4), including the new `LITESTREAM_REPLICA_URL` prefix and the X OAuth
   client of the production X app.
-- The first site admins' identities and the named first group of invite
-  recipients listed in the launch runbook (question Q11). There is no
+- X access on the production X app confirmed with the access level Q8
+  requires; this is a launch blocker, and there is no GitHub-only launch.
+- The abuse mailbox, `abuse@<host>` for the host of `SESSION_PUBLIC_ORIGIN`
+  (abuse@session.dev), exists and is read by the site admins (Q10); a
+  launch blocker.
+- The first site admins (each with the provider they sign in with and the
+  handle they will choose) and the named first group of invite recipients
+  listed in the launch runbook (question Q11). There is no
   launch date to announce and no notice period: the current web app is not
   in use.
 
@@ -443,6 +520,10 @@ Exit criteria:
   holds no research table.
 - The staging reset and the staging restore rehearsal are recorded in the
   launch runbook with their times.
+- A test message to the abuse address is received, and the production X
+  app's access level and callback `https://session.dev/auth/x/callback`
+  are confirmed; both are recorded in the launch runbook. X sign-in itself
+  is first exercised by the M8b smoke test.
 
 ### M8b — Data wipe and launch
 
@@ -452,10 +533,12 @@ Scope: §3.5 and §3.6. Exit criteria:
 - Production smoke on the deployed build: `curl -fsS
   https://session.dev/healthz`; boot log shows `0000_initial.sql` applied on
   an empty database and Litestream replicating to the new prefix; a seeded
-  site admin signs in with GitHub and another with X, sets the default model
-  and the default effort, creates an invite; a second account redeems it and the inviter gets the
-  `invite_used` notification; post; ask with included tokens; remove and
-  ban; a channel invite link redemption.
+  site admin signs in with GitHub and another with X (both providers must
+  work; neither is optional), sets the default model and the default
+  effort, creates an invite; a second account redeems it and the inviter
+  gets the `invite_used` notification; post; ask with included tokens;
+  remove and ban; a channel invite link redemption; the site footer shows
+  abuse@session.dev.
 - A restore rehearsal against a post-launch snapshot, checking the epoch
   bump.
 
@@ -474,7 +557,7 @@ test` and the web workflow green on the default branch.
 ### 3.0 Repository and the build branch
 
 The build happens on a new branch created from the repository's initial
-commit, not on top of the `session-desktop` history (decision B). The local
+commit, not on top of the `session-desktop` history (E1, Q2). The local
 clone is shallow (`git rev-parse --is-shallow-repository` answers `true`), so
 the initial commit is not visible here; it is confirmed with `git fetch
 --unshallow` and `git rev-list --max-parents=0 HEAD` before the branch is
@@ -558,7 +641,8 @@ machine. Staging is reset after the M8a squash.
 ### 3.3 Litestream and restore
 
 - Replication as in `13` §6: continuous, snapshot every 6 h, retention 30
-  days. The change log, recorded answers and effect queue add write volume;
+  days. The change log, recorded answers, notifications and usage ledger
+  checkpoints add write volume;
   WAL size is monitored (§4).
 - A restore moves the database back in time while clients hold cursors and
   confirmed answers from after the restored point. Decided (E6): boot
@@ -598,7 +682,8 @@ machine. Staging is reset after the M8a squash.
   kept.
 - Configuration added (`01` S3, `03` §6-§7, `04` §10, Z2):
   `SESSION_MIN_PROTOCOL`, `SESSION_CURSOR_KEY`, `SESSION_CURSOR_KEY_PREVIOUS`,
-  `SESSION_SECRET_KEY`, `SESSION_WEEKLY_TOKENS`, `SESSION_RUN_MAX_TOKENS`,
+  `SESSION_SECRET_KEY`, `SESSION_WEEKLY_TOKENS`, `SESSION_OVERDRAFT_TOKENS`
+  (200,000 per member per week), `SESSION_RUN_MAX_TOKENS`,
   `SESSION_QUEUED_PER_USER`, the web window (`SESSION_WEB_WINDOW_DAYS`,
   `SESSION_WEB_WINDOW_THREADS`, `SESSION_WEB_WINDOW_CAP`),
   `SESSION_X_CLIENT_ID`, `SESSION_X_CLIENT_SECRET` and the abuse limits of
@@ -625,12 +710,16 @@ directories, deploy).
 Backups: the old Litestream prefix, which holds all deleted data, is kept for
 30 days after launch as the only rollback source (§3.6 step 8), then deleted.
 
-Site admins after the wipe (decided, Q6): each person who
-runs Session signs in once with GitHub or X, which creates a waiting
-account; the operator then runs `npm run db:admin -- <provider>:<login>`
-through `fly ssh console`, which sets `is_admin` and `status: active`
-(`bin/admin.ts` gains the provider prefix and the activation). Each admin
-then chooses a handle at the profile step. Admins are the roots of the invite
+Site admins after the wipe (decided, Q6): admins are set by handle, which is
+unique (the provider `login` is not, `04` I1). Through `fly ssh console`,
+the operator runs `npm run db:admin -- --invite` once per person who runs
+Session; it prints a root account invite (no `created_by`). Each of them
+opens it, signs in with GitHub or X, chooses a handle at the profile step
+and is active with no inviter. The operator then runs `npm run db:admin --
+<handle>`, which sets `is_admin` on that account (`bin/admin.ts` changes
+from `<github login>` to `<handle>` and gains `--invite`). Root invites are
+not account invites of any member and do not count for the rollback
+cut-off (§3.6 step 8). Admins are the roots of the invite
 tree and are exempt from the 3-open-links limit (`04` I2); they set the
 default model and the default effort (`03` K15) before inviting anyone,
 then invite the named first group of the launch runbook, who then have 3
@@ -657,15 +746,19 @@ waits for an invite.
    (`reset-database.md` §3).
 5. Deploy the build branch to production (`fly deploy web -c web/fly.toml`)
    and scale to 1. Boot runs `0000_initial.sql` on the empty file, records
-   the Litestream generation id, then starts the effect worker.
+   the Litestream generation id, then starts the run dispatcher and the
+   scheduled maintenance jobs.
 6. Seed the site admins (§3.5); the admins set the default model and the
    default effort.
-7. Smoke checks (M8b exit).
-8. On failure before the first invite is sent: `fly scale count 0`, restore
+7. Smoke checks (M8b exit): sign-in with each provider, the default model
+   and effort, post and ask first; the smoke test's invite redemption is
+   the first invite used, and the checks after it are fixed forward.
+8. On failure before the first invite is used (a member's account invite
+   redeemed; the root invites of §3.5 do not count): `fly scale count 0`, restore
    the old prefix as `LITESTREAM_REPLICA_URL`, deploy the recorded old image,
    scale to 1, and set the `production` environment's branch rule back to
    `main`. Nothing written to the new
-   build is kept. After the first invite is used, fixes go forward.
+   build is kept. From the first invite used on, fixes go forward.
 9. After 30 days: delete the old Litestream prefix and the old image.
 
 ## 4. Observability
@@ -680,7 +773,9 @@ answer codes, never record text.
 | `session_sync_pull_seconds`, `session_sync_snapshot_bytes` | Read cost per log; snapshot size of the web window | p95 pull above 250 ms; p95 snapshot above 5 MB |
 | `session_sync_resync_total{reason}` | Resyncs by reason (forged, expired, epoch, scope change) | sudden rise after a deploy |
 | `session_sync_clients`, `session_sse_clients` | Registered and connected clients | — |
-| `session_effects_queue_depth`, `session_effects_dead_letters` | Effect worker health | any dead letter |
+| `session_runs_queued`, `session_run_claim_conflicts_total` | Queued run records and dispatcher compare-and-set claims that matched nothing (there is no effect queue) | queued runs older than 10 min while capacity is free |
+| `session_ledger_open_closed_at_boot_total` | `usage_events` rows still `open` after a crash, closed at boot with their last checkpoint (at most 2 s of output each unbilled, `03` K1) | any after a boot that was not preceded by a deploy or drain |
+| `session_overdraft_stops_total` | Runs stopped at the per-member overdraft limit (`03` K9) | — |
 | `session_changelog_rows`, `session_tombstones`, `session_idempotency_rows` | Table growth and pruning | growth past the 30- and 7-day bounds |
 | `session_protocol_requests{version}`, `session_upgrade_required_total` | Clients by protocol version; `426` answers | `426` answers still rising 10 min after a deploy (a reload loop) |
 | `session_rate_limited_total{bucket}` | Abuse limits hit | — |
@@ -711,11 +806,11 @@ Security, Operations (deploys, backups). The Desktop role is removed
 | The real server half diverges from the prototype where the suites do not look | Medium | High | Conformance target runs every replica-proto file unchanged; the server mutation set with every applicable fault required (M3, E4); oracles and convergence in CI | Server |
 | The mutation run is too slow to keep in the loop | High | Medium | Nightly and path-filtered runs; `--slots`; name filters per change | Server |
 | The carry-over commit misses a file the web build needs, or carries a desktop dependency | Medium | Medium | Paths kept unchanged; M1a's entry requires the carried CI green before any other change; ADR-1's desktop-shared modules removed only when nothing imports them (M4) | Operations |
-| SQLite's single writer saturates with change log, recorded answers and effects | Low | High | One commit per apply; short transactions; M3 load check; machine size raised before limits | Server |
-| Erased text survives in WAL, effect payloads, notifications or logs | Medium | High | Effects and notifications carry ids (the `removed` notification only the owner's note); logs carry no text; storage scan over file and WAL (M3); staging scan (M6) | Security |
+| SQLite's single writer saturates with change log, recorded answers, in-transaction notifications and ledger checkpoints (one update per open provider call every 2 s) | Low | High | One commit per apply; short transactions; M3 load check; machine size raised before limits | Server |
+| Erased text survives in WAL, notifications or logs | Medium | High | Notifications carry ids (the `removed` notification only the owner's note); logs carry no text; storage scan over file and WAL (M3); staging scan (M6) | Security |
 | A restore serves erased text again (backups keep it; no retention requirement, decided) | Medium | Medium | The restore runbook lists the removals applied after the restore point (from the JSON logs, which carry mutator names and item ids) and repeats them before traffic resumes | Security |
 | Included-token spend exceeds budget: 2,000,000 tokens per member per week at the default model's price | Medium | High | Cached input counted at the discount ratio (P12); a site admin sets the default model and default effort at runtime and can switch to a cheaper default or a lower effort at once (K15); members may still pick any registry model; `SESSION_WEEKLY_TOKENS` per-user override; per-run cap `SESSION_RUN_MAX_TOKENS`; during testing the provider API keys are capped at the provider (Q12); no spend budget and no cost alert | Product |
-| A site admin makes an expensive model or a high effort the default | Low | Medium | The default must be payable with included tokens and the default effort one the default model accepts (K15); changes are logged with the admin's id; during testing the provider API keys are capped at the provider (Q12) | Operations |
+| A site admin makes an expensive model or a high effort the default | Low | Medium | The default must be payable with included tokens and the default effort one of low, medium, high and max; a composer moves to the highest effort its model accepts not above it (K12, K15); changes are logged with the admin's id; during testing the provider API keys are capped at the provider (Q12) | Operations |
 | Replica size in a browser tab: the in-memory replica is loaded by a snapshot on every page load | Medium | Medium | Web window of 30 days or 100 threads, capped at 500 per space (E7, `01` R1), as server settings; snapshot size measured in M3 and alerted (§4) | Server |
 | Every deploy restarts the one machine and every SSE client reconnects and pulls at once | High | Low | Cursors resume with `pull`, not `snapshot`; client reconnect jitter; load check includes a reconnect of 200 clients | Server |
 | A protocol bump makes open tabs reload in a loop | Low | Medium | One reload, then the "Reload to continue" message (`02` §9.2); `426` counter and alert (§4) | Client |
@@ -726,11 +821,11 @@ Security, Operations (deploys, backups). The Desktop role is removed
 | Cursor key or secret key lost, or rotated without overlap | Low | Medium | Configured keys with a 30-day previous cursor key; rotation runbook; keys backed up outside Fly; a lost cursor key causes resyncs, a lost secret key forces users to re-enter API keys and invalidates open invite codes | Operations |
 | Invite code enumeration through `auth.checkInvite` | Low | Medium | 30-bit codes (S2) with one failure answer, per-IP limits (about 36,000 IP-hours per hit at 3,000 open codes, `04` §13) and the failed-check alert | Security |
 | Invite tree slows growth or concentrates invites in admins | Medium | Low | Admin exemption from slots; redemption metrics | Product |
-| Spam or abuse in open channels | Medium | Medium | Invite-only accounts; the owner's removal and ban; per-user limits; suspension; the invite tree to find an abusive account's inviter | Product |
-| Abuse goes unnoticed because there is no reporting: an owner who does not watch a channel, or an abusive owner | Medium | Medium | Site admins can suspend an account, which freezes its channels (`04` B6); the abuse email address in the site footer (Q10) | Product |
-| X sign-in breaks or costs more than expected (API access level, rate limits, policy changes) | Medium | Medium | GitHub sign-in stays available; a staging X app before M6 (Q8); sign-in failure alert by provider (§4); existing X accounts cannot move to GitHub (no linking), which the risk accepts | Product |
-| A person holds two accounts, one per provider | Medium | Low | Each needs its own invite; both appear in the invite tree under their inviters; suspension per account (`04` §13) | Product |
-| A channel cannot be moderated because its only owner is absent, suspended or deleted (ownership is not transferable) | Medium | Medium | Suspension and deletion freeze the owner's channels (`04` B6); a site admin deletes a channel by operator job; P24 | Product |
+| Spam or abuse in open channels | Medium | Medium | Invite-only accounts; the owner's removal and ban; per-user limits; account deletion by operator job; the invite tree to find an abusive account's inviter | Product |
+| Abuse goes unnoticed because there is no reporting: an owner who does not watch a channel, or an abusive owner | Medium | Medium | The abuse address abuse@<host> in the site footer, a mailbox that exists before launch (Q10); site admins delete the account by operator job, which freezes its channels (`04` B6), or delete a channel; there is no suspension (P3) | Product |
+| X sign-in is not ready for launch, breaks, or costs more than expected (API access level, rate limits, policy changes) | Medium | High | X access on staging before M6 and on production before launch is a launch blocker (Q8), with no GitHub-only launch; the M8b smoke test signs in with both providers; sign-in failure alert by provider (§4); after launch, GitHub sign-in keeps working while X is down, and existing X accounts cannot move to GitHub (no linking), which the risk accepts | Product |
+| A person holds two accounts, one per provider | Medium | Low | Each needs its own invite; both appear in the invite tree under their inviters; owners' bans and account deletion act per account (`04` §13) | Product |
+| A channel cannot be moderated because its only owner is absent or deleted (ownership is not transferable) | Medium | Medium | Deleting the owner's account freezes the owner's channels (`04` B6); a site admin deletes a channel by operator job; the abuse address (Q10); P24 | Product |
 | Former web users lose their accounts and research at the wipe (no export, decided) | Low | Low | The current web app is not in use, so the wipe needs no announcement (Q11); invite-only re-entry | Product |
 | ADR-23 (user keys, models) is not accepted in time | Medium | Medium | Drafted in M1a; M5a ships on included tokens only; M5b waits on it | Product |
 | Scope from the mockup grows past the contract (rules, hide, join requests, reporting, widgets, model availability, per-member model overrides) | Medium | Medium | Decisions recorded in 00 and §6; contract changes only through `01` §7 | Product |
@@ -750,58 +845,66 @@ for reference from this file.
 
 ### Product
 
-- **P1. Sign-in provider.** Decided (D): GitHub or X. An account is created
-  with one provider and stays bound to it; no linking of two providers, no
+- **P1. Sign-in provider.** Decided: GitHub and X, both offered from launch
+  (Q8). An account is created with one provider and stays bound to it; no linking of two providers, no
   merging of accounts (`04` §1, I1, I4, Z2). `04` §15 q7.
 - **P2. Channel moderators in v1.** Decided: a channel has exactly one
   owner, ownership is not transferable, and there are no admins or
   moderators (`01` C18; `04` §4.3). `01` §9 q5, `04` §1.
 - **P3. Site-wide moderators.** Decided: none; only `users.is_admin`, which
-  marks the people who run Session. `04` §15 q6.
-- **P4. Admission to private channels.** Decided (E): channel invite links
+  marks the people who run Session. Site admins have no suspension: there
+  is no `admin.suspend` and no `suspended` status (`04` I6 removed); their
+  Session-wide tools are account deletion and channel deletion by operator
+  job and the invite tree, and a channel is frozen only when its owner's
+  account is deleted (`04` B6). `04` §15 q6.
+- **P4. Admission to private channels.** Decided: channel invite links
   only, no join requests (`01` C9, C10; `04` B4). `01` §9 q6.
 - **P5. The removal placeholder.** Decided: the author shows as "[deleted]"
   (`04` §6.2), and the placeholder stays until the author deletes it. The
   reason is owner-written text and is shown (`01` C12). `02` §14 q4, `04`
   §15 q1, q2.
 - **P6. Report and remove follow-ups and replies individually at launch.**
-  Moot (F): there is no reporting; the owner removes threads. `04` §15 q9.
+  Decided: there is no reporting at all (no `reports.*`, no report
+  notifications, no report part of the moderation log, no report limits;
+  the mockup has none either), so reporting them is moot; the owner
+  removes threads, not follow-ups or replies individually (`01` C12; `04`
+  O1 removed). `04` §15 q9.
 - **P7. Offer Hide to the owner.** Decided: no. `04` §15 q10.
 - **P8. Frozen copy after a voluntary Leave.** Decided: no; the web client
   keeps no frozen copy at all (`01` R4, `04` P2). `04` §15 q5.
 - **P9. Thread addresses and a single-thread page.** Decided: threads get an
   address, and a link opens the thread in its channel feed scrolled into
   view; no single-thread page (`02` §2.1). `02` §14 q3.
-- **P10. Notifications surface.** Decided (G): a Notifications page in the
+- **P10. Notifications surface.** Decided: a Notifications page in the
   account menu and an unread dot on the account avatar; kinds: mentions, a
   reply to your post, a branch or comment on your ask, your thread removed
   by the owner (with reason), your invite used (`01` C16, `02` W2.6). No
   push notifications. `02` §14 q5.
-- **P11. Models at launch and the allowance.** Replaced (H): a site admin
+- **P11. Models at launch and the allowance.** Replaced: a site admin
   sets the default model and the default effort at runtime on the Site
   Admin page (`03` K15, `02` W8.2); every registry model is available to
   every member, with no availability setting; per-member overrides: no
   (Q9). Decided: 2,000,000 tokens a week per member. There is no weekly
   spend budget and no cost alert (Q12). `03` §9 q1.
-- **P12. Cached tokens.** Decided (I): counted at the provider's discount
+- **P12. Cached tokens.** Decided: counted at the provider's discount
   ratio (`03` K2). `03` §9 q2.
-- **P13. Effort and the allowance.** Decided (I): no cost hint for high
+- **P13. Effort and the allowance.** Decided: no cost hint for high
   effort and no effort cap (`03` K12). `03` §9 q6.
 - **P14. Who may promote a branch** and who is shown as its author. Decided:
   anyone who can read the branch may open it as its own thread, shown with
   the branch's author (`03` G5). `03` §9 q4.
-- **P15. "Run on this Mac"** in the out-of-tokens message. Decided (J): no;
+- **P15. "Run on this Mac"** in the out-of-tokens message. Decided: no;
   device runs are not built. `03` §9 q5.
 - **P16. Old desktop data.** Moot: the desktop app was never in production
   and no desktop client ships. `05` §3.5.
 - **P17. Cutover date and notice period.** Moot as a desktop cutover;
   there is no web launch date or notice period either (Q11). `05` M8a.
 - **P18. Phone client.** Decided: no phone app in this build. `05` §5.
-- **P19. Keep accounts through the data reset.** Decided (C): no; all
+- **P19. Keep accounts through the data reset.** Decided: no; all
   existing web data is wiped, accounts included, and site admins are
   re-seeded (§3.5, Q6). `05` §3.5.
-- **P20. Export before the reset.** Decided (C): no export. `05` §3.5.
-- **P21. Widgets and artifacts in answers.** Decided (K): excluded; answers
+- **P20. Export before the reset.** Decided: no export. `05` §3.5.
+- **P21. Widgets and artifacts in answers.** Decided: excluded; answers
   are plain Markdown; the mockup shows them only as options (`02` §1, §4.4;
   `03` §1). `02` §14 q6.
 - **P22. Typography.** Decided: as in the mockup (Inter; title 16.5 px,
@@ -841,11 +944,11 @@ for reference from this file.
 
 - **S1. Erasure and backups.** Decided: no retention requirement for backups;
   removed text may stay in Litestream generations and archives (`01` §9 q3).
-- **S2. Account invite code length.** Decided (L): 30-bit `SESS-XXXX-XX`
+- **S2. Account invite code length.** Decided: 30-bit `SESS-XXXX-XX`
   (`04` I2, §13). `04` §15 q3.
 - **S3. Showing an open invite code again.** Decided: yes, from encrypted
   storage readable only by its creator (`04` §3.1). `04` §15 q4.
-- **S4. Waiting accounts.** Decided (L): kept 90 days without a code; 5 per
+- **S4. Waiting accounts.** Decided: kept 90 days without a code; 5 per
   IP per day (`04` I1). `04` §15 q8.
 - **S5. Device-run local reads.** Moot: no device runs. `AGENTS.md`
   "Desktop", `03` V4.
