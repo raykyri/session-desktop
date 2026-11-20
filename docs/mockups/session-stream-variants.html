@@ -190,6 +190,9 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .graph svg circle.sel { fill: var(--accent); stroke: var(--accent-soft); stroke-width: 5; }
 .grow-r { position: relative; display: block; width: 100%; text-align: left; height: 26px; border-radius: var(--r-md); padding-right: 6px; white-space: nowrap; overflow: hidden; }
 .grow-r:hover { background: var(--fill-hover); }
+.grow-r:has(.rav-r) { display: flex; align-items: center; gap: 6px; }
+.grow-r:has(.rav-r) .gq { flex: 1; min-width: 0; }
+.rav-r { margin-left: auto; }
 .grow-r .gq { display: block; font-size: var(--fs-sm); color: var(--t-secondary); overflow: hidden; text-overflow: ellipsis; line-height: 26px; }
 .grow-r.on .gq, .grp.hl .grow-r .gq { color: var(--t-heading); }
 .grow-r.on .gq { font-weight: 600; }
@@ -552,7 +555,7 @@ function outline(p, T, G) {
     if (d > 0) { const px = X(d - 1), py = idx[n.par] * H + 13; paths += `<path class="${on.has(n.id) ? 'on' : ''}" d="M${px} ${py} L${px} ${y - 6} Q${px} ${y} ${px + 6} ${y} L${X(d)} ${y}"/>`; }
     dots += `<circle class="${n.id === sel ? 'sel' : on.has(n.id) ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="3.5"/>`;
   });
-  return `<div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-grp="${g}"><span class="gq">${esc(n.q)}</span></button>`).join('')}</div>${readout(p, T, G.ns)}`;
+  return `<div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-grp="${g}"><span class="gq">${esc(n.q)}</span>${n.u !== T.nodes[n.par].u ? `<span class="rav rav-r" title="${esc(n.u)}">${av(n.u, 'xs')}</span>` : ''}</button>`).join('')}</div>${readout(p, T, G.ns)}`;
 }
 
 /* ---- replies on plain posts, drawn as trees (one style per variant) ---- */
