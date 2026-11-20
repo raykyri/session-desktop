@@ -60,7 +60,7 @@ interface FixtureError {
   isRetryable?: boolean;
 }
 
-interface FixtureStep {
+export interface FixtureStep {
   parts?: LanguageModelV4StreamPart[];
   /** Rejected before the first chunk, the way a 4xx arrives. */
   error?: FixtureError;
@@ -68,7 +68,7 @@ interface FixtureStep {
   delayMs?: number;
 }
 
-interface FixtureFile {
+export interface FixtureFile {
   scenario: string;
   description?: string;
   steps: FixtureStep[];
@@ -87,6 +87,13 @@ export function loadFixture(scenario: string): FixtureFile {
   const parsed = JSON.parse(raw) as FixtureFile;
   cache.set(scenario, parsed);
   return parsed;
+}
+
+/** A scenario built in a test rather than read from `fixtures/`, such as a
+ * stream long enough to reach a token limit. It is selected like the others,
+ * by name or by a `fixture:<name>` marker. */
+export function registerFixture(fixture: FixtureFile): void {
+  cache.set(fixture.scenario, fixture);
 }
 
 /** Every scenario on disk, for the test that asserts the set is complete. */

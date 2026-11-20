@@ -28,7 +28,7 @@ import {
   resolveEffort,
   findModel,
 } from "@session/shared";
-import type { LanguageModel, ToolSet } from "ai";
+import type { ToolSet } from "ai";
 
 import type { Config } from "../config.js";
 
@@ -44,16 +44,25 @@ export {
  * and provider-executed tools that belong to it. */
 export interface ResolvedModel {
   entry: ModelEntry;
-  model: LanguageModel;
+  /** Wrapped by the ledger meter (`meter.ts`) before any call is made. */
+  model: LanguageModelV4;
   providerOptions: ProviderOptions;
   /** Merged into the owned tool set. Empty unless the entry uses native search. */
   providerTools: ToolSet;
 }
 
+/** A member's own key for one call (`03` K4, K9). */
+export interface PersonalKey {
+  provider: "anthropic";
+  apiKey: string;
+}
+
 export interface Providers {
   /** `null` when the model is unknown or its provider has no credential —
-   * the same answer `system.runtimeConfig` gives as `available: false`. */
-  resolve(modelId: string, effort?: string | null): ResolvedModel | null;
+   * the same answer `system.runtimeConfig` gives as `available: false`.
+   * With `key`, an Anthropic model is called with the member's key instead
+   * of the deployment's; any other model answers `null`. */
+  resolve(modelId: string, effort?: string | null, key?: PersonalKey): ResolvedModel | null;
   /** True when every model is a recorded fixture. */
   readonly fixtures: boolean;
 }
@@ -214,9 +223,12 @@ export function createProviders(config: Config, options: CreateProvidersOptions 
 
   return {
     fixtures,
-    resolve(modelId: string, effort?: string | null): ResolvedModel | null {
+    resolve(modelId: string, effort?: string | null, key?: PersonalKey): ResolvedModel | null {
       const entry = findModel(modelId);
-      if (!entry || !config.credentials[entry.provider]) {
+      if (!entry) {
+        return null;
+      }
+      if (key ? entry.provider !== key.provider : !config.credentials[entry.provider]) {
         return null;
       }
       const resolvedEffort = resolveEffort(entry, effort);
@@ -270,7 +282,14 @@ export function createProviders(config: Config, options: CreateProvidersOptions 
         case "anthropic":
           return {
             entry,
-            model: anthropicProvider()(entry.route),
+            // The member's key is held only by this client, for this call
+            // (`03` K4); it is never cached with the deployment's.
+            model: key
+              ? createAnthropic({
+                  apiKey: key.apiKey,
+                  ...(fetchImpl ? { fetch: fetchImpl } : {}),
+                })(entry.route)
+              : anthropicProvider()(entry.route),
             providerOptions,
             providerTools: {},
           };

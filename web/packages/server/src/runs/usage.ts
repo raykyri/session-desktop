@@ -1,27 +1,17 @@
-// Token usage and its estimated cost (`04-agent-runtime.md` §10,
+// Estimated cost and per-call tool usage (`04-agent-runtime.md` §10,
 // `02-domain-model-and-database.md` §3.7).
 //
-// Recorded for every attempt whether or not daily limits are enforced, because
-// the limits are turned on later against history that has to already exist.
+// Tokens are not recorded here: every provider call has its own ledger row,
+// written as the call spends (`ledger.ts`, `meter.ts`; `03` K1). Search and
+// fetch calls are billed by their vendors per call, not per token, and keep
+// their own `usage_events` rows.
 
 import type { SessionDatabase } from "@session/db";
 import { usage as usageRepo } from "@session/db";
 import type { ModelEntry } from "@session/shared";
 import { estimateCostMicros } from "@session/shared";
-import type { LanguageModelUsage } from "ai";
 
 import type { AttemptUsage } from "./store.js";
-
-/** The SDK's nested usage flattened into the four numbers `usage_events`
- * carries. */
-export function attemptUsageOf(usage: LanguageModelUsage | undefined): AttemptUsage {
-  return {
-    inputTokens: usage?.inputTokens ?? 0,
-    outputTokens: usage?.outputTokens ?? 0,
-    reasoningTokens: usage?.outputTokenDetails?.reasoningTokens ?? 0,
-    cachedTokens: usage?.inputTokenDetails?.cacheReadTokens ?? 0,
-  };
-}
 
 /**
  * Cost in micro-dollars from the registry's price table.
@@ -35,31 +25,6 @@ export function costOf(entry: ModelEntry, usage: AttemptUsage): number {
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens,
   });
-}
-
-export interface RecordAttemptUsageInput {
-  db: SessionDatabase;
-  userId: string;
-  nodeId: string | null;
-  entry: ModelEntry;
-  kind: "research" | "metadata";
-  usage: AttemptUsage;
-}
-
-export function recordAttemptUsage(input: RecordAttemptUsageInput): number {
-  const cost = costOf(input.entry, input.usage);
-  usageRepo.record(input.db, input.userId, {
-    nodeId: input.nodeId,
-    kind: input.kind,
-    provider: input.entry.provider,
-    model: input.entry.id,
-    inputTokens: input.usage.inputTokens,
-    outputTokens: input.usage.outputTokens,
-    reasoningTokens: input.usage.reasoningTokens,
-    cachedTokens: input.usage.cachedTokens,
-    costEstimateMicros: cost,
-  });
-  return cost;
 }
 
 /** Tool calls are billed by the vendor per call, not per token, so they are
@@ -78,21 +43,4 @@ export function recordToolUsage(
   for (let index = 0; index < count; index += 1) {
     usageRepo.record(db, userId, { nodeId, kind, provider });
   }
-}
-
-/** The `run` row of an attempt that starts streaming. The daily run limit
- * counts these rows (`usage.dailyTotals`), and they outlive the run they
- * name. */
-export function recordRunStart(
-  db: SessionDatabase,
-  userId: string,
-  runId: string,
-  entry: ModelEntry,
-): void {
-  usageRepo.record(db, userId, {
-    nodeId: runId,
-    kind: "run",
-    provider: entry.provider,
-    model: entry.id,
-  });
 }
