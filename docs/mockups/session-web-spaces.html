@@ -10655,12 +10655,14 @@ function acJump(k) {
    Included tokens (the Session allowance) pay first, then your default API key. A different key can be
    picked for one ask. tmPayer() is the one payer rule for every path: web and Phone composers, follow-ups,
    Retry and Ask again. The payer does not depend on the space; asks are charged in the space they run in.
-   Usage this month lives in one value collection, `usage`: tokens by source and space (`by`), the included
-   allowance (`cap`) and the default key (`def`). */
+   Usage lives in one value collection, `usage`: tokens this month by source and space (`by`), the included
+   tokens used this week (`week`), the weekly included allowance (`cap`, resetting Monday 00:00 UTC at
+   `resetAt`) and the default key (`def`). Included tokens are one weekly allowance; key limits are monthly. */
 Object.assign(st, { tmPick: null, tmChoose: false });
 /* The usage fixture (D.usage). by: tokens this month per source and space; each source's total is the sum of its spaces, and each
-   is at least what your listed asks in that space used. Included tokens: 1.38m of 2m. Gemini key (k2): 372k of
-   its 1m limit; Anthropic key (k1): 612k of 2m. A key's use this month is read from here. */
+   is at least what your listed asks in that space used. Included tokens: 310k of the 500k weekly allowance (1.38m
+   this month). Gemini key (k2): 372k of its 1m monthly limit; Anthropic key (k1): 612k of 2m. A key's use this
+   month is read from here. */
 const TU = () => D.usage;
 const tmSum = o => Object.values(o || {}).reduce((a, b) => a + b, 0);
 const tmUsed = src => tmSum((TU().by || {})[src]);
@@ -10680,7 +10682,8 @@ const tmOverride = () => st.device === 'native' ? nst.payer : st.tmPick;
 /* one source: the included tokens or one of your keys */
 function tmSrc(id) {
   if (!id) return null;
-  if (id === 'session') { const cap = TU().cap, used = tmUsed('session'); return { kind: 'session', id, label: 'Included tokens', cap, used, left: Math.max(0, cap - used), prov: null }; }
+  /* the included tokens: used and left this week (the allowance); month: their use this month, for Usage's totals */
+  if (id === 'session') { const cap = TU().cap, used = TU().week || 0; return { kind: 'session', id, label: 'Included tokens', cap, used, left: Math.max(0, cap - used), prov: null, month: tmUsed('session') }; }
   const k = st.userKeys.find(x => x.id === id); if (!k) return null;
   const cap = kinfo(k).cap || 0, used = tmUsed(id);
   return { kind: 'key', id, label: tmKeyName(k), cap, used, left: !k.valid ? 0 : cap ? Math.max(0, cap - used) : Infinity, prov: tmProv(k), valid: k.valid };
@@ -10708,7 +10711,10 @@ function tmPayer(sid, o = {}) {
 }
 const tmPayOk = sid => { const p = tmPayer(sid, { override: tmOverride() }); return p.ok ? p : null; };
 const tmCanPayWith = id => tmChoices().some(c => c.id === id && c.left > 0);
-const tmLeftTx = x => x.left === Infinity ? `${fmtT(x.used)} used this month, no limit` : `${fmtT(x.left)} left this month`;
+const tmPer = x => x.kind === 'session' ? 'week' : 'month';
+const tmLeftTx = x => x.left === Infinity ? `${fmtT(x.used)} used this month, no limit` : `${fmtT(x.left)} left this ${tmPer(x)}`;
+/* a source's tokens this month (Usage's totals): for the included tokens, their month, not their week */
+const tmMonthUsed = x => x.kind === 'session' ? x.month : x.used;
 
 /* ---------- models: the model must run on the payer's provider ---------- */
 const TM_MODELS = [
@@ -10765,15 +10771,15 @@ function tmLine(sid, o = {}) {
   const who = l => !many ? `<b>${l}</b>` : ph ? `<button class="n-lnk tm-who" type="button" data-n="sheet:payer:${sid}">${l}</button>` : `<button class="tlink tm-who" type="button" data-tmchoose="${sid}" aria-haspopup="menu" aria-expanded="${!!st.tmChoose}">${l}${I.chev}</button>`;
   const wrap = (h, warn) => ph ? h : `<span class="c2-note tm-line${warn ? ' warn' : ''}">${h}</span>${st.tmChoose === sid && many ? tmPop(sid, pay) : ''}`;
   if (!pay.ok) {
-    if (pay.why === 'out-nokey') return wrap(`You’ve used this month’s included tokens. They reset ${reset}. ${tmBtn('addkey', '', 'Add an API key')} to keep asking.`, true);
+    if (pay.why === 'out-nokey') return wrap(`You’ve used this week’s included tokens. They reset ${reset}. ${tmBtn('addkey', '', 'Add an API key')} to keep asking.`, true);
     const k = pay.key, other = tmChoices().find(c => c.left > 0 && c.id !== k.id);
-    return wrap(`You’ve used this month’s included tokens, and your ${esc(k.label)} reached its monthly limit of ${fmtT(k.cap)} tokens. ${other ? `${tmBtn('pick', other.id, `Use ${tmUseName(other)}`)} · ` : ''}${tmBtn('cap', k.id, 'Change limit')}`, true);
+    return wrap(`You’ve used this week’s included tokens, and your ${esc(k.label)} reached its monthly limit of ${fmtT(k.cap)} tokens. ${other ? `${tmBtn('pick', other.id, `Use ${tmUseName(other)}`)} · ` : ''}${tmBtn('cap', k.id, 'Change limit')}`, true);
   }
   /* 80% or more used: how much is left, and for the included tokens without a key, a prompt to add one */
   const low = tmLow(pay);
-  const post = !low ? '' : `. ${fmtT(pay.left)} left this month${pay.kind === 'session' && !tmKeys().length ? `. ${tmBtn('addkey', '', 'Add an API key')} to keep asking after they run out.` : '.'}`;
+  const post = !low ? '' : `. ${fmtT(pay.left)} left this ${tmPer(pay)}${pay.kind === 'session' && !tmKeys().length ? `. ${tmBtn('addkey', '', 'Add an API key')} to keep asking after they run out.` : '.'}`;
   const moved = pay.kind === 'key' && sess.left <= 0 && !U.movedSeen && !pay.picked;
-  const said = `You’ve used this month’s included tokens, so asks now use your ${esc(pay.label)} until they reset ${reset}. ${tmBtn('moved', '1', 'OK')}`;
+  const said = `You’ve used this week’s included tokens, so asks now use your ${esc(pay.label)} until they reset ${reset}. ${tmBtn('moved', '1', 'OK')}`;
   const note = moved ? (ph ? `<span class="tm-moved">${said}</span> ` : `<span class="c2-note tm-moved" role="status">${said}</span>`) : '';
   const line = who(pay.kind === 'session' ? 'Use included tokens' : `Using ${esc(pay.label)}`) + post;
   return ph ? note + line : note + wrap(line, low);
@@ -10788,7 +10794,7 @@ function tmPop(sid, pay) {
 const tmIc = c => `<span class="ts-ic">${c.kind === 'session' ? I.agent : MI.key}</span>`;
 function tmSub(c) {
   if (c.kind === 'key' && c.valid === false) return 'Rejected by the provider';
-  if (c.left <= 0) return c.kind === 'key' ? `Reached its ${fmtT(c.cap)} limit` : 'None left this month';
+  if (c.left <= 0) return c.kind === 'key' ? `Reached its ${fmtT(c.cap)} limit` : 'None left this week';
   return `${tmLeftTx(c)}${c.kind === 'key' ? ` · ${esc(c.prov)}` : ''}`;
 }
 
@@ -10810,10 +10816,10 @@ function tmModelMenu() {
 function tmStopWhy(src, tok) {
   const after = tok ? `The agent stopped after ${fmtT(tok)} tokens and wrote nothing.` : 'The agent wrote nothing.';
   if (!src) return `Nothing could pay for this ask. ${after}`;
-  if (src.kind === 'session') return `You’ve used this month’s included tokens. ${after} They reset ${dayOf(TU().resetAt)}.`;
+  if (src.kind === 'session') return `You’ve used this week’s included tokens. ${after} They reset ${dayOf(TU().resetAt)}.`;
   return `Your ${esc(src.label)} reached its monthly limit of ${fmtT(src.cap)} tokens. ${after}`;
 }
-const tmStopSum = src => src ? `The answer stopped: ${src.kind === 'session' ? 'this month’s included tokens are used up' : `your ${esc(src.label)} reached its monthly limit`}.` : 'The answer stopped: nothing could pay for it.';
+const tmStopSum = src => src ? `The answer stopped: ${src.kind === 'session' ? 'this week’s included tokens are used up' : `your ${esc(src.label)} reached its monthly limit`}.` : 'The answer stopped: nothing could pay for it.';
 /* the payer of an answer inside a sentence: "your included tokens", "your Gemini API key" */
 function tmPaidNoun(pay, u, sid) {
   const id = tmPaidId(pay, u, sid), k = st.userKeys.find(x => x.id === id), your = u === ME.u ? 'your ' : '';
@@ -10878,7 +10884,7 @@ function tmFuAgain(a) {
 /* ---------- Usage: this month's tokens, by source, by space, and recent asks ---------- */
 /* the sources, with this month's use: the included tokens and each of your keys */
 const tmSources = () => [tmSrc('session'), ...st.userKeys.map(k => tmSrc(k.id))];
-const tmTotal = () => tmSources().reduce((a, x) => a + x.used, 0);
+const tmTotal = () => tmSources().reduce((a, x) => a + tmMonthUsed(x), 0);
 function tmBySpace(srcs) {
   const by = {};
   srcs.forEach(x => Object.entries((TU().by || {})[x.id] || {}).forEach(([sid, v]) => { by[sid] = (by[sid] || 0) + v; }));
@@ -10902,14 +10908,14 @@ function tmRecent(n = 8) {
   return l.filter(r => !fresh || isNew(r)).sort((a, b) => qtAge(a) - qtAge(b)).slice(0, n);
 }
 const tmBar = (v, max) => `<span class="tm-bar" aria-hidden="true"><i style="width:${Math.max(1, Math.min(100, max ? v / max * 100 : 0)).toFixed(1)}%"></i></span>`;
-const tmSrcLine = x => x.kind === 'session' ? `${fmtT(x.used)} of ${fmtT(x.cap)} · ${fmtT(x.left)} left · resets ${dayOf(TU().resetAt)}`
+const tmSrcLine = x => x.kind === 'session' ? `${fmtT(x.used)} of ${fmtT(x.cap)} this week · ${fmtT(x.left)} left · resets ${dayOf(TU().resetAt)}`
   : `${esc(x.prov)}${tmDef() && tmDef().id === x.id ? ' · Used for asks' : ''} · ${x.valid === false ? 'Rejected by the provider' : x.cap ? `${fmtT(x.used)} of a ${fmtT(x.cap)} monthly limit` : 'No monthly limit'}`;
 function tmUsagePage() {
   const wrap = h => `<div class="A C Af H">${topHeader()}<div class="home-wide sub-page ak-page ac-page tm-upage"><div class="sub-top"><h2>Usage</h2>${st.auth === 'in' ? '<button class="btn" type="button" data-sub="keys">API keys</button>' : ''}</div>${h}</div></div>`;
   if (st.auth !== 'in') return wrap(acOutNote('Log in to see your usage.'));
   const srcs = tmSources(), total = tmTotal(), spaces = tmBySpace(srcs), rec = tmRecent();
-  const head = `<div class="tm-total"><b class="num">${fmtT(total)}</b><span>tokens this month</span></div><p class="muted tm-ulead">Included tokens reset ${dayOf(TU().resetAt)}. Your providers bill your keys. Key limits reset on the 1st of each month.</p>`;
-  const src = `<div class="tm-rows">${srcs.map(x => `<div class="tm-row">${tmIc(x)}<div class="tm-rt"><b>${esc(x.label)}</b><small>${tmSrcLine(x)}</small>${x.cap ? tmBar(x.used, x.cap) : ''}</div><b class="num">${fmtT(x.used)}</b>${x.kind === 'key' && x.valid !== false ? `<span class="tm-ra">${tmDef() && tmDef().id === x.id ? '' : `<button class="tlink" type="button" data-tmdef="${x.id}">Use for asks</button>`}<button class="tlink" type="button" data-akcap="${x.id}">${x.cap ? 'Change limit' : 'Set limit'}</button></span>` : ''}</div>`).join('')}</div>`;
+  const head = `<div class="tm-total"><b class="num">${fmtT(total)}</b><span>tokens this month</span></div><p class="muted tm-ulead">Included tokens are a weekly allowance and reset ${dayOf(TU().resetAt)}. Your providers bill your keys. Key limits reset on the 1st of each month.</p>`;
+  const src = `<div class="tm-rows">${srcs.map(x => `<div class="tm-row">${tmIc(x)}<div class="tm-rt"><b>${esc(x.label)}</b><small>${tmSrcLine(x)}</small>${x.cap ? tmBar(x.used, x.cap) : ''}</div><b class="num">${fmtT(tmMonthUsed(x))}</b>${x.kind === 'key' && x.valid !== false ? `<span class="tm-ra">${tmDef() && tmDef().id === x.id ? '' : `<button class="tlink" type="button" data-tmdef="${x.id}">Use for asks</button>`}<button class="tlink" type="button" data-akcap="${x.id}">${x.cap ? 'Change limit' : 'Set limit'}</button></span>` : ''}</div>`).join('')}</div>`;
   const sps = spaces.length ? `<div class="tm-rows">${spaces.map(([sid, v]) => `<div class="tm-row">${glyph(sp(sid))}<div class="tm-rt"><button class="tlink tm-sp" type="button" data-space="${sid}">${spName(sp(sid))}</button>${tmBar(v, spaces[0][1])}</div><b class="num">${fmtT(v)}</b></div>`).join('')}</div>` : '<p class="muted">No asks this month.</p>';
   const recent = !rec ? pgUsageWait() : rec.length ? `<div class="tm-rows">${rec.map(r => `<div class="tm-row tm-rec"><div class="tm-rt"><button class="tlink tm-rq" type="button" ${r.open}>${esc(qtClip(r.t, 80))}</button><small>${spName(sp(r.s))} · ${tmPaidLabel(r.pay, r.u, r.s)} · ${agoText(r)}</small></div><b class="num">${fmtT(r.tok)}</b></div>`).join('')}</div>${pgFoot('usage:8')}` : '<p class="muted">No asks yet this month.</p>';
   return wrap(`${head}<div class="cs-set st-side ac-set">${stSec('By source', 'The tokens your asks used this month, by source.', src)}${stSec('By space', 'Where you asked. The figures add up to the total.', sps)}${stSec('Recent asks', 'Your latest asks and follow-ups. They are part of the totals above.', recent)}</div>`);
@@ -10920,7 +10926,7 @@ function tmNUsage() {
   const srcs = tmSources(), total = tmTotal(), spaces = tmBySpace(srcs), rec = tmRecent(6);
   const row = (l, sub, v, extra = '', bar = '') => `<div class="n-row tm-nrow"><span class="n-row-b"><b>${l}</b>${sub ? `<small>${sub}</small>` : ''}${bar}</span><span class="n-val num">${v}</span>${extra}</div>`;
   const body = `<div class="tm-ntotal"><b class="num">${fmtT(total)}</b><span>tokens this month</span></div>`
-    + nGroup('By source', srcs.map(x => row(esc(x.label), tmSrcLine(x), fmtT(x.used), '', x.cap ? tmBar(x.used, x.cap) : '')), `Included tokens reset ${dayOf(TU().resetAt)}.`)
+    + nGroup('By source', srcs.map(x => row(esc(x.label), tmSrcLine(x), fmtT(tmMonthUsed(x)), '', x.cap ? tmBar(x.used, x.cap) : '')), `Included tokens are a weekly allowance and reset ${dayOf(TU().resetAt)}.`)
     + nGroup('By space', spaces.map(([sid, v]) => row(spName(sp(sid)), '', fmtT(v), '', tmBar(v, spaces[0][1]))), 'The figures add up to the total.')
     + (!rec ? nGroup('Recent asks', [pgUsageWait()]) : nGroup('Recent asks', rec.map(r => `<button class="n-row" type="button" data-n="${r.nopen}"><span class="n-row-b"><b>${esc(qtClip(r.t, 70))}</b><small>${spName(sp(r.s))} · ${tmPaidLabel(r.pay, r.u, r.s)}</small></span><span class="n-val num">${fmtT(r.tok)}</span></button>`)) + pgFoot('usage:6'));
   return { body: `${nPushBar('Usage', '')}<div class="tm-nusage">${body}</div>` };
@@ -10980,7 +10986,7 @@ const tmMovedSeen = () => mutate('usage.markMovedSeen', {}, () => db.set('usage'
    its asks). The mock has one signed-in person, so the server sets up the new account's data with a
    scenario, as for a Screen entry (the real server makes the account empty). */
 { const ob0 = acOnbStart; acOnbStart = function () { ob0(); runScenario('new account', null, renderAll); }; }
-const tmOnbCopy = () => `Each month, your asks can use up to ${fmtT(TU().cap)} included tokens. After they run out, asks use your API key, and your provider bills you for those tokens. Session uses the key only for asks you start. Account › Usage shows both.`;
+const tmOnbCopy = () => `Each week, your asks can use up to ${fmtT(TU().cap)} included tokens. After they run out, asks use your API key, and your provider bills you for those tokens. Session uses the key only for asks you start. Account › Usage shows both.`;
 
 /* ---------- Phone: composer line, dock, chooser, You › Usage, key details, first run ---------- */
 /* the inline composer's line: the model for the payer, then who pays */

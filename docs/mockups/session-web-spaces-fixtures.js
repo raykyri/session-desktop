@@ -3793,8 +3793,9 @@ Make a table of sources with columns for coverage, update frequency, delay and l
     muted: { $set: [] },
     blocked: { $set: [] },
     usage: {
-      cap: 2e6,
-      resetAt: '2026-12-01T12:00:00Z',
+      cap: 5e5,             /* the weekly included allowance */
+      week: 3.1e5,          /* included tokens used this week */
+      resetAt: '2026-11-23T00:00:00Z',   /* Monday 00:00 UTC */
       def: 'k2',
       movedSeen: false,
       by: {

@@ -157,8 +157,9 @@ const envSchema = z.object({
   SESSION_MIN_PROTOCOL: positiveInteger(MIN_PROTOCOL_VERSION, 1),
   /** Origins a bearer request may come from (CORS): the desktop app's. */
   SESSION_DESKTOP_ORIGINS: z.string().trim().default("tauri://localhost"),
-  /** The included tokens a person has a month (`/api/me/usage`'s `cap`). */
-  SESSION_INCLUDED_TOKENS: positiveInteger(1_000_000),
+  /** The included tokens a person has a week, Monday 00:00 UTC to the next
+   * Monday (`/api/me/usage`'s `cap`). */
+  SESSION_INCLUDED_TOKENS: positiveInteger(250_000),
 
   SESSION_FIXTURE_PROVIDERS: flag(false),
   SESSION_TEST_AUTH: flag(false),

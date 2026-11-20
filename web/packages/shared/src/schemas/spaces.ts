@@ -718,12 +718,14 @@ export const apiKeySchema = z.object({
 /** TODO(limits): the stored key, with the raw value. Not sent. */
 export const storedApiKeySchema = apiKeySchema.extend({ raw: z.string().optional() });
 
-/** TODO(limits): token usage, a stub. `by`: tokens this month per source
- * (`session` or a key id) and space; `cap`: the included tokens a month;
- * `def`: the default key, which pays after the included tokens run out;
- * `fresh`: a new account. */
+/** Token usage. `by`: tokens this month per source (`session` or a key id)
+ * and space; `cap`: the weekly included allowance, and `week` the included
+ * tokens used this week (owner decision: one weekly allowance, reset Monday
+ * 00:00 UTC at `resetAt`; key limits stay monthly); `def`: the default key,
+ * which pays after the included tokens run out; `fresh`: a new account. */
 export const tokenUsageSchema = z.object({
   cap: z.number(),
+  week: z.number(),
   resetAt: spaceIsoTimeSchema,
   def: z.string().nullable(),
   movedSeen: z.boolean(),

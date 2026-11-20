@@ -34,7 +34,7 @@
 
   /* ---- accounts ---- */
   scenario('new account', { note: 'a new account (Sign up, or after deleting the account): no API keys, no usage yet, no default key',
-    run: tx => { tx.get('userKeys').forEach(k => tx.remove('userKeys', k.id)); tx.setValue('usage', { ...tx.value('usage'), by: {}, def: null, movedSeen: false, fresh: true }); } });
+    run: tx => { tx.get('userKeys').forEach(k => tx.remove('userKeys', k.id)); tx.setValue('usage', { ...tx.value('usage'), by: {}, week: 0, def: null, movedSeen: false, fresh: true }); } });
 
   scenario('keys: a key being checked', { note: 'you added the Work key (Anthropic, 1M tokens a month); the provider is checking it',
     run: tx => tx.put('userKeys', { id: 'k3', kind: 'key', raw: 'sk-ant-api03-Xr7qL2mN8vB4kW9dT1fS6hJ3', label: 'Work key', mask: 'sk-ant-…6hJ3', valid: false, check: 'checking', provider: 'Anthropic', lastUsedAt: null, used: 0, cap: 1e6 }) });
@@ -145,17 +145,20 @@
   /* ---- your asks, and who pays for them (the token model; TODO(limits): usage is a stub) ---- */
   const SAMPLE_Q = 'What changed in public guidance on AI model evaluations this year?';
   const noKeys = tx => tx.get('userKeys').forEach(k => tx.remove('userKeys', k.id));
-  /* your included tokens this month: `used` in all, the difference charged to #public */
+  /* your included tokens this week: `used` (of the weekly allowance); this month's use is at least that much,
+     any difference charged to #public */
   const sessionUsed = (tx, used) => {
     const u = tx.value('usage'), by = u.by.session || (u.by.session = {});
-    by.public = (by.public || 0) + used - Object.values(by).reduce((a, b) => a + b, 0);
+    const month = Object.values(by).reduce((a, b) => a + b, 0);
+    if (month < used) by.public = (by.public || 0) + used - month;
+    u.week = used;
     tx.setValue('usage', u);
   };
   /* how an ask of yours ended: its payer, the tokens it used, its summary line and its failure */
   const ASK_ENDS = {
     running: { running: true, pay: 'session', att: 1 },
     stopped: { pay: 'session', tok: 18e3, sum: 'Stopped. The agent wrote nothing.', fail: { why: 'stopped' } },
-    tokens: { pay: 'session', sum: 'The answer stopped: this month’s included tokens are used up.', fail: { why: 'tokens' } },
+    tokens: { pay: 'session', sum: 'The answer stopped: this week’s included tokens are used up.', fail: { why: 'tokens' } },
     key: { pay: 'k0', sum: 'The answer failed: the provider rejected the API key.', fail: { why: 'key' } },
     rate: { pay: 'k2', sum: 'The answer failed: the provider is limiting requests.', fail: { why: 'rate' } },
     /* the run's checks when it started failed (step 7), and the server could not resume a run after a restart */
@@ -168,7 +171,7 @@
     run: (tx, a, h) => {
       const q = a.q || SAMPLE_Q, end = JSON.parse(JSON.stringify(ASK_ENDS[a.end]));
       if (a.end === 'rate') end.fail.at = Date.now() + 20e3;   /* the provider's retry time, on the real clock as the page counts it */
-      if (a.end === 'tokens') { sessionUsed(tx, 2e6); end.tok = a.tok; }
+      if (a.end === 'tokens') { sessionUsed(tx, 5e5); end.tok = a.tok; }
       const id = tx.id();
       /* args.device: the ask ran on your MacBook Air (Claude Code): a device run, which pays nothing */
       const ex = a.device ? { kind: 'device', cli: a.cli || 'claude', device: 'd1', u: tx.me.u } : null;
@@ -190,13 +193,13 @@
     } });
   scenario('no joined spaces', { note: 'you joined no spaces. args.leaveGrants: you are not a member of the closed #grants either',
     run: (tx, a, h) => { if (a.leaveGrants) h.rel('grants', 'none'); tx.setValue('joined', []); } });
-  scenario('usage: near the limit, no key', { note: 'you used 81% of this month’s included tokens and have no API key',
-    run: tx => { noKeys(tx); sessionUsed(tx, 1.62e6); } });
-  scenario('usage: included tokens used up', { note: 'this month’s included tokens are used up; asks move to your default key. args.noKey: you have no API key',
-    run: (tx, a) => { if (a.noKey) noKeys(tx); sessionUsed(tx, 2e6); } });
-  scenario('usage: a follow-up stopped for tokens', { note: 'your follow-up on your ask in #public stopped because this month’s included tokens are used up',
+  scenario('usage: near the limit, no key', { note: 'you used 81% of this week’s included tokens and have no API key',
+    run: tx => { noKeys(tx); sessionUsed(tx, 4.05e5); } });
+  scenario('usage: included tokens used up', { note: 'this week’s included tokens are used up; asks move to your default key. args.noKey: you have no API key',
+    run: (tx, a) => { if (a.noKey) noKeys(tx); sessionUsed(tx, 5e5); } });
+  scenario('usage: a follow-up stopped for tokens', { note: 'your follow-up on your ask in #public stopped because this week’s included tokens are used up',
     run: (tx, a, h) => {
-      sessionUsed(tx, 2e6);
+      sessionUsed(tx, 5e5);
       const rich = tx.get('rich'), p = tx.get('posts').find(x => x.u === tx.me.u && x.k === 'ask' && x.s === 'public' && rich[x.id]), tree = h.tree(p.id);
       tx.mapPut('qtd', p.id, { ...tree, nodes: [...tree.nodes, { id: 'tmf', par: 'r', u: tx.me.u, createdAt: h.ago('2m'), q: 'Which of these works describe a market that prices attention directly?', tok: 6e3, running: false, html: '', pay: 'session', fail: { why: 'tokens' } }] });
     } });

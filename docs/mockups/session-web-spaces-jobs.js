@@ -113,11 +113,11 @@
     const p = prov(k), n = `${TM_PROVNAME[p] || p} API key`, lbl = k.label.trim();
     return lbl !== n && validKeys(g).some(x => x.id !== k.id && prov(x) === p) ? `${n} (${lbl})` : n;
   }
-  /* one source of tokens: the included tokens or one of the person's keys, with what is left this month */
+  /* one source of tokens: the included tokens (a weekly allowance) or one of the person's keys (a monthly limit), with what is left */
   function src(g, id) {
     if (!id) return null;
     const u = g('usage'), used = sum((u.by || {})[id]);
-    if (id === 'session') return { kind: 'session', id, label: 'Included tokens', cap: u.cap, used, left: Math.max(0, u.cap - used) };
+    if (id === 'session') { const week = u.week || 0; return { kind: 'session', id, label: 'Included tokens', cap: u.cap, used: week, left: Math.max(0, u.cap - week) }; }
     const k = g('userKeys').find(x => x.id === id); if (!k) return null;
     const cap = k.cap || 0;
     return { kind: 'key', id, label: keyName(g, k), cap, used, left: !k.valid ? 0 : cap ? Math.max(0, cap - used) : Infinity };
@@ -128,7 +128,7 @@
     return x ? { ok: true, ...x } : { ok: false };
   }
   /* the summary line of an answer that stopped for tokens */
-  const stopSum = s => s ? `The answer stopped: ${s.kind === 'session' ? 'this month’s included tokens are used up' : `your ${esc(s.label)} reached its monthly limit`}.` : 'The answer stopped: nothing could pay for it.';
+  const stopSum = s => s ? `The answer stopped: ${s.kind === 'session' ? 'this week’s included tokens are used up' : `your ${esc(s.label)} reached its monthly limit`}.` : 'The answer stopped: nothing could pay for it.';
   /* the summary line of a stopped or failed answer */
   const FAIL_SUM = {
     stopped: () => 'Stopped. The agent wrote nothing.',

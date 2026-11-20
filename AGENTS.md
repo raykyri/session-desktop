@@ -235,6 +235,10 @@ rules above stay as they are. Decisions for the new client:
   - A device answer is labelled "<handle>'s desktop". After an interrupt,
     Run again is offered only on the device that ran it; the web offers
     "Run with included tokens".
+  - Included tokens are one weekly allowance per person, from Monday
+    00:00 UTC to the next Monday (`SESSION_INCLUDED_TOKENS`, with a
+    per-person override an admin sets); there are no daily limits. API
+    key limits stay monthly, and the Usage page's totals are this month's.
   - The remove dialog says "The user will not be notified." Bans are
     permanent, with Unban; Ban on the Phone app is deferred.
 - Phase 2a (done): `web/packages/server` serves spaces from `@session/sync`

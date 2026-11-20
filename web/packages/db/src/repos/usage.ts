@@ -208,6 +208,15 @@ export function monthOf(at: number): { start: number; end: number } {
   };
 }
 
+/** The UTC week of `at` (Monday 00:00 UTC to the next Monday): the period of
+ * the included tokens' weekly allowance. */
+export function weekOf(at: number): { start: number; end: number } {
+  const d = new Date(at);
+  const day = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const start = day - ((d.getUTCDay() + 6) % 7) * 86_400_000;
+  return { start, end: start + 7 * 86_400_000 };
+}
+
 /** Tokens this month by payer and space (`/api/me/usage`'s `by`): input
  * plus output tokens of every event with a payer. */
 export function monthlyByPayer(
@@ -215,7 +224,25 @@ export function monthlyByPayer(
   userId: string,
   at: number = now(),
 ): Record<string, Record<string, number>> {
-  const { start, end } = monthOf(at);
+  return byPayerBetween(db, userId, monthOf(at));
+}
+
+/** Tokens one payer used this week (the included tokens' allowance). */
+export function weeklyUsed(
+  db: SessionDatabase,
+  userId: string,
+  payer: string,
+  at: number = now(),
+): number {
+  const by = byPayerBetween(db, userId, weekOf(at))[payer] ?? {};
+  return Object.values(by).reduce((a, b) => a + b, 0);
+}
+
+function byPayerBetween(
+  db: SessionDatabase,
+  userId: string,
+  { start, end }: { start: number; end: number },
+): Record<string, Record<string, number>> {
   const rows = db
     .select({
       payer: usageEvents.payer,
