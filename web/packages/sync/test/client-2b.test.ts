@@ -180,7 +180,9 @@ test("an answered write is not played again over a log read after its answer", a
 
 test("an answered write is not played again over a read sent before its answer but served after it", async (t) => {
   const { w, closed } = cast(t);
-  // two pages; pages.move swaps them, so playing it twice puts them back
+  // two pages; pages.move puts one at a position (absolute since review
+  // round 1 of phase 2, so playing it twice no longer shows here: the
+  // answered decline above does)
   const one = w.id();
   const two = w.id();
   ok(
@@ -215,7 +217,7 @@ test("an answered write is not played again over a read sent before its answer b
       (p) => p.id,
     );
   t.deepEqual(order(), [one, two]);
-  const move = olga.write("pages.move", { space: closed, page: one, other: two });
+  const move = olga.write("pages.move", { space: closed, page: one, to: 1 });
   await new Promise((r) => setTimeout(r, 0));
   // a read of the space's log, sent before the answer: it holds the move
   await olga.sync(`space:${closed}`);

@@ -30,6 +30,24 @@ import { DAY, isoAt } from "../time.js";
 /** The longest an invite link lasts, in days. */
 export const INVITE_MAX_DAYS = 30;
 
+/** How long after a decline its person may request again, in days (the
+ * mockup's decline dialog: "They can request again after 14 days"; review
+ * round 1 of phase 2, 2b design finding 1). */
+export const DECLINE_WAIT_DAYS = 14;
+
+/** A declined request of the actor's in space `sp` whose wait has not
+ * passed: the refusal of a new request, or of a withdrawal that would end
+ * the wait. */
+function declinedWait(r: { st: string; retryAt?: string | null } | undefined, now: string) {
+  if (r?.st !== "declined" || !r.retryAt || now >= r.retryAt) return;
+  throw refuse(
+    "PRECONDITION_FAILED",
+    `Your request was declined. You can request again after ${DECLINE_WAIT_DAYS} days.`,
+    undefined,
+    r.retryAt,
+  );
+}
+
 /** Code characters: Crockford base32 in lower case, 10 of them (50 bits). */
 const CODE_CHARS = "0123456789abcdefghjkmnpqrstvwxyz";
 
@@ -56,6 +74,8 @@ export const memberMutators = [
         issues.push("input.rulesAccepted: expected true");
       if (issues.length) throw refuse("BAD_REQUEST", undefined, issues);
       const old = tx.get("request", `${s.id}:${tx.me}`);
+      // a declined request: again only once its wait passed (`retryAt`)
+      declinedWait(old, tx.now);
       tx.put({
         kind: "request",
         sp: s.id,
@@ -63,6 +83,7 @@ export const memberMutators = [
         st: "open",
         a,
         why: null,
+        retryAt: null,
         createdAt: old ? old.createdAt : tx.now,
         updatedAt: tx.now,
       });
@@ -70,12 +91,14 @@ export const memberMutators = [
     },
   }),
 
-  // Withdraw your own request: it is deleted, whatever its state.
+  // Withdraw your own request: it is deleted, whatever its state, except a
+  // declined one whose wait has not passed (deleting it would end the wait).
   defineMutator({
     name: "joinRequests.withdraw",
     input: z.strictObject({ space: ulidS }),
     can: (tx, i) => inSpace(tx, i.space, "user"),
     run: (tx, i) => {
+      declinedWait(tx.get("request", `${i.space}:${tx.me}`), tx.now);
       tx.del("request", `${i.space}:${tx.me}`);
       return null;
     },
@@ -121,12 +144,18 @@ export const memberMutators = [
         if (i.decision === "approve") {
           if (bannedFrom(tx, i.space, u))
             throw refuse("PRECONDITION_FAILED", "This person is banned from the space.");
-          tx.put({ ...r, st: "approved", updatedAt: tx.now });
+          tx.put({ ...r, st: "approved", retryAt: null, updatedAt: tx.now });
           addMember(tx, i.space, u, "member", tx.id(k));
         } else if (i.decision === "decline") {
-          tx.put({ ...r, st: "declined", why: (i.why ?? "").trim(), updatedAt: tx.now });
+          tx.put({
+            ...r,
+            st: "declined",
+            why: (i.why ?? "").trim(),
+            retryAt: isoAt(tx.nowMs + DECLINE_WAIT_DAYS * DAY),
+            updatedAt: tx.now,
+          });
         } else {
-          tx.put({ ...r, st: "open", updatedAt: tx.now });
+          tx.put({ ...r, st: "open", retryAt: null, updatedAt: tx.now });
         }
       }
       refreshSpace(tx, i.space);

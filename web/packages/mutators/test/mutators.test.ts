@@ -1045,7 +1045,7 @@ test("pages: create with an id, edit with versions and a new title, restore, mov
     w.run("mona", "pages.update", { space: open, page: f, title: "New guide", text: [] }),
     "CONFLICT",
   );
-  ok(t, w.run("mona", "pages.move", { space: open, page: f, other: g }));
+  ok(t, w.run("mona", "pages.move", { space: open, page: f, to: 0 }));
   t.deepEqual(
     rec(w, `pages:${open}`, "pages").list.map((p) => [p.id, p.t]),
     [

@@ -156,6 +156,11 @@ export interface ServerHooks {
    * deleted. A server records a start for each run record with an executor
    * that a committed write creates. */
   deviceRunStarts(u: string, since: number): readonly number[];
+  /** Whether `u` may run model `model` on the included tokens (the
+   * server's `canUseModel`: an admin-only model, for an admin only).
+   * Asked only for an admin-only model; a server that gives no answer
+   * refuses it (review round 1 of phase 2, F1). */
+  includedModel?(u: string, model: string): boolean;
 }
 
 /** The device runs a write's staged changes start: the new run records with
@@ -449,6 +454,7 @@ export function apply(
         tx,
         random: () => server.random(),
         deviceRunStarts: (u, since) => server.deviceRunStarts(u, since),
+        includedModel: (u, model) => server.includedModel?.(u, model) ?? false,
       };
       values = def.pre(ctx, input);
     }

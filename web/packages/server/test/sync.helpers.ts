@@ -103,8 +103,10 @@ export class HttpClient {
     return this.post("/api/sync/pull", { log, cursor, clientId: this.clientId });
   }
 
-  call(name: string, input: unknown) {
-    return this.post(`/api/rpc/${name}`, input);
+  /** An online call; `headers`: more request headers (a client address the
+   * proxy header names, `Fly-Client-IP`). */
+  call(name: string, input: unknown, headers: Record<string, string> = {}) {
+    return this.post(`/api/rpc/${name}`, input, headers);
   }
 
   /** Open the event stream with `cursors`; `read()` answers the text so
@@ -161,11 +163,14 @@ export class HttpClient {
 }
 
 /** A device of `u`'s signed in through the browser approval: its token. */
+/** Sign a device in: asked and approved with one click from the same
+ * computer (one client address). */
 export async function signInDevice(h: Harness, browser: HttpClient) {
   const anon = new HttpClient(h, null);
-  const a = await anon.call("devices.authorize", { name: "Mel's Mac", kind: "mac" });
+  const here = { "Fly-Client-IP": "10.0.0.7" };
+  const a = await anon.call("devices.authorize", { name: "Mel's Mac", kind: "mac" }, here);
   const request = (a.body.result as { request: string }).request;
-  const ap = await browser.call("devices.approve", { request });
+  const ap = await browser.call("devices.approve", { request }, here);
   const t = await anon.call("devices.token", { request });
   const r = t.body.result as { token: string; device: string };
   return { approve: ap, token: r.token, device: r.device };

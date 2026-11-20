@@ -820,6 +820,9 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         issues.push("input.rulesAccepted: expected true");
       if (issues.length) throw refuse("BAD_REQUEST", undefined, issues);
       const old = tx.get(requestKey(s.id, tx.me));
+      // a declined request waits 14 days (review round 1 of phase 2)
+      if (old?.kind === "request" && old.st === "declined" && old.retryAt && tx.now < old.retryAt)
+        throw refuse("PRECONDITION_FAILED", "You can request again after 14 days.");
       tx.put({
         kind: "request",
         sp: s.id,
@@ -827,6 +830,7 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         st: "open",
         a,
         why: null,
+        retryAt: null,
         createdAt: old?.kind === "request" ? old.createdAt : tx.now,
         updatedAt: tx.now,
       });
@@ -870,12 +874,18 @@ export const MUTATORS: Readonly<Record<string, AnyMutator>> = Object.freeze({
         if (i.decision === "approve") {
           if (bannedFrom(tx, i.space, u))
             throw refuse("PRECONDITION_FAILED", "This person is banned from the space.");
-          tx.put({ ...r, st: "approved", updatedAt: tx.now });
+          tx.put({ ...r, st: "approved", retryAt: null, updatedAt: tx.now });
           addMember(tx, i.space, u, "member", tx.id(k));
         } else if (i.decision === "decline") {
-          tx.put({ ...r, st: "declined", why: (i.why ?? "").trim(), updatedAt: tx.now });
+          tx.put({
+            ...r,
+            st: "declined",
+            why: (i.why ?? "").trim(),
+            retryAt: isoAt(Date.parse(tx.now) + 14 * DAY),
+            updatedAt: tx.now,
+          });
         } else {
-          tx.put({ ...r, st: "open", updatedAt: tx.now });
+          tx.put({ ...r, st: "open", retryAt: null, updatedAt: tx.now });
         }
       }
       refreshSpace(tx, i.space);

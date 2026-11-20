@@ -21,6 +21,16 @@ export function attemptUsageOf(usage: LanguageModelUsage | undefined): AttemptUs
   };
 }
 
+/** The sum of two usages (the steps of an attempt). */
+export function addUsage(a: AttemptUsage, b: AttemptUsage): AttemptUsage {
+  return {
+    inputTokens: a.inputTokens + b.inputTokens,
+    outputTokens: a.outputTokens + b.outputTokens,
+    reasoningTokens: a.reasoningTokens + b.reasoningTokens,
+    cachedTokens: a.cachedTokens + b.cachedTokens,
+  };
+}
+
 /**
  * Cost in micro-dollars from the registry's price table.
  *

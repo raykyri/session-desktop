@@ -75,7 +75,7 @@ import {
 
 import { RunJobs } from "./jobs.js";
 import { answerWrites, bounds } from "./limits.js";
-import { OnlineCalls, type KeyVault, type OnlineHandlers } from "./online.js";
+import { OnlineCalls, type CallMeta, type KeyVault, type OnlineHandlers } from "./online.js";
 import type {
   LogRow,
   ServerStore,
@@ -90,6 +90,17 @@ import { Tokens, type CursorKeys } from "./tokens.js";
 type RunEvent = Extract<SseEvent, { type: "run" }>;
 
 export const EFFECT_MAX_ATTEMPTS = 10;
+
+/** `SyncServerOptions.writeBudget`. */
+export interface WriteBudget {
+  /** The most writes and calls at once (the bucket's size). */
+  burst: number;
+  /** How many the bucket refills a minute. */
+  perMinute: number;
+}
+
+/** The buckets kept before full ones are dropped. */
+const BUDGET_KEYS_MAX = 10_000;
 export const EFFECT_BACKOFF_MIN = 1000;
 export const EFFECT_BACKOFF_MAX = 600_000;
 /** How many expired rows of each table one housekeeping pass removes. */
@@ -128,6 +139,21 @@ export interface SyncServerOptions {
    * default MIN_PROTOCOL_VERSION): a write or a read below it answers
    * UPDATE_REQUIRED (phase 2a). */
   minProtocol?: number;
+  /** A per-account budget of writes and online calls (review round 1 of
+   * phase 2, F6): a bucket of `burst` that refills at `perMinute`. A write
+   * or call past it answers TOO_MANY_REQUESTS with `retryAt`, unrecorded,
+   * before anything else is read. A call with no actor is counted by its
+   * network address (`CallMeta.ip`) when known. Default: no budget. */
+  writeBudget?: WriteBudget | null;
+  /** The most queued and running server runs one person may have (a
+   * deployment setting: the HTTP server passes `SESSION_QUEUED_PER_USER`;
+   * default no limit). A write that would start one more answers
+   * TOO_MANY_REQUESTS, unrecorded (review round 1 of phase 2, F5). */
+  queuedRunsPerUser?: number;
+  /** Whether `u` may run an admin-only model on the included tokens (the
+   * HTTP server's `canUseModel`). Without it, nobody may (review round 1 of
+   * phase 2, F1). */
+  includedModel?: (u: string, model: string) => boolean;
   /** Test only: an effect for which this answers true fails on that attempt. */
   failEffect?: (effect: pkg.Effect, attempt: number) => boolean;
   /** Hears each fault of a housekeeping pass (counted in
@@ -186,6 +212,50 @@ function logsOfAudience(a: pkg.Audience): LogId[] {
 
 const same = (a: pkg.StoredRecord, b: pkg.Draft) =>
   JSON.stringify({ ...a, rev: 0 }) === JSON.stringify({ ...b, rev: 0 });
+
+/** A stream's read of one log (`SyncServer.streamPulls`): its reader, the
+ * log, the cursor token it holds, and the keys of the rows the commit wrote
+ * in the log (none: every row may have changed). */
+export interface StreamPull {
+  actor: Actor | null;
+  log: LogId;
+  cursor: Cursor;
+  keys?: ReadonlySet<string> | null;
+}
+
+export type StreamPullAnswer =
+  { resync: true } | { skip: true } | { cursor: Cursor; changed: boolean };
+
+/** A read-only view of a transaction that reads each record, log row,
+ * tombstone and epoch once (`streamPulls`: many readers of one commit). */
+function memoTx(tx: StoreTx): StoreTx {
+  const cache = new Map<string, unknown>();
+  const memo =
+    <A extends unknown[], R>(name: string, f: (...a: A) => R) =>
+    (...a: A): R => {
+      const k = `${name}\u0000${a.join("\u0000")}`;
+      if (cache.has(k)) return cache.get(k) as R;
+      const v = f(...a);
+      cache.set(k, v);
+      return v;
+    };
+  const get = memo("get", (key: string) => tx.get(key));
+  const logGet = memo("logGet", (log: LogId, key: string) => tx.logGet(log, key));
+  const logAfter = memo("logAfter", (log: LogId, after: number) => tx.logAfter(log, after));
+  const tombGet = memo("tombGet", (key: string) => tx.tombGet(key));
+  const epoch = memo("epoch", (log: LogId) => tx.epoch(log));
+  return new Proxy(tx, {
+    get(target, p, receiver) {
+      if (p === "get") return get;
+      if (p === "logGet") return logGet;
+      if (p === "logAfter") return logAfter;
+      if (p === "tombGet") return tombGet;
+      if (p === "epoch") return epoch;
+      const v = Reflect.get(target, p, receiver) as unknown;
+      return typeof v === "function" ? (v as (...a: unknown[]) => unknown).bind(target) : v;
+    },
+  });
+}
 
 /** A `Reader` (by kind and id) over a transaction. */
 const readerOf = (tx: StoreTx): pkg.Reader => ({
@@ -246,6 +316,12 @@ export class SyncServer {
   private readonly jobRunner: JobRunner;
   private readonly tokens: Tokens;
   private readonly failEffect: SyncServerOptions["failEffect"];
+  /** `SyncServerOptions.includedModel`. */
+  readonly includedModel: (u: string, model: string) => boolean;
+  /** `SyncServerOptions.queuedRunsPerUser`. */
+  readonly queuedRunsPerUser: number;
+  private readonly writeBudget: WriteBudget | null;
+  private readonly buckets = new Map<string, { tokens: number; at: number }>();
   private readonly onError: SyncServerOptions["onError"];
   readonly online: OnlineCalls;
   /** The lowest protocol version taken (`SyncServerOptions.minProtocol`). */
@@ -273,6 +349,9 @@ export class SyncServer {
     this.jobRunner = o.jobs ?? { start: () => {} };
     this.tokens = new Tokens(o.cursorKeys);
     this.failEffect = o.failEffect;
+    this.includedModel = o.includedModel ?? (() => false);
+    this.queuedRunsPerUser = o.queuedRunsPerUser ?? Infinity;
+    this.writeBudget = o.writeBudget ?? null;
     this.onError = o.onError;
     this.minProtocol = Math.max(MIN_PROTOCOL_VERSION, o.minProtocol ?? MIN_PROTOCOL_VERSION);
     this.online = new OnlineCalls(this, o.online, o.keys, {
@@ -514,6 +593,38 @@ export class SyncServer {
     }
   }
 
+  /** Take one write or call from `key`'s budget (`writeBudget`): null when
+   * it is within it, else the TOO_MANY_REQUESTS refusal, with `retryAt` when
+   * the next one is taken. The clock going back refills nothing and takes
+   * nothing away. */
+  overBudget(key: string | null): AnswerError | null {
+    const b = this.writeBudget;
+    if (!b || key === null) return null;
+    const now = this.clockNow();
+    const prev = this.buckets.get(key) ?? { tokens: b.burst, at: now };
+    const tokens = Math.min(
+      b.burst,
+      prev.tokens + (Math.max(0, now - prev.at) * b.perMinute) / 60_000,
+    );
+    if (tokens < 1) {
+      this.buckets.set(key, { tokens, at: Math.max(now, prev.at) });
+      const wait = Math.ceil(((1 - tokens) * 60_000) / b.perMinute);
+      return {
+        ...err(
+          "TOO_MANY_REQUESTS",
+          "You made too many changes in a short time. Try again in a minute.",
+        ),
+        // whole seconds, rounded up: a retry at it is taken
+        retryAt: isoAt(Math.ceil((now + wait) / 1000) * 1000),
+      };
+    }
+    if (this.buckets.size >= BUDGET_KEYS_MAX)
+      for (const [k, v] of this.buckets)
+        if (v.tokens + ((now - v.at) * b.perMinute) / 60_000 >= b.burst) this.buckets.delete(k);
+    this.buckets.set(key, { tokens: tokens - 1, at: Math.max(now, prev.at) });
+    return null;
+  }
+
   /** Housekeeping before a request: at most once a second of server time, in
    * its own transaction, so a request that is refused (and rolls back) does
    * not undo it (review round 1 of phase 1, W1). A fault in it fails no
@@ -657,6 +768,8 @@ export class SyncServer {
     const m = parsed.data;
     if (!actor || !pkg.isHandle(actor.u)) return no(err("UNAUTHORIZED"));
     const u = actor.u;
+    const spent = this.overBudget(`u:${u}`);
+    if (spent) return no(spent);
     this.housekeepDue();
     return this.run((tx) => {
       const now = this.time(tx);
@@ -682,18 +795,19 @@ export class SyncServer {
       const hit = wellFormed ? live(tx.answerGet(u, m.mutationId)) : undefined;
       // a write this user's devices sent before, under any client id or seq
       if (hit && (hit.digest === payload || hit.digest.startsWith("replaced:")))
-        return this.replay(tx, u, hit.answer, now);
+        return this.withCreated(tx, m.name, this.replay(tx, u, hit.answer, now));
       // a reminted write: processed already under an id it replaces
       if (wellFormed && !hit)
         for (const old of m.replaces) {
           const prior = live(tx.answerGet(u, old));
           if (!prior) continue;
           tx.answerPut(u, m.mutationId, { digest: payload, answer: prior.answer, at: now });
-          return this.replay(tx, u, prior.answer, now);
+          return this.withCreated(tx, m.name, this.replay(tx, u, prior.answer, now));
         }
       const sent = sha256(canonical([m.mutationId, m.name, m.input]));
       const kept = live(tx.seqAnswerGet(m.clientId, m.seq));
-      if (kept && kept.digest === sent) return this.replay(tx, u, kept.answer, now);
+      if (kept && kept.digest === sent)
+        return this.withCreated(tx, m.name, this.replay(tx, u, kept.answer, now));
       if (m.seq !== client.last + 1)
         return out({
           ...err("OUT_OF_ORDER", undefined, [`seq: expected ${client.last + 1}`]),
@@ -764,6 +878,7 @@ export class SyncServer {
       server: {
         random: this.random,
         deviceRunStarts: (who, since) => tx.deviceRunsSince(who, since),
+        includedModel: (who, model) => this.includedModel(who, model),
       },
     });
     if (res.status === "unknown") return out(err("INTERNAL_SERVER_ERROR"));
@@ -779,6 +894,8 @@ export class SyncServer {
       record({ ok: false, error: e, ...(reads ? { reads } : {}), seq: m.seq });
       return this.withReads(tx, u, out(e, m.seq), reads);
     }
+    const many = this.tooManyRuns(tx, u, res.writes);
+    if (many) return out(many);
     const started = pkg.deviceRunsStarted(res.writes, (key) => tx.get(key) !== undefined);
     // spaces this write archives (review round 2 of phase 1)
     const archived = res.writes.flatMap(([key, d]) => {
@@ -797,7 +914,51 @@ export class SyncServer {
     for (const sp of archived) this.online.spaceArchived(tx, now, sp);
     for (const effect of res.effects) tx.effectAdd(effect, now);
     record({ ok: true, result: res.result ?? null, seq: m.seq });
-    return { ok: true, result: res.result ?? null, serverTime: now, seq: m.seq };
+    return this.withCreated(tx, m.name, {
+      ok: true,
+      result: res.result ?? null,
+      serverTime: now,
+      seq: m.seq,
+    });
+  }
+
+  /** `spaces.create`'s answer with the new space as it is stored now
+   * (`space`: the record `directory` serves), so a client that holds no log
+   * of it shows it at once (review round 1 of phase 2, 2b design finding 6).
+   * The stored answer keeps only the id (no record text is stored with an
+   * answer): a replay reads the space again, and has no `space` once it was
+   * deleted. */
+  private withCreated(tx: StoreTx, name: string, a: Answer): Answer {
+    if (name !== "spaces.create" || !a.ok) return a;
+    const id = (a.result as { id?: unknown } | null)?.id;
+    const s = typeof id === "string" ? tx.get(pkg.spaceKey(id)) : undefined;
+    if (s?.kind !== "space" || s.deleted) return a;
+    return { ...a, result: { ...(a.result as object), space: s } };
+  }
+
+  /** The refusal of staged `writes` that start a server run of `u`'s and
+   * leave them more than `queuedRunsPerUser` queued and running server runs
+   * (TOO_MANY_REQUESTS, unrecorded: it can be sent again once one ends), or
+   * null. Device runs have their own limit. */
+  tooManyRuns(tx: StoreTx, u: string, writes: readonly pkg.Write[]): AnswerError | null {
+    const mine = (d: pkg.Draft | null): boolean =>
+      d?.kind === "run" &&
+      d.u === u &&
+      d.executor === null &&
+      (d.status === "queued" || d.status === "running");
+    if (!writes.some(([key, d]) => mine(d) && tx.get(key) === undefined)) return null;
+    const live = new Set<string>();
+    for (const status of ["queued", "running"])
+      for (const r of tx.scan("run", "status", status))
+        if (r.kind === "run" && mine(r)) live.add(`run:${r.id}`);
+    for (const [key, d] of writes)
+      if (mine(d)) live.add(key);
+      else if (d === null || d.kind === "run") live.delete(key);
+    if (live.size <= this.queuedRunsPerUser) return null;
+    return err(
+      "TOO_MANY_REQUESTS",
+      `You have ${this.queuedRunsPerUser} asks waiting or running. Ask again once one of them finishes.`,
+    );
   }
 
   /** Whether an input id of the write (the mutator's `ids`) is in the id
@@ -855,8 +1016,10 @@ export class SyncServer {
 
   // ---- the online-only calls ----
 
-  call(actor: Actor | null, name: string, input: unknown): CallAnswer {
-    return this.online.call(actor, name, input);
+  /** An online call; `meta`: what the HTTP layer knows of the request (the
+   * caller's network address, for a device sign-in). */
+  call(actor: Actor | null, name: string, input: unknown, meta?: CallMeta): CallAnswer {
+    return this.online.call(actor, name, input, meta);
   }
 
   // ---- the effect worker ----
@@ -1313,22 +1476,82 @@ export class SyncServer {
     });
   }
 
-  /** Whether any of the rows `keys` of `log` reads for `actor` as `pull`
-   * would serve it: a record they may read, or a delete they may read. A
-   * stream pulls a log for its reader only when this answers true (report-1b
-   * finding 1: a commit no longer costs one pull per open stream), since a
-   * pull serves nothing else of those rows. A change of the reader's own
-   * scope writes a row they read (their member record, or its delete), and
-   * a replaced history no keys at all, so neither is skipped. */
-  affects(actor: Actor | null, log: LogId, keys: ReadonlySet<string>): boolean {
-    const u = this.userOf(actor);
-    if (actor !== null && u === null) return true;
+  /** What `pull` would answer each stream (`StreamPull`), reduced to what
+   * a stream uses: resync (the token does not open, or the reader's scope
+   * changed), or its new cursor and whether anything changed; or nothing
+   * to do (`skip`), when the reader may read none of the commit's rows of
+   * the log (`keys`). The read check is part of the pull (phase 2a design
+   * finding 1), and all the streams of a commit are served in one
+   * transaction, in which each log row, record and tombstone is read once
+   * however many streams read it (design finding 2): what differs by
+   * reader is only the view of a record and the token. */
+  streamPulls(reqs: readonly StreamPull[]): StreamPullAnswer[] {
+    if (!reqs.length) return [];
+    this.housekeepDue();
     return this.run((tx) => {
-      for (const key of keys) {
+      const now = this.time(tx);
+      const m = memoTx(tx);
+      return reqs.map((q) => this.streamPull(m, q, now));
+    });
+  }
+
+  private streamPull(tx: StoreTx, q: StreamPull, now: number): StreamPullAnswer {
+    const { actor, log } = q;
+    if (this.readError(actor, log, {}, now)) return { resync: true };
+    const u = this.userOf(actor);
+    if (!logS.safeParse(log).success) return { resync: true };
+    // a commit whose rows of this log the reader may not read: no pull
+    // (report-1b finding 1). A change of the reader's own scope writes a row
+    // they read, and a replaced history names no keys, so neither is skipped.
+    if (q.keys && !(actor !== null && u === null)) {
+      let reads = false;
+      for (const key of q.keys) {
         const row = tx.logGet(log, key);
-        if (row && this.readRow(tx, row, u) !== null) return true;
+        if (row && this.readRow(tx, row, u) !== null) {
+          reads = true;
+          break;
+        }
       }
-      return false;
+      if (!reads) return { skip: true };
+    }
+    const c = this.tokens.open(q.cursor, now);
+    if (
+      c === null ||
+      c.log !== log ||
+      c.u !== u ||
+      c.n !== tx.epoch(log).n ||
+      c.at < now - TOMBSTONE_TTL ||
+      c.i !== this.instance(tx) ||
+      c.h > tx.head()
+    )
+      return { resync: true };
+    if (this.closedTo(log, u)) return { cursor: this.serve(tx, log, u, 0, now), changed: false };
+    if (u !== null && this.scopeChanged(tx, log, u, c.v, c.h)) return { resync: true };
+    let to = c.v;
+    let changed = false;
+    for (const row of tx.logAfter(log, c.v)) {
+      if (this.readRow(tx, row, u) === null) continue;
+      to = row.version;
+      changed = true;
+    }
+    return { cursor: this.serve(tx, log, u, to, now), changed };
+  }
+
+  /** How many spaces each of `handles` wrote a thread in, for a profile
+   * (`/api/users`): over the `thread.u` index; a removed thread's
+   * placeholder and an erased one are not counted (phase 2a design finding
+   * 7, review round 1 of phase 2). Counts closed spaces too, as the mock's
+   * profile does. */
+  authorSpaces(handles: readonly string[]): Record<string, number> {
+    return this.run((tx) => {
+      const out: Record<string, number> = {};
+      for (const u of handles) {
+        const spaces = new Set<string>();
+        for (const r of tx.scan("thread", "u", u))
+          if (r.kind === "thread" && r.u === u && r.mod !== "removed" && !r.gone) spaces.add(r.s);
+        out[u] = spaces.size;
+      }
+      return out;
     });
   }
 

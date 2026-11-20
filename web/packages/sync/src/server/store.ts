@@ -96,6 +96,13 @@ export interface Signin {
   /** The device's id, chosen at the approval; its record and token are made
    * when the app takes the token, so no token is ever stored. */
   device: string | null;
+  /** The network address the sign-in was asked from, when known (review
+   * round 1 of phase 2). */
+  ip?: string | null;
+  /** The device and the app the app named, at most SIGNIN_TEXT_MAX
+   * characters each. */
+  desc?: string | null;
+  app?: string | null;
 }
 
 /** A device run's lease, kept apart from the run record (never replicated)

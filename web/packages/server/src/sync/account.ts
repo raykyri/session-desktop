@@ -78,8 +78,10 @@ export function tokenSource(
 
 /** Who pays for a run of `u`'s whose ask named `pay`: that source when it
  * has tokens left; with no payer named, the included tokens, then the
- * default key (the mock's `payer`). `fail`: the run ends (`tokens`, or `key`
- * for a key that is not valid). */
+ * default key (the mock's `payer`). `included`: whether the included tokens
+ * may pay for the run's model (an admin-only model runs on them for an
+ * admin only: `canUseModel`); when not, they pay nothing. `fail`: the run
+ * ends (`tokens`, or `key` for a key that is not valid). */
 export function payerFor(
   db: SessionDatabase,
   sync: SyncServer,
@@ -88,14 +90,16 @@ export function payerFor(
   u: string,
   pay: string | null,
   at = Date.now(),
+  included = true,
 ): { ok: true; source: TokenSource } | { ok: false; why: "tokens" | "key" } {
   if (pay !== null) {
+    if (pay === "session" && !included) return { ok: false, why: "tokens" };
     const s = tokenSource(db, sync, config, userId, u, pay, at);
     if (!s) return { ok: false, why: "key" };
     if (s.kind === "key" && s.key?.status !== "valid") return { ok: false, why: "key" };
     return s.left > 0 ? { ok: true, source: s } : { ok: false, why: "tokens" };
   }
-  const order = ["session"];
+  const order = included ? ["session"] : [];
   const d = defaultKey(db, sync, userId, u);
   if (d) order.push(d.id);
   for (const id of order) {
@@ -202,14 +206,17 @@ export function devicesOf(sync: SyncServer, u: string) {
 
 /** `/api/users?handle=<h>`: the number of spaces each person wrote threads
  * in, closed spaces included (the mock's `people`). */
-export function peopleOf(db: SessionDatabase, handles: string[]) {
-  const out: Record<string, { spaces: number }> = {};
-  const stmt = db.$client.prepare(
-    "SELECT COUNT(DISTINCT json_extract(body, '$.s')) AS n FROM sync_records WHERE kind = 'thread' AND json_extract(body, '$.u') = ? AND json_extract(body, '$.gone') = 0",
+/** The most handles one `/api/users` read takes. */
+export const PEOPLE_MAX = 100;
+
+/** `/api/users`: the count of spaces each of the first PEOPLE_MAX `handles`
+ * that names an account wrote a thread in (`SyncServer.authorSpaces`). */
+export function peopleOf(db: SessionDatabase, sync: SyncServer, handles: readonly string[]) {
+  const known = [...new Set(handles.slice(0, PEOPLE_MAX))].filter(
+    (h) => users.findByHandle(db, h) !== null,
   );
-  for (const h of handles.slice(0, 100))
-    out[h] = { spaces: (stmt.get(h) as { n: number } | undefined)?.n ?? 0 };
-  return out;
+  const counts = sync.authorSpaces(known);
+  return Object.fromEntries(known.map((h) => [h, { spaces: counts[h] ?? 0 }]));
 }
 
 /** `usage.listAsks`: the caller's asks and follow-ups that used tokens,

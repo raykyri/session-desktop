@@ -376,7 +376,7 @@ export function history(t: ExecutionContext, seed = 1): World {
   run("mel", "pages.update", { space: open, page: guide, title: "Guide", text: ["no"] });
   run("olga", "spaces.update", { id: open, set: { pageEdit: "members" } });
   run("mel", "pages.restore", { space: open, page: guide, rev: 1, note: "Back", base: { rev: 2 } });
-  run("mona", "pages.move", { space: open, page: guide, other: faq });
+  run("mona", "pages.move", { space: open, page: guide, to: 1 });
   run("mona", "pages.remove", { space: open, page: faq });
 
   // sources
@@ -416,7 +416,8 @@ export function history(t: ExecutionContext, seed = 1): World {
   });
   run("mel", "pages.restore", { space: open, page: guide, rev: 99, note: "x" });
   run("mona", "pages.remove", { space: open, page: w.id() });
-  run("mona", "pages.move", { space: open, page: guide, other: w.id() });
+  run("mona", "pages.move", { space: open, page: w.id(), to: 0 });
+  run("mona", "pages.move", { space: open, page: guide, to: 9 });
   run("mona", "members.remove", { space: open, user: "otto", base: { adm: "x" } });
   run("mel", "spaceSources.setPolicy", { space: open, policy: "mods" });
   run("eve", "sourceReports.create", { space: closed, source: "SRC1", why: "x" });

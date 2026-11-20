@@ -45,7 +45,7 @@ import { z } from "zod";
 
 import { sessionEventSchema as sessionEventEnvelopeSchema } from "./events.js";
 import { researchNodeStatusSchema } from "./research.js";
-import { turnSchema } from "./turn.js";
+import { deviceTurnSchema, turnSchema } from "./turn.js";
 
 // ---- primitives ----
 
@@ -1421,7 +1421,12 @@ export const spaceProcedures = {
   /** wire: `ThreadInvite` */
   "invites.restore": { input: z.object({ id: spaceRecordIdSchema }), result: nullResultSchema },
   // -- spaces
-  "spaces.create": { input: createSpaceInputSchema, result: z.object({ id: spaceIdSchema }) },
+  /** The answer holds the new space as the server stores it (`space`, the
+   * record `GET /api/spaces` lists), when the server has it. */
+  "spaces.create": {
+    input: createSpaceInputSchema,
+    result: z.object({ id: spaceIdSchema, space: z.record(z.string(), z.unknown()).optional() }),
+  },
   "spaces.update": { input: updateSpaceInputSchema, result: nullResultSchema },
   "spaces.verifyDomain": {
     input: z.object({ id: spaceIdSchema, domain: z.string(), method: z.literal("dns").optional() }),
@@ -1469,9 +1474,9 @@ export const spaceProcedures = {
     input: z.object({ ...spaceInput, page: z.string() }),
     result: nullResultSchema,
   },
-  /** Swap two pages, by id. */
+  /** Move a page, by id, to position `to` of the list (0 is the first). */
   "pages.move": {
-    input: z.object({ ...spaceInput, page: z.string(), other: z.string() }),
+    input: z.object({ ...spaceInput, page: z.string(), to: count }),
     result: nullResultSchema,
   },
   // -- API keys (TODO(limits)); `raw` is write-only
@@ -1527,7 +1532,14 @@ export const spaceProcedures = {
   // -- devices and device runs: online calls (not mutators)
   "devices.revoke": { input: z.object({ id: spaceRecordIdSchema }), result: nullResultSchema },
   "devices.authorize": {
-    input: z.object({ name: z.string(), kind: z.enum(["mac", "phone"]).optional() }),
+    input: z.object({
+      name: z.string().max(200),
+      kind: z.enum(["mac", "phone"]).optional(),
+      /** The device, as the app describes it ("MacBook Air · macOS 15.1"). */
+      device: z.string().max(200).optional(),
+      /** The app and its version ("Session for Mac 1.0.0"). */
+      app: z.string().max(200).optional(),
+    }),
     result: z.object({ request: z.string(), code: z.string(), url: z.string() }),
   },
   "devices.approve": {
@@ -1551,7 +1563,7 @@ export const spaceProcedures = {
     result: z.object({ lease: leaseSchema }),
   },
   "runs.turn": {
-    input: z.object({ ...runInput, attempt: count, turn: z.unknown() }),
+    input: z.object({ ...runInput, attempt: count, turn: deviceTurnSchema }),
     result: nullResultSchema,
   },
   "runs.finish": {

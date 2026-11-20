@@ -156,6 +156,19 @@ const envSchema = z.object({
   /** The included tokens a person has a week, Monday 00:00 UTC to the next
    * Monday (`/api/me/usage`'s `cap`). */
   SESSION_INCLUDED_TOKENS: positiveInteger(250_000),
+  /** The request header that holds the client's network address, set by
+   * the platform's proxy, which replaces any value a client sends (Fly's
+   * `Fly-Client-IP`). Empty: the socket's address (no proxy). The address
+   * keys the rate limits and decides whether a device sign-in is approved
+   * from the computer that asked for it. */
+  SESSION_CLIENT_IP_HEADER: z.string().trim().toLowerCase().default("fly-client-ip"),
+  /** A person's budget of sync writes and online calls (`POST
+   * /api/sync/write`, `POST /api/rpc/*`): at most SESSION_WRITE_BURST at
+   * once, refilled at SESSION_WRITES_PER_MINUTE (the earlier tRPC limit was
+   * 60 a minute; the burst lets a desktop send an outbox kept offline).
+   * Past it a write answers TOO_MANY_REQUESTS with `retryAt`. */
+  SESSION_WRITE_BURST: positiveInteger(120, 1),
+  SESSION_WRITES_PER_MINUTE: positiveInteger(60, 1),
 
   SESSION_FIXTURE_PROVIDERS: flag(false),
   SESSION_TEST_AUTH: flag(false),
@@ -234,6 +247,10 @@ export interface Config {
     minProtocol: number;
     desktopOrigins: string[];
     includedTokens: number;
+    /** `SESSION_CLIENT_IP_HEADER`: null for the socket's address. */
+    clientIpHeader: string | null;
+    /** SESSION_WRITE_BURST and SESSION_WRITES_PER_MINUTE. */
+    writeBudget: { burst: number; perMinute: number };
   };
 }
 
@@ -378,6 +395,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       minProtocol: value.SESSION_MIN_PROTOCOL,
       desktopOrigins,
       includedTokens: value.SESSION_INCLUDED_TOKENS,
+      clientIpHeader: value.SESSION_CLIENT_IP_HEADER || null,
+      writeBudget: {
+        burst: value.SESSION_WRITE_BURST,
+        perMinute: value.SESSION_WRITES_PER_MINUTE,
+      },
     },
   };
 }

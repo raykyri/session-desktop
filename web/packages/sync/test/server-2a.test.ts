@@ -16,7 +16,7 @@ import {
   type JobRunner,
 } from "../src/server/index.js";
 
-import { STORES, cast, ok, type World } from "./helpers.js";
+import { STORES, cast, ok, turnOf, type World } from "./helpers.js";
 
 const okCall = (t: { fail(m: string): void }, a: CallAnswer): unknown => {
   if (!a.ok) t.fail(`expected ok, got ${JSON.stringify(a.error)}`);
@@ -28,8 +28,9 @@ const code = (a: CallAnswer) => (a.ok ? "ok" : a.error.code);
 function device(t: { fail(m: string): void }, w: World, u: string) {
   const a = okCall(t, w.server.call(null, "devices.authorize", { name: `${u}'s Mac` })) as {
     request: string;
+    code: string;
   };
-  okCall(t, w.server.call({ u }, "devices.approve", { request: a.request }));
+  okCall(t, w.server.call({ u }, "devices.approve", { request: a.request, code: a.code }));
   const c = okCall(t, w.server.call(null, "devices.token", { request: a.request })) as {
     device: string;
   };
@@ -93,10 +94,16 @@ for (const kind of STORES) {
     okCall(t, w.server.call(d.as, "runs.turn", { run, device: d.id, attempt: 1, turn: "MK-T1" }));
     okCall(
       t,
-      w.server.call(d.as, "runs.turn", { run, device: d.id, attempt: 1, turn: { t: "MK-T2" } }),
+      w.server.call(d.as, "runs.turn", { run, device: d.id, attempt: 1, turn: turnOf("MK-T2") }),
+    );
+    // a turn is text or a `Turn` (review round 1 of phase 2)
+    t.like(
+      w.server.call(d.as, "runs.turn", { run, device: d.id, attempt: 1, turn: { t: "MK-T3" } }),
+      { ok: false, error: { code: "BAD_REQUEST" } },
     );
     t.like(w.get(`turn:${run}:1`), { kind: "turn", run, th, n: 1, body: "MK-T1", u: "mel" });
-    t.like(w.get(`turn:${run}:2`), { n: 2, body: { t: "MK-T2" } });
+    t.like(w.get(`turn:${run}:2`), { n: 2, body: turnOf("MK-T2") });
+    t.is(w.get(`turn:${run}:3`), undefined);
     // in the space's log: a signed-out reader pulls them
     const snap = w.server.snapshot(null, `space:${open}`);
     t.deepEqual(
@@ -144,7 +151,9 @@ for (const kind of STORES) {
     t.like(w.get(`run:${run}`), { status: "running", pay: "session" });
     const listen = events(w, null, `space:${open}`);
     t.true(w.server.runJobs.delta(run, 1, 1, "partial"));
-    t.is(w.server.runJobs.turn(run, 1, { text: "turn one" }), 1);
+    t.is(w.server.runJobs.turn(run, 1, turnOf("turn one")), 1);
+    // a job's turn is a Turn
+    t.throws(() => w.server.runJobs.turn(run, 1, { text: "no turn" } as never));
     t.true(w.server.runJobs.finish(run, 1, "The answer.", 42));
     t.like(w.get(`run:${run}`), { status: "complete", end: null });
     t.like(w.get(`thread:${th}`), { sum: "The answer.", running: false, tok: 42 });
@@ -155,7 +164,7 @@ for (const kind of STORES) {
     await listen.close();
     // a finished run takes no more writes
     t.false(w.server.runJobs.delta(run, 1, 2, "late"));
-    t.is(w.server.runJobs.turn(run, 1, "late"), null);
+    t.is(w.server.runJobs.turn(run, 1, turnOf("late")), null);
     t.false(w.server.runJobs.finish(run, 1, "late"));
     t.deepEqual(w.server.runJobs.start(run), { ok: false, why: "done" });
     // a follow-up's job reads the branch above it
@@ -166,7 +175,10 @@ for (const kind of STORES) {
     const s2 = w.server.runJobs.start(r.run);
     if (!s2.ok) return t.fail(s2.why);
     t.is(s2.job.q, "And then?");
-    t.deepEqual(s2.job.history, [{ q: "What changed?", a: "The answer." }]);
+    // with the turns of the run that answered it
+    t.deepEqual(s2.job.history, [
+      { q: "What changed?", a: "The answer.", turns: [{ ...turnOf("turn one") }] },
+    ]);
     t.true(w.server.runJobs.finish(r.run, 1, "Then this."));
     t.like(w.get(`followup:${fu}`), { a: "Then this." });
   });
@@ -174,17 +186,33 @@ for (const kind of STORES) {
   test(`${kind}: a job's start ends a run whose person lost access, and resumes a running one`, (t) => {
     const { w, open, closed } = cast(t, kind);
     const { run } = ask(t, w, "mel", closed);
+    // the leave ends the run in its commit (review round 1 of phase 2, F3)
     ok(t, w.as("mel", "spaces.leave", { space: closed }));
-    t.deepEqual(w.server.runJobs.start(run), { ok: false, why: "access" });
     t.like(w.get(`run:${run}`), { status: "failed", end: "access" });
+    t.deepEqual(w.server.runJobs.start(run), { ok: false, why: "done" });
+    // a lost access the job hears of first: its start ends the run
+    const { run: r0 } = ask(t, w, "mel", open);
+    w.server.run((tx) => {
+      const ban = {
+        kind: "ban",
+        id: `${open}:mel`,
+        sp: open,
+        u: "mel",
+        createdAt: "2026-01-01T00:00:00Z",
+      };
+      w.server.commit(tx, [[`ban:${open}:mel`, ban as never]], w.server.time(tx));
+    });
+    t.deepEqual(w.server.runJobs.start(r0), { ok: false, why: "access" });
+    t.like(w.get(`run:${r0}`), { status: "failed", end: "access" });
+    w.server.run((tx) => w.server.commit(tx, [[`ban:${open}:mel`, null]], w.server.time(tx)));
     const { th, run: r2 } = ask(t, w, "mel", open);
     const a = w.server.runJobs.start(r2);
     t.true(a.ok);
-    t.is(w.server.runJobs.turn(r2, 1, "kept"), 1);
+    t.is(w.server.runJobs.turn(r2, 1, turnOf("kept")), 1);
     const b = w.server.runJobs.start(r2);
     if (!b.ok) return t.fail(b.why);
     t.true(b.job.resumed);
-    t.deepEqual(b.job.turns, ["kept"]);
+    t.deepEqual(b.job.turns, [turnOf("kept")]);
     t.true(w.server.runJobs.interrupt(r2));
     t.like(w.get(`run:${r2}`), { status: "failed", end: "interrupted" });
     t.like(w.get(`thread:${th}`), { running: false });
@@ -314,12 +342,17 @@ for (const kind of STORES) {
       }
     })();
     await new Promise((r) => setTimeout(r, 0));
+    // the logs the stream pulled: its reads that were not skipped (the read
+    // check is part of the pull: review round 1 of phase 2)
     const pulls: string[] = [];
-    const real = w.server.pull.bind(w.server);
-    w.server.pull = ((...a: Parameters<typeof real>) => {
-      pulls.push(a[1]);
-      return real(...a);
-    }) as typeof w.server.pull;
+    const real = w.server.streamPulls.bind(w.server);
+    w.server.streamPulls = (reqs) => {
+      const out = real(reqs);
+      out.forEach((a, k) => {
+        if (!("skip" in a)) pulls.push(reqs[k]?.log ?? "");
+      });
+      return out;
+    };
     // a member's thread in the closed space: otto (no member) reads none of it
     ok(t, w.as("mel", "threads.create", { id: w.id(), space: closed, kind: "post", q: "MEMBERS" }));
     await new Promise((r) => setTimeout(r, 0));

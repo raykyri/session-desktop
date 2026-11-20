@@ -9745,7 +9745,7 @@ on($('app'), 'click', e => {
   if ((b = d('[data-abrestore]'))) { abRestore(s, st.abPage, +b.dataset.abrestore); return go(); }
   if ((b = d('[data-abcopy]'))) { taCopy(csUrl()); toast(`Copied ${csUrl()}`); return go(); }
   if (d('[data-abpgorder]')) { st.abPgOrder = !st.abPgOrder; return go(); }
-  if ((b = d('[data-abpgmv]'))) { const [v, i] = b.dataset.abpgmv.split(':'), k = +i, j = v === 'up' ? k - 1 : k + 1; mutate('pages.move', { space: s.id, page: s.pages[k][2], other: s.pages[j][2] }, () => spEdit(s.id, x => { [x.pages[k], x.pages[j]] = [x.pages[j], x.pages[k]]; })); return go(); }
+  if ((b = d('[data-abpgmv]'))) { const [v, i] = b.dataset.abpgmv.split(':'), k = +i, j = v === 'up' ? k - 1 : k + 1; mutate('pages.move', { space: s.id, page: s.pages[k][2], to: j }, () => spEdit(s.id, x => { [x.pages[k], x.pages[j]] = [x.pages[j], x.pages[k]]; })); return go(); }
   if ((b = d('[data-abpgdel]'))) { st.modal = 'ab-pgdel:' + b.dataset.abpgdel; return go(); }
   if ((b = d('[data-abpgdelok]'))) { const i = +b.dataset.abpgdelok, t = s.pages[i][0]; mutate('pages.remove', { space: s.id, page: s.pages[i][2] }, () => { spEdit(s.id, x => { x.pages.splice(i, 1); }); db.del('pagedocs', abKey(s, t)); }); st.modal = null; if (st.subPage === 'abpage') Object.assign(st, { ...NAVBASE(), space: s.id, home: false, drawer: true, dsSTab: 'wiki', mWiki: st.device === 'phone' }); toast(`Removed “${t}”.`); return go(); }
   if ((b = d('[data-abskill]'))) { st.modal = 'ab-skill:' + b.dataset.abskill; return go(); }

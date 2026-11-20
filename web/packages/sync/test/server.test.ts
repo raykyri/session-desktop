@@ -376,7 +376,10 @@ for (const kind of STORES) {
     const { w, open } = cast(t, kind);
     const s = w.server.call(null, "devices.authorize", { name: "Mac" });
     const request = s.ok ? (s.result as { request: string }).request : "";
-    const ap = w.server.call({ u: "mel" }, "devices.approve", { request });
+    const ap = w.server.call({ u: "mel" }, "devices.approve", {
+      request,
+      code: s.ok ? (s.result as { code: string }).code : "",
+    });
     const device = ap.ok ? (ap.result as { device: string }).device : "";
     ok(t, w.server.call(null, "devices.token", { request }));
     const mac = { kind: "device", cli: "claude", device };
@@ -492,7 +495,12 @@ for (const kind of STORES) {
 
 test("sqlite: the migrations apply once, and the schema is the package's", (t) => {
   const db = new BetterSqlite(":memory:");
-  t.deepEqual(migrate(db), ["0001_sync.sql", "0002_review_r1.sql", "0003_space_vis.sql"]);
+  t.deepEqual(migrate(db), [
+    "0001_sync.sql",
+    "0002_review_r1.sql",
+    "0003_space_vis.sql",
+    "0004_review_r1_phase2.sql",
+  ]);
   t.deepEqual(migrate(db), []);
   const store = new SqliteServerStore(db);
   const tables = (

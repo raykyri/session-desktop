@@ -184,7 +184,7 @@ const IN_OPEN: Record<string, [Who, (x: World2) => unknown, "closed"?]> = {
   ],
   "pages.restore": ["moderator", (x) => ({ space: x.open, page: x.ids.page, rev: 0, note: "n" })],
   "pages.remove": ["moderator", (x) => ({ space: x.open, page: x.ids.page })],
-  "pages.move": ["moderator", (x) => ({ space: x.open, page: x.ids.page, other: x.ids.page })],
+  "pages.move": ["moderator", (x) => ({ space: x.open, page: x.ids.page, to: 0 })],
   "spaceSources.add": ["member", (x) => ({ space: x.open, url: "example.org/new" })],
   "spaceSources.review": [
     "moderator",

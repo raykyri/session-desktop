@@ -92,11 +92,26 @@ Rate limits and invite restrictions are enabled in production. Because the hoste
   code an admin minted (`06-auth-and-users.md` §3). `SESSION_ALLOWED_GITHUB_LOGINS`
   is the narrower alternative; with neither, sign-up is open to anyone who can
   reach the host.
-- `SESSION_QUEUED_PER_USER = "20"` caps what one account may have *waiting*.
-  Because `SESSION_RUNS_PER_USER` limits only concurrently active runs, an unconstrained queue could allow an automated script to enqueue hundreds of requests, committing the server to costly serial execution. Refused at launch with
-  `TOO_MANY_REQUESTS`; admins are exempt; it bounds the queue itself rather
-  than the spend. Checked again inside the transaction that admits the
-  node, so concurrent launches cannot pass it together.
+- `SESSION_QUEUED_PER_USER = "20"` caps the server runs one account may have
+  queued or running. Because `SESSION_RUNS_PER_USER` limits only concurrently
+  active runs, an unconstrained queue could allow an automated script to
+  enqueue hundreds of requests, committing the server to costly serial
+  execution. A write that would start one more answers `TOO_MANY_REQUESTS`
+  (unrecorded), checked in the transaction of the write; admins are not
+  exempt. It bounds the queue, not the spend: the included tokens and a key's
+  monthly cap are read again after every step of a run, which ends `tokens`
+  once its payer has nothing left (review round 1 of phase 2).
+- `SESSION_WRITE_BURST` (default 120) and `SESSION_WRITES_PER_MINUTE`
+  (default 60, the earlier tRPC mutation limit) are each account's budget of
+  `POST /api/sync/write` and `POST /api/rpc/*` requests; a request with no
+  account is counted by its client address. Past it the answer is
+  `TOO_MANY_REQUESTS` (429) with `retryAt`, unrecorded.
+- `SESSION_CLIENT_IP_HEADER` (default `fly-client-ip`) names the header the
+  platform's proxy sets to the client's address; Fly replaces any value a
+  client sends. Empty means the socket's address (no proxy). The address keys
+  the rate limits and decides whether a device sign-in is approved without
+  its code (AGENTS.md, device sign-in). `X-Forwarded-For` is not read: a client
+  sets it.
 
 A person's own weekly allowance is stored in `user_limits.weekly_tokens` and
 is set from `/admin`, so raising one account's allowance does not change the

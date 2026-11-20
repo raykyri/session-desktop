@@ -183,7 +183,9 @@ rules above stay as they are. Decisions for the new client:
   - Catalog sources are in a public `catalog` log. A source waiting for
     review has one audience; its fields are redacted for readers who are
     neither staff nor the person who added it.
-  - Promoting a branch copies only the actor's own follow-ups. Every report
+  - Promoting a branch copies only the asker's own follow-ups (the actor's
+    until review round 1 of phase 2, which let the thread's owner and the
+    space's moderators promote too; the new thread is the asker's). Every report
     reopen carries `base`. A space's staff read its invite requests.
   - A replica treats ids it minted, and ids derived from its own unanswered
     mutation ids, as unused (`withOwnIds`); any other id it lacks is unknown.
@@ -229,7 +231,17 @@ rules above stay as they are. Decisions for the new client:
   - Update Session is a dialog.
   - A removed member's frozen copy is greyed with one short notice. Removal
     from a space and the loss of a role show no notice.
-  - Device sign-in is approved in the browser with one click, then a toast.
+  - Device sign-in is approved in the browser with one click, then a toast,
+    only from the computer that asked (review round 1 of phase 2):
+    `devices.authorize` records the client address (the trusted proxy
+    header, `SESSION_CLIENT_IP_HEADER`, else the socket; never a header a
+    client sets) and the device and app the app names. `devices.approve`
+    without the code succeeds only from a browser at that address; elsewhere
+    it takes the request's code, and a missing or wrong code is refused. A
+    deny never needs the code. The /device page reads the request from
+    `GET /api/devices/requests/:request` (device, app, when asked,
+    `sameComputer`; never the code). Remaining risk: people behind one
+    address (a shared NAT) count as the same computer.
     Devices lists device tokens only (not browsers), in the Phone app's
     Account page; the web has no Devices UI for now.
   - A device answer is labelled "<handle>'s desktop". After an interrupt,
@@ -254,7 +266,8 @@ rules above stay as they are. Decisions for the new client:
     `Authorization: Bearer <device token>` (no cookie, no CSRF check). CORS
     admits `SESSION_DESKTOP_ORIGINS` for bearer requests only.
   - `users.handle` (the lower-case login) is the sync actor's `u`.
-  - Runs: a `job` effect queues the run in `run_queue`; the loop builds the
+  - Runs (amended in review round 1 of phase 2, below): a `job` effect
+    queues the run in `run_queue`; the loop builds the
     context from the branch's exchanges and the stored turns, stores each
     committed turn as a `turn:<run>:<n>` record (its `body` redacted with
     its node, deleted with its run), and writes the answer and the run's
@@ -265,6 +278,39 @@ rules above stay as they are. Decisions for the new client:
     key; a key is stored encrypted and pays only for its own provider's
     models. A run interrupted by a restart resumes at most twice, after its
     stored turns, then ends `interrupted`.
+- Review round 1 of phase 2 (server):
+  - An admin-only model runs on the included tokens for an admin only
+    (`canUseModel`): the ask's pre-check refuses it (FORBIDDEN) unless an
+    API key of the person's pays, and the payer rule skips the included
+    tokens for it when the job starts. A key pays for any model of its
+    provider.
+  - A run records each step's tokens as the step finishes, whatever ends
+    it. After each step that calls tools the payer is read again; one with
+    nothing left ends the run `tokens` (a key no longer valid: `key`), and
+    the thread keeps the tokens used (`tok`).
+  - A ban, a removal or an archive ends the person's (the space's) server
+    runs in its commit, and the runner stops their loop after it; each of a
+    job's calls checks access and the archived state as `start` does.
+  - A person has at most `SESSION_QUEUED_PER_USER` server runs queued or
+    running; a write or Run again past it answers TOO_MANY_REQUESTS,
+    unrecorded. Every `POST /api/sync/write` and `/api/rpc/*` takes one from
+    a per-account budget (`SESSION_WRITE_BURST`, refilled at
+    `SESSION_WRITES_PER_MINUTE`); past it TOO_MANY_REQUESTS with `retryAt`.
+  - A run's context: the branch's earlier exchanges with the tool calls and
+    results of the runs that answered them, within a size budget, then the
+    question, then the turns the run stored; a resumed run continues after
+    them. A server job's turn is a `Turn` (`@session/shared`); a device's
+    `runs.turn` takes text or a `Turn`.
+  - A key check's verdict applies only if the key was not replaced
+    meanwhile. `/api/users` takes at most 100 handles before any lookup and
+    counts spaces over the `thread.u` index, without removed threads.
+  - SSE: a commit's streams are read in one transaction
+    (`SyncServer.streamPulls`); a stream whose reader reads none of the
+    commit's rows is skipped there.
+  - A declined join request waits 14 days (`retryAt`): asking again or
+    withdrawing before then is PRECONDITION_FAILED with `retryAt`.
+    `pages.move` takes an absolute position (`to`). `spaces.create` answers
+    `{ id, space }`.
   - Test-only routes (`/api/test/*`, `/mockups/*`) exist only with
     `SESSION_TEST_AUTH` outside production; `@session/server/test-server`
     starts the app over a temp database, and replica-proto runs its whole

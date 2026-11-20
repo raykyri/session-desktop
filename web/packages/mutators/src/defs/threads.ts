@@ -13,10 +13,10 @@
 // asker's (its `device` record is in their user log, phase 1b, Part 0 item
 // 2), and the server's pre-check the limit of device runs an hour.
 
-import { spaces } from "@session/shared";
+import { findModel, spaces } from "@session/shared";
 import { z } from "zod";
 
-import { canRead, isClosed, reviewedFor } from "../access.js";
+import { bannedFrom, canRead, isClosed, isModOf, reviewedFor, roleIn } from "../access.js";
 import { defineMutator, inSpace, inSpaces, personal, type PreCtx, type Tx } from "../engine.js";
 import { bad, notFound, refuse, stale } from "../errors.js";
 import type { Executor, FollowUpRec, ThreadRec } from "../records.js";
@@ -91,6 +91,30 @@ function deviceCheck(ctx: PreCtx, ex: z.infer<typeof executorS> | null | undefin
       isoAt((recent[recent.length - DEVICE_RUNS_PER_HOUR] ?? ctx.nowMs) + HOUR),
     );
   return {};
+}
+
+/** Whether a model is one the included tokens run for admins only
+ * (`adminOnly` in the model registry). An ask that names one needs the
+ * server's pre-check. */
+export const adminOnlyModel = (model: string | null | undefined): model is string =>
+  model != null && findModel(model)?.adminOnly === true;
+
+/** The pre-check of an ask's model (review round 1 of phase 2, F1): an
+ * admin-only model runs on the included tokens for an admin only, so a
+ * person who is not one names an API key of theirs to pay for it. A device
+ * run uses no tokens of the server's. */
+function modelCheck(
+  ctx: PreCtx,
+  model: string | null | undefined,
+  pay: string | null | undefined,
+  ex?: z.infer<typeof executorS> | null,
+) {
+  if (ex || !adminOnlyModel(model) || paidByKey(pay)) return;
+  if (ctx.includedModel?.(ctx.me, model) !== true)
+    throw refuse(
+      "FORBIDDEN",
+      "This model doesn’t run on the included tokens. Choose an API key of yours to pay for it.",
+    );
 }
 
 const executorOf = (tx: Tx, ex: z.infer<typeof executorS> | null | undefined): Executor | null =>
@@ -203,11 +227,16 @@ export const threadMutators = [
             "A branch of a thread in a closed space can only become a thread in the same space.",
           );
         if (i.from.node !== "r") {
-          // DESIGN: the mock makes the new thread the asker's (the node's
-          // author). Here only the asker may start a thread from their ask.
+          // the asker of the branch, the thread's owner and the space's
+          // moderators may start a thread from it; the new thread is the
+          // asker's (the mockup's rule; review round 1 of phase 2, 2b design
+          // finding 4)
           const n = followUpOf(tx, src.id, i.from.node);
-          if (n.u !== tx.me)
-            throw refuse("FORBIDDEN", "Only the person who asked this can start a thread from it.");
+          if (n.u !== tx.me && src.u !== tx.me && !isModOf(tx, src.s, tx.me))
+            throw refuse(
+              "FORBIDDEN",
+              "Only the asker of this branch, the thread owner and moderators can do this.",
+            );
         }
         return inSpaces(tx, [...scope.spaces, src.s], "user");
       }
@@ -215,8 +244,11 @@ export const threadMutators = [
       if (i.kind === "ask") ownDevice(tx, i.executor);
       return scope;
     },
-    needsPre: (i) => !i.from && i.kind === "ask" && !!i.executor,
-    pre: (ctx, i) => deviceCheck(ctx, i.executor),
+    needsPre: (i) => !i.from && i.kind === "ask" && (!!i.executor || adminOnlyModel(i.model)),
+    pre: (ctx, i) => {
+      modelCheck(ctx, i.model, i.pay, i.executor);
+      return deviceCheck(ctx, i.executor);
+    },
     run: (tx, i) => {
       const s = writable(tx, i.space);
       if (i.kind === "post" && s.postsOff)
@@ -281,6 +313,13 @@ export const threadMutators = [
       author(tx, p.u);
       if (i.run) ownPayer(tx, i.pay);
       return scope;
+    },
+    // a run again with an admin-only model named; one that keeps the
+    // thread's model is checked when its job starts (the payer rule)
+    needsPre: (i) => !!i.run && adminOnlyModel(i.model),
+    pre: (ctx, i) => {
+      modelCheck(ctx, i.model, i.pay);
+      return {};
     },
     run: (tx, i) => {
       const p = readableThread(tx, i.id);
@@ -541,8 +580,11 @@ export const threadMutators = [
       ownDevice(tx, i.executor);
       return scope;
     },
-    needsPre: (i) => !!i.executor,
-    pre: (ctx, i) => deviceCheck(ctx, i.executor),
+    needsPre: (i) => !!i.executor || adminOnlyModel(i.model),
+    pre: (ctx, i) => {
+      modelCheck(ctx, i.model, i.pay, i.executor);
+      return deviceCheck(ctx, i.executor);
+    },
     run: (tx, i) => {
       const p = readableThread(tx, i.thread);
       writable(tx, p.s);
@@ -780,6 +822,13 @@ function fromBranch(
   if (n.mod === "removed") throw removed();
   if (hideOf(tx, n)) throw refuse("PRECONDITION_FAILED", "This item is hidden.");
   if (n.del) throw deleted("follow-up");
+  // the new thread is the asker's: they must be able to post in its space
+  const asker = n.u;
+  if (asker !== tx.me) {
+    const target = needSpace(tx, sp);
+    if (bannedFrom(tx, sp, asker) || (isClosed(target) && roleIn(tx, sp, asker) === null))
+      throw refuse("FORBIDDEN", "The person who asked this can no longer post in this space.");
+  }
   const nodes = tx.scan("followup.th", src.id);
   const byId = new Map(nodes.map((x) => [x.id, x]));
   const path = (x: FollowUpRec) => {
@@ -799,7 +848,7 @@ function fromBranch(
       ? nodes.filter((x) => {
           const down = fromN(x);
           return (
-            down.length > 0 && down.every((y) => y.mod === null && !hideOf(tx, y) && y.u === tx.me)
+            down.length > 0 && down.every((y) => y.mod === null && !hideOf(tx, y) && y.u === asker)
           );
         })
       : [];
@@ -809,7 +858,7 @@ function fromBranch(
     kind: "thread",
     id,
     s: sp,
-    u: tx.me,
+    u: asker,
     k: "ask",
     q: n.q,
     t: (title || n.q).trim(),
@@ -838,6 +887,7 @@ function fromBranch(
     if (par === null) first++;
     tx.create({
       ...followUp(tx, newId.get(x.id) as string, p, par, x.q, null, null, null),
+      u: asker,
       a: x.a,
       del: x.del,
       createdAt: x.createdAt,

@@ -123,7 +123,12 @@ test("the sync store's migrations are recorded once", (t) => {
         name: string;
       }[]
     ).map((r) => r.name);
-    t.deepEqual(names, ["0001_sync.sql", "0002_review_r1.sql", "0003_space_vis.sql"]);
+    t.deepEqual(names, [
+      "0001_sync.sql",
+      "0002_review_r1.sql",
+      "0003_space_vis.sql",
+      "0004_review_r1_phase2.sql",
+    ]);
     closeDatabase(db);
   } finally {
     rmSync(directory, { recursive: true, force: true });

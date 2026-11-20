@@ -107,7 +107,7 @@ for (let s0 = 1; s0 <= SEEDS; s0 += 4)
       const revoked = new Set<string>();
       const signIn = async (u: string) => {
         const a = (await on.call(null, "devices.authorize", { name: `${u}'s mac` })) as Any;
-        await on.call({ u }, "devices.approve", { request: a.result.request });
+        await on.call({ u }, "devices.approve", { request: a.result.request, code: a.result.code });
         const c = (await on.call(null, "devices.token", { request: a.result.request })) as Any;
         if (!c.ok) throw new Error(`seed ${seed}: device sign-in: ${JSON.stringify(c)}`);
         devices.set(u, c.result.device);

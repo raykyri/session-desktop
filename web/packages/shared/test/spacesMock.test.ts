@@ -661,7 +661,15 @@ const PROC_CALLS: Record<keyof typeof spaceProcedures, ProcCall> = {
     input: async () => {
       const run = await deviceRun();
       await call("runs.claim", { run, device: "d1" });
-      return { run, device: "d1", attempt: 1, turn: { tool: "read", input: "notes" } };
+      // a turn is text or a `Turn` (review round 1 of phase 2)
+      const turn = {
+        id: "t1",
+        agentId: run,
+        role: "assistant",
+        blocks: [{ type: "toolUse", id: "c1", name: "read", input: "notes" }],
+        sourceIndex: 0,
+      };
+      return { run, device: "d1", attempt: 1, turn };
     },
   },
   "runs.finish": {
@@ -746,8 +754,8 @@ const PROC_CALLS: Record<keyof typeof spaceProcedures, ProcCall> = {
   "pages.remove": { input: async () => ({ space: "scifi", page: (await pageIds("scifi"))[0] }) },
   "pages.move": {
     input: async () => {
-      const [a, b] = await pageIds("scifi");
-      return { space: "scifi", page: a, other: b };
+      const [a] = await pageIds("scifi");
+      return { space: "scifi", page: a, to: 1 };
     },
   },
   "apiKeys.create": {

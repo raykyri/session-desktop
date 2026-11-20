@@ -228,7 +228,10 @@ test("3. skills and pages: a queued edit names its item, not its place; a reorde
   );
   t.is(rec(w, `page:${p}`, "page").text[0], "r");
   ok(t, w.run("mona", "pages.update", { space: open, id: q, title: "Help", text: ["h"] }));
-  ok(t, w.run("mona", "pages.move", { space: open, page: q, other: p }));
+  ok(t, w.run("mona", "pages.move", { space: open, page: q, to: 0 }));
+  // an absolute position: the same move again changes nothing (review
+  // round 1 of phase 2)
+  ok(t, w.run("mona", "pages.move", { space: open, page: q, to: 0 }));
   // an edit queued before the move edits the same page after it
   ok(t, w.run("mona", "pages.update", { space: open, page: p, title: "Rules", text: ["r2"] }));
   t.deepEqual(

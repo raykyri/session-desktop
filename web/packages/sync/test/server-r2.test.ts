@@ -33,7 +33,10 @@ type Any = any;
 /** Sign a device in for `u` (approved in the browser, the token taken). */
 function device(w: World, u: string): { id: string; token: string; as: Actor } {
   const a = w.server.call(null, "devices.authorize", { name: "mac" }) as Any;
-  const b = w.server.call({ u }, "devices.approve", { request: a.result.request }) as Any;
+  const b = w.server.call({ u }, "devices.approve", {
+    request: a.result.request,
+    code: a.result.code,
+  }) as Any;
   const c = w.server.call(null, "devices.token", { request: a.result.request }) as Any;
   if (!a.ok || !b.ok || !c.ok) throw new Error(JSON.stringify([a, b, c]));
   return { id: c.result.device, token: c.result.token, as: { u, device: c.result.device } };
@@ -458,7 +461,8 @@ for (const kind of STORES) {
       t.like(get(w, `run:${x.run}`), { status: "failed", end: "interrupted" });
       t.false(get(w, `thread:${x.th}`).running);
     }
-    t.like(get(w, `run:${job.run}`), { status: "queued" }, "a server job is not a device run");
+    // a server job's run ends too (review round 1 of phase 2, F3)
+    t.like(get(w, `run:${job.run}`), { status: "failed", end: "interrupted" });
     t.is(
       code(w.server.call(d.as, "runs.claim", { run: q.run, device: d.id })),
       "PRECONDITION_FAILED",
@@ -509,7 +513,9 @@ for (const kind of STORES) {
     const { w } = cast(t, kind);
     const a = w.server.call(null, "devices.authorize", { name: "attacker's mac" }) as Any;
     const req = a.result.request;
-    t.true(w.server.call({ u: "mel" }, "devices.approve", { request: req }).ok);
+    t.true(
+      w.server.call({ u: "mel" }, "devices.approve", { request: req, code: a.result.code }).ok,
+    );
     t.is(
       code(w.server.call({ u: "otto" }, "devices.approve", { request: req, deny: true })),
       "NOT_FOUND",

@@ -182,6 +182,9 @@ export interface RequestRec {
   st: "open" | "approved" | "declined";
   a: string[];
   why: string | null;
+  /** A declined request: when its person may ask again (14 days after the
+   * decline; review round 1 of phase 2). */
+  retryAt?: string | null;
   createdAt: string;
   updatedAt: string;
   rev: number;

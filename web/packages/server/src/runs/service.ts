@@ -2,8 +2,9 @@
 // it the jobs the mutators queued (`JobRunner.start`), and it runs them.
 // - `run`: a run of an ask with the included tokens (an owned agent loop; a
 //   device run is its device's, never a server job). It goes to `run_queue`
-//   and starts when the caps allow: per user, per provider, the daily limits
-//   when enforced. The payer is chosen when it starts (`payerFor`: the ask's
+//   and starts when the caps allow: per user and per provider (how many a
+//   person may queue is the sync server's `queuedRunsPerUser`). The payer is
+//   chosen when it starts (`payerFor`: the ask's
 //   payer, else the included tokens, then the asker's default API key), and
 //   a user's key is decrypted for the provider call it pays. A 429 requeues
 //   with backoff (MAX_RATE_LIMIT_REQUEUES), then ends the run `rate`.
@@ -24,12 +25,12 @@ import {
   users as usersRepo,
 } from "@session/db";
 import type { JobKind } from "@session/mutators";
-import { DEFAULT_MODEL_ID, findModel } from "@session/shared";
+import { DEFAULT_MODEL_ID, canUseModel, findModel } from "@session/shared";
 import type { JobRunner, SyncServer } from "@session/sync/server";
 
 import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";
-import { payerFor } from "../sync/account.js";
+import { payerFor, tokenSource } from "../sync/account.js";
 
 import { backoffFor, MAX_RATE_LIMIT_REQUEUES } from "./errors.js";
 import { runAttempt, type AttemptResult, type LoopDeps } from "./loop.js";
@@ -179,6 +180,9 @@ export function createRunsService(deps: RunsServiceDeps): RunsService {
       logger.warn({ error, keyId: id }, "an API key check failed");
       reason = "the provider could not be reached";
     }
+    // the verdict is of the raw key read above: a key replaced during the
+    // check keeps "checking" for its own job (review round 1 of phase 2, F8)
+    if (apiKeys.get(db, id)?.fingerprint !== row.fingerprint) return;
     if (sync.keyChecked(id, reason === null)) apiKeys.setReason(db, id, reason);
   };
 
@@ -199,7 +203,19 @@ export function createRunsService(deps: RunsServiceDeps): RunsService {
     }
     const modelId = run.model ?? DEFAULT_MODEL_ID;
     const entry = findModel(modelId);
-    const payer = payerFor(db, sync, config, userId, user.handle, run.pay);
+    // an admin-only model runs on the included tokens for an admin only;
+    // a key of the person's own pays for any model of its provider
+    // (review round 1 of phase 2, F1)
+    const payer = payerFor(
+      db,
+      sync,
+      config,
+      userId,
+      user.handle,
+      run.pay,
+      Date.now(),
+      canUseModel(user, modelId),
+    );
     const end = (why: "tokens" | "key" | "interrupted") => {
       if (sync.runJobs.start(runId).ok) sync.runJobs.fail(runId, run.attempt, why);
       runsRepo.release(db, runId);
@@ -250,6 +266,13 @@ export function createRunsService(deps: RunsServiceDeps): RunsService {
         seqStart: runsRepo.get(db, runId)?.seq ?? 0,
         signal: controller.signal,
         isDraining: () => draining,
+        // the weekly allowance or the key's monthly cap, read again after
+        // each step: other runs of the person's spend it too (F4)
+        payerLeft: () => {
+          const s = tokenSource(db, sync, config, userId, user.handle, payer.source.id);
+          if (s === null || (s.kind === "key" && s.key?.status !== "valid")) return "key";
+          return s.left;
+        },
       });
     } catch (error) {
       logger.error({ error, runId }, "a run attempt threw");

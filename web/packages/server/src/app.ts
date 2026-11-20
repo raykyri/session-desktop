@@ -74,7 +74,7 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   const logger = deps.logger ?? defaultLogger(deps.config.env);
   const app = new Hono<AppEnv>();
 
-  app.use("*", requestContext(logger));
+  app.use("*", requestContext(logger, deps.config.sync.clientIpHeader));
   app.use("*", requestMetrics(metrics));
   app.use("*", requestLogging());
   app.use("*", securityHeaders(deps.config));

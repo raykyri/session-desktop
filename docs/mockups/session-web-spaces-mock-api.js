@@ -992,7 +992,7 @@
     'from?': obj({ th: ID, node: str }), 'branch?': one('all', 'one'), 'executor?': nul(EXEC_IN),
   };
   proc('threads.create', { input: obj(THREAD_IN, 'CreateThreadInput'), output: '{ id: ThreadId, run: RunId | null }', who: 'member', errors: ['NOT_FOUND', 'PRECONDITION_FAILED', 'CONFLICT', 'EXPIRED', 'TOO_MANY_REQUESTS'], wire: 'ResearchTree', writes: ['posts', 'rich', 'fu', 'qtd', 'runs', 'usage'],
-    note: 'an ask or a post; id: the client’s ULID (else the server makes one). An ask starts a run (a server job, section 6a; with executor, a device run, section 6b). The first ask a key pays for after the included tokens run out marks the usage note about it seen (TODO(limits) stub). from: start the thread from a branch of another thread’s ask tree, the caller’s own follow-up (branch: "all" copies the caller’s own asks below it, and none below another person’s or a hidden or removed one); the new thread is the caller’s and the source node links to it. A branch of a closed space’s thread stays in that space. topic: kept only in a space with the FAQ landing that has the topic. pay: TODO(limits), stored as sent; a key that pays must be yours.',
+    note: 'an ask or a post; id: the client’s ULID (else the server makes one). An ask starts a run (a server job, section 6a; with executor, a device run, section 6b). The first ask a key pays for after the included tokens run out marks the usage note about it seen (TODO(limits) stub). from: start the thread from a branch of another thread’s ask tree, a follow-up the caller asked, or any follow-up of a thread the caller owns or of a space they moderate (branch: "all" copies the asker’s own asks below it, and none below another person’s or a hidden or removed one); the new thread is the asker’s and the source node links to it. A branch of a closed space’s thread stays in that space. topic: kept only in a space with the FAQ landing that has the topic. pay: TODO(limits), stored as sent; a key that pays must be yours.',
     space: (tx, i) => i.space,
     can: (tx, i) => {
       if (!i.from) return all(ownPayer(tx, i.pay), i.kind === 'ask' ? deviceOk(tx, i.executor) : true);
@@ -1000,7 +1000,8 @@
       if (r !== true) return r;
       if (closedSpace(tx.find('spaces', src.s)) && src.s !== i.space) return deny('A branch of a thread in a closed space can only become a thread in the same space.');
       const n = i.from.node === 'r' ? null : askNodes(tx, src.id).find(x => x.id === i.from.node);
-      return !n || n.u === tx.me.u || deny('Only the person who asked this can start a thread from it.');
+      /* the asker of the branch, the thread's owner and the space's moderators (the page's qtCanPromote) */
+      return !n || n.u === tx.me.u || src.u === tx.me.u || rankIn(tx.get, src.s) >= RANK.mod || deny('Only the asker of this branch, the thread owner and moderators can do this.');
     },
     run: (tx, i) => {
       const s = writable(tx, i.space);
@@ -1015,14 +1016,16 @@
         if (nm(n) === 'removed') throw removedErr();
         if (nm(n) === 'hidden') throw rpcError('PRECONDITION_FAILED', 'This item is hidden.');
         if (n.del) throw deletedErr('follow-up');
+        /* the new thread is the asker's, who must be able to post in its space */
+        if (n.u !== tx.me.u && (tx.get('banned').some(b => b.u === n.u && banSpace(b) === s.id) || (closedSpace(s) && !rosterOf(tx, s.id).some(x => x.u === n.u)))) throw rpcError('FORBIDDEN', 'The person who asked this can no longer post in this space.');
         const byId = Object.fromEntries(nodes.map(x => [x.id, x])), path = x => { const out = []; for (let y = x; y; y = byId[y.par]) out.unshift(y); return out; };
         const under = x => { const p = path(x), k = p.findIndex(y => y.id === n.id); return k < 0 ? [] : p.slice(k + 1); };
-        const rec = { id, s: s.id, u: tx.me.u, k: 'ask', t: (i.title || n.q).trim(), q: n.q, sum: clipText(htmlText(n.html), 170), tok: n.tok || 0, from: { th: src.id, node: n.id, lv: path(n).length } };
+        const rec = { id, s: s.id, u: n.u, k: 'ask', t: (i.title || n.q).trim(), q: n.q, sum: clipText(htmlText(n.html), 170), tok: n.tok || 0, from: { th: src.id, node: n.id, lv: path(n).length } };
         if (topic) rec.topic = topic;
         tx.put('posts', rec);
         tx.mapPut('rich', id, n.html || '');
         tx.mapPut('fu', id, []);
-        const desc = i.branch === 'all' ? nodes.filter(x => { const dn = under(x); return dn.length > 0 && dn.every(y => y.u === tx.me.u && !nm(y)); }) : [];
+        const desc = i.branch === 'all' ? nodes.filter(x => { const dn = under(x); return dn.length > 0 && dn.every(y => y.u === n.u && !nm(y)); }) : [];
         tx.mapPut('qtd', id, { nodes: desc.map(x => ({ id: x.id, par: x.par === n.id ? 'r' : x.par, u: x.u, createdAt: x.createdAt, q: x.q, html: x.html, tok: x.tok })) });
         const tree = askTree(tx, src.id);
         tx.mapPut('qtd', src.id, { ...tree, nodes: tree.nodes.map(x => x.id === n.id ? { ...x, promoted: id } : x) });
@@ -1399,16 +1402,25 @@
       const a = i.answers || [], issues = (s.qs || []).map((q, k) => q.req && !String(a[k] || '').trim() ? `input.answers[${k}]: expected an answer to “${q.q}” (required)` : null).filter(Boolean);
       if ((s.rules || []).length && i.rulesAccepted !== true) issues.push('input.rulesAccepted: expected true (the space’s rules accepted)');
       if (issues.length) throw rpcError('BAD_REQUEST', undefined, issues);
-      setRelation(tx, s.id, 'pending');
       const old = tx.find('reqs', tx.me.u);
+      declinedWait(tx, old, s.id);
+      setRelation(tx, s.id, 'pending');
       tx.put('reqs', { u: tx.me.u, sp: s.id, st: 'open', a, userCreatedAt: tx.me.createdAt, ...(old && old.rev ? { rev: old.rev } : {}) });
     } });
   proc('joinRequests.withdraw', { input: obj({ space: ID }), output: 'null', who: 'user', errors: ['NOT_FOUND'], writes: ['rel', 'reqs', 'joined', 'spaces', 'roles'],
     note: 'withdraw your own request to join a space', space: (tx, i) => i.space,
     run: (tx, i) => {
-      tx.need('spaces', i.space, 'space'); setRelation(tx, i.space, 'none');
-      const r = tx.find('reqs', tx.me.u); if (r && reqSpace(r) === i.space) tx.remove('reqs', tx.me.u);
+      tx.need('spaces', i.space, 'space');
+      const r = tx.find('reqs', tx.me.u);
+      declinedWait(tx, r, i.space);
+      setRelation(tx, i.space, 'none');
+      if (r && reqSpace(r) === i.space) tx.remove('reqs', tx.me.u);
     } });
+  /* a declined request may be sent again (or withdrawn) only once its wait has passed: 14 days after the decline (retryAt) */
+  function declinedWait(tx, r, sid) {
+    if (!r || reqSpace(r) !== sid || r.st !== 'declined' || !r.retryAt || tx.now >= r.retryAt) return;
+    throw rpcError('PRECONDITION_FAILED', 'Your request was declined. You can request again after 14 days.', undefined, { retryAt: r.retryAt });
+  }
   const spaceIn = (tx, i) => i.space;
   const reqBanned = (tx, sid, u) => tx.get('banned').some(b => b.u === u && banSpace(b) === sid);
   proc('joinRequests.decide', { input: obj({ space: ID, users: arr(str), decision: one('approve', 'decline', 'reopen'), 'why?': str, 'base?': rec(int) }, 'DecideRequestsInput'), output: 'null', who: 'moderator', errors: ['NOT_FOUND', 'STALE', 'PRECONDITION_FAILED'], writes: ['reqs', 'mem', 'memOther', 'spaces'],
@@ -1425,8 +1437,9 @@
           if (reqBanned(tx, i.space, u)) throw rpcError('PRECONDITION_FAILED', 'This person is banned from the space.');
           r.st = 'approved'; addToRoster(tx, i.space, u, 'member');
         }
-        if (i.decision === 'decline') { r.st = 'declined'; r.why = (i.why || '').trim(); }
-        if (i.decision === 'reopen') r.st = 'open';
+        if (i.decision === 'decline') { r.st = 'declined'; r.why = (i.why || '').trim(); r.retryAt = new Date(Date.parse(tx.now) + 14 * 864e5).toISOString().replace(/\.\d{3}Z$/, 'Z'); }
+        if (i.decision === 'reopen') { r.st = 'open'; delete r.retryAt; }
+        if (i.decision === 'approve') delete r.retryAt;
         tx.put('reqs', r);
       }
     } });
@@ -1803,9 +1816,9 @@
   proc('pages.remove', { space: spaceIn, input: obj({ space: ID, page: ID }), output: 'null', who: 'moderator', errors: ['NOT_FOUND'], writes: ['pagedocs', 'spaces'],
     note: 'remove a page (page: its id)',
     run: (tx, i) => { const [, pg] = pageAt(tx, i.space, i.page); tx.edit('spaces', i.space, x => { x.pages = x.pages.filter(p => p[2] !== i.page); }); tx.mapDel('pagedocs', `${i.space}/${pageSlug(pg[0])}`); } });
-  proc('pages.move', { space: spaceIn, input: obj({ space: ID, page: ID, other: ID }), output: 'null', who: 'moderator', errors: ['NOT_FOUND'], writes: ['spaces'],
-    note: 'swap a page with another (About’s up and down), both by id: a move that waited names the same pages whatever moved meanwhile',
-    run: (tx, i) => { const [, , a] = pageAt(tx, i.space, i.page), [, , b] = pageAt(tx, i.space, i.other); tx.edit('spaces', i.space, x => { const p = x.pages.slice(); [p[a], p[b]] = [p[b], p[a]]; x.pages = p; }); } });
+  proc('pages.move', { space: spaceIn, input: obj({ space: ID, page: ID, to: int }), output: 'null', who: 'moderator', errors: ['NOT_FOUND', 'BAD_REQUEST'], writes: ['spaces'],
+    note: 'move a page, by id, to position to of the list (0 is the first; About’s up and down): an absolute position, so the same move applied twice leaves the list as once',
+    run: (tx, i) => { const [, , a] = pageAt(tx, i.space, i.page); tx.edit('spaces', i.space, x => { const p = x.pages.slice(), [pg] = p.splice(a, 1); if (!Number.isInteger(i.to) || i.to < 0 || i.to > p.length) throw bad1('to', `a position from 0 to ${p.length}`); p.splice(i.to, 0, pg); x.pages = p; }); } });
 
   /* -- API keys: TODO(limits) stubs. Not encrypted (owner decision), no usage accounting. A key check is a
      server job (section 6a): the key is "checking" until the job writes the provider's verdict. */
