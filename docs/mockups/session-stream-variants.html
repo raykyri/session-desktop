@@ -181,15 +181,20 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .nb-a { align-items: flex-end; }
 .nb-a > .av { align-self: flex-start; margin-top: 5px; }
 /* bottom-aligned items keep the same centres as the one-line bar: text and 26px pills sit on the 30px button's centre line */
-.nb-a > textarea { margin-bottom: 1px; }
-.nb-a > .mpick:not(.split), .nb-a > .pick { margin-bottom: 2px; }
+.nb-a > textarea { margin-bottom: -1px; }
 .nb-bare { padding-left: 16px; }
 /* Split */
 .split { display: inline-flex; flex: none; }
-.split-main { height: 30px; padding: 0 12px 0 14px; border-radius: 15px 0 0 15px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); }
-.split-more { height: 30px; width: 28px; display: inline-grid; place-items: center; border-radius: 0 15px 15px 0; background: var(--accent-strong); color: var(--on-accent-light); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--on-accent-light) 35%, transparent); }
+.split :is(.split-main, .split-more) { transition: background .15s, color .15s, opacity .15s, box-shadow .15s; }
+.split-main { height: 26px; padding: 0 10px 0 12px; border-radius: 13px 0 0 13px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); }
+.split-more { height: 26px; width: 24px; display: inline-grid; place-items: center; border-radius: 0 13px 13px 0; background: var(--accent-strong); color: var(--on-accent-light); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--on-accent-light) 35%, transparent); }
 .split-more svg.i { width: 13px; height: 13px; }
-.nb:not(.has-text) .split-main, .nb:not(.has-text) .split-more { background: var(--control); color: var(--t-secondary); box-shadow: inset 1px 0 0 var(--border-strong); }
+/* Empty composer: the button stays blue but reads as disabled. One treatment per variant. */
+.btn-faded:not(.has-text) :is(.split-main, .split-more) { opacity: .45; }
+.btn-tint:not(.has-text) :is(.split-main, .split-more) { background: var(--accent-soft); color: var(--accent); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--accent) 25%, transparent); }
+.btn-outline:not(.has-text) :is(.split-main, .split-more) { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.btn-outline:not(.has-text) .split-main { box-shadow: inset 1px 0 0 color-mix(in srgb, var(--accent) 45%, transparent), inset 0 1px 0 color-mix(in srgb, var(--accent) 45%, transparent), inset 0 -1px 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+.btn-muted:not(.has-text) :is(.split-main, .split-more) { background: color-mix(in srgb, var(--accent-strong) 45%, var(--card)); color: color-mix(in srgb, var(--on-accent-light) 80%, transparent); }
 .menu.right { left: auto; right: 0; }
 .mi-2 { height: auto; padding: 7px 10px; align-items: flex-start; }
 .mi-2 b { display: block; font-weight: 500; color: var(--t-heading); }
@@ -562,7 +567,7 @@ const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data
 /* ================= pinned maps ================= */
 /* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
    as a small outline tree per passage. */
-const st = { v: 'splitBare', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
+const st = { v: 'faded', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
 
 /* Which model answered and at what thinking effort. The fixtures do not record it; the mock picks one
    per thread. Shown in a tooltip on the answer's icon. */
@@ -704,7 +709,10 @@ const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches i
 const TREE_NOTE = 'Posts keep the pinned branch trees and avatar reply trees.';
 const variant = (name, thesis, composer, dock = false) => ({ name, q: 'Composer', thesis: `${thesis} ${TREE_NOTE}`, composer, dock, replies: replyLines, layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); } });
 const V = {
-  splitBare: variant('Split · no avatar', '<strong>Split · ends, without the avatar.</strong> Only the text and the controls; as the text grows, the space, model and split button stay beside the last line.', 'splitBare'),
+  faded: variant('Faded', '<strong>Empty: the blue button at 45% opacity.</strong> It keeps its shape and colour and comes up to full strength as soon as there is text.', () => COMPOSERS.splitBare('btn-faded')),
+  tint: variant('Tint', '<strong>Empty: a pale blue tint with blue text.</strong> The same family as the branch count chips; it fills in solid once there is text.', () => COMPOSERS.splitBare('btn-tint')),
+  outline: variant('Outline', '<strong>Empty: a blue outline with blue text.</strong> No fill until there is text to send.', () => COMPOSERS.splitBare('btn-outline')),
+  muted: variant('Muted', '<strong>Empty: a desaturated solid blue.</strong> Mixed toward the card colour, with softened white text.', () => COMPOSERS.splitBare('btn-muted')),
 };
 
 /* ---- composers: start a thread. Each variant below uses one. The draft survives re-renders. ---- */
@@ -749,7 +757,7 @@ const COMPOSERS = {
   /* Split, with the avatar held at the first line and the controls at the last as the text grows. */
   splitEnds: () => COMPOSERS.split(' nb-a'),
   /* Split · ends without the avatar: text and controls only. */
-  splitBare: () => COMPOSERS.split(' nb-a nb-bare', false),
+  splitBare: (tone = 'btn-faded') => COMPOSERS.split(' nb-a nb-bare ' + tone, false),
 };
 let nseq = 0;
 function newThread(space, q, kind) {
@@ -771,7 +779,7 @@ function render() {
   const tabs = [['home', 'Home'], ...spacesWithPosts.filter(x => x.id !== 'sablefield').map(x => [x.id, spName(x.id)])];
   const posts = streamFor(st.space);
   app.innerHTML = `<div class="mg" id="k-mg"><div class="mg-inner"><nav class="tabs"><div class="tabs-s" id="k-tabs">${tabs.map(([id, l]) => `<button data-a="space" data-id="${id}" aria-current="${st.space === id}">${esc(l)}</button>`).join('')}</div></nav>
-    ${v.dock ? '' : COMPOSERS[v.composer]()}
+    ${v.dock ? '' : (typeof v.composer === 'function' ? v.composer() : COMPOSERS[v.composer]())}
     ${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div>`;
   const mg = $('#k-mg'), ta = $('#in-new');
   if (ta && st.draft) ta.style.height = ta.scrollHeight + 'px';
@@ -791,7 +799,7 @@ function renderBar() {
   $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${st.theme === k}">${l}</button>`).join('');
   $('#thesis').innerHTML = `<span class="qtag">${V[st.v].q}</span>` + V[st.v].thesis;
 }
-function go(v) { if (!V[v]) v = 'splitBare'; st.v = v; st.asking = null; renderBar(); render(); }
+function go(v) { if (!V[v]) v = 'faded'; st.v = v; st.asking = null; renderBar(); render(); }
 $('#variant-seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { history.replaceState(null, '', '#' + b.dataset.v); go(b.dataset.v); } });
 $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; st.theme = b.dataset.t; if (st.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = st.theme; renderBar(); });
 
@@ -856,6 +864,6 @@ document.addEventListener('keydown', e => {
   if (e.key.length !== 1 || !k) return;
   e.preventDefault(); history.replaceState(null, '', '#' + k); go(k);
 });
-go(location.hash.slice(1) || 'splitBare');
+go(location.hash.slice(1) || 'faded');
 document.fonts?.ready.then(() => render());
 </script>
