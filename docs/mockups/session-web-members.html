@@ -99,7 +99,14 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .prose h4 { margin: 1em 0 .35em; font-size: var(--fs-base); color: var(--t-heading); font-weight: 600; }
 .prose table { border-collapse: collapse; font-size: var(--fs-sm); margin: 0 0 .7em; display: block; overflow-x: auto; }
 .prose th, .prose td { border-bottom: 1px solid var(--divider); padding: 4px 8px; text-align: left; }
-.prose sup.cite { font-size: 9.5px; color: var(--accent); font-weight: 600; margin-left: -1px; }
+.prose sup.cite { font-size: 9.5px; color: var(--accent); font-weight: 600; margin-left: -1px; cursor: pointer; padding: 0 1px; border-radius: 3px; }
+.prose sup.cite:hover, .prose sup.cite:focus-visible { background: color-mix(in srgb, var(--accent) 16%, transparent); outline: none; }
+#citepop { position: absolute; z-index: 26; width: 260px; padding: 10px 12px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow), var(--shadow-pop, 0 6px 20px rgba(0,0,0,.18)); font-size: var(--fs-xs); color: var(--t-secondary); }
+#citepop .cp-h { display: flex; gap: 8px; align-items: baseline; }
+#citepop .cp-n { flex: none; min-width: 16px; height: 16px; border-radius: 4px; display: inline-grid; place-items: center; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); font-weight: 600; font-size: 10px; }
+#citepop b { color: var(--t-heading); font-size: var(--fs-sm); font-weight: 600; line-height: 1.35; }
+#citepop p { margin: 6px 0 0 24px; line-height: 1.45; }
+#citepop a { display: inline-block; margin: 6px 0 0 24px; color: var(--accent); }
 .prose .pending { color: var(--t-faint); }
 .clamp { max-height: 9.6em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
 .clamp.s { max-height: 4.8em; }
@@ -385,7 +392,7 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 
 /* ================= membership screens ================= */
 [hidden] { display: none !important; }
-#app > .toast, #app > .dialog, #app > .authdlg { height: auto; }
+#app > .toast, #app > .dialog, #app > .authdlg, #app > #citepop { height: auto; }
 .grow { flex: 1; }
 .mockbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding-bottom: 8px; }
 .mk { display: inline-flex; align-items: center; gap: 6px; }
@@ -1262,7 +1269,7 @@ function renderNetwork() {
   streamFor(st.space).forEach(p => p.k === 'ask' && v.layout(p));
   mg.scrollTop = top;
   const tabsEl = mg.querySelector('.tabs'), edge = () => tabsEl.classList.toggle('scrolled', mg.scrollTop > 2);
-  edge(); mg.addEventListener('scroll', () => { edge(); $('#selbranch')?.remove(); }, { passive: true });
+  edge(); mg.addEventListener('scroll', () => { edge(); $('#selbranch')?.remove(); $('#citepop')?.remove(); }, { passive: true });
   const ts = $('#k-tabs'), fade = () => { ts.style.setProperty('--fl', ts.scrollLeft > 1 ? '40px' : '0px'); ts.style.setProperty('--fr', ts.scrollLeft + ts.clientWidth < ts.scrollWidth - 1 ? '40px' : '0px'); };
   ts.scrollLeft = tabsLeft; { const on = ts.querySelector('[aria-current="true"]'); if (on && (on.offsetLeft + on.offsetWidth > ts.scrollLeft + ts.clientWidth - 40 || on.offsetLeft < ts.scrollLeft + 40)) ts.scrollLeft = on.offsetLeft - ts.clientWidth / 2 + on.offsetWidth / 2; }
   fade(); ts.addEventListener('scroll', fade, { passive: true });
@@ -1315,6 +1322,22 @@ app.addEventListener('click', e => {
   if (a === 'mode') { st.newMode = d.m; st.menu = null; render(); const t = $('#in-new'); t?.focus(); t?.setSelectionRange(t.value.length, t.value.length); return; }
   if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; st.askPar = null; st.brReplying = null; render(); return; }
 });
+/* citations: the superscript numbers open a small card for that source (the thread's sources, 1-based) */
+function citeOpen(sup) {
+  $('#citepop')?.remove();
+  const card = sup.closest('[id^="card-"]'), pid = card?.id.slice(5), n = +sup.textContent.trim(), src = (D.srcd[pid] || [])[n - 1];
+  if (!src) return;
+  const [title, domain, note] = src, r = sup.getBoundingClientRect(), A = app.getBoundingClientRect();
+  app.insertAdjacentHTML('beforeend', `<div id="citepop" role="dialog" aria-label="Source ${n}"><div class="cp-h"><span class="cp-n">${n}</span><b>${esc(title)}</b></div>${note ? `<p>${esc(note)}</p>` : ''}<a href="https://${esc(domain)}" target="_blank" rel="noopener noreferrer">${esc(domain)} ↗</a></div>`);
+  const pop = $('#citepop');
+  pop.style.top = (r.bottom - A.top + 6) + 'px';
+  pop.style.left = Math.max(8, Math.min(r.left - A.left - 12, A.width - pop.offsetWidth - 8)) + 'px';
+  pop.querySelector('a').focus({ preventScroll: true });
+}
+const citeReady = () => app.querySelectorAll('.prose sup.cite:not([tabindex])').forEach(x => { x.tabIndex = 0; x.setAttribute('role', 'button'); x.setAttribute('aria-label', 'Source ' + x.textContent.trim()); });
+app.addEventListener('click', e => { const c = e.target.closest('.prose sup.cite'); if (c) { e.stopPropagation(); citeOpen(c); } }, true);
+document.addEventListener('mousedown', e => { if (!e.target.closest('#citepop, .prose sup.cite')) $('#citepop')?.remove(); });
+app.addEventListener('keydown', e => { const c = e.target.closest?.('.prose sup.cite'); if (c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); citeOpen(c); } if (e.key === 'Escape') $('#citepop')?.remove(); });
 /* select text in an answer to branch from it */
 app.addEventListener('mouseup', e => {
   setTimeout(() => {
@@ -1658,7 +1681,8 @@ function render() {
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
   if (st.screen === 'network') renderNetwork();
   else { pg.innerHTML = (st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
-  app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg, :scope > #selbranch').forEach(x => x.remove());
+  app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg, :scope > #selbranch, :scope > #citepop').forEach(x => x.remove());
+  citeReady();
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
   if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
 }
