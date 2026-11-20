@@ -365,16 +365,6 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .ip small { color: var(--t-faint); font-size: var(--fs-xs); }
 .invc .ltext { display: flex; align-items: baseline; gap: 10px; margin: 6px 0 4px; font-size: var(--fs-sm); color: var(--t-heading); }
 .invc .ltext span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rrows .run.rb { grid-template-columns: minmax(0, 1fr) 54px; row-gap: 1px; }
-.run.rb .rq { grid-column: 1; grid-row: 1; }
-.run.rb .rmeta { grid-column: 1; grid-row: 2; color: var(--t-faint); font-size: var(--fs-xs); }
-.run.rb b { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
-.run.rc { grid-template-columns: minmax(0, 1fr) 90px 44px; align-items: center; }
-.rbar { height: 4px; border-radius: 2px; background: var(--control); overflow: hidden; }
-.rbar > span { display: block; height: 100%; background: color-mix(in srgb, var(--accent-strong) 70%, var(--card)); }
-.run.rd { grid-template-columns: 48px minmax(0, 1fr) auto 50px; }
-.run.rd b { text-align: left; }
-.run.rd .tag { font-size: 10.5px; padding: 1px 6px; border-radius: 8px; background: var(--control); color: var(--t-secondary); }
 .run.re { grid-template-columns: minmax(0, 1fr) auto; }
 .run.re .rpct { color: var(--t-secondary); font-variant-numeric: tabular-nums; font-size: var(--fs-xs); }
 .rdet > summary { display: flex; align-items: baseline; gap: 8px; cursor: pointer; list-style: none; }
@@ -1457,18 +1447,9 @@ function usageTop() {
   return `<section class="box"><p class="usent ${tone}">You have <b>${lp}%</b> of your included usage left this week. It resets on ${WEEK[0]}, in ${resetIn()}.</p><div class="utrack ${tone}" role="img" aria-label="${lp}% left"><span style="width:${((1 - pct) * 100).toFixed(1)}%"></span></div></section>`;
 }
 function usageRunsSection() {
-  /* row variants: A question, date, tokens, billing · B two lines: question over date and billing, tokens right
-     C question, a bar sized against the largest run, tokens · D tokens first, billing as a tag only when not included
-     E question, then tokens and the share of the weekly allowance */
-  const runs = usageRuns(), max = Math.max(1, ...runs.map(r => r.tok)), bill = r => r.bill || 'Included', paid = r => r.bill && r.bill !== 'Included';
-  const row = ({
-    a: r => `<div class="run"><span class="rq">${esc(clip(r.q, 70))}</span><small>${day(r.at)}</small><b>${fmtTok(r.tok)}</b><small class="bill">${bill(r)}</small></div>`,
-    b: r => `<div class="run rb"><span class="rq">${esc(clip(r.q, 90))}</span><b>${fmtTok(r.tok)}</b><span class="rmeta">${day(r.at)} · ${bill(r)}</span></div>`,
-    c: r => `<div class="run rc"><span class="rq">${esc(clip(r.q, 80))}</span><span class="rbar"><span style="width:${(r.tok / max * 100).toFixed(1)}%"></span></span><b>${fmtTok(r.tok)}</b></div>`,
-    d: r => `<div class="run rd"><b>${fmtTok(r.tok)}</b><span class="rq">${esc(clip(r.q, 80))}</span>${paid(r) ? `<span class="tag">${esc(r.bill)}</span>` : '<span></span>'}<small>${day(r.at)}</small></div>`,
-    e: r => `<div class="run re"><span class="rq">${esc(clip(r.q, 90))}</span><span class="rpct">${fmtTok(r.tok)} · ${Math.max(1, Math.round(r.tok / ALLOWANCE * 100))}% of week</span></div>`,
-  })[st.ui.runs] || (r => '');
-  return `<section class="box"><h3>Recent runs</h3><div class="runs rrows">${runs.map(row).join('') || '<p class="empty">No runs yet this week.</p>'}</div></section>`;
+  /* each row: the question, then tokens and date on the right */
+  const runs = usageRuns();
+  return `<section class="box"><h3>Recent runs</h3><div class="runs rrows">${runs.map(r => `<div class="run re"><span class="rq">${esc(clip(r.q, 90))}</span><span class="rpct">${fmtTok(r.tok)} · ${day(r.at)}</span></div>`).join('') || '<p class="empty">No runs yet this week.</p>'}</div></section>`;
 }
 function usagePage() {
   const hasKey = keys().anthropic?.status === 'working' || keys().openai?.status === 'working';
@@ -1486,7 +1467,7 @@ function renderMock() {
   const cur = st.auth === 'out' ? 'out' : st.user;
   const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcde'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
-    ${seg('inv', 'Invites', 5)}${seg('runs', 'Run rows', 5)}
+    ${seg('inv', 'Invites', 5)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -1516,7 +1497,6 @@ function previewVariant(k) {
   if (k === 'tree') $('.ttree, .ttable')?.closest('section')?.scrollIntoView({ block: 'start' });
   if (k === 'meter') $('.meter')?.focus();
   if (k === 'inv') $('.mside .box, .mone .box')?.closest('section')?.scrollIntoView({ block: 'nearest' });
-  if (k === 'runs') $('.runs, .rdet')?.closest('section')?.scrollIntoView({ block: 'nearest' });
 }
 function signIn(u) { st.authOpen = false; st.auth = 'in'; st.user = u; st.screen = member(u).status === 'active' ? 'feed' : 'status'; st.menu = null; st.sel = {}; render(); }
 document.addEventListener('click', e => {
