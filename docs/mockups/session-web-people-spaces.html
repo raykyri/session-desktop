@@ -78,6 +78,15 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .dots { display: flex; gap: 6px; } .dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--border-strong); }
 .frame-top span { flex: 1; text-align: center; font-size: var(--fs-xs); color: var(--t-faint); margin-right: 39px; }
 #app { flex: 1; min-height: 0; position: relative; }
+/* fullscreen: only the app, edge to edge */
+.fsbtn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: var(--r-lg); background: var(--control); color: var(--t-secondary); font-size: var(--fs-sm); font-weight: 500; }
+.fsbtn:hover { color: var(--t-heading); }
+.fsexit { display: none; }
+body.fs { padding: 0; }
+body.fs > .bar, body.fs > .mockbar, body.fs > .thesis, body.fs .frame-top { display: none; }
+body.fs .frame { border-radius: 0; box-shadow: none; }
+body.fs .fsexit { display: block; position: fixed; z-index: 100; top: 8px; left: 50%; transform: translate(-50%, -150%); padding: 6px 12px; border-radius: 16px; background: var(--t-heading); color: var(--canvas); font-size: var(--fs-xs); font-weight: 600; opacity: 0; transition: transform .15s, opacity .15s; }
+body.fs .fsexit:focus-visible, body.fs.fs-peek .fsexit { transform: translate(-50%, 0); opacity: .92; }
 #app > div { height: 100%; }
 
 /* ---- shared pieces ---- */
@@ -887,6 +896,7 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
   <h1>Session · community spaces</h1>
   <div class="seg" id="variant-seg" role="group" aria-label="Variant"></div>
   <span class="grow"></span>
+  <button class="fsbtn" id="fs-btn" title="Show only the app (Ctrl+Shift+F)"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg>Fullscreen</button>
   <div class="seg" id="theme-seg" role="group" aria-label="Theme"></div>
 </header>
 <div class="mockbar" id="mock"></div>
@@ -895,7 +905,27 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
   <div class="frame-top"><div class="dots"><i></i><i></i><i></i></div><span>session.app</span></div>
   <div id="app"></div>
 </div>
+<button class="fsexit" id="fs-exit" title="Exit fullscreen (Esc or Ctrl+Shift+F)">Exit fullscreen</button>
 
+<script>
+/* Fullscreen hides the mock controls and the window frame, and asks the browser for real fullscreen when it allows it.
+   Exit with the button that appears when the pointer reaches the top edge, Escape, or Ctrl+Shift+F. */
+(() => {
+  const setFs = on => {
+    document.body.classList.toggle('fs', on);
+    try { if (on && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {}); if (!on && document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); } catch {}
+    window.dispatchEvent(new Event('resize'));
+  };
+  document.getElementById('fs-btn').addEventListener('click', () => setFs(true));
+  document.getElementById('fs-exit').addEventListener('click', () => setFs(false));
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('fs')) setFs(false); });
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); setFs(!document.body.classList.contains('fs')); }
+    else if (e.key === 'Escape' && document.body.classList.contains('fs') && !document.fullscreenElement && !document.querySelector('#app .menu, #app .dialog, #app .authdlg, #citepop')) setFs(false);
+  });
+  document.addEventListener('mousemove', e => document.body.classList.toggle('fs-peek', document.body.classList.contains('fs') && e.clientY < 36));
+})();
+</script>
 <script src="session-web-spaces-fixtures.js"></script>
 <script>
 'use strict';
