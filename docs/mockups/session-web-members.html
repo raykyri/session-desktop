@@ -332,6 +332,28 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .replies .rtext { margin: 2px 0 0; color: var(--t-body); font-size: var(--fs-sm); line-height: 1.45; }
 .rlike { display: inline-flex; align-items: center; gap: 4px; color: var(--t-muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 .rlike svg.i { width: 12px; height: 12px; }
+.bq { margin: 0 0 8px; padding: 6px 10px; border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); background: var(--inset); border-radius: 0 6px 6px 0; color: var(--t-secondary); font-size: var(--fs-xs); line-height: 1.45; }
+.preview .bq { margin: 8px 0 2px; }
+#selbranch { position: absolute; z-index: 25; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px 0 9px; border-radius: 14px; background: var(--t-heading); color: var(--canvas); font-size: var(--fs-xs); font-weight: 600; box-shadow: var(--shadow-pop, 0 4px 14px rgba(0,0,0,.18)); }
+#selbranch svg.i { width: 12px; height: 12px; }
+button.anc { cursor: pointer; font: inherit; }
+button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.prose .qsel { background: color-mix(in srgb, var(--accent) 9%, transparent); border-radius: 6px; }
+.fromln { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 6px; padding: 0; color: var(--t-faint); font-size: var(--fs-xs); text-align: left; }
+.fromln b { font-weight: 500; color: var(--t-secondary); }
+.fromln:hover b { color: var(--accent); }
+.fromln svg.i { width: 12px; height: 12px; flex: none; }
+.brp { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--divider); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.brp > .composer { align-self: stretch; margin-top: 6px; }
+.brp-h { font-size: var(--fs-xs); color: var(--t-faint); margin-bottom: 2px; }
+.brr { align-self: stretch; padding: 6px 0; }
+.brr .pf { margin-top: 4px; }
+.brr .composer { margin-top: 6px; }
+.rtext { font-size: var(--fs-sm); color: var(--t-primary); line-height: 1.45; }
+.rtext p { margin: 2px 0; }
+.rtext blockquote { margin: 4px 0; padding-left: 8px; border-left: 2px solid var(--border-strong); color: var(--t-faint); }
+.mention { color: var(--accent); font-weight: 500; }
+.rhid { margin-left: 6px; font-size: 10.5px; color: var(--t-faint); font-variant-numeric: tabular-nums; }
 .rlike:not(:disabled):hover { color: var(--t-heading); }
 .rlike.on, .iconbtn.likes.on { color: var(--bad); }
 .rlike.on svg.i, .iconbtn.likes.on svg.i { fill: currentColor; }
@@ -468,9 +490,9 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .fine { color: var(--t-faint) !important; font-size: var(--fs-xs) !important; line-height: 1.5; }
 .ferr { color: var(--bad) !important; font-size: var(--fs-sm) !important; }
 .code-f { display: flex; gap: 8px; }
-.code-f input, .pf input:not([type="checkbox"]), .kform input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: var(--r-lg); border: 1px solid var(--control-border); background: var(--field); color: var(--t-heading); font: inherit; font-size: var(--fs-md); outline: none; }
+.code-f input, .pform input:not([type="checkbox"]), .kform input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: var(--r-lg); border: 1px solid var(--control-border); background: var(--field); color: var(--t-heading); font: inherit; font-size: var(--fs-md); outline: none; }
 .code-f input { text-transform: uppercase; }
-.code-f input:focus, .pf input:focus, .kform input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.code-f input:focus, .pform input:focus, .kform input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .inviter { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
 .inviter b { display: block; color: var(--t-heading); font-size: var(--fs-sm); }
 .inviter small { color: var(--t-faint); font-size: var(--fs-xs); }
@@ -480,14 +502,14 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .xacct > span:not(.av) { flex: 1; }
 .xacct b { display: block; color: var(--t-heading); font-size: var(--fs-sm); }
 .xacct small { color: var(--t-faint); font-size: var(--fs-xs); }
-.pf { display: flex; flex-direction: column; gap: 14px; }
-.pf label { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); font-weight: 500; color: var(--t-heading); }
-.pf label input { flex: none; }
-.pf label small { font-weight: 400; color: var(--t-faint); font-size: var(--fs-xs); }
+.pform { display: flex; flex-direction: column; gap: 14px; }
+.pform label { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); font-weight: 500; color: var(--t-heading); }
+.pform label input { flex: none; }
+.pform label small { font-weight: 400; color: var(--t-faint); font-size: var(--fs-xs); }
 .hwrap { display: flex; align-items: center; border: 1px solid var(--control-border); border-radius: var(--r-lg); background: var(--field); padding-left: 12px; color: var(--t-faint); }
 .hwrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.pf .hwrap input { border: 0 !important; box-shadow: none !important; padding-left: 2px; }
-.pf label.chk { flex-direction: row; align-items: center; gap: 8px; font-weight: 400; color: var(--t-secondary); }
+.pform .hwrap input { border: 0 !important; box-shadow: none !important; padding-left: 2px; }
+.pform label.chk { flex-direction: row; align-items: center; gap: 8px; font-weight: 400; color: var(--t-secondary); }
 .next { padding: 12px 14px; border-radius: var(--r-lg); background: var(--inset); }
 .next b { font-size: var(--fs-sm); color: var(--t-heading); }
 .next p { margin: 4px 0 0; font-size: var(--fs-sm) !important; }
@@ -914,7 +936,7 @@ function tree(p) {
   for (const n of [...list, ...(EXTRA[p.id] || [])]) {
     if (DELETED.has(p.id + ':' + n.id)) continue;
     const f = n.fu != null ? fu[n.fu] : null;
-    nodes[n.id] = { id: n.id, par: n.par, u: n.u || f?.u, createdAt: n.createdAt || f?.createdAt, q: asTyped(p, n.fu != null ? 'f' + n.fu : n.id, n.q || f?.q || ''), q0: n.q || f?.q || '', html: n.html || f?.html || (f?.a ? `<p>${esc(f.a)}</p>` : ''), sum: f?.a || '', tok: n.tok || 0, pending: n.pending };
+    nodes[n.id] = { id: n.id, par: n.par, quote: n.quote, u: n.u || f?.u, createdAt: n.createdAt || f?.createdAt, q: asTyped(p, n.fu != null ? 'f' + n.fu : n.id, n.q || f?.q || ''), q0: n.q || f?.q || '', html: n.html || f?.html || (f?.a ? `<p>${esc(f.a)}</p>` : ''), sum: f?.a || '', tok: n.tok || 0, pending: n.pending };
   }
   const kids = {};
   for (const id in nodes) { const n = nodes[id]; if (n.par) (kids[n.par] ||= []).push(n); }
@@ -940,9 +962,12 @@ const answerHtml = n => n.pending ? `<p class="pending">${esc(n.html)}</p>` : n.
 const status = n => n.pending ? `<span class="status">Researching · Step 1 of 4</span>` : '';
 
 let seq = 0;
-function addBranch(p, par, q) {
+/* Branch replies live beside the fixtures: BRP['thread:node'] is a reply list shaped like a post's.
+   PROMOTED['thread:node'] is the id of the thread a branch was opened as. */
+const BRP = {}, PROMOTED = {};
+function addBranch(p, par, q, quote) {
   const id = 'x' + (++seq);
-  const node = { id, par, u: me(), createdAt: new Date(NOW).toISOString(), q, html: 'Searching sources. The answer appears here when the run finishes.', pending: true };
+  const node = { id, par, quote: quote || undefined, u: me(), createdAt: new Date(NOW).toISOString(), q, html: 'Searching sources. The answer appears here when the run finishes.', pending: true };
   (EXTRA[p.id] ||= []).push(node);
   setTimeout(() => { if (DELETED.has(p.id + ':' + id) || !byId(p.id)) return; node.pending = false; node.html = `<p>Mock answer. In the app, the agent's answer to "${esc(clip(q, 80))}" is stored here when the run finishes, and the branch count on the thread goes up by one.</p>`; node.tok = 18000; node.bill = charge(q, 18000); render(); }, 2600);
   return id;
@@ -952,7 +977,7 @@ const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data
 /* ================= pinned maps ================= */
 /* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
    as a small outline tree per passage. */
-const st = { v: 'type', newSpace: 'public', newMode: 'ask', newModel: 'Opus 5.5', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null, liked: {}, saved: {} };
+const st = { quote: null, askPar: null, brReplying: null, rcol: {}, v: 'type', newSpace: 'public', newMode: 'ask', newModel: 'Opus 5.5', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null, liked: {}, saved: {} };
 
 /* Which model answered and at what thinking effort. The fixtures do not record it; the mock picks one
    per thread. Shown in a tooltip on the answer's icon. */
@@ -960,10 +985,10 @@ const RUNS = ['Opus 5.5 · high effort', 'Opus 5.5 · medium effort', 'Gemini 4 
 const runOf = p => p.run || RUNS[[...p.id].reduce((s, c) => s + c.charCodeAt(0), 0) % RUNS.length];
 /* "..." menu on the metadata line of your own threads, branches and replies. Delete is offered only
    while nobody has responded (no branches, no replies). key: 't:thread', 'b:thread:node' or 'r:thread:reply'. */
-const moreMenu = (key, canDelete, what) => {
+const moreMenu = (key, canDelete, what, extra = '', del = true) => {
   const open = st.menu === 'more:' + key;
   return `<span class="mpick more"><button type="button" class="more-btn" data-a="menu" data-m="more:${key}" aria-haspopup="menu" aria-expanded="${open}" aria-label="More">${I.dots}</button>
-    ${open ? `<div class="menu right" role="menu">${canDelete ? `<button type="button" class="mi danger" role="menuitem" data-a="del" data-k="${key}"><span>Delete ${what}</span></button>` : `<div class="mi mi-off" role="menuitem" aria-disabled="true"><span>Delete ${what}<small>Not available once someone else has responded</small></span></div>`}</div>` : ''}</span>`;
+    ${open ? `<div class="menu right" role="menu">${extra}${!del ? '' : canDelete ? `<button type="button" class="mi danger" role="menuitem" data-a="del" data-k="${key}"><span>Delete ${what}</span></button>` : `<div class="mi mi-off" role="menuitem" aria-disabled="true"><span>Delete ${what}<small>Not available once someone else has responded</small></span></div>`}</div>` : ''}</span>`;
 };
 function me() { return st.auth === 'out' ? null : st.user; }
 const mine = u => u === me();
@@ -995,10 +1020,12 @@ function card(p) {
   const acts = `<button class="iconbtn likes${st.liked[lk] ? ' on' : ''}" data-a="like" data-k="${lk}" aria-pressed="${!!st.liked[lk]}" aria-label="Like, ${nl} likes"${off}>${I.heart}<span>${nl}</span></button><button class="iconbtn${st.saved[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!st.saved[p.id]}" aria-label="${st.saved[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}</button>`;
   if (p.k === 'post') {
     const n = replyCount(p);
-    return `<article class="${cls}">${head}<p class="post">${esc(p.q)}</p><div class="card-f">${lead}${count(n ? noun(n, 'reply', 'replies') : '')}${canWrite() ? `<button class="iconbtn" data-a="reply" data-id="${rkey(p, 'top')}" aria-label="Reply">${I.reply}</button>` : ''}${acts}${tail}</div></article>`;
+    return `<article class="${cls}" id="card-${p.id}">${head}<p class="post">${esc(p.q)}</p><div class="card-f">${lead}${count(n ? noun(n, 'reply', 'replies') : '')}${canWrite() ? `<button class="iconbtn" data-a="reply" data-id="${rkey(p, 'top')}" aria-label="Reply">${I.reply}</button>` : ''}${acts}${tail}</div></article>`;
   }
   const T = tree(p), src = (D.srcd[p.id] || []).length;
-  return `<article class="${cls}" id="card-${p.id}">${head}<p class="ask">${esc(T.nodes.r.q)}</p>
+  const src0 = p.from && byId(p.from.pid);
+  const from = src0 ? `<button class="fromln" data-a="gofrom" data-id="${p.from.pid}" data-node="${p.from.nid}">${I.branch}<span>Branched from <b>${esc(clip(tree(src0).nodes.r.q, 70))}</b></span></button>` : '';
+  return `<article class="${cls}" id="card-${p.id}">${head}${from}<p class="ask">${esc(T.nodes.r.q)}</p>
     <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok)].filter(Boolean).join(' · ')}</span></div>
     <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
     <div class="card-f">${lead}${count(T.count ? noun(T.count, 'branch', 'branches') : '')}${canWrite() && !p.pending ? `<button class="iconbtn" data-a="ask" data-id="${p.id}" aria-label="${st.asking === p.id ? 'Close the branch box' : 'Branch'}">${st.asking === p.id ? I.x : I.branch}</button>` : ''}${acts}${tail}</div></article>`;
@@ -1014,7 +1041,7 @@ function bestBlock(blocks, text) { const w = words(text); let best = 0, bi = 0; 
 /* Group the answer's top-level branches by the paragraph they belong to, in reading order. */
 function groupsFor(p, prose) {
   const T = tree(p), blocks = blocksOf(prose), by = new Map();
-  for (const n of T.kids('r')) { const bi = bestBlock(blocks, n.q0 + ' ' + summ(n)); if (!by.has(bi)) by.set(bi, []); by.get(bi).push(n); }
+  for (const n of T.kids('r')) { const bi = bestBlock(blocks, n.quote || (n.q0 + ' ' + summ(n))); if (!by.has(bi)) by.set(bi, []); by.get(bi).push(n); }
   return [...by.entries()].sort((a, b) => a[0] - b[0]).map(([bi, ns], gi) => ({ g: 't' + p.id + '-' + bi, bi, block: blocks[bi], ns, gi, total: ns.reduce((s, n) => s + 1 + T.desc(n.id), 0) }));
 }
 /* Place margin items at their anchor's height; push down to avoid overlap; grow the margin to fit. */
@@ -1026,7 +1053,7 @@ function place(margin, items) {
   margin.style.minHeight = y + 'px';
 }
 const narrow = () => matchMedia('(max-width: 860px)').matches;
-const badge = (b, g, total) => { b.dataset.grp = g; b.insertAdjacentHTML('beforeend', `<span class="anc" aria-label="${noun(total, 'branch', 'branches')} on this passage">${I.branch}${total}</span>`); };
+const badge = (b, g, total, pid, bi) => { b.dataset.grp = g; b.insertAdjacentHTML('beforeend', canWrite() ? `<button type="button" class="anc" data-a="askpass" data-id="${pid}" data-bi="${bi}" title="Ask about this passage" aria-label="${noun(total, 'branch', 'branches')} on this passage. Ask about it">${I.branch}${total}</button>` : `<span class="anc" aria-label="${noun(total, 'branch', 'branches')} on this passage">${I.branch}${total}</span>`); };
 const onPath = (p, T) => { const s = st.sel[p.id]; return new Set(s && T.nodes[s] ? T.path(s).map(n => n.id) : []); };
 const inGroup = (T, ns, id) => !!id && T.nodes[id] && ns.some(n => T.path(id).some(x => x.id === n.id));
 const leaves = (T, id) => { const k = T.kids(id); return k.length ? k.reduce((s, c) => s + leaves(T, c.id), 0) : 1; };
@@ -1037,9 +1064,14 @@ function pinGroups(p, draw, cls = '') {
   const prose = document.getElementById('pr-' + p.id), margin = document.getElementById('mr-' + p.id);
   if (!prose || !margin) return;
   const T = tree(p), items = [];
-  if (st.asking === p.id && !st.sel[p.id]) { margin.insertAdjacentHTML('beforeend', `<div class="pin">${composer('mf:' + p.id + ':r', 'Ask a branch question about the answer')}</div>`); items.push({ el: margin.lastElementChild, anchor: prose.firstElementChild }); }
+  if (st.asking === p.id && !st.sel[p.id]) {
+    const q = st.quote?.pid === p.id ? st.quote.text : '', blocks = blocksOf(prose), at = q ? blocks[bestBlock(blocks, q)] : prose.firstElementChild;
+    margin.insertAdjacentHTML('beforeend', `<div class="pin">${q ? `<blockquote class="bq">${esc(clip(q, 180))}</blockquote>` : ''}${composer('mf:' + p.id + ':r', q ? 'Ask about this passage' : 'Ask a branch question about the answer')}</div>`);
+    items.push({ el: margin.lastElementChild, anchor: at || prose.firstElementChild });
+    at?.classList.add('qsel');
+  }
   for (const G of groupsFor(p, prose)) {
-    badge(G.block, G.g, G.total);
+    badge(G.block, G.g, G.total, p.id, G.bi);
     margin.insertAdjacentHTML('beforeend', `<div class="pin grp ${cls}" data-grp-box="${G.g}">${draw(T, G)}</div>`);
     margin.lastElementChild.querySelectorAll('[data-draw]').forEach(drawGraph);
     items.push({ el: margin.lastElementChild, anchor: G.block });
@@ -1049,10 +1081,23 @@ function pinGroups(p, draw, cls = '') {
 
 /* The read-out under a drawing: the selected branch's question and answer. */
 function preview(p, T, n) {
-  const k = T.kids(n.id).length;
-  return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${mine(n.u) ? moreMenu('b:' + p.id + ':' + n.id, !n.pending && !othersUnderBranch(T, n.id), 'branch') : ''}</div>${status(n)}<div class="prose">${answerHtml(n)}</div>
-    <div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches'}</span>${canWrite() && !n.pending ? `<button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.id}">Branch from here</button>` : ''}</div>
-    ${st.asking === p.id ? composer('mf:' + p.id + ':' + n.id, 'Ask a branch question') : ''}</div>`;
+  const k = T.kids(n.id).length, key = p.id + ':' + n.id, promoted = PROMOTED[key] && byId(PROMOTED[key]) ? PROMOTED[key] : null;
+  const extra = canWrite() && !n.pending && !promoted ? `<button type="button" class="mi" role="menuitem" data-a="promote" data-id="${p.id}" data-node="${n.id}"><span>Open as its own thread</span></button>` : '';
+  const more = canWrite() && (extra || mine(n.u)) ? moreMenu('b:' + p.id + ':' + n.id, !n.pending && !othersUnderBranch(T, n.id) && !othersUnderReplies(BRP[key]), 'branch', extra, mine(n.u)) : '';
+  const par = st.asking === p.id ? (st.askPar ?? n.id) : null;
+  return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${more}</div>${n.quote ? `<blockquote class="bq">${esc(clip(n.quote, 180))}</blockquote>` : ''}${status(n)}<div class="prose">${answerHtml(n)}</div>
+    <div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches'}</span>${promoted ? `<button class="tlink" data-a="gothread" data-id="${promoted}">Open thread</button>` : ''}<span class="grow"></span>${canWrite() && !n.pending ? `<button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.id}" data-sel="${n.id}" title="Ask a follow-up under this answer">Continue</button><button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.par}" data-sel="${n.id}" title="Ask another question beside this one">Branch</button>` : ''}</div>
+    ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? 'Continue from this answer' : 'Ask beside this branch') : ''}
+    ${branchReplies(p, n)}</div>`;
+}
+/* replies on a branch's answer: a short discussion without running another ask */
+function branchReplies(p, n) {
+  if (n.pending) return '';
+  const key = p.id + ':' + n.id, rows = flatReplies(BRP[key] || []);
+  const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, at === 'top' ? 'Reply to this branch · @ to mention' : 'Reply · @ to mention', '', 'Reply') : '';
+  if (!rows.length && !canWrite()) return '';
+  return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'reply', 'replies')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 3) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><div class="rtext">${fmtReply(r.t)}</div><div class="pf">${likeBtnK('b:' + key + ':' + id, r)}${canWrite() ? `<button class="tlink" data-a="brreply" data-k="${key}/${id}">Reply</button>` : ''}</div>${box(id)}</div>`).join('')}
+    ${canWrite() && st.brReplying !== key + '/top' ? `<button class="tlink brp-add" data-a="brreply" data-k="${key}/top">Reply to this branch</button>` : ''}${box('top')}</div>`;
 }
 const readout = (p, T, ns) => inGroup(T, ns, st.sel[p.id]) ? preview(p, T, T.nodes[st.sel[p.id]]) : '';
 
@@ -1079,20 +1124,30 @@ function drawGraph(graph) {
 
 /* ---- replies on plain posts, drawn as trees (one style per variant) ---- */
 /* Reply ids are paths into the reply list: '0' is the first reply, '0.1' the second reply under it. */
-const flatReplies = (list, d = 0, pre = '') => list.flatMap((r, i) => { const id = pre + i; return [{ r, d, id }, ...flatReplies(r.kids || [], d + 1, id + '.')]; });
+const flatReplies = (list, d = 0, pre = '', col) => list.flatMap((r, i) => { const id = pre + i, shut = !!(col && col(id) && (r.kids || []).length); return [{ r, d, id, hid: shut ? flatReplies(r.kids).length : 0 }, ...(shut ? [] : flatReplies(r.kids || [], d + 1, id + '.', col))]; });
+const replyAtIn = (list, id) => id.split('.').reduce((acc, k, i) => (i ? acc.kids : acc)[+k], list);
+/* reply text: lines starting with "> " are quotes; @handles of members are mentions */
+const MENTION = /@([a-z0-9._]{2,20})/g;
+const mentionsIn = t => [...new Set([...t.matchAll(MENTION)].map(m => m[1].replace(/\.$/, '')).filter(u => member(u) && u !== me()))];
+const fmtReply = t => { const lines = t.split('\n'), out = []; let q = [];
+  const flush = () => { if (q.length) out.push(`<blockquote>${q.join('<br>')}</blockquote>`); q = []; };
+  for (const l of lines) { const m = l.match(/^>\s?(.*)$/); const h = esc(m ? m[1] : l).replace(MENTION, (x, u) => member(u.replace(/\.$/, '')) ? `<span class="mention">${x}</span>` : x); if (m) q.push(h); else { flush(); if (h.trim()) out.push(`<p>${h}</p>`); } }
+  flush(); return out.join(''); };
+const plainReply = t => t.split('\n').filter(l => !/^>/.test(l)).join(' ').trim() || t;
 const replyAt = (p, id) => id.split('.').reduce((acc, k, i) => (i ? acc.kids : acc)[+k], replies(p));
 function addReply(p, at, t) {
   const r = { u: me(), createdAt: new Date(NOW).toISOString(), t, likes: 0 };
   if (at === 'top') (D.rp[p.id] ||= []).push(r); else (replyAt(p, at).kids ||= []).push(r);
 }
 const rkey = (p, id) => p.id + '/' + id;
-const likeBtn = (p, id, r) => { const k = 'r:' + p.id + ':' + id, n = (r.likes || 0) + (st.liked[k] ? 1 : 0); return `<button class="rlike${st.liked[k] ? ' on' : ''}" data-a="like" data-k="${k}" aria-pressed="${!!st.liked[k]}" aria-label="Like, ${n} likes"${canWrite() ? '' : ' disabled'}>${I.heart}${n}</button>`; };
-const replyBox = (p, at, ph) => st.replying === rkey(p, at) ? composer('rp:' + p.id + ':' + at, ph, '', 'Reply') : '';
+const likeBtn = (p, id, r) => likeBtnK('r:' + p.id + ':' + id, r);
+const likeBtnK = (k, r) => { const n = (r.likes || 0) + (st.liked[k] ? 1 : 0); return `<button class="rlike${st.liked[k] ? ' on' : ''}" data-a="like" data-k="${k}" aria-pressed="${!!st.liked[k]}" aria-label="Like, ${n} likes"${canWrite() ? '' : ' disabled'}>${I.heart}${n}</button>`; };
+const replyBox = (p, at, ph) => st.replying === rkey(p, at) ? composer('rp:' + p.id + ':' + at, ph + ' · @ to mention', '', 'Reply') : '';
 const replyLink = (p, id) => canWrite() ? `<button class="tlink" data-a="reply" data-id="${rkey(p, id)}">Reply</button>` : '';
 
 /* Avatar tree: the same line graph as the branch trees, one row per reply led by its author's avatar; click a row to read it. */
 function replyLines(p) {
-  const rows = flatReplies(replies(p)); if (!rows.length) return st.replying === rkey(p, 'top') ? `<div class="grp">${replyBox(p, 'top', 'Reply to the post')}</div>` : '';
+  const rows = flatReplies(replies(p), 0, '', id => st.rcol[p.id + '/' + id]); if (!rows.length) return st.replying === rkey(p, 'top') ? `<div class="grp">${replyBox(p, 'top', 'Reply to the post')}</div>` : '';
   const sel = st.rsel[p.id], H = 26, X = d => 6 + d * 13, idx = Object.fromEntries(rows.map((x, i) => [x.id, i]));
   const on = new Set(); if (sel) sel.split('.').forEach((_, i, a) => on.add(a.slice(0, i + 1).join('.')));
   let paths = '', dots = '';
@@ -1102,8 +1157,8 @@ function replyLines(p) {
     dots += `<circle class="${id === sel ? 'sel' : on.has(id) ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="3.5"/>`;
   });
   const cur = sel && idx[sel] != null ? rows[idx[sel]] : null;
-  return `<div class="grp"><div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ r, d, id }) => `<button class="grow-r${on.has(id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}"><span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(r.t)}</span></span></button>`).join('')}</div>
-    ${cur ? `<div class="preview fadein"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div><p class="rtext">${esc(cur.r.t)}</p><div class="pf">${likeBtn(p, cur.id, cur.r)}${replyLink(p, cur.id)}</div>${replyBox(p, cur.id, 'Reply to ' + cur.r.u)}</div>` : ''}
+  return `<div class="grp"><div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ r, d, id, hid }) => `<button class="grow-r${on.has(id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}"><span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(plainReply(r.t))}</span>${hid ? `<span class="rhid">+${hid}</span>` : ''}</span></button>`).join('')}</div>
+    ${cur ? `<div class="preview fadein"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div><div class="rtext">${fmtReply(cur.r.t)}</div><div class="pf">${likeBtn(p, cur.id, cur.r)}${replyLink(p, cur.id)}${canWrite() ? `<button class="tlink" data-a="rquote" data-id="${rkey(p, cur.id)}">Quote</button>` : ''}${(cur.r.kids || []).length ? `<button class="tlink" data-a="rcol" data-id="${p.id}" data-node="${cur.id}">${st.rcol[p.id + '/' + cur.id] ? `Show ${noun(flatReplies(cur.r.kids).length, 'reply', 'replies')}` : 'Hide replies'}</button>` : ''}</div>${replyBox(p, cur.id, 'Reply to ' + cur.r.u)}</div>` : ''}
     <div class="rfoot">${replyLink(p, 'top')}</div>${replyBox(p, 'top', 'Reply to the post')}</div>`;
 }
 
@@ -1189,7 +1244,7 @@ function renderNetwork() {
   streamFor(st.space).forEach(p => p.k === 'ask' && v.layout(p));
   mg.scrollTop = top;
   const tabsEl = mg.querySelector('.tabs'), edge = () => tabsEl.classList.toggle('scrolled', mg.scrollTop > 2);
-  edge(); mg.addEventListener('scroll', edge, { passive: true });
+  edge(); mg.addEventListener('scroll', () => { edge(); $('#selbranch')?.remove(); }, { passive: true });
   const ts = $('#k-tabs'), fade = () => { ts.style.setProperty('--fl', ts.scrollLeft > 1 ? '40px' : '0px'); ts.style.setProperty('--fr', ts.scrollLeft + ts.clientWidth < ts.scrollWidth - 1 ? '40px' : '0px'); };
   ts.scrollLeft = tabsLeft; { const on = ts.querySelector('[aria-current="true"]'); if (on && (on.offsetLeft + on.offsetWidth > ts.scrollLeft + ts.clientWidth - 40 || on.offsetLeft < ts.scrollLeft + 40)) ts.scrollLeft = on.offsetLeft - ts.clientWidth / 2 + on.offsetWidth / 2; }
   fade(); ts.addEventListener('scroll', fade, { passive: true });
@@ -1209,8 +1264,20 @@ app.addEventListener('click', e => {
   const t = e.target.closest('[data-a]'); if (!t) return;
   const a = t.dataset.a, d = t.dataset;
   if (a === 'space') { st.space = d.id; st.asking = null; render(); $('#k-mg').scrollTop = 0; return; }
-  if (a === 'ask') { st.asking = st.asking === d.id ? null : d.id; st.sel[d.id] = null; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
-  if (a === 'askfrom') { st.sel[d.id] = d.node; st.asking = d.id; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
+  if (a === 'ask') { st.asking = st.asking === d.id ? null : d.id; st.sel[d.id] = null; st.quote = null; st.askPar = null; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
+  if (a === 'askfrom') { st.sel[d.id] = d.sel || d.node; st.askPar = d.node; st.asking = d.id; st.quote = null; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
+  if (a === 'askpass' || a === 'selbranch') { const pr = document.getElementById('pr-' + d.id); let q = st.selText || '';
+    if (a === 'askpass') { const b = blocksOf(pr)[+d.bi].cloneNode(true); b.querySelectorAll('.anc, sup').forEach(x => x.remove()); q = clip(b.textContent.replace(/\s+/g, ' ').trim(), 220); }
+    $('#selbranch')?.remove(); getSelection()?.removeAllRanges(); st.quote = { pid: d.id, text: q }; st.asking = d.id; st.sel[d.id] = null; st.askPar = null; render(); document.getElementById(`in-mf:${d.id}:r`)?.focus(); return; }
+  if (a === 'promote') { const P = byId(d.id), n = tree(P).nodes[d.node], id = 'new' + (++nseq);
+    D.posts.push({ id, s: P.s, u: me(), k: 'ask', createdAt: new Date(NOW).toISOString(), q: n.q, sum: '', tok: n.tok || 0, likesBase: 0, run: runOf(P), from: { pid: d.id, nid: d.node } });
+    D.rich[id] = n.html; PROMOTED[d.id + ':' + d.node] = id; st.menu = null; toast('Opened as its own thread.'); render(); document.getElementById('card-' + id)?.scrollIntoView({ block: 'start' }); return; }
+  if (a === 'gothread') { st.space = 'home'; render(); document.getElementById('card-' + d.id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+  if (a === 'gofrom') { st.sel[d.id] = d.node; st.asking = null; render(); document.getElementById('card-' + d.id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+  if (a === 'brreply') { st.brReplying = st.brReplying === d.k ? null : d.k; render(); document.getElementById('in-br:' + d.k.replace('/', ':'))?.focus(); return; }
+  if (a === 'rcol') { const k = d.id + '/' + d.node; st.rcol[k] = !st.rcol[k]; render(); return; }
+  if (a === 'rquote') { const [pid, rid] = d.id.split('/'), r = replyAt(byId(pid), rid); st.replying = d.id; render();
+    const ta = document.getElementById('in-rp:' + pid + ':' + rid); if (ta) { ta.value = `> ${clip(plainReply(r.t), 200)}\n`; ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
   if (a === 'rsel') { st.rsel[d.id] = st.rsel[d.id] === d.node ? null : d.node; st.replying = null; render(); return; }
   if (a === 'reply') { st.replying = st.replying === d.id ? null : d.id; render(); document.getElementById('in-rp:' + d.id.replace('/', ':'))?.focus(); return; }
   if (a === 'del') { deleteItem(d.k); return; }
@@ -1219,7 +1286,21 @@ app.addEventListener('click', e => {
   if (a === 'menu') { st.menu = st.menu === d.m ? null : d.m; render(); if (!d.m.startsWith('more:')) $('#in-new')?.focus({ preventScroll: true }); return; }
   if (a === 'setmodel' || a === 'seteffort' || a === 'setspace') { st[{ setmodel: 'newModel', seteffort: 'newEffort', setspace: 'newSpace' }[a]] = d.v; st.menu = null; render(); $('#in-new')?.focus(); return; }
   if (a === 'mode') { st.newMode = d.m; st.menu = null; render(); const t = $('#in-new'); t?.focus(); t?.setSelectionRange(t.value.length, t.value.length); return; }
-  if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; render(); return; }
+  if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; st.askPar = null; st.brReplying = null; render(); return; }
+});
+/* select text in an answer to branch from it */
+app.addEventListener('mouseup', e => {
+  setTimeout(() => {
+    $('#selbranch')?.remove();
+    const sel = getSelection(), t = sel && sel.toString().replace(/\s+/g, ' ').trim();
+    if (!t || t.length < 3 || !canWrite() || !sel.rangeCount) return;
+    const pr = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement)?.closest('.card .prose[id^="pr-"]');
+    if (!pr || !pr.contains(sel.focusNode)) return;
+    const pid = pr.id.slice(3); if (byId(pid)?.pending) return;
+    const r = sel.getRangeAt(0).getBoundingClientRect(), A = app.getBoundingClientRect();
+    st.selText = clip(t, 300);
+    app.insertAdjacentHTML('beforeend', `<button id="selbranch" data-a="selbranch" data-id="${pid}" style="left:${Math.max(8, Math.min(r.left + r.width / 2 - A.left - 64, A.width - 140))}px;top:${r.top - A.top - 36}px">${I.branch}Branch from this</button>`);
+  });
 });
 /* hover: outline the drawing under the pointer */
 function hl(e, on) {
@@ -1232,13 +1313,15 @@ app.addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target.closest('[data-form]'); if (!f) return;
   const inp = f.querySelector('input, textarea'), v = inp.value.trim(); if (!v) { inp.focus(); return; }
-  const [kind, pid, node] = f.dataset.form.split(':'), p = byId(pid);
+  const [kind, pid, node, at] = f.dataset.form.split(':'), p = byId(pid);
+  const notify = t => { const m = mentionsIn(t); if (m.length) toast(`Notified ${m.map(u => '@' + u).join(', ')}.`); };
+  if (kind === 'br') { const list = (BRP[pid + ':' + node] ||= []), r = { u: me(), createdAt: new Date(NOW).toISOString(), t: v, likes: 0 }; if (at === 'top') list.push(r); else (replyAtIn(list, at).kids ||= []).push(r); st.brReplying = null; notify(v); render(); return; }
   if (kind === 'new' && e.submitter?.value !== 'post' && outOfTokens() && st.newModel !== 'GPT-6.1 Sol') { toast('Included tokens are used up until Friday. Post instead, or add an API key in Usage.'); render(); return; }
   if (kind === 'new') { newThread(newSpaceId(), v, e.submitter?.value === 'post' ? 'post' : 'ask'); return; }
-  if (kind === 'rp') { addReply(p, node, v); st.replying = null; render(); return; }
+  if (kind === 'rp') { addReply(p, node, v); st.replying = null; if (node !== 'top') st.rcol[pid + '/' + node] = false; notify(v); render(); return; }
   if (kind === 'mf' && outOfTokens()) { toast('Included tokens are used up until Friday. Add an API key in Usage to keep branching.'); render(); return; }
-  st.sel[pid] = addBranch(p, node, v);
-  st.asking = null; render();
+  st.sel[pid] = addBranch(p, node, v, node === 'r' && st.quote?.pid === pid ? st.quote.text : null);
+  st.asking = null; st.quote = null; st.askPar = null; render();
 });
 /* composer: a click anywhere in it keeps the cursor in the text (controls still work); a click outside the model menu closes it */
 app.addEventListener('mousedown', e => {
@@ -1416,7 +1499,7 @@ function authScreen() {
   } else if (st.flow === 'profile') {
     const a = X_ACCOUNTS.find(x => x.x === st.xacct), inv = INVITES.find(i => i.code === st.code), pf = st.profile;
     body = `<div class="auth-c">${back('xauth')}<h2>Create your account</h2><div class="inviter">${av(a.x)}<div><b>Signed in with X as @${esc(a.x)}</b><small>Invited by ${esc(nameOf(inv.by))} · code ${esc(inv.code)}</small></div></div>
-      <form class="pf" data-mform="profile"><label>Name<input id="pf-name" value="${esc(pf.name)}" autocomplete="off"></label>
+      <form class="pform" data-mform="profile"><label>Name<input id="pf-name" value="${esc(pf.name)}" autocomplete="off"></label>
       <label>Handle on Session<span class="hwrap"><span>@</span><input id="pf-handle" value="${esc(pf.handle)}" autocomplete="off" spellcheck="false"></span><small>Lowercase letters, numbers, dots and underscores; 3 to 20 characters.</small></label>
       ${pf.err ? `<p class="ferr">${esc(pf.err)}</p>` : ''}
       <label class="chk"><input type="checkbox" id="pf-rules"${pf.rules ? ' checked' : ''}> I have read the space rules and will follow them.</label>
@@ -1544,7 +1627,7 @@ function render() {
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
   if (st.screen === 'network') renderNetwork();
   else { pg.innerHTML = (st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
-  app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg').forEach(x => x.remove());
+  app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg, :scope > #selbranch').forEach(x => x.remove());
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
   if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
 }
