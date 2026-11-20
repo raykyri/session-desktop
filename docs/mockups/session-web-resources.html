@@ -432,8 +432,12 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 #page > .mg, #page > .page { height: 100%; }
 /* ================= resources ================= */
 #page > .rwrap { height: 100%; display: flex; flex-direction: column; }
-.rtop { flex: none; padding: 0 20px; border-bottom: 1px solid var(--divider); }
-.rtop .tabs { position: static; box-shadow: none; clip-path: none; padding: 10px 0; }
+.hstrip { flex: 1; min-width: 0; margin-left: 6px; }
+.hstrip .tabs { position: static; box-shadow: none; clip-path: none; padding: 0; background: none; }
+.hstrip .tabs-s { align-items: center; }
+#shell { overflow: hidden; }
+#bar { transition: margin-top .22s ease, opacity .22s ease; }
+#shell.barhid > #bar { margin-top: -49px; opacity: 0; pointer-events: none; }
 .rwrap > .spshell { flex: 1; min-height: 0; display: flex; position: relative; }
 .rwrap .row { grid-template-columns: minmax(0, 520px) minmax(0, 290px); gap: 18px; }
 .rwrap .mg-inner { max-width: 900px; padding-top: 12px; }
@@ -522,7 +526,9 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .spshell.rl-6 > .mg { position: absolute; top: 12px; right: 14px; bottom: 12px; width: 590px; height: auto; border-radius: 18px; background: var(--canvas); box-shadow: var(--shadow), 0 16px 40px rgba(0,0,0,.14); }
 .rl-6 .row { grid-template-columns: minmax(0, 1fr); }
 /* 8 shelf */
-.rp-shelf { margin: 0 auto 6px; max-width: 828px; padding: 10px 12px 4px; border: 0; border-radius: 16px; overflow: visible; }
+.rp-shelf { position: sticky; top: 10px; z-index: 8; margin: 0 auto 14px; max-width: 828px; max-height: 44vh; padding: 10px 12px 4px; border: 0; border-radius: 16px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+  background: color-mix(in srgb, var(--card) 86%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--shadow), 0 10px 30px rgba(0,0,0,.10); }
+.rp-shelf .rshelf, .rp-shelf .rspines { overscroll-behavior-x: contain; }
 .rshelf { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 12px; }
 .rshelf .rcard { flex: none; width: 220px; }
 .shelfdrop { flex: none; width: 150px; margin: 0; display: grid; place-items: center; }
@@ -593,13 +599,68 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .rlkbar { display: flex; align-items: center; gap: 5px; margin-top: -8px; padding: 12px 10px 6px; border-radius: 0 0 12px 12px; background: var(--control); color: var(--t-secondary); font-size: var(--fs-xs); text-align: left; }
 .rlkbar svg.i { width: 11px; height: 11px; }
 .rlk.on .rlkbar { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+/* B2 side shelf */
+.rp-sideshelf { width: 250px; background: color-mix(in srgb, var(--control) 70%, var(--canvas)); }
+.rledges { display: flex; flex-direction: column; gap: 14px; }
+.rledge { position: relative; padding-bottom: 8px; }
+.rledge::after { content: ''; position: absolute; left: -6px; right: -6px; bottom: 0; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--t-faint) 28%, transparent); box-shadow: 0 2px 3px rgba(0,0,0,.08); }
+/* B3 dock */
+.rp-dock { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 9; width: min(980px, calc(100% - 32px)); max-height: 46vh; padding: 8px 14px 10px; border: 0; border-radius: 16px; overflow-y: auto; overscroll-behavior: contain; background: color-mix(in srgb, var(--card) 88%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--shadow), 0 12px 34px rgba(0,0,0,.14); }
+.rl-21 .mg-inner { padding-bottom: 260px; }
+.rp-dock .rhead { margin-bottom: 6px; }
+.rp-dock .rkf { margin: 0 8px 0 0; }
+.rdk { display: inline-flex; align-items: center; gap: 6px; }
+.rdk svg.i { width: 12px; height: 12px; color: var(--t-faint); transition: transform .12s; }
+.rdk[aria-expanded="false"] svg.i { transform: rotate(180deg); }
+.rp-dock .rshelf .rcard { width: 220px; max-height: 170px; overflow: hidden; }
+/* B4 spines */
+.rspines { display: flex; align-items: flex-end; gap: 6px; overflow-x: auto; padding: 4px 2px 12px; border-bottom: 5px solid color-mix(in srgb, var(--t-faint) 30%, transparent); border-radius: 0 0 3px 3px; }
+.rspine { flex: none; position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; width: 44px; height: 176px; padding: 8px 0; border-radius: 6px 6px 2px 2px; background: var(--card); box-shadow: var(--shadow); cursor: pointer; }
+.rspine:nth-child(3n) { height: 160px; } .rspine:nth-child(4n) { height: 188px; }
+.rspine:hover { transform: translateY(-4px); }
+.rspine .rsk svg.i { width: 13px; height: 13px; color: var(--t-faint); }
+.rst { flex: 1; writing-mode: vertical-rl; transform: rotate(180deg); font-size: var(--fs-xs); font-weight: 600; color: var(--t-heading); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rspine.k-post { border-top: 4px solid var(--t-heading); } .rspine.k-link { border-top: 4px solid var(--accent); } .rspine.k-paper { border-top: 4px solid var(--bad); } .rspine.k-video { border-top: 4px solid var(--good); } .rspine.k-image { border-top: 4px solid var(--warn); } .rspine.k-note { border-top: 4px solid var(--t-faint); }
+.rspine-open { flex: none; position: relative; width: 240px; }
+.rspx { position: absolute; top: -10px; right: -8px; width: 22px; height: 22px; border-radius: 11px; background: var(--card); box-shadow: var(--shadow); z-index: 2; }
+.rspx svg.i { width: 10px; height: 10px; }
+.spinedrop { flex: none; width: 70px; height: 150px; margin: 0; display: grid; place-items: center; }
+/* C2 reader shelf */
+.rchips2 { display: flex; flex-wrap: wrap; gap: 6px; }
+.rchip2 { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; padding: 5px 10px; border-radius: 14px; background: var(--card); box-shadow: var(--shadow); font-size: var(--fs-xs); color: var(--t-heading); cursor: pointer; }
+.rchip2 span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rchip2 svg.i { width: 12px; height: 12px; color: var(--t-faint); }
+.rchip2.on { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.chipdrop { margin: 0; padding: 5px 12px; }
+.rtopprev { margin-top: 10px; }
+.rtopprev .rcard { max-width: 560px; }
+/* C3 reader rail */
+.rp-rrail { position: relative; width: 60px; padding: 12px 8px; overflow: visible; }
+.rtiles { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.rtile { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--card); box-shadow: var(--shadow); color: var(--t-secondary); cursor: pointer; }
+.rtile svg.i { width: 16px; height: 16px; }
+.rtile.k-paper { color: var(--bad); } .rtile.k-link { color: var(--accent); } .rtile.k-video { color: var(--good); } .rtile.k-image { color: var(--warn); }
+.rtile.on { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.radd3 { background: none; box-shadow: inset 0 0 0 1.5px var(--border-strong); color: var(--t-faint); }
+.rflyout { position: absolute; z-index: 12; left: 68px; top: 12px; width: 320px; padding: 4px; }
+.rflyout .rcard { box-shadow: var(--shadow), 0 14px 34px rgba(0,0,0,.18); }
+.rflyout .radd { padding: 8px; border-radius: 12px; background: var(--card); box-shadow: var(--shadow); }
+/* D2 linked shelf · D3 linked side */
+.rp-lshelf .rshelf .rlk { flex: none; width: 220px; }
+.rp-lside { width: 270px; }
+.rls { display: flex; flex-direction: column; gap: 6px; }
+.rls.on { margin-bottom: 6px; }
+.rcnt { display: inline-flex; align-items: center; gap: 3px; flex: none; color: var(--accent); font-size: var(--fs-xs); font-weight: 600; }
+.rcnt svg.i { width: 11px; height: 11px; }
 /* mock bar */
+.rlseg button b { color: var(--t-faint); margin-right: 5px; font-weight: 600; }
 .rlseg { flex-wrap: wrap; }
 .rsamp { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 8px; cursor: grab; font-size: var(--fs-xs); color: var(--t-secondary); user-select: none; }
 .rsamp:hover { background: var(--fill-hover); color: var(--t-heading); }
 .rsamp svg.i { width: 12px; height: 12px; }
 @media (max-width: 860px) {
   .rwrap > .spshell { flex-direction: column; overflow-y: auto; }
+  .rwrap > .spshell > .rp.rp-dock { position: absolute; left: 10px; right: 10px; bottom: 10px; transform: none; width: auto !important; max-height: 40vh; border-bottom: 0; }
   .rwrap > .spshell > .rp { flex: none !important; min-width: 0 !important; width: auto !important; max-height: 340px; border-right: 0; border-bottom: 1px solid var(--divider); }
   .rwrap > .spshell > .mg { flex: none; height: auto; overflow: visible; width: auto !important; position: static !important; box-shadow: none !important; border-radius: 0 !important; }
   .rcv { height: auto !important; width: auto !important; display: flex; flex-direction: column; gap: 10px; padding: 0 14px; }
@@ -1724,11 +1785,19 @@ function createSpace() {
    (or a link from another tab) onto the resources area to add it; drag cards to reorder or, on canvases, move them.
    Layouts (mock bar): 1-4 a column to the left that pushes the asks right, 5-7 canvases, 8-12 other arrangements. */
 const RL = [
-  [5, 'Canvas', 'Freeform canvas left of the asks'],
-  [8, 'Shelf', 'A shelf of cards above the asks'],
-  [10, 'Reader', 'A list with the selected card open above it'],
-  [16, 'Linked', 'Each card shows the asks that used it; pick one to filter the asks'],
+  [5, 'A', 'Canvas', 'Freeform canvas left of the asks'],
+  [8, 'B1', 'Shelf', 'A shelf of cards above the asks'],
+  [20, 'B2', 'Side shelf', 'A narrow vertical shelf on the left'],
+  [21, 'B3', 'Dock', 'A shelf docked along the bottom of the page'],
+  [22, 'B4', 'Spines', 'Cards stand as spines on a shelf above the asks; open one to read it'],
+  [10, 'C1', 'Reader', 'A list with the selected card open above it'],
+  [23, 'C2', 'Reader shelf', 'Title chips across the top; the selected card opens under them'],
+  [24, 'C3', 'Reader rail', 'A rail of tiles on the left; the selected card opens beside it'],
+  [16, 'D1', 'Linked', 'Each card shows the asks that used it; pick one to filter the asks'],
+  [25, 'D2', 'Linked shelf', 'Linked cards in a shelf above the asks'],
+  [26, 'D3', 'Linked side', 'A narrow list with ask counts; pick one to filter the asks'],
 ];
+const LINKED = [16, 25, 26], TOPSHELF = [8, 22, 23, 25];
 const RKIND = { post: 'Posts', link: 'Links', paper: 'Papers', video: 'Videos', image: 'Images', note: 'Notes' };
 let rseq = 0;
 const R = o => ({ id: 'r' + (++rseq), at: '2026-11-1' + (rseq % 7) + 'T1' + (rseq % 9) + ':00:00Z', ...o });
@@ -1778,7 +1847,7 @@ const resById = (id) => { for (const k in RES) { const r = RES[k].find(x => x.id
 function addResource(data, at = {}) {
   const sp = resTarget(); if (!sp || !canWrite()) return;
   const r = R({ ...data, by: st.user, at: new Date(NOW).toISOString(), ...at });
-  (RES[sp] ||= []).push(r); st.rsel = r.id; toast(SP[st.space] ? 'Added to resources.' : `Added to ${spName(sp)}.`); render();
+  (RES[sp] ||= []).push(r); st.rpick = r.id; toast(SP[st.space] ? 'Added to resources.' : `Added to ${spName(sp)}.`); render();
 }
 function resFromUrl(u) {
   let host = ''; try { host = new URL(u).hostname.replace(/^www\./, ''); } catch { return null; }
@@ -1804,14 +1873,14 @@ function rcard(r, size = 'full', extra = '') {
   const used = usedBy(r.id).length;
   const foot = `<div class="rfoot2"><span class="rk">${RICON[r.kind]}${r.kind === 'post' ? 'Post on X' : r.domain || 'Note'}</span>${tag}${used ? `<span class="rused" title="Asks about this">${ARROW_REPLY}${used}</span>` : ''}<span class="grow"></span>${av(r.by, 'xs')}</div>`;
   let body = '';
-  if (size === 'row') return `<div class="rrow${st.rsel === r.id ? ' sel' : ''}" draggable="${canWrite()}" data-rid="${r.id}" data-a="rpick" data-id="${r.id}"><span class="rk">${RICON[r.kind]}</span><span class="rt">${esc(rTitle(r))}</span><small>${esc(r.kind === 'post' ? 'X' : r.domain || 'note')}</small>${tag}<small>${day(r.at)}</small>${av(r.by, 'xs')}</div>`;
+  if (size === 'row') return `<div class="rrow${st.rpick === r.id ? ' sel' : ''}" draggable="${canWrite()}" data-rid="${r.id}" data-a="rpick" data-id="${r.id}"><span class="rk">${RICON[r.kind]}</span><span class="rt">${esc(rTitle(r))}</span><small>${esc(r.kind === 'post' ? 'X' : r.domain || 'note')}</small>${tag}<small>${day(r.at)}</small>${av(r.by, 'xs')}</div>`;
   if (r.kind === 'post') body = `<div class="rpost"><span class="rpav">${esc((r.name || r.handle)[0])}</span><div><b>${esc(r.name)}</b><small>@${esc(r.handle)}</small></div></div><p class="rtxt">${esc(size === 'compact' ? clip(r.text, 90) : r.text)}</p>${r.likes != null ? `<small class="rmeta">${r.likes} likes</small>` : ''}`;
   else if (r.kind === 'note') body = `<p class="rtxt rnote2">${esc(size === 'compact' ? clip(r.text, 90) : r.text)}</p>`;
   else if (r.kind === 'image') body = `<div class="rimg" style="--h:${r.hue || 210}"></div><b class="rtl">${esc(r.title)}</b>`;
   else if (r.kind === 'video') body = `<div class="rimg rvid" style="--h:${(r.title.length * 23) % 360}"><span>${RICON.video}</span>${r.dur ? `<em>${esc(r.dur)}</em>` : ''}</div><b class="rtl">${esc(r.title)}</b>`;
   else if (r.kind === 'paper') body = `<div class="rpaper"><span class="rpdf">PDF</span><div><b class="rtl">${esc(r.title)}</b><small>${esc(r.authors || '')}${r.pages ? ` · ${r.pages} pages` : ''}</small></div></div>`;
   else body = `<b class="rtl">${esc(r.title)}</b>${r.text && size !== 'compact' ? `<p class="rtxt">${esc(r.text)}</p>` : ''}`;
-  return `<div class="rcard k-${r.kind} s-${size}${st.rsel === r.id ? ' sel' : ''}" draggable="${canWrite()}" data-rid="${r.id}"${extra}>${body}${foot}${acts}</div>`;
+  return `<div class="rcard k-${r.kind} s-${size}${st.rpick === r.id ? ' sel' : ''}" draggable="${canWrite()}" data-rid="${r.id}"${extra}>${body}${foot}${acts}</div>`;
 }
 const usedBy = id => D.posts.filter(p => p.about?.id === id);
 const kindFilter = list => { const ks = Object.keys(RKIND).filter(k => list.some(r => r.kind === k)); return ks.length > 1 ? `<div class="rkf">${[['', 'All'], ...ks.map(k => [k, RKIND[k]])].map(([k, l]) => `<button data-a="rkind" data-k="${k}" aria-pressed="${(st.rkind || '') === k}">${l}</button>`).join('')}</div>` : ''; };
@@ -1828,28 +1897,43 @@ function resourcesPane() {
     const H = Math.max(600, ...list.map(r => r.y + 240)), W = Math.max(520, ...list.map(r => r.x + 260));
     return `<div class="rp rp-canvas v5" data-drop="1" data-canvas="1"><div class="rcv-h">${rHead(list)}${title}</div><div class="rcv" style="height:${H}px;width:${W}px">${list.map(r => rcard(r, 'compact', ` data-cv="1" style="left:${r.x}px;top:${r.y}px"`)).join('')}${canWrite() && !list.length ? '<div class="rdrop big cvhint"><b>Drop anything here</b><span>Arrange cards however you like.</span></div>' : ''}</div></div>`; }
   if (v === 8) return `<div class="rp rp-shelf" data-drop="1">${rHead(list)}<div class="rshelf">${list.map(r => rcard(r, 'compact')).join('')}${canWrite() ? '<div class="rdrop shelfdrop">Drop here</div>' : ''}</div></div>`;
-  if (v === 10) { const cur = list.find(r => r.id === st.rsel) || list[0];
+  if (v === 10) { const cur = list.find(r => r.id === st.rpick) || list[0];
     return `<aside class="rp rp-reader" data-drop="1">${rHead(list)}${title}${cur ? `<div class="rprev">${rcard(cur)}</div>` : ''}<div class="rrows">${list.map(r => rcard(r, 'row')).join('')}</div>${rDropHint(list)}</aside>`; }
   if (v === 16) { const pick = st.rlink;
     return `<aside class="rp rp-linked" data-drop="1">${rHead(list, pick ? '<button class="tlink" data-a="rlink" data-id="">Show all asks</button>' : '')}${title}<div class="rlist">${list.map(r => { const asks = usedBy(r.id); return `<div class="rlk${pick === r.id ? ' on' : ''}">${rcard(r, 'compact')}<button class="rlkbar" data-a="rlink" data-id="${pick === r.id ? '' : r.id}">${asks.length ? `${ARROW_REPLY}${noun(asks.length, 'ask', 'asks')} about this` : 'No asks yet'}<span class="grow"></span>${pick === r.id ? 'Showing' : asks.length ? 'Show' : ''}</button></div>`; }).join('')}</div>${rDropHint(list)}</aside>`; }
+  const linkBar = (r, pick) => { const n = usedBy(r.id).length; return `<button class="rlkbar" data-a="rlink" data-id="${pick === r.id ? '' : r.id}">${n ? `${ARROW_REPLY}${noun(n, 'ask', 'asks')}` : 'No asks yet'}<span class="grow"></span>${pick === r.id ? 'Showing' : n ? 'Show' : ''}</button>`; };
+  if (v === 20) return `<aside class="rp rp-sideshelf" data-drop="1">${rHead(list)}${title}<div class="rledges">${list.map(r => `<div class="rledge">${rcard(r, 'compact')}</div>`).join('')}</div>${rDropHint(list)}</aside>`;
+  if (v === 21) { const open = st.dockOpen !== false;
+    return `<div class="rp rp-dock${open ? ' open' : ''}" data-drop="1"><div class="rhead"><button class="rdk" data-a="rdock" aria-expanded="${open}">${I.down}<b>Resources</b><small>${list.length}</small></button><span class="grow"></span>${open ? kindFilter(resAll(st.space)) : ''}${canWrite() ? '<button class="btn2 sm" data-a="radd">Add</button>' : ''}</div>${st.radding ? rHead([]).split('</div>').slice(1).join('</div>') : ''}${open ? `<div class="rshelf">${list.map(r => rcard(r, 'compact')).join('')}${canWrite() ? '<div class="rdrop shelfdrop">Drop here</div>' : ''}</div>` : ''}</div>`; }
+  if (v === 22) return `<div class="rp rp-shelf rp-spines" data-drop="1">${rHead(list)}<div class="rspines">${list.map(r => st.rpick === r.id ? `<div class="rspine-open">${rcard(r, 'compact')}<button class="iconbtn rspx" data-a="rpick" data-id="" aria-label="Close">${I.x}</button></div>` : `<button class="rspine k-${r.kind}" draggable="${canWrite()}" data-rid="${r.id}" data-a="rpick" data-id="${r.id}" title="${esc(rTitle(r))}"><span class="rsk">${RICON[r.kind]}</span><span class="rst">${esc(clip(rTitle(r), 34))}</span>${av(r.by, 'xs')}</button>`).join('')}${canWrite() ? '<div class="rdrop spinedrop">Drop</div>' : ''}</div></div>`;
+  if (v === 23) { const cur = list.find(r => r.id === st.rpick);
+    return `<div class="rp rp-shelf rp-rtop" data-drop="1">${rHead(list)}<div class="rchips2">${list.map(r => `<button class="rchip2${cur?.id === r.id ? ' on' : ''}" draggable="${canWrite()}" data-rid="${r.id}" data-a="rpick" data-id="${cur?.id === r.id ? '' : r.id}">${RICON[r.kind]}<span>${esc(clip(rTitle(r), 30))}</span></button>`).join('')}${canWrite() ? '<span class="rdrop chipdrop">Drop here</span>' : ''}</div>${cur ? `<div class="rtopprev">${rcard(cur)}</div>` : ''}</div>`; }
+  if (v === 24) { const cur = list.find(r => r.id === st.rpick);
+    return `<aside class="rp rp-rrail" data-drop="1"><div class="rtiles">${canWrite() ? `<button class="rtile radd3" data-a="radd" title="Add">${PLUS2}</button>` : ''}${list.map(r => `<button class="rtile k-${r.kind}${cur?.id === r.id ? ' on' : ''}" draggable="${canWrite()}" data-rid="${r.id}" data-a="rpick" data-id="${cur?.id === r.id ? '' : r.id}" title="${esc(rTitle(r))}">${RICON[r.kind]}</button>`).join('')}</div>${cur ? `<div class="rflyout">${rcard(cur)}</div>` : ''}${st.radding ? `<div class="rflyout">${rHead([]).split('</div>').slice(1).join('</div>')}</div>` : ''}</aside>`; }
+  if (v === 25) { const pick = st.rlink;
+    return `<div class="rp rp-shelf rp-lshelf" data-drop="1">${rHead(list, pick ? '<button class="tlink" data-a="rlink" data-id="">Show all asks</button>' : '')}<div class="rshelf">${list.map(r => `<div class="rlk${pick === r.id ? ' on' : ''}">${rcard(r, 'compact')}${linkBar(r, pick)}</div>`).join('')}${canWrite() ? '<div class="rdrop shelfdrop">Drop here</div>' : ''}</div></div>`; }
+  if (v === 26) { const pick = st.rlink;
+    return `<aside class="rp rp-lside" data-drop="1">${rHead(list, pick ? '<button class="tlink" data-a="rlink" data-id="">All</button>' : '')}${title}<div class="rrows">${list.map(r => { const n = usedBy(r.id).length; return `<div class="rls${pick === r.id ? ' on' : ''}"><div class="rrow${pick === r.id ? ' sel' : ''}" draggable="${canWrite()}" data-rid="${r.id}" data-a="rlink" data-id="${pick === r.id ? '' : r.id}"><span class="rk">${RICON[r.kind]}</span><span class="rt">${esc(rTitle(r))}</span>${n ? `<span class="rcnt">${ARROW_REPLY}${n}</span>` : ''}</div>${pick === r.id ? rcard(r, 'compact') : ''}</div>`; }).join('')}</div>${rDropHint(list)}</aside>`; }
   return '';
 }
 
 function renderNetwork() {
   const v = V[st.v], first = lastV !== st.v, sc = $('#k-mg'), top = sc && !first ? sc.scrollTop : 0, tabsLeft = $('#k-tabs')?.scrollLeft || 0;
-  const d = st.ui.sd, locked = spaceLocked(), posts = locked ? [] : streamFor(st.space).filter(p => st.ui.rl !== 16 || !st.rlink || p.about?.id === st.rlink);
+  const d = st.ui.sd, locked = spaceLocked(), posts = locked ? [] : streamFor(st.space).filter(p => !LINKED.includes(st.ui.rl) || !st.rlink || p.about?.id === st.rlink);
   const navTop = d === 'a' ? navStrip() : d === 'b' ? navDropTop() : `<nav class="tabs tabs-dd tabs-min sp-mob">${ddButton('big', `<span class="spt-l">${st.space !== 'home' && SP[st.space] ? glyph(SP[st.space]) : HOME}${esc(curLabel())}</span>`)}</nav>`;
   const side = d === 'c' ? navRail() : d === 'd' ? navSidebar() : '';
   const empty = locked ? `<div class="row"><p class="empty saved-empty">This space is private. Ask @${esc(ownerOf(st.space))} to add you.</p><div></div></div>`
     : st.space === 'saved' && !posts.length ? '<div class="row"><p class="empty saved-empty">Nothing saved yet. Use the bookmark on any thread to keep it here.</p><div></div></div>'
     : st.space === 'home' && !posts.length ? '<div class="row"><p class="empty saved-empty">Join a few spaces to fill Home. <button class="tlink inl" data-a="browse">Browse spaces</button></p><div></div></div>'
     : SP[st.space] && !posts.length ? '<div class="row"><p class="empty saved-empty">No threads here yet. Ask the first question.</p><div></div></div>' : '';
-  const rv = st.ui.rl, pane = st.screen === 'network' && !locked ? resourcesPane() : '', shelf = rv === 8;
-  $('#page').innerHTML = `<div class="rwrap"><div class="rtop">${navTop}</div><div class="spshell rl-${rv}${rv === 4 && st.drawer === false ? ' shut' : ''}">${shelf ? '' : pane}<div class="mg" id="k-mg"><div class="mg-inner">${shelf ? pane : ''}
+  const rv = st.ui.rl, pane = st.screen === 'network' && !locked ? resourcesPane() : '', shelf = TOPSHELF.includes(rv) || rv === 21;
+  $('#page').innerHTML = `<div class="rwrap"><div class="spshell rl-${rv}${rv === 4 && st.drawer === false ? ' shut' : ''}">${shelf ? '' : pane}<div class="mg" id="k-mg"><div class="mg-inner">${shelf && rv !== 21 ? pane : ''}
     ${pendingBanner()}${spaceHead()}${locked || (SP[st.space] && !isJoined(st.space) && st.auth === 'in') ? '' : composerOrLock(v)}
-    ${empty}${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div></div></div>`;
+    ${empty}${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div>${rv === 21 ? pane : ''}</div></div>`;
   const mg = $('#k-mg'), ta = $('#in-new');
-  mg.classList.add('ncw');  /* below 520px the composer's controls wrap to a second row */
+  mg.classList.add('ncw');
+  /* the app bar slides away while scrolling down and comes back on any scroll up */
+  { let lastY = mg.scrollTop; mg.addEventListener('scroll', () => { const y = mg.scrollTop, sh = $('#shell'); if (!sh) return; if (y > lastY + 4 && y > 64) sh.classList.add('barhid'); else if (y < lastY - 4 || y < 24) sh.classList.remove('barhid'); lastY = y; }, { passive: true }); if (mg.scrollTop < 24) $('#shell')?.classList.remove('barhid'); }  /* below 520px the composer's controls wrap to a second row */
   if (v.fs) mg.style.setProperty('--title-fs', v.fs);
   if (v.ifs) mg.style.setProperty('--input-fs', v.ifs);
   if (ta && st.draft) ta.style.height = ta.scrollHeight + 'px';
@@ -1887,9 +1971,10 @@ app.addEventListener('click', e => {
   if (a === 'raddclose') { st.radding = false; render(); return; }
   if (a === 'rkind') { st.rkind = d.k || null; render(); return; }
   if (a === 'rlink') { st.rlink = d.id || null; render(); return; }
+  if (a === 'rdock') { st.dockOpen = st.dockOpen === false; render(); return; }
   if (a === 'rdrawer') { st.drawer = st.drawer === false; render(); return; }
   if (a === 'rpile') { st.pileOpen = st.pileOpen === d.k ? null : d.k; render(); return; }
-  if (a === 'rpick') { st.rsel = d.id; render(); return; }
+  if (a === 'rpick') { st.rpick = d.id || null; st.radding = false; render(); return; }
   if (a === 'rsort') { if (st.rsort === d.k) st.rsortDir = -(st.rsortDir || -1); else { st.rsort = d.k; st.rsortDir = d.k === 'at' ? -1 : 1; } render(); return; }
   if (a === 'join') { e.stopPropagation(); if (!canWrite()) return; joinedIds().push(d.id); SEEN[st.user + ':' + d.id] = true; toast(`Joined ${spName(d.id)}.`); render(); return; }
   if (a === 'leave') { const j = joinedIds(); j.splice(j.indexOf(d.id), 1); toast(`Left ${spName(d.id)}.`); if (isPrivate(d.id)) st.space = 'home'; render(); return; }
@@ -1990,7 +2075,7 @@ app.addEventListener('pointerdown', e => {
   cvDrag = { c, r, sx: e.clientX, sy: e.clientY, x: r.x, y: r.y }; c.setPointerCapture(e.pointerId); c.classList.add('lifting'); e.preventDefault();
 });
 app.addEventListener('pointermove', e => { if (!cvDrag) return; const { c, sx, sy, x, y } = cvDrag; let nx = Math.max(0, x + e.clientX - sx), ny = Math.max(0, y + e.clientY - sy); c.style.left = nx + 'px'; c.style.top = ny + 'px'; cvDrag.nx = nx; cvDrag.ny = ny; });
-app.addEventListener('pointerup', () => { if (!cvDrag) return; const { c, r, nx, ny } = cvDrag; c.classList.remove('lifting'); if (nx != null) { r.x = nx; r.y = ny; r.moved = true; } else { st.rsel = r.id; } cvDrag = null; render(); });
+app.addEventListener('pointerup', () => { if (!cvDrag) return; const { c, r, nx, ny } = cvDrag; c.classList.remove('lifting'); if (nx != null) { r.x = nx; r.y = ny; r.moved = true; } else { st.rpick = r.id; } cvDrag = null; render(); });
 /* select text in an answer to branch from it */
 app.addEventListener('mouseup', e => {
   setTimeout(() => {
@@ -2197,7 +2282,7 @@ function savedBtn() {
 function appbar() {
   const m = meM();
   const open = st.menu === 'acct';
-  return `<header class="appbar">${brandBtn()}${st.ui.sd === 'b' && st.ui.sv === '1' && st.screen === 'network' ? ddButton('inbar', esc(curLabel())) : ''}
+  return `<header class="appbar">${brandBtn()}${st.screen === 'network' ? `<div class="hstrip">${navStrip()}</div>` : ''}${st.ui.sd === 'b' && st.ui.sv === '1' && st.screen === 'network' ? ddButton('inbar', esc(curLabel())) : ''}
     <span class="grow"></span>${meter()}${savedBtn()}
     <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}">${av(st.user, 'sm')}${I.down}</button>
     ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff ? cap1(m.staff) : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
@@ -2207,7 +2292,7 @@ function appbar() {
 
 /* ---- signed-out site: the open network with a Sign in button; sign-in runs in a dialog (A) or a side sheet (B) ---- */
 const brandBtn = () => `<button class="brand home" data-ma="go" data-to="network" aria-label="Session home">${mark('sm')}<b>Session</b></button>`;
-const appbarOut = () => `<header class="appbar">${brandBtn()}${st.ui.sd === 'b' && st.ui.sv === '1' ? ddButton('inbar', esc(curLabel())) : ''}<span class="grow"></span>
+const appbarOut = () => `<header class="appbar">${brandBtn()}<div class="hstrip">${navStrip()}</div>${st.ui.sd === 'b' && st.ui.sv === '1' ? ddButton('inbar', esc(curLabel())) : ''}<span class="grow"></span>
   <button class="ghost" data-ma="openauth" data-to="code">Join with invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></header>`;
 const authDialog = () => `<div class="scrim auth-scrim" data-ma="closeauth"></div><div class="authdlg v-a" role="dialog" aria-modal="true" aria-label="Sign in to Session"><button class="iconbtn dclose" data-ma="closeauth" aria-label="Close">${I.x}</button>${authScreen()}</div>`;
 /* ---- sign-in steps ---- */
@@ -2361,11 +2446,11 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
-    <span class="mk"><span class="mkl">Resources</span><span class="seg rlseg">${RL.map(([id, n, h], i) => `<button data-mrl="${id}" aria-pressed="${st.ui.rl === id}" title="${esc(h)}">${String.fromCharCode(65 + i)} ${esc(n)}</button>`).join('')}</span></span>
+    <span class="mk"><span class="mkl">Resources</span><span class="seg rlseg">${RL.map(([id, k, n, h]) => `<button data-mrl="${id}" aria-pressed="${st.ui.rl === id}" title="${esc(h)}"><b>${k}</b>${esc(n)}</button>`).join('')}</span></span>
     <span class="mk"><span class="mkl">Drag in</span><span class="seg">${Object.keys(RSAMPLE).map(k => `<span class="rsamp" draggable="true" data-rsample="${k}" title="Drag onto the resources">${RICON[k]}${cap1(k === 'post' ? 'post on X' : k)}</span>`).join('')}</span></span>
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
-  $('#thesis').innerHTML = '<span class="qtag">Resources</span>' + esc((RL.find(x => x[0] === st.ui.rl) || RL[0])[2]) + '. Drag a sample from Drag in onto the resources to add it. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
+  $('#thesis').innerHTML = '<span class="qtag">Resources</span>' + esc((RL.find(x => x[0] === st.ui.rl) || RL[0])[3]) + '. Drag a sample from Drag in onto the resources to add it. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
 }
 /* Every render rebuilds the page. Keep what people typed in open boxes, and put focus back on the
    control that had it (matched by id or by its data attributes). */
