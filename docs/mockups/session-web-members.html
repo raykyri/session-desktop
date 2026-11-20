@@ -625,7 +625,29 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .kb { display: flex; flex-direction: column; gap: 6px; align-items: stretch; min-width: 0; }
 .kb > .ghost { align-self: flex-end; }
 .kstate { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; font-size: var(--fs-sm); }
-.kstate code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--fs-xs); background: var(--inset); padding: 3px 6px; border-radius: 4px; color: var(--t-heading); }
+.kmask { color: var(--t-heading); font-size: var(--fs-sm); }
+.btn2.sm { height: 28px; padding: 0 12px; border-radius: 14px; font-size: var(--fs-xs); font-weight: 600; }
+.btn1.danger { background: var(--bad); color: #fff; }
+.kconfirm .grow { flex: 1; }
+.kcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 8px; }
+.kcard { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--inset); }
+.kcard > b { color: var(--t-heading); font-size: var(--fs-sm); }
+.kcard > small, .kmuted { color: var(--t-faint); font-size: var(--fs-xs); margin: 0; }
+.kcard .kform { flex-wrap: wrap; }
+.klist { display: flex; flex-direction: column; margin-top: 4px; }
+.kli { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 6px 0; border-bottom: 1px solid var(--divider); font-size: var(--fs-sm); }
+.kli:last-child { border-bottom: 0; }
+.kli.col { flex-direction: column; align-items: stretch; gap: 8px; }
+.kli > b { color: var(--t-heading); }
+.kli > small { color: var(--t-faint); font-size: var(--fs-xs); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kli small .kmask { font-size: inherit; color: inherit; }
+.kdot { width: 8px; height: 8px; border-radius: 50%; background: var(--control); flex: none; }
+.kdot.ok { background: var(--good); } .kdot.wait { background: var(--warn); }
+.kline { padding: 8px 0; border-bottom: 1px solid var(--divider); }
+.kline > b { color: var(--t-heading); min-width: 80px; }
+.kadd { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.kadd .modes { align-self: flex-start; }
+.kadd .fine, .kadd .ferr { margin: 0; }
 .kstate small { color: var(--t-faint); font-size: var(--fs-xs); }
 .kform { display: flex; gap: 8px; align-items: center; width: 100%; }
 .kform input { height: 34px; font-size: var(--fs-sm); }
@@ -1256,7 +1278,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { xcopy: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pitch: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1333,13 +1355,13 @@ const authDialog = () => `<div class="scrim auth-scrim" data-ma="closeauth"></di
 const xBtn = (label = 'Sign in with X') => `<button class="xbtn" data-ma="xauth">${label}</button>`;
 /* copy for the invite-code step: heading, line under it, check button, valid-invite line, X button */
 const CODE_COPY = { h: 'Have an invite?', p: 'Paste the code or link a member sent you.', btn: 'Continue', ok: n => `Invite from ${n}`, x: 'Sign up with X' };
-/* copy variants for the X sign-in step */
-const X_COPY = {
-  a: 'X asks you to let Session see your name, handle and profile picture. Session cannot post for you or read your messages.',
-  b: 'Session gets your name, handle and profile picture from X. It cannot post or read your messages.',
-  c: 'Session uses your X name, handle and picture for your profile. Nothing is posted to X.',
-  d: 'Session only reads your public X profile. It never posts or sees your DMs.',
-  e: 'Session can see your X name, handle and profile picture, and nothing else.',
+/* copy variants for the line under the sign-in heading */
+const PITCH = {
+  a: 'Ask a question and an agent researches it. Branch from any passage of the answer to go deeper; everyone in the space can read and build on it.',
+  b: 'Ask a question and an agent researches it. Branch from any part of the answer to follow up, and see what others in the space are asking.',
+  c: 'An agent researches your questions and cites its sources. Start a branch from any passage to dig further; the whole space can read along.',
+  d: 'Research in the open: ask, get a sourced answer, and branch from any passage. Everyone in the space builds on the same threads.',
+  e: 'Ask anything and an agent writes a sourced answer. Branch from any passage to go deeper, and build on what others in the space have found.',
 };
 function authScreen() {
   const back = to => `<button class="tlink back" data-ma="flow" data-to="${to}">${I.left}Back</button>`;
@@ -1347,11 +1369,11 @@ function authScreen() {
   const linkInv = st.fromLink && INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
   if (st.flow === 'landing' && linkInv) {
     body = `<div class="auth-c"><div class="inviter">${av(linkInv.by)}<div><b>${esc(nameOf(linkInv.by))} invited you to Session</b><small>@${esc(linkInv.by)}</small></div></div>
-      <h2>Research with agents, in shared spaces.</h2><p>Ask a question and an agent researches it. Branch from any passage of the answer to go deeper; everyone in the space can read and build on it.</p>
+      <h2>Research with agents, in shared spaces.</h2><p>${PITCH[st.ui.pitch] || PITCH.a}</p>
       <div class="auth-acts">${xBtn('Continue with X')}<button class="btn2" data-ma="nolink">I already have an account</button></div></div>`;
   } else if (st.flow === 'landing') {
     body = `<div class="auth-c"><span class="brand lg">${mark()}<b>Session</b></span><h2>Research with agents, in shared spaces.</h2>
-      <p>Ask a question and an agent researches it. Branch from any passage of the answer to go deeper; everyone in the space can read and build on it.</p>
+      <p>${PITCH[st.ui.pitch] || PITCH.a}</p>
       <div class="auth-acts">${xBtn()}<button class="btn2" data-ma="flow" data-to="code">I have an invite code</button></div></div>`;
   } else if (st.flow === 'code') {
     const inv = INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
@@ -1361,7 +1383,7 @@ function authScreen() {
       ${st.codeErr ? `<p class="ferr">${esc(st.codeErr)}</p>` : ''}
       ${inv ? `<div class="inviter">${av(inv.by)}<div><b>${C.ok(esc(nameOf(inv.by)))}</b><small>@${esc(inv.by)}</small></div></div><div class="auth-acts">${st.xacct && !MEMBERS.some(m => m.x === st.xacct) ? `<button class="btn1" data-ma="toprofile">Continue as @${esc(st.xacct)}</button>${xBtn('Use a different X account')}` : xBtn(C.x)}</div>` : ''}</div>`;
   } else if (st.flow === 'xauth') {
-    body = `<div class="auth-c">${back(st.intent === 'signup' ? 'code' : 'landing')}<h2>Sign in with X</h2><p>${X_COPY[st.ui.xcopy] || X_COPY.a}</p>
+    body = `<div class="auth-c">${back(st.intent === 'signup' ? 'code' : 'landing')}<h2>Sign in with X</h2><p>Session uses your name, handle and profile picture from X for your profile. It cannot post or read your messages.</p>
       <div class="auth-acts"><button class="xbtn" data-ma="xgo">Continue to X</button></div></div>`;
   } else if (st.flow === 'noaccount') {
     const a = X_ACCOUNTS.find(x => x.x === st.xacct);
@@ -1431,16 +1453,38 @@ function membersPage() {
 
 /* ---- usage and API keys (key variants) ---- */
 const PROVIDERS = { anthropic: { name: 'Anthropic', prefix: 'sk-ant-', ph: 'sk-ant-...', models: 'Opus 5.5' }, openai: { name: 'OpenAI', prefix: 'sk-', ph: 'sk-...', models: 'GPT-6.1 Sol' } };
+/* API keys (variants). Buttons are real buttons; key values use the body font.
+   A one row per provider · B two cards side by side · C a compact list with a status dot
+   D one form with a provider switch, saved keys listed below · E the paste field is always shown for a missing key */
+const mask = (P, k) => `<span class="kmask">${P.prefix}••••${k.last4}</span>`;
+const kStatus = k => `<span class="chip ${k.status === 'working' ? 'ok' : ''}">${k.status === 'working' ? 'Working' : 'Checking…'}</span>`;
+const kErr = id => st.keyErr && st.keyForm === id ? `<p class="ferr">${esc(st.keyErr)}</p>` : '';
+const kInput = (id, P, cancel = true) => `<form class="kform" data-mform="key:${id}"><input id="in-key-${id}" type="password" placeholder="Paste your ${P.name} key (${P.ph})" autocomplete="off" spellcheck="false" aria-label="${P.name} API key"><button type="submit" class="btn1 sm">Save</button>${cancel ? `<button type="button" class="btn2 sm" data-ma="keycancel">Cancel</button>` : ''}</form>`;
+const kConfirm = (id, P) => `<div class="kconfirm"><span>Remove the ${P.name} key? Asks billed to it will stop.</span><span class="grow"></span><button class="btn2 sm" data-ma="keykeep">Keep</button><button class="btn1 sm danger" data-ma="keyremove" data-k="${id}">Remove</button></div>`;
+const kRemove = id => `<button class="btn2 sm" data-ma="keyask" data-k="${id}">Remove</button>`;
+const kAdd = (id, cls = 'btn2 sm') => `<button class="${cls}" data-ma="keyadd" data-k="${id}">Add key</button>`;
 function keyBlock(id) {
   const P = PROVIDERS[id], k = keys()[id];
-  const form = st.keyForm === id ? `<form class="kform" data-mform="key:${id}"><input id="in-key" type="password" placeholder="${P.ph}" autocomplete="off" spellcheck="false" aria-label="${P.name} API key"><button type="submit" class="btn1 sm">Save key</button><button type="button" class="tlink" data-ma="keycancel">Cancel</button></form>${st.keyErr ? `<p class="ferr">${esc(st.keyErr)}</p>` : ''}` : '';
-  const body = k ? (st.removing === id ? `<div class="kconfirm">Remove the ${P.name} key? Asks billed to it will stop. <button class="tlink danger" data-ma="keyremove" data-k="${id}">Remove</button><button class="tlink" data-ma="keykeep">Keep</button></div>`
-      : `<div class="kstate"><code>${P.prefix}…${k.last4}</code><span class="chip ${k.status === 'working' ? 'ok' : ''}">${k.status === 'working' ? 'Working' : 'Checking…'}</span><span class="grow"></span><button class="tlink danger" data-ma="keyask" data-k="${id}">Remove</button></div>`)
-    : st.keyForm === id ? '' : `<button class="ghost" data-ma="keyadd" data-k="${id}">Add key</button>`;
+  const form = st.keyForm === id ? kInput(id, P) + kErr(id) : '';
+  const body = k ? (st.removing === id ? kConfirm(id, P) : `<div class="kstate">${mask(P, k)}${kStatus(k)}<span class="grow"></span>${kRemove(id)}</div>`)
+    : st.keyForm === id ? '' : `<div class="kstate"><small>Runs ${P.models}</small><span class="grow"></span>${kAdd(id)}</div>`;
   return { P, k, form, body };
 }
 function keysSection() {
-  return `<section class="box"><h3>API keys</h3>${['anthropic', 'openai'].map(id => { const b = keyBlock(id); return `<div class="krow"><b class="kname">${b.P.name}</b><div class="kb">${b.body}${b.form}</div></div>`; }).join('')}</section>`;
+  const ids = ['anthropic', 'openai'], v = st.ui.keys;
+  if (v === 'b') return `<section class="box keys-sec"><h3>API keys</h3><div class="kcards">${ids.map(id => { const P = PROVIDERS[id], k = keys()[id];
+    const inner = st.removing === id && k ? kConfirm(id, P) : st.keyForm === id ? kInput(id, P) + kErr(id) : k ? `<div class="kstate">${mask(P, k)}${kStatus(k)}</div>${kRemove(id)}` : `<p class="kmuted">Not added</p>${kAdd(id, 'btn1 sm')}`;
+    return `<div class="kcard"><b>${P.name}</b><small>Runs ${P.models}</small>${inner}</div>`; }).join('')}</div></section>`;
+  if (v === 'c') return `<section class="box keys-sec"><h3>API keys</h3><div class="klist">${ids.map(id => { const P = PROVIDERS[id], k = keys()[id];
+    if (st.removing === id && k) return `<div class="kli">${kConfirm(id, P)}</div>`;
+    if (st.keyForm === id) return `<div class="kli col"><b>${P.name}</b>${kInput(id, P)}${kErr(id)}</div>`;
+    return `<div class="kli"><span class="kdot ${k ? (k.status === 'working' ? 'ok' : 'wait') : ''}"></span><b>${P.name}</b><small>${k ? `${mask(P, k)} · ${k.status === 'working' ? 'Working' : 'Checking…'}` : `Not added · runs ${P.models}`}</small><span class="grow"></span>${k ? kRemove(id) : kAdd(id)}</div>`; }).join('')}</div></section>`;
+  if (v === 'd') { const prov = st.keyProv || (keys().anthropic ? 'openai' : 'anthropic'), P = PROVIDERS[prov], saved = ids.filter(id => keys()[id]);
+    return `<section class="box keys-sec"><h3>API keys</h3>${saved.map(id => { const Q = PROVIDERS[id], k = keys()[id]; return st.removing === id ? kConfirm(id, Q) : `<div class="kstate kline"><b>${Q.name}</b>${mask(Q, k)}${kStatus(k)}<span class="grow"></span>${kRemove(id)}</div>`; }).join('')}
+      <div class="kadd"><span class="modes" role="group" aria-label="Provider">${ids.map(id => `<button type="button" data-ma="keyprov" data-k="${id}" aria-pressed="${prov === id}">${PROVIDERS[id].name}</button>`).join('')}</span>${kInput(prov, P, false)}${st.keyErr ? `<p class="ferr">${esc(st.keyErr)}</p>` : ''}<p class="fine">${keys()[prov] ? `Saving replaces your current ${P.name} key.` : `Adds ${P.models}.`}</p></div></section>`; }
+  if (v === 'e') return `<section class="box keys-sec"><h3>API keys</h3>${ids.map(id => { const P = PROVIDERS[id], k = keys()[id];
+    return `<div class="krow"><b class="kname">${P.name}</b><div class="kb">${k ? (st.removing === id ? kConfirm(id, P) : `<div class="kstate">${mask(P, k)}${kStatus(k)}<span class="grow"></span>${kRemove(id)}</div>`) : kInput(id, P, false) + (st.keyErr && st.keyForm === id ? kErr(id) : '')}</div></div>`; }).join('')}</section>`;
+  return `<section class="box keys-sec"><h3>API keys</h3>${ids.map(id => { const b = keyBlock(id); return `<div class="krow"><b class="kname">${b.P.name}</b><div class="kb">${b.body}${b.form}</div></div>`; }).join('')}</section>`;
 }
 /* ---- usage page ----
    top: one sentence with the share of included usage left, and a bar of what is left  */
@@ -1476,7 +1520,8 @@ function renderMock() {
   const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcdef'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
-    ${seg('xcopy', 'X step copy', 5)}
+    ${seg('keys', 'API keys', 5)}
+    ${seg('pitch', 'Sign-in line', 5)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -1498,12 +1543,12 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the feed for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
-  if (k === 'xcopy') { st.auth = 'out'; st.authOpen = true; st.flow = 'xauth'; st.intent = 'signin'; st.fromLink = false; render(); return; }
+  if (k === 'pitch') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; render(); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'feed' : 'usage';
   render();
-  if (k === 'keys') $('.kcards, .krow')?.closest('section')?.scrollIntoView({ block: 'start' });
+  if (k === 'keys') $('.keys-sec')?.scrollIntoView({ block: 'start' });
   if (k === 'tree') $('.ttree, .ttable')?.closest('section')?.scrollIntoView({ block: 'start' });
   if (k === 'meter') $('.meter')?.focus();
 }
@@ -1551,7 +1596,8 @@ app.addEventListener('click', e => {
   if (a === 'copynew') { let i = myInvites().find(x => inviteState(x) === 'open'); if (!i) { if (slotsUsed() >= SLOTS || !canInvite(meM())) return; i = { code: newCode(), by: st.user, created: new Date(NOW).toISOString(), used: null }; INVITES.push(i); } const t = `session.app/i/${i.code}`; try { navigator.clipboard.writeText(t).catch(() => {}); } catch {} toast('Invite link copied. Send it to one person.'); render(); return; }
   if (a === 'revoke') { INVITES.find(i => i.code === d.code).revoked = true; toast('Invite revoked.'); render(); return; }
   if (a === 'copy') { const done = () => { toast('Link copied.'); render(); }; try { navigator.clipboard.writeText(d.t).then(done, () => { toast(d.t); render(); }); } catch { toast(d.t); render(); } return; }
-  if (a === 'keyadd') { st.keyForm = d.k; st.keyErr = ''; render(); $('#in-key')?.focus(); return; }
+  if (a === 'keyadd') { st.keyForm = d.k; st.keyErr = ''; render(); $(`#in-key-${d.k}`)?.focus(); return; }
+  if (a === 'keyprov') { st.keyProv = d.k; st.keyErr = ''; render(); $(`#in-key-${d.k}`)?.focus(); return; }
   if (a === 'keycancel') { st.keyForm = null; st.keyErr = ''; render(); return; }
   if (a === 'keyask') { st.removing = d.k; render(); return; }
   if (a === 'keykeep') { st.removing = null; render(); return; }
@@ -1585,10 +1631,10 @@ app.addEventListener('submit', e => {
     st.code = ''; signIn(pf.handle); toast(`Account created. ${nameOf(inv.by)} invited you.`); render(); return;
   }
   if (kind.startsWith('key:')) {
-    const id = kind.slice(4), P = PROVIDERS[id], v = $('#in-key').value.trim();
+    const id = kind.slice(4), P = PROVIDERS[id], v = f.querySelector('input').value.trim(); st.keyForm = id;
     const wrong = id === 'openai' && v.startsWith('sk-ant-');
     st.keyErr = !v ? 'Paste a key.' : wrong ? 'That looks like an Anthropic key. Add it under Anthropic.' : !v.startsWith(P.prefix) || v.length < 24 ? `${P.name} keys start with ${P.prefix} and are longer than this. Copy the whole key from your ${P.name} account.` : '';
-    if (st.keyErr) { render(); $('#in-key')?.focus(); return; }
+    if (st.keyErr) { render(); $(`#in-key-${id}`)?.focus(); return; }
     keys()[id] = { last4: v.slice(-4), added: new Date(NOW).toISOString(), status: 'checking' };
     st.keyForm = null; render();
     setTimeout(() => { if (keys()[id]) { keys()[id].status = 'working'; toast(`${P.name} key works.`); render(); } }, 1300);
