@@ -481,8 +481,6 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .pbanner b { color: var(--t-heading); font-weight: 600; }
 .pbanner > div { flex: 1; min-width: 0; }
 .pdot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex: none; }
-.row.notice-row { padding: 6px 0 0; }
-.tnotice { margin: 0; padding: 8px 12px; border-radius: var(--r-lg); background: color-mix(in srgb, var(--bad) 9%, var(--card)); color: var(--t-secondary); font-size: var(--fs-sm); }
 /* tree A */
 .ttree { position: relative; background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 4px 12px; }
 .ttree svg { position: absolute; left: 12px; top: 4px; width: calc(100% - 24px); overflow: visible; pointer-events: none; }
@@ -1226,7 +1224,7 @@ function charge(q, tok) {
 let toastTimer;
 function toast(t) { st.toast = t; clearTimeout(toastTimer); toastTimer = setTimeout(() => { st.toast = ''; const el = $('#toast'); if (el) el.remove(); }, 2800); }
 
-/* composer: locked while pending; a notice when included tokens are used up */
+/* composer: hidden while pending (the banner explains why) */
 const pendingBanner = () => {
   if (isActive() || st.auth !== 'in') return '';
   const pr = progress(meM());
@@ -1235,8 +1233,7 @@ const pendingBanner = () => {
 function composerOrLock(v) {
   if (!canWrite()) return '';
   const c = typeof v.composer === 'function' ? v.composer() : COMPOSERS[v.composer]();
-  if (!outOfTokens()) return c;
-  return c.replace('<div></div></div>', `<div></div></div><div class="row notice-row"><p class="tnotice">Included tokens are used up until ${WEEK[0]}, ${day(new Date(RESET).toISOString())}. Asks are paused; you can still post. <button class="tlink" data-ma="go" data-to="usage">Add an API key</button></p><div></div></div>`);
+  return c;
 }
 
 /* ---- token meter in the app bar (variants) ---- */
