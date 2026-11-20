@@ -161,7 +161,8 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .mi svg.i { width: 13px; height: 13px; color: var(--accent); }
 .mi-sub > svg.i { color: var(--t-muted); }
 .mi-v { color: var(--t-faint); }
-.menu-scroll { max-height: 300px; overflow-y: auto; min-width: 200px; }
+.menu-scroll { max-height: min(460px, 62vh); overflow-y: auto; min-width: 210px; padding: 6px; }
+.menu-scroll .mi { flex: none; height: 32px; gap: 10px; padding: 0 12px 0 10px; }
 .glyph { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; color: var(--av-fg); font-size: 10px; font-weight: 700; flex: none; }
 .mi .glyph { width: 16px; height: 16px; font-size: 9px; border-radius: 4px; }
 .msep { height: 1px; margin: 4px 6px; background: var(--divider); }
