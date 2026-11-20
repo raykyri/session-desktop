@@ -31,8 +31,9 @@ import {
 
 import { STORES, cast, ok, type World } from "./helpers.js";
 
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access --
-   records are read as `any` */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access,
+   @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return --
+   records and call results are read as `any` */
 type Any = any;
 
 /** What the streams' read answers one stream: `resync`, `skip` or `cursor`. */
@@ -125,7 +126,7 @@ for (const kind of STORES) {
     t.is(streamRead(w, { u: "Not A Handle" }, log, cursor), "resync");
     t.is(pullRead(w, { u: "Not A Handle" }, log, cursor), "UNAUTHORIZED");
     // and a log that is none
-    t.is(streamRead(w, null, "space:a:b" as LogId, cursor), "resync");
+    t.is(streamRead(w, null, "space:a:b", cursor), "resync");
   });
 
   test(`${kind}: finding 3: a run's history leaves out the earlier asks hidden for its person`, (t) => {

@@ -3,7 +3,6 @@
 // device's calls on a run it holds, which take nothing from it (review round
 // 2 of phase 2, reviewer A's finding 2; the experiment e02-budget-device-run).
 
-import type { RunRec } from "@session/mutators";
 import test from "ava";
 
 import { createHarness } from "./helpers.js";
@@ -149,7 +148,7 @@ test.serial(
       (await dev.call("runs.finish", { run, device: d.device, attempt: 1, answer: "A" })).body,
       { ok: true },
     );
-    t.like(h.deps.sync.records().get(`run:${run}`) as RunRec, { status: "complete" });
+    t.like(h.deps.sync.records().get(`run:${run}`), { status: "complete" });
     // the person's budget is whole: 120 writes at once
     let ok = 0;
     for (let n = 0; n < 121; n++)
