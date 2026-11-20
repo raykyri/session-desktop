@@ -2,45 +2,91 @@
 
 Status: draft. This file orders the work from the finished phase 0 prototype
 (`web/packages/replica-proto`) to the hard cutover, in dependency order. For
-each milestone it states the scope, the exit criteria and the tests that prove
-them, then covers deployment, observability, risks and the open questions of
-the whole plan. The designs it schedules are in `01-architecture-and-data.md`
-(server half, data, mutators, sync, contract changes), `02-client-app.md`
-(client), `03-agents-and-research.md` (runs) and
+each milestone it states the scope (as item ids from 01-04), the exit criteria
+as commands or named tests, then covers deployment and cutover, observability,
+risks and the open questions of the whole plan. The designs it schedules are
+in `01-architecture-and-data.md` (server half, data, mutators, sync, contract
+changes), `02-client-app.md` (client), `03-agents-and-research.md` (runs) and
 `04-membership-moderation-security.md` (membership, moderation, security).
 Rules come from `AGENTS.md` ("Planned: desktop client and sync core") and
 ADR-19 to ADR-22; where this file restates one, the source wins.
+
+Naming: milestones are `M0`-`M8` with letter suffixes. Item ids of other files
+are always prefixed with the file number, because 01 also uses `M1`-`M6` for
+its mutator items: "`01` M6" is 01's item "Update the acceptance suite first",
+"M6" alone is the milestone. 04 has no item ids, so it is scheduled by
+section.
 
 ## 1. Milestones at a glance
 
 | Id | Milestone | Depends on | Can overlap with |
 |---|---|---|---|
 | M0 | Phase 0: `replica-proto` (done) | — | — |
-| M1 | `@session/mutators` | M0 | M2 (interfaces) |
-| M2 | `@session/sync` | M1 | M4 (in-memory server) |
-| M3 | Server half passing replica-proto's suites | M1, M2 | M4 |
-| M4 | Client shell and feed | M2 (M3 for e2e) | M3, M5 |
-| M5 | Runs | M3, M4 | M6 |
-| M6 | Membership and moderation | M3, M4 | M5, M7 |
-| M7 | Desktop (Tauri) wrapper and device runs | M4, M5 | M6 |
-| M8 | Data reset and hard cutover | all | — |
+| M1a | Contract revision in `spaces.ts` and `replica-proto` | M0 | — |
+| M1b | `@session/mutators` | M1a | M2 (interfaces) |
+| M2 | `@session/sync` library (client half, server half over an in-memory store) | M1b | M4 (fixture replica) |
+| M3 | Server half on SQLite passing replica-proto's suites; staging app | M2 | M4 |
+| M4 | Client shell, feed, posts, replies, channels, signed-out reading | M1b (fixture replica); M2, M3 for e2e | M3, M5a |
+| M5a | Owned runs: asks, branches, look-ups, comments, streaming | M3, M4 | M6 |
+| M5b | Weekly allowance, payer, API keys, Usage page | M5a, ADR-23 accepted | M6, M7a |
+| M6 | Membership and moderation | M3, M4 | M5a, M5b, M7a |
+| M7a | Desktop shell: Tauri wrapper, SQLite adapter, device token | M4 | M5b, M6 |
+| M7b | Device runs | M5a, M7a | M6 |
+| M8a | Cutover preparation | M5b, M6, M7b | — |
+| M8b | Data reset and hard cutover | M8a | — |
+| M8c | Removal of the old code | M8b | — |
 
-Until M8, the current web app stays deployed and the current Tauri app and
-its rules stay as they are (`AGENTS.md`). The new server and client run on a
-staging app (§3.2) from M3.
+Each milestone ends with a merge to `main` whose checks pass on their own;
+none depends on a later one to be verified. Until M8b, the current web app and
+the current Tauri app stay in production with their rules (`AGENTS.md`); how
+`main` keeps building while production does not change is in §3.1.
 
-### Test commands referred to below
+### 1.1 Commands referred to below
 
 - Repository root: `npm run check` (desktop type checks, unused-module check,
-  format) and `npm test`; `npm run preflight` runs both. Required whenever
+  `cargo fmt --check`), `npm test` (`test:unit` and `cargo test` in
+  `src-tauri`), `npm run preflight` (both). Required whenever
   `web/packages/shared` changes, because the desktop imports it (`AGENTS.md`,
   ADR-1).
 - `web/`: `npm run check` (`tsc -b`, ESLint, Prettier, `drizzle-kit check`),
-  `npm test` (AVA in every package), `npm run test:e2e` (Playwright, Chromium,
-  fixture providers) (`12-testing-linting-ci.md`).
-- `web/packages/replica-proto`: `npm test` (the adversarial suite, read and
-  write oracles, effect model, convergence) and `npm run mutate` (about 45
-  minutes on 4 cores; exits 1 when a mutation survives).
+  `npm test` (AVA in every package), `npm test --workspace <pkg> -- <files>`
+  for one package, `npm run test:e2e` (Playwright, Chromium, fixture
+  providers; specs in `web/e2e`) (`12-testing-linting-ci.md` §1, §4).
+- `web/packages/replica-proto`: `npm test` (`inv1`-`inv7`, `review-r1`,
+  `review-r2`, `convergence`, the read oracle `oracle.ts`, the write oracle
+  `write-oracle.ts`, the effect model `effect-model.ts`) and `npm run mutate`
+  (`test/mutations/mutate.ts`; about 45 minutes on 4 cores; exits non-zero
+  when a mutation survives; `-- --check` only checks that every pattern
+  matches once; `-- X1 N2` runs a subset).
+- `web/packages/db`: migration tests in `test/migrations.test.ts`, run with
+  `cd web && npm test --workspace @session/db -- test/migrations.test.ts`.
+
+### 1.2 Traceability
+
+Every work item of 01-04 is scheduled in exactly one milestone. Two items are
+split and say so: `01` D5 (`0001_spaces.sql` in M3, `0002_drop_research.sql`
+in M8b) and `02` W2.4 (web in M4, the Tauri drag region in M7a). The contract
+items `01` C1-C17 are scheduled in M1a, where they change `spaces.ts` and
+`replica-proto`; the server routes some of them need are built under the
+items named in the M3, M4 and M6 rows (`01` S4 runs C16's effect, `01` R5 and
+`spaces.directory` serve C7, `04` §3 builds C8's account invites).
+
+| Milestone | 01 | 02 | 03 | 04 |
+|---|---|---|---|---|
+| M1a | C1-C17, M6 | — | — (ADR-23 drafted, §6) | §11 |
+| M1b | M1-M5 | — | G1, G2, G4, G5, G6 (mutators) | — |
+| M2 | Y1-Y6, Y8-Y12, R1-R4 | — | — | — |
+| M3 | S1-S5, D1-D4, D5 (0001), D6, D7, Y7, A1, A3 | — | — | §12 |
+| M4 | A2, R5 | W1.1, W1.2, W2.1-W2.3, W2.4 (web), W2.5, W3.1, W3.2, W4.3, W4.5, W5.1, W6.1-W6.3, W6.6, W6.7, W9.1-W9.3, §9.5, §9.6, §9.8, W10.1-W10.3, W11.1 | — | §3.5, §4.1, §4.2, §4.4, §7 |
+| M5a | — | W4.1, W4.2, W4.4 | G3, G7, G8, E1-E4, T1-T4, K1, K2, K12, K13, L1, L2 | — |
+| M5b | — | W8.1 | K3-K11, K14 | — |
+| M6 | — | W6.4, W6.5, W7.1-W7.3 | — | §3.1-§3.4, §4.3, §5, §6, §8, §9, §10, §13 |
+| M7a | — | W2.4 (desktop), §12.3 | — | — |
+| M7b | — | — | V1-V7, T5, L3 | — |
+| M8b | D5 (0002) | — | — | — |
+
+`03` L4 adds no work beyond `01` A3 (M3). `02` §9.7 is a reference table, not
+an item. `04` §1, §2 and §14 record decisions and dependencies only.
 
 ## 2. Milestones
 
@@ -49,306 +95,483 @@ staging app (§3.2) from M3.
 `web/packages/replica-proto`: prototype server half (`src/server.ts`), access
 rules (`src/access.ts`), mutators ported from the mock backend
 (`src/mutators.ts`), a minimal replica client (`src/client.ts`), and the
-suites `inv1` to `inv7`, `review-r1`, `review-r2`, `convergence`, the read
-oracle, the write oracle, the effect model and the mutation runner (X1–X31,
-N2–N34, R2-1 on). Nothing in the app imports it. It is the acceptance suite
-for M1–M3.
+suites listed in §1.1 with the mutation runner (faults X1-X31, N2-N34, R2-1
+on). Nothing in the app imports it. It is the acceptance suite for M1a-M3.
 
-### M1 — `@session/mutators`
+### M1a — Contract revision
 
 Scope:
+- `web/packages/shared/src/schemas/spaces.ts`: the contract changes `01`
+  C1-C17 (likes removed and saves counted, ask-node kinds with `quote` and
+  `look`, comments, total counts, channel rules removed, the "All" scope,
+  account invites and `users.status`, `vis: "open" | "private"`, deferred
+  surfaces moved to `spaces.deferred.ts`, owner-only About, report and
+  removal notes and the `modlog` kind, the `prefs` record, ULID space ids,
+  mentions, the run record) and the additions `04` §11 requests (`ban` and
+  `unban` `modlog` kinds, one open report per reporter and item,
+  `auth.checkInvite` with one `unusable` answer, no default rules).
+- `replica-proto` changed to the revised contract before anything is ported
+  (`01` M6): `likes.set` replaced by counted saves, rules dropped, comment and
+  ask-node kinds added; mutation patterns that pointed at removed code are
+  rewritten with the same faults.
+- Documents: ADR-19's `deviceNow` corrected to `clientTime` (`01` Y1); ADR-23
+  (user API keys, model payers, the weekly allowance; `03` §6) drafted for
+  decision before M5b.
+
+Exit criteria:
+- `cd web/packages/replica-proto && npm test && npm run mutate` exits 0.
+- `cd web && npm run check && npm test --workspace @session/shared` passes,
+  including `test/spacesMock.test.ts` (the mockup's validator test).
+- Root `npm run check` passes (the desktop imports `@session/shared`).
+
+### M1b — `@session/mutators`
+
+Scope (`01` §3):
 - New package `web/packages/mutators` (npm workspace, AVA, `tsc -b`
   reference), depending on `@session/shared` and `zod` only.
-- The three stages from `AGENTS.md`: server-only pre-checks that may refuse
-  (invite codes, limits), a deterministic `run` over a synchronous `tx`
-  (`tx.now`, ids from the input and from the mutation id plus an ordinal, no
-  clock, no random source, no `Intl`/`Date` formatting), and post-commit
-  effects that carry ids, not text.
-- Every write in the contract that the client uses, ported from
-  `replica-proto/src/mutators.ts` and the mock API, plus the contract changes
-  listed in `01-architecture-and-data.md` and in
-  `04-membership-moderation-security.md` §11 (report and removal notes,
-  `modlog` records with ban kinds, `vis: "private"`, owner-only About, no
-  default channel rules). Deferred surfaces (`01` C10) are left out.
-- Shared validators used by both client forms and mutators: channel name,
-  handle, text bounds.
-- The `unknown` answer for reads the replica cannot answer, which stops
-  prediction.
+- `01` M1-M5: the three stages (`pre`, deterministic `run` over a synchronous
+  `tx` with `tx.now` and `tx.id(ordinal)`, `post` effects carrying ids),
+  indexed reads (`tx.byKey`, `tx.list`, `tx.count`) returning `unknown`
+  outside the working set, the stored shape with counts as stored fields,
+  stale-intent rules, and one file per area.
+- The run-starting and graph mutators of `03` G1, G2, G4, G5, G6
+  (`threads.create`, `nodes.ask`, `nodes.lookup` with `LOOKUP_PROMPT_V1`,
+  `comments.create`, promotion, `nodes.delete`, cancel and retry). Their
+  `post` stage queues `job` effects that nothing consumes until M5a.
+- Shared validators used by forms and mutators: channel name, handle, text
+  bounds (`04` §4.2, §3.1, §10).
 
 Exit criteria:
 - `replica-proto` imports its mutators from `@session/mutators` instead of
-  `src/mutators.ts` (its `server.ts` and harness unchanged otherwise), and
-  every replica-proto test passes.
-- `npm run mutate` in replica-proto reports no `SURVIVED`, with patterns that
-  pointed into `src/mutators.ts` moved to the package and the faults kept the
-  same (the runner's README rule).
-- The mutator package's own tests: one test file per namespace (`spaces`,
-  `members`, `invites`, `reports`, `moderation`, `research`, `replies`,
-  `followups`, `notifications`), plus the determinism test of `inv1`
-  ("mutators read no clock, no random source and no Intl") run over every
-  mutator in the package.
-- `web/` `npm run check` and the root `npm run check` pass.
+  `src/mutators.ts`; `cd web/packages/replica-proto && npm test && npm run
+  mutate` exits 0, with patterns that pointed into `src/mutators.ts` moved to
+  the package and the faults kept the same (the runner's README rule).
+- `cd web && npm test --workspace @session/mutators` passes: one test file
+  per area of `01` M5, the table test of `01` M5 (every mutator with `who`,
+  stale-intent rule and `online`), `inv1`'s determinism test run over every
+  mutator, and the `03` G1, G2, G4 tests.
+- `cd web && npm run check` passes, including the ESLint rule banning `Date`,
+  `Math.random`, `crypto` and `Intl` under `src/run/` (`01` M1).
 
 ### M2 — `@session/sync`
 
-Scope (design in `01-architecture-and-data.md`):
-- Package `web/packages/sync` with two entry points, `client` and `server`.
-- Client half: replica behind a storage adapter (used only to load and persist
-  behind a working set), an in-memory adapter for the web, an adapter
-  interface the desktop's SQLite adapter implements in M7; the outbox in one
-  global order, kept 3 days in server time, pausing with backoff on transient
-  answers; registered client id and per-client seq; reminted envelopes listing
-  replaced mutation ids; rebase of pending writes on confirmed changes; a
-  cursor token per log; replication tiers (full and summary records, the
-  windows in `AGENTS.md`); reactive queries for React and React Native.
-- Server half as a library over a storage interface: one change-log table, one
-  log per space and one per user (rows hold key, operation and version);
-  `snapshot` and `pull` reading records as they are now, filtered by the
-  reader's scope; tombstones for 30 days; the last processed seq per client
-  with every batch; idempotent apply by (user, mutation id) for 7 days; the log
-  epoch; AEAD cursor tokens with a configured key and a 30-day previous key;
-  an SSE reader over `fetch` with a map of cursor tokens as the event id.
+Scope (`01` §4, §5):
+- Package `web/packages/sync` with entry points `@session/sync/client` and
+  `@session/sync/server`; the server half defines `ServerStore`, which this
+  milestone implements in memory only.
+- Wire and server half: `01` Y1-Y6 and Y8 (envelope, answers, `register`,
+  `apply`, `snapshot` and `pull`, AEAD cursor tokens with the previous key,
+  retention jobs).
+- Client half: `01` Y9-Y12 (replica behind a `StorageAdapter`, with the memory
+  adapter and a better-sqlite3 test adapter; the outbox; rebase; reactive
+  queries).
+- Replication tiers `01` R1-R4 (full and summary tiers, the window computed by
+  the server with the client's opened-thread list, promotion, closed spaces
+  and frozen copies).
 
 Exit criteria:
-- `replica-proto`'s `convergence.test.ts` runs with the `@session/sync` client
-  in place of `src/client.ts` against the prototype server and passes.
-- Client-half tests: outbox order and backoff; a write failing 5 times shown
-  while later writes continue (`Q3`); the 3-day drop reported; `EXPIRED`,
-  `CLOCK_SKEW`, `TOO_LARGE` handling; rebase after a refusal; rollback with
-  draft restoration (`04` §9); resync on a token the server rejects; tier
-  promotion when a thread is opened.
-- Server-half tests against an in-memory store reproduce `inv3`, `inv5`,
-  `inv6` and `T1` with the library's own code.
-- `web/` `npm run check` passes.
+- `replica-proto`'s harness uses the `@session/sync` client in place of
+  `src/client.ts`; `cd web/packages/replica-proto && npm test && npm run
+  mutate` exits 0 (patterns into `src/client.ts` moved as in M1b).
+- `cd web && npm test --workspace @session/sync` passes: the `01` Y1-Y12
+  acceptance tests, including outbox backoff, a write failing 5 times shown
+  while later writes continue, the 3-day drop reported, `EXPIRED`,
+  `CLOCK_SKEW` and `TOO_LARGE` handling, rollback with draft text restored
+  (`04` §9), resync on a rejected token, the R2 snapshot test of the four
+  inclusion rules and the 5,000 cap, tier promotion (R3), and the same client
+  suite over both adapters (Y9).
+- Server-half tests on the in-memory store reproduce `inv3`, `inv5`, `inv6`
+  and `inv7`.
+- `cd web && npm run check` passes.
 
-### M3 — Server half passing replica-proto's suites
+### M3 — Server half on SQLite
 
 Scope:
-- In `web/packages/db`: Drizzle tables for records, the change log, the id
-  registry (every id with its last rev, never reused), idempotency answers,
-  registered clients (90-day idle expiry, 20 registrations a day), the effect
-  queue with dead letters, tombstones, cursor epochs. Migrations generated
-  with `drizzle-kit`.
-- In `web/packages/server`: the apply, snapshot, pull and SSE endpoints over
-  the `@session/sync` server library and SQLite; the commit that writes record
-  changes, the stored answer, the seq and queued effects together; the effect
-  worker with backoff; the protocol version header and the minimum-version
-  answer (`Session-Protocol`, `426 UPGRADE_REQUIRED`, `01` S1); cookie
-  authentication per `06-auth-and-users.md` and the device-token path (`01`
-  S2); request-level rate limits.
-- A conformance adapter: replica-proto's harness (`test/harness.ts`) gains a
-  target interface (apply, snapshot, pull, register, clock control, random
-  source fault injection, storage scan). The prototype implements it in
-  process; `web/packages/server/test/conformance/` implements it over HTTP
-  against a server on a temp SQLite file with an injected clock. A test
-  importing replica-proto is test code, not app code, so `AGENTS.md`'s "nothing
-  in the app imports it" holds.
+- `web/packages/db`: `01` D1-D4 and `0001_spaces.sql` of D5 (records, sync
+  bookkeeping, non-replicated server tables, `secure_delete`), D6 (log epochs
+  and the restore marker, with the step added to `runbooks/restore.md`), D7
+  (record shape backfills); `ServerStore` over SQLite in
+  `web/packages/db/src/sync/`.
+- `web/packages/server`: `01` S1-S5 (sync pipeline with `Session-Protocol` and
+  `426 UPGRADE_REQUIRED`, device tokens and `devices.*` pairing, configuration,
+  effect worker, drain and boot), Y7 (SSE over `fetch`), A1 (sync routes),
+  A3 (rate limits); `04` §12 (cookie and bearer authentication, CORS allowlist
+  refusing `*` at boot, one replica per user).
+- A conformance target: replica-proto's harness gains a target interface
+  (apply, snapshot, pull, register, clock control, random-source fault
+  injection, storage scan); `web/packages/server/test/conformance/`
+  implements it over HTTP against a server on a temp SQLite file. A test
+  importing replica-proto is test code, so "nothing in the app imports it"
+  holds.
+- Staging app and the `main` branch split (§3.1, §3.2).
 
 Exit criteria:
-- Every replica-proto test file passes against the conformance target, with
-  the same assertions: `inv1`–`inv7`, `review-r1`, `review-r2`, the read and
-  write oracles, the effect model and `convergence`.
-- The storage scan (`R5`) runs over the SQLite file, the WAL included, after a
-  checkpoint: removed text appears in no table.
-- A server mutation set: the X, N and R faults that apply to server-half code
-  are re-expressed against `web/packages/server` and `web/packages/sync`, run
-  by a copy of the mutation runner, and none survive. Faults that have no
-  counterpart in the real code are listed with the reason.
+- `cd web && npm test --workspace @session/server -- 'test/conformance/**'`
+  runs every replica-proto test file against the HTTP target with the same
+  assertions.
+- `cd web && npm test --workspace @session/db` passes, including
+  `migrations.test.ts` (fresh database and a database at `0000` both migrate),
+  the D1 property test, the D2 kill-between-statements test, the D3 test that
+  no server-only table reaches `snapshot` or `pull`, the D4 storage scan over
+  the SQLite file and WAL after a checkpoint, and the D6 restore test (a
+  pre-restore cursor answers `resync`).
+- Server mutation set: the X, N and R faults that apply to server-half code,
+  re-expressed against `web/packages/server` and `web/packages/sync` and run
+  by a copy of the runner (`npm run mutate --workspace @session/server`,
+  proposed), exits 0. Faults without a counterpart are listed with the
+  reason (question E4 in §6).
 - Restart test: a server killed between commit and response answers the
-  replayed envelope from the stored answer after boot.
-- Load check on the staging machine size (`shared-cpu-2x`, 2 GB): 200 SSE
+  replayed envelope from the stored answer after boot (`01` S5).
+- `cd web && npm run check && npm test` pass; CI's `docker` job builds.
+- Load check on staging (`shared-cpu-2x`, 2 GB, as production): 200 SSE
   clients and 20 writes per second for 10 minutes, apply p95 under 50 ms,
-  pull p95 under 100 ms, no growth in resident memory after the first minute.
-- `web/` `npm run check` and `npm test` pass; CI's `docker` job builds.
+  pull p95 under 100 ms, resident memory flat after the first minute, and
+  the snapshot size of a 5,000-thread space recorded for question E7.
 
-### M4 — Client shell and feed
+### M4 — Client shell, feed, posts and channels
 
-Scope (`02-client-app.md`): the app shell (app bar with the scope picker,
-channel strip, usage ring, Saved count, layout toggle, account menu), the feed
-rows with branches in the side column, thread view, the composer (Ask and
-Post), channel pages, Browse, the signed-out reading mode, and the replica
-wiring (reactive queries, outbox state shown on items). Old web screens for
-trees, workspaces and folders are removed from the client package.
-
-Exit criteria:
-- New e2e specs replace `research.spec.ts`, `library.spec.ts`,
-  `live.spec.ts` and `collaboration.spec.ts`: `feed.spec.ts` (post, reply,
-  save, the Saved count, a second context seeing the post without a reload,
-  signed-out reading of an open channel), `offline.spec.ts` for the web's
-  in-flight-only rule (a request that fails is shown, nothing is kept after a
-  reload).
-- `visual.spec.ts` baselines regenerated by CI's `update-visual-baselines`
-  run for the new Home and thread views.
-- Client component tests for every screen listed in `02-client-app.md`.
-- Accessibility: `eslint-plugin-jsx-a11y` clean; keyboard paths through the
-  feed, dialogs and menus covered by component tests.
-
-### M5 — Runs
-
-Scope (`03-agents-and-research.md`): Ask, branch and look-up as runs on the
-owned agent loop; committed turns and run state as records in the space log;
-in-flight text as ephemeral events on the sync SSE connection keyed by run,
-attempt and per-attempt sequence (ADR-22); gap refetch; the weekly allowance,
-the usage page and API keys; cancellation on thread removal.
+Scope (`02-client-app.md`; items in §1.2): the research client removed (`02`
+W1.1, with `01` A2's routers); the app shell, routes, bar hiding, phone
+widths; feed rows and cards; reply trees on posts; the composer (Post mode
+end to end, Ask mode against the fixture replica); channel header, info
+dialog, About editor, Browse, New channel; the replica wiring, outbox
+states and per-viewer fields; signed-out reading (`02` §9.5, `04` §3.5) and
+unjoined open channels (`01` R5 with `spaces.directory`); saves and the Saved
+count (`04` §7); the fixture replica (`02` §9.6); accessibility and tokens.
+The usage ring renders from the fixture until M5b provides `usage.get`.
 
 Exit criteria:
-- `runs.spec.ts`: ask with the `paced-answer` fixture, a reload mid-stream and
-  a second tab on the same run, a branch from a selected answer, Look up on a
-  1–4 word selection, Stop, Run again creating a new attempt.
-- Server tests: sequence continuity and auto-resume across a simulated restart
-  (the `05-run-lifecycle-and-streaming.md` scenario re-expressed for records);
-  allowance admission; a removal during a run ends it with nothing written
-  after the removal.
-- Fixture providers only; nothing reaches the network in CI.
+- `cd web && npm run check && npm test` pass, including every `02` W
+  acceptance test listed for this milestone and the `02` §9.8 `rg` check for
+  scaffolding names.
+- `cd web && npm run test:e2e -- spaces-shell spaces-feed spaces-replies
+  spaces-channels spaces-signed-out spaces-keyboard` passes against the M3
+  server, for the post, reply, save, join, create and About parts of those
+  specs (`02` §12.2); `spaces-feed` also covers the web in-flight-only rule
+  with `context.setOffline` (a failed request shows "Not sent", a reload
+  keeps nothing).
+- `research.spec.ts`, `library.spec.ts`, `collaboration.spec.ts`,
+  `live.spec.ts` and `widgets.spec.ts` are deleted; `visual.spec.ts`
+  baselines are regenerated by CI's `update-visual-baselines` run (`12` §4)
+  for the views in `02` §12.2.
+- `vite build` output contains no fixture strings (`02` §9.6).
+
+### M5a — Owned runs
+
+Scope (`03` §1-§5, §7): run, turn and answer records; context assembly and the
+access check at start (G7, G8); the owned loop re-pointed at records through
+`serverApply` with attempt fencing (E1-E4); progress steps; streaming as
+ephemeral deltas with gap refetch from `run_live` (T1-T4); the usage ledger
+and what counts (K1, K2) with every run paid as `included` and the existing
+limits; model access per run and no Effort control (K12, K13); per-run
+limits (L1, L2); the client's branch tree, branch card and selection actions
+(`02` W4.1, W4.2, W4.4) and the look-up display (G3).
+
+Exit criteria:
+- `cd web && npm test --workspace @session/server --workspace @session/db`
+  passes, including `runs.test.ts` and `runRecovery.test.ts` rewritten
+  against the new records (E2), the E1 removal-during-run test, the E3
+  fixture-provider tests, the E4 cancel-then-retry test, the T2 non-member
+  delta test, the T4 change-log bound and the L2 look-up tool cap.
+- `cd web && npm run test:e2e -- spaces-feed spaces-branches spaces-runs`
+  passes: ask with the `paced-answer` fixture, a reload mid-stream and a
+  second tab on the same run, Continue, Branch, Branch here, Look up on a
+  1-4 word selection showing the phrase and not the prompt, Comment, Stop,
+  Run again creating a new attempt, dot alignment (`02` W4.1).
+  `spaces-runs.spec.ts` is new in this file.
+- Fixture providers only; nothing reaches a model provider in CI.
+
+### M5b — Allowance, payer, API keys, Usage page
+
+Entry: ADR-23 accepted (`03` §6; open question P11).
+
+Scope: the weekly allowance and its reset (K3), API keys encrypted under
+`SESSION_SECRET_KEY` with the `keyCheck` effect (K4), `usage.get` and
+`usage.listRuns` (K5), the meter (K6), the billing setting and the payer made
+in `pre` (K7, K8), crossing the allowance during a run (K9), runs at the reset
+(K10), model payers in the registry (K11), the key-run privacy note (K14); the
+Usage page (`02` W8.1) and the app bar ring on live data.
+
+Exit criteria:
+- `cd web && npm test` passes, including the K3 reset-boundary tests with an
+  injected clock, the K4 test that greps the database file for a stored raw
+  key and finds nothing, the K5 removed-thread test, the K8 mutator tests for
+  each payer and the convergence test of a write queued with tokens left and
+  applied after they ran out, and the K9 boundary-crossing ledger test.
+- `cd web && npm run test:e2e -- spaces-usage` passes (keys, billing setting,
+  out-of-tokens refusal of Ask while Post sends).
+- `06-auth-and-users.md` §8 and `fly.toml`'s comment on daily limits updated
+  to the weekly allowance.
 
 ### M6 — Membership and moderation
 
-Scope: everything in `04-membership-moderation-security.md`: account invites,
-the members page and invite tree, the "Join with invite?" step and waiting
-accounts, channels with open and private visibility, roles, channel info and
-About editing, channel invite links, report, remove with reason, ban, the
-moderation log, frozen copies, abuse limits.
+Scope (`04` sections in §1.2; `02` W6.4, W6.5, W7.1-W7.3): account invites,
+`users.status` and handles, the invite tree, the "Join with invite?" flows
+and waiting accounts; roles with the member list, Make moderator and Transfer
+ownership; channel invite links; report, remove with reason, ban, the
+moderation log; privacy rules; client rendering of apply-time refusals; abuse
+limits; the threat notes' mitigations (merged failure answer for
+`auth.checkInvite`, the cursor-key rotation runbook in `web/docs/runbooks/`).
+`04` §4.3 and §6.4 add screens (member list, Banned list, "Invite to #name")
+that `02` has no W item for; they are built here.
 
 Exit criteria:
-- `e2e/invites.spec.ts` and `e2e/moderation.spec.ts` as specified in `04`
-  §3.4, §5 and §6.6.
-- Server tests for the account-invite slot rule, concurrency and the
-  waiting-account sweep; the conformance suites still pass after the contract changes.
-- A privacy check run by hand on staging before M8: after a removal, the text
-  is absent from the SQLite file, from pull and snapshot answers for every
-  role, and from the effect queue.
+- `cd web && npm test --workspace @session/db -- test/invites.test.ts` passes
+  (`04` §3.1: hash lookup, concurrent redemption, handle uniqueness, the
+  waiting-account sweep), and the server tests of `04` §3.2 (3 open links, a
+  4th refused, revoke and use freeing a slot, concurrent creates, the admin
+  exemption).
+- `cd web && npm run test:e2e -- spaces-membership spaces-channels` passes,
+  covering the scenarios of `04` §3.4 (link, code, waiting account, used
+  code), §4.4, §5 (private channel link, reused link refused) and §6.6
+  (report, moderation log count without reload, removal with reason,
+  dismissal, ban). 04 names these specs `invites.spec.ts` and
+  `moderation.spec.ts`; one set of names is chosen in 02 §12.2.
+- The conformance suite (M3) and `cd web/packages/replica-proto && npm test`
+  still pass after the M6 mutator changes; `npm run mutate` runs on the pull
+  request (§3.1).
+- Privacy check on staging, by script: after a removal, the removed text is
+  absent from the SQLite file, from `pull` and `snapshot` answers for every
+  role, and from the `effects` table (the D4 scan run with
+  `fly ssh console -a session-staging`).
 
-### M7 — Desktop (Tauri) wrapper and device runs
+### M7a — Desktop shell
 
 Scope:
-- A new Tauri shell that loads the M4 client build (one client codebase;
-  macOS only). The current `src/` React app and its Rust commands are not
-  used by it.
-- A SQLite storage adapter for `@session/sync` on the Rust side, exposed to
-  the client through a narrow command set (load working set, persist batch,
-  wipe), so the outbox survives restarts for 3 days.
-- Device-token sign-in through a one-time pairing code from a signed-in web
-  session (`01` S2); the token in the Keychain; sign-out wipes the replica
-  and outbox.
-- Device runs (`03-agents-and-research.md` V1–V7, ADR-21): an executor that
-  claims runs (`/api/runs/claim`), spawns Claude Code or Codex in an empty
-  temporary directory, reports turns and the finish with the attempt number,
-  sends heartbeats every 10 s on a lease separate from progress, and stays
-  under the 200 KB answer cap. No CLI session resume.
-- The updater keeps its existing key and endpoint (`docs/releasing.md`).
+- A Tauri shell that loads the M4 client build (macOS only; one client
+  codebase). It is built from a separate directory so the current app keeps
+  building and releasing from `src/` and `src-tauri` until M8b (question
+  E10). It keeps bundle id `dev.session.desktop`, the Keychain service, the
+  updater key and endpoint (`docs/session-cutover.md`, `docs/releasing.md`),
+  so existing installs update into it.
+- A SQLite `StorageAdapter` on the Rust side behind a narrow command set
+  (load working set, persist batch, wipe), so the outbox survives restarts
+  for 3 days.
+- Device-token sign-in through a pairing code (`01` S2), the token in the
+  Keychain, sign-out wiping replica and outbox; the frozen-channel banner
+  (`04` §8); the drag region and traffic-light inset (`02` W2.4); "Update
+  Session" through the updater on `426`.
 
 Exit criteria:
-- `cargo test` in `src-tauri` covers the storage adapter (persist, load,
-  wipe, a crash between persist and acknowledge), token storage through a
-  Keychain abstraction, and the device-run executor against the fake-CLI
-  fixture of `03` V4 (recorded JSONL: claim, turns, finish, lease loss ending
-  `interrupted`, a working directory that is empty at spawn).
-- The root `npm run check` and `npm test` pass; the desktop workflow's
+- `cargo test` for the new shell covers the storage adapter (persist, load,
+  wipe, a crash between persist and acknowledge) and token storage through a
+  Keychain abstraction.
+- Root `npm run check && npm test` pass; `.github/workflows/desktop.yml`'s
   `frontend`, `rust` and `native` jobs pass.
-- A manual macOS checklist (kept in `web/docs/runbooks/desktop-release.md`):
-  sign in, offline post queued and sent on reconnect after an app restart,
-  removed-member frozen channel, device run end to end with each CLI, sign-out
-  wipe, "Update Session" shown for a protocol below the minimum.
+- The manual macOS checklist in `web/docs/runbooks/desktop-release.md` (new):
+  sign in, an offline reply queued and sent after an app restart (`02`
+  §12.3), the frozen channel of a removed member, sign-out wipe, "Update
+  Session" for a protocol below the minimum, window drag by the bar.
 
-### M8 — Data reset and hard cutover
+### M7b — Device runs
 
-Scope (`AGENTS.md` "Cutover"; `docs/session-cutover.md` for the naming and
-storage contracts that stay):
-- Data reset. `01` D5 leaves the choice between the migration
-  `0002_drop_research.sql` and a full reset (`runbooks/reset-database.md`) to
-  this file. Choice: the migration. It drops the research tables (trees,
-  nodes, workspaces, folders, highlights, recaps, drafts, thread invitations,
-  notifications) and their files under `/data/documents`, and keeps `users`
-  (GitHub identity, `is_admin`, `invited_by`), `sessions`, `user_limits` and
-  the sign-up codes in their extended form (`01` C8). Existing accounts
-  become `active` and, where `invited_by` is null, roots of the invite tree;
-  each chooses a handle at first sign-in. The full reset would discard the
-  accounts and admin flags the invite tree starts from. Question 19 asks
-  whether to reset anyway.
-- Before the migration: a Litestream snapshot, verified by a restore to a
-  scratch machine, kept for the 30-day retention; an announcement to existing
-  web users that their threads will be removed, with a date.
-- Deploy the spaces server build to production (`fly deploy web -c
-  web/fly.toml`), then publish the desktop release (`docs/releasing.md`).
-  The new desktop build imports no local research and reads none of the old
-  app's storage; it leaves the old files in place.
-- After cutover: remove the old desktop frontend (`src/`), its Rust commands
-  and tests that no longer apply, the web client's tree and workspace code,
-  and replica-proto's prototype server if the conformance target replaces it
-  (the suites stay). Update `AGENTS.md`: move the "Planned" section to current
-  rules and drop "until the cutover".
+Scope (`03` V1-V7, T5, L3; ADR-21): CLI detection and the picker entries,
+claim with the G8 check, lease and heartbeat every 10 s, the CLI spawned in
+an empty temporary directory with no session resume, turn and finish
+reporting with the attempt number, the 200 KB answer cap, 100 device runs per
+hour, "Waiting for your Mac".
 
 Exit criteria:
-- The restore rehearsal (`web/docs/runbooks/restore.md`) run against the
-  pre-reset snapshot and against a post-reset snapshot, including the log
-  epoch bump (§3.3).
-- Production smoke on the deployed build: sign in on web and desktop, post,
-  ask with included tokens, a device run, report and remove, invite link
-  redemption.
-- The root `npm run preflight` and the web CI jobs green on the cutover
-  commit.
+- `cd web && npm test --workspace @session/server` passes the V2 concurrent
+  claim test, the V3 lease-expiry test (run `interrupted` within 40 s, late
+  turn refused), the V5 stale-attempt, oversized-answer and no-turn tests, and
+  the V6 101st-claim refusal.
+- `cargo test` in the new shell passes the executor tests against the
+  fake-CLI fixture of `03` V4 (recorded JSONL: claim, turns, finish, lease
+  loss, a working directory that is empty at spawn).
+- The macOS checklist gains a device run end to end with each CLI.
+- The risk "device runs read local files" (§5) has a recorded decision
+  (question S5).
 
-## 3. Deployment
+### M8a — Cutover preparation
 
-### 3.1 Pipeline
+Scope, with production still on the current app:
+- `web/docs/runbooks/cutover.md` (new): the steps of §3.6 with commands.
+- On the `legacy-web` branch (§3.1), deployed to production: a banner with the
+  cutover date and what is dropped (§3.5), and a handler that reloads the
+  page on any `426`, so tabs open across the cutover load the new client.
+- A migration rehearsal: restore production's latest Litestream generation to
+  a scratch machine (`runbooks/restore.md` §2), run the cutover build against
+  it, and record the time `0001` and `0002` take and the file size after.
+- A restore rehearsal on staging including the epoch bump (`01` D6).
+- Production secrets staged with `fly secrets set --stage -a session-dev`
+  (§3.4); the desktop release built, signed and notarized, not published.
 
-Unchanged from `13-deployment-fly.md` and `12` §4: CI's `check`, `test`,
-`e2e` and `docker` jobs gate `deploy` on a push to `main`; one Fly app, one
-machine, one volume, `strategy = "immediate"`. Added to CI from M1: a job that
-runs replica-proto's `npm test`; from M3, the conformance suite inside the
-server's `npm test`. `npm run mutate` is too slow for every push; it runs
-nightly and on pull requests that touch `web/packages/mutators`,
-`web/packages/sync` or the server's sync code, and a surviving mutation fails
-that run.
+Exit criteria:
+- `cd web && npm test --workspace @session/db -- test/migrations.test.ts`
+  passes a test that migrates a populated `0000` database (fixture rows in
+  every research table, users with and without `invited_by`) through `0002`
+  and checks: kept tables keep their rows, dropped tables are gone, every
+  existing user is `active`, and a byte scan of the file finds none of the
+  fixture's research text.
+- The migration rehearsal and the staging restore rehearsal are recorded in
+  the cutover runbook with their times.
+- The banner has been live for the notice period (question P17).
+
+### M8b — Data reset and hard cutover
+
+Scope: §3.5 and §3.6. Exit criteria:
+- Root `npm run preflight` and the web CI jobs (`check`, `test`, `e2e`,
+  `docker`) green on the cutover commit.
+- Production smoke on the deployed build: `curl -fsS
+  https://session.dev/healthz`; sign in on web and desktop; post; ask with
+  included tokens; a device run; report and remove; invite link redemption;
+  boot log shows `0001` and `0002` applied and Litestream replicating.
+- A restore rehearsal against a post-cutover snapshot, including the epoch
+  bump.
+
+### M8c — Removal of the old code
+
+Scope: delete the old desktop frontend (`src/`), its Rust commands and tests,
+the web client's tree and workspace code still present, the `legacy-web`
+branch; move the new shell into place if it was built separately; decide on
+replica-proto's prototype server (question E5; the suites stay); restore the
+production `deploy` job on `main`; update `AGENTS.md` (move "Planned" to
+current rules, drop "until the cutover"). Exit: root `npm run preflight`,
+`cd web && npm run check && npm test`, and both CI workflows green.
+
+## 3. Deployment and cutover
+
+### 3.1 Pipeline and branches
+
+`13-deployment-fly.md` and `12` §4: CI's `check`, `test`, `e2e` and `docker`
+jobs gate `deploy` on a push to `main`; one Fly app (`session-dev`), one
+machine, one volume, `strategy = "immediate"`. Added:
+
+- From M1a, a CI job runs replica-proto's `npm test`; from M3, the conformance
+  suite runs inside the server's `npm test`.
+- `npm run mutate` (replica-proto, and from M3 the server copy) is too slow
+  for every push; it runs nightly and on pull requests that touch
+  `web/packages/replica-proto`, `web/packages/mutators`, `web/packages/sync`
+  or the server's sync code, and a surviving mutation fails that run.
+- Before the first M3 merge, the merge that can change production behaviour
+  (`0001_spaces.sql`, new routes), `main` stops deploying to production: the
+  `deploy` job targets the staging app, and production deploys come from a
+  `legacy-web` branch cut from `main` at that point, which takes only fixes
+  and the M8a notice. M8b deploys `main` to production; M8c removes the
+  branch. This keeps "until the cutover, the current app stays" true while
+  M3-M7 land on `main` (question E1).
 
 ### 3.2 Staging
 
-From M3 to M8 the new server runs on a separate Fly app (`session-staging`
-proposed) with its own volume, Litestream bucket prefix, OAuth app and
-secrets, `SESSION_REQUIRE_INVITE=1` and fixture providers optional. Production
-keeps the current web app until M8. Whether a second app is acceptable is an
-open question (§6).
+From M3 to M8b the new server runs on a separate Fly app (`session-staging`
+proposed, `web/fly.staging.toml`) with its own volume, Litestream bucket
+prefix, OAuth app, secrets and `SESSION_REQUIRE_INVITE=1`. Model calls use
+fixture providers by default and real providers with low per-user limits when
+a milestone needs them (M5a, M7b). A second Fly app departs from `13` §1's
+single app (question E1); production keeps one database on one machine.
 
 ### 3.3 Litestream and restore
 
-- Replication as in `13` §6. The change log, idempotency answers and effect
-  queue add write volume; WAL checkpoints are monitored (§4).
-- A restore moves the database back in time. Clients may hold cursors and
-  confirmed answers from after the restored point. The restore runbook adds:
-  bump the log epochs before the server accepts traffic, so every cursor
-  resyncs (`01` D6: the runbook writes a restore marker, and boot increments
-  every epoch on a mismatch), and record the restore time. Writes confirmed
-  after the restored
-  point and before the failure are lost: their idempotency answers are gone,
-  and clients have dropped them from their outboxes. With Litestream's
-  seconds of lag this is a small window; the runbook states it.
+- Replication as in `13` §6: continuous, snapshot every 6 h, retention 30
+  days. The change log, recorded answers and effect queue add write volume;
+  WAL size is monitored (§4).
+- A restore moves the database back in time while clients hold cursors and
+  confirmed answers from after the restored point. `runbooks/restore.md`
+  gains the `01` D6 step: write the restore marker before the server accepts
+  traffic, so boot increments every log epoch and every cursor resyncs, and
+  record the restore time. Writes confirmed after the restored point are
+  lost: their recorded answers are gone and clients have dropped them from
+  their outboxes. The runbook states this window (Litestream lag, seconds).
+- Erased content stays in Litestream generations until the 30-day retention
+  expires (`01` D4). The privacy copy must state the bound (question S1).
 - `SESSION_CURSOR_KEY` and `SESSION_CURSOR_KEY_PREVIOUS` are Fly secrets; a
-  rotation runbook covers the 30-day overlap.
+  rotation runbook (M6) covers the 30-day overlap.
 
-### 3.4 Protocol version and "Update Session"
+### 3.4 Protocol version, "Update Session" and configuration
 
-- Every sync and tRPC request carries the protocol version header (name fixed
-  in `01-architecture-and-data.md`). The server accepts `[SESSION_MIN_PROTOCOL,
-  current]`; below the minimum it answers the minimum-version error and the
-  client shows "Update Session" (desktop: the updater; web: reload).
-- Additive changes (a new optional input field, a new mutator, a new record
-  kind that old clients ignore) do not bump the version. A change to an
-  existing mutator's input or `run` semantics bumps it, because client
-  prediction and server authority must run the same definition.
-- Deploy order for a bump: deploy the server accepting both versions, publish
-  the desktop release, then raise the minimum after 7 days or at once for a
-  security fix. The web client is always current after a reload; a tab that
-  stays open across a deploy receives the minimum-version answer and reloads.
+- Every sync and tRPC request of the new clients carries `Session-Protocol`
+  (`01` S1). The server accepts `[SESSION_MIN_PROTOCOL, current]`; below the
+  minimum it answers `426 { code: "UPGRADE_REQUIRED" }` and the client shows
+  "Update Session" (desktop: the updater; web: reload).
+- Additive changes (a new optional input field, a new mutator, a record kind
+  old clients ignore) do not bump the version. A change to an existing
+  mutator's input or `run` semantics bumps it, because prediction and
+  authority must run the same definition.
+- Order for a bump: deploy the server accepting both versions, publish the
+  desktop release, raise the minimum after 7 days (question E2), or at once
+  for a security fix. The web client is current after a reload; an open tab
+  receives `426` and reloads.
+- Configuration added (`01` S3, `03` §6-§7, `04` §10): `SESSION_MIN_PROTOCOL`,
+  `SESSION_CURSOR_KEY`, `SESSION_CURSOR_KEY_PREVIOUS`, `SESSION_SECRET_KEY`,
+  `SESSION_DEVICE_ANSWER_MAX_BYTES`, `SESSION_DEVICE_RUNS_PER_HOUR`,
+  `SESSION_WEEKLY_TOKENS`, `SESSION_RUN_MAX_TOKENS`,
+  `SESSION_QUEUED_PER_USER`, the CORS allowlist of desktop origins and the
+  abuse limits. All are validated at boot and documented in
+  `web/.env.example`; the keys are Fly secrets. Losing `SESSION_SECRET_KEY`
+  makes stored API keys unreadable; it is backed up outside Fly.
 
-### 3.5 Configuration added
+### 3.5 Data reset: what is dropped, what is kept, how users are told
 
-From `01` S3 and `03`: `SESSION_MIN_PROTOCOL`, `SESSION_CURSOR_KEY`,
-`SESSION_CURSOR_KEY_PREVIOUS`, `SESSION_SECRET_KEY`,
-`SESSION_DEVICE_ANSWER_MAX_BYTES`, `SESSION_DEVICE_RUNS_PER_HOUR`,
-`SESSION_WEEKLY_TOKENS`, `SESSION_RUN_MAX_TOKENS`. Added here: the CORS
-allowlist of desktop origins and the abuse limits of `04` §10. All are
-validated at boot and documented in `web/.env.example`; the keys are Fly
-secrets.
+`AGENTS.md`: existing web data is dropped and no desktop research is
+imported. `01` D5 leaves the choice between `0002_drop_research.sql` and a
+full reset (`runbooks/reset-database.md`) to this file. Choice: the
+migration, because a full reset also discards the accounts, admin flags and
+`invited_by` edges the invite tree starts from (question P19 asks whether to
+reset anyway).
+
+Dropped by `0002` (with `secure_delete` on from `0001`, so freed pages are
+overwritten):
+- Research and collaboration tables: `trees`, `tree_*`, `nodes`,
+  `node_messages`, `node_summaries`, `run_turns`, `run_attempts`, `run_queue`,
+  `followup_queue`, `response_snapshots`, `folders`, `workspaces`,
+  `highlights`, `feed_items`, `research_drafts`, `interface_drafts`,
+  `widget_*`, `research_images`, `image_refs`, `notifications`,
+  `collapsed_*` (`01` §2).
+- `embed_assets` and `tweet_cache`, which 01 §2 does not classify; proposed
+  dropped, since they serve only research content.
+- Files: `/data/documents/*` (image attachments of `research_images`) and
+  `/data/embeds/*`, removed by a cutover step (§3.6), as in
+  `reset-database.md` §3.
+
+Kept: `users` (GitHub identity, `is_admin`, `invited_by`; extended with
+`status`, `handle`, `display_name` by `04` §3.1; every existing user becomes
+`active`, users with no `invited_by` become roots of the invite tree, and
+each chooses a handle at first sign-in before any write), `sessions` (no
+sign-in needed), `oauth_states`, `invites` (extended by `01` C8; unused codes
+stay redeemable), `signup_attempts`, `user_limits`, `usage_events` (rows from
+before the cutover have no `week` and do not count toward an allowance),
+`user_preferences`, `backfills`.
+
+On the desktop: the new build imports no local research and reads none of
+the old app's storage; the old files under `~/Library/Application
+Support/session` stay in place (question P16).
+
+Backups: the pre-cutover Litestream generation, which holds all dropped
+content, is kept until the 30-day retention expires and then deleted; it is
+the only rollback source (§3.6).
+
+How users are told (`users` holds no email address, so notices reach only
+people who open the app):
+- From M8a, a banner in the current web app with the date, the sentence
+  "Threads, workspaces and folders on the web are removed on <date>; your
+  account and sign-in stay", and the 30-day backup bound.
+- After the cutover, the release notes of the desktop update and a one-time
+  notice on first launch of the new build: local research is not imported
+  and the old files remain on disk.
+- Whether to offer an export before the date is question P20.
+
+### 3.6 Cutover sequence (M8b)
+
+1. Freeze: merge the cutover commit to `main`; CI green (`check`, `test`,
+   `e2e`, `docker`).
+2. Record the current Litestream generation and time as the rollback point;
+   restore it to a scratch machine and run `PRAGMA integrity_check`
+   (`runbooks/restore.md` §2).
+3. Apply the staged secrets and deploy `main` to production (`fly deploy web
+   -c web/fly.toml`; with `strategy = "immediate"` this is a short outage).
+   Boot runs `0001` and `0002`, then starts the effect worker.
+4. Remove `/data/documents/*`, `/data/embeds/*` and
+   `/data/tmp/documents-backup.stamp` from a one-off machine with the volume
+   (`reset-database.md` §3), so the next documents archive starts empty.
+5. Smoke checks (M8b exit). On failure before step 6: `fly scale count 0`,
+   restore the rollback point (`runbooks/restore.md`), deploy the
+   `legacy-web` image, scale to 1. Nothing written to the new build is kept.
+6. Publish the desktop release (`docs/releasing.md`). From here rollback
+   would lose writes made through the new clients and is not planned; fixes
+   go forward.
+7. After 7 days: the `legacy-web` image and the rollback generation are no
+   longer needed; the generation expires with Litestream retention.
 
 ## 4. Observability
 
@@ -359,7 +582,7 @@ answer codes, never record text.
 |---|---|---|
 | `session_sync_apply_total{mutator,answer}` | Writes by answer code (`OK`, `FORBIDDEN`, `STALE`, `CONFLICT`, `EXPIRED`, `CLOCK_SKEW`, `TOO_MANY_REQUESTS`, …) | `INTERNAL_SERVER_ERROR` above 1% for 10 min |
 | `session_sync_apply_seconds` | Apply latency histogram | p95 above 100 ms |
-| `session_sync_pull_seconds`, `session_sync_snapshot_bytes` | Read cost per log | p95 pull above 250 ms |
+| `session_sync_pull_seconds`, `session_sync_snapshot_bytes` | Read cost per log; snapshot size per tier | p95 pull above 250 ms; p95 snapshot above 5 MB |
 | `session_sync_resync_total{reason}` | Resyncs by reason (forged, expired, epoch, scope change) | sudden rise after a deploy |
 | `session_sync_clients`, `session_sse_clients` | Registered and connected clients | — |
 | `session_effects_queue_depth`, `session_effects_dead_letters` | Effect worker health | any dead letter |
@@ -368,6 +591,7 @@ answer codes, never record text.
 | `session_rate_limited_total{bucket}` | Abuse limits hit | — |
 | `session_invite_checks_total{outcome}` | Invite code checks | failed checks above 100/hour |
 | `session_reports_total`, `session_removals_total` | Moderation volume | — |
+| `session_weekly_tokens{payer}`, `session_weekly_cost_usd{provider}` | Included-token spend against budget | weekly cost above the budget set in question P11 |
 | `session_device_runs_active`, `session_device_leases_expired_total` | Device runs | lease expiries above 20% of claims |
 | `session_wal_bytes` | WAL size between checkpoints | above 512 MB |
 
@@ -377,61 +601,122 @@ outboxes.
 
 ## 5. Risk register
 
-| Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
-| The real server half diverges from the prototype in ways the suites do not cover | Medium | High | Conformance target runs every replica-proto file unchanged; server mutation set (M3); the write oracle and convergence run in CI |
-| The mutation run is too slow to keep in the loop | High | Medium | Nightly and path-filtered runs; `--slots`; a name filter per change |
-| SQLite single writer saturates with the change log, idempotency and effect writes | Low | High | One commit per apply; short transactions; load check in M3; machine size raised before limits |
-| Erased text survives somewhere (WAL, effect payloads, logs, backups) | Medium | High | Effects carry ids; logs carry no text; storage scan over the file and WAL; backup retention stated in the privacy page |
-| A restore loses confirmed writes | Low | Medium | Epoch bump; runbook statement; Litestream lag alert |
-| Client prediction and server disagree across versions | Medium | Medium | Protocol version bump rule; rebase on confirmed changes; `unknown` stops prediction |
-| Cursor key mishandled (lost or rotated without overlap) | Low | Medium | Configured key with 30-day previous key; rotation runbook; a lost key causes resyncs, not data loss |
-| Desktop UI cannot be driven by Playwright (tauri-driver has no macOS support) | High | Medium | Client logic tested in the browser; Rust adapter and executor tests; manual macOS checklist |
-| Device runs leak local files through CLI read tools | Medium | Medium | Empty working directory; read-only tools only; local-read lockdown deferred and tracked (`03`) |
-| Invite tree slows growth or concentrates invites in admins | Medium | Low | Admin exemption from slots; metrics on redemptions |
-| Spam or abuse in open channels | Medium | Medium | Invite-only accounts; reports, removal and ban; per-user limits; the invite tree to find the inviter of an abusive account |
-| Existing web users object to the data reset | Medium | Low | Announcement with a date; accounts kept |
-| Scope from the mockup grows past the contract (rules, hide, requests) | Medium | Medium | `04` §1 decisions; contract changes only through `01` |
+Owner roles: Product, Server (server half, sync, runs), Client (web client),
+Desktop (Tauri shell, device runs), Security, Operations (deploys, backups).
+
+| Risk | Likelihood | Impact | Mitigation | Owner |
+|---|---|---|---|---|
+| The real server half diverges from the prototype where the suites do not look | Medium | High | Conformance target runs every replica-proto file unchanged; server mutation set (M3); oracles and convergence in CI | Server |
+| The mutation run is too slow to keep in the loop | High | Medium | Nightly and path-filtered runs; `--slots`; name filters per change | Server |
+| SQLite's single writer saturates with change log, recorded answers and effects | Low | High | One commit per apply; short transactions; M3 load check; machine size raised before limits | Server |
+| Erased text survives in WAL, effect payloads or logs | Medium | High | Effects carry ids; logs carry no text; storage scan over file and WAL (M3); staging scan (M6) | Security |
+| Erased text survives in Litestream generations and the pre-cutover generation for 30 days, against "never served again" | High | Medium | Bound stated in the privacy copy; shorter retention if question S1 requires. A restore to a point before a removal serves the removed content again; the restore runbook lists the removals applied after the restore point (from the JSON logs, which carry mutator names and item ids) and repeats them before traffic resumes | Security |
+| Included-token spend exceeds budget: 2,000,000 tokens per member per week at the default model's price, cached context counted in full | Medium | High | `SESSION_WEEKLY_TOKENS` per user override; per-run cap `SESSION_RUN_MAX_TOKENS`; weekly cost alert (§4); model and allowance decided in ADR-23 before M5b (P11, P12) | Product |
+| Device runs expose local files: channel content in the CLI prompt can direct read-only tools to read files outside the empty working directory and put them in an answer posted to a shared channel | Medium | High | Empty working directory; no attachments; answer size cap; decision before M7b exit on locking tools to web search and fetch or limiting device runs to private channels (S5) | Security |
+| Device token theft or a stolen Mac | Low | High | Token hashed on the server, Keychain item bound to the signing identity, revocation ends streams within 60 s (`04` §12); local replica relies on FileVault | Security |
+| Replica size on small devices: 5,000 full threads per space in a web tab's memory or on a phone | Medium | Medium | Snapshot size measured in M3 and alerted (§4); web window decided (E7); Phone window 30 days or 200 threads; Phone not scheduled before cutover (P18) | Server |
+| Every deploy restarts the one machine and every SSE client reconnects and pulls at once | High | Low | Cursors resume with `pull`, not `snapshot`; client reconnect jitter; load check includes a reconnect of 200 clients | Server |
+| A restore loses confirmed writes | Low | Medium | Epoch bump; runbook statement; Litestream lag monitored | Operations |
+| Cutover migration takes too long or fails on production data | Low | High | Rehearsal on a restored copy (M8a) with timing; rollback point and `legacy-web` image (§3.6 step 5) | Operations |
+| Client prediction and server disagree across versions | Medium | Medium | Protocol bump rule; rebase on confirmed changes; `unknown` stops prediction | Server |
+| Cursor key or secret key lost, or rotated without overlap | Low | Medium | Configured keys with a 30-day previous cursor key; rotation runbook; keys backed up outside Fly; a lost cursor key causes resyncs, a lost secret key forces users to re-enter API keys | Operations |
+| Desktop UI cannot be driven by Playwright (tauri-driver has no macOS support) | High | Medium | Client logic tested in the browser; Rust adapter and executor tests; manual macOS checklist | Desktop |
+| Invite code enumeration through `auth.checkInvite` | Low | Medium | 50-bit codes (S2), one failure answer, per-IP limits, failed-check alert | Security |
+| Invite tree slows growth or concentrates invites in admins | Medium | Low | Admin exemption from slots; redemption metrics | Product |
+| Spam or abuse in open channels | Medium | Medium | Invite-only accounts; report, removal, ban; per-user limits; the invite tree to find an abusive account's inviter | Product |
+| Existing web users lose research they wanted to keep | Medium | Medium | Banner with date (M8a); export decision (P20); accounts kept | Product |
+| ADR-23 (user keys, models) is not accepted in time | Medium | Medium | Drafted in M1a; M5a ships on included tokens only; M5b waits on it | Product |
+| Scope from the mockup grows past the contract (rules, hide, join requests, inbox) | Medium | Medium | `04` §1 decisions; contract changes only through `01` §7 | Product |
 
 ## 6. Open questions
 
-Membership, moderation and security (details in `04` §15):
+One deduplicated list of the open questions of 01-05, grouped by who decides.
+Each names its sources; the files' own lists stay as written. Ids are for
+reference from this file.
 
-1. Does the removal placeholder show the author's handle, as the mockup does
-   (`01` C12 keeps the author only on the staff-only `modlog` entry)?
-2. Does a removal placeholder stay until the author deletes it, or expire?
-3. Account invite codes: 30-bit `SESS-XXXX-XX` or 50-bit `SESS-XXXXX-XXXXX`?
-4. Can members see their open codes again after creation (needs reversible
-   storage)?
-5. Does the desktop keep a frozen copy after a voluntary Leave?
-6. Site-wide moderators, or only `users.is_admin`?
-7. Sign in with X in addition to or instead of GitHub (ADR-5)?
-8. Lifetime of a waiting account without a code, and its place in sign-up
-   throttling.
-9. Report and remove follow-ups and replies individually at launch?
-10. Offer Hide to staff?
+### Product
 
-Raised in `01` §9 and decided elsewhere or still open: moderator and admin
-roles in v1 (`01` question 5; `04` proposes "Make moderator"), join requests
-(`01` question 6), the Litestream retention bound for erased text (`01`
-question 3).
+- **P1. Sign-in provider.** X in addition to or instead of GitHub (ADR-5).
+  `02` §14 q1, `04` §15 q7.
+- **P2. Channel moderators in v1.** Grant `mod` through "Make moderator" (as
+  `04` §4.3 proposes) or keep the owner as the only staff. `01` §9 q5, `02`
+  §14 q10, `04` §1.
+- **P3. Site-wide moderators** or only `users.is_admin`. `04` §15 q6.
+- **P4. Admission to private channels.** Channel invite links only (`04` §5),
+  or also join requests; `02` has no screen for either. `01` §9 q6, `02` §14
+  q2.
+- **P5. The removal placeholder.** Whether it shows the author's handle, and
+  whether it stays until the author deletes it or expires. The reason is
+  moderator text and is shown (`01` C12), which settles `02` §14 q5. `04` §15
+  q1, q2.
+- **P6. Report and remove follow-ups and replies individually at launch.**
+  `04` §15 q9.
+- **P7. Offer Hide to staff.** `04` §15 q10.
+- **P8. Frozen copy after a voluntary Leave** (proposed: no). `04` §15 q5.
+- **P9. Thread addresses and a single-thread page** for notifications and
+  shared links. `02` §14 q4.
+- **P10. Notifications inbox.** `01` C16 writes mention notifications and
+  `04` §6 report notifications, but no screen shows them. `02` §14 q6.
+- **P11. Models at launch and the allowance.** Default model for members,
+  lifting ADR-16's Fable gate, and whether 2,000,000 tokens a week is
+  affordable at that price; the weekly budget for the cost alert. `03` §9 q1.
+- **P12. Cached tokens** counted in full, at the discount ratio, or not at
+  all. `03` §9 q2.
+- **P13. Effort control.** Reopen ADR-16, or drop the mockup's Effort submenu
+  (`02` §5 and W2.5 still show it; `03` K12 removes it). `03` §9 q6.
+- **P14. Who may promote a branch** and who is shown as its author. `03` §9 q4.
+- **P15. "Run on this Mac"** in the out-of-tokens message. `03` §9 q5.
+- **P16. Old desktop data** after the cutover: delete, offer to delete, or
+  leave (proposed: leave). `05` §3.5.
+- **P17. Cutover date and notice period.** `05` M8a.
+- **P18. Phone client** before or after the cutover. `05` §5.
+- **P19. Keep accounts through the data reset** (`0002`), or reset fully and
+  re-seed admins. `05` §3.5.
+- **P20. Export before the reset** for existing web users. `05` §3.5.
+- **P21. Widgets and artifacts in answers.** `02` §14 q7.
+- **P22. Typography** (Inter or the app's font; title and input sizes).
+  `02` §14 q8.
+- **P23. Settings entry** in the account menu. `02` §14 q9.
 
-Delivery:
+### Engineering
 
-11. Is a separate staging Fly app acceptable, or should the spaces server run
-    behind a flag in the production app until M8?
-12. How long does the server accept the previous protocol version after a
-    desktop release (proposed 7 days)?
-13. Does replica-proto's prototype server stay after M3 as the reference
-    implementation, or is it removed once the conformance target exists?
-14. Which faults in the server mutation set are required for M3's exit, and
-    which may be listed as not applicable?
-15. Is a manual macOS checklist enough for desktop releases, or is a UI
-    automation route (for example an in-app test harness) needed before M8?
-16. Does the new desktop build delete the old app's local data, offer to, or
-    leave it (proposed: leave it)?
-17. Cutover date and the notice period for existing web users.
-18. Does the Phone (React Native) client need any milestone before M8, or is
-    it scheduled after the cutover?
-19. Keep existing accounts through the data reset (the `0002` migration, M8),
-    or reset the database fully and re-seed admins by hand?
+- **E1. Staging and the branch split.** A second Fly app and `main` deploying
+  to it until M8b (§3.1, §3.2), or the spaces server behind a flag in the
+  production app. `05` §3.
+- **E2. Previous protocol version window** after a desktop release (proposed
+  7 days). `05` §3.4.
+- **E3. Record storage.** One `records` table with JSON bodies and generated
+  columns as needed, or typed tables for threads and nodes now. `01` §9 q1.
+- **E4. Server mutation set.** Which faults are required for M3's exit and
+  which may be listed as not applicable. `05` M3.
+- **E5. replica-proto's prototype server** after M3: kept as the reference or
+  removed once the conformance target exists. `05` M8c.
+- **E6. Restore detection.** A runbook-written marker or a boot-time check of
+  the Litestream generation id. `01` §9 q4.
+- **E7. Web replication window.** A smaller window for the in-memory web
+  replica than the desktop's, given snapshot size per tab. `01` §9 q7.
+- **E8. Device runs without a device.** How long a device run may stay
+  queued, and a server-side wall clock for claimed runs. `03` §9 q3.
+- **E9. Desktop test automation.** A manual macOS checklist, or a UI
+  automation route before M8b. `05` M7a.
+- **E10. Where the new desktop shell lives** until M8c (separate directory or
+  in `src-tauri` behind a build switch). `05` M7a.
+
+### Security
+
+- **S1. Erasure and backups.** Fixed Litestream retention bound stated in the
+  privacy copy, or re-snapshot after removals. `01` §9 q3, `04` §8.
+- **S2. Account invite code length.** 30-bit `SESS-XXXX-XX` or 50-bit
+  `SESS-XXXXX-XXXXX`. `04` §15 q3.
+- **S3. Showing an open invite code again**, which needs reversible storage.
+  `04` §15 q4.
+- **S4. Waiting accounts.** Lifetime without a code (proposed 14 days) and
+  their place in per-IP sign-up throttling. `04` §15 q8.
+- **S5. Device-run local reads.** Whether locking the CLIs' read tools (or
+  limiting device runs) must land before M8b, given answers are posted to
+  shared channels. `AGENTS.md` "Desktop", `03` V4, `05` §5.
+- **S6. Save counts in small private channels**, where a count of 1 can
+  identify the saver. `01` §9 q2.
+
+Settled elsewhere: `02` §14 q3 (branch comments) by `01` C4; `02` §14 q5
+(removal reason) by `01` C12.
