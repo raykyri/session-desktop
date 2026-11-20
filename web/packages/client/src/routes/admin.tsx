@@ -10,8 +10,8 @@ import { modelsFor } from "@session/shared";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { useAdminUsers, useCreateInvites, useMe, useSetUserLimits } from "../api/queries.js";
-import { workspaceSearch } from "../features/sidebar/scope.js";
+import { useAdminUsers, useCreateInvites, useMe, useSetUserLimits } from "../api/account.js";
+import { PageFrame } from "../features/shell/Frames.js";
 import { ControlButton } from "../ui/Button.js";
 import { Field, Input } from "../ui/Field.js";
 
@@ -83,23 +83,23 @@ export function AdminPage() {
 
   if (!isAdmin) {
     return (
-      <div className="research-reading-surface h-full overflow-y-auto px-8 py-10">
-        <h1 className="text-title text-fg-heading m-0 font-semibold">Admin</h1>
-        <p className="max-w-feed text-fg-muted mt-3 text-base">
+      <PageFrame title="Site Admin" narrow>
+        <p className="text-fg-muted m-0 text-base">
           You must be an administrator to access this page.{" "}
-          <Link to="/" search={workspaceSearch} className="text-fg-interactive">
+          <Link to="/" search={{}} className="text-fg-interactive">
             Back to Home
           </Link>
         </p>
-      </div>
+      </PageFrame>
     );
   }
 
+  // The Site Admin settings (default model and effort, 02 W8.2) join this
+  // page with 03 K15; the account table and sign-up codes are the current
+  // server's.
   return (
-    <div className="h-full overflow-y-auto px-8 py-10">
-      <div className="mx-auto flex w-[min(880px,100%)] flex-col gap-8">
-        <h1 className="text-title text-fg-heading m-0 font-semibold">Admin</h1>
-
+    <PageFrame title="Site Admin">
+      <div className="mt-4 flex flex-col gap-8">
         <section className="flex flex-col gap-3">
           <h2 className="text-fg-heading m-0 text-base font-semibold">Accounts</h2>
           {users.isLoading ? <p className="text-fg-muted m-0 text-base">Loading…</p> : null}
@@ -220,6 +220,6 @@ export function AdminPage() {
           ) : null}
         </section>
       </div>
-    </div>
+    </PageFrame>
   );
 }

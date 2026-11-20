@@ -1,6 +1,7 @@
 import { useSearch } from "@tanstack/react-router";
 
-import { startGitHubSignIn } from "../api/api.js";
+import { startGitHubSignIn } from "../api/account.js";
+import { readPendingInvite } from "../lib/pendingInvite.js";
 import { ControlButton } from "../ui/Button.js";
 import { GitHubMark } from "../ui/GitHubMark.js";
 
@@ -14,8 +15,10 @@ import { GitHubMark } from "../ui/GitHubMark.js";
  * answers `/auth/github` with a 503 page rather than a redirect, so "signups
  * are closed" has no query parameter to read and is not rendered here.
  *
- * It renders outside `AppShell`: there is no sidebar, no stage header and no
- * subscription before a session exists.
+ * It renders outside `AppShell`. It stands in for the auth dialog (02 W7.2)
+ * until that is built: the app bar's "Sign in" and "Join with invite" open
+ * it, and an account invite link (`/i#<code>`) leads here with its code in
+ * memory (`lib/pendingInvite.ts`), which the GitHub sign-in carries.
  */
 const SIGN_IN_ERRORS: Readonly<Record<string, string>> = {
   not_allowed: "This GitHub account is not authorized to access this Session instance.",
@@ -40,7 +43,7 @@ export function LoginPage() {
         <div className="flex flex-col gap-2">
           <h1 className="text-title text-fg-heading m-0 font-semibold">Session</h1>
           <p className="text-fg-secondary m-0 text-base">
-            A research workspace. Sign in to get started.
+            Session is a shared workspace for exploring questions, ideas, and artifacts.
           </p>
         </div>
 
@@ -53,7 +56,11 @@ export function LoginPage() {
         <ControlButton
           size="lg"
           className="w-full gap-2"
-          onClick={() => startGitHubSignIn(search.redirect, search.signup ?? search.invite)}
+          onClick={() => {
+            const pending = readPendingInvite();
+            const code = pending?.kind === "account" ? pending.code : undefined;
+            startGitHubSignIn(search.redirect, search.signup ?? search.invite ?? code);
+          }}
         >
           <GitHubMark />
           Sign in with GitHub

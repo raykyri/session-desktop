@@ -1,104 +1,60 @@
-// The token of an invitation link (`/invite#<token>`, `03-api-and-events.md`
-// §2 `invites.create`), held between opening the link and accepting it.
+// Invite codes carried in a URL fragment (02 §2.1, 04 §3.2, §5): an account
+// invite link (`/i#<code>`) or a channel invite link (`/c/<name>#<code>`).
 //
-// The token is the URL fragment, which no request carries. On page load it is
-// read before the router or any request starts (`app/captureInvite.ts`),
-// removed from the address bar with `history.replaceState`, and kept in this
-// tab's `sessionStorage`, so it is not in the history, in the `/login`
-// redirect or in the GitHub sign-in round trip; `/invite` reads it back and
-// posts it to `invites.accept`. Without `sessionStorage` (blocked storage) it
-// is kept in memory, which lasts until the page reloads.
+// The fragment is never sent with a request. On page load it is read before
+// the router or any request starts (`app/captureInvite.ts`), removed from the
+// address bar with `history.replaceState`, and kept in memory for this page
+// load only: it is not in the history, in a sign-in redirect or in storage.
+// The auth dialog (02 W7.2) and channel join (W6.9) read it from here.
 
-const STORAGE_KEY = "session.pending-invite.v1";
+export type PendingInvite =
+  { kind: "account"; code: string } | { kind: "channel"; channel: string; code: string };
 
-/** A stored token older than this is dropped rather than accepted: a sign-in
- * abandoned an hour ago should not accept an invitation later. */
-export const PENDING_INVITE_TTL_MS = 60 * 60 * 1000;
+/** The path an account invite link opens. */
+export const INVITE_PATH = "/i";
 
-/** The path an invitation link opens. */
-export const INVITE_PATH = "/invite";
+let pending: PendingInvite | null = null;
 
-let memory: { token: string; savedAt: number } | null = null;
-
-function storage(): Storage | null {
-  try {
-    return typeof sessionStorage === "undefined" ? null : sessionStorage;
-  } catch {
-    return null;
-  }
+export function savePendingInvite(invite: PendingInvite): void {
+  pending = invite;
 }
 
-/** Keeps `token` until it is accepted or cleared. */
-export function savePendingInvite(token: string, at: number = Date.now()): void {
-  const entry = { token, savedAt: at };
-  memory = entry;
-  try {
-    storage()?.setItem(STORAGE_KEY, JSON.stringify(entry));
-  } catch {
-    // Quota or blocked storage: the in-memory copy is used.
-  }
-}
-
-/** The token saved in this tab, unless it is older than the TTL. */
-export function readPendingInvite(at: number = Date.now()): string | null {
-  let entry = memory;
-  try {
-    const raw = storage()?.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as unknown;
-      if (
-        typeof parsed === "object" &&
-        parsed !== null &&
-        typeof (parsed as { token?: unknown }).token === "string" &&
-        typeof (parsed as { savedAt?: unknown }).savedAt === "number"
-      ) {
-        entry = parsed as { token: string; savedAt: number };
-      }
-    }
-  } catch {
-    // Unreadable storage: fall back to memory.
-  }
-  if (!entry || entry.token === "" || at - entry.savedAt > PENDING_INVITE_TTL_MS) {
-    return null;
-  }
-  return entry.token;
+export function readPendingInvite(): PendingInvite | null {
+  return pending;
 }
 
 export function clearPendingInvite(): void {
-  memory = null;
-  try {
-    storage()?.removeItem(STORAGE_KEY);
-  } catch {
-    // Nothing stored.
-  }
+  pending = null;
 }
 
-function isInvitePath(pathname: string): boolean {
-  return pathname === INVITE_PATH || pathname === `${INVITE_PATH}/`;
+function inviteOfPath(pathname: string, code: string): PendingInvite | null {
+  if (pathname === INVITE_PATH || pathname === `${INVITE_PATH}/`) {
+    return { kind: "account", code };
+  }
+  const channel = /^\/c\/([a-z0-9][a-z0-9-]{1,29})\/?$/.exec(pathname)?.[1];
+  return channel ? { kind: "channel", channel, code } : null;
 }
 
 /**
- * On an invitation link (`/invite#<token>`): saves the token and replaces the
- * address with `/invite`, keeping the history entry's state. Answers the
- * token, or null when this is not an invitation link with a fragment.
+ * On an invite link: keeps the code in memory and replaces the address with
+ * the same path and search but no fragment. Answers the invite, or null when
+ * the URL is not an invite link with a fragment.
  */
 export function captureInviteFragment(
   location: Pick<Location, "pathname" | "search" | "hash"> = window.location,
   history: Pick<History, "replaceState" | "state"> = window.history,
-): string | null {
-  if (!isInvitePath(location.pathname) || location.hash.length <= 1) {
-    return null;
-  }
-  let token: string;
+): PendingInvite | null {
+  if (location.hash.length <= 1) return null;
+  let code: string;
   try {
-    token = decodeURIComponent(location.hash.slice(1));
+    code = decodeURIComponent(location.hash.slice(1));
   } catch {
-    token = location.hash.slice(1);
+    code = location.hash.slice(1);
   }
+  const invite = inviteOfPath(location.pathname, code.trim());
+  if (!invite) return null;
   history.replaceState(history.state, "", `${location.pathname}${location.search}`);
-  if (token.trim() === "") {
-    return null;
-  }
-  savePendingInvite(token);
-  return token;
+  if (invite.code === "") return null;
+  savePendingInvite(invite);
+  return invite;
 }
