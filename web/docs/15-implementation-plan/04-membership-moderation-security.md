@@ -187,8 +187,8 @@ in the mockup's order.
   like signed-out readers, and any write control explains that an invite is
   needed. Redeeming sets `status: "active"`, the handle and `invited_by`.
 
-Acceptance: `e2e/invites.spec.ts` (new): a member creates a link; a second
-context opens it signed out, completes the test sign-in
+Acceptance: `e2e/spaces-membership.spec.ts` (`02` §12.2): a member creates a
+link; a second context opens it signed out, completes the test sign-in
 (`SESSION_TEST_AUTH=1`) and the profile step, and appears in the first
 member's "You invited" and tree; a third context signs in without a code,
 reads an open channel, cannot ask, redeems a code on the status page and can
@@ -315,7 +315,7 @@ log (N open)". The owner's Edit opens `chEditDlg` with About only, at most
 
 Acceptance: client test that only the owner sees Edit and the length error; a
 server test that a moderator's and an admin's `spaces.update` are refused; a
-step in `e2e/moderation.spec.ts` where a member's open channel info shows the
+step in `e2e/spaces-channels.spec.ts` where a member's open channel info shows the
 new About without a reload.
 
 ## 5. Channel invite links
@@ -341,7 +341,7 @@ new About without a reload.
   and can remove or ban that person.
 - Limits: 20 links per user per day; 50 open per channel (§10).
 
-Acceptance: in `e2e/moderation.spec.ts`, the owner of a private channel copies
+Acceptance: in `e2e/spaces-channels.spec.ts`, the owner of a private channel copies
 a link, a second account opens it and reads the channel, a third account using
 the same link gets "This invite link has expired or was already used."; server
 tests for the expiry bounds and that a plain member's snapshot holds no link
@@ -483,7 +483,7 @@ clock; a client test that an entry for a removed item renders no title.
 - `@session/mutators` tests: note bounds; one open report per reporter and
   item; a removal resolves every open report on the item; the placeholder
   holds no field of the removed content.
-- `e2e/moderation.spec.ts`: a member reports a thread with a note; the owner's
+- `e2e/spaces-channels.spec.ts`: a member reports a thread with a note; the owner's
   channel info shows "Moderation log (1 open)" without a reload; the owner
   removes it with a reason; the member's feed shows the placeholder with the
   reason and no text, also after a reload; a second report is dismissed and
