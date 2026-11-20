@@ -1943,7 +1943,7 @@ const authDialog = () => `<div class="scrim auth-scrim" data-ma="closeauth"></di
 /* ---- sign-in steps ---- */
 const xBtn = (label = 'Sign in with X') => `<button class="xbtn" data-ma="xauth">${label}</button>`;
 /* copy for the invite-code step: heading, line under it, check button, valid-invite line, X button */
-const CODE_COPY = { h: 'Have an invite?', p: 'Paste the code or link a member sent you.', btn: 'Continue', ok: n => `Invite from ${n}`, x: 'Sign up with X' };
+const CODE_COPY = { h: 'Join with invite?', p: 'Paste the code or link a member sent you.', btn: 'Continue', ok: n => `Invite from ${n}`, x: 'Sign up with X' };
 function authScreen() {
   const back = to => `<button class="tlink back" data-ma="flow" data-to="${to}">${I.left}Back</button>`;
   let body = '';
