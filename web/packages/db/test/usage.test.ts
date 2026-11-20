@@ -7,7 +7,9 @@ import { createFixture } from "./helpers.js";
 const DAY = 86_400_000;
 const NOON = Math.floor(1_700_000_000_000 / DAY) * DAY + DAY / 2;
 
-test("daily totals sum one UTC day and count run starts as runs", (t) => {
+// NOON is a Tuesday: its UTC week runs from the Monday before (NOON - 1.5
+// days) to the next Monday.
+test("weekly totals sum one UTC week (Monday 00:00) and count run starts as runs", (t) => {
   const fixture = createFixture(t);
   usage.record(fixture.db, fixture.userId, {
     runId: "R1",
@@ -25,43 +27,37 @@ test("daily totals sum one UTC day and count run starts as runs", (t) => {
     provider: "vertex",
     inputTokens: 5,
     outputTokens: 5,
-    at: NOON + 1000,
+    at: NOON + 4 * DAY,
   });
-  for (const at of [NOON - DAY, NOON + DAY])
+  // the Sunday before and the Monday after are other weeks
+  for (const at of [NOON - 2 * DAY, NOON + 6 * DAY])
     usage.record(fixture.db, fixture.userId, {
       kind: "research",
       provider: "vertex",
       inputTokens: 1_000_000,
       at,
     });
-  for (const at of [NOON, NOON - DAY, NOON + DAY])
+  for (const at of [NOON, NOON - DAY, NOON - 2 * DAY, NOON + 6 * DAY])
     usage.record(fixture.db, fixture.userId, { kind: "run", provider: "vertex", at });
-  const totals = usage.dailyTotals(fixture.db, fixture.userId, NOON);
-  t.is(totals.day, NOON - DAY / 2);
+  const totals = usage.weeklyTotals(fixture.db, fixture.userId, NOON);
   t.is(totals.inputTokens, 105);
   t.is(totals.outputTokens, 205);
   t.is(totals.reasoningTokens, 50);
   t.is(totals.cachedTokens, 10);
   t.is(totals.costEstimateMicros, 7);
-  t.is(totals.runs, 1, "only run starts inside the day are runs");
-  t.is(usage.dailyTotals(fixture.db, "someone-else", NOON).runs, 0);
+  t.is(totals.runs, 2, "only run starts inside the week are runs");
+  t.is(usage.weeklyTotals(fixture.db, "someone-else", NOON).runs, 0);
 });
 
-test("the admission check follows the per-account overrides", (t) => {
+test("the weekly allowance is the person's own, else the deployment's", (t) => {
   const fixture = createFixture(t);
-  usage.record(fixture.db, fixture.userId, { kind: "run", provider: "vertex", at: NOON });
-  t.true(
-    usage.admissionCheck(fixture.db, fixture.userId, { defaults: { dailyRuns: 2 }, at: NOON })
-      .allowed,
-  );
-  auth.setUserLimits(fixture.db, fixture.userId, { dailyRuns: 1 });
-  const d = usage.admissionCheck(fixture.db, fixture.userId, {
-    defaults: { dailyRuns: 2 },
-    at: NOON,
-  });
-  t.false(d.allowed);
-  t.is(d.reason, "runs");
-  t.true(usage.admissionCheck(fixture.db, fixture.userId, { isAdmin: true, at: NOON }).allowed);
+  t.is(usage.weeklyAllowance(fixture.db, fixture.userId, 250_000), 250_000);
+  auth.setUserLimits(fixture.db, fixture.userId, 40_000);
+  t.is(usage.weeklyAllowance(fixture.db, fixture.userId, 250_000), 40_000);
+  auth.setUserLimits(fixture.db, fixture.userId, 0);
+  t.is(usage.weeklyAllowance(fixture.db, fixture.userId, 250_000), 0, "zero is an allowance");
+  auth.setUserLimits(fixture.db, fixture.userId, null);
+  t.is(usage.weeklyAllowance(fixture.db, fixture.userId, 250_000), 250_000);
 });
 
 test("monthly usage by payer and space, for /api/me/usage", (t) => {

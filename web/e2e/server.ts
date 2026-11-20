@@ -17,7 +17,6 @@ const { ready } = startTestServer({
   timers: true,
   clientDistDirectory: fileURLToPath(new URL("../packages/client/dist/app", import.meta.url)),
   env: {
-    SESSION_ENFORCE_LIMITS: "0",
     SESSION_CURSOR_KEY: Buffer.alloc(32, 7).toString("base64"),
     SESSION_API_KEY_ENCRYPTION_KEY: Buffer.alloc(32, 9).toString("base64"),
     GOOGLE_APPLICATION_CREDENTIALS_JSON: '{"type":"service_account"}',

@@ -44,9 +44,6 @@ kill_timeout = "30s"
   SESSION_RUNS_OPENROUTER = "8"
   SESSION_RUNS_ANTHROPIC = "2"
   SESSION_RUN_TIMEOUT_SECONDS = "900"
-  SESSION_ENFORCE_LIMITS = "1"
-  SESSION_DAILY_TOKENS = "1000000"
-  SESSION_DAILY_RUNS = "10"
   SESSION_REQUIRE_INVITE = "1"
   SESSION_SEARCH_VENDOR = "parallel"
   GOOGLE_VERTEX_PROJECT = "session-dev"
@@ -88,24 +85,22 @@ machine size before raising the per-provider run caps.
 
 Rate limits and invite restrictions are enabled in production. Because the hosted service incurs direct provider token costs, these settings are defined explicitly in `fly.toml` rather than falling back to permissive local development defaults:
 
-- `SESSION_ENFORCE_LIMITS = "1"` enforces `SESSION_DAILY_TOKENS` and
-  `SESSION_DAILY_RUNS` by rejecting requests that exceed those quotas. At `0`,
-  usage is recorded without blocking requests. This is suitable for local
-  development but not for a public deployment.
+- There are no daily limits (phase 2b). The included tokens are one weekly
+  allowance per person (`SESSION_INCLUDED_TOKENS`, Monday 00:00 UTC); past
+  it, the person's default API key pays.
 - `SESSION_REQUIRE_INVITE = "1"` means an account is created only against a
   code an admin minted (`06-auth-and-users.md` §3). `SESSION_ALLOWED_GITHUB_LOGINS`
   is the narrower alternative; with neither, sign-up is open to anyone who can
   reach the host.
 - `SESSION_QUEUED_PER_USER = "20"` caps what one account may have *waiting*.
   Because `SESSION_RUNS_PER_USER` limits only concurrently active runs, an unconstrained queue could allow an automated script to enqueue hundreds of requests, committing the server to costly serial execution. Refused at launch with
-  `TOO_MANY_REQUESTS`; admins are exempt; enforced regardless of
-  `SESSION_ENFORCE_LIMITS`, because it bounds the queue itself rather
-  than the day's spend. Checked again inside the transaction that admits the
+  `TOO_MANY_REQUESTS`; admins are exempt; it bounds the queue itself rather
+  than the spend. Checked again inside the transaction that admits the
   node, so concurrent launches cannot pass it together.
 
-Per-account overrides for the daily limits are stored in `user_limits` and are set
-from `/admin`, so raising one account's ceiling does not mean turning
-enforcement off.
+A person's own weekly allowance is stored in `user_limits.weekly_tokens` and
+is set from `/admin`, so raising one account's allowance does not change the
+deployment's default.
 
 Deploying:
 

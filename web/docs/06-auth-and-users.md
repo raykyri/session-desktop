@@ -134,8 +134,13 @@ metadata run. Thread invitations by GitHub login: one pending per account
 and thread, at most 100 created per inviter per day.
 In-memory token buckets in Hono middleware (single process).
 
-Usage-level (schema now, enforcement later, `SESSION_ENFORCE_LIMITS=1`):
-per account per UTC day, `daily_tokens` (input + output across all models,
+Superseded (owner decision, phase 2b): there are no daily limits. The
+included tokens are one weekly allowance per person (Monday 00:00 UTC,
+`SESSION_INCLUDED_TOKENS`, overridable per person in `user_limits.weekly_tokens`
+from the admin page; admins are not exempt); past it, the person's default API
+key pays. The paragraph below describes the removed daily check.
+
+Usage-level (removed in phase 2b): per account per UTC day, `daily_tokens` (input + output across all models,
 from `usage_events`) and `daily_runs` (research attempts started, counted
 from the `run` rows of `usage_events`, which deleting the research does not
 remove). `usage_events`

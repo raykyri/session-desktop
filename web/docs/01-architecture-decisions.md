@@ -473,8 +473,17 @@ Choice: option 3.
   orders a client's writes; transient answers are never recorded.
 - Removed content is erased at rest; tombstones keep audience fields and
   the rev only, for 30 days.
-- Online-only account calls (API keys, usage, settings) stay tRPC
-  procedures; replicated data does not use them.
+- Online-only account calls (API keys, usage, settings) are plain routes
+  outside the replicated logs, never written through the outbox.
+  Amended in phase 2b: they are not tRPC. The online calls go to `POST
+  /api/rpc/<name>` (`SyncServer.call`), the account reads to `GET /api/me`,
+  `/api/me/*`, `/api/users` and `GET /api/rpc/usage.listAsks`, and the web
+  shell's own account routes to `/api/config`, `/api/me/preferences` and
+  `/api/admin/*`. The space directory (the spaces a person may find, which
+  no log holds) is `GET /api/spaces` (`SyncServer.directory`). tRPC is
+  removed from the server and the client, and TanStack Query from the
+  client, which reads the replica through `useQuery` and the rest through a
+  small cached-read helper.
 
 Why: phase 0 (`web/packages/replica-proto`) showed with an adversarial
 suite, two review rounds and mutation testing that replicas are safe under

@@ -1,6 +1,6 @@
 // Account-scoped wire types introduced by the web app: the signed-in user,
 // workspaces (the desktop's research-scoped `GroupInfo`), user settings, the
-// per-day usage summary, and the model registry
+// and the model registry
 // entries as returned to the client (`04-agent-runtime.md` §1).
 
 import { z } from "zod";
@@ -100,24 +100,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   showNotifications: true,
   defaultModel: DEFAULT_MODEL_ID,
 };
-
-/** One UTC day of recorded usage for the signed-in account, against the
- * limits in `06-auth-and-users.md` §8. */
-export const usageSummarySchema = z.object({
-  /** Start of the UTC day the counts cover, in milliseconds. */
-  day: z.number(),
-  inputTokens: z.number(),
-  outputTokens: z.number(),
-  reasoningTokens: z.number(),
-  cachedTokens: z.number(),
-  costEstimateMicros: z.number(),
-  runs: z.number(),
-  /** Null when the deployment has no limit configured. */
-  dailyTokenLimit: z.number().nullish(),
-  dailyRunLimit: z.number().nullish(),
-});
-
-export type UsageSummary = z.infer<typeof usageSummarySchema>;
 
 export const modelProviderSchema = z.enum(["vertex", "openrouter", "anthropic"]);
 

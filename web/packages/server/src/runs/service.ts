@@ -18,7 +18,6 @@ import { resolveTxt } from "node:dns/promises";
 import type { KeyCipher, SessionDatabase } from "@session/db";
 import {
   apiKeys,
-  nextUtcMidnight,
   preferences,
   runs as runsRepo,
   usage as usageRepo,
@@ -197,17 +196,6 @@ export function createRunsService(deps: RunsServiceDeps): RunsService {
     if (!run || !user || run.executor !== null) {
       runsRepo.release(db, runId);
       return;
-    }
-    // the daily limits, when enforced: wait for the next UTC day
-    if (config.limits.enforceDailyLimits && !resume) {
-      const d = usageRepo.admissionCheck(db, userId, {
-        isAdmin: user.isAdmin,
-        defaults: { dailyTokens: config.limits.dailyTokens, dailyRuns: config.limits.dailyRuns },
-      });
-      if (!d.allowed) {
-        runsRepo.requeue(db, runId, nextUtcMidnight(Date.now()));
-        return;
-      }
     }
     const modelId = run.model ?? DEFAULT_MODEL_ID;
     const entry = findModel(modelId);

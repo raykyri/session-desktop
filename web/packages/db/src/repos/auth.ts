@@ -259,40 +259,31 @@ export function countSignupAttempts(db: SessionDatabase, ipHash: string, since: 
   return row?.value ?? 0;
 }
 
-export interface UserDailyLimits {
-  dailyTokens: number | null;
-  dailyRuns: number | null;
+export interface UserLimits {
+  /** The person's weekly allowance of included tokens, or null for the
+   * deployment's default. */
+  weeklyTokens: number | null;
 }
 
-/** Returns user daily limit overrides, or null if deployment defaults apply. */
-export function getUserLimits(db: SessionDatabase, userId: string): UserDailyLimits | null {
+/** A person's own allowance, or null when the deployment's default applies. */
+export function getUserLimits(db: SessionDatabase, userId: string): UserLimits | null {
   const row = db.select().from(userLimits).where(eq(userLimits.userId, userId)).get();
-  return row ? { dailyTokens: row.dailyTokens, dailyRuns: row.dailyRuns } : null;
+  return row ? { weeklyTokens: row.weeklyTokens } : null;
 }
 
-/**
- * Updates specified user daily limits. Passing null resets a limit to
- * deployment defaults, while undefined preserves existing overrides.
- */
+/** Set a person's weekly allowance of included tokens; null goes back to
+ * the deployment's default. */
 export function setUserLimits(
   db: SessionDatabase,
   userId: string,
-  limits: Partial<UserDailyLimits>,
-): UserDailyLimits {
+  weeklyTokens: number | null,
+): UserLimits {
   const at = now();
-  const changed: Partial<UserDailyLimits> & { updatedAt: number } = { updatedAt: at };
-  if (limits.dailyTokens !== undefined) changed.dailyTokens = limits.dailyTokens;
-  if (limits.dailyRuns !== undefined) changed.dailyRuns = limits.dailyRuns;
   const row = db
     .insert(userLimits)
-    .values({
-      userId,
-      dailyTokens: limits.dailyTokens ?? null,
-      dailyRuns: limits.dailyRuns ?? null,
-      updatedAt: at,
-    })
-    .onConflictDoUpdate({ target: userLimits.userId, set: changed })
+    .values({ userId, weeklyTokens, updatedAt: at })
+    .onConflictDoUpdate({ target: userLimits.userId, set: { weeklyTokens, updatedAt: at } })
     .returning()
     .get();
-  return { dailyTokens: row.dailyTokens, dailyRuns: row.dailyRuns };
+  return { weeklyTokens: row.weeklyTokens };
 }

@@ -1,11 +1,11 @@
 // The administrator view (07 §3). What is asserted here is the one number on
 // the page the server also computes: the day's token spend, which has to match
-// what `admissionCheck` charges an account against its limit.
+// what the server records as the account's usage this week.
 
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import test from "ava";
 
-import { renderApp, resetDocumentRoot, testUser } from "./helpers.js";
+import { renderApp, resetDocumentRoot, testUser, waitUntil } from "./helpers.js";
 
 test.afterEach.always(() => {
   cleanup();
@@ -15,7 +15,6 @@ test.afterEach.always(() => {
 const adminUser = (usage: Record<string, number>) => ({
   ...testUser({ id: "u2", login: "someone", handle: "someone", isAdmin: false }),
   usage: {
-    day: 1_700_000_000_000,
     inputTokens: 0,
     outputTokens: 0,
     reasoningTokens: 0,
@@ -24,7 +23,7 @@ const adminUser = (usage: Record<string, number>) => ({
     runs: 0,
     ...usage,
   },
-  limits: { dailyTokens: null, dailyRuns: null },
+  allowance: { weeklyTokens: null, defaultTokens: 250_000, used: 0 },
   workspaceCount: 1,
 });
 
@@ -45,10 +44,30 @@ test.serial(
       (cell) => cell.textContent,
     );
     // `reasoningTokens` is a breakdown of `outputTokens`, so the sum is 1,500 —
-    // the same number `db/repos/usage.ts:admissionCheck` spends.
+    // the same number the server counts.
     t.is(cells[3], "1.5k");
   },
 );
+
+test.serial("the allowance column shows the default until an admin sets one, and saves a number", async (t) => {
+  const app = await renderApp("/admin", {
+    user: testUser({ isAdmin: true }),
+    routes: { "GET /api/admin/users": [{ ...adminUser({}), allowance: { weeklyTokens: null, defaultTokens: 250_000, used: 12_000 } }] },
+  });
+  const input = await screen.findByRole("textbox", { name: "Weekly allowance for someone" });
+  t.is((input as HTMLInputElement).value, "");
+  t.is((input as HTMLInputElement).placeholder, "default (250.0k)");
+  t.truthy(screen.getByText("12.0k of 250.0k"));
+  app.server.routes.set("POST /api/admin/limits", { weeklyTokens: 40_000, defaultTokens: 250_000, used: 12_000 });
+  fireEvent.change(input, { target: { value: "40000" } });
+  fireEvent.blur(input);
+  await waitUntil(t, () => app.server.calls.some((c) => c.path === "/api/admin/limits"), "saved");
+  t.deepEqual(app.server.calls.find((c) => c.path === "/api/admin/limits")?.body, { userId: "u2", weeklyTokens: 40_000 });
+  // "default" goes back to the deployment's
+  fireEvent.change(input, { target: { value: "default" } });
+  fireEvent.blur(input);
+  t.pass();
+});
 
 test.serial("the model access column names the gated model only where it applies", async (t) => {
   await renderApp("/admin", {

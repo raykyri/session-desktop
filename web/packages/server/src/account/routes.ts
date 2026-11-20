@@ -4,9 +4,10 @@
 //   GET  /api/config               the runtime configuration (models, limits)
 //   GET  /api/me/preferences       the appearance settings (`UserSettings`)
 //   POST /api/me/preferences       { settings?, researchLaunchInstruction? }
-//   GET  /api/me/usage/daily       today's usage against the daily limits
-//   GET  /api/admin/users          admins: every account with usage and limits
-//   POST /api/admin/limits         admins: { userId, dailyTokens?, dailyRuns? }
+//   GET  /api/admin/users          admins: every account, its usage this week
+//                                  and its weekly allowance of included tokens
+//   POST /api/admin/limits         admins: { userId, weeklyTokens } (null: the
+//                                  deployment's default)
 //   POST /api/admin/invites        admins: { count } sign-up codes
 //
 // A write answers 401 signed out and 429 past the account's write budget (60
@@ -30,9 +31,8 @@ export interface StoredSettings extends UserSettings {
   researchLaunchInstruction: string | null;
 }
 
-/** One UTC day of usage. */
-export interface DailyUsageTotals {
-  day: number;
+/** A person's usage this UTC week (Monday 00:00 UTC). */
+export interface WeeklyUsage {
   inputTokens: number;
   outputTokens: number;
   reasoningTokens: number;
@@ -41,14 +41,18 @@ export interface DailyUsageTotals {
   runs: number;
 }
 
-export interface DailyLimits {
-  dailyTokens: number | null;
-  dailyRuns: number | null;
+/** A person's weekly allowance of included tokens: their own (`weeklyTokens`,
+ * null for none), the deployment's default, and what they used of it this
+ * week. Administrators have one too (no exemption). */
+export interface Allowance {
+  weeklyTokens: number | null;
+  defaultTokens: number;
+  used: number;
 }
 
 export interface AdminUser extends User {
-  usage: DailyUsageTotals;
-  limits: DailyLimits;
+  usage: WeeklyUsage;
+  allowance: Allowance;
 }
 
 type ErrorCode =
@@ -87,8 +91,7 @@ const preferencesInput = z.strictObject({
 
 const limitsInput = z.strictObject({
   userId: z.string(),
-  dailyTokens: z.number().int().min(0).nullable().optional(),
-  dailyRuns: z.number().int().min(0).nullable().optional(),
+  weeklyTokens: z.number().int().min(0).max(1e12).nullable(),
 });
 
 const invitesInput = z.strictObject({ count: z.number().int().min(1).max(100) });
@@ -113,6 +116,11 @@ export function accountRoutes(deps: ServerDeps, limiter: RateLimiter): Hono<AppE
       return fail(c, "TOO_MANY_REQUESTS", "Too many changes at once; try again in a moment.");
     return user;
   };
+  const allowanceOf = (userId: string): Allowance => ({
+    weeklyTokens: auth.getUserLimits(db, userId)?.weeklyTokens ?? null,
+    defaultTokens: config.sync.includedTokens,
+    used: usage.weeklyUsed(db, userId, "session"),
+  });
   const admin = (c: Context<AppEnv>): User | Response => {
     const user = browserUser(c);
     if (!user) return fail(c, "UNAUTHORIZED", "Sign in to continue.");
@@ -145,27 +153,13 @@ export function accountRoutes(deps: ServerDeps, limiter: RateLimiter): Hono<AppE
     return c.json(readSettings(db, user.id));
   });
 
-  app.get("/api/me/usage/daily", (c) => {
-    const user = browserUser(c);
-    if (!user) return fail(c, "UNAUTHORIZED", "Sign in to continue.");
-    return c.json(
-      usage.summary(db, user.id, {
-        dailyTokens: config.limits.dailyTokens,
-        dailyRuns: config.limits.dailyRuns,
-      }),
-    );
-  });
-
   app.get("/api/admin/users", (c) => {
     const user = admin(c);
     if (user instanceof Response) return user;
     const list: AdminUser[] = users.listUsers(db).map((u) => ({
       ...u,
-      usage: usage.dailyTotals(db, u.id),
-      limits: usage.effectiveLimits(db, u.id, {
-        dailyTokens: config.limits.dailyTokens,
-        dailyRuns: config.limits.dailyRuns,
-      }),
+      usage: usage.weeklyTotals(db, u.id),
+      allowance: allowanceOf(u.id),
     }));
     return c.json(list);
   });
@@ -174,14 +168,11 @@ export function accountRoutes(deps: ServerDeps, limiter: RateLimiter): Hono<AppE
     const user = admin(c);
     if (user instanceof Response) return user;
     const input = limitsInput.safeParse(await jsonBody(c));
-    if (!input.success) return fail(c, "BAD_REQUEST", "Expected { userId, dailyTokens?, dailyRuns? }.");
+    if (!input.success) return fail(c, "BAD_REQUEST", "Expected { userId, weeklyTokens }.");
     if (!users.findById(db, input.data.userId))
       return fail(c, "NOT_FOUND", `account ${input.data.userId} was not found`);
-    const patch: { dailyTokens?: number | null; dailyRuns?: number | null } = {};
-    if (input.data.dailyTokens !== undefined) patch.dailyTokens = input.data.dailyTokens;
-    if (input.data.dailyRuns !== undefined) patch.dailyRuns = input.data.dailyRuns;
-    const limits: DailyLimits = auth.setUserLimits(db, input.data.userId, patch);
-    return c.json(limits);
+    auth.setUserLimits(db, input.data.userId, input.data.weeklyTokens);
+    return c.json(allowanceOf(input.data.userId));
   });
 
   /** Admin sign-up codes have no maker, so they draw on no personal allowance. */

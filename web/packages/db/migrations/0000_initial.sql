@@ -134,8 +134,7 @@ CREATE TABLE `signup_attempts` (
 CREATE INDEX `signup_attempts_ip_idx` ON `signup_attempts` (`ip_hash`,`attempted_at`);--> statement-breakpoint
 CREATE TABLE `user_limits` (
 	`user_id` text PRIMARY KEY NOT NULL,
-	`daily_tokens` integer,
-	`daily_runs` integer,
+	`weekly_tokens` integer,
 	`updated_at` integer NOT NULL,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );

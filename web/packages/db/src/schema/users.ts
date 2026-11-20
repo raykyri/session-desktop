@@ -56,13 +56,13 @@ export const signupAttempts = sqliteTable(
   (table) => [index("signup_attempts_ip_idx").on(table.ipHash, table.attemptedAt)],
 );
 
-/** Per-account overrides of the deployment daily limits. Null means "use the
- * deployment default" (`SESSION_DAILY_TOKENS`, `SESSION_DAILY_RUNS`). */
+/** A person's own weekly allowance of included tokens (Monday 00:00 UTC to
+ * the next Monday), set by an administrator. Null means the deployment's
+ * default (`SESSION_INCLUDED_TOKENS`). There are no daily limits. */
 export const userLimits = sqliteTable("user_limits", {
   userId: text("user_id")
     .primaryKey()
     .references(() => users.id, { onDelete: "cascade" }),
-  dailyTokens: integer("daily_tokens"),
-  dailyRuns: integer("daily_runs"),
+  weeklyTokens: integer("weekly_tokens"),
   updatedAt: integer("updated_at").notNull(),
 });

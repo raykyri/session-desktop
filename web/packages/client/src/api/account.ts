@@ -38,16 +38,19 @@ export interface RuntimeConfig {
   limits: {
     runsPerUser: number;
     runTimeoutSeconds: number;
-    dailyTokens: number;
-    dailyRuns: number;
-    enforced: boolean;
+    /** The deployment's weekly allowance of included tokens. */
+    includedTokens: number;
   };
   features: { webSearch: boolean; searchVendor?: "parallel" | "tavily" };
 }
 
-export interface DailyLimits {
-  dailyTokens: number | null;
-  dailyRuns: number | null;
+/** A person's weekly allowance of included tokens: their own (null: none,
+ * the default applies), the deployment's default, and what they used this
+ * week (Monday 00:00 UTC). */
+export interface Allowance {
+  weeklyTokens: number | null;
+  defaultTokens: number;
+  used: number;
 }
 
 export interface AdminUser {
@@ -58,8 +61,8 @@ export interface AdminUser {
   avatarUrl?: string | null;
   isAdmin: boolean;
   createdAt: number;
+  /** This UTC week's usage, every payer. */
   usage: {
-    day: number;
     inputTokens: number;
     outputTokens: number;
     reasoningTokens: number;
@@ -67,7 +70,7 @@ export interface AdminUser {
     costEstimateMicros: number;
     runs: number;
   };
-  limits: DailyLimits;
+  allowance: Allowance;
 }
 
 export function gitHubSignInUrl(returnTo?: string, signupCode?: string): string {
@@ -142,10 +145,9 @@ export async function logout(): Promise<void> {
 
 export async function setUserLimits(input: {
   userId: string;
-  dailyTokens?: number | null;
-  dailyRuns?: number | null;
-}): Promise<DailyLimits> {
-  const limits = await postJson<DailyLimits>("/api/admin/limits", input);
+  weeklyTokens: number | null;
+}): Promise<Allowance> {
+  const limits = await postJson<Allowance>("/api/admin/limits", input);
   void adminUsersResource.load(true).catch(() => undefined);
   return limits;
 }

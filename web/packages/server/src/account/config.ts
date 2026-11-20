@@ -11,10 +11,9 @@ import type { Config } from "../config.js";
 export interface RuntimeLimits {
   runsPerUser: number;
   runTimeoutSeconds: number;
-  dailyTokens: number;
-  dailyRuns: number;
-  /** False while `SESSION_ENFORCE_LIMITS=0`: usage is recorded either way. */
-  enforced: boolean;
+  /** The deployment's weekly allowance of included tokens (a person may have
+   * their own: `/api/me/usage`'s `cap`). */
+  includedTokens: number;
 }
 
 export interface RuntimeFeatures {
@@ -67,9 +66,7 @@ export function runtimeConfigFor(config: Config, user: { isAdmin: boolean } | nu
     limits: {
       runsPerUser: config.limits.perUser,
       runTimeoutSeconds: Math.round(config.limits.runTimeoutMs / 1000),
-      dailyTokens: config.limits.dailyTokens,
-      dailyRuns: config.limits.dailyRuns,
-      enforced: config.limits.enforceDailyLimits,
+      includedTokens: config.sync.includedTokens,
     },
     features: searchFeatures(config),
   };

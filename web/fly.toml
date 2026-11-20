@@ -5,11 +5,11 @@
 # The positional `web` is the build context; without it flyctl hands Docker
 # the repository root, where `package.json` is the desktop's.
 #
-# Enables token quota limits and invitation-only registration to restrict access and control LLM provider costs.
-# `SESSION_ENFORCE_LIMITS = "1"` makes the daily token and run limits refuse
-# rather than merely record; `SESSION_REQUIRE_INVITE = "1"` means an account is
-# created only against a code an admin minted. Turning either off is a
-# deliberate act, which is why they are here rather than defaulted in the code.
+# Invitation-only registration restricts access: `SESSION_REQUIRE_INVITE = "1"`
+# means an account is created only against a code an admin minted. Turning it
+# off is a deliberate act, which is why it is here rather than defaulted in the
+# code. Token spend is bounded by the weekly allowance of included tokens
+# (`SESSION_INCLUDED_TOKENS`, per person; there are no daily limits).
 #
 # Secrets (never here): SESSION_CURSOR_KEY (and, after a rotation,
 # SESSION_CURSOR_KEY_PREVIOUS with SESSION_CURSOR_KEY_ROTATED_AT),
@@ -41,9 +41,6 @@ kill_timeout = "30s"
   SESSION_RUNS_OPENROUTER = "8"
   SESSION_RUNS_ANTHROPIC = "2"
   SESSION_RUN_TIMEOUT_SECONDS = "900"
-  SESSION_ENFORCE_LIMITS = "1"
-  SESSION_DAILY_TOKENS = "1000000"
-  SESSION_DAILY_RUNS = "10"
   SESSION_REQUIRE_INVITE = "1"
   SESSION_SEARCH_VENDOR = "parallel"
   GOOGLE_VERTEX_PROJECT = "session-dev"

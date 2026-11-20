@@ -4,6 +4,10 @@
 
 import test from "ava";
 
+import { auth } from "@session/db";
+
+import { payerFor, tokenSource } from "../src/sync/account.js";
+
 import { createHarness } from "./helpers.js";
 import { HttpClient } from "./sync.helpers.js";
 
@@ -49,9 +53,10 @@ test("the runtime configuration lists models and limits to anyone", async (t) =>
   const h = createHarness(t);
   const res = await h.request("/api/config");
   t.is(res.status, 200);
-  const body = (await res.json()) as { models: unknown[]; limits: { dailyRuns: number } };
+  const body = (await res.json()) as { models: unknown[]; limits: Record<string, unknown> };
   t.true(body.models.length > 0);
-  t.is(typeof body.limits.dailyRuns, "number");
+  t.is(body.limits["includedTokens"], 250_000, "the weekly allowance");
+  t.false("dailyRuns" in body.limits, "no daily limits");
 });
 
 test("admin routes: an admin lists accounts, sets limits and makes codes; others are refused", async (t) => {
@@ -61,24 +66,37 @@ test("admin routes: an admin lists accounts, sets limits and makes codes; others
   const plain = h.signIn(plainUser);
   const list = await h.request("/api/admin/users", { cookie: admin });
   t.is(list.status, 200);
-  const users = (await list.json()) as { login: string; usage: { runs: number } }[];
+  const users = (await list.json()) as { login: string; usage: { runs: number }; allowance: { defaultTokens: number } }[];
   t.deepEqual(users.map((u) => u.login).sort(), ["plain", "root"]);
   t.is((await h.request("/api/admin/users", { cookie: plain })).status, 403);
   t.is((await h.request("/api/admin/users")).status, 401);
-  const limits = await h.post(
-    "/api/admin/limits",
-    { userId: plainUser.id, dailyRuns: 3, dailyTokens: null },
-    admin,
-  );
+  const limits = await h.post("/api/admin/limits", { userId: plainUser.id, weeklyTokens: 40_000 }, admin);
   t.is(limits.status, 200);
-  t.is(limits.body["dailyRuns"], 3);
-  t.is((await h.post("/api/admin/limits", { userId: "nobody", dailyRuns: 1 }, admin)).status, 404);
-  t.is((await h.post("/api/admin/limits", { userId: plainUser.id }, plain)).status, 403);
+  t.like(limits.body, { weeklyTokens: 40_000, defaultTokens: 250_000, used: 0 });
+  // the person's own allowance is their usage's cap
+  const usage = (await (await h.request("/api/me/usage", { cookie: plain })).json()) as { cap: number };
+  t.is(usage.cap, 40_000);
+  t.like((await h.post("/api/admin/limits", { userId: plainUser.id, weeklyTokens: null }, admin)).body, { weeklyTokens: null });
+  t.is(((await (await h.request("/api/me/usage", { cookie: plain })).json()) as { cap: number }).cap, 250_000);
+  t.is((await h.post("/api/admin/limits", { userId: plainUser.id, weeklyTokens: -1 }, admin)).status, 400);
+  t.is((await h.post("/api/admin/limits", { userId: "nobody", weeklyTokens: 1 }, admin)).status, 404);
+  t.is((await h.post("/api/admin/limits", { userId: plainUser.id, weeklyTokens: 1 }, plain)).status, 403);
   const codes = await h.post("/api/admin/invites", { count: 2 }, admin);
   t.is((codes.body as { codes: string[] }).codes.length, 2);
   t.is((await h.post("/api/admin/invites", { count: 0 }, admin)).status, 400);
-  const daily = await h.request("/api/me/usage/daily", { cookie: plain });
-  t.is(daily.status, 200);
+  t.is(users[0]?.allowance.defaultTokens, 250_000);
+  t.is((await h.request("/api/me/usage/daily", { cookie: plain })).status, 404, "no daily usage route");
+});
+
+test("a person's own weekly allowance is what the included tokens pay; admins are not exempt", (t) => {
+  const h = createHarness(t);
+  const root = h.addUser("root", { isAdmin: true });
+  const src = () => tokenSource(h.db, h.deps.sync, h.config, root.id, root.handle, "session");
+  t.like(src(), { cap: 250_000, left: 250_000 });
+  auth.setUserLimits(h.db, root.id, 0);
+  t.like(src(), { cap: 0, left: 0 }, "an allowance of 0 pays for nothing, an admin's too");
+  const payer = payerFor(h.db, h.deps.sync, h.config, root.id, root.handle, null);
+  t.false(payer.ok);
 });
 
 test("/api/spaces lists the spaces the caller may find", async (t) => {

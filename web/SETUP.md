@@ -314,6 +314,8 @@ Users see a pause, not a loss.
 does not start if the database has a migration unsupported by the image, so redeploying an
 older image after a migration will not start. Roll forward instead.
 
-**Limits are on.** `SESSION_ENFORCE_LIMITS=1` in `fly.toml` caps daily tokens
-and runs per account, with a queue cap alongside. Admins are exempt. Raise a
-single account through the `user_limits` table rather than the global default.
+**Included tokens are a weekly allowance.** Each person's asks may use
+`SESSION_INCLUDED_TOKENS` included tokens a week (Monday 00:00 UTC), then their
+default API key pays; there are no daily limits, and a queue cap bounds what
+waits. Admins have the allowance too. Change one person's on the admin page
+(`user_limits.weekly_tokens`) rather than the global default.

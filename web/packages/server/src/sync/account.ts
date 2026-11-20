@@ -65,7 +65,7 @@ export function tokenSource(
 ): TokenSource | null {
   if (id === "session") {
     // the included tokens: one weekly allowance (Monday 00:00 UTC)
-    const cap = config.sync.includedTokens;
+    const cap = usage.weeklyAllowance(db, userId, config.sync.includedTokens);
     const used = usage.weeklyUsed(db, userId, id, at);
     return { id, kind: "session", cap, used, left: Math.max(0, cap - used) };
   }
@@ -136,7 +136,7 @@ export function usageOf(
   const d = defaultKey(db, sync, user.id, user.handle);
   const by = usage.monthlyByPayer(db, user.id, at);
   return {
-    cap: config.sync.includedTokens,
+    cap: usage.weeklyAllowance(db, user.id, config.sync.includedTokens),
     week: usage.weeklyUsed(db, user.id, "session", at),
     resetAt: isoAt(usage.weekOf(at).end),
     def: d?.id ?? null,

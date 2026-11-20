@@ -912,15 +912,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "daily_tokens": {
-          "name": "daily_tokens",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "daily_runs": {
-          "name": "daily_runs",
+        "weekly_tokens": {
+          "name": "weekly_tokens",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,

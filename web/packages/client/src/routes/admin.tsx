@@ -1,10 +1,11 @@
-// The administrator view (07 §3): who has an account, what they used today,
-// and the two levers an administrator has — per-account daily limits and
-// sign-up codes (`admin.createInvites`; a code lets one new account in).
+// The administrator view (07 §3): who has an account, what they used this
+// week, and the two levers an administrator has — a person's own weekly
+// allowance of included tokens (or the deployment's default) and sign-up codes
+// (a code lets one new account in). There are no daily limits.
 //
 // The page is rendered only for an administrator. That is a courtesy, not the
-// control: every procedure behind it is an `adminProcedure`, which answers
-// `FORBIDDEN` whatever the client chooses to show (`06-auth-and-users.md` §8).
+// control: every route behind it (`/api/admin/*`) answers FORBIDDEN to anyone
+// else, whatever the client chooses to show (`06-auth-and-users.md` §8).
 
 import { modelsFor } from "@session/shared";
 import { Link } from "@tanstack/react-router";
@@ -38,33 +39,36 @@ function modelAccess(user: { isAdmin: boolean }): string {
     .join(", ");
 }
 
-function LimitCell({
-  userId,
-  label,
+/** A person's weekly allowance: a number of tokens, or empty for the
+ * deployment's default. */
+function AllowanceCell({
+  login,
   value,
+  fallback,
   onSave,
 }: {
-  userId: string;
-  label: string;
+  login: string;
   value: number | null;
+  fallback: number;
   onSave: (next: number | null) => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const shown = draft ?? (value === null ? "" : String(value));
   return (
     <input
-      aria-label={`${label} for ${userId}`}
-      className="border-border-divider bg-surface-input min-h-control-sm w-24 rounded-md border px-2 text-sm"
+      aria-label={`Weekly allowance for ${login}`}
+      className="border-border-divider bg-surface-input min-h-control-sm w-28 rounded-md border px-2 text-sm"
       inputMode="numeric"
+      placeholder={`default (${formatTokens(fallback)})`}
       value={shown}
       onChange={(event) => setDraft(event.currentTarget.value)}
       onBlur={() => {
         if (draft === null) return;
-        const trimmed = draft.trim();
-        const next = trimmed === "" ? null : Number(trimmed);
+        const trimmed = draft.trim().toLowerCase();
+        const next = trimmed === "" || trimmed === "default" ? null : Number(trimmed);
         setDraft(null);
-        // A typo must not become a limit of `NaN`; the field simply reverts.
-        if (next !== null && !Number.isInteger(next)) return;
+        // A typo must not become an allowance of `NaN`; the field reverts.
+        if (next !== null && (!Number.isInteger(next) || next < 0)) return;
         if (next === value) return;
         onSave(next);
       }}
@@ -113,27 +117,26 @@ export function AdminPage() {
                     Model access
                   </th>
                   <th scope="col" className="py-1 font-medium">
-                    Runs today
+                    Runs this week
                   </th>
                   <th scope="col" className="py-1 font-medium">
-                    Tokens today
+                    Tokens this week
                   </th>
                   <th scope="col" className="py-1 font-medium">
                     Cost
                   </th>
                   <th scope="col" className="py-1 font-medium">
-                    Daily tokens
+                    Included tokens this week
                   </th>
                   <th scope="col" className="py-1 font-medium">
-                    Daily runs
+                    Weekly allowance
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {users.data.map((user) => {
                   // `reasoningTokens` is included in `outputTokens`; excluding it
-                  // from this sum prevents double-counting and matches the server
-                  // limit (`db/repos/usage.ts:admissionCheck`).
+                  // from this sum prevents double-counting.
                   const tokens = user.usage.inputTokens + user.usage.outputTokens;
                   return (
                     <tr key={user.id} className="border-border-divider border-t">
@@ -156,21 +159,15 @@ export function AdminPage() {
                       <td className="py-1.5">{formatTokens(tokens)}</td>
                       <td className="py-1.5">{formatCost(user.usage.costEstimateMicros)}</td>
                       <td className="py-1.5">
-                        <LimitCell
-                          userId={user.login}
-                          label="Daily tokens"
-                          value={user.limits.dailyTokens}
-                          onSave={(dailyTokens) =>
-                            setLimits.mutate({ userId: user.id, dailyTokens })
-                          }
-                        />
+                        {formatTokens(user.allowance.used)} of{" "}
+                        {formatTokens(user.allowance.weeklyTokens ?? user.allowance.defaultTokens)}
                       </td>
                       <td className="py-1.5">
-                        <LimitCell
-                          userId={user.login}
-                          label="Daily runs"
-                          value={user.limits.dailyRuns}
-                          onSave={(dailyRuns) => setLimits.mutate({ userId: user.id, dailyRuns })}
+                        <AllowanceCell
+                          login={user.login}
+                          value={user.allowance.weeklyTokens}
+                          fallback={user.allowance.defaultTokens}
+                          onSave={(weeklyTokens) => setLimits.mutate({ userId: user.id, weeklyTokens })}
                         />
                       </td>
                     </tr>

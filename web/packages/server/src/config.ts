@@ -133,10 +133,6 @@ const envSchema = z.object({
   SESSION_RUNS_ANTHROPIC: positiveInteger(2, 1),
   SESSION_RUN_TIMEOUT_SECONDS: positiveInteger(900),
 
-  SESSION_ENFORCE_LIMITS: flag(false),
-  SESSION_DAILY_TOKENS: positiveInteger(1_000_000),
-  SESSION_DAILY_RUNS: positiveInteger(10),
-
   LITESTREAM_REPLICA_URL: optionalString,
   SESSION_DOCUMENTS_REPLICA_URL: optionalString,
   AWS_ACCESS_KEY_ID: optionalString,
@@ -178,9 +174,6 @@ export interface RunLimits {
   openrouter: number;
   anthropic: number;
   runTimeoutMs: number;
-  enforceDailyLimits: boolean;
-  dailyTokens: number;
-  dailyRuns: number;
 }
 
 /** Which providers have a credential. A model whose provider is missing is
@@ -371,9 +364,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       openrouter: value.SESSION_RUNS_OPENROUTER,
       anthropic: value.SESSION_RUNS_ANTHROPIC,
       runTimeoutMs: value.SESSION_RUN_TIMEOUT_SECONDS * 1000,
-      enforceDailyLimits: value.SESSION_ENFORCE_LIMITS,
-      dailyTokens: value.SESSION_DAILY_TOKENS,
-      dailyRuns: value.SESSION_DAILY_RUNS,
     },
 
     litestreamReplicaUrl: value.LITESTREAM_REPLICA_URL,
