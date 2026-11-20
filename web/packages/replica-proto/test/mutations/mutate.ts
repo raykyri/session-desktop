@@ -809,20 +809,23 @@ const IN_SYNC: Record<string, SyncEdit> = {
     from: '  "INTERNAL_SERVER_ERROR",\n  "TOO_LARGE",\n]);',
     to: '  "TOO_LARGE",\n]);',
   },
+  // X30 and N2 to N5 moved with the cursor checks into `openCursor`, which
+  // `pull` and the streams' read share since review round 2 of phase 2: the
+  // same faults, now in both reads
   X30: {
     file: "src/server/server.ts",
-    from: "        c.at < now - TOMBSTONE_TTL ||\n",
-    to: "        false ||\n",
+    from: "      c.at < now - TOMBSTONE_TTL ||\n",
+    to: "      false ||\n",
   },
-  N2: { file: "src/server/server.ts", from: "        c.u !== u ||\n", to: "" },
-  N3: { file: "src/server/server.ts", from: "        c.log !== log ||\n", to: "" },
-  N4: { file: "src/server/server.ts", from: "        c.n !== tx.epoch(log).n ||\n", to: "" },
+  N2: { file: "src/server/server.ts", from: "      c.u !== u ||\n", to: "" },
+  N3: { file: "src/server/server.ts", from: "      c.log !== log ||\n", to: "" },
+  N4: { file: "src/server/server.ts", from: "      c.n !== tx.epoch(log).n ||\n", to: "" },
   N5: {
     file: "src/server/server.ts",
-    from: "      const c = this.tokens.open(cursor, now);\n",
+    from: "    const c = this.tokens.open(cursor, now);\n",
     // tokens carry the database's instance id since review round 1 of
     // phase 1: the made-up state has this database's
-    to: "      const c = this.tokens.open(cursor, now) ?? { log, u, n: tx.epoch(log).n, v: 0, h: 0, at: now, i: this.instance(tx) };\n",
+    to: "    const c = this.tokens.open(cursor, now) ?? { log, u, n: tx.epoch(log).n, v: 0, h: 0, at: now, i: this.instance(tx) };\n",
   },
   // moved with the epochs read once (review round 2 of phase 1): the same fault
   N6: {
@@ -905,9 +908,10 @@ const IN_SYNC: Record<string, SyncEdit> = {
     ],
   },
   N30: {
+    // (moved into `openCursor` with X30)
     file: "src/server/server.ts",
-    from: "        c.n !== tx.epoch(log).n ||\n",
-    to: "        (c.v > 0 && c.n !== tx.epoch(log).n) ||\n",
+    from: "      c.n !== tx.epoch(log).n ||\n",
+    to: "      (c.v > 0 && c.n !== tx.epoch(log).n) ||\n",
   },
   N31: {
     file: "src/server/tokens.ts",
