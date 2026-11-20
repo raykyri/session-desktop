@@ -391,6 +391,53 @@ rules above stay as they are. Decisions for the new client:
     Mobile Web; in this sandbox set `SESSION_E2E_HOST=127.0.0.1`. Tests
     tagged `@server-r1` need the server half of review round 1 of phase 2
     and run only with `SESSION_E2E_SERVER_R1=1`.
+- Phase 3 (done): `web/desktop` (`@session/desktop`, a workspace of
+  `web/`) is the new Desktop app: the spaces web client in Tauri 2, macOS
+  only. See `web/desktop/README.md`, which lists what is not verified until
+  it runs on a Mac.
+  - One UI: the client reads what differs between the web and the app from
+    `web/packages/client/src/platform.ts` (the server's origin, the bearer
+    token and no cookie, `persist` and the replica's storage, the account
+    as last read, opening links, sign-out, Update Session, `here`: "this
+    Mac"). The app's entry installs its platform (`setPlatform`) before the
+    first render and renders `@session/client/shell`; the web build holds
+    no desktop code. Links the person copies use `siteOrigin()`.
+  - Replica: each person's replica and outbox in `replica-<handle>.sqlite`
+    (`SqliteStorage`, `persist: true`), opened with `tauri-plugin-sql`; a
+    batch is the app's `sql_batch` command, one transaction on the plugin's
+    pool. Sign-out and a token the server no longer takes clear it and
+    return to the sign-in. The app starts offline from the replica and the
+    account kept in the Keychain item; it reads the server after, and sends
+    the writes an earlier run left in the outbox. A desktop session watches
+    its fetch: a network failure shows the offline bar, the next response
+    hides it and sends the outbox.
+  - Writes (`writes.tsx`): a screen waits for a write only while it is
+    being sent; once it waits in the outbox (offline, behind other writes,
+    held, tried without an answer) the screen goes on (`queued`), and
+    Unsent changes and its toasts (`spaces/Outbox.tsx`) own it. The sync
+    states follow the mockup's default Variants: a toast for a write that
+    failed 5 times, EXPIRED, dropped or refused; a header badge with a
+    popover and `/unsent`; the desktop offline bar; the Update Session
+    dialog. A STALE decision without text shows its toast and leaves the
+    list; a refused write with text stays in the list with Copy text;
+    FORBIDDEN moderation is one grouped toast. A frozen copy (the sync
+    core keeps the person's own threads and what they wrote under them) is
+    greyed and read-only with one notice, and stays in the header.
+  - Sign-in: `devices.authorize` with the Mac and the app, the browser at
+    `/device?request=<id>`, the code on the app's window, `devices.token`
+    polled every 2 s. The server takes these two calls from a desktop
+    origin without a token or a cookie (`middleware/cors.ts`, `csrf.ts`).
+  - Not built: the updater ("Download and restart" opens
+    `<server>/download`), signing, the Devices list (Phone only), device
+    runs (phase 4). The app's appearance settings stay on the Mac (a device
+    token reads none of the browser's account routes).
+  - Tests: `web/desktop/test` (platform, sign-in), `cargo test` in
+    `web/desktop/src-tauri`, `packages/client/test/desktop.test.tsx`, and
+    the desktop-mode e2e (`npm run test:e2e:desktop`, `web/e2e/desktop`):
+    the built frontend from a second origin admitted as a desktop origin,
+    a test bridge (better-sqlite3, a Keychain in memory, recorded links)
+    in place of Tauri's, against the real server; the gate is
+    `offline-day.spec.ts`.
 - Ids: clients generate ULIDs. The server accepts a timestamp from 4 days in
   the past to 1 minute in the future (the outbox keeps writes 3 days), rejects an id that already exists, and
   answers a collision with the same CONFLICT whether or not the caller can
