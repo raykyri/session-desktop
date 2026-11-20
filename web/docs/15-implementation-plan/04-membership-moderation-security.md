@@ -470,8 +470,6 @@ one unread notification for the owner.
   with the removal" (placeholder "Optional", at most 300 characters), the
   line "Readers see that it was removed. Branches and replies under it go
   with it. @author is notified, with the reason.", and Cancel and Remove.
-  Plan addition: the hint "Readers see this. Do not quote the removed text."
-  under the field.
 - `moderation.decide { item, decision: "removed", note? }` writes a
   `modlog` entry and, in the same transaction, a `removed` notification to
   the author with the note and no thread text (`01` C16, written by the
@@ -855,7 +853,7 @@ none of them.
   the inviter in the tree; the inviter can revoke open links at any time;
   channel owners can remove and ban the account it created, and a site
   admin can delete that account by operator job (§8).
-- **Handle enumeration.** Handles are public by design (bylines, the tree);
+- **Handle enumeration.** Handles are public by design (thread rows, the invite tree);
   the availability check is rate-limited only to bound load.
 - **No reporting.** Members cannot flag content to the owner or to site
   admins in the app (`05` §6 P6). An owner sees their channel's content

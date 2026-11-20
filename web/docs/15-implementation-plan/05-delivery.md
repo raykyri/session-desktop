@@ -39,7 +39,7 @@ web-only scope).
 | M2 | `@session/sync` library (client half, server half over an in-memory store) | M1b | M4 (fixture replica) |
 | M3 | Server half on SQLite passing replica-proto's suites; staging app | M2 | M4 |
 | M4 | Client shell, feed, posts, replies, channels, signed-out reading | M1b (fixture replica); M2, M3 for e2e | M3, M5a |
-| M5a | Owned runs: asks, branches, look-ups, comments, streaming | M3, M4 | M6 |
+| M5a | Owned runs: asks, branches, look-ups, comments, streaming, ledger at spend time | M3, M4 | — |
 | M5b | Weekly allowance, payer, API keys, Usage page, Site Admin settings | M5a, ADR-23 accepted | M6 |
 | M6 | Membership, sign-in with GitHub and X, moderation, notifications | M3, M4, M5a | M5b |
 | M7a | (removed: web-only build) Desktop shell | — | — |
@@ -67,8 +67,9 @@ exist there (removed: web-only build).
   providers; specs in `web/e2e`).
 - `web/packages/replica-proto`: `npm test` (`inv1`-`inv7`, `review-r1`,
   `review-r2`, `convergence`, the read oracle `oracle.ts`, the write oracle
-  `write-oracle.ts`; the effect model `effect-model.ts` is removed or
-  rewritten in M1a, since there is no effect queue, `01` U6) and `npm run mutate`
+  `write-oracle.ts` with its effect model `effect-model.ts`, which M1a
+  rewrites to predict notifications as part of the write, `01` U6) and
+  `npm run mutate`
   (`test/mutations/mutate.ts`; about 45 minutes on 4 cores; exits non-zero
   when a mutation survives; `-- --check` only checks that every pattern
   matches once; `-- X1 N2` runs a subset).
@@ -86,9 +87,11 @@ M4, M5b and M6 rows (C16's notifications are written by each mutator's
 `notify` stage, `01` U1, in M1b and filled in by the M6 items; `01` R5 and
 `spaces.directory` serve C7; `04` §3 builds C8's account invites). M6
 depends on M5a because the branch and comment notifications of C16 come
-from runs. `04` I1 (the `users.provider` and `provider_user_id` columns,
-`code_hash` and `code_enc`, and their migration) is built whole in M6;
-M3's `0001_spaces.sql` does not touch those columns.
+from runs. `04` I1 (`users.status`, `handle`, `provider` and
+`provider_user_id`, `invites.code_hash` and `code_enc`) is built whole in
+M6 with its own generated migration, `0002_accounts.sql`; M3's
+`0001_spaces.sql` does not add those columns, and the M8a squash folds both
+into `0000_initial.sql`.
 
 | Milestone | 01 | 02 | 03 | 04 |
 |---|---|---|---|---|
@@ -105,8 +108,8 @@ M3's `0001_spaces.sql` does not touch those columns.
 Removed and not scheduled (web-only build): `01` S2; `02` §12.3; `03` V1-V7,
 T5, L3; `04` Z3. Removed and not scheduled (no reporting, P6): `04` O1.
 Removed and not scheduled (no suspension, P3): `04` I6. Removed and not
-scheduled (no effect queue): `01` S4. `01` S2's acceptance line on foreign origins is kept under S1. `02` W2.4
-(no Tauri part) and W6.10 (no desktop frozen copy) are now scheduled whole.
+scheduled (no effect queue): `01` S4. `01` S2's acceptance line on
+foreign origins is kept under S1. `02` W2.4 (no Tauri part) and W6.10 (no desktop frozen copy) are now scheduled whole.
 
 `03` L4 adds no work beyond `01` A3 (M3). `01` Y13 (`serverApply`) is built
 in M2 and first used by `03` E1 in M5a. `02` §9.7 is a reference table, not
@@ -145,11 +148,14 @@ Scope:
   (`01` U6): `likes.set` replaced by counted saves, rules dropped, comment and
   ask-node kinds added, `erase` extended to saves, comments and mention
   notifications; the admin and moderator roles, `members.setRole`, `RANK`
-  and the `invite` setting removed; reporting removed; the effect model
-  replaced (notifications written by the mutator in the write's
-  transaction, the `job` effect replaced by a `run` record with status
-  `queued`, the effect worker, dead letters and the effect-model tests
-  removed or rewritten); with the tests and mutation patterns `01` U6 names
+  and the `invite` setting removed; reporting removed; the effect queue
+  removed (notifications written by the mutator's `notify` stage in the
+  write's transaction; the `job` effect replaced by a `run` record with
+  status `queued`; `work()`, the effect worker and dead letters removed;
+  the write oracle's effect model `test/effect-model.ts` kept and rewritten
+  to predict notifications as part of the write; tests that call `work()`
+  or `jobs()` rewritten, or removed where their subject is retry, backoff
+  or dead letters); with the tests and mutation patterns `01` U6 names
   removed or rewritten; mutation patterns that pointed at removed code are
   rewritten with the same faults.
 - Documents: ADR-19's `deviceNow` corrected to `clientTime` (`01` Y1); a
@@ -244,14 +250,18 @@ Exit criteria:
 
 Scope:
 - `web/packages/db`: `01` D1-D4 and `0001_spaces.sql` of D5 (records, sync
-  bookkeeping, non-replicated server tables including `site_settings` and
-  `server_meta`, `secure_delete`), D6 (log epochs and the boot-time Litestream generation
+  bookkeeping, non-replicated server tables including `site_settings`,
+  `server_meta` and `save_counts` (the true save count of a private-channel
+  thread, while the replicated counts record serves 0 below 3, `01` C1),
+  `secure_delete`), D6 (log epochs and the boot-time Litestream generation
   check), D7 (record shape backfills); `ServerStore` over SQLite in
   `web/packages/db/src/sync/`.
 - `web/packages/server`: `01` S1 and S3-S5 (sync pipeline with
   `Session-Protocol` and `426 UPGRADE_REQUIRED`, cookie authentication, no
-  CORS headers, configuration, drain and boot; `01` S4, the effect worker,
-  is removed), Y7 (SSE over
+  CORS headers, configuration, drain and boot: on boot, after migration
+  and the restore check, close `usage_events` rows still `open`, mark runs
+  still `running` as `interrupted`, then start the run dispatcher and the
+  maintenance jobs; `01` S4, the effect worker, is removed), Y7 (SSE over
   `fetch`), A1 (sync routes), A3 (rate limits). `04`'s hardening (Z2, Z4) is
   M6.
 - A conformance target: replica-proto's harness gains a target interface
@@ -269,7 +279,9 @@ Exit criteria:
 - `cd web && npm test --workspace @session/db` passes, including
   `migrations.test.ts` (a fresh database migrates through `0001`), the D1
   property test, the D2 kill-between-statements test, the D3 test that no
-  server-only table reaches `snapshot` or `pull`, the D4 storage scan over
+  server-only table reaches `snapshot` or `pull` (with a save in a private
+  channel whose true count stays below 3 writing no change-log row, `01`
+  C1), the D4 storage scan over
   the SQLite file and WAL after a checkpoint, and the D6 restore test (a
   database with a different Litestream generation id boots with bumped
   epochs and a pre-restore cursor answers `resync`).
@@ -429,7 +441,7 @@ W7.1-W7.3): sign-in with GitHub and with X, both required at launch, each
 account bound to one provider (`04` I1, I4, Z2; P1, Q8), with the staging X
 app working before this milestone starts; account invites with 30-bit
 codes, `users.status` (`waiting` or `active`; no suspension, `04` I6
-removed) and handles, the provider columns and their migration, admin
+removed) and handles, the provider columns and `0002_accounts.sql`, admin
 seeding by handle with `db:admin`, the invite tree, the "Join with invite?"
 flows and waiting accounts kept 90 days (`04` I1-I4); channel ownership and
 the member list (`04` B2, `02` W6.8; no moderator or admin roles and no
@@ -633,6 +645,7 @@ volume, `strategy = "immediate"`. With the build on its own branch:
 Decided (E1): from M3 the new server runs on a separate Fly app
 (`session-staging`, `web/fly.staging.toml`) with its own volume, Litestream
 bucket prefix, GitHub and X OAuth apps, secrets and invite-only sign-in.
+The staging X app works at the access level Q8 requires before M6 starts.
 Model calls use fixture providers by default and real providers with low
 per-user limits when a milestone needs them (M5a, M5b). The second app
 departs from `13` §1's single app; production keeps one database on one
@@ -687,7 +700,8 @@ machine. Staging is reset after the M8a squash.
   `SESSION_QUEUED_PER_USER`, the web window (`SESSION_WEB_WINDOW_DAYS`,
   `SESSION_WEB_WINDOW_THREADS`, `SESSION_WEB_WINDOW_CAP`),
   `SESSION_X_CLIENT_ID`, `SESSION_X_CLIENT_SECRET` and the abuse limits of
-  `04` Z1. `SESSION_DESKTOP_ORIGINS`, `SESSION_DEVICE_ANSWER_MAX_BYTES` and
+  `04` Z1. The abuse address in the site footer is not a setting: it is
+  `abuse@` followed by the hostname of `SESSION_PUBLIC_ORIGIN` (Q10). `SESSION_DESKTOP_ORIGINS`, `SESSION_DEVICE_ANSWER_MAX_BYTES` and
   `SESSION_DEVICE_RUNS_PER_HOUR` are not added (removed: web-only build).
   The default model and the default effort are set by a site admin at
   runtime, not by configuration (`03` K15). All are validated at boot and
@@ -746,8 +760,10 @@ waits for an invite.
    (`reset-database.md` §3).
 5. Deploy the build branch to production (`fly deploy web -c web/fly.toml`)
    and scale to 1. Boot runs `0000_initial.sql` on the empty file, records
-   the Litestream generation id, then starts the run dispatcher and the
-   scheduled maintenance jobs.
+   the Litestream generation id, closes `usage_events` rows still `open`
+   and marks runs still `running` as `interrupted` (none on an empty
+   file), then starts the run dispatcher and the scheduled maintenance
+   jobs (`01` S5).
 6. Seed the site admins (§3.5); the admins set the default model and the
    default effort.
 7. Smoke checks (M8b exit): sign-in with each provider, the default model
@@ -966,7 +982,11 @@ The product owner's answers, each with its source.
 - **Q1. Amend ADR-19 to ADR-22 and `AGENTS.md` now?** Decided: yes: the
   carry-over commit writes a web-only `AGENTS.md`, and M1a adds a "Scope of
   this build" note to each ADR naming the desktop, phone and device-run
-  parts not built. `00` "Scope of this build", `05` §3.0, M1a.
+  parts not built. Both also record that there is no effect queue:
+  notifications are written in the write's transaction and a queued `run`
+  record replaces the `job` effect, which departs from `AGENTS.md`'s
+  "queued effects commit together; effects run from a worker" (`01` U6,
+  S4). `00` "Scope of this build", `05` §3.0, M1a.
 - **Q2. Branch point.** The clone is shallow, so the initial commit is
   unconfirmed. Decided: unshallow, confirm it with `git rev-list
   --max-parents=0 HEAD`, and let the carry-over commit delete whatever it
@@ -982,9 +1002,11 @@ The product owner's answers, each with its source.
 - **Q5. Keep the protocol version header?** Decided: yes; it is cheap
   and makes open tabs reload after a mutator change instead of failing
   writes; one reload, then a Reload message. `01` S1, `05` §3.4.
-- **Q6. Seeding site admins after the wipe.** Decided: admins sign in
-  once, then `npm run db:admin -- <provider>:<login>` activates and promotes
-  them (no config list of identities). `05` §3.5.
+- **Q6. Seeding site admins after the wipe.** Decided: by handle (handles
+  are unique; provider logins are not). Each admin redeems a root invite
+  printed by `npm run db:admin -- --invite`, chooses a handle, and is then
+  promoted with `npm run db:admin -- <handle>` (no config list of
+  identities). `04` I1, `05` §3.5.
 - **Q7. Identity rules across providers.** Decided: store each account's
   email address from the provider and update it on every sign-in; emails
   are not deduplicated, merged or used to match accounts; the Session
@@ -992,17 +1014,22 @@ The product owner's answers, each with its source.
   provider, each needing an invite; the account-age minimum applies to X
   through `created_at`. `04` I1, Z2, §13.
 - **Q8. X developer access.** Which X API access level the sign-in needs at
-  the expected volume, and its cost. Decided: confirm with a staging X
-  app before M6; launch with GitHub only if X access is not ready. `04` Z2,
-  `05` §5.
+  the expected volume, and its cost. Decided: Session launches with both
+  GitHub and X. X access ready on the staging X app before M6 and on the
+  production X app before launch is a launch blocker; there is no
+  GitHub-only fallback. The M8b smoke test signs in with both. `04` Z2,
+  `05` M6, M8a, M8b, §5.
 - **Q9. Per-member model overrides** (the mockup's third admin variant).
   Decided: no. The Site Admin page has only the default model and the
   default effort; there is no per-member override and no availability
   setting. `03` K15, `02` W8.2.
 - **Q10. How members reach site admins about abuse, with no reporting.**
-  Decided: an abuse email address in the site footer, on every page, read
-  by site admins. There is no community guidelines page and no rules
-  checkbox at sign-up. `04` §13, `05` §5.
+  Decided: the site footer on every feed and page reads "Session · Report
+  abuse: abuse@<host>" (the mockup's copy), where `<host>` is the hostname
+  of `SESSION_PUBLIC_ORIGIN` (abuse@session.dev in production); site admins
+  read the mailbox, which must exist before launch (M8a). There is no
+  community guidelines page and no rules checkbox at sign-up. `02` W2.7,
+  `04` §13, `05` M4, §5.
 - **Q11. Launch date, notice period and the first members.** Decided:
   no launch date, notice period or banner, because the current web app is
   not in use and the wipe needs no announcement; site admins invite a

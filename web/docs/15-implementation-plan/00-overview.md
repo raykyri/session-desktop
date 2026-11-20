@@ -289,8 +289,9 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
     answers are accepted for Q1 (ADR scope notes, web-only `AGENTS.md`,
     which also records the removal of the effect queue), Q2, Q4 (in-flight
     writes only; client ids kept per tab across reloads, 01 Y3), Q5
-    (protocol header kept) and Q6 (admins sign in once, then `npm run
-    db:admin -- <handle>`). Q8: launch with both GitHub and X; X access
+    (protocol header kept) and Q6 (each first admin redeems a root invite
+    printed by `npm run db:admin -- --invite`, chooses a handle, and is
+    promoted with `npm run db:admin -- <handle>`). Q8: launch with both GitHub and X; X access
     ready on staging before M6 and on production before launch is a launch
     blocker, and the launch smoke test signs in with both. Q10: the site
     footer reads "Session · Report abuse: abuse@<host>" (`<host>` from

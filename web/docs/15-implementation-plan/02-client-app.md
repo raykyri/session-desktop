@@ -899,9 +899,9 @@ TanStack Query for online-only calls:
 
 | Hook | Screens | Reads |
 |---|---|---|
-| `useMe()` | all | user record, `status`, roles (user log) |
+| `useMe()` | all | user record, `status` (`waiting` or `active`), `is_admin` (user log) |
 | `usePrefs()` | layout | `prefs` record (01 C13) |
-| `useChannels(scope)` | strip, Browse, channel picker | spaces, memberships, roles; All adds `spaces.directory` (TanStack) |
+| `useChannels(scope)` | strip, Browse, channel picker | spaces with their `owner`, memberships; All adds `spaces.directory` (TanStack) |
 | `useChannel(name)` | header, info dialog | space, owner, member count |
 | `useMembers(space)` | member list | member records, bans |
 | `useFeed({kind, id?})` | feed | threads of joined channels / one channel / saved set, newest first; summaries outside the window (01 R1) |
@@ -910,14 +910,14 @@ TanStack Query for online-only calls:
 | `useBranchComments(id, node)` | branch card | comments on a node |
 | `useReplies(id)` | reply tree | replies |
 | `useRun(node)` | run states | run record plus the stream buffer |
-| `useSources(id)` | byline, citation popover | cited pages of the answer |
+| `useSources(id)` | card footer meta, citation popover | cited pages of the answer |
 | `useModerationLog(space)` | moderation log | `modlog` entries |
 | `useNotifications()` | notifications page, unread dot | notification records (user log) |
 | `useModels()` | composer, Site Admin settings | `models.list` (every registry model, default model and default effort), `admin.models.list` (TanStack, online-only, 03 K15) |
 | `useInvites()` | invites page | `accountInvites.*`, `members.tree` (TanStack, online-only, 01 C8) |
 | `useUsage()` | ring, usage page, composer | `usage.get`, `usage.listRuns` (TanStack) |
 
-A summary-only thread renders title, byline and counts; opening its side column
+A summary-only thread renders the title row, the footer meta and counts; opening its side column
 requests the full records (01 R3); offline it shows "Available when
 online". Unjoined open channels under All are read into an ephemeral
 replica that is dropped on leaving the channel view (01 R5).
@@ -938,7 +938,7 @@ and Open as its own thread with `from`), `threads.delete`, `research.forkNode`
 `prefs.set`, `spaces.join`, `spaces.leave`, `spaces.update`,
 `moderation.decide`, `members.ban`,
 `members.unban`, `members.remove`, `invites.create`,
-`invites.revoke`, `invites.restore`, `notifications.markSeen`,
+`invites.revoke`, `invites.restore`,
 `notifications.markRead`, `notifications.markAllRead`, `research.cancelNode`,
 `research.retryNode`. Each makes its ULIDs, applies the prediction to the
 replica and enqueues the envelope.
@@ -947,23 +947,49 @@ replica and enqueues the envelope.
 - A recorded refusal rolls the prediction back and shows a toast for the code
   (STALE, FORBIDDEN, CONFLICT, PRECONDITION_FAILED, …, with the 04 §9 copy
   where it applies); typed text returns to its composer.
-- The outbox holds a write only while its request is in flight; a network
-  failure marks the item "Not sent" with Retry (same mutation id) and
-  Discard. A reload drops unsent writes; typed text survives in `drafts`
-  (sessionStorage, §9.4). The desktop's 3-day outbox is not built (removed:
-  web-only build; 01 Y10).
-- `UPGRADE_REQUIRED` (01 S1): the client keeps unsent composer text in
-  `drafts` and reloads the page once; if the reloaded page gets
-  `UPGRADE_REQUIRED` again within 60 s, it shows "Session was updated.
-  Reload to continue." with a Reload button instead of reloading in a loop.
+- A `queue_full` refusal (`PRECONDITION_FAILED`, 01 Y2, 03 L1) is handled
+  as in §5: rollback, text restored, the queue toast.
+- The outbox holds a write only while its request is in flight. A network
+  failure keeps the prediction in the replica (the item stays rendered as
+  sent) and marks the write "Not sent" with Retry (same mutation id) and
+  Discard (rolls the prediction back and returns typed text to its
+  composer). A write that created an item (thread, branch, look-up, reply,
+  comment) shows "Not sent · Retry · Discard" under that item. A write with
+  no item or composer (`saved.set`, `spaces.join`, `spaces.leave`,
+  `prefs.set`, `notifications.markRead`, `notifications.markAllRead`,
+  `research.cancelNode`) shows a persistent toast (`role="alert"`) "Not
+  sent." with Retry and Discard; while several such writes are unsent it
+  reads "N changes not sent." and its Retry and Discard act on all of them
+  in outbox order. A reload drops unsent writes and their predictions; typed
+  text survives in `drafts` (sessionStorage, §9.4). The desktop's 3-day
+  outbox is not built (removed: web-only build; 01 Y10).
+- `UPGRADE_REQUIRED` (`426`, 01 S1): the client keeps unsent composer text
+  in `drafts`, writes the time of the reload to sessionStorage
+  (`session-upgrade-reload-at`, per tab) and reloads the page once. If the
+  reloaded tab gets `UPGRADE_REQUIRED` again within 60 s of that time, it
+  shows "Session was updated. Reload to continue." with a Reload button
+  instead of reloading in a loop; a `426` more than 60 s after it reloads
+  again and overwrites the time.
+- Client id (01 Y3): `{clientId, userId}` is kept in sessionStorage, so a
+  reload of the tab re-attaches the same id with `register` (which returns
+  `lastSeq`) instead of registering a new one. On load the tab takes the Web
+  Lock `session-client:<clientId>` with `ifAvailable`; a duplicated tab, which
+  copies sessionStorage, does not get the lock and registers a new id. A
+  stored id of another user, or an expired one (7 days idle), answers
+  `WRONG_CLIENT` and the client registers anew. Sign-out clears the stored
+  id.
 - Online-only actions (new channel, account invites, keys, billing, sign-in)
   show a busy state and inline errors.
 
 **W9.2** Acceptance: a fake server refusing a reply (rolled back, text
 restored), answering STALE to a member removal (toast, record reloaded),
-dropping the connection (Not sent; Retry reuses the mutation id), and
-answering `UPGRADE_REQUIRED` (one reload, draft kept; a second answer shows
-the Reload message).
+answering `queue_full` to an ask (rolled back, text restored, toast),
+dropping the connection (Not sent under a reply and in the toast for a save;
+the prediction stays; Retry reuses the mutation id; Discard rolls back), and
+answering `UPGRADE_REQUIRED` (one reload, draft kept, the time in
+sessionStorage; a second answer within 60 s shows the Reload message, one
+after 61 s reloads again); 100 reloads of one tab register one client id; a
+duplicated tab registers a new one; sign-out clears the stored id.
 
 ### 9.3 Per-viewer fields
 
@@ -976,14 +1002,16 @@ field.
 ### 9.4 UI state (Zustand)
 
 `navigation` (localStorage: scope, applied layout, last channel; sessionStorage:
-scroll anchors); `threadUi` (memory: per thread the selected branch or reply, the open
+scroll anchors); the sync client's `{clientId, userId}` and the upgrade
+reload time (sessionStorage, per tab; §9.2); `threadUi` (memory: per thread the selected branch or reply, the open
 inline composer with kind, parent and quote, collapsed replies; one inline
 composer per thread); `drafts` (sessionStorage, per account); `overlays`;
 `runStream` (in-flight text keyed by run, attempt, seq; applies only the next
 seq, drops lower seqs and older attempts, fetches `GET /api/runs/:id/live` on a
 gap or reconnect, clears on the committed turn; 03 T3). **W9.3** Acceptance:
 tests for the one-composer rule, a stream gap, a duplicate and an old attempt,
-and an account change clearing `threadUi` and `drafts`.
+and an account change or sign-out clearing `threadUi`, `drafts` and the
+stored client id.
 
 ### 9.5 Signed-out reading
 
@@ -1006,38 +1034,42 @@ lands. Acceptance: no fixture strings in `vite build` output.
 |---|---|
 | `PROMPTS` replaces fixture text with typed text | stored `q` as sent |
 | passage by word overlap (`groupsFor`, `bestBlock`) | stored passage index (N3) |
-| `runOf` hashes the id to pick a model and effort | `model` and `effort` on the node and run records (03 §1, K12) |
+| `runOf`, `RUNS`: hashes the thread id to pick a model and effort (the mock no longer shows them) | `model` and `effort` stored on the node and run records (03 §1, K12); not shown anywhere in the UI |
 | `likesBase` as save count; `T.count`, `replyCount` as totals | counts record `{ saves, r }` (01 C1, C5) |
 | `setTimeout` answers, `pending`, "Step 1 of 4" | run records, `step` and the stream (03 E3, T1-T3) |
 | `charge`, `RUNLOG`, `USAGE`, `BILLING`, `ALLOWANCE`, `RESET` | usage procedures and the ledger (03 K1-K7) |
-| key status set to `working` by a timer, toast "key works" | `keyCheck` effect (03 K4) |
+| key status `checking`, set to `working` by a 1.3 s timer, toast "<Provider> key works." | `apiKeys.set` checks the key with the provider during the request (03 K4; refused with `BAD_REQUEST` when rejected, `BAD_GATEWAY` when unreachable); the UI shows "Checking…" while it runs, then "Valid" and the toast (W8.1) |
 | `SPACE_META` owner and `vis`, `JOINED`, `memberCount` hash | space and member records; `owner` on the space record (01 C9, C18) |
 | `isMod` as owner only | kept: the owner is the only moderator, `isOwner(space)` (04 §4.3, 01 C18) |
 | `MEMBERS`, `INVITES`, `newCode`, `inviteState` | account invites and `members.tree` (01 C8, 04 §3) |
 | `BRP`, `n.look`, `n.quote`, `addLookup` prompt | comments, `look`, `quote`, server-built `q` (01 C3, C4) |
 | `PROMOTED`, `from` | `promoted` on the node, `from` on the thread (03 G5) |
-| `MODLOG` seeds, `p.removed` | `modlog` records (removals and bans; no reports), the placeholder fields (01 C12) |
-| `mentionsIn` toast ("Notified @x.") | server notifications (01 C16) listed on the notifications page with the unread dot (W2.6); no client toast |
+| `MODLOG` seeds, `p.removed` | `modlog` records (removals and bans), the placeholder fields (01 C12) |
+| `mentionsIn` toast ("Notified @x.", "@y isn't a member.") and `NOTIFS` | the same toast from the handles the server reports with the confirmation (§4.3, N16); notification records (01 C16) on the notifications page (W2.6) |
+| `alignBar()` measuring a row's cells | `useBarAlign` (§2.2, Placement) |
+| `ADMIN`, `MODELS`, `setDefault`, `setDefaultEffort` | `site_settings` through `admin.models.*` (03 K15) |
 | `render()` with focus restored by signature | React reconciliation and §10 focus rules |
 
 ### 9.8 Scaffolding that does not ship
 
 The top bar (title, variant segment, Fullscreen, theme segment), the mock bar
-(persona switcher "View as", Layout A/B, Jump to, Tokens), the thesis lines
+(persona switcher, Jump to, Tokens), the thesis lines
 (`ASK_THESIS`, `TREE_NOTE`), the window frame, hash and Ctrl+letter variant
 switching (`go`, `V`, `ORDER`, `variant`), navigation directions B-D
 (`navDropTop`, `ddButton`, `spacesMenuItems`, the ⌘K finder, `navRail`,
 `navSidebar`, `SP_VARIANTS`, `STARRED`, `VISITS`, `SEEN` unread counts),
 unused composer variants (`modeSeg`, `splitBare`, `splitEnds`) and Saved
 variants a-d, `previewVariant`, `renderMock`, `X_ACCOUNTS` and the fake X
-sign-in, the fixtures and seeded moderation log, the timer-driven run and key
-check, the mock's fixed `EFFORT_OPTS` list (the real submenu reads the model
+sign-in, the fixtures, `SEED_RM`, `SEED_POST`, `NOTIFS` and the seeded
+moderation log, the timer-driven run and key check, the model prices and
+notes in `MODELS`, the mock's fixed `EFFORT_OPTS` list (the real submenu reads the model
 registry, §5), the channel rules state and
 `.rulesdlg` styles with the "rules gate" and "agent's rule check" named in the
 `submitNew` comment, the defined but unused like code (`likeBtn`, `likeBtnK`,
-`LIKED`), and the `data-theme` switch (the app uses `data-appearance` and
-`data-color-theme`). Acceptance: a CI `rg` finds none of "View as", "Jump to",
-"Fullscreen", "EFFORT_OPTS", "rules gate" or the variant names in
+`LIKED`, `I.heart`), the card-avatar variant comments (`V[st.v].av`), and the
+`data-theme` switch (the app uses `data-appearance` and
+`data-color-theme`). Acceptance: a CI `rg` finds none of "Jump to", "Fullscreen",
+"EFFORT_OPTS", "rules gate", "likeBtn" or the variant names in
 `packages/client/src`.
 
 ## 10. Accessibility
@@ -1046,9 +1078,10 @@ registry, §5), the channel rules state and
 
 Tab order follows DOM order: the app bar (home, scope picker, strip chips,
 New channel, ring, Saved, layout toggle, account menu), then the main column:
-banner, channel header, composer, then each row as card (title-row "…",
-Branched from, byline tooltip, citations, footer) followed by its side column
-(each branch tree, the open card's controls, its composer). A branch or reply
+banner, channel header, composer, then each row as card (Branched from,
+the title row's "…", citations and passage count buttons, footer: follow-up or Reply, Save) followed by its side column (each
+branch tree, the open card's controls, its composer), and last the site
+footer's address link. A branch or reply
 tree is one tab stop with a roving `tabindex`. Opening a menu, dialog or
 composer moves focus as follows:
 
@@ -1062,7 +1095,7 @@ composer moves focus as follows:
 | Member list, channel invite dialog | Close | the opening row |
 | Remove | reason field | the card's "…" button |
 | Site Admin settings | the page heading | — |
-| Delete confirmation (`alertdialog`) | Cancel (the mock focuses Delete) | "…" button, or the next row if the item is gone |
+| Delete confirmation (`alertdialog`) | Cancel (the mock focuses Delete; the plan keeps focus off the destructive button) | "…" button, or the next row if the item is gone |
 | New channel | Name | opener, or the new channel's heading |
 | Auth dialog | first field or step heading | opener |
 | Inline composer, Escape | — | selected tree row, or the button that opened it |
@@ -1070,7 +1103,7 @@ composer moves focus as follows:
 | Selection actions, Escape | — | the answer, selection kept |
 | API key form, Escape | — | Add key or Remove |
 
-Route changes to Browse, Invites, Usage, Notifications, Admin and Welcome focus the
+Route changes to Browse, Invites, Usage, Notifications, Site Admin and Welcome focus the
 page heading (`tabindex="-1"`). Branch and reply trees are `role="tree"`
 with `treeitem` rows (`aria-level`, `aria-selected`, `aria-expanded` on
 collapsible replies); Up/Down move, Left goes to the parent, Right to the first child, Enter or Space
@@ -1082,24 +1115,32 @@ above, opens and closes every dialog and menu, and checks
 
 ### 10.2 Escape order
 
-Innermost first, one layer per press: delete confirmation; remove dialog;
-About editor; moderation log; member list and channel invite dialog; info
-dialog; auth dialog; open menu (focus to its trigger); citation popover;
-selection actions; the focused inline composer (closes it); API key form, then
-key-removal confirm. Base UI handles its nested dialogs, menus and popovers;
+Innermost first, one layer per press, as the mock's handler: delete
+confirmation; remove dialog; About editor; moderation log; member list and
+channel invite dialog (plan additions); info dialog; auth dialog; open menu
+(focus to its trigger); citation popover; selection actions; the focused
+inline composer (closes it); API key form, then key-removal confirm. The
+stacks the UI can produce are an info dialog with one dialog over it (About
+editor, moderation log, member list or channel invite dialog), and the
+remove or delete dialog over the feed. Base UI handles its nested dialogs, menus and popovers;
 selection actions, inline composers and the key form register in
 `stores/overlays` (`OVERLAY_PRIORITY` gains `selection`, `inlineComposer`,
 `keyForm`) and are dispatched by `AppShell`'s capture handler (07 §4.4). Escape
 in a composer with text closes it and keeps the draft. **W10.2** Acceptance: a
-test opens the info dialog, moderation log and remove dialog stacked, then
-presses Escape four times and checks which layer closed each time and where
-focus went; a second test does the same for menu, selection actions and inline
-composer.
+test opens the info dialog, then the About editor over it, and presses Escape
+twice: the first press closes the editor (focus on Edit), the second the info
+dialog (focus on the header's info button); a second test does the same with
+the moderation log (focus on "Moderation log", then the info button); a third
+opens the remove dialog from a card's "…" menu and checks one press closes it
+with focus on that "…" button; a fourth opens an inline composer with a
+selection popover and an open menu elsewhere and checks three presses close
+the menu, the selection actions and the composer in that order.
 
 ### 10.3 Reduced motion
 
 Under `prefers-reduced-motion` or `data-reduce-motion` (08 §7): no bar
-`margin-top` transition, no card fade (`pvFade`) or dialog entrance, instant
+`transform` transition (it hides and shows at once), no card fade (`pvFade`),
+no notification flash transition, no dialog entrance, instant
 scripted scrolls (`scrollIntoPadded`, strip chip centring, `?t=` scroll to a
 row, passage count buttons), and a static dot in place of the status pulse
 ("Step N of 4" carries progress). **W10.3** Acceptance: Playwright with
@@ -1111,7 +1152,8 @@ and card and `animation-name` (`none`) on the status dot, and checks that
 
 `tokens.css` stays the token source (08 §1). The mock's roles map to existing
 tokens; only these are added, each with a dark value and a light override in
-both colour themes and exposed through `@theme inline`: `--unread-dot`,
+both colour themes and exposed through `@theme inline`: `--unread-dot` (the
+account avatar's dot and the notification rows' dot),
 `--passage-mark` (mock:
 light `rgba(60,40,20,.06)`, dark `rgba(255,255,255,.07)`), `--avatar-1`…
 `--avatar-6` and `--avatar-fg`, `--tree-rail`, `--tree-rail-on`,
@@ -1128,11 +1170,11 @@ in the four theme × appearance combinations.
 
 **W11.2 Contrast.** A unit test resolves token values from `tokens.css` for
 each of the four theme × appearance combinations and checks: body, title,
-byline, tree-row and chip text against `--workspace-bg`, `--content-card-bg`
+footer meta, site footer, tree-row and chip text against `--workspace-bg`, `--content-card-bg`
 and `--popover-bg`, and against `--passage-mark` and the `qsel` tint
 composited over the workspace background, at least 4.5:1;
 tree rail, dots, the hollow title node, the ring arc and track, the Saved pill
-border, the avatar fill against `--avatar-fg`, and `--focus-ring`, at least
+and layout toggle borders, the floating app bar's divider border, the avatar fill against `--avatar-fg`, and `--focus-ring`, at least
 3:1 against their background; disabled controls are exempt. Acceptance: the
 test passes in CI and names the failing pair when it does not.
 
@@ -1141,10 +1183,12 @@ test passes in CI and names the failing pair when it does not.
 ### 12.1 Unit and component
 
 AVA, jsdom and Testing Library under `packages/client/test/`, on the fixture
-replica: `lookPhrase`, `railGeometry`, `placePins`, `useBarAutoHide`, count and
-byline formatting, viewer fields, scope lists, invite-code parsing, run states,
+replica: `lookPhrase`, `railGeometry`, `placePins`, `useBarAutoHide`,
+`useBarAlign`, count and footer-meta formatting, notification text, the site
+footer address, viewer fields, scope lists, invite-code parsing, run states,
 focus table, Escape stack, contrast pairs, one-composer rule, write rollback,
-stream gaps, and each screen's viewer states. Tests of the deleted features go
+stream gaps, "Not sent" states, the upgrade reload timer, client id
+storage, and each screen's viewer states. Tests of the deleted features go
 with them (12 §3.5).
 
 ### 12.2 End-to-end (`web/e2e`)
@@ -1155,24 +1199,24 @@ delivers them.
 
 | Spec (`web/e2e/`) | Milestone | Drives |
 |---|---|---|
-| `spaces-shell.spec.ts` | M4 | scope, strip, bar hide, layout toggle, phone widths |
-| `spaces-feed.spec.ts` | M4, M5a | post, save and the Saved count, a second context seeing a post without a reload, delete, the removed placeholder; the web's in-flight-only outbox (Not sent, Retry, nothing kept after a reload); from M5a, an ask streaming with a reload mid-stream |
-| `spaces-replies.spec.ts` | M4 | reply trees, Reply at root, mentions |
+| `spaces-shell.spec.ts` | M4 | scope, strip (including on Notifications and Site Admin), bar hide without layout shift, bar alignment per layout and width band, layout toggle, narrow widths, the site footer (W2.7) on feeds and pages, signed in and out |
+| `spaces-feed.spec.ts` | M4, M5a | post, save and the Saved count, the footer meta and no model or effort text, a second context seeing a post without a reload, delete, the removed placeholder; the web's in-flight-only outbox (Not sent, Retry, nothing kept after a reload); from M5a, an ask streaming with a reload mid-stream, the queue-full refusal |
+| `spaces-replies.spec.ts` | M4 | reply trees, Reply at root, mentions and the mention toast |
 | `spaces-signed-out.spec.ts` | M4 | signed-out reading of a thread, its branches and replies (§9.5); write controls open the auth dialog |
 | `spaces-keyboard.spec.ts` | M4 | §10 focus order, Escape order, reduced motion |
 | `spaces-channels.spec.ts` | M4, M6 | join, leave, New channel, About (M4); channel invite links, removal with reason, the moderation log, ban (M6; 04 B3, B4, §6.6) |
-| `spaces-notifications.spec.ts` | M6 | each notification kind of 01 C16 reaches its recipient, the unread dot, Mark all read, a link opening the thread in its feed (§2.1) |
+| `spaces-notifications.spec.ts` | M6 | each notification kind of 01 C16 reaches its recipient, the unread dot, Mark all as read, a row opening the thread in its feed with the item selected and the bar shown (§2.1, W2.6) |
 | `spaces-branches.spec.ts` | M5a | follow-up, Continue, Branch, Branch here, Look up, Comment, dot alignment |
-| `spaces-runs.spec.ts` | M5a | run states, Stop and Run again (05 M5a) |
-| `spaces-usage.spec.ts` | M5b | usage page, keys, billing setting, out-of-tokens refusal |
+| `spaces-runs.spec.ts` | M5a | run states and run notes, Stop and Run again (05 M5a) |
+| `spaces-usage.spec.ts` | M5b | usage page, keys with the check during the request (Checking…, Valid, both refusals), billing setting, out-of-tokens refusal |
 | `spaces-membership.spec.ts` | M6 | account invite links and codes, waiting accounts, the invite tree (04 I4) |
 
 `visual.spec.ts` is rewritten for Home in `centred` and `wide` at 1440 and
 1100 px, a channel at 800 px, an open branch card, the stacked dialogs, Usage,
 Invites and the auth dialog. `admin.spec.ts` stays and gains the Site Admin
 settings (W8.2): a site admin changes the default model and the default
-effort, a key-only model cannot be chosen as the default, and a member's
-composer starts on both after a reload. The `library`, `research`,
+effort (with the two toasts), a key-only model is not listed, and a
+member's composer starts on both after a reload. The `library`, `research`,
 `collaboration`, `live` and `widgets` specs are deleted.
 
 ### 12.3 Desktop (removed: web-only build)
@@ -1184,7 +1228,7 @@ whole end-to-end suite.
 
 | Id | Needs | Provided by |
 |---|---|---|
-| N1 | `@session/sync` client half (replica, outbox, rebase, reactive queries, the memory adapter) and `@session/mutators` | 01 Y9-Y12, U1-U5 |
+| N1 | `@session/sync` client half (replica, outbox, rebase, reactive queries, the memory adapter), `register` re-attaching a stored client id, the recorded `queue_full` refusal, and `@session/mutators` | 01 Y2, Y3, Y9-Y12, U1-U5 |
 | N2 | Signed-out and unjoined reading of open channels | 01 Y5, R5; 04 §3.5 |
 | N3 | Passage index on ask nodes (block index of the quoted passage, absent for footer asks), over a block structure that is the same for streamed and final text | 01 C3, 03 §1 (`b`) |
 | N4 | Counts record `{ th, s, saves, r }` with totals; no likes | 01 C1, C5 |
@@ -1192,28 +1236,29 @@ whole end-to-end suite.
 | N6 | Comments on ask nodes; look-ups through `research.forkNode` with `look` and a server-built `q` | 01 C3, C4, U5; 03 §2.1, G2-G4 |
 | N7 | Account invites, waiting accounts, `members.tree` (online-only) | 01 C8; 04 §3 |
 | N8 | Placeholder fields `mod`, `modBy`, `modNote`; `modlog` with ban entries | 01 C12; 04 §6.5 |
-| N9 | Run records, `step`, failure reasons, stream deltas and `/live`, cancel and retry | 03 §1, E3, G6, T1-T3; 01 Y7 |
-| N10 | `usage.*`, `apiKeys.*`, `usage.changed`, model registry with payers, `models.list` and `admin.models.*` (default model and default effort) | 03 K4-K8, K11, K15 |
+| N9 | Run records, `step`, failure reasons, the stop `note`, stream deltas and `/live`, cancel and retry, the queued-run limit | 03 §1, E3, E5, G6, L1, T1-T3; 01 Y7 |
+| N10 | `usage.*`, `apiKeys.*` with the key check during `apiKeys.set`, model registry with payers and efforts, `models.list` and `admin.models.*` (default model and default effort) | 03 K4-K8, K11, K12, K15 |
 | N11 | GitHub and X sign-in with the profile step, `auth.checkInvite` | 04 §1, §3.4, Z2 |
 | N12 | Stored answer and stream format: both Markdown | 01 C3; 03 §1 |
 | N13 | `prefs` record and `prefs.set` | 01 C13 |
 | N14 | Member list, ban, unban, remove and channel invite link mutators | 04 §4.3, §5, §6.4 |
-| N15 | Notification records (`mention`, `reply`, `branch`, `comment`, `removed`, `invite_used`) and the `notifications.*` mutators, for W2.6 | 01 C16, U5; 04 O2, I4 |
+| N15 | Notification records (`mention`, `reply`, `branch`, `comment`, `removed`, `invite_used`) and `notifications.markRead` and `notifications.markAllRead`, for W2.6 | 01 C16, U5; 04 O2, I4 |
+| N16 | The confirmation of a post, reply or comment lists the mentioned handles that were notified and the handles that are not members, for the mention toast (§4.3) | 01 C16, U5 (requested here) |
 
 Shell, feed, side column, composer and dialogs are built against the fixture
-replica (§9.6) and do not wait on N1-N15.
+replica (§9.6) and do not wait on N1-N16.
 
 ## 14. Open questions
 
 1. **Passage index.** Settled: 01 C3 and 03 §1 store `b` on the node, sent
    in `research.forkNode` input (N3).
-2. **Stop.** The mock has no Stop control; 03 G6 and 05 M5a need one. Placement
-   proposed in §3.3 (beside the run status, asker only).
+2. **Stop.** Settled (03 G6, 05 M5a): the mock has no Stop control; §3.3
+   places it beside the run status, for the asker only.
 3. **Thread addresses.** Decided (P9): `/c/$name?t=&sel=` opens the thread in
    its channel feed scrolled into view; a thread outside the loaded feed is
    fetched and inserted (§2.1).
-4. **Removal placeholder author.** Decided: "[deleted]" (04 §6.2).
-5. **Notifications inbox.** Decided (G, P10): a notifications page in the
+4. **Removal placeholder author.** Decided (P5): "[deleted]" (04 §6.2).
+5. **Notifications inbox.** Decided (P10): a notifications page in the
    account menu and an unread dot on the account avatar (W2.6); no push
    notifications.
 6. **Widgets and artifacts.** Decided (P21): not rendered; answers are plain
@@ -1221,6 +1266,7 @@ replica (§9.6) and do not wait on N1-N15.
 7. **Typography.** Decided (P22): as in the mockup (§11).
 8. **Settings.** Decided (P23): a Settings entry only once there are
    settings beyond Usage; none at launch.
-9. **Effort.** Settled: the submenu ships with the efforts of the chosen
-   model (§5, 03 K12); whether effort is capped for included tokens is 03
-   question 6.
+9. **Effort.** Decided (P13, 03 K12): the submenu lists the efforts of the
+   chosen model with no Default item (§5); effort is not capped on included
+   tokens and no cost estimate is shown; the per-run token cap (03 L1) bounds
+   a single run.

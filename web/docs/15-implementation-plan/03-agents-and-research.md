@@ -127,11 +127,10 @@ text that the UI will not display (01 C3). Acceptance: look-up input with `q`
 is refused as an extra field; a 5-word phrase and a phrase that starts inside
 a word are refused; client prediction and server apply produce the same `q`.
 
-The mockup always parents a look-up on the root (`addLookup(p, …)` passes
-`'r'`) and passes no context, because only the root answer is selectable
-there. The plan parents it on the node whose answer holds the selection and
-sends the passage as `quote`; for a selection in the root answer this is the
-mockup's behaviour.
+As in the mockup, Look up and Branch here are offered only for a selection
+in a thread card's answer (`.card .prose`), never in a branch card, so both
+are parented on the root (`addLookup(p, …)` passes `'r'`). The plan also
+sends the passage that holds the selection as `quote` (02 §4.4).
 
 **G3. What the UI shows of a look-up.** Rows and cards show a magnifier and
 the phrase (the mockup's `lookh` block, "Look up <phrase>"), never `q`. The

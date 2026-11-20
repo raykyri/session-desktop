@@ -214,7 +214,8 @@ expires; there is no retention requirement for backups (§9 q3; 05 §6 S1).
 
 **D5. Migration sequence.** Following `02-domain-model-and-database.md` §4,
 on the build branch (`05` §3.0): a generated migration `0001_spaces.sql`
-adds D1-D3, the C8 columns and the provider columns of 04 I1 in M3. Once the
+adds D1-D3 in M3; `0002_accounts.sql` adds the C8 columns and the
+provider columns of 04 I1 in M6 (`05` §1.2). Once the
 research schema files are deleted (with A2 and `02` W1.1 in M4), the
 migrations are squashed into one generated `0000_initial.sql` in M8a. No
 database at an older migration has to be upgraded: production is wiped at
@@ -828,8 +829,9 @@ channels, and add account invites, built on the existing `invites` table and
 replaces `code` as the key, the code is stored as `code_hash` for lookup and
 as `code_enc` (AES-256-GCM under `SESSION_SECRET_KEY`, readable only by the
 link's creator, nulled when the link is used or revoked), `revoked_at` is
-added, and `users.invites_remaining` is dropped in favour of the
-3-open-links rule, checked inside the `accountInvites.create` transaction.
+added, `created_by` is nullable (null for the root invites printed by
+`npm run db:admin -- --invite`, 04 I1), and `users.invites_remaining` is
+dropped in favour of the 3-open-links rule, checked inside the `accountInvites.create` transaction.
 `auth.checkInvite` answers `open` or one `unusable` answer for used, revoked
 and unknown codes. `users` gains `status: "waiting" | "active"`, `handle`
 and `display_name` (rules in `04-membership-moderation-security.md` §3.1);
