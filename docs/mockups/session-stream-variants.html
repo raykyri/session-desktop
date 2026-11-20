@@ -137,11 +137,16 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 /* ---- one scroll, rows of [post] [margin] ---- */
 .mg { height: 100%; overflow-y: auto; background: var(--feed); }
 .mg-inner { max-width: 1180px; margin: 0 auto; padding: 0 24px 60px; }
-.tabs { position: sticky; top: 0; z-index: 10; display: flex; gap: 4px; padding: 12px 0; background: var(--feed); overflow-x: auto;
+.tabs { position: sticky; top: 0; z-index: 10; padding: 12px 0; background: var(--feed);
   /* full-width band, with a hairline below it that fades in once the stream scrolls */
   box-shadow: 0 0 0 100vmax var(--feed), 0 1px 0 100vmax transparent; clip-path: inset(0 -100vmax -1px); transition: box-shadow .2s ease; }
 .tabs.scrolled { box-shadow: 0 0 0 100vmax var(--feed), 0 1px 0 100vmax var(--divider); }
-.tabs button { padding: 5px 10px; border-radius: 14px; font-size: var(--fs-sm); color: var(--t-secondary); font-weight: 500; white-space: nowrap; }
+/* the tab row scrolls sideways; its edges fade where more tabs are hidden, instead of cutting a tab off */
+.tabs-s { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; --fl: 0px; --fr: 0px;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent); }
+.tabs-s::-webkit-scrollbar { display: none; }
+.tabs button { flex: none; padding: 5px 10px; border-radius: 14px; font-size: var(--fs-sm); color: var(--t-secondary); font-weight: 500; white-space: nowrap; }
 .tabs button:hover { background: var(--fill-hover); }
 .tabs button[aria-current="true"] { background: var(--t-heading); color: var(--feed); }
 .row { display: grid; grid-template-columns: minmax(0, 600px) minmax(0, 330px); gap: 28px; padding: 14px 0; justify-content: center; }
@@ -204,7 +209,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .lay-front.tap { cursor: pointer; }
 .lay-front { position: relative; z-index: 5; background: var(--card); border-radius: var(--r-lg); box-shadow: var(--shadow), var(--shadow-soft); padding: 10px 12px 12px; }
 .grp.hl .lay-front { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), var(--shadow-soft); }
-.lay-front .rq { margin: 4px 0 4px; font-size: var(--fs-base); font-weight: 600; color: var(--t-heading); line-height: 1.4; }
+.lay-front .rq { margin: 4px 0 4px; font-size: var(--fs-base); font-weight: 400; color: var(--t-heading); line-height: 1.4; }
 .lay-front .lay-s { margin: 0; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.45; }
 .lay-front .prose { font-size: var(--fs-sm); max-height: 240px; overflow-y: auto; }
 .lay-acts { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
@@ -585,10 +590,10 @@ const ORDER = Object.keys(V);
 const app = $('#app');
 let lastV = null;
 function render() {
-  const v = V[st.v], first = lastV !== st.v, sc = $('#k-mg'), top = sc && !first ? sc.scrollTop : 0;
+  const v = V[st.v], first = lastV !== st.v, sc = $('#k-mg'), top = sc && !first ? sc.scrollTop : 0, tabsLeft = $('#k-tabs')?.scrollLeft || 0;
   const tabs = [['home', 'Home'], ...spacesWithPosts.filter(x => x.id !== 'sablefield').map(x => [x.id, spName(x.id)])];
   const posts = streamFor(st.space);
-  app.innerHTML = `<div class="mg" id="k-mg"><div class="mg-inner"><nav class="tabs">${tabs.map(([id, l]) => `<button data-a="space" data-id="${id}" aria-current="${st.space === id}">${esc(l)}</button>`).join('')}</nav>
+  app.innerHTML = `<div class="mg" id="k-mg"><div class="mg-inner"><nav class="tabs"><div class="tabs-s" id="k-tabs">${tabs.map(([id, l]) => `<button data-a="space" data-id="${id}" aria-current="${st.space === id}">${esc(l)}</button>`).join('')}</div></nav>
     ${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick">${repliesMargin(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}</div></div>`;
   const mg = $('#k-mg');
   mg.scrollTop = top;
@@ -596,6 +601,9 @@ function render() {
   mg.scrollTop = top;
   const tabsEl = mg.querySelector('.tabs'), edge = () => tabsEl.classList.toggle('scrolled', mg.scrollTop > 2);
   edge(); mg.addEventListener('scroll', edge, { passive: true });
+  const ts = $('#k-tabs'), fade = () => { ts.style.setProperty('--fl', ts.scrollLeft > 1 ? '40px' : '0px'); ts.style.setProperty('--fr', ts.scrollLeft + ts.clientWidth < ts.scrollWidth - 1 ? '40px' : '0px'); };
+  ts.scrollLeft = tabsLeft; { const on = ts.querySelector('[aria-current="true"]'); if (on && (on.offsetLeft + on.offsetWidth > ts.scrollLeft + ts.clientWidth - 40 || on.offsetLeft < ts.scrollLeft + 40)) ts.scrollLeft = on.offsetLeft - ts.clientWidth / 2 + on.offsetWidth / 2; }
+  fade(); ts.addEventListener('scroll', fade, { passive: true });
   lastV = st.v;
 }
 function renderBar() {
