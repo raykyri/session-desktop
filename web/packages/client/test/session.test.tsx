@@ -5,6 +5,7 @@
 // and `useWorld`.
 
 import type {
+  PushResult,
   Change,
   CursorMap,
   LogId,
@@ -17,6 +18,7 @@ import test from "ava";
 
 import { meResource } from "../src/api/account.js";
 import { setFetch } from "../src/api/http.js";
+import { Toasts, WRITE_ERROR, useWrite, type Outcome } from "../src/spaces/writes.js";
 import { useWorld } from "../src/spaces/world.js";
 import { Reader, mapSource } from "../src/sync/reader.js";
 import { SpacesProvider, useRunText } from "../src/sync/react.js";
@@ -113,14 +115,17 @@ const run = (status: string) =>
 
 /** A transport over logs held here: a snapshot serves a log's records, a
  * pull the changes queued for it, and the stream the events a test emits. */
-function scripted(logs: Record<string, StoredRecord[]>) {
+function scripted(logs: Record<string, StoredRecord[]>, o: { push?: () => PushResult } = {}) {
   const queued = new Map<string, Change[]>();
   const reads: string[] = [];
   let emit: ((e: SseEvent) => void) | null = null;
   const listening: (() => void)[] = [];
   const t: Transport = {
     register: () => Promise.resolve({ ok: true, clientId: "c1", serverTime: NOW }),
-    push: (es) => Promise.resolve(es.map(() => ({ ok: true, result: null, serverTime: NOW }))),
+    push: (es) =>
+      Promise.resolve(
+        es.map(() => (o.push ? o.push() : { ok: true as const, result: null, serverTime: NOW })),
+      ),
     snapshot: (log: LogId) => {
       reads.push(`snapshot ${log}`);
       return Promise.resolve({
@@ -374,6 +379,66 @@ test.serial(
       [SP]: "mod",
       [LAB]: "member",
     });
+    meResource.reset();
+    session.stop();
+  },
+);
+
+// ---- the write budget's refusal ----
+
+test.serial(
+  "a write the server's budget refuses (TOO_MANY_REQUESTS, unrecorded) shows the mockup's toast and is not offered again",
+  async (t) => {
+    directoryFetch();
+    const s = scripted(
+      {
+        "user:raymond": [member("raymond")],
+        [`space:${SP}`]: [space, member("raymond"), thread, counts],
+      },
+      {
+        push: () => ({
+          ok: false,
+          error: {
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many changes.",
+            retryAt: "2026-11-16T10:00:10Z",
+          },
+          serverTime: NOW,
+        }),
+      },
+    );
+    const session = new SpacesSession("raymond", { transport: s.transport });
+    meResource.set(testUser());
+    let outcome: Outcome | null = null;
+    function Probe() {
+      const write = useWrite();
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            void write("likes.set", { thread: TH, on: true }).then((o) => (outcome = o))
+          }
+        >
+          Like
+        </button>
+      );
+    }
+    render(
+      <SpacesProvider make={() => session}>
+        <Probe />
+        <Toasts />
+      </SpacesProvider>,
+    );
+    await waitUntil(t, () => session.status().ready, "the session started");
+    await act(async () => {
+      screen.getByRole("button", { name: "Like" }).click();
+      await settle();
+    });
+    await waitUntil(t, () => outcome !== null, "the write ended");
+    t.like(outcome as Outcome | null, { ok: false, error: { code: "TOO_MANY_REQUESTS" } });
+    t.truthy(screen.getByText(WRITE_ERROR["TOO_MANY_REQUESTS"] ?? "-"));
+    // refused, not waiting for Try again
+    t.deepEqual(session.client?.problems(), []);
     meResource.reset();
     session.stop();
   },

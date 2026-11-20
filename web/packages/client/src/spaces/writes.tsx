@@ -129,13 +129,30 @@ export function refusalToast(error: ApiError): void {
 }
 
 /** Wait for a write's outcome; a refusal shows its toast unless `quiet`. */
+/** A write the server's write budget refused (TOO_MANY_REQUESTS with
+ * `retryAt`, unrecorded: phase 2 review round 1, reviewer A's F6). The sync
+ * client ends it as failed on the web; it never applied unless an earlier
+ * send of it went without an answer (`uncertain`), so it reads as refused. */
+function limited(session: SpacesSession, local: string): ApiError | null {
+  const e = session.client?.outbox().find((x) => x.local === local);
+  return e && e.state === "failed" && !e.uncertain && e.error?.code === "TOO_MANY_REQUESTS"
+    ? e.error
+    : null;
+}
+
 async function settle(
   session: SpacesSession,
   w: { local: string; answer: Promise<Answer | null> },
   quiet: boolean,
 ): Promise<Outcome> {
   const a = await w.answer;
-  if (a === null) return { ok: false, error: null, local: w.local };
+  if (a === null) {
+    const error = limited(session, w.local);
+    if (!error) return { ok: false, error: null, local: w.local };
+    if (!quiet) refusalToast(error);
+    session.client?.discard(w.local);
+    return { ok: false, error };
+  }
   if (a.ok) return { ok: true, result: a.result };
   const code = a.error.code;
   if (!quiet) toast(WRITE_ERROR[code] ?? WRITE_ERROR["unavailable"] ?? "");
@@ -177,6 +194,11 @@ export function useWrite(): Writer {
           resolve({ ok: true, result: e.result, input: e.input, earlier: e.earlier === true });
         else if (e.state === "refused" || e.state === "expired") {
           const error = e.error ?? { code: "BAD_REQUEST", message: "" };
+          toast(WRITE_ERROR[error.code] ?? WRITE_ERROR["unavailable"] ?? "");
+          c.discard(local);
+          resolve({ ok: false, error });
+        } else if (e.state === "failed" && limited(session, local)) {
+          const error = limited(session, local) ?? { code: "TOO_MANY_REQUESTS", message: "" };
           toast(WRITE_ERROR[error.code] ?? WRITE_ERROR["unavailable"] ?? "");
           c.discard(local);
           resolve({ ok: false, error });
