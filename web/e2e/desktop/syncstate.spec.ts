@@ -8,14 +8,27 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { APP_ORIGIN } from "../constants.js";
+import { APP_ORIGIN, DESKTOP_ORIGIN } from "../constants.js";
 
-import { openApp, signedInApp } from "./app.js";
+import { openApp, recordToasts, signedInApp, spaceId, toasts } from "./app.js";
 import { storedOutbox } from "./files.js";
-import { offline, online } from "./net.js";
-import { DAY, HOUR, MIN, failNext, seedOutbox, serverNow, sf4, ulid } from "./outbox.js";
+import { appGo, offline, online, trackRequests } from "./net.js";
+import {
+  DAY,
+  HOUR,
+  MIN,
+  failNext,
+  seedOutbox,
+  serverNow,
+  serverWrite,
+  sf4,
+  ulid,
+} from "./outbox.js";
 
 const REPLY = "Does region pinning need a restart for read replicas made before 4.2?";
+const SCIFI_REPLY = "Offline reply: the reading group moves to Thursday this week.";
+const UNAVAILABLE =
+  "Couldn’t reach the server, so Session undid the change. Try again in a moment.";
 const OFFLINE_BAR =
   "You’re offline. Changes are saved on this Mac and sent when the connection is back.";
 
@@ -86,6 +99,23 @@ test("sx-ob-wait and sx-off-app: offline, a reply waits on this Mac with the oth
   await expect(heldReply(page)).toHaveCount(0);
   await expect(page.locator(".rp").filter({ hasText: REPLY })).toBeVisible();
   await expect.poll(() => storedOutbox(bridge).filter((e) => e.state !== "answered")).toEqual([]);
+  // the list counts what this run of the app sent in the past minute
+  // (the mockup's sxSent)
+  await offline(page);
+  await reply(page, "A second reply, written offline.");
+  await badge(page).click();
+  await expect(pop.locator(".sx-sent")).toHaveText("2 changes were sent just now.");
+  await page.keyboard.press("Escape");
+  await online(page);
+  await expect(badge(page)).toBeHidden();
+  // the app started again: the answers it keeps are no sends of this run
+  await page.reload();
+  await expect(page.locator(".th-q")).toContainText("4.2 is out");
+  await offline(page);
+  await reply(page, "A third reply, written offline.");
+  await badge(page).click();
+  await expect(pop.locator(".sx-row")).toHaveCount(1);
+  await expect(pop.locator(".sx-sent")).toHaveCount(0);
   bridge.close();
 });
 
@@ -104,9 +134,10 @@ test("sx-ob-retry: a reply the server didn't answer is tried again with backoff"
   await expect(toast(page).getByRole("button", { name: "Retry now" })).toBeVisible();
   // its item shows the tag only (the message is the toast's)
   await expect(heldReply(page).locator(".sx-tag")).toHaveText("Not sent yet");
-  // the third try goes through
+  // the third try goes through, and the retry's toast goes with it
   await expect(badge(page)).toBeHidden({ timeout: 20_000 });
   await expect(page.locator(".rp").filter({ hasText: REPLY })).toBeVisible();
+  await expect(toast(page)).toHaveCount(0);
   bridge.close();
 });
 
@@ -302,40 +333,73 @@ test("sx-rf-forbidden: queued moderation refused as FORBIDDEN after the role was
     input: { item: `r:${String(r.record["th"])}:${String(r.record["id"])}`, decision: "hidden" },
     made: 35 * MIN,
   });
+  // and a reply in #sci-fi, where ines.v is banned meanwhile
+  const scifi = spaceId(app.records, "sci-fi");
+  const scifiPost = app.records.find(
+    (r) => r.record.kind === "thread" && r.record["s"] === scifi && r.record["k"] === "post",
+  );
+  const RID = ulid(now - 25 * MIN);
   seedOutbox(app.bridge, now, [
     hide(replies[0] as never),
     hide(replies[1] as never),
     { name: "likes.set", input: { thread: thread?.["id"], on: true }, made: 30 * MIN },
+    {
+      name: "research.createPostFollowUp",
+      input: { id: RID, thread: String(scifiPost?.record["id"]), t: SCIFI_REPLY },
+      made: 25 * MIN,
+    },
   ]);
   // an admin changed the role meanwhile
   const member = app.records.find(
     (r) => r.record.kind === "member" && r.record["sp"] === spId && r.record["u"] === "ines.v",
   );
   if (!member) throw new Error("no member record");
-  await request.post(`${APP_ORIGIN}/api/test/records`, {
-    headers: { "x-requested-with": "session", "content-type": "application/json" },
-    data: { records: [{ key: member.key, record: { ...member.record, role: "member" } }] },
-  });
-  const page = await openApp(context, app.bridge, "/s/replication-club");
-  await expect(toast(page)).toHaveText(
-    /2 moderation actions in #replication-club weren’t applied\./,
+  await serverWrite(request, [
+    { key: member.key, record: { ...member.record, role: "member" } },
+    {
+      key: `ban:${scifi}:ines.v`,
+      record: {
+        kind: "ban",
+        id: `${scifi}:ines.v`,
+        sp: scifi,
+        u: "ines.v",
+        createdAt: "2026-11-16T09:00:00Z",
+      },
+    },
+  ]);
+  const page = await context.newPage();
+  await recordToasts(page);
+  await app.bridge.install(page);
+  await page.goto(`${DESKTOP_ORIGIN}/s/replication-club`);
+  // one toast per space: the reply on its own (with Copy text), and under
+  // it the moderation, grouped
+  await expect.poll(() => toasts(page)).toEqual(["Not applied: your reply in #sci-fi."]);
+  await expect(toast(page).locator(".sx-tacts button")).toHaveText(["Copy text", "Details"]);
+  await toast(page).locator(".iconbtn").click();
+  await expect(toast(page).locator("span").first()).toHaveText(
+    "2 moderation actions in #replication-club weren’t applied.",
   );
-  await expect(toast(page).getByRole("button", { name: "Details" })).toBeVisible();
+  expect(await toasts(page)).toEqual([
+    "Not applied: your reply in #sci-fi.",
+    "2 moderation actions in #replication-club weren’t applied.",
+  ]);
   await toast(page).getByRole("button", { name: "Details" }).click();
   await expect(page).toHaveURL(/\/unsent$/);
   const rows = page.locator(".sx-obp .sx-row");
-  await expect(rows).toHaveCount(2);
+  await expect(rows).toHaveCount(3);
   await expect(rows.locator(".sx-rs")).toHaveText([
     "Not applied. The server refused it.",
     "Not applied. The server refused it.",
+    "Not applied. The server refused it.",
   ]);
+  await expect(rows.nth(2).locator(".sx-rh b")).toHaveText("Reply in #sci-fi");
   await expect(rows.first().locator(".sx-rh b")).toContainText(
     /^Hide a reply by .+ in #replication-club$/,
   );
   await expect(rows.first().locator(".sx-acts button")).toHaveText(["Dismiss"]);
   // the like after them was sent
   await rows.first().getByRole("button", { name: "Dismiss" }).click();
-  await expect(rows).toHaveCount(1);
+  await expect(rows).toHaveCount(2);
   app.bridge.close();
 });
 
@@ -343,6 +407,7 @@ test("sx-up-app: an old app holds its writes; Update Session is a dialog", async
   context,
   request,
 }) => {
+  const net = trackRequests(context);
   const { page, bridge, records } = await signedInApp(context);
   await page.goto(`${page.url().replace(/\/$/, "")}${sf4(records).path}`);
   await expect(page.locator(".th-q")).toContainText("4.2 is out");
@@ -351,16 +416,21 @@ test("sx-up-app: an old app holds its writes; Update Session is a dialog", async
       headers: { "x-requested-with": "session", "content-type": "application/json" },
       data: { minProtocol },
     });
-  await set(99);
   {
-    await reply(page);
+    // the minimum is raised once the app's start-up reads are done and the
+    // reply is typed: the reply's write is the first request it refuses
+    await page.getByRole("textbox", { name: "Write a reply" }).fill(REPLY);
+    await net.quiet();
+    await set(99);
+    await page.locator(".fu-box2").getByRole("button", { name: "Reply", exact: true }).click();
     const d = page.getByRole("dialog", { name: "Update Session" });
     await expect(d).toBeVisible();
     await expect(d.locator("p.muted")).toHaveText(
-      "This version of Session is too old to sync. 1 changes wait on this Mac and are sent after the update.",
+      "This version of Session is too old to sync. 1 change waits on this Mac and is sent after the update.",
     );
     await expect(d.getByRole("button", { name: "Later" })).toBeVisible();
-    await d.getByRole("button", { name: "Download and restart" }).click();
+    // no updater yet: the download page opens in the browser
+    await d.getByRole("button", { name: "Open the download page" }).click();
     await expect.poll(() => bridge.opened.at(-1)).toBe(`${APP_ORIGIN}/download`);
     await expect(heldReply(page).locator(".sx-st")).toHaveText(
       "Not sent yet: this version of Session can’t sync. It sends after the update.",
@@ -375,5 +445,175 @@ test("sx-up-app: an old app holds its writes; Update Session is a dialog", async
   await page.reload();
   await expect(badge(page)).toBeHidden();
   await expect(page.locator(".rp").filter({ hasText: REPLY })).toHaveCount(1);
+  bridge.close();
+});
+
+test("a write shown before the app started gets its toast; a dropped like's toast offers Dismiss", async ({
+  context,
+}) => {
+  const { page, bridge } = await restartWith(context, (_now, t) => [
+    {
+      name: "likes.set",
+      input: { thread: t.thread, on: true },
+      made: 3 * DAY + HOUR,
+      state: "dropped",
+    },
+  ]);
+  await expect(toast(page).locator("span").first()).toHaveText(
+    "Not sent: your like in Sablefield.",
+  );
+  await expect(toast(page).locator(".sx-tacts button")).toHaveText(["Dismiss", "Details"]);
+  // it stays until the person acts on it
+  await page.waitForTimeout(13_000);
+  await expect(toast(page).locator("span").first()).toHaveText(
+    "Not sent: your like in Sablefield.",
+  );
+  await toast(page).locator(".sx-tacts").getByRole("button", { name: "Dismiss" }).click();
+  await expect(toast(page)).toHaveText("Removed from Unsent changes.");
+  await expect(badge(page)).toBeHidden();
+  bridge.close();
+});
+
+test("online-only calls offline end at once, as on the web: Create space", async ({ context }) => {
+  const { page, bridge } = await signedInApp(context, { path: "/spaces/new" });
+  await expect(page.locator("#cs-crname")).toBeVisible();
+  await offline(page);
+  await page.locator("#cs-crname").fill("offline-made");
+  await page.locator("#cs-crdesc").fill("Made while the Mac was offline.");
+  await page.getByRole("button", { name: "Create space" }).click();
+  await expect(toast(page)).toContainText(
+    "Couldn’t reach the server, so Session didn’t create the space. Try again in a moment.",
+  );
+  // the form stays, with what was typed; nothing waits in the outbox
+  await expect(page).toHaveURL(/\/spaces\/new$/);
+  await expect(page.locator("#cs-crname")).toHaveValue("offline-made");
+  expect(storedOutbox(bridge)).toEqual([]);
+  await online(page);
+  const r = await context.request.get(`${APP_ORIGIN}/api/spaces`);
+  const names = ((await r.json()) as { spaces: { name: string }[] }).spaces.map((s) => s.name);
+  expect(names).not.toContain("offline-made");
+  bridge.close();
+});
+
+/** The scenario's ask of ines.v ("asks: your ask": the newest thread). */
+async function myAsk(context: Parameters<typeof signedInApp>[0], end: string) {
+  const app = await signedInApp(context, {
+    scenario: "asks: your ask",
+    args: { space: "public", end },
+  });
+  const ask = app.records
+    .filter(
+      (r) => r.record.kind === "thread" && r.record["u"] === "ines.v" && r.record["k"] === "ask",
+    )
+    .sort((a, b) => String(b.record["createdAt"]).localeCompare(String(a.record["createdAt"])))[0];
+  await app.page.goto(`${new URL(app.page.url()).origin}/s/public/t/${String(ask?.record["id"])}`);
+  return app;
+}
+
+test("online-only calls offline end at once, as on the web: Stop", async ({ context }) => {
+  const { page, bridge } = await myAsk(context, "running");
+  await expect(page.getByText("Researching").first()).toBeVisible();
+  await offline(page);
+  await page.getByRole("button", { name: "Stop" }).click();
+  await expect(toast(page)).toContainText(UNAVAILABLE);
+  await expect(page.getByText("Researching").first()).toBeVisible();
+  expect(storedOutbox(bridge)).toEqual([]);
+  bridge.close();
+});
+
+test("online-only calls offline end at once, as on the web: Run again", async ({ context }) => {
+  const { page, bridge } = await myAsk(context, "stopped");
+  await expect(page.getByRole("button", { name: "Run again" })).toBeVisible();
+  await offline(page);
+  await page.getByRole("button", { name: "Run again" }).click();
+  await expect(toast(page)).toContainText(UNAVAILABLE);
+  await expect(page.getByRole("button", { name: "Run again" })).toBeVisible();
+  expect(storedOutbox(bridge)).toEqual([]);
+  bridge.close();
+});
+
+test("no toast over the list it points to: a reply refused while Unsent changes is open", async ({
+  context,
+  request,
+}) => {
+  const { page, bridge, records } = await signedInApp(context);
+  const t = sf4(records);
+  await appGo(page, t.path);
+  await expect(page.locator(".th-q")).toContainText("4.2 is out");
+  await offline(page);
+  await reply(page);
+  await expect(badge(page)).toHaveText("1unsent");
+  await appGo(page, "/unsent");
+  const row = page.locator(".sx-obp .sx-row");
+  await expect(row).toHaveCount(1);
+  // banned in Sablefield meanwhile
+  await serverWrite(request, [
+    {
+      key: `ban:${t.space}:ines.v`,
+      record: {
+        kind: "ban",
+        id: `${t.space}:ines.v`,
+        sp: t.space,
+        u: "ines.v",
+        createdAt: "2026-11-16T09:00:00Z",
+      },
+    },
+  ]);
+  await online(page);
+  await expect(row.locator(".sx-rs")).toHaveText("Not applied. The server refused it.");
+  // the grouping waits half a second; no toast comes after it either
+  await page.waitForTimeout(1500);
+  await expect(toast(page)).toHaveCount(0);
+  bridge.close();
+});
+
+test("a settings change saved offline is not shown as saved; refused later, its text is kept", async ({
+  context,
+  request,
+}) => {
+  const { page, bridge, records } = await signedInApp(context, {
+    path: "/s/sablefield/manage/settings",
+  });
+  // every toast from here on is recorded
+  await recordToasts(page);
+  await page.reload();
+  await expect(page.locator("#st-rules")).toBeVisible();
+  await expect.poll(() => bridge.title).toBe("Session — Manage");
+  await offline(page);
+  const RULES = "Rule typed offline: cite a source for each claim.";
+  await page.locator("#st-rules").fill(RULES);
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(badge(page)).toHaveText("1unsent");
+  await page.waitForTimeout(500);
+  await expect(toast(page)).toHaveCount(0);
+  // meanwhile another admin changes the rules
+  const sp = records.find((r) => r.record.kind === "space" && r.record["name"] === "sablefield");
+  if (!sp) throw new Error("no Sablefield");
+  await serverWrite(request, [
+    {
+      key: sp.key,
+      record: {
+        ...sp.record,
+        rules: ["Another admin’s rule."],
+        rulesRev: Number(sp.record["rulesRev"] ?? 0) + 1,
+      },
+    },
+  ]);
+  await online(page);
+  await expect(toast(page).locator("span").first()).toHaveText(
+    "Not saved: your settings change in Sablefield.",
+  );
+  await expect(toast(page).locator(".sx-tacts button")).toHaveText(["Copy text", "Details"]);
+  // the only toast: no "Settings saved." for the write that waited
+  expect(await toasts(page)).toEqual(["Not saved: your settings change in Sablefield."]);
+  await badge(page).click();
+  const row = page.getByRole("dialog", { name: "Unsent changes" }).locator(".sx-row");
+  await expect(row.locator(".sx-rh b")).toHaveText("Settings in Sablefield");
+  await expect(row.locator(".sx-rt")).toContainText(RULES);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin: new URL(page.url()).origin,
+  });
+  await row.getByRole("button", { name: "Copy text" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(RULES);
   bridge.close();
 });

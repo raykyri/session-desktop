@@ -48,6 +48,7 @@ import {
   SaveAskButton,
   SaveButton,
   Share,
+  openLink,
   useRunControl,
 } from "./ThreadWrites.js";
 import { Author, Avatar, Lock } from "./atoms.js";
@@ -356,8 +357,9 @@ function Answer({ t, space, mine }: { t: ThreadView; space: Space; mine: boolean
   );
 }
 
-/** A cited source opens in a new tab. */
-const openSource = (href: string) => window.open(href, "_blank", "noopener");
+/** A cited source opens in a new tab (the Desktop app: the system
+ * browser). */
+const openSource = (href: string) => void openLink(href);
 
 /** The answer's sources under it on Mobile Web (the mockup's m-src: the side
  * column's list is hidden there, and this one on Desktop). */
@@ -465,6 +467,8 @@ function FollowUpItem({
   onPick: (id: string) => void;
 }) {
   const now = useNow();
+  // a frozen copy (the Desktop app) takes no new asks
+  const frozen = useWorld().frozen.has(t.s);
   const [asking, setAsking] = useState(false);
   const kids = t.followups.filter((x) => x.par === f.id);
   const count = (id: string): number =>
@@ -521,7 +525,7 @@ function FollowUpItem({
         <p className="tm-meta">{payerLabel(f.run?.pay ?? null)}</p>
       ) : null}
       <div className="qt-acts">
-        {!running ? (
+        {!running && !frozen ? (
           <button
             className="btn sm"
             type="button"
@@ -539,7 +543,9 @@ function FollowUpItem({
         <span className="grow" />
         <AskMenu t={t} f={f} space={space} onCompare={() => onPick(f.id)} />
       </div>
-      {asking ? <AskBox t={t} par={f.id} level={level} onClose={() => setAsking(false)} /> : null}
+      {asking && !frozen ? (
+        <AskBox t={t} par={f.id} level={level} onClose={() => setAsking(false)} />
+      ) : null}
       {below ? (
         <button
           className="tlink qt-fub"
@@ -578,6 +584,8 @@ function ReplyItem({ t, r, kids }: { t: ThreadView; r: Reply; kids: Reply[] }) {
   const w = useWorld();
   const space = w.byId.get(t.s);
   const me = w.me?.u ?? null;
+  // a frozen copy (the Desktop app) is read-only: no replies to replies
+  const frozen = w.frozen.has(t.s);
   const [replying, setReplying] = useState(false);
   // the Desktop app: a reply the outbox holds shows where it waits
   const held = usePendingItem(r.id);
@@ -596,7 +604,7 @@ function ReplyItem({ t, r, kids }: { t: ThreadView; r: Reply; kids: Reply[] }) {
           <p>{r.del ? "You deleted this reply." : r.t}</p>
         )}
         <div className="rp-acts">
-          {r.parent === null ? (
+          {r.parent === null && !frozen ? (
             <button
               className="tlink"
               type="button"
@@ -627,7 +635,7 @@ function ReplyItem({ t, r, kids }: { t: ThreadView; r: Reply; kids: Reply[] }) {
         {kids.map((k) => (
           <ReplyItem key={k.id} t={t} r={k} kids={[]} />
         ))}
-        {replying ? (
+        {replying && !frozen ? (
           <ReplyBox t={t} to={{ id: r.id, u: r.u }} onClose={() => setReplying(false)} />
         ) : null}
       </div>
@@ -835,11 +843,11 @@ function Sources({ md }: { md: string | null }) {
             // the mockup's source row: a list item that opens its page
             // eslint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role
             role="button"
-            onClick={() => window.open(c.href, "_blank", "noopener")}
+            onClick={() => openSource(c.href)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                window.open(c.href, "_blank", "noopener");
+                openSource(c.href);
               }
             }}
           >
@@ -1144,9 +1152,9 @@ export function ThreadPage({
                 t={t}
                 space={s}
                 asking={askingRoot}
-                onAsk={t.running ? undefined : () => setAskingRoot((a) => !a)}
+                onAsk={t.running || frozen ? undefined : () => setAskingRoot((a) => !a)}
               />
-              {askingRoot && !t.running ? (
+              {askingRoot && !t.running && !frozen ? (
                 <div className="qt-rootask qt-rootask-in">
                   <AskBox t={t} par="r" level={0} onClose={() => setAskingRoot(false)} />
                 </div>

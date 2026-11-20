@@ -145,6 +145,8 @@ test("sign-out from the account menu revokes the device and clears it", async ({
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in to Session" })).toBeVisible();
   expect(bridge.keychain).toBeNull();
+  // the sign-in's window title names no screen
+  await expect.poll(() => bridge.title).toBe("Session");
   // the server no longer takes the token
   const r = await context.request.get(`${APP_ORIGIN}/api/me`, {
     headers: { Authorization: `Bearer ${device.token}` },

@@ -1,19 +1,22 @@
 // Phase 3's gate (the architecture plan, with the owner's later decisions):
 // a day offline with posts, follow-ups and a page edit queued, across a
 // reload of the app, replays once on reconnecting (the server holds each
-// write once), and a conflict on reconnect follows the sync-state UI
-// decisions in AGENTS.md: a STALE decision (a Show whose reply was edited)
-// and a FORBIDDEN one (a Hide after the moderator role was removed) each
-// show their toast, nothing is applied again in place, and the person's
-// text is recoverable with Copy from Unsent changes. The day passes on the
-// Playwright clock in the page and on the server's settable clock.
+// write once, a reply whose answer was lost before the day included), and a
+// conflict on reconnect follows the sync-state UI decisions in AGENTS.md: a
+// STALE decision (a Show whose reply was edited) and a FORBIDDEN one (a Hide
+// after the moderator role was removed) each show their toast and stay in
+// Unsent changes until dismissed, nothing is applied again in place, and the
+// person's text is recoverable with Copy from Unsent changes. The day passes
+// on the Playwright clock in the page and on the server's settable clock:
+// the list says the writes were made a day ago, and the server stores them
+// at its time a day later.
 
 import { expect, test, type Page } from "@playwright/test";
 
 import { APP_ORIGIN } from "../constants.js";
 import type { KeyedRecord } from "../fixtures/mockup.js";
 
-import { signedInApp, spaceId } from "./app.js";
+import { recordToasts, signedInApp, spaceId, toasts } from "./app.js";
 import { storedOutbox } from "./files.js";
 import { appGo, offline, online, reloadOffline } from "./net.js";
 import { DAY, serverNow, serverWrite, sf4 } from "./outbox.js";
@@ -26,22 +29,9 @@ const FOLLOW_UP = "Which of these changes apply to open-weight models?";
 const PAGE_LINE = "- Piranesi (Clarke, 2020): a house of endless halls, told from inside it.";
 const REPLY = "Does region pinning need a restart for read replicas made before 4.2?";
 const SCIFI_REPLY = "Offline reply: the reading group moves to Thursday this week.";
-
-/** Every toast the page shows, in order (one is on screen at a time). */
-async function recordToasts(page: Page) {
-  await page.addInitScript(() => {
-    const w = window as unknown as { __toasts: string[] };
-    w.__toasts = [];
-    new MutationObserver(() => {
-      for (const t of document.querySelectorAll(".cs-toast > span:first-child")) {
-        const s = t.textContent ?? "";
-        if (s && w.__toasts.at(-1) !== s) w.__toasts.push(s);
-      }
-    }).observe(document, { subtree: true, childList: true, characterData: true });
-  });
-}
-const toasts = (page: Page) =>
-  page.evaluate(() => (window as unknown as { __toasts: string[] }).__toasts);
+const LOST_REPLY = "The server applied this reply, but its answer was lost on the way back.";
+const STALE_TOAST = "Show wasn’t applied because bram edited the reply after you chose Show.";
+const FORBIDDEN_TOAST = "1 moderation action in #sci-fi wasn’t applied.";
 
 async function post(page: Page, text: string) {
   await page.getByRole("button", { name: /Make a query/ }).click();
@@ -96,8 +86,41 @@ test("a day offline: posts, a follow-up and a page edit replay once; STALE and F
   await page.reload();
   await expect(page.getByRole("button", { name: /^Account: / })).toBeVisible();
 
+  // ---- online: the server applies a reply, and its answer is lost ----
+  await appGo(page, `${t.path}`);
+  let lost = 0;
+  const WRITE = `${APP_ORIGIN}/api/sync/write`;
+  // the first write reaches the server and its response is cut; a write
+  // sent again before the connection goes reaches nothing
+  await page.route(WRITE, async (route) => {
+    if (lost > 0) return route.abort("internetdisconnected");
+    lost++;
+    await route.fetch();
+    await route.abort("connectionreset");
+  });
+  await page.getByRole("textbox", { name: "Write a reply" }).fill(LOST_REPLY);
+  await page.locator(".fu-box2").getByRole("button", { name: "Reply", exact: true }).click();
+  await expect.poll(() => lost).toBe(1);
+
   // ---- offline: the writes of a day ----
   await offline(page);
+  await page.unroute(WRITE);
+  // applied on the server; the app does not know, and keeps it to send
+  // again
+  await expect
+    .poll(async () =>
+      (await serverRecords(page, `space:${t.space}`)).filter(
+        (r) => r.record.kind === "reply" && r.record["t"] === LOST_REPLY,
+      ),
+    )
+    .toHaveLength(1);
+  await expect
+    .poll(() => storedOutbox(bridge)[0])
+    .toMatchObject({
+      name: "research.createPostFollowUp",
+      state: "queued",
+      uncertain: true,
+    });
   await appGo(page, `/s/public`);
   await post(page, POST);
   await expect(page.locator(".th-q")).toHaveText(POST);
@@ -143,6 +166,7 @@ test("a day offline: posts, a follow-up and a page edit replay once; STALE and F
   await page.getByRole("menuitem", { name: "Hide" }).click();
 
   const NAMES = [
+    "research.createPostFollowUp",
     "threads.create",
     "threads.create",
     "research.forkNode",
@@ -159,6 +183,10 @@ test("a day offline: posts, a follow-up and a page edit replay once; STALE and F
   await reloadOffline(page);
   await expect(page.locator(".sx-badge")).toHaveText(`${NAMES.length}unsent`);
   await page.clock.fastForward("24:00:00");
+  // Unsent changes: every write was made on this Mac a day ago
+  await page.locator(".sx-badge").click();
+  await expect(page.locator(".sx-pop .sx-rh .faint")).toHaveText(NAMES.map(() => "1d ago"));
+  await page.keyboard.press("Escape");
   const later = now + DAY;
   const clock = await request.post(`${APP_ORIGIN}/api/test/clock`, {
     headers: HEADERS,
@@ -194,8 +222,8 @@ test("a day offline: posts, a follow-up and a page edit replay once; STALE and F
 
   // ---- back online: the outbox replays, in order ----
   await online(page);
-  // what the outbox keeps: only the refused Hide (the STALE Show left it
-  // with its toast)
+  // what the outbox keeps: the refused Show and Hide, until the person
+  // dismisses them
   await expect
     .poll(
       () =>
@@ -204,24 +232,33 @@ test("a day offline: posts, a follow-up and a page edit replay once; STALE and F
           .map((e) => `${e.name} ${e.state} ${e.error?.code ?? ""}`),
       { timeout: 30_000 },
     )
-    .toEqual(["moderation.decide refused FORBIDDEN"]);
-  await expect(page.locator(".sx-badge")).toHaveText("1unsent");
-  await expect
-    .poll(() => toasts(page))
-    .toEqual(
-      expect.arrayContaining([
-        "Show wasn’t applied because bram edited the reply after you chose Show.",
-        "1 moderation action in #sci-fi wasn’t applied.",
-      ]),
-    );
-  // the FORBIDDEN Hide stays in Unsent changes; nothing is applied again
+    .toEqual(["moderation.decide refused STALE", "moderation.decide refused FORBIDDEN"]);
+  await expect(page.locator(".sx-badge")).toHaveText("2unsent");
+  // exactly these toasts since the restart: STALE, then FORBIDDEN over it
+  await expect.poll(() => toasts(page)).toEqual([STALE_TOAST, FORBIDDEN_TOAST]);
+  const shown = page.locator(".cs-toast");
+  await expect(shown.locator("span").first()).toHaveText(FORBIDDEN_TOAST);
+  // the STALE notice stays: under the FORBIDDEN toast, and in the list
+  await shown.locator(".iconbtn").click();
+  await expect(shown.locator("span").first()).toHaveText(STALE_TOAST);
   await page.locator(".sx-badge").click();
   const pop = page.getByRole("dialog", { name: "Unsent changes" });
   const row = pop.locator(".sx-row");
-  await expect(row).toHaveCount(1);
-  await expect(row.locator(".sx-rh b")).toHaveText(/^Hide a reply by .+ in #sci-fi$/);
-  await expect(row.locator(".sx-rs")).toHaveText("Not applied. The server refused it.");
-  await row.getByRole("button", { name: "Dismiss" }).click();
+  await expect(row.locator(".sx-rh b")).toHaveText([
+    "Show bram’s reply in Sablefield",
+    /^Hide a reply by .+ in #sci-fi$/,
+  ]);
+  await expect(row.locator(".sx-rs")).toHaveText([
+    "Not saved. The item changed on the server after you made this change on this Mac, so the server didn’t apply the change.",
+    "Not applied. The server refused it.",
+  ]);
+  // nothing is applied again: each has only Dismiss
+  await expect(row.nth(0).locator(".sx-acts button")).toHaveText(["Dismiss"]);
+  await expect(row.nth(1).locator(".sx-acts button")).toHaveText(["Dismiss"]);
+  await row.nth(0).getByRole("button", { name: "Dismiss" }).click();
+  // the STALE toast goes with its write
+  await expect(page.getByText(STALE_TOAST)).toHaveCount(0);
+  await row.first().getByRole("button", { name: "Dismiss" }).click();
   await expect(page.locator(".sx-badge")).toBeHidden();
 
   // ---- the server holds each write once ----
@@ -229,6 +266,11 @@ test("a day offline: posts, a follow-up and a page edit replay once; STALE and F
   const threads = pub.filter((r) => r.record.kind === "thread");
   expect(threads.filter((r) => r.record["q"] === POST)).toHaveLength(1);
   expect(threads.filter((r) => r.record["q"] === POST_2)).toHaveLength(1);
+  // stored at the server's time (to the second), a day after they were made
+  for (const q of [POST, POST_2]) {
+    const at = Date.parse(String(threads.find((r) => r.record["q"] === q)?.record["createdAt"]));
+    expect(at).toBeGreaterThanOrEqual(Math.floor(later / 1000) * 1000);
+  }
   expect(
     pub.filter((r) => r.record.kind === "followup" && r.record["q"] === FOLLOW_UP),
   ).toHaveLength(1);
@@ -246,6 +288,10 @@ test("a day offline: posts, a follow-up and a page edit replay once; STALE and F
   expect(sci.some((r) => r.key === `hide:reply:${String(target_?.record["id"])}`)).toBe(false);
   const sab = await serverRecords(page, `space:${t.space}`);
   expect(sab.filter((r) => r.record.kind === "reply" && r.record["t"] === REPLY)).toHaveLength(1);
+  // the reply whose answer was lost: sent again after the reload, applied once
+  expect(sab.filter((r) => r.record.kind === "reply" && r.record["t"] === LOST_REPLY)).toHaveLength(
+    1,
+  );
   // the Show was not applied: bram's reply is still hidden, on the server
   // and in the app
   expect(sab.some((r) => r.key === hideKey)).toBe(true);
@@ -283,7 +329,12 @@ test("a refused write keeps the person's text: Copy text from Unsent changes", a
     },
   ]);
   await online(page);
-  await expect(page.locator(".cs-toast")).toContainText("1 change in Sablefield wasn’t applied.");
+  // one refused write that is not a moderator's: its own toast, with Copy
+  // text (the mockup's pattern for a write that needs the person)
+  await expect(page.locator(".cs-toast > span").first()).toHaveText(
+    "Not applied: your reply in Sablefield.",
+  );
+  await expect(page.locator(".cs-toast .sx-tacts button")).toHaveText(["Copy text", "Details"]);
   await page.locator(".sx-badge").click();
   const row = page.getByRole("dialog", { name: "Unsent changes" }).locator(".sx-row");
   await expect(row.locator(".sx-rt")).toHaveText(REPLY);

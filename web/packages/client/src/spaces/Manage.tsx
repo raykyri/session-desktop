@@ -1155,9 +1155,14 @@ export function ManagePage({ name, tab }: { name: string; tab: string }) {
     [s?.id],
   ) ?? { req: 0, rep: 0 };
   if (!s || !isStaff(role) || !role) {
-    if (!w.loaded) return <Page place={{ kind: "other" }}>{null}</Page>;
+    if (!w.loaded)
+      return (
+        <Page place={{ kind: "other" }} title="Manage">
+          {null}
+        </Page>
+      );
     return (
-      <Page place={{ kind: "other" }}>
+      <Page place={{ kind: "other" }} title="Manage">
         <NotFound space={s ? undefined : name} />
       </Page>
     );
@@ -1213,7 +1218,7 @@ export function ManagePage({ name, tab }: { name: string; tab: string }) {
       replace: true,
     });
   return (
-    <Page place={{ kind: "space", id: s.id }}>
+    <Page place={{ kind: "space", id: s.id }} title="Manage">
       <div className={`home-wide sub-page cs-mg cs-mg-${cur}`}>
         <div className="sub-top">
           <div className="ys-et">

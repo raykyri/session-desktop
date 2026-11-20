@@ -18,7 +18,7 @@ import { Modal } from "./Page.js";
 import { Svg } from "./Svg.js";
 import { I, SVG } from "./icons.js";
 import { useWorld } from "./world.js";
-import { refusalToast, toast, useWrite } from "./writes.js";
+import { refusalToast, savedToast, toast, useWrite } from "./writes.js";
 
 interface Draft {
   name: string;
@@ -137,7 +137,7 @@ export function SettingsManage({ s }: { s: Space }) {
     );
     if (o.ok) {
       setConflict(false);
-      toast("Settings saved.");
+      savedToast(o, "Settings saved.");
       if (d.name !== s.name)
         void navigate({
           to: "/s/$space/manage/$tab",

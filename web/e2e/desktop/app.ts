@@ -82,3 +82,20 @@ export async function signedInApp(
 /** The id of a space of the scenario by its name. */
 export const spaceId = (records: KeyedRecord[], name: string) =>
   String(records.find((r) => r.record.kind === "space" && r.record["name"] === name)?.record["id"]);
+
+/** Every toast text the page shows, in order, from its next load (one is
+ * on screen at a time); `toasts` reads them. */
+export async function recordToasts(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __toasts: string[] };
+    w.__toasts = [];
+    new MutationObserver(() => {
+      for (const t of document.querySelectorAll(".cs-toast > span:first-child")) {
+        const s = t.textContent ?? "";
+        if (s && w.__toasts.at(-1) !== s) w.__toasts.push(s);
+      }
+    }).observe(document, { subtree: true, childList: true, characterData: true });
+  });
+}
+export const toasts = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __toasts?: string[] }).__toasts ?? []);

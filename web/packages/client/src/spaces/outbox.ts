@@ -72,16 +72,20 @@ export interface ObItem {
   page: string | null;
 }
 
-/** The writes a moderator queues (FORBIDDEN after a role change). */
-const MODERATION: ReadonlySet<string> = new Set([
+/** The writes a moderator queues (FORBIDDEN after a role change): the
+ * mutators that need a moderator's or an admin's role in a space
+ * (`test/desktop.test.tsx` checks each name against `MUTATORS`). */
+export const MODERATION: ReadonlySet<string> = new Set([
   "moderation.decide",
   "joinRequests.decide",
   "members.remove",
   "members.ban",
   "members.unban",
   "members.setRole",
-  "reports.decide",
+  "reports.resolve",
   "invites.revoke",
+  "invites.restore",
+  "spaceSources.review",
 ]);
 
 export const isModeration = (o: Pick<ObItem, "name">) => MODERATION.has(o.name);
@@ -94,6 +98,33 @@ const ERR_TEXT: Record<string, string> = {
 };
 
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+const strs = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+/** The person's text of a write, for Copy text: its parts that hold text,
+ * each paragraph apart. */
+const joinText = (parts: (string | null | undefined)[]) =>
+  parts
+    .map((x) => (x ?? "").trim())
+    .filter(Boolean)
+    .join("\n\n");
+
+/** The text a `spaces.update` sets (the settings the person types). */
+function settingsText(set: unknown): string {
+  const s = (set ?? {}) as Record<string, unknown>;
+  const qs = Array.isArray(s["qs"])
+    ? (s["qs"] as unknown[]).map((q) => str((q as { q?: unknown } | null)?.q))
+    : [];
+  const topics = Array.isArray(s["topics"])
+    ? (s["topics"] as unknown[]).map((x) => strs(x).join(": "))
+    : [];
+  return joinText([
+    str(s["title"]),
+    str(s["desc"]),
+    strs(s["rules"]).join("\n"),
+    qs.filter(Boolean).join("\n"),
+    topics.filter(Boolean).join("\n"),
+  ]);
+}
 
 /** An entry's state as the list shows it. `held`: the client is held for
  * an update (UPDATE_REQUIRED), so a queued write is not sent either. */
@@ -138,6 +169,8 @@ export function describe(
   );
   const space =
     str(i["space"]) ??
+    // a space's own writes name it as `id` (spaces.update, spaces.archive)
+    (e.name.startsWith("spaces.") ? str(i["id"]) : null) ??
     th?.s ??
     (str(i["reply"]) ? (r.get("reply", str(i["reply"]) ?? "")?.s ?? null) : null);
   const where = space ? label(space) : null;
@@ -193,7 +226,8 @@ export function describe(
       noun = pg ? "page edit" : "page";
       page = pg ?? str(i["id"]);
       title = at(pg ? `Edit of ${t}` : `New page ${t}`);
-      text = Array.isArray(i["text"]) ? (i["text"] as unknown[]).map(String).join("\n") : "";
+      // the editor's paragraphs, as the person typed them
+      text = strs(i["text"]).join("\n\n");
       break;
     }
     case "moderation.decide": {
@@ -257,6 +291,39 @@ export function describe(
             ? "Delete of your follow-up"
             : "Delete of your reply",
       );
+      break;
+    case "skills.create":
+    case "skills.update": {
+      const n = str(i["name"]) ?? "";
+      noun = "skill";
+      title = at(e.name === "skills.create" ? `New skill ${n}` : `Edit of skill ${n}`);
+      text = joinText([n, str(i["prompt"])]);
+      break;
+    }
+    case "spaces.update":
+      noun = "settings change";
+      title = at("Settings");
+      text = settingsText(i["set"]);
+      break;
+    case "profile.update":
+      noun = "profile change";
+      title = "Profile";
+      text = joinText([str(i["name"]), str(i["bio"])]);
+      break;
+    case "reports.create":
+      noun = "report";
+      title = at("Report");
+      text = str(i["note"]) ?? "";
+      break;
+    case "joinRequests.create":
+      noun = "request to join";
+      title = at("Request to join");
+      text = joinText(strs(i["answers"]));
+      break;
+    case "spaceSources.add":
+      noun = "source";
+      title = at("Source");
+      text = joinText([str(i["url"]), str(i["note"])]);
       break;
     default:
       if (MODERATION.has(e.name)) {
@@ -402,7 +469,7 @@ export function statusOf(o: ObItem, o2: { here: string; offline: boolean; now: n
       return {
         tone: "bad",
         head: "Not saved",
-        text: `It changed on the server after you made this change on ${o2.here}, so the server didn’t apply it.`,
+        text: `The item changed on the server after you made this change on ${o2.here}, so the server didn’t apply the change.`,
         acts: [...copy, ["Dismiss", "discard", !o.text]],
       };
     case "refused":

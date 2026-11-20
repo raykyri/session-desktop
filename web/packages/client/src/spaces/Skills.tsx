@@ -14,7 +14,15 @@ import { useRecords, useSession } from "../sync/react.js";
 import { Modal } from "./Page.js";
 import { Svg } from "./Svg.js";
 import { MII, SVG } from "./icons.js";
-import { WRITE_ERROR, lostEditsToast, refusalToast, toast, useCreate, useWrite } from "./writes.js";
+import {
+  WRITE_ERROR,
+  lostEditsToast,
+  refusalToast,
+  savedToast,
+  toast,
+  useCreate,
+  useWrite,
+} from "./writes.js";
 
 /** A skill's prompt: its description, a blank line, its instructions. */
 export const skParse = (t: string) => {
@@ -107,7 +115,7 @@ function Editor({
       // a new skill that an earlier send made holds that send's input
       if (isNew && "lostEdits" in o && o.lostEdits)
         lostEditsToast("skill", skFile(ed.n, ed.d, ed.b));
-      else toast(isNew ? `Added ${name}. It shows in About.` : `Saved ${name}.`);
+      else savedToast(o, isNew ? `Added ${name}. It shows in About.` : `Saved ${name}.`);
     } else if (o.error?.code === "CONFLICT" && !isNew && /first/.test(o.error.message))
       setConflict(true);
     else if (o.error) refusalToast(o.error);

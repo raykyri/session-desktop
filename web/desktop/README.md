@@ -130,17 +130,19 @@ dev.session.spaces/` (the app's data directory); signing out deletes it
    app also detects a network failure from its own requests.
 8. `app_about`'s Mac name (`scutil --get ComputerName`) and macOS version
    (`sw_vers -productVersion`).
-9. `window.setTitle` follows the page's title ("Session — Home").
+9. `window.setTitle` follows the page's title ("Session — Home"; "Session" on
+   the sign-in after a sign-out).
 10. Links: the sign-in's approval page, Update Session's download page and a
     link in a thread open in the default browser; a mailto link opens Mail;
-    `window.open` (Sources, Share on X) opens the browser and no second
-    window; a `file:` link opens nothing.
+    `window.open` and `platform().openExternal` (a cited source, Share on X)
+    open the browser and no second window, and "Opened X with a link to the
+    thread." shows only after it opened; a `file:` link opens nothing.
 
 ## Known gaps
 
-- Update Session's "Download and restart" opens `<server>/download` in the
-  browser; the Tauri updater (and signing, notarization) is not part of this
-  phase.
+- Update Session's "Open the download page" opens `<server>/download` in the
+  browser (the mockup's "Download and restart" waits for the updater); the
+  Tauri updater (and signing, notarization) is not part of this phase.
 - The server reads the browser's account routes (`/api/me/preferences`,
   admin) only with a cookie (ADR-19 as amended), so the app keeps its
   appearance settings on the Mac only.

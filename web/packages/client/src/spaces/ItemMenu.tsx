@@ -17,7 +17,7 @@ import { Svg } from "./Svg.js";
 import { CI, I, SFI } from "./icons.js";
 import { useOverlay } from "./overlay.js";
 import { useWorld } from "./world.js";
-import { refusalToast, toast, useWrite } from "./writes.js";
+import { refusalToast, savedToast, toast, useWrite } from "./writes.js";
 
 const TRASH =
   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>';
@@ -69,10 +69,10 @@ export function ReportDialog({
       why,
       ...(note.trim() ? { note: note.trim() } : {}),
     });
-    if (o.ok)
-      toast(
-        `Report sent to the moderators of ${spaceName(space)}. You get a notification when they resolve it.`,
-      );
+    savedToast(
+      o,
+      `Report sent to the moderators of ${spaceName(space)}. You get a notification when they resolve it.`,
+    );
   };
   const ctx =
     item.by === "Agent"

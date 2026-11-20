@@ -27,6 +27,7 @@ import {
   WRITE_ERROR,
   lostEditsToast,
   refusalToast,
+  savedToast,
   toast,
   useCreate,
   useQuickWrite,
@@ -90,10 +91,10 @@ function ReportDialog({
   const send = async () => {
     onClose();
     const o = await write("sourceReports.create", { space: s.id, source: id, why });
-    if (o.ok)
-      toast(
-        `Report sent to the moderators of ${spaceName(s)}. You get a notification when they resolve it.`,
-      );
+    savedToast(
+      o,
+      `Report sent to the moderators of ${spaceName(s)}. You get a notification when they resolve it.`,
+    );
   };
   return (
     <Modal
@@ -666,7 +667,7 @@ export function SourcesManage({ s }: { s: Space }) {
                   checked={data.policy === k}
                   onChange={() =>
                     void write("spaceSources.setPolicy", { space: s.id, policy: k }).then((o) => {
-                      if (o.ok) toast("Saved.");
+                      savedToast(o, "Saved.");
                     })
                   }
                 />

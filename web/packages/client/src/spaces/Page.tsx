@@ -51,30 +51,41 @@ const PLACE_TITLE: Partial<Record<Place["kind"], string>> = {
 };
 
 /** The Desktop app's window title names where the person is ("Session —
- * Home", the mockup's sx-wt); the platform puts it in the title bar. The web
- * keeps its page title. */
-function useWindowTitle(place: Place) {
+ * Home", the mockup's sx-wt and sxWinTitle: a page of its own by its name,
+ * else the space); the platform puts it in the title bar. With no screen
+ * (the sign-in after a sign-out) it is "Session". The web keeps its page
+ * title. */
+function useWindowTitle(place: Place, title: string | undefined) {
   const w = useWorld();
   const space = place.kind === "space" || place.kind === "thread" ? w.byId.get(place.id) : null;
   const where =
+    title ??
     PLACE_TITLE[place.kind] ??
     (space ? spaceName(space) : place.kind === "other" ? place.label : undefined);
   useEffect(() => {
-    if (isDesktop()) document.title = where ? `Session — ${where}` : "Session";
+    if (!isDesktop()) return;
+    document.title = where ? `Session — ${where}` : "Session";
+    return () => {
+      document.title = "Session";
+    };
   }, [where]);
 }
 
-/** A screen: its root classes, the header (where it is), and its body. */
+/** A screen: its root classes, the header (where it is), and its body.
+ * `title`: the window's title in the Desktop app, when the screen is a page
+ * of its own ("Manage", "Account") rather than where it is. */
 export function Page({
   cls = "H",
   place,
+  title,
   children,
 }: {
   cls?: string;
   place: Place;
+  title?: string;
   children: ReactNode;
 }) {
-  useWindowTitle(place);
+  useWindowTitle(place, title);
   return (
     <div className={cx("A C Af", cls)}>
       <Header place={place} />
@@ -288,14 +299,21 @@ export function UpdateDialog({ onLater }: { onLater: () => void }) {
               }
             }}
           >
-            {here ? "Download and restart" : "Reload"}
+            {/* no updater yet (phase 5): the download page opens */}
+            {here ? "Open the download page" : "Reload"}
           </button>
         </>
       }
     >
       <p className="muted">
         {here
-          ? `This version of Session is too old to sync.${waiting ? ` ${waiting} changes wait on ${here} and are sent after the update.` : ""}`
+          ? `This version of Session is too old to sync.${
+              waiting === 1
+                ? ` 1 change waits on ${here} and is sent after the update.`
+                : waiting
+                  ? ` ${waiting} changes wait on ${here} and are sent after the update.`
+                  : ""
+            }`
           : "Session has been updated. Reload the page to keep saving changes."}
       </p>
     </Modal>

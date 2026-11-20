@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { isClosed, spaceName } from "../data/format.js";
 import type { Space, ThreadView } from "../data/spaces.js";
-import { siteOrigin } from "../platform.js";
+import { platform, siteOrigin } from "../platform.js";
 import { useStatus } from "../sync/react.js";
 
 import { ModelMenu, PayerLine, useAskModel } from "./Composer.js";
@@ -230,12 +230,14 @@ export function Share({ t, space }: { t: ThreadView; space: Space }) {
               role="menuitem"
               onClick={() => {
                 setOpen(false);
-                window.open(
-                  `https://x.com/intent/post?url=${encodeURIComponent(url)}`,
-                  "_blank",
-                  "noopener",
+                // the Desktop app opens it in the system browser; the toast
+                // says so only once it opened
+                void openLink(`https://x.com/intent/post?url=${encodeURIComponent(url)}`).then(
+                  (ok) => {
+                    if (ok) toast("Opened X with a link to the thread.");
+                    else toast("Couldn’t open X in your browser.");
+                  },
                 );
-                toast("Opened X with a link to the thread.");
               }}
             >
               <Svg src={SVG.XI} />
@@ -246,6 +248,21 @@ export function Share({ t, space }: { t: ThreadView; space: Space }) {
       ) : null}
     </span>
   );
+}
+
+/** Open a link in a new tab (the Desktop app: the system browser), and
+ * whether it opened: the platform's `openExternal` may answer a promise
+ * that fails when the link could not be opened. */
+export function openLink(url: string): Promise<boolean> {
+  try {
+    const opened: unknown = platform().openExternal(url);
+    return Promise.resolve(opened).then(
+      () => true,
+      () => false,
+    );
+  } catch {
+    return Promise.resolve(false);
+  }
 }
 
 /** The run controls: Stop while it runs, Run again or Retry after. They are
