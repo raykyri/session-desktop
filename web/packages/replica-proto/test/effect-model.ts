@@ -24,6 +24,11 @@ import { USE_PACKAGE } from "../src/switch.js";
 import { mayRead } from "./oracle.js";
 
 type Dump = ReadonlyMap<string, StoredRecord>;
+
+/** The server under test is `@session/sync`'s (REPLICA_PROTO_SERVER). */
+const SYNC_SERVER = ["sync-memory", "sync-sqlite", "http"].includes(
+  process.env["REPLICA_PROTO_SERVER"] ?? "",
+);
 type In = Record<string, unknown>;
 type Fields = Record<string, unknown>;
 
@@ -148,8 +153,31 @@ export function predictEffects(
           ended: name === "spaces.leave" ? "left" : "removed",
         });
       if (USE_PACKAGE && role !== null && !old) keys.set(`exit:${sp}:${u}`, null);
+      if (role === null) endRuns(sp, u);
     }
     keys.set(`space:${sp}`, spaceFields(membersAfter(dump, sp, change)));
+  };
+  /** `@session/sync` ends the queued and running runs of a person who may no
+   * longer write in the space (banned, or out of a closed space), server
+   * jobs too since review round 1 of phase 2 (`accessChanged`): `access`, and
+   * the thread stops running when the run is its ask's current attempt. */
+  const endRuns = (sp: string, u: string) => {
+    if (!SYNC_SERVER) return;
+    const banned = name === "members.ban" || dump.has(`ban:${sp}:${u}`);
+    if (!banned && !isClosed(dump, sp)) return;
+    for (const r of dump.values()) {
+      if (r.kind !== "run" || r.s !== sp || r.u !== u) continue;
+      if (r.status !== "queued" && r.status !== "running") continue;
+      keys.set(`run:${r.id}`, { status: "failed", end: "access" });
+      const p = dump.get(`thread:${r.th}`);
+      if (
+        r.node === "r" &&
+        p?.kind === "thread" &&
+        (p as unknown as { att?: number }).att === r.attempt &&
+        p.running
+      )
+        keys.set(`thread:${p.id}`, { running: false });
+    }
   };
   const children = (th: string) =>
     [...dump.entries()].filter(
