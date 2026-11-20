@@ -330,17 +330,21 @@ export const turnRecordSchema = z.object({
 export const citedPageSchema = z.tuple([z.string(), z.string(), z.string()]);
 
 /** An answer (`answer:<node>`, with the thread's id for the root ask): the
- * final answer as Markdown. The server stores no HTML (C3). */
+ * final answer as Markdown. The server stores no HTML (C3). `u` is the
+ * asker; `mod` follows its node's (or root thread's) moderation state, so a
+ * hidden ask's answer is served to the asker and the owner only. */
 export const answerRecordSchema = z.object({
   kind: z.literal("answer"),
   node: spaceUlidSchema,
   th: spaceThreadIdSchema,
   s: spaceIdSchema,
+  u: spaceHandleSchema,
   md: z.string(),
   pages: z.array(citedPageSchema),
   tok: count,
   run: spaceUlidSchema,
   attempt: z.number().int().positive(),
+  mod: moderationStateSchema.nullable(),
   rev,
 });
 
