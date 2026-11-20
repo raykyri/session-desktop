@@ -456,8 +456,6 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .m-ring circle:not(.arc) { stroke: var(--border-strong); }
 /* phones: the app name hides so the channel strip has room */
 @media (max-width: 520px) { .appbar .brand b { display: none; } .appbar { gap: 8px; } .hsp { margin-left: 0; } }
-/* ---- polish, wave 2 ---- */
-.pf-hover .card :is(.iconbtn, .more-btn):not(:disabled):hover, .pf-hover .preview .more-btn:hover { background: var(--control); color: var(--t-heading); }
 .replies .tlink { font-size: var(--fs-xs); font-weight: 400; }
 .replies .composer { margin-top: 8px; }
 .preview .rtext { margin: 6px 0 2px; }
@@ -472,7 +470,6 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .grow { flex: 1; }
 .mockbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding-bottom: 8px; }
 .mk { display: inline-flex; align-items: center; gap: 6px; }
-.seg.pol button[aria-pressed="false"] { color: var(--t-faint); text-decoration: line-through; text-decoration-color: color-mix(in srgb, currentColor 50%, transparent); }
 .mkl { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--t-faint); }
 #shell { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
 #bar { flex: none; position: relative; z-index: 30; transition: margin-top .2s ease; }
@@ -1373,7 +1370,7 @@ function card(p) {
   const lk = 'p:' + p.id, nl = (p.likesBase || 0) + (LIKED()[lk] ? 1 : 0), off = canWrite() || st.auth === 'out' ? '' : ` disabled title="${st.auth === 'out' ? 'Sign in to like and save' : 'Liking opens once you have an invite'}"`;
   /* no likes on threads; the bookmark carries how many people saved it (the fixtures' like counts stand in for save counts) */
   const ns = (p.likesBase || 0) + (SAVED()[p.id] ? 1 : 0);
-  const acts = `<button class="iconbtn cnt${SAVED()[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!SAVED()[p.id]}" aria-label="${SAVED()[p.id] ? 'Saved' : 'Save'}, saved by ${ns}" title="${SAVED()[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}${ns || !st.pol.zero ? `<span>${ns}</span>` : ''}</button>`;
+  const acts = `<button class="iconbtn cnt${SAVED()[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!SAVED()[p.id]}" aria-label="${SAVED()[p.id] ? 'Saved' : 'Save'}, saved by ${ns}" title="${SAVED()[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}${ns ? `<span>${ns}</span>` : ''}</button>`;
   /* reply / follow-up button carries its count, like the like button */
   const rbtn = (n, attrs, on, label, what) => `<button class="iconbtn likes rcount${on ? ' on' : ''}" ${canWrite() ? attrs : st.auth === 'out' ? 'data-ma="openauth"' : `disabled title="${label} opens once you have an invite"`} aria-pressed="${on}" aria-label="${label}${n ? `, ${noun(n, what[0], what[1])}` : ''}" title="${label}">${ARROW_REPLY}${n ? `<span>${n}</span>` : ''}</button>`;
   if (p.k === 'post') {
@@ -2060,11 +2057,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-/* Polish pass: each fix is a class on #app (pf-<key>), on by default, switchable in the mock bar. */
-const POLISH = [
-  ['Polish 2', [['hover', 'Visible hover on cards'], ['zero', 'No zero counts']]],
-];
-Object.assign(st, { pol: Object.fromEntries(POLISH.flatMap(([, l]) => l.map(([k]) => [k, true]))), mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pl: 'a', tt: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pl: 'a', tt: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 /* seeds: #sci-fi (owned by @ines.v) has reports in its moderation log */
 { const sf = Object.keys(SPACE_META).find(k => SPACE_META[k].owner === 'ines.v'), others = D.posts.filter(p => p.s === sf && p.u !== 'ines.v');
   if (sf && others.length) {
@@ -2311,7 +2304,6 @@ function renderMock() {
     
     ${seg('pl', 'Layout', 2)}
     ${seg('tt', 'Post title', 3)}
-    ${POLISH.map(([g, l]) => `<span class="mk"><span class="mkl">${g}</span><span class="seg pol">${l.map(([k, t]) => `<button data-pol="${k}" aria-pressed="${!!st.pol[k]}" title="${st.pol[k] ? 'On' : 'Off'}: click to compare">${t}</button>`).join('')}</span></span>`).join('')}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -2338,7 +2330,6 @@ function render() {
 }
 function renderInner() {
   renderMock();
-  for (const k in st.pol) app.classList.toggle('pf-' + k, !!st.pol[k]);
   if (!$('#shell')) { app.innerHTML = '<div id="shell"><div id="bar"></div><div id="page"></div></div>'; lastV = null; }
   $('#bar').innerHTML = st.auth === 'out' ? appbarOut() : appbar();
   { const ts = $('#k-tabs'); if (ts && st.screen !== 'network') { const fade = () => { ts.style.setProperty('--fl', ts.scrollLeft > 1 ? '40px' : '0px'); ts.style.setProperty('--fr', ts.scrollLeft + ts.clientWidth < ts.scrollWidth - 1 ? '40px' : '0px'); }; fade(); ts.addEventListener('scroll', fade, { passive: true }); } }
@@ -2383,7 +2374,6 @@ document.addEventListener('click', e => {
     render(); return; }
   const sd = e.target.closest('[data-msd]'); if (sd) { st.ui.sd = sd.dataset.msd; st.ui.sv = '1'; st.menu = null; st.screen = 'network'; st.authOpen = false; render(); return; }
   const sv = e.target.closest('[data-msv]'); if (sv) { st.ui.sv = sv.dataset.msv; st.menu = null; st.screen = 'network'; if (st.ui.sd === 'b' && st.ui.sv !== '1') st.menu = null; render(); return; }
-  const pb = e.target.closest('[data-pol]'); if (pb) { st.pol[pb.dataset.pol] = !st.pol[pb.dataset.pol]; render(); return; }
   const v = e.target.closest('[data-mv]'); if (v) { st.ui[v.dataset.mv] = v.dataset.x; previewVariant(v.dataset.mv); return; }
   const t = e.target.closest('[data-mt]'); if (t) { st.mt = t.dataset.mt; const u = usage(); const need = { norm: null, low: ALLOWANCE * .85, out: ALLOWANCE + 20e3 }[t.dataset.mt]; if (need != null) { const others = u.reduce((a, b, i) => i === TODAY ? a : a + b, 0); u[TODAY] = Math.max(0, need - others); } else USAGE[st.user] = (USAGE_BASE[st.user] || [0, 0, 0, 0, 0, 0, 0]).slice(); render(); return; }
 });
