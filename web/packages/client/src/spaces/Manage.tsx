@@ -17,6 +17,7 @@ import { Modal, NotFound, Page } from "./Page.js";
 import { Scrim } from "./Scrim.js";
 import { SkillsManage } from "./Skills.js";
 import { SourcesManage } from "./Sources.js";
+import { SettingsManage } from "./SpaceSettings.js";
 import { Svg } from "./Svg.js";
 import { Author, Avatar } from "./atoms.js";
 import { cx } from "./cx.js";
@@ -25,7 +26,8 @@ import { useOverlay } from "./overlay.js";
 import { useWorld } from "./world.js";
 import { refusalToast, toast, useWrite } from "./writes.js";
 
-export type ManageTab = "requests" | "reports" | "members" | "invites" | "skills" | "sources";
+export type ManageTab =
+  "requests" | "reports" | "members" | "invites" | "skills" | "sources" | "settings";
 
 const ROLES: [Role, string][] = [
   ["member", "Member"],
@@ -666,7 +668,7 @@ function Members({ s, myRole }: { s: Space; myRole: Role }) {
   const me = useWorld().me?.u ?? "";
   const [q, setQ] = useState("");
   const [dlg, setDlg] = useState<
-    { k: "role"; u: string; to: Role } | { k: "remove" | "ban"; u: string } | null
+    { k: "role"; u: string; to: Role } | { k: "remove" | "ban" | "owner"; u: string } | null
   >(null);
   const members =
     useRecords((r) => r.list("member", (m) => m.sp === s.id), [s.id])?.sort(
@@ -680,7 +682,48 @@ function Members({ s, myRole }: { s: Space; myRole: Role }) {
     m.role !== "owner" &&
     (m.role === "admin" ? RANK[myRole]! >= RANK["admin"]! : RANK[myRole]! > RANK[m.role]!);
   const L = (r: Role) => ROLES.find((x) => x[0] === r)?.[1] ?? "Owner";
-  const dialog = !dlg ? null : dlg.k === "role" ? (
+  const dialog = !dlg ? null : dlg.k === "owner" ? (
+    <Modal
+      title={`Make ${dlg.u} the owner of ${spaceName(s)}?`}
+      role="alertdialog"
+      onClose={() => setDlg(null)}
+      footer={
+        <Foot>
+          <button className="btn" type="button" onClick={() => setDlg(null)}>
+            Cancel
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={() => {
+              const u = dlg.u;
+              const m = members.find((x) => x.u === u);
+              setDlg(null);
+              void write("members.setRole", {
+                space: s.id,
+                user: u,
+                role: "owner",
+                base: { rev: m?.rev ?? 0 },
+              }).then((o) => {
+                if (o.ok) toast(`${u} is now the owner of ${spaceName(s)}.`);
+              });
+            }}
+          >
+            Make owner
+          </button>
+        </Foot>
+      }
+    >
+      <p className="muted">
+        {dlg.u} becomes the owner: they can transfer ownership, and archive or delete {spaceName(s)}
+        . You become an admin and can still change roles and settings.
+      </p>
+      <p className="cs-fine">
+        <Svg src={MI.mods} />
+        <span>A space has one owner. Only {dlg.u} can make you the owner again.</span>
+      </p>
+    </Modal>
+  ) : dlg.k === "role" ? (
     (() => {
       const m = members.find((x) => x.u === dlg.u);
       const was = m?.role ?? "member";
@@ -829,6 +872,15 @@ function Members({ s, myRole }: { s: Space; myRole: Role }) {
                 />
               )}
               <span className="mem-acts">
+                {myRole === "owner" && m.role === "admin" ? (
+                  <button
+                    className="tlink"
+                    type="button"
+                    onClick={() => setDlg({ k: "owner", u: m.u })}
+                  >
+                    Make owner
+                  </button>
+                ) : null}
                 {canAct(m) ? (
                   <>
                     <button
@@ -1110,6 +1162,9 @@ export function ManagePage({ name, tab }: { name: string; tab: string }) {
     ...(closed ? ([["invites", "Invites"]] as [ManageTab, React.ReactNode][]) : []),
     ["skills", "Skills"],
     ["sources", "Sources"],
+    ...(role === "owner" || role === "admin"
+      ? ([["settings", "Settings"]] as [ManageTab, React.ReactNode][])
+      : []),
   ];
   const cur = (tabs.find((t) => t[0] === tab) ?? tabs[0])?.[0] ?? "members";
   const go = (t: ManageTab) =>
@@ -1163,6 +1218,8 @@ export function ManagePage({ name, tab }: { name: string; tab: string }) {
           <SkillsManage s={s} />
         ) : cur === "sources" ? (
           <SourcesManage s={s} />
+        ) : cur === "settings" ? (
+          <SettingsManage s={s} />
         ) : (
           <Invites s={s} />
         )}

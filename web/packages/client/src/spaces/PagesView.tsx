@@ -19,7 +19,7 @@ import { MissingSpace } from "./Membership.js";
 import { Modal, NotFound, Page } from "./Page.js";
 import { Svg } from "./Svg.js";
 import { Author, Avatar, Glyph } from "./atoms.js";
-import { CI, MII, QTI } from "./icons.js";
+import { CI, MII, NVI, QTI } from "./icons.js";
 import { canRead, useWorld } from "./world.js";
 import { refusalToast, toast, useWrite } from "./writes.js";
 
@@ -73,6 +73,7 @@ export function PagePage({ name, slug }: { name: string; slug: string }) {
   const [over, setOver] = useState(false);
   const [hist, setHist] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState(false);
   if (!s) {
     if (!w.loaded) return <Page place={{ kind: "other" }}>{null}</Page>;
     return <MissingSpace name={name} thread={false} />;
@@ -310,6 +311,17 @@ export function PagePage({ name, slug }: { name: string; slug: string }) {
                 >
                   <Svg src={CI.clock} />
                 </button>
+                {isStaff(role) ? (
+                  <button
+                    className="iconbtn abp-ib"
+                    type="button"
+                    aria-label="Remove page"
+                    title="Remove page"
+                    onClick={() => setRemoving(true)}
+                  >
+                    <Svg src={NVI.trash} />
+                  </button>
+                ) : null}
                 <button
                   className="iconbtn abp-ib"
                   type="button"
@@ -338,7 +350,7 @@ export function PagePage({ name, slug }: { name: string; slug: string }) {
                 </span>
               </div>
             </header>
-            {hist ? <History page={page} now={now} /> : null}
+            {hist ? <History page={page} now={now} canEdit={mayEdit} /> : null}
             <div className="abp-prose">
               <Markdown markdown={page.text.join("\n\n")} className="prose" />
             </div>
@@ -381,6 +393,40 @@ export function PagePage({ name, slug }: { name: string; slug: string }) {
           </article>
         ) : null}
       </div>
+      {removing && page ? (
+        <Modal
+          title={`Remove ${page.t}?`}
+          role="alertdialog"
+          onClose={() => setRemoving(false)}
+          footer={
+            <>
+              <span style={{ flex: 1 }} />
+              <button className="btn" type="button" onClick={() => setRemoving(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn danger"
+                type="button"
+                onClick={() => {
+                  setRemoving(false);
+                  void write("pages.remove", { space: s.id, page: page.id }).then((o) => {
+                    if (o.ok) {
+                      toast("Page removed.");
+                      toAbout();
+                    }
+                  });
+                }}
+              >
+                Remove page
+              </button>
+            </>
+          }
+        >
+          <p className="muted">
+            The page leaves {spaceName(s)}’s About. Threads that link to it keep their text.
+          </p>
+        </Modal>
+      ) : null}
       {over && ed ? (
         <Modal
           title={`Overwrite ${savedBy}’s version?`}
@@ -415,7 +461,32 @@ export function PagePage({ name, slug }: { name: string; slug: string }) {
   );
 }
 
-function History({ page, now }: { page: PageRec; now: number }) {
+function History({ page, now, canEdit }: { page: PageRec; now: number; canEdit: boolean }) {
+  const write = useWrite();
+  // an earlier version comes back as a new one; the history keeps both
+  const restore = async (k: number, force: boolean) => {
+    const r = page.revs[k];
+    if (!r) return;
+    const o = await write(
+      "pages.restore",
+      {
+        space: page.sp,
+        page: page.id,
+        rev: k,
+        note: `Restored the version from ${agoText(r.createdAt, now)}`,
+        base: { rev: page.ver },
+        ...(force ? { force: true } : {}),
+      },
+      { quiet: true },
+    );
+    if (o.ok) toast("Restored. The page history keeps both versions.");
+    else if (o.error?.code === "CONFLICT")
+      toast("Someone else changed this page after you opened its history.", {
+        label: "Restore anyway",
+        run: () => void restore(k, true),
+      });
+    else if (o.error) refusalToast(o.error);
+  };
   return (
     <section className="abp-hist" aria-label="History">
       <ol>
@@ -425,6 +496,11 @@ function History({ page, now }: { page: PageRec; now: number }) {
             <span>
               <b>{r.by}</b> {r.note} <span className="faint">{agoText(r.createdAt, now)}</span>
             </span>
+            {canEdit && k > 0 ? (
+              <button className="tlink" type="button" onClick={() => void restore(k, false)}>
+                Restore
+              </button>
+            ) : null}
           </li>
         ))}
       </ol>

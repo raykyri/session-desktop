@@ -177,3 +177,49 @@ test("an answered write is not played again over a log read after its answer", a
   // the server's state, not the decline played again on top of it
   t.is(st(), "open");
 });
+
+test("an answered write is not played again over a read sent before its answer but served after it", async (t) => {
+  const { w, closed } = cast(t);
+  // two pages; pages.move swaps them, so playing it twice puts them back
+  const one = w.id();
+  const two = w.id();
+  ok(
+    t,
+    w.as("olga", "pages.update", { space: closed, page: null, id: one, title: "One", text: ["a"] }),
+  );
+  ok(
+    t,
+    w.as("olga", "pages.update", { space: closed, page: null, id: two, title: "Two", text: ["b"] }),
+  );
+  const inner = new InProcessTransport(w.server, { u: "olga" });
+  let hold: (() => void) | null = null;
+  const transport: Transport = {
+    register: () => inner.register(),
+    // the server applies the write at once; its answer waits
+    push: async (e) => {
+      const a = await inner.push(e);
+      await new Promise<void>((r) => (hold = r));
+      return a;
+    },
+    pull: (l, c, o) => inner.pull(l, c, o),
+    snapshot: (l, o) => inner.snapshot(l, o),
+    call: (n, i) => inner.call(n, i),
+    listen: () => Promise.resolve(),
+  };
+  const olga = client(w, "olga", { transport });
+  await olga.init();
+  await olga.open(`user:olga`);
+  await olga.open(`space:${closed}`);
+  const order = () =>
+    ((olga.get(`pages:${closed}`) as { list: { id: string }[] } | undefined)?.list ?? []).map(
+      (p) => p.id,
+    );
+  t.deepEqual(order(), [one, two]);
+  const move = olga.write("pages.move", { space: closed, page: one, other: two });
+  await new Promise((r) => setTimeout(r, 0));
+  // a read of the space's log, sent before the answer: it holds the move
+  await olga.sync(`space:${closed}`);
+  (hold as (() => void) | null)?.();
+  t.true((await move.answer)?.ok);
+  t.deepEqual(order(), [two, one]);
+});

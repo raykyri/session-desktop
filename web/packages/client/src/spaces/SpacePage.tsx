@@ -235,6 +235,7 @@ function SourcesTab({ s }: { s: Space }) {
 
 function AboutTab({ s }: { s: Space }) {
   const now = useNow();
+  const write = useWrite();
   const w = useWorld();
   const role = w.roles[s.id];
   const navigate = useNavigate();
@@ -298,8 +299,8 @@ function AboutTab({ s }: { s: Space }) {
         </div>
         {pages.length ? (
           <ul className="links ab-pgl">
-            {pages.map((p) => (
-              <li key={p.id}>
+            {pages.map((p, k) => (
+              <li key={p.id} className={editsPages ? "ab-pgo" : undefined}>
                 <button
                   className="ab-pgr"
                   type="button"
@@ -316,6 +317,36 @@ function AboutTab({ s }: { s: Space }) {
                   <span>{p.t}</span>
                   <small>{ago(p.at, now)}</small>
                 </button>
+                {editsPages ? (
+                  <span className="ab-pgb">
+                    <button
+                      className="iconbtn"
+                      type="button"
+                      aria-label={`Move ${p.t} up`}
+                      disabled={!k}
+                      onClick={() => {
+                        const other = pages[k - 1];
+                        if (other)
+                          void write("pages.move", { space: s.id, page: p.id, other: other.id });
+                      }}
+                    >
+                      <Svg src={I.chev} style={{ transform: "rotate(180deg)" }} />
+                    </button>
+                    <button
+                      className="iconbtn"
+                      type="button"
+                      aria-label={`Move ${p.t} down`}
+                      disabled={k === pages.length - 1}
+                      onClick={() => {
+                        const other = pages[k + 1];
+                        if (other)
+                          void write("pages.move", { space: s.id, page: p.id, other: other.id });
+                      }}
+                    >
+                      <Svg src={I.chev} />
+                    </button>
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>

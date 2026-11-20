@@ -229,6 +229,10 @@ export interface OutboxEntry {
   /** The client's read tick when it was answered (this process only: set
    * again when the outbox is loaded). */
   answeredTick?: number;
+  /** The seq the server recorded it under, when it answered with one: a read
+   * of a log that says this client's last seq is at least this one holds
+   * its effect. */
+  answeredSeq?: number;
   /** What the mutators predicted. */
   prediction?: "ok" | "refused" | "unknown";
   predictedError?: ApiError;
@@ -241,6 +245,9 @@ interface LiveLog {
   /** The read tick of the latest read that was served (stamped when it was
    * requested). */
   pulledTick: number;
+  /** The client's last recorded seq as the latest read of this log said it
+   * (`lastSeq`): every write recorded at or before it is in that read. */
+  pulledSeq: number;
   tier: TierOptions | undefined;
   /** Threads held as summaries: their follow-ups, replies and runs are not
    * held (a scan of them is UNKNOWN). */
@@ -670,6 +677,7 @@ export class SyncClient implements Changing {
       records: new Map(),
       frozen: false,
       pulledTick: -1,
+      pulledSeq: 0,
       tier,
       summaries: new Set(),
       marked: new Set(),
@@ -866,6 +874,7 @@ export class SyncClient implements Changing {
     if (f.pull) {
       const p = f.pull;
       this.learn(p.lastSeq);
+      if (p.lastSeq !== null) l.pulledSeq = Math.max(l.pulledSeq, p.lastSeq);
       let changes: readonly Change[] = p.changes;
       if (p.summaries) {
         this.mark(
@@ -884,6 +893,7 @@ export class SyncClient implements Changing {
     }
     const s = f.snapshot;
     this.learn(s.lastSeq);
+    if (s.lastSeq !== null) l.pulledSeq = Math.max(l.pulledSeq, s.lastSeq);
     const records = new Map(s.records.map((x) => [x.key, x.record]));
     if (s.summaries) {
       l.marked = new Set();
@@ -1252,7 +1262,7 @@ export class SyncClient implements Changing {
         // records there are the server's (and may hold later changes by
         // others), so it is not played again on top of them (phase 2b: a
         // decline undone at once came back as declined)
-        if (e.state === "answered" && this.readAfter(key, draft, e.answeredTick)) continue;
+        if (e.state === "answered" && this.readAfter(key, draft, e)) continue;
         if (draft === null) {
           this.overlay.set(key, null);
           continue;
@@ -1264,15 +1274,19 @@ export class SyncClient implements Changing {
     this.changed();
   }
 
-  /** Whether a log that holds the record was read (a pull or snapshot that
-   * started) after `tick`. */
-  private readAfter(key: string, draft: pkg.Draft | null, tick: number | undefined) {
+  /** Whether a log that holds the record was read with the write's effect:
+   * a read that started after its answer, or one whose `lastSeq` covers the
+   * seq it was recorded under (a read sent before the answer came back but
+   * served after the write). */
+  private readAfter(key: string, draft: pkg.Draft | null, e: OutboxEntry) {
+    const tick = e.answeredTick;
     if (tick === undefined) return false;
     const r = draft ?? this.confirmed(key);
     if (!r) return false;
     return pkg.logsOf(r).some((log) => {
       const l = this.logs.get(log);
-      return l !== undefined && !l.frozen && l.pulledTick > tick;
+      if (l === undefined || l.frozen) return false;
+      return l.pulledTick > tick || (e.answeredSeq !== undefined && l.pulledSeq >= e.answeredSeq);
     });
   }
 
@@ -1554,6 +1568,8 @@ export class SyncClient implements Changing {
     }
     this.meta.clientId = r.clientId;
     this.meta.lastSeq = 0;
+    // a new registration numbers its writes from 1 again
+    for (const l of this.logs.values()) l.pulledSeq = 0;
     await this.persist();
     return true;
   }
@@ -1947,6 +1963,7 @@ export class SyncClient implements Changing {
           e.result = a.ok ? a.result : null;
           e.uncertain = false;
           e.answeredTick = this.tick++;
+          if (a.seq !== undefined) e.answeredSeq = a.seq;
           if (e.name === "threads.delete") this.unfreeze((e.input as { id: string }).id);
           this.noteLeave(e);
           this.resolve(

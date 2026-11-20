@@ -281,6 +281,77 @@ const SCREENS: Screen[] = [
       await expect(p).toHaveURL(/\/s\/public\/t\/[0-9A-Z]{26}$/);
     },
   },
+  {
+    key: "ab-page-hist",
+    url: "/s/sci-fi/pages/canon-starter-list",
+    run: async (p) => {
+      // a save makes a second version; History restores the first
+      await p.getByRole("button", { name: "Edit", exact: true }).click();
+      await p.locator("#ab-pg-b").fill("A new version of the page.");
+      await p.getByRole("button", { name: "Save", exact: true }).click();
+      await toastSays(p, "Page saved.");
+      await p.getByRole("button", { name: "History", exact: true }).click();
+      await p
+        .getByRole("region", { name: "History" })
+        .getByRole("button", { name: "Restore" })
+        .first()
+        .click();
+      await toastSays(p, "Restored. The page history keeps both versions.");
+    },
+  },
+  {
+    key: "ab-pages-order",
+    url: "/s/sci-fi/about",
+    run: async (p) => {
+      // /about opens the sidebar's About (a sheet on a phone)
+      const names = p.locator(".ab-pgl .ab-pgr span");
+      const first = await names.first().textContent();
+      await p.getByRole("button", { name: `Move ${first} down` }).click();
+      await expect(names.nth(1)).toHaveText(first ?? "");
+    },
+  },
+  {
+    key: "ab-set",
+    url: "/s/ml-papers/manage/settings",
+    run: async (p) => {
+      await expect(p.getByRole("tab", { name: "Settings" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await expect(p.getByRole("button", { name: "Save changes" })).toBeDisabled();
+      await p.locator("#st-desc").fill("Papers, preprints and the asks about them.");
+      await p.getByRole("button", { name: "Save changes" }).click();
+      await toastSays(p, "Settings saved.");
+      await expect(p.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    },
+  },
+  {
+    key: "cx-owner",
+    url: "/s/math/manage/members",
+    run: async (p) => {
+      const row = p.locator('.mem-row[data-mname="lettie"]');
+      await row.getByRole("button", { name: "Make owner" }).click();
+      await p
+        .getByRole("alertdialog", { name: "Make lettie the owner of #math?" })
+        .getByRole("button", { name: "Make owner" })
+        .click();
+      await toastSays(p, "lettie is now the owner of #math.");
+      await expect(row.getByText("Owner")).toBeVisible();
+    },
+  },
+  {
+    key: "cx-archive",
+    url: "/s/math/manage/settings",
+    run: async (p) => {
+      await p.getByRole("button", { name: "Archive space" }).click();
+      await p
+        .getByRole("alertdialog", { name: "Archive #math?" })
+        .getByRole("button", { name: "Archive" })
+        .click();
+      await toastSays(p, "Archived #math. Threads are read-only.");
+      await expect(p.getByRole("button", { name: "Unarchive" })).toBeVisible();
+    },
+  },
 ];
 
 async function open(p: Page, s: Screen) {
