@@ -479,9 +479,6 @@ const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data
    as a small outline tree per passage. */
 const st = { v: 'lines', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
 
-/* The fixtures do not record which model answered; the mock assigns one per thread, mostly Opus 4.8. */
-const MODELS = ['Opus 4.8', 'Opus 4.8', 'Sonnet 4.6'];
-const modelOf = p => MODELS[[...p.id].reduce((s, c) => s + c.charCodeAt(0), 0) % MODELS.length];
 function card(p) {
   const head = `<div class="card-h">${av(p.u)}<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div></div>`;
   const acts = `<button class="iconbtn likes" aria-label="Like, ${p.likesBase || 0} likes">${I.heart}<span>${p.likesBase || 0}</span></button><button class="iconbtn" aria-label="Save">${I.save}</button>`;
@@ -491,7 +488,7 @@ function card(p) {
   }
   const T = tree(p), src = (D.srcd[p.id] || []).length;
   return `<article class="card" id="card-${p.id}">${head}<p class="ask">${esc(T.nodes.r.q)}</p>
-    <div class="byline">${mark('sm')}<span>${modelOf(p)}${src ? ` · ${noun(src, 'source', 'sources')}` : ''} · ${ktok(p.tok)}</span></div>
+    <div class="byline">${mark('sm')}<span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok)].filter(Boolean).join(' · ')}</span></div>
     <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
     <div class="card-f"><span class="notes">${noun(T.count, 'branch', 'branches')}</span><button class="iconbtn" data-a="ask" data-id="${p.id}" aria-label="${st.asking === p.id ? 'Close the branch box' : 'Branch'}">${st.asking === p.id ? I.x : I.branch}</button>${acts}</div></article>`;
 }
