@@ -24,6 +24,7 @@ import {
   type Query,
   type RunFrame,
   type StoredRecord,
+  type Transport,
 } from "@session/sync/client";
 
 import { REQUESTED_WITH_HEADERS, currentFetch, getJson } from "../api/http.js";
@@ -114,20 +115,25 @@ export class SpacesSession {
       onUnauthorized?: () => void;
       /** False: no event stream (tests). */
       listen?: boolean;
+      /** The sync transport (tests); by default `FetchTransport` over the
+       * session cookie. */
+      transport?: Transport;
     } = {},
   ) {
     this.me = me;
     this.listens = o.listen !== false;
-    const transport = new FetchTransport({
-      baseUrl: "",
-      headers: REQUESTED_WITH_HEADERS,
-      fetch: o.fetch ?? ((...a) => currentFetch()(...a)),
-      onUpdateRequired: () => this.setStatus({ updateRequired: true }),
-      onUnauthorized: () => {
-        this.setStatus({ signedOut: true });
-        o.onUnauthorized?.();
-      },
-    });
+    const transport =
+      o.transport ??
+      new FetchTransport({
+        baseUrl: "",
+        headers: REQUESTED_WITH_HEADERS,
+        fetch: o.fetch ?? ((...a) => currentFetch()(...a)),
+        onUpdateRequired: () => this.setStatus({ updateRequired: true }),
+        onUnauthorized: () => {
+          this.setStatus({ signedOut: true });
+          o.onUnauthorized?.();
+        },
+      });
     this.statusValue = {
       online: typeof navigator === "undefined" ? true : navigator.onLine !== false,
       updateRequired: false,
@@ -213,12 +219,27 @@ export class SpacesSession {
       .map((m) => m.sp);
   }
 
+  /** The joined spaces' logs being opened: a second call waits for the
+   * reads the first one started, so `ready` follows them. */
+  private readonly opening = new Map<string, Promise<void>>();
+
   private async openJoined() {
     if (!this.client) return;
-    const open = new Set(this.client.openLogs());
-    const want = this.memberSpaces().filter((sp) => !open.has(`space:${sp}`));
     const c = this.client;
-    await Promise.all(want.map((sp) => c.open(`space:${sp}`).catch(() => undefined)));
+    const open = new Set(c.openLogs());
+    const waits = this.memberSpaces().map((sp) => {
+      const log: LogId = `space:${sp}`;
+      const now = this.opening.get(log);
+      if (now) return now;
+      if (open.has(log)) return Promise.resolve();
+      const p = c
+        .open(log)
+        .catch(() => undefined)
+        .finally(() => this.opening.delete(log));
+      this.opening.set(log, p);
+      return p;
+    });
+    await Promise.all(waits);
   }
 
   /** Start reading: the user log and the joined spaces, then the stream. */
@@ -264,6 +285,12 @@ export class SpacesSession {
       if (this.listens) void this.listenLoop(() => c.listen(signal));
     } else if (this.guest) {
       const g = this.guest;
+      // a signed-out reader sees in-flight text too, and drops it as the
+      // signed-in path does when the run's answer or end arrives
+      g.onRun((f) => this.runs.add(f));
+      g.onChange(() => {
+        for (const r of this.endedRuns()) this.runs.drop(r);
+      });
       this.setStatus({ ready: true });
       if (this.listens) void this.listenLoop(() => g.listen(signal));
     }

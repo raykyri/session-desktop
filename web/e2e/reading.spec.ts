@@ -5,7 +5,7 @@
 // navigation suite (back links, search, notifications, Saved, system states)
 // follow.
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Request } from "@playwright/test";
 
 import { APP_ORIGIN } from "./constants.js";
 import type { KeyedRecord } from "./fixtures/mockup.js";
@@ -601,3 +601,136 @@ for (const [layout, viewport] of [
     });
   });
 }
+
+// Streamed answer text (phase 2 review round 1, findings 6 and 9): the run
+// frames of the sync stream (ADR-22) show as the answer's text while it
+// runs, a frame at or below the last seq is dropped, and the text goes when
+// the answer arrives. The page's event stream is answered here, one
+// connection per step (the client connects again after a stream ends), so
+// the test decides what each frame says; signed in and signed out (the
+// server sends run frames to a signed-out reader of an open space too).
+const RUN_HEADERS = { "x-requested-with": "session", "content-type": "application/json" };
+
+/** The page's event stream, one connection at a time: `send` answers the
+ * open connection with these events (the client connects again after it
+ * ends), or the next one if none is open. A connection the page dropped
+ * (it reconnects when the logs it reads change) is not answered. */
+async function holdEvents(page: Page) {
+  const queue: string[] = [];
+  const open: { req: Request; answer: (body: string) => void }[] = [];
+  page.on("requestfailed", (rq) => {
+    const k = open.findIndex((o) => o.req === rq);
+    if (k >= 0) open.splice(k, 1);
+  });
+  await page.route("**/api/sync/events**", async (r) => {
+    const body = await new Promise<string>((answer) => {
+      const b = queue.shift();
+      if (b !== undefined) answer(b);
+      else open.push({ req: r.request(), answer });
+    });
+    await r.fulfill({ status: 200, contentType: "text/event-stream", body }).catch(() => undefined);
+  });
+  return {
+    send(...events: object[]) {
+      const body = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
+      const o = open.pop();
+      open.length = 0;
+      if (o) o.answer(body);
+      else queue.push(body);
+    },
+  };
+}
+
+for (const signedIn of [true, false])
+  test(`streamed answer text, ${signedIn ? "signed in" : "signed out"}`, async ({ page }) => {
+    const { records } = await loadScenario(page.context().request, "asks: your ask", {
+      args: ASK("running"),
+    });
+    if (signedIn) await signInAs(page.context());
+    const run = records.find(
+      (r) =>
+        r.record.kind === "run" &&
+        r.record["status"] === "running" &&
+        r.record["node"] === "r" &&
+        r.record["executor"] === null,
+    );
+    const th = String(run?.record["th"]);
+    const thread = records.find((r) => r.key === `thread:${th}`);
+    expect(run && thread).toBeTruthy();
+    const id = String(run?.record["id"]);
+    const attempt = Number(run?.record["attempt"]);
+    const events = await holdEvents(page);
+    await page.goto(`/s/public/t/${th}`);
+    await expect(page.locator("#th-a").getByText("Researching")).toBeVisible();
+    // the page has opened the logs it reads: its stream is the last one
+    await page.waitForTimeout(500);
+    const live = page.locator("#th-a .as-live");
+    events.send({ type: "run", run: id, attempt, seq: 1, text: "Shortlist so far" });
+    await expect(live).toHaveText("Shortlist so far");
+    events.send({ type: "run", run: id, attempt, seq: 2, text: ", newest first." });
+    await expect(live).toHaveText("Shortlist so far, newest first.");
+    // a frame at or below the last seq is dropped; the next one is applied
+    events.send(
+      { type: "run", run: id, attempt, seq: 2, text: " REPEATED" },
+      { type: "run", run: id, attempt, seq: 1, text: " OLDER" },
+      { type: "run", run: id, attempt, seq: 3, text: " Done." },
+    );
+    await expect(live).toHaveText("Shortlist so far, newest first. Done.");
+    // the answer arrives: the run completes and the thread has its answer
+    const answer = "Three novels treat agents bargaining for their owners.";
+    const put = await page.request.post(`${APP_ORIGIN}/api/test/records`, {
+      headers: RUN_HEADERS,
+      data: {
+        records: [
+          { key: run?.key, record: { ...run?.record, status: "complete", rev: undefined } },
+          {
+            key: thread?.key,
+            record: { ...thread?.record, sum: answer, running: false, rev: undefined },
+          },
+        ],
+      },
+    });
+    expect(put.ok()).toBe(true);
+    events.send({ type: "poke", logs: [`space:${String(thread?.record["s"])}`] });
+    await expect(page.locator("#th-a").getByText(answer)).toBeVisible();
+    await expect(page.locator(".as-live")).toHaveCount(0);
+    await expect(page.getByText("Shortlist so far")).toHaveCount(0);
+    // a follow-up's run streams the same way
+    const fu0 = records.find((r) => r.record.kind === "followup");
+    expect(fu0).toBeTruthy();
+    const fu = "01M7HWS78000000000000000F1";
+    const fuRun = "01M7HWS78000000000000000R1";
+    const fuRec = {
+      ...fu0?.record,
+      id: fu,
+      th,
+      s: thread?.record["s"],
+      par: null,
+      u: "hal_b",
+      q: "Which of these were written before 2010?",
+      a: null,
+      rev: undefined,
+    };
+    const runRec = { ...run?.record, id: fuRun, node: fu, u: "hal_b", rev: undefined };
+    const add = await page.request.post(`${APP_ORIGIN}/api/test/records`, {
+      headers: RUN_HEADERS,
+      data: {
+        records: [
+          { key: `followup:${fu}`, record: fuRec },
+          { key: `run:${fuRun}`, record: runRec },
+        ],
+      },
+    });
+    expect(add.ok()).toBe(true);
+    events.send({ type: "poke", logs: [`space:${String(thread?.record["s"])}`] });
+    const node = page.locator(`#qt-n-${fu}`);
+    await expect(node.getByText("Researching")).toBeVisible();
+    await page.waitForTimeout(300);
+    events.send(
+      { type: "run", run: fuRun, attempt, seq: 1, text: "Two of them:" },
+      { type: "run", run: fuRun, attempt, seq: 1, text: " AGAIN" },
+    );
+    await expect(node.locator(".as-live")).toHaveText("Two of them:");
+    events.send({ type: "run", run: fuRun, attempt, seq: 2, text: " Accelerando and Walkaway." });
+    await expect(node.locator(".as-live")).toHaveText("Two of them: Accelerando and Walkaway.");
+  });
