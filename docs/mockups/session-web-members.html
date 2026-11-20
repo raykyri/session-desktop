@@ -1357,8 +1357,7 @@ function authScreen() {
       ${inv ? `<div class="inviter">${av(inv.by)}<div><b>${C.ok(esc(nameOf(inv.by)))}</b><small>@${esc(inv.by)}</small></div></div><div class="auth-acts">${st.xacct && !MEMBERS.some(m => m.x === st.xacct) ? `<button class="btn1" data-ma="toprofile">Continue as @${esc(st.xacct)}</button>${xBtn('Use a different X account')}` : xBtn(C.x)}</div>` : ''}</div>`;
   } else if (st.flow === 'xauth') {
     body = `<div class="auth-c">${back(st.intent === 'signup' ? 'code' : 'landing')}<h2>Sign in with X</h2><p>X asks you to let Session see your name, handle and profile picture. Session cannot post for you or read your messages.</p>
-      <div class="auth-acts"><button class="xbtn" data-ma="xgo">Continue to X</button></div>
-      <p class="fine">You'll come back here after signing in on X.</p></div>`;
+      <div class="auth-acts"><button class="xbtn" data-ma="xgo">Continue to X</button></div></div>`;
   } else if (st.flow === 'noaccount') {
     const a = X_ACCOUNTS.find(x => x.x === st.xacct);
     body = `<div class="auth-c">${back('landing')}<h2>No Session account for @${esc(a.x)}</h2><p>Session is invite-only. Ask a member for an invite code, then sign up with it. If you already have a code, enter it now.</p><div class="auth-acts"><button class="btn1" data-ma="flow" data-to="code">Enter an invite code</button><button class="btn2" data-ma="waitlist">Continue without one</button></div><p class="fine">Without an invite you can read every open space, and enter a code later.</p></div>`;
