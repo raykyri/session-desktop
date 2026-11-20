@@ -627,6 +627,8 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .kb > .ghost { align-self: flex-end; }
 .kstate { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; font-size: var(--fs-sm); }
 .kmask { color: var(--t-heading); font-size: var(--fs-sm); }
+.kchip { gap: 4px; padding-left: 6px; }
+.kchip svg.kcc { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .btn2.sm { height: 28px; padding: 0 12px; border-radius: 14px; font-size: var(--fs-xs); font-weight: 600; }
 .btn1.danger { background: var(--bad); color: #fff; }
 .kconfirm .grow { flex: 1; }
@@ -1455,7 +1457,8 @@ function membersPage() {
 const PROVIDERS = { anthropic: { name: 'Anthropic', prefix: 'sk-ant-', ph: 'sk-ant-...', models: 'Opus 5.5' }, openai: { name: 'OpenAI', prefix: 'sk-', ph: 'sk-...', models: 'GPT-6.1 Sol' } };
 /* API keys: one line per provider with the masked key, status and Remove, or Not set and Add key. Buttons are real buttons; key values use the body font. */
 const mask = (P, k) => `<span class="kmask">${P.prefix}••••${k.last4}</span>`;
-const kStatus = k => `<span class="chip ${k.status === 'working' ? 'ok' : ''}">${k.status === 'working' ? 'Working' : 'Checking…'}</span>`;
+const CHECK_CIRCLE = '<svg class="i kcc" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M5.4 8.2l1.8 1.8 3.4-3.8"/></svg>';
+const kStatus = k => `<span class="chip kchip ${k.status === 'working' ? 'ok' : ''}">${k.status === 'working' ? `${CHECK_CIRCLE}Valid` : 'Checking…'}</span>`;
 const kErr = id => st.keyErr && st.keyForm === id ? `<p class="ferr">${esc(st.keyErr)}</p>` : '';
 const kInput = (id, P, cancel = true) => `<form class="kform" data-mform="key:${id}"><input id="in-key-${id}" type="password" placeholder="Paste your ${P.name} key (${P.ph})" autocomplete="off" spellcheck="false" aria-label="${P.name} API key"><button type="submit" class="btn1 sm">Save</button>${cancel ? `<button type="button" class="btn2 sm" data-ma="keycancel">Cancel</button>` : ''}</form>`;
 const kConfirm = (id, P) => `<div class="kconfirm"><span>Remove the ${P.name} key? Asks billed to it will stop.</span><span class="grow"></span><button class="btn2 sm" data-ma="keykeep">Keep</button><button class="btn1 sm danger" data-ma="keyremove" data-k="${id}">Remove</button></div>`;
