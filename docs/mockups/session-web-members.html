@@ -344,6 +344,7 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .preview .prose { font-size: var(--fs-sm); max-height: 260px; overflow-y: auto; margin-top: 6px; padding-bottom: 8px;
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); }
 .preview .pf { margin-top: 2px !important; }
+.preview .rtext + .pf { margin-top: 3px !important; }
 .preview .pf { display: flex; gap: 12px; margin-top: 8px; font-size: var(--fs-xs); color: var(--t-faint); align-items: center; }
 .preview .pf .tlink { font-size: inherit; font-weight: inherit; }
 .mgn .preview .composer { margin-top: 10px; }
@@ -379,7 +380,7 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .brp > .composer { align-self: stretch; margin-top: 6px; }
 .brp-h { font-size: var(--fs-xs); color: var(--t-faint); margin-bottom: 2px; }
 .brr { align-self: stretch; padding: 6px 0; }
-.brr .pf { margin-top: 4px; }
+.brr .pf { margin-top: 5px; }
 .brr .composer { margin-top: 6px; }
 .rtext { font-size: var(--fs-sm); color: var(--t-primary); line-height: 1.45; overflow-wrap: anywhere; }
 .preview .rtext { max-height: 240px; overflow-y: auto; }
@@ -406,6 +407,7 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .rhid { margin-left: 6px; font-size: 10.5px; color: var(--t-faint); font-variant-numeric: tabular-nums; }
 .rlike:not(:disabled):hover { color: var(--t-heading); }
 .rlike.on, .iconbtn.likes.on { color: var(--bad); }
+.rlike.rrep.on { color: var(--t-heading); }
 .rlike.on svg.i, .iconbtn.likes.on svg.i { fill: currentColor; }
 .iconbtn.on:not(.likes) { color: var(--accent); }
 .iconbtn.on:not(.likes):not([data-a="ask"]):not([data-a="replyopen"]) svg.i { fill: currentColor; }
@@ -1309,7 +1311,7 @@ function preview(p, T, n) {
 function branchActs(p, n, k, promoted) {
   const open = promoted ? `<button class="tlink" data-a="gothread" data-id="${promoted}">Open thread</button>` : '';
   const b = (node, label, tip) => `<button class="tlink bact" data-a="askfrom" data-id="${p.id}" data-node="${node}" data-sel="${n.id}" title="${tip}">${I.agent}${label}</button>`;
-  return `<div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches'}</span>${open}<span class="grow"></span>${canWrite() && !n.pending
+  return `<div class="pf">${open}<span class="grow"></span>${canWrite() && !n.pending
     ? b(n.id, 'Continue', 'Ask a new question under this answer. Runs an answer.') + b(n.par, 'Branch', 'Ask a different question at the same point, next to this one. Runs an answer.') : ''}</div>`;
 }
 /* replies on a branch's answer: a short discussion without running another ask */
@@ -1318,7 +1320,7 @@ function branchReplies(p, n) {
   const key = p.id + ':' + n.id, rows = flatReplies(BRP[key] || []);
   const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, 'Reply', '', 'Reply', 'brclose') : '';
   if (!rows.length && !canWrite()) return '';
-  return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'reply', 'replies')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 3) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><div class="rtext">${fmtReply(r.t)}</div><div class="pf">${likeBtnK('b:' + rid(r), r)}${canWrite() ? `<button class="tlink" data-a="brreply" data-k="${key}/${id}">${st.brReplying === key + '/' + id ? 'Close reply' : 'Reply'}</button>` : ''}</div>${box(id)}</div>`).join('')}
+  return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'reply', 'replies')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 3) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><div class="rtext">${fmtReply(r.t)}</div><div class="pf">${likeBtnK('b:' + rid(r), r)}${canWrite() ? replyIcon(`data-a="brreply" data-k="${key}/${id}"`, st.brReplying === key + '/' + id) : ''}</div>${box(id)}</div>`).join('')}
     ${canWrite() && st.brReplying !== key + '/top' ? `<button class="tlink brp-add" data-a="brreply" data-k="${key}/top">Reply to this branch</button>` : ''}${box('top')}</div>`;
 }
 const readout = (p, T, ns) => inGroup(T, ns, st.sel[p.id]) ? preview(p, T, T.nodes[st.sel[p.id]]) : '';
@@ -1365,7 +1367,8 @@ const rkey = (p, id) => p.id + '/' + id;
 const likeBtn = (p, id, r) => likeBtnK('r:' + rid(r), r);
 const likeBtnK = (k, r) => { const n = (r.likes || 0) + (LIKED()[k] ? 1 : 0); return `<button class="rlike${LIKED()[k] ? ' on' : ''}" data-a="like" data-k="${k}" aria-pressed="${!!LIKED()[k]}" aria-label="Like, ${n} likes"${canWrite() || st.auth === 'out' ? '' : ' disabled title="Liking opens once you have an invite"'}>${I.heart}${n}</button>`; };
 const replyBox = (p, at, ph) => st.replying === rkey(p, at) ? composer('rp:' + p.id + ':' + at, ph, '', 'Reply', 'rpclose') : '';
-const replyLink = (p, id, label = 'Reply') => canWrite() ? `<button class="tlink" data-a="reply" data-id="${rkey(p, id)}">${st.replying === rkey(p, id) ? 'Close reply' : label}</button>` : '';
+const replyIcon = (attrs, open) => `<button class="rlike rrep${open ? ' on' : ''}" ${attrs} aria-pressed="${open}" aria-label="${open ? 'Close reply' : 'Reply'}" title="${open ? 'Close reply' : 'Reply'}">${ARROW_REPLY}</button>`;
+const replyLink = (p, id, label = 'Reply') => !canWrite() ? '' : id === 'top' ? `<button class="tlink" data-a="reply" data-id="${rkey(p, id)}">${st.replying === rkey(p, id) ? 'Close reply' : label}</button>` : replyIcon(`data-a="reply" data-id="${rkey(p, id)}"`, st.replying === rkey(p, id));
 
 /* Avatar tree: the same line graph as the branch trees, one row per reply led by its author's avatar; click a row to read it. */
 function replyLines(p) {
