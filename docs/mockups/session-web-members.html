@@ -1040,7 +1040,7 @@ function card(p) {
   }
   const T = tree(p), src = (D.srcd[p.id] || []).length;
   const src0 = p.from && byId(p.from.pid);
-  const from = src0 ? `<button class="fromln" data-a="gofrom" data-id="${p.from.pid}" data-node="${p.from.nid}">${I.branch}<span>Branched from <b>${esc(clip(tree(src0).nodes.r.q, 70))}</b></span></button>` : '';
+  const from = src0 ? `<button class="fromln" data-a="gofrom" data-id="${p.from.pid}" data-node="${p.from.nid}">${ARROW_REPLY}<span>Branched from <b>${esc(clip(tree(src0).nodes.r.q, 70))}</b></span></button>` : '';
   return `<article class="${cls}" id="card-${p.id}">${head}${from}<p class="ask">${esc(T.nodes.r.q)}</p>
     <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok)].filter(Boolean).join(' · ')}</span></div>
     <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
@@ -1325,7 +1325,7 @@ app.addEventListener('mouseup', e => {
     { const f = sel.getRangeAt(0).cloneContents(); f.querySelectorAll('.anc, sup').forEach(x => x.remove()); st.selText = f.textContent.replace(/\s+/g, ' ').trim() || t; }
     /* below the selection: right-aligned to a one-line selection, left-aligned to a longer one */
     const tops = new Set([...sel.getRangeAt(0).getClientRects()].filter(x => x.width > 1).map(x => Math.round(x.top / 4)));
-    app.insertAdjacentHTML('beforeend', `<button id="selbranch" data-a="selbranch" data-id="${pid}" style="top:${r.bottom - A.top + 8}px">${I.branch}Branch here</button>`);
+    app.insertAdjacentHTML('beforeend', `<button id="selbranch" data-a="selbranch" data-id="${pid}" style="top:${r.bottom - A.top + 8}px">${ARROW_REPLY}Branch here</button>`);
     const sb = $('#selbranch'), x = tops.size > 1 ? r.left - A.left : r.right - A.left - sb.offsetWidth;
     sb.style.left = Math.max(8, Math.min(x, A.width - sb.offsetWidth - 8)) + 'px';
   });
