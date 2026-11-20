@@ -59,6 +59,10 @@ export function startTestServer(o: TestServerOptions = {}): {
     SESSION_DATA_DIR: directory,
     SESSION_TEST_AUTH: "1",
     SESSION_FIXTURE_PROVIDERS: "1",
+    // the suites over HTTP write far faster than a person: a budget they
+    // never reach, unless `env` sets one
+    SESSION_WRITE_BURST: "1000000",
+    SESSION_WRITES_PER_MINUTE: "1000000",
     ...o.env,
   });
   const db = openDatabase(config.databasePath);

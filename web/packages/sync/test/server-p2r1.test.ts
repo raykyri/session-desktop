@@ -288,4 +288,33 @@ for (const kind of STORES) {
     });
     t.is(code(w.server.call(null, "devices.authorize", { name: "   " })), "BAD_REQUEST");
   });
+  test(`${kind}: F6: the write budget: a bucket per person, refilled by time; a clock that goes back refills nothing`, (t) => {
+    const { w, open } = cast(t, kind, 1, { writeBudget: { burst: 20, perMinute: 60 } });
+    const post = (u: string) =>
+      w.as(u, "threads.create", { id: w.id(), space: open, kind: "post", q: "p" });
+    // the cast's own writes drew on the buckets: a minute refills them
+    w.clock.advance(60_000);
+    for (let k = 0; k < 20; k++) ok(t, post("mel"));
+    const e = refused(t, post("mel"), "TOO_MANY_REQUESTS");
+    t.truthy(e?.retryAt);
+    ok(t, post("otto"));
+    t.is(code(w.server.call({ u: "mel" }, "settings.update", {})), "TOO_MANY_REQUESTS");
+    w.clock.advance(1000);
+    ok(t, post("mel"));
+    refused(t, post("mel"), "TOO_MANY_REQUESTS");
+    w.clock.advance(-60_000);
+    refused(t, post("mel"), "TOO_MANY_REQUESTS");
+    w.clock.advance(60_000 + 2000);
+    ok(t, post("mel"));
+    ok(t, post("mel"));
+    refused(t, post("mel"), "TOO_MANY_REQUESTS");
+    // a full bucket holds no more than its size
+    w.clock.advance(10 * 60_000);
+    for (let k = 0; k < 20; k++) ok(t, post("mel"));
+    refused(t, post("mel"), "TOO_MANY_REQUESTS");
+    // no budget: no limit
+    const o = cast(t, kind, 2);
+    for (let k = 0; k < 50; k++)
+      ok(t, o.w.as("mel", "threads.create", { id: o.w.id(), space: o.open, kind: "post", q: "p" }));
+  });
 }

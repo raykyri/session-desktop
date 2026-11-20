@@ -872,6 +872,11 @@ export class OnlineCalls {
         error: fail("NOT_FOUND", "The server has no procedure with this name.").toError(),
         serverTime: t0,
       };
+    // the account's budget of writes and calls (review round 1 of phase 2)
+    const spent = this.server.overBudget(
+      actor && pkg.isHandle(actor.u) ? `u:${actor.u}` : meta.ip ? `ip:${meta.ip}` : null,
+    );
+    if (spent) return { ok: false, error: spent, serverTime: t0 };
     // bounded before anything parses it (review round 2 of phase 1)
     const b = bounds(input, MAX_CALL_DEPTH + 1, MAX_CALL_BYTES);
     if (b !== "ok" || Buffer.byteLength(JSON.stringify(input) ?? "") > MAX_CALL_BYTES)

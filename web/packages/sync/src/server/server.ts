@@ -90,6 +90,17 @@ import { Tokens, type CursorKeys } from "./tokens.js";
 type RunEvent = Extract<SseEvent, { type: "run" }>;
 
 export const EFFECT_MAX_ATTEMPTS = 10;
+
+/** `SyncServerOptions.writeBudget`. */
+export interface WriteBudget {
+  /** The most writes and calls at once (the bucket's size). */
+  burst: number;
+  /** How many the bucket refills a minute. */
+  perMinute: number;
+}
+
+/** The buckets kept before full ones are dropped. */
+const BUDGET_KEYS_MAX = 10_000;
 export const EFFECT_BACKOFF_MIN = 1000;
 export const EFFECT_BACKOFF_MAX = 600_000;
 /** How many expired rows of each table one housekeeping pass removes. */
@@ -128,6 +139,12 @@ export interface SyncServerOptions {
    * default MIN_PROTOCOL_VERSION): a write or a read below it answers
    * UPDATE_REQUIRED (phase 2a). */
   minProtocol?: number;
+  /** A per-account budget of writes and online calls (review round 1 of
+   * phase 2, F6): a bucket of `burst` that refills at `perMinute`. A write
+   * or call past it answers TOO_MANY_REQUESTS with `retryAt`, unrecorded,
+   * before anything else is read. A call with no actor is counted by its
+   * network address (`CallMeta.ip`) when known. Default: no budget. */
+  writeBudget?: WriteBudget | null;
   /** The most queued and running server runs one person may have (a
    * deployment setting: the HTTP server passes `SESSION_QUEUED_PER_USER`;
    * default no limit). A write that would start one more answers
@@ -259,6 +276,8 @@ export class SyncServer {
   readonly includedModel: (u: string, model: string) => boolean;
   /** `SyncServerOptions.queuedRunsPerUser`. */
   readonly queuedRunsPerUser: number;
+  private readonly writeBudget: WriteBudget | null;
+  private readonly buckets = new Map<string, { tokens: number; at: number }>();
   private readonly onError: SyncServerOptions["onError"];
   readonly online: OnlineCalls;
   /** The lowest protocol version taken (`SyncServerOptions.minProtocol`). */
@@ -288,6 +307,7 @@ export class SyncServer {
     this.failEffect = o.failEffect;
     this.includedModel = o.includedModel ?? (() => false);
     this.queuedRunsPerUser = o.queuedRunsPerUser ?? Infinity;
+    this.writeBudget = o.writeBudget ?? null;
     this.onError = o.onError;
     this.minProtocol = Math.max(MIN_PROTOCOL_VERSION, o.minProtocol ?? MIN_PROTOCOL_VERSION);
     this.online = new OnlineCalls(this, o.online, o.keys, {
@@ -529,6 +549,35 @@ export class SyncServer {
     }
   }
 
+  /** Take one write or call from `key`'s budget (`writeBudget`): null when
+   * it is within it, else the TOO_MANY_REQUESTS refusal, with `retryAt` when
+   * the next one is taken. The clock going back refills nothing and takes
+   * nothing away. */
+  overBudget(key: string | null): AnswerError | null {
+    const b = this.writeBudget;
+    if (!b || key === null) return null;
+    const now = this.clockNow();
+    const prev = this.buckets.get(key) ?? { tokens: b.burst, at: now };
+    const tokens = Math.min(b.burst, prev.tokens + (Math.max(0, now - prev.at) * b.perMinute) / 60_000);
+    if (tokens < 1) {
+      this.buckets.set(key, { tokens, at: Math.max(now, prev.at) });
+      const wait = Math.ceil(((1 - tokens) * 60_000) / b.perMinute);
+      return {
+        ...err(
+          "TOO_MANY_REQUESTS",
+          "You made too many changes in a short time. Try again in a minute.",
+        ),
+        // whole seconds, rounded up: a retry at it is taken
+        retryAt: isoAt(Math.ceil((now + wait) / 1000) * 1000),
+      };
+    }
+    if (this.buckets.size >= BUDGET_KEYS_MAX)
+      for (const [k, v] of this.buckets)
+        if (v.tokens + ((now - v.at) * b.perMinute) / 60_000 >= b.burst) this.buckets.delete(k);
+    this.buckets.set(key, { tokens: tokens - 1, at: Math.max(now, prev.at) });
+    return null;
+  }
+
   /** Housekeeping before a request: at most once a second of server time, in
    * its own transaction, so a request that is refused (and rolls back) does
    * not undo it (review round 1 of phase 1, W1). A fault in it fails no
@@ -672,6 +721,8 @@ export class SyncServer {
     const m = parsed.data;
     if (!actor || !pkg.isHandle(actor.u)) return no(err("UNAUTHORIZED"));
     const u = actor.u;
+    const spent = this.overBudget(`u:${u}`);
+    if (spent) return no(spent);
     this.housekeepDue();
     return this.run((tx) => {
       const now = this.time(tx);

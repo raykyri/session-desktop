@@ -90,6 +90,7 @@ export function createSync(o: CreateSyncOptions): SyncServer {
     keys: new DbKeyVault(o.db, o.keys),
     minProtocol: o.config.sync.minProtocol,
     queuedRunsPerUser: o.config.limits.queuedPerUser,
+    writeBudget: o.config.sync.writeBudget,
     // an admin-only model runs on the included tokens for an admin only
     includedModel: (u, model) => canUseModel(users.findByHandle(o.db, u), model),
     // a housekeeping fault is counted by the server (`housekeepingFaults`,
