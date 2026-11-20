@@ -368,8 +368,8 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .rlike.on, .iconbtn.likes.on { color: var(--bad); }
 .rlike.on svg.i, .iconbtn.likes.on svg.i { fill: currentColor; }
 .iconbtn.on:not(.likes) { color: var(--accent); }
-.iconbtn.on:not(.likes):not([data-a="ask"]) svg.i { fill: currentColor; }
-.iconbtn[data-a="ask"].on { background: var(--fill-hover); }
+.iconbtn.on:not(.likes):not([data-a="ask"]):not([data-a="replyopen"]) svg.i { fill: currentColor; }
+.iconbtn:is([data-a="ask"], [data-a="replyopen"]).on { background: var(--fill-hover); }
 .rfoot { margin-top: 8px; padding-left: 4px; }
 .replies .tlink { font-size: var(--fs-xs); font-weight: 400; }
 .replies .composer { margin-top: 8px; }
@@ -1032,7 +1032,7 @@ function card(p) {
   const acts = `<button class="iconbtn likes${st.liked[lk] ? ' on' : ''}" data-a="like" data-k="${lk}" aria-pressed="${!!st.liked[lk]}" aria-label="Like, ${nl} likes"${off}>${I.heart}<span>${nl}</span></button><button class="iconbtn${st.saved[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!st.saved[p.id]}" aria-label="${st.saved[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}</button>`;
   if (p.k === 'post') {
     const n = replyCount(p);
-    return `<article class="${cls}" id="card-${p.id}">${head}<p class="post">${esc(p.q)}</p><div class="card-f">${lead}${count(n ? noun(n, 'reply', 'replies') : '')}${canWrite() ? `<button class="iconbtn" data-a="reply" data-id="${rkey(p, 'top')}" aria-label="Reply">${I.reply}</button>` : ''}${acts}${tail}</div></article>`;
+    return `<article class="${cls}" id="card-${p.id}">${head}<p class="post">${esc(p.q)}</p><div class="card-f">${lead}${count(n ? noun(n, 'reply', 'replies') : '')}${canWrite() ? `<button class="iconbtn${st.replying === rkey(p, 'top') ? ' on' : ''}" data-a="replyopen" data-id="${rkey(p, 'top')}" aria-pressed="${st.replying === rkey(p, 'top')}" aria-label="Reply" title="Reply">${ARROW_REPLY}</button>` : ''}${acts}${tail}</div></article>`;
   }
   const T = tree(p), src = (D.srcd[p.id] || []).length;
   const src0 = p.from && byId(p.from.pid);
@@ -1110,7 +1110,7 @@ function branchReplies(p, n) {
   const key = p.id + ':' + n.id, rows = flatReplies(BRP[key] || []);
   const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, 'Reply', '', 'Reply', 'brclose') : '';
   if (!rows.length && !canWrite()) return '';
-  return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'reply', 'replies')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 3) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><div class="rtext">${fmtReply(r.t)}</div><div class="pf">${likeBtnK('b:' + key + ':' + id, r)}${canWrite() ? `<button class="tlink" data-a="brreply" data-k="${key}/${id}">Reply</button>` : ''}</div>${box(id)}</div>`).join('')}
+  return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'reply', 'replies')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 3) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><div class="rtext">${fmtReply(r.t)}</div><div class="pf">${likeBtnK('b:' + key + ':' + id, r)}${canWrite() ? `<button class="tlink" data-a="brreply" data-k="${key}/${id}">${st.brReplying === key + '/' + id ? 'Close reply' : 'Reply'}</button>` : ''}</div>${box(id)}</div>`).join('')}
     ${canWrite() && st.brReplying !== key + '/top' ? `<button class="tlink brp-add" data-a="brreply" data-k="${key}/top">Reply to this branch</button>` : ''}${box('top')}</div>`;
 }
 const readout = (p, T, ns) => inGroup(T, ns, st.sel[p.id]) ? preview(p, T, T.nodes[st.sel[p.id]]) : '';
@@ -1157,7 +1157,7 @@ const rkey = (p, id) => p.id + '/' + id;
 const likeBtn = (p, id, r) => likeBtnK('r:' + p.id + ':' + id, r);
 const likeBtnK = (k, r) => { const n = (r.likes || 0) + (st.liked[k] ? 1 : 0); return `<button class="rlike${st.liked[k] ? ' on' : ''}" data-a="like" data-k="${k}" aria-pressed="${!!st.liked[k]}" aria-label="Like, ${n} likes"${canWrite() ? '' : ' disabled'}>${I.heart}${n}</button>`; };
 const replyBox = (p, at, ph) => st.replying === rkey(p, at) ? composer('rp:' + p.id + ':' + at, ph, '', 'Reply', 'rpclose') : '';
-const replyLink = (p, id) => canWrite() ? `<button class="tlink" data-a="reply" data-id="${rkey(p, id)}">Reply</button>` : '';
+const replyLink = (p, id) => canWrite() ? `<button class="tlink" data-a="reply" data-id="${rkey(p, id)}">${st.replying === rkey(p, id) ? 'Close reply' : 'Reply'}</button>` : '';
 
 /* Avatar tree: the same line graph as the branch trees, one row per reply led by its author's avatar; click a row to read it. */
 function replyLines(p) {
@@ -1298,6 +1298,7 @@ app.addEventListener('click', e => {
   if (a === 'rquote') { const [pid, rid] = d.id.split('/'), r = replyAt(byId(pid), rid); st.replying = d.id; render();
     const ta = document.getElementById('in-rp:' + pid + ':' + rid); if (ta) { ta.value = `> ${clip(plainReply(r.t), 200)}\n`; ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
   if (a === 'rsel') { st.rsel[d.id] = st.rsel[d.id] === d.node ? null : d.node; st.replying = null; render(); return; }
+  if (a === 'replyopen') { if (st.replying !== d.id) { st.replying = d.id; render(); } document.getElementById('in-rp:' + d.id.replace('/', ':'))?.focus(); return; }
   if (a === 'reply') { st.replying = st.replying === d.id ? null : d.id; render(); document.getElementById('in-rp:' + d.id.replace('/', ':'))?.focus(); return; }
   if (a === 'del') { deleteItem(d.k); return; }
   if (a === 'like') { st.liked[d.k] = !st.liked[d.k]; render(); return; }
@@ -1318,9 +1319,11 @@ app.addEventListener('mouseup', e => {
     const pid = pr.id.slice(3); if (byId(pid)?.pending) return;
     const r = sel.getRangeAt(0).getBoundingClientRect(), A = app.getBoundingClientRect();
     { const f = sel.getRangeAt(0).cloneContents(); f.querySelectorAll('.anc, sup').forEach(x => x.remove()); st.selText = f.textContent.replace(/\s+/g, ' ').trim() || t; }
-    /* below the selection, right edges aligned */
+    /* below the selection: right-aligned to a one-line selection, left-aligned to a longer one */
+    const tops = new Set([...sel.getRangeAt(0).getClientRects()].filter(x => x.width > 1).map(x => Math.round(x.top / 4)));
     app.insertAdjacentHTML('beforeend', `<button id="selbranch" data-a="selbranch" data-id="${pid}" style="top:${r.bottom - A.top + 8}px">${I.branch}Branch here</button>`);
-    const sb = $('#selbranch'); sb.style.left = Math.max(8, Math.min(r.right - A.left - sb.offsetWidth, A.width - sb.offsetWidth - 8)) + 'px';
+    const sb = $('#selbranch'), x = tops.size > 1 ? r.left - A.left : r.right - A.left - sb.offsetWidth;
+    sb.style.left = Math.max(8, Math.min(x, A.width - sb.offsetWidth - 8)) + 'px';
   });
 });
 /* hover: outline the drawing under the pointer */
