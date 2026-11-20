@@ -133,12 +133,12 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .pick select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; font-size: var(--fs-sm); }
 .pick svg.i { position: absolute; right: 7px; width: 12px; height: 12px; pointer-events: none; color: var(--t-muted); }
 .pick.static { padding-right: 9px; color: var(--t-secondary); font-size: var(--fs-sm); font-weight: 500; }
-.send { width: 30px; height: 30px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--accent); color: var(--on-accent); transition: background .15s, color .15s; }
+.send { width: 30px; height: 30px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--accent-strong); color: var(--on-accent-light); transition: background .15s, color .15s; }
 .send svg.i { width: 15px; height: 15px; stroke-width: 1.8; }
 .nb:not(.has-text) .send, .nb:not(.has-text) .primary { background: var(--control); color: var(--t-dim); }
 .ghost { height: 30px; padding: 0 12px; border-radius: 15px; color: var(--t-secondary); font-weight: 500; font-size: var(--fs-sm); flex: none; }
 .ghost:hover { background: var(--fill-hover); color: var(--t-heading); }
-.primary { height: 30px; padding: 0 16px; border-radius: 15px; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: var(--fs-sm); flex: none; transition: background .15s, color .15s; }
+.primary { height: 30px; padding: 0 16px; border-radius: 15px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); flex: none; transition: background .15s, color .15s; }
 .modes { display: inline-flex; background: var(--control); border-radius: 13px; padding: 2px; flex: none; }
 .modes button { height: 22px; padding: 0 10px; border-radius: 11px; font-size: var(--fs-xs); font-weight: 500; color: var(--t-muted); }
 .modes button[aria-pressed="true"] { background: var(--card); color: var(--t-heading); box-shadow: var(--shadow); }
@@ -195,7 +195,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .nb-top .modes { margin-right: 4px; }
 .nb-modecard .nb-f { margin-top: 6px; }
 .nb-modecard textarea { font-size: 15.5px; line-height: 1.5; }
-.composer button { height: 30px; padding: 0 12px; border-radius: 15px; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: var(--fs-sm); }
+.composer button { height: 30px; padding: 0 12px; border-radius: 15px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); }
 .composer .ctx { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
 .status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--warn); }
 .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.2s infinite; }
@@ -743,7 +743,7 @@ const COMPOSERS = {
   split: () => {
     const open = st.menu === 'send';
     const opt = (m, t, sub) => `<button type="button" class="mi mi-2" role="menuitemradio" aria-checked="${st.newMode === m}" data-a="mode" data-m="${m}"><span><b>${t}</b><small>${sub}</small></span>${st.newMode === m ? CHECK : ''}</button>`;
-    return `<div class="row new-row"><form class="${nbClass('nb-dock')}" data-form="new:x">${av(F.me.u, 'sm')}${draft(ph())}${spaceField()}
+    return `<div class="row new-row"><form class="${nbClass('nb-dock')}" data-form="new:x">${av(F.me.u, 'sm')}${draft(ph())}${spaceField()}${isAsk() ? modelMenu() : ''}
       <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter>${isAsk() ? 'Ask' : 'Post'}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
       ${open ? `<div class="menu right" role="menu">${opt('ask', 'Ask', 'The agent researches and answers')}${opt('post', 'Post', 'A message to people in the space')}</div>` : ''}</span></form><div></div></div>`;
   },
