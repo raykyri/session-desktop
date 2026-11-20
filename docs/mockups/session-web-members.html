@@ -539,10 +539,11 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .pbanner { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: var(--r-xl); background: color-mix(in srgb, var(--warn) 10%, var(--card)); box-shadow: var(--shadow); font-size: var(--fs-sm); color: var(--t-secondary); }
 .pbanner b { color: var(--t-heading); font-weight: 600; }
 .pbanner > div { flex: 1; min-width: 0; }
-.pbanner.inl .code-f { margin-top: 10px; max-width: 420px; }
-.reqmsg { margin: 0 0 12px; font-size: var(--fs-md); color: var(--t-heading); line-height: 1.5; }
-.pend-b { max-width: 440px; padding-top: 72px; text-align: center; }
-.pend-b .code-f { text-align: left; }
+.code-f .btn1 { height: 40px; border-radius: 20px; }
+.pend-a .code-f { margin: 4px 0 24px; }
+.pend-a .ferr { margin: -16px 0 24px; }
+.pend-a .pcard { padding: 14px 18px; margin-bottom: 20px; }
+.pend-a .checks { margin: 0; gap: 8px; }
 .pdot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex: none; }
 /* tree A */
 .ttree { position: relative; background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 4px 12px; }
@@ -1253,7 +1254,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pend: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1292,7 +1293,6 @@ function toast(t) { st.toast = t; clearTimeout(toastTimer); toastTimer = setTime
 const pendingBanner = () => {
   if (st.auth === 'out') return `<div class="row new-row"><div class="pbanner out"><div><b>You're reading Session's open spaces.</b> Sign in to ask, branch and reply. New accounts need an invite from a member.</div><button class="ghost" data-ma="openauth" data-to="code">I have an invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></div><div></div></div>`;
   if (isActive() || st.auth !== 'in') return '';
-  if (st.ui.pend === 'd') return `<div class="row new-row"><div class="pbanner inl"><div><b>You don't have an invite yet.</b> You can read every open space. Enter a code from a member to ask, post and reply.${redeemForm()}</div></div><div></div></div>`;
   return `<div class="row new-row"><div class="pbanner"><span class="pdot"></span><div><b>You don't have an invite yet.</b> You can read every open space. Asking, posting and replying open once you enter an invite code.</div><button class="ghost" data-ma="go" data-to="status">Enter a code</button></div><div></div></div>`;
 };
 function composerOrLock(v) {
@@ -1370,18 +1370,12 @@ function authScreen() {
 }
 
 /* ---- status page: signed in with X, no invite yet ----
-   A explains what is open now, with the code field · B just the code field · C a message to send a member, then the code field
-   D no page; the banner on the feed holds the code field */
+   what is open now, and the code field */
 const redeemForm = (label = 'Use code') => `<form class="code-f" data-mform="redeem"><input id="in-redeem" value="${esc(st.redeem || '')}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1">${label}</button></form>${st.redeemErr ? `<p class="ferr">${esc(st.redeemErr)}</p>` : ''}`;
 function statusPage() {
-  const m = meM(), first = esc(m.name.split(' ')[0]), msg = `I'm on Session as @${m.u}. Could you send me an invite link?`;
+  const m = meM();
   const browse = `<div class="auth-acts"><button class="btn2" data-ma="go" data-to="feed">Browse the feed</button></div>`;
-  const v = st.ui.pend;
-  if (v === 'b') return `<div class="page"><div class="page-in narrow pend-b"><h2>Enter an invite code</h2><p class="lede">Session is invite-only. Ask a member for a code or a link.</p>${redeemForm()}</div></div>`;
-  if (v === 'c') return `<div class="page"><div class="page-in narrow"><h2>Ask a member for an invite</h2><p class="lede">Hi ${first}. Session is invite-only. Anyone with an account can send you a link.</p>
-    <div class="pcard"><p class="reqmsg">${esc(msg)}</p><button class="btn1 sm" data-ma="copy" data-t="${esc(msg)}">Copy message</button></div>
-    <h3>Have a code?</h3>${redeemForm()}${browse}</div></div>`;
-  return `<div class="page"><div class="page-in narrow"><h2>You need an invite</h2><p class="lede">Hi ${first}. You're signed in as @${esc(m.u)}, but Session is invite-only. Enter a code or link from a member to start asking and posting.</p>
+  return `<div class="page"><div class="page-in narrow pend-a"><h2>Invite required</h2><p class="lede">You're signed in as @${esc(m.u)}, but Session is invite-only. Enter a code or link from a member to start asking and posting.</p>
     ${redeemForm()}
     <div class="pcard"><ul class="checks"><li class="ok">${CHECK}Read every open space and its branches</li><li><span class="ring"></span>Ask, post, branch and reply</li><li><span class="ring"></span>Invite people</li></ul></div>${browse}</div></div>`;
 }
@@ -1492,7 +1486,7 @@ function renderMock() {
   const cur = st.auth === 'out' ? 'out' : st.user;
   const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcde'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
-    ${seg('inv', 'Invites', 5)}${seg('pend', 'No-invite screen', 4)}${seg('runs', 'Run rows', 5)}
+    ${seg('inv', 'Invites', 5)}${seg('runs', 'Run rows', 5)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -1503,7 +1497,7 @@ function render() {
   $('#bar').innerHTML = st.auth === 'out' ? appbarOut() : appbar();
   if (st.auth === 'out') st.screen = 'feed';
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
-  if (st.screen === 'feed' || (st.screen === 'status' && st.ui.pend === 'd' && !isActive())) renderFeed();
+  if (st.screen === 'feed') renderFeed();
   else { pg.innerHTML = (st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
   app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg').forEach(x => x.remove());
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
@@ -1515,7 +1509,6 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
-  if (k === 'pend') { st.authOpen = false; if (!(st.auth === 'in' && meM()?.status === 'waiting')) { const w = MEMBERS.find(m => m.status === 'waiting'); st.user = w ? w.u : 'kofi.a'; } st.auth = 'in'; st.redeemErr = ''; st.screen = 'status'; render(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'feed' : 'usage';
   render();
