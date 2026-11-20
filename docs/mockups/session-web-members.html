@@ -334,6 +334,12 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .rlike svg.i { width: 12px; height: 12px; }
 .bq { margin: 0 0 8px; padding: 6px 10px; border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); background: var(--inset); border-radius: 0 6px 6px 0; color: var(--t-secondary); font-size: var(--fs-xs); line-height: 1.45; }
 .preview .bq { margin: 8px 0 2px; }
+.bq.full { max-height: 150px; overflow-y: auto; }
+button.bq.bqx { display: block; width: 100%; text-align: left; cursor: pointer; font: inherit; font-size: var(--fs-xs); }
+button.bq.bqx:hover { background: color-mix(in srgb, var(--accent) 8%, var(--inset)); }
+.bqm { display: block; margin-top: 4px; color: var(--accent); font-weight: 500; }
+.composer button.cx { width: 26px; height: 26px; padding: 0; margin-bottom: 2px; border-radius: 13px; background: none; color: var(--t-faint); }
+.composer button.cx:hover { background: var(--fill-hover); color: var(--t-heading); }
 #selbranch { position: absolute; z-index: 25; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px 0 9px; border-radius: 14px; background: var(--t-heading); color: var(--canvas); font-size: var(--fs-xs); font-weight: 600; box-shadow: var(--shadow-pop, 0 4px 14px rgba(0,0,0,.18)); }
 #selbranch svg.i { width: 12px; height: 12px; }
 button.anc { cursor: pointer; font: inherit; }
@@ -972,7 +978,7 @@ function addBranch(p, par, q, quote) {
   setTimeout(() => { if (DELETED.has(p.id + ':' + id) || !byId(p.id)) return; node.pending = false; node.html = `<p>Mock answer. In the app, the agent's answer to "${esc(clip(q, 80))}" is stored here when the run finishes, and the branch count on the thread goes up by one.</p>`; node.tok = 18000; node.bill = charge(q, 18000); render(); }, 2600);
   return id;
 }
-const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data-form="${id}">${ctx ? `<span class="ctx">${ctx}</span>` : ''}<textarea id="in-${id}" rows="1" placeholder="${esc(ph)}"></textarea><button type="submit">${btn}</button></form>`;
+const composer = (id, ph, ctx = '', btn = 'Ask', close = '') => `<form class="composer" data-form="${id}">${ctx ? `<span class="ctx">${ctx}</span>` : ''}<textarea id="in-${id}" rows="1" placeholder="${esc(ph)}"></textarea>${close ? `<button type="button" class="iconbtn cx" data-a="${close}" aria-label="Close" title="Close">${I.x}</button>` : ''}<button type="submit">${btn}</button></form>`;
 
 /* ================= pinned maps ================= */
 /* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
@@ -1036,6 +1042,7 @@ function card(p) {
 const STOP = new Set('what which does with that this from have there their about would could should into than then they them were been being where when your more most other some such only also over just like very many much does show give list same each these those here after before because between under while whether'.split(' '));
 const words = s => new Set((strip(s).toLowerCase().match(/[a-z0-9]{4,}/g) || []).filter(w => !STOP.has(w)));
 const overlap = (w, text) => { const bw = words(text); let sc = 0; w.forEach(x => { if (bw.has(x)) sc++; }); return sc / Math.sqrt(bw.size + 6); };
+const blockText = b => { const c = b.cloneNode(true); c.querySelectorAll('.anc, sup').forEach(x => x.remove()); return c.textContent.replace(/\s+/g, ' ').trim(); };
 function blocksOf(prose) { return [...prose.querySelectorAll(':scope > p, :scope > ul > li, :scope > ol > li, :scope > h4, :scope > table')]; }
 function bestBlock(blocks, text) { const w = words(text); let best = 0, bi = 0; blocks.forEach((b, i) => { if (b.tagName === 'H4') return; const sc = overlap(w, b.textContent); if (sc > best) { best = sc; bi = i; } }); return bi; }
 /* Group the answer's top-level branches by the paragraph they belong to, in reading order. */
@@ -1066,7 +1073,8 @@ function pinGroups(p, draw, cls = '') {
   const T = tree(p), items = [];
   if (st.asking === p.id && !st.sel[p.id]) {
     const q = st.quote?.pid === p.id ? st.quote.text : '', blocks = blocksOf(prose), at = q ? blocks[bestBlock(blocks, q)] : prose.firstElementChild;
-    margin.insertAdjacentHTML('beforeend', `<div class="pin">${q ? `<blockquote class="bq">${esc(clip(q, 180))}</blockquote>` : ''}${composer('mf:' + p.id + ':r', q ? 'Ask about this passage' : 'Ask a branch question about the answer')}</div>`);
+    const long = q.length > 180 && !st.quote.open;
+    margin.insertAdjacentHTML('beforeend', `<div class="pin">${q ? (long ? `<button type="button" class="bq bqx" data-a="qexpand" data-id="${p.id}" aria-label="Show the whole quote">${esc(clip(q, 180))}<span class="bqm">Show all</span></button>` : `<blockquote class="bq full">${esc(q)}</blockquote>`) : ''}${composer('mf:' + p.id + ':r', q ? 'Ask about this passage' : 'Ask about the answer', '', 'Ask', 'askclose')}</div>`);
     items.push({ el: margin.lastElementChild, anchor: at || prose.firstElementChild });
     at?.classList.add('qsel');
   }
@@ -1087,14 +1095,14 @@ function preview(p, T, n) {
   const par = st.asking === p.id ? (st.askPar ?? n.id) : null;
   return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${more}</div>${n.quote ? `<blockquote class="bq">${esc(clip(n.quote, 180))}</blockquote>` : ''}${status(n)}<div class="prose">${answerHtml(n)}</div>
     <div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches'}</span>${promoted ? `<button class="tlink" data-a="gothread" data-id="${promoted}">Open thread</button>` : ''}<span class="grow"></span>${canWrite() && !n.pending ? `<button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.id}" data-sel="${n.id}" title="Ask a follow-up under this answer">Continue</button><button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.par}" data-sel="${n.id}" title="Ask another question beside this one">Branch</button>` : ''}</div>
-    ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? 'Continue from this answer' : 'Ask beside this branch') : ''}
+    ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? 'Continue from here' : 'Ask beside this', '', 'Ask', 'askclose') : ''}
     ${branchReplies(p, n)}</div>`;
 }
 /* replies on a branch's answer: a short discussion without running another ask */
 function branchReplies(p, n) {
   if (n.pending) return '';
   const key = p.id + ':' + n.id, rows = flatReplies(BRP[key] || []);
-  const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, at === 'top' ? 'Reply to this branch · @ to mention' : 'Reply · @ to mention', '', 'Reply') : '';
+  const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, 'Reply', '', 'Reply', 'brclose') : '';
   if (!rows.length && !canWrite()) return '';
   return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'reply', 'replies')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 3) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><div class="rtext">${fmtReply(r.t)}</div><div class="pf">${likeBtnK('b:' + key + ':' + id, r)}${canWrite() ? `<button class="tlink" data-a="brreply" data-k="${key}/${id}">Reply</button>` : ''}</div>${box(id)}</div>`).join('')}
     ${canWrite() && st.brReplying !== key + '/top' ? `<button class="tlink brp-add" data-a="brreply" data-k="${key}/top">Reply to this branch</button>` : ''}${box('top')}</div>`;
@@ -1142,12 +1150,12 @@ function addReply(p, at, t) {
 const rkey = (p, id) => p.id + '/' + id;
 const likeBtn = (p, id, r) => likeBtnK('r:' + p.id + ':' + id, r);
 const likeBtnK = (k, r) => { const n = (r.likes || 0) + (st.liked[k] ? 1 : 0); return `<button class="rlike${st.liked[k] ? ' on' : ''}" data-a="like" data-k="${k}" aria-pressed="${!!st.liked[k]}" aria-label="Like, ${n} likes"${canWrite() ? '' : ' disabled'}>${I.heart}${n}</button>`; };
-const replyBox = (p, at, ph) => st.replying === rkey(p, at) ? composer('rp:' + p.id + ':' + at, ph + ' · @ to mention', '', 'Reply') : '';
+const replyBox = (p, at, ph) => st.replying === rkey(p, at) ? composer('rp:' + p.id + ':' + at, ph, '', 'Reply', 'rpclose') : '';
 const replyLink = (p, id) => canWrite() ? `<button class="tlink" data-a="reply" data-id="${rkey(p, id)}">Reply</button>` : '';
 
 /* Avatar tree: the same line graph as the branch trees, one row per reply led by its author's avatar; click a row to read it. */
 function replyLines(p) {
-  const rows = flatReplies(replies(p), 0, '', id => st.rcol[p.id + '/' + id]); if (!rows.length) return st.replying === rkey(p, 'top') ? `<div class="grp">${replyBox(p, 'top', 'Reply to the post')}</div>` : '';
+  const rows = flatReplies(replies(p), 0, '', id => st.rcol[p.id + '/' + id]); if (!rows.length) return st.replying === rkey(p, 'top') ? `<div class="grp">${replyBox(p, 'top', 'Reply')}</div>` : '';
   const sel = st.rsel[p.id], H = 26, X = d => 6 + d * 13, idx = Object.fromEntries(rows.map((x, i) => [x.id, i]));
   const on = new Set(); if (sel) sel.split('.').forEach((_, i, a) => on.add(a.slice(0, i + 1).join('.')));
   let paths = '', dots = '';
@@ -1158,8 +1166,8 @@ function replyLines(p) {
   });
   const cur = sel && idx[sel] != null ? rows[idx[sel]] : null;
   return `<div class="grp"><div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ r, d, id, hid }) => `<button class="grow-r${on.has(id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}"><span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(plainReply(r.t))}</span>${hid ? `<span class="rhid">+${hid}</span>` : ''}</span></button>`).join('')}</div>
-    ${cur ? `<div class="preview fadein"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div><div class="rtext">${fmtReply(cur.r.t)}</div><div class="pf">${likeBtn(p, cur.id, cur.r)}${replyLink(p, cur.id)}${canWrite() ? `<button class="tlink" data-a="rquote" data-id="${rkey(p, cur.id)}">Quote</button>` : ''}${(cur.r.kids || []).length ? `<button class="tlink" data-a="rcol" data-id="${p.id}" data-node="${cur.id}">${st.rcol[p.id + '/' + cur.id] ? `Show ${noun(flatReplies(cur.r.kids).length, 'reply', 'replies')}` : 'Hide replies'}</button>` : ''}</div>${replyBox(p, cur.id, 'Reply to ' + cur.r.u)}</div>` : ''}
-    <div class="rfoot">${replyLink(p, 'top')}</div>${replyBox(p, 'top', 'Reply to the post')}</div>`;
+    ${cur ? `<div class="preview fadein"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div><div class="rtext">${fmtReply(cur.r.t)}</div><div class="pf">${likeBtn(p, cur.id, cur.r)}${replyLink(p, cur.id)}${canWrite() ? `<button class="tlink" data-a="rquote" data-id="${rkey(p, cur.id)}">Quote</button>` : ''}${(cur.r.kids || []).length ? `<button class="tlink" data-a="rcol" data-id="${p.id}" data-node="${cur.id}">${st.rcol[p.id + '/' + cur.id] ? `Show ${noun(flatReplies(cur.r.kids).length, 'reply', 'replies')}` : 'Hide replies'}</button>` : ''}</div>${replyBox(p, cur.id, 'Reply to @' + cur.r.u)}</div>` : ''}
+    <div class="rfoot">${replyLink(p, 'top')}</div>${replyBox(p, 'top', 'Reply')}</div>`;
 }
 
 const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches is shaded and gets its own small tree beside it.';
@@ -1267,8 +1275,12 @@ app.addEventListener('click', e => {
   if (a === 'ask') { st.asking = st.asking === d.id ? null : d.id; st.sel[d.id] = null; st.quote = null; st.askPar = null; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
   if (a === 'askfrom') { st.sel[d.id] = d.sel || d.node; st.askPar = d.node; st.asking = d.id; st.quote = null; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
   if (a === 'askpass' || a === 'selbranch') { const pr = document.getElementById('pr-' + d.id); let q = st.selText || '';
-    if (a === 'askpass') { const b = blocksOf(pr)[+d.bi].cloneNode(true); b.querySelectorAll('.anc, sup').forEach(x => x.remove()); q = clip(b.textContent.replace(/\s+/g, ' ').trim(), 220); }
-    $('#selbranch')?.remove(); getSelection()?.removeAllRanges(); st.quote = { pid: d.id, text: q }; st.asking = d.id; st.sel[d.id] = null; st.askPar = null; render(); document.getElementById(`in-mf:${d.id}:r`)?.focus(); return; }
+    if (a === 'askpass') q = blockText(blocksOf(pr)[+d.bi]);
+    $('#selbranch')?.remove(); getSelection()?.removeAllRanges(); st.quote = { pid: d.id, text: q, open: false }; st.asking = d.id; st.sel[d.id] = null; st.askPar = null; render(); document.getElementById(`in-mf:${d.id}:r`)?.focus(); return; }
+  if (a === 'askclose') { st.asking = null; st.quote = null; st.askPar = null; render(); return; }
+  if (a === 'brclose') { st.brReplying = null; render(); return; }
+  if (a === 'rpclose') { st.replying = null; render(); return; }
+  if (a === 'qexpand') { if (st.quote) st.quote.open = true; render(); document.getElementById(`in-mf:${d.id}:r`)?.focus(); return; }
   if (a === 'promote') { const P = byId(d.id), n = tree(P).nodes[d.node], id = 'new' + (++nseq);
     D.posts.push({ id, s: P.s, u: me(), k: 'ask', createdAt: new Date(NOW).toISOString(), q: n.q, sum: '', tok: n.tok || 0, likesBase: 0, run: runOf(P), from: { pid: d.id, nid: d.node } });
     D.rich[id] = n.html; PROMOTED[d.id + ':' + d.node] = id; st.menu = null; toast('Opened as its own thread.'); render(); document.getElementById('card-' + id)?.scrollIntoView({ block: 'start' }); return; }
@@ -1298,7 +1310,7 @@ app.addEventListener('mouseup', e => {
     if (!pr || !pr.contains(sel.focusNode)) return;
     const pid = pr.id.slice(3); if (byId(pid)?.pending) return;
     const r = sel.getRangeAt(0).getBoundingClientRect(), A = app.getBoundingClientRect();
-    st.selText = clip(t, 300);
+    { const f = sel.getRangeAt(0).cloneContents(); f.querySelectorAll('.anc, sup').forEach(x => x.remove()); st.selText = f.textContent.replace(/\s+/g, ' ').trim() || t; }
     app.insertAdjacentHTML('beforeend', `<button id="selbranch" data-a="selbranch" data-id="${pid}" style="left:${Math.max(8, Math.min(r.left + r.width / 2 - A.left - 64, A.width - 140))}px;top:${r.bottom - A.top + 8}px">${I.branch}Branch here</button>`);
   });
 });
