@@ -427,6 +427,9 @@ rules above stay as they are. Decisions for the new client:
     offline bar, and is opened again on the next call. The client's
     tables carry `PRAGMA user_version`; a file of another version is made
     again, its logs read again from the server, its meta and outbox kept.
+    A frozen copy comes back only on a read of the user log asked for
+    after the read that froze it. `Platform.openExternal` answers a promise
+    that rejects when the link could not be opened.
     The app is one instance (a dev build has its own identifier, data
     directory and Keychain item); links open in the system's apps for
     http, https and mailto only, and a page's new window opens http and
