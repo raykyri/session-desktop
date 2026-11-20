@@ -1640,7 +1640,7 @@ function renderMock() {
   const personas = [['out', 'Signed out'], ['sol', 'Admin'], ['ines.v', 'Member'], ['kofi.a', 'No invite'], ...MEMBERS.filter(m => m.created).map(m => [m.u, `New account (${m.status === 'active' ? 'active' : 'no invite'})`])];
   const cur = st.auth === 'out' ? 'out' : st.user;
   const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcdef'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
-  $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
+  $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>
