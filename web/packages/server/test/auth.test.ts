@@ -118,7 +118,12 @@ test("the callback exchanges the code, creates the account, and sets the cookie"
   const token = /session=([^;]+)/.exec(cookie)?.[1] ?? "";
   t.is(auth.readSession(harness.db, token)?.userId, user?.id);
   const me = await harness.request("/api/me", { cookie: token });
-  t.like(await me.json(), { login: "octocat", u: user?.handle, handle: user?.handle, isAdmin: false });
+  t.like(await me.json(), {
+    login: "octocat",
+    u: user?.handle,
+    handle: user?.handle,
+    isAdmin: false,
+  });
 });
 
 test("a state is single use", async (t) => {

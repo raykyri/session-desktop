@@ -8,9 +8,9 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { useSession, useStatus } from "../sync/react.js";
 
 import { Header, type Place } from "./Header.js";
+import { Svg } from "./Svg.js";
 import { I, NVI, SVG } from "./icons.js";
 import { focusFirst, useOverlay } from "./overlay.js";
-import { Svg } from "./Svg.js";
 
 export function OfflineBar() {
   const status = useStatus();
@@ -148,13 +148,21 @@ export function Modal({
   useEffect(() => focusFirst(ref.current), []);
   const id = "cs-dt";
   return (
+    // a press outside the dialog closes it; Escape does from the keyboard
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className="modal-scrim"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div ref={ref} className={`modal ${className}`} role={role} aria-modal="true" aria-labelledby={id}>
+      <div
+        ref={ref}
+        className={`modal ${className}`}
+        role={role}
+        aria-modal="true"
+        aria-labelledby={id}
+      >
         <div className="modal-h">
           <h3 id={id}>{title}</h3>
           <button className="iconbtn" type="button" aria-label="Close" onClick={onClose}>

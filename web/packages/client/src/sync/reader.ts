@@ -62,10 +62,9 @@ export class Reader {
 
 /** A record source over a plain map (tests, and the frozen reads of a
  * screen). */
-export function mapSource(records: Iterable<StoredRecord>): Pick<
-  RecordSource,
-  "get" | "keys" | "pendingAt"
-> {
+export function mapSource(
+  records: Iterable<StoredRecord>,
+): Pick<RecordSource, "get" | "keys" | "pendingAt"> {
   const m = new Map<string, StoredRecord>();
   for (const r of records) m.set(pkg.keyOf(r), r);
   return { get: (k) => m.get(k), keys: () => new Set(m.keys()), pendingAt: () => false };

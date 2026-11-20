@@ -20,17 +20,17 @@ import { loadAdminRoute, loadSettingsRoute } from "../routes/chunks.js";
 import { InvitePage } from "../routes/invite.js";
 import { LoginPage } from "../routes/login.js";
 import { HomePage } from "../spaces/HomePage.js";
-import { BackRow } from "../spaces/nav.js";
 import { NotificationsPage } from "../spaces/Notifications.js";
 import { NotFound, Page } from "../spaces/Page.js";
 import { SavedPage } from "../spaces/SavedPage.js";
 import { SearchPage } from "../spaces/SearchPage.js";
 import { SpacePage } from "../spaces/SpacePage.js";
 import { ThreadPage } from "../spaces/ThreadPage.js";
+import { BackRow } from "../spaces/nav.js";
 
 import { RouteErrorPanel, RoutePendingPanel } from "./RouteBoundary.js";
-import { AppShell } from "./layout/AppShell.js";
 import { SpacesRoot } from "./SpacesRoot.js";
+import { AppShell } from "./layout/AppShell.js";
 
 /** /login: an error code from the OAuth callback, where to go after, and a
  * sign-up code. */
@@ -209,7 +209,11 @@ const keysRoute = createRoute({
 
 // ---- the shell's pages (phase 2a) ----
 
-const shellRoute = createRoute({ getParentRoute: () => rootRoute, id: "shell", component: AppShell });
+const shellRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: "shell",
+  component: AppShell,
+});
 
 const inviteRoute = createRoute({
   getParentRoute: () => shellRoute,

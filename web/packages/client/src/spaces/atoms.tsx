@@ -16,8 +16,8 @@ import {
 } from "../data/format.js";
 import type { Space } from "../data/spaces.js";
 
-import { I, SVG } from "./icons.js";
 import { Svg } from "./Svg.js";
+import { I, SVG } from "./icons.js";
 
 export function Logo({ text = "Session" }: { text?: string }) {
   return (
@@ -59,7 +59,13 @@ export function Author({ u, label }: { u: string; label?: string }) {
 }
 
 /** A space's square glyph: its first letter on its colour. */
-export function Glyph({ s, className = "" }: { s: Pick<Space, "name" | "av" | "img">; className?: string }) {
+export function Glyph({
+  s,
+  className = "",
+}: {
+  s: Pick<Space, "name" | "av" | "img">;
+  className?: string;
+}) {
   if (s.img) return <span className={`glyph cx-img ${className}`} aria-hidden="true" />;
   return (
     <span
@@ -97,7 +103,13 @@ export function Seal({ s, size }: { s: Pick<Space, "dom">; size?: "sm" | "lg" })
 }
 
 /** A lock marker. */
-export function Lock({ className = "cs-lk", title = "Closed space" }: { className?: string; title?: string }) {
+export function Lock({
+  className = "cs-lk",
+  title = "Closed space",
+}: {
+  className?: string;
+  title?: string;
+}) {
   return (
     <span className={className} title={title} aria-label={title}>
       <Svg src={SVG.LOCK} />

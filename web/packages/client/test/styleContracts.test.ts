@@ -41,7 +41,8 @@ function tokensBy(css: string): Map<string, Set<string>> {
   for (const match of withoutComments(css).matchAll(blockPattern)) {
     const selector = (match[1] ?? "").trim();
     const set = out.get(selector) ?? new Set<string>();
-    for (const token of (match[2] ?? "").matchAll(/(--[a-z0-9-]+):/g)) if (token[1]) set.add(token[1]);
+    for (const token of (match[2] ?? "").matchAll(/(--[a-z0-9-]+):/g))
+      if (token[1]) set.add(token[1]);
     out.set(selector, set);
   }
   return out;
@@ -60,15 +61,30 @@ test("each appearance block sets the same tokens, and dark covers them all", (t)
   const system = by.get(':root:not([data-theme="dark"])') ?? new Set();
   const dark = by.get(':root[data-theme="dark"]') ?? new Set();
   t.true(light.size > 30, "sanity: the light block was found");
-  t.deepEqual([...system].sort(), [...light].sort(), "the system's light block matches data-theme=light");
-  t.deepEqual([...dark].sort(), [...light].sort(), "data-theme=dark restores every token light changes");
-  t.deepEqual([...light].filter((x) => !root.has(x)), [], "light changes only tokens dark sets");
+  t.deepEqual(
+    [...system].sort(),
+    [...light].sort(),
+    "the system's light block matches data-theme=light",
+  );
+  t.deepEqual(
+    [...dark].sort(),
+    [...light].sort(),
+    "data-theme=dark restores every token light changes",
+  );
+  t.deepEqual(
+    [...light].filter((x) => !root.has(x)),
+    [],
+    "light changes only tokens dark sets",
+  );
 });
 
 test("the appearance blocks flip color-scheme, and the page has the pane's background", (t) => {
   t.regex(tokensCss, /:root\s*\{[^}]*color-scheme:\s*dark/s);
   t.regex(tokensCss, /:root\[data-theme="light"\]\s*\{[^}]*color-scheme:\s*light/s);
-  t.regex(tokensCss, /@media \(prefers-color-scheme: light\)\s*\{\s*:root:not\(\[data-theme="dark"\]\)\s*\{[^}]*color-scheme:\s*light/s);
+  t.regex(
+    tokensCss,
+    /@media \(prefers-color-scheme: light\)\s*\{\s*:root:not\(\[data-theme="dark"\]\)\s*\{[^}]*color-scheme:\s*light/s,
+  );
   t.regex(withoutComments(appCss), /body\s*\{[^}]*background:\s*var\(--pane\)/);
 });
 
@@ -188,7 +204,9 @@ test("the theme maps the app's color ramp under fg-* and every surface under sur
 
   const textTokens = [
     ...new Set(
-      [...ruleBody(shellCss, ":root .shell-legacy").matchAll(/(--text-[a-z0-9-]+):/g)].map((match) => match[1]),
+      [...ruleBody(shellCss, ":root .shell-legacy").matchAll(/(--text-[a-z0-9-]+):/g)].map(
+        (match) => match[1],
+      ),
     ),
   ];
   t.true(textTokens.length > 10, "sanity: the ramp was found");

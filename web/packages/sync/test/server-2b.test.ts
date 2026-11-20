@@ -20,7 +20,12 @@ for (const kind of STORES) {
     const hidden = w.id();
     ok(
       t,
-      w.as("olga", "spaces.create", { id: hidden, name: "attic", vis: "unlisted", policy: "invite" }),
+      w.as("olga", "spaces.create", {
+        id: hidden,
+        name: "attic",
+        vis: "unlisted",
+        policy: "invite",
+      }),
     );
     const names = (u: string | null) =>
       w.server.directory(u === null ? null : { u }).spaces.map((s) => s.name);
@@ -43,7 +48,10 @@ for (const kind of STORES) {
     ok(t, w.as("olga", "spaces.delete", { id: open }));
     t.deepEqual(names("mel"), ["lab"]);
     // a space that changes visibility moves with its index
-    ok(t, w.as("olga", "spaces.update", { id: closed, set: { vis: "unlisted", policy: "invite" } }));
+    ok(
+      t,
+      w.as("olga", "spaces.update", { id: closed, set: { vis: "unlisted", policy: "invite" } }),
+    );
     t.deepEqual(names("otto"), []);
     t.deepEqual(names("mel"), ["lab"]);
   });

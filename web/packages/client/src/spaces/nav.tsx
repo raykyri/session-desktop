@@ -5,8 +5,8 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
-import { I } from "./icons.js";
 import { Svg } from "./Svg.js";
+import { I } from "./icons.js";
 
 /** Where a screen was opened from: a label and the address. */
 export interface From {

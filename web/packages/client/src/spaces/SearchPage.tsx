@@ -11,11 +11,11 @@ import type { Space } from "../data/spaces.js";
 import { useNow, useRecords } from "../sync/react.js";
 import type { Reader } from "../sync/reader.js";
 
+import { Page } from "./Page.js";
+import { Svg } from "./Svg.js";
 import { Author, Seal, SpaceGlyph, SpaceTag } from "./atoms.js";
 import { I } from "./icons.js";
 import { BackRow } from "./nav.js";
-import { Page } from "./Page.js";
-import { Svg } from "./Svg.js";
 import { canRead, useWorld } from "./world.js";
 
 const CAP = 4;
@@ -145,10 +145,18 @@ export function SearchPage({ q: q0, scope }: { q: string; scope: string | undefi
   const navigate = useNavigate();
   const [q, setQ] = useState(q0);
   const [all, setAll] = useState<string | null>(null);
-  useEffect(() => setQ(q0), [q0]);
+  // a new address (Back, a link) shows its query
+  const [shownFor, setShownFor] = useState(q0);
+  if (shownFor !== q0) {
+    setShownFor(q0);
+    setQ(q0);
+  }
   const scoped = scope ? w.spaces.find((s) => s.name === scope) : undefined;
   const readable = useMemo(
-    () => new Set(w.spaces.filter((s) => canRead(w, s) && (!scoped || s.id === scoped.id)).map((s) => s.id)),
+    () =>
+      new Set(
+        w.spaces.filter((s) => canRead(w, s) && (!scoped || s.id === scoped.id)).map((s) => s.id),
+      ),
     [w, scoped],
   );
   const stem = stemOf(q0);
@@ -157,14 +165,22 @@ export function SearchPage({ q: q0, scope }: { q: string; scope: string | undefi
   const session = w.session;
   useEffect(() => {
     if (stem) for (const id of readable) void session?.showSpace(id);
-  }, [stem, key, session]);
-  const res = useRecords((r) => search(r, stem, readable), [stem, key]) ?? { threads: [], asks: [] };
+  }, [stem, readable, session]);
+  const res = useRecords((r) => search(r, stem, readable), [stem, key]) ?? {
+    threads: [],
+    asks: [],
+  };
   const spaces = scoped
     ? []
     : w.spaces.filter(
-        (s) => s.vis !== "unlisted" && stem && `${s.name} ${s.title} ${s.desc}`.toLowerCase().includes(stem),
+        (s) =>
+          s.vis !== "unlisted" &&
+          stem &&
+          `${s.name} ${s.title} ${s.desc}`.toLowerCase().includes(stem),
       );
-  const ph = scoped ? `Search in ${spaceName(scoped)}` : "Search threads, spaces, pages and sources";
+  const ph = scoped
+    ? `Search in ${spaceName(scoped)}`
+    : "Search threads, spaces, pages and sources";
   const open = (th: string, s: string) => {
     const sp = w.byId.get(s);
     if (sp)
@@ -177,7 +193,11 @@ export function SearchPage({ q: q0, scope }: { q: string; scope: string | undefi
   const tag = (s: Space | undefined) =>
     s ? (
       <>
-        <button className="row-sp" type="button" onClick={() => void navigate({ to: "/s/$space", params: { space: s.name } })}>
+        <button
+          className="row-sp"
+          type="button"
+          onClick={() => void navigate({ to: "/s/$space", params: { space: s.name } })}
+        >
           <SpaceTag s={s} />
         </button>
         <span aria-hidden="true">·</span>
@@ -205,12 +225,21 @@ export function SearchPage({ q: q0, scope }: { q: string; scope: string | undefi
             placeholder={ph}
             aria-label={ph}
             autoComplete="off"
-            autoFocus={!q0}
+            ref={(el) => {
+              if (el && !q0 && !el.dataset["f"]) {
+                el.dataset["f"] = "1";
+                el.focus();
+              }
+            }}
             value={q}
             onChange={(e) => setQ(e.currentTarget.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter")
-                void navigate({ to: "/search", search: { q: q.trim(), ...(scope ? { in: scope } : {}) }, replace: true });
+                void navigate({
+                  to: "/search",
+                  search: { q: q.trim(), ...(scope ? { in: scope } : {}) },
+                  replace: true,
+                });
             }}
           />
         </label>
@@ -230,8 +259,8 @@ export function SearchPage({ q: q0, scope }: { q: string; scope: string | undefi
         ) : null}
         {!stem ? (
           <p className="muted nv-sprompt">
-            Type a word or phrase to search the threads, {scoped ? "" : "spaces, "}pages and sources you can
-            read{scoped ? ` in ${spaceName(scoped)}` : ""}.
+            Type a word or phrase to search the threads, {scoped ? "" : "spaces, "}pages and sources
+            you can read{scoped ? ` in ${spaceName(scoped)}` : ""}.
           </p>
         ) : (
           <div className="sr-two">
@@ -262,7 +291,13 @@ export function SearchPage({ q: q0, scope }: { q: string; scope: string | undefi
                           <span aria-hidden="true">·</span>
                           <span className="num">
                             {h.n}{" "}
-                            {h.k === "ask" ? (h.n === 1 ? "follow-up" : "follow-ups") : h.n === 1 ? "reply" : "replies"}
+                            {h.k === "ask"
+                              ? h.n === 1
+                                ? "follow-up"
+                                : "follow-ups"
+                              : h.n === 1
+                                ? "reply"
+                                : "replies"}
                           </span>
                         </div>
                       </article>
@@ -316,7 +351,13 @@ export function SearchPage({ q: q0, scope }: { q: string; scope: string | undefi
                     <SpaceGlyph s={scoped} />
                     <div className="br-nm">
                       <span className="cs-nmrow">
-                        <button className="dg-name" type="button" onClick={() => void navigate({ to: "/s/$space", params: { space: scoped.name } })}>
+                        <button
+                          className="dg-name"
+                          type="button"
+                          onClick={() =>
+                            void navigate({ to: "/s/$space", params: { space: scoped.name } })
+                          }
+                        >
                           {spaceName(scoped)}
                         </button>
                         <Seal s={scoped} size="sm" />
@@ -324,7 +365,11 @@ export function SearchPage({ q: q0, scope }: { q: string; scope: string | undefi
                       <small className="num">{fmt(scoped.members)} members</small>
                     </div>
                   </div>
-                  <button className="tlink nv-all" type="button" onClick={() => void navigate({ to: "/search", search: { q: q0 } })}>
+                  <button
+                    className="tlink nv-all"
+                    type="button"
+                    onClick={() => void navigate({ to: "/search", search: { q: q0 } })}
+                  >
                     Search all spaces
                   </button>
                 </>
@@ -339,7 +384,13 @@ export function SearchPage({ q: q0, scope }: { q: string; scope: string | undefi
                         <SpaceGlyph s={s} />
                         <div className="br-nm">
                           <span className="cs-nmrow">
-                            <button className="dg-name" type="button" onClick={() => void navigate({ to: "/s/$space", params: { space: s.name } })}>
+                            <button
+                              className="dg-name"
+                              type="button"
+                              onClick={() =>
+                                void navigate({ to: "/s/$space", params: { space: s.name } })
+                              }
+                            >
                               {spaceName(s)}
                             </button>
                             <Seal s={s} size="sm" />

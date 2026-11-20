@@ -2,9 +2,8 @@
 // and its appearance settings, the runtime configuration, the admin pages'
 // reads and writes, sign-out, and the space directory.
 
-import test from "ava";
-
 import { auth } from "@session/db";
+import test from "ava";
 
 import { payerFor, tokenSource } from "../src/sync/account.js";
 
@@ -66,26 +65,55 @@ test("admin routes: an admin lists accounts, sets limits and makes codes; others
   const plain = h.signIn(plainUser);
   const list = await h.request("/api/admin/users", { cookie: admin });
   t.is(list.status, 200);
-  const users = (await list.json()) as { login: string; usage: { runs: number }; allowance: { defaultTokens: number } }[];
+  const users = (await list.json()) as {
+    login: string;
+    usage: { runs: number };
+    allowance: { defaultTokens: number };
+  }[];
   t.deepEqual(users.map((u) => u.login).sort(), ["plain", "root"]);
   t.is((await h.request("/api/admin/users", { cookie: plain })).status, 403);
   t.is((await h.request("/api/admin/users")).status, 401);
-  const limits = await h.post("/api/admin/limits", { userId: plainUser.id, weeklyTokens: 40_000 }, admin);
+  const limits = await h.post(
+    "/api/admin/limits",
+    { userId: plainUser.id, weeklyTokens: 40_000 },
+    admin,
+  );
   t.is(limits.status, 200);
   t.like(limits.body, { weeklyTokens: 40_000, defaultTokens: 250_000, used: 0 });
   // the person's own allowance is their usage's cap
-  const usage = (await (await h.request("/api/me/usage", { cookie: plain })).json()) as { cap: number };
+  const usage = (await (await h.request("/api/me/usage", { cookie: plain })).json()) as {
+    cap: number;
+  };
   t.is(usage.cap, 40_000);
-  t.like((await h.post("/api/admin/limits", { userId: plainUser.id, weeklyTokens: null }, admin)).body, { weeklyTokens: null });
-  t.is(((await (await h.request("/api/me/usage", { cookie: plain })).json()) as { cap: number }).cap, 250_000);
-  t.is((await h.post("/api/admin/limits", { userId: plainUser.id, weeklyTokens: -1 }, admin)).status, 400);
-  t.is((await h.post("/api/admin/limits", { userId: "nobody", weeklyTokens: 1 }, admin)).status, 404);
-  t.is((await h.post("/api/admin/limits", { userId: plainUser.id, weeklyTokens: 1 }, plain)).status, 403);
+  t.like(
+    (await h.post("/api/admin/limits", { userId: plainUser.id, weeklyTokens: null }, admin)).body,
+    { weeklyTokens: null },
+  );
+  t.is(
+    ((await (await h.request("/api/me/usage", { cookie: plain })).json()) as { cap: number }).cap,
+    250_000,
+  );
+  t.is(
+    (await h.post("/api/admin/limits", { userId: plainUser.id, weeklyTokens: -1 }, admin)).status,
+    400,
+  );
+  t.is(
+    (await h.post("/api/admin/limits", { userId: "nobody", weeklyTokens: 1 }, admin)).status,
+    404,
+  );
+  t.is(
+    (await h.post("/api/admin/limits", { userId: plainUser.id, weeklyTokens: 1 }, plain)).status,
+    403,
+  );
   const codes = await h.post("/api/admin/invites", { count: 2 }, admin);
   t.is((codes.body as { codes: string[] }).codes.length, 2);
   t.is((await h.post("/api/admin/invites", { count: 0 }, admin)).status, 400);
   t.is(users[0]?.allowance.defaultTokens, 250_000);
-  t.is((await h.request("/api/me/usage/daily", { cookie: plain })).status, 404, "no daily usage route");
+  t.is(
+    (await h.request("/api/me/usage/daily", { cookie: plain })).status,
+    404,
+    "no daily usage route",
+  );
 });
 
 test("a person's own weekly allowance is what the included tokens pay; admins are not exempt", (t) => {

@@ -211,13 +211,23 @@ export function htmlToMarkdown(html: string, cites: [string, string, string?][] 
   s = s.replace(/<(b|strong)>([\s\S]*?)<\/\1>/g, "**$2**");
   s = s.replace(/<(i|em)>([\s\S]*?)<\/\1>/g, "*$2*");
   s = s.replace(/<code>([\s\S]*?)<\/code>/g, "`$1`");
-  s = s.replace(/<h([1-6])>([\s\S]*?)<\/h\1>/g, (_, l: string, t: string) => `\n\n${"#".repeat(Number(l))} ${t}\n\n`);
-  s = s.replace(/<blockquote>([\s\S]*?)<\/blockquote>/g, (_, t: string) => `\n\n> ${t.replace(/<\/?p>/g, "").trim()}\n\n`);
+  s = s.replace(
+    /<h([1-6])>([\s\S]*?)<\/h\1>/g,
+    (_, l: string, t: string) => `\n\n${"#".repeat(Number(l))} ${t}\n\n`,
+  );
+  s = s.replace(
+    /<blockquote>([\s\S]*?)<\/blockquote>/g,
+    (_, t: string) => `\n\n> ${t.replace(/<\/?p>/g, "").trim()}\n\n`,
+  );
   s = s.replace(/<ol>([\s\S]*?)<\/ol>/g, (_, t: string) => {
     let n = 0;
     return `\n\n${t.replace(/<li>([\s\S]*?)<\/li>/g, (_m, x: string) => `${++n}. ${x.trim()}\n`)}\n`;
   });
-  s = s.replace(/<ul>([\s\S]*?)<\/ul>/g, (_, t: string) => `\n\n${t.replace(/<li>([\s\S]*?)<\/li>/g, (_m, x: string) => `- ${x.trim()}\n`)}\n`);
+  s = s.replace(
+    /<ul>([\s\S]*?)<\/ul>/g,
+    (_, t: string) =>
+      `\n\n${t.replace(/<li>([\s\S]*?)<\/li>/g, (_m, x: string) => `- ${x.trim()}\n`)}\n`,
+  );
   s = s.replace(/<br\s*\/?>/g, "  \n");
   s = s.replace(/<p>([\s\S]*?)<\/p>/g, "\n\n$1\n\n");
   s = s.replace(/<[^>]+>/g, "");
@@ -248,7 +258,10 @@ const pageSlug = (t: string) => slug(t);
 const unset = (s: unknown): string[] => {
   if (Array.isArray(s)) return s as string[];
   if (s && typeof s === "object") {
-    if (typeof (s as { forEach?: unknown }).forEach === "function" && typeof (s as { has?: unknown }).has === "function")
+    if (
+      typeof (s as { forEach?: unknown }).forEach === "function" &&
+      typeof (s as { has?: unknown }).has === "function"
+    )
       return Array.from(s as Iterable<string>);
     const x = (s as { $set?: unknown }).$set;
     if (Array.isArray(x)) return x as string[];
@@ -259,7 +272,8 @@ const unset = (s: unknown): string[] => {
 const str = (v: unknown, d = ""): string => (typeof v === "string" ? v : d);
 const num = (v: unknown, d = 0): number => (typeof v === "number" ? v : d);
 const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
-const obj = (v: unknown): Json => (v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : {});
+const obj = (v: unknown): Json =>
+  v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : {};
 
 /** The item key of a mock moderation key ("a:<thread>", "p:<thread>",
  * "r:<thread>:<reply>", "f:<thread>:<follow-up>"). */
@@ -321,14 +335,23 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
     const k = `${sp}:${u}`;
     const old = members.get(k);
     if (old && (RANK[str(old["role"])] ?? 0) >= (RANK[role] ?? 0)) return;
-    members.set(k, { kind: "member", sp, u, role, adm: toUlid(`adm:${k}`), joinedAt: joinedAt ?? at });
+    members.set(k, {
+      kind: "member",
+      sp,
+      u,
+      role,
+      adm: toUlid(`adm:${k}`),
+      joinedAt: joinedAt ?? at,
+    });
   };
   const joinedList = unset(c["joined"]);
   const joined = new Set(joinedList);
   // the person's spaces in the order they joined them (the mock lists them so)
   const joinedAt = (id: string) => {
     const k = joinedList.indexOf(id);
-    return new Date(Date.parse("2026-09-20T12:00:00Z") + k * 3600_000).toISOString().replace(/\.\d{3}Z$/, "Z");
+    return new Date(Date.parse("2026-09-20T12:00:00Z") + k * 3600_000)
+      .toISOString()
+      .replace(/\.\d{3}Z$/, "Z");
   };
   const roles = obj(c["roles"]);
   const dsPol = obj(c["dsPol"]);
@@ -336,7 +359,10 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
   for (const s of arr<Json>(c["spaces"])) {
     const id = str(s["id"]);
     const sp = toUlid(id);
-    const staff: [string, string][] = arr<[string, string]>(s["mods"]).map(([u, r]) => [u, ROLE[r] ?? "mod"]);
+    const staff: [string, string][] = arr<[string, string]>(s["mods"]).map(([u, r]) => [
+      u,
+      ROLE[r] ?? "mod",
+    ]);
     const mine = joined.has(id) ? (ROLE[str(roles[id])] ?? "member") : null;
     if (mine && mine !== "member" && !staff.some(([u]) => u === me)) staff.push([me, mine]);
     staff.sort((a, b) => (RANK[b[1]] ?? 0) - (RANK[a[1]] ?? 0) || (a[0] < b[0] ? -1 : 1));
@@ -345,7 +371,8 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
     if (mine) member(sp, me, mine, joinedAt(id));
     const roster = id === "replication" ? c["mem"] : obj(c["memOther"])[id];
     for (const x of arr<Json>(roster))
-      if (str(x["u"]) !== me) member(sp, str(x["u"]), ROLE[str(x["role"])] ?? "member", str(x["joinedAt"]) || undefined);
+      if (str(x["u"]) !== me)
+        member(sp, str(x["u"]), ROLE[str(x["role"])] ?? "member", str(x["joinedAt"]) || undefined);
     const dom = obj(s["dom"]);
     put(`space:${sp}`, {
       kind: "space",
@@ -368,22 +395,45 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
       topics: arr(s["topics"]),
       plain: !!s["plain"],
       pageEdit: str(s["pageEdit"]) || null,
-      srcPolicy: str(dsPol[id], "members") === "review" ? "review" : str(dsPol[id], "members") === "mods" ? "mods" : "members",
+      srcPolicy:
+        str(dsPol[id], "members") === "review"
+          ? "review"
+          : str(dsPol[id], "members") === "mods"
+            ? "mods"
+            : "members",
       dom: dom["domain"]
-        ? { domain: str(dom["domain"]), method: "dns", state: str(dom["state"], "ok"), verifiedAt: str(dom["verifiedAt"]) || null }
+        ? {
+            domain: str(dom["domain"]),
+            method: "dns",
+            state: str(dom["state"], "ok"),
+            verifiedAt: str(dom["verifiedAt"]) || null,
+          }
         : null,
-      archived: s["archived"] ? { by: str(obj(s["archived"])["by"], me), at: str(obj(s["archived"])["at"], at) } : null,
+      archived: s["archived"]
+        ? { by: str(obj(s["archived"])["by"], me), at: str(obj(s["archived"])["at"], at) }
+        : null,
       deleted: !!s["deleted"],
       members: num(s["members"]),
       mods: staff,
       createdAt: str(s["createdAt"], at),
     });
-    put(`stats:${sp}`, { kind: "stats", sp, posts: num(s["posts"]), updatedAt: str(s["updatedAt"], str(s["createdAt"], at)) });
+    put(`stats:${sp}`, {
+      kind: "stats",
+      sp,
+      posts: num(s["posts"]),
+      updatedAt: str(s["updatedAt"], str(s["createdAt"], at)),
+    });
     const pages = arr<[string, string, string]>(s["pages"]);
-    put(`pages:${sp}`, { kind: "pages", sp, list: pages.map(([t, edited, pid]) => ({ id: toUlid(pid), t, at: edited })) });
+    put(`pages:${sp}`, {
+      kind: "pages",
+      sp,
+      list: pages.map(([t, edited, pid]) => ({ id: toUlid(pid), t, at: edited })),
+    });
     const docs = obj(c["pagedocs"]);
     for (const [t, edited, pid] of pages) {
-      const doc = obj(Object.values(docs).find((d) => obj(d)["id"] === pid) ?? docs[`${id}/${pageSlug(t)}`]);
+      const doc = obj(
+        Object.values(docs).find((d) => obj(d)["id"] === pid) ?? docs[`${id}/${pageSlug(t)}`],
+      );
       const id2 = toUlid(pid);
       put(`page:${id2}`, {
         kind: "page",
@@ -395,7 +445,11 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
         by: str(doc["by"]),
         ed: str(doc["ed"]) || null,
         ver: num(doc["rev"]),
-        revs: arr<Json>(doc["revs"]).map((r) => ({ by: str(r["by"]), note: str(r["note"]), createdAt: str(r["createdAt"], edited) })),
+        revs: arr<Json>(doc["revs"]).map((r) => ({
+          by: str(r["by"]),
+          note: str(r["note"]),
+          createdAt: str(r["createdAt"], edited),
+        })),
       });
     }
     const skills = arr<Json>(obj(c["skills"])[id]);
@@ -403,7 +457,14 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
       put(`skills:${sp}`, { kind: "skills", sp, order: skills.map((k) => toUlid(str(k["id"]))) });
       for (const k of skills) {
         const kid = toUlid(str(k["id"]));
-        put(`skill:${kid}`, { kind: "skill", id: kid, sp, name: str(k["name"]), prompt: str(k["prompt"]), ver: num(k["rev"]) });
+        put(`skill:${kid}`, {
+          kind: "skill",
+          id: kid,
+          sp,
+          name: str(k["name"]),
+          prompt: str(k["prompt"]),
+          ver: num(k["rev"]),
+        });
       }
     }
   }
@@ -425,10 +486,17 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
     const html = str(rich[th]);
     const ask = p["k"] === "ask";
     const fail = p["fail"] ? str(obj(p["fail"])["why"]) || "interrupted" : null;
-    const sum = ask && !fail && !p["running"] ? (html ? htmlToMarkdown(html, cites) : str(p["sum"]) || null) : null;
+    const sum =
+      ask && !fail && !p["running"]
+        ? html
+          ? htmlToMarkdown(html, cites)
+          : str(p["sum"]) || null
+        : null;
     const fl = arr<Json>(fus[th]);
     const tree = arr<Json>(obj(qtd[th])["nodes"]);
-    fl.forEach((f, k) => nodesOf.set(`${th}:${str(f["id"], `f${k}`)}`, inThread(th, str(f["id"], `f${k}`))));
+    fl.forEach((f, k) =>
+      nodesOf.set(`${th}:${str(f["id"], `f${k}`)}`, inThread(th, str(f["id"], `f${k}`))),
+    );
     // follow-up ids: the mock's entry id, else its place
     const fuId = (k: number) => inThread(th, str(fl[k]?.["id"], `f${k}`));
     const nodeId = new Map<string, string>([["r", ""]]);
@@ -459,18 +527,50 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
       about: p["about"] ?? null,
       skill: str(p["skill"]) || null,
       att: num(p["att"], ask ? 1 : 0),
-      from: p["from"] ? { th: str(obj(p["from"])["th"]), node: str(obj(p["from"])["node"]), lv: num(obj(p["from"])["lv"]) } : null,
+      from: p["from"]
+        ? {
+            th: str(obj(p["from"])["th"]),
+            node: str(obj(p["from"])["node"]),
+            lv: num(obj(p["from"])["lv"]),
+          }
+        : null,
       createdAt: created,
       updatedAt: str(p["updatedAt"], created),
     });
     const ex = obj(p["executor"]);
     if (ask) {
-      const r = runOf({ th, s, u: str(p["u"]), node: "r", running: !!p["running"], fail, att: num(p["att"], 1), pay: p["pay"] == null ? null : str(p["pay"]), model: str(p["model"]) || null, executor: ex["kind"] ? { kind: "device", cli: str(ex["cli"], "claude"), device: toUlid(str(ex["device"], "d1")), u: str(ex["u"], me) } : null, createdAt: created });
+      const r = runOf({
+        th,
+        s,
+        u: str(p["u"]),
+        node: "r",
+        running: !!p["running"],
+        fail,
+        att: num(p["att"], 1),
+        pay: p["pay"] == null ? null : str(p["pay"]),
+        model: str(p["model"]) || null,
+        executor: ex["kind"]
+          ? {
+              kind: "device",
+              cli: str(ex["cli"], "claude"),
+              device: toUlid(str(ex["device"], "d1")),
+              u: str(ex["u"], me),
+            }
+          : null,
+        createdAt: created,
+      });
       put(r.key, r.record);
     }
     const rps = arr<Json>(obj(c["rp"])[th]);
     const rlikes: Record<string, number> = {};
-    put(`counts:${th}`, { kind: "counts", th, s, likes: num(p["likes"]), r: ask ? fl.length : rps.length, rlikes });
+    put(`counts:${th}`, {
+      kind: "counts",
+      th,
+      s,
+      likes: num(p["likes"]),
+      r: ask ? fl.length : rps.length,
+      rlikes,
+    });
     fl.forEach((f, k) => {
       const id = fuId(k);
       put(`followup:${id}`, {
@@ -492,7 +592,19 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
         mod: null,
         createdAt: str(f["createdAt"], created),
       });
-      const r = runOf({ th, s, u: str(f["u"]), node: id, running: !!f["running"], fail: null, att: 1, pay: f["pay"] == null ? null : str(f["pay"]), model: str(f["model"]) || null, executor: null, createdAt: str(f["createdAt"], created) });
+      const r = runOf({
+        th,
+        s,
+        u: str(f["u"]),
+        node: id,
+        running: !!f["running"],
+        fail: null,
+        att: 1,
+        pay: f["pay"] == null ? null : str(f["pay"]),
+        model: str(f["model"]) || null,
+        executor: null,
+        createdAt: str(f["createdAt"], created),
+      });
       put(r.key, r.record);
     });
     for (const n of tree) {
@@ -518,17 +630,53 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
         mod: null,
         createdAt: str(n["createdAt"], created),
       });
-      const r = runOf({ th, s, u: str(n["u"]), node: id, running: !!n["running"], fail: null, att: 1, pay: n["pay"] == null ? null : str(n["pay"]), model: str(n["model"]) || null, executor: null, createdAt: str(n["createdAt"], created) });
+      const r = runOf({
+        th,
+        s,
+        u: str(n["u"]),
+        node: id,
+        running: !!n["running"],
+        fail: null,
+        att: 1,
+        pay: n["pay"] == null ? null : str(n["pay"]),
+        model: str(n["model"]) || null,
+        executor: null,
+        createdAt: str(n["createdAt"], created),
+      });
       put(r.key, r.record);
     }
     rps.forEach((r, k) => {
       const rid = inThread(th, str(r["id"], `r${k}`));
       if (num(r["likes"])) rlikes[rid] = num(r["likes"]);
-      put(`reply:${rid}`, { kind: "reply", id: rid, th, s, u: str(r["u"]), t: str(r["t"]), parent: null, edited: !!r["edited"], del: !!r["del"], mod: null, createdAt: str(r["createdAt"], created) });
+      put(`reply:${rid}`, {
+        kind: "reply",
+        id: rid,
+        th,
+        s,
+        u: str(r["u"]),
+        t: str(r["t"]),
+        parent: null,
+        edited: !!r["edited"],
+        del: !!r["del"],
+        mod: null,
+        createdAt: str(r["createdAt"], created),
+      });
       arr<Json>(r["kids"]).forEach((x, j) => {
         const xid = inThread(th, str(x["id"], `r${k}.${j}`));
         if (num(x["likes"])) rlikes[xid] = num(x["likes"]);
-        put(`reply:${xid}`, { kind: "reply", id: xid, th, s, u: str(x["u"]), t: str(x["t"]), parent: rid, edited: !!x["edited"], del: !!x["del"], mod: null, createdAt: str(x["createdAt"], created) });
+        put(`reply:${xid}`, {
+          kind: "reply",
+          id: xid,
+          th,
+          s,
+          u: str(x["u"]),
+          t: str(x["t"]),
+          parent: rid,
+          edited: !!x["edited"],
+          del: !!x["del"],
+          mod: null,
+          createdAt: str(x["createdAt"], created),
+        });
       });
     });
   }
@@ -538,13 +686,24 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
     const item = itemKey(key);
     const th = key.split(":")[1] ?? "";
     const t = out.get(`thread:${th}`);
-    if (item && t) put(`hide:${item}`, { kind: "hide", item, s: str(t["s"]), ed: 0, createdAt: at });
+    if (item && t)
+      put(`hide:${item}`, { kind: "hide", item, s: str(t["s"]), ed: 0, createdAt: at });
   }
   // the person's records
-  for (const th of unset(c["liked"])) if (out.has(`thread:${th}`)) put(`like:${me}:${th}`, { kind: "like", u: me, th, createdAt: at });
-  for (const th of unset(c["saved"])) if (out.has(`thread:${th}`)) put(`save:${me}:${th}`, { kind: "save", u: me, th, createdAt: at });
+  for (const th of unset(c["liked"]))
+    if (out.has(`thread:${th}`))
+      put(`like:${me}:${th}`, { kind: "like", u: me, th, createdAt: at });
+  for (const th of unset(c["saved"]))
+    if (out.has(`thread:${th}`))
+      put(`save:${me}:${th}`, { kind: "save", u: me, th, createdAt: at });
   const profile = obj(c["profile"]);
-  if (profile["name"]) put(`profile:${me}`, { kind: "profile", u: me, name: str(profile["name"]), bio: str(profile["bio"]) });
+  if (profile["name"])
+    put(`profile:${me}`, {
+      kind: "profile",
+      u: me,
+      name: str(profile["name"]),
+      bio: str(profile["bio"]),
+    });
   put(`seen:${me}`, { kind: "seen", u: me, reqs: !!c["reqSeen"], reps: !!c["repSeen"] });
   for (const n of arr<Json>(c["notifs"])) {
     const id = toUlid(str(n["id"]));
@@ -555,7 +714,11 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
       id,
       to: me,
       type: str(n["type"]),
-      sp: n["space"] ? toUlid(str(n["space"])) : th && out.get(`thread:${th}`) ? str(out.get(`thread:${th}`)?.["s"]) : null,
+      sp: n["space"]
+        ? toUlid(str(n["space"]))
+        : th && out.get(`thread:${th}`)
+          ? str(out.get(`thread:${th}`)?.["s"])
+          : null,
       report: n["report"] ? toUlid(str(n["report"])) : null,
       item: n["item"] ? itemKey(str(n["item"])) : null,
       outcome: str(n["outcome"]) || null,
@@ -570,13 +733,33 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
   }
   for (const r of arr<Json>(c["reqs"])) {
     const sp = toUlid(str(r["sp"], "replication"));
-    put(`request:${sp}:${str(r["u"])}`, { kind: "request", sp, u: str(r["u"]), st: str(r["st"], "open"), a: arr<string>(r["a"]), why: r["why"] == null ? null : str(r["why"]), createdAt: str(r["createdAt"], at), updatedAt: str(r["updatedAt"], str(r["createdAt"], at)) });
+    put(`request:${sp}:${str(r["u"])}`, {
+      kind: "request",
+      sp,
+      u: str(r["u"]),
+      st: str(r["st"], "open"),
+      a: arr<string>(r["a"]),
+      why: r["why"] == null ? null : str(r["why"]),
+      createdAt: str(r["createdAt"], at),
+      updatedAt: str(r["updatedAt"], str(r["createdAt"], at)),
+    });
   }
   for (const r of arr<Json>(c["reports"])) {
     const id = toUlid(str(r["id"]));
     const key = itemKey(str(r["key"]));
     if (!key) continue;
-    put(`report:${id}`, { kind: "report", id, sp: toUlid(str(r["sp"])), key, by: str(r["by"]), st: str(r["st"], "open"), why: str(r["why"]), note: str(r["note"]), createdAt: str(r["createdAt"], at), updatedAt: str(r["updatedAt"], str(r["createdAt"], at)) });
+    put(`report:${id}`, {
+      kind: "report",
+      id,
+      sp: toUlid(str(r["sp"])),
+      key,
+      by: str(r["by"]),
+      st: str(r["st"], "open"),
+      why: str(r["why"]),
+      note: str(r["note"]),
+      createdAt: str(r["createdAt"], at),
+      updatedAt: str(r["updatedAt"], str(r["createdAt"], at)),
+    });
   }
   // sources added to spaces
   const media = new Map(arr<Json>(c["media"]).map((m) => [str(m["id"]), m]));
@@ -616,7 +799,10 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
 }
 
 /** A scenario's records: the seed, then the scenario, as `me` reads them. */
-export async function scenarioRecords(name = "seed", args?: unknown): Promise<{ records: KeyedRecord[]; clock: string }> {
+export async function scenarioRecords(
+  name = "seed",
+  args?: unknown,
+): Promise<{ records: KeyedRecord[]; clock: string }> {
   const b = mockBackend();
   if (name !== "seed") await b.scenario(name, args);
   const c = await collections(b);

@@ -42,6 +42,24 @@ export async function loadScenario(
   return { clock, records: list };
 }
 
+/** A Screen entry's address in the client: the mockup's, with a thread its
+ * scenario made (the mock numbers new ids per page) replaced by the newest
+ * thread of that space in the records. */
+export function pathFor(records: KeyedRecord[], url: string): string {
+  let path = url.replace(/^session\.app/, "") || "/";
+  const m = /\/s\/([^/]+)\/t\/([0-9A-Z]+)/.exec(path);
+  if (m && !records.some((r) => r.key === `thread:${m[2]}`)) {
+    const sp = records.find((r) => r.record.kind === "space" && r.record["name"] === m[1])?.record[
+      "id"
+    ];
+    const newest = records
+      .filter((r) => r.record.kind === "thread" && r.record["s"] === sp)
+      .sort((a, b) => (String(a.record["createdAt"]) < String(b.record["createdAt"]) ? 1 : -1))[0];
+    if (newest && m[2]) path = path.replace(m[2], String(newest.record["id"]));
+  }
+  return path;
+}
+
 /** Sign the context in as `login` (the mockup's person by default). */
 export async function signInAs(context: BrowserContext, login = MOCK_ME, origin = APP_ORIGIN) {
   const r = await context.request.post(`${origin}/auth/test-login`, {

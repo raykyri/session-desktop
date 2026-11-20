@@ -8,11 +8,11 @@ import { ago, spaceName } from "../data/format.js";
 import { savedThreads, threadView } from "../data/spaces.js";
 import { useNow, useRecords, useSession } from "../sync/react.js";
 
+import { Page } from "./Page.js";
+import { Svg } from "./Svg.js";
 import { Author, Glyph } from "./atoms.js";
 import { I, SVI } from "./icons.js";
 import { BackRow } from "./nav.js";
-import { Page } from "./Page.js";
-import { Svg } from "./Svg.js";
 import { useWorld } from "./world.js";
 
 const PAGE = 20;
@@ -74,7 +74,12 @@ export function SavedPage() {
             {[...counts].map(([sp, n]) => {
               const s = w.byId.get(sp);
               return s ? (
-                <button key={sp} type="button" aria-pressed={filter === sp} onClick={() => setFilter(sp)}>
+                <button
+                  key={sp}
+                  type="button"
+                  aria-pressed={filter === sp}
+                  onClick={() => setFilter(sp)}
+                >
                   {spaceName(s)} <small className="num">{n}</small>
                 </button>
               ) : null;
@@ -105,7 +110,7 @@ export function SavedPage() {
                   state: { from: { label: "Saved", to: "/saved" } } as never,
                 });
               return (
-                <article className="sv-row" key={x.id}>
+                <article className="sv-row" key={x.id} data-open={x.id}>
                   {s ? <Glyph s={s} /> : null}
                   <div className="sv-body">
                     <div className="meta">
@@ -128,7 +133,13 @@ export function SavedPage() {
                   </div>
                   <div className="sv-side">
                     {s ? (
-                      <button className="sp-tag" type="button" onClick={() => void navigate({ to: "/s/$space", params: { space: s.name } })}>
+                      <button
+                        className="sp-tag"
+                        type="button"
+                        onClick={() =>
+                          void navigate({ to: "/s/$space", params: { space: s.name } })
+                        }
+                      >
                         {spaceName(s)}
                       </button>
                     ) : null}
@@ -149,7 +160,11 @@ export function SavedPage() {
         )}
         {list.length > shown ? (
           <div className="pg-more" aria-live="polite">
-            <button className="btn sm pg-btn" type="button" onClick={() => setShown((n) => n + PAGE)}>
+            <button
+              className="btn sm pg-btn"
+              type="button"
+              onClick={() => setShown((n) => n + PAGE)}
+            >
               Show more
             </button>
           </div>

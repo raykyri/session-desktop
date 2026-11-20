@@ -60,9 +60,11 @@ export function createResource<T>(fetcher: () => Promise<T>): Resource<T> {
         },
       );
       inflight = p;
-      void p.finally(() => {
-        if (inflight === p) inflight = null;
-      }).catch(() => undefined);
+      void p
+        .finally(() => {
+          if (inflight === p) inflight = null;
+        })
+        .catch(() => undefined);
       return p;
     },
     set(data) {
@@ -93,7 +95,7 @@ export function useResource<T>(r: Resource<T>, enabled = true): ResourceState<T>
 
 export interface Action<I, O> {
   /** Run it; `onSuccess` gets the answer. An error is kept in `error`. */
-  mutate(input: I, o?: { onSuccess?: (out: O) => void; onError?: (e: Error) => void }): void;
+  mutate: (input: I, o?: { onSuccess?: (out: O) => void; onError?: (e: Error) => void }) => void;
   isPending: boolean;
   error: Error | null;
   /** The last answer. */
@@ -102,7 +104,11 @@ export interface Action<I, O> {
 
 /** A write in a component: whether it is running and its last error. */
 export function useAction<I, O>(fn: (input: I) => Promise<O>): Action<I, O> {
-  const [state, setState] = useState<{ isPending: boolean; error: Error | null; data: O | undefined }>({
+  const [state, setState] = useState<{
+    isPending: boolean;
+    error: Error | null;
+    data: O | undefined;
+  }>({
     isPending: false,
     error: null,
     data: undefined,

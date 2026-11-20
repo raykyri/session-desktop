@@ -140,7 +140,8 @@ export function accountRoutes(deps: ServerDeps, limiter: RateLimiter): Hono<AppE
     const user = writer(c);
     if (user instanceof Response) return user;
     const input = preferencesInput.safeParse(await jsonBody(c));
-    if (!input.success) return fail(c, "BAD_REQUEST", "Expected { settings?, researchLaunchInstruction? }.");
+    if (!input.success)
+      return fail(c, "BAD_REQUEST", "Expected { settings?, researchLaunchInstruction? }.");
     const patch: Parameters<typeof preferences.update>[2] = {};
     if (input.data.settings !== undefined) patch.settings = input.data.settings;
     if (input.data.researchLaunchInstruction !== undefined)

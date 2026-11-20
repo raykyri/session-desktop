@@ -5,14 +5,21 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 
 import { ago } from "../data/format.js";
-import { SORTS, sortRows, type KindFilter, type Row, type Sort, type Space } from "../data/spaces.js";
+import {
+  SORTS,
+  sortRows,
+  type KindFilter,
+  type Row,
+  type Sort,
+  type Space,
+} from "../data/spaces.js";
 import { useNow } from "../sync/react.js";
 
+import { Svg } from "./Svg.js";
 import { Author, Avatar, SpaceTag } from "./atoms.js";
 import { I } from "./icons.js";
 import type { From } from "./nav.js";
 import { useOverlay } from "./overlay.js";
-import { Svg } from "./Svg.js";
 
 const KF: [KindFilter, string, string][] = [
   ["all", "All", "Asks and posts"],
@@ -38,7 +45,7 @@ export function SortControl({ f, withKind = true }: { f: FeedState; withKind?: b
   useOverlay(open, () => setOpen(false));
   const kl = withKind && f.kind !== "all" ? `${KF.find((k) => k[0] === f.kind)?.[1] ?? ""} · ` : "";
   return (
-    <div className={`sortdd${withKind ? " sortdd-k" : ""}`}>
+    <div className={`sortdd${withKind ? "sortdd-k" : ""}`}>
       <button
         aria-label="Sort and filter posts"
         type="button"
@@ -123,8 +130,16 @@ export function FeedRow({
       ...(from ? { state: { from } as never } : {}),
     });
   };
-  const title = !ask && p.mod ? `Post ${p.mod} by a moderator.` : p.del ? `You deleted this ${ask ? "ask" : "post"}.` : p.q;
+  const title =
+    !ask && p.mod
+      ? `Post ${p.mod} by a moderator.`
+      : p.del
+        ? `You deleted this ${ask ? "ask" : "post"}.`
+        : p.q;
   return (
+    // a click on the row opens it, as on the mockup; its title is the link
+    // keyboard users take
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
     <article
       className={`row row-x row-rowsq row-i-lefttxt ${ask ? "row-ask" : "row-post"}`}
       role="listitem"
@@ -133,7 +148,10 @@ export function FeedRow({
         open();
       }}
     >
-      <span className="row-k" title={ask ? "Ask: answered by an agent" : "Post: replies from people"}>
+      <span
+        className="row-k"
+        title={ask ? "Ask: answered by an agent" : "Post: replies from people"}
+      >
         {ask ? (
           <span className="agent">
             <Svg src={I.agent} />
@@ -144,7 +162,7 @@ export function FeedRow({
       </span>
       <div className="row-m">
         <a
-          className={`row-t row-link${ask ? "" : " row-tp"}`}
+          className={`row-t row-link${ask ? "" : "row-tp"}`}
           href={space ? `/s/${space.name}/t/${p.id}` : undefined}
           onClick={(e) => {
             e.preventDefault();
@@ -202,10 +220,7 @@ export function Feed({
   from?: From;
 }) {
   const [shown, setShown] = useState(page);
-  const list = sortRows(
-    f.kind === "all" ? rows : rows.filter((p) => p.k === f.kind),
-    f.sort,
-  );
+  const list = sortRows(f.kind === "all" ? rows : rows.filter((p) => p.k === f.kind), f.sort);
   if (!list.length)
     return (
       empty ?? (

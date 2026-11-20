@@ -18,11 +18,12 @@ import {
 import { useRecords, useNow, useSession } from "../sync/react.js";
 import type { Reader } from "../sync/reader.js";
 
+import { Scrim } from "./Scrim.js";
+import { Svg } from "./Svg.js";
 import { Avatar } from "./atoms.js";
 import { CI, I, SFI, SVG } from "./icons.js";
 import { BackRow } from "./nav.js";
 import { useOverlay } from "./overlay.js";
-import { Svg } from "./Svg.js";
 import { useWorld } from "./world.js";
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
@@ -175,7 +176,8 @@ export function useNotificationItems(): { items: Item[]; unread: number } {
   );
   return useMemo(() => {
     if (!data) return { items: [], unread: 0 };
-    const name = (s: Space | undefined) => (s ? (s.plain && s.dom?.state === "ok" ? s.title : `#${s.name}`) : "a space");
+    const name = (s: Space | undefined) =>
+      s ? (s.plain && s.dom?.state === "ok" ? s.title : `#${s.name}`) : "a space";
     const L: Labels = {
       thread: (id) => (id ? (data.labels.threads[id] ?? null) : null),
       space: (id) => (id ? w.byId.get(id) : undefined),
@@ -224,7 +226,8 @@ function useOpenItem() {
   const navigate = useNavigate();
   const w = useWorld();
   return (x: Item) => {
-    if (x.k === "reqs" || x.k === "reps") session?.write("notifications.markSeen", { kind: x.k === "reqs" ? "requests" : "reports" });
+    if (x.k === "reqs" || x.k === "reps")
+      session?.write("notifications.markSeen", { kind: x.k === "reqs" ? "requests" : "reports" });
     else if (x.unread) session?.write("notifications.markRead", { id: x.id });
     const sp = x.open?.space ? w.byId.get(x.open.space) : undefined;
     if (x.open?.thread) {
@@ -239,7 +242,10 @@ function useOpenItem() {
       return;
     }
     if (sp && x.open?.manage)
-      void navigate({ to: "/s/$space/manage/$tab", params: { space: sp.name, tab: x.open.manage } });
+      void navigate({
+        to: "/s/$space/manage/$tab",
+        params: { space: sp.name, tab: x.open.manage },
+      });
     else if (sp) void navigate({ to: "/s/$space", params: { space: sp.name } });
   };
 }
@@ -268,7 +274,7 @@ export function NotificationItem({ x, onOpen }: { x: Item; onOpen: (x: Item) => 
   const session = useSession();
   const who = x.u && x.k !== "declined" ? <b>{x.u}</b> : null;
   return (
-    <div className={`nt-item${x.unread ? " unread" : ""}`}>
+    <div className={`nt-item${x.unread ? "unread" : ""}`}>
       <ItemIcon x={x} />
       <span className="nt-b">
         <button className="nt-tx nt-open" type="button" onClick={() => onOpen(x)}>
@@ -283,7 +289,9 @@ export function NotificationItem({ x, onOpen }: { x: Item; onOpen: (x: Item) => 
             <button
               className="btn sm primary"
               type="button"
-              onClick={() => x.sp && session?.write("spaces.join", { space: x.sp, notification: x.id })}
+              onClick={() =>
+                x.sp && session?.write("spaces.join", { space: x.sp, notification: x.id })
+              }
             >
               Accept
             </button>
@@ -321,7 +329,8 @@ function markAllRead(session: ReturnType<typeof useSession>, items: Item[]) {
   if (items.some((x) => x.unread && x.k !== "reqs" && x.k !== "reps"))
     session.write("notifications.markAllRead", {});
   for (const k of ["reqs", "reps"] as const)
-    if (items.some((x) => x.k === k && x.unread)) session.write("notifications.markSeen", { kind: k === "reqs" ? "requests" : "reports" });
+    if (items.some((x) => x.k === k && x.unread))
+      session.write("notifications.markSeen", { kind: k === "reqs" ? "requests" : "reports" });
 }
 
 /** The bell in the header, with its popover. */
@@ -335,7 +344,7 @@ export function Bell({ onPage }: { onPage: boolean }) {
   return (
     <div className="nt-wrap">
       <button
-        className={`btn hb nt-btn${open || onPage ? " on" : ""}`}
+        className={`btn hb nt-btn${open || onPage ? "on" : ""}`}
         type="button"
         aria-haspopup="true"
         aria-expanded={open}
@@ -348,7 +357,7 @@ export function Bell({ onPage }: { onPage: boolean }) {
       </button>
       {open ? (
         <>
-          <div className="um-scrim" onClick={() => setOpen(false)} />
+          <Scrim onClose={() => setOpen(false)} />
           <div className="pop nt-pop" role="dialog" aria-label="Notifications">
             <div className="nt-h">
               <b>Notifications</b>
@@ -401,7 +410,9 @@ export function NotificationsPage() {
   const { items, unread } = useNotificationItems();
   const session = useSession();
   const openItem = useOpenItem();
-  const list = items.filter((x) => f === "all" || (f === "spaces" ? x.k !== "reply" : x.k === "reply"));
+  const list = items.filter(
+    (x) => f === "all" || (f === "spaces" ? x.k !== "reply" : x.k === "reply"),
+  );
   const chip = (k: Filter, l: string) => (
     <button type="button" aria-pressed={f === k} onClick={() => setF(k)}>
       {l}

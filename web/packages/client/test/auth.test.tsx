@@ -19,7 +19,11 @@ test.serial("a guest sees Log in and Sign up, and no account reads are made", as
   await waitUntil(t, () => screen.queryByRole("button", { name: "Log in" }) !== null, "Log in");
   t.truthy(screen.queryByRole("button", { name: "Sign up" }));
   t.is(screen.queryByRole("button", { name: /^Account/ }), null);
-  t.is(app.server.calls.filter((c) => c.path === "/api/me/preferences").length, 0, "no account reads");
+  t.is(
+    app.server.calls.filter((c) => c.path === "/api/me/preferences").length,
+    0,
+    "no account reads",
+  );
   // a guest reads no sync log as a person
   t.is(app.server.calls.filter((c) => c.path === "/api/sync/register").length, 0);
 });
@@ -41,7 +45,11 @@ test.serial("the signed-in session reads its user log over the sync routes", asy
   const app = await renderApp("/", { user: testUser({ handle: "raymond", u: "raymond" }) });
   await waitUntil(
     t,
-    () => app.server.calls.some((c) => c.path === "/api/sync/snapshot" && (c.body as { log: string }).log === "user:raymond"),
+    () =>
+      app.server.calls.some(
+        (c) =>
+          c.path === "/api/sync/snapshot" && (c.body as { log: string }).log === "user:raymond",
+      ),
     "a snapshot of user:raymond",
   );
   const reg = app.server.calls.find((c) => c.path === "/api/sync/register");

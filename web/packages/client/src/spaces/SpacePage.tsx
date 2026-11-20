@@ -9,13 +9,14 @@ import { ago, dayOf, fmt, isClosed, isVerified, spaceName } from "../data/format
 import { isStaff, threadRows, type Space } from "../data/spaces.js";
 import { useNow, useRecords } from "../sync/react.js";
 
-import { Author, Avatar, Seal, SpaceGlyph } from "./atoms.js";
 import { Composer } from "./Composer.js";
 import { FaqLanding, topicsOf, topicSlug } from "./FaqLanding.js";
 import { Feed, SortControl, useFeedState } from "./Feed.js";
-import { CI, I, MI, MII, SVG } from "./icons.js";
 import { NotFound, Page } from "./Page.js";
 import { Svg } from "./Svg.js";
+import { Author, Avatar, Seal, SpaceGlyph } from "./atoms.js";
+import { CI, I, MI, MII, SVG } from "./icons.js";
+import { useOverlay } from "./overlay.js";
 import { canRead, useWorld } from "./world.js";
 
 const policyLabel = (s: Space) => (s.policy === "invite" ? "Invite only" : "Join by request");
@@ -26,14 +27,32 @@ const ROLE_TITLE: Record<string, string> = {
   mod: "Moderator: requests, reports and members",
 };
 
-function Banner({ s, compact }: { s: Space; compact: boolean }) {
+function Banner({
+  s,
+  compact,
+  onSide,
+}: {
+  s: Space;
+  compact: boolean;
+  onSide?: (t: SideTab) => void;
+}) {
   const w = useWorld();
   const role = w.roles[s.id];
   const review =
-    useRecords((r) => (isStaff(role) ? r.list("request", (q) => q.sp === s.id && q.st === "open").length + r.list("report", (q) => q.sp === s.id && q.st === "open").length : 0), [s.id, role]) ?? 0;
+    useRecords(
+      (r) =>
+        isStaff(role)
+          ? r.list("request", (q) => q.sp === s.id && q.st === "open").length +
+            r.list("report", (q) => q.sp === s.id && q.st === "open").length
+          : 0,
+      [s.id, role],
+    ) ?? 0;
   const closed = isClosed(s);
   return (
-    <div className={`banner${compact ? " sf-compact" : ""} has-tabs`} style={{ ["--sp" as string]: `var(--av${s.av || 1})` }}>
+    <div
+      className={`banner${compact ? "sf-compact" : ""} has-tabs`}
+      style={{ ["--sp" as string]: `var(--av${s.av || 1})` }}
+    >
       <SpaceGlyph s={s} className={compact ? "lg" : "xl"} />
       <div style={{ minWidth: 0 }}>
         <h2>
@@ -64,7 +83,12 @@ function Banner({ s, compact }: { s: Space; compact: boolean }) {
       </div>
       <div className="banner-acts">
         {isStaff(role) ? (
-          <button className="btn cs-b cs-mgb" type="button" aria-label={`Manage ${spaceName(s)}`} title="Manage">
+          <button
+            className="btn cs-b cs-mgb"
+            type="button"
+            aria-label={`Manage ${spaceName(s)}`}
+            title="Manage"
+          >
             <Svg src={MI.cog} />
             <span className="d-only">Manage</span>
             {review ? (
@@ -91,6 +115,18 @@ function Banner({ s, compact }: { s: Space; compact: boolean }) {
           <button className="btn primary" type="button">
             Join
           </button>
+        ) : null}
+        {onSide ? (
+          <>
+            <button className="btn sm m-wiki" type="button" onClick={() => onSide("sources")}>
+              <Svg src={MII.library} />
+              Sources
+            </button>
+            <button className="btn sm m-wiki" type="button" onClick={() => onSide("wiki")}>
+              <Svg src={I.book} />
+              About
+            </button>
+          </>
         ) : null}
       </div>
     </div>
@@ -130,7 +166,7 @@ function SourcesTab({ s }: { s: Space }) {
           const m = x.meta;
           const host = m.url.replace(/^https?:\/\//, "").split("/")[0] ?? m.url;
           return (
-            <article key={x.src} className="mi-u mi-u2" tabIndex={0}>
+            <article key={x.src} className="mi-u mi-u2">
               <div className="mi-p">
                 {m.t ? (
                   <span className="mi-ic mi-k-article">
@@ -298,9 +334,40 @@ function AboutTab({ s }: { s: Space }) {
   );
 }
 
-function Sidebar({ s }: { s: Space }) {
-  // a space with the FAQ landing opens on About, the others on Sources
-  const [tab, setTab] = useState<SideTab>(s.faq ? "wiki" : "sources");
+/** The sidebar: Sources and About. Collapsed (desktop), a narrow strip that
+ * opens it; on a phone it is a sheet over the page (`mwiki`), and its
+ * collapse button closes the sheet. */
+function Sidebar({
+  s,
+  tab,
+  setTab,
+  open,
+  onToggle,
+}: {
+  s: Space;
+  tab: SideTab;
+  setTab: (t: SideTab) => void;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  if (!open)
+    return (
+      <aside className="drawer closed ds-sclosed" aria-label="Sources and wiki">
+        <div className="dh">
+          <button
+            className="iconbtn"
+            type="button"
+            data-act="drawer"
+            aria-label="Open the sidebar"
+            onClick={onToggle}
+          >
+            <Svg src={MII.library} />
+          </button>
+          <span className="ds-csep" aria-hidden="true" />
+          <span className="vlabel">Sources</span>
+        </div>
+      </aside>
+    );
   return (
     <aside className="drawer wk ds-side" aria-label="Sources and about">
       <div className="dh ds-tabs">
@@ -325,6 +392,15 @@ function Sidebar({ s }: { s: Space }) {
           </button>
         </span>
         <span className="grow" />
+        <button
+          className="iconbtn"
+          type="button"
+          data-act="drawer"
+          aria-label="Collapse the sidebar"
+          onClick={onToggle}
+        >
+          <Svg src={I.close} />
+        </button>
       </div>
       {tab === "sources" ? <SourcesTab s={s} /> : <AboutTab s={s} />}
     </aside>
@@ -338,7 +414,12 @@ function FaqToc({ s, rows }: { s: Space; rows: Parameters<typeof topicsOf>[1] })
   return (
     <nav className="rf-toc" aria-label="Topics">
       <div className="eyebrow">Topics</div>
-      <button type="button" className="rf-toc-i" aria-current="false" onClick={() => void navigate({ to: "/s/$space", params: { space: s.name } })}>
+      <button
+        type="button"
+        className="rf-toc-i"
+        aria-current="false"
+        onClick={() => void navigate({ to: "/s/$space", params: { space: s.name } })}
+      >
         All answers <span className="num">{all.length}</span>
       </button>
       {list.map((t) => (
@@ -347,7 +428,12 @@ function FaqToc({ s, rows }: { s: Space; rows: Parameters<typeof topicsOf>[1] })
           type="button"
           className="rf-toc-i"
           aria-current="false"
-          onClick={() => void navigate({ to: "/s/$space/topics/$topic", params: { space: s.name, topic: topicSlug(t.title) } })}
+          onClick={() =>
+            void navigate({
+              to: "/s/$space/topics/$topic",
+              params: { space: s.name, topic: topicSlug(t.title) },
+            })
+          }
         >
           {t.title} <span className="num">{t.rows.length}</span>
         </button>
@@ -405,10 +491,20 @@ function Gate({ s }: { s: Space }) {
  * feed (Latest, on a space with the landing). */
 export type SpaceView = { kind: "threads" } | { kind: "latest" } | { kind: "topic"; topic: string };
 
-export function SpacePage({ name, view = { kind: "threads" } }: { name: string; view?: SpaceView }) {
+export function SpacePage({
+  name,
+  view = { kind: "threads" },
+}: {
+  name: string;
+  view?: SpaceView;
+}) {
   const w = useWorld();
   const f = useFeedState();
   const navigate = useNavigate();
+  const [sideOpen, setSideOpen] = useState(true);
+  const [mWiki, setMWiki] = useState(false);
+  const [sideTab, setSideTab] = useState<SideTab | null>(null);
+  useOverlay(mWiki, () => setMWiki(false));
   const s = useMemo(() => w.spaces.find((x) => x.name === name), [w.spaces, name]);
   const session = w.session;
   useEffect(() => {
@@ -447,10 +543,17 @@ export function SpacePage({ name, view = { kind: "threads" } }: { name: string; 
       </Page>
     );
   return (
-    <Page cls="ds-hd" place={{ kind: "space", id: s.id }}>
+    <Page cls={`ds-hd${mWiki ? " mwiki" : ""}`} place={{ kind: "space", id: s.id }}>
       <div className="body">
         <div className="ds-top">
-          <Banner s={s} compact={s.faq} />
+          <Banner
+            s={s}
+            compact={s.faq}
+            onSide={(t) => {
+              setSideTab(t);
+              setMWiki(true);
+            }}
+          />
         </div>
         <div className="mcol">
           <nav className="sp-tabs" aria-label={spaceName(s)}>
@@ -478,7 +581,13 @@ export function SpacePage({ name, view = { kind: "threads" } }: { name: string; 
             <div className="main">{feed}</div>
           )}
         </div>
-        <Sidebar s={s} />
+        <Sidebar
+          s={s}
+          tab={sideTab ?? (s.faq ? "wiki" : "sources")}
+          setTab={setSideTab}
+          open={sideOpen || mWiki}
+          onToggle={() => (mWiki ? setMWiki(false) : setSideOpen((o) => !o))}
+        />
       </div>
     </Page>
   );

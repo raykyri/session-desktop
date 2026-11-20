@@ -54,10 +54,10 @@ export async function signIn(page: Page, options: SignInOptions): Promise<Signed
   return (await response.json()) as SignedInUser;
 }
 
-/** Signs in and opens Home (the shell's placeholder, phase 2a). */
+/** Signs in and opens Home; the account menu shows who is signed in. */
 export async function signInAndOpenHome(page: Page, options: SignInOptions): Promise<SignedInUser> {
   const user = await signIn(page, options);
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Account: / })).toBeVisible();
   return user;
 }

@@ -6,9 +6,9 @@
 
 import { fileURLToPath } from "node:url";
 
-import { startTestServer } from "@session/server/test-server";
-
 import { APP_ORIGIN, E2E_PORT } from "./constants.js";
+
+import { startTestServer } from "@session/server/test-server";
 
 const { ready } = startTestServer({
   port: E2E_PORT,

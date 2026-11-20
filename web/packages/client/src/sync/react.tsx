@@ -7,6 +7,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useCallback,
   useMemo,
   useState,
   useSyncExternalStore,
@@ -53,6 +54,8 @@ export function SpacesProvider({
         // the server no longer takes the session: ask who is signed in
         onUnauthorized: () => void meResource.load(true).catch(() => undefined),
       });
+    // the session belongs to this effect: it is made, started and stopped here
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSession(s);
     void s.start();
     return () => s.stop();
@@ -91,7 +94,8 @@ const NO_QUERY = {
  * before the session exists. */
 export function useRecords<T>(fn: (r: Reader) => T, deps: readonly unknown[]): T | undefined {
   const s = useSession();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // `fn` is new on each render; `deps` say when it means something new
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/use-memo
   const q = useMemo(() => (s ? s.query(fn) : NO_QUERY), [s, ...deps]);
   return useQuery(q as { get(): T | undefined; subscribe(l: () => void): () => void });
 }
@@ -125,10 +129,11 @@ export function useRunText(run: string | null, attempt?: number): string | null 
 /** The server's time as the client estimates it, ticking each `ms`. */
 export function useNow(ms = 30_000): number {
   const s = useSession();
-  const [, tick] = useState(0);
+  const read = useCallback(() => (s ? s.now() : Date.now()), [s]);
+  const [now, setNow] = useState(read);
   useEffect(() => {
-    const h = setInterval(() => tick((n) => n + 1), ms);
+    const h = setInterval(() => setNow(read()), ms);
     return () => clearInterval(h);
-  }, [ms]);
-  return s ? s.now() : Date.now();
+  }, [ms, read]);
+  return now;
 }

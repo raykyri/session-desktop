@@ -11,7 +11,8 @@ export interface RecordedRequest {
   headers: Headers;
 }
 
-export type Answer = unknown | ((body: unknown) => unknown);
+/** A JSON body, a function of the request body, or a `Response`. */
+export type Answer = unknown;
 
 export interface FetchStub {
   fetch: typeof fetch;
@@ -32,8 +33,12 @@ export function createFetchStub(routes: Record<string, Answer> = {}): FetchStub 
     logs: new Map(),
   };
   const now = () => Date.parse("2026-11-16T10:00:00Z");
-  stub.fetch = async (input, init) => {
-    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, "http://localhost");
+  stub.fetch = (input, init) => Promise.resolve(answer(input, init));
+  const answer = (input: Parameters<typeof fetch>[0], init: RequestInit | undefined): Response => {
+    const url = new URL(
+      typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+      "http://localhost",
+    );
     const method = (init?.method ?? "GET").toUpperCase();
     const text = typeof init?.body === "string" ? init.body : "";
     const body = text ? (JSON.parse(text) as unknown) : undefined;
@@ -58,7 +63,13 @@ export function createFetchStub(routes: Record<string, Answer> = {}): FetchStub 
         return json(200, { ok: true, records, cursor: `k:${log}`, lastSeq: 0, serverTime: now() });
       }
       case "POST /api/sync/pull":
-        return json(200, { ok: true, changes: [], cursor: (body as { cursor: string }).cursor, lastSeq: 0, serverTime: now() });
+        return json(200, {
+          ok: true,
+          changes: [],
+          cursor: (body as { cursor: string }).cursor,
+          lastSeq: 0,
+          serverTime: now(),
+        });
       case "GET /api/spaces":
         return json(200, { spaces: [], stats: [], serverTime: now() });
     }

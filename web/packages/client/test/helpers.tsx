@@ -38,7 +38,11 @@ export function testUser(overrides: Partial<Me> = {}): Me {
 /** What the shell reads when it starts. */
 export function defaultRoutes(user: Me | null): Record<string, Answer> {
   return {
-    "GET /api/me": user ?? new Response(JSON.stringify({ ok: false, error: { code: "UNAUTHORIZED", message: "x" } }), { status: 401 }),
+    "GET /api/me":
+      user ??
+      new Response(JSON.stringify({ ok: false, error: { code: "UNAUTHORIZED", message: "x" } }), {
+        status: 401,
+      }),
     "GET /api/me/preferences": { ...DEFAULT_USER_SETTINGS, researchLaunchInstruction: null },
     "GET /api/config": { version: "0.0.0", models: [], limits: {}, features: {} },
   };

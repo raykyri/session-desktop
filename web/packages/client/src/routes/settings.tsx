@@ -70,7 +70,7 @@ function ResearchInstructionsRow() {
   const value = edit ?? stored;
   const pendingRef = useRef<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mutate = update.mutate;
+  const { mutate } = update;
   const id = useId();
 
   const save = useCallback(() => {

@@ -174,7 +174,8 @@ export class SpacesSession {
   /** One reader per version of the records, shared by every query. */
   reader(): Reader {
     const ver = this.source.version();
-    if (this.readerAt?.ver !== ver) this.readerAt = { ver, reader: new Reader(this.source, this.me) };
+    if (this.readerAt?.ver !== ver)
+      this.readerAt = { ver, reader: new Reader(this.source, this.me) };
     return this.readerAt.reader;
   }
 
@@ -216,7 +217,8 @@ export class SpacesSession {
     if (!this.client) return;
     const open = new Set(this.client.openLogs());
     const want = this.memberSpaces().filter((sp) => !open.has(`space:${sp}`));
-    await Promise.all(want.map((sp) => this.client?.open(`space:${sp}`).catch(() => undefined)));
+    const c = this.client;
+    await Promise.all(want.map((sp) => c.open(`space:${sp}`).catch(() => undefined)));
   }
 
   /** Start reading: the user log and the joined spaces, then the stream. */

@@ -8,8 +8,8 @@ import type { UserSettings } from "@session/shared";
 import { useEffect, useRef } from "react";
 
 import { preferencesResource, useMe, useSettings } from "../api/account.js";
-import { postJson } from "../api/http.js";
 import type { ServerSettings } from "../api/account.js";
+import { postJson } from "../api/http.js";
 import { normalizeSettings, useSettingsStore } from "../stores/settings.js";
 
 /** Debounce interval for pushing local user settings modifications to the

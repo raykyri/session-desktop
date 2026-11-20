@@ -72,16 +72,35 @@ function MarkdownLink({
 }: ComponentPropsWithoutRef<"a"> & { node?: unknown }) {
   void node;
   const safe = safeHref(href);
-  const text = typeof children === "string" ? children : Array.isArray(children) && children.length === 1 && typeof children[0] === "string" ? (children[0] as string) : null;
+  const text =
+    typeof children === "string"
+      ? children
+      : Array.isArray(children) && children.length === 1 && typeof children[0] === "string"
+        ? children[0]
+        : null;
   if (safe && text !== null && /^\d{1,3}$/.test(text))
     return (
-      <sup className="cite ta-cite" tabIndex={0} role="button" aria-label={`Source ${text}`} title={title ?? hostOf(safe)}>
+      <sup
+        className="cite ta-cite"
+        tabIndex={0}
+        // the mockup's citation marker: a superscript that opens its source
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role
+        role="button"
+        aria-label={`Source ${text}`}
+        title={title ?? hostOf(safe)}
+      >
         {text}
       </sup>
     );
   if (!safe) return <span>{children}</span>;
   return (
-    <a {...rest} href={safe} target="_blank" rel="noopener noreferrer" {...(title ? { title } : {})}>
+    <a
+      {...rest}
+      href={safe}
+      target="_blank"
+      rel="noopener noreferrer"
+      {...(title ? { title } : {})}
+    >
       {children}
     </a>
   );

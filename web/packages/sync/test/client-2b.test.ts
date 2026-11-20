@@ -20,15 +20,24 @@ import { cast } from "./helpers.js";
 function recording() {
   const seen: { method: string; path: string; headers: Headers }[] = [];
   const f: typeof fetch = (input, init) => {
-    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
-    seen.push({ method: init?.method ?? "GET", path: url.pathname, headers: new Headers(init?.headers) });
+    const url = new URL(
+      typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+    );
+    seen.push({
+      method: init?.method ?? "GET",
+      path: url.pathname,
+      headers: new Headers(init?.headers),
+    });
     if (url.pathname === "/api/sync/events")
       return Promise.resolve(new Response(null, { status: 401 }));
     return Promise.resolve(
-      new Response(JSON.stringify({ ok: false, error: { code: "FORBIDDEN", message: "x" }, serverTime: 1 }), {
-        status: 403,
-        headers: { "Content-Type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({ ok: false, error: { code: "FORBIDDEN", message: "x" }, serverTime: 1 }),
+        {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
     );
   };
   return { seen, f };
@@ -63,7 +72,11 @@ test("FetchTransport sends its headers on every request, under the protocol's ow
   await tr.pull("user:mel", "cursor");
   await tr.snapshot("user:mel");
   await tr.call("research.cancelNode", {});
-  await tr.listen(() => ({}), () => undefined, new AbortController().signal);
+  await tr.listen(
+    () => ({}),
+    () => undefined,
+    new AbortController().signal,
+  );
   t.deepEqual(
     seen.map((r) => r.path),
     [

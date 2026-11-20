@@ -10,9 +10,9 @@ import { ago, spaceName } from "../data/format.js";
 import type { Row, Space } from "../data/spaces.js";
 import { useNow } from "../sync/react.js";
 
-import { Author } from "./atoms.js";
 import { FeedRow } from "./Feed.js";
 import { highlight, stemOf } from "./SearchPage.js";
+import { Author } from "./atoms.js";
 
 const CARD = 3;
 const RECENT = 4;
@@ -26,7 +26,11 @@ export const topicSlug = (t: string) =>
 /** A space's topics with their threads; threads without one are "Other". */
 export function topicsOf(s: Space, rows: Row[]) {
   const asks = rows.filter((r) => r.k === "ask" && !r.del && !r.mod);
-  const list = s.topics.map(([id, title]) => ({ id, title, rows: asks.filter((r) => r.topic === id) }));
+  const list = s.topics.map(([id, title]) => ({
+    id,
+    title,
+    rows: asks.filter((r) => r.topic === id),
+  }));
   const known = new Set(s.topics.map(([id]) => id));
   const other = asks.filter((r) => !r.topic || !known.has(r.topic));
   if (other.length) list.push({ id: "other", title: "Other", rows: other });
@@ -64,7 +68,13 @@ export function FaqLanding({ s, rows, topic }: { s: Space; rows: Row[]; topic: s
           All answers <span className="num">{all.length}</span>
         </button>
         {list.map((t) => (
-          <button key={t.id} type="button" className="rf-toc-i" aria-current={cur?.id === t.id} onClick={() => go(t)}>
+          <button
+            key={t.id}
+            type="button"
+            className="rf-toc-i"
+            aria-current={cur?.id === t.id}
+            onClick={() => go(t)}
+          >
             {t.title} <span className="num">{t.rows.length}</span>
           </button>
         ))}
@@ -80,7 +90,12 @@ export function FaqLanding({ s, rows, topic }: { s: Space; rows: Row[]; topic: s
             value={q}
             onChange={(e) => setQ(e.currentTarget.value)}
           />
-          <button className="btn primary" type="button" disabled={!q.trim()} aria-disabled={!q.trim()}>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={!q.trim()}
+            aria-disabled={!q.trim()}
+          >
             Ask
           </button>
         </div>
@@ -110,13 +125,24 @@ export function FaqLanding({ s, rows, topic }: { s: Space; rows: Row[]; topic: s
           ) : null}
         </div>
         <div className="sf-tchips" role="navigation" aria-label="Topics">
-          <button type="button" className="mchip sf-tchip" aria-current={!cur} onClick={() => go(null)}>
+          <button
+            type="button"
+            className="mchip sf-tchip"
+            aria-current={!cur}
+            onClick={() => go(null)}
+          >
             All
           </button>
           {list
             .filter((t) => t.id !== "other")
             .map((t) => (
-              <button key={t.id} type="button" className="mchip sf-tchip" aria-current={cur?.id === t.id} onClick={() => go(t)}>
+              <button
+                key={t.id}
+                type="button"
+                className="mchip sf-tchip"
+                aria-current={cur?.id === t.id}
+                onClick={() => go(t)}
+              >
                 {t.title}
               </button>
             ))}
@@ -183,14 +209,22 @@ export function FaqLanding({ s, rows, topic }: { s: Space; rows: Row[]; topic: s
                 <button
                   className="tlink"
                   type="button"
-                  onClick={() => void navigate({ to: "/s/$space/latest", params: { space: s.name } })}
+                  onClick={() =>
+                    void navigate({ to: "/s/$space/latest", params: { space: s.name } })
+                  }
                 >
                   See all threads
                 </button>
               </div>
               <div className="rows rows-plain" role="list">
                 {recent.map((r) => (
-                  <FeedRow key={r.id} p={r} space={s} tag={false} from={{ label: spaceName(s), to: `/s/${s.name}`, space: s.id }} />
+                  <FeedRow
+                    key={r.id}
+                    p={r}
+                    space={s}
+                    tag={false}
+                    from={{ label: spaceName(s), to: `/s/${s.name}`, space: s.id }}
+                  />
                 ))}
               </div>
             </section>

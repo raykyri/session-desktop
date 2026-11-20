@@ -105,7 +105,9 @@ export function AdminPage() {
 
         <section className="flex flex-col gap-3">
           <h2 className="text-fg-heading m-0 text-base font-semibold">Accounts</h2>
-          {users.status === "loading" ? <p className="text-fg-muted m-0 text-base">Loading…</p> : null}
+          {users.status === "loading" ? (
+            <p className="text-fg-muted m-0 text-base">Loading…</p>
+          ) : null}
           {users.data ? (
             <table className="w-full border-collapse text-sm">
               <thead>
@@ -167,7 +169,9 @@ export function AdminPage() {
                           login={user.login}
                           value={user.allowance.weeklyTokens}
                           fallback={user.allowance.defaultTokens}
-                          onSave={(weeklyTokens) => setLimits.mutate({ userId: user.id, weeklyTokens })}
+                          onSave={(weeklyTokens) =>
+                            setLimits.mutate({ userId: user.id, weeklyTokens })
+                          }
                         />
                       </td>
                     </tr>

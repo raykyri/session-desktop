@@ -3,7 +3,7 @@
 // load's error with Retry), Update Session, and the toasts.
 
 import { Outlet } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { meResource, useMe } from "../api/account.js";
 import { LoadFailed, Skeleton, UpdateDialog } from "../spaces/Page.js";
@@ -15,10 +15,8 @@ import { SessionBoot } from "./SessionBoot.js";
 
 function UpdateGate() {
   const status = useStatus();
+  // Later hides it for this page; a reload is the update
   const [later, setLater] = useState(false);
-  useEffect(() => {
-    if (!status.updateRequired) setLater(false);
-  }, [status.updateRequired]);
   if (!status.updateRequired || later) return null;
   return <UpdateDialog onLater={() => setLater(true)} />;
 }
@@ -40,7 +38,12 @@ function FirstLoad({ children }: { children: React.ReactNode }) {
     return (
       <LoadFailed
         message="Your sign-in expired. Sign in again to load your spaces."
-        onRetry={() => void meResource.load(true).then(() => session?.retry()).catch(() => undefined)}
+        onRetry={() =>
+          void meResource
+            .load(true)
+            .then(() => session?.retry())
+            .catch(() => undefined)
+        }
       />
     );
   if (!session || (me.data && !status.ready)) return <Skeleton />;

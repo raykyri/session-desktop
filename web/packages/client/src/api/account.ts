@@ -157,6 +157,6 @@ export function createInvites(input: { count: number }): Promise<{ codes: string
 }
 
 export const useUpdateSettings = () => useAction(updatePreferences);
-export const useLogout = () => useAction((_: void) => logout());
+export const useLogout = () => useAction<void, void>(() => logout());
 export const useSetUserLimits = () => useAction(setUserLimits);
 export const useCreateInvites = () => useAction(createInvites);

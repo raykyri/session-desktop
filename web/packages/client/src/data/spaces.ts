@@ -312,38 +312,34 @@ export function threadView(r: Reader, id: string): ThreadView | null {
   const counts = r.get("counts", id);
   const followups = r
     .list("followup", (f) => f.th === id)
-    .map(
-      (f): FollowUp => ({
-        id: f.id,
-        par: f.par,
-        u: f.u,
-        q: f.q,
-        a: f.a,
-        del: f.del,
-        edited: f.edited,
-        mod: moderated(r, `followup:${f.id}`, f.mod),
-        promoted: f.promoted,
-        createdAt: f.createdAt,
-        run: runOf(r, id, f.id),
-        saved: me !== null && r.byKey(`asksave:${me}:${id}:${f.id}`) !== undefined,
-      }),
-    );
+    .map((f): FollowUp => ({
+      id: f.id,
+      par: f.par,
+      u: f.u,
+      q: f.q,
+      a: f.a,
+      del: f.del,
+      edited: f.edited,
+      mod: moderated(r, `followup:${f.id}`, f.mod),
+      promoted: f.promoted,
+      createdAt: f.createdAt,
+      run: runOf(r, id, f.id),
+      saved: me !== null && r.byKey(`asksave:${me}:${id}:${f.id}`) !== undefined,
+    }));
   const replies = r
     .list("reply", (x) => x.th === id)
-    .map(
-      (x): Reply => ({
-        id: x.id,
-        parent: x.parent,
-        u: x.u,
-        t: x.t,
-        del: x.del,
-        edited: x.edited,
-        mod: moderated(r, `reply:${x.id}`, x.mod),
-        likes: counts?.rlikes[x.id] ?? 0,
-        liked: me !== null && r.byKey(`rlike:${me}:${x.id}`) !== undefined,
-        createdAt: x.createdAt,
-      }),
-    );
+    .map((x): Reply => ({
+      id: x.id,
+      parent: x.parent,
+      u: x.u,
+      t: x.t,
+      del: x.del,
+      edited: x.edited,
+      mod: moderated(r, `reply:${x.id}`, x.mod),
+      likes: counts?.rlikes[x.id] ?? 0,
+      liked: me !== null && r.byKey(`rlike:${me}:${x.id}`) !== undefined,
+      createdAt: x.createdAt,
+    }));
   return {
     ...rowOf(r, t, latest),
     edited: t.edited,

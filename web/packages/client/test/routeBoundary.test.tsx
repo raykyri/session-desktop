@@ -6,21 +6,22 @@ import test from "ava";
 
 import { renderApp, waitUntil } from "./helpers.js";
 
-test.serial(
-  "unmatched URL paths render Page not found under the header",
-  async (t) => {
-    const app = await renderApp("/not-a-real-page");
-    await waitUntil(
-      t,
-      () => screen.queryByRole("heading", { name: "Page not found" }) !== null,
-      "the not-found page is shown rather than a blank page",
-    );
-    // the page has a way back without reaching for the address bar
-    t.truthy(screen.queryByRole("button", { name: "Go to Home" }));
-    t.is(screen.queryAllByRole("button", { name: "Search" }).length, 2, "the header's and the page's");
-    app.unmount();
-  },
-);
+test.serial("unmatched URL paths render Page not found under the header", async (t) => {
+  const app = await renderApp("/not-a-real-page");
+  await waitUntil(
+    t,
+    () => screen.queryByRole("heading", { name: "Page not found" }) !== null,
+    "the not-found page is shown rather than a blank page",
+  );
+  // the page has a way back without reaching for the address bar
+  t.truthy(screen.queryByRole("button", { name: "Go to Home" }));
+  t.is(
+    screen.queryAllByRole("button", { name: "Search" }).length,
+    2,
+    "the header's and the page's",
+  );
+  app.unmount();
+});
 
 test.serial("a route that throws is contained by the error boundary", async (t) => {
   // Use an invalid query parameter to trigger the router's native error

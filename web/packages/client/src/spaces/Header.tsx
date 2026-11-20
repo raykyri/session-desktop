@@ -4,19 +4,20 @@
 // (`.mchips`), and the CSS narrows the rest.
 
 import { useNavigate } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { logout } from "../api/account.js";
 import { count, spaceName } from "../data/format.js";
 import { headerSpaces, savedThreads, type Space } from "../data/spaces.js";
-import { useRecords, useSession } from "../sync/react.js";
 import { useSettingsStore } from "../stores/settings.js";
+import { useRecords, useSession } from "../sync/react.js";
 
+import { Bell } from "./Notifications.js";
+import { Scrim } from "./Scrim.js";
+import { Svg } from "./Svg.js";
 import { Avatar, Logo, Seal, SpaceGlyph, Lock } from "./atoms.js";
 import { CI, I, MI, SVG } from "./icons.js";
-import { Bell } from "./Notifications.js";
 import { useOverlay } from "./overlay.js";
-import { Svg } from "./Svg.js";
 import { useWorld } from "./world.js";
 
 /** Where the person is: the header marks it. */
@@ -110,13 +111,21 @@ function Switcher({ place }: { place: Place }) {
       >
         <span className="sw-d">All spaces</span>
         <span className="sw-m">
-          {current ?? (cur ? <>{spaceName(cur)}<Seal s={cur} size="sm" /></> : "Home")}
+          {current ??
+            (cur ? (
+              <>
+                {spaceName(cur)}
+                <Seal s={cur} size="sm" />
+              </>
+            ) : (
+              "Home"
+            ))}
         </span>
         <Svg src={I.chev} />
       </button>
       {open ? (
         <>
-          <div className="um-scrim" onClick={() => setOpen(false)} />
+          <Scrim onClose={() => setOpen(false)} />
           <div className="pop" role="menu">
             <input
               id="sw-q"
@@ -124,7 +133,7 @@ function Switcher({ place }: { place: Place }) {
               placeholder="Find a space"
               aria-label="Find a space"
               autoComplete="off"
-              autoFocus
+              ref={(el) => el?.focus()}
               value={q}
               onChange={(e) => setQ(e.currentTarget.value)}
             />
@@ -239,7 +248,7 @@ function AccountMenu() {
       </button>
       {open ? (
         <>
-          <div className="um-scrim" onClick={() => setOpen(false)} />
+          <Scrim onClose={() => setOpen(false)} />
           <div className="pop um" role="menu" aria-label="Account">
             <button
               className="um-head"
@@ -297,6 +306,13 @@ export function Header({ place }: { place: Place }) {
   const session = useSession();
   const tabs = useMemo(() => headerSpaces(w.spaces, w.roles), [w.spaces, w.roles]);
   const saved = useRecords((r) => savedThreads(r).length, []) ?? 0;
+  // the current chip in view (Mobile Web)
+  const chips = useRef<HTMLDivElement>(null);
+  const placeId = place.kind === "space" ? place.id : null;
+  useEffect(() => {
+    const el = chips.current?.querySelector<HTMLElement>('[aria-current="true"]');
+    if (el && chips.current) chips.current.scrollLeft = el.offsetLeft - 12;
+  }, [placeId, tabs.length]);
   const searchRef = useRef<HTMLButtonElement>(null);
   const home = place.kind === "home";
   const tab = (s: Space) => (
@@ -325,7 +341,12 @@ export function Header({ place }: { place: Place }) {
   return (
     <>
       <div className="hdr">
-        <button className="logo-btn" type="button" aria-label="Home" onClick={() => void navigate({ to: "/" })}>
+        <button
+          className="logo-btn"
+          type="button"
+          aria-label="Home"
+          onClick={() => void navigate({ to: "/" })}
+        >
           <Logo text="" />
         </button>
         <nav className="hnav" aria-label="Top spaces">
@@ -361,7 +382,7 @@ export function Header({ place }: { place: Place }) {
           {w.me ? <Bell onPage={place.kind === "notifications"} /> : null}
           {w.me ? (
             <button
-              className={`btn${place.kind === "saved" ? " on" : ""}`}
+              className={`btn${place.kind === "saved" ? "on" : ""}`}
               type="button"
               title="Saved"
               aria-label={saved ? `Saved: ${saved}` : "Saved"}
@@ -379,7 +400,10 @@ export function Header({ place }: { place: Place }) {
                 className="btn hb"
                 type="button"
                 onClick={() =>
-                  void navigate({ to: "/login", search: { redirect: location.pathname + location.search } })
+                  void navigate({
+                    to: "/login",
+                    search: { redirect: location.pathname + location.search },
+                  })
                 }
               >
                 Log in
@@ -395,8 +419,13 @@ export function Header({ place }: { place: Place }) {
           )}
         </div>
       </div>
-      <div className="mchips" role="navigation" aria-label="Spaces">
-        <button type="button" className="mchip" aria-current={home} onClick={() => void navigate({ to: "/" })}>
+      <div className="mchips" role="navigation" aria-label="Spaces" ref={chips}>
+        <button
+          type="button"
+          className="mchip"
+          aria-current={home}
+          onClick={() => void navigate({ to: "/" })}
+        >
           Home
         </button>
         {tabs.map(chip)}

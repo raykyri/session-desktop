@@ -9,12 +9,12 @@ import { count, spaceName } from "../data/format.js";
 import { threadRows, type Space } from "../data/spaces.js";
 import { useRecords } from "../sync/react.js";
 
-import { Seal, SpaceGlyph } from "./atoms.js";
 import { Composer } from "./Composer.js";
 import { Feed, SortControl, useFeedState } from "./Feed.js";
-import { SVG } from "./icons.js";
 import { Page } from "./Page.js";
 import { Svg } from "./Svg.js";
+import { Seal, SpaceGlyph } from "./atoms.js";
+import { SVG } from "./icons.js";
 import { useWorld } from "./world.js";
 
 function SpaceRow({ s }: { s: Space }) {
@@ -60,7 +60,11 @@ function HomeSide() {
         <div className="note-card">
           <div className="sk-head">
             <h3>{joined.length ? "More spaces" : "Spaces"}</h3>
-            <button className="tlink" type="button" onClick={() => void navigate({ to: "/spaces/browse" })}>
+            <button
+              className="tlink"
+              type="button"
+              onClick={() => void navigate({ to: "/spaces/browse" })}
+            >
               Browse all
             </button>
           </div>
@@ -87,7 +91,11 @@ function HomeEmpty() {
         have joined a space.
       </p>
       <div className="as-empty-a">
-        <button className="btn primary" type="button" onClick={() => void navigate({ to: "/spaces/browse" })}>
+        <button
+          className="btn primary"
+          type="button"
+          onClick={() => void navigate({ to: "/spaces/browse" })}
+        >
           Browse spaces
         </button>
         <button className="btn" type="button" onClick={() => void navigate({ to: "/spaces/new" })}>
@@ -125,7 +133,11 @@ export function HomePage() {
           <div className="main">
             <div className="home-head">
               <h2>{out ? "Everything on Session" : "Home"}</h2>
-              <p>{out ? "New threads from every public space." : "New threads from the spaces you joined."}</p>
+              <p>
+                {out
+                  ? "New threads from every public space."
+                  : "New threads from the spaces you joined."}
+              </p>
             </div>
             {empty ? (
               <HomeEmpty />
@@ -135,7 +147,14 @@ export function HomePage() {
                 <div className="fbar fbar-k">
                   <SortControl f={f} />
                 </div>
-                <Feed rows={rows} f={f} spaces={w.byId} tag page={20} from={{ label: "Home", to: "/" }} />
+                <Feed
+                  rows={rows}
+                  f={f}
+                  spaces={w.byId}
+                  tag
+                  page={20}
+                  from={{ label: "Home", to: "/" }}
+                />
               </>
             )}
           </div>

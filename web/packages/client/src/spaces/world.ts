@@ -24,7 +24,10 @@ export function useWorld(): World {
   const me = useMe().data ?? null;
   const session = useSession();
   const dir = useDirectory();
-  const data = useRecords((r) => ({ spaces: spacesOf(r, dir.data), roles: rolesOf(r) }), [dir.data]);
+  const data = useRecords(
+    (r) => ({ spaces: spacesOf(r, dir.data), roles: rolesOf(r) }),
+    [dir.data],
+  );
   const spaces = useMemo(() => data?.spaces ?? [], [data]);
   const byId = useMemo(() => new Map(spaces.map((s) => [s.id, s])), [spaces]);
   return {

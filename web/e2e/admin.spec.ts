@@ -9,6 +9,7 @@ import { signIn, signInAndOpenHome } from "./helpers.js";
 
 test("an admin opens the admin page and makes sign-up codes", async ({ page }) => {
   await signInAndOpenHome(page, { login: "e2e-admin", isAdmin: true });
+  await page.goto("/settings");
   await page.getByRole("link", { name: "Admin" }).click();
   await expect(page).toHaveURL(/\/admin$/);
   await page.getByRole("button", { name: "Create codes" }).click();
@@ -17,6 +18,7 @@ test("an admin opens the admin page and makes sign-up codes", async ({ page }) =
 
 test("an account that is no admin has no Admin link", async ({ page }) => {
   await signInAndOpenHome(page, { login: "e2e-plain" });
+  await page.goto("/settings");
   await expect(page.getByRole("link", { name: "Settings" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Admin" })).toHaveCount(0);
 });
@@ -30,4 +32,5 @@ test("a guest is sent to sign in, and a signed-in account comes back", async ({ 
   await expect(page).toHaveURL(/\/settings$/);
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
+  await expect(page.getByRole("button", { name: "Sign in with GitHub" })).toBeVisible();
 });

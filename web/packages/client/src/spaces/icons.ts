@@ -2,7 +2,7 @@
 // script: `I` (the shared atoms), `MI`, `MII` (sources), `NVI` (navigation), `SXI` (sync
 // states) and the rest by the mockup's names; `SVG` holds its single icons (LOCK, SEAL, ...).
 // Render one with `<Svg src={I.search} />` (`Svg.tsx`).
-/* eslint-disable */
+
 // prettier-ignore
 
 export const I = {
@@ -23,124 +23,157 @@ export const I = {
 } as const;
 
 export const MI = {
-  "user": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"5.5\" r=\"2.5\"/><path d=\"M3 13.5c.6-2.4 2.6-3.7 5-3.7s4.4 1.3 5 3.7\" stroke-linecap=\"round\"/></svg>",
-  "grid": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" aria-hidden=\"true\"><rect x=\"2.5\" y=\"2.5\" width=\"4.5\" height=\"4.5\" rx=\"1\"/><rect x=\"9\" y=\"2.5\" width=\"4.5\" height=\"4.5\" rx=\"1\"/><rect x=\"2.5\" y=\"9\" width=\"4.5\" height=\"4.5\" rx=\"1\"/><rect x=\"9\" y=\"9\" width=\"4.5\" height=\"4.5\" rx=\"1\"/></svg>",
-  "cog": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/></svg>",
-  "mods": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"3.4\" r=\"1.7\"/><circle cx=\"3.4\" cy=\"12.2\" r=\"1.7\"/><circle cx=\"12.6\" cy=\"12.2\" r=\"1.7\"/><path d=\"M7.2 4.9 4.2 10.7M8.8 4.9l3 5.8M5.1 12.2h5.8\"/></svg>",
-  "key": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"5.5\" cy=\"10.5\" r=\"3\"/><path d=\"M7.7 8.3 13.5 2.5M11.5 4.5l1.5 1.5M10 6l1.2 1.2\"/></svg>",
-  "kbd": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" aria-hidden=\"true\"><rect x=\"1.8\" y=\"4\" width=\"12.4\" height=\"8\" rx=\"1.5\"/><path d=\"M4.5 7h.01M7 7h.01M9.5 7h.01M12 7h.01M5 9.5h6\" stroke-linecap=\"round\"/></svg>",
-  "out": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6.5 13.5H3.5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3M10.5 11 13.5 8l-3-3M13.5 8H6\"/></svg>"
+  user: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.6-2.4 2.6-3.7 5-3.7s4.4 1.3 5 3.7" stroke-linecap="round"/></svg>',
+  grid: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></svg>',
+  cog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
+  mods: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="3.4" r="1.7"/><circle cx="3.4" cy="12.2" r="1.7"/><circle cx="12.6" cy="12.2" r="1.7"/><path d="M7.2 4.9 4.2 10.7M8.8 4.9l3 5.8M5.1 12.2h5.8"/></svg>',
+  key: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="5.5" cy="10.5" r="3"/><path d="M7.7 8.3 13.5 2.5M11.5 4.5l1.5 1.5M10 6l1.2 1.2"/></svg>',
+  kbd: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1.8" y="4" width="12.4" height="8" rx="1.5"/><path d="M4.5 7h.01M7 7h.01M9.5 7h.01M12 7h.01M5 9.5h6" stroke-linecap="round"/></svg>',
+  out: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 13.5H3.5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3M10.5 11 13.5 8l-3-3M13.5 8H6"/></svg>',
 } as const;
 
 export const SVI = {
-  "list": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M3 4h10M3 8h10M3 12h10\"/></svg>",
-  "reader": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" aria-hidden=\"true\"><rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"1.5\"/><path d=\"M6.5 3v10\"/></svg>"
+  list: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M3 4h10M3 8h10M3 12h10"/></svg>',
+  reader:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6.5 3v10"/></svg>',
 } as const;
 
 export const CI = {
-  "clock": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"5.8\"/><path d=\"M8 4.8V8l2.2 1.4\"/></svg>",
-  "bell": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 11.2V7.3a4 4 0 0 1 8 0v3.9l1.2 1.3H2.8z\"/><path d=\"M6.6 14a1.5 1.5 0 0 0 2.8 0\" stroke-linecap=\"round\"/></svg>",
-  "link": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2-2a2.6 2.6 0 0 0-3.7-3.7l-.7.7M9.2 6.8a2.6 2.6 0 0 0-3.7 0l-2 2a2.6 2.6 0 0 0 3.7 3.7l.7-.7\"/></svg>",
-  "eyeOff": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M2.3 8S4.3 4 8 4s5.7 4 5.7 4-2 4-5.7 4-5.7-4-5.7-4z\"/><circle cx=\"8\" cy=\"8\" r=\"1.8\"/><path d=\"M3 13 13 3\"/></svg>",
-  "users": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"6\" cy=\"5.8\" r=\"2.3\"/><path d=\"M2 13c.4-2 2-3.2 4-3.2s3.6 1.2 4 3.2\"/><path d=\"M10.6 3.7a2.2 2.2 0 0 1 0 4.3M11.8 9.9c1.2.4 2 1.5 2.2 3.1\"/></svg>",
-  "share": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 2.5V10M5 5.3 8 2.5l3 2.8M3.5 8.5v5h9v-5\"/></svg>",
-  "plusU": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"6.5\" cy=\"5.8\" r=\"2.3\"/><path d=\"M2.5 13c.4-2 2-3.2 4-3.2 1 0 1.9.3 2.6.8M12 8.5v4M10 10.5h4\"/></svg>"
+  clock:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5.8"/><path d="M8 4.8V8l2.2 1.4"/></svg>',
+  bell: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M4 11.2V7.3a4 4 0 0 1 8 0v3.9l1.2 1.3H2.8z"/><path d="M6.6 14a1.5 1.5 0 0 0 2.8 0" stroke-linecap="round"/></svg>',
+  link: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2-2a2.6 2.6 0 0 0-3.7-3.7l-.7.7M9.2 6.8a2.6 2.6 0 0 0-3.7 0l-2 2a2.6 2.6 0 0 0 3.7 3.7l.7-.7"/></svg>',
+  eyeOff:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M2.3 8S4.3 4 8 4s5.7 4 5.7 4-2 4-5.7 4-5.7-4-5.7-4z"/><circle cx="8" cy="8" r="1.8"/><path d="M3 13 13 3"/></svg>',
+  users:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="5.8" r="2.3"/><path d="M2 13c.4-2 2-3.2 4-3.2s3.6 1.2 4 3.2"/><path d="M10.6 3.7a2.2 2.2 0 0 1 0 4.3M11.8 9.9c1.2.4 2 1.5 2.2 3.1"/></svg>',
+  share:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5V10M5 5.3 8 2.5l3 2.8M3.5 8.5v5h9v-5"/></svg>',
+  plusU:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="6.5" cy="5.8" r="2.3"/><path d="M2.5 13c.4-2 2-3.2 4-3.2 1 0 1.9.3 2.6.8M12 8.5v4M10 10.5h4"/></svg>',
 } as const;
 
 export const SFI = {
-  "flag": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3.5 14V2.5M3.5 3h8l-1.6 3 1.6 3h-8\"/></svg>",
-  "more": "<svg viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><circle cx=\"3.5\" cy=\"8\" r=\"1.25\"/><circle cx=\"8\" cy=\"8\" r=\"1.25\"/><circle cx=\"12.5\" cy=\"8\" r=\"1.25\"/></svg>",
-  "tag": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2.5 2.5h5.2l5.8 5.8-5.2 5.2-5.8-5.8z\"/><circle cx=\"5.4\" cy=\"5.4\" r=\"1\" fill=\"currentColor\" stroke=\"none\"/></svg>",
-  "arrow": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 8h10M9 4l4 4-4 4\"/></svg>",
-  "repo": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"4.5\" cy=\"3.8\" r=\"1.5\"/><circle cx=\"4.5\" cy=\"12.2\" r=\"1.5\"/><circle cx=\"11.5\" cy=\"6\" r=\"1.5\"/><path d=\"M4.5 5.3v5.4M11.5 7.5c0 2.2-2.6 2.2-5.6 3.6\"/></svg>"
+  flag: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 14V2.5M3.5 3h8l-1.6 3 1.6 3h-8"/></svg>',
+  more: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3.5" cy="8" r="1.25"/><circle cx="8" cy="8" r="1.25"/><circle cx="12.5" cy="8" r="1.25"/></svg>',
+  tag: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h5.2l5.8 5.8-5.2 5.2-5.8-5.8z"/><circle cx="5.4" cy="5.4" r="1" fill="currentColor" stroke="none"/></svg>',
+  arrow:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>',
+  repo: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="4.5" cy="3.8" r="1.5"/><circle cx="4.5" cy="12.2" r="1.5"/><circle cx="11.5" cy="6" r="1.5"/><path d="M4.5 5.3v5.4M11.5 7.5c0 2.2-2.6 2.2-5.6 3.6"/></svg>',
 } as const;
 
 export const MII = {
-  "x": "<svg viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M2.2 2.5h3.6l2.7 3.8 3.2-3.8h1.7L9.3 7l4.6 6.5h-3.6L7.4 9.4l-3.5 4.1H2.2l4.3-5z\"/></svg>",
-  "article": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><rect x=\"2.5\" y=\"2\" width=\"11\" height=\"12\" rx=\"1.5\"/><path d=\"M5 5.2h6M5 7.8h6M5 10.4h3.5\"/></svg>",
-  "forum": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2.5 3.5h8v5.5h-4.5L3.5 11V9h-1z\"/><path d=\"M10.5 6h3v5.5h-1V13.5l-2.5-2h-3V9\"/></svg>",
-  "audio": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><rect x=\"6\" y=\"2\" width=\"4\" height=\"7.5\" rx=\"2\"/><path d=\"M3.8 7.5a4.2 4.2 0 0 0 8.4 0M8 11.7v2.3\"/></svg>",
-  "video": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"1.8\" y=\"3.2\" width=\"12.4\" height=\"9.6\" rx=\"2\"/><path d=\"M6.6 5.9v4.2L10 8z\" fill=\"currentColor\"/></svg>",
-  "feed": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M3 7.5a5.5 5.5 0 0 1 5.5 5.5M3 3a10 10 0 0 1 10 10\"/><circle cx=\"3.8\" cy=\"12.2\" r=\"1.1\" fill=\"currentColor\" stroke=\"none\"/></svg>",
-  "ext": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M9 2.8h4.2V7M13.2 2.8 7.5 8.5M11.5 9.5v3.2a.8.8 0 0 1-.8.8H3.3a.8.8 0 0 1-.8-.8V5.3a.8.8 0 0 1 .8-.8h3.2\"/></svg>",
-  "inbox": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2.5 9 4.3 3.3h7.4L13.5 9v3.7h-11z\"/><path d=\"M2.5 9h3.2l.8 1.6h3l.8-1.6h3.2\"/></svg>",
-  "library": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2.5 2.5h3v11h-3zM6.5 2.5h3v11h-3z\"/><path d=\"m10.6 3.3 2.8-.7 2 10.6-2.8.6z\" transform=\"translate(-1.2 .2)\"/></svg>",
-  "ask": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2.5 3.2h11v7.3H7.2L4.2 13v-2.5H2.5z\"/><path d=\"M8 5.2v3.2M6.4 6.8h3.2\" stroke-linecap=\"round\"/></svg>",
-  "changed": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M13 6.2A5.2 5.2 0 0 0 3.6 4.4M3 9.8a5.2 5.2 0 0 0 9.4 1.8\"/><path d=\"M3.4 2.4v2.4h2.4M12.6 13.6v-2.4h-2.4\"/></svg>",
-  "trash": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5\"/></svg>",
-  "lock": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" aria-hidden=\"true\"><rect x=\"3.5\" y=\"7\" width=\"9\" height=\"6.5\" rx=\"1.2\"/><path d=\"M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7\"/></svg>",
-  "vote": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 13V3.5M4 7.5l4-4 4 4\"/></svg>",
-  "select": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"2.5\" y=\"2.5\" width=\"11\" height=\"11\" rx=\"2.5\"/><path d=\"m5.3 8.2 1.9 1.9 3.6-3.8\" stroke-linecap=\"round\"/></svg>",
-  "plus": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M8 3.5v9M3.5 8h9\"/></svg>",
-  "pdf": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3.5 2h6l3 3v9h-9z\"/><path d=\"M9.5 2v3h3\"/><path d=\"M5.6 8.6h4.8M5.6 11h3.2\" stroke-linecap=\"round\"/></svg>",
-  "send": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2.5 7.6 13.5 2.5 9.8 13.5 7.6 8.6z\"/><path d=\"M7.6 8.6 13.5 2.5\"/></svg>",
-  "upload": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 10.5V2.8M4.8 5.8 8 2.6l3.2 3.2\"/><path d=\"M2.8 10v2.4c0 .5.4.9.9.9h8.6c.5 0 .9-.4.9-.9V10\"/></svg>",
-  "link": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.9.9\"/><path d=\"M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9\"/></svg>",
-  "more": "<svg viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><circle cx=\"3.6\" cy=\"8\" r=\"1.25\"/><circle cx=\"8\" cy=\"8\" r=\"1.25\"/><circle cx=\"12.4\" cy=\"8\" r=\"1.25\"/></svg>",
-  "side": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"2\" y=\"2.5\" width=\"12\" height=\"11\" rx=\"2\"/><path d=\"M6 2.5v11\"/></svg>"
+  x: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.2 2.5h3.6l2.7 3.8 3.2-3.8h1.7L9.3 7l4.6 6.5h-3.6L7.4 9.4l-3.5 4.1H2.2l4.3-5z"/></svg>',
+  article:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><rect x="2.5" y="2" width="11" height="12" rx="1.5"/><path d="M5 5.2h6M5 7.8h6M5 10.4h3.5"/></svg>',
+  forum:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.5h8v5.5h-4.5L3.5 11V9h-1z"/><path d="M10.5 6h3v5.5h-1V13.5l-2.5-2h-3V9"/></svg>',
+  audio:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><rect x="6" y="2" width="4" height="7.5" rx="2"/><path d="M3.8 7.5a4.2 4.2 0 0 0 8.4 0M8 11.7v2.3"/></svg>',
+  video:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="1.8" y="3.2" width="12.4" height="9.6" rx="2"/><path d="M6.6 5.9v4.2L10 8z" fill="currentColor"/></svg>',
+  feed: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M3 7.5a5.5 5.5 0 0 1 5.5 5.5M3 3a10 10 0 0 1 10 10"/><circle cx="3.8" cy="12.2" r="1.1" fill="currentColor" stroke="none"/></svg>',
+  ext: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2.8h4.2V7M13.2 2.8 7.5 8.5M11.5 9.5v3.2a.8.8 0 0 1-.8.8H3.3a.8.8 0 0 1-.8-.8V5.3a.8.8 0 0 1 .8-.8h3.2"/></svg>',
+  inbox:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 9 4.3 3.3h7.4L13.5 9v3.7h-11z"/><path d="M2.5 9h3.2l.8 1.6h3l.8-1.6h3.2"/></svg>',
+  library:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h3v11h-3zM6.5 2.5h3v11h-3z"/><path d="m10.6 3.3 2.8-.7 2 10.6-2.8.6z" transform="translate(-1.2 .2)"/></svg>',
+  ask: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3.2h11v7.3H7.2L4.2 13v-2.5H2.5z"/><path d="M8 5.2v3.2M6.4 6.8h3.2" stroke-linecap="round"/></svg>',
+  changed:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 6.2A5.2 5.2 0 0 0 3.6 4.4M3 9.8a5.2 5.2 0 0 0 9.4 1.8"/><path d="M3.4 2.4v2.4h2.4M12.6 13.6v-2.4h-2.4"/></svg>',
+  trash:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>',
+  lock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg>',
+  vote: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V3.5M4 7.5l4-4 4 4"/></svg>',
+  select:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5"/><path d="m5.3 8.2 1.9 1.9 3.6-3.8" stroke-linecap="round"/></svg>',
+  plus: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>',
+  pdf: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 2h6l3 3v9h-9z"/><path d="M9.5 2v3h3"/><path d="M5.6 8.6h4.8M5.6 11h3.2" stroke-linecap="round"/></svg>',
+  send: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.6 13.5 2.5 9.8 13.5 7.6 8.6z"/><path d="M7.6 8.6 13.5 2.5"/></svg>',
+  upload:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 10.5V2.8M4.8 5.8 8 2.6l3.2 3.2"/><path d="M2.8 10v2.4c0 .5.4.9.9.9h8.6c.5 0 .9-.4.9-.9V10"/></svg>',
+  link: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.9.9"/><path d="M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9"/></svg>',
+  more: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3.6" cy="8" r="1.25"/><circle cx="8" cy="8" r="1.25"/><circle cx="12.4" cy="8" r="1.25"/></svg>',
+  side: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M6 2.5v11"/></svg>',
 } as const;
 
 export const QTI = {
-  "map": "<svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"3.5\" cy=\"8\" r=\"1.8\"/><circle cx=\"12.5\" cy=\"3.8\" r=\"1.8\"/><circle cx=\"12.5\" cy=\"12.2\" r=\"1.8\"/><path d=\"M5.2 7.3 10.8 4.5M5.2 8.7l5.6 2.8\"/></svg>",
-  "swap": "<svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 5h9l-2.5-2.5M13 11H4l2.5 2.5\"/></svg>",
-  "tree": "<svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"1.8\" y=\"2\" width=\"4.4\" height=\"3.4\" rx=\"1\"/><rect x=\"9.8\" y=\"6.3\" width=\"4.4\" height=\"3.4\" rx=\"1\"/><rect x=\"9.8\" y=\"11\" width=\"4.4\" height=\"3.4\" rx=\"1\"/><path d=\"M4 5.4v7.3h5.8M4 8h5.8\"/></svg>",
-  "up": "<svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 13V3M4 7l4-4 4 4\"/></svg>",
-  "ask": "<svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 3v5.5a2 2 0 0 0 2 2h8M10 7.5l3 3-3 3\"/></svg>",
-  "link": "<svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9\"/></svg>",
-  "save": "<svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 2.5h8v11L8 10.8 4 13.5z\"/></svg>",
-  "saved": "<svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M4 2.5h8v11L8 10.8 4 13.5z\"/></svg>",
-  "cmp": "<svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" aria-hidden=\"true\"><rect x=\"2\" y=\"2.5\" width=\"5\" height=\"11\" rx=\"1\"/><rect x=\"9\" y=\"2.5\" width=\"5\" height=\"11\" rx=\"1\"/></svg>",
-  "out": "<svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M9 3h4v4M13 3 7.5 8.5M11 9.5V13H3V5h3.5\"/></svg>",
-  "fold": "<svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 6l4-3 4 3M4 10l4 3 4-3\"/></svg>"
+  map: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="3.5" cy="8" r="1.8"/><circle cx="12.5" cy="3.8" r="1.8"/><circle cx="12.5" cy="12.2" r="1.8"/><path d="M5.2 7.3 10.8 4.5M5.2 8.7l5.6 2.8"/></svg>',
+  swap: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h9l-2.5-2.5M13 11H4l2.5 2.5"/></svg>',
+  tree: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.8" y="2" width="4.4" height="3.4" rx="1"/><rect x="9.8" y="6.3" width="4.4" height="3.4" rx="1"/><rect x="9.8" y="11" width="4.4" height="3.4" rx="1"/><path d="M4 5.4v7.3h5.8M4 8h5.8"/></svg>',
+  up: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"/></svg>',
+  ask: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v5.5a2 2 0 0 0 2 2h8M10 7.5l3 3-3 3"/></svg>',
+  link: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9"/></svg>',
+  save: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5h8v11L8 10.8 4 13.5z"/></svg>',
+  saved:
+    '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5h8v11L8 10.8 4 13.5z"/></svg>',
+  cmp: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="2.5" width="5" height="11" rx="1"/><rect x="9" y="2.5" width="5" height="11" rx="1"/></svg>',
+  out: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h4v4M13 3 7.5 8.5M11 9.5V13H3V5h3.5"/></svg>',
+  fold: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4-3 4 3M4 10l4 3 4-3"/></svg>',
 } as const;
 
 export const AC_I = {
-  "block": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"5.6\"/><path d=\"M4 4l8 8\" stroke-linecap=\"round\"/></svg>",
-  "mail": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"2\" y=\"3.5\" width=\"12\" height=\"9\" rx=\"1.4\"/><path d=\"m2.6 4.4 5.4 4.2 5.4-4.2\"/></svg>"
+  block:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="5.6"/><path d="M4 4l8 8" stroke-linecap="round"/></svg>',
+  mail: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3.5" width="12" height="9" rx="1.4"/><path d="m2.6 4.4 5.4 4.2 5.4-4.2"/></svg>',
 } as const;
 
 export const NVI = {
-  "off": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M2 2l12 12M5.2 8.6a4.2 4.2 0 0 1 2.3-1.1M2.5 5.9A8 8 0 0 1 5 4.4M13.5 5.9a8 8 0 0 0-5-2.3M10.8 8.6c-.3-.2-.6-.4-.9-.5M8 12h.01\"/></svg>",
-  "map": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2 4l4-1.5 4 1.5 4-1.5v9.5L10 13.5 6 12l-4 1.5z\"/><path d=\"M6 2.5V12M10 4v9.5\"/></svg>",
-  "trash": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9\"/></svg>"
+  off: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M2 2l12 12M5.2 8.6a4.2 4.2 0 0 1 2.3-1.1M2.5 5.9A8 8 0 0 1 5 4.4M13.5 5.9a8 8 0 0 0-5-2.3M10.8 8.6c-.3-.2-.6-.4-.9-.5M8 12h.01"/></svg>',
+  map: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M2 4l4-1.5 4 1.5 4-1.5v9.5L10 13.5 6 12l-4 1.5z"/><path d="M6 2.5V12M10 4v9.5"/></svg>',
+  trash:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 9h6.6l.7-9"/></svg>',
 } as const;
 
 export const SXI = {
-  "mac": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"3.5\" width=\"10\" height=\"7\" rx=\"1\"/><path d=\"M1.5 12.5h13\"/></svg>",
-  "phone": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" aria-hidden=\"true\"><rect x=\"4.5\" y=\"1.8\" width=\"7\" height=\"12.4\" rx=\"1.6\"/><path d=\"M7.2 12h1.6\" stroke-linecap=\"round\"/></svg>",
-  "up": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 10.5V3M5 6l3-3 3 3\"/><path d=\"M2.5 9.5v3a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3\"/></svg>",
-  "clock": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"5.8\"/><path d=\"M8 4.8V8l2.2 1.4\"/></svg>",
-  "reply": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 4 2.5 7.5 6 11\"/><path d=\"M2.5 7.5H10a3.5 3.5 0 0 1 3.5 3.5v1\"/></svg>",
-  "heart": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 13.2S2.5 10 2.5 6.3A2.8 2.8 0 0 1 8 5a2.8 2.8 0 0 1 5.5 1.3C13.5 10 8 13.2 8 13.2z\"/></svg>",
-  "doc": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 2h5.5L12 4.5V14H4z\"/><path d=\"M6 7.5h4M6 10h4\" stroke-linecap=\"round\"/></svg>",
-  "eye": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" aria-hidden=\"true\"><path d=\"M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z\"/><circle cx=\"8\" cy=\"8\" r=\"2\"/></svg>",
-  "user": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"5.5\" r=\"2.5\"/><path d=\"M3 13.5c.6-2.4 2.6-3.7 5-3.7s4.4 1.3 5 3.7\"/></svg>",
-  "dl": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 2.5V10M5 7l3 3 3-3\"/><path d=\"M2.5 11v1.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V11\"/></svg>",
-  "cli": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"1.8\" y=\"2.8\" width=\"12.4\" height=\"10.4\" rx=\"1.4\"/><path d=\"m4.5 6.3 2 1.7-2 1.7M8 10h3.5\"/></svg>",
-  "lock": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" aria-hidden=\"true\"><rect x=\"3.5\" y=\"7\" width=\"9\" height=\"6.5\" rx=\"1.2\"/><path d=\"M5.5 7V5a2.5 2.5 0 0 1 5 0v2\"/></svg>",
-  "ban": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"5.6\"/><path d=\"M4 4l8 8\" stroke-linecap=\"round\"/></svg>",
-  "more": "<svg viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><circle cx=\"3.5\" cy=\"8\" r=\"1.2\"/><circle cx=\"8\" cy=\"8\" r=\"1.2\"/><circle cx=\"12.5\" cy=\"8\" r=\"1.2\"/></svg>"
+  mac: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.5" width="10" height="7" rx="1"/><path d="M1.5 12.5h13"/></svg>',
+  phone:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="4.5" y="1.8" width="7" height="12.4" rx="1.6"/><path d="M7.2 12h1.6" stroke-linecap="round"/></svg>',
+  up: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 10.5V3M5 6l3-3 3 3"/><path d="M2.5 9.5v3a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-3"/></svg>',
+  clock:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5.8"/><path d="M8 4.8V8l2.2 1.4"/></svg>',
+  reply:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4 2.5 7.5 6 11"/><path d="M2.5 7.5H10a3.5 3.5 0 0 1 3.5 3.5v1"/></svg>',
+  heart:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M8 13.2S2.5 10 2.5 6.3A2.8 2.8 0 0 1 8 5a2.8 2.8 0 0 1 5.5 1.3C13.5 10 8 13.2 8 13.2z"/></svg>',
+  doc: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M4 2h5.5L12 4.5V14H4z"/><path d="M6 7.5h4M6 10h4" stroke-linecap="round"/></svg>',
+  eye: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>',
+  user: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.6-2.4 2.6-3.7 5-3.7s4.4 1.3 5 3.7"/></svg>',
+  dl: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5V10M5 7l3 3 3-3"/><path d="M2.5 11v1.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V11"/></svg>',
+  cli: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.4"/><path d="m4.5 6.3 2 1.7-2 1.7M8 10h3.5"/></svg>',
+  lock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>',
+  ban: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="5.6"/><path d="M4 4l8 8" stroke-linecap="round"/></svg>',
+  more: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3.5" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="12.5" cy="8" r="1.2"/></svg>',
 } as const;
 
 export const ROLE_IC = {
-  "Moderator": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 1.8 13 3.6v4.1c0 3-2.1 5.2-5 6.5-2.9-1.3-5-3.5-5-6.5V3.6z\"/></svg>",
-  "Admin": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 12.2 2.4 5.6l3.4 2.6L8 3.8l2.2 4.4 3.4-2.6-.6 6.6z\"/></svg>"
+  Moderator:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 13 3.6v4.1c0 3-2.1 5.2-5 6.5-2.9-1.3-5-3.5-5-6.5V3.6z"/></svg>',
+  Admin:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M3 12.2 2.4 5.6l3.4 2.6L8 3.8l2.2 4.4 3.4-2.6-.6 6.6z"/></svg>',
 } as const;
 
 export const MIPLAT = {} as const;
 
 export const SVG = {
-  "PLUS": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M8 3.5v9M3.5 8h9\"/></svg>",
-  "GLOBE": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"5.8\"/><path d=\"M2.4 8h11.2M8 2.2c1.7 1.6 2.6 3.6 2.6 5.8S9.7 12.2 8 13.8M8 2.2C6.3 3.8 5.4 5.8 5.4 8s.9 4.2 2.6 5.8\"/></svg>",
-  "XL": "<svg viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M2.2 2.5h3.6l2.7 3.8 3.2-3.8h1.7L9.3 7l4.6 6.5h-3.6L7.4 9.4l-3.5 4.1H2.2l4.3-5z\"/></svg>",
-  "XI": "<svg class=\"xi\" viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M2.2 2.5h3.6l2.7 3.8 3.2-3.8h1.7L9.3 7l4.6 6.5h-3.6L7.4 9.4l-3.5 4.1H2.2l4.3-5z\"/></svg>",
-  "LOCK": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" aria-hidden=\"true\"><rect x=\"3.5\" y=\"7\" width=\"9\" height=\"6.5\" rx=\"1.2\"/><path d=\"M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7\"/></svg>",
-  "GRIP": "<svg viewBox=\"0 0 16 16\" fill=\"currentColor\" aria-hidden=\"true\"><circle cx=\"6\" cy=\"4\" r=\"1.1\"/><circle cx=\"10\" cy=\"4\" r=\"1.1\"/><circle cx=\"6\" cy=\"8\" r=\"1.1\"/><circle cx=\"10\" cy=\"8\" r=\"1.1\"/><circle cx=\"6\" cy=\"12\" r=\"1.1\"/><circle cx=\"10\" cy=\"12\" r=\"1.1\"/></svg>",
-  "K_OUT": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"5.5\" r=\"2.5\"/><path d=\"M3 13.5c.6-2.4 2.6-3.7 5-3.7s4.4 1.3 5 3.7M2.5 2.5l11 11\"/></svg>",
-  "SEAL": "<svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M8 1.2 9.7 2.5l2.1-.1.6 2 1.7 1.3-.7 2 .7 2-1.7 1.3-.6 2-2.1-.1L8 14.8l-1.7-1.3-2.1.1-.6-2-1.7-1.3.7-2-.7-2 1.7-1.3.6-2 2.1.1z\"/><path d=\"M5.5 8.2 7.2 9.8l3.3-3.4\" fill=\"none\" style=\"stroke:var(--pane)\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>",
-  "CX_ARCH": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"2\" y=\"3\" width=\"12\" height=\"3\" rx=\".8\"/><path d=\"M3 6v6.5h10V6M6.5 8.8h3\" stroke-linecap=\"round\"/></svg>",
-  "PG_TRASH": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5\"/></svg>",
-  "SK_GRIP": "<svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><g fill=\"currentColor\"><circle cx=\"6\" cy=\"4\" r=\"1.1\"/><circle cx=\"10\" cy=\"4\" r=\"1.1\"/><circle cx=\"6\" cy=\"8\" r=\"1.1\"/><circle cx=\"10\" cy=\"8\" r=\"1.1\"/><circle cx=\"6\" cy=\"12\" r=\"1.1\"/><circle cx=\"10\" cy=\"12\" r=\"1.1\"/></g></svg>",
-  "TA_THINK": "<svg viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M2.3 11.8a5.7 5.7 0 0 1 11.4 0\"/><path d=\"M8 11.8 10.4 7.6\"/><path d=\"M4.2 7.3l.7.6M11.8 7.3l-.7.6M8 5.4v.9\"/></svg>",
-  "NE_MINUS": "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\" fill=\"currentColor\"/><path d=\"M7.5 12h9\" stroke=\"#fff\" stroke-width=\"2.2\" stroke-linecap=\"round\"/></svg>"
+  PLUS: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>',
+  GLOBE:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="5.8"/><path d="M2.4 8h11.2M8 2.2c1.7 1.6 2.6 3.6 2.6 5.8S9.7 12.2 8 13.8M8 2.2C6.3 3.8 5.4 5.8 5.4 8s.9 4.2 2.6 5.8"/></svg>',
+  XL: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.2 2.5h3.6l2.7 3.8 3.2-3.8h1.7L9.3 7l4.6 6.5h-3.6L7.4 9.4l-3.5 4.1H2.2l4.3-5z"/></svg>',
+  XI: '<svg class="xi" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.2 2.5h3.6l2.7 3.8 3.2-3.8h1.7L9.3 7l4.6 6.5h-3.6L7.4 9.4l-3.5 4.1H2.2l4.3-5z"/></svg>',
+  LOCK: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg>',
+  GRIP: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="6" cy="4" r="1.1"/><circle cx="10" cy="4" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="10" cy="8" r="1.1"/><circle cx="6" cy="12" r="1.1"/><circle cx="10" cy="12" r="1.1"/></svg>',
+  K_OUT:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.6-2.4 2.6-3.7 5-3.7s4.4 1.3 5 3.7M2.5 2.5l11 11"/></svg>',
+  SEAL: '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1.2 9.7 2.5l2.1-.1.6 2 1.7 1.3-.7 2 .7 2-1.7 1.3-.6 2-2.1-.1L8 14.8l-1.7-1.3-2.1.1-.6-2-1.7-1.3.7-2-.7-2 1.7-1.3.6-2 2.1.1z"/><path d="M5.5 8.2 7.2 9.8l3.3-3.4" fill="none" style="stroke:var(--pane)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  CX_ARCH:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="12" height="3" rx=".8"/><path d="M3 6v6.5h10V6M6.5 8.8h3" stroke-linecap="round"/></svg>',
+  PG_TRASH:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>',
+  SK_GRIP:
+    '<svg viewBox="0 0 16 16" aria-hidden="true"><g fill="currentColor"><circle cx="6" cy="4" r="1.1"/><circle cx="10" cy="4" r="1.1"/><circle cx="6" cy="8" r="1.1"/><circle cx="10" cy="8" r="1.1"/><circle cx="6" cy="12" r="1.1"/><circle cx="10" cy="12" r="1.1"/></g></svg>',
+  TA_THINK:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M2.3 11.8a5.7 5.7 0 0 1 11.4 0"/><path d="M8 11.8 10.4 7.6"/><path d="M4.2 7.3l.7.6M11.8 7.3l-.7.6M8 5.4v.9"/></svg>',
+  NE_MINUS:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7.5 12h9" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>',
 } as const;

@@ -7,16 +7,23 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useRuntimeConfig } from "../api/account.js";
-import { Markdown, citationsOf } from "../features/markdown/index.js";
 import { ago, dayOf, fmtT, spaceName } from "../data/format.js";
-import { threadView, type FollowUp, type Reply, type RunView, type Space, type ThreadView } from "../data/spaces.js";
+import {
+  threadView,
+  type FollowUp,
+  type Reply,
+  type RunView,
+  type Space,
+  type ThreadView,
+} from "../data/spaces.js";
+import { Markdown, citationsOf } from "../features/markdown/index.js";
 import { useNow, useRecords, useRunText } from "../sync/react.js";
 
+import { NotFound, Page } from "./Page.js";
+import { Svg } from "./Svg.js";
 import { Author, Avatar, Lock } from "./atoms.js";
 import { CI, I, NVI, QTI, SFI } from "./icons.js";
 import { BackButton, useNavState } from "./nav.js";
-import { NotFound, Page } from "./Page.js";
-import { Svg } from "./Svg.js";
 import { useWorld } from "./world.js";
 
 const PROVIDER: Record<string, string> = {
@@ -34,12 +41,14 @@ function payerLabel(pay: string | null): string {
 function stepsOf(turns: unknown[]): string[] {
   const out: string[] = [];
   for (const t of turns) {
-    const blocks = (t as { blocks?: { type: string; name?: string; input?: unknown }[] }).blocks ?? [];
+    const blocks =
+      (t as { blocks?: { type: string; name?: string; input?: unknown }[] }).blocks ?? [];
     for (const b of blocks) {
       if (b.type !== "toolUse") continue;
       const input = (b.input ?? {}) as Record<string, unknown>;
-      if (b.name === "web_search") out.push(`Searched the web for “${String(input["query"] ?? "")}”`);
-      else if (b.name === "web_fetch") out.push(`Read ${String(input["url"] ?? "a page")}`);
+      const str = (v: unknown, d: string) => (typeof v === "string" ? v : d);
+      if (b.name === "web_search") out.push(`Searched the web for “${str(input["query"], "")}”`);
+      else if (b.name === "web_fetch") out.push(`Read ${str(input["url"], "a page")}`);
       else out.push(`Used ${b.name ?? "a tool"}`);
     }
   }
@@ -47,7 +56,17 @@ function stepsOf(turns: unknown[]): string[] {
 }
 
 /** A run that has not answered: running, or why it ended. */
-function RunBox({ run, tok, space, mine }: { run: RunView; tok: number; space: Space; mine: boolean }) {
+function RunBox({
+  run,
+  tok,
+  space,
+  mine,
+}: {
+  run: RunView;
+  tok: number;
+  space: Space;
+  mine: boolean;
+}) {
   const live = useRunText(run.status === "running" ? run.id : null, run.attempt);
   if (run.status === "queued" || run.status === "running") {
     const steps = stepsOf(run.turns);
@@ -82,7 +101,9 @@ function RunBox({ run, tok, space, mine }: { run: RunView; tok: number; space: S
       <div className="run as-end" role="status">
         <p className="as-why">
           <b>Stopped.</b> The agent wrote nothing.{" "}
-          {tok ? <span className="faint num">{fmtT(tok)} tokens used from your included tokens.</span> : null}
+          {tok ? (
+            <span className="faint num">{fmtT(tok)} tokens used from your included tokens.</span>
+          ) : null}
         </p>
         {mine ? (
           <div className="as-acts">
@@ -128,7 +149,7 @@ function Answer({ t, space, mine }: { t: ThreadView; space: Space; mine: boolean
   const ended = t.run && t.run.status !== "complete" && !(t.run.status === "cancelled");
   const showRun = t.running || (t.sum === null && ended);
   return (
-    <section className={`th-ans${showRun ? " running" : ""}`} id="th-a">
+    <section className={`th-ans${showRun ? "running" : ""}`} id="th-a">
       <div className="cr-label">
         <span className="agent">
           <Svg src={I.agent} />
@@ -150,20 +171,32 @@ function Actions({ t, kind }: { t: ThreadView; kind: "ask" | "post" }) {
   return (
     <div className="p-foot">
       {kind === "ask" ? (
-        <button className="btn sm" type="button" aria-label="Ask about this answer" aria-expanded="false">
+        <button
+          className="btn sm"
+          type="button"
+          aria-label="Ask about this answer"
+          aria-expanded="false"
+        >
           <Svg src={QTI.ask} />
           <span>
             Ask <span className="m-long">about this answer</span>
           </span>
         </button>
       ) : null}
-      <button className="act" type="button" aria-pressed={t.liked} aria-label="Like">
+      <button
+        className="act"
+        type="button"
+        data-toggle="liked"
+        aria-pressed={t.liked}
+        aria-label="Like"
+      >
         <Svg src={I.heart} />
         <span className="num">{t.likes}</span>
       </button>
       <button
         className="act"
         type="button"
+        data-toggle="saved"
         aria-pressed={t.saved}
         aria-label={t.saved ? "Remove from saved" : "Save"}
         title={t.saved ? "Saved" : "Save"}
@@ -171,13 +204,26 @@ function Actions({ t, kind }: { t: ThreadView; kind: "ask" | "post" }) {
         <Svg src={I.mark} />
       </button>
       <span className="sf-imw ta-shw">
-        <button className="act" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Share">
+        <button
+          className="act"
+          type="button"
+          aria-haspopup="true"
+          aria-expanded="false"
+          aria-label="Share"
+        >
           <Svg src={CI.share} />
           <span>Share</span>
         </button>
       </span>
       <span className="sf-imw sf-pend">
-        <button className="act sf-im" type="button" aria-haspopup="true" aria-expanded="false" aria-label="More actions" title="More">
+        <button
+          className="act sf-im"
+          type="button"
+          aria-haspopup="true"
+          aria-expanded="false"
+          aria-label="More actions"
+          title="More"
+        >
           <Svg src={SFI.more} />
         </button>
       </span>
@@ -196,7 +242,9 @@ function FollowUpItem({ f, below }: { f: FollowUp; below: number }) {
         <b>{f.u}</b>
         <span>{ago(f.createdAt, now)}</span>
       </div>
-      <p className="fu-q">{f.del ? "You deleted this follow-up." : f.mod ? `Follow-up ${f.mod} by a moderator.` : f.q}</p>
+      <p className="fu-q">
+        {f.del ? "You deleted this follow-up." : f.mod ? `Follow-up ${f.mod} by a moderator.` : f.q}
+      </p>
       <div className="fu-a">
         {f.a !== null && !f.mod ? (
           <Markdown markdown={f.a} className="prose fu-prose" />
@@ -229,7 +277,14 @@ function FollowUpItem({ f, below }: { f: FollowUp; below: number }) {
         </button>
         <span className="grow" />
         <span className="qt-mw">
-          <button className="act sf-im" type="button" aria-haspopup="true" aria-expanded="false" aria-label="More actions for this ask" title="More">
+          <button
+            className="act sf-im"
+            type="button"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="More actions for this ask"
+            title="More"
+          >
             <Svg src={SFI.more} />
           </button>
         </span>
@@ -246,7 +301,7 @@ function FollowUpItem({ f, below }: { f: FollowUp; below: number }) {
 function ReplyItem({ r, kids }: { r: Reply; kids: Reply[] }) {
   const now = useNow();
   return (
-    <div className={`rp${r.parent ? " rp-kid" : ""}`}>
+    <div className={`rp${r.parent ? "rp-kid" : ""}`}>
       <Avatar u={r.u} className="sm" />
       <div className="rp-b">
         <div className="meta">
@@ -267,8 +322,15 @@ function ReplyItem({ r, kids }: { r: Reply; kids: Reply[] }) {
             <Svg src={I.heart} />
             <span className="num">{r.likes}</span>
           </button>
-          <span className="sf-imw ">
-            <button className="act sf-im" type="button" aria-haspopup="true" aria-expanded="false" aria-label="More actions" title="More">
+          <span className="sf-imw">
+            <button
+              className="act sf-im"
+              type="button"
+              aria-haspopup="true"
+              aria-expanded="false"
+              aria-label="More actions"
+              title="More"
+            >
               <Svg src={SFI.more} />
             </button>
           </span>
@@ -298,8 +360,19 @@ function Outline({ t, title }: { t: ThreadView; title: string }) {
     const d = depth(f.id);
     const sub = kids(f.id);
     return (
-      <li key={f.id} role="treeitem" aria-level={d + 1} aria-expanded={sub.length ? true : undefined}>
-        <button className="qt-olr" type="button" style={{ ["--d" as string]: d }} aria-current="false">
+      <li
+        key={f.id}
+        role="treeitem"
+        aria-level={d + 1}
+        aria-selected="false"
+        aria-expanded={sub.length ? true : undefined}
+      >
+        <button
+          className="qt-olr"
+          type="button"
+          style={{ ["--d" as string]: d }}
+          aria-current="false"
+        >
           <Avatar u={f.u} />
           <span className="qt-olt">{f.q}</span>
           <span className="qt-olm" />
@@ -321,8 +394,13 @@ function Outline({ t, title }: { t: ThreadView; title: string }) {
         </span>
       </div>
       <ul role="tree">
-        <li role="treeitem" aria-level={1} aria-expanded="true">
-          <button className="qt-olr top path" type="button" style={{ ["--d" as string]: 0 }} aria-current="true">
+        <li role="treeitem" aria-level={1} aria-selected="true" aria-expanded="true">
+          <button
+            className="qt-olr top path"
+            type="button"
+            style={{ ["--d" as string]: 0 }}
+            aria-current="true"
+          >
             <Avatar u={t.u} />
             <span className="qt-olt">{title}</span>
             <span className="qt-olm" />
@@ -357,7 +435,11 @@ function Facts({ t, space, kind }: { t: ThreadView; space: Space; kind: "ask" | 
     <div className="th-facts">
       <div>
         <span>Space</span>
-        <button className="tlink th-sp" type="button" onClick={() => void navigate({ to: "/s/$space", params: { space: space.name } })}>
+        <button
+          className="tlink th-sp"
+          type="button"
+          onClick={() => void navigate({ to: "/s/$space", params: { space: space.name } })}
+        >
           {spaceName(space)}
         </button>
       </div>
@@ -413,7 +495,21 @@ function Sources({ md }: { md: string | null }) {
       </h3>
       <ol className="sx-src">
         {list.map((c) => (
-          <li key={c.n} tabIndex={0} role="button" onClick={() => window.open(c.href, "_blank", "noopener")}>
+          <li
+            key={c.n}
+            data-tasrc={c.n}
+            tabIndex={0}
+            // the mockup's source row: a list item that opens its page
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role
+            role="button"
+            onClick={() => window.open(c.href, "_blank", "noopener")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                window.open(c.href, "_blank", "noopener");
+              }
+            }}
+          >
             <span className="sx-n num">{c.n}</span>
             <div>
               <b>{c.title}</b>
@@ -437,10 +533,16 @@ function ThreadBack({ space }: { space: Space }) {
       </span>
     );
   return (
-    <button className="th-back" type="button" onClick={() => void navigate({ to: "/s/$space", params: { space: space.name } })}>
+    <button
+      className="th-back"
+      type="button"
+      onClick={() => void navigate({ to: "/s/$space", params: { space: space.name } })}
+    >
       <Svg src={I.chev} className="bk" />
       {spaceName(space)}
-      {space.vis !== "open" ? <Lock className="cs-lk" title={space.vis === "unlisted" ? "Closed, unlisted" : "Closed"} /> : null}
+      {space.vis !== "open" ? (
+        <Lock className="cs-lk" title={space.vis === "unlisted" ? "Closed, unlisted" : "Closed"} />
+      ) : null}
     </button>
   );
 }
@@ -457,7 +559,9 @@ function Deleted({ t, space }: { t: ThreadView; space: Space }) {
         <h2>This thread was deleted</h2>
         <p className="muted">
           {t.mod === "removed" ? (
-            <>A moderator of {spaceName(space)} deleted this thread on {dayOf(t.updatedAt, now)}.</>
+            <>
+              A moderator of {spaceName(space)} deleted this thread on {dayOf(t.updatedAt, now)}.
+            </>
           ) : (
             <>
               <b>{t.u}</b> deleted this thread on {dayOf(t.updatedAt, now)}.
@@ -466,7 +570,11 @@ function Deleted({ t, space }: { t: ThreadView; space: Space }) {
           Its question, answer and follow-ups are no longer available.
         </p>
         <div className="cs-na-b">
-          <button className="btn primary" type="button" onClick={() => void navigate({ to: "/s/$space", params: { space: space.name } })}>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={() => void navigate({ to: "/s/$space", params: { space: space.name } })}
+          >
             Open {spaceName(space)}
           </button>
           <button className="btn" type="button" onClick={() => void navigate({ to: "/" })}>
@@ -490,9 +598,10 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
   }, [s, id, session]);
   const t = useRecords((r) => threadView(r, id), [id]);
   const heading = useRef<HTMLParagraphElement>(null);
+  const loaded = t?.id;
   useEffect(() => {
-    if (focus && t) heading.current?.focus();
-  }, [focus, t?.id]);
+    if (focus && loaded) heading.current?.focus();
+  }, [focus, loaded]);
   if (!s) {
     if (!w.loaded) return <Page place={{ kind: "other" }}>{null}</Page>;
     return (
@@ -566,18 +675,35 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
           <ThreadBack space={s} />
           <div className="qt-tools">
             <div className="seg th-vt" role="group" aria-label="View">
-              <button type="button" aria-pressed={view === "docsrc"} onClick={() => setView("docsrc")}>
+              <button
+                type="button"
+                aria-pressed={view === "docsrc"}
+                onClick={() => setView("docsrc")}
+              >
                 Document
               </button>
               <button type="button" aria-pressed={view === "chat"} onClick={() => setView("chat")}>
                 Transcript
               </button>
             </div>
-            <button className="btn sm" type="button" aria-pressed="false" aria-label="Map" title="Map">
+            <button
+              className="btn sm"
+              type="button"
+              data-qt="map"
+              aria-pressed="false"
+              aria-label="Map"
+              title="Map"
+            >
               <Svg src={QTI.map} />
               <span className="qt-tl">Map</span>
             </button>
-            <button className="btn sm qt-olbtn" type="button" aria-pressed="false" aria-label="Outline" title="Outline">
+            <button
+              className="btn sm qt-olbtn"
+              type="button"
+              aria-pressed="false"
+              aria-label="Outline"
+              title="Outline"
+            >
               <Svg src={QTI.tree ?? QTI.map} />
               <span className="qt-tl">Outline</span>
             </button>
