@@ -324,11 +324,7 @@ function AboutTab({ s }: { s: Space }) {
                       type="button"
                       aria-label={`Move ${p.t} up`}
                       disabled={!k}
-                      onClick={() => {
-                        const other = pages[k - 1];
-                        if (other)
-                          void write("pages.move", { space: s.id, page: p.id, other: other.id });
-                      }}
+                      onClick={() => void write("pages.move", pageMove(s.id, p.id, k - 1))}
                     >
                       <Svg src={I.chev} style={{ transform: "rotate(180deg)" }} />
                     </button>
@@ -337,11 +333,7 @@ function AboutTab({ s }: { s: Space }) {
                       type="button"
                       aria-label={`Move ${p.t} down`}
                       disabled={k === pages.length - 1}
-                      onClick={() => {
-                        const other = pages[k + 1];
-                        if (other)
-                          void write("pages.move", { space: s.id, page: p.id, other: other.id });
-                      }}
+                      onClick={() => void write("pages.move", pageMove(s.id, p.id, k + 1))}
                     >
                       <Svg src={I.chev} />
                     </button>
@@ -574,6 +566,12 @@ function Gate({ s }: { s: Space }) {
 /** Which view of a space's Threads tab: the FAQ landing or a topic, or the
  * feed (Latest, on a space with the landing). */
 export type SpaceView = { kind: "threads" } | { kind: "latest" } | { kind: "topic"; topic: string };
+
+/** `pages.move`'s input: the page and the position it goes to in the
+ * space's list (0 first), absolute so a write sent again lands it in the
+ * same place (2b design finding 5; the server agent's shape, assumed as
+ * `to` until its branch is merged). */
+export const pageMove = (space: string, page: string, to: number) => ({ space, page, to });
 
 export function SpacePage({
   name,

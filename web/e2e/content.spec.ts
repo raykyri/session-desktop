@@ -507,3 +507,20 @@ test("qt-promote by the thread's owner @server-r1", async ({ page }) => {
   await toastSays(page, /Thread started in #public/);
   await expect(page).toHaveURL(/\/s\/public\/t\/[0-9A-Z]{26}$/);
 });
+
+// After the server's branch is merged: pages.move takes the position the page
+// goes to (2b design finding 5), and a move sent twice lands in one place.
+test("ab-pages: a page moves down one place @server-r1", async ({ page }) => {
+  test.skip(process.env["SESSION_E2E_SERVER_R1"] !== "1", "needs pages.move's position");
+  await loadScenario(page.context().request, "seed");
+  await signInAs(page.context());
+  await page.goto("/s/sci-fi");
+  const list = page.locator(".ab-pgl > li .ab-pgr span");
+  await expect(list.first()).toBeVisible();
+  const before = await list.allInnerTexts();
+  expect(before.length).toBeGreaterThan(1);
+  await page.getByRole("button", { name: `Move ${before[0] ?? ""} down` }).click();
+  await expect(list).toHaveText([before[1] ?? "", before[0] ?? "", ...before.slice(2)]);
+  await page.reload();
+  await expect(list).toHaveText([before[1] ?? "", before[0] ?? "", ...before.slice(2)]);
+});
