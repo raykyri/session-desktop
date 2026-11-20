@@ -225,12 +225,15 @@ Acceptance: `db:generate` produces no diff in CI; `migrations.test.ts`
 migrates a fresh database, and after the squash finds no research table.
 
 **D6. Log epochs and restores.** A log's epoch increments when its history
-is replaced: a space's visibility changes (prototype test "a space that
-becomes closed resyncs every reader") or the database is restored from
-Litestream. Cursors older than 30 days resync through `servedAt` (Y5), not
+is replaced: the database is restored from Litestream, or (in the
+prototype suite) the `replaceHistory` test hook replaces a log's history
+("a log whose history was replaced resyncs every reader into the current
+state"). Cursors older than 30 days resync through `servedAt` (Y5), not
 through the epoch. Visibility is fixed at creation in v1 (C11), so in
-production only a restore bumps epochs; the visibility path stays because the
-prototype suite tests it. A restore is detected at boot (decision E6): the
+production only a restore bumps epochs. The prototype's visibility-change
+path, its test "a space that becomes closed resyncs every reader" and the
+mutation pattern X2 ("opening a space admits banned requesters") were
+removed in M1a (U6); the epoch path is tested through `replaceHistory`. A restore is detected at boot (decision E6): the
 server compares the Litestream generation id recorded in `server_meta` with
 the generation Litestream reports for the file; a different id, or none
 recorded, increments every log's epoch, so every cursor issued before the
@@ -427,6 +430,11 @@ porting, change `replica-proto` itself to the revised contract:
 - protocol: `queuedAt` and `replaces` in the envelope (Y1), an oversized
   envelope answering `TOO_LARGE` instead of `BAD_REQUEST`, and
   `PROTOCOL_VERSION` raised to 4;
+- visibility: a space's visibility is fixed at creation (C9, C11), so the
+  prototype's visibility-change path, the test "a space that becomes closed
+  resyncs every reader" and pattern X2 are removed; tests that changed
+  visibility to replace a log's history use the `replaceHistory` test hook
+  instead (D6, A1);
 - the read oracle (`test/oracle.ts`), the write oracle
   (`test/write-oracle.ts`) and the effect model, which are written apart from
   `src/` and must change with it, and the patterns in
@@ -704,7 +712,8 @@ Acceptance: `web/packages/server/test/conformance/` implements replica-proto's
 `ServerFactory` over HTTP against a server on a temp SQLite file with an
 injected clock. The `TestServer` hooks as U6 leaves them (`dump`, `jobs`
 over queued run records, the storage scan, clock and random-source
-control; `work` is removed with the effect worker) are served by a route
+control, and `replaceHistory`, which replaces a log's history and bumps its
+epoch as a restore does; `work` is removed with the effect worker) are served by a route
 mounted only when `NODE_ENV=test`. Every replica-proto test file passes
 against it unchanged, the oracles and effect model included. The mutation runner
 mutates the prototype's `src/` only; the server's own mutation set is
