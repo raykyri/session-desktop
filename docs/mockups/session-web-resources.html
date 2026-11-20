@@ -518,6 +518,13 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .rcv .rcard { position: absolute; width: 220px; touch-action: none; }
 .rcard.lifting { z-index: 6; cursor: grabbing; box-shadow: 0 0 0 2px var(--accent), 0 12px 30px rgba(0,0,0,.2); transform: rotate(-1deg); }
 .rp-canvas.v7 .rcv { background-image: radial-gradient(color-mix(in srgb, var(--t-faint) 45%, transparent) 1px, transparent 1.2px); background-size: 20px 20px; }
+.spshell.rl-5 > .rp-canvas { flex: 1 1 auto; min-width: 360px; max-width: 760px; margin: 14px 0 14px 14px; border: 0; border-radius: 18px; overflow: auto; overscroll-behavior: contain;
+  background: var(--card); box-shadow: var(--shadow), 0 14px 40px rgba(0,0,0,.10); }
+.spshell.rl-5 > .rp-canvas .rcv-h { background: linear-gradient(var(--card) 72%, transparent); border-radius: 18px 18px 0 0; }
+.spshell.rl-5 > .rp-canvas .rcard { box-shadow: 0 0 0 1px var(--divider), 0 2px 6px rgba(0,0,0,.05); }
+.spshell.rl-5 > .rp-canvas .rcard.sel { box-shadow: 0 0 0 2px var(--accent); }
+.spshell.rl-5 > .rp-canvas.dropover { box-shadow: 0 0 0 2px var(--accent), 0 14px 40px rgba(0,0,0,.10); background: color-mix(in srgb, var(--accent) 5%, var(--card)); }
+.spshell.rl-5 > .mg { flex: 1 1 860px; }
 .rp-canvas.v5 .rcv { background-image: radial-gradient(color-mix(in srgb, var(--t-faint) 26%, transparent) 1px, transparent 1.2px); background-size: 14px 14px; }
 .rclus { position: absolute; top: 46px; font-size: var(--fs-xs); font-weight: 600; color: var(--t-faint); }
 .cvhint { position: absolute; left: 20px; top: 20px; width: 300px; }
@@ -661,6 +668,7 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 @media (max-width: 860px) {
   .rwrap > .spshell { flex-direction: column; overflow-y: auto; }
   .rwrap > .spshell > .rp.rp-dock { position: absolute; left: 10px; right: 10px; bottom: 10px; transform: none; width: auto !important; max-height: 40vh; border-bottom: 0; }
+  .spshell.rl-5 > .rp-canvas { margin: 10px; max-width: none; }
   .rwrap > .spshell > .rp { flex: none !important; min-width: 0 !important; width: auto !important; max-height: 340px; border-right: 0; border-bottom: 1px solid var(--divider); }
   .rwrap > .spshell > .mg { flex: none; height: auto; overflow: visible; width: auto !important; position: static !important; box-shadow: none !important; border-radius: 0 !important; }
   .rcv { height: auto !important; width: auto !important; display: flex; flex-direction: column; gap: 10px; padding: 0 14px; }
@@ -1784,19 +1792,7 @@ function createSpace() {
    The ask column is narrower and sits to the right of the space's resources. Drag a sample from the mock bar
    (or a link from another tab) onto the resources area to add it; drag cards to reorder or, on canvases, move them.
    Layouts (mock bar): 1-4 a column to the left that pushes the asks right, 5-7 canvases, 8-12 other arrangements. */
-const RL = [
-  [5, 'A', 'Canvas', 'Freeform canvas left of the asks'],
-  [8, 'B1', 'Shelf', 'A shelf of cards above the asks'],
-  [20, 'B2', 'Side shelf', 'A narrow vertical shelf on the left'],
-  [21, 'B3', 'Dock', 'A shelf docked along the bottom of the page'],
-  [22, 'B4', 'Spines', 'Cards stand as spines on a shelf above the asks; open one to read it'],
-  [10, 'C1', 'Reader', 'A list with the selected card open above it'],
-  [23, 'C2', 'Reader shelf', 'Title chips across the top; the selected card opens under them'],
-  [24, 'C3', 'Reader rail', 'A rail of tiles on the left; the selected card opens beside it'],
-  [16, 'D1', 'Linked', 'Each card shows the asks that used it; pick one to filter the asks'],
-  [25, 'D2', 'Linked shelf', 'Linked cards in a shelf above the asks'],
-  [26, 'D3', 'Linked side', 'A narrow list with ask counts; pick one to filter the asks'],
-];
+const RL = [[5, 'A', 'Canvas', 'A floating canvas left of the asks']];
 const LINKED = [16, 25, 26], TOPSHELF = [8, 22, 23, 25];
 const RKIND = { post: 'Posts', link: 'Links', paper: 'Papers', video: 'Videos', image: 'Images', note: 'Notes' };
 let rseq = 0;
@@ -1893,28 +1889,9 @@ function resourcesPane() {
   const v = st.ui.rl, list = resFor(st.space), home = !SP[st.space];
   const kf = kindFilter(resAll(st.space));
   const title = kf + (home ? `<p class="rnote3">From the spaces you joined. Items you add go to ${esc(spName(resTarget() || 'public'))}.</p>` : '');
-  if (v === 5) { canvasPos(list, 230, 2, 20, 20);
+  canvasPos(list, 230, 2, 20, 20);
     const H = Math.max(600, ...list.map(r => r.y + 240)), W = Math.max(520, ...list.map(r => r.x + 260));
-    return `<div class="rp rp-canvas v5" data-drop="1" data-canvas="1"><div class="rcv-h">${rHead(list)}${title}</div><div class="rcv" style="height:${H}px;width:${W}px">${list.map(r => rcard(r, 'compact', ` data-cv="1" style="left:${r.x}px;top:${r.y}px"`)).join('')}${canWrite() && !list.length ? '<div class="rdrop big cvhint"><b>Drop anything here</b><span>Arrange cards however you like.</span></div>' : ''}</div></div>`; }
-  if (v === 8) return `<div class="rp rp-shelf" data-drop="1">${rHead(list)}<div class="rshelf">${list.map(r => rcard(r, 'compact')).join('')}${canWrite() ? '<div class="rdrop shelfdrop">Drop here</div>' : ''}</div></div>`;
-  if (v === 10) { const cur = list.find(r => r.id === st.rpick) || list[0];
-    return `<aside class="rp rp-reader" data-drop="1">${rHead(list)}${title}${cur ? `<div class="rprev">${rcard(cur)}</div>` : ''}<div class="rrows">${list.map(r => rcard(r, 'row')).join('')}</div>${rDropHint(list)}</aside>`; }
-  if (v === 16) { const pick = st.rlink;
-    return `<aside class="rp rp-linked" data-drop="1">${rHead(list, pick ? '<button class="tlink" data-a="rlink" data-id="">Show all asks</button>' : '')}${title}<div class="rlist">${list.map(r => { const asks = usedBy(r.id); return `<div class="rlk${pick === r.id ? ' on' : ''}">${rcard(r, 'compact')}<button class="rlkbar" data-a="rlink" data-id="${pick === r.id ? '' : r.id}">${asks.length ? `${ARROW_REPLY}${noun(asks.length, 'ask', 'asks')} about this` : 'No asks yet'}<span class="grow"></span>${pick === r.id ? 'Showing' : asks.length ? 'Show' : ''}</button></div>`; }).join('')}</div>${rDropHint(list)}</aside>`; }
-  const linkBar = (r, pick) => { const n = usedBy(r.id).length; return `<button class="rlkbar" data-a="rlink" data-id="${pick === r.id ? '' : r.id}">${n ? `${ARROW_REPLY}${noun(n, 'ask', 'asks')}` : 'No asks yet'}<span class="grow"></span>${pick === r.id ? 'Showing' : n ? 'Show' : ''}</button>`; };
-  if (v === 20) return `<aside class="rp rp-sideshelf" data-drop="1">${rHead(list)}${title}<div class="rledges">${list.map(r => `<div class="rledge">${rcard(r, 'compact')}</div>`).join('')}</div>${rDropHint(list)}</aside>`;
-  if (v === 21) { const open = st.dockOpen !== false;
-    return `<div class="rp rp-dock${open ? ' open' : ''}" data-drop="1"><div class="rhead"><button class="rdk" data-a="rdock" aria-expanded="${open}">${I.down}<b>Resources</b><small>${list.length}</small></button><span class="grow"></span>${open ? kindFilter(resAll(st.space)) : ''}${canWrite() ? '<button class="btn2 sm" data-a="radd">Add</button>' : ''}</div>${st.radding ? rHead([]).split('</div>').slice(1).join('</div>') : ''}${open ? `<div class="rshelf">${list.map(r => rcard(r, 'compact')).join('')}${canWrite() ? '<div class="rdrop shelfdrop">Drop here</div>' : ''}</div>` : ''}</div>`; }
-  if (v === 22) return `<div class="rp rp-shelf rp-spines" data-drop="1">${rHead(list)}<div class="rspines">${list.map(r => st.rpick === r.id ? `<div class="rspine-open">${rcard(r, 'compact')}<button class="iconbtn rspx" data-a="rpick" data-id="" aria-label="Close">${I.x}</button></div>` : `<button class="rspine k-${r.kind}" draggable="${canWrite()}" data-rid="${r.id}" data-a="rpick" data-id="${r.id}" title="${esc(rTitle(r))}"><span class="rsk">${RICON[r.kind]}</span><span class="rst">${esc(clip(rTitle(r), 34))}</span>${av(r.by, 'xs')}</button>`).join('')}${canWrite() ? '<div class="rdrop spinedrop">Drop</div>' : ''}</div></div>`;
-  if (v === 23) { const cur = list.find(r => r.id === st.rpick);
-    return `<div class="rp rp-shelf rp-rtop" data-drop="1">${rHead(list)}<div class="rchips2">${list.map(r => `<button class="rchip2${cur?.id === r.id ? ' on' : ''}" draggable="${canWrite()}" data-rid="${r.id}" data-a="rpick" data-id="${cur?.id === r.id ? '' : r.id}">${RICON[r.kind]}<span>${esc(clip(rTitle(r), 30))}</span></button>`).join('')}${canWrite() ? '<span class="rdrop chipdrop">Drop here</span>' : ''}</div>${cur ? `<div class="rtopprev">${rcard(cur)}</div>` : ''}</div>`; }
-  if (v === 24) { const cur = list.find(r => r.id === st.rpick);
-    return `<aside class="rp rp-rrail" data-drop="1"><div class="rtiles">${canWrite() ? `<button class="rtile radd3" data-a="radd" title="Add">${PLUS2}</button>` : ''}${list.map(r => `<button class="rtile k-${r.kind}${cur?.id === r.id ? ' on' : ''}" draggable="${canWrite()}" data-rid="${r.id}" data-a="rpick" data-id="${cur?.id === r.id ? '' : r.id}" title="${esc(rTitle(r))}">${RICON[r.kind]}</button>`).join('')}</div>${cur ? `<div class="rflyout">${rcard(cur)}</div>` : ''}${st.radding ? `<div class="rflyout">${rHead([]).split('</div>').slice(1).join('</div>')}</div>` : ''}</aside>`; }
-  if (v === 25) { const pick = st.rlink;
-    return `<div class="rp rp-shelf rp-lshelf" data-drop="1">${rHead(list, pick ? '<button class="tlink" data-a="rlink" data-id="">Show all asks</button>' : '')}<div class="rshelf">${list.map(r => `<div class="rlk${pick === r.id ? ' on' : ''}">${rcard(r, 'compact')}${linkBar(r, pick)}</div>`).join('')}${canWrite() ? '<div class="rdrop shelfdrop">Drop here</div>' : ''}</div></div>`; }
-  if (v === 26) { const pick = st.rlink;
-    return `<aside class="rp rp-lside" data-drop="1">${rHead(list, pick ? '<button class="tlink" data-a="rlink" data-id="">All</button>' : '')}${title}<div class="rrows">${list.map(r => { const n = usedBy(r.id).length; return `<div class="rls${pick === r.id ? ' on' : ''}"><div class="rrow${pick === r.id ? ' sel' : ''}" draggable="${canWrite()}" data-rid="${r.id}" data-a="rlink" data-id="${pick === r.id ? '' : r.id}"><span class="rk">${RICON[r.kind]}</span><span class="rt">${esc(rTitle(r))}</span>${n ? `<span class="rcnt">${ARROW_REPLY}${n}</span>` : ''}</div>${pick === r.id ? rcard(r, 'compact') : ''}</div>`; }).join('')}</div>${rDropHint(list)}</aside>`; }
-  return '';
+    return `<div class="rp rp-canvas v5" data-drop="1" data-canvas="1"><div class="rcv-h">${rHead(list)}${title}</div><div class="rcv" style="height:${H}px;width:${W}px">${list.map(r => rcard(r, 'compact', ` data-cv="1" style="left:${r.x}px;top:${r.y}px"`)).join('')}${canWrite() && !list.length ? '<div class="rdrop big cvhint"><b>Drop anything here</b><span>Arrange cards however you like.</span></div>' : ''}</div></div>`;
 }
 
 function renderNetwork() {
@@ -2446,7 +2423,6 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
-    <span class="mk"><span class="mkl">Resources</span><span class="seg rlseg">${RL.map(([id, k, n, h]) => `<button data-mrl="${id}" aria-pressed="${st.ui.rl === id}" title="${esc(h)}"><b>${k}</b>${esc(n)}</button>`).join('')}</span></span>
     <span class="mk"><span class="mkl">Drag in</span><span class="seg">${Object.keys(RSAMPLE).map(k => `<span class="rsamp" draggable="true" data-rsample="${k}" title="Drag onto the resources">${RICON[k]}${cap1(k === 'post' ? 'post on X' : k)}</span>`).join('')}</span></span>
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
