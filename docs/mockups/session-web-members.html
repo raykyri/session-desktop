@@ -374,7 +374,6 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .rtext { font-size: var(--fs-sm); color: var(--t-primary); line-height: 1.45; overflow-wrap: anywhere; }
 .preview .rtext { max-height: 240px; overflow-y: auto; }
 .rnote { font-size: var(--fs-xs); color: var(--t-faint); }
-.tundo { margin-left: 12px; color: var(--accent); font-weight: 600; font-size: inherit; }
 .saved-empty { grid-column: 1; padding: 24px 4px; }
 .mkfix .mkl { color: var(--accent); }
 @media (max-width: 520px) { .ncw .nb-dock { flex-wrap: wrap; row-gap: 6px; } .ncw .nb-dock > textarea { flex: 1 1 calc(100% - 40px); } .ncw .nb-dock > textarea + * { margin-left: 28px; } .ncw .nb-dock > .split { margin-left: auto; } }
@@ -1035,13 +1034,10 @@ const othersUnderBranch = (T, id) => T.kids(id).some(c => !mine(c.u) || othersUn
 const othersUnderReplies = list => (list || []).some(r => !mine(r.u) || othersUnderReplies(r.kids));
 function deleteItem(key) {
   const [kind, pid, id] = key.split(':'), p = byId(pid); if (!p) return;
-  let undo = null, what = 'Reply deleted.';
-  if (kind === 't') { const at = D.posts.indexOf(p); D.posts.splice(at, 1); if (st.asking === pid) st.asking = null; undo = () => D.posts.splice(at, 0, p); what = p.k === 'ask' ? 'Ask deleted.' : 'Post deleted.'; }
-  else if (kind === 'b') { const T = tree(p), gone = [id, ...T.dfs(id).map(x => x.n.id)]; gone.forEach(x => DELETED.add(pid + ':' + x)); if (gone.includes(st.sel[pid])) st.sel[pid] = null; undo = () => { gone.forEach(x => DELETED.delete(pid + ':' + x)); st.sel[pid] = id; }; what = 'Branch deleted.'; }
-  else if (kind === 'r') { const path = id.split('.'), i = +path.pop(), list = path.length ? replyAt(p, path.join('.')).kids : replies(p), [r] = list.splice(i, 1); st.rsel[pid] = null; undo = () => { list.splice(i, 0, r); st.rsel[pid] = id; }; }
-  st.menu = null; st.replying = null;
-  if (st.ui.del === 'b') { toast(what); st.undo = undo; }
-  render();
+  if (kind === 't') { D.posts.splice(D.posts.indexOf(p), 1); if (st.asking === pid) st.asking = null; }
+  else if (kind === 'b') { const T = tree(p), gone = [id, ...T.dfs(id).map(x => x.n.id)]; gone.forEach(x => DELETED.add(pid + ':' + x)); if (gone.includes(st.sel[pid])) st.sel[pid] = null; }
+  else if (kind === 'r') { const path = id.split('.'), i = +path.pop(), list = path.length ? replyAt(p, path.join('.')).kids : replies(p); list.splice(i, 1); st.rsel[pid] = null; }
+  st.menu = null; st.replying = null; render();
 }
 /* Avatar placement on cards, per variant (V[st.v].av):
    header  28px avatar beside the name line (the original)
@@ -1329,10 +1325,9 @@ app.addEventListener('click', e => {
   if (a === 'rsel') { st.rsel[d.id] = st.rsel[d.id] === d.node ? null : d.node; st.replying = null; render(); return; }
   if (a === 'replyopen') { if (st.replying !== d.id) { st.replying = d.id; render(); } document.getElementById('in-rp:' + d.id.replace('/', ':'))?.focus(); return; }
   if (a === 'reply') { st.replying = st.replying === d.id ? null : d.id; render(); document.getElementById('in-rp:' + d.id.replace('/', ':'))?.focus(); return; }
-  if (a === 'del') { if (st.ui.del === 'c') { st.delAsk = d.k; st.menu = null; render(); $('.dialog .btn1')?.focus(); } else deleteItem(d.k); return; }
+  if (a === 'del') { st.delAsk = d.k; st.menu = null; render(); $('.dialog .btn1')?.focus(); return; }
   if (a === 'delyes') { const k = st.delAsk; st.delAsk = null; deleteItem(k); return; }
   if (a === 'delno') { st.delAsk = null; render(); return; }
-  if (a === 'undo') { st.undo?.(); st.undo = null; st.toast = ''; render(); return; }
   if ((a === 'like' || a === 'save') && st.auth === 'out') { authFrom = sigOf(t); st.authOpen = true; st.flow = 'landing'; st.fromLink = false; render(); return; }
   if (a === 'like') { LIKED()[d.k] = !LIKED()[d.k]; render(); return; }
   if (a === 'save') { SAVED()[d.id] = !SAVED()[d.id]; toast(SAVED()[d.id] ? 'Saved.' : 'Removed from saved.'); render(); return; }
@@ -1412,6 +1407,7 @@ document.addEventListener('keydown', e => {
     const i = items.indexOf(document.activeElement.closest?.('.mi')); items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus(); return;
   }
   if (e.key !== 'Escape') return;
+  if (st.delAsk) { st.delAsk = null; render(); return; }
   if (st.menu) { const m = st.menu; st.menu = null; render(); app.querySelector(`[data-m="${CSS.escape(m)}"]`)?.focus({ preventScroll: true }); return; }
   const f = e.target.closest?.('form[data-form]');
   if (f) { const [k, pid] = f.dataset.form.split(':');
@@ -1483,7 +1479,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { del: 'a', saved: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { saved: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1517,7 +1513,7 @@ function charge(q, tok, model = 'Opus 5.5') {
   return bill;
 }
 let toastTimer;
-function toast(t) { st.toast = t; st.undo = null; clearTimeout(toastTimer); toastTimer = setTimeout(() => { st.toast = ''; st.undo = null; const el = $('#toast'); if (el) el.remove(); }, 5000); }
+function toast(t) { st.toast = t; clearTimeout(toastTimer); toastTimer = setTimeout(() => { st.toast = ''; const el = $('#toast'); if (el) el.remove(); }, 4000); }
 
 /* composer: hidden without an invite (the banner explains why) */
 const pendingBanner = () => {
@@ -1710,7 +1706,7 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
-    <span class="mk mkfix"><span class="mkl">Fixes</span></span>${seg('del', 'Delete', 3)}${seg('saved', 'Saved', 3)}
+    <span class="mk mkfix"><span class="mkl">Fixes</span></span>${seg('saved', 'Saved', 3)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -1749,12 +1745,12 @@ function renderInner() {
   if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
   if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
-const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}${st.undo && st.ui.del === 'b' ? '<button class="tundo" data-a="undo">Undo</button>' : ''}</div>` : '';
+const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}</div>` : '';
 /* Each variant control also sets up a view that shows it: the signed-out landing for Sign-in,
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
-  if (['del', 'saved'].includes(k)) {
+  if (k === 'saved') {
     st.authOpen = false; st.screen = 'network';
     st.auth = 'in'; st.user = 'ines.v';
     if (k === 'saved' && st.ui.saved === 'c') st.space = 'saved';
