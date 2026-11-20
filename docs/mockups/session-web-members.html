@@ -1060,7 +1060,7 @@ function card(p) {
   const count = c => mode === 'footer' ? (c ? `<span class="notes">· ${c}</span>` : '<span class="notes"></span>') : `<span class="notes">${c}</span>`;
   const tail = mode === 'footer' ? more : '';
   const cls = `card av-${mode} pad-${V[st.v].pad || 'base'}`;
-  const lk = 'p:' + p.id, nl = (p.likesBase || 0) + (LIKED()[lk] ? 1 : 0), off = canWrite() || (st.auth === 'out' && st.ui.likeout === 'a') ? '' : ` disabled title="${st.auth === 'out' ? 'Sign in to like and save' : 'Liking opens once you have an invite'}"`;
+  const lk = 'p:' + p.id, nl = (p.likesBase || 0) + (LIKED()[lk] ? 1 : 0), off = canWrite() || st.auth === 'out' ? '' : ` disabled title="${st.auth === 'out' ? 'Sign in to like and save' : 'Liking opens once you have an invite'}"`;
   const acts = `<button class="iconbtn likes${LIKED()[lk] ? ' on' : ''}" data-a="like" data-k="${lk}" aria-pressed="${!!LIKED()[lk]}" aria-label="Like, ${nl} likes"${off}>${I.heart}<span>${nl}</span></button><button class="iconbtn${SAVED()[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!SAVED()[p.id]}" aria-label="${SAVED()[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}</button>`;
   if (p.k === 'post') {
     const n = replyCount(p);
@@ -1187,7 +1187,7 @@ function addReply(p, at, t) {
 }
 const rkey = (p, id) => p.id + '/' + id;
 const likeBtn = (p, id, r) => likeBtnK('r:' + rid(r), r);
-const likeBtnK = (k, r) => { const n = (r.likes || 0) + (LIKED()[k] ? 1 : 0); return `<button class="rlike${LIKED()[k] ? ' on' : ''}" data-a="like" data-k="${k}" aria-pressed="${!!LIKED()[k]}" aria-label="Like, ${n} likes"${canWrite() || (st.auth === 'out' && st.ui.likeout === 'a') ? '' : ` disabled title="${st.auth === 'out' ? 'Sign in to like' : 'Liking opens once you have an invite'}"`}>${I.heart}${n}</button>`; };
+const likeBtnK = (k, r) => { const n = (r.likes || 0) + (LIKED()[k] ? 1 : 0); return `<button class="rlike${LIKED()[k] ? ' on' : ''}" data-a="like" data-k="${k}" aria-pressed="${!!LIKED()[k]}" aria-label="Like, ${n} likes"${canWrite() || st.auth === 'out' ? '' : ' disabled title="Liking opens once you have an invite"'}>${I.heart}${n}</button>`; };
 const replyBox = (p, at, ph) => st.replying === rkey(p, at) ? composer('rp:' + p.id + ':' + at, ph, '', 'Reply', 'rpclose') : '';
 const replyLink = (p, id, label = 'Reply') => canWrite() ? `<button class="tlink" data-a="reply" data-id="${rkey(p, id)}">${st.replying === rkey(p, id) ? 'Close reply' : label}</button>` : '';
 
@@ -1391,10 +1391,10 @@ app.addEventListener('submit', e => {
   const [kind, pid, node, at] = f.dataset.form.split(':'), p = byId(pid);
   const notify = t => { const m = mentionsIn(t), miss = [...new Set([...t.matchAll(MENTION)].map(x => x[1].replace(/\.$/, '')).filter(u => !member(u)))]; const parts = [m.length ? `Notified ${m.map(u => '@' + u).join(', ')}.` : '', miss.length ? `${miss.map(u => '@' + u).join(', ')} ${miss.length === 1 ? "isn't a member" : "aren't members"}.` : '']; if (m.length || miss.length) toast(parts.filter(Boolean).join(' ')); };
   if (kind === 'br') { inp.value = ''; const list = (BRP[pid + ':' + node] ||= []), r = { u: me(), createdAt: new Date(NOW).toISOString(), t: v, likes: 0 }; if (at === 'top') list.push(r); else (replyAtIn(list, at).kids ||= []).push(r); st.brReplying = null; notify(v); render(); return; }
-  if (kind === 'new' && e.submitter?.value !== 'post' && outOfTokens() && st.newModel !== 'GPT-6.1 Sol') { toast(outMsg('asking') + ' You can still post.'); render(); return; }
+  if (kind === 'new' && e.submitter?.value !== 'post' && outOfTokens() && st.newModel !== 'GPT-6.1 Sol') { toast(OUT_MSG); render(); return; }
   if (kind === 'new') { newThread(newSpaceId(), v, e.submitter?.value === 'post' ? 'post' : 'ask'); return; }
   if (kind === 'rp') { inp.value = ''; addReply(p, node, v); st.replying = null; if (node !== 'top') st.rcol[rid(replyAt(p, node))] = false; st.rsel[pid] = node === 'top' ? String(replies(p).length - 1) : node + '.' + (replyAt(p, node).kids.length - 1); notify(v); render(); return; }
-  if (kind === 'mf' && outOfTokens()) { toast(outMsg('branching')); render(); return; }
+  if (kind === 'mf' && outOfTokens()) { toast(OUT_MSG); render(); return; }
   inp.value = '';
   st.sel[pid] = addBranch(p, node, v, node === 'r' && st.quote?.pid === pid ? st.quote.text : null);
   st.asking = null; st.quote = null; st.askPar = null; render();
@@ -1485,7 +1485,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { likeout: 'a', outtok: 'a', del: 'a', saved: 'a', ncomp: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { outtok: 'a', del: 'a', saved: 'a', ncomp: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1504,7 +1504,7 @@ const used = () => usage().reduce((a, b) => a + b, 0);
 const left = () => Math.max(0, ALLOWANCE - used());
 const keys = () => (KEYS[st.user] ||= {});
 const billing = () => BILLING[st.user] || 'pause';
-const outMsg = what => keys().anthropic?.status === 'working' ? `Included tokens are used up until Friday. Turn on “Continue on my Anthropic key” in Usage to keep ${what}.` : `Included tokens are used up until Friday. Add an Anthropic key in Usage to keep ${what}.`;
+const OUT_MSG = "You're out of tokens until Friday. You can still post, or add an API key in Usage.";
 const paused = () => canWrite() && outOfTokens();
 const PAUSED_NOTE = () => `Included tokens are used up until ${WEEK[0]}. ${keys().anthropic?.status === 'working' ? 'Turn on “Continue on my Anthropic key” in Usage to keep asking.' : 'Add an Anthropic key in Usage to keep asking.'}`;
 const outOfTokens = () => left() <= 0 && !(billing() === 'key' && keys().anthropic?.status === 'working');
@@ -1714,7 +1714,7 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
-    <span class="mk mkfix"><span class="mkl">Fixes</span></span>${seg('likeout', 'Signed-out likes', 2)}${seg('outtok', 'Out of tokens', 3)}${seg('del', 'Delete', 3)}${seg('saved', 'Saved', 3)}${seg('ncomp', 'Narrow composer', 2)}
+    <span class="mk mkfix"><span class="mkl">Fixes</span></span>${seg('outtok', 'Out of tokens', 3)}${seg('del', 'Delete', 3)}${seg('saved', 'Saved', 3)}${seg('ncomp', 'Narrow composer', 2)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -1758,10 +1758,9 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
-  if (['likeout', 'outtok', 'del', 'saved', 'ncomp'].includes(k)) {
+  if (['outtok', 'del', 'saved', 'ncomp'].includes(k)) {
     st.authOpen = false; st.screen = 'network';
-    if (k === 'likeout') st.auth = 'out';
-    else { st.auth = 'in'; st.user = k === 'outtok' ? 'sol' : 'ines.v'; }
+    st.auth = 'in'; st.user = k === 'outtok' ? 'sol' : 'ines.v';
     if (k === 'outtok') { const u = usage(), others = u.reduce((a, b, i) => i === TODAY ? a : a + b, 0); u[TODAY] = Math.max(0, ALLOWANCE + 20e3 - others); BILLING.sol = 'pause'; st.mt = 'out'; }
     if (k === 'saved' && st.ui.saved === 'c') st.space = 'saved';
     render(); if (k === 'ncomp') toast('Narrow the window below 520px to see this.'); return;
