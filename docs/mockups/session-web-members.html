@@ -530,14 +530,23 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .pbanner b { color: var(--t-heading); font-weight: 600; }
 .pbanner > div { flex: 1; min-width: 0; }
 .code-f .btn1 { height: 40px; border-radius: 20px; }
+.tcopy { margin: 0 0 8px; max-width: 640px; }
+.tfacts { margin: 0 0 8px; padding-left: 18px; color: var(--t-faint); font-size: var(--fs-sm); line-height: 1.5; max-width: 640px; }
+.tgap { height: 6px; }
+section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
+.ipav { display: flex; align-items: center; gap: 4px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--divider); }
+.ipav > span:first-child { margin-right: 6px; color: var(--t-faint); font-size: var(--fs-xs); }
+.slot { padding: 2px 0 0; }
+.slot + .slot { margin-top: 6px; }
+.slot.empty .btn2 { margin-top: 0; }
 .pend-a .code-f { margin: 4px 0 24px; }
 .pend-a .ferr { margin: -16px 0 24px; }
 .pend-a .pcard { padding: 14px 18px; margin-bottom: 20px; }
 .pend-a .checks { margin: 0; gap: 8px; }
 .pdot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex: none; }
 /* tree A */
-.ttree { position: relative; background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 4px 12px; }
-.ttree svg { position: absolute; left: 12px; top: 4px; width: calc(100% - 24px); overflow: visible; pointer-events: none; }
+.ttree { position: relative; background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 6px 12px; }
+.ttree svg { position: absolute; left: 12px; top: 6px; width: calc(100% - 24px); overflow: visible; pointer-events: none; }
 .ttree svg path { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
 .trow { position: relative; display: flex; align-items: center; gap: 10px; height: 40px; }
 .trole { font-weight: 400; color: var(--t-faint); }
@@ -1244,7 +1253,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { codecopy: 'a', treecopy: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1281,7 +1290,7 @@ function toast(t) { st.toast = t; clearTimeout(toastTimer); toastTimer = setTime
 
 /* composer: hidden without an invite (the banner explains why) */
 const pendingBanner = () => {
-  if (st.auth === 'out') return `<div class="row new-row"><div class="pbanner out"><div><b>You're reading Session's open spaces.</b> Sign in to ask, branch and reply. New accounts need an invite from a member.</div><button class="ghost" data-ma="openauth" data-to="code">I have an invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></div><div></div></div>`;
+  if (st.auth === 'out') return `<div class="row new-row"><div class="pbanner out"><div><b>You're reading Session's open spaces.</b> Sign in to ask, branch and reply. New accounts need an invite from a member.</div><button class="ghost" data-ma="openauth" data-to="code">Join with invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></div><div></div></div>`;
   if (isActive() || st.auth !== 'in') return '';
   return `<div class="row new-row"><div class="pbanner"><span class="pdot"></span><div><b>You don't have an invite yet.</b> You can read every open space. Asking, posting and replying open once you enter an invite code.</div><button class="ghost" data-ma="go" data-to="status">Enter a code</button></div><div></div></div>`;
 };
@@ -1316,16 +1325,24 @@ function appbar() {
 /* ---- signed-out site: the open feed with a Sign in button; sign-in runs in a dialog (A) or a side sheet (B) ---- */
 const brandBtn = () => `<button class="brand home" data-ma="go" data-to="feed" aria-label="Session home">${mark('sm')}<b>Session</b></button>`;
 const appbarOut = () => `<header class="appbar">${brandBtn()}<span class="grow"></span>
-  <button class="ghost" data-ma="openauth" data-to="code">I have an invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></header>`;
+  <button class="ghost" data-ma="openauth" data-to="code">Join with invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></header>`;
 const authDialog = () => `<div class="scrim auth-scrim" data-ma="closeauth"></div><div class="authdlg v-a" role="dialog" aria-modal="true" aria-label="Sign in to Session"><button class="iconbtn dclose" data-ma="closeauth" aria-label="Close">${I.x}</button>${authScreen()}</div>`;
 /* ---- sign-in steps ---- */
 const xBtn = (label = 'Sign in with X') => `<button class="xbtn" data-ma="xauth">${label}</button>`;
+/* copy variants for the invite-code step: heading, line under it, check button, valid-invite line, X button */
+const CODE_COPY = {
+  a: { h: 'Enter your invite code', p: 'It came from the member who invited you, as a code or a link.', btn: 'Check', ok: n => `${n} invited you`, x: 'Continue with X' },
+  b: { h: 'Have an invite?', p: 'Paste the code or link a member sent you.', btn: 'Continue', ok: n => `Invite from ${n}`, x: 'Sign up with X' },
+  c: { h: 'Invite code', p: '', btn: 'Check', ok: n => `${n} invited you`, x: 'Continue with X' },
+  d: { h: 'Join with an invite', p: 'Paste the code, or the whole link.', btn: 'Use code', ok: n => `Valid invite from ${n}`, x: 'Create your account with X' },
+  e: { h: 'Got an invite code?', p: `Codes work once and expire ${INVITE_DAYS} days after they're made.`, btn: 'Check code', ok: n => `${n}'s invite is valid`, x: 'Continue with X' },
+};
 function authScreen() {
   const back = to => `<button class="tlink back" data-ma="flow" data-to="${to}">${I.left}Back</button>`;
   let body = '';
   const linkInv = st.fromLink && INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
   if (st.flow === 'landing' && linkInv) {
-    body = `<div class="auth-c"><div class="inviter">${av(linkInv.by)}<div><b>${esc(nameOf(linkInv.by))} invited you to Session</b><small>@${esc(linkInv.by)} · this invite expires ${day(addDays(linkInv.created, INVITE_DAYS))}</small></div></div>
+    body = `<div class="auth-c"><div class="inviter">${av(linkInv.by)}<div><b>${esc(nameOf(linkInv.by))} invited you to Session</b><small>@${esc(linkInv.by)} · Invite expires ${day(addDays(linkInv.created, INVITE_DAYS))}</small></div></div>
       <h2>Research with agents, in shared spaces.</h2><p>Ask a question and an agent researches it. Branch from any passage of the answer to go deeper; everyone in the space can read and build on it.</p>
       <div class="auth-acts">${xBtn('Continue with X')}<button class="btn2" data-ma="nolink">I already have an account</button></div></div>`;
   } else if (st.flow === 'landing') {
@@ -1334,10 +1351,11 @@ function authScreen() {
       <div class="auth-acts">${xBtn()}<button class="btn2" data-ma="flow" data-to="code">I have an invite code</button></div></div>`;
   } else if (st.flow === 'code') {
     const inv = INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
-    body = `<div class="auth-c">${back('landing')}<h2>Enter your invite code</h2><p>It came from the member who invited you, as a code or a link.</p>
-      <form class="code-f" data-mform="code"><input id="in-code" value="${esc(st.code)}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1">Check</button></form>
+    const C = CODE_COPY[st.ui.codecopy] || CODE_COPY.a;
+    body = `<div class="auth-c">${back('landing')}<h2>${C.h}</h2>${C.p ? `<p>${C.p}</p>` : ''}
+      <form class="code-f" data-mform="code"><input id="in-code" value="${esc(st.code)}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1">${C.btn}</button></form>
       ${st.codeErr ? `<p class="ferr">${esc(st.codeErr)}</p>` : ''}
-      ${inv ? `<div class="inviter">${av(inv.by)}<div><b>${esc(nameOf(inv.by))} invited you</b><small>@${esc(inv.by)} · expires ${day(addDays(inv.created, INVITE_DAYS))}</small></div></div><div class="auth-acts">${st.xacct && !MEMBERS.some(m => m.x === st.xacct) ? `<button class="btn1" data-ma="toprofile">Continue as @${esc(st.xacct)}</button>${xBtn('Use a different X account')}` : xBtn('Continue with X')}</div>` : ''}</div>`;
+      ${inv ? `<div class="inviter">${av(inv.by)}<div><b>${C.ok(esc(nameOf(inv.by)))}</b><small>@${esc(inv.by)} · expires ${day(addDays(inv.created, INVITE_DAYS))}</small></div></div><div class="auth-acts">${st.xacct && !MEMBERS.some(m => m.x === st.xacct) ? `<button class="btn1" data-ma="toprofile">Continue as @${esc(st.xacct)}</button>${xBtn('Use a different X account')}` : xBtn(C.x)}</div>` : ''}</div>`;
   } else if (st.flow === 'xauth') {
     body = `<div class="auth-c">${back(st.intent === 'signup' ? 'code' : 'landing')}<h2>Sign in with X</h2><p>X asks you to let Session see your name, handle and profile picture. Session cannot post for you or read your messages.</p>
       <div class="auth-acts"><button class="xbtn" data-ma="xgo">Continue to X</button></div>
@@ -1386,33 +1404,46 @@ function treeA() {
 /* ---- members page, split into sections so each has variants ----
    inv:    A slots bar + full list · B one line + open codes only · C one button that shows the newest open code
    layout: A two columns · B one column */
+/* explanation above the invite tree (variants) */
+const TREE_COPY = {
+  a: [`Session is invite-only. Every account starts from an invite link sent by a member, and this tree shows who invited whom.`, `You can have ${SLOTS} open invite links at a time. Each link works for one person and expires ${INVITE_DAYS} days after you make it. A slot frees when a link is used, expires or is revoked.`],
+  b: [`Every member joined through another member's invite link. Links work once, expire after ${INVITE_DAYS} days, and you can have ${SLOTS} open at a time.`],
+  c: null,
+  d: [`Invites are how Session grows. Send links to people you would like to research with; the tree keeps a record of who brought in whom, and your name stays next to the people you invite.`, `Each link works for one person and expires after ${INVITE_DAYS} days. You can have ${SLOTS} open at a time.`],
+};
 function treeSection() {
-  const sub = 'Who invited whom.';
-  return `<section><div class="shead"><h3>Invite tree</h3><span class="modes" role="group">${[['all', 'Everyone'], ['mine', 'Your branch']].map(([k, l]) => `<button type="button" data-ma="scope" data-s="${k}" aria-pressed="${st.treeScope === k}">${l}</button>`).join('')}</span></div>
-    <p class="sub">${sub}</p>${treeA()}</section>`;
+  const T = TREE_COPY[st.ui.treecopy];
+  const copy = T ? T.map(t => `<p class="sub tcopy">${t}</p>`).join('') : `<ul class="tfacts"><li>Every account starts from a member's invite link.</li><li>Each link works for one person and expires after ${INVITE_DAYS} days.</li><li>You can have ${SLOTS} open links at a time; a slot frees when one is used, expires or is revoked.</li></ul>`;
+  st.treeScope = 'all';
+  return `<section><h3>Invite tree</h3>${copy}<div class="tgap"></div>${treeA()}</section>`;
 }
 function invSection() {
-  /* all variants start from one invite link (the previous C):
-     A link field + Copy, expiry, Revoke, Make another · B one button that copies a link, made on demand
-     C A plus the people you invited · D every open link stacked · E the link as plain text, count in the heading */
+  /* A one link + the people you invited (was C) · B every open link stacked (was D) · C every open link + the people you invited
+     D three slots: open links, people who used a link, and empty slots · E one link + the people you invited as avatars
+     F every open link as plain text + the people you invited */
   const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), used = slotsUsed(), can = used < SLOTS && canInvite(meM());
-  const why = !canInvite(meM()) ? 'You can invite once your account is active.' : used >= SLOTS ? `You have ${SLOTS} open invites. One frees when it is used, expires or is revoked.` : `Each link works for one person and expires in ${INVITE_DAYS} days.`;
+  const why = !canInvite(meM()) ? 'You can invite once your account is active.' : used >= SLOTS ? `You have ${SLOTS} open invites. One frees when it is used, expires or is revoked.` : '';
   const open = inv.filter(i => inviteState(i) === 'open'), i = open[0], L = x => `session.app/i/${x.code}`, exp = x => day(addDays(x.created, INVITE_DAYS));
   const left = SLOTS - used, make = (cls = 'btn1 wide', t = 'Make an invite link') => `<button class="${cls}" data-ma="newinvite"${can ? '' : ' disabled'}>${t}</button>`;
   const field = x => `<div class="ilink"><code>${L(x)}</code><button class="btn1 sm" data-ma="copy" data-t="${L(x)}">Copy</button></div>`;
+  const ltext = x => `<div class="ltext"><span>${L(x)}</span><button class="tlink" data-ma="copy" data-t="${L(x)}">Copy</button></div>`;
   const revoke = x => `<button class="tlink inl danger" data-ma="revoke" data-code="${x.code}">Revoke</button>`;
+  const ppl = MEMBERS.filter(m => m.inviter === st.user).sort((a, b) => a.joined < b.joined ? 1 : -1);
+  const pplList = ppl.length ? `<h4>You invited</h4><div class="ippl">${ppl.map(m => `<div class="ip">${av(m.u, 'xs')}<b>${esc(m.u)}</b><span class="grow"></span><small>Joined ${day(m.joined)}</small></div>`).join('')}</div>` : '';
+  const pplAv = ppl.length ? `<div class="ipav"><span>You invited</span>${ppl.map(m => `<span title="@${esc(m.u)}">${av(m.u, 'sm')}</span>`).join('')}</div>` : '';
+  const head = n => `<div class="shead"><h3>Invite someone</h3><small>${n}</small></div>`;
+  const one = i ? `${field(i)}<p class="fine">Works once, until ${exp(i)}. ${open.length > 1 ? `${open.length - 1} more open. ` : ''}${revoke(i)}</p>${can ? make('tlink', 'Make another') : ''}` : `${make()}${why ? `<p class="fine">${why}</p>` : ''}`;
+  const stack = (row = field) => `${open.map(x => `${row(x)}<p class="fine">Until ${exp(x)}. ${revoke(x)}</p>`).join('')}${can ? make(open.length ? 'btn2 wide' : 'btn1 wide', open.length ? 'Make another' : 'Make an invite link') : `<p class="fine">${why}</p>`}`;
   const v = st.ui.inv;
-  if (v === 'b') return `<section class="box invc"><h3>Invite someone</h3><p class="sub">Send the link to one person. ${left} of ${SLOTS} invites left.</p>
-    <button class="btn1 wide" data-ma="copynew"${i || can ? '' : ' disabled'}>Copy invite link</button>
-    <p class="fine">${i ? `${open.length} link${open.length === 1 ? '' : 's'} open, expires ${exp(i)}. ${revoke(i)}` : why}</p></section>`;
-  if (v === 'd') return `<section class="box invc"><div class="shead"><h3>Invite someone</h3><small>${left} of ${SLOTS} left</small></div>
-    ${open.map(x => `${field(x)}<p class="fine">Until ${exp(x)}. ${revoke(x)}</p>`).join('')}${can ? make(open.length ? 'btn2 wide' : 'btn1 wide', open.length ? 'Make another' : 'Make an invite link') : `<p class="fine">${why}</p>`}</section>`;
-  if (v === 'e') return `<section class="box invc e"><div class="shead"><h3>Invite someone</h3><small>${left} left</small></div>
-    ${i ? `<div class="ltext"><span>${L(i)}</span><button class="tlink" data-ma="copy" data-t="${L(i)}">Copy</button></div><p class="fine">Works once, until ${exp(i)}. ${revoke(i)}${can ? ` · <button class="tlink inl" data-ma="newinvite">New link</button>` : ''}</p>` : `${make('tlink', 'Make an invite link')}<p class="fine">${why}</p>`}</section>`;
-  const base = i ? `${field(i)}<p class="fine">Works once, until ${exp(i)}. ${open.length > 1 ? `${open.length - 1} more open. ` : ''}${revoke(i)}</p>${can ? make('tlink', 'Make another') : ''}` : `${make()}<p class="fine">${why}</p>`;
-  if (v === 'c') { const ppl = MEMBERS.filter(m => m.inviter === st.user);
-    return `<section class="box invc"><h3>Invite someone</h3>${base}${ppl.length ? `<h4>You invited</h4><div class="ippl">${ppl.map(m => `<div class="ip">${av(m.u, 'xs')}<b>${esc(m.u)}</b><span class="grow"></span><small>Joined ${day(m.joined)}</small></div>`).join('')}</div>` : ''}</section>`; }
-  return `<section class="box invc"><h3>Invite someone</h3>${base}</section>`;
+  if (v === 'b') return `<section class="box invc">${head(`${left} of ${SLOTS} left`)}${stack()}</section>`;
+  if (v === 'c') return `<section class="box invc">${head(`${left} of ${SLOTS} left`)}${stack()}${pplList}</section>`;
+  if (v === 'd') { const usedL = inv.filter(x => inviteState(x) === 'used').slice(0, Math.max(0, SLOTS - open.length));
+    const rows = [...open.map(x => `<div class="slot">${field(x)}<p class="fine">Until ${exp(x)}. ${revoke(x)}</p></div>`),
+      ...Array.from({ length: Math.max(0, SLOTS - open.length) }, () => `<div class="slot empty">${make('btn2 wide', 'Make an invite link')}</div>`)];
+    return `<section class="box invc">${head(`${open.length} of ${SLOTS} open`)}${rows.join('')}${usedL.length ? `<p class="fine">Used: ${usedL.map(x => `@${esc(x.used)}`).join(', ')}</p>` : ''}${!canInvite(meM()) ? `<p class="fine">${why}</p>` : ''}</section>`; }
+  if (v === 'e') return `<section class="box invc"><h3>Invite someone</h3>${one}${pplAv}</section>`;
+  if (v === 'f') return `<section class="box invc e">${head(`${left} left`)}${stack(ltext)}${pplList}</section>`;
+  return `<section class="box invc"><h3>Invite someone</h3>${one}${pplList}</section>`;
 }
 function membersPage() {
   return `<div class="page"><div class="page-in"><div class="mcols"><div class="mmain">${treeSection()}</div>
@@ -1463,9 +1494,9 @@ function usagePage() {
 function renderMock() {
   const personas = [['out', 'Signed out'], ['sol', 'Admin'], ['ines.v', 'Member'], ['kofi.a', 'No invite'], ...MEMBERS.filter(m => m.created).map(m => [m.u, `New account (${m.status === 'active' ? 'active' : 'no invite'})`])];
   const cur = st.auth === 'out' ? 'out' : st.user;
-  const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcde'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
+  const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcdef'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
-    ${seg('inv', 'Invites', 5)}
+    ${seg('inv', 'Invites', 6)}${seg('treecopy', 'Tree text', 4)}${seg('codecopy', 'Code step copy', 5)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -1487,9 +1518,10 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the feed for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
+  if (k === 'codecopy') { st.auth = 'out'; st.authOpen = true; st.flow = 'code'; st.intent = 'signup'; st.fromLink = false; st.code = 'SESS-9TQ2-X8'; st.codeErr = ''; render(); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
-  st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'feed' : 'usage';
+  st.screen = (k === 'inv' || k === 'treecopy') ? 'members' : k === 'meter' ? 'feed' : 'usage';
   render();
   if (k === 'keys') $('.kcards, .krow')?.closest('section')?.scrollIntoView({ block: 'start' });
   if (k === 'tree') $('.ttree, .ttable')?.closest('section')?.scrollIntoView({ block: 'start' });
@@ -1552,7 +1584,7 @@ app.addEventListener('submit', e => {
   e.preventDefault();
   const kind = f.dataset.mform;
   if (kind === 'code') {
-    const c = $('#in-code').value.trim().toUpperCase(); st.code = c;
+    const c = $('#in-code').value.trim().toUpperCase().replace(/^.*\//, ''); st.code = c;
     const inv = INVITES.find(i => i.code === c);
     st.codeErr = !c ? 'Enter the code from your invite.' : !inv ? "That code doesn't exist. Check it against the invite, or ask the person who invited you." : inviteState(inv) === 'used' ? 'That code has already been used. Each code works for one person; ask for a new one.' : inviteState(inv) !== 'open' ? 'That code has expired or was revoked. Ask the person who invited you for a new one.' : '';
     render(); return;
