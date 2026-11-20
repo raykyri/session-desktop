@@ -498,7 +498,20 @@ Choice: option 3.
   round 1 of phase 2): past it a write or a call answers TOO_MANY_REQUESTS
   (429) with `retryAt`, unrecorded, which the client treats as any limit's.
   `spaces.create` answers `{ id, space }`, the new space as `GET
-  /api/spaces` lists it.
+  /api/spaces` lists it. Amended in review round 2 of phase 2: a device's
+  `runs.heartbeat`, `runs.turn` and `runs.finish` on a run whose lease it
+  holds take nothing from the budget (the lease, the turn and answer sizes
+  and the device runs an hour bound them); a signed-out caller is counted
+  by its client address, an IPv6 address by its /64 and an IPv4-mapped one
+  by its IPv4 address, and `devices.token` for a sign-in the server holds
+  by that sign-in. The client address is the socket's unless
+  `SESSION_CLIENT_IP_HEADER` names the header a proxy replaces (Fly's
+  `fly-client-ip`, set in `fly.toml`).
+- Open event streams (review round 2 of phase 2): a browser session, a
+  device, or signed out a client address holds at most
+  `SESSION_STREAMS_PER_READER` (8) open `GET /api/sync/events` streams;
+  past it the request answers TOO_MANY_REQUESTS (429, `{ ok: false, error,
+  serverTime }`, no `retryAt`) until one of them closes.
 
 Why: phase 0 (`web/packages/replica-proto`) showed with an adversarial
 suite, two review rounds and mutation testing that replicas are safe under
@@ -554,8 +567,15 @@ Supersedes ADR-11.
 
 Choice: committed turns and run state are records in the space log, served
 by `pull`. In-flight text is sent as ephemeral events on the same SSE
-connection, keyed by run, attempt and a per-attempt sequence; a client
-drops events it has already applied and refetches the run on a gap. A
+connection, keyed by run, attempt and a per-attempt sequence. A client
+applies an attempt's events only in order from sequence 1, each one next
+to the last; on a gap or when it joined after the first event, it drops
+the streamed text and shows the run's steps until the answer arrives
+(review round 2 of phase 2; phase 2a refetched the run on a gap). The
+server stores a run's sequence ahead of the events it sends, never below
+one sent, and a resumed attempt numbers its events past the stored value
+with one number skipped, so its first event is never next to an event of
+the text it does not continue. A
 device run that loses its lease ends `interrupted`, and Run again starts a
 new attempt. A server run interrupted by a restart resumes in the same
 attempt and continues after its stored turns: they are given to the model,

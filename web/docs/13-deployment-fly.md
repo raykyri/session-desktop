@@ -48,6 +48,7 @@ kill_timeout = "30s"
   SESSION_SEARCH_VENDOR = "parallel"
   GOOGLE_VERTEX_PROJECT = "session-dev"
   GOOGLE_VERTEX_LOCATION = "global"
+  SESSION_CLIENT_IP_HEADER = "fly-client-ip"
 
 [[mounts]]
   source = "session_data"
@@ -62,8 +63,8 @@ kill_timeout = "30s"
   min_machines_running = 1
   [http_service.concurrency]
     type = "requests"
-    soft_limit = 200
-    hard_limit = 400
+    soft_limit = 1000
+    hard_limit = 2000
   [[http_service.checks]]
     grace_period = "20s"
     interval = "30s"
@@ -106,12 +107,26 @@ Rate limits and invite restrictions are enabled in production. Because the hoste
   `POST /api/sync/write` and `POST /api/rpc/*` requests; a request with no
   account is counted by its client address. Past it the answer is
   `TOO_MANY_REQUESTS` (429) with `retryAt`, unrecorded.
-- `SESSION_CLIENT_IP_HEADER` (default `fly-client-ip`) names the header the
-  platform's proxy sets to the client's address; Fly replaces any value a
-  client sends. Empty means the socket's address (no proxy). The address keys
-  the rate limits and decides whether a device sign-in is approved without
-  its code (AGENTS.md, device sign-in). `X-Forwarded-For` is not read: a client
-  sets it.
+- `SESSION_CLIENT_IP_HEADER` names the header the platform's proxy sets to
+  the client's address. Empty, the default, means the socket's address: off
+  Fly (`npm run dev`, Docker, the test server, Fly's private network) a
+  client can send any `Fly-Client-IP` it likes. `fly.toml` sets
+  `fly-client-ip`, which Fly's edge replaces on every request. A production
+  server that names a header while `FLY_APP_NAME` (set by Fly on its
+  machines) is unset refuses to start. The address keys the signed-out rate
+  limits (an IPv6 address by its /64, an IPv4-mapped one by its IPv4
+  address) and decides whether a device sign-in is approved without its
+  code (AGENTS.md, device sign-in). `X-Forwarded-For` is not read: a client
+  sets it (review round 2 of phase 2).
+- A device's `runs.heartbeat`, `runs.turn` and `runs.finish` on a run it
+  holds take nothing from the write budget; `devices.token` polling for a
+  sign-in the server holds is counted by that sign-in, not by the address.
+- `SESSION_STREAMS_PER_READER` (default 8) is the most open
+  `GET /api/sync/events` streams of one browser session, one device, or
+  signed out one client address; past it the request answers
+  `TOO_MANY_REQUESTS` (429). Fly counts each open stream against
+  `[http_service.concurrency]` (`type = "requests"`) for as long as it is
+  open, so `fly.toml` sets `soft_limit = 1000` and `hard_limit = 2000`.
 
 A person's own weekly allowance is stored in `user_limits.weekly_tokens` and
 is set from `/admin`, so raising one account's allowance does not change the

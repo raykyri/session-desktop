@@ -8,7 +8,7 @@
 
 import test from "ava";
 
-import { ConfigError } from "../src/config.js";
+import { ConfigError, loadConfig } from "../src/config.js";
 
 import { createHarness, testConfig } from "./helpers.js";
 import { HttpClient } from "./sync.helpers.js";
@@ -19,8 +19,13 @@ const ATTACKER = "198.51.100.9";
 const status = (r: { status: number; body: { ok?: boolean } }) => (r.body.ok ? 200 : r.status);
 
 test("SESSION_CLIENT_IP_HEADER is empty by default; in production a header needs FLY_APP_NAME", (t) => {
+  // the default: no header (the harness's `testConfig` names Fly's)
   t.is(
-    testConfig("/tmp/session-config", { SESSION_CLIENT_IP_HEADER: "" }).sync.clientIpHeader,
+    loadConfig({
+      NODE_ENV: "test",
+      SESSION_PUBLIC_ORIGIN: "http://localhost:8787",
+      SESSION_DATA_DIR: "/tmp/session-config",
+    }).sync.clientIpHeader,
     null,
   );
   const production = {

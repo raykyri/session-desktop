@@ -23,8 +23,9 @@ import { createRunsService } from "../src/runs/service.js";
 import { createHarness, type Harness } from "./helpers.js";
 import { HttpClient } from "./sync.helpers.js";
 
-function world(t: Parameters<typeof createHarness>[0]) {
+function world(t: Parameters<typeof createHarness>[0], env: Record<string, string> = {}) {
   const h = createHarness(t, {
+    env,
     fetch: fixturePageFetch,
     runs: { toolOverrides: { lookup: fixtureLookup } },
   });
@@ -376,6 +377,27 @@ test.serial(
     t.is((rec(h, `thread:${a.th}`) as ThreadRec).tok, recorded(h, a.run));
     t.like(rec(h, `run:${b.run}`), { status: "complete" });
     t.is((rec(h, `thread:${b.th}`) as ThreadRec).tok, 700);
+    await next.drain();
+  },
+);
+
+test.serial(
+  "E3b: a resumed run whose payer runs out keeps the tokens of all its attempts",
+  async (t) => {
+    setFixtureScenario("success-with-tools");
+    const { h, olga, mel } = world(t, { SESSION_INCLUDED_TOKENS: "1000" });
+    const sp = await openSpace(olga, mel);
+    // the last process finished a step (940 tokens), then stopped
+    const { th, run } = await interrupted(h, mel, sp);
+    recordStep(h, run, sp, 940);
+    const next = nextProcess(h);
+    next.recover();
+    next.tick();
+    await next.idle();
+    // 60 left when it resumed: one more step, then it ends
+    t.like(rec(h, `run:${run}`), { status: "failed", end: "tokens" });
+    t.is(recorded(h, run), 940 + 940);
+    t.like(rec(h, `thread:${th}`), { sum: null, running: false, tok: 940 + 940 });
     await next.drain();
   },
 );

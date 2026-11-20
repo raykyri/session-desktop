@@ -143,7 +143,10 @@ export interface SyncServerOptions {
    * phase 2, F6): a bucket of `burst` that refills at `perMinute`. A write
    * or call past it answers TOO_MANY_REQUESTS with `retryAt`, unrecorded,
    * before anything else is read. A call with no actor is counted by its
-   * network address (`CallMeta.ip`) when known. Default: no budget. */
+   * network address (`CallMeta.ip`, by `addressKey`) when known; a device's
+   * calls on a run it holds and `devices.token` for a sign-in the server
+   * holds are not counted by person or address (`OnlineCalls`, review
+   * round 2 of phase 2). Default: no budget. */
   writeBudget?: WriteBudget | null;
   /** The most queued and running server runs one person may have (a
    * deployment setting: the HTTP server passes `SESSION_QUEUED_PER_USER`;

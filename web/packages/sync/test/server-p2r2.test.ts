@@ -2,7 +2,9 @@
 // both stores: the stream's cursor checks, which `pull` and `streamPull`
 // share (`openCursor`, finding 4; the mutations m01 SP1 to SP6 as tests); a
 // run's context without the earlier asks hidden for its person (finding 3);
-// the key a signed-out caller's address is counted under (finding 6); and
+// a device's calls on a run it holds, which take nothing from the write
+// budget (finding 2); the key a signed-out caller's address is counted under
+// (finding 6); and
 // the run status index, which nothing reads (finding 8, migration 0005).
 
 import { cpSync, mkdtempSync, rmSync } from "node:fs";
@@ -14,6 +16,7 @@ import test, { type ExecutionContext } from "ava";
 import BetterSqlite from "better-sqlite3";
 
 import {
+  LEASE_MS,
   SYNC_MIGRATIONS,
   SqliteServerStore,
   SyncServer,
@@ -46,6 +49,18 @@ const pullRead = (w: World, actor: Actor | null, log: LogId, cursor: Cursor) => 
   const p = w.server.pull(actor, log, cursor) as Any;
   return p.ok === false ? p.error.code : "resync" in p ? "resync" : "changes";
 };
+
+/** Sign a device in for `u` (approved with the code, the token taken). */
+function device(w: World, u: string): Actor {
+  const a = w.server.call(null, "devices.authorize", { name: "mac" }) as Any;
+  const b = w.server.call({ u }, "devices.approve", {
+    request: a.result.request,
+    code: a.result.code,
+  }) as Any;
+  const c = w.server.call(null, "devices.token", { request: a.result.request }) as Any;
+  if (!a.ok || !b.ok || !c.ok) throw new Error(JSON.stringify([a, b, c]));
+  return { u, device: c.result.device };
+}
 
 const post = (t: ExecutionContext, w: World, u: string, space: string, q = "p") =>
   ok(t, w.as(u, "threads.create", { id: w.id(), space, kind: "post", q }));
@@ -158,6 +173,70 @@ for (const kind of STORES) {
     ]);
   });
 
+  test(`${kind}: finding 2: a device's run calls are free only on a run it holds now, at its attempt`, (t) => {
+    const { w, open } = cast(t, kind, 1, { writeBudget: { burst: 6, perMinute: 600 } });
+    const d = device(w, "mel");
+    w.clock.advance(1000);
+    const dev = d.device as string;
+    const exec = { kind: "device", cli: "claude", device: dev };
+    // what is left of mel's budget, used up; then a second refills it
+    const left = () => {
+      let n = 0;
+      while (n < 10 && w.server.overBudget("u:mel") === null) n++;
+      w.clock.advance(1000);
+      return n;
+    };
+    const ask = () => {
+      const id = w.id();
+      const a = w.as("mel", "threads.create", {
+        id,
+        space: open,
+        kind: "ask",
+        q: "Q?",
+        executor: exec,
+      });
+      if (!a.ok) throw new Error(JSON.stringify(a.error));
+      return { th: id, run: (a.result as { run: string }).run };
+    };
+    const call = (name: string, input: object) => w.server.call(d, name, { device: dev, ...input });
+    const code = (a: Any) => (a.ok ? "ok" : a.error.code);
+    const a = ask();
+    w.clock.advance(1000);
+    const b = ask();
+    w.clock.advance(1000);
+    t.is(code(call("runs.claim", { run: a.run })), "ok");
+    t.is(left(), 5, "a claim is counted");
+    t.is(code(call("runs.claim", { run: b.run })), "ok");
+    left();
+    // held: free
+    t.is(code(call("runs.heartbeat", { run: a.run, attempt: 1 })), "ok");
+    t.is(code(call("runs.turn", { run: a.run, attempt: 1, turn: "t" })), "ok");
+    t.is(left(), 6);
+    // another attempt: counted
+    t.is(code(call("runs.heartbeat", { run: a.run, attempt: 2 })), "PRECONDITION_FAILED");
+    t.is(left(), 5);
+    // a run that Run again cancelled, its lease not yet dropped: counted
+    ok(
+      t,
+      w.as("mel", "threads.update", {
+        id: a.th,
+        q: "Q?",
+        run: true,
+        base: { rev: w.rev(`thread:${a.th}`) },
+      }),
+    );
+    t.not((w.get(`run:${a.run}`) as Any).status, "running");
+    left();
+    t.not(code(call("runs.heartbeat", { run: a.run, attempt: 1 })), "ok");
+    t.is(left(), 5);
+    // a lease that ended: counted
+    t.is(code(call("runs.heartbeat", { run: b.run, attempt: 1 })), "ok");
+    t.is(left(), 6);
+    w.clock.advance(LEASE_MS);
+    t.is(code(call("runs.heartbeat", { run: b.run, attempt: 1 })), "PRECONDITION_FAILED");
+    t.is(left(), 5);
+  });
+
   test(`${kind}: finding 8: the queued runs limit counts the person's runs, and writes add no run status index rows`, (t) => {
     const db = kind === "sqlite" ? new BetterSqlite(":memory:") : null;
     const { w, open } = cast(t, kind, 1, {
@@ -210,6 +289,7 @@ test("finding 6: addressKey: IPv4 as it is, IPv4-mapped as its IPv4 address, IPv
   t.is(addressKey("2001:DB8:1:2:aaaa:bbbb:cccc:dddd"), "2001:db8:1:2::/64");
   t.is(addressKey("2001:db8::"), "2001:db8:0:0::/64");
   t.is(addressKey("fe80::1%eth0"), "fe80:0:0:0::/64");
+  t.is(addressKey("::ffff:203.0.113.5%eth0"), "203.0.113.5");
   t.is(addressKey("::1"), "0:0:0:0::/64");
   t.is(addressKey("unknown"), "unknown");
 });

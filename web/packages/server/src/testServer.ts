@@ -63,6 +63,10 @@ export function startTestServer(o: TestServerOptions = {}): {
     // never reach, unless `env` sets one
     SESSION_WRITE_BURST: "1000000",
     SESSION_WRITES_PER_MINUTE: "1000000",
+    // and open more event streams than a person, all from 127.0.0.1. The
+    // client address is the socket's (no SESSION_CLIENT_IP_HEADER), unless
+    // `env` names a header
+    SESSION_STREAMS_PER_READER: "1000000",
     ...o.env,
   });
   const db = openDatabase(config.databasePath);

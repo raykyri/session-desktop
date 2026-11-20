@@ -233,10 +233,11 @@ rules above stay as they are. Decisions for the new client:
     from a space and the loss of a role show no notice.
   - Device sign-in is approved in the browser with one click, then a toast,
     only from the computer that asked (review round 1 of phase 2):
-    `devices.authorize` records the client address (the trusted proxy
-    header, `SESSION_CLIENT_IP_HEADER`, else the socket; never a header a
-    client sets) and the device and app the app names. `devices.approve`
-    without the code succeeds only from a browser at that address; elsewhere
+    `devices.authorize` records the client address (the socket's, or the
+    header `SESSION_CLIENT_IP_HEADER` names, which only `fly.toml` sets, to
+    Fly's `fly-client-ip`; never a header a client sets) and the device and
+    app the app names. `devices.approve` without the code succeeds only
+    from a browser at that address; elsewhere
     it takes the request's code, and a missing or wrong code is refused. A
     deny never needs the code. The /device page reads the request from
     `GET /api/devices/requests/:request` (device, app, when asked,
@@ -317,6 +318,25 @@ rules above stay as they are. Decisions for the new client:
     `SESSION_TEST_AUTH` outside production; `@session/server/test-server`
     starts the app over a temp database, and replica-proto runs its whole
     suite over HTTP (`npm run test:http`).
+- Review round 2 of phase 2 (server):
+  - `SESSION_CLIENT_IP_HEADER` is empty by default (the socket's address);
+    `web/fly.toml` sets `fly-client-ip`, and a production server that names
+    a header without `FLY_APP_NAME` refuses to start.
+  - A device's `runs.heartbeat`, `runs.turn` and `runs.finish` on a run
+    whose lease it holds take nothing from the write budget. A signed-out
+    caller is counted by its address: an IPv6 address by its /64, an
+    IPv4-mapped one by its IPv4 address; `devices.token` for a sign-in the
+    server holds is counted by that sign-in.
+  - A person, a device or a signed-out address holds at most
+    `SESSION_STREAMS_PER_READER` (8) open event streams; past it
+    `GET /api/sync/events` answers TOO_MANY_REQUESTS (429).
+  - `pull` and the streams' read share one cursor check (`openCursor`).
+    The queued runs limit reads the person's runs (`run.u`); the
+    `run.status` index is dropped (sync migration 0005).
+  - A thread's `tok` is every token its run recorded, over all attempts.
+    A server run stores its event number ahead of the events it sends, and
+    a resumed attempt skips one number past it, so its first event is never
+    next to one sent before (ADR-22).
 - Phase 2b (done): `web/packages/client` is the spaces web client for the
   Desktop and Mobile Web layouts, built from the mockup's styles and copy.
   - Routes are in `src/app/router.tsx`. `/invite`, `/settings` and `/admin`
