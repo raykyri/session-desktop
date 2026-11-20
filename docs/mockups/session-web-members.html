@@ -1070,7 +1070,7 @@ function place(margin, items) {
   margin.style.minHeight = y + 'px';
 }
 const narrow = () => matchMedia('(max-width: 860px)').matches;
-const badge = (b, g, total, pid, bi) => { b.dataset.grp = g; b.insertAdjacentHTML('beforeend', canWrite() ? `<button type="button" class="anc" data-a="askpass" data-id="${pid}" data-bi="${bi}" title="Ask about this passage" aria-label="${noun(total, 'branch', 'branches')} on this passage. Ask about it">${ARROW_REPLY}${total}</button>` : `<span class="anc" aria-label="${noun(total, 'branch', 'branches')} on this passage">${ARROW_REPLY}${total}</span>`); };
+const badge = (b, g, total, pid, bi) => { b.dataset.grp = g; b.insertAdjacentHTML('beforeend', `<button type="button" class="anc" data-a="grpopen" data-id="${pid}" data-bi="${bi}" title="Open the branches on this passage" aria-label="${noun(total, 'branch', 'branches')} on this passage. Open the first">${ARROW_REPLY}${total}</button>`); };
 const onPath = (p, T) => { const s = st.sel[p.id]; return new Set(s && T.nodes[s] ? T.path(s).map(n => n.id) : []); };
 const inGroup = (T, ns, id) => !!id && T.nodes[id] && ns.some(n => T.path(id).some(x => x.id === n.id));
 const leaves = (T, id) => { const k = T.kids(id); return k.length ? k.reduce((s, c) => s + leaves(T, c.id), 0) : 1; };
@@ -1285,6 +1285,9 @@ app.addEventListener('click', e => {
   if (a === 'ask' && st.asking === d.id) { (document.getElementById(`in-mf:${d.id}:${st.askPar ?? 'r'}`) || $(`[id^="in-mf\\:${d.id}"]`))?.focus(); return; }
   if (a === 'ask') { st.asking = d.id; st.sel[d.id] = null; st.quote = null; st.askPar = null; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
   if (a === 'askfrom') { st.sel[d.id] = d.sel || d.node; st.askPar = d.node; st.asking = d.id; st.quote = null; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
+  if (a === 'grpopen') { const G = groupsFor(byId(d.id), document.getElementById('pr-' + d.id)).find(x => x.bi === +d.bi); if (!G) return;
+    const first = G.ns[0].id; st.sel[d.id] = first; st.asking = null; st.askPar = null; st.quote = null; render();
+    const row = document.querySelector(`#mr-${d.id} .grow-r[data-node="${first}"]`); row?.focus({ preventScroll: true }); row?.closest('.pin')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
   if (a === 'askpass' || a === 'selbranch') { const pr = document.getElementById('pr-' + d.id); let q = st.selText || '';
     if (a === 'askpass') q = blockText(blocksOf(pr)[+d.bi]);
     $('#selbranch')?.remove(); getSelection()?.removeAllRanges(); st.quote = { pid: d.id, text: q, open: false }; st.asking = d.id; st.sel[d.id] = null; st.askPar = null; render(); document.getElementById(`in-mf:${d.id}:r`)?.focus(); return; }
