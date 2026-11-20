@@ -336,12 +336,17 @@ for (const kind of STORES) {
       }
     })();
     await new Promise((r) => setTimeout(r, 0));
+    // the logs the stream pulled: its reads that were not skipped (the read
+    // check is part of the pull: review round 1 of phase 2)
     const pulls: string[] = [];
-    const real = w.server.pull.bind(w.server);
-    w.server.pull = ((...a: Parameters<typeof real>) => {
-      pulls.push(a[1]);
-      return real(...a);
-    }) as typeof w.server.pull;
+    const real = w.server.streamPulls.bind(w.server);
+    w.server.streamPulls = (reqs) => {
+      const out = real(reqs);
+      out.forEach((a, k) => {
+        if (!("skip" in a)) pulls.push(reqs[k]?.log ?? "");
+      });
+      return out;
+    };
     // a member's thread in the closed space: otto (no member) reads none of it
     ok(t, w.as("mel", "threads.create", { id: w.id(), space: closed, kind: "post", q: "MEMBERS" }));
     await new Promise((r) => setTimeout(r, 0));

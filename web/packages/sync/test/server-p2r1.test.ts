@@ -6,7 +6,7 @@
 
 import test from "ava";
 
-import type { CallAnswer } from "../src/server/index.js";
+import { openStream, type CallAnswer } from "../src/server/index.js";
 
 import { STORES, cast, ok, refused, turnOf, type World } from "./helpers.js";
 
@@ -316,5 +316,53 @@ for (const kind of STORES) {
     const o = cast(t, kind, 2);
     for (let k = 0; k < 50; k++)
       ok(t, o.w.as("mel", "threads.create", { id: o.w.id(), space: o.open, kind: "post", q: "p" }));
+  });
+  test(`${kind}: design findings 1 and 2: the streams of a commit are read in one batch, the check part of it`, async (t) => {
+    const { w, open, closed } = cast(t, kind);
+    const streams = ["mel", "otto", null].map((u) => {
+      const actor = u === null ? null : { u };
+      const s = w.server.snapshot(actor as never, `space:${open}`) as Any;
+      const c = w.server.snapshot(actor as never, `space:${closed}`) as Any;
+      const ac = new AbortController();
+      const st = openStream(
+        w.server,
+        actor,
+        { [`space:${open}`]: s.cursor, [`space:${closed}`]: c.cursor },
+        ac.signal,
+        { setInterval: () => 0, clearInterval: () => {} },
+      );
+      const reader = st.getReader();
+      let text = "";
+      const pump = (async () => {
+        for (;;) {
+          const r = await reader.read();
+          if (r.done) break;
+          text += new TextDecoder().decode(r.value);
+        }
+      })();
+      return { ac, pump, text: () => text };
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    const calls: string[][] = [];
+    const real = w.server.streamPulls.bind(w.server);
+    w.server.streamPulls = (reqs) => {
+      const out = real(reqs);
+      calls.push(out.map((a) => Object.keys(a)[0] ?? ""));
+      return out;
+    };
+    ok(t, w.as("olga", "threads.create", { id: w.id(), space: open, kind: "post", q: "ALL" }));
+    await new Promise((r) => setTimeout(r, 0));
+    t.deepEqual(calls, [["cursor", "cursor", "cursor"]], "one batch for the three streams");
+    for (const s of streams) t.regex(s.text(), /event: poke\nid: .*\ndata: \{"type":"poke","logs":\["space:/);
+    // a closed space's post: mel reads it, otto and a signed-out reader skip it
+    ok(t, w.as("mel", "threads.create", { id: w.id(), space: closed, kind: "post", q: "MEMBERS" }));
+    await new Promise((r) => setTimeout(r, 0));
+    t.deepEqual(calls[1], ["cursor", "skip", "skip"]);
+    for (const s of streams) s.ac.abort();
+    await Promise.all(streams.map((s) => s.pump));
+    // no stream: no batch
+    ok(t, w.as("olga", "threads.create", { id: w.id(), space: open, kind: "post", q: "NONE" }));
+    t.is(calls.length, 2);
+    t.deepEqual(w.server.streamPulls([]), []);
   });
 }

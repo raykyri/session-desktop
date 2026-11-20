@@ -213,6 +213,50 @@ function logsOfAudience(a: pkg.Audience): LogId[] {
 const same = (a: pkg.StoredRecord, b: pkg.Draft) =>
   JSON.stringify({ ...a, rev: 0 }) === JSON.stringify({ ...b, rev: 0 });
 
+/** A stream's read of one log (`SyncServer.streamPulls`): its reader, the
+ * log, the cursor token it holds, and the keys of the rows the commit wrote
+ * in the log (none: every row may have changed). */
+export interface StreamPull {
+  actor: Actor | null;
+  log: LogId;
+  cursor: Cursor;
+  keys?: ReadonlySet<string> | null;
+}
+
+export type StreamPullAnswer =
+  { resync: true } | { skip: true } | { cursor: Cursor; changed: boolean };
+
+/** A read-only view of a transaction that reads each record, log row,
+ * tombstone and epoch once (`streamPulls`: many readers of one commit). */
+function memoTx(tx: StoreTx): StoreTx {
+  const cache = new Map<string, unknown>();
+  const memo =
+    <A extends unknown[], R>(name: string, f: (...a: A) => R) =>
+    (...a: A): R => {
+      const k = `${name}\u0000${a.join("\u0000")}`;
+      if (cache.has(k)) return cache.get(k) as R;
+      const v = f(...a);
+      cache.set(k, v);
+      return v;
+    };
+  const get = memo("get", (key: string) => tx.get(key));
+  const logGet = memo("logGet", (log: LogId, key: string) => tx.logGet(log, key));
+  const logAfter = memo("logAfter", (log: LogId, after: number) => tx.logAfter(log, after));
+  const tombGet = memo("tombGet", (key: string) => tx.tombGet(key));
+  const epoch = memo("epoch", (log: LogId) => tx.epoch(log));
+  return new Proxy(tx, {
+    get(target, p, receiver) {
+      if (p === "get") return get;
+      if (p === "logGet") return logGet;
+      if (p === "logAfter") return logAfter;
+      if (p === "tombGet") return tombGet;
+      if (p === "epoch") return epoch;
+      const v = Reflect.get(target, p, receiver) as unknown;
+      return typeof v === "function" ? (v as (...a: unknown[]) => unknown).bind(target) : v;
+    },
+  });
+}
+
 /** A `Reader` (by kind and id) over a transaction. */
 const readerOf = (tx: StoreTx): pkg.Reader => ({
   get: <K extends pkg.Kind>(kind: K, id: string) =>
@@ -1408,31 +1452,67 @@ export class SyncServer {
     });
   }
 
-  /** Whether any of the rows `keys` of `log` reads for `actor` as `pull`
-   * would serve it: a record they may read, or a delete they may read. A
-   * stream pulls a log for its reader only when this answers true (report-1b
-   * finding 1: a commit no longer costs one pull per open stream), since a
-   * pull serves nothing else of those rows. A change of the reader's own
-   * scope writes a row they read (their member record, or its delete), and
-   * a replaced history no keys at all, so neither is skipped. */
-  affects(actor: Actor | null, log: LogId, keys: ReadonlySet<string>): boolean {
-    const u = this.userOf(actor);
-    if (actor !== null && u === null) return true;
+  /** What `pull` would answer each stream (`StreamPull`), reduced to what
+   * a stream uses: resync (the token does not open, or the reader's scope
+   * changed), or its new cursor and whether anything changed; or nothing
+   * to do (`skip`), when the reader may read none of the commit's rows of
+   * the log (`keys`). The read check is part of the pull (phase 2a design
+   * finding 1), and all the streams of a commit are served in one
+   * transaction, in which each log row, record and tombstone is read once
+   * however many streams read it (design finding 2): what differs by
+   * reader is only the view of a record and the token. */
+  streamPulls(reqs: readonly StreamPull[]): StreamPullAnswer[] {
+    if (!reqs.length) return [];
+    this.housekeepDue();
     return this.run((tx) => {
-      for (const key of keys) {
-        const row = tx.logGet(log, key);
-        if (row && this.readRow(tx, row, u) !== null) return true;
-      }
-      return false;
+      const now = this.time(tx);
+      const m = memoTx(tx);
+      return reqs.map((q) => this.streamPull(m, q, now));
     });
   }
 
-  /** The spaces `actor` may find (phase 2b: the web's space directory, `GET
-   * /api/spaces`): every open and listed space that is not deleted, and the
-   * unlisted ones they are a member of, by name; with the stats record of
-   * each space whose content they read. A space record is public
-   * (`readsAudience`); an unlisted one is found only through a link or a
-   * membership, so it is listed to its members only. */
+  private streamPull(tx: StoreTx, q: StreamPull, now: number): StreamPullAnswer {
+    const { actor, log } = q;
+    if (this.readError(actor, log, {}, now)) return { resync: true };
+    const u = this.userOf(actor);
+    if (!logS.safeParse(log).success) return { resync: true };
+    // a commit whose rows of this log the reader may not read: no pull
+    // (report-1b finding 1). A change of the reader's own scope writes a row
+    // they read, and a replaced history names no keys, so neither is skipped.
+    if (q.keys && !(actor !== null && u === null)) {
+      let reads = false;
+      for (const key of q.keys) {
+        const row = tx.logGet(log, key);
+        if (row && this.readRow(tx, row, u) !== null) {
+          reads = true;
+          break;
+        }
+      }
+      if (!reads) return { skip: true };
+    }
+    const c = this.tokens.open(q.cursor, now);
+    if (
+      c === null ||
+      c.log !== log ||
+      c.u !== u ||
+      c.n !== tx.epoch(log).n ||
+      c.at < now - TOMBSTONE_TTL ||
+      c.i !== this.instance(tx) ||
+      c.h > tx.head()
+    )
+      return { resync: true };
+    if (this.closedTo(log, u)) return { cursor: this.serve(tx, log, u, 0, now), changed: false };
+    if (u !== null && this.scopeChanged(tx, log, u, c.v, c.h)) return { resync: true };
+    let to = c.v;
+    let changed = false;
+    for (const row of tx.logAfter(log, c.v)) {
+      if (this.readRow(tx, row, u) === null) continue;
+      to = row.version;
+      changed = true;
+    }
+    return { cursor: this.serve(tx, log, u, to, now), changed };
+  }
+
   /** How many spaces each of `handles` wrote a thread in, for a profile
    * (`/api/users`): over the `thread.u` index; a removed thread's
    * placeholder and an erased one are not counted (phase 2a design finding
@@ -1451,6 +1531,12 @@ export class SyncServer {
     });
   }
 
+  /** The spaces `actor` may find (phase 2b: the web's space directory, `GET
+   * /api/spaces`): every open and listed space that is not deleted, and the
+   * unlisted ones they are a member of, by name; with the stats record of
+   * each space whose content they read. A space record is public
+   * (`readsAudience`); an unlisted one is found only through a link or a
+   * membership, so it is listed to its members only. */
   directory(actor: Actor | null): Directory {
     const u = this.userOf(actor);
     return this.run((tx) => {
