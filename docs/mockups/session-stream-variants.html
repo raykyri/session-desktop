@@ -230,6 +230,15 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .card .ask, .card .post { white-space: pre-line; }
 .card .post { margin: 0 0 6px; color: var(--t-primary); font-size: var(--fs-lg); line-height: 1.45; }
 .card .byline { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: var(--fs-sm); color: var(--t-faint); }
+/* avatar placements */
+.card-h .av.sm { margin: 0 -2px 0 0; }
+.card.av-gutter { padding-left: 10px; }
+.card.av-gutter > :not(.card-h) { margin-left: 28px; }
+.card.av-gutter .card-h { gap: 8px; }
+.byl { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.byl .who { flex-wrap: nowrap; white-space: nowrap; }
+.card.av-footer .card-f .notes { margin-left: 4px; }
+.card.av-footer .card-f .more { margin-left: 2px; }
 /* the footer sits at the bottom of the card when the margin makes the row taller */
 .card { display: flex; flex-direction: column; }
 .card > :nth-last-child(2) { margin-bottom: 13px; }
@@ -563,7 +572,7 @@ const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data
 /* ================= pinned maps ================= */
 /* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
    as a small outline tree per passage. */
-const st = { v: 'faded', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
+const st = { v: 'header', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
 
 /* Which model answered and at what thinking effort. The fixtures do not record it; the mock picks one
    per thread. Shown in a tooltip on the answer's icon. */
@@ -584,18 +593,30 @@ function deleteItem(key) {
   else if (kind === 'r') { const path = id.split('.'), i = +path.pop(), list = path.length ? replyAt(p, path.join('.')).kids : replies(p); list.splice(i, 1); st.rsel[pid] = null; }
   st.menu = null; render();
 }
+/* Avatar placement on cards, per variant (V[st.v].av):
+   header  28px avatar beside the name line (the original)
+   small   20px avatar beside the name line, the composer's size
+   gutter  20px avatar in a left gutter at the composer's position; text lines up with the composer's text
+   footer  no header; a 20px avatar, name, space and time lead the footer row */
 function card(p) {
-  const head = `<div class="card-h">${av(p.u)}<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div>${mine(p.u) ? moreMenu('t:' + p.id, p.k === 'ask' ? tree(p).count === 0 : replyCount(p) === 0, p.k === 'ask' ? 'ask' : 'post') : ''}</div>`;
+  const mode = V[st.v].av || 'header';
+  const meta = `<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div>`;
+  const more = mine(p.u) ? moreMenu('t:' + p.id, p.k === 'ask' ? tree(p).count === 0 : replyCount(p) === 0, p.k === 'ask' ? 'ask' : 'post') : '';
+  const head = mode === 'footer' ? '' : `<div class="card-h">${av(p.u, mode === 'header' ? '' : 'sm')}${meta}${more}</div>`;
+  const lead = mode === 'footer' ? `<span class="byl">${av(p.u, 'sm')}${meta}</span>` : '';
+  const count = c => mode === 'footer' ? (c ? `<span class="notes">· ${c}</span>` : '<span class="notes"></span>') : `<span class="notes">${c}</span>`;
+  const tail = mode === 'footer' ? more : '';
+  const cls = `card av-${mode}`;
   const acts = `<button class="iconbtn likes" aria-label="Like, ${p.likesBase || 0} likes">${I.heart}<span>${p.likesBase || 0}</span></button><button class="iconbtn" aria-label="Save">${I.save}</button>`;
   if (p.k === 'post') {
     const n = replyCount(p);
-    return `<article class="card">${head}<p class="post">${esc(p.q)}</p><div class="card-f"><span class="notes">${n ? noun(n, 'reply', 'replies') : ''}</span><button class="iconbtn" aria-label="Reply">${I.reply}</button>${acts}</div></article>`;
+    return `<article class="${cls}">${head}<p class="post">${esc(p.q)}</p><div class="card-f">${lead}${count(n ? noun(n, 'reply', 'replies') : '')}<button class="iconbtn" aria-label="Reply">${I.reply}</button>${acts}${tail}</div></article>`;
   }
   const T = tree(p), src = (D.srcd[p.id] || []).length;
-  return `<article class="card" id="card-${p.id}">${head}<p class="ask">${esc(T.nodes.r.q)}</p>
+  return `<article class="${cls}" id="card-${p.id}">${head}<p class="ask">${esc(T.nodes.r.q)}</p>
     <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok)].filter(Boolean).join(' · ')}</span></div>
     <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
-    <div class="card-f"><span class="notes">${T.count ? noun(T.count, 'branch', 'branches') : ''}</span><button class="iconbtn" data-a="ask" data-id="${p.id}" aria-label="${st.asking === p.id ? 'Close the branch box' : 'Branch'}">${st.asking === p.id ? I.x : I.branch}</button>${acts}</div></article>`;
+    <div class="card-f">${lead}${count(T.count ? noun(T.count, 'branch', 'branches') : '')}<button class="iconbtn" data-a="ask" data-id="${p.id}" aria-label="${st.asking === p.id ? 'Close the branch box' : 'Branch'}">${st.asking === p.id ? I.x : I.branch}</button>${acts}${tail}</div></article>`;
 }
 
 /* ---- passage matching: the fixtures do not store the passage a branch came from, so the mock picks
@@ -703,9 +724,12 @@ function replyLines(p) {
 
 const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches is shaded and gets its own small tree beside it.';
 const TREE_NOTE = 'Posts keep the pinned branch trees and avatar reply trees.';
-const variant = (name, thesis, composer, dock = false) => ({ name, q: 'Composer', thesis: `${thesis} ${TREE_NOTE}`, composer, dock, replies: replyLines, layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); } });
+const variant = (name, thesis, composer, dock = false, av = 'header') => ({ name, q: 'Avatars', av, thesis: `${thesis} ${TREE_NOTE}`, composer, dock, replies: replyLines, layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); } });
 const V = {
-  faded: variant('Faded', '<strong>Empty: the blue button at 45% opacity.</strong> It keeps its shape and colour and comes up to full strength as soon as there is text.', () => COMPOSERS.split(' nb-a btn-faded')),
+  header: variant('Header', '<strong>The avatar leads the name line.</strong> 28px, beside the author, space and time at the top of the card; larger than the composer\'s.', () => COMPOSERS.split(' nb-a btn-faded'), false, 'header'),
+  small: variant('Header · 20px', '<strong>The same header, at the composer\'s size.</strong> A 20px avatar beside the name line, so the composer and the posts use one avatar size.', () => COMPOSERS.split(' nb-a btn-faded'), false, 'small'),
+  gutter: variant('Gutter', '<strong>The composer\'s position.</strong> A 20px avatar sits in a narrow left gutter at the same inset as the composer\'s, and every line of the post starts where the composer\'s text starts.', () => COMPOSERS.split(' nb-a btn-faded'), false, 'gutter'),
+  footer: variant('Footer byline', '<strong>The content leads; the author signs at the bottom.</strong> The card opens with the ask; a 20px avatar, name, space and time start the footer row beside the counts.', () => COMPOSERS.split(' nb-a btn-faded'), false, 'footer'),
 };
 
 /* ---- composers: start a thread. Each variant below uses one. The draft survives re-renders. ---- */
@@ -792,7 +816,7 @@ function renderBar() {
   $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${st.theme === k}">${l}</button>`).join('');
   $('#thesis').innerHTML = `<span class="qtag">${V[st.v].q}</span>` + V[st.v].thesis;
 }
-function go(v) { if (!V[v]) v = 'faded'; st.v = v; st.asking = null; renderBar(); render(); }
+function go(v) { if (!V[v]) v = 'header'; st.v = v; st.asking = null; renderBar(); render(); }
 $('#variant-seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { history.replaceState(null, '', '#' + b.dataset.v); go(b.dataset.v); } });
 $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; st.theme = b.dataset.t; if (st.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = st.theme; renderBar(); });
 
@@ -857,6 +881,6 @@ document.addEventListener('keydown', e => {
   if (e.key.length !== 1 || !k) return;
   e.preventDefault(); history.replaceState(null, '', '#' + k); go(k);
 });
-go(location.hash.slice(1) || 'faded');
+go(location.hash.slice(1) || 'header');
 document.fonts?.ready.then(() => render());
 </script>
