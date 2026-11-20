@@ -25,7 +25,10 @@ const COMBINATIONS: { appearance: Appearance; colorTheme: ColorTheme }[] = [
 ];
 
 test.describe("@visual", () => {
-  test("Home and a document in every theme and appearance", async ({ page }, testInfo) => {
+  // The research client's Home and document views were removed with 02 W1.1;
+  // the spec is rewritten for the views of 02 §12.2 once the feed renders
+  // (W3.1, W3.2), and CI regenerates the baselines then (05 M4).
+  test.fixme("Home and a document in every theme and appearance", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "chromium", "baselines are Chromium's");
     // Baselines are per platform, because a page rendered by macOS's
     // rasterizer is not the same image Linux produces. Outside CI, a machine

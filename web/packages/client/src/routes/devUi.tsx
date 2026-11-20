@@ -11,7 +11,6 @@ import { CommandPalette } from "../ui/CommandPalette.js";
 import { ComposerSubmitShortcutGlyph } from "../ui/ComposerSubmitShortcut.js";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../ui/ContextMenu.js";
 import { ConfirmDialog, Dialog } from "../ui/Dialog.js";
-import { DomSearchBar } from "../ui/DomSearchBar.js";
 import { Field, Input, ShortcutHint, Textarea } from "../ui/Field.js";
 import { FindBar } from "../ui/FindBar.js";
 import { HistoryNav } from "../ui/HistoryNav.js";
@@ -279,7 +278,6 @@ function Kitchen() {
           onFindPrevious={() => {}}
           onClose={() => {}}
         />
-        <DomSearchBar active placeholder="Find in document" rootRef={proseRef} />
       </Row>
 
       <Row title="Prose">

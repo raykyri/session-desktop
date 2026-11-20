@@ -1,11 +1,17 @@
 import { DEFAULT_USER_SETTINGS, type User } from "@session/shared";
 import { QueryClient } from "@tanstack/react-query";
-import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
+import {
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+} from "@tanstack/react-router";
 import { render, waitFor } from "@testing-library/react";
 import type { RenderResult } from "@testing-library/react";
 import type { ExecutionContext } from "ava";
+import type { ReactElement } from "react";
 
-import { queryClientDefaults } from "../src/api/queries.js";
+import { queryClientDefaults } from "../src/api/account.js";
 import { setTrpcClient } from "../src/api/trpc.js";
 import { AppProviders } from "../src/app/providers.js";
 import { createAppRouter } from "../src/app/router.js";
@@ -24,45 +30,16 @@ export function testUser(overrides: Partial<User> = {}): User {
   };
 }
 
-/** What the shell's boot loader reads. Every one of them has to answer with
+/** What the shell reads over tRPC. Every one of them has to answer with
  * something: a query function that resolves `undefined` is an error in
  * TanStack Query, not an empty result. */
 export function defaultResponses(user: User | null): Record<string, unknown> {
   return {
     "auth.me": user,
-    "interfaceDrafts.get": (input: { key: string }) => ({ key: input.key, value: null }),
-    "settings.get": {
-      ...DEFAULT_USER_SETTINGS,
-      researchLaunchInstruction: null,
-      defaultWorkspaceId: null,
-    },
+    "auth.logout": { ok: true },
+    "admin.listUsers": [],
+    "settings.get": { ...DEFAULT_USER_SETTINGS },
     "system.runtimeConfig": { version: "0.0.0", models: [], limits: {}, features: {} },
-    "workspaces.list": [],
-    // `SessionBoot` creates one when the list comes back empty, which is what
-    // a first sign-in does (07 §2).
-    "workspaces.ensureDefault": {
-      id: "w1",
-      name: "Research",
-      position: 0,
-      createdAt: 1_700_000_000_000,
-      updatedAt: 1_700_000_000_000,
-    },
-    "research.listTrees": [],
-    "research.listActivity": [],
-    "feed.recentActivity": { items: [], nextCursor: null },
-    "folders.get": { folders: [], membership: {}, collapsed: [] },
-    // Web-only collaboration reads: nothing shared, no invitations, nobody
-    // else viewing.
-    "sharing.listShared": [],
-    "sharing.listMembers": [],
-    "invites.received": [],
-    "invites.list": [],
-    "events.presence": [],
-    // An empty notification inbox.
-    "notifications.list": { items: [], nextCursor: null },
-    "notifications.unreadCount": { count: 0 },
-    "events.setInterest": { applied: true },
-    "events.subscribe": undefined,
   };
 }
 
@@ -122,6 +99,28 @@ export async function renderApp(
   );
   await router.load();
   return Object.assign(result, { queryClient, trpc: stub, router });
+}
+
+/**
+ * Renders one component under a router of its own, at `path`, so its links
+ * resolve without the app's route tree, guards or shell.
+ */
+export async function renderInRouter(element: ReactElement, path = "/"): Promise<RenderResult> {
+  const rootRoute = createRootRoute({ component: () => element });
+  const router = createRouter({
+    routeTree: rootRoute,
+    history: createMemoryHistory({ initialEntries: [path] }),
+  });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { gcTime: Number.POSITIVE_INFINITY } },
+  });
+  const result = render(
+    <AppProviders queryClient={queryClient}>
+      <RouterProvider router={router} />
+    </AppProviders>,
+  );
+  await router.load();
+  return result;
 }
 
 /**

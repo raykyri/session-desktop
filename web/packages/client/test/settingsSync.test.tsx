@@ -5,7 +5,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, render } from "@testing-library/react";
 import test from "ava";
 
-import { queryClientDefaults } from "../src/api/queries.js";
+import { queryClientDefaults } from "../src/api/account.js";
 import { setTrpcClient } from "../src/api/trpc.js";
 import { SESSION_SETTINGS_SYNC_DEBOUNCE_MS, SessionBoot } from "../src/app/SessionBoot.js";
 import { AppProviders } from "../src/app/providers.js";

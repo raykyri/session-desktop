@@ -1,17 +1,14 @@
-// The desktop's four settings on the web (`07-client-architecture.md` §3):
-// "Require ⌘↵ to send", "Widgets in answers", "Show keyboard shortcut hints"
-// and "Reduce motion", each with its behaviour, and the settings page that
-// lists them. Also where toasts and notifications appear.
+// The settings kept from the earlier client (02 §1; not linked at launch,
+// P23): "Require ⌘↵ to send" and "Reduce motion" with their behaviour, and
+// the settings page that lists them. Also where toasts and notifications
+// appear.
 
 import { DEFAULT_USER_SETTINGS } from "@session/shared";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import test from "ava";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import { applyEventBatch } from "../src/api/events.js";
 import { ThemeEffects } from "../src/app/ThemeEffects.js";
-import { ResearchMarkdown } from "../src/features/markdown/ResearchMarkdown.js";
-import { PostFollowUpField } from "../src/features/thread/PostFollowUpField.js";
 import { prefersReducedMotion } from "../src/lib/motion.js";
 import { pushToast } from "../src/lib/toast.js";
 import { useNotificationsStore } from "../src/stores/notifications.js";
@@ -20,19 +17,6 @@ import { isComposerSubmitShortcut } from "../src/ui/ComposerSubmitShortcut.js";
 import { NotificationStack } from "../src/ui/NotificationStack.js";
 
 import { renderApp, resetDocumentRoot, waitUntil } from "./helpers.js";
-import { serverSettings, testQueryClient, workspace } from "./phase6Fixtures.js";
-
-const MODELS = [
-  {
-    id: "gemini-flash",
-    label: "Gemini 3.8 Flash",
-    provider: "vertex" as const,
-    adminOnly: false,
-    available: true,
-    supportsFiles: true,
-    supportsImages: true,
-  },
-];
 
 test.beforeEach(() => {
   useSettingsStore.setState({ settings: { ...DEFAULT_USER_SETTINGS }, hydrated: true });
@@ -63,64 +47,6 @@ test("without Require ⌘↵, a bare Enter sends and Shift+Enter does not", (t) 
   t.false(isComposerSubmitShortcut(enter({ metaKey: true }), true, false));
   t.false(isComposerSubmitShortcut(enter(), true, true), "with it, Enter is a newline");
   t.true(isComposerSubmitShortcut(enter({ metaKey: true }), true, true));
-});
-
-test.serial("a note's follow-up box sends on Enter when the setting is off", async (t) => {
-  useSettingsStore.getState().patch({ requireCmdEnterToSend: false });
-  const sent: string[] = [];
-  render(
-    <PostFollowUpField
-      models={MODELS}
-      defaultChoice={{ model: "gemini-flash", effort: null }}
-      onSubmit={(input) => {
-        sent.push(input.prompt);
-        return Promise.resolve();
-      }}
-    />,
-  );
-  const field = screen.getByRole("textbox", { name: "Follow-up" });
-  fireEvent.focus(field);
-  fireEvent.change(field, { target: { value: "Why?" } });
-  // The shared Ask/Note switch, as in the Home ask box.
-  const kinds = screen.getByRole("radiogroup", { name: "Ask or add a note" });
-  t.truthy(within(kinds).getByRole("radio", { name: "Ask Gemini 3.8 Flash" }));
-  t.is(
-    screen.getByRole("button", { name: "Ask" }).getAttribute("title"),
-    "Ask Gemini 3.8 Flash (↵)",
-  );
-  fireEvent.keyDown(field, { key: "Enter" });
-  await waitUntil(t, () => sent.length === 1, "Enter sends");
-  t.deepEqual(sent, ["Why?"]);
-});
-
-test.serial("Ask opens the model menu; Add a note changes the placeholder", (t) => {
-  render(
-    <PostFollowUpField
-      models={MODELS}
-      defaultChoice={{ model: "gemini-flash", effort: null }}
-      onSubmit={() => Promise.resolve()}
-    />,
-  );
-  const field = screen.getByRole("textbox", { name: "Follow-up" });
-  fireEvent.focus(field);
-  t.is(field.getAttribute("placeholder"), "Ask a follow-up");
-  fireEvent.click(screen.getByRole("radio", { name: "Ask Gemini 3.8 Flash" }));
-  t.truthy(screen.getByRole("menu"));
-  fireEvent.click(screen.getByRole("radio", { name: "Add a note" }));
-  t.is(field.getAttribute("placeholder"), "Add a note (not visible to agent)");
-  t.is(
-    screen.getByRole("button", { name: "Add note" }).getAttribute("title"),
-    `Add note (${navigator.platform.includes("Mac") ? "⌘↵" : "Ctrl+↵"})`,
-  );
-});
-
-test.serial("with Widgets in answers off, a widget block is code", (t) => {
-  useSettingsStore.getState().patch({ researchInlineWidgets: false });
-  const { container } = render(
-    <ResearchMarkdown widgetNodeId="n1" markdown={"```session-html\n<p>x</p>\n```"} />,
-  );
-  t.is(container.querySelector("[data-research-widget]"), null);
-  t.truthy(container.querySelector("pre"));
 });
 
 test.serial("Reduce motion marks the document and reduces scripted motion", (t) => {
@@ -154,135 +80,23 @@ test.serial("a toast is bottom centre, one at a time; a notification top right",
   t.true(region.className.includes("top-4"));
 });
 
-test.serial("Notifications off hides server notifications but not client toasts", (t) => {
-  useSettingsStore.getState().patch({ showNotifications: false });
-  pushToast({ title: "Couldn’t delete the draft", tone: "error" });
-  applyEventBatch(
-    [
-      {
-        type: "notification.requested",
-        payload: {
-          notification: {
-            id: "server",
-            title: "Answer ready",
-            body: "",
-            tone: "info",
-            timeoutMs: 5_000,
-            createdAt: 1,
-          },
-        },
-        timestamp: 1,
-      },
-    ],
-    testQueryClient(),
-  );
-  const titles = useNotificationsStore.getState().items.map((item) => item.title);
-  t.deepEqual(titles, ["Couldn’t delete the draft"]);
-});
-
-test.serial("the settings page lists the desktop's settings", async (t) => {
-  const app = await renderApp("/settings", {
-    queryClient: testQueryClient(),
-    responses: {
-      "workspaces.list": [workspace()],
-      "settings.get": serverSettings(),
-      "usage.summary": null,
-    },
-  });
-  await waitUntil(t, () => screen.queryByText("Widgets in answers") !== null, "the page");
+test.serial("the settings page lists the settings that remain", async (t) => {
+  const app = await renderApp("/settings");
+  await waitUntil(t, () => screen.queryByText("Reduce motion") !== null, "the page");
   t.truthy(screen.getByText(/^Require (⌘↵|Ctrl\+↵) to send$/));
   t.truthy(screen.getByText("Show keyboard shortcut hints"));
-  t.truthy(screen.getByText("Reduce motion"));
   t.truthy(screen.getAllByText("Color theme").length > 0);
-  t.is(screen.queryByText("Show tool calls"), null);
-  t.is(screen.queryByText("Show timestamps"), null);
-  const chord = navigator.platform.includes("Mac") ? "⌘↵" : "Ctrl+↵";
-  t.truthy(
-    screen.getByText(
-      `A thread's question boxes always require ${chord}. This setting controls the Home ask box, drafts and note follow-ups.`,
-    ),
-  );
-  // The desktop's rows only, plus the web's Default model and Notifications.
-  t.truthy(screen.getByText("Sent with every research launch"));
   t.truthy(screen.getByRole("checkbox", { name: /^Notifications/ }));
-  t.truthy(screen.getByRole("combobox", { name: "Default model" }));
-  for (const gone of ["Text size", "Default workspace", "Usage", "Save instructions"]) {
+  // The research client's rows are gone (02 §1, §11, P21).
+  for (const gone of [
+    "Widgets in answers",
+    "Research instructions",
+    "Default model",
+    "Body font",
+  ]) {
     t.is(screen.queryByText(gone), null, gone);
   }
   fireEvent.click(screen.getByRole("checkbox", { name: "Reduce motion" }));
   t.true(useSettingsStore.getState().settings.reduceMotion);
-  app.unmount();
-});
-
-test.serial(
-  "research instructions save as they are typed, with the desktop placeholder",
-  async (t) => {
-    const app = await renderApp("/settings", {
-      queryClient: testQueryClient(),
-      responses: {
-        "workspaces.list": [workspace()],
-        "settings.get": serverSettings(),
-        "settings.update": (input: { researchLaunchInstruction?: string | null }) =>
-          serverSettings({ researchLaunchInstruction: input.researchLaunchInstruction ?? null }),
-      },
-    });
-    const field = await screen.findByRole<HTMLTextAreaElement>("textbox", {
-      name: "Research instructions",
-    });
-    t.is(field.placeholder, "Answer concisely, in a few short paragraphs.");
-    fireEvent.change(field, { target: { value: "Cite primary sources." } });
-    await waitUntil(
-      t,
-      () =>
-        app.trpc.calls.some(
-          (call) =>
-            call.path === "settings.update" &&
-            (call.input as { researchLaunchInstruction?: string }).researchLaunchInstruction ===
-              "Cite primary sources.",
-        ),
-      "saved after the pause",
-    );
-    fireEvent.change(field, { target: { value: "" } });
-    fireEvent.blur(field);
-    await waitUntil(
-      t,
-      () =>
-        app.trpc.calls.some(
-          (call) =>
-            call.path === "settings.update" &&
-            (call.input as { researchLaunchInstruction?: string | null })
-              .researchLaunchInstruction === null,
-        ),
-      "an empty field clears the instruction at once on blur",
-    );
-    app.unmount();
-  },
-);
-
-test.serial("shortcut hints show while ⌘ is held, unless the setting is off", async (t) => {
-  const app = await renderApp("/", {
-    queryClient: testQueryClient(),
-    responses: { "workspaces.list": [workspace()], "settings.get": serverSettings() },
-  });
-  const home = await screen.findByRole("link", { name: /^Home/ });
-  const hold = (down: boolean) =>
-    act(() => {
-      window.dispatchEvent(
-        new KeyboardEvent(down ? "keydown" : "keyup", {
-          key: navigator.platform.includes("Mac") ? "Meta" : "Control",
-          metaKey: down,
-          ctrlKey: down,
-        }),
-      );
-    });
-  t.false(/H$/.test(home.textContent ?? ""));
-  hold(true);
-  t.regex(home.textContent ?? "", /H$/, "the Home chord shows");
-  hold(false);
-  t.false(/H$/.test(home.textContent ?? ""));
-  act(() => useSettingsStore.getState().patch({ showShortcutHints: false }));
-  hold(true);
-  t.false(/H$/.test(home.textContent ?? ""), "not with the setting off");
-  hold(false);
   app.unmount();
 });

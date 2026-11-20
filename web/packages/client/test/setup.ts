@@ -82,3 +82,21 @@ if (!Element.prototype.hasPointerCapture) {
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
+// jsdom has no element `scrollTo`; the shell resets its scroll container
+// with it and the channel strip centres its current chip. The stub sets the
+// offsets, which jsdom stores.
+if (!Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = function scrollTo(
+    this: Element,
+    options?: ScrollToOptions | number,
+    y?: number,
+  ) {
+    if (typeof options === "number") {
+      this.scrollLeft = options;
+      this.scrollTop = y ?? this.scrollTop;
+      return;
+    }
+    if (options?.left !== undefined) this.scrollLeft = options.left;
+    if (options?.top !== undefined) this.scrollTop = options.top;
+  };
+}

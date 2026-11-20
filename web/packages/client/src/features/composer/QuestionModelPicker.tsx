@@ -19,7 +19,7 @@ import { findModel, MODEL_REGISTRY } from "@session/shared";
 import { Bot, ChevronDown, ChevronRight } from "lucide-react";
 import { useMemo } from "react";
 
-import { useMe, useRuntimeConfig } from "../../api/queries.js";
+import { useMe, useRuntimeConfig } from "../../api/account.js";
 import { cn } from "../../lib/cn.js";
 import { Menu, MenuItem, MenuSeparator } from "../../ui/Menu.js";
 import { GeminiMark } from "../../ui/ModelMark.js";

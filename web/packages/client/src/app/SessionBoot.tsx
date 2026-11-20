@@ -1,8 +1,7 @@
-// Session initialization and background sync services (07 §2, §4.2, §8).
-//
-// Account- and session-scoped background services: the server events
-// subscription, draft persistence, and settings sync. `AppShell` mounts this
-// once; it no-ops until a session exists, so none of it runs for guests or on
+// Account-scoped background services (07 §2, §4.3). Today that is the user
+// settings sync; the replica's provider and the sync client's registration
+// join it with 02 §9. `AppShell` mounts this once; it renders nothing and
+// does nothing until a session exists, so none of it runs for guests or on
 // `/login`.
 
 import { userSettingsSchema } from "@session/shared";
@@ -10,11 +9,7 @@ import type { UserSettings } from "@session/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
-import { ensureDefaultResearchWorkspace, setDraft, updateSettings } from "../api/api.js";
-import { queryKeys } from "../api/cache.js";
-import { connectEventBridge } from "../api/events.js";
-import { useActiveNodes, useMe, useSettings, useWorkspaces } from "../api/queries.js";
-import { setDraftSyncTarget, type ComposerDraft, type DraftKey } from "../stores/drafts.js";
+import { queryKeys, updateSettings, useMe, useSettings } from "../api/account.js";
 import { normalizeSettings, useSettingsStore } from "../stores/settings.js";
 
 /** Debounce interval for pushing local user settings modifications to the
@@ -41,57 +36,6 @@ export function changedSettings(next: UserSettings, base: UserSettings): Partial
     if (next[key] !== base[key]) (patch as Record<string, unknown>)[key] = next[key];
   }
   return patch;
-}
-
-/** Maintains the event stream subscription for the application lifetime. */
-function useEventBridge(): void {
-  const queryClient = useQueryClient();
-  useEffect(() => {
-    const bridge = connectEventBridge({ queryClient });
-    return () => bridge.close();
-  }, [queryClient]);
-}
-
-/**
- * Registers remote synchronization target for the local draft store. Draft
- * records are serialized as JSON strings for storage via `interfaceDrafts.set`.
- */
-function useDraftSync(): void {
-  useEffect(() => {
-    const write = (key: DraftKey, draft: ComposerDraft | null): void => {
-      // An empty string signals draft deletion on the server.
-      void setDraft(key, draft === null ? "" : JSON.stringify(draft)).catch(() => {
-        // Draft sync errors do not trigger notifications; the local draft remains preserved in sessionStorage and retries on subsequent changes.
-      });
-    };
-    setDraftSyncTarget(write);
-    return () => setDraftSyncTarget(null);
-  }, []);
-}
-
-/**
- * Ensures a default workspace exists for the account. When workspace listings
- * return empty, invokes `workspaces.ensureDefault` once per mount to establish
- * the initial workspace required for queries and submissions.
- */
-function useDefaultWorkspace(): void {
-  const queryClient = useQueryClient();
-  const workspaces = useWorkspaces();
-  const requested = useRef(false);
-
-  const empty = workspaces.isSuccess && (workspaces.data?.length ?? 0) === 0;
-  useEffect(() => {
-    if (!empty || requested.current) return;
-    requested.current = true;
-    void ensureDefaultResearchWorkspace()
-      .then((workspace) => {
-        queryClient.setQueryData(queryKeys.workspaces(), [workspace]);
-      })
-      .catch(() => {
-        // Allow retry on subsequent mounts if workspace initialization fails.
-        requested.current = false;
-      });
-  }, [empty, queryClient]);
 }
 
 /**
@@ -151,21 +95,6 @@ function useSettingsSync(): void {
   }, [queryClient]);
 }
 
-/**
- * Maintains the session-wide active nodes cache.
- *
- * Event reducers query this cache via `cachedNode` to determine whether a node's
- * predecessor is known. Without this cache, nodes outside the currently open thread
- * would cause `research.node.updated` events to trigger full tree invalidations
- * on every run progress update. When populated, updates patch summaries in place.
- *
- * The cache is updated directly via `setQueryData` and invalidated only upon
- * event parsing failures or bridge reconnections.
- */
-function useActiveNodeCache(): void {
-  useActiveNodes();
-}
-
 export function SessionBoot() {
   const me = useMe();
   if (!me.data) return null;
@@ -173,10 +102,6 @@ export function SessionBoot() {
 }
 
 function SignedInSessionBoot() {
-  useEventBridge();
-  useActiveNodeCache();
-  useDraftSync();
   useSettingsSync();
-  useDefaultWorkspace();
   return null;
 }

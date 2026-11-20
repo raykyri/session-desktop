@@ -18,7 +18,9 @@ async function openModelMenu(page: Page) {
   return page.getByRole("menu", { name: "Model" });
 }
 
-test("an admin sees the gated model in the ask box's model menu", async ({ page }) => {
+// The research client's ask box was removed with 02 W1.1. The model menu
+// returns in the new composer (02 W5.1) and these two cases move to it then.
+test.fixme("an admin sees the gated model in the ask box's model menu", async ({ page }) => {
   await signInAndOpenHome(page, { login: "e2e-admin", isAdmin: true });
 
   const menu = await openModelMenu(page);
@@ -28,7 +30,7 @@ test("an admin sees the gated model in the ask box's model menu", async ({ page 
   await expect(page.getByRole("radio", { name: `Ask with ${GATED_MODEL}` })).toBeVisible();
 });
 
-test("hides admin-only models from non-admin users in the model menu", async ({ page }) => {
+test.fixme("hides admin-only models from non-admin users in the model menu", async ({ page }) => {
   await signInAndOpenHome(page, { login: "e2e-plain" });
 
   const menu = await openModelMenu(page);

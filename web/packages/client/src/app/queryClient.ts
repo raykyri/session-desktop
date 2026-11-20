@@ -7,7 +7,7 @@
 
 import { QueryClient } from "@tanstack/react-query";
 
-import { queryClientDefaults } from "../api/queries.js";
+import { queryClientDefaults } from "../api/account.js";
 
 export function createAppQueryClient(): QueryClient {
   return new QueryClient({ defaultOptions: queryClientDefaults });
