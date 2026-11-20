@@ -99,7 +99,11 @@ test("migration 0003 indexes the spaces stored before it", (t) => {
     JSON.stringify(space),
     1,
   );
-  t.deepEqual(migrate(db), ["0003_space_vis.sql", "0004_review_r1_phase2.sql"]);
+  t.deepEqual(migrate(db), [
+    "0003_space_vis.sql",
+    "0004_review_r1_phase2.sql",
+    "0005_review_r2_phase2.sql",
+  ]);
   const store = new SqliteServerStore(db, { migrations: false });
   const found = store.transaction((tx) => tx.scan("space", "vis", "open").map((r) => r.kind));
   t.deepEqual(found, ["space"]);

@@ -85,7 +85,7 @@ import type {
   Tombstone,
 } from "./store.js";
 import { chooseTiers, inSummary, threadOf } from "./tiers.js";
-import { Tokens, type CursorKeys } from "./tokens.js";
+import { Tokens, type CursorKeys, type CursorState } from "./tokens.js";
 
 type RunEvent = Extract<SseEvent, { type: "run" }>;
 
@@ -947,10 +947,11 @@ export class SyncServer {
       d.executor === null &&
       (d.status === "queued" || d.status === "running");
     if (!writes.some(([key, d]) => mine(d) && tx.get(key) === undefined)) return null;
+    // the actor's runs (`run.u`), not every queued and running run on the
+    // server (review round 2 of phase 2, finding 8)
     const live = new Set<string>();
-    for (const status of ["queued", "running"])
-      for (const r of tx.scan("run", "status", status))
-        if (r.kind === "run" && mine(r)) live.add(`run:${r.id}`);
+    for (const r of tx.scan("run", "u", u))
+      if (r.kind === "run" && mine(r)) live.add(`run:${r.id}`);
     for (const [key, d] of writes)
       if (mine(d)) live.add(key);
       else if (d === null || d.kind === "run") live.delete(key);
@@ -1390,27 +1391,14 @@ export class SyncServer {
     this.housekeepDue();
     return this.run((tx): PullAnswer => {
       const now = this.time(tx);
-      const no = this.readError(actor, log, options, now);
-      if (no) return no;
-      const u = this.userOf(actor);
-      if (!logS.safeParse(log).success) return { resync: true, serverTime: now };
-      const c = this.tokens.open(cursor, now);
-      if (
-        c === null ||
-        c.log !== log ||
-        c.u !== u ||
-        c.n !== tx.epoch(log).n ||
-        c.at < now - TOMBSTONE_TTL ||
-        // served by another database, or by this one before a restore
-        c.i !== this.instance(tx) ||
-        c.h > tx.head()
-      )
-        return { resync: true, serverTime: now };
+      const o = this.openCursor(tx, actor, log, cursor, now, options);
+      if ("error" in o) return o.error;
+      // (a pull is never skipped: it passes no `before`)
+      if (!("c" in o)) return { resync: true, serverTime: now };
+      const { u, c } = o;
       const lastSeq = this.lastSeq(tx, u, options.clientId, now);
-      if (this.closedTo(log, u))
+      if (o.closed)
         return { changes: [], cursor: this.serve(tx, log, u, 0, now), lastSeq, serverTime: now };
-      if (u !== null && this.scopeChanged(tx, log, u, c.v, c.h))
-        return { resync: true, serverTime: now };
       const tiers = this.tiers(tx, log, u, now, options);
       const changes: Change[] = [];
       const summaries = new Set<string>();
@@ -1438,6 +1426,53 @@ export class SyncServer {
         ...this.extras(tx, log, u),
       };
     });
+  }
+
+  /** The checks that open `cursor` for a read of `log` by `actor`, shared
+   * by `pull` and the streams' `streamPull` (review round 2 of phase 2,
+   * finding 4): a read the server does not serve (`error`: `pull` answers
+   * it, a stream resyncs); a log that is not one, or a token that does not
+   * open, is another reader's or log's, is of another epoch, is older than
+   * the tombstones, was served by another database or by this one before a
+   * restore (its instance id), or names a head the database has not
+   * reached, or a reader whose scope changed since it was served (`resync`);
+   * else the reader, the token's state and whether the log is closed to
+   * the reader (another person's user log: served empty). `before`, when
+   * given, runs after the first two checks and before the token is opened:
+   * a stream's `skip`. */
+  private openCursor(
+    tx: StoreTx,
+    actor: Actor | null,
+    log: LogId,
+    cursor: Cursor,
+    now: number,
+    options: ReadOpts,
+    before?: (u: string | null) => boolean,
+  ):
+    | { error: ReadError }
+    | { resync: true }
+    | { skip: true }
+    | { u: string | null; c: CursorState; closed: boolean } {
+    const error = this.readError(actor, log, options, now);
+    if (error) return { error };
+    const u = this.userOf(actor);
+    if (!logS.safeParse(log).success) return { resync: true };
+    if (before?.(u)) return { skip: true };
+    const c = this.tokens.open(cursor, now);
+    if (
+      c === null ||
+      c.log !== log ||
+      c.u !== u ||
+      c.n !== tx.epoch(log).n ||
+      c.at < now - TOMBSTONE_TTL ||
+      // served by another database, or by this one before a restore
+      c.i !== this.instance(tx) ||
+      c.h > tx.head()
+    )
+      return { resync: true };
+    if (this.closedTo(log, u)) return { u, c, closed: true };
+    if (u !== null && this.scopeChanged(tx, log, u, c.v, c.h)) return { resync: true };
+    return { u, c, closed: false };
   }
 
   /** Whether what `u` may read of `log` changed after the token at `version`
@@ -1496,37 +1531,22 @@ export class SyncServer {
   }
 
   private streamPull(tx: StoreTx, q: StreamPull, now: number): StreamPullAnswer {
-    const { actor, log } = q;
-    if (this.readError(actor, log, {}, now)) return { resync: true };
-    const u = this.userOf(actor);
-    if (!logS.safeParse(log).success) return { resync: true };
+    const { actor, log, keys } = q;
     // a commit whose rows of this log the reader may not read: no pull
     // (report-1b finding 1). A change of the reader's own scope writes a row
     // they read, and a replaced history names no keys, so neither is skipped.
-    if (q.keys && !(actor !== null && u === null)) {
-      let reads = false;
-      for (const key of q.keys) {
+    const unread = (u: string | null) =>
+      !!keys &&
+      !(actor !== null && u === null) &&
+      ![...keys].some((key) => {
         const row = tx.logGet(log, key);
-        if (row && this.readRow(tx, row, u) !== null) {
-          reads = true;
-          break;
-        }
-      }
-      if (!reads) return { skip: true };
-    }
-    const c = this.tokens.open(q.cursor, now);
-    if (
-      c === null ||
-      c.log !== log ||
-      c.u !== u ||
-      c.n !== tx.epoch(log).n ||
-      c.at < now - TOMBSTONE_TTL ||
-      c.i !== this.instance(tx) ||
-      c.h > tx.head()
-    )
-      return { resync: true };
-    if (this.closedTo(log, u)) return { cursor: this.serve(tx, log, u, 0, now), changed: false };
-    if (u !== null && this.scopeChanged(tx, log, u, c.v, c.h)) return { resync: true };
+        return row !== undefined && this.readRow(tx, row, u) !== null;
+      });
+    const o = this.openCursor(tx, actor, log, q.cursor, now, {}, unread);
+    if ("skip" in o) return o;
+    if ("error" in o || "resync" in o) return { resync: true };
+    const { u, c } = o;
+    if (o.closed) return { cursor: this.serve(tx, log, u, 0, now), changed: false };
     let to = c.v;
     let changed = false;
     for (const row of tx.logAfter(log, c.v)) {

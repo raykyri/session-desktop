@@ -1,10 +1,13 @@
 // The per-account budget of writes and online calls (review round 1 of
-// phase 2, reviewer A's F6; the experiment e02-limits E2a as a test).
+// phase 2, reviewer A's F6; the experiment e02-limits E2a as a test), and a
+// device's calls on a run it holds, which take nothing from it (review round
+// 2 of phase 2, reviewer A's finding 2; the experiment e02-budget-device-run).
 
+import type { RunRec } from "@session/mutators";
 import test from "ava";
 
 import { createHarness } from "./helpers.js";
-import { HttpClient } from "./sync.helpers.js";
+import { HttpClient, signInDevice } from "./sync.helpers.js";
 
 class Clock {
   ms = Date.now();
@@ -96,5 +99,75 @@ test.serial(
         ok: true,
       },
     );
+  },
+);
+
+test.serial(
+  "E2: a device's calls on a run it holds take nothing from its person's budget",
+  async (t) => {
+    const clock = new Clock();
+    const h = createHarness(t, {
+      env: { SESSION_WRITE_BURST: "120", SESSION_WRITES_PER_MINUTE: "60" },
+      sync: { clock },
+    });
+    const olga = new HttpClient(h, { cookie: h.signIn(h.addUser("olga")) });
+    const mel = new HttpClient(h, { cookie: h.signIn(h.addUser("mel")) });
+    const sp = olga.id();
+    await olga.write("spaces.create", { id: sp, name: "lounge" });
+    await mel.write("spaces.join", { space: sp });
+    const d = await signInDevice(h, mel);
+    const dev = new HttpClient(h, { bearer: d.token });
+    const executor = { kind: "device", cli: "claude", device: d.device };
+    const th = mel.id();
+    const r = await mel.write("threads.create", {
+      id: th,
+      space: sp,
+      kind: "ask",
+      q: "Q?",
+      executor,
+    });
+    const run = (r.body.result as { run: string }).run;
+    t.like((await dev.call("runs.claim", { run, device: d.device })).body, { ok: true });
+    // two turns a second for 200 s, a heartbeat every 30 s
+    const refused: string[] = [];
+    for (let k = 0; k < 400; k++) {
+      clock.ms += 500;
+      if (k % 60 === 59) {
+        const hb = await dev.call("runs.heartbeat", { run, device: d.device, attempt: 1 });
+        if (!hb.body.ok) refused.push(`heartbeat ${k}: ${hb.body.error?.code}`);
+      }
+      const a = await dev.call("runs.turn", {
+        run,
+        device: d.device,
+        attempt: 1,
+        turn: `step ${k}`,
+      });
+      if (!a.body.ok) refused.push(`turn ${k}: ${a.body.error?.code}`);
+    }
+    t.deepEqual(refused, []);
+    t.like(
+      (await dev.call("runs.finish", { run, device: d.device, attempt: 1, answer: "A" })).body,
+      { ok: true },
+    );
+    t.like(h.deps.sync.records().get(`run:${run}`) as RunRec, { status: "complete" });
+    // the person's budget is whole: 120 writes at once
+    let ok = 0;
+    for (let n = 0; n < 121; n++)
+      if (
+        (await mel.write("threads.create", { id: mel.id(), space: sp, kind: "post", q: `p${n}` }))
+          .body.ok
+      )
+        ok++;
+    t.is(ok, 120);
+    // a device's call on a run it does not hold is counted: the budget is
+    // spent now, so it answers TOO_MANY_REQUESTS before any other check
+    t.like((await dev.call("runs.turn", { run, device: d.device, attempt: 1, turn: "x" })).body, {
+      ok: false,
+      error: { code: "TOO_MANY_REQUESTS" },
+    });
+    t.like((await dev.call("runs.claim", { run, device: d.device })).body, {
+      ok: false,
+      error: { code: "TOO_MANY_REQUESTS" },
+    });
   },
 );

@@ -152,7 +152,7 @@ export function buildDeps(o: {
     db: o.db,
     sync,
     keys,
-    streams: new StreamRegistry(),
+    streams: new StreamRegistry(o.config.sync.streamsPerReader),
     runs: runner,
     logger: o.logger,
     ...(o.fetch ? { fetch: o.fetch } : {}),

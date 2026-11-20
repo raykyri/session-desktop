@@ -9,8 +9,9 @@ import type { AppEnv } from "../deps.js";
 import type { Logger } from "../logger.js";
 
 /** The client's network address: from `header` when the platform's proxy
- * sets it (`SESSION_CLIENT_IP_HEADER`: Fly terminates TLS and replaces any
- * `Fly-Client-IP` a client sends), else the socket's. Never from a header a
+ * sets it (`SESSION_CLIENT_IP_HEADER`, empty by default: Fly terminates TLS
+ * and replaces any `Fly-Client-IP` a client sends, and `fly.toml` names it),
+ * else the socket's. Never from a header a
  * client can set, such as `X-Forwarded-For` (review round 1 of phase 2: the
  * address decides a one-click device sign-in). "unknown" when there is
  * neither (a test's `app.request`). */
@@ -35,7 +36,7 @@ function socketAddress(env: unknown): string | undefined {
 
 export function requestContext(
   logger: Logger,
-  clientIpHeader: string | null = "fly-client-ip",
+  clientIpHeader: string | null = null,
 ): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const requestId = c.req.header("x-request-id") ?? randomUUID();

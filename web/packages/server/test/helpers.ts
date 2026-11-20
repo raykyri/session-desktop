@@ -82,6 +82,10 @@ export function testConfig(directory: string, overrides: Record<string, string> 
     PARALLEL_API_KEY: "parallel-key",
     SESSION_CURSOR_KEY: Buffer.alloc(32, 7).toString("base64"),
     SESSION_API_KEY_ENCRYPTION_KEY: Buffer.alloc(32, 9).toString("base64"),
+    // the harness stands for the server behind Fly's proxy: a test names a
+    // client's address with `Fly-Client-IP` (`app.request` has no socket).
+    // A test of the default (the socket's address) passes "".
+    SESSION_CLIENT_IP_HEADER: "fly-client-ip",
     ...overrides,
   });
 }

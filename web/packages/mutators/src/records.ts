@@ -963,7 +963,6 @@ export const INDEXES = {
   "reply.parent": ["reply", "parent"],
   "run.th": ["run", "th"],
   "run.u": ["run", "u"],
-  "run.status": ["run", "status"],
   "turn.run": ["turn", "run"],
   "apikey.u": ["apikey", "u"],
   "report.sp": ["report", "sp"],

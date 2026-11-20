@@ -1,9 +1,14 @@
 // A server run's context (review round 1 of phase 2, reviewer A's F7 and
 // phase 2a design finding 4; the experiment e02-limits E2b as a test): a
 // resumed run continues after its stored turns, and a follow-up's context
-// holds the tool calls and results of the answers before it.
+// holds the tool calls and results of the answers before it. Review round 2
+// of phase 2 (the experiment e03-context as tests): hidden earlier asks stay
+// out of another member's run (reviewer A's finding 3); a resumed run's
+// thread keeps the tokens of all its attempts (finding 7); and a resumed
+// attempt numbers its in-flight events above every one sent before, with a
+// gap (reviewer B's finding 6).
 
-import { runs as runsRepo } from "@session/db";
+import { runs as runsRepo, usage } from "@session/db";
 import type { ThreadRec } from "@session/mutators";
 import test from "ava";
 
@@ -12,6 +17,7 @@ import {
   fixturePageFetch,
   setFixtureScenario,
 } from "../src/runs/fixtureProvider.js";
+import { SEQ_PERSIST_EVERY } from "../src/runs/loop.js";
 import { createRunsService } from "../src/runs/service.js";
 
 import { createHarness, type Harness } from "./helpers.js";
@@ -244,5 +250,178 @@ test.serial(
     t.regex(first[2]?.text ?? "", /\[web_search /);
     t.true((first[5]?.text ?? "").includes(sum.slice(0, 30)));
     t.regex(first[6]?.text ?? "", /And then\?/);
+  },
+);
+
+test.serial(
+  "E3a: hidden earlier asks (the thread's and a follow-up) stay out of another member's run",
+  async (t) => {
+    const prompts: string[] = [];
+    setFixtureScenario((options) => {
+      prompts.push(JSON.stringify((options as { prompt: unknown }).prompt));
+      return "success-with-tools";
+    });
+    const { h, olga, mel } = world(t);
+    const otto = new HttpClient(h, { cookie: h.signIn(h.addUser("otto")) });
+    const sp = await openSpace(olga, mel);
+    await otto.write("spaces.join", { space: sp });
+    const th = mel.id();
+    await mel.write("threads.create", {
+      id: th,
+      space: sp,
+      kind: "ask",
+      q: "SECRET THREAD QUESTION",
+    });
+    await drive(h);
+    const fu = mel.id();
+    await mel.write("research.forkNode", {
+      id: fu,
+      thread: th,
+      parent: "r",
+      q: "SECRET FOLLOW-UP",
+    });
+    await drive(h);
+    const sum = (rec(h, `thread:${th}`) as ThreadRec).sum ?? "";
+    t.true(sum.length > 40);
+    // the moderator hides both
+    for (const item of [`a:${th}`, `f:${th}:${fu}`])
+      t.like(
+        (await olga.write("moderation.decide", { item, decision: "hidden" })).body,
+        { ok: true },
+        item,
+      );
+    // otto asks below the hidden follow-up: neither reaches his run
+    prompts.length = 0;
+    t.like(
+      (
+        await otto.write("research.forkNode", {
+          id: otto.id(),
+          thread: th,
+          parent: fu,
+          q: "OTTO ASKS",
+        })
+      ).body,
+      { ok: true },
+    );
+    await drive(h);
+    const first = prompts[0] ?? "";
+    t.true(first.includes("OTTO ASKS"));
+    t.false(first.includes("SECRET THREAD QUESTION"));
+    t.false(first.includes(sum.slice(0, 40)));
+    t.false(first.includes("SECRET FOLLOW-UP"));
+    // the author reads both unredacted: they reach her run
+    prompts.length = 0;
+    await mel.write("research.forkNode", { id: mel.id(), thread: th, parent: fu, q: "MEL ASKS" });
+    await drive(h);
+    t.true((prompts[0] ?? "").includes("SECRET THREAD QUESTION"));
+    t.true((prompts[0] ?? "").includes("SECRET FOLLOW-UP"));
+  },
+);
+
+/** Tokens the last process recorded for run `run`, of a step it finished. */
+const recordStep = (h: Harness, run: string, sp: string, tokens: number) => {
+  const userId = (
+    h.db.$client.prepare("SELECT user_id AS id FROM run_queue WHERE run_id = ?").get(run) as {
+      id: string;
+    }
+  ).id;
+  usage.record(h.db, userId, {
+    runId: run,
+    payer: "session",
+    spaceId: sp,
+    kind: "research",
+    provider: "google",
+    inputTokens: tokens - 40,
+    outputTokens: 40,
+  });
+};
+
+const recorded = (h: Harness, run: string) => usage.tokensOfRun(h.db, run);
+
+test.serial(
+  "E3b: a resumed run's thread keeps the tokens of all its attempts, also when finished from its stored answer",
+  async (t) => {
+    setFixtureScenario("success");
+    const { h, olga, mel } = world(t);
+    const sp = await openSpace(olga, mel);
+    // the last process finished a tool step (940 tokens) and stored its
+    // turns, then stopped
+    const a = await interrupted(h, mel, sp);
+    recordStep(h, a.run, sp, 940);
+    const jobs = h.deps.sync.runJobs;
+    jobs.turn(
+      a.run,
+      1,
+      assistant(a.run, 0, [
+        { type: "toolUse", id: "c1", name: "web_fetch", input: { url: "https://example.com" } },
+      ]),
+    );
+    jobs.turn(a.run, 1, {
+      id: `${a.run}-1`,
+      agentId: a.run,
+      role: "user",
+      blocks: [{ type: "toolResult", toolUseId: "c1", content: "page", isError: false }],
+      sourceIndex: 1,
+    });
+    // the last process stored this one's answer turn, then stopped
+    const b = await interrupted(h, mel, sp);
+    recordStep(h, b.run, sp, 700);
+    jobs.turn(b.run, 1, assistant(b.run, 0, [{ type: "text", text: "THE STORED ANSWER" }]));
+    const next = nextProcess(h);
+    next.recover();
+    next.tick();
+    await next.idle();
+    t.like(rec(h, `run:${a.run}`), { status: "complete" });
+    t.true(recorded(h, a.run) > 940);
+    t.is((rec(h, `thread:${a.th}`) as ThreadRec).tok, recorded(h, a.run));
+    t.like(rec(h, `run:${b.run}`), { status: "complete" });
+    t.is((rec(h, `thread:${b.th}`) as ThreadRec).tok, 700);
+    await next.drain();
+  },
+);
+
+/** Run `run`'s in-flight events as the job sends them: each one's number,
+ * and the number stored in `run_queue` at that moment. */
+function deltas(h: Harness, run: string) {
+  const sent: { seq: number; stored: number }[] = [];
+  const jobs = h.deps.sync.runJobs;
+  const real = jobs.delta.bind(jobs);
+  jobs.delta = (id, attempt, seq, text) => {
+    if (id === run) sent.push({ seq, stored: runsRepo.get(h.db, id)?.seq ?? -1 });
+    return real(id, attempt, seq, text);
+  };
+  return sent;
+}
+
+test.serial(
+  "B6: the event number stored for a run is never below one sent, and a resumed attempt's numbers start past it with a gap",
+  async (t) => {
+    setFixtureScenario("success");
+    const { h, olga, mel } = world(t);
+    const sp = await openSpace(olga, mel);
+    // a fresh attempt: from 1, each sent number at or below the stored one
+    const fresh = await ask(mel, sp);
+    const sent = deltas(h, fresh.run);
+    await drive(h);
+    t.like(rec(h, `run:${fresh.run}`), { status: "complete" });
+    t.true(sent.length > 0);
+    t.is(sent[0]?.seq, 1);
+    t.is(sent[0]?.stored, SEQ_PERSIST_EVERY, "stored ahead before the first event");
+    for (const e of sent) t.true(e.stored >= e.seq, JSON.stringify(e));
+    // the last process sent events up to 7 (the stored number at or above
+    // it), then stopped
+    const { run } = await interrupted(h, mel, sp);
+    runsRepo.setSeq(h.db, run, 7);
+    const resumed = deltas(h, run);
+    const next = nextProcess(h);
+    next.recover();
+    next.tick();
+    await next.idle();
+    t.like(rec(h, `run:${run}`), { status: "complete" });
+    t.true(resumed.length > 0);
+    t.is(resumed[0]?.seq, 9, "7 + 1 is skipped: the first resumed event is not next to the last");
+    for (const e of resumed) t.true(e.stored >= e.seq, JSON.stringify(e));
+    t.is(runsRepo.get(h.db, run), null, "released");
+    await next.drain();
   },
 );

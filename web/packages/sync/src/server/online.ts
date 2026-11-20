@@ -65,7 +65,7 @@ import { z } from "zod";
 
 import { HOUR, MINUTE, type Actor, type AnswerError, type CallAnswer } from "../protocol.js";
 
-import { answerWrites, bounds } from "./limits.js";
+import { addressKey, answerWrites, bounds } from "./limits.js";
 import type { SyncServer } from "./server.js";
 import type { Lease, Signin, StoreTx } from "./store.js";
 
@@ -179,6 +179,10 @@ export function writesIn(g: pkg.Reader, sp: string, u: string): boolean {
 const mayRun = (g: pkg.Reader, r: pkg.RunRec) => pkg.canRead(g, r, r.u) && writesIn(g, r.s, r.u);
 
 const live = (r: pkg.RunRec) => r.status === "queued" || r.status === "running";
+
+/** A device's calls on a run it holds: they take nothing from the write
+ * budget (`OnlineCalls.budgetKey`). */
+const RUN_CALLS = new Set(["runs.heartbeat", "runs.turn", "runs.finish"]);
 
 /** A run of the caller's, run by the calling device: for every call but
  * claim, the attempt that holds a lease that has not ended. Answers the run
@@ -875,9 +879,7 @@ export class OnlineCalls {
         serverTime: t0,
       };
     // the account's budget of writes and calls (review round 1 of phase 2)
-    const spent = this.server.overBudget(
-      actor && pkg.isHandle(actor.u) ? `u:${actor.u}` : meta.ip ? `ip:${meta.ip}` : null,
-    );
+    const spent = this.server.overBudget(this.budgetKey(actor, name, input, meta));
     if (spent) return { ok: false, error: spent, serverTime: t0 };
     // bounded before anything parses it (review round 2 of phase 1)
     const b = bounds(input, MAX_CALL_DEPTH + 1, MAX_CALL_BYTES);
@@ -915,6 +917,68 @@ export class OnlineCalls {
     } catch (e) {
       if (e instanceof Refused) return { ok: false, error: e.refusal.toError(), serverTime: e.at };
       return { ok: false, error: fail("INTERNAL_SERVER_ERROR").toError(), serverTime: t0 };
+    }
+  }
+
+  /** The budget a call takes one from (`SyncServer.overBudget`), or null
+   * for none (review round 2 of phase 2):
+   * - a device's `runs.heartbeat`, `runs.turn` or `runs.finish` on a run
+   *   whose lease that device holds at the attempt it names: none. A run's
+   *   calls are bounded by its lease, the turn and answer sizes and the
+   *   device runs an hour, and a device run at two turns a second would
+   *   otherwise use up its person's budget in two minutes, refusing the
+   *   run's heartbeats and the person's own writes;
+   * - any other call of a person's: theirs;
+   * - `devices.token` for a sign-in the server holds: that sign-in's, so an
+   *   app polling for its token shares no budget with the other callers
+   *   behind its address;
+   * - any other signed-out call: its address's (`addressKey`: an IPv6
+   *   address by its /64, an IPv4-mapped one by its IPv4 address). */
+  private budgetKey(
+    actor: Actor | null,
+    name: string,
+    input: unknown,
+    meta: CallMeta,
+  ): string | null {
+    const i = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
+    if (actor && pkg.isHandle(actor.u)) {
+      if (RUN_CALLS.has(name) && this.holdsLease(actor, i)) return null;
+      return `u:${actor.u}`;
+    }
+    if (name === "devices.token" && typeof i["request"] === "string" && i["request"].length <= 64) {
+      const request = i["request"];
+      if (this.read((tx) => tx.signinGet(request) !== undefined)) return `signin:${request}`;
+    }
+    return meta.ip ? `ip:${addressKey(meta.ip)}` : null;
+  }
+
+  /** Whether device `actor` holds the lease of run `i.run` at attempt
+   * `i.attempt` now. */
+  private holdsLease(actor: Actor, i: Record<string, unknown>): boolean {
+    const { run, device, attempt } = i;
+    if (actor.device == null || device !== actor.device || typeof run !== "string") return false;
+    return this.read((tx) => {
+      const r = tx.get(`run:${run}`);
+      const l = tx.leaseGet(run);
+      return (
+        r?.kind === "run" &&
+        r.status === "running" &&
+        r.attempt === attempt &&
+        r.executor?.u === actor.u &&
+        r.executor.device === device &&
+        l !== undefined &&
+        l.until > this.server.time(tx)
+      );
+    });
+  }
+
+  /** A check before the budget is taken: false when the store fails (the
+   * call is then charged, and its own transaction meets the fault). */
+  private read(f: (tx: StoreTx) => boolean): boolean {
+    try {
+      return this.server.run(f);
+    } catch {
+      return false;
     }
   }
 

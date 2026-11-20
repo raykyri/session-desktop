@@ -47,10 +47,15 @@ kill_timeout = "30s"
   GOOGLE_VERTEX_LOCATION = "global"
   # Spaces (phase 2a): the lowest sync protocol version taken, the desktop
   # app's origin (CORS for its bearer requests) and the included tokens a
-  # person has a month.
+  # person has a week.
   SESSION_MIN_PROTOCOL = "4"
   SESSION_DESKTOP_ORIGINS = "tauri://localhost"
   SESSION_INCLUDED_TOKENS = "1000000"
+  # The client's address is the header Fly's proxy sets, replacing any value
+  # a client sends. The default (empty) is the socket's address; a server in
+  # production that names a header and runs without FLY_APP_NAME refuses to
+  # start (review round 2 of phase 2).
+  SESSION_CLIENT_IP_HEADER = "fly-client-ip"
 
 [[mounts]]
   source = "session_data"
@@ -66,10 +71,15 @@ kill_timeout = "30s"
   auto_start_machines = true
   min_machines_running = 1
 
+  # Every open sync event stream (`GET /api/sync/events`) is a request here
+  # for as long as it is open: one a browser tab, one a desktop. A session,
+  # a device or a signed-out address holds at most SESSION_STREAMS_PER_READER
+  # (8) of them, and the limits leave room for the streams and the requests
+  # beside them (review round 2 of phase 2).
   [http_service.concurrency]
     type = "requests"
-    soft_limit = 200
-    hard_limit = 400
+    soft_limit = 1000
+    hard_limit = 2000
 
   # `/healthz` is 503 until migrations and run reconciliation finish and from
   # the first moment of the drain (`13` §5), so the proxy follows the boot.

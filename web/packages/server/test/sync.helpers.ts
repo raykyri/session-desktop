@@ -25,6 +25,17 @@ const random = () => {
 export class HttpClient {
   clientId = "";
   seq = 0;
+  /** The socket's remote address its requests come from (`app.request`
+   * has none unless given: the client address is then the proxy header's,
+   * or unknown). */
+  socket: string | null = null;
+
+  /** `app.request`'s environment: the socket's address, when set. */
+  private env() {
+    return this.socket === null
+      ? undefined
+      : { incoming: { socket: { remoteAddress: this.socket } } };
+  }
 
   constructor(
     readonly h: Harness,
@@ -42,17 +53,21 @@ export class HttpClient {
 
   async post(path: string, body: unknown, extra: Record<string, string> = {}) {
     const bearer = this.auth !== null && "bearer" in this.auth;
-    const res = await this.h.app.request(path, {
-      method: "POST",
-      body: JSON.stringify(body),
-      headers: {
-        ...(bearer ? { Origin: "tauri://localhost" } : { Origin: "http://localhost:8787" }),
-        ...(bearer ? {} : { "X-Requested-With": "session" }),
-        ...(this.auth && "cookie" in this.auth ? { Cookie: `session=${this.auth.cookie}` } : {}),
-        ...this.headers(),
-        ...extra,
+    const res = await this.h.app.request(
+      path,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: {
+          ...(bearer ? { Origin: "tauri://localhost" } : { Origin: "http://localhost:8787" }),
+          ...(bearer ? {} : { "X-Requested-With": "session" }),
+          ...(this.auth && "cookie" in this.auth ? { Cookie: `session=${this.auth.cookie}` } : {}),
+          ...this.headers(),
+          ...extra,
+        },
       },
-    });
+      this.env(),
+    );
     const text = await res.text();
     return { status: res.status, body: (text ? JSON.parse(text) : {}) as Body, res };
   }
@@ -111,20 +126,25 @@ export class HttpClient {
 
   /** Open the event stream with `cursors`; `read()` answers the text so
    * far, `close()` ends it. */
-  async events(cursors: Record<string, string>) {
+  async events(cursors: Record<string, string>, extra: Record<string, string> = {}) {
     const ac = new AbortController();
     const bearer = this.auth !== null && "bearer" in this.auth;
-    const res = await this.h.app.request("/api/sync/events", {
-      method: "GET",
-      signal: ac.signal,
-      headers: {
-        ...this.headers(),
-        ...(bearer ? { Origin: "tauri://localhost" } : {}),
-        ...(this.auth && "cookie" in this.auth ? { Cookie: `session=${this.auth.cookie}` } : {}),
-        Accept: "text/event-stream",
-        "Last-Event-ID": JSON.stringify(cursors),
+    const res = await this.h.app.request(
+      "/api/sync/events",
+      {
+        method: "GET",
+        signal: ac.signal,
+        headers: {
+          ...this.headers(),
+          ...(bearer ? { Origin: "tauri://localhost" } : {}),
+          ...(this.auth && "cookie" in this.auth ? { Cookie: `session=${this.auth.cookie}` } : {}),
+          Accept: "text/event-stream",
+          "Last-Event-ID": JSON.stringify(cursors),
+          ...extra,
+        },
       },
-    });
+      this.env(),
+    );
     let text = "";
     let done = false;
     const pump = (async () => {

@@ -5,7 +5,9 @@
 //                              `apply` (TOO_LARGE)
 //   POST /api/sync/snapshot   { log, clientId?, tier?, threads? }
 //   POST /api/sync/pull       { log, cursor, clientId?, tier? }
-//   GET  /api/sync/events     SSE (cursor tokens in Last-Event-ID or ?cursors)
+//   GET  /api/sync/events     SSE (cursor tokens in Last-Event-ID or ?cursors);
+//                              at most SESSION_STREAMS_PER_READER open per
+//                              session, device or signed-out address (429)
 //   POST /api/rpc/<name>      an online-only call (`NOT_MUTATORS`)
 //   GET  /api/rpc/usage.listAsks, and the account reads under /api/me
 //   GET  /api/spaces          the spaces the caller may find (the directory)
@@ -21,7 +23,7 @@
 
 import { auth } from "@session/db";
 import { PROTOCOL_HEADER, type LogId, type ReadOptions } from "@session/sync";
-import { sseResponse } from "@session/sync/server";
+import { addressKey, sseResponse } from "@session/sync/server";
 import type { Context } from "hono";
 import { Hono } from "hono";
 
@@ -179,9 +181,28 @@ export function syncRoutes(deps: ServerDeps): Hono<AppEnv> {
     // signed out
     if (c.get("bearer") && c.get("actor") === null) return error(c, "UNAUTHORIZED");
     const ac = new AbortController();
-    c.req.raw.signal.addEventListener("abort", () => ac.abort());
     const session = c.get("bearer") ? null : c.get("sessionToken");
-    const done = deps.streams.add(session === null ? null : sessionKey(session), ac);
+    const sessionId = session === null ? null : sessionKey(session);
+    // what the stream counts against: the device, the browser session, or
+    // signed out the client's address (review round 2 of phase 2)
+    const actor = c.get("actor");
+    const ip = ipOf(c);
+    const reader =
+      actor?.device != null
+        ? `device:${actor.device}`
+        : sessionId !== null
+          ? `session:${sessionId}`
+          : ip !== null
+            ? `ip:${addressKey(ip)}`
+            : null;
+    const done = deps.streams.add(sessionId, ac, reader);
+    if (done === null)
+      return error(
+        c,
+        "TOO_MANY_REQUESTS",
+        `${deps.streams.perReader} event streams are open for this session, device or address, the most allowed. Close one to open another.`,
+      );
+    c.req.raw.signal.addEventListener("abort", () => ac.abort());
     ac.signal.addEventListener("abort", done);
     const req = new Request(c.req.url, { headers: c.req.raw.headers, signal: ac.signal });
     const res = sseResponse(sync, req, c.get("actor"));

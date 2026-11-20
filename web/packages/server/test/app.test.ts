@@ -117,6 +117,7 @@ test("test-only auth is impossible in production", (t) => {
   const config = testConfig("/tmp/session-config", {
     NODE_ENV: "production",
     SESSION_TEST_AUTH: "1",
+    FLY_APP_NAME: "session-dev",
   });
   t.false(config.testAuthEnabled);
   t.true(config.isProduction);

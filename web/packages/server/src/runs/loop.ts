@@ -10,8 +10,16 @@
 //   any record;
 // - in-flight text goes to the readers of the run's node as SSE `run` events
 //   (`RunJobs.delta`, at most every DELTA_INTERVAL_MS), numbered within the
-//   attempt from `seqStart`;
-// - the answer and the run's end are `RunJobs.finish` / `fail`.
+//   attempt from `seqStart`. The number stored in `run_queue` is never below
+//   one already sent: before an event takes a number past it, the stored
+//   number moves SEQ_PERSIST_EVERY ahead. A resumed attempt (the process
+//   stopped, or a 429 requeued it) skips one number past the stored one, so
+//   its first event is above every one sent before and not next to the
+//   last: a client, which applies only consecutive numbers from 1, drops
+//   the text it streamed before, which the resumed attempt does not
+//   continue (review round 2 of phase 2);
+// - the answer and the run's end are `RunJobs.finish` / `fail`; the thread's
+//   `tok` is every token the run recorded, over all its attempts.
 // When a write answers that the job no longer holds the run (it was
 // cancelled, a later run of the ask replaced it, the person lost access), the
 // attempt stops. Usage is recorded by run, payer and space as each step
@@ -22,7 +30,7 @@
 // ends the run `tokens`, and a key that is no longer valid ends it `key`.
 
 import type { AttemptUsage, SessionDatabase } from "@session/db";
-import { runs as runsRepo } from "@session/db";
+import { runs as runsRepo, usage as usageRepo } from "@session/db";
 import type { RunEnd } from "@session/mutators";
 import type { Turn } from "@session/shared";
 import type { JobStart, SyncServer } from "@session/sync/server";
@@ -49,8 +57,9 @@ import { addUsage, attemptUsageOf, costOf, recordAttemptUsage, recordToolUsage }
 /** `04-agent-runtime.md` §3. */
 export const MAX_STEPS = 25;
 export const DELTA_INTERVAL_MS = 50;
-/** How often the attempt's event number is written to `run_queue`, so a
- * resumed attempt numbers its events past it. */
+/** How far ahead of the attempt's last event number the number stored in
+ * `run_queue` moves when an event reaches it: a resumed attempt numbers its
+ * events past the stored number, so past every event sent before. */
 export const SEQ_PERSIST_EVERY = 50;
 
 export type AttemptOutcome =
@@ -85,7 +94,8 @@ export interface RunAttemptInput {
   instruction: string | null;
   /** The number of this attempt in `run_attempts`. */
   n: number;
-  /** The last in-flight event number used before this attempt. */
+  /** The event number stored in `run_queue`: at or above every in-flight
+   * event number the run sent before this attempt. */
   seqStart: number;
   signal: AbortSignal;
   isDraining: () => boolean;
@@ -124,10 +134,15 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   const attempt = run.attempt;
   const held = () => jobs.holds(run.id, attempt);
 
-  let seq = input.seqStart;
+  // the number stored in `run_queue`: at or above every number sent
+  let seqStored = input.seqStart;
+  let seq = input.seqStart + (job.resumed ? 1 : 0);
   const nextSeq = () => {
     seq += 1;
-    if (seq % SEQ_PERSIST_EVERY === 0) runsRepo.setSeq(db, run.id, seq);
+    if (seq > seqStored) {
+      seqStored = seq + SEQ_PERSIST_EVERY - 1;
+      runsRepo.setSeq(db, run.id, seqStored);
+    }
     return seq;
   };
 
@@ -183,7 +198,9 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     recordToolUsage(db, input.userId, run.id, "search", "search", toolUsage.search);
     recordToolUsage(db, input.userId, run.id, "fetch", "fetch", toolUsage.fetch);
   };
-  const tokens = () => usage.inputTokens + usage.outputTokens;
+  // the tokens the run recorded, this attempt's and earlier ones' (the
+  // thread's `tok`)
+  const runTokens = () => usageRepo.tokensOfRun(db, run.id);
 
   // the attempt's own abort: the caller's (a cancel, the drain), and a write
   // the sync server refused because the job no longer holds the run
@@ -213,7 +230,8 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     // the last process stored the answer's turn and stopped before writing
     // it: nothing is left to generate
     finishAttempt("complete");
-    if (!jobs.finish(run.id, attempt, answerOf(stored), 0)) return { outcome: "cancelled" };
+    if (!jobs.finish(run.id, attempt, answerOf(stored), runTokens()))
+      return { outcome: "cancelled" };
     return { outcome: "complete" };
   }
 
@@ -322,7 +340,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     // thread keeps the tokens it used (the mock's `tokens` end)
     finishAttempt("failed");
     recordUsage();
-    jobs.fail(run.id, attempt, spent, tokens());
+    jobs.fail(run.id, attempt, spent, runTokens());
     return { outcome: "failed", end: spent };
   }
   if (input.signal.aborted) {
@@ -362,6 +380,6 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     jobs.fail(run.id, attempt, "interrupted");
     return { outcome: "failed", end: "interrupted" };
   }
-  if (!jobs.finish(run.id, attempt, answer, tokens())) return { outcome: "cancelled" };
+  if (!jobs.finish(run.id, attempt, answer, runTokens())) return { outcome: "cancelled" };
   return { outcome: "complete" };
 }

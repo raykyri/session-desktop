@@ -311,6 +311,43 @@ test.serial("F4: a key's monthly cap is checked between steps too", async (t) =>
 });
 
 test.serial(
+  "F4: a key that is no longer valid between two tool steps ends the run `key` (review round 2 of phase 2, finding 5)",
+  async (t) => {
+    setFixtureScenario("success-with-tools");
+    // the key is found invalid while the run's first tool call fetches
+    let key: string | null = null;
+    let h: Harness | null = null;
+    const fetch: typeof globalThis.fetch = (input, init) => {
+      if (key !== null && h !== null) {
+        const { sync } = h.deps;
+        const id = key;
+        sync.run((tx) => {
+          const k = tx.get(`apikey:${id}`);
+          if (k?.kind === "apikey")
+            sync.commit(tx, [[`apikey:${id}`, { ...k, status: "invalid" }]], sync.time(tx));
+        });
+      }
+      return fixturePageFetch(input, init);
+    };
+    h = createHarness(t, { fetch, runs: { toolOverrides: { lookup: fixtureLookup } } });
+    const olga = new HttpClient(h, { cookie: h.signIn(h.addUser("olga")) });
+    const mel = new HttpClient(h, { cookie: h.signIn(h.addUser("mel")) });
+    const sp = await openSpace(olga, mel);
+    const k = await mel.call("apiKeys.create", { raw: "sk-or-MEL-KEY-0001", label: "" });
+    const id = (k.body.result as { id: string }).id;
+    await drive(h);
+    t.like(rec(h, `apikey:${id}`), { status: "valid" });
+    key = id;
+    const r = await ask(mel, sp, { model: "deepseek-flash", pay: id });
+    await drive(h);
+    t.like(rec(h, `apikey:${id}`), { status: "invalid" });
+    t.like(rec(h, `run:${r.run}`), { status: "failed", end: "key", pay: id });
+    t.like(rec(h, `thread:${r.th}`), { sum: null, running: false, tok: 940 });
+    t.is(researchTokens(h, r.run), 940, "one step, then it stopped");
+  },
+);
+
+test.serial(
   "F5: SESSION_QUEUED_PER_USER bounds a person's queued and running server runs",
   async (t) => {
     setFixtureScenario("success");

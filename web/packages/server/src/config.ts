@@ -158,10 +158,16 @@ const envSchema = z.object({
   SESSION_INCLUDED_TOKENS: positiveInteger(250_000),
   /** The request header that holds the client's network address, set by
    * the platform's proxy, which replaces any value a client sends (Fly's
-   * `Fly-Client-IP`). Empty: the socket's address (no proxy). The address
-   * keys the rate limits and decides whether a device sign-in is approved
-   * from the computer that asked for it. */
-  SESSION_CLIENT_IP_HEADER: z.string().trim().toLowerCase().default("fly-client-ip"),
+   * `Fly-Client-IP`, which `fly.toml` names). Empty, the default: the
+   * socket's address. Off Fly a client sets that header itself, so it is
+   * named only behind a proxy that replaces it (review round 2 of phase 2).
+   * The address keys the signed-out rate limits and the signed-out stream
+   * limit, and decides whether a device sign-in is approved from the
+   * computer that asked for it. */
+  SESSION_CLIENT_IP_HEADER: z.string().trim().toLowerCase().default(""),
+  /** Set by Fly on its machines: a production server that names a client
+   * address header refuses to start without it. */
+  FLY_APP_NAME: optionalString,
   /** A person's budget of sync writes and online calls (`POST
    * /api/sync/write`, `POST /api/rpc/*`): at most SESSION_WRITE_BURST at
    * once, refilled at SESSION_WRITES_PER_MINUTE (the earlier tRPC limit was
@@ -169,6 +175,11 @@ const envSchema = z.object({
    * Past it a write answers TOO_MANY_REQUESTS with `retryAt`. */
   SESSION_WRITE_BURST: positiveInteger(120, 1),
   SESSION_WRITES_PER_MINUTE: positiveInteger(60, 1),
+  /** The most sync event streams (`GET /api/sync/events`) one browser
+   * session, one device, or signed out one client address (an IPv6 /64)
+   * holds open; past it a new one answers TOO_MANY_REQUESTS (review round 2
+   * of phase 2). The web client opens one a tab, the desktop one. */
+  SESSION_STREAMS_PER_READER: positiveInteger(8, 1),
 
   SESSION_FIXTURE_PROVIDERS: flag(false),
   SESSION_TEST_AUTH: flag(false),
@@ -251,6 +262,8 @@ export interface Config {
     clientIpHeader: string | null;
     /** SESSION_WRITE_BURST and SESSION_WRITES_PER_MINUTE. */
     writeBudget: { burst: number; perMinute: number };
+    /** SESSION_STREAMS_PER_READER. */
+    streamsPerReader: number;
   };
 }
 
@@ -312,6 +325,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       issues.push("SESSION_CURSOR_KEY_ROTATED_AT: expected the rotation's ISO time");
     previousCursorKey = { key, rotatedAt };
   }
+  // a header named off Fly is one a client sets: in production that is a
+  // configuration error, not a fallback (review round 2 of phase 2)
+  if (isProduction && value.SESSION_CLIENT_IP_HEADER !== "" && value.FLY_APP_NAME === null)
+    issues.push(
+      "SESSION_CLIENT_IP_HEADER: names a header only a proxy sets; FLY_APP_NAME is unset, so the server is not behind Fly's proxy (leave it empty for the socket's address)",
+    );
   const desktopOrigins = value.SESSION_DESKTOP_ORIGINS.split(",")
     .map((o) => o.trim())
     .filter(Boolean);
@@ -400,6 +419,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         burst: value.SESSION_WRITE_BURST,
         perMinute: value.SESSION_WRITES_PER_MINUTE,
       },
+      streamsPerReader: value.SESSION_STREAMS_PER_READER,
     },
   };
 }

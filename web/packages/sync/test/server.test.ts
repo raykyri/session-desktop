@@ -500,6 +500,7 @@ test("sqlite: the migrations apply once, and the schema is the package's", (t) =
     "0002_review_r1.sql",
     "0003_space_vis.sql",
     "0004_review_r1_phase2.sql",
+    "0005_review_r2_phase2.sql",
   ]);
   t.deepEqual(migrate(db), []);
   const store = new SqliteServerStore(db);
