@@ -17,9 +17,17 @@ run execution belong to `01-architecture-and-data.md` and
 them, with ids `N1`-`N15` (01 uses `D` for its database items). Item ids of
 other files are cited as "01 C3", "03 K8", "04 §5".
 
-"The mock" below means the members mockup's behaviour as read from its source;
-function names are given in parentheses. Exact user-facing copy is taken from
-those functions unless an item or 01-04 says otherwise.
+"The mock" below means the members mockup's behaviour as read from its source
+at HEAD (the app code from about line 1128); function names are given in
+parentheses. User-facing copy (headings, button labels, menu labels, toasts,
+empty states, dialog text, notification text) is the mock's. The client
+departs from it in two places only: the account invite link carries the code
+in the fragment (`/i#<code>`, the mock prints `session.app/i/<code>`), and
+sign-in offers GitHub as well as X. Where an item adds a control or text the
+mock lacks (Stop, Run again, Ban on the thread menu, Unban, the member list,
+channel invite links), the item says it is a plan addition. Where a rule of
+01-04 removes data the mock shows (removed text, the author of a removed
+thread), the item says so.
 
 ## 1. Package layout
 
@@ -54,8 +62,9 @@ New code:
 
 ```
 src/replica/              ReplicaProvider, adapters/, queries.ts, writes.ts, viewer.ts, runStream.ts, fixtureReplica.ts
-src/features/shell/       AppBar, ScopePicker, ChannelStrip, UsageRing, SavedButton, LayoutToggle, AccountMenu, useBarAutoHide
-src/features/feed/        FeedPage, FeedRow, ThreadCard, TitleRow, Byline, AnswerProse, CardFooter, RunStatus, RemovedCard, BranchedFrom
+src/features/shell/       AppBar, ScopePicker, ChannelStrip, UsageRing, SavedButton, LayoutToggle, AccountMenu, useBarAutoHide,
+                          useBarAlign, SiteFooter
+src/features/feed/        FeedPage, FeedRow, ThreadCard, TitleRow, AnswerProse, CardFooter, RunStatus, RemovedCard, BranchedFrom
 src/features/branches/    BranchTree, BranchCard, BranchActions, BranchComments, SelectionActions, lookPhrase.ts, geometry.ts
 src/features/replies/     ReplyTree, ReplyCard
 src/features/composer/    NewThreadComposer, InlineComposer, SendSplitButton, ChannelPicker, ModelPicker
@@ -118,169 +127,269 @@ Left to right (`appbar`):
    "Session home"; goes to `/`.
 2. **Scope picker** (`headerSpaces`, `SCOPES`, `SCOPE_IC`): a menu button with
    `menuitemradio` items Joined (check-circle icon), Channels you manage (person
-   icon; owner role, only for accounts that can write) and All (compass icon;
-   01 C7). The scope chooses which channels the strip lists; Home always shows
-   joined channels. With one scope (signed out, where Joined would equal All)
-   no picker is drawn.
+   icon; channels the viewer owns, only for accounts that can write) and All
+   (compass icon; 01 C7). The scope chooses which channels the strip lists;
+   Home always shows joined channels. With one scope (signed out, where Joined
+   would equal All) no picker is drawn.
 3. **Channel strip**: horizontally scrolling `#name` chips with
-   `aria-current="page"` on the current one, a join "+" on unjoined chips
-   under All, a trailing New channel button for writers, and the empty line
-   ("You have not made a channel yet." / "Nothing here yet."). No scrollbar; a
-   mask fades 40 px at an edge only while content is hidden past it (`--fl`,
-   `--fr`). The current chip is scrolled to the centre when it lies within
-   40 px of an edge. Shown on feed routes, Browse, Invites and Usage.
-4. **Usage ring with track** (`meter`): "Nk left", a fill track, and an 18 px
-   ring arc over a full-circle track; tone `ok` below 80 % used, `warn` from
-   80 %, `bad` from 95 % (03 K6); `aria-label` "N of M included tokens left
-   this week; resets in …". Below 860 px only the ring shows. Opens `/usage`.
-   Offline it shows the last value and its time in the label.
-5. **Saved round button with count** (`savedBtn` variant `e`): a 28 px pill,
-   bookmark filled when the count is above zero, no number at zero, label
-   "Saved, N" (or "Saved"), `aria-current="page"` on `/saved` (the mock's
-   `aria-pressed` is wrong for a link). The count is computed from save records
-   in the user log (01 C2).
-6. **Layout toggle round button** (`layoutBtn`): switches between `centred` and
-   `wide` (§3.1); its icon shows the target layout, its label is "Wider main
-   column" or "Centre the main column"; feed routes only.
-7. **Account menu**: the avatar button carries an unread dot while any
-   notification is unread (W2.6; decision P10), and its label becomes
-   "Account, N unread notifications". Menu: header with avatar, name,
-   `@handle` and "Member", "Admin" or "No invite yet"; Notifications (with
-   the unread count, W2.6), Invites, Saved, Usage and API keys, Admin (site
-   admins only, W8.2), Sign out. No Settings entry until there are settings
-   beyond Usage (decision P23). Without an invite: Enter an invite code,
-   Sign out.
+   `aria-current="page"` on the current one, a join "+" (title "Join") on
+   unjoined chips under All, a trailing New channel button (label "New
+   channel") for writers, and the empty line ("You have not made a channel
+   yet." under Channels you manage, "Nothing here yet." otherwise). No
+   scrollbar; a mask fades 40 px at an edge only while content is hidden past
+   it (`--fl`, `--fr`). The current chip is scrolled to the centre when it
+   lies within 40 px of an edge. Shown on the feed routes, Browse, Invites,
+   Usage, Notifications and Site Admin; not on `/welcome`.
+4. **Usage ring** (`meter`): an 18 px ring only, at every width (no "Nk left"
+   text and no track bar): an arc for the share used over a full-circle
+   track; tone `ok` below 80 % used, `warn` from 80 %, `bad` from 95 %
+   (03 K6); `aria-label` "N of M included tokens left this week; resets in
+   2 days 5 h" (`fmtTok`, `resetIn`). Opens `/usage`. Offline it shows the
+   last value and its time in the label.
+5. **Saved round button with count** (`savedBtn` variant `e`): a 30 px pill
+   (30 px high, at least 30 px wide; a 30 px circle with the bookmark alone
+   at zero), bookmark filled when the count is above zero, no number at zero,
+   label "Saved, N" (or "Saved"), title "Saved", `aria-current="page"` on
+   `/saved` (the mock's `aria-pressed` is wrong for a link). The count is
+   computed from save records in the user log (01 C2).
+6. **Layout toggle round button** (`layoutBtn`): 30 px; switches between
+   `centred` and `wide` (§3.1); its icon shows the target layout (arrows
+   outward in `centred`, inward in `wide`), its label and title are "Expand"
+   in `centred` and "Collapse" in `wide`; feed routes only.
+7. **Account menu**: the 20 px avatar button carries a 9 px unread dot while
+   any notification is unread (W2.6; decision P10), and its label becomes
+   "Account, N unread notifications". Menu: header with avatar, name and
+   "@handle · Member", "@handle · Admin" (site admins) or "@handle · No
+   invite yet"; Notifications (with the unread count, W2.6); Invites, Saved,
+   Usage and API keys, Site Admin (site admins only, W8.2); Sign out. No
+   Settings entry until there are settings beyond Usage (decision P23).
+   Without an invite: Enter an invite code, Sign out.
 
 Items 4-6 are not rendered for accounts without an invite.
 **Signed out** (`appbarOut`): name, strip of open channels, "Join with invite"
 (opens the auth dialog at the code step) and "Sign in".
 
+**Placement** (`#bar`, `alignBar`). The bar is absolutely positioned over the
+page (`position: absolute; top: 0`), so showing or hiding it never changes
+the page's layout or scroll position; the feed and every page reserve its
+height with 49 px of top padding (and `scroll-padding-top: 49px` on pages).
+In layout `centred` above 860 px the bar is a floating card aligned to the
+feed's columns: no top border, a 1 px divider border on the other sides and
+rounded bottom corners. Above 1320 px, where the main column is centred on
+its own, the bar has the main column's left edge and width; from 861 to
+1320 px, where the main and side columns are centred as a pair, it spans
+both columns, from the main column's left edge to the side column's right
+edge. In layout `wide`, at 860 px and below, and on non-feed screens it is
+full width. `useBarAlign` measures the first feed row whose first cell is not
+the channel header, sets `--bl` and `--bw` on the shell, and re-measures on
+resize and on a layout change.
+
 **W2.2 `AppBar` and parts** in `features/shell/` on `ui/Menu` and
 `ui/RoundButton`. Acceptance: component tests per viewer state (signed out, no
-invite, member, channel owner) for which controls render; the list per scope;
-ring tone at 79.9/80/94.9/95 %; Saved shows no number at 0 and `aria-current`
-only on `/saved`; fade variables are `0px` when the strip does not overflow.
+invite, member, channel owner) for which controls render; the list per scope
+and its two empty lines; the strip on each route of item 3 and not on
+`/welcome`; ring tone at 79.9/80/94.9/95 % and no visible text in the ring
+button; Saved shows no number at 0 and `aria-current` only on `/saved`; the
+layout toggle's label per layout; fade variables are `0px` when the strip
+does not overflow; "Site Admin" in the account menu only for site admins.
+Playwright in `centred` at 1440 px reads the bar's left edge and width equal
+to the main column's, at 1100 px equal to the span of both columns, and in
+`wide` and at 800 px the full width.
 
 **W2.3 Bar hides on scroll.** `useBarAutoHide(scrollEl)`: shown within 48 px of
 the top; past that a downward step over 4 px hides it and an upward step over
 4 px shows it, the reference position moving only on such steps or within
 48 px of the top. It stays shown while one of its menus is open, on non-feed
 screens, and while focus is inside it (a `focusin` shows it, so Shift+Tab from
-the feed reaches it). Hiding animates `margin-top` over 0.2 s (none under
-reduced motion); the hidden bar is not `inert` and stays in the accessibility
-tree. Acceptance: reducer unit test over scroll sequences; Playwright reads the
-bar's box after wheel 400 px down (hidden) and 50 px up (shown), and after
-Shift+Tab from the first feed control while hidden (shown, focus on the last
-bar control).
+the feed reaches it; a plan addition). A jump from a notification (W2.6) sets
+`keepBar`: the scroll event that jump causes does not hide the bar, and the
+reference position moves to the new offset. Hiding sets
+`transform: translateY(-100%)` with a 0.2 s transition (none under reduced
+motion); the hidden bar is not `inert` and stays in the accessibility tree.
+The sticky side column of a post (§4.3) has `top: calc(58px + 49px)` while
+the bar shows and `top: 58px` while it is hidden. Acceptance: reducer unit
+test over scroll sequences, including `keepBar`; Playwright reads the bar's
+box after wheel 400 px down (hidden) and 50 px up (shown), checks that the
+first row's `getBoundingClientRect().top` and the scroll container's
+`scrollTop` do not change when the bar hides or shows, reads the sticky
+column's `top` in both states, checks the bar stays shown after opening a
+notification, and after Shift+Tab from the first feed control while hidden
+(shown, focus on the last bar control).
 
 **W2.4 Full window, no fullscreen.** The mock's Fullscreen button, window frame
 (`.frame`) and `fs-exit` are scaffolding. The shell fills the viewport, with
-one scroll container below the bar. The Tauri drag region and traffic-light
+one scroll container under the bar. The Tauri drag region and traffic-light
 inset are not built (removed: web-only build). Acceptance: no
 `requestFullscreen` in the client.
 
-**W2.5 Phone width.** ≤ 520 px: brand word hidden, composer controls wrap to a
-second row under the text (`ncw`), menus right-anchored and capped at
-`100vw - 40px`. ≤ 860 px: feed rows, Invites and Usage stack to one column.
-Acceptance: Playwright at 360×740 and 390×844 asserts
-`scrollWidth <= innerWidth` on every route and that the send button is visible.
+**W2.5 Narrow widths.** ≤ 520 px: brand word hidden, composer controls wrap to
+a second row under the text (`ncw`). ≤ 600 px: the composer's menus are
+right-anchored and capped at `100vw - 40px`, and the Effort submenu is drawn
+inline under its row instead of flying out to the side. ≤ 860 px: feed rows,
+Invites and Usage stack to one column, the side column is not sticky, and the
+bar is full width. Acceptance: Playwright at 360×740 and 390×844 asserts
+`scrollWidth <= innerWidth` on every route, that the send button is visible,
+and that the open Effort submenu lies inside the viewport.
 
-**W2.6 Notifications page** (`/notifications`, reached from the account
-menu; decision G). Lists the notification records of the user log (01 C16),
-newest first:
-- `mention`: "@x mentioned you in #name";
-- `reply`: "@x replied to your post in #name" ("@x and N others" when
-  coalesced);
-- `branch`: "@x branched from your ask in #name" (a look-up reads "@x looked
-  up a phrase in your ask");
-- `comment`: "@x commented on your ask in #name";
-- `removed`: "Your thread in #name was removed by @owner", with "Reason:
-  “…”" when the owner gave one; it links to the placeholder;
-- `invite_used`: "@x joined Session with your invite", linking to `/invites`.
+**W2.6 Notifications page** (`/notifications`, `notifPage`, reached from the
+account menu; decision P10). Heading "Notifications" with "Mark all as read"
+(disabled while nothing is unread). Under it, while the list is not empty, the
+summary line "N unread notifications." (or "1 unread notification.", or "All
+caught up.") followed by "Mentions, replies to your posts, branches and
+comments on your asks, removals, and invites people used." The list is the
+notification records of the user log (01 C16), newest first, in a box; each
+row shows the actor's avatar with a kind badge (`N_KIND`), the text, and a
+sub-line "#channel · 3h" ("Invites · 3h" for an invite), and unread rows are
+tinted with an 8 px dot labelled "Unread". The thread title is the
+replica's, clipped at 64 characters, in quotes (`titleOf`):
+- `mention`: "@x mentioned you in a reply on “title”" (`comment` or `post`
+  in place of `reply`, by where the mention is);
+- `reply`: "@x replied to your post “title”";
+- `branch`: "@x branched from your ask “title”" (a look-up too);
+- `comment`: "@x commented on your ask “title”";
+- `removed`: "@x removed your ask: “reason”" (or "post"; without a reason,
+  "@x removed your ask"). The mock also prints the title; the client cannot,
+  because the removal erases the text and the notification carries none
+  (01 C16, 04 O2);
+- `invite_used`: "@x joined Session with your invite SESS-XXXX-XX".
 
-Each channel row links to the thread's address (§2.1, `/c/$name?t=&sel=`);
-an item the viewer can no longer read is not served, so it is not listed.
-Opening the page writes `notifications.markSeen`; a row click writes
-`notifications.markRead`; "Mark all read" writes
-`notifications.markAllRead`. An unread dot on the account avatar in the app
-bar (`UnreadDot`, 6 px, accent, with the label of §2.2 item 7) shows while
-any notification is unread, and the menu's Notifications entry shows the
-count; no other app bar control is added. Empty state "No notifications
-yet.". Acceptance: component tests per notification type, for the coalesced
-text, for the unread dot appearing and clearing after `markSeen`, and for
-the unread count; a test that a mention in a private channel the viewer left
-is not listed.
+Coalesced `reply`, `branch` and `comment` records (01 C16) read "@x and N
+others …" (a plan addition; the mock has no coalescing). Opening a row
+(`openNotif`) writes `notifications.markRead` and goes to the thread's address
+(§2.1, `/c/$name?t=&sel=`): a reply mention or reply selects that reply in
+the reply tree, a branch selects the new node, a comment or a comment mention
+selects the node commented on; the card is scrolled to 12 px below the top of
+the feed with `keepBar` set (W2.3) and flashes a 2 px accent ring for 1.6 s
+(`.card.flash`; no transition under reduced motion). An invite row goes to
+`/invites`. An item the viewer can no longer read is not served, so it is not
+listed. "Mark all as read" writes `notifications.markAllRead` and shows the
+toast "All notifications marked as read." The unread dot on the account
+avatar (`UnreadDot`, 9 px, `--unread-dot`, with the label of §2.2 item 7)
+shows while any notification is unread, as in the mock; opening the page
+does not clear it. The menu's Notifications entry shows the count; no other
+app bar control is added. Empty state (`notifEmpty`): a box with a bell,
+"No notifications yet", "You are notified when someone mentions you, replies
+to your post, branches or comments on your ask, uses one of your invites, or
+when a channel owner removes your thread." and the button "Invite someone"
+(to `/invites`). Acceptance: component tests per notification kind and for
+the coalesced text; the summary line for 0, 1 and 3 unread; the unread dot
+appearing, staying after the page is opened, and clearing after the last
+`markRead` or `markAllRead`; the unread count; a reply mention selecting the
+reply; the flash class removed after 1.6 s; a test that a mention in a
+private channel the viewer left is not listed.
+
+**W2.7 Site footer** (`siteFoot`, 05 §6 Q10). Every feed (after the last row)
+and every page (`/saved`, Browse, Invites, Usage, Notifications, Site Admin,
+`/welcome`, `/settings`) ends with a centred footer: "Session · Report abuse:
+abuse@<host>", the address a `mailto:` link, where `<host>` is the hostname of
+`SESSION_PUBLIC_ORIGIN` (in production `abuse@session.dev`); 40 px above it,
+a 1 px divider rule on top, extra-small faint text. The address comes from
+the client's build-time config of the public origin, not from a literal.
+Signed-out readers see it too. Scheduled in M4. Acceptance: a component test
+that the address follows the configured origin; `spaces-shell.spec.ts` finds
+the footer at the end of Home, a channel, Browse and Usage, signed in and
+signed out.
 
 ## 3. Feed
 
 ### 3.1 Rows and layouts
 
-Each thread is a row `[card | side column]` under, in order, the no-invite
-banner ("You don't have an invite yet. …", Enter a code), the frozen-copy
-banner (§6, W6.10), the channel header, the composer and the empty state
-(`renderNetwork`).
+The feed (`renderNetwork`) is, in order: the no-invite banner ("You don't
+have an invite yet. You can read every open channel. Asking, posting and
+replying open once you enter an invite code.", button "Enter a code"), the
+channel header (W6.1), the frozen-channel banner (W6.10), the composer (§5;
+not rendered in a channel the signed-in viewer has not joined), the empty
+state, one row `[card | side column]` per thread, and the site footer (W2.7).
 
-- **`centred`** (mock layout A): ≥ 1321 px a grid `1fr | 600px | 1fr`, card in
-  the middle, side column in the right track capped at 330 px, channel header
-  spanning both; 861-1320 px a centred `600px | 330px` pair.
-- **`wide`** (mock layout B): ≥ 861 px a centred `720px | 300px` pair.
-- ≤ 860 px: one column, side column after the card with a 12 px inset.
+- **`centred`** (mock layout A, `pl-a`): above 1320 px a grid
+  `1fr | 600px | 1fr` (at most 1340 px wide), card in the middle track, side
+  column in the right track capped at 330 px; the channel header takes the
+  main column's width. From 861 to 1320 px a centred `600px | 330px` pair, the
+  channel header spanning both columns. The app bar follows the same columns
+  (§2.2, Placement).
+- **`wide`** (mock layout B, `pl-b`): ≥ 861 px a centred `720px | 300px` pair,
+  the channel header spanning both.
+- Columns are 21 px apart. ≤ 860 px: one column with a 12 px page inset, the
+  side column after the card with a further 12 px inset.
 
 The layout is the `prefs` record in the user log (01 C13, written with
 `prefs.set`), default `centred`; `navigation` holds the applied value so the
-first paint does not wait for the replica (ADR-20). Empty states: Saved
-("Nothing saved yet. …"), Home ("Join a few channels to fill Home." with a
-Browse channels link), empty channel ("No threads here yet. Ask the first
-question."), and a private channel the viewer is not in ("This channel is
-private." with the owner's handle).
+first paint does not wait for the replica (ADR-20). Empty states:
+- Saved (`savedEmpty`): a box with a bookmark icon, "Nothing saved yet",
+  "Threads you save appear here, newest first. Save one with the bookmark at
+  the bottom of the thread; saving again removes it." and the button "Go to
+  Home";
+- Home: "Join a few channels to fill Home." followed by the inline link
+  "Browse channels";
+- a channel without threads: "No threads here yet. Ask the first question.";
+- a private channel the viewer is not in: "This channel is private. Ask
+  @owner to add you."
 
 **W3.1 `FeedPage`, `FeedRow`.** Grid utilities keyed on `data-layout`; rows
 virtualised with `@tanstack/react-virtual` past 60 rows, measured after the side
-column lays out. Acceptance: visual baselines (§12.2); a test per empty state;
-toggling the layout writes one `prefs.set` and a second replica of the same
-account applies it.
+column lays out. Acceptance: visual baselines (§12.2); a test per empty state
+with its copy and button; the channel header's width per layout and width
+band; toggling the layout writes one `prefs.set` and a second replica of the
+same account applies it.
 
 ### 3.2 Card
 
+- **Branched from** (`fromln`): on a thread opened from a branch, above the
+  title row, a reply-arrow and "Branched from <title>" (the source thread's
+  question clipped at 70 characters, bold) linking to the source row with that
+  branch selected.
 - **Title row** (`titleRow`), drawn as a tree row: an 11 px hollow node centred
-  on the first line, aligned with the composer's node; the title in regular
-  weight at the title size (16.5 px in the mock); on the right the author's
-  20 px avatar with tooltip "handle · 3h"; a post shows its channel before the
-  avatar; then the "…" menu. An ask's title is the question as typed.
-- **Branched from** (`fromln`): on a thread opened from a branch, "Branched
-  from <title>" linking to the source row with that branch selected.
-- **Byline** (asks): agent mark with a tooltip "model · effort" (03 §1,
-  K12; "Opus 5.5 · high effort"), then "N sources · Nk tokens · #channel",
-  omitting empty parts. An ask's channel is in the byline, not the title
-  row.
-- **Answer prose** (§4.4).
-- **Footer**: follow-up button (reply-arrow icon, label "Ask a follow-up") with
-  the total branch count for an ask, Reply with the total reply count for a
-  post, then Save with the save count (01 C1, C5). A zero count is not drawn;
-  the label then omits the number. In a private channel a save count below 3
-  is not drawn (decision S6, 01 C1). No likes anywhere.
-- **"…" menu**: own thread, Delete (disabled with "Not available once someone
-  else has responded" or "Available when the answer finishes"; 01 C15);
-  another member's thread, for the channel's owner (04 §4.3), Remove… and
-  "Ban from #name"; for anyone else no menu (there is no reporting, 04
-  §6.1).
-- **Removed thread** (`card.removed`, 01 C12, 04 §6.2): "Removed by @owner",
-  "Reason: “…”" when given, "Ask by [deleted] in #name" or "Post by [deleted]
-  in #name" for every reader, the author included; no prose, footer or side
-  column. The author's "…" menu keeps Delete (04 §6.2).
+  on the first line; the title in regular weight at the title size (16.5 px in
+  the mock); on the right a post's channel (`#name`, extra-small, faint), then
+  the author's 20 px avatar with the tooltip "handle · 3h", then the "…" menu.
+  An ask's title is the question as typed; an ask's channel is in the footer
+  meta, not the title row.
+- **Answer prose** (asks, §4.4).
+- **Footer** (`card-f`): on the left, for an ask, the meta
+  "N sources · Nk tokens · #channel" (`fmeta`; "1 source", tokens as
+  `ktok`: "41k tokens", or the exact number below 1,000), omitting empty
+  parts; then the follow-up button (reply-arrow icon, label and title "Ask a
+  follow-up", `aria-label` "Ask a follow-up, N branches") with the total
+  branch count for an ask (hidden while the root answer runs), or Reply
+  (label "Reply, N replies") with the total reply count for a post; then Save
+  (bookmark; label "Save" or "Saved", with ", saved by N" when the count is
+  shown; title "Save" or "Saved"; `aria-pressed`) with the save count (01 C1,
+  C5). Saving shows the toast "Saved.", unsaving "Removed from saved.". A zero
+  count is not drawn; the label then omits the number. In a private channel a
+  save count below 3 is not drawn (decision S6, 01 C1). There is no byline,
+  no agent mark on the card and no likes. The model and effort of a run are
+  stored on the node and run records (03 K12) and shown nowhere in the UI.
+- **"…" menu** (`moreMenu`, label "More"): own thread, "Delete ask" or
+  "Delete post" (disabled with "Not available once someone else has
+  responded", or "Available when the answer finishes" while the root answer
+  runs; 01 C15), confirmed by an `alertdialog` "Delete this thread?" / "This
+  can't be undone." with Cancel and Delete; another member's thread, for the
+  channel's owner (04 §4.3), "Remove…" (W6.5) and "Ban from #name" (a plan
+  addition; the mock's thread menu has only Remove…); for anyone else no
+  menu.
+- **Removed thread** (`card.removed`, 01 C12, 04 §6.2): a removal icon,
+  "Removed by @owner", "Reason: “…”" when given, and "Ask by [deleted] in
+  #name" or "Post by [deleted] in #name" for every reader, the author
+  included (the mock prints the author's handle; 05 §6 P5 decided
+  "[deleted]"); no prose, footer or side column. The author's "…" menu keeps
+  Delete (04 §6.2).
 - **Hidden thread** (04 §6.3): the author and the owner see the text under
   "Hidden by the channel owner"; others see the placeholder. No Hide command
   (decision P7).
 
 Signed out, the follow-up, Reply and Save controls open the auth dialog and
 focus returns to the control on close; without an invite they are disabled
-with "… opens once you have an invite".
+with the titles "Ask a follow-up opens once you have an invite", "Reply opens
+once you have an invite" and "Saving opens once you have an invite" (the
+mock's "Liking opens …" on Save is a leftover of removed likes).
 
 **W3.2 `ThreadCard` and parts.** Acceptance: tests for no zero counts, no
-save count below 3 in a private channel, no like control, byline omissions,
-Delete eligibility, Remove and Ban for the owner and no menu for other
-members, no Report anywhere, the removed and hidden placeholders, and the
-three viewer states of the footer.
+save count below 3 in a private channel, footer meta omissions ("2 sources ·
+#ml" without tokens, "41k tokens · #ml" without sources), no model or effort
+text anywhere in the card's DOM, Delete eligibility and the confirmation
+copy, Remove and Ban for the owner and no menu for other members, the removed
+and hidden placeholders, the Save toasts, and the three viewer states of the
+footer.
 
 ### 3.3 Run states
 
@@ -291,18 +400,19 @@ cards:
 |---|---|
 | `queued` | "Queued" |
 | `running` | "Researching · Step N of 4" (`step` 0-3, 03 E3) with a pulsing dot, replaced by streamed text as it arrives (ADR-22) |
-| `failed` | the reason for `fail.why` (`tokens`: the out-of-tokens copy; `key`, `rate`, `access`, `error`, `stopped`) |
+| `complete` | the answer; a run note after it when the run record carries one: "Stopped at the run's token limit." (03 E5, L1) or "Stopped: this week's included tokens ran out." (the member's overdraft limit was reached, 03 K9) |
+| `failed` | the reason for `fail.why` (`tokens`: "You're out of tokens until Friday. You can still post, or add an API key in Usage.", weekday from `usage.get`; `key`, `rate`, `access`, `error`) |
 | `cancelled`, `interrupted` | "Stopped" / "Interrupted" with the partial text |
 
-While `queued` or `running` the asker gets Stop (`research.cancelNode`); this
-is not in the mock and is required by 05 M5a. After `failed`, `cancelled` or
-`interrupted` the asker gets Run again (`research.retryNode`, a new attempt).
-While a node runs its follow-up button, Continue, Branch, Comment, selection
+While `queued` or `running` the asker gets Stop (`research.cancelNode`; a plan
+addition required by 05 M5a). After `failed`, `cancelled` or `interrupted` the
+asker gets Run again (`research.retryNode`, a new attempt; a plan addition).
+While a node runs, its follow-up button, Continue, Branch, Comment, selection
 actions and Delete are hidden or disabled as in the mock.
 
-**W3.3 `RunStatus`.** Acceptance: a test per status on the fixture replica;
-Stop and Run again only for the asker; an `interrupted` run with partial text
-keeps that text and shows Run again.
+**W3.3 `RunStatus`.** Acceptance: a test per status on the fixture replica,
+including both `complete` notes; Stop and Run again only for the asker; an
+`interrupted` run with partial text keeps that text and shows Run again.
 
 ## 4. Side column
 

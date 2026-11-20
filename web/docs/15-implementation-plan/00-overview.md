@@ -53,26 +53,44 @@ to them.
 
 - Names: users see "channels"; the code and wire keep `space`.
 - App bar: the app name is the home button; a scope picker (Joined, Channels
-  you manage, All) and a scrolling channel strip; usage ring; Saved (with a
-  count); a layout toggle (centred main column, or a wider main column); the
-  account menu. The bar slides away while the feed scrolls down.
+  you manage, All) and a scrolling channel strip; the usage ring (a ring
+  only, at every width: no "Nk left" label and no bar; warn from 80 % used,
+  bad from 95 %); Saved (with a count); a layout toggle (centred main column,
+  or a wider main column); the account menu. The bar is positioned over the
+  page and the page reserves its 49 px height, so hiding or showing it never
+  changes layout or scroll position; it slides away (`translateY(-100%)`,
+  0.2 s, none under reduced motion) while the feed scrolls down and returns
+  on any scroll up. In the centred layout above 860 px it is a floating card
+  aligned to the feed columns (the main column above 1320 px, main and side
+  columns together from 861 to 1320 px); in the wide layout and at 860 px
+  and below it is full width (02 W2.2, W2.3).
 - Feed rows: a post on the left, its branches or replies in a side column.
   Titles are drawn as tree rows (hollow node, regular weight, author avatar on
-  the right). The byline reads "N sources · Nk tokens · #channel". The footer
-  carries a reply/follow-up count and a save count; there are no likes.
-  Answers are plain Markdown; widgets and artifacts appear in the mockup
-  only as options and are not built.
+  the right, name and time in the avatar's tooltip). An ask card has no
+  byline: "N sources · Nk tokens · #channel" (empty parts omitted) sits on
+  the left of the card footer, followed by the follow-up button with its
+  count and Save with its count; a post shows its channel beside the avatar
+  and a reply count. Model and effort are stored on node and run records
+  (03 K12) and shown nowhere in the UI. There are no likes. Answers are
+  plain Markdown; widgets and artifacts are not built.
 - Branches: a tree beside each answer; selecting a row shows its card with
   Comment, Continue and Branch. Selecting 1-4 whole words in an answer offers
   Look up (a branch that describes the phrase) above Branch here.
-- Composer: Ask (arrow) or Post (pencil), channel and model pickers.
+- Composer: starts with the member's avatar (20 px); the text, the channel
+  picker, the model picker for asks, and a split send button whose menu
+  chooses Ask (arrow) or Post (pencil) (02 W5.1).
 - Channels: an info dialog (description, owner, members, visibility); owners
   edit only About; owners remove threads with an optional reason, and the
-  moderation log lists the owner's removals and bans. The mockup's member
-  reports are not built (no reporting). The owner is the only person who
-  moderates (`isMod` is the owner). Channel rules were tried and removed.
+  moderation log ("Moderation log") lists the owner's removals and bans.
+  There is no reporting. The owner is the only person who moderates
+  (`isMod` is the owner). Channel rules were tried and removed.
 - Membership: invite-only, with an invite tree and at most 3 open links;
-  sign-in with GitHub or X.
+  sign-in with GitHub or X. Two deliberate departures from the mockup: the
+  invite link carries the code in the fragment (`/i#<code>`), and sign-in
+  offers GitHub as well as X.
+- Site footer on every feed and page: "Session · Report abuse:
+  abuse@<host>", with `<host>` the hostname of `SESSION_PUBLIC_ORIGIN`
+  (`abuse@session.dev` in production).
 - Notifications: a page in the account menu and an unread dot on the
   account avatar.
 - Usage and API keys page: weekly allowance, recent runs, what happens when
@@ -91,8 +109,9 @@ to them.
 | `05-delivery.md` | Milestones `M0`-`M8` (M7a, M7b removed), the build branch and carry-over, testing and acceptance, deployment and launch, observability, risks, open questions | milestones `M`; questions `P`, `E`, `S`, `Q` |
 
 Removed items, kept with their ids: `01` S2; `02` W1.2 (replaced by a
-check), §12.3; `03` V1-V7, T5, L3; `04` Z3 (web-only build); `04` O1 (no
-reporting); milestones M7a and M7b.
+check), §12.3; `03` V1-V7, T5, L3; `04` Z3; milestones M7a and M7b (all
+web-only build); `04` O1 (no reporting); `04` I6 (no suspension); `01` S4
+(no effect queue).
 
 Files cite each other's items with the file number ("01 C3", "04 O2").
 
@@ -111,7 +130,9 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
   generic (01 D1).
 - Likes are removed from the contract; the counts record is
   `{ th, s, saves, r }`, with `r` the total of branches or replies; in
-  private channels save counts below 3 are not served (01 C1, C5).
+  private channels save counts below 3 are not served: the counts record
+  stores the served value and the true count is a non-replicated server
+  column (01 C1, C5).
 - The web client keeps an in-memory replica loaded by a snapshot on each
   page load, with a smaller window than the desktop's (30 days or 100
   threads, capped at 500 per space), and holds a write only while its
@@ -129,8 +150,19 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
   there is no reporting; notifications cover mentions, replies to a post,
   branches and comments on an ask, removals and used invites (01 C12, C16;
   02 W2.6; 04 O2, O5).
+- There is no effect queue. Notifications are written in the same
+  transaction as the write that causes them, by a server-only `notify`
+  stage after `run`, so they are exactly once; a run is queued by writing
+  its `run` record with status `queued`, and the dispatcher claims it with
+  a compare-and-set; title and summary are the run's final steps; an API
+  key is checked with the provider during the `apiKeys.set` request. This
+  departs from `AGENTS.md` and from replica-proto's effect model; U6
+  changes replica-proto first and the web-only `AGENTS.md` (Q1) records it
+  (01 U1, U6, S4, C16; 03 E2, K4).
 - Sign-in is GitHub or X; an account is bound to the provider it was
-  created with (04 I1, Z2).
+  created with (04 I1, Z2). Launch is with both: X access ready on staging
+  before M6 and on production before launch is a launch blocker, and the
+  launch smoke test signs in with both (Q8).
 - Account invites are online-only tRPC calls, at most 3 open links per
   member, with a 30-bit code (`SESS-XXXX-XX`) in the URL fragment
   (`/i#<code>`), stored hashed and encrypted for its creator, and one
@@ -143,7 +175,25 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
   provider's discount ratio; the server decides the payer in the mutator's
   `pre` stage; members may add Anthropic and OpenAI keys (ADR-23, to be
   written); the Effort submenu lists the chosen model's efforts, with no
-  cost hint and no cap (03 K2, K3, K4, K8, K12).
+  cost hint and no cap; every new run carries an explicit effort (03 K2,
+  K3, K4, K8, K12).
+- Tokens are billed at spend time: each provider call opens a
+  `usage_events` row when it starts, updates it at most every 2 s and
+  closes it when the call ends for any reason; ledger writes are not
+  fenced, and at most 2 s of output per call can go unbilled after a crash.
+  Allowance checks count open rows (03 K1, K9).
+- Overdraft is limited per member: `SESSION_OVERDRAFT_TOKENS` (200,000 a
+  week) is shared by all of a member's included-token runs; at allowance
+  plus that limit every such run stops at its next checkpoint with "Stopped:
+  this week's included tokens ran out." The per-run cap of 400,000 stays
+  (01 S3; 03 K9).
+- Beyond 20 queued runs per user, `pre` refuses with a recorded
+  `PRECONDITION_FAILED` (`reason: "queue_full"`); `TOO_MANY_REQUESTS` is
+  only for transport rate limits (01 Y2; 03 L1).
+- Client ids are kept across reloads, per tab: the web client keeps
+  `{clientId, userId}` in sessionStorage behind a Web Lock, `register`
+  re-attaches an existing id, only new ids count against the limit of 50 a
+  day, and web client ids expire after 7 days idle (01 Y3, D2; 02 §9.2).
 - A site admin sets the default model and the default effort at runtime;
   members' composers start on both. Every registry model stays available to
   every member: there is no availability setting and no per-member override
@@ -161,19 +211,27 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
   Litestream generations and archives (01 §9 q3, 05 S1).
 - A channel has exactly one owner and no other roles: no admins, moderators
   or other staff. Ownership is not transferable; everyone else in a channel
-  is a member. Only the owner removes threads, dismisses reports, reads the
-  moderation log, bans and unbans, removes members from a private channel,
-  makes channel invite links and edits About; reports go to the owner. The
+  is a member. Only the owner removes threads, reads the moderation log,
+  bans and unbans, removes members from a private channel, makes channel
+  invite links and edits About. The
   contract drops the `admin` and `mod` roles, `members.setRole`, the space's
   `mods` list (replaced by `owner`) and the `invite` setting, and
   replica-proto drops or rewrites the tests for them (01 C18, U6; 04 §4.3).
   `users.is_admin` stays for the people who run Session: site admins seed
   the roots of the invite tree, are exempt from the 3-open-invites limit,
-  suspend accounts (04 I6) and delete channels by operator job (04 §1); they
-  have no channel role. A channel whose owner is suspended or deleted is
-  frozen: readable as before, closed to writes other than deleting one's
-  own items and leaving (04 B6). A deleted owner's channels stay frozen
-  and readable indefinitely; nothing deletes them on a schedule (05 P24).
+  set the default model and effort, and delete accounts and channels by
+  operator job (04 §1); they have no channel role. There is no suspension:
+  no `admin.suspend` and no `suspended` status (04 I6 removed). A channel
+  is frozen only when its owner's account is deleted: readable as before,
+  closed to writes other than deleting one's own items and leaving (04
+  B6). A deleted owner's channels stay frozen and readable indefinitely;
+  nothing deletes them on a schedule (05 P24).
+- Account deletion deletes the provider identity (`provider`,
+  `provider_user_id`); the handle stays reserved, and the person can sign
+  in again as a new waiting identity (04 I1).
+- Abuse reaches site admins by email: the site footer reads "Session ·
+  Report abuse: abuse@<host>" on every feed and page (a client item in 02,
+  scheduled in M4), and the mailbox must exist before launch (Q10).
 - The product owner's answers to `05-delivery.md` §6, recorded there as
   "Decided" and in each file where the question was:
   - Scope: web only (above); no "Run on this Mac" (P15), no phone app
@@ -189,7 +247,14 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
     banner; site admins invite a named first group, who then have 3
     invites each (Q11).
   - Sign-in: GitHub or X; one provider per account, no linking, no merging
-    (P1; 04 I1, Z2).
+    (P1; 04 I1, Z2). Launch with both providers; there is no GitHub-only
+    fallback (Q8).
+  - No suspension: site admins' Session-wide tools are account deletion
+    and channel deletion by operator job and the invite tree (04 I6
+    removed, B6).
+  - Follow-up jobs ("effects") removed: notifications commit with the
+    write, runs are queued as `run` records (01 S4 removed, U1, C16; 03
+    E2).
   - Private channels: channel invite links only (P4).
   - No reporting: no `reports.*`, report notifications, report part of the
     moderation log, report limits or report e2e cases; the owner's Remove
@@ -221,11 +286,17 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
     boot-time Litestream generation check (E6); a smaller web window (E7).
   - Security: save counts below 3 hidden in private channels (S6).
   - New questions from the web-only scope (05 §6, Q1-Q12): the recommended
-    answers are accepted for Q1 (ADR scope notes, web-only `AGENTS.md`), Q2,
-    Q4 (in-flight writes only), Q5 (protocol header kept), Q6 (admin
-    seeding with `db:admin`), Q8 (staging X app before M6) and Q10 (an abuse
-    address in the site footer; no community guidelines page). Q3: the branch is `session-web`
-    and `main` is kept as it is. Q7: each account's email from the provider
+    answers are accepted for Q1 (ADR scope notes, web-only `AGENTS.md`,
+    which also records the removal of the effect queue), Q2, Q4 (in-flight
+    writes only; client ids kept per tab across reloads, 01 Y3), Q5
+    (protocol header kept) and Q6 (admins sign in once, then `npm run
+    db:admin -- <handle>`). Q8: launch with both GitHub and X; X access
+    ready on staging before M6 and on production before launch is a launch
+    blocker, and the launch smoke test signs in with both. Q10: the site
+    footer reads "Session · Report abuse: abuse@<host>" (`<host>` from
+    `SESSION_PUBLIC_ORIGIN`) on every feed and page, the mailbox exists
+    before launch, and there is no community guidelines page. Q3: the
+    branch is `session-web` and `main` is kept as it is. Q7: each account's email from the provider
     is stored and updated on every sign-in, never used to match, deduplicate
     or merge accounts; the handle stays the only unique name (04 I1, Z2).
     Q9: no per-member model overrides. Q11: above. Q12: no weekly spend

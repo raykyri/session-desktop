@@ -74,28 +74,38 @@ rotation, then removed), `SESSION_SECRET_KEY` (API key and invite code
 encryption, see 03 and C8), the X OAuth client settings (04 Z2), the web
 replication window of R1, and the run and allowance settings of
 `03-agents-and-research.md`: `SESSION_WEEKLY_TOKENS` (2,000,000),
-`SESSION_RUN_MAX_TOKENS` (400,000) and `SESSION_QUEUED_PER_USER` (20); the
-abuse limits of 04 Z1. The default model and the default effort are not
-configuration: a site admin sets them at runtime (03 K15).
+`SESSION_RUN_MAX_TOKENS` (400,000), `SESSION_OVERDRAFT_TOKENS` (200,000
+per member per week, shared by all of the member's included-token runs, 03
+K9) and `SESSION_QUEUED_PER_USER` (20); the abuse limits of 04 Z1. The
+default model and the default effort are not configuration: a site admin
+sets them at runtime (03 K15). The abuse address of the site footer,
+`abuse@<host>`, is derived from the hostname of `SESSION_PUBLIC_ORIGIN`
+and is not a separate setting; the mailbox must exist before launch (a
+launch prerequisite in 05).
 `SESSION_DESKTOP_ORIGINS`, `SESSION_DEVICE_ANSWER_MAX_BYTES` and
 `SESSION_DEVICE_RUNS_PER_HOUR` are not added (removed: web-only build).
 Acceptance: boot refuses a cursor key that is not 32 bytes of base64;
 `web/.env.example` documents every new variable.
 
-**S4. Effect worker.** A loop in the server process that takes rows from
-`effects` (D2) in `next_at` order, runs them (notifications, run jobs, key
-checks), and on failure backs off 1 s, 2 s, 4 s up to 10 minutes, moving the
-row to the dead-letter state after 10 attempts (the constants in
-`replica-proto/src/server.ts`). Effects carry ids, never text. Acceptance: the
-replica-proto effect model (`test/effect-model.ts`) passes against it; the
-count of dead-lettered effects is a gauge on `/metrics`.
+**S4. Effect worker (removed: no effect queue).** Not built: there is no
+`effects` table, no effect worker, no dead letters and no dead-letter
+gauge. Notifications are written in the transaction of the write that
+causes them (U1 `notify`, C16); a run is queued as its `run` record with
+status `queued` and claimed by the run dispatcher (03 E2); a new thread's
+title and summary are the run's final steps; an API key is checked during
+the `apiKeys.set` request (§6, 03 K4). Scheduled maintenance (the hourly
+retention jobs of Y8, the 90-day waiting-account sweep of 04 I1) stays; it
+is not an effect.
 
 **S5. Drain and boot.** On `SIGTERM`: answer every later envelope
 `SERVICE_UNAVAILABLE` (unrecorded, so outboxes retry), close SSE streams,
-then run the existing run drain (`05-run-lifecycle-and-streaming.md` §7).
+then run the existing run drain (`05-run-lifecycle-and-streaming.md` §7),
+which closes the `usage_events` row of every call it ends (03 K1).
 Commits are synchronous, so no transaction is open across the signal. On
-boot: migrate, check the restore marker (D6), then start the effect worker
-and the run dispatcher. Acceptance: a test sends `SIGTERM` during a batch
+boot: migrate, check the restore marker (D6), close `usage_events` rows
+still `open` with their last checkpoint (03 K1), mark runs still `running`
+as `interrupted` (03 E2), then start the run dispatcher and the scheduled
+maintenance jobs (Y8). Acceptance: a test sends `SIGTERM` during a batch
 `apply`; envelopes after the signal answer `SERVICE_UNAVAILABLE`; after a
 restart the client resends them and each mutation id is applied exactly once.
 
@@ -159,29 +169,32 @@ by D7.
   continues from its last rev.
 - `tombstones(key, kind, sp, th, u, deleted_at)`: audience fields only, no
   text; the rev is in `registry`; pruned after 30 days.
-- `clients(client_id, user_id, last_seq, created_at, last_used_at)`: expires
-  after 90 days idle; at most 20 registrations per user per day.
+- `clients(client_id, user_id, last_seq, created_at, last_used_at)`: a web
+  client id is kept across reloads of its tab (Y3) and expires after 7 days
+  idle; at most 50 new ids per user per day, re-attaches not counted.
 - `answers(user_id, mutation_id, client_id, seq, digest, answer_json,
   created_at)`: recorded answers, kept 7 days. `digest` hashes the name and
   canonical input, so a reused mutation id with another payload is detected.
   An answer for a malformed or reused mutation id is stored under
   `(client_id, seq)` only. A reminted envelope stores its answer under every
   mutation id it replaces, in the same commit.
-- `effects(id, type, payload_json, attempts, next_at, state)`: ids only;
-  `state` is `queued` or `dead`.
+- There is no `effects` table (S4 removed).
 
-Acceptance: a commit writes the record rows, the log rows, the registry, the
-recorded answer, the client's `last_seq` and the queued effects in one
-transaction (AGENTS.md). A test injects a failure into the `effects` insert
-and finds no record, log, registry, answer or `last_seq` change, and an
-`INTERNAL_SERVER_ERROR` answer that a resend replaces.
+Acceptance: a commit writes the record rows (the notifications of U1's
+`notify` stage included), the log rows, the registry, the recorded answer
+and the client's `last_seq` in one transaction (AGENTS.md). A test injects
+a failure into the notification write of `notify` and finds no record,
+log, registry, answer or `last_seq` change, and an `INTERNAL_SERVER_ERROR`
+answer that a resend replaces.
 
 **D3. Non-replicated server tables.** New: `api_keys` (encrypted value,
 provider, mask, status, last used), `run_live` (in-flight checkpoint text per
 run and attempt, deleted at finish), `site_settings` (`default_model` and
 `default_effort`, set by a site admin, 03 K15; no `model_settings` table),
-`server_meta` (the Litestream generation id of D6). Changed: `usage_events`
-(03), `invites` and `users` (C8, 04 I1). `device_tokens` and `run_leases`
+`server_meta` (the Litestream generation id of D6), `save_counts` (thread
+id and the true save count of a thread in a private channel, C1). Changed:
+`usage_events` (opened, checkpointed and closed per provider call, 03 K1),
+`invites` and `users` (C8, 04 I1). `device_tokens` and `run_leases`
 are not created (removed: web-only build). Acceptance: no row of these
 tables appears in any `snapshot` or `pull` (a test lists every served record
 kind and checks it against D1's kinds).
@@ -249,17 +262,24 @@ shared zod schema, strict), `who`, `space`, `ids`, `online`, and three stages:
    `tx.now`, never a clock, random source, `Intl` or `Date` formatting. Makes
    no ids: the first id is in the input, later ones come from
    `tx.id(ordinal)`, derived from the mutation id.
-3. `post(input, result)`: post-commit effects (ids only).
+3. `notify(tx, input, result)`: server only, inside the transaction after
+   `run`; writes the notification records the write causes (C16, with its
+   coalescing). Never run on the client. Notifications are exactly once
+   because they commit with the write. This replaces the prototype's
+   `post` stage (post-commit effects); there is no effect queue (S4
+   removed).
 
-On the server the order is the prototype's: ban check, `who`, `can`, `pre`,
-`run`, all inside one transaction (Y4), so `pre` never runs for a caller the
-permission checks refuse. Work that needs the network (key checks, model
-calls) is an effect, not `pre`.
+On the server the order is the prototype's, with `notify` added: ban check,
+`who`, `can`, `pre`, `run`, `notify`, all inside one transaction (Y4), so
+`pre` never runs for a caller the permission checks refuse. No stage does
+network work: model calls run in the run loop (03), and an API key is
+checked in the `apiKeys.set` request (§6).
 
 Acceptance: the prototype test "mutators read no clock, no random source and
 no Intl while the server applies them" runs over every mutator in the
 package; an ESLint rule bans `Date`, `Math.random`, `crypto` and `Intl` in
-the whole package.
+the whole package; a test refuses a write in `run` and finds no
+notification committed.
 
 **U2. Indexed reads in `tx`.** The prototype's `tx.find(kind, predicate)`
 scans every record of a kind, which is acceptable in memory and not on a
@@ -277,12 +297,14 @@ the client and never stored or served. Acceptance: a test parses every record
 a mutator writes with its stored schema and finds no `mine`, `saved` or
 `liked` field.
 
-**U4. Stale intent.** `shown`, `approve` and reopen carry `base.rev` of the
-target and answer `STALE` on a mismatch; `members.setRole` and its rule are
-removed with the admin and moderator roles (C18); `hidden`,
-`removed`, `decline` and `members.ban` act on the record as it is;
-`members.remove` compares the admission id (AGENTS.md). Acceptance: the
-replica-proto review-r1/r2 tests for these cases pass.
+**U4. Stale intent.** `shown` carries `base.rev` of the target and answers
+`STALE` on a mismatch; `members.setRole` and its rule are removed with the
+admin and moderator roles (C18); `hidden`, `removed` and `members.ban` act
+on the record as it is; `members.remove` compares the admission id
+(AGENTS.md). Join requests are not built (C9, C10), so `approve`,
+`decline` and reopen are not in `@session/mutators`; their rules stay
+tested only in the prototype suite. Acceptance: the replica-proto
+review-r1/r2 tests for these cases pass.
 
 **U5. The mutator set.** Mutator names are the procedure names of
 `spaces.ts`; this plan adds only `comments.*` (C4) and `prefs.set` (C13),
@@ -378,8 +400,25 @@ porting, change `replica-proto` itself to the revised contract:
   above); tests that use `reports.create` as a sample write (in
   `convergence`, `inv2`, `inv3`, `inv4`) take another mutator. Mutation
   pattern X11 (no longer rewritten) and the N24 control ("one report in 32
-  notifies nobody") are removed or re-pointed at the mention effect, and
-  `npm run mutate -- --check` lists the result;
+  notifies nobody") are removed or re-pointed at a notification written by
+  `notify`, and `npm run mutate -- --check` lists the result;
+- effects (S4 removed; product owner decision): the `Effect` type, the
+  `post` stage, the effect queue, the effect worker (`work`),
+  `EFFECT_MAX_ATTEMPTS` and the dead letters are removed from `src/`.
+  Notifications are written in the transaction by a `notify` stage (U1);
+  the `job` effect that `research.forkNode` and `threads.create` queue is
+  replaced by the `run` record they write with status `queued`, and the
+  `jobs()` test hook lists queued run records instead. The effect model
+  (`test/effect-model.ts`, the write oracle's prediction of the records a
+  write changes) leaves notifications out today because the worker wrote
+  them later; it now predicts them as part of the write. The tests that
+  call `work()` or `jobs()` (in `convergence`, `inv4`, `review-r1` and
+  `review-r2`) are rewritten to read the notification and run records
+  committed with the write, or removed where their subject is retry,
+  backoff or dead letters. Mutation patterns that target the effect queue
+  are removed. This departs
+  from `AGENTS.md` ("queued effects commit together; effects run from a
+  worker"); the web-only `AGENTS.md` (05 §6 Q1) records the change;
 - protocol: `queuedAt` and `replaces` in the envelope (Y1), an oversized
   envelope answering `TOO_LARGE` instead of `BAD_REQUEST`, and
   `PROTOCOL_VERSION` raised to 4;
