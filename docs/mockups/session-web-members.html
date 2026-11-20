@@ -1472,7 +1472,7 @@ function drawGraph(graph) {
   const X = d => 10 + d * 13, at = {};
   let paths = '', dots = '';
   for (const r of graph.querySelectorAll(':scope > .grow-r')) {
-    const d = +r.dataset.d, y = r.offsetTop + 13, on = r.classList.contains('on');
+    const d = +r.dataset.d, on = r.classList.contains('on'), c = r.querySelector('.gq-av, .gq'), y = r.offsetTop + (c ? c.offsetTop + (c.classList.contains('gq-av') ? c.offsetHeight / 2 : parseFloat(getComputedStyle(c).lineHeight) / 2) : 13);  /* centred on the first line, also when a selected row grows */
     at[r.dataset.node] = { x: X(d), y };
     const par = at[r.dataset.par];
     if (par) paths += `<path class="${on ? 'on' : ''}" d="M${par.x} ${par.y} L${par.x} ${y - 6} Q${par.x} ${y} ${par.x + 6} ${y} L${X(d)} ${y}"/>`;
@@ -1502,7 +1502,7 @@ const rkey = (p, id) => p.id + '/' + id;
 const likeBtn = (p, id, r) => likeBtnK('r:' + rid(r), r);
 const likeBtnK = (k, r) => { const n = (r.likes || 0) + (LIKED()[k] ? 1 : 0); return `<button class="rlike${LIKED()[k] ? ' on' : ''}" data-a="like" data-k="${k}" aria-pressed="${!!LIKED()[k]}" aria-label="Like, ${n} likes"${canWrite() || st.auth === 'out' ? '' : ' disabled title="Liking opens once you have an invite"'}>${I.heart}${n}</button>`; };
 const replyBox = (p, at, ph) => st.replying === rkey(p, at) ? composer('rp:' + p.id + ':' + at, ph, '', 'Reply', 'rpclose') : '';
-const replyIcon = (attrs, open) => `<button class="rlike rrep${open ? ' on' : ''}" ${attrs} aria-pressed="${open}" aria-label="${open ? 'Close reply' : 'Reply'}" title="${open ? 'Close reply' : 'Reply'}">${ARROW_REPLY}</button>`;
+const replyIcon = (attrs, open) => `<button class="tlink" ${attrs} aria-pressed="${open}">${open ? 'Close reply' : 'Reply'}</button>`;
 const replyLink = (p, id, label = 'Reply') => !canWrite() ? '' : id === 'top' ? `<button class="tlink" data-a="reply" data-id="${rkey(p, id)}">${st.replying === rkey(p, id) ? 'Close reply' : label}</button>` : replyIcon(`data-a="reply" data-id="${rkey(p, id)}"`, st.replying === rkey(p, id));
 
 /* Avatar tree: the same line graph as the branch trees, one row per reply led by its author's avatar; click a row to read it. */
@@ -1512,7 +1512,7 @@ function replyLines(p) {
   const on = new Set(); if (sel) sel.split('.').forEach((_, i, a) => on.add(a.slice(0, i + 1).join('.')));
   const cur = sel && idx[sel] != null ? rows[idx[sel]] : null;
   return `<div class="grp"><div class="graph" data-draw><svg aria-hidden="true"></svg>${rows.map(({ r, d, id, hid }) => `<button class="grow-r${on.has(id) ? ' on' : ''}${id === sel ? ' sel' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}" data-d="${d}" data-par="${d ? id.split('.').slice(0, -1).join('.') : ''}"><span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(plainReply(r.t))}</span>${hid ? `<span class="rhid">+${hid}</span>` : ''}</span></button>`).join('')}</div>
-    ${cur ? `<div class="preview${pvFade(p.id, 'r:' + cur.id)}"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div><div class="rtext">${fmtReply(cur.r.t)}</div><div class="pf">${replyLink(p, cur.id)}${(cur.r.kids || []).length ? `<button class="tlink" data-a="rcol" data-id="${p.id}" data-node="${cur.id}">${st.rcol[rid(cur.r)] ? `Show ${noun(flatReplies(cur.r.kids).length, 'reply', 'replies')}` : 'Hide replies'}</button>` : ''}</div>${replyBox(p, cur.id, 'Reply to @' + cur.r.u)}</div>` : ''}
+    ${cur ? `<div class="preview${pvFade(p.id, 'r:' + cur.id)}"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div><div class="rtext">${fmtReply(cur.r.t)}</div><div class="pf">${replyLink(p, cur.id)}</div>${replyBox(p, cur.id, 'Reply to @' + cur.r.u)}</div>` : ''}
     <div class="rfoot">${canWrite() ? replyLink(p, 'top', 'Reply at root') : st.auth === 'out' ? '<button class="tlink" data-ma="openauth">Sign in to reply</button>' : '<span class="rnote">Replying opens once you have an invite</span>'}</div>${replyBox(p, 'top', 'Reply to @' + p.u)}</div>`;
 }
 
