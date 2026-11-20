@@ -454,6 +454,11 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .pf-ring .m-ring circle:not(.arc) { stroke: var(--border-strong); }
 @media (max-width: 520px) { .pf-phone .appbar .brand b { display: none; } .pf-phone .appbar { gap: 8px; } .pf-phone .hsp { margin-left: 0; } }
 .pf-root .grp + .rfoot, .pf-root .rfoot { padding-left: 11px; }
+/* ---- polish, wave 2 ---- */
+.pf-hover .card :is(.iconbtn, .more-btn):not(:disabled):hover, .pf-hover .preview .more-btn:hover { background: var(--control); color: var(--t-heading); }
+.pf-more .preview.open .prose { max-height: none; -webkit-mask-image: none; mask-image: none; }
+.pf-more .preview .prose.fits { -webkit-mask-image: none; mask-image: none; padding-bottom: 0; }
+.pvmore { display: block; margin: -2px 0 6px; font-size: var(--fs-xs) !important; }
 .replies .tlink { font-size: var(--fs-xs); font-weight: 400; }
 .replies .composer { margin-top: 8px; }
 .preview .rtext { margin: 6px 0 2px; }
@@ -1369,7 +1374,7 @@ function card(p) {
   const lk = 'p:' + p.id, nl = (p.likesBase || 0) + (LIKED()[lk] ? 1 : 0), off = canWrite() || st.auth === 'out' ? '' : ` disabled title="${st.auth === 'out' ? 'Sign in to like and save' : 'Liking opens once you have an invite'}"`;
   /* no likes on threads; the bookmark carries how many people saved it (the fixtures' like counts stand in for save counts) */
   const ns = (p.likesBase || 0) + (SAVED()[p.id] ? 1 : 0);
-  const acts = `<button class="iconbtn cnt${SAVED()[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!SAVED()[p.id]}" aria-label="${SAVED()[p.id] ? 'Saved' : 'Save'}, saved by ${ns}" title="${SAVED()[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}<span>${ns}</span></button>`;
+  const acts = `<button class="iconbtn cnt${SAVED()[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!SAVED()[p.id]}" aria-label="${SAVED()[p.id] ? 'Saved' : 'Save'}, saved by ${ns}" title="${SAVED()[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}${ns || !st.pol.zero ? `<span>${ns}</span>` : ''}</button>`;
   /* reply / follow-up button carries its count, like the like button */
   const rbtn = (n, attrs, on, label, what) => `<button class="iconbtn likes rcount${on ? ' on' : ''}" ${canWrite() ? attrs : st.auth === 'out' ? 'data-ma="openauth"' : `disabled title="${label} opens once you have an invite"`} aria-pressed="${on}" aria-label="${label}${n ? `, ${noun(n, what[0], what[1])}` : ''}" title="${label}">${ARROW_REPLY}${n ? `<span>${n}</span>` : ''}</button>`;
   if (p.k === 'post') {
@@ -1441,7 +1446,8 @@ function preview(p, T, n) {
   const extra = canWrite() && !n.pending && !promoted ? `<button type="button" class="mi" role="menuitem" data-a="promote" data-id="${p.id}" data-node="${n.id}"><span>Open as its own thread</span></button>` : '';
   const more = canWrite() && (extra || mine(n.u)) ? moreMenu('b:' + p.id + ':' + n.id, !n.pending && !promoted && !othersUnderBranch(T, n.id) && !othersUnderReplies(BRP[key]), 'branch', extra, mine(n.u), n.pending ? 'Available when the answer finishes' : promoted ? 'Not available after it was opened as a thread' : undefined) : '';
   const par = st.asking === p.id ? (st.askPar ?? n.id) : null;
-  return `<div class="preview${pvFade(p.id, 'b:' + n.id)}"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${more}</div>${n.look ? `<div class="lookh">${SEARCH}<span>Look up</span><b>${esc(n.look)}</b></div>` : n.quote ? `<blockquote class="bq">${esc(clip(n.quote, 180))}</blockquote>` : ''}${status(n)}<div class="prose">${answerHtml(n)}</div>
+  const pvk = p.id + ':' + n.id, pvOpen = st.pol.more && st.pvOpen === pvk;
+  return `<div class="preview${pvFade(p.id, 'b:' + n.id)}${pvOpen ? ' open' : ''}"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${more}</div>${n.look ? `<div class="lookh">${SEARCH}<span>Look up</span><b>${esc(n.look)}</b></div>` : n.quote ? `<blockquote class="bq">${esc(clip(n.quote, 180))}</blockquote>` : ''}${status(n)}<div class="prose">${answerHtml(n)}</div>${st.pol.more ? `<button class="tlink pvmore" data-a="pvmore" data-k="${pvk}">${pvOpen ? 'Show less' : 'Show all'}</button>` : ''}
     ${branchActs(p, n, k, promoted)}
     ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? 'Continue ask' : 'Ask beside this', '', 'Ask', 'askclose') : st.brReplying === p.id + ':' + n.id + '/top' ? composer('br:' + p.id + ':' + n.id + ':top', 'Comment here', '', 'Comment', 'brclose') : ''}
     ${branchReplies(p, n)}</div>`;
@@ -1858,6 +1864,7 @@ app.addEventListener('click', e => {
   if (a === 'grpopen') { const G = groupsFor(byId(d.id), document.getElementById('pr-' + d.id)).find(x => x.bi === +d.bi); if (!G) return;
     const first = G.ns[0].id; st.sel[d.id] = first; st.asking = null; st.askPar = null; st.quote = null; render();
     const row = document.querySelector(`#mr-${d.id} .grow-r[data-node="${first}"]`); row?.focus({ preventScroll: true }); row?.closest('.pin')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
+  if (a === 'pvmore') { st.pvOpen = st.pvOpen === d.k ? null : d.k; render(); return; }
   if (a === 'sellook') { const p = byId(d.id), pr = document.getElementById('pr-' + d.id); $('#selbranch')?.remove(); $('#sellook')?.remove(); getSelection()?.removeAllRanges();
     st.sel[d.id] = addLookup(p, st.lookText, null); st.asking = null; st.quote = null; render(); return; }
   if (a === 'askpass' || a === 'selbranch') { const pr = document.getElementById('pr-' + d.id); let q = st.selText || '';
@@ -2059,6 +2066,7 @@ const BILLING = { 'ines.v': 'key', sol: 'pause' };
 /* Polish pass: each fix is a class on #app (pf-<key>), on by default, switchable in the mock bar. */
 const POLISH = [
   ['Polish 1', [['hug', 'Short cards hug content'], ['cite', 'Citation stays with its word'], ['ring', 'Usage ring track'], ['phone', 'Phone header'], ['root', 'Align Reply at root']]],
+  ['Polish 2', [['hover', 'Visible hover on cards'], ['zero', 'No zero counts'], ['more', 'Side card: Show all']]],
 ];
 Object.assign(st, { pol: Object.fromEntries(POLISH.flatMap(([, l]) => l.map(([k]) => [k, true]))), mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pl: 'a', tt: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 /* seeds: #sci-fi (owned by @ines.v) has reports in its moderation log */
@@ -2349,6 +2357,7 @@ function renderInner() {
   if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
   if (st.creating) app.insertAdjacentHTML('beforeend', newSpaceDlg());
   if (st.chInfo) app.insertAdjacentHTML('beforeend', chInfoDlg());
+  app.querySelectorAll('.preview:not(.open) .pvmore').forEach(b => { const pr = b.previousElementSibling; if (pr && pr.scrollHeight <= pr.clientHeight + 2) { b.remove(); pr.classList.add('fits'); } });
   if (st.rm) app.insertAdjacentHTML('beforeend', rmDlg());
   if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
