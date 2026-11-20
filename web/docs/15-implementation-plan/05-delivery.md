@@ -50,9 +50,9 @@ web-only scope).
 
 Each milestone ends with a merge to the build branch (§3.0) whose checks pass
 on their own; none depends on a later one to be verified. Until M8b, the
-current web app stays in production, deployed from the existing `main` of
-`session-desktop` with its rules (`AGENTS.md`); the build branch deploys only
-to staging (§3.1).
+current web app (not in use) stays in production, deployed from the existing
+`main` of `session-desktop` with its rules (`AGENTS.md`); the build branch,
+`session-web`, deploys only to staging (§3.1).
 
 ### 1.1 Commands referred to below
 
@@ -424,9 +424,6 @@ Not built: `03` V1-V7, T5 and L3 are removed, with the server routes, the
 Scope, with production still on the current web app:
 - `web/docs/runbooks/launch.md` (new): the steps of §3.6 with commands,
   including the admin seeding of §3.5.
-- On the existing `main` of `session-desktop` (which still deploys the
-  current web app): a banner with the launch date and what is deleted
-  (§3.5). This is the only change to that branch.
 - `01` D5's squash: with the research schema gone (M4), the migrations of the
   build branch are replaced by one generated `0000_initial.sql`; staging is
   reset with `runbooks/reset-database.md` and redeployed.
@@ -435,8 +432,10 @@ Scope, with production still on the current web app:
 - Production secrets staged with `fly secrets set --stage -a session-dev`
   (§3.4), including the new `LITESTREAM_REPLICA_URL` prefix and the X OAuth
   client of the production X app.
-- The first site admins' identities and the first invite recipients listed
-  in the launch runbook (question Q11).
+- The first site admins' identities and the named first group of invite
+  recipients listed in the launch runbook (question Q11). There is no
+  launch date to announce and no notice period: the current web app is not
+  in use.
 
 Exit criteria:
 - `cd web && npm test --workspace @session/db -- test/migrations.test.ts`
@@ -444,8 +443,6 @@ Exit criteria:
   holds no research table.
 - The staging reset and the staging restore rehearsal are recorded in the
   launch runbook with their times.
-- The banner has been live on the current web app for the notice period
-  (question Q11).
 
 ### M8b — Data wipe and launch
 
@@ -464,9 +461,9 @@ Scope: §3.5 and §3.6. Exit criteria:
 
 ### M8c — After launch: branch and documents
 
-Scope: the build branch becomes the repository's default branch and the old
-`main` is kept read-only under another name, with its `deploy` job removed
-(question Q3); `AGENTS.md` on the build branch moves the sync core from
+Scope: `session-web` becomes the repository's default branch; the old
+`main` is kept as it is, under its name and writable, with no change to its
+files (question Q3); `AGENTS.md` on the build branch moves the sync core from
 "Planned" to current rules; replica-proto's prototype server stays as the
 reference (decision E5; the suites stay). There is no old desktop code to
 remove on the build branch (§3.0). Exit: `cd web && npm run check && npm
@@ -481,7 +478,9 @@ commit, not on top of the `session-desktop` history (decision B). The local
 clone is shallow (`git rev-parse --is-shallow-repository` answers `true`), so
 the initial commit is not visible here; it is confirmed with `git fetch
 --unshallow` and `git rev-list --max-parents=0 HEAD` before the branch is
-made (question Q2). The branch name is question Q3 (proposed `web`).
+made; the carry-over commit deletes whatever the initial commit holds
+outside the carried set (decided, Q2). The branch is named `session-web`
+(decided, Q3).
 
 Method: create the branch at the initial commit, then make one carry-over
 commit that copies files, unchanged, from a recorded `session-desktop`
@@ -493,7 +492,7 @@ every path cited in 01-05 and in `web/docs` stays valid and `web.yml` keeps
 its `working-directory: web`. Later commits make the changes the milestones
 schedule; the carry-over commit changes nothing but `AGENTS.md` and
 `README.md`. `web.yml`'s `deploy` job runs only on `refs/heads/main`, so on
-the build branch it deploys nothing until M3 points it at staging.
+`session-web` it deploys nothing until M3 points it at staging.
 
 Carried over (what the build reuses):
 
@@ -527,13 +526,17 @@ scope, P21). No further work happens on the desktop branch.
 jobs gate `deploy`; one production Fly app (`session-dev`), one machine, one
 volume, `strategy = "immediate"`. With the build on its own branch:
 
-- `session-desktop`'s `main` keeps deploying the current web app to
-  production until M8b and takes only fixes and the M8a banner. Its `deploy`
-  job is disabled in the launch step (§3.6 step 1), so no later push to it
-  can redeploy the old app over the new one.
-- On the build branch, `web.yml`'s `deploy` job runs on pushes to the build
-  branch and targets the staging app (`-c web/fly.staging.toml`) from M3; in
-  M8b the same change that launches points it at production. No
+- `main` is kept as it is (not renamed, archived or made read-only) and
+  takes no launch changes; the current web app it deploys is not in use.
+  Its `web.yml` `deploy` job deploys to production through the GitHub
+  environment `production`. From launch (§3.6 step 1) that environment's
+  deployment branch rule allows only `session-web`, so a push to `main`
+  cannot redeploy the old app over the new one; `main`'s files are not
+  changed for this.
+- On `session-web`, `web.yml`'s `deploy` job runs on pushes to
+  `session-web` and targets the staging app (`-c web/fly.staging.toml`)
+  from M3; in M8b the same change that launches points it at production,
+  which from then on deploys from `session-web` only. No
   `legacy-web` branch is needed.
 - From M1a, a CI job runs replica-proto's `npm test`; from M3, the
   conformance suite runs inside the server's `npm test`.
@@ -582,7 +585,7 @@ machine. Staging is reset after the M8a squash.
   desktop "Update Session" prompt (removed: web-only build). The web client
   keeps unsent composer text in its drafts store and reloads once; a second
   `426` within 60 s shows "Session was updated. Reload to continue." (`02`
-  §9.2). Keeping the header is question Q5 (recommended).
+  §9.2). Keeping the header is decided (Q5).
 - Additive changes (a new optional input field, a new mutator, a record kind
   old clients ignore) do not bump the version. A change to an existing
   mutator's input or `run` semantics bumps it, because prediction and
@@ -607,7 +610,7 @@ machine. Staging is reset after the M8a squash.
   `SESSION_SECRET_KEY` makes stored API keys and open invite codes
   unreadable; it is backed up outside Fly.
 
-### 3.5 Data wipe: what is deleted, how site admins are seeded, how users are told
+### 3.5 Data wipe: what is deleted and how site admins are seeded
 
 Decided (P19): the launch is a hard reset. Every row of the current
 production database is deleted, accounts included: `users`, `sessions`,
@@ -622,30 +625,28 @@ directories, deploy).
 Backups: the old Litestream prefix, which holds all deleted data, is kept for
 30 days after launch as the only rollback source (§3.6 step 8), then deleted.
 
-Site admins after the wipe (question Q6, proposed procedure): each person who
+Site admins after the wipe (decided, Q6): each person who
 runs Session signs in once with GitHub or X, which creates a waiting
 account; the operator then runs `npm run db:admin -- <provider>:<login>`
 through `fly ssh console`, which sets `is_admin` and `status: active`
 (`bin/admin.ts` gains the provider prefix and the activation). Each admin
 then chooses a handle at the profile step. Admins are the roots of the invite
 tree and are exempt from the 3-open-links limit (`04` I2); they set the
-default model and the default effort (`03` K15) before inviting anyone.
+default model and the default effort (`03` K15) before inviting anyone,
+then invite the named first group of the launch runbook, who then have 3
+invites each (Q11).
 
-How users are told (`users` holds no email address, so notices reach only
-people who open the app):
-- From M8a, a banner in the current web app with the date and the sentence
-  "On <date> Session is replaced. All accounts, threads, workspaces and
-  folders are deleted; there is no export. Sign-in afterwards needs an
-  invite."
-- After launch, nothing is carried over and the old accounts no longer
-  exist; a former user signs in as a new identity and waits for an invite.
-- There is no desktop notice: the desktop app was never in production.
+The wipe needs no announcement: the current web app is not in use, so there
+is no banner, launch date or notice period (decided, Q11). Nothing is
+carried over; anyone who held an old account signs in as a new identity and
+waits for an invite.
 
 ### 3.6 Launch sequence (M8b)
 
 1. Freeze: merge the launch commit to the build branch; CI green (`check`,
-   `test`, `e2e`, `docker`). Disable the `deploy` job on `session-desktop`'s
-   `main` and point the build branch's `deploy` job at production.
+   `test`, `e2e`, `docker`). Set the `production` environment's deployment
+   branch rule to `session-web` only (§3.1) and point `session-web`'s
+   `deploy` job at production.
 2. Record the rollback point: the current image of `session-dev` and the old
    Litestream prefix and generation.
 3. Apply the staged secrets (new `LITESTREAM_REPLICA_URL` prefix, cursor and
@@ -662,7 +663,8 @@ people who open the app):
 7. Smoke checks (M8b exit).
 8. On failure before the first invite is sent: `fly scale count 0`, restore
    the old prefix as `LITESTREAM_REPLICA_URL`, deploy the recorded old image,
-   scale to 1, re-enable `main`'s `deploy` job. Nothing written to the new
+   scale to 1, and set the `production` environment's branch rule back to
+   `main`. Nothing written to the new
    build is kept. After the first invite is used, fixes go forward.
 9. After 30 days: delete the old Litestream prefix and the old image.
 
@@ -686,7 +688,7 @@ answer codes, never record text.
 | `session_signins_total{provider,outcome}` | GitHub and X sign-ins | X failures above 20% for 1 h |
 | `session_removals_total`, `session_bans_total` | Moderation volume (there are no reports) | — |
 | `session_notifications_total{type}` | Notifications written by kind (`01` C16) | — |
-| `session_weekly_tokens{payer}`, `session_weekly_cost_usd{provider}` | Included-token spend against budget | weekly cost above the budget of question Q12 |
+| `session_weekly_tokens{payer}`, `session_weekly_cost_usd{provider}` | Included-token use by payer; spend by provider | — (no spend budget and no cost alert, Q12) |
 | `session_run_failures_total{cls}` | Owned-run failures by provider error class (`03` E5) | any `auth` (the deployment credential was rejected) |
 | `session_wal_bytes` | WAL size between checkpoints | above 512 MB |
 
@@ -712,8 +714,8 @@ Security, Operations (deploys, backups). The Desktop role is removed
 | SQLite's single writer saturates with change log, recorded answers and effects | Low | High | One commit per apply; short transactions; M3 load check; machine size raised before limits | Server |
 | Erased text survives in WAL, effect payloads, notifications or logs | Medium | High | Effects and notifications carry ids (the `removed` notification only the owner's note); logs carry no text; storage scan over file and WAL (M3); staging scan (M6) | Security |
 | A restore serves erased text again (backups keep it; no retention requirement, decided) | Medium | Medium | The restore runbook lists the removals applied after the restore point (from the JSON logs, which carry mutator names and item ids) and repeats them before traffic resumes | Security |
-| Included-token spend exceeds budget: 2,000,000 tokens per member per week at the default model's price | Medium | High | Cached input counted at the discount ratio (P12); a site admin sets the default model and default effort at runtime and can switch to a cheaper default or a lower effort at once (K15); members may still pick any registry model; `SESSION_WEEKLY_TOKENS` per-user override; per-run cap `SESSION_RUN_MAX_TOKENS`; weekly cost alert (§4, Q12) | Product |
-| A site admin makes an expensive model or a high effort the default | Low | Medium | The default must be payable with included tokens and the default effort one the default model accepts (K15); changes are logged with the admin's id; the cost alert | Operations |
+| Included-token spend exceeds budget: 2,000,000 tokens per member per week at the default model's price | Medium | High | Cached input counted at the discount ratio (P12); a site admin sets the default model and default effort at runtime and can switch to a cheaper default or a lower effort at once (K15); members may still pick any registry model; `SESSION_WEEKLY_TOKENS` per-user override; per-run cap `SESSION_RUN_MAX_TOKENS`; during testing the provider API keys are capped at the provider (Q12); no spend budget and no cost alert | Product |
+| A site admin makes an expensive model or a high effort the default | Low | Medium | The default must be payable with included tokens and the default effort one the default model accepts (K15); changes are logged with the admin's id; during testing the provider API keys are capped at the provider (Q12) | Operations |
 | Replica size in a browser tab: the in-memory replica is loaded by a snapshot on every page load | Medium | Medium | Web window of 30 days or 100 threads, capped at 500 per space (E7, `01` R1), as server settings; snapshot size measured in M3 and alerted (§4) | Server |
 | Every deploy restarts the one machine and every SSE client reconnects and pulls at once | High | Low | Cursors resume with `pull`, not `snapshot`; client reconnect jitter; load check includes a reconnect of 200 clients | Server |
 | A protocol bump makes open tabs reload in a loop | Low | Medium | One reload, then the "Reload to continue" message (`02` §9.2); `426` counter and alert (§4) | Client |
@@ -729,7 +731,7 @@ Security, Operations (deploys, backups). The Desktop role is removed
 | X sign-in breaks or costs more than expected (API access level, rate limits, policy changes) | Medium | Medium | GitHub sign-in stays available; a staging X app before M6 (Q8); sign-in failure alert by provider (§4); existing X accounts cannot move to GitHub (no linking), which the risk accepts | Product |
 | A person holds two accounts, one per provider | Medium | Low | Each needs its own invite; both appear in the invite tree under their inviters; suspension per account (`04` §13) | Product |
 | A channel cannot be moderated because its only owner is absent, suspended or deleted (ownership is not transferable) | Medium | Medium | Suspension and deletion freeze the owner's channels (`04` B6); a site admin deletes a channel by operator job; P24 | Product |
-| Existing web users lose their accounts and research at the wipe (no export, decided) | High | Medium | Banner with the date and wording of §3.5 for the notice period (Q11); invite-only re-entry | Product |
+| Former web users lose their accounts and research at the wipe (no export, decided) | Low | Low | The current web app is not in use, so the wipe needs no announcement (Q11); invite-only re-entry | Product |
 | ADR-23 (user keys, models) is not accepted in time | Medium | Medium | Drafted in M1a; M5a ships on included tokens only; M5b waits on it | Product |
 | Scope from the mockup grows past the contract (rules, hide, join requests, reporting, widgets, model availability, per-member model overrides) | Medium | Medium | Decisions recorded in 00 and §6; contract changes only through `01` §7 | Product |
 
@@ -779,9 +781,8 @@ for reference from this file.
   sets the default model and the default effort at runtime on the Site
   Admin page (`03` K15, `02` W8.2); every registry model is available to
   every member, with no availability setting; per-member overrides: no
-  (Q9). Decided: 2,000,000
-  tokens a week per member. The weekly budget for the cost alert is Q12.
-  `03` §9 q1.
+  (Q9). Decided: 2,000,000 tokens a week per member. There is no weekly
+  spend budget and no cost alert (Q12). `03` §9 q1.
 - **P12. Cached tokens.** Decided (I): counted at the provider's discount
   ratio (`03` K2). `03` §9 q2.
 - **P13. Effort and the allowance.** Decided (I): no cost hint for high
@@ -793,8 +794,8 @@ for reference from this file.
   device runs are not built. `03` §9 q5.
 - **P16. Old desktop data.** Moot: the desktop app was never in production
   and no desktop client ships. `05` §3.5.
-- **P17. Cutover date and notice period.** Moot as a desktop cutover; the
-  web launch date and notice period are Q11. `05` M8a.
+- **P17. Cutover date and notice period.** Moot as a desktop cutover;
+  there is no web launch date or notice period either (Q11). `05` M8a.
 - **P18. Phone client.** Decided: no phone app in this build. `05` §5.
 - **P19. Keep accounts through the data reset.** Decided (C): no; all
   existing web data is wiped, accounts included, and site admins are
@@ -857,34 +858,38 @@ K12; branch comments by `01` C4; the removal reason by `01` C12.
 
 ### New questions from the web-only scope
 
-For the product owner; each has a recommended answer and its source.
+The product owner's answers, each with its source.
 
-- **Q1. Amend ADR-19 to ADR-22 and `AGENTS.md` now?** Recommended: yes: the
+- **Q1. Amend ADR-19 to ADR-22 and `AGENTS.md` now?** Decided: yes: the
   carry-over commit writes a web-only `AGENTS.md`, and M1a adds a "Scope of
   this build" note to each ADR naming the desktop, phone and device-run
   parts not built. `00` "Scope of this build", `05` §3.0, M1a.
 - **Q2. Branch point.** The clone is shallow, so the initial commit is
-  unconfirmed. Recommended: unshallow, confirm it with `git rev-list
+  unconfirmed. Decided: unshallow, confirm it with `git rev-list
   --max-parents=0 HEAD`, and let the carry-over commit delete whatever it
   holds outside the carried set. `05` §3.0.
-- **Q3. Build branch name and the old `main` after launch.** Recommended:
-  `web`; it becomes the default branch in M8c, and the old `main` is renamed
-  `desktop-archive`, read-only, with its deploy job removed. `05` §3.1, M8c.
-- **Q4. Offline writes on the web.** Recommended: in-flight only ("Not sent"
+- **Q3. Build branch name and the old `main` after launch.** Decided:
+  `session-web`; production for the new app deploys from it, and it becomes
+  the default branch in M8c. The old `main` is kept as it is: not renamed,
+  not archived, not made read-only; the `production` environment's branch
+  rule stops its `deploy` job from deploying (§3.1). `05` §3.0, §3.1, M8c.
+- **Q4. Offline writes on the web.** Decided: in-flight only ("Not sent"
   with Retry, drafts in sessionStorage); no IndexedDB outbox or replica.
   `01` Y9, Y10; `02` §9.2.
-- **Q5. Keep the protocol version header?** Recommended: yes; it is cheap
+- **Q5. Keep the protocol version header?** Decided: yes; it is cheap
   and makes open tabs reload after a mutator change instead of failing
   writes; one reload, then a Reload message. `01` S1, `05` §3.4.
-- **Q6. Seeding site admins after the wipe.** Recommended: admins sign in
+- **Q6. Seeding site admins after the wipe.** Decided: admins sign in
   once, then `npm run db:admin -- <provider>:<login>` activates and promotes
   them (no config list of identities). `05` §3.5.
-- **Q7. Identity rules across providers.** Recommended: store no email;
-  the Session handle is the only unique name; one person may hold one
-  account per provider, each needing an invite; the account-age minimum
-  applies to X through `created_at`. `04` I1, §13.
+- **Q7. Identity rules across providers.** Decided: store each account's
+  email address from the provider and update it on every sign-in; emails
+  are not deduplicated, merged or used to match accounts; the Session
+  handle is the only unique name; one person may hold one account per
+  provider, each needing an invite; the account-age minimum applies to X
+  through `created_at`. `04` I1, Z2, §13.
 - **Q8. X developer access.** Which X API access level the sign-in needs at
-  the expected volume, and its cost. Recommended: confirm with a staging X
+  the expected volume, and its cost. Decided: confirm with a staging X
   app before M6; launch with GitHub only if X access is not ready. `04` Z2,
   `05` §5.
 - **Q9. Per-member model overrides** (the mockup's third admin variant).
@@ -892,10 +897,12 @@ For the product owner; each has a recommended answer and its source.
   default effort; there is no per-member override and no availability
   setting. `03` K15, `02` W8.2.
 - **Q10. How members reach site admins about abuse, with no reporting.**
-  Recommended: a contact address on the community-rules page, read by site
+  Decided: a contact address on the community-rules page, read by site
   admins. `04` §13, `05` §5.
-- **Q11. Launch date, notice period and the first members.** Recommended: a
-  14-day banner on the current web app; site admins invite a named first
-  group, who then have 3 invites each. `05` M8a, §3.5.
-- **Q12. Weekly cost budget for the alert** (left from P11). Recommended:
-  set a USD amount before M5b; alert at 80% of it. `05` §4.
+- **Q11. Launch date, notice period and the first members.** Decided:
+  no launch date, notice period or banner, because the current web app is
+  not in use and the wipe needs no announcement; site admins invite a
+  named first group, who then have 3 invites each. `05` M8a, §3.5.
+- **Q12. Weekly cost budget for the alert** (left from P11). Decided: no
+  weekly spend budget and no cost alerting; during testing the provider
+  API keys are capped at the provider. `05` §4, §5.

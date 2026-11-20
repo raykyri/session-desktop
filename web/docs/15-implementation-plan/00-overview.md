@@ -179,9 +179,15 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
   - Scope: web only (above); no "Run on this Mac" (P15), no phone app
     (P18); the desktop questions P16, P17, E8-E10 and S5 are moot.
   - Repository: a new branch from the initial commit with the reused files
-    copied in (05 §3.0); the branch point is to be confirmed (Q2).
+    copied in (05 §3.0); the clone is unshallowed and the branch point
+    confirmed with `git rev-list --max-parents=0 HEAD` (Q2). The branch is
+    `session-web`, production deploys from it, and the old `main` is kept
+    as it is (Q3).
   - Launch: a hard reset; all web data and accounts are wiped, site admins
-    are re-seeded, and there is no export (P19, P20; 05 §3.5).
+    are re-seeded, and there is no export (P19, P20; 05 §3.5). The current
+    web app is not in use, so there is no launch date, notice period or
+    banner; site admins invite a named first group, who then have 3
+    invites each (Q11).
   - Sign-in: GitHub or X; one provider per account, no linking, no merging
     (P1; 04 I1, Z2).
   - Private channels: channel invite links only (P4).
@@ -214,14 +220,25 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
     required (E4); the prototype server kept as the reference (E5); a
     boot-time Litestream generation check (E6); a smaller web window (E7).
   - Security: save counts below 3 hidden in private channels (S6).
+  - New questions from the web-only scope (05 §6, Q1-Q12): the recommended
+    answers are accepted for Q1 (ADR scope notes, web-only `AGENTS.md`), Q2,
+    Q4 (in-flight writes only), Q5 (protocol header kept), Q6 (admin
+    seeding with `db:admin`), Q8 (staging X app before M6) and Q10 (contact
+    address on the community-rules page). Q3: the branch is `session-web`
+    and `main` is kept as it is. Q7: each account's email from the provider
+    is stored and updated on every sign-in, never used to match, deduplicate
+    or merge accounts; the handle stays the only unique name (04 I1, Z2).
+    Q9: no per-member model overrides. Q11: above. Q12: no weekly spend
+    budget and no cost alert; during testing the provider API keys are
+    capped at the provider (05 §4, §5).
 
 ## Open questions
 
 `05-delivery.md` §6 consolidates the questions of 01-05, grouped by who
 decides (Product `P1`-`P24`, Engineering `E1`-`E10`, Security `S1`-`S6`), with
 the source and the recorded decision of each. Its subsection "New questions
-from the web-only scope" (`Q1`-`Q12`) lists what the decisions above leave
-open. Each file keeps its own list.
+from the web-only scope" (`Q1`-`Q12`) records the answers to the questions
+the web-only scope raised; all are decided. Each file keeps its own list.
 
 ## How this plan was produced
 

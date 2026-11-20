@@ -89,7 +89,10 @@ separate limits.
   `github_created_at` becomes `provider_created_at` (the account-age check
   of `06` §3 applies to both providers). An identity belongs to one account
   for its lifetime; there is no second identity per account and no merge.
-  `users` holds no email address for either provider. `users.handle`
+  `users.email` holds the email address the provider returns, updated on
+  every sign-in (null when the provider returns none); it is not unique,
+  and emails are never used to match, deduplicate or merge accounts
+  (decided, `05` §6 Q7). `users.handle`
   (unique, `^[a-z0-9._]{3,20}$`, the mockup's rule, null while waiting) and `users.display_name`. Handles are the values of
   `spaceHandleSchema` and are never reused; a waiting account gets no handle,
   so the sweep below cannot be used to reserve handles.
@@ -601,7 +604,8 @@ channel's saves; `R4a`.
   author's delete path (a thread with others' replies stays an empty shell,
   `AGENTS.md`), their user log, member records and sessions; it keeps
   their handle reserved, `modlog` entries naming them until retention, and
-  their node in the invite tree as "Deleted account".
+  their node in the invite tree as "Deleted account". It clears
+  `users.email`.
   Channels the person owns are not deleted with the account; they are
   frozen (§4.5).
 
@@ -694,10 +698,14 @@ addition (`01` now records the first three, in C12, U6 and C8):
 
 **Z2. Web.** GitHub OAuth or X OAuth 2.0, both with PKCE, and database
 sessions (`06`). X sign-in is new: an X developer app with the callback
-`<SESSION_PUBLIC_ORIGIN>/auth/x/callback`, scopes `users.read` and
-`tweet.read` (X requires the second to read the signed-in user), and
-`GET /2/users/me` with `user.fields=created_at,profile_image_url` for the
-id, username, name, avatar and account age. Configuration
+`<SESSION_PUBLIC_ORIGIN>/auth/x/callback`, scopes `users.read`,
+`tweet.read` (X requires it to read the signed-in user) and `users.email`,
+and `GET /2/users/me` with
+`user.fields=created_at,profile_image_url,confirmed_email` for the id,
+username, name, avatar, account age and email. GitHub sign-in adds the
+`user:email` scope and reads the primary verified address from
+`GET /user/emails`. Each sign-in writes the returned address to
+`users.email` (§3.1). Configuration
 `SESSION_X_CLIENT_ID` and `SESSION_X_CLIENT_SECRET` (a Fly secret),
 validated at boot like the GitHub settings; staging has its own X app.
 ADR-5 gets an amendment naming both providers. Sessions: cookie
@@ -786,7 +794,8 @@ none of them.
 - **No reporting.** Members cannot flag content to the owner or to site
   admins in the app (decision F). An owner sees their channel's content
   directly; abuse by an owner, or in a channel its owner does not watch,
-  reaches site admins only outside the app (`05` §6, Q10).
+  reaches site admins only outside the app, through a contact address on
+  the community-rules page (decided, `05` §6, Q10).
 - **Owner exposure.** "Removed by @owner" names the owner to every reader,
   as the mockup decides; the owner can ban members who harass them.
 - **Abusive or absent owner.** Nobody can ban an owner or take over a
@@ -807,7 +816,7 @@ none of them.
 - **Two accounts per person.** Accounts are bound to one provider (§3.1), so
   a person with a GitHub and an X account can hold two Session accounts,
   each admitted by its own invite. The invite tree shows both under their
-  inviters.
+  inviters. A shared email address does not link them (`05` §6, Q7).
 - **CSRF.** Cookie requests need a same-origin `Origin`/`Sec-Fetch-Site` and
   the custom header; sync GETs are guarded too (Z2). Login CSRF is prevented
   by the single-use `oauth_states` row bound to the state cookie.
