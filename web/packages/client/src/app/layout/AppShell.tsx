@@ -1,23 +1,20 @@
-import { resolveAppShortcut } from "@session/shared";
-import type { AppShortcutCommand } from "@session/shared";
-import { Outlet, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { Outlet, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
+import type { CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { useMarkNotificationRead, useSignedIn, useTreeSummaries } from "../../api/queries.js";
-import { FolderDialogsHost } from "../../features/home/FolderDialogsHost.js";
-import { buildPaletteCommands } from "../../features/palette/commands.js";
-import { useWorkspaceScope, workspaceSearch } from "../../features/sidebar/scope.js";
-import { DeleteOfferHost } from "../../features/thread/DeleteOfferHost.js";
-import { requestHomeComposerFocus } from "../../stores/homeFocus.js";
+import { useLogout, useMe } from "../../api/account.js";
+import { AppBar } from "../../features/shell/AppBar.js";
+import { channelOfPath, isFeedPath, showsChannelStrip } from "../../features/shell/screens.js";
+import { scopesFor, useShellData } from "../../features/shell/shellData.js";
+import { useBarAlign } from "../../features/shell/useBarAlign.js";
+import { useBarAutoHide } from "../../features/shell/useBarAutoHide.js";
+import { viewerOf } from "../../features/shell/viewer.js";
 import { useNavigationStore } from "../../stores/navigation.js";
 import { useOverlaysStore } from "../../stores/overlays.js";
-import { CommandPalette, type PaletteCommand } from "../../ui/CommandPalette.js";
 import { DiagramLightbox, ImageLightbox } from "../../ui/Lightboxes.js";
 import { NotificationStack } from "../../ui/NotificationStack.js";
 import { useUserNotifications } from "../../ui/useUserNotifications.js";
 import { SessionBoot } from "../SessionBoot.js";
-
-import { Sidebar } from "./Sidebar.js";
 
 /** An open Base UI dialog, popover, menu or select popup, if there is one.
  * Every Base UI layer has `data-open` while it is mounted and open; the
@@ -28,144 +25,128 @@ const BASE_UI_LAYER_SELECTOR =
   '[data-open][role="menu"],[data-open][role="listbox"]';
 
 /**
- * The application frame (07 §1, §4.4, §5): sidebar, the routed view, the two
- * lightboxes, the toast region, and the command palette. There is no bar above
- * the routed view: page-level back/forward is the browser's (ADR-7), and the
- * only shell control beside the stage is the sidebar restore button, shown in
- * a slim column while the sidebar is collapsed.
+ * The application frame (02 §2): the app bar over one scroll container that
+ * fills the viewport (W2.4), the routed screen inside it, the toasts and the
+ * lightboxes.
  *
- * It installs exactly one capture-phase keydown listener, which does two
- * things in order:
+ * The bar is positioned over the scroll container, so hiding or showing it
+ * never moves the page (02 §2.2 "Placement"); every screen reserves its
+ * height (`.feed-inner`, `.page-inner`). On feeds it hides while scrolling
+ * down (`useBarAutoHide`, W2.3) and, in layout `centred` above 860 px, it is
+ * a floating card aligned to the feed's columns (`useBarAlign`).
  *
- * 1. Escape goes to the top of the overlay stack, if anything is on it. Base UI
- *    dismisses its own dialogs, menus and popovers with correct nesting, so
- *    only non-library layers register (07 §4.4).
- * 2. Every other key goes through `resolveAppShortcut`, the one chord table
- *    (07 §5). Every chord in it also works from a text field.
- *
- * This replaces `App.tsx:9094-9220`, where the dismissal order was a hand-
- * maintained sequence of `if` branches.
+ * One capture-phase keydown listener gives Escape to the top of the overlay
+ * stack (`stores/overlays`), for the layers Base UI does not own (02 §10.2).
  */
 export function AppShell() {
   const navigate = useNavigate();
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const toggleSidebar = useNavigationStore((state) => state.toggleSidebar);
-  const signedIn = useSignedIn();
-  const markNotificationRead = useMarkNotificationRead().mutate;
+  const router = useRouter();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const me = useMe();
+  const viewer = viewerOf(me.data);
+  const logout = useLogout();
   const { notifications, dismiss } = useUserNotifications();
-  const { workspaceId } = useWorkspaceScope();
-  const trees = useTreeSummaries({ workspaceId });
 
-  const runCommand = useCallback(
-    (command: AppShortcutCommand) => {
-      switch (command.type) {
-        case "focusResearchHome":
-          // Home, with the caret in its ask box.
-          requestHomeComposerFocus();
-          void navigate({ to: "/", search: workspaceSearch });
-          return;
-        case "openSettings":
-          void navigate({ to: "/settings", search: workspaceSearch });
-          return;
-        case "openCommandPalette":
-          setPaletteOpen(true);
-          return;
-        case "toggleLeftSidebar":
-          toggleSidebar();
-          return;
-        case "focusFollowups":
-        case "openWorkspaceMenu":
-          // Owned by the mounted view rather than the shell: the shell
-          // re-dispatches as a window event and the route consumes it (07 §5).
-          window.dispatchEvent(new CustomEvent("session:shortcut", { detail: command }));
-          return;
-      }
-    },
-    [navigate, toggleSidebar],
-  );
+  const layout = useNavigationStore((state) => state.layout);
+  const toggleLayout = useNavigationStore((state) => state.toggleLayout);
+  const setScope = useNavigationStore((state) => state.setScope);
+
+  const isFeed = isFeedPath(pathname);
+  const showStrip = showsChannelStrip(pathname);
+  const data = useShellData(viewer);
+
+  const [shell, setShell] = useState<HTMLDivElement | null>(null);
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const bar = useBarAutoHide(scroller, isFeed, menuOpen);
+  const alignment = useBarAlign(shell, scroller, layout, isFeed);
+
+  // A new screen starts at its top (the mock's `scrollTop = 0` on a channel
+  // change). A thread address (`?t=`) scrolls to its row once the feed has
+  // loaded it (02 §2.1).
+  useLayoutEffect(() => {
+    scroller?.scrollTo({ top: 0 });
+  }, [scroller, pathname]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
-
-      // The shell stands down while a library layer is open (07 §4.4, §5).
+      if (event.defaultPrevented || event.key !== "Escape") return;
       // Base UI dismisses its own dialogs, menus and popovers with correct
-      // nesting, so taking Escape here would close a lightbox underneath the
-      // dialog the user is actually looking at; and an app chord fired from
-      // inside a dialog would act on the page behind it.
+      // nesting; while one is open the shell stands down.
       if (document.querySelector(BASE_UI_LAYER_SELECTOR)) return;
-
-      if (event.key === "Escape") {
-        if (useOverlaysStore.getState().dismissTop()) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-        return;
+      if (useOverlaysStore.getState().dismissTop()) {
+        event.preventDefault();
+        event.stopPropagation();
       }
-
-      const command = resolveAppShortcut({
-        key: event.key,
-        metaKey: event.metaKey,
-        ctrlKey: event.ctrlKey,
-        altKey: event.altKey,
-        shiftKey: event.shiftKey,
-      });
-      if (!command) return;
-      // A held chord would fire a burst of navigations on key repeat.
-      if (event.repeat) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      runCommand(command);
     };
-
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [runCommand]);
+  }, []);
 
-  // Built only while the palette is open (`App.tsx:8098`): a list rebuilt on
-  // every render of a closed dialog is work nobody sees.
-  const commands: PaletteCommand[] = paletteOpen
-    ? buildPaletteCommands(trees.data ?? [], {
-        openTree: (treeId) =>
-          void navigate({
-            to: "/r/$treeId",
-            params: { treeId },
-            search: workspaceSearch,
-          }),
-        openHome: () => void navigate({ to: "/", search: workspaceSearch }),
-        toggleSidebar,
-        openSettings: () => void navigate({ to: "/settings", search: workspaceSearch }),
-      })
-    : [];
+  // Sign-in is the `/login` page until the auth dialog (02 W7.2) replaces it;
+  // both buttons go there and come back to this page.
+  const openSignIn = useCallback(() => {
+    void navigate({ to: "/login", search: { redirect: pathname } });
+  }, [navigate, pathname]);
+
+  const signOut = useCallback(() => {
+    logout.mutate(undefined, {
+      onSettled: () => {
+        void router.invalidate();
+        void navigate({ to: "/" });
+      },
+    });
+  }, [logout, navigate, router]);
+
+  const style = alignment
+    ? ({ "--bl": `${alignment.left}px`, "--bw": `${alignment.width}px` } as CSSProperties)
+    : undefined;
 
   return (
-    <div className="bg-surface-workspace text-fg-primary flex h-full w-full overflow-hidden">
+    <div
+      ref={setShell}
+      className="app-shell bg-surface-feed text-fg-primary"
+      data-bar-aligned={alignment ? "" : undefined}
+      data-bar-hidden={bar.hidden ? "" : undefined}
+      style={style}
+    >
       <SessionBoot />
-      <Sidebar />
-      <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
+      <div
+        ref={barRef}
+        className="app-bar-slot"
+        data-hidden={bar.hidden ? "" : undefined}
+        onFocus={bar.onFocusIn}
+        onBlur={(event) => bar.onFocusOut(event.relatedTarget, barRef.current)}
+      >
+        <AppBar
+          viewer={viewer}
+          showStrip={showStrip}
+          isFeed={isFeed}
+          scopes={scopesFor(viewer)}
+          scope={data.scope}
+          onScopeChange={setScope}
+          channels={data.channels}
+          currentChannel={channelOfPath(pathname)}
+          usage={data.usage}
+          savedCount={data.savedCount}
+          onSaved={pathname === "/saved"}
+          layout={layout}
+          onToggleLayout={toggleLayout}
+          unreadCount={data.unreadCount}
+          onSignIn={openSignIn}
+          onJoinWithInvite={openSignIn}
+          onSignOut={signOut}
+          onMenuOpenChange={setMenuOpen}
+        />
+      </div>
+      <div ref={setScroller} className="app-scroll" data-shell-scroll="">
         <Outlet />
-      </main>
+      </div>
       <ImageLightbox />
       <DiagramLightbox />
-      <NotificationStack
-        notifications={notifications}
-        onDismiss={dismiss}
-        // A server notification names the in-app path it is about
-        // (`notification.requested` `href`); opening it marks its inbox
-        // entry, which has the same id, read.
-        onOpen={(href, id) => {
-          if (signedIn) markNotificationRead(id);
-          if (href.startsWith("/") && !href.startsWith("//")) void navigate({ href });
-        }}
-      />
-      {signedIn ? <FolderDialogsHost /> : null}
-      {signedIn ? <DeleteOfferHost /> : null}
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-        commands={commands}
-      />
+      <NotificationStack notifications={notifications} onDismiss={dismiss} />
     </div>
   );
 }

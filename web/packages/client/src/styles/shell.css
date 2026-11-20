@@ -1,0 +1,204 @@
+/* The app shell's structural rules (02 §2.2 "Placement", W2.3, W2.5, §3.1):
+   what Tailwind utilities on the components cannot say, namely the bar's
+   placement over the page, the feed's column grid per layout and width band,
+   and the channel strip's edge fade. Values follow the members mockup
+   (`#bar`, `#shell.colbar`, `.pl-a`, `.pl-b`, `.tabs-s`). Every color is a
+   token. */
+
+/* ---- the shell and its bar ---- */
+
+/* One scroll container under the bar (W2.4). The bar is positioned over it,
+   so showing or hiding the bar never changes the page's layout or its scroll
+   position; the page reserves the bar's height itself (`.feed-inner`,
+   `.page-inner`). */
+.app-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  /* The sticky side column of a post sits this far from the top (02 §4.3):
+     58 px under the bar while it shows, 58 px from the top while it is
+     hidden. */
+  --stick-top: calc(58px + var(--app-bar-h));
+}
+
+.app-shell[data-bar-hidden] {
+  --stick-top: 58px;
+}
+
+.app-bar-slot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  transition: transform 0.2s ease;
+}
+
+/* Hidden: slid up by its own height. It stays in the accessibility tree and
+   is not inert, so focus can still reach it (W2.3). */
+.app-bar-slot[data-hidden] {
+  transform: translateY(-100%);
+}
+
+/* Layout `centred` above 860 px: a floating card aligned to the feed's
+   columns. `useBarAlign` measures them and sets `--bl` and `--bw`. */
+.app-shell[data-bar-aligned] .app-bar-slot {
+  left: var(--bl);
+  right: auto;
+  width: var(--bw);
+}
+
+.app-shell[data-bar-aligned] .app-bar {
+  padding: 0 8px 0 10px;
+  gap: 8px;
+  border: 1px solid var(--surface-divider);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.app-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--research-feed-bg);
+  scroll-padding-top: var(--app-bar-h);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-bar-slot {
+    transition: none;
+  }
+}
+
+:root[data-reduce-motion] .app-bar-slot {
+  transition: none;
+}
+
+/* ---- the channel strip (02 §2.2 item 3) ---- */
+
+/* No scrollbar; a 40 px mask fades an edge only while chips are hidden past
+   it. `ChannelStrip` sets `--fl` and `--fr` to 40px or 0px. */
+.channel-strip {
+  --fl: 0px;
+  --fr: 0px;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black var(--fl),
+    black calc(100% - var(--fr)),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black var(--fl),
+    black calc(100% - var(--fr)),
+    transparent
+  );
+}
+
+.channel-strip::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- feed rows (02 §3.1) ---- */
+
+/* The feed's content column: the bar's height reserved at the top. */
+.feed-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--app-bar-h) 24px 60px;
+}
+
+/* A row is `[card | side column]`, 21 px apart. The first cell of a row may
+   be a channel header (`data-row-head`), which spans the main column in
+   `centred` above 1320 px and both columns otherwise. */
+.feed-row {
+  display: grid;
+  grid-template-columns: minmax(0, 600px) minmax(0, 330px);
+  gap: 21px;
+  padding: 14px 0;
+  justify-content: center;
+}
+
+@media (min-width: 861px) {
+  .feed-inner[data-layout="centred"] {
+    max-width: 1340px;
+  }
+
+  .feed-inner[data-layout="centred"] .feed-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 600px) minmax(0, 1fr);
+    justify-content: stretch;
+  }
+
+  .feed-inner[data-layout="centred"] .feed-row > :nth-child(1) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .feed-inner[data-layout="centred"] .feed-row > :nth-child(2) {
+    grid-column: 3;
+    max-width: 330px;
+  }
+
+  .feed-inner[data-layout="centred"] .feed-row > [data-row-head] {
+    grid-column: 2;
+  }
+
+  .feed-inner[data-layout="wide"] .feed-row {
+    grid-template-columns: minmax(0, 720px) minmax(0, 300px);
+  }
+
+  .feed-inner[data-layout="wide"] .feed-row > [data-row-head] {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 861px) and (max-width: 1320px) {
+  .feed-inner[data-layout="centred"] .feed-row {
+    grid-template-columns: minmax(0, 600px) minmax(0, 330px);
+    justify-content: center;
+  }
+
+  .feed-inner[data-layout="centred"] .feed-row > :nth-child(1),
+  .feed-inner[data-layout="centred"] .feed-row > :nth-child(2) {
+    grid-column: auto;
+  }
+
+  .feed-inner[data-layout="centred"] .feed-row > [data-row-head] {
+    grid-column: 1 / -1;
+  }
+}
+
+/* 860 px and below: one column with a 12 px page inset; the side column
+   follows the card with a further 12 px inset (W2.5). */
+@media (max-width: 860px) {
+  .feed-inner {
+    padding: var(--app-bar-h) 12px 30px;
+  }
+
+  .feed-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .feed-row > :nth-child(2) {
+    padding-left: 12px;
+  }
+}
+
+/* ---- pages (Browse, Invites, Usage, Notifications, Site Admin, Welcome,
+   Settings) ---- */
+
+.page-inner {
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: calc(24px + var(--app-bar-h)) 24px 60px;
+}
+
+.page-inner[data-width="narrow"] {
+  max-width: 660px;
+}
