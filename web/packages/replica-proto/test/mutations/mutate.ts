@@ -748,6 +748,10 @@ interface SyncEdit {
   from: string;
   to: string;
   also?: { from: string; to: string }[];
+  /** Test files of `@session/sync` that kill the mutation where this suite
+   * cannot tell it apart (N34: each of this suite's servers has its own store
+   * and key). They run, in the copy of the package, when this suite passes. */
+  ownTests?: string[];
 }
 
 /** `--sync` runs the suite against `@session/sync`'s server half
@@ -928,19 +932,22 @@ const IN_SYNC: Record<string, SyncEdit> = {
   // the configured key is not used (every server seals with the same key)
   // Since review round 1 of phase 1 a token carries its database's
   // instance id, so a token of another server answers resync whatever its
-  // key: this suite, whose servers each have their own store, no longer
-  // tells a constant key apart (it survives here). `@session/sync`'s own
-  // test of key rotation over one store kills it, since review round 2 of
-  // phase 2: its check that a key never configured opens nothing ran after
-  // the clock had passed the token's age, which resynced it whatever the
-  // key, and now runs before.
+  // key: this suite, whose servers each have their own store, cannot tell a
+  // constant key apart. `@session/sync`'s own test of key rotation over one
+  // store kills it (since review round 2 of phase 2, when its check that a key
+  // never configured opens nothing moved before the clock passes the token's
+  // age), so that test runs for it (`ownTests`).
   N34: {
     file: "src/server/tokens.ts",
     from: '    const cipher = createCipheriv("aes-256-gcm", this.keys.current, iv);',
     to: '    const cipher = createCipheriv("aes-256-gcm", Buffer.alloc(32), iv);',
     also: [
-      { from: "    const keys = [this.keys.current];", to: "    const keys = [Buffer.alloc(32)];" },
+      {
+        from: "    const keys = [this.keys.current];",
+        to: "    const keys: Uint8Array[] = [Buffer.alloc(32)];",
+      },
     ],
+    ownTests: ["test/server.test.ts"],
   },
   "R2-7": {
     file: "src/server/server.ts",
@@ -1011,6 +1018,7 @@ function target(m: Mutation): {
   where: Where;
   file: string;
   edits: { from: string; to: string }[];
+  ownTests?: string[];
 } {
   const p = IN_PACKAGE[idOfMutation(m)];
   if (PACKAGE && p) return { where: "mutators", file: p.file, edits: [{ from: p.from, to: p.to }] };
@@ -1018,7 +1026,12 @@ function target(m: Mutation): {
     throw new Error(`${m.name}: no place in @session/mutators (IN_PACKAGE)`);
   const q = IN_SYNC[idOfMutation(m)];
   if (SYNC && q)
-    return { where: "sync", file: q.file, edits: [{ from: q.from, to: q.to }, ...(q.also ?? [])] };
+    return {
+      where: "sync",
+      file: q.file,
+      edits: [{ from: q.from, to: q.to }, ...(q.also ?? [])],
+      ...(q.ownTests ? { ownTests: q.ownTests } : {}),
+    };
   if (SYNC && SERVER_FILES.has(m.file))
     throw new Error(`${m.name}: no place in @session/sync (IN_SYNC)`);
   return { where: "proto", file: m.file, edits: edits(m) };
@@ -1114,15 +1127,29 @@ async function run(m: Mutation, dir: string): Promise<Outcome> {
   try {
     const tc = await sh("npx", ["tsc", "-p", "tsconfig.test.json", "--noEmit"], dir);
     const ava = await sh("npx", ["ava", "--timeout=600s"], dir, PACKAGE);
-    const tests = [
-      ...new Set(
-        [...ava.out.matchAll(/[✘×] \[fail\]: (.+?)(?:\s{2,}|$)/gm)].map((x) => x[1] ?? ""),
-      ),
+    const failed = (out: string) => [
+      ...new Set([...out.matchAll(/[✘×] \[fail\]: (.+?)(?:\s{2,}|$)/gm)].map((x) => x[1] ?? "")),
     ];
+    const count = (out: string, what: string) =>
+      Number(new RegExp(`(\\d+) tests? ${what}`).exec(out)?.[1] ?? 0);
+    let passed = count(ava.out, "passed");
+    let nFailed = count(ava.out, "failed");
+    let tests = failed(ava.out);
+    if (nFailed === 0 && where.ownTests?.length) {
+      // the package's own tests, in the slot's copy of it
+      const own = await sh(
+        "npx",
+        ["ava", "--timeout=600s", ...where.ownTests],
+        join(dir, "..", "sync"),
+      );
+      passed += count(own.out, "passed");
+      nFailed += count(own.out, "failed");
+      tests = [...tests, ...failed(own.out).map((x) => `@session/sync › ${x}`)];
+    }
     return {
       typecheck: tc.code === 0 ? "ok" : (tc.out.split("\n")[0] ?? "failed"),
-      passed: Number(/(\d+) tests? passed/.exec(ava.out)?.[1] ?? 0),
-      failed: Number(/(\d+) tests? failed/.exec(ava.out)?.[1] ?? 0),
+      passed,
+      failed: nFailed,
       tests: tests.map((x) => x.slice(0, 140)),
     };
   } finally {

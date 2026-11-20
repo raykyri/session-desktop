@@ -38,7 +38,11 @@ of `@session/sync` (`IN_SYNC` in `mutate.ts`), the mutators' in
 they are: the suite's clients are the prototype's. Where the prototype's code
 has no exact counterpart, the mutation names the same fault in the code that
 does the same job, and says so in a comment (N34: the configured key is not
-used; R2-22: the store's dump leaves out the clients).
+used; R2-22: the store's dump leaves out the clients). A mutation this suite
+cannot tell apart can name test files of `@session/sync` (`ownTests`), which
+run in the slot's copy of that package when this suite passes (N34: each of
+this suite's servers has its own store and key, so only the package's key
+rotation test over one store sees a constant key).
 
 It exits with 1 when a mutation survives.
 
