@@ -315,3 +315,26 @@ test("sx-si-web over the server's read of the request @server-r1", async ({ page
   await page.getByRole("button", { name: "Approve this Mac" }).click();
   await expect(page.getByRole("heading", { name: "This Mac is signed in" })).toBeVisible();
 });
+
+// After the server's branch is merged: spaces.create's answer carries the new
+// space, so its page shows before any read of the directory or the logs.
+test("ow-create shows the new space at once @server-r1", async ({ page }) => {
+  test.skip(process.env["SESSION_E2E_SERVER_R1"] !== "1", "needs spaces.create's space");
+  await loadScenario(page.context().request, "seed");
+  await signInAs(page.context());
+  await page.goto("/spaces/new");
+  await page.locator("#cs-crname").fill("field-notes-now");
+  let created = false;
+  page.on("response", (r) => {
+    if (r.url().endsWith("/api/rpc/spaces.create")) created = true;
+  });
+  // after the create, every read waits
+  for (const path of ["**/api/spaces", "**/api/sync/pull", "**/api/sync/snapshot"])
+    await page.route(path, async (r) => {
+      if (!created) return r.continue();
+      await new Promise(() => undefined);
+    });
+  await page.getByRole("button", { name: "Create space" }).click();
+  await expect(page).toHaveURL(/\/s\/field-notes-now$/);
+  await expect(page.getByRole("heading", { name: "#field-notes-now" })).toBeVisible();
+});

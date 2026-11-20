@@ -203,6 +203,16 @@ export class SpacesSession {
     }
   }
 
+  /** A space the person just made (`spaces.create`'s answer carries it
+   * under `space`, in the directory's shape: 2b design finding 6): it is in
+   * the directory at once, before the next read of it. */
+  addSpace(space: pkg.SpaceRec): void {
+    const d = this.directory.get().data;
+    const spaces = [...(d?.spaces ?? []).filter((x) => x.id !== space.id), space];
+    this.directory.set({ spaces, stats: d?.stats ?? [], serverTime: d?.serverTime ?? this.now() });
+    if (this.directoryAt === null) this.directoryAt = Date.now();
+  }
+
   /** A thread held as a summary is fetched in full when it is opened. */
   async openThread(space: string, thread: string): Promise<void> {
     await this.showSpace(space);

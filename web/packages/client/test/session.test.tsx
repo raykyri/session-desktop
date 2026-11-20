@@ -443,3 +443,31 @@ test.serial(
     session.stop();
   },
 );
+
+// ---- a space just made (2b design finding 6) ----
+
+test.serial("a space spaces.create answered is in the directory at once", async (t) => {
+  directoryFetch();
+  const s = scripted({ "user:raymond": [] });
+  const session = new SpacesSession("raymond", { transport: s.transport });
+  await session.start();
+  await session.directory.load();
+  t.deepEqual(
+    session.directory.get().data?.spaces.map((x) => x.name),
+    ["public"],
+  );
+  const made = rec({
+    ...(space as unknown as Record<string, unknown>),
+    id: "01M2JF0CG0ZZZZZZZZZZZZZZZZ",
+    name: "field-recordings",
+  });
+  session.addSpace(made as never);
+  t.deepEqual(
+    session.directory.get().data?.spaces.map((x) => x.name),
+    ["public", "field-recordings"],
+  );
+  // the same space again replaces it
+  session.addSpace(made as never);
+  t.is(session.directory.get().data?.spaces.length, 2);
+  session.stop();
+});
