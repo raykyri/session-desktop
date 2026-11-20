@@ -397,7 +397,7 @@ function layers(p, T, G) {
   const sibs = G.ns.length > 1 ? `<div class="lay-sibs">${G.ns.map((x, i) => `<button class="${x.id === top.id ? 'on' : ''}" data-a="layer" data-g="${G.g}" data-id="${p.id}" data-node="${x.id}" aria-label="Stack ${i + 1}: ${esc(x.q)}">${i + 1}</button>`).join('')}<span>${noun(G.ns.length, 'stack', 'stacks')} on this passage</span></div>` : '';
   const back = Array.from({ length: k }, (_, i) => `<div class="lay-back" style="--i:${i + 1}"></div>`).join('');
   return `${sibs}<div class="lay" style="--k:${k}">${back}<div class="lay-front fadein${open ? '' : ' tap'}" data-grp="${G.g}"${open ? '' : ` data-a="tsel" data-id="${p.id}" data-node="${id}"`}>
-      <div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time></div><p class="rq">${esc(n.q)}</p>${status(n)}
+      <div class="who" title="${esc(n.u)}">${av(n.u, 'xs')}</div><p class="rq">${esc(n.q)}</p>${status(n)}
       ${open ? `<div class="prose">${answerHtml(n)}</div>` : `<p class="lay-s">${esc(clip(summ(n), 150))}</p>`}
       <div class="lay-acts">${d > 1 ? `<button class="chip" data-a="layer" data-g="${G.g}" data-id="${p.id}" data-node="${n.par}">${I.left}Up a layer</button>` : ''}<button class="tlink" data-a="tsel" data-id="${p.id}" data-node="${id}">${open ? 'Show less' : 'Read the answer'}</button></div>
       ${kids.length ? `<div class="lay-kids">${kids.map(c => `<button class="lay-kid" data-a="layer" data-g="${G.g}" data-id="${p.id}" data-node="${c.id}">${I.deeper}<span>${esc(c.q)}</span></button>`).join('')}</div>` : ''}
