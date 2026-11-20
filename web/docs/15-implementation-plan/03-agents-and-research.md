@@ -2,7 +2,7 @@
 
 Status: draft. This file plans how asks, branches, comments and look-ups
 become runs; which models and effort levels a run may use, and how a site
-admin sets the default model and model availability (K15); the owned agent
+admin sets the default model and the default effort (K15); the owned agent
 loop, which is the only executor in this build (device CLI runs of ADR-21
 and `AGENTS.md` "Desktop" are out of scope: web-only build, `00-overview.md`);
 streaming over the sync connection (ADR-22); token accounting, the weekly
@@ -103,8 +103,8 @@ mutator refuses `parent` equal to the root's own `par` (`null`) with
 be readable, not removed and not running or queued (the mockup hides Continue
 and Branch while `n.pending`). `q` is 1 to 8,000 characters; `quote` at most
 2,000; `b` an integer the client takes from the passage index (02 §4.4, W4.4). The
-model must be one the person may use (K13, checked in `pre` against the
-availability a site admin sets, K15) and `effort` one the model accepts
+model must be a registry entry (K11, K13, checked in `pre`) and `effort` one
+the model accepts
 (`ModelEntry.efforts`), else `BAD_REQUEST`, as `research.forkNode` refuses
 today. `post` queues a `job` effect with the run id. Acceptance: mutator tests
 for each parent rule and each refusal; a convergence-suite generator that adds
@@ -520,7 +520,7 @@ allowance is spent ends `tokens` without a provider call.
 **K11. Model registry.** Models come from
 `web/packages/shared/src/models/registry.ts` (ADR-16). The mockup's names
 ("Opus 5.5", "Gemini 4 Neon", "GPT-6.1 Sol") are placeholders; the picker
-shows the registry entries a site admin made available (K15), short names on
+shows every registry entry (K15 sets only the default), short names on
 the button and full names in the menu. Each entry gains `payers`: `included` and/or
 `key:<provider>`. The mockup's key-only OpenAI model ("GPT-6.1 Sol", "your
 OpenAI key", "Add a key" linking to Usage when missing) becomes an entry
@@ -528,9 +528,10 @@ with `payers: ["key:openai"]`, called with the person's OpenAI key directly,
 not through OpenRouter. When that key is removed, a composer that had the
 model selected falls back to the default model. ADR-16 restricts
 `claude-fable` to admins "until per-account usage limits are active"; the
-weekly allowance is such a limit, and the gate is replaced by K15: a site
-admin decides at runtime which models members may use (decision H, which
-replaces question P11). ADR-23 records this. Acceptance: a picker test for a key-only model with
+weekly allowance is such a limit, so the gate is removed and every
+registry entry is available to every member; a site admin sets only the
+default model and default effort (K15; decision H, which replaces question
+P11). ADR-23 records this. Acceptance: a picker test for a key-only model with
 and without the key.
 
 **K12. Effort.** The mockup's model menu has an Effort submenu (`modelMenu`,
@@ -547,50 +548,63 @@ changes with the model; the mutator refuses an effort the model does not
 accept.
 
 **K13. Model per run.** A follow-up may use a different model than its parent
-(`04-agent-runtime.md` §1). The server re-checks model access (K15
-availability), effort and payer in `pre` on every `threads.create`,
-`research.forkNode` and `research.retryNode`; the client predicts with the
-`models.list` answer it holds. A run already queued keeps its model when a
-site admin later makes the model unavailable. Acceptance: a member's
-`research.forkNode` with a model that is not available answers `FORBIDDEN`.
+(`04-agent-runtime.md` §1). The server re-checks the model (a registry entry), effort and payer in
+`pre` on every `threads.create`, `research.forkNode` and
+`research.retryNode`; the client predicts with the `models.list` answer it
+holds. There is no availability check. A run already queued keeps its model
+and effort when a site admin later changes the default model or default
+effort. Acceptance: a member's `research.forkNode` with a model id that is
+not in the registry, or an effort the model does not accept, answers
+`BAD_REQUEST`.
 
 **K14. Key-run privacy.** OpenRouter's zero-data-retention routing
 (`04-agent-runtime.md` §1) does not apply to calls made with a person's own
 Anthropic or OpenAI key; those calls fall under the person's own agreement
 with the provider. The Usage page says so next to each key.
 
-**K15. Default model and model availability (site admin).** Decision H: a
-site admin (`users.is_admin`) chooses at runtime, on an admin page, which
-models members may use and which one is the default for asks. The mockup
-draws three variants of that page (a single default-model setting; a models
-table with default and availability; a settings page with per-member
-overrides); the server below supports the first two, and per-member
-overrides are an open question (`05` §6, Q9).
-- Storage (non-replicated, `01` D3): `model_settings(model_id PK, available
-  boolean, updated_by, updated_at)` with one row per registry entry, and
-  `site_settings(key PK, value_json, updated_by, updated_at)` holding
-  `default_model`. A registry entry without a row is unavailable, so a model
-  added to the registry is off until an admin turns it on. The launch seed
-  makes the registry's current default available and the default.
+**K15. Default model and default effort (site admin).** Decision H: a site
+admin (`users.is_admin`) sets at runtime, on the Site Admin page (`02`
+W8.2), exactly two settings: the default model and the default effort for
+asks. Members' composers start on both. There is no model availability
+setting: every registry entry stays available to every member (K11). There
+are no per-member model overrides (`05` §6, Q9 decided: no). Of the
+mockup's three variants of the page (a single default-model setting; a
+models table with default and availability; a settings page with per-member
+overrides), this build ships the first, with the default effort added.
+- Storage (non-replicated, `01` D3): `site_settings(key PK, value_json,
+  updated_by, updated_at)` holding `default_model` (a registry id) and
+  `default_effort` (`low`, `medium`, `high` or `max`). The launch seed sets
+  the registry's current default and its `defaultEffort`. If a deploy
+  removes the stored default model from the registry, the server uses the
+  registry's default and its `defaultEffort` until an admin sets another.
+- Rules: the default model must be payable with `included` (K11 `payers`);
+  a key-only model, such as the OpenAI one, answers `BAD_REQUEST`. The
+  default effort must be one the default model accepts
+  (`ModelEntry.efforts`), else `BAD_REQUEST`. When `setDefault` names a
+  model that does not accept the current default effort, the server sets
+  `default_effort` to that model's `defaultEffort` in the same transaction
+  and returns `effortReset: { from, to }`, which the page shows (`02`
+  W8.2).
 - API (tRPC, online-only, site admins only, ADR-19): `admin.models.list`
-  (every registry entry with `available`, `payers`, efforts and whether it
-  is the default), `admin.models.setAvailable { model, available }`,
-  `admin.models.setDefault { model }`. The default must be available and
-  payable with `included` (K11 `payers`); making the default unavailable
-  answers `PRECONDITION_FAILED` until another default is set. Every change
-  is logged with the admin's id.
-- Members read `models.list` (tRPC, online, cached 60 s): the available
-  entries with their payers and efforts, and the default. The composer starts
-  on the default unless the person picked another model in this tab
-  (`02` §5). Changes reach open tabs on the next fetch.
-- The `pre` stage of K13 checks availability on the server; `run` does not
-  read it, so prediction is unaffected. ADR-16's `claude-fable` admin gate is
-  replaced by this setting.
+  (every registry entry with name, provider, `payers` and efforts, the
+  default model and the default effort), `admin.models.setDefault { model }`
+  (returns the new default model, the default effort and `effortReset?`),
+  `admin.models.setDefaultEffort { effort }`. No prices or descriptions are
+  returned. Every change is logged with the admin's id.
+- Members read `models.list` (tRPC, online, cached 60 s): every registry
+  entry with its payers and efforts, the default model and the default
+  effort. The composer starts on the default model and the default effort
+  unless the person picked another model or effort in this tab (`02` §5).
+  Changes reach open tabs on the next fetch.
+- The settings affect only the composer's starting choice; `pre` (K13) and
+  `run` do not read them, so prediction is unaffected.
 Acceptance: server tests that a non-admin's `admin.models.*` answers
-`FORBIDDEN`, that an unavailable model is refused in `pre`, that the default
-cannot be unavailable or key-only, and that a new registry entry starts
-unavailable; a client test of the admin page (`02` W8.2) and of the composer
-starting on the default.
+`FORBIDDEN`, that a key-only default is refused, that a default effort the
+default model does not accept is refused, that `setDefault` to a model that
+does not accept the current default effort resets it to that model's
+`defaultEffort` and returns `effortReset`, and that `models.list` returns
+every registry entry; a client test of the Site Admin page (`02` W8.2) and
+of the composer starting on the default model and default effort.
 
 ## 7. Per-run limits
 
@@ -636,9 +650,10 @@ and T tests without network access.
 ## 9. Open questions
 
 1. **Which models at launch, and the admin gate.** Decided (H, replacing
-   P11): a site admin chooses the default model and model availability at
-   runtime (K15). The allowance is 2,000,000 tokens a week per member.
-   Per-member model overrides are open (`05` §6, Q9).
+   P11): a site admin sets the default model and the default effort at runtime
+   (K15); every registry model is available to every member. The allowance
+   is 2,000,000 tokens a week per member. Per-member model overrides:
+   decided no (`05` §6, Q9).
 2. **Cached tokens.** Decided (P12): counted at the provider's discount
    ratio (K2).
 3. **Device runs without a device.** Moot: no device runs in this build.

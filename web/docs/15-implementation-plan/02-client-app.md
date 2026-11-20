@@ -35,7 +35,7 @@ folders or the TanStack Query research cache.
 | `app/captureInvite.ts`, `lib/pendingInvite.ts` | Kept; the fragment capture is reused for `/i#<code>` and channel links (§2.1) |
 | `routes/home.tsx`, `research.$treeId.tsx`, `highlights.tsx`, `places.tsx` | Deleted; new route modules per §2.1 |
 | `routes/notifications.tsx` | Rewritten for W2.6 |
-| `routes/admin.tsx`, `settings.tsx`, `login.tsx`, `devUi.tsx`, `invite.tsx`, `chunks.ts` | Kept and restyled; `invite.tsx` rewritten for account invites; `admin.tsx` gains the models panel (W8.2); `settings.tsx` is not linked from the account menu at launch (decision P23) |
+| `routes/admin.tsx`, `settings.tsx`, `login.tsx`, `devUi.tsx`, `invite.tsx`, `chunks.ts` | Kept and restyled; `invite.tsx` rewritten for account invites; `admin.tsx` gains the Site Admin settings (W8.2); `settings.tsx` is not linked from the account menu at launch (decision P23) |
 | `api/trpc.ts` | Kept for online-only procedures (auth, usage, API keys, invites, directory, settings) |
 | `api/api.ts`, `cache.ts`, `events.ts`, `queries.ts` | Deleted; replaced by `replica/` (§9) |
 | `stores/settings`, `overlays`, `notifications`, `connection`, `localAccount`, `lightboxes` | Kept |
@@ -64,7 +64,7 @@ src/features/channels/    ChannelHeader, ChannelInfoDialog, AboutEditorDialog, M
 src/features/membership/  MembersPage, InviteTree, InviteLinks, AuthDialog, InviteRequiredPage
 src/features/usage/       UsagePage, RecentRuns, OutOfTokensChoice, ApiKeys
 src/features/notifications/ NotificationsPage, NotificationRow, UnreadDot
-src/features/admin/       ModelsPanel
+src/features/admin/       SiteSettingsPanel
 ```
 
 **W1.1 Remove the research client.** Acceptance: `npm run check` passes;
@@ -91,7 +91,7 @@ finds nothing.
 | `/usage` | Usage and API keys |
 | `/welcome` | Invite required (`statusPage`) |
 | `/notifications` | Notifications (W2.6) |
-| `/admin` | Site admins only: the existing admin page with the models panel (W8.2) |
+| `/admin` | Site admins only: the existing admin page with the Site Admin settings (W8.2) |
 | `/i` | Account invite link; the code is in the fragment (`<SESSION_PUBLIC_ORIGIN>/i#<code>`, in production `https://session.dev/i#<code>`; 04 §3.2, §3.4), captured into memory, removed from the URL, and opens the auth dialog over `/` |
 | `/settings` | Kept from the current client, restyled; no menu entry at launch (P23) |
 
@@ -428,10 +428,10 @@ The new-thread composer is the mock's `COMPOSERS.split` with `nb-a`:
   post"), controls held on the last line;
 - channel picker on Home and Saved (joined channels, `menuitemradio`); on a
   channel route the name as static text;
-- model picker for asks: short names, full names in the menu, listing the
-  models a site admin made available (`models.list`, 03 K11, K15) and
-  starting on the admin's default unless the person picked another model in
-  this tab; a model needing a missing key shows "Add a key" linking to
+- model picker for asks: short names, full names in the menu, listing
+  every registry model (`models.list`, 03 K11, K15) and starting on the
+  site default model and default effort unless the person picked another
+  model or effort in this tab; a model needing a missing key shows "Add a key" linking to
   `/usage`; a key-billed model shows "your OpenAI key". No device entries
   ("Claude Code on this Mac"; removed: web-only build). An Effort submenu
   (the shipped `QuestionModelPicker`'s) lists Default and only the efforts
@@ -465,8 +465,8 @@ empty-text state, the signed-out cover, out-of-tokens refusal for each run-
 starting write and not for Post, reply or comment, draft restore across routes,
 focus back to the field after a menu choice, the Effort submenu listing only
 the chosen model's efforts and resetting on a model change, the picker
-starting on the default model of `models.list`; `admin.spec.ts` finds a
-model that a site admin made unavailable absent from a member's picker.
+starting on the default model and default effort of `models.list`, and
+listing every registry model.
 
 ## 6. Channels
 
@@ -621,19 +621,28 @@ Acceptance: tone thresholds; disabled key radio and its reason; key add,
 check state and remove; the model picker drops a key-only model when its key is
 removed; the ring updates within 1 s of a fixture run's finish.
 
-**W8.2 Admin models panel** (`/admin`, site admins only; decision H, 03 K15).
-The mockup draws three variants; this build ships the second, a models table:
-one row per registry entry with short and full name, provider, payers
-(included, key), efforts, an Available switch
-(`admin.models.setAvailable`) and a Default radio
-(`admin.models.setDefault`); the default row's switch is disabled with
-"Choose another default first."; a key-only model's Default radio is
-disabled with "Members need their own key for this model." The first
-variant (a single default-model setting) is the same data without the
-table. Per-member overrides (the third variant) are not built (`05` §6,
-Q9). All online-only through TanStack Query, with inline errors. Acceptance:
-component tests for the two disabled states, a non-admin reaching `/admin`
-gets the not-found page, and a change refetches `models.list`.
+**W8.2 Site Admin settings** (`/admin`, site admins only; decision H, 03 K15).
+Heading "Site Admin", subtitle "Settings for everyone on Session.", and
+exactly two settings:
+- Default model: a radio list of every registry entry, each row showing the
+  model's name and provider (`admin.models.setDefault`). A key-only model's
+  radio is disabled with "Members need their own key for this model."
+- Default effort: a radio list of low, medium, high and max
+  (`admin.models.setDefaultEffort`). Efforts the default model does not
+  accept (`ModelEntry.efforts`) are disabled with "<model> does not accept
+  this effort." When a new default model does not accept the current
+  default effort, the server resets the default effort to that model's
+  `defaultEffort` and the page shows "Default effort reset to <effort>:
+  <model> does not accept <old effort>."
+
+The page shows no prices, no model descriptions, no availability switches
+and no per-member overrides (every registry model stays available to every
+member; `05` §6, Q9 decided: no). The mockup's other two variants (a models
+table with availability; per-member overrides) are not built. All
+online-only through TanStack Query, with inline errors. Acceptance:
+component tests for the disabled key-only radio, the disabled efforts, the
+reset notice, a non-admin reaching `/admin` gets the not-found page, and a
+change refetches `models.list`.
 
 ## 9. Client state
 
@@ -661,7 +670,7 @@ TanStack Query for online-only calls:
 | `useSources(id)` | byline, citation popover | cited pages of the answer |
 | `useModerationLog(space)` | moderation log | `modlog` entries |
 | `useNotifications()` | notifications page, unread dot | notification records (user log) |
-| `useModels()` | composer, admin panel | `models.list`, `admin.models.list` (TanStack, online-only, 03 K15) |
+| `useModels()` | composer, Site Admin settings | `models.list` (every registry model, default model and default effort), `admin.models.list` (TanStack, online-only, 03 K15) |
 | `useInvites()` | invites page | `accountInvites.*`, `members.tree` (TanStack, online-only, 01 C8) |
 | `useUsage()` | ring, usage page, composer | `usage.get`, `usage.listRuns` (TanStack) |
 
@@ -809,7 +818,7 @@ composer moves focus as follows:
 | Moderation log | Close | "Moderation log" button |
 | Member list, channel invite dialog | Close | the opening row |
 | Remove | reason field | the card's "…" button |
-| Admin models panel | the page heading | — |
+| Site Admin settings | the page heading | — |
 | Delete confirmation (`alertdialog`) | Cancel (the mock focuses Delete) | "…" button, or the next row if the item is gone |
 | New channel | Name | opener, or the new channel's heading |
 | Auth dialog | first field or step heading | opener |
@@ -917,9 +926,10 @@ delivers them.
 
 `visual.spec.ts` is rewritten for Home in `centred` and `wide` at 1440 and
 1100 px, a channel at 800 px, an open branch card, the stacked dialogs, Usage,
-Invites and the auth dialog. `admin.spec.ts` stays and gains the models panel
-(W8.2): a site admin makes a model unavailable and changes the default, and a
-member's composer reflects both after a reload. The `library`, `research`,
+Invites and the auth dialog. `admin.spec.ts` stays and gains the Site Admin
+settings (W8.2): a site admin changes the default model and the default
+effort, a key-only model cannot be chosen as the default, and a member's
+composer starts on both after a reload. The `library`, `research`,
 `collaboration`, `live` and `widgets` specs are deleted.
 
 ### 12.3 Desktop (removed: web-only build)
@@ -940,7 +950,7 @@ whole end-to-end suite.
 | N7 | Account invites, waiting accounts, `members.tree` (online-only) | 01 C8; 04 §3 |
 | N8 | Placeholder fields `mod`, `modBy`, `modNote`; `modlog` with ban entries | 01 C12; 04 §6.5 |
 | N9 | Run records, `step`, failure reasons, stream deltas and `/live`, cancel and retry | 03 §1, E3, G6, T1-T3; 01 Y7 |
-| N10 | `usage.*`, `apiKeys.*`, `usage.changed`, model registry with payers, `models.list` and `admin.models.*` | 03 K4-K8, K11, K15 |
+| N10 | `usage.*`, `apiKeys.*`, `usage.changed`, model registry with payers, `models.list` and `admin.models.*` (default model and default effort) | 03 K4-K8, K11, K15 |
 | N11 | GitHub and X sign-in with the profile step, `auth.checkInvite` | 04 §1, §3.4, Z2 |
 | N12 | Stored answer and stream format: both Markdown | 01 C3; 03 §1 |
 | N13 | `prefs` record and `prefs.set` | 01 C13 |

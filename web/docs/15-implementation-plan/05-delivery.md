@@ -40,7 +40,7 @@ web-only scope).
 | M3 | Server half on SQLite passing replica-proto's suites; staging app | M2 | M4 |
 | M4 | Client shell, feed, posts, replies, channels, signed-out reading | M1b (fixture replica); M2, M3 for e2e | M3, M5a |
 | M5a | Owned runs: asks, branches, look-ups, comments, streaming | M3, M4 | M6 |
-| M5b | Weekly allowance, payer, API keys, Usage page, admin model settings | M5a, ADR-23 accepted | M6 |
+| M5b | Weekly allowance, payer, API keys, Usage page, Site Admin settings | M5a, ADR-23 accepted | M6 |
 | M6 | Membership, sign-in with GitHub or X, moderation, notifications | M3, M4 | M5a, M5b |
 | M7a | (removed: web-only build) Desktop shell | — | — |
 | M7b | (removed: web-only build) Device runs | — | — |
@@ -305,8 +305,9 @@ through `serverApply` with attempt fencing (E1-E4); progress steps;
 streaming as ephemeral deltas with gap refetch from `run_live` (T1-T4); the
 usage ledger and what counts, cached input at the discount ratio (K1, K2)
 with every run paid as `included` and the existing limits; failure handling
-(E5); model access per run checked in `pre` against the registry's current
-admin gate until K15 replaces it in M5b, and the Effort submenu listing the
+(E5); model and effort per run checked in `pre` against the registry, with
+ADR-16's `claude-fable` admin gate kept until the weekly allowance (K3)
+removes it in M5b (K11), and the Effort submenu listing the
 chosen model's efforts (K12, K13); per-run limits (L1, L2); the client's run
 states, branch tree, branch card and selection actions (`02` W3.3, W4.1,
 W4.2, W4.4) and the look-up display (G3).
@@ -326,7 +327,7 @@ Exit criteria:
   `spaces-runs.spec.ts` is new in this milestone.
 - Fixture providers only; nothing reaches a model provider in CI.
 
-### M5b — Allowance, payer, API keys, Usage page, admin model settings
+### M5b — Allowance, payer, API keys, Usage page, Site Admin settings
 
 Entry: ADR-23 accepted (`03` §6, K15).
 
@@ -335,9 +336,9 @@ Scope: the weekly allowance and its reset (K3), API keys encrypted under
 `usage.listRuns` (K5), the meter (K6), the billing setting and the payer made
 in `pre` (K7, K8), crossing the allowance during a run (K9), runs at the reset
 (K10), model payers in the registry (K11), the key-run privacy note (K14),
-the default model and model availability set by a site admin with
+the default model and default effort set by a site admin with
 `models.list` and `admin.models.*` (K15, decision H); the Usage page (`02`
-W8.1), the admin models panel (`02` W8.2) and the app bar ring on live data.
+W8.1), the Site Admin settings (`02` W8.2) and the app bar ring on live data.
 
 Exit criteria:
 - `cd web && npm test` passes, including the K3 reset-boundary tests with an
@@ -345,12 +346,14 @@ Exit criteria:
   key and finds nothing, the K5 removed-thread test, the K8 mutator tests for
   each payer and the convergence test of a write queued with tokens left and
   applied after they ran out, the K9 boundary-crossing ledger test, and the
-  K15 server tests (non-admin refused, unavailable model refused in `pre`,
-  default neither unavailable nor key-only, new registry entry unavailable).
+  K15 server tests (non-admin refused, key-only default refused, a default
+  effort the default model does not accept refused, the default effort
+  reset on a change of default model, every registry entry in
+  `models.list`).
 - `cd web && npm run test:e2e -- spaces-usage admin` passes (keys, billing
-  setting, out-of-tokens refusal of Ask while Post sends; a site admin makes
-  a model unavailable and changes the default, and a member's composer shows
-  both after a reload).
+  setting, out-of-tokens refusal of Ask while Post sends; a site admin
+  changes the default model and the default effort, and a member's composer
+  starts on both after a reload).
 - `06-auth-and-users.md` §8 and `fly.toml`'s comment on daily limits updated
   to the weekly allowance.
 
@@ -452,8 +455,8 @@ Scope: §3.5 and §3.6. Exit criteria:
 - Production smoke on the deployed build: `curl -fsS
   https://session.dev/healthz`; boot log shows `0000_initial.sql` applied on
   an empty database and Litestream replicating to the new prefix; a seeded
-  site admin signs in with GitHub and another with X, sets the default model,
-  creates an invite; a second account redeems it and the inviter gets the
+  site admin signs in with GitHub and another with X, sets the default model
+  and the default effort, creates an invite; a second account redeems it and the inviter gets the
   `invite_used` notification; post; ask with included tokens; remove and
   ban; a channel invite link redemption.
 - A restore rehearsal against a post-launch snapshot, checking the epoch
@@ -598,7 +601,7 @@ machine. Staging is reset after the M8a squash.
   `SESSION_X_CLIENT_ID`, `SESSION_X_CLIENT_SECRET` and the abuse limits of
   `04` Z1. `SESSION_DESKTOP_ORIGINS`, `SESSION_DEVICE_ANSWER_MAX_BYTES` and
   `SESSION_DEVICE_RUNS_PER_HOUR` are not added (removed: web-only build).
-  The default model and model availability are set by a site admin at
+  The default model and the default effort are set by a site admin at
   runtime, not by configuration (`03` K15). All are validated at boot and
   documented in `web/.env.example`; the keys are Fly secrets. Losing
   `SESSION_SECRET_KEY` makes stored API keys and open invite codes
@@ -626,7 +629,7 @@ through `fly ssh console`, which sets `is_admin` and `status: active`
 (`bin/admin.ts` gains the provider prefix and the activation). Each admin
 then chooses a handle at the profile step. Admins are the roots of the invite
 tree and are exempt from the 3-open-links limit (`04` I2); they set the
-default model and model availability (`03` K15) before inviting anyone.
+default model and the default effort (`03` K15) before inviting anyone.
 
 How users are told (`users` holds no email address, so notices reach only
 people who open the app):
@@ -654,8 +657,8 @@ people who open the app):
 5. Deploy the build branch to production (`fly deploy web -c web/fly.toml`)
    and scale to 1. Boot runs `0000_initial.sql` on the empty file, records
    the Litestream generation id, then starts the effect worker.
-6. Seed the site admins (§3.5); the admins set the default model and model
-   availability.
+6. Seed the site admins (§3.5); the admins set the default model and the
+   default effort.
 7. Smoke checks (M8b exit).
 8. On failure before the first invite is sent: `fly scale count 0`, restore
    the old prefix as `LITESTREAM_REPLICA_URL`, deploy the recorded old image,
@@ -709,8 +712,8 @@ Security, Operations (deploys, backups). The Desktop role is removed
 | SQLite's single writer saturates with change log, recorded answers and effects | Low | High | One commit per apply; short transactions; M3 load check; machine size raised before limits | Server |
 | Erased text survives in WAL, effect payloads, notifications or logs | Medium | High | Effects and notifications carry ids (the `removed` notification only the owner's note); logs carry no text; storage scan over file and WAL (M3); staging scan (M6) | Security |
 | A restore serves erased text again (backups keep it; no retention requirement, decided) | Medium | Medium | The restore runbook lists the removals applied after the restore point (from the JSON logs, which carry mutator names and item ids) and repeats them before traffic resumes | Security |
-| Included-token spend exceeds budget: 2,000,000 tokens per member per week at the default model's price | Medium | High | Cached input counted at the discount ratio (P12); a site admin chooses the default model and availability at runtime and can switch to a cheaper default at once (K15); `SESSION_WEEKLY_TOKENS` per-user override; per-run cap `SESSION_RUN_MAX_TOKENS`; weekly cost alert (§4, Q12) | Product |
-| A site admin makes an expensive model the default, or makes every model unavailable | Low | Medium | The default must be available and payable with included tokens (K15); changes are logged with the admin's id; the cost alert | Operations |
+| Included-token spend exceeds budget: 2,000,000 tokens per member per week at the default model's price | Medium | High | Cached input counted at the discount ratio (P12); a site admin sets the default model and default effort at runtime and can switch to a cheaper default or a lower effort at once (K15); members may still pick any registry model; `SESSION_WEEKLY_TOKENS` per-user override; per-run cap `SESSION_RUN_MAX_TOKENS`; weekly cost alert (§4, Q12) | Product |
+| A site admin makes an expensive model or a high effort the default | Low | Medium | The default must be payable with included tokens and the default effort one the default model accepts (K15); changes are logged with the admin's id; the cost alert | Operations |
 | Replica size in a browser tab: the in-memory replica is loaded by a snapshot on every page load | Medium | Medium | Web window of 30 days or 100 threads, capped at 500 per space (E7, `01` R1), as server settings; snapshot size measured in M3 and alerted (§4) | Server |
 | Every deploy restarts the one machine and every SSE client reconnects and pulls at once | High | Low | Cursors resume with `pull`, not `snapshot`; client reconnect jitter; load check includes a reconnect of 200 clients | Server |
 | A protocol bump makes open tabs reload in a loop | Low | Medium | One reload, then the "Reload to continue" message (`02` §9.2); `426` counter and alert (§4) | Client |
@@ -728,7 +731,7 @@ Security, Operations (deploys, backups). The Desktop role is removed
 | A channel cannot be moderated because its only owner is absent, suspended or deleted (ownership is not transferable) | Medium | Medium | Suspension and deletion freeze the owner's channels (`04` B6); a site admin deletes a channel by operator job; P24 | Product |
 | Existing web users lose their accounts and research at the wipe (no export, decided) | High | Medium | Banner with the date and wording of §3.5 for the notice period (Q11); invite-only re-entry | Product |
 | ADR-23 (user keys, models) is not accepted in time | Medium | Medium | Drafted in M1a; M5a ships on included tokens only; M5b waits on it | Product |
-| Scope from the mockup grows past the contract (rules, hide, join requests, reporting, widgets, per-member model overrides) | Medium | Medium | Decisions recorded in 00 and §6; contract changes only through `01` §7 | Product |
+| Scope from the mockup grows past the contract (rules, hide, join requests, reporting, widgets, model availability, per-member model overrides) | Medium | Medium | Decisions recorded in 00 and §6; contract changes only through `01` §7 | Product |
 
 Removed (web-only build): "Device runs expose local files", "Device token
 theft or a stolen Mac", "Desktop UI cannot be driven by Playwright", the
@@ -773,8 +776,10 @@ for reference from this file.
   by the owner (with reason), your invite used (`01` C16, `02` W2.6). No
   push notifications. `02` §14 q5.
 - **P11. Models at launch and the allowance.** Replaced (H): a site admin
-  chooses the default model and model availability at runtime on an admin
-  page (`03` K15, `02` W8.2); per-member overrides are Q9. Decided: 2,000,000
+  sets the default model and the default effort at runtime on the Site
+  Admin page (`03` K15, `02` W8.2); every registry model is available to
+  every member, with no availability setting; per-member overrides: no
+  (Q9). Decided: 2,000,000
   tokens a week per member. The weekly budget for the cost alert is Q12.
   `03` §9 q1.
 - **P12. Cached tokens.** Decided (I): counted at the provider's discount
@@ -883,8 +888,9 @@ For the product owner; each has a recommended answer and its source.
   app before M6; launch with GitHub only if X access is not ready. `04` Z2,
   `05` §5.
 - **Q9. Per-member model overrides** (the mockup's third admin variant).
-  Recommended: not at launch; add later as a per-user table beside
-  `user_limits`. `03` K15, `02` W8.2.
+  Decided: no. The Site Admin page has only the default model and the
+  default effort; there is no per-member override and no availability
+  setting. `03` K15, `02` W8.2.
 - **Q10. How members reach site admins about abuse, with no reporting.**
   Recommended: a contact address on the community-rules page, read by site
   admins. `04` §13, `05` §5.

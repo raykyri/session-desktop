@@ -77,16 +77,16 @@ to them.
   account avatar.
 - Usage and API keys page: weekly allowance, recent runs, what happens when
   included tokens run out, Anthropic/OpenAI keys.
-- Admin: a site-admin page to choose the default model and which models
-  members may use (the mockup shows three variants).
+- Site Admin: a page for site admins with two settings, the default model
+  and the default effort, on which every member's composer starts.
 
 ## Plan files
 
 | File | Covers | Item ids |
 |---|---|---|
 | `01-architecture-and-data.md` | Server half, database, mutators, sync, API surface, the contract changes the mockup needs | `S`, `D`, `U`, `Y`, `R`, `A`, `C` |
-| `02-client-app.md` | The web client: app shell, feed, branches, composer, channels, membership, notifications, usage and admin model screens, state, accessibility, layout | `W`; `N` for its dependencies |
-| `03-agents-and-research.md` | Asks, branches and look-ups as owned runs; models and the admin model settings; streaming; tokens, allowance and API keys (device runs `V` removed) | `G`, `E`, `V`, `T`, `K`, `L` |
+| `02-client-app.md` | The web client: app shell, feed, branches, composer, channels, membership, notifications, usage and Site Admin screens, state, accessibility, layout | `W`; `N` for its dependencies |
+| `03-agents-and-research.md` | Asks, branches and look-ups as owned runs; models and the site-wide default model and effort; streaming; tokens, allowance and API keys (device runs `V` removed) | `G`, `E`, `V`, `T`, `K`, `L` |
 | `04-membership-moderation-security.md` | Invites, sign-in with GitHub or X, channels and ownership, moderation (no reporting), privacy, permissions, abuse limits, authentication | `I`, `B`, `O`, `P`, `Z` |
 | `05-delivery.md` | Milestones `M0`-`M8` (M7a, M7b removed), the build branch and carry-over, testing and acceptance, deployment and launch, observability, risks, open questions | milestones `M`; questions `P`, `E`, `S`, `Q` |
 
@@ -144,8 +144,10 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
   `pre` stage; members may add Anthropic and OpenAI keys (ADR-23, to be
   written); the Effort submenu lists the chosen model's efforts, with no
   cost hint and no cap (03 K2, K3, K4, K8, K12).
-- A site admin chooses the default model and model availability at runtime;
-  the server checks availability in `pre` (03 K13, K15; 02 W8.2).
+- A site admin sets the default model and the default effort at runtime;
+  members' composers start on both. Every registry model stays available to
+  every member: there is no availability setting and no per-member override
+  (03 K15; 02 W8.2).
 - The launch wipes all web data, accounts included, with no export; the
   migrations are squashed into one `0000_initial.sql` and site admins are
   re-seeded (01 D5; 05 §3.5, §3.6).
@@ -190,9 +192,12 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
   - Notifications: a Notifications page in the account menu and an unread
     dot on the avatar; kinds mention, reply, branch, comment, removed,
     invite used (P10; 01 C16; 02 W2.6).
-  - Admin panel: site admins choose the default model and model
-    availability at runtime (replaces P11; 03 K15; 02 W8.2); per-member
-    overrides are open (Q9).
+  - Site Admin page ("Site Admin", "Settings for everyone on Session."):
+    exactly two settings, the default model (a key-only model cannot be
+    the default) and the default effort (low, medium, high, max), on which
+    members' composers start. No model availability control, no prices or
+    model descriptions, and no per-member model overrides (replaces P11;
+    Q9 decided: no; 03 K15; 02 W8.2).
   - Tokens: cached input at the discount ratio (P12); no cost hint and no
     effort cap (P13); 2,000,000 tokens a week.
   - Widgets and artifacts are not built; answers are plain Markdown (P21).

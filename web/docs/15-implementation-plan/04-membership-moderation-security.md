@@ -822,7 +822,7 @@ none of them.
   C1, C8–C14, C18, S1–S3, D2, D3, D4, U6, Y3, Y8.
 - `02-client-app.md`: the dialogs and pages named here (channel info, edit,
   member list, moderation log, remove dialog, members page, invite flow,
-  frozen-channel banner, notifications page, admin models page).
+  frozen-channel banner, notifications page, Site Admin page).
 - `03-agents-and-research.md`: run cancellation on removal; run limits;
   answers stored as Markdown (§1).
 - `05-delivery.md`: M4 schedules I5, B1, B3 and P1; M6 schedules the other

@@ -75,7 +75,7 @@ encryption, see 03 and C8), the X OAuth client settings (04 Z2), the web
 replication window of R1, and the run and allowance settings of
 `03-agents-and-research.md`: `SESSION_WEEKLY_TOKENS` (2,000,000),
 `SESSION_RUN_MAX_TOKENS` (400,000) and `SESSION_QUEUED_PER_USER` (20); the
-abuse limits of 04 Z1. The default model and model availability are not
+abuse limits of 04 Z1. The default model and the default effort are not
 configuration: a site admin sets them at runtime (03 K15).
 `SESSION_DESKTOP_ORIGINS`, `SESSION_DEVICE_ANSWER_MAX_BYTES` and
 `SESSION_DEVICE_RUNS_PER_HOUR` are not added (removed: web-only build).
@@ -178,8 +178,8 @@ and finds no record, log, registry, answer or `last_seq` change, and an
 
 **D3. Non-replicated server tables.** New: `api_keys` (encrypted value,
 provider, mask, status, last used), `run_live` (in-flight checkpoint text per
-run and attempt, deleted at finish), `site_settings` and `model_settings`
-(the default model and model availability a site admin sets, 03 K15),
+run and attempt, deleted at finish), `site_settings` (`default_model` and
+`default_effort`, set by a site admin, 03 K15; no `model_settings` table),
 `server_meta` (the Litestream generation id of D6). Changed: `usage_events`
 (03), `invites` and `users` (C8, 04 I1). `device_tokens` and `run_leases`
 are not created (removed: web-only build). Acceptance: no row of these
@@ -622,8 +622,8 @@ web-only build).
 | `GET /api/runs/:id/live` | read | in-flight checkpoint of a run after a gap (ADR-22) |
 | tRPC `account.*` | online | profile and account settings; `devices.*` is not built (removed: web-only build) |
 | tRPC `apiKeys.*`, `usage.*` | online | keys, allowance, recent runs (`03-agents-and-research.md` §6) |
-| tRPC `models.list` | online | the models a member may pick and the default model (03 K15) |
-| tRPC `admin.models.*`, `admin.suspend` | online, site admins | default model and model availability (03 K15); suspension (04 I6) |
+| tRPC `models.list` | online | every registry model, the default model and the default effort (03 K15) |
+| tRPC `admin.models.*`, `admin.suspend` | online, site admins | default model and default effort (03 K15); suspension (04 I6) |
 | tRPC `accountInvites.*`, `members.tree` | online | Session invites and the invite tree (C8) |
 | tRPC `spaces.directory` | online | the "All" list of open channels (C7) |
 | `GET /healthz`, `/auth/*` | Hono | `/auth/github/*` and the new `/auth/x/*` (04 Z2) |
