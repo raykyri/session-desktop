@@ -126,6 +126,39 @@ test("finding 1: a client stopped during the registration after WRONG_CLIENT tak
   t.deepEqual(storage.writes.slice(n), []);
   const meta = await storage.loadMeta();
   t.not(meta?.clientId, null, "the stored id is the first registration's");
+  // the late registration's id is not taken
+  t.is(c.clientId, null);
+});
+
+test("finding 1: a WRONG_CLIENT that arrives after the stop makes no registration", async (t) => {
+  const { w } = cast(t);
+  const storage = new Recorded();
+  const inner = new InProcessTransport(w.server, { u: "mel" });
+  let registers = 0;
+  let release: (() => void) | null = null;
+  const pushes: Envelope[] = [];
+  const transport: Transport = {
+    ...watched(inner, {
+      push: async (es) => {
+        pushes.push(...es);
+        await new Promise<void>((r) => (release = r));
+        return [fail("WRONG_CLIENT", w.clock.now()) as PushResult];
+      },
+    }),
+    register: () => (registers++, inner.register()),
+  };
+  const c = client(w, "mel", { storage, transport, persist: true });
+  await c.init();
+  c.write("profile.update", { name: "Mel", bio: "" });
+  for (let k = 0; k < 100 && release === null; k++) await tick();
+  t.truthy(release, "the write is on the wire");
+  c.stop();
+  const n = storage.writes.length;
+  (release as unknown as () => void)();
+  await sleep(30);
+  t.is(registers, 1);
+  t.is(pushes.length, 1);
+  t.deepEqual(storage.writes.slice(n), []);
 });
 
 test("finding 1: a registration answered for another person is not taken: the client signs out and sends nothing", async (t) => {

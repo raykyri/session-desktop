@@ -371,3 +371,40 @@ test("finding 2: links the app opens are http, https or mailto, else the server'
   await new Promise((r) => setTimeout(r, 0));
   t.deepEqual(b.opened, ["mailto:a@b.c", "https://session.test/s/x"]);
 });
+
+test("finding 1: an answer read with an earlier sign-in's token is not kept, even for the same person", async (t) => {
+  const b = new FakeBridge();
+  const d = await Desktop.start(b);
+  await d.signedIn({ token: "tok-1", device: "dev-1", u: "ines.v" });
+  await offlineFetch(() => d.signOut());
+  await d.signedIn({ token: "tok-2", device: "dev-2", u: "ines.v" });
+  d.rememberMe({ handle: "ines.v", u: "ines.v", name: "Old" }, "tok-1");
+  t.is(d.lastMe(), null);
+  d.rememberMe({ handle: "ines.v", u: "ines.v", name: "New" }, "tok-2");
+  t.like(d.lastMe(), { name: "New" });
+});
+
+test("finding 1: a write the session asks for after its token was refused is not stored: the storage closes before the screens do", async (t) => {
+  const dir = tempDir(t);
+  const b = new FakeBridge(dir);
+  const d = await Desktop.start(b);
+  await d.signedIn({ token: "tok", device: "dev", u: "ines.v" });
+  const s = d.storage("ines.v");
+  await s.saveMeta({ user: "ines.v", clientId: "c1", lastSeq: 0, offset: 0 });
+  d.unauthorized("tok");
+  // the session is still up for a moment: its next write is refused
+  await t.throwsAsync(s.saveOutbox([{ local: "late" }]));
+  await new Promise((r) => setTimeout(r, 20));
+  t.deepEqual(readdirSync(dir), []);
+});
+
+test("finding 7: a replica that failed to open opens on the storage's next call", async (t) => {
+  const b = new FakeBridge();
+  const d = await Desktop.start(b);
+  await d.signedIn({ token: "tok", device: "dev", u: "ines.v" });
+  b.failOpen.push(new ReplicaError("FAILED", "database is locked"));
+  const s = d.storage("ines.v");
+  await t.throwsAsync(s.loadMeta(), { message: "database is locked" });
+  t.is(await s.loadMeta(), null);
+  t.true(b.hasReplica("ines.v"));
+});

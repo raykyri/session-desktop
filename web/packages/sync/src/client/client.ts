@@ -1403,7 +1403,6 @@ export class SyncClient implements Changing {
   }
 
   private async persist() {
-    if (this.stopped) return;
     if (this.keep)
       await this.storage.saveOutbox(
         // what holds for this process only is not stored
@@ -1785,7 +1784,6 @@ export class SyncClient implements Changing {
   /** Send the outbox in order (one flush at a time; a write queued during a
    * flush is sent by it). */
   flush(): Promise<void> {
-    if (this.stopped) return Promise.resolve();
     if (this.flushing) {
       this.again = true;
       return this.flushing;
@@ -1795,7 +1793,7 @@ export class SyncClient implements Changing {
         for (;;) {
           this.again = false;
           const blocked = await this.flushOnce();
-          if (blocked || this.stopped || !(this.again || this.pick() !== null)) break;
+          if (blocked || !(this.again || this.pick() !== null)) break;
         }
       } finally {
         this.flushing = null;
@@ -1893,7 +1891,6 @@ export class SyncClient implements Changing {
   /** One pass over the outbox. Answers whether it is blocked (no server,
    * held, signed out), so the flush does not go round again. */
   private async flushOnce(): Promise<boolean> {
-    if (this.stopped) return true;
     this.expire();
     if (this.updateRequired) this.hold();
     this.failStuck();
@@ -1972,12 +1969,6 @@ export class SyncClient implements Changing {
           [a] = await this.transport.push([env]);
         } finally {
           this.inFlight = null;
-        }
-        // an answer after the client stopped: nothing follows from it (no
-        // registration, no resend, nothing stored)
-        if (this.stopped) {
-          blocked = true;
-          break;
         }
         if (a === NO_RESPONSE) {
           this.noResponse(e, now, true);

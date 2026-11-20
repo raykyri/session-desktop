@@ -234,7 +234,6 @@ export class Desktop implements Platform {
   /** Try again: the client's screens open the replica again. */
   retryStorage(): void {
     if (!this.problemValue) return;
-    this.stores.delete(this.problemValue.handle);
     this.problemValue = null;
     this.changed();
   }
@@ -244,7 +243,7 @@ export class Desktop implements Platform {
    * the app holds it, or SQLite fails). */
   async unsentWrites(): Promise<OutboxEntry[] | null> {
     const p = this.problemValue;
-    if (!p || p.code === "LOCKED") return null;
+    if (!p) return null;
     try {
       const db = await this.bridge.openReplica(p.handle);
       const rows = await db.select<{ body: string }>(
