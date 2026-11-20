@@ -12,10 +12,10 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { useMe } from "../api/account.js";
-import { getJson } from "../api/http.js";
+import { HttpError, getJson } from "../api/http.js";
 import { createResource, useResource } from "../api/resource.js";
 import { agoText, dayOf, fmtT, spaceName } from "../data/format.js";
-import { useNow, useRecords, useSession } from "../sync/react.js";
+import { useNow, useRecords } from "../sync/react.js";
 
 import { Modal, Page } from "./Page.js";
 import { Scrim } from "./Scrim.js";
@@ -782,15 +782,19 @@ export function AccountPage({ tab }: { tab: string }) {
 
 // ---- a Desktop app's sign-in ----
 
-/** `devices.request`: what the page shows about a sign-in the app started.
+/** `GET /api/devices/requests/:request` (the server's `signinView`): what
+ * the page shows about a sign-in the app started, never its code.
  * `sameComputer`: the request came from this browser's network address, so
  * one click approves it; otherwise the page asks for the code the app shows
  * (phase 2 review round 1, finding 1: a link someone else sent cannot sign
  * their Mac in as the reader). */
 interface SignInRequest {
-  device: string;
-  app: string;
-  askedAt: string | number;
+  name: string;
+  /** The device and the app as the app describes them, or null. */
+  device: string | null;
+  app: string | null;
+  askedAt: string;
+  state: "waiting" | "approved" | "denied" | "taken";
   sameComputer: boolean;
 }
 
@@ -805,7 +809,6 @@ const askedText = (at: string | number, now: number) => {
 
 export function DevicePage({ request, code: code0 }: { request?: string; code?: string }) {
   const w = useWorld();
-  const session = useSession();
   const now = useNow();
   const navigate = useNavigate();
   const write = useWrite();
@@ -821,22 +824,24 @@ export function DevicePage({ request, code: code0 }: { request?: string; code?: 
   }, [w.me, w.loaded, navigate]);
   // the request as the server recorded it: the device, the app, when, and
   // whether it came from this computer
-  const client = session?.client ?? null;
+  const me = w.me?.u ?? null;
   useEffect(() => {
-    if (!request || !client) return;
+    if (!request || !me) return;
     let live = true;
-    void client
-      .call("devices.request", { request })
-      .then((a) => {
+    getJson<SignInRequest>(`/api/devices/requests/${encodeURIComponent(request)}`)
+      .then((v) => {
         if (!live) return;
-        if (a.ok) setInfo(a.result as SignInRequest);
-        else setInfo(a.error.code === "NOT_FOUND" ? "gone" : "unknown");
+        setInfo(v);
+        if (v.state === "denied") setDone("denied");
+        else if (v.state !== "waiting") setDone("approved");
       })
-      .catch(() => live && setInfo("unknown"));
+      .catch((e: unknown) => {
+        if (live) setInfo(e instanceof HttpError && e.code === "NOT_FOUND" ? "gone" : "unknown");
+      });
     return () => {
       live = false;
     };
-  }, [request, client]);
+  }, [request, me]);
   // a request the page could not read asks for the code
   const here = typeof info === "object" && info !== null && info.sameComputer;
   const needsCode = !here;
@@ -866,9 +871,13 @@ export function DevicePage({ request, code: code0 }: { request?: string; code?: 
       <section className="cs-card sx-dcard">
         <dl className="sx-dl2">
           <dt>Device</dt>
-          <dd>{info.device}</dd>
-          <dt>App</dt>
-          <dd>{info.app}</dd>
+          <dd>{info.device ?? info.name}</dd>
+          {info.app ? (
+            <>
+              <dt>App</dt>
+              <dd>{info.app}</dd>
+            </>
+          ) : null}
           <dt>Asked</dt>
           <dd>
             {askedText(info.askedAt, now)}, from {here ? "this computer" : "another computer"}

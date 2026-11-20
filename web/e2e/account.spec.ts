@@ -3,12 +3,12 @@
 // Desktop and Mobile Web. The web has no Devices tab (AGENTS.md).
 //
 // Device sign-in (phase 2 review round 1, finding 1): the page reads the
-// request with `devices.request`, which the server agent adds in the same
-// round. The screens below answer that read from the page's route with the
-// agreed shape ({device, app, askedAt, sameComputer}), so they test the
-// client half on its own; `@server-r1` tests run against the real read and
-// are skipped unless SESSION_E2E_SERVER_R1=1 (after the server's branch is
-// merged).
+// request at `GET /api/devices/requests/:request`, which the server agent
+// adds in the same round. The screens below answer that read from the
+// page's route in the server's shape, so they test the client half on its
+// own; the `@server-r1` test runs against the real read and the real
+// same-address rule and is skipped unless SESSION_E2E_SERVER_R1=1 (after
+// the server's branch is merged).
 
 import { expect, test, type Page } from "@playwright/test";
 
@@ -25,11 +25,14 @@ interface Screen {
 }
 
 /** The Mac app starts a sign-in (`devices.authorize`, signed out). */
-async function authorize(p: Page): Promise<{ request: string; code: string }> {
+async function authorize(
+  p: Page,
+  about: { device?: string; app?: string } = {},
+): Promise<{ request: string; code: string }> {
   const r = await p.request.fetch("/api/rpc/devices.authorize", {
     method: "POST",
     headers: HEADERS,
-    data: { name: "MacBook Air", kind: "mac" },
+    data: { name: "MacBook Air", kind: "mac", ...about },
   });
   const body = (await r.json()) as { result?: { request: string; code: string } };
   expect(body.result).toBeTruthy();
@@ -37,18 +40,20 @@ async function authorize(p: Page): Promise<{ request: string; code: string }> {
 }
 
 /** The page's read of the request, in the shape the server agent adds
- * (`devices.request`), answered here so the screen does not depend on it. */
-async function answerRequest(p: Page, sameComputer: boolean) {
-  await p.route("**/api/rpc/devices.request", (r) =>
+ * (`GET /api/devices/requests/:request`, the server's `signinView`),
+ * answered here so the screen does not depend on it. */
+async function answerRequest(p: Page, request: string, sameComputer: boolean) {
+  await p.route(`**/api/devices/requests/${request}`, (r) =>
     r.fulfill({
       json: {
-        ok: true,
-        result: {
-          device: "MacBook Air · macOS 15.1",
-          app: "Session for Mac 1.0.0",
-          askedAt: new Date().toISOString(),
-          sameComputer,
-        },
+        request,
+        name: "MacBook Air",
+        kind: "mac",
+        device: "MacBook Air · macOS 15.1",
+        app: "Session for Mac 1.0.0",
+        askedAt: new Date().toISOString(),
+        state: "waiting",
+        sameComputer,
         serverTime: Date.now(),
       },
     }),
@@ -140,7 +145,7 @@ const SCREENS: Screen[] = [
     url: "/",
     run: async (p) => {
       const signIn = await authorize(p);
-      await answerRequest(p, true);
+      await answerRequest(p, signIn.request, true);
       await p.goto(`/device?request=${signIn.request}`);
       await expect(p.getByRole("heading", { name: "Sign in on a Mac?" })).toBeVisible();
       await expect(
@@ -163,7 +168,7 @@ const SCREENS: Screen[] = [
     url: "/",
     run: async (p) => {
       const signIn = await authorize(p);
-      await answerRequest(p, false);
+      await answerRequest(p, signIn.request, false);
       await p.goto(`/device?request=${signIn.request}`);
       await expect(
         p.getByText(
@@ -189,7 +194,7 @@ const SCREENS: Screen[] = [
     url: "/",
     run: async (p) => {
       const signIn = await authorize(p);
-      await answerRequest(p, false);
+      await answerRequest(p, signIn.request, false);
       await p.goto(`/device?request=${signIn.request}`);
       const field = p.getByLabel("The code the Mac shows");
       await field.fill(signIn.code === "ZAN-NTB" ? "ZAN-NTC" : "ZAN-NTB");
@@ -288,17 +293,24 @@ test("acx-out: Account signed out asks to log in", async ({ page }) => {
   await expect(page.getByText("Log in to see your account, usage and API keys.")).toBeVisible();
 });
 
-// After the server's branch is merged: the page's own read of the request.
+// After the server's branch is merged: the page's own read of the request
+// and the server's same-address rule.
 // The e2e browser and the request context both reach the server from
 // 127.0.0.1, so the request is from this computer and one click approves it.
-test("sx-si-web over the real devices.request @server-r1", async ({ page }) => {
-  test.skip(process.env["SESSION_E2E_SERVER_R1"] !== "1", "needs the server's devices.request");
+test("sx-si-web over the server's read of the request @server-r1", async ({ page }) => {
+  test.skip(
+    process.env["SESSION_E2E_SERVER_R1"] !== "1",
+    "needs the server's GET /api/devices/requests/:request",
+  );
   await loadScenario(page.context().request, "seed");
   await signInAs(page.context());
   await page.goto("/");
-  const signIn = await authorize(page);
+  const signIn = await authorize(page, {
+    device: "MacBook Air · macOS 15.1",
+    app: "Session for Mac 1.0.0",
+  });
   await page.goto(`/device?request=${signIn.request}`);
-  await expect(page.locator(".sx-dcard").getByText(/from this computer$/)).toBeVisible();
+  await expectCard(page, "Just now, from this computer");
   await expect(page.locator("#sx-dcode")).toHaveCount(0);
   await page.getByRole("button", { name: "Approve this Mac" }).click();
   await expect(page.getByRole("heading", { name: "This Mac is signed in" })).toBeVisible();
