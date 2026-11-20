@@ -125,15 +125,20 @@ test("finding 7: a replica that fails to open: its unsent change can be copied, 
   await page.unroute(SERVER);
   await page.getByRole("button", { name: "Reset", exact: true }).click();
   await expect(page.getByRole("button", { name: /^Account: / })).toBeVisible();
-  // the replica was made again from the server, without the unsent reply
+  // the replica was made again from the server, without the unsent reply;
+  // just after Reset the app may hold the new file before it has made the
+  // client's tables, so a query that fails reads as no rows yet
   await expect
-    .poll(
-      () =>
-        bridge.query<{ n: number }>(
+    .poll(() => {
+      try {
+        return bridge.query<{ n: number }>(
           replicaFileOf(bridge),
           "SELECT count(*) AS n FROM sync_client_records",
-        )[0]?.n,
-    )
+        )[0]?.n;
+      } catch {
+        return 0;
+      }
+    })
     .toBeGreaterThan(10);
   expect(storedOutbox(bridge)).toEqual([]);
   bridge.close();
