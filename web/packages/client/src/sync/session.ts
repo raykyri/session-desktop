@@ -13,6 +13,13 @@
 // The transport is `FetchTransport({ baseUrl: "" })` with the session cookie
 // and the CSRF header a cookie POST needs. The space directory (`GET
 // /api/spaces`) lists the spaces the person may find, which no log holds.
+//
+// In the Desktop app (phase 3) the platform (`../platform.ts`) gives the
+// server's origin and the device's bearer token, and the client keeps its
+// replica and outbox with `persist: true` in the platform's storage
+// (SQLite): a write waits on the device until the server answers it, across
+// a restart, and the sync-state UI (`../spaces/Outbox.tsx`) shows the
+// writes that wait or need the person.
 
 import * as pkg from "@session/mutators";
 import {
@@ -24,11 +31,13 @@ import {
   type Query,
   type RunFrame,
   type StoredRecord,
+  type StorageAdapter,
   type Transport,
 } from "@session/sync/client";
 
-import { REQUESTED_WITH_HEADERS, currentFetch, getJson } from "../api/http.js";
+import { currentFetch, getJson } from "../api/http.js";
 import { createResource, type Resource } from "../api/resource.js";
+import { platform } from "../platform.js";
 
 import { GuestStore } from "./guest.js";
 import { Reader, type RecordSource } from "./reader.js";
@@ -122,6 +131,9 @@ export class SpacesSession {
   private readonly shown = new Set<string>();
   private started = false;
   private readonly listens: boolean;
+  /** The outbox is kept across time (the desktop): a write waits on the
+   * device until the server answers it. */
+  readonly persistent: boolean;
 
   constructor(
     me: string | null,
@@ -131,18 +143,28 @@ export class SpacesSession {
       /** False: no event stream (tests). */
       listen?: boolean;
       /** The sync transport (tests); by default `FetchTransport` over the
-       * session cookie. */
+       * session cookie (the web) or the device token (the desktop). */
       transport?: Transport;
+      /** Keep the outbox across time (default: the platform's). */
+      persist?: boolean;
+      /** Where the replica is kept (default: the platform's, else memory). */
+      storage?: StorageAdapter;
+      /** The sync client's clocks (tests). */
+      clock?: { now(): number };
+      monotonic?: () => number;
     } = {},
   ) {
     this.me = me;
     this.listens = o.listen !== false;
+    const p = platform();
+    this.persistent = o.persist ?? p.persist;
     const transport =
       o.transport ??
       new FetchTransport({
-        baseUrl: "",
-        headers: REQUESTED_WITH_HEADERS,
-        fetch: o.fetch ?? ((...a) => currentFetch()(...a)),
+        baseUrl: p.origin,
+        headers: p.headers(),
+        token: () => p.token(),
+        fetch: this.watch(o.fetch ?? ((...a) => currentFetch()(...a))),
         onUpdateRequired: () => this.setStatus({ updateRequired: true }),
         onUnauthorized: () => {
           this.setStatus({ signedOut: true });
@@ -156,7 +178,15 @@ export class SpacesSession {
       ready: false,
     };
     if (me !== null) {
-      this.client = new SyncClient({ user: me, transport, persist: false });
+      const storage = o.storage ?? p.storage(me);
+      this.client = new SyncClient({
+        user: me,
+        transport,
+        persist: this.persistent,
+        ...(storage ? { storage } : {}),
+        ...(o.clock ? { clock: o.clock } : {}),
+        ...(o.monotonic ? { monotonic: o.monotonic } : {}),
+      });
       this.guest = null;
       this.source = this.client;
     } else {
@@ -169,6 +199,28 @@ export class SpacesSession {
       this.directoryAt = Date.now();
       return d;
     });
+  }
+
+  /** The desktop's fetch, watched: a request that gets no response at all
+   * (the network is down) shows the offline bar, and the first response
+   * after it hides the bar and sends the outbox. A response, whatever its
+   * status, means the server can be reached. The web's status follows its
+   * reads and the browser's online events only. */
+  private watch(f: typeof fetch): typeof fetch {
+    if (!this.persistent) return f;
+    return async (...a) => {
+      try {
+        const r = await f(...a);
+        if (!this.statusValue.online) {
+          this.setStatus({ online: true });
+          void this.retry();
+        }
+        return r;
+      } catch (e) {
+        if (!(e instanceof Error && e.name === "AbortError")) this.setStatus({ online: false });
+        throw e;
+      }
+    };
   }
 
   /** When the directory was read (the device's clock): a guest's "now". */
@@ -303,7 +355,12 @@ export class SpacesSession {
         await c.init();
         await c.open(`user:${this.me}`);
         await this.openJoined();
-        this.setStatus({ ready: true, online: true });
+        if (this.persistent) {
+          // the logs came from storage: shown at once, then read from the
+          // server (which also tells whether it can be reached)
+          this.setStatus({ ready: true });
+          void c.sync().catch(() => false);
+        } else this.setStatus({ ready: true, online: true });
       } catch {
         this.setStatus({ ready: true, online: false });
       }

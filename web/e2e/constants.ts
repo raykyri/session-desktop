@@ -31,3 +31,10 @@ export const E2E_RUN_ID_VARIABLE = "SESSION_E2E_RUN_ID";
  * A machine or container without IPv6 sets `127.0.0.1`.
  */
 export const E2E_HOST = process.env["SESSION_E2E_HOST"] ?? "::";
+
+/** Where the desktop-mode e2e serves the Desktop app's built frontend
+ * (`web/desktop/dist/app`, phase 3): another origin than the server's, so
+ * its requests cross origins as the app's (`tauri://localhost`) do, under
+ * the server's CORS for `SESSION_DESKTOP_ORIGINS`. */
+export const DESKTOP_PORT = E2E_PORT + 2;
+export const DESKTOP_ORIGIN = `http://127.0.0.1:${DESKTOP_PORT}`;

@@ -8,7 +8,11 @@
 // - a request from an allowed origin gets `Access-Control-Allow-Origin` only
 //   when it carries a bearer token, so a cookie request from that origin is
 //   not readable there (and the CSRF guard refuses its writes);
-// - no credentials mode: the cookie never crosses.
+// - no credentials mode: the cookie never crosses;
+// - the app's sign-in (phase 3): `devices.authorize` and `devices.token`
+//   are called before the app has a token, so they are readable from an
+//   allowed origin without one (`DEVICE_SIGNIN`); the CSRF guard lets them
+//   through only without a cookie (`csrf.ts`).
 // Any other origin gets no CORS headers at all.
 
 import type { MiddlewareHandler } from "hono";
@@ -17,6 +21,12 @@ import type { Config } from "../config.js";
 import type { AppEnv } from "../deps.js";
 
 const API = /^\/(api|auth)\//;
+
+/** The online calls of a device sign-in: the app has no token yet. */
+export const DEVICE_SIGNIN: ReadonlySet<string> = new Set([
+  "/api/rpc/devices.authorize",
+  "/api/rpc/devices.token",
+]);
 
 const ALLOW_HEADERS = "Authorization, Content-Type, X-Session-Protocol, Last-Event-ID";
 
@@ -36,7 +46,8 @@ export function desktopCors(config: Config): MiddlewareHandler<AppEnv> {
       });
     }
     await next();
-    if (/^Bearer /i.test(c.req.header("authorization") ?? "")) {
+    const signin = DEVICE_SIGNIN.has(path) && c.req.header("cookie") === undefined;
+    if (signin || /^Bearer /i.test(c.req.header("authorization") ?? "")) {
       c.res.headers.set("Access-Control-Allow-Origin", origin);
       c.res.headers.set("Access-Control-Expose-Headers", "X-Session-Server-Time");
       c.res.headers.append("Vary", "Origin");

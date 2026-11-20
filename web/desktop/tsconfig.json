@@ -1,0 +1,19 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["node", "vite/client"]
+  },
+  "include": ["src", "test", "vite.config.ts"],
+  "references": [
+    {
+      "path": "../packages/client"
+    },
+    {
+      "path": "../packages/sync"
+    }
+  ]
+}

@@ -8,6 +8,8 @@ import type { MiddlewareHandler } from "hono";
 import type { Config } from "../config.js";
 import type { AppEnv } from "../deps.js";
 
+import { DEVICE_SIGNIN } from "./cors.js";
+
 export const REQUESTED_WITH_HEADER = "x-requested-with";
 export const REQUESTED_WITH_VALUE = "session";
 
@@ -46,6 +48,7 @@ function isGuarded(method: string, path: string): boolean {
 }
 
 export function csrfGuard(config: Config): MiddlewareHandler<AppEnv> {
+  const desktop = new Set(config.sync.desktopOrigins);
   return async (c, next) => {
     const path = new URL(c.req.url).pathname;
     const method = c.req.method;
@@ -56,6 +59,16 @@ export function csrfGuard(config: Config): MiddlewareHandler<AppEnv> {
     // session loader reads no cookie for it, so there is no ambient
     // credential to forge (phase 2a). Its origin is checked by CORS.
     if (/^Bearer /i.test(c.req.header("authorization") ?? "")) {
+      return next();
+    }
+    // The Desktop app's sign-in calls, from its origin, before it has a
+    // token (phase 3): without a cookie they carry no credential at all,
+    // and neither call reads who is signed in.
+    if (
+      DEVICE_SIGNIN.has(path) &&
+      c.req.header("cookie") === undefined &&
+      desktop.has(c.req.header("origin") ?? "")
+    ) {
       return next();
     }
     const origin = checkOrigin(c.req.raw.headers, config.publicOrigin);

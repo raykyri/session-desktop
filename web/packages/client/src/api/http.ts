@@ -1,14 +1,18 @@
 // JSON over `fetch` for the shell's plain routes (phase 2b; ADR-19 as amended):
-// the session cookie rides along (same origin), and every request carries the
-// CSRF header the server's guard asks a cookie write for.
+// on the web the session cookie rides along (same origin), and every request
+// carries the CSRF header the server's guard asks a cookie write for; in the
+// Desktop app a request goes to the server's origin with the device's bearer
+// token and no cookie (`platform.ts`).
 
-/** CSRF defense: a cross-origin page cannot set a custom header without a
- * preflight the server refuses. */
-export const REQUESTED_WITH_HEADER = "X-Requested-With";
-export const REQUESTED_WITH_VALUE = "session";
-export const REQUESTED_WITH_HEADERS: Readonly<Record<string, string>> = {
-  [REQUESTED_WITH_HEADER]: REQUESTED_WITH_VALUE,
-};
+import { platform } from "../platform.js";
+
+/** The headers of a request to the server: the platform's (the web's CSRF
+ * header) and the bearer device token (the Desktop app). */
+export function requestHeaders(): Record<string, string> {
+  const p = platform();
+  const token = p.token();
+  return { ...p.headers(), ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
 /** A route's error answer: `{ error: { code, message } }`, the sync routes'
  * `{ ok: false, error }`, or a status without a body. */
@@ -49,11 +53,12 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
-    res = await fetchImpl(path, {
+    const p = platform();
+    res = await fetchImpl(`${p.origin}${path}`, {
       method,
-      credentials: "same-origin",
+      credentials: p.credentials,
       headers: {
-        ...REQUESTED_WITH_HEADERS,
+        ...requestHeaders(),
         Accept: "application/json",
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },

@@ -46,23 +46,38 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      testIgnore: /desktop\//,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 900 } },
+    },
+    // Phase 3: the Desktop app's frontend in Chromium, with its Tauri bridge
+    // replaced by the test's (`e2e/desktop/bridge.ts`), against the same
+    // server (`npm run test:e2e:desktop`).
+    {
+      name: "desktop",
+      testDir: "./e2e/desktop",
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1320, height: 900 } },
     },
     {
       name: "webkit",
       use: { ...devices["Desktop Safari"], viewport: { width: 1280, height: 900 } },
       // Best-effort: WebKit is excluded from the default local run so a
       // machine without the browser still gets a green suite.
+      testIgnore: /desktop\//,
       grepInvert: /@visual/,
     },
   ],
 
   webServer: {
-    // The client bundle, then `@session/server/test-server` on the suite's
-    // port (`e2e/server.ts`): a temp database, test sign-in and the test
+    // The client bundle and the Desktop app's, then
+    // `@session/server/test-server` on the suite's port (`e2e/server.ts`,
+    // which also serves the Desktop app's frontend on `DESKTOP_ORIGIN`): a temp database, test sign-in and the test
     // routes (`/api/test/records`, `clock`, `fail`, `config`, `device`),
     // the fixture providers and the job runner.
-    command: ["npm run build --workspace @session/client", "npx tsx e2e/server.ts"].join(" && "),
+    command: [
+      "npm run build --workspace @session/client",
+      "npm run build --workspace @session/desktop",
+      "npx tsx e2e/server.ts",
+    ].join(" && "),
     url: `${APP_ORIGIN}/healthz`,
     // A server already on the port is used only when asked for
     // (`SESSION_E2E_REUSE_SERVER=1`); otherwise Playwright refuses to start

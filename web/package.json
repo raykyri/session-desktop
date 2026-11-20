@@ -8,7 +8,8 @@
     "node": ">=22.20"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "desktop"
   ],
   "scripts": {
     "dev": "concurrently -k -n server,client \"npm run dev --workspace @session/server\" \"npm run dev --workspace @session/client\"",
@@ -16,6 +17,7 @@
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "playwright test --project=chromium",
     "test:e2e:webkit": "playwright test --project=webkit",
+    "test:e2e:desktop": "playwright test --project=desktop",
     "test:e2e:update-snapshots": "playwright test --project=chromium --update-snapshots",
     "lint": "eslint . && prettier --check .",
     "check": "tsc -b && npm run lint && npm run db:check",

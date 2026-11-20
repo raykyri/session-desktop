@@ -6,6 +6,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { platform } from "../platform.js";
 import { useSession, useStatus } from "../sync/react.js";
 
 import { Header, type Place } from "./Header.js";
@@ -14,16 +15,21 @@ import { cx } from "./cx.js";
 import { I, NVI, SVG } from "./icons.js";
 import { focusFirst, useOverlay } from "./overlay.js";
 
+/** Offline: the web can't send changes; the Desktop app keeps them on the
+ * device (the mockup's sx-off-app) and sends them when the connection is
+ * back. */
 export function OfflineBar() {
   const status = useStatus();
   const session = useSession();
   if (status.online) return null;
+  const here = session?.persistent ? platform().here : null;
   return (
     <div className="nv-off" role="status">
       <Svg src={NVI.off ?? SVG.LOCK} />
       <span className="grow">
-        You’re offline. Session shows what it already loaded and can’t send changes until the
-        connection is back.
+        {here
+          ? `You’re offline. Changes are saved on ${here} and sent when the connection is back.`
+          : "You’re offline. Session shows what it already loaded and can’t send changes until the connection is back."}
       </span>
       <button className="btn sm" type="button" onClick={() => void session?.retry()}>
         Try again

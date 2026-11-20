@@ -325,6 +325,39 @@ test("CORS admits the desktop origin for bearer requests only", async (t) => {
   t.is(cookie.headers.get("access-control-allow-origin"), null);
 });
 
+test("the Desktop app's sign-in calls are taken from its origin without a token or a cookie (phase 3)", async (t) => {
+  const h = createHarness(t);
+  const call = (name: string, input: unknown, headers: Record<string, string>) =>
+    h.app.request(`/api/rpc/${name}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify(input),
+    });
+  const app = { Origin: "tauri://localhost" };
+  const a = await call("devices.authorize", { name: "MacBook Air", kind: "mac" }, app);
+  t.is(a.status, 200);
+  t.is(a.headers.get("access-control-allow-origin"), "tauri://localhost");
+  const request = ((await a.json()) as { result: { request: string } }).result.request;
+  const w = await call("devices.token", { request }, app);
+  t.is(w.status, 412);
+  t.is(w.headers.get("access-control-allow-origin"), "tauri://localhost");
+  t.like(await w.json(), { ok: false, error: { code: "PRECONDITION_FAILED" } });
+  // any other online call from that origin still needs a token
+  const other = await call("devices.revoke", { id: request }, app);
+  t.is(other.status, 403);
+  t.is(other.headers.get("access-control-allow-origin"), null);
+  // with a cookie the guard applies (no X-Requested-With, another origin)
+  const [mel] = people(h, "mel");
+  const cookie = `session=${(mel?.auth as { cookie: string }).cookie}`;
+  const withCookie = await call("devices.authorize", { name: "m" }, { ...app, Cookie: cookie });
+  t.is(withCookie.status, 403);
+  t.is(withCookie.headers.get("access-control-allow-origin"), null);
+  // from an origin that is not the app's: refused
+  const evil = await call("devices.authorize", { name: "m" }, { Origin: "https://evil.example" });
+  t.is(evil.status, 403);
+  t.is(evil.headers.get("access-control-allow-origin"), null);
+});
+
 test("the account reads: /api/me, settings, usage, API keys; settings.update and usage.setDefaultKey", async (t) => {
   const h = createHarness(t);
   const [mel] = people(h, "Mel");

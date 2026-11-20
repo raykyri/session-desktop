@@ -6,6 +6,7 @@
 
 import type { ModelInfo, UserSettings } from "@session/shared";
 
+import { isDesktop, platform } from "../platform.js";
 import { useSettingsStore } from "../stores/settings.js";
 
 import { HttpError, getJson, postJson } from "./http.js";
@@ -85,12 +86,23 @@ export function startGitHubSignIn(returnTo?: string, signupCode?: string): void 
   window.location.assign(gitHubSignInUrl(returnTo, signupCode));
 }
 
-/** Who is signed in: null when nobody is (401). */
+/** Who is signed in: null when nobody is (401). The platform keeps the
+ * answer: the Desktop app starts from it when the server cannot be reached
+ * (it shows its replica offline), and a 401 there means the device's token
+ * was revoked or expired (`Platform.unauthorized`). */
 export const meResource = createResource<Me | null>(async () => {
   try {
-    return await getJson<Me>("/api/me");
+    const me = await getJson<Me>("/api/me");
+    platform().rememberMe(me);
+    return me;
   } catch (e) {
-    if (e instanceof HttpError && e.status === 401) return null;
+    if (e instanceof HttpError && e.status === 401) {
+      platform().rememberMe(null);
+      platform().unauthorized();
+      return null;
+    }
+    const last = platform().lastMe();
+    if (last) return last as Me;
     throw e;
   }
 });
@@ -116,8 +128,11 @@ export function useSignedIn(): boolean {
   return Boolean(useMe().data);
 }
 
+/** The appearance settings the server keeps. A device's token reads none of
+ * the browser's account routes (ADR-19 as amended), so the Desktop app keeps
+ * its settings on the device only. */
 export function useSettings() {
-  return useResource(preferencesResource, useSignedIn());
+  return useResource(preferencesResource, useSignedIn() && !isDesktop());
 }
 
 export function useRuntimeConfig() {
@@ -134,9 +149,11 @@ export async function updatePreferences(input: SettingsUpdate): Promise<ServerSe
   return saved;
 }
 
-/** Sign out this browser; the account state is forgotten. */
+/** Sign out this browser (or the Desktop app: its platform forgets the
+ * device's token and its replica); the account state is forgotten. */
 export async function logout(): Promise<void> {
-  await postJson("/auth/logout");
+  if (isDesktop()) await platform().signOut();
+  else await postJson("/auth/logout");
   meResource.set(null);
   preferencesResource.reset();
   adminUsersResource.reset();

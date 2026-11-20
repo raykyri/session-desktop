@@ -1,0 +1,4 @@
+/* The client's styles (Tailwind over the mockup's), with the client's sources scanned for
+   the utilities they use: Tailwind scans the app's own folder only. */
+@import "../../packages/client/src/styles/app.css";
+@source "../../packages/client/src";
