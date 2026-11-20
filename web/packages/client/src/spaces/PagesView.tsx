@@ -12,10 +12,12 @@ import { useMemo, useState } from "react";
 import { agoText, spaceName } from "../data/format.js";
 import { isStaff, threadRows } from "../data/spaces.js";
 import { Markdown } from "../features/markdown/index.js";
+import { siteOrigin } from "../platform.js";
 import { useNow, useRecords, useSession } from "../sync/react.js";
 
 import { LeaveGuard } from "./Discard.js";
 import { MissingSpace } from "./Membership.js";
+import { takePageDraft } from "./Outbox.js";
 import { Modal, NotFound, Page } from "./Page.js";
 import { Svg } from "./Svg.js";
 import { Author, Avatar, Glyph } from "./atoms.js";
@@ -67,10 +69,20 @@ export function PagePage({ name, slug }: { name: string; slug: string }) {
           : [],
       [s?.id, page?.slug],
     ) ?? [];
+  // a page edit sent late from Unsent changes (the Desktop app; the
+  // mockup's ec-page-unsent): its text back in the editor, with the
+  // editor's conflict notice
+  const [late] = useState(() => takePageDraft(name, slug));
   const [ed, setEd] = useState<Editing | null>(
-    slug === "untitled-page" ? { title: "", body: "", ver: 0, isNew: true } : null,
+    late
+      ? { ...late, isNew: false }
+      : slug === "untitled-page"
+        ? { title: "", body: "", ver: 0, isNew: true }
+        : null,
   );
-  const [cf, setCf] = useState<Conflict | null>(null);
+  const [cf, setCf] = useState<Conflict | null>(
+    late ? { step: "conflict", mine: `${late.title}\n\n${late.body}` } : null,
+  );
   const [over, setOver] = useState(false);
   const [hist, setHist] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -150,7 +162,9 @@ export function PagePage({ name, slug }: { name: string; slug: string }) {
       setCf(null);
       // a new page that an earlier send made holds that send's input
       if (made?.lostEdits) lostEditsToast("page", `${ed.title}\n\n${ed.body}`);
-      else toast(ed.isNew ? "Page added." : "Page saved.");
+      // the Desktop app: a save that waits in the outbox shows in Unsent
+      // changes, not as saved
+      else if (!o.queued) toast(ed.isNew ? "Page added." : "Page saved.");
       // a create answered by a read has no result: the page is the create's id
       const id = made?.id ?? page?.id;
       const saved = id ? session?.reader().get("page", id) : undefined;
@@ -350,7 +364,9 @@ export function PagePage({ name, slug }: { name: string; slug: string }) {
                   aria-label="Copy link"
                   title="Copy link"
                   onClick={() => {
-                    void navigator.clipboard?.writeText(location.href).catch(() => undefined);
+                    void navigator.clipboard
+                      ?.writeText(`${siteOrigin()}${location.pathname}${location.search}`)
+                      .catch(() => undefined);
                     toast("Link copied.");
                   }}
                 >

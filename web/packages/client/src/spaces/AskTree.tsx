@@ -11,6 +11,7 @@ import { useState } from "react";
 import { ago, spaceName } from "../data/format.js";
 import { isStaff, type FollowUp, type Space, type ThreadView } from "../data/spaces.js";
 import { Markdown } from "../features/markdown/index.js";
+import { siteOrigin } from "../platform.js";
 import { useNow } from "../sync/react.js";
 
 import { DeleteDialog, ReportDialog, type Item } from "./ItemMenu.js";
@@ -442,7 +443,7 @@ export function AskMenu({
     mod: f.mod,
     own: mine,
     kids: t.followups.filter((x) => x.par === f.id).length,
-    url: `${location.origin}/s/${space.name}/t/${t.id}/a/${f.id}`,
+    url: `${siteOrigin()}/s/${space.name}/t/${t.id}/a/${f.id}`,
   };
   const it = (icon: string, label: string, run: () => void, sub?: string, disabled = false) => (
     <button

@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { isClosed, spaceName } from "../data/format.js";
 import type { Space, ThreadView } from "../data/spaces.js";
+import { siteOrigin } from "../platform.js";
 import { useStatus } from "../sync/react.js";
 
 import { ModelMenu, PayerLine, useAskModel } from "./Composer.js";
@@ -43,7 +44,7 @@ function useSignedIn(): () => boolean {
 }
 
 export function threadUrl(space: Space, id: string): string {
-  return `${location.origin}/s/${space.name}/t/${id}`;
+  return `${siteOrigin()}/s/${space.name}/t/${id}`;
 }
 
 async function copy(text: string): Promise<void> {

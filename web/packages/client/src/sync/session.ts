@@ -357,9 +357,13 @@ export class SpacesSession {
         await this.openJoined();
         if (this.persistent) {
           // the logs came from storage: shown at once, then read from the
-          // server (which also tells whether it can be reached)
+          // server (which also tells whether it can be reached), and the
+          // writes an earlier run of the app left in the outbox are sent
           this.setStatus({ ready: true });
-          void c.sync().catch(() => false);
+          void c
+            .sync()
+            .catch(() => false)
+            .then(() => c.flush());
         } else this.setStatus({ ready: true, online: true });
       } catch {
         this.setStatus({ ready: true, online: false });

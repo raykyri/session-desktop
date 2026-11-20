@@ -12,6 +12,7 @@ import { useNow, useRecords } from "../sync/react.js";
 import { Composer } from "./Composer.js";
 import { FaqLanding, topicsOf, topicSlug } from "./FaqLanding.js";
 import { Feed, SortControl, useFeedState } from "./Feed.js";
+import { FrozenStrip, NotAMember, useReadOnly } from "./Frozen.js";
 import { JoinCard, JoinControl, MissingSpace, NoAccess, policyLabel } from "./Membership.js";
 import { Page } from "./Page.js";
 import { Svg } from "./Svg.js";
@@ -33,10 +34,13 @@ function Banner({
   s,
   compact,
   onSide,
+  frozen = false,
 }: {
   s: Space;
   compact: boolean;
   onSide?: (t: SideTab) => void;
+  /** A frozen copy (the Desktop app): "Not a member", no controls. */
+  frozen?: boolean;
 }) {
   const w = useWorld();
   const navigate = useNavigate();
@@ -85,7 +89,8 @@ function Banner({
         ) : null}
       </div>
       <div className="banner-acts">
-        {isStaff(role) ? (
+        {frozen ? <NotAMember /> : null}
+        {!frozen && isStaff(role) ? (
           <button
             className="btn cs-b cs-mgb"
             type="button"
@@ -107,7 +112,7 @@ function Banner({
             ) : null}
           </button>
         ) : null}
-        <JoinControl s={s} />
+        {frozen ? null : <JoinControl s={s} />}
         {onSide ? (
           <>
             <button className="btn sm m-wiki" type="button" onClick={() => onSide("sources")}>
@@ -628,6 +633,8 @@ export function SpacePage({
   const [sideTab, setSideTab] = useState<SideTab | null>(side ?? null);
   useOverlay(mWiki, () => setMWiki(false));
   const s = useMemo(() => w.spaces.find((x) => x.name === name), [w.spaces, name]);
+  const frozen = s ? w.frozen.has(s.id) : false;
+  useReadOnly(frozen);
   const session = w.session;
   useEffect(() => {
     if (s) void session?.showSpace(s.id);
@@ -639,7 +646,7 @@ export function SpacePage({
   }
   const feed = (
     <>
-      <Composer space={s} />
+      {frozen ? <FrozenStrip s={s} /> : <Composer space={s} />}
       <div className="fbar fbar-k nv-fbar">
         <SpaceSearch s={s} />
         <SortControl f={f} />
@@ -654,7 +661,7 @@ export function SpacePage({
       />
     </>
   );
-  if (!canRead(w, s))
+  if (!canRead(w, s) && !frozen)
     return (
       <Page cls="" place={{ kind: "space", id: s.id }}>
         <Gate s={s} />
@@ -666,6 +673,7 @@ export function SpacePage({
         <div className="ds-top">
           <Banner
             s={s}
+            frozen={frozen}
             compact={s.faq}
             onSide={(t) => {
               setSideTab(t);
@@ -696,7 +704,7 @@ export function SpacePage({
               </div>
             </div>
           ) : (
-            <div className="main">{feed}</div>
+            <div className={cx("main", frozen && "sx-grey")}>{feed}</div>
           )}
         </div>
         <Sidebar

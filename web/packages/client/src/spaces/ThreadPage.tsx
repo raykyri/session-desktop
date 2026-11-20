@@ -30,11 +30,14 @@ import {
   type ThreadView,
 } from "../data/spaces.js";
 import { Markdown, citationsOf } from "../features/markdown/index.js";
+import { siteOrigin } from "../platform.js";
 import { useNow, useRecords, useRunText } from "../sync/react.js";
 
 import { AskMenu, Compare, MapDialog } from "./AskTree.js";
+import { FrozenStrip, useReadOnly } from "./Frozen.js";
 import { ItemMenu, ModNote, type Item } from "./ItemMenu.js";
 import { MissingSpace, ThreadGate } from "./Membership.js";
+import { HeldReply, useHeldReplies, usePendingItem } from "./Outbox.js";
 import { Modal, NotFound, Page } from "./Page.js";
 import { Svg } from "./Svg.js";
 import {
@@ -401,7 +404,7 @@ function ThreadMenu({ t, space }: { t: ThreadView; space: Space }) {
     mod: t.mod,
     own,
     kids: ask ? t.followups.length : t.replies.length,
-    url: `${location.origin}/s/${space.name}/t/${t.id}`,
+    url: `${siteOrigin()}/s/${space.name}/t/${t.id}`,
   };
   return <ItemMenu item={item} space={space} />;
 }
@@ -576,6 +579,9 @@ function ReplyItem({ t, r, kids }: { t: ThreadView; r: Reply; kids: Reply[] }) {
   const space = w.byId.get(t.s);
   const me = w.me?.u ?? null;
   const [replying, setReplying] = useState(false);
+  // the Desktop app: a reply the outbox holds shows where it waits
+  const held = usePendingItem(r.id);
+  if (held && me) return <HeldReply o={held} me={me} />;
   return (
     <div className={cx("rp", r.parent && "rp-kid")}>
       <Avatar u={r.u} className="sm" />
@@ -613,7 +619,7 @@ function ReplyItem({ t, r, kids }: { t: ThreadView; r: Reply; kids: Reply[] }) {
                 mod: r.mod,
                 own: r.u === me && !r.del,
                 kids: kids.length,
-                url: `${location.origin}/s/${space.name}/t/${t.id}`,
+                url: `${siteOrigin()}/s/${space.name}/t/${t.id}`,
               }}
             />
           ) : null}
@@ -626,6 +632,22 @@ function ReplyItem({ t, r, kids }: { t: ThreadView; r: Reply; kids: Reply[] }) {
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** The Desktop app: replies the outbox set aside (failed, EXPIRED, dropped,
+ * refused), which the replica's view no longer holds, at the end of the
+ * thread's replies. */
+function HeldReplies({ thread }: { thread: string }) {
+  const held = useHeldReplies(thread);
+  const me = useWorld().me?.u ?? null;
+  if (!me) return null;
+  return (
+    <>
+      {held.map((o) => (
+        <HeldReply key={o.local} o={o} me={me} />
+      ))}
+    </>
   );
 }
 
@@ -916,6 +938,8 @@ export function ThreadPage({
   const { focus } = useNavState();
   const s = w.spaces.find((x) => x.name === name);
   const session = w.session;
+  const frozen = s ? w.frozen.has(s.id) : false;
+  useReadOnly(frozen);
   const [view, setView] = useState<"docsrc" | "chat">("docsrc");
   const [askingRoot, setAskingRoot] = useState(false);
   const [olSheet, setOlSheet] = useState(false);
@@ -934,7 +958,7 @@ export function ThreadPage({
     if (!w.loaded) return <Page place={{ kind: "other" }}>{null}</Page>;
     return <MissingSpace name={name} thread={true} />;
   }
-  if (!canRead(w, s))
+  if (!canRead(w, s) && !frozen)
     return (
       <Page cls="" place={{ kind: "space", id: s.id }}>
         <ThreadGate s={s} />
@@ -991,7 +1015,8 @@ export function ThreadPage({
                     kids={t.replies.filter((k) => k.parent === r.id)}
                   />
                 ))}
-                {s.archived ? null : <ReplyBox t={t} />}
+                <HeldReplies thread={t.id} />
+                {frozen ? <FrozenStrip s={s} /> : s.archived ? null : <ReplyBox t={t} />}
               </section>
             </article>
             <aside className="th-aside">

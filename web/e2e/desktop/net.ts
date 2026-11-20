@@ -28,3 +28,12 @@ export async function reloadOffline(page: Page): Promise<void> {
   await page.reload();
   await page.context().setOffline(true);
 }
+
+/** Go to a screen inside the app (the router's own navigation), which
+ * works offline: a page load of the app's files would not. */
+export async function appGo(page: Page, path: string): Promise<void> {
+  await page.evaluate((p) => {
+    window.history.pushState({}, "", p);
+    window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
+  }, path);
+}

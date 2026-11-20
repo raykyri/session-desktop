@@ -6,14 +6,18 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { platform } from "../platform.js";
+import { spaceName } from "../data/format.js";
+import { isDesktop, platform, siteHost } from "../platform.js";
 import { useSession, useStatus } from "../sync/react.js";
 
 import { Header, type Place } from "./Header.js";
+import { useOutbox } from "./Outbox.js";
 import { Svg } from "./Svg.js";
 import { cx } from "./cx.js";
 import { I, NVI, SVG } from "./icons.js";
 import { focusFirst, useOverlay } from "./overlay.js";
+import { useWorld } from "./world.js";
+import { toast } from "./writes.js";
 
 /** Offline: the web can't send changes; the Desktop app keeps them on the
  * device (the mockup's sx-off-app) and sends them when the connection is
@@ -38,6 +42,28 @@ export function OfflineBar() {
   );
 }
 
+const PLACE_TITLE: Partial<Record<Place["kind"], string>> = {
+  home: "Home",
+  saved: "Saved",
+  notifications: "Notifications",
+  search: "Search",
+  browse: "Browse spaces",
+};
+
+/** The Desktop app's window title names where the person is ("Session —
+ * Home", the mockup's sx-wt); the platform puts it in the title bar. The web
+ * keeps its page title. */
+function useWindowTitle(place: Place) {
+  const w = useWorld();
+  const space = place.kind === "space" || place.kind === "thread" ? w.byId.get(place.id) : null;
+  const where =
+    PLACE_TITLE[place.kind] ??
+    (space ? spaceName(space) : place.kind === "other" ? place.label : undefined);
+  useEffect(() => {
+    if (isDesktop()) document.title = where ? `Session — ${where}` : "Session";
+  }, [where]);
+}
+
 /** A screen: its root classes, the header (where it is), and its body. */
 export function Page({
   cls = "H",
@@ -48,6 +74,7 @@ export function Page({
   place: Place;
   children: ReactNode;
 }) {
+  useWindowTitle(place);
   return (
     <div className={cx("A C Af", cls)}>
       <Header place={place} />
@@ -103,7 +130,7 @@ export function LoadFailed({ message, onRetry }: { message: string; onRetry: () 
 /** Page not found: an unknown address, or a space that does not exist. */
 export function NotFound({ space }: { space?: string }) {
   const navigate = useNavigate();
-  const addr = `${location.host}${location.pathname}`;
+  const addr = `${siteHost()}${location.pathname}`;
   return (
     <div className="cs-napage nv-nf">
       <div className="cs-na">
@@ -234,6 +261,10 @@ export function Modal({
  * page is reloaded. Later closes it; it comes back on the next refused
  * write. */
 export function UpdateDialog({ onLater }: { onLater: () => void }) {
+  const session = useSession();
+  // the Desktop app (the mockup's sx-up-app): the writes wait on the device
+  const here = session?.persistent ? platform().here : null;
+  const waiting = useOutbox().items.length;
   return (
     <Modal
       title="Update Session"
@@ -244,13 +275,29 @@ export function UpdateDialog({ onLater }: { onLater: () => void }) {
           <button className="btn" type="button" onClick={onLater}>
             Later
           </button>
-          <button className="btn primary" type="button" onClick={() => location.reload()}>
-            Reload
+          <button
+            className="btn primary"
+            type="button"
+            onClick={() => {
+              platform().update();
+              if (here) {
+                onLater();
+                toast(
+                  `Opened the download page in your browser. Unsent changes are kept on ${here}.`,
+                );
+              }
+            }}
+          >
+            {here ? "Download and restart" : "Reload"}
           </button>
         </>
       }
     >
-      <p className="muted">Session has been updated. Reload the page to keep saving changes.</p>
+      <p className="muted">
+        {here
+          ? `This version of Session is too old to sync.${waiting ? ` ${waiting} changes wait on ${here} and are sent after the update.` : ""}`
+          : "Session has been updated. Reload the page to keep saving changes."}
+      </p>
     </Modal>
   );
 }

@@ -10,6 +10,7 @@ import { useRef, useState, type ReactNode } from "react";
 
 import { fmt, spaceName } from "../data/format.js";
 import type { Space } from "../data/spaces.js";
+import { siteHost } from "../platform.js";
 import { useRecords } from "../sync/react.js";
 
 import { LeaveGuard } from "./Discard.js";
@@ -200,7 +201,7 @@ export function SettingsManage({ s }: { s: Space }) {
           <small className="faint">
             Lowercase letters, numbers and hyphens. Unique on Session. The address is{" "}
             <b className="cx-url">
-              {location.host}/s/{d.name}
+              {siteHost()}/s/{d.name}
             </b>
             .
           </small>

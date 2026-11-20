@@ -10,9 +10,13 @@ export function replicaFileOf(bridge: TestBridge, handle?: string): string {
 }
 
 /** The outbox as stored: each entry's name, state and input. */
-export function storedOutbox(
-  bridge: TestBridge,
-): { name: string; state: string; input: Record<string, unknown>; mutationId: string }[] {
+export function storedOutbox(bridge: TestBridge): {
+  name: string;
+  state: string;
+  input: Record<string, unknown>;
+  mutationId: string;
+  error?: { code: string };
+}[] {
   return bridge
     .query<{ body: string }>(
       replicaFileOf(bridge),

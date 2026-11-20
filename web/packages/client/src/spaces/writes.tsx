@@ -4,8 +4,14 @@
 // ends at once: the screen that made it shows Try again on its item. A
 // refusal (FORBIDDEN, NOT_FOUND, STALE, …) puts the prediction back and shows
 // one toast whose text depends on the code (the mockup's API_ERR.write).
+//
+// In the Desktop app (`persist: true`, phase 3) the screen waits for a
+// write only while it is being sent: once it waits in the outbox (offline,
+// behind other writes, held for an update, or after a try without an
+// answer) the screen goes on as if it applied, and Unsent changes and its
+// toasts (`Outbox.tsx`) show what becomes of it.
 
-import type { Answer, ApiError } from "@session/sync/client";
+import type { Answer, ApiError, OutboxEntry, SyncClient } from "@session/sync/client";
 import { useState, useSyncExternalStore } from "react";
 
 import { useSession } from "../sync/react.js";
@@ -115,6 +121,10 @@ export type Outcome =
   | {
       ok: true;
       result: unknown;
+      /** The Desktop app: the write waits in the outbox (offline, behind
+       * other writes, or after a try without an answer); Unsent changes
+       * shows it from here on, and its result is not known. */
+      queued?: boolean;
       /** Send again: the input as it was sent (its ids can be new). */
       input?: unknown;
       /** Send again: an earlier envelope of it had applied (`earlier`). */
@@ -150,11 +160,77 @@ function limited(session: SpacesSession, local: string): ApiError | null {
     : null;
 }
 
+/** The writes a screen waits on (the Desktop app): their refusal is the
+ * screen's to show; once a write waits in the outbox, Unsent changes and
+ * its toasts show what happens to it (`Outbox.tsx`). */
+const awaited = new Set<string>();
+export const isAwaited = (local: string) => awaited.has(local);
+
+/** A write that waits in the outbox rather than for an answer now: held
+ * for an update, or tried without an answer and waiting for its next try.
+ * (A write that ended, refused or shown, is its answer's.) */
+function waits(c: SyncClient, e: OutboxEntry): boolean {
+  if (e.state === "held") return true;
+  return e.state === "queued" && (e.tries > 0 || e.uncertain || e.next > c.now());
+}
+
+/** The Desktop app (`persist: true`): a write is the screen's until it is
+ * answered or it waits in the outbox; then the screen goes on as if it
+ * applied (`queued`), and the outbox owns it. */
+async function settleKept(
+  session: SpacesSession,
+  c: SyncClient,
+  w: { local: string; answer: Promise<Answer | null> },
+  quiet: boolean,
+): Promise<Outcome> {
+  awaited.add(w.local);
+  try {
+    return await new Promise<Outcome>((resolve) => {
+      let done = false;
+      const finish = (o: Outcome) => {
+        if (done) return;
+        done = true;
+        stop();
+        resolve(o);
+      };
+      const check = () => {
+        const list = c.outbox();
+        const k = list.findIndex((x) => x.local === w.local);
+        const e = list[k];
+        // an online-only call is not in the outbox: its answer decides
+        if (!e || e.state === "answered") return;
+        const behind = list.slice(0, k).some((x) => x.state === "queued" || x.state === "held");
+        if (behind || waits(c, e) || c.updateRequired || !session.status().online)
+          finish({ ok: true, result: null, queued: true });
+      };
+      const stop = c.onChange(check);
+      check();
+      void w.answer.then((a) => {
+        if (done) return;
+        if (a === null) {
+          const error = limited(session, w.local);
+          if (!error) return finish({ ok: true, result: null, queued: true });
+          if (!quiet) refusalToast(error);
+          c.discard(w.local);
+          return finish({ ok: false, error });
+        }
+        if (a.ok) return finish({ ok: true, result: a.result });
+        if (!quiet) refusalToast(a.error);
+        c.discard(w.local);
+        finish({ ok: false, error: a.error });
+      });
+    });
+  } finally {
+    awaited.delete(w.local);
+  }
+}
+
 async function settle(
   session: SpacesSession,
   w: { local: string; answer: Promise<Answer | null> },
   quiet: boolean,
 ): Promise<Outcome> {
+  if (session.persistent && session.client) return settleKept(session, session.client, w, quiet);
   const a = await w.answer;
   if (a === null) {
     const error = limited(session, w.local);

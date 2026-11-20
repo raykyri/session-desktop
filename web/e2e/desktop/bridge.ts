@@ -62,6 +62,13 @@ export class TestBridge {
       .all(...params) as T[];
   }
 
+  /** A statement on one of the app's files (the test's own writes). */
+  run(name: string, sql: string, params: Params = []): void {
+    this.db(name)
+      .prepare(sql)
+      .run(...params);
+  }
+
   private handle(op: string, args: unknown[]): unknown {
     switch (op) {
       case "serverOrigin":

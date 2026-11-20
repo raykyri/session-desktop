@@ -6,6 +6,7 @@ import { Outlet } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { meResource, useMe } from "../api/account.js";
+import { OutboxToasts } from "../spaces/Outbox.js";
 import { LoadFailed, Skeleton, UpdateDialog } from "../spaces/Page.js";
 import { Toasts } from "../spaces/writes.js";
 import { SpacesProvider, useSession, useStatus } from "../sync/react.js";
@@ -60,6 +61,7 @@ export function SpacesRoot() {
         <FirstLoad>
           <Outlet />
         </FirstLoad>
+        <OutboxToasts />
         <Toasts />
       </div>
       <UpdateGate />

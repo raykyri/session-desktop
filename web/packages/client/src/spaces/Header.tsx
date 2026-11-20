@@ -14,6 +14,7 @@ import { useSettingsStore } from "../stores/settings.js";
 import { useRecords, useSession } from "../sync/react.js";
 
 import { Bell } from "./Notifications.js";
+import { UnsentBadge } from "./Outbox.js";
 import { Scrim } from "./Scrim.js";
 import { Svg } from "./Svg.js";
 import { Avatar, Logo, Seal, SpaceGlyph, Lock } from "./atoms.js";
@@ -307,7 +308,11 @@ export function Header({ place }: { place: Place }) {
   const navigate = useNavigate();
   const session = useSession();
   const order = useHeaderTabs();
-  const tabs = useMemo(() => headerSpaces(w.spaces, w.roles, order), [w.spaces, w.roles, order]);
+  // a frozen copy stays in the header (the Desktop app)
+  const tabs = useMemo(() => {
+    const list = headerSpaces(w.spaces, w.roles, order);
+    return [...list, ...w.spaces.filter((s) => w.frozen.has(s.id) && !list.includes(s))];
+  }, [w.spaces, w.roles, w.frozen, order]);
   const saved = useRecords((r) => savedThreads(r).length, []) ?? 0;
   // the current chip in view (Mobile Web)
   const chips = useRef<HTMLDivElement>(null);
@@ -340,7 +345,6 @@ export function Header({ place }: { place: Place }) {
       <TabName s={s} />
     </button>
   );
-  void session;
   return (
     <>
       <div className="hdr">
@@ -366,6 +370,7 @@ export function Header({ place }: { place: Place }) {
           <div className="hscroll">{tabs.map(tab)}</div>
         </nav>
         <div className="hdr-right">
+          {session?.persistent && w.me ? <UnsentBadge /> : null}
           <button
             ref={searchRef}
             className="btn hb nv-sbtn"

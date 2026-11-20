@@ -20,6 +20,7 @@ import {
   visLabel,
 } from "../data/format.js";
 import { isStaff, moderated, type Moderated, type Role, type Space } from "../data/spaces.js";
+import { siteOrigin, siteHost } from "../platform.js";
 import { useNow, useRecords, useSession } from "../sync/react.js";
 import type { Reader } from "../sync/reader.js";
 
@@ -1012,7 +1013,7 @@ function Invites({ s }: { s: Space }) {
         ? `Used by ${l.usedBy ?? ""}`
         : `Expired ${l.expiresAt ? dayOf(l.expiresAt, now) : ""}`
       : `One use · ${l.expiresAt ? `expires ${dayOf(l.expiresAt, now)}` : "no expiry"}`;
-  const url = (code: string) => `${location.host}/i/${code}`;
+  const url = (code: string) => `${siteHost()}/i/${code}`;
   const create = async () => {
     const days = Number(exp);
     const o = await write("invites.create", {
@@ -1100,7 +1101,7 @@ function Invites({ s }: { s: Space }) {
                     disabled={!l.code}
                     onClick={() => {
                       void navigator.clipboard
-                        ?.writeText(`${location.origin}/i/${l.code}`)
+                        ?.writeText(`${siteOrigin()}/i/${l.code}`)
                         .catch(() => undefined);
                       toast(`Copied ${url(l.code)}`);
                     }}

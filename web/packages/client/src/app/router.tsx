@@ -32,6 +32,7 @@ import { SearchPage } from "../spaces/SearchPage.js";
 import { SourcePage } from "../spaces/Sources.js";
 import { SpacePage } from "../spaces/SpacePage.js";
 import { ThreadPage } from "../spaces/ThreadPage.js";
+import { UnsentPage } from "../spaces/UnsentPage.js";
 
 import { RouteErrorPanel, RoutePendingPanel } from "./RouteBoundary.js";
 import { SpacesRoot } from "./SpacesRoot.js";
@@ -225,6 +226,14 @@ const savedRoute = createRoute({
   component: SavedPage,
 });
 
+/** Unsent changes (the Desktop app: the outbox; the web has none). */
+const unsentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/unsent",
+  beforeLoad: requireSignedIn,
+  component: UnsentPage,
+});
+
 const profileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/u/$handle",
@@ -323,6 +332,7 @@ const routeTree = rootRoute.addChildren([
   searchRoute,
   notificationsRoute,
   savedRoute,
+  unsentRoute,
   profileRoute,
   browseRoute,
   createSpaceRoute,

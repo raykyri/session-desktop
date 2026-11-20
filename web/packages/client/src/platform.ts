@@ -92,5 +92,11 @@ export function platform(): Platform {
   return current;
 }
 
+/** The server's site, for the links the person copies or shares: the
+ * page's own origin on the web; the server's in the Desktop app, whose page
+ * is served from the app (`tauri://localhost`). */
+export const siteOrigin = () => current.origin || location.origin;
+export const siteHost = () => (current.origin ? new URL(current.origin).host : location.host);
+
 /** Whether the client runs in the Desktop app. */
 export const isDesktop = () => current.kind === "desktop";

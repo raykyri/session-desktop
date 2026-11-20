@@ -12,6 +12,7 @@ import { useState } from "react";
 
 import { agoText, ago, dayOf, spaceName } from "../data/format.js";
 import { isStaff, type Space } from "../data/spaces.js";
+import { siteOrigin } from "../platform.js";
 import { useNow, useRecords } from "../sync/react.js";
 
 import { Modal, NotFound, Page } from "./Page.js";
@@ -270,7 +271,9 @@ export function SourcePage({ id }: { id: string }) {
               className="btn sm d-only"
               type="button"
               onClick={() => {
-                void navigator.clipboard?.writeText(location.href).catch(() => undefined);
+                void navigator.clipboard
+                  ?.writeText(`${siteOrigin()}${location.pathname}${location.search}`)
+                  .catch(() => undefined);
                 toast("Link copied.");
               }}
             >

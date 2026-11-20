@@ -37,6 +37,13 @@ export const keychainItem = (d: DeviceSignIn) =>
 /** The app's window: a page with the bridge, at `path`. */
 export async function openApp(context: BrowserContext, bridge: TestBridge, path = "/") {
   const page = await context.newPage();
+  page.on("pageerror", (e) => process.stdout.write(`page error: ${e.message}\n`));
+  page.on("console", (m) => {
+    if (m.type() === "error" && m.args().length)
+      void Promise.all(m.args().map((a) => a.jsonValue().catch(() => "?"))).then((v) =>
+        process.stdout.write(`console: ${JSON.stringify(v).slice(0, 3000)}\n`),
+      );
+  });
   await bridge.install(page);
   await page.goto(`${DESKTOP_ORIGIN}${path}`);
   return page;

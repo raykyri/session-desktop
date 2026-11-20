@@ -100,11 +100,15 @@ export function useRecords<T>(fn: (r: Reader) => T, deps: readonly unknown[]): T
   return useQuery(q as { get(): T | undefined; subscribe(l: () => void): () => void });
 }
 
+/** The directory's state before a session exists: one value, so
+ * `useSyncExternalStore` reads the same snapshot each time. */
+const IDLE = { status: "idle" as const, data: undefined, error: null };
+
 export function useDirectory(): ResourceState<Directory> & { session: SpacesSession | null } {
   const s = useSession();
   const fallback = useMemo(
     () => ({
-      get: () => ({ status: "idle" as const, data: undefined, error: null }),
+      get: () => IDLE,
       subscribe: () => () => undefined,
       load: () => Promise.reject(new Error("no session")),
       set: () => undefined,

@@ -12,3 +12,6 @@ packages/db/migrations/
 packages/client/src/styles/spaces.css
 packages/client/src/styles/tokens.css
 packages/client/scripts/mockup-tokens.json
+# the Desktop app's Rust build and Tauri's generated schemas
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
