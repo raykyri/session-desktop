@@ -1,0 +1,48 @@
+[package]
+name = "session-desktop"
+version = "0.1.0"
+description = "Session for Mac: the spaces client with a replica on the device."
+authors = ["Raymond Zhong"]
+license = "MIT"
+edition = "2024"
+
+# The app's own Rust stays small (phase 3): plugin registration, the batch
+# command over the SQL plugin's pool, the Keychain item and what the app
+# tells the server about the Mac. Everything else is the web client.
+
+[lib]
+name = "session_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "session-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+# The SQL plugin's own sqlx (0.8): `sql_batch` runs a transaction on the
+# plugin's pool for the same file.
+sqlx = { version = "0.8", default-features = false, features = ["sqlite", "runtime-tokio", "json"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+# No platform store off macOS: keyring's mock store (the app is macOS only;
+# this keeps `cargo check` and the tests running on Linux).
+keyring = { version = "3" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 16
+strip = "symbols"
