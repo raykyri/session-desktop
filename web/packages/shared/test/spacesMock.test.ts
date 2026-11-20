@@ -1,5 +1,6 @@
 // Checks the HTML mockup's mock backend (`docs/mockups/session-web-spaces-*.js`)
-// against the Spaces schemas in `src/schemas/spaces.ts`: the fixtures, every
+// against the first-draft Spaces schemas in `src/schemas/spaces.deferred.ts`
+// (the build's contract, `src/schemas/spaces.ts`, revised them): the fixtures, every
 // GET row and paged query for three callers, one valid call of every
 // procedure, the error bodies, and the events of an ask's run. It also checks
 // that every row of the mock's API table has an entry in `spacesApi`, so a new
@@ -19,7 +20,6 @@ import type { ExecutionContext } from "ava";
 import type { z } from "zod";
 
 import * as root from "../src/index.js";
-import type { Spaces } from "../src/index.js";
 import { researchTreeSummarySchema as realTreeSummarySchema } from "../src/schemas/research.js";
 import {
   apiKeySchema,
@@ -62,9 +62,10 @@ import {
   tokenUsageSchema,
   userSchema,
   userSettingsSchema,
-} from "../src/schemas/spaces.js";
-import type { notificationPayloadSchema, spacePageSchema } from "../src/schemas/spaces.js";
+} from "../src/schemas/spaces.deferred.js";
+import type { notificationPayloadSchema, spacePageSchema } from "../src/schemas/spaces.deferred.js";
 import type { InboxNotificationPage, NotificationPayload } from "../src/types/sharing.js";
+import type * as Deferred from "../src/types/spaces.deferred.js";
 
 // ---- the schemas' types against the real types they reuse ----
 
@@ -89,20 +90,22 @@ test("the schemas that stand for real types match them", (t) => {
 
 // ---- exports: a namespace, and no name of the real app's taken ----
 
-/** The types the package root exports as `Spaces.<name>` are this module's. */
+/** The first-draft types are this module's. */
 const namespaced: [
-  Same<Spaces.ResearchTreeSummary, z.output<typeof researchTreeSummarySchema>>,
-  Same<Spaces.ResearchTreeDetail, Spaces.ResearchTreeSummary>,
-  Same<Spaces.User, z.output<typeof userSchema>>,
+  Same<Deferred.ResearchTreeSummary, z.output<typeof researchTreeSummarySchema>>,
+  Same<Deferred.ResearchTreeDetail, Deferred.ResearchTreeSummary>,
+  Same<Deferred.User, z.output<typeof userSchema>>,
 ] = [true, true, true];
 
-test("the package root exports the Spaces schemas only under `spaces`", (t) => {
+test("the package root exports the spaces contract only under `spaces`, and not the first draft", (t) => {
   t.true(namespaced.every(Boolean));
-  t.is(root.spaces.researchTreeSummarySchema, researchTreeSummarySchema);
-  t.is(root.spaces.researchTreeDetailSchema, researchTreeSummarySchema);
   t.is(root.researchTreeSummarySchema, realTreeSummarySchema);
+  t.false("researchTreeSummarySchema" in root.spaces);
+  t.truthy(root.spaces.threadRecordSchema);
   const values = new Set<unknown>(Object.values(root));
+  // schemas and functions; a number such as a bound may equal another export
   const leaked = Object.entries(root.spaces)
+    .filter(([, v]) => typeof v === "object" || typeof v === "function")
     .filter(([, v]) => values.has(v))
     .map(([k]) => k);
   t.deepEqual(leaked, [], "values of the spaces module at the package root");

@@ -98,6 +98,10 @@ export default tseslint.config(
             "packages/shared/src/wire/index.ts",
             "packages/shared/src/schemas/index.ts",
             "packages/shared/src/lib/*.ts",
+            // the first-draft mock's contract: only the mock's validator test
+            // (`test/spacesMock.test.ts`) imports it
+            "packages/shared/src/schemas/spaces.deferred.ts",
+            "packages/shared/src/types/spaces.deferred.ts",
           ],
         },
       ],
