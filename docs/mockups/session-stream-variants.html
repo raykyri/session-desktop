@@ -137,7 +137,10 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 /* ---- one scroll, rows of [post] [margin] ---- */
 .mg { height: 100%; overflow-y: auto; background: var(--feed); }
 .mg-inner { max-width: 1180px; margin: 0 auto; padding: 0 24px 60px; }
-.tabs { position: sticky; top: 0; z-index: 10; display: flex; gap: 4px; padding: 12px 0; background: var(--feed); overflow-x: auto; }
+.tabs { position: sticky; top: 0; z-index: 10; display: flex; gap: 4px; padding: 12px 0; background: var(--feed); overflow-x: auto;
+  /* full-width band, with a hairline below it that fades in once the stream scrolls */
+  box-shadow: 0 0 0 100vmax var(--feed), 0 1px 0 100vmax transparent; clip-path: inset(0 -100vmax -1px); transition: box-shadow .2s ease; }
+.tabs.scrolled { box-shadow: 0 0 0 100vmax var(--feed), 0 1px 0 100vmax var(--divider); }
 .tabs button { padding: 5px 10px; border-radius: 14px; font-size: var(--fs-sm); color: var(--t-secondary); font-weight: 500; white-space: nowrap; }
 .tabs button:hover { background: var(--fill-hover); }
 .tabs button[aria-current="true"] { background: var(--t-heading); color: var(--feed); }
@@ -591,6 +594,8 @@ function render() {
   mg.scrollTop = top;
   streamFor(st.space).forEach(p => p.k === 'ask' && v.layout(p));
   mg.scrollTop = top;
+  const tabsEl = mg.querySelector('.tabs'), edge = () => tabsEl.classList.toggle('scrolled', mg.scrollTop > 2);
+  edge(); mg.addEventListener('scroll', edge, { passive: true });
   lastV = st.v;
 }
 function renderBar() {
