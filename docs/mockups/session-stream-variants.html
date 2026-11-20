@@ -99,7 +99,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .prose h4 { margin: 1em 0 .35em; font-size: var(--fs-base); color: var(--t-heading); font-weight: 600; }
 .prose table { border-collapse: collapse; font-size: var(--fs-sm); margin: 0 0 .7em; display: block; overflow-x: auto; }
 .prose th, .prose td { border-bottom: 1px solid var(--divider); padding: 4px 8px; text-align: left; }
-.prose sup.cite { font-size: 9.5px; color: var(--accent); font-weight: 600; margin-left: 0; }
+.prose sup.cite { font-size: 9.5px; color: var(--accent); font-weight: 600; margin-left: -1px; }
 .prose .pending { color: var(--t-faint); }
 .clamp { max-height: 9.6em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
 .clamp.s { max-height: 4.8em; }
@@ -144,8 +144,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .row { display: grid; grid-template-columns: minmax(0, 600px) minmax(0, 330px); gap: 28px; padding: 14px 0; justify-content: center; }
 .card { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 18px 20px 12px; min-width: 0; transition: opacity .2s; }
 .card-h { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.card h2 { margin: 0 0 8px; font-size: var(--fs-xl); line-height: 1.25; letter-spacing: -.015em; color: var(--t-heading); text-wrap: balance; }
-.card .ask { margin: 0 0 14px; color: var(--t-secondary); font-size: var(--fs-md); }
+.card .ask { margin: 0 0 14px; color: var(--t-heading); font-size: var(--fs-lg); line-height: 1.45; }
 .card .post { margin: 0 0 6px; color: var(--t-primary); font-size: var(--fs-lg); line-height: 1.45; }
 .card .byline { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: var(--fs-sm); color: var(--t-faint); }
 /* the footer sits at the bottom of the card when the margin makes the row taller */
@@ -186,7 +185,10 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .grow-r.on .gq { font-weight: 600; }
 .preview { margin-top: 10px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
 .preview .rq { margin: 4px 0 8px; font-size: var(--fs-base); font-weight: 600; color: var(--t-heading); line-height: 1.4; }
-.preview .prose { font-size: var(--fs-sm); max-height: 260px; overflow-y: auto; }
+/* the question is already the selected row above, so the card holds only the answer; its scroll area fades out above the footer */
+.preview .prose { font-size: var(--fs-sm); max-height: 260px; overflow-y: auto; margin-top: 6px; padding-bottom: 8px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); }
+.preview .pf { margin-top: 2px !important; }
 .preview .pf { display: flex; gap: 12px; margin-top: 8px; font-size: var(--fs-xs); color: var(--t-faint); align-items: center; }
 .preview .pf .tlink { font-size: inherit; font-weight: inherit; }
 .mgn .preview .composer { margin-top: 10px; }
@@ -227,7 +229,6 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
   <h1>Session · pinned maps</h1>
   <div class="seg" id="variant-seg" role="group" aria-label="Variant"></div>
   <span class="grow"></span>
-  <div class="seg" id="data-seg" role="group" aria-label="Test data"></div>
   <div class="seg" id="theme-seg" role="group" aria-label="Theme"></div>
 </header>
 <p class="thesis" id="thesis"></p>
@@ -276,8 +277,8 @@ const byNew = (a, b) => (a.createdAt < b.createdAt ? 1 : -1);
 const streamFor = s => D.posts.filter(p => (s === 'home' ? !p.rf : p.s === s)).sort(byNew);
 const spacesWithPosts = D.spaces.filter(s => D.posts.some(p => p.s === s.id));
 
-/* Prompt-style test data: the same asks and branch questions, typed the way people instruct an agent
-   (lowercase, terse, shorthand), keyed by thread id and node id ('q' is the thread's ask). */
+/* What people typed: each ask and branch question as it is typed to an agent (lowercase, terse,
+   shorthand), keyed by thread id and node id ('q' is the thread's ask). It replaces the fixtures' text. */
 const PROMPTS = {
  "01M7HWGZJGT7JTFFVSYPX055KV": {
   "q": "scan sci-fi + adjacent writing for intention marketplaces / intention networks. go broad, give me a list of examples",
@@ -392,9 +393,34 @@ const PROMPTS = {
  "01M7BESDR08WWS4J3FKS5B43EB": {
   "q": "how much notice does a landlord need to give before a rent increase under the current city ordinance",
   "f0": "which sources is this leaning on most"
+ },
+ "01M7H9WZA09M3CNSPTFF22FZ86": {
+  "q": "is the 3.1x figure in this paragraph right? says it's from the appendix table in halvorsen et al",
+  "f0": "which sources is this leaning on most"
+ },
+ "01M7GB06P0P8ZXPB0DEXY3G3RT": {
+  "q": "which of the contamination claims in this thread has anyone else actually checked",
+  "f0": "which sources is this leaning on most",
+  "f1": "what would change the conclusion"
+ },
+ "01M7GRQN60V68CFNX27EE5W66S": {
+  "q": "where do the thread and orbit lab's response disagree + what evidence does each side give",
+  "f0": "which sources is this leaning on most"
+ },
+ "01M7BESDR0YSSVFVJ47HD56Y9M": {
+  "q": "which paper is lin feld describing here",
+  "f0": "which sources is this leaning on most"
+ },
+ "01M7E164R0B8KHNGZTQ0METX7J": {
+  "q": "what would it take to report flops per problem like this post proposes, for a closed model",
+  "f0": "which sources is this leaning on most"
+ },
+ "01M7GZKCE0ZYF4MBKKGYS455JM": {
+  "q": "rerun the near-dup search from the published script on a random sample of 200 problems, compare w the reported matches",
+  "f0": "which sources is this leaning on most"
  }
 };
-const asTyped = (p, id, text) => (st.data === 'prompts' && PROMPTS[p.id]?.[id === 'r' ? 'q' : id]) || text;
+const asTyped = (p, id, text) => PROMPTS[p.id]?.[id === 'r' ? 'q' : id] || text;
 
 function tree(p) {
   const fu = D.fu[p.id] || [], qt = D.qtd[p.id];
@@ -442,10 +468,7 @@ const replyTree = list => list.map(r => `<div class="reply">${av(r.u, 'sm')}<div
 /* Both variants show the same stream of whole posts and pin the branches to the passage of the answer
    they ask about. Pinned map draws each passage's branches as an outline; Layers draws them as a stack
    of cards, one card per level of depth. */
-/* the test-data choice is remembered in this browser */
-const DATA_KEY = 'session-mock-data';
-const savedData = () => { try { return localStorage.getItem(DATA_KEY) === 'prompts' ? 'prompts' : 'written'; } catch { return 'written'; } };
-const st = { v: 'pinned', data: savedData(), space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, layer: {}, asking: null };
+const st = { v: 'pinned', space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, layer: {}, asking: null };
 
 function card(p) {
   const head = `<div class="card-h">${av(p.u)}<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div></div>`;
@@ -455,7 +478,7 @@ function card(p) {
     return `<article class="card">${head}<p class="post">${esc(p.q)}</p><div class="card-f"><span class="notes">${noun(n, 'reply', 'replies')}</span><button class="iconbtn" aria-label="Reply">${I.reply}</button>${acts}</div></article>`;
   }
   const T = tree(p), src = (D.srcd[p.id] || []).length;
-  return `<article class="card" id="card-${p.id}">${head}${p.t ? `<h2>${esc(p.t)}</h2>` : ''}<p class="ask">${esc(T.nodes.r.q)}</p>
+  return `<article class="card" id="card-${p.id}">${head}<p class="ask">${esc(T.nodes.r.q)}</p>
     <div class="byline">${mark('sm')}<span>Answered by Session${src ? ` · ${noun(src, 'source', 'sources')}` : ''} · ${ktok(p.tok)}</span></div>
     <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
     <div class="card-f"><span class="notes">${noun(T.count, 'branch', 'branches')}</span><button class="iconbtn" data-a="ask" data-id="${p.id}" aria-label="${st.asking === p.id ? 'Close the branch box' : 'Branch'}">${st.asking === p.id ? I.x : I.branch}</button>${acts}</div></article>`;
@@ -507,7 +530,7 @@ function pinGroups(p, draw, cls = '') {
 /* The read-out under a drawing: the selected branch's question and answer. */
 function preview(p, T, n) {
   const k = T.kids(n.id).length;
-  return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time></div><p class="rq">${esc(n.q)}</p>${status(n)}<div class="prose">${answerHtml(n)}</div>
+  return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time></div>${status(n)}<div class="prose">${answerHtml(n)}</div>
     <div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches under this'}</span><button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.id}">Branch from here</button></div>
     ${st.asking === p.id ? composer('mf:' + p.id + ':' + n.id, 'Ask a branch question') : ''}</div>`;
 }
@@ -572,13 +595,11 @@ function render() {
 }
 function renderBar() {
   $('#variant-seg').innerHTML = ORDER.map((k, i) => `<button data-v="${k}" aria-pressed="${st.v === k}"><b>${String.fromCharCode(65 + i)}</b>${V[k].name}</button>`).join('');
-  $('#data-seg').innerHTML = [['written', 'Written'], ['prompts', 'Typed']].map(([k, l]) => `<button data-d="${k}" aria-pressed="${st.data === k}">${l}</button>`).join('');
   $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${st.theme === k}">${l}</button>`).join('');
   $('#thesis').innerHTML = `<span class="qtag">${V[st.v].q}</span>` + V[st.v].thesis;
 }
 function go(v) { if (!V[v]) v = 'pinned'; st.v = v; st.asking = null; renderBar(); render(); }
 $('#variant-seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { history.replaceState(null, '', '#' + b.dataset.v); go(b.dataset.v); } });
-$('#data-seg').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b) return; st.data = b.dataset.d; try { localStorage.setItem(DATA_KEY, st.data); } catch {} renderBar(); render(); });
 $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; st.theme = b.dataset.t; if (st.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = st.theme; renderBar(); });
 
 app.addEventListener('click', e => {
