@@ -135,7 +135,7 @@ body.fs .fsexit:focus-visible, body.fs.fs-peek .fsexit { transform: translate(-5
 .composer:focus-within { border-color: var(--accent); }
 .composer textarea { flex: 1; min-width: 0; border: 0; background: none; outline: none; padding: 6px 0; font: inherit; font-size: var(--fs-base); line-height: 1.4; color: inherit; resize: none; max-height: 160px; }
 .composer textarea::placeholder { color: var(--placeholder); }
-.row.new-row { padding: 12px 0 0; }
+.row.new-row { padding: 17px 0 0; }
 .row.new-row + .row { padding-top: 14px; }
 /* composer parts */
 .nb { min-width: 0; }
@@ -426,8 +426,11 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .mockbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding-bottom: 8px; }
 .mk { display: inline-flex; align-items: center; gap: 6px; }
 .mkl { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--t-faint); }
-#shell { display: flex; flex-direction: column; height: 100%; }
-#bar { flex: none; }
+#shell { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+#bar { flex: none; transition: margin-top .2s ease; }
+/* the app bar slides up out of view while the feed scrolls down, and back on any scroll up */
+#bar.hid { margin-top: -49px; }
+@media (prefers-reduced-motion: reduce) { #bar { transition: none; } }
 #page { flex: 1; min-height: 0; position: relative; }
 #page > .mg, #page > .page { height: 100%; }
 
@@ -1578,7 +1581,11 @@ function renderNetwork() {
   mg.querySelectorAll('.stick.replies .graph[data-draw]').forEach(drawGraph);
   mg.scrollTop = top;
   const tabsEl = mg.querySelector('.tabs') || document.createElement('div'), edge = () => tabsEl.classList.toggle('scrolled', mg.scrollTop > 2);
-  edge(); mg.addEventListener('scroll', () => { edge(); $('#selbranch')?.remove(); $('#citepop')?.remove(); }, { passive: true });
+  let lastY = mg.scrollTop;
+  const bar = () => { const y = mg.scrollTop, dy = y - lastY, el = $('#bar'); if (!el) return;
+    if (y < 48 || st.menu) el.classList.remove('hid'); else if (dy > 4) el.classList.add('hid'); else if (dy < -4) el.classList.remove('hid');
+    if (Math.abs(dy) > 4 || y < 48) lastY = y; };
+  edge(); mg.addEventListener('scroll', () => { edge(); bar(); $('#selbranch')?.remove(); $('#citepop')?.remove(); }, { passive: true });
   const ts = $('#k-tabs') || document.createElement('div'), fade = () => { ts.style.setProperty('--fl', ts.scrollLeft > 1 ? '40px' : '0px'); ts.style.setProperty('--fr', ts.scrollLeft + ts.clientWidth < ts.scrollWidth - 1 ? '40px' : '0px'); };
   ts.scrollLeft = tabsLeft; { const on = ts.querySelector('[aria-current="true"]'); if (on && (on.offsetLeft + on.offsetWidth > ts.scrollLeft + ts.clientWidth - 40 || on.offsetLeft < ts.scrollLeft + 40)) ts.scrollLeft = on.offsetLeft - ts.clientWidth / 2 + on.offsetWidth / 2; }
   fade(); ts.addEventListener('scroll', fade, { passive: true });
@@ -2057,6 +2064,7 @@ function renderInner() {
   renderMock();
   if (!$('#shell')) { app.innerHTML = '<div id="shell"><div id="bar"></div><div id="page"></div></div>'; lastV = null; }
   $('#bar').innerHTML = st.auth === 'out' ? appbarOut() : appbar();
+  if (st.screen !== 'network' || st.menu) $('#bar').classList.remove('hid');
   if (st.auth === 'out') st.screen = 'network';
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
   if (st.screen === 'network') renderNetwork();
