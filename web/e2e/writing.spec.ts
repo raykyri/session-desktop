@@ -15,6 +15,8 @@ interface Screen {
   args?: unknown;
   url: string;
   out?: boolean;
+  /** Changes the scenario's records first. */
+  edit?: (r: KeyedRecord[]) => KeyedRecord[];
   /** The thread to open, found in the scenario's records (`:thread` in url). */
   thread?: (r: KeyedRecord[]) => KeyedRecord | undefined;
   run: (p: Page) => Promise<void>;
@@ -136,6 +138,32 @@ const SCREENS: Screen[] = [
     run: async (p) => {
       await expect(p.getByRole("region").or(p.locator(".cs-denied")).first()).toBeVisible();
       await text(p, "Your request was declined");
+      // the 14 days after a decline (2b design finding 1, the mockup's cxDeniedCard)
+      await expect(p.locator(".cs-denied .cs-fine")).toHaveText(
+        /^You can request again on [A-Z][a-z]{2} \d{1,2}\.$/,
+      );
+      await expect(p.getByRole("button", { name: "Request declined" }).first()).toBeDisabled();
+    },
+  },
+  {
+    key: "cx-declined-again",
+    scenario: "replication: denied",
+    // declined 20 days before the scenario's clock: the waiting period has passed
+    edit: (rs) =>
+      rs.map((r) =>
+        r.record.kind === "request" && r.record["st"] === "declined"
+          ? {
+              ...r,
+              record: { ...r.record, updatedAt: "2026-10-27T10:00:00Z", retryAt: undefined },
+            }
+          : r,
+      ),
+    url: "/s/replication-club",
+    run: async (p) => {
+      await expect(p.locator(".cs-denied .cs-fine")).toHaveText(
+        "The waiting period has passed. You can send a new request with new answers.",
+      );
+      await expect(p.getByRole("button", { name: "Request to join" }).first()).toBeEnabled();
     },
   },
   {
@@ -588,6 +616,7 @@ const SCREENS: Screen[] = [
 async function open(p: Page, s: Screen) {
   const { records } = await loadScenario(p.context().request, s.scenario ?? "seed", {
     args: s.args,
+    ...(s.edit ? { edit: s.edit } : {}),
   });
   if (!s.out) await signInAs(p.context());
   const th = s.thread?.(records);
