@@ -368,7 +368,8 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .rlike.on, .iconbtn.likes.on { color: var(--bad); }
 .rlike.on svg.i, .iconbtn.likes.on svg.i { fill: currentColor; }
 .iconbtn.on:not(.likes) { color: var(--accent); }
-.iconbtn.on:not(.likes) svg.i { fill: currentColor; }
+.iconbtn.on:not(.likes):not([data-a="ask"]) svg.i { fill: currentColor; }
+.iconbtn[data-a="ask"].on { background: var(--fill-hover); }
 .rfoot { margin-top: 8px; padding-left: 4px; }
 .replies .tlink { font-size: var(--fs-xs); font-weight: 400; }
 .replies .composer { margin-top: 8px; }
@@ -1017,6 +1018,7 @@ function deleteItem(key) {
    small   20px avatar beside the name line, the composer's size
    gutter  20px avatar in a left gutter at the composer's position; text lines up with the composer's text
    footer  no header; a 20px avatar, name, space and time lead the footer row */
+const ARROW_REPLY = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 4 3 7.5 6.5 11"/><path d="M3.5 7.5h5.5a4 4 0 0 1 4 4v1"/></svg>';
 function card(p) {
   const mode = V[st.v].av || 'header';
   const meta = `<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div>`;
@@ -1038,7 +1040,7 @@ function card(p) {
   return `<article class="${cls}" id="card-${p.id}">${head}${from}<p class="ask">${esc(T.nodes.r.q)}</p>
     <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok)].filter(Boolean).join(' · ')}</span></div>
     <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
-    <div class="card-f">${lead}${count(T.count ? noun(T.count, 'branch', 'branches') : '')}${canWrite() && !p.pending ? `<button class="iconbtn" data-a="ask" data-id="${p.id}" aria-label="${st.asking === p.id ? 'Close the branch box' : 'Branch'}">${st.asking === p.id ? I.x : I.branch}</button>` : ''}${acts}${tail}</div></article>`;
+    <div class="card-f">${lead}${count(T.count ? noun(T.count, 'branch', 'branches') : '')}${canWrite() && !p.pending ? `<button class="iconbtn${st.asking === p.id ? ' on' : ''}" data-a="ask" data-id="${p.id}" aria-pressed="${st.asking === p.id}" aria-label="Ask a follow-up" title="Ask a follow-up">${ARROW_REPLY}</button>` : ''}${acts}${tail}</div></article>`;
 }
 
 /* ---- passage matching: the fixtures do not store the passage a branch came from, so the mock picks
@@ -1276,7 +1278,8 @@ app.addEventListener('click', e => {
   const t = e.target.closest('[data-a]'); if (!t) return;
   const a = t.dataset.a, d = t.dataset;
   if (a === 'space') { st.space = d.id; st.asking = null; render(); $('#k-mg').scrollTop = 0; return; }
-  if (a === 'ask') { st.asking = st.asking === d.id ? null : d.id; st.sel[d.id] = null; st.quote = null; st.askPar = null; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
+  if (a === 'ask' && st.asking === d.id) { (document.getElementById(`in-mf:${d.id}:${st.askPar ?? 'r'}`) || $(`[id^="in-mf\\:${d.id}"]`))?.focus(); return; }
+  if (a === 'ask') { st.asking = d.id; st.sel[d.id] = null; st.quote = null; st.askPar = null; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
   if (a === 'askfrom') { st.sel[d.id] = d.sel || d.node; st.askPar = d.node; st.asking = d.id; st.quote = null; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
   if (a === 'askpass' || a === 'selbranch') { const pr = document.getElementById('pr-' + d.id); let q = st.selText || '';
     if (a === 'askpass') q = blockText(blocksOf(pr)[+d.bi]);
