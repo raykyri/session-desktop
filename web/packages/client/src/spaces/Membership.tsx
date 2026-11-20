@@ -188,6 +188,19 @@ function LeaveDialog({ s, onClose }: { s: Space; onClose: () => void }) {
   );
 }
 
+/** Leave, with the leave dialog (Account › Your spaces). */
+export function LeaveButton({ s }: { s: Space }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button className="btn sm" type="button" onClick={() => setOpen(true)}>
+        Leave
+      </button>
+      {open ? <LeaveDialog s={s} onClose={() => setOpen(false)} /> : null}
+    </>
+  );
+}
+
 function JoinDialog({ s, onClose }: { s: Space; onClose: () => void }) {
   const write = useWrite();
   const join = async () => {
@@ -225,7 +238,7 @@ function JoinDialog({ s, onClose }: { s: Space; onClose: () => void }) {
 
 /** Join or Joined on the banner: an open space's button, or a closed
  * space's Joined menu (Manage space, Leave space). */
-export function JoinControl({ s }: { s: Space }) {
+export function JoinControl({ s, compact = false }: { s: Space; compact?: boolean }) {
   const w = useWorld();
   const signIn = useSignIn();
   const navigate = useNavigate();
@@ -253,7 +266,11 @@ export function JoinControl({ s }: { s: Space }) {
             Joined
           </button>
         ) : (
-          <button className="btn primary" type="button" onClick={() => setDlg("join")}>
+          <button
+            className={compact ? "btn primary sm" : "btn primary"}
+            type="button"
+            onClick={() => setDlg("join")}
+          >
             Join
           </button>
         )}
@@ -476,7 +493,7 @@ function MyRequestDialog({
 }
 
 /** The main action on a closed space for someone who is not a member. */
-export function JoinCta({ s }: { s: Space }) {
+export function JoinCta({ s, compact = false }: { s: Space; compact?: boolean }) {
   const w = useWorld();
   const now = useNow();
   const signIn = useSignIn();
@@ -569,8 +586,13 @@ export function JoinCta({ s }: { s: Space }) {
     );
   return (
     <>
-      <button className="btn primary" type="button" onClick={() => setDlg("request")}>
-        Request to join
+      <button
+        className={compact ? "btn primary sm" : "btn primary"}
+        type="button"
+        onClick={() => setDlg("request")}
+      >
+        {/* a list's row (the mockup's csJoinCtl) says Request */}
+        {compact ? "Request" : "Request to join"}
       </button>
       {dialogs}
     </>

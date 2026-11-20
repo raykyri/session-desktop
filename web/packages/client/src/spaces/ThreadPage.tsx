@@ -344,9 +344,46 @@ function Answer({ t, space, mine }: { t: ThreadView; space: Space; mine: boolean
       ) : showRun && t.run ? (
         <RunBox run={t.run} tok={t.tok} space={space} mine={mine} thread={t.id} node="r" />
       ) : t.sum !== null ? (
-        <Markdown markdown={t.sum} className="prose qt-prose" />
+        <>
+          <Markdown markdown={t.sum} className="prose qt-prose" />
+          <AnswerSources md={t.sum} />
+        </>
       ) : null}
     </section>
+  );
+}
+
+/** A cited source opens in a new tab. */
+const openSource = (href: string) => window.open(href, "_blank", "noopener");
+
+/** The answer's sources under it on Mobile Web (the mockup's m-src: the side
+ * column's list is hidden there, and this one on Desktop). */
+function AnswerSources({ md }: { md: string }) {
+  const list = useMemo(() => citationsOf(md), [md]);
+  if (!list.length) return null;
+  return (
+    <ol className="m-src qt-src">
+      {list.map((c) => (
+        <li
+          key={c.n}
+          data-tasrc={c.n}
+          tabIndex={0}
+          // the mockup's source row: a list item that opens its page
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role
+          role="button"
+          onClick={() => openSource(c.href)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openSource(c.href);
+            }
+          }}
+        >
+          <b>{c.title}</b>
+          <span>{c.host}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 

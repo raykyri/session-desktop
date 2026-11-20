@@ -230,6 +230,22 @@ export function htmlToMarkdown(html: string, cites: [string, string, string?][] 
     (_, t: string) =>
       `\n\n${t.replace(/<li>([\s\S]*?)<\/li>/g, (_m, x: string) => `- ${x.trim()}\n`)}\n`,
   );
+  // a table as a GFM table: its first row is the header (review round 2 of
+  // phase 2: the tags were dropped, so the cells ran together)
+  s = s.replace(/<table>([\s\S]*?)<\/table>/g, (_, t: string) => {
+    const rows = [...t.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map((r) =>
+      [...(r[1] ?? "").matchAll(/<t[hd]>([\s\S]*?)<\/t[hd]>/g)].map((c) =>
+        (c[1] ?? "")
+          .replace(/<[^>]+>/g, "")
+          .replace(/\|/g, "\\|")
+          .trim(),
+      ),
+    );
+    const [head, ...body] = rows;
+    if (!head) return "";
+    const line = (cells: string[]) => `| ${cells.join(" | ")} |`;
+    return `\n\n${[line(head), line(head.map(() => "---")), ...body.map(line)].join("\n")}\n\n`;
+  });
   s = s.replace(/<br\s*\/?>/g, "  \n");
   s = s.replace(/<p>([\s\S]*?)<\/p>/g, "\n\n$1\n\n");
   s = s.replace(/<[^>]+>/g, "");

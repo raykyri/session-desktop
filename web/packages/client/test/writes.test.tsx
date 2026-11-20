@@ -56,11 +56,14 @@ test.serial(
         message: "Too many changes.",
         retryAt: "2026-11-16T10:00:10Z",
       }),
-      WRITE_ERROR["TOO_MANY_REQUESTS"],
+      WRITE_ERROR["TOO_MANY_REQUESTS"] ?? "-",
     );
     // no message: the mockup's copy
-    t.is(refusalText({ code: "TOO_MANY_REQUESTS", message: "" }), WRITE_ERROR["TOO_MANY_REQUESTS"]);
+    t.is(
+      refusalText({ code: "TOO_MANY_REQUESTS", message: "" }),
+      WRITE_ERROR["TOO_MANY_REQUESTS"] ?? "-",
+    );
     // other codes keep their copy, not the server's message
-    t.is(refusalText({ code: "STALE", message: "x" }), WRITE_ERROR["STALE"]);
+    t.is(refusalText({ code: "STALE", message: "x" }), WRITE_ERROR["STALE"] ?? "-");
   },
 );

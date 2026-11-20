@@ -133,8 +133,9 @@ export function FaqLanding({ s, rows, topic }: { s: Space; rows: Row[]; topic: s
           >
             All
           </button>
+          {/* the mockup's faqChips: the topics that have answers, then Other */}
           {list
-            .filter((t) => t.id !== "other")
+            .filter((t) => t.rows.length > 0)
             .map((t) => (
               <button
                 key={t.id}

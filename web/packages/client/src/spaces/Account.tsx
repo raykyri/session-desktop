@@ -14,13 +14,16 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMe } from "../api/account.js";
 import { HttpError, getJson } from "../api/http.js";
 import { createResource, useResource } from "../api/resource.js";
-import { agoText, dayOf, fmtT, spaceName } from "../data/format.js";
+import { agoText, dayOf, fmtT, isClosed, spaceName } from "../data/format.js";
+import { headerSpaces, isStaff, type Space } from "../data/spaces.js";
+import { setHeaderTabs, useHeaderTabs } from "../stores/headerTabs.js";
 import { useNow, useRecords } from "../sync/react.js";
 
+import { JoinControl, JoinCta, LeaveButton } from "./Membership.js";
 import { Modal, Page } from "./Page.js";
 import { Scrim } from "./Scrim.js";
 import { Svg } from "./Svg.js";
-import { Glyph } from "./atoms.js";
+import { Glyph, Lock, Seal } from "./atoms.js";
 import { cx } from "./cx.js";
 import { I, MI, SVG, SXI } from "./icons.js";
 import { useOverlay } from "./overlay.js";
@@ -664,42 +667,240 @@ function AccountTab() {
   );
 }
 
+/** A role as the mockup's lists show it beside a space's name (none for a
+ * member). */
+const ROLE_IC: Record<string, string> = {
+  mod: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 13 3.6v4.1c0 3-2.1 5.2-5 6.5-2.9-1.3-5-3.5-5-6.5V3.6z"/></svg>',
+  admin:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M3 12.2 2.4 5.6l3.4 2.6L8 3.8l2.2 4.4 3.4-2.6-.6 6.6z"/></svg>',
+};
+ROLE_IC["owner"] = ROLE_IC["admin"] ?? "";
+const ROLE_NAME: Record<string, string> = {
+  owner: "Owner",
+  admin: "Admin",
+  mod: "Moderator",
+  member: "Member",
+};
+
+function RoleMark({ role }: { role: string }) {
+  if (role === "member") return null;
+  return (
+    <span className="rl-inline">
+      <Svg src={ROLE_IC[role] ?? ""} />
+      {ROLE_NAME[role]}
+    </span>
+  );
+}
+
+/** Account › Your spaces (the mockup's layoutYourSpaces): the spaces the
+ * person joined (Manage for staff, Leave) and the others they may find
+ * (Join or Request), with Edit header tabs and Create a space. */
 function YourSpaces() {
   const w = useWorld();
   const navigate = useNavigate();
-  const mine = w.spaces.filter((s) => w.roles[s.id] !== undefined);
-  const ROLE: Record<string, string> = {
-    owner: "Owner",
-    admin: "Admin",
-    mod: "Moderator",
-    member: "Member",
+  const [editing, setEditing] = useState(false);
+  if (editing) return <HeaderTabsEditor onDone={() => setEditing(false)} />;
+  const order = headerSpaces(w.spaces, w.roles);
+  const joined = order.filter((s) => w.roles[s.id] !== undefined);
+  const more = w.spaces.filter(
+    (s) => w.roles[s.id] === undefined && !s.archived && s.vis !== "unlisted",
+  );
+  const name = (s: Space) => (
+    <button
+      className="dg-name"
+      type="button"
+      onClick={() => void navigate({ to: "/s/$space", params: { space: s.name } })}
+    >
+      {spaceName(s)}
+    </button>
+  );
+  const row = (s: Space, mine: boolean) => {
+    const role = w.roles[s.id];
+    return (
+      <div className="ys-row" key={s.id}>
+        <span className="ys-gw">
+          <Glyph s={s} className="lg" />
+        </span>
+        <div className="ys-tx">
+          <span className="ys-nm">
+            {name(s)}
+            <Seal s={s} size="sm" />
+            {s.vis !== "open" ? (
+              <Lock
+                className="cs-lk"
+                title={s.vis === "unlisted" ? "Closed, unlisted" : "Closed"}
+              />
+            ) : null}
+            {mine && role ? <RoleMark role={role} /> : null}
+          </span>
+          <p>{s.desc}</p>
+        </div>
+        {mine ? (
+          <span className="cs-ysb">
+            {isStaff(role) ? (
+              <button
+                className="btn sm cs-b cs-ib ys-mg"
+                type="button"
+                aria-label={`Manage ${spaceName(s)}`}
+                title="Manage"
+                onClick={() =>
+                  void navigate({
+                    to: "/s/$space/manage/$tab",
+                    params: { space: s.name, tab: "requests" },
+                  })
+                }
+              >
+                <Svg src={MI.cog} />
+              </button>
+            ) : null}
+            <LeaveButton s={s} />
+          </span>
+        ) : isClosed(s) ? (
+          <JoinCta s={s} compact />
+        ) : (
+          <JoinControl s={s} compact />
+        )}
+      </div>
+    );
   };
   return (
-    <div className="acx-main ac-page">
+    <div className="acx-main ysm-compact">
       <div className="sub-top">
         <h2>Your spaces</h2>
+        <span className="ys-acts">
+          <button className="btn" type="button" onClick={() => setEditing(true)}>
+            <span className="d-only">Edit header tabs</span>
+            <span className="m-only">Edit tabs</span>
+          </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => void navigate({ to: "/spaces/new" })}
+          >
+            <span className="d-only">Create a space</span>
+            <span className="m-only">
+              <Svg src={SVG.PLUS} />
+              Create
+            </span>
+          </button>
+        </span>
       </div>
-      <div className="ak-list">
-        {mine.map((s) => (
-          <div className="ak-row" key={s.id}>
-            <Glyph s={s} />
-            <div className="ak-tx">
-              <button
-                className="tlink"
-                type="button"
-                onClick={() => void navigate({ to: "/s/$space", params: { space: s.name } })}
-              >
-                {spaceName(s)}
-              </button>
-              <small>{ROLE[w.roles[s.id] ?? "member"]}</small>
-            </div>
-          </div>
-        ))}
-        {mine.length ? null : (
-          <div className="ak-row">
-            <span className="muted">You haven’t joined any spaces yet.</span>
-          </div>
+      <section className="ys-sec">
+        <h3>Joined</h3>
+        {joined.length ? (
+          joined.map((s) => row(s, true))
+        ) : (
+          <p className="muted">You have not joined any spaces.</p>
         )}
+      </section>
+      <section className="ys-sec">
+        <h3 className="ys-h">
+          Discover
+          <button
+            className="tlink"
+            type="button"
+            onClick={() => void navigate({ to: "/spaces/browse" })}
+          >
+            Browse all
+          </button>
+        </h3>
+        {more.map((s) => row(s, false))}
+      </section>
+    </div>
+  );
+}
+
+/** Account › Your spaces › Header tabs (the mockup's ysOrder): the order of
+ * the header's spaces and which it shows, applied as they change. */
+function HeaderTabsEditor({ onDone }: { onDone: () => void }) {
+  const w = useWorld();
+  const tabs = useHeaderTabs();
+  // every space the header can list, in the header's order
+  const order = headerSpaces(w.spaces, w.roles, { order: tabs.order, hidden: [] });
+  const hidden = new Set(tabs.hidden);
+  const move = (k: number, d: -1 | 1) => {
+    const ids = order.map((s) => s.id);
+    const a = ids[k];
+    const b = ids[k + d];
+    if (a === undefined || b === undefined) return;
+    ids[k] = b;
+    ids[k + d] = a;
+    setHeaderTabs({ ...tabs, order: ids });
+  };
+  const show = (id: string, on: boolean) =>
+    setHeaderTabs({
+      ...tabs,
+      hidden: on ? tabs.hidden.filter((x) => x !== id) : [...tabs.hidden, id],
+    });
+  return (
+    <div className="acx-main">
+      <div className="sub-top">
+        <div className="ys-et">
+          <button className="th-back" type="button" onClick={onDone}>
+            <Svg src={I.chev} className="bk" />
+            Your spaces
+          </button>
+          <h2>Header tabs</h2>
+        </div>
+        <button className="btn primary" type="button" onClick={onDone}>
+          Save
+        </button>
+      </div>
+      <p className="muted ys-note">
+        Choose which spaces appear as tabs in the header. Use the arrows to reorder.
+      </p>
+      <div className="ts-list ys-olist">
+        {order.map((s, k) => {
+          const role = w.roles[s.id];
+          return (
+            <div className="ts-row ts-srow ys-drag" key={s.id}>
+              <span className="ts-n num">{k + 1}</span>
+              <span className="ts-move">
+                <button
+                  className="iconbtn"
+                  type="button"
+                  aria-label={`Move #${s.name} up`}
+                  disabled={k === 0}
+                  onClick={() => move(k, -1)}
+                >
+                  <Svg src={I.chev} style={{ transform: "rotate(180deg)" }} />
+                </button>
+                <button
+                  className="iconbtn"
+                  type="button"
+                  aria-label={`Move #${s.name} down`}
+                  disabled={k === order.length - 1}
+                  onClick={() => move(k, 1)}
+                >
+                  <Svg src={I.chev} />
+                </button>
+              </span>
+              <Glyph s={s} />
+              <span className="ts-tx">
+                <b className="cs-nmrow">
+                  {spaceName(s)}
+                  <Seal s={s} size="sm" />
+                </b>
+                <small>
+                  {role !== undefined
+                    ? ROLE_NAME[role]
+                    : isClosed(s)
+                      ? "Not a member. Closed spaces you are not in are not shown in the header."
+                      : "Not joined"}
+                </small>
+              </span>
+              <label className="ts-sw">
+                <input
+                  type="checkbox"
+                  checked={!hidden.has(s.id)}
+                  aria-label={`Show #${s.name} in the header`}
+                  onChange={(e) => show(s.id, e.currentTarget.checked)}
+                />
+                <span className="sw-track" aria-hidden="true" />
+              </label>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
