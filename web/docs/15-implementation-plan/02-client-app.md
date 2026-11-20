@@ -237,9 +237,9 @@ account applies it.
   another member's thread, for staff of the channel (04 §4.3), Remove… and
   "Ban from #name"; otherwise Report… for writers.
 - **Removed thread** (`card.removed`, 01 C12, 04 §6.2): "Removed by @mod",
-  "Reason: “…”" when given, "Ask in #name" or "Post in #name"; no prose,
-  footer or side column. The mock also prints the author's handle; that waits
-  on 04 question 1.
+  "Reason: “…”" when given, "Ask by [deleted] in #name" or "Post by [deleted]
+  in #name" for every reader, the author included; no prose, footer or side
+  column. The author's "…" menu keeps Delete (04 §6.2).
 - **Hidden thread** (04 §6.3): the author and staff see the text under "Hidden
   by moderators"; others see the placeholder. No Hide command.
 
@@ -893,8 +893,7 @@ replica (§9.6) and do not wait on N1-N15.
 3. **Thread addresses.** Notifications and shared links need one; the plan uses
    `/c/$name?t=&sel=`, which needs a single-thread fallback for threads outside
    the loaded feed.
-4. **Removal placeholder author.** Show the author's handle as the mock does
-   (04 question 1)?
+4. **Removal placeholder author.** Decided: "[deleted]" (04 §6.2).
 5. **Notifications inbox.** The mock has no surface for the notifications
    01 C16 and 04 O1-O2 produce. W2.6 adds a minimal page reached from the
    account menu; whether it needs an app bar control or push notifications

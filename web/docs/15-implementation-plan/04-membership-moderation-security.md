@@ -35,7 +35,7 @@ client security), so that `05-delivery.md` (M4, M6 and M7a) can schedule them.
 | Ban | Not offered | Offered to staff | `AGENTS.md`: removal in an open space is STALE after leave and rejoin; "the UI offers ban as the tool there". |
 | Report and removal text | One optional free-text field each | `reports.create { item, note? }`; `moderation.decide { …, note? }` (`01` C12) | Overview product decision. |
 | Who may report | Any active account (`canWrite()`) | Members of the channel (`reports.create` is `who: "member"` in replica-proto); a non-member in an open channel sees "Join #name to report." | Keeps the tested rule and ties each report to a person the staff can ban. |
-| Removal placeholder | "Removed by @mod", "Reason: …", "Ask by @author in #channel" | Kept as drawn; §6.2 lists exactly what is stored and served | `AGENTS.md` erases content (text and everything under the thread), not the record's attribution; replica-proto's `erase` and `redact` keep `u` on the placeholder. |
+| Removal placeholder | "Removed by @mod", "Reason: …", "Ask by @author in #channel" | The author shows as "[deleted]" (product decision); §6.2 lists exactly what is stored and served | `AGENTS.md` erases content (text and everything under the thread), not the record's attribution; replica-proto's `erase` and `redact` keep `u` on the placeholder. |
 | Moderation log excerpt | Quotes a removed thread's title | No text of a removed item | `AGENTS.md`: removed content is erased and never served again (`01` C12 agrees). |
 | Channel rules | Removed | Client never sends `rules`; no default rule is stored | Overview product decision. |
 | Visibility | Open or Private | Wire `vis: "open" \| "private"`; private is closed, unlisted and invite-only (`01` C9) | Matches the product; the closed-space rules of phase 0 apply unchanged. |
@@ -402,7 +402,8 @@ What the removal commit leaves, and who gets it:
 
 | Data | Stored after removal | Served to |
 |---|---|---|
-| Thread record: `id`, `s`, kind (ask or post), `u` (author), `createdAt` | kept | every reader of the channel |
+| Thread record: `id`, `s`, kind (ask or post), `createdAt` | kept | every reader of the channel |
+| `u` (author) | kept, for the author's right to delete the placeholder (`R11`) and their user log | the author only; every other reader gets `u: null` |
 | `mod: "removed"`, `modBy`, `modNote` | written | every reader of the channel |
 | Thread text: `q`, `t`, `sum`, quotes, look-up phrases | emptied in the same commit | nobody |
 | Ask nodes and follow-ups, answers, replies, comments, runs and turns, `run_live` checkpoints, mention notifications about it, saves of it | deleted; tombstones keep key, kind, audience fields and rev | readers get `del` |
@@ -411,9 +412,13 @@ What the removal commit leaves, and who gets it:
 | `modlog` entry | `kind`, `item`, `by`, `author`, `note`, `at` | staff; deleted after 180 days |
 | `usage_events` of its runs | kept, no text (`03` K1) | the payer |
 
-The client renders the placeholder as the mockup does: "Removed by @mod",
-"Reason: “…”" when a note exists, and "Ask by @author in #name" or "Post by
-@author in #name". Deleting saves of a removed thread is a change to
+The client renders the placeholder as "Removed by @mod", "Reason: “…”" when
+a note exists, and "Ask by [deleted] in #name" or "Post by [deleted] in
+#name" for every reader, the author included (product decision). The author's
+replica still receives `u`, so the author's "…" menu keeps Delete. Acceptance:
+a server test that a reader other than the author receives `u: null` on a
+removed thread in snapshot and pull, and a client test that the placeholder
+prints "[deleted]" for both the author and another reader. Deleting saves of a removed thread is a change to
 replica-proto's `erase` (`01` U6), which today keeps them.
 
 Placeholder lifetime: until the author deletes it or the channel is deleted;
@@ -518,8 +523,10 @@ channel's saves; `R4a`, `R4c`, `H2`.
   through cursors made before the removal (`inv6`: "an old cursor resyncs into
   the current state"). Tombstones keep key, kind, audience fields and rev.
   Effects carry ids, not text; server logs carry ids and answer codes, not
-  text (`05` §4). Litestream generations hold the text until they expire; the
-  bound and the privacy copy are `01` question 3. Report notes and removal
+  text (`05` §4). Litestream generations hold the text until they expire. Product
+  decision: there is no retention requirement for backups, so removed text
+  may stay in backups for as long as they are kept; "never served again"
+  applies to what the server serves, not to backups (`01` question 3). Report notes and removal
   reasons are moderator- or reporter-written text and are kept as §6.2 says.
 - **Hidden text** goes to its author and the channel's staff only.
 - **Frozen copy.** A member removed or banned from a private channel keeps
@@ -752,9 +759,9 @@ the token.
 
 ## 15. Open questions
 
-1. Does the removal placeholder show the author's handle, as the mockup does?
-   Proposed in §6.2: yes, as replica-proto already serves it; `01` C12 lists
-   `u` among the kept fields.
+1. Decided: the removal placeholder shows "[deleted]" for the author; `u` is
+   served to the author only (§6.2). replica-proto's `erase` and `redact`
+   serve `u` to every reader today; `01` U6 changes that.
 2. Does a removal placeholder stay until the author deletes it, or expire (for
    example after 90 days)?
 3. Account invite codes: the mockup's 30-bit `SESS-XXXX-XX` or 50-bit

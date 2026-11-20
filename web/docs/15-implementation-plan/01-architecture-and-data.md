@@ -172,7 +172,7 @@ overwritten in the file, and run `erase` paths as deletes of the affected
 (`inv6-removed-content.test.ts`) is ported to scan the bytes of the SQLite
 file and its WAL, after a checkpoint, for a removed thread's marker text and
 finds none. Litestream generations still hold the text until their retention
-expires; see open question 3.
+expires; there is no retention requirement for backups (question 3, decided).
 
 ### 2.2 Migrations
 
@@ -686,8 +686,10 @@ reason. Change:
 - `reports.create { item, note? }` (note at most 500 characters); `why` goes.
 - `moderation.decide { item, decision, note?, base? }`; the thread placeholder
   keeps `id`, `s`, its kind (ask or post), `u` (author), `createdAt`, `mod`,
-  `modBy` and `modNote`, and nothing else of the removed content (the stored
-  and served table is in 04 §6.2).
+  `modBy` and `modNote`, and nothing else of the removed content. `u` is
+  served to the author only; every other reader gets `u: null` and the client
+  prints "[deleted]" (product decision; the stored and served table is in
+  04 §6.2). This is a change to replica-proto's `erase`/`redact` (U6).
 - A `modlog` record kind in the space log, readable by staff only: `{ id, sp,
   kind: "report" | "remove" | "dismiss" | "ban" | "unban", item, by, author,
   note, at }`; for `ban` and `unban`, `item` is null and `author` names the
@@ -763,10 +765,11 @@ them.
 2. **Who sees save counts.** C1 serves the count to every reader of the
    space. In a private channel with few members a count of 1 can identify the
    saver. Show save counts only above a threshold, or only to the author?
-3. **Erasure and backups.** D4 erases from the live file, but Litestream
-   generations and the nightly archive keep removed text until retention
-   expires. Set Litestream retention to a fixed bound (for example 72 hours)
-   and state it in the privacy copy, or re-snapshot after removals?
+3. **Erasure and backups.** Decided: no retention requirement. D4 erases
+   from the live file; Litestream generations and the nightly archive may keep
+   removed text for as long as they are retained, and the retention period is
+   set for recovery, not for erasure. A restore must still repeat the
+   removals applied after its restore point (05 §3.3).
 4. **Restore marker.** D6 relies on the restore runbook to write a marker. Is
    a boot-time check of the Litestream generation id more reliable than a
    manual step?

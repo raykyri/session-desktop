@@ -96,6 +96,14 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
   kept; research tables, `embed_assets` and `tweet_cache` are dropped
   (01 §2, D5; 05 §3.5).
 
+## Decisions recorded after review
+
+- The weekly allowance is 2,000,000 included tokens per member (03 K3).
+- A removed thread's placeholder shows "[deleted]" for its author; the
+  author's handle is served to the author only (04 §6.2, 01 C12).
+- Backups have no retention requirement: removed text may remain in
+  Litestream generations and archives (01 §9 q3, 05 S1).
+
 ## Open questions
 
 `05-delivery.md` §6 consolidates the open questions of 01-05, grouped by who

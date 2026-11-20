@@ -491,8 +491,9 @@ single app (question E1); production keeps one database on one machine.
   record the restore time. Writes confirmed after the restored point are
   lost: their recorded answers are gone and clients have dropped them from
   their outboxes. The runbook states this window (Litestream lag, seconds).
-- Erased content stays in Litestream generations until the 30-day retention
-  expires (`01` D4). The privacy copy must state the bound (question S1).
+- Erased content stays in Litestream generations for as long as they are
+  retained (`01` D4). Decided: backups have no retention requirement; the
+  30-day retention is set for recovery.
 - `SESSION_CURSOR_KEY` and `SESSION_CURSOR_KEY_PREVIOUS` are Fly secrets; a
   rotation runbook (M6) covers the 30-day overlap.
 
@@ -563,7 +564,7 @@ How users are told (`users` holds no email address, so notices reach only
 people who open the app):
 - From M8a, a banner in the current web app with the date, the sentence
   "Threads, workspaces and folders on the web are removed on <date>; your
-  account and sign-in stay", and the 30-day backup bound.
+  account and sign-in stay".
 - After the cutover, the release notes of the desktop update and a one-time
   notice on first launch of the new build: local research is not imported
   and the old files remain on disk.
@@ -629,7 +630,7 @@ Desktop (Tauri shell, device runs), Security, Operations (deploys, backups).
 | The mutation run is too slow to keep in the loop | High | Medium | Nightly and path-filtered runs; `--slots`; name filters per change | Server |
 | SQLite's single writer saturates with change log, recorded answers and effects | Low | High | One commit per apply; short transactions; M3 load check; machine size raised before limits | Server |
 | Erased text survives in WAL, effect payloads or logs | Medium | High | Effects carry ids; logs carry no text; storage scan over file and WAL (M3); staging scan (M6) | Security |
-| Erased text survives in Litestream generations and the pre-cutover generation for 30 days, against "never served again" | High | Medium | Bound stated in the privacy copy; shorter retention if question S1 requires. A restore to a point before a removal serves the removed content again; the restore runbook lists the removals applied after the restore point (from the JSON logs, which carry mutator names and item ids) and repeats them before traffic resumes | Security |
+| A restore serves erased text again (backups keep it; no retention requirement, decided) | Medium | Medium | A restore to a point before a removal serves the removed content again; the restore runbook lists the removals applied after the restore point (from the JSON logs, which carry mutator names and item ids) and repeats them before traffic resumes | Security |
 | Included-token spend exceeds budget: 2,000,000 tokens per member per week at the default model's price, cached context counted in full | Medium | High | `SESSION_WEEKLY_TOKENS` per user override; per-run cap `SESSION_RUN_MAX_TOKENS`; weekly cost alert (§4); model and allowance decided in ADR-23 before M5b (P11, P12) | Product |
 | Device runs expose local files: channel content in the CLI prompt can direct read-only tools to read files outside the empty working directory and put them in an answer posted to a shared channel | Medium | High | Empty working directory; no attachments; answer size cap; decision before M7b exit on locking tools to web search and fetch or limiting device runs to private channels (S5) | Security |
 | Device token theft or a stolen Mac | Low | High | Token hashed on the server, Keychain item bound to the signing identity, revocation ends streams within 60 s (`04` §12); local replica relies on FileVault | Security |
@@ -663,8 +664,8 @@ reference from this file.
 - **P3. Site-wide moderators** or only `users.is_admin`. `04` §15 q6.
 - **P4. Admission to private channels.** Channel invite links only (`04` B4,
   `02` W6.9), or also join requests, which have no screen. `01` §9 q6.
-- **P5. The removal placeholder.** Whether it shows the author's handle, and
-  whether it stays until the author deletes it or expires. The reason is
+- **P5. The removal placeholder.** Decided: the author shows as "[deleted]"
+  (`04` §6.2). Open: whether it stays until the author deletes it or expires. The reason is
   moderator text and is shown (`01` C12). `02` §14 q4, `04` §15 q1, q2.
 - **P6. Report and remove follow-ups and replies individually at launch.**
   `04` §15 q9.
@@ -677,8 +678,8 @@ reference from this file.
   from the account menu (not in the mockup). Whether it needs an app bar
   control or desktop push notifications. `02` §14 q5.
 - **P11. Models at launch and the allowance.** Default model for members,
-  lifting ADR-16's Fable gate, and whether 2,000,000 tokens a week is
-  affordable at that price; the weekly budget for the cost alert. `03` §9 q1.
+  lifting ADR-16's Fable gate; the weekly budget for the cost alert. Decided:
+  2,000,000 tokens a week per member. `03` §9 q1.
 - **P12. Cached tokens** counted in full, at the discount ratio, or not at
   all. `03` §9 q2.
 - **P13. Effort and the allowance.** The Effort submenu ships with the chosen
@@ -725,8 +726,8 @@ reference from this file.
 
 ### Security
 
-- **S1. Erasure and backups.** Fixed Litestream retention bound stated in the
-  privacy copy, or re-snapshot after removals. `01` §9 q3, `04` §8.
+- **S1. Erasure and backups.** Decided: no retention requirement for backups;
+  removed text may stay in Litestream generations and archives (`01` §9 q3).
 - **S2. Account invite code length.** 30-bit `SESS-XXXX-XX` or 50-bit
   `SESS-XXXXX-XXXXX`. `04` §15 q3.
 - **S3. Showing an open invite code again**, which needs reversible storage.

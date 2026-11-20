@@ -587,8 +587,8 @@ and T tests without network access.
    Anthropic model for everyone as the default and an OpenAI model on the
    person's key. ADR-16's default is `gemini-flash`, and Fable is admin-only.
    Should ADR-23 make an Anthropic model the default for all members now that
-   the weekly allowance exists, and is 2,000,000 tokens a week affordable at
-   that model's price?
+   the weekly allowance exists? The allowance itself is decided: 2,000,000
+   tokens a week per member.
 2. **Cached tokens.** Count cached input tokens in full, at the provider's
    discount ratio, or not at all? Long branch chains resend the same context,
    so this changes how fast the allowance runs out.
