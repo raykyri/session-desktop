@@ -335,6 +335,10 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .bq { margin: 0 0 8px; padding: 6px 10px; border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); background: var(--inset); border-radius: 0 6px 6px 0; color: var(--t-secondary); font-size: var(--fs-xs); line-height: 1.45; }
 .preview .bq { margin: 8px 0 2px; }
 .bq.full { max-height: 150px; overflow-y: auto; }
+.bqw { position: relative; }
+.bqw > .bq { padding-right: 30px; }
+.bqw > .bqc { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; color: var(--t-faint); }
+.bqw > .bqc svg.i { width: 12px; height: 12px; }
 button.bq.bqx { display: block; width: 100%; text-align: left; cursor: pointer; font: inherit; font-size: var(--fs-xs); }
 button.bq.bqx:hover { background: color-mix(in srgb, var(--accent) 8%, var(--inset)); }
 .bqm { display: block; margin-top: 4px; color: var(--accent); font-weight: 500; }
@@ -1074,7 +1078,7 @@ function pinGroups(p, draw, cls = '') {
   if (st.asking === p.id && !st.sel[p.id]) {
     const q = st.quote?.pid === p.id ? st.quote.text : '', blocks = blocksOf(prose), at = q ? blocks[bestBlock(blocks, q)] : prose.firstElementChild;
     const long = q.length > 180 && !st.quote.open;
-    margin.insertAdjacentHTML('beforeend', `<div class="pin">${q ? (long ? `<button type="button" class="bq bqx" data-a="qexpand" data-id="${p.id}" aria-label="Show the whole quote">${esc(clip(q, 180))}<span class="bqm">Show all</span></button>` : `<blockquote class="bq full">${esc(q)}</blockquote>`) : ''}${composer('mf:' + p.id + ':r', q ? 'Ask about this passage' : 'Ask about the answer', '', 'Ask', 'askclose')}</div>`);
+    margin.insertAdjacentHTML('beforeend', `<div class="pin">${q ? `<div class="bqw">${long ? `<button type="button" class="bq bqx" data-a="qexpand" data-id="${p.id}" aria-label="Show the whole quote">${esc(clip(q, 180))}<span class="bqm">Show all</span></button>` : `<blockquote class="bq full">${esc(q)}</blockquote>`}<button type="button" class="iconbtn bqc" data-a="askclose" aria-label="Close" title="Close">${I.x}</button></div>` : ''}${composer('mf:' + p.id + ':r', q ? 'Ask about this passage' : 'Ask about the answer', '', 'Ask', q ? '' : 'askclose')}</div>`);
     items.push({ el: margin.lastElementChild, anchor: at || prose.firstElementChild });
     at?.classList.add('qsel');
   }
