@@ -261,6 +261,24 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .row { display: grid; grid-template-columns: minmax(0, 600px) minmax(0, 330px); gap: 21px; padding: 14px 0; justify-content: center; }
 .card { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 18px 20px 11px; min-width: 0; transition: opacity .2s; }
 .card-h { display: flex; align-items: center; gap: 10px; margin-bottom: 11px; }
+/* title treatments B-E: the title as a tree row */
+.tt { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 13px; }
+.tt > .ask, .tt > .post { flex: 1; min-width: 0; margin: 0 !important; }
+.ttn { flex: none; width: 11px; height: 11px; margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 11px) / 2); border-radius: 50%; border: 1.5px solid var(--t-dim); background: var(--card); position: relative; z-index: 1; }
+.ttav { flex: none; display: inline-flex; margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 20px) / 2); }
+.tt .more { margin-left: -4px; margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 24px) / 2); align-self: flex-start; }
+.ttm { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; }
+.tt > .ttm { margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 16px) / 2); line-height: 16px; }
+.ttm-under { margin: -9px 0 12px 21px; }
+.ttm-foot { margin-right: auto; overflow: hidden; text-overflow: ellipsis; }
+.card.tt-b .byline, .card.tt-b > .prose, .card.tt-b > .fromln { margin-left: 21px; }
+/* C: a rail runs from the node down the card, like the tree's lines */
+.card.tt-c { position: relative; }
+.card.tt-c::before { content: ""; position: absolute; left: calc(20px + 5px); top: calc(18px + 12px); bottom: 46px; width: 1.5px; background: var(--border-strong); }
+.card.tt-c > :not(.tt):not(.card-f) { margin-left: 21px; }
+/* E: the title reads as a tree row: regular weight, the tree's text colour */
+.card.tt-e .tt > .ask, .card.tt-e .tt > .post { font-weight: 400; color: var(--t-primary); }
+.card.tt-e .byline, .card.tt-e > .prose { margin-left: 21px; }
 .card .ask { margin: -1px 0 13px; color: var(--t-heading); font-size: var(--title-fs, var(--fs-md)); line-height: 1.44; }
 .card .ask, .card .post { white-space: pre-line; }
 .card .post { margin: 0 0 6px; color: var(--t-primary); font-size: var(--title-fs, var(--fs-md)); line-height: 1.44; }
@@ -316,7 +334,7 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .pinned > .pin { position: absolute; left: 0; right: 0; }
 .grp { padding: 2px 0 4px 8px; border-left: 1.5px solid var(--border-strong); transition: border-color .15s; }
 .grp.hl { border-left-color: color-mix(in srgb, var(--accent) 30%, var(--border-strong)); }
-.grp .preview { margin: 8px 0 4px 8px; }
+.grp .preview { margin: 10px 0 4px 8px; }
 /* passages with branches are marked at all times, in a neutral tint */
 .prose [data-grp] { background: var(--mark); box-shadow: -6px 0 0 var(--mark), 6px 0 0 var(--mark); border-radius: 2px; }
 .anc { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 0 6px; height: 18px; border-radius: 9px; vertical-align: 1px;
@@ -344,7 +362,7 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .grow-r.on .gq, .grp.hl .grow-r .gq { color: var(--t-heading); }
 .grow-r.on .gq { font-weight: 400; }
 .grow-r.sel .gq { font-weight: 500; }
-.preview { margin-top: 12px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
+.preview { margin-top: 14px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
 .preview .rq { margin: 4px 0 8px; font-size: var(--fs-base); font-weight: 600; color: var(--t-heading); line-height: 1.4; }
 /* the question is already the selected row above, so the card holds only the answer; its scroll area fades out above the footer */
 .preview .prose { font-size: var(--fs-sm); max-height: 260px; overflow-y: auto; margin-top: 6px; padding-bottom: 8px;
@@ -1324,13 +1342,21 @@ function card(p) {
   const mode = V[st.v].av || 'header';
   if (p.removed) { const r = p.removed; return `<article class="card removed" id="card-${p.id}"><div class="rmnote">${RM_IC}<span>Removed by @${esc(r.by)}${r.note ? `<small>Reason: “${esc(r.note)}”</small>` : ''}<small>${p.k === 'post' ? 'Post' : 'Ask'} by @${esc(p.u)} in ${esc(spName(p.s))}</small></span></div></article>`; }
   const meta = `<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div>`;
-  const modItems = !mine(p.u) && canWrite() && SPACE_META[p.s] ? (isMod(p.s) ? `<button type="button" class="mi danger" role="menuitem" data-a="rmopen" data-id="${p.id}"><span>Remove for a rule…</span></button>` : `<button type="button" class="mi" role="menuitem" data-a="reportopen" data-id="${p.id}"><span>Report…</span></button>`) : '';
+  const modItems = !mine(p.u) && canWrite() && SPACE_META[p.s] ? (isMod(p.s) ? `<button type="button" class="mi danger" role="menuitem" data-a="rmopen" data-id="${p.id}"><span>Remove…</span></button>` : `<button type="button" class="mi" role="menuitem" data-a="reportopen" data-id="${p.id}"><span>Report…</span></button>`) : '';
   const more = !mine(p.u) && modItems ? moreMenu('t:' + p.id, false, '', modItems, false) : mine(p.u) ? moreMenu('t:' + p.id, !p.pending && (p.k === 'ask' ? !othersUnderBranch(tree(p), 'r') : !othersUnderReplies(replies(p))), p.k === 'ask' ? 'ask' : 'post', '', true, p.pending ? 'Available when the answer finishes' : undefined) : '';
-  const head = mode === 'footer' ? '' : `<div class="card-h">${av(p.u, mode === 'header' ? '' : 'sm')}${meta}${more}</div>`;
-  const lead = mode === 'footer' ? `<span class="byl">${av(p.u, 'sm')}${meta}</span>` : '';
+  /* post title treatments (mock variant st.ui.tt). A is the social-card header (avatar, name, channel, time
+     above the title). B-E draw the title like a row of the branch tree: a hollow node, plain text, the
+     author's avatar on the right, and the name, channel and time moved off the top. */
+  const tt = st.ui.tt || 'a', who = `${esc(p.u)} · ${spName(p.s)} · ${rel(p.createdAt)}`;
+  const ttAv = `<span class="ttav" title="${esc(p.u)}">${av(p.u, 'sm')}</span>`;
+  const titleRow = (cls, text) => tt === 'a' ? `<p class="${cls}">${text}</p>`
+    : tt === 'd' ? `<div class="tt"><p class="${cls}">${text}</p><span class="ttm">${spName(p.s)} · ${rel(p.createdAt)}</span>${ttAv}${more}</div>`
+    : `<div class="tt"><span class="ttn" aria-hidden="true"></span><p class="${cls}">${text}</p>${ttAv}${more}</div>${tt === 'b' ? `<div class="ttm ttm-under">${who}</div>` : ''}`;
+  const head = tt !== 'a' || mode === 'footer' ? '' : `<div class="card-h">${av(p.u, mode === 'header' ? '' : 'sm')}${meta}${more}</div>`;
+  const lead = tt === 'c' || tt === 'e' ? `<span class="ttm ttm-foot">${who}</span>` : mode === 'footer' && tt === 'a' ? `<span class="byl">${av(p.u, 'sm')}${meta}</span>` : '';
   const count = c => mode === 'footer' ? (c ? `<span class="notes">· ${c}</span>` : '<span class="notes"></span>') : `<span class="notes">${c}</span>`;
-  const tail = mode === 'footer' ? more : '';
-  const cls = `card av-${mode} pad-${V[st.v].pad || 'base'}`;
+  const tail = mode === 'footer' && tt === 'a' ? more : '';
+  const cls = `card av-${mode} pad-${V[st.v].pad || 'base'} tt-${tt}`;
   const lk = 'p:' + p.id, nl = (p.likesBase || 0) + (LIKED()[lk] ? 1 : 0), off = canWrite() || st.auth === 'out' ? '' : ` disabled title="${st.auth === 'out' ? 'Sign in to like and save' : 'Liking opens once you have an invite'}"`;
   /* no likes on threads; the bookmark carries how many people saved it (the fixtures' like counts stand in for save counts) */
   const ns = (p.likesBase || 0) + (SAVED()[p.id] ? 1 : 0);
@@ -1339,12 +1365,12 @@ function card(p) {
   const rbtn = (n, attrs, on, label, what) => `<button class="iconbtn likes rcount${on ? ' on' : ''}" ${canWrite() ? attrs : st.auth === 'out' ? 'data-ma="openauth"' : `disabled title="${label} opens once you have an invite"`} aria-pressed="${on}" aria-label="${label}${n ? `, ${noun(n, what[0], what[1])}` : ''}" title="${label}">${ARROW_REPLY}${n ? `<span>${n}</span>` : ''}</button>`;
   if (p.k === 'post') {
     const n = replyCount(p);
-    return `<article class="${cls}" id="card-${p.id}">${head}<p class="post">${esc(p.q)}</p><div class="card-f">${lead}${count('')}${rbtn(n, `data-a="replyopen" data-id="${rkey(p, 'top')}"`, st.replying === rkey(p, 'top'), 'Reply', ['reply', 'replies'])}${acts}${tail}</div></article>`;
+    return `<article class="${cls}" id="card-${p.id}">${head}${titleRow('post', esc(p.q))}<div class="card-f">${lead}${count('')}${rbtn(n, `data-a="replyopen" data-id="${rkey(p, 'top')}"`, st.replying === rkey(p, 'top'), 'Reply', ['reply', 'replies'])}${acts}${tail}</div></article>`;
   }
   const T = tree(p), src = (D.srcd[p.id] || []).length;
   const src0 = p.from && byId(p.from.pid) && tree(byId(p.from.pid)).nodes[p.from.nid] ? byId(p.from.pid) : null;
   const from = src0 ? `<button class="fromln" data-a="gofrom" data-id="${p.from.pid}" data-node="${p.from.nid}">${ARROW_REPLY}<span>Branched from <b>${esc(clip(tree(src0).nodes.r.q, 70))}</b></span></button>` : '';
-  return `<article class="${cls}" id="card-${p.id}">${head}${from}<p class="ask">${esc(T.nodes.r.q)}</p>
+  return `<article class="${cls}" id="card-${p.id}">${head}${from}${titleRow('ask', esc(T.nodes.r.q))}
     <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok)].filter(Boolean).join(' · ')}</span></div>
     <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
     <div class="card-f">${lead}${count('')}${p.pending ? '' : rbtn(T.count, `data-a="ask" data-id="${p.id}"`, st.asking === p.id, 'Ask a follow-up', ['branch', 'branches'])}${acts}${tail}</div></article>`;
@@ -1486,7 +1512,7 @@ function replyLines(p) {
   const on = new Set(); if (sel) sel.split('.').forEach((_, i, a) => on.add(a.slice(0, i + 1).join('.')));
   const cur = sel && idx[sel] != null ? rows[idx[sel]] : null;
   return `<div class="grp"><div class="graph" data-draw><svg aria-hidden="true"></svg>${rows.map(({ r, d, id, hid }) => `<button class="grow-r${on.has(id) ? ' on' : ''}${id === sel ? ' sel' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}" data-d="${d}" data-par="${d ? id.split('.').slice(0, -1).join('.') : ''}"><span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(plainReply(r.t))}</span>${hid ? `<span class="rhid">+${hid}</span>` : ''}</span></button>`).join('')}</div>
-    ${cur ? `<div class="preview${pvFade(p.id, 'r:' + cur.id)}"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div><div class="rtext">${fmtReply(cur.r.t)}</div><div class="pf">${replyLink(p, cur.id)}${canWrite() ? `<button class="tlink" data-a="rquote" data-id="${rkey(p, cur.id)}">Quote</button>` : ''}${(cur.r.kids || []).length ? `<button class="tlink" data-a="rcol" data-id="${p.id}" data-node="${cur.id}">${st.rcol[rid(cur.r)] ? `Show ${noun(flatReplies(cur.r.kids).length, 'reply', 'replies')}` : 'Hide replies'}</button>` : ''}</div>${replyBox(p, cur.id, 'Reply to @' + cur.r.u)}</div>` : ''}
+    ${cur ? `<div class="preview${pvFade(p.id, 'r:' + cur.id)}"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div><div class="rtext">${fmtReply(cur.r.t)}</div><div class="pf">${replyLink(p, cur.id)}${(cur.r.kids || []).length ? `<button class="tlink" data-a="rcol" data-id="${p.id}" data-node="${cur.id}">${st.rcol[rid(cur.r)] ? `Show ${noun(flatReplies(cur.r.kids).length, 'reply', 'replies')}` : 'Hide replies'}</button>` : ''}</div>${replyBox(p, cur.id, 'Reply to @' + cur.r.u)}</div>` : ''}
     <div class="rfoot">${canWrite() ? replyLink(p, 'top', 'Reply at root') : st.auth === 'out' ? '<button class="tlink" data-ma="openauth">Sign in to reply</button>' : '<span class="rnote">Replying opens once you have an invite</span>'}</div>${replyBox(p, 'top', 'Reply to @' + p.u)}</div>`;
 }
 
@@ -2020,7 +2046,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pl: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pl: 'a', tt: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 /* seeds: #sci-fi (owned by @ines.v) has reports in its moderation log */
 { const sf = Object.keys(SPACE_META).find(k => SPACE_META[k].owner === 'ines.v'), others = D.posts.filter(p => p.s === sf && p.u !== 'ines.v');
   if (sf && others.length) {
@@ -2266,6 +2292,7 @@ function renderMock() {
     
     
     ${seg('pl', 'Layout', 2)}
+    ${seg('tt', 'Post title', 5)}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -2314,6 +2341,7 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
+  if (k === 'tt') { st.screen = 'network'; st.authOpen = false; render(); return; }
   if (k === 'pl') { st.screen = 'network'; st.authOpen = false; render(); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
