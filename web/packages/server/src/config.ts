@@ -131,6 +131,11 @@ const envSchema = z.object({
   SESSION_RUNS_ANTHROPIC: positiveInteger(2, 1),
   SESSION_RUN_TIMEOUT_SECONDS: positiveInteger(900),
 
+  // Included tokens (`03-agents-and-research.md` K3, K9, L1).
+  SESSION_WEEKLY_TOKENS: positiveInteger(2_000_000),
+  SESSION_OVERDRAFT_TOKENS: positiveInteger(200_000),
+  SESSION_RUN_MAX_TOKENS: positiveInteger(400_000, 1),
+
   SESSION_ENFORCE_LIMITS: flag(false),
   SESSION_DAILY_TOKENS: positiveInteger(1_000_000),
   SESSION_DAILY_RUNS: positiveInteger(10),
@@ -159,6 +164,13 @@ export interface RunLimits {
   openrouter: number;
   anthropic: number;
   runTimeoutMs: number;
+  /** Included tokens per member per week (`03` K3). */
+  weeklyTokens: number;
+  /** Tokens past the allowance a member's included-token runs may spend in a
+   * week, shared by all of them (`03` K9). */
+  overdraftTokens: number;
+  /** Counted tokens one run may spend, whoever pays (`03` L1). */
+  runMaxTokens: number;
   enforceDailyLimits: boolean;
   dailyTokens: number;
   dailyRuns: number;
@@ -309,6 +321,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       openrouter: value.SESSION_RUNS_OPENROUTER,
       anthropic: value.SESSION_RUNS_ANTHROPIC,
       runTimeoutMs: value.SESSION_RUN_TIMEOUT_SECONDS * 1000,
+      weeklyTokens: value.SESSION_WEEKLY_TOKENS,
+      overdraftTokens: value.SESSION_OVERDRAFT_TOKENS,
+      runMaxTokens: value.SESSION_RUN_MAX_TOKENS,
       enforceDailyLimits: value.SESSION_ENFORCE_LIMITS,
       dailyTokens: value.SESSION_DAILY_TOKENS,
       dailyRuns: value.SESSION_DAILY_RUNS,
