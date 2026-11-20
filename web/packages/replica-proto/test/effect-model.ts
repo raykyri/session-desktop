@@ -409,7 +409,7 @@ export function predictEffects(
       const p = get(`thread:${str("id")}`) as Extract<StoredRecord, { kind: "thread" }>;
       // a thread with nodes (an ask) or replies (a post) keeps its place; one
       // without is gone, leaves Saved and loses its root answer
-      const kept = ofThread(p.id, p.k === "ask" ? "node" : "reply").length > 0;
+      const kept = ofThread(p.id, p.k === "ask" ? "node" : "reply", "comment").length > 0;
       keys.set(`thread:${p.id}`, {
         del: true,
         gone: !kept,
@@ -735,9 +735,23 @@ export function predictEffects(
           if (x.kind === "notif" && x.type === "mention" && x.th === r.id) keys.set(ck, null);
         notify(String(r.u), "removed", r.s, r.id, key, note);
       } else if (r.kind === "node") {
+        // the node's subtree: its descendants go, and every answer, comment
+        // and run in it (M1a review 13)
         keys.set(key, { mod: "removed", q: "", look: null, quote: null });
-        if (dump.has(`answer:${r.id}`)) drop(`answer:${r.id}`);
-        for (const [ck, x] of dump) if (x.kind === "comment" && x.node === r.id) drop(ck);
+        const under = new Set([r.id]);
+        let size = 0;
+        while (size !== under.size) {
+          size = under.size;
+          for (const x of dump.values())
+            if (x.kind === "node" && x.th === r.th && under.has(x.par)) under.add(x.id);
+        }
+        for (const [ck, x] of dump) {
+          if (x.kind === "node" && x.id !== r.id && under.has(x.id)) drop(ck);
+          if ((x.kind === "comment" || x.kind === "run") && x.th === r.th && under.has(x.node))
+            drop(ck);
+          if (x.kind === "answer" && x.th === r.th && under.has(x.node)) drop(ck);
+        }
+        keys.set(`counts:${r.th}`, { r: ofThread(r.th, "node").length - (under.size - 1) });
       } else if (r.kind === "reply" || r.kind === "comment") {
         keys.set(key, { mod: "removed", t: "" });
         if (r.parent === null)

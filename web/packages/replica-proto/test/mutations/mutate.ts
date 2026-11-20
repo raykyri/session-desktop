@@ -141,8 +141,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "X20 threads.delete gets kept wrong",
     file: "../mutators/src/threads.ts",
-    from: "      const kept = counts.r > 0;\n",
-    to: "      const kept = counts.r > 1;\n",
+    from: '      const kept = counts.r > 0 || tx.count("comment", { th: p.id }) > 0;\n',
+    to: '      const kept = counts.r > 1 || tx.count("comment", { th: p.id }) > 0;\n',
   },
   {
     // round 1's fault was a version that showed the server's head. Versions
@@ -676,6 +676,48 @@ const MUTATIONS: Mutation[] = [
     file: "../mutators/src/notify.ts",
     from: "    if (!readsSpace(tx, sp, to)) return false;",
     to: '    if (!readsSpace(tx, sp, to) && type === "mention") return false;',
+  },
+  {
+    name: "M1a-12 an ask deleted with only comments under it is gone, its comments kept",
+    file: "../mutators/src/threads.ts",
+    from: '      const kept = counts.r > 0 || tx.count("comment", { th: p.id }) > 0;\n',
+    to: "      const kept = counts.r > 0;\n",
+  },
+  {
+    name: "M1a-13a removing a node keeps the nodes under it",
+    file: "../mutators/src/rules.ts",
+    from: "      for (const x of nodes) if (x.id !== r.id && under.has(x.id)) drop(nodeKey(x.id));\n",
+    to: "",
+  },
+  {
+    name: "M1a-13b removing a node leaves its run queued",
+    file: "../mutators/src/rules.ts",
+    from: '      for (const x of tx.list("run", th).filter((y) => under.has(y.node))) drop(`run:${x.id}`);\n',
+    to: "",
+  },
+  {
+    name: "M1a-17 removing a reply, comment or node keeps the mentions of it",
+    file: "../mutators/src/rules.ts",
+    from: "    tx.del(`notif:${x.id}`);",
+    to: "    void x;",
+  },
+  {
+    name: "M1a-18a a branch notifies the thread's author, not the parent's",
+    file: "../mutators/src/nodes.ts",
+    from: 'send(authorOf(parent), "branch"',
+    to: 'send(authorOf(p), "branch"',
+  },
+  {
+    name: "M1a-18b a comment notifies the thread's author, not the node's",
+    file: "../mutators/src/comments.ts",
+    from: 'n.send(authorOf(node), "comment"',
+    to: 'n.send(authorOf(p), "comment"',
+  },
+  {
+    name: "M1a-18c anyone marks a notification read",
+    file: "../mutators/src/notifications.ts",
+    from: '      if (n?.kind !== "notif" || n.to !== tx.me || !canRead(tx, n, tx.me)) throw notFound();',
+    to: '      if (n?.kind !== "notif") throw notFound();\n      void canRead;',
   },
   // ---- M1b: `@session/mutators` ----
   {

@@ -129,14 +129,16 @@ export const THREADS = {
       if ((tx.byKey(threadKey(i.id)) as ThreadRec).u !== tx.me) throw notAuthor();
     },
     // Kept as the mock has it (review round 1, R11; `01` C15): a thread
-    // deleted while it has nodes or replies stays as a shell (`del`), and
+    // deleted while it has nodes, replies or comments stays as a shell
+    // (`del`; comments count too, M1a review 12), and
     // nodes, replies and saves on it are taken as on any thread. A thread
     // with none is `gone`; it leaves every Saved. The author may delete a
     // thread the owner removed: its count `r` is 0 then, so it is gone.
     run: (tx, i) => {
       const p = tx.byKey(threadKey(i.id)) as ThreadRec;
       const counts = countsOf(tx, p);
-      const kept = counts.r > 0;
+      // nodes, replies or comments under it keep it as a shell
+      const kept = counts.r > 0 || tx.count("comment", { th: p.id }) > 0;
       // an author who may no longer read the thread (removed from its private
       // space) learns nothing about it: whether it got nodes or replies after
       // they left is not in the answer (R4b)

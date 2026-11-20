@@ -9,7 +9,6 @@ import { canRead, isClosed, spaceRec } from "./access.js";
 import { refuse, Refusal } from "./errors.js";
 import { ULID_RE } from "./ids.js";
 import {
-  answerKey,
   countsKey,
   keyOf,
   memberKey,
@@ -242,12 +241,31 @@ export function erase(
       });
       return;
     }
-    case "node":
-      drop(answerKey(r.id));
-      for (const x of tx.list("comment", { th: r.th }).filter((y) => y.node === r.id))
+    case "node": {
+      // the node and every node under it, at any depth: the descendants go
+      // with their answers, comments and runs, as everything under a removed
+      // thread does, and so do the node's own answer, comments and runs (a
+      // queued run would spend tokens on erased text; M1a review 13)
+      const th = { th: r.th };
+      const nodes = tx.list("node", th);
+      const under = new Set([r.id]);
+      for (let grew = true; grew;) {
+        grew = false;
+        for (const x of nodes)
+          if (!under.has(x.id) && under.has(x.par)) {
+            under.add(x.id);
+            grew = true;
+          }
+      }
+      for (const x of nodes) if (x.id !== r.id && under.has(x.id)) drop(nodeKey(x.id));
+      for (const x of tx.list("answer", th).filter((y) => under.has(y.node))) drop(keyOf(x));
+      for (const x of tx.list("comment", th).filter((y) => under.has(y.node)))
         drop(`comment:${x.id}`);
+      for (const x of tx.list("run", th).filter((y) => under.has(y.node))) drop(`run:${x.id}`);
       tx.put({ ...r, q: "", look: null, quote: null, mod: "removed" });
+      recount(tx, tx.byKey(threadKey(r.th)) as ThreadRec);
       break;
+    }
     case "reply":
       if (r.parent === null)
         for (const x of tx.list("reply", { th: r.th }).filter((y) => y.parent === r.id))
