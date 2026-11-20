@@ -179,7 +179,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .mi-off:hover { background: none; }
 /* Split · ends: avatar at the first line, controls at the last */
 .nb-a { align-items: flex-end; }
-.nb-a > .av { align-self: flex-start; margin-top: 5px; }
+.nb-a > .av { align-self: flex-start; margin-top: 4px; }
 /* bottom-aligned items keep the same centres as the one-line bar: text and 26px pills sit on the 30px button's centre line */
 .nb-a > textarea { margin-bottom: -1px; }
 .nb-bare { padding-left: 16px; }
@@ -705,7 +705,7 @@ const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches i
 const TREE_NOTE = 'Posts keep the pinned branch trees and avatar reply trees.';
 const variant = (name, thesis, composer, dock = false) => ({ name, q: 'Composer', thesis: `${thesis} ${TREE_NOTE}`, composer, dock, replies: replyLines, layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); } });
 const V = {
-  faded: variant('Faded', '<strong>Empty: the blue button at 45% opacity.</strong> It keeps its shape and colour and comes up to full strength as soon as there is text.', () => COMPOSERS.splitBare('btn-faded')),
+  faded: variant('Faded', '<strong>Empty: the blue button at 45% opacity.</strong> It keeps its shape and colour and comes up to full strength as soon as there is text.', () => COMPOSERS.split(' nb-a btn-faded')),
 };
 
 /* ---- composers: start a thread. Each variant below uses one. The draft survives re-renders. ---- */
