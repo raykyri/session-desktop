@@ -447,18 +447,17 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .iconbtn.on:not(.likes) { color: var(--accent); }
 .iconbtn.on:not(.likes):not([data-a="ask"]):not([data-a="replyopen"]) svg.i { fill: currentColor; }
 .iconbtn:is([data-a="ask"], [data-a="replyopen"]).on { background: var(--fill-hover); }
-.rfoot { margin-top: 8px; padding-left: 4px; }
-/* ---- polish, wave 1 ---- */
-.pf-hug .row > .card { align-self: start; }
-.pf-cite .prose .nw { white-space: nowrap; }
-.pf-ring .m-ring circle:not(.arc) { stroke: var(--border-strong); }
-@media (max-width: 520px) { .pf-phone .appbar .brand b { display: none; } .pf-phone .appbar { gap: 8px; } .pf-phone .hsp { margin-left: 0; } }
-.pf-root .grp + .rfoot, .pf-root .rfoot { padding-left: 11px; }
+.rfoot { margin-top: 8px; padding-left: 11px; }
+/* short cards keep their own height instead of stretching to the side column */
+.row > .card { align-self: start; }
+/* a citation stays on the line of the word before it */
+.prose .nw { white-space: nowrap; }
+/* the usage ring's track, so it reads as a gauge */
+.m-ring circle:not(.arc) { stroke: var(--border-strong); }
+/* phones: the app name hides so the channel strip has room */
+@media (max-width: 520px) { .appbar .brand b { display: none; } .appbar { gap: 8px; } .hsp { margin-left: 0; } }
 /* ---- polish, wave 2 ---- */
 .pf-hover .card :is(.iconbtn, .more-btn):not(:disabled):hover, .pf-hover .preview .more-btn:hover { background: var(--control); color: var(--t-heading); }
-.pf-more .preview.open .prose { max-height: none; -webkit-mask-image: none; mask-image: none; }
-.pf-more .preview .prose.fits { -webkit-mask-image: none; mask-image: none; padding-bottom: 0; }
-.pvmore { display: block; margin: -2px 0 6px; font-size: var(--fs-xs) !important; }
 .replies .tlink { font-size: var(--fs-xs); font-weight: 400; }
 .replies .composer { margin-top: 8px; }
 .preview .rtext { margin: 6px 0 2px; }
@@ -1446,8 +1445,7 @@ function preview(p, T, n) {
   const extra = canWrite() && !n.pending && !promoted ? `<button type="button" class="mi" role="menuitem" data-a="promote" data-id="${p.id}" data-node="${n.id}"><span>Open as its own thread</span></button>` : '';
   const more = canWrite() && (extra || mine(n.u)) ? moreMenu('b:' + p.id + ':' + n.id, !n.pending && !promoted && !othersUnderBranch(T, n.id) && !othersUnderReplies(BRP[key]), 'branch', extra, mine(n.u), n.pending ? 'Available when the answer finishes' : promoted ? 'Not available after it was opened as a thread' : undefined) : '';
   const par = st.asking === p.id ? (st.askPar ?? n.id) : null;
-  const pvk = p.id + ':' + n.id, pvOpen = st.pol.more && st.pvOpen === pvk;
-  return `<div class="preview${pvFade(p.id, 'b:' + n.id)}${pvOpen ? ' open' : ''}"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${more}</div>${n.look ? `<div class="lookh">${SEARCH}<span>Look up</span><b>${esc(n.look)}</b></div>` : n.quote ? `<blockquote class="bq">${esc(clip(n.quote, 180))}</blockquote>` : ''}${status(n)}<div class="prose">${answerHtml(n)}</div>${st.pol.more ? `<button class="tlink pvmore" data-a="pvmore" data-k="${pvk}">${pvOpen ? 'Show less' : 'Show all'}</button>` : ''}
+  return `<div class="preview${pvFade(p.id, 'b:' + n.id)}"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${more}</div>${n.look ? `<div class="lookh">${SEARCH}<span>Look up</span><b>${esc(n.look)}</b></div>` : n.quote ? `<blockquote class="bq">${esc(clip(n.quote, 180))}</blockquote>` : ''}${status(n)}<div class="prose">${answerHtml(n)}</div>
     ${branchActs(p, n, k, promoted)}
     ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? 'Continue ask' : 'Ask beside this', '', 'Ask', 'askclose') : st.brReplying === p.id + ':' + n.id + '/top' ? composer('br:' + p.id + ':' + n.id + ':top', 'Comment here', '', 'Comment', 'brclose') : ''}
     ${branchReplies(p, n)}</div>`;
@@ -1864,7 +1862,6 @@ app.addEventListener('click', e => {
   if (a === 'grpopen') { const G = groupsFor(byId(d.id), document.getElementById('pr-' + d.id)).find(x => x.bi === +d.bi); if (!G) return;
     const first = G.ns[0].id; st.sel[d.id] = first; st.asking = null; st.askPar = null; st.quote = null; render();
     const row = document.querySelector(`#mr-${d.id} .grow-r[data-node="${first}"]`); row?.focus({ preventScroll: true }); row?.closest('.pin')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
-  if (a === 'pvmore') { st.pvOpen = st.pvOpen === d.k ? null : d.k; render(); return; }
   if (a === 'sellook') { const p = byId(d.id), pr = document.getElementById('pr-' + d.id); $('#selbranch')?.remove(); $('#sellook')?.remove(); getSelection()?.removeAllRanges();
     st.sel[d.id] = addLookup(p, st.lookText, null); st.asking = null; st.quote = null; render(); return; }
   if (a === 'askpass' || a === 'selbranch') { const pr = document.getElementById('pr-' + d.id); let q = st.selText || '';
@@ -1910,7 +1907,7 @@ function citeOpen(sup) {
   pop.querySelector('a').focus({ preventScroll: true });
 }
 const citeReady = () => app.querySelectorAll('.prose sup.cite:not([tabindex])').forEach(x => {
-  if (st.pol.cite) { const t = x.previousSibling; if (t && t.nodeType === 3) { const m = t.data.match(/(\S+\s*)$/); if (m) { const w = document.createElement('span'); w.className = 'nw'; t.data = t.data.slice(0, -m[1].length); w.append(m[1]); x.before(w); w.append(x); } } else if (t && t.nodeType === 1 && t.classList.contains('nw')) t.append(x); else if (t && t.nodeType === 1) { const w = document.createElement('span'); w.className = 'nw'; t.before(w); w.append(t, x); } } x.tabIndex = 0; x.setAttribute('role', 'button'); x.setAttribute('aria-label', 'Source ' + x.textContent.trim()); });
+  { const t = x.previousSibling; if (t && t.nodeType === 3) { const m = t.data.match(/(\S+\s*)$/); if (m) { const w = document.createElement('span'); w.className = 'nw'; t.data = t.data.slice(0, -m[1].length); w.append(m[1]); x.before(w); w.append(x); } } else if (t && t.nodeType === 1 && t.classList.contains('nw')) t.append(x); else if (t && t.nodeType === 1) { const w = document.createElement('span'); w.className = 'nw'; t.before(w); w.append(t, x); } } x.tabIndex = 0; x.setAttribute('role', 'button'); x.setAttribute('aria-label', 'Source ' + x.textContent.trim()); });
 app.addEventListener('click', e => { const c = e.target.closest('.prose sup.cite'); if (c) { e.stopPropagation(); citeOpen(c); } }, true);
 document.addEventListener('mousedown', e => { if (!e.target.closest('#citepop, .prose sup.cite')) $('#citepop')?.remove(); });
 app.addEventListener('keydown', e => { const c = e.target.closest?.('.prose sup.cite'); if (c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); citeOpen(c); } if (e.key === 'Escape') $('#citepop')?.remove(); });
@@ -2065,8 +2062,7 @@ const BILLING = { 'ines.v': 'key', sol: 'pause' };
 /* ---- membership state ---- */
 /* Polish pass: each fix is a class on #app (pf-<key>), on by default, switchable in the mock bar. */
 const POLISH = [
-  ['Polish 1', [['hug', 'Short cards hug content'], ['cite', 'Citation stays with its word'], ['ring', 'Usage ring track'], ['phone', 'Phone header'], ['root', 'Align Reply at root']]],
-  ['Polish 2', [['hover', 'Visible hover on cards'], ['zero', 'No zero counts'], ['more', 'Side card: Show all']]],
+  ['Polish 2', [['hover', 'Visible hover on cards'], ['zero', 'No zero counts']]],
 ];
 Object.assign(st, { pol: Object.fromEntries(POLISH.flatMap(([, l]) => l.map(([k]) => [k, true]))), mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pl: 'a', tt: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 /* seeds: #sci-fi (owned by @ines.v) has reports in its moderation log */
@@ -2357,7 +2353,6 @@ function renderInner() {
   if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
   if (st.creating) app.insertAdjacentHTML('beforeend', newSpaceDlg());
   if (st.chInfo) app.insertAdjacentHTML('beforeend', chInfoDlg());
-  app.querySelectorAll('.preview:not(.open) .pvmore').forEach(b => { const pr = b.previousElementSibling; if (pr && pr.scrollHeight <= pr.clientHeight + 2) { b.remove(); pr.classList.add('fits'); } });
   if (st.rm) app.insertAdjacentHTML('beforeend', rmDlg());
   if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
