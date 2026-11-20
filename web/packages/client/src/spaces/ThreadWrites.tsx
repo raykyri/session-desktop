@@ -262,6 +262,9 @@ export function useRunControl(thread: string, node: string) {
     busy,
     stop: () => void go("research.cancelNode", { thread, node }),
     again: () => void go("research.retryNode", { thread, node }),
+    /** Run again as a server run on the included tokens (after a device
+     * run was interrupted: the web cannot run it on the device). */
+    included: () => void go("research.retryNode", { thread, node, pay: "session" }),
   };
 }
 

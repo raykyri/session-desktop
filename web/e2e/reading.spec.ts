@@ -8,6 +8,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { APP_ORIGIN } from "./constants.js";
+import type { KeyedRecord } from "./fixtures/mockup.js";
 import { loadScenario, pathFor, signInAs } from "./scenario.js";
 
 const HEADERS = { "x-requested-with": "session", "content-type": "application/json" };
@@ -145,8 +146,12 @@ const SCREENS: Screen[] = [
     scenario: "asks: your ask",
     args: ASK("tokens", { space: "markets", tok: 30000 }),
     url: "/s/markets/t/01M7HWS780000000000000000E",
+    // the mockup's tmStopWhy: this week's allowance and its reset day (the
+    // scenario's clock is Monday Nov 16; the allowance resets on Monday 00:00 UTC)
     check: (p) =>
-      text(p, /You’ve used this week’s included tokens|You’ve used this month’s included tokens/),
+      expect(p.locator("#th-a .as-why")).toHaveText(
+        "You’ve used this week’s included tokens. The agent stopped after 30k tokens and wrote nothing. They reset Nov 23.",
+      ),
   },
   {
     key: "as-fail-key",
@@ -498,3 +503,101 @@ test.describe("system states", () => {
     await expect(page.getByRole("tab", { name: "About" })).toBeHidden();
   });
 });
+
+// Device runs on the web (phase 2 review round 1, finding 5; AGENTS.md: a
+// device answer is labelled "<handle>’s desktop"; after an interrupt the web
+// offers "Run with included tokens"). The mockup's sx-dr-label, sx-dr-view
+// and sx-dr-int-web, in their default Variants.
+/** The thread whose ask a device ran, in a scenario's records. */
+function deviceThread(rs: KeyedRecord[]): string {
+  const run = rs.find(
+    (r) => r.record.kind === "run" && r.record["node"] === "r" && r.record["executor"] != null,
+  );
+  const th = rs.find((r) => r.key === `thread:${String(run?.record["th"])}`);
+  const sp = rs.find((r) => r.record.kind === "space" && r.record["id"] === th?.record["s"]);
+  return `/s/${String(sp?.record["name"])}/t/${String(th?.record["id"])}`;
+}
+
+for (const [layout, viewport] of [
+  ["Desktop", { width: 1318, height: 900 }],
+  ["Mobile Web", { width: 390, height: 844 }],
+] as const) {
+  test.describe(`device runs, ${layout}`, () => {
+    test.use({ viewport });
+
+    test("sx-dr-label: an answer a Mac wrote is labelled with its desktop", async ({ page }) => {
+      const { records } = await loadScenario(
+        page.context().request,
+        "device runs: an answer from a Mac",
+      );
+      await signInAs(page.context());
+      await page.goto(deviceThread(records));
+      // the answer's meta line is the label, with no tokens (a device answer
+      // reports no usage)
+      const meta = page.locator("#qt-n-r > p.tm-meta");
+      await expect(meta).toHaveCount(1);
+      await expect(meta).toHaveClass(/sx-dl/);
+      await expect(meta).toHaveText("Answered on ines.v’s desktop · Claude Code");
+      await expect(page.locator(".th-facts")).toContainText("Ran onines.v’s desktop · Claude Code");
+    });
+
+    test("sx-dr-view: another member's device run, running, with no token count", async ({
+      page,
+    }) => {
+      const { records } = await loadScenario(
+        page.context().request,
+        "device runs: mira_k’s ask running",
+      );
+      await signInAs(page.context());
+      await page.goto(deviceThread(records));
+      const run = page.locator("#th-a .run.sx-drun");
+      await expect(run.locator(".run-h")).toHaveText(
+        "Running on mira_k’s desktop· Claude Code · attempt 2",
+      );
+      await expect(run.locator(".as-why")).toHaveText(
+        "The answer shows here when Claude Code finishes. Device runs report their text, not their steps or token use.",
+      );
+      await expect(page.locator("#th-a").getByText(/tokens so far/)).toHaveCount(0);
+      // not the asker's: no Stop
+      await expect(run.getByRole("button")).toHaveCount(0);
+    });
+
+    test("sx-dr-int-web: another member's interrupted device run", async ({ page }) => {
+      const { records } = await loadScenario(
+        page.context().request,
+        "device runs: mira_k’s run interrupted",
+      );
+      await signInAs(page.context());
+      await page.goto(deviceThread(records));
+      const box = page.locator("#th-a .as-fail");
+      await expect(box.locator(".run-h")).toHaveText("!Couldn’t finish the answer");
+      await expect(box.locator(".as-why")).toHaveText(
+        "The run stopped: mira_k’s desktop went to sleep or lost its connection while Claude Code worked. The agent wrote nothing. mira_k can run it again.",
+      );
+      await expect(box.getByRole("button")).toHaveCount(0);
+    });
+
+    test("sx-dr-int-web, the asker: Run with included tokens starts a server run", async ({
+      page,
+    }) => {
+      const { records } = await loadScenario(
+        page.context().request,
+        "device runs: mira_k’s run interrupted",
+      );
+      await signInAs(page.context(), "mira_k");
+      await page.goto(deviceThread(records));
+      const box = page.locator("#th-a .as-fail");
+      await expect(box.locator(".as-why")).toHaveText(
+        "The run stopped: mira_k’s desktop went to sleep or lost its connection while Claude Code worked. The agent wrote nothing.",
+      );
+      // no Run again on the web: only the included tokens
+      await expect(box.getByRole("button")).toHaveCount(1);
+      const sent = page.waitForRequest((r) => r.url().endsWith("/api/rpc/research.retryNode"));
+      await box.getByRole("button", { name: "Run with included tokens" }).click();
+      const body = (await sent).postDataJSON() as Record<string, unknown>;
+      expect(body["pay"]).toBe("session");
+      expect(body["executor"] ?? null).toBeNull();
+      await expect(page.locator("#th-a .as-fail")).toHaveCount(0);
+    });
+  });
+}

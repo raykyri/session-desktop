@@ -96,3 +96,40 @@ export function avatarColor(handle: string): number {
   for (let i = 0; i < handle.length; i++) h = Math.imul(h ^ handle.charCodeAt(i), 16777619) >>> 0;
   return (h % 6) + 1;
 }
+
+// ---- runs (phase 2 review round 1, findings 5 and 7) ----
+
+/** A device run's CLI, as the mockup names it. */
+export const cliName = (cli: "claude" | "codex") => (cli === "codex" ? "Codex" : "Claude Code");
+
+/** The label of an answer a device wrote (the mockup's sxLabelText, its
+ * default Variant: text in the meta line). */
+export const deviceLabel = (d: { u: string; cli: "claude" | "codex" }) =>
+  `Answered on ${d.u}’s desktop · ${cliName(d.cli)}`;
+
+/** The next Monday 00:00 UTC after `now`: when the weekly included tokens
+ * reset (AGENTS.md). */
+export function weekResetAt(now: number): number {
+  const d = new Date(now);
+  const day = d.getUTCDay();
+  const midnight = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  return midnight + ((8 - day) % 7 || 7) * 864e5;
+}
+
+/** Why an answer stopped for tokens, naming who paid (the mockup's
+ * tmStopWhy): the weekly included tokens with their reset day, or a key's
+ * monthly limit. `key` is the reader's own key that paid, when it is one. */
+export function tokensWhy(
+  pay: string | null,
+  tok: number,
+  now: number,
+  key: { name: string; cap: number } | null,
+): string {
+  const after = tok
+    ? `The agent stopped after ${fmtT(tok)} tokens and wrote nothing.`
+    : "The agent wrote nothing.";
+  if (pay === null || pay === "session")
+    return `You’ve used this week’s included tokens. ${after} They reset ${dayOf(weekResetAt(now), now)}.`;
+  if (key) return `Your ${key.name} reached its monthly limit of ${fmtT(key.cap)} tokens. ${after}`;
+  return `Nothing could pay for this ask. ${after}`;
+}
