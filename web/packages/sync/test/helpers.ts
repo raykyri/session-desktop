@@ -46,6 +46,15 @@ export function rng(seed: number): () => number {
 export type StoreKind = "memory" | "sqlite";
 export const STORES: StoreKind[] = ["memory", "sqlite"];
 
+/** A `Turn` of an assistant with `text` (a server job's turn). */
+export const turnOf = (text: string, n = 1) => ({
+  id: `turn-${n}`,
+  agentId: "agent",
+  role: "assistant",
+  blocks: [{ type: "text" as const, text }],
+  sourceIndex: n - 1,
+});
+
 export const makeStore = (kind: StoreKind): ServerStore =>
   kind === "memory" ? new MemoryServerStore() : new SqliteServerStore(new BetterSqlite(":memory:"));
 

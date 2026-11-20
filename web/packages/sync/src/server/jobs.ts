@@ -23,16 +23,20 @@
 // hidden item counts as an edit of it (`answerWrites`).
 
 import * as pkg from "@session/mutators";
+import { isTurn, type Turn } from "@session/shared";
 
 import { answerWrites } from "./limits.js";
 import { storeTurn, writesIn, type CallCtx } from "./online.js";
 import type { SyncServer } from "./server.js";
 import type { StoreTx } from "./store.js";
 
-/** One exchange of a branch: an ask and its answer, as a reader reads them. */
+/** One exchange of a branch: an ask and its answer, as a reader reads them,
+ * and the turns of the run that wrote that answer (its tool calls and
+ * results; a device's turns may be text), oldest first. */
 export interface Exchange {
   q: string;
   a: string;
+  turns: unknown[];
 }
 
 /** What a job needs to answer a run. */
@@ -54,6 +58,14 @@ export interface JobStart {
 
 export type JobStartAnswer =
   { ok: true; job: JobStart } | { ok: false; why: "gone" | "done" | "access" | "archived" };
+
+/** The turns run `id` stored, by number. */
+const turnsOfRun = (tx: StoreTx, id: string): unknown[] =>
+  tx
+    .scan("turn", "run", id)
+    .flatMap((x) => (x.kind === "turn" ? [x] : []))
+    .sort((a, b) => a.n - b.n)
+    .map((x) => x.body);
 
 const readerOf = (tx: StoreTx): pkg.Reader => ({
   get: <K extends pkg.Kind>(kind: K, id: string) =>
@@ -145,21 +157,29 @@ export class RunJobs {
         chain.unshift(f);
         par = f.par;
       }
+      // the turns of the run that answered an item: the run of its current
+      // attempt that completed
+      const runTurns = (node: string, att: number) => {
+        const done = tx
+          .scan("run", "th", p.id)
+          .find(
+            (x) =>
+              x.kind === "run" && x.node === node && x.attempt === att && x.status === "complete",
+          );
+        return done?.kind === "run" ? turnsOfRun(tx, done.id) : [];
+      };
       const history: Exchange[] = [];
       if (n.kind === "followup" && shown(p) && p.mod === null)
-        history.push({ q: p.q, a: p.sum ?? "" });
+        history.push({ q: p.q, a: p.sum ?? "", turns: runTurns("r", p.att) });
       for (const f of chain)
-        if (f.mod === null && !f.del && shown(f)) history.push({ q: f.q, a: f.a ?? "" });
+        if (f.mod === null && !f.del && shown(f))
+          history.push({ q: f.q, a: f.a ?? "", turns: runTurns(f.id, f.att) });
       const sk = p.skill !== null ? tx.get(`skill:${p.skill}`) : undefined;
       const skill =
         sk?.kind === "skill" && pkg.canRead(g, sk, r.u)
           ? { name: sk.name, prompt: sk.prompt }
           : null;
-      const turns = tx
-        .scan("turn", "run", r.id)
-        .flatMap((x) => (x.kind === "turn" ? [x] : []))
-        .sort((a, b) => a.n - b.n)
-        .map((x) => x.body);
+      const turns = turnsOfRun(tx, r.id);
       return { ok: true, job: { run, q: n.q, history, skill, turns, resumed } };
     });
   }
@@ -182,8 +202,11 @@ export class RunJobs {
   }
 
   /** Store one committed turn of run `id`: its number, or null when the job
-   * no longer holds the run. */
-  turn(id: string, attempt: number, body: unknown): number | null {
+   * no longer holds the run. `body` is a `Turn` (`@session/shared`'s
+   * schema; phase 2a design finding 8): anything else is a fault of the
+   * job's, and throws. */
+  turn(id: string, attempt: number, body: Turn): number | null {
+    if (!isTurn(body)) throw new Error("a server job's turn is not a Turn");
     return this.server.run((tx) => {
       const now = this.server.time(tx);
       const r = this.held(tx, now, id, attempt);

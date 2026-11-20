@@ -60,7 +60,7 @@
 import { createHash, randomBytes } from "node:crypto";
 
 import * as pkg from "@session/mutators";
-import { spaces } from "@session/shared";
+import { deviceTurnSchema, spaces } from "@session/shared";
 import { z } from "zod";
 
 import { HOUR, MINUTE, type Actor, type AnswerError, type CallAnswer } from "../protocol.js";
@@ -740,7 +740,7 @@ export function defaultHandlers(
 
   h["runs.turn"] = (ctx, input) => {
     const i = parse(
-      runInput.extend({ attempt: z.number().int().nonnegative(), turn: z.unknown() }),
+      runInput.extend({ attempt: z.number().int().nonnegative(), turn: deviceTurnSchema }),
       input,
     );
     const text = typeof i.turn === "string" ? i.turn : JSON.stringify(i.turn ?? null);

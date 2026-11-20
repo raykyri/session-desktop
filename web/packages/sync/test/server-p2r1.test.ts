@@ -8,7 +8,7 @@ import test from "ava";
 
 import type { CallAnswer } from "../src/server/index.js";
 
-import { STORES, cast, ok, refused, type World } from "./helpers.js";
+import { STORES, cast, ok, refused, turnOf, type World } from "./helpers.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access,
    @typescript-eslint/no-unsafe-assignment --
@@ -51,7 +51,7 @@ for (const kind of STORES) {
     t.like(get(w, `run:${kept.run}`), { status: "failed", end: "interrupted" });
     t.deepEqual(cancelled, [banned.run, queued.run, kept.run]);
     // nothing more lands
-    t.is(w.server.runJobs.turn(kept.run, 1, "late"), null);
+    t.is(w.server.runJobs.turn(kept.run, 1, turnOf("late")), null);
     t.false(w.server.runJobs.finish(kept.run, 1, "late"));
   });
 
@@ -77,7 +77,7 @@ for (const kind of STORES) {
       const jobs = w.server.runJobs;
       const r =
         call === "turn"
-          ? jobs.turn(b.run, 1, "x")
+          ? jobs.turn(b.run, 1, turnOf("x"))
           : call === "finish"
             ? jobs.finish(b.run, 1, "x")
             : call === "fail"

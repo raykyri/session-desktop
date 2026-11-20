@@ -198,7 +198,16 @@ test.serial(
     t.true(job.ok);
     t.like((await olga.write("members.ban", { space: sp, user: "mel" })).body, { ok: true });
     t.like(rec(h, `run:${run}`), { status: "failed", end: "access" });
-    t.is(h.deps.sync.runJobs.turn(run, 1, { role: "assistant" }), null);
+    t.is(
+      h.deps.sync.runJobs.turn(run, 1, {
+        id: "t1",
+        agentId: run,
+        role: "assistant",
+        blocks: [{ type: "text", text: "after the ban" }],
+        sourceIndex: 0,
+      }),
+      null,
+    );
     t.false(h.deps.sync.runJobs.delta(run, 1, 1, "text"));
     t.false(h.deps.sync.runJobs.finish(run, 1, "ANSWER AFTER THE BAN", 10));
     const guest = new HttpClient(h, null);

@@ -45,7 +45,7 @@ import { z } from "zod";
 
 import { sessionEventSchema as sessionEventEnvelopeSchema } from "./events.js";
 import { researchNodeStatusSchema } from "./research.js";
-import { turnSchema } from "./turn.js";
+import { deviceTurnSchema, turnSchema } from "./turn.js";
 
 // ---- primitives ----
 
@@ -1558,7 +1558,7 @@ export const spaceProcedures = {
     result: z.object({ lease: leaseSchema }),
   },
   "runs.turn": {
-    input: z.object({ ...runInput, attempt: count, turn: z.unknown() }),
+    input: z.object({ ...runInput, attempt: count, turn: deviceTurnSchema }),
     result: nullResultSchema,
   },
   "runs.finish": {

@@ -72,6 +72,11 @@ export const turnSchema = z
   })
   .loose();
 
+/** A device run's turn (`runs.turn`): a `Turn` as the CLI adapters write
+ * it, or the text the CLI wrote (review round 1 of phase 2; phase 2a design
+ * finding 8). */
+export const deviceTurnSchema = z.union([z.string(), turnSchema]);
+
 /**
  * Whether `value` is a well-formed turn.
  *

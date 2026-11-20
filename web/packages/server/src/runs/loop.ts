@@ -39,7 +39,7 @@ import {
   resolveGroundingRedirects,
 } from "./groundingRedirects.js";
 import { TurnMapper } from "./mapper.js";
-import { researchSystemPrompt, runMessages } from "./prompts.js";
+import { endsWithAnswer, parseTurns, researchSystemPrompt, runMessages } from "./prompts.js";
 import type { ResolvedModel } from "./providers.js";
 import type { RunToolContext, ToolCaches } from "./tools/context.js";
 import { ToolBudget } from "./tools/context.js";
@@ -202,11 +202,26 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   const signal = AbortSignal.any([input.signal, timeout, lost.signal, outOfTokens.signal]);
 
   const system = researchSystemPrompt(input.instruction, job.skill);
-  const messages: ModelMessage[] = runMessages(job.history, job.q);
   const tools = buildTools(toolContext, signal, {
     nativeSearch: resolved.entry.nativeSearch,
     providerTools: resolved.providerTools,
   });
+  // a resumed run continues after the turns it stored (ADR-22); a stored
+  // turn that is no `Turn` is not given to the model
+  const stored = parseTurns(job.turns) ?? [];
+  const messages: ModelMessage[] = runMessages(
+    job.history,
+    job.q,
+    stored,
+    new Set(Object.keys(tools)),
+  );
+  if (endsWithAnswer(stored)) {
+    // the last process stored the answer's turn and stopped before writing
+    // it: nothing is left to generate
+    finishAttempt("complete");
+    if (!jobs.finish(run.id, attempt, answerOf(stored), 0)) return { outcome: "cancelled" };
+    return { outcome: "complete" };
+  }
 
   let pending = "";
   let lastDeltaAt = 0;
@@ -346,7 +361,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     jobs.fail(run.id, attempt, "interrupted");
     return { outcome: "failed", error: classified, end: "interrupted" };
   }
-  const answer = answerOf(mapper.committedTurns);
+  const answer = answerOf([...stored, ...mapper.committedTurns]);
   finishAttempt(answer === "" ? "failed" : "complete");
   recordUsage();
   if (answer === "") {
