@@ -359,6 +359,11 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .invc .ilink code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
 .invc > .tlink { margin-top: 4px; }
 .invc .ilink code { font-family: inherit; }
+.invc .ilink { gap: 4px; }
+.invc .ilink .btn1 { margin-right: 2px; }
+.invc .ilink + .ilink { margin-top: 0; }
+.iconbtn.ix { width: 26px; height: 26px; color: var(--t-faint); }
+.iconbtn.ix:hover { color: var(--t-secondary); }
 .ippl { display: flex; flex-direction: column; gap: 6px; }
 .ip { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); }
 .ip b { color: var(--t-heading); font-weight: 500; }
@@ -1213,7 +1218,7 @@ let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTime
 const ALLOWANCE = 2_000_000;                       /* included tokens per member per week */
 const RESET = Date.parse('2026-11-20T00:00:00Z');  /* weekly reset: Fridays 00:00 UTC */
 const WEEK = ['Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu'], TODAY = 3;
-const SLOTS = 3, INVITE_DAYS = 7;
+const SLOTS = 3;
 const OPEN_INVITES = SLOTS;
 const day = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const addDays = (iso, n) => new Date(Date.parse(iso) + n * 864e5).toISOString();
@@ -1263,7 +1268,7 @@ const ancestors = u => { const out = []; let m = member(u); while (m && m.invite
 const activeSince = m => m.activated || addDays(m.joined, 2);
 const canInvite = m => m?.status === 'active';
 const myInvites = () => INVITES.filter(i => i.by === st.user);
-const inviteState = i => i.revoked ? 'revoked' : i.used ? 'used' : Date.parse(addDays(i.created, INVITE_DAYS)) < NOW ? 'expired' : 'open';
+const inviteState = i => i.revoked ? 'revoked' : i.used ? 'used' : 'open';
 const openCount = () => myInvites().filter(i => inviteState(i) === 'open').length;
 const slotsUsed = () => openCount();
 function newCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = n => Array.from({ length: n }, () => a[Math.floor(Math.random() * a.length)]).join(''); return `SESS-${r(4)}-${r(2)}`; }
@@ -1290,7 +1295,7 @@ function toast(t) { st.toast = t; clearTimeout(toastTimer); toastTimer = setTime
 
 /* composer: hidden without an invite (the banner explains why) */
 const pendingBanner = () => {
-  if (st.auth === 'out') return `<div class="row new-row"><div class="pbanner out"><div><b>You're reading Session's open spaces.</b> Sign in to ask, branch and reply. New accounts need an invite from a member.</div><button class="ghost" data-ma="openauth" data-to="code">Join with invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></div><div></div></div>`;
+  if (st.auth === 'out') return '';
   if (isActive() || st.auth !== 'in') return '';
   return `<div class="row new-row"><div class="pbanner"><span class="pdot"></span><div><b>You don't have an invite yet.</b> You can read every open space. Asking, posting and replying open once you enter an invite code.</div><button class="ghost" data-ma="go" data-to="status">Enter a code</button></div><div></div></div>`;
 };
@@ -1336,7 +1341,7 @@ function authScreen() {
   let body = '';
   const linkInv = st.fromLink && INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
   if (st.flow === 'landing' && linkInv) {
-    body = `<div class="auth-c"><div class="inviter">${av(linkInv.by)}<div><b>${esc(nameOf(linkInv.by))} invited you to Session</b><small>@${esc(linkInv.by)} · Invite expires ${day(addDays(linkInv.created, INVITE_DAYS))}</small></div></div>
+    body = `<div class="auth-c"><div class="inviter">${av(linkInv.by)}<div><b>${esc(nameOf(linkInv.by))} invited you to Session</b><small>@${esc(linkInv.by)}</small></div></div>
       <h2>Research with agents, in shared spaces.</h2><p>Ask a question and an agent researches it. Branch from any passage of the answer to go deeper; everyone in the space can read and build on it.</p>
       <div class="auth-acts">${xBtn('Continue with X')}<button class="btn2" data-ma="nolink">I already have an account</button></div></div>`;
   } else if (st.flow === 'landing') {
@@ -1349,7 +1354,7 @@ function authScreen() {
     body = `<div class="auth-c">${back('landing')}<h2>${C.h}</h2>${C.p ? `<p>${C.p}</p>` : ''}
       <form class="code-f" data-mform="code"><input id="in-code" value="${esc(st.code)}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1">${C.btn}</button></form>
       ${st.codeErr ? `<p class="ferr">${esc(st.codeErr)}</p>` : ''}
-      ${inv ? `<div class="inviter">${av(inv.by)}<div><b>${C.ok(esc(nameOf(inv.by)))}</b><small>@${esc(inv.by)} · expires ${day(addDays(inv.created, INVITE_DAYS))}</small></div></div><div class="auth-acts">${st.xacct && !MEMBERS.some(m => m.x === st.xacct) ? `<button class="btn1" data-ma="toprofile">Continue as @${esc(st.xacct)}</button>${xBtn('Use a different X account')}` : xBtn(C.x)}</div>` : ''}</div>`;
+      ${inv ? `<div class="inviter">${av(inv.by)}<div><b>${C.ok(esc(nameOf(inv.by)))}</b><small>@${esc(inv.by)}</small></div></div><div class="auth-acts">${st.xacct && !MEMBERS.some(m => m.x === st.xacct) ? `<button class="btn1" data-ma="toprofile">Continue as @${esc(st.xacct)}</button>${xBtn('Use a different X account')}` : xBtn(C.x)}</div>` : ''}</div>`;
   } else if (st.flow === 'xauth') {
     body = `<div class="auth-c">${back(st.intent === 'signup' ? 'code' : 'landing')}<h2>Sign in with X</h2><p>X asks you to let Session see your name, handle and profile picture. Session cannot post for you or read your messages.</p>
       <div class="auth-acts"><button class="xbtn" data-ma="xgo">Continue to X</button></div>
@@ -1399,19 +1404,19 @@ function treeA() {
    inv:    A slots bar + full list · B one line + open codes only · C one button that shows the newest open code
    layout: A two columns · B one column */
 /* explanation above the invite tree */
-const TREE_COPY = [`Session is invite-only. You can have ${SLOTS} open invite links at a time. Each link works for one person and expires ${INVITE_DAYS} days after you make it. A slot frees when a link is used, expires or is revoked.`];
+const TREE_COPY = [`Session is invite-only. You can have ${SLOTS} open invite links at a time. Each link works for one person. A slot frees when a link is used or revoked.`];
 function treeSection() {
   st.treeScope = 'all';
   return `<section><h3>Invite tree</h3>${TREE_COPY.map(t => `<p class="sub tcopy">${t}</p>`).join('')}<div class="tgap"></div>${treeA()}</section>`;
 }
 function invSection() {
-  /* every open link with Copy and Revoke, a button for a new one, then the people you invited */
+  /* every open link with Copy and a revoke x, a button for a new one, then the people you invited */
   const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), used = slotsUsed(), can = used < SLOTS && canInvite(meM());
-  const why = !canInvite(meM()) ? 'You can invite once your account is active.' : `You have ${SLOTS} open invites. One frees when it is used, expires or is revoked.`;
-  const open = inv.filter(i => inviteState(i) === 'open'), L = x => `session.app/i/${x.code}`, exp = x => day(addDays(x.created, INVITE_DAYS));
+  const why = !canInvite(meM()) ? 'You can invite once your account is active.' : `You have ${SLOTS} open invites. One frees when it is used or revoked.`;
+  const open = inv.filter(i => inviteState(i) === 'open'), L = x => `session.app/i/${x.code}`;
   const ppl = MEMBERS.filter(m => m.inviter === st.user).sort((a, b) => a.joined < b.joined ? 1 : -1);
   return `<section class="box invc"><div class="shead"><h3>Invite someone</h3><small>${SLOTS - used} of ${SLOTS} left</small></div>
-    ${open.map(x => `<div class="ilink"><code>${L(x)}</code><button class="btn1 sm" data-ma="copy" data-t="${L(x)}">Copy</button></div><p class="fine">Until ${exp(x)}. <button class="tlink inl danger" data-ma="revoke" data-code="${x.code}">Revoke</button></p>`).join('')}
+    ${open.map(x => `<div class="ilink"><code>${L(x)}</code><button class="btn1 sm" data-ma="copy" data-t="${L(x)}">Copy</button><button class="iconbtn ix" data-ma="revoke" data-code="${x.code}" aria-label="Revoke this link" title="Revoke">${I.x}</button></div>`).join('')}
     ${can ? `<button class="${open.length ? 'btn2' : 'btn1'} wide" data-ma="newinvite">${open.length ? 'Create a new link' : 'Create an invite link'}</button>` : `<p class="fine">${why}</p>`}
     ${ppl.length ? `<h4>You invited</h4><div class="ippl">${ppl.map(m => `<div class="ip">${av(m.u, 'xs')}<b>${esc(m.u)}</b><span class="grow"></span><small>Joined ${day(m.joined)}</small></div>`).join('')}</div>` : ''}</section>`;
 }
@@ -1554,12 +1559,12 @@ app.addEventListener('submit', e => {
   if (kind === 'code') {
     const c = $('#in-code').value.trim().toUpperCase().replace(/^.*\//, ''); st.code = c;
     const inv = INVITES.find(i => i.code === c);
-    st.codeErr = !c ? 'Enter the code from your invite.' : !inv ? "That code doesn't exist. Check it against the invite, or ask the person who invited you." : inviteState(inv) === 'used' ? 'That code has already been used. Each code works for one person; ask for a new one.' : inviteState(inv) !== 'open' ? 'That code has expired or was revoked. Ask the person who invited you for a new one.' : '';
+    st.codeErr = !c ? 'Enter the code from your invite.' : !inv ? "That code doesn't exist. Check it against the invite, or ask the person who invited you." : inviteState(inv) === 'used' ? 'That code has already been used. Each code works for one person; ask for a new one.' : inviteState(inv) !== 'open' ? 'That code was revoked. Ask the person who invited you for a new one.' : '';
     render(); return;
   }
   if (kind === 'redeem') {
     const c = $('#in-redeem').value.trim().toUpperCase(), inv = INVITES.find(i => i.code === c.replace(/^.*\//, '')); st.redeem = c;
-    st.redeemErr = !c ? 'Enter the code from your invite.' : !inv ? "That code doesn't exist. Check it against the invite." : inviteState(inv) === 'used' ? 'That code has already been used. Ask for a new one.' : inviteState(inv) !== 'open' ? 'That code has expired or was revoked. Ask for a new one.' : '';
+    st.redeemErr = !c ? 'Enter the code from your invite.' : !inv ? "That code doesn't exist. Check it against the invite." : inviteState(inv) === 'used' ? 'That code has already been used. Ask for a new one.' : inviteState(inv) !== 'open' ? 'That code was revoked. Ask for a new one.' : '';
     if (st.redeemErr) { render(); return; }
     const m = meM(); inv.used = m.u; m.status = 'active'; m.inviter = inv.by; m.joined = new Date(NOW).toISOString(); st.redeem = ''; st.screen = 'feed';
     toast(`You're in. ${nameOf(inv.by)} invited you.`); render(); return;
