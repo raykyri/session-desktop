@@ -428,6 +428,12 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .hsv-e.has { color: var(--t-heading); }
 .hsv-e.has svg.i { fill: currentColor; }
 .hsv-e:hover, .hsv-e.on { background: var(--control); }
+/* header round buttons: Saved and the layout toggle */
+.hsv-e, .hlay { height: 30px; min-width: 30px; border-radius: 15px; justify-content: center; }
+.hsv-e:not(.has) { width: 30px; padding: 0; }
+.hlay { display: inline-flex; align-items: center; padding: 0; width: 30px; color: var(--t-muted); box-shadow: inset 0 0 0 1px var(--divider); }
+.hlay:hover { background: var(--control); color: var(--t-heading); }
+.hlay svg.i { width: 15px; height: 15px; }
 @media (max-width: 520px) { .ncw .nb-dock { flex-wrap: wrap; row-gap: 6px; } .ncw .nb-dock > textarea { flex: 1 1 calc(100% - 40px); } .ncw .nb-dock > textarea + * { margin-left: 28px; } .ncw .nb-dock > .split { margin-left: auto; } }
 .rtext p { margin: 2px 0; }
 .rtext blockquote { margin: 4px 0; padding-left: 8px; border-left: 2px solid var(--border-strong); color: var(--t-faint); }
@@ -1849,6 +1855,7 @@ app.addEventListener('click', e => {
   if (a === 'grpopen') { const G = groupsFor(byId(d.id), document.getElementById('pr-' + d.id)).find(x => x.bi === +d.bi); if (!G) return;
     const first = G.ns[0].id; st.sel[d.id] = first; st.asking = null; st.askPar = null; st.quote = null; render();
     const row = document.querySelector(`#mr-${d.id} .grow-r[data-node="${first}"]`); row?.focus({ preventScroll: true }); row?.closest('.pin')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
+  if (a === 'laytoggle') { st.ui.pl = st.ui.pl === 'b' ? 'a' : 'b'; render(); app.querySelector('.hlay')?.focus(); return; }
   if (a === 'sellook') { const p = byId(d.id), pr = document.getElementById('pr-' + d.id); $('#selbranch')?.remove(); $('#sellook')?.remove(); getSelection()?.removeAllRanges();
     st.sel[d.id] = addLookup(p, st.lookText, null); st.asking = null; st.quote = null; render(); return; }
   if (a === 'askpass' || a === 'selbranch') { const pr = document.getElementById('pr-' + d.id); let q = st.selText || '';
@@ -2125,11 +2132,20 @@ function savedBtn() {
   if (v === 'e') return `<button class="hsv-e${on ? ' on' : ''}${n ? ' has' : ''}" ${attrs}>${I.save}${n ? `<span>${n}</span>` : ''}</button>`;
   return `<button class="iconbtn hsaved${on ? ' on' : ''}" ${attrs}>${I.save}</button>`;
 }
+/* switches the feed between layout A (main column centred, side column to its right) and B (wider main
+   column and narrower side, centred as a pair). The icon shows the layout the button switches to. */
+const LAY_A = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="3" width="12.5" height="10" rx="1.5"/><path d="M5.25 3v10M10.75 3v10"/></svg>';
+const LAY_B = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="3" width="12.5" height="10" rx="1.5"/><path d="M10.25 3v10"/></svg>';
+function layoutBtn() {
+  if (st.screen !== 'network') return '';
+  const wide = st.ui.pl === 'b', label = wide ? 'Centre the main column' : 'Wider main column';
+  return `<button class="hlay" data-a="laytoggle" aria-label="${label}" title="${label}">${wide ? LAY_A : LAY_B}</button>`;
+}
 function appbar() {
   const m = meM();
   const open = st.menu === 'acct';
   return `<header class="appbar">${brandBtn()}${headerSpaces()}
-    <span class="grow"></span>${meter()}${savedBtn()}
+    <span class="grow"></span>${meter()}${savedBtn()}${layoutBtn()}
     <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}">${av(st.user, 'sm')}${I.down}</button>
     ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff ? cap1(m.staff) : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
       ${isActive() ? `<button class="mi" data-ma="go" data-to="members"><span>Invites</span></button><button class="mi" data-a="space" data-id="saved"><span>Saved</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
