@@ -123,9 +123,19 @@ export type Outcome =
   | { ok: false; error: ApiError }
   | { ok: false; error: null; local: string };
 
-/** The toast of a refusal (the mockup's API_ERR.write). */
+/** The text of a refusal (the mockup's API_ERR.write). TOO_MANY_REQUESTS
+ * without `retryAt` is the limit on a person's asks waiting or running, not
+ * the write budget: waiting a minute does not lift it, so the server's
+ * message, which names the limit, is shown (the mockup's API_ERR.write
+ * `queued`; review round 2 of phase 2, finding 7). */
+export function refusalText(error: ApiError): string {
+  if (error.code === "TOO_MANY_REQUESTS" && !error.retryAt && error.message) return error.message;
+  return WRITE_ERROR[error.code] ?? WRITE_ERROR["unavailable"] ?? "";
+}
+
+/** The toast of a refusal. */
 export function refusalToast(error: ApiError): void {
-  toast(WRITE_ERROR[error.code] ?? WRITE_ERROR["unavailable"] ?? "");
+  toast(refusalText(error));
 }
 
 /** Wait for a write's outcome; a refusal shows its toast unless `quiet`. */
@@ -154,8 +164,7 @@ async function settle(
     return { ok: false, error };
   }
   if (a.ok) return { ok: true, result: a.result };
-  const code = a.error.code;
-  if (!quiet) toast(WRITE_ERROR[code] ?? WRITE_ERROR["unavailable"] ?? "");
+  if (!quiet) refusalToast(a.error);
   // a refused write is shown once (here); the outbox forgets it
   session.client?.discard(w.local);
   return { ok: false, error: a.error };
@@ -194,12 +203,12 @@ export function useWrite(): Writer {
           resolve({ ok: true, result: e.result, input: e.input, earlier: e.earlier === true });
         else if (e.state === "refused" || e.state === "expired") {
           const error = e.error ?? { code: "BAD_REQUEST", message: "" };
-          toast(WRITE_ERROR[error.code] ?? WRITE_ERROR["unavailable"] ?? "");
+          refusalToast(error);
           c.discard(local);
           resolve({ ok: false, error });
         } else if (e.state === "failed" && limited(session, local)) {
           const error = limited(session, local) ?? { code: "TOO_MANY_REQUESTS", message: "" };
-          toast(WRITE_ERROR[error.code] ?? WRITE_ERROR["unavailable"] ?? "");
+          refusalToast(error);
           c.discard(local);
           resolve({ ok: false, error });
         } else if (e.state === "failed" || e.state === "dropped")

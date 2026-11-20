@@ -95,12 +95,14 @@ function Requests({ s }: { s: Space }) {
     decision: "approve" | "decline" | "reopen",
     ids: string[],
     why?: string,
+    seen?: Record<string, number>,
   ) => {
     // the revs as the moderator saw them: an approve, the open request on
-    // screen; an Undo, the declined request as the replica holds it
+    // screen; an Undo, the request the decline left (`seen`), else the
+    // declined request as the replica holds it
     const revOf = (u: string) =>
       decision === "reopen"
-        ? (session?.reader().get("request", `${s.id}:${u}`)?.rev ?? 0)
+        ? (seen?.[u] ?? session?.reader().get("request", `${s.id}:${u}`)?.rev ?? 0)
         : (baseOf([u])[u] ?? 0);
     const base = Object.fromEntries(ids.map((u) => [u, revOf(u)]));
     const o = await write(
@@ -192,10 +194,22 @@ function Requests({ s }: { s: Space }) {
                 void decide("decline", ids, why).then((o) => {
                   if (!o.ok) return;
                   const one = ids[0];
+                  // Undo reopens the request as this decline left it: a
+                  // change someone made after it makes the Undo STALE
+                  // (review round 2 of phase 2, finding 7)
+                  const left = one
+                    ? session?.reader().get("request", `${s.id}:${one}`)?.rev
+                    : undefined;
                   if (ids.length === 1 && one)
                     toast(`Declined ${one}.`, {
                       label: "Undo",
-                      run: () => void decide("reopen", [one]),
+                      run: () =>
+                        void decide(
+                          "reopen",
+                          [one],
+                          undefined,
+                          left === undefined ? undefined : { [one]: left },
+                        ),
                     });
                   else toast(`Declined ${ids.length} requests.`);
                 });

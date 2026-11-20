@@ -4330,6 +4330,8 @@ const API_ERR = {
     CONFLICT: 'Someone else changed this item first. Session undid your change.',
     PRECONDITION_FAILED: 'The item changed state, so the server didn’t save the change. Session undid it.',
     TOO_MANY_REQUESTS: 'You made too many changes in a short time. Session undid the last one. Try again in a minute.',
+    /* TOO_MANY_REQUESTS without retryAt: the limit on a person's asks waiting or running (the server's message) */
+    queued: 'You have 3 asks waiting or running. Ask again once one of them finishes.',
     STALE: 'This item changed after you opened it, so the server didn’t apply the change. Session undid it.',
     EXPIRED: 'The change was made too long ago for the server to take it. Session undid it.',
     TOO_LARGE: 'The change is too large for the server to take. Session undid it.',

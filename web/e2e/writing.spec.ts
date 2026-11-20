@@ -889,6 +889,43 @@ for (const [layout, viewport] of [
       );
     });
 
+    // review round 2 of phase 2, finding 7: Undo sends the rev the decline
+    // left, so a change the page has heard of since makes it STALE
+    test("Undo of a decline after another change to the request is STALE", async ({ page: p }) => {
+      const { records } = await loadScenario(p.context().request, "replication: moderator", {
+        args: { seen: true },
+      });
+      await signInAs(p.context());
+      await p.goto("/s/replication-club/manage/requests");
+      const card = p.locator(".rq-card").first();
+      const who = ((await card.locator(".rq-nm .faint").textContent()) ?? "")
+        .replace(/^@/, "")
+        .trim();
+      await card.getByRole("button", { name: "Decline" }).click();
+      await dialog(p, `Decline the request from ${who}?`)
+        .getByRole("button", { name: "Decline" })
+        .click();
+      await toastSays(p, `Declined ${who}.`);
+      // another moderator reopens and declines it again meanwhile, and the
+      // page reads that change
+      const req = records.find((r) => r.record.kind === "request" && r.record["u"] === who);
+      expect(req).toBeTruthy();
+      const pulled = p.waitForResponse((r) => r.url().endsWith("/api/sync/pull"));
+      if (req)
+        await serverPut(p, [
+          { ...req, record: { ...req.record, st: "declined", why: "Declined again." } },
+        ]);
+      await pulled;
+      await p.locator(".cs-toast").getByRole("button", { name: "Undo" }).click();
+      await toastWithoutAction(
+        p,
+        "This item changed after you opened it, so the server didn’t apply the change. Session undid it.",
+      );
+      await expect(p.locator(".rq-card .rq-nm .faint").getByText(who, { exact: true })).toHaveCount(
+        0,
+      );
+    });
+
     test("sx-rf-show: Show refused as STALE is not reapplied", async ({ page: p }) => {
       const { records } = await loadScenario(
         p.context().request,
