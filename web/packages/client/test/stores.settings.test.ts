@@ -17,7 +17,8 @@ test.beforeEach(() => {
 test.serial("uses default appearance settings when local storage is empty", (t) => {
   t.is(useSettingsStore.getState().settings.appearance, "dark");
   t.is(useSettingsStore.getState().settings.colorTheme, "orange-blob");
-  t.is(useSettingsStore.getState().settings.textSize, 15);
+  // The default size, so the type scale is the mockup's (02 §11).
+  t.is(useSettingsStore.getState().settings.textSize, DEFAULT_USER_SETTINGS.textSize);
   t.is(useSettingsStore.getState().settings.bodyFontId, "dm-sans");
 });
 

@@ -23,9 +23,16 @@ test.serial("the settings store is applied to <html> as attributes", (t) => {
 
   t.is(root.dataset["colorTheme"], "green-blob");
   t.is(root.dataset["appearance"], "dark");
-  t.is(root.dataset["bodyFont"], "dm-sans");
-  t.regex(root.style.getPropertyValue("--font-ui"), /DM Sans/);
   t.false(root.classList.contains("reduce-motion"));
+});
+
+test.serial("the body font setting is not applied: the face is Inter from tokens.css", (t) => {
+  render(<ThemeEffects />);
+  act(() => useSettingsStore.getState().set("bodyFontId", "valley-sans"));
+
+  const root = document.documentElement;
+  t.is(root.dataset["bodyFont"], undefined);
+  t.is(root.style.getPropertyValue("--font-ui"), "");
 });
 
 test.serial("changing the theme rewrites the attributes without a remount", (t) => {
@@ -46,19 +53,6 @@ test.serial("appearance drives the color-scheme meta the tokens cannot reach", (
   t.is(meta()?.content, "dark");
   act(() => useSettingsStore.getState().setAppearance("light"));
   t.is(meta()?.content, "light");
-});
-
-test.serial("the body font choice sets both the stack and the optical marker", (t) => {
-  render(<ThemeEffects />);
-
-  act(() => useSettingsStore.getState().set("bodyFontId", "valley-sans"));
-
-  t.is(document.documentElement.dataset["bodyFont"], "valley-sans");
-  t.regex(document.documentElement.style.getPropertyValue("--font-ui"), /Valley Sans/);
-
-  act(() => useSettingsStore.getState().set("bodyFontId", "inter"));
-  t.is(document.documentElement.dataset["bodyFont"], "inter");
-  t.regex(document.documentElement.style.getPropertyValue("--font-ui"), /Inter/);
 });
 
 test.serial("text size becomes a bounded pixel zoom, not a root font size", (t) => {

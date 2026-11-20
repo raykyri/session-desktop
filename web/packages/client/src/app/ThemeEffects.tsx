@@ -1,17 +1,18 @@
 import { APP_TEXT_SIZE, APP_TEXT_SIZE_MAX, APP_TEXT_SIZE_MIN, clamp } from "@session/shared";
-import { useEffect, useLayoutEffect } from "react";
+import { useLayoutEffect } from "react";
 
 import { useResolvedAppearance } from "../lib/appearance.js";
-import { bodyFontStackFor, detectAvailableBodyFonts } from "../lib/bodyFonts.js";
 import { REDUCE_MOTION_ATTRIBUTE } from "../lib/motion.js";
 import { useSettingsStore } from "../stores/settings.js";
 
 /**
  * Writes the settings store onto `<html>` (07 §2, ported from
  * `App.tsx:1926-1969`): `data-color-theme`, `data-appearance`,
- * `data-body-font`, the `--font-ui` stack, and the `color-scheme` meta that
- * replaces the desktop's `getCurrentWindow().setTheme`, and
- * `data-reduce-motion` for the "Reduce motion" setting (`lib/motion.ts`).
+ * the `color-scheme` meta that replaces the desktop's
+ * `getCurrentWindow().setTheme`, and `data-reduce-motion` for the "Reduce
+ * motion" setting (`lib/motion.ts`). The UI face is Inter from `tokens.css`
+ * (02 §11, decision P22): the body-font setting is not applied, because no
+ * Settings entry offers it at launch (P23).
  *
  * Everything runs in a layout effect so the attributes land before paint —
  * switching or restoring a theme must not flash the default palette. The
@@ -23,8 +24,6 @@ import { useSettingsStore } from "../stores/settings.js";
  */
 export function ThemeEffects() {
   const settings = useSettingsStore((state) => state.settings);
-  const patch = useSettingsStore((state) => state.patch);
-  const bodyFontFamily = bodyFontStackFor(settings.bodyFontId);
   // "system" resolves against the OS preference and tracks it live.
   const appearance = useResolvedAppearance(settings.appearance);
 
@@ -50,14 +49,6 @@ export function ThemeEffects() {
     meta.content = appearance;
   }, [appearance]);
 
-  useLayoutEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty("--font-ui", bodyFontFamily);
-    // `data-body-font` drives the optical size offset for faces that sit high
-    // in their control boxes (`--font-ui-size-offset`).
-    root.dataset["bodyFont"] = settings.bodyFontId;
-  }, [bodyFontFamily, settings.bodyFontId]);
-
   // App text size adjusts reading surface zoom via CSS variables rather than root font size, as layout tokens are pixel-based. It becomes `--app-text-zoom`, which `prose.css` folds into the
   // reading surface's body size (the desktop's `--turn-font-delta`).
   useLayoutEffect(() => {
@@ -68,21 +59,6 @@ export function ThemeEffects() {
     );
     document.documentElement.style.setProperty("--app-text-zoom", `${zoom}px`);
   }, [settings.textSize]);
-
-  // Optional local faces (none on the web after Inter was bundled) fall back
-  // if `FontFace` cannot load them from the host.
-  useEffect(() => {
-    let disposed = false;
-    void detectAvailableBodyFonts().then((available) => {
-      if (disposed) return;
-      if (available.some((option) => option.id === settings.bodyFontId)) return;
-      const fallback = available[0];
-      if (fallback) patch({ bodyFontId: fallback.id });
-    });
-    return () => {
-      disposed = true;
-    };
-  }, [settings.bodyFontId, patch]);
 
   return null;
 }

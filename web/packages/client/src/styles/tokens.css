@@ -1,34 +1,49 @@
-/* Copied verbatim from the desktop `src/styles/tokens.css` (08 §1). Two
-   deliberate departures, both noted inline below:
-   - the `@font-face` blocks moved to `fonts.css`, which imports the woff2
+/* The design tokens (08 §1), carried over from the desktop `tokens.css` and
+   extended for the spaces client (02 §11). Departures from the desktop copy:
+   - the `@font-face` blocks live in `fonts.css`, which imports the woff2
      files as Vite assets so the bundler fingerprints them;
    - `:root { background: transparent }` (macOS window vibrancy, which the web
-     has no equivalent of) becomes `var(--workspace-bg)`.
-   Everything else must stay byte-identical so the light-override and
-   half-pixel contracts in `test/tokenContracts.test.ts` keep meaning what
-   they meant on the desktop. */
+     has no equivalent of) becomes `var(--workspace-bg)`;
+   - typography follows the members mockup (decision P22): Inter, and the
+     mockup's type scale (`--fs-*`; the title is 16.5 px, the composer input
+     15 px);
+   - the spaces roles 02 §11 adds: `--unread-dot`, `--passage-mark`,
+     `--avatar-1`…`--avatar-6`, `--avatar-fg`, `--tree-rail`,
+     `--tree-rail-on` and `--tree-dot-selected`, each with a dark value here
+     and a light override under `data-appearance="light"`. The mockup's
+     other roles map to existing tokens (`--chrome` to `--chrome-header-bg`,
+     `--canvas` to `--research-feed-bg`, `--divider` to `--surface-divider`,
+     `--warn` and `--bad` to `--status-active-fg` and
+     `--status-attention-fg`, and so on). */
 
 :root {
   /* Optical compensation for the selected UI face. DM Sans reads slightly
      smaller than the other body-font options at the same nominal size. */
   --font-ui-size-offset: 0px;
 
-  /* Type scale. Controls share --fs-base; --fs-reading anchors the reading
-     surface (prose, summaries, the composer and launcher, dialog titles, the
-     sidebar's rows), with the research sizes derived from it in prose.css;
-     xs/sm are for hints, badges, meta. */
-  --fs-xs: calc(11px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
-  --fs-sm: calc(12px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
-  --fs-base: calc(13px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
-  --fs-input: calc(13px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
+  /* Type scale, the members mockup's (P22): xs/sm for hints, meta and
+     chips, base for body text and controls, md for section headings, lg for
+     dialog headings. --fs-reading anchors the Markdown reading surface, with
+     the research sizes derived from it in prose.css. --fs-title (a thread's
+     title) and --fs-input (the composer's text) are the mockup's sizes and
+     take no DM Sans offset (02 §11). */
+  --fs-xs: calc(11.5px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
+  --fs-sm: calc(12.5px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
+  --fs-base: calc(13.5px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
+  --fs-md: calc(14.5px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
+  --fs-lg: calc(17px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
+  --fs-input: calc(15px + var(--app-text-zoom, 0px));
   --fs-reading: calc(14px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
-  /* Page and dialog titles: one step above the reading body. */
-  --fs-title: calc(17px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
+  --fs-title: calc(16.5px + var(--app-text-zoom, 0px));
 
   /* Control heights. sm = inline/table actions, md = default, lg = composer + launcher. */
   --control-h-sm: 26px;
   --control-h-md: 30px;
   --control-h-lg: 34px;
+
+  /* The app bar's height including its 1 px bottom border. The page under
+     it reserves this much at the top (02 §2.2, Placement). */
+  --app-bar-h: 49px;
 
   /* Shared maximum for Home activity and tweet embeds on wider surfaces. */
   --research-feed-max-width: 540px;
@@ -39,7 +54,7 @@
   --radius-lg: 8px;
 
   --font-ui:
-    "DM Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono:
     "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     monospace;
@@ -182,6 +197,24 @@
 
   --control-fg: var(--text-strong);
   --control-fg-muted: #b9c0bc;
+
+  /* Spaces roles (02 §11), from the members mockup's dark values. The unread
+     dot is the mockup's dark `--accent-strong` override. Avatars and channel
+     glyphs take one of six fills, chosen per handle or channel. Tree rails
+     are the mockup's `--border-strong`; the selected path mixes in the
+     accent. */
+  --unread-dot: #1c6fb3;
+  --passage-mark: rgba(255, 255, 255, 0.07);
+  --avatar-1: #5b7a96;
+  --avatar-2: #8a6f9e;
+  --avatar-3: #6d8f6a;
+  --avatar-4: #a77b55;
+  --avatar-5: #4f8a8b;
+  --avatar-6: #9a6262;
+  --avatar-fg: #f4f3ec;
+  --tree-rail: #373634;
+  --tree-rail-on: color-mix(in srgb, var(--accent-color) 55%, var(--tree-rail));
+  --tree-dot-selected: var(--accent-color);
 
   /* Amber split-focus indicators are deliberately theme-independent so the
      active-pane cue reads the same across themes. */
@@ -516,6 +549,19 @@
   --scrim-bg: rgba(40, 44, 46, 0.42);
 
   --control-fg-muted: #4e5754;
+
+  --unread-dot: #095c98;
+  --passage-mark: rgba(60, 40, 20, 0.06);
+  --avatar-1: #4a6a86;
+  --avatar-2: #77598c;
+  --avatar-3: #557a52;
+  --avatar-4: #93663f;
+  --avatar-5: #3d7778;
+  --avatar-6: #8a4f4f;
+  --avatar-fg: #ffffff;
+  --tree-rail: #e1dcd6;
+  --tree-rail-on: color-mix(in srgb, var(--accent-color) 55%, var(--tree-rail));
+  --tree-dot-selected: var(--accent-color);
 
   --split-border-hover: rgba(154, 107, 18, 0.65);
   --split-border-active: rgba(154, 107, 18, 0.85);

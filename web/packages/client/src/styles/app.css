@@ -2,8 +2,7 @@
 @import "./fonts.css" layer(base);
 @import "./tokens.css" layer(base);
 @import "./prose.css" layer(components);
-@import "./tweet.css" layer(components);
-@import "./feed.css" layer(components);
+@import "./shell.css" layer(components);
 
 /* Tailwind v4 reads the design system out of `@theme` (08 §2, ADR-8). Every
    value below is `var(--token)` under `@theme inline`, so a utility compiles to
@@ -24,8 +23,12 @@
   --text-sm--line-height: 1.45;
   --text-base: var(--fs-base);
   --text-base--line-height: 1.5;
+  --text-md: var(--fs-md);
+  --text-md--line-height: 1.45;
+  --text-lg: var(--fs-lg);
+  --text-lg--line-height: 1.35;
   --text-input: var(--fs-input);
-  --text-input--line-height: 1.5;
+  --text-input--line-height: 1.4;
   --text-reading: var(--fs-reading);
   --text-reading--line-height: 1.5;
   --text-title: var(--fs-title);
@@ -43,6 +46,7 @@
   --spacing-control-md: var(--control-h-md);
   --spacing-control-lg: var(--control-h-lg);
   --spacing-feed: var(--research-feed-max-width);
+  --spacing-app-bar: var(--app-bar-h);
 
   /* ---- Foreground ramp (the app's --text-* color tokens). ---- */
   --color-fg-primary: var(--text-primary);
@@ -173,6 +177,20 @@
   --color-highlight-neutral: var(--research-highlight-neutral-bg);
   --color-highlight-action: var(--research-highlight-action-bg);
   --color-highlight-action-hover: var(--research-highlight-action-bg-hover);
+
+  /* ---- Spaces roles (02 §11). ---- */
+  --color-unread-dot: var(--unread-dot);
+  --color-passage-mark: var(--passage-mark);
+  --color-avatar-1: var(--avatar-1);
+  --color-avatar-2: var(--avatar-2);
+  --color-avatar-3: var(--avatar-3);
+  --color-avatar-4: var(--avatar-4);
+  --color-avatar-5: var(--avatar-5);
+  --color-avatar-6: var(--avatar-6);
+  --color-avatar-fg: var(--avatar-fg);
+  --color-tree-rail: var(--tree-rail);
+  --color-tree-rail-on: var(--tree-rail-on);
+  --color-tree-dot-selected: var(--tree-dot-selected);
 
   /* ---- Elevation, stacking, motion. ---- */
   --shadow-popover: var(--popover-shadow);

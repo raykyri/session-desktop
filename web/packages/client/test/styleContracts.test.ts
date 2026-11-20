@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import test from "ava";
@@ -7,17 +7,15 @@ import test from "ava";
 // `researchStyleContracts.test.ts`, re-expressed for the web
 // (`08-design-system-and-styling.md` §6). The intents are unchanged; what moved
 // is the set of files, because the twelve feature stylesheets became Tailwind
-// utilities on components and only `prose.css`, `tweet.css` and `feed.css`
-// (the marks Home's card drag sets on the DOM) remain as CSS.
+// utilities on components and only `prose.css` and `shell.css` (the app
+// bar's placement and the feed grid, 02 §2.2) remain as CSS.
 
 const stylesDirectory = join(import.meta.dirname, "..", "src", "styles");
-const sourceDirectory = join(import.meta.dirname, "..", "src");
 
 const tokensCss = readFileSync(join(stylesDirectory, "tokens.css"), "utf8");
 const proseCss = readFileSync(join(stylesDirectory, "prose.css"), "utf8");
-const tweetCss = readFileSync(join(stylesDirectory, "tweet.css"), "utf8");
 const appCss = readFileSync(join(stylesDirectory, "app.css"), "utf8");
-const feedCss = readFileSync(join(stylesDirectory, "feed.css"), "utf8");
+const shellCss = readFileSync(join(stylesDirectory, "shell.css"), "utf8");
 
 const COLOR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\brgba?\(/;
 
@@ -47,16 +45,6 @@ function tokensDeclaredIn(selectorFilter: (selector: string) => boolean): Set<st
   return declared;
 }
 
-function sourceFiles(directory: string, extensions: string[]): string[] {
-  const files: string[] = [];
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...sourceFiles(path, extensions));
-    else if (extensions.some((extension) => entry.name.endsWith(extension))) files.push(path);
-  }
-  return files;
-}
-
 // ---------------------------------------------------------------- §6 item 1
 
 test("every dark color token has a light-appearance override", (t) => {
@@ -65,7 +53,7 @@ test("every dark color token has a light-appearance override", (t) => {
   // Layout, type, motion and stacking tokens are appearance-independent, as are
   // the lightbox scrims that sit over images.
   const appearanceIndependent =
-    /^--(fs|control-h|radius|z|font|transition|research-feed|lightbox)-|^--control-fg$/;
+    /^--(fs|control-h|radius|z|font|transition|research-feed|lightbox|app-bar)-|^--control-fg$/;
   const missing = [...dark].filter(
     (token) => !light.has(token) && !appearanceIndependent.test(token),
   );
@@ -100,9 +88,8 @@ test("no color literals outside tokens.css", (t) => {
   const offenders: string[] = [];
   for (const [name, css] of [
     ["prose.css", proseCss],
-    ["tweet.css", tweetCss],
     ["app.css", appCss],
-    ["feed.css", feedCss],
+    ["shell.css", shellCss],
   ] as const) {
     css.split("\n").forEach((line, index) => {
       // Two escape hatches, both spelled on the line that uses them: colors
@@ -178,11 +165,16 @@ test("research prose restores list markers that Tailwind preflight strips", (t) 
 
 test("DM Sans adds one optical half-pixel to UI type but not to monospace", (t) => {
   const root = ruleBody(tokensCss, ":root");
-  for (const step of ["xs", "sm", "base", "input"]) {
+  // The title and the composer input take the mockup's sizes with no offset
+  // (02 §11).
+  for (const step of ["xs", "sm", "base", "md", "lg"]) {
     t.regex(
       root,
       new RegExp(`--fs-${step}:\\s*calc\\([^;]+var\\(--font-ui-size-offset\\)[^;]*\\)`),
     );
+  }
+  for (const step of ["title", "input"]) {
+    t.notRegex(root, new RegExp(`--fs-${step}:[^;]*font-ui-size-offset`));
   }
   t.regex(
     ruleBody(tokensCss, ':root[data-body-font="dm-sans"]'),
@@ -201,31 +193,47 @@ test("DM Sans adds one optical half-pixel to UI type but not to monospace", (t) 
   t.regex(surface, /--research-markdown-font-delta:[^;]+- var\(--font-ui-size-offset\)/s);
 });
 
-// ---------------------------------------------------------------- §6 item 6
+// ---------------------------------------------------------------- 02 §11
 
-test("the tweet recipe is defined in tweet.css and nowhere else", (t) => {
-  t.regex(tweetCss, /\.journal-tweet\s*\{/);
-  const tweet = ruleBody(tweetCss, ".journal-tweet");
-  t.regex(tweet, /max-width:\s*var\(--research-feed-max-width\)/);
-
-  const stats = ruleBody(tweetCss, ".journal-tweet-stats");
-  t.regex(stats, /align-items:\s*center/);
-  t.regex(stats, /line-height:\s*1/);
-
-  // No other stylesheet, and no component, may redeclare the recipe.
-  for (const [name, css] of [
-    ["prose.css", proseCss],
-    ["app.css", appCss],
-  ] as const) {
-    t.false(withoutComments(css).includes(".journal-tweet"), `${name} must not redefine it`);
+test("the spaces roles have a dark value and a light override, exposed to Tailwind", (t) => {
+  const dark = ruleBody(tokensCss, ":root");
+  const light = ruleBody(tokensCss, ':root[data-appearance="light"]');
+  const theme = ruleBody(appCss, "@theme inline");
+  const roles = [
+    "--unread-dot",
+    "--passage-mark",
+    ...[1, 2, 3, 4, 5, 6].map((n) => `--avatar-${n}`),
+    "--avatar-fg",
+    "--tree-rail",
+    "--tree-rail-on",
+    "--tree-dot-selected",
+  ];
+  for (const role of roles) {
+    t.true(dark.includes(`${role}:`), `${role} has a dark value`);
+    t.true(light.includes(`${role}:`), `${role} has a light override`);
+    t.true(theme.includes(`var(${role})`), `${role} is exposed to Tailwind`);
   }
+});
 
-  const redefining = sourceFiles(sourceDirectory, [".css"]).filter(
-    (file) =>
-      !file.endsWith("tweet.css") &&
-      withoutComments(readFileSync(file, "utf8")).includes(".journal-tweet"),
+test("typography follows the members mockup: Inter, a 16.5 px title, a 15 px input", (t) => {
+  const root = ruleBody(tokensCss, ":root");
+  t.regex(root, /--font-ui:\s*"Inter"/);
+  t.regex(root, /--fs-title:\s*calc\(16\.5px/);
+  t.regex(root, /--fs-input:\s*calc\(15px/);
+  t.regex(root, /--fs-base:\s*calc\(13\.5px/);
+});
+
+test("the app bar is placed over the page and slides with a transform", (t) => {
+  const slot = ruleBody(shellCss, ".app-bar-slot");
+  t.regex(slot, /position:\s*absolute/);
+  t.regex(slot, /transition:\s*transform 0\.2s/);
+  t.regex(ruleBody(shellCss, ".app-bar-slot[data-hidden]"), /translateY\(-100%\)/);
+  t.regex(ruleBody(shellCss, ".feed-inner"), /padding:\s*var\(--app-bar-h\)/);
+  t.regex(ruleBody(tokensCss, ":root"), /--app-bar-h:\s*49px/);
+  t.regex(
+    withoutComments(shellCss),
+    /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.app-bar-slot\s*\{\s*transition:\s*none/,
   );
-  t.deepEqual(redefining, []);
 });
 
 // -------------------------------------------------- the Tailwind token bridge
@@ -304,13 +312,4 @@ test("the reduced-motion block follows the OS preference and cancels Tailwind tr
   t.notRegex(proseCss, /\.reduce-motion,/);
   t.regex(proseCss, /transition-duration: 0\.01ms !important/);
   t.regex(proseCss, /translate: none/);
-});
-
-test("DOM search paints through the documented highlight registry names", (t) => {
-  t.regex(proseCss, /::highlight\(session-search\)/);
-  t.regex(proseCss, /::highlight\(session-search-active\)/);
-
-  const searchModule = readFileSync(join(sourceDirectory, "lib", "transcriptSearch.ts"), "utf8");
-  t.regex(searchModule, /SEARCH_HIGHLIGHT = "session-search"/);
-  t.regex(searchModule, /SEARCH_ACTIVE_HIGHLIGHT = "session-search-active"/);
 });

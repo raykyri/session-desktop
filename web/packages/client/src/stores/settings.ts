@@ -31,12 +31,13 @@ import { resolveAppearance } from "../lib/appearance.js";
 
 export const SETTINGS_STORAGE_KEY = "session.settings.v2";
 
-/** First paint for a guest: Warm theme and Medium type. Account defaults stay
- * `DEFAULT_USER_SETTINGS`; `SessionBoot` replaces this once a session exists. */
+/** First paint for a guest: the Warm theme, whose values are the members
+ * mockup's, at the default text size so the type scale is the mockup's
+ * (02 §11). Account defaults stay `DEFAULT_USER_SETTINGS`; `SessionBoot`
+ * replaces this once a session exists. */
 export const GUEST_USER_SETTINGS: UserSettings = {
   ...DEFAULT_USER_SETTINGS,
   colorTheme: "orange-blob",
-  textSize: 15,
 };
 
 export interface SettingsState {
