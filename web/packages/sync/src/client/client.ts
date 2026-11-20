@@ -99,8 +99,8 @@
 //   calls) are sent at once, never queued, predicted or stored; held, signed
 //   out, or when a flush ends blocked (offline, a registration the server
 //   refused), they fail.
-// - `stop` ends the client (its person signed out): no request is sent
-//   after it, no registration is made, and nothing more is stored, whatever
+// - `stop` ends the client (its person signed out): no write is sent after
+//   it, no registration is made, and nothing more is stored, whatever
 //   answer arrives late (review round 1 of phase 3, finding 1). A
 //   registration whose answer names another person (`u`) is not taken: the
 //   client signs out.
@@ -1831,7 +1831,8 @@ export class SyncClient implements Changing {
 
   /** Stop the client (it is no longer used: its person signed out, or the
    * screens closed): the outbox's timer ends, and so does a flush under
-   * way: nothing is sent, registered or stored after this. */
+   * way: no write is sent, no client id registered and nothing stored
+   * after this. */
   stop() {
     this.stopped = true;
     if (this.timer && this.timerHandle !== null) this.timer.clear(this.timerHandle);

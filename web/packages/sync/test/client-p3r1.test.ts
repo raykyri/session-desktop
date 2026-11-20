@@ -142,7 +142,7 @@ test("finding 1: a WRONG_CLIENT that arrives after the stop makes no registratio
       push: async (es) => {
         pushes.push(...es);
         await new Promise<void>((r) => (release = r));
-        return [fail("WRONG_CLIENT", w.clock.now()) as PushResult];
+        return [fail("WRONG_CLIENT", w.clock.now())];
       },
     }),
     register: () => (registers++, inner.register()),
