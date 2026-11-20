@@ -189,12 +189,8 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .split-main { height: 26px; padding: 0 10px 0 12px; border-radius: 13px 0 0 13px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); }
 .split-more { height: 26px; width: 24px; display: inline-grid; place-items: center; border-radius: 0 13px 13px 0; background: var(--accent-strong); color: var(--on-accent-light); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--on-accent-light) 35%, transparent); }
 .split-more svg.i { width: 13px; height: 13px; }
-/* Empty composer: the button stays blue but reads as disabled. One treatment per variant. */
+/* Empty composer: the button stays blue at 45% opacity until there is text */
 .btn-faded:not(.has-text) :is(.split-main, .split-more) { opacity: .45; }
-.btn-tint:not(.has-text) :is(.split-main, .split-more) { background: var(--accent-soft); color: var(--accent); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--accent) 25%, transparent); }
-.btn-outline:not(.has-text) :is(.split-main, .split-more) { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
-.btn-outline:not(.has-text) .split-main { box-shadow: inset 1px 0 0 color-mix(in srgb, var(--accent) 45%, transparent), inset 0 1px 0 color-mix(in srgb, var(--accent) 45%, transparent), inset 0 -1px 0 color-mix(in srgb, var(--accent) 45%, transparent); }
-.btn-muted:not(.has-text) :is(.split-main, .split-more) { background: color-mix(in srgb, var(--accent-strong) 45%, var(--card)); color: color-mix(in srgb, var(--on-accent-light) 80%, transparent); }
 .menu.right { left: auto; right: 0; }
 .mi-2 { height: auto; padding: 7px 10px; align-items: flex-start; }
 .mi-2 b { display: block; font-weight: 500; color: var(--t-heading); }
@@ -710,9 +706,6 @@ const TREE_NOTE = 'Posts keep the pinned branch trees and avatar reply trees.';
 const variant = (name, thesis, composer, dock = false) => ({ name, q: 'Composer', thesis: `${thesis} ${TREE_NOTE}`, composer, dock, replies: replyLines, layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); } });
 const V = {
   faded: variant('Faded', '<strong>Empty: the blue button at 45% opacity.</strong> It keeps its shape and colour and comes up to full strength as soon as there is text.', () => COMPOSERS.splitBare('btn-faded')),
-  tint: variant('Tint', '<strong>Empty: a pale blue tint with blue text.</strong> The same family as the branch count chips; it fills in solid once there is text.', () => COMPOSERS.splitBare('btn-tint')),
-  outline: variant('Outline', '<strong>Empty: a blue outline with blue text.</strong> No fill until there is text to send.', () => COMPOSERS.splitBare('btn-outline')),
-  muted: variant('Muted', '<strong>Empty: a desaturated solid blue.</strong> Mixed toward the card colour, with softened white text.', () => COMPOSERS.splitBare('btn-muted')),
 };
 
 /* ---- composers: start a thread. Each variant below uses one. The draft survives re-renders. ---- */
