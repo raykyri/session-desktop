@@ -131,7 +131,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 /* ---- one scroll, rows of [post] [margin] ---- */
 .mg { height: 100%; overflow-y: auto; background: var(--feed); }
 .mg-inner { max-width: 1180px; margin: 0 auto; padding: 0 24px 60px; }
-.tabs { position: sticky; top: 0; z-index: 4; display: flex; gap: 4px; padding: 12px 0; background: var(--feed); overflow-x: auto; }
+.tabs { position: sticky; top: 0; z-index: 10; display: flex; gap: 4px; padding: 12px 0; background: var(--feed); overflow-x: auto; }
 .tabs button { padding: 5px 10px; border-radius: 14px; font-size: var(--fs-sm); color: var(--t-secondary); font-weight: 500; white-space: nowrap; }
 .tabs button:hover { background: var(--fill-hover); }
 .tabs button[aria-current="true"] { background: var(--t-heading); color: var(--feed); }
@@ -159,10 +159,9 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .anc { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 0 6px; height: 18px; border-radius: 9px; vertical-align: 1px;
   background: var(--accent-soft); color: var(--accent); font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .anc svg.i { width: 11px; height: 11px; }
-.cap { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.4; min-height: 2.8em; }
 .qtag { display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .02em; }
 
-/* outline (Pinned map, Minimap, Stems) */
+/* outline (Pinned map) */
 .graph { position: relative; }
 .graph svg { position: absolute; inset: 0; width: 100%; overflow: visible; pointer-events: none; }
 .graph svg path { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
@@ -180,77 +179,28 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .preview .prose { font-size: var(--fs-sm); max-height: 260px; overflow-y: auto; }
 .preview .pf { display: flex; gap: 12px; margin-top: 8px; font-size: var(--fs-xs); color: var(--t-faint); align-items: center; }
 
-/* Rings */
-.rg { display: flex; align-items: center; gap: 12px; }
-.ringsvg { flex: none; overflow: visible; }
-.seg { fill: var(--control-border); fill-opacity: calc(1 - var(--d) * .14); cursor: pointer; transition: fill .12s; }
-.seg:hover { fill: var(--t-dim); }
-.seg.on { fill: var(--accent); fill-opacity: .45; }
-.seg.sel { fill: var(--accent); fill-opacity: 1; }
-.hub { fill: var(--card); stroke: var(--border-strong); }
-.hubt { fill: var(--t-heading); font-size: 11px; font-weight: 700; text-anchor: middle; font-variant-numeric: tabular-nums; }
-.rg .cap { flex: 1; min-width: 0; margin: 0; }
-
-/* Arcs */
-.arcsvg { display: block; width: 100%; overflow: visible; }
-.arcsvg line { stroke: var(--border-strong); stroke-width: 1; }
-.arcsvg path { fill: none; stroke: var(--t-dim); stroke-width: 1.5; }
-.arcsvg path.root { stroke-dasharray: 3 3; }
-.arcsvg path.on { stroke: var(--accent); stroke-width: 2; stroke-dasharray: none; }
-.arcsvg .para { fill: var(--t-secondary); }
-.arcsvg circle { fill: var(--card); stroke: var(--t-muted); stroke-width: 1.5; }
-.arcsvg circle.on { fill: var(--accent); stroke: var(--accent); }
-.arcsvg circle.sel { fill: var(--accent); stroke: var(--accent-soft); stroke-width: 6; }
-.arcsvg circle.hit { fill: transparent; stroke: none; }
-.arcsvg .adot { cursor: pointer; }
-.arcsvg .adot:hover circle:not(.hit) { stroke: var(--accent); }
-.arcsvg text { fill: var(--t-faint); font-size: 10.5px; font-variant-numeric: tabular-nums; }
-
 /* Layers */
 .laygrp { border-left: 0; padding-left: 0; }
 .lay { position: relative; padding: 0 calc(var(--k) * 7px) calc(var(--k) * 7px) 0; }
 .lay-back { position: absolute; top: 0; left: 0; right: calc(var(--k) * 7px); bottom: calc(var(--k) * 7px); border-radius: var(--r-lg);
   background: var(--card); box-shadow: var(--shadow); transform: translate(calc(var(--i) * 7px), calc(var(--i) * 7px)); opacity: calc(1 - var(--i) * .25); z-index: calc(4 - var(--i)); }
+.lay-front.tap { cursor: pointer; }
 .lay-front { position: relative; z-index: 5; background: var(--card); border-radius: var(--r-lg); box-shadow: var(--shadow), var(--shadow-pop); padding: 10px 12px 12px; }
-.grp.hl .lay-front { box-shadow: 0 0 0 1.5px var(--accent), var(--shadow-pop); }
-.lay-meta { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--t-faint); font-weight: 600; margin-bottom: 6px; }
+.grp.hl .lay-front { box-shadow: 0 0 0 1px var(--accent), var(--shadow-pop); }
 .lay-front .rq { margin: 4px 0 4px; font-size: var(--fs-base); font-weight: 600; color: var(--t-heading); line-height: 1.4; }
 .lay-front .lay-s { margin: 0; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.45; }
 .lay-front .prose { font-size: var(--fs-sm); max-height: 240px; overflow-y: auto; }
 .lay-acts { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .lay-kids { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-.lay-kid { text-align: left; padding: 6px 9px; border-radius: var(--r-md); background: var(--inset); font-size: var(--fs-sm); color: var(--t-heading); line-height: 1.35; }
+.lay-kid { display: flex; align-items: flex-start; gap: 6px; text-align: left; padding: 6px 9px; border-radius: var(--r-md); background: var(--inset); font-size: var(--fs-sm); color: var(--t-heading); line-height: 1.35; }
 .lay-kid:hover { background: var(--fill-hover); }
-.lay-kid span { display: block; font-size: 10.5px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; }
+.lay-kid svg.i { color: var(--accent); margin-top: 2px; }
+.lay-kid span { min-width: 0; }
 .lay-sibs { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; font-size: var(--fs-xs); color: var(--t-faint); }
 .lay-sibs button { width: 20px; height: 20px; border-radius: 50%; font-size: 10.5px; font-weight: 600; background: var(--control); color: var(--t-secondary); }
 .lay-sibs button.on { background: var(--accent); color: var(--on-accent); }
 .lay-sibs span { margin-left: 4px; }
 
-/* Minimap */
-.mm .label { margin-bottom: 10px; }
-.mmsvg { display: block; overflow: visible; margin-bottom: 14px; }
-.mmsvg rect { fill: var(--border-strong); }
-.mmsvg rect.h { fill: var(--t-dim); }
-.mmsvg rect.a { fill: var(--accent); fill-opacity: .35; }
-.mmsvg rect.cur { fill-opacity: .8; }
-.mmsvg rect.vp { fill: var(--accent-soft); fill-opacity: 1; stroke: var(--accent); stroke-opacity: .5; stroke-width: 1; }
-.mmsvg .mk { cursor: pointer; }
-.mmsvg .mk circle { fill: var(--card); stroke: var(--accent); stroke-width: 1.5; }
-.mmsvg .mk.sel circle, .mmsvg .mk:hover circle { fill: var(--accent); }
-.mmsvg .mk text { fill: var(--accent); font-size: 9.5px; font-weight: 700; text-anchor: middle; font-variant-numeric: tabular-nums; pointer-events: none; }
-.mmsvg .mk.sel text, .mmsvg .mk:hover text { fill: var(--on-accent); }
-
-/* Stems */
-.row { position: relative; }
-.stem-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
-.stem-layer svg { position: absolute; inset: 0; overflow: visible; }
-.stem-layer path { fill: none; stroke: var(--t-dim); stroke-width: 1.25; transition: stroke .15s; }
-.stem-layer circle { fill: var(--t-dim); }
-.stem-layer .blk-hl { stroke: var(--accent); fill: var(--accent); }
-.stem-layer path.blk-hl { fill: none; stroke-width: 2; }
-.stem-u { position: absolute; border-bottom: 1.5px solid var(--t-dim); transition: background .15s, border-color .15s; }
-.stem-u.blk-hl { background: var(--accent-soft); border-color: var(--accent); }
 
 @media (max-width: 860px) {
   .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
@@ -258,7 +208,6 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
   .pinned > .pin { position: static; margin-bottom: 8px; }
   .mg-inner { padding: 0 12px 30px; }
   .mgn { padding-left: 12px; }
-  .stem-layer { display: none; }
 }
 </style>
 
@@ -304,6 +253,7 @@ const I = {
   heart: '<svg class="i" viewBox="0 0 16 16"><path d="M8 13.2S2.5 9.9 2.5 6.1A2.8 2.8 0 0 1 8 4.8a2.8 2.8 0 0 1 5.5 1.3C13.5 9.9 8 13.2 8 13.2z"/></svg>',
   save: '<svg class="i" viewBox="0 0 16 16"><path d="M4 2.5h8v11l-4-2.8-4 2.8z"/></svg>',
   left: '<svg class="i" viewBox="0 0 16 16"><path d="M10 3.5L5.5 8l4.5 4.5"/></svg>',
+  deeper: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3v4.5a2.5 2.5 0 0 0 2.5 2.5H12.5M9.5 7l3 3-3 3"/></svg>',
   right: '<svg class="i" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5"/></svg>',
   agent: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8" fill="currentColor" stroke="none"/></svg>',
 };
@@ -357,11 +307,10 @@ const composer = (id, ph, ctx = '') => `<form class="composer" data-form="${id}"
 const replyTree = list => list.map(r => `<div class="reply">${av(r.u, 'sm')}<div><div class="who"><b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><p>${esc(r.t)}</p></div>${r.kids ? `<div class="kids">${replyTree(r.kids)}</div>` : ''}</div>`).join('');
 
 /* ================= pinned maps ================= */
-/* Every variant shows the same stream of whole posts and pins the branches to the passage of the answer
-   they ask about. They differ in what the pinned drawing shows about those branches: their outline,
-   their volume and depth, their order in time, their layers, their place in the whole answer, or the
-   exact sentence they grew from. */
-const st = { v: 'pinned', space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, layer: {}, mm: {}, asking: null };
+/* Both variants show the same stream of whole posts and pin the branches to the passage of the answer
+   they ask about. Pinned map draws each passage's branches as an outline; Layers draws them as a stack
+   of cards, one card per level of depth. */
+const st = { v: 'pinned', space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, layer: {}, asking: null };
 
 function card(p) {
   const head = `<div class="card-h">${av(p.u)}<div class="who"><b>${esc(p.u)}</b><span>${p.k === 'ask' ? 'asked in' : 'posted in'}</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div></div>`;
@@ -379,7 +328,7 @@ function card(p) {
 const repliesMargin = p => { const r = replies(p); return r.length ? `<span class="label">Replies · ${replyCount(p)}</span>${replyTree(r)}` : ''; };
 
 /* ---- passage matching: the fixtures do not store the passage a branch came from, so the mock picks
-   the paragraph (or sentence) that shares the most words with the branch question and its answer ---- */
+   the paragraph that shares the most words with the branch question and its answer ---- */
 const STOP = new Set('what which does with that this from have there their about would could should into than then they them were been being where when your more most other some such only also over just like very many much does show give list same each these those here after before because between under while whether'.split(' '));
 const words = s => new Set((strip(s).toLowerCase().match(/[a-z0-9]{4,}/g) || []).filter(w => !STOP.has(w)));
 const overlap = (w, text) => { const bw = words(text); let sc = 0; w.forEach(x => { if (bw.has(x)) sc++; }); return sc / Math.sqrt(bw.size + 6); };
@@ -442,134 +391,17 @@ function outline(p, T, G) {
   return `<div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-grp="${g}"><span class="gq">${esc(n.q)}</span></button>`).join('')}</div>${readout(p, T, G.ns)}`;
 }
 
-const pt = (c, r, a) => `${(c + r * Math.cos(a)).toFixed(2)} ${(c + r * Math.sin(a)).toFixed(2)}`;
-function sector(c, r0, r1, a0, a1) {
-  const gap = Math.min(0.035, (a1 - a0) / 5); a0 += gap; a1 -= gap; if (a1 - a0 > 6.27) a1 = a0 + 6.27;
-  const L = a1 - a0 > Math.PI ? 1 : 0;
-  return `M${pt(c, r1, a0)} A${r1} ${r1} 0 ${L} 1 ${pt(c, r1, a1)} L${pt(c, r0, a1)} A${r0} ${r0} 0 ${L} 0 ${pt(c, r0, a0)}Z`;
-}
-function rings(p, T, G) {
-  const sel = st.sel[p.id], on = onPath(p, T), R0 = 15, W = 14, depth = Math.max(...G.ns.map(n => below(T, n.id))) + 1;
-  const size = 2 * (R0 + W * depth) + 4, c = size / 2, all = G.ns.reduce((s, n) => s + leaves(T, n.id), 0);
-  let segs = '';
-  const walk = (n, d, a0, a1) => {
-    segs += `<path class="seg${n.id === sel ? ' sel' : on.has(n.id) ? ' on' : ''}" style="--d:${d}" d="${sector(c, R0 + d * W, R0 + (d + 1) * W - 2, a0, a1)}" data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-grp="${G.g}" data-q="${esc(n.q)}"><title>${esc(n.q)}</title></path>`;
-    let a = a0; const L = leaves(T, n.id);
-    for (const k of T.kids(n.id)) { const span = (a1 - a0) * leaves(T, k.id) / L; walk(k, d + 1, a, a + span); a += span; }
-  };
-  let a = -Math.PI / 2; G.ns.forEach(n => { const span = 2 * Math.PI * leaves(T, n.id) / all; walk(n, 0, a, a + span); a += span; });
-  const def = inGroup(T, G.ns, sel) ? T.nodes[sel].q : `${noun(G.total, 'branch', 'branches')}, ${noun(depth, 'level', 'levels')} deep. Hover a segment to see its question.`;
-  return `<div class="rg"><svg class="ringsvg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-label="${noun(G.total, 'branch', 'branches')} on this passage">${segs}<circle class="hub" cx="${c}" cy="${c}" r="${R0 - 3}"/><text class="hubt" x="${c}" y="${c + 3.5}">${G.total}</text></svg>
-    <p class="cap" data-def="${esc(def)}">${esc(def)}</p></div>${readout(p, T, G.ns)}`;
-}
-
-function arcs(p, T, G) {
-  const sel = st.sel[p.id], on = onPath(p, T);
-  const nodes = G.ns.flatMap(n => T.dfs(n.id, 0, []).map(r => r.n)).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
-  const W = 300, x0 = 10, span = W - 58, xs = {};
-  nodes.forEach((n, i) => { xs[n.id] = 44 + (nodes.length > 1 ? i * span / (nodes.length - 1) : span / 2); });
-  const arcsData = nodes.map(n => { const u = n.par === 'r' ? x0 : xs[n.par], v = xs[n.id], xa = Math.min(u, v), xb = Math.max(u, v), rx = (xb - xa) / 2; return { n, xa, xb, rx, ry: Math.min(rx, 18 + rx * 0.35) }; });
-  const top = Math.max(...arcsData.map(a => a.ry)) + 8, y0 = top, H = y0 + 30;
-  const paths = arcsData.map(a => `<path class="${on.has(a.n.id) ? 'on' : ''}${a.n.par === 'r' ? ' root' : ''}" d="M${a.xa} ${y0} A${a.rx.toFixed(1)} ${a.ry.toFixed(1)} 0 0 1 ${a.xb.toFixed(1)} ${y0}"/>`).join('');
-  const dots = nodes.map(n => `<g data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-grp="${G.g}" data-q="${esc(n.q)}" class="adot"><circle class="hit" cx="${xs[n.id]}" cy="${y0}" r="10"/><circle class="${n.id === sel ? 'sel' : on.has(n.id) ? 'on' : ''}" cx="${xs[n.id]}" cy="${y0}" r="4.5"/><title>${esc(n.q)}</title></g>`).join('');
-  const f = nodes[0], l = nodes[nodes.length - 1];
-  const def = inGroup(T, G.ns, sel) ? T.nodes[sel].q : `${noun(G.total, 'branch', 'branches')} over ${rel(f.createdAt) === rel(l.createdAt) ? rel(f.createdAt) : rel(f.createdAt) + ' to ' + rel(l.createdAt)} ago. Hover a dot to see its question.`;
-  return `<svg class="arcsvg" viewBox="0 0 ${W} ${H}" height="${H}" aria-label="${noun(G.total, 'branch', 'branches')} in the order they were asked">
-      <line x1="${x0}" x2="${W - 8}" y1="${y0}" y2="${y0}"/>${paths}<rect class="para" x="${x0 - 4}" y="${y0 - 4}" width="8" height="8" rx="1.5"/>${dots}
-      <text x="${x0 - 4}" y="${y0 + 20}">¶</text><text x="${xs[f.id]}" y="${y0 + 20}" text-anchor="middle">${rel(f.createdAt)}</text>${nodes.length > 1 ? `<text x="${xs[l.id]}" y="${y0 + 20}" text-anchor="middle">${rel(l.createdAt)}</text>` : ''}</svg>
-    <p class="cap" data-def="${esc(def)}">${esc(def)}</p>${readout(p, T, G.ns)}`;
-}
-
 function layers(p, T, G) {
   const id = inGroup(T, G.ns, st.layer[G.g]) ? st.layer[G.g] : G.ns[0].id, n = T.nodes[id], path = T.path(id), d = path.length - 1;
   const top = path[1], k = Math.min(3, below(T, id)), kids = T.kids(id), open = st.sel[p.id] === id;
   const sibs = G.ns.length > 1 ? `<div class="lay-sibs">${G.ns.map((x, i) => `<button class="${x.id === top.id ? 'on' : ''}" data-a="layer" data-g="${G.g}" data-id="${p.id}" data-node="${x.id}" aria-label="Stack ${i + 1}: ${esc(x.q)}">${i + 1}</button>`).join('')}<span>${noun(G.ns.length, 'stack', 'stacks')} on this passage</span></div>` : '';
   const back = Array.from({ length: k }, (_, i) => `<div class="lay-back" style="--i:${i + 1}"></div>`).join('');
-  return `${sibs}<div class="lay" style="--k:${k}">${back}<div class="lay-front fadein" data-grp="${G.g}">
-      <div class="lay-meta"><span>Layer ${d}</span><span>${k ? noun(below(T, id), 'layer', 'layers') + ' below' : 'Bottom layer'}</span></div>
+  return `${sibs}<div class="lay" style="--k:${k}">${back}<div class="lay-front fadein${open ? '' : ' tap'}" data-grp="${G.g}"${open ? '' : ` data-a="tsel" data-id="${p.id}" data-node="${id}"`}>
       <div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time></div><p class="rq">${esc(n.q)}</p>${status(n)}
       ${open ? `<div class="prose">${answerHtml(n)}</div>` : `<p class="lay-s">${esc(clip(summ(n), 150))}</p>`}
       <div class="lay-acts">${d > 1 ? `<button class="chip" data-a="layer" data-g="${G.g}" data-id="${p.id}" data-node="${n.par}">${I.left}Up a layer</button>` : ''}<button class="tlink" data-a="tsel" data-id="${p.id}" data-node="${id}">${open ? 'Show less' : 'Read the answer'}</button></div>
-      ${kids.length ? `<div class="lay-kids">${kids.map(c => `<button class="lay-kid" data-a="layer" data-g="${G.g}" data-id="${p.id}" data-node="${c.id}"><span>Go deeper</span>${esc(c.q)}</button>`).join('')}</div>` : ''}
+      ${kids.length ? `<div class="lay-kids">${kids.map(c => `<button class="lay-kid" data-a="layer" data-g="${G.g}" data-id="${p.id}" data-node="${c.id}">${I.deeper}<span>${esc(c.q)}</span></button>`).join('')}</div>` : ''}
       ${st.asking === p.id && open ? composer('mf:' + p.id + ':' + id, 'Ask a branch question') : ''}</div></div>`;
-}
-
-/* Minimap: a scaled-down silhouette of the answer in the margin. */
-const hash = n => { n = (n ^ 61) ^ (n >>> 16); n = (n + (n << 3)) | 0; n ^= n >>> 4; n = Math.imul(n, 0x27d4eb2d); return Math.abs(n ^ (n >>> 15)); };
-const MM = {};
-function minimap(p) {
-  const prose = document.getElementById('pr-' + p.id), box = document.getElementById('mm-' + p.id);
-  if (!prose || !box) return;
-  const T = tree(p), blocks = blocksOf(prose), groups = groupsFor(p, prose), pr = prose.getBoundingClientRect();
-  const s = Math.min(0.34, 300 / pr.height), W = 120, H = pr.height * s, LH = 21.6;
-  const gOf = Object.fromEntries(groups.map(G => [G.bi, G]));
-  const cur = groups[Math.min(st.mm[p.id] ?? 0, groups.length - 1)];
-  let bars = '';
-  blocks.forEach((b, i) => {
-    const r = b.getBoundingClientRect(), y = (r.top - pr.top) * s, lines = Math.max(1, Math.round(r.height / LH)), ind = b.tagName === 'LI' ? 9 : 0, G = gOf[i];
-    for (let j = 0; j < lines; j++) {
-      const w = b.tagName === 'H4' ? 45 : j === lines - 1 && lines > 1 ? 30 + hash(i * 31 + j) % 40 : 82 + hash(i * 17 + j) % 18;
-      bars += `<rect class="${b.tagName === 'H4' ? 'h' : ''}${G ? ' a' : ''}${G && cur && G.g === cur.g ? ' cur' : ''}" x="${ind}" y="${(y + j * LH * s).toFixed(1)}" width="${((W - ind) * w / 100).toFixed(1)}" height="${Math.max(1.6, 9 * s).toFixed(1)}" rx="1"/>`;
-    }
-  });
-  const marks = groups.map((G, i) => { const y = (G.block.getBoundingClientRect().top - pr.top) * s + 3; return `<g class="mk${G === cur ? ' sel' : ''}" data-a="mgrp" data-id="${p.id}" data-i="${i}" data-grp="${G.g}"><circle cx="${W + 16}" cy="${y.toFixed(1)}" r="8"/><text x="${W + 16}" y="${(y + 3.3).toFixed(1)}">${G.total}</text><title>${noun(G.total, 'branch', 'branches')} on passage ${G.bi + 1}</title></g>`; }).join('');
-  groups.forEach(G => badge(G.block, G.g, G.total));
-  box.innerHTML = `<span class="label">Answer · ${noun(blocks.length, 'passage', 'passages')} · ${noun(T.count, 'branch', 'branches')}</span>
-    <svg class="mmsvg" width="${W + 28}" height="${H.toFixed(0)}" viewBox="0 0 ${W + 28} ${H.toFixed(0)}">${bars}<rect class="vp" id="vp-${p.id}" x="-4" y="0" width="${W + 8}" height="0" rx="3"/>${marks}</svg>
-    ${st.asking === p.id ? composer('mf:' + p.id + ':r', 'Ask a branch question about the answer') : ''}
-    ${cur ? `<div class="grp" data-grp-box="${cur.g}"><span class="label">Passage ${cur.bi + 1} · ${noun(cur.total, 'branch', 'branches')}</span>${outline(p, T, cur)}</div>` : '<p class="empty">No branches yet.</p>'}`;
-  MM[p.id] = { prose, s };
-  viewport(p.id);
-}
-function viewport(id) {
-  const m = MM[id], vp = document.getElementById('vp-' + id), sc = $('#k-mg'); if (!m || !vp || !sc) return;
-  const pr = m.prose.getBoundingClientRect(), r = sc.getBoundingClientRect();
-  const y1 = Math.max(pr.top, r.top + 52) - pr.top, y2 = Math.min(pr.bottom, r.bottom) - pr.top;
-  if (y2 <= y1) { vp.setAttribute('height', 0); return; }
-  vp.setAttribute('y', (y1 * m.s).toFixed(1)); vp.setAttribute('height', ((y2 - y1) * m.s).toFixed(1));
-}
-
-/* Stems: anchor each branch to the sentence it asks about and draw a line from that sentence. */
-function sentenceRange(block, text) {
-  const full = block.textContent, w = words(text), re = /[^.!?]+(?:[.!?]+["'”)\]]*|$)/g;
-  let m, best = -1, at = [0, full.length];
-  while ((m = re.exec(full))) { if (m[0].trim().length < 3) continue; const sc = overlap(w, m[0]); if (sc > best) { best = sc; const lead = m[0].length - m[0].trimStart().length; at = [m.index + lead, m.index + m[0].trimEnd().length]; } }
-  const tw = document.createTreeWalker(block, NodeFilter.SHOW_TEXT); let pos = 0, node, r = document.createRange(), started = false;
-  while ((node = tw.nextNode())) {
-    const len = node.nodeValue.length;
-    if (!started && pos + len > at[0]) { r.setStart(node, at[0] - pos); started = true; }
-    if (started && pos + len >= at[1]) { r.setEnd(node, at[1] - pos); return { r, key: at[0] }; }
-    pos += len;
-  }
-  r.selectNodeContents(block); return { r, key: 0 };
-}
-function stems(p) {
-  const prose = document.getElementById('pr-' + p.id), margin = document.getElementById('mr-' + p.id);
-  if (!prose || !margin) return;
-  const T = tree(p), blocks = blocksOf(prose), by = new Map(), items = [];
-  for (const n of T.kids('r')) {
-    const bi = bestBlock(blocks, n.q + ' ' + summ(n)), { r, key } = sentenceRange(blocks[bi], n.q + ' ' + summ(n)), k = bi + ':' + key;
-    if (!by.has(k)) by.set(k, { bi, r, ns: [] }); by.get(k).ns.push(n);
-  }
-  if (st.asking === p.id) { margin.insertAdjacentHTML('beforeend', `<div class="pin">${composer('mf:' + p.id + ':r', 'Ask a branch question about the answer')}</div>`); items.push({ el: margin.lastElementChild, anchor: prose.firstElementChild }); }
-  const groups = [...by.values()].sort((a, b) => a.bi - b.bi || a.r.compareBoundaryPoints(Range.START_TO_START, b.r));
-  groups.forEach((S, i) => {
-    S.g = 's' + p.id + '-' + i; S.total = S.ns.reduce((s, n) => s + 1 + T.desc(n.id), 0); S.rects = [...S.r.getClientRects()].filter(x => x.width > 2);
-    margin.insertAdjacentHTML('beforeend', `<div class="pin grp" data-grp-box="${S.g}">${outline(p, T, S)}</div>`);
-    items.push({ el: margin.lastElementChild, anchor: { getBoundingClientRect: () => S.rects[0] || blocks[S.bi].getBoundingClientRect() } });
-  });
-  if (narrow()) return;
-  place(margin, items);
-  const row = prose.closest('.row'), R = row.getBoundingClientRect(), cardR = prose.closest('.card').getBoundingClientRect();
-  let marks = '', lines = '';
-  groups.forEach(S => {
-    S.rects.forEach(x => { marks += `<div class="stem-u" data-grp="${S.g}" style="left:${x.left - R.left}px;top:${x.top - R.top}px;width:${x.width}px;height:${x.height}px"></div>`; });
-    const last = S.rects[S.rects.length - 1]; if (!last) return;
-    const el = margin.querySelector(`[data-grp-box="${S.g}"]`).getBoundingClientRect();
-    const sx = cardR.right - R.left, sy = last.top - R.top + last.height / 2, ex = el.left - R.left + 13, ey = el.top - R.top + 13;
-    lines += `<path data-grp="${S.g}" d="M${sx.toFixed(1)} ${sy.toFixed(1)} C${(sx + 18).toFixed(1)} ${sy.toFixed(1)} ${(ex - 18).toFixed(1)} ${ey.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}"/><circle data-grp="${S.g}" cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="2.5"/>`;
-  });
-  row.insertAdjacentHTML('beforeend', `<div class="stem-layer">${marks}<svg width="${R.width}" height="${R.height}">${lines}</svg></div>`);
 }
 
 const V = {
@@ -579,37 +411,11 @@ const V = {
     thesis: '<strong>Structure: an outline beside each passage.</strong> Each paragraph that has branches gets its own small tree, drawn as a line graph with one row per branch. Click a row to read it under its tree; hover a tree to see its passage.',
     layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); },
   },
-  rings: {
-    name: 'Rings',
-    q: 'Volume',
-    thesis: '<strong>Volume and depth at a glance.</strong> Each passage\'s branches are drawn as rings around a count. The inner ring holds the branches asked about the passage, each outer ring is one level deeper, and a segment is as wide as everything that grew from it. Hover a segment for its question; click to read it.',
-    layout(p) { pinGroups(p, (T, G) => rings(p, T, G)); },
-  },
-  arcs: {
-    name: 'Arcs',
-    q: 'Time',
-    thesis: '<strong>Time: who answered whom, and when.</strong> Each passage\'s branches are dots on a line, left to right in the order they were asked. An arc joins each branch to the one it came from; arcs from the ¶ mark start at the passage itself. Long arcs are late questions about early answers.',
-    layout(p) { pinGroups(p, (T, G) => arcs(p, T, G)); },
-  },
   layers: {
     name: 'Layers',
     q: 'Depth',
-    thesis: '<strong>Depth as a stack.</strong> Each passage holds a stack of cards. The front card is the branch you are on and the cards behind it are the layers below it. Go deeper or back up one layer at a time; the stack shrinks as you reach the bottom.',
+    thesis: '<strong>Depth as a stack.</strong> Each passage holds a stack of cards. The front card is the branch you are on and the cards behind it are the layers below it. Click the card to read its answer, follow an arrow to go one layer deeper, or go back up; the stack shrinks as you reach the bottom.',
     layout(p) { pinGroups(p, (T, G) => layers(p, T, G), 'laygrp'); },
-  },
-  minimap: {
-    name: 'Minimap',
-    q: 'Distribution',
-    sticky: true,
-    thesis: '<strong>Where in the answer the branches grow.</strong> The margin holds a scaled-down silhouette of the whole answer. Paragraphs with branches are tinted and counted, and a frame shows the part on screen as you scroll. Pick a count to see that paragraph\'s tree below.',
-    layout(p) { minimap(p); },
-    scroll() { Object.keys(MM).forEach(viewport); },
-  },
-  stems: {
-    name: 'Stems',
-    q: 'Precision',
-    thesis: '<strong>Branches grow from exact sentences.</strong> The sentence a branch asks about is underlined, and a line runs from the edge of the post, level with that sentence, to the branch\'s tree in the margin. Each sentence gets its own tree, so one paragraph can hold several.',
-    layout(p) { stems(p); },
   },
 };
 
@@ -621,14 +427,12 @@ function render() {
   const v = V[st.v], first = lastV !== st.v, sc = $('#k-mg'), top = sc && !first ? sc.scrollTop : 0;
   const tabs = [['home', 'Home'], ...spacesWithPosts.filter(x => x.id !== 'sablefield').map(x => [x.id, spName(x.id)])];
   const posts = streamFor(st.space);
-  for (const k in MM) delete MM[k];
   app.innerHTML = `<div class="mg" id="k-mg"><div class="mg-inner"><nav class="tabs">${tabs.map(([id, l]) => `<button data-a="space" data-id="${id}" aria-current="${st.space === id}">${esc(l)}</button>`).join('')}</nav>
-    ${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick">${repliesMargin(p)}</div>` : v.sticky ? `<div class="stick mm" id="mm-${p.id}"></div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}</div></div>`;
+    ${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick">${repliesMargin(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}</div></div>`;
   const mg = $('#k-mg');
   mg.scrollTop = top;
   streamFor(st.space).forEach(p => p.k === 'ask' && v.layout(p));
   mg.scrollTop = top;
-  if (v.scroll) mg.addEventListener('scroll', v.scroll, { passive: true });
   lastV = st.v;
 }
 function renderBar() {
@@ -648,14 +452,11 @@ app.addEventListener('click', e => {
   if (a === 'askfrom') { st.sel[d.id] = d.node; st.asking = d.id; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
   if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; render(); return; }
   if (a === 'layer') { st.layer[d.g] = d.node; st.sel[d.id] = null; render(); return; }
-  if (a === 'mgrp') { st.mm[d.id] = +d.i; st.sel[d.id] = null; render(); return; }
 });
-/* hover links: a drawing and its passage; a drawing's caption follows the hovered branch */
+/* hover links: a drawing and its passage */
 function hl(e, on) {
   const n = e.target.closest('[data-grp]');
   if (n) { const g = n.dataset.grp; app.querySelectorAll(`[data-grp="${g}"]`).forEach(x => { if (x.closest('.mgn') || x.classList.contains('anc')) return; x.classList.toggle('blk-hl', on); }); app.querySelector(`[data-grp-box="${g}"]`)?.classList.toggle('hl', on); }
-  const q = e.target.closest('[data-q]');
-  if (q) { const cap = q.closest('[data-grp-box]')?.querySelector('.cap'); if (cap) cap.textContent = on ? q.dataset.q : cap.dataset.def; }
 }
 app.addEventListener('mouseover', e => hl(e, true));
 app.addEventListener('mouseout', e => hl(e, false));
