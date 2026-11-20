@@ -136,7 +136,6 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .tabs button:hover { background: var(--fill-hover); }
 .tabs button[aria-current="true"] { background: var(--t-heading); color: var(--feed); }
 .row { display: grid; grid-template-columns: minmax(0, 600px) minmax(0, 330px); gap: 28px; padding: 14px 0; justify-content: center; }
-.row.lr { grid-template-columns: minmax(0, 210px) minmax(0, 580px) minmax(0, 300px); gap: 24px; }
 .card { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 18px 20px 12px; min-width: 0; transition: opacity .2s; }
 .card-h { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .card h2 { margin: 0 0 8px; font-size: var(--fs-xl); line-height: 1.25; letter-spacing: -.015em; color: var(--t-heading); text-wrap: balance; }
@@ -151,7 +150,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .mgn .label { display: block; margin: 2px 0 8px; }
 .stick { position: sticky; top: 58px; max-height: calc(100vh - 150px); overflow-y: auto; padding: 2px 2px 8px 0; }
 
-/* notes (shared by Notes, Anchored, Gloss) */
+/* notes (Anchored) */
 .note { display: block; width: 100%; text-align: left; padding: 9px 10px; border-radius: var(--r-lg); margin-bottom: 4px; transition: background .15s, box-shadow .15s; }
 .note:hover, .note.hl { background: var(--fill-hover); }
 .note.open { background: var(--card); box-shadow: var(--shadow); }
@@ -163,7 +162,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .note-kids { margin: 2px 0 6px 12px; padding-left: 8px; border-left: 1.5px solid var(--border-strong); }
 .mgn .composer { margin-top: 8px; }
 
-/* Anchored and Gloss: margin items placed at the height of the passage they belong to */
+/* Anchored and Pinned map: margin items placed at the height of the passage they belong to */
 .pinned > .pin { position: absolute; left: 0; right: 0; }
 .pin-group { padding-left: 10px; border-left: 1.5px solid var(--border-strong); transition: border-color .15s; }
 .pin-group.hl { border-left-color: var(--accent); }
@@ -173,16 +172,8 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .anc { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 0 6px; height: 18px; border-radius: 9px; vertical-align: 1px;
   background: var(--accent-soft); color: var(--accent); font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .anc svg.i { width: 11px; height: 11px; }
-.gl-src { padding: 4px 0 4px 10px; border-left: 1.5px solid var(--border-strong); font-size: var(--fs-sm); line-height: 1.4; transition: border-color .15s; }
-.gl-src b { display: block; font-weight: 500; color: var(--t-heading); }
-.gl-src span { font-size: var(--fs-xs); color: var(--t-faint); }
-.gl-src sup { color: var(--accent); font-weight: 700; margin-right: 4px; }
-.gl-src.hl { border-left-color: var(--accent); }
-.prose sup.cite.hl { background: var(--accent); color: var(--on-accent); border-radius: 3px; padding: 0 2px; }
-.left-h { text-align: right; }
-.unplaced { font-size: var(--fs-xs); color: var(--t-faint); }
 
-/* Map */
+/* line graph for Pinned map */
 .graph { position: relative; }
 .graph svg { position: absolute; inset: 0; width: 100%; overflow: visible; pointer-events: none; }
 .graph svg path { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
@@ -207,8 +198,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .tgrp.hl .grow-r .gq { color: var(--t-heading); }
 
 @media (max-width: 860px) {
-  .row, .row.lr { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .row.lr .mgn.left { order: 3; }
+  .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .stick { position: static; max-height: none; }
   .pinned > .pin { position: static; margin-bottom: 8px; }
   .mg-inner { padding: 0 12px 30px; }
@@ -313,7 +303,7 @@ const replyTree = list => list.map(r => `<div class="reply">${av(r.u, 'sm')}<div
 
 /* ================= margin family ================= */
 /* Every variant shows the same stream of whole posts. They differ in what the margin holds and how it
-   relates to the post: notes pinned to passages, two margins (sources and branches), or a tree map. */
+   relates to the post: notes pinned to passages, or small branch trees pinned to passages. */
 const st = { v: 'anchored', space: 'home', theme: 'system', exp: new Set(['01M7HWGZJGT7JTFFVSYPX055KV:f0']), sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, hover: {}, asking: null };
 const key = (p, n) => p.id + ':' + n;
 
@@ -342,7 +332,7 @@ function note(p, T, n, extra = '') {
 const askBox = (p, ph = 'Ask a branch question', ctx = '') => st.asking === p.id ? composer('m:' + p.id, ph, ctx) : '';
 const repliesMargin = p => { const r = replies(p); return r.length ? `<span class="label">Replies · ${replyCount(p)}</span>${replyTree(r)}` : ''; };
 
-/* ---- passage matching for Anchored and Gloss ---- */
+/* ---- passage matching for Anchored and Pinned map ---- */
 const STOP = new Set('what which does with that this from have there their about would could should into than then they them were been being where when your more most other some such only also over just like very many much does show give list same each these those here after before because between under while whether'.split(' '));
 const words = s => new Set((strip(s).toLowerCase().match(/[a-z0-9]{4,}/g) || []).filter(w => !STOP.has(w)));
 function blocksOf(prose) { return [...prose.querySelectorAll(':scope > p, :scope > ul > li, :scope > ol > li, :scope > h4, :scope > table')]; }
@@ -378,21 +368,15 @@ function anchorBranches(p) {
   if (!narrow()) place(margin, items);
   const box = margin.querySelector('.ask-pin'); if (box) { box.style.top = (parseFloat(margin.style.minHeight) || 0) + 'px'; margin.style.minHeight = (parseFloat(margin.style.minHeight) || 0) + box.offsetHeight + 'px'; }
 }
-function anchorSources(p) {
-  const prose = document.getElementById('pr-' + p.id), margin = document.getElementById('ml-' + p.id);
-  if (!prose || !margin) return;
-  const src = D.srcd[p.id] || [], sups = [...prose.querySelectorAll('sup.cite')], items = [];
-  let last = prose.firstElementChild;
-  src.forEach((s, i) => {
-    const sup = sups.find(x => x.textContent.trim() === String(i + 1));
-    if (sup) { sup.dataset.cite = p.id + '-' + (i + 1); last = sup; }
-    margin.insertAdjacentHTML('beforeend', `<div class="pin gl-src" data-src="${p.id}-${i + 1}"><b><sup>${i + 1}</sup>${esc(s[0])}</b><span>${esc(s[1])} · ${esc(s[2])}</span></div>`);
-    items.push({ el: margin.lastElementChild, anchor: sup || last });
-  });
-  if (!narrow()) place(margin, items);
-}
 
 /* ---- tree maps pinned to passages (Pinned map) ---- */
+function preview(p, T, n) {
+  if (n.id === 'r') return `<div class="preview"><span class="label">Answer</span><p class="rq">${esc(p.t || clip(p.q, 80))}</p><div class="pf">${noun(T.kids('r').length, 'branch', 'branches')} start here</div></div>`;
+  const k = T.kids(n.id).length;
+  return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${n.tok ? `<span>${ktok(n.tok)}</span>` : ''}</div><p class="rq">${esc(n.q)}</p>${status(n)}<div class="prose">${answerHtml(n)}</div>
+    <div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches under this'}</span><button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.id}">Branch from here</button></div>
+    ${st.asking === p.id ? composer('mf:' + p.id + ':' + n.id, 'Ask a branch question') : ''}</div>`;
+}
 function subtree(p, T, tops, g) {
   const sel = st.sel[p.id], on = new Set(sel && T.nodes[sel] ? T.path(sel).map(n => n.id) : []);
   const rows = tops.flatMap(n => T.dfs(n.id, 0, [])), H = 26, X = d => 6 + d * 13, idx = Object.fromEntries(rows.map((r, i) => [r.n.id, i]));
@@ -403,7 +387,7 @@ function subtree(p, T, tops, g) {
     dots += `<circle class="${n.id === sel ? 'sel' : on.has(n.id) ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="3.5"/>`;
   });
   const cur = rows.find(r => r.n.id === sel)?.n;
-  return `<div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-grp="${g}"><span class="gq">${esc(n.q)}</span></button>`).join('')}</div>${cur ? V.map.preview(p, T, cur) : ''}`;
+  return `<div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-grp="${g}"><span class="gq">${esc(n.q)}</span></button>`).join('')}</div>${cur ? preview(p, T, cur) : ''}`;
 }
 function anchorTrees(p) {
   const prose = document.getElementById('pr-' + p.id), margin = document.getElementById('mr-' + p.id);
@@ -434,47 +418,10 @@ const V = {
     },
     layout(p) { anchorBranches(p); },
   },
-  gloss: {
-    name: 'Gloss',
-    full: true,
-    lr: true,
-    thesis: '<strong>Two margins, like an annotated text.</strong> The left margin holds the sources, each at the line that cites it. The right margin holds the branches, each at the passage it asks about. Hover a source or a citation number to link the two.',
-    left(p) { return p.k === 'post' ? '' : `<div class="pinned" id="ml-${p.id}"></div>`; },
-    margin(p) { return V.anchored.margin(p); },
-    layout(p) { anchorSources(p); anchorBranches(p); },
-  },
-  map: {
-    name: 'Map',
-    thesis: '<strong>The margin shows the shape of the conversation.</strong> A tree of every branch sits beside the post, with a preview card under it. Hover a node to preview it and click to keep it; the highlighted line is the path back to the answer.',
-    margin(p) {
-      if (p.k === 'post') return `<div class="stick">${repliesMargin(p)}</div>`;
-      const T = tree(p);
-      if (!T.count) return `<div class="stick"><span class="label">Tree</span><p class="empty">No branches yet.</p>${askBox(p)}</div>`;
-      const cur = T.nodes[st.hover[p.id]] || T.nodes[st.sel[p.id]] || Object.values(T.nodes).filter(n => n.id !== 'r').sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
-      return `<div class="stick"><span class="label">Tree · ${noun(T.count, 'branch', 'branches')}</span><div id="map-${p.id}">${this.graph(p, T, cur)}</div><div id="pv-${p.id}">${this.preview(p, T, cur)}</div></div>`;
-    },
-    graph(p, T, cur) {
-      const rows = T.dfs(), on = new Set(T.path(cur.id).map(n => n.id)), H = 26, X = d => 8 + d * 13, idx = Object.fromEntries(rows.map((r, i) => [r.n.id, i]));
-      let paths = '', dots = '';
-      rows.forEach(({ n, d }, i) => {
-        const y = i * H + 13;
-        if (n.par) { const px = X(d - 1), py = idx[n.par] * H + 13; paths += `<path class="${on.has(n.id) ? 'on' : ''}" d="M${px} ${py} L${px} ${y - 6} Q${px} ${y} ${px + 6} ${y} L${X(d)} ${y}"/>`; }
-        dots += `<circle class="${n.id === cur.id ? 'sel' : on.has(n.id) ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="3.5"/>`;
-      });
-      return `<div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="pin" data-id="${p.id}" data-node="${n.id}" data-hov="${p.id}"><span class="gq">${esc(n.id === 'r' ? 'Answer' : n.q)}</span></button>`).join('')}</div>`;
-    },
-    preview(p, T, n) {
-      if (n.id === 'r') return `<div class="preview"><span class="label">Answer</span><p class="rq">${esc(p.t || clip(p.q, 80))}</p><div class="pf">${noun(T.kids('r').length, 'branch', 'branches')} start here</div></div>`;
-      const k = T.kids(n.id).length;
-      return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${n.tok ? `<span>${ktok(n.tok)}</span>` : ''}</div><p class="rq">${esc(n.q)}</p>${status(n)}<div class="prose">${answerHtml(n)}</div>
-        <div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches under this'}</span><button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.id}">Branch from here</button></div>
-        ${st.asking === p.id ? composer('mf:' + p.id + ':' + n.id, 'Ask a branch question') : ''}</div>`;
-    },
-  },
   pinned: {
     name: 'Pinned map',
     full: true,
-    thesis: '<strong>The tree, split up and pinned to passages.</strong> Each paragraph that has branches gets its own small tree beside it, drawn the same way as Map. Click a node to read it under its tree; hover a tree to see its passage.',
+    thesis: '<strong>The tree, split up and pinned to passages.</strong> Each paragraph that has branches gets its own small tree beside it, drawn as a line graph. Click a node to read it under its tree; hover a tree to see its passage.',
     margin(p) { return p.k === 'post' ? repliesMargin(p) : `<div class="pinned" id="mr-${p.id}"></div>`; },
     layout(p) { anchorTrees(p); },
   },
@@ -489,7 +436,7 @@ function render() {
   const tabs = [['home', 'Home'], ...spacesWithPosts.filter(x => x.id !== 'sablefield').map(x => [x.id, spName(x.id)])];
   const posts = streamFor(st.space);
   app.innerHTML = `<div class="mg" id="k-mg"><div class="mg-inner"><nav class="tabs">${tabs.map(([id, l]) => `<button data-a="space" data-id="${id}" aria-current="${st.space === id}">${esc(l)}</button>`).join('')}</nav>
-    ${posts.map(p => `<div class="row${v.lr ? ' lr' : ''}">${v.lr ? `<aside class="mgn left">${v.left(p)}</aside>` : ''}${card(p, v.full)}<aside class="mgn">${v.margin(p)}</aside></div>`).join('')}</div></div>`;
+    ${posts.map(p => `<div class="row">${card(p, v.full)}<aside class="mgn">${v.margin(p)}</aside></div>`).join('')}</div></div>`;
   layout();
   $('#k-mg').scrollTop = top;
   lastV = st.v;
@@ -512,30 +459,25 @@ app.addEventListener('click', e => {
   if (a === 'note') { st.exp.has(d.id) ? st.exp.delete(d.id) : st.exp.add(d.id); render(); return; }
   if (a === 'ask') {
     const p = byId(d.id);
-    st.asking = st.asking === p.id ? null : p.id; if (st.v === 'map') st.sel[p.id] ||= 'r'; if (st.v === 'pinned') st.sel[p.id] = null; render(); $(`[id^="in-m"][id*="${p.id}"]`)?.focus(); return;
+    st.asking = st.asking === p.id ? null : p.id; if (st.v === 'pinned') st.sel[p.id] = null; render(); $(`[id^="in-m"][id*="${p.id}"]`)?.focus(); return;
   }
   if (a === 'askfrom') { st.sel[d.id] = d.node; st.hover[d.id] = null; st.asking = d.id; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
   if (a === 'anc') { const g = d.grp, box = app.querySelector(`[data-grp-box="${g}"]`); box?.querySelectorAll('.note').forEach(n => { if (!st.exp.has(n.dataset.id)) st.exp.add(n.dataset.id); }); render(); return; }
   if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; render(); return; }
-  if (a === 'pin') { st.sel[d.id] = d.node; st.hover[d.id] = null; st.asking = null; render(); return; }
 });
-/* hover links: note and its passage; source and its citation; map row and preview */
+/* hover links: a tree or note and its passage */
 function hl(e, on) {
   const n = e.target.closest('[data-grp]');
   if (n) { const g = n.dataset.grp; app.querySelectorAll(`[data-grp="${g}"]`).forEach(x => { if (x.closest('.mgn') || x.classList.contains('anc')) return; x.classList.toggle('blk-hl', on); }); app.querySelector(`[data-grp-box="${g}"]`)?.classList.toggle('hl', on); }
-  const s = e.target.closest('[data-src], sup[data-cite]');
-  if (s) { const id = s.dataset.src || s.dataset.cite; app.querySelector(`[data-src="${id}"]`)?.classList.toggle('hl', on); app.querySelector(`sup[data-cite="${id}"]`)?.classList.toggle('hl', on); }
-  const r = e.target.closest('[data-hov]');
-  if (r && st.v === 'map') { const pid = r.dataset.hov; st.hover[pid] = on ? r.dataset.node : null; const p = byId(pid), T = tree(p); const cur = T.nodes[st.hover[pid]] || T.nodes[st.sel[pid]]; if (cur) { $('#pv-' + pid).innerHTML = V.map.preview(p, T, cur); const g = $('#map-' + pid); g.innerHTML = V.map.graph(p, T, cur); } }
 }
 app.addEventListener('mouseover', e => hl(e, true));
-app.addEventListener('mouseout', e => { if (e.relatedTarget && e.target.closest('[data-hov]') && e.relatedTarget.closest('[data-hov]') === e.target.closest('[data-hov]')) return; hl(e, false); });
+app.addEventListener('mouseout', e => hl(e, false));
 app.addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target.closest('[data-form]'), inp = f.querySelector('input'), v = inp.value.trim(); if (!v) { inp.focus(); return; }
   const [kind, pid, node] = f.dataset.form.split(':'), p = byId(pid);
   if (kind === 'mf') { st.sel[pid] = addBranch(p, node, v); }
-  else { const nid = addBranch(p, 'r', v); st.exp.add(key(p, nid)); if (st.v === 'map') st.sel[pid] = nid; }
+  else { const nid = addBranch(p, 'r', v); st.exp.add(key(p, nid)); }
   st.asking = null; render();
 });
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(render, 150); });
