@@ -1304,6 +1304,7 @@ const left = () => Math.max(0, ALLOWANCE - used());
 const keys = () => (KEYS[st.user] ||= {});
 const billing = () => BILLING[st.user] || 'pause';
 const outOfTokens = () => left() <= 0 && !(billing() === 'key' && keys().anthropic?.status === 'working');
+const resetShort = () => { const h = Math.round((RESET - NOW) / 36e5), d = Math.floor(h / 24); return d ? `${d}d ${h % 24}h` : `${h}h`; };
 const resetIn = () => { const h = Math.round((RESET - NOW) / 36e5), d = Math.floor(h / 24); return d ? `${d} day${d === 1 ? '' : 's'} ${h % 24} h` : `${h} h`; };
 /* charge a finished run: included tokens first, then the key the member chose; logged for the Usage page */
 const RUNLOG = {};
@@ -1479,7 +1480,7 @@ function usageRuns() {
 }
 function usageTop() {
   const pct = Math.min(1, used() / ALLOWANCE), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok', lp = Math.round((1 - pct) * 100);
-  return `<section class="box"><p class="usent ${tone}">You have <b>${lp}%</b> of your included usage left this week. It resets on ${WEEK[0]}, in ${resetIn()}.</p><div class="utrack ${tone}" role="img" aria-label="${lp}% left"><span style="width:${((1 - pct) * 100).toFixed(1)}%"></span></div></section>`;
+  return `<section class="box"><p class="usent ${tone}">You have <b>${lp}%</b> of usage left this week. Next reset on ${WEEK[0]}, in ${resetShort()}.</p><div class="utrack ${tone}" role="img" aria-label="${lp}% left"><span style="width:${((1 - pct) * 100).toFixed(1)}%"></span></div></section>`;
 }
 function usageRunsSection() {
   /* each row: the question, then the share of the weekly allowance it used and the date */
