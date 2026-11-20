@@ -140,6 +140,9 @@ body.fs .fsexit:focus-visible, body.fs.fs-peek .fsexit { transform: translate(-5
 /* composer parts */
 .nb { min-width: 0; }
 .nb-dock > .av, .nb-dock > textarea { position: relative; top: -1px; }
+/* post titles B and C: the composer starts with a tree node, like the titles below it, instead of your avatar */
+.av.nbnode { background: none; margin-left: -4px; margin-right: 4px; }  /* lines up with the card nodes below */
+.av.nbnode .ttn { margin-top: 0; }
 .nb textarea { display: block; width: 100%; resize: none; border: 0; outline: none; background: none; color: var(--t-heading); font: inherit; font-size: var(--input-fs, var(--fs-md)); line-height: 1.5; padding: 3px 0; min-height: 28px; max-height: 240px; }
 .nb textarea::placeholder { color: var(--placeholder); }
 .nb-f { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
@@ -1570,7 +1573,7 @@ const COMPOSERS = {
   split: (extra = '', face = true) => {
     const open = st.menu === 'send';
     const opt = (m, t, sub) => `<button type="button" class="mi mi-2" role="menuitemradio" aria-checked="${st.newMode === m}" data-a="mode" data-m="${m}"><span class="mi-ic">${m === 'ask' ? ARROW_SEND : PENCIL}</span><span><b>${t}</b><small>${sub}</small></span>${st.newMode === m ? CHECK : ''}</button>`;
-    return `<div class="row new-row"><form class="${nbClass('nb-dock' + extra)}" data-form="new:x">${face ? av(me(), 'sm') : ''}${draft(ph())}${spaceField()}${isAsk() ? modelMenu() : ''}
+    return `<div class="row new-row"><form class="${nbClass('nb-dock' + extra)}" data-form="new:x">${!face ? '' : st.ui.tt === 'b' || st.ui.tt === 'c' ? '<span class="av sm nbnode" aria-hidden="true"><span class="ttn"></span></span>' : av(me(), 'sm')}${draft(ph())}${spaceField()}${isAsk() ? modelMenu() : ''}
       <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter${st.draft.trim() ? '' : ' disabled'} aria-label="${isAsk() ? 'Ask' : 'Post'}" title="${isAsk() ? 'Ask' : 'Post'}">${ARROW_SEND}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
       ${open ? `<div class="menu right" role="menu">${opt('ask', 'Ask', 'Agent researches and answers')}${opt('post', 'Post', 'A message to people in the channel')}</div>` : ''}</span></form><div></div></div>`;
   },
