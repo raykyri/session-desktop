@@ -548,45 +548,103 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 .sphead.wide { grid-column: 1 / -1; }
 .sphead .chinfo { width: 28px; height: 28px; color: var(--t-muted); }
 .sphead .chinfo svg.i { width: 15px; height: 15px; }
-.chdlg { display: grid; gap: 12px; }
+/* channel dialogs: info, editor (stacked above info), moderation log, rules gate, remove / report */
+.dialog.chdlg { display: flex; flex-direction: column; gap: 12px; top: 50%; transform: translate(-50%, -50%); max-height: calc(100% - 40px); overflow: auto; overscroll-behavior: contain; }
 .chdlg-h { display: flex; align-items: center; gap: 10px; }
 .chdlg-h h3 { flex: 1; display: flex; align-items: center; }
 .chdlg-h .glyph { width: 28px; height: 28px; border-radius: 8px; font-size: 14px; }
+.chdlg-h .btn2 { flex: none; }
 .chfacts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font-size: var(--fs-sm); }
 .chfacts dt { color: var(--t-faint); }
 .chfacts dd { margin: 0; display: inline-flex; align-items: center; gap: 5px; color: var(--t-primary); }
-.chdlg h4 { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--t-heading); }
+.chdlg h4 { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--t-heading); display: flex; align-items: baseline; gap: 8px; }
+.chdlg h4 small { font-weight: 400; color: var(--t-faint); font-size: var(--fs-xs); }
 .chnone { color: var(--t-faint) !important; }
-.chdlg-h .btn2 { flex: none; }
-.cedlg { width: min(520px, calc(100% - 32px)); max-height: 80vh; overflow: auto; }
-:is(.cedlg, .cepage, .ceinline) fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
-:is(.cedlg, .cepage, .ceinline) legend { padding: 0; margin-bottom: 4px; font-size: var(--fs-sm); font-weight: 500; color: var(--t-heading); }
-:is(.cedlg, .cepage, .ceinline) legend small { margin-left: 6px; font-weight: 400; color: var(--t-faint); }
-:is(.cedlg, .cepage, .ceinline) textarea { padding: 9px 12px; border-radius: var(--r-lg); border: 1px solid var(--control-border); background: var(--field); font: inherit; font-size: var(--fs-sm); color: inherit; resize: vertical; line-height: 1.45; }
-:is(.cedlg, .cepage, .ceinline) textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-:is(.cedlg, .cepage, .ceinline) .radio { flex-direction: row; font-weight: 400; padding: 4px 0; }
-:is(.cedlg, .cepage, .ceinline) .radio small { display: block; color: var(--t-muted); font-size: var(--fs-xs); }
-:is(.cedlg, .cepage, .ceinline) .cerule textarea { flex: 1; min-width: 0; padding: 7px 10px; resize: none; overflow: hidden; }
-.dialog.cesheet { top: 0; bottom: 0; left: auto; right: 0; transform: none; width: min(460px, 100%); max-height: none; border-radius: 0; padding: 20px 22px; align-content: start; }
-.cepage .ceback::before { content: '‹ '; }
-.cepage .ceback { margin-bottom: 10px; }
-.cepage .ceform { margin-top: 10px; gap: 20px; }
-.cepage .dacts { justify-content: flex-start; flex-direction: row-reverse; }
-.sphead.ceinline { padding-bottom: 18px; }
-.ceinline .chdlg-h { margin-bottom: 12px; }
-.ceinline .chdlg-h .glyph { width: 26px; height: 26px; border-radius: 7px; font-size: 13px; }
-.ceinline .ceform { max-width: 640px; }
+.chrules { margin: 0; padding-left: 20px; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.45; display: grid; gap: 6px; }
+.chrules li b { color: var(--t-heading); font-weight: 500; }
+.chrules li span:not(.rtag) { display: block; color: var(--t-muted); font-size: var(--fs-xs); }
+.chrules li.gone b { text-decoration: line-through; color: var(--t-faint); }
+.rtag { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 0 6px; height: 17px; border-radius: 9px; font-size: 10px; font-weight: 600; vertical-align: 1px; background: var(--accent-soft); color: var(--accent); }
+.rtag.chk { background: var(--control); color: var(--t-muted); }
+.rtag svg.i { width: 10px; height: 10px; }
+.crules summary { cursor: pointer; font-size: var(--fs-sm); color: var(--t-muted); }
+.crules[open] summary { margin-bottom: 6px; }
+.chfoot { display: flex; gap: 14px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--divider); }
+/* the editor sits above the info dialog with its own scrim */
+.scrim.ce-scrim { z-index: 42; }
+.dialog.cedlg { z-index: 43; width: min(520px, calc(100% - 32px)); padding: 0; gap: 0; overflow: hidden; }
+.cedlg > .chdlg-h { padding: 16px 20px 12px; border-bottom: 1px solid var(--divider); }
+.cedlg .ceform { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0; }
+.cedlg .cebody { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 14px 20px 18px; display: flex; flex-direction: column; gap: 16px; }
+.cedlg .dacts { padding: 12px 20px; border-top: 1px solid var(--divider); }
+.cedlg fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cedlg legend { padding: 0; margin-bottom: 4px; font-size: var(--fs-sm); font-weight: 500; color: var(--t-heading); }
+.cedlg legend small { margin-left: 6px; font-weight: 400; color: var(--t-faint); font-variant-numeric: tabular-nums; }
+.cedlg textarea, .rmdlg textarea { padding: 9px 12px; border-radius: var(--r-lg); border: 1px solid var(--control-border); background: var(--field); font: inherit; font-size: var(--fs-sm); color: inherit; resize: vertical; line-height: 1.45; }
+.cedlg textarea:focus, .rmdlg textarea:focus, .cedlg select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.cedlg .radio, .rmdlg .radio { flex-direction: row; font-weight: 400; padding: 4px 0; }
+.cedlg .radio small, .rmdlg .radio small { display: block; color: var(--t-muted); font-size: var(--fs-xs); }
+.cedlg select { height: 34px; padding: 0 10px; border-radius: var(--r-md); border: 1px solid var(--control-border); background: var(--field); font: inherit; font-size: var(--fs-sm); color: inherit; justify-self: start; }
 .cecount { align-self: flex-end; font-weight: 400; color: var(--t-faint); font-size: var(--fs-xs); }
+/* rules: a drag handle, the rule, a check toggle and remove */
 .cerules ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.cerule { display: flex; align-items: flex-start; gap: 4px; }
-.cerule .cenum { padding-top: 9px; }
-.cerule .iconbtn { margin-top: 4px; }
-.cerule .cenum { flex: none; width: 18px; text-align: right; margin-right: 4px; font-size: var(--fs-xs); color: var(--t-faint); font-variant-numeric: tabular-nums; }
-.cerule .iconbtn { width: 26px; height: 26px; flex: none; color: var(--t-muted); }
-.cerule .iconbtn:disabled { opacity: .3; }
+.cerule { display: grid; grid-template-columns: 22px 1fr auto auto; gap: 2px 4px; align-items: start; border-radius: var(--r-md); background: var(--card); }
+.cerule.drag { position: relative; z-index: 2; box-shadow: var(--shadow), var(--shadow-pop); }
+.cerule.drag, .cerule.drag * { cursor: grabbing !important; }
+.cehandle { width: 22px; height: 34px; display: grid; place-items: center; border-radius: 6px; color: var(--t-faint); cursor: grab; touch-action: none; }
+.cehandle:hover, .cehandle:focus-visible { color: var(--t-heading); background: var(--fill-hover); }
+.cehandle svg { width: 10px; height: 14px; fill: currentColor; }
+.cerule textarea { min-width: 0; padding: 7px 10px; resize: none; overflow: hidden; }
+.cerule textarea.ced { grid-column: 2; font-size: var(--fs-xs); padding: 6px 10px; color: var(--t-secondary); }
+.cerule .iconbtn { width: 28px; height: 28px; margin-top: 3px; color: var(--t-faint); }
+.cerule .iconbtn[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
 .cerule .iconbtn svg.i { width: 13px; height: 13px; }
+.cerule .cedadd { grid-column: 2; justify-self: start; font-size: var(--fs-xs); color: var(--t-faint); font-weight: 400; }
+.cerule .cedadd:hover { color: var(--accent); }
 .cadd { justify-self: start; margin-left: 26px; }
-.chrules { margin: 0; padding-left: 18px; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.45; display: grid; gap: 4px; }
+.cetpl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: var(--fs-xs); color: var(--t-faint); }
+.cetpl button { height: 26px; padding: 0 10px; border-radius: 13px; background: var(--control); color: var(--t-heading); font-size: var(--fs-xs); font-weight: 500; }
+.cetpl button:hover { background: var(--fill-hover); }
+.cefine { margin: 0; font-size: var(--fs-xs) !important; color: var(--t-faint) !important; }
+/* rules updated, in the channel header */
+.rupd { display: inline-flex; align-items: center; gap: 10px; margin-top: 8px; padding: 5px 6px 5px 10px; border-radius: var(--r-md); background: var(--accent-soft); font-size: var(--fs-xs); color: var(--t-heading); }
+.rupd .tlink { font-size: inherit; }
+.rupd .iconbtn { width: 22px; height: 22px; color: var(--t-muted); }
+.rupd .iconbtn svg.i { width: 11px; height: 11px; }
+/* rules link in the composer */
+.nb .rlink { flex: none; display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 14px; color: var(--t-faint); }
+.nb .rlink:hover { color: var(--t-heading); background: var(--fill-hover); }
+.nb .rlink svg.i { width: 14px; height: 14px; }
+/* an ask held by a checked rule */
+.held { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: var(--r-lg); background: color-mix(in srgb, var(--warn, #c98a1b) 12%, var(--card)); font-size: var(--fs-sm); color: var(--t-heading); }
+.held > svg.i { width: 15px; height: 15px; flex: none; margin-top: 2px; color: var(--warn, #c98a1b); }
+.held p { margin: 0; flex: 1; line-height: 1.45; }
+.held p small { display: block; color: var(--t-muted); font-size: var(--fs-xs); }
+.held .acts { display: flex; gap: 6px; flex: none; }
+/* removed threads */
+.card.removed { padding-top: 14px; padding-bottom: 14px; }
+.rmnote { display: flex; gap: 8px; align-items: flex-start; font-size: var(--fs-sm); color: var(--t-muted); line-height: 1.45; }
+.rmnote svg.i { width: 14px; height: 14px; flex: none; margin-top: 3px; }
+.rmnote b { color: var(--t-heading); font-weight: 500; }
+.rmnote small { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--t-faint); }
+.rmdlg .rlist { display: grid; gap: 0; max-height: 260px; overflow: auto; }
+.held-flag { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-size: var(--fs-xs); color: var(--warn, #c98a1b); }
+.held-flag svg.i { width: 12px; height: 12px; }
+/* moderation log */
+.mlsum { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.mlsum li { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+.mlsum .bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--control); overflow: hidden; }
+.mlsum .bar i { display: block; height: 100%; background: var(--accent); }
+.mlsum small { color: var(--t-faint); font-variant-numeric: tabular-nums; }
+.mlist { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.mlist li { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--divider); font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.4; }
+.mlist li > span:not(.mlkind):not(.acts) { flex: 1; min-width: 0; }
+.mlist li b { color: var(--t-heading); font-weight: 500; }
+.mlist li small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
+.mlist .acts { display: flex; gap: 6px; flex: none; }
+.mlkind { flex: none; height: 18px; padding: 0 6px; border-radius: 9px; font-size: 10px; font-weight: 600; line-height: 18px; background: var(--control); color: var(--t-muted); margin-top: 1px; }
+.mlkind.rm { background: color-mix(in srgb, var(--bad) 14%, var(--card)); color: var(--bad); }
+.mltabs { align-self: flex-start; }
 .sphead.wide p { max-width: 80ch; }
 .sphead > .chip { flex: none; height: 28px; padding: 0 12px; border-radius: 14px; font-size: var(--fs-xs); font-weight: 600; }
 .sphead h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; color: var(--t-heading); }
@@ -954,13 +1012,16 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 /* channel feeds: 2px less above each post */
 .chfeed .row:not(.new-row) { padding-top: 12px; }
 /* page layouts (mock variants): A main + side, centered as a pair · B main column centered, side column to its right
-   C one column, branches and replies below each card · D wider main column, narrower side */
+   C one column, branches and replies below each card · D wider main column, narrower side
+   E main column centered, branches on the left · F main column centered, each reader puts branches left or right */
 @media (min-width: 861px) {
-  .pl-b .mg-inner { max-width: 1340px; }
-  .pl-b .row { grid-template-columns: minmax(0, 1fr) minmax(0, 600px) minmax(0, 1fr); justify-content: stretch; }
-  .pl-b .row > :nth-child(1) { grid-column: 2; }
-  .pl-b .row > :nth-child(2) { grid-column: 3; max-width: 330px; }
-  .pl-b .row > .sphead.wide { grid-column: 2 / 4; max-width: 951px; }
+  :is(.pl-b, .pl-e, .pl-f) .mg-inner { max-width: 1340px; }
+  :is(.pl-b, .pl-e, .pl-f) .row { grid-template-columns: minmax(0, 1fr) minmax(0, 600px) minmax(0, 1fr); justify-content: stretch; }
+  :is(.pl-b, .pl-e, .pl-f) .row > :nth-child(1) { grid-column: 2; grid-row: 1; }
+  :is(.pl-b, .pl-f.side-r) .row > :nth-child(2) { grid-column: 3; max-width: 330px; }
+  :is(.pl-e, .pl-f.side-l) .row > :nth-child(2) { grid-column: 1; grid-row: 1; justify-self: end; width: 100%; max-width: 330px; }
+  :is(.pl-b, .pl-f.side-r) .row > .sphead.wide { grid-column: 2 / 4; max-width: 951px; }
+  :is(.pl-e, .pl-f.side-l) .row > .sphead.wide { grid-column: 2; }
   .pl-c .row { grid-template-columns: minmax(0, 640px); gap: 8px; }
   .pl-c .stick { position: static; max-height: none; }
   .pl-c .pinned > .pin { position: static; margin-bottom: 8px; }
@@ -968,10 +1029,23 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
   .pl-d .row { grid-template-columns: minmax(0, 720px) minmax(0, 300px); }
 }
 @media (min-width: 861px) and (max-width: 1320px) {
-  .pl-b .row { grid-template-columns: minmax(0, 600px) minmax(0, 330px); justify-content: center; }
-  .pl-b .row > :nth-child(1), .pl-b .row > :nth-child(2) { grid-column: auto; }
-  .pl-b .row > .sphead.wide { grid-column: 1 / -1; }
+  :is(.pl-b, .pl-f.side-r) .row { grid-template-columns: minmax(0, 600px) minmax(0, 330px); justify-content: center; }
+  :is(.pl-b, .pl-f.side-r) .row > :nth-child(1), :is(.pl-b, .pl-f.side-r) .row > :nth-child(2) { grid-column: auto; }
+  :is(.pl-b, .pl-f.side-r) .row > .sphead.wide { grid-column: 1 / -1; }
+  :is(.pl-e, .pl-f.side-l) .row { grid-template-columns: minmax(0, 330px) minmax(0, 600px); justify-content: center; }
+  :is(.pl-e, .pl-f.side-l) .row > :nth-child(1) { grid-column: 2; }
+  :is(.pl-e, .pl-f.side-l) .row > :nth-child(2) { grid-column: 1; max-width: none; }
+  :is(.pl-e, .pl-f.side-l) .row > .sphead.wide { grid-column: 1 / -1; }
 }
+/* F: the switch at the top of each side column */
+.sideflip { display: none; }
+.pl-f .sideflip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; margin: 0 0 6px; border-radius: 12px; font-size: var(--fs-xs); color: var(--t-faint); }
+.pl-f .sideflip:hover { color: var(--t-heading); background: var(--fill-hover); }
+.pl-f .sideflip svg.i { width: 12px; height: 12px; }
+.pl-f.side-l .mgn { text-align: right; }
+.pl-f.side-l .mgn > * { text-align: left; }
+.pl-f.side-l .mgn > .sideflip { text-align: right; }
+@media (max-width: 860px) { .pl-f .sideflip { display: none; } }
 @media (max-width: 860px) {
     .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .stick { position: static; max-height: none; }
@@ -1292,8 +1366,10 @@ const ARROW_SEND = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path 
 const ARROW_REPLY = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 4 3 7.5 6.5 11"/><path d="M3.5 7.5h5.5a4 4 0 0 1 4 4v1"/></svg>';
 function card(p) {
   const mode = V[st.v].av || 'header';
-  const meta = `<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div>`;
-  const more = mine(p.u) ? moreMenu('t:' + p.id, !p.pending && (p.k === 'ask' ? !othersUnderBranch(tree(p), 'r') : !othersUnderReplies(replies(p))), p.k === 'ask' ? 'ask' : 'post', '', true, p.pending ? 'Available when the answer finishes' : undefined) : '';
+  if (p.removed) { const r = p.removed; return `<article class="card removed" id="card-${p.id}"><div class="rmnote">${RM_IC}<span>Removed by @${esc(r.by)} for breaking ${esc(ruleLabel(p.s, r.rule))}${mine(p.u) && r.note ? `<small>Note to you: “${esc(r.note)}”</small>` : ''}<small>${p.k === 'post' ? 'Post' : 'Ask'} by @${esc(p.u)} in ${esc(spName(p.s))}</small></span></div></article>`; }
+  const meta = `<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time>${p.flag != null && (isMod(p.s) || mine(p.u)) ? `<span class="held-flag" title="Asked after the agent flagged it for rule ${p.flag + 1}">${WARN_IC}Rule ${p.flag + 1}</span>` : ''}</div>`;
+  const modItems = !mine(p.u) && canWrite() && SPACE_META[p.s] ? (isMod(p.s) ? `<button type="button" class="mi danger" role="menuitem" data-a="rmopen" data-id="${p.id}"><span>Remove for a rule…</span></button>` : `<button type="button" class="mi" role="menuitem" data-a="reportopen" data-id="${p.id}"><span>Report…</span></button>`) : '';
+  const more = !mine(p.u) && modItems ? moreMenu('t:' + p.id, false, '', modItems, false) : mine(p.u) ? moreMenu('t:' + p.id, !p.pending && (p.k === 'ask' ? !othersUnderBranch(tree(p), 'r') : !othersUnderReplies(replies(p))), p.k === 'ask' ? 'ask' : 'post', '', true, p.pending ? 'Available when the answer finishes' : undefined) : '';
   const head = mode === 'footer' ? '' : `<div class="card-h">${av(p.u, mode === 'header' ? '' : 'sm')}${meta}${more}</div>`;
   const lead = mode === 'footer' ? `<span class="byl">${av(p.u, 'sm')}${meta}</span>` : '';
   const count = c => mode === 'footer' ? (c ? `<span class="notes">· ${c}</span>` : '<span class="notes"></span>') : `<span class="notes">${c}</span>`;
@@ -1500,7 +1576,7 @@ const COMPOSERS = {
   split: (extra = '', face = true) => {
     const open = st.menu === 'send';
     const opt = (m, t, sub) => `<button type="button" class="mi mi-2" role="menuitemradio" aria-checked="${st.newMode === m}" data-a="mode" data-m="${m}"><span><b>${t}</b><small>${sub}</small></span>${st.newMode === m ? CHECK : ''}</button>`;
-    return `<div class="row new-row"><form class="${nbClass('nb-dock' + extra)}" data-form="new:x">${face ? av(me(), 'sm') : ''}${draft(ph())}${spaceField()}${isAsk() ? modelMenu() : ''}
+    return `<div class="row new-row"><form class="${nbClass('nb-dock' + extra)}" data-form="new:x">${face ? av(me(), 'sm') : ''}${draft(ph())}${spaceField()}${rulesOf(newSpaceId()).length ? `<button type="button" class="rlink" data-a="rulesopen" aria-label="Rules for ${esc(spName(newSpaceId()))}" title="Rules for ${esc(spName(newSpaceId()))}">${RULES_IC}</button>` : ''}${isAsk() ? modelMenu() : ''}
       <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter${st.draft.trim() ? '' : ' disabled'} aria-label="${isAsk() ? 'Ask' : 'Post'}" title="${isAsk() ? 'Ask' : 'Post'}">${ARROW_SEND}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
       ${open ? `<div class="menu right" role="menu">${opt('ask', 'Ask', 'Agent researches and answers')}${opt('post', 'Post', 'A message to people in the channel')}</div>` : ''}</span></form><div></div></div>`;
   },
@@ -1509,6 +1585,13 @@ const COMPOSERS = {
   /* Split · ends without the avatar: text and controls only. */
   splitBare: (tone = 'btn-faded') => COMPOSERS.split(' nb-a nb-bare ' + tone, false),
 };
+/* new thread, after the rules gate (first post in a channel) and the agent's rule check (asks) */
+function submitNew(q, kind, o = {}) {
+  const sp = newSpaceId();
+  if (rulesOf(sp).length && !isMod(sp) && !acked()[sp]) { st.ackGate = { s: sp, q, kind }; render(); app.querySelector('[data-a="ackok"]')?.focus(); return; }
+  if (kind === 'ask' && !o.skipCheck) { const hit = ruleCheck(sp, q); if (hit) { st.held = { s: sp, q, rule: hit[1] }; render(); app.querySelector('[data-a="heldedit"]')?.focus(); return; } }
+  st.held = null; newThread(sp, q, kind); if (o.flag != null) { const p = D.posts[D.posts.length - 1]; p.flag = o.flag; MODLOG.push({ k: 'report', s: sp, pid: p.id, by: 'agent', rule: o.flag, note: 'Asked anyway after the agent check.', at: NOW + 1 }); }
+}
 let nseq = 0;
 function newThread(space, q, kind) {
   const id = 'new' + (++nseq), now = new Date(NOW).toISOString(), model = st.newModel;
@@ -1576,7 +1659,7 @@ const SCOPES = () => [['joined', st.auth === 'out' ? 'Open' : 'Joined'], ...(can
 const scopeList = () => { const sc = st.spScope || 'joined'; return sc === 'yours' ? yourSpaces() : sc === 'discover' ? discover() : navSpaces(); };
 const SCOPE_IC = { joined: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path d="m5.6 8.2 1.7 1.7 3.2-3.6"/></svg>', yours: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.6" r="2.6"/><path d="M3 13.5c.5-2.6 2.6-4 5-4s4.5 1.4 5 4"/></svg>', discover: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="m10.4 5.6-1.3 3.5-3.5 1.3 1.3-3.5Z"/></svg>' };
 function headerSpaces() {
-  if (!['network', 'usage', 'members', 'browse', 'chedit'].includes(st.screen)) return '<span class="hsp"></span>';
+  if (!['network', 'usage', 'members', 'browse'].includes(st.screen)) return '<span class="hsp"></span>';
   const sc = st.spScope || 'joined', list = scopeList();
   const join = x => sc === 'discover' && canWrite() ? `<span class="tj" data-a="join" data-id="${x.id}" title="Join">+</span>` : '';
   const add = canWrite() ? `<button class="tadd" data-a="newspace" title="New channel" aria-label="New channel">${PLUS2}</button>` : '';
@@ -1617,12 +1700,12 @@ function navSidebar() {
 /* the header of a space: what it is, who made it, and joining */
 function spaceHead() {
   const x = SP[st.space]; if (!x || !SPACE_META[x.id]) return '';
-  if (st.chEdit && st.chEdit.id === x.id && st.ui.ed === 'd') return chEditDlg(x);
   const own = ownerOf(x.id) === me() && st.auth === 'in', j = isJoined(x.id);
   const act = !canWrite() ? '' : own ? '<span class="chip">Your channel</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : isPrivate(x.id) ? '<span class="chip">Members only</span>' : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`;
   const name = `${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}`, desc = x.desc ? `<p>${esc(clip(x.desc, 170))}</p>` : '';
   const info = `<button class="iconbtn chinfo" data-a="chinfo" data-id="${x.id}" aria-label="About this channel" title="About this channel">${INFO_IC}</button>`;
-  return `<div class="row new-row"><div class="sphead wide"><div class="grow"><h2>${glyph(x)}${name}</h2>${desc}</div>${info}${act}</div></div>`;
+  const upd = rulesNew(x.id) ? `<div class="rupd" role="status">${RULES_IC}<span>The rules changed ${rel(new Date(x.rulesAt).toISOString())}.</span><button class="tlink" data-a="rulesdiff" data-id="${x.id}">See what changed</button><button class="iconbtn" data-a="rulesseen" data-id="${x.id}" aria-label="Dismiss">${I.x}</button></div>` : '';
+  return `<div class="row new-row"><div class="sphead wide"><div class="grow"><h2>${glyph(x)}${name}</h2>${desc}${upd}</div>${info}${act}</div></div>`;
 }
 const spaceLocked = () => SP[st.space] && SPACE_META[st.space] && isPrivate(st.space) && !isJoined(st.space);
 /* Browse: every open space, plus private ones you are in */
@@ -1633,51 +1716,154 @@ function browsePage() {
     <div class="bgrid">${list.map(x => { const own = ownerOf(x.id) === me() && st.auth === 'in', j = isJoined(x.id); return `<div class="bcard"><button class="bopen" data-a="space" data-id="${x.id}">${glyph(x)}<span><b>${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</b><small>by @${esc(ownerOf(x.id))} · ${noun(memberCount(x.id), 'member', 'members')}</small></span></button><p>${esc(clip(x.desc || '', 120))}</p>${!canWrite() ? '' : own ? '<span class="chip">Yours</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`}</div>`; }).join('') || '<p class="empty">No channels match.</p>'}</div></div></div>`;
 }
 /* New space dialog */
-/* About a channel: owner, members, visibility, rules */
+/* ---- channel rules ----
+   A rule is a string or { t: title, d: details, check: true when the agent checks asks against it }.
+   Rules updated: an owner's save records rulesPrev and rulesAt; members see a notice until they open it.
+   Rules gate: a member's first ask or post in a channel shows the rules once. */
+const COMMUNITY_RULES = [{ t: 'No personal data about private individuals.' }, { t: 'No harassment, threats or slurs.' }, { t: 'Disclose conflicts of interest when they matter.' }];
+const RULE_TEMPLATES = {
+  Research: [{ t: 'Cite sources for factual claims.', d: 'Links or DOIs. The agent\'s citations count.' }, { t: 'Keep asks scoped to one question.', check: true }, { t: 'Branch an existing thread instead of re-asking.' }],
+  'Reading group': [{ t: 'Mark spoilers in titles.', d: 'Use [spoilers] at the start of the title.' }, { t: 'Cite editions and page numbers when quoting.' }, { t: 'Be generous with first-time readers.' }],
+  Workplace: [{ t: 'Do not share drafts or data outside the channel.' }, { t: 'No personal data about customers or colleagues.', check: true }, { t: 'Asks use the channel\'s token budget. Keep each ask to one result.' }],
+};
+const SIDE_L = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6.5 3v10"/></svg>', SIDE_R = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M9.5 3v10"/></svg>';
+const AGENT_I = I.agent.replace('<svg', '<svg class="i"');
+const rT = r => typeof r === 'string' ? r : r.t, rD = r => typeof r === 'string' ? '' : (r.d || ''), rC = r => typeof r !== 'string' && !!r.check;
+const rulesOf = id => SP[id]?.rules || [];
+const CAPS = [[0, 'No limit'], [25000, '25k tokens'], [50000, '50k tokens'], [100000, '100k tokens']];
+const capOf = id => SP[id]?.askCap || 0;
+const ruleItem = (r, extra = '') => `<li${extra}><b>${esc(rT(r))}</b>${rC(r) ? `<span class="rtag chk" title="The agent checks asks against this rule before they run">${AGENT_I}checked</span>` : ''}${rD(r) ? `<span>${esc(rD(r))}</span>` : ''}</li>`;
+const RULES_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 2.5h7l2 2v9h-9Z"/><path d="M6 7h4.5M6 9.5h4.5M6 12h2.5"/></svg>';
+const WARN_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5 14 13H2Z"/><path d="M8 6.5v3"/><circle cx="8" cy="11.3" r=".4" fill="currentColor"/></svg>';
+const RM_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path d="M4 12 12 4"/></svg>';
+const HANDLE = '<svg viewBox="0 0 10 14" aria-hidden="true"><circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="3" cy="11" r="1.2"/><circle cx="7" cy="11" r="1.2"/></svg>';
+const isMod = id => ownerOf(id) === me() && canWrite();
+/* rules updated: members who have not opened the channel info since the last change see a notice */
+const rulesSeen = () => (st.rulesSeenBy[st.user] ||= {});
+const rulesNew = id => { const x = SP[id]; return !!(x?.rulesAt && st.auth === 'in' && !isMod(id) && (rulesSeen()[id] || 0) < x.rulesAt); };
+const ruleDiff = id => { const x = SP[id], prev = (x.rulesPrev || []).map(rT), now = rulesOf(id).map(rT); return { added: new Set(now.filter(t => !prev.includes(t))), removed: prev.filter(t => !now.includes(t)) }; };
+
+/* About a channel: owner, members, visibility, ask limit, rules, community rules */
 const INFO_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7.2v3.8"/><circle cx="8" cy="5" r=".4" fill="currentColor"/></svg>';
 function chInfoDlg() {
   const x = SP[st.chInfo]; if (!x) return '';
-  if (st.chEdit && 'ab'.includes(st.ui.ed || 'a')) return chEditDlg(x);
-  const o = ownerOf(x.id), rules = x.rules || [], own = o === me() && canWrite();
-  return `<div class="scrim" data-a="chinfoclose"></div><div class="dialog chdlg" role="dialog" aria-modal="true" aria-labelledby="ci-h">
-    <div class="chdlg-h">${glyph(x)}<h3 id="ci-h">${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</h3>${own ? '<button class="btn2 sm" data-a="chedit">Edit</button>' : ''}<button class="iconbtn" data-a="chinfoclose" aria-label="Close">${I.x || '×'}</button></div>
+  const o = ownerOf(x.id), rules = rulesOf(x.id), own = isMod(x.id), diff = st.showDiff === x.id ? ruleDiff(x.id) : null;
+  const log = MODLOG.filter(m => m.s === x.id), open = log.filter(m => m.k === 'report' && !m.done).length;
+  const info = `<div class="scrim" data-a="chinfoclose"></div><div class="dialog chdlg" role="dialog" aria-modal="true" aria-labelledby="ci-h">
+    <div class="chdlg-h">${glyph(x)}<h3 id="ci-h">${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</h3>${own ? '<button class="btn2 sm" data-a="chedit">Edit</button>' : ''}<button class="iconbtn" data-a="chinfoclose" aria-label="Close">${I.x}</button></div>
     ${x.desc ? `<p>${esc(x.desc)}</p>` : ''}
-    <dl class="chfacts"><dt>Channel by</dt><dd>${av(o, 'xs')}@${esc(o)}</dd><dt>Members</dt><dd>${memberCount(x.id)}</dd><dt>Visibility</dt><dd>${isPrivate(x.id) ? 'Private: only members can read or post' : 'Open: anyone can read and join'}</dd></dl>
-    ${rules.length ? `<h4>Rules</h4><ol class="chrules">${rules.map(r => `<li>${esc(r)}</li>`).join('')}</ol>` : own ? '<p class="chnone">No rules yet. <button class="tlink inl" data-a="chedit">Add rules</button></p>' : ''}</div>`;
+    <dl class="chfacts"><dt>Channel by</dt><dd>${av(o, 'xs')}@${esc(o)}</dd><dt>Members</dt><dd>${memberCount(x.id)}</dd><dt>Visibility</dt><dd>${isPrivate(x.id) ? 'Private: only members can read or post' : 'Open: anyone can read and join'}</dd>${capOf(x.id) ? `<dt>Ask limit</dt><dd>${fmtTok(capOf(x.id))} tokens per ask, from the channel's budget</dd>` : ''}</dl>
+    <h4>Rules${diff ? ` <small>Updated ${rel(new Date(x.rulesAt).toISOString())}</small>` : ''}</h4>
+    ${rules.length || diff?.removed.length ? `<ol class="chrules">${rules.map(r => ruleItem(r, diff?.added.has(rT(r)) ? ' class="new"' : '').replace('</b>', diff?.added.has(rT(r)) ? '</b><span class="rtag">New</span>' : '</b>')).join('')}${(diff?.removed || []).map(t => `<li class="gone"><b>${esc(t)}</b><span>Removed</span></li>`).join('')}</ol>` : own ? '<p class="chnone">No rules yet. <button class="tlink inl" data-a="chedit">Add rules</button></p>' : '<p class="chnone">This channel has no rules of its own.</p>'}
+    <details class="crules"><summary>Community rules, which apply in every channel</summary><ol class="chrules">${COMMUNITY_RULES.map(r => ruleItem(r)).join('')}</ol></details>
+    ${own ? `<div class="chfoot"><button class="tlink" data-a="modlog">Moderation log${open ? ` (${open} open)` : ''}</button></div>` : ''}</div>`;
+  return info + (st.chEdit ? chEditDlg(x) : '') + (st.modlog ? modLogDlg(x) : '');
 }
-/* Owner's edit view: description, visibility and an ordered list of rules. Edits are held in st.chEdit
-   until Save; empty rules are dropped. */
+/* Owner's editor, a dialog above the info dialog. Edits are held in st.chEdit until Save; empty rules are dropped. */
 const RULES_MAX = 10, DESC_MAX = 300;
 function chEditDlg(x) {
   const c = st.chEdit, n = c.rules.length;
-  const row = (r, i) => `<li class="cerule"><span class="cenum">${i + 1}</span><textarea data-ce="rule" data-i="${i}" id="ce-r-${i}" rows="1" placeholder="A rule members should follow" maxlength="200" aria-label="Rule ${i + 1}">${esc(r)}</textarea>
-    <button type="button" class="iconbtn" data-a="cerule" data-op="up" data-i="${i}" aria-label="Move rule ${i + 1} up"${i ? '' : ' disabled'}>${CE_UP}</button><button type="button" class="iconbtn" data-a="cerule" data-op="down" data-i="${i}" aria-label="Move rule ${i + 1} down"${i < n - 1 ? '' : ' disabled'}>${CE_DOWN}</button><button type="button" class="iconbtn" data-a="cerule" data-op="del" data-i="${i}" aria-label="Remove rule ${i + 1}">${I.x}</button></li>`;
-  const form = `<form class="pform ceform" data-form="chedit:${x.id}">
+  const row = (r, i) => `<li class="cerule" data-i="${i}"><button type="button" class="cehandle" data-i="${i}" aria-label="Rule ${i + 1}. Drag, or use the arrow keys, to reorder" title="Drag to reorder">${HANDLE}</button>
+    <textarea data-ce="rule" data-i="${i}" id="ce-r-${i}" rows="1" placeholder="A rule members should follow" maxlength="160" aria-label="Rule ${i + 1}">${esc(r.t)}</textarea>
+    <button type="button" class="iconbtn" data-a="cerule" data-op="check" data-i="${i}" aria-pressed="${!!r.check}" aria-label="Check asks against rule ${i + 1}" title="${r.check ? 'The agent checks asks against this rule before they run' : 'Check asks against this rule before they run'}">${AGENT_I}</button>
+    <button type="button" class="iconbtn" data-a="cerule" data-op="del" data-i="${i}" aria-label="Remove rule ${i + 1}">${I.x}</button>
+    ${r.d || r.showD ? `<textarea class="ced" data-ce="ruled" data-i="${i}" id="ce-d-${i}" rows="1" placeholder="Details (optional)" maxlength="240" aria-label="Details for rule ${i + 1}">${esc(r.d || '')}</textarea>` : `<button type="button" class="tlink cedadd" data-a="cerule" data-op="details" data-i="${i}">Add details</button>`}</li>`;
+  return `<div class="scrim ce-scrim" data-a="cecancel"></div><div class="dialog chdlg cedlg" role="dialog" aria-modal="true" aria-labelledby="ce-h">
+    <div class="chdlg-h">${glyph(x)}<h3 id="ce-h">Edit ${esc(spName(x.id))}</h3></div>
+    <form class="pform ceform" data-form="chedit:${x.id}"><div class="cebody">
       <label>About<textarea data-ce="desc" id="ce-desc" rows="3" maxlength="${DESC_MAX}" placeholder="What the channel is for. Shown at the top of the channel.">${esc(c.desc)}</textarea><small class="cecount" id="ce-count">${c.desc.length} / ${DESC_MAX}</small></label>
       <fieldset class="nsvis"><legend>Visibility</legend>${[['open', 'Open', 'Anyone can read and join.'], ['private', 'Private', 'Only members can read or post. Current members stay.']].map(([k, l, h]) => `<label class="radio"><input type="radio" name="cevis" value="${k}"${c.vis === k ? ' checked' : ''}> <span><b>${l}</b><small>${h}</small></span></label>`).join('')}</fieldset>
-      <fieldset class="cerules"><legend>Rules <small>${n} of ${RULES_MAX}</small></legend>${n ? `<ol>${c.rules.map(row).join('')}</ol>` : '<p class="chnone">No rules. Members see these in the channel info.</p>'}
-        ${n < RULES_MAX ? '<button type="button" class="tlink cadd" data-a="cerule" data-op="add">+ Add rule</button>' : ''}</fieldset>
-      ${c.err ? `<p class="ferr">${esc(c.err)}</p>` : ''}
-      <div class="dacts"><button type="button" class="btn2" data-a="cecancel">Cancel</button><button type="submit" class="btn1">Save</button></div></form>`;
-  const head = `<div class="chdlg-h">${glyph(x)}<h3 id="ce-h">Edit ${esc(spName(x.id))}</h3></div>`;
-  const ed = st.ui.ed || 'a';
-  /* where the editor opens: A dialog · B side sheet · C a settings page · D in place, in the channel header */
-  if (ed === 'c') return `<div class="page"><div class="page-in narrow cepage"><button class="tlink ceback" data-a="cecancel">${esc(spName(x.id))}</button><div class="shead"><h2>Channel settings</h2></div>${form}</div></div>`;
-  if (ed === 'd') return `<div class="row new-row"><div class="sphead wide ceinline"><div class="grow">${head}${form}</div></div></div>`;
-  return `<div class="scrim" data-a="chinfoclose"></div><div class="dialog chdlg cedlg${ed === 'b' ? ' cesheet' : ''}" role="dialog" aria-modal="true" aria-labelledby="ce-h">${head}${form}</div>`;
+      <fieldset class="cerules"><legend>Rules <small>${n} / ${RULES_MAX}</small></legend>${n ? `<ol>${c.rules.map(row).join('')}</ol>` : `<div class="cetpl">Start from<span></span>${Object.keys(RULE_TEMPLATES).map(k => `<button type="button" data-a="cetpl" data-k="${esc(k)}">${esc(k)}</button>`).join('')}</div>`}
+        ${n < RULES_MAX ? '<button type="button" class="tlink cadd" data-a="cerule" data-op="add">+ Add rule</button>' : ''}
+        <p class="cefine">Members see the rules before their first ask or post here. Rules marked with ${AGENT_I.replace('class="i"', 'class="i" style="width:11px;height:11px;vertical-align:-1px"')} are checked before an ask runs.</p></fieldset>
+      <fieldset><legend>Asks</legend><label class="cecap">Limit per ask<select data-ce="cap" id="ce-cap">${CAPS.map(([v, l]) => `<option value="${v}"${+c.cap === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label><p class="cefine">Asks in this channel draw on the channel's token budget. The limit is shown to members with the rules.</p></fieldset>
+      ${c.err ? `<p class="ferr">${esc(c.err)}</p>` : ''}</div>
+      <div class="dacts"><button type="button" class="btn2" data-a="cecancel">Cancel</button><button type="submit" class="btn1">Save</button></div></form></div>`;
 }
-const CE_UP = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg>', CE_DOWN = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>';
 function saveChEdit(id) {
-  const x = SP[id], c = st.chEdit, rules = c.rules.map(r => r.trim()).filter(Boolean);
+  const x = SP[id], c = st.chEdit, rules = c.rules.map(r => ({ t: r.t.trim(), d: (r.d || '').trim(), check: !!r.check })).filter(r => r.t);
   if (c.desc.trim().length > DESC_MAX) { c.err = `Keep the description under ${DESC_MAX} characters.`; render(); return; }
-  x.desc = c.desc.trim(); x.rules = rules; (SPACE_META[id] ||= {}).vis = c.vis;
-  closeChEdit(); toast('Channel updated.');
+  const before = JSON.stringify(rulesOf(id).map(r => [rT(r), rD(r)])), after = JSON.stringify(rules.map(r => [r.t, r.d]));
+  if (before !== after) { x.rulesPrev = rulesOf(id).map(rT); x.rulesAt = NOW + (st.tick = (st.tick || 0) + 1); }
+  x.desc = c.desc.trim(); x.rules = rules; x.askCap = +c.cap || 0; (SPACE_META[id] ||= {}).vis = c.vis;
+  st.chEdit = null; render(); app.querySelector('.chdlg [data-a="chedit"]')?.focus(); toast(before !== after ? 'Channel updated. Members will see that the rules changed.' : 'Channel updated.');
 }
-/* leave the editor: back to the info dialog (A, B) or to the channel (C, D) */
-function closeChEdit() {
-  const id = st.chEdit.id; st.chEdit = null;
-  if (st.screen === 'chedit') { st.screen = 'network'; st.space = id; }
-  render(); (app.querySelector('[data-a="chedit"]') || app.querySelector(`[data-a="chinfo"][data-id="${id}"]`))?.focus();
+function closeChEdit() { st.chEdit = null; render(); app.querySelector('.chdlg [data-a="chedit"]')?.focus(); }
+/* reorder by dragging the handle; the row follows the pointer and the others make room */
+let ceDrag = null;
+app.addEventListener('pointerdown', e => {
+  const h = e.target.closest('.cehandle'); if (!h || !st.chEdit) return;
+  e.preventDefault(); const li = h.closest('.cerule'), rows = [...li.parentElement.children];
+  ceDrag = { i: +h.dataset.i, y0: e.clientY, li, rows, mids: rows.map(r => { const b = r.getBoundingClientRect(); return b.top + b.height / 2; }), h: li.getBoundingClientRect().height + 6, to: +h.dataset.i };
+  li.classList.add('drag'); h.setPointerCapture(e.pointerId);
+});
+app.addEventListener('pointermove', e => {
+  if (!ceDrag) return; const d = ceDrag, dy = e.clientY - d.y0, y = d.mids[d.i] + dy;
+  d.to = d.mids.filter((m, k) => k !== d.i && (k < d.i ? y < m : y > m)).length ? (dy < 0 ? d.mids.findIndex((m, k) => k < d.i && y < m) : d.mids.length - 1 - [...d.mids].reverse().findIndex((m, k) => d.mids.length - 1 - k > d.i && y > m)) : d.i;
+  d.li.style.transform = `translateY(${dy}px)`;
+  d.rows.forEach((r, k) => { if (k === d.i) return; const shift = d.i < d.to && k > d.i && k <= d.to ? -d.h : d.i > d.to && k < d.i && k >= d.to ? d.h : 0; r.style.transform = shift ? `translateY(${shift}px)` : ''; r.style.transition = 'transform .12s'; });
+});
+const ceDrop = () => { if (!ceDrag) return; const { i, to } = ceDrag; ceDrag = null; const r = st.chEdit.rules; r.splice(to, 0, r.splice(i, 1)[0]); render(); app.querySelector(`.cehandle[data-i="${to}"]`)?.focus(); };
+app.addEventListener('pointerup', ceDrop); app.addEventListener('pointercancel', ceDrop);
+app.addEventListener('keydown', e => {
+  const h = e.target.closest?.('.cehandle'); if (!h || !st.chEdit || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  e.preventDefault(); const r = st.chEdit.rules, i = +h.dataset.i, j = e.key === 'ArrowUp' ? i - 1 : i + 1; if (j < 0 || j >= r.length) return;
+  [r[i], r[j]] = [r[j], r[i]]; render(); app.querySelector(`.cehandle[data-i="${j}"]`)?.focus();
+});
+
+/* Moderation log: reports and removals with the rule each one cited */
+const MODLOG = [];
+function modLogDlg(x) {
+  const rules = rulesOf(x.id), log = MODLOG.filter(m => m.s === x.id).sort((a, b) => b.at - a.at), tab = st.modlogTab || 'open';
+  const shown = tab === 'open' ? log.filter(m => m.k === 'report' && !m.done) : log;
+  const by = rules.map((r, i) => [i, log.filter(m => m.rule === i).length]).filter(([, n]) => n).sort((a, b) => b[1] - a[1]), max = Math.max(1, ...by.map(b => b[1]));
+  const ruleName = i => i == null || i < 0 ? 'Other' : `Rule ${i + 1}: ${clip(rT(rules[i] || ''), 48)}`;
+  const item = m => { const p = byId(m.pid); return `<li><span class="mlkind${m.k === 'remove' ? ' rm' : ''}">${m.k === 'remove' ? 'Removed' : m.done ? 'Dismissed' : 'Report'}</span><span><b>${esc(ruleName(m.rule))}</b>${m.k === 'remove' ? `@${esc(m.by)} removed @${esc(p?.u || '?')}'s ${p?.k === 'post' ? 'post' : 'ask'}` : `@${esc(m.by)} reported @${esc(p?.u || '?')}'s ${p?.k === 'post' ? 'post' : 'ask'}`}: “${esc(clip(p?.q || '', 70))}”${m.note ? `<small>“${esc(m.note)}”</small>` : ''}<small>${rel(new Date(m.at).toISOString())}</small></span>
+    ${m.k === 'report' && !m.done && p && !p.removed ? `<span class="acts"><button class="btn2 sm" data-a="mldismiss" data-i="${MODLOG.indexOf(m)}">Dismiss</button><button class="btn1 sm" data-a="rmopen" data-id="${m.pid}" data-r="${m.rule}">Remove</button></span>` : ''}</li>`; };
+  return `<div class="scrim ce-scrim" data-a="modlogclose"></div><div class="dialog chdlg cedlg mldlg" role="dialog" aria-modal="true" aria-labelledby="ml-h">
+    <div class="chdlg-h">${glyph(x)}<h3 id="ml-h">Moderation log</h3><button class="iconbtn" data-a="modlogclose" aria-label="Close">${I.x}</button></div>
+    <div class="cebody">${by.length ? `<div><h4>By rule <small>last 30 days</small></h4><ul class="mlsum">${by.map(([i, n]) => `<li><span>${esc(ruleName(i))}</span><small>${n}</small><span class="bar"><i style="width:${n / max * 100}%"></i></span></li>`).join('')}</ul></div>` : ''}
+      <span class="modes mltabs" role="group">${[['open', `Open reports (${log.filter(m => m.k === 'report' && !m.done).length})`], ['all', 'Everything']].map(([k, l]) => `<button type="button" data-a="mltab" data-k="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</span>
+      ${shown.length ? `<ul class="mlist">${shown.map(item).join('')}</ul>` : `<p class="chnone">${tab === 'open' ? 'No open reports.' : 'Nothing logged yet.'}</p>`}</div></div>`;
+}
+/* Remove (owner) or report (member) a thread, citing a rule */
+function rmDlg() {
+  const r = st.rm; if (!r) return '';
+  const p = byId(r.pid), rules = rulesOf(p.s), all = [...rules.map((x, i) => [i, `Rule ${i + 1}: ${rT(x)}`]), ...COMMUNITY_RULES.map((x, i) => [-(i + 2), `Community: ${rT(x)}`]), [-1, 'Something else']];
+  const rm = r.mode === 'remove';
+  return `<div class="scrim" style="z-index:44" data-a="rmclose"></div><div class="dialog chdlg rmdlg" style="z-index:45" role="dialog" aria-modal="true" aria-labelledby="rm-h">
+    <div class="chdlg-h"><h3 id="rm-h">${rm ? `Remove @${esc(p.u)}'s ${p.k === 'post' ? 'post' : 'ask'}` : `Report this ${p.k === 'post' ? 'post' : 'ask'}`}</h3><button class="iconbtn" data-a="rmclose" aria-label="Close">${I.x}</button></div>
+    <p>“${esc(clip(p.q, 120))}”</p>
+    <form class="pform" data-form="rm:${p.id}"><fieldset style="border:0;margin:0;padding:0"><legend style="padding:0;margin-bottom:4px;font-size:var(--fs-sm);font-weight:500;color:var(--t-heading)">Which rule does it break?</legend><div class="rlist">${all.map(([i, l]) => `<label class="radio"><input type="radio" name="rmrule" value="${i}"${r.rule === i ? ' checked' : ''}> <span><b>${esc(l)}</b></span></label>`).join('')}</div></fieldset>
+      <label>${rm ? `Note to @${esc(p.u)}` : 'Anything the owner should know?'} <textarea id="rm-note" rows="2" placeholder="Optional">${esc(r.note || '')}</textarea></label>
+      ${rm ? `<p class="cefine">@${esc(p.u)} and readers see that it was removed and which rule it broke. Branches and replies under it go with it.</p>` : `<p class="cefine">Reports go to @${esc(ownerOf(p.s))}, who runs this channel. @${esc(p.u)} is not told who reported.</p>`}
+      ${r.err ? `<p class="ferr">${esc(r.err)}</p>` : ''}
+      <div class="dacts"><button type="button" class="btn2" data-a="rmclose">Cancel</button><button type="submit" class="btn1${rm ? ' danger' : ''}">${rm ? 'Remove' : 'Send report'}</button></div></form></div>`;
+}
+const ruleLabel = (s, i) => i == null || i === -1 ? 'its rules' : i < -1 ? `the community rule “${rT(COMMUNITY_RULES[-i - 2])}”` : `rule ${i + 1}: “${rT(rulesOf(s)[i] || '')}”`;
+/* Rules gate: shown before a member's first ask or post in a channel with rules */
+const acked = () => (st.ackBy[st.user] ||= {});
+function ackDlg() {
+  const g = st.ackGate; if (!g) return ''; const x = SP[g.s];
+  return `<div class="scrim" data-a="ackclose"></div><div class="dialog chdlg" role="dialog" aria-modal="true" aria-labelledby="ak-h">
+    <div class="chdlg-h">${glyph(x)}<h3 id="ak-h">Before you ${g.kind === 'post' ? 'post' : 'ask'} in ${esc(spName(x.id))}</h3></div>
+    <p>@${esc(ownerOf(x.id))} set these rules for the channel.${capOf(x.id) ? ` Asks here can use up to ${fmtTok(capOf(x.id))} tokens each.` : ''}</p>
+    <ol class="chrules">${rulesOf(x.id).map(r => ruleItem(r)).join('')}</ol>
+    <details class="crules"><summary>Community rules also apply</summary><ol class="chrules">${COMMUNITY_RULES.map(r => ruleItem(r)).join('')}</ol></details>
+    <div class="dacts"><button class="btn2" data-a="ackclose">Not now</button><button class="btn1" data-a="ackok">I'll follow these</button></div></div>`;
+}
+/* agent-checked rules: a stand-in for the real check, by the rule's wording */
+function ruleCheck(s, q) {
+  return rulesOf(s).map((r, i) => [r, i]).filter(([r]) => rC(r)).find(([r]) => {
+    const t = rT(r).toLowerCase();
+    if (/one question|single (question|result)|one result/.test(t)) return (q.match(/\?/g) || []).length > 1 || /\b(and also|also,|second question)\b/i.test(q);
+    if (/personal data|private individual/.test(t)) return /\b[\w.+-]+@[\w-]+\.\w+|\b\d{3}[ -.]?\d{3}[ -.]?\d{4}\b|home address|where does .* live/i.test(q);
+    return false;
+  });
+}
+function heldRow() {
+  const h = st.held; if (!h || h.s !== newSpaceId()) return '';
+  return `<div class="row new-row"><div class="held" role="status">${WARN_IC}<p>This ask may break rule ${h.rule + 1}: “${esc(rT(rulesOf(h.s)[h.rule]))}”<small>@${esc(ownerOf(h.s))} has the agent check asks against this rule. Edit the ask, or ask anyway and it will be marked for the owner.</small></p><span class="acts"><button class="btn2 sm" data-a="heldedit">Edit</button><button class="btn1 sm" data-a="heldgo">Ask anyway</button></span></div><div></div></div>`;
 }
 function newSpaceDlg() {
   const c = st.creating; if (!c) return '';
@@ -1706,9 +1892,9 @@ function renderNetwork() {
     : st.space === 'saved' && !posts.length ? '<div class="row"><p class="empty saved-empty">Nothing saved yet. Use the bookmark on any thread to keep it here.</p><div></div></div>'
     : st.space === 'home' && !posts.length ? '<div class="row"><p class="empty saved-empty">Join a few channels to fill Home. <button class="tlink inl" data-a="browse">Browse channels</button></p><div></div></div>'
     : SP[st.space] && !posts.length ? '<div class="row"><p class="empty saved-empty">No threads here yet. Ask the first question.</p><div></div></div>' : '';
-  $('#page').innerHTML = `<div class="spshell sd-${d} spv-${spv()} pl-${st.ui.pl || 'a'}${SP[st.space] && SPACE_META[st.space] ? ' chfeed' : ''}">${side}<div class="mg" id="k-mg"><div class="mg-inner">${navTop}
+  $('#page').innerHTML = `<div class="spshell sd-${d} spv-${spv()} pl-${st.ui.pl || 'a'} side-${st.side || 'r'}${SP[st.space] && SPACE_META[st.space] ? ' chfeed' : ''}">${side}<div class="mg" id="k-mg"><div class="mg-inner">${navTop}
     ${pendingBanner()}${spaceHead()}${locked || (SP[st.space] && !isJoined(st.space) && st.auth === 'in') ? '' : composerOrLock(v)}
-    ${empty}${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div></div>`;
+    ${empty}${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${st.ui.pl === 'f' ? `<button class="sideflip" data-a="sideflip" title="Show branches and replies on the ${st.side === 'l' ? 'right' : 'left'}">${st.side === 'l' ? SIDE_R : SIDE_L}Move to the ${st.side === 'l' ? 'right' : 'left'}</button>` : ''}${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div></div>`;
   const mg = $('#k-mg'), ta = $('#in-new');
   mg.classList.add('ncw');  /* below 520px the composer's controls wrap to a second row */
   if (v.fs) mg.style.setProperty('--title-fs', v.fs);
@@ -1748,14 +1934,30 @@ app.addEventListener('click', e => {
   if (a === 'join') { e.stopPropagation(); if (!canWrite()) return; joinedIds().push(d.id); SEEN[st.user + ':' + d.id] = true; toast(`Joined ${spName(d.id)}.`); render(); return; }
   if (a === 'leave') { const j = joinedIds(); j.splice(j.indexOf(d.id), 1); toast(`Left ${spName(d.id)}.`); if (isPrivate(d.id)) st.space = 'home'; render(); return; }
   if (a === 'newspace') { st.menu = null; st.creating = { name: '', desc: '', vis: 'open', err: '' }; render(); $('#ns-name')?.focus(); return; }
-  if (a === 'chedit') { const x = SP[st.chInfo]; const ed = st.ui.ed || 'a'; if (ed === 'c' || ed === 'd') { st.chInfo = null; if (ed === 'c') st.screen = 'chedit'; } st.chEdit = { id: x.id, desc: x.desc || '', vis: isPrivate(x.id) ? 'private' : 'open', rules: [...(x.rules || [])], err: '' }; render(); $('#ce-desc')?.focus(); return; }
+  if (a === 'sideflip') { st.side = st.side === 'l' ? 'r' : 'l'; render(); app.querySelector('.sideflip')?.focus({ preventScroll: true }); return; }
+  if (a === 'chedit') { const x = SP[st.chInfo]; st.chEdit = { id: x.id, desc: x.desc || '', vis: isPrivate(x.id) ? 'private' : 'open', cap: capOf(x.id), rules: rulesOf(x.id).map(r => ({ t: rT(r), d: rD(r), check: rC(r) })), err: '' }; render(); $('#ce-desc')?.focus(); return; }
   if (a === 'cecancel') { closeChEdit(); return; }
+  if (a === 'cetpl') { st.chEdit.rules = RULE_TEMPLATES[d.k].map(r => ({ t: r.t, d: r.d || '', check: !!r.check })); render(); $('#ce-r-0')?.focus(); return; }
   if (a === 'cerule') { const r = st.chEdit.rules, i = +d.i;
-    if (d.op === 'add') { r.push(''); render(); $(`#ce-r-${r.length - 1}`)?.focus(); return; }
-    if (d.op === 'del') { r.splice(i, 1); render(); ($(`#ce-r-${Math.min(i, r.length - 1)}`) || app.querySelector('.cadd'))?.focus(); return; }
-    const j = d.op === 'up' ? i - 1 : i + 1; [r[i], r[j]] = [r[j], r[i]]; render(); app.querySelector(`[data-a="cerule"][data-op="${d.op}"][data-i="${j}"]:not(:disabled)`)?.focus() || $(`#ce-r-${j}`)?.focus(); return; }
-  if (a === 'chinfo') { st.chInfo = d.id; render(); app.querySelector('.chdlg .iconbtn')?.focus(); return; }
-  if (a === 'chinfoclose') { const id = st.chInfo; st.chInfo = null; st.chEdit = null; render(); app.querySelector(`[data-a="chinfo"][data-id="${id}"]`)?.focus(); return; }
+    if (d.op === 'add') { r.push({ t: '', d: '', check: false }); render(); $(`#ce-r-${r.length - 1}`)?.focus(); return; }
+    if (d.op === 'details') { r[i].showD = true; render(); $(`#ce-d-${i}`)?.focus(); return; }
+    if (d.op === 'check') { r[i].check = !r[i].check; render(); app.querySelector(`[data-a="cerule"][data-op="check"][data-i="${i}"]`)?.focus(); return; }
+    if (d.op === 'del') { r.splice(i, 1); render(); ($(`#ce-r-${Math.min(i, r.length - 1)}`) || app.querySelector('.cadd'))?.focus(); return; } }
+  if (a === 'modlog') { st.modlog = true; st.modlogTab = 'open'; render(); app.querySelector('.mldlg .iconbtn')?.focus(); return; }
+  if (a === 'modlogclose') { st.modlog = false; render(); app.querySelector('[data-a="modlog"]')?.focus(); return; }
+  if (a === 'mltab') { st.modlogTab = d.k; render(); return; }
+  if (a === 'mldismiss') { MODLOG[+d.i].done = true; render(); toast('Report dismissed.'); return; }
+  if (a === 'rmopen' || a === 'reportopen') { st.menu = null; st.rm = { pid: d.id, mode: a === 'rmopen' ? 'remove' : 'report', rule: d.r != null && d.r !== '' ? +d.r : null, note: '' }; render(); app.querySelector('.rmdlg input[type="radio"]')?.focus(); return; }
+  if (a === 'rmclose') { st.rm = null; render(); return; }
+  if (a === 'rulesdiff') { st.chInfo = d.id; st.showDiff = d.id; rulesSeen()[d.id] = SP[d.id].rulesAt; render(); app.querySelector('.chdlg .iconbtn')?.focus(); return; }
+  if (a === 'rulesseen') { rulesSeen()[d.id] = SP[d.id].rulesAt; render(); return; }
+  if (a === 'rulesopen') { st.chInfo = newSpaceId(); render(); app.querySelector('.chdlg .iconbtn')?.focus(); return; }
+  if (a === 'ackclose') { st.ackGate = null; render(); $('#in-new')?.focus(); return; }
+  if (a === 'ackok') { const g = st.ackGate; acked()[g.s] = true; st.ackGate = null; submitNew(g.q, g.kind); return; }
+  if (a === 'heldedit') { st.held = null; render(); $('#in-new')?.focus(); return; }
+  if (a === 'heldgo') { const h = st.held; st.held = null; submitNew(h.q, 'ask', { skipCheck: true, flag: h.rule }); return; }
+  if (a === 'chinfo') { st.chInfo = d.id; if (rulesNew(d.id)) { st.showDiff = d.id; rulesSeen()[d.id] = SP[d.id].rulesAt; } render(); app.querySelector('.chdlg .iconbtn')?.focus(); return; }
+  if (a === 'chinfoclose') { const id = st.chInfo; st.chInfo = null; st.chEdit = null; st.modlog = false; st.showDiff = null; render(); app.querySelector(`[data-a="chinfo"][data-id="${id}"]`)?.focus(); return; }
   if (a === 'newspaceclose') { st.creating = null; render(); return; }
   if (a === 'browse') { st.menu = null; st.screen = 'browse'; render(); $('#in-browseq')?.focus({ preventScroll: true }); return; }
   if (a === 'spscope') { st.spScope = d.s; st.menu = null; render(); return; }
@@ -1845,13 +2047,16 @@ app.addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target.closest('[data-form]'); if (!f) return;
   if (f.dataset.form.startsWith('chedit:')) { saveChEdit(f.dataset.form.slice(7)); return; }
+  if (f.dataset.form.startsWith('rm:')) { const r = st.rm, p = byId(r.pid); r.note = $('#rm-note').value.trim(); if (r.rule == null) { r.err = 'Pick the rule it breaks.'; render(); return; }
+    if (r.mode === 'remove') { p.removed = { by: me(), rule: r.rule, note: r.note }; MODLOG.forEach(m => { if (m.pid === p.id && m.k === 'report') m.done = true; }); MODLOG.push({ k: 'remove', s: p.s, pid: p.id, by: me(), rule: r.rule, note: r.note, at: NOW + 1 }); st.rm = null; render(); toast('Removed. The author sees which rule it broke.'); return; }
+    MODLOG.push({ k: 'report', s: p.s, pid: p.id, by: me(), rule: r.rule, note: r.note, at: NOW + 1 }); st.rm = null; render(); toast(`Reported to @${ownerOf(p.s)}.`); return; }
   const inp = f.querySelector('input, textarea'), v = inp.value.trim(); if (!v) { inp.focus(); return; }
   if (f.dataset.form === 'newspace:x') { createSpace(); return; }
   const [kind, pid, node, at] = f.dataset.form.split(':'), p = byId(pid);
   const notify = t => { const m = mentionsIn(t), miss = [...new Set([...t.matchAll(MENTION)].map(x => x[1].replace(/\.$/, '')).filter(u => !member(u)))]; const parts = [m.length ? `Notified ${m.map(u => '@' + u).join(', ')}.` : '', miss.length ? `${miss.map(u => '@' + u).join(', ')} ${miss.length === 1 ? "isn't a member" : "aren't members"}.` : '']; if (m.length || miss.length) toast(parts.filter(Boolean).join(' ')); };
   if (kind === 'br') { inp.value = ''; const list = (BRP[pid + ':' + node] ||= []), r = { u: me(), createdAt: new Date(NOW).toISOString(), t: v, likes: 0 }; if (at === 'top') list.push(r); else (replyAtIn(list, at).kids ||= []).push(r); st.brReplying = null; notify(v); render(); return; }
   if (kind === 'new' && e.submitter?.value !== 'post' && outOfTokens() && st.newModel !== 'GPT-6.1 Sol') { toast(OUT_MSG); render(); return; }
-  if (kind === 'new') { newThread(newSpaceId(), v, e.submitter?.value === 'post' ? 'post' : 'ask'); return; }
+  if (kind === 'new') { submitNew(v, e.submitter?.value === 'post' ? 'post' : (e.submitter ? 'ask' : st.newMode)); return; }
   if (kind === 'rp') { inp.value = ''; addReply(p, node, v); st.replying = null; if (node !== 'top') st.rcol[rid(replyAt(p, node))] = false; st.rsel[pid] = node === 'top' ? String(replies(p).length - 1) : node + '.' + (replyAt(p, node).kids.length - 1); notify(v); render(); return; }
   if (kind === 'mf' && outOfTokens()) { toast(OUT_MSG); render(); return; }
   inp.value = '';
@@ -1875,8 +2080,11 @@ document.addEventListener('keydown', e => {
   }
   if (e.key !== 'Escape') return;
   if (st.delAsk) { st.delAsk = null; render(); return; }
+  if (st.rm) { st.rm = null; render(); return; }
+  if (st.ackGate) { st.ackGate = null; render(); $('#in-new')?.focus(); return; }
   if (st.chEdit) { closeChEdit(); return; }
-  if (st.chInfo) { const id = st.chInfo; st.chInfo = null; render(); app.querySelector(`[data-a="chinfo"][data-id="${id}"]`)?.focus(); return; }
+  if (st.modlog) { st.modlog = false; render(); app.querySelector('[data-a="modlog"]')?.focus(); return; }
+  if (st.chInfo) { const id = st.chInfo; st.chInfo = null; st.showDiff = null; render(); app.querySelector(`[data-a="chinfo"][data-id="${id}"]`)?.focus(); return; }
   if (st.menu) { const m = st.menu; st.menu = null; render(); app.querySelector(`[data-m="${CSS.escape(m)}"]`)?.focus({ preventScroll: true }); return; }
   const f = e.target.closest?.('form[data-form]');
   if (f) { const [k, pid] = f.dataset.form.split(':');
@@ -1893,7 +2101,7 @@ app.addEventListener('keydown', e => {
 });
 app.addEventListener('input', e => {
   const t = e.target;
-  if (t.dataset.ce && st.chEdit) { if (t.dataset.ce === 'desc') { st.chEdit.desc = t.value; const n = $('#ce-count'); if (n) n.textContent = `${t.value.length} / ${DESC_MAX}`; } else st.chEdit.rules[+t.dataset.i] = t.value; if (t.tagName === 'INPUT') return; }
+  if (t.dataset.ce && st.chEdit) { const c = st.chEdit; if (t.dataset.ce === 'desc') { c.desc = t.value; const n = $('#ce-count'); if (n) n.textContent = `${t.value.length} / ${DESC_MAX}`; } else if (t.dataset.ce === 'rule') c.rules[+t.dataset.i].t = t.value; else if (t.dataset.ce === 'ruled') c.rules[+t.dataset.i].d = t.value; if (t.tagName !== 'TEXTAREA') return; }
   if (t.id === 'in-spq' || t.id === 'in-sideq' || t.id === 'in-browseq') { st[{ 'in-spq': 'spq', 'in-sideq': 'sideq', 'in-browseq': 'browseq' }[t.id]] = t.value; const pos = t.selectionStart; render(); const n = document.getElementById(t.id); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; } if (t.tagName !== 'TEXTAREA' || !t.form) return;
   t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
   if (t.id !== 'in-new') return;
@@ -1901,6 +2109,8 @@ app.addEventListener('input', e => {
 });
 app.addEventListener('change', e => {
   if (e.target.name === 'cevis' && st.chEdit) { st.chEdit.vis = e.target.value; return; }
+  if (e.target.id === 'ce-cap' && st.chEdit) { st.chEdit.cap = +e.target.value; return; }
+  if (e.target.name === 'rmrule' && st.rm) { st.rm.rule = +e.target.value; st.rm.err = ''; return; }
   const k = { 'new-space': 'newSpace', 'new-model': 'newModel', 'new-effort': 'newEffort' }[e.target.id];
   if (k) { st[k] = e.target.value; render(); $('#in-new')?.focus(); }
 });
@@ -1951,7 +2161,18 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pl: 'a', ed: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { rulesSeenBy: {}, ackBy: {}, mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pl: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+/* seeds for the rule features: #public changed its rules two days ago (members see the notice); its scope rule
+   is checked by the agent; #sci-fi (owned by @ines.v) has reports in its moderation log */
+{ const pub = SP.public; if (pub?.rules?.length) {
+    pub.rules = pub.rules.map(r => /one question/i.test(rT(r)) ? { t: rT(r), d: 'Two questions are two asks. Branch the thread for the second one.', check: true } : r);
+    pub.rulesPrev = pub.rules.slice(0, -1).map(rT); pub.rulesAt = NOW - 2 * 864e5; }
+  const sf = Object.keys(SPACE_META).find(k => SPACE_META[k].owner === 'ines.v'), others = D.posts.filter(p => p.s === sf && p.u !== 'ines.v');
+  if (sf && rulesOf(sf).length && others.length) {
+    MODLOG.push({ k: 'report', s: sf, pid: others[0].id, by: 'kofi.a', rule: 0, note: 'The title gives away the ending.', at: NOW - 3 * 36e5 });
+    if (others[1]) MODLOG.push({ k: 'report', s: sf, pid: others[1].id, by: 'oduya', rule: 1, note: '', at: NOW - 26 * 36e5 });
+    MODLOG.push({ k: 'report', s: sf, pid: others[0].id, by: 'hal_b', rule: 0, note: '', at: NOW - 5 * 36e5 });
+    if (others[2]) MODLOG.push({ k: 'report', s: sf, pid: others[2].id, by: 'mira_k', rule: 1, note: '', at: NOW - 6 * 864e5, done: true }); } }
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1997,7 +2218,7 @@ function composerOrLock(v) {
   if (st.auth === 'out') { const c = typeof v.composer === 'function' ? v.composer() : COMPOSERS[v.composer](); return `<div class="nb-offw"><fieldset class="nb-off" disabled aria-hidden="true">${c}</fieldset><button type="button" class="nb-cover" data-ma="openauth" aria-label="Sign in to ask or post"></button></div>`; }
   if (!canWrite()) return '';
   const c = typeof v.composer === 'function' ? v.composer() : COMPOSERS[v.composer]();
-  return c;
+  return c + heldRow();
 }
 
 /* ---- token meter in the app bar (variants) ---- */
@@ -2190,8 +2411,7 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
-    ${seg('pl', 'Layout', 4)}
-    ${seg('ed', 'Channel editor', 4)}
+    ${seg('pl', 'Layout', 6)}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -2225,14 +2445,16 @@ function renderInner() {
   if (st.auth === 'out') st.screen = 'network';
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
   if (st.screen === 'network') renderNetwork();
-  else { pg.innerHTML = (st.screen === 'chedit' && st.chEdit ? chEditDlg(SP[st.chEdit.id]) : st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
+  else { pg.innerHTML = (st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
   app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg, :scope > #selbranch, :scope > #citepop').forEach(x => x.remove());
   citeReady();
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
   if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
   if (st.creating) app.insertAdjacentHTML('beforeend', newSpaceDlg());
   if (st.chInfo) app.insertAdjacentHTML('beforeend', chInfoDlg());
-  app.querySelectorAll('.cerule textarea').forEach(t => { t.style.height = t.scrollHeight + 2 + 'px'; });
+  if (st.rm) app.insertAdjacentHTML('beforeend', rmDlg());
+  if (st.ackGate) app.insertAdjacentHTML('beforeend', ackDlg());
+  app.querySelectorAll('.cerule textarea').forEach(t => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 2 + 'px'; });
   if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
 const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}</div>` : '';
@@ -2241,10 +2463,6 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
   if (k === 'pl') { st.screen = 'network'; st.authOpen = false; render(); return; }
-  if (k === 'ed') { /* open the editor on a channel you own */
-    st.auth = 'in'; st.user = 'ines.v'; st.authOpen = false; st.chEdit = null; st.chInfo = null; st.screen = 'network';
-    const id = Object.keys(SPACE_META).find(k => ownerOf(k) === me()); if (!id) { render(); return; }
-    st.space = id; st.chInfo = id; render(); app.querySelector('[data-a="chedit"]')?.click(); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'network' : 'usage';
