@@ -1253,7 +1253,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { codecopy: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1329,14 +1329,8 @@ const appbarOut = () => `<header class="appbar">${brandBtn()}<span class="grow">
 const authDialog = () => `<div class="scrim auth-scrim" data-ma="closeauth"></div><div class="authdlg v-a" role="dialog" aria-modal="true" aria-label="Sign in to Session"><button class="iconbtn dclose" data-ma="closeauth" aria-label="Close">${I.x}</button>${authScreen()}</div>`;
 /* ---- sign-in steps ---- */
 const xBtn = (label = 'Sign in with X') => `<button class="xbtn" data-ma="xauth">${label}</button>`;
-/* copy variants for the invite-code step: heading, line under it, check button, valid-invite line, X button */
-const CODE_COPY = {
-  a: { h: 'Enter your invite code', p: 'It came from the member who invited you, as a code or a link.', btn: 'Check', ok: n => `${n} invited you`, x: 'Continue with X' },
-  b: { h: 'Have an invite?', p: 'Paste the code or link a member sent you.', btn: 'Continue', ok: n => `Invite from ${n}`, x: 'Sign up with X' },
-  c: { h: 'Invite code', p: '', btn: 'Check', ok: n => `${n} invited you`, x: 'Continue with X' },
-  d: { h: 'Join with an invite', p: 'Paste the code, or the whole link.', btn: 'Use code', ok: n => `Valid invite from ${n}`, x: 'Create your account with X' },
-  e: { h: 'Got an invite code?', p: `Codes work once and expire ${INVITE_DAYS} days after they're made.`, btn: 'Check code', ok: n => `${n}'s invite is valid`, x: 'Continue with X' },
-};
+/* copy for the invite-code step: heading, line under it, check button, valid-invite line, X button */
+const CODE_COPY = { h: 'Have an invite?', p: 'Paste the code or link a member sent you.', btn: 'Continue', ok: n => `Invite from ${n}`, x: 'Sign up with X' };
 function authScreen() {
   const back = to => `<button class="tlink back" data-ma="flow" data-to="${to}">${I.left}Back</button>`;
   let body = '';
@@ -1351,7 +1345,7 @@ function authScreen() {
       <div class="auth-acts">${xBtn()}<button class="btn2" data-ma="flow" data-to="code">I have an invite code</button></div></div>`;
   } else if (st.flow === 'code') {
     const inv = INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
-    const C = CODE_COPY[st.ui.codecopy] || CODE_COPY.a;
+    const C = CODE_COPY;
     body = `<div class="auth-c">${back('landing')}<h2>${C.h}</h2>${C.p ? `<p>${C.p}</p>` : ''}
       <form class="code-f" data-mform="code"><input id="in-code" value="${esc(st.code)}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1">${C.btn}</button></form>
       ${st.codeErr ? `<p class="ferr">${esc(st.codeErr)}</p>` : ''}
@@ -1489,7 +1483,7 @@ function renderMock() {
   const cur = st.auth === 'out' ? 'out' : st.user;
   const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcdef'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
-    ${seg('inv', 'Invites', 6)}${seg('codecopy', 'Code step copy', 5)}
+    ${seg('inv', 'Invites', 6)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -1511,7 +1505,6 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the feed for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
-  if (k === 'codecopy') { st.auth = 'out'; st.authOpen = true; st.flow = 'code'; st.intent = 'signup'; st.fromLink = false; st.code = 'SESS-9TQ2-X8'; st.codeErr = ''; render(); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'feed' : 'usage';
