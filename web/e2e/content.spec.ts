@@ -352,6 +352,20 @@ const SCREENS: Screen[] = [
       await expect(p.getByRole("button", { name: "Unarchive" })).toBeVisible();
     },
   },
+  {
+    key: "mi-a-saved",
+    url: (rs) => `/source/${firstSource(rs, "ml-papers")}`,
+    run: async (p) => {
+      const title = (await p.locator(".mi-title").textContent()) ?? "";
+      const save = p.locator(".mi-acts").getByRole("button", { name: /^Save/ });
+      if ((await save.getAttribute("aria-pressed")) !== "true") await save.click();
+      await expect(save).toHaveAttribute("aria-pressed", "true");
+      await p.goto("/saved");
+      await p.getByRole("button", { name: /^Sources/ }).click();
+      await p.getByRole("link", { name: title }).click();
+      await expect(p.locator(".mi-title")).toHaveText(title);
+    },
+  },
 ];
 
 async function open(p: Page, s: Screen) {

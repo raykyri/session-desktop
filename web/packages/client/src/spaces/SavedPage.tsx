@@ -11,7 +11,7 @@ import { useNow, useRecords, useSession } from "../sync/react.js";
 import { Page } from "./Page.js";
 import { Svg } from "./Svg.js";
 import { Author, Glyph } from "./atoms.js";
-import { I, SVI } from "./icons.js";
+import { I, MII, SVI } from "./icons.js";
 import { BackRow } from "./nav.js";
 import { useWorld } from "./world.js";
 
@@ -32,6 +32,30 @@ export function SavedPage() {
           const t = threadView(r, th);
           return t ? [{ id: t.id, s: t.s, u: t.u, q: t.q, sum: t.summary, at: t.createdAt }] : [];
         }),
+      [],
+    ) ?? [];
+  // saved sources (srcsave), with what the spaces' copies say of them
+  const sources =
+    useRecords(
+      (r) =>
+        r
+          .list("srcsave", (x) => x.u === r.me)
+          .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+          .flatMap((x) => {
+            const m =
+              r.list("spacesrc", (c) => c.src === x.src && !c.rm)[0]?.meta ??
+              r.get("source", x.src)?.meta;
+            return m
+              ? [
+                  {
+                    id: x.src,
+                    t: m.t ?? m.body[0]?.p ?? m.au,
+                    by: [m.pl, m.au].filter(Boolean).join(" · "),
+                    at: x.createdAt,
+                  },
+                ]
+              : [];
+          }),
       [],
     ) ?? [];
   const counts = new Map<string, number>();
@@ -71,6 +95,15 @@ export function SavedPage() {
             <button type="button" aria-pressed={filter === "all"} onClick={() => setFilter("all")}>
               All <small className="num">{items.length}</small>
             </button>
+            {sources.length ? (
+              <button
+                type="button"
+                aria-pressed={filter === "mi-items"}
+                onClick={() => setFilter("mi-items")}
+              >
+                Sources <small className="num">{sources.length}</small>
+              </button>
+            ) : null}
             {[...counts].map(([sp, n]) => {
               const s = w.byId.get(sp);
               return s ? (
@@ -94,7 +127,37 @@ export function SavedPage() {
             </button>
           </div>
         </div>
-        {items.length === 0 ? (
+        {filter === "mi-items" ? (
+          <div className="sv-list">
+            {sources
+              .filter((x) => !needle || `${x.t} ${x.by}`.toLowerCase().includes(needle))
+              .map((x) => (
+                <article className="sv-row" key={x.id}>
+                  <span className="mi-ic mi-k-article">
+                    <Svg src={MII.article} />
+                  </span>
+                  <div className="sv-body">
+                    <div className="meta">
+                      <span>{x.by}</span>
+                      <span>{ago(x.at, now)}</span>
+                    </div>
+                    <p className="sv-q">
+                      <a
+                        className="row-link"
+                        href={`/source/${x.id}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          void navigate({ to: "/source/$id", params: { id: x.id } });
+                        }}
+                      >
+                        {x.t}
+                      </a>
+                    </p>
+                  </div>
+                </article>
+              ))}
+          </div>
+        ) : items.length === 0 ? (
           <p className="muted sv-empty">
             Nothing saved yet. Use the bookmark on a thread, an ask or a source to keep it here.
           </p>
