@@ -683,7 +683,7 @@ const CHECK = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3
 const modelMenu = () => {
   const open = st.menu === 'model';
   const item = (a, v, label, on) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${on}" data-a="${a}" data-v="${v}"><span>${label}</span>${on ? CHECK : ''}</button>`;
-  return `<span class="mpick"><button type="button" class="pick" data-a="menu" aria-haspopup="menu" aria-expanded="${open}" title="Model and effort"><span>${esc(st.newModel)} · ${esc(st.newEffort)}</span>${I.down}</button>
+  return `<span class="mpick"><button type="button" class="pick" data-a="menu" aria-haspopup="menu" aria-expanded="${open}" title="Model and effort"><span>${esc(st.newModel)}</span>${I.down}</button>
     ${open ? `<div class="menu" role="menu" aria-label="Model">${MODEL_OPTS.map(m => item('setmodel', m, m, m === st.newModel)).join('')}<div class="msep"></div>
       <div class="mi mi-sub" role="menuitem" aria-haspopup="menu" tabindex="-1"><span>Effort</span><span class="mi-v">${cap1(st.newEffort)}</span>${I.right}
         <div class="menu submenu" role="menu" aria-label="Effort">${EFFORT_OPTS.map(e => item('seteffort', e, cap1(e), e === st.newEffort)).join('')}</div></div></div>` : ''}</span>`;
