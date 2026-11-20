@@ -411,6 +411,7 @@ const SCREENS: Screen[] = [
     run: async (p) => {
       // /about opens the sidebar's About (a sheet on a phone)
       const names = p.locator(".ab-pgl .ab-pgr span");
+      await expect(names.nth(1)).toBeVisible();
       const before = await names.allInnerTexts();
       expect(before.length).toBeGreaterThan(1);
       await p.getByRole("button", { name: `Move ${before[0] ?? ""} down` }).click();
