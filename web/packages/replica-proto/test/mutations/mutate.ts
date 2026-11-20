@@ -930,7 +930,10 @@ const IN_SYNC: Record<string, SyncEdit> = {
   // instance id, so a token of another server answers resync whatever its
   // key: this suite, whose servers each have their own store, no longer
   // tells a constant key apart (it survives here). `@session/sync`'s own
-  // test of key rotation over one store kills it.
+  // test of key rotation over one store kills it, since review round 2 of
+  // phase 2: its check that a key never configured opens nothing ran after
+  // the clock had passed the token's age, which resynced it whatever the
+  // key, and now runs before.
   N34: {
     file: "src/server/tokens.ts",
     from: '    const cipher = createCipheriv("aes-256-gcm", this.keys.current, iv);',

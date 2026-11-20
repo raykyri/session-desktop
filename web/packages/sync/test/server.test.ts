@@ -194,18 +194,22 @@ for (const kind of STORES) {
     const w2 = new World(kind, 1, { cursorKeys: rotated, store: w.server.store });
     w2.clock.ms = w.clock.ms;
     t.false("resync" in w2.server.pull({ u: "mel" }, `space:${open}`, s.cursor));
-    w2.clock.advance(TOMBSTONE_TTL + 1);
-    t.deepEqual(w2.server.pull({ u: "mel" }, `space:${open}`, s.cursor), {
-      resync: true,
-      serverTime: w2.clock.now(),
-    });
-    // a key never configured opens nothing
+    // a key never configured opens nothing. Checked before the clock below
+    // moves the store's server time past the token's age, so the key is the
+    // only reason it does not open (review round 2 of phase 2: replica-proto's
+    // N34, a constant key, survived the check made after it)
     const w3 = new World(kind, 1, {
       cursorKeys: { current: newCursorKey() },
       store: w.server.store,
     });
     w3.clock.ms = w.clock.ms;
     t.true("resync" in w3.server.pull({ u: "mel" }, `space:${open}`, s.cursor));
+    t.false("resync" in w.server.pull({ u: "mel" }, `space:${open}`, s.cursor));
+    w2.clock.advance(TOMBSTONE_TTL + 1);
+    t.deepEqual(w2.server.pull({ u: "mel" }, `space:${open}`, s.cursor), {
+      resync: true,
+      serverTime: w2.clock.now(),
+    });
   });
 
   test(`${kind}: tiers: the desktop and Phone windows, pinned threads, summaries and hydration`, (t) => {
