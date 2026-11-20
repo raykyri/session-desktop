@@ -91,7 +91,7 @@ body.fs .fsexit:focus-visible, body.fs.fs-peek .fsexit { transform: translate(-5
 
 /* ---- shared pieces ---- */
 .av { width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
-  color: var(--av-fg); font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+  color: var(--av-fg); font-size: 10.5px; font-weight: 600; letter-spacing: .02em; padding-top: 2px; }  /* initials sit 1px below center */
 .av.sm { width: 20px; height: 20px; font-size: 8.5px; }
 .av.xs { width: 16px; height: 16px; font-size: 7.5px; }
 .avs { display: inline-flex; } .avs .av { box-shadow: 0 0 0 2px var(--pane); } .avs .av + .av { margin-left: -5px; }
@@ -131,11 +131,11 @@ body.fs .fsexit:focus-visible, body.fs.fs-peek .fsexit { transform: translate(-5
 .iconbtn { width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: var(--r-md); color: var(--t-muted); flex: none; }
 .iconbtn:hover { background: var(--fill-hover); color: var(--t-heading); }
 .composer { display: flex; gap: 8px; align-items: flex-end; background: var(--field); border: 1px solid var(--control-border);
-  border-radius: 20px; padding: 4px 4px 4px 14px; }
+  border-radius: 20px; padding: 4px 4px 4px 15px; }
 .composer:focus-within { border-color: var(--accent); }
 .composer textarea { flex: 1; min-width: 0; border: 0; background: none; outline: none; padding: 6px 0; font: inherit; font-size: var(--fs-base); line-height: 1.4; color: inherit; resize: none; max-height: 160px; }
 .composer textarea::placeholder { color: var(--placeholder); }
-.row.new-row { padding: 17px 0 0; }
+.row.new-row { padding: 15px 0 0; }
 .row.new-row + .row { padding-top: 14px; }
 /* composer parts */
 .nb { min-width: 0; }
@@ -259,18 +259,18 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .card .ask { margin: 0 0 14px; color: var(--t-heading); font-size: var(--title-fs, var(--fs-md)); line-height: 1.44; }
 .card .ask, .card .post { white-space: pre-line; }
 .card .post { margin: 0 0 6px; color: var(--t-primary); font-size: var(--title-fs, var(--fs-md)); line-height: 1.44; }
-.card .byline { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: var(--fs-sm); color: var(--t-faint); }
+.card .byline { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: var(--fs-sm); color: var(--t-faint); }
 /* padding variants (the base values are on .card, .card-h, .card .ask and .card-f) */
 .card.pad-compact { padding: 14px 16px 10px; }
 .pad-compact .card-h { margin-bottom: 8px; }
 .pad-compact .ask { margin-bottom: 10px !important; }
-.pad-compact .byline { margin-bottom: 8px !important; }
+.pad-compact .byline { margin-bottom: 10px !important; }
 .pad-compact > :nth-last-child(2) { margin-bottom: 10px !important; }
 .pad-compact .card-f { padding-top: 8px; }
 .card.pad-roomy { padding: 24px 28px 16px; }
 .pad-roomy .card-h { margin-bottom: 16px; }
 .pad-roomy .ask { margin-bottom: 18px !important; }
-.pad-roomy .byline { margin-bottom: 14px !important; }
+.pad-roomy .byline { margin-bottom: 16px !important; }
 .pad-roomy > :nth-last-child(2) { margin-bottom: 18px !important; }
 .pad-roomy .card-f { padding-top: 12px; }
 .card.pad-inset { padding: 14px 14px 10px; }
