@@ -3905,11 +3905,17 @@ html[data-client="app"] .frame-bar .sx-wt { display: block; font-weight: 650; co
 @media (prefers-reduced-motion: reduce) { .sx-caret { animation: none; } }
 /* device sign-in: the app's window and the browser's approval page */
 .sx-sign .cs-na { max-width: 440px; }
+.as-pchk { display: inline-flex; align-items: center; gap: 6px; }
+.as-pchk .spin { flex: none; width: 12px; height: 12px; }
 .sx-wait { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--t-muted); }
 .sx-dcard { text-align: left; align-self: stretch; }
 .sx-dcard .sx-dl2 { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: var(--fs-sm); margin: 0; }
 .sx-dcard dt { color: var(--t-faint); }
 .sx-dcard dd { margin: 0; color: var(--t-primary); }
+.sx-dcode { align-self: stretch; text-align: left; flex: none; }
+.sx-dcode input { font-size: var(--fs-base); letter-spacing: .08em; text-transform: uppercase; }
+.sx-code-l { margin: 4px 0 0; }
+.sx-code { font-size: 22px; font-weight: 600; letter-spacing: .12em; color: var(--t-primary); margin: 0 0 6px; }
 /* the Phone app's You › Account: Devices */
 .sx-devi { width: 34px; height: 34px; flex: none; border-radius: 9px; display: grid; place-items: center; background: var(--fill-subtle); color: var(--t-secondary); }
 .sx-devi svg { width: 16px; height: 16px; }
@@ -5373,8 +5379,8 @@ function composer(force) {
   const spaceSel = st.home ? `<div class="c2-spm"><button class="c2-sp" type="button" data-act="sp-menu" aria-haspopup="listbox" aria-expanded="${!!st.spOpen}" aria-label="Space: ${spName(s)}">${glyph(s)}<span>${spName(s)}</span>${I.chev}</button>${st.spOpen ? `<div class="ts-ddmenu c2-spmenu" role="listbox" aria-label="Space">${D.spaces.filter(x => D.joined.includes(x.id) && !x.archived).map(x => `<button type="button" class="ts-opt" role="option" aria-selected="${x.id === s.id}" data-cspace="${x.id}">${glyph(x)}<span class="ts-tx"><b class="cs-nmrow">${spName(x)}${spSeal(x, 'sm')}${csMark(x, false)}</b></span>${x.id === s.id ? I.check : ''}</button>`).join('')}</div>` : ''}</div>` : `<span class="c2-sp static">${glyph(s)}${spName(s)}</span>`;
   const closeB = force ? '' : `<button class="iconbtn c2-x" type="button" data-act="comp-close" aria-label="Close composer" title="Close">${I.close}</button>`;
   const ta = `<textarea id="compose-text" rows="2" placeholder="${ask ? 'Make a query' : 'Write a post'}" aria-label="${ask ? 'Query' : 'Post text'}">${esc(st.draft)}</textarea>`;
-  const warn = st.askErr === 'comp' ? askErrNote() : ask ? askPayNote(s) : '';
-  const submit = ask ? `<button class="btn primary" type="button" data-act="ask-go" ${pay && !ASK.hold ? '' : 'disabled aria-disabled="true"'}>Ask</button>` : `<button class="btn primary" type="button" data-send="post"${ASK.hold ? ' disabled aria-disabled="true"' : ''}>Post</button>`;
+  const warn = st.askErr === 'comp' ? askErrNote() : st.askErr === 'check' ? AS_CHECK_NOTE : ask ? askPayNote(s) : '';
+  const submit = ask ? `<button class="btn primary" type="button" data-act="ask-go" ${pay && !ASK.hold ? '' : 'disabled aria-disabled="true"'}>Ask</button>` : `<button class="btn primary" type="button" data-send="post"${ASK.hold || st.askErr === 'check' ? ' disabled aria-disabled="true"' : ''}>Post</button>`;
   const left = ask ? modelPicker() + (faqOn(s) ? tpPicker(s) : '') : '<span class="c2-note c2-free">Posts use no tokens.</span>';
   const off = s.postsOff ? `<span class="c2-note sf-pnote">Posts are turned off in ${spName(s)}. You can still reply to existing posts.</span>` : '';
   return `<div class="composer open c2 c2v-bar">${closeB}${ta}${ask ? `<div id="ta-skl" class="ta-skl-w">${taSkHTML()}</div>` : ''}${ask ? `<div id="mi-att" class="mi-att-w">${miAttHTML()}</div>` : ''}<div class="c2-bar">${modeSeg}${left}<span class="grow"></span>${warn}<span class="c2-end">${spaceSel}${submit}</span>${off}</div></div>`;
@@ -10021,6 +10027,10 @@ const askPayOk = id => { const k = id && st.userKeys.find(x => x.id === id); ret
 /* the composer's line about who pays (tmLine) */
 const askPayNote = s => !s || st.auth !== 'in' ? '' : tmLine(s.id);
 const AS_ERR = 'Couldn’t post. Try again.';
+/* phase 2 review round 1: a post whose answer was lost may still have been saved. Post again first checks the
+   space (the post's id is in it, or it isn't); Session never makes a second post while the first has no answer */
+const AS_CHECK_NOTE = '<span class="c2-note as-perr as-pchk" role="status"><span class="spin" aria-hidden="true"></span>Checking whether your post went through…</span>';
+const AS_LOST = 'Your post went through before the error, so Session didn’t post it again. Your later edits weren’t saved.';
 const askErrNote = () => `<span class="c2-note warn as-perr" role="alert">${AS_ERR} <button class="tlink" type="button" data-askretry="1">Retry</button></span>`;
 const askNoJoined = () => st.auth === 'in' && !D.joined.some(id => sp(id));
 const askHomeEmpty = () => `${homeTitle('Home', 'New threads from the spaces you joined.')}<div class="cs-empty as-empty"><p><b>Join a space to see its threads here</b></p><p class="muted">Threads from the spaces you join show on Home, newest first. You can ask and post once you have joined a space.</p><div class="as-empty-a"><button class="btn primary" type="button" data-sub="browse">Browse spaces</button><button class="btn" type="button" data-sub="create">${PLUS}Create a space</button></div></div>`;
@@ -10228,6 +10238,7 @@ on($('app'), 'click', e => {
   if ((b = d('[data-askstop]'))) { askStop(b.dataset.askstop); return done(); }
   if ((b = d('[data-askagain]'))) { const [i, k] = b.dataset.askagain.split(':'); askAgain(i, k); return done(); }
   if (d('[data-askkey]')) { Object.assign(st, { addingKey: true, keyDraft: '', keyName: '', keyErr: '', keyShow: false, renaming: null, modal: 'addkey', mpOpen: false }); return done(); }
+  if (d('[data-cstoast="ask-copyedits"]')) { st.toast = null; toast('Copied your edits.'); return done(); }
   if (d('[data-askretry]') || d('[data-cstoast="ask-retry"]')) { st.toast = null; st.askErr = null; st.qtErr = ''; if (ASK.retry) ASK.retry(); return done(); }
   if (d('[data-askdiscard]')) {
     const i = st.thread, f = { ...st.fuDraft }; delete f[i];
@@ -10243,7 +10254,7 @@ on($('app'), 'input', e => {
 });
 
 /* ---------- Screen entries ---------- */
-JUMPS.push(['Asks and answers', [['as-run', 'Answer running, with Stop'], ['as-stopped', 'Answer stopped'], ['as-fail-tokens', 'Answer stopped: included tokens used up'], ['as-fail-key', 'Answer failed: provider rejected the key'], ['as-fail-rate', 'Answer failed: rate limit'], ['as-fail-access', 'Answer failed: no access when the run started'], ['as-fail-interrupted', 'Answer failed: the server couldn’t resume the run'], ['as-notif', 'Notification: an ask was answered'], ['as-post-fail', 'Couldn’t post: Retry'], ['as-fu-fail', 'Follow-up couldn’t post: Retry'], ['as-discard', 'Discard your follow-up?'], ['as-home-empty', 'Home with no joined spaces']]]);
+JUMPS.push(['Asks and answers', [['as-run', 'Answer running, with Stop'], ['as-stopped', 'Answer stopped'], ['as-fail-tokens', 'Answer stopped: included tokens used up'], ['as-fail-key', 'Answer failed: provider rejected the key'], ['as-fail-rate', 'Answer failed: rate limit'], ['as-fail-access', 'Answer failed: no access when the run started'], ['as-fail-interrupted', 'Answer failed: the server couldn’t resume the run'], ['as-notif', 'Notification: an ask was answered'], ['as-post-fail', 'Couldn’t post: Retry'], ['as-post-check', 'Post again: checking whether the first post went through'], ['as-post-lost', 'Post again: the first post had gone through'], ['as-fu-fail', 'Follow-up couldn’t post: Retry'], ['as-discard', 'Discard your follow-up?'], ['as-home-empty', 'Home with no joined spaces']]]);
 const AS_MQ = 'How do prediction markets settle a contract when the source agency revises its data?';
 screenData('as-run', 'asks: your ask', { space: 'public', end: 'running' });
 screenData('as-stopped', 'asks: your ask', { space: 'public', end: 'stopped' });
@@ -10263,6 +10274,9 @@ function asJump(k) {
     case 'as-run': case 'as-stopped': case 'as-fail-tokens': case 'as-fail-key': case 'as-fail-rate': case 'as-fail-access': case 'as-fail-interrupted': thread(lastTid()); break;
     case 'as-notif': Object.assign(st, { home: true, ntOpen: true }); break;
     case 'as-post-fail': compose('public', { mode: 'post', draft: 'Notes from Thursday’s reading group are on the wiki page. Next week: chapters 4 to 6.', askErr: 'comp' }); ASK.retry = () => askPost('post'); break;
+    case 'as-post-check': compose('public', { mode: 'post', draft: 'Notes from Thursday’s reading group are on the wiki page. Next week: chapters 4 to 7.', askErr: 'check' }); break;
+    /* the check found the first post: open it; the draft had edits the first post doesn't have, so say so and offer them */
+    case 'as-post-lost': compose('public', { mode: 'post', draft: 'Notes from Thursday’s reading group are on the wiki page. Next week: chapters 4 to 6.' }); createThread('post'); Object.assign(st, { compOpen: false, draft: '' }); toast(AS_LOST, 'ask-copyedits', 'Copy your edits'); break;
     case 'as-fu-fail': thread(askIn('public'), { qtAskAt: 'r', qtFocusIn: true, qtDraft: 'Which of these changes apply to open-weight models?', qtErr: `${AS_ERR} <button class="tlink" type="button" data-askretry="1">Retry</button>` }); ASK.retry = () => askFollowUp('r'); break;
     case 'as-discard': thread(askIn('public'), { qtAskAt: 'r', qtFocusIn: true, qtDraft: 'Which of these changes apply to open-weight models?', modal: 'ask-discard:follow-up' }); ASK.nav = '[data-home="1"]'; break;
     case 'as-home-empty': st.home = true; break;
@@ -13445,7 +13459,7 @@ const SXV = [
 const SX_CLIENT = [['web', 'Browser'], ['app', 'Desktop app']];
 Object.assign(st, { client: 'web' }, Object.fromEntries(SXV.map(([k, , , o]) => [k, o[0][0]])));
 /* the screen's state: the outbox, refusals, access changes, device runs (set by the Screen entries, sxUi) */
-const SX0 = () => ({ sxScr: null, sxObx: [], sxSent: 0, sxPop: false, sxFrozen: null, sxUpd: null, sxSign: null, sxExec: 'session', sxExecDef: 'session', sxExecSp: {}, sxExecOpen: false, sxLimit: null, sxRateAt: null, sxSignReq: null, sxTip: false, sxNoteX: false, sxDraft: null, sxMainOff: false });
+const SX0 = () => ({ sxScr: null, sxObx: [], sxSent: 0, sxPop: false, sxFrozen: null, sxUpd: null, sxSign: null, sxExec: 'session', sxExecDef: 'session', sxExecSp: {}, sxExecOpen: false, sxLimit: null, sxRateAt: null, sxSignReq: null, sxSignCode0: null, sxSignFrom: 'here', sxSignCode: '', sxSignErr: '', sxTip: false, sxNoteX: false, sxDraft: null, sxMainOff: false });
 Object.assign(st, SX0());
 /* the Variants bar: Client next to the device, and a row of controls shown with the screens they apply to */
 {
@@ -14379,13 +14393,22 @@ function sxRunMarks(i, r) {
 function sxSignStart() {
   return sxWork(async gen => {
     const r = await sxFetch('POST', '/api/rpc/devices.authorize', { name: 'MacBook Air', kind: 'mac' }, { 'X-Session-Auth': 'out' });
-    if (gen === SXQ.gen && r.ok) Object.assign(st, { sxSignReq: r.body.result.request });
+    if (gen === SXQ.gen && r.ok) Object.assign(st, { sxSignReq: r.body.result.request, sxSignCode0: r.body.result.code });
   });
 }
-/* the browser approves with one click (round 2: no code to match) or denies it: devices.approve */
+/* the browser approves or denies a sign-in: devices.approve. One click when the request came from the same network
+   address as this browser ("from this computer"); from another computer the browser sends the code the Mac shows
+   (phase 2 review round 1: a link someone else sent can't sign their Mac in as you). A deny needs no code. */
 function sxSignAnswer(deny) {
   const req = st.sxSignReq; if (!req) return;
-  mutate('devices.approve', Object.assign({ request: req }, deny ? { deny: true } : {}), null, { then: () => { st.sxSign = deny ? 'denied' : 'approved'; renderAll(); } });
+  const code = !deny && st.sxSignFrom === 'other' ? st.sxSignCode.trim() : null;
+  if (!deny && st.sxSignFrom === 'other' && !code) return;
+  const bad = e => !!e && e.code === 'BAD_REQUEST';
+  mutate('devices.approve', Object.assign({ request: req }, deny ? { deny: true } : code ? { code } : {}), null, {
+    then: () => { st.sxSign = deny ? 'denied' : 'approved'; renderAll(); },
+    quiet: bad,
+    fail: e => { if (bad(e)) { st.sxSignErr = 'This code doesn’t match the one on your Mac. Check the code in the Session app and try again.'; renderAll(); setTimeout(() => { const i = $('sx-dcode'); if (i) i.focus(); }, 0); } },
+  });
 }
 function sxSignPage() {
   const s = st.sxSign || 'wait';
@@ -14393,17 +14416,19 @@ function sxSignPage() {
     ? `<span class="cs-na-ic">${SXI.mac}</span><h2>Sign in to Session</h2><p class="muted">Session opens session.app in your browser. Approve this Mac there, and the app signs in.</p><div class="cs-na-b"><button class="btn primary" type="button" data-sx="signstart:">Sign in with the browser</button></div>`
     : s === 'denied'
     ? `<span class="cs-na-ic">${SXI.mac}</span><h2>Sign-in was denied</h2><p class="muted">The browser denied this Mac. Start again if that was a mistake.</p><div class="cs-na-b"><button class="btn primary" type="button" data-sx="signstart:">Start again</button></div>`
-    : `<span class="cs-na-ic">${SXI.mac}</span><h2>Approve this Mac in your browser</h2><p class="muted">Session opened session.app/device in your browser. Approve this Mac there. The app then stores a device token in the macOS Keychain.</p><span class="sx-wait"><span class="spin" aria-hidden="true"></span>Waiting for the browser…</span><div class="cs-na-b"><button class="btn" type="button" data-sx="signopen:">Open the page again</button><button class="btn" type="button" data-sx="signcancel:">Cancel</button></div><p class="cs-fine">${CI.clock}<span>The request expires in 10 minutes.</span></p>`;
+    : `<span class="cs-na-ic">${SXI.mac}</span><h2>Approve this Mac in your browser</h2><p class="muted">Session opened session.app/device in your browser. Approve this Mac there. The app then stores a device token in the macOS Keychain.</p>${st.sxSignCode0 ? `<p class="sx-code-l muted">If the browser asks for a code, enter</p><p class="sx-code num" aria-label="Sign-in code">${esc(st.sxSignCode0)}</p>` : ''}<span class="sx-wait"><span class="spin" aria-hidden="true"></span>Waiting for the browser…</span><div class="cs-na-b"><button class="btn" type="button" data-sx="signopen:">Open the page again</button><button class="btn" type="button" data-sx="signcancel:">Cancel</button></div><p class="cs-fine">${CI.clock}<span>The request expires in 10 minutes.</span></p>`;
   return `<div class="A C Af H sx-sign"><div class="cs-napage"><div class="cs-na">${body}</div></div></div>`;
 }
 function sxDevicePage() {
-  const s = st.sxSign || 'web';
-  const card = `<section class="cs-card sx-dcard"><dl class="sx-dl2"><dt>Device</dt><dd>MacBook Air · macOS 15.1</dd><dt>App</dt><dd>Session for Mac 1.0.0</dd><dt>Asked</dt><dd>Just now, from this computer</dd></dl></section>`;
+  const s = st.sxSign || 'web', here = st.sxSignFrom !== 'other';
+  const card = `<section class="cs-card sx-dcard"><dl class="sx-dl2"><dt>Device</dt><dd>MacBook Air · macOS 15.1</dd><dt>App</dt><dd>Session for Mac 1.0.0</dd><dt>Asked</dt><dd>Just now, from ${here ? 'this computer' : 'another computer'}</dd></dl></section>`;
+  const codeF = here ? '' : `<label class="fld sx-dcode"><span>The code the Mac shows</span><input id="sx-dcode" class="num" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="ABC-DEF" maxlength="9" value="${esc(st.sxSignCode)}"${st.sxSignErr ? ' aria-invalid="true" aria-describedby="sx-derr"' : ''}></label>${st.sxSignErr ? `<p class="ts-err" id="sx-derr" role="alert">${st.sxSignErr}</p>` : ''}`;
+  const lead = here ? 'Approve only if you just started this on your own Mac.' : 'The request came from another computer. Enter the code the Session app shows on the Mac. If you didn’t start this sign-in, deny it.';
   const body = s === 'approved'
     ? `<span class="cs-na-ic">${I.check}</span><h2>This Mac is signed in</h2><p class="muted">Go back to the Session app. You can close this tab.</p>`
     : s === 'denied'
     ? `<span class="cs-na-ic">${SXI.ban}</span><h2>Sign-in denied</h2><p class="muted">The app on that Mac was not signed in. You can close this tab.</p>`
-    : `<span class="cs-na-ic">${SXI.mac}</span><h2>Sign in on a Mac?</h2><p class="muted">The Session app on a Mac asked to sign in as ${esc(ME.u)}. Approve only if you just started this on your own Mac.</p>${card}<div class="cs-na-b"><button class="btn" type="button" data-sx="signno:">Deny</button><button class="btn primary" type="button" data-sx="signok:">Approve this Mac</button></div><p class="cs-fine">${LOCK}<span>The app gets a device token for your account. It can read and write what you can, until you revoke it.</span></p>`;
+    : `<span class="cs-na-ic">${SXI.mac}</span><h2>Sign in on a Mac?</h2><p class="muted">The Session app on a Mac asked to sign in as ${esc(ME.u)}. ${lead}</p>${card}${codeF}<div class="cs-na-b"><button class="btn" type="button" data-sx="signno:">Deny</button><button class="btn primary" type="button" id="sx-dok" data-sx="signok:"${here || st.sxSignCode.trim() ? '' : ' disabled'}>Approve this Mac</button></div><p class="cs-fine">${LOCK}<span>The app gets a device token for your account. It can read and write what you can, until you revoke it.</span></p>`;
   return `<div class="A C Af H">${topHeader()}<div class="cs-napage sx-sign"><div class="cs-na">${body}</div></div></div>`;
 }
 CS_PAGES.sxsign = sxSignPage;
@@ -14432,6 +14457,7 @@ JUMPS.splice((i => i < 0 ? JUMPS.length : i)(JUMPS.findIndex(g => g[0] === 'Acco
   ['Update Session', [['sx-up-web', 'Web: Update Session (reload)'], ['sx-up-app', 'Desktop app: Update Session (download and restart)']]],
   ['Desktop app and devices', [
     ['sx-app-home', 'Desktop app: Home'], ['sx-si-app', 'Device sign-in: the app waits for the browser'], ['sx-si-web', 'Device sign-in: approve the Mac in the browser'],
+    ['sx-si-other', 'Device sign-in: a request from another computer, enter the code'], ['sx-si-wrong', 'Device sign-in: the code doesn’t match'],
     ['sx-si-done', 'Device sign-in: approved'],
   ]],
   ['Device runs (Desktop app)', [
@@ -14595,7 +14621,10 @@ function sxUi(k, again) {
     case 'app-home': app(); st.home = true; break;
     case 'si-app': app(); Object.assign(st, { auth: 'out', subPage: 'sxsign', sxSign: 'wait' }); sxSignStart(); break;
     /* the browser: a sign-in the Mac started (devices.authorize), to approve or deny */
-    case 'si-web': web(); Object.assign(st, { subPage: 'sxdevice', sxSign: 'web' }); sxSignStart(); break;
+    case 'si-web': web(); Object.assign(st, { subPage: 'sxdevice', sxSign: 'web', sxSignFrom: 'here' }); sxSignStart(); break;
+    /* the request came from another network address: the page asks for the code the Mac shows (phase 2 review round 1) */
+    case 'si-other': web(); Object.assign(st, { subPage: 'sxdevice', sxSign: 'web', sxSignFrom: 'other', sxSignCode: '', sxSignErr: '' }); sxSignStart(); break;
+    case 'si-wrong': web(); Object.assign(st, { subPage: 'sxdevice', sxSign: 'web', sxSignFrom: 'other', sxSignCode: 'ZAN-NTB', sxSignErr: 'This code doesn’t match the one on your Mac. Check the code in the Session app and try again.' }); sxSignStart(); break;
     case 'si-done': app(); st.home = true; toast('Signed in successfully.'); break;
     /* the Phone app: the devices are a section of You › Account (round 2) */
     case 'dev': case 'dev-revoke':
@@ -15101,6 +15130,7 @@ on($('app'), 'input', e => {
   if (qtInput(e)) return;
   if (sfInput(e)) return;
   if (csInput(e)) return;
+  if (e.target.id === 'sx-dcode') { st.sxSignCode = e.target.value; const b = $('sx-dok'); if (b) b.disabled = !e.target.value.trim(); if (st.sxSignErr) { st.sxSignErr = ''; const er = $('sx-derr'); if (er) er.remove(); e.target.removeAttribute('aria-invalid'); e.target.removeAttribute('aria-describedby'); } return; }
   if (e.target.id === 'compose-text') { st.draft = e.target.value; return; }
   if (e.target.id === 'dlg-q') { st.draft = e.target.value; return; }
   if (e.target.id === 'key-in') { st.keyDraft = e.target.value; return; }
