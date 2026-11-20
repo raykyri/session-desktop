@@ -550,6 +550,40 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .rday { position: relative; display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
 .rday h4 { margin: 0; font-size: var(--fs-xs); color: var(--t-faint); }
 .rday h4::before { content: ''; position: absolute; left: -17px; top: 3px; width: 10px; height: 10px; border-radius: 50%; background: var(--canvas); box-shadow: inset 0 0 0 2px var(--accent); }
+/* filters, usage badge, composer as a drop target */
+.rkf { display: flex; flex-wrap: wrap; gap: 4px; margin: -2px 0 10px; }
+.rkf button { padding: 2px 9px; border-radius: 10px; font-size: var(--fs-xs); color: var(--t-secondary); }
+.rkf button:hover { background: var(--fill-hover); }
+.rkf button[aria-pressed="true"] { background: var(--t-heading); color: var(--canvas); }
+.rused { display: inline-flex; align-items: center; gap: 3px; color: var(--accent); font-weight: 600; }
+.rused svg.i { width: 11px; height: 11px; }
+.nb.attachover { box-shadow: 0 0 0 2px var(--accent), var(--shadow) !important; }
+/* 13 split */
+.rp-split { position: relative; border-right: 0; flex: none; }
+.rsplit { position: relative; flex: none; width: 10px; margin: 0 -5px; cursor: col-resize; z-index: 4; }
+.rsplit::after { content: ''; position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; background: var(--divider); }
+.rsplit:hover::after { background: var(--accent); }
+/* 14 moodboard */
+.rp-mood { width: 600px; }
+.rmood { columns: 2; column-gap: 12px; }
+.rmood .rcard { break-inside: avoid; margin-bottom: 12px; }
+.rmood .s-full .rimg { height: 200px; }
+.rmood .k-post .rtxt, .rmood .k-note .rtxt { font-family: Georgia, "Times New Roman", serif; font-size: 15px; line-height: 1.4; color: var(--t-heading); }
+.rmood .k-post .rtxt::before { content: '“'; } .rmood .k-post .rtxt::after { content: '”'; }
+/* 15 topics */
+.rp-topics { width: 600px; }
+.rtopics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.rtopic { padding: 10px; border-radius: 14px; background: color-mix(in srgb, var(--control) 55%, transparent); transition: box-shadow .12s, background .12s; }
+.rtopic.dropover { box-shadow: inset 0 0 0 2px var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--canvas)); }
+.rtopic .rlist { gap: 8px; }
+.radd2 { min-height: 90px; display: grid; place-items: center; border: 1.5px dashed var(--border-strong); background: none; color: var(--t-faint); font-size: var(--fs-sm); }
+/* 16 linked */
+.rp-linked { width: 360px; }
+.rlk { display: flex; flex-direction: column; }
+.rlk > .rcard { z-index: 1; }
+.rlkbar { display: flex; align-items: center; gap: 5px; margin-top: -8px; padding: 12px 10px 6px; border-radius: 0 0 12px 12px; background: var(--control); color: var(--t-secondary); font-size: var(--fs-xs); text-align: left; }
+.rlkbar svg.i { width: 11px; height: 11px; }
+.rlk.on .rlkbar { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 /* mock bar */
 .rlseg { flex-wrap: wrap; }
 .rsamp { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 8px; cursor: grab; font-size: var(--fs-xs); color: var(--t-secondary); user-select: none; }
@@ -1672,6 +1706,10 @@ const RL = [
   ['Reader', 'A list with the selected card open above it'],
   ['Table', 'Compact rows, sortable like a table'],
   ['Timeline', 'Cards on a timeline by when they were added'],
+  ['Split', 'Half canvas, half asks, with a divider you can drag'],
+  ['Moodboard', 'Image-first masonry; text cards read as quotes'],
+  ['Topics', 'Cards grouped by topic; drag between groups to retag'],
+  ['Linked', 'Each card shows the asks that used it; pick one to filter the asks'],
 ];
 const RKIND = { post: 'Posts', link: 'Links', paper: 'Papers', video: 'Videos', image: 'Images', note: 'Notes' };
 let rseq = 0;
@@ -1712,7 +1750,11 @@ const RSAMPLE = {
   image: () => ({ kind: 'image', title: 'Whiteboard from Tuesday', domain: 'upload', hue: 200 }),
   note: () => ({ kind: 'note', text: 'Follow up: check the 2019 edition for the missing chapter.' }),
 };
-const resFor = id => id === 'home' || id === 'saved' ? navSpaces().flatMap(x => (RES[x.id] || []).map(r => ({ ...r, sp: x.id }))) : (RES[id] ||= []);
+const TOPICS = { scifi: ['Reputation', 'Markets', 'Agents', 'Sources'], markets: ['Resolution', 'Rules'], ml: ['Reproduction', 'Code'], public: ['Guides'] };
+(() => { const a = D.posts.find(p => p.s === 'scifi' && p.k === 'ask'), b = D.posts.filter(p => p.s === 'scifi' && p.k === 'ask')[1]; if (a) a.about = { id: RES.scifi[1].id, kind: 'link', title: RES.scifi[1].title }; if (b) b.about = { id: RES.scifi[0].id, kind: 'post', title: '@' + RES.scifi[0].handle }; })();
+(() => { for (const k in RES) RES[k].forEach((r, i) => { r.topic ||= (TOPICS[k] || ['General'])[i % (TOPICS[k] || ['General']).length]; }); })();
+const resAll = id => id === 'home' || id === 'saved' ? navSpaces().flatMap(x => (RES[x.id] || []).map(r => ({ ...r, sp: x.id }))) : (RES[id] ||= []);
+const resFor = id => resAll(id).filter(r => !st.rkind || r.kind === st.rkind);
 const resTarget = () => SP[st.space] ? st.space : (isJoined(st.newSpace) ? st.newSpace : navSpaces()[0]?.id);
 const resById = (id) => { for (const k in RES) { const r = RES[k].find(x => x.id === id); if (r) return [k, r]; } return []; };
 function addResource(data, at = {}) {
@@ -1741,7 +1783,8 @@ const rTitle = r => r.kind === 'post' ? `@${r.handle}` : r.kind === 'note' ? cli
 function rcard(r, size = 'full', extra = '') {
   const tag = r.sp ? `<span class="rsp">${esc(spName(r.sp))}</span>` : '';
   const acts = canWrite() ? `<span class="racts"><button class="tlink" data-a="rask" data-id="${r.id}">Ask about this</button>${r.by === me() ? `<button class="iconbtn rx" data-a="rdel" data-id="${r.id}" aria-label="Remove" title="Remove">${I.x}</button>` : ''}</span>` : '';
-  const foot = `<div class="rfoot2"><span class="rk">${RICON[r.kind]}${r.kind === 'post' ? 'Post on X' : r.domain || 'Note'}</span>${tag}<span class="grow"></span>${av(r.by, 'xs')}</div>`;
+  const used = usedBy(r.id).length;
+  const foot = `<div class="rfoot2"><span class="rk">${RICON[r.kind]}${r.kind === 'post' ? 'Post on X' : r.domain || 'Note'}</span>${tag}${used ? `<span class="rused" title="Asks about this">${ARROW_REPLY}${used}</span>` : ''}<span class="grow"></span>${av(r.by, 'xs')}</div>`;
   let body = '';
   if (size === 'row') return `<div class="rrow${st.rsel === r.id ? ' sel' : ''}" draggable="${canWrite()}" data-rid="${r.id}" data-a="rpick" data-id="${r.id}"><span class="rk">${RICON[r.kind]}</span><span class="rt">${esc(rTitle(r))}</span><small>${esc(r.kind === 'post' ? 'X' : r.domain || 'note')}</small>${tag}<small>${day(r.at)}</small>${av(r.by, 'xs')}</div>`;
   if (r.kind === 'post') body = `<div class="rpost"><span class="rpav">${esc((r.name || r.handle)[0])}</span><div><b>${esc(r.name)}</b><small>@${esc(r.handle)}</small></div></div><p class="rtxt">${esc(size === 'compact' ? clip(r.text, 90) : r.text)}</p>${r.likes != null ? `<small class="rmeta">${r.likes} likes</small>` : ''}`;
@@ -1752,6 +1795,8 @@ function rcard(r, size = 'full', extra = '') {
   else body = `<b class="rtl">${esc(r.title)}</b>${r.text && size !== 'compact' ? `<p class="rtxt">${esc(r.text)}</p>` : ''}`;
   return `<div class="rcard k-${r.kind} s-${size}${st.rsel === r.id ? ' sel' : ''}" draggable="${canWrite()}" data-rid="${r.id}"${extra}>${body}${foot}${acts}</div>`;
 }
+const usedBy = id => D.posts.filter(p => p.about?.id === id);
+const kindFilter = list => { const ks = Object.keys(RKIND).filter(k => list.some(r => r.kind === k)); return ks.length > 1 ? `<div class="rkf">${[['', 'All'], ...ks.map(k => [k, RKIND[k]])].map(([k, l]) => `<button data-a="rkind" data-k="${k}" aria-pressed="${(st.rkind || '') === k}">${l}</button>`).join('')}</div>` : ''; };
 const rHead = (list, more = '') => `<div class="rhead"><b>Resources</b><small>${list.length}</small><span class="grow"></span>${more}${canWrite() ? `<button class="btn2 sm" data-a="radd">Add</button>` : ''}</div>${st.radding ? `<form class="radd" data-form="radd:x"><input id="in-radd" placeholder="Paste a link, post URL or note" autocomplete="off"><button type="submit" class="btn1 sm">Add</button><button type="button" class="iconbtn cx" data-a="raddclose" aria-label="Close">${I.x}</button></form>` : ''}`;
 const rDropHint = list => canWrite() ? `<div class="rdrop${list.length ? '' : ' big'}">${list.length ? 'Drop links, posts or files here' : `<b>Nothing collected yet</b><span>Drag links, posts on X, papers or images here, or use Add.</span>`}</div>` : (list.length ? '' : '<p class="empty">Nothing collected here yet.</p>');
 /* canvas positions: saved per card; new cards land where they were dropped */
@@ -1759,7 +1804,8 @@ function canvasPos(list, w = 230, cols = 2, gx = 20, gy = 20) { list.forEach((r,
 
 function resourcesPane() {
   const v = st.ui.rl, list = resFor(st.space), home = !SP[st.space];
-  const title = home ? `<p class="rnote3">From the spaces you joined. Items you add go to ${esc(spName(resTarget() || 'public'))}.</p>` : '';
+  const kf = [3, 9, 15].includes(v) ? '' : kindFilter(resAll(st.space));
+  const title = kf + (home ? `<p class="rnote3">From the spaces you joined. Items you add go to ${esc(spName(resTarget() || 'public'))}.</p>` : '');
   if (v === 1) return `<aside class="rp rp-col" data-drop="1">${rHead(list)}${title}<div class="rlist">${list.map(r => rcard(r)).join('')}</div>${rDropHint(list)}</aside>`;
   if (v === 2) return `<aside class="rp rp-mas" data-drop="1">${rHead(list)}${title}<div class="rmas">${list.map(r => rcard(r)).join('')}</div>${rDropHint(list)}</aside>`;
   if (v === 3) { const kinds = Object.keys(RKIND).filter(k => list.some(r => r.kind === k) || ['post', 'link', 'paper'].includes(k));
@@ -1780,13 +1826,20 @@ function resourcesPane() {
   if (v === 11) { const key = st.rsort || 'at', dir = st.rsortDir || -1, rows = list.slice().sort((a, b) => { const A = key === 'title' ? rTitle(a).toLowerCase() : a[key] || '', B = key === 'title' ? rTitle(b).toLowerCase() : b[key] || ''; return (A < B ? -1 : A > B ? 1 : 0) * dir; });
     const th = (k, l) => `<button class="rth${key === k ? ' on' : ''}" data-a="rsort" data-k="${k}">${l}${key === k ? (dir > 0 ? ' ↑' : ' ↓') : ''}</button>`;
     return `<aside class="rp rp-table" data-drop="1">${rHead(list)}${title}<div class="rtable"><div class="rtr rth-row">${th('kind', 'Kind')}${th('title', 'Title')}${th('by', 'Added by')}${th('at', 'Added')}</div>${rows.map(r => rcard(r, 'row')).join('')}</div>${rDropHint(list)}</aside>`; }
+  if (v === 13) { canvasPos(list, 230, 2, 20, 20); const H = Math.max(600, ...list.map(r => r.y + 240));
+    return `<div class="rp rp-canvas rp-split" data-drop="1" data-canvas="1" style="width:${st.splitW || 640}px"><div class="rcv-h">${rHead(list)}${title}</div><div class="rcv" style="height:${H}px;width:${Math.max(480, ...list.map(r => r.x + 250))}px">${list.map(r => rcard(r, 'compact', ` data-cv="1" style="left:${r.x}px;top:${r.y}px"`)).join('')}</div></div><div class="rsplit" data-split="1" title="Drag to resize" role="separator" aria-orientation="vertical"></div>`; }
+  if (v === 14) return `<aside class="rp rp-mood" data-drop="1">${rHead(list)}${title}<div class="rmood">${list.map(r => rcard(r, r.kind === 'image' || r.kind === 'video' ? 'full' : 'compact')).join('')}</div>${rDropHint(list)}</aside>`;
+  if (v === 15) { const topics = [...new Set([...(TOPICS[st.space] || []), ...list.map(r => r.topic || 'General')])];
+    return `<aside class="rp rp-topics" data-drop="1">${rHead(list)}${title}<div class="rtopics">${topics.map(t => { const items = list.filter(r => (r.topic || 'General') === t); return `<section class="rtopic" data-drop="1" data-topic="${esc(t)}"><div class="rhead"><b>${esc(t)}</b><small>${items.length}</small></div><div class="rlist">${items.map(r => rcard(r, 'compact')).join('') || '<div class="rdrop">Drag cards here</div>'}</div></section>`; }).join('')}${canWrite() ? '<button class="rtopic radd2" data-a="rtopicnew">+ New topic</button>' : ''}</div></aside>`; }
+  if (v === 16) { const pick = st.rlink;
+    return `<aside class="rp rp-linked" data-drop="1">${rHead(list, pick ? '<button class="tlink" data-a="rlink" data-id="">Show all asks</button>' : '')}${title}<div class="rlist">${list.map(r => { const asks = usedBy(r.id); return `<div class="rlk${pick === r.id ? ' on' : ''}">${rcard(r, 'compact')}<button class="rlkbar" data-a="rlink" data-id="${pick === r.id ? '' : r.id}">${asks.length ? `${ARROW_REPLY}${noun(asks.length, 'ask', 'asks')} about this` : 'No asks yet'}<span class="grow"></span>${pick === r.id ? 'Showing' : asks.length ? 'Show' : ''}</button></div>`; }).join('')}</div>${rDropHint(list)}</aside>`; }
   const groups = {}; list.slice().sort((a, b) => a.at < b.at ? 1 : -1).forEach(r => (groups[day(r.at)] ||= []).push(r));
   return `<aside class="rp rp-time" data-drop="1">${rHead(list)}${title}${canWrite() ? '<div class="rdrop">Drop to add it to today</div>' : ''}<div class="rtl2">${Object.entries(groups).map(([d, rs]) => `<section class="rday"><h4>${d}</h4>${rs.map(r => rcard(r, 'compact')).join('')}</section>`).join('')}</div></aside>`;
 }
 
 function renderNetwork() {
   const v = V[st.v], first = lastV !== st.v, sc = $('#k-mg'), top = sc && !first ? sc.scrollTop : 0, tabsLeft = $('#k-tabs')?.scrollLeft || 0;
-  const d = st.ui.sd, locked = spaceLocked(), posts = locked ? [] : streamFor(st.space);
+  const d = st.ui.sd, locked = spaceLocked(), posts = locked ? [] : streamFor(st.space).filter(p => st.ui.rl !== 16 || !st.rlink || p.about?.id === st.rlink);
   const navTop = d === 'a' ? navStrip() : d === 'b' ? navDropTop() : `<nav class="tabs tabs-dd tabs-min sp-mob">${ddButton('big', `<span class="spt-l">${st.space !== 'home' && SP[st.space] ? glyph(SP[st.space]) : HOME}${esc(curLabel())}</span>`)}</nav>`;
   const side = d === 'c' ? navRail() : d === 'd' ? navSidebar() : '';
   const empty = locked ? `<div class="row"><p class="empty saved-empty">This space is private. Ask @${esc(ownerOf(st.space))} to add you.</p><div></div></div>`
@@ -1834,6 +1887,9 @@ app.addEventListener('click', e => {
   if (a === 'rdel') { const [k] = resById(d.id); if (k) { RES[k] = RES[k].filter(x => x.id !== d.id); toast('Removed from resources.'); render(); } return; }
   if (a === 'radd') { st.radding = !st.radding; render(); $('#in-radd')?.focus(); return; }
   if (a === 'raddclose') { st.radding = false; render(); return; }
+  if (a === 'rkind') { st.rkind = d.k || null; render(); return; }
+  if (a === 'rlink') { st.rlink = d.id || null; render(); return; }
+  if (a === 'rtopicnew') { const k = st.space, t = 'Topic ' + ((TOPICS[k] ||= []).length + 1); TOPICS[k].push(t); render(); return; }
   if (a === 'rdrawer') { st.drawer = st.drawer === false; render(); return; }
   if (a === 'rpile') { st.pileOpen = st.pileOpen === d.k ? null : d.k; render(); return; }
   if (a === 'rpick') { st.rsel = d.id; render(); return; }
@@ -1905,8 +1961,9 @@ document.addEventListener('dragstart', e => {
   const sm = e.target.closest?.('[data-rsample]'); if (sm) { e.dataTransfer.setData('application/x-session-res', sm.dataset.rsample); e.dataTransfer.effectAllowed = 'copy'; return; }
   const c = e.target.closest?.('[data-rid]'); if (c && !c.dataset.cv) { e.dataTransfer.setData('application/x-session-move', c.dataset.rid); e.dataTransfer.effectAllowed = 'move'; c.classList.add('dragging'); }
 });
-document.addEventListener('dragend', () => app.querySelectorAll('.dragging, .dropover, .before').forEach(x => x.classList.remove('dragging', 'dropover', 'before')));
+document.addEventListener('dragend', () => app.querySelectorAll('.dragging, .dropover, .before, .attachover').forEach(x => x.classList.remove('dragging', 'dropover', 'before')));
 app.addEventListener('dragover', e => {
+  const nb = e.target.closest('.nb'); if (nb && [...e.dataTransfer.types].includes('application/x-session-move')) { e.preventDefault(); nb.classList.add('attachover'); return; }
   const z = e.target.closest('[data-drop]'); if (!z || !canWrite()) return;
   e.preventDefault(); e.dataTransfer.dropEffect = [...e.dataTransfer.types].includes('application/x-session-move') ? 'move' : 'copy';
   app.querySelectorAll('.dropover').forEach(x => x !== z && x.classList.remove('dropover')); z.classList.add('dropover');
@@ -1914,20 +1971,27 @@ app.addEventListener('dragover', e => {
 });
 app.addEventListener('dragleave', e => { const z = e.target.closest('[data-drop]'); if (z && !z.contains(e.relatedTarget)) z.classList.remove('dropover'); });
 app.addEventListener('drop', e => {
+  const nb = e.target.closest('.nb'), mv0 = e.dataTransfer.getData('application/x-session-move');
+  if (nb && mv0) { e.preventDefault(); const [, r] = resById(mv0); if (r) { st.attach = { id: r.id, kind: r.kind, title: rTitle(r) }; render(); $('#in-new')?.focus(); } return; }
   const z = e.target.closest('[data-drop]'); if (!z || !canWrite()) return; e.preventDefault();
   const cv = z.closest('[data-canvas]')?.querySelector('.rcv'), pos = cv ? (() => { const b = cv.getBoundingClientRect(); return { x: Math.max(0, e.clientX - b.left - 110), y: Math.max(0, e.clientY - b.top - 30), moved: true }; })() : {};
   if (pos.x != null && st.ui.rl === 7) { pos.x = Math.round(pos.x / 20) * 20; pos.y = Math.round(pos.y / 20) * 20; }
   const lane = e.target.closest('[data-kind]')?.dataset.kind;
   const mv = e.dataTransfer.getData('application/x-session-move');
-  if (mv) { const [k, r] = resById(mv); if (!r) return; const list = RES[k], tgt = e.target.closest('[data-rid]')?.dataset.rid;
+  const topic = e.target.closest('[data-topic]')?.dataset.topic;
+  if (mv) { const [k, r] = resById(mv); if (!r) return; if (topic) r.topic = topic; const list = RES[k], tgt = e.target.closest('[data-rid]')?.dataset.rid;
     list.splice(list.indexOf(r), 1); const ti = tgt ? list.findIndex(x => x.id === tgt) : -1; list.splice(ti < 0 ? list.length : ti, 0, r); render(); return; }
   const sm = e.dataTransfer.getData('application/x-session-res');
-  if (sm && RSAMPLE[sm]) { addResource(RSAMPLE[sm](), pos); return; }
+  if (sm && RSAMPLE[sm]) { addResource({ ...RSAMPLE[sm](), ...(topic ? { topic } : {}) }, pos); return; }
   const url = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || '').trim().split('\n')[0];
   if (url) addResource(resFromUrl(url) || { kind: lane === 'note' ? 'note' : 'note', text: url }, pos);
 });
 /* canvas: move cards with the pointer (no re-render while dragging) */
 let cvDrag = null;
+let spDrag = null;
+app.addEventListener('pointerdown', e => { const h = e.target.closest('[data-split]'); if (!h) return; const pane = h.previousElementSibling; spDrag = { pane, sx: e.clientX, w: pane.offsetWidth }; h.setPointerCapture(e.pointerId); e.preventDefault(); });
+app.addEventListener('pointermove', e => { if (!spDrag) return; const w = Math.max(320, Math.min(window.innerWidth - 560, spDrag.w + e.clientX - spDrag.sx)); spDrag.pane.style.width = w + 'px'; spDrag.nw = w; });
+app.addEventListener('pointerup', () => { if (!spDrag) return; if (spDrag.nw) st.splitW = spDrag.nw; spDrag = null; });
 app.addEventListener('pointerdown', e => {
   const c = e.target.closest('.rcard[data-cv]'); if (!c || e.target.closest('button, a') || !canWrite()) return;
   const [, r] = resById(c.dataset.rid); if (!r) return;
