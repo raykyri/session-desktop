@@ -399,7 +399,11 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .m-track { width: 64px; height: 5px; border-radius: 3px; background: var(--control); overflow: hidden; }
 .m-track > span { display: block; height: 100%; background: var(--tone); border-radius: 3px; }
 /* the bar on wide layouts; a ring (no percentage) on narrow ones */
-.meter .m-ring { display: none; width: 18px; height: 18px; transform: rotate(-90deg); }
+.meter .m-l, .meter .m-track { display: none !important; }
+.meter { position: relative; }
+.meter .m-tip { position: absolute; top: calc(100% + 8px); right: -6px; white-space: nowrap; padding: 5px 9px; border-radius: 8px; background: var(--t-heading); color: var(--feed); font-size: var(--fs-xs); font-weight: 500; font-variant-numeric: tabular-nums; opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 20; }
+.meter:hover .m-tip, .meter:focus-visible .m-tip { opacity: 1; }
+.meter .m-ring { display: block; width: 18px; height: 18px; transform: rotate(-90deg); }
 .m-ring circle { fill: none; stroke: var(--control); stroke-width: 3; }
 .m-ring circle.arc { stroke: var(--tone); stroke-linecap: round; }
 /* auth */
@@ -420,6 +424,7 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .auth-acts { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
 .xbtn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 42px; border-radius: 21px; background: var(--t-heading); color: var(--feed); font-weight: 600; font-size: var(--fs-md); }
 .xbtn:hover { opacity: .9; }
+.auth-acts .btn2 { height: 42px; border-radius: 21px; font-size: var(--fs-md); font-weight: 600; }
 .xmark { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; border: 1.5px solid currentColor; font-size: 11px; font-weight: 700; }
 .btn1, .btn2 { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 38px; padding: 0 16px; border-radius: 19px; font-weight: 600; font-size: var(--fs-sm); }
 .btn1 { background: var(--accent-strong); color: var(--on-accent-light); }
@@ -434,7 +439,7 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .ferr { color: var(--bad) !important; font-size: var(--fs-sm) !important; }
 .code-f { display: flex; gap: 8px; }
 .code-f input, .pf input:not([type="checkbox"]), .kform input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: var(--r-lg); border: 1px solid var(--control-border); background: var(--field); color: var(--t-heading); font: inherit; font-size: var(--fs-md); outline: none; }
-.code-f input { font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
+.code-f input { text-transform: uppercase; }
 .code-f input:focus, .pf input:focus, .kform input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .inviter { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
 .inviter b { display: block; color: var(--t-heading); font-size: var(--fs-sm); }
@@ -593,7 +598,7 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .kstate code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--fs-xs); background: var(--inset); padding: 3px 6px; border-radius: 4px; color: var(--t-heading); }
 .kstate small { color: var(--t-faint); font-size: var(--fs-xs); }
 .kform { display: flex; gap: 8px; align-items: center; width: 100%; }
-.kform input { height: 34px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--fs-sm); }
+.kform input { height: 34px; font-size: var(--fs-sm); }
 .kconfirm { font-size: var(--fs-sm); color: var(--t-secondary); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 /* dialog, toast */
 .scrim { position: absolute; inset: 0; z-index: 40; background: rgba(10, 12, 14, .32); }
@@ -871,11 +876,11 @@ const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data
 /* ================= pinned maps ================= */
 /* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
    as a small outline tree per passage. */
-const st = { v: 'type', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
+const st = { v: 'type', newSpace: 'public', newMode: 'ask', newModel: 'Opus 5.5', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
 
 /* Which model answered and at what thinking effort. The fixtures do not record it; the mock picks one
    per thread. Shown in a tooltip on the answer's icon. */
-const RUNS = ['Opus 4.8 · high effort', 'Opus 4.8 · medium effort', 'Sonnet 4.6 · high effort', 'Opus 4.8 · max effort'];
+const RUNS = ['Opus 5.5 · high effort', 'Opus 5.5 · medium effort', 'Gemini 4 Neon · high effort', 'Opus 5.5 · max effort'];
 const runOf = p => p.run || RUNS[[...p.id].reduce((s, c) => s + c.charCodeAt(0), 0) % RUNS.length];
 /* "..." menu on the metadata line of your own threads, branches and replies. Delete is offered only
    while nobody has responded (no branches, no replies). key: 't:thread', 'b:thread:node' or 'r:thread:reply'. */
@@ -1030,7 +1035,8 @@ const V = {
 };
 
 /* ---- composers: start a thread. Each variant below uses one. The draft survives re-renders. ---- */
-const MODEL_OPTS = ['Opus 4.8', 'Sonnet 4.6'], modelOpts = () => keys().openai?.status === 'working' ? [...MODEL_OPTS, 'GPT-5'] : MODEL_OPTS, EFFORT_OPTS = ['low', 'medium', 'high', 'max'];
+/* the picker shows the short name; the menu shows the full name. Sol runs only on the member's OpenAI key. */
+const MODEL_OPTS = ['Opus 5.5', 'Gemini 4 Neon', 'GPT-6.1 Sol'], SHORT = { 'Opus 5.5': 'Opus', 'Gemini 4 Neon': 'Gemini', 'GPT-6.1 Sol': 'Sol' }, hasOpenAI = () => keys().openai?.status === 'working', modelOpts = () => MODEL_OPTS, EFFORT_OPTS = ['low', 'medium', 'high', 'max'];
 /* a pill sized to its current value; the native select sits invisibly on top of it */
 const pick = (id, opts, cur, label, fmt = x => x) => `<label class="pick" title="${label}"><span>${esc(fmt(cur))}</span><select id="${id}" aria-label="${label}">${opts.map(o => `<option value="${o}"${o === cur ? ' selected' : ''}>${esc(fmt(o))}</option>`).join('')}</select>${I.down}</label>`;
 /* Space picker: a custom menu of spaces (only on Home; inside a space the thread goes there). */
@@ -1050,11 +1056,11 @@ const cap1 = x => x[0].toUpperCase() + x.slice(1);
 const CHECK = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>';
 const modelMenu = () => {
   const open = st.menu === 'model';
-  const item = (a, v, label, on) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${on}" data-a="${a}" data-v="${v}"><span>${label}</span>${on ? CHECK : ''}</button>`;
-  return `<span class="mpick"><button type="button" class="pick" data-a="menu" data-m="model" aria-haspopup="menu" aria-expanded="${open}" title="Model and effort"><span>${esc(st.newModel)}</span>${I.down}</button>
-    ${open ? `<div class="menu" role="menu" aria-label="Model">${modelOpts().map(m => item('setmodel', m, m === 'GPT-5' ? 'GPT-5<span class="src">your OpenAI key</span>' : m, m === st.newModel)).join('')}<div class="msep"></div>
+  const item = (a, v, label, on, off) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${on}" data-a="${a}" data-v="${v}"${off ? ' disabled' : ''}><span>${label}</span>${on ? CHECK : ''}</button>`;
+  return `<span class="mpick"><button type="button" class="pick" data-a="menu" data-m="model" aria-haspopup="menu" aria-expanded="${open}" title="Model and effort"><span>${esc(SHORT[st.newModel] || st.newModel)}</span>${I.down}</button>
+    ${open ? `<div class="menu" role="menu" aria-label="Model">${modelOpts().map(m => item('setmodel', m, m === 'GPT-6.1 Sol' ? `GPT-6.1 Sol<span class="src">${hasOpenAI() ? 'your OpenAI key' : 'needs an OpenAI key'}</span>` : m, m === st.newModel, m === 'GPT-6.1 Sol' && !hasOpenAI())).join('')}<div class="msep"></div>
       <div class="mi mi-sub" role="menuitem" aria-haspopup="menu" tabindex="-1"><span>Effort</span><span class="mi-v">${cap1(st.newEffort)}</span>${I.right}
-        <div class="menu submenu" role="menu" aria-label="Effort">${EFFORT_OPTS.map(e => item('seteffort', e, cap1(e), e === st.newEffort)).join('')}</div></div><div class="msep"></div><div class="mi-note">${st.newModel === 'GPT-5' ? 'Billed to your OpenAI key' : `${fmtTok(left())} included tokens left this week${left() <= 0 && billing() === 'key' && keys().anthropic ? ', then your Anthropic key' : ''}`}</div></div>` : ''}</span>`;
+        <div class="menu submenu" role="menu" aria-label="Effort">${EFFORT_OPTS.map(e => item('seteffort', e, cap1(e), e === st.newEffort)).join('')}</div></div></div>` : ''}</span>`;
 };
 const isAsk = () => st.newMode === 'ask';
 const ph = () => isAsk() ? 'Ask anything' : 'Write a post';
@@ -1145,7 +1151,7 @@ app.addEventListener('submit', e => {
   const f = e.target.closest('[data-form]'); if (!f) return;
   const inp = f.querySelector('input, textarea'), v = inp.value.trim(); if (!v) { inp.focus(); return; }
   const [kind, pid, node] = f.dataset.form.split(':'), p = byId(pid);
-  if (kind === 'new' && e.submitter?.value !== 'post' && outOfTokens() && st.newModel !== 'GPT-5') { toast('Included tokens are used up until Friday. Post instead, or add an API key in Usage.'); render(); return; }
+  if (kind === 'new' && e.submitter?.value !== 'post' && outOfTokens() && st.newModel !== 'GPT-6.1 Sol') { toast('Included tokens are used up until Friday. Post instead, or add an API key in Usage.'); render(); return; }
   if (kind === 'new') { newThread(newSpaceId(), v, e.submitter?.value === 'post' ? 'post' : 'ask'); return; }
   if (kind === 'rp') { addReply(p, node, v); st.replying = null; render(); return; }
   st.sel[pid] = addBranch(p, node, v);
@@ -1262,11 +1268,12 @@ const keys = () => (KEYS[st.user] ||= {});
 const billing = () => BILLING[st.user] || 'pause';
 const outOfTokens = () => left() <= 0 && !(billing() === 'key' && keys().anthropic?.status === 'working');
 const resetIn = () => { const h = Math.round((RESET - NOW) / 36e5), d = Math.floor(h / 24); return d ? `${d} day${d === 1 ? '' : 's'} ${h % 24} h` : `${h} h`; };
+const resetShort = () => { const h = Math.round((RESET - NOW) / 36e5), d = Math.floor(h / 24); return d ? `${d}d ${h % 24}h` : `${h}h`; };
 /* charge a finished run: included tokens first, then the key the member chose; logged for the Usage page */
 const RUNLOG = {};
 function charge(q, tok) {
   let bill = 'Included';
-  if (st.newModel === 'GPT-5') bill = 'OpenAI key';
+  if (st.newModel === 'GPT-6.1 Sol') bill = 'OpenAI key';
   else if (left() >= tok) usage()[TODAY] += tok;
   else { const inc = left(); usage()[TODAY] += inc; bill = billing() === 'key' && keys().anthropic?.status === 'working' ? (inc ? 'Included + Anthropic key' : 'Anthropic key') : 'Included'; if (bill === 'Included') usage()[TODAY] += tok - inc; }
   (RUNLOG[st.user] ||= []).push({ q, at: new Date(NOW).toISOString(), tok, bill });
@@ -1294,7 +1301,7 @@ function meter() {
   const u = used(), pct = Math.min(1, u / ALLOWANCE), l = left(), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok';
   const title = `${fmtTok(l)} of ${fmtTok(ALLOWANCE)} included tokens left this week; resets in ${resetIn()}`;
   const r = 7, c = 2 * Math.PI * r;
-  return `<button class="meter ${tone}" data-ma="go" data-to="usage" title="${title}" aria-label="${title}"><span class="m-l">${fmtTok(l)} left</span><span class="m-track"><span style="width:${(pct * 100).toFixed(1)}%"></span></span><svg class="m-ring" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}"/><circle class="arc" cx="9" cy="9" r="${r}" stroke-dasharray="${(c * pct).toFixed(2)} ${c.toFixed(2)}"/></svg></button>`;
+  return `<button class="meter ${tone}" data-ma="go" data-to="usage" aria-label="${title}"><span class="m-tip" aria-hidden="true">${Math.round((1 - pct) * 100)}% left · ${resetShort()} left</span><span class="m-l">${fmtTok(l)} left</span><span class="m-track"><span style="width:${(pct * 100).toFixed(1)}%"></span></span><svg class="m-ring" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}"/><circle class="arc" cx="9" cy="9" r="${r}" stroke-dasharray="${(c * pct).toFixed(2)} ${c.toFixed(2)}"/></svg></button>`;
 }
 
 /* ---- app bar ---- */
@@ -1316,7 +1323,7 @@ const appbarOut = () => `<header class="appbar">${brandBtn()}<span class="grow">
   <button class="ghost" data-ma="openauth" data-to="code">I have an invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></header>`;
 const authDialog = () => `<div class="scrim auth-scrim" data-ma="closeauth"></div><div class="authdlg v-a" role="dialog" aria-modal="true" aria-label="Sign in to Session"><button class="iconbtn dclose" data-ma="closeauth" aria-label="Close">${I.x}</button>${authScreen()}</div>`;
 /* ---- sign-in steps ---- */
-const xBtn = (label = 'Sign in with X') => `<button class="xbtn" data-ma="xauth">${'<span class="xmark" aria-hidden="true">X</span>'}${label}</button>`;
+const xBtn = (label = 'Sign in with X') => `<button class="xbtn" data-ma="xauth">${label}</button>`;
 function authScreen() {
   const back = to => `<button class="tlink back" data-ma="flow" data-to="${to}">${I.left}Back</button>`;
   let body = '';
@@ -1324,8 +1331,7 @@ function authScreen() {
   if (st.flow === 'landing' && linkInv) {
     body = `<div class="auth-c"><span class="brand lg">${mark()}<b>Session</b></span><div class="inviter">${av(linkInv.by)}<div><b>${esc(nameOf(linkInv.by))} invited you to Session</b><small>@${esc(linkInv.by)} · this invite expires ${day(addDays(linkInv.created, INVITE_DAYS))}</small></div></div>
       <h2>Research with agents, in shared spaces.</h2><p>Ask a question and an agent researches it. Branch from any passage of the answer to go deeper; everyone in the space can read and build on it.</p>
-      <div class="auth-acts">${xBtn('Continue with X')}<button class="btn2" data-ma="nolink">I already have an account</button></div>
-      <p class="fine">Your account starts pending until ${NEED} members vouch for you.</p></div>`;
+      <div class="auth-acts">${xBtn('Continue with X')}<button class="btn2" data-ma="nolink">I already have an account</button></div></div>`;
   } else if (st.flow === 'landing') {
     body = `<div class="auth-c"><span class="brand lg">${mark()}<b>Session</b></span><h2>Research with agents, in shared spaces.</h2>
       <p>Ask a question and an agent researches it. Branch from any passage of the answer to go deeper; everyone in the space can read and build on it.</p>
@@ -1340,7 +1346,7 @@ function authScreen() {
       ${inv ? `<div class="inviter">${av(inv.by)}<div><b>${esc(nameOf(inv.by))} invited you</b><small>@${esc(inv.by)} · expires ${day(addDays(inv.created, INVITE_DAYS))}</small></div></div><div class="auth-acts">${st.xacct && !MEMBERS.some(m => m.x === st.xacct) ? `<button class="btn1" data-ma="toprofile">Continue as @${esc(st.xacct)}</button>${xBtn('Use a different X account')}` : xBtn('Continue with X')}</div>` : ''}</div>`;
   } else if (st.flow === 'xauth') {
     body = `<div class="auth-c">${back(st.intent === 'signup' ? 'code' : 'landing')}<h2>Sign in with X</h2><p>X asks you to let Session see your name, handle and profile picture. Session cannot post for you or read your messages.</p>
-      <div class="auth-acts"><button class="xbtn" data-ma="xgo"><span class="xmark" aria-hidden="true">X</span>Continue to X</button></div>
+      <div class="auth-acts"><button class="xbtn" data-ma="xgo">Continue to X</button></div>
       <p class="fine">You'll come back here after signing in on X.</p></div>`;
   } else if (st.flow === 'noaccount') {
     const a = X_ACCOUNTS.find(x => x.x === st.xacct);
@@ -1395,45 +1401,16 @@ function treeA() {
     const y = i * H + H / 2;
     if (d > 0 && idx[m.inviter] != null) { const px = X(d - 1), py = idx[m.inviter] * H + H / 2; paths += `<path d="M${px} ${py + 11} L${px} ${y - 6} Q${px} ${y} ${px + 6} ${y} L${X(d) - 11} ${y}"/>`; }
   });
-  return `<div class="ttree"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ m, d }) => `<div class="trow${m.u === st.user ? ' me' : ''}" style="padding-left:${X(d) - 10}px">${av(m.u, 'sm')}<span class="tn"><b>${esc(m.u)}</b><small>${esc(m.name)}${m.inviter ? ` · joined ${day(m.joined)}` : ' · founder'}</small></span>${statusChip(m)}<span class="grow"></span>${vouchCtl(m)}</div>`).join('')}</div>`;
-}
-function treeB() {
-  const rows = treeRows();
-  return `<div class="ttable" role="table"><div class="tr th" role="row"><span>Member</span><span>Invited by</span><span>Joined</span><span>Vouched by</span><span></span></div>
-    ${rows.map(({ m, d }) => `<div class="tr${m.u === st.user ? ' me' : ''}" role="row"><span class="tm" style="padding-left:${d * 16}px">${d ? '<i class="elbow"></i>' : ''}${av(m.u, 'xs')}<b>${esc(m.u)}</b>${statusChip(m)}</span><span>${m.inviter ? esc(m.inviter) : '—'}</span><span>${day(m.joined)}</span><span class="vlist">${m.vouchers.map(v => av(v, 'xs')).join('') || '<small>—</small>'}</span><span class="tact">${vouchCtl(m)}</span></div>`).join('')}</div>`;
-}
-/* C: an indented list, text only */
-function treeC() {
-  return `<div class="tsimple">${treeRows().map(({ m, d }) => `<div class="srow${m.u === st.user ? ' me' : ''}" style="padding-left:${d * 22}px"><b>${esc(m.u)}</b>${m.status === 'pending' ? `<span class="sp-pend">pending, ${progress(m).n} of ${NEED}</span>` : m.staff ? `<span class="sp-staff">${m.staff}</span>` : ''}<span class="grow"></span>${vouchCtl(m)}</div>`).join('')}</div>`;
-}
-/* D: grouped by inviter, one line per person who has invited someone */
-function treeD() {
-  const rows = treeRows(), inviters = rows.filter(({ m }) => MEMBERS.some(c => c.inviter === m.u));
-  return `<div class="tgroups">${inviters.map(({ m }) => `<div class="grow-l"><span class="gby">${av(m.u, 'xs')}<b>${esc(m.u)}</b> invited</span><span class="gkids">${MEMBERS.filter(c => c.inviter === m.u).map(c => `<span class="kidchip${c.status === 'pending' ? ' pend' : ''}">${esc(c.u)}${c.status === 'pending' ? ` · ${progress(c).n}/${NEED}` : ''}${eligible(st.user, c.u) && !c.vouchers.includes(st.user) ? ` <button class="tlink" data-ma="askvouch" data-u="${c.u}">Vouch</button>` : ''}</span>`).join('')}</span></div>`).join('')}</div>`;
-}
-/* E: just your place in it: the chain above you and the people you invited */
-function treeE() {
-  const up = ancestors(st.user).reverse(), mine2 = MEMBERS.filter(c => c.inviter === st.user);
-  return `<div class="tpath"><div class="chain">${[...up, st.user].map(u => `<span class="${u === st.user ? 'me' : ''}">${esc(u)}</span>`).join(`<i>${I.right}</i>`)}</div>
-    ${mine2.length ? `<p class="sub">You invited</p><div class="list">${mine2.map(c => `<div class="li">${av(c.u, 'sm')}<div class="grow"><b>${esc(c.u)}</b><small>joined ${day(c.joined)}${c.status === 'pending' ? ` · pending, ${progress(c).n} of ${NEED}` : ''}</small></div>${vouchCtl(c)}</div>`).join('')}</div>` : '<p class="sub">You haven\'t invited anyone yet.</p>'}</div>`;
+  return `<div class="ttree"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ m, d }) => `<div class="trow${m.u === st.user ? ' me' : ''}" style="padding-left:${X(d) - 10}px">${av(m.u, 'sm')}<span class="tn"><b>${esc(m.u)}</b><small>${esc(m.name)}</small></span>${statusChip(m)}<span class="grow"></span>${vouchCtl(m)}</div>`).join('')}</div>`;
 }
 /* ---- members page, split into sections so each has variants ----
-   req:    A list with "I don't know them" · B one row of chips · C no section; a count on the tree header, vouch in the tree
    inv:    A slots bar + full list · B one line + open codes only · C one button that shows the newest open code
-   rules:  A full list · B collapsed · C three sentences · D none, one link under the tree
    layout: A two columns · B one column */
 const vouchReqs = () => MEMBERS.filter(t => eligible(st.user, t.u) && !t.vouchers.includes(st.user) && !st.dismissed[st.user + '>' + t.u]);
-function reqSection() {
-  const reqs = vouchReqs();
-  if (!reqs.length || st.ui.req === 'c') return '';
-  if (st.ui.req === 'b') return `<section class="reqb"><h3>Waiting for your vouch</h3><div class="rchips">${reqs.map(t => `<span class="rchip">${av(t.u, 'xs')}<b>${esc(t.name)}</b><small>${progress(t).n}/${NEED}</small><button class="btn1 sm" data-ma="askvouch" data-u="${t.u}">Vouch</button></span>`).join('')}</div></section>`;
-  return `<section><h3>Waiting for your vouch</h3><p class="sub">Vouch only for people you know. Your name appears on their profile as a voucher.</p><div class="list">${reqs.map(t => { const pr = progress(t); return `<div class="li">${av(t.u)}<div class="grow"><b>${esc(t.name)} <span class="h">@${esc(t.u)}</span></b><small>Invited by ${esc(nameOf(t.inviter))} · joined ${rel(t.joined)} ago · ${pr.n} of ${NEED} vouches</small></div><button class="tlink" data-ma="notnow" data-u="${t.u}">I don't know them</button><button class="btn1 sm" data-ma="askvouch" data-u="${t.u}">Vouch</button></div>`; }).join('')}</div></section>`;
-}
 function treeSection() {
-  const n = vouchReqs().length, cnt = st.ui.req === 'c' && n ? `<span class="tcount">${n} waiting for your vouch</span>` : '';
-  const sub = st.ui.rules === 'd' ? `Who invited whom. <button class="tlink inl" data-ma="rulesdlg">How membership works</button>` : 'Who invited whom. You can vouch for pending members anywhere below you.';
-  return `<section><div class="shead"><h3>Invite tree ${cnt}</h3><span class="modes" role="group">${[['all', 'Everyone'], ['mine', 'Your branch']].map(([k, l]) => `<button type="button" data-ma="scope" data-s="${k}" aria-pressed="${st.treeScope === k}">${l}</button>`).join('')}</span></div>
-    <p class="sub">${sub}</p>${({ a: treeA, b: treeB, c: treeC, d: treeD, e: treeE })[st.ui.tree]()}</section>`;
+  const sub = 'Who invited whom. You can vouch for pending members anywhere below you.';
+  return `<section><div class="shead"><h3>Invite tree</h3><span class="modes" role="group">${[['all', 'Everyone'], ['mine', 'Your branch']].map(([k, l]) => `<button type="button" data-ma="scope" data-s="${k}" aria-pressed="${st.treeScope === k}">${l}</button>`).join('')}</span></div>
+    <p class="sub">${sub}</p>${treeA()}</section>`;
 }
 function invSection() {
   const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), oc = openCount(), used = slotsUsed(), can = used < SLOTS && canVouchYet(meM());
@@ -1452,22 +1429,14 @@ function invSection() {
     <div class="list tight">${inv.map(invRow).join('') || '<p class="empty">No invites yet.</p>'}</div>
     <button class="btn1 wide" data-ma="newinvite"${can ? '' : ' disabled'}>Create an invite</button><p class="fine">${why}</p></section>`;
 }
-const RULES_SHORT = [`Accounts start from a member's invite and stay read-only until ${NEED} members above them in the tree vouch, at least one besides the inviter.`, `Members can invite and vouch after ${VOUCH_WAIT} days active, with ${SLOTS} invite slots each.`, `Invites expire in ${INVITE_DAYS} days; pending accounts close after ${PENDING_DAYS}.`];
-const rulesList = () => `<dl class="rules">${RULES.map(([t, d]) => `<dt>${t}</dt><dd>${d}</dd>`).join('')}</dl>`;
-function rulesSection() {
-  if (st.ui.rules === 'd') return '';
-  if (st.ui.rules === 'b') return `<section class="box"><details class="rdet"><summary><h3>How membership works</h3></summary>${rulesList()}</details></section>`;
-  if (st.ui.rules === 'c') return `<section class="box"><h3>How membership works</h3><p class="rshort">${RULES_SHORT.join(' ')}</p></section>`;
-  return `<section class="box"><h3>How membership works</h3>${rulesList()}</section>`;
-}
 function membersPage() {
-  if (st.ui.layout === 'b') return `<div class="page"><div class="page-in narrow mone">${reqSection()}${invSection()}${treeSection()}${rulesSection()}</div></div>`;
-  return `<div class="page"><div class="page-in"><div class="mcols"><div class="mmain">${reqSection()}${treeSection()}</div>
-    <aside class="mside">${invSection()}${rulesSection()}</aside></div></div></div>`;
+  if (st.ui.layout === 'b') return `<div class="page"><div class="page-in narrow mone">${invSection()}${treeSection()}</div></div>`;
+  return `<div class="page"><div class="page-in"><div class="mcols"><div class="mmain">${treeSection()}</div>
+    <aside class="mside">${invSection()}</aside></div></div></div>`;
 }
 
 /* ---- usage and API keys (key variants) ---- */
-const PROVIDERS = { anthropic: { name: 'Anthropic', prefix: 'sk-ant-', ph: 'sk-ant-...', models: 'Opus 4.8, Sonnet 4.6' }, openai: { name: 'OpenAI', prefix: 'sk-', ph: 'sk-...', models: 'GPT-5' } };
+const PROVIDERS = { anthropic: { name: 'Anthropic', prefix: 'sk-ant-', ph: 'sk-ant-...', models: 'Opus 5.5' }, openai: { name: 'OpenAI', prefix: 'sk-', ph: 'sk-...', models: 'GPT-6.1 Sol' } };
 function keyBlock(id) {
   const P = PROVIDERS[id], k = keys()[id];
   const form = st.keyForm === id ? `<form class="kform" data-mform="key:${id}"><input id="in-key" type="password" placeholder="${P.ph}" autocomplete="off" spellcheck="false" aria-label="${P.name} API key"><button type="submit" class="btn1 sm">Save key</button><button type="button" class="tlink" data-ma="keycancel">Cancel</button></form>${st.keyErr ? `<p class="ferr">${esc(st.keyErr)}</p>` : ''}` : '';
@@ -1497,7 +1466,7 @@ function usageTop() {
   if (st.ui.utop === 'c') return `<section class="box"><div class="shead"><h3>${fmtTok(tot)} of ${fmtTok(ALLOWANCE)} used this week</h3><small>${cap1(reset)}</small></div>${chart(false)}</section>`;
   if (st.ui.utop === 'd') return `<section class="box"><p class="usent ${tone}">You have <b>${fmtTok(left())}</b> of ${fmtTok(ALLOWANCE)} included tokens left. They reset on ${WEEK[0]}, in ${resetIn()}.</p>${bar}</section>`;
   return `<section class="box"><div class="shead"><h3>Included tokens this week</h3><small>Resets ${WEEK[0]}, ${day(new Date(RESET).toISOString())} at 00:00 UTC, in ${resetIn()}</small></div>
-    <p class="sub">Covers asks and branches on Opus 4.8 and Sonnet 4.6. GPT-5 runs only on your OpenAI key.</p><div class="ubig ${tone}"><b>${fmtTok(left())}</b><span>left of ${fmtTok(ALLOWANCE)}</span></div>${bar}${chart(true)}</section>`;
+    <p class="sub">Covers asks and branches on Opus 5.5 and Gemini 4 Neon. GPT-6.1 Sol runs only on your OpenAI key.</p><div class="ubig ${tone}"><b>${fmtTok(left())}</b><span>left of ${fmtTok(ALLOWANCE)}</span></div>${bar}${chart(true)}</section>`;
 }
 function usageRunsSection() {
   if (st.ui.runs === 'd') return '';
@@ -1523,9 +1492,8 @@ function renderMock() {
   const cur = st.auth === 'out' ? 'out' : st.user;
   const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcde'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
-    ${seg('tree', 'Tree', 5)}${seg('layout', 'Members layout', 2)}${seg('req', 'Vouch requests', 3)}${seg('inv', 'Invites', 3)}${seg('rules', 'Rules', 4)}${seg('utop', 'Usage top', 4)}${seg('runs', 'Recent runs', 4)}
+    ${seg('layout', 'Members layout', 2)}${seg('inv', 'Invites', 3)}${seg('utop', 'Usage top', 4)}${seg('runs', 'Recent runs', 4)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
-    <span class="mk"><span class="mkl">X returns</span><span class="seg">${X_ACCOUNTS.map(a => `<button data-mx="${a.x}" aria-pressed="${st.mockX === a.x}" title="${esc(a.note)}">@${a.x}</button>`).join('')}</span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
 }
@@ -1540,7 +1508,6 @@ function render() {
   app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg').forEach(x => x.remove());
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
   if (st.confirm) app.insertAdjacentHTML('beforeend', confirmEl());
-  if (st.rulesOpen && st.screen === 'members') app.insertAdjacentHTML('beforeend', `<div class="scrim" data-ma="closerules"></div><div class="dialog rulesdlg" role="dialog" aria-modal="true" aria-labelledby="rl-h"><h3 id="rl-h">How membership works</h3>${rulesList()}<div class="dacts"><button class="btn2" data-ma="closerules">Close</button></div></div>`);
   if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
 }
 const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}</div>` : '';
@@ -1557,12 +1524,12 @@ function previewVariant(k) {
   st.confirm = null; st.menu = null;
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
-  st.screen = ['tree', 'layout', 'req', 'inv', 'rules'].includes(k) ? 'members' : k === 'meter' ? 'feed' : 'usage';
+  st.screen = ['layout', 'inv'].includes(k) ? 'members' : k === 'meter' ? 'feed' : 'usage';
   render();
   if (k === 'keys') $('.kcards, .krow')?.closest('section')?.scrollIntoView({ block: 'start' });
   if (k === 'tree') $('.ttree, .ttable')?.closest('section')?.scrollIntoView({ block: 'start' });
   if (k === 'meter') $('.meter')?.focus();
-  if (k === 'inv' || k === 'rules') $(k === 'inv' ? '.mside .box, .mone .box' : '.rules, .rshort, .rdet, .tlink.inl')?.closest('section')?.scrollIntoView({ block: 'nearest' });
+  if (k === 'inv') $('.mside .box, .mone .box')?.closest('section')?.scrollIntoView({ block: 'nearest' });
   if (k === 'runs') $('.runs, .rdet')?.closest('section')?.scrollIntoView({ block: 'nearest' });
 }
 function signIn(u) { st.authOpen = false; st.auth = 'in'; st.user = u; st.screen = member(u).status === 'active' ? 'feed' : 'status'; st.menu = null; st.sel = {}; render(); }
@@ -1607,8 +1574,6 @@ app.addEventListener('click', e => {
   if (a === 'dovouch') { vouch(st.user, d.u); st.confirm = null; render(); return; }
   if (a === 'unvouch') { unvouch(st.user, d.u); render(); return; }
   if (a === 'notnow') { st.dismissed[st.user + '>' + d.u] = true; toast(`Hidden. ${nameOf(d.u)} stays in the tree, where you can still vouch.`); render(); return; }
-  if (a === 'rulesdlg') { st.rulesOpen = true; render(); return; }
-  if (a === 'closerules') { st.rulesOpen = false; render(); return; }
   if (a === 'scope') { st.treeScope = d.s; render(); return; }
   if (a === 'remind') { st.reminded[d.u] = true; toast(`Reminder sent to ${nameOf(d.u)}.`); render(); return; }
   if (a === 'newinvite') { if (slotsUsed() >= SLOTS || !canVouchYet(meM())) return; const code = newCode(); INVITES.push({ code, by: st.user, created: new Date(NOW).toISOString(), used: null }); toast(`Invite ${code} created. Send the link to one person.`); render(); return; }
@@ -1618,7 +1583,7 @@ app.addEventListener('click', e => {
   if (a === 'keycancel') { st.keyForm = null; st.keyErr = ''; render(); return; }
   if (a === 'keyask') { st.removing = d.k; render(); return; }
   if (a === 'keykeep') { st.removing = null; render(); return; }
-  if (a === 'keyremove') { delete keys()[d.k]; st.removing = null; if (!keys().anthropic && !keys().openai) BILLING[st.user] = 'pause'; if (st.newModel === 'GPT-5' && !keys().openai) st.newModel = 'Opus 4.8'; toast(`${PROVIDERS[d.k].name} key removed.`); render(); return; }
+  if (a === 'keyremove') { delete keys()[d.k]; st.removing = null; if (!keys().anthropic && !keys().openai) BILLING[st.user] = 'pause'; if (st.newModel === 'GPT-6.1 Sol' && !keys().openai) st.newModel = 'Opus 5.5'; toast(`${PROVIDERS[d.k].name} key removed.`); render(); return; }
 });
 app.addEventListener('change', e => { if (e.target.dataset.ma === 'bill') { BILLING[st.user] = e.target.value; toast(e.target.value === 'key' ? 'Asks will continue on your API key.' : 'Asks will pause until the reset.'); render(); } });
 app.addEventListener('submit', e => {
