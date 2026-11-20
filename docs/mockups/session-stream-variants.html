@@ -119,6 +119,19 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .composer:focus-within { border-color: var(--accent); }
 .composer input { flex: 1; min-width: 0; border: 0; background: none; outline: none; padding: 6px 0; font-size: var(--fs-base); }
 .composer input::placeholder { color: var(--placeholder); }
+.new-row { padding: 2px 0 0; }
+.newbox { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 12px 14px 10px; min-width: 0; transition: box-shadow .15s; }
+.newbox:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), var(--shadow-soft); }
+.newbox textarea { display: block; width: 100%; resize: none; border: 0; outline: none; background: none; color: var(--t-heading); font: inherit; font-size: var(--fs-lg); line-height: 1.45; padding: 2px 0 8px; min-height: 34px; max-height: 240px; }
+.newbox textarea::placeholder { color: var(--placeholder); }
+.newbox-f { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--t-muted); }
+.newbox-to { display: inline-flex; align-items: center; gap: 4px; }
+.newbox-to select { border: 0; background: var(--control); border-radius: var(--r-md); padding: 3px 6px; color: var(--t-secondary); font-size: var(--fs-sm); }
+.newbox-hint { margin-right: auto; color: var(--t-faint); font-size: var(--fs-xs); }
+.newbox .btn-1, .newbox .btn-2 { height: 30px; padding: 0 14px; border-radius: 15px; font-weight: 600; font-size: var(--fs-sm); }
+.newbox .btn-1 { background: var(--accent); color: var(--on-accent); }
+.newbox .btn-2 { background: var(--control); color: var(--t-secondary); }
+.newbox .btn-2:hover { background: var(--control-hover); }
 .composer button { height: 30px; padding: 0 12px; border-radius: 15px; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: var(--fs-sm); }
 .composer .ctx { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
 .status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--warn); }
@@ -480,7 +493,7 @@ const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data
 /* ================= pinned maps ================= */
 /* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
    as a small outline tree per passage. */
-const st = { v: 'faces', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
+const st = { v: 'faces', newSpace: 'public', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
 
 /* Which model answered and at what thinking effort. The fixtures do not record it; the mock picks one
    per thread. Shown in a tooltip on the answer's icon. */
@@ -614,6 +627,26 @@ const V = {
   },
 };
 
+/* ---- composer: start a thread at the top of the stream ---- */
+const newBox = () => {
+  const home = st.space === 'home', opts = spacesWithPosts.filter(x => x.id !== 'sablefield');
+  return `<div class="row new-row"><form class="newbox" data-form="new:${home ? 'public' : st.space}">
+    <textarea id="in-new" rows="1" placeholder="ask anything, or write a post" aria-label="Ask or post"></textarea>
+    <div class="newbox-f">${home ? `<label class="newbox-to">in <select id="new-space" aria-label="Space">${opts.map(x => `<option value="${x.id}"${x.id === st.newSpace ? ' selected' : ''}>${esc(spName(x.id))}</option>`).join('')}</select></label>` : `<span class="newbox-to">in ${esc(spName(st.space))}</span>`}
+      <span class="newbox-hint">Enter to ask · Shift+Enter for a new line</span>
+      <button type="submit" value="post" class="btn-2">Post</button><button type="submit" value="ask" class="btn-1">Ask</button></div>
+  </form><div></div></div>`;
+};
+let nseq = 0;
+function newThread(space, q, kind) {
+  const id = 'new' + (++nseq), now = new Date(NOW).toISOString();
+  if (kind === 'post') { D.posts.push({ id, s: space, u: F.me.u, k: 'post', createdAt: now, q, tok: 0, likesBase: 0 }); render(); return; }
+  D.posts.push({ id, s: space, u: F.me.u, k: 'ask', createdAt: now, q, sum: '', tok: 0, likesBase: 0 });
+  D.rich[id] = '<p><span class="status">Researching · step 1 of 4</span></p>';
+  render();
+  setTimeout(() => { D.rich[id] = `<p>Mock answer to "${esc(clip(q, 90))}". In the app, the agent's answer appears here when the run finishes; select a passage to branch from it.</p>`; byId(id).tok = 41000; render(); }, 2600);
+}
+
 /* ---- shell ---- */
 const ORDER = Object.keys(V);
 const app = $('#app');
@@ -623,6 +656,7 @@ function render() {
   const tabs = [['home', 'Home'], ...spacesWithPosts.filter(x => x.id !== 'sablefield').map(x => [x.id, spName(x.id)])];
   const posts = streamFor(st.space);
   app.innerHTML = `<div class="mg" id="k-mg"><div class="mg-inner"><nav class="tabs"><div class="tabs-s" id="k-tabs">${tabs.map(([id, l]) => `<button data-a="space" data-id="${id}" aria-current="${st.space === id}">${esc(l)}</button>`).join('')}</div></nav>
+    ${newBox()}
     ${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}</div></div>`;
   const mg = $('#k-mg');
   mg.scrollTop = top;
@@ -664,12 +698,19 @@ app.addEventListener('mouseover', e => hl(e, true));
 app.addEventListener('mouseout', e => hl(e, false));
 app.addEventListener('submit', e => {
   e.preventDefault();
-  const f = e.target.closest('[data-form]'), inp = f.querySelector('input'), v = inp.value.trim(); if (!v) { inp.focus(); return; }
+  const f = e.target.closest('[data-form]'), inp = f.querySelector('input, textarea'), v = inp.value.trim(); if (!v) { inp.focus(); return; }
   const [kind, pid, node] = f.dataset.form.split(':'), p = byId(pid);
+  if (kind === 'new') { st.newSpace = $('#new-space')?.value || st.newSpace; newThread($('#new-space')?.value || pid, v, e.submitter?.value === 'post' ? 'post' : 'ask'); return; }
   if (kind === 'rp') { addReply(p, node, v); st.replying = null; render(); return; }
   st.sel[pid] = addBranch(p, node, v);
   st.asking = null; render();
 });
+/* Enter sends the composer as an ask; Shift+Enter starts a new line */
+app.addEventListener('keydown', e => {
+  if (e.target.id !== 'in-new') return;
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.target.form.requestSubmit(e.target.form.querySelector('[value="ask"]')); }
+});
+app.addEventListener('input', e => { if (e.target.id === 'in-new') { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; } });
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(render, 150); });
 window.addEventListener('hashchange', () => go(location.hash.slice(1)));
 /* Ctrl+A, Ctrl+B, ... switch to the variant with that letter (not while typing in a field) */
