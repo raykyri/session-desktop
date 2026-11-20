@@ -3,8 +3,9 @@
 // the reviewer's sign-out experiment); a registration answered for another
 // person is not taken (finding 1); a storage that failed to open is opened
 // again on the next call (finding 7, the reviewer's experiment); a closed
-// storage refuses later writes (finding 1); and the replica's schema
-// version (finding 13).
+// storage refuses later writes (finding 1); the replica's schema version
+// (finding 13); and a frozen copy that a read of the user log made
+// before the removal does not bring back (found by the UI fix agent).
 
 import test from "ava";
 
@@ -23,7 +24,7 @@ import {
 } from "../src/client/index.js";
 
 import { client, fail, nodeSqlite, sleep, tick, watched } from "./client-helpers.js";
-import { cast } from "./helpers.js";
+import { cast, ok } from "./helpers.js";
 
 /** A storage that records its writes. */
 class Recorded extends MemoryStorage {
@@ -379,4 +380,49 @@ test("finding 13: a client over a file made again reads its logs from the server
   await c.flush();
   t.is(pushes.length, 1);
   t.is(pushes[0]?.name, "profile.update");
+});
+
+test("a frozen copy stays frozen when the user log was read before the removal and the space log after it", async (t) => {
+  const { w, closed } = cast(t);
+  const mine = w.id();
+  ok(t, w.as("mel", "threads.create", { id: mine, space: closed, kind: "post", q: "mine" }));
+  let userRead: (() => void) | null = null;
+  const userServed = new Promise<void>((r) => (userRead = r));
+  let removeOnPull = false;
+  const inner = new InProcessTransport(w.server, { u: "mel" });
+  const transport = watched(inner, {
+    pull: async (log, cursor, o) => {
+      if (log === "user:mel") {
+        const p = await inner.pull(log, cursor, o);
+        if (removeOnPull) (userRead as unknown as () => void)();
+        return p;
+      }
+      if (removeOnPull && log === `space:${closed}`) {
+        // the removal is written after the user log was read
+        removeOnPull = false;
+        await userServed;
+        ok(
+          t,
+          w.as("olga", "members.remove", {
+            space: closed,
+            user: "mel",
+            base: { adm: (w.get(`member:${closed}:mel`) as { adm: string }).adm },
+          }),
+        );
+      }
+      return inner.pull(log, cursor, o);
+    },
+  });
+  const mel = client(w, "mel", { transport });
+  await mel.init();
+  await mel.open("user:mel");
+  await mel.open(`space:${closed}`);
+  removeOnPull = true;
+  await mel.sync();
+  t.true(mel.isFrozen(`space:${closed}`), "the copy stays frozen");
+  t.truthy(mel.view().get("thread", mine));
+  // the next read of the user log has no membership either: still frozen
+  await mel.sync();
+  t.true(mel.isFrozen(`space:${closed}`));
+  t.truthy(mel.view().get("thread", mine));
 });

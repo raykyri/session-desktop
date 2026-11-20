@@ -148,8 +148,8 @@ test("sign-out without a connection still clears the device", async (t) => {
 test("links open in the system browser; the window's title follows the page's", async (t) => {
   const b = new FakeBridge();
   const d = await Desktop.start(b);
-  d.openExternal("/device?request=r1");
-  d.openExternal("https://example.com/x");
+  await d.openExternal("/device?request=r1");
+  await d.openExternal("https://example.com/x");
   await new Promise((r) => setTimeout(r, 0));
   t.deepEqual(b.opened, ["https://session.test/device?request=r1", "https://example.com/x"]);
   d.update();

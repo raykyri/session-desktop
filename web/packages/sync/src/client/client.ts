@@ -254,6 +254,9 @@ interface LiveLog {
   cursor: Cursor | null;
   records: Map<string, StoredRecord>;
   frozen: boolean;
+  /** The read tick of the read that froze it (-1: frozen before this
+   * process, or never). */
+  frozenTick: number;
   /** The read tick of the latest read that was served (stamped when it was
    * requested). */
   pulledTick: number;
@@ -718,6 +721,7 @@ export class SyncClient implements Changing {
       cursor: null,
       records: new Map(),
       frozen: false,
+      frozenTick: -1,
       pulledTick: -1,
       pulledSeq: 0,
       tier,
@@ -765,11 +769,14 @@ export class SyncClient implements Changing {
     try {
       if (!(await this.readAll(logs))) reached = false;
       // a frozen space the user is a member of again comes back; a frozen
-      // copy of a space they left is not kept
+      // copy of a space they left is not kept. Only a read of the user log
+      // asked for after the read that froze it says so: an earlier one
+      // still holds the membership the removal ended (review round 1 of
+      // phase 3)
       const me = this.logs.get(`user:${this.user}`);
       const back: LogId[] = [];
       for (const [log, l] of this.logs) {
-        if (!l.frozen) continue;
+        if (!l.frozen || !me || me.pulledTick <= l.frozenTick) continue;
         const sp = log.slice(6);
         if (!this.left.has(sp) && !this.member(me, sp)) continue;
         l.frozen = false;
@@ -953,6 +960,7 @@ export class SyncClient implements Changing {
     if (frozen) {
       l.records = frozen;
       l.frozen = true;
+      l.frozenTick = tick;
     } else l.records = records;
     l.summaries = this.summariesOf(log, l);
     // a new cursor (or none, for a frozen copy): the event stream follows

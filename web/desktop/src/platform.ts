@@ -196,10 +196,8 @@ export class Desktop implements Platform {
     a.me = me;
     void this.bridge.keychainSet(JSON.stringify(a)).catch(() => undefined);
   }
-  openExternal(url: string): void {
-    void this.bridge
-      .openUrl(/^(https?|mailto):/.test(url) ? url : `${this.origin}${url}`)
-      .catch(() => undefined);
+  openExternal(url: string): Promise<void> {
+    return this.bridge.openUrl(/^(https?|mailto):/.test(url) ? url : `${this.origin}${url}`);
   }
   /** Sign out: the server revokes this device's token (when it can be
    * reached), and the device forgets the token and the replica. */
@@ -226,7 +224,7 @@ export class Desktop implements Platform {
   /** Update Session: the app has no updater yet (phase 5), so the download
    * page opens in the browser. */
   update(): void {
-    this.openExternal("/download");
+    void this.openExternal("/download").catch(() => undefined);
   }
 
   // ---- the storage problem ----

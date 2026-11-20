@@ -48,8 +48,10 @@ export interface Platform {
    * kept only while `token` is still the sign-in's, and the account is its
    * person's. */
   rememberMe(me: unknown, token: string | null): void;
-  /** Open a link of the server's site in the system browser. */
-  openExternal(url: string): void;
+  /** Open a link (a path of the server's site, or an http, https or mailto
+   * link) in the system browser; rejects when it could not be opened (the
+   * desktop's opener refused it or failed). */
+  openExternal(url: string): Promise<void>;
   /** Sign this device or browser out. */
   signOut(): Promise<void>;
   /** The server no longer takes `token` (revoked or expired): the desktop
@@ -82,7 +84,11 @@ export const webPlatform: Platform = {
   storage: () => null,
   lastMe: () => null,
   rememberMe: () => undefined,
-  openExternal: (url) => void window.open(url, "_blank", "noopener"),
+  openExternal: (url) => {
+    // `noopener` makes `window.open` answer null whether or not it opened
+    window.open(url, "_blank", "noopener");
+    return Promise.resolve();
+  },
   // the web's sign-out is `logout` (api/account.ts): POST /auth/logout
   signOut: () => Promise.resolve(),
   unauthorized: () => undefined,

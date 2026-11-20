@@ -773,6 +773,16 @@ async function step(sim: Sim, k: number): Promise<string> {
       -5 * DAY,
     ]);
     if (Math.abs(d.skew) >= DAY) hit(sim, "a device clock days off");
+    // a write not sent yet gets new ids on this clock when the server's
+    // window would refuse its ids by it (and keeps them once sent): the
+    // clock is its reason too (an oracle gap seed 649 showed, and seed 139
+    // after review round 1 of phase 3)
+    const off = d.skew;
+    for (const e of d.client.outbox()) {
+      const rec = sim.writes.get(e.local);
+      const waiting = e.state === "queued" || e.state === "held";
+      if (rec && waiting && !e.sent && Math.abs(off) > Math.abs(rec.off)) rec.off = off;
+    }
     return `${d.name} clock ${d.skew}`;
   }
   if (roll < 0.73) {

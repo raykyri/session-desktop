@@ -363,11 +363,13 @@ test("finding 10: the token is stored before the app is signed in; a token the K
 test("finding 2: links the app opens are http, https or mailto, else the server's", async (t) => {
   const b = new FakeBridge();
   const d = await Desktop.start(b);
-  d.openExternal("mailto:a@b.c");
-  d.openExternal("/s/x");
+  await d.openExternal("mailto:a@b.c");
+  await d.openExternal("/s/x");
   b.openFails = true;
-  // a link that cannot be opened is no unhandled rejection
-  d.openExternal("https://example.com/");
+  // a link that cannot be opened rejects, for the screen to say so
+  await t.throwsAsync(d.openExternal("https://example.com/"));
+  // Update Session's download page: no unhandled rejection
+  d.update();
   await new Promise((r) => setTimeout(r, 0));
   t.deepEqual(b.opened, ["mailto:a@b.c", "https://session.test/s/x"]);
 });
