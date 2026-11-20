@@ -222,6 +222,21 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // review round 2 of phase 2, finding 1: a code in the link is ignored,
+    // so a link made by whoever started the sign-in elsewhere cannot fill it
+    key: "sx-si-link-code",
+    url: "/",
+    run: async (p) => {
+      const signIn = await authorize(p);
+      await answerRequest(p, signIn.request, false);
+      await p.goto(`/device?request=${signIn.request}&code=${encodeURIComponent(signIn.code)}`);
+      await expectCard(p, "Just now, from another computer");
+      await expect(p.getByLabel("The code the Mac shows")).toHaveValue("");
+      await expect(p.getByRole("button", { name: "Approve this Mac" })).toBeDisabled();
+      expect(await tokenTaken(p, signIn.request)).toBe(false);
+    },
+  },
+  {
     key: "ac-onb-terms",
     url: "/welcome",
     run: async (p) => {

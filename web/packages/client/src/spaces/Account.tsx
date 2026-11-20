@@ -807,13 +807,13 @@ const askedText = (at: string | number, now: number) => {
   return `${t.charAt(0).toUpperCase()}${t.slice(1)}`;
 };
 
-export function DevicePage({ request, code: code0 }: { request?: string; code?: string }) {
+export function DevicePage({ request }: { request?: string }) {
   const w = useWorld();
   const now = useNow();
   const navigate = useNavigate();
   const write = useWrite();
   const [info, setInfo] = useState<SignInRequest | "gone" | "unknown" | null>(null);
-  const [code, setCode] = useState(code0 ?? "");
+  const [code, setCode] = useState("");
   const [codeErr, setCodeErr] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<"approved" | "denied" | null>(null);

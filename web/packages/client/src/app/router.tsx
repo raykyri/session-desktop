@@ -248,13 +248,13 @@ const accountRoute = createRoute({
 const deviceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/device",
-  validateSearch: (s: Record<string, unknown>): { request?: string; code?: string } => ({
-    ...(typeof s["request"] === "string" ? { request: s["request"] } : {}),
-    ...(typeof s["code"] === "string" ? { code: s["code"] } : {}),
-  }),
+  // only the request: a code in the link is ignored, because whoever sent
+  // the link could have started the sign-in from their own computer
+  validateSearch: (s: Record<string, unknown>): { request?: string } =>
+    typeof s["request"] === "string" ? { request: s["request"] } : {},
   component: function DeviceRoute() {
-    const { request, code } = deviceRoute.useSearch();
-    return <DevicePage {...(request ? { request } : {})} {...(code ? { code } : {})} />;
+    const { request } = deviceRoute.useSearch();
+    return <DevicePage {...(request ? { request } : {})} />;
   },
 });
 const welcomeRoute = createRoute({
