@@ -339,8 +339,28 @@ rules above stay as they are. Decisions for the new client:
     `input`). A STALE or FORBIDDEN decision shows its toast with no action
     and nothing is applied again; TOO_MANY_REQUESTS (the server's write
     budget) reads as a refusal.
+  - Decided in review round 2 of phase 2 (client): a create that is sent
+    again compares its whole input (`make(id)`) with every input sent
+    before it, and reports lost edits when an earlier one applied and any
+    differs; while it has no answer, the composer's space, Ask or Post,
+    payer and model are fixed, and the thread opens in the space its record
+    names. A screen of one space, thread or page is keyed by its
+    parameters, and the leave guard's Discard drops the draft and forgets
+    its create. Streamed run text applies a frame only at the next seq, and
+    an attempt's first frame only at seq 1; after a gap, a late join or a
+    resumed server run (whose seq jumps above every seq it sent) the
+    attempt shows no streamed text, only its steps, until the answer
+    arrives. The event stream is one connection per tab; a refusal
+    (TOO_MANY_REQUESTS for too many open streams, a 5xx) or a failed
+    connection backs off from 2 s, doubling to 30 s, and never retries
+    before the refusal's `Retry-After` or `retryAt` (at most 5 minutes).
+    Undo of a decline sends the rev the decline left. TOO_MANY_REQUESTS
+    without `retryAt` (the queued-runs limit) shows the server's message.
+    The header's tab order (Account › Your spaces › Edit header tabs) is a
+    display preference kept in the browser's localStorage.
   - `/device` shows the request's device, app and time; from another
-    network address it asks for the code the app shows. On Mobile Web,
+    network address it asks for the code the app shows, typed (a code in
+    the link is ignored). On Mobile Web,
     menus, popovers and sheets have a history entry (Back closes them), as
     dialogs do on both layouts; unsaved input asks before Back, Escape or a
     click outside discards it.
