@@ -145,7 +145,10 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .card .ask { margin: 0 0 14px; color: var(--t-secondary); font-size: var(--fs-md); }
 .card .post { margin: 0 0 6px; color: var(--t-primary); font-size: var(--fs-lg); line-height: 1.45; }
 .card .byline { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: var(--fs-sm); color: var(--t-faint); }
-.card-f { display: flex; align-items: center; gap: 4px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--divider); }
+/* the footer sits at the bottom of the card when the margin makes the row taller */
+.card { display: flex; flex-direction: column; }
+.card > :nth-last-child(2) { margin-bottom: 12px; }
+.card-f { display: flex; align-items: center; gap: 4px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--divider); }
 .card-f .notes { font-weight: 600; color: var(--t-heading); font-size: var(--fs-sm); margin-right: auto; }
 .card-f .notes span { color: var(--t-faint); font-weight: 400; }
 .mgn { min-width: 0; position: relative; }
@@ -203,7 +206,6 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .lay-sibs { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; font-size: var(--fs-xs); color: var(--t-faint); }
 .lay-sibs button { width: 20px; height: 20px; border-radius: 50%; font-size: 10.5px; font-weight: 600; background: var(--control); color: var(--t-secondary); }
 .lay-sibs button.on { background: var(--accent); color: var(--on-accent); }
-.lay-sibs span { margin-left: 4px; }
 
 
 @media (max-width: 860px) {
@@ -398,7 +400,7 @@ function outline(p, T, G) {
 function layers(p, T, G) {
   const id = inGroup(T, G.ns, st.layer[G.g]) ? st.layer[G.g] : G.ns[0].id, n = T.nodes[id], path = T.path(id), d = path.length - 1;
   const top = path[1], k = Math.min(3, below(T, id)), kids = T.kids(id), open = st.sel[p.id] === id;
-  const sibs = G.ns.length > 1 ? `<div class="lay-sibs">${G.ns.map((x, i) => `<button class="${x.id === top.id ? 'on' : ''}" data-a="layer" data-g="${G.g}" data-id="${p.id}" data-node="${x.id}" aria-label="Stack ${i + 1}: ${esc(x.q)}">${i + 1}</button>`).join('')}<span>${noun(G.ns.length, 'stack', 'stacks')} on this passage</span></div>` : '';
+  const sibs = G.ns.length > 1 ? `<div class="lay-sibs">${G.ns.map((x, i) => `<button class="${x.id === top.id ? 'on' : ''}" data-a="layer" data-g="${G.g}" data-id="${p.id}" data-node="${x.id}" aria-label="Stack ${i + 1}: ${esc(x.q)}">${i + 1}</button>`).join('')}</div>` : '';
   const back = Array.from({ length: k }, (_, i) => `<div class="lay-back" style="--i:${i + 1}"></div>`).join('');
   return `${sibs}<div class="lay" style="--k:${k}">${back}<div class="lay-front fadein${open ? '' : ' tap'}" data-grp="${G.g}"${open ? '' : ` data-a="tsel" data-id="${p.id}" data-node="${id}"`}>
       <div class="who" title="${esc(n.u)}">${av(n.u, 'xs')}</div><p class="rq">${esc(n.q)}</p>${status(n)}
