@@ -319,8 +319,13 @@ adapter and a SQLite adapter.
 server time; the web client holds a write only while its request is in flight
 (AGENTS.md, ADR-20). Transient answers pause the outbox with backoff (1 s to
 10 minutes); a write that fails 5 times is shown to the person and the rest of
-the outbox continues; a write dropped at 3 days is reported. Acceptance: the
-prototype client tests for backoff, failure and drop pass.
+the outbox continues; a write dropped at 3 days is reported. After
+`CLOCK_SKEW` the client corrects its clock offset and remints the writes it
+has not sent (new mutation id and new client-made ids, as `remint` in
+`replica-proto/src/client.ts`); a sent write keeps its mutation id, and a
+reminted envelope lists the ids it replaces in `replaces`. Acceptance: review-r2's client
+tests for backoff, failure and drop pass with the `@session/sync` client in
+place of `src/client.ts`.
 
 **Y11. Rebase.** Confirmed changes are applied to the confirmed state, then
 pending writes are re-run on top with their mutators. A pending write whose
