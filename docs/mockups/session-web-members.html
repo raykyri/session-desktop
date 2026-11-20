@@ -262,7 +262,7 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .card { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 18px 20px 11px; min-width: 0; transition: opacity .2s; }
 .card-h { display: flex; align-items: center; gap: 10px; margin-bottom: 11px; }
 /* title treatments B-E: the title as a tree row */
-.tt { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 13px; }
+.tt { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
 .tt > .ask, .tt > .post { flex: 1; min-width: 0; margin: 0 !important; }
 .ttn { flex: none; width: 11px; height: 11px; margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 11px) / 2); border-radius: 50%; border: 1.5px solid var(--t-dim); background: var(--card); position: relative; z-index: 1; }
 .ttav { flex: none; display: inline-flex; margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 20px) / 2); }
@@ -275,7 +275,7 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .card.tt-b { position: relative; }
 .card.tt-b { --pl: 20px; --pt: 18px; }
 .card.tt-b.pad-compact { --pl: 16px; --pt: 14px; } .card.tt-b.pad-roomy { --pl: 28px; --pt: 24px; } .card.tt-b.pad-inset { --pl: 14px; --pt: 14px; } .card.tt-b.pad-even { --pl: 18px; --pt: 18px; }
-.card.tt-b::before { content: ""; position: absolute; left: calc(var(--pl) + 4.75px); top: calc(var(--pt) + 10px); bottom: 46px; width: 1.5px; background: var(--border-strong); }
+.card.tt-b::before { content: ""; position: absolute; left: calc(var(--pl) + 4.75px); top: calc(var(--pt) + 10px); bottom: var(--rb, 56px); width: 1.5px; background: linear-gradient(var(--border-strong) calc(100% - 24px), transparent); }
 .card.tt-b > :not(.tt):not(.card-f) { margin-left: 21px; }
 /* C: the title reads as a tree row: regular weight, the tree's text colour */
 .card.tt-c .tt > .ask, .card.tt-c .tt > .post { font-weight: 400; color: var(--t-primary); }
@@ -1356,14 +1356,14 @@ function card(p) {
   /* post title treatments (mock variant st.ui.tt). None has a social-card header row above the title.
      A: the time and the author's avatar trail the title; the channel follows the token count.
      B, C draw the title like a row of the branch tree: a hollow node, plain text, the author's avatar on
-     the right, and the name, channel and time in the footer. B adds a rail from the node down the card;
-     C sets the title in the tree's regular weight. */
+     the right. B adds a rail from the node down the card and puts the name, channel and time in the footer.
+     C sets the title in the tree's regular weight and, like A, puts the channel after the token count. */
   const tt = st.ui.tt || 'a', who = `${esc(p.u)} · ${spName(p.s)} · ${rel(p.createdAt)}`;
-  const ttAv = `<span class="ttav" title="${esc(p.u)}">${av(p.u, 'sm')}</span>`;
-  const titleRow = (cls, text) => tt === 'a' ? `<div class="tt"><p class="${cls}">${text}</p><span class="ttm">${cls === 'post' ? spName(p.s) + ' · ' : ''}${rel(p.createdAt)}</span>${ttAv}${more}</div>`
-    : `<div class="tt"><span class="ttn" aria-hidden="true"></span><p class="${cls}">${text}</p>${ttAv}${more}</div>`;
+  const ttAv = `<span class="ttav" title="${esc(p.u)} · ${rel(p.createdAt)}">${av(p.u, 'sm')}</span>`;
+  const titleRow = (cls, text) => tt === 'a' ? `<div class="tt"><p class="${cls}">${text}</p>${cls === 'post' ? `<span class="ttm">${spName(p.s)}</span>` : ''}${ttAv}${more}</div>`
+    : `<div class="tt"><span class="ttn" aria-hidden="true"></span><p class="${cls}">${text}</p>${tt === 'c' && cls === 'post' ? `<span class="ttm">${spName(p.s)}</span>` : ''}${ttAv}${more}</div>`;
   const head = '';
-  const lead = tt === 'b' || tt === 'c' ? `<span class="ttm ttm-foot">${who}</span>` : '';
+  const lead = tt === 'b' ? `<span class="ttm ttm-foot">${who}</span>` : '';
   const count = c => mode === 'footer' ? (c ? `<span class="notes">· ${c}</span>` : '<span class="notes"></span>') : `<span class="notes">${c}</span>`;
   const tail = '';
   const cls = `card av-${mode} pad-${V[st.v].pad || 'base'} tt-${tt}`;
@@ -1381,7 +1381,7 @@ function card(p) {
   const src0 = p.from && byId(p.from.pid) && tree(byId(p.from.pid)).nodes[p.from.nid] ? byId(p.from.pid) : null;
   const from = src0 ? `<button class="fromln" data-a="gofrom" data-id="${p.from.pid}" data-node="${p.from.nid}">${ARROW_REPLY}<span>Branched from <b>${esc(clip(tree(src0).nodes.r.q, 70))}</b></span></button>` : '';
   return `<article class="${cls}" id="card-${p.id}">${head}${from}${titleRow('ask', esc(T.nodes.r.q))}
-    <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok), tt === 'a' ? spName(p.s) : ''].filter(Boolean).join(' · ')}</span></div>
+    <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok), tt === 'a' || tt === 'c' ? spName(p.s) : ''].filter(Boolean).join(' · ')}</span></div>
     <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
     <div class="card-f">${lead}${count('')}${p.pending ? '' : rbtn(T.count, `data-a="ask" data-id="${p.id}"`, st.asking === p.id, 'Ask a follow-up', ['branch', 'branches'])}${acts}${tail}</div></article>`;
 }
@@ -2344,6 +2344,8 @@ function renderInner() {
   if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
   if (st.creating) app.insertAdjacentHTML('beforeend', newSpaceDlg());
   if (st.chInfo) app.insertAdjacentHTML('beforeend', chInfoDlg());
+  /* title B: the rail stops 10px above the footer divider (the footer's height differs by density) */
+  app.querySelectorAll('.card.tt-b').forEach(c => { const f = c.querySelector(':scope > .card-f'); if (f) c.style.setProperty('--rb', Math.round(c.getBoundingClientRect().bottom - f.getBoundingClientRect().top + 10) + 'px'); });
   if (st.rm) app.insertAdjacentHTML('beforeend', rmDlg());
   if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
