@@ -662,6 +662,60 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 /* mock bar */
 .rlseg button b { color: var(--t-faint); margin-right: 5px; font-weight: 600; }
 .rlseg { flex-wrap: wrap; }
+/* ---- canvas variants: stacks ---- */
+.rhead .rkdd { flex: none; }
+.rkbtn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 14px; background: var(--control); color: var(--t-heading); font-size: var(--fs-xs); font-weight: 600; }
+.rkbtn svg.i { width: 12px; height: 12px; color: var(--t-muted); }
+.rkdd .menu { min-width: 180px; }
+.mi-c { margin-left: auto; color: var(--t-faint); font-size: var(--fs-xs); }
+.cstk-h { display: flex; align-items: baseline; gap: 6px; margin: 0 2px 6px; }
+.cstk-h b, .pgrip b, .tile-h b { color: var(--t-heading); font-size: var(--fs-xs); font-weight: 600; }
+.cstk-h small, .pgrip small, .tile-h small { color: var(--t-faint); font-size: var(--fs-xs); }
+[data-stack].dropover { box-shadow: 0 0 0 2px var(--accent) !important; border-radius: 12px; }
+/* 2 piles */
+.cv2 .rcv { background-image: radial-gradient(color-mix(in srgb, var(--t-faint) 26%, transparent) 1px, transparent 1.2px); background-size: 14px 14px; }
+.pile { position: absolute; width: 222px; border-radius: 14px; }
+.pile.lifting { z-index: 6; }
+.pile.lifting .pcrd .rcard { box-shadow: 0 0 0 2px var(--accent), 0 12px 30px rgba(0,0,0,.18); }
+.pgrip { display: flex; align-items: baseline; gap: 6px; padding: 2px 4px 6px; cursor: grab; touch-action: none; user-select: none; }
+.pgrip .tlink { font-size: var(--fs-xs); }
+.pstack { position: relative; height: 150px; }
+.pile:not(.open) .pcrd { position: absolute; left: calc(var(--i) * 6px); right: calc(var(--i) * -6px); top: calc(var(--i) * 6px); }
+.pile:not(.open) .pcrd:nth-last-child(n+2) .rcard { max-height: 140px; overflow: hidden; }
+.pile:not(.open) .pcrd .rcard { max-height: 140px; overflow: hidden; }
+.pile:not(.open) .pcrd:not(:last-child) .rcard > * { visibility: hidden; }
+.pile.open .pstack { height: auto; display: flex; flex-direction: column; gap: 8px; }
+/* 3 cascade */
+.cv3 { width: 320px; flex: none !important; padding: 0 0 20px; }
+.casc { display: flex; flex-direction: column; gap: 14px; padding: 0 12px; }
+.cstk { display: flex; flex-direction: column; }
+.cstrip { display: flex; align-items: center; gap: 7px; height: 34px; margin-bottom: -6px; padding: 0 10px 6px; border-radius: 10px 10px 0 0; background: var(--card); box-shadow: 0 0 0 1px var(--divider); font-size: var(--fs-xs); color: var(--t-secondary); text-align: left; cursor: pointer; }
+.cstrip:hover { color: var(--t-heading); background: color-mix(in srgb, var(--accent) 5%, var(--card)); }
+.cstrip > span:not(.av) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cstrip svg.i { width: 12px; height: 12px; color: var(--t-faint); }
+.cstk > .rcard { position: relative; z-index: 1; }
+/* 4 shelves */
+.cv4 { width: 400px; flex: none !important; padding: 0 0 20px; }
+.shelves { display: flex; flex-direction: column; gap: 16px; padding: 0 12px; }
+.hand { display: flex; overflow-x: auto; padding: 6px 4px 14px; border-bottom: 4px solid color-mix(in srgb, var(--t-faint) 28%, transparent); border-radius: 0 0 3px 3px; }
+.hand .rcard { flex: none; width: 190px; max-height: 150px; overflow: hidden; transition: transform .12s, margin .12s; }
+.hand .rcard + .rcard { margin-left: -138px; }
+.hand .rcard:hover, .hand .rcard.sel { transform: translateY(-8px); z-index: 2; }
+.hand:hover .rcard + .rcard { margin-left: -120px; }
+/* 5 tiles */
+.cv5 { width: 440px; flex: none !important; padding: 0 0 20px; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 0 12px; align-items: start; }
+.tile { border-radius: 14px; padding: 8px; background: color-mix(in srgb, var(--control) 55%, transparent); }
+.tile.open { grid-column: 1 / -1; }
+.tile-h { display: flex; align-items: baseline; gap: 6px; width: 100%; padding: 0 2px 8px; text-align: left; }
+.tile-h svg.i { margin-left: auto; width: 11px; height: 11px; color: var(--t-faint); transform: rotate(-90deg); transition: transform .12s; align-self: center; }
+.tile.open .tile-h svg.i { transform: none; }
+.tstack { position: relative; padding: 0 calc(var(--n) * 3px) calc(var(--n) * 4px) 0; }
+.tstack::before, .tstack::after { content: ''; position: absolute; left: 6px; right: 0; bottom: 0; top: 6px; border-radius: 12px; background: var(--card); box-shadow: 0 0 0 1px var(--divider); }
+.tstack::before { left: 3px; top: 3px; right: 3px; bottom: 3px; }
+.tstack .rcard { position: relative; z-index: 1; max-height: 132px; overflow: hidden; }
+.tile .rlist { gap: 8px; }
+
 .rsamp { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 8px; cursor: grab; font-size: var(--fs-xs); color: var(--t-secondary); user-select: none; }
 .rsamp:hover { background: var(--fill-hover); color: var(--t-heading); }
 .rsamp svg.i { width: 12px; height: 12px; }
@@ -673,6 +727,8 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
   .rwrap > .spshell > .mg { flex: none; height: auto; overflow: visible; width: auto !important; position: static !important; box-shadow: none !important; border-radius: 0 !important; }
   .rcv { height: auto !important; width: auto !important; display: flex; flex-direction: column; gap: 10px; padding: 0 14px; }
   .rcv .rcard { position: static; width: auto; }
+  .cv2 .pile { position: static; width: auto; }
+  .cv3, .cv4, .cv5 { width: auto !important; }
   .rclus { display: none; }
   .spshell.rl-3 > .mg { width: auto; }
   .rp-lanes { overflow-x: auto; }
@@ -1878,20 +1934,43 @@ function rcard(r, size = 'full', extra = '') {
   else body = `<b class="rtl">${esc(r.title)}</b>${r.text && size !== 'compact' ? `<p class="rtxt">${esc(r.text)}</p>` : ''}`;
   return `<div class="rcard k-${r.kind} s-${size}${st.rpick === r.id ? ' sel' : ''}" draggable="${canWrite()}" data-rid="${r.id}"${extra}>${body}${foot}${acts}</div>`;
 }
+const STACKPOS = {}, STACKNAME = {};
+let stackSeq = 0;
+const stackOf = r => r.stack ||= r.kind;
+const stackName = id => STACKNAME[id] || RKIND[id] || 'Stack';
+function stacksOf(list) { const m = new Map(); list.forEach(r => { const k = stackOf(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }); return [...m.entries()]; }
 const usedBy = id => D.posts.filter(p => p.about?.id === id);
 const kindFilter = list => { const ks = Object.keys(RKIND).filter(k => list.some(r => r.kind === k)); return ks.length > 1 ? `<div class="rkf">${[['', 'All'], ...ks.map(k => [k, RKIND[k]])].map(([k, l]) => `<button data-a="rkind" data-k="${k}" aria-pressed="${(st.rkind || '') === k}">${l}</button>`).join('')}</div>` : ''; };
-const rHead = (list, more = '') => `<div class="rhead"><b>Resources</b><small>${list.length}</small><span class="grow"></span>${more}${canWrite() ? `<button class="btn2 sm" data-a="radd">Add</button>` : ''}</div>${st.radding ? `<form class="radd" data-form="radd:x"><input id="in-radd" placeholder="Paste a link, post URL or note" autocomplete="off"><button type="submit" class="btn1 sm">Add</button><button type="button" class="iconbtn cx" data-a="raddclose" aria-label="Close">${I.x}</button></form>` : ''}`;
+const kindMenu = list => { const ks = Object.keys(RKIND).filter(k => list.some(r => r.kind === k)), open = st.menu === 'rkind';
+  return `<span class="mpick rkdd"><button type="button" class="rkbtn" data-a="menu" data-m="rkind" aria-haspopup="menu" aria-expanded="${open}">${st.rkind ? `${RICON[st.rkind]}${RKIND[st.rkind]}` : 'All kinds'}${I.down}</button>${open ? `<div class="menu" role="menu" aria-label="Filter by kind">${[['', 'All kinds'], ...ks.map(k => [k, RKIND[k]])].map(([k, l]) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${(st.rkind || '') === k}" data-a="rkind" data-k="${k}">${k ? RICON[k] : ''}<span>${l}</span><small class="mi-c">${k ? list.filter(r => r.kind === k).length : list.length}</small>${(st.rkind || '') === k ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>`; };
+const rHead = (list, more = '') => `<div class="rhead">${kindMenu(resAll(st.space))}<span class="grow"></span>${more}${canWrite() ? `<button class="btn2 sm" data-a="radd">Add</button>` : ''}</div>${st.radding ? `<form class="radd" data-form="radd:x"><input id="in-radd" placeholder="Paste a link, post URL or note" autocomplete="off"><button type="submit" class="btn1 sm">Add</button><button type="button" class="iconbtn cx" data-a="raddclose" aria-label="Close">${I.x}</button></form>` : ''}`;
 const rDropHint = list => canWrite() ? `<div class="rdrop${list.length ? '' : ' big'}">${list.length ? 'Drop links, posts or files here' : `<b>Nothing collected yet</b><span>Drag links, posts on X, papers or images here, or use Add.</span>`}</div>` : (list.length ? '' : '<p class="empty">Nothing collected here yet.</p>');
 /* canvas positions: saved per card; new cards land where they were dropped */
 function canvasPos(list, w = 230, cols = 2, gx = 20, gy = 20) { list.forEach((r, i) => { if (r.x == null) { r.x = gx + (i % cols) * (w + 18); r.y = gy + Math.floor(i / cols) * 200; } }); }
 
+/* Canvas variants (mock bar): 1 freeform cards · 2 piles you place on the canvas · 3 a compact cascade of stacks
+   · 4 shelves of overlapping cards · 5 a grid of stack tiles. 2-5 stack cards by kind until you move them. */
+const CV = [['Freeform', 'Cards placed anywhere on the canvas'], ['Piles', 'Stacks you place on the canvas; click one to spread it'], ['Cascade', 'Compact stacks; only titles show until you pick a card'], ['Shelves', 'One shelf per stack; cards overlap like a hand'], ['Tiles', 'A grid of stack tiles; open one to see its cards']];
+const pileCard = (r, i, n) => `<div class="pcrd" style="--i:${i}">${rcard(r, 'compact')}</div>`;
 function resourcesPane() {
-  const v = st.ui.rl, list = resFor(st.space), home = !SP[st.space];
-  const kf = kindFilter(resAll(st.space));
-  const title = kf + (home ? `<p class="rnote3">From the spaces you joined. Items you add go to ${esc(spName(resTarget() || 'public'))}.</p>` : '');
-  canvasPos(list, 230, 2, 20, 20);
+  const v = st.ui.cv || 1, list = resFor(st.space), home = !SP[st.space];
+  const title = home ? `<p class="rnote3">From the spaces you joined. Items you add go to ${esc(spName(resTarget() || 'public'))}.</p>` : '';
+  const head = `<div class="rcv-h">${rHead(list)}${title}</div>`;
+  const empty = canWrite() && !list.length ? '<div class="rdrop big cvhint"><b>Drop anything here</b><span>Links, posts, papers and notes stack by kind.</span></div>' : '';
+  if (v === 1) { canvasPos(list, 230, 2, 20, 20);
     const H = Math.max(600, ...list.map(r => r.y + 240)), W = Math.max(520, ...list.map(r => r.x + 260));
-    return `<div class="rp rp-canvas v5" data-drop="1" data-canvas="1"><div class="rcv-h">${rHead(list)}${title}</div><div class="rcv" style="height:${H}px;width:${W}px">${list.map(r => rcard(r, 'compact', ` data-cv="1" style="left:${r.x}px;top:${r.y}px"`)).join('')}${canWrite() && !list.length ? '<div class="rdrop big cvhint"><b>Drop anything here</b><span>Arrange cards however you like.</span></div>' : ''}</div></div>`;
+    return `<div class="rp rp-canvas v5 cv1" data-drop="1" data-canvas="1">${head}<div class="rcv" style="height:${H}px;width:${W}px">${list.map(r => rcard(r, 'compact', ` data-cv="1" style="left:${r.x}px;top:${r.y}px"`)).join('')}${empty}</div></div>`; }
+  const stacks = stacksOf(list);
+  if (v === 2) { const key = st.space;
+    stacks.forEach(([id], i) => { const k = key + ':' + id; STACKPOS[k] ||= { x: 16 + (i % 2) * 238, y: 16 + Math.floor(i / 2) * 210 }; });
+    const H = Math.max(520, ...stacks.map(([id, rs]) => STACKPOS[key + ':' + id].y + (st.openStack === id ? rs.length * 128 + 60 : 220)));
+    return `<div class="rp rp-canvas v5 cv2" data-drop="1" data-canvas="1">${head}<div class="rcv" style="height:${H}px;width:480px">${stacks.map(([id, rs]) => { const pos = STACKPOS[key + ':' + id], open = st.openStack === id;
+      return `<div class="pile${open ? ' open' : ''}" data-stack="${esc(id)}" data-drop="1" style="left:${pos.x}px;top:${pos.y}px"><div class="pgrip" data-pilegrip="${esc(id)}"><b>${esc(stackName(id))}</b><small>${rs.length}</small><span class="grow"></span><button class="tlink" data-a="stackopen" data-k="${esc(id)}">${open ? 'Stack' : 'Spread'}</button></div><div class="pstack">${(open ? rs : rs.slice(-3)).map((r, i, a) => pileCard(r, open ? 0 : a.length - 1 - i, a.length)).join('')}</div></div>`; }).join('')}${empty}</div></div>`; }
+  if (v === 3) return `<aside class="rp rp-canvas cv3" data-drop="1">${head}<div class="casc">${stacks.map(([id, rs]) => { const front = rs.find(r => r.id === st.front?.[id]) || rs[rs.length - 1];
+    return `<section class="cstk" data-stack="${esc(id)}" data-drop="1"><div class="cstk-h"><b>${esc(stackName(id))}</b><small>${rs.length}</small></div>${rs.filter(r => r !== front).map(r => `<button class="cstrip" draggable="${canWrite()}" data-rid="${r.id}" data-a="front" data-k="${esc(id)}" data-id="${r.id}">${RICON[r.kind]}<span>${esc(clip(rTitle(r), 44))}</span>${av(r.by, 'xs')}</button>`).join('')}${rcard(front, 'compact')}</section>`; }).join('')}${empty}</div></aside>`;
+  if (v === 4) return `<aside class="rp rp-canvas cv4" data-drop="1">${head}<div class="shelves">${stacks.map(([id, rs]) => `<section class="shelf" data-stack="${esc(id)}" data-drop="1"><div class="cstk-h"><b>${esc(stackName(id))}</b><small>${rs.length}</small></div><div class="hand">${rs.map(r => rcard(r, 'compact')).join('')}</div></section>`).join('')}${empty}</div></aside>`;
+  return `<aside class="rp rp-canvas cv5" data-drop="1">${head}<div class="tiles">${stacks.map(([id, rs]) => { const open = st.openStack === id, top = rs[rs.length - 1];
+    return `<section class="tile${open ? ' open' : ''}" data-stack="${esc(id)}" data-drop="1"><button class="tile-h" data-a="stackopen" data-k="${esc(id)}" aria-expanded="${open}"><b>${esc(stackName(id))}</b><small>${rs.length}</small>${I.down}</button>${open ? `<div class="rlist">${rs.map(r => rcard(r, 'compact')).join('')}</div>` : `<div class="tstack" style="--n:${Math.min(rs.length, 3)}">${rcard(top, 'compact')}</div>`}</section>`; }).join('')}${empty}</div></aside>`;
 }
 
 function renderNetwork() {
@@ -1946,8 +2025,10 @@ app.addEventListener('click', e => {
   if (a === 'rdel') { const [k] = resById(d.id); if (k) { RES[k] = RES[k].filter(x => x.id !== d.id); toast('Removed from resources.'); render(); } return; }
   if (a === 'radd') { st.radding = !st.radding; render(); $('#in-radd')?.focus(); return; }
   if (a === 'raddclose') { st.radding = false; render(); return; }
-  if (a === 'rkind') { st.rkind = d.k || null; render(); return; }
+  if (a === 'rkind') { st.rkind = d.k || null; st.menu = null; render(); return; }
   if (a === 'rlink') { st.rlink = d.id || null; render(); return; }
+  if (a === 'stackopen') { st.openStack = st.openStack === d.k ? null : d.k; render(); return; }
+  if (a === 'front') { st.front = { ...(st.front || {}), [d.k]: d.id }; render(); return; }
   if (a === 'rdock') { st.dockOpen = st.dockOpen === false; render(); return; }
   if (a === 'rdrawer') { st.drawer = st.drawer === false; render(); return; }
   if (a === 'rpile') { st.pileOpen = st.pileOpen === d.k ? null : d.k; render(); return; }
@@ -2036,16 +2117,21 @@ app.addEventListener('drop', e => {
   const cv = z.closest('[data-canvas]')?.querySelector('.rcv'), pos = cv ? (() => { const b = cv.getBoundingClientRect(); return { x: Math.max(0, e.clientX - b.left - 110), y: Math.max(0, e.clientY - b.top - 30), moved: true }; })() : {};
   const lane = e.target.closest('[data-kind]')?.dataset.kind;
   const mv = e.dataTransfer.getData('application/x-session-move');
-  const topic = e.target.closest('[data-topic]')?.dataset.topic;
-  if (mv) { const [k, r] = resById(mv); if (!r) return; if (topic) r.topic = topic; const list = RES[k], tgt = e.target.closest('[data-rid]')?.dataset.rid;
+  const topic = e.target.closest('[data-topic]')?.dataset.topic, stackT = e.target.closest('[data-stack]')?.dataset.stack;
+  if (mv) { const [k, r] = resById(mv); if (!r) return; if (topic) r.topic = topic;
+    if (stackT) r.stack = stackT; else if (st.ui.cv === 2 && pos.x != null) { const id = 's' + (++stackSeq); r.stack = id; STACKNAME[id] = 'Stack ' + stackSeq; STACKPOS[k + ':' + id] = { x: pos.x, y: pos.y }; } const list = RES[k], tgt = e.target.closest('[data-rid]')?.dataset.rid;
     list.splice(list.indexOf(r), 1); const ti = tgt ? list.findIndex(x => x.id === tgt) : -1; list.splice(ti < 0 ? list.length : ti, 0, r); render(); return; }
   const sm = e.dataTransfer.getData('application/x-session-res');
-  if (sm && RSAMPLE[sm]) { addResource({ ...RSAMPLE[sm](), ...(topic ? { topic } : {}) }, pos); return; }
+  if (sm && RSAMPLE[sm]) { const extra = stackT ? { stack: stackT } : {}; if (!stackT && st.ui.cv === 2 && pos.x != null) { const id = 's' + (++stackSeq); extra.stack = id; STACKNAME[id] = 'Stack ' + stackSeq; STACKPOS[resTarget() + ':' + id] = { x: pos.x, y: pos.y }; } addResource({ ...RSAMPLE[sm](), ...(topic ? { topic } : {}), ...extra }, st.ui.cv === 1 ? pos : {}); return; }
   const url = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || '').trim().split('\n')[0];
   if (url) addResource(resFromUrl(url) || { kind: lane === 'note' ? 'note' : 'note', text: url }, pos);
 });
 /* canvas: move cards with the pointer (no re-render while dragging) */
 let cvDrag = null;
+let pileDrag = null;
+app.addEventListener('pointerdown', e => { const g = e.target.closest('[data-pilegrip]'); if (!g || e.target.closest('button') || !canWrite()) return; const pile = g.closest('.pile'), k = st.space + ':' + g.dataset.pilegrip; pileDrag = { pile, k, sx: e.clientX, sy: e.clientY, x: STACKPOS[k].x, y: STACKPOS[k].y }; g.setPointerCapture(e.pointerId); pile.classList.add('lifting'); e.preventDefault(); });
+app.addEventListener('pointermove', e => { if (!pileDrag) return; const p = pileDrag; p.nx = Math.max(0, p.x + e.clientX - p.sx); p.ny = Math.max(0, p.y + e.clientY - p.sy); p.pile.style.left = p.nx + 'px'; p.pile.style.top = p.ny + 'px'; });
+app.addEventListener('pointerup', () => { if (!pileDrag) return; const p = pileDrag; pileDrag = null; p.pile.classList.remove('lifting'); if (p.nx != null) STACKPOS[p.k] = { x: p.nx, y: p.ny }; render(); });
 app.addEventListener('pointerdown', e => {
   const c = e.target.closest('.rcard[data-cv]'); if (!c || e.target.closest('button, a') || !canWrite()) return;
   const [, r] = resById(c.dataset.rid); if (!r) return;
@@ -2184,7 +2270,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { sd: 'a', sv: '3', rl: 5, savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { sd: 'a', sv: '3', rl: 5, cv: 2, savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -2423,10 +2509,11 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
+    <span class="mk"><span class="mkl">Canvas</span><span class="seg">${CV.map(([n, h], i) => `<button data-mcv="${i + 1}" aria-pressed="${(st.ui.cv || 1) === i + 1}" title="${esc(h)}"><b>${i + 1}</b>${n}</button>`).join('')}</span></span>
     <span class="mk"><span class="mkl">Drag in</span><span class="seg">${Object.keys(RSAMPLE).map(k => `<span class="rsamp" draggable="true" data-rsample="${k}" title="Drag onto the resources">${RICON[k]}${cap1(k === 'post' ? 'post on X' : k)}</span>`).join('')}</span></span>
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
-  $('#thesis').innerHTML = '<span class="qtag">Resources</span>' + esc((RL.find(x => x[0] === st.ui.rl) || RL[0])[3]) + '. Drag a sample from Drag in onto the resources to add it. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
+  $('#thesis').innerHTML = '<span class="qtag">Resources</span>' + esc(CV[(st.ui.cv || 1) - 1][1]) + '. Drag a sample from Drag in onto the resources to add it. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
 }
 /* Every render rebuilds the page. Keep what people typed in open boxes, and put focus back on the
    control that had it (matched by id or by its data attributes). */
@@ -2486,6 +2573,7 @@ document.addEventListener('click', e => {
     if (k === 'link') { st.flow = 'landing'; st.fromLink = true; st.code = 'SESS-9TQ2-X8'; }
     if (k === 'code') { st.flow = 'code'; st.intent = 'signup'; st.fromLink = false; st.code = 'SESS-9TQ2-X8'; }
     render(); return; }
+  const cvb = e.target.closest('[data-mcv]'); if (cvb) { st.ui.cv = +cvb.dataset.mcv; st.openStack = null; st.screen = 'network'; st.menu = null; render(); return; }
   const rl = e.target.closest('[data-mrl]'); if (rl) { st.ui.rl = +rl.dataset.mrl; st.screen = 'network'; st.menu = null; if (st.space === 'home') st.space = 'scifi'; render(); return; }
   const sd = e.target.closest('[data-msd]'); if (sd) { st.ui.sd = sd.dataset.msd; st.ui.sv = '1'; st.menu = null; st.screen = 'network'; st.authOpen = false; render(); return; }
   const sv = e.target.closest('[data-msv]'); if (sv) { st.ui.sv = sv.dataset.msv; st.menu = null; st.screen = 'network'; if (st.ui.sd === 'b' && st.ui.sv !== '1') st.menu = null; render(); return; }
