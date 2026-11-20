@@ -97,3 +97,33 @@ test("monthly usage by payer and space, for /api/me/usage", (t) => {
   t.is(usage.monthlyUsed(fixture.db, fixture.userId, "session", NOON), 32);
   t.is(usage.tokensOfRun(fixture.db, "R"), 2 * (10 + 5 + 1 + 100 + 1000 + 7));
 });
+
+test("weekly included tokens: Monday 00:00 UTC to the next Monday", (t) => {
+  const fixture = createFixture(t);
+  // Thursday 2026-11-19 12:00 UTC: the week is Monday the 16th to Monday the 23rd
+  const at = Date.UTC(2026, 10, 19, 12);
+  const week = usage.weekOf(at);
+  t.is(week.start, Date.UTC(2026, 10, 16));
+  t.is(week.end, Date.UTC(2026, 10, 23));
+  // a Monday is the first day of its own week, and a Sunday the last
+  t.is(usage.weekOf(Date.UTC(2026, 10, 16)).start, Date.UTC(2026, 10, 16));
+  t.is(usage.weekOf(Date.UTC(2026, 10, 22, 23, 59)).start, Date.UTC(2026, 10, 16));
+  const rec = (payer: string, tokens: number, when: number) =>
+    usage.record(fixture.db, fixture.userId, {
+      runId: "R",
+      spaceId: "S1",
+      payer,
+      kind: "research",
+      provider: "anthropic",
+      inputTokens: tokens,
+      outputTokens: 0,
+      at: when,
+    });
+  rec("session", 10, week.start);
+  rec("session", 20, week.end - 1);
+  rec("session", 400, week.start - 1);
+  rec("session", 800, week.end);
+  rec("K1", 5, at);
+  t.is(usage.weeklyUsed(fixture.db, fixture.userId, "session", at), 30);
+  t.is(usage.weeklyUsed(fixture.db, fixture.userId, "K1", at), 5);
+});

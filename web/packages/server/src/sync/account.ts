@@ -63,11 +63,13 @@ export function tokenSource(
   id: string,
   at = Date.now(),
 ): TokenSource | null {
-  const used = usage.monthlyUsed(db, userId, id, at);
   if (id === "session") {
+    // the included tokens: one weekly allowance (Monday 00:00 UTC)
     const cap = config.sync.includedTokens;
+    const used = usage.weeklyUsed(db, userId, id, at);
     return { id, kind: "session", cap, used, left: Math.max(0, cap - used) };
   }
+  const used = usage.monthlyUsed(db, userId, id, at);
   const key = keyRecords(sync, u).find((k) => k.id === id);
   if (!key) return null;
   const left = key.status !== "valid" ? 0 : key.cap ? Math.max(0, key.cap - used) : Infinity;
@@ -135,7 +137,8 @@ export function usageOf(
   const by = usage.monthlyByPayer(db, user.id, at);
   return {
     cap: config.sync.includedTokens,
-    resetAt: isoAt(usage.monthOf(at).end),
+    week: usage.weeklyUsed(db, user.id, "session", at),
+    resetAt: isoAt(usage.weekOf(at).end),
     def: d?.id ?? null,
     movedSeen: prefs.movedSeen,
     ...(at - user.createdAt < 60_000 ? { fresh: true } : {}),

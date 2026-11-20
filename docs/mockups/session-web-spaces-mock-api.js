@@ -376,9 +376,11 @@
   S.Me = obj({ u: str, name: str, bio: str, x: str, createdAt: iso }, 'Me');
   /* TODO(limits): token usage is a stub (owner decision: no server-side limit tracking yet). The jobs charge
      asks to it (section 6a, charge) with the page's former arithmetic; people set the default key with
-     usage.setDefaultKey. by: tokens this month per source ('session' or a key id) and space; cap: the included
-     tokens a month; def: the default key, which pays after the included tokens run out. */
-  S.Usage = obj({ cap: num, resetAt: iso, def: nul(str), movedSeen: bool, 'fresh?': bool, by: rec(rec(num)) }, 'Usage');
+     usage.setDefaultKey. by: tokens this month per source ('session' or a key id) and space; week: the included
+     tokens used this week; cap: the weekly included allowance (owner decision: one weekly allowance, reset
+     Monday 00:00 UTC at resetAt; no daily limits; key limits stay monthly); def: the default key, which pays
+     after the included tokens run out. */
+  S.Usage = obj({ cap: num, week: num, resetAt: iso, def: nul(str), movedSeen: bool, 'fresh?': bool, by: rec(rec(num)) }, 'Usage');
   S.Settings = obj({ email: str, emailNew: nul(str), exportAt: nul(iso), emailOn: bool, types: rec(bool), spaces: rec(str) }, 'Settings');
   S.ClosedSpaceState = one('none', 'pending', 'member', 'mod', 'denied');
 
@@ -1205,7 +1207,9 @@
   function charge(tx, pay, tok, sid) {
     if (!pay || !tok) return;
     const u = tx.value('usage'), by = u.by[pay] || (u.by[pay] = {});
-    by[sid] = (by[sid] || 0) + tok; tx.setValue('usage', u);
+    by[sid] = (by[sid] || 0) + tok;
+    if (pay === 'session') u.week = (u.week || 0) + tok;
+    tx.setValue('usage', u);
     if (tx.find('userKeys', pay)) tx.edit('userKeys', pay, k => { k.lastUsedAt = tx.now; });
   }
   /* change one ask of a thread's tree (fn) and the flat follow-up it stands for (fuFn); f<index> names a flat

@@ -252,7 +252,9 @@ test("the account reads: /api/me, settings, usage, API keys; settings.update and
     error: { code: "BAD_REQUEST" },
   });
   const usage = await get("/api/me/usage");
-  t.like(usage, { cap: 1_000_000, def: null, movedSeen: false, by: {} });
+  // the included tokens: one weekly allowance, reset Monday 00:00 UTC
+  t.like(usage, { cap: 250_000, week: 0, def: null, movedSeen: false, by: {} });
+  t.is(new Date(usage.resetAt as string).getUTCDay(), 1);
   const k = await mel.call("apiKeys.create", { raw: "sk-ant-MK-RAW-0001", label: "Work" });
   const id = (k.body.result as { id: string }).id;
   const keys = (await (await h.request("/api/me/api-keys", { cookie })).json()) as Record<
