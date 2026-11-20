@@ -192,6 +192,31 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // phase 2 review round 1, finding 4: Read on … opens the source's own
+    // address (its stored url has no scheme), not a page of the app
+    key: "mi-orig",
+    url: (rs) => `/source/${firstSource(rs, "ml-papers")}`,
+    run: async (p, rs) => {
+      const src = firstSource(rs, "ml-papers");
+      const meta = rs.find((r) => r.record.kind === "spacesrc" && r.record["src"] === src)?.record[
+        "meta"
+      ] as { url: string };
+      expect(meta.url).not.toMatch(/^https?:/);
+      // the original's site, answered here (the sandbox has no outside network)
+      await p
+        .context()
+        .route(/^https:\/\//, (r) =>
+          r.fulfill({ contentType: "text/html", body: "<title>original</title>" }),
+        );
+      const a = p.locator("a.mi-orig");
+      await expect(a).toHaveAttribute("href", `https://${meta.url}`);
+      const [popup] = await Promise.all([p.waitForEvent("popup"), a.click()]);
+      await popup.waitForLoadState();
+      expect(popup.url()).toBe(new URL(`https://${meta.url}`).href);
+      await popup.close();
+    },
+  },
+  {
     key: "ds-x-report",
     url: (rs) => `/source/${firstSource(rs, "ml-papers")}`,
     run: async (p) => {

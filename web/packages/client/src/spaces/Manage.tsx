@@ -82,7 +82,11 @@ function Requests({ s }: { s: Space }) {
   const baseOf = (ids: string[]) =>
     Object.fromEntries(ids.map((u) => [u, open.find((r) => r.u === u)?.rev ?? 0]));
   const session = useSession();
-  const decide = async (decision: "approve" | "decline" | "reopen", ids: string[], why?: string) => {
+  const decide = async (
+    decision: "approve" | "decline" | "reopen",
+    ids: string[],
+    why?: string,
+  ) => {
     // the revs as the moderator saw them: an approve, the open request on
     // screen; an Undo, the declined request as the replica holds it
     const revOf = (u: string) =>

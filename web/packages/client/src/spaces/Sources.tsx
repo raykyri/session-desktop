@@ -6,6 +6,7 @@
 // sources.
 
 import type { SpaceSourceRec } from "@session/mutators";
+import { safeHref } from "@session/shared";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
@@ -22,6 +23,15 @@ import { I, MII, QTI, SFI } from "./icons.js";
 import { useOverlay } from "./overlay.js";
 import { useWorld } from "./world.js";
 import { WRITE_ERROR, refusalToast, toast, useCreate, useQuickWrite, useWrite } from "./writes.js";
+
+/** The original of a source, to open in a new tab: its stored url (kept
+ * without a scheme, the mutators' `sourceFor`) as an https address, through
+ * `safeHref`. An uploaded file (`session.app/files/…`) has no original on
+ * the web, so it has none (phase 2 review round 1, finding 4). */
+export function sourceHref(url: string | null | undefined): string | undefined {
+  if (!url || /^session\.app\/files\//i.test(url)) return undefined;
+  return safeHref(/^https?:\/\//i.test(url) ? url : `https://${url}`);
+}
 
 const DS_WHY: [string, string][] = [
   ["spam", "Spam or advertising"],
@@ -197,6 +207,7 @@ export function SourcePage({ id }: { id: string }) {
   const copy = copies[0];
   const m = copy?.meta ?? catalog?.meta;
   const s = copy ? w.byId.get(copy.sp) : undefined;
+  const orig = sourceHref(m?.url);
   if (!m) {
     if (!w.loaded) return <Page place={{ kind: "other" }}>{null}</Page>;
     return (
@@ -224,10 +235,10 @@ export function SourcePage({ id }: { id: string }) {
             <span />
           )}
           <div className="mi-acts">
-            {m.url ? (
+            {orig ? (
               <a
                 className="btn sm mi-orig"
-                href={m.url}
+                href={orig}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={`Read on ${m.pl}`}
