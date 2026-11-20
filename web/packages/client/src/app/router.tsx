@@ -28,6 +28,7 @@ import { NotFound, Page } from "../spaces/Page.js";
 import { PagePage } from "../spaces/PagesView.js";
 import { SavedPage } from "../spaces/SavedPage.js";
 import { SearchPage } from "../spaces/SearchPage.js";
+import { SourcePage } from "../spaces/Sources.js";
 import { SpacePage } from "../spaces/SpacePage.js";
 import { ThreadPage } from "../spaces/ThreadPage.js";
 import { BackRow } from "../spaces/nav.js";
@@ -150,6 +151,15 @@ const aboutRoute = createRoute({
   component: function AboutRoute() {
     const { space } = aboutRoute.useParams();
     return <SpacePage name={space} side="wiki" />;
+  },
+});
+
+const sourceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/source/$id",
+  component: function SourceRoute() {
+    const { id } = sourceRoute.useParams();
+    return <SourcePage id={id} />;
   },
 });
 
@@ -299,6 +309,7 @@ const routeTree = rootRoute.addChildren([
   pageRoute,
   aboutRoute,
   inviteLinkRoute,
+  sourceRoute,
   searchRoute,
   notificationsRoute,
   savedRoute,

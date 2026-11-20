@@ -129,6 +129,7 @@ type SideTab = "sources" | "wiki";
 
 function SourcesTab({ s }: { s: Space }) {
   const write = useWrite();
+  const navigate = useNavigate();
   const [url, setUrl] = useState("");
   // a link pasted or entered: added to the space (the server reads the page);
   // one already there says who added it
@@ -185,7 +186,19 @@ function SourcesTab({ s }: { s: Space }) {
           const m = x.meta;
           const host = m.url.replace(/^https?:\/\//, "").split("/")[0] ?? m.url;
           return (
-            <article key={x.src} className="mi-u mi-u2">
+            <article
+              key={x.src}
+              className="mi-u mi-u2"
+              // the mockup's source row: an article that opens the source's page
+              // eslint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role
+              role="link"
+              tabIndex={0}
+              aria-label={m.t ?? m.au}
+              onClick={() => void navigate({ to: "/source/$id", params: { id: x.src } })}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void navigate({ to: "/source/$id", params: { id: x.src } });
+              }}
+            >
               <div className="mi-p">
                 {m.t ? (
                   <span className="mi-ic mi-k-article">

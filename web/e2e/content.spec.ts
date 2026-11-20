@@ -37,6 +37,18 @@ function deepAsk(rs: KeyedRecord[], space: string) {
   return { th, deep: String(deep?.record["id"]), q: String(deep?.record["q"]) };
 }
 
+/** A source added to a space. */
+const firstSource = (rs: KeyedRecord[], space: string) =>
+  String(
+    rs.find(
+      (r) =>
+        r.record.kind === "spacesrc" &&
+        r.record["sp"] === spaceId(rs, space) &&
+        !r.record["rm"] &&
+        !r.record["rv"],
+    )?.record["src"],
+  );
+
 const SCREENS: Screen[] = [
   {
     key: "ab-page",
@@ -140,6 +152,52 @@ const SCREENS: Screen[] = [
       await field.press("Enter");
       await expect(field).toHaveValue("");
       await expect(p.getByText("example.org").first()).toBeVisible();
+    },
+  },
+  {
+    key: "mi-a-item",
+    url: (rs) => `/source/${firstSource(rs, "ml-papers")}`,
+    run: async (p) => {
+      await expect(p.locator(".mi-title")).toBeVisible();
+      await expect(p.getByRole("heading", { name: /Asks about this source/ })).toBeVisible();
+      // a passage's Ask shows on hover (Desktop); on a phone, the source's box
+      if ((p.viewportSize()?.width ?? 0) < 760)
+        await p.getByRole("button", { name: "Ask about this source…" }).click();
+      else
+        await p
+          .locator(".mi-b")
+          .first()
+          .getByRole("button", { name: /Ask about paragraph/ })
+          .click();
+      await p.locator("#mi-ask").fill("Which table does this figure come from?");
+      await p.locator(".mi-askc").getByRole("button", { name: "Ask", exact: true }).click();
+      await expect(p).toHaveURL(/\/s\/ml-papers\/t\/[0-9A-Z]{26}$/);
+      await expect(p.locator("#th-q")).toHaveText("Which table does this figure come from?");
+    },
+  },
+  {
+    key: "ds-x-report",
+    url: (rs) => `/source/${firstSource(rs, "ml-papers")}`,
+    run: async (p) => {
+      await p.getByRole("button", { name: "More actions" }).click();
+      await p.getByRole("menuitem", { name: "Report this source" }).click();
+      const d = p.getByRole("dialog", { name: "Report this source" });
+      await d.getByLabel("Broken link or wrong reader copy").check();
+      await d.getByRole("button", { name: "Send report" }).click();
+      await toastSays(p, /Report sent to the moderators of/);
+    },
+  },
+  {
+    key: "ds-x-queue",
+    scenario: "public: moderator",
+    url: "/s/public/manage/sources",
+    run: async (p) => {
+      await expect(p.getByRole("heading", { name: "Waiting for review" })).toBeVisible();
+      const row = p.locator(".ds-mrow").first();
+      await row.getByRole("button", { name: "Approve" }).click();
+      await toastSays(p, "Approved. Members see it in Sources.");
+      await p.getByLabel(/^Moderators/).check();
+      await toastSays(p, "Saved.");
     },
   },
 ];
