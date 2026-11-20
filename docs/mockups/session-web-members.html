@@ -174,6 +174,10 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .more-btn { width: 24px; height: 24px; display: inline-grid; place-items: center; border-radius: var(--r-md); color: var(--t-faint); }
 .mpick.more { height: 20px; align-items: center; }
 fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
+.nb-offw { position: relative; }
+.nb-cover { position: absolute; inset: 0; z-index: 2; cursor: pointer; background: none; border-radius: 22px; }
+.nb-cover:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nb-offw:hover .nb { opacity: .75; }
 .nb-off .nb { opacity: .6; }
 .nb-off textarea::placeholder { color: var(--t-faint); }
 .av.guest { background: color-mix(in srgb, var(--t-faint) 55%, var(--control)); }
@@ -1157,11 +1161,11 @@ const rkey = (p, id) => p.id + '/' + id;
 const likeBtn = (p, id, r) => likeBtnK('r:' + p.id + ':' + id, r);
 const likeBtnK = (k, r) => { const n = (r.likes || 0) + (st.liked[k] ? 1 : 0); return `<button class="rlike${st.liked[k] ? ' on' : ''}" data-a="like" data-k="${k}" aria-pressed="${!!st.liked[k]}" aria-label="Like, ${n} likes"${canWrite() ? '' : ' disabled'}>${I.heart}${n}</button>`; };
 const replyBox = (p, at, ph) => st.replying === rkey(p, at) ? composer('rp:' + p.id + ':' + at, ph, '', 'Reply', 'rpclose') : '';
-const replyLink = (p, id) => canWrite() ? `<button class="tlink" data-a="reply" data-id="${rkey(p, id)}">${st.replying === rkey(p, id) ? 'Close reply' : 'Reply'}</button>` : '';
+const replyLink = (p, id, label = 'Reply') => canWrite() ? `<button class="tlink" data-a="reply" data-id="${rkey(p, id)}">${st.replying === rkey(p, id) ? 'Close reply' : label}</button>` : '';
 
 /* Avatar tree: the same line graph as the branch trees, one row per reply led by its author's avatar; click a row to read it. */
 function replyLines(p) {
-  const rows = flatReplies(replies(p), 0, '', id => st.rcol[p.id + '/' + id]); if (!rows.length) return st.replying === rkey(p, 'top') ? `<div class="grp">${replyBox(p, 'top', 'Reply')}</div>` : '';
+  const rows = flatReplies(replies(p), 0, '', id => st.rcol[p.id + '/' + id]); if (!rows.length) return st.replying === rkey(p, 'top') ? `<div class="grp">${replyBox(p, 'top', 'Reply to @' + p.u)}</div>` : '';
   const sel = st.rsel[p.id], H = 26, X = d => 6 + d * 13, idx = Object.fromEntries(rows.map((x, i) => [x.id, i]));
   const on = new Set(); if (sel) sel.split('.').forEach((_, i, a) => on.add(a.slice(0, i + 1).join('.')));
   let paths = '', dots = '';
@@ -1173,7 +1177,7 @@ function replyLines(p) {
   const cur = sel && idx[sel] != null ? rows[idx[sel]] : null;
   return `<div class="grp"><div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ r, d, id, hid }) => `<button class="grow-r${on.has(id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}"><span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(plainReply(r.t))}</span>${hid ? `<span class="rhid">+${hid}</span>` : ''}</span></button>`).join('')}</div>
     ${cur ? `<div class="preview fadein"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div><div class="rtext">${fmtReply(cur.r.t)}</div><div class="pf">${likeBtn(p, cur.id, cur.r)}${replyLink(p, cur.id)}${canWrite() ? `<button class="tlink" data-a="rquote" data-id="${rkey(p, cur.id)}">Quote</button>` : ''}${(cur.r.kids || []).length ? `<button class="tlink" data-a="rcol" data-id="${p.id}" data-node="${cur.id}">${st.rcol[p.id + '/' + cur.id] ? `Show ${noun(flatReplies(cur.r.kids).length, 'reply', 'replies')}` : 'Hide replies'}</button>` : ''}</div>${replyBox(p, cur.id, 'Reply to @' + cur.r.u)}</div>` : ''}
-    <div class="rfoot">${replyLink(p, 'top')}</div>${replyBox(p, 'top', 'Reply')}</div>`;
+    <div class="rfoot">${replyLink(p, 'top', 'Reply to post')}</div>${replyBox(p, 'top', 'Reply to @' + p.u)}</div>`;
 }
 
 const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches is shaded and gets its own small tree beside it.';
@@ -1458,7 +1462,7 @@ const pendingBanner = () => {
   return `<div class="row new-row"><div class="pbanner"><span class="pdot"></span><div><b>You don't have an invite yet.</b> You can read every open space. Asking, posting and replying open once you enter an invite code.</div><button class="ghost" data-ma="go" data-to="status">Enter a code</button></div><div></div></div>`;
 };
 function composerOrLock(v) {
-  if (st.auth === 'out') { const c = typeof v.composer === 'function' ? v.composer() : COMPOSERS[v.composer](); return `<fieldset class="nb-off" disabled aria-label="Sign in to ask or post">${c}</fieldset>`; }
+  if (st.auth === 'out') { const c = typeof v.composer === 'function' ? v.composer() : COMPOSERS[v.composer](); return `<div class="nb-offw"><fieldset class="nb-off" disabled aria-hidden="true">${c}</fieldset><button type="button" class="nb-cover" data-ma="openauth" aria-label="Sign in to ask or post"></button></div>`; }
   if (!canWrite()) return '';
   const c = typeof v.composer === 'function' ? v.composer() : COMPOSERS[v.composer]();
   return c;
