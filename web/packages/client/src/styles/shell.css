@@ -42,6 +42,14 @@
   transform: translateY(-100%);
 }
 
+/* The bar's insets and gap (`.appbar`). They are declared here rather than
+   as utilities on the header because utilities win over this layer, and the
+   floating card below narrows them. */
+.app-bar {
+  padding: 0 14px 0 16px;
+  gap: 12px;
+}
+
 /* Layout `centred` above 860 px: a floating card aligned to the feed's
    columns. `useBarAlign` measures them and sets `--bl` and `--bw`. */
 .app-shell[data-bar-aligned] .app-bar-slot {

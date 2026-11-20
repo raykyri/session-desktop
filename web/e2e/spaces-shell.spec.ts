@@ -117,6 +117,11 @@ test.describe("signed in", () => {
     expect(Math.round((centred.bar?.right ?? 0) - (centred.bar?.left ?? 0))).toBe(600);
     expect(centred.bar?.top).toBe(0);
     await expect(page.locator(".app-shell")).toHaveAttribute("data-bar-aligned", "");
+    // The card's narrower insets (`#shell.colbar .appbar`).
+    const header = page.locator("header.app-bar");
+    await expect(header).toHaveCSS("padding-left", "10px");
+    await expect(header).toHaveCSS("padding-right", "8px");
+    await expect(header).toHaveCSS("border-left-width", "1px");
 
     // Centred from 861 to 1320 px: from the main column's left edge to the
     // side column's right edge.
@@ -137,6 +142,10 @@ test.describe("signed in", () => {
       await page.setViewportSize({ width, height: 900 });
       await expectBarEdges(page, fullWidth(width), `wide at ${width}`);
     }
+    // Full width: the bar's own insets and only a bottom border.
+    await expect(header).toHaveCSS("padding-left", "16px");
+    await expect(header).toHaveCSS("padding-right", "14px");
+    await expect(header).toHaveCSS("border-left-width", "0px");
 
     // Back to centred: the floating card again.
     await toggle("Collapse").click();

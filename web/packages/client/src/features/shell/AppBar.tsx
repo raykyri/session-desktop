@@ -77,7 +77,7 @@ export function AppBar(props: AppBarProps) {
   const { viewer } = props;
   const writer = canWrite(viewer);
   return (
-    <header className="app-bar bg-surface-header border-border-divider flex h-12 items-center gap-3 border-b pr-3.5 pl-4 max-[520px]:gap-2">
+    <header className="app-bar bg-surface-header border-border-divider flex h-12 items-center border-b max-[520px]:gap-2">
       <BrandButton />
       <div className="ml-1.5 flex h-full min-w-0 flex-1 items-center gap-1.5 max-[520px]:ml-0">
         {props.showStrip ? (
