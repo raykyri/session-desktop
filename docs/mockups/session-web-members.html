@@ -175,6 +175,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .msep { height: 1px; margin: 4px 6px; background: var(--divider); }
 .submenu { display: none; top: -4px; left: calc(100% + 4px); min-width: 140px; }
 .mi-sub:hover > .submenu, .mi-sub:focus-within > .submenu { display: flex; }
+@media (max-width: 600px) { .nb .mpick .menu { left: auto; right: 0; max-width: calc(100vw - 40px); } .submenu { position: static; box-shadow: none; padding: 2px 0 0 10px; min-width: 0; } .mi-sub { flex-wrap: wrap; height: auto; min-height: 30px; } .mi-sub:hover > .submenu, .mi-sub:focus-within > .submenu { display: flex; flex-basis: 100%; } }
 .mi-sub::after { content: ""; position: absolute; left: 100%; top: 0; width: 8px; height: 100%; }
 /* "..." menu */
 .more { margin-left: auto; align-self: center; }
@@ -370,7 +371,15 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .brr { align-self: stretch; padding: 6px 0; }
 .brr .pf { margin-top: 4px; }
 .brr .composer { margin-top: 6px; }
-.rtext { font-size: var(--fs-sm); color: var(--t-primary); line-height: 1.45; }
+.rtext { font-size: var(--fs-sm); color: var(--t-primary); line-height: 1.45; overflow-wrap: anywhere; }
+.preview .rtext { max-height: 240px; overflow-y: auto; }
+.rnote { font-size: var(--fs-xs); color: var(--t-faint); }
+.pnote { color: var(--warn); }
+.pznote { margin: 0 0 6px; padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--t-secondary); font-size: var(--fs-xs); line-height: 1.4; }
+.tundo { margin-left: 12px; color: var(--accent); font-weight: 600; font-size: inherit; }
+.saved-empty { grid-column: 1; padding: 24px 4px; }
+.mkfix .mkl { color: var(--accent); }
+@media (max-width: 520px) { .ncw .nb-dock { flex-wrap: wrap; row-gap: 6px; } .ncw .nb-dock > textarea { flex: 1 1 calc(100% - 40px); } .ncw .nb-dock > textarea + * { margin-left: 28px; } .ncw .nb-dock > .split { margin-left: auto; } }
 .rtext p { margin: 2px 0; }
 .rtext blockquote { margin: 4px 0; padding-left: 8px; border-left: 2px solid var(--border-strong); color: var(--t-faint); }
 .mention { color: var(--accent); font-weight: 500; }
@@ -481,6 +490,8 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 /* auth */
 /* sign-in dialog (A) and side sheet (B) over the signed-out site */
 .scrim.auth-scrim { z-index: 30; background: rgba(10, 12, 14, .45); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+:root[data-theme="dark"] { --accent-strong: #1c6fb3; --bad-strong: #b4483d; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --accent-strong: #1c6fb3; --bad-strong: #b4483d; } }
 :root[data-theme="dark"] .scrim.auth-scrim { background: rgba(0, 0, 0, .6); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .scrim.auth-scrim { background: rgba(0, 0, 0, .6); } }
 .authdlg { position: absolute; z-index: 31; background: var(--canvas); box-shadow: var(--shadow), var(--shadow-pop); overflow-y: auto; }
@@ -674,7 +685,8 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .radio input { margin-top: 3px; accent-color: var(--accent-strong); }
 .radio b { display: block; font-size: var(--fs-sm); color: var(--t-heading); font-weight: 500; }
 .radio small { font-size: var(--fs-xs); color: var(--t-faint); }
-.radio.off { cursor: default; opacity: .6; }
+.radio.off { cursor: default; }
+.radio.off b { color: var(--t-faint); }
 /* keys A (rows) */
 .krow { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 12px; min-height: 48px; padding: 8px 0; border-bottom: 1px solid var(--divider); align-items: center; }
 .kname { font-size: var(--fs-sm); color: var(--t-heading); font-weight: 600; }
@@ -686,10 +698,12 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .kb > .ghost { align-self: flex-end; }
 .kstate { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; font-size: var(--fs-sm); }
 .kmask { color: var(--t-heading); font-size: var(--fs-sm); }
+.kstack { display: flex; flex-direction: column; gap: 6px; }
+@media (max-width: 600px) { .run .rq { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } }
 .kchip { gap: 4px; padding-left: 6px; }
 .kchip svg.kcc { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .btn2.sm { height: 28px; padding: 0 12px; border-radius: 14px; font-size: var(--fs-xs); font-weight: 600; }
-.btn1.danger { background: var(--bad); color: #fff; }
+.btn1.danger { background: var(--bad-strong, var(--bad)); color: #fff; }
 .kconfirm .grow { flex: 1; }
 .klabel { display: flex; flex-direction: column; gap: 1px; }
 .klabel small { color: var(--t-faint); font-size: var(--fs-xs); }
@@ -803,7 +817,7 @@ const mark = (c = '') => `<span class="mark ${c}" aria-hidden="true">${I.agent}<
 
 const byId = id => D.posts.find(p => p.id === id);
 const byNew = (a, b) => (a.createdAt < b.createdAt ? 1 : -1);
-const streamFor = s => D.posts.filter(p => (s === 'home' ? !p.rf : p.s === s)).sort(byNew);
+const streamFor = s => D.posts.filter(p => (s === 'saved' ? SAVED()[p.id] : s === 'home' ? !p.rf : p.s === s)).sort(byNew);
 const spacesWithPosts = D.spaces.filter(s => D.posts.some(p => p.s === s.id));
 
 /* What people typed: each ask and branch question as it is typed to an agent (lowercase, terse,
@@ -988,18 +1002,22 @@ let seq = 0;
    PROMOTED['thread:node'] is the id of the thread a branch was opened as. */
 const BRP = {}, PROMOTED = {};
 function addBranch(p, par, q, quote) {
-  const id = 'x' + (++seq);
+  const id = 'xn' + (++seq);
   const node = { id, par, quote: quote || undefined, u: me(), createdAt: new Date(NOW).toISOString(), q, html: 'Searching sources. The answer appears here when the run finishes.', pending: true };
   (EXTRA[p.id] ||= []).push(node);
-  setTimeout(() => { if (DELETED.has(p.id + ':' + id) || !byId(p.id)) return; node.pending = false; node.html = `<p>Mock answer. In the app, the agent's answer to "${esc(clip(q, 80))}" is stored here when the run finishes, and the branch count on the thread goes up by one.</p>`; node.tok = 18000; node.bill = charge(q, 18000); render(); }, 2600);
+  setTimeout(() => { if (DELETED.has(p.id + ':' + id) || !byId(p.id)) return; node.pending = false; node.html = `<p>Mock answer. In the app, the agent's answer to "${esc(clip(q, 80))}" is stored here when the run finishes, and the branch count on the thread goes up by one.</p>`; node.tok = 18000; node.bill = charge(q, 18000, runOf(p).split(' · ')[0]); render(); }, 2600);
   return id;
 }
-const composer = (id, ph, ctx = '', btn = 'Ask', close = '') => `<form class="composer" data-form="${id}">${ctx ? `<span class="ctx">${ctx}</span>` : ''}<textarea id="in-${id}" rows="1" placeholder="${esc(ph)}"></textarea>${close ? `<button type="button" class="iconbtn cx" data-a="${close}" aria-label="Close" title="Close">${I.x}</button>` : ''}<button type="submit">${btn}</button></form>`;
+const composer = (id, ph, ctx = '', btn = 'Ask', close = '') => `${id.startsWith('mf:') && st.ui.outtok === 'c' && paused() ? `<p class="pznote">${esc(PAUSED_NOTE())}</p>` : ''}<form class="composer" data-form="${id}">${ctx ? `<span class="ctx">${ctx}</span>` : ''}<textarea id="in-${id}" rows="1" placeholder="${esc(ph)}"></textarea>${close ? `<button type="button" class="iconbtn cx" data-a="${close}" aria-label="Close" title="Close">${I.x}</button>` : ''}<button type="submit">${btn}</button></form>`;
 
 /* ================= pinned maps ================= */
 /* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
    as a small outline tree per passage. */
-const st = { quote: null, askPar: null, brReplying: null, rcol: {}, v: 'type', newSpace: 'public', newMode: 'ask', newModel: 'Opus 5.5', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null, liked: {}, saved: {} };
+const st = { quote: null, askPar: null, brReplying: null, rcol: {}, v: 'type', newSpace: 'public', newMode: 'ask', newModel: 'Opus 5.5', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null, likedBy: {}, savedBy: {} };
+const LIKED = () => st.auth === 'out' ? {} : (st.likedBy[st.user] ||= {});
+const SAVED = () => st.auth === 'out' ? {} : (st.savedBy[st.user] ||= {});
+let ridSeq = 0;
+const rid = r => r.rid ||= 'q' + (++ridSeq);
 
 /* Which model answered and at what thinking effort. The fixtures do not record it; the mock picks one
    per thread. Shown in a tooltip on the answer's icon. */
@@ -1007,10 +1025,10 @@ const RUNS = ['Opus 5.5 · high effort', 'Opus 5.5 · medium effort', 'Gemini 4 
 const runOf = p => p.run || RUNS[[...p.id].reduce((s, c) => s + c.charCodeAt(0), 0) % RUNS.length];
 /* "..." menu on the metadata line of your own threads, branches and replies. Delete is offered only
    while nobody has responded (no branches, no replies). key: 't:thread', 'b:thread:node' or 'r:thread:reply'. */
-const moreMenu = (key, canDelete, what, extra = '', del = true) => {
+const moreMenu = (key, canDelete, what, extra = '', del = true, why = 'Not available once someone else has responded') => {
   const open = st.menu === 'more:' + key;
   return `<span class="mpick more"><button type="button" class="more-btn" data-a="menu" data-m="more:${key}" aria-haspopup="menu" aria-expanded="${open}" aria-label="More">${I.dots}</button>
-    ${open ? `<div class="menu right" role="menu">${extra}${!del ? '' : canDelete ? `<button type="button" class="mi danger" role="menuitem" data-a="del" data-k="${key}"><span>Delete ${what}</span></button>` : `<div class="mi mi-off" role="menuitem" aria-disabled="true"><span>Delete ${what}<small>Not available once someone else has responded</small></span></div>`}</div>` : ''}</span>`;
+    ${open ? `<div class="menu right" role="menu">${extra}${!del ? '' : canDelete ? `<button type="button" class="mi danger" role="menuitem" data-a="del" data-k="${key}"><span>Delete ${what}</span></button>` : `<div class="mi mi-off" role="menuitem" aria-disabled="true"><span>Delete ${what}<small>${why}</small></span></div>`}</div>` : ''}</span>`;
 };
 function me() { return st.auth === 'out' ? null : st.user; }
 const mine = u => u === me();
@@ -1018,11 +1036,14 @@ const mine = u => u === me();
 const othersUnderBranch = (T, id) => T.kids(id).some(c => !mine(c.u) || othersUnderBranch(T, c.id));
 const othersUnderReplies = list => (list || []).some(r => !mine(r.u) || othersUnderReplies(r.kids));
 function deleteItem(key) {
-  const [kind, pid, id] = key.split(':'), p = byId(pid);
-  if (kind === 't') { D.posts.splice(D.posts.indexOf(p), 1); if (st.asking === pid) st.asking = null; }
-  else if (kind === 'b') { const T = tree(p), gone = [id, ...T.dfs(id).map(x => x.n.id)]; gone.forEach(x => DELETED.add(pid + ':' + x)); if (gone.includes(st.sel[pid])) st.sel[pid] = null; }
-  else if (kind === 'r') { const path = id.split('.'), i = +path.pop(), list = path.length ? replyAt(p, path.join('.')).kids : replies(p); list.splice(i, 1); st.rsel[pid] = null; }
-  st.menu = null; st.replying = null; render();
+  const [kind, pid, id] = key.split(':'), p = byId(pid); if (!p) return;
+  let undo = null, what = 'Reply deleted.';
+  if (kind === 't') { const at = D.posts.indexOf(p); D.posts.splice(at, 1); if (st.asking === pid) st.asking = null; undo = () => D.posts.splice(at, 0, p); what = p.k === 'ask' ? 'Ask deleted.' : 'Post deleted.'; }
+  else if (kind === 'b') { const T = tree(p), gone = [id, ...T.dfs(id).map(x => x.n.id)]; gone.forEach(x => DELETED.add(pid + ':' + x)); if (gone.includes(st.sel[pid])) st.sel[pid] = null; undo = () => { gone.forEach(x => DELETED.delete(pid + ':' + x)); st.sel[pid] = id; }; what = 'Branch deleted.'; }
+  else if (kind === 'r') { const path = id.split('.'), i = +path.pop(), list = path.length ? replyAt(p, path.join('.')).kids : replies(p), [r] = list.splice(i, 1); st.rsel[pid] = null; undo = () => { list.splice(i, 0, r); st.rsel[pid] = id; }; }
+  st.menu = null; st.replying = null;
+  if (st.ui.del === 'b') { toast(what); st.undo = undo; }
+  render();
 }
 /* Avatar placement on cards, per variant (V[st.v].av):
    header  28px avatar beside the name line (the original)
@@ -1033,25 +1054,25 @@ const ARROW_REPLY = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path
 function card(p) {
   const mode = V[st.v].av || 'header';
   const meta = `<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div>`;
-  const more = mine(p.u) ? moreMenu('t:' + p.id, !p.pending && (p.k === 'ask' ? !othersUnderBranch(tree(p), 'r') : !othersUnderReplies(replies(p))), p.k === 'ask' ? 'ask' : 'post') : '';
+  const more = mine(p.u) ? moreMenu('t:' + p.id, !p.pending && (p.k === 'ask' ? !othersUnderBranch(tree(p), 'r') : !othersUnderReplies(replies(p))), p.k === 'ask' ? 'ask' : 'post', '', true, p.pending ? 'Available when the answer finishes' : undefined) : '';
   const head = mode === 'footer' ? '' : `<div class="card-h">${av(p.u, mode === 'header' ? '' : 'sm')}${meta}${more}</div>`;
   const lead = mode === 'footer' ? `<span class="byl">${av(p.u, 'sm')}${meta}</span>` : '';
   const count = c => mode === 'footer' ? (c ? `<span class="notes">· ${c}</span>` : '<span class="notes"></span>') : `<span class="notes">${c}</span>`;
   const tail = mode === 'footer' ? more : '';
   const cls = `card av-${mode} pad-${V[st.v].pad || 'base'}`;
-  const lk = 'p:' + p.id, nl = (p.likesBase || 0) + (st.liked[lk] ? 1 : 0), off = canWrite() ? '' : ` disabled title="${st.auth === 'out' ? 'Sign in to like and save' : 'Liking opens once you have an invite'}"`;
-  const acts = `<button class="iconbtn likes${st.liked[lk] ? ' on' : ''}" data-a="like" data-k="${lk}" aria-pressed="${!!st.liked[lk]}" aria-label="Like, ${nl} likes"${off}>${I.heart}<span>${nl}</span></button><button class="iconbtn${st.saved[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!st.saved[p.id]}" aria-label="${st.saved[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}</button>`;
+  const lk = 'p:' + p.id, nl = (p.likesBase || 0) + (LIKED()[lk] ? 1 : 0), off = canWrite() || (st.auth === 'out' && st.ui.likeout === 'a') ? '' : ` disabled title="${st.auth === 'out' ? 'Sign in to like and save' : 'Liking opens once you have an invite'}"`;
+  const acts = `<button class="iconbtn likes${LIKED()[lk] ? ' on' : ''}" data-a="like" data-k="${lk}" aria-pressed="${!!LIKED()[lk]}" aria-label="Like, ${nl} likes"${off}>${I.heart}<span>${nl}</span></button><button class="iconbtn${SAVED()[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!SAVED()[p.id]}" aria-label="${SAVED()[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}</button>`;
   if (p.k === 'post') {
     const n = replyCount(p);
     return `<article class="${cls}" id="card-${p.id}">${head}<p class="post">${esc(p.q)}</p><div class="card-f">${lead}${count(n ? noun(n, 'reply', 'replies') : '')}${canWrite() ? `<button class="iconbtn${st.replying === rkey(p, 'top') ? ' on' : ''}" data-a="replyopen" data-id="${rkey(p, 'top')}" aria-pressed="${st.replying === rkey(p, 'top')}" aria-label="Reply" title="Reply">${ARROW_REPLY}</button>` : ''}${acts}${tail}</div></article>`;
   }
   const T = tree(p), src = (D.srcd[p.id] || []).length;
-  const src0 = p.from && byId(p.from.pid);
+  const src0 = p.from && byId(p.from.pid) && tree(byId(p.from.pid)).nodes[p.from.nid] ? byId(p.from.pid) : null;
   const from = src0 ? `<button class="fromln" data-a="gofrom" data-id="${p.from.pid}" data-node="${p.from.nid}">${ARROW_REPLY}<span>Branched from <b>${esc(clip(tree(src0).nodes.r.q, 70))}</b></span></button>` : '';
   return `<article class="${cls}" id="card-${p.id}">${head}${from}<p class="ask">${esc(T.nodes.r.q)}</p>
     <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok)].filter(Boolean).join(' · ')}</span></div>
     <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
-    <div class="card-f">${lead}${count(T.count ? noun(T.count, 'branch', 'branches') : '')}${canWrite() && !p.pending ? `<button class="iconbtn${st.asking === p.id ? ' on' : ''}" data-a="ask" data-id="${p.id}" aria-pressed="${st.asking === p.id}" aria-label="Ask a follow-up" title="Ask a follow-up">${ARROW_REPLY}</button>` : ''}${acts}${tail}</div></article>`;
+    <div class="card-f">${lead}${count(T.count ? noun(T.count, 'branch', 'branches') : '')}${canWrite() && !p.pending && st.ui.outtok === 'b' && paused() ? `<button class="iconbtn" disabled title="${esc(PAUSED_NOTE())}" aria-label="Asking is paused">${ARROW_REPLY}</button>` : ''}${canWrite() && !p.pending && !(st.ui.outtok === 'b' && paused()) ? `<button class="iconbtn${st.asking === p.id ? ' on' : ''}" data-a="ask" data-id="${p.id}" aria-pressed="${st.asking === p.id}" aria-label="Ask a follow-up" title="Ask a follow-up">${ARROW_REPLY}</button>` : ''}${acts}${tail}</div></article>`;
 }
 
 /* ---- passage matching: the fixtures do not store the passage a branch came from, so the mock picks
@@ -1108,10 +1129,10 @@ function pinGroups(p, draw, cls = '') {
 function preview(p, T, n) {
   const k = T.kids(n.id).length, key = p.id + ':' + n.id, promoted = PROMOTED[key] && byId(PROMOTED[key]) ? PROMOTED[key] : null;
   const extra = canWrite() && !n.pending && !promoted ? `<button type="button" class="mi" role="menuitem" data-a="promote" data-id="${p.id}" data-node="${n.id}"><span>Open as its own thread</span></button>` : '';
-  const more = canWrite() && (extra || mine(n.u)) ? moreMenu('b:' + p.id + ':' + n.id, !n.pending && !othersUnderBranch(T, n.id) && !othersUnderReplies(BRP[key]), 'branch', extra, mine(n.u)) : '';
+  const more = canWrite() && (extra || mine(n.u)) ? moreMenu('b:' + p.id + ':' + n.id, !n.pending && !promoted && !othersUnderBranch(T, n.id) && !othersUnderReplies(BRP[key]), 'branch', extra, mine(n.u), n.pending ? 'Available when the answer finishes' : promoted ? 'Not available after it was opened as a thread' : undefined) : '';
   const par = st.asking === p.id ? (st.askPar ?? n.id) : null;
   return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${more}</div>${n.quote ? `<blockquote class="bq">${esc(clip(n.quote, 180))}</blockquote>` : ''}${status(n)}<div class="prose">${answerHtml(n)}</div>
-    <div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches'}</span>${promoted ? `<button class="tlink" data-a="gothread" data-id="${promoted}">Open thread</button>` : ''}<span class="grow"></span>${canWrite() && !n.pending ? `<button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.id}" data-sel="${n.id}" title="Ask a follow-up under this answer">Continue</button><button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.par}" data-sel="${n.id}" title="Ask another question beside this one">Branch</button>` : ''}</div>
+    <div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches'}</span>${promoted ? `<button class="tlink" data-a="gothread" data-id="${promoted}">Open thread</button>` : ''}<span class="grow"></span>${canWrite() && !n.pending && st.ui.outtok === 'b' && paused() ? `<span class="pnote" title="${esc(PAUSED_NOTE())}">Asking paused until ${WEEK[0]}</span>` : ''}${canWrite() && !n.pending && !(st.ui.outtok === 'b' && paused()) ? `<button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.id}" data-sel="${n.id}" title="Ask a follow-up under this answer">Continue</button><button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.par}" data-sel="${n.id}" title="Ask another question beside this one">Branch</button>` : ''}</div>
     ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? 'Continue from here' : 'Ask beside this', '', 'Ask', 'askclose') : ''}
     ${branchReplies(p, n)}</div>`;
 }
@@ -1121,7 +1142,7 @@ function branchReplies(p, n) {
   const key = p.id + ':' + n.id, rows = flatReplies(BRP[key] || []);
   const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, 'Reply', '', 'Reply', 'brclose') : '';
   if (!rows.length && !canWrite()) return '';
-  return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'reply', 'replies')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 3) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><div class="rtext">${fmtReply(r.t)}</div><div class="pf">${likeBtnK('b:' + key + ':' + id, r)}${canWrite() ? `<button class="tlink" data-a="brreply" data-k="${key}/${id}">${st.brReplying === key + '/' + id ? 'Close reply' : 'Reply'}</button>` : ''}</div>${box(id)}</div>`).join('')}
+  return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'reply', 'replies')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 3) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><div class="rtext">${fmtReply(r.t)}</div><div class="pf">${likeBtnK('b:' + rid(r), r)}${canWrite() ? `<button class="tlink" data-a="brreply" data-k="${key}/${id}">${st.brReplying === key + '/' + id ? 'Close reply' : 'Reply'}</button>` : ''}</div>${box(id)}</div>`).join('')}
     ${canWrite() && st.brReplying !== key + '/top' ? `<button class="tlink brp-add" data-a="brreply" data-k="${key}/top">Reply to this branch</button>` : ''}${box('top')}</div>`;
 }
 const readout = (p, T, ns) => inGroup(T, ns, st.sel[p.id]) ? preview(p, T, T.nodes[st.sel[p.id]]) : '';
@@ -1149,7 +1170,7 @@ function drawGraph(graph) {
 
 /* ---- replies on plain posts, drawn as trees (one style per variant) ---- */
 /* Reply ids are paths into the reply list: '0' is the first reply, '0.1' the second reply under it. */
-const flatReplies = (list, d = 0, pre = '', col) => list.flatMap((r, i) => { const id = pre + i, shut = !!(col && col(id) && (r.kids || []).length); return [{ r, d, id, hid: shut ? flatReplies(r.kids).length : 0 }, ...(shut ? [] : flatReplies(r.kids || [], d + 1, id + '.', col))]; });
+const flatReplies = (list, d = 0, pre = '', col) => list.flatMap((r, i) => { const id = pre + i, shut = !!(col && col(id, r) && (r.kids || []).length); return [{ r, d, id, hid: shut ? flatReplies(r.kids).length : 0 }, ...(shut ? [] : flatReplies(r.kids || [], d + 1, id + '.', col))]; });
 const replyAtIn = (list, id) => id.split('.').reduce((acc, k, i) => (i ? acc.kids : acc)[+k], list);
 /* reply text: lines starting with "> " are quotes; @handles of members are mentions */
 const MENTION = /@([a-z0-9._]{2,20})/g;
@@ -1165,26 +1186,20 @@ function addReply(p, at, t) {
   if (at === 'top') (D.rp[p.id] ||= []).push(r); else (replyAt(p, at).kids ||= []).push(r);
 }
 const rkey = (p, id) => p.id + '/' + id;
-const likeBtn = (p, id, r) => likeBtnK('r:' + p.id + ':' + id, r);
-const likeBtnK = (k, r) => { const n = (r.likes || 0) + (st.liked[k] ? 1 : 0); return `<button class="rlike${st.liked[k] ? ' on' : ''}" data-a="like" data-k="${k}" aria-pressed="${!!st.liked[k]}" aria-label="Like, ${n} likes"${canWrite() ? '' : ' disabled'}>${I.heart}${n}</button>`; };
+const likeBtn = (p, id, r) => likeBtnK('r:' + rid(r), r);
+const likeBtnK = (k, r) => { const n = (r.likes || 0) + (LIKED()[k] ? 1 : 0); return `<button class="rlike${LIKED()[k] ? ' on' : ''}" data-a="like" data-k="${k}" aria-pressed="${!!LIKED()[k]}" aria-label="Like, ${n} likes"${canWrite() || (st.auth === 'out' && st.ui.likeout === 'a') ? '' : ` disabled title="${st.auth === 'out' ? 'Sign in to like' : 'Liking opens once you have an invite'}"`}>${I.heart}${n}</button>`; };
 const replyBox = (p, at, ph) => st.replying === rkey(p, at) ? composer('rp:' + p.id + ':' + at, ph, '', 'Reply', 'rpclose') : '';
 const replyLink = (p, id, label = 'Reply') => canWrite() ? `<button class="tlink" data-a="reply" data-id="${rkey(p, id)}">${st.replying === rkey(p, id) ? 'Close reply' : label}</button>` : '';
 
 /* Avatar tree: the same line graph as the branch trees, one row per reply led by its author's avatar; click a row to read it. */
 function replyLines(p) {
-  const rows = flatReplies(replies(p), 0, '', id => st.rcol[p.id + '/' + id]); if (!rows.length) return st.replying === rkey(p, 'top') ? `<div class="grp">${replyBox(p, 'top', 'Reply to @' + p.u)}</div>` : '';
+  const rows = flatReplies(replies(p), 0, '', (id, r) => st.rcol[rid(r)]); if (!rows.length) return st.replying === rkey(p, 'top') ? `<div class="grp">${replyBox(p, 'top', 'Reply to @' + p.u)}</div>` : '';
   const sel = st.rsel[p.id], H = 26, X = d => 6 + d * 13, idx = Object.fromEntries(rows.map((x, i) => [x.id, i]));
   const on = new Set(); if (sel) sel.split('.').forEach((_, i, a) => on.add(a.slice(0, i + 1).join('.')));
-  let paths = '', dots = '';
-  rows.forEach(({ id, d }, i) => {
-    const y = i * H + 13;
-    if (d > 0) { const par = id.split('.').slice(0, -1).join('.'), px = X(d - 1), py = idx[par] * H + 13; paths += `<path class="${on.has(id) ? 'on' : ''}" d="M${px} ${py} L${px} ${y - 6} Q${px} ${y} ${px + 6} ${y} L${X(d)} ${y}"/>`; }
-    dots += `<circle class="${id === sel ? 'sel' : on.has(id) ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="3.5"/>`;
-  });
   const cur = sel && idx[sel] != null ? rows[idx[sel]] : null;
-  return `<div class="grp"><div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ r, d, id, hid }) => `<button class="grow-r${on.has(id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}"><span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(plainReply(r.t))}</span>${hid ? `<span class="rhid">+${hid}</span>` : ''}</span></button>`).join('')}</div>
-    ${cur ? `<div class="preview fadein"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div><div class="rtext">${fmtReply(cur.r.t)}</div><div class="pf">${likeBtn(p, cur.id, cur.r)}${replyLink(p, cur.id)}${canWrite() ? `<button class="tlink" data-a="rquote" data-id="${rkey(p, cur.id)}">Quote</button>` : ''}${(cur.r.kids || []).length ? `<button class="tlink" data-a="rcol" data-id="${p.id}" data-node="${cur.id}">${st.rcol[p.id + '/' + cur.id] ? `Show ${noun(flatReplies(cur.r.kids).length, 'reply', 'replies')}` : 'Hide replies'}</button>` : ''}</div>${replyBox(p, cur.id, 'Reply to @' + cur.r.u)}</div>` : ''}
-    <div class="rfoot">${replyLink(p, 'top', 'Reply at root')}</div>${replyBox(p, 'top', 'Reply to @' + p.u)}</div>`;
+  return `<div class="grp"><div class="graph" data-draw><svg aria-hidden="true"></svg>${rows.map(({ r, d, id, hid }) => `<button class="grow-r${on.has(id) ? ' on' : ''}${id === sel ? ' sel' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}" data-d="${d}" data-par="${d ? id.split('.').slice(0, -1).join('.') : ''}"><span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(plainReply(r.t))}</span>${hid ? `<span class="rhid">+${hid}</span>` : ''}</span></button>`).join('')}</div>
+    ${cur ? `<div class="preview fadein"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) ? moreMenu('r:' + p.id + ':' + cur.id, !othersUnderReplies(cur.r.kids), 'reply') : ''}</div><div class="rtext">${fmtReply(cur.r.t)}</div><div class="pf">${likeBtn(p, cur.id, cur.r)}${replyLink(p, cur.id)}${canWrite() ? `<button class="tlink" data-a="rquote" data-id="${rkey(p, cur.id)}">Quote</button>` : ''}${(cur.r.kids || []).length ? `<button class="tlink" data-a="rcol" data-id="${p.id}" data-node="${cur.id}">${st.rcol[rid(cur.r)] ? `Show ${noun(flatReplies(cur.r.kids).length, 'reply', 'replies')}` : 'Hide replies'}</button>` : ''}</div>${replyBox(p, cur.id, 'Reply to @' + cur.r.u)}</div>` : ''}
+    <div class="rfoot">${canWrite() ? replyLink(p, 'top', 'Reply at root') : st.auth === 'out' ? '<button class="tlink" data-ma="openauth">Sign in to reply</button>' : '<span class="rnote">Replying opens once you have an invite</span>'}</div>${replyBox(p, 'top', 'Reply to @' + p.u)}</div>`;
 }
 
 const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches is shaded and gets its own small tree beside it.';
@@ -1201,12 +1216,12 @@ const MODEL_OPTS = ['Opus 5.5', 'Gemini 4 Neon', 'GPT-6.1 Sol'], SHORT = { 'Opus
 const pick = (id, opts, cur, label, fmt = x => x) => `<label class="pick" title="${label}"><span>${esc(fmt(cur))}</span><select id="${id}" aria-label="${label}">${opts.map(o => `<option value="${o}"${o === cur ? ' selected' : ''}>${esc(fmt(o))}</option>`).join('')}</select>${I.down}</label>`;
 /* Space picker: a custom menu of spaces (only on Home; inside a space the thread goes there). */
 const spaceField = () => {
-  if (st.space !== 'home') return `<span class="pick static">${esc(spName(st.space))}</span>`;
+  if (st.space !== 'home' && st.space !== 'saved') return `<span class="pick static">${esc(spName(st.space))}</span>`;
   const open = st.menu === 'space', list = spacesWithPosts.filter(x => x.id !== 'sablefield');
   return `<span class="mpick"><button type="button" class="pick" data-a="menu" data-m="space" aria-haspopup="menu" aria-expanded="${open}" title="Space"><span>${esc(spName(st.newSpace))}</span>${I.down}</button>
     ${open ? `<div class="menu menu-scroll" role="menu" aria-label="Space">${list.map(x => `<button type="button" class="mi" role="menuitemradio" aria-checked="${x.id === st.newSpace}" data-a="setspace" data-v="${x.id}">${glyph(x)}<span>${esc(spName(x.id))}</span>${x.id === st.newSpace ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>`;
 };
-const newSpaceId = () => st.space === 'home' ? st.newSpace : st.space;
+const newSpaceId = () => st.space === 'home' || st.space === 'saved' ? st.newSpace : st.space;
 const draft = (ph, extra = '') => `<textarea id="in-new" rows="1" placeholder="${esc(ph)}" aria-label="Ask or post"${extra}>${esc(st.draft)}</textarea>`;
 const sendBtn = (val, label) => `<button type="submit" value="${val}" class="send" data-enter aria-label="${label}" title="${label}">${I.up}</button>`;
 const modeSeg = () => `<span class="modes" role="group" aria-label="Ask or post">${['ask', 'post'].map(m => `<button type="button" data-a="mode" data-m="${m}" aria-pressed="${st.newMode === m}">${m === 'ask' ? 'Ask' : 'Post'}</button>`).join('')}</span>`;
@@ -1218,8 +1233,8 @@ const modelMenu = () => {
   const open = st.menu === 'model';
   const item = (a, v, label, on, off) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${on}" data-a="${a}" data-v="${v}"${off ? ' disabled' : ''}><span>${label}</span>${on ? CHECK : ''}</button>`;
   return `<span class="mpick"><button type="button" class="pick" data-a="menu" data-m="model" aria-haspopup="menu" aria-expanded="${open}" title="Model and effort"><span>${esc(SHORT[st.newModel] || st.newModel)}</span>${I.down}</button>
-    ${open ? `<div class="menu" role="menu" aria-label="Model">${modelOpts().map(m => item('setmodel', m, m === 'GPT-6.1 Sol' ? `GPT-6.1 Sol<span class="src">${hasOpenAI() ? 'your OpenAI key' : 'needs an OpenAI key'}</span>` : m, m === st.newModel, m === 'GPT-6.1 Sol' && !hasOpenAI())).join('')}<div class="msep"></div>
-      <div class="mi mi-sub" role="menuitem" aria-haspopup="menu" tabindex="-1"><span>Effort</span><span class="mi-v">${cap1(st.newEffort)}</span>${I.right}
+    ${open ? `<div class="menu" role="menu" aria-label="Model">${modelOpts().map(m => m === 'GPT-6.1 Sol' && !hasOpenAI() ? `<button type="button" class="mi" role="menuitem" data-ma="go" data-to="usage"><span>GPT-6.1 Sol<span class="src">add an OpenAI key</span></span></button>` : item('setmodel', m, m === 'GPT-6.1 Sol' ? 'GPT-6.1 Sol<span class="src">your OpenAI key</span>' : m, m === st.newModel)).join('')}<div class="msep"></div>
+      <div class="mi mi-sub" role="menuitem" aria-haspopup="menu" tabindex="0"><span>Effort</span><span class="mi-v">${cap1(st.newEffort)}</span>${I.right}
         <div class="menu submenu" role="menu" aria-label="Effort">${EFFORT_OPTS.map(e => item('seteffort', e, cap1(e), e === st.newEffort)).join('')}</div></div></div>` : ''}</span>`;
 };
 const isAsk = () => st.newMode === 'ask';
@@ -1241,13 +1256,13 @@ const COMPOSERS = {
 };
 let nseq = 0;
 function newThread(space, q, kind) {
-  const id = 'new' + (++nseq), now = new Date(NOW).toISOString();
+  const id = 'new' + (++nseq), now = new Date(NOW).toISOString(), model = st.newModel;
   st.draft = '';
   if (kind === 'post') { D.posts.push({ id, s: space, u: me(), k: 'post', createdAt: now, q, tok: 0, likesBase: 0 }); render(); return; }
   D.posts.push({ id, s: space, u: me(), k: 'ask', createdAt: now, q, sum: '', tok: 0, likesBase: 0, run: `${st.newModel} · ${st.newEffort} effort`, pending: true });
   D.rich[id] = '<p><span class="status">Researching · Step 1 of 4</span></p>';
   render();
-  setTimeout(() => { const np = byId(id); if (!np) return; np.pending = false; D.rich[id] = `<p>Mock answer to "${esc(clip(q, 90))}". In the app, the agent's answer appears here when the run finishes, and you can branch from any passage of it.</p>`; np.tok = 41000; np.bill = charge(q, 41000); render(); }, 2600);
+  setTimeout(() => { const np = byId(id); if (!np) return; np.pending = false; D.rich[id] = `<p>Mock answer to "${esc(clip(q, 90))}". In the app, the agent's answer appears here when the run finishes, and you can branch from any passage of it.</p>`; np.tok = 41000; np.bill = charge(q, 41000, model); render(); }, 2600);
 }
 
 /* ---- shell ---- */
@@ -1256,17 +1271,19 @@ const app = $('#app');
 let lastV = null;
 function renderNetwork() {
   const v = V[st.v], first = lastV !== st.v, sc = $('#k-mg'), top = sc && !first ? sc.scrollTop : 0, tabsLeft = $('#k-tabs')?.scrollLeft || 0;
-  const tabs = [['home', 'Home'], ...spacesWithPosts.filter(x => x.id !== 'sablefield').map(x => [x.id, spName(x.id)])];
+  const tabs = [['home', 'Home'], ...(isActive() && (st.ui.saved === 'b' || st.space === 'saved') ? [['saved', 'Saved']] : []), ...spacesWithPosts.filter(x => x.id !== 'sablefield').map(x => [x.id, spName(x.id)])];
   const posts = streamFor(st.space);
   $('#page').innerHTML = `<div class="mg" id="k-mg"><div class="mg-inner"><nav class="tabs"><div class="tabs-s" id="k-tabs">${tabs.map(([id, l]) => `<button data-a="space" data-id="${id}" aria-current="${st.space === id}">${esc(l)}</button>`).join('')}</div></nav>
     ${pendingBanner()}${composerOrLock(v)}
-    ${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div>`;
+    ${st.space === 'saved' && !posts.length ? '<div class="row"><p class="empty saved-empty">Nothing saved yet. Use the bookmark on any thread to keep it here.</p><div></div></div>' : ''}${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div>`;
   const mg = $('#k-mg'), ta = $('#in-new');
+  mg.classList.toggle('ncw', st.ui.ncomp === 'a');
   if (v.fs) mg.style.setProperty('--title-fs', v.fs);
   if (v.ifs) mg.style.setProperty('--input-fs', v.ifs);
   if (ta && st.draft) ta.style.height = ta.scrollHeight + 'px';
   mg.scrollTop = top;
   streamFor(st.space).forEach(p => p.k === 'ask' && v.layout(p));
+  mg.querySelectorAll('.stick.replies .graph[data-draw]').forEach(drawGraph);
   mg.scrollTop = top;
   const tabsEl = mg.querySelector('.tabs'), edge = () => tabsEl.classList.toggle('scrolled', mg.scrollTop > 2);
   edge(); mg.addEventListener('scroll', () => { edge(); $('#selbranch')?.remove(); $('#citepop')?.remove(); }, { passive: true });
@@ -1288,7 +1305,7 @@ $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[da
 app.addEventListener('click', e => {
   const t = e.target.closest('[data-a]'); if (!t) return;
   const a = t.dataset.a, d = t.dataset;
-  if (a === 'space') { st.space = d.id; st.asking = null; render(); $('#k-mg').scrollTop = 0; return; }
+  if (a === 'space') { st.space = d.id; st.asking = null; st.menu = null; st.screen = 'network'; render(); $('#k-mg').scrollTop = 0; return; }
   if (a === 'ask' && st.asking === d.id) { (document.getElementById(`in-mf:${d.id}:${st.askPar ?? 'r'}`) || $(`[id^="in-mf\\:${d.id}"]`))?.focus(); return; }
   if (a === 'ask') { st.asking = d.id; st.sel[d.id] = null; st.quote = null; st.askPar = null; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
   if (a === 'askfrom') { st.sel[d.id] = d.sel || d.node; st.askPar = d.node; st.asking = d.id; st.quote = null; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
@@ -1308,16 +1325,20 @@ app.addEventListener('click', e => {
   if (a === 'gothread') { st.space = 'home'; render(); document.getElementById('card-' + d.id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
   if (a === 'gofrom') { st.sel[d.id] = d.node; st.asking = null; render(); document.getElementById('card-' + d.id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
   if (a === 'brreply') { st.brReplying = st.brReplying === d.k ? null : d.k; render(); document.getElementById('in-br:' + d.k.replace('/', ':'))?.focus(); return; }
-  if (a === 'rcol') { const k = d.id + '/' + d.node; st.rcol[k] = !st.rcol[k]; render(); return; }
+  if (a === 'rcol') { const k = rid(replyAt(byId(d.id), d.node)); st.rcol[k] = !st.rcol[k]; render(); return; }
   if (a === 'rquote') { const [pid, rid] = d.id.split('/'), r = replyAt(byId(pid), rid); st.replying = d.id; render();
     const ta = document.getElementById('in-rp:' + pid + ':' + rid); if (ta) { ta.value = `> ${clip(plainReply(r.t), 200)}\n`; ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
   if (a === 'rsel') { st.rsel[d.id] = st.rsel[d.id] === d.node ? null : d.node; st.replying = null; render(); return; }
   if (a === 'replyopen') { if (st.replying !== d.id) { st.replying = d.id; render(); } document.getElementById('in-rp:' + d.id.replace('/', ':'))?.focus(); return; }
   if (a === 'reply') { st.replying = st.replying === d.id ? null : d.id; render(); document.getElementById('in-rp:' + d.id.replace('/', ':'))?.focus(); return; }
-  if (a === 'del') { deleteItem(d.k); return; }
-  if (a === 'like') { st.liked[d.k] = !st.liked[d.k]; render(); return; }
-  if (a === 'save') { st.saved[d.id] = !st.saved[d.id]; toast(st.saved[d.id] ? 'Saved.' : 'Removed from saved.'); render(); return; }
-  if (a === 'menu') { st.menu = st.menu === d.m ? null : d.m; render(); if (!d.m.startsWith('more:')) $('#in-new')?.focus({ preventScroll: true }); return; }
+  if (a === 'del') { if (st.ui.del === 'c') { st.delAsk = d.k; st.menu = null; render(); $('.dialog .btn1')?.focus(); } else deleteItem(d.k); return; }
+  if (a === 'delyes') { const k = st.delAsk; st.delAsk = null; deleteItem(k); return; }
+  if (a === 'delno') { st.delAsk = null; render(); return; }
+  if (a === 'undo') { st.undo?.(); st.undo = null; st.toast = ''; render(); return; }
+  if ((a === 'like' || a === 'save') && st.auth === 'out') { authFrom = sigOf(t); st.authOpen = true; st.flow = 'landing'; st.fromLink = false; render(); return; }
+  if (a === 'like') { LIKED()[d.k] = !LIKED()[d.k]; render(); return; }
+  if (a === 'save') { SAVED()[d.id] = !SAVED()[d.id]; toast(SAVED()[d.id] ? 'Saved.' : 'Removed from saved.'); render(); return; }
+  if (a === 'menu') { st.menu = st.menu === d.m ? null : d.m; render(); if (st.menu && (d.m === 'acct' || d.m.startsWith('more:'))) app.querySelector('.mpick .menu .mi:not([aria-disabled])')?.focus({ preventScroll: true }); else if (['model', 'space', 'send'].includes(d.m)) $('#in-new')?.focus({ preventScroll: true }); return; }
   if (a === 'setmodel' || a === 'seteffort' || a === 'setspace') { st[{ setmodel: 'newModel', seteffort: 'newEffort', setspace: 'newSpace' }[a]] = d.v; st.menu = null; render(); $('#in-new')?.focus(); return; }
   if (a === 'mode') { st.newMode = d.m; st.menu = null; render(); const t = $('#in-new'); t?.focus(); t?.setSelectionRange(t.value.length, t.value.length); return; }
   if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; st.askPar = null; st.brReplying = null; render(); return; }
@@ -1346,7 +1367,7 @@ app.addEventListener('mouseup', e => {
     if (!t || t.length < 3 || !canWrite() || !sel.rangeCount) return;
     const pr = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement)?.closest('.card .prose[id^="pr-"]');
     if (!pr || !pr.contains(sel.focusNode)) return;
-    const pid = pr.id.slice(3); if (byId(pid)?.pending) return;
+    const pid = pr.id.slice(3); if (byId(pid)?.pending || (st.ui.outtok === 'b' && paused())) return;
     const r = sel.getRangeAt(0).getBoundingClientRect(), A = app.getBoundingClientRect();
     { const f = sel.getRangeAt(0).cloneContents(); f.querySelectorAll('.anc, sup').forEach(x => x.remove()); st.selText = f.textContent.replace(/\s+/g, ' ').trim() || t; }
     /* below the selection: right-aligned to a one-line selection, left-aligned to a longer one */
@@ -1368,12 +1389,13 @@ app.addEventListener('submit', e => {
   const f = e.target.closest('[data-form]'); if (!f) return;
   const inp = f.querySelector('input, textarea'), v = inp.value.trim(); if (!v) { inp.focus(); return; }
   const [kind, pid, node, at] = f.dataset.form.split(':'), p = byId(pid);
-  const notify = t => { const m = mentionsIn(t); if (m.length) toast(`Notified ${m.map(u => '@' + u).join(', ')}.`); };
-  if (kind === 'br') { const list = (BRP[pid + ':' + node] ||= []), r = { u: me(), createdAt: new Date(NOW).toISOString(), t: v, likes: 0 }; if (at === 'top') list.push(r); else (replyAtIn(list, at).kids ||= []).push(r); st.brReplying = null; notify(v); render(); return; }
-  if (kind === 'new' && e.submitter?.value !== 'post' && outOfTokens() && st.newModel !== 'GPT-6.1 Sol') { toast('Included tokens are used up until Friday. Post instead, or add an API key in Usage.'); render(); return; }
+  const notify = t => { const m = mentionsIn(t), miss = [...new Set([...t.matchAll(MENTION)].map(x => x[1].replace(/\.$/, '')).filter(u => !member(u)))]; const parts = [m.length ? `Notified ${m.map(u => '@' + u).join(', ')}.` : '', miss.length ? `${miss.map(u => '@' + u).join(', ')} ${miss.length === 1 ? "isn't a member" : "aren't members"}.` : '']; if (m.length || miss.length) toast(parts.filter(Boolean).join(' ')); };
+  if (kind === 'br') { inp.value = ''; const list = (BRP[pid + ':' + node] ||= []), r = { u: me(), createdAt: new Date(NOW).toISOString(), t: v, likes: 0 }; if (at === 'top') list.push(r); else (replyAtIn(list, at).kids ||= []).push(r); st.brReplying = null; notify(v); render(); return; }
+  if (kind === 'new' && e.submitter?.value !== 'post' && outOfTokens() && st.newModel !== 'GPT-6.1 Sol') { toast(outMsg('asking') + ' You can still post.'); render(); return; }
   if (kind === 'new') { newThread(newSpaceId(), v, e.submitter?.value === 'post' ? 'post' : 'ask'); return; }
-  if (kind === 'rp') { addReply(p, node, v); st.replying = null; if (node !== 'top') st.rcol[pid + '/' + node] = false; notify(v); render(); return; }
-  if (kind === 'mf' && outOfTokens()) { toast('Included tokens are used up until Friday. Add an API key in Usage to keep branching.'); render(); return; }
+  if (kind === 'rp') { inp.value = ''; addReply(p, node, v); st.replying = null; if (node !== 'top') st.rcol[rid(replyAt(p, node))] = false; st.rsel[pid] = node === 'top' ? String(replies(p).length - 1) : node + '.' + (replyAt(p, node).kids.length - 1); notify(v); render(); return; }
+  if (kind === 'mf' && outOfTokens()) { toast(outMsg('branching')); render(); return; }
+  inp.value = '';
   st.sel[pid] = addBranch(p, node, v, node === 'r' && st.quote?.pid === pid ? st.quote.text : null);
   st.asking = null; st.quote = null; st.askPar = null; render();
 });
@@ -1383,7 +1405,24 @@ app.addEventListener('mousedown', e => {
   const f = e.target.closest('.nb'); if (!f || e.target.closest('textarea, select')) return;
   e.preventDefault(); const t = f.querySelector('textarea'); if (document.activeElement !== t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && st.menu) { st.menu = null; render(); $('#in-new')?.focus(); } });
+/* Escape closes the innermost thing: a menu (focus returns to its button), then an inline composer,
+   then a key form or remove confirm. Arrow keys move through open menus. */
+document.addEventListener('keydown', e => {
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && st.menu) {
+    const items = [...app.querySelectorAll('.mpick .menu .mi')].filter(x => x.offsetParent && !x.matches('[aria-disabled="true"]'));
+    if (!items.length) return; e.preventDefault();
+    const i = items.indexOf(document.activeElement.closest?.('.mi')); items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus(); return;
+  }
+  if (e.key !== 'Escape') return;
+  if (st.menu) { const m = st.menu; st.menu = null; render(); app.querySelector(`[data-m="${CSS.escape(m)}"]`)?.focus({ preventScroll: true }); return; }
+  const f = e.target.closest?.('form[data-form]');
+  if (f) { const [k, pid] = f.dataset.form.split(':');
+    if (k === 'mf') { st.asking = null; st.quote = null; st.askPar = null; render(); (app.querySelector(`#mr-${CSS.escape(pid)} .grow-r.sel`) || app.querySelector(`[data-a="ask"][data-id="${pid}"]`))?.focus({ preventScroll: true }); return; }
+    if (k === 'rp') { st.replying = null; render(); return; }
+    if (k === 'br') { st.brReplying = null; render(); return; } }
+  if (e.target.closest?.('form[data-mform^="key:"]') || st.keyForm) { st.keyForm = null; st.keyErr = ''; render(); return; }
+  if (st.removing) { const k = st.removing; st.removing = null; render(); app.querySelector(`[data-ma="keyask"][data-k="${k}"]`)?.focus(); return; }
+});
 /* every text box (new thread, branch, reply): Enter starts a new line; Cmd+Enter (Ctrl+Enter elsewhere) sends */
 app.addEventListener('keydown', e => {
   const t = e.target; if (t.tagName !== 'TEXTAREA' || !t.form) return;
@@ -1446,7 +1485,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { likeout: 'a', outtok: 'a', del: 'a', saved: 'a', ncomp: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1465,21 +1504,24 @@ const used = () => usage().reduce((a, b) => a + b, 0);
 const left = () => Math.max(0, ALLOWANCE - used());
 const keys = () => (KEYS[st.user] ||= {});
 const billing = () => BILLING[st.user] || 'pause';
+const outMsg = what => keys().anthropic?.status === 'working' ? `Included tokens are used up until Friday. Turn on “Continue on my Anthropic key” in Usage to keep ${what}.` : `Included tokens are used up until Friday. Add an Anthropic key in Usage to keep ${what}.`;
+const paused = () => canWrite() && outOfTokens();
+const PAUSED_NOTE = () => `Included tokens are used up until ${WEEK[0]}. ${keys().anthropic?.status === 'working' ? 'Turn on “Continue on my Anthropic key” in Usage to keep asking.' : 'Add an Anthropic key in Usage to keep asking.'}`;
 const outOfTokens = () => left() <= 0 && !(billing() === 'key' && keys().anthropic?.status === 'working');
 const resetShort = () => { const h = Math.round((RESET - NOW) / 36e5), d = Math.floor(h / 24); return d ? `${d}d ${h % 24}h` : `${h}h`; };
 const resetIn = () => { const h = Math.round((RESET - NOW) / 36e5), d = Math.floor(h / 24); return d ? `${d} day${d === 1 ? '' : 's'} ${h % 24} h` : `${h} h`; };
 /* charge a finished run: included tokens first, then the key the member chose; logged for the Usage page */
 const RUNLOG = {};
-function charge(q, tok) {
+function charge(q, tok, model = 'Opus 5.5') {
   let bill = 'Included';
-  if (st.newModel === 'GPT-6.1 Sol') bill = 'OpenAI key';
+  if (model === 'GPT-6.1 Sol') bill = 'OpenAI key';
   else if (left() >= tok) usage()[TODAY] += tok;
   else { const inc = left(); usage()[TODAY] += inc; bill = billing() === 'key' && keys().anthropic?.status === 'working' ? (inc ? 'Included + Anthropic key' : 'Anthropic key') : 'Included'; if (bill === 'Included') usage()[TODAY] += tok - inc; }
   (RUNLOG[st.user] ||= []).push({ q, at: new Date(NOW).toISOString(), tok, bill });
   return bill;
 }
 let toastTimer;
-function toast(t) { st.toast = t; clearTimeout(toastTimer); toastTimer = setTimeout(() => { st.toast = ''; const el = $('#toast'); if (el) el.remove(); }, 2800); }
+function toast(t) { st.toast = t; st.undo = null; clearTimeout(toastTimer); toastTimer = setTimeout(() => { st.toast = ''; st.undo = null; const el = $('#toast'); if (el) el.remove(); }, 5000); }
 
 /* composer: hidden without an invite (the banner explains why) */
 const pendingBanner = () => {
@@ -1512,7 +1554,7 @@ function appbar() {
     <span class="grow"></span>${meter()}
     <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}">${av(st.user, 'sm')}${I.down}</button>
     ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff ? cap1(m.staff) : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
-      ${isActive() ? `<button class="mi" data-ma="go" data-to="members"><span>Invites</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
+      ${isActive() ? `<button class="mi" data-ma="go" data-to="members"><span>Invites</span></button>${st.ui.saved === 'c' ? `<button class="mi" data-a="space" data-id="saved"><span>Saved</span></button>` : ''}<button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
       <div class="msep"></div><button class="mi" data-ma="signout"><span>Sign out</span></button></div>` : ''}</span></header>`;
 }
 
@@ -1533,6 +1575,9 @@ function authScreen() {
     body = `<div class="auth-c"><div class="inviter">${av(linkInv.by)}<div><b>${esc(nameOf(linkInv.by))} invited you to Session</b><small>@${esc(linkInv.by)}</small></div></div>
       <h2>Explore together.</h2><p>Session is a shared workspace for exploring questions, ideas, and artifacts.</p>
       <div class="auth-acts">${xBtn('Continue with X')}<button class="btn2" data-ma="nolink">I already have an account</button></div></div>`;
+  } else if (st.flow === 'landing' && st.fromLink) {
+    body = `<div class="auth-c"><h2>This invite link no longer works</h2><p>It has already been used or was revoked. Ask the person who sent it for a new one.</p>
+      <div class="auth-acts">${xBtn()}<button class="btn2" data-ma="flow" data-to="code">I have an invite code</button></div></div>`;
   } else if (st.flow === 'landing') {
     body = `<div class="auth-c"><span class="brand lg">${mark()}<b>Session</b></span><h2>Explore together.</h2>
       <p>Session is a shared workspace for exploring questions, ideas, and artifacts.</p>
@@ -1545,7 +1590,7 @@ function authScreen() {
       ${st.codeErr ? `<p class="ferr">${esc(st.codeErr)}</p>` : ''}
       ${inv ? `<div class="inviter">${av(inv.by)}<div><b>${C.ok(esc(nameOf(inv.by)))}</b><small>@${esc(inv.by)}</small></div></div><div class="auth-acts">${st.xacct && !MEMBERS.some(m => m.x === st.xacct) ? `<button class="btn1" data-ma="toprofile">Continue as @${esc(st.xacct)}</button>${xBtn('Use a different X account')}` : xBtn(C.x)}</div>` : ''}</div>`;
   } else if (st.flow === 'xauth') {
-    body = `<div class="auth-c">${back(st.intent === 'signup' ? 'code' : 'landing')}<h2>Sign in with X</h2><p>Session uses your name, handle and profile picture from X for your profile. It cannot post or read your messages.</p>
+    body = `<div class="auth-c">${back(st.fromLink || st.intent !== 'signup' ? 'landing' : 'code')}<h2>Sign in with X</h2><p>Session uses your name, handle and profile picture from X for your profile. It cannot post or read your messages.</p>
       <div class="auth-acts"><button class="xbtn" data-ma="xgo">Continue to X</button></div></div>`;
   } else if (st.flow === 'noaccount') {
     const a = X_ACCOUNTS.find(x => x.x === st.xacct);
@@ -1620,14 +1665,14 @@ const mask = (P, k) => `<span class="kmask">${P.prefix}••••${k.last4}</s
 const CHECK_CIRCLE = '<svg class="i kcc" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M5.4 8.2l1.8 1.8 3.4-3.8"/></svg>';
 const kStatus = k => `<span class="chip kchip ${k.status === 'working' ? 'ok' : ''}">${k.status === 'working' ? `${CHECK_CIRCLE}Valid` : 'Checking…'}</span>`;
 const kErr = id => st.keyErr && st.keyForm === id ? `<p class="ferr">${esc(st.keyErr)}</p>` : '';
-const kInput = (id, P, cancel = true) => `<form class="kform" data-mform="key:${id}"><input id="in-key-${id}" type="password" placeholder="Paste your ${P.name} key (${P.ph})" autocomplete="off" spellcheck="false" aria-label="${P.name} API key"><button type="submit" class="btn1 sm">Save</button>${cancel ? `<button type="button" class="btn2 sm" data-ma="keycancel">Cancel</button>` : ''}</form>`;
+const kInput = (id, P, cancel = true) => `<form class="kform" data-mform="key:${id}"><input id="in-key-${id}" type="password" placeholder="Paste key (${P.ph})" autocomplete="off" spellcheck="false" aria-label="${P.name} API key"><button type="submit" class="btn1 sm">Save</button>${cancel ? `<button type="button" class="btn2 sm" data-ma="keycancel">Cancel</button>` : ''}</form>`;
 const kConfirm = (id, P) => `<div class="kconfirm"><span>Remove the ${P.name} key? Asks billed to it will stop.</span><span class="grow"></span><button class="btn2 sm" data-ma="keykeep">Keep</button><button class="btn1 sm danger" data-ma="keyremove" data-k="${id}">Remove</button></div>`;
 const kRemove = id => `<button class="btn2 sm" data-ma="keyask" data-k="${id}">Remove</button>`;
 const kAdd = (id, cls = 'btn2 sm') => `<button class="${cls}" data-ma="keyadd" data-k="${id}">Add key</button>`;
 function keysSection() {
   const row = id => {
     const P = PROVIDERS[id], k = keys()[id];
-    const body = k && st.removing === id ? kConfirm(id, P) : st.keyForm === id ? kInput(id, P) + kErr(id)
+    const body = k && st.removing === id ? kConfirm(id, P) : st.keyForm === id ? `<div class="kstack"><b class="kname">${P.name}</b>${kInput(id, P)}${kErr(id)}</div>`
       : k ? `<div class="kstate"><b class="kname">${P.name}</b>${mask(P, k)}${kStatus(k)}<span class="grow"></span>${kRemove(id)}</div>`
       : `<div class="kstate"><b class="kname">${P.name}</b><small>Not set</small><span class="grow"></span>${kAdd(id)}</div>`;
     return `<div class="krow one"><div class="kb">${body}</div></div>`;
@@ -1649,31 +1694,52 @@ function usageTop() {
 function usageRunsSection() {
   /* each row: the question, then the share of the weekly allowance it used and the date */
   const runs = usageRuns();
-  return `<section class="box"><h3>Recent runs</h3><div class="runs rrows">${runs.map(r => `<div class="run re"><span class="rq">${esc(clip(r.q, 90))}</span><span class="rpct">${r.tok / ALLOWANCE < .005 ? '<1' : Math.round(r.tok / ALLOWANCE * 100)}% · ${day(r.at)}</span></div>`).join('') || '<p class="empty">No runs yet this week.</p>'}</div></section>`;
+  return `<section class="box"><h3>Recent runs</h3><div class="runs rrows">${runs.map(r => `<div class="run re"><span class="rq">${esc(clip(r.q, 90))}</span><span class="rpct">${r.bill && r.bill !== 'Included' ? esc(r.bill) : `${r.tok / ALLOWANCE < .005 ? '<1' : Math.round(r.tok / ALLOWANCE * 100)}%`} · ${day(r.at)}</span></div>`).join('') || '<p class="empty">No runs yet this week.</p>'}</div></section>`;
 }
 function usagePage() {
-  const hasKey = keys().anthropic?.status === 'working' || keys().openai?.status === 'working';
+  const hasKey = keys().anthropic?.status === 'working';
   return `<div class="page"><div class="page-in narrow ustack"><h2>Usage and API keys</h2>
     ${usageTop()}${usageRunsSection()}
     <section class="box"><h3>When included tokens run out</h3>
       <label class="radio"><input type="radio" name="bill" data-ma="bill" value="pause"${billing() === 'pause' ? ' checked' : ''}> <span><b>Pause my asks until the reset</b><small>You can still read, post and reply.</small></span></label>
-      <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my API key</b><small>${hasKey ? 'Asks bill to your key until the reset.' : 'Add a key below to turn this on.'}</small></span></label></section>
+      <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my Anthropic key</b><small>${hasKey ? 'Asks bill to your Anthropic key until the reset.' : keys().openai?.status === 'working' ? 'Needs an Anthropic key. Your OpenAI key only runs GPT-6.1 Sol.' : 'Add an Anthropic key below to turn this on.'}</small></span></label></section>
     ${keysSection()}</div></div>`;
 }
 
 /* ---- app render ---- */
 function renderMock() {
-  const personas = [['out', 'Signed out'], ['sol', 'Admin'], ['ines.v', 'Member'], ['kofi.a', 'No invite'], ...MEMBERS.filter(m => m.created).map(m => [m.u, `New account (${m.status === 'active' ? 'active' : 'no invite'})`])];
+  const personas = [['out', 'Signed out'], ['sol', 'Admin'], ['ines.v', 'Member'], ['kofi.a', 'No invite'], ...MEMBERS.filter(m => m.created).map(m => [m.u, `@${m.u}${m.status === 'active' ? '' : ' (no invite)'}`])];
   const cur = st.auth === 'out' ? 'out' : st.user;
   const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcdef'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
+    <span class="mk mkfix"><span class="mkl">Fixes</span></span>${seg('likeout', 'Signed-out likes', 2)}${seg('outtok', 'Out of tokens', 3)}${seg('del', 'Delete', 3)}${seg('saved', 'Saved', 3)}${seg('ncomp', 'Narrow composer', 2)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>
-    <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
+    <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
 }
+/* Every render rebuilds the page. Keep what people typed in open boxes, and put focus back on the
+   control that had it (matched by id or by its data attributes). */
+const sigOf = el => !el || el === document.body || !app.contains(el) ? null : { id: el.id, a: el.dataset.a || '', ma: el.dataset.ma || '', k: el.dataset.k || '', i: el.dataset.id || '', n: el.dataset.node || '', m: el.dataset.m || '', v: el.dataset.v || '', to: el.dataset.to || '' };
+function findSig(g) {
+  if (!g) return null;
+  if (g.id) return document.getElementById(g.id);
+  const q = [['a', 'data-a'], ['ma', 'data-ma'], ['k', 'data-k'], ['i', 'data-id'], ['n', 'data-node'], ['m', 'data-m'], ['v', 'data-v'], ['to', 'data-to']].filter(([k]) => g[k]).map(([k, at]) => `[${at}="${CSS.escape(g[k])}"]`).join('');
+  return q ? app.querySelector(q) : null;
+}
+let lastFlow = null;
 function render() {
+  const focusSig = sigOf(document.activeElement), drafts = {};
+  app.querySelectorAll('#page textarea').forEach(t => { if (t.id && t.id !== 'in-new' && t.value) drafts[t.id] = t.value; });
+  renderInner();
+  for (const id in drafts) { const t = document.getElementById(id); if (t && !t.value) { t.value = drafts[id]; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } }
+  if (focusSig && (document.activeElement === document.body || !document.activeElement)) { const el = findSig(focusSig); if (el) { el.focus({ preventScroll: true }); if (el.tagName === 'TEXTAREA') el.setSelectionRange(el.value.length, el.value.length); } }
+  const dlg = $('.authdlg');
+  if (dlg && st.flow !== lastFlow) { const h = dlg.querySelector('h2'); h?.setAttribute('tabindex', '-1'); (dlg.querySelector('input:not([type="checkbox"])') || h)?.focus({ preventScroll: true }); }
+  lastFlow = dlg ? st.flow : null;
+}
+function renderInner() {
   renderMock();
   if (!$('#shell')) { app.innerHTML = '<div id="shell"><div id="bar"></div><div id="page"></div></div>'; lastV = null; }
   $('#bar').innerHTML = st.auth === 'out' ? appbarOut() : appbar();
@@ -1685,12 +1751,21 @@ function render() {
   citeReady();
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
   if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
+  if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
-const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}</div>` : '';
+const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}${st.undo && st.ui.del === 'b' ? '<button class="tundo" data-a="undo">Undo</button>' : ''}</div>` : '';
 /* Each variant control also sets up a view that shows it: the signed-out landing for Sign-in,
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
+  if (['likeout', 'outtok', 'del', 'saved', 'ncomp'].includes(k)) {
+    st.authOpen = false; st.screen = 'network';
+    if (k === 'likeout') st.auth = 'out';
+    else { st.auth = 'in'; st.user = k === 'outtok' ? 'sol' : 'ines.v'; }
+    if (k === 'outtok') { const u = usage(), others = u.reduce((a, b, i) => i === TODAY ? a : a + b, 0); u[TODAY] = Math.max(0, ALLOWANCE + 20e3 - others); BILLING.sol = 'pause'; st.mt = 'out'; }
+    if (k === 'saved' && st.ui.saved === 'c') st.space = 'saved';
+    render(); if (k === 'ncomp') toast('Narrow the window below 520px to see this.'); return;
+  }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'network' : 'usage';
@@ -1702,33 +1777,33 @@ function previewVariant(k) {
 function signIn(u) { st.authOpen = false; st.auth = 'in'; st.user = u; st.screen = member(u).status === 'active' ? 'network' : 'status'; st.menu = null; st.sel = {}; render(); }
 document.addEventListener('click', e => {
   const p = e.target.closest('[data-mp]');
-  if (p) { if (p.dataset.mp === 'out') { st.auth = 'out'; st.authOpen = false; st.flow = 'landing'; } else signIn(p.dataset.mp); st.confirm = null; render(); return; }
+  if (p) { if (p.dataset.mp === 'out') { st.auth = 'out'; st.authOpen = false; st.flow = 'landing'; st.code = ''; st.xacct = null; st.profile = null; st.fromLink = false; } else signIn(p.dataset.mp); st.confirm = null; render(); return; }
   const o = e.target.closest('[data-mo]');
   if (o) { const k = o.dataset.mo; st.auth = 'out'; st.authOpen = true; st.confirm = null; st.menu = null; st.codeErr = '';
     if (k === 'signin') { st.flow = 'landing'; st.fromLink = false; st.code = ''; }
     if (k === 'link') { st.flow = 'landing'; st.fromLink = true; st.code = 'SESS-9TQ2-X8'; }
     if (k === 'code') { st.flow = 'code'; st.intent = 'signup'; st.fromLink = false; st.code = 'SESS-9TQ2-X8'; }
     render(); return; }
-  const mx = e.target.closest('[data-mx]'); if (mx) { st.mockX = mx.dataset.mx; renderMock(); return; }
   const v = e.target.closest('[data-mv]'); if (v) { st.ui[v.dataset.mv] = v.dataset.x; previewVariant(v.dataset.mv); return; }
-  const t = e.target.closest('[data-mt]'); if (t) { const u = usage(); const need = { norm: null, low: ALLOWANCE - 90e3, out: ALLOWANCE + 20e3 }[t.dataset.mt]; if (need != null) { const others = u.reduce((a, b, i) => i === TODAY ? a : a + b, 0); u[TODAY] = Math.max(0, need - others); } else USAGE[st.user] = (USAGE_BASE[st.user] || [0, 0, 0, 0, 0, 0, 0]).slice(); render(); return; }
+  const t = e.target.closest('[data-mt]'); if (t) { st.mt = t.dataset.mt; const u = usage(); const need = { norm: null, low: ALLOWANCE * .85, out: ALLOWANCE + 20e3 }[t.dataset.mt]; if (need != null) { const others = u.reduce((a, b, i) => i === TODAY ? a : a + b, 0); u[TODAY] = Math.max(0, need - others); } else USAGE[st.user] = (USAGE_BASE[st.user] || [0, 0, 0, 0, 0, 0, 0]).slice(); render(); return; }
 });
 const USAGE_BASE = Object.fromEntries(Object.entries(USAGE).map(([k, v]) => [k, v.slice()]));
 app.addEventListener('click', e => {
   const t = e.target.closest('[data-ma]'); if (!t || (t.tagName === 'INPUT' && t.type === 'radio')) return;
   const a = t.dataset.ma, d = t.dataset;
-  if (a === 'go') { st.screen = d.to; st.menu = null; render(); $('#k-page') && ($('#k-page').scrollTop = 0); return; }
+  if (a === 'go') { st.screen = d.to; st.menu = null; if (d.to === 'network' && t.classList.contains('brand')) st.space = 'home'; render(); if ($('#k-page')) { $('#k-page').scrollTop = 0; const h = $('#k-page h2, #k-page h3'); h?.setAttribute('tabindex', '-1'); h?.focus({ preventScroll: true }); } return; }
   if (a === 'flow') { st.flow = d.to; st.codeErr = ''; if (d.to === 'code') st.intent = 'signup'; render(); $('#in-code')?.focus(); return; }
   if (a === 'xauth') { if (st.flow === 'landing') st.intent = st.fromLink ? 'signup' : 'signin'; st.flow = 'xauth'; render(); return; }
-  if (a === 'openauth') { st.authOpen = true; st.flow = d.to || 'landing'; st.codeErr = ''; if (d.to === 'code') st.intent = 'signup'; render(); (app.querySelector('.authdlg #in-code') || app.querySelector('.authdlg .xbtn'))?.focus(); return; }
-  if (a === 'closeauth') { st.authOpen = false; st.flow = 'landing'; st.fromLink = false; render(); return; }
-  if (a === 'openlink') { st.code = 'SESS-9TQ2-X8'; st.fromLink = true; st.authOpen = true; st.flow = 'landing'; render(); return; }
+  if (a === 'openauth') { authFrom = sigOf(t); st.authOpen = true; st.flow = d.to || 'landing'; st.codeErr = ''; if (d.to === 'code') st.intent = 'signup'; render(); (app.querySelector('.authdlg #in-code') || app.querySelector('.authdlg .xbtn'))?.focus(); return; }
+  if (a === 'closeauth') { closeAuth(); return; }
   if (a === 'nolink') { st.fromLink = false; st.code = ''; st.intent = 'signin'; st.flow = 'xauth'; render(); return; }
   if (a === 'toprofile') { const a2 = X_ACCOUNTS.find(z => z.x === st.xacct); st.profile = { name: a2.name, handle: st.xacct.replace(/[^a-z0-9._]/g, '').slice(0, 20), rules: false, err: '' }; st.flow = 'profile'; render(); return; }
   if (a === 'fill') { st.code = d.code; st.codeErr = ''; render(); return; }
   if (a === 'xpick' || a === 'xgo') {
     const x = a === 'xgo' ? st.mockX : d.x, m = MEMBERS.find(mm => mm.x === x);
     st.xacct = x;
+    const invOpen = INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
+    if (m && m.status === 'waiting' && invOpen) { invOpen.used = m.u; m.status = 'active'; m.inviter = invOpen.by; m.joined = new Date(NOW).toISOString(); st.code = ''; signIn(m.u); toast(`You're in. ${nameOf(invOpen.by)} invited you.`); render(); return; }
     if (m) { signIn(m.u); return; }
     const inv = INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
     if (st.intent === 'signup' && inv) { const a2 = X_ACCOUNTS.find(z => z.x === x); st.profile = { name: a2.name, handle: x.replace(/[^a-z0-9._]/g, '').slice(0, 20), rules: false, err: '' }; st.flow = 'profile'; }
@@ -1746,7 +1821,7 @@ app.addEventListener('click', e => {
   if (a === 'keyadd') { st.keyForm = d.k; st.keyErr = ''; render(); $(`#in-key-${d.k}`)?.focus(); return; }
   if (a === 'keyprov') { st.keyProv = d.k; st.keyErr = ''; render(); $(`#in-key-${d.k}`)?.focus(); return; }
   if (a === 'keycancel') { st.keyForm = null; st.keyErr = ''; render(); return; }
-  if (a === 'keyask') { st.removing = d.k; render(); return; }
+  if (a === 'keyask') { st.removing = d.k; render(); $('.kconfirm [data-ma="keykeep"]')?.focus(); return; }
   if (a === 'keykeep') { st.removing = null; render(); return; }
   if (a === 'keyremove') { delete keys()[d.k]; st.removing = null; if (!keys().anthropic && !keys().openai) BILLING[st.user] = 'pause'; if (st.newModel === 'GPT-6.1 Sol' && !keys().openai) st.newModel = 'Opus 5.5'; toast(`${PROVIDERS[d.k].name} key removed.`); render(); return; }
 });
@@ -1756,13 +1831,13 @@ app.addEventListener('submit', e => {
   e.preventDefault();
   const kind = f.dataset.mform;
   if (kind === 'code') {
-    const c = $('#in-code').value.trim().toUpperCase().replace(/^.*\//, ''); st.code = c;
+    const c = $('#in-code').value.trim().toUpperCase().replace(/\/+$/, '').replace(/^.*\//, ''); st.code = c;
     const inv = INVITES.find(i => i.code === c);
     st.codeErr = !c ? 'Enter the code from your invite.' : !inv ? "That code doesn't exist. Check it against the invite, or ask the person who invited you." : inviteState(inv) === 'used' ? 'That code has already been used. Each code works for one person; ask for a new one.' : inviteState(inv) !== 'open' ? 'That code was revoked. Ask the person who invited you for a new one.' : '';
     render(); return;
   }
   if (kind === 'redeem') {
-    const c = $('#in-redeem').value.trim().toUpperCase(), inv = INVITES.find(i => i.code === c.replace(/^.*\//, '')); st.redeem = c;
+    const c = $('#in-redeem').value.trim().toUpperCase(), inv = INVITES.find(i => i.code === c.replace(/\/+$/, '').replace(/^.*\//, '')); st.redeem = c;
     st.redeemErr = !c ? 'Enter the code from your invite.' : !inv ? "That code doesn't exist. Check it against the invite." : inviteState(inv) === 'used' ? 'That code has already been used. Ask for a new one.' : inviteState(inv) !== 'open' ? 'That code was revoked. Ask for a new one.' : '';
     if (st.redeemErr) { render(); return; }
     const m = meM(); inv.used = m.u; m.status = 'active'; m.inviter = inv.by; m.joined = new Date(NOW).toISOString(); st.redeem = ''; st.screen = 'network';
@@ -1787,7 +1862,15 @@ app.addEventListener('submit', e => {
     setTimeout(() => { if (keys()[id]) { keys()[id].status = 'working'; toast(`${P.name} key works.`); render(); } }, 1300);
   }
 });
-document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (st.confirm) { st.confirm = null; render(); } else if (st.auth === 'out' && st.authOpen) { st.authOpen = false; st.flow = 'landing'; render(); } });
+let authFrom = null;
+const closeAuth = () => { st.authOpen = false; st.flow = 'landing'; st.fromLink = false; render(); findSig(authFrom)?.focus({ preventScroll: true }); authFrom = null; };
+document.addEventListener('keydown', e => {
+  const dlg = $('.authdlg');
+  if (e.key === 'Tab' && dlg) { const fs = [...dlg.querySelectorAll('button, input, a[href], [tabindex]:not([tabindex="-1"])')].filter(x => !x.disabled && x.offsetParent); if (!fs.length) return;
+    const i = fs.indexOf(document.activeElement); if (e.shiftKey && i <= 0) { e.preventDefault(); fs[fs.length - 1].focus(); } else if (!e.shiftKey && (i === fs.length - 1 || i < 0)) { e.preventDefault(); fs[0].focus(); } return; }
+  if (e.key !== 'Escape') return;
+  if (st.confirm) { st.confirm = null; render(); } else if (st.auth === 'out' && st.authOpen) closeAuth();
+});
 
 window.addEventListener('hashchange', () => go(location.hash.slice(1)));
 /* Ctrl+A, Ctrl+B, ... switch to the variant with that letter (not while typing in a field) */
