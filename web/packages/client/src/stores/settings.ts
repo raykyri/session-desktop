@@ -6,13 +6,13 @@
 // Persistence key is `session.settings.v2`, replacing the desktop's
 // `session.settings.v1` (07 §8). The version bump is deliberate: the desktop
 // record carried terminal, worktree and agent keys that no longer exist, so a
-// v1 blob must not be read back into this shape. Persist `version` 3 migrates
-// a still-default Cool/Small local record to the guest Warm/Medium defaults.
+// v1 blob must not be read back into this shape. Persist `version` 3 moves a
+// local record still on the earlier Cool theme default to the Warm theme.
 //
 // `DEFAULT_USER_SETTINGS` comes from `shared`: the server writes the same
 // object into `user_preferences` on first access, and a second copy here would
-// drift the moment a field is added. Guests paint from `GUEST_USER_SETTINGS`
-// until a session loads.
+// drift the moment a field is added. Guests paint from the same defaults
+// (`GUEST_USER_SETTINGS`) until a session loads.
 
 import {
   APP_TEXT_SIZE_MAX,
@@ -31,14 +31,15 @@ import { resolveAppearance } from "../lib/appearance.js";
 
 export const SETTINGS_STORAGE_KEY = "session.settings.v2";
 
-/** First paint for a guest: the Warm theme, whose values are the members
- * mockup's, at the default text size so the type scale is the mockup's
- * (02 §11). Account defaults stay `DEFAULT_USER_SETTINGS`; `SessionBoot`
- * replaces this once a session exists. */
-export const GUEST_USER_SETTINGS: UserSettings = {
-  ...DEFAULT_USER_SETTINGS,
-  colorTheme: "orange-blob",
-};
+/** First paint for a guest: the account defaults, which are the members
+ * mockup's palette (the Warm theme, following the system's appearance) at
+ * the default text size, so the type scale is the mockup's (02 §11).
+ * `SessionBoot` replaces this with the account's settings once a session
+ * exists. */
+export const GUEST_USER_SETTINGS: UserSettings = { ...DEFAULT_USER_SETTINGS };
+
+/** The color theme every record started with before persist version 3. */
+const VERSION_2_DEFAULT_THEME: ColorTheme = "green-blob";
 
 export interface SettingsState {
   settings: UserSettings;
@@ -122,11 +123,8 @@ export const useSettingsStore = create<SettingsState>()(
         return {
           settings: {
             ...settings,
-            ...(settings.colorTheme === DEFAULT_USER_SETTINGS.colorTheme
+            ...(settings.colorTheme === VERSION_2_DEFAULT_THEME
               ? { colorTheme: GUEST_USER_SETTINGS.colorTheme }
-              : {}),
-            ...(settings.textSize === DEFAULT_USER_SETTINGS.textSize
-              ? { textSize: GUEST_USER_SETTINGS.textSize }
               : {}),
           },
         };

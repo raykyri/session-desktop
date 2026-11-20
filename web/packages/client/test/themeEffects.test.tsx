@@ -21,7 +21,9 @@ test.serial("the settings store is applied to <html> as attributes", (t) => {
   render(<ThemeEffects />);
   const root = document.documentElement;
 
-  t.is(root.dataset["colorTheme"], "green-blob");
+  t.is(root.dataset["colorTheme"], "orange-blob");
+  // The default appearance is "system"; without `window.matchMedia` (jsdom)
+  // it resolves to dark (`lib/appearance.ts`).
   t.is(root.dataset["appearance"], "dark");
   t.false(root.classList.contains("reduce-motion"));
 });
@@ -39,11 +41,11 @@ test.serial("changing the theme rewrites the attributes without a remount", (t) 
   render(<ThemeEffects />);
 
   act(() => {
-    useSettingsStore.getState().patch({ colorTheme: "orange-blob", appearance: "light" });
+    useSettingsStore.getState().patch({ colorTheme: "green-blob", appearance: "dark" });
   });
 
-  t.is(document.documentElement.dataset["colorTheme"], "orange-blob");
-  t.is(document.documentElement.dataset["appearance"], "light");
+  t.is(document.documentElement.dataset["colorTheme"], "green-blob");
+  t.is(document.documentElement.dataset["appearance"], "dark");
 });
 
 test.serial("appearance drives the color-scheme meta the tokens cannot reach", (t) => {

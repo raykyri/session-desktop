@@ -47,7 +47,7 @@ export interface DeleteDialogProps {
 /** The primary button of a confirm dialog that deletes nothing (Move to
  * Trash, Archive, Move). */
 const PRIMARY_CLASS =
-  "border-accent bg-accent text-fg-on-accent hover:not-disabled:bg-accent-strong " +
+  "border-accent-strong bg-accent-strong text-fg-on-accent hover:not-disabled:opacity-90 " +
   "disabled:border-border-control disabled:bg-control";
 
 export function DeleteDialog({

@@ -15,8 +15,10 @@ test.beforeEach(() => {
 });
 
 test.serial("uses default appearance settings when local storage is empty", (t) => {
-  t.is(useSettingsStore.getState().settings.appearance, "dark");
+  // The members mockup's palette, following the system's appearance.
+  t.is(useSettingsStore.getState().settings.appearance, "system");
   t.is(useSettingsStore.getState().settings.colorTheme, "orange-blob");
+  t.deepEqual(GUEST_USER_SETTINGS, DEFAULT_USER_SETTINGS, "guests and new accounts start alike");
   // The default size, so the type scale is the mockup's (02 §11).
   t.is(useSettingsStore.getState().settings.textSize, DEFAULT_USER_SETTINGS.textSize);
   t.is(useSettingsStore.getState().settings.bodyFontId, "dm-sans");
@@ -113,13 +115,13 @@ test.serial("the desktop's four settings are kept as stored", async (t) => {
 });
 
 test.serial(
-  "a v2 Cool/Small local record migrates to the guest Warm/Medium defaults",
+  "a v2 local record on the earlier Cool default migrates to the Warm theme",
   async (t) => {
     localStorage.setItem(
       SETTINGS_STORAGE_KEY,
       JSON.stringify({
         version: 2,
-        state: { settings: { ...DEFAULT_USER_SETTINGS } },
+        state: { settings: { ...DEFAULT_USER_SETTINGS, colorTheme: "green-blob" } },
       }),
     );
 

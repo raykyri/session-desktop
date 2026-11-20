@@ -14,7 +14,12 @@
      other roles map to existing tokens (`--chrome` to `--chrome-header-bg`,
      `--canvas` to `--research-feed-bg`, `--divider` to `--surface-divider`,
      `--warn` and `--bad` to `--status-active-fg` and
-     `--status-attention-fg`, and so on). */
+     `--status-attention-fg`, and so on);
+   - the Warm theme (`orange-blob`), the default for every account and for
+     signed-out visitors, holds the mockup's palette exactly: its `:root`
+     values in the light appearance and its dark values in the dark one
+     (`test/palette.test.ts` compares the two). The Cool theme
+     (`green-blob`) keeps the desktop's values. */
 
 :root {
   /* Optical compensation for the selected UI face. DM Sans reads slightly
@@ -360,12 +365,12 @@
 
   --workspace-bg: #1c1b1a;
   --research-workspace-bg: var(--right-pane-bg);
-  --field-bg: #171615;
+  --field-bg: #232220;
   --field-bg-hover: #1e1d1a;
-  --panel-bg: var(--field-bg);
-  --popover-bg: var(--field-bg);
-  --content-card-bg: #222120;
-  --content-inset-bg: #1d1c19;
+  --panel-bg: #171615;
+  --popover-bg: var(--content-card-bg);
+  --content-card-bg: #211f1e;
+  --content-inset-bg: #181716;
   --context-menu-bg: #23221f;
   --popover-item-hover-bg: var(--pane-tab-hover-bg);
   --chrome-header-bg: #171716;
@@ -410,7 +415,8 @@
   --accent-soft: rgba(51, 173, 255, 0.13);
   --accent-subtle: rgba(51, 173, 255, 0.08);
   --accent-active-bg: #263a49;
-  --accent-strong: #268fd6;
+  /* The mockup's dark override of `--accent-strong`, under white text. */
+  --accent-strong: #1c6fb3;
 
   --control-bg: #282827;
   --control-bg-hover: #313130;
@@ -418,6 +424,13 @@
   --control-border-hover: #4a4946;
   --control-border-hover-accent: #57544f;
   --focus-ring: #33adff;
+
+  /* Text roles where the mockup's palette differs from the shared ramp.
+     Accent-filled controls carry white text in both appearances
+     (`--on-accent-light`). */
+  --text-muted: #919994;
+  --text-faint: #828b86;
+  --text-on-accent: #ffffff;
 
   /* Feed column (B1): the column behind the cards, the boxed folder trays,
      the card of the open thread, and the fields and popovers over the feed,
@@ -672,12 +685,12 @@
 
   --workspace-bg: #f5f3f0;
   --research-workspace-bg: var(--right-pane-bg);
-  --field-bg: #fbfaf8;
+  --field-bg: #ffffff;
   --field-bg-hover: #f5f2ee;
-  --panel-bg: var(--field-bg);
-  --popover-bg: var(--field-bg);
+  --panel-bg: #fbfaf8;
+  --popover-bg: var(--content-card-bg);
   --content-card-bg: #ffffff;
-  --content-inset-bg: #f2efeb;
+  --content-inset-bg: #f5f2ee;
   --context-menu-bg: #f1ede8;
   --popover-item-hover-bg: var(--pane-tab-hover-bg);
   --chrome-header-bg: #f4f2ef;
@@ -695,8 +708,8 @@
   --markdown-blockquote-border: #c9c3bb;
   --transcript-code-bg: #f4f1ed;
   --transcript-code-header-bg: #ebe6e0;
-  --surface-divider: #e0dbd5;
-  --surface-border-strong: #d2ccc5;
+  --surface-divider: #ebe7e2;
+  --surface-border-strong: #e1dcd6;
   --dialog-border: #c8c1b9;
   --chrome-control-bg: rgba(244, 242, 239, 0.9);
   --chrome-control-bg-hover: rgba(232, 228, 222, 0.95);
@@ -717,19 +730,24 @@
   --folder-picker-status-border: #cdc3b7;
   --queued-turn-border: #cdc4ba;
 
-  --accent-color: #0b7fd1;
-  --accent-shadow: rgba(11, 127, 209, 0.3);
+  --accent-color: #0a6fb8;
+  --accent-shadow: rgba(10, 111, 184, 0.3);
   --accent-soft: rgba(11, 127, 209, 0.12);
-  --accent-subtle: rgba(11, 127, 209, 0.07);
+  --accent-subtle: rgba(10, 111, 184, 0.07);
   --accent-active-bg: #dcebf7;
-  --accent-strong: #0a68ab;
+  --accent-strong: #095c98;
 
   --control-bg: #efece8;
   --control-bg-hover: #e6e2dc;
-  --control-border: #d3cdc5;
+  --control-border: #e0dbd4;
   --control-border-hover: #c1bab0;
   --control-border-hover-accent: #a9c6dc;
-  --focus-ring: #0b7fd1;
+  --focus-ring: #0a6fb8;
+
+  --text-muted: #5b625e;
+  --text-faint: #686e6b;
+  --text-on-accent: #ffffff;
+  --popover-shadow: 0 10px 28px rgba(20, 24, 26, 0.14);
 
   /* Feed column (B1): the column behind the cards, the boxed folder trays,
      the card of the open thread, and the fields and popovers over the feed,

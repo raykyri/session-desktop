@@ -84,8 +84,11 @@ export type UserSettings = z.infer<typeof userSettingsSchema>;
  * copies of this object would drift the moment a field is added.
  */
 export const DEFAULT_USER_SETTINGS: UserSettings = {
-  colorTheme: "green-blob",
-  appearance: "dark",
+  /** The Warm theme, whose light and dark values are the members mockup's
+   * palette (`docs/mockups/session-web-members.html`, 02 §11). */
+  colorTheme: "orange-blob",
+  /** Follows the system's light or dark preference, as the mockup does. */
+  appearance: "system",
   /** An id in the client's `BODY_FONT_OPTIONS`; the client cannot be imported
    * from here, so the value is repeated rather than referenced. */
   bodyFontId: "dm-sans",
