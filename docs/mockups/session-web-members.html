@@ -1,0 +1,1497 @@
+<title>Session Members Mockup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a control bar (variant, theme) over one framed app viewport. Each variant puts a chat or
+   post stream in the middle and shows branches beside it. Colors are the spaces mockup's tokens
+   (session-web-spaces.html), light first, with its dark values. */
+:root {
+  --page: #e9e6e1; --chrome: #f4f2ef; --pane: #fcfbf9; --feed: #f8f6f3; --card: #ffffff; --inset: #f5f2ee;
+  --field: #ffffff; --control: #efece8; --control-hover: #e6e2dc; --control-border: #e0dbd4;
+  --divider: #ebe7e2; --border-strong: #e1dcd6; --fill-subtle: rgba(0,0,0,.04); --fill-hover: rgba(0,0,0,.05);
+  --accent: #0a6fb8; --accent-soft: rgba(11,127,209,.12); --accent-strong: #095c98; --on-accent: #ffffff; --on-accent-light: #ffffff;
+  --t-heading: #121617; --t-primary: #23282a; --t-body: #33393b; --t-secondary: #4a5350; --t-muted: #5b625e;
+  --t-faint: #686e6b; --t-dim: #9aa19d; --placeholder: #8e958f; --good: #2f8a4d; --warn: #9a6b12; --bad: #c0563f;
+  --av1: #4a6a86; --av2: #77598c; --av3: #557a52; --av4: #93663f; --av5: #3d7778; --av6: #8a4f4f; --av-fg: #ffffff;
+  --mark: rgba(60,40,20,.06);
+  --shadow-soft: 0 3px 10px rgba(20,24,26,.05);
+  --shadow: 0 1px 2px rgba(60,40,20,.06), 0 0 0 1px rgba(60,40,20,.05);
+  --shadow-pop: 0 10px 28px rgba(20,24,26,.14);
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --fs-xs: 11.5px; --fs-sm: 12.5px; --fs-base: 13.5px; --fs-md: 14.5px; --fs-lg: 17px; --fs-xl: 21px;
+  --r-sm: 4px; --r-md: 6px; --r-lg: 8px; --r-xl: 12px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --page: #121110; --chrome: #171716; --pane: #1c1b1a; --feed: #1a1918; --card: #211f1e; --inset: #181716;
+  --field: #232220; --control: #282827; --control-hover: #313130; --control-border: #3d3d3c;
+  --divider: #2d2d2c; --border-strong: #373634; --fill-subtle: rgba(255,255,255,.05); --fill-hover: rgba(255,255,255,.06);
+  --accent: #33adff; --accent-soft: rgba(51,173,255,.13); --accent-strong: #268fd6; --on-accent: #0f1413; --on-accent-light: #ffffff;
+  --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #919994;
+  --t-faint: #828b86; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f; --bad: #e0796d;
+  --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
+  --mark: rgba(255,255,255,.07);
+  --shadow-soft: 0 3px 10px rgba(0,0,0,.22);
+  --shadow: 0 0 0 1px rgba(255,255,255,.06); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
+} }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #121110; --chrome: #171716; --pane: #1c1b1a; --feed: #1a1918; --card: #211f1e; --inset: #181716;
+  --field: #232220; --control: #282827; --control-hover: #313130; --control-border: #3d3d3c;
+  --divider: #2d2d2c; --border-strong: #373634; --fill-subtle: rgba(255,255,255,.05); --fill-hover: rgba(255,255,255,.06);
+  --accent: #33adff; --accent-soft: rgba(51,173,255,.13); --accent-strong: #268fd6; --on-accent: #0f1413; --on-accent-light: #ffffff;
+  --t-heading: #f4f3ec; --t-primary: #e7e7e2; --t-body: #d9ddd9; --t-secondary: #c4cbc6; --t-muted: #919994;
+  --t-faint: #828b86; --t-dim: #5a615e; --placeholder: #6b726d; --good: #81c784; --warn: #d7a84f; --bad: #e0796d;
+  --av1: #5b7a96; --av2: #8a6f9e; --av3: #6d8f6a; --av4: #a77b55; --av5: #4f8a8b; --av6: #9a6262; --av-fg: #f4f3ec;
+  --mark: rgba(255,255,255,.07);
+  --shadow-soft: 0 3px 10px rgba(0,0,0,.22);
+  --shadow: 0 0 0 1px rgba(255,255,255,.06); --shadow-pop: 0 10px 28px rgba(0,0,0,.5);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--page); color: var(--t-primary); font: 400 var(--fs-base)/1.5 var(--font);
+  display: flex; flex-direction: column; padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px 16px; -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- control bar ---- */
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding-bottom: 10px; }
+.bar h1 { margin: 0; font-size: var(--fs-md); font-weight: 700; color: var(--t-heading); letter-spacing: -.01em; }
+.seg { display: inline-flex; background: var(--control); border-radius: var(--r-lg); padding: 2px; gap: 2px; flex-wrap: wrap; }
+.seg button { padding: 4px 10px; border-radius: var(--r-md); color: var(--t-secondary); font-size: var(--fs-sm); font-weight: 500; white-space: nowrap; }
+.seg button:hover { color: var(--t-heading); }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--t-heading); box-shadow: var(--shadow); }
+.seg button b { font-weight: 600; color: var(--t-faint); margin-right: 5px; font-variant-numeric: tabular-nums; }
+.bar .grow { flex: 1; }
+.thesis { margin: 0 0 10px; color: var(--t-secondary); font-size: var(--fs-sm); max-width: 110ch; }
+.thesis strong { color: var(--t-heading); font-weight: 600; }
+
+/* ---- frame ---- */
+.frame { flex: 1; min-height: 0; display: flex; flex-direction: column; border-radius: var(--r-xl); overflow: hidden;
+  background: var(--pane); box-shadow: var(--shadow), var(--shadow-pop); }
+.frame-top { display: flex; align-items: center; gap: 12px; height: 30px; padding: 0 12px; background: var(--chrome); border-bottom: 1px solid var(--divider); flex: none; }
+.dots { display: flex; gap: 6px; } .dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--border-strong); }
+.frame-top span { flex: 1; text-align: center; font-size: var(--fs-xs); color: var(--t-faint); margin-right: 39px; }
+#app { flex: 1; min-height: 0; position: relative; }
+#app > div { height: 100%; }
+
+/* ---- shared pieces ---- */
+.av { width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
+  color: var(--av-fg); font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+.av.sm { width: 20px; height: 20px; font-size: 8.5px; }
+.av.xs { width: 16px; height: 16px; font-size: 7.5px; }
+.avs { display: inline-flex; } .avs .av { box-shadow: 0 0 0 2px var(--pane); } .avs .av + .av { margin-left: -5px; }
+.mark { width: 28px; height: 28px; border-radius: 8px; display: inline-grid; place-items: center; flex: none;
+  background: var(--accent-soft); color: var(--accent); }
+.mark svg { width: 16px; height: 16px; }
+.mark.sm { width: 20px; height: 20px; border-radius: 6px; } .mark.sm svg { width: 12px; height: 12px; }
+.who { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--t-faint); min-width: 0; }
+.who b { color: var(--t-heading); font-weight: 600; }
+.who .sp { color: var(--t-secondary); }
+.prose { color: var(--t-body); font-size: var(--fs-base); line-height: 1.6; min-width: 0; overflow-wrap: anywhere; }
+.prose > :first-child { margin-top: 0; } .prose > :last-child { margin-bottom: 0; }
+.prose p { margin: 0 0 .7em; } .prose ul, .prose ol { margin: 0 0 .7em; padding-left: 1.3em; } .prose li { margin: .2em 0; }
+.prose h4 { margin: 1em 0 .35em; font-size: var(--fs-base); color: var(--t-heading); font-weight: 600; }
+.prose table { border-collapse: collapse; font-size: var(--fs-sm); margin: 0 0 .7em; display: block; overflow-x: auto; }
+.prose th, .prose td { border-bottom: 1px solid var(--divider); padding: 4px 8px; text-align: left; }
+.prose sup.cite { font-size: 9.5px; color: var(--accent); font-weight: 600; margin-left: -1px; }
+.prose .pending { color: var(--t-faint); }
+.clamp { max-height: 9.6em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
+.clamp.s { max-height: 4.8em; }
+.open > .clamp, .clamp.open { max-height: none; -webkit-mask-image: none; mask-image: none; }
+.tlink { color: var(--accent); font-size: var(--fs-sm); font-weight: 500; }
+.tlink:hover { text-decoration: underline; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 13px;
+  background: var(--control); color: var(--t-secondary); font-size: var(--fs-sm); font-weight: 500; white-space: nowrap; }
+.chip:hover { background: var(--control-hover); color: var(--t-heading); }
+.chip.on { background: var(--accent-soft); color: var(--accent); }
+.chip .muted { color: var(--t-faint); font-weight: 400; }
+.label { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--t-faint); }
+.iconbtn { width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: var(--r-md); color: var(--t-muted); flex: none; }
+.iconbtn:hover { background: var(--fill-hover); color: var(--t-heading); }
+.composer { display: flex; gap: 8px; align-items: flex-end; background: var(--field); border: 1px solid var(--control-border);
+  border-radius: 20px; padding: 4px 4px 4px 14px; }
+.composer:focus-within { border-color: var(--accent); }
+.composer textarea { flex: 1; min-width: 0; border: 0; background: none; outline: none; padding: 6px 0; font: inherit; font-size: var(--fs-base); line-height: 1.4; color: inherit; resize: none; max-height: 160px; }
+.composer textarea::placeholder { color: var(--placeholder); }
+.row.new-row { padding: 2px 0 0; }
+.row.new-row + .row { padding-top: 14px; }
+/* composer parts */
+.nb { min-width: 0; }
+.nb textarea { display: block; width: 100%; resize: none; border: 0; outline: none; background: none; color: var(--t-heading); font: inherit; font-size: var(--input-fs, var(--fs-md)); line-height: 1.5; padding: 3px 0; min-height: 28px; max-height: 240px; }
+.nb textarea::placeholder { color: var(--placeholder); }
+.nb-f { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.pick { position: relative; display: inline-flex; align-items: center; height: 26px; padding: 0 22px 0 9px; border-radius: 13px; background: var(--control); flex: none; }
+.pick:hover { background: var(--control-hover); }
+.pick:focus-within { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent); }
+.pick > span { color: var(--t-secondary); font-size: var(--fs-sm); font-weight: 500; white-space: nowrap; }
+.pick select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; font-size: var(--fs-sm); }
+.pick svg.i { position: absolute; right: 7px; width: 12px; height: 12px; pointer-events: none; color: var(--t-muted); }
+.pick.static { padding-right: 9px; color: var(--t-secondary); font-size: var(--fs-sm); font-weight: 500; }
+.send { width: 30px; height: 30px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--accent-strong); color: var(--on-accent-light); transition: background .15s, color .15s; }
+.send svg.i { width: 15px; height: 15px; stroke-width: 1.8; }
+.nb:not(.has-text) .send, .nb:not(.has-text) .primary { background: var(--control); color: var(--t-dim); }
+.ghost { height: 30px; padding: 0 12px; border-radius: 15px; color: var(--t-secondary); font-weight: 500; font-size: var(--fs-sm); flex: none; }
+.ghost:hover { background: var(--fill-hover); color: var(--t-heading); }
+.primary { height: 30px; padding: 0 16px; border-radius: 15px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); flex: none; transition: background .15s, color .15s; }
+.modes { display: inline-flex; background: var(--control); border-radius: 13px; padding: 2px; flex: none; }
+.modes button { height: 22px; padding: 0 10px; border-radius: 11px; font-size: var(--fs-xs); font-weight: 500; color: var(--t-muted); }
+.modes button[aria-pressed="true"] { background: var(--card); color: var(--t-heading); box-shadow: var(--shadow); }
+/* Dock: a chat-style bar at the head of the stream, in the flow of the page */
+.row.dock-row { padding: 2px 0 0; }
+.row.dock-row + .row { padding-top: 14px; }
+.nb-dock { display: flex; align-items: center; gap: 8px; background: var(--card); border-radius: 24px; box-shadow: var(--shadow); padding: 7px 7px 7px 13px; transition: box-shadow .15s; }
+.nb-dock:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow-soft); }
+.nb-dock textarea { flex: 1; min-width: 0; }
+/* model menu */
+.mpick { position: relative; display: inline-flex; }
+.mpick > .pick { cursor: pointer; }
+.menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; min-width: 190px; padding: 4px; border-radius: var(--r-lg);
+  background: var(--card); box-shadow: var(--shadow), var(--shadow-pop); display: flex; flex-direction: column; }
+.mi { position: relative; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: var(--r-md); text-align: left;
+  font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; white-space: nowrap; }
+.mi > span:not(.glyph):not(.mi-v) { flex: 1; }
+.mi > .glyph { flex: none; line-height: 1; }
+.mi:hover, .mi:focus-visible, .mi-sub:focus-within { background: var(--fill-hover); }
+.mi svg.i { width: 13px; height: 13px; color: var(--accent); }
+.mi-sub > svg.i { color: var(--t-muted); }
+.mi-v { color: var(--t-faint); }
+.menu-scroll { max-height: 300px; overflow-y: auto; min-width: 200px; }
+.glyph { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; color: var(--av-fg); font-size: 10px; font-weight: 700; flex: none; }
+.mi .glyph { width: 16px; height: 16px; font-size: 9px; border-radius: 4px; }
+.msep { height: 1px; margin: 4px 6px; background: var(--divider); }
+.submenu { display: none; top: -4px; left: calc(100% + 4px); min-width: 140px; }
+.mi-sub:hover > .submenu, .mi-sub:focus-within > .submenu { display: flex; }
+.mi-sub::after { content: ""; position: absolute; left: 100%; top: 0; width: 8px; height: 100%; }
+/* "..." menu */
+.more { margin-left: auto; align-self: center; }
+.more-btn { width: 24px; height: 24px; display: inline-grid; place-items: center; border-radius: var(--r-md); color: var(--t-faint); }
+.more-btn:hover, .more-btn[aria-expanded="true"] { background: var(--fill-hover); color: var(--t-heading); }
+.card-h .who { flex: 1; }
+.mi.danger { color: var(--bad); }
+.mi-off { cursor: default; height: auto; padding: 7px 10px; color: var(--t-faint); }
+.mi-off small { display: block; font-size: var(--fs-xs); margin-top: 1px; }
+.mi-off:hover { background: none; }
+/* Split · ends: avatar at the first line, controls at the last */
+.nb-a { align-items: flex-end; }
+.nb-a > .av { align-self: flex-start; margin-top: calc(var(--input-fs, 14.5px) * .75 - 7px); }
+/* bottom-aligned items keep the same centres as the one-line bar: text and 26px pills sit on the 30px button's centre line */
+/* one text line (font size x 1.5 + 6px padding) centred on the 26px controls: */
+.nb-a > textarea { margin-bottom: calc(10px - var(--input-fs, 14.5px) * .75); }
+.nb-bare { padding-left: 16px; }
+/* Split */
+.split { display: inline-flex; flex: none; }
+.split :is(.split-main, .split-more) { transition: background .15s, color .15s, opacity .15s, box-shadow .15s; }
+.split-main { height: 26px; padding: 0 10px 0 12px; border-radius: 13px 0 0 13px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); }
+.split-more { height: 26px; width: 24px; display: inline-grid; place-items: center; border-radius: 0 13px 13px 0; background: var(--accent-strong); color: var(--on-accent-light); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--on-accent-light) 35%, transparent); }
+.split-more svg.i { width: 13px; height: 13px; }
+/* Empty composer: the button stays blue at 45% opacity until there is text */
+.btn-faded:not(.has-text) :is(.split-main, .split-more) { opacity: .45; }
+.menu.right { left: auto; right: 0; }
+.mi-2 { height: auto; padding: 7px 10px; align-items: flex-start; }
+.mi-2 b { display: block; font-weight: 500; color: var(--t-heading); }
+.mi-2 small { display: block; font-size: var(--fs-xs); color: var(--t-faint); margin-top: 1px; }
+.mi-2 svg.i { margin-top: 3px; }
+.composer button { height: 30px; padding: 0 12px; border-radius: 15px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); }
+.composer .ctx { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
+.status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--warn); }
+.status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .status::before, .fadein { animation: none !important; } }
+.scroll { overflow-y: auto; overscroll-behavior: contain; }
+.empty { color: var(--t-faint); font-size: var(--fs-sm); padding: 8px 0; }
+.dayrule { display: flex; align-items: center; gap: 10px; color: var(--t-faint); font-size: var(--fs-xs); font-weight: 600; margin: 18px 0 6px; }
+.dayrule::before, .dayrule::after { content: ""; flex: 1; height: 1px; background: var(--divider); }
+.fadein { animation: fadein .25s ease; } @keyframes fadein { from { opacity: 0; transform: translateY(3px); } }
+
+/* ---- one scroll, rows of [post] [margin] ---- */
+.mg { height: 100%; overflow-y: auto; background: var(--feed); }
+.mg-inner { max-width: 1180px; margin: 0 auto; padding: 0 24px 60px; }
+.tabs { position: sticky; top: 0; z-index: 10; padding: 12px 0; background: var(--feed);
+  /* full-width band, with a hairline below it that fades in once the stream scrolls */
+  box-shadow: 0 0 0 100vmax var(--feed), 0 1px 0 100vmax transparent; clip-path: inset(0 -100vmax -1px); transition: box-shadow .2s ease; }
+.tabs.scrolled { box-shadow: 0 0 0 100vmax var(--feed), 0 1px 0 100vmax var(--divider); }
+/* the tab row scrolls sideways; its edges fade where more tabs are hidden, instead of cutting a tab off */
+.tabs-s { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; --fl: 0px; --fr: 0px;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent); }
+.tabs-s::-webkit-scrollbar { display: none; }
+.tabs button { flex: none; padding: 5px 10px; border-radius: 14px; font-size: var(--fs-sm); color: var(--t-secondary); font-weight: 500; white-space: nowrap; }
+.tabs button:hover { background: var(--fill-hover); }
+.tabs button[aria-current="true"] { background: var(--t-heading); color: var(--feed); }
+.row { display: grid; grid-template-columns: minmax(0, 600px) minmax(0, 330px); gap: 21px; padding: 14px 0; justify-content: center; }
+.card { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 18px 20px 12px; min-width: 0; transition: opacity .2s; }
+.card-h { display: flex; align-items: center; gap: 10px; margin-bottom: 11px; }
+.card .ask { margin: 0 0 14px; color: var(--t-heading); font-size: var(--title-fs, var(--fs-md)); line-height: 1.5; }
+.card .ask, .card .post { white-space: pre-line; }
+.card .post { margin: 0 0 6px; color: var(--t-primary); font-size: var(--title-fs, var(--fs-md)); line-height: 1.5; }
+.card .byline { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: var(--fs-sm); color: var(--t-faint); }
+/* padding variants (the base values are on .card, .card-h, .card .ask and .card-f) */
+.card.pad-compact { padding: 14px 16px 10px; }
+.pad-compact .card-h { margin-bottom: 8px; }
+.pad-compact .ask { margin-bottom: 10px !important; }
+.pad-compact .byline { margin-bottom: 8px !important; }
+.pad-compact > :nth-last-child(2) { margin-bottom: 10px !important; }
+.pad-compact .card-f { padding-top: 8px; }
+.card.pad-roomy { padding: 24px 28px 16px; }
+.pad-roomy .card-h { margin-bottom: 16px; }
+.pad-roomy .ask { margin-bottom: 18px !important; }
+.pad-roomy .byline { margin-bottom: 14px !important; }
+.pad-roomy > :nth-last-child(2) { margin-bottom: 18px !important; }
+.pad-roomy .card-f { padding-top: 12px; }
+.card.pad-inset { padding: 14px 14px 10px; }
+.pad-inset .card-h { margin-left: -1px; }
+.card.pad-even { padding: 18px; }
+.pad-even .card-f { padding-top: 12px; }
+/* avatar placements */
+.card-h .av.sm { margin: 0 -2px 0 0; }
+.card.av-gutter { padding-left: 10px; }
+.card.av-gutter > :not(.card-h) { margin-left: 28px; }
+.card.av-gutter .card-h { gap: 8px; }
+.byl { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.byl .who { flex-wrap: nowrap; white-space: nowrap; }
+.card.av-footer .card-f .notes { margin-left: 4px; }
+.card.av-footer .card-f .more { margin-left: 2px; }
+/* the footer sits at the bottom of the card when the margin makes the row taller */
+.card { display: flex; flex-direction: column; }
+.card > :nth-last-child(2) { margin-bottom: 13px; }
+.tip { position: relative; display: inline-flex; cursor: default; border-radius: 6px; }
+/* tooltip to the right of the icon, with a triangle pointing back at it */
+.tip::after { content: attr(data-tip); position: absolute; left: calc(100% + 9px); top: 50%; z-index: 6; white-space: nowrap; pointer-events: none;
+  padding: 4px 8px; border-radius: var(--r-md); background: var(--t-heading); color: var(--card); font-size: var(--fs-xs); font-weight: 500;
+  opacity: 0; transform: translate(-3px, -50%); transition: opacity .12s, transform .12s; }
+.tip::before { content: ""; position: absolute; left: calc(100% + 4px); top: 50%; z-index: 6; pointer-events: none;
+  border-style: solid; border-width: 5px 5px 5px 0; border-color: transparent var(--t-heading) transparent transparent;
+  opacity: 0; transform: translate(-3px, -50%); transition: opacity .12s, transform .12s; }
+.tip:hover::after, .tip:focus-visible::after, .tip:hover::before, .tip:focus-visible::before { opacity: 1; transform: translate(0, -50%); }
+.card-f { display: flex; align-items: center; gap: 4px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--divider); }
+.card-f .notes { font-weight: 400; color: var(--t-muted); font-size: var(--fs-sm); margin-right: auto; }
+.iconbtn.likes { width: auto; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.mgn { min-width: 0; position: relative; }
+.mgn .label { display: block; margin: 2px 0 8px; }
+.stick { position: sticky; top: 58px; max-height: calc(100vh - 150px); overflow-y: auto; padding: 2px 2px 8px 0; }
+
+/* pinned drawings: placed at the height of the passage they belong to */
+.mgn .composer { margin-top: 8px; }
+.pinned > .pin { position: absolute; left: 0; right: 0; }
+.grp { padding: 2px 0 4px 8px; border-left: 1.5px solid var(--border-strong); transition: border-color .15s; }
+.grp.hl { border-left-color: color-mix(in srgb, var(--accent) 30%, var(--border-strong)); }
+.grp .preview { margin: 6px 0 4px 8px; }
+/* passages with branches are marked at all times, in a neutral tint */
+.prose [data-grp] { background: var(--mark); box-shadow: -6px 0 0 var(--mark), 6px 0 0 var(--mark); border-radius: 2px; }
+.anc { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 0 6px; height: 18px; border-radius: 9px; vertical-align: 1px;
+  background: var(--accent-soft); color: var(--accent); font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.anc svg.i { width: 11px; height: 11px; }
+.qtag { display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .02em; }
+
+/* outline (Pinned map) */
+.graph { position: relative; }
+.graph svg { position: absolute; inset: 0; width: 100%; overflow: visible; pointer-events: none; }
+.graph svg path { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
+.graph svg path.on { stroke: color-mix(in srgb, var(--accent) 55%, var(--border-strong)); stroke-width: 1.5; }
+.graph svg circle { fill: var(--feed); stroke: var(--t-dim); stroke-width: 1.5; }
+.graph svg circle.on { fill: var(--feed); stroke: color-mix(in srgb, var(--accent) 70%, var(--border-strong)); }
+.graph svg circle.sel { fill: var(--accent); stroke: var(--accent); stroke-width: 1.5; }
+.grow-r { position: relative; display: block; width: 100%; text-align: left; height: 26px; border-radius: var(--r-md); padding-right: 6px; white-space: nowrap; overflow: hidden; }
+.grow-r:hover { background: var(--fill-hover); }
+.grow-r:has(.rav-r) { display: flex; align-items: center; gap: 6px; }
+.grow-r:has(.rav-r) .gq { flex: 1; min-width: 0; }
+.rav-r { margin-left: auto; }
+.grow-r.on { height: auto; padding-top: 4px; padding-bottom: 4px; white-space: normal; }
+.grow-r.on .gq { white-space: normal; line-height: 1.4; overflow: visible; }
+.grow-r.on:has(.rav-r) { align-items: flex-start; }
+.grow-r .gq { display: block; font-size: var(--fs-sm); color: var(--t-secondary); overflow: hidden; text-overflow: ellipsis; line-height: 26px; }
+.grow-r.on .gq, .grp.hl .grow-r .gq { color: var(--t-heading); }
+.grow-r.on .gq { font-weight: 400; }
+.grow-r.sel .gq { font-weight: 500; }
+.preview { margin-top: 10px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
+.preview .rq { margin: 4px 0 8px; font-size: var(--fs-base); font-weight: 600; color: var(--t-heading); line-height: 1.4; }
+/* the question is already the selected row above, so the card holds only the answer; its scroll area fades out above the footer */
+.preview .prose { font-size: var(--fs-sm); max-height: 260px; overflow-y: auto; margin-top: 6px; padding-bottom: 8px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); }
+.preview .pf { margin-top: 2px !important; }
+.preview .pf { display: flex; gap: 12px; margin-top: 8px; font-size: var(--fs-xs); color: var(--t-faint); align-items: center; }
+.preview .pf .tlink { font-size: inherit; font-weight: inherit; }
+.mgn .preview .composer { margin-top: 10px; }
+
+
+
+/* replies as trees */
+.replies .rtext { margin: 2px 0 0; color: var(--t-body); font-size: var(--fs-sm); line-height: 1.45; }
+.rlike { display: inline-flex; align-items: center; gap: 4px; color: var(--t-muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.rlike svg.i { width: 12px; height: 12px; }
+.rfoot { margin-top: 8px; padding-left: 4px; }
+.replies .tlink { font-size: var(--fs-xs); font-weight: 400; }
+.replies .composer { margin-top: 8px; }
+.preview .rtext { margin: 6px 0 2px; }
+.grow-r .gq-av { display: flex; align-items: center; gap: 6px; height: 26px; }
+.gq-av .gt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rav { display: inline-flex; flex: none; line-height: 1; }
+.rav .av.xs { box-shadow: 0 0 0 1.5px var(--feed); }
+
+/* ================= membership screens ================= */
+[hidden] { display: none !important; }
+#app > .toast, #app > .dialog { height: auto; }
+.grow { flex: 1; }
+.mockbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding-bottom: 8px; }
+.mk { display: inline-flex; align-items: center; gap: 6px; }
+.mkl { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--t-faint); }
+#shell { display: flex; flex-direction: column; height: 100%; }
+#bar { flex: none; }
+#page { flex: 1; min-height: 0; position: relative; }
+#page > .mg, #page > .page { height: 100%; }
+.appbar { height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 14px 0 16px; border-bottom: 1px solid var(--divider); background: var(--chrome); }
+.brand { display: inline-flex; align-items: center; gap: 8px; color: var(--t-heading); font-size: var(--fs-md); }
+.brand.lg { font-size: var(--fs-lg); gap: 10px; }
+.navs { display: flex; gap: 2px; margin-left: 10px; }
+.nav { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: var(--r-md); color: var(--t-secondary); font-weight: 500; font-size: var(--fs-sm); }
+.nav:hover { background: var(--fill-hover); color: var(--t-heading); }
+.nav[aria-current="true"] { background: var(--control); color: var(--t-heading); }
+.nbadge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent-strong); color: var(--on-accent-light); font-size: 10.5px; font-weight: 700; display: inline-grid; place-items: center; }
+.acct { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 6px 0 4px; border-radius: 15px; color: var(--t-muted); }
+.acct:hover, .acct[aria-expanded="true"] { background: var(--fill-hover); }
+.acct svg.i { width: 12px; height: 12px; }
+.mhead { display: flex; align-items: center; gap: 10px; padding: 8px 10px 6px; }
+.mhead b { display: block; color: var(--t-heading); font-size: var(--fs-sm); }
+.mhead small { color: var(--t-faint); font-size: var(--fs-xs); }
+/* meter variants */
+.meter { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 15px; color: var(--t-secondary); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; --tone: var(--accent-strong); }
+.meter:hover { background: var(--fill-hover); color: var(--t-heading); }
+.meter.warn { --tone: var(--warn); } .meter.bad { --tone: var(--bad); }
+.m-track { width: 64px; height: 5px; border-radius: 3px; background: var(--control); overflow: hidden; }
+.m-track > span { display: block; height: 100%; background: var(--tone); border-radius: 3px; }
+.m-ring svg { width: 18px; height: 18px; transform: rotate(-90deg); }
+.m-ring circle { fill: none; stroke: var(--control); stroke-width: 3; }
+.m-ring circle.arc { stroke: var(--tone); stroke-linecap: round; }
+.m-text { background: var(--control); }
+.m-text.warn, .m-text.bad { color: var(--tone); }
+/* auth */
+.auth { height: 100%; overflow-y: auto; display: grid; place-items: center; padding: 32px 20px; background: var(--feed); }
+.auth-c { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 14px; }
+.auth-c h2 { margin: 6px 0 0; font-size: 22px; line-height: 1.25; color: var(--t-heading); letter-spacing: -.015em; text-wrap: balance; }
+.auth-c p { margin: 0; color: var(--t-secondary); font-size: var(--fs-md); line-height: 1.5; }
+.auth-acts { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.auth-b { place-items: stretch; padding: 0; }
+.auth-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100%; }
+.auth-split > .auth-c { align-self: center; justify-self: center; padding: 32px; }
+.auth-preview { background: var(--page); padding: 40px 32px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 55%, transparent); mask-image: linear-gradient(#000 55%, transparent); }
+.pv-card { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 14px 16px; position: relative; }
+.pv-card p { margin: 8px 0 0; color: var(--t-heading); font-size: var(--fs-md); line-height: 1.45; }
+.pv-n { position: absolute; right: 14px; top: 14px; display: inline-flex; gap: 4px; align-items: center; color: var(--t-faint); font-size: var(--fs-xs); }
+.xbtn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 42px; border-radius: 21px; background: var(--t-heading); color: var(--feed); font-weight: 600; font-size: var(--fs-md); }
+.xbtn:hover { opacity: .9; }
+.xmark { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; border: 1.5px solid currentColor; font-size: 11px; font-weight: 700; }
+.btn1, .btn2 { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 38px; padding: 0 16px; border-radius: 19px; font-weight: 600; font-size: var(--fs-sm); }
+.btn1 { background: var(--accent-strong); color: var(--on-accent-light); }
+.btn1:disabled { opacity: .45; cursor: default; }
+.btn2 { background: var(--control); color: var(--t-heading); }
+.btn2:hover { background: var(--control-hover); }
+.btn1.sm { height: 28px; padding: 0 12px; border-radius: 14px; font-size: var(--fs-xs); }
+.btn1.wide { width: 100%; margin-top: 4px; }
+.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; }
+.back svg.i { width: 12px; height: 12px; }
+.fine { color: var(--t-faint) !important; font-size: var(--fs-xs) !important; line-height: 1.5; }
+.ferr { color: var(--bad) !important; font-size: var(--fs-sm) !important; }
+.code-f { display: flex; gap: 8px; }
+.code-f input, .pf input:not([type="checkbox"]), .kform input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: var(--r-lg); border: 1px solid var(--control-border); background: var(--field); color: var(--t-heading); font: inherit; font-size: var(--fs-md); outline: none; }
+.code-f input { font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
+.code-f input:focus, .pf input:focus, .kform input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.inviter { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
+.inviter b { display: block; color: var(--t-heading); font-size: var(--fs-sm); }
+.inviter small { color: var(--t-faint); font-size: var(--fs-xs); }
+.mock-note { font-size: var(--fs-sm); color: var(--t-secondary); }
+.mock-note b { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 4px; background: var(--warn); color: var(--card); font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; }
+.xlist { display: flex; flex-direction: column; gap: 6px; }
+.xacct { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); text-align: left; }
+.xacct:hover { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent), var(--shadow); }
+.xacct > span:not(.av) { flex: 1; }
+.xacct b { display: block; color: var(--t-heading); font-size: var(--fs-sm); }
+.xacct small { color: var(--t-faint); font-size: var(--fs-xs); }
+.pf { display: flex; flex-direction: column; gap: 14px; }
+.pf label { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); font-weight: 500; color: var(--t-heading); }
+.pf label input { flex: none; }
+.pf label small { font-weight: 400; color: var(--t-faint); font-size: var(--fs-xs); }
+.hwrap { display: flex; align-items: center; border: 1px solid var(--control-border); border-radius: var(--r-lg); background: var(--field); padding-left: 12px; color: var(--t-faint); }
+.hwrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.pf .hwrap input { border: 0 !important; box-shadow: none !important; padding-left: 2px; }
+.pf label.chk { flex-direction: row; align-items: center; gap: 8px; font-weight: 400; color: var(--t-secondary); }
+.next { padding: 12px 14px; border-radius: var(--r-lg); background: var(--inset); }
+.next b { font-size: var(--fs-sm); color: var(--t-heading); }
+.next p { margin: 4px 0 0; font-size: var(--fs-sm) !important; }
+/* pages */
+.page { overflow-y: auto; background: var(--feed); }
+.page-in { max-width: 1060px; margin: 0 auto; padding: 24px 24px 60px; }
+.page-in.narrow { max-width: 660px; }
+.page h2 { margin: 0 0 8px; font-size: 22px; color: var(--t-heading); letter-spacing: -.015em; }
+.page h3 { margin: 0 0 4px; font-size: var(--fs-md); color: var(--t-heading); }
+.page h4 { margin: 18px 0 6px; font-size: var(--fs-sm); color: var(--t-heading); }
+.lede { margin: 0 0 18px; color: var(--t-secondary); font-size: var(--fs-md); line-height: 1.5; }
+.sub { margin: 0 0 12px; color: var(--t-faint); font-size: var(--fs-sm); line-height: 1.45; }
+.page section { margin-bottom: 26px; }
+.box { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 16px 18px; }
+.shead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.shead small { color: var(--t-faint); font-size: var(--fs-xs); }
+.mcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 320px); gap: 24px; align-items: start; }
+.mside { position: sticky; top: 0; }
+.list { display: flex; flex-direction: column; }
+.li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--divider); }
+.li:last-child { border-bottom: 0; }
+.li b { display: block; color: var(--t-heading); font-size: var(--fs-sm); font-weight: 600; }
+.li b .h { font-weight: 400; color: var(--t-faint); }
+.li small { color: var(--t-faint); font-size: var(--fs-xs); }
+.list.tight .li { padding: 8px 0; gap: 10px; }
+.slots { display: flex; gap: 4px; margin: 2px 0 6px; }
+.slots span { flex: 1; height: 6px; border-radius: 3px; background: var(--control); }
+.slots span.open { background: var(--accent-strong); }
+.slots span.pend { background: var(--warn); }
+.li.inv { flex-wrap: wrap; row-gap: 4px; }
+.li.inv .iacts { flex-basis: 100%; display: flex; justify-content: flex-end; gap: 10px; align-items: center; }
+.li.inv code { white-space: nowrap; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--fs-xs); color: var(--t-heading); background: var(--inset); padding: 3px 6px; border-radius: 4px; }
+.li.inv b { font-weight: 500; font-size: var(--fs-xs); }
+.chip { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 10px; font-size: 10.5px; font-weight: 600; background: var(--control); color: var(--t-secondary); white-space: nowrap; }
+.chip.ok { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+.chip.pend { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.chip.staff { background: var(--accent-soft); color: var(--accent); }
+.tlink.danger, .danger { color: var(--bad); }
+.empty { color: var(--t-faint); font-size: var(--fs-sm); }
+.vdone { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--good); font-weight: 600; }
+.vdone svg.i { width: 12px; height: 12px; }
+.rules { margin: 8px 0 0; }
+.rules dt { font-size: var(--fs-sm); font-weight: 600; color: var(--t-heading); margin-top: 10px; }
+.rules dd { margin: 2px 0 0; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.45; }
+/* status */
+.pcard { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 16px 18px; margin-bottom: 26px; }
+.steps { display: flex; gap: 6px; margin-bottom: 10px; }
+.steps span { flex: 1; height: 6px; border-radius: 3px; background: var(--control); }
+.steps span.on { background: var(--good); }
+.pcard > b { color: var(--t-heading); font-size: var(--fs-md); }
+.checks { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.checks li { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--t-secondary); }
+.checks li.ok { color: var(--t-heading); }
+.checks svg.i { width: 14px; height: 14px; color: var(--good); }
+.checks .ring { width: 12px; height: 12px; margin: 1px; border-radius: 50%; border: 1.5px solid var(--t-dim); }
+.vby { margin: 12px 0 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--t-faint); }
+.vb { display: inline-flex; gap: 5px; align-items: center; color: var(--t-secondary); }
+.pbanner { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: var(--r-xl); background: color-mix(in srgb, var(--warn) 10%, var(--card)); box-shadow: var(--shadow); font-size: var(--fs-sm); color: var(--t-secondary); }
+.pbanner b { color: var(--t-heading); font-weight: 600; }
+.pbanner > div { flex: 1; min-width: 0; }
+.pdot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex: none; }
+.row.notice-row { padding: 6px 0 0; }
+.tnotice { margin: 0; padding: 8px 12px; border-radius: var(--r-lg); background: color-mix(in srgb, var(--bad) 9%, var(--card)); color: var(--t-secondary); font-size: var(--fs-sm); }
+/* tree A */
+.ttree { position: relative; background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 4px 12px; }
+.ttree svg { position: absolute; left: 12px; top: 4px; width: calc(100% - 24px); overflow: visible; pointer-events: none; }
+.ttree svg path { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
+.trow { position: relative; display: flex; align-items: center; gap: 10px; height: 40px; }
+.trow.me .tn b::after { content: " (you)"; font-weight: 400; color: var(--t-faint); }
+.tn { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.tn b { font-size: var(--fs-sm); color: var(--t-heading); font-weight: 600; }
+.tn small { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* tree B */
+.ttable { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 4px 0; overflow-x: auto; }
+.tr { display: grid; grid-template-columns: minmax(220px, 2fr) 90px 70px 90px minmax(130px, 1fr); align-items: center; gap: 10px; min-height: 40px; padding: 0 14px; border-bottom: 1px solid var(--divider); font-size: var(--fs-sm); color: var(--t-secondary); min-width: 620px; }
+.tr:last-child { border-bottom: 0; }
+.tr.th { min-height: 32px; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--t-faint); }
+.tr.me { background: var(--fill-subtle); }
+.tm { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.tm b { color: var(--t-heading); }
+.elbow { width: 10px; height: 10px; border-left: 1.5px solid var(--border-strong); border-bottom: 1.5px solid var(--border-strong); border-bottom-left-radius: 4px; margin-top: -8px; flex: none; }
+.vlist { display: inline-flex; gap: 2px; }
+.tact { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+/* usage */
+.ubig { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 8px; }
+.ubig b { font-size: 28px; color: var(--t-heading); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.ubig span { color: var(--t-faint); font-size: var(--fs-sm); }
+.ubig.warn b { color: var(--warn); } .ubig.bad b { color: var(--bad); }
+.utrack { height: 8px; border-radius: 4px; background: var(--control); overflow: hidden; --tone: var(--accent-strong); }
+.utrack.warn { --tone: var(--warn); } .utrack.bad { --tone: var(--bad); }
+.utrack > span { display: block; height: 100%; background: var(--tone); }
+.uchart { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; margin-top: 18px; height: 110px; }
+.ucol { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; }
+.ub { width: 100%; max-width: 44px; border-radius: 4px 4px 1px 1px; background: color-mix(in srgb, var(--accent-strong) 55%, var(--card)); }
+.ucol.today .ub { background: var(--accent-strong); }
+.ucol.future .ub { background: var(--control); }
+.uv { font-size: 10.5px; color: var(--t-faint); font-variant-numeric: tabular-nums; }
+.ul { font-size: var(--fs-xs); color: var(--t-muted); }
+.ucol.today .ul { color: var(--t-heading); font-weight: 600; }
+.runs { display: flex; flex-direction: column; }
+.run { display: grid; grid-template-columns: minmax(0, 1fr) 54px 48px 62px; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--divider); font-size: var(--fs-sm); }
+.run:last-child { border-bottom: 0; }
+.run .rq { color: var(--t-heading); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run small { color: var(--t-faint); font-size: var(--fs-xs); }
+.run b { text-align: right; font-variant-numeric: tabular-nums; color: var(--t-secondary); font-weight: 500; }
+.radio { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; cursor: pointer; }
+.radio input { margin-top: 3px; accent-color: var(--accent-strong); }
+.radio b { display: block; font-size: var(--fs-sm); color: var(--t-heading); font-weight: 500; }
+.radio small { font-size: var(--fs-xs); color: var(--t-faint); }
+.radio.off { cursor: default; opacity: .6; }
+/* keys A (rows) */
+.krow { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--divider); align-items: start; }
+.krow:last-of-type { border-bottom: 0; }
+.kh b { display: block; font-size: var(--fs-sm); color: var(--t-heading); }
+.kh small { font-size: var(--fs-xs); color: var(--t-faint); }
+.kb { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.kstate { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; font-size: var(--fs-sm); }
+.kstate code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--fs-xs); background: var(--inset); padding: 3px 6px; border-radius: 4px; color: var(--t-heading); }
+.kstate small { color: var(--t-faint); font-size: var(--fs-xs); }
+.kform { display: flex; gap: 8px; align-items: center; width: 100%; }
+.kform input { height: 34px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--fs-sm); }
+.kconfirm { font-size: var(--fs-sm); color: var(--t-secondary); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+/* keys B (cards) */
+.kcards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.kcard { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; min-width: 0; }
+.kcard.has { box-shadow: 0 0 0 1px color-mix(in srgb, var(--good) 35%, transparent), var(--shadow); }
+.kcard .kform { flex-wrap: wrap; }
+/* dialog, toast */
+.scrim { position: absolute; inset: 0; z-index: 40; background: rgba(10, 12, 14, .32); }
+.dialog { position: absolute; z-index: 41; left: 50%; top: 18%; transform: translateX(-50%); width: min(420px, calc(100% - 32px)); background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow), var(--shadow-pop); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.dialog h3 { margin: 0; font-size: var(--fs-lg); color: var(--t-heading); }
+.dialog p { margin: 0; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.5; }
+.dialog .inviter { box-shadow: none; background: var(--inset); }
+.dacts { display: flex; gap: 8px; justify-content: flex-end; }
+.toast { position: absolute; z-index: 50; left: 50%; bottom: 18px; transform: translateX(-50%); max-width: calc(100% - 32px); padding: 9px 14px; border-radius: var(--r-lg); background: var(--t-heading); color: var(--card); font-size: var(--fs-sm); box-shadow: var(--shadow-pop); animation: fadein .2s ease; }
+.mi-note { padding: 6px 10px 4px; font-size: var(--fs-xs); color: var(--t-faint); }
+.mi .src { margin-left: 6px; font-size: var(--fs-xs); color: var(--t-faint); }
+@media (max-width: 860px) {
+  .mcols, .auth-split, .kcards { grid-template-columns: minmax(0, 1fr); }
+  .auth-preview { display: none; }
+  .mside { position: static; }
+  .krow { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .m-track, .m-l { display: none; }
+}
+
+@media (max-width: 860px) {
+    .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .stick { position: static; max-height: none; }
+  .pinned > .pin { position: static; margin-bottom: 8px; }
+  .mg-inner { padding: 0 12px 30px; }
+  .mgn { padding-left: 12px; }
+}
+</style>
+
+
+<header class="bar">
+  <h1>Session · members</h1>
+  <div class="seg" id="variant-seg" role="group" aria-label="Variant"></div>
+  <span class="grow"></span>
+  <div class="seg" id="theme-seg" role="group" aria-label="Theme"></div>
+</header>
+<div class="mockbar" id="mock"></div>
+<p class="thesis" id="thesis"></p>
+<div class="frame">
+  <div class="frame-top"><div class="dots"><i></i><i></i><i></i></div><span>session.app</span></div>
+  <div id="app"></div>
+</div>
+
+<script src="session-web-spaces-fixtures.js"></script>
+<script>
+'use strict';
+/* Data: the spaces mockup's fixtures. A thread (post) is an ask with the agent's answer, or a plain post
+   with replies. An ask's branches are its follow-ups (fu) and, where it has one, its ask tree (qtd): nodes
+   whose `par` is 'r' (the answer) or another node. Asking a branch here adds a local node with a mock
+   pending answer. */
+const F = window.SessionFixtures, D = F.data, NOW = Date.parse(F.clock);
+const SP = Object.fromEntries(D.spaces.map(s => [s.id, s]));
+const USERS = { 'ines.v': 2, hal_b: 4, 'jun.park': 5, oduya: 6, sol: 3, lettie: 1, mira_k: 2, tomasz: 4 };
+const EXTRA = {};
+const DELETED = new Set();  /* branches removed in this session, as 'thread:node' */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const strip = h => String(h || '').replace(/<sup[^>]*>.*?<\/sup>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+const clip = (s, n) => (s = String(s || '')).length > n ? s.slice(0, n - 1).replace(/[\s,;:.]+\S*$/, '') + '…' : s;
+const rel = iso => { const m = (NOW - Date.parse(iso)) / 6e4; if (m < 1) return 'now'; if (m < 60) return Math.round(m) + 'm'; const h = m / 60; if (h < 24) return Math.round(h) + 'h'; const d = h / 24; if (d < 7) return Math.round(d) + 'd'; if (d < 30) return Math.round(d / 7) + 'w'; return Math.round(d / 30) + 'mo'; };
+const dayOf = iso => { const d = new Date(iso), n = new Date(NOW); const k = x => x.toISOString().slice(0, 10); if (k(d) === k(n)) return 'Today'; n.setUTCDate(n.getUTCDate() - 1); if (k(d) === k(n)) return 'Yesterday'; return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }); };
+const ktok = n => n ? (n >= 1000 ? Math.round(n / 1000) + 'k' : n) + ' tokens' : '';
+const initials = u => { const p = u.split(/[._]/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : u.slice(0, 2)).toUpperCase(); };
+const av = (u, c = '') => `<span class="av ${c}" style="background:var(--av${USERS[u] || ((u.length % 6) + 1)})" aria-hidden="true">${initials(u)}</span>`;
+const spName = id => '#' + SP[id].name;
+const glyph = s => `<span class="glyph" style="background:var(--av${s.av})" aria-hidden="true">${esc(s.name[0].toUpperCase())}</span>`;
+const I = {
+  branch: '<svg class="i" viewBox="0 0 16 16"><circle cx="4" cy="3.5" r="1.6"/><circle cx="4" cy="12.5" r="1.6"/><circle cx="12" cy="5" r="1.6"/><path d="M4 5.1v5.8M12 6.6c0 3.2-3.6 2.6-6.9 4.6"/></svg>',
+  reply: '<svg class="i" viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>',
+  x: '<svg class="i" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+  heart: '<svg class="i" viewBox="0 0 16 16"><path d="M8 13.2S2.5 9.9 2.5 6.1A2.8 2.8 0 0 1 8 4.8a2.8 2.8 0 0 1 5.5 1.3C13.5 9.9 8 13.2 8 13.2z"/></svg>',
+  save: '<svg class="i" viewBox="0 0 16 16"><path d="M4 2.5h8v11l-4-2.8-4 2.8z"/></svg>',
+  left: '<svg class="i" viewBox="0 0 16 16"><path d="M10 3.5L5.5 8l4.5 4.5"/></svg>',
+  deeper: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3v4.5a2.5 2.5 0 0 0 2.5 2.5H12.5M9.5 7l3 3-3 3"/></svg>',
+  dots: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.25" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r="1.25" fill="currentColor" stroke="none"/><circle cx="12.5" cy="8" r="1.25" fill="currentColor" stroke="none"/></svg>',
+  up: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3.5M3.8 7.7 8 3.5l4.2 4.2"/></svg>',
+  down: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg>',
+  right: '<svg class="i" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5"/></svg>',
+  agent: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.8" fill="currentColor" stroke="none"/></svg>',
+};
+const mark = (c = '') => `<span class="mark ${c}" aria-hidden="true">${I.agent}</span>`;
+
+const byId = id => D.posts.find(p => p.id === id);
+const byNew = (a, b) => (a.createdAt < b.createdAt ? 1 : -1);
+const streamFor = s => D.posts.filter(p => (s === 'home' ? !p.rf : p.s === s)).sort(byNew);
+const spacesWithPosts = D.spaces.filter(s => D.posts.some(p => p.s === s.id));
+
+/* What people typed: each ask and branch question as it is typed to an agent (lowercase, terse,
+   shorthand), keyed by thread id and node id ('q' is the thread's ask). It replaces the fixtures' text. */
+const PROMPTS = {
+ "01M7HWGZJGT7JTFFVSYPX055KV": {
+  "q": "scan sci-fi + adjacent writing for intention marketplaces / intention networks. go broad, give me a list of examples",
+  "f0": "which of these actually let you trade intentions vs just make them visible",
+  "f1": "any non english ones",
+  "f2": "group by decade instead",
+  "g1": "how does the darknet in daemon decide who gets which task",
+  "g2": "which lem stories come closest to an intention market",
+  "h1": "so closer to a labour market or a reputation ledger"
+ },
+ "01M7HQMDT0RH0G2WHVJHQ6Z8C2": {
+  "q": "dagen h logistics. signage, the overnight changeover, accident stats before/after",
+  "f0": "why was the referendum result ignored",
+  "f1": "what happened w buses and trams"
+ },
+ "01M7HM6J60FXTCP97AMP8ZRX5E": {
+  "q": "public datasets for how long container ships wait at port. how far back does each go",
+  "f0": "how hard is it to get dwell times out of the noaa ais files",
+  "f1": "can any of these show the 2021 la/long beach queue"
+ },
+ "01M7H9WZA0CYDP5Z7ACZYSZTQ2": {
+  "q": "explain banach-tarski and show exactly where the axiom of choice gets used in the proof",
+  "f0": "why 3d but not 2d",
+  "f1": "is there a version w/o choice"
+ },
+ "01M7HTF26GS2MA4P948GD5K0EG": {
+  "q": "find novels + short stories where personal ai agents negotiate/bargain/trade for the people they work for",
+  "f0": "only the ones that show the actual back and forth, not just the outcome",
+  "f1": "anything where the agent is legally liable for what it agrees to"
+ },
+ "01M7H6F3P02JFX3X2X804X3986": {
+  "q": "compare video calls in 1960s sf vs how people actually use them now",
+  "f0": "did anyone back then predict people turning the camera off",
+  "f1": "how did they handle time zones / delay on long distance calls"
+ },
+ "01M7E164R0BPYCCAQ4CDZ2QSG8": {
+  "q": "trace how the meaning of metaverse changed from 1992 to now",
+  "f0": "did stephenson ever comment on companies using the word in 2021",
+  "f1": "is metaverse in the main dictionaries yet",
+  "f2": "compare the snow crash metaverse w the oasis in ready player one"
+ },
+ "01M7HGRPJ0E7RGZ45D4KENBQ6P": {
+  "q": "how do prediction markets deal w questions where the resolution criteria end up ambiguous",
+  "f0": "has a regulator ever overruled an exchange on a resolution",
+  "f1": "doesnt voiding create its own bad incentives",
+  "a3": "how big are the top uma voters holdings vs the markets they resolve",
+  "a4": "what does optimistic mean in optimistic oracle",
+  "a5": "where in the kalshi rulebook are outcomes the contract didnt anticipate",
+  "b1": "how often did augur v1 markets resolve invalid",
+  "b2": "can you separate void prob from event prob in the price",
+  "b3": "which disputed markets were these complaints about",
+  "b4": "current status of the kalshi election contracts litigation",
+  "c1": "has anyone listed a market on whether another market gets voided",
+  "c2": "work through a numeric example, 20% void prob",
+  "c3": "how did clarification work in that market",
+  "d1": "expected return if void prob is really 5% and i buy at 0.58",
+  "d2": "would a market on a void need its own ambiguous resolution rule",
+  "e1": "does that change if the stake is locked 6 months before resolution"
+ },
+ "01M7HM6J60Z1FFM56RSRTHFM2Y": {
+  "q": "summarize the main published results on test-time compute scaling, 2025-2026",
+  "f0": "parallel sampling vs longer single traces, which is cheaper at the same accuracy",
+  "f1": "any results outside math + code"
+ },
+ "01M7H9WZA0NR1T4T2TGBEKK21Y": {
+  "q": "why does tardigrade dsup protect human cells from xray damage",
+  "f0": "does it work for uv too",
+  "f1": "why would it hurt neurons if it helps hek293"
+ },
+ "01M7GW5GT0XMQGVRNF95PDQ8HV": {
+  "q": "how were medieval guild apprenticeships contracted + who enforced the terms",
+  "f0": "were girls apprenticed under the same contracts",
+  "f1": "what happened if the master died mid-term"
+ },
+ "01M7E164R0M5VQ0DTHTK7229GY": {
+  "q": "compare heat pump adoption in norway vs poland since 2010 and explain the gap",
+  "f0": "did heat pumps increase coal burn in poland via the grid",
+  "f1": "how do they cope w norwegian winters"
+ },
+ "01M7HDATY00YDFQVMNJW7VNX53": {
+  "q": "what happened after houston dropped parking minimums downtown",
+  "f0": "did street parking get worse in eado / midtown",
+  "f1": "has houston extended it since 2019"
+ },
+ "01M7HVAH3GCWYN0S5H6NX9WKRT": {
+  "q": "rerun the main table of the 2025 grokking-on-modular-arithmetic paper w their released code. which numbers reproduce",
+  "f0": "which sources is this leaning on most",
+  "f1": "what would change the conclusion",
+  "x1": "is the 3x step count consistent across seeds",
+  "x2": "which seeds + what weight decay"
+ },
+ "01M7H6F3P012CRWKEQVTVA6PV4": {
+  "q": "check if the speculative decoding speedup holds on consumer gpus w the released code",
+  "f0": "which sources is this leaning on most",
+  "f1": "what would change the conclusion"
+ },
+ "01M7H31820BK289S2XPP2DTK2N": {
+  "q": "does the default enrolment effect on retirement saving survive the revised survey weights",
+  "f0": "which sources is this leaning on most",
+  "f1": "what would change the conclusion"
+ },
+ "01M7E164R0RBHSCJH2YBWZ6AWG": {
+  "q": "compare managed postgres providers: pitr limits, cross-region read replicas",
+  "f0": "which sources is this leaning on most",
+  "f1": "what would change the conclusion"
+ },
+ "01M7E164R0Y9DN252RVM5BA939": {
+  "q": "track record of grant schemes that fund replication studies. who funds them, what share of funded projects finish",
+  "f0": "which sources is this leaning on most",
+  "f1": "what would change the conclusion"
+ },
+ "01M7BESDR08WWS4J3FKS5B43EB": {
+  "q": "how much notice does a landlord need to give before a rent increase under the current city ordinance",
+  "f0": "which sources is this leaning on most"
+ },
+ "01M7H9WZA09M3CNSPTFF22FZ86": {
+  "q": "is the 3.1x figure in this paragraph right? says it's from the appendix table in halvorsen et al",
+  "f0": "which sources is this leaning on most"
+ },
+ "01M7GB06P0P8ZXPB0DEXY3G3RT": {
+  "q": "which of the contamination claims in this thread has anyone else actually checked",
+  "f0": "which sources is this leaning on most",
+  "f1": "what would change the conclusion"
+ },
+ "01M7GRQN60V68CFNX27EE5W66S": {
+  "q": "where do the thread and orbit lab's response disagree + what evidence does each side give",
+  "f0": "which sources is this leaning on most"
+ },
+ "01M7BESDR0YSSVFVJ47HD56Y9M": {
+  "q": "which paper is lin feld describing here",
+  "f0": "which sources is this leaning on most"
+ },
+ "01M7E164R0B8KHNGZTQ0METX7J": {
+  "q": "what would it take to report flops per problem like this post proposes, for a closed model",
+  "f0": "which sources is this leaning on most"
+ },
+ "01M7GZKCE0ZYF4MBKKGYS455JM": {
+  "q": "rerun the near-dup search from the published script on a random sample of 200 problems, compare w the reported matches",
+  "f0": "which sources is this leaning on most"
+ }
+};
+const asTyped = (p, id, text) => PROMPTS[p.id]?.[id === 'r' ? 'q' : id] || text;
+
+function tree(p) {
+  const fu = D.fu[p.id] || [], qt = D.qtd[p.id];
+  const nodes = { r: { id: 'r', par: null, u: p.u, createdAt: p.createdAt, q: asTyped(p, 'r', p.q), q0: p.q, t: p.t, html: D.rich[p.id] || (p.sum ? `<p>${esc(p.sum)}</p>` : ''), sum: p.sum || '', tok: p.tok } };
+  const list = qt ? qt.nodes : fu.map((f, i) => ({ id: 'f' + i, par: 'r', fu: i }));
+  for (const n of [...list, ...(EXTRA[p.id] || [])]) {
+    if (DELETED.has(p.id + ':' + n.id)) continue;
+    const f = n.fu != null ? fu[n.fu] : null;
+    nodes[n.id] = { id: n.id, par: n.par, u: n.u || f?.u, createdAt: n.createdAt || f?.createdAt, q: asTyped(p, n.fu != null ? 'f' + n.fu : n.id, n.q || f?.q || ''), q0: n.q || f?.q || '', html: n.html || f?.html || (f?.a ? `<p>${esc(f.a)}</p>` : ''), sum: f?.a || '', tok: n.tok || 0, pending: n.pending };
+  }
+  const kids = {};
+  for (const id in nodes) { const n = nodes[id]; if (n.par) (kids[n.par] ||= []).push(n); }
+  for (const k in kids) kids[k].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  const T = {
+    p, nodes, count: Object.keys(nodes).length - 1,
+    kids: id => kids[id] || [],
+    desc: id => (kids[id] || []).reduce((s, c) => s + 1 + T.desc(c.id), 0),
+    path(id) { const a = []; let n = nodes[id]; while (n) { a.unshift(n); n = nodes[n.par]; } return a; },
+    users() { return [...new Set(Object.values(nodes).filter(n => n.id !== 'r').map(n => n.u))]; },
+    last() { return Object.values(nodes).reduce((m, n) => (n.createdAt > m ? n.createdAt : m), p.createdAt); },
+    dfs(id = 'r', d = 0, out = []) { out.push({ n: nodes[id], d }); for (const c of T.kids(id)) T.dfs(c.id, d + 1, out); return out; },
+    leaf(id) { let n = nodes[id]; while (T.kids(n.id).length) n = T.kids(n.id)[0]; return n.id; },
+  };
+  return T;
+}
+const summ = n => n.sum || clip(strip(n.html), 200);
+const replies = p => D.rp[p.id] || [];
+const replyCount = p => replies(p).reduce((s, r) => s + 1 + (r.kids || []).length, 0);
+const noun = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const qText = n => n.q;
+const answerHtml = n => n.pending ? `<p class="pending">${esc(n.html)}</p>` : n.html;
+const status = n => n.pending ? `<span class="status">Researching · Step 1 of 4</span>` : '';
+
+let seq = 0;
+function addBranch(p, par, q) {
+  const id = 'x' + (++seq);
+  const node = { id, par, u: me(), createdAt: new Date(NOW).toISOString(), q, html: 'Searching sources. The answer appears here when the run finishes.', pending: true };
+  (EXTRA[p.id] ||= []).push(node);
+  setTimeout(() => { node.pending = false; node.html = `<p>Mock answer. In the app, the agent's answer to "${esc(clip(q, 80))}" is stored here when the run finishes, and the branch count on the thread goes up by one.</p>`; node.tok = 18000; usage()[TODAY] += 18000; render(); }, 2600);
+  return id;
+}
+const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data-form="${id}">${ctx ? `<span class="ctx">${ctx}</span>` : ''}<textarea id="in-${id}" rows="1" placeholder="${esc(ph)}"></textarea><button type="submit">${btn}</button></form>`;
+
+/* ================= pinned maps ================= */
+/* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
+   as a small outline tree per passage. */
+const st = { v: 'type', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
+
+/* Which model answered and at what thinking effort. The fixtures do not record it; the mock picks one
+   per thread. Shown in a tooltip on the answer's icon. */
+const RUNS = ['Opus 4.8 · high effort', 'Opus 4.8 · medium effort', 'Sonnet 4.6 · high effort', 'Opus 4.8 · max effort'];
+const runOf = p => p.run || RUNS[[...p.id].reduce((s, c) => s + c.charCodeAt(0), 0) % RUNS.length];
+/* "..." menu on the metadata line of your own threads, branches and replies. Delete is offered only
+   while nobody has responded (no branches, no replies). key: 't:thread', 'b:thread:node' or 'r:thread:reply'. */
+const moreMenu = (key, canDelete, what) => {
+  const open = st.menu === 'more:' + key;
+  return `<span class="mpick more"><button type="button" class="more-btn" data-a="menu" data-m="more:${key}" aria-haspopup="menu" aria-expanded="${open}" aria-label="More">${I.dots}</button>
+    ${open ? `<div class="menu right" role="menu">${canDelete ? `<button type="button" class="mi danger" role="menuitem" data-a="del" data-k="${key}"><span>Delete ${what}</span></button>` : `<div class="mi mi-off" role="menuitem" aria-disabled="true"><span>Delete ${what}<small>Not available once someone has responded</small></span></div>`}</div>` : ''}</span>`;
+};
+function me() { return st.user || F.me.u; }
+const mine = u => u === me();
+function deleteItem(key) {
+  const [kind, pid, id] = key.split(':'), p = byId(pid);
+  if (kind === 't') D.posts.splice(D.posts.indexOf(p), 1);
+  else if (kind === 'b') { DELETED.add(pid + ':' + id); if (st.sel[pid] === id) st.sel[pid] = null; }
+  else if (kind === 'r') { const path = id.split('.'), i = +path.pop(), list = path.length ? replyAt(p, path.join('.')).kids : replies(p); list.splice(i, 1); st.rsel[pid] = null; }
+  st.menu = null; render();
+}
+/* Avatar placement on cards, per variant (V[st.v].av):
+   header  28px avatar beside the name line (the original)
+   small   20px avatar beside the name line, the composer's size
+   gutter  20px avatar in a left gutter at the composer's position; text lines up with the composer's text
+   footer  no header; a 20px avatar, name, space and time lead the footer row */
+function card(p) {
+  const mode = V[st.v].av || 'header';
+  const meta = `<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div>`;
+  const more = mine(p.u) ? moreMenu('t:' + p.id, p.k === 'ask' ? tree(p).count === 0 : replyCount(p) === 0, p.k === 'ask' ? 'ask' : 'post') : '';
+  const head = mode === 'footer' ? '' : `<div class="card-h">${av(p.u, mode === 'header' ? '' : 'sm')}${meta}${more}</div>`;
+  const lead = mode === 'footer' ? `<span class="byl">${av(p.u, 'sm')}${meta}</span>` : '';
+  const count = c => mode === 'footer' ? (c ? `<span class="notes">· ${c}</span>` : '<span class="notes"></span>') : `<span class="notes">${c}</span>`;
+  const tail = mode === 'footer' ? more : '';
+  const cls = `card av-${mode} pad-${V[st.v].pad || 'base'}`;
+  const acts = `<button class="iconbtn likes" aria-label="Like, ${p.likesBase || 0} likes"${canWrite() ? '' : ' disabled title="Liking opens when your account is active"'}>${I.heart}<span>${p.likesBase || 0}</span></button><button class="iconbtn" aria-label="Save">${I.save}</button>`;
+  if (p.k === 'post') {
+    const n = replyCount(p);
+    return `<article class="${cls}">${head}<p class="post">${esc(p.q)}</p><div class="card-f">${lead}${count(n ? noun(n, 'reply', 'replies') : '')}<button class="iconbtn" aria-label="Reply">${I.reply}</button>${acts}${tail}</div></article>`;
+  }
+  const T = tree(p), src = (D.srcd[p.id] || []).length;
+  return `<article class="${cls}" id="card-${p.id}">${head}<p class="ask">${esc(T.nodes.r.q)}</p>
+    <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok)].filter(Boolean).join(' · ')}</span></div>
+    <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
+    <div class="card-f">${lead}${count(T.count ? noun(T.count, 'branch', 'branches') : '')}${canWrite() ? `<button class="iconbtn" data-a="ask" data-id="${p.id}" aria-label="${st.asking === p.id ? 'Close the branch box' : 'Branch'}">${st.asking === p.id ? I.x : I.branch}</button>` : ''}${acts}${tail}</div></article>`;
+}
+
+/* ---- passage matching: the fixtures do not store the passage a branch came from, so the mock picks
+   the paragraph that shares the most words with the branch question and its answer ---- */
+const STOP = new Set('what which does with that this from have there their about would could should into than then they them were been being where when your more most other some such only also over just like very many much does show give list same each these those here after before because between under while whether'.split(' '));
+const words = s => new Set((strip(s).toLowerCase().match(/[a-z0-9]{4,}/g) || []).filter(w => !STOP.has(w)));
+const overlap = (w, text) => { const bw = words(text); let sc = 0; w.forEach(x => { if (bw.has(x)) sc++; }); return sc / Math.sqrt(bw.size + 6); };
+function blocksOf(prose) { return [...prose.querySelectorAll(':scope > p, :scope > ul > li, :scope > ol > li, :scope > h4, :scope > table')]; }
+function bestBlock(blocks, text) { const w = words(text); let best = 0, bi = 0; blocks.forEach((b, i) => { if (b.tagName === 'H4') return; const sc = overlap(w, b.textContent); if (sc > best) { best = sc; bi = i; } }); return bi; }
+/* Group the answer's top-level branches by the paragraph they belong to, in reading order. */
+function groupsFor(p, prose) {
+  const T = tree(p), blocks = blocksOf(prose), by = new Map();
+  for (const n of T.kids('r')) { const bi = bestBlock(blocks, n.q0 + ' ' + summ(n)); if (!by.has(bi)) by.set(bi, []); by.get(bi).push(n); }
+  return [...by.entries()].sort((a, b) => a[0] - b[0]).map(([bi, ns], gi) => ({ g: 't' + p.id + '-' + bi, bi, block: blocks[bi], ns, gi, total: ns.reduce((s, n) => s + 1 + T.desc(n.id), 0) }));
+}
+/* Place margin items at their anchor's height; push down to avoid overlap; grow the margin to fit. */
+function place(margin, items) {
+  const top0 = margin.getBoundingClientRect().top; let y = 0;
+  items.map(it => ({ ...it, t: it.anchor.getBoundingClientRect().top - top0 })).sort((a, b) => a.t - b.t).forEach(it => {
+    const t = Math.max(it.t, y); it.el.style.top = t + 'px'; y = t + it.el.offsetHeight + 12;
+  });
+  margin.style.minHeight = y + 'px';
+}
+const narrow = () => matchMedia('(max-width: 860px)').matches;
+const badge = (b, g, total) => { b.dataset.grp = g; b.insertAdjacentHTML('beforeend', `<span class="anc" aria-label="${noun(total, 'branch', 'branches')} on this passage">${I.branch}${total}</span>`); };
+const onPath = (p, T) => { const s = st.sel[p.id]; return new Set(s && T.nodes[s] ? T.path(s).map(n => n.id) : []); };
+const inGroup = (T, ns, id) => !!id && T.nodes[id] && ns.some(n => T.path(id).some(x => x.id === n.id));
+const leaves = (T, id) => { const k = T.kids(id); return k.length ? k.reduce((s, c) => s + leaves(T, c.id), 0) : 1; };
+const below = (T, id) => { const k = T.kids(id); return k.length ? 1 + Math.max(...k.map(c => below(T, c.id))) : 0; };
+
+/* Pin one drawing per paragraph. draw(T, group) returns the drawing's HTML. */
+function pinGroups(p, draw, cls = '') {
+  const prose = document.getElementById('pr-' + p.id), margin = document.getElementById('mr-' + p.id);
+  if (!prose || !margin) return;
+  const T = tree(p), items = [];
+  if (st.asking === p.id && !st.sel[p.id]) { margin.insertAdjacentHTML('beforeend', `<div class="pin">${composer('mf:' + p.id + ':r', 'Ask a branch question about the answer')}</div>`); items.push({ el: margin.lastElementChild, anchor: prose.firstElementChild }); }
+  for (const G of groupsFor(p, prose)) {
+    badge(G.block, G.g, G.total);
+    margin.insertAdjacentHTML('beforeend', `<div class="pin grp ${cls}" data-grp-box="${G.g}">${draw(T, G)}</div>`);
+    margin.lastElementChild.querySelectorAll('[data-draw]').forEach(drawGraph);
+    items.push({ el: margin.lastElementChild, anchor: G.block });
+  }
+  if (!narrow()) place(margin, items);
+}
+
+/* The read-out under a drawing: the selected branch's question and answer. */
+function preview(p, T, n) {
+  const k = T.kids(n.id).length;
+  return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${mine(n.u) ? moreMenu('b:' + p.id + ':' + n.id, !k, 'branch') : ''}</div>${status(n)}<div class="prose">${answerHtml(n)}</div>
+    <div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches'}</span>${canWrite() ? `<button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.id}">Branch from here</button>` : ''}</div>
+    ${st.asking === p.id ? composer('mf:' + p.id + ':' + n.id, 'Ask a branch question') : ''}</div>`;
+}
+const readout = (p, T, ns) => inGroup(T, ns, st.sel[p.id]) ? preview(p, T, T.nodes[st.sel[p.id]]) : '';
+
+/* ---- drawings ---- */
+/* Rows on the selected path show their whole question, so rows differ in height; the lines are drawn
+   after layout from each row's measured position (drawGraph). */
+function outline(p, T, G) {
+  const sel = st.sel[p.id], on = onPath(p, T), g = G.g;
+  const rows = G.ns.flatMap(n => T.dfs(n.id, 0, [])), X = d => 6 + d * 13;
+  return `<div class="graph" data-draw><svg aria-hidden="true"></svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}${n.id === sel ? ' sel' : ''}" style="padding-left:${X(d) + 10}px" data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-par="${d ? n.par : ''}" data-d="${d}" data-grp="${g}"><span class="gq">${esc(n.q)}</span>${n.u !== T.nodes[n.par].u ? `<span class="rav rav-r" title="${esc(n.u)}">${av(n.u, 'xs')}</span>` : ''}</button>`).join('')}</div>${readout(p, T, G.ns)}`;
+}
+function drawGraph(graph) {
+  const X = d => 6 + d * 13, at = {};
+  let paths = '', dots = '';
+  for (const r of graph.querySelectorAll(':scope > .grow-r')) {
+    const d = +r.dataset.d, y = r.offsetTop + 13, on = r.classList.contains('on');
+    at[r.dataset.node] = { x: X(d), y };
+    const par = at[r.dataset.par];
+    if (par) paths += `<path class="${on ? 'on' : ''}" d="M${par.x} ${par.y} L${par.x} ${y - 6} Q${par.x} ${y} ${par.x + 6} ${y} L${X(d)} ${y}"/>`;
+    dots += `<circle class="${r.classList.contains('sel') ? 'sel' : on ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="3.5"/>`;
+  }
+  const svg = graph.querySelector('svg'); svg.setAttribute('height', graph.offsetHeight); svg.innerHTML = paths + dots;
+}
+
+/* ---- replies on plain posts, drawn as trees (one style per variant) ---- */
+/* Reply ids are paths into the reply list: '0' is the first reply, '0.1' the second reply under it. */
+const flatReplies = (list, d = 0, pre = '') => list.flatMap((r, i) => { const id = pre + i; return [{ r, d, id }, ...flatReplies(r.kids || [], d + 1, id + '.')]; });
+const replyAt = (p, id) => id.split('.').reduce((acc, k, i) => (i ? acc.kids : acc)[+k], replies(p));
+function addReply(p, at, t) {
+  const r = { u: me(), createdAt: new Date(NOW).toISOString(), t, likes: 0 };
+  if (at === 'top') (D.rp[p.id] ||= []).push(r); else (replyAt(p, at).kids ||= []).push(r);
+}
+const rkey = (p, id) => p.id + '/' + id;
+const likeBtn = r => `<span class="rlike">${I.heart}${r.likes || 0}</span>`;
+const replyBox = (p, at, ph) => st.replying === rkey(p, at) ? composer('rp:' + p.id + ':' + at, ph, '', 'Reply') : '';
+const replyLink = (p, id) => canWrite() ? `<button class="tlink" data-a="reply" data-id="${rkey(p, id)}">Reply</button>` : '';
+
+/* Avatar tree: the same line graph as the branch trees, one row per reply led by its author's avatar; click a row to read it. */
+function replyLines(p) {
+  const rows = flatReplies(replies(p)); if (!rows.length) return '';
+  const sel = st.rsel[p.id], H = 26, X = d => 6 + d * 13, idx = Object.fromEntries(rows.map((x, i) => [x.id, i]));
+  const on = new Set(); if (sel) sel.split('.').forEach((_, i, a) => on.add(a.slice(0, i + 1).join('.')));
+  let paths = '', dots = '';
+  rows.forEach(({ id, d }, i) => {
+    const y = i * H + 13;
+    if (d > 0) { const par = id.split('.').slice(0, -1).join('.'), px = X(d - 1), py = idx[par] * H + 13; paths += `<path class="${on.has(id) ? 'on' : ''}" d="M${px} ${py} L${px} ${y - 6} Q${px} ${y} ${px + 6} ${y} L${X(d)} ${y}"/>`; }
+    dots += `<circle class="${id === sel ? 'sel' : on.has(id) ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="3.5"/>`;
+  });
+  const cur = sel && idx[sel] != null ? rows[idx[sel]] : null;
+  return `<div class="grp"><div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ r, d, id }) => `<button class="grow-r${on.has(id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}"><span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(r.t)}</span></span></button>`).join('')}</div>
+    ${cur ? `<div class="preview fadein"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time>${mine(cur.r.u) ? moreMenu('r:' + p.id + ':' + cur.id, !(cur.r.kids || []).length, 'reply') : ''}</div><p class="rtext">${esc(cur.r.t)}</p><div class="pf">${likeBtn(cur.r)}${replyLink(p, cur.id)}</div>${replyBox(p, cur.id, 'Reply to ' + cur.r.u)}</div>` : ''}
+    <div class="rfoot">${replyLink(p, 'top')}</div>${replyBox(p, 'top', 'Reply to the post')}</div>`;
+}
+
+const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches is shaded and gets its own small tree beside it.';
+const TREE_NOTE = 'Posts keep the pinned branch trees and avatar reply trees.';
+const variant = (name, thesis, composer, dock = false, av = 'header', pad = 'base', fs = '', ifs = '') => ({ name, q: 'Type size', av, pad, fs, ifs, thesis: `${thesis} ${TREE_NOTE}`, composer, dock, replies: replyLines, layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); } });
+const V = {
+  type: variant('Type', '<strong>Post titles at 16.5px, the composer at 15px.</strong> The ask on each card and the text of plain posts are a step larger than what you type.', () => COMPOSERS.split(' nb-a btn-faded'), false, 'small', 'inset', '16.5px', '15px'),
+};
+
+/* ---- composers: start a thread. Each variant below uses one. The draft survives re-renders. ---- */
+const MODEL_OPTS = ['Opus 4.8', 'Sonnet 4.6'], modelOpts = () => keys().openai?.status === 'working' ? [...MODEL_OPTS, 'GPT-5'] : MODEL_OPTS, EFFORT_OPTS = ['low', 'medium', 'high', 'max'];
+/* a pill sized to its current value; the native select sits invisibly on top of it */
+const pick = (id, opts, cur, label, fmt = x => x) => `<label class="pick" title="${label}"><span>${esc(fmt(cur))}</span><select id="${id}" aria-label="${label}">${opts.map(o => `<option value="${o}"${o === cur ? ' selected' : ''}>${esc(fmt(o))}</option>`).join('')}</select>${I.down}</label>`;
+/* Space picker: a custom menu of spaces (only on Home; inside a space the thread goes there). */
+const spaceField = () => {
+  if (st.space !== 'home') return `<span class="pick static">${esc(spName(st.space))}</span>`;
+  const open = st.menu === 'space', list = spacesWithPosts.filter(x => x.id !== 'sablefield');
+  return `<span class="mpick"><button type="button" class="pick" data-a="menu" data-m="space" aria-haspopup="menu" aria-expanded="${open}" title="Space"><span>${esc(spName(st.newSpace))}</span>${I.down}</button>
+    ${open ? `<div class="menu menu-scroll" role="menu" aria-label="Space">${list.map(x => `<button type="button" class="mi" role="menuitemradio" aria-checked="${x.id === st.newSpace}" data-a="setspace" data-v="${x.id}">${glyph(x)}<span>${esc(spName(x.id))}</span>${x.id === st.newSpace ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>`;
+};
+const newSpaceId = () => st.space === 'home' ? st.newSpace : st.space;
+const draft = (ph, extra = '') => `<textarea id="in-new" rows="1" placeholder="${esc(ph)}" aria-label="Ask or post"${extra}>${esc(st.draft)}</textarea>`;
+const sendBtn = (val, label) => `<button type="submit" value="${val}" class="send" data-enter aria-label="${label}" title="${label}">${I.up}</button>`;
+const modeSeg = () => `<span class="modes" role="group" aria-label="Ask or post">${['ask', 'post'].map(m => `<button type="button" data-a="mode" data-m="${m}" aria-pressed="${st.newMode === m}">${m === 'ask' ? 'Ask' : 'Post'}</button>`).join('')}</span>`;
+const nbClass = extra => `nb ${extra}${st.draft.trim() ? ' has-text' : ''}`;
+/* Custom model menu: models first, then Effort at the bottom as a submenu (opens on hover or focus). */
+const cap1 = x => x[0].toUpperCase() + x.slice(1);
+const CHECK = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>';
+const modelMenu = () => {
+  const open = st.menu === 'model';
+  const item = (a, v, label, on) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${on}" data-a="${a}" data-v="${v}"><span>${label}</span>${on ? CHECK : ''}</button>`;
+  return `<span class="mpick"><button type="button" class="pick" data-a="menu" data-m="model" aria-haspopup="menu" aria-expanded="${open}" title="Model and effort"><span>${esc(st.newModel)}</span>${I.down}</button>
+    ${open ? `<div class="menu" role="menu" aria-label="Model">${modelOpts().map(m => item('setmodel', m, m === 'GPT-5' ? 'GPT-5<span class="src">your OpenAI key</span>' : m, m === st.newModel)).join('')}<div class="msep"></div>
+      <div class="mi mi-sub" role="menuitem" aria-haspopup="menu" tabindex="-1"><span>Effort</span><span class="mi-v">${cap1(st.newEffort)}</span>${I.right}
+        <div class="menu submenu" role="menu" aria-label="Effort">${EFFORT_OPTS.map(e => item('seteffort', e, cap1(e), e === st.newEffort)).join('')}</div></div><div class="msep"></div><div class="mi-note">${st.newModel === 'GPT-5' ? 'Billed to your OpenAI key' : `${fmtTok(left())} included tokens left this week${left() <= 0 && billing() === 'key' && keys().anthropic ? ', then your Anthropic key' : ''}`}</div></div>` : ''}</span>`;
+};
+const isAsk = () => st.newMode === 'ask';
+const ph = () => isAsk() ? 'Ask anything' : 'Write a post';
+const modeSend = () => sendBtn(st.newMode, isAsk() ? 'Ask' : 'Post');
+const COMPOSERS = {
+  /* C: no switch; the send button is split, and its arrow chooses whether it asks or posts. */
+  split: (extra = '', face = true) => {
+    const open = st.menu === 'send';
+    const opt = (m, t, sub) => `<button type="button" class="mi mi-2" role="menuitemradio" aria-checked="${st.newMode === m}" data-a="mode" data-m="${m}"><span><b>${t}</b><small>${sub}</small></span>${st.newMode === m ? CHECK : ''}</button>`;
+    return `<div class="row new-row"><form class="${nbClass('nb-dock' + extra)}" data-form="new:x">${face ? av(me(), 'sm') : ''}${draft(ph())}${spaceField()}${isAsk() ? modelMenu() : ''}
+      <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter>${isAsk() ? 'Ask' : 'Post'}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
+      ${open ? `<div class="menu right" role="menu">${opt('ask', 'Ask', 'The agent researches and answers')}${opt('post', 'Post', 'A message to people in the space')}</div>` : ''}</span></form><div></div></div>`;
+  },
+  /* Split, with the avatar held at the first line and the controls at the last as the text grows. */
+  splitEnds: () => COMPOSERS.split(' nb-a'),
+  /* Split · ends without the avatar: text and controls only. */
+  splitBare: (tone = 'btn-faded') => COMPOSERS.split(' nb-a nb-bare ' + tone, false),
+};
+let nseq = 0;
+function newThread(space, q, kind) {
+  const id = 'new' + (++nseq), now = new Date(NOW).toISOString();
+  st.draft = '';
+  if (kind === 'post') { D.posts.push({ id, s: space, u: me(), k: 'post', createdAt: now, q, tok: 0, likesBase: 0 }); render(); return; }
+  D.posts.push({ id, s: space, u: me(), k: 'ask', createdAt: now, q, sum: '', tok: 0, likesBase: 0, run: `${st.newModel} · ${st.newEffort} effort` });
+  D.rich[id] = '<p><span class="status">Researching · Step 1 of 4</span></p>';
+  render();
+  setTimeout(() => { D.rich[id] = `<p>Mock answer to "${esc(clip(q, 90))}". In the app, the agent's answer appears here when the run finishes, and you can branch from any passage of it.</p>`; byId(id).tok = 41000; if (st.newModel !== 'GPT-5') usage()[TODAY] += 41000; render(); }, 2600);
+}
+
+/* ---- shell ---- */
+const ORDER = Object.keys(V);
+const app = $('#app');
+let lastV = null;
+function renderFeed() {
+  const v = V[st.v], first = lastV !== st.v, sc = $('#k-mg'), top = sc && !first ? sc.scrollTop : 0, tabsLeft = $('#k-tabs')?.scrollLeft || 0;
+  const tabs = [['home', 'Home'], ...spacesWithPosts.filter(x => x.id !== 'sablefield').map(x => [x.id, spName(x.id)])];
+  const posts = streamFor(st.space);
+  $('#page').innerHTML = `<div class="mg" id="k-mg"><div class="mg-inner"><nav class="tabs"><div class="tabs-s" id="k-tabs">${tabs.map(([id, l]) => `<button data-a="space" data-id="${id}" aria-current="${st.space === id}">${esc(l)}</button>`).join('')}</div></nav>
+    ${pendingBanner()}${composerOrLock(v)}
+    ${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div>`;
+  const mg = $('#k-mg'), ta = $('#in-new');
+  if (v.fs) mg.style.setProperty('--title-fs', v.fs);
+  if (v.ifs) mg.style.setProperty('--input-fs', v.ifs);
+  if (ta && st.draft) ta.style.height = ta.scrollHeight + 'px';
+  mg.scrollTop = top;
+  streamFor(st.space).forEach(p => p.k === 'ask' && v.layout(p));
+  mg.scrollTop = top;
+  const tabsEl = mg.querySelector('.tabs'), edge = () => tabsEl.classList.toggle('scrolled', mg.scrollTop > 2);
+  edge(); mg.addEventListener('scroll', edge, { passive: true });
+  const ts = $('#k-tabs'), fade = () => { ts.style.setProperty('--fl', ts.scrollLeft > 1 ? '40px' : '0px'); ts.style.setProperty('--fr', ts.scrollLeft + ts.clientWidth < ts.scrollWidth - 1 ? '40px' : '0px'); };
+  ts.scrollLeft = tabsLeft; { const on = ts.querySelector('[aria-current="true"]'); if (on && (on.offsetLeft + on.offsetWidth > ts.scrollLeft + ts.clientWidth - 40 || on.offsetLeft < ts.scrollLeft + 40)) ts.scrollLeft = on.offsetLeft - ts.clientWidth / 2 + on.offsetWidth / 2; }
+  fade(); ts.addEventListener('scroll', fade, { passive: true });
+  lastV = st.v;
+}
+function renderBar() {
+  $('#variant-seg').hidden = ORDER.length < 2;
+  $('#variant-seg').innerHTML = ORDER.map((k, i) => `<button data-v="${k}" aria-pressed="${st.v === k}"><b>${String.fromCharCode(65 + i)}</b>${V[k].name}</button>`).join('');
+  $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${st.theme === k}">${l}</button>`).join('');
+  $('#thesis').innerHTML = `<span class="qtag">${V[st.v].q}</span>` + V[st.v].thesis;
+}
+function go(v) { if (!V[v]) v = 'type'; st.v = v; st.asking = null; renderBar(); render(); }
+$('#variant-seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { history.replaceState(null, '', '#' + b.dataset.v); go(b.dataset.v); } });
+$('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; st.theme = b.dataset.t; if (st.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = st.theme; renderBar(); });
+
+app.addEventListener('click', e => {
+  const t = e.target.closest('[data-a]'); if (!t) return;
+  const a = t.dataset.a, d = t.dataset;
+  if (a === 'space') { st.space = d.id; st.asking = null; render(); $('#k-mg').scrollTop = 0; return; }
+  if (a === 'ask') { st.asking = st.asking === d.id ? null : d.id; st.sel[d.id] = null; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
+  if (a === 'askfrom') { st.sel[d.id] = d.node; st.asking = d.id; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
+  if (a === 'rsel') { st.rsel[d.id] = st.rsel[d.id] === d.node ? null : d.node; st.replying = null; render(); return; }
+  if (a === 'reply') { st.replying = st.replying === d.id ? null : d.id; render(); document.getElementById('in-rp:' + d.id.replace('/', ':'))?.focus(); return; }
+  if (a === 'del') { deleteItem(d.k); return; }
+  if (a === 'menu') { st.menu = st.menu === d.m ? null : d.m; render(); $('#in-new')?.focus(); return; }
+  if (a === 'setmodel' || a === 'seteffort' || a === 'setspace') { st[{ setmodel: 'newModel', seteffort: 'newEffort', setspace: 'newSpace' }[a]] = d.v; st.menu = null; render(); $('#in-new')?.focus(); return; }
+  if (a === 'mode') { st.newMode = d.m; st.menu = null; render(); const t = $('#in-new'); t?.focus(); t?.setSelectionRange(t.value.length, t.value.length); return; }
+  if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; render(); return; }
+});
+/* hover: outline the drawing under the pointer */
+function hl(e, on) {
+  const n = e.target.closest('[data-grp]');
+  if (n) { const g = n.dataset.grp; app.querySelector(`[data-grp-box="${g}"]`)?.classList.toggle('hl', on); }
+}
+app.addEventListener('mouseover', e => hl(e, true));
+app.addEventListener('mouseout', e => hl(e, false));
+app.addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target.closest('[data-form]'); if (!f) return;
+  const inp = f.querySelector('input, textarea'), v = inp.value.trim(); if (!v) { inp.focus(); return; }
+  const [kind, pid, node] = f.dataset.form.split(':'), p = byId(pid);
+  if (kind === 'new' && e.submitter?.value !== 'post' && outOfTokens() && st.newModel !== 'GPT-5') { toast('Included tokens are used up until Friday. Post instead, or add an API key in Usage.'); render(); return; }
+  if (kind === 'new') { newThread(newSpaceId(), v, e.submitter?.value === 'post' ? 'post' : 'ask'); return; }
+  if (kind === 'rp') { addReply(p, node, v); st.replying = null; render(); return; }
+  st.sel[pid] = addBranch(p, node, v);
+  st.asking = null; render();
+});
+/* composer: a click anywhere in it keeps the cursor in the text (controls still work); a click outside the model menu closes it */
+app.addEventListener('mousedown', e => {
+  if (st.menu && !e.target.closest('.mpick')) { st.menu = null; if (!e.target.closest('.nb')) render(); else setTimeout(render); }
+  const f = e.target.closest('.nb'); if (!f || e.target.closest('textarea, select')) return;
+  e.preventDefault(); const t = f.querySelector('textarea'); if (document.activeElement !== t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && st.menu) { st.menu = null; render(); $('#in-new')?.focus(); } });
+/* every text box (new thread, branch, reply): Enter starts a new line; Cmd+Enter (Ctrl+Enter elsewhere) sends */
+app.addEventListener('keydown', e => {
+  const t = e.target; if (t.tagName !== 'TEXTAREA' || !t.form) return;
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); t.form.requestSubmit(t.form.querySelector('[data-enter]') || t.form.querySelector('[type="submit"]')); }
+});
+app.addEventListener('input', e => {
+  const t = e.target; if (t.tagName !== 'TEXTAREA' || !t.form) return;
+  t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
+  if (t.id !== 'in-new') return;
+  st.draft = t.value; t.form.classList.toggle('has-text', !!t.value.trim());
+});
+app.addEventListener('change', e => {
+  const k = { 'new-space': 'newSpace', 'new-model': 'newModel', 'new-effort': 'newEffort' }[e.target.id];
+  if (k) { st[k] = e.target.value; render(); $('#in-new')?.focus(); }
+});
+let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(render, 150); });
+/* ================= membership: sign-in, invites, vouches, tokens, API keys ================= */
+/* Rules (second pass; see RULES below). Everything here is mock state in memory: switching the
+   "View as" control keeps what you did, and a reload starts over. */
+const ALLOWANCE = 2_000_000;                       /* included tokens per member per week */
+const RESET = Date.parse('2026-11-20T00:00:00Z');  /* weekly reset: Fridays 00:00 UTC */
+const WEEK = ['Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu'], TODAY = 3;
+const NEED = 2, SLOTS = 3, INVITE_DAYS = 7, PENDING_DAYS = 30, VOUCH_WAIT = 7;
+const OPEN_INVITES = SLOTS;
+const day = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+const addDays = (iso, n) => new Date(Date.parse(iso) + n * 864e5).toISOString();
+const fmtTok = n => n >= 1e6 ? (n / 1e6).toFixed(n % 1e6 ? 2 : 0).replace(/\.?0+$/, '') + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n);
+
+const MEMBERS = [
+  { u: 'sol', name: 'Sol Amari', x: 'solamari', inviter: null, joined: '2026-09-15T12:00:00Z', status: 'active', staff: 'admin', vouchers: [] },
+  { u: 'hal_b', name: 'Hal Bryce', x: 'halbryce', inviter: 'sol', joined: '2026-09-16T09:00:00Z', status: 'active', staff: 'mod', vouchers: ['sol', 'tomasz'] },
+  { u: 'ines.v', name: 'Ines V.', x: 'ines_v', inviter: 'sol', joined: '2026-09-15T15:00:00Z', status: 'active', vouchers: ['sol', 'hal_b'] },
+  { u: 'tomasz', name: 'Tomasz W.', x: 'tomaszw', inviter: 'sol', joined: '2026-09-18T10:00:00Z', status: 'active', vouchers: ['sol', 'hal_b'] },
+  { u: 'oduya', name: 'Oduya E.', x: 'oduya_e', inviter: 'hal_b', joined: '2026-09-29T10:00:00Z', status: 'active', vouchers: ['hal_b', 'sol'] },
+  { u: 'mira_k', name: 'Mira K.', x: 'mirak', inviter: 'hal_b', joined: '2026-10-04T10:00:00Z', status: 'active', vouchers: ['hal_b', 'sol'] },
+  { u: 'jun.park', name: 'Jun Park', x: 'junpark', inviter: 'ines.v', joined: '2026-10-02T10:00:00Z', status: 'active', vouchers: ['ines.v', 'sol'] },
+  { u: 'lettie', name: 'Lettie M.', x: 'lettiem', inviter: 'ines.v', joined: '2026-10-11T10:00:00Z', status: 'active', vouchers: ['ines.v', 'hal_b'] },
+  { u: 'priya.n', name: 'Priya Nair', x: 'priyanair', inviter: 'ines.v', joined: '2026-11-14T18:00:00Z', status: 'pending', vouchers: ['sol'] },
+  { u: 'kofi.a', name: 'Kofi Asante', x: 'kofi_a', inviter: 'jun.park', joined: '2026-11-15T20:00:00Z', status: 'pending', vouchers: [] },
+  { u: 'dmitri_k', name: 'Dmitri K.', x: 'dmitrik', inviter: 'hal_b', joined: '2026-11-12T08:00:00Z', status: 'pending', vouchers: ['hal_b'] },
+];
+const INVITES = [
+  { code: 'SESS-4KQ7-M2', by: 'ines.v', created: '2026-11-13T10:00:00Z', used: 'priya.n' },
+  { code: 'SESS-9TQ2-X8', by: 'ines.v', created: '2026-11-15T10:00:00Z', used: null },
+  { code: 'SESS-H3WP-6R', by: 'jun.park', created: '2026-11-14T10:00:00Z', used: 'kofi.a' },
+  { code: 'SESS-77LD-QA', by: 'lettie', created: '2026-11-11T10:00:00Z', used: null },
+  { code: 'SESS-B2NE-5V', by: 'hal_b', created: '2026-11-10T10:00:00Z', used: 'dmitri_k' },
+  { code: 'SESS-K8CM-3T', by: 'sol', created: '2026-11-16T08:00:00Z', used: null },
+];
+const X_ACCOUNTS = [
+  { x: 'ines_v', name: 'Ines V.', note: 'Has a Session account' },
+  { x: 'kofi_a', name: 'Kofi Asante', note: 'Pending Session account' },
+  { x: 'rheaok', name: 'Rhea Okafor', note: 'No Session account yet' },
+];
+const USAGE = {
+  'ines.v': [310e3, 120e3, 420e3, 390e3, 0, 0, 0],
+  sol: [600e3, 510e3, 480e3, 380e3, 0, 0, 0],
+};
+const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:00Z', status: 'working', lastUsed: '2026-11-12T10:00:00Z' } } };
+const BILLING = { 'ines.v': 'key', sol: 'pause' };
+const RULES = [
+  ['Invite-only', `Every account starts from a member's invite. A code works once and expires ${INVITE_DAYS} days after it is made.`],
+  ['Invite slots', `Each active member has ${SLOTS} slots. An open invite takes one, and so does each person you invited who is still pending, so you cannot have more than ${SLOTS} unvouched people in flight.`],
+  ['Pending first', 'New accounts can read every open space but cannot ask, post, branch, reply or like until they are active.'],
+  ['Two vouches', `Activation needs ${NEED} vouches from active members above you in the invite tree (your inviter, their inviter, and so on up) or from staff. At least one must come from someone other than your inviter, so nobody can bring in an account alone.`],
+  ['Vouching', `Members can invite and vouch once they have been active for ${VOUCH_WAIT} days, so a chain of new accounts cannot vouch each other in.`],
+  ['Withdrawing', 'A voucher can withdraw while the account is pending. Once it is active, vouches stay on both profiles.'],
+  ['Expiry', `Pending accounts close after ${PENDING_DAYS} days without activation, and the invite goes back to the inviter.`],
+];
+
+/* ---- membership state ---- */
+Object.assign(st, { auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { signin: 'a', tree: 'a', meter: 'a', keys: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+const member = u => MEMBERS.find(m => m.u === u);
+const meM = () => member(st.user);
+const isActive = () => st.auth === 'in' && meM()?.status === 'active';
+const canWrite = () => isActive();
+const nameOf = u => member(u)?.name || u;
+const ancestors = u => { const out = []; let m = member(u); while (m && m.inviter) { out.push(m.inviter); m = member(m.inviter); } return out; };
+const activeSince = m => m.activated || addDays(m.joined, 2);
+const canVouchYet = m => m.status === 'active' && (NOW - Date.parse(activeSince(m))) / 864e5 >= VOUCH_WAIT;
+const inReach = (voucher, target) => ancestors(target).includes(voucher) || !!member(voucher)?.staff;
+const eligible = (voucher, target) => { const v = member(voucher), t = member(target); return !!v && !!t && canVouchYet(v) && t.status === 'pending' && voucher !== target && inReach(voucher, target); };
+const progress = m => { const vs = m.vouchers.filter(v => member(v)?.status === 'active'); const other = vs.some(v => v !== m.inviter); return { n: vs.length, other, done: vs.length >= NEED && other }; };
+function vouch(voucher, target) {
+  const t = member(target); if (!eligible(voucher, target) || t.vouchers.includes(voucher)) return;
+  t.vouchers.push(voucher);
+  const pr = progress(t);
+  if (pr.done) { t.status = 'active'; t.activated = new Date(NOW).toISOString(); toast(`${t.name} is now active. They can invite and vouch from ${day(addDays(t.activated, VOUCH_WAIT))}.`); }
+  else toast(pr.n >= NEED ? `Vouch recorded. ${t.name} still needs one from someone other than ${nameOf(t.inviter)}.` : `Vouch recorded: ${pr.n} of ${NEED}.`);
+}
+function unvouch(voucher, target) { const t = member(target); if (t.status !== 'pending') return; t.vouchers = t.vouchers.filter(v => v !== voucher); toast('Vouch withdrawn.'); }
+const myInvites = () => INVITES.filter(i => i.by === st.user);
+const inviteState = i => i.revoked ? 'revoked' : i.used ? 'used' : Date.parse(addDays(i.created, INVITE_DAYS)) < NOW ? 'expired' : 'open';
+const openCount = () => myInvites().filter(i => inviteState(i) === 'open').length;
+const pendingInvitees = () => MEMBERS.filter(m => m.inviter === st.user && m.status === 'pending').length;
+const slotsUsed = () => openCount() + pendingInvitees();
+function newCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = n => Array.from({ length: n }, () => a[Math.floor(Math.random() * a.length)]).join(''); return `SESS-${r(4)}-${r(2)}`; }
+const usage = () => (USAGE[st.user] ||= [0, 0, 0, 0, 0, 0, 0]);
+const used = () => usage().reduce((a, b) => a + b, 0);
+const left = () => Math.max(0, ALLOWANCE - used());
+const keys = () => (KEYS[st.user] ||= {});
+const billing = () => BILLING[st.user] || 'pause';
+const outOfTokens = () => left() <= 0 && !(billing() === 'key' && keys().anthropic?.status === 'working');
+const resetIn = () => { const h = Math.round((RESET - NOW) / 36e5); return h >= 48 ? `${Math.round(h / 24)} days` : `${h} hours`; };
+let toastTimer;
+function toast(t) { st.toast = t; clearTimeout(toastTimer); toastTimer = setTimeout(() => { st.toast = ''; const el = $('#toast'); if (el) el.remove(); }, 2800); }
+
+/* composer: locked while pending; a notice when included tokens are used up */
+const pendingBanner = () => {
+  if (isActive() || st.auth !== 'in') return '';
+  const pr = progress(meM());
+  return `<div class="row new-row"><div class="pbanner"><span class="pdot"></span><div><b>Your account is waiting for vouches: ${pr.n} of ${NEED}.</b> You can read everything. Asking, posting, branching and replying open when it is active.</div><button class="ghost" data-ma="go" data-to="status">See status</button></div><div></div></div>`;
+};
+function composerOrLock(v) {
+  if (!canWrite()) return '';
+  const c = typeof v.composer === 'function' ? v.composer() : COMPOSERS[v.composer]();
+  if (!outOfTokens()) return c;
+  return c.replace('<div></div></div>', `<div></div></div><div class="row notice-row"><p class="tnotice">Included tokens are used up until ${WEEK[0]}, ${day(new Date(RESET).toISOString())}. Asks are paused; you can still post. <button class="tlink" data-ma="go" data-to="usage">Add an API key</button></p><div></div></div>`);
+}
+
+/* ---- token meter in the app bar (variants) ---- */
+function meter() {
+  if (!isActive()) return '';
+  const u = used(), pct = Math.min(1, u / ALLOWANCE), l = left(), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok';
+  const title = `${fmtTok(l)} of ${fmtTok(ALLOWANCE)} included tokens left this week; resets in ${resetIn()}`;
+  if (st.ui.meter === 'a') return `<button class="meter m-bar ${tone}" data-ma="go" data-to="usage" title="${title}"><span class="m-l">${fmtTok(l)} left</span><span class="m-track"><span style="width:${(pct * 100).toFixed(1)}%"></span></span></button>`;
+  if (st.ui.meter === 'b') { const r = 7, c = 2 * Math.PI * r; return `<button class="meter m-ring ${tone}" data-ma="go" data-to="usage" title="${title}"><svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}"/><circle class="arc" cx="9" cy="9" r="${r}" stroke-dasharray="${(c * pct).toFixed(2)} ${c.toFixed(2)}"/></svg><span>${Math.round((1 - pct) * 100)}%</span></button>`; }
+  return `<button class="meter m-text ${tone}" data-ma="go" data-to="usage" title="${title}">${fmtTok(l)} tokens left · resets ${WEEK[0]}</button>`;
+}
+
+/* ---- app bar ---- */
+function appbar() {
+  const m = meM(), asks = MEMBERS.filter(t => eligible(st.user, t.u) && !t.vouchers.includes(st.user) && !st.dismissed[st.user + '>' + t.u]).length;
+  const nav = (to, label, badge) => `<button class="nav" data-ma="go" data-to="${to}" aria-current="${st.screen === to}">${label}${badge ? `<span class="nbadge">${badge}</span>` : ''}</button>`;
+  const open = st.menu === 'acct';
+  return `<header class="appbar"><span class="brand">${mark('sm')}<b>Session</b></span>
+    <nav class="navs">${nav('feed', 'Feed')}${isActive() ? nav('members', 'Members', asks) : nav('status', 'Status')}</nav><span class="grow"></span>${meter()}
+    <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}">${av(st.user, 'sm')}${I.down}</button>
+    ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff ? cap1(m.staff) : 'Member') : 'Pending'}</small></div></div><div class="msep"></div>
+      ${isActive() ? `<button class="mi" data-ma="go" data-to="members"><span>Invites and vouches</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>` : `<button class="mi" data-ma="go" data-to="status"><span>Account status</span></button>`}
+      <div class="msep"></div><button class="mi" data-ma="signout"><span>Sign out</span></button></div>` : ''}</span></header>`;
+}
+
+/* ---- signed-out flow (sign-in variants on the landing step) ---- */
+const xBtn = (label = 'Sign in with X') => `<button class="xbtn" data-ma="xauth">${'<span class="xmark" aria-hidden="true">X</span>'}${label}</button>`;
+function authScreen() {
+  const back = to => `<button class="tlink back" data-ma="flow" data-to="${to}">${I.left}Back</button>`;
+  let body = '';
+  if (st.flow === 'landing') {
+    body = `<div class="auth-c"><span class="brand lg">${mark()}<b>Session</b></span><h2>Research with agents, in shared spaces.</h2>
+      <p>Ask a question and an agent researches it. Branch from any passage of the answer to go deeper; everyone in the space can read and build on it.</p>
+      <div class="auth-acts">${xBtn()}<button class="btn2" data-ma="flow" data-to="code">I have an invite code</button></div>
+      <p class="fine">Session is invite-only. New accounts need an invite code from a member.</p></div>`;
+    if (st.ui.signin === 'b') body = `<div class="auth-split">${body}<div class="auth-preview" aria-hidden="true">${streamFor('home').filter(p => p.k === 'ask').slice(0, 4).map(p => `<div class="pv-card"><div class="who">${av(p.u, 'xs')}<b>${esc(p.u)}</b><span class="sp">${spName(p.s)}</span></div><p>${esc(clip(tree(p).nodes.r.q, 110))}</p><span class="pv-n">${I.branch}${tree(p).count}</span></div>`).join('')}</div></div>`;
+  } else if (st.flow === 'code') {
+    const inv = INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
+    body = `<div class="auth-c">${back('landing')}<h2>Enter your invite code</h2><p>It came from the member who invited you, as a code or a link.</p>
+      <form class="code-f" data-mform="code"><input id="in-code" value="${esc(st.code)}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1">Check</button></form>
+      ${st.codeErr ? `<p class="ferr">${esc(st.codeErr)}</p>` : ''}
+      ${inv ? `<div class="inviter">${av(inv.by)}<div><b>${esc(nameOf(inv.by))} invited you</b><small>@${esc(inv.by)} · expires ${day(addDays(inv.created, INVITE_DAYS))}</small></div></div><div class="auth-acts">${xBtn('Continue with X')}</div>` : `<p class="fine">Mock: an open code is <button class="tlink" data-ma="fill" data-code="SESS-9TQ2-X8">SESS-9TQ2-X8</button>.</p>`}</div>`;
+  } else if (st.flow === 'xauth') {
+    body = `<div class="auth-c">${back(st.intent === 'signup' ? 'code' : 'landing')}<h2>Sign in with X</h2><p>X asks you to let Session see your name, handle and profile picture. Session cannot post for you or read your messages.</p>
+      <div class="mock-note"><b>Mock</b> Pick the X account that comes back from X:</div>
+      <div class="xlist">${X_ACCOUNTS.map(a => `<button class="xacct" data-ma="xpick" data-x="${a.x}">${av(a.x)}<span><b>${esc(a.name)}</b><small>@${esc(a.x)} · ${esc(a.note)}</small></span>${I.right}</button>`).join('')}</div></div>`;
+  } else if (st.flow === 'noaccount') {
+    const a = X_ACCOUNTS.find(x => x.x === st.xacct);
+    body = `<div class="auth-c">${back('landing')}<h2>No Session account for @${esc(a.x)}</h2><p>Session is invite-only. Ask a member for an invite code, then sign up with it. If you already have a code, enter it now.</p><div class="auth-acts"><button class="btn1" data-ma="flow" data-to="code">Enter an invite code</button></div></div>`;
+  } else if (st.flow === 'profile') {
+    const a = X_ACCOUNTS.find(x => x.x === st.xacct), inv = INVITES.find(i => i.code === st.code), pf = st.profile;
+    body = `<div class="auth-c">${back('xauth')}<h2>Create your account</h2><div class="inviter">${av(a.x)}<div><b>Signed in with X as @${esc(a.x)}</b><small>Invited by ${esc(nameOf(inv.by))} · code ${esc(inv.code)}</small></div></div>
+      <form class="pf" data-mform="profile"><label>Name<input id="pf-name" value="${esc(pf.name)}" autocomplete="off"></label>
+      <label>Handle on Session<span class="hwrap"><span>@</span><input id="pf-handle" value="${esc(pf.handle)}" autocomplete="off" spellcheck="false"></span><small>Lowercase letters, numbers, dots and underscores; 3 to 20 characters.</small></label>
+      ${pf.err ? `<p class="ferr">${esc(pf.err)}</p>` : ''}
+      <label class="chk"><input type="checkbox" id="pf-rules"${pf.rules ? ' checked' : ''}> I have read the space rules and will follow them.</label>
+      <div class="next"><b>What happens next</b><p>Your account starts pending. It becomes active once ${NEED} members above you in the invite tree vouch for you, at least one of them someone other than your inviter (${esc(nameOf(inv.by))}).</p></div>
+      <button type="submit" class="btn1 wide">Create account</button></form></div>`;
+  }
+  return `<div class="auth ${st.ui.signin === 'b' && st.flow === 'landing' ? 'auth-b' : ''}">${body}</div>`;
+}
+
+/* ---- status page (pending accounts) ---- */
+function statusPage() {
+  const m = meM(), pr = progress(m), el = MEMBERS.filter(v => eligible(v.u, m.u));
+  const closes = addDays(m.joined, PENDING_DAYS);
+  const check = (ok, t) => `<li class="${ok ? 'ok' : ''}">${ok ? CHECK : '<span class="ring"></span>'}${t}</li>`;
+  return `<div class="page"><div class="page-in narrow">
+    <h2>Waiting for vouches</h2><p class="lede">Hi ${esc(m.name.split(' ')[0])}. Your account is pending: you can read every open space, and you can ask and post once ${NEED} members vouch for you.</p>
+    <div class="pcard"><div class="steps">${Array.from({ length: NEED }, (_, i) => `<span class="${i < pr.n ? 'on' : ''}"></span>`).join('')}</div><b>${pr.n} of ${NEED} vouches</b>
+      <ul class="checks">${check(pr.n >= NEED, `${NEED} vouches from members above you in the invite tree, or staff`)}${check(pr.other, `At least one from someone other than ${esc(nameOf(m.inviter))}, who invited you`)}</ul>
+      ${m.vouchers.length ? `<p class="vby">Vouched by ${m.vouchers.map(v => `<span class="vb">${av(v, 'xs')}${esc(v)}</span>`).join('')}</p>` : ''}</div>
+    <h3>Who can vouch for you</h3><p class="sub">Members above you in the invite tree, and staff. Session lets you send each of them one reminder a day.</p>
+    <div class="list">${el.map(v => `<div class="li">${av(v.u, 'sm')}<div class="grow"><b>${esc(v.name)}</b><small>@${esc(v.u)} · ${v.u === m.inviter ? 'invited you' : v.staff ? cap1(v.staff) : 'above you in the tree'}</small></div>
+      ${m.vouchers.includes(v.u) ? '<span class="chip ok">Vouched</span>' : st.reminded[v.u] ? '<span class="chip">Reminded today</span>' : `<button class="ghost" data-ma="remind" data-u="${v.u}">Send a reminder</button>`}</div>`).join('')}</div>
+    <p class="fine">If it isn't activated, this account closes on ${day(closes)} and ${esc(nameOf(m.inviter))} gets the invite back.</p>
+    <div class="auth-acts"><button class="btn2" data-ma="go" data-to="feed">Browse the feed</button></div></div></div>`;
+}
+
+/* ---- members page: vouch requests, invites, tree (variants), rules ---- */
+const statusChip = m => m.status === 'active' ? (m.staff ? `<span class="chip staff">${cap1(m.staff)}</span>` : '') : `<span class="chip pend">Pending · ${progress(m).n} of ${NEED}</span>`;
+const vouchCtl = m => {
+  if (m.status !== 'pending') return '';
+  if (m.vouchers.includes(st.user)) return `<span class="vdone">${CHECK}You vouched</span><button class="tlink" data-ma="unvouch" data-u="${m.u}">Withdraw</button>`;
+  if (eligible(st.user, m.u)) return `<button class="btn1 sm" data-ma="askvouch" data-u="${m.u}">Vouch</button>`;
+  return '';
+};
+function treeRows() {
+  const out = [], walk = (u, d) => { out.push({ m: member(u), d }); MEMBERS.filter(c => c.inviter === u).sort((a, b) => a.joined < b.joined ? -1 : 1).forEach(c => walk(c.u, d + 1)); };
+  if (st.treeScope === 'mine') walk(st.user, 0); else walk('sol', 0);
+  return out;
+}
+function treeA() {
+  const rows = treeRows(), H = 40, X = d => 8 + d * 18, idx = Object.fromEntries(rows.map((r, i) => [r.m.u, i]));
+  let paths = '', dots = '';
+  rows.forEach(({ m, d }, i) => {
+    const y = i * H + H / 2;
+    if (d > 0 && idx[m.inviter] != null) { const px = X(d - 1), py = idx[m.inviter] * H + H / 2; paths += `<path d="M${px} ${py + 11} L${px} ${y - 6} Q${px} ${y} ${px + 6} ${y} L${X(d) - 11} ${y}"/>`; }
+  });
+  return `<div class="ttree"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ m, d }) => `<div class="trow${m.u === st.user ? ' me' : ''}" style="padding-left:${X(d) - 10}px">${av(m.u, 'sm')}<span class="tn"><b>${esc(m.u)}</b><small>${esc(m.name)}${m.inviter ? ` · joined ${day(m.joined)}` : ' · founder'}</small></span>${statusChip(m)}<span class="grow"></span>${vouchCtl(m)}</div>`).join('')}</div>`;
+}
+function treeB() {
+  const rows = treeRows();
+  return `<div class="ttable" role="table"><div class="tr th" role="row"><span>Member</span><span>Invited by</span><span>Joined</span><span>Vouched by</span><span></span></div>
+    ${rows.map(({ m, d }) => `<div class="tr${m.u === st.user ? ' me' : ''}" role="row"><span class="tm" style="padding-left:${d * 16}px">${d ? '<i class="elbow"></i>' : ''}${av(m.u, 'xs')}<b>${esc(m.u)}</b>${statusChip(m)}</span><span>${m.inviter ? esc(m.inviter) : '—'}</span><span>${day(m.joined)}</span><span class="vlist">${m.vouchers.map(v => av(v, 'xs')).join('') || '<small>—</small>'}</span><span class="tact">${vouchCtl(m)}</span></div>`).join('')}</div>`;
+}
+function membersPage() {
+  const reqs = MEMBERS.filter(t => eligible(st.user, t.u) && !t.vouchers.includes(st.user) && !st.dismissed[st.user + '>' + t.u]);
+  const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), oc = openCount();
+  const invRow = i => { const s = inviteState(i), link = `session.app/i/${i.code}`; return `<div class="li inv"><code>${i.code}</code><div class="grow"><b>${s === 'open' ? `Open · expires ${day(addDays(i.created, INVITE_DAYS))}` : s === 'used' ? `Used by @${esc(i.used)}` : s === 'revoked' ? 'Revoked' : 'Expired'}</b><small>${s === 'used' ? (member(i.used).status === 'active' ? 'Active' : `Pending · ${progress(member(i.used)).n} of ${NEED} vouches`) : `Made ${day(i.created)}`}</small></div>
+    ${s === 'open' ? `<span class="iacts"><button class="ghost" data-ma="copy" data-t="${link}">Copy link</button><button class="tlink danger" data-ma="revoke" data-code="${i.code}">Revoke</button></span>` : ''}</div>`; };
+  return `<div class="page"><div class="page-in"><div class="mcols"><div class="mmain">
+    ${reqs.length ? `<section><h3>Waiting for your vouch</h3><p class="sub">Vouch only for people you know. Your name appears on their profile as a voucher.</p><div class="list">${reqs.map(t => { const pr = progress(t); return `<div class="li">${av(t.u)}<div class="grow"><b>${esc(t.name)} <span class="h">@${esc(t.u)}</span></b><small>Invited by ${esc(nameOf(t.inviter))} · joined ${rel(t.joined)} ago · ${pr.n} of ${NEED} vouches</small></div><button class="tlink" data-ma="notnow" data-u="${t.u}">I don't know them</button><button class="btn1 sm" data-ma="askvouch" data-u="${t.u}">Vouch</button></div>`; }).join('')}</div></section>` : ''}
+    <section><div class="shead"><h3>Invite tree</h3><span class="modes" role="group">${[['all', 'Everyone'], ['mine', 'Your branch']].map(([k, l]) => `<button type="button" data-ma="scope" data-s="${k}" aria-pressed="${st.treeScope === k}">${l}</button>`).join('')}</span></div>
+      <p class="sub">Who invited whom. You can vouch for pending members anywhere below you.</p>${st.ui.tree === 'a' ? treeA() : treeB()}</section></div>
+    <aside class="mside"><section class="box"><div class="shead"><h3>Your invites</h3><small>${slotsUsed()} of ${SLOTS} slots in use</small></div><div class="slots" aria-hidden="true">${Array.from({ length: SLOTS }, (_, i) => `<span class="${i < openCount() ? 'open' : i < slotsUsed() ? 'pend' : ''}"></span>`).join('')}</div><p class="fine">${openCount()} open invite${openCount() === 1 ? '' : 's'}, ${pendingInvitees()} invitee${pendingInvitees() === 1 ? '' : 's'} waiting for vouches.</p>
+      <div class="list tight">${inv.map(invRow).join('') || '<p class="empty">No invites yet.</p>'}</div>
+      <button class="btn1 wide" data-ma="newinvite"${slotsUsed() >= SLOTS || !canVouchYet(meM()) ? ' disabled' : ''}>Create an invite</button><p class="fine">${!canVouchYet(meM()) ? `You can invite and vouch ${VOUCH_WAIT} days after your account became active.` : slotsUsed() >= SLOTS ? 'All slots are in use. A slot frees when an invite is revoked or expires, or when someone you invited is vouched in.' : `Each code works for one person and expires in ${INVITE_DAYS} days.`}</p></section>
+    <section class="box"><h3>How membership works</h3><dl class="rules">${RULES.map(([t, d]) => `<dt>${t}</dt><dd>${d}</dd>`).join('')}</dl></section></aside></div></div></div>`;
+}
+
+/* ---- usage and API keys (key variants) ---- */
+const PROVIDERS = { anthropic: { name: 'Anthropic', prefix: 'sk-ant-', ph: 'sk-ant-...', models: 'Opus 4.8, Sonnet 4.6' }, openai: { name: 'OpenAI', prefix: 'sk-', ph: 'sk-...', models: 'GPT-5' } };
+function keyBlock(id) {
+  const P = PROVIDERS[id], k = keys()[id];
+  const form = st.keyForm === id ? `<form class="kform" data-mform="key:${id}"><input id="in-key" type="password" placeholder="${P.ph}" autocomplete="off" spellcheck="false" aria-label="${P.name} API key"><button type="submit" class="btn1 sm">Save key</button><button type="button" class="tlink" data-ma="keycancel">Cancel</button></form>${st.keyErr ? `<p class="ferr">${esc(st.keyErr)}</p>` : ''}` : '';
+  const body = k ? (st.removing === id ? `<div class="kconfirm">Remove the ${P.name} key? Asks billed to it will stop. <button class="tlink danger" data-ma="keyremove" data-k="${id}">Remove</button><button class="tlink" data-ma="keykeep">Keep</button></div>`
+      : `<div class="kstate"><code>${P.prefix}…${k.last4}</code><span class="chip ${k.status === 'working' ? 'ok' : ''}">${k.status === 'working' ? 'Working' : 'Checking…'}</span><small>Added ${day(k.added)}${k.lastUsed ? ` · last used ${day(k.lastUsed)}` : ''}</small><span class="grow"></span><button class="tlink danger" data-ma="keyask" data-k="${id}">Remove</button></div>`)
+    : st.keyForm === id ? '' : `<button class="ghost" data-ma="keyadd" data-k="${id}">Add key</button>`;
+  return { P, k, form, body };
+}
+function keysSection() {
+  const note = '<p class="fine">Keys are encrypted and used only for asks you start. After saving, Session shows only the last 4 characters. The provider bills you directly at its rates.</p>';
+  if (st.ui.keys === 'a') return `<section class="box"><h3>API keys</h3>${['anthropic', 'openai'].map(id => { const b = keyBlock(id); return `<div class="krow"><div class="kh"><b>${b.P.name}</b><small>${b.P.models}</small></div><div class="kb">${b.body}${b.form}</div></div>`; }).join('')}${note}</section>`;
+  return `<section><h3>API keys</h3><div class="kcards">${['anthropic', 'openai'].map(id => { const b = keyBlock(id); return `<div class="kcard${b.k ? ' has' : ''}"><div class="kh"><b>${b.P.name}</b><small>${b.P.models}</small></div>${b.body}${b.form}</div>`; }).join('')}</div>${note}</section>`;
+}
+function usagePage() {
+  const u = usage(), tot = used(), max = Math.max(...u, 1), pct = Math.min(1, tot / ALLOWANCE), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok';
+  const runs = [];
+  D.posts.filter(p => p.u === st.user && p.k === 'ask' && p.tok).forEach(p => runs.push({ q: tree(p).nodes.r.q, at: p.createdAt, tok: p.tok }));
+  D.posts.filter(p => p.k === 'ask').forEach(p => Object.values(tree(p).nodes).forEach(n => { if (n.id !== 'r' && n.u === st.user && n.tok) runs.push({ q: n.q, at: n.createdAt, tok: n.tok }); }));
+  runs.sort((a, b) => a.at < b.at ? 1 : -1);
+  const hasKey = keys().anthropic?.status === 'working' || keys().openai?.status === 'working';
+  return `<div class="page"><div class="page-in narrow"><h2>Usage and API keys</h2>
+    <section class="box"><div class="shead"><h3>Included tokens this week</h3><small>Resets ${WEEK[0]}, ${day(new Date(RESET).toISOString())} at 00:00 UTC, in ${resetIn()}</small></div>
+      <div class="ubig ${tone}"><b>${fmtTok(left())}</b><span>left of ${fmtTok(ALLOWANCE)}</span></div><div class="utrack ${tone}"><span style="width:${(pct * 100).toFixed(1)}%"></span></div>
+      <div class="uchart" role="img" aria-label="Tokens used per day this week">${u.map((v, i) => `<div class="ucol${i === TODAY ? ' today' : ''}${i > TODAY ? ' future' : ''}"><span class="uv">${i <= TODAY ? fmtTok(v) : ''}</span><span class="ub" style="height:${i <= TODAY ? Math.max(2, v / max * 64) : 2}px"></span><span class="ul">${WEEK[i]}</span></div>`).join('')}</div>
+      <h4>Recent runs</h4><div class="runs">${runs.slice(0, 6).map(r => `<div class="run"><span class="rq">${esc(clip(r.q, 70))}</span><small>${day(r.at)}</small><b>${fmtTok(r.tok)}</b><small class="bill">Included</small></div>`).join('') || '<p class="empty">No runs yet this week.</p>'}</div></section>
+    <section class="box"><h3>When included tokens run out</h3>
+      <label class="radio"><input type="radio" name="bill" data-ma="bill" value="pause"${billing() === 'pause' ? ' checked' : ''}> <span><b>Pause my asks until the reset</b><small>You can still read, post and reply.</small></span></label>
+      <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my API key</b><small>${hasKey ? 'Asks bill to your key until the reset.' : 'Add a key below to turn this on.'}</small></span></label></section>
+    ${keysSection()}</div></div>`;
+}
+
+/* ---- app render ---- */
+function renderMock() {
+  const personas = [['out', 'Signed out'], ...MEMBERS.filter(m => ['ines.v', 'sol', 'kofi.a', 'rhea.ok'].includes(m.u)).map(m => [m.u, `${m.u} · ${m.status === 'active' ? (m.staff ? m.staff : 'member') : 'pending'}`])];
+  const cur = st.auth === 'out' ? 'out' : st.user;
+  const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abc'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
+  $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
+    ${seg('signin', 'Sign-in', 2)}${seg('tree', 'Tree', 2)}${seg('meter', 'Meter', 3)}${seg('keys', 'Keys', 2)}
+    <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
+  $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
+}
+function render() {
+  renderMock();
+  if (st.auth === 'out') { app.innerHTML = authScreen() + toastEl(); lastV = null; return; }
+  if (!$('#shell')) app.innerHTML = '<div id="shell"><div id="bar"></div><div id="page"></div></div>';
+  $('#bar').innerHTML = appbar();
+  const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
+  if (st.screen === 'feed') renderFeed();
+  else { pg.innerHTML = (st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
+  app.querySelectorAll(':scope > .scrim, :scope > .dialog').forEach(x => x.remove());
+  $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
+  if (st.confirm) app.insertAdjacentHTML('beforeend', confirmEl());
+}
+const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}</div>` : '';
+function confirmEl() {
+  const t = member(st.confirm.u);
+  return `<div class="scrim" data-ma="cancel"></div><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-h"><h3 id="dlg-h">Vouch for ${esc(t.name)}?</h3>
+    <div class="inviter">${av(t.u)}<div><b>@${esc(t.u)}</b><small>Invited by ${esc(nameOf(t.inviter))} · ${progress(t).n} of ${NEED} vouches so far</small></div></div>
+    <p>Vouching says you know this person and expect them to follow the space rules. Your name is shown on their profile and yours, and you can withdraw it until their account is active.</p>
+    <div class="dacts"><button class="btn2" data-ma="cancel">Cancel</button><button class="btn1" data-ma="dovouch" data-u="${t.u}">Vouch</button></div></div>`;
+}
+function signIn(u) { st.auth = 'in'; st.user = u; st.screen = member(u).status === 'active' ? 'feed' : 'status'; st.menu = null; st.sel = {}; render(); }
+document.addEventListener('click', e => {
+  const p = e.target.closest('[data-mp]');
+  if (p) { if (p.dataset.mp === 'out') { st.auth = 'out'; st.flow = 'landing'; } else signIn(p.dataset.mp); st.confirm = null; render(); return; }
+  const v = e.target.closest('[data-mv]'); if (v) { st.ui[v.dataset.mv] = v.dataset.x; if (v.dataset.mv === 'signin' && st.auth === 'in') { st.auth = 'out'; st.flow = 'landing'; } render(); return; }
+  const t = e.target.closest('[data-mt]'); if (t) { const u = usage(); const need = { norm: null, low: ALLOWANCE - 90e3, out: ALLOWANCE + 20e3 }[t.dataset.mt]; if (need != null) { const others = u.reduce((a, b, i) => i === TODAY ? a : a + b, 0); u[TODAY] = Math.max(0, need - others); } else if (USAGE_BASE[st.user]) USAGE[st.user] = USAGE_BASE[st.user].slice(); render(); return; }
+});
+const USAGE_BASE = Object.fromEntries(Object.entries(USAGE).map(([k, v]) => [k, v.slice()]));
+app.addEventListener('click', e => {
+  const t = e.target.closest('[data-ma]'); if (!t || (t.tagName === 'INPUT' && t.type === 'radio')) return;
+  const a = t.dataset.ma, d = t.dataset;
+  if (a === 'go') { st.screen = d.to; st.menu = null; render(); $('#k-page') && ($('#k-page').scrollTop = 0); return; }
+  if (a === 'flow') { st.flow = d.to; st.codeErr = ''; if (d.to === 'code') st.intent = 'signup'; render(); $('#in-code')?.focus(); return; }
+  if (a === 'xauth') { if (st.flow === 'landing') st.intent = 'signin'; st.flow = 'xauth'; render(); return; }
+  if (a === 'fill') { st.code = d.code; st.codeErr = ''; render(); return; }
+  if (a === 'xpick') {
+    const x = d.x, m = MEMBERS.find(mm => mm.x === x);
+    st.xacct = x;
+    if (m) { signIn(m.u); return; }
+    const inv = INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
+    if (st.intent === 'signup' && inv) { const a2 = X_ACCOUNTS.find(z => z.x === x); st.profile = { name: a2.name, handle: x.replace(/[^a-z0-9._]/g, '').slice(0, 20), rules: false, err: '' }; st.flow = 'profile'; }
+    else st.flow = 'noaccount';
+    render(); return;
+  }
+  if (a === 'signout') { st.auth = 'out'; st.flow = 'landing'; st.menu = null; render(); return; }
+  if (a === 'askvouch') { st.confirm = { u: d.u }; render(); app.querySelector('.dialog .btn1')?.focus(); return; }
+  if (a === 'cancel') { st.confirm = null; render(); return; }
+  if (a === 'dovouch') { vouch(st.user, d.u); st.confirm = null; render(); return; }
+  if (a === 'unvouch') { unvouch(st.user, d.u); render(); return; }
+  if (a === 'notnow') { st.dismissed[st.user + '>' + d.u] = true; toast(`Hidden. ${nameOf(d.u)} stays in the tree, where you can still vouch.`); render(); return; }
+  if (a === 'scope') { st.treeScope = d.s; render(); return; }
+  if (a === 'remind') { st.reminded[d.u] = true; toast(`Reminder sent to ${nameOf(d.u)}.`); render(); return; }
+  if (a === 'newinvite') { if (slotsUsed() >= SLOTS || !canVouchYet(meM())) return; const code = newCode(); INVITES.push({ code, by: st.user, created: new Date(NOW).toISOString(), used: null }); toast(`Invite ${code} created. Send the link to one person.`); render(); return; }
+  if (a === 'revoke') { INVITES.find(i => i.code === d.code).revoked = true; toast('Invite revoked.'); render(); return; }
+  if (a === 'copy') { const done = () => { toast('Link copied.'); render(); }; try { navigator.clipboard.writeText(d.t).then(done, () => { toast(d.t); render(); }); } catch { toast(d.t); render(); } return; }
+  if (a === 'keyadd') { st.keyForm = d.k; st.keyErr = ''; render(); $('#in-key')?.focus(); return; }
+  if (a === 'keycancel') { st.keyForm = null; st.keyErr = ''; render(); return; }
+  if (a === 'keyask') { st.removing = d.k; render(); return; }
+  if (a === 'keykeep') { st.removing = null; render(); return; }
+  if (a === 'keyremove') { delete keys()[d.k]; st.removing = null; if (!keys().anthropic && !keys().openai) BILLING[st.user] = 'pause'; if (st.newModel === 'GPT-5' && !keys().openai) st.newModel = 'Opus 4.8'; toast(`${PROVIDERS[d.k].name} key removed.`); render(); return; }
+});
+app.addEventListener('change', e => { if (e.target.dataset.ma === 'bill') { BILLING[st.user] = e.target.value; toast(e.target.value === 'key' ? 'Asks will continue on your API key.' : 'Asks will pause until the reset.'); render(); } });
+app.addEventListener('submit', e => {
+  const f = e.target.closest('[data-mform]'); if (!f) return;
+  e.preventDefault();
+  const kind = f.dataset.mform;
+  if (kind === 'code') {
+    const c = $('#in-code').value.trim().toUpperCase(); st.code = c;
+    const inv = INVITES.find(i => i.code === c);
+    st.codeErr = !c ? 'Enter the code from your invite.' : !inv ? "That code doesn't exist. Check it against the invite, or ask the person who invited you." : inviteState(inv) === 'used' ? 'That code has already been used. Each code works for one person; ask for a new one.' : inviteState(inv) !== 'open' ? 'That code has expired or was revoked. Ask the person who invited you for a new one.' : '';
+    render(); return;
+  }
+  if (kind === 'profile') {
+    const pf = st.profile; pf.name = $('#pf-name').value.trim(); pf.handle = $('#pf-handle').value.trim().toLowerCase(); pf.rules = $('#pf-rules').checked;
+    pf.err = !pf.name ? 'Enter a name.' : !/^[a-z0-9._]{3,20}$/.test(pf.handle) ? 'Handles use 3 to 20 lowercase letters, numbers, dots or underscores.' : member(pf.handle) ? `@${pf.handle} is taken. Try another.` : !pf.rules ? 'Confirm that you will follow the space rules.' : '';
+    if (pf.err) { render(); return; }
+    const inv = INVITES.find(i => i.code === st.code);
+    inv.used = pf.handle;
+    MEMBERS.push({ u: pf.handle, name: pf.name, x: st.xacct, inviter: inv.by, joined: new Date(NOW).toISOString(), status: 'pending', vouchers: [] });
+    st.code = ''; signIn(pf.handle); toast('Account created. It is pending until two members vouch for you.'); render(); return;
+  }
+  if (kind.startsWith('key:')) {
+    const id = kind.slice(4), P = PROVIDERS[id], v = $('#in-key').value.trim();
+    const wrong = id === 'openai' && v.startsWith('sk-ant-');
+    st.keyErr = !v ? 'Paste a key.' : wrong ? 'That looks like an Anthropic key. Add it under Anthropic.' : !v.startsWith(P.prefix) || v.length < 24 ? `${P.name} keys start with ${P.prefix} and are longer than this. Copy the whole key from your ${P.name} account.` : '';
+    if (st.keyErr) { render(); $('#in-key')?.focus(); return; }
+    keys()[id] = { last4: v.slice(-4), added: new Date(NOW).toISOString(), status: 'checking' };
+    st.keyForm = null; render();
+    setTimeout(() => { if (keys()[id]) { keys()[id].status = 'working'; toast(`${P.name} key works.`); render(); } }, 1300);
+  }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && st.confirm) { st.confirm = null; render(); } });
+
+window.addEventListener('hashchange', () => go(location.hash.slice(1)));
+/* Ctrl+A, Ctrl+B, ... switch to the variant with that letter (not while typing in a field) */
+document.addEventListener('keydown', e => {
+  if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.target.closest('input, textarea, [contenteditable]')) return;
+  const k = ORDER[e.key.toLowerCase().charCodeAt(0) - 97];
+  if (e.key.length !== 1 || !k) return;
+  e.preventDefault(); history.replaceState(null, '', '#' + k); go(k);
+});
+go(location.hash.slice(1) || 'type');
+document.fonts?.ready.then(() => render());
+</script>
