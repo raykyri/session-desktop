@@ -539,6 +539,10 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .pbanner { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: var(--r-xl); background: color-mix(in srgb, var(--warn) 10%, var(--card)); box-shadow: var(--shadow); font-size: var(--fs-sm); color: var(--t-secondary); }
 .pbanner b { color: var(--t-heading); font-weight: 600; }
 .pbanner > div { flex: 1; min-width: 0; }
+.pbanner.inl .code-f { margin-top: 10px; max-width: 420px; }
+.reqmsg { margin: 0 0 12px; font-size: var(--fs-md); color: var(--t-heading); line-height: 1.5; }
+.pend-b { max-width: 440px; padding-top: 72px; text-align: center; }
+.pend-b .code-f { text-align: left; }
 .pdot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex: none; }
 /* tree A */
 .ttree { position: relative; background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 4px 12px; }
@@ -1157,7 +1161,7 @@ app.addEventListener('click', e => {
   if (a === 'rsel') { st.rsel[d.id] = st.rsel[d.id] === d.node ? null : d.node; st.replying = null; render(); return; }
   if (a === 'reply') { st.replying = st.replying === d.id ? null : d.id; render(); document.getElementById('in-rp:' + d.id.replace('/', ':'))?.focus(); return; }
   if (a === 'del') { deleteItem(d.k); return; }
-  if (a === 'menu') { st.menu = st.menu === d.m ? null : d.m; render(); $('#in-new')?.focus(); return; }
+  if (a === 'menu') { st.menu = st.menu === d.m ? null : d.m; render(); if (!d.m.startsWith('more:')) $('#in-new')?.focus({ preventScroll: true }); return; }
   if (a === 'setmodel' || a === 'seteffort' || a === 'setspace') { st[{ setmodel: 'newModel', seteffort: 'newEffort', setspace: 'newSpace' }[a]] = d.v; st.menu = null; render(); $('#in-new')?.focus(); return; }
   if (a === 'mode') { st.newMode = d.m; st.menu = null; render(); const t = $('#in-new'); t?.focus(); t?.setSelectionRange(t.value.length, t.value.length); return; }
   if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; render(); return; }
@@ -1203,42 +1207,42 @@ app.addEventListener('change', e => {
   if (k) { st[k] = e.target.value; render(); $('#in-new')?.focus(); }
 });
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(render, 150); });
-/* ================= membership: sign-in, invites, vouches, tokens, API keys ================= */
+/* ================= membership: sign-in, invites, tokens, API keys ================= */
 /* Rules (second pass; see RULES below). Everything here is mock state in memory: switching the
    "View as" control keeps what you did, and a reload starts over. */
 const ALLOWANCE = 2_000_000;                       /* included tokens per member per week */
 const RESET = Date.parse('2026-11-20T00:00:00Z');  /* weekly reset: Fridays 00:00 UTC */
 const WEEK = ['Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu'], TODAY = 3;
-const NEED = 2, SLOTS = 3, INVITE_DAYS = 7, PENDING_DAYS = 30, VOUCH_WAIT = 7;
+const SLOTS = 3, INVITE_DAYS = 7;
 const OPEN_INVITES = SLOTS;
 const day = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const addDays = (iso, n) => new Date(Date.parse(iso) + n * 864e5).toISOString();
 const fmtTok = n => n >= 1e6 ? (n / 1e6).toFixed(n % 1e6 ? 2 : 0).replace(/\.?0+$/, '') + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n);
 
 const MEMBERS = [
-  { u: 'sol', name: 'Sol Amari', x: 'solamari', inviter: null, joined: '2026-09-15T12:00:00Z', status: 'active', staff: 'admin', vouchers: [] },
-  { u: 'hal_b', name: 'Hal Bryce', x: 'halbryce', inviter: 'sol', joined: '2026-09-16T09:00:00Z', status: 'active', staff: 'mod', vouchers: ['sol', 'tomasz'] },
-  { u: 'ines.v', name: 'Ines V.', x: 'ines_v', inviter: 'sol', joined: '2026-09-15T15:00:00Z', status: 'active', vouchers: ['sol', 'hal_b'] },
-  { u: 'tomasz', name: 'Tomasz W.', x: 'tomaszw', inviter: 'sol', joined: '2026-09-18T10:00:00Z', status: 'active', vouchers: ['sol', 'hal_b'] },
-  { u: 'oduya', name: 'Oduya E.', x: 'oduya_e', inviter: 'hal_b', joined: '2026-09-29T10:00:00Z', status: 'active', vouchers: ['hal_b', 'sol'] },
-  { u: 'mira_k', name: 'Mira K.', x: 'mirak', inviter: 'hal_b', joined: '2026-10-04T10:00:00Z', status: 'active', vouchers: ['hal_b', 'sol'] },
-  { u: 'jun.park', name: 'Jun Park', x: 'junpark', inviter: 'ines.v', joined: '2026-10-02T10:00:00Z', status: 'active', vouchers: ['ines.v', 'sol'] },
-  { u: 'lettie', name: 'Lettie M.', x: 'lettiem', inviter: 'ines.v', joined: '2026-10-11T10:00:00Z', status: 'active', vouchers: ['ines.v', 'hal_b'] },
-  { u: 'priya.n', name: 'Priya Nair', x: 'priyanair', inviter: 'ines.v', joined: '2026-11-14T18:00:00Z', status: 'pending', vouchers: ['sol'] },
-  { u: 'kofi.a', name: 'Kofi Asante', x: 'kofi_a', inviter: 'jun.park', joined: '2026-11-15T20:00:00Z', status: 'pending', vouchers: [] },
-  { u: 'dmitri_k', name: 'Dmitri K.', x: 'dmitrik', inviter: 'hal_b', joined: '2026-11-12T08:00:00Z', status: 'pending', vouchers: ['hal_b'] },
+  { u: 'sol', name: 'Sol Amari', x: 'solamari', inviter: null, joined: '2026-09-15T12:00:00Z', status: 'active', staff: 'admin' },
+  { u: 'hal_b', name: 'Hal Bryce', x: 'halbryce', inviter: 'sol', joined: '2026-09-16T09:00:00Z', status: 'active', staff: 'mod' },
+  { u: 'ines.v', name: 'Ines V.', x: 'ines_v', inviter: 'sol', joined: '2026-09-15T15:00:00Z', status: 'active' },
+  { u: 'tomasz', name: 'Tomasz W.', x: 'tomaszw', inviter: 'sol', joined: '2026-09-18T10:00:00Z', status: 'active' },
+  { u: 'oduya', name: 'Oduya E.', x: 'oduya_e', inviter: 'hal_b', joined: '2026-09-29T10:00:00Z', status: 'active' },
+  { u: 'mira_k', name: 'Mira K.', x: 'mirak', inviter: 'hal_b', joined: '2026-10-04T10:00:00Z', status: 'active' },
+  { u: 'jun.park', name: 'Jun Park', x: 'junpark', inviter: 'ines.v', joined: '2026-10-02T10:00:00Z', status: 'active' },
+  { u: 'lettie', name: 'Lettie M.', x: 'lettiem', inviter: 'ines.v', joined: '2026-10-11T10:00:00Z', status: 'active' },
+  { u: 'priya.n', name: 'Priya Nair', x: 'priyanair', inviter: 'ines.v', joined: '2026-11-14T18:00:00Z', status: 'active' },
+  { u: 'kofi.a', name: 'Kofi Asante', x: 'kofi_a', inviter: null, joined: '2026-11-15T20:00:00Z', status: 'waiting' },
+  { u: 'dmitri_k', name: 'Dmitri K.', x: 'dmitrik', inviter: 'hal_b', joined: '2026-11-12T08:00:00Z', status: 'active' },
 ];
 const INVITES = [
   { code: 'SESS-4KQ7-M2', by: 'ines.v', created: '2026-11-13T10:00:00Z', used: 'priya.n' },
   { code: 'SESS-9TQ2-X8', by: 'ines.v', created: '2026-11-15T10:00:00Z', used: null },
-  { code: 'SESS-H3WP-6R', by: 'jun.park', created: '2026-11-14T10:00:00Z', used: 'kofi.a' },
+  { code: 'SESS-H3WP-6R', by: 'jun.park', created: '2026-11-14T10:00:00Z', used: null },
   { code: 'SESS-77LD-QA', by: 'lettie', created: '2026-11-11T10:00:00Z', used: null },
   { code: 'SESS-B2NE-5V', by: 'hal_b', created: '2026-11-10T10:00:00Z', used: 'dmitri_k' },
   { code: 'SESS-K8CM-3T', by: 'sol', created: '2026-11-16T08:00:00Z', used: null },
 ];
 const X_ACCOUNTS = [
   { x: 'ines_v', name: 'Ines V.', note: 'Has a Session account' },
-  { x: 'kofi_a', name: 'Kofi Asante', note: 'Pending Session account' },
+  { x: 'kofi_a', name: 'Kofi Asante', note: 'Signed in, no invite yet' },
   { x: 'rheaok', name: 'Rhea Okafor', note: 'No Session account yet' },
 ];
 const USAGE = {
@@ -1247,18 +1251,9 @@ const USAGE = {
 };
 const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:00Z', status: 'working', lastUsed: '2026-11-12T10:00:00Z' } } };
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
-const RULES = [
-  ['Invite-only', `Every account starts from a member's invite. A code works once and expires ${INVITE_DAYS} days after it is made.`],
-  ['Invite slots', `Each active member has ${SLOTS} slots. An open invite takes one, and so does each person you invited who is still pending, so you cannot have more than ${SLOTS} unvouched people in flight.`],
-  ['Pending first', 'New accounts can read every open space but cannot ask, post, branch, reply or like until they are active.'],
-  ['Two vouches', `Activation needs ${NEED} vouches from active members above you in the invite tree (your inviter, their inviter, and so on up) or from staff. At least one must come from someone other than your inviter, so nobody can bring in an account alone.`],
-  ['Vouching', `Members can invite and vouch once they have been active for ${VOUCH_WAIT} days, so a chain of new accounts cannot vouch each other in.`],
-  ['Withdrawing', 'A voucher can withdraw while the account is pending. Once it is active, vouches stay on both profiles.'],
-  ['Expiry', `Pending accounts close after ${PENDING_DAYS} days without activation, and the invite goes back to the inviter.`],
-];
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pend: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1266,23 +1261,11 @@ const canWrite = () => isActive();
 const nameOf = u => member(u)?.name || u;
 const ancestors = u => { const out = []; let m = member(u); while (m && m.inviter) { out.push(m.inviter); m = member(m.inviter); } return out; };
 const activeSince = m => m.activated || addDays(m.joined, 2);
-const canVouchYet = m => m.status === 'active' && (NOW - Date.parse(activeSince(m))) / 864e5 >= VOUCH_WAIT;
-const inReach = (voucher, target) => ancestors(target).includes(voucher) || !!member(voucher)?.staff;
-const eligible = (voucher, target) => { const v = member(voucher), t = member(target); return !!v && !!t && canVouchYet(v) && t.status === 'pending' && voucher !== target && inReach(voucher, target); };
-const progress = m => { const vs = m.vouchers.filter(v => member(v)?.status === 'active'); const other = vs.some(v => v !== m.inviter); return { n: vs.length, other, done: vs.length >= NEED && other }; };
-function vouch(voucher, target) {
-  const t = member(target); if (!eligible(voucher, target) || t.vouchers.includes(voucher)) return;
-  t.vouchers.push(voucher);
-  const pr = progress(t);
-  if (pr.done) { t.status = 'active'; t.activated = new Date(NOW).toISOString(); toast(`${t.name} is now active. They can invite and vouch from ${day(addDays(t.activated, VOUCH_WAIT))}.`); }
-  else toast(pr.n >= NEED ? `Vouch recorded. ${t.name} still needs one from someone other than ${nameOf(t.inviter)}.` : `Vouch recorded: ${pr.n} of ${NEED}.`);
-}
-function unvouch(voucher, target) { const t = member(target); if (t.status !== 'pending') return; t.vouchers = t.vouchers.filter(v => v !== voucher); toast('Vouch withdrawn.'); }
+const canInvite = m => m?.status === 'active';
 const myInvites = () => INVITES.filter(i => i.by === st.user);
 const inviteState = i => i.revoked ? 'revoked' : i.used ? 'used' : Date.parse(addDays(i.created, INVITE_DAYS)) < NOW ? 'expired' : 'open';
 const openCount = () => myInvites().filter(i => inviteState(i) === 'open').length;
-const pendingInvitees = () => MEMBERS.filter(m => m.inviter === st.user && m.status === 'pending').length;
-const slotsUsed = () => openCount() + pendingInvitees();
+const slotsUsed = () => openCount();
 function newCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = n => Array.from({ length: n }, () => a[Math.floor(Math.random() * a.length)]).join(''); return `SESS-${r(4)}-${r(2)}`; }
 const usage = () => (USAGE[st.user] ||= [0, 0, 0, 0, 0, 0, 0]);
 const used = () => usage().reduce((a, b) => a + b, 0);
@@ -1305,12 +1288,12 @@ function charge(q, tok) {
 let toastTimer;
 function toast(t) { st.toast = t; clearTimeout(toastTimer); toastTimer = setTimeout(() => { st.toast = ''; const el = $('#toast'); if (el) el.remove(); }, 2800); }
 
-/* composer: hidden while pending (the banner explains why) */
+/* composer: hidden without an invite (the banner explains why) */
 const pendingBanner = () => {
   if (st.auth === 'out') return `<div class="row new-row"><div class="pbanner out"><div><b>You're reading Session's open spaces.</b> Sign in to ask, branch and reply. New accounts need an invite from a member.</div><button class="ghost" data-ma="openauth" data-to="code">I have an invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></div><div></div></div>`;
   if (isActive() || st.auth !== 'in') return '';
-  const pr = progress(meM());
-  return `<div class="row new-row"><div class="pbanner"><span class="pdot"></span><div><b>Your account is waiting for vouches: ${pr.n} of ${NEED}.</b> You can read everything. Asking, posting, branching and replying open when it is active.</div><button class="ghost" data-ma="go" data-to="status">See status</button></div><div></div></div>`;
+  if (st.ui.pend === 'd') return `<div class="row new-row"><div class="pbanner inl"><div><b>You don't have an invite yet.</b> You can read every open space. Enter a code from a member to ask, post and reply.${redeemForm()}</div></div><div></div></div>`;
+  return `<div class="row new-row"><div class="pbanner"><span class="pdot"></span><div><b>You don't have an invite yet.</b> You can read every open space. Asking, posting and replying open once you enter an invite code.</div><button class="ghost" data-ma="go" data-to="status">Enter a code</button></div><div></div></div>`;
 };
 function composerOrLock(v) {
   if (!canWrite()) return '';
@@ -1329,14 +1312,14 @@ function meter() {
 
 /* ---- app bar ---- */
 function appbar() {
-  const m = meM(), asks = MEMBERS.filter(t => eligible(st.user, t.u) && !t.vouchers.includes(st.user) && !st.dismissed[st.user + '>' + t.u]).length;
+  const m = meM();
   const nav = (to, label, badge) => `<button class="nav" data-ma="go" data-to="${to}" aria-current="${st.screen === to}">${label}${badge ? `<span class="nbadge">${badge}</span>` : ''}</button>`;
   const open = st.menu === 'acct';
   return `<header class="appbar">${brandBtn()}
-    <nav class="navs">${isActive() ? nav('members', 'Members', asks) : nav('status', 'Status')}</nav><span class="grow"></span>${meter()}
+    <nav class="navs">${isActive() ? nav('members', 'Members') : nav('status', 'Invite')}</nav><span class="grow"></span>${meter()}
     <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}">${av(st.user, 'sm')}${I.down}</button>
-    ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff ? cap1(m.staff) : 'Member') : 'Pending'}</small></div></div><div class="msep"></div>
-      ${isActive() ? `<button class="mi" data-ma="go" data-to="members"><span>Invites and vouches</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>` : `<button class="mi" data-ma="go" data-to="status"><span>Account status</span></button>`}
+    ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff ? cap1(m.staff) : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
+      ${isActive() ? `<button class="mi" data-ma="go" data-to="members"><span>Invites</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
       <div class="msep"></div><button class="mi" data-ma="signout"><span>Sign out</span></button></div>` : ''}</span></header>`;
 }
 
@@ -1373,7 +1356,7 @@ function authScreen() {
       <p class="fine">You'll come back here after signing in on X.</p></div>`;
   } else if (st.flow === 'noaccount') {
     const a = X_ACCOUNTS.find(x => x.x === st.xacct);
-    body = `<div class="auth-c">${back('landing')}<h2>No Session account for @${esc(a.x)}</h2><p>Session is invite-only. Ask a member for an invite code, then sign up with it. If you already have a code, enter it now.</p><div class="auth-acts"><button class="btn1" data-ma="flow" data-to="code">Enter an invite code</button></div></div>`;
+    body = `<div class="auth-c">${back('landing')}<h2>No Session account for @${esc(a.x)}</h2><p>Session is invite-only. Ask a member for an invite code, then sign up with it. If you already have a code, enter it now.</p><div class="auth-acts"><button class="btn1" data-ma="flow" data-to="code">Enter an invite code</button><button class="btn2" data-ma="waitlist">Continue without one</button></div><p class="fine">Without an invite you can read every open space, and enter a code later.</p></div>`;
   } else if (st.flow === 'profile') {
     const a = X_ACCOUNTS.find(x => x.x === st.xacct), inv = INVITES.find(i => i.code === st.code), pf = st.profile;
     body = `<div class="auth-c">${back('xauth')}<h2>Create your account</h2><div class="inviter">${av(a.x)}<div><b>Signed in with X as @${esc(a.x)}</b><small>Invited by ${esc(nameOf(inv.by))} · code ${esc(inv.code)}</small></div></div>
@@ -1381,37 +1364,29 @@ function authScreen() {
       <label>Handle on Session<span class="hwrap"><span>@</span><input id="pf-handle" value="${esc(pf.handle)}" autocomplete="off" spellcheck="false"></span><small>Lowercase letters, numbers, dots and underscores; 3 to 20 characters.</small></label>
       ${pf.err ? `<p class="ferr">${esc(pf.err)}</p>` : ''}
       <label class="chk"><input type="checkbox" id="pf-rules"${pf.rules ? ' checked' : ''}> I have read the space rules and will follow them.</label>
-      <div class="next"><b>What happens next</b><p>Your account starts pending. It becomes active once ${NEED} members above you in the invite tree vouch for you, at least one of them someone other than your inviter (${esc(nameOf(inv.by))}).</p></div>
       <button type="submit" class="btn1 wide">Create account</button></form></div>`;
   }
   return body;
 }
 
-/* ---- status page (pending accounts) ---- */
+/* ---- status page: signed in with X, no invite yet ----
+   A explains what is open now, with the code field · B just the code field · C a message to send a member, then the code field
+   D no page; the banner on the feed holds the code field */
+const redeemForm = (label = 'Use code') => `<form class="code-f" data-mform="redeem"><input id="in-redeem" value="${esc(st.redeem || '')}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1">${label}</button></form>${st.redeemErr ? `<p class="ferr">${esc(st.redeemErr)}</p>` : ''}`;
 function statusPage() {
-  const m = meM(), pr = progress(m), el = MEMBERS.filter(v => eligible(v.u, m.u));
-  const closes = addDays(m.joined, PENDING_DAYS);
-  const check = (ok, t) => `<li class="${ok ? 'ok' : ''}">${ok ? CHECK : '<span class="ring"></span>'}${t}</li>`;
-  return `<div class="page"><div class="page-in narrow">
-    <h2>Waiting for vouches</h2><p class="lede">Hi ${esc(m.name.split(' ')[0])}. Your account is pending: you can read every open space, and you can ask and post once ${NEED} members vouch for you.</p>
-    <div class="pcard"><div class="steps">${Array.from({ length: NEED }, (_, i) => `<span class="${i < pr.n ? 'on' : ''}"></span>`).join('')}</div><b>${pr.n} of ${NEED} vouches</b>
-      <ul class="checks">${check(pr.n >= NEED, `${NEED} vouches from members above you in the invite tree, or staff`)}${check(pr.other, `At least one from someone other than ${esc(nameOf(m.inviter))}, who invited you`)}</ul>
-      ${m.vouchers.length ? `<p class="vby">Vouched by ${m.vouchers.map(v => `<span class="vb">${av(v, 'xs')}${esc(v)}</span>`).join('')}</p>` : ''}</div>
-    <h3>Who can vouch for you</h3><p class="sub">Members above you in the invite tree, and staff. Session lets you send each of them one reminder a day.</p>
-    <div class="list">${el.map(v => `<div class="li">${av(v.u, 'sm')}<div class="grow"><b>${esc(v.name)}</b><small>@${esc(v.u)} · ${v.u === m.inviter ? 'invited you' : v.staff ? cap1(v.staff) : 'above you in the tree'}</small></div>
-      ${m.vouchers.includes(v.u) ? '<span class="chip ok">Vouched</span>' : st.reminded[v.u] ? '<span class="chip">Reminded today</span>' : `<button class="ghost" data-ma="remind" data-u="${v.u}">Send a reminder</button>`}</div>`).join('')}</div>
-    <p class="fine">If it isn't activated, this account closes on ${day(closes)} and ${esc(nameOf(m.inviter))} gets the invite back.</p>
-    <div class="auth-acts"><button class="btn2" data-ma="go" data-to="feed">Browse the feed</button></div></div></div>`;
+  const m = meM(), first = esc(m.name.split(' ')[0]), msg = `I'm on Session as @${m.u}. Could you send me an invite link?`;
+  const browse = `<div class="auth-acts"><button class="btn2" data-ma="go" data-to="feed">Browse the feed</button></div>`;
+  const v = st.ui.pend;
+  if (v === 'b') return `<div class="page"><div class="page-in narrow pend-b"><h2>Enter an invite code</h2><p class="lede">Session is invite-only. Ask a member for a code or a link.</p>${redeemForm()}</div></div>`;
+  if (v === 'c') return `<div class="page"><div class="page-in narrow"><h2>Ask a member for an invite</h2><p class="lede">Hi ${first}. Session is invite-only. Anyone with an account can send you a link.</p>
+    <div class="pcard"><p class="reqmsg">${esc(msg)}</p><button class="btn1 sm" data-ma="copy" data-t="${esc(msg)}">Copy message</button></div>
+    <h3>Have a code?</h3>${redeemForm()}${browse}</div></div>`;
+  return `<div class="page"><div class="page-in narrow"><h2>You need an invite</h2><p class="lede">Hi ${first}. You're signed in as @${esc(m.u)}, but Session is invite-only. Enter a code or link from a member to start asking and posting.</p>
+    ${redeemForm()}
+    <div class="pcard"><ul class="checks"><li class="ok">${CHECK}Read every open space and its branches</li><li><span class="ring"></span>Ask, post, branch and reply</li><li><span class="ring"></span>Invite people</li></ul></div>${browse}</div></div>`;
 }
 
-/* ---- members page: vouch requests, invites, tree (variants), rules ---- */
-const statusChip = m => m.status === 'active' ? '' : `<span class="tpend">Pending · ${progress(m).n} of ${NEED}</span>`;
-const vouchCtl = m => {
-  if (m.status !== 'pending') return '';
-  if (m.vouchers.includes(st.user)) return `<span class="vdone">${CHECK}You vouched</span><button class="tlink" data-ma="unvouch" data-u="${m.u}">Withdraw</button>`;
-  if (eligible(st.user, m.u)) return `<button class="btn1 sm" data-ma="askvouch" data-u="${m.u}">Vouch</button>`;
-  return '';
-};
+/* ---- members page: invite tree and invites ---- */
 function treeRows() {
   const out = [], walk = (u, d) => { out.push({ m: member(u), d }); MEMBERS.filter(c => c.inviter === u).sort((a, b) => a.joined < b.joined ? -1 : 1).forEach(c => walk(c.u, d + 1)); };
   if (st.treeScope === 'mine') walk(st.user, 0); else walk('sol', 0);
@@ -1424,14 +1399,13 @@ function treeA() {
     const y = i * H + H / 2;
     if (d > 0 && idx[m.inviter] != null) { const px = X(d - 1), py = idx[m.inviter] * H + H / 2; paths += `<path d="M${px} ${py + 11} L${px} ${y - 6} Q${px} ${y} ${px + 6} ${y} L${X(d) - 11} ${y}"/>`; }
   });
-  return `<div class="ttree"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ m, d }) => `<div class="trow${m.u === st.user ? ' me' : ''}" style="padding-left:${X(d) - 10}px">${av(m.u, 'sm')}<span class="tn"><b>${esc(m.u)}${m.staff ? `<span class="trole"> · ${cap1(m.staff)}</span>` : ''}</b><small>${esc(m.name)}</small></span><span class="grow"></span>${statusChip(m)}${vouchCtl(m)}</div>`).join('')}</div>`;
+  return `<div class="ttree"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ m, d }) => `<div class="trow${m.u === st.user ? ' me' : ''}" style="padding-left:${X(d) - 10}px">${av(m.u, 'sm')}<span class="tn"><b>${esc(m.u)}${m.staff ? `<span class="trole"> · ${cap1(m.staff)}</span>` : ''}</b><small>${esc(m.name)}</small></span></div>`).join('')}</div>`;
 }
 /* ---- members page, split into sections so each has variants ----
    inv:    A slots bar + full list · B one line + open codes only · C one button that shows the newest open code
    layout: A two columns · B one column */
-const vouchReqs = () => MEMBERS.filter(t => eligible(st.user, t.u) && !t.vouchers.includes(st.user) && !st.dismissed[st.user + '>' + t.u]);
 function treeSection() {
-  const sub = 'Who invited whom. You can vouch for pending members anywhere below you.';
+  const sub = 'Who invited whom.';
   return `<section><div class="shead"><h3>Invite tree</h3><span class="modes" role="group">${[['all', 'Everyone'], ['mine', 'Your branch']].map(([k, l]) => `<button type="button" data-ma="scope" data-s="${k}" aria-pressed="${st.treeScope === k}">${l}</button>`).join('')}</span></div>
     <p class="sub">${sub}</p>${treeA()}</section>`;
 }
@@ -1439,8 +1413,8 @@ function invSection() {
   /* all variants start from one invite link (the previous C):
      A link field + Copy, expiry, Revoke, Make another · B one button that copies a link, made on demand
      C A plus the people you invited · D every open link stacked · E the link as plain text, count in the heading */
-  const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), used = slotsUsed(), can = used < SLOTS && canVouchYet(meM());
-  const why = !canVouchYet(meM()) ? `You can invite ${VOUCH_WAIT} days after your account became active.` : used >= SLOTS ? 'All invites are in use. One frees when an invite expires or someone you invited is vouched in.' : `Each link works for one person and expires in ${INVITE_DAYS} days.`;
+  const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), used = slotsUsed(), can = used < SLOTS && canInvite(meM());
+  const why = !canInvite(meM()) ? 'You can invite once your account is active.' : used >= SLOTS ? `You have ${SLOTS} open invites. One frees when it is used, expires or is revoked.` : `Each link works for one person and expires in ${INVITE_DAYS} days.`;
   const open = inv.filter(i => inviteState(i) === 'open'), i = open[0], L = x => `session.app/i/${x.code}`, exp = x => day(addDays(x.created, INVITE_DAYS));
   const left = SLOTS - used, make = (cls = 'btn1 wide', t = 'Make an invite link') => `<button class="${cls}" data-ma="newinvite"${can ? '' : ' disabled'}>${t}</button>`;
   const field = x => `<div class="ilink"><code>${L(x)}</code><button class="btn1 sm" data-ma="copy" data-t="${L(x)}">Copy</button></div>`;
@@ -1455,7 +1429,7 @@ function invSection() {
     ${i ? `<div class="ltext"><span>${L(i)}</span><button class="tlink" data-ma="copy" data-t="${L(i)}">Copy</button></div><p class="fine">Works once, until ${exp(i)}. ${revoke(i)}${can ? ` · <button class="tlink inl" data-ma="newinvite">New link</button>` : ''}</p>` : `${make('tlink', 'Make an invite link')}<p class="fine">${why}</p>`}</section>`;
   const base = i ? `${field(i)}<p class="fine">Works once, until ${exp(i)}. ${open.length > 1 ? `${open.length - 1} more open. ` : ''}${revoke(i)}</p>${can ? make('tlink', 'Make another') : ''}` : `${make()}<p class="fine">${why}</p>`;
   if (v === 'c') { const ppl = MEMBERS.filter(m => m.inviter === st.user);
-    return `<section class="box invc"><h3>Invite someone</h3>${base}${ppl.length ? `<h4>You invited</h4><div class="ippl">${ppl.map(m => `<div class="ip">${av(m.u, 'xs')}<b>${esc(m.u)}</b><span class="grow"></span><small>${m.status === 'active' ? 'Active' : `Pending · ${progress(m).n} of ${NEED}`}</small></div>`).join('')}</div>` : ''}</section>`; }
+    return `<section class="box invc"><h3>Invite someone</h3>${base}${ppl.length ? `<h4>You invited</h4><div class="ippl">${ppl.map(m => `<div class="ip">${av(m.u, 'xs')}<b>${esc(m.u)}</b><span class="grow"></span><small>Joined ${day(m.joined)}</small></div>`).join('')}</div>` : ''}</section>`; }
   return `<section class="box invc"><h3>Invite someone</h3>${base}</section>`;
 }
 function membersPage() {
@@ -1514,11 +1488,11 @@ function usagePage() {
 
 /* ---- app render ---- */
 function renderMock() {
-  const personas = [['out', 'Signed out'], ['sol', 'Admin'], ['ines.v', 'Member'], ['kofi.a', 'Pending'], ...MEMBERS.filter(m => m.created).map(m => [m.u, `New account (${m.status === 'active' ? 'active' : 'pending'})`])];
+  const personas = [['out', 'Signed out'], ['sol', 'Admin'], ['ines.v', 'Member'], ['kofi.a', 'No invite'], ...MEMBERS.filter(m => m.created).map(m => [m.u, `New account (${m.status === 'active' ? 'active' : 'no invite'})`])];
   const cur = st.auth === 'out' ? 'out' : st.user;
   const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcde'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
-    ${seg('inv', 'Invites', 5)}${seg('runs', 'Run rows', 5)}
+    ${seg('inv', 'Invites', 5)}${seg('pend', 'No-invite screen', 4)}${seg('runs', 'Run rows', 5)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -1529,26 +1503,19 @@ function render() {
   $('#bar').innerHTML = st.auth === 'out' ? appbarOut() : appbar();
   if (st.auth === 'out') st.screen = 'feed';
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
-  if (st.screen === 'feed') renderFeed();
+  if (st.screen === 'feed' || (st.screen === 'status' && st.ui.pend === 'd' && !isActive())) renderFeed();
   else { pg.innerHTML = (st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
   app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg').forEach(x => x.remove());
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
-  if (st.confirm) app.insertAdjacentHTML('beforeend', confirmEl());
   if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
 }
 const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}</div>` : '';
-function confirmEl() {
-  const t = member(st.confirm.u);
-  return `<div class="scrim" data-ma="cancel"></div><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-h"><h3 id="dlg-h">Vouch for ${esc(t.name)}?</h3>
-    <div class="inviter">${av(t.u)}<div><b>@${esc(t.u)}</b><small>Invited by ${esc(nameOf(t.inviter))} · ${progress(t).n} of ${NEED} vouches so far</small></div></div>
-    <p>Vouching says you know this person and expect them to follow the space rules. Your name is shown on their profile and yours, and you can withdraw it until their account is active.</p>
-    <div class="dacts"><button class="btn2" data-ma="cancel">Cancel</button><button class="btn1" data-ma="dovouch" data-u="${t.u}">Vouch</button></div></div>`;
-}
 /* Each variant control also sets up a view that shows it: the signed-out landing for Sign-in,
    an active member on Members for Tree, on the feed for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
+  if (k === 'pend') { st.authOpen = false; if (!(st.auth === 'in' && meM()?.status === 'waiting')) { const w = MEMBERS.find(m => m.status === 'waiting'); st.user = w ? w.u : 'kofi.a'; } st.auth = 'in'; st.redeemErr = ''; st.screen = 'status'; render(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'feed' : 'usage';
   render();
@@ -1595,15 +1562,11 @@ app.addEventListener('click', e => {
     render(); return;
   }
   if (a === 'signout') { st.auth = 'out'; st.authOpen = false; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.xacct = null; st.menu = null; render(); return; }
-  if (a === 'askvouch') { st.confirm = { u: d.u }; render(); app.querySelector('.dialog .btn1')?.focus(); return; }
   if (a === 'cancel') { st.confirm = null; render(); return; }
-  if (a === 'dovouch') { vouch(st.user, d.u); st.confirm = null; render(); return; }
-  if (a === 'unvouch') { unvouch(st.user, d.u); render(); return; }
-  if (a === 'notnow') { st.dismissed[st.user + '>' + d.u] = true; toast(`Hidden. ${nameOf(d.u)} stays in the tree, where you can still vouch.`); render(); return; }
   if (a === 'scope') { st.treeScope = d.s; render(); return; }
-  if (a === 'remind') { st.reminded[d.u] = true; toast(`Reminder sent to ${nameOf(d.u)}.`); render(); return; }
-  if (a === 'newinvite') { if (slotsUsed() >= SLOTS || !canVouchYet(meM())) return; const code = newCode(); INVITES.push({ code, by: st.user, created: new Date(NOW).toISOString(), used: null }); toast(`Invite ${code} created. Send the link to one person.`); render(); return; }
-  if (a === 'copynew') { let i = myInvites().find(x => inviteState(x) === 'open'); if (!i) { if (slotsUsed() >= SLOTS || !canVouchYet(meM())) return; i = { code: newCode(), by: st.user, created: new Date(NOW).toISOString(), used: null }; INVITES.push(i); } const t = `session.app/i/${i.code}`; try { navigator.clipboard.writeText(t).catch(() => {}); } catch {} toast('Invite link copied. Send it to one person.'); render(); return; }
+  if (a === 'waitlist') { const x = X_ACCOUNTS.find(z => z.x === st.xacct), u = st.xacct.replace(/[^a-z0-9._]/g, '').slice(0, 20); if (!member(u)) MEMBERS.push({ created: true, u, name: x.name, x: st.xacct, inviter: null, joined: new Date(NOW).toISOString(), status: 'waiting' }); signIn(u); render(); return; }
+  if (a === 'newinvite') { if (slotsUsed() >= SLOTS || !canInvite(meM())) return; const code = newCode(); INVITES.push({ code, by: st.user, created: new Date(NOW).toISOString(), used: null }); toast(`Invite ${code} created. Send the link to one person.`); render(); return; }
+  if (a === 'copynew') { let i = myInvites().find(x => inviteState(x) === 'open'); if (!i) { if (slotsUsed() >= SLOTS || !canInvite(meM())) return; i = { code: newCode(), by: st.user, created: new Date(NOW).toISOString(), used: null }; INVITES.push(i); } const t = `session.app/i/${i.code}`; try { navigator.clipboard.writeText(t).catch(() => {}); } catch {} toast('Invite link copied. Send it to one person.'); render(); return; }
   if (a === 'revoke') { INVITES.find(i => i.code === d.code).revoked = true; toast('Invite revoked.'); render(); return; }
   if (a === 'copy') { const done = () => { toast('Link copied.'); render(); }; try { navigator.clipboard.writeText(d.t).then(done, () => { toast(d.t); render(); }); } catch { toast(d.t); render(); } return; }
   if (a === 'keyadd') { st.keyForm = d.k; st.keyErr = ''; render(); $('#in-key')?.focus(); return; }
@@ -1623,14 +1586,21 @@ app.addEventListener('submit', e => {
     st.codeErr = !c ? 'Enter the code from your invite.' : !inv ? "That code doesn't exist. Check it against the invite, or ask the person who invited you." : inviteState(inv) === 'used' ? 'That code has already been used. Each code works for one person; ask for a new one.' : inviteState(inv) !== 'open' ? 'That code has expired or was revoked. Ask the person who invited you for a new one.' : '';
     render(); return;
   }
+  if (kind === 'redeem') {
+    const c = $('#in-redeem').value.trim().toUpperCase(), inv = INVITES.find(i => i.code === c.replace(/^.*\//, '')); st.redeem = c;
+    st.redeemErr = !c ? 'Enter the code from your invite.' : !inv ? "That code doesn't exist. Check it against the invite." : inviteState(inv) === 'used' ? 'That code has already been used. Ask for a new one.' : inviteState(inv) !== 'open' ? 'That code has expired or was revoked. Ask for a new one.' : '';
+    if (st.redeemErr) { render(); return; }
+    const m = meM(); inv.used = m.u; m.status = 'active'; m.inviter = inv.by; m.joined = new Date(NOW).toISOString(); st.redeem = ''; st.screen = 'feed';
+    toast(`You're in. ${nameOf(inv.by)} invited you.`); render(); return;
+  }
   if (kind === 'profile') {
     const pf = st.profile; pf.name = $('#pf-name').value.trim(); pf.handle = $('#pf-handle').value.trim().toLowerCase(); pf.rules = $('#pf-rules').checked;
     pf.err = !pf.name ? 'Enter a name.' : !/^[a-z0-9._]{3,20}$/.test(pf.handle) ? 'Handles use 3 to 20 lowercase letters, numbers, dots or underscores.' : member(pf.handle) ? `@${pf.handle} is taken. Try another.` : !pf.rules ? 'Confirm that you will follow the space rules.' : '';
     if (pf.err) { render(); return; }
     const inv = INVITES.find(i => i.code === st.code);
     inv.used = pf.handle;
-    MEMBERS.push({ created: true, u: pf.handle, name: pf.name, x: st.xacct, inviter: inv.by, joined: new Date(NOW).toISOString(), status: 'pending', vouchers: [] });
-    st.code = ''; signIn(pf.handle); toast('Account created. It is pending until two members vouch for you.'); render(); return;
+    MEMBERS.push({ created: true, u: pf.handle, name: pf.name, x: st.xacct, inviter: inv.by, joined: new Date(NOW).toISOString(), status: 'active' });
+    st.code = ''; signIn(pf.handle); toast(`Account created. ${nameOf(inv.by)} invited you.`); render(); return;
   }
   if (kind.startsWith('key:')) {
     const id = kind.slice(4), P = PROVIDERS[id], v = $('#in-key').value.trim();
