@@ -5,9 +5,10 @@
 // navigation suite (back links, search, notifications, Saved, system states)
 // follow.
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Request } from "@playwright/test";
 
 import { APP_ORIGIN } from "./constants.js";
+import type { KeyedRecord } from "./fixtures/mockup.js";
 import { loadScenario, pathFor, signInAs } from "./scenario.js";
 
 const HEADERS = { "x-requested-with": "session", "content-type": "application/json" };
@@ -145,8 +146,12 @@ const SCREENS: Screen[] = [
     scenario: "asks: your ask",
     args: ASK("tokens", { space: "markets", tok: 30000 }),
     url: "/s/markets/t/01M7HWS780000000000000000E",
+    // the mockup's tmStopWhy: this week's allowance and its reset day (the
+    // scenario's clock is Monday Nov 16; the allowance resets on Monday 00:00 UTC)
     check: (p) =>
-      text(p, /You’ve used this week’s included tokens|You’ve used this month’s included tokens/),
+      expect(p.locator("#th-a .as-why")).toHaveText(
+        "You’ve used this week’s included tokens. The agent stopped after 30k tokens and wrote nothing. They reset Nov 23.",
+      ),
   },
   {
     key: "as-fail-key",
@@ -498,3 +503,234 @@ test.describe("system states", () => {
     await expect(page.getByRole("tab", { name: "About" })).toBeHidden();
   });
 });
+
+// Device runs on the web (phase 2 review round 1, finding 5; AGENTS.md: a
+// device answer is labelled "<handle>’s desktop"; after an interrupt the web
+// offers "Run with included tokens"). The mockup's sx-dr-label, sx-dr-view
+// and sx-dr-int-web, in their default Variants.
+/** The thread whose ask a device ran, in a scenario's records. */
+function deviceThread(rs: KeyedRecord[]): string {
+  const run = rs.find(
+    (r) => r.record.kind === "run" && r.record["node"] === "r" && r.record["executor"] != null,
+  );
+  const th = rs.find((r) => r.key === `thread:${String(run?.record["th"])}`);
+  const sp = rs.find((r) => r.record.kind === "space" && r.record["id"] === th?.record["s"]);
+  return `/s/${String(sp?.record["name"])}/t/${String(th?.record["id"])}`;
+}
+
+for (const [layout, viewport] of [
+  ["Desktop", { width: 1318, height: 900 }],
+  ["Mobile Web", { width: 390, height: 844 }],
+] as const) {
+  test.describe(`device runs, ${layout}`, () => {
+    test.use({ viewport });
+
+    test("sx-dr-label: an answer a Mac wrote is labelled with its desktop", async ({ page }) => {
+      const { records } = await loadScenario(
+        page.context().request,
+        "device runs: an answer from a Mac",
+      );
+      await signInAs(page.context());
+      await page.goto(deviceThread(records));
+      // the answer's meta line is the label, with no tokens (a device answer
+      // reports no usage)
+      const meta = page.locator("#qt-n-r > p.tm-meta");
+      await expect(meta).toHaveCount(1);
+      await expect(meta).toHaveClass(/sx-dl/);
+      await expect(meta).toHaveText("Answered on ines.v’s desktop · Claude Code");
+      await expect(page.locator(".th-facts")).toContainText("Ran onines.v’s desktop · Claude Code");
+    });
+
+    test("sx-dr-view: another member's device run, running, with no token count", async ({
+      page,
+    }) => {
+      const { records } = await loadScenario(
+        page.context().request,
+        "device runs: mira_k’s ask running",
+      );
+      await signInAs(page.context());
+      await page.goto(deviceThread(records));
+      const run = page.locator("#th-a .run.sx-drun");
+      await expect(run.locator(".run-h")).toHaveText(
+        "Running on mira_k’s desktop· Claude Code · attempt 2",
+      );
+      await expect(run.locator(".as-why")).toHaveText(
+        "The answer shows here when Claude Code finishes. Device runs report their text, not their steps or token use.",
+      );
+      await expect(page.locator("#th-a").getByText(/tokens so far/)).toHaveCount(0);
+      // not the asker's: no Stop
+      await expect(run.getByRole("button")).toHaveCount(0);
+    });
+
+    test("sx-dr-int-web: another member's interrupted device run", async ({ page }) => {
+      const { records } = await loadScenario(
+        page.context().request,
+        "device runs: mira_k’s run interrupted",
+      );
+      await signInAs(page.context());
+      await page.goto(deviceThread(records));
+      const box = page.locator("#th-a .as-fail");
+      await expect(box.locator(".run-h")).toHaveText("!Couldn’t finish the answer");
+      await expect(box.locator(".as-why")).toHaveText(
+        "The run stopped: mira_k’s desktop went to sleep or lost its connection while Claude Code worked. The agent wrote nothing. mira_k can run it again.",
+      );
+      await expect(box.getByRole("button")).toHaveCount(0);
+    });
+
+    test("sx-dr-int-web, the asker: Run with included tokens starts a server run", async ({
+      page,
+    }) => {
+      const { records } = await loadScenario(
+        page.context().request,
+        "device runs: mira_k’s run interrupted",
+      );
+      await signInAs(page.context(), "mira_k");
+      await page.goto(deviceThread(records));
+      const box = page.locator("#th-a .as-fail");
+      await expect(box.locator(".as-why")).toHaveText(
+        "The run stopped: mira_k’s desktop went to sleep or lost its connection while Claude Code worked. The agent wrote nothing.",
+      );
+      // no Run again on the web: only the included tokens
+      await expect(box.getByRole("button")).toHaveCount(1);
+      const sent = page.waitForRequest((r) => r.url().endsWith("/api/rpc/research.retryNode"));
+      await box.getByRole("button", { name: "Run with included tokens" }).click();
+      const body = (await sent).postDataJSON() as Record<string, unknown>;
+      expect(body["pay"]).toBe("session");
+      expect(body["executor"] ?? null).toBeNull();
+      await expect(page.locator("#th-a .as-fail")).toHaveCount(0);
+    });
+  });
+}
+
+// Streamed answer text (phase 2 review round 1, findings 6 and 9): the run
+// frames of the sync stream (ADR-22) show as the answer's text while it
+// runs, a frame at or below the last seq is dropped, and the text goes when
+// the answer arrives. The page's event stream is answered here, one
+// connection per step (the client connects again after a stream ends), so
+// the test decides what each frame says; signed in and signed out (the
+// server sends run frames to a signed-out reader of an open space too).
+const RUN_HEADERS = { "x-requested-with": "session", "content-type": "application/json" };
+
+/** The page's event stream, one connection at a time: `send` answers the
+ * open connection with these events (the client connects again after it
+ * ends), or the next one if none is open. A connection the page dropped
+ * (it reconnects when the logs it reads change) is not answered. */
+async function holdEvents(page: Page) {
+  const queue: string[] = [];
+  const open: { req: Request; answer: (body: string) => void }[] = [];
+  page.on("requestfailed", (rq) => {
+    const k = open.findIndex((o) => o.req === rq);
+    if (k >= 0) open.splice(k, 1);
+  });
+  await page.route("**/api/sync/events**", async (r) => {
+    const body = await new Promise<string>((answer) => {
+      const b = queue.shift();
+      if (b !== undefined) answer(b);
+      else open.push({ req: r.request(), answer });
+    });
+    await r.fulfill({ status: 200, contentType: "text/event-stream", body }).catch(() => undefined);
+  });
+  return {
+    send(...events: object[]) {
+      const body = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
+      const o = open.pop();
+      open.length = 0;
+      if (o) o.answer(body);
+      else queue.push(body);
+    },
+  };
+}
+
+for (const signedIn of [true, false])
+  test(`streamed answer text, ${signedIn ? "signed in" : "signed out"}`, async ({ page }) => {
+    const { records } = await loadScenario(page.context().request, "asks: your ask", {
+      args: ASK("running"),
+    });
+    if (signedIn) await signInAs(page.context());
+    const run = records.find(
+      (r) =>
+        r.record.kind === "run" &&
+        r.record["status"] === "running" &&
+        r.record["node"] === "r" &&
+        r.record["executor"] === null,
+    );
+    const th = String(run?.record["th"]);
+    const thread = records.find((r) => r.key === `thread:${th}`);
+    expect(run && thread).toBeTruthy();
+    const id = String(run?.record["id"]);
+    const attempt = Number(run?.record["attempt"]);
+    const events = await holdEvents(page);
+    await page.goto(`/s/public/t/${th}`);
+    await expect(page.locator("#th-a").getByText("Researching")).toBeVisible();
+    // the page has opened the logs it reads: its stream is the last one
+    await page.waitForTimeout(500);
+    const live = page.locator("#th-a .as-live");
+    events.send({ type: "run", run: id, attempt, seq: 1, text: "Shortlist so far" });
+    await expect(live).toHaveText("Shortlist so far");
+    events.send({ type: "run", run: id, attempt, seq: 2, text: ", newest first." });
+    await expect(live).toHaveText("Shortlist so far, newest first.");
+    // a frame at or below the last seq is dropped; the next one is applied
+    events.send(
+      { type: "run", run: id, attempt, seq: 2, text: " REPEATED" },
+      { type: "run", run: id, attempt, seq: 1, text: " OLDER" },
+      { type: "run", run: id, attempt, seq: 3, text: " Done." },
+    );
+    await expect(live).toHaveText("Shortlist so far, newest first. Done.");
+    // the answer arrives: the run completes and the thread has its answer
+    const answer = "Three novels treat agents bargaining for their owners.";
+    const put = await page.request.post(`${APP_ORIGIN}/api/test/records`, {
+      headers: RUN_HEADERS,
+      data: {
+        records: [
+          { key: run?.key, record: { ...run?.record, status: "complete", rev: undefined } },
+          {
+            key: thread?.key,
+            record: { ...thread?.record, sum: answer, running: false, rev: undefined },
+          },
+        ],
+      },
+    });
+    expect(put.ok()).toBe(true);
+    events.send({ type: "poke", logs: [`space:${String(thread?.record["s"])}`] });
+    await expect(page.locator("#th-a").getByText(answer)).toBeVisible();
+    await expect(page.locator(".as-live")).toHaveCount(0);
+    await expect(page.getByText("Shortlist so far")).toHaveCount(0);
+    // a follow-up's run streams the same way
+    const fu0 = records.find((r) => r.record.kind === "followup");
+    expect(fu0).toBeTruthy();
+    const fu = "01M7HWS78000000000000000F1";
+    const fuRun = "01M7HWS78000000000000000R1";
+    const fuRec = {
+      ...fu0?.record,
+      id: fu,
+      th,
+      s: thread?.record["s"],
+      par: null,
+      u: "hal_b",
+      q: "Which of these were written before 2010?",
+      a: null,
+      rev: undefined,
+    };
+    const runRec = { ...run?.record, id: fuRun, node: fu, u: "hal_b", rev: undefined };
+    const add = await page.request.post(`${APP_ORIGIN}/api/test/records`, {
+      headers: RUN_HEADERS,
+      data: {
+        records: [
+          { key: `followup:${fu}`, record: fuRec },
+          { key: `run:${fuRun}`, record: runRec },
+        ],
+      },
+    });
+    expect(add.ok()).toBe(true);
+    events.send({ type: "poke", logs: [`space:${String(thread?.record["s"])}`] });
+    const node = page.locator(`#qt-n-${fu}`);
+    await expect(node.getByText("Researching")).toBeVisible();
+    await page.waitForTimeout(300);
+    events.send(
+      { type: "run", run: fuRun, attempt, seq: 1, text: "Two of them:" },
+      { type: "run", run: fuRun, attempt, seq: 1, text: " AGAIN" },
+    );
+    await expect(node.locator(".as-live")).toHaveText("Two of them:");
+    events.send({ type: "run", run: fuRun, attempt, seq: 2, text: " Accelerando and Walkaway." });
+    await expect(node.locator(".as-live")).toHaveText("Two of them: Accelerando and Walkaway.");
+  });

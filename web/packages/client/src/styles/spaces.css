@@ -3575,11 +3575,15 @@ html:root .sub-page.acx-page:is(.acx-tabs-v, .acx-outp) { padding-left: 14px; pa
 @media (prefers-reduced-motion: reduce) { .sx-caret { animation: none; } }
 /* device sign-in: the app's window and the browser's approval page */
 .sx-sign .cs-na { max-width: 440px; }
+.as-pchk { display: inline-flex; align-items: center; gap: 6px; }
+.as-pchk .spin { flex: none; width: 12px; height: 12px; }
 .sx-wait { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--t-muted); }
 .sx-dcard { text-align: left; align-self: stretch; }
 .sx-dcard .sx-dl2 { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: var(--fs-sm); margin: 0; }
 .sx-dcard dt { color: var(--t-faint); }
 .sx-dcard dd { margin: 0; color: var(--t-primary); }
+.sx-dcode { align-self: stretch; text-align: left; flex: none; }
+.sx-dcode input { font-size: var(--fs-base); letter-spacing: .08em; text-transform: uppercase; }
 /* the Phone app's You › Account: Devices */
 .sx-devi { width: 34px; height: 34px; flex: none; border-radius: 9px; display: grid; place-items: center; background: var(--fill-subtle); color: var(--t-secondary); }
 .sx-devi svg { width: 16px; height: 16px; }

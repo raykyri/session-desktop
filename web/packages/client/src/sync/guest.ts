@@ -2,13 +2,17 @@
 // open (open spaces, and a closed space's public records), kept current by
 // the event stream's pokes. The sync client is a person's replica and never
 // reads as nobody (a read made as nobody signs it out), so a guest reads
-// through the transport directly. Nothing is written as a guest.
+// through the transport directly. Nothing is written as a guest. The
+// stream's run frames (in-flight answer text, which the server sends to a
+// signed-out reader of an open space too) go to `onRun` listeners (phase 2
+// review round 1, finding 9).
 
 import {
   isReadError,
   type Changing,
   type CursorMap,
   type LogId,
+  type RunFrame,
   type StoredRecord,
   type Transport,
 } from "@session/sync/client";
@@ -24,6 +28,7 @@ interface GuestLog {
 export class GuestStore implements RecordSource, Changing {
   private readonly logs = new Map<LogId, GuestLog>();
   private readonly listeners = new Set<() => void>();
+  private readonly runListeners = new Set<(f: RunFrame) => void>();
   private ver = 0;
   private stream: AbortController | null = null;
   private stopped = false;
@@ -41,6 +46,12 @@ export class GuestStore implements RecordSource, Changing {
   onChange(listener: () => void) {
     this.listeners.add(listener);
     return () => void this.listeners.delete(listener);
+  }
+
+  /** In-flight text of runs, as the stream sends it. */
+  onRun(listener: (f: RunFrame) => void) {
+    this.runListeners.add(listener);
+    return () => void this.runListeners.delete(listener);
   }
 
   private changed() {
@@ -136,6 +147,10 @@ export class GuestStore implements RecordSource, Changing {
         await this.transport.listen(
           () => this.cursors(),
           (e) => {
+            if (e.type === "run") {
+              for (const l of [...this.runListeners]) l(e);
+              return;
+            }
             if (e.type !== "poke") return;
             for (const log of e.logs) {
               const l = this.logs.get(log);

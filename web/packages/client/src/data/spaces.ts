@@ -9,6 +9,8 @@ import type * as pkg from "@session/mutators";
 import type { Reader } from "../sync/reader.js";
 import type { Directory } from "../sync/session.js";
 
+import { plainText } from "./format.js";
+
 export type Role = pkg.SpaceRole;
 
 /** A space as a screen shows it: its record and its activity. */
@@ -151,13 +153,7 @@ export function summaryOf(md: string | null): string | null {
       .split(/\n\s*\n/)
       .map((p) => p.trim())
       .find((p) => p && !/^(#|```|\||-{3})/.test(p)) ?? "";
-  const text = para
-    .replace(/\[(\d{1,3})\]\([^)]*\)/g, "")
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/^[-*+]\s+/gm, "")
-    .replace(/[*_`>#]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const text = plainText(para);
   return text.length > 280 ? `${text.slice(0, 279).trimEnd()}…` : text;
 }
 

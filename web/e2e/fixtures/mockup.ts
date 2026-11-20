@@ -287,6 +287,21 @@ function itemKey(key: string): string | null {
   return `thread:${th}`;
 }
 
+/** A report's key as `reports.create` stores it (the moderation key:
+ * "a:<thread>" for an ask's answer, "p:<thread>" for a post, "f:<thread>:<id>",
+ * "r:<thread>:<id>"), with the mock's ids as ULIDs. `kindOf` says whether a
+ * thread is an ask (phase 2 review round 1: the loader wrote record keys,
+ * which no report of the server has, so Manage showed every report as an
+ * "item"). */
+function moderationKey(key: string, kindOf: (th: string) => string | undefined): string | null {
+  const [k, th, sub] = key.split(":");
+  if (!th) return null;
+  if ((k === "r" || k === "f") && sub) return `${k}:${th}:${inThread(th, sub)}`;
+  const kind = kindOf(th);
+  if (!kind) return null;
+  return `${kind === "ask" ? "a" : "p"}:${th}`;
+}
+
 /** The ULID of an id the mock makes up within a thread ("f0", a reply's
  * "rp1"): fixture ids repeat across threads, so the thread is part of it. */
 const inThread = (th: string, id: string) => (ULID_RE.test(id) ? id : toUlid(`${th}:${id}`));
@@ -793,7 +808,10 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
   }
   for (const r of arr<Json>(c["reports"])) {
     const id = toUlid(str(r["id"]));
-    const key = itemKey(str(r["key"]));
+    const key = moderationKey(str(r["key"]), (th) => {
+      const t = out.get(`thread:${th}`);
+      return t ? str(t["k"]) : undefined;
+    });
     if (!key) continue;
     put(`report:${id}`, {
       kind: "report",

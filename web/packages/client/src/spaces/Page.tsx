@@ -3,7 +3,7 @@
 // rows), a load that failed, page not found, Update Session.
 
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { useSession, useStatus } from "../sync/react.js";
@@ -140,6 +140,7 @@ export function Modal({
   bare = false,
   back = true,
   wrap,
+  unsaved,
 }: {
   title: ReactNode;
   onClose: () => void;
@@ -155,11 +156,24 @@ export function Modal({
   back?: boolean;
   /** A class for an element around the dialog (the mockup's qt-olm-sheet). */
   wrap?: string;
+  /** Unsaved input: Back, Escape, the scrim and Close ask first (the
+   * mockup's OV_DIRTY); a Cancel button of the dialog's own discards. */
+  unsaved?: { dirty: () => boolean; title: string; body: string };
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  useOverlay(true, onClose, { back });
+  const [asking, setAsking] = useState(false);
+  const leave = (): boolean => {
+    if (unsaved?.dirty()) {
+      setAsking(true);
+      return false;
+    }
+    onClose();
+    return true;
+  };
+  useOverlay(!asking, leave, { back });
   useEffect(() => focusFirst(ref.current), []);
-  const id = "cs-dt";
+  // each dialog its own title id: a confirmation stacks on a dialog
+  const id = `cs-dt${useId().replace(/:/g, "")}`;
   // a dialog sits at the top of the app element (as the mockup's do), not
   // inside the menu or row that opened it
   const dialog = (
@@ -168,7 +182,7 @@ export function Modal({
     <div
       className="modal-scrim"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) leave();
       }}
     >
       <div
@@ -183,7 +197,7 @@ export function Modal({
         ) : (
           <div className="modal-h">
             <h3 id={id}>{title}</h3>
-            <button className="iconbtn" type="button" aria-label="Close" onClick={onClose}>
+            <button className="iconbtn" type="button" aria-label="Close" onClick={() => leave()}>
               <Svg src={I.close} />
             </button>
           </div>
@@ -191,6 +205,17 @@ export function Modal({
         {children}
         {footer ? <div className="modal-f">{footer}</div> : null}
       </div>
+      {asking && unsaved ? (
+        <DiscardDialog
+          title={unsaved.title}
+          body={unsaved.body}
+          onKeep={() => setAsking(false)}
+          onDiscard={() => {
+            setAsking(false);
+            onClose();
+          }}
+        />
+      ) : null}
     </div>
   );
   return createPortal(
@@ -220,6 +245,47 @@ export function UpdateDialog({ onLater }: { onLater: () => void }) {
       }
     >
       <p className="muted">Session has been updated. Reload the page to keep saving changes.</p>
+    </Modal>
+  );
+}
+
+/** Unsent text: the "Discard …?" question (the mockup's ask-discard and the
+ * composer's discard, and OV_DIRTY's questions). */
+export function DiscardDialog({
+  title,
+  body = "The text you wrote will be deleted.",
+  onKeep,
+  onDiscard,
+  back = true,
+}: {
+  title: string;
+  /** What is lost (the mockup's OV_DIRTY text). */
+  body?: string;
+  onKeep: () => void;
+  onDiscard: () => void;
+  back?: boolean;
+}) {
+  return (
+    <Modal
+      title={title}
+      role="alertdialog"
+      className="sm"
+      bare
+      back={back}
+      onClose={onKeep}
+      footer={
+        <>
+          <span style={{ flex: 1 }} />
+          <button className="btn" type="button" onClick={onKeep}>
+            Keep editing
+          </button>
+          <button className="btn danger" type="button" onClick={onDiscard}>
+            Discard
+          </button>
+        </>
+      }
+    >
+      <p className="muted">{body}</p>
     </Modal>
   );
 }

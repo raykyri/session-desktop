@@ -9,9 +9,9 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { ago, spaceName } from "../data/format.js";
-import type { FollowUp, Space, ThreadView } from "../data/spaces.js";
+import { isStaff, type FollowUp, type Space, type ThreadView } from "../data/spaces.js";
 import { Markdown } from "../features/markdown/index.js";
-import { useNow, useSession } from "../sync/react.js";
+import { useNow } from "../sync/react.js";
 
 import { DeleteDialog, ReportDialog, type Item } from "./ItemMenu.js";
 import { Modal } from "./Page.js";
@@ -22,7 +22,7 @@ import { cx } from "./cx.js";
 import { NVI, QTI, SFI } from "./icons.js";
 import { useOverlay } from "./overlay.js";
 import { useWorld } from "./world.js";
-import { toast, useQuickWrite, useWrite } from "./writes.js";
+import { WRITE_ERROR, toast, useCreate, useQuickWrite } from "./writes.js";
 
 const clip = (t: string, n: number) =>
   t.length > n ? `${t.slice(0, n).replace(/\s+\S*$/, "")}…` : t;
@@ -110,7 +110,8 @@ export function MapDialog({
         <>
           Map of this thread{" "}
           <span className="num faint">
-            {t.followups.length + 1} asks · {levels} {levels === 1 ? "level" : "levels"}
+            {t.followups.length + 1} {t.followups.length ? "asks" : "ask"} · {levels}{" "}
+            {levels === 1 ? "level" : "levels"}
           </span>
         </>
       }
@@ -191,8 +192,7 @@ export function Compare({
   close: () => void;
 }) {
   const now = useNow();
-  const write = useWrite();
-  const session = useSession();
+  const create = useCreate();
   const [side, setSide] = useState<"a" | "b">("a");
   const [q, setQ] = useState("");
   const pa = pathOf(t, a);
@@ -228,20 +228,19 @@ export function Compare({
     </div>
   );
   const ask = async () => {
-    if (!q.trim()) return;
-    const id = session?.newId() ?? "";
-    const o = await write("research.forkNode", {
+    if (!q.trim() || create.checking) return;
+    const o = await create.send("research.forkNode", (id) => ({
       id,
       thread: t.id,
       parent: side === "a" ? a : b,
       q: q.trim(),
       uses: [a, b],
       pay: "session",
-    });
+    }));
     if (o.ok) {
       setQ("");
-      go(id);
-    }
+      go(o.id);
+    } else if (o.error === null) toast(WRITE_ERROR["unavailable"] ?? "");
   };
   return (
     <div className="qt-cmp">
@@ -314,8 +313,7 @@ function PromoteDialog({
   space: Space;
   onClose: () => void;
 }) {
-  const write = useWrite();
-  const session = useSession();
+  const create = useCreate();
   const navigate = useNavigate();
   const sub = t.followups.filter(
     (x) => pathOf(t, x.id).some((y) => y.id === f.id) && x.id !== f.id,
@@ -323,8 +321,8 @@ function PromoteDialog({
   const [title, setTitle] = useState(f.q.replace(/\?$/, ""));
   const [inc, setInc] = useState<"all" | "one">(sub ? "all" : "one");
   const start = async () => {
-    const id = session?.newId() ?? "";
-    const o = await write("threads.create", {
+    if (create.checking) return;
+    const o = await create.send("threads.create", (id) => ({
       id,
       space: space.id,
       kind: "ask",
@@ -332,11 +330,14 @@ function PromoteDialog({
       title: title.trim() || f.q,
       from: { th: t.id, node: f.id },
       branch: inc,
-    });
-    if (!o.ok) return;
+    }));
+    if (!o.ok) {
+      if (o.error === null) toast(WRITE_ERROR["unavailable"] ?? "");
+      return;
+    }
     onClose();
     toast(`Thread started in ${spaceName(space)}. The branch it came from links to it.`);
-    void navigate({ to: "/s/$space/t/$thread", params: { space: space.name, thread: id } });
+    void navigate({ to: "/s/$space/t/$thread", params: { space: space.name, thread: o.id } });
   };
   return (
     <Modal
@@ -423,6 +424,9 @@ export function AskMenu({
   const [dlg, setDlg] = useState<"promote" | "report" | "delete" | null>(null);
   useOverlay(open, () => setOpen(false));
   const mine = w.me?.u === f.u && !f.del;
+  // the asker of the branch, the thread's owner and the space's moderators
+  // (2b design finding 4: the mockup's qtCanPromote, the server agent's rule)
+  const canPromote = !!w.me && (mine || w.me.u === t.u || isStaff(w.roles[space.id]));
   const pick = (fn: () => void) => () => {
     setOpen(false);
     fn();
@@ -484,8 +488,10 @@ export function AskMenu({
               QTI.out,
               "Start a thread from this branch",
               () => setDlg("promote"),
-              mine ? undefined : "Only the person who asked this can start a thread from it.",
-              !mine,
+              canPromote
+                ? undefined
+                : "Only the asker of this branch, the thread owner and moderators can do this.",
+              !canPromote,
             )}
             {mine
               ? it(NVI.trash, "Delete", () => setDlg("delete"))

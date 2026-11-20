@@ -1,13 +1,26 @@
 // A thread (the mockup's question-tree layout for an ask, and its post layout
 // for a post): the question, the agent's answer with live text while it
 // runs, follow-ups or replies, and the side column (outline, cited sources,
-// facts).
+// facts). A device run (phase 2 review round 1, finding 5; the mockup's
+// sx-dr-label, sx-dr-view, sx-dr-int-web) is "Running on <handle>’s
+// desktop" with its CLI and attempt and no token count, its answer is
+// labelled "Answered on <handle>’s desktop · <CLI>", and after an interrupt
+// the web offers only "Run with included tokens".
 
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useRuntimeConfig } from "../api/account.js";
-import { ago, dayOf, fmtT, spaceName } from "../data/format.js";
+import {
+  ageMinutes,
+  ago,
+  cliName,
+  dayOf,
+  deviceLabel,
+  fmtT,
+  spaceName,
+  tokensWhy,
+} from "../data/format.js";
 import {
   threadView,
   type FollowUp,
@@ -87,6 +100,91 @@ function RunBox({
 }) {
   const live = useRunText(run.status === "running" ? run.id : null, run.attempt);
   const ctl = useRunControl(thread, node);
+  const now = useNow();
+  const key = useRecords(
+    (r) => {
+      const k = run.pay && run.pay !== "session" ? r.get("apikey", run.pay) : undefined;
+      return k && k.u === r.me ? { name: k.name, cap: k.cap, provider: k.provider } : null;
+    },
+    [run.pay],
+  );
+  // the reader's other keys that can pay now (the mockup's tmActs)
+  const others =
+    useRecords(
+      (r) =>
+        r
+          .list("apikey", (k) => k.u === r.me && k.status === "valid" && k.id !== run.pay)
+          .map((k) => ({ id: k.id, name: k.name })),
+      [run.pay],
+    ) ?? [];
+  const navigate = useNavigate();
+  const dev = run.device;
+  if (dev && (run.status === "queued" || run.status === "running")) {
+    // a device run reports its text when it finishes, not its steps or
+    // tokens (the mockup's sxRunLive, its default Variant)
+    const m = Math.floor(ageMinutes(run.createdAt, now));
+    return (
+      <div className="run sx-drun">
+        <div className="run-h">
+          <span className="spin" aria-hidden="true" />
+          <b>Running on {dev.u}’s desktop</b>
+          <span className="faint">
+            · {cliName(dev.cli)}
+            {run.attempt > 1
+              ? ` · attempt ${run.attempt}`
+              : ` · started ${m < 1 ? "just now" : `${m} min ago`}`}
+          </span>
+          {mine ? (
+            <button
+              className="btn sm as-stop"
+              type="button"
+              disabled={ctl.busy}
+              aria-disabled={ctl.busy || undefined}
+              onClick={ctl.stop}
+            >
+              Stop
+            </button>
+          ) : null}
+        </div>
+        <p className="as-why">
+          The answer shows here when {cliName(dev.cli)} finishes. Device runs report their text, not
+          their steps or token use.
+        </p>
+      </div>
+    );
+  }
+  if (dev && (run.end === "interrupted" || run.end === "too_large")) {
+    // the mockup's sxRunEnd on the web: Run again only on the Mac that ran
+    // it, so the web offers the included tokens
+    const size = run.end === "too_large";
+    return (
+      <div className="run as-end as-fail" role="status">
+        <div className="run-h">
+          <span className="as-ic" aria-hidden="true">
+            !
+          </span>
+          <b>{size ? "Couldn’t save the answer" : "Couldn’t finish the answer"}</b>
+        </div>
+        <p className="as-why">
+          {size
+            ? `The answer from ${cliName(dev.cli)} is larger than 200 KB, the limit for an answer from a device. Session didn’t save it.`
+            : `The run stopped: ${dev.u}’s desktop went to sleep or lost its connection while ${cliName(dev.cli)} worked. The agent wrote nothing.${mine ? "" : ` ${dev.u} can run it again.`}`}
+        </p>
+        {mine ? (
+          <div className="as-acts">
+            <button
+              className="btn sm primary"
+              type="button"
+              disabled={ctl.busy}
+              onClick={ctl.included}
+            >
+              Run with included tokens
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
   if (run.status === "queued" || run.status === "running") {
     const steps = stepsOf(run.turns);
     return (
@@ -140,9 +238,14 @@ function RunBox({
       </div>
     );
   const why: Record<string, string> = {
-    tokens: `You’ve used this month’s included tokens. The agent stopped${tok ? ` after ${fmtT(tok)} tokens` : ""} and wrote nothing.`,
-    key: `${PROVIDER[run.model?.split("/")[0] ?? ""] ?? "The provider"} rejected the API key that pays for this ask. The agent wrote nothing.`,
-    rate: "The provider is limiting requests from the API key that pays for this ask. The agent wrote nothing.",
+    tokens: tokensWhy(run.pay, tok, now, key ?? null),
+    // the mockup's tmFailHTML: the provider and the reader's own key by name
+    key: key
+      ? `${key.provider} rejected your ${key.name}. The agent wrote nothing.`
+      : `${PROVIDER[run.model?.split("/")[0] ?? ""] ?? "The provider"} rejected the API key that pays for this ask. The agent wrote nothing.`,
+    rate: key
+      ? `${key.provider} is limiting requests from your ${key.name}. The agent wrote nothing.`
+      : "The provider is limiting requests from the API key that pays for this ask. The agent wrote nothing.",
     access: `The agent didn’t run: when the run began, you could no longer read ${spaceName(space)} or a source this ask is about, or the API key that pays isn’t yours.`,
     interrupted: run.device
       ? `The run stopped on ${run.device.u}’s desktop before it finished. The agent wrote nothing.`
@@ -160,9 +263,64 @@ function RunBox({
       <p className="as-why">{why[run.end ?? "interrupted"] ?? why["interrupted"]}</p>
       {mine ? (
         <div className="as-acts">
-          <button className="tlink" type="button" disabled={ctl.busy} onClick={ctl.again}>
-            Retry
-          </button>
+          {run.end === "tokens" ? (
+            // another payer runs it again; with none, add a key
+            run.pay === null || run.pay === "session" ? (
+              others[0] ? (
+                <button
+                  className="btn sm primary"
+                  type="button"
+                  disabled={ctl.busy}
+                  onClick={() => ctl.payWith(others[0]?.id ?? "")}
+                >
+                  Use {others[0].name}
+                </button>
+              ) : (
+                <button
+                  className="tlink"
+                  type="button"
+                  onClick={() => void navigate({ to: "/settings/$tab", params: { tab: "keys" } })}
+                >
+                  Add an API key
+                </button>
+              )
+            ) : (
+              <>
+                <button
+                  className="btn sm primary"
+                  type="button"
+                  disabled={ctl.busy}
+                  onClick={ctl.included}
+                >
+                  Use included tokens
+                </button>
+                <button
+                  className="tlink"
+                  type="button"
+                  onClick={() => void navigate({ to: "/settings/$tab", params: { tab: "keys" } })}
+                >
+                  Change limit
+                </button>
+              </>
+            )
+          ) : run.end === "key" ? (
+            <>
+              <button className="tlink" type="button" disabled={ctl.busy} onClick={ctl.included}>
+                Retry with included tokens
+              </button>
+              <button
+                className="tlink"
+                type="button"
+                onClick={() => void navigate({ to: "/settings/$tab", params: { tab: "keys" } })}
+              >
+                API keys
+              </button>
+            </>
+          ) : (
+            <button className="tlink" type="button" disabled={ctl.busy} onClick={ctl.again}>
+              Retry
+            </button>
+          )}
         </div>
       ) : null}
     </div>
@@ -303,6 +461,8 @@ function FollowUpItem({
           />
         ) : f.a !== null ? (
           <Markdown markdown={f.a} className="prose fu-prose" />
+        ) : running && f.run?.device ? (
+          <RunBox run={f.run} tok={0} space={space} mine={f.u === me} thread={t.id} node={f.id} />
         ) : running ? (
           <div className="run">
             <div className="run-h">
@@ -315,7 +475,11 @@ function FollowUpItem({
           <RunBox run={f.run} tok={0} space={space} mine={f.u === me} thread={t.id} node={f.id} />
         ) : null}
       </div>
-      {f.a !== null ? <p className="tm-meta">{payerLabel(f.run?.pay ?? null)}</p> : null}
+      {f.a !== null && f.run?.device ? (
+        <p className="tm-meta sx-dl">{deviceLabel(f.run.device)}</p>
+      ) : f.a !== null ? (
+        <p className="tm-meta">{payerLabel(f.run?.pay ?? null)}</p>
+      ) : null}
       <div className="qt-acts">
         {!running ? (
           <button
@@ -491,7 +655,8 @@ function Outline({
       <div className="qt-ol-h">
         <h3>Outline</h3>
         <span className="num">
-          {t.followups.length + 1} asks · {levels} {levels === 1 ? "level" : "levels"}
+          {t.followups.length + 1} {t.followups.length ? "asks" : "ask"} · {levels}{" "}
+          {levels === 1 ? "level" : "levels"}
         </span>
       </div>
       <ul role="tree">
@@ -563,7 +728,14 @@ function Facts({ t, space, kind }: { t: ThreadView; space: Space; kind: "ask" | 
             <span>Levels</span>
             <b className="num">{levels}</b>
           </div>
-          {t.model ? (
+          {t.run?.device ? (
+            <div>
+              <span>Ran on</span>
+              <b>
+                {t.run.device.u}’s desktop · {cliName(t.run.device.cli)}
+              </b>
+            </div>
+          ) : t.model ? (
             <div>
               <span>Model</span>
               <b>{model?.label ?? t.model}</b>
@@ -899,7 +1071,9 @@ export function ThreadPage({
                 {t.del ? "You deleted this ask." : t.q}
               </p>
               <Answer t={t} space={s} mine={mine} />
-              {t.sum !== null && t.tok ? (
+              {t.sum !== null && t.run?.device && t.run.status === "complete" ? (
+                <p className="tm-meta sx-dl">{deviceLabel(t.run.device)}</p>
+              ) : t.sum !== null && t.tok ? (
                 <p className="tm-meta">
                   {payerLabel(t.pay)} · <span className="num">{fmtT(t.tok)} tokens</span>
                 </p>

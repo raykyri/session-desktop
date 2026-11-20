@@ -91,7 +91,9 @@
 //   input ids and no `replaces` (listing the refused id would replay the
 //   refusal). Any other keeps its input ids and lists its sent ids in
 //   `replaces`, so a write the server applied under an old id is answered
-//   from it and never applied twice. Discard of a write on the wire is
+//   from it and never applied twice. Send again may carry a new input
+//   that makes the same ids (a create's text edited after its answer was
+//   lost): it is still the one write. Discard of a write on the wire is
 //   refused;
 // - online-only writes (a mutator marked `online`, and the `NOT_MUTATORS`
 //   calls) are sent at once, never queued, predicted or stored; held, signed
@@ -233,6 +235,11 @@ export interface OutboxEntry {
    * of a log that says this client's last seq is at least this one holds
    * its effect. */
   answeredSeq?: number;
+  /** It was answered from an earlier envelope of it (a recorded answer
+   * under another mutation id, or CONFLICT on its own input id), or a read
+   * showed the record it made: what applied is an earlier envelope's input,
+   * which `sendAgain` with an `input` may have changed since. */
+  earlier?: boolean;
   /** What the mutators predicted. */
   prediction?: "ok" | "refused" | "unknown";
   predictedError?: ApiError;
@@ -579,13 +586,16 @@ export class SyncClient implements Changing {
     return this.confirmed(key);
   }
 
-  /** A record of the confirmed state. */
+  /** A record of the confirmed state. A record two logs hold (read at
+   * different times) is the copy with the higher rev: the log read later
+   * may hold a newer copy than the log opened first. */
   confirmed(key: string): StoredRecord | undefined {
+    let out: StoredRecord | undefined;
     for (const l of this.logs.values()) {
       const r = l.records.get(key);
-      if (r) return r;
+      if (r && (!out || r.rev > out.rev)) out = r;
     }
-    return undefined;
+    return out;
   }
 
   /** Every key of the view. */
@@ -1126,6 +1136,7 @@ export class SyncClient implements Changing {
       for (const e of shown)
         if (this.appliedHere(e, ids)) {
           e.state = "answered";
+          e.earlier = true;
           e.answeredTick = this.tick++;
           delete e.error;
         }
@@ -1480,19 +1491,37 @@ export class SyncClient implements Changing {
    *   reads as applied), and a failed or dropped one lists its sent ids in
    *   `replaces`, so a write the server applied under an old id is answered
    *   from it.
-   * A recorded refusal is never listed: it would be replayed. */
-  sendAgain(local: string): boolean {
+   * A recorded refusal is never listed: it would be replayed.
+   *
+   * `input` replaces the write's input (the person changed the text of a
+   * create that went without an answer). It must make the same ids as the
+   * write's input, so the write stays the one create and never becomes a
+   * second one; otherwise nothing changes and the answer is false. A write
+   * that applied (its ids are in the replica, or the server answers from an
+   * earlier envelope under `replaces`) keeps what it applied. */
+  sendAgain(local: string, o: { input?: unknown } = {}): boolean {
     const e = this.entries.find((x) => x.local === local && SHOWN.has(x.state));
     if (!e) return false;
+    let input: unknown = e.input;
+    if (o.input !== undefined) {
+      const def = this.registry.get(e.name);
+      const parsed = def?.input.safeParse(o.input);
+      const ids = parsed?.success && def ? def.ids(parsed.data) : null;
+      if (!ids || ids.length !== e.minted.length || ids.some((id, k) => id !== e.minted[k]))
+        return false;
+      input = json(o.input);
+    }
     const refused = e.state === "expired" || e.state === "refused";
     if (this.appliedHere(e)) {
       e.state = "answered";
+      e.earlier = true;
       e.answeredTick = this.tick++;
       delete e.error;
       void this.persist();
       this.rebase();
       return true;
     }
+    e.input = input;
     if (!e.sent || (refused && !e.uncertain)) {
       e.replaces = [];
       e.sent = false;
@@ -1957,6 +1986,8 @@ export class SyncClient implements Changing {
           await this.applyAnswerChanges(a.error.changes);
           this.end(e, a.error.code === "EXPIRED" ? "expired" : "refused", a.error, a);
         } else {
+          if (!a.ok || (a.replayed && a.recordedAs !== undefined && a.recordedAs !== e.mutationId))
+            e.earlier = true;
           if (a.ok && a.replayed) this.adopt(e, a);
           if (e.online) this.direct = this.direct.filter((x) => x !== e);
           e.state = "answered";

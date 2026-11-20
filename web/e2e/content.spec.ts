@@ -14,6 +14,9 @@ interface Screen {
   scenario?: string;
   url: string | ((r: KeyedRecord[]) => string);
   run: (p: Page, r: KeyedRecord[]) => Promise<void>;
+  /** Needs the server agent's branch of review round 1 (@server-r1): run
+   * with SESSION_E2E_SERVER_R1=1 after the merge. */
+  server?: boolean;
 }
 
 const toastSays = (p: Page, t: string | RegExp) =>
@@ -38,6 +41,40 @@ function deepAsk(rs: KeyedRecord[], space: string) {
 }
 
 /** A follow-up the person asked in a #public thread. */
+/** A follow-up by someone else in a thread of `space`, in a thread the
+ * person owns (`owner`) or one they do not. */
+function othersFollowUp(rs: KeyedRecord[], space: string, owner: boolean) {
+  const sp = spaceId(rs, space);
+  const ths = new Map(
+    rs
+      .filter(
+        (r) =>
+          r.record.kind === "thread" &&
+          r.record["s"] === sp &&
+          (r.record["u"] === "ines.v") === owner,
+      )
+      .map((r) => [r.record["id"], r.record]),
+  );
+  const f = rs.find(
+    (r) =>
+      r.record.kind === "followup" &&
+      ths.has(r.record["th"]) &&
+      r.record["u"] !== "ines.v" &&
+      !r.record["del"],
+  );
+  return { th: String(f?.record["th"]), fu: String(f?.record["id"]) };
+}
+
+/** Open an ask's menu and read its Start a thread item. */
+async function promoteItem(p: Page, fu: string) {
+  await p
+    .locator(`#qt-n-${fu}`)
+    .getByRole("button", { name: "More actions for this ask" })
+    .first()
+    .click();
+  return p.getByRole("menuitem", { name: /Start a thread from this branch/ });
+}
+
 function myFollowUp(rs: KeyedRecord[]) {
   const sp = spaceId(rs, "public");
   const ths = new Set(
@@ -192,6 +229,31 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // phase 2 review round 1, finding 4: Read on … opens the source's own
+    // address (its stored url has no scheme), not a page of the app
+    key: "mi-orig",
+    url: (rs) => `/source/${firstSource(rs, "ml-papers")}`,
+    run: async (p, rs) => {
+      const src = firstSource(rs, "ml-papers");
+      const meta = rs.find((r) => r.record.kind === "spacesrc" && r.record["src"] === src)?.record[
+        "meta"
+      ] as { url: string };
+      expect(meta.url).not.toMatch(/^https?:/);
+      // the original's site, answered here (the sandbox has no outside network)
+      await p
+        .context()
+        .route(/^https:\/\//, (r) =>
+          r.fulfill({ contentType: "text/html", body: "<title>original</title>" }),
+        );
+      const a = p.locator("a.mi-orig");
+      await expect(a).toHaveAttribute("href", `https://${meta.url}`);
+      const [popup] = await Promise.all([p.waitForEvent("popup"), a.click()]);
+      await popup.waitForLoadState();
+      expect(popup.url()).toBe(new URL(`https://${meta.url}`).href);
+      await popup.close();
+    },
+  },
+  {
     key: "ds-x-report",
     url: (rs) => `/source/${firstSource(rs, "ml-papers")}`,
     run: async (p) => {
@@ -282,6 +344,47 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // 2b design finding 4: the thread's owner may start a thread from
+    // another person's branch (the mockup's qtCanPromote)
+    key: "qt-promote-owner",
+    url: (rs) => {
+      const { th, fu } = othersFollowUp(rs, "public", true);
+      return `/s/public/t/${th}/a/${fu}`;
+    },
+    run: async (p, rs) => {
+      const item = await promoteItem(p, othersFollowUp(rs, "public", true).fu);
+      await expect(item).not.toHaveAttribute("aria-disabled", "true");
+      await expect(item).not.toContainText("Only the asker");
+    },
+  },
+  {
+    // and a moderator of the space
+    key: "qt-promote-mod",
+    url: (rs) => {
+      const { th, fu } = othersFollowUp(rs, "ml-papers", false);
+      return `/s/ml-papers/t/${th}/a/${fu}`;
+    },
+    run: async (p, rs) => {
+      const item = await promoteItem(p, othersFollowUp(rs, "ml-papers", false).fu);
+      await expect(item).not.toHaveAttribute("aria-disabled", "true");
+    },
+  },
+  {
+    // anyone else sees why not
+    key: "qt-promote-other",
+    url: (rs) => {
+      const { th, fu } = othersFollowUp(rs, "public", false);
+      return `/s/public/t/${th}/a/${fu}`;
+    },
+    run: async (p, rs) => {
+      const item = await promoteItem(p, othersFollowUp(rs, "public", false).fu);
+      await expect(item).toHaveAttribute("aria-disabled", "true");
+      await expect(item).toContainText(
+        "Only the asker of this branch, the thread owner and moderators can do this.",
+      );
+    },
+  },
+  {
     key: "ab-page-hist",
     url: "/s/sci-fi/pages/canon-starter-list",
     run: async (p) => {
@@ -302,12 +405,20 @@ const SCREENS: Screen[] = [
   {
     key: "ab-pages-order",
     url: "/s/sci-fi/about",
+    // pages.move takes the position the page goes to (2b design finding 5):
+    // the server agent's change
+    server: true,
     run: async (p) => {
       // /about opens the sidebar's About (a sheet on a phone)
       const names = p.locator(".ab-pgl .ab-pgr span");
-      const first = await names.first().textContent();
-      await p.getByRole("button", { name: `Move ${first} down` }).click();
-      await expect(names.nth(1)).toHaveText(first ?? "");
+      await expect(names.nth(1)).toBeVisible();
+      const before = await names.allInnerTexts();
+      expect(before.length).toBeGreaterThan(1);
+      await p.getByRole("button", { name: `Move ${before[0] ?? ""} down` }).click();
+      const after = [before[1] ?? "", before[0] ?? "", ...before.slice(2)];
+      await expect(names).toHaveText(after);
+      await p.reload();
+      await expect(names).toHaveText(after);
     },
   },
   {
@@ -382,7 +493,11 @@ for (const [layout, viewport] of [
   test.describe(`slice 3 screens, ${layout}`, () => {
     test.use({ viewport });
     for (const s of SCREENS) {
-      test(s.key, async ({ page }) => {
+      test(s.server ? `${s.key} @server-r1` : s.key, async ({ page }) => {
+        test.skip(
+          !!s.server && process.env["SESSION_E2E_SERVER_R1"] !== "1",
+          "needs the server agent's branch",
+        );
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         const rs = await open(page, s);
@@ -392,3 +507,18 @@ for (const [layout, viewport] of [
     }
   });
 }
+
+// After the server's branch is merged: the thread's owner starts a thread
+// from another person's branch (the server agent's promote rule).
+test("qt-promote by the thread's owner @server-r1", async ({ page }) => {
+  test.skip(process.env["SESSION_E2E_SERVER_R1"] !== "1", "needs the server's promote rule");
+  const { records } = await loadScenario(page.context().request, "seed");
+  await signInAs(page.context());
+  const { th, fu } = othersFollowUp(records, "public", true);
+  await page.goto(`/s/public/t/${th}/a/${fu}`);
+  await (await promoteItem(page, fu)).click();
+  const d = page.getByRole("dialog", { name: "Start a thread from this branch" });
+  await d.getByRole("button", { name: "Start thread" }).click();
+  await toastSays(page, /Thread started in #public/);
+  await expect(page).toHaveURL(/\/s\/public\/t\/[0-9A-Z]{26}$/);
+});

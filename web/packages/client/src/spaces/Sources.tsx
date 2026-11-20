@@ -6,12 +6,13 @@
 // sources.
 
 import type { SpaceSourceRec } from "@session/mutators";
+import { safeHref } from "@session/shared";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { agoText, ago, dayOf, spaceName } from "../data/format.js";
 import { isStaff, type Space } from "../data/spaces.js";
-import { useNow, useRecords, useSession } from "../sync/react.js";
+import { useNow, useRecords } from "../sync/react.js";
 
 import { Modal, NotFound, Page } from "./Page.js";
 import { Scrim } from "./Scrim.js";
@@ -21,7 +22,16 @@ import { cx } from "./cx.js";
 import { I, MII, QTI, SFI } from "./icons.js";
 import { useOverlay } from "./overlay.js";
 import { useWorld } from "./world.js";
-import { refusalToast, toast, useQuickWrite, useWrite } from "./writes.js";
+import { WRITE_ERROR, refusalToast, toast, useCreate, useQuickWrite, useWrite } from "./writes.js";
+
+/** The original of a source, to open in a new tab: its stored url (kept
+ * without a scheme, the mutators' `sourceFor`) as an https address, through
+ * `safeHref`. An uploaded file (`session.app/files/…`) has no original on
+ * the web, so it has none (phase 2 review round 1, finding 4). */
+export function sourceHref(url: string | null | undefined): string | undefined {
+  if (!url || /^session\.app\/files\//i.test(url)) return undefined;
+  return safeHref(/^https?:\/\//i.test(url) ? url : `https://${url}`);
+}
 
 const DS_WHY: [string, string][] = [
   ["spam", "Spam or advertising"],
@@ -134,25 +144,23 @@ function AskBox({
   b: number | null;
   onDone: () => void;
 }) {
-  const write = useWrite();
-  const session = useSession();
+  const create = useCreate();
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const ask = async () => {
-    if (!q.trim()) return;
-    const tid = session?.newId() ?? "";
-    const o = await write("threads.create", {
+    if (!q.trim() || create.checking) return;
+    const o = await create.send("threads.create", (tid) => ({
       id: tid,
       space: s.id,
       kind: "ask",
       q: q.trim(),
       pay: "session",
       about: b === null ? { it: id } : { it: id, b },
-    });
+    }));
     if (o.ok) {
       onDone();
-      void navigate({ to: "/s/$space/t/$thread", params: { space: s.name, thread: tid } });
-    }
+      void navigate({ to: "/s/$space/t/$thread", params: { space: s.name, thread: o.id } });
+    } else if (o.error === null) toast(WRITE_ERROR["unavailable"] ?? "");
   };
   return (
     <div className="composer open c2 c2v-bar mi-askc">
@@ -199,6 +207,7 @@ export function SourcePage({ id }: { id: string }) {
   const copy = copies[0];
   const m = copy?.meta ?? catalog?.meta;
   const s = copy ? w.byId.get(copy.sp) : undefined;
+  const orig = sourceHref(m?.url);
   if (!m) {
     if (!w.loaded) return <Page place={{ kind: "other" }}>{null}</Page>;
     return (
@@ -226,10 +235,10 @@ export function SourcePage({ id }: { id: string }) {
             <span />
           )}
           <div className="mi-acts">
-            {m.url ? (
+            {orig ? (
               <a
                 className="btn sm mi-orig"
-                href={m.url}
+                href={orig}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={`Read on ${m.pl}`}

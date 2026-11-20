@@ -1,17 +1,18 @@
 // Account (the mockup's acx pages, phase 2b slice 4): `/settings/<tab>` with
 // Account (profile and notification email), Usage (included tokens this
 // week and each key this month), API keys (add with a monthly limit,
-// rename, change the limit, use for asks, check again, replace, revoke),
-// Your spaces and Devices; `/device` approves a Desktop app's sign-in; and
-// `/welcome`, the first run. Account reads are /api/me/*; changes are the
-// online-only calls (apiKeys.*, usage.setDefaultKey, settings.update,
+// rename, change the limit, use for asks, check again, replace, revoke) and
+// Your spaces; `/device` approves a Desktop app's sign-in; and `/welcome`,
+// the first run. The web has no Devices tab: devices are listed in the Phone
+// app's Account page (AGENTS.md). Account reads are /api/me/*; changes are
+// the online-only calls (apiKeys.*, usage.setDefaultKey, settings.update,
 // devices.*) and the profile.update and onboarding.finish mutators.
 
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { useMe } from "../api/account.js";
-import { getJson } from "../api/http.js";
+import { HttpError, getJson } from "../api/http.js";
 import { createResource, useResource } from "../api/resource.js";
 import { agoText, dayOf, fmtT, spaceName } from "../data/format.js";
 import { useNow, useRecords } from "../sync/react.js";
@@ -21,7 +22,7 @@ import { Scrim } from "./Scrim.js";
 import { Svg } from "./Svg.js";
 import { Glyph } from "./atoms.js";
 import { cx } from "./cx.js";
-import { I, MI, SXI } from "./icons.js";
+import { I, MI, SVG, SXI } from "./icons.js";
 import { useOverlay } from "./overlay.js";
 import { useWorld } from "./world.js";
 import { refusalToast, toast, useWrite } from "./writes.js";
@@ -48,14 +49,6 @@ interface UsageView {
   def: string | null;
   by: Record<string, Record<string, number>>;
 }
-interface DeviceView {
-  id: string;
-  name: string;
-  kind: string;
-  plat: string;
-  createdAt: string;
-  lastSeenAt: string | null;
-}
 interface AccountSettings {
   emailOn?: boolean;
   email?: string | null;
@@ -64,7 +57,6 @@ interface AccountSettings {
 
 export const keysResource = createResource(() => getJson<ApiKeyView[]>("/api/me/api-keys"));
 export const usageResource = createResource(() => getJson<UsageView>("/api/me/usage"));
-const devicesResource = createResource(() => getJson<DeviceView[]>("/api/me/devices"));
 const settingsResource = createResource(() => getJson<AccountSettings>("/api/me/settings"));
 
 const reloadAccount = () => {
@@ -477,9 +469,9 @@ function Usage() {
   const keys = useResource(keysResource);
   const u = usage.data;
   const ks = keys.data ?? [];
-  const month =
-    ks.reduce((n, k) => n + k.used, 0) +
-    (u ? Object.values(u.by["session"] ?? {}).reduce((a, b) => a + b, 0) : 0);
+  // the included tokens this month (Usage's totals are this month's)
+  const sessionMonth = u ? Object.values(u.by["session"] ?? {}).reduce((a, b) => a + b, 0) : 0;
+  const month = ks.reduce((n, k) => n + k.used, 0) + sessionMonth;
   const reset = u ? dayOf(u.resetAt, now) : "";
   const pct = (a: number, b: number) => `${b ? Math.min(100, (a / b) * 100).toFixed(1) : "0"}%`;
   return (
@@ -492,14 +484,14 @@ function Usage() {
         <span>tokens this month</span>
       </div>
       <p className="muted tm-ulead">
-        Included tokens reset {reset}. Your providers bill your keys. Key limits reset on the 1st of
-        each month.
+        Included tokens are a weekly allowance and reset {reset}. Your providers bill your keys. Key
+        limits reset on the 1st of each month.
       </p>
       <div className="cs-set st-side ac-set">
         <section className="st-sec">
           <div className="st-head">
             <h3>By source</h3>
-            <p>The tokens your asks used, by source: included tokens this week, keys this month.</p>
+            <p>The tokens your asks used this month, by source.</p>
           </div>
           <div className="st-body">
             <div className="tm-rows">
@@ -511,14 +503,14 @@ function Usage() {
                   <div className="tm-rt">
                     <b>Included tokens</b>
                     <small>
-                      {fmtT(u.week)} of {fmtT(u.cap)} · {fmtT(Math.max(0, u.cap - u.week))} left ·
-                      resets {reset}
+                      {fmtT(u.week)} of {fmtT(u.cap)} this week ·{" "}
+                      {fmtT(Math.max(0, u.cap - u.week))} left · resets {reset}
                     </small>
                     <span className="tm-bar" aria-hidden="true">
                       <i style={{ width: pct(u.week, u.cap) }} />
                     </span>
                   </div>
-                  <b className="num">{fmtT(u.week)}</b>
+                  <b className="num">{fmtT(sessionMonth)}</b>
                 </div>
               ) : null}
               {ks.map((k) => (
@@ -552,7 +544,7 @@ function Usage() {
   );
 }
 
-// ---- account, spaces, devices ----
+// ---- account, spaces ----
 
 function AccountTab() {
   const w = useWorld();
@@ -713,67 +705,11 @@ function YourSpaces() {
   );
 }
 
-function Devices() {
-  const now = useNow();
-  const call = useCall();
-  const devices = useResource(devicesResource);
-  return (
-    <div className="acx-main ac-page">
-      <div className="sub-top">
-        <h2>Devices</h2>
-      </div>
-      <p className="muted">
-        Devices that signed in to the Session app. Revoking a device signs it out the next time it
-        connects, and changes it has not sent yet are lost. Browsers are not listed: use Sign out in
-        a browser.
-      </p>
-      <div className="ak-list">
-        {(devices.data ?? []).map((d) => (
-          <div className="ak-row" key={d.id}>
-            <span className="ts-ic">
-              <Svg src={d.kind === "phone" ? SXI.phone : SXI.mac} />
-            </span>
-            <div className="ak-tx">
-              <b>{d.name}</b>
-              <small>
-                {d.plat} · Signed in {dayOf(d.createdAt, now)} · Last seen{" "}
-                {d.lastSeenAt ? agoText(d.lastSeenAt, now) : "never"}
-              </small>
-            </div>
-            <span className="ak-acts">
-              <button
-                className="tlink danger-l"
-                type="button"
-                onClick={() =>
-                  void call("devices.revoke", { id: d.id }).then((r) => {
-                    if (r !== null) {
-                      void devicesResource.load(true);
-                      toast(`Revoked ${d.name}.`);
-                    }
-                  })
-                }
-              >
-                Revoke
-              </button>
-            </span>
-          </div>
-        ))}
-        {devices.data && !devices.data.length ? (
-          <div className="ak-row">
-            <span className="muted">No devices signed in.</span>
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 const TABS: [string, string][] = [
   ["account", "Account"],
   ["usage", "Usage"],
   ["keys", "API keys"],
   ["spaces", "Your spaces"],
-  ["devices", "Devices"],
 ];
 
 export function AccountPage({ tab }: { tab: string }) {
@@ -810,7 +746,6 @@ export function AccountPage({ tab }: { tab: string }) {
     usage: <Usage />,
     keys: <Keys />,
     spaces: <YourSpaces />,
-    devices: <Devices />,
   };
   return (
     <Page place={{ kind: "other" }}>
@@ -847,76 +782,211 @@ export function AccountPage({ tab }: { tab: string }) {
 
 // ---- a Desktop app's sign-in ----
 
+/** `GET /api/devices/requests/:request` (the server's `signinView`): what
+ * the page shows about a sign-in the app started, never its code.
+ * `sameComputer`: the request came from this browser's network address, so
+ * one click approves it; otherwise the page asks for the code the app shows
+ * (phase 2 review round 1, finding 1: a link someone else sent cannot sign
+ * their Mac in as the reader). */
+interface SignInRequest {
+  name: string;
+  /** The device and the app as the app describes them, or null. */
+  device: string | null;
+  app: string | null;
+  askedAt: string;
+  state: "waiting" | "approved" | "denied" | "taken";
+  sameComputer: boolean;
+}
+
+const CODE_WRONG =
+  "This code doesn’t match the one on your Mac. Check the code in the Session app and try again.";
+
+/** "Just now", "3m ago". */
+const askedText = (at: string | number, now: number) => {
+  const t = agoText(at, now);
+  return `${t.charAt(0).toUpperCase()}${t.slice(1)}`;
+};
+
 export function DevicePage({ request, code: code0 }: { request?: string; code?: string }) {
   const w = useWorld();
+  const now = useNow();
   const navigate = useNavigate();
-  const call = useCall();
+  const write = useWrite();
+  const [info, setInfo] = useState<SignInRequest | "gone" | "unknown" | null>(null);
   const [code, setCode] = useState(code0 ?? "");
+  const [codeErr, setCodeErr] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<"approved" | "denied" | null>(null);
+  const field = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!w.me && w.loaded)
       void navigate({ to: "/login", search: { redirect: location.pathname + location.search } });
   }, [w.me, w.loaded, navigate]);
+  // the request as the server recorded it: the device, the app, when, and
+  // whether it came from this computer
+  const me = w.me?.u ?? null;
+  useEffect(() => {
+    if (!request || !me) return;
+    let live = true;
+    getJson<SignInRequest>(`/api/devices/requests/${encodeURIComponent(request)}`)
+      .then((v) => {
+        if (!live) return;
+        setInfo(v);
+        if (v.state === "denied") setDone("denied");
+        else if (v.state !== "waiting") setDone("approved");
+      })
+      .catch((e: unknown) => {
+        if (live) setInfo(e instanceof HttpError && e.code === "NOT_FOUND" ? "gone" : "unknown");
+      });
+    return () => {
+      live = false;
+    };
+  }, [request, me]);
+  // a request the page could not read asks for the code
+  const here = typeof info === "object" && info !== null && info.sameComputer;
+  const needsCode = !here;
   const answer = async (deny: boolean) => {
-    if (!request) return;
-    const r = await call("devices.approve", {
-      request,
-      ...(code.trim() ? { code: code.trim() } : {}),
-      ...(deny ? { deny: true } : {}),
-    });
-    if (r !== null) setDone(deny ? "denied" : "approved");
+    if (!request || busy) return;
+    const sent = code.trim();
+    if (!deny && needsCode && !sent) return;
+    setBusy(true);
+    const o = await write(
+      "devices.approve",
+      { request, ...(deny ? { deny: true } : needsCode ? { code: sent } : {}) },
+      { quiet: true },
+    );
+    setBusy(false);
+    if (o.ok) {
+      setDone(deny ? "denied" : "approved");
+      if (!deny) toast("Signed in successfully.");
+    } else if (o.error?.code === "BAD_REQUEST" && !deny) {
+      setCodeErr(true);
+      setTimeout(() => field.current?.focus(), 0);
+    } else if (o.error?.code === "NOT_FOUND") setInfo("gone");
+    else if (o.error) refusalToast(o.error);
+    else toast("Couldn’t reach the server. Try again in a moment.");
   };
+  const card =
+    typeof info === "object" && info !== null ? (
+      <section className="cs-card sx-dcard">
+        <dl className="sx-dl2">
+          <dt>Device</dt>
+          <dd>{info.device ?? info.name}</dd>
+          {info.app ? (
+            <>
+              <dt>App</dt>
+              <dd>{info.app}</dd>
+            </>
+          ) : null}
+          <dt>Asked</dt>
+          <dd>
+            {askedText(info.askedAt, now)}, from {here ? "this computer" : "another computer"}
+          </dd>
+        </dl>
+      </section>
+    ) : null;
   return (
     <Page place={{ kind: "other" }}>
       <div className="cs-napage sx-sign">
         <div className="cs-na">
-          <span className="cs-na-ic">
-            <Svg src={SXI.mac} />
-          </span>
-          {done ? (
+          {done === "approved" ? (
             <>
-              <h2>{done === "approved" ? "Mac signed in" : "Sign-in denied"}</h2>
+              <span className="cs-na-ic">
+                <Svg src={I.check} />
+              </span>
+              <h2>This Mac is signed in</h2>
+              <p className="muted">Go back to the Session app. You can close this tab.</p>
+            </>
+          ) : done === "denied" ? (
+            <>
+              <span className="cs-na-ic">
+                <Svg src={SXI.ban} />
+              </span>
+              <h2>Sign-in denied</h2>
               <p className="muted">
-                {done === "approved"
-                  ? "Go back to the Session app: it finishes signing in on its own."
-                  : "The Mac was not signed in. You can close this page."}
+                The app on that Mac was not signed in. You can close this tab.
               </p>
             </>
-          ) : !request ? (
+          ) : !request || info === "gone" ? (
             <>
+              <span className="cs-na-ic">
+                <Svg src={SXI.mac} />
+              </span>
               <h2>No sign-in to approve</h2>
               <p className="muted">
-                Open this page from the Session app on your Mac: it adds the sign-in to the link.
+                {request
+                  ? "The server has no record of this sign-in. It may have expired. Start again in the Session app on your Mac."
+                  : "Open this page from the Session app on your Mac: it adds the sign-in to the link."}
               </p>
             </>
+          ) : info === null ? (
+            <span className="cs-na-ic">
+              <Svg src={SXI.mac} />
+            </span>
           ) : (
             <>
+              <span className="cs-na-ic">
+                <Svg src={SXI.mac} />
+              </span>
               <h2>Sign in on a Mac?</h2>
               <p className="muted">
-                The Session app on a Mac asked to sign in as {w.me?.u}. Approve only if you just
-                started this on your own Mac.
+                The Session app on a Mac asked to sign in as {w.me?.u}.{" "}
+                {here
+                  ? "Approve only if you just started this on your own Mac."
+                  : "The request came from another computer. Enter the code the Session app shows on the Mac. If you didn’t start this sign-in, deny it."}
               </p>
-              <label className="fld">
-                <span>The code the app shows</span>
-                <input
-                  id="sx-code"
-                  type="text"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="ABC-123"
-                  value={code}
-                  onChange={(e) => setCode(e.currentTarget.value)}
-                />
-              </label>
+              {card}
+              {needsCode ? (
+                <>
+                  <label className="fld sx-dcode">
+                    <span>The code the Mac shows</span>
+                    <input
+                      id="sx-dcode"
+                      ref={field}
+                      className="num"
+                      type="text"
+                      autoComplete="one-time-code"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      placeholder="ABC-DEF"
+                      maxLength={9}
+                      value={code}
+                      aria-invalid={codeErr || undefined}
+                      aria-describedby={codeErr ? "sx-derr" : undefined}
+                      onChange={(e) => {
+                        setCode(e.currentTarget.value);
+                        setCodeErr(false);
+                      }}
+                    />
+                  </label>
+                  {codeErr ? (
+                    <p className="ts-err" id="sx-derr" role="alert">
+                      {CODE_WRONG}
+                    </p>
+                  ) : null}
+                </>
+              ) : null}
               <div className="cs-na-b">
-                <button className="btn" type="button" onClick={() => void answer(true)}>
+                <button
+                  className="btn"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void answer(true)}
+                >
                   Deny
                 </button>
-                <button className="btn primary" type="button" onClick={() => void answer(false)}>
+                <button
+                  className="btn primary"
+                  type="button"
+                  id="sx-dok"
+                  disabled={busy || (needsCode && !code.trim())}
+                  onClick={() => void answer(false)}
+                >
                   Approve this Mac
                 </button>
               </div>
               <p className="cs-fine">
+                <Svg src={SVG.LOCK} />
                 <span>
                   The app gets a device token for your account. It can read and write what you can,
                   until you revoke it.

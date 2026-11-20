@@ -6,12 +6,13 @@
 // force); and, for the owner, Archive and Delete.
 
 import { useNavigate } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { fmt, spaceName } from "../data/format.js";
 import type { Space } from "../data/spaces.js";
 import { useRecords } from "../sync/react.js";
 
+import { LeaveGuard } from "./Discard.js";
 import { Modal } from "./Page.js";
 import { Svg } from "./Svg.js";
 import { I, SVG } from "./icons.js";
@@ -101,9 +102,12 @@ export function SettingsManage({ s }: { s: Space }) {
   const [delName, setDelName] = useState("");
   const base = draftOf(s, rec?.rules ?? s.rules);
   const dirty = JSON.stringify(d) !== JSON.stringify(base);
+  // set while a save goes to a renamed space's address
+  const saving = useRef(false);
   const set = (p: Partial<Draft>) => setD({ ...d, ...p });
   const save = async (force: boolean) => {
     const closed = d.vis !== "open";
+    saving.current = true;
     const o = await write(
       "spaces.update",
       {
@@ -138,11 +142,21 @@ export function SettingsManage({ s }: { s: Space }) {
           to: "/s/$space/manage/$tab",
           params: { space: d.name, tab: "settings" },
           replace: true,
-        });
+        }).finally(() => (saving.current = false));
+      else saving.current = false;
     } else if (o.error?.code === "CONFLICT" && /rules/.test(o.error.message)) setConflict(true);
     else if (o.error) refusalToast(o.error);
+    if (!o.ok) saving.current = false;
   };
   const closed = d.vis !== "open";
+  // leaving with unsaved settings asks first (the mockup's scr:settings)
+  const guard = (
+    <LeaveGuard
+      when={() => dirty && !saving.current}
+      title="Discard your changes to the settings?"
+      body={`You haven’t saved your changes to the settings of ${spaceName(s)}.`}
+    />
+  );
   const buttons = (
     <>
       <button className="btn ghost" type="button" disabled={!dirty} onClick={() => setD(base)}>
@@ -160,6 +174,7 @@ export function SettingsManage({ s }: { s: Space }) {
   );
   return (
     <div className="cs-set st-side">
+      {guard}
       {conflict ? (
         <div className="cs-strip warn ed-cf" role="alert">
           <span className="grow">
@@ -173,7 +188,7 @@ export function SettingsManage({ s }: { s: Space }) {
           </span>
         </div>
       ) : null}
-      <Sec title="About" sub="The space's name, title and description.">
+      <Sec title="About" sub="Shown in the About tab of the space.">
         <label className="fld">
           <span>Name</span>
           <input
@@ -182,6 +197,13 @@ export function SettingsManage({ s }: { s: Space }) {
             value={d.name}
             onChange={(e) => set({ name: e.currentTarget.value })}
           />
+          <small className="faint">
+            Lowercase letters, numbers and hyphens. Unique on Session. The address is{" "}
+            <b className="cx-url">
+              {location.host}/s/{d.name}
+            </b>
+            .
+          </small>
         </label>
         <label className="fld">
           <span>Title</span>
@@ -191,6 +213,9 @@ export function SettingsManage({ s }: { s: Space }) {
             value={d.title}
             onChange={(e) => set({ title: e.currentTarget.value })}
           />
+          <small className="faint">
+            Shown in About. With a verified domain, it can replace the #name.
+          </small>
         </label>
         <label className="fld">
           <span>Description</span>
@@ -404,35 +429,56 @@ export function SettingsManage({ s }: { s: Space }) {
           set={(v) => set({ faq: v })}
         />
       </Sec>
-      <Sec title="Posts" sub="Whether members can write plain posts as well as asks.">
+      <Sec title="Posts" sub="Plain posts that people reply to. Asks are not affected.">
         <Toggle
           on={!d.postsOff}
-          title="Allow posts"
-          sub="People can post and reply. Asks are always on."
+          title="Allow new posts"
+          sub={
+            d.postsOff
+              ? `Off: the composer in ${spaceName(s)} is ask-only. Existing posts and their replies stay visible, and people can still reply to them.`
+              : "People can write posts as well as asks."
+          }
           set={(v) => set({ postsOff: !v })}
         />
       </Sec>
-      <Sec title="Pages" sub="Who edits the space's pages.">
-        <div className="seg" role="radiogroup" aria-label="Who edits pages">
-          <button
-            type="button"
-            aria-pressed={d.pageEdit === "mods"}
-            onClick={() => set({ pageEdit: "mods" })}
-          >
-            Moderators
-          </button>
-          <button
-            type="button"
-            aria-pressed={d.pageEdit === "members"}
-            onClick={() => set({ pageEdit: "members" })}
-          >
-            All members
-          </button>
+      <Sec
+        title="Pages"
+        sub="Who can edit the pages in About. Moderators can always add, order and remove pages."
+      >
+        <div className="ab-radios">
+          {(
+            [
+              ["mods", "Moderators", "Only moderators edit pages."],
+              [
+                "members",
+                "Members",
+                "Any member can edit a page. The page history shows every change.",
+              ],
+            ] as const
+          ).map(([v, t, sub]) => (
+            <label className="cs-rad" key={v} htmlFor={`ab-pgedit-${v}`} aria-label={t}>
+              <input
+                id={`ab-pgedit-${v}`}
+                type="radio"
+                name="ab-pgedit"
+                value={v}
+                checked={d.pageEdit === v}
+                onChange={() => set({ pageEdit: v })}
+              />
+              <span>
+                <b>{t}</b>
+                <small>{sub}</small>
+              </span>
+            </label>
+          ))}
         </div>
       </Sec>
       <div className="st-end">{buttons}</div>
       {owner ? (
-        <Sec title="Archive or delete" sub="Stop activity in the space, or delete it.">
+        <Sec
+          title="Archive or delete"
+          sub="These take effect at once. They are not part of Save changes."
+        >
           <div className="cs-row">
             {s.archived ? (
               <button

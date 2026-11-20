@@ -7,7 +7,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { getJson } from "../api/http.js";
-import { fmt, isClosed, spaceName, visLabel } from "../data/format.js";
+import { dayOf, fmt, isClosed, spaceName, visLabel } from "../data/format.js";
 import { isStaff, type Space } from "../data/spaces.js";
 import { useNow, useRecords } from "../sync/react.js";
 
@@ -25,6 +25,14 @@ export const policyLabel = (s: Space) =>
 const ROLE_LABEL: Record<string, string> = { owner: "Owner", admin: "Admin", mod: "Moderator" };
 
 /** The person's join request in a space, if any. */
+/** When a declined request may be sent again: the request's `retryAt`
+ * (the server agent's, phase 2 review round 1; 2b design finding 1), else 14
+ * days after it was declined, as the decline dialog says. */
+export function retryAtOf(req: { updatedAt: string; retryAt?: string | null }): number {
+  const at = req.retryAt ? Date.parse(req.retryAt) : NaN;
+  return Number.isFinite(at) ? at : Date.parse(req.updatedAt) + 14 * 864e5;
+}
+
 export function useMyRequest(s: Space) {
   const w = useWorld();
   const me = w.me?.u ?? null;
@@ -552,6 +560,13 @@ export function JoinCta({ s }: { s: Space }) {
         Invite only
       </span>
     );
+  // a declined request waits 14 days (the mockup's csJoinAct)
+  if (req?.st === "declined" && now < retryAtOf(req))
+    return (
+      <button className="btn" type="button" disabled>
+        Request declined
+      </button>
+    );
   return (
     <>
       <button className="btn primary" type="button" onClick={() => setDlg("request")}>
@@ -565,7 +580,9 @@ export function JoinCta({ s }: { s: Space }) {
 /** A declined request: when, and the moderators' note. */
 function DeclinedCard({ s }: { s: Space }) {
   const req = useMyRequest(s);
+  const now = useNow();
   if (req?.st !== "declined") return null;
+  const again = retryAtOf(req);
   const on = new Date(req.updatedAt).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -586,7 +603,11 @@ function DeclinedCard({ s }: { s: Space }) {
       ) : null}
       <p className="cs-fine">
         <Svg src={CI.clock} />
-        <span>You can send a new request with new answers.</span>
+        <span>
+          {now < again
+            ? `You can request again on ${dayOf(again, now)}.`
+            : "The waiting period has passed. You can send a new request with new answers."}
+        </span>
       </p>
     </section>
   );

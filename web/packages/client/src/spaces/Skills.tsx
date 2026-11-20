@@ -14,7 +14,7 @@ import { useRecords, useSession } from "../sync/react.js";
 import { Modal } from "./Page.js";
 import { Svg } from "./Svg.js";
 import { MII, SVG } from "./icons.js";
-import { refusalToast, toast, useWrite } from "./writes.js";
+import { WRITE_ERROR, refusalToast, toast, useCreate, useWrite } from "./writes.js";
 
 /** A skill's prompt: its description, a blank line, its instructions. */
 export const skParse = (t: string) => {
@@ -66,6 +66,7 @@ function Editor({
   onClose: () => void;
 }) {
   const write = useWrite();
+  const create = useCreate();
   const session = useSession();
   const [ed, setEd] = useState(draft);
   const [seen, setSeen] = useState(false);
@@ -77,11 +78,15 @@ function Editor({
     if (errs.n || errs.d) return;
     const name = ed.n.trim();
     const prompt = skJoin(ed.d, ed.b);
-    const o = await write(
-      isNew ? "skills.create" : "skills.update",
-      isNew
-        ? { id: session?.newId() ?? "", space: s.id, name, prompt }
-        : {
+    // a new skill is a create: one that got no answer is sent again as the
+    // same skill (`useCreate`)
+    const o = isNew
+      ? await create.send("skills.create", (id) => ({ id, space: s.id, name, prompt }), {
+          quiet: true,
+        })
+      : await write(
+          "skills.update",
+          {
             id: ed.id,
             space: s.id,
             name,
@@ -89,14 +94,15 @@ function Editor({
             base: { rev: ed.ver },
             ...(force ? { force: true } : {}),
           },
-      { quiet: true },
-    );
+          { quiet: true },
+        );
     if (o.ok) {
       onClose();
       toast(isNew ? `Added ${name}. It shows in About.` : `Saved ${name}.`);
     } else if (o.error?.code === "CONFLICT" && !isNew && /first/.test(o.error.message))
       setConflict(true);
     else if (o.error) refusalToast(o.error);
+    else toast(WRITE_ERROR["unavailable"] ?? "");
   };
   const reload = () => {
     const cur = ed.id ? session?.reader().get("skill", ed.id) : undefined;
@@ -112,6 +118,13 @@ function Editor({
       title={isNew ? "Add a skill" : "Edit skill"}
       className="cs-m ab-sked ab-sked-preview"
       onClose={onClose}
+      unsaved={{
+        dirty: () => ed.n !== draft.n || ed.d !== draft.d || ed.b !== draft.b,
+        title: isNew ? "Discard this skill?" : "Discard your changes to this skill?",
+        body: isNew
+          ? "The name, description and instructions you entered will be deleted."
+          : "The skill keeps the name, description and instructions it had before.",
+      }}
       footer={
         <>
           <span style={{ flex: 1 }} />

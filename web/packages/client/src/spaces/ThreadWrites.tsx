@@ -2,16 +2,17 @@
 // answer, reply, and the run controls (Stop, Run again, Retry). Each write
 // goes through the outbox and shows at once; a refusal puts it back with a
 // toast. A follow-up or reply that got no answer keeps its text and offers
-// Retry (the mockup's as-perr).
+// Retry (the mockup's as-perr); like the composer's create, it is never made
+// a second time (`useCreate`).
 
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
 import { isClosed, spaceName } from "../data/format.js";
 import type { Space, ThreadView } from "../data/spaces.js";
-import { useSession, useStatus } from "../sync/react.js";
+import { useStatus } from "../sync/react.js";
 
-import { ModelMenu, PayerLine } from "./Composer.js";
+import { ModelMenu, PayerLine, useAskModel } from "./Composer.js";
 import { DiscardDialog, LeaveGuard } from "./Discard.js";
 import { Modal } from "./Page.js";
 import { Scrim } from "./Scrim.js";
@@ -19,7 +20,14 @@ import { Svg } from "./Svg.js";
 import { CI, I, SVG } from "./icons.js";
 import { useOverlay } from "./overlay.js";
 import { useWorld } from "./world.js";
-import { WRITE_ERROR, toast, useQuickWrite, useWrite } from "./writes.js";
+import {
+  WRITE_ERROR,
+  lostEditsToast,
+  toast,
+  useCreate,
+  useQuickWrite,
+  useWrite,
+} from "./writes.js";
 
 const AS_ERR = "Couldn’t post. Try again.";
 
@@ -254,6 +262,11 @@ export function useRunControl(thread: string, node: string) {
     busy,
     stop: () => void go("research.cancelNode", { thread, node }),
     again: () => void go("research.retryNode", { thread, node }),
+    /** Run again as a server run on the included tokens (after a device
+     * run was interrupted: the web cannot run it on the device). */
+    included: () => void go("research.retryNode", { thread, node, pay: "session" }),
+    /** Run again with another payer (the mockup's tmActs). */
+    payWith: (pay: string) => void go("research.retryNode", { thread, node, pay }),
   };
 }
 
@@ -270,45 +283,50 @@ export function AskBox({
   level: number;
   onClose: () => void;
 }) {
-  const session = useSession();
-  const write = useWrite();
+  const create = useCreate();
   const [draft, setDraft] = useState("");
   const [model, setModel] = useState("");
   const [pay, setPay] = useState("session");
-  const [err, setErr] = useState<{ text: string; local: string | null } | null>(null);
+  const asked = useAskModel(pay, model);
+  const [err, setErr] = useState<{ text: string; retry: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const ta = useRef<HTMLTextAreaElement>(null);
   useEffect(() => ta.current?.focus(), []);
+  const close = () => {
+    create.forget();
+    onClose();
+  };
   const cancel = () => {
     if (draft.trim()) setConfirm(true);
-    else onClose();
+    else close();
   };
   const ask = async () => {
     const q = draft.trim();
     if (!q) {
-      setErr({ text: "Write a question first.", local: null });
+      setErr({ text: "Write a question first.", retry: false });
       ta.current?.focus();
       return;
     }
     setBusy(true);
-    const o = await write("research.forkNode", {
-      id: session?.newId() ?? "",
-      thread: t.id,
-      parent: par,
-      q,
-      pay,
-      ...(model ? { model } : {}),
-    });
+    setErr(null);
+    const o = await create.send(
+      "research.forkNode",
+      (id) => ({
+        id,
+        thread: t.id,
+        parent: par,
+        q,
+        pay,
+        ...(asked.model ? { model: asked.model.id } : {}),
+      }),
+      { text: q },
+    );
     setBusy(false);
-    if (o.ok) onClose();
-    else if (o.error === null) setErr({ text: AS_ERR, local: o.local });
-  };
-  const retry = async (local: string) => {
-    setBusy(true);
-    const o = await write.retry(local);
-    setBusy(false);
-    if (o.ok) onClose();
+    if (o.ok) {
+      onClose();
+      if (o.lostEdits) lostEditsToast("follow-up", q);
+    } else if (o.error === null) setErr({ text: AS_ERR, retry: true });
   };
   return (
     <div className="qt-comp" id="qt-comp">
@@ -330,13 +348,18 @@ export function AskBox({
           }
         }}
       />
-      {err ? (
+      {create.checking ? (
+        <span className="qt-err as-pchk" role="status">
+          <span className="spin" aria-hidden="true" />
+          Checking whether your follow-up went through…
+        </span>
+      ) : err ? (
         <span className="qt-err" role="alert">
           {err.text}
-          {err.local ? (
+          {err.retry ? (
             <>
               {" "}
-              <button className="tlink" type="button" onClick={() => void retry(err.local ?? "")}>
+              <button className="tlink" type="button" onClick={() => void ask()}>
                 Retry
               </button>
             </>
@@ -346,7 +369,7 @@ export function AskBox({
         <PayerLine pay={pay} setPay={setPay} />
       )}
       <div className="qt-cbar fu2-bar">
-        <ModelMenu model={model} setModel={setModel} />
+        <ModelMenu model={model} setModel={setModel} pay={pay} />
         <span className="grow" />
         <button className="btn" type="button" onClick={cancel}>
           Cancel
@@ -354,8 +377,8 @@ export function AskBox({
         <button
           className="btn primary"
           type="button"
-          disabled={busy}
-          aria-disabled={busy || undefined}
+          disabled={busy || create.checking}
+          aria-disabled={busy || create.checking || undefined}
           onClick={() => void ask()}
         >
           Ask
@@ -368,7 +391,7 @@ export function AskBox({
           onKeep={() => setConfirm(false)}
           onDiscard={() => {
             setConfirm(false);
-            onClose();
+            close();
           }}
         />
       ) : null}
@@ -387,11 +410,10 @@ export function ReplyBox({
   to?: { id: string; u: string };
   onClose?: () => void;
 }) {
-  const session = useSession();
-  const write = useWrite();
+  const create = useCreate();
   const signedIn = useSignedIn();
   const [draft, setDraft] = useState("");
-  const [failed, setFailed] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const ta = useRef<HTMLTextAreaElement>(null);
@@ -406,28 +428,18 @@ export function ReplyBox({
     }
     if (!signedIn()) return;
     setBusy(true);
-    const o = await write("research.createPostFollowUp", {
-      id: session?.newId() ?? "",
-      thread: t.id,
-      t: text,
-      ...(to ? { parent: to.id } : {}),
-    });
+    setFailed(false);
+    const o = await create.send(
+      "research.createPostFollowUp",
+      (id) => ({ id, thread: t.id, t: text, ...(to ? { parent: to.id } : {}) }),
+      { text },
+    );
     setBusy(false);
     if (o.ok) {
       setDraft("");
       onClose?.();
-    } else if (o.error === null) setFailed(o.local);
-  };
-  const retry = async () => {
-    if (!failed) return;
-    setBusy(true);
-    const o = await write.retry(failed);
-    setBusy(false);
-    if (o.ok) {
-      setFailed(null);
-      setDraft("");
-      onClose?.();
-    }
+      if (o.lostEdits) lostEditsToast("reply", text);
+    } else if (o.error === null) setFailed(true);
   };
   const online = useStatus().online;
   const label = to ? `Reply to ${to.u}` : "Write a reply";
@@ -442,13 +454,18 @@ export function ReplyBox({
         value={draft}
         onChange={(e) => {
           setDraft(e.currentTarget.value);
-          setFailed(null);
+          setFailed(false);
         }}
       />
-      {failed ? (
+      {create.checking ? (
+        <span className="c2-note as-perr as-pchk" role="status">
+          <span className="spin" aria-hidden="true" />
+          Checking whether your reply went through…
+        </span>
+      ) : failed ? (
         <span className="c2-note warn as-perr" role="alert">
           {online ? AS_ERR : "You’re offline. Your reply wasn’t sent; the text is still here."}{" "}
-          <button className="tlink" type="button" onClick={() => void retry()}>
+          <button className="tlink" type="button" onClick={() => void send()}>
             {online ? "Retry" : "Try again"}
           </button>
         </span>
@@ -467,8 +484,8 @@ export function ReplyBox({
         <button
           className="btn primary"
           type="button"
-          disabled={busy}
-          aria-disabled={busy || undefined}
+          disabled={busy || create.checking}
+          aria-disabled={busy || create.checking || undefined}
           onClick={() => void send()}
         >
           Reply
@@ -482,6 +499,7 @@ export function ReplyBox({
           onDiscard={() => {
             setConfirm(false);
             setDraft("");
+            create.forget();
             onClose?.();
           }}
         />

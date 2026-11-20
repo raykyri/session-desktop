@@ -5,6 +5,7 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { APP_ORIGIN } from "./constants.js";
 import type { KeyedRecord } from "./fixtures/mockup.js";
 import { loadScenario, pathFor, recordsOf, signInAs } from "./scenario.js";
 
@@ -14,6 +15,8 @@ interface Screen {
   args?: unknown;
   url: string;
   out?: boolean;
+  /** Changes the scenario's records first. */
+  edit?: (r: KeyedRecord[]) => KeyedRecord[];
   /** The thread to open, found in the scenario's records (`:thread` in url). */
   thread?: (r: KeyedRecord[]) => KeyedRecord | undefined;
   run: (p: Page) => Promise<void>;
@@ -135,6 +138,32 @@ const SCREENS: Screen[] = [
     run: async (p) => {
       await expect(p.getByRole("region").or(p.locator(".cs-denied")).first()).toBeVisible();
       await text(p, "Your request was declined");
+      // the 14 days after a decline (2b design finding 1, the mockup's cxDeniedCard)
+      await expect(p.locator(".cs-denied .cs-fine")).toHaveText(
+        /^You can request again on [A-Z][a-z]{2} \d{1,2}\.$/,
+      );
+      await expect(p.getByRole("button", { name: "Request declined" }).first()).toBeDisabled();
+    },
+  },
+  {
+    key: "cx-declined-again",
+    scenario: "replication: denied",
+    // declined 20 days before the scenario's clock: the waiting period has passed
+    edit: (rs) =>
+      rs.map((r) =>
+        r.record.kind === "request" && r.record["st"] === "declined"
+          ? {
+              ...r,
+              record: { ...r.record, updatedAt: "2026-10-27T10:00:00Z", retryAt: undefined },
+            }
+          : r,
+      ),
+    url: "/s/replication-club",
+    run: async (p) => {
+      await expect(p.locator(".cs-denied .cs-fine")).toHaveText(
+        "The waiting period has passed. You can send a new request with new answers.",
+      );
+      await expect(p.getByRole("button", { name: "Request to join" }).first()).toBeEnabled();
     },
   },
   {
@@ -411,6 +440,81 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // phase 2 review round 1, finding 2: the first post applied but its
+    // answer was lost; the person edits the text and posts again
+    key: "as-post-lost",
+    url: "/s/public",
+    run: async (p) => {
+      const first =
+        "Notes from Thursday’s reading group are on the wiki page. Next week: chapters 4 to 6.";
+      const edited =
+        "Notes from Thursday’s reading group are on the wiki page. Next week: chapters 4 to 7.";
+      await p.getByRole("button", { name: /Make a query/ }).click();
+      await p.locator(".c2-mode").getByRole("button", { name: "Post" }).click();
+      await p.locator("#compose-text").fill(first);
+      let lose = true;
+      await p.route("**/api/sync/write", async (r) => {
+        if (!lose) return r.continue();
+        lose = false;
+        // the server applies it; the browser never sees the answer
+        await r.fetch();
+        await r.abort("connectionreset");
+      });
+      const post = p.locator(".c2-end").getByRole("button", { name: "Post" });
+      await post.click();
+      await expect(p.locator(".as-perr")).toContainText("Couldn’t post. Try again.");
+      await p.locator("#compose-text").fill(edited);
+      // the check reads the space first: hold that read to see it
+      let release = () => undefined as void;
+      const held = new Promise<void>((r) => (release = r));
+      await p.route("**/api/sync/pull", async (r) => {
+        await held;
+        await r.continue();
+      });
+      await post.click();
+      await expect(p.locator(".as-pchk")).toHaveText("Checking whether your post went through…");
+      await expect(post).toBeDisabled();
+      release();
+      await expect(p).toHaveURL(/\/t\//);
+      await toastSays(
+        p,
+        "Your post went through before the error, so Session didn’t post it again. Your later edits weren’t saved.",
+      );
+      await p.locator(".cs-toast").getByRole("button", { name: "Copy your edits" }).click();
+      await toastSays(p, "Copied your edits.");
+      await p.unroute("**/api/sync/pull");
+      await expect(p.getByText(first).first()).toBeVisible();
+      await p.goto("/s/public");
+      await expect(p.getByText(/chapters 4 to 6/)).toHaveCount(1);
+      await expect(p.getByText(/chapters 4 to 7/)).toHaveCount(0);
+    },
+  },
+  {
+    // the first post never reached the server: Post again sends the same
+    // create with the edited text, once
+    key: "as-post-check",
+    url: "/s/public",
+    run: async (p) => {
+      await p.getByRole("button", { name: /Make a query/ }).click();
+      await p.locator(".c2-mode").getByRole("button", { name: "Post" }).click();
+      await p.locator("#compose-text").fill("A reading list for chapters 4 to 6.");
+      await p.route("**/api/sync/write", (r) => r.abort());
+      const post = p.locator(".c2-end").getByRole("button", { name: "Post" });
+      await post.click();
+      await expect(p.locator(".as-perr")).toContainText("Couldn’t post. Try again.");
+      await p.unroute("**/api/sync/write");
+      await p.locator("#compose-text").fill("A reading list for chapters 4 to 7.");
+      // still the lost create's note while the text changes
+      await expect(p.locator(".as-perr")).toContainText("Couldn’t post. Try again.");
+      await post.click();
+      await expect(p).toHaveURL(/\/t\//);
+      await expect(p.getByText("A reading list for chapters 4 to 7.").first()).toBeVisible();
+      await expect(p.locator(".cs-toast")).toHaveCount(0);
+      await p.goto("/s/public");
+      await expect(p.getByText(/A reading list for chapters/)).toHaveCount(1);
+    },
+  },
+  {
     key: "ov-compose-back",
     scenario: "replication: member",
     url: "/s/replication-club",
@@ -512,6 +616,7 @@ const SCREENS: Screen[] = [
 async function open(p: Page, s: Screen) {
   const { records } = await loadScenario(p.context().request, s.scenario ?? "seed", {
     args: s.args,
+    ...(s.edit ? { edit: s.edit } : {}),
   });
   if (!s.out) await signInAs(p.context());
   const th = s.thread?.(records);
@@ -563,3 +668,178 @@ test.describe("invite links", () => {
     await expect(page.getByRole("button", { name: "Joined" })).toBeVisible();
   });
 });
+
+// Refused writes on the web (phase 2 review round 1, finding 3): a STALE or
+// FORBIDDEN decision shows a toast with no action, the item shows its
+// current state, and nothing is applied (AGENTS.md; the mockup's
+// sx-rf-show, sx-rf-approve and sx-rf-forbidden). The page's event stream is
+// held, so it has not heard of the change the server made meanwhile.
+const TEST_HEADERS = { "x-requested-with": "session", "content-type": "application/json" };
+
+/** Write records on the server as they are now (`/api/test/records`): each
+ * put moves the record's rev. */
+async function serverPut(p: Page, records: KeyedRecord[]) {
+  const r = await p.request.post(`${APP_ORIGIN}/api/test/records`, {
+    headers: TEST_HEADERS,
+    data: {
+      records: records.map((x) => ({ key: x.key, record: { ...x.record, rev: undefined } })),
+    },
+  });
+  expect(r.ok()).toBe(true);
+}
+
+/** The toast says `text` and offers nothing but Dismiss. */
+async function toastWithoutAction(p: Page, text: string) {
+  const t = p.locator(".cs-toast");
+  await expect(t.getByText(text, { exact: true })).toBeVisible();
+  await expect(t.getByRole("button")).toHaveCount(1);
+  await expect(t.getByRole("button", { name: "Dismiss" })).toBeVisible();
+}
+
+for (const [layout, viewport] of [
+  ["Desktop", { width: 1318, height: 900 }],
+  ["Mobile Web", { width: 390, height: 844 }],
+] as const) {
+  test.describe(`refused writes, ${layout}`, () => {
+    test.use({ viewport });
+
+    test("sx-rf-approve: Approve refused as STALE is not reapplied", async ({ page: p }) => {
+      const { records } = await loadScenario(p.context().request, "replication: moderator", {
+        args: { seen: true },
+      });
+      await signInAs(p.context());
+      await p.route("**/api/sync/events**", () => undefined);
+      await p.goto("/s/replication-club/manage/requests");
+      const card = p.locator(".rq-card").first();
+      const who = ((await card.locator(".rq-nm .faint").textContent()) ?? "")
+        .replace(/^@/, "")
+        .trim();
+      const req = records.find((r) => r.record.kind === "request" && r.record["u"] === who);
+      expect(req).toBeTruthy();
+      // the person rewrites the request after the moderator looked
+      const msg = "Edited after the moderator opened the queue.";
+      const a = (req?.record["a"] as string[] | undefined) ?? [];
+      if (req) await serverPut(p, [{ ...req, record: { ...req.record, a: [msg, ...a.slice(1)] } }]);
+      await card.getByRole("button", { name: "Approve" }).click();
+      await dialog(p, `Approve the request from ${who}?`)
+        .getByRole("button", { name: "Approve" })
+        .click();
+      await toastWithoutAction(
+        p,
+        `Approve wasn’t applied because ${who} changed the request after you chose Approve.`,
+      );
+      // the card shows the request as it is now, still open
+      const now = p.locator(".rq-card").filter({ hasText: who });
+      await expect(now.getByText(msg)).toBeVisible();
+      await expect(now.getByRole("button", { name: "Approve" })).toBeVisible();
+      await expect(p.locator(".rq-decided").getByText(who)).toHaveCount(0);
+    });
+
+    test("Undo of a decline refused as STALE is not sent again", async ({ page: p }) => {
+      const { records } = await loadScenario(p.context().request, "replication: moderator", {
+        args: { seen: true },
+      });
+      await signInAs(p.context());
+      // this page does not hear of changes others make
+      await p.route("**/api/sync/events**", () => undefined);
+      await p.goto("/s/replication-club/manage/requests");
+      const card = p.locator(".rq-card").first();
+      const who = ((await card.locator(".rq-nm .faint").textContent()) ?? "")
+        .replace(/^@/, "")
+        .trim();
+      await card.getByRole("button", { name: "Decline" }).click();
+      await dialog(p, `Decline the request from ${who}?`)
+        .getByRole("button", { name: "Decline" })
+        .click();
+      await toastSays(p, `Declined ${who}.`);
+      // another moderator approves it meanwhile
+      const req = records.find((r) => r.record.kind === "request" && r.record["u"] === who);
+      expect(req).toBeTruthy();
+      if (req) await serverPut(p, [{ ...req, record: { ...req.record, st: "approved" } }]);
+      const writes: string[] = [];
+      p.on("request", (r) => {
+        if (r.url().endsWith("/api/sync/write")) writes.push(r.postData() ?? "");
+      });
+      await p.locator(".cs-toast").getByRole("button", { name: "Undo" }).click();
+      await toastWithoutAction(
+        p,
+        "This item changed after you opened it, so the server didn’t apply the change. Session undid it.",
+      );
+      // one Undo was sent, not a second one with the new rev
+      expect(writes.filter((w) => w.includes("reopen"))).toHaveLength(1);
+      await expect(p.locator(".rq-card .rq-nm .faint").getByText(who, { exact: true })).toHaveCount(
+        0,
+      );
+    });
+
+    test("sx-rf-show: Show refused as STALE is not reapplied", async ({ page: p }) => {
+      const { records } = await loadScenario(
+        p.context().request,
+        "sablefield: bram edited a hidden reply",
+      );
+      await signInAs(p.context());
+      const hide = records.find((r) => r.record.kind === "hide");
+      const reply = records.find((r) => r.key === hide?.record["item"]);
+      expect(hide && reply).toBeTruthy();
+      await p.route("**/api/sync/events**", () => undefined);
+      await p.goto(`/s/sablefield/t/${String(reply?.record["th"])}`);
+      const note = p
+        .locator(".sf-modph")
+        .filter({ hasText: "This reply is hidden by a moderator." });
+      await expect(note).toBeVisible();
+      // bram edits the hidden reply meanwhile: its hide record moves
+      if (hide && reply)
+        await serverPut(p, [
+          { ...reply, record: { ...reply.record, t: "Edited again while the page was open." } },
+          { ...hide, record: { ...hide.record, ed: 1 } },
+        ]);
+      await note.getByRole("button", { name: "Show it again" }).click();
+      await toastWithoutAction(
+        p,
+        "Show wasn’t applied because bram edited the reply after you chose Show.",
+      );
+      // still hidden
+      await expect(note).toBeVisible();
+      await expect(note.getByRole("button", { name: "Show it again" })).toBeVisible();
+    });
+
+    test("sx-rf-forbidden: a moderation write refused as FORBIDDEN is not reapplied", async ({
+      page: p,
+    }) => {
+      const { records } = await loadScenario(p.context().request, "replication: moderator", {
+        args: { seen: true },
+      });
+      await signInAs(p.context());
+      await p.route("**/api/sync/events**", () => undefined);
+      await p.goto("/s/replication-club/manage/requests");
+      const card = p.locator(".rq-card").first();
+      const who = ((await card.locator(".rq-nm .faint").textContent()) ?? "")
+        .replace(/^@/, "")
+        .trim();
+      // the person's moderator role is taken away meanwhile
+      const me = records.find(
+        (r) =>
+          r.record.kind === "member" &&
+          r.record["u"] === "ines.v" &&
+          r.key.includes(":ines.v") &&
+          records.some(
+            (x) =>
+              x.record.kind === "space" &&
+              x.record["name"] === "replication-club" &&
+              x.record["id"] === r.record["sp"],
+          ),
+      );
+      expect(me).toBeTruthy();
+      if (me) await serverPut(p, [{ ...me, record: { ...me.record, role: "member" } }]);
+      await card.getByRole("button", { name: "Approve" }).click();
+      await dialog(p, `Approve the request from ${who}?`)
+        .getByRole("button", { name: "Approve" })
+        .click();
+      await toastWithoutAction(
+        p,
+        "You no longer have permission to do this. Session undid the change.",
+      );
+      await expect(p.locator(".rq-decided").getByText(who)).toHaveCount(0);
+    });
+  });
+}

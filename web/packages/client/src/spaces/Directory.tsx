@@ -3,6 +3,7 @@
 // space), and a person's profile (`/u/<handle>`: their threads in the spaces
 // the reader reads, Mute and Block).
 
+import type { SpaceRec } from "@session/mutators";
 import { useNavigate } from "@tanstack/react-router";
 import { Fragment, useState } from "react";
 
@@ -158,9 +159,18 @@ export function CreateSpacePage() {
     setBusy(false);
     if (!o.ok) {
       if (o.error) refusalToast(o.error);
+      else
+        toast(
+          "Couldn’t reach the server, so Session didn’t create the space. Try again in a moment.",
+        );
       return;
     }
-    await session?.retry();
+    // the answer carries the new space (2b design finding 6): it shows at
+    // once; the logs and the directory are read again behind it
+    const made = (o.result as { space?: SpaceRec } | null)?.space;
+    if (made && session) session.addSpace(made);
+    else await session?.retry();
+    if (made) void session?.retry();
     toast(
       `#${slug} is ready. ${closed ? "Invite the first members." : "Share it with people who should join."}`,
     );

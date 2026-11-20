@@ -328,12 +328,27 @@ rules above stay as they are. Decisions for the new client:
     shell supplies a device-token session with `persist: true`.
   - Writes go through `src/spaces/writes.tsx`: on the web a write with no
     answer offers Retry, and a refused write shows the error toast and is
-    discarded.
+    discarded. Decided in review round 1 of phase 2: a create (a thread,
+    follow-up, reply, page or skill) that got no answer is never made a
+    second time (`useCreate`): the next send reads the logs first ("Checking
+    whether your post went through…"), opens the record if it applied (the
+    mockup's as-post-lost toast, with Copy your edits), and otherwise sends
+    the same id again with the current text (`SyncClient.sendAgain` with
+    `input`). A STALE or FORBIDDEN decision shows its toast with no action
+    and nothing is applied again; TOO_MANY_REQUESTS (the server's write
+    budget) reads as a refusal.
+  - `/device` shows the request's device, app and time; from another
+    network address it asks for the code the app shows. On Mobile Web,
+    menus, popovers and sheets have a history entry (Back closes them), as
+    dialogs do on both layouts; unsaved input asks before Back, Escape or a
+    click outside discards it.
   - Build class names with `cx()`, never template literals: the Tailwind
     Prettier plugin trims the spaces inside them. Run Prettier from `web/`.
-  - e2e specs (`web/e2e/{reading,writing,content,account,admin}.spec.ts`)
+  - e2e specs (`web/e2e/{reading,writing,content,account,admin,overlays}.spec.ts`)
     run against the real server with the mockup's data, on Desktop and
-    Mobile Web; in this sandbox set `SESSION_E2E_HOST=127.0.0.1`.
+    Mobile Web; in this sandbox set `SESSION_E2E_HOST=127.0.0.1`. Tests
+    tagged `@server-r1` need the server half of review round 1 of phase 2
+    and run only with `SESSION_E2E_SERVER_R1=1`.
 - Ids: clients generate ULIDs. The server accepts a timestamp from 4 days in
   the past to 1 minute in the future (the outbox keeps writes 3 days), rejects an id that already exists, and
   answers a collision with the same CONFLICT whether or not the caller can

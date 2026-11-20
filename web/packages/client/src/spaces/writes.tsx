@@ -6,7 +6,7 @@
 // one toast whose text depends on the code (the mockup's API_ERR.write).
 
 import type { Answer, ApiError } from "@session/sync/client";
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { useSession } from "../sync/react.js";
 import type { SpacesSession } from "../sync/session.js";
@@ -112,7 +112,14 @@ export function Toasts() {
 /** How a write ended: applied, refused (with the server's error), or no
  * answer (the screen offers Try again). */
 export type Outcome =
-  | { ok: true; result: unknown }
+  | {
+      ok: true;
+      result: unknown;
+      /** Send again: the input as it was sent (its ids can be new). */
+      input?: unknown;
+      /** Send again: an earlier envelope of it had applied (`earlier`). */
+      earlier?: boolean;
+    }
   | { ok: false; error: ApiError }
   | { ok: false; error: null; local: string };
 
@@ -122,13 +129,30 @@ export function refusalToast(error: ApiError): void {
 }
 
 /** Wait for a write's outcome; a refusal shows its toast unless `quiet`. */
+/** A write the server's write budget refused (TOO_MANY_REQUESTS with
+ * `retryAt`, unrecorded: phase 2 review round 1, reviewer A's F6). The sync
+ * client ends it as failed on the web; it never applied unless an earlier
+ * send of it went without an answer (`uncertain`), so it reads as refused. */
+function limited(session: SpacesSession, local: string): ApiError | null {
+  const e = session.client?.outbox().find((x) => x.local === local);
+  return e && e.state === "failed" && !e.uncertain && e.error?.code === "TOO_MANY_REQUESTS"
+    ? e.error
+    : null;
+}
+
 async function settle(
   session: SpacesSession,
   w: { local: string; answer: Promise<Answer | null> },
   quiet: boolean,
 ): Promise<Outcome> {
   const a = await w.answer;
-  if (a === null) return { ok: false, error: null, local: w.local };
+  if (a === null) {
+    const error = limited(session, w.local);
+    if (!error) return { ok: false, error: null, local: w.local };
+    if (!quiet) refusalToast(error);
+    session.client?.discard(w.local);
+    return { ok: false, error };
+  }
   if (a.ok) return { ok: true, result: a.result };
   const code = a.error.code;
   if (!quiet) toast(WRITE_ERROR[code] ?? WRITE_ERROR["unavailable"] ?? "");
@@ -140,8 +164,9 @@ async function settle(
 export interface Writer {
   /** Make a write and wait for its outcome. */
   (name: string, input: unknown, o?: { quiet?: boolean }): Promise<Outcome>;
-  /** Send a write that got no answer again, keeping its ids. */
-  retry(local: string): Promise<Outcome>;
+  /** Send a write that got no answer again, keeping its ids; `input`
+   * changes its input (it must make the same ids). */
+  retry(local: string, o?: { input?: unknown }): Promise<Outcome>;
 }
 
 export function useWrite(): Writer {
@@ -156,18 +181,24 @@ export function useWrite(): Writer {
     if (!w) return { ok: false, error: { code: "UNAUTHORIZED", message: "Sign in." } };
     return settle(session, w, o.quiet === true);
   };
-  const retry = async (local: string): Promise<Outcome> => {
+  const retry = async (local: string, o: { input?: unknown } = {}): Promise<Outcome> => {
     const c = session?.client;
-    if (!session || !c || !c.sendAgain(local))
+    if (!session || !c || !c.sendAgain(local, o))
       return { ok: false, error: { code: "NOT_FOUND", message: "Gone." } };
     // the entry's state is the outcome: answered, or shown again
     return new Promise<Outcome>((resolve) => {
       const check = () => {
         const e = c.outbox().find((x) => x.local === local);
         if (!e) return false;
-        if (e.state === "answered") resolve({ ok: true, result: e.result });
+        if (e.state === "answered")
+          resolve({ ok: true, result: e.result, input: e.input, earlier: e.earlier === true });
         else if (e.state === "refused" || e.state === "expired") {
           const error = e.error ?? { code: "BAD_REQUEST", message: "" };
+          toast(WRITE_ERROR[error.code] ?? WRITE_ERROR["unavailable"] ?? "");
+          c.discard(local);
+          resolve({ ok: false, error });
+        } else if (e.state === "failed" && limited(session, local)) {
+          const error = limited(session, local) ?? { code: "TOO_MANY_REQUESTS", message: "" };
           toast(WRITE_ERROR[error.code] ?? WRITE_ERROR["unavailable"] ?? "");
           c.discard(local);
           resolve({ ok: false, error });
@@ -192,4 +223,98 @@ export function useQuickWrite() {
     void write(name, input).then((o) => {
       if (!o.ok && o.error === null) toast(WRITE_ERROR["unavailable"] ?? "");
     });
+}
+
+// ---- creates ----
+
+/** How a create ended: an `Outcome`, the id of the record it made, and
+ * (applied) whether an earlier send had applied with the text it had then
+ * while the text sent last differs (`lostEdits`). */
+export type CreateOutcome = Outcome & { id: string; lostEdits: boolean };
+
+/** A create: a write whose input names the id of the record it makes
+ * (`threads.create`, a follow-up, a reply). A create that got no answer may
+ * have applied (phase 2 review round 1, finding 2), so no second create is
+ * made while it has none: the next send first reads the logs (`checking`);
+ * a read that holds its record means it applied, and otherwise it is sent
+ * again with the same id, the current input, and its earlier mutation ids
+ * in `replaces`, so the server answers from an earlier envelope that
+ * applied rather than making a second record. */
+export function useCreate() {
+  const session = useSession();
+  const write = useWrite();
+  const [lost, setLost] = useState<{ local: string; id: string; text: string } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const send = async (
+    name: string,
+    make: (id: string) => Record<string, unknown>,
+    o: { quiet?: boolean; text?: string } = {},
+  ): Promise<CreateOutcome> => {
+    const c = session?.client;
+    if (!session || !c)
+      return {
+        ok: false,
+        error: { code: "UNAUTHORIZED", message: "Sign in." },
+        id: "",
+        lostEdits: false,
+      };
+    const text = o.text ?? "";
+    let id: string;
+    let first: string;
+    let out: Outcome;
+    if (lost) {
+      id = lost.id;
+      first = lost.text;
+      setChecking(true);
+      try {
+        await c.sync().catch(() => false);
+        const e = c.outbox().find((x) => x.local === lost.local);
+        // a read that holds its record answered it (or the entry is gone
+        // after it was answered)
+        out =
+          !e || e.state === "answered"
+            ? { ok: true, result: e?.result ?? null, earlier: true }
+            : await write.retry(lost.local, { input: make(id) });
+      } finally {
+        setChecking(false);
+      }
+    } else {
+      id = session.newId();
+      first = text;
+      out = await write(name, make(id), o);
+    }
+    if (out.ok) {
+      setLost(null);
+      const sent = (out.input as { id?: unknown } | undefined)?.id;
+      return {
+        ...out,
+        id: typeof sent === "string" ? sent : id,
+        lostEdits: out.earlier === true && o.text !== undefined && text !== first,
+      };
+    }
+    if (out.error === null) setLost({ local: out.local, id, text: first });
+    else setLost(null);
+    return { ...out, id, lostEdits: false };
+  };
+  /** The draft was discarded: its create that got no answer is forgotten. */
+  const forget = () => {
+    if (lost) session?.client?.discard(lost.local);
+    setLost(null);
+  };
+  return { send, forget, checking, lost: lost !== null };
+}
+
+/** The toast of a create that had applied before the person's later edits
+ * (the mockup's AS_LOST, with Copy your edits). */
+export function lostEditsToast(noun: string, draft: string): void {
+  toast(
+    `Your ${noun} went through before the error, so Session didn’t post it again. Your later edits weren’t saved.`,
+    {
+      label: "Copy your edits",
+      run: () =>
+        void Promise.resolve(navigator.clipboard?.writeText(draft))
+          .catch(() => undefined)
+          .then(() => toast("Copied your edits.")),
+    },
+  );
 }
