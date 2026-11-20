@@ -430,6 +430,50 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 #bar { flex: none; }
 #page { flex: 1; min-height: 0; position: relative; }
 #page > .mg, #page > .page { height: 100%; }
+
+/* ---- spaces in the app bar ---- */
+::selection { background: color-mix(in srgb, var(--accent) 34%, transparent); }
+:root[data-theme="dark"] ::selection { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) ::selection { background: color-mix(in srgb, var(--accent) 45%, transparent); } }
+.hsp { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; margin-left: 10px; height: 100%; }
+.hsp + .grow { flex: 0; }
+.hsp .tabs { position: static; flex: 1; min-width: 0; padding: 0; background: none; box-shadow: none; clip-path: none; }
+.hsp .tabs-s { align-items: center; }
+.hsp .tabs button { padding: 4px 10px; }
+.hsp .tabs .sscope { height: 28px; }
+.hsp .tabs .sscope button { height: 24px; }
+/* B scope dropdown */
+.hsdd { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border-radius: 14px; background: var(--control); font-size: var(--fs-sm); font-weight: 600; color: var(--t-heading); }
+.hsdd svg.i { width: 11px; height: 11px; color: var(--t-muted); }
+.hs-b .tabs-s > .mpick { flex: none; margin-right: 4px; }
+/* C underlined tabs */
+.htabs { flex: 1; min-width: 0; display: flex; align-self: stretch; overflow-x: auto; scrollbar-width: none; --fl: 0px; --fr: 0px;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent); mask-image: linear-gradient(to right, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent); }
+.htabs::-webkit-scrollbar { display: none; }
+.htabs button { flex: none; display: inline-flex; align-items: center; padding: 0 10px; border-bottom: 2px solid transparent; font-size: var(--fs-sm); font-weight: 500; color: var(--t-secondary); white-space: nowrap; }
+.htabs button:hover { color: var(--t-heading); }
+.htabs button[aria-current="true"] { color: var(--t-heading); border-bottom-color: var(--t-heading); }
+.htabs .tj, .hs-c .tempty { margin-left: 6px; }
+.hsl { flex: none; display: inline-flex; gap: 2px; padding-left: 8px; border-left: 1px solid var(--divider); }
+.hsl button { padding: 3px 7px; border-radius: 6px; font-size: var(--fs-xs); color: var(--t-faint); }
+.hsl button[aria-pressed="true"] { color: var(--t-heading); background: var(--control); }
+/* D breadcrumb */
+.hsep { color: var(--t-dim); font-size: 18px; font-weight: 300; margin: 0 2px 0 -2px; }
+.hcrumb { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 10px 0 6px; border-radius: 10px; font-size: var(--fs-md); font-weight: 600; color: var(--t-heading); white-space: nowrap; min-width: 0; }
+.hcrumb:hover, .hcrumb[aria-expanded="true"] { background: var(--fill-hover); }
+.hcrumb .glyph { width: 22px; height: 22px; border-radius: 6px; font-size: 11px; }
+.hcrumb svg.i { width: 12px; height: 12px; color: var(--t-muted); }
+.hcmenu { min-width: 270px; }
+.hcmodes { display: flex; margin: 4px 6px 6px; }
+.hcmodes button { flex: 1; }
+.hmeta { color: var(--t-faint); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* E icon chips */
+.hsic { flex: none; display: inline-flex; gap: 1px; padding: 2px; border-radius: 10px; background: var(--control); }
+.hsic .iconbtn { width: 26px; height: 26px; border-radius: 8px; }
+.hsic .iconbtn[aria-pressed="true"] { background: var(--card); color: var(--t-heading); box-shadow: var(--shadow); }
+.hsdiv { flex: none; width: 1px; height: 20px; background: var(--divider); margin: 0 4px; }
+.hs-e .gchip .glyph { width: 16px; height: 16px; font-size: 9px; border-radius: 4px; }
+@media (max-width: 860px) { .hmeta, .hsl, .hs-e .hsic, .hs-e .hsdiv { display: none; } }
 /* ---- spaces made by people: navigation directions ---- */
 #page > .spshell { height: 100%; display: flex; position: relative; }
 .spshell > .mg { flex: 1; min-width: 0; height: 100%; }
@@ -1464,8 +1508,29 @@ function spacesMenuItems(q = '') {
 const ddButton = (cls, label) => { const open = st.menu === 'spaces'; return `<span class="mpick ${cls}"><button type="button" class="spdd" data-a="menu" data-m="spaces" aria-haspopup="menu" aria-expanded="${open}">${label}${I.down}</button>${open ? `<div class="menu menu-scroll spmenu" role="menu" aria-label="Spaces">${spacesMenuItems()}</div>` : ''}</span>`; };
 
 /* ---- A: the top strip, showing different things ---- */
+/* ---- the spaces strip in the app bar (variants) ----
+   A the scoped strip as is · B scope as a dropdown, then chips · C underlined text tabs, scope as text links
+   D a breadcrumb: Session / #space ▾, scope and spaces inside the menu · E icon chips, scope as icon buttons */
+const SCOPES = () => [['joined', st.auth === 'out' ? 'Open' : 'Joined'], ...(canWrite() ? [['yours', 'Yours']] : []), ['discover', 'Discover']];
+const scopeList = () => { const sc = st.spScope || 'joined'; return sc === 'yours' ? yourSpaces() : sc === 'discover' ? discover() : navSpaces(); };
+const SCOPE_IC = { joined: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path d="m5.6 8.2 1.7 1.7 3.2-3.6"/></svg>', yours: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.6" r="2.6"/><path d="M3 13.5c.5-2.6 2.6-4 5-4s4.5 1.4 5 4"/></svg>', discover: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="m10.4 5.6-1.3 3.5-3.5 1.3 1.3-3.5Z"/></svg>' };
+function headerSpaces() {
+  if (st.screen !== 'network') return '<span class="hsp"></span>';
+  const v = st.ui.hs || 'a', sc = st.spScope || 'joined', list = scopeList();
+  const join = x => sc === 'discover' && canWrite() ? `<span class="tj" data-a="join" data-id="${x.id}" title="Join">+</span>` : '';
+  const add = canWrite() ? `<button class="tadd" data-a="newspace" title="New space" aria-label="New space">${PLUS2}</button>` : '';
+  const empty = list.length ? '' : `<span class="tempty">${sc === 'yours' ? 'You have not made a space yet.' : 'Nothing here yet.'}</span>`;
+  if (v === 'b') { const open = st.menu === 'hscope';
+    return `<div class="hsp hs-b"><nav class="tabs"><div class="tabs-s" id="k-tabs"><span class="mpick"><button type="button" class="hsdd" data-a="menu" data-m="hscope" aria-haspopup="menu" aria-expanded="${open}">${SCOPES().find(x => x[0] === sc)[1]}${I.down}</button>${open ? `<div class="menu" role="menu">${SCOPES().map(([k, l]) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${sc === k}" data-a="spscope" data-s="${k}">${SCOPE_IC[k]}<span>${l}</span>${sc === k ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>${list.map(x => chipBtn(x.id, esc(spName(x.id)) + join(x))).join('')}${empty}${add}</div></nav></div>`; }
+  if (v === 'c') return `<div class="hsp hs-c"><nav class="htabs" id="k-tabs">${list.map(x => chipBtn(x.id, esc(spName(x.id)) + join(x))).join('')}${empty}</nav><span class="hsl">${SCOPES().map(([k, l]) => `<button data-a="spscope" data-s="${k}" aria-pressed="${sc === k}">${l}</button>`).join('')}</span>${add}</div>`;
+  if (v === 'd') { const open = st.menu === 'hcrumb', cur = SP[st.space];
+    return `<div class="hsp hs-d"><span class="hsep">/</span><span class="mpick"><button type="button" class="hcrumb" data-a="menu" data-m="hcrumb" aria-haspopup="menu" aria-expanded="${open}">${cur ? glyph(cur) : ''}<span>${cur ? esc(spName(cur.id)) : st.space === 'saved' ? 'Saved' : 'All spaces'}</span>${I.down}</button>${open ? `<div class="menu menu-scroll spmenu hcmenu" role="menu"><span class="modes hcmodes" role="group">${SCOPES().map(([k, l]) => `<button type="button" data-a="spscope" data-s="${k}" aria-pressed="${sc === k}">${l}</button>`).join('')}</span>
+      ${list.map(x => spItem(x, sc === 'discover' && canWrite() ? `<span class="tj" data-a="join" data-id="${x.id}" title="Join">+</span>` : '')).join('')}${list.length ? '' : `<div class="mi-note">${sc === 'yours' ? 'You have not made a space yet.' : 'Nothing here yet.'}</div>`}<div class="msep"></div>${newBtns()}</div>` : ''}</span>${cur && SPACE_META[cur.id] ? `<small class="hmeta">by @${esc(ownerOf(cur.id))} · ${noun(memberCount(cur.id), 'member', 'members')}</small>` : ''}</div>`; }
+  if (v === 'e') return `<div class="hsp hs-e"><span class="hsic" role="group" aria-label="Show">${SCOPES().map(([k, l]) => `<button class="iconbtn" data-a="spscope" data-s="${k}" aria-pressed="${sc === k}" aria-label="${l}" title="${l}">${SCOPE_IC[k]}</button>`).join('')}</span><span class="hsdiv"></span><nav class="tabs"><div class="tabs-s" id="k-tabs">${list.map(x => chipBtn(x.id, `${glyph(x)}<span>${esc(x.name)}</span>${join(x)}`, 'gchip')).join('')}${empty}${add}</div></nav></div>`;
+  return `<div class="hsp hs-a">${navStrip()}</div>`;
+}
 function navStrip() {
-  const v = st.ui.sv, home = chipBtn('home', 'Home'), saved = isActive() && st.space === 'saved' ? chipBtn('saved', 'Saved') : '';
+  const v = st.ui.sv, home = '', saved = isActive() && st.space === 'saved' ? chipBtn('saved', 'Saved') : '';
   const tail = canWrite() ? `<button class="tadd" data-a="newspace" title="New space" aria-label="New space">${PLUS2}</button><button class="tadd" data-a="browse" title="Browse spaces" aria-label="Browse spaces">${COMPASS}</button>` : `<button class="tadd" data-a="browse" title="Browse spaces" aria-label="Browse spaces">${COMPASS}</button>`;
   let chips = '';
   if (v === '1') chips = navSpaces().map(x => chipBtn(x.id, esc(spName(x.id)))).join('') + (canWrite() ? '<button class="tlinkb" data-a="newspace">+ New space</button>' : '') + '<button class="tlinkb" data-a="browse">Browse</button>';
@@ -1542,7 +1607,7 @@ function createSpace() {
 function renderNetwork() {
   const v = V[st.v], first = lastV !== st.v, sc = $('#k-mg'), top = sc && !first ? sc.scrollTop : 0, tabsLeft = $('#k-tabs')?.scrollLeft || 0;
   const d = st.ui.sd, locked = spaceLocked(), posts = locked ? [] : streamFor(st.space);
-  const navTop = d === 'a' ? navStrip() : d === 'b' ? navDropTop() : `<nav class="tabs tabs-dd tabs-min sp-mob">${ddButton('big', `<span class="spt-l">${st.space !== 'home' && SP[st.space] ? glyph(SP[st.space]) : HOME}${esc(curLabel())}</span>`)}</nav>`;
+  const navTop = d === 'a' ? '' : d === 'b' ? navDropTop() : `<nav class="tabs tabs-dd tabs-min sp-mob">${ddButton('big', `<span class="spt-l">${st.space !== 'home' && SP[st.space] ? glyph(SP[st.space]) : HOME}${esc(curLabel())}</span>`)}</nav>`;
   const side = d === 'c' ? navRail() : d === 'd' ? navSidebar() : '';
   const empty = locked ? `<div class="row"><p class="empty saved-empty">This space is private. Ask @${esc(ownerOf(st.space))} to add you.</p><div></div></div>`
     : st.space === 'saved' && !posts.length ? '<div class="row"><p class="empty saved-empty">Nothing saved yet. Use the bookmark on any thread to keep it here.</p><div></div></div>'
@@ -1773,7 +1838,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { hs: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1848,7 +1913,7 @@ function savedBtn() {
 function appbar() {
   const m = meM();
   const open = st.menu === 'acct';
-  return `<header class="appbar">${brandBtn()}${st.ui.sd === 'b' && st.ui.sv === '1' && st.screen === 'network' ? ddButton('inbar', esc(curLabel())) : ''}
+  return `<header class="appbar">${brandBtn()}${headerSpaces()}
     <span class="grow"></span>${meter()}${savedBtn()}
     <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}">${av(st.user, 'sm')}${I.down}</button>
     ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff ? cap1(m.staff) : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
@@ -1858,7 +1923,7 @@ function appbar() {
 
 /* ---- signed-out site: the open network with a Sign in button; sign-in runs in a dialog (A) or a side sheet (B) ---- */
 const brandBtn = () => `<button class="brand home" data-ma="go" data-to="network" aria-label="Session home">${mark('sm')}<b>Session</b></button>`;
-const appbarOut = () => `<header class="appbar">${brandBtn()}${st.ui.sd === 'b' && st.ui.sv === '1' ? ddButton('inbar', esc(curLabel())) : ''}<span class="grow"></span>
+const appbarOut = () => `<header class="appbar">${brandBtn()}${headerSpaces()}
   <button class="ghost" data-ma="openauth" data-to="code">Join with invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></header>`;
 const authDialog = () => `<div class="scrim auth-scrim" data-ma="closeauth"></div><div class="authdlg v-a" role="dialog" aria-modal="true" aria-label="Sign in to Session"><button class="iconbtn dclose" data-ma="closeauth" aria-label="Close">${I.x}</button>${authScreen()}</div>`;
 /* ---- sign-in steps ---- */
@@ -2012,6 +2077,7 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
+    ${seg('hs', 'Spaces in header', 5)}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Spaces</span>Spaces are made by members. Home shows the spaces you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -2056,6 +2122,7 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
+  if (k === 'hs') { st.screen = 'network'; st.authOpen = false; render(); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'network' : 'usage';
