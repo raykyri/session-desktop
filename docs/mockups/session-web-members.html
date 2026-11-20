@@ -1253,7 +1253,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { codecopy: 'a', treecopy: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { codecopy: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1404,18 +1404,11 @@ function treeA() {
 /* ---- members page, split into sections so each has variants ----
    inv:    A slots bar + full list · B one line + open codes only · C one button that shows the newest open code
    layout: A two columns · B one column */
-/* explanation above the invite tree (variants) */
-const TREE_COPY = {
-  a: [`Session is invite-only. Every account starts from an invite link sent by a member, and this tree shows who invited whom.`, `You can have ${SLOTS} open invite links at a time. Each link works for one person and expires ${INVITE_DAYS} days after you make it. A slot frees when a link is used, expires or is revoked.`],
-  b: [`Every member joined through another member's invite link. Links work once, expire after ${INVITE_DAYS} days, and you can have ${SLOTS} open at a time.`],
-  c: null,
-  d: [`Invites are how Session grows. Send links to people you would like to research with; the tree keeps a record of who brought in whom, and your name stays next to the people you invite.`, `Each link works for one person and expires after ${INVITE_DAYS} days. You can have ${SLOTS} open at a time.`],
-};
+/* explanation above the invite tree */
+const TREE_COPY = [`Session is invite-only.`, `You can have ${SLOTS} open invite links at a time. Each link works for one person and expires ${INVITE_DAYS} days after you make it. A slot frees when a link is used, expires or is revoked.`];
 function treeSection() {
-  const T = TREE_COPY[st.ui.treecopy];
-  const copy = T ? T.map(t => `<p class="sub tcopy">${t}</p>`).join('') : `<ul class="tfacts"><li>Every account starts from a member's invite link.</li><li>Each link works for one person and expires after ${INVITE_DAYS} days.</li><li>You can have ${SLOTS} open links at a time.</li></ul>`;
   st.treeScope = 'all';
-  return `<section><h3>Invite tree</h3>${copy}<div class="tgap"></div>${treeA()}</section>`;
+  return `<section><h3>Invite tree</h3>${TREE_COPY.map(t => `<p class="sub tcopy">${t}</p>`).join('')}<div class="tgap"></div>${treeA()}</section>`;
 }
 function invSection() {
   /* A one link + the people you invited (was C) · B every open link stacked (was D) · C every open link + the people you invited
@@ -1496,7 +1489,7 @@ function renderMock() {
   const cur = st.auth === 'out' ? 'out' : st.user;
   const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcdef'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
-    ${seg('inv', 'Invites', 6)}${seg('treecopy', 'Tree text', 4)}${seg('codecopy', 'Code step copy', 5)}
+    ${seg('inv', 'Invites', 6)}${seg('codecopy', 'Code step copy', 5)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -1521,7 +1514,7 @@ function previewVariant(k) {
   if (k === 'codecopy') { st.auth = 'out'; st.authOpen = true; st.flow = 'code'; st.intent = 'signup'; st.fromLink = false; st.code = 'SESS-9TQ2-X8'; st.codeErr = ''; render(); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
-  st.screen = (k === 'inv' || k === 'treecopy') ? 'members' : k === 'meter' ? 'feed' : 'usage';
+  st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'feed' : 'usage';
   render();
   if (k === 'keys') $('.kcards, .krow')?.closest('section')?.scrollIntoView({ block: 'start' });
   if (k === 'tree') $('.ttree, .ttable')?.closest('section')?.scrollIntoView({ block: 'start' });
