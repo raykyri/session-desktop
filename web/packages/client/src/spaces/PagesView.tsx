@@ -284,7 +284,12 @@ export function PagePage({ name, slug }: { name: string; slug: string }) {
                   ? !!(ed.title || ed.body)
                   : !!page && (ed.title !== page.t || ed.body !== page.text.join("\n\n")))
               }
-              title="Discard your changes?"
+              title={ed.isNew ? "Discard this page?" : "Discard your changes to this page?"}
+              body={
+                ed.isNew
+                  ? "The title and text you wrote will be deleted."
+                  : "The page stays as it was before you edited it."
+              }
             />
           </div>
         ) : page ? (

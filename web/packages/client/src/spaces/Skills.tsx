@@ -118,6 +118,13 @@ function Editor({
       title={isNew ? "Add a skill" : "Edit skill"}
       className="cs-m ab-sked ab-sked-preview"
       onClose={onClose}
+      unsaved={{
+        dirty: () => ed.n !== draft.n || ed.d !== draft.d || ed.b !== draft.b,
+        title: isNew ? "Discard this skill?" : "Discard your changes to this skill?",
+        body: isNew
+          ? "The name, description and instructions you entered will be deleted."
+          : "The skill keeps the name, description and instructions it had before.",
+      }}
       footer={
         <>
           <span style={{ flex: 1 }} />

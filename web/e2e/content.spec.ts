@@ -14,6 +14,9 @@ interface Screen {
   scenario?: string;
   url: string | ((r: KeyedRecord[]) => string);
   run: (p: Page, r: KeyedRecord[]) => Promise<void>;
+  /** Needs the server agent's branch of review round 1 (@server-r1): run
+   * with SESSION_E2E_SERVER_R1=1 after the merge. */
+  server?: boolean;
 }
 
 const toastSays = (p: Page, t: string | RegExp) =>
@@ -402,12 +405,19 @@ const SCREENS: Screen[] = [
   {
     key: "ab-pages-order",
     url: "/s/sci-fi/about",
+    // pages.move takes the position the page goes to (2b design finding 5):
+    // the server agent's change
+    server: true,
     run: async (p) => {
       // /about opens the sidebar's About (a sheet on a phone)
       const names = p.locator(".ab-pgl .ab-pgr span");
-      const first = await names.first().textContent();
-      await p.getByRole("button", { name: `Move ${first} down` }).click();
-      await expect(names.nth(1)).toHaveText(first ?? "");
+      const before = await names.allInnerTexts();
+      expect(before.length).toBeGreaterThan(1);
+      await p.getByRole("button", { name: `Move ${before[0] ?? ""} down` }).click();
+      const after = [before[1] ?? "", before[0] ?? "", ...before.slice(2)];
+      await expect(names).toHaveText(after);
+      await p.reload();
+      await expect(names).toHaveText(after);
     },
   },
   {
@@ -482,7 +492,11 @@ for (const [layout, viewport] of [
   test.describe(`slice 3 screens, ${layout}`, () => {
     test.use({ viewport });
     for (const s of SCREENS) {
-      test(s.key, async ({ page }) => {
+      test(s.server ? `${s.key} @server-r1` : s.key, async ({ page }) => {
+        test.skip(
+          !!s.server && process.env["SESSION_E2E_SERVER_R1"] !== "1",
+          "needs the server agent's branch",
+        );
         const errors: string[] = [];
         page.on("pageerror", (e) => errors.push(e.message));
         const rs = await open(page, s);
@@ -506,21 +520,4 @@ test("qt-promote by the thread's owner @server-r1", async ({ page }) => {
   await d.getByRole("button", { name: "Start thread" }).click();
   await toastSays(page, /Thread started in #public/);
   await expect(page).toHaveURL(/\/s\/public\/t\/[0-9A-Z]{26}$/);
-});
-
-// After the server's branch is merged: pages.move takes the position the page
-// goes to (2b design finding 5), and a move sent twice lands in one place.
-test("ab-pages: a page moves down one place @server-r1", async ({ page }) => {
-  test.skip(process.env["SESSION_E2E_SERVER_R1"] !== "1", "needs pages.move's position");
-  await loadScenario(page.context().request, "seed");
-  await signInAs(page.context());
-  await page.goto("/s/sci-fi");
-  const list = page.locator(".ab-pgl > li .ab-pgr span");
-  await expect(list.first()).toBeVisible();
-  const before = await list.allInnerTexts();
-  expect(before.length).toBeGreaterThan(1);
-  await page.getByRole("button", { name: `Move ${before[0] ?? ""} down` }).click();
-  await expect(list).toHaveText([before[1] ?? "", before[0] ?? "", ...before.slice(2)]);
-  await page.reload();
-  await expect(list).toHaveText([before[1] ?? "", before[0] ?? "", ...before.slice(2)]);
 });

@@ -3,11 +3,12 @@
 // rows), a load that failed, page not found, Update Session.
 
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { useSession, useStatus } from "../sync/react.js";
 
+import { DiscardDialog } from "./Discard.js";
 import { Header, type Place } from "./Header.js";
 import { Svg } from "./Svg.js";
 import { cx } from "./cx.js";
@@ -140,6 +141,7 @@ export function Modal({
   bare = false,
   back = true,
   wrap,
+  unsaved,
 }: {
   title: ReactNode;
   onClose: () => void;
@@ -155,11 +157,24 @@ export function Modal({
   back?: boolean;
   /** A class for an element around the dialog (the mockup's qt-olm-sheet). */
   wrap?: string;
+  /** Unsaved input: Back, Escape, the scrim and Close ask first (the
+   * mockup's OV_DIRTY); a Cancel button of the dialog's own discards. */
+  unsaved?: { dirty: () => boolean; title: string; body: string };
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  useOverlay(true, onClose, { back });
+  const [asking, setAsking] = useState(false);
+  const leave = (): boolean => {
+    if (unsaved?.dirty()) {
+      setAsking(true);
+      return false;
+    }
+    onClose();
+    return true;
+  };
+  useOverlay(!asking, leave, { back });
   useEffect(() => focusFirst(ref.current), []);
-  const id = "cs-dt";
+  // each dialog its own title id: a confirmation stacks on a dialog
+  const id = `cs-dt${useId().replace(/:/g, "")}`;
   // a dialog sits at the top of the app element (as the mockup's do), not
   // inside the menu or row that opened it
   const dialog = (
@@ -168,7 +183,7 @@ export function Modal({
     <div
       className="modal-scrim"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) leave();
       }}
     >
       <div
@@ -183,7 +198,7 @@ export function Modal({
         ) : (
           <div className="modal-h">
             <h3 id={id}>{title}</h3>
-            <button className="iconbtn" type="button" aria-label="Close" onClick={onClose}>
+            <button className="iconbtn" type="button" aria-label="Close" onClick={() => leave()}>
               <Svg src={I.close} />
             </button>
           </div>
@@ -191,6 +206,17 @@ export function Modal({
         {children}
         {footer ? <div className="modal-f">{footer}</div> : null}
       </div>
+      {asking && unsaved ? (
+        <DiscardDialog
+          title={unsaved.title}
+          body={unsaved.body}
+          onKeep={() => setAsking(false)}
+          onDiscard={() => {
+            setAsking(false);
+            onClose();
+          }}
+        />
+      ) : null}
     </div>
   );
   return createPortal(

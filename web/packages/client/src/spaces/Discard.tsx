@@ -8,11 +8,14 @@ import { Modal } from "./Page.js";
 
 export function DiscardDialog({
   title,
+  body = "The text you wrote will be deleted.",
   onKeep,
   onDiscard,
   back = true,
 }: {
   title: string;
+  /** What is lost (the mockup's OV_DIRTY text). */
+  body?: string;
   onKeep: () => void;
   onDiscard: () => void;
   back?: boolean;
@@ -37,7 +40,7 @@ export function DiscardDialog({
         </>
       }
     >
-      <p className="muted">The text you wrote will be deleted.</p>
+      <p className="muted">{body}</p>
     </Modal>
   );
 }
@@ -45,7 +48,15 @@ export function DiscardDialog({
 /** While `when`, leaving the screen asks first: Keep editing stays, Discard
  * goes on to where the person was going. A reload or a closed tab gets the
  * browser's own question. */
-export function LeaveGuard({ when, title }: { when: boolean | (() => boolean); title: string }) {
+export function LeaveGuard({
+  when,
+  title,
+  body,
+}: {
+  when: boolean | (() => boolean);
+  title: string;
+  body?: string;
+}) {
   const on = typeof when === "function" ? when : () => when;
   const b = useBlocker({
     shouldBlockFn: ({ current, next }) =>
@@ -59,6 +70,7 @@ export function LeaveGuard({ when, title }: { when: boolean | (() => boolean); t
   return (
     <DiscardDialog
       title={title}
+      {...(body !== undefined ? { body } : {})}
       back={false}
       onKeep={() => b.reset()}
       onDiscard={() => b.proceed()}

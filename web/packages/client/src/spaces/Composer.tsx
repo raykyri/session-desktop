@@ -252,7 +252,9 @@ export function Composer({ space }: { space: Space | null }) {
     if (draft.trim()) setConfirm(true);
     else setOpen(false);
   };
-  useOverlay(open && !confirm, close);
+  // the open composer is part of its screen, not an overlay: Back with a
+  // draft asks (the leave guard), and without one leaves the screen
+  useOverlay(open && !confirm, close, { back: false });
 
   if (!w.me)
     return (

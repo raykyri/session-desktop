@@ -6,12 +6,13 @@
 // force); and, for the owner, Archive and Delete.
 
 import { useNavigate } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { fmt, spaceName } from "../data/format.js";
 import type { Space } from "../data/spaces.js";
 import { useRecords } from "../sync/react.js";
 
+import { LeaveGuard } from "./Discard.js";
 import { Modal } from "./Page.js";
 import { Svg } from "./Svg.js";
 import { I, SVG } from "./icons.js";
@@ -101,9 +102,12 @@ export function SettingsManage({ s }: { s: Space }) {
   const [delName, setDelName] = useState("");
   const base = draftOf(s, rec?.rules ?? s.rules);
   const dirty = JSON.stringify(d) !== JSON.stringify(base);
+  // set while a save goes to a renamed space's address
+  const saving = useRef(false);
   const set = (p: Partial<Draft>) => setD({ ...d, ...p });
   const save = async (force: boolean) => {
     const closed = d.vis !== "open";
+    saving.current = true;
     const o = await write(
       "spaces.update",
       {
@@ -138,11 +142,21 @@ export function SettingsManage({ s }: { s: Space }) {
           to: "/s/$space/manage/$tab",
           params: { space: d.name, tab: "settings" },
           replace: true,
-        });
+        }).finally(() => (saving.current = false));
+      else saving.current = false;
     } else if (o.error?.code === "CONFLICT" && /rules/.test(o.error.message)) setConflict(true);
     else if (o.error) refusalToast(o.error);
+    if (!o.ok) saving.current = false;
   };
   const closed = d.vis !== "open";
+  // leaving with unsaved settings asks first (the mockup's scr:settings)
+  const guard = (
+    <LeaveGuard
+      when={() => dirty && !saving.current}
+      title="Discard your changes to the settings?"
+      body={`You haven’t saved your changes to the settings of ${spaceName(s)}.`}
+    />
+  );
   const buttons = (
     <>
       <button className="btn ghost" type="button" disabled={!dirty} onClick={() => setD(base)}>
@@ -160,6 +174,7 @@ export function SettingsManage({ s }: { s: Space }) {
   );
   return (
     <div className="cs-set st-side">
+      {guard}
       {conflict ? (
         <div className="cs-strip warn ed-cf" role="alert">
           <span className="grow">
