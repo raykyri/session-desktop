@@ -91,9 +91,9 @@ test("a token the server no longer takes: the replica, the outbox and the Keycha
   const states: string[] = [];
   d.onChange(() => states.push(d.state()));
   d.unauthorized("tok-1");
-  t.deepEqual(states, ["signin"]);
   t.is(d.token(), null);
   await new Promise((r) => setTimeout(r, 10));
+  t.deepEqual(states, ["signin"]);
   t.is(b.keychain, null);
   // the replica's file is deleted
   t.deepEqual(b.deleted, ["ines.v"]);

@@ -294,19 +294,19 @@ export class Desktop implements Platform {
 
   /** The sign-in shows, and the replica, the outbox and the Keychain item
    * go. The storage is closed first, so nothing a late answer of the
-   * session brings is stored; then the screens (and the session) are taken
-   * down, and the file is deleted (review round 1 of phase 3, findings 1
-   * and 5). */
+   * session brings is stored, and the Keychain item is deleted; then the
+   * screens (and the session) are taken down, and the file is deleted
+   * (review round 1 of phase 3, findings 1 and 5). */
   private async forget(): Promise<void> {
     const a = this.account;
     const s = a ? this.stores.get(a.handle) : undefined;
     const closing = s?.close().catch(() => undefined);
     this.account = null;
     this.problemValue = null;
+    await this.bridge.keychainDelete().catch(() => undefined);
     this.changed();
     await closing;
     await new Promise((r) => setTimeout(r, 0));
     if (a) await this.dropReplica(a.handle);
-    await this.bridge.keychainDelete().catch(() => undefined);
   }
 }
