@@ -42,9 +42,9 @@ export function pathOf(t: ThreadView, id: string): FollowUp[] {
 // ---- the map ----
 
 const W = 230;
-const H = 74;
+const H = 56;
 const GX = 12;
-const GY = 14;
+const GY = 10;
 
 export function MapDialog({
   t,
@@ -110,7 +110,7 @@ export function MapDialog({
         <>
           Map of this thread{" "}
           <span className="num faint">
-            {t.followups.length + 1} asks · {levels + 1} levels
+            {t.followups.length + 1} asks · {levels} {levels === 1 ? "level" : "levels"}
           </span>
         </>
       }
@@ -157,7 +157,8 @@ export function MapDialog({
                     key={f.id}
                     d={`M${a.x + W} ${a.y + H / 2} C${a.x + W + GX} ${a.y + H / 2} ${b.x - GX} ${b.y + H / 2} ${b.x} ${b.y + H / 2}`}
                     fill="none"
-                    stroke="var(--border-strong)"
+                    stroke="currentColor"
+                    strokeOpacity={0.35}
                   />
                 );
               })}
