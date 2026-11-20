@@ -177,6 +177,10 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .mi-off { cursor: default; height: auto; padding: 7px 10px; color: var(--t-faint); }
 .mi-off small { display: block; font-size: var(--fs-xs); margin-top: 1px; }
 .mi-off:hover { background: none; }
+/* Split · ends: avatar at the first line, controls at the last */
+.nb-a { align-items: flex-end; }
+.nb-a > .av { align-self: flex-start; margin-top: 5px; }
+.nb-bare { padding-left: 16px; }
 /* Split */
 .split { display: inline-flex; flex: none; }
 .split-main { height: 30px; padding: 0 12px 0 14px; border-radius: 15px 0 0 15px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); }
@@ -705,6 +709,8 @@ const TREE_NOTE = 'Posts keep the pinned branch trees and avatar reply trees.';
 const variant = (name, thesis, composer, dock = false) => ({ name, q: 'Composer', thesis: `${thesis} ${TREE_NOTE}`, composer, dock, replies: replyLines, layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); } });
 const V = {
   split: variant('Split', '<strong>One button that knows both actions.</strong> No switch: the send button is split, and its arrow chooses whether it asks the agent or posts to people.', 'split'),
+  splitEnds: variant('Split · ends', '<strong>Split, for longer asks.</strong> As the text grows past one line, your avatar stays beside the first line and the space, model and split button stay beside the last, where the cursor is.', 'splitEnds'),
+  splitBare: variant('Split · no avatar', '<strong>Split, without the avatar.</strong> The line holds only the text, the space, the model (for asks) and the split button; who is posting is clear from the account.', 'splitBare'),
   modes: variant('Modes', '<strong>Choose the kind of thread first.</strong> Ask shows the model menu, with thinking effort inside it; Post hides it.', 'modes'),
 };
 
@@ -740,13 +746,17 @@ const ph = () => isAsk() ? 'Ask anything' : 'Write a post';
 const modeSend = () => sendBtn(st.newMode, isAsk() ? 'Ask' : 'Post');
 const COMPOSERS = {
   /* C: no switch; the send button is split, and its arrow chooses whether it asks or posts. */
-  split: () => {
+  split: (extra = '', face = true) => {
     const open = st.menu === 'send';
     const opt = (m, t, sub) => `<button type="button" class="mi mi-2" role="menuitemradio" aria-checked="${st.newMode === m}" data-a="mode" data-m="${m}"><span><b>${t}</b><small>${sub}</small></span>${st.newMode === m ? CHECK : ''}</button>`;
-    return `<div class="row new-row"><form class="${nbClass('nb-dock')}" data-form="new:x">${av(F.me.u, 'sm')}${draft(ph())}${spaceField()}${isAsk() ? modelMenu() : ''}
+    return `<div class="row new-row"><form class="${nbClass('nb-dock' + extra)}" data-form="new:x">${face ? av(F.me.u, 'sm') : ''}${draft(ph())}${spaceField()}${isAsk() ? modelMenu() : ''}
       <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter>${isAsk() ? 'Ask' : 'Post'}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
       ${open ? `<div class="menu right" role="menu">${opt('ask', 'Ask', 'The agent researches and answers')}${opt('post', 'Post', 'A message to people in the space')}</div>` : ''}</span></form><div></div></div>`;
   },
+  /* Split, with the avatar held at the first line and the controls at the last as the text grows. */
+  splitEnds: () => COMPOSERS.split(' nb-a'),
+  /* Split without the avatar: the line is all text and controls. */
+  splitBare: () => COMPOSERS.split(' nb-bare', false),
   /* D: mode first; Ask shows the model menu (with effort inside), Post hides it. */
   modes: () => `<div class="row new-row"><form class="${nbClass('nb-modecard')}" data-form="new:x"><div class="nb-top">${modeSeg()}${spaceField()}${isAsk() ? modelMenu() : ''}</div>
     ${draft(ph())}<div class="nb-f"><button type="submit" value="${st.newMode}" class="primary" data-enter>${isAsk() ? 'Ask' : 'Post'}</button></div></form><div></div></div>`,
