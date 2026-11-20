@@ -347,6 +347,39 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 #page > .mg, #page > .page { height: 100%; }
 .appbar { height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 14px 0 16px; border-bottom: 1px solid var(--divider); background: var(--chrome); }
 .brand { display: inline-flex; align-items: center; gap: 8px; color: var(--t-heading); font-size: var(--fs-md); }
+/* simplification variants */
+.rchips { display: flex; flex-wrap: wrap; gap: 8px; }
+.rchip { display: inline-flex; align-items: center; gap: 7px; padding: 4px 4px 4px 8px; border-radius: 20px; background: var(--card); box-shadow: var(--shadow); font-size: var(--fs-sm); }
+.rchip b { color: var(--t-heading); font-weight: 500; }
+.rchip small { color: var(--t-faint); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.tcount { margin-left: 6px; padding: 1px 8px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-size: var(--fs-xs); font-weight: 500; vertical-align: 2px; }
+.tlink.inl { font-size: inherit; padding: 0; }
+.btn2.wide { width: 100%; margin-top: 4px; }
+.invc .ilink { display: flex; align-items: center; gap: 8px; margin: 8px 0 6px; padding: 4px 4px 4px 10px; border-radius: 10px; background: var(--inset); }
+.invc .ilink code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
+.invc > .tlink { margin-top: 4px; }
+.rdet > summary { display: flex; align-items: baseline; gap: 8px; cursor: pointer; list-style: none; }
+.rdet > summary::-webkit-details-marker { display: none; }
+.rdet > summary h3 { margin: 0; }
+.rdet > summary small { color: var(--t-faint); font-size: var(--fs-xs); }
+.rdet > summary::after { content: ''; width: 6px; height: 6px; margin-left: auto; border: solid var(--t-faint); border-width: 0 1.5px 1.5px 0; transform: translateY(-2px) rotate(45deg); transition: transform .15s; }
+.rdet[open] > summary::after { transform: translateY(1px) rotate(-135deg); }
+.rdet[open] > summary { margin-bottom: 8px; }
+.rshort { margin: 6px 0 0; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.5; }
+.mone > section { margin-bottom: 18px; }
+.ustack > .box { margin-bottom: 14px; }
+.uline { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.uline b { font-size: var(--fs-lg); color: var(--t-heading); font-variant-numeric: tabular-nums; }
+.uline.warn b { color: var(--warn); } .uline.bad b { color: var(--bad); }
+.uline span { color: var(--t-faint); font-size: var(--fs-sm); }
+.usent { margin: 0 0 10px; font-size: var(--fs-base); color: var(--t-secondary); line-height: 1.5; }
+.usent b { color: var(--t-heading); font-variant-numeric: tabular-nums; }
+.usent.warn b { color: var(--warn); } .usent.bad b { color: var(--bad); }
+.uchart.bare { height: 64px; margin-top: 10px; }
+.run.b { grid-template-columns: minmax(0, 1fr) auto 48px; }
+.dialog.rulesdlg { width: min(520px, calc(100% - 32px)); max-height: 70vh; overflow: auto; }
+button.brand.home { background: none; border: 0; padding: 4px 6px; margin-left: -6px; border-radius: var(--r-md, 8px); font-family: inherit; cursor: pointer; }
+button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .brand.lg { font-size: var(--fs-lg); gap: 10px; }
 .navs { display: flex; gap: 2px; margin-left: 10px; }
 .nav { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: var(--r-md); color: var(--t-secondary); font-weight: 500; font-size: var(--fs-sm); }
@@ -1196,7 +1229,7 @@ const RULES = [
 ];
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { signin: 'a', tree: 'a', meter: 'a', keys: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1269,8 +1302,8 @@ function appbar() {
   const m = meM(), asks = MEMBERS.filter(t => eligible(st.user, t.u) && !t.vouchers.includes(st.user) && !st.dismissed[st.user + '>' + t.u]).length;
   const nav = (to, label, badge) => `<button class="nav" data-ma="go" data-to="${to}" aria-current="${st.screen === to}">${label}${badge ? `<span class="nbadge">${badge}</span>` : ''}</button>`;
   const open = st.menu === 'acct';
-  return `<header class="appbar"><span class="brand">${mark('sm')}<b>Session</b></span>
-    <nav class="navs">${nav('feed', 'Feed')}${isActive() ? nav('members', 'Members', asks) : nav('status', 'Status')}</nav><span class="grow"></span>${meter()}
+  return `<header class="appbar">${brandBtn()}
+    <nav class="navs">${isActive() ? nav('members', 'Members', asks) : nav('status', 'Status')}</nav><span class="grow"></span>${meter()}
     <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}">${av(st.user, 'sm')}${I.down}</button>
     ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff ? cap1(m.staff) : 'Member') : 'Pending'}</small></div></div><div class="msep"></div>
       ${isActive() ? `<button class="mi" data-ma="go" data-to="members"><span>Invites and vouches</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>` : `<button class="mi" data-ma="go" data-to="status"><span>Account status</span></button>`}
@@ -1278,7 +1311,8 @@ function appbar() {
 }
 
 /* ---- signed-out site: the open feed with a Sign in button; sign-in runs in a dialog (A) or a side sheet (B) ---- */
-const appbarOut = () => `<header class="appbar"><span class="brand">${mark('sm')}<b>Session</b></span><nav class="navs"><button class="nav" aria-current="true">Feed</button></nav><span class="grow"></span>
+const brandBtn = () => `<button class="brand home" data-ma="go" data-to="feed" aria-label="Session home">${mark('sm')}<b>Session</b></button>`;
+const appbarOut = () => `<header class="appbar">${brandBtn()}<span class="grow"></span>
   <button class="ghost" data-ma="openauth" data-to="code">I have an invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></header>`;
 const authDialog = () => `<div class="scrim auth-scrim" data-ma="closeauth"></div><div class="authdlg v-a" role="dialog" aria-modal="true" aria-label="Sign in to Session"><button class="iconbtn dclose" data-ma="closeauth" aria-label="Close">${I.x}</button>${authScreen()}</div>`;
 /* ---- sign-in steps ---- */
@@ -1383,19 +1417,53 @@ function treeE() {
   return `<div class="tpath"><div class="chain">${[...up, st.user].map(u => `<span class="${u === st.user ? 'me' : ''}">${esc(u)}</span>`).join(`<i>${I.right}</i>`)}</div>
     ${mine2.length ? `<p class="sub">You invited</p><div class="list">${mine2.map(c => `<div class="li">${av(c.u, 'sm')}<div class="grow"><b>${esc(c.u)}</b><small>joined ${day(c.joined)}${c.status === 'pending' ? ` · pending, ${progress(c).n} of ${NEED}` : ''}</small></div>${vouchCtl(c)}</div>`).join('')}</div>` : '<p class="sub">You haven\'t invited anyone yet.</p>'}</div>`;
 }
-function membersPage() {
-  const reqs = MEMBERS.filter(t => eligible(st.user, t.u) && !t.vouchers.includes(st.user) && !st.dismissed[st.user + '>' + t.u]);
-  const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), oc = openCount();
+/* ---- members page, split into sections so each has variants ----
+   req:    A list with "I don't know them" · B one row of chips · C no section; a count on the tree header, vouch in the tree
+   inv:    A slots bar + full list · B one line + open codes only · C one button that shows the newest open code
+   rules:  A full list · B collapsed · C three sentences · D none, one link under the tree
+   layout: A two columns · B one column */
+const vouchReqs = () => MEMBERS.filter(t => eligible(st.user, t.u) && !t.vouchers.includes(st.user) && !st.dismissed[st.user + '>' + t.u]);
+function reqSection() {
+  const reqs = vouchReqs();
+  if (!reqs.length || st.ui.req === 'c') return '';
+  if (st.ui.req === 'b') return `<section class="reqb"><h3>Waiting for your vouch</h3><div class="rchips">${reqs.map(t => `<span class="rchip">${av(t.u, 'xs')}<b>${esc(t.name)}</b><small>${progress(t).n}/${NEED}</small><button class="btn1 sm" data-ma="askvouch" data-u="${t.u}">Vouch</button></span>`).join('')}</div></section>`;
+  return `<section><h3>Waiting for your vouch</h3><p class="sub">Vouch only for people you know. Your name appears on their profile as a voucher.</p><div class="list">${reqs.map(t => { const pr = progress(t); return `<div class="li">${av(t.u)}<div class="grow"><b>${esc(t.name)} <span class="h">@${esc(t.u)}</span></b><small>Invited by ${esc(nameOf(t.inviter))} · joined ${rel(t.joined)} ago · ${pr.n} of ${NEED} vouches</small></div><button class="tlink" data-ma="notnow" data-u="${t.u}">I don't know them</button><button class="btn1 sm" data-ma="askvouch" data-u="${t.u}">Vouch</button></div>`; }).join('')}</div></section>`;
+}
+function treeSection() {
+  const n = vouchReqs().length, cnt = st.ui.req === 'c' && n ? `<span class="tcount">${n} waiting for your vouch</span>` : '';
+  const sub = st.ui.rules === 'd' ? `Who invited whom. <button class="tlink inl" data-ma="rulesdlg">How membership works</button>` : 'Who invited whom. You can vouch for pending members anywhere below you.';
+  return `<section><div class="shead"><h3>Invite tree ${cnt}</h3><span class="modes" role="group">${[['all', 'Everyone'], ['mine', 'Your branch']].map(([k, l]) => `<button type="button" data-ma="scope" data-s="${k}" aria-pressed="${st.treeScope === k}">${l}</button>`).join('')}</span></div>
+    <p class="sub">${sub}</p>${({ a: treeA, b: treeB, c: treeC, d: treeD, e: treeE })[st.ui.tree]()}</section>`;
+}
+function invSection() {
+  const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), oc = openCount(), used = slotsUsed(), can = used < SLOTS && canVouchYet(meM());
+  const why = !canVouchYet(meM()) ? `You can invite ${VOUCH_WAIT} days after your account became active.` : used >= SLOTS ? 'All slots are in use. One frees when an invite expires or someone you invited is vouched in.' : `Each code works for one person and expires in ${INVITE_DAYS} days.`;
+  const openRow = i => { const link = `session.app/i/${i.code}`; return `<div class="li inv"><code>${i.code}</code><div class="grow"><small>Expires ${day(addDays(i.created, INVITE_DAYS))}</small></div><span class="iacts"><button class="ghost" data-ma="copy" data-t="${link}">Copy link</button><button class="tlink danger" data-ma="revoke" data-code="${i.code}">Revoke</button></span></div>`; };
+  const open = inv.filter(i => inviteState(i) === 'open');
+  if (st.ui.inv === 'b') return `<section class="box"><div class="shead"><h3>Invites</h3><small>${SLOTS - used} of ${SLOTS} left</small></div>
+    <div class="list tight">${open.map(openRow).join('')}</div>
+    <button class="btn2 wide" data-ma="newinvite"${can ? '' : ' disabled'}>Create an invite</button>${can ? '' : `<p class="fine">${why}</p>`}</section>`;
+  if (st.ui.inv === 'c') { const i = open[0], link = i && `session.app/i/${i.code}`;
+    return `<section class="box invc"><h3>Invite someone</h3>${i ? `<div class="ilink"><code>${link}</code><button class="btn1 sm" data-ma="copy" data-t="${link}">Copy</button></div><p class="fine">Works once, until ${day(addDays(i.created, INVITE_DAYS))}. ${open.length > 1 ? `${open.length - 1} more open. ` : ''}<button class="tlink inl danger" data-ma="revoke" data-code="${i.code}">Revoke</button></p>`
+      : `<button class="btn1 wide" data-ma="newinvite"${can ? '' : ' disabled'}>Make an invite link</button><p class="fine">${why}</p>`}${i && can ? `<button class="tlink" data-ma="newinvite">Make another</button>` : ''}</section>`; }
   const invRow = i => { const s = inviteState(i), link = `session.app/i/${i.code}`; return `<div class="li inv"><code>${i.code}</code><div class="grow"><b>${s === 'open' ? `Open · expires ${day(addDays(i.created, INVITE_DAYS))}` : s === 'used' ? `Used by @${esc(i.used)}` : s === 'revoked' ? 'Revoked' : 'Expired'}</b><small>${s === 'used' ? (member(i.used).status === 'active' ? 'Active' : `Pending · ${progress(member(i.used)).n} of ${NEED} vouches`) : `Made ${day(i.created)}`}</small></div>
     ${s === 'open' ? `<span class="iacts"><button class="ghost" data-ma="copy" data-t="${link}">Copy link</button><button class="tlink danger" data-ma="revoke" data-code="${i.code}">Revoke</button></span>` : ''}</div>`; };
-  return `<div class="page"><div class="page-in"><div class="mcols"><div class="mmain">
-    ${reqs.length ? `<section><h3>Waiting for your vouch</h3><p class="sub">Vouch only for people you know. Your name appears on their profile as a voucher.</p><div class="list">${reqs.map(t => { const pr = progress(t); return `<div class="li">${av(t.u)}<div class="grow"><b>${esc(t.name)} <span class="h">@${esc(t.u)}</span></b><small>Invited by ${esc(nameOf(t.inviter))} · joined ${rel(t.joined)} ago · ${pr.n} of ${NEED} vouches</small></div><button class="tlink" data-ma="notnow" data-u="${t.u}">I don't know them</button><button class="btn1 sm" data-ma="askvouch" data-u="${t.u}">Vouch</button></div>`; }).join('')}</div></section>` : ''}
-    <section><div class="shead"><h3>Invite tree</h3><span class="modes" role="group">${[['all', 'Everyone'], ['mine', 'Your branch']].map(([k, l]) => `<button type="button" data-ma="scope" data-s="${k}" aria-pressed="${st.treeScope === k}">${l}</button>`).join('')}</span></div>
-      <p class="sub">Who invited whom. You can vouch for pending members anywhere below you.</p>${({ a: treeA, b: treeB, c: treeC, d: treeD, e: treeE })[st.ui.tree]()}</section></div>
-    <aside class="mside"><section class="box"><div class="shead"><h3>Your invites</h3><small>${slotsUsed()} of ${SLOTS} slots in use</small></div><div class="slots" aria-hidden="true">${Array.from({ length: SLOTS }, (_, i) => `<span class="${i < openCount() ? 'open' : i < slotsUsed() ? 'pend' : ''}"></span>`).join('')}</div><p class="fine">${openCount()} open invite${openCount() === 1 ? '' : 's'}, ${pendingInvitees()} invitee${pendingInvitees() === 1 ? '' : 's'} waiting for vouches.</p>
-      <div class="list tight">${inv.map(invRow).join('') || '<p class="empty">No invites yet.</p>'}</div>
-      <button class="btn1 wide" data-ma="newinvite"${slotsUsed() >= SLOTS || !canVouchYet(meM()) ? ' disabled' : ''}>Create an invite</button><p class="fine">${!canVouchYet(meM()) ? `You can invite and vouch ${VOUCH_WAIT} days after your account became active.` : slotsUsed() >= SLOTS ? 'All slots are in use. A slot frees when an invite is revoked or expires, or when someone you invited is vouched in.' : `Each code works for one person and expires in ${INVITE_DAYS} days.`}</p></section>
-    <section class="box"><h3>How membership works</h3><dl class="rules">${RULES.map(([t, d]) => `<dt>${t}</dt><dd>${d}</dd>`).join('')}</dl></section></aside></div></div></div>`;
+  return `<section class="box"><div class="shead"><h3>Your invites</h3><small>${used} of ${SLOTS} slots in use</small></div><div class="slots" aria-hidden="true">${Array.from({ length: SLOTS }, (_, i) => `<span class="${i < oc ? 'open' : i < used ? 'pend' : ''}"></span>`).join('')}</div><p class="fine">${oc} open invite${oc === 1 ? '' : 's'}, ${pendingInvitees()} invitee${pendingInvitees() === 1 ? '' : 's'} waiting for vouches.</p>
+    <div class="list tight">${inv.map(invRow).join('') || '<p class="empty">No invites yet.</p>'}</div>
+    <button class="btn1 wide" data-ma="newinvite"${can ? '' : ' disabled'}>Create an invite</button><p class="fine">${why}</p></section>`;
+}
+const RULES_SHORT = [`Accounts start from a member's invite and stay read-only until ${NEED} members above them in the tree vouch, at least one besides the inviter.`, `Members can invite and vouch after ${VOUCH_WAIT} days active, with ${SLOTS} invite slots each.`, `Invites expire in ${INVITE_DAYS} days; pending accounts close after ${PENDING_DAYS}.`];
+const rulesList = () => `<dl class="rules">${RULES.map(([t, d]) => `<dt>${t}</dt><dd>${d}</dd>`).join('')}</dl>`;
+function rulesSection() {
+  if (st.ui.rules === 'd') return '';
+  if (st.ui.rules === 'b') return `<section class="box"><details class="rdet"><summary><h3>How membership works</h3></summary>${rulesList()}</details></section>`;
+  if (st.ui.rules === 'c') return `<section class="box"><h3>How membership works</h3><p class="rshort">${RULES_SHORT.join(' ')}</p></section>`;
+  return `<section class="box"><h3>How membership works</h3>${rulesList()}</section>`;
+}
+function membersPage() {
+  if (st.ui.layout === 'b') return `<div class="page"><div class="page-in narrow mone">${reqSection()}${invSection()}${treeSection()}${rulesSection()}</div></div>`;
+  return `<div class="page"><div class="page-in"><div class="mcols"><div class="mmain">${reqSection()}${treeSection()}</div>
+    <aside class="mside">${invSection()}${rulesSection()}</aside></div></div></div>`;
 }
 
 /* ---- usage and API keys (key variants) ---- */
@@ -1411,18 +1479,38 @@ function keyBlock(id) {
 function keysSection() {
   return `<section class="box"><h3>API keys</h3>${['anthropic', 'openai'].map(id => { const b = keyBlock(id); return `<div class="krow"><b class="kname">${b.P.name}</b><div class="kb">${b.body}${b.form}</div></div>`; }).join('')}</section>`;
 }
-function usagePage() {
-  const u = usage(), tot = used(), max = Math.max(...u, 1), pct = Math.min(1, tot / ALLOWANCE), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok';
+/* ---- usage page ----
+   utop: A big number, bar, day chart · B one line and a bar · C day chart, total in the heading · D one sentence
+   runs: A table with date and billing · B question and tokens, billing only when not included · C collapsed · D none */
+function usageRuns() {
   const runs = (RUNLOG[st.user] || []).slice().reverse();
   D.posts.filter(p => p.u === st.user && p.k === 'ask' && p.tok && !p.id.startsWith('new')).forEach(p => runs.push({ q: tree(p).nodes.r.q, at: p.createdAt, tok: p.tok }));
   D.posts.filter(p => p.k === 'ask').forEach(p => Object.values(tree(p).nodes).forEach(n => { if (n.id !== 'r' && !n.id.startsWith('x') && n.u === st.user && n.tok) runs.push({ q: n.q, at: n.createdAt, tok: n.tok }); }));
-  runs.sort((a, b) => a.at < b.at ? 1 : a.at > b.at ? -1 : 0);
+  return runs.sort((a, b) => a.at < b.at ? 1 : a.at > b.at ? -1 : 0).slice(0, 6);
+}
+function usageTop() {
+  const u = usage(), tot = used(), max = Math.max(...u, 1), pct = Math.min(1, tot / ALLOWANCE), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok';
+  const bar = `<div class="utrack ${tone}"><span style="width:${(pct * 100).toFixed(1)}%"></span></div>`;
+  const chart = labels => `<div class="uchart${labels ? '' : ' bare'}" role="img" aria-label="Tokens used per day this week">${u.map((v, i) => `<div class="ucol${i === TODAY ? ' today' : ''}${i > TODAY ? ' future' : ''}">${labels ? `<span class="uv">${i <= TODAY ? fmtTok(v) : ''}</span>` : ''}<span class="ub" style="height:${i <= TODAY ? Math.max(2, v / max * (labels ? 64 : 40)) : 2}px"></span><span class="ul">${WEEK[i]}</span></div>`).join('')}</div>`;
+  const reset = `resets ${WEEK[0]} in ${resetIn()}`;
+  if (st.ui.utop === 'b') return `<section class="box"><div class="uline ${tone}"><b>${fmtTok(left())} left</b><span>of ${fmtTok(ALLOWANCE)} included · ${reset}</span></div>${bar}</section>`;
+  if (st.ui.utop === 'c') return `<section class="box"><div class="shead"><h3>${fmtTok(tot)} of ${fmtTok(ALLOWANCE)} used this week</h3><small>${cap1(reset)}</small></div>${chart(false)}</section>`;
+  if (st.ui.utop === 'd') return `<section class="box"><p class="usent ${tone}">You have <b>${fmtTok(left())}</b> of ${fmtTok(ALLOWANCE)} included tokens left. They reset on ${WEEK[0]}, in ${resetIn()}.</p>${bar}</section>`;
+  return `<section class="box"><div class="shead"><h3>Included tokens this week</h3><small>Resets ${WEEK[0]}, ${day(new Date(RESET).toISOString())} at 00:00 UTC, in ${resetIn()}</small></div>
+    <p class="sub">Covers asks and branches on Opus 4.8 and Sonnet 4.6. GPT-5 runs only on your OpenAI key.</p><div class="ubig ${tone}"><b>${fmtTok(left())}</b><span>left of ${fmtTok(ALLOWANCE)}</span></div>${bar}${chart(true)}</section>`;
+}
+function usageRunsSection() {
+  if (st.ui.runs === 'd') return '';
+  const runs = usageRuns(), none = '<p class="empty">No runs yet this week.</p>';
+  if (st.ui.runs === 'b') return `<section class="box"><h3>Recent runs</h3><div class="runs">${runs.map(r => `<div class="run b"><span class="rq">${esc(clip(r.q, 90))}</span>${r.bill && r.bill !== 'Included' ? `<small class="bill">${esc(r.bill)}</small>` : ''}<b>${fmtTok(r.tok)}</b></div>`).join('') || none}</div></section>`;
+  const table = `<div class="runs">${runs.map(r => `<div class="run"><span class="rq">${esc(clip(r.q, 70))}</span><small>${day(r.at)}</small><b>${fmtTok(r.tok)}</b><small class="bill">${r.bill || 'Included'}</small></div>`).join('') || none}</div>`;
+  if (st.ui.runs === 'c') return `<section class="box"><details class="rdet"><summary><h3>Recent runs</h3><small>${runs.length}</small></summary>${table}</details></section>`;
+  return `<section class="box"><h3>Recent runs</h3>${table}</section>`;
+}
+function usagePage() {
   const hasKey = keys().anthropic?.status === 'working' || keys().openai?.status === 'working';
-  return `<div class="page"><div class="page-in narrow"><h2>Usage and API keys</h2>
-    <section class="box"><div class="shead"><h3>Included tokens this week</h3><small>Resets ${WEEK[0]}, ${day(new Date(RESET).toISOString())} at 00:00 UTC, in ${resetIn()}</small></div>
-      <p class="sub">Covers asks and branches on Opus 4.8 and Sonnet 4.6. GPT-5 runs only on your OpenAI key.</p><div class="ubig ${tone}"><b>${fmtTok(left())}</b><span>left of ${fmtTok(ALLOWANCE)}</span></div><div class="utrack ${tone}"><span style="width:${(pct * 100).toFixed(1)}%"></span></div>
-      <div class="uchart" role="img" aria-label="Tokens used per day this week">${u.map((v, i) => `<div class="ucol${i === TODAY ? ' today' : ''}${i > TODAY ? ' future' : ''}"><span class="uv">${i <= TODAY ? fmtTok(v) : ''}</span><span class="ub" style="height:${i <= TODAY ? Math.max(2, v / max * 64) : 2}px"></span><span class="ul">${WEEK[i]}</span></div>`).join('')}</div>
-      <h4>Recent runs</h4><div class="runs">${runs.slice(0, 6).map(r => `<div class="run"><span class="rq">${esc(clip(r.q, 70))}</span><small>${day(r.at)}</small><b>${fmtTok(r.tok)}</b><small class="bill">${r.bill || 'Included'}</small></div>`).join('') || '<p class="empty">No runs yet this week.</p>'}</div></section>
+  return `<div class="page"><div class="page-in narrow ustack"><h2>Usage and API keys</h2>
+    ${usageTop()}${usageRunsSection()}
     <section class="box"><h3>When included tokens run out</h3>
       <label class="radio"><input type="radio" name="bill" data-ma="bill" value="pause"${billing() === 'pause' ? ' checked' : ''}> <span><b>Pause my asks until the reset</b><small>You can still read, post and reply.</small></span></label>
       <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my API key</b><small>${hasKey ? 'Asks bill to your key until the reset.' : 'Add a key below to turn this on.'}</small></span></label></section>
@@ -1435,7 +1523,7 @@ function renderMock() {
   const cur = st.auth === 'out' ? 'out' : st.user;
   const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcde'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
-    ${seg('tree', 'Tree', 5)}
+    ${seg('tree', 'Tree', 5)}${seg('layout', 'Members layout', 2)}${seg('req', 'Vouch requests', 3)}${seg('inv', 'Invites', 3)}${seg('rules', 'Rules', 4)}${seg('utop', 'Usage top', 4)}${seg('runs', 'Recent runs', 4)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
     <span class="mk"><span class="mkl">X returns</span><span class="seg">${X_ACCOUNTS.map(a => `<button data-mx="${a.x}" aria-pressed="${st.mockX === a.x}" title="${esc(a.note)}">@${a.x}</button>`).join('')}</span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
@@ -1452,6 +1540,7 @@ function render() {
   app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg').forEach(x => x.remove());
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
   if (st.confirm) app.insertAdjacentHTML('beforeend', confirmEl());
+  if (st.rulesOpen && st.screen === 'members') app.insertAdjacentHTML('beforeend', `<div class="scrim" data-ma="closerules"></div><div class="dialog rulesdlg" role="dialog" aria-modal="true" aria-labelledby="rl-h"><h3 id="rl-h">How membership works</h3>${rulesList()}<div class="dacts"><button class="btn2" data-ma="closerules">Close</button></div></div>`);
   if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
 }
 const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}</div>` : '';
@@ -1468,11 +1557,13 @@ function previewVariant(k) {
   st.confirm = null; st.menu = null;
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
-  st.screen = k === 'tree' ? 'members' : k === 'meter' ? 'feed' : 'usage';
+  st.screen = ['tree', 'layout', 'req', 'inv', 'rules'].includes(k) ? 'members' : k === 'meter' ? 'feed' : 'usage';
   render();
   if (k === 'keys') $('.kcards, .krow')?.closest('section')?.scrollIntoView({ block: 'start' });
   if (k === 'tree') $('.ttree, .ttable')?.closest('section')?.scrollIntoView({ block: 'start' });
   if (k === 'meter') $('.meter')?.focus();
+  if (k === 'inv' || k === 'rules') $(k === 'inv' ? '.mside .box, .mone .box' : '.rules, .rshort, .rdet, .tlink.inl')?.closest('section')?.scrollIntoView({ block: 'nearest' });
+  if (k === 'runs') $('.runs, .rdet')?.closest('section')?.scrollIntoView({ block: 'nearest' });
 }
 function signIn(u) { st.authOpen = false; st.auth = 'in'; st.user = u; st.screen = member(u).status === 'active' ? 'feed' : 'status'; st.menu = null; st.sel = {}; render(); }
 document.addEventListener('click', e => {
@@ -1516,6 +1607,8 @@ app.addEventListener('click', e => {
   if (a === 'dovouch') { vouch(st.user, d.u); st.confirm = null; render(); return; }
   if (a === 'unvouch') { unvouch(st.user, d.u); render(); return; }
   if (a === 'notnow') { st.dismissed[st.user + '>' + d.u] = true; toast(`Hidden. ${nameOf(d.u)} stays in the tree, where you can still vouch.`); render(); return; }
+  if (a === 'rulesdlg') { st.rulesOpen = true; render(); return; }
+  if (a === 'closerules') { st.rulesOpen = false; render(); return; }
   if (a === 'scope') { st.treeScope = d.s; render(); return; }
   if (a === 'remind') { st.reminded[d.u] = true; toast(`Reminder sent to ${nameOf(d.u)}.`); render(); return; }
   if (a === 'newinvite') { if (slotsUsed() >= SLOTS || !canVouchYet(meM())) return; const code = newCode(); INVITES.push({ code, by: st.user, created: new Date(NOW).toISOString(), used: null }); toast(`Invite ${code} created. Send the link to one person.`); render(); return; }
