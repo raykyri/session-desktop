@@ -123,7 +123,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .row.new-row + .row { padding-top: 14px; }
 /* composer parts */
 .nb { min-width: 0; }
-.nb textarea { display: block; width: 100%; resize: none; border: 0; outline: none; background: none; color: var(--t-heading); font: inherit; font-size: var(--fs-md); line-height: 1.5; padding: 3px 0; min-height: 28px; max-height: 240px; }
+.nb textarea { display: block; width: 100%; resize: none; border: 0; outline: none; background: none; color: var(--t-heading); font: inherit; font-size: var(--title-fs, var(--fs-md)); line-height: 1.5; padding: 3px 0; min-height: 28px; max-height: 240px; }
 .nb textarea::placeholder { color: var(--placeholder); }
 .nb-f { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .pick { position: relative; display: inline-flex; align-items: center; height: 26px; padding: 0 22px 0 9px; border-radius: 13px; background: var(--control); flex: none; }
@@ -179,9 +179,10 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .mi-off:hover { background: none; }
 /* Split · ends: avatar at the first line, controls at the last */
 .nb-a { align-items: flex-end; }
-.nb-a > .av { align-self: flex-start; margin-top: 4px; }
+.nb-a > .av { align-self: flex-start; margin-top: calc(var(--title-fs, 14.5px) * .75 - 7px); }
 /* bottom-aligned items keep the same centres as the one-line bar: text and 26px pills sit on the 30px button's centre line */
-.nb-a > textarea { margin-bottom: -1px; }
+/* one text line (font size x 1.5 + 6px padding) centred on the 26px controls: */
+.nb-a > textarea { margin-bottom: calc(10px - var(--title-fs, 14.5px) * .75); }
 .nb-bare { padding-left: 16px; }
 /* Split */
 .split { display: inline-flex; flex: none; }
@@ -226,9 +227,9 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .row { display: grid; grid-template-columns: minmax(0, 600px) minmax(0, 330px); gap: 21px; padding: 14px 0; justify-content: center; }
 .card { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 18px 20px 12px; min-width: 0; transition: opacity .2s; }
 .card-h { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.card .ask { margin: 0 0 14px; color: var(--t-heading); font-size: var(--fs-md); line-height: 1.5; }
+.card .ask { margin: 0 0 14px; color: var(--t-heading); font-size: var(--title-fs, var(--fs-md)); line-height: 1.5; }
 .card .ask, .card .post { white-space: pre-line; }
-.card .post { margin: 0 0 6px; color: var(--t-primary); font-size: var(--fs-md); line-height: 1.5; }
+.card .post { margin: 0 0 6px; color: var(--t-primary); font-size: var(--title-fs, var(--fs-md)); line-height: 1.5; }
 .card .byline { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: var(--fs-sm); color: var(--t-faint); }
 /* padding variants (the base values are on .card, .card-h, .card .ask and .card-f) */
 .card.pad-compact { padding: 14px 16px 10px; }
@@ -589,7 +590,7 @@ const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data
 /* ================= pinned maps ================= */
 /* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
    as a small outline tree per passage. */
-const st = { v: 'inset', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
+const st = { v: 'fs15', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
 
 /* Which model answered and at what thinking effort. The fixtures do not record it; the mock picks one
    per thread. Shown in a tooltip on the answer's icon. */
@@ -741,9 +742,13 @@ function replyLines(p) {
 
 const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches is shaded and gets its own small tree beside it.';
 const TREE_NOTE = 'Posts keep the pinned branch trees and avatar reply trees.';
-const variant = (name, thesis, composer, dock = false, av = 'header', pad = 'base') => ({ name, q: 'Padding', av, pad, thesis: `${thesis} ${TREE_NOTE}`, composer, dock, replies: replyLines, layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); } });
+const variant = (name, thesis, composer, dock = false, av = 'header', pad = 'base', fs = '') => ({ name, q: 'Type size', av, pad, fs, thesis: `${thesis} ${TREE_NOTE}`, composer, dock, replies: replyLines, layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); } });
 const V = {
-  inset: variant('Composer inset', '<strong>Cards share the composer\'s inset.</strong> The avatar sits 13px from the card edge, as it does in the composer, and the name lines up with the composer\'s text; the body keeps 14px sides.', () => COMPOSERS.split(' nb-a btn-faded'), false, 'small', 'inset'),
+  fs15: variant('15px', '<strong>Titles and the composer at 15px.</strong> The ask on each card, the text of plain posts and the text you type all use this size, at 1.5 line height.', () => COMPOSERS.split(' nb-a btn-faded'), false, 'small', 'inset', '15px'),
+  fs155: variant('15.5px', '<strong>Titles and the composer at 15.5px.</strong> The ask on each card, the text of plain posts and the text you type all use this size, at 1.5 line height.', () => COMPOSERS.split(' nb-a btn-faded'), false, 'small', 'inset', '15.5px'),
+  fs16: variant('16px', '<strong>Titles and the composer at 16px.</strong> The ask on each card, the text of plain posts and the text you type all use this size, at 1.5 line height.', () => COMPOSERS.split(' nb-a btn-faded'), false, 'small', 'inset', '16px'),
+  fs165: variant('16.5px', '<strong>Titles and the composer at 16.5px.</strong> The ask on each card, the text of plain posts and the text you type all use this size, at 1.5 line height.', () => COMPOSERS.split(' nb-a btn-faded'), false, 'small', 'inset', '16.5px'),
+  fs17: variant('17px', '<strong>Titles and the composer at 17px.</strong> The ask on each card, the text of plain posts and the text you type all use this size, at 1.5 line height.', () => COMPOSERS.split(' nb-a btn-faded'), false, 'small', 'inset', '17px'),
 };
 
 /* ---- composers: start a thread. Each variant below uses one. The draft survives re-renders. ---- */
@@ -813,6 +818,7 @@ function render() {
     ${v.dock ? '' : (typeof v.composer === 'function' ? v.composer() : COMPOSERS[v.composer]())}
     ${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div>`;
   const mg = $('#k-mg'), ta = $('#in-new');
+  if (v.fs) mg.style.setProperty('--title-fs', v.fs);
   if (ta && st.draft) ta.style.height = ta.scrollHeight + 'px';
   mg.scrollTop = top;
   streamFor(st.space).forEach(p => p.k === 'ask' && v.layout(p));
@@ -830,7 +836,7 @@ function renderBar() {
   $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${st.theme === k}">${l}</button>`).join('');
   $('#thesis').innerHTML = `<span class="qtag">${V[st.v].q}</span>` + V[st.v].thesis;
 }
-function go(v) { if (!V[v]) v = 'inset'; st.v = v; st.asking = null; renderBar(); render(); }
+function go(v) { if (!V[v]) v = 'fs15'; st.v = v; st.asking = null; renderBar(); render(); }
 $('#variant-seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { history.replaceState(null, '', '#' + b.dataset.v); go(b.dataset.v); } });
 $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; st.theme = b.dataset.t; if (st.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = st.theme; renderBar(); });
 
@@ -895,6 +901,6 @@ document.addEventListener('keydown', e => {
   if (e.key.length !== 1 || !k) return;
   e.preventDefault(); history.replaceState(null, '', '#' + k); go(k);
 });
-go(location.hash.slice(1) || 'inset');
+go(location.hash.slice(1) || 'fs15');
 document.fonts?.ready.then(() => render());
 </script>
