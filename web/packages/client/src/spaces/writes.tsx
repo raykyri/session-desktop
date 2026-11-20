@@ -228,27 +228,32 @@ export function useQuickWrite() {
 // ---- creates ----
 
 /** How a create ended: an `Outcome`, the id of the record it made, and
- * (applied) whether an earlier send had applied with the text it had then
- * while the text sent last differs (`lostEdits`). */
+ * (applied) whether an earlier send had applied while the input sent last
+ * differs from an input sent before it (`lostEdits`): the record holds an
+ * earlier input, so the later edits were not saved. */
 export type CreateOutcome = Outcome & { id: string; lostEdits: boolean };
 
 /** A create: a write whose input names the id of the record it makes
- * (`threads.create`, a follow-up, a reply). A create that got no answer may
- * have applied (phase 2 review round 1, finding 2), so no second create is
- * made while it has none: the next send first reads the logs (`checking`);
- * a read that holds its record means it applied, and otherwise it is sent
- * again with the same id, the current input, and its earlier mutation ids
- * in `replaces`, so the server answers from an earlier envelope that
- * applied rather than making a second record. */
+ * (`threads.create`, a follow-up, a reply, a page, a skill). A create that
+ * got no answer may have applied (phase 2 review round 1, finding 2), so no
+ * second create is made while it has none: the next send first reads the
+ * logs (`checking`); a read that holds its record means it applied, and
+ * otherwise it is sent again with the same id, the current input, and its
+ * earlier mutation ids in `replaces`, so the server answers from an earlier
+ * envelope that applied rather than making a second record. An earlier
+ * envelope that applied made the record from its own input, so the whole
+ * input (`make(id)`: the text, the space, the kind, who pays, the model, the
+ * parent) is compared with every input sent before it (review round 2 of
+ * phase 2, finding 2); a difference is reported as lost edits. */
 export function useCreate() {
   const session = useSession();
   const write = useWrite();
-  const [lost, setLost] = useState<{ local: string; id: string; text: string } | null>(null);
+  const [lost, setLost] = useState<{ local: string; id: string; sent: string[] } | null>(null);
   const [checking, setChecking] = useState(false);
   const send = async (
     name: string,
     make: (id: string) => Record<string, unknown>,
-    o: { quiet?: boolean; text?: string } = {},
+    o: { quiet?: boolean } = {},
   ): Promise<CreateOutcome> => {
     const c = session?.client;
     if (!session || !c)
@@ -258,13 +263,15 @@ export function useCreate() {
         id: "",
         lostEdits: false,
       };
-    const text = o.text ?? "";
     let id: string;
-    let first: string;
+    // the inputs sent before this one, as JSON
+    let before: string[];
+    let input: Record<string, unknown>;
     let out: Outcome;
     if (lost) {
       id = lost.id;
-      first = lost.text;
+      before = lost.sent;
+      input = make(id);
       setChecking(true);
       try {
         await c.sync().catch(() => false);
@@ -274,25 +281,28 @@ export function useCreate() {
         out =
           !e || e.state === "answered"
             ? { ok: true, result: e?.result ?? null, earlier: true }
-            : await write.retry(lost.local, { input: make(id) });
+            : await write.retry(lost.local, { input });
       } finally {
         setChecking(false);
       }
     } else {
       id = session.newId();
-      first = text;
-      out = await write(name, make(id), o);
+      before = [];
+      input = make(id);
+      out = await write(name, input, o);
     }
+    const now = JSON.stringify(input);
     if (out.ok) {
       setLost(null);
       const sent = (out.input as { id?: unknown } | undefined)?.id;
       return {
         ...out,
         id: typeof sent === "string" ? sent : id,
-        lostEdits: out.earlier === true && o.text !== undefined && text !== first,
+        lostEdits: out.earlier === true && before.some((j) => j !== now),
       };
     }
-    if (out.error === null) setLost({ local: out.local, id, text: first });
+    if (out.error === null)
+      setLost({ local: out.local, id, sent: before.includes(now) ? before : [...before, now] });
     else setLost(null);
     return { ...out, id, lostEdits: false };
   };
@@ -301,7 +311,7 @@ export function useCreate() {
     if (lost) session?.client?.discard(lost.local);
     setLost(null);
   };
-  return { send, forget, checking, lost: lost !== null };
+  return { send, forget, checking, lost: lost !== null, lostId: lost?.id ?? null };
 }
 
 /** The toast of a create that had applied before the person's later edits

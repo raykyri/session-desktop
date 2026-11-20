@@ -22,7 +22,15 @@ import { cx } from "./cx.js";
 import { I, MII, QTI, SFI } from "./icons.js";
 import { useOverlay } from "./overlay.js";
 import { useWorld } from "./world.js";
-import { WRITE_ERROR, refusalToast, toast, useCreate, useQuickWrite, useWrite } from "./writes.js";
+import {
+  WRITE_ERROR,
+  lostEditsToast,
+  refusalToast,
+  toast,
+  useCreate,
+  useQuickWrite,
+  useWrite,
+} from "./writes.js";
 
 /** The original of a source, to open in a new tab: its stored url (kept
  * without a scheme, the mutators' `sourceFor`) as an https address, through
@@ -160,6 +168,7 @@ function AskBox({
     if (o.ok) {
       onDone();
       void navigate({ to: "/s/$space/t/$thread", params: { space: s.name, thread: o.id } });
+      if (o.lostEdits) lostEditsToast("ask", q.trim());
     } else if (o.error === null) toast(WRITE_ERROR["unavailable"] ?? "");
   };
   return (

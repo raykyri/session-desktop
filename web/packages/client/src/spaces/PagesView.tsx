@@ -21,7 +21,7 @@ import { Svg } from "./Svg.js";
 import { Author, Avatar, Glyph } from "./atoms.js";
 import { CI, MII, NVI, QTI } from "./icons.js";
 import { canRead, useWorld } from "./world.js";
-import { refusalToast, toast, useCreate, useWrite } from "./writes.js";
+import { lostEditsToast, refusalToast, toast, useCreate, useWrite } from "./writes.js";
 
 const EDIT =
   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 2.8l2.7 2.7-7.4 7.4H3.1v-2.7z"/></svg>';
@@ -123,30 +123,37 @@ export function PagePage({ name, slug }: { name: string; slug: string }) {
     setBusy(true);
     // a new page is a create: one that got no answer is sent again as the
     // same page (`useCreate`)
-    const o = ed.isNew
+    const made = ed.isNew
       ? await create.send(
           "pages.update",
           (id) => ({ space: s.id, page: null, id, title, text, ...(force ? { force: true } : {}) }),
           { quiet: true },
         )
-      : await write(
-          "pages.update",
-          {
-            space: s.id,
-            page: page?.id,
-            base: { rev: ed.ver },
-            title,
-            text,
-            ...(force ? { force: true } : {}),
-          },
-          { quiet: true },
-        );
+      : null;
+    const o =
+      made ??
+      (await write(
+        "pages.update",
+        {
+          space: s.id,
+          page: page?.id,
+          base: { rev: ed.ver },
+          title,
+          text,
+          ...(force ? { force: true } : {}),
+        },
+        { quiet: true },
+      ));
     setBusy(false);
     if (o.ok) {
       setEd(null);
       setCf(null);
-      toast(ed.isNew ? "Page added." : "Page saved.");
-      const saved = session?.reader().get("page", (o.result as { id: string }).id);
+      // a new page that an earlier send made holds that send's input
+      if (made?.lostEdits) lostEditsToast("page", `${ed.title}\n\n${ed.body}`);
+      else toast(ed.isNew ? "Page added." : "Page saved.");
+      // a create answered by a read has no result: the page is the create's id
+      const id = made?.id ?? page?.id;
+      const saved = id ? session?.reader().get("page", id) : undefined;
       if (saved && saved.slug !== slug)
         void navigate({
           to: "/s/$space/pages/$slug",
@@ -290,6 +297,7 @@ export function PagePage({ name, slug }: { name: string; slug: string }) {
                   ? "The title and text you wrote will be deleted."
                   : "The page stays as it was before you edited it."
               }
+              onDiscard={() => create.forget()}
             />
           </div>
         ) : page ? (

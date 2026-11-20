@@ -5,8 +5,11 @@
 // that got no answer keeps the text and offers Retry, and is never made a
 // second time (`useCreate`): Post or Retry first checks whether it went
 // through (the mockup's as-post-check), opens it if it did (as-post-lost,
-// with Copy your edits when the text changed since), and otherwise sends it
-// again with the same id. A draft closed with Escape or Close asks before it
+// with Copy your edits when the input changed since), and otherwise sends it
+// again with the same id. While a create has no answer, the space, Ask or
+// Post, who pays and the model are fixed: a change to them could not apply
+// to a record an earlier send made (review round 2 of phase 2, finding 2).
+// The person goes to the thread in the space its record names. A draft closed with Escape or Close asks before it
 // is discarded. Who pays is aware of providers (phase 2a design finding 6):
 // a key pays only for its own provider's models, so the model menu lists the
 // models the payer runs, a key that runs none of them is not offered, and a
@@ -19,7 +22,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMe, useRuntimeConfig } from "../api/account.js";
 import { spaceName } from "../data/format.js";
 import type { Space } from "../data/spaces.js";
-import { useRecords } from "../sync/react.js";
+import { useRecords, useSession } from "../sync/react.js";
 
 import { DiscardDialog, LeaveGuard } from "./Discard.js";
 import { Scrim } from "./Scrim.js";
@@ -111,10 +114,13 @@ export function ModelMenu({
   model,
   setModel,
   pay,
+  disabled = false,
 }: {
   model: string;
   setModel: (m: string) => void;
   pay: string;
+  /** A create with no answer: the model is fixed until it has one. */
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   useOverlay(open, () => setOpen(false));
@@ -126,6 +132,7 @@ export function ModelMenu({
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
+        disabled={disabled}
         onClick={() => setOpen((o) => !o)}
       >
         <Svg src={GLOBE} />
@@ -165,7 +172,16 @@ export function ModelMenu({
   );
 }
 
-export function PayerLine({ pay, setPay }: { pay: string; setPay: (p: string) => void }) {
+export function PayerLine({
+  pay,
+  setPay,
+  disabled = false,
+}: {
+  pay: string;
+  setPay: (p: string) => void;
+  /** A create with no answer: who pays is fixed until it has one. */
+  disabled?: boolean;
+}) {
   const keys = usePayers();
   const [open, setOpen] = useState(false);
   useOverlay(open, () => setOpen(false));
@@ -180,6 +196,7 @@ export function PayerLine({ pay, setPay }: { pay: string; setPay: (p: string) =>
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
+        disabled={disabled}
         onClick={() => setOpen((o) => !o)}
       >
         {label}
@@ -226,7 +243,10 @@ export function PayerLine({ pay, setPay }: { pay: string; setPay: (p: string) =>
 export function Composer({ space }: { space: Space | null }) {
   const w = useWorld();
   const navigate = useNavigate();
+  const session = useSession();
   const create = useCreate();
+  // a create with no answer fixes what it was sent with
+  const fixed = create.lost || create.checking;
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"ask" | "post">("ask");
   const [draft, setDraft] = useState("");
@@ -301,13 +321,16 @@ export function Composer({ space }: { space: Space | null }) {
         : { id, space: target.id, kind: "post", q };
     // the person goes to the thread once the server has it: a create that
     // got no answer keeps the composer open with its text and Retry
-    const o = await create.send("threads.create", make, { text: q });
+    const o = await create.send("threads.create", make);
     setBusy(false);
     if (!o.ok) return;
     sending.current = true;
     setDraft("");
     setOpen(false);
-    void navigate({ to: "/s/$space/t/$thread", params: { space: target.name, thread: o.id } });
+    // the space the record is in: an earlier send that applied made it
+    const at = session?.reader().get("thread", o.id)?.s;
+    const sp = (at ? w.byId.get(at) : undefined) ?? target;
+    void navigate({ to: "/s/$space/t/$thread", params: { space: sp.name, thread: o.id } });
     if (o.lostEdits) lostEditsToast("post", q);
   };
   const modes: ["ask" | "post", string, string, string][] = [
@@ -358,8 +381,8 @@ export function Composer({ space }: { space: Space | null }) {
                 type="button"
                 aria-pressed={(k === "ask") === ask}
                 title={d}
-                disabled={k === "post" && postsOff}
-                aria-disabled={k === "post" && postsOff ? true : undefined}
+                disabled={(k === "post" && postsOff) || fixed}
+                aria-disabled={(k === "post" && postsOff) || fixed ? true : undefined}
                 onClick={() => setMode(k)}
               >
                 <Svg src={ic} />
@@ -368,7 +391,7 @@ export function Composer({ space }: { space: Space | null }) {
             ))}
           </div>
           {ask ? (
-            <ModelMenu model={model} setModel={setModel} pay={pay} />
+            <ModelMenu model={model} setModel={setModel} pay={pay} disabled={fixed} />
           ) : (
             <span className="c2-note c2-free">Posts use no tokens.</span>
           )}
@@ -386,7 +409,7 @@ export function Composer({ space }: { space: Space | null }) {
               </button>
             </span>
           ) : ask ? (
-            <PayerLine pay={pay} setPay={setPay} />
+            <PayerLine pay={pay} setPay={setPay} disabled={fixed} />
           ) : null}
           <span className="c2-end">
             {target ? (
@@ -396,7 +419,7 @@ export function Composer({ space }: { space: Space | null }) {
                   {spaceName(target)}
                 </span>
               ) : (
-                <SpacePick spaces={joined} cur={target} onPick={setSpaceId} />
+                <SpacePick spaces={joined} cur={target} onPick={setSpaceId} disabled={fixed} />
               )
             ) : null}
             <button
@@ -419,6 +442,10 @@ export function Composer({ space }: { space: Space | null }) {
       <LeaveGuard
         when={() => !!draft.trim() && !sending.current && !confirm}
         title="Discard this draft?"
+        onDiscard={() => {
+          setDraft("");
+          create.forget();
+        }}
       />
       {confirm ? (
         <DiscardDialog
@@ -440,10 +467,12 @@ function SpacePick({
   spaces,
   cur,
   onPick,
+  disabled,
 }: {
   spaces: Space[];
   cur: Space;
   onPick: (id: string) => void;
+  disabled: boolean;
 }) {
   const [open, setOpen] = useState(false);
   useOverlay(open, () => setOpen(false));
@@ -455,6 +484,7 @@ function SpacePick({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={`Space: ${spaceName(cur)}`}
+        disabled={disabled}
         onClick={() => setOpen((o) => !o)}
       >
         <Glyph s={cur} />

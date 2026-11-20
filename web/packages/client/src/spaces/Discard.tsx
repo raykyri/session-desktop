@@ -9,16 +9,19 @@ import { DiscardDialog } from "./Page.js";
 export { DiscardDialog };
 
 /** While `when`, leaving the screen asks first: Keep editing stays, Discard
- * goes on to where the person was going. A reload or a closed tab gets the
- * browser's own question. */
+ * runs `onDiscard` (the screen drops its draft, and a create with no answer
+ * is forgotten) and goes on to where the person was going. A reload or a
+ * closed tab gets the browser's own question. */
 export function LeaveGuard({
   when,
   title,
   body,
+  onDiscard,
 }: {
   when: boolean | (() => boolean);
   title: string;
   body?: string;
+  onDiscard?: () => void;
 }) {
   const on = typeof when === "function" ? when : () => when;
   const b = useBlocker({
@@ -36,7 +39,10 @@ export function LeaveGuard({
       {...(body !== undefined ? { body } : {})}
       back={false}
       onKeep={() => b.reset()}
-      onDiscard={() => b.proceed()}
+      onDiscard={() => {
+        onDiscard?.();
+        b.proceed();
+      }}
     />
   );
 }
