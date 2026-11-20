@@ -242,8 +242,9 @@ const recordKey = (key: string) => {
 /** An item a moderator hid or removed (the mockup's modPh): a placeholder,
  * and for the space's staff Show it again on a hidden one. Show sends the
  * hide record's rev as the moderator saw it: if the author edited the item
- * meanwhile, the server refuses it as STALE, and the toast offers Reload and
- * reapply (the item's current text is on screen by then). */
+ * meanwhile, the server refuses it as STALE, and a toast says so with no
+ * action: the item's current text is on screen by then, and nothing is
+ * applied again (AGENTS.md; the mockup's sx-rf-show). */
 export function ModNote({
   itemKey,
   noun,
@@ -259,7 +260,6 @@ export function ModNote({
 }) {
   const w = useWorld();
   const write = useWrite();
-  const session = useSession();
   const rev = useRecords((r) => r.get("hide", recordKey(itemKey))?.rev ?? 0, [itemKey]) ?? 0;
   const show = async (base: number) => {
     const o = await write(
@@ -269,13 +269,7 @@ export function ModNote({
     );
     if (o.ok || o.error === null) return;
     if (o.error.code === "STALE")
-      toast(`Show wasn’t applied because ${by} edited the ${noun} after you chose Show.`, {
-        label: "Reload and reapply",
-        run: () => {
-          const now = session?.reader().get("hide", recordKey(itemKey))?.rev ?? 0;
-          void show(now);
-        },
-      });
+      toast(`Show wasn’t applied because ${by} edited the ${noun} after you chose Show.`);
     else refusalToast(o.error);
   };
   return (

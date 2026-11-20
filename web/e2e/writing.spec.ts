@@ -6,6 +6,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import type { KeyedRecord } from "./fixtures/mockup.js";
+import { APP_ORIGIN } from "./constants.js";
 import { loadScenario, pathFor, recordsOf, signInAs } from "./scenario.js";
 
 interface Screen {
@@ -638,3 +639,178 @@ test.describe("invite links", () => {
     await expect(page.getByRole("button", { name: "Joined" })).toBeVisible();
   });
 });
+
+// Refused writes on the web (phase 2 review round 1, finding 3): a STALE or
+// FORBIDDEN decision shows a toast with no action, the item shows its
+// current state, and nothing is applied (AGENTS.md; the mockup's
+// sx-rf-show, sx-rf-approve and sx-rf-forbidden). The page's event stream is
+// held, so it has not heard of the change the server made meanwhile.
+const TEST_HEADERS = { "x-requested-with": "session", "content-type": "application/json" };
+
+/** Write records on the server as they are now (`/api/test/records`): each
+ * put moves the record's rev. */
+async function serverPut(p: Page, records: KeyedRecord[]) {
+  const r = await p.request.post(`${APP_ORIGIN}/api/test/records`, {
+    headers: TEST_HEADERS,
+    data: {
+      records: records.map((x) => ({ key: x.key, record: { ...x.record, rev: undefined } })),
+    },
+  });
+  expect(r.ok()).toBe(true);
+}
+
+/** The toast says `text` and offers nothing but Dismiss. */
+async function toastWithoutAction(p: Page, text: string) {
+  const t = p.locator(".cs-toast");
+  await expect(t.getByText(text, { exact: true })).toBeVisible();
+  await expect(t.getByRole("button")).toHaveCount(1);
+  await expect(t.getByRole("button", { name: "Dismiss" })).toBeVisible();
+}
+
+for (const [layout, viewport] of [
+  ["Desktop", { width: 1318, height: 900 }],
+  ["Mobile Web", { width: 390, height: 844 }],
+] as const) {
+  test.describe(`refused writes, ${layout}`, () => {
+    test.use({ viewport });
+
+    test("sx-rf-approve: Approve refused as STALE is not reapplied", async ({ page: p }) => {
+      const { records } = await loadScenario(p.context().request, "replication: moderator", {
+        args: { seen: true },
+      });
+      await signInAs(p.context());
+      await p.route("**/api/sync/events**", () => undefined);
+      await p.goto("/s/replication-club/manage/requests");
+      const card = p.locator(".rq-card").first();
+      const who = ((await card.locator(".rq-nm .faint").textContent()) ?? "")
+        .replace(/^@/, "")
+        .trim();
+      const req = records.find((r) => r.record.kind === "request" && r.record["u"] === who);
+      expect(req).toBeTruthy();
+      // the person rewrites the request after the moderator looked
+      const msg = "Edited after the moderator opened the queue.";
+      const a = (req?.record["a"] as string[] | undefined) ?? [];
+      if (req) await serverPut(p, [{ ...req, record: { ...req.record, a: [msg, ...a.slice(1)] } }]);
+      await card.getByRole("button", { name: "Approve" }).click();
+      await dialog(p, `Approve the request from ${who}?`)
+        .getByRole("button", { name: "Approve" })
+        .click();
+      await toastWithoutAction(
+        p,
+        `Approve wasn’t applied because ${who} changed the request after you chose Approve.`,
+      );
+      // the card shows the request as it is now, still open
+      const now = p.locator(".rq-card").filter({ hasText: who });
+      await expect(now.getByText(msg)).toBeVisible();
+      await expect(now.getByRole("button", { name: "Approve" })).toBeVisible();
+      await expect(p.locator(".rq-decided").getByText(who)).toHaveCount(0);
+    });
+
+    test("Undo of a decline refused as STALE is not sent again", async ({ page: p }) => {
+      const { records } = await loadScenario(p.context().request, "replication: moderator", {
+        args: { seen: true },
+      });
+      await signInAs(p.context());
+      // this page does not hear of changes others make
+      await p.route("**/api/sync/events**", () => undefined);
+      await p.goto("/s/replication-club/manage/requests");
+      const card = p.locator(".rq-card").first();
+      const who = ((await card.locator(".rq-nm .faint").textContent()) ?? "")
+        .replace(/^@/, "")
+        .trim();
+      await card.getByRole("button", { name: "Decline" }).click();
+      await dialog(p, `Decline the request from ${who}?`)
+        .getByRole("button", { name: "Decline" })
+        .click();
+      await toastSays(p, `Declined ${who}.`);
+      // another moderator approves it meanwhile
+      const req = records.find((r) => r.record.kind === "request" && r.record["u"] === who);
+      expect(req).toBeTruthy();
+      if (req) await serverPut(p, [{ ...req, record: { ...req.record, st: "approved" } }]);
+      const writes: string[] = [];
+      p.on("request", (r) => {
+        if (r.url().endsWith("/api/sync/write")) writes.push(r.postData() ?? "");
+      });
+      await p.locator(".cs-toast").getByRole("button", { name: "Undo" }).click();
+      await toastWithoutAction(
+        p,
+        "This item changed after you opened it, so the server didn’t apply the change. Session undid it.",
+      );
+      // one Undo was sent, not a second one with the new rev
+      expect(writes.filter((w) => w.includes("reopen"))).toHaveLength(1);
+      await expect(p.locator(".rq-card .rq-nm .faint").getByText(who, { exact: true })).toHaveCount(
+        0,
+      );
+    });
+
+    test("sx-rf-show: Show refused as STALE is not reapplied", async ({ page: p }) => {
+      const { records } = await loadScenario(
+        p.context().request,
+        "sablefield: bram edited a hidden reply",
+      );
+      await signInAs(p.context());
+      const hide = records.find((r) => r.record.kind === "hide");
+      const reply = records.find((r) => r.key === hide?.record["item"]);
+      expect(hide && reply).toBeTruthy();
+      await p.route("**/api/sync/events**", () => undefined);
+      await p.goto(`/s/sablefield/t/${String(reply?.record["th"])}`);
+      const note = p
+        .locator(".sf-modph")
+        .filter({ hasText: "This reply is hidden by a moderator." });
+      await expect(note).toBeVisible();
+      // bram edits the hidden reply meanwhile: its hide record moves
+      if (hide && reply)
+        await serverPut(p, [
+          { ...reply, record: { ...reply.record, t: "Edited again while the page was open." } },
+          { ...hide, record: { ...hide.record, ed: 1 } },
+        ]);
+      await note.getByRole("button", { name: "Show it again" }).click();
+      await toastWithoutAction(
+        p,
+        "Show wasn’t applied because bram edited the reply after you chose Show.",
+      );
+      // still hidden
+      await expect(note).toBeVisible();
+      await expect(note.getByRole("button", { name: "Show it again" })).toBeVisible();
+    });
+
+    test("sx-rf-forbidden: a moderation write refused as FORBIDDEN is not reapplied", async ({
+      page: p,
+    }) => {
+      const { records } = await loadScenario(p.context().request, "replication: moderator", {
+        args: { seen: true },
+      });
+      await signInAs(p.context());
+      await p.route("**/api/sync/events**", () => undefined);
+      await p.goto("/s/replication-club/manage/requests");
+      const card = p.locator(".rq-card").first();
+      const who = ((await card.locator(".rq-nm .faint").textContent()) ?? "")
+        .replace(/^@/, "")
+        .trim();
+      // the person's moderator role is taken away meanwhile
+      const me = records.find(
+        (r) =>
+          r.record.kind === "member" &&
+          r.record["u"] === "ines.v" &&
+          r.key.includes(":ines.v") &&
+          records.some(
+            (x) =>
+              x.record.kind === "space" &&
+              x.record["name"] === "replication-club" &&
+              x.record["id"] === r.record["sp"],
+          ),
+      );
+      expect(me).toBeTruthy();
+      if (me) await serverPut(p, [{ ...me, record: { ...me.record, role: "member" } }]);
+      await card.getByRole("button", { name: "Approve" }).click();
+      await dialog(p, `Approve the request from ${who}?`)
+        .getByRole("button", { name: "Approve" })
+        .click();
+      await toastWithoutAction(
+        p,
+        "You no longer have permission to do this. Session undid the change.",
+      );
+      await expect(p.locator(".rq-decided").getByText(who)).toHaveCount(0);
+    });
+  });
+}

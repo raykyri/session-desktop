@@ -3,7 +3,8 @@
 // remove), Members (roles, remove, ban, unban) and Invites (one-time links).
 // Each action is a write; approving and reopening send the request's rev as
 // the moderator saw it, so a request that changed meanwhile is refused as
-// STALE (the toast offers Reload and reapply).
+// STALE: a toast says so, the card shows the request as it is now, and
+// nothing is applied again (AGENTS.md; the mockup's sx-rf-approve).
 
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -81,15 +82,11 @@ function Requests({ s }: { s: Space }) {
   const baseOf = (ids: string[]) =>
     Object.fromEntries(ids.map((u) => [u, open.find((r) => r.u === u)?.rev ?? 0]));
   const session = useSession();
-  const decide = async (
-    decision: "approve" | "decline" | "reopen",
-    ids: string[],
-    why?: string,
-    fresh = false,
-  ) => {
-    // the revs as the moderator saw them; a reapply reads them again
+  const decide = async (decision: "approve" | "decline" | "reopen", ids: string[], why?: string) => {
+    // the revs as the moderator saw them: an approve, the open request on
+    // screen; an Undo, the declined request as the replica holds it
     const revOf = (u: string) =>
-      fresh || decision === "reopen"
+      decision === "reopen"
         ? (session?.reader().get("request", `${s.id}:${u}`)?.rev ?? 0)
         : (baseOf([u])[u] ?? 0);
     const base = Object.fromEntries(ids.map((u) => [u, revOf(u)]));
@@ -103,18 +100,12 @@ function Requests({ s }: { s: Space }) {
       },
       { quiet: true },
     );
-    if (!o.ok && o.error?.code === "STALE" && decision === "reopen" && !fresh)
-      // Undo acts on the decline just made: the request as it is now
-      return decide("reopen", ids, why, true);
     if (!o.ok && o.error) {
       const u = ids[0] ?? "";
+      // STALE is not applied again: the toast has no action
       if (o.error.code === "STALE" && decision === "approve")
         toast(
           `Approve wasn’t applied because ${ids.length === 1 ? u : "someone"} changed the request after you chose Approve.`,
-          {
-            label: "Reload and reapply",
-            run: () => void decide("approve", ids, undefined, true),
-          },
         );
       else refusalToast(o.error);
     }
