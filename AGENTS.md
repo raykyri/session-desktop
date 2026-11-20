@@ -269,6 +269,25 @@ rules above stay as they are. Decisions for the new client:
     `SESSION_TEST_AUTH` outside production; `@session/server/test-server`
     starts the app over a temp database, and replica-proto runs its whole
     suite over HTTP (`npm run test:http`).
+- Phase 2b (done): `web/packages/client` is the spaces web client for the
+  Desktop and Mobile Web layouts, built from the mockup's styles and copy.
+  - Routes are in `src/app/router.tsx`. `/invite`, `/settings` and `/admin`
+    keep the earlier shell, whose styles are scoped under `.shell-legacy`.
+    TanStack Query and tRPC are removed; account reads use plain routes
+    (`src/api/*`).
+  - Data: `src/sync/session.ts` wraps the `@session/sync` client
+    (`FetchTransport`, cookie auth, `persist: false`), or a guest reader
+    when signed out. `src/sync/react.tsx` has the hooks (`useRecords`,
+    `useRunText`, ...) and `setSessionFactory`, through which the desktop
+    shell supplies a device-token session with `persist: true`.
+  - Writes go through `src/spaces/writes.tsx`: on the web a write with no
+    answer offers Retry, and a refused write shows the error toast and is
+    discarded.
+  - Build class names with `cx()`, never template literals: the Tailwind
+    Prettier plugin trims the spaces inside them. Run Prettier from `web/`.
+  - e2e specs (`web/e2e/{reading,writing,content,account,admin}.spec.ts`)
+    run against the real server with the mockup's data, on Desktop and
+    Mobile Web; in this sandbox set `SESSION_E2E_HOST=127.0.0.1`.
 - Ids: clients generate ULIDs. The server accepts a timestamp from 4 days in
   the past to 1 minute in the future (the outbox keeps writes 3 days), rejects an id that already exists, and
   answers a collision with the same CONFLICT whether or not the caller can
