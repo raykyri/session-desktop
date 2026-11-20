@@ -173,6 +173,10 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .more { margin-left: auto; align-self: center; }
 .more-btn { width: 24px; height: 24px; display: inline-grid; place-items: center; border-radius: var(--r-md); color: var(--t-faint); }
 .mpick.more { height: 20px; align-items: center; }
+fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
+.nb-off .nb { opacity: .6; }
+.nb-off textarea::placeholder { color: var(--t-faint); }
+.av.guest { background: var(--control); }
 .more-btn:hover, .more-btn[aria-expanded="true"] { background: var(--fill-hover); color: var(--t-heading); }
 .card-h .who { flex: 1; }
 .mi.danger { color: var(--bad); }
@@ -729,7 +733,7 @@ const rel = iso => { const m = (NOW - Date.parse(iso)) / 6e4; if (m < 1) return 
 const dayOf = iso => { const d = new Date(iso), n = new Date(NOW); const k = x => x.toISOString().slice(0, 10); if (k(d) === k(n)) return 'Today'; n.setUTCDate(n.getUTCDate() - 1); if (k(d) === k(n)) return 'Yesterday'; return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }); };
 const ktok = n => n ? (n >= 1000 ? Math.round(n / 1000) + 'k' : n) + ' tokens' : '';
 const initials = u => { const p = u.split(/[._]/).filter(Boolean); return (p.length > 1 ? p[0][0] + p[1][0] : u.slice(0, 2)).toUpperCase(); };
-const av = (u, c = '') => `<span class="av ${c}" style="background:var(--av${USERS[u] || ((u.length % 6) + 1)})" aria-hidden="true">${initials(u)}</span>`;
+const av = (u, c = '') => !u ? `<span class="av ${c} guest" aria-hidden="true"></span>` : `<span class="av ${c}" style="background:var(--av${USERS[u] || ((u.length % 6) + 1)})" aria-hidden="true">${initials(u)}</span>`;
 const spName = id => '#' + SP[id].name;
 const glyph = s => `<span class="glyph" style="background:var(--av${s.av})" aria-hidden="true">${esc(s.name[0].toUpperCase())}</span>`;
 const I = {
@@ -1130,7 +1134,7 @@ const modelMenu = () => {
         <div class="menu submenu" role="menu" aria-label="Effort">${EFFORT_OPTS.map(e => item('seteffort', e, cap1(e), e === st.newEffort)).join('')}</div></div></div>` : ''}</span>`;
 };
 const isAsk = () => st.newMode === 'ask';
-const ph = () => isAsk() ? 'Ask anything' : 'Write a post';
+const ph = () => st.auth === 'out' ? 'Sign in to ask or post' : isAsk() ? 'Ask anything' : 'Write a post';
 const modeSend = () => sendBtn(st.newMode, isAsk() ? 'Ask' : 'Post');
 const COMPOSERS = {
   /* C: no switch; the send button is split, and its arrow chooses whether it asks or posts. */
@@ -1335,6 +1339,7 @@ const pendingBanner = () => {
   return `<div class="row new-row"><div class="pbanner"><span class="pdot"></span><div><b>You don't have an invite yet.</b> You can read every open space. Asking, posting and replying open once you enter an invite code.</div><button class="ghost" data-ma="go" data-to="status">Enter a code</button></div><div></div></div>`;
 };
 function composerOrLock(v) {
+  if (st.auth === 'out') { const c = typeof v.composer === 'function' ? v.composer() : COMPOSERS[v.composer](); return `<fieldset class="nb-off" disabled aria-label="Sign in to ask or post">${c}</fieldset>`; }
   if (!canWrite()) return '';
   const c = typeof v.composer === 'function' ? v.composer() : COMPOSERS[v.composer]();
   return c;
