@@ -62,6 +62,22 @@ export function trackRequests(context: BrowserContext) {
   };
   context.on("requestfinished", done);
   context.on("requestfailed", done);
+  // a page that loads again drops its old document's requests, which may
+  // end with no event at all
+  context.on("page", (p) =>
+    p.on("framenavigated", (f) => {
+      if (f !== p.mainFrame()) return;
+      for (const r of [...live]) {
+        let page: Page | null = null;
+        try {
+          page = r.frame().page();
+        } catch {
+          page = null;
+        }
+        if (page === p) live.delete(r);
+      }
+    }),
+  );
   return {
     quiet: (ms = 750) =>
       expect
