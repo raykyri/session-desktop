@@ -226,6 +226,18 @@ export interface Directory {
   serverTime: number;
 }
 
+/** An invite link as the person who opens it sees it (phase 2b): the space
+ * it admits to, who made it, and whether it still admits. */
+export interface InviteView {
+  space: pkg.SpaceRec;
+  by: string;
+  expiresAt: string | null;
+  /** "live": joining with the code admits; "expired": it no longer does
+   * (used, revoked, past its date, or its maker may no longer invite). */
+  state: "live" | "expired";
+  serverTime: number;
+}
+
 export class SyncServer {
   readonly store: ServerStore;
   private readonly clock: Clock;
@@ -1348,6 +1360,61 @@ export class SyncServer {
         if (st?.kind === "stats") stats.push(st);
       }
       return { spaces, stats, serverTime: this.clockNow() };
+    });
+  }
+
+  /** A space found by its name, as a link to it (`/s/<name>`) shows it: an
+   * open or listed space's record, which the directory lists too; an
+   * unlisted space's name only, unless the reader is a member (the mockup:
+   * "an unlisted space opened without access shows its name and nothing
+   * else"). Null: no such space, or deleted. */
+  spaceNamed(
+    name: string,
+    actor: Actor | null,
+  ): pkg.SpaceRec | Pick<pkg.SpaceRec, "kind" | "id" | "name" | "vis" | "av"> | null {
+    const u = this.userOf(actor);
+    return this.run((tx) => {
+      const s = tx.scan("space", "name", name).find((r) => r.kind === "space" && !r.deleted);
+      if (s?.kind !== "space") return null;
+      if (s.vis !== "unlisted") return s;
+      const m = u === null ? undefined : tx.get(pkg.memberKey(s.id, u));
+      if (m?.kind === "member") return s;
+      return { kind: "space", id: s.id, name: s.name, vis: s.vis, av: s.av };
+    });
+  }
+
+  /** The invite link with this code, for its landing page: anyone who has
+   * the code may see the space's public record (its name, description,
+   * rules), as a closed space's join card shows them. Null: no such link. */
+  invite(code: string): InviteView | null {
+    return this.run((tx) => {
+      const link = tx.scan("invite", "code", code)[0];
+      if (link?.kind !== "invite") return null;
+      const s = tx.get(pkg.spaceKey(link.sp));
+      if (s?.kind !== "space" || s.deleted) return null;
+      const role = (u: string) => {
+        const m = tx.get(pkg.memberKey(s.id, u));
+        return m?.kind === "member" ? m.role : null;
+      };
+      const r = role(link.by);
+      // who may invite: moderators and up; in a closed space whose invite
+      // setting is "members", its members (the mutators' mayInvite)
+      const mayInvite =
+        (r !== null && r !== "member") ||
+        (s.vis !== "open" && s.invite === "members" && r !== null);
+      const now = this.clockNow();
+      const live =
+        link.dead === null &&
+        link.revokedAt === null &&
+        (link.expiresAt === null || Date.parse(link.expiresAt) > now) &&
+        mayInvite;
+      return {
+        space: s,
+        by: link.by,
+        expiresAt: link.expiresAt,
+        state: live ? "live" : "expired",
+        serverTime: now,
+      };
     });
   }
 

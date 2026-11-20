@@ -9,6 +9,11 @@ const stack: { close: () => void }[] = [];
 
 /** While `open`: Escape closes it (the top of the stack only), and closing
  * returns focus to the element that had it when it opened. */
+// A dialog that replaces another (View your request, then Withdraw) keeps
+// the history entry the first one added: the closing one leaves it for a
+// moment, and the next one to open takes it over instead of adding another.
+let leaving: ReturnType<typeof setTimeout> | null = null;
+
 export function useOverlay(open: boolean, close: () => void, o: { back?: boolean } = {}) {
   const closeRef = useRef(close);
   useEffect(() => {
@@ -34,14 +39,21 @@ export function useOverlay(open: boolean, close: () => void, o: { back?: boolean
       entry.close();
     };
     if (o.back) {
-      history.pushState({ ...((history.state as object | null) ?? {}), overlay: true }, "");
+      if (leaving !== null) {
+        clearTimeout(leaving);
+        leaving = null;
+      } else history.pushState({ ...((history.state as object | null) ?? {}), overlay: true }, "");
       window.addEventListener("popstate", onPop);
     }
     return () => {
       document.removeEventListener("keydown", onKey, true);
       if (o.back) {
         window.removeEventListener("popstate", onPop);
-        if (!popped && (history.state as { overlay?: boolean } | null)?.overlay) history.back();
+        if (!popped && (history.state as { overlay?: boolean } | null)?.overlay)
+          leaving = setTimeout(() => {
+            leaving = null;
+            if ((history.state as { overlay?: boolean } | null)?.overlay) history.back();
+          }, 0);
       }
       const k = stack.indexOf(entry);
       if (k >= 0) stack.splice(k, 1);

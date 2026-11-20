@@ -13,7 +13,7 @@ test("an admin opens the admin page and makes sign-up codes", async ({ page }) =
   await page.getByRole("link", { name: "Admin" }).click();
   await expect(page).toHaveURL(/\/admin$/);
   await page.getByRole("button", { name: "Create codes" }).click();
-  await expect(page.getByText(/[A-Z0-9]{6,}/).first()).toBeVisible();
+  await expect(page.getByText(/^[A-Za-z0-9_-]{10,}$/).first()).toBeVisible();
 });
 
 test("an account that is no admin has no Admin link", async ({ page }) => {

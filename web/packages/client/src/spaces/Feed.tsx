@@ -17,6 +17,7 @@ import { useNow } from "../sync/react.js";
 
 import { Svg } from "./Svg.js";
 import { Author, Avatar, SpaceTag } from "./atoms.js";
+import { cx } from "./cx.js";
 import { I } from "./icons.js";
 import type { From } from "./nav.js";
 import { useOverlay } from "./overlay.js";
@@ -45,7 +46,7 @@ export function SortControl({ f, withKind = true }: { f: FeedState; withKind?: b
   useOverlay(open, () => setOpen(false));
   const kl = withKind && f.kind !== "all" ? `${KF.find((k) => k[0] === f.kind)?.[1] ?? ""} · ` : "";
   return (
-    <div className={`sortdd${withKind ? "sortdd-k" : ""}`}>
+    <div className={cx("sortdd", withKind && "sortdd-k")}>
       <button
         aria-label="Sort and filter posts"
         type="button"
@@ -141,7 +142,7 @@ export function FeedRow({
     // keyboard users take
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
     <article
-      className={`row row-x row-rowsq row-i-lefttxt ${ask ? "row-ask" : "row-post"}`}
+      className={cx("row row-x row-rowsq row-i-lefttxt", ask ? "row-ask" : "row-post")}
       role="listitem"
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("a, button")) return;
@@ -162,7 +163,7 @@ export function FeedRow({
       </span>
       <div className="row-m">
         <a
-          className={`row-t row-link${ask ? "" : "row-tp"}`}
+          className={cx("row-t row-link", !ask && "row-tp")}
           href={space ? `/s/${space.name}/t/${p.id}` : undefined}
           onClick={(e) => {
             e.preventDefault();

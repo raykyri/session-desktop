@@ -171,6 +171,8 @@ const ROWS: Record<string, string> = {
   rpLiked: "/api/me/reply-likes",
   repSeen: "/api/me/report-notices",
   reqSeen: "/api/me/request-notices",
+  links: "/api/invite-links",
+  rel: "/api/me/closed-spaces",
 };
 
 /** The mock's collections as it serves them to the signed-in person. */
@@ -731,6 +733,33 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
       createdAt: str(n["createdAt"], at),
     });
   }
+  // bans and invite links (phase 2b, slice 2)
+  for (const b of arr<Json>(c["banned"])) {
+    const sp = toUlid(str(b["sp"], "replication"));
+    put(`ban:${sp}:${str(b["u"])}`, {
+      kind: "ban",
+      id: `${sp}:${str(b["u"])}`,
+      sp,
+      u: str(b["u"]),
+      createdAt: str(b["createdAt"], at),
+    });
+  }
+  for (const l of arr<Json>(c["links"])) {
+    const id = toUlid(str(l["id"]));
+    put(`invite:${id}`, {
+      kind: "invite",
+      id,
+      code: str(l["code"]),
+      by: str(l["by"]),
+      sp: toUlid(str(l["sp"])),
+      expiresAt: l["expiresAt"] == null ? null : str(l["expiresAt"]),
+      dead: l["dead"] == null ? null : str(l["dead"]),
+      usedBy: l["usedBy"] == null ? null : str(l["usedBy"]),
+      revokedAt: null,
+      revokedRole: null,
+      createdAt: str(l["createdAt"], at),
+    });
+  }
   for (const r of arr<Json>(c["reqs"])) {
     const sp = toUlid(str(r["sp"], "replication"));
     put(`request:${sp}:${str(r["u"])}`, {
@@ -742,6 +771,24 @@ export function convert(c: Json, me: string, now: string): KeyedRecord[] {
       why: r["why"] == null ? null : str(r["why"]),
       createdAt: str(r["createdAt"], at),
       updatedAt: str(r["updatedAt"], str(r["createdAt"], at)),
+    });
+  }
+  // the person's own request in a closed space, as the mock keeps it: its
+  // state there ("pending", "denied"), not a request row
+  for (const [sid, rel] of Object.entries(obj(c["rel"]))) {
+    if (rel !== "pending" && rel !== "denied") continue;
+    const sp = toUlid(sid);
+    const key = `request:${sp}:${me}`;
+    if (out.has(key)) continue;
+    put(key, {
+      kind: "request",
+      sp,
+      u: me,
+      st: rel === "pending" ? "open" : "declined",
+      a: [],
+      why: null,
+      createdAt: at,
+      updatedAt: at,
     });
   }
   for (const r of arr<Json>(c["reports"])) {

@@ -21,6 +21,7 @@ import type { Reader } from "../sync/reader.js";
 import { Scrim } from "./Scrim.js";
 import { Svg } from "./Svg.js";
 import { Avatar } from "./atoms.js";
+import { cx } from "./cx.js";
 import { CI, I, SFI, SVG } from "./icons.js";
 import { BackRow } from "./nav.js";
 import { useOverlay } from "./overlay.js";
@@ -274,7 +275,7 @@ export function NotificationItem({ x, onOpen }: { x: Item; onOpen: (x: Item) => 
   const session = useSession();
   const who = x.u && x.k !== "declined" ? <b>{x.u}</b> : null;
   return (
-    <div className={`nt-item${x.unread ? "unread" : ""}`}>
+    <div className={cx("nt-item", x.unread && "unread")}>
       <ItemIcon x={x} />
       <span className="nt-b">
         <button className="nt-tx nt-open" type="button" onClick={() => onOpen(x)}>
@@ -344,7 +345,7 @@ export function Bell({ onPage }: { onPage: boolean }) {
   return (
     <div className="nt-wrap">
       <button
-        className={`btn hb nt-btn${open || onPage ? "on" : ""}`}
+        className={cx("btn hb nt-btn", (open || onPage) && "on")}
         type="button"
         aria-haspopup="true"
         aria-expanded={open}

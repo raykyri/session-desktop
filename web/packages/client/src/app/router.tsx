@@ -20,6 +20,8 @@ import { loadAdminRoute, loadSettingsRoute } from "../routes/chunks.js";
 import { InvitePage } from "../routes/invite.js";
 import { LoginPage } from "../routes/login.js";
 import { HomePage } from "../spaces/HomePage.js";
+import { InviteLanding } from "../spaces/InviteLanding.js";
+import { ManagePage } from "../spaces/Manage.js";
 import { NotificationsPage } from "../spaces/Notifications.js";
 import { NotFound, Page } from "../spaces/Page.js";
 import { SavedPage } from "../spaces/SavedPage.js";
@@ -126,8 +128,17 @@ const manageRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/s/$space/manage/$tab",
   component: function ManageRoute() {
-    const { space } = manageRoute.useParams();
-    return <SpacePage name={space} />;
+    const { space, tab } = manageRoute.useParams();
+    return <ManagePage name={space} tab={tab} />;
+  },
+});
+
+const inviteLinkRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/i/$code",
+  component: function InviteLinkRoute() {
+    const { code } = inviteLinkRoute.useParams();
+    return <InviteLanding code={code} />;
   },
 });
 
@@ -245,6 +256,7 @@ const routeTree = rootRoute.addChildren([
   threadRoute,
   askRoute,
   manageRoute,
+  inviteLinkRoute,
   searchRoute,
   notificationsRoute,
   savedRoute,

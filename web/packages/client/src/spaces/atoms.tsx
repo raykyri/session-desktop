@@ -17,6 +17,7 @@ import {
 import type { Space } from "../data/spaces.js";
 
 import { Svg } from "./Svg.js";
+import { cx } from "./cx.js";
 import { I, SVG } from "./icons.js";
 
 export function Logo({ text = "Session" }: { text?: string }) {
@@ -96,7 +97,7 @@ export function Seal({ s, size }: { s: Pick<Space, "dom">; size?: "sm" | "lg" })
   if (!isVerified(s)) return null;
   const t = sealText(s);
   return (
-    <span className={`sf-seal${size ? ` ${size}` : ""}`} title={t} aria-label={t}>
+    <span className={cx("sf-seal", size)} title={t} aria-label={t}>
       <Svg src={SVG.SEAL} />
     </span>
   );

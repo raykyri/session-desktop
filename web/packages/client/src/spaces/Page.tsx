@@ -4,11 +4,13 @@
 
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { useSession, useStatus } from "../sync/react.js";
 
 import { Header, type Place } from "./Header.js";
 import { Svg } from "./Svg.js";
+import { cx } from "./cx.js";
 import { I, NVI, SVG } from "./icons.js";
 import { focusFirst, useOverlay } from "./overlay.js";
 
@@ -41,7 +43,7 @@ export function Page({
   children: ReactNode;
 }) {
   return (
-    <div className={`A C Af${cls ? ` ${cls}` : ""}`}>
+    <div className={cx("A C Af", cls)}>
       <Header place={place} />
       <OfflineBar />
       {children}
@@ -135,6 +137,8 @@ export function Modal({
   footer,
   className = "cs-m",
   role = "dialog",
+  bare = false,
+  back = true,
 }: {
   title: ReactNode;
   onClose: () => void;
@@ -142,12 +146,20 @@ export function Modal({
   footer?: ReactNode;
   className?: string;
   role?: "dialog" | "alertdialog";
+  /** A title without the header row and its Close button (the mockup's
+   * discard questions). */
+  bare?: boolean;
+  /** Back closes it (a history entry); off for a dialog that a blocked
+   * navigation opened, which goes on once it closes. */
+  back?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  useOverlay(true, onClose, { back: true });
+  useOverlay(true, onClose, { back });
   useEffect(() => focusFirst(ref.current), []);
   const id = "cs-dt";
-  return (
+  // a dialog sits at the top of the app element (as the mockup's do), not
+  // inside the menu or row that opened it
+  return createPortal(
     // a press outside the dialog closes it; Escape does from the keyboard
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
@@ -163,16 +175,21 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={id}
       >
-        <div className="modal-h">
+        {bare ? (
           <h3 id={id}>{title}</h3>
-          <button className="iconbtn" type="button" aria-label="Close" onClick={onClose}>
-            <Svg src={I.close} />
-          </button>
-        </div>
+        ) : (
+          <div className="modal-h">
+            <h3 id={id}>{title}</h3>
+            <button className="iconbtn" type="button" aria-label="Close" onClick={onClose}>
+              <Svg src={I.close} />
+            </button>
+          </div>
+        )}
         {children}
         {footer ? <div className="modal-f">{footer}</div> : null}
       </div>
-    </div>
+    </div>,
+    document.getElementById("app") ?? document.body,
   );
 }
 

@@ -1,6 +1,7 @@
 // Phase 2b: the space directory (`SyncServer.directory`), which the web
 // client's Home, header and Browse read, and the `space.vis` index it scans
-// (migration 0003 for the spaces stored before it).
+// (migration 0003 for the spaces stored before it); an invite link's landing
+// (`SyncServer.invite`).
 
 import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -54,6 +55,33 @@ for (const kind of STORES) {
     );
     t.deepEqual(names("otto"), []);
     t.deepEqual(names("mel"), ["lab"]);
+  });
+}
+
+for (const kind of STORES) {
+  test(`${kind}: an invite link's landing names its space and whether it still admits`, (t) => {
+    const { w, closed } = cast(t, kind);
+    t.is(w.server.invite("nosuchcode"), null);
+    const id = w.id();
+    const made = ok(t, w.as("olga", "invites.create", { id, space: closed, days: 7 })) as {
+      code: string;
+    };
+    const v = w.server.invite(made.code);
+    t.is(v?.space.name, "lab");
+    t.is(v?.by, "olga");
+    t.is(v?.state, "live");
+    t.truthy(v?.expiresAt);
+    // used once: it no longer admits
+    ok(t, w.as("otto", "spaces.join", { space: closed, invite: made.code }));
+    t.is(w.server.invite(made.code)?.state, "expired");
+    // revoked
+    const id2 = w.id();
+    const two = ok(t, w.as("olga", "invites.create", { id: id2, space: closed })) as {
+      code: string;
+    };
+    t.is(w.server.invite(two.code)?.state, "live");
+    ok(t, w.as("olga", "invites.revoke", { id: id2 }));
+    t.is(w.server.invite(two.code)?.state, "expired");
   });
 }
 

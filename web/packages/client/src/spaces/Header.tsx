@@ -16,6 +16,7 @@ import { Bell } from "./Notifications.js";
 import { Scrim } from "./Scrim.js";
 import { Svg } from "./Svg.js";
 import { Avatar, Logo, Seal, SpaceGlyph, Lock } from "./atoms.js";
+import { cx } from "./cx.js";
 import { CI, I, MI, SVG } from "./icons.js";
 import { useOverlay } from "./overlay.js";
 import { useWorld } from "./world.js";
@@ -382,7 +383,7 @@ export function Header({ place }: { place: Place }) {
           {w.me ? <Bell onPage={place.kind === "notifications"} /> : null}
           {w.me ? (
             <button
-              className={`btn${place.kind === "saved" ? "on" : ""}`}
+              className={cx("btn", place.kind === "saved" && "on")}
               type="button"
               title="Saved"
               aria-label={saved ? `Saved: ${saved}` : "Saved"}

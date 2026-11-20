@@ -9,6 +9,8 @@
 //   POST /api/rpc/<name>      an online-only call (`NOT_MUTATORS`)
 //   GET  /api/rpc/usage.listAsks, and the account reads under /api/me
 //   GET  /api/spaces          the spaces the caller may find (the directory)
+//   GET  /api/invites/:code   an invite link's landing: its space and state
+//   GET  /api/spaces/named/:name  a space by its name (an unlisted one: its name)
 //   POST /api/admin/reset-time  an operator resets the stored server time
 // A route parses the request, authenticates (the session cookie, or a
 // device's bearer token: `auth/actor.ts`), checks the protocol header, and
@@ -258,6 +260,27 @@ export function syncRoutes(deps: ServerDeps): Hono<AppEnv> {
     c.header("X-Session-Server-Time", String(d.serverTime));
     c.header("Cache-Control", "no-store");
     return c.json(d);
+  });
+
+  // a space a link names, for a reader the directory does not list it to
+  // (an unlisted space they are not in: its name only)
+  app.get("/api/spaces/named/:name", (c) => {
+    const s = sync.spaceNamed(c.req.param("name"), c.get("actor"));
+    if (!s) return error(c, "NOT_FOUND");
+    c.header("Cache-Control", "no-store");
+    return c.json({ space: s, serverTime: now() });
+  });
+
+  // an invite link's landing page (/i/<code>): the space it admits to and
+  // whether it still does; signed out too, as the mock's landing is
+  app.get("/api/invites/:code", (c) => {
+    const code = c.req.param("code");
+    if (!/^[0-9A-Za-z]{1,32}$/.test(code)) return error(c, "NOT_FOUND");
+    const v = sync.invite(code);
+    if (!v) return error(c, "NOT_FOUND");
+    c.header("X-Session-Server-Time", String(v.serverTime));
+    c.header("Cache-Control", "no-store");
+    return c.json(v);
   });
 
   // ---- operators ----

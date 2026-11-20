@@ -1,6 +1,7 @@
 // Phase 2b (the web client): the headers `FetchTransport` sends on every
 // request (the web's CSRF header on a cookie POST), and the in-flight run
-// text the stream carries (`onRun`).
+// text the stream carries (`onRun`), and an answered write that a later read
+// of its log already holds.
 
 import test from "ava";
 
@@ -14,7 +15,7 @@ import {
 } from "../src/client/index.js";
 
 import { client } from "./client-helpers.js";
-import { cast } from "./helpers.js";
+import { cast, ok } from "./helpers.js";
 
 /** A fetch that records each request's method, path and headers. */
 function recording() {
@@ -139,4 +140,40 @@ test("a run frame on the stream goes to the onRun listeners and changes no log",
   await mel.listen(new AbortController().signal);
   t.is(got.length, 2);
   t.is(other.length, 4);
+});
+
+test("an answered write is not played again over a log read after its answer", async (t) => {
+  const { w, closed } = cast(t);
+  ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
+  const olga = client(w, "olga");
+  await olga.init();
+  await olga.open(`user:olga`);
+  await olga.open(`space:${closed}`);
+  const key = `request:${closed}:otto`;
+  const st = () => (olga.get(key) as { st?: string } | undefined)?.st;
+  t.is(st(), "open");
+  // decline: answered; only the space's log is read after it, so the
+  // answered entry stays (the user log was read before)
+  const no = olga.write("joinRequests.decide", {
+    space: closed,
+    users: ["otto"],
+    decision: "decline",
+  });
+  t.true((await no.answer)?.ok);
+  await olga.sync(`space:${closed}`);
+  t.is(st(), "declined");
+  // another moderator's change lands meanwhile: it reopens the request
+  const rev = (w.server.records().get(key) as { rev: number }).rev;
+  ok(
+    t,
+    w.as("olga", "joinRequests.decide", {
+      space: closed,
+      users: ["otto"],
+      decision: "reopen",
+      base: { otto: rev },
+    }),
+  );
+  await olga.sync(`space:${closed}`);
+  // the server's state, not the decline played again on top of it
+  t.is(st(), "open");
 });

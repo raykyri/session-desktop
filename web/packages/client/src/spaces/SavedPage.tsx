@@ -148,7 +148,9 @@ export function SavedPage() {
                       type="button"
                       aria-label="Remove from saved"
                       title="Remove from saved"
-                      onClick={() => session?.write("saved.set", { thread: x.id, on: false })}
+                      onClick={() =>
+                        session?.write("saved.set", { kind: "thread", id: x.id, on: false })
+                      }
                     >
                       <Svg src={I.close} />
                     </button>

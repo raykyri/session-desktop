@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { meResource, useMe } from "../api/account.js";
 import { LoadFailed, Skeleton, UpdateDialog } from "../spaces/Page.js";
+import { Toasts } from "../spaces/writes.js";
 import { SpacesProvider, useSession, useStatus } from "../sync/react.js";
 import { NotificationStack } from "../ui/NotificationStack.js";
 import { useUserNotifications } from "../ui/useUserNotifications.js";
@@ -59,6 +60,7 @@ export function SpacesRoot() {
         <FirstLoad>
           <Outlet />
         </FirstLoad>
+        <Toasts />
       </div>
       <UpdateGate />
       <NotificationStack notifications={notifications} onDismiss={dismiss} />

@@ -12,14 +12,15 @@ import { useNow, useRecords } from "../sync/react.js";
 import { Composer } from "./Composer.js";
 import { FaqLanding, topicsOf, topicSlug } from "./FaqLanding.js";
 import { Feed, SortControl, useFeedState } from "./Feed.js";
-import { NotFound, Page } from "./Page.js";
+import { JoinCard, JoinControl, MissingSpace, NoAccess, policyLabel } from "./Membership.js";
+import { Page } from "./Page.js";
 import { Svg } from "./Svg.js";
 import { Author, Avatar, Seal, SpaceGlyph } from "./atoms.js";
+import { cx } from "./cx.js";
 import { CI, I, MI, MII, SVG } from "./icons.js";
 import { useOverlay } from "./overlay.js";
 import { canRead, useWorld } from "./world.js";
 
-const policyLabel = (s: Space) => (s.policy === "invite" ? "Invite only" : "Join by request");
 const ROLE_LABEL: Record<string, string> = { owner: "Owner", admin: "Admin", mod: "Moderator" };
 const ROLE_TITLE: Record<string, string> = {
   owner: "Owner: settings and moderators; archives or deletes the space",
@@ -37,6 +38,7 @@ function Banner({
   onSide?: (t: SideTab) => void;
 }) {
   const w = useWorld();
+  const navigate = useNavigate();
   const role = w.roles[s.id];
   const review =
     useRecords(
@@ -50,7 +52,7 @@ function Banner({
   const closed = isClosed(s);
   return (
     <div
-      className={`banner${compact ? "sf-compact" : ""} has-tabs`}
+      className={cx("banner", compact && "sf-compact", "has-tabs")}
       style={{ ["--sp" as string]: `var(--av${s.av || 1})` }}
     >
       <SpaceGlyph s={s} className={compact ? "lg" : "xl"} />
@@ -88,6 +90,12 @@ function Banner({
             type="button"
             aria-label={`Manage ${spaceName(s)}`}
             title="Manage"
+            onClick={() =>
+              void navigate({
+                to: "/s/$space/manage/$tab",
+                params: { space: s.name, tab: "requests" },
+              })
+            }
           >
             <Svg src={MI.cog} />
             <span className="d-only">Manage</span>
@@ -98,24 +106,7 @@ function Banner({
             ) : null}
           </button>
         ) : null}
-        {role !== undefined ? (
-          closed ? (
-            <div className="cs-mw">
-              <button className="btn cs-b" type="button" aria-haspopup="true" aria-expanded="false">
-                Joined
-                <Svg src={I.chev} className="cs-cv" />
-              </button>
-            </div>
-          ) : (
-            <button className="btn" type="button">
-              Joined
-            </button>
-          )
-        ) : !closed ? (
-          <button className="btn primary" type="button">
-            Join
-          </button>
-        ) : null}
+        <JoinControl s={s} />
         {onSide ? (
           <>
             <button className="btn sm m-wiki" type="button" onClick={() => onSide("sources")}>
@@ -465,26 +456,10 @@ function SpaceSearch({ s }: { s: Space }) {
   );
 }
 
-/** A closed space the reader may not read: the gate (joining is the
- * second slice's). */
+/** A closed space the reader may not read: the join card, or (unlisted)
+ * its name only. */
 function Gate({ s }: { s: Space }) {
-  return (
-    <div className="body">
-      <div className="ds-top">
-        <Banner s={s} compact={false} />
-      </div>
-      <div className="mcol">
-        <div className="main">
-          <div className="cs-empty">
-            <p>
-              <b>Only members can read {spaceName(s)}</b>
-            </p>
-            <p className="muted">{policyLabel(s)}.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return s.vis === "unlisted" ? <NoAccess s={s} thread={false} /> : <JoinCard s={s} />;
 }
 
 /** Which view of a space's Threads tab: the FAQ landing or a topic, or the
@@ -513,11 +488,7 @@ export function SpacePage({
   const rows = useRecords((r) => (s ? threadRows(r, new Set([s.id])) : []), [s?.id]) ?? [];
   if (!s) {
     if (!w.loaded) return <Page place={{ kind: "other" }}>{null}</Page>;
-    return (
-      <Page place={{ kind: "other" }}>
-        <NotFound space={name} />
-      </Page>
-    );
+    return <MissingSpace name={name} thread={false} />;
   }
   const feed = (
     <>

@@ -1248,6 +1248,11 @@ export class SyncClient implements Changing {
       else delete e.predictedError;
       if (out.status !== "ok") continue;
       for (const [key, draft] of out.writes) {
+        // an answered write is in every log read after its answer: its
+        // records there are the server's (and may hold later changes by
+        // others), so it is not played again on top of them (phase 2b: a
+        // decline undone at once came back as declined)
+        if (e.state === "answered" && this.readAfter(key, draft, e.answeredTick)) continue;
         if (draft === null) {
           this.overlay.set(key, null);
           continue;
@@ -1257,6 +1262,18 @@ export class SyncClient implements Changing {
       }
     }
     this.changed();
+  }
+
+  /** Whether a log that holds the record was read (a pull or snapshot that
+   * started) after `tick`. */
+  private readAfter(key: string, draft: pkg.Draft | null, tick: number | undefined) {
+    if (tick === undefined) return false;
+    const r = draft ?? this.confirmed(key);
+    if (!r) return false;
+    return pkg.logsOf(r).some((log) => {
+      const l = this.logs.get(log);
+      return l !== undefined && !l.frozen && l.pulledTick > tick;
+    });
   }
 
   // ---- writes ----

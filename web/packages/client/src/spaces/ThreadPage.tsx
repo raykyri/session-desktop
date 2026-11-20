@@ -19,12 +19,25 @@ import {
 import { Markdown, citationsOf } from "../features/markdown/index.js";
 import { useNow, useRecords, useRunText } from "../sync/react.js";
 
+import { ItemMenu, ModNote, type Item } from "./ItemMenu.js";
+import { MissingSpace, ThreadGate } from "./Membership.js";
 import { NotFound, Page } from "./Page.js";
 import { Svg } from "./Svg.js";
+import {
+  AskBox,
+  LikeButton,
+  ReplyBox,
+  ReplyLike,
+  SaveAskButton,
+  SaveButton,
+  Share,
+  useRunControl,
+} from "./ThreadWrites.js";
 import { Author, Avatar, Lock } from "./atoms.js";
-import { CI, I, NVI, QTI, SFI } from "./icons.js";
+import { cx } from "./cx.js";
+import { I, NVI, QTI } from "./icons.js";
 import { BackButton, useNavState } from "./nav.js";
-import { useWorld } from "./world.js";
+import { canRead, useWorld } from "./world.js";
 
 const PROVIDER: Record<string, string> = {
   anthropic: "Anthropic",
@@ -61,13 +74,18 @@ function RunBox({
   tok,
   space,
   mine,
+  thread,
+  node,
 }: {
   run: RunView;
   tok: number;
   space: Space;
   mine: boolean;
+  thread: string;
+  node: string;
 }) {
   const live = useRunText(run.status === "running" ? run.id : null, run.attempt);
+  const ctl = useRunControl(thread, node);
   if (run.status === "queued" || run.status === "running") {
     const steps = stepsOf(run.turns);
     return (
@@ -77,7 +95,13 @@ function RunBox({
           <b>Researching</b>
           {tok ? <span className="faint">· {fmtT(tok)} tokens so far</span> : null}
           {mine ? (
-            <button className="btn sm as-stop" type="button">
+            <button
+              className="btn sm as-stop"
+              type="button"
+              disabled={ctl.busy}
+              aria-disabled={ctl.busy || undefined}
+              onClick={ctl.stop}
+            >
               Stop
             </button>
           ) : null}
@@ -107,7 +131,7 @@ function RunBox({
         </p>
         {mine ? (
           <div className="as-acts">
-            <button className="tlink" type="button">
+            <button className="tlink" type="button" disabled={ctl.busy} onClick={ctl.again}>
               Run again
             </button>
           </div>
@@ -135,7 +159,7 @@ function RunBox({
       <p className="as-why">{why[run.end ?? "interrupted"] ?? why["interrupted"]}</p>
       {mine ? (
         <div className="as-acts">
-          <button className="tlink" type="button">
+          <button className="tlink" type="button" disabled={ctl.busy} onClick={ctl.again}>
             Retry
           </button>
         </div>
@@ -146,10 +170,10 @@ function RunBox({
 
 /** The thread's answer: the run's state until it answers, then the text. */
 function Answer({ t, space, mine }: { t: ThreadView; space: Space; mine: boolean }) {
-  const ended = t.run && t.run.status !== "complete" && !(t.run.status === "cancelled");
+  const ended = t.run && t.run.status !== "complete";
   const showRun = t.running || (t.sum === null && ended);
   return (
-    <section className={`th-ans${showRun ? "running" : ""}`} id="th-a">
+    <section className={cx("th-ans", showRun && "running")} id="th-a">
       <div className="cr-label">
         <span className="agent">
           <Svg src={I.agent} />
@@ -157,9 +181,9 @@ function Answer({ t, space, mine }: { t: ThreadView; space: Space; mine: boolean
         Agent answer
       </div>
       {t.mod ? (
-        <p className="muted">Answer {t.mod} by a moderator.</p>
+        <ModNote itemKey={`a:${t.id}`} noun="answer" mod={t.mod} by="the agent" space={space} />
       ) : showRun && t.run ? (
-        <RunBox run={t.run} tok={t.tok} space={space} mine={mine} />
+        <RunBox run={t.run} tok={t.tok} space={space} mine={mine} thread={t.id} node="r" />
       ) : t.sum !== null ? (
         <Markdown markdown={t.sum} className="prose qt-prose" />
       ) : null}
@@ -167,15 +191,45 @@ function Answer({ t, space, mine }: { t: ThreadView; space: Space; mine: boolean
   );
 }
 
-function Actions({ t, kind }: { t: ThreadView; kind: "ask" | "post" }) {
+/** The thread's own menu: its answer (an ask) or the post. */
+function ThreadMenu({ t, space }: { t: ThreadView; space: Space }) {
+  const w = useWorld();
+  const ask = t.k === "ask";
+  const own = w.me?.u === t.u && !t.del;
+  const item: Item = {
+    key: `${ask ? "a" : "p"}:${t.id}`,
+    noun: own && ask ? "ask" : ask ? "answer" : "post",
+    by: ask && !own ? "Agent" : t.u,
+    text: ask ? (t.sum ?? t.q) : t.q,
+    q: t.q,
+    mod: t.mod,
+    own,
+    kids: ask ? t.followups.length : t.replies.length,
+    url: `${location.origin}/s/${space.name}/t/${t.id}`,
+  };
+  return <ItemMenu item={item} space={space} />;
+}
+
+function Actions({
+  t,
+  space,
+  asking,
+  onAsk,
+}: {
+  t: ThreadView;
+  space: Space;
+  asking?: boolean;
+  onAsk?: () => void;
+}) {
   return (
     <div className="p-foot">
-      {kind === "ask" ? (
+      {onAsk ? (
         <button
           className="btn sm"
           type="button"
           aria-label="Ask about this answer"
-          aria-expanded="false"
+          aria-expanded={asking ?? false}
+          onClick={onAsk}
         >
           <Svg src={QTI.ask} />
           <span>
@@ -183,56 +237,31 @@ function Actions({ t, kind }: { t: ThreadView; kind: "ask" | "post" }) {
           </span>
         </button>
       ) : null}
-      <button
-        className="act"
-        type="button"
-        data-toggle="liked"
-        aria-pressed={t.liked}
-        aria-label="Like"
-      >
-        <Svg src={I.heart} />
-        <span className="num">{t.likes}</span>
-      </button>
-      <button
-        className="act"
-        type="button"
-        data-toggle="saved"
-        aria-pressed={t.saved}
-        aria-label={t.saved ? "Remove from saved" : "Save"}
-        title={t.saved ? "Saved" : "Save"}
-      >
-        <Svg src={I.mark} />
-      </button>
-      <span className="sf-imw ta-shw">
-        <button
-          className="act"
-          type="button"
-          aria-haspopup="true"
-          aria-expanded="false"
-          aria-label="Share"
-        >
-          <Svg src={CI.share} />
-          <span>Share</span>
-        </button>
-      </span>
-      <span className="sf-imw sf-pend">
-        <button
-          className="act sf-im"
-          type="button"
-          aria-haspopup="true"
-          aria-expanded="false"
-          aria-label="More actions"
-          title="More"
-        >
-          <Svg src={SFI.more} />
-        </button>
-      </span>
+      <LikeButton t={t} />
+      <SaveButton t={t} />
+      <Share t={t} space={space} />
+      <ThreadMenu t={t} space={space} />
     </div>
   );
 }
 
-function FollowUpItem({ f, below }: { f: FollowUp; below: number }) {
+function FollowUpItem({
+  t,
+  f,
+  below,
+  level,
+  space,
+  me,
+}: {
+  t: ThreadView;
+  f: FollowUp;
+  below: number;
+  level: number;
+  space: Space;
+  me: string | null;
+}) {
   const now = useNow();
+  const [asking, setAsking] = useState(false);
   const running = f.run && (f.run.status === "queued" || f.run.status === "running");
   const live = useRunText(running && f.run ? f.run.id : null, f.run?.attempt);
   return (
@@ -242,11 +271,17 @@ function FollowUpItem({ f, below }: { f: FollowUp; below: number }) {
         <b>{f.u}</b>
         <span>{ago(f.createdAt, now)}</span>
       </div>
-      <p className="fu-q">
-        {f.del ? "You deleted this follow-up." : f.mod ? `Follow-up ${f.mod} by a moderator.` : f.q}
-      </p>
+      <p className="fu-q">{f.del ? "You deleted this follow-up." : f.q}</p>
       <div className="fu-a">
-        {f.a !== null && !f.mod ? (
+        {f.mod ? (
+          <ModNote
+            itemKey={`f:${t.id}:${f.id}`}
+            noun="follow-up answer"
+            mod={f.mod}
+            by="the agent"
+            space={space}
+          />
+        ) : f.a !== null ? (
           <Markdown markdown={f.a} className="prose fu-prose" />
         ) : running ? (
           <div className="run">
@@ -256,39 +291,47 @@ function FollowUpItem({ f, below }: { f: FollowUp; below: number }) {
             </div>
             {live ? <Markdown markdown={live} className="prose fu-prose as-live" /> : null}
           </div>
+        ) : f.run && !f.mod ? (
+          <RunBox run={f.run} tok={0} space={space} mine={f.u === me} thread={t.id} node={f.id} />
         ) : null}
       </div>
       {f.a !== null ? <p className="tm-meta">{payerLabel(f.run?.pay ?? null)}</p> : null}
       <div className="qt-acts">
-        <button className="btn sm" type="button" aria-label="Ask about this answer">
-          <Svg src={QTI.ask} />
-          <span>
-            Ask <span className="m-long">about this answer</span>
-          </span>
-        </button>
-        <button
-          className="act sf-im qt-save"
-          type="button"
-          aria-pressed={f.saved}
-          aria-label="Save this ask"
-          title="Save this ask"
-        >
-          <Svg src={I.mark} />
-        </button>
+        {!running ? (
+          <button
+            className="btn sm"
+            type="button"
+            aria-label="Ask about this answer"
+            aria-expanded={asking}
+            onClick={() => setAsking((a) => !a)}
+          >
+            <Svg src={QTI.ask} />
+            <span>
+              Ask <span className="m-long">about this answer</span>
+            </span>
+          </button>
+        ) : null}
+        <SaveAskButton thread={t.id} node={f.id} saved={f.saved} />
         <span className="grow" />
         <span className="qt-mw">
-          <button
-            className="act sf-im"
-            type="button"
-            aria-haspopup="true"
-            aria-expanded="false"
-            aria-label="More actions for this ask"
-            title="More"
-          >
-            <Svg src={SFI.more} />
-          </button>
+          <ItemMenu
+            space={space}
+            label="More actions for this ask"
+            item={{
+              key: `f:${t.id}:${f.id}`,
+              noun: "follow-up answer",
+              by: "Agent",
+              text: f.a ?? f.q,
+              q: t.q,
+              mod: f.mod,
+              own: f.u === me && !f.del,
+              kids: below,
+              url: `${location.origin}/s/${space.name}/t/${t.id}/a/${f.id}`,
+            }}
+          />
         </span>
       </div>
+      {asking ? <AskBox t={t} par={f.id} level={level} onClose={() => setAsking(false)} /> : null}
       {below ? (
         <button className="tlink qt-fub" type="button" aria-expanded="false">
           Show {below} {below === 1 ? "ask" : "asks"} below
@@ -298,46 +341,60 @@ function FollowUpItem({ f, below }: { f: FollowUp; below: number }) {
   );
 }
 
-function ReplyItem({ r, kids }: { r: Reply; kids: Reply[] }) {
+function ReplyItem({ t, r, kids }: { t: ThreadView; r: Reply; kids: Reply[] }) {
   const now = useNow();
+  const w = useWorld();
+  const space = w.byId.get(t.s);
+  const me = w.me?.u ?? null;
+  const [replying, setReplying] = useState(false);
   return (
-    <div className={`rp${r.parent ? "rp-kid" : ""}`}>
+    <div className={cx("rp", r.parent && "rp-kid")}>
       <Avatar u={r.u} className="sm" />
       <div className="rp-b">
         <div className="meta">
           <b>{r.u}</b>
           <span>{ago(r.createdAt, now)}</span>
         </div>
-        <p>{r.del ? "You deleted this reply." : r.mod ? `Reply ${r.mod} by a moderator.` : r.t}</p>
+        {r.mod && space ? (
+          <ModNote itemKey={`r:${t.id}:${r.id}`} noun="reply" mod={r.mod} by={r.u} space={space} />
+        ) : (
+          <p>{r.del ? "You deleted this reply." : r.t}</p>
+        )}
         <div className="rp-acts">
-          <button className="tlink" type="button" aria-expanded="false">
-            Reply
-          </button>
-          <button
-            className="tlink ta-like"
-            type="button"
-            aria-pressed={r.liked}
-            aria-label={`Like (${r.likes} ${r.likes === 1 ? "like" : "likes"})`}
-          >
-            <Svg src={I.heart} />
-            <span className="num">{r.likes}</span>
-          </button>
-          <span className="sf-imw">
+          {r.parent === null ? (
             <button
-              className="act sf-im"
+              className="tlink"
               type="button"
-              aria-haspopup="true"
-              aria-expanded="false"
-              aria-label="More actions"
-              title="More"
+              aria-expanded={replying}
+              onClick={() => setReplying((x) => !x)}
             >
-              <Svg src={SFI.more} />
+              Reply
             </button>
-          </span>
+          ) : null}
+          <ReplyLike id={r.id} likes={r.likes} liked={r.liked} />
+          {space ? (
+            <ItemMenu
+              space={space}
+              item={{
+                key: `r:${t.id}:${r.id}`,
+                noun: "reply",
+                by: r.u,
+                text: r.t,
+                q: t.q,
+                mod: r.mod,
+                own: r.u === me && !r.del,
+                kids: kids.length,
+                url: `${location.origin}/s/${space.name}/t/${t.id}`,
+              }}
+            />
+          ) : null}
         </div>
         {kids.map((k) => (
-          <ReplyItem key={k.id} r={k} kids={[]} />
+          <ReplyItem key={k.id} t={t} r={k} kids={[]} />
         ))}
+        {replying ? (
+          <ReplyBox t={t} to={{ id: r.id, u: r.u }} onClose={() => setReplying(false)} />
+        ) : null}
       </div>
     </div>
   );
@@ -593,6 +650,7 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
   const s = w.spaces.find((x) => x.name === name);
   const session = w.session;
   const [view, setView] = useState<"docsrc" | "chat">("docsrc");
+  const [askingRoot, setAskingRoot] = useState(false);
   useEffect(() => {
     if (s) void session?.openThread(s.id, id);
   }, [s, id, session]);
@@ -604,12 +662,14 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
   }, [focus, loaded]);
   if (!s) {
     if (!w.loaded) return <Page place={{ kind: "other" }}>{null}</Page>;
+    return <MissingSpace name={name} thread={true} />;
+  }
+  if (!canRead(w, s))
     return (
-      <Page place={{ kind: "other" }}>
-        <NotFound space={name} />
+      <Page cls="" place={{ kind: "space", id: s.id }}>
+        <ThreadGate s={s} />
       </Page>
     );
-  }
   if (!t)
     return (
       <Page place={{ kind: "thread", id: s.id }}>
@@ -643,16 +703,25 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
               </div>
               {meta}
               <p className="th-q th-post" id="th-q" ref={heading} tabIndex={-1}>
-                {t.del ? "You deleted this post." : t.mod ? `Post ${t.mod} by a moderator.` : t.q}
+                {t.del ? "You deleted this post." : t.mod ? null : t.q}
               </p>
-              <Actions t={t} kind="post" />
+              {t.mod ? (
+                <ModNote itemKey={`p:${t.id}`} noun="post" mod={t.mod} by={t.u} space={s} />
+              ) : null}
+              <Actions t={t} space={s} />
               <section className="th-rps" id="th-f">
                 <h3>
                   Replies <span className="faint num">{t.replies.length}</span>
                 </h3>
                 {tops.map((r) => (
-                  <ReplyItem key={r.id} r={r} kids={t.replies.filter((k) => k.parent === r.id)} />
+                  <ReplyItem
+                    key={r.id}
+                    t={t}
+                    r={r}
+                    kids={t.replies.filter((k) => k.parent === r.id)}
+                  />
                 ))}
+                {s.archived ? null : <ReplyBox t={t} />}
               </section>
             </article>
             <aside className="th-aside">
@@ -714,7 +783,7 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
             <article className="qt-node qt-inl qt-fuv" id="qt-n-r">
               {meta}
               <p className="th-q" id="th-q" ref={heading} tabIndex={-1}>
-                {t.del ? "You deleted this ask." : t.mod ? `Ask ${t.mod} by a moderator.` : t.q}
+                {t.del ? "You deleted this ask." : t.q}
               </p>
               <Answer t={t} space={s} mine={mine} />
               {t.sum !== null && t.tok ? (
@@ -722,23 +791,45 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
                   {payerLabel(t.pay)} · <span className="num">{fmtT(t.tok)} tokens</span>
                 </p>
               ) : null}
-              <Actions t={t} kind="ask" />
+              <Actions
+                t={t}
+                space={s}
+                asking={askingRoot}
+                onAsk={t.running ? undefined : () => setAskingRoot((a) => !a)}
+              />
+              {askingRoot && !t.running ? (
+                <div className="qt-rootask qt-rootask-in">
+                  <AskBox t={t} par="r" level={0} onClose={() => setAskingRoot(false)} />
+                </div>
+              ) : null}
               <section className="th-fus" id="th-f">
                 <h3>
                   Follow-ups <span className="faint num">{first.length}</span>
-                  <div className="seg qt-fut" role="group" aria-label="Show follow-ups as">
-                    <button type="button" aria-pressed="true">
-                      Answers
-                    </button>
-                    <button type="button" aria-pressed="false">
-                      Questions
-                    </button>
-                  </div>
+                  {first.length ? (
+                    <div className="seg qt-fut" role="group" aria-label="Show follow-ups as">
+                      <button type="button" aria-pressed="true">
+                        Answers
+                      </button>
+                      <button type="button" aria-pressed="false">
+                        Questions
+                      </button>
+                    </div>
+                  ) : null}
                 </h3>
                 {first.length ? (
-                  first.map((f) => <FollowUpItem key={f.id} f={f} below={below(f.id)} />)
+                  first.map((f) => (
+                    <FollowUpItem
+                      key={f.id}
+                      t={t}
+                      f={f}
+                      below={below(f.id)}
+                      level={1}
+                      space={s}
+                      me={w.me?.u ?? null}
+                    />
+                  ))
                 ) : (
-                  <p className="muted">Follow-ups can be added once the answer is ready.</p>
+                  <p className="muted">Follow-ups appear here once the answer is ready.</p>
                 )}
               </section>
             </article>

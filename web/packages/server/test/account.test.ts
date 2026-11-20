@@ -155,3 +155,28 @@ test("/api/spaces lists the spaces the caller may find", async (t) => {
     ["attic", "lounge"],
   );
 });
+
+test("/api/invites/:code answers an invite link's space and state, signed out too", async (t) => {
+  const h = createHarness(t);
+  const olga = h.signIn(h.addUser("olga"));
+  const client = new HttpClient(h, { cookie: olga });
+  const space = client.id();
+  const made = await client.write("spaces.create", {
+    id: space,
+    name: "attic",
+    vis: "unlisted",
+    policy: "invite",
+  });
+  t.true(made.body.ok, JSON.stringify(made.body));
+  const link = await client.write("invites.create", { id: client.id(), space, days: 7 });
+  t.true(link.body.ok, JSON.stringify(link.body));
+  const code = (link.body as unknown as { result: { code: string } }).result.code;
+  const res = await h.request(`/api/invites/${code}`);
+  t.is(res.status, 200);
+  const v = (await res.json()) as { space: { name: string }; by: string; state: string };
+  t.is(v.space.name, "attic");
+  t.is(v.by, "olga");
+  t.is(v.state, "live");
+  t.is((await h.request("/api/invites/nosuchcode")).status, 404);
+  t.is((await h.request("/api/invites/not%20a%20code")).status, 404);
+});

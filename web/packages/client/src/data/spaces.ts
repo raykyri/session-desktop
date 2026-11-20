@@ -28,6 +28,8 @@ export interface Space {
   topics: [string, string][];
   postsOff: boolean;
   rules: string[];
+  /** The request form's questions. */
+  qs: { q: string; req: boolean }[];
   mods: [string, Role][];
   members: number;
   /** Threads, from its stats (null where the reader may not read them). */
@@ -36,7 +38,7 @@ export interface Space {
   createdAt: string;
 }
 
-function toSpace(s: pkg.SpaceRec, stats: pkg.StatsRec | undefined): Space {
+export function toSpace(s: pkg.SpaceRec, stats: pkg.StatsRec | undefined): Space {
   return {
     id: s.id,
     name: s.name,
@@ -53,6 +55,7 @@ function toSpace(s: pkg.SpaceRec, stats: pkg.StatsRec | undefined): Space {
     topics: s.topics,
     postsOff: s.postsOff,
     rules: s.rules,
+    qs: s.qs,
     mods: s.mods,
     members: s.members,
     posts: stats ? stats.posts : null,
@@ -284,7 +287,7 @@ export interface ThreadView extends Row {
 
 /** The latest run of a node ("r": the thread's ask, else a follow-up). */
 function runOf(r: Reader, th: string, node: string): RunView | null {
-  const runs = r.list("run", (x) => x.th === th && x.node === node && x.status !== "cancelled");
+  const runs = r.list("run", (x) => x.th === th && x.node === node);
   const run = runs.sort((a, b) => b.attempt - a.attempt || (a.createdAt < b.createdAt ? 1 : -1))[0];
   if (!run) return null;
   const turns = r
