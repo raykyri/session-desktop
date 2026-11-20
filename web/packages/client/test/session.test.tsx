@@ -18,10 +18,10 @@ import test from "ava";
 
 import { meResource } from "../src/api/account.js";
 import { setFetch } from "../src/api/http.js";
-import { Toasts, WRITE_ERROR, useWrite, type Outcome } from "../src/spaces/writes.js";
 import { useWorld } from "../src/spaces/world.js";
-import { Reader, mapSource } from "../src/sync/reader.js";
+import { Toasts, WRITE_ERROR, useWrite, type Outcome } from "../src/spaces/writes.js";
 import { SpacesProvider, useRunText } from "../src/sync/react.js";
+import { Reader, mapSource } from "../src/sync/reader.js";
 import { RunTexts, SpacesSession } from "../src/sync/session.js";
 
 import { createFetchStub } from "./fetchStub.js";
@@ -435,7 +435,7 @@ test.serial(
       await settle();
     });
     await waitUntil(t, () => outcome !== null, "the write ended");
-    t.like(outcome as Outcome | null, { ok: false, error: { code: "TOO_MANY_REQUESTS" } });
+    t.like(outcome, { ok: false, error: { code: "TOO_MANY_REQUESTS" } });
     t.truthy(screen.getByText(WRITE_ERROR["TOO_MANY_REQUESTS"] ?? "-"));
     // refused, not waiting for Try again
     t.deepEqual(session.client?.problems(), []);

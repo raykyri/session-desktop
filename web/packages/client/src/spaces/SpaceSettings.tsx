@@ -188,7 +188,7 @@ export function SettingsManage({ s }: { s: Space }) {
           </span>
         </div>
       ) : null}
-      <Sec title="About" sub="The space's name, title and description.">
+      <Sec title="About" sub="Shown in the About tab of the space.">
         <label className="fld">
           <span>Name</span>
           <input
@@ -197,6 +197,13 @@ export function SettingsManage({ s }: { s: Space }) {
             value={d.name}
             onChange={(e) => set({ name: e.currentTarget.value })}
           />
+          <small className="faint">
+            Lowercase letters, numbers and hyphens. Unique on Session. The address is{" "}
+            <b className="cx-url">
+              {location.host}/s/{d.name}
+            </b>
+            .
+          </small>
         </label>
         <label className="fld">
           <span>Title</span>
@@ -206,6 +213,9 @@ export function SettingsManage({ s }: { s: Space }) {
             value={d.title}
             onChange={(e) => set({ title: e.currentTarget.value })}
           />
+          <small className="faint">
+            Shown in About. With a verified domain, it can replace the #name.
+          </small>
         </label>
         <label className="fld">
           <span>Description</span>
@@ -419,35 +429,56 @@ export function SettingsManage({ s }: { s: Space }) {
           set={(v) => set({ faq: v })}
         />
       </Sec>
-      <Sec title="Posts" sub="Whether members can write plain posts as well as asks.">
+      <Sec title="Posts" sub="Plain posts that people reply to. Asks are not affected.">
         <Toggle
           on={!d.postsOff}
-          title="Allow posts"
-          sub="People can post and reply. Asks are always on."
+          title="Allow new posts"
+          sub={
+            d.postsOff
+              ? `Off: the composer in ${spaceName(s)} is ask-only. Existing posts and their replies stay visible, and people can still reply to them.`
+              : "People can write posts as well as asks."
+          }
           set={(v) => set({ postsOff: !v })}
         />
       </Sec>
-      <Sec title="Pages" sub="Who edits the space's pages.">
-        <div className="seg" role="radiogroup" aria-label="Who edits pages">
-          <button
-            type="button"
-            aria-pressed={d.pageEdit === "mods"}
-            onClick={() => set({ pageEdit: "mods" })}
-          >
-            Moderators
-          </button>
-          <button
-            type="button"
-            aria-pressed={d.pageEdit === "members"}
-            onClick={() => set({ pageEdit: "members" })}
-          >
-            All members
-          </button>
+      <Sec
+        title="Pages"
+        sub="Who can edit the pages in About. Moderators can always add, order and remove pages."
+      >
+        <div className="ab-radios">
+          {(
+            [
+              ["mods", "Moderators", "Only moderators edit pages."],
+              [
+                "members",
+                "Members",
+                "Any member can edit a page. The page history shows every change.",
+              ],
+            ] as const
+          ).map(([v, t, sub]) => (
+            <label className="cs-rad" key={v} htmlFor={`ab-pgedit-${v}`} aria-label={t}>
+              <input
+                id={`ab-pgedit-${v}`}
+                type="radio"
+                name="ab-pgedit"
+                value={v}
+                checked={d.pageEdit === v}
+                onChange={() => set({ pageEdit: v })}
+              />
+              <span>
+                <b>{t}</b>
+                <small>{sub}</small>
+              </span>
+            </label>
+          ))}
         </div>
       </Sec>
       <div className="st-end">{buttons}</div>
       {owner ? (
-        <Sec title="Archive or delete" sub="Stop activity in the space, or delete it.">
+        <Sec
+          title="Archive or delete"
+          sub="These take effect at once. They are not part of Save changes."
+        >
           <div className="cs-row">
             {s.archived ? (
               <button

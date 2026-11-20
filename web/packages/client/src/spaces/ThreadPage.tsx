@@ -104,10 +104,20 @@ function RunBox({
   const key = useRecords(
     (r) => {
       const k = run.pay && run.pay !== "session" ? r.get("apikey", run.pay) : undefined;
-      return k && k.u === r.me ? { name: k.name, cap: k.cap } : null;
+      return k && k.u === r.me ? { name: k.name, cap: k.cap, provider: k.provider } : null;
     },
     [run.pay],
   );
+  // the reader's other keys that can pay now (the mockup's tmActs)
+  const others =
+    useRecords(
+      (r) =>
+        r
+          .list("apikey", (k) => k.u === r.me && k.status === "valid" && k.id !== run.pay)
+          .map((k) => ({ id: k.id, name: k.name })),
+      [run.pay],
+    ) ?? [];
+  const navigate = useNavigate();
   const dev = run.device;
   if (dev && (run.status === "queued" || run.status === "running")) {
     // a device run reports its text when it finishes, not its steps or
@@ -229,8 +239,13 @@ function RunBox({
     );
   const why: Record<string, string> = {
     tokens: tokensWhy(run.pay, tok, now, key ?? null),
-    key: `${PROVIDER[run.model?.split("/")[0] ?? ""] ?? "The provider"} rejected the API key that pays for this ask. The agent wrote nothing.`,
-    rate: "The provider is limiting requests from the API key that pays for this ask. The agent wrote nothing.",
+    // the mockup's tmFailHTML: the provider and the reader's own key by name
+    key: key
+      ? `${key.provider} rejected your ${key.name}. The agent wrote nothing.`
+      : `${PROVIDER[run.model?.split("/")[0] ?? ""] ?? "The provider"} rejected the API key that pays for this ask. The agent wrote nothing.`,
+    rate: key
+      ? `${key.provider} is limiting requests from your ${key.name}. The agent wrote nothing.`
+      : "The provider is limiting requests from the API key that pays for this ask. The agent wrote nothing.",
     access: `The agent didn’t run: when the run began, you could no longer read ${spaceName(space)} or a source this ask is about, or the API key that pays isn’t yours.`,
     interrupted: run.device
       ? `The run stopped on ${run.device.u}’s desktop before it finished. The agent wrote nothing.`
@@ -248,9 +263,64 @@ function RunBox({
       <p className="as-why">{why[run.end ?? "interrupted"] ?? why["interrupted"]}</p>
       {mine ? (
         <div className="as-acts">
-          <button className="tlink" type="button" disabled={ctl.busy} onClick={ctl.again}>
-            Retry
-          </button>
+          {run.end === "tokens" ? (
+            // another payer runs it again; with none, add a key
+            run.pay === null || run.pay === "session" ? (
+              others[0] ? (
+                <button
+                  className="btn sm primary"
+                  type="button"
+                  disabled={ctl.busy}
+                  onClick={() => ctl.payWith(others[0]?.id ?? "")}
+                >
+                  Use {others[0].name}
+                </button>
+              ) : (
+                <button
+                  className="tlink"
+                  type="button"
+                  onClick={() => void navigate({ to: "/settings/$tab", params: { tab: "keys" } })}
+                >
+                  Add an API key
+                </button>
+              )
+            ) : (
+              <>
+                <button
+                  className="btn sm primary"
+                  type="button"
+                  disabled={ctl.busy}
+                  onClick={ctl.included}
+                >
+                  Use included tokens
+                </button>
+                <button
+                  className="tlink"
+                  type="button"
+                  onClick={() => void navigate({ to: "/settings/$tab", params: { tab: "keys" } })}
+                >
+                  Change limit
+                </button>
+              </>
+            )
+          ) : run.end === "key" ? (
+            <>
+              <button className="tlink" type="button" disabled={ctl.busy} onClick={ctl.included}>
+                Retry with included tokens
+              </button>
+              <button
+                className="tlink"
+                type="button"
+                onClick={() => void navigate({ to: "/settings/$tab", params: { tab: "keys" } })}
+              >
+                API keys
+              </button>
+            </>
+          ) : (
+            <button className="tlink" type="button" disabled={ctl.busy} onClick={ctl.again}>
+              Retry
+            </button>
+          )}
         </div>
       ) : null}
     </div>
@@ -585,7 +655,8 @@ function Outline({
       <div className="qt-ol-h">
         <h3>Outline</h3>
         <span className="num">
-          {t.followups.length + 1} asks · {levels} {levels === 1 ? "level" : "levels"}
+          {t.followups.length + 1} {t.followups.length ? "asks" : "ask"} · {levels}{" "}
+          {levels === 1 ? "level" : "levels"}
         </span>
       </div>
       <ul role="tree">

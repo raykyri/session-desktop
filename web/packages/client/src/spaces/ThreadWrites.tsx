@@ -265,6 +265,8 @@ export function useRunControl(thread: string, node: string) {
     /** Run again as a server run on the included tokens (after a device
      * run was interrupted: the web cannot run it on the device). */
     included: () => void go("research.retryNode", { thread, node, pay: "session" }),
+    /** Run again with another payer (the mockup's tmActs). */
+    payWith: (pay: string) => void go("research.retryNode", { thread, node, pay }),
   };
 }
 

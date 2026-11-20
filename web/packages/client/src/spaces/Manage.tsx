@@ -7,9 +7,18 @@
 // nothing is applied again (AGENTS.md; the mockup's sx-rf-approve).
 
 import { useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { agoText, ago, dayOf, fmt, isClosed, spaceName, visLabel } from "../data/format.js";
+import {
+  agoText,
+  ago,
+  dayOf,
+  fmt,
+  isClosed,
+  plainText,
+  spaceName,
+  visLabel,
+} from "../data/format.js";
 import { isStaff, moderated, type Moderated, type Role, type Space } from "../data/spaces.js";
 import { useNow, useRecords, useSession } from "../sync/react.js";
 import type { Reader } from "../sync/reader.js";
@@ -419,6 +428,15 @@ export function itemInfo(r: Reader, key: string): ItemInfo | null {
   return null;
 }
 
+/** A report's noun from its key alone (before its item is read). */
+const NOUN: Record<string, string> = {
+  a: "answer",
+  p: "post",
+  f: "follow-up answer",
+  r: "reply",
+};
+const nounOf = (key: string) => NOUN[key.split(":")[0] ?? ""] ?? "item";
+
 function Reports({ s }: { s: Space }) {
   const now = useNow();
   const [rm, setRm] = useState<{ id: string; by: string; noun: string; author: string } | null>(
@@ -441,6 +459,12 @@ function Reports({ s }: { s: Space }) {
   const open = data.filter((x) => x.rep.st === "open");
   const done = data.filter((x) => x.rep.st !== "open" && now - Date.parse(x.rep.updatedAt) < 864e5);
   const me = useWorld().me?.u;
+  // a reported item's thread may be held as a summary: read it in full
+  const session = useSession();
+  const threads = [...new Set(open.map((x) => x.rep.key.split(":")[1] ?? ""))].join(",");
+  useEffect(() => {
+    for (const th of threads.split(",")) if (th) void session?.openThread(s.id, th);
+  }, [session, s.id, threads]);
   const resolve = async (id: string, how: "dismissed" | "hidden" | "removed", by: string) => {
     const o = await write("reports.resolve", { report: id, outcome: how });
     if (o.ok) {
@@ -467,7 +491,7 @@ function Reports({ s }: { s: Space }) {
           <span className="rq-dtx">
             <b>{repWhy(rep.why)}</b>{" "}
             <span className="faint">
-              · {it?.noun ?? "item"} reported by {rep.by === me ? "you" : rep.by} ·{" "}
+              · {it?.noun ?? nounOf(rep.key)} reported by {rep.by === me ? "you" : rep.by} ·{" "}
               {REP_DONE[rep.st]?.[0] ?? rep.st}
             </span>
           </span>
@@ -499,7 +523,7 @@ function Reports({ s }: { s: Space }) {
                 {repWhy(rep.why)}
               </span>
               <span className="faint cs-small">
-                {it?.noun ?? "item"} · reported {agoText(rep.createdAt, now)}
+                {it?.noun ?? nounOf(rep.key)} · reported {agoText(rep.createdAt, now)}
               </span>
             </div>
             {it ? (
@@ -519,7 +543,7 @@ function Reports({ s }: { s: Space }) {
                     {clip(it.q, 90)}
                   </button>
                 </span>
-                <p>{clip(it.text, 220)}</p>
+                <p>{clip(plainText(it.text), 220)}</p>
                 {mod ? (
                   <span className="ks bad">{mod === "hidden" ? "Hidden" : "Removed"}</span>
                 ) : null}
@@ -550,13 +574,18 @@ function Reports({ s }: { s: Space }) {
                 type="button"
                 onClick={() => void resolve(rep.id, "hidden", rep.by)}
               >
-                Hide the {(it?.noun ?? "item").replace("follow-up ", "")}
+                Hide the {(it?.noun ?? nounOf(rep.key)).replace("follow-up ", "")}
               </button>
               <button
                 className="btn sm sf-rm"
                 type="button"
                 onClick={() =>
-                  setRm({ id: rep.id, by: rep.by, noun: it?.noun ?? "item", author: it?.by ?? "" })
+                  setRm({
+                    id: rep.id,
+                    by: rep.by,
+                    noun: it?.noun ?? nounOf(rep.key),
+                    author: it?.by ?? "",
+                  })
                 }
               >
                 Remove

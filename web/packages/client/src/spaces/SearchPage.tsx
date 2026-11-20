@@ -6,7 +6,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { ago, fmt, spaceName } from "../data/format.js";
+import { ago, fmt, plainText, spaceName } from "../data/format.js";
 import type { Space } from "../data/spaces.js";
 import { useNow, useRecords } from "../sync/react.js";
 import type { Reader } from "../sync/reader.js";
@@ -65,13 +65,7 @@ export function excerpt(src: string, stem: string): string {
 }
 
 /** Markdown as plain text for matching: links and markers dropped. */
-const plain = (md: string | null) =>
-  (md ?? "")
-    .replace(/\[(\d{1,3})\]\([^)]*\)/g, "")
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/[#*_`>]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+const plain = (md: string | null) => plainText(md ?? "");
 
 interface Hit {
   id: string;

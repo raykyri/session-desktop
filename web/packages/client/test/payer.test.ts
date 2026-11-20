@@ -8,17 +8,20 @@ import test from "ava";
 
 import { modelChoice, modelsFor } from "../src/spaces/Composer.js";
 
-const model = (id: string, provider: ModelInfo["provider"], o: Partial<ModelInfo> = {}) =>
-  ({
-    id,
-    label: id.toUpperCase(),
-    provider,
-    adminOnly: false,
-    available: true,
-    supportsFiles: false,
-    supportsImages: false,
-    ...o,
-  }) as ModelInfo;
+const model = (
+  id: string,
+  provider: ModelInfo["provider"],
+  o: Partial<ModelInfo> = {},
+): ModelInfo => ({
+  id,
+  label: id.toUpperCase(),
+  provider,
+  adminOnly: false,
+  available: true,
+  supportsFiles: false,
+  supportsImages: false,
+  ...o,
+});
 
 const MODELS = [
   model("gemini", "vertex"),

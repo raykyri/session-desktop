@@ -408,6 +408,43 @@ function AboutTab({ s }: { s: Space }) {
             </div>
           ) : null}
         </div>
+        {isVerified(s) && s.dom ? (
+          <p className="cs-fine sf-vnote">
+            <Svg src={SVG.SEAL} />
+            <span>
+              The admins of {spaceName(s)} control {s.dom.domain}.
+              {s.dom.verifiedAt
+                ? ` Verified ${dayOf(s.dom.verifiedAt, now)} with a DNS record.`
+                : ""}{" "}
+              The seal does not mean that the space is official.
+            </span>
+          </p>
+        ) : null}
+      </div>
+      {/* the mockup's abAbout: how the space is read and joined */}
+      <div className="note-card">
+        <h3>Joining and visibility</h3>
+        <ul className="sf-plain">
+          <li>
+            {!closed
+              ? "Open: anyone can read threads."
+              : s.vis === "unlisted"
+                ? "Closed and unlisted: members read threads; hidden from browse and search."
+                : "Closed: members read threads; shown in browse and search."}
+          </li>
+          <li>
+            {!closed
+              ? "Anyone signed in can join."
+              : s.policy === "invite"
+                ? "Invite only."
+                : "Join by request, approved by a moderator."}
+          </li>
+          {closed ? (
+            <li>
+              {s.invite === "members" ? "Members can invite people." : "Moderators invite people."}
+            </li>
+          ) : null}
+        </ul>
       </div>
       <div className="note-card">
         <h3>Moderators</h3>

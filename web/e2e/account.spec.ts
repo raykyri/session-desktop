@@ -100,6 +100,11 @@ const SCREENS: Screen[] = [
       await expect(p.getByRole("heading", { name: "Usage" })).toBeVisible();
       await expect(p.getByText("Included tokens", { exact: true })).toBeVisible();
       await expect(p.getByText(/tokens this month/)).toBeVisible();
+      // the mockup's weekly copy (finding 7): the allowance is weekly, the totals this month's
+      await expect(p.locator(".tm-ulead")).toHaveText(
+        "Included tokens are a weekly allowance and reset Nov 23. Your providers bill your keys. Key limits reset on the 1st of each month.",
+      );
+      await expect(p.locator(".tm-row").first().locator("small")).toContainText(" this week · ");
     },
   },
   {

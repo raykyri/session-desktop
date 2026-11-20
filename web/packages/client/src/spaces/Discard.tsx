@@ -4,46 +4,9 @@
 
 import { useBlocker } from "@tanstack/react-router";
 
-import { Modal } from "./Page.js";
+import { DiscardDialog } from "./Page.js";
 
-export function DiscardDialog({
-  title,
-  body = "The text you wrote will be deleted.",
-  onKeep,
-  onDiscard,
-  back = true,
-}: {
-  title: string;
-  /** What is lost (the mockup's OV_DIRTY text). */
-  body?: string;
-  onKeep: () => void;
-  onDiscard: () => void;
-  back?: boolean;
-}) {
-  return (
-    <Modal
-      title={title}
-      role="alertdialog"
-      className="sm"
-      bare
-      back={back}
-      onClose={onKeep}
-      footer={
-        <>
-          <span style={{ flex: 1 }} />
-          <button className="btn" type="button" onClick={onKeep}>
-            Keep editing
-          </button>
-          <button className="btn danger" type="button" onClick={onDiscard}>
-            Discard
-          </button>
-        </>
-      }
-    >
-      <p className="muted">{body}</p>
-    </Modal>
-  );
-}
+export { DiscardDialog };
 
 /** While `when`, leaving the screen asks first: Keep editing stays, Discard
  * goes on to where the person was going. A reload or a closed tab gets the

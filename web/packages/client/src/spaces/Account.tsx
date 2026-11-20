@@ -469,9 +469,9 @@ function Usage() {
   const keys = useResource(keysResource);
   const u = usage.data;
   const ks = keys.data ?? [];
-  const month =
-    ks.reduce((n, k) => n + k.used, 0) +
-    (u ? Object.values(u.by["session"] ?? {}).reduce((a, b) => a + b, 0) : 0);
+  // the included tokens this month (Usage's totals are this month's)
+  const sessionMonth = u ? Object.values(u.by["session"] ?? {}).reduce((a, b) => a + b, 0) : 0;
+  const month = ks.reduce((n, k) => n + k.used, 0) + sessionMonth;
   const reset = u ? dayOf(u.resetAt, now) : "";
   const pct = (a: number, b: number) => `${b ? Math.min(100, (a / b) * 100).toFixed(1) : "0"}%`;
   return (
@@ -484,14 +484,14 @@ function Usage() {
         <span>tokens this month</span>
       </div>
       <p className="muted tm-ulead">
-        Included tokens reset {reset}. Your providers bill your keys. Key limits reset on the 1st of
-        each month.
+        Included tokens are a weekly allowance and reset {reset}. Your providers bill your keys. Key
+        limits reset on the 1st of each month.
       </p>
       <div className="cs-set st-side ac-set">
         <section className="st-sec">
           <div className="st-head">
             <h3>By source</h3>
-            <p>The tokens your asks used, by source: included tokens this week, keys this month.</p>
+            <p>The tokens your asks used this month, by source.</p>
           </div>
           <div className="st-body">
             <div className="tm-rows">
@@ -503,14 +503,14 @@ function Usage() {
                   <div className="tm-rt">
                     <b>Included tokens</b>
                     <small>
-                      {fmtT(u.week)} of {fmtT(u.cap)} · {fmtT(Math.max(0, u.cap - u.week))} left ·
-                      resets {reset}
+                      {fmtT(u.week)} of {fmtT(u.cap)} this week ·{" "}
+                      {fmtT(Math.max(0, u.cap - u.week))} left · resets {reset}
                     </small>
                     <span className="tm-bar" aria-hidden="true">
                       <i style={{ width: pct(u.week, u.cap) }} />
                     </span>
                   </div>
-                  <b className="num">{fmtT(u.week)}</b>
+                  <b className="num">{fmtT(sessionMonth)}</b>
                 </div>
               ) : null}
               {ks.map((k) => (

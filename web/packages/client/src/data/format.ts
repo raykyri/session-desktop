@@ -97,6 +97,24 @@ export function avatarColor(handle: string): number {
   return (h % 6) + 1;
 }
 
+/** Markdown as plain text (a feed row's summary, a search snippet): links
+ * and citation markers dropped, and emphasis, code, quote, heading and list
+ * markers taken away where they are markup, so an underscore inside a word
+ * (E_SYNC_SCOPE, pg_trgm) stays. */
+export function plainText(md: string): string {
+  return md
+    .replace(/\[(\d{1,3})\]\([^)]*\)/g, "")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/^\s{0,3}(?:[-*+]|\d+\.)\s+/gm, "")
+    .replace(/^\s{0,3}(?:#{1,6}|>)\s?/gm, "")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/(\*\*|__)(?=\S)([^]*?\S)\1/g, "$2")
+    .replace(/(^|[^\w*])\*(?=\S)([^*\n]*?\S)\*(?![\w*])/g, "$1$2")
+    .replace(/(^|[^\w])_(?=\S)([^_\n]*?\S)_(?!\w)/g, "$1$2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // ---- runs (phase 2 review round 1, findings 5 and 7) ----
 
 /** A device run's CLI, as the mockup names it. */

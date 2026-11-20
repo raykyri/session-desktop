@@ -5,8 +5,8 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
-import type { KeyedRecord } from "./fixtures/mockup.js";
 import { APP_ORIGIN } from "./constants.js";
+import type { KeyedRecord } from "./fixtures/mockup.js";
 import { loadScenario, pathFor, recordsOf, signInAs } from "./scenario.js";
 
 interface Screen {

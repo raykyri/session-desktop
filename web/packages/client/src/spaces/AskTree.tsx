@@ -110,7 +110,8 @@ export function MapDialog({
         <>
           Map of this thread{" "}
           <span className="num faint">
-            {t.followups.length + 1} asks · {levels} {levels === 1 ? "level" : "levels"}
+            {t.followups.length + 1} {t.followups.length ? "asks" : "ask"} · {levels}{" "}
+            {levels === 1 ? "level" : "levels"}
           </span>
         </>
       }

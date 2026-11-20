@@ -8,7 +8,6 @@ import { createPortal } from "react-dom";
 
 import { useSession, useStatus } from "../sync/react.js";
 
-import { DiscardDialog } from "./Discard.js";
 import { Header, type Place } from "./Header.js";
 import { Svg } from "./Svg.js";
 import { cx } from "./cx.js";
@@ -246,6 +245,47 @@ export function UpdateDialog({ onLater }: { onLater: () => void }) {
       }
     >
       <p className="muted">Session has been updated. Reload the page to keep saving changes.</p>
+    </Modal>
+  );
+}
+
+/** Unsent text: the "Discard …?" question (the mockup's ask-discard and the
+ * composer's discard, and OV_DIRTY's questions). */
+export function DiscardDialog({
+  title,
+  body = "The text you wrote will be deleted.",
+  onKeep,
+  onDiscard,
+  back = true,
+}: {
+  title: string;
+  /** What is lost (the mockup's OV_DIRTY text). */
+  body?: string;
+  onKeep: () => void;
+  onDiscard: () => void;
+  back?: boolean;
+}) {
+  return (
+    <Modal
+      title={title}
+      role="alertdialog"
+      className="sm"
+      bare
+      back={back}
+      onClose={onKeep}
+      footer={
+        <>
+          <span style={{ flex: 1 }} />
+          <button className="btn" type="button" onClick={onKeep}>
+            Keep editing
+          </button>
+          <button className="btn danger" type="button" onClick={onDiscard}>
+            Discard
+          </button>
+        </>
+      }
+    >
+      <p className="muted">{body}</p>
     </Modal>
   );
 }
