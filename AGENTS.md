@@ -237,6 +237,34 @@ rules above stay as they are. Decisions for the new client:
     "Run with included tokens".
   - The remove dialog says "The user will not be notified." Bans are
     permanent, with Unban; Ban on the Phone app is deferred.
+- Phase 2a (done): `web/packages/server` serves spaces from `@session/sync`
+  over one SQLite database (drizzle's migration `0000_initial.sql`, then
+  the package's own migrations on the same connection). Routes parse the
+  request, authenticate and call the package; a rule lives in the package,
+  never in a route.
+  - Sync routes: `POST /api/sync/register`, `write`, `snapshot`, `pull` and
+    `GET /api/sync/events`; online calls at `POST /api/rpc/<name>`; account
+    reads at `/api/me*`, `/api/users` and `usage.listAsks`, in the mock's
+    shapes. `POST /api/admin/reset-time` calls `SyncServer.resetTime()`.
+  - A request authenticates with the session cookie (CSRF-guarded) or with
+    `Authorization: Bearer <device token>` (no cookie, no CSRF check). CORS
+    admits `SESSION_DESKTOP_ORIGINS` for bearer requests only.
+  - `users.handle` (the lower-case login) is the sync actor's `u`.
+  - Runs: a `job` effect queues the run in `run_queue`; the loop builds the
+    context from the branch's exchanges and the stored turns, stores each
+    committed turn as a `turn:<run>:<n>` record (its `body` redacted with
+    its node, deleted with its run), and writes the answer and the run's
+    end as server writes. In-flight text is an `event: run` frame on the
+    sync stream, sent only to readers who read the run's node unredacted;
+    a stream pulls only for commits its reader may read. The payer is the
+    ask's `pay`, else the included tokens, else the asker's default API
+    key; a key is stored encrypted and pays only for its own provider's
+    models. A run interrupted by a restart resumes at most twice, after its
+    stored turns, then ends `interrupted`.
+  - Test-only routes (`/api/test/*`, `/mockups/*`) exist only with
+    `SESSION_TEST_AUTH` outside production; `@session/server/test-server`
+    starts the app over a temp database, and replica-proto runs its whole
+    suite over HTTP (`npm run test:http`).
 - Ids: clients generate ULIDs. The server accepts a timestamp from 4 days in
   the past to 1 minute in the future (the outbox keeps writes 3 days), rejects an id that already exists, and
   answers a collision with the same CONFLICT whether or not the caller can

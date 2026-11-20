@@ -533,7 +533,10 @@ by `pull`. In-flight text is sent as ephemeral events on the same SSE
 connection, keyed by run, attempt and a per-attempt sequence; a client
 drops events it has already applied and refetches the run on a gap. A
 device run that loses its lease ends `interrupted`, and Run again starts a
-new attempt.
+new attempt. A server run interrupted by a restart resumes in the same
+attempt: its context is rebuilt from the stored turns and the answer is
+generated again after them (phase 2a); after two resumes it ends
+`interrupted`.
 
 Why: one connection carries both replicated changes and streaming, and the
 durable state is the same for owned and device runs.
