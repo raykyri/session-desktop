@@ -125,55 +125,19 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .dayrule::before, .dayrule::after { content: ""; flex: 1; height: 1px; background: var(--divider); }
 .fadein { animation: fadein .25s ease; } @keyframes fadein { from { opacity: 0; transform: translateY(3px); } }
 
-/* ---- 1 Channel ---- */
-.v1 { display: grid; grid-template-columns: 210px minmax(0, 1fr); }
-.v1.has-drawer { grid-template-columns: 210px minmax(0, 1fr) minmax(340px, 430px); }
-.side { background: var(--chrome); border-right: 1px solid var(--divider); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
-.side .label { padding: 10px 8px 6px; }
-.side button { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: var(--r-md); color: var(--t-secondary); text-align: left; font-size: var(--fs-base); }
-.side button:hover { background: var(--fill-hover); color: var(--t-heading); }
-.side button[aria-current="true"] { background: var(--control); color: var(--t-heading); font-weight: 600; }
-.side button small { margin-left: auto; color: var(--t-faint); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; font-weight: 400; }
-.glyph { width: 18px; height: 18px; border-radius: 5px; display: inline-grid; place-items: center; color: var(--av-fg); font-size: 10px; font-weight: 700; flex: none; }
-.v1-chat { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.chathead { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--divider); flex: none; min-width: 0; }
-.chathead h2 { margin: 0; font-size: var(--fs-md); color: var(--t-heading); white-space: nowrap; }
-.chathead p { margin: 0; color: var(--t-faint); font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.v1-log { flex: 1; min-height: 0; padding: 4px 20px 16px; }
-.msg { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: 10px 8px; border-radius: var(--r-lg); max-width: 760px; }
-.msg:hover { background: var(--fill-subtle); }
-.msg.is-open { background: var(--accent-soft); }
-.msg-q { margin: 2px 0 0; color: var(--t-primary); font-size: var(--fs-md); }
-.agent { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; margin-top: 10px; padding: 10px 12px; background: var(--card); border-radius: var(--r-lg); box-shadow: var(--shadow); }
-.agent .who { margin-bottom: 4px; }
-.msg-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
-.v1-compose { padding: 10px 20px 16px; flex: none; }
-.drawer { border-left: 1px solid var(--divider); background: var(--feed); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.drawer-h { display: flex; align-items: flex-start; gap: 8px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--divider); flex: none; }
-.drawer-h > div { flex: 1; min-width: 0; }
-.drawer-h h3 { margin: 2px 0 0; font-size: var(--fs-md); color: var(--t-heading); line-height: 1.35; text-wrap: balance; }
-.drawer-b { flex: 1; min-height: 0; padding: 12px 16px; }
-.drawer-f { padding: 10px 12px 12px; border-top: 1px solid var(--divider); flex: none; display: flex; flex-direction: column; gap: 6px; }
-.from { font-size: var(--fs-sm); color: var(--t-secondary); background: var(--inset); border-radius: var(--r-lg); padding: 10px 12px; margin-bottom: 14px; }
-.bn { position: relative; padding: 10px 0 0; }
-.bn-q { margin: 4px 0 6px; font-weight: 600; color: var(--t-heading); font-size: var(--fs-base); line-height: 1.4; }
-.bn-a { display: grid; grid-template-columns: 20px minmax(0,1fr); gap: 8px; }
-.bn-acts { display: flex; gap: 12px; margin: 6px 0 0 28px; }
-.bn-kids { margin-left: 9px; padding-left: 14px; border-left: 1.5px solid var(--border-strong); }
-.bn.sel > .bn-q { color: var(--accent); }
 .reply { display: grid; grid-template-columns: 20px minmax(0,1fr); gap: 8px; padding: 8px 0; }
 .reply p { margin: 2px 0 0; color: var(--t-body); }
 .reply .kids { grid-column: 2; margin-top: 4px; padding-left: 12px; border-left: 1.5px solid var(--border-strong); }
-
-/* ---- 2 Margin ---- */
-.v2 { overflow-y: auto; background: var(--feed); }
-.v2-inner { max-width: 1000px; margin: 0 auto; padding: 0 24px 40px; }
-.v2-tabs { position: sticky; top: 0; z-index: 2; display: flex; gap: 4px; padding: 12px 0; background: var(--feed); overflow-x: auto; }
-.v2-tabs button { padding: 5px 10px; border-radius: 14px; font-size: var(--fs-sm); color: var(--t-secondary); font-weight: 500; white-space: nowrap; }
-.v2-tabs button:hover { background: var(--fill-hover); }
-.v2-tabs button[aria-current="true"] { background: var(--t-heading); color: var(--feed); }
-.v2-row { display: grid; grid-template-columns: minmax(0, 600px) minmax(0, 330px); gap: 28px; padding: 14px 0; justify-content: center; }
-.card { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 18px 20px 12px; min-width: 0; }
+/* ---- margin family: one scroll, rows of [left margin?] [post] [right margin] ---- */
+.mg { height: 100%; overflow-y: auto; background: var(--feed); }
+.mg-inner { max-width: 1180px; margin: 0 auto; padding: 0 24px 60px; }
+.tabs { position: sticky; top: 0; z-index: 4; display: flex; gap: 4px; padding: 12px 0; background: var(--feed); overflow-x: auto; }
+.tabs button { padding: 5px 10px; border-radius: 14px; font-size: var(--fs-sm); color: var(--t-secondary); font-weight: 500; white-space: nowrap; }
+.tabs button:hover { background: var(--fill-hover); }
+.tabs button[aria-current="true"] { background: var(--t-heading); color: var(--feed); }
+.row { display: grid; grid-template-columns: minmax(0, 600px) minmax(0, 330px); gap: 28px; padding: 14px 0; justify-content: center; }
+.row.lr { grid-template-columns: minmax(0, 210px) minmax(0, 580px) minmax(0, 300px); gap: 24px; }
+.card { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 18px 20px 12px; min-width: 0; transition: opacity .2s; }
 .card-h { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .card h2 { margin: 0 0 8px; font-size: var(--fs-xl); line-height: 1.25; letter-spacing: -.015em; color: var(--t-heading); text-wrap: balance; }
 .card .ask { margin: 0 0 14px; color: var(--t-secondary); font-size: var(--fs-md); }
@@ -183,10 +147,13 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .card-f { display: flex; align-items: center; gap: 4px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--divider); }
 .card-f .notes { font-weight: 600; color: var(--t-heading); font-size: var(--fs-sm); margin-right: auto; }
 .card-f .notes span { color: var(--t-faint); font-weight: 400; }
-.v2-notes { position: sticky; top: 58px; align-self: start; max-height: calc(100vh - 140px); overflow-y: auto; padding: 4px 2px 4px 0; }
-.v2-notes .label { display: block; margin: 2px 0 8px; }
-.note { display: block; width: 100%; text-align: left; padding: 9px 10px; border-radius: var(--r-lg); margin-bottom: 4px; }
-.note:hover { background: var(--fill-hover); }
+.mgn { min-width: 0; position: relative; }
+.mgn .label { display: block; margin: 2px 0 8px; }
+.stick { position: sticky; top: 58px; max-height: calc(100vh - 150px); overflow-y: auto; padding: 2px 2px 8px 0; }
+
+/* notes (shared by Notes, Anchored, Gloss) */
+.note { display: block; width: 100%; text-align: left; padding: 9px 10px; border-radius: var(--r-lg); margin-bottom: 4px; transition: background .15s, box-shadow .15s; }
+.note:hover, .note.hl { background: var(--fill-hover); }
 .note.open { background: var(--card); box-shadow: var(--shadow); }
 .note .who { margin-bottom: 3px; }
 .note .nq { color: var(--t-heading); font-weight: 600; font-size: var(--fs-base); line-height: 1.4; }
@@ -194,93 +161,66 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .note .prose { font-size: var(--fs-sm); margin-top: 6px; }
 .note .inside { display: inline-flex; align-items: center; gap: 4px; margin-top: 5px; font-size: var(--fs-xs); color: var(--accent); font-weight: 500; }
 .note-kids { margin: 2px 0 6px 12px; padding-left: 8px; border-left: 1.5px solid var(--border-strong); }
+.mgn .composer { margin-top: 8px; }
 
-/* ---- 3 Banks ---- */
-.v3 { display: grid; grid-template-columns: minmax(220px, 290px) minmax(0, 620px) minmax(260px, 340px); justify-content: center; background: var(--pane); }
-.bank { min-height: 0; overflow-y: auto; padding: 18px 18px 30px; background: var(--feed); }
-.bank.l { border-right: 1px solid var(--divider); } .bank.r { border-left: 1px solid var(--divider); }
-.bank-h { margin-bottom: 14px; }
-.bank-h h3 { margin: 4px 0 0; font-size: var(--fs-base); color: var(--t-heading); line-height: 1.35; text-wrap: balance; }
-.bank section { margin-bottom: 20px; }
-.bank section > .label { display: block; margin-bottom: 8px; }
-.src { display: block; padding: 7px 0; border-bottom: 1px solid var(--divider); }
-.src b { display: block; font-weight: 500; color: var(--t-heading); font-size: var(--fs-sm); line-height: 1.35; }
-.src span { font-size: var(--fs-xs); color: var(--t-faint); }
-.src sup { color: var(--accent); font-weight: 600; margin-right: 4px; }
-.person { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: var(--fs-sm); color: var(--t-secondary); }
-.person small { margin-left: auto; color: var(--t-faint); }
-.v3-stream { min-height: 0; overflow-y: auto; padding: 18px 22px 60vh; position: relative; }
-.v3-stream .hint { font-size: var(--fs-sm); color: var(--t-faint); margin: 0 0 12px; }
-.sitem { display: grid; grid-template-columns: 28px minmax(0,1fr); gap: 10px; padding: 12px; border-radius: var(--r-lg); margin-bottom: 4px; transition: background .15s; cursor: pointer; }
-.sitem:hover { background: var(--fill-subtle); }
-.sitem.focus { background: var(--card); box-shadow: var(--shadow); }
-.sitem .t { margin: 2px 0 0; color: var(--t-heading); font-weight: 600; font-size: var(--fs-md); line-height: 1.4; }
-.sitem .s { margin: 4px 0 0; color: var(--t-secondary); }
-.sitem .meta { display: flex; gap: 10px; align-items: center; margin-top: 6px; font-size: var(--fs-xs); color: var(--t-faint); }
-.sitem .meta .br { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: var(--t-secondary); }
-.outline { list-style: none; margin: 0; padding: 0; }
-.orow { display: block; width: 100%; text-align: left; padding: 6px 6px 6px calc(6px + var(--d) * 14px); border-radius: var(--r-md); position: relative; }
-.orow:hover { background: var(--fill-hover); }
-.orow::before { content: ""; position: absolute; left: calc(var(--d) * 14px - 4px); top: 0; bottom: 0; width: 1.5px; background: var(--border-strong); }
-.orow[style*="--d:0"]::before { display: none; }
-.orow .oq { font-size: var(--fs-sm); color: var(--t-heading); font-weight: 500; line-height: 1.4; }
-.orow .om { font-size: var(--fs-xs); color: var(--t-faint); }
-.orow.open { background: var(--card); box-shadow: var(--shadow); }
-.orow .prose { font-size: var(--fs-sm); margin-top: 6px; }
-.v3-note { display: none; }
+/* Anchored and Gloss: margin items placed at the height of the passage they belong to */
+.pinned > .pin { position: absolute; left: 0; right: 0; }
+.pin-group { padding-left: 10px; border-left: 1.5px solid var(--border-strong); transition: border-color .15s; }
+.pin-group.hl { border-left-color: var(--accent); }
+.pin-group .note { padding: 6px 8px; }
+.pin-group .label { margin: 0 0 2px 8px; }
+.prose .blk-hl { background: var(--accent-soft); box-shadow: -6px 0 0 var(--accent-soft), 6px 0 0 var(--accent-soft); border-radius: 2px; }
+.anc { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 0 6px; height: 18px; border-radius: 9px; vertical-align: 1px;
+  background: var(--accent-soft); color: var(--accent); font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.anc svg.i { width: 11px; height: 11px; }
+.gl-src { padding: 4px 0 4px 10px; border-left: 1.5px solid var(--border-strong); font-size: var(--fs-sm); line-height: 1.4; transition: border-color .15s; }
+.gl-src b { display: block; font-weight: 500; color: var(--t-heading); }
+.gl-src span { font-size: var(--fs-xs); color: var(--t-faint); }
+.gl-src sup { color: var(--accent); font-weight: 700; margin-right: 4px; }
+.gl-src.hl { border-left-color: var(--accent); }
+.prose sup.cite.hl { background: var(--accent); color: var(--on-accent); border-radius: 3px; padding: 0 2px; }
+.left-h { text-align: right; }
+.unplaced { font-size: var(--fs-xs); color: var(--t-faint); }
 
-/* ---- 4 Columns ---- */
-.v4 { display: flex; overflow-x: auto; background: var(--page); scroll-behavior: smooth; }
-.col { flex: none; width: 400px; max-width: 88vw; display: flex; flex-direction: column; min-height: 0; background: var(--pane); border-right: 1px solid var(--divider); }
-.col.stream { width: 330px; background: var(--feed); }
-.v4 > .col:last-child:not(.stream) { flex: 1 0 400px; max-width: 760px; }
-.col.spine { width: 44px; align-items: center; gap: 10px; padding: 14px 0; background: var(--feed); text-align: left; }
-.col.spine:hover { background: var(--fill-hover); }
-.col.spine .label, .col.spine .sp-t { writing-mode: vertical-rl; transform: rotate(180deg); }
-.col.spine .sp-t { font-size: var(--fs-sm); color: var(--t-heading); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: 80%; }
-.col-h { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 16px; border-bottom: 1px solid var(--divider); flex: none; min-height: 48px; }
-.col-h > div { flex: 1; min-width: 0; }
-.col-h .label { display: block; }
-.col-h h3 { margin: 1px 0 0; font-size: var(--fs-base); color: var(--t-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.col-h select { border: 1px solid var(--control-border); background: var(--field); border-radius: var(--r-md); padding: 3px 6px; font-size: var(--fs-sm); }
-.col-b { flex: 1; min-height: 0; padding: 14px 16px; }
-.col-f { padding: 10px 12px 12px; border-top: 1px solid var(--divider); flex: none; }
-.litem { display: block; width: 100%; text-align: left; padding: 10px; border-radius: var(--r-lg); margin-bottom: 2px; }
-.litem:hover { background: var(--fill-hover); }
-.litem.sel { background: var(--accent-soft); }
-.litem .t { color: var(--t-heading); font-weight: 600; font-size: var(--fs-base); line-height: 1.4; }
-.litem .meta { display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: var(--fs-xs); color: var(--t-faint); }
-.litem .meta .br { margin-left: auto; display: inline-flex; gap: 4px; align-items: center; color: var(--t-secondary); }
-.litem .s { color: var(--t-secondary); font-size: var(--fs-sm); margin-top: 3px; line-height: 1.45; }
-.node-q { margin: 6px 0 12px; font-size: var(--fs-lg); line-height: 1.35; color: var(--t-heading); font-weight: 600; text-wrap: balance; }
-.kids-h { display: flex; align-items: center; gap: 8px; margin: 18px 0 6px; }
-.crumb { font-size: var(--fs-xs); color: var(--t-faint); margin-bottom: 4px; }
+/* Reader: margin is an index; opening a branch widens it into a reading column */
+.row.rd { transition: grid-template-columns .25s ease; }
+.row.rd.reading { grid-template-columns: minmax(0, 430px) minmax(0, 560px); }
+.row.rd.reading .card { opacity: .62; }
+.row.rd.reading .card:hover { opacity: 1; }
+.idx { list-style: none; margin: 0; padding: 0; }
+.irow { display: block; width: 100%; text-align: left; padding: 5px 8px 5px calc(8px + var(--d) * 14px); border-radius: var(--r-md); position: relative; }
+.irow::before { content: ""; position: absolute; left: calc(var(--d) * 14px - 2px); top: 0; bottom: 0; width: 1.5px; background: var(--border-strong); }
+.irow.d0::before { display: none; }
+.irow:hover { background: var(--fill-hover); }
+.irow .iq { display: block; font-size: var(--fs-sm); color: var(--t-heading); font-weight: 500; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.irow .im { display: block; font-size: var(--fs-xs); color: var(--t-faint); }
+.reader { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); border: 1px solid var(--accent-soft); padding: 14px 18px 14px; display: flex; flex-direction: column; gap: 10px; }
+.reader-h { display: flex; align-items: flex-start; gap: 8px; }
+.crumbs { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; font-size: var(--fs-xs); color: var(--t-faint); min-width: 0; }
+.crumbs button { color: var(--t-secondary); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 4px; border-radius: var(--r-sm); }
+.crumbs button:hover { background: var(--fill-hover); color: var(--t-heading); }
+.crumbs svg.i { width: 11px; height: 11px; color: var(--t-dim); }
+.reader .rq { margin: 0; font-size: var(--fs-lg); line-height: 1.35; color: var(--t-heading); font-weight: 600; text-wrap: balance; }
+.reader .kidlist { display: flex; flex-direction: column; gap: 2px; }
+.kid { display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: var(--r-lg); background: var(--inset); }
+.kid:hover { background: var(--fill-hover); }
+.kid b { display: block; font-weight: 600; color: var(--t-heading); font-size: var(--fs-sm); line-height: 1.4; }
+.kid span { display: block; font-size: var(--fs-xs); color: var(--t-faint); margin-top: 2px; }
 
-/* ---- 5 Paths ---- */
-.v5 { display: grid; grid-template-columns: 250px minmax(0, 1fr) 310px; }
-.v5-list { background: var(--chrome); border-right: 1px solid var(--divider); min-height: 0; overflow-y: auto; padding: 12px 8px; }
-.v5-list .label { display: block; padding: 4px 8px 8px; }
-.v5-conv { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.v5-log { flex: 1; min-height: 0; padding: 20px 28px 24px; }
-.v5-log > div { max-width: 700px; margin: 0 auto; }
-.turn-u { display: flex; flex-direction: column; align-items: flex-end; margin: 18px 0 10px; }
-.bubble { background: var(--control); color: var(--t-heading); padding: 9px 14px; border-radius: 16px 16px 4px 16px; max-width: 85%; font-size: var(--fs-md); line-height: 1.45; }
-.turn-u .who { margin-bottom: 5px; justify-content: flex-end; }
-.sib { display: inline-flex; align-items: center; gap: 2px; margin-top: 5px; font-size: var(--fs-xs); color: var(--t-faint); font-variant-numeric: tabular-nums; }
-.sib button { width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: var(--r-sm); color: var(--t-secondary); }
-.sib button:hover:not(:disabled) { background: var(--fill-hover); }
-.sib button:disabled { opacity: .35; cursor: default; }
-.turn-a { display: grid; grid-template-columns: 28px minmax(0,1fr); gap: 10px; }
-.turn-a .who { margin-bottom: 4px; }
-.cont { margin: 22px 0 0; padding: 12px 14px; border-radius: var(--r-lg); background: var(--inset); }
-.cont .label { display: block; margin-bottom: 8px; }
-.cont .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.cont .chip { white-space: normal; height: auto; min-height: 26px; padding: 4px 10px; text-align: left; }
-.v5-compose { padding: 10px 28px 16px; flex: none; }
-.v5-compose > * { max-width: 700px; margin: 0 auto; }
-.v5-graph { border-left: 1px solid var(--divider); background: var(--feed); min-height: 0; overflow-y: auto; padding: 14px 10px 24px 12px; }
-.v5-graph .gh { display: flex; align-items: center; gap: 8px; padding: 0 4px 10px; }
-.v5-graph .gh h3 { margin: 2px 0 0; font-size: var(--fs-base); color: var(--t-heading); line-height: 1.35; }
+/* Activity */
+.act-sum { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--t-secondary); margin-bottom: 10px; }
+.act-grp { font-size: var(--fs-xs); color: var(--t-faint); font-weight: 600; margin: 14px 0 4px; }
+.ev { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; width: 100%; text-align: left; padding: 8px 6px; border-radius: var(--r-lg); }
+.ev:hover { background: var(--fill-hover); }
+.ev.open { background: var(--card); box-shadow: var(--shadow); }
+.ev .line { font-size: var(--fs-sm); color: var(--t-faint); line-height: 1.4; }
+.ev .line b { color: var(--t-heading); font-weight: 600; }
+.ev .line i { font-style: normal; color: var(--t-secondary); }
+.ev .eq { margin-top: 3px; color: var(--t-heading); font-size: var(--fs-base); line-height: 1.4; font-weight: 500; }
+.ev .es { margin-top: 3px; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.45; }
+.ev .prose { font-size: var(--fs-sm); margin-top: 6px; }
+
+/* Map */
 .graph { position: relative; }
 .graph svg { position: absolute; inset: 0; width: 100%; overflow: visible; pointer-events: none; }
 .graph svg path { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
@@ -288,35 +228,29 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .graph svg circle { fill: var(--feed); stroke: var(--t-dim); stroke-width: 1.5; }
 .graph svg circle.on { fill: var(--accent); stroke: var(--accent); }
 .graph svg circle.sel { fill: var(--accent); stroke: var(--accent-soft); stroke-width: 5; }
-.grow-r { position: relative; display: block; width: 100%; text-align: left; height: 34px; border-radius: var(--r-md); padding-right: 6px; white-space: nowrap; overflow: hidden; }
+.grow-r { position: relative; display: block; width: 100%; text-align: left; height: 26px; border-radius: var(--r-md); padding-right: 6px; white-space: nowrap; overflow: hidden; }
 .grow-r:hover { background: var(--fill-hover); }
-.grow-r .gq { display: block; font-size: var(--fs-sm); color: var(--t-secondary); overflow: hidden; text-overflow: ellipsis; line-height: 17px; padding-top: 1px; }
-.grow-r .gm { display: block; font-size: 10.5px; color: var(--t-faint); line-height: 14px; }
+.grow-r .gq { display: block; font-size: var(--fs-sm); color: var(--t-secondary); overflow: hidden; text-overflow: ellipsis; line-height: 26px; }
 .grow-r.on .gq { color: var(--t-heading); font-weight: 600; }
-.legend { display: flex; gap: 12px; font-size: var(--fs-xs); color: var(--t-faint); padding: 12px 4px 0; }
-.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 4px; vertical-align: 0; }
+.preview { margin-top: 12px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
+.preview .rq { margin: 4px 0 8px; font-size: var(--fs-base); font-weight: 600; color: var(--t-heading); line-height: 1.4; }
+.preview .prose { font-size: var(--fs-sm); max-height: 260px; overflow-y: auto; }
+.preview .pf { display: flex; gap: 12px; margin-top: 8px; font-size: var(--fs-xs); color: var(--t-faint); align-items: center; }
 
-/* ---- narrow ---- */
 @media (max-width: 860px) {
-  .v1, .v1.has-drawer { grid-template-columns: minmax(0,1fr); }
-  .v1 .side { display: none; }
-  .v1 .drawer { position: absolute; inset: 0; z-index: 5; }
-  .v2-row { grid-template-columns: minmax(0,1fr); gap: 8px; }
-  .v2-notes { position: static; max-height: none; padding-left: 12px; }
-  .v2-inner { padding: 0 12px 30px; }
-  .v3 { grid-template-columns: minmax(0,1fr); }
-  .v3 .bank { display: none; }
-  .v3-note { display: block; font-size: var(--fs-sm); color: var(--warn); margin: 0 0 10px; }
-  .v5 { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr) 220px; }
-  .v5-list { display: none; }
-  .v5-graph { border-left: 0; border-top: 1px solid var(--divider); }
-  .v5-log, .v5-compose { padding-left: 14px; padding-right: 14px; }
-  .frame-top span { margin-right: 0; }
+  .row, .row.lr, .row.rd.reading { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .row.lr .mgn.left { order: 3; }
+  .stick { position: static; max-height: none; }
+  .pinned > .pin { position: static; margin-bottom: 8px; }
+  .mg-inner { padding: 0 12px 30px; }
+  .mgn { padding-left: 12px; }
+  .left-h { text-align: left; }
 }
 </style>
 
+
 <header class="bar">
-  <h1>Session · stream variants</h1>
+  <h1>Session · margin variants</h1>
   <div class="seg" id="variant-seg" role="group" aria-label="Variant"></div>
   <span class="grow"></span>
   <div class="seg" id="theme-seg" role="group" aria-label="Theme"></div>
@@ -408,317 +342,252 @@ function addBranch(p, par, q) {
 const composer = (id, ph, ctx = '') => `<form class="composer" data-form="${id}">${ctx ? `<span class="ctx">${ctx}</span>` : ''}<input id="in-${id}" placeholder="${esc(ph)}" autocomplete="off"><button type="submit">Ask</button></form>`;
 const replyTree = list => list.map(r => `<div class="reply">${av(r.u, 'sm')}<div><div class="who"><b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><p>${esc(r.t)}</p></div>${r.kids ? `<div class="kids">${replyTree(r.kids)}</div>` : ''}</div>`).join('');
 
-/* ================= 1 Channel ================= */
-const V1 = {
-  name: 'Channel',
-  thesis: '<strong>The space is a chat log.</strong> Asks and answers arrive in order, newest at the bottom. An answer\'s branches open in a drawer on the right, as a nested conversation you can add to.',
-  st: { space: 'markets', open: '01M7HGRPJ0E7RGZ45D4KENBQ6P', sel: 'r' },
-  html() {
-    const s = this.st, posts = streamFor(s.space).slice().reverse();
-    let day = '';
-    const log = posts.map(p => { const d = dayOf(p.createdAt); const rule = d !== day ? `<div class="dayrule">${d}</div>` : ''; day = d; return rule + this.msg(p); }).join('');
-    const sp = s.space === 'home' ? null : SP[s.space];
-    return `<div class="v1${s.open ? ' has-drawer' : ''}">
-      ${sideNav(s.space)}
-      <section class="v1-chat">
-        <header class="chathead">${sp ? glyph(sp) : ''}<h2>${sp ? spName(sp.id) : 'Home'}</h2><p>${sp ? esc(sp.desc) : 'Every space you joined, in one log.'}</p></header>
-        <div class="v1-log scroll" id="k-v1log">${log}</div>
-        <div class="v1-compose">${composer('v1', sp ? `Ask ${spName(sp.id)} a question, or post` : 'Ask a question, or post to a space')}</div>
-      </section>
-      ${s.open ? `<aside class="drawer">${this.drawer(byId(s.open))}</aside>` : ''}
-    </div>`;
-  },
-  msg(p) {
-    const open = this.st.open === p.id, sp = this.st.space === 'home' ? `<span class="sp">${spName(p.s)}</span>` : '';
-    if (p.k === 'post') {
-      const n = replyCount(p), us = [...new Set(replies(p).map(r => r.u))];
-      return `<div class="msg${open ? ' is-open' : ''}">${av(p.u)}<div><div class="who"><b>${esc(p.u)}</b>${sp}<time>${rel(p.createdAt)}</time></div><p class="msg-q">${esc(p.q)}</p>
-        ${n ? `<div class="msg-foot"><button class="chip${open ? ' on' : ''}" data-a="open" data-id="${p.id}">${I.reply}${noun(n, 'reply', 'replies')} <span class="avs">${us.slice(0, 3).map(u => av(u, 'xs')).join('')}</span></button></div>` : ''}</div></div>`;
-    }
-    const T = tree(p), us = T.users();
-    return `<div class="msg${open ? ' is-open' : ''}">${av(p.u)}<div><div class="who"><b>${esc(p.u)}</b>${sp}<time>${rel(p.createdAt)}</time></div><p class="msg-q">${esc(p.q)}</p>
-      <div class="agent">${mark('sm')}<div style="min-width:0"><div class="who"><b>Session</b><span>${p.t ? esc(p.t) : 'Answer'}</span><span>${ktok(p.tok)}</span></div>
-        <div class="prose clamp" id="ans-${p.id}">${T.nodes.r.html}</div><button class="tlink" data-a="more" data-id="ans-${p.id}">Show full answer</button></div></div>
-      <div class="msg-foot"><button class="chip${open ? ' on' : ''}" data-a="open" data-id="${p.id}">${I.branch}${T.count ? noun(T.count, 'branch', 'branches') : 'Branch'} ${us.length ? `<span class="avs">${us.slice(0, 4).map(u => av(u, 'xs')).join('')}</span><span class="muted">last ${rel(T.last())}</span>` : ''}</button></div></div></div>`;
-  },
-  drawer(p) {
-    const close = `<button class="iconbtn" data-a="close" aria-label="Close">${I.x}</button>`;
-    if (p.k === 'post') return `<div class="drawer-h"><div><span class="label">Replies</span><h3>${esc(clip(p.q, 90))}</h3></div>${close}</div>
-      <div class="drawer-b scroll" id="k-v1d">${replyTree(replies(p))}</div><div class="drawer-f">${composer('v1d', 'Reply')}</div>`;
-    const T = tree(p), sel = T.nodes[this.st.sel] ? this.st.sel : 'r';
-    const node = n => `<div class="bn${sel === n.id ? ' sel' : ''}"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time></div>
-      <p class="bn-q">${esc(n.q)}</p><div class="bn-a">${mark('sm')}<div style="min-width:0">${status(n)}<div class="prose clamp s" id="bn-${n.id}">${answerHtml(n)}</div>
-      <div class="bn-acts" style="margin-left:0"><button class="tlink" data-a="more" data-id="bn-${n.id}">Show more</button><button class="tlink" data-a="sel" data-node="${n.id}">Branch from here</button></div></div></div>
-      ${T.kids(n.id).length ? `<div class="bn-kids">${T.kids(n.id).map(node).join('')}</div>` : ''}</div>`;
-    const target = sel === 'r' ? 'the answer' : `"${esc(clip(T.nodes[sel].q, 40))}"`;
-    return `<div class="drawer-h"><div><span class="label">${noun(T.count, 'branch', 'branches')} · ${spName(p.s)}</span><h3>${esc(p.t || clip(p.q, 90))}</h3></div>${close}</div>
-      <div class="drawer-b scroll" id="k-v1d"><div class="from"><b>From the answer.</b> ${esc(summ(T.nodes.r))} <button class="tlink" data-a="sel" data-node="r">Branch from the answer</button></div>
-      ${T.kids('r').map(node).join('') || '<p class="empty">No branches yet. Ask one below.</p>'}</div>
-      <div class="drawer-f">${composer('v1d', 'Ask a branch question', 'From ' + target)}</div>`;
-  },
-  on(a, d) {
-    const s = this.st;
-    if (a === 'space') { s.space = d.id; s.open = null; render(); scrollEnd('k-v1log'); }
-    else if (a === 'open') { s.open = s.open === d.id ? null : d.id; s.sel = 'r'; render(); }
-    else if (a === 'close') { s.open = null; render(); }
-    else if (a === 'sel') { s.sel = d.node; render(); $('#in-v1d')?.focus(); }
-  },
-  submit(f, v) {
-    if (f === 'v1') { const sp = this.st.space === 'home' ? 'public' : this.st.space; D.posts.push({ id: 'new' + (++seq), s: sp, u: F.me.u, k: 'post', createdAt: new Date(NOW).toISOString(), q: v, tok: 0, likesBase: 0 }); render(); scrollEnd('k-v1log'); return; }
-    if (f === 'v1d' && this.st.open) { const p = byId(this.st.open); if (p.k === 'post') { (D.rp[p.id] ||= []).push({ u: F.me.u, createdAt: new Date(NOW).toISOString(), t: v, likes: 0 }); } else { this.st.sel = addBranch(p, this.st.sel, v); } render(); scrollEnd('k-v1d'); }
-  },
-  mounted(first) { if (first) scrollEnd('k-v1log'); },
-};
-function sideNav(cur) {
-  const b = (id, label, g, n) => `<button data-a="space" data-id="${id}" aria-current="${cur === id}">${g}${label}${n != null ? `<small>${n}</small>` : ''}</button>`;
-  return `<nav class="side scroll">${b('home', 'Home', '<span class="glyph" style="background:var(--t-secondary)">H</span>')}
-    <span class="label">Spaces</span>${spacesWithPosts.map(s => b(s.id, esc(spName(s.id)), glyph(s), D.posts.filter(p => p.s === s.id).length)).join('')}</nav>`;
+/* ================= margin family ================= */
+/* Every variant shows the same stream of whole posts. They differ in what the margin holds and how it
+   relates to the post: a list, notes pinned to passages, two margins, an index that opens a reader,
+   an activity log, or a tree map. */
+const st = { v: 'notes', space: 'home', theme: 'system', exp: new Set(['01M7HWGZJGT7JTFFVSYPX055KV:f0']), open: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1', '01M7HGRPJ0E7RGZ45D4KENBQ6P': 'b2' }, sel: {}, hover: {}, asking: null };
+const key = (p, n) => p.id + ':' + n;
+
+function card(p, full) {
+  const head = `<div class="card-h">${av(p.u)}<div class="who"><b>${esc(p.u)}</b><span>${p.k === 'ask' ? 'asked in' : 'posted in'}</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div></div>`;
+  const acts = `<button class="iconbtn" aria-label="Like">${I.heart}</button><button class="iconbtn" aria-label="Save">${I.save}</button>`;
+  if (p.k === 'post') {
+    const n = replyCount(p);
+    return `<article class="card">${head}<p class="post">${esc(p.q)}</p><div class="card-f"><span class="notes">${noun(n, 'reply', 'replies')} <span>· ${p.likesBase} likes</span></span><button class="iconbtn" aria-label="Reply">${I.reply}</button>${acts}</div></article>`;
+  }
+  const T = tree(p), src = (D.srcd[p.id] || []).length;
+  return `<article class="card" id="card-${p.id}">${head}${p.t ? `<h2>${esc(p.t)}</h2>` : ''}<p class="ask">${esc(p.q)}</p>
+    <div class="byline">${mark('sm')}<span>Answered by Session${src ? ` · ${noun(src, 'source', 'sources')}` : ''} · ${ktok(p.tok)}</span></div>
+    <div class="prose${full ? '' : ' clamp'}" id="pr-${p.id}">${T.nodes.r.html}</div>${full ? '' : `<button class="tlink" data-a="more" data-id="pr-${p.id}">Keep reading</button>`}
+    <div class="card-f"><span class="notes">${noun(T.count, 'branch', 'branches')} <span>· ${p.likesBase} likes</span></span><button class="iconbtn" data-a="ask" data-id="${p.id}" aria-label="Branch">${I.branch}</button>${acts}</div></article>`;
 }
 
-/* ================= 2 Margin ================= */
-const V2 = {
-  name: 'Margin',
-  thesis: '<strong>A dashboard of whole posts.</strong> Each answer is shown at length, and its branches sit in the right margin beside it, always visible, the way notes sit beside a text. Open a note to read it and the branches under it.',
-  st: { space: 'home', exp: new Set(['01M7HWGZJGT7JTFFVSYPX055KV:f0']) },
-  html() {
-    const s = this.st, posts = streamFor(s.space);
-    const tabs = [['home', 'Home'], ...spacesWithPosts.filter(x => x.id !== 'sablefield').map(x => [x.id, spName(x.id)])];
-    return `<div class="v2" id="k-v2"><div class="v2-inner">
-      <nav class="v2-tabs">${tabs.map(([id, l]) => `<button data-a="space" data-id="${id}" aria-current="${s.space === id}">${esc(l)}</button>`).join('')}</nav>
-      ${posts.map(p => `<div class="v2-row">${this.card(p)}<aside class="v2-notes">${this.notes(p)}</aside></div>`).join('')}
-    </div></div>`;
+/* A note: the branch question, a short answer, and when open the full answer and the branches under it. */
+function note(p, T, n, extra = '') {
+  const k = key(p, n.id), o = st.exp.has(k), kids = T.kids(n.id), dn = T.desc(n.id);
+  return `<button class="note${o ? ' open' : ''}" data-a="note" data-id="${k}"${extra}><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time></div>
+    <div class="nq">${esc(n.q)}</div>${o ? `${status(n)}<div class="prose">${answerHtml(n)}</div>` : `${status(n)}<div class="ns">${esc(clip(summ(n), 130))}</div>`}
+    ${dn && !o ? `<span class="inside">${I.branch}${noun(dn, 'branch', 'branches')} inside</span>` : ''}</button>
+    ${o && kids.length ? `<div class="note-kids">${kids.map(c => note(p, T, c)).join('')}</div>` : ''}`;
+}
+const askBox = (p, ph = 'Ask a branch question', ctx = '') => st.asking === p.id ? composer('m:' + p.id, ph, ctx) : '';
+const repliesMargin = p => { const r = replies(p); return r.length ? `<span class="label">Replies · ${replyCount(p)}</span>${replyTree(r)}` : ''; };
+
+/* ---- passage matching for Anchored and Gloss ---- */
+const STOP = new Set('what which does with that this from have there their about would could should into than then they them were been being where when your more most other some such only also over just like very many much does show give list same each these those here after before because between under while whether'.split(' '));
+const words = s => new Set((strip(s).toLowerCase().match(/[a-z0-9]{4,}/g) || []).filter(w => !STOP.has(w)));
+function blocksOf(prose) { return [...prose.querySelectorAll(':scope > p, :scope > ul > li, :scope > ol > li, :scope > h4, :scope > table')]; }
+function bestBlock(blocks, text) {
+  const w = words(text); let best = 0, bi = 0;
+  blocks.forEach((b, i) => { if (b.tagName === 'H4') return; const bw = words(b.textContent); let sc = 0; w.forEach(x => { if (bw.has(x)) sc++; }); sc /= Math.sqrt(bw.size + 6); if (sc > best) { best = sc; bi = i; } });
+  return blocks[bi];
+}
+/* Place margin items at their anchor's height; push down to avoid overlap; grow the margin to fit. */
+function place(margin, items) {
+  const top0 = margin.getBoundingClientRect().top; let y = 0;
+  items.map(it => ({ ...it, t: it.anchor.getBoundingClientRect().top - top0 })).sort((a, b) => a.t - b.t).forEach(it => {
+    const t = Math.max(it.t, y); it.el.style.top = t + 'px'; y = t + it.el.offsetHeight + 10;
+  });
+  margin.style.minHeight = y + 'px';
+}
+const narrow = () => matchMedia('(max-width: 860px)').matches;
+
+function anchorBranches(p) {
+  const prose = document.getElementById('pr-' + p.id), margin = document.getElementById('mr-' + p.id);
+  if (!prose || !margin) return;
+  const T = tree(p), blocks = blocksOf(prose), groups = new Map();
+  for (const n of T.kids('r')) { const b = n.anchor ? blocks[n.anchor] : bestBlock(blocks, n.q + ' ' + summ(n)); if (!groups.has(b)) groups.set(b, []); groups.get(b).push(n); }
+  let gi = 0; const items = [];
+  for (const [b, ns] of groups) {
+    const g = 'g' + p.id + '-' + (gi++);
+    b.dataset.grp = g;
+    const total = ns.reduce((s, n) => s + 1 + T.desc(n.id), 0);
+    b.insertAdjacentHTML('beforeend', `<button class="anc" data-a="anc" data-grp="${g}" aria-label="${noun(total, 'branch', 'branches')} on this passage">${I.branch}${total}</button>`);
+    const el = margin.querySelector(`[data-grp-box="${g}"]`) || (() => { margin.insertAdjacentHTML('beforeend', `<div class="pin pin-group" data-grp-box="${g}">${ns.map(n => note(p, T, n, ` data-grp="${g}"`)).join('')}</div>`); return margin.lastElementChild; })();
+    items.push({ el, anchor: b });
+  }
+  if (!narrow()) place(margin, items);
+  const box = margin.querySelector('.ask-pin'); if (box) { box.style.top = (parseFloat(margin.style.minHeight) || 0) + 'px'; margin.style.minHeight = (parseFloat(margin.style.minHeight) || 0) + box.offsetHeight + 'px'; }
+}
+function anchorSources(p) {
+  const prose = document.getElementById('pr-' + p.id), margin = document.getElementById('ml-' + p.id);
+  if (!prose || !margin) return;
+  const src = D.srcd[p.id] || [], sups = [...prose.querySelectorAll('sup.cite')], items = [];
+  let last = prose.firstElementChild;
+  src.forEach((s, i) => {
+    const sup = sups.find(x => x.textContent.trim() === String(i + 1));
+    if (sup) { sup.dataset.cite = p.id + '-' + (i + 1); last = sup; }
+    margin.insertAdjacentHTML('beforeend', `<div class="pin gl-src" data-src="${p.id}-${i + 1}"><b><sup>${i + 1}</sup>${esc(s[0])}</b><span>${esc(s[1])} · ${esc(s[2])}</span></div>`);
+    items.push({ el: margin.lastElementChild, anchor: sup || last });
+  });
+  if (!narrow()) place(margin, items);
+}
+
+/* ---- tree helpers for Reader and Map ---- */
+const pathLabel = (T, n) => n.id === 'r' ? 'Answer' : clip(n.q, 34);
+
+const V = {
+  notes: {
+    name: 'Notes',
+    thesis: '<strong>Branches as a list beside the post.</strong> The answer is clamped like a feed item. Its top-level branches are listed in the right margin and stay pinned while you read; open one to read it and the branches under it.',
+    margin(p) {
+      if (p.k === 'post') return `<div class="stick">${repliesMargin(p)}</div>`;
+      const T = tree(p), top = T.kids('r');
+      return `<div class="stick"><span class="label">Branches${T.count ? ' · ' + T.count : ''}</span>${top.map(n => note(p, T, n)).join('') || '<p class="empty">No branches yet.</p>'}${askBox(p)}</div>`;
+    },
   },
-  card(p) {
-    const head = `<div class="card-h">${av(p.u)}<div class="who"><b>${esc(p.u)}</b><span>${p.k === 'ask' ? 'asked in' : 'posted in'}</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div></div>`;
-    const acts = `<button class="iconbtn" aria-label="Like">${I.heart}</button><button class="iconbtn" aria-label="Save">${I.save}</button>`;
-    if (p.k === 'post') {
-      const n = replyCount(p);
-      return `<article class="card">${head}<p class="post">${esc(p.q)}</p><div class="card-f"><span class="notes">${noun(n, 'reply', 'replies')} <span>· ${p.likesBase} likes</span></span><button class="iconbtn" aria-label="Reply">${I.reply}</button>${acts}</div></article>`;
-    }
-    const T = tree(p), src = (D.srcd[p.id] || []).length;
-    return `<article class="card">${head}${p.t ? `<h2>${esc(p.t)}</h2>` : ''}<p class="ask">${esc(p.q)}</p>
-      <div class="byline">${mark('sm')}<span>Answered by Session${src ? ` · ${noun(src, 'source', 'sources')}` : ''} · ${ktok(p.tok)}</span></div>
-      <div class="prose clamp" id="c-${p.id}">${T.nodes.r.html}</div><button class="tlink" data-a="more" data-id="c-${p.id}">Keep reading</button>
-      <div class="card-f"><span class="notes">${noun(T.count, 'branch', 'branches')} <span>· ${p.likesBase} likes</span></span><button class="iconbtn" data-a="v2branch" data-id="${p.id}" aria-label="Branch">${I.branch}</button>${acts}</div></article>`;
+  anchored: {
+    name: 'Anchored',
+    full: true,
+    thesis: '<strong>Each branch sits next to the passage it asks about.</strong> The answer is shown whole, and its branches are placed at the height of the paragraph they come from, with a count on that paragraph. Hover a note to see its passage. (The mock matches branches to paragraphs by their words; the real app would store the passage a person selected.)',
+    margin(p) {
+      if (p.k === 'post') return repliesMargin(p);
+      return `<div class="pinned" id="mr-${p.id}">${st.asking === p.id ? `<div class="pin ask-pin">${askBox(p, 'Ask about the answer')}</div>` : ''}</div>`;
+    },
+    layout(p) { anchorBranches(p); },
   },
-  notes(p) {
-    if (p.k === 'post') { const r = replies(p); return r.length ? `<span class="label">Replies</span>${replyTree(r)}` : ''; }
-    const T = tree(p), exp = this.st.exp;
-    const note = n => {
-      const key = p.id + ':' + n.id, o = exp.has(key), k = T.kids(n.id), dn = T.desc(n.id);
-      return `<button class="note${o ? ' open' : ''}" data-a="note" data-id="${key}"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time></div>
-        <div class="nq">${esc(n.q)}</div>${o ? `${status(n)}<div class="prose">${answerHtml(n)}</div>` : `<div class="ns">${esc(clip(summ(n), 130))}</div>`}
-        ${dn && !o ? `<span class="inside">${I.branch}${noun(dn, 'branch', 'branches')} inside</span>` : ''}</button>
-        ${o && k.length ? `<div class="note-kids">${k.map(note).join('')}</div>` : ''}`;
-    };
-    const top = T.kids('r');
-    return `<span class="label">${top.length ? `Branches · ${T.count}` : 'Branches'}</span>${top.map(note).join('') || '<p class="empty">No branches yet.</p>'}
-      ${this.st.asking === p.id ? `<div style="margin-top:8px">${composer('v2:' + p.id, 'Ask a branch question')}</div>` : ''}`;
+  gloss: {
+    name: 'Gloss',
+    full: true,
+    lr: true,
+    thesis: '<strong>Two margins, like an annotated text.</strong> The left margin holds the sources, each at the line that cites it. The right margin holds the branches, each at the passage it asks about. Hover a source or a citation number to link the two.',
+    left(p) { return p.k === 'post' ? '' : `<div class="pinned" id="ml-${p.id}"></div>`; },
+    margin(p) { return V.anchored.margin(p); },
+    layout(p) { anchorSources(p); anchorBranches(p); },
   },
-  on(a, d) {
-    const s = this.st;
-    if (a === 'space') { s.space = d.id; render(); $('#k-v2').scrollTop = 0; }
-    else if (a === 'note') { s.exp.has(d.id) ? s.exp.delete(d.id) : s.exp.add(d.id); render(); }
-    else if (a === 'v2branch') { s.asking = d.id; render(); $(`#in-v2\\:${d.id}`)?.focus(); }
+  reader: {
+    name: 'Reader',
+    rd: true,
+    thesis: '<strong>The margin is an index that opens into a reader.</strong> Closed, it lists every branch as one line in its tree. Open a branch and the margin widens into a reading column while the post steps back; the path above the question walks back up the tree.',
+    margin(p) {
+      if (p.k === 'post') return `<div class="stick">${repliesMargin(p)}</div>`;
+      const T = tree(p), id = st.open[p.id];
+      if (id && T.nodes[id]) return `<div class="stick">${this.reader(p, T, T.nodes[id])}</div>`;
+      const rows = T.dfs().slice(1);
+      return `<div class="stick"><span class="label">Branches${T.count ? ' · ' + T.count : ''}</span><div class="idx">${rows.map(({ n, d }) => `<button class="irow d${d - 1}" style="--d:${d - 1}" data-a="read" data-id="${p.id}" data-node="${n.id}"><span class="iq">${esc(n.q)}</span><span class="im">${esc(n.u)} · ${rel(n.createdAt)}${n.pending ? ' · researching' : ''}</span></button>`).join('') || '<p class="empty">No branches yet.</p>'}</div>${askBox(p)}</div>`;
+    },
+    reader(p, T, n) {
+      const path = T.path(n.id), kids = T.kids(n.id);
+      return `<div class="reader fadein"><div class="reader-h"><nav class="crumbs" aria-label="Path">${path.map((x, i) => `${i ? I.right : ''}<button data-a="read" data-id="${p.id}" data-node="${x.id}">${esc(pathLabel(T, x))}</button>`).join('')}</nav><button class="iconbtn" data-a="unread" data-id="${p.id}" aria-label="Back to the branch list">${I.x}</button></div>
+        <div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${n.tok ? `<span>${ktok(n.tok)}</span>` : ''}</div>
+        <p class="rq">${esc(n.q)}</p>${status(n)}<div class="prose">${answerHtml(n)}</div>
+        ${kids.length ? `<span class="label" style="margin:6px 0 0">${noun(kids.length, 'branch', 'branches')} from here</span><div class="kidlist">${kids.map(c => `<button class="kid" data-a="read" data-id="${p.id}" data-node="${c.id}"><b>${esc(c.q)}</b><span>${esc(c.u)} · ${rel(c.createdAt)}${T.desc(c.id) ? ` · ${T.desc(c.id)} more inside` : ''}</span></button>`).join('')}</div>` : ''}
+        ${composer('rd:' + p.id, 'Ask a branch question about this answer')}</div>`;
+    },
   },
-  submit(f, v) { const id = f.split(':')[1], p = byId(id); const nid = addBranch(p, 'r', v); this.st.exp.add(id + ':' + nid); this.st.asking = null; render(); },
+  activity: {
+    name: 'Activity',
+    thesis: '<strong>The margin is a live log of what people did with the post.</strong> Newest first: who branched from which answer, and when, with runs still researching at the top. The box to ask is always there.',
+    margin(p) {
+      if (p.k === 'post') return `<div class="stick">${repliesMargin(p)}</div>`;
+      const T = tree(p), evs = Object.values(T.nodes).filter(n => n.id !== 'r').sort((a, b) => (a.pending ? -1 : b.pending ? 1 : a.createdAt < b.createdAt ? 1 : -1));
+      const us = T.users();
+      let grp = '';
+      const list = evs.map(n => {
+        const m = (NOW - Date.parse(n.createdAt)) / 6e4, g = n.pending ? 'Running now' : m < 60 ? 'Last hour' : m < 1440 ? 'Today' : 'Earlier';
+        const head = g !== grp ? `<div class="act-grp">${g}</div>` : ''; grp = g;
+        const par = T.nodes[n.par], k = key(p, n.id), o = st.exp.has(k);
+        return head + `<button class="ev${o ? ' open' : ''}" data-a="note" data-id="${k}">${av(n.u, 'sm')}<div style="min-width:0"><div class="line"><b>${esc(n.u)}</b> branched from <i>${par.id === 'r' ? 'the answer' : '“' + esc(clip(par.q, 46)) + '”'}</i> · ${rel(n.createdAt)}</div>
+          <div class="eq">${esc(n.q)}</div>${status(n)}${o ? `<div class="prose">${answerHtml(n)}</div>` : `<div class="es">${esc(clip(summ(n), 110))}</div>`}</div></button>`;
+      }).join('');
+      return `<div class="stick"><div class="act-sum"><span class="avs">${us.slice(0, 5).map(u => av(u, 'xs')).join('')}</span><span>${T.count ? `${noun(T.count, 'branch', 'branches')} by ${noun(us.length, 'person', 'people')} · last ${rel(T.last())}` : 'No branches yet'}</span></div>
+        ${composer('m:' + p.id, 'Ask about this post')}${list}</div>`;
+    },
+  },
+  map: {
+    name: 'Map',
+    thesis: '<strong>The margin shows the shape of the conversation.</strong> A tree of every branch sits beside the post, with a preview card under it. Hover a node to preview it and click to keep it; the highlighted line is the path back to the answer.',
+    margin(p) {
+      if (p.k === 'post') return `<div class="stick">${repliesMargin(p)}</div>`;
+      const T = tree(p);
+      if (!T.count) return `<div class="stick"><span class="label">Tree</span><p class="empty">No branches yet.</p>${askBox(p)}</div>`;
+      const cur = T.nodes[st.hover[p.id]] || T.nodes[st.sel[p.id]] || Object.values(T.nodes).filter(n => n.id !== 'r').sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
+      return `<div class="stick"><span class="label">Tree · ${noun(T.count, 'branch', 'branches')}</span><div id="map-${p.id}">${this.graph(p, T, cur)}</div><div id="pv-${p.id}">${this.preview(p, T, cur)}</div></div>`;
+    },
+    graph(p, T, cur) {
+      const rows = T.dfs(), on = new Set(T.path(cur.id).map(n => n.id)), H = 26, X = d => 8 + d * 13, idx = Object.fromEntries(rows.map((r, i) => [r.n.id, i]));
+      let paths = '', dots = '';
+      rows.forEach(({ n, d }, i) => {
+        const y = i * H + 13;
+        if (n.par) { const px = X(d - 1), py = idx[n.par] * H + 13; paths += `<path class="${on.has(n.id) ? 'on' : ''}" d="M${px} ${py} L${px} ${y - 6} Q${px} ${y} ${px + 6} ${y} L${X(d)} ${y}"/>`; }
+        dots += `<circle class="${n.id === cur.id ? 'sel' : on.has(n.id) ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="3.5"/>`;
+      });
+      return `<div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="pin" data-id="${p.id}" data-node="${n.id}" data-hov="${p.id}"><span class="gq">${esc(n.id === 'r' ? 'Answer' : n.q)}</span></button>`).join('')}</div>`;
+    },
+    preview(p, T, n) {
+      if (n.id === 'r') return `<div class="preview"><span class="label">Answer</span><p class="rq">${esc(p.t || clip(p.q, 80))}</p><div class="pf">${noun(T.kids('r').length, 'branch', 'branches')} start here</div></div>`;
+      const k = T.kids(n.id).length;
+      return `<div class="preview"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${n.tok ? `<span>${ktok(n.tok)}</span>` : ''}</div><p class="rq">${esc(n.q)}</p>${status(n)}<div class="prose">${answerHtml(n)}</div>
+        <div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches under this'}</span><button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.id}">Branch from here</button></div>
+        ${st.asking === p.id ? composer('mf:' + p.id + ':' + n.id, 'Ask a branch question') : ''}</div>`;
+    },
+  },
 };
 
-/* ================= 3 Banks ================= */
-const V3 = {
-  name: 'Banks',
-  thesis: '<strong>The post you are reading sets both sides.</strong> The left bank shows what it is built on (sources, replies, the people in it) and the right bank shows the branches that grew from it. Scroll the stream and both banks follow; nothing needs a click.',
-  st: { focus: null, exp: new Set() },
-  html() {
-    const posts = streamFor('home');
-    this.st.focus ||= posts[0].id;
-    return `<div class="v3"><aside class="bank l" id="k-v3l">${this.left()}</aside>
-      <main class="v3-stream" id="k-v3s"><p class="v3-note">The banks need a wider window. Widen it to see sources and branches beside the stream.</p>
-        <p class="hint">Home · the item under the top third of the stream is the one the banks describe.</p>${posts.map(p => this.item(p)).join('')}</main>
-      <aside class="bank r" id="k-v3r">${this.right()}</aside></div>`;
-  },
-  item(p) {
-    const n = p.k === 'ask' ? tree(p).count : replyCount(p);
-    return `<article class="sitem${this.st.focus === p.id ? ' focus' : ''}" data-a="focus" data-id="${p.id}" data-sid="${p.id}">${av(p.u)}<div style="min-width:0">
-      <p class="t">${esc(p.k === 'ask' ? (p.t || p.q) : p.q)}</p>${p.k === 'ask' && p.sum ? `<p class="s">${esc(p.sum)}</p>` : ''}
-      <div class="meta"><span>${esc(p.u)}</span><span>${spName(p.s)}</span><span>${rel(p.createdAt)}</span><span class="br">${p.k === 'ask' ? I.branch : I.reply}${n}</span></div></div></article>`;
-  },
-  left() {
-    const p = byId(this.st.focus); if (!p) return '';
-    const src = D.srcd[p.id] || [];
-    let people = '';
-    if (p.k === 'ask') {
-      const T = tree(p), c = {}; Object.values(T.nodes).forEach(n => { c[n.u] = (c[n.u] || 0) + 1; });
-      people = Object.entries(c).sort((a, b) => b[1] - a[1]).map(([u, k]) => `<div class="person">${av(u, 'sm')}<span>${esc(u)}</span><small>${u === p.u ? 'asked' : noun(k, 'branch', 'branches')}</small></div>`).join('');
-    }
-    return `<div class="fadein"><div class="bank-h"><span class="label">Built on</span><h3>${esc(p.t || clip(p.q, 80))}</h3></div>
-      ${p.k === 'ask' ? `<section><span class="label">Sources · ${src.length}</span>${src.map((s, i) => `<div class="src"><b><sup>${i + 1}</sup>${esc(s[0])}</b><span>${esc(s[1])} · ${esc(s[2])}</span></div>`).join('') || '<p class="empty">The answer lists no sources in this mock.</p>'}</section>
-        <section><span class="label">People</span>${people}</section>` : `<section><span class="label">Replies · ${replyCount(p)}</span>${replyTree(replies(p))}</section>`}</div>`;
-  },
-  right() {
-    const p = byId(this.st.focus); if (!p) return '';
-    if (p.k === 'post') return `<div class="fadein"><div class="bank-h"><span class="label">Branches</span><h3>Plain posts have replies, not branches.</h3></div></div>`;
-    const T = tree(p), rows = T.dfs().slice(1), exp = this.st.exp;
-    return `<div class="fadein"><div class="bank-h"><span class="label">Branches · ${T.count}</span><h3>${esc(p.t || clip(p.q, 80))}</h3></div>
-      <div class="outline">${rows.map(({ n, d }) => { const key = p.id + ':' + n.id, o = exp.has(key); return `<button class="orow${o ? ' open' : ''}" style="--d:${d - 1}" data-a="orow" data-id="${key}"><div class="oq">${esc(n.q)}</div><div class="om">${esc(n.u)} · ${rel(n.createdAt)}${T.kids(n.id).length ? ` · ${noun(T.kids(n.id).length, 'branch', 'branches')}` : ''}</div>${o ? `<div class="prose">${answerHtml(n)}</div>` : ''}</button>`; }).join('') || '<p class="empty">No branches yet.</p>'}</div></div>`;
-  },
-  setFocus(id, force) {
-    if (!force && id === this.st.focus) return;
-    this.st.focus = id;
-    document.querySelectorAll('.sitem').forEach(e => e.classList.toggle('focus', e.dataset.sid === id));
-    $('#k-v3l').innerHTML = this.left(); $('#k-v3r').innerHTML = this.right();
-  },
-  on(a, d) {
-    if (a === 'focus') { const el = $(`[data-sid="${d.id}"]`), sc = $('#k-v3s'); sc.scrollTo({ top: el.offsetTop - sc.clientHeight * 0.3 + 10, behavior: 'smooth' }); this.setFocus(d.id); }
-    else if (a === 'orow') { const s = this.st.exp; s.has(d.id) ? s.delete(d.id) : s.add(d.id); const r = $('#k-v3r'), t = r.scrollTop; r.innerHTML = this.right(); r.firstElementChild.classList.remove('fadein'); r.scrollTop = t; }
-  },
-  mounted() {
-    const sc = $('#k-v3s');
-    sc.addEventListener('scroll', () => {
-      const y = sc.getBoundingClientRect().top + sc.clientHeight * 0.3;
-      let best = null;
-      for (const el of sc.querySelectorAll('.sitem')) { const r = el.getBoundingClientRect(); if (r.top <= y) best = el; else break; }
-      if (best) this.setFocus(best.dataset.sid);
-    }, { passive: true });
-  },
-};
-
-/* ================= 4 Columns ================= */
-const V4 = {
-  name: 'Columns',
-  thesis: '<strong>Depth runs to the right.</strong> The stream is the first column. Opening a thread adds a column, and each branch you open adds another. Past three columns, the oldest fold into spines on the left, so the whole path stays on screen.',
-  st: { space: 'home', path: ['01M7HGRPJ0E7RGZ45D4KENBQ6P', 'r', 'a2', 'b2'] },
-  html() {
-    const s = this.st, cols = [this.stream()];
-    if (s.path.length) {
-      const p = byId(s.path[0]);
-      if (p.k === 'post') cols.push(this.postCol(p));
-      else { const T = tree(p); for (let i = 1; i < s.path.length; i++) cols.push(this.nodeCol(T, s.path[i], s.path[i + 1], i)); }
-    }
-    /* At most three open columns: the ones before them fold into spines. */
-    const fold = Math.max(0, cols.length - 3);
-    for (let i = 0; i < fold; i++) cols[i] = this.spine(i);
-    return `<div class="v4" id="k-v4">${cols.join('')}</div>`;
-  },
-  spine(i) {
-    const s = this.st, p = byId(s.path[0]);
-    let label = s.space === 'home' ? 'Home' : spName(s.space);
-    if (i > 0) { const T = tree(p), n = T.nodes[s.path[i]]; label = i === 1 ? (p.t || p.q) : n.q; }
-    return `<button class="col spine" data-a="unfold" data-i="${i}" title="Show this column"><span class="label">${i === 0 ? 'Stream' : i === 1 ? 'Thread' : 'Depth ' + (i - 1)}</span><span class="sp-t">${esc(clip(label, 70))}</span></button>`;
-  },
-  stream() {
-    const s = this.st, opts = [['home', 'Home'], ...spacesWithPosts.map(x => [x.id, spName(x.id)])];
-    return `<section class="col stream"><div class="col-h"><div><span class="label">Stream</span></div><select id="v4-space" aria-label="Space">${opts.map(([v, l]) => `<option value="${v}"${v === s.space ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
-      <div class="col-b scroll" id="k-v4s">${streamFor(s.space).map(p => { const n = p.k === 'ask' ? tree(p).count : replyCount(p); return `<button class="litem${s.path[0] === p.id ? ' sel' : ''}" data-a="thread" data-id="${p.id}"><div class="t">${esc(p.k === 'ask' ? (p.t || p.q) : clip(p.q, 120))}</div>${p.k === 'ask' && p.sum ? `<div class="s">${esc(clip(p.sum, 110))}</div>` : ''}<div class="meta">${av(p.u, 'xs')}<span>${esc(p.u)}</span><span>${spName(p.s)}</span><span>${rel(p.createdAt)}</span><span class="br">${p.k === 'ask' ? I.branch : I.reply}${n}</span></div></button>`; }).join('')}</div></section>`;
-  },
-  postCol(p) {
-    return `<section class="col"><div class="col-h"><div><span class="label">Post · ${spName(p.s)}</span><h3>${esc(p.u)}</h3></div><button class="iconbtn" data-a="pop" data-i="0" aria-label="Close">${I.x}</button></div>
-      <div class="col-b scroll"><div class="who">${av(p.u, 'sm')}<b>${esc(p.u)}</b><time>${rel(p.createdAt)}</time></div><p class="node-q">${esc(p.q)}</p>
-      <div class="kids-h"><span class="label">Replies · ${replyCount(p)}</span></div>${replyTree(replies(p))}</div></section>`;
-  },
-  nodeCol(T, id, next, i) {
-    const n = T.nodes[id], p = T.p, k = T.kids(id), root = id === 'r';
-    const crumb = root ? '' : `<div class="crumb">In reply to: ${esc(clip(T.nodes[n.par].par ? T.nodes[n.par].q : (p.t || p.q), 70))}</div>`;
-    return `<section class="col" data-col="${i}"><div class="col-h"><div><span class="label">${root ? 'Thread · ' + spName(p.s) : 'Branch · depth ' + (T.path(id).length - 1)}</span><h3>${esc(root ? (p.t || clip(p.q, 60)) : clip(n.q, 60))}</h3></div><button class="iconbtn" data-a="pop" data-i="${i - 1}" aria-label="Close column">${I.x}</button></div>
-      <div class="col-b scroll">${crumb}<div class="who">${av(n.u, 'sm')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time></div>
-        <p class="node-q">${esc(n.q)}</p><div class="who" style="margin-bottom:6px">${mark('sm')}<b>Session</b>${n.tok ? `<span>${ktok(n.tok)}</span>` : ''}</div>${status(n)}<div class="prose">${answerHtml(n)}</div>
-        <div class="kids-h">${I.branch}<span class="label">${k.length ? noun(k.length, 'branch', 'branches') + ' from here' : 'No branches from here yet'}</span></div>
-        ${k.map(c => `<button class="litem${next === c.id ? ' sel' : ''}" data-a="node" data-i="${i}" data-id="${c.id}"><div class="t">${esc(c.q)}</div><div class="s">${esc(clip(summ(c), 120))}</div><div class="meta">${av(c.u, 'xs')}<span>${esc(c.u)}</span><span>${rel(c.createdAt)}</span>${T.desc(c.id) ? `<span class="br">${I.branch}${T.desc(c.id)}</span>` : ''}</div></button>`).join('')}
-      </div><div class="col-f">${composer('v4:' + i, 'Ask a branch question about this answer')}</div></section>`;
-  },
-  on(a, d) {
-    const s = this.st;
-    if (a === 'thread') { s.path = byId(d.id).k === 'post' ? [d.id] : [d.id, 'r']; render(); }
-    else if (a === 'node') { s.path = [...s.path.slice(0, +d.i + 1), d.id]; render(); }
-    else if (a === 'unfold') { s.path = s.path.slice(0, Math.max(2, +d.i + 2)); render(); }
-    else if (a === 'pop') { s.path = +d.i === 0 ? [] : s.path.slice(0, +d.i + 1); render(); }
-  },
-  change(e) { if (e.target.id === 'v4-space') { this.st.space = e.target.value; this.st.path = []; render(); } },
-  submit(f, v) { const i = +f.split(':')[1], s = this.st, p = byId(s.path[0]); const nid = addBranch(p, s.path[i], v); s.path = [...s.path.slice(0, i + 1), nid]; render(); },
-  mounted() { const c = $('#k-v4'); c.scrollLeft = c.scrollWidth; },
-};
-
-/* ================= 5 Paths ================= */
-const V5 = {
-  name: 'Paths',
-  thesis: '<strong>One conversation at a time.</strong> The middle reads as a single chat from the original ask down one path of branches. Where a question has siblings, step between them in place; the right rail maps the whole tree and shows which path you are on.',
-  st: { pid: '01M7HGRPJ0E7RGZ45D4KENBQ6P', node: 'e1' },
-  html() {
-    const s = this.st, p = byId(s.pid), T = tree(p);
-    if (!T.nodes[s.node]) s.node = 'r';
-    const threads = streamFor('home').filter(x => x.k === 'ask').concat(D.posts.filter(x => x.rf && D.qtd[x.id]));
-    return `<div class="v5"><nav class="v5-list"><span class="label">Threads</span>${threads.map(x => { const n = tree(x).count; return `<button class="litem${x.id === s.pid ? ' sel' : ''}" data-a="pick" data-id="${x.id}"><div class="t">${esc(x.t || clip(x.q, 70))}</div><div class="meta"><span>${spName(x.s)}</span><span>${rel(x.createdAt)}</span><span class="br">${I.branch}${n}</span></div></button>`; }).join('')}</nav>
-      <section class="v5-conv"><div class="v5-log scroll" id="k-v5log"><div>${this.conv(T)}</div></div>
-        <div class="v5-compose"><div>${composer('v5', T.kids(s.node).length ? 'Ask a new branch from the last answer' : 'Continue this path', s.node === 'r' ? '' : 'Depth ' + (T.path(s.node).length - 1))}</div></div></section>
-      <aside class="v5-graph" id="k-v5g">${this.graph(T)}</aside></div>`;
-  },
-  conv(T) {
-    const path = T.path(this.st.node), p = T.p, last = path[path.length - 1];
-    const turns = path.map(n => {
-      const sibs = n.par ? T.kids(n.par) : [], i = sibs.indexOf(n);
-      const sw = sibs.length > 1 ? `<div class="sib"><button data-a="sib" data-id="${sibs[i - 1]?.id || ''}" ${i ? '' : 'disabled'} aria-label="Previous branch">${I.left}</button>${i + 1} of ${sibs.length}<button data-a="sib" data-id="${sibs[i + 1]?.id || ''}" ${i < sibs.length - 1 ? '' : 'disabled'} aria-label="Next branch">${I.right}</button></div>` : '';
-      return `<div class="turn-u"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${n.id === 'r' ? `<span class="sp">${spName(p.s)}</span>` : ''}</div><div class="bubble">${esc(n.q)}</div>${sw}</div>
-        <div class="turn-a">${mark()}<div style="min-width:0"><div class="who"><b>Session</b>${n.id === 'r' && p.t ? `<span>${esc(p.t)}</span>` : ''}${n.tok ? `<span>${ktok(n.tok)}</span>` : ''}</div>${status(n)}<div class="prose">${answerHtml(n)}</div></div></div>`;
-    }).join('');
-    const k = T.kids(last.id);
-    return turns + (k.length ? `<div class="cont"><span class="label">${noun(k.length, 'branch continues', 'branches continue')} from this answer</span><div class="chips">${k.map(c => `<button class="chip" data-a="go" data-id="${T.leaf(c.id)}">${I.branch}${esc(clip(c.q, 70))}</button>`).join('')}</div></div>` : '');
-  },
-  graph(T) {
-    const rows = T.dfs(), on = new Set(T.path(this.st.node).map(n => n.id)), H = 34, X = d => 10 + d * 14;
-    const idx = Object.fromEntries(rows.map((r, i) => [r.n.id, i]));
-    let paths = '', dots = '';
-    rows.forEach(({ n, d }, i) => {
-      const y = i * H + 12;
-      if (n.par) { const pi = idx[n.par], px = X(d - 1), py = pi * H + 12; paths += `<path class="${on.has(n.id) ? 'on' : ''}" d="M${px} ${py} L${px} ${y - 7} Q${px} ${y} ${px + 7} ${y} L${X(d)} ${y}"/>`; }
-      dots += `<circle class="${n.id === this.st.node ? 'sel' : on.has(n.id) ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="4"/>`;
-    });
-    const p = T.p;
-    return `<div class="gh"><div><span class="label">Tree · ${noun(T.count, 'branch', 'branches')}</span><h3>${esc(p.t || clip(p.q, 60))}</h3></div></div>
-      <div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>
-      ${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}" style="padding-left:${X(d) + 12}px" data-a="go" data-id="${n.id}"><span class="gq">${esc(n.id === 'r' ? 'Original ask' : n.q)}</span><span class="gm">${esc(n.u)} · ${rel(n.createdAt)}</span></button>`).join('')}</div>
-      <div class="legend"><span><i></i>Path shown in the chat</span></div>`;
-  },
-  on(a, d) {
-    const s = this.st;
-    if (a === 'pick') { s.pid = d.id; const T = tree(byId(d.id)); s.node = T.leaf('r'); render(); scrollEnd('k-v5log'); }
-    else if (a === 'go') { s.node = d.id; render(); scrollEnd('k-v5log'); }
-    else if (a === 'sib' && d.id) { const T = tree(byId(s.pid)); const anchor = $(`[data-a="sib"][data-id="${d.id}"]`)?.closest('.turn-u'); const top = anchor?.getBoundingClientRect().top; s.node = T.leaf(d.id); render();
-      const sc = $('#k-v5log'), el = [...sc.querySelectorAll('.turn-u')].find(e => e.querySelector('.bubble').textContent === T.nodes[d.id].q); if (el && top != null) sc.scrollTop += el.getBoundingClientRect().top - top; }
-  },
-  submit(f, v) { const s = this.st; s.node = addBranch(byId(s.pid), s.node, v); render(); scrollEnd('k-v5log'); },
-  mounted(first) { if (first) scrollEnd('k-v5log'); },
-};
-
-/* ================= shell ================= */
-const VARIANTS = { channel: V1, margin: V2, banks: V3, columns: V4, paths: V5 };
-const ORDER = Object.keys(VARIANTS);
-const state = { v: 'channel', theme: 'system' };
+/* ---- shell ---- */
+const ORDER = Object.keys(V);
 const app = $('#app');
-function scrollEnd(id) { const e = document.getElementById(id); if (e) e.scrollTop = e.scrollHeight; }
 let lastV = null;
 function render() {
-  const V = VARIANTS[state.v], first = lastV !== state.v;
-  const keep = {}; if (!first) app.querySelectorAll('[id^="k-"]').forEach(e => { keep[e.id] = [e.scrollTop, e.scrollLeft]; });
-  app.innerHTML = V.html();
-  for (const id in keep) { const e = document.getElementById(id); if (e) { e.scrollTop = keep[id][0]; e.scrollLeft = keep[id][1]; } }
-  lastV = state.v;
-  V.mounted?.(first);
+  const v = V[st.v], first = lastV !== st.v, sc = $('#k-mg'), top = sc && !first ? sc.scrollTop : 0;
+  const tabs = [['home', 'Home'], ...spacesWithPosts.filter(x => x.id !== 'sablefield').map(x => [x.id, spName(x.id)])];
+  const posts = streamFor(st.space);
+  app.innerHTML = `<div class="mg" id="k-mg"><div class="mg-inner"><nav class="tabs">${tabs.map(([id, l]) => `<button data-a="space" data-id="${id}" aria-current="${st.space === id}">${esc(l)}</button>`).join('')}</nav>
+    ${posts.map(p => `<div class="row${v.lr ? ' lr' : ''}${v.rd ? ' rd' : ''}${v.rd && st.open[p.id] ? ' reading' : ''}">${v.lr ? `<aside class="mgn left">${v.left(p)}</aside>` : ''}${card(p, v.full)}<aside class="mgn">${v.margin(p)}</aside></div>`).join('')}</div></div>`;
+  layout();
+  $('#k-mg').scrollTop = top;
+  lastV = st.v;
 }
+function layout() { const v = V[st.v]; if (v.layout) streamFor(st.space).forEach(p => p.k === 'ask' && v.layout(p)); }
 function renderBar() {
-  $('#variant-seg').innerHTML = ORDER.map((k, i) => `<button data-v="${k}" aria-pressed="${state.v === k}"><b>${i + 1}</b>${VARIANTS[k].name}</button>`).join('');
-  $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${state.theme === k}">${l}</button>`).join('');
-  $('#thesis').innerHTML = VARIANTS[state.v].thesis;
+  $('#variant-seg').innerHTML = ORDER.map((k, i) => `<button data-v="${k}" aria-pressed="${st.v === k}"><b>${String.fromCharCode(65 + i)}</b>${V[k].name}</button>`).join('');
+  $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${st.theme === k}">${l}</button>`).join('');
+  $('#thesis').innerHTML = V[st.v].thesis;
 }
-function go(v) { if (!VARIANTS[v]) v = 'channel'; state.v = v; renderBar(); render(); }
+function go(v) { if (!V[v]) v = 'notes'; st.v = v; st.asking = null; renderBar(); render(); }
 $('#variant-seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { history.replaceState(null, '', '#' + b.dataset.v); go(b.dataset.v); } });
-$('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; state.theme = b.dataset.t; if (state.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = state.theme; renderBar(); });
+$('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; st.theme = b.dataset.t; if (st.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = st.theme; renderBar(); });
+
 app.addEventListener('click', e => {
   const t = e.target.closest('[data-a]'); if (!t) return;
-  if (t.dataset.a === 'more') { const el = document.getElementById(t.dataset.id); el.classList.toggle('open'); t.dataset.label ||= t.textContent; t.textContent = el.classList.contains('open') ? 'Show less' : t.dataset.label; return; }
-  VARIANTS[state.v].on(t.dataset.a, t.dataset, e);
+  const a = t.dataset.a, d = t.dataset;
+  if (a === 'more') { const el = document.getElementById(d.id); el.classList.toggle('open'); d.label ||= t.textContent; t.textContent = el.classList.contains('open') ? 'Show less' : d.label; return; }
+  if (a === 'space') { st.space = d.id; st.asking = null; render(); $('#k-mg').scrollTop = 0; return; }
+  if (a === 'note') { st.exp.has(d.id) ? st.exp.delete(d.id) : st.exp.add(d.id); render(); return; }
+  if (a === 'ask') {
+    const p = byId(d.id);
+    if (st.v === 'reader' && st.open[p.id]) { $(`#in-rd\\:${p.id}`)?.focus(); return; }
+    if (st.v === 'activity') { $(`#in-m\\:${p.id}`)?.focus(); return; }
+    st.asking = st.asking === p.id ? null : p.id; if (st.v === 'map') st.sel[p.id] ||= 'r'; render(); $(`[id^="in-m"][id*="${p.id}"]`)?.focus(); return;
+  }
+  if (a === 'askfrom') { st.sel[d.id] = d.node; st.hover[d.id] = null; st.asking = d.id; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
+  if (a === 'anc') { const g = d.grp, box = app.querySelector(`[data-grp-box="${g}"]`); box?.querySelectorAll('.note').forEach(n => { if (!st.exp.has(n.dataset.id)) st.exp.add(n.dataset.id); }); render(); return; }
+  if (a === 'read') { st.open[d.id] = d.node; render(); return; }
+  if (a === 'unread') { delete st.open[d.id]; render(); return; }
+  if (a === 'pin') { st.sel[d.id] = d.node; st.hover[d.id] = null; st.asking = null; render(); return; }
 });
-app.addEventListener('change', e => VARIANTS[state.v].change?.(e));
-app.addEventListener('submit', e => { e.preventDefault(); const f = e.target.closest('[data-form]'), inp = f.querySelector('input'), v = inp.value.trim(); if (!v) { inp.focus(); return; } VARIANTS[state.v].submit?.(f.dataset.form, v); });
+/* hover links: note and its passage; source and its citation; map row and preview */
+function hl(e, on) {
+  const n = e.target.closest('[data-grp]');
+  if (n) { const g = n.dataset.grp; app.querySelectorAll(`[data-grp="${g}"]`).forEach(x => { if (x.classList.contains('note') || x.classList.contains('anc')) return; x.classList.toggle('blk-hl', on); }); app.querySelector(`[data-grp-box="${g}"]`)?.classList.toggle('hl', on); }
+  const s = e.target.closest('[data-src], sup[data-cite]');
+  if (s) { const id = s.dataset.src || s.dataset.cite; app.querySelector(`[data-src="${id}"]`)?.classList.toggle('hl', on); app.querySelector(`sup[data-cite="${id}"]`)?.classList.toggle('hl', on); }
+  const r = e.target.closest('[data-hov]');
+  if (r && st.v === 'map') { const pid = r.dataset.hov; st.hover[pid] = on ? r.dataset.node : null; const p = byId(pid), T = tree(p); const cur = T.nodes[st.hover[pid]] || T.nodes[st.sel[pid]]; if (cur) { $('#pv-' + pid).innerHTML = V.map.preview(p, T, cur); const g = $('#map-' + pid); g.innerHTML = V.map.graph(p, T, cur); } }
+}
+app.addEventListener('mouseover', e => hl(e, true));
+app.addEventListener('mouseout', e => { if (e.relatedTarget && e.target.closest('[data-hov]') && e.relatedTarget.closest('[data-hov]') === e.target.closest('[data-hov]')) return; hl(e, false); });
+app.addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target.closest('[data-form]'), inp = f.querySelector('input'), v = inp.value.trim(); if (!v) { inp.focus(); return; }
+  const [kind, pid, node] = f.dataset.form.split(':'), p = byId(pid);
+  if (kind === 'rd') { st.open[pid] = addBranch(p, st.open[pid], v); }
+  else if (kind === 'mf') { st.sel[pid] = addBranch(p, node, v); }
+  else { const nid = addBranch(p, 'r', v); st.exp.add(key(p, nid)); if (st.v === 'map') st.sel[pid] = nid; }
+  st.asking = null; render();
+});
+let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(render, 150); });
 window.addEventListener('hashchange', () => go(location.hash.slice(1)));
-go(location.hash.slice(1) || 'channel');
+go(location.hash.slice(1) || 'notes');
 </script>
