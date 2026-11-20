@@ -336,7 +336,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 
 /* ================= membership screens ================= */
 [hidden] { display: none !important; }
-#app > .toast, #app > .dialog { height: auto; }
+#app > .toast, #app > .dialog, #app > .authdlg { height: auto; }
 .grow { flex: 1; }
 .mockbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding-bottom: 8px; }
 .mk { display: inline-flex; align-items: center; gap: 6px; }
@@ -365,24 +365,26 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .meter.warn { --tone: var(--warn); } .meter.bad { --tone: var(--bad); }
 .m-track { width: 64px; height: 5px; border-radius: 3px; background: var(--control); overflow: hidden; }
 .m-track > span { display: block; height: 100%; background: var(--tone); border-radius: 3px; }
-.m-ring svg { width: 18px; height: 18px; transform: rotate(-90deg); }
+/* the bar on wide layouts; a ring (no percentage) on narrow ones */
+.meter .m-ring { display: none; width: 18px; height: 18px; transform: rotate(-90deg); }
 .m-ring circle { fill: none; stroke: var(--control); stroke-width: 3; }
 .m-ring circle.arc { stroke: var(--tone); stroke-linecap: round; }
-.m-text { background: var(--control); }
-.m-text.warn, .m-text.bad { color: var(--tone); }
 /* auth */
+/* sign-in dialog (A) and side sheet (B) over the signed-out site */
+.scrim.auth-scrim { z-index: 30; }
+.authdlg { position: absolute; z-index: 31; background: var(--feed); box-shadow: var(--shadow), var(--shadow-pop); overflow-y: auto; }
+.authdlg.v-a { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, calc(100% - 32px)); max-height: calc(100% - 40px); border-radius: var(--r-xl); padding: 36px 44px 32px; animation: dlgin .18s ease; }
+.authdlg .auth-c { max-width: none; }
+.dclose { position: absolute; top: 12px; right: 12px; }
+@keyframes dlgin { from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); } }
+@media (prefers-reduced-motion: reduce) { .authdlg { animation: none !important; } }
+.pbanner.out { background: var(--card); }
+.pbanner.out .btn1 { flex: none; }
 .auth { height: 100%; overflow-y: auto; display: grid; place-items: center; padding: 32px 20px; background: var(--feed); }
 .auth-c { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 14px; }
 .auth-c h2 { margin: 6px 0 0; font-size: 22px; line-height: 1.25; color: var(--t-heading); letter-spacing: -.015em; text-wrap: balance; }
 .auth-c p { margin: 0; color: var(--t-secondary); font-size: var(--fs-md); line-height: 1.5; }
 .auth-acts { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
-.auth-b { place-items: stretch; padding: 0; }
-.auth-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100%; }
-.auth-split > .auth-c { align-self: center; justify-self: center; padding: 32px; }
-.auth-preview { background: var(--page); padding: 40px 32px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 55%, transparent); mask-image: linear-gradient(#000 55%, transparent); }
-.pv-card { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 14px 16px; position: relative; }
-.pv-card p { margin: 8px 0 0; color: var(--t-heading); font-size: var(--fs-md); line-height: 1.45; }
-.pv-n { position: absolute; right: 14px; top: 14px; display: inline-flex; gap: 4px; align-items: center; color: var(--t-faint); font-size: var(--fs-xs); }
 .xbtn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 42px; border-radius: 21px; background: var(--t-heading); color: var(--feed); font-weight: 600; font-size: var(--fs-md); }
 .xbtn:hover { opacity: .9; }
 .xmark { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; border: 1.5px solid currentColor; font-size: 11px; font-weight: 700; }
@@ -404,8 +406,6 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .inviter { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
 .inviter b { display: block; color: var(--t-heading); font-size: var(--fs-sm); }
 .inviter small { color: var(--t-faint); font-size: var(--fs-xs); }
-.mock-note { font-size: var(--fs-sm); color: var(--t-secondary); }
-.mock-note b { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 4px; background: var(--warn); color: var(--card); font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; }
 .xlist { display: flex; flex-direction: column; gap: 6px; }
 .xacct { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); text-align: left; }
 .xacct:hover { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent), var(--shadow); }
@@ -490,6 +490,25 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .tn { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 .tn b { font-size: var(--fs-sm); color: var(--t-heading); font-weight: 600; }
 .tn small { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* tree C, D, E */
+.tsimple { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 6px 16px; }
+.srow { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: var(--fs-sm); color: var(--t-heading); }
+.srow.me b::after { content: " (you)"; font-weight: 400; color: var(--t-faint); }
+.sp-pend { color: var(--warn); font-size: var(--fs-xs); }
+.sp-staff { color: var(--t-faint); font-size: var(--fs-xs); }
+.tgroups { display: flex; flex-direction: column; gap: 2px; background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 6px 16px; }
+.grow-l { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--divider); align-items: baseline; }
+.grow-l:last-child { border-bottom: 0; }
+.gby { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--t-faint); }
+.gby b { color: var(--t-heading); }
+.gkids { display: flex; flex-wrap: wrap; gap: 6px; }
+.kidchip { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border-radius: 12px; background: var(--control); font-size: var(--fs-xs); color: var(--t-heading); font-weight: 500; }
+.kidchip.pend { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); }
+.kidchip .tlink { font-size: var(--fs-xs); }
+.tpath { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 14px 16px; }
+.chain { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: var(--fs-sm); color: var(--t-secondary); margin-bottom: 12px; }
+.chain span.me { color: var(--t-heading); font-weight: 600; }
+.chain i { color: var(--t-dim); display: inline-flex; } .chain svg.i { width: 12px; height: 12px; }
 /* tree B */
 .ttable { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 4px 0; overflow-x: auto; }
 .tr { display: grid; grid-template-columns: minmax(220px, 2fr) 90px 70px 90px minmax(130px, 1fr); align-items: center; gap: 10px; min-height: 40px; padding: 0 14px; border-bottom: 1px solid var(--divider); font-size: var(--fs-sm); color: var(--t-secondary); min-width: 620px; }
@@ -529,22 +548,20 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .radio small { font-size: var(--fs-xs); color: var(--t-faint); }
 .radio.off { cursor: default; opacity: .6; }
 /* keys A (rows) */
-.krow { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--divider); align-items: start; }
+.krow { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 12px; min-height: 48px; padding: 8px 0; border-bottom: 1px solid var(--divider); align-items: center; }
+.kname { font-size: var(--fs-sm); color: var(--t-heading); font-weight: 600; }
+.kb .ghost { margin-left: auto; }
 .krow:last-of-type { border-bottom: 0; }
 .kh b { display: block; font-size: var(--fs-sm); color: var(--t-heading); }
 .kh small { font-size: var(--fs-xs); color: var(--t-faint); }
-.kb { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.kb { display: flex; flex-direction: column; gap: 6px; align-items: stretch; min-width: 0; }
+.kb > .ghost { align-self: flex-end; }
 .kstate { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; font-size: var(--fs-sm); }
 .kstate code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--fs-xs); background: var(--inset); padding: 3px 6px; border-radius: 4px; color: var(--t-heading); }
 .kstate small { color: var(--t-faint); font-size: var(--fs-xs); }
 .kform { display: flex; gap: 8px; align-items: center; width: 100%; }
 .kform input { height: 34px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--fs-sm); }
 .kconfirm { font-size: var(--fs-sm); color: var(--t-secondary); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-/* keys B (cards) */
-.kcards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.kcard { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; min-width: 0; }
-.kcard.has { box-shadow: 0 0 0 1px color-mix(in srgb, var(--good) 35%, transparent), var(--shadow); }
-.kcard .kform { flex-wrap: wrap; }
 /* dialog, toast */
 .scrim { position: absolute; inset: 0; z-index: 40; background: rgba(10, 12, 14, .32); }
 .dialog { position: absolute; z-index: 41; left: 50%; top: 18%; transform: translateX(-50%); width: min(420px, calc(100% - 32px)); background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow), var(--shadow-pop); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
@@ -556,11 +573,12 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .mi-note { padding: 6px 10px 4px; font-size: var(--fs-xs); color: var(--t-faint); }
 .mi .src { margin-left: 6px; font-size: var(--fs-xs); color: var(--t-faint); }
 @media (max-width: 860px) {
-  .mcols, .auth-split, .kcards { grid-template-columns: minmax(0, 1fr); }
-  .auth-preview { display: none; }
+  .mcols { grid-template-columns: minmax(0, 1fr); }
   .mside { position: static; }
   .krow { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .m-track, .m-l { display: none; }
+  .meter .m-ring { display: block; }
+  .meter { padding: 0 6px; }
 }
 
 @media (max-width: 860px) {
@@ -833,7 +851,7 @@ const moreMenu = (key, canDelete, what) => {
   return `<span class="mpick more"><button type="button" class="more-btn" data-a="menu" data-m="more:${key}" aria-haspopup="menu" aria-expanded="${open}" aria-label="More">${I.dots}</button>
     ${open ? `<div class="menu right" role="menu">${canDelete ? `<button type="button" class="mi danger" role="menuitem" data-a="del" data-k="${key}"><span>Delete ${what}</span></button>` : `<div class="mi mi-off" role="menuitem" aria-disabled="true"><span>Delete ${what}<small>Not available once someone has responded</small></span></div>`}</div>` : ''}</span>`;
 };
-function me() { return st.user || F.me.u; }
+function me() { return st.auth === 'out' ? null : st.user; }
 const mine = u => u === me();
 function deleteItem(key) {
   const [kind, pid, id] = key.split(':'), p = byId(pid);
@@ -1178,7 +1196,7 @@ const RULES = [
 ];
 
 /* ---- membership state ---- */
-Object.assign(st, { auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { signin: 'a', tree: 'a', meter: 'a', keys: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { signin: 'a', tree: 'a', meter: 'a', keys: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1226,6 +1244,7 @@ function toast(t) { st.toast = t; clearTimeout(toastTimer); toastTimer = setTime
 
 /* composer: hidden while pending (the banner explains why) */
 const pendingBanner = () => {
+  if (st.auth === 'out') return `<div class="row new-row"><div class="pbanner out"><div><b>You're reading Session's open spaces.</b> Sign in to ask, branch and reply. New accounts need an invite from a member.</div><button class="ghost" data-ma="openauth" data-to="code">I have an invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></div><div></div></div>`;
   if (isActive() || st.auth !== 'in') return '';
   const pr = progress(meM());
   return `<div class="row new-row"><div class="pbanner"><span class="pdot"></span><div><b>Your account is waiting for vouches: ${pr.n} of ${NEED}.</b> You can read everything. Asking, posting, branching and replying open when it is active.</div><button class="ghost" data-ma="go" data-to="status">See status</button></div><div></div></div>`;
@@ -1241,9 +1260,8 @@ function meter() {
   if (!isActive()) return '';
   const u = used(), pct = Math.min(1, u / ALLOWANCE), l = left(), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok';
   const title = `${fmtTok(l)} of ${fmtTok(ALLOWANCE)} included tokens left this week; resets in ${resetIn()}`;
-  if (st.ui.meter === 'a') return `<button class="meter m-bar ${tone}" data-ma="go" data-to="usage" title="${title}"><span class="m-l">${fmtTok(l)} left</span><span class="m-track"><span style="width:${(pct * 100).toFixed(1)}%"></span></span></button>`;
-  if (st.ui.meter === 'b') { const r = 7, c = 2 * Math.PI * r; return `<button class="meter m-ring ${tone}" data-ma="go" data-to="usage" title="${title}"><svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}"/><circle class="arc" cx="9" cy="9" r="${r}" stroke-dasharray="${(c * pct).toFixed(2)} ${c.toFixed(2)}"/></svg><span>${Math.round((1 - pct) * 100)}%</span></button>`; }
-  return `<button class="meter m-text ${tone}" data-ma="go" data-to="usage" title="${title}">${fmtTok(l)} tokens left · resets ${WEEK[0]}</button>`;
+  const r = 7, c = 2 * Math.PI * r;
+  return `<button class="meter ${tone}" data-ma="go" data-to="usage" title="${title}" aria-label="${title}"><span class="m-l">${fmtTok(l)} left</span><span class="m-track"><span style="width:${(pct * 100).toFixed(1)}%"></span></span><svg class="m-ring" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}"/><circle class="arc" cx="9" cy="9" r="${r}" stroke-dasharray="${(c * pct).toFixed(2)} ${c.toFixed(2)}"/></svg></button>`;
 }
 
 /* ---- app bar ---- */
@@ -1259,7 +1277,11 @@ function appbar() {
       <div class="msep"></div><button class="mi" data-ma="signout"><span>Sign out</span></button></div>` : ''}</span></header>`;
 }
 
-/* ---- signed-out flow (sign-in variants on the landing step) ---- */
+/* ---- signed-out site: the open feed with a Sign in button; sign-in runs in a dialog (A) or a side sheet (B) ---- */
+const appbarOut = () => `<header class="appbar"><span class="brand">${mark('sm')}<b>Session</b></span><nav class="navs"><button class="nav" aria-current="true">Feed</button></nav><span class="grow"></span>
+  <button class="ghost" data-ma="openauth" data-to="code">I have an invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></header>`;
+const authDialog = () => `<div class="scrim auth-scrim" data-ma="closeauth"></div><div class="authdlg v-a" role="dialog" aria-modal="true" aria-label="Sign in to Session"><button class="iconbtn dclose" data-ma="closeauth" aria-label="Close">${I.x}</button>${authScreen()}</div>`;
+/* ---- sign-in steps ---- */
 const xBtn = (label = 'Sign in with X') => `<button class="xbtn" data-ma="xauth">${'<span class="xmark" aria-hidden="true">X</span>'}${label}</button>`;
 function authScreen() {
   const back = to => `<button class="tlink back" data-ma="flow" data-to="${to}">${I.left}Back</button>`;
@@ -1275,18 +1297,17 @@ function authScreen() {
       <p>Ask a question and an agent researches it. Branch from any passage of the answer to go deeper; everyone in the space can read and build on it.</p>
       <div class="auth-acts">${xBtn()}<button class="btn2" data-ma="flow" data-to="code">I have an invite code</button></div>
       <p class="fine">Session is invite-only. New accounts need an invite code from a member.</p>
-      <p class="fine">Mock: <button class="tlink" data-ma="openlink">open an invite link</button> (session.app/i/SESS-9TQ2-X8).</p></div>`;
-    if (st.ui.signin === 'b') body = `<div class="auth-split">${body}<div class="auth-preview" aria-hidden="true">${streamFor('home').filter(p => p.k === 'ask').slice(0, 4).map(p => `<div class="pv-card"><div class="who">${av(p.u, 'xs')}<b>${esc(p.u)}</b><span class="sp">${spName(p.s)}</span></div><p>${esc(clip(tree(p).nodes.r.q, 110))}</p><span class="pv-n">${I.branch}${tree(p).count}</span></div>`).join('')}</div></div>`;
+</div>`;
   } else if (st.flow === 'code') {
     const inv = INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
     body = `<div class="auth-c">${back('landing')}<h2>Enter your invite code</h2><p>It came from the member who invited you, as a code or a link.</p>
       <form class="code-f" data-mform="code"><input id="in-code" value="${esc(st.code)}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1">Check</button></form>
       ${st.codeErr ? `<p class="ferr">${esc(st.codeErr)}</p>` : ''}
-      ${inv ? `<div class="inviter">${av(inv.by)}<div><b>${esc(nameOf(inv.by))} invited you</b><small>@${esc(inv.by)} · expires ${day(addDays(inv.created, INVITE_DAYS))}</small></div></div><div class="auth-acts">${st.xacct && !MEMBERS.some(m => m.x === st.xacct) ? `<button class="btn1" data-ma="toprofile">Continue as @${esc(st.xacct)}</button>${xBtn('Use a different X account')}` : xBtn('Continue with X')}</div>` : `<p class="fine">Mock: an open code is <button class="tlink" data-ma="fill" data-code="SESS-9TQ2-X8">SESS-9TQ2-X8</button>.</p>`}</div>`;
+      ${inv ? `<div class="inviter">${av(inv.by)}<div><b>${esc(nameOf(inv.by))} invited you</b><small>@${esc(inv.by)} · expires ${day(addDays(inv.created, INVITE_DAYS))}</small></div></div><div class="auth-acts">${st.xacct && !MEMBERS.some(m => m.x === st.xacct) ? `<button class="btn1" data-ma="toprofile">Continue as @${esc(st.xacct)}</button>${xBtn('Use a different X account')}` : xBtn('Continue with X')}</div>` : ''}</div>`;
   } else if (st.flow === 'xauth') {
     body = `<div class="auth-c">${back(st.intent === 'signup' ? 'code' : 'landing')}<h2>Sign in with X</h2><p>X asks you to let Session see your name, handle and profile picture. Session cannot post for you or read your messages.</p>
-      <div class="mock-note"><b>Mock</b> Pick the X account that comes back from X:</div>
-      <div class="xlist">${X_ACCOUNTS.map(a => `<button class="xacct" data-ma="xpick" data-x="${a.x}">${av(MEMBERS.find(m => m.x === a.x)?.u || a.x)}<span><b>${esc(a.name)}</b><small>@${esc(a.x)} · ${esc(a.note)}</small></span>${I.right}</button>`).join('')}</div></div>`;
+      <div class="auth-acts"><button class="xbtn" data-ma="xgo"><span class="xmark" aria-hidden="true">X</span>Continue to X</button></div>
+      <p class="fine">You'll come back here after signing in on X.</p></div>`;
   } else if (st.flow === 'noaccount') {
     const a = X_ACCOUNTS.find(x => x.x === st.xacct);
     body = `<div class="auth-c">${back('landing')}<h2>No Session account for @${esc(a.x)}</h2><p>Session is invite-only. Ask a member for an invite code, then sign up with it. If you already have a code, enter it now.</p><div class="auth-acts"><button class="btn1" data-ma="flow" data-to="code">Enter an invite code</button></div></div>`;
@@ -1300,7 +1321,7 @@ function authScreen() {
       <div class="next"><b>What happens next</b><p>Your account starts pending. It becomes active once ${NEED} members above you in the invite tree vouch for you, at least one of them someone other than your inviter (${esc(nameOf(inv.by))}).</p></div>
       <button type="submit" class="btn1 wide">Create account</button></form></div>`;
   }
-  return `<div class="auth ${st.ui.signin === 'b' && st.flow === 'landing' ? 'auth-b' : ''}">${body}</div>`;
+  return body;
 }
 
 /* ---- status page (pending accounts) ---- */
@@ -1347,6 +1368,21 @@ function treeB() {
   return `<div class="ttable" role="table"><div class="tr th" role="row"><span>Member</span><span>Invited by</span><span>Joined</span><span>Vouched by</span><span></span></div>
     ${rows.map(({ m, d }) => `<div class="tr${m.u === st.user ? ' me' : ''}" role="row"><span class="tm" style="padding-left:${d * 16}px">${d ? '<i class="elbow"></i>' : ''}${av(m.u, 'xs')}<b>${esc(m.u)}</b>${statusChip(m)}</span><span>${m.inviter ? esc(m.inviter) : '—'}</span><span>${day(m.joined)}</span><span class="vlist">${m.vouchers.map(v => av(v, 'xs')).join('') || '<small>—</small>'}</span><span class="tact">${vouchCtl(m)}</span></div>`).join('')}</div>`;
 }
+/* C: an indented list, text only */
+function treeC() {
+  return `<div class="tsimple">${treeRows().map(({ m, d }) => `<div class="srow${m.u === st.user ? ' me' : ''}" style="padding-left:${d * 22}px"><b>${esc(m.u)}</b>${m.status === 'pending' ? `<span class="sp-pend">pending, ${progress(m).n} of ${NEED}</span>` : m.staff ? `<span class="sp-staff">${m.staff}</span>` : ''}<span class="grow"></span>${vouchCtl(m)}</div>`).join('')}</div>`;
+}
+/* D: grouped by inviter, one line per person who has invited someone */
+function treeD() {
+  const rows = treeRows(), inviters = rows.filter(({ m }) => MEMBERS.some(c => c.inviter === m.u));
+  return `<div class="tgroups">${inviters.map(({ m }) => `<div class="grow-l"><span class="gby">${av(m.u, 'xs')}<b>${esc(m.u)}</b> invited</span><span class="gkids">${MEMBERS.filter(c => c.inviter === m.u).map(c => `<span class="kidchip${c.status === 'pending' ? ' pend' : ''}">${esc(c.u)}${c.status === 'pending' ? ` · ${progress(c).n}/${NEED}` : ''}${eligible(st.user, c.u) && !c.vouchers.includes(st.user) ? ` <button class="tlink" data-ma="askvouch" data-u="${c.u}">Vouch</button>` : ''}</span>`).join('')}</span></div>`).join('')}</div>`;
+}
+/* E: just your place in it: the chain above you and the people you invited */
+function treeE() {
+  const up = ancestors(st.user).reverse(), mine2 = MEMBERS.filter(c => c.inviter === st.user);
+  return `<div class="tpath"><div class="chain">${[...up, st.user].map(u => `<span class="${u === st.user ? 'me' : ''}">${esc(u)}</span>`).join(`<i>${I.right}</i>`)}</div>
+    ${mine2.length ? `<p class="sub">You invited</p><div class="list">${mine2.map(c => `<div class="li">${av(c.u, 'sm')}<div class="grow"><b>${esc(c.u)}</b><small>joined ${day(c.joined)}${c.status === 'pending' ? ` · pending, ${progress(c).n} of ${NEED}` : ''}</small></div>${vouchCtl(c)}</div>`).join('')}</div>` : '<p class="sub">You haven\'t invited anyone yet.</p>'}</div>`;
+}
 function membersPage() {
   const reqs = MEMBERS.filter(t => eligible(st.user, t.u) && !t.vouchers.includes(st.user) && !st.dismissed[st.user + '>' + t.u]);
   const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), oc = openCount();
@@ -1355,7 +1391,7 @@ function membersPage() {
   return `<div class="page"><div class="page-in"><div class="mcols"><div class="mmain">
     ${reqs.length ? `<section><h3>Waiting for your vouch</h3><p class="sub">Vouch only for people you know. Your name appears on their profile as a voucher.</p><div class="list">${reqs.map(t => { const pr = progress(t); return `<div class="li">${av(t.u)}<div class="grow"><b>${esc(t.name)} <span class="h">@${esc(t.u)}</span></b><small>Invited by ${esc(nameOf(t.inviter))} · joined ${rel(t.joined)} ago · ${pr.n} of ${NEED} vouches</small></div><button class="tlink" data-ma="notnow" data-u="${t.u}">I don't know them</button><button class="btn1 sm" data-ma="askvouch" data-u="${t.u}">Vouch</button></div>`; }).join('')}</div></section>` : ''}
     <section><div class="shead"><h3>Invite tree</h3><span class="modes" role="group">${[['all', 'Everyone'], ['mine', 'Your branch']].map(([k, l]) => `<button type="button" data-ma="scope" data-s="${k}" aria-pressed="${st.treeScope === k}">${l}</button>`).join('')}</span></div>
-      <p class="sub">Who invited whom. You can vouch for pending members anywhere below you.</p>${st.ui.tree === 'a' ? treeA() : treeB()}</section></div>
+      <p class="sub">Who invited whom. You can vouch for pending members anywhere below you.</p>${({ a: treeA, b: treeB, c: treeC, d: treeD, e: treeE })[st.ui.tree]()}</section></div>
     <aside class="mside"><section class="box"><div class="shead"><h3>Your invites</h3><small>${slotsUsed()} of ${SLOTS} slots in use</small></div><div class="slots" aria-hidden="true">${Array.from({ length: SLOTS }, (_, i) => `<span class="${i < openCount() ? 'open' : i < slotsUsed() ? 'pend' : ''}"></span>`).join('')}</div><p class="fine">${openCount()} open invite${openCount() === 1 ? '' : 's'}, ${pendingInvitees()} invitee${pendingInvitees() === 1 ? '' : 's'} waiting for vouches.</p>
       <div class="list tight">${inv.map(invRow).join('') || '<p class="empty">No invites yet.</p>'}</div>
       <button class="btn1 wide" data-ma="newinvite"${slotsUsed() >= SLOTS || !canVouchYet(meM()) ? ' disabled' : ''}>Create an invite</button><p class="fine">${!canVouchYet(meM()) ? `You can invite and vouch ${VOUCH_WAIT} days after your account became active.` : slotsUsed() >= SLOTS ? 'All slots are in use. A slot frees when an invite is revoked or expires, or when someone you invited is vouched in.' : `Each code works for one person and expires in ${INVITE_DAYS} days.`}</p></section>
@@ -1368,14 +1404,12 @@ function keyBlock(id) {
   const P = PROVIDERS[id], k = keys()[id];
   const form = st.keyForm === id ? `<form class="kform" data-mform="key:${id}"><input id="in-key" type="password" placeholder="${P.ph}" autocomplete="off" spellcheck="false" aria-label="${P.name} API key"><button type="submit" class="btn1 sm">Save key</button><button type="button" class="tlink" data-ma="keycancel">Cancel</button></form>${st.keyErr ? `<p class="ferr">${esc(st.keyErr)}</p>` : ''}` : '';
   const body = k ? (st.removing === id ? `<div class="kconfirm">Remove the ${P.name} key? Asks billed to it will stop. <button class="tlink danger" data-ma="keyremove" data-k="${id}">Remove</button><button class="tlink" data-ma="keykeep">Keep</button></div>`
-      : `<div class="kstate"><code>${P.prefix}…${k.last4}</code><span class="chip ${k.status === 'working' ? 'ok' : ''}">${k.status === 'working' ? 'Working' : 'Checking…'}</span><small>Added ${day(k.added)}${k.lastUsed ? ` · last used ${day(k.lastUsed)}` : ''}</small><span class="grow"></span><button class="tlink danger" data-ma="keyask" data-k="${id}">Remove</button></div>`)
+      : `<div class="kstate"><code>${P.prefix}…${k.last4}</code><span class="chip ${k.status === 'working' ? 'ok' : ''}">${k.status === 'working' ? 'Working' : 'Checking…'}</span><span class="grow"></span><button class="tlink danger" data-ma="keyask" data-k="${id}">Remove</button></div>`)
     : st.keyForm === id ? '' : `<button class="ghost" data-ma="keyadd" data-k="${id}">Add key</button>`;
   return { P, k, form, body };
 }
 function keysSection() {
-  const note = '<p class="fine">Keys are encrypted and used only for asks you start. After saving, Session shows only the last 4 characters. The provider bills you directly at its rates.</p>';
-  if (st.ui.keys === 'a') return `<section class="box"><h3>API keys</h3>${['anthropic', 'openai'].map(id => { const b = keyBlock(id); return `<div class="krow"><div class="kh"><b>${b.P.name}</b><small>${b.P.models}</small></div><div class="kb">${b.body}${b.form}</div></div>`; }).join('')}${note}</section>`;
-  return `<section><h3>API keys</h3><div class="kcards">${['anthropic', 'openai'].map(id => { const b = keyBlock(id); return `<div class="kcard${b.k ? ' has' : ''}"><div class="kh"><b>${b.P.name}</b><small>${b.P.models}</small></div>${b.body}${b.form}</div>`; }).join('')}</div>${note}</section>`;
+  return `<section class="box"><h3>API keys</h3>${['anthropic', 'openai'].map(id => { const b = keyBlock(id); return `<div class="krow"><b class="kname">${b.P.name}</b><div class="kb">${b.body}${b.form}</div></div>`; }).join('')}</section>`;
 }
 function usagePage() {
   const u = usage(), tot = used(), max = Math.max(...u, 1), pct = Math.min(1, tot / ALLOWANCE), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok';
@@ -1397,25 +1431,28 @@ function usagePage() {
 
 /* ---- app render ---- */
 function renderMock() {
-  const personas = [['out', 'Signed out'], ...MEMBERS.filter(m => ['ines.v', 'sol', 'kofi.a', 'rhea.ok'].includes(m.u)).map(m => [m.u, `${m.u} · ${m.status === 'active' ? (m.staff ? m.staff : 'member') : 'pending'}`])];
+  const personas = [['out', 'Signed out'], ['sol', 'Admin'], ['ines.v', 'Member'], ['kofi.a', 'Pending'], ...MEMBERS.filter(m => m.created).map(m => [m.u, `New account (${m.status === 'active' ? 'active' : 'pending'})`])];
   const cur = st.auth === 'out' ? 'out' : st.user;
-  const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abc'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
+  const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcde'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
-    ${seg('signin', 'Sign-in', 2)}${seg('tree', 'Tree', 2)}${seg('meter', 'Meter', 3)}${seg('keys', 'Keys', 2)}
+    ${seg('tree', 'Tree', 5)}
+    <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
+    <span class="mk"><span class="mkl">X returns</span><span class="seg">${X_ACCOUNTS.map(a => `<button data-mx="${a.x}" aria-pressed="${st.mockX === a.x}" title="${esc(a.note)}">@${a.x}</button>`).join('')}</span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
 }
 function render() {
   renderMock();
-  if (st.auth === 'out') { app.innerHTML = authScreen() + toastEl(); lastV = null; return; }
-  if (!$('#shell')) app.innerHTML = '<div id="shell"><div id="bar"></div><div id="page"></div></div>';
-  $('#bar').innerHTML = appbar();
+  if (!$('#shell')) { app.innerHTML = '<div id="shell"><div id="bar"></div><div id="page"></div></div>'; lastV = null; }
+  $('#bar').innerHTML = st.auth === 'out' ? appbarOut() : appbar();
+  if (st.auth === 'out') st.screen = 'feed';
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
   if (st.screen === 'feed') renderFeed();
   else { pg.innerHTML = (st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
-  app.querySelectorAll(':scope > .scrim, :scope > .dialog').forEach(x => x.remove());
+  app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg').forEach(x => x.remove());
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
   if (st.confirm) app.insertAdjacentHTML('beforeend', confirmEl());
+  if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
 }
 const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}</div>` : '';
 function confirmEl() {
@@ -1429,7 +1466,7 @@ function confirmEl() {
    an active member on Members for Tree, on the feed for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
-  if (k === 'signin') { st.auth = 'out'; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); return; }
+  if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'tree' ? 'members' : k === 'meter' ? 'feed' : 'usage';
   render();
@@ -1437,10 +1474,17 @@ function previewVariant(k) {
   if (k === 'tree') $('.ttree, .ttable')?.closest('section')?.scrollIntoView({ block: 'start' });
   if (k === 'meter') $('.meter')?.focus();
 }
-function signIn(u) { st.auth = 'in'; st.user = u; st.screen = member(u).status === 'active' ? 'feed' : 'status'; st.menu = null; st.sel = {}; render(); }
+function signIn(u) { st.authOpen = false; st.auth = 'in'; st.user = u; st.screen = member(u).status === 'active' ? 'feed' : 'status'; st.menu = null; st.sel = {}; render(); }
 document.addEventListener('click', e => {
   const p = e.target.closest('[data-mp]');
-  if (p) { if (p.dataset.mp === 'out') { st.auth = 'out'; st.flow = 'landing'; } else signIn(p.dataset.mp); st.confirm = null; render(); return; }
+  if (p) { if (p.dataset.mp === 'out') { st.auth = 'out'; st.authOpen = false; st.flow = 'landing'; } else signIn(p.dataset.mp); st.confirm = null; render(); return; }
+  const o = e.target.closest('[data-mo]');
+  if (o) { const k = o.dataset.mo; st.auth = 'out'; st.authOpen = true; st.confirm = null; st.menu = null; st.codeErr = '';
+    if (k === 'signin') { st.flow = 'landing'; st.fromLink = false; st.code = ''; }
+    if (k === 'link') { st.flow = 'landing'; st.fromLink = true; st.code = 'SESS-9TQ2-X8'; }
+    if (k === 'code') { st.flow = 'code'; st.intent = 'signup'; st.fromLink = false; st.code = 'SESS-9TQ2-X8'; }
+    render(); return; }
+  const mx = e.target.closest('[data-mx]'); if (mx) { st.mockX = mx.dataset.mx; renderMock(); return; }
   const v = e.target.closest('[data-mv]'); if (v) { st.ui[v.dataset.mv] = v.dataset.x; previewVariant(v.dataset.mv); return; }
   const t = e.target.closest('[data-mt]'); if (t) { const u = usage(); const need = { norm: null, low: ALLOWANCE - 90e3, out: ALLOWANCE + 20e3 }[t.dataset.mt]; if (need != null) { const others = u.reduce((a, b, i) => i === TODAY ? a : a + b, 0); u[TODAY] = Math.max(0, need - others); } else USAGE[st.user] = (USAGE_BASE[st.user] || [0, 0, 0, 0, 0, 0, 0]).slice(); render(); return; }
 });
@@ -1451,12 +1495,14 @@ app.addEventListener('click', e => {
   if (a === 'go') { st.screen = d.to; st.menu = null; render(); $('#k-page') && ($('#k-page').scrollTop = 0); return; }
   if (a === 'flow') { st.flow = d.to; st.codeErr = ''; if (d.to === 'code') st.intent = 'signup'; render(); $('#in-code')?.focus(); return; }
   if (a === 'xauth') { if (st.flow === 'landing') st.intent = st.fromLink ? 'signup' : 'signin'; st.flow = 'xauth'; render(); return; }
-  if (a === 'openlink') { st.code = 'SESS-9TQ2-X8'; st.fromLink = true; render(); return; }
+  if (a === 'openauth') { st.authOpen = true; st.flow = d.to || 'landing'; st.codeErr = ''; if (d.to === 'code') st.intent = 'signup'; render(); (app.querySelector('.authdlg #in-code') || app.querySelector('.authdlg .xbtn'))?.focus(); return; }
+  if (a === 'closeauth') { st.authOpen = false; st.flow = 'landing'; st.fromLink = false; render(); return; }
+  if (a === 'openlink') { st.code = 'SESS-9TQ2-X8'; st.fromLink = true; st.authOpen = true; st.flow = 'landing'; render(); return; }
   if (a === 'nolink') { st.fromLink = false; st.code = ''; st.intent = 'signin'; st.flow = 'xauth'; render(); return; }
   if (a === 'toprofile') { const a2 = X_ACCOUNTS.find(z => z.x === st.xacct); st.profile = { name: a2.name, handle: st.xacct.replace(/[^a-z0-9._]/g, '').slice(0, 20), rules: false, err: '' }; st.flow = 'profile'; render(); return; }
   if (a === 'fill') { st.code = d.code; st.codeErr = ''; render(); return; }
-  if (a === 'xpick') {
-    const x = d.x, m = MEMBERS.find(mm => mm.x === x);
+  if (a === 'xpick' || a === 'xgo') {
+    const x = a === 'xgo' ? st.mockX : d.x, m = MEMBERS.find(mm => mm.x === x);
     st.xacct = x;
     if (m) { signIn(m.u); return; }
     const inv = INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
@@ -1464,7 +1510,7 @@ app.addEventListener('click', e => {
     else st.flow = 'noaccount';
     render(); return;
   }
-  if (a === 'signout') { st.auth = 'out'; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.xacct = null; st.menu = null; render(); return; }
+  if (a === 'signout') { st.auth = 'out'; st.authOpen = false; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.xacct = null; st.menu = null; render(); return; }
   if (a === 'askvouch') { st.confirm = { u: d.u }; render(); app.querySelector('.dialog .btn1')?.focus(); return; }
   if (a === 'cancel') { st.confirm = null; render(); return; }
   if (a === 'dovouch') { vouch(st.user, d.u); st.confirm = null; render(); return; }
@@ -1498,7 +1544,7 @@ app.addEventListener('submit', e => {
     if (pf.err) { render(); return; }
     const inv = INVITES.find(i => i.code === st.code);
     inv.used = pf.handle;
-    MEMBERS.push({ u: pf.handle, name: pf.name, x: st.xacct, inviter: inv.by, joined: new Date(NOW).toISOString(), status: 'pending', vouchers: [] });
+    MEMBERS.push({ created: true, u: pf.handle, name: pf.name, x: st.xacct, inviter: inv.by, joined: new Date(NOW).toISOString(), status: 'pending', vouchers: [] });
     st.code = ''; signIn(pf.handle); toast('Account created. It is pending until two members vouch for you.'); render(); return;
   }
   if (kind.startsWith('key:')) {
@@ -1511,7 +1557,7 @@ app.addEventListener('submit', e => {
     setTimeout(() => { if (keys()[id]) { keys()[id].status = 'working'; toast(`${P.name} key works.`); render(); } }, 1300);
   }
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && st.confirm) { st.confirm = null; render(); } });
+document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (st.confirm) { st.confirm = null; render(); } else if (st.auth === 'out' && st.authOpen) { st.authOpen = false; st.flow = 'landing'; render(); } });
 
 window.addEventListener('hashchange', () => go(location.hash.slice(1)));
 /* Ctrl+A, Ctrl+B, ... switch to the variant with that letter (not while typing in a field) */
