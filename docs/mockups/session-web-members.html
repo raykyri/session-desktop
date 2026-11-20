@@ -207,7 +207,8 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .nb > .mpick.split { margin-right: 2px; }
 .split :is(.split-main, .split-more) { transition: background .15s, color .15s, opacity .15s, box-shadow .15s; }
 .split-main { height: 26px; padding: 0 10px 0 12px; border-radius: 13px 0 0 13px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); }
-.split-more { height: 26px; width: 24px; display: inline-grid; place-items: center; border-radius: 0 13px 13px 0; background: var(--accent-strong); color: var(--on-accent-light); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--on-accent-light) 35%, transparent); }
+.split-more { height: 26px; width: 24px; display: inline-grid; place-items: center; border-radius: 0 13px 13px 0; background: var(--accent-strong); color: var(--on-accent-light); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--on-accent-light) 16%, transparent); }
+.split-main:disabled { cursor: default; }
 .split-more svg.i { width: 13px; height: 13px; }
 /* Empty composer: the button stays blue at 45% opacity until there is text */
 .btn-faded:not(.has-text) :is(.split-main, .split-more) { opacity: .45; }
@@ -378,6 +379,17 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .hsaved { width: 30px; height: 30px; }
 .hsaved.on { background: var(--control); color: var(--t-heading); }
 .hsaved.on svg.i { fill: currentColor; }
+.hsv-b, .hsv-d { display: inline-flex; align-items: center; gap: 5px; }
+.hsv-b svg.i { width: 14px; height: 14px; }
+.hsv-b.on, .hsv-d.on { background: var(--control); color: var(--t-heading); }
+.hsv-b.on svg.i, .hsv-c.on svg.i, .hsv-e.on svg.i { fill: currentColor; }
+.hsv-c { position: relative; }
+.hcount { position: absolute; top: 1px; right: 0; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px; background: var(--accent-strong); color: var(--on-accent-light); font-size: 9.5px; font-weight: 700; line-height: 14px; text-align: center; }
+.hsv-e { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 9px; border-radius: 14px; color: var(--t-muted); box-shadow: inset 0 0 0 1px var(--divider); font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabular-nums; }
+.hsv-e svg.i { width: 13px; height: 13px; }
+.hsv-e.has { color: var(--t-heading); }
+.hsv-e.has svg.i { fill: currentColor; }
+.hsv-e:hover, .hsv-e.on { background: var(--control); }
 @media (max-width: 520px) { .ncw .nb-dock { flex-wrap: wrap; row-gap: 6px; } .ncw .nb-dock > textarea { flex: 1 1 calc(100% - 40px); } .ncw .nb-dock > textarea + * { margin-left: 28px; } .ncw .nb-dock > .split { margin-left: auto; } }
 .rtext p { margin: 2px 0; }
 .rtext blockquote { margin: 4px 0; padding-left: 8px; border-left: 2px solid var(--border-strong); color: var(--t-faint); }
@@ -1229,7 +1241,7 @@ const modelMenu = () => {
   const open = st.menu === 'model';
   const item = (a, v, label, on, off) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${on}" data-a="${a}" data-v="${v}"${off ? ' disabled' : ''}><span>${label}</span>${on ? CHECK : ''}</button>`;
   return `<span class="mpick"><button type="button" class="pick" data-a="menu" data-m="model" aria-haspopup="menu" aria-expanded="${open}" title="Model and effort"><span>${esc(SHORT[st.newModel] || st.newModel)}</span>${I.down}</button>
-    ${open ? `<div class="menu" role="menu" aria-label="Model">${modelOpts().map(m => m === 'GPT-6.1 Sol' && !hasOpenAI() ? `<button type="button" class="mi" role="menuitem" data-ma="go" data-to="usage"><span>GPT-6.1 Sol<span class="src">add an OpenAI key</span></span></button>` : item('setmodel', m, m === 'GPT-6.1 Sol' ? 'GPT-6.1 Sol<span class="src">your OpenAI key</span>' : m, m === st.newModel)).join('')}<div class="msep"></div>
+    ${open ? `<div class="menu" role="menu" aria-label="Model">${modelOpts().map(m => m === 'GPT-6.1 Sol' && !hasOpenAI() ? `<button type="button" class="mi" role="menuitem" data-ma="go" data-to="usage"><span>GPT-6.1 Sol<span class="src">Add a key</span></span></button>` : item('setmodel', m, m === 'GPT-6.1 Sol' ? 'GPT-6.1 Sol<span class="src">your OpenAI key</span>' : m, m === st.newModel)).join('')}<div class="msep"></div>
       <div class="mi mi-sub" role="menuitem" aria-haspopup="menu" tabindex="0"><span>Effort</span><span class="mi-v">${cap1(st.newEffort)}</span>${I.right}
         <div class="menu submenu" role="menu" aria-label="Effort">${EFFORT_OPTS.map(e => item('seteffort', e, cap1(e), e === st.newEffort)).join('')}</div></div></div>` : ''}</span>`;
 };
@@ -1242,7 +1254,7 @@ const COMPOSERS = {
     const open = st.menu === 'send';
     const opt = (m, t, sub) => `<button type="button" class="mi mi-2" role="menuitemradio" aria-checked="${st.newMode === m}" data-a="mode" data-m="${m}"><span><b>${t}</b><small>${sub}</small></span>${st.newMode === m ? CHECK : ''}</button>`;
     return `<div class="row new-row"><form class="${nbClass('nb-dock' + extra)}" data-form="new:x">${face ? av(me(), 'sm') : ''}${draft(ph())}${spaceField()}${isAsk() ? modelMenu() : ''}
-      <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter>${isAsk() ? 'Ask' : 'Post'}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
+      <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter${st.draft.trim() ? '' : ' disabled'}>${isAsk() ? 'Ask' : 'Post'}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
       ${open ? `<div class="menu right" role="menu">${opt('ask', 'Ask', 'The agent researches and answers')}${opt('post', 'Post', 'A message to people in the space')}</div>` : ''}</span></form><div></div></div>`;
   },
   /* Split, with the avatar held at the first line and the controls at the last as the text grows. */
@@ -1316,7 +1328,7 @@ app.addEventListener('click', e => {
   if (a === 'rpclose') { st.replying = null; render(); return; }
   if (a === 'qexpand') { if (st.quote) st.quote.open = true; render(); document.getElementById(`in-mf:${d.id}:r`)?.focus(); return; }
   if (a === 'promote') { const P = byId(d.id), n = tree(P).nodes[d.node], id = 'new' + (++nseq);
-    D.posts.push({ id, s: P.s, u: me(), k: 'ask', createdAt: new Date(NOW).toISOString(), q: n.q, sum: '', tok: n.tok || 0, likesBase: 0, run: runOf(P), from: { pid: d.id, nid: d.node } });
+    D.posts.push({ id, s: P.s, u: n.u, k: 'ask', createdAt: new Date(NOW).toISOString(), q: n.q, sum: '', tok: n.tok || 0, likesBase: 0, run: runOf(P), from: { pid: d.id, nid: d.node } });
     D.rich[id] = n.html; PROMOTED[d.id + ':' + d.node] = id; st.menu = null; toast('Opened as its own thread.'); render(); document.getElementById('card-' + id)?.scrollIntoView({ block: 'start' }); return; }
   if (a === 'gothread') { st.space = 'home'; render(); document.getElementById('card-' + d.id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
   if (a === 'gofrom') { st.sel[d.id] = d.node; st.asking = null; render(); document.getElementById('card-' + d.id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
@@ -1428,7 +1440,7 @@ app.addEventListener('input', e => {
   const t = e.target; if (t.tagName !== 'TEXTAREA' || !t.form) return;
   t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
   if (t.id !== 'in-new') return;
-  st.draft = t.value; t.form.classList.toggle('has-text', !!t.value.trim());
+  st.draft = t.value; t.form.classList.toggle('has-text', !!t.value.trim()); t.form.querySelectorAll('.split-main').forEach(b => { b.disabled = !t.value.trim(); });
 });
 app.addEventListener('change', e => {
   const k = { 'new-space': 'newSpace', 'new-model': 'newModel', 'new-effort': 'newEffort' }[e.target.id];
@@ -1481,7 +1493,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { savedbtn: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1541,14 +1553,26 @@ function meter() {
 
 /* ---- app bar ---- */
 /* the app bar has no Members tab; Invites is in the account menu */
+/* Saved in the app bar (variants)
+   A bookmark icon · B bookmark and "Saved" · C bookmark with a count of saved threads · D the word "Saved" · E bookmark in a pill, filled when anything is saved */
+function savedBtn() {
+  if (!isActive()) return '';
+  const on = st.space === 'saved' && st.screen === 'network', n = Object.values(SAVED()).filter(Boolean).length, v = st.ui.savedbtn;
+  const attrs = `data-a="space" data-id="saved" aria-pressed="${on}" aria-label="Saved${n ? `, ${n}` : ''}" title="Saved"`;
+  if (v === 'b') return `<button class="ghost hsv-b${on ? ' on' : ''}" ${attrs}>${I.save}<span>Saved</span></button>`;
+  if (v === 'c') return `<button class="iconbtn hsaved hsv-c${on ? ' on' : ''}" ${attrs}>${I.save}${n ? `<span class="hcount">${n}</span>` : ''}</button>`;
+  if (v === 'd') return `<button class="ghost hsv-d${on ? ' on' : ''}" ${attrs}>Saved</button>`;
+  if (v === 'e') return `<button class="hsv-e${on ? ' on' : ''}${n ? ' has' : ''}" ${attrs}>${I.save}${n ? `<span>${n}</span>` : ''}</button>`;
+  return `<button class="iconbtn hsaved${on ? ' on' : ''}" ${attrs}>${I.save}</button>`;
+}
 function appbar() {
   const m = meM();
   const open = st.menu === 'acct';
   return `<header class="appbar">${brandBtn()}
-    <span class="grow"></span>${meter()}${isActive() ? `<button class="iconbtn hsaved${st.space === 'saved' && st.screen === 'network' ? ' on' : ''}" data-a="space" data-id="saved" aria-pressed="${st.space === 'saved' && st.screen === 'network'}" aria-label="Saved" title="Saved">${I.save}</button>` : ''}
+    <span class="grow"></span>${meter()}${savedBtn()}
     <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}">${av(st.user, 'sm')}${I.down}</button>
     ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff ? cap1(m.staff) : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
-      ${isActive() ? `<button class="mi" data-ma="go" data-to="members"><span>Invites</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
+      ${isActive() ? `<button class="mi" data-ma="go" data-to="members"><span>Invites</span></button><button class="mi" data-a="space" data-id="saved"><span>Saved</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
       <div class="msep"></div><button class="mi" data-ma="signout"><span>Sign out</span></button></div>` : ''}</span></header>`;
 }
 
@@ -1696,7 +1720,7 @@ function usagePage() {
     ${usageTop()}${usageRunsSection()}
     <section class="box"><h3>When included tokens run out</h3>
       <label class="radio"><input type="radio" name="bill" data-ma="bill" value="pause"${billing() === 'pause' ? ' checked' : ''}> <span><b>Pause my asks until the reset</b><small>You can still read, post and reply.</small></span></label>
-      <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my Anthropic key</b><small>${hasKey ? 'Asks bill to your Anthropic key until the reset.' : keys().openai?.status === 'working' ? 'Needs an Anthropic key. Your OpenAI key only runs GPT-6.1 Sol.' : 'Add an Anthropic key below to turn this on.'}</small></span></label></section>
+      <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my Anthropic key</b><small>${hasKey ? 'Asks bill to your Anthropic key until the reset.' : keys().openai?.status === 'working' ? 'Needs an Anthropic key. Your OpenAI key only runs GPT-6.1 Sol.' : 'Add a key below to turn this on.'}</small></span></label></section>
     ${keysSection()}</div></div>`;
 }
 
@@ -1708,7 +1732,8 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
-    <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>
+    ${seg('savedbtn', 'Saved button', 5)}
+    ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
 }
@@ -1751,6 +1776,7 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
+  if (k === 'savedbtn') { if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; } st.authOpen = false; render(); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'network' : 'usage';
