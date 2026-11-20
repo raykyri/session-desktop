@@ -427,7 +427,7 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .mk { display: inline-flex; align-items: center; gap: 6px; }
 .mkl { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--t-faint); }
 #shell { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
-#bar { flex: none; transition: margin-top .2s ease; }
+#bar { flex: none; position: relative; z-index: 30; transition: margin-top .2s ease; }
 /* the app bar slides up out of view while the feed scrolls down, and back on any scroll up */
 #bar.hid { margin-top: -49px; }
 @media (prefers-reduced-motion: reduce) { #bar { transition: none; } }
@@ -447,7 +447,7 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .hsp .tabs .sscope button { height: 24px; }
 .hsdd { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border-radius: 14px; background: var(--control); font-size: var(--fs-sm); font-weight: 600; color: var(--t-heading); }
 .hsdd svg.i { width: 11px; height: 11px; color: var(--t-muted); }
-.hsp .tabs-s > .mpick { flex: none; margin-right: 4px; }
+.hsp > .mpick { flex: none; }
 /* ---- spaces made by people: navigation directions ---- */
 #page > .spshell { height: 100%; display: flex; position: relative; }
 .spshell > .mg { flex: 1; min-width: 0; height: 100%; }
@@ -539,32 +539,30 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 .sact { color: var(--accent); }
 .sact svg.i { width: 14px; height: 14px; margin: 0 3px; }
 /* space header, browse, new space */
-.sphead { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: var(--r-xl); background: var(--card); box-shadow: var(--shadow); }
-.sphead > .glyph { width: 40px; height: 40px; border-radius: 11px; font-size: 18px; }
-.sphead h2 { margin: 0; font-size: 18px; color: var(--t-heading); display: flex; align-items: center; }
+.sphead { display: flex; align-items: flex-start; gap: 12px; padding: 4px 2px 14px; border-bottom: 1px solid var(--divider); }
+.sphead h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; color: var(--t-heading); }
+.sphead h2 .glyph { width: 26px; height: 26px; border-radius: 7px; font-size: 13px; }
 .sphead p { margin: 3px 0 4px; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.45; }
 .sphead small { display: inline-flex; align-items: center; gap: 4px; color: var(--t-faint); font-size: var(--fs-xs); }
-/* channel header variants: A card · B plain, no card, a rule below · C one line · D color band · E centered intro */
-.sphead.ch-b { background: none; box-shadow: none; border-radius: 0; padding: 4px 2px 14px; border-bottom: 1px solid var(--divider); }
-.ch-b h2 { gap: 8px; font-size: 20px; }
-.ch-b h2 .glyph { width: 26px; height: 26px; border-radius: 7px; font-size: 13px; }
-.sphead.ch-c { align-items: center; gap: 10px; padding: 8px 10px 8px 12px; border-radius: var(--r-lg); }
-.ch-c > .glyph { width: 26px !important; height: 26px !important; border-radius: 7px !important; font-size: 13px !important; }
-.ch-c h2 { font-size: 15px; flex: none; }
-.ch-c p { flex: 1; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--t-muted); }
-.ch-c small { flex: none; }
-.sphead.ch-d { display: block; padding: 0; overflow: hidden; }
-.chband { height: 44px; background: color-mix(in srgb, var(--chc) 70%, var(--card)); }
-.chbody { display: flex; align-items: flex-start; gap: 12px; padding: 0 16px 14px; }
-.chbody > .glyph { width: 52px; height: 52px; border-radius: 14px; font-size: 22px; margin-top: -24px; box-shadow: 0 0 0 3px var(--card); }
-.chbody .grow { padding-top: 8px; }
-.chbody > .btn1, .chbody > .btn2, .chbody > .chip { margin-top: 10px; }
-.sphead.ch-e { flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 22px 20px 18px; }
-.ch-e > .glyph { width: 48px; height: 48px; border-radius: 13px; font-size: 21px; }
-.ch-e h2 { font-size: 20px; justify-content: center; }
-.ch-e p { margin: 0; max-width: 52ch; }
-.ch-e > .btn1, .ch-e > .btn2, .ch-e > .chip { margin-top: 6px; }
-@media (max-width: 860px) { .ch-c p { display: none; } .ch-c h2 { flex: 1; } }
+/* branch action variants */
+.preview .pf2 > span:first-child { flex-basis: 100%; }
+.preview .pf2 > .grow { display: none; }
+.preview .pf2 { gap: 8px 12px; }
+.preview .pf { flex-wrap: wrap; row-gap: 6px; }
+.preview .pf > * { white-space: nowrap; }
+.pf .bagrp { gap: 8px !important; }
+.pf .bagrp { display: inline-flex; align-items: center; gap: 10px; }
+.pf .bal { color: var(--t-faint); }
+.pf .basep { width: 1px; height: 12px; background: var(--divider); }
+.pf .bapill { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 9px 0 6px; white-space: nowrap; border-radius: 12px; border: 1px solid var(--control-border); color: var(--t-heading); font-weight: 500; }
+.pf .bapill:hover { background: var(--fill-hover); }
+.pf .bapill .mark svg { width: 12px; height: 12px; }
+.pf + .bachoose, .bachoose { display: grid; gap: 2px; margin-top: 8px; padding: 4px; border-radius: var(--r-md); background: var(--control); }
+.bachoose button { display: grid; gap: 1px; padding: 6px 9px; border-radius: 7px; text-align: left; font-size: var(--fs-xs); }
+.bachoose button:hover { background: var(--card); }
+.bachoose b { color: var(--t-heading); font-weight: 600; }
+.bachoose span { color: var(--t-muted); }
+.pf .tlink svg.i { width: 10px; height: 10px; margin-left: 3px; vertical-align: -1px; }
 .bgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .bcard { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
 .bcard p { margin: 0; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.45; flex: 1; }
@@ -1318,18 +1316,44 @@ function preview(p, T, n) {
   const more = canWrite() && (extra || mine(n.u)) ? moreMenu('b:' + p.id + ':' + n.id, !n.pending && !promoted && !othersUnderBranch(T, n.id) && !othersUnderReplies(BRP[key]), 'branch', extra, mine(n.u), n.pending ? 'Available when the answer finishes' : promoted ? 'Not available after it was opened as a thread' : undefined) : '';
   const par = st.asking === p.id ? (st.askPar ?? n.id) : null;
   return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${more}</div>${n.quote ? `<blockquote class="bq">${esc(clip(n.quote, 180))}</blockquote>` : ''}${status(n)}<div class="prose">${answerHtml(n)}</div>
-    <div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches'}</span>${promoted ? `<button class="tlink" data-a="gothread" data-id="${promoted}">Open thread</button>` : ''}<span class="grow"></span>${canWrite() && !n.pending ? `<button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.id}" data-sel="${n.id}" title="Ask a follow-up under this answer">Continue</button><button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.par}" data-sel="${n.id}" title="Ask another question beside this one">Branch</button>` : ''}</div>
-    ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? 'Continue from here' : 'Ask beside this', '', 'Ask', 'askclose') : ''}
+    ${branchActs(p, n, k, promoted)}
+    ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? BA().phF : BA().phI, '', 'Ask', 'askclose') : ''}
     ${branchReplies(p, n)}</div>`;
+}
+/* ---- branch actions (variants) ----
+   A as built: Continue / Branch / Reply to this branch · B renamed: Follow up / Ask instead / Reply
+   C grouped: "Ask" label over the two asking actions, Reply in the same row · D asking actions as pills with the
+   agent mark (they run an answer and use tokens), Reply as plain text · E one "Ask" control that opens an inline
+   chooser with a line on where each question goes */
+const BA_COPY = {
+  a: { cnt: k => k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches', fol: 'Continue', ins: 'Branch', reply: 'Reply to this branch', phF: 'Continue from here', phI: 'Ask beside this', phR: 'Reply' },
+  b: { cnt: k => k ? noun(k, 'follow-up', 'follow-ups') : 'No follow-ups', fol: 'Follow up', ins: 'Ask instead', reply: 'Reply', phF: 'Follow up on this answer', phI: 'Ask a different question here', phR: 'Reply (does not ask for an answer)' },
+};
+const BA = () => ({ ...BA_COPY[(st.ui.ba || 'a') === 'a' ? 'a' : 'b'], inRow: st.ui.ba === 'c' });
+function branchActs(p, n, k, promoted) {
+  const c = BA(), v = st.ui.ba || 'a', key = p.id + ':' + n.id, can = canWrite() && !n.pending;
+  const open = promoted ? `<button class="tlink" data-a="gothread" data-id="${promoted}">Open thread</button>` : '';
+  const b = (node, label, tip, cls = 'tlink') => `<button class="${cls}" data-a="askfrom" data-id="${p.id}" data-node="${node}" data-sel="${n.id}" title="${tip}">${label}</button>`;
+  const fol = cls => b(n.id, (v === 'd' ? mark('sm') : '') + c.fol, 'Ask a new question under this answer. Runs an answer.', cls);
+  const ins = cls => b(n.par, (v === 'd' ? mark('sm') : '') + c.ins, 'Ask a different question at the same point, next to this one. Runs an answer.', cls);
+  const head = `<span>${c.cnt(k)}</span>${open}<span class="grow"></span>`;
+  if (!can) return `<div class="pf">${head}</div>`;
+  if (v === 'c') return `<div class="pf pf2">${head}<span class="bagrp"><span class="bal">Ask</span>${fol()}${ins()}</span><span class="basep"></span><button class="tlink" data-a="brreply" data-k="${key}/top">${c.reply}</button></div>`;
+  if (v === 'd') return `<div class="pf pf2">${head}${fol('bapill')}${ins('bapill')}</div>`;
+  if (v === 'e') { const on = st.baOpen === key;
+    return `<div class="pf">${head}<button class="tlink" data-a="baopen" data-k="${key}" aria-expanded="${on}">Ask${I.down}</button></div>${on ? `<div class="bachoose">
+      <button data-a="askfrom" data-id="${p.id}" data-node="${n.id}" data-sel="${n.id}"><b>${c.fol}</b><span>A new question under this answer, using it as context</span></button>
+      <button data-a="askfrom" data-id="${p.id}" data-node="${n.par}" data-sel="${n.id}"><b>${c.ins}</b><span>A different question at the same point, next to this one</span></button></div>` : ''}`; }
+  return `<div class="pf">${head}${fol()}${ins()}</div>`;
 }
 /* replies on a branch's answer: a short discussion without running another ask */
 function branchReplies(p, n) {
   if (n.pending) return '';
   const key = p.id + ':' + n.id, rows = flatReplies(BRP[key] || []);
-  const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, 'Reply', '', 'Reply', 'brclose') : '';
+  const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, BA().phR, '', 'Reply', 'brclose') : '';
   if (!rows.length && !canWrite()) return '';
   return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'reply', 'replies')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 3) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><div class="rtext">${fmtReply(r.t)}</div><div class="pf">${likeBtnK('b:' + rid(r), r)}${canWrite() ? `<button class="tlink" data-a="brreply" data-k="${key}/${id}">${st.brReplying === key + '/' + id ? 'Close reply' : 'Reply'}</button>` : ''}</div>${box(id)}</div>`).join('')}
-    ${canWrite() && st.brReplying !== key + '/top' ? `<button class="tlink brp-add" data-a="brreply" data-k="${key}/top">Reply to this branch</button>` : ''}${box('top')}</div>`;
+    ${canWrite() && st.brReplying !== key + '/top' && !BA().inRow ? `<button class="tlink brp-add" data-a="brreply" data-k="${key}/top">${BA().reply}</button>` : ''}${box('top')}</div>`;
 }
 const readout = (p, T, ns) => inGroup(T, ns, st.sel[p.id]) ? preview(p, T, T.nodes[st.sel[p.id]]) : '';
 
@@ -1488,7 +1512,7 @@ const STAR = on => `<svg class="i" viewBox="0 0 16 16" aria-hidden="true"${on ? 
 const SEARCH = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>';
 const spv = () => st.ui.sd + st.ui.sv;
 const curLabel = () => st.space === 'home' ? 'Home' : st.space === 'saved' ? 'Saved' : spName(st.space);
-const chipBtn = (id, inner, cls = '') => `<button class="${cls}" data-a="space" data-id="${id}" aria-current="${st.space === id}">${inner}</button>`;
+const chipBtn = (id, inner, cls = '') => `<button class="${cls}" data-a="space" data-id="${id}" aria-current="${st.screen === 'network' && st.space === id}">${inner}</button>`;
 const spItem = (x, extra = '') => `<button type="button" class="mi" role="menuitemradio" aria-checked="${st.space === x.id}" data-a="space" data-id="${x.id}">${glyph(x)}<span>${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</span>${extra}${st.space === x.id ? CHECK : ''}</button>`;
 const newBtns = (cls = 'mi') => canWrite() ? `<button type="button" class="${cls}" data-a="newspace">${PLUS2}<span>New channel</span></button><button type="button" class="${cls}" data-a="browse">${COMPASS}<span>Browse channels</span></button>` : `<button type="button" class="${cls}" data-a="browse">${COMPASS}<span>Browse channels</span></button>`;
 /* the list inside every dropdown: Home, your spaces, joined, then New and Browse */
@@ -1508,13 +1532,13 @@ const SCOPES = () => [['joined', st.auth === 'out' ? 'Open' : 'Joined'], ...(can
 const scopeList = () => { const sc = st.spScope || 'joined'; return sc === 'yours' ? yourSpaces() : sc === 'discover' ? discover() : navSpaces(); };
 const SCOPE_IC = { joined: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path d="m5.6 8.2 1.7 1.7 3.2-3.6"/></svg>', yours: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.6" r="2.6"/><path d="M3 13.5c.5-2.6 2.6-4 5-4s4.5 1.4 5 4"/></svg>', discover: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="m10.4 5.6-1.3 3.5-3.5 1.3 1.3-3.5Z"/></svg>' };
 function headerSpaces() {
-  if (st.screen !== 'network') return '<span class="hsp"></span>';
+  if (!['network', 'usage', 'members', 'browse'].includes(st.screen)) return '<span class="hsp"></span>';
   const sc = st.spScope || 'joined', list = scopeList();
   const join = x => sc === 'discover' && canWrite() ? `<span class="tj" data-a="join" data-id="${x.id}" title="Join">+</span>` : '';
   const add = canWrite() ? `<button class="tadd" data-a="newspace" title="New channel" aria-label="New channel">${PLUS2}</button>` : '';
   const empty = list.length ? '' : `<span class="tempty">${sc === 'yours' ? 'You have not made a channel yet.' : 'Nothing here yet.'}</span>`;
   const open = st.menu === 'hscope';
-  return `<div class="hsp"><nav class="tabs"><div class="tabs-s" id="k-tabs"><span class="mpick"><button type="button" class="hsdd" data-a="menu" data-m="hscope" aria-haspopup="menu" aria-expanded="${open}">${SCOPES().find(x => x[0] === sc)[1]}${I.down}</button>${open ? `<div class="menu" role="menu">${SCOPES().map(([k, l]) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${sc === k}" data-a="spscope" data-s="${k}">${SCOPE_IC[k]}<span>${l}</span>${sc === k ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>${list.map(x => chipBtn(x.id, esc(spName(x.id)) + join(x))).join('')}${empty}${add}</div></nav></div>`;
+  return `<div class="hsp"><span class="mpick"><button type="button" class="hsdd" data-a="menu" data-m="hscope" aria-haspopup="menu" aria-expanded="${open}">${SCOPES().find(x => x[0] === sc)[1]}${I.down}</button>${open ? `<div class="menu" role="menu">${SCOPES().map(([k, l]) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${sc === k}" data-a="spscope" data-s="${k}">${SCOPE_IC[k]}<span>${l}</span>${sc === k ? CHECK : ''}</button>`).join('')}</div>` : ''}</span><nav class="tabs"><div class="tabs-s" id="k-tabs">${list.map(x => chipBtn(x.id, esc(spName(x.id)) + join(x))).join('')}${empty}${add}</div></nav></div>`;
 }
 /* ---- B: a dropdown ---- */
 function navDropTop() {
@@ -1553,12 +1577,7 @@ function spaceHead() {
   const act = !canWrite() ? '' : own ? '<span class="chip">Your channel</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : isPrivate(x.id) ? '<span class="chip">Members only</span>' : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`;
   const name = `${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}`, by = `Channel by ${av(ownerOf(x.id), 'xs')}@${esc(ownerOf(x.id))}`, cnt = noun(memberCount(x.id), 'member', 'members');
   const meta = `${by} · ${cnt}${isPrivate(x.id) ? ' · private' : ''}`, desc = x.desc ? `<p>${esc(clip(x.desc, 170))}</p>` : '';
-  const v = st.ui.ch || 'a', wrap = h => `<div class="row new-row"><div class="sphead ch-${v}" style="--chc:var(--av${x.av})">${h}</div><div></div></div>`;
-  if (v === 'b') return wrap(`<div class="grow"><h2>${glyph(x)}${name}</h2>${desc}<small>${meta}</small></div>${act}`);
-  if (v === 'c') return wrap(`${glyph(x)}<h2>${name}</h2>${x.desc ? `<p title="${esc(x.desc)}">${esc(x.desc)}</p>` : '<span class="grow"></span>'}<small>${cnt}</small>${act}`);
-  if (v === 'd') return wrap(`<div class="chband"></div><div class="chbody">${glyph(x)}<div class="grow"><h2>${name}</h2>${desc}<small>${meta}</small></div>${act}</div>`);
-  if (v === 'e') return wrap(`${glyph(x)}<h2>${name}</h2>${desc}<small>${meta}</small>${act}`);
-  return wrap(`${glyph(x)}<div class="grow"><h2>${name}</h2>${desc}<small>${meta}</small></div>${act}`);
+  return `<div class="row new-row"><div class="sphead"><div class="grow"><h2>${glyph(x)}${name}</h2>${desc}<small>${meta}</small></div>${act}</div><div></div></div>`;
 }
 const spaceLocked = () => SP[st.space] && SPACE_META[st.space] && isPrivate(st.space) && !isJoined(st.space);
 /* Browse: every open space, plus private ones you are in */
@@ -1640,12 +1659,13 @@ app.addEventListener('click', e => {
   if (a === 'newspace') { st.menu = null; st.creating = { name: '', desc: '', vis: 'open', err: '' }; render(); $('#ns-name')?.focus(); return; }
   if (a === 'newspaceclose') { st.creating = null; render(); return; }
   if (a === 'browse') { st.menu = null; st.screen = 'browse'; render(); $('#in-browseq')?.focus({ preventScroll: true }); return; }
-  if (a === 'spscope') { st.spScope = d.s; render(); return; }
+  if (a === 'spscope') { st.spScope = d.s; st.menu = null; render(); return; }
   if (a === 'star') { e.stopPropagation(); const s0 = (STARRED[st.user] ||= []), i = s0.indexOf(d.id); if (i < 0) s0.push(d.id); else s0.splice(i, 1); render(); return; }
   if (a === 'seccol') { st.secCol = { ...(st.secCol || {}), [d.k]: !(st.secCol || {})[d.k] }; render(); return; }
   if (a === 'ask' && st.asking === d.id) { (document.getElementById(`in-mf:${d.id}:${st.askPar ?? 'r'}`) || $(`[id^="in-mf\\:${d.id}"]`))?.focus(); return; }
   if (a === 'ask') { st.asking = d.id; st.sel[d.id] = null; st.quote = null; st.askPar = null; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
-  if (a === 'askfrom') { st.sel[d.id] = d.sel || d.node; st.askPar = d.node; st.asking = d.id; st.quote = null; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
+  if (a === 'baopen') { st.baOpen = st.baOpen === d.k ? null : d.k; render(); return; }
+  if (a === 'askfrom') { st.baOpen = null; st.sel[d.id] = d.sel || d.node; st.askPar = d.node; st.asking = d.id; st.quote = null; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
   if (a === 'grpopen') { const G = groupsFor(byId(d.id), document.getElementById('pr-' + d.id)).find(x => x.bi === +d.bi); if (!G) return;
     const first = G.ns[0].id; st.sel[d.id] = first; st.asking = null; st.askPar = null; st.quote = null; render();
     const row = document.querySelector(`#mr-${d.id} .grow-r[data-node="${first}"]`); row?.focus({ preventScroll: true }); row?.closest('.pin')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
@@ -1825,7 +1845,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { ch: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { ba: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -2064,7 +2084,7 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
-    ${seg('ch', 'Channel header', 5)}
+    ${seg('ba', 'Branch actions', 5)}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -2093,6 +2113,7 @@ function renderInner() {
   renderMock();
   if (!$('#shell')) { app.innerHTML = '<div id="shell"><div id="bar"></div><div id="page"></div></div>'; lastV = null; }
   $('#bar').innerHTML = st.auth === 'out' ? appbarOut() : appbar();
+  { const ts = $('#k-tabs'); if (ts && st.screen !== 'network') { const fade = () => { ts.style.setProperty('--fl', ts.scrollLeft > 1 ? '40px' : '0px'); ts.style.setProperty('--fr', ts.scrollLeft + ts.clientWidth < ts.scrollWidth - 1 ? '40px' : '0px'); }; fade(); ts.addEventListener('scroll', fade, { passive: true }); } }
   if (st.screen !== 'network' || st.menu) $('#bar').classList.remove('hid');
   if (st.auth === 'out') st.screen = 'network';
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
@@ -2110,7 +2131,13 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
-  if (k === 'ch') { st.screen = 'network'; st.authOpen = false; if (!SP[st.space] || !SPACE_META[st.space]) st.space = (navSpaces()[0] || discover()[0]).id; render(); $('#k-mg') && ($('#k-mg').scrollTop = 0); return; }
+  if (k === 'ba') { /* open the first branch on screen so its actions show */
+    if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
+    st.screen = 'network'; st.authOpen = false; st.asking = null; st.baOpen = null;
+    const p = streamFor(st.space).find(p => p.k === 'ask' && Object.keys(tree(p).nodes).length > 1) || streamFor('home').find(p => p.k === 'ask' && Object.keys(tree(p).nodes).length > 1);
+    if (p && !streamFor(st.space).includes(p)) st.space = 'home';
+    if (p && !st.sel[p.id]) st.sel[p.id] = Object.keys(tree(p).nodes).find(id => id !== 'r');
+    render(); if (p) $('#card-' + p.id)?.scrollIntoView({ block: 'start' }); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'network' : 'usage';
