@@ -400,6 +400,10 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .nav { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: var(--r-md); color: var(--t-secondary); font-weight: 500; font-size: var(--fs-sm); }
 .nav:hover { background: var(--fill-hover); color: var(--t-heading); }
 .nav[aria-current="true"] { background: var(--control); color: var(--t-heading); }
+.hinv { display: inline-flex; align-items: center; gap: 5px; padding: 0 12px 0 9px; color: var(--t-heading); background: var(--control); }
+.hinv svg.i { width: 14px; height: 14px; }
+.hinv.on, .hicon.on { background: var(--control-hover); color: var(--t-heading); }
+.hicon svg.i { width: 17px; height: 17px; }
 .nbadge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent-strong); color: var(--on-accent-light); font-size: 10.5px; font-weight: 700; display: inline-grid; place-items: center; }
 .acct { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 6px 0 4px; border-radius: 15px; color: var(--t-muted); }
 .acct:hover, .acct[aria-expanded="true"] { background: var(--fill-hover); }
@@ -1287,7 +1291,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { nav: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1344,15 +1348,29 @@ function meter() {
 }
 
 /* ---- app bar ---- */
+/* where Members sits in the app bar (variants)
+   A text tab next to the brand · B text tabs for Members and Usage · C "Invite" button with a plus, on the right
+   D people icon on the right, next to the meter · E none; Members lives in the account menu only */
+const PEOPLE = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6" cy="5.5" r="2.4"/><path d="M1.8 13c.4-2.3 2.1-3.6 4.2-3.6s3.8 1.3 4.2 3.6"/><path d="M10.6 3.3a2.3 2.3 0 0 1 0 4.4M12.2 9.6c1.1.5 1.8 1.6 2 3.4"/></svg>';
+const PLUS = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>';
+function navArea(nav) {
+  if (!isActive()) return { left: `<nav class="navs">${nav('status', 'Invite')}</nav>`, right: '' };
+  const v = st.ui.nav;
+  if (v === 'b') return { left: `<nav class="navs">${nav('members', 'Members')}${nav('usage', 'Usage')}</nav>`, right: '' };
+  if (v === 'c') return { left: '', right: `<button class="ghost hinv${st.screen === 'members' ? ' on' : ''}" data-ma="go" data-to="members">${PLUS}Invite</button>` };
+  if (v === 'd') return { left: '', right: `<button class="iconbtn hicon${st.screen === 'members' ? ' on' : ''}" data-ma="go" data-to="members" aria-label="Members and invites" title="Members and invites">${PEOPLE}</button>` };
+  if (v === 'e') return { left: '', right: '' };
+  return { left: `<nav class="navs">${nav('members', 'Members')}</nav>`, right: '' };
+}
 function appbar() {
   const m = meM();
   const nav = (to, label, badge) => `<button class="nav" data-ma="go" data-to="${to}" aria-current="${st.screen === to}">${label}${badge ? `<span class="nbadge">${badge}</span>` : ''}</button>`;
   const open = st.menu === 'acct';
   return `<header class="appbar">${brandBtn()}
-    <nav class="navs">${isActive() ? nav('members', 'Members') : nav('status', 'Invite')}</nav><span class="grow"></span>${meter()}
+    ${navArea(nav).left}<span class="grow"></span>${navArea(nav).right}${meter()}
     <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}">${av(st.user, 'sm')}${I.down}</button>
     ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff ? cap1(m.staff) : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
-      ${isActive() ? `<button class="mi" data-ma="go" data-to="members"><span>Invites</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
+      ${isActive() ? `<button class="mi" data-ma="go" data-to="members"><span>${st.ui.nav === 'e' ? 'Members and invites' : 'Invites'}</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
       <div class="msep"></div><button class="mi" data-ma="signout"><span>Sign out</span></button></div>` : ''}</span></header>`;
 }
 
@@ -1407,7 +1425,7 @@ function authScreen() {
 const redeemForm = (label = 'Use code') => `<form class="code-f" data-mform="redeem"><input id="in-redeem" value="${esc(st.redeem || '')}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1">${label}</button></form>${st.redeemErr ? `<p class="ferr">${esc(st.redeemErr)}</p>` : ''}`;
 function statusPage() {
   const m = meM();
-  const browse = `<div class="auth-acts"><button class="btn2" data-ma="go" data-to="feed">Browse the feed</button></div>`;
+  const browse = `<div class="auth-acts"><button class="btn2" data-ma="go" data-to="feed">Browse the network</button></div>`;
   return `<div class="page"><div class="page-in narrow pend-a"><h2>Invite required</h2><p class="lede">You're signed in as @${esc(m.u)}, but Session is invite-only. Enter a code or link from a member to start asking and posting.</p>
     ${redeemForm()}
     <div class="pcard"><ul class="checks"><li class="ok">${CHECK}Read every open space and its branches</li><li><span class="ring"></span>Ask, post, branch and reply</li><li><span class="ring"></span>Invite people</li></ul></div>${browse}</div></div>`;
@@ -1509,6 +1527,7 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
+    ${seg('nav', 'Members in header', 5)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -1530,6 +1549,7 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the feed for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
+  if (k === 'nav') { if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; } st.authOpen = false; st.screen = 'feed'; render(); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'feed' : 'usage';
