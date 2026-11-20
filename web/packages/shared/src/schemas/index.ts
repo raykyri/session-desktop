@@ -7,7 +7,7 @@ export * from "./research.js";
 export * from "./turn.js";
 export * from "./tweet.js";
 
-// The Spaces API's schemas (the HTML mockup's contract) are named after the
-// real wire types they stand in for, which are other shapes, so they are
-// reached through a namespace: `spaces.researchTreeSummarySchema`.
+// The spaces contract (records, mutators, errors) is reached through a
+// namespace: `spaces.threadRecordSchema`. The first-draft mock's contract,
+// `./spaces.deferred.ts`, is not exported.
 export * as spaces from "./spaces.js";

@@ -7,7 +7,7 @@ import test from "ava";
 
 import type { Envelope, StatsRec, CountsRec, ThreadRec } from "../src/index.js";
 
-import { DAY, HOUR, actor, cast, ok, refused, thread } from "./harness.js";
+import { DAY, HOUR, MODEL, actor, cast, ok, refused, thread } from "./harness.js";
 
 test("a replay of the same mutation id is applied once and answers the first result", async (t) => {
   const { w, open } = await cast(t);
@@ -15,7 +15,7 @@ test("a replay of the same mutation id is applied once and answers the first res
   const sent: Envelope[] = [];
   const first: string[] = [];
   for (const [name, input] of [
-    ["likes.set", { thread: th, on: true }],
+    ["saved.set", { kind: "thread", id: th, on: true }],
     ["threads.create", { id: w.id(), space: open, kind: "post", q: "once" }],
     ["research.createPostFollowUp", { id: w.id(), thread: th, t: "once" }],
   ] as const) {
@@ -35,7 +35,7 @@ test("a replay of the same mutation id is applied once and answers the first res
   }
   t.is(JSON.stringify([...w.server.dump()]), before);
   const pCounts = w.get(`counts:${th}`) as CountsRec;
-  t.is(pCounts.likes, 1);
+  t.is(pCounts.saves, 1);
   t.is(pCounts.r, 1);
   t.is((w.get(`stats:${open}`) as StatsRec).posts, 2);
 });
@@ -43,23 +43,26 @@ test("a replay of the same mutation id is applied once and answers the first res
 test("a replay with a different name or input is refused, and the stored result stays", async (t) => {
   const { w, open } = await cast(t);
   const th = await thread(t, w, "mel", open, "post");
-  const e = await w.envelope("otto", "likes.set", { thread: th, on: true });
+  const e = await w.envelope("otto", "saved.set", { kind: "thread", id: th, on: true });
   await ok(t, w.server.apply(actor("otto"), e));
   for (const forged of [
-    { name: "members.setRole", input: { space: open, user: "otto", role: "owner" } },
-    { name: "likes.set", input: { thread: th, on: false } },
+    { name: "spaces.leave", input: { space: open } },
+    { name: "saved.set", input: { kind: "thread", id: th, on: false } },
   ]) {
     const r = await w.resend("otto", { ...e, ...forged }, true);
     t.is(r.ok ? null : r.error.code, "BAD_REQUEST");
     t.deepEqual(r.ok ? null : r.error.issues, ["mutationId: already used for a different change"]);
   }
   t.is((w.get(`member:${open}:otto`) as { role: string }).role, "member");
-  t.truthy(w.get(`like:otto:${th}`));
+  t.truthy(w.get(`save:otto:${th}`));
   // the same payload with its keys in another order is the same payload
-  t.deepEqual(await w.server.apply(actor("otto"), { ...e, input: { on: true, thread: th } }), {
-    ok: true,
-    result: { on: true },
-  });
+  t.deepEqual(
+    await w.server.apply(actor("otto"), { ...e, input: { on: true, id: th, kind: "thread" } }),
+    {
+      ok: true,
+      result: { on: true },
+    },
+  );
 });
 
 test("a refusal is stored too: the same mutation id is refused again", async (t) => {
@@ -71,7 +74,7 @@ test("a refusal is stored too: the same mutation id is refused again", async (t)
     q: "x",
   });
   await refused(t, w.server.apply(actor("otto"), e), "FORBIDDEN");
-  await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
+  await ok(t, w.as("otto", "joinRequests.create", { space: closed }));
   await ok(
     t,
     w.as("olga", "joinRequests.decide", {
@@ -89,7 +92,12 @@ test("another user's mutation id neither blocks nor replays your write", async (
   const mid = w.id();
   const a = (await ok(
     t,
-    w.as("mel", "threads.create", { id: w.id(), space: open, kind: "ask", q: "mel's" }, mid),
+    w.as(
+      "mel",
+      "threads.create",
+      { id: w.id(), space: open, kind: "ask", q: "mel's", ...MODEL },
+      mid,
+    ),
   )) as {
     id: string;
     run: string;
@@ -98,7 +106,12 @@ test("another user's mutation id neither blocks nor replays your write", async (
   // derived run id does not collide with mel's
   const b = (await ok(
     t,
-    w.as("otto", "threads.create", { id: w.id(), space: open, kind: "ask", q: "otto's" }, mid),
+    w.as(
+      "otto",
+      "threads.create",
+      { id: w.id(), space: open, kind: "ask", q: "otto's", ...MODEL },
+      mid,
+    ),
   )) as {
     id: string;
     run: string;
@@ -109,7 +122,7 @@ test("another user's mutation id neither blocks nor replays your write", async (
   t.truthy(w.get(`run:${a.run}`));
   t.truthy(w.get(`run:${b.run}`));
   // and mel's replay still answers mel's result
-  const melsInput = { id: a.id, space: open, kind: "ask", q: "mel's" };
+  const melsInput = { id: a.id, space: open, kind: "ask", q: "mel's", ...MODEL };
   t.deepEqual(await w.as("mel", "threads.create", melsInput, mid), { ok: true, result: a });
   // eve sending mel's exact envelope, mel's client id included, is refused
   const melsEnvelope = { ...(await w.envelope("mel", "threads.create", melsInput, mid)), seq: 1 };

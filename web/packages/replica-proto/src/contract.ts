@@ -8,7 +8,7 @@
 
 import type { Spaces } from "@session/shared";
 
-import type { AnyMutator, Effect } from "./mutators.js";
+import type { AnyMutator } from "./mutators.js";
 import type { LogId, StoredRecord } from "./records.js";
 
 export type Awaitable<T> = T | Promise<T>;
@@ -19,9 +19,10 @@ export interface Actor {
 }
 
 /** The protocol version this prototype speaks, and the lowest it accepts.
- * Version 3 added `clientTime` to the envelope, and made cursors tokens. */
-export const PROTOCOL_VERSION = 3;
-export const MIN_PROTOCOL_VERSION = 3;
+ * Version 3 added `clientTime` to the envelope, and made cursors tokens.
+ * Version 4 added `queuedAt` and `replaces`, and `TOO_LARGE`. */
+export const PROTOCOL_VERSION = 4;
+export const MIN_PROTOCOL_VERSION = 4;
 
 /** One outbox entry as the client sends it: a mutator's name and input, the
  * client that sends it, its place in that client's sequence, and the
@@ -38,20 +39,30 @@ export const MIN_PROTOCOL_VERSION = 3;
  * `clientTime` is the device's clock, corrected by the offset the client
  * learned from CLOCK_SKEW, in milliseconds since the epoch. The client makes
  * its ids from the same clock, so `clientTime` minus the time in the mutation
- * id is the write's age measured on the device (review round 2, finding 3). */
+ * id is the write's age measured on the device (review round 2, finding 3).
+ *
+ * `queuedAt` is when the write was queued, on the same clock; the server
+ * checks its age like a mutation id's. `replaces` lists the mutation ids of
+ * the same write that the client reminted after CLOCK_SKEW (their envelopes
+ * may still arrive): the server stores this envelope's answer under each of
+ * them in the same commit, so a delayed original gets that answer and is
+ * never applied (`01` Y1). */
 export interface Envelope {
   clientId: string;
   seq: number;
   mutationId: string;
+  replaces?: string[];
   name: string;
   input: unknown;
   protocolVersion: number;
   clientTime: number;
+  queuedAt: number;
 }
 
-/** The spaces API's codes, and the ones the sync protocol adds:
+/** The answer codes (`Spaces.SpaceErrorCode`, `01` Y2), the sync protocol's
+ * included:
  * - `UPGRADE_REQUIRED`: the client's protocol version is below the minimum
- *   ("Update Session").
+ *   (the client reloads).
  * - `STALE`: the record a decision acts on is no longer in the state the
  *   client saw (a thread edited since `base.rev`, a member admitted again
  *   since the decision was made).
@@ -59,29 +70,23 @@ export interface Envelope {
  *   server's time. Not recorded; the error carries `serverTime`, and the
  *   client corrects its clock and sends the write again.
  * - `EXPIRED`: the write is too old to apply. Measured on the device's clock
- *   (`clientTime`), its mutation id or a new id in its input is more than 4
- *   days old or more than a minute in the future, or an online-only write's
- *   mutation id is more than a minute old. Recorded; the client drops the
- *   write and tells the person.
+ *   (`clientTime`), its mutation id, its `queuedAt` or a new id in its input
+ *   is more than 4 days old or more than a minute in the future, or an
+ *   online-only write's mutation id is more than a minute old. Recorded; the
+ *   client drops the write and tells the person.
  * - `OUT_OF_ORDER`: `seq` is not the client's next one. Not recorded; the
  *   error carries `expectedSeq`.
  * - `WRONG_CLIENT`: the client id is unknown, expired, or bound to another
- *   user. Not recorded. */
-export type ErrorCode =
-  | Spaces.SpaceErrorCode
-  | "UPGRADE_REQUIRED"
-  | "STALE"
-  | "CLOCK_SKEW"
-  | "EXPIRED"
-  | "OUT_OF_ORDER"
-  | "WRONG_CLIENT";
+ *   user. Not recorded.
+ * - `TOO_LARGE`: the envelope is over 256 KB as JSON. Not recorded. */
+export type ErrorCode = Spaces.SpaceErrorCode;
 
 /** The answers that record nothing: the envelope's `seq` is not used up, the
  * same `seq` may be sent again, and the client keeps the write queued. The
  * transient ones (TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE,
  * INTERNAL_SERVER_ERROR, CLOCK_SKEW) say nothing about the write itself; the
- * client sends it again later. A BAD_REQUEST for a malformed or oversized
- * envelope records nothing either (it has no usable `seq`).
+ * client sends it again later. TOO_LARGE, and a BAD_REQUEST for a malformed
+ * or too deep envelope, record nothing either (it has no usable `seq`).
  *
  * Every other answer, applied or refused, uses up the `seq` and is recorded
  * in the same commit as the write's changes: under (user, mutation id) for 7
@@ -99,6 +104,7 @@ export const UNRECORDED: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
   "TOO_MANY_REQUESTS",
   "SERVICE_UNAVAILABLE",
   "INTERNAL_SERVER_ERROR",
+  "TOO_LARGE",
 ]);
 
 /** An error answer. `message` is fixed per code and cause, so two answers
@@ -109,6 +115,8 @@ export interface ApiError {
   code: ErrorCode;
   message: string;
   issues?: string[];
+  /** Why a PRECONDITION_FAILED was answered, where the client acts on it. */
+  reason?: Spaces.SpaceRefusalReason;
   serverTime?: number;
   expectedSeq?: number;
 }
@@ -136,7 +144,7 @@ export type Cursor = string;
 export type Change = { key: string; op: "put"; record: StoredRecord } | { key: string; op: "del" };
 
 /** Replication tier of a snapshot: `full` records, or `summary` (threads
- * without follow-ups and replies). Pulls are not tiered in this prototype. */
+ * without their nodes, answers, replies, comments and runs). Pulls are not tiered in this prototype. */
 export type Tier = "full" | "summary";
 
 export interface ReadOptions {
@@ -217,33 +225,28 @@ export interface StorageScan {
   /** The logs whose history was replaced: how many times, and the version
    * the current history began at. */
   epochs: { log: LogId; n: number; start: number }[];
-  /** The post-commit effects not yet run, with the time of the next attempt. */
-  effects: { effect: unknown; at: number; attempts: number; next: number }[];
-  /** The effects that failed 10 times and are no longer tried. */
-  deadLetters: { effect: unknown; at: number; attempts: number; failedAt: number }[];
-  /** The server jobs the effects started. */
-  jobs: { kind: string; id: string }[];
 }
 
 /** Test-only access the suite needs besides the API: the stored records (the
- * oracles read them as facts), a log's rows, the post-commit jobs the server
- * started, every value at rest, one pass of the effect worker, and a server
- * job's result. */
+ * oracles read them as facts), a log's rows, the queued runs, every value at
+ * rest, a run's result, and a restore of one log. */
 export interface TestServer extends ServerHalf {
   dump(): ReadonlyMap<string, StoredRecord>;
   logRows(log: LogId): Awaitable<LogRow[]>;
+  /** The run records with status `queued`: the run queue (there is no job
+   * queue; `01` S4 removed). */
   jobs(): readonly { kind: string; id: string }[];
   /** Expires what is past its lifetime first, as every call does. */
   scanStorage(): Awaitable<StorageScan>;
-  /** One pass of the effect worker at the server's time: runs each queued
-   * effect whose next attempt is due. Answers how many ran. On the real
-   * server a loop calls it; no request handler does. */
-  work(): Awaitable<number>;
   /** What a run writes when it finishes (not modelled otherwise): `text` as
-   * a thread's summary (`thread:<id>`) or a follow-up's answer
-   * (`followup:<id>`). False, and nothing written, for a removed item, a
+   * a thread's summary (`thread:<id>`) or a node's answer (`node:<id>`, which
+   * writes `answer:<id>`). False, and nothing written, for a removed item, a
    * deleted thread or another key. */
   finishJob(key: string, text: string): Awaitable<boolean>;
+  /** Replace a log's history, as a restore from a backup does (`01` D6):
+   * every cursor of the log resyncs, and so does every user-log cursor of a
+   * person with a record about that space. */
+  replaceHistory(log: LogId): Awaitable<void>;
 }
 
 export interface Clock {
@@ -262,9 +265,6 @@ export interface ServerOptions {
    * The suite passes a set with a faulty definition to test that a fault
    * writes nothing. */
   mutators?: Readonly<Record<string, AnyMutator>>;
-  /** Test only: an effect for which this answers true fails on that attempt
-   * (1, 2, …), as if the service it calls were down. */
-  failEffect?: (effect: Effect, attempt: number) => boolean;
 }
 
 export type ServerFactory = (options: ServerOptions) => TestServer;

@@ -51,7 +51,14 @@ export function ulid(ms: number, random: () => number): string {
  * most `ID_MAX_AGE` old and at most `ID_MAX_AHEAD` in the future of
  * `deviceNow`. */
 export function ageOk(id: string, deviceNow: number): boolean {
-  const age = deviceNow - ulidTime(id);
+  return timeOk(ulidTime(id), deviceNow);
+}
+
+/** Whether a time on the device's clock (an envelope's `queuedAt`, a
+ * ULID's time) is in the same window: at most `ID_MAX_AGE` before
+ * `deviceNow` and at most `ID_MAX_AHEAD` after it. */
+export function timeOk(ms: number, deviceNow: number): boolean {
+  const age = deviceNow - ms;
   return age <= ID_MAX_AGE && age >= -ID_MAX_AHEAD;
 }
 

@@ -1,22 +1,27 @@
 // The write oracle's effect model: for a write the oracle predicts `ok`, the
-// records it changes. It is written apart from `src/mutators.ts`, from the
-// mock's procedures (`docs/mockups/session-web-spaces-mock-api.js`, section
-// 5b), AGENTS.md and the owner's decisions of phase 0b and review round 1,
-// and reads the server's records before the write only as facts.
+// records it changes, its notifications included. It is written apart from
+// `src/mutators.ts`, from the mock's procedures
+// (`docs/mockups/session-web-spaces-mock-api.js`, section 5b), AGENTS.md,
+// the owner's decisions of phase 0b and review round 1, and the
+// implementation plan (`01` C1-C18), and reads the server's records before
+// the write only as facts.
 //
 // A prediction names every key the write may change and the fields of it that
 // matter (roles, admissions, membership, bans, counts, owners, moderation
-// states, a space's settings, and text erased on removal), or that the key is
-// gone after the write. Records whose keys the server makes (a run's derived
-// id) are predicted by kind and fields. A field may be predicted by a test
-// (`Is`) where the server makes the value: an admission id is a ULID, and a
-// new one differs from every admission id the person had in that space.
-// `check` compares a prediction with the server's records before and after
-// the write: every changed key must be predicted, and every predicted key must
+// states, a space's About, text erased on removal, notifications), or that
+// the key is gone after the write. Records whose keys the server makes (a
+// run's or a notification's derived id, a moderation log entry) are
+// predicted by kind and fields. A field may be predicted by a test (`Is`)
+// where the server makes the value: an admission id is a ULID, and a new one
+// differs from every admission id the person had in that space. `check`
+// compares a prediction with the server's records before and after the
+// write: every changed key must be predicted, and every predicted key must
 // hold the predicted fields.
 //
-// Notifications are not the write's changes: the effect worker writes them
-// later (round 2, decision 6), and the suite checks them where it runs it.
+// Notifications are part of the write (`01` U1, C16): written in the same
+// commit, once. Nobody is notified of their own action; `reply`, `branch`
+// and `comment` coalesce into the recipient's unread notification of that
+// type and thread; mentions notify members of the space.
 
 import type { StoredRecord } from "../src/index.js";
 
@@ -37,6 +42,7 @@ class Is {
   }
 }
 const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
+const anId = () => new Is("an id", (v) => typeof v === "string" && ULID.test(v));
 
 export interface Prediction {
   /** key → the fields the record holds after the write, or null: no record. */
@@ -46,8 +52,6 @@ export interface Prediction {
   /** The write's result, as far as the model knows it. */
   result?: (r: unknown) => boolean;
 }
-
-const RANK: Record<string, number> = { member: 1, mod: 2, admin: 3, owner: 4 };
 
 /** The mock's name rule (its spaces.create), written out step by step: lower
  * case; a leading "#" dropped; each run of characters other than a to z, 0
@@ -69,16 +73,49 @@ export function slug(n: string): string {
   return out.slice(start, start + 32);
 }
 
-/** A space's questions as stored: each trimmed, the empty ones dropped, and
- * `req` true or false (the mock's `qs.filter(q => q.q.trim())`). */
-const questions = (qs: unknown): Fields[] =>
-  (qs as { q: string; req?: boolean }[])
-    .filter((x) => x.q.trim() !== "")
-    .map((x) => ({ q: x.q.trim(), req: x.req === true }));
+/** A look-up phrase as stored: the words between the first and the last
+ * letter or digit, joined by single spaces (`03` G2). */
+function phrase(v: string): string {
+  const chars = [...v];
+  const word = (ch: string) => /[\p{L}\p{N}]/u.test(ch);
+  while (chars.length && !word(chars[0] as string)) chars.shift();
+  while (chars.length && !word(chars[chars.length - 1] as string)) chars.pop();
+  return chars
+    .join("")
+    .split(/\s+/)
+    .filter((x) => x !== "")
+    .join(" ");
+}
+
+/** The look-up prompt the server stores in `q` (`03` G2, the mockup's text). */
+const lookupPrompt = (p: string) =>
+  'Look up "' +
+  p +
+  '" as it is used in this answer. Describe what it refers to in two or three sentences, with a source.';
+
+/** The handles a text mentions: "@" after the start or a character that
+ * cannot be in a handle, then a handle's characters, without trailing dots;
+ * each once. */
+function mentioned(t: string): string[] {
+  const inHandle = (ch: string) => /[a-z0-9._-]/.test(ch);
+  const out: string[] = [];
+  for (let k = 0; k < t.length; k++) {
+    if (t[k] !== "@") continue;
+    const before = k === 0 ? "" : (t[k - 1] as string);
+    if (before !== "" && (inHandle(before) || before === "@")) continue;
+    let h = "";
+    for (let j = k + 1; j < t.length && inHandle(t[j] as string) && h.length < 64; j++)
+      h += t[j] as string;
+    if (!/^[a-z0-9]/.test(h)) continue;
+    while (h.endsWith(".")) h = h.slice(0, -1);
+    if (h && !out.includes(h)) out.push(h);
+  }
+  return out;
+}
 
 const isClosed = (dump: Dump, sp: string) => {
   const s = dump.get(`space:${sp}`);
-  return s?.kind === "space" && s.vis !== "open";
+  return s?.kind === "space" && s.vis === "private";
 };
 
 /** The members of a space after the write: the stored ones with `change`
@@ -90,15 +127,6 @@ function membersAfter(dump: Dump, sp: string, change: Map<string, string | null>
     if (role === null) out.delete(u);
     else out.set(u, role);
   return out;
-}
-
-/** The space record's member count and staff list (the mock's `mods`: the
- * owner, admins and moderators, by rank and then handle). */
-function spaceFields(members: Map<string, string>): Fields {
-  const staff = [...members]
-    .filter(([, role]) => role !== "member")
-    .sort(([a, x], [b, y]) => (RANK[y] ?? 0) - (RANK[x] ?? 0) || (a < b ? -1 : a > b ? 1 : 0));
-  return { members: members.size, mods: staff };
 }
 
 /** Every admission id each person had in each space, by "<space>:<person>". */
@@ -130,49 +158,100 @@ export function predictEffects(
   const out: Prediction = { keys, fresh };
   const get = (key: string) => dump.get(key) as (StoredRecord & Fields) | undefined;
   const str = (k: string) => String(input[k]);
-  /** A change of membership in `sp`: the member records and the space record. */
+  /** A change of membership in `sp`: the member records and the space's count. */
   const members = (sp: string, change: Map<string, string | null>) => {
     for (const [u, role] of change) {
       const old = dump.get(`member:${sp}:${u}`);
-      // a role change keeps the admission; a new member gets a new one
+      // a member record keeps its admission; a new member gets a new one
       const adm = old?.kind === "member" ? old.adm : newAdmission(dump, sp, u, had);
       keys.set(`member:${sp}:${u}`, role === null ? null : { sp, u, role, adm });
     }
-    keys.set(`space:${sp}`, spaceFields(membersAfter(dump, sp, change)));
+    keys.set(`space:${sp}`, { members: membersAfter(dump, sp, change).size });
   };
-  const children = (th: string) =>
+  /** A notification of the actor's write, unless it is to the actor: a
+   * coalescing type updates the recipient's unread one of that type and
+   * thread, if there is one. */
+  const notify = (
+    to: string,
+    type: string,
+    sp: string,
+    th: string,
+    item: string,
+    note: string | null = null,
+  ) => {
+    if (to === me) return;
+    if (type === "reply" || type === "branch" || type === "comment") {
+      const old = [...dump.entries()].find(
+        ([, r]) => r.kind === "notif" && r.to === to && r.type === type && r.th === th && !r.read,
+      );
+      if (old) {
+        const n = old[1] as StoredRecord & { n: number };
+        keys.set(old[0], { to, type, th, item, actor: me, n: n.n + 1, read: false });
+        return;
+      }
+    }
+    fresh.push({
+      kind: "notif",
+      id: anId(),
+      to,
+      type,
+      sp,
+      th,
+      item,
+      actor: type === "removed" ? null : me,
+      n: 1,
+      note,
+      read: false,
+    });
+  };
+  /** Mention notifications for the members of `sp` that `t` names. */
+  const mentions = (t: string, sp: string, th: string, item: string) => {
+    for (const h of mentioned(t))
+      if (dump.get(`member:${sp}:${h}`)?.kind === "member") notify(h, "mention", sp, th, item);
+  };
+  /** The author of the node a reference names in a thread: `r` the thread's. */
+  const authorAt = (th: string, ref: string) =>
+    String(get(ref === "r" ? `thread:${th}` : `node:${ref}`)?.["u"]);
+  const ofThread = (th: string, ...kinds: string[]) =>
     [...dump.entries()].filter(
-      ([, r]) => (r.kind === "followup" || r.kind === "reply" || r.kind === "run") && r.th === th,
+      ([, r]) => kinds.includes(r.kind) && "th" in r && (r as { th: string }).th === th,
     );
+  /** A new run of an ask (the run queue, `03` E2). */
+  const run = (th: string, sp: string, node: string) =>
+    fresh.push({
+      kind: "run",
+      id: anId(),
+      th,
+      s: sp,
+      node,
+      u: me,
+      model: input["model"],
+      effort: input["effort"],
+      status: "queued",
+      attempt: 1,
+      step: 0,
+    });
+  /** A moderation log entry (`01` C12). */
+  const modlog = (sp: string, act: string, item: string | null, author: string, note: unknown) =>
+    fresh.push({ kind: "modlog", id: anId(), sp, act, item, by: me, author, note });
+  /** The mention notifications about any of `erased` go with it. */
+  const eraseMentions = (erased: Set<string>) => {
+    for (const [k, r] of dump)
+      if (r.kind === "notif" && r.type === "mention" && erased.has(r.item ?? "")) keys.set(k, null);
+  };
 
   switch (name) {
     case "spaces.create": {
       const id = str("id");
-      const vis = (input["vis"] as string | undefined) ?? "open";
-      const closed = vis !== "open";
-      const name = slug(str("name"));
-      const rules = ((input["rules"] as string[] | undefined) ?? [])
-        .map((x) => x.trim())
-        .filter((x) => x !== "");
-      // the mock: title = name, an empty description is "No description
-      // yet.", no rules is the one default rule; a closed space's policy,
-      // invite setting and questions (phase 0b: "request" and "mods" when
-      // not given), an open space's none
+      // the creator is the owner and only member; an empty About is ""
       keys.set(`space:${id}`, {
         id,
-        name,
-        title: name,
-        desc:
-          (typeof input["desc"] === "string" ? input["desc"] : "").trim() || "No description yet.",
-        rules: rules.length ? rules : ["Be specific in asks."],
-        vis,
-        policy: closed ? (input["policy"] ?? "request") : null,
-        invite: closed ? (input["invite"] ?? "mods") : null,
-        qs: closed ? questions(input["qs"] ?? []) : [],
-        postsOff: false,
+        name: slug(str("name")),
+        desc: (typeof input["desc"] === "string" ? input["desc"] : "").trim(),
+        vis: input["vis"] ?? "open",
         members: 1,
-        mods: [[me, "owner"]],
-        rulesRev: 0,
+        owner: me,
+        frozen: false,
       });
       keys.set(`stats:${id}`, { sp: id, posts: 0 });
       keys.set(`member:${id}:${me}`, {
@@ -185,47 +264,15 @@ export function predictEffects(
       break;
     }
     case "spaces.update": {
-      const sp = str("id");
-      const s = get(`space:${sp}`) as Extract<StoredRecord, { kind: "space" }>;
-      const set = (input["set"] ?? {}) as In;
-      const vis = (set["vis"] as string | undefined) ?? s.vis;
-      const rules = set["rules"]
-        ? (set["rules"] as string[]).map((x) => x.trim()).filter(Boolean)
-        : s.rules;
-      const changed = rules.join("\n") !== s.rules.join("\n");
-      const closed = vis !== "open";
-      // a setting not sent keeps its value; a closed space keeps its policy,
-      // invite setting and questions, and an open space has none
-      const fields: Fields = {
-        name: typeof set["name"] === "string" ? slug(set["name"]) : s.name,
-        title: set["title"] ?? s.title,
-        desc: set["desc"] ?? s.desc,
-        rules,
-        vis,
-        policy: closed ? (set["policy"] ?? s.policy ?? "request") : null,
-        invite: closed ? (set["invite"] ?? s.invite ?? "mods") : null,
-        qs: closed ? (set["qs"] ? questions(set["qs"]) : s.qs) : [],
-        rulesRev: s.rulesRev + (changed ? 1 : 0),
-        postsOff: set["postsOff"] ?? s.postsOff,
+      // About only; nothing else of the space changes
+      const s = get(`space:${str("id")}`) as Extract<StoredRecord, { kind: "space" }>;
+      keys.set(`space:${s.id}`, {
+        name: s.name,
+        vis: s.vis,
+        owner: s.owner,
         members: s.members,
-        mods: s.mods,
-      };
-      keys.set(`space:${sp}`, fields);
-      // the mock: a closed space that becomes open approves its open
-      // requests and adds their people; a person banned from the space can't
-      // join it, so a banned requester is approved but not added
-      if (s.vis !== "open" && vis === "open") {
-        const change = new Map<string, string | null>();
-        for (const r of dump.values())
-          if (r.kind === "request" && r.sp === sp && r.st === "open") {
-            keys.set(`request:${sp}:${r.u}`, { st: "approved" });
-            if (!dump.has(`ban:${sp}:${r.u}`) && !dump.has(`member:${sp}:${r.u}`))
-              change.set(r.u, "member");
-          }
-        for (const [u, role] of change)
-          keys.set(`member:${sp}:${u}`, { sp, u, role, adm: newAdmission(dump, sp, u, had) });
-        Object.assign(fields, spaceFields(membersAfter(dump, sp, change)));
-      }
+        desc: str("desc").trim(),
+      });
       break;
     }
     case "spaces.join": {
@@ -257,17 +304,24 @@ export function predictEffects(
         q: str("q").trim(),
         t: input["title"] ?? null,
         sum: null,
+        tok: 0,
+        src: 0,
+        model: ask ? input["model"] : null,
+        effort: ask ? input["effort"] : null,
         running: ask,
         del: false,
         gone: false,
         mod: null,
+        modBy: null,
+        modNote: null,
       });
       // the counts live apart from the thread (round 1, decision 4)
-      keys.set(`counts:${id}`, { th: id, s: sp, likes: 0, r: 0 });
+      keys.set(`counts:${id}`, { th: id, s: sp, saves: 0, r: 0 });
       const stats = get(`stats:${sp}`);
       if (stats) keys.set(`stats:${sp}`, { posts: Number(stats["posts"]) + 1 });
-      // an ask starts a run (the mock's threads.create: "An ask starts a run")
-      if (ask) fresh.push({ kind: "run", th: id, s: sp, u: me, status: "queued" });
+      // an ask queues its root run; a post notifies the members it mentions
+      if (ask) run(id, sp, "r");
+      else mentions(str("q"), sp, id, `thread:${id}`);
       out.result = (r) => {
         const x = r as { id?: unknown; run?: unknown } | null;
         return x?.id === id && (ask ? typeof x.run === "string" : x.run === null);
@@ -287,14 +341,9 @@ export function predictEffects(
     }
     case "threads.delete": {
       const p = get(`thread:${str("id")}`) as Extract<StoredRecord, { kind: "thread" }>;
-      // the mock: a thread with follow-ups (an ask) or replies (a post) keeps
-      // its place; one without is gone and leaves Saved and likes
-      const kids = [...dump.values()].filter((r) =>
-        p.k === "ask"
-          ? r.kind === "followup" && r.th === p.id
-          : r.kind === "reply" && r.th === p.id && r.parent === null,
-      ).length;
-      const kept = kids > 0;
+      // a thread with nodes (an ask) or replies (a post) keeps its place; one
+      // without is gone, leaves Saved and loses its root answer
+      const kept = ofThread(p.id, p.k === "ask" ? "node" : "reply").length > 0;
       keys.set(`thread:${p.id}`, {
         del: true,
         gone: !kept,
@@ -304,51 +353,72 @@ export function predictEffects(
         sum: kept ? p.sum : null,
         mod: p.mod,
       });
-      if (!kept) keys.set(`counts:${p.id}`, { likes: 0 });
+      if (!kept) keys.set(`counts:${p.id}`, { saves: 0 });
       for (const [k, r] of dump) {
-        if (r.kind === "run" && r.th === p.id) keys.set(k, null);
-        if (!kept && (r.kind === "like" || r.kind === "save") && r.th === p.id) keys.set(k, null);
+        if (r.kind === "run" && r.th === p.id && r.node === "r") keys.set(k, null);
+        if (!kept && r.kind === "save" && r.th === p.id) keys.set(k, null);
       }
+      if (!kept && dump.has(`answer:${p.id}`)) keys.set(`answer:${p.id}`, null);
       // round 1, R4b: an author who may no longer read it is told nothing
       const reads = mayRead(dump, p, me);
       out.result = (r) => JSON.stringify(r) === JSON.stringify(reads ? { kept } : null);
-      break;
-    }
-    case "likes.set": {
-      const th = str("thread");
-      const had = dump.has(`like:${me}:${th}`);
-      const on = input["on"] === true;
-      if (on === had) break;
-      keys.set(`like:${me}:${th}`, on ? { u: me, th } : null);
-      const n = get(`counts:${th}`);
-      if (n) keys.set(`counts:${th}`, { likes: Math.max(0, Number(n["likes"]) + (on ? 1 : -1)) });
       break;
     }
     case "saved.set": {
       const th = str("id");
       const had = dump.has(`save:${me}:${th}`);
       const on = input["on"] === true;
-      if (on !== had) keys.set(`save:${me}:${th}`, on ? { u: me, th } : null);
+      if (on === had) break;
+      keys.set(`save:${me}:${th}`, on ? { u: me, th } : null);
+      // the served count: every save, but 0 below 3 in a private space (S6)
+      const counts = get(`counts:${th}`);
+      if (counts) {
+        let n = 0;
+        for (const r of dump.values()) if (r.kind === "save" && r.th === th) n++;
+        n += on ? 1 : -1;
+        const hide = isClosed(dump, String(counts["s"])) && n < 3;
+        keys.set(`counts:${th}`, { saves: hide ? 0 : n });
+      }
       break;
     }
-    case "followups.ask": {
+    case "research.forkNode": {
       const p = get(`thread:${str("thread")}`) as Extract<StoredRecord, { kind: "thread" }>;
-      keys.set(`followup:${str("id")}`, {
+      const id = str("id");
+      const look = input["kind"] === "lookup" ? phrase(str("look")) : null;
+      keys.set(`node:${id}`, {
+        id,
         th: p.id,
         s: p.s,
+        par: input["parent"],
+        k: input["kind"],
         u: me,
-        q: str("q").trim(),
-        a: null,
+        q: look === null ? str("q").trim() : lookupPrompt(look),
+        look,
+        quote: input["quote"] ?? null,
+        b: input["b"] ?? null,
+        tpl: look === null ? null : 1,
+        model: input["model"],
+        effort: input["effort"],
+        run: anId(),
+        promoted: null,
         mod: null,
+        del: false,
       });
-      const n = get(`counts:${p.id}`);
-      keys.set(`counts:${p.id}`, { r: Number(n?.["r"]) + 1, likes: n?.["likes"] });
+      run(p.id, p.s, id);
+      // `r` counts every node under the root (C5)
+      keys.set(`counts:${p.id}`, { r: ofThread(p.id, "node").length + 1 });
+      notify(authorAt(p.id, str("parent")), "branch", p.s, p.id, `node:${id}`);
+      out.result = (r) => {
+        const x = r as { id?: unknown; run?: unknown } | null;
+        return x?.id === id && typeof x.run === "string";
+      };
       break;
     }
     case "research.createPostFollowUp": {
       const p = get(`thread:${str("thread")}`) as Extract<StoredRecord, { kind: "thread" }>;
       const parent = (input["parent"] as string | undefined) ?? null;
-      keys.set(`reply:${str("id")}`, {
+      const id = str("id");
+      keys.set(`reply:${id}`, {
         th: p.id,
         s: p.s,
         u: me,
@@ -356,20 +426,32 @@ export function predictEffects(
         parent,
         mod: null,
       });
-      // a top-level reply counts for its post; a reply to a reply does not
-      const n = get(`counts:${p.id}`);
-      if (parent === null) keys.set(`counts:${p.id}`, { r: Number(n?.["r"]) + 1 });
+      // every reply counts for its post, at every depth (C5)
+      keys.set(`counts:${p.id}`, { r: ofThread(p.id, "reply").length + 1 });
+      notify(String(p.u), "reply", p.s, p.id, `reply:${id}`);
+      mentions(str("t"), p.s, p.id, `reply:${id}`);
+      break;
+    }
+    case "comments.create": {
+      const p = get(`thread:${str("thread")}`) as Extract<StoredRecord, { kind: "thread" }>;
+      const id = str("id");
+      keys.set(`comment:${id}`, {
+        th: p.id,
+        s: p.s,
+        node: input["node"],
+        parent: input["parent"] ?? null,
+        u: me,
+        t: str("t").trim(),
+        mod: null,
+      });
+      // a comment starts no run and changes no count (`03` G4)
+      notify(authorAt(p.id, str("node")), "comment", p.s, p.id, `comment:${id}`);
+      mentions(str("t"), p.s, p.id, `comment:${id}`);
       break;
     }
     case "joinRequests.create": {
       const sp = str("space");
-      keys.set(`request:${sp}:${me}`, {
-        sp,
-        u: me,
-        st: "open",
-        a: input["answers"] ?? [],
-        why: null,
-      });
+      keys.set(`request:${sp}:${me}`, { sp, u: me, st: "open", why: null });
       break;
     }
     case "joinRequests.decide": {
@@ -384,16 +466,7 @@ export function predictEffects(
         });
         if (d === "approve" && !dump.has(`member:${sp}:${u}`)) change.set(u, "member");
       }
-      // the space record is written again in any case (its counts)
-      members(sp, change);
-      break;
-    }
-    case "members.setRole": {
-      const sp = str("space");
-      const role = str("role");
-      const change = new Map<string, string | null>([[str("user"), role]]);
-      // the mock: role "owner" transfers ownership; the old owner becomes an admin
-      if (role === "owner") change.set(me, "admin");
+      // the space record is written again in any case (its count)
       members(sp, change);
       break;
     }
@@ -408,13 +481,26 @@ export function predictEffects(
       const user = str("user");
       // whatever the member record's rev or admission (round 2)
       members(sp, new Map([[user, null]]));
-      // the mock's ban record: id "<space>:<user>", one per person and space
-      keys.set(`ban:${sp}:${user}`, { id: `${sp}:${user}`, sp, u: user });
+      // the mock's ban record: id "<space>:<user>", one per person and space;
+      // a new ban is logged (C12)
+      if (!dump.has(`ban:${sp}:${user}`)) {
+        keys.set(`ban:${sp}:${user}`, { id: `${sp}:${user}`, sp, u: user });
+        modlog(sp, "ban", null, user, null);
+      }
+      break;
+    }
+    case "members.unban": {
+      const sp = str("space");
+      const user = str("user");
+      if (dump.has(`ban:${sp}:${user}`)) {
+        keys.set(`ban:${sp}:${user}`, null);
+        modlog(sp, "unban", null, user, null);
+      }
       break;
     }
     case "invites.create": {
       const id = str("id");
-      const days = input["days"] as number | null | undefined;
+      const days = input["days"] as number;
       const now = Math.floor(nowMs / 1000) * 1000;
       keys.set(`invite:${id}`, {
         id,
@@ -422,59 +508,88 @@ export function predictEffects(
         sp: str("space"),
         dead: null,
         usedBy: null,
-        expiresAt: days
-          ? new Date(now + days * 86_400_000).toISOString().replace(".000Z", "Z")
-          : null,
+        expiresAt: new Date(now + days * 86_400_000).toISOString().replace(".000Z", "Z"),
       });
+      // 26 base32 characters from the server's random source (`04` B4)
       out.result = (r) => {
         const x = r as { id?: unknown; code?: unknown } | null;
         return (
-          x?.id === id && typeof x.code === "string" && /^[0-9a-hjkmnp-tv-z]{10}$/.test(x.code)
+          x?.id === id && typeof x.code === "string" && /^[0-9a-hjkmnp-tv-z]{26}$/.test(x.code)
         );
       };
       break;
     }
-    case "reports.create": {
-      const id = str("id");
-      const item = str("item");
-      const [, th] = item.split(":");
-      const p = get(`thread:${th ?? ""}`);
-      const sp = String(p?.["s"]);
-      keys.set(`report:${id}`, {
-        sp,
-        key: item,
-        by: me,
-        st: "open",
-        why: str("why").trim(),
-        note: (typeof input["note"] === "string" ? input["note"] : "").trim(),
-      });
-      // the staff's notifications come from the effect worker, later
-      out.result = (r) => JSON.stringify(r) === JSON.stringify({ id, sp });
-      break;
-    }
     case "moderation.decide": {
-      const [k, th, sub] = str("item").split(":");
-      const key = k === "f" ? `followup:${sub}` : k === "r" ? `reply:${sub}` : `thread:${th}`;
+      const item = str("item");
+      const [k, th, sub] = item.split(":");
+      const key =
+        k === "f"
+          ? `node:${sub}`
+          : k === "r"
+            ? `reply:${sub}`
+            : k === "c"
+              ? `comment:${sub}`
+              : `thread:${th}`;
       const r = get(key) as StoredRecord & Fields;
       const d = input["decision"];
-      if (d === "hidden") keys.set(key, { mod: "hidden", ...text(r) });
-      else if (d === "shown") keys.set(key, { mod: null, ...text(r) });
-      else {
-        // removed: erased for good, with everything under it (owner
-        // decision, 0b): a thread's follow-ups, runs and replies; a top-level
-        // reply's replies. The item stays as a placeholder with no text.
-        if (r.kind === "thread") {
-          keys.set(key, { mod: "removed", q: "", t: null, sum: null, running: false });
-          keys.set(`counts:${r.id}`, { r: 0 });
-          for (const [ck] of children(r.id)) keys.set(ck, null);
-        } else if (r.kind === "followup") keys.set(key, { mod: "removed", q: "", a: null });
-        else if (r.kind === "reply") {
-          keys.set(key, { mod: "removed", t: "" });
-          if (r.parent === null)
-            for (const [ck, x] of dump)
-              if (x.kind === "reply" && x.parent === r.id) keys.set(ck, null);
-        }
+      if (d === "hidden" || d === "shown") {
+        const mod = d === "hidden" ? "hidden" : null;
+        keys.set(key, { mod, ...text(r) });
+        // the answer of a hidden ask is hidden with it
+        const answer = `answer:${String(r["id"])}`;
+        if ((r.kind === "thread" || r.kind === "node") && dump.has(answer))
+          keys.set(answer, { mod, md: (get(answer) as Fields)["md"] });
+        break;
       }
+      // removed: erased for good, with everything under it (owner decision,
+      // 0b; `04` §6.2). The item stays as a placeholder with no text; the
+      // removal is logged, and a thread's author is notified with the reason.
+      const note = (typeof input["note"] === "string" ? input["note"] : "").trim() || null;
+      const erased = new Set<string>([key]);
+      const drop = (ck: string) => {
+        erased.add(ck);
+        keys.set(ck, null);
+      };
+      if (r.kind === "thread") {
+        keys.set(key, {
+          mod: "removed",
+          q: "",
+          t: null,
+          sum: null,
+          running: false,
+          modBy: me,
+          modNote: note,
+        });
+        keys.set(`counts:${r.id}`, { r: 0, saves: 0 });
+        for (const [ck] of ofThread(r.id, "node", "answer", "reply", "comment", "run", "save"))
+          drop(ck);
+        for (const [ck, x] of dump)
+          if (x.kind === "notif" && x.type === "mention" && x.th === r.id) keys.set(ck, null);
+        notify(String(r.u), "removed", r.s, r.id, key, note);
+      } else if (r.kind === "node") {
+        keys.set(key, { mod: "removed", q: "", look: null, quote: null });
+        if (dump.has(`answer:${r.id}`)) drop(`answer:${r.id}`);
+        for (const [ck, x] of dump) if (x.kind === "comment" && x.node === r.id) drop(ck);
+      } else if (r.kind === "reply" || r.kind === "comment") {
+        keys.set(key, { mod: "removed", t: "" });
+        if (r.parent === null)
+          for (const [ck, x] of dump) if (x.kind === r.kind && x.parent === r.id) drop(ck);
+        if (r.kind === "reply")
+          keys.set(`counts:${r.th}`, { r: ofThread(r.th, "reply").length - (erased.size - 1) });
+      }
+      eraseMentions(erased);
+      modlog(String(r["s"]), "remove", item, String(r["u"]), note);
+      break;
+    }
+    case "notifications.markRead": {
+      const key = `notif:${str("id")}`;
+      if (get(key)?.["read"] === false) keys.set(key, { read: true });
+      break;
+    }
+    case "prefs.set": {
+      const old = get(`prefs:${me}`);
+      if (old?.["layout"] !== input["layout"])
+        keys.set(`prefs:${me}`, { u: me, layout: input["layout"] });
       break;
     }
   }
@@ -485,8 +600,8 @@ export function predictEffects(
  * keeps them. */
 function text(r: StoredRecord): Fields {
   if (r.kind === "thread") return { q: r.q, t: r.t, sum: r.sum };
-  if (r.kind === "followup") return { q: r.q, a: r.a };
-  if (r.kind === "reply") return { t: r.t };
+  if (r.kind === "node") return { q: r.q, look: r.look, quote: r.quote };
+  if (r.kind === "reply" || r.kind === "comment") return { t: r.t };
   return {};
 }
 

@@ -1,19 +1,21 @@
 // Convergence, property-based: random sequences of writes from random actors,
-// hostile ones included, with role changes, removals, bans and moderation
-// mid-sequence and the clock moving forward. Every step is checked four ways:
+// hostile ones included, with removals, bans, moderation and restores of a
+// log mid-sequence and the clock moving forward. Every step is checked four
+// ways:
 //
 // - The write oracle (test/write-oracle.ts) predicts each envelope's answer
 //   (ok or the refusal's code) and whether it is recorded; the server must
 //   give exactly that answer, and report the predicted last seq for the
 //   client. For a write applied now, the effect model (test/effect-model.ts)
-//   predicts the records it changes, and the server's change set must match;
-//   any other answer must change nothing. Registrations are predicted too.
-// - State invariants hold after every step: one owner per space, no member
-//   record beside a ban, no tombstone older than 30 days, report
-//   notifications to the space's staff when the effect worker ran and only
-//   while they are staff when they are read, no effect lost (each report's
-//   notifications and each run's job are written, queued, or dead letters),
-//   and no marker at rest (`scanStorage`) that is not still in its record and
+//   predicts the records it changes, its notifications included, and the
+//   server's change set must match; any other answer must change nothing.
+//   Registrations are predicted too.
+// - State invariants hold after every step: one owner per space, the one the
+//   space record names; no member record beside a ban; no tombstone older
+//   than 30 days; nobody notified of their own action, and at most one
+//   unread reply, branch or comment notification per person and thread;
+//   notifications served only while their person may read their space; and
+//   no marker at rest (`scanStorage`) that is not still in its record and
 //   field, unremoved.
 // - Writes: honest writes are queued on a device's `ReplicaClient` and sent
 //   with `flush`, through its outbox. A device's clock may be slow, fast or
@@ -30,29 +32,31 @@
 //   and 30-day limits. A pull may name (put or del) only keys the reader could
 //   read at some step.
 // - Every text the generator writes carries a unique marker: questions,
-//   titles, replies, follow-up questions, report reasons and notes, request
-//   answers and decline reasons, a space's description, title, rules and
-//   questions, and the summaries and follow-up answers that runs write when
-//   they finish (`finishJob`). No response (snapshot, pull, apply answer or
-//   error) may carry a marker unless the marker is still stored in its record
-//   and the reader may see that text now: a space's settings are public; for
-//   a report or a request, the reader is its person or the space's staff;
-//   otherwise the record is not removed, its space is open or the reader a
-//   member, and if hidden, the reader is its author or the space's staff.
-//   This check uses neither oracle.
+//   titles, replies, node questions, quotes and look-up phrases, comments,
+//   decline reasons, a space's About, and the summaries and node answers that
+//   runs write when they finish (`finishJob`). No response (snapshot, pull,
+//   apply answer or error) may carry a marker unless the marker is still
+//   stored in its record and the reader may see that text now: a space's
+//   About is public; for a request, the reader is its person or the space's
+//   owner; otherwise the record is not removed, its space is open or the
+//   reader a member, and if hidden, the reader is its author or the space's
+//   owner. This check uses neither oracle. Removal reasons carry no marker:
+//   they are the owner's text, shown with the placeholder.
 //
 // The generator also makes: bans followed by the banned person's own writes,
 // declines followed by the person asking again, removals of threads with
-// follow-ups and replies, stale decisions, gapped and out-of-order seqs, old
-// and future ids, client ids used by another person, clients idle for 90
-// days, bursts of registrations, envelopes nested too deep or too large, a
-// failing random source, failing effects, and forged and replayed cursors
-// (another reader's token, another log's token, a changed byte, a token from
-// before the log's history was replaced).
+// nodes, comments and replies, stale decisions, gapped and out-of-order seqs,
+// old and future ids, old queue times, reminted envelopes naming other ids,
+// client ids used by another person, clients idle for 90 days, bursts of
+// registrations, envelopes nested too deep or too large, a failing random
+// source, restores of a space log, and forged and replayed cursors (another
+// reader's token, another log's token, a changed byte, a token from before
+// the log's history was replaced).
 //
 // Seeds are fixed: 200 sequences of 100 steps. REPLICA_PROTO_SEQUENCES runs
 // more locally (1,000 before a change is merged).
 
+import { spaces } from "@session/shared";
 import test, { type ExecutionContext } from "ava";
 
 import {
@@ -80,7 +84,6 @@ const PEOPLE = ["olga", "ada", "mona", "mel", "otto", "eve"] as const;
 type Person = (typeof PEOPLE)[number];
 /** An actor as sent: a person, signed out, or a handle no person may have. */
 type Who = Person | null | "null";
-const STAFF_ROLES = new Set(["mod", "admin", "owner"]);
 
 interface Sent {
   u: Who;
@@ -119,7 +122,7 @@ interface Ctx {
   origins: Map<string, { key: string; field: string }>;
   marks: number;
   /** Fault switches. */
-  faults: { random: boolean; effects: boolean; loss: boolean };
+  faults: { random: boolean; loss: boolean };
   /** Every write queued on a device, by local id: its person and device. */
   writes: Map<string, { u: Person; dev: Device; name: string }>;
   /** Writes sent with `send` (online only): their answer. */
@@ -130,13 +133,10 @@ interface Ctx {
   applied: Map<string, number>;
   /** Every admission id each person had in each space. */
   admissions: Map<string, Set<string>>;
-  /** Each space's history: how many times it opened or closed. */
-  history: Map<string, { closed: boolean; n: number }>;
+  /** Each space log's history: how many times it was replaced (a restore). */
+  history: Map<string, number>;
   /** Tokens served to readers, with the space history they were served in. */
   tokens: { u: string | null; log: LogId; cursor: string; n: number }[];
-  /** Reports and runs created, for the effect checks. */
-  reports: Set<string>;
-  runs: Set<string>;
 }
 
 const pick = <T>(r: () => number, xs: readonly T[]): T => xs[Math.floor(r() * xs.length)] as T;
@@ -166,11 +166,32 @@ const threadId = (c: Ctx) =>
 function itemKey(c: Ctx): string {
   const items = [
     ...records(c, "thread").map((p) => `${p.k === "ask" ? "a" : "p"}:${p.id}`),
-    ...records(c, "followup").map((f) => `f:${f.th}:${f.id}`),
+    ...records(c, "node").map((f) => `f:${f.th}:${f.id}`),
     ...records(c, "reply").map((x) => `r:${x.th}:${x.id}`),
+    ...records(c, "comment").map((x) => `c:${x.th}:${x.id}`),
   ];
   return items.length ? pick(c.r, items) : `a:${c.w.id()}`;
 }
+/** A node reference in a thread: usually `r` or one of its nodes, sometimes
+ * a node of another thread or a made-up one. */
+function nodeRef(c: Ctx, th: string): string {
+  const own = records(c, "node").filter((n) => n.th === th);
+  if (chance(c.r, 0.4)) return "r";
+  if (own.length && chance(c.r, 0.8)) return pick(c.r, own).id;
+  return some(
+    c,
+    records(c, "node").map((n) => n.id),
+  );
+}
+const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
+/** A model and an effort, now and then a missing or an unknown effort. */
+const model = (c: Ctx) =>
+  chance(c.r, 0.04)
+    ? { model: "m" }
+    : {
+        model: pick(c.r, ["claude-fable-5-1", "m"]),
+        effort: pick(c.r, [...EFFORTS, ...(chance(c.r, 0.05) ? ["huge"] : [])]),
+      };
 
 /** A new id from the sending device's clock: fresh, or one that was ever
  * taken (any record's, readable or not, deleted ones included). */
@@ -195,8 +216,7 @@ const MARKER = /mk\d+§\d+§/g;
 const roleNow = (c: Ctx, sp: string, u: string) => {
   const m = c.w.get(`member:${sp}:${u}`);
   return m?.kind === "member" ? m.role : null;
-};
-/** A record's rev as the client saw it: usually now, sometimes one write ago. */
+}; /** A record's rev as the client saw it: usually now, sometimes one write ago. */
 const seenRev = (c: Ctx, key: string) => {
   const rev = c.w.rev(key);
   return chance(c.r, 0.85) ? rev : Math.max(0, rev - 1);
@@ -212,56 +232,30 @@ const seenAdmission = (c: Ctx, sp: string, u: string) => {
 /** The record a moderation key names. */
 const itemRecordKey = (item: string) => {
   const [k, th, sub] = item.split(":");
-  return k === "f" ? `followup:${sub}` : k === "r" ? `reply:${sub}` : `thread:${th}`;
+  return k === "f"
+    ? `node:${sub}`
+    : k === "r"
+      ? `reply:${sub}`
+      : k === "c"
+        ? `comment:${sub}`
+        : `thread:${th}`;
 };
-
-/** Settings of a space, each with a marker in its text. */
-function settings(c: Ctx, sp: string): Record<string, unknown> {
-  const key = `space:${sp}`;
-  return pick(c.r, [
-    { vis: pick(c.r, ["open", "listed", "unlisted"]) },
-    { vis: pick(c.r, ["open", "listed"]) },
-    { invite: pick(c.r, ["mods", "members"]) },
-    { rules: [marked(c, key, "rules"), ...(chance(c.r, 0.3) ? ["  "] : [])] },
-    { name: pick(c.r, ["lounge", "lab", "renamed", "#Lab Two!"]) },
-    { postsOff: chance(c.r, 0.5) },
-    { policy: pick(c.r, ["request", "invite"]) },
-    { desc: marked(c, key, "desc") },
-    { title: marked(c, key, "title") },
-    {
-      qs: [
-        { q: marked(c, key, "qs"), req: chance(c.r, 0.5) },
-        ...(chance(c.r, 0.3) ? [{ q: "   " }] : []),
-      ],
-    },
-  ]);
-}
 
 type Gen = (c: Ctx, u: Who, d: Device | null) => Record<string, unknown>;
 const GENERATORS: Record<string, Gen> = {
   "spaces.create": (c, _u, d) => {
     const id = newId(c, d);
-    const closed = chance(c.r, 0.5);
     return {
       id,
       name: pick(c.r, ["lounge", "lab", "new", "other", "#Lab", " -Lab ünd #2"]),
-      ...(chance(c.r, 0.5) ? { vis: closed ? pick(c.r, ["listed", "unlisted"]) : "open" } : {}),
+      ...(chance(c.r, 0.5) ? { vis: pick(c.r, ["open", "private"]) } : {}),
       ...(chance(c.r, 0.5) ? { desc: marked(c, `space:${id}`, "desc") } : {}),
-      ...(chance(c.r, 0.5) ? { rules: [marked(c, `space:${id}`, "rules"), " "] } : {}),
-      ...(chance(c.r, 0.4) ? { policy: pick(c.r, ["request", "invite"]) } : {}),
-      ...(chance(c.r, 0.4) ? { invite: pick(c.r, ["mods", "members"]) } : {}),
-      ...(chance(c.r, 0.4)
-        ? { qs: [{ q: marked(c, `space:${id}`, "qs"), req: chance(c.r, 0.5) }, { q: "" }] }
-        : {}),
     };
   },
+  // About only (`01` C11); now and then over 300 characters
   "spaces.update": (c) => {
     const id = spaceId(c);
-    return {
-      id,
-      set: settings(c, id),
-      ...(chance(c.r, 0.3) ? { base: { rulesRev: Math.floor(c.r() * 3) } } : {}),
-    };
+    return { id, desc: chance(c.r, 0.1) ? "x".repeat(301) : marked(c, `space:${id}`, "desc") };
   },
   "spaces.join": (c) => {
     const codes = records(c, "invite").map((l) => l.code);
@@ -275,12 +269,16 @@ const GENERATORS: Record<string, Gen> = {
   "spaces.leave": (c) => ({ space: spaceId(c) }),
   "threads.create": (c, _u, d) => {
     const id = newId(c, d);
+    const kind = pick(c.r, ["ask", "post"]);
+    // a post mentions people now and then
+    const at = chance(c.r, 0.3) ? ` @${pick(c.r, PEOPLE)}` : "";
     return {
       id,
       space: spaceId(c),
-      kind: pick(c.r, ["ask", "post"]),
-      q: marked(c, `thread:${id}`, "q"),
+      kind,
+      q: marked(c, `thread:${id}`, "q") + at,
       ...(chance(c.r, 0.5) ? { title: marked(c, `thread:${id}`, "t") } : {}),
+      ...(kind === "ask" ? model(c) : {}),
     };
   },
   "threads.update": (c, u) => {
@@ -298,32 +296,60 @@ const GENERATORS: Record<string, Gen> = {
     const own = records(c, "thread").filter((p) => p.u === u);
     return { id: own.length && chance(c.r, 0.6) ? pick(c.r, own).id : threadId(c) };
   },
-  "likes.set": (c) => ({ thread: threadId(c), on: chance(c.r, 0.7) }),
   "saved.set": (c) => ({ kind: "thread", id: threadId(c), on: chance(c.r, 0.6) }),
-  "followups.ask": (c, _u, d) => {
+  // Continue, Branch, Branch here and Look up (`03` §2.1)
+  "research.forkNode": (c, _u, d) => {
     const id = newId(c, d);
-    return { id, thread: threadId(c), q: marked(c, `followup:${id}`, "q") };
+    const thread = threadId(c);
+    const look = chance(c.r, 0.3);
+    return {
+      id,
+      thread,
+      parent: nodeRef(c, thread),
+      ...(look
+        ? {
+            kind: "lookup",
+            // the phrase ends on a letter, so the marker survives the trim
+            look: chance(c.r, 0.1)
+              ? "one two three four five"
+              : `${marked(c, `node:${id}`, "look")}x`,
+          }
+        : { kind: "ask", q: marked(c, `node:${id}`, "q") }),
+      ...(chance(c.r, 0.3) ? { quote: marked(c, `node:${id}`, "quote"), b: 1 } : {}),
+      ...model(c),
+    };
+  },
+  "comments.create": (c, _u, d) => {
+    const thread = threadId(c);
+    const node = nodeRef(c, thread);
+    const tops = records(c, "comment").filter((x) => x.parent === null && x.th === thread);
+    const top = tops.length && chance(c.r, 0.3) ? pick(c.r, tops) : null;
+    const id = newId(c, d);
+    const at = chance(c.r, 0.3) ? ` @${pick(c.r, PEOPLE)}` : "";
+    return {
+      id,
+      thread,
+      node: top ? top.node : node,
+      t: marked(c, `comment:${id}`, "t") + at,
+      ...(top ? { parent: top.id } : {}),
+    };
   },
   "research.createPostFollowUp": (c, _u, d) => {
     const replies = records(c, "reply").filter((x) => x.parent === null);
     const top = replies.length && chance(c.r, 0.3) ? pick(c.r, replies) : null;
     const id = newId(c, d);
+    const at = chance(c.r, 0.3) ? ` @${pick(c.r, PEOPLE)}` : "";
     return {
       id,
       thread: top ? top.th : threadId(c),
-      t: marked(c, `reply:${id}`, "t"),
+      t: marked(c, `reply:${id}`, "t") + at,
       ...(top ? { parent: top.id } : {}),
     };
   },
   "joinRequests.create": (c) => {
     const closed = records(c, "space").filter((x) => x.vis !== "open");
     const space = closed.length && chance(c.r, 0.7) ? pick(c.r, closed).id : spaceId(c);
-    return {
-      space,
-      rulesAccepted: chance(c.r, 0.8),
-      // the request is the sender's, and a replay may send it as someone else
-      answers: [marked(c, `request:${space}:*`, "a")],
-    };
+    return { space };
   },
   "joinRequests.decide": (c) => {
     // usually an open request, so approvals change scopes; a planned second
@@ -345,38 +371,26 @@ const GENERATORS: Record<string, Gen> = {
         : {}),
     };
   },
-  "members.setRole": (c) => {
-    const space = spaceId(c);
-    const user = pick(c.r, [...PEOPLE, "null"]);
-    return {
-      space,
-      user,
-      role: pick(c.r, ["member", "mod", "mod", "admin", "owner"]),
-      base: { rev: seenRev(c, `member:${space}:${user}`) },
-    };
-  },
   "members.remove": (c) => {
     const space = spaceId(c);
     const user = pick(c.r, PEOPLE);
     return { space, user, base: { adm: seenAdmission(c, space, user) } };
   },
   "members.ban": (c) => ({ space: spaceId(c), user: pick(c.r, PEOPLE) }),
+  "members.unban": (c) => {
+    const bans = records(c, "ban");
+    const b = bans.length && chance(c.r, 0.7) ? pick(c.r, bans) : null;
+    return b ? { space: b.sp, user: b.u } : { space: spaceId(c), user: pick(c.r, PEOPLE) };
+  },
   "invites.create": (c, _u, d) => ({
     id: newId(c, d),
     space: spaceId(c),
-    ...(chance(c.r, 0.3) ? { days: 1 } : {}),
+    days: pick(c.r, [1, 7, 7, 30, ...(chance(c.r, 0.1) ? [0, 31] : [])]),
   }),
-  "reports.create": (c, _u, d) => {
-    const id = newId(c, d);
-    return {
-      id,
-      item: itemKey(c),
-      why: marked(c, `report:${id}`, "why"),
-      ...(chance(c.r, 0.5) ? { note: marked(c, `report:${id}`, "note") } : {}),
-    };
-  },
   "moderation.decide": (c) => {
-    // a removal of a thread that has follow-ups or replies, often
+    // a removal of a thread that has nodes or replies, often; a removal's
+    // reason is the owner's text, with no marker
+    const note = chance(c.r, 0.5) ? { note: pick(c.r, ["Off topic.", " ", "Spam"]) } : {};
     const busy = records(c, "thread").filter((p) => {
       const n = c.w.get(`counts:${p.id}`);
       return n?.kind === "counts" && n.r > 0 && p.mod !== "removed";
@@ -384,45 +398,54 @@ const GENERATORS: Record<string, Gen> = {
     if (busy.length && chance(c.r, 0.4)) {
       const p = pick(c.r, busy);
       const item = `${p.k === "ask" ? "a" : "p"}:${p.id}`;
-      return { item, decision: "removed", base: { rev: seenRev(c, `thread:${p.id}`) } };
+      return { item, decision: "removed", ...note };
     }
     const item = itemKey(c);
+    const decision = pick(c.r, ["hidden", "hidden", "removed", "shown", "shown"]);
+    // "shown" needs a base; the restricting decisions take one or not
+    const withBase = decision === "shown" ? chance(c.r, 0.95) : chance(c.r, 0.5);
+    const base = withBase ? { base: { rev: seenRev(c, itemRecordKey(item)) } } : {};
+    return { item, decision, ...(decision === "removed" ? note : {}), ...base };
+  },
+  "notifications.markRead": (c, u) => {
+    const mine = records(c, "notif").filter((n) => n.to === u);
     return {
-      item,
-      decision: pick(c.r, ["hidden", "hidden", "removed", "shown", "shown"]),
-      base: { rev: seenRev(c, itemRecordKey(item)) },
+      id: some(
+        c,
+        (mine.length && chance(c.r, 0.8) ? mine : records(c, "notif")).map((n) => n.id),
+      ),
     };
   },
+  "prefs.set": (c) => ({ layout: pick(c.r, ["centred", "wide"]) }),
 };
 const NAMES = Object.keys(GENERATORS);
-// role and membership changes come often, so scopes change mid-sequence
+// membership changes come often, so scopes change mid-sequence
 const WEIGHTED = [
   ...NAMES,
-  "spaces.update",
-  "spaces.update",
   "threads.create",
   "threads.create",
   "spaces.join",
   "spaces.join",
   "joinRequests.create",
   "joinRequests.decide",
-  "members.setRole",
-  "members.setRole",
+  "joinRequests.decide",
   "members.remove",
   "members.ban",
   "moderation.decide",
-  "likes.set",
-  "followups.ask",
+  "moderation.decide",
+  "research.forkNode",
+  "research.forkNode",
+  "comments.create",
   "research.createPostFollowUp",
-  "reports.create",
+  "saved.set",
 ];
 
-const STAFF_WRITES = new Set([
+const OWNER_WRITES = new Set([
   "spaces.update",
   "joinRequests.decide",
-  "members.setRole",
   "members.remove",
   "members.ban",
+  "members.unban",
   "moderation.decide",
   "invites.create",
 ]);
@@ -447,7 +470,21 @@ function afterBan(c: Ctx, sp: string, u: Person) {
           { name: "threads.delete", input: () => ({ id: mine.id }) },
         ]
       : []),
-    { name: "likes.set", input: (c: Ctx) => ({ thread: any, on: chance(c.r, 0.5) }) },
+    {
+      name: "research.forkNode",
+      input: (c: Ctx, d: Device) => ({
+        ...(GENERATORS["research.forkNode"] as Gen)(c, u, d),
+        thread: any,
+        parent: "r",
+      }),
+    },
+    {
+      name: "comments.create",
+      input: (c: Ctx, d: Device) => {
+        const id = d.cl.newId();
+        return { id, thread: any, node: "r", t: marked(c, `comment:${id}`, "t") };
+      },
+    },
     {
       name: "saved.set",
       input: (c: Ctx) => ({ kind: "thread", id: any, on: chance(c.r, 0.5) }),
@@ -474,29 +511,56 @@ function afterBan(c: Ctx, sp: string, u: Person) {
 }
 
 /** The removal rule, checked on the stored records (no oracle): a removed
- * item keeps no text, and nothing is stored under a removed thread or a
- * removed top-level reply. */
+ * item keeps no text, and nothing is stored under a removed thread, a
+ * removed node, or a removed top-level reply or comment. */
 function erasureFaults(dump: ReadonlyMap<string, StoredRecord>): string[] {
   const out: string[] = [];
   const threads = new Set<string>();
-  const replies = new Set<string>();
+  const nodes = new Set<string>();
+  const tops = new Set<string>();
   for (const [k, r] of dump) {
     if (r.kind === "thread" && r.mod === "removed") {
       threads.add(r.id);
       if (r.q || r.t || r.sum) out.push(`removed ${k} keeps its text`);
     }
-    if (r.kind === "followup" && r.mod === "removed" && (r.q || r.a))
-      out.push(`removed ${k} keeps its text`);
-    if (r.kind === "reply" && r.mod === "removed") {
-      if (r.parent === null) replies.add(r.id);
+    if (r.kind === "node" && r.mod === "removed") {
+      nodes.add(r.id);
+      if (r.q || r.look || r.quote) out.push(`removed ${k} keeps its text`);
+    }
+    if ((r.kind === "reply" || r.kind === "comment") && r.mod === "removed") {
+      if (r.parent === null) tops.add(r.id);
       if (r.t) out.push(`removed ${k} keeps its text`);
     }
   }
   for (const [k, r] of dump) {
-    if ((r.kind === "followup" || r.kind === "reply" || r.kind === "run") && threads.has(r.th))
+    if (
+      (r.kind === "node" ||
+        r.kind === "answer" ||
+        r.kind === "reply" ||
+        r.kind === "comment" ||
+        r.kind === "run" ||
+        r.kind === "save" ||
+        (r.kind === "notif" && r.type === "mention")) &&
+      threads.has(r.th ?? "")
+    )
       out.push(`${k} is stored under a removed thread`);
-    if (r.kind === "reply" && r.parent !== null && replies.has(r.parent))
-      out.push(`${k} is stored under a removed reply`);
+    if ((r.kind === "answer" && nodes.has(r.node)) || (r.kind === "comment" && nodes.has(r.node)))
+      out.push(`${k} is stored under a removed node`);
+    if ((r.kind === "reply" || r.kind === "comment") && r.parent !== null && tops.has(r.parent))
+      out.push(`${k} is stored under a removed ${r.kind}`);
+  }
+  return out;
+}
+
+/** The stored records that do not parse with the shared contract's stored
+ * schema (`spaces.storedRecordSchema`), with the first issue of each. Join
+ * requests are the prototype's own kind (`01` C10). */
+function unparsed(dump: ReadonlyMap<string, StoredRecord>): string[] {
+  const out: string[] = [];
+  for (const [k, r] of dump) {
+    if (r.kind === "request") continue;
+    const p = spaces.storedRecordSchema.safeParse(r);
+    if (!p.success) out.push(`${k} does not parse: ${JSON.stringify(p.error.issues[0])}`);
   }
   return out;
 }
@@ -505,15 +569,13 @@ function erasureFaults(dump: ReadonlyMap<string, StoredRecord>): string[] {
 const nest = (v: unknown, depth: number): unknown => (depth ? [nest(v, depth - 1)] : v);
 
 async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
-  const faults = { random: false, effects: false, loss: false };
+  const faults = { random: false, loss: false };
   const serverRandom = rng(seed ^ 0x5eed);
-  const effectDice = rng(seed * 31 + 3);
   const w = new World(seed, {
     random: () => {
       if (faults.random) throw new Error("the random source is unavailable");
       return serverRandom();
     },
-    failEffect: () => faults.effects && effectDice() < 0.7,
   });
   const c: Ctx = {
     seed,
@@ -534,20 +596,15 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     admissions: new Map(),
     history: new Map(),
     tokens: [],
-    reports: new Set(),
-    runs: new Set(),
   };
-  // a starting point: one open and one closed space with a few members
+  // a starting point: one open and one private space with a few members
   const open = w.id();
   const closed = w.id();
   await ok(t, w.as("olga", "spaces.create", { id: open, name: "lounge" }));
-  await ok(
-    t,
-    w.as("olga", "spaces.create", { id: closed, name: "lab", vis: "listed", invite: "members" }),
-  );
+  await ok(t, w.as("olga", "spaces.create", { id: closed, name: "lab", vis: "private" }));
   for (const u of ["mona", "mel", "eve"]) await ok(t, w.as(u, "spaces.join", { space: open }));
   for (const u of ["ada", "mona", "mel"]) {
-    await ok(t, w.as(u, "joinRequests.create", { space: closed, rulesAccepted: true }));
+    await ok(t, w.as(u, "joinRequests.create", { space: closed }));
     await ok(
       t,
       w.as("olga", "joinRequests.decide", {
@@ -558,15 +615,6 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       }),
     );
   }
-  await ok(
-    t,
-    w.as("olga", "members.setRole", {
-      space: closed,
-      user: "mona",
-      role: "mod",
-      base: w.member(closed, "mona"),
-    }),
-  );
 
   const failures: string[] = [];
   const people: (Person | null)[] = [...PEOPLE, null];
@@ -596,26 +644,28 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     }
     return null;
   };
-  const isStaff = (sp: string, reader: string | null) => {
-    const role = reader === null ? null : roleNow(c, sp, reader);
-    return role !== null && STAFF_ROLES.has(role);
+  const isOwner = (sp: string, reader: string | null) =>
+    reader !== null && roleNow(c, sp, reader) === "owner";
+  /** May `u` read a space's content now: it is open, or `u` is a member. */
+  const readsSpace = (sp: string, u: string | null) => {
+    const space = w.get(`space:${sp}`);
+    return (
+      space?.kind === "space" &&
+      (space.vis === "open" || (u !== null && roleNow(c, sp, u) !== null))
+    );
   };
   /** The secret check: may `reader` see the text that carries `m`, now? */
   const mayShow = (reader: string | null, m: string): boolean => {
     const rec = storedNow(m);
     if (!rec) return false;
-    // a space's settings are public, with the space record
+    // a space's About is public, with the space record
     if (rec["kind"] === "space") return true;
-    // a report's reason and note, a request's answers and decline reason:
-    // their person and the space's staff
-    if (rec["kind"] === "report") return reader === rec["by"] || isStaff(String(rec["sp"]), reader);
-    if (rec["kind"] === "request") return reader === rec["u"] || isStaff(String(rec["sp"]), reader);
+    // a request's decline reason: its person and the space's owner
+    if (rec["kind"] === "request") return reader === rec["u"] || isOwner(String(rec["sp"]), reader);
     const sp = String(rec["s"]);
-    const space = w.get(`space:${sp}`);
-    const role = reader === null ? null : roleNow(c, sp, reader);
-    if (space?.kind !== "space" || (space.vis !== "open" && role === null)) return false;
-    if (rec["mod"] === "hidden" && reader !== rec["u"] && !(role !== null && STAFF_ROLES.has(role)))
-      return false;
+    if (!readsSpace(sp, reader)) return false;
+    // hidden text, an answer of a hidden ask included: its author and the owner
+    if (rec["mod"] === "hidden" && reader !== rec["u"] && !isOwner(sp, reader)) return false;
     return true;
   };
   const scan = (reader: string | null, what: string, response: unknown) => {
@@ -623,21 +673,9 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       if (!mayShow(reader, m))
         failures.push(`${what} to ${reader} carries ${m} (${JSON.stringify(c.origins.get(m))})`);
   };
-  /** Count the spaces' openings and closings, as the stored records show them. */
-  const refreshHistory = () => {
-    for (const s of records(c, "space")) {
-      const h = c.history.get(s.id) ?? { closed: s.vis !== "open", n: 0 };
-      if (h.closed !== (s.vis !== "open")) {
-        h.closed = !h.closed;
-        h.n++;
-      }
-      c.history.set(s.id, h);
-    }
-  };
-  const spaceHistory = (log: LogId) => {
-    refreshHistory();
-    return log.startsWith("space:") ? (c.history.get(log.slice(6))?.n ?? 0) : 0;
-  };
+  /** How many times a space log's history was replaced (by a restore). */
+  const spaceHistory = (log: LogId) =>
+    log.startsWith("space:") ? (c.history.get(log.slice(6)) ?? 0) : 0;
   const stash = (u: string | null, log: LogId, cursor: string) => {
     if (c.tokens.length > 300) c.tokens.splice(0, 100);
     if (chance(c.r, 0.2)) c.tokens.push({ u, log, cursor, n: spaceHistory(log) });
@@ -671,7 +709,6 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     if (fault) failures.push(`${what}: the effect model: ${fault}\n${JSON.stringify(e)}`);
     c.model.commit(u, e, p, now);
     c.model.learn(w.server.dump());
-    refreshHistory();
     // a flush sends many writes in one step: what each reader may read is
     // learned after each of them
     learn();
@@ -687,11 +724,6 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
         c.applied.set(local, n);
         if (n > 1) failures.push(`${what}: write ${local} (${e.name}) was applied ${n} times`);
       }
-      if (e.name === "reports.create") c.reports.add(String((e.input as { id: string }).id));
-      if (e.name === "threads.create" && res.ok) {
-        const run = (res.result as { run: string | null }).run;
-        if (run) c.runs.add(run);
-      }
       if (e.name === "members.ban") {
         const i = e.input as { space: string; user: Person };
         afterBan(c, i.space, i.user);
@@ -703,11 +735,7 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
           c.plan.push({
             u: who,
             name: "joinRequests.create",
-            input: (c) => ({
-              space: i.space,
-              rulesAccepted: true,
-              answers: [marked(c, `request:${i.space}:*`, "a")],
-            }),
+            input: () => ({ space: i.space }),
             what: "asking again after a decline",
           });
       }
@@ -780,7 +808,7 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
           if (
             o &&
             old !== id &&
-            ["thread", "followup", "reply", "report", "space"].includes(kind ?? "")
+            ["thread", "node", "reply", "comment", "space"].includes(kind ?? "")
           )
             o.key = `${kind}:${id}`;
         }
@@ -830,7 +858,7 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
   c.model.learn(w.server.dump());
   for (const r of w.server.dump().values())
     if (r.kind === "member") c.admissions.set(`${r.sp}:${r.u}`, new Set([r.adm]));
-  for (const s of records(c, "space")) c.history.set(s.id, { closed: s.vis !== "open", n: 0 });
+  for (const s of records(c, "space")) c.history.set(s.id, 0);
 
   /** Read a device client's new recorded answers into the suite's record. */
   const harvest = (d: Device) => {
@@ -942,34 +970,39 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       for (const [k, x] of cl.frozen(log))
         if (!("u" in x) || x.u !== u || cl.records(log).has(k))
           return failed(step, what, `${u} holds a frozen ${k}`);
-      // the staff invariant at read time, with no oracle: a person's user log
-      // holds report notifications only for spaces where they are staff now
+      // user logs follow current access, with no oracle: a person's user log
+      // holds notifications and saves only of spaces they may read now
       if (u !== null && log === `user:${u}`)
-        for (const x of [...cl.records(log).values(), ...snap.records.map((y) => y.record)])
-          if (x.kind === "notif" && !isStaff(x.sp, u))
-            return failed(step, what, `${u} holds a notification of ${x.sp}, not being staff`);
+        for (const x of [...cl.records(log).values(), ...snap.records.map((y) => y.record)]) {
+          const sp =
+            x.kind === "notif"
+              ? x.sp
+              : x.kind === "save"
+                ? (w.get(`thread:${x.th}`) as { s?: string } | undefined)?.s
+                : undefined;
+          if (sp && !readsSpace(sp, u))
+            return failed(step, what, `${u} holds a ${x.kind} of ${sp}, not reading it`);
+        }
     }
     return true;
   };
 
   /** The state invariants, checked on the stored records and on every value
    * at rest after each step (no oracle):
-   * - each space has exactly one owner;
+   * - each space has exactly one owner, the one its record names;
    * - nobody has a member record in a space they are banned from;
    * - no tombstone is older than 30 days;
-   * - the notifications of a report go to the space's staff (owner, admins,
-   *   moderators) when the worker wrote them, and to nobody else;
-   * - no effect is lost: every report has its notifications, or its effect
-   *   is queued or a dead letter; every run has its job, likewise;
+   * - nobody is notified of their own action, and a person has at most one
+   *   unread reply, branch or comment notification per thread;
    * - no marker is at rest anywhere unless it is still in the record and
    *   field it was written to, and that record is not removed. */
-  const notified = new Set<string>();
-  const invariants = async (step: number, final = false): Promise<string[]> => {
+  const invariants = async (step: number): Promise<string[]> => {
     const out: string[] = [];
     const dump = w.server.dump();
     for (const s of records(c, "space")) {
       const owners = records(c, "member").filter((m) => m.sp === s.id && m.role === "owner");
-      if (owners.length !== 1) out.push(`#${s.name} has ${owners.length} owners`);
+      if (owners.length !== 1 || owners[0]?.u !== s.owner)
+        out.push(`#${s.name} has the owners ${owners.map((m) => m.u).join()}, names ${s.owner}`);
     }
     for (const b of records(c, "ban"))
       if (dump.has(`member:${b.sp}:${b.u}`)) out.push(`${b.u} is a member of ${b.sp} and banned`);
@@ -977,38 +1010,14 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     for (const tomb of scan.tombstones)
       if (tomb.at < w.clock.now() - 30 * DAY)
         out.push(`a tombstone of ${tomb.key} outlived 30 days`);
-    const fresh = new Map<string, { sp: string; to: string[] }>();
-    for (const [k, n] of dump) {
-      if (n.kind !== "notif" || notified.has(k)) continue;
-      notified.add(k);
-      const g = fresh.get(n.report) ?? { sp: n.sp, to: [] };
-      g.to.push(n.to);
-      fresh.set(n.report, g);
+    const unread = new Set<string>();
+    for (const n of records(c, "notif")) {
+      if (n.actor === n.to) out.push(`${n.to} was notified of their own ${n.type}`);
+      if (n.read || !["reply", "branch", "comment"].includes(n.type)) continue;
+      const k = `${n.to} ${n.type} ${n.th}`;
+      if (unread.has(k)) out.push(`${n.to} has two unread ${n.type} notifications of ${n.th}`);
+      unread.add(k);
     }
-    for (const [report, g] of fresh) {
-      const staff = records(c, "member")
-        .filter((m) => m.sp === g.sp && STAFF_ROLES.has(m.role))
-        .map((m) => m.u)
-        .sort();
-      if (JSON.stringify(g.to.sort()) !== JSON.stringify(staff))
-        out.push(`report ${report} notified ${g.to.join()}, its staff are ${staff.join()}`);
-    }
-    const pending = (e: unknown) => JSON.stringify(e);
-    const queuedOrDead = new Set(
-      [...scan.effects.map((x) => x.effect), ...scan.deadLetters.map((x) => x.effect)].map(pending),
-    );
-    const notifiedReports = new Set(records(c, "notif").map((n) => n.report));
-    for (const report of c.reports)
-      if (
-        !notifiedReports.has(report) &&
-        ![...queuedOrDead].some((e) => e.includes(`"report":"${report}"`))
-      )
-        out.push(`the notifications of report ${report} were lost`);
-    const jobs = new Set(scan.jobs.map((j) => j.id));
-    for (const run of c.runs)
-      if (!jobs.has(run) && ![...queuedOrDead].some((e) => e.includes(`"id":"${run}"`)))
-        out.push(`the job of run ${run} was lost`);
-    if (final && scan.effects.length) out.push(`${scan.effects.length} effects never ran`);
     for (const [table, values] of Object.entries(scan))
       for (const m of JSON.stringify(values).match(MARKER) ?? [])
         if (!storedNow(m))
@@ -1098,9 +1107,9 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     }
     let u: Person = pick(c.r, PEOPLE);
     const name = pick(c.r, WEIGHTED);
-    // the staff's writes mostly come from staff, so they succeed often enough
-    if (STAFF_WRITES.has(name) && chance(c.r, 0.5))
-      u = pick(c.r, ["olga", "olga", "ada", "mona"] as const);
+    // the owner's writes mostly come from olga, who owns the first spaces,
+    // so they succeed often enough
+    if (OWNER_WRITES.has(name) && chance(c.r, 0.5)) u = "olga";
     // and requests to join mostly from people outside the closed spaces
     if (name === "joinRequests.create" && chance(c.r, 0.6))
       u = pick(c.r, ["otto", "eve", "mel"] as const);
@@ -1112,21 +1121,29 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     let what = `${d.name}: ${name}`;
     let mutationId: string | undefined;
     let sentName = name;
-    // a second moderator decides the same request (a stale decision)
+    // the owner's other device decides the same request (a stale decision)
     if (name === "joinRequests.decide" && chance(c.r, 0.4)) {
-      const other = pick(c.r, ["olga", "ada", "mona"] as const);
       const same = { ...input };
-      c.plan.push({ u: other, name, input: () => same, what: "the same decision again" });
+      c.plan.push({ u: "olga", name, input: () => same, what: "the same decision again" });
     }
     if (u === "eve" || chance(c.r, 0.12)) {
       const now = d.cl.now();
       switch (Math.floor(c.r() * 7)) {
         case 0:
-          input = { ...input, likes: 999, u: "olga" };
+          input = { ...input, saves: 999, u: "olga" };
           what += " with forged fields";
           break;
         case 1:
-          sentName = pick(c.r, ["spaces.nuke", "__proto__", "toString", "saved.toggle"]);
+          sentName = pick(c.r, [
+            "spaces.nuke",
+            "__proto__",
+            "toString",
+            "saved.toggle",
+            "likes.set",
+            "reports.create",
+            "members.setRole",
+            "followups.ask",
+          ]);
           what = `${d.name}: unknown ${sentName}`;
           break;
         case 2:
@@ -1190,8 +1207,10 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     let seq = (c.model.lastSeq(clientId) ?? 0) + 1;
     let protocolVersion = PROTOCOL_VERSION;
     let clientTime = w.clock.now();
+    let queuedAt: number | null = null;
+    let replaces: string[] | undefined;
     let what = `${u} raw: ${name}`;
-    switch (Math.floor(r() * 9)) {
+    switch (Math.floor(r() * 11)) {
       case 0:
         seq += 1 + Math.floor(r() * 3);
         what += " with a gap in its seq";
@@ -1208,7 +1227,7 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
         break;
       }
       case 3:
-        protocolVersion = 2;
+        protocolVersion = pick(r, [2, 3]);
         what += " from an old protocol version";
         break;
       case 4:
@@ -1223,16 +1242,30 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
         input = { ...(input as object), q: "x".repeat(300_000) };
         what += " larger than 256 KB";
         break;
+      case 7:
+        queuedAt = clientTime + pick(r, [-5 * DAY, -4 * DAY, 2 * MINUTE, -HOUR]);
+        what += " queued at another time";
+        break;
+      case 8: {
+        // a reminted envelope: the ids it replaces, its own or someone's
+        const mine = c.sent.filter((x) => x.u === u).map((x) => x.e.mutationId);
+        replaces = [w.id(), ...(mine.length && chance(r, 0.5) ? [pick(r, mine)] : [])];
+        if (chance(r, 0.1)) replaces.push("not-a-ulid");
+        what += " naming ids it replaces";
+        break;
+      }
       default:
     }
     const e: Envelope = {
       clientId,
       seq,
       mutationId: w.id(),
+      ...(replaces ? { replaces } : {}),
       name,
       input,
       protocolVersion,
       clientTime,
+      queuedAt: queuedAt ?? clientTime,
     };
     const res = await applyChecked(u, e, what);
     if (u !== null && chance(r, 0.5)) c.sent.push({ u, e });
@@ -1266,18 +1299,35 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       // every client record expires (idle for 90 days)
       w.clock.advance(91 * DAY);
       what = "clock +91 days";
+    } else if (roll < 0.088) {
+      // a restore replaces a space log's history: its cursors resync
+      const sp = pick(
+        c.r,
+        records(c, "space").map((s) => s.id),
+      );
+      await w.server.replaceHistory(`space:${sp}`);
+      c.history.set(sp, (c.history.get(sp) ?? 0) + 1);
+      what = `space:${sp} is restored`;
     } else if (roll < 0.11) {
       if (!(await forged(step))) return false;
       what = "forged cursor";
     } else if (roll < 0.14) {
-      // a run finishes: a thread's summary or a follow-up's answer, with a marker
+      // a run finishes: a thread's summary or a node's answer, with a marker
       const items = [
-        ...records(c, "thread").map((p) => ({ key: `thread:${p.id}`, field: "sum" })),
-        ...records(c, "followup").map((f) => ({ key: `followup:${f.id}`, field: "a" })),
+        ...records(c, "thread").map((p) => ({
+          key: `thread:${p.id}`,
+          at: `thread:${p.id}`,
+          field: "sum",
+        })),
+        ...records(c, "node").map((f) => ({
+          key: `node:${f.id}`,
+          at: `answer:${f.id}`,
+          field: "md",
+        })),
       ];
       const item = items.length ? pick(c.r, items) : null;
       what = `a run finishes for ${item?.key ?? "nothing"}`;
-      if (item) await w.server.finishJob(item.key, marked(c, item.key, item.field));
+      if (item) await w.server.finishJob(item.key, marked(c, item.at, item.field));
     } else if (roll < 0.18) {
       const d = pick(c.r, c.devices);
       const x = c.r();
@@ -1293,7 +1343,7 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       }
       await flush(d);
     } else if (roll < 0.2) {
-      const k = pick(c.r, ["random", "effects", "loss"] as const);
+      const k = pick(c.r, ["random", "loss"] as const);
       faults[k] = !faults[k];
       what = `${k} faults ${faults[k] ? "on" : "off"}`;
     } else if (roll < 0.21) {
@@ -1307,8 +1357,6 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       what = await deviceWrite();
     }
     if (failures.length) return failed(step, what, failures.slice(0, 3).join("\n"));
-    if (chance(c.r, 0.9)) await w.server.work();
-    refreshHistory();
     learn();
     const erased = erasureFaults(w.server.dump());
     if (erased.length) return failed(step, what, erased.slice(0, 3).join("\n"));
@@ -1321,18 +1369,17 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
         l.next = step + 5 + Math.floor(c.r() * 16);
       }
   }
-  // the end: faults off, every outbox sent, every effect run
-  faults.random = faults.effects = faults.loss = false;
+  // the end: faults off, every outbox sent
+  faults.random = faults.loss = false;
   c.plan.length = 0;
   for (let round = 0; round < 8; round++) {
     // a day passes once, for a person who used up a day's registrations
     w.clock.advance(round === 4 ? DAY : 11 * MINUTE);
     for (const d of c.devices) await flush(d);
-    await w.server.work();
   }
   if (failures.length) return failed(STEPS, "drain", failures.slice(0, 3).join("\n"));
   learn();
-  const end = [...(await invariants(STEPS, true)), ...outcomes(true)];
+  const end = [...(await invariants(STEPS)), ...outcomes(true), ...unparsed(w.server.dump())];
   if (end.length) return failed(STEPS, "drain", end.slice(0, 3).join("\n"));
   for (const cl of eager.values()) if (!(await check(STEPS, "drain", cl))) return false;
   return true;
