@@ -269,16 +269,17 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .tt .more { margin-left: -4px; margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 24px) / 2); align-self: flex-start; }
 .ttm { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; }
 .tt > .ttm { margin-top: calc((var(--title-fs, var(--fs-md)) * 1.44 - 16px) / 2); line-height: 16px; }
-.ttm-under { margin: -9px 0 12px 21px; }
 .ttm-foot { margin-right: auto; overflow: hidden; text-overflow: ellipsis; }
-.card.tt-b .byline, .card.tt-b > .prose, .card.tt-b > .fromln { margin-left: 21px; }
-/* C: a rail runs from the node down the card, like the tree's lines */
-.card.tt-c { position: relative; }
-.card.tt-c::before { content: ""; position: absolute; left: calc(20px + 5px); top: calc(18px + 12px); bottom: 46px; width: 1.5px; background: var(--border-strong); }
-.card.tt-c > :not(.tt):not(.card-f) { margin-left: 21px; }
-/* E: the title reads as a tree row: regular weight, the tree's text colour */
-.card.tt-e .tt > .ask, .card.tt-e .tt > .post { font-weight: 400; color: var(--t-primary); }
-.card.tt-e .byline, .card.tt-e > .prose { margin-left: 21px; }
+/* B: a rail runs from the node down the card, like the tree's lines. It starts at the node's centre (the
+   node covers it) and is placed from the card's left padding, which differs by density. */
+.card.tt-b { position: relative; }
+.card.tt-b { --pl: 20px; --pt: 18px; }
+.card.tt-b.pad-compact { --pl: 16px; --pt: 14px; } .card.tt-b.pad-roomy { --pl: 28px; --pt: 24px; } .card.tt-b.pad-inset { --pl: 14px; --pt: 14px; } .card.tt-b.pad-even { --pl: 18px; --pt: 18px; }
+.card.tt-b::before { content: ""; position: absolute; left: calc(var(--pl) + 4.75px); top: calc(var(--pt) + 10px); bottom: 46px; width: 1.5px; background: var(--border-strong); }
+.card.tt-b > :not(.tt):not(.card-f) { margin-left: 21px; }
+/* C: the title reads as a tree row: regular weight, the tree's text colour */
+.card.tt-c .tt > .ask, .card.tt-c .tt > .post { font-weight: 400; color: var(--t-primary); }
+.card.tt-c .byline, .card.tt-c > .prose { margin-left: 21px; }
 .card .ask { margin: -1px 0 13px; color: var(--t-heading); font-size: var(--title-fs, var(--fs-md)); line-height: 1.44; }
 .card .ask, .card .post { white-space: pre-line; }
 .card .post { margin: 0 0 6px; color: var(--t-primary); font-size: var(--title-fs, var(--fs-md)); line-height: 1.44; }
@@ -1344,18 +1345,19 @@ function card(p) {
   const meta = `<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div>`;
   const modItems = !mine(p.u) && canWrite() && SPACE_META[p.s] ? (isMod(p.s) ? `<button type="button" class="mi danger" role="menuitem" data-a="rmopen" data-id="${p.id}"><span>Remove…</span></button>` : `<button type="button" class="mi" role="menuitem" data-a="reportopen" data-id="${p.id}"><span>Report…</span></button>`) : '';
   const more = !mine(p.u) && modItems ? moreMenu('t:' + p.id, false, '', modItems, false) : mine(p.u) ? moreMenu('t:' + p.id, !p.pending && (p.k === 'ask' ? !othersUnderBranch(tree(p), 'r') : !othersUnderReplies(replies(p))), p.k === 'ask' ? 'ask' : 'post', '', true, p.pending ? 'Available when the answer finishes' : undefined) : '';
-  /* post title treatments (mock variant st.ui.tt). A is the social-card header (avatar, name, channel, time
-     above the title). B-E draw the title like a row of the branch tree: a hollow node, plain text, the
-     author's avatar on the right, and the name, channel and time moved off the top. */
+  /* post title treatments (mock variant st.ui.tt). None has a social-card header row above the title.
+     A: the time and the author's avatar trail the title; the channel follows the token count.
+     B, C draw the title like a row of the branch tree: a hollow node, plain text, the author's avatar on
+     the right, and the name, channel and time in the footer. B adds a rail from the node down the card;
+     C sets the title in the tree's regular weight. */
   const tt = st.ui.tt || 'a', who = `${esc(p.u)} · ${spName(p.s)} · ${rel(p.createdAt)}`;
   const ttAv = `<span class="ttav" title="${esc(p.u)}">${av(p.u, 'sm')}</span>`;
-  const titleRow = (cls, text) => tt === 'a' ? `<p class="${cls}">${text}</p>`
-    : tt === 'd' ? `<div class="tt"><p class="${cls}">${text}</p><span class="ttm">${spName(p.s)} · ${rel(p.createdAt)}</span>${ttAv}${more}</div>`
-    : `<div class="tt"><span class="ttn" aria-hidden="true"></span><p class="${cls}">${text}</p>${ttAv}${more}</div>${tt === 'b' ? `<div class="ttm ttm-under">${who}</div>` : ''}`;
-  const head = tt !== 'a' || mode === 'footer' ? '' : `<div class="card-h">${av(p.u, mode === 'header' ? '' : 'sm')}${meta}${more}</div>`;
-  const lead = tt === 'c' || tt === 'e' ? `<span class="ttm ttm-foot">${who}</span>` : mode === 'footer' && tt === 'a' ? `<span class="byl">${av(p.u, 'sm')}${meta}</span>` : '';
+  const titleRow = (cls, text) => tt === 'a' ? `<div class="tt"><p class="${cls}">${text}</p><span class="ttm">${cls === 'post' ? spName(p.s) + ' · ' : ''}${rel(p.createdAt)}</span>${ttAv}${more}</div>`
+    : `<div class="tt"><span class="ttn" aria-hidden="true"></span><p class="${cls}">${text}</p>${ttAv}${more}</div>`;
+  const head = '';
+  const lead = tt === 'b' || tt === 'c' ? `<span class="ttm ttm-foot">${who}</span>` : '';
   const count = c => mode === 'footer' ? (c ? `<span class="notes">· ${c}</span>` : '<span class="notes"></span>') : `<span class="notes">${c}</span>`;
-  const tail = mode === 'footer' && tt === 'a' ? more : '';
+  const tail = '';
   const cls = `card av-${mode} pad-${V[st.v].pad || 'base'} tt-${tt}`;
   const lk = 'p:' + p.id, nl = (p.likesBase || 0) + (LIKED()[lk] ? 1 : 0), off = canWrite() || st.auth === 'out' ? '' : ` disabled title="${st.auth === 'out' ? 'Sign in to like and save' : 'Liking opens once you have an invite'}"`;
   /* no likes on threads; the bookmark carries how many people saved it (the fixtures' like counts stand in for save counts) */
@@ -1371,7 +1373,7 @@ function card(p) {
   const src0 = p.from && byId(p.from.pid) && tree(byId(p.from.pid)).nodes[p.from.nid] ? byId(p.from.pid) : null;
   const from = src0 ? `<button class="fromln" data-a="gofrom" data-id="${p.from.pid}" data-node="${p.from.nid}">${ARROW_REPLY}<span>Branched from <b>${esc(clip(tree(src0).nodes.r.q, 70))}</b></span></button>` : '';
   return `<article class="${cls}" id="card-${p.id}">${head}${from}${titleRow('ask', esc(T.nodes.r.q))}
-    <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok)].filter(Boolean).join(' · ')}</span></div>
+    <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok), tt === 'a' ? spName(p.s) : ''].filter(Boolean).join(' · ')}</span></div>
     <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
     <div class="card-f">${lead}${count('')}${p.pending ? '' : rbtn(T.count, `data-a="ask" data-id="${p.id}"`, st.asking === p.id, 'Ask a follow-up', ['branch', 'branches'])}${acts}${tail}</div></article>`;
 }
@@ -2292,7 +2294,7 @@ function renderMock() {
     
     
     ${seg('pl', 'Layout', 2)}
-    ${seg('tt', 'Post title', 5)}
+    ${seg('tt', 'Post title', 3)}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
