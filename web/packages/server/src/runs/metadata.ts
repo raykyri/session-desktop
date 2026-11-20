@@ -1,62 +1,34 @@
-// Metadata runs: titles, recaps, and context summaries.
+// Metadata runs: titles and context summaries on `METADATA_MODEL_ID`
+// (`04-agent-runtime.md` §9).
+//
+// Each call is one structured provider call with its usage recorded. Nothing
+// here reads or writes a thread: the recaps, the title written back to a node
+// and its thread, and the events they published went with the research API
+// (plan `01` A2). M5a makes a new thread's title and summary the final steps
+// of its run (`03` E2) and stores them on the thread record.
 
-import {
-  access as accessRepo,
-  nodes as nodesRepo,
-  recaps as recapsRepo,
-  snapshots as snapshotsRepo,
-  trees as treesRepo,
-  newId,
-} from "@session/db";
 import type { SessionDatabase } from "@session/db";
-import type { ResearchNode, ResearchRecapCandidate, ResearchTree } from "@session/shared";
 import {
-  DEFAULT_RECAP_INSTRUCTIONS,
   METADATA_MODEL_ID,
-  agentSpecFor,
   RESEARCH_TITLE_MAX_CHARS,
-  normalizeRecap,
-  recapJobKey,
-  recapSourceFitsBudget,
-  recapSourceForNode,
   sanitizeResearchTitle,
-  shouldScheduleRecap,
 } from "@session/shared";
-import {
-  nodePrompt,
-  nodeRecap,
-  nodeResponseSnapshotAt,
-} from "@session/shared/lib/researchNodeTypes";
 import { Output, generateText } from "ai";
 import { z } from "zod";
 
-import type { Config } from "../config.js";
-import type { EventBus } from "../events/bus.js";
-import { sessionEvent } from "../events/bus.js";
-import { emitFeedItemUpsertedForNode } from "../events/feed.js";
 import type { Logger } from "../logger.js";
-import { sharedTree } from "../research/access.js";
 
 import { classifyRunError } from "./errors.js";
 import type { Providers } from "./providers.js";
 import { attemptUsageOf, recordAttemptUsage } from "./usage.js";
 
 const titleSchema = z.object({ title: z.string() });
-const recapSchema = z.object({ recap: z.string() });
-
-/** How long a generated recap candidate stays claimable by
- * `recaps.applyCandidate`. Long enough for the dialog to be read and
- * confirmed, short enough that the map cannot grow unbounded. */
-export const RECAP_CANDIDATE_TTL_MS = 30 * 60 * 1000;
+const summarySchema = z.object({ summary: z.string() });
 
 const TITLE_SYSTEM =
   "You name research threads. Given a question and the opening of its answer, write a short " +
   "title for the thread: a noun phrase in sentence case, no final period, no quotation marks, " +
   `at most ${RESEARCH_TITLE_MAX_CHARS} characters. Name the subject, not the act of asking.`;
-
-const RECAP_SYSTEM =
-  "You write recaps of research answers. Use only the supplied answer; add nothing and do not " +
-  "speculate. Plain prose, no Markdown, no heading, no 'Summary:' label.";
 
 const CONTEXT_SUMMARY_SYSTEM =
   "Summarize the early part of a research conversation so it can remain in context. Include the " +
@@ -64,38 +36,34 @@ const CONTEXT_SUMMARY_SYSTEM =
   "phrasing, and superseded information. Use concise plain text.";
 
 export interface MetadataDeps {
-  config: Config;
   db: SessionDatabase;
-  eventBus: EventBus;
   providers: Providers;
   logger: Logger;
 }
 
+export interface TitleInput {
+  userId: string;
+  /** The run the title is for; its usage row names it. */
+  runId: string;
+  question: string;
+  /** The opening of the answer, if there is one yet. */
+  opening: string;
+}
+
 export interface MetadataRunner {
-  generateTitle(userId: string, nodeId: string): Promise<string | null>;
-  generateRecapCandidate(
-    userId: string,
-    nodeId: string,
-    instructions?: string,
-  ): Promise<ResearchRecapCandidate | null>;
-  /** The automatic recap a completed run schedules. Saves it itself. */
-  runScheduledRecap(userId: string, nodeId: string): Promise<boolean>;
+  /** A sanitized title, or null when the model gave none or the call failed. */
+  generateTitle(input: TitleInput): Promise<string | null>;
   /** The context compaction summarizer (`04-agent-runtime.md` §4). */
   summarize(input: {
     text: string;
     userId: string;
     signal?: AbortSignal | undefined;
   }): Promise<string | null>;
-  /** A candidate this server issued to this account, for
-   * `recaps.applyCandidate`. */
-  recallRecapCandidate(userId: string, id: string): ResearchRecapCandidate | null;
-  /** True when an automatic recap for this exact answer is already running. */
-  isRecapPending(key: string): boolean;
 }
 
 interface GenerateOptions<T> {
   userId: string;
-  nodeId: string | null;
+  runId: string | null;
   system: string;
   prompt: string;
   schema: z.ZodType<T>;
@@ -104,36 +72,6 @@ interface GenerateOptions<T> {
 }
 
 export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
-  const candidates = new Map<
-    string,
-    { candidate: ResearchRecapCandidate; userId: string; expiresAt: number }
-  >();
-  const pendingRecaps = new Set<string>();
-
-  /** A thread event to its audience and to `userId`, who asked for the job
-   * (or for the run it follows). A tree goes to the others without the
-   * asker's per-person fields. */
-  const emit = (userId: string, type: string, payload: Record<string, unknown>): void => {
-    const tree = payload["tree"] as ResearchTree | undefined;
-    const node = payload["node"] as ResearchNode | undefined;
-    const nodeId = typeof payload["nodeId"] === "string" ? payload["nodeId"] : undefined;
-    const treeId =
-      tree?.id ??
-      node?.treeId ??
-      (nodeId === undefined ? null : accessRepo.nodeTreeId(deps.db, nodeId));
-    if (treeId === null) {
-      deps.eventBus.emit(userId, sessionEvent(type, payload));
-      return;
-    }
-    if (tree !== undefined) {
-      deps.eventBus.emit(userId, sessionEvent(type, payload));
-      const others = sessionEvent(type, { ...payload, tree: sharedTree(tree) });
-      deps.eventBus.emitToTree(treeId, others, [], [userId]);
-      return;
-    }
-    deps.eventBus.emitToTree(treeId, sessionEvent(type, payload), [userId]);
-  };
-
   /** One structured metadata call with usage accounting and failure logging. */
   const generate = async <T>(options: GenerateOptions<T>): Promise<T | null> => {
     const resolved = deps.providers.resolve(METADATA_MODEL_ID);
@@ -151,14 +89,13 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
         output: Output.object({ schema: options.schema, name: options.name }),
         ...(options.signal ? { abortSignal: options.signal } : {}),
       });
-      const usage = attemptUsageOf(result.totalUsage);
       recordAttemptUsage({
         db: deps.db,
         userId: options.userId,
-        nodeId: options.nodeId,
+        nodeId: options.runId,
         entry: resolved.entry,
         kind: "metadata",
-        usage,
+        usage: attemptUsageOf(result.totalUsage),
       });
       return result.output;
     } catch (error) {
@@ -171,139 +108,17 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
     }
   };
 
-  const answerText = (userId: string, nodeId: string): string | null => {
-    const snapshot = snapshotsRepo.read(deps.db, userId, nodeId);
-    if (!snapshot) {
-      return null;
-    }
-    const node = nodesRepo.get(deps.db, userId, nodeId);
-    if (!node) {
-      return null;
-    }
-    return recapSourceForNode(node, snapshot.turns) ?? null;
-  };
-
-  const runner: MetadataRunner = {
-    async generateTitle(userId, nodeId) {
-      const node = nodesRepo.get(deps.db, userId, nodeId);
-      if (!node) {
-        return null;
-      }
-      const preview = node.type === "exchange" ? node.run.responsePreview : null;
-      const opening = (preview ?? answerText(userId, nodeId) ?? "").slice(0, 2_000);
+  return {
+    async generateTitle({ userId, runId, question, opening }) {
       const result = await generate({
         userId,
-        nodeId,
+        runId,
         system: TITLE_SYSTEM,
-        prompt: `Question:\n${nodePrompt(node)}\n\nAnswer opening:\n${opening || "(no answer yet)"}`,
+        prompt: `Question:\n${question}\n\nAnswer opening:\n${opening.slice(0, 2_000) || "(no answer yet)"}`,
         schema: titleSchema,
         name: "research_title",
       });
-      const title = result === null ? undefined : sanitizeResearchTitle(result.title);
-      if (title === undefined) {
-        return null;
-      }
-      // Re-read after the await. The model takes seconds, and a rename in the
-      // meantime is a deliberate act by the user; a generated title is a
-      // default, and a default must not overwrite a decision.
-      const current = nodesRepo.get(deps.db, userId, nodeId);
-      if (!current) {
-        return null;
-      }
-      if (current.title !== null && current.title !== undefined) {
-        return current.title;
-      }
-      const renamed = nodesRepo.rename(deps.db, userId, nodeId, title);
-      emit(userId, "research.node.updated", { node: renamed });
-      emitFeedItemUpsertedForNode(deps, renamed.id);
-      // A thread takes its name from its root question.
-      if (renamed.parentNodeId === null || renamed.parentNodeId === undefined) {
-        const tree = treesRepo.rename(deps.db, userId, renamed.treeId, title);
-        emit(userId, "research.tree.updated", { tree });
-      }
-      return title;
-    },
-
-    async generateRecapCandidate(userId, nodeId, instructions) {
-      const node = nodesRepo.get(deps.db, userId, nodeId);
-      const snapshot = snapshotsRepo.read(deps.db, userId, nodeId);
-      if (!node || !snapshot) {
-        return null;
-      }
-      const source = recapSourceForNode(node, snapshot.turns);
-      if (source === undefined || !recapSourceFitsBudget(node, source)) {
-        return null;
-      }
-      const used = instructions?.trim() || DEFAULT_RECAP_INSTRUCTIONS;
-      const result = await generate({
-        userId,
-        nodeId,
-        system: RECAP_SYSTEM,
-        prompt: `Instructions:\n${used}\n\nQuestion:\n${nodePrompt(node)}\n\nAnswer:\n${source}`,
-        schema: recapSchema,
-        name: "research_recap",
-      });
-      const text = result === null ? undefined : normalizeRecap(result.recap);
-      if (text === undefined) {
-        return null;
-      }
-      const candidate: ResearchRecapCandidate = {
-        id: newId(),
-        text,
-        responseRevision: snapshot.revision,
-        generatedAt: Date.now(),
-        adapter: agentSpecFor(METADATA_MODEL_ID).adapter,
-        model: METADATA_MODEL_ID,
-        instructions: used,
-      };
-      const now = Date.now();
-      for (const [id, entry] of candidates) {
-        if (entry.expiresAt <= now) {
-          candidates.delete(id);
-        }
-      }
-      candidates.set(candidate.id, { candidate, userId, expiresAt: now + RECAP_CANDIDATE_TTL_MS });
-      return candidate;
-    },
-
-    async runScheduledRecap(userId, nodeId) {
-      const node = nodesRepo.get(deps.db, userId, nodeId);
-      if (!node || !shouldScheduleRecap(node)) {
-        return false;
-      }
-      const key = recapJobKey(node);
-      if (pendingRecaps.has(key)) {
-        return false;
-      }
-      pendingRecaps.add(key);
-      emit(userId, "research.recap.pending", { nodeId, pending: true });
-      try {
-        const candidate = await runner.generateRecapCandidate(userId, nodeId);
-        if (candidate === null) {
-          return false;
-        }
-        const saved = recapsRepo.save(deps.db, userId, {
-          nodeId,
-          text: candidate.text,
-          responseRevision: candidate.responseRevision,
-          model: candidate.model ?? METADATA_MODEL_ID,
-          expectedSnapshotAt: nodeResponseSnapshotAt(node),
-          // What the node carried before the model was called. Applying a
-          // recap from the dialog changes neither the snapshot nor the
-          // revision, so without this the automatic recap comes back and
-          // replaces the summary the user wrote while it was generating.
-          expectedCurrentRecapId: nodeRecap(node)?.id ?? null,
-        });
-        if (saved) {
-          emit(userId, "research.node.updated", { node: saved });
-          emitFeedItemUpsertedForNode(deps, saved.id);
-        }
-        return saved !== null;
-      } finally {
-        pendingRecaps.delete(key);
-        // Every exit path clears the flag (`04-agent-runtime.md` §9).
-        emit(userId, "research.recap.pending", { nodeId, pending: false });
-      }
+      return (result === null ? undefined : sanitizeResearchTitle(result.title)) ?? null;
     },
 
     async summarize({ text, userId, signal }) {
@@ -312,37 +127,14 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
       }
       const result = await generate({
         userId,
-        nodeId: null,
+        runId: null,
         system: CONTEXT_SUMMARY_SYSTEM,
         prompt: text,
-        schema: recapSchema,
+        schema: summarySchema,
         name: "context_summary",
         signal,
       });
-      return result?.recap.trim() ?? null;
-    },
-
-    recallRecapCandidate(userId, id) {
-      const entry = candidates.get(id);
-      if (!entry) {
-        return null;
-      }
-      if (entry.expiresAt <= Date.now()) {
-        candidates.delete(id);
-        return null;
-      }
-      // Ids are ULIDs and unguessable, and `applyCandidate` re-checks the
-      // answer revision anyway; the account check is here so neither of those
-      // is what the isolation rests on.
-      return entry.userId === userId ? entry.candidate : null;
-    },
-
-    isRecapPending(key) {
-      return pendingRecaps.has(key);
+      return result?.summary.trim() ?? null;
     },
   };
-  return runner;
 }
-
-/** Re-exported so the loop can dedupe a recap it is about to schedule. */
-export { recapJobKey, shouldScheduleRecap };

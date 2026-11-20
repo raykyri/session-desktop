@@ -21,9 +21,8 @@ const EXECUTION_OPTIONS = { toolCallId: "call-1", messages: [] } as never;
 function toolContext(harness: ReturnType<typeof createHarness>, userId: string): RunToolContext {
   return {
     config: harness.config,
-    db: harness.db,
     userId,
-    nodeId: null,
+    runId: "run-1",
     logger: harness.logger,
     fetch: globalThis.fetch,
     budget: new ToolBudget(),

@@ -6,21 +6,16 @@ import type { SessionDatabase } from "@session/db";
 import type { User } from "@session/shared";
 
 import type { Config } from "./config.js";
-import type { EventBus } from "./events/bus.js";
 import type { Logger } from "./logger.js";
-import type { DeletionJob } from "./research/deletion.js";
 import type { RunsService } from "./runs/service.js";
 
 export interface ServerDeps {
   config: Config;
   db: SessionDatabase;
-  eventBus: EventBus;
+  /** Attempts in progress, for the drain (`runs/service.ts`). */
   runs: RunsService;
-  /** Deletes the rows of threads marked deleted, between requests
-   * (`research/deletion.ts`). Kicked by the procedures that mark them. */
-  deletions: DeletionJob;
   logger?: Logger;
-  /** Outbound HTTP (GitHub, the tweet syndication CDN). Injected so tests can
+  /** Outbound HTTP (GitHub, the run tools). Injected so tests can
    * answer without a network. */
   fetch?: typeof globalThis.fetch;
 }

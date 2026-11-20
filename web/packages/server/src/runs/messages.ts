@@ -2,23 +2,17 @@
 // §8).
 //
 // The app stores the conversation: a node's context is its ancestors' stored
-// `ModelMessage`s along the tree path, plus the new user message this attempt
-// is asking. Two things happen on the way out — provider reasoning metadata
+// `ModelMessage`s along the tree path (`RunRequest.history`, read by the
+// store), plus the new user message this attempt is asking. Two things happen on the way out — provider reasoning metadata
 // is dropped when the thread changed model, and the whole thing is cut down to
 // the context budget — and both only shape what the model sees. The displayed
 // document is unaffected.
 
-import { readFile } from "node:fs/promises";
+import type { Turn } from "@session/shared";
+import { estimateTokenCount } from "@session/shared";
+import type { AssistantContent, ModelMessage, TextPart, ToolContent } from "ai";
 
-import type { SessionDatabase } from "@session/db";
-import { images, messages as messagesRepo } from "@session/db";
-import type { ResearchNode, Turn } from "@session/shared";
-import { estimateTokenCount, findModel, nodeModelId } from "@session/shared";
-import { nodeAttachments } from "@session/shared/lib/researchNodeTypes";
-import type { AssistantContent, ImagePart, ModelMessage, TextPart, ToolContent } from "ai";
-
-import { RunInputError } from "./errors.js";
-import type { RunToolContext } from "./tools/context.js";
+import type { ContextMessage, SummaryCache } from "./store.js";
 
 /** `04-agent-runtime.md` §4. Below each model's context window to limit
  * the cost of long threads. */
@@ -71,30 +65,20 @@ export function stripForeignReasoning(message: ModelMessage): ModelMessage {
   return { ...bare, content: content as AssistantContent };
 }
 
-interface PathMessage {
-  nodeId: string;
-  message: ModelMessage;
-  /** Which model produced an assistant message, for the reasoning rule. */
-  model: string | null;
-}
-
 /** The ancestors' stored messages, root first, with reasoning kept only where
- * the producing model is the one about to run. */
+ * the producing model is `model`, the one about to run. */
 export function ancestorContext(
-  db: SessionDatabase,
-  userId: string,
-  node: ResearchNode,
-): PathMessage[] {
-  const model = nodeModelId(node);
-  return messagesRepo.ancestorMessages(db, userId, node.id).map((stored) => {
-    const message = stored.message as ModelMessage;
-    return {
-      nodeId: stored.nodeId,
-      model: stored.model,
-      message:
-        stored.model !== null && stored.model !== model ? stripForeignReasoning(message) : message,
-    };
-  });
+  history: readonly ContextMessage[],
+  model: string,
+): ContextMessage[] {
+  return history.map((stored) => ({
+    nodeId: stored.nodeId,
+    model: stored.model,
+    message:
+      stored.model !== null && stored.model !== model
+        ? stripForeignReasoning(stored.message)
+        : stored.message,
+  }));
 }
 
 /** The byte length of a binary payload, or null when the value is not one.
@@ -172,7 +156,7 @@ function elideToolMessage(message: ModelMessage): ModelMessage {
   };
 }
 
-function nodeOrder(path: readonly PathMessage[]): string[] {
+function nodeOrder(path: readonly ContextMessage[]): string[] {
   const seen: string[] = [];
   for (const entry of path) {
     if (!seen.includes(entry.nodeId)) {
@@ -204,18 +188,17 @@ function exchangeText(messages: readonly ModelMessage[]): string {
   return parts.join("\n\n");
 }
 
-function readSummary(db: SessionDatabase, userId: string, nodeId: string): string | null {
+function readSummary(cache: SummaryCache | undefined, nodeId: string): string | null {
   try {
-    const cached = messagesRepo.getSummary(db, userId, nodeId);
-    return cached?.coversThroughNodeId === nodeId ? cached.summary : null;
+    return cache?.read(nodeId) ?? null;
   } catch {
     return null;
   }
 }
 
-function writeSummary(db: SessionDatabase, userId: string, nodeId: string, summary: string): void {
+function writeSummary(cache: SummaryCache | undefined, nodeId: string, summary: string): void {
   try {
-    messagesRepo.saveSummary(db, userId, nodeId, summary, nodeId);
+    cache?.write(nodeId, summary);
   } catch {
     // Nothing downstream depends on the cache existing.
   }
@@ -236,12 +219,11 @@ export interface CompactionResult {
  * and descendant reuses it.
  */
 export async function compactContext(
-  db: SessionDatabase,
-  userId: string,
-  path: readonly PathMessage[],
+  path: readonly ContextMessage[],
   options: {
     budgetTokens?: number;
     summarize?: ContextSummarizer | undefined;
+    summaries?: SummaryCache | undefined;
     signal?: AbortSignal | undefined;
   } = {},
 ): Promise<CompactionResult> {
@@ -287,7 +269,7 @@ export async function compactContext(
   // The cache is an optimization, not a correctness requirement: a node that
   // has been removed since it was summarized must cost a re-summarization, not
   // the run.
-  const cached = readSummary(db, userId, coversThrough);
+  const cached = readSummary(options.summaries, coversThrough);
   let summary = cached;
   if (summary === null) {
     const text = exchangeText(
@@ -298,7 +280,7 @@ export async function compactContext(
       ...(options.signal ? { signal: options.signal } : {}),
     });
     if (summary !== null) {
-      writeSummary(db, userId, coversThrough, summary);
+      writeSummary(options.summaries, coversThrough, summary);
     }
   }
   if (summary === null) {
@@ -323,46 +305,18 @@ export async function compactContext(
   };
 }
 
-/**
- * The images the node's own message carries, as image parts of the user
- * message, read from the volume. Only this attempt's question carries them:
- * the stored conversation keeps each message's text (`loop.ts`), so a
- * follow-up does not send its ancestors' images again.
- *
- * A model that cannot read images, or an image that is gone, fails the
- * attempt rather than sending the question without them, as the desktop
- * refuses such a launch (`ensure_adapter_reads_images`).
- */
-export async function imageParts(db: SessionDatabase, node: ResearchNode): Promise<ImagePart[]> {
-  const ids = images.imageIdsOf(nodeAttachments(node));
-  if (ids.length === 0) {
-    return [];
-  }
-  const model = findModel(nodeModelId(node));
-  if (model?.supportsImages !== true) {
-    throw new RunInputError(`${model?.label ?? nodeModelId(node)} can't read images.`);
-  }
-  return Promise.all(
-    ids.map(async (id) => {
-      const row = images.findById(db, id);
-      const bytes = row ? await readFile(row.storagePath).catch(() => null) : null;
-      if (!row || !bytes) {
-        throw new RunInputError(images.IMAGE_UNAVAILABLE);
-      }
-      return { type: "image" as const, image: new Uint8Array(bytes), mediaType: row.mime };
-    }),
-  );
-}
-
 export interface BuildMessagesInput {
-  ctx: RunToolContext;
-  node: ResearchNode;
+  /** The thread's earlier exchanges, root first, as stored. */
+  history: readonly ContextMessage[];
+  /** The model about to run, for the reasoning rule (`ancestorContext`). */
+  model: string;
   /** The assembled text of the new user message (`prompts.ts`). */
   userText: string;
   /** Committed exchanges of an interrupted attempt, kept as context on resume
    * (`05-run-lifecycle-and-streaming.md` §7). */
   priorMessages?: readonly ModelMessage[] | undefined;
   summarize?: ContextSummarizer | undefined;
+  summaries?: SummaryCache | undefined;
   budgetTokens?: number | undefined;
   signal?: AbortSignal | undefined;
 }
@@ -377,20 +331,17 @@ export interface BuiltMessages {
 /** The whole request body for one attempt: ancestors, then this node's
  * question, then whatever an interrupted attempt already produced. */
 export async function buildMessages(input: BuildMessagesInput): Promise<BuiltMessages> {
-  const { ctx, node } = input;
-  const path = ancestorContext(ctx.db, ctx.userId, node);
-  const compacted = await compactContext(ctx.db, ctx.userId, path, {
+  const path = ancestorContext(input.history, input.model);
+  const compacted = await compactContext(path, {
     ...(input.budgetTokens === undefined ? {} : { budgetTokens: input.budgetTokens }),
     summarize: input.summarize,
+    summaries: input.summaries,
     signal: input.signal,
   });
 
   const messages: ModelMessage[] = [
     ...compacted.messages,
-    {
-      role: "user",
-      content: [{ type: "text", text: input.userText }, ...(await imageParts(ctx.db, node))],
-    },
+    { role: "user", content: [{ type: "text", text: input.userText }] },
     ...(input.priorMessages ?? []),
   ];
   return {

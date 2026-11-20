@@ -18,9 +18,10 @@ const IMAGE_HOSTS = [
  * The app's CSP. `style-src` carries `unsafe-inline` because MathJax and
  * mermaid inject style elements; there is no `unsafe-eval`, which is why the
  * client keeps the `PACKAGE_VERSION` define instead of letting MathJax
- * compile at runtime.
+ * compile at runtime. Nothing is framed: widgets and artifacts are not built
+ * (plan `00`, decision P21).
  */
-export function contentSecurityPolicy(artifactOrigin: string): string {
+export function contentSecurityPolicy(): string {
   return [
     "default-src 'self'",
     "script-src 'self'",
@@ -28,7 +29,7 @@ export function contentSecurityPolicy(artifactOrigin: string): string {
     `img-src 'self' data: blob: ${IMAGE_HOSTS.join(" ")}`,
     "font-src 'self'",
     "connect-src 'self'",
-    `frame-src ${artifactOrigin}`,
+    "frame-src 'none'",
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'self' https://github.com",
@@ -37,28 +38,17 @@ export function contentSecurityPolicy(artifactOrigin: string): string {
 }
 
 export function securityHeaders(config: Config): MiddlewareHandler<AppEnv> {
-  const policy = contentSecurityPolicy(config.artifactOrigin);
+  const policy = contentSecurityPolicy();
   return async (c, next) => {
     await next();
-    // The artifact origin sets its own, far stricter policy per response
-    // (`11-artifacts-and-browser.md` §2); do not overwrite it.
-    if (!c.res.headers.has("Content-Security-Policy")) {
-      c.res.headers.set("Content-Security-Policy", policy);
-    }
+    c.res.headers.set("Content-Security-Policy", policy);
     c.res.headers.set("Referrer-Policy", "no-referrer");
     c.res.headers.set("X-Content-Type-Options", "nosniff");
-    // Artifact host permits framing solely by the application origin via CSP frame-ancestors.
-    // The main application disallows all framing via X-Frame-Options: DENY.
-    if (c.req.header("host") !== config.artifactHost) {
-      c.res.headers.set("X-Frame-Options", "DENY");
-    }
-    // Widget pages set their own, longer list (`artifacts/widgetPage.ts`).
-    if (!c.res.headers.has("Permissions-Policy")) {
-      c.res.headers.set(
-        "Permissions-Policy",
-        "accelerometer=(), camera=(), geolocation=(), gyroscope=(), microphone=(), payment=(), usb=()",
-      );
-    }
+    c.res.headers.set("X-Frame-Options", "DENY");
+    c.res.headers.set(
+      "Permissions-Policy",
+      "accelerometer=(), camera=(), geolocation=(), gyroscope=(), microphone=(), payment=(), usb=()",
+    );
     if (config.isProduction) {
       c.res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
     }

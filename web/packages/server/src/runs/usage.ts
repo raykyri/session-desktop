@@ -4,14 +4,16 @@
 // Recorded for every attempt whether or not daily limits are enforced, because
 // the limits are turned on later against history that has to already exist.
 
-import type { AttemptUsage, SessionDatabase } from "@session/db";
+import type { SessionDatabase } from "@session/db";
 import { usage as usageRepo } from "@session/db";
 import type { ModelEntry } from "@session/shared";
 import { estimateCostMicros } from "@session/shared";
 import type { LanguageModelUsage } from "ai";
 
-/** The SDK's nested usage flattened into the four numbers `usage_events` and
- * `run_attempts.usage_json` carry. */
+import type { AttemptUsage } from "./store.js";
+
+/** The SDK's nested usage flattened into the four numbers `usage_events`
+ * carries. */
 export function attemptUsageOf(usage: LanguageModelUsage | undefined): AttemptUsage {
   return {
     inputTokens: usage?.inputTokens ?? 0,

@@ -1,15 +1,9 @@
-// Enforces maximum response body byte limits on oEmbed, syndication,
-// embed images, and shared HTTP reader responses (`src/net/readCapped.ts`).
+// The byte cap on HTTP response bodies read by the run tools
+// (`src/net/readCapped.ts`).
 
-import { embeds } from "@session/db";
 import test from "ava";
 
-import { MAX_EMBED_BYTES, embedHash } from "../src/embeds/storage.js";
-import { MAX_OEMBED_RESPONSE_BYTES, fetchTweetOembed } from "../src/journal/oembed.js";
-import { MAX_TWEET_RESPONSE_BYTES, fetchTweetJson } from "../src/journal/tweets.js";
 import { ResponseTooLargeError, readCapped } from "../src/net/readCapped.js";
-
-import { createHarness } from "./helpers.js";
 
 const CHUNK = 64 * 1024;
 
@@ -62,35 +56,4 @@ test("a declared content-length over the cap is rejected before reading the body
   const response = new Response(body.stream, { headers: { "content-length": "1048576" } });
   await t.throwsAsync(readCapped(response, 1000), { instanceOf: ResponseTooLargeError });
   t.is(body.pulled(), 0);
-});
-
-test("an oversized oEmbed body is aborted at the byte cap", async (t) => {
-  const body = meteredBody(8 * 1024 * 1024);
-  const doFetch: typeof globalThis.fetch = () => Promise.resolve(new Response(body.stream));
-  await t.throwsAsync(fetchTweetOembed(doFetch, "1599367266448994304"), {
-    message: /exceeds the maximum allowed size/,
-  });
-  t.true(body.pulled() <= MAX_OEMBED_RESPONSE_BYTES + CHUNK, `read ${body.pulled()} bytes`);
-});
-
-test("an oversized syndication body is aborted at the byte cap", async (t) => {
-  const body = meteredBody(8 * 1024 * 1024);
-  const doFetch: typeof globalThis.fetch = () => Promise.resolve(new Response(body.stream));
-  await t.throwsAsync(fetchTweetJson(doFetch, "1599367266448994304", "4c2mmul6mnh"));
-  t.true(body.pulled() <= MAX_TWEET_RESPONSE_BYTES + CHUNK, `read ${body.pulled()} bytes`);
-});
-
-test("an embed image over the cap is not stored and is read only to the cap", async (t) => {
-  const image = "https://pbs.twimg.com/profile_images/1/large.jpg";
-  const body = meteredBody(MAX_EMBED_BYTES * 4);
-  const harness = createHarness(t, {
-    fetch: () =>
-      Promise.resolve(new Response(body.stream, { headers: { "Content-Type": "image/jpeg" } })),
-  });
-  const hash = embedHash(image);
-  embeds.register(harness.db, { hash, sourceUrl: image });
-  const response = await harness.request(`/embeds/${hash}`);
-  t.is(response.status, 404);
-  t.true(body.pulled() <= MAX_EMBED_BYTES + CHUNK, `read ${body.pulled()} bytes`);
-  t.is(embeds.get(harness.db, hash)?.storedAt, null);
 });

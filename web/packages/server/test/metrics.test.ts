@@ -71,12 +71,10 @@ test("/metrics reports the process and the database", async (t) => {
     /session_http_request_duration_seconds_count\{method="GET",route="\/healthz",status="2xx"\} 1/,
   );
   t.true(body.includes("session_ready 1"));
-  t.true(body.includes("session_queue_depth 0"));
-  t.true(body.includes("session_sse_clients 0"));
   t.regex(body, /session_db_size_bytes\{file="db"\} [1-9][0-9]*/);
   // The volume is the one resource whose exhaustion takes the whole server
   // down rather than one request: every SQLite write fails at once when the
-  // mount fills, and uploads are what fill it (`13-deployment-fly.md` §7).
+  // mount fills (`13-deployment-fly.md` §7).
   t.true(body.includes("# TYPE session_volume_free_bytes gauge"));
   t.regex(body, /session_volume_free_bytes [1-9][0-9]*/);
   t.is(
@@ -88,40 +86,21 @@ test("/metrics reports the process and the database", async (t) => {
   t.true(body.endsWith("\n"));
 });
 
-test("active runs, queue depth, and daily usage come out of the database", async (t) => {
+test("daily usage comes out of the database", async (t) => {
   const harness = createHarness(t, { env: { SESSION_METRICS_TOKEN: TOKEN } });
   const user = harness.addUser("metrics");
-  const client = harness.db.$client;
-  client
+  harness.db.$client
     .prepare(
       "INSERT INTO usage_events (id, user_id, node_id, kind, provider, model, input_tokens, output_tokens, reasoning_tokens, cached_tokens, cost_estimate_micros, created_at) VALUES (?, ?, NULL, 'research', 'vertex', 'gemini-flash', 100, 40, 0, 0, 2500, ?)",
     )
     .run("usage-metrics", user.id, Date.now());
 
-  const caller = harness.caller(user);
-  const workspace = await caller.workspaces.ensureDefault();
-  const detail = await caller.research.createTree({
-    prompt: "What is in the queue?",
-    model: "gemini-flash",
-    workspaceId: workspace.id,
-  });
-  const nodeId = detail.nodes[0]?.id ?? "";
-
-  const scrape = async (): Promise<string> =>
-    (await harness.request("/metrics", { headers: { Authorization: `Bearer ${TOKEN}` } })).text();
-
-  // Admitted but unclaimed: queue depth, not an active run.
-  const waiting = await scrape();
-  t.true(waiting.includes("session_queue_depth 1"));
-  t.false(waiting.includes("session_active_runs{"));
-
-  client.prepare("UPDATE run_queue SET claimed_at = ? WHERE node_id = ?").run(Date.now(), nodeId);
-  const running = await scrape();
-  t.true(running.includes("session_queue_depth 0"));
-  t.regex(running, /session_active_runs\{provider="[a-z]+"\} 1/);
-  t.true(running.includes('session_daily_tokens{provider="vertex",direction="input"} 100'));
-  t.true(running.includes('session_daily_tokens{provider="vertex",direction="output"} 40'));
-  t.true(running.includes('session_daily_cost_usd{provider="vertex"} 0.002500'));
+  const body = await (
+    await harness.request("/metrics", { headers: { Authorization: `Bearer ${TOKEN}` } })
+  ).text();
+  t.true(body.includes('session_daily_tokens{provider="vertex",direction="input"} 100'));
+  t.true(body.includes('session_daily_tokens{provider="vertex",direction="output"} 40'));
+  t.true(body.includes('session_daily_cost_usd{provider="vertex"} 0.002500'));
 });
 
 test("the histogram labels stay bounded", (t) => {

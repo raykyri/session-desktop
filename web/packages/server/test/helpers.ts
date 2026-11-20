@@ -7,8 +7,7 @@ import { join } from "node:path";
 
 import type { SessionDatabase } from "@session/db";
 import { auth, closeDatabase, openDatabase, users } from "@session/db";
-import type { ResearchNode, ResearchRecap, RunState, User } from "@session/shared";
-import { nodeRecap } from "@session/shared/lib/researchNodeTypes";
+import type { User } from "@session/shared";
 import type { ExecutionContext } from "ava";
 import type { Hono } from "hono";
 
@@ -17,19 +16,15 @@ import type { OAuthClient } from "../src/auth/github.js";
 import type { Config } from "../src/config.js";
 import { loadConfig } from "../src/config.js";
 import type { AppEnv, ServerDeps } from "../src/deps.js";
-import { EventBus } from "../src/events/bus.js";
 import type { Logger } from "../src/logger.js";
 import { createLogger } from "../src/logger.js";
 import { RateLimiter } from "../src/middleware/rateLimit.js";
-import { treeDirectory } from "../src/research/access.js";
-import { createDeletionJob } from "../src/research/deletion.js";
 import type { NoopRunsService, RunsService } from "../src/runs/service.js";
 import { createNoopRunsService } from "../src/runs/service.js";
 import { createAppContext } from "../src/trpc/base.js";
 import { appRouter, createCallerFactory } from "../src/trpc/router.js";
 
 export const PUBLIC_ORIGIN = "http://localhost:8787";
-export const ARTIFACT_ORIGIN = "http://artifacts.localhost:8787";
 
 const callerFactory = createCallerFactory(appRouter);
 
@@ -39,7 +34,6 @@ export interface Harness {
   config: Config;
   db: SessionDatabase;
   deps: ServerDeps;
-  eventBus: EventBus;
   logger: Logger;
   /** The recording stand-in, unless `createRuns` replaced it. */
   runs: NoopRunsService;
@@ -60,8 +54,7 @@ export interface HarnessOptions {
   env?: Record<string, string>;
   fetch?: typeof globalThis.fetch;
   createOAuthClient?: (deps: ServerDeps) => OAuthClient;
-  /** Swaps the recording stand-in for the real agent loop
-   * (`12-testing-linting-ci.md` §3.3). */
+  /** Swaps the recording stand-in for another runs service. */
   createRuns?: (deps: Omit<ServerDeps, "runs">) => RunsService;
 }
 
@@ -73,7 +66,6 @@ export function testConfig(directory: string, overrides: Record<string, string> 
     HOST: "127.0.0.1",
     PORT: "8787",
     SESSION_PUBLIC_ORIGIN: PUBLIC_ORIGIN,
-    SESSION_ARTIFACT_ORIGIN: ARTIFACT_ORIGIN,
     SESSION_DATA_DIR: directory,
     GITHUB_CLIENT_ID: "client-id",
     GITHUB_CLIENT_SECRET: "client-secret",
@@ -97,16 +89,11 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
     rmSync(directory, { recursive: true, force: true });
   });
   const logger = createLogger({ level: "error", write: () => undefined });
-  const eventBus = new EventBus(treeDirectory(db));
   const runs = createNoopRunsService();
   const limiter = new RateLimiter();
-  const deletions = createDeletionJob({ db, logger });
-  t.teardown(() => deletions.stop());
   const base = {
     config,
     db,
-    eventBus,
-    deletions,
     logger,
     ...(options.fetch ? { fetch: options.fetch } : {}),
   };
@@ -122,7 +109,6 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
     config,
     db,
     deps,
-    eventBus,
     logger,
     runs,
     limiter,
@@ -153,42 +139,4 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
       });
     },
   };
-}
-
-/** A highlight anchor over `exact` in the answer at `revision`. */
-export function anchorFor(revision: string, exact: string, start = 0) {
-  return {
-    version: 1 as const,
-    projection: "answer-v1" as const,
-    responseRevision: revision,
-    start,
-    end: start + exact.length,
-    exact,
-    prefix: "",
-    suffix: "",
-  };
-}
-
-/** A minimal assistant turn, the shape a snapshot commit requires. */
-export function answerTurn(nodeId: string, text: string, id = `${nodeId}-turn`) {
-  return {
-    id,
-    agentId: nodeId,
-    role: "assistant" as const,
-    blocks: [{ type: "text" as const, text }],
-    sourceIndex: 0,
-  };
-}
-
-/** An exchange's run, failing the test for a node without one. */
-export function runOf(node: ResearchNode | null | undefined): RunState {
-  if (node?.type !== "exchange") {
-    throw new Error(`expected an exchange, got ${node?.type ?? "no node"}`);
-  }
-  return node.run;
-}
-
-/** A node's recap, or undefined for a node without one. */
-export function recapOf(node: ResearchNode | null | undefined): ResearchRecap | undefined {
-  return node ? (nodeRecap(node) ?? undefined) : undefined;
 }

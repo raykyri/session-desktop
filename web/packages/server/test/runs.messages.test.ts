@@ -1,12 +1,6 @@
 // The canonical message store: forks and the context budget
 // (`04-agent-runtime.md` §4).
 
-import {
-  messages as messagesRepo,
-  nodes as nodesRepo,
-  snapshots as snapshotsRepo,
-  trees as treesRepo,
-} from "@session/db";
 import type { ModelMessage } from "ai";
 import test from "ava";
 
@@ -18,8 +12,7 @@ import {
   messagesFromCommittedTurns,
   stripForeignReasoning,
 } from "../src/runs/messages.js";
-
-import { answerTurn, createHarness } from "./helpers.js";
+import type { ContextMessage } from "../src/runs/store.js";
 
 const REASONING_MESSAGE: ModelMessage = {
   role: "assistant",
@@ -30,47 +23,20 @@ const REASONING_MESSAGE: ModelMessage = {
   providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
 };
 
-test("a same-model fork keeps reasoning and a cross-model fork drops it", async (t) => {
-  const harness = createHarness(t);
-  const user = harness.addUser("forker");
-  const caller = harness.caller(user);
-  const workspace = await caller.workspaces.ensureDefault();
-  const detail = treesRepo.admitRoot(harness.db, user.id, {
-    type: "exchange",
-    workspaceId: workspace.id,
-    message: { text: "root" },
-    agent: { model: "claude-fable" },
-  });
-  const rootId = detail.tree.rootNodeId;
-  snapshotsRepo.commit(harness.db, user.id, {
-    nodeId: rootId,
-    turns: [answerTurn(rootId, "The answer.")],
-    outcome: { status: "complete" },
-  });
-  messagesRepo.appendMessages(harness.db, user.id, rootId, [
-    { message: { role: "user", content: "root" }, model: null },
-    { message: REASONING_MESSAGE, model: "claude-fable" },
-  ]);
+test("a same-model fork keeps reasoning and a cross-model fork drops it", (t) => {
+  const history: ContextMessage[] = [
+    { nodeId: "root", message: { role: "user", content: "root" }, model: null },
+    { nodeId: "root", message: REASONING_MESSAGE, model: "claude-fable" },
+  ];
 
-  const sameModel = nodesRepo.admitChild(harness.db, user.id, {
-    parentNodeId: rootId,
-    message: { text: "follow-up" },
-    agent: { model: "claude-fable" },
-  });
-  const kept = ancestorContext(harness.db, user.id, sameModel);
+  const kept = ancestorContext(history, "claude-fable");
   const keptParts = kept[1]?.message.content as { type: string }[];
   t.true(
     keptParts.some((part) => part.type === "reasoning"),
     "same model keeps its thinking",
   );
 
-  const otherModel = nodesRepo.admitChild(harness.db, user.id, {
-    parentNodeId: rootId,
-    message: { text: "follow-up elsewhere" },
-    agent: { model: "gemini-flash" },
-    inline: true,
-  });
-  const dropped = ancestorContext(harness.db, user.id, otherModel);
+  const dropped = ancestorContext(history, "gemini-flash");
   const droppedMessage = dropped[1]?.message as ModelMessage & { providerOptions?: unknown };
   const droppedParts = droppedMessage.content as { type: string; providerOptions?: unknown }[];
   t.false(
@@ -87,34 +53,9 @@ test("stripForeignReasoning leaves a plain message alone", (t) => {
 });
 
 test("the context budget elides old tool results before it summarizes", async (t) => {
-  const harness = createHarness(t);
-  const user = harness.addUser("verbose");
-  const caller = harness.caller(user);
-  const workspace = await caller.workspaces.ensureDefault();
-  // Real nodes, because the summary cache is keyed on the node it covers.
-  const detail = treesRepo.admitRoot(harness.db, user.id, {
-    type: "exchange",
-    workspaceId: workspace.id,
-    message: { text: "root" },
-    agent: { model: "gemini-flash" },
-  });
-  const ids: string[] = [detail.tree.rootNodeId];
-  for (let depth = 0; depth < 2; depth += 1) {
-    const parentId = ids[depth] ?? "";
-    snapshotsRepo.commit(harness.db, user.id, {
-      nodeId: parentId,
-      turns: [answerTurn(parentId, "an answer")],
-      outcome: { status: "complete" },
-    });
-    ids.push(
-      nodesRepo.admitChild(harness.db, user.id, {
-        parentNodeId: parentId,
-        message: { text: "more" },
-      }).id,
-    );
-  }
+  const ids = ["n1", "n2", "n3"];
   const [first = "", , third = ""] = ids;
-  const path = ids.flatMap((nodeId) => [
+  const path: ContextMessage[] = ids.flatMap((nodeId) => [
     {
       nodeId,
       model: null,
@@ -145,11 +86,11 @@ test("the context budget elides old tool results before it summarizes", async (t
     },
   ]);
 
-  const untouched = await compactContext(harness.db, user.id, path, { budgetTokens: 1_000_000 });
+  const untouched = await compactContext(path, { budgetTokens: 1_000_000 });
   t.false(untouched.elidedToolResults);
   t.is(untouched.summarizedThrough, null);
 
-  const elided = await compactContext(harness.db, user.id, path, { budgetTokens: 900 });
+  const elided = await compactContext(path, { budgetTokens: 900 });
   t.true(elided.elidedToolResults);
   const serialized = JSON.stringify(elided.messages);
   t.true(serialized.includes(ELIDED_TOOL_RESULT), "old tool results become a placeholder");
@@ -161,8 +102,16 @@ test("the context budget elides old tool results before it summarizes", async (t
   t.true(elided.estimatedTokens < untouched.estimatedTokens);
 
   // Still over budget, and a summarizer is available: the oldest node collapses.
-  const summarized = await compactContext(harness.db, user.id, path, {
+  const cache = new Map<string, string>();
+  const summaries = {
+    read: (nodeId: string) => cache.get(nodeId) ?? null,
+    write: (nodeId: string, summary: string) => {
+      cache.set(nodeId, summary);
+    },
+  };
+  const summarized = await compactContext(path, {
     budgetTokens: 100,
+    summaries,
     summarize: () => Promise.resolve("Earlier: the thread established the basics."),
   });
   t.is(summarized.summarizedThrough, first);
@@ -173,8 +122,9 @@ test("the context budget elides old tool results before it summarizes", async (t
 
   // The summary is cached on the node it covers, so the second call is free.
   let calls = 0;
-  const second = await compactContext(harness.db, user.id, path, {
+  const second = await compactContext(path, {
     budgetTokens: 100,
+    summaries,
     summarize: () => {
       calls += 1;
       return Promise.resolve("a second summary");
