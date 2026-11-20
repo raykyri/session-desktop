@@ -215,8 +215,6 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .rfoot { margin-top: 8px; padding-left: 4px; }
 .replies .tlink { font-size: var(--fs-xs); font-weight: 400; }
 .replies .composer { margin-top: 8px; }
-.grow-r .ru { color: var(--t-faint); }
-.grow-r.on .ru { color: var(--t-secondary); font-weight: 600; }
 .preview .rtext { margin: 6px 0 2px; }
 .grow-r .gq-av { display: flex; align-items: center; gap: 6px; height: 26px; }
 .gq-av .gt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -474,7 +472,7 @@ const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data
 /* ================= pinned maps ================= */
 /* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
    as a small outline tree per passage. */
-const st = { v: 'lines', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
+const st = { v: 'faces', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
 
 /* Which model answered and at what thinking effort. The fixtures do not record it; the mock picks one
    per thread. Shown in a tooltip on the answer's icon. */
@@ -571,8 +569,8 @@ const likeBtn = r => `<span class="rlike">${I.heart}${r.likes || 0}</span>`;
 const replyBox = (p, at, ph) => st.replying === rkey(p, at) ? composer('rp:' + p.id + ':' + at, ph, '', 'Reply') : '';
 const replyLink = (p, id) => `<button class="tlink" data-a="reply" data-id="${rkey(p, id)}">Reply</button>`;
 
-/* Line tree: the same line graph as the branch trees, one row per reply; click a row to read it. */
-function replyLines(p, faces = false) {
+/* Avatar tree: the same line graph as the branch trees, one row per reply led by its author's avatar; click a row to read it. */
+function replyLines(p) {
   const rows = flatReplies(replies(p)); if (!rows.length) return '';
   const sel = st.rsel[p.id], H = 26, X = d => 6 + d * 13, idx = Object.fromEntries(rows.map((x, i) => [x.id, i]));
   const on = new Set(); if (sel) sel.split('.').forEach((_, i, a) => on.add(a.slice(0, i + 1).join('.')));
@@ -583,25 +581,18 @@ function replyLines(p, faces = false) {
     dots += `<circle class="${id === sel ? 'sel' : on.has(id) ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="3.5"/>`;
   });
   const cur = sel && idx[sel] != null ? rows[idx[sel]] : null;
-  return `<div class="grp"><div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ r, d, id }) => `<button class="grow-r${on.has(id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}">${faces ? `<span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(r.t)}</span></span>` : `<span class="gq"><span class="ru">${esc(r.u)}</span> ${esc(r.t)}</span>`}</button>`).join('')}</div>
+  return `<div class="grp"><div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ r, d, id }) => `<button class="grow-r${on.has(id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}"><span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(r.t)}</span></span></button>`).join('')}</div>
     ${cur ? `<div class="preview fadein"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time></div><p class="rtext">${esc(cur.r.t)}</p><div class="pf">${likeBtn(cur.r)}${replyLink(p, cur.id)}</div>${replyBox(p, cur.id, 'Reply to ' + cur.r.u)}</div>` : ''}
     <div class="rfoot">${replyLink(p, 'top')}</div>${replyBox(p, 'top', 'Reply to the post')}</div>`;
 }
 
 const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches is shaded and gets its own small tree beside it.';
 const V = {
-  lines: {
-    name: 'Line tree',
-    q: 'Replies',
-    thesis: `<strong>Replies drawn like branches.</strong> A plain post's replies get the same line graph as an answer's branches, one row per reply with the author first. Click a row to read the reply and answer it. ${ASK_THESIS}`,
-    replies: replyLines,
-    layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); },
-  },
   faces: {
     name: 'Avatar tree',
     q: 'Replies',
     thesis: `<strong>The same line tree, with faces instead of names.</strong> Each row starts with the author's avatar, which leaves more of the line for what they said; hover an avatar for the name. Click a row to read the reply and answer it. ${ASK_THESIS}`,
-    replies: p => replyLines(p, true),
+    replies: replyLines,
     layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); },
   },
 };
@@ -633,7 +624,7 @@ function renderBar() {
   $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${st.theme === k}">${l}</button>`).join('');
   $('#thesis').innerHTML = `<span class="qtag">${V[st.v].q}</span>` + V[st.v].thesis;
 }
-function go(v) { if (!V[v]) v = 'lines'; st.v = v; st.asking = null; renderBar(); render(); }
+function go(v) { if (!V[v]) v = 'faces'; st.v = v; st.asking = null; renderBar(); render(); }
 $('#variant-seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { history.replaceState(null, '', '#' + b.dataset.v); go(b.dataset.v); } });
 $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; st.theme = b.dataset.t; if (st.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = st.theme; renderBar(); });
 
@@ -671,6 +662,6 @@ document.addEventListener('keydown', e => {
   if (e.key.length !== 1 || !k) return;
   e.preventDefault(); history.replaceState(null, '', '#' + k); go(k);
 });
-go(location.hash.slice(1) || 'lines');
+go(location.hash.slice(1) || 'faces');
 document.fonts?.ready.then(() => render());
 </script>
