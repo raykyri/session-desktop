@@ -42,6 +42,8 @@ export interface Seeded {
   queued?: number;
   /** The ids its input makes. */
   minted?: string[];
+  /** Its state as the earlier run left it (default: queued). */
+  state?: string;
 }
 
 /** Add writes to the end of the stored outbox (the app is not running). */
@@ -67,7 +69,7 @@ export function seedOutbox(bridge: TestBridge, now: number, writes: Seeded[]): s
       wire: false,
       tries: 0,
       next: 0,
-      state: "queued",
+      state: w.state ?? "queued",
       minted: w.minted ?? (typeof w.input["id"] === "string" ? [w.input["id"]] : []),
     };
     bridge.run(file, "INSERT INTO sync_client_outbox (pos, body) VALUES (?, ?)", [

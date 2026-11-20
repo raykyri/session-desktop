@@ -418,17 +418,33 @@ rules above stay as they are. Decisions for the new client:
     states follow the mockup's default Variants: a toast for a write that
     failed 5 times, EXPIRED, dropped or refused; a header badge with a
     popover and `/unsent`; the desktop offline bar; the Update Session
-    dialog. A STALE decision without text shows its toast and leaves the
-    list; a refused write with text stays in the list with Copy text;
-    FORBIDDEN moderation is one grouped toast. A frozen copy (the sync
-    core keeps the person's own threads and what they wrote under them) is
-    greyed and read-only with one notice, and stays in the header.
+    dialog. A refused write stays in the list until the person dismisses
+    it, a STALE decision too (nothing is applied again), with Copy text
+    when it has text. FORBIDDEN moderation is one grouped toast per space.
+    A frozen copy (the sync core keeps the person's own threads and what
+    they wrote under them) is greyed and read-only with one notice (no
+    Reply, no Ask about this answer), and stays in the header.
+  - Review round 1 of phase 3 (UI): an online-only call with no answer ends
+    as on the web (`{ok: false, error: null}`), never `queued`. The
+    outbox's toasts stay until dismissed or until the write they name
+    changes (a toast over one shows first; a retry's countdown is read
+    from the entry), and a write already shown at start gets its toast;
+    a toast's first action is the list's first (Dismiss included). One
+    refused write that is not a moderator's gets its own toast with Copy
+    text. Every write with typed text (skills, settings, profile, report
+    notes, join answers, sources) keeps it for Copy text; a page edit's
+    paragraphs are joined by a blank line. A toast that says a write was
+    saved or sent (`savedToast`) shows only once it applied. "Sent just
+    now" counts this run's sends in the past minute. `/unsent` exists only
+    in the Desktop app. Links open through `platform().openExternal`, and
+    "Opened X…" shows once it opened. Window titles name a page of its own
+    ("Session — Manage", "Session — Account"); with no screen, "Session".
   - Sign-in: `devices.authorize` with the Mac and the app, the browser at
     `/device?request=<id>`, the code on the app's window, `devices.token`
     polled every 2 s. The server takes these two calls from a desktop
     origin without a token or a cookie (`middleware/cors.ts`, `csrf.ts`).
-  - Not built: the updater ("Download and restart" opens
-    `<server>/download`), signing, the Devices list (Phone only), device
+  - Not built: the updater (Update Session's "Open the download page"
+    opens `<server>/download`), signing, the Devices list (Phone only), device
     runs (phase 4). The app's appearance settings stay on the Mac (a device
     token reads none of the browser's account routes).
   - Tests: `web/desktop/test` (platform, sign-in), `cargo test` in

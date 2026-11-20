@@ -8,6 +8,7 @@ import { expect, test } from "@playwright/test";
 import { signedInApp } from "./app.js";
 import { replicaFileOf } from "./files.js";
 import { offline, online, reloadOffline } from "./net.js";
+import { sf4 } from "./outbox.js";
 
 const OFFLINE_BAR =
   "You’re offline. Changes are saved on this Mac and sent when the connection is back.";
@@ -57,5 +58,34 @@ test("offline, a reload starts from the replica (sx-off-app)", async ({ context 
   // back online (the browser's online event): the bar goes
   await online(page);
   await expect(page.getByText(OFFLINE_BAR)).toBeHidden();
+  bridge.close();
+});
+
+test("window titles name the page; links open in the system browser", async ({ context }) => {
+  const { page, bridge, records } = await signedInApp(context);
+  const origin = new URL(page.url()).origin;
+  for (const [path, title] of [
+    ["/settings/account", "Session — Account"],
+    ["/settings/keys", "Session — API keys"],
+    ["/s/sablefield/manage/members", "Session — Manage"],
+    ["/s/sablefield", "Session — Sablefield"],
+  ] as const) {
+    await page.goto(`${origin}${path}`);
+    await expect.poll(() => bridge.title).toBe(title);
+  }
+  // Share to X: the browser opens, then the toast says so
+  await page.goto(`${origin}${sf4(records).path}`);
+  await page.locator(".th-main .p-foot").getByRole("button", { name: "Share" }).click();
+  await page.getByRole("menuitem", { name: "Share to X" }).click();
+  await expect
+    .poll(() => bridge.opened.at(-1) ?? "")
+    .toMatch(/^https:\/\/x\.com\/intent\/post\?url=/);
+  await expect(page.locator(".cs-toast")).toContainText("Opened X with a link to the thread.");
+  // a cited source of an answer
+  await page.goto(`${origin}/s/public/t/01M7HWGZJGT7JTFFVSYPX055KV`);
+  const n = bridge.opened.length;
+  await page.locator(".ds-src li").first().click();
+  await expect.poll(() => bridge.opened.length).toBe(n + 1);
+  expect(bridge.opened.at(-1)).toMatch(/^https?:\/\//);
   bridge.close();
 });

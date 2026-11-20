@@ -466,17 +466,22 @@ function Watcher() {
     /** Not over the list the toast points to (the popover, `/unsent`). */
     const hidden = () => popOpen || location.pathname === "/unsent";
     /** A write's toast: it stays until dismissed, and goes once the write
-     * left the state it names (sent, retried, dismissed in the list). */
+     * left the state it names (sent, retried, dismissed in the list). Its
+     * text is read from the write as it is now (a retry's countdown; the
+     * space's name once the replica has it). */
     const say = (
       o: ObItem,
       k: string,
-      text: string | (() => string),
+      text: (now: ObItem) => string,
       ...actions: { label: string; run: () => void }[]
     ) => {
       if (hidden()) return;
       stickyToast({
         key: `ob:${o.local}`,
-        text,
+        text: () => {
+          const e = entry(o.local);
+          return text(e ? describeNow(e) : o);
+        },
         actions,
         live: () => {
           const e = entry(o.local);
@@ -492,7 +497,8 @@ function Watcher() {
       say(
         o,
         k,
-        `${s.head ?? "Not saved"}: your ${o.noun}${o.spaceLabel ? ` in ${o.spaceLabel}` : ""}.`,
+        (x) =>
+          `${s.head ?? "Not saved"}: your ${x.noun}${x.spaceLabel ? ` in ${x.spaceLabel}` : ""}.`,
         ...(first ? [{ label: first[0], run: () => actRef.current(o, first[1]) }] : []),
         details,
       );
@@ -509,7 +515,6 @@ function Watcher() {
           continue;
         }
         if (hidden()) continue;
-        const where = one.spaceLabel;
         const mod = group.every(isModeration);
         const n = group.length;
         const what = mod
@@ -521,7 +526,10 @@ function Watcher() {
             : "changes";
         stickyToast({
           key: `ob-forbidden:${one.local}`,
-          text: `${n} ${what}${where ? ` in ${where}` : ""} ${n === 1 ? "wasn’t" : "weren’t"} applied.`,
+          text: () => {
+            const where = one.space ? labelIn(session)(one.space) : null;
+            return `${n} ${what}${where ? ` in ${where}` : ""} ${n === 1 ? "wasn’t" : "weren’t"} applied.`;
+          },
           actions: [details],
           live: () => group.some((o) => entry(o.local)?.state === "refused"),
         });
@@ -546,21 +554,17 @@ function Watcher() {
         if (k === "wait" || k === "held" || k === "answered") continue;
         const o = describeNow(e);
         if (o.state === "retry") {
-          // the countdown is read from the entry as it is now
           say(
             o,
             k,
-            () => {
-              const now = entry(o.local);
-              const x = now ? describeNow(now) : o;
-              return `Not sent yet: the server didn’t answer. Next try in ${x.next} s (try ${x.tries} of 5).`;
-            },
+            (x) =>
+              `Not sent yet: the server didn’t answer. Next try in ${x.next} s (try ${x.tries} of 5).`,
             { label: "Retry now", run: () => actRef.current(o, "retryNow") },
           );
         } else if (o.state === "stale" && !o.text) {
           // a decision whose item changed: not applied again; it stays in
           // Unsent changes until the person dismisses it
-          say(o, k, staleText(o));
+          say(o, k, staleText);
         } else if (o.state === "forbidden") {
           // the writes the same replay refuses are one toast per space: it
           // waits until none came for half a second
