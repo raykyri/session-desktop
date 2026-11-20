@@ -146,7 +146,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .tabs button { flex: none; padding: 5px 10px; border-radius: 14px; font-size: var(--fs-sm); color: var(--t-secondary); font-weight: 500; white-space: nowrap; }
 .tabs button:hover { background: var(--fill-hover); }
 .tabs button[aria-current="true"] { background: var(--t-heading); color: var(--feed); }
-.row { display: grid; grid-template-columns: minmax(0, 600px) minmax(0, 330px); gap: 28px; padding: 14px 0; justify-content: center; }
+.row { display: grid; grid-template-columns: minmax(0, 600px) minmax(0, 330px); gap: 21px; padding: 14px 0; justify-content: center; }
 .card { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 18px 20px 12px; min-width: 0; transition: opacity .2s; }
 .card-h { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .card .ask { margin: 0 0 14px; color: var(--t-heading); font-size: var(--fs-lg); line-height: 1.45; }
@@ -193,6 +193,9 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .grow-r:has(.rav-r) { display: flex; align-items: center; gap: 6px; }
 .grow-r:has(.rav-r) .gq { flex: 1; min-width: 0; }
 .rav-r { margin-left: auto; }
+.grow-r.on { height: auto; padding-top: 4px; padding-bottom: 4px; white-space: normal; }
+.grow-r.on .gq { white-space: normal; line-height: 1.4; overflow: visible; }
+.grow-r.on:has(.rav-r) { align-items: flex-start; }
 .grow-r .gq { display: block; font-size: var(--fs-sm); color: var(--t-secondary); overflow: hidden; text-overflow: ellipsis; line-height: 26px; }
 .grow-r.on .gq, .grp.hl .grow-r .gq { color: var(--t-heading); }
 .grow-r.on .gq { font-weight: 600; }
@@ -434,7 +437,7 @@ function tree(p) {
   const list = qt ? qt.nodes : fu.map((f, i) => ({ id: 'f' + i, par: 'r', fu: i }));
   for (const n of [...list, ...(EXTRA[p.id] || [])]) {
     const f = n.fu != null ? fu[n.fu] : null;
-    nodes[n.id] = { id: n.id, par: n.par, u: n.u || f?.u, createdAt: n.createdAt || f?.createdAt, q: asTyped(p, n.id, n.q || f?.q || ''), q0: n.q || f?.q || '', html: n.html || f?.html || (f?.a ? `<p>${esc(f.a)}</p>` : ''), sum: f?.a || '', tok: n.tok || 0, pending: n.pending };
+    nodes[n.id] = { id: n.id, par: n.par, u: n.u || f?.u, createdAt: n.createdAt || f?.createdAt, q: asTyped(p, n.fu != null ? 'f' + n.fu : n.id, n.q || f?.q || ''), q0: n.q || f?.q || '', html: n.html || f?.html || (f?.a ? `<p>${esc(f.a)}</p>` : ''), sum: f?.a || '', tok: n.tok || 0, pending: n.pending };
   }
   const kids = {};
   for (const id in nodes) { const n = nodes[id]; if (n.par) (kids[n.par] ||= []).push(n); }
@@ -529,6 +532,7 @@ function pinGroups(p, draw, cls = '') {
   for (const G of groupsFor(p, prose)) {
     badge(G.block, G.g, G.total);
     margin.insertAdjacentHTML('beforeend', `<div class="pin grp ${cls}" data-grp-box="${G.g}">${draw(T, G)}</div>`);
+    margin.lastElementChild.querySelectorAll('[data-draw]').forEach(drawGraph);
     items.push({ el: margin.lastElementChild, anchor: G.block });
   }
   if (!narrow()) place(margin, items);
@@ -544,16 +548,24 @@ function preview(p, T, n) {
 const readout = (p, T, ns) => inGroup(T, ns, st.sel[p.id]) ? preview(p, T, T.nodes[st.sel[p.id]]) : '';
 
 /* ---- drawings ---- */
+/* Rows on the selected path show their whole question, so rows differ in height; the lines are drawn
+   after layout from each row's measured position (drawGraph). */
 function outline(p, T, G) {
   const sel = st.sel[p.id], on = onPath(p, T), g = G.g;
-  const rows = G.ns.flatMap(n => T.dfs(n.id, 0, [])), H = 26, X = d => 6 + d * 13, idx = Object.fromEntries(rows.map((r, i) => [r.n.id, i]));
+  const rows = G.ns.flatMap(n => T.dfs(n.id, 0, [])), X = d => 6 + d * 13;
+  return `<div class="graph" data-draw><svg aria-hidden="true"></svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}${n.id === sel ? ' sel' : ''}" style="padding-left:${X(d) + 10}px" data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-par="${d ? n.par : ''}" data-d="${d}" data-grp="${g}"><span class="gq">${esc(n.q)}</span>${n.u !== T.nodes[n.par].u ? `<span class="rav rav-r" title="${esc(n.u)}">${av(n.u, 'xs')}</span>` : ''}</button>`).join('')}</div>${readout(p, T, G.ns)}`;
+}
+function drawGraph(graph) {
+  const X = d => 6 + d * 13, at = {};
   let paths = '', dots = '';
-  rows.forEach(({ n, d }, i) => {
-    const y = i * H + 13;
-    if (d > 0) { const px = X(d - 1), py = idx[n.par] * H + 13; paths += `<path class="${on.has(n.id) ? 'on' : ''}" d="M${px} ${py} L${px} ${y - 6} Q${px} ${y} ${px + 6} ${y} L${X(d)} ${y}"/>`; }
-    dots += `<circle class="${n.id === sel ? 'sel' : on.has(n.id) ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="3.5"/>`;
-  });
-  return `<div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-grp="${g}"><span class="gq">${esc(n.q)}</span>${n.u !== T.nodes[n.par].u ? `<span class="rav rav-r" title="${esc(n.u)}">${av(n.u, 'xs')}</span>` : ''}</button>`).join('')}</div>${readout(p, T, G.ns)}`;
+  for (const r of graph.querySelectorAll(':scope > .grow-r')) {
+    const d = +r.dataset.d, y = r.offsetTop + 13, on = r.classList.contains('on');
+    at[r.dataset.node] = { x: X(d), y };
+    const par = at[r.dataset.par];
+    if (par) paths += `<path class="${on ? 'on' : ''}" d="M${par.x} ${par.y} L${par.x} ${y - 6} Q${par.x} ${y} ${par.x + 6} ${y} L${X(d)} ${y}"/>`;
+    dots += `<circle class="${r.classList.contains('sel') ? 'sel' : on ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="3.5"/>`;
+  }
+  const svg = graph.querySelector('svg'); svg.setAttribute('height', graph.offsetHeight); svg.innerHTML = paths + dots;
 }
 
 /* ---- replies on plain posts, drawn as trees (one style per variant) ---- */
