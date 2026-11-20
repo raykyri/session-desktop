@@ -140,6 +140,11 @@ const upTo =
   (v) =>
     typeof v === "string" && v.length <= n;
 const bool: Check = (v) => typeof v === "boolean";
+/** Text a write must carry: 1 to `n` characters. */
+const words =
+  (n: number): Check =>
+  (v) =>
+    typeof v === "string" && v.length >= 1 && v.length <= n;
 const ulid: Check = (v) => typeof v === "string" && ULID.test(v);
 const nat: Check = (v) => typeof v === "number" && Number.isInteger(v) && v >= 0;
 const oneOf =
@@ -147,8 +152,14 @@ const oneOf =
   (v) =>
     xs.includes(v);
 const handle: Check = isHandle;
-const itemKey: Check = (v) =>
-  typeof v === "string" && /^[a-z]+:[0-9A-HJKMNP-TV-Z]{26}(:.*)?$/.test(v);
+/** A moderation key: `a:` or `p:` and a thread id; `f:`, `r:` or `c:`, a
+ * thread id and an item id. */
+const itemKey: Check = (v) => {
+  if (typeof v !== "string") return false;
+  const [k, ...ids] = v.split(":");
+  const n = k === "a" || k === "p" ? 1 : k === "f" || k === "r" || k === "c" ? 2 : 0;
+  return n > 0 && ids.length === n && ids.every((x) => /^[0-9A-HJKMNP-TV-Z]{26}$/.test(x));
+};
 /** `r` (a thread's root ask) or a node's id. */
 const nodeRef: Check = (v) => v === "r" || ulid(v);
 const model: Check = (v) => typeof v === "string" && v.length >= 1 && v.length <= 100;
@@ -201,35 +212,35 @@ const SCHEMA: Record<string, Check> = {
   "spaces.leave": obj({ space: ulid }),
   "threads.create": (v) =>
     byKind({
-      ask: obj({ id: ulid, space: ulid, kind: str, q: upTo(8000), model, effort }, { title }),
-      post: obj({ id: ulid, space: ulid, kind: str, q: upTo(8000) }, { title }),
+      ask: obj({ id: ulid, space: ulid, kind: str, q: words(8000), model, effort }, { title }),
+      post: obj({ id: ulid, space: ulid, kind: str, q: words(8000) }, { title }),
     })(v) ||
     // a node opened as its own thread (`03` G5): no kind
     obj({ id: ulid, from: obj({ th: ulid, node: ulid }) })(v),
-  "threads.update": obj({ id: ulid, q: upTo(8000), base: obj({ rev: nat }) }),
+  "threads.update": obj({ id: ulid, q: words(8000), base: obj({ rev: nat }) }),
   "threads.delete": obj({ id: ulid }),
   "saved.set": obj({ kind: oneOf("thread"), id: ulid, on: bool }),
   "research.forkNode": byKind({
     ask: obj(
-      { id: ulid, thread: ulid, parent: nodeRef, kind: str, q: upTo(8000), model, effort },
+      { id: ulid, thread: ulid, parent: nodeRef, kind: str, q: words(8000), model, effort },
       { quote: upTo(2000), b: nat },
     ),
     lookup: obj(
-      { id: ulid, thread: ulid, parent: nodeRef, kind: str, look: upTo(80), model, effort },
+      { id: ulid, thread: ulid, parent: nodeRef, kind: str, look: words(80), model, effort },
       { quote: upTo(2000), b: nat },
     ),
   }),
-  "followups.update": obj({ ...nodeIn, q: upTo(8000), base: rev }),
+  "followups.update": obj({ ...nodeIn, q: words(8000), base: rev }),
   "followups.delete": obj(nodeIn),
   "research.cancelNode": obj(nodeIn),
   "research.retryNode": obj({ ...nodeIn, model, effort }),
-  "research.createPostFollowUp": obj({ id: ulid, thread: ulid, t: upTo(8000) }, { parent: ulid }),
-  "replies.update": obj({ id: ulid, t: upTo(8000), base: rev }),
+  "research.createPostFollowUp": obj({ id: ulid, thread: ulid, t: words(8000) }, { parent: ulid }),
+  "replies.update": obj({ id: ulid, t: words(8000), base: rev }),
   "replies.delete": obj({ id: ulid }),
-  "comments.update": obj({ id: ulid, t: upTo(8000), base: rev }),
+  "comments.update": obj({ id: ulid, t: words(8000), base: rev }),
   "comments.delete": obj({ id: ulid }),
   "comments.create": obj(
-    { id: ulid, thread: ulid, node: nodeRef, t: upTo(8000) },
+    { id: ulid, thread: ulid, node: nodeRef, t: words(8000) },
     { parent: ulid },
   ),
   "joinRequests.create": obj({ space: ulid }),
@@ -253,10 +264,14 @@ const SCHEMA: Record<string, Check> = {
   }),
   "invites.revoke": obj({ id: ulid }),
   "invites.restore": obj({ id: ulid }),
-  "moderation.decide": obj(
-    { item: itemKey, decision: oneOf("hidden", "removed", "shown") },
-    { note: upTo(300), base: rev },
-  ),
+  // by decision: a reason only with a removal; "shown" needs the item's rev
+  "moderation.decide": (v) => {
+    const d = (v as { decision?: unknown } | null)?.decision;
+    if (d === "removed")
+      return obj({ item: itemKey, decision: str }, { note: upTo(300), base: rev })(v);
+    if (d === "hidden") return obj({ item: itemKey, decision: str }, { base: rev })(v);
+    return d === "shown" && obj({ item: itemKey, decision: str, base: rev })(v);
+  },
   "notifications.markRead": obj({ id: ulid }),
   "notifications.markAllRead": obj({}),
   "prefs.set": obj({ layout: oneOf("centred", "wide") }),
@@ -681,7 +696,6 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     const item = seenItem(f, String(i["item"]));
     inSpace(f, item.s, "owner");
     const d = i["decision"];
-    if (d === "shown" && i["base"] === undefined) no("BAD_REQUEST");
     // round 2: only "shown" could expose text, so only it compares the rev
     if (d === "shown" && item.rev !== baseRev(i)) no("STALE");
     if (item.mod === "removed") no("PRECONDITION_FAILED");

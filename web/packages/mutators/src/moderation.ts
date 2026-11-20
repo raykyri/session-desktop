@@ -4,7 +4,7 @@
 import { refuse } from "./errors.js";
 import { Notifier } from "./notify.js";
 import { answerKey, threadKey } from "./records.js";
-import { M, erase, itemOf, removed, stale, bad } from "./rules.js";
+import { M, erase, itemOf, removed, stale } from "./rules.js";
 import { define } from "./tx.js";
 
 export const MODERATION = {
@@ -12,10 +12,8 @@ export const MODERATION = {
     input: M["moderation.decide"].input,
     who: "owner",
     intent: "base.rev when shown",
+    // "shown" carries `base` (the input schema requires it)
     space: (tx, i) => itemOf(tx, i.item).s,
-    can: (_tx, i) => {
-      if (i.decision === "shown" && i.base === undefined) throw bad("base", "the item's rev");
-    },
     run: (tx, i) => {
       const r = itemOf(tx, i.item);
       // "shown" acts on the item as the owner read it: its rev. The author

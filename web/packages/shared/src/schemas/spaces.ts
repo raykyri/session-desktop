@@ -63,7 +63,9 @@ export const askNodeRefSchema = z.union([z.literal("r"), spaceUlidSchema]);
 
 /** An item that can be moderated, `"<kind>:<thread>[:<item>]"`: `a:` an ask
  * thread, `p:` a post, `f:` an ask node, `r:` a reply, `c:` a comment (C4). */
-export const moderationKeySchema = z.string().regex(/^[a-z]+:[0-9A-HJKMNP-TV-Z]{26}(:.*)?$/);
+export const moderationKeySchema = z
+  .string()
+  .regex(/^(?:[ap]:[0-9A-HJKMNP-TV-Z]{26}|[frc]:[0-9A-HJKMNP-TV-Z]{26}:[0-9A-HJKMNP-TV-Z]{26})$/);
 
 /** A moderated record's state. */
 export const moderationStateSchema = z.enum(["hidden", "removed"]);
@@ -531,6 +533,9 @@ const nullResult = z.null();
 /** `base` of a write that compares the target's rev (stale intent). */
 const baseRev = z.strictObject({ rev: count });
 const text = (max: number) => z.string().max(max);
+/** Text a write must carry: a question, a post, a reply, a comment, a look-up
+ * phrase (the mutator also refuses text that is only spaces). */
+const words = (max: number) => z.string().min(1).max(max);
 
 /** `threads.create` with `from` (`03` G5): a node opened as its own thread,
  * in the node's space. The server copies the node's question and answer and
@@ -549,7 +554,7 @@ export const createThreadInputSchema = z.union([
       id: ulid,
       space: spaceIdSchema,
       kind: z.literal("ask"),
-      q: text(ASK_TEXT_MAX),
+      q: words(ASK_TEXT_MAX),
       title: z.string().nullable().optional(),
       model: spaceModelSchema,
       effort: spaceEffortSchema,
@@ -558,7 +563,7 @@ export const createThreadInputSchema = z.union([
       id: ulid,
       space: spaceIdSchema,
       kind: z.literal("post"),
-      q: text(ASK_TEXT_MAX),
+      q: words(ASK_TEXT_MAX),
       title: z.string().nullable().optional(),
     }),
   ]),
@@ -575,7 +580,7 @@ export const forkNodeInputSchema = z.discriminatedUnion("kind", [
     thread: spaceThreadIdSchema,
     parent: askNodeRefSchema,
     kind: z.literal("ask"),
-    q: text(ASK_TEXT_MAX),
+    q: words(ASK_TEXT_MAX),
     quote: text(QUOTE_MAX).optional(),
     b: count.optional(),
     model: spaceModelSchema,
@@ -586,7 +591,7 @@ export const forkNodeInputSchema = z.discriminatedUnion("kind", [
     thread: spaceThreadIdSchema,
     parent: askNodeRefSchema,
     kind: z.literal("lookup"),
-    look: text(LOOKUP_PHRASE_MAX),
+    look: words(LOOKUP_PHRASE_MAX),
     quote: text(QUOTE_MAX).optional(),
     b: count.optional(),
     model: spaceModelSchema,
@@ -654,7 +659,7 @@ export const spaceMutators = {
   "threads.update": {
     who: "author",
     online: false,
-    input: z.strictObject({ id: spaceThreadIdSchema, q: text(ASK_TEXT_MAX), base: baseRev }),
+    input: z.strictObject({ id: spaceThreadIdSchema, q: words(ASK_TEXT_MAX), base: baseRev }),
     result: nullResult,
   },
   /** A thread deleted while it has asks or replies under it stays as an
@@ -684,7 +689,7 @@ export const spaceMutators = {
   "followups.update": {
     who: "author",
     online: false,
-    input: z.strictObject({ ...nodeInput, q: text(ASK_TEXT_MAX), base: baseRev }),
+    input: z.strictObject({ ...nodeInput, q: words(ASK_TEXT_MAX), base: baseRev }),
     result: nullResult,
   },
   "followups.delete": {
@@ -714,7 +719,7 @@ export const spaceMutators = {
     input: z.strictObject({
       id: ulid,
       thread: spaceThreadIdSchema,
-      t: text(ASK_TEXT_MAX),
+      t: words(ASK_TEXT_MAX),
       parent: ulid.optional(),
     }),
     result: nullResult,
@@ -722,7 +727,7 @@ export const spaceMutators = {
   "replies.update": {
     who: "author",
     online: false,
-    input: z.strictObject({ id: ulid, t: text(ASK_TEXT_MAX), base: baseRev }),
+    input: z.strictObject({ id: ulid, t: words(ASK_TEXT_MAX), base: baseRev }),
     result: nullResult,
   },
   "replies.delete": {
@@ -739,7 +744,7 @@ export const spaceMutators = {
       id: ulid,
       thread: spaceThreadIdSchema,
       node: askNodeRefSchema,
-      t: text(ASK_TEXT_MAX),
+      t: words(ASK_TEXT_MAX),
       parent: ulid.optional(),
     }),
     result: nullResult,
@@ -747,7 +752,7 @@ export const spaceMutators = {
   "comments.update": {
     who: "author",
     online: false,
-    input: z.strictObject({ id: ulid, t: text(ASK_TEXT_MAX), base: baseRev }),
+    input: z.strictObject({ id: ulid, t: words(ASK_TEXT_MAX), base: baseRev }),
     result: nullResult,
   },
   "comments.delete": {
@@ -812,12 +817,20 @@ export const spaceMutators = {
   "moderation.decide": {
     who: "owner",
     online: false,
-    input: z.strictObject({
-      item: moderationKeySchema,
-      decision: z.enum(["hidden", "removed", "shown"]),
-      note: text(MODERATION_NOTE_MAX).optional(),
-      base: baseRev.optional(),
-    }),
+    input: z.discriminatedUnion("decision", [
+      z.strictObject({
+        item: moderationKeySchema,
+        decision: z.literal("hidden"),
+        base: baseRev.optional(),
+      }),
+      z.strictObject({
+        item: moderationKeySchema,
+        decision: z.literal("removed"),
+        note: text(MODERATION_NOTE_MAX).optional(),
+        base: baseRev.optional(),
+      }),
+      z.strictObject({ item: moderationKeySchema, decision: z.literal("shown"), base: baseRev }),
+    ]),
     result: nullResult,
   },
   // -- notifications and preferences

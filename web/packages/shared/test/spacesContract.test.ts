@@ -109,3 +109,40 @@ test("the sync codes are answer codes, and the unrecorded ones are listed", (t) 
   };
   t.true(spaces.spaceErrorSchema.safeParse(queueFull).success);
 });
+
+test("a moderation decision is discriminated: shown needs base, a reason goes with a removal only", (t) => {
+  const d = spaces.spaceMutators["moderation.decide"].input;
+  const item = `f:${ID}:${ID2}`;
+  t.true(d.safeParse({ item, decision: "shown", base: { rev: 1 } }).success);
+  t.false(d.safeParse({ item, decision: "shown" }).success);
+  t.true(d.safeParse({ item, decision: "hidden" }).success);
+  t.true(d.safeParse({ item, decision: "removed", note: "Spam" }).success);
+  t.false(d.safeParse({ item, decision: "hidden", note: "Spam" }).success);
+  for (const ok of [`a:${ID}`, `p:${ID}`, `f:${ID}:${ID2}`, `r:${ID}:${ID2}`, `c:${ID}:${ID2}`])
+    t.true(spaces.moderationKeySchema.safeParse(ok).success, ok);
+  for (const bad of [
+    `a:${ID}:${ID2}`,
+    `f:${ID}`,
+    `f:${ID}:__proto__`,
+    `x:${ID}`,
+    `c:${ID}:${ID2}:x`,
+  ])
+    t.false(spaces.moderationKeySchema.safeParse(bad).success, bad);
+});
+
+test("questions, replies, comments and look-up phrases are not empty", (t) => {
+  const m = spaces.spaceMutators;
+  t.false(m["threads.create"].input.safeParse({ id: ID, space: ID2, kind: "post", q: "" }).success);
+  t.false(m["research.createPostFollowUp"].input.safeParse({ id: ID, thread: ID2, t: "" }).success);
+  t.false(m["comments.create"].input.safeParse({ id: ID, thread: ID2, node: "r", t: "" }).success);
+  const look = {
+    id: ID,
+    thread: ID2,
+    parent: "r",
+    kind: "lookup",
+    look: "",
+    model: "m",
+    effort: "low",
+  };
+  t.false(m["research.forkNode"].input.safeParse(look).success);
+});

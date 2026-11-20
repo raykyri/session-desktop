@@ -511,6 +511,11 @@ test("Q2: every exception in apply is answered; a deep input is BAD_REQUEST and 
     [
       "olga",
       "moderation.decide",
+      { item: `f:${w.id()}:${w.id()}`, decision: "hidden", base: { rev: 0 } },
+    ],
+    [
+      "olga",
+      "moderation.decide",
       { item: `f:${w.id()}:__proto__`, decision: "hidden", base: { rev: 0 } },
     ],
     ["olga", "invites.create", { id: w.id(), space: open, days: 1 }],
@@ -521,7 +526,7 @@ test("Q2: every exception in apply is answered; a deep input is BAD_REQUEST and 
     const r = await w.as(u, name, input);
     got.push(r.ok ? "ok" : r.error.code);
   }
-  t.deepEqual(got, ["ok", "ok", "NOT_FOUND", "NOT_FOUND", "ok", "BAD_REQUEST"]);
+  t.deepEqual(got, ["ok", "ok", "NOT_FOUND", "NOT_FOUND", "BAD_REQUEST", "ok", "BAD_REQUEST"]);
   t.true((await w.server.register(actor("constructor"))).ok);
   t.deepEqual(await w.server.pull(null, "space:x:y", "e"), { resync: true });
 });
