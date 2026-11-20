@@ -51,6 +51,8 @@ test("finding 2: a create that applied but lost its answer, edited and sent agai
   await mel.flush();
   const e = mel.outbox().find((x) => x.local === w1.local);
   t.is(e?.state, "answered");
+  // answered from the first envelope: the edit did not apply
+  t.true(e?.earlier);
   t.is(threads(w, open).length, 1);
   // the thread holds what applied first
   t.is(threads(w, open)[0]?.q, "first text");
@@ -67,7 +69,7 @@ test("finding 2: a read that holds the thread answers the lost create: Send agai
   await mel.sync(`space:${open}`);
   // the replica holds the thread the create made: it applied
   const e = mel.outbox().find((x) => x.local === w1.local);
-  t.true(e === undefined || e.state === "answered");
+  t.true(e === undefined || (e.state === "answered" && e.earlier === true));
   const pushes = mel.pushed.n;
   t.false(mel.sendAgain(w1.local, { input: { ...input, q: "edited text" } }));
   await mel.flush();
@@ -87,6 +89,7 @@ test("finding 2: a create that never reached the server, edited and sent again, 
   t.true(mel.sendAgain(w1.local, { input: { ...input, q: "edited text" } }));
   await mel.flush();
   t.is(mel.outbox().find((x) => x.local === w1.local)?.state, "answered");
+  t.falsy(mel.outbox().find((x) => x.local === w1.local)?.earlier);
   t.is(threads(w, open).length, 1);
   t.is(threads(w, open)[0]?.q, "edited text");
   // the same id: the screen goes to the thread it named

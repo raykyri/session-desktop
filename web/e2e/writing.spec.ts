@@ -411,6 +411,81 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // phase 2 review round 1, finding 2: the first post applied but its
+    // answer was lost; the person edits the text and posts again
+    key: "as-post-lost",
+    url: "/s/public",
+    run: async (p) => {
+      const first =
+        "Notes from Thursday’s reading group are on the wiki page. Next week: chapters 4 to 6.";
+      const edited =
+        "Notes from Thursday’s reading group are on the wiki page. Next week: chapters 4 to 7.";
+      await p.getByRole("button", { name: /Make a query/ }).click();
+      await p.locator(".c2-mode").getByRole("button", { name: "Post" }).click();
+      await p.locator("#compose-text").fill(first);
+      let lose = true;
+      await p.route("**/api/sync/write", async (r) => {
+        if (!lose) return r.continue();
+        lose = false;
+        // the server applies it; the browser never sees the answer
+        await r.fetch();
+        await r.abort("connectionreset");
+      });
+      const post = p.locator(".c2-end").getByRole("button", { name: "Post" });
+      await post.click();
+      await expect(p.locator(".as-perr")).toContainText("Couldn’t post. Try again.");
+      await p.locator("#compose-text").fill(edited);
+      // the check reads the space first: hold that read to see it
+      let release = () => undefined as void;
+      const held = new Promise<void>((r) => (release = r));
+      await p.route("**/api/sync/pull", async (r) => {
+        await held;
+        await r.continue();
+      });
+      await post.click();
+      await expect(p.locator(".as-pchk")).toHaveText("Checking whether your post went through…");
+      await expect(post).toBeDisabled();
+      release();
+      await expect(p).toHaveURL(/\/t\//);
+      await toastSays(
+        p,
+        "Your post went through before the error, so Session didn’t post it again. Your later edits weren’t saved.",
+      );
+      await p.locator(".cs-toast").getByRole("button", { name: "Copy your edits" }).click();
+      await toastSays(p, "Copied your edits.");
+      await p.unroute("**/api/sync/pull");
+      await expect(p.getByText(first).first()).toBeVisible();
+      await p.goto("/s/public");
+      await expect(p.getByText(/chapters 4 to 6/)).toHaveCount(1);
+      await expect(p.getByText(/chapters 4 to 7/)).toHaveCount(0);
+    },
+  },
+  {
+    // the first post never reached the server: Post again sends the same
+    // create with the edited text, once
+    key: "as-post-check",
+    url: "/s/public",
+    run: async (p) => {
+      await p.getByRole("button", { name: /Make a query/ }).click();
+      await p.locator(".c2-mode").getByRole("button", { name: "Post" }).click();
+      await p.locator("#compose-text").fill("A reading list for chapters 4 to 6.");
+      await p.route("**/api/sync/write", (r) => r.abort());
+      const post = p.locator(".c2-end").getByRole("button", { name: "Post" });
+      await post.click();
+      await expect(p.locator(".as-perr")).toContainText("Couldn’t post. Try again.");
+      await p.unroute("**/api/sync/write");
+      await p.locator("#compose-text").fill("A reading list for chapters 4 to 7.");
+      // still the lost create's note while the text changes
+      await expect(p.locator(".as-perr")).toContainText("Couldn’t post. Try again.");
+      await post.click();
+      await expect(p).toHaveURL(/\/t\//);
+      await expect(p.getByText("A reading list for chapters 4 to 7.").first()).toBeVisible();
+      await expect(p.locator(".cs-toast")).toHaveCount(0);
+      await p.goto("/s/public");
+      await expect(p.getByText(/A reading list for chapters/)).toHaveCount(1);
+    },
+  },
+  {
     key: "ov-compose-back",
     scenario: "replication: member",
     url: "/s/replication-club",

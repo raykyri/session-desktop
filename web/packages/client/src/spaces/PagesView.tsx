@@ -21,7 +21,7 @@ import { Svg } from "./Svg.js";
 import { Author, Avatar, Glyph } from "./atoms.js";
 import { CI, MII, NVI, QTI } from "./icons.js";
 import { canRead, useWorld } from "./world.js";
-import { refusalToast, toast, useWrite } from "./writes.js";
+import { refusalToast, toast, useCreate, useWrite } from "./writes.js";
 
 const EDIT =
   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 2.8l2.7 2.7-7.4 7.4H3.1v-2.7z"/></svg>';
@@ -48,6 +48,7 @@ export function PagePage({ name, slug }: { name: string; slug: string }) {
   const navigate = useNavigate();
   const session = useSession();
   const write = useWrite();
+  const create = useCreate();
   const s = useMemo(() => w.spaces.find((x) => x.name === name), [w.spaces, name]);
   const page = useRecords(
     (r) => (s ? (r.list("page", (p) => p.sp === s.id && p.slug === slug)[0] ?? null) : null),
@@ -120,18 +121,26 @@ export function PagePage({ name, slug }: { name: string; slug: string }) {
       .map((x) => x.trim())
       .filter(Boolean);
     setBusy(true);
-    const id = session?.newId() ?? "";
-    const o = await write(
-      "pages.update",
-      {
-        space: s.id,
-        ...(ed.isNew ? { page: null, id } : { page: page?.id, base: { rev: ed.ver } }),
-        title,
-        text,
-        ...(force ? { force: true } : {}),
-      },
-      { quiet: true },
-    );
+    // a new page is a create: one that got no answer is sent again as the
+    // same page (`useCreate`)
+    const o = ed.isNew
+      ? await create.send(
+          "pages.update",
+          (id) => ({ space: s.id, page: null, id, title, text, ...(force ? { force: true } : {}) }),
+          { quiet: true },
+        )
+      : await write(
+          "pages.update",
+          {
+            space: s.id,
+            page: page?.id,
+            base: { rev: ed.ver },
+            title,
+            text,
+            ...(force ? { force: true } : {}),
+          },
+          { quiet: true },
+        );
     setBusy(false);
     if (o.ok) {
       setEd(null);

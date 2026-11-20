@@ -2,8 +2,12 @@
 // field-like button; open, Ask or Post, the text, the model and who pays (an
 // ask), the space (on Home), and Ask or Post. A thread is made with the
 // client's ULID (`threads.create`); the person goes to it at once. A create
-// that got no answer keeps the text and offers Retry; a draft closed with
-// Escape or Close asks before it is discarded.
+// that got no answer keeps the text and offers Retry, and is never made a
+// second time (`useCreate`): Post or Retry first checks whether it went
+// through (the mockup's as-post-check), opens it if it did (as-post-lost,
+// with Copy your edits when the text changed since), and otherwise sends it
+// again with the same id. A draft closed with Escape or Close asks before it
+// is discarded.
 
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
@@ -11,7 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRuntimeConfig } from "../api/account.js";
 import { spaceName } from "../data/format.js";
 import type { Space } from "../data/spaces.js";
-import { useRecords, useSession } from "../sync/react.js";
+import { useRecords } from "../sync/react.js";
 
 import { DiscardDialog, LeaveGuard } from "./Discard.js";
 import { Scrim } from "./Scrim.js";
@@ -20,7 +24,7 @@ import { Glyph } from "./atoms.js";
 import { I } from "./icons.js";
 import { useOverlay } from "./overlay.js";
 import { useWorld } from "./world.js";
-import { useWrite } from "./writes.js";
+import { lostEditsToast, useCreate } from "./writes.js";
 
 const GLOBE =
   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="5.8"/><path d="M2.4 8h11.2M8 2.2c1.7 1.6 2.6 3.6 2.6 5.8S9.7 12.2 8 13.8M8 2.2C6.3 3.8 5.4 5.8 5.4 8s.9 4.2 2.6 5.8"/></svg>';
@@ -150,15 +154,13 @@ export function PayerLine({ pay, setPay }: { pay: string; setPay: (p: string) =>
 export function Composer({ space }: { space: Space | null }) {
   const w = useWorld();
   const navigate = useNavigate();
-  const session = useSession();
-  const write = useWrite();
+  const create = useCreate();
   const config = useRuntimeConfig();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"ask" | "post">("ask");
   const [draft, setDraft] = useState("");
   const [model, setModel] = useState("");
   const [pay, setPay] = useState("session");
-  const [failed, setFailed] = useState<{ local: string; space: string; id: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const joined = Object.keys(w.roles)
@@ -211,38 +213,28 @@ export function Composer({ space }: { space: Space | null }) {
   const submit = async () => {
     if (!target || !draft.trim() || busy) return;
     setBusy(true);
-    setFailed(null);
-    const id = session?.newId() ?? "";
-    const input = ask
-      ? {
-          id,
-          space: target.id,
-          kind: "ask",
-          q: draft.trim(),
-          pay,
-          ...(model || firstModel ? { model: model || firstModel } : {}),
-        }
-      : { id, space: target.id, kind: "post", q: draft.trim() };
+    const q = draft.trim();
+    const make = (id: string) =>
+      ask
+        ? {
+            id,
+            space: target.id,
+            kind: "ask",
+            q,
+            pay,
+            ...(model || firstModel ? { model: model || firstModel } : {}),
+          }
+        : { id, space: target.id, kind: "post", q };
     // the person goes to the thread once the server has it: a create that
     // got no answer keeps the composer open with its text and Retry
-    const o = await write("threads.create", input);
+    const o = await create.send("threads.create", make, { text: q });
     setBusy(false);
-    if (o.ok) opened(target.name, id);
-    else if (o.error === null) setFailed({ local: o.local, space: target.name, id });
-  };
-  const opened = (space: string, id: string) => {
+    if (!o.ok) return;
     sending.current = true;
-    setFailed(null);
     setDraft("");
     setOpen(false);
-    void navigate({ to: "/s/$space/t/$thread", params: { space, thread: id } });
-  };
-  const retry = async () => {
-    if (!failed) return;
-    setBusy(true);
-    const o = await write.retry(failed.local);
-    setBusy(false);
-    if (o.ok) opened(failed.space, failed.id);
+    void navigate({ to: "/s/$space/t/$thread", params: { space: target.name, thread: o.id } });
+    if (o.lostEdits) lostEditsToast("post", q);
   };
   const modes: ["ask" | "post", string, string, string][] = [
     [
@@ -279,10 +271,7 @@ export function Composer({ space }: { space: Space | null }) {
           placeholder={ask ? "Make a query" : "Write a post"}
           aria-label={ask ? "Query" : "Post text"}
           value={draft}
-          onChange={(e) => {
-            setDraft(e.currentTarget.value);
-            setFailed(null);
-          }}
+          onChange={(e) => setDraft(e.currentTarget.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
           }}
@@ -310,10 +299,15 @@ export function Composer({ space }: { space: Space | null }) {
             <span className="c2-note c2-free">Posts use no tokens.</span>
           )}
           <span className="grow" />
-          {failed ? (
+          {create.checking ? (
+            <span className="c2-note as-perr as-pchk" role="status">
+              <span className="spin" aria-hidden="true" />
+              Checking whether your post went through…
+            </span>
+          ) : create.lost ? (
             <span className="c2-note warn as-perr" role="alert">
               Couldn’t post. Try again.{" "}
-              <button className="tlink" type="button" onClick={() => void retry()}>
+              <button className="tlink" type="button" onClick={() => void submit()}>
                 Retry
               </button>
             </span>
@@ -334,8 +328,8 @@ export function Composer({ space }: { space: Space | null }) {
             <button
               className="btn primary"
               type="button"
-              disabled={busy || !draft.trim()}
-              aria-disabled={busy || !draft.trim()}
+              disabled={busy || create.checking || !draft.trim()}
+              aria-disabled={busy || create.checking || !draft.trim()}
               onClick={() => void submit()}
             >
               {ask ? "Ask" : "Post"}
@@ -359,7 +353,7 @@ export function Composer({ space }: { space: Space | null }) {
           onDiscard={() => {
             setConfirm(false);
             setDraft("");
-            setFailed(null);
+            create.forget();
             setOpen(false);
           }}
         />

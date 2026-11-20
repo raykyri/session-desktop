@@ -235,6 +235,11 @@ export interface OutboxEntry {
    * of a log that says this client's last seq is at least this one holds
    * its effect. */
   answeredSeq?: number;
+  /** It was answered from an earlier envelope of it (a recorded answer
+   * under another mutation id, or CONFLICT on its own input id), or a read
+   * showed the record it made: what applied is an earlier envelope's input,
+   * which `sendAgain` with an `input` may have changed since. */
+  earlier?: boolean;
   /** What the mutators predicted. */
   prediction?: "ok" | "refused" | "unknown";
   predictedError?: ApiError;
@@ -1131,6 +1136,7 @@ export class SyncClient implements Changing {
       for (const e of shown)
         if (this.appliedHere(e, ids)) {
           e.state = "answered";
+          e.earlier = true;
           e.answeredTick = this.tick++;
           delete e.error;
         }
@@ -1508,6 +1514,7 @@ export class SyncClient implements Changing {
     const refused = e.state === "expired" || e.state === "refused";
     if (this.appliedHere(e)) {
       e.state = "answered";
+      e.earlier = true;
       e.answeredTick = this.tick++;
       delete e.error;
       void this.persist();
@@ -1979,6 +1986,8 @@ export class SyncClient implements Changing {
           await this.applyAnswerChanges(a.error.changes);
           this.end(e, a.error.code === "EXPIRED" ? "expired" : "refused", a.error, a);
         } else {
+          if (!a.ok || (a.replayed && a.recordedAs !== undefined && a.recordedAs !== e.mutationId))
+            e.earlier = true;
           if (a.ok && a.replayed) this.adopt(e, a);
           if (e.online) this.direct = this.direct.filter((x) => x !== e);
           e.state = "answered";
