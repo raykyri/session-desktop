@@ -1425,11 +1425,23 @@ function confirmEl() {
     <p>Vouching says you know this person and expect them to follow the space rules. Your name is shown on their profile and yours, and you can withdraw it until their account is active.</p>
     <div class="dacts"><button class="btn2" data-ma="cancel">Cancel</button><button class="btn1" data-ma="dovouch" data-u="${t.u}">Vouch</button></div></div>`;
 }
+/* Each variant control also sets up a view that shows it: the signed-out landing for Sign-in,
+   an active member on Members for Tree, on the feed for Meter, and on Usage at the keys for Keys. */
+function previewVariant(k) {
+  st.confirm = null; st.menu = null;
+  if (k === 'signin') { st.auth = 'out'; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); return; }
+  if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
+  st.screen = k === 'tree' ? 'members' : k === 'meter' ? 'feed' : 'usage';
+  render();
+  if (k === 'keys') $('.kcards, .krow')?.closest('section')?.scrollIntoView({ block: 'start' });
+  if (k === 'tree') $('.ttree, .ttable')?.closest('section')?.scrollIntoView({ block: 'start' });
+  if (k === 'meter') $('.meter')?.focus();
+}
 function signIn(u) { st.auth = 'in'; st.user = u; st.screen = member(u).status === 'active' ? 'feed' : 'status'; st.menu = null; st.sel = {}; render(); }
 document.addEventListener('click', e => {
   const p = e.target.closest('[data-mp]');
   if (p) { if (p.dataset.mp === 'out') { st.auth = 'out'; st.flow = 'landing'; } else signIn(p.dataset.mp); st.confirm = null; render(); return; }
-  const v = e.target.closest('[data-mv]'); if (v) { st.ui[v.dataset.mv] = v.dataset.x; if (v.dataset.mv === 'signin' && st.auth === 'in') toast('Sign-in variants show on the signed-out screens: set View as to Signed out.'); render(); return; }
+  const v = e.target.closest('[data-mv]'); if (v) { st.ui[v.dataset.mv] = v.dataset.x; previewVariant(v.dataset.mv); return; }
   const t = e.target.closest('[data-mt]'); if (t) { const u = usage(); const need = { norm: null, low: ALLOWANCE - 90e3, out: ALLOWANCE + 20e3 }[t.dataset.mt]; if (need != null) { const others = u.reduce((a, b, i) => i === TODAY ? a : a + b, 0); u[TODAY] = Math.max(0, need - others); } else USAGE[st.user] = (USAGE_BASE[st.user] || [0, 0, 0, 0, 0, 0, 0]).slice(); render(); return; }
 });
 const USAGE_BASE = Object.fromEntries(Object.entries(USAGE).map(([k, v]) => [k, v.slice()]));
