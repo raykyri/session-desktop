@@ -20,6 +20,7 @@ import { loadAdminRoute, loadSettingsRoute } from "../routes/chunks.js";
 import { InvitePage } from "../routes/invite.js";
 import { LoginPage } from "../routes/login.js";
 import { AccountPage, DevicePage, WelcomePage } from "../spaces/Account.js";
+import { BrowsePage, CreateSpacePage, ProfilePage } from "../spaces/Directory.js";
 import { HomePage } from "../spaces/HomePage.js";
 import { InviteLanding } from "../spaces/InviteLanding.js";
 import { ManagePage } from "../spaces/Manage.js";
@@ -31,7 +32,6 @@ import { SearchPage } from "../spaces/SearchPage.js";
 import { SourcePage } from "../spaces/Sources.js";
 import { SpacePage } from "../spaces/SpacePage.js";
 import { ThreadPage } from "../spaces/ThreadPage.js";
-import { BackRow } from "../spaces/nav.js";
 
 import { RouteErrorPanel, RoutePendingPanel } from "./RouteBoundary.js";
 import { SpacesRoot } from "./SpacesRoot.js";
@@ -212,44 +212,30 @@ const savedRoute = createRoute({
   component: SavedPage,
 });
 
-/** A screen the later slices of phase 2b build: its title under the header. */
-function Later({ title }: { title: string }) {
-  return (
-    <Page place={{ kind: "other", label: title }}>
-      <div className="home-wide sub-page">
-        <BackRow />
-        <div className="sub-top">
-          <h2>{title}</h2>
-        </div>
-      </div>
-    </Page>
-  );
-}
-
 const profileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/u/$handle",
   component: function ProfileRoute() {
     const { handle } = profileRoute.useParams();
-    return <Later title={handle} />;
+    return <ProfilePage handle={handle} />;
   },
 });
 const browseRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/spaces/browse",
-  component: () => <Later title="Browse spaces" />,
+  component: BrowsePage,
 });
 const createSpaceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/spaces/new",
   beforeLoad: requireSignedIn,
-  component: () => <Later title="Create a space" />,
+  component: CreateSpacePage,
 });
 const yourSpacesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/spaces",
   beforeLoad: requireSignedIn,
-  component: () => <Later title="Your spaces" />,
+  component: () => <AccountPage tab="spaces" />,
 });
 const accountRoute = createRoute({
   getParentRoute: () => rootRoute,

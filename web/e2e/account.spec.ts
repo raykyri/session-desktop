@@ -108,6 +108,41 @@ const SCREENS: Screen[] = [
       await expect(p).toHaveURL(/\/$/);
     },
   },
+  {
+    key: "nm-browse",
+    url: "/spaces/browse",
+    run: async (p) => {
+      await expect(p.getByRole("heading", { name: "Browse spaces" })).toBeVisible();
+      await p.getByRole("button", { name: /^Closed/ }).click();
+      await expect(p.locator(".br-grp .br-row").first()).toBeVisible();
+      await expect(
+        p.locator(".br-grp").getByRole("button", { name: "#replication-club" }),
+      ).toBeVisible();
+    },
+  },
+  {
+    key: "ow-create",
+    url: "/spaces/new",
+    run: async (p) => {
+      await p.locator("#cs-crname").fill("field-recordings");
+      await p.locator("#cs-crdesc").fill("Recordings made outdoors, and how they were made.");
+      await expect(p.locator(".cs-crprev")).toContainText("#field-recordings");
+      await p.getByRole("button", { name: "Create space" }).click();
+      await expect(p).toHaveURL(/\/s\/field-recordings$/);
+      await expect(p.getByRole("heading", { name: "#field-recordings" })).toBeVisible();
+    },
+  },
+  {
+    key: "ac-pf-more",
+    url: "/u/hal_b",
+    run: async (p) => {
+      await expect(p.getByRole("heading", { name: /hal|Hal/ }).first()).toBeVisible();
+      await p.getByRole("button", { name: "More" }).click();
+      await p.getByRole("menuitem", { name: "Mute hal_b" }).click();
+      await toastSays(p, /Muted hal_b/);
+      await expect(p.getByText("You muted hal_b.", { exact: false })).toBeVisible();
+    },
+  },
 ];
 
 for (const [layout, viewport] of [
