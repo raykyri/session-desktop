@@ -1636,17 +1636,21 @@ const ddButton = (cls, label) => { const open = st.menu === 'spaces'; return `<s
 
 /* ---- A: the top strip, showing different things ---- */
 /* ---- the spaces strip in the app bar: a scope dropdown, then the space chips ---- */
-const SCOPES = () => [['joined', st.auth === 'out' ? 'Open' : 'Joined'], ...(canWrite() ? [['yours', 'Channels you manage']] : []), ['discover', 'Discover']];
-const scopeList = () => { const sc = st.spScope || 'joined'; return sc === 'yours' ? yourSpaces() : sc === 'discover' ? discover() : navSpaces(); };
+/* Scopes in the header dropdown. All is every channel you can read: open channels plus private ones you are in.
+   Signed out, Joined would list the same channels as All, so only All is offered. */
+const allVisible = () => spaceList().filter(x => !isPrivate(x.id) || isJoined(x.id));
+const SCOPES = () => st.auth === 'out' ? [['discover', 'All']] : [['joined', 'Joined'], ...(canWrite() ? [['yours', 'Channels you manage']] : []), ['discover', 'All']];
+const curScope = () => st.auth === 'out' ? 'discover' : st.spScope || 'joined';
+const scopeList = () => { const sc = curScope(); return sc === 'yours' ? yourSpaces() : sc === 'discover' ? allVisible() : navSpaces(); };
 const SCOPE_IC = { joined: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path d="m5.6 8.2 1.7 1.7 3.2-3.6"/></svg>', yours: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.6" r="2.6"/><path d="M3 13.5c.5-2.6 2.6-4 5-4s4.5 1.4 5 4"/></svg>', discover: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="m10.4 5.6-1.3 3.5-3.5 1.3 1.3-3.5Z"/></svg>' };
 function headerSpaces() {
   if (!['network', 'usage', 'members', 'browse'].includes(st.screen)) return '<span class="hsp"></span>';
-  const sc = st.spScope || 'joined', list = scopeList();
-  const join = x => sc === 'discover' && canWrite() ? `<span class="tj" data-a="join" data-id="${x.id}" title="Join">+</span>` : '';
+  const sc = curScope(), list = scopeList();
+  const join = x => sc === 'discover' && canWrite() && !isJoined(x.id) ? `<span class="tj" data-a="join" data-id="${x.id}" title="Join">+</span>` : '';
   const add = canWrite() ? `<button class="tadd" data-a="newspace" title="New channel" aria-label="New channel">${PLUS2}</button>` : '';
   const empty = list.length ? '' : `<span class="tempty">${sc === 'yours' ? 'You have not made a channel yet.' : 'Nothing here yet.'}</span>`;
   const open = st.menu === 'hscope';
-  return `<div class="hsp"><span class="mpick"><button type="button" class="hsdd" data-a="menu" data-m="hscope" aria-haspopup="menu" aria-expanded="${open}">${SCOPES().find(x => x[0] === sc)[1]}${I.down}</button>${open ? `<div class="menu" role="menu">${SCOPES().map(([k, l]) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${sc === k}" data-a="spscope" data-s="${k}">${SCOPE_IC[k]}<span>${l}</span>${sc === k ? CHECK : ''}</button>`).join('')}</div>` : ''}</span><nav class="tabs"><div class="tabs-s" id="k-tabs">${list.map(x => chipBtn(x.id, esc(spName(x.id)) + join(x))).join('')}${empty}${add}</div></nav></div>`;
+  return `<div class="hsp">${SCOPES().length > 1 ? `<span class="mpick"><button type="button" class="hsdd" data-a="menu" data-m="hscope" aria-haspopup="menu" aria-expanded="${open}">${SCOPES().find(x => x[0] === sc)[1]}${I.down}</button>${open ? `<div class="menu" role="menu">${SCOPES().map(([k, l]) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${sc === k}" data-a="spscope" data-s="${k}">${SCOPE_IC[k]}<span>${l}</span>${sc === k ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>` : ''}<nav class="tabs"><div class="tabs-s" id="k-tabs">${list.map(x => chipBtn(x.id, esc(spName(x.id)) + join(x))).join('')}${empty}${add}</div></nav></div>`;
 }
 /* ---- B: a dropdown ---- */
 function navDropTop() {
