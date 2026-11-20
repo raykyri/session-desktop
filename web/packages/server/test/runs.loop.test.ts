@@ -56,13 +56,15 @@ test("an attempt streams, commits its turns, and completes with an answer", asyn
   t.is(calls.at(-1)?.kind, "finish", "the outcome is the last write");
 
   const rows = usageRows(harness, request.runId);
-  t.deepEqual(
-    rows.find((row) => row.kind === "run"),
-    { kind: "run", n: 1 },
-    "one run row per attempt, for the daily run limit",
+  t.false(
+    rows.some((row) => row.kind === "research" || row.kind === "run"),
+    "tokens go to the ledger, not to usage_events",
   );
-  t.true(rows.some((row) => row.kind === "research"));
   t.true(rows.some((row) => row.kind === "search" || row.kind === "fetch"));
+  const ledgerRows = harness.ledger.rows({ runId: request.runId });
+  t.true(ledgerRows.length >= 2, "one ledger row per provider call");
+  t.true(ledgerRows.every((row) => row.state === "closed" && row.ending === "finish"));
+  t.is(finish?.summary.tok, harness.ledger.runTokens(request.runId));
 });
 
 test("a provider failure fails the attempt with its classified error", async (t) => {
@@ -86,7 +88,10 @@ test("a 429 ends the attempt rate_limited for the dispatcher to queue again", as
   const result = await harness.agent.run(request);
   t.is(result.outcome, "rate_limited");
   t.is(result.error?.errorClass, "rate_limited");
-  t.is(harness.store.finishes(request.runId)[0]?.summary.outcome, "rate_limited");
+  t.deepEqual(harness.store.finishes(request.runId), [], "the dispatcher decides");
+  const [row] = harness.ledger.rows({ runId: request.runId });
+  t.is(row?.ending, "rate_limited");
+  t.is(row?.counted, 0, "a call refused before streaming is closed at 0");
 });
 
 test("a refusal fails the attempt", async (t) => {
@@ -112,6 +117,7 @@ test("an unconfigured model fails before anything streams", async (t) => {
     harness.store.calls.map((call) => call.kind),
     ["finish"],
   );
+  t.deepEqual(harness.ledger.rows(), [], "no call, no ledger row");
 });
 
 test("a cancel aborts the stream and records the attempt cancelled", async (t) => {
@@ -126,7 +132,8 @@ test("a cancel aborts the stream and records the attempt cancelled", async (t) =
 
   t.is((await running).outcome, "cancelled");
   t.is(harness.store.finishes(request.runId)[0]?.summary.outcome, "cancelled");
-  t.true(usageRows(harness, request.runId).some((row) => row.kind === "research"));
+  t.deepEqual(harness.store.finishes(request.runId)[0]?.summary.fail, { why: "stopped" });
+  t.is(harness.ledger.rows({ runId: request.runId })[0]?.ending, "cancel");
 });
 
 test("a drain keeps the partial text and records the attempt interrupted", async (t) => {
@@ -156,7 +163,7 @@ test("a drain keeps the partial text and records the attempt interrupted", async
   t.is((await harness.agent.run(harness.runRequest(user.id, "late"))).outcome, "superseded");
 });
 
-test("an attempt superseded by a newer one records usage and writes nothing else", async (t) => {
+test("an attempt superseded by a newer one closes its ledger row and writes nothing else", async (t) => {
   const harness = createLoopHarness(t);
   const user = harness.addUser("retrier");
   const request = harness.runRequest(user.id, "fixture:paced-answer");
@@ -164,13 +171,15 @@ test("an attempt superseded by a newer one records usage and writes nothing else
   const running = harness.agent.run(request);
   await waitFor(harness, request.runId, "delta");
   const before = harness.store.calls.length;
-  // A retry started attempt 2; then this attempt's stream ends.
+  // A retry started attempt 2; the attempt's next write finds the fence and
+  // aborts the stream.
   harness.store.attempts.set(request.runId, 2);
-  harness.agent.cancel(request.runId);
 
   t.is((await running).outcome, "superseded");
   t.is(harness.store.calls.length, before, "no write after the newer attempt began");
-  t.true(usageRows(harness, request.runId).some((row) => row.kind === "research"));
+  const [row] = harness.ledger.rows({ runId: request.runId });
+  t.is(row?.state, "closed");
+  t.is(row?.ending, "superseded");
 });
 
 test("a resume replays the committed turns and keeps them in the answer", async (t) => {

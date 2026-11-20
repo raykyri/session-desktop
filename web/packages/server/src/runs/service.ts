@@ -2,16 +2,9 @@
 // `05-run-lifecycle-and-streaming.md` §7).
 //
 // It starts an attempt of a run the caller hands it, aborts one on cancel,
-// and on `SIGTERM` aborts every attempt so each records itself `interrupted`.
-//
-// What it no longer does: claim from `run_queue` under the per-user and
-// per-provider caps, gate a follow-up on its parent's run, hold runs for the
-// daily limits, queue a rate-limited attempt again with backoff, resume
-// interrupted attempts at boot, run the title and recap pool, and dispatch
-// queued follow-ups. All of that read the research tables, which were
-// removed with the research API (plan `01` A2). M5a replaces it with the
-// dispatcher of `03` E2, which claims the oldest admissible `queued` run
-// record with a compare-and-set and calls `run`.
+// and on `SIGTERM` aborts every attempt so each records itself `interrupted`
+// and closes the ledger row of the call it was making (`01` S5). Which run
+// starts when is the dispatcher's decision (`dispatcher.ts`, `03` E2).
 
 import type { SessionDatabase } from "@session/db";
 
@@ -19,6 +12,11 @@ import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";
 import { createLogger } from "../logger.js";
 
+import type { Allowances } from "./allowance.js";
+import { configAllowances } from "./allowance.js";
+import type { ClassifiedError } from "./errors.js";
+import type { Ledger } from "./ledger.js";
+import { LEDGER_CHECKPOINT_MS, ZERO_COUNTS } from "./ledger.js";
 import type { AttemptResult, LoopDeps } from "./loop.js";
 import { runAttempt } from "./loop.js";
 import type { MetadataRunner } from "./metadata.js";
@@ -67,6 +65,12 @@ export interface RunsServiceDeps {
   config: Config;
   db: SessionDatabase;
   store: RunStore;
+  ledger: Ledger;
+  /** The configured allowance for everyone when absent. */
+  allowances?: Allowances;
+  now?: () => number;
+  /** `LEDGER_CHECKPOINT_MS` when absent; tests shorten it. */
+  ledgerCheckpointMs?: number;
   logger?: Logger;
   fetch?: typeof globalThis.fetch;
   /** Constructed from the config when absent. */
@@ -80,6 +84,8 @@ export interface AgentRunsService extends RunsService {
    * already running here, or any attempt once the drain began, is not
    * started and answers `superseded`. */
   run(request: RunRequest): Promise<AttemptResult>;
+  /** True once `drain` began: nothing more starts. */
+  readonly draining: boolean;
   /** Resolves when every attempt started so far has settled. */
   idle(): Promise<void>;
   readonly providers: Providers;
@@ -94,11 +100,15 @@ interface ActiveRun {
 export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
   const logger = deps.logger ?? createLogger({ level: "info" });
   const providers = deps.providers ?? createProviders(deps.config);
-  const metadata = deps.metadata ?? createMetadataRunner({ db: deps.db, providers, logger });
+  const metadata = deps.metadata ?? createMetadataRunner({ providers, logger });
   const loopDeps: LoopDeps = {
     config: deps.config,
     db: deps.db,
     store: deps.store,
+    ledger: deps.ledger,
+    allowances: deps.allowances ?? configAllowances(deps.config),
+    now: deps.now ?? Date.now,
+    ledgerCheckpointMs: deps.ledgerCheckpointMs ?? LEDGER_CHECKPOINT_MS,
     providers,
     metadata,
     logger,
@@ -110,9 +120,42 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
   const active = new Map<string, ActiveRun>();
   let draining = false;
 
+  /** The loop settles every expected failure itself and has closed its
+   * ledger rows; this is a write that threw (a store call). The run is
+   * marked failed so it does not stay `running` until the next boot. */
+  const recordThrow = (request: RunRequest, error: unknown): AttemptResult => {
+    logger.error({ runId: request.runId, error }, "run attempt threw");
+    const classified: ClassifiedError = {
+      errorClass: "unknown",
+      message: "The run stopped unexpectedly. Try again.",
+      detail: String(error),
+    };
+    try {
+      if (deps.store.isCurrent(request)) {
+        deps.store.finish(request, {
+          outcome: "failed",
+          fail: { why: "error", cls: "unknown" },
+          error: classified,
+          tok: deps.ledger.runTokens(request.runId),
+          bill: null,
+          steps: 0,
+          toolCalls: 0,
+          usage: { ...ZERO_COUNTS },
+          costEstimateMicros: 0,
+        });
+      }
+    } catch (finishError) {
+      logger.error({ runId: request.runId, error: finishError }, "could not record the failure");
+    }
+    return { outcome: "failed", error: classified };
+  };
+
   return {
     providers,
     metadata,
+    get draining() {
+      return draining;
+    },
 
     run(request) {
       if (draining || active.has(request.runId)) {
@@ -124,20 +167,7 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
         signal: controller.signal,
         isDraining: () => draining,
       })
-        .catch((error: unknown): AttemptResult => {
-          // The loop settles every expected failure itself; this is a write
-          // that threw (a store call). The dispatcher (M5a) marks the run
-          // failed so it does not stay `running` until the next boot.
-          logger.error({ runId: request.runId, error }, "run attempt threw");
-          return {
-            outcome: "failed",
-            error: {
-              errorClass: "unknown",
-              message: "The run stopped unexpectedly. Try again.",
-              detail: String(error),
-            },
-          };
-        })
+        .catch((error: unknown) => recordThrow(request, error))
         .finally(() => {
           active.delete(request.runId);
         });
