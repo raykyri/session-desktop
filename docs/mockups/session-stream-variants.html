@@ -562,7 +562,7 @@ const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data
 /* ================= pinned maps ================= */
 /* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
    as a small outline tree per passage. */
-const st = { v: 'splitEnds', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
+const st = { v: 'splitBare', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
 
 /* Which model answered and at what thinking effort. The fixtures do not record it; the mock picks one
    per thread. Shown in a tooltip on the answer's icon. */
@@ -704,7 +704,6 @@ const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches i
 const TREE_NOTE = 'Posts keep the pinned branch trees and avatar reply trees.';
 const variant = (name, thesis, composer, dock = false) => ({ name, q: 'Composer', thesis: `${thesis} ${TREE_NOTE}`, composer, dock, replies: replyLines, layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); } });
 const V = {
-  splitEnds: variant('Split · ends', '<strong>Split, for longer asks.</strong> As the text grows past one line, your avatar stays beside the first line and the space, model and split button stay beside the last, where the cursor is.', 'splitEnds'),
   splitBare: variant('Split · no avatar', '<strong>Split · ends, without the avatar.</strong> Only the text and the controls; as the text grows, the space, model and split button stay beside the last line.', 'splitBare'),
 };
 
@@ -792,7 +791,7 @@ function renderBar() {
   $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${st.theme === k}">${l}</button>`).join('');
   $('#thesis').innerHTML = `<span class="qtag">${V[st.v].q}</span>` + V[st.v].thesis;
 }
-function go(v) { if (!V[v]) v = 'splitEnds'; st.v = v; st.asking = null; renderBar(); render(); }
+function go(v) { if (!V[v]) v = 'splitBare'; st.v = v; st.asking = null; renderBar(); render(); }
 $('#variant-seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { history.replaceState(null, '', '#' + b.dataset.v); go(b.dataset.v); } });
 $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; st.theme = b.dataset.t; if (st.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = st.theme; renderBar(); });
 
@@ -857,6 +856,6 @@ document.addEventListener('keydown', e => {
   if (e.key.length !== 1 || !k) return;
   e.preventDefault(); history.replaceState(null, '', '#' + k); go(k);
 });
-go(location.hash.slice(1) || 'splitEnds');
+go(location.hash.slice(1) || 'splitBare');
 document.fonts?.ready.then(() => render());
 </script>
