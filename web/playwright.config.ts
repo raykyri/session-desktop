@@ -1,21 +1,15 @@
 // End-to-end configuration (`12-testing-linting-ci.md` §3.6).
 //
-// One real server — fixture providers, a temp data directory, the test-only
-// sign-in route — serving the built client through its own static middleware,
-// which is the deployment's arrangement rather than Vite's. Building the
-// client is part of the server command so `npm run test:e2e` is a single step.
+// One real server — `@session/server/test-server`: fixture providers, a temp
+// database, the test-only sign-in and scenario routes — serving the built
+// client through its own static middleware, which is the deployment's
+// arrangement rather than Vite's. Building the client is part of the server
+// command so `npm run test:e2e` is a single step.
 //
 
 import { defineConfig, devices } from "@playwright/test";
 
-import {
-  APP_ORIGIN,
-  E2E_DATA_DIR,
-  E2E_HOST,
-  E2E_PORT,
-  E2E_REUSE_SERVER,
-  E2E_RUN_ID_VARIABLE,
-} from "./e2e/constants.js";
+import { APP_ORIGIN, E2E_REUSE_SERVER, E2E_RUN_ID_VARIABLE } from "./e2e/constants.js";
 
 const CI = Boolean(process.env["CI"]);
 
@@ -64,41 +58,18 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: [
-      `rm -rf ${JSON.stringify(E2E_DATA_DIR)}`,
-      "npm run build --workspace @session/client",
-      "npx tsx packages/server/src/index.ts",
-    ].join(" && "),
+    // The client bundle, then `@session/server/test-server` on the suite's
+    // port (`e2e/server.ts`): a temp database, test sign-in and the test
+    // routes (`/api/test/records`, `clock`, `fail`, `config`, `device`),
+    // the fixture providers and the job runner.
+    command: ["npm run build --workspace @session/client", "npx tsx e2e/server.ts"].join(" && "),
     url: `${APP_ORIGIN}/healthz`,
     // A server already on the port is used only when asked for
     // (`SESSION_E2E_REUSE_SERVER=1`); otherwise Playwright refuses to start
     // rather than run against another suite's server and data.
     reuseExistingServer: E2E_REUSE_SERVER,
     timeout: 180_000,
-    // Request logging is disabled in e2e test mode to avoid obscuring test runner output.
     stdout: "ignore",
     stderr: "pipe",
-    env: {
-      // `::` (`E2E_HOST`) rather than the config's default loopback: the suite
-      // reaches the same process as both `127.0.0.1` and `localhost`, and a
-      // v4-only bind would miss `localhost` if the browser tried only `::1`.
-      HOST: E2E_HOST,
-      PORT: String(E2E_PORT),
-      NODE_ENV: "development",
-      SESSION_PUBLIC_ORIGIN: APP_ORIGIN,
-      SESSION_DATA_DIR: E2E_DATA_DIR,
-      SESSION_FIXTURE_PROVIDERS: "1",
-      SESSION_TEST_AUTH: "1",
-      // Every provider reports a credential so no model is hidden as
-      // unavailable; the fixture provider answers instead of any of them.
-      GOOGLE_APPLICATION_CREDENTIALS_JSON: '{"type":"service_account"}',
-      GOOGLE_VERTEX_PROJECT: "session-e2e",
-      OPENROUTER_API_KEY: "openrouter-key",
-      ANTHROPIC_API_KEY: "anthropic-key",
-      // No search key on purpose: `web_search` is then not registered at all,
-      // so a fixture that calls it fails the call locally instead of reaching
-      // a vendor from CI (`04-agent-runtime.md` §11).
-      SESSION_ENFORCE_LIMITS: "0",
-    },
   },
 });

@@ -1,10 +1,12 @@
-// `system.health` and `system.runtimeConfig` (`03-api-and-events.md` §2).
+// The runtime configuration the web client reads (`GET /api/config`): the
+// server's version, the models it can run, the run limits and the search
+// features (`03-api-and-events.md` §2). Phase 2b moved it from tRPC's
+// `system.runtimeConfig` to a plain route (ADR-19 as amended).
 
 import type { ModelInfo } from "@session/shared";
 import { MODEL_REGISTRY, canUseModel, modelInfo, version } from "@session/shared";
 
-import type { Config } from "../../config.js";
-import { publicProcedure, router } from "../base.js";
+import type { Config } from "../config.js";
 
 export interface RuntimeLimits {
   runsPerUser: number;
@@ -19,9 +21,6 @@ export interface RuntimeFeatures {
   webSearch: boolean;
   searchVendor?: "parallel" | "tavily";
 }
-
-/** The search half of the features block. */
-export type RuntimeSearchFeatures = RuntimeFeatures;
 
 export interface RuntimeConfig {
   version: string;
@@ -39,7 +38,7 @@ export function modelAvailability(config: Config): (provider: ModelInfo["provide
 
 /** The vendor `web_search` uses: the configured one when its key is set,
  * otherwise whichever key exists (`web/.env.example`). */
-export function searchFeatures(config: Config): RuntimeSearchFeatures {
+export function searchFeatures(config: Config): RuntimeFeatures {
   const keys: Record<"parallel" | "tavily", boolean> = {
     parallel: config.search.parallelApiKey !== null,
     tavily: config.search.tavilyApiKey !== null,
@@ -75,8 +74,3 @@ export function runtimeConfigFor(config: Config, user: { isAdmin: boolean } | nu
     features: searchFeatures(config),
   };
 }
-
-export const systemRouter = router({
-  health: publicProcedure.query(() => ({ ok: true, version })),
-  runtimeConfig: publicProcedure.query(({ ctx }) => runtimeConfigFor(ctx.config, ctx.user)),
-});

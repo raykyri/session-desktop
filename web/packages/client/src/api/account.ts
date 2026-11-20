@@ -1,31 +1,74 @@
-// The web client's shell (phase 2a): the account procedures the server keeps
-// on tRPC (sign-in state, appearance settings, the daily usage summary, the
-// admin pages). Spaces are the sync protocol's; phase 2b builds them on
-// `@session/sync`'s client in this shell.
+// The web shell's account state over plain routes (phase 2b; ADR-19 as
+// amended): who is signed in (`/api/me`), the appearance settings
+// (`/api/me/preferences`), the runtime configuration (`/api/config`), the
+// admin pages (`/api/admin/*`) and sign-out (`/auth/logout`). Spaces are the
+// sync protocol's (`../sync/`).
 
-import type { UserSettings } from "@session/shared";
-import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ModelInfo, UserSettings } from "@session/shared";
 
 import { useSettingsStore } from "../stores/settings.js";
 
-import { trpc } from "./trpc.js";
+import { HttpError, getJson, postJson } from "./http.js";
+import { createResource, useAction, useResource } from "./resource.js";
 
-export const queryKeys = {
-  me: () => ["me"] as const,
-  settings: () => ["settings"] as const,
-  runtimeConfig: () => ["runtimeConfig"] as const,
-  usage: () => ["usage"] as const,
-  adminUsers: () => ["adminUsers"] as const,
-};
+/** `/api/me`: the mock's fields (`u`, `name`, `bio`) and the account's. */
+export interface Me {
+  u: string;
+  name: string;
+  bio: string;
+  x: string;
+  createdAt: string;
+  id: string;
+  login: string;
+  handle: string;
+  avatarUrl: string | null;
+  isAdmin: boolean;
+}
 
-/** Query defaults: account state changes only when this tab changes it. */
-export const queryClientDefaults = {
-  queries: {
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-    retry: 1,
-  },
-} as const;
+export type ServerSettings = UserSettings & { researchLaunchInstruction: string | null };
+
+export interface SettingsUpdate {
+  settings?: Partial<UserSettings>;
+  researchLaunchInstruction?: string | null;
+}
+
+export interface RuntimeConfig {
+  version: string;
+  models: ModelInfo[];
+  limits: {
+    runsPerUser: number;
+    runTimeoutSeconds: number;
+    dailyTokens: number;
+    dailyRuns: number;
+    enforced: boolean;
+  };
+  features: { webSearch: boolean; searchVendor?: "parallel" | "tavily" };
+}
+
+export interface DailyLimits {
+  dailyTokens: number | null;
+  dailyRuns: number | null;
+}
+
+export interface AdminUser {
+  id: string;
+  login: string;
+  handle: string;
+  name?: string | null;
+  avatarUrl?: string | null;
+  isAdmin: boolean;
+  createdAt: number;
+  usage: {
+    day: number;
+    inputTokens: number;
+    outputTokens: number;
+    reasoningTokens: number;
+    cachedTokens: number;
+    costEstimateMicros: number;
+    runs: number;
+  };
+  limits: DailyLimits;
+}
 
 export function gitHubSignInUrl(returnTo?: string, signupCode?: string): string {
   const params = new URLSearchParams();
@@ -39,31 +82,31 @@ export function startGitHubSignIn(returnTo?: string, signupCode?: string): void 
   window.location.assign(gitHubSignInUrl(returnTo, signupCode));
 }
 
-export interface SettingsUpdate {
-  settings?: Partial<UserSettings>;
-  researchLaunchInstruction?: string | null;
+/** Who is signed in: null when nobody is (401). */
+export const meResource = createResource<Me | null>(async () => {
+  try {
+    return await getJson<Me>("/api/me");
+  } catch (e) {
+    if (e instanceof HttpError && e.status === 401) return null;
+    throw e;
+  }
+});
+
+export const preferencesResource = createResource(() =>
+  getJson<ServerSettings>("/api/me/preferences"),
+);
+
+export const configResource = createResource(() => getJson<RuntimeConfig>("/api/config"));
+
+export const adminUsersResource = createResource(() => getJson<AdminUser[]>("/api/admin/users"));
+
+/** The signed-in account, loading it when needed (route guards). */
+export function ensureMe(): Promise<Me | null> {
+  return meResource.load().catch(() => null);
 }
 
-export type ServerSettings = UserSettings & { researchLaunchInstruction: string | null };
-
-export const meQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.me(),
-    queryFn: () => trpc().auth.me.query(),
-    retry: false,
-  });
-
-export const settingsQueryOptions = () =>
-  queryOptions({ queryKey: queryKeys.settings(), queryFn: () => trpc().settings.get.query() });
-
-export const runtimeConfigQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.runtimeConfig(),
-    queryFn: () => trpc().system.runtimeConfig.query(),
-  });
-
 export function useMe() {
-  return useQuery(meQueryOptions());
+  return useResource(meResource);
 }
 
 export function useSignedIn(): boolean {
@@ -71,66 +114,47 @@ export function useSignedIn(): boolean {
 }
 
 export function useSettings() {
-  const signedIn = useSignedIn();
-  return useQuery({ ...settingsQueryOptions(), enabled: signedIn });
+  return useResource(preferencesResource, useSignedIn());
 }
 
 export function useRuntimeConfig() {
-  return useQuery(runtimeConfigQueryOptions());
-}
-
-export function useUsageSummary() {
-  const signedIn = useSignedIn();
-  return useQuery({
-    queryKey: queryKeys.usage(),
-    queryFn: () => trpc().usage.summary.query(),
-    enabled: signedIn,
-  });
+  return useResource(configResource);
 }
 
 export function useAdminUsers(enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.adminUsers(),
-    queryFn: () => trpc().admin.listUsers.query(),
-    enabled,
-  });
+  return useResource(adminUsersResource, enabled);
 }
 
-export function useUpdateSettings() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (input: SettingsUpdate) => trpc().settings.update.mutate(input),
-    onSuccess: (settings) => {
-      client.setQueryData(queryKeys.settings(), settings);
-    },
-  });
+export async function updatePreferences(input: SettingsUpdate): Promise<ServerSettings> {
+  const saved = await postJson<ServerSettings>("/api/me/preferences", input);
+  preferencesResource.set(saved);
+  return saved;
 }
 
-export function useLogout() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: () => trpc().auth.logout.mutate(),
-    onSuccess: () => {
-      client.clear();
-      useSettingsStore.getState().reset();
-    },
-  });
+/** Sign out this browser; the account state is forgotten. */
+export async function logout(): Promise<void> {
+  await postJson("/auth/logout");
+  meResource.set(null);
+  preferencesResource.reset();
+  adminUsersResource.reset();
+  useSettingsStore.getState().reset();
 }
 
-export function useSetUserLimits() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (input: {
-      userId: string;
-      dailyTokens?: number | null;
-      dailyRuns?: number | null;
-    }) => trpc().admin.setLimits.mutate(input),
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.adminUsers() }),
-  });
+export async function setUserLimits(input: {
+  userId: string;
+  dailyTokens?: number | null;
+  dailyRuns?: number | null;
+}): Promise<DailyLimits> {
+  const limits = await postJson<DailyLimits>("/api/admin/limits", input);
+  void adminUsersResource.load(true).catch(() => undefined);
+  return limits;
 }
 
-export function useCreateInvites() {
-  return useMutation({
-    mutationFn: (input: { count: number }) => trpc().admin.createInvites.mutate(input),
-  });
+export function createInvites(input: { count: number }): Promise<{ codes: string[] }> {
+  return postJson<{ codes: string[] }>("/api/admin/invites", input);
 }
+
+export const useUpdateSettings = () => useAction(updatePreferences);
+export const useLogout = () => useAction((_: void) => logout());
+export const useSetUserLimits = () => useAction(setUserLimits);
+export const useCreateInvites = () => useAction(createInvites);

@@ -32,6 +32,10 @@ export interface TestServerOptions {
   /** A sync clock that `POST /api/test/clock` sets (an offset from the real
    * clock), when `sync.clock` is not given. */
   settableClock?: boolean;
+  /** Serve the built web client from this directory (the e2e suite). */
+  clientDistDirectory?: string;
+  /** The origin the server takes as its own (CSRF), when not the default. */
+  publicOrigin?: string;
 }
 
 export interface RunningTestServer {
@@ -51,7 +55,7 @@ export function startTestServer(o: TestServerOptions = {}): {
     NODE_ENV: "test",
     HOST: "127.0.0.1",
     PORT: String(o.port ?? 0),
-    SESSION_PUBLIC_ORIGIN: "http://127.0.0.1:8787",
+    SESSION_PUBLIC_ORIGIN: o.publicOrigin ?? "http://127.0.0.1:8787",
     SESSION_DATA_DIR: directory,
     SESSION_TEST_AUTH: "1",
     SESSION_FIXTURE_PROVIDERS: "1",
@@ -74,7 +78,7 @@ export function startTestServer(o: TestServerOptions = {}): {
   if (o.timers) deps.runs.startTimers();
   const app = createApp({
     ...deps,
-    clientDistDirectory: join(directory, "no-client"),
+    clientDistDirectory: o.clientDistDirectory ?? join(directory, "no-client"),
     ...(o.mockupsDirectory ? { mockupsDirectory: o.mockupsDirectory } : {}),
   });
   let server: ServerType | null = null;

@@ -54,6 +54,10 @@ export interface FetchTransportOptions {
   baseUrl: string;
   /** The bearer token, or null (a browser with a session cookie). */
   token?: () => string | null;
+  /** Headers sent with every request: the web's CSRF header
+   * (`X-Requested-With: session`), which a cookie POST needs. The content
+   * type, the protocol header and a bearer token are set after them. */
+  headers?: Readonly<Record<string, string>>;
   fetch?: typeof fetch;
   /** The server answered that this client is too old. */
   onUpdateRequired?: () => void;
@@ -103,6 +107,7 @@ export class FetchTransport implements Transport {
 
   private headers(extra: Record<string, string> = {}): Record<string, string> {
     const h: Record<string, string> = {
+      ...this.o.headers,
       "Content-Type": "application/json",
       [PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
       ...extra,

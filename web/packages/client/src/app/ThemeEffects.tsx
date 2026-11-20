@@ -37,6 +37,14 @@ export function ThemeEffects() {
     document.documentElement.toggleAttribute(REDUCE_MOTION_ATTRIBUTE, settings.reduceMotion);
   }, [settings.reduceMotion]);
 
+  // The spaces client's tokens (`styles/tokens.css`, the mockup's) follow
+  // the system unless `data-theme` names light or dark.
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (settings.appearance === "system") delete root.dataset["theme"];
+    else root.dataset["theme"] = settings.appearance;
+  }, [settings.appearance]);
+
   useLayoutEffect(() => {
     const root = document.documentElement;
     root.dataset["appearance"] = appearance;
@@ -52,7 +60,9 @@ export function ThemeEffects() {
 
   useLayoutEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty("--font-ui", bodyFontFamily);
+    // the older shell pages' face (`.shell-legacy`); the spaces client uses
+    // the mockup's, Inter
+    root.style.setProperty("--shell-font-ui", bodyFontFamily);
     // `data-body-font` drives the optical size offset for faces that sit high
     // in their control boxes (`--font-ui-size-offset`).
     root.dataset["bodyFont"] = settings.bodyFontId;

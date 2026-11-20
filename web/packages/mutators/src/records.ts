@@ -947,6 +947,7 @@ export function createdOf(r: StoredRecord): string {
  * SQLite each is a `WHERE kind = ? AND <field> = ?` on an index. */
 export const INDEXES = {
   "space.name": ["space", "name"],
+  "space.vis": ["space", "vis"],
   "member.sp": ["member", "sp"],
   "member.u": ["member", "u"],
   "thread.s": ["thread", "s"],

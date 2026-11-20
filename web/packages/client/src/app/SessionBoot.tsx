@@ -5,11 +5,11 @@
 
 import { userSettingsSchema } from "@session/shared";
 import type { UserSettings } from "@session/shared";
-import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
-import { queryKeys, useMe, useSettings } from "../api/account.js";
-import { trpc } from "../api/trpc.js";
+import { preferencesResource, useMe, useSettings } from "../api/account.js";
+import { postJson } from "../api/http.js";
+import type { ServerSettings } from "../api/account.js";
 import { normalizeSettings, useSettingsStore } from "../stores/settings.js";
 
 /** Debounce interval for pushing local user settings modifications to the
@@ -32,7 +32,6 @@ export function changedSettings(next: UserSettings, base: UserSettings): Partial
 }
 
 function useSettingsSync(): void {
-  const queryClient = useQueryClient();
   const settings = useSettings();
   const server = useRef<UserSettings | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -59,11 +58,10 @@ function useSettingsSync(): void {
         const patch = changedSettings(pending, sent);
         if (Object.keys(patch).length === 0) return;
         server.current = { ...sent, ...patch };
-        void trpc()
-          .settings.update.mutate({ settings: patch })
+        void postJson<ServerSettings>("/api/me/preferences", { settings: patch })
           .then((saved) => {
             server.current = normalizeSettings(saved);
-            queryClient.setQueryData(queryKeys.settings(), saved);
+            preferencesResource.set(saved);
           })
           .catch(() => {
             server.current = sent;
@@ -75,7 +73,7 @@ function useSettingsSync(): void {
       if (timer.current !== null) clearTimeout(timer.current);
       timer.current = null;
     };
-  }, [queryClient]);
+  }, []);
 }
 
 export function SessionBoot() {

@@ -47,7 +47,7 @@ test("the CSP allows the twimg hosts and no eval", (t) => {
 
 test("rejects mutation requests missing the custom header", async (t) => {
   const harness = createHarness(t);
-  const response = await harness.app.request("/api/trpc/settings.update", {
+  const response = await harness.app.request("/api/me/preferences", {
     method: "POST",
     headers: { Origin: PUBLIC_ORIGIN, "Content-Type": "application/json" },
     body: "{}",
@@ -57,7 +57,7 @@ test("rejects mutation requests missing the custom header", async (t) => {
 
 test("rejects cross-origin requests regardless of request headers", async (t) => {
   const harness = createHarness(t);
-  const foreignOrigin = await harness.app.request("/api/trpc/settings.update", {
+  const foreignOrigin = await harness.app.request("/api/me/preferences", {
     method: "POST",
     headers: {
       Origin: "https://evil.example",
@@ -68,7 +68,7 @@ test("rejects cross-origin requests regardless of request headers", async (t) =>
   });
   t.is(foreignOrigin.status, 403);
 
-  const crossSite = await harness.app.request("/api/trpc/system.health", {
+  const crossSite = await harness.app.request("/api/sync/events", {
     headers: { "Sec-Fetch-Site": "cross-site" },
   });
   t.is(crossSite.status, 403);
@@ -76,7 +76,7 @@ test("rejects cross-origin requests regardless of request headers", async (t) =>
 
 test("a same-origin query passes the guard", async (t) => {
   const harness = createHarness(t);
-  const response = await harness.request("/api/trpc/system.health", {
+  const response = await harness.request("/api/config", {
     headers: { "Sec-Fetch-Site": "same-origin" },
   });
   t.is(response.status, 200);
@@ -168,18 +168,21 @@ test("without a built client an unknown path is a 404", async (t) => {
 test("the mutation budget is per account", async (t) => {
   const harness = createHarness(t);
   const user = harness.addUser("budget");
-  const caller = harness.caller(user);
+  const cookie = harness.signIn(user);
   for (let attempt = 0; attempt < 60; attempt += 1) {
-    await caller.settings.update({});
+    t.is((await harness.post("/api/me/preferences", {}, cookie)).status, 200);
   }
-  await t.throwsAsync(caller.settings.update({}), { message: /too many changes/ });
+  const over = await harness.post("/api/me/preferences", {}, cookie);
+  t.is(over.status, 429);
+  t.regex(String((over.body["error"] as { message: string }).message), /Too many changes/);
   // A second account is unaffected.
-  await t.notThrowsAsync(harness.caller(harness.addUser("budget2")).settings.update({}));
+  const other = harness.signIn(harness.addUser("budget2"));
+  t.is((await harness.post("/api/me/preferences", {}, other)).status, 200);
 });
 
 test("an opaque origin is not our origin", async (t) => {
   const harness = createHarness(t);
-  const response = await harness.app.request("/api/trpc/settings.update", {
+  const response = await harness.app.request("/api/me/preferences", {
     method: "POST",
     headers: { Origin: "null", "X-Requested-With": "session", "Content-Type": "application/json" },
     body: "{}",

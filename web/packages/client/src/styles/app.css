@@ -1,7 +1,16 @@
-@import "tailwindcss";
+/* Tailwind's theme and utilities without its preflight: the spaces client's
+   styles (spaces.css, ported from the mockup) are written over the browser's
+   defaults, as the mockup is, and preflight's resets (headings, lists,
+   buttons) would change them. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
 @import "./fonts.css" layer(base);
+@import "./shell-tokens.css" layer(base);
 @import "./tokens.css" layer(base);
 @import "./prose.css" layer(components);
+@import "./spaces.css" layer(components);
+@import "./spaces-app.css" layer(components);
 
 /* Tailwind v4 reads the design system out of `@theme` (08 §2, ADR-8). Every
    value below is `var(--token)` under `@theme inline`, so a utility compiles to
@@ -198,51 +207,13 @@
 
 @layer base {
   html,
-  body,
-  #root {
-    height: 100%;
+  body {
     margin: 0;
-    overflow: hidden;
   }
 
   body {
-    font-family: var(--font-ui);
+    background: var(--pane);
     font-synthesis: none;
-    line-height: 1.5;
     text-rendering: optimizeLegibility;
-  }
-
-  ::selection {
-    background: var(--selection-bg);
-    color: var(--selection-fg);
-  }
-
-  /* Browser default :focus-visible is a lighter system blue. Match the
-     app's --focus-ring. Controls that opt into FOCUS_RING set outline-none
-     and draw their own inset ring. */
-  :focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
-    border-radius: 5px;
-  }
-
-  /* lucide-react sets width/height attributes, but as a flex item an SVG can
-     still collapse to a sliver instead of honoring that intrinsic size. */
-  .lucide {
-    flex: none;
-  }
-
-  button,
-  textarea,
-  input,
-  select {
-    font: inherit;
-    font-size: var(--fs-base);
-  }
-
-  textarea::placeholder,
-  input::placeholder {
-    color: var(--placeholder-color);
-    opacity: 1;
   }
 }

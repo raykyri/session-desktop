@@ -24,7 +24,7 @@ test.serial("the settings store is applied to <html> as attributes", (t) => {
   t.is(root.dataset["colorTheme"], "green-blob");
   t.is(root.dataset["appearance"], "dark");
   t.is(root.dataset["bodyFont"], "dm-sans");
-  t.regex(root.style.getPropertyValue("--font-ui"), /DM Sans/);
+  t.regex(root.style.getPropertyValue("--shell-font-ui"), /DM Sans/);
   t.false(root.classList.contains("reduce-motion"));
 });
 
@@ -54,11 +54,11 @@ test.serial("the body font choice sets both the stack and the optical marker", (
   act(() => useSettingsStore.getState().set("bodyFontId", "valley-sans"));
 
   t.is(document.documentElement.dataset["bodyFont"], "valley-sans");
-  t.regex(document.documentElement.style.getPropertyValue("--font-ui"), /Valley Sans/);
+  t.regex(document.documentElement.style.getPropertyValue("--shell-font-ui"), /Valley Sans/);
 
   act(() => useSettingsStore.getState().set("bodyFontId", "inter"));
   t.is(document.documentElement.dataset["bodyFont"], "inter");
-  t.regex(document.documentElement.style.getPropertyValue("--font-ui"), /Inter/);
+  t.regex(document.documentElement.style.getPropertyValue("--shell-font-ui"), /Inter/);
 });
 
 test.serial("text size becomes a bounded pixel zoom, not a root font size", (t) => {

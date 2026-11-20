@@ -8,6 +8,7 @@
 //   GET  /api/sync/events     SSE (cursor tokens in Last-Event-ID or ?cursors)
 //   POST /api/rpc/<name>      an online-only call (`NOT_MUTATORS`)
 //   GET  /api/rpc/usage.listAsks, and the account reads under /api/me
+//   GET  /api/spaces          the spaces the caller may find (the directory)
 //   POST /api/admin/reset-time  an operator resets the stored server time
 // A route parses the request, authenticates (the session cookie, or a
 // device's bearer token: `auth/actor.ts`), checks the protocol header, and
@@ -209,7 +210,16 @@ export function syncRoutes(deps: ServerDeps): Hono<AppEnv> {
   app.get("/api/me", (c) => {
     const user = signedIn(c);
     if (!user) return error(c, "UNAUTHORIZED");
-    return c.json(meOf(sync, user));
+    // the mock's fields, and the account's for the web shell (phase 2b: in
+    // place of tRPC's auth.me)
+    return c.json({
+      ...meOf(sync, user),
+      id: user.id,
+      login: user.login,
+      handle: user.handle,
+      avatarUrl: user.avatarUrl ?? null,
+      isAdmin: user.isAdmin,
+    });
   });
   app.get("/api/me/settings", (c) => {
     const user = signedIn(c);
@@ -239,6 +249,15 @@ export function syncRoutes(deps: ServerDeps): Hono<AppEnv> {
         handles.filter((h) => users.findByHandle(db, h) !== null),
       ),
     );
+  });
+
+  // the spaces the caller may find, and the stats of those they read (the
+  // web client's directory: Home, the header, Browse; phase 2b)
+  app.get("/api/spaces", (c) => {
+    const d = sync.directory(c.get("actor"));
+    c.header("X-Session-Server-Time", String(d.serverTime));
+    c.header("Cache-Control", "no-store");
+    return c.json(d);
   });
 
   // ---- operators ----

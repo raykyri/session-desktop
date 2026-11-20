@@ -35,7 +35,7 @@ export function LoginPage() {
   const message = search.error ? SIGN_IN_ERRORS[search.error] : undefined;
 
   return (
-    <div className="bg-surface-workspace flex h-full w-full items-center justify-center px-6">
+    <div className="shell-legacy bg-surface-workspace flex min-h-screen w-full items-center justify-center px-6">
       <div className="flex w-[min(360px,100%)] flex-col items-center gap-6 text-center">
         <div className="flex flex-col gap-2">
           <h1 className="text-title text-fg-heading m-0 font-semibold">Session</h1>

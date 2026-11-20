@@ -1,18 +1,41 @@
 // The server's copy wins on initial load; local changes push after a debounce, and the tab's own echo of a push it just sent is dropped.
 
 import { DEFAULT_USER_SETTINGS } from "@session/shared";
-import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, render } from "@testing-library/react";
 import test from "ava";
 
-import { queryClientDefaults } from "../src/api/account.js";
-import { setTrpcClient } from "../src/api/trpc.js";
+import { meResource } from "../src/api/account.js";
+import { setFetch } from "../src/api/http.js";
 import { SESSION_SETTINGS_SYNC_DEBOUNCE_MS, SessionBoot } from "../src/app/SessionBoot.js";
 import { AppProviders } from "../src/app/providers.js";
 import { useSettingsStore } from "../src/stores/settings.js";
 
-import { defaultResponses, resetDocumentRoot, testUser, waitUntil } from "./helpers.js";
-import { createTrpcStub, type TrpcStub } from "./trpcStub.js";
+import { createFetchStub, type Answer, type FetchStub } from "./fetchStub.js";
+import { defaultRoutes, resetAccount, resetDocumentRoot, testUser, waitUntil } from "./helpers.js";
+
+/** The server, with `settings.get` and `settings.update` at their plain
+ * routes (phase 2b). */
+function createTrpcStub(r: Record<string, Answer>) {
+  const routes: Record<string, Answer> = {};
+  for (const [k, v] of Object.entries(r)) {
+    if (k === "settings.get") routes["GET /api/me/preferences"] = v;
+    else if (k === "settings.update") routes["POST /api/me/preferences"] = v;
+    else routes[k] = v;
+  }
+  const stub = createFetchStub(routes);
+  const view = {
+    fetch: stub.fetch,
+    get calls() {
+      return stub.calls.map((c) => ({
+        path: c.path === "/api/me/preferences" && c.method === "POST" ? "settings.update" : c.path,
+        input: c.body,
+      }));
+    },
+  };
+  return view;
+}
+const defaultResponses = defaultRoutes;
+type TrpcStub = Pick<FetchStub, "fetch">;
 
 function serverSettings(overrides: Record<string, unknown> = {}) {
   return {
@@ -23,18 +46,14 @@ function serverSettings(overrides: Record<string, unknown> = {}) {
 }
 
 function mount(stub: TrpcStub) {
-  setTrpcClient(stub.client);
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { ...queryClientDefaults.queries, gcTime: Number.POSITIVE_INFINITY },
-    },
-  });
-  const result = render(
-    <AppProviders queryClient={queryClient}>
+  resetAccount();
+  setFetch(stub.fetch);
+  meResource.set(testUser());
+  return render(
+    <AppProviders>
       <SessionBoot />
     </AppProviders>,
   );
-  return { ...result, queryClient };
 }
 
 test.beforeEach(() => {
@@ -111,7 +130,7 @@ test.serial("a push that fails does not stop the next one", async (t) => {
     "settings.get": serverSettings({ textSize: 15 }),
     "settings.update": () => {
       calls += 1;
-      if (calls === 1) throw new Error("offline");
+      if (calls === 1) return new Response("offline", { status: 503 });
       return serverSettings({ textSize: 18 });
     },
   });

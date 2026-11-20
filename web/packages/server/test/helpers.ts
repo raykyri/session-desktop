@@ -1,5 +1,4 @@
-// A whole server over a temp-file database: the app for `app.request()` and a
-// tRPC caller for the account procedures (`12-testing-linting-ci.md` §3.4),
+// A whole server over a temp-file database: the app for `app.request()` (`12-testing-linting-ci.md` §3.4),
 // with the real sync server and the real job runner (fixture providers, no
 // timers: a test drives `work` and `tick`).
 
@@ -24,15 +23,9 @@ import { createLogger } from "../src/logger.js";
 import { buildDeps } from "../src/main.js";
 import { RateLimiter } from "../src/middleware/rateLimit.js";
 import type { RunsServiceDeps } from "../src/runs/service.js";
-import { createAppContext } from "../src/trpc/base.js";
-import { appRouter, createCallerFactory } from "../src/trpc/router.js";
 
 export const PUBLIC_ORIGIN = "http://localhost:8787";
 export const DESKTOP_ORIGIN = "tauri://localhost";
-
-const callerFactory = createCallerFactory(appRouter);
-
-export type Caller = ReturnType<typeof callerFactory>;
 
 export interface Harness {
   config: Config;
@@ -42,8 +35,6 @@ export interface Harness {
   limiter: RateLimiter;
   app: Hono<AppEnv>;
   directory: string;
-  /** A caller bound to `user`, or anonymous when it is null. */
-  caller(user: User | null): Caller;
   /** Creates an account directly, the way the database tests do. */
   addUser(login: string, options?: { isAdmin?: boolean }): User;
   /** A session cookie for `user`. */
@@ -141,8 +132,6 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
     limiter,
     app,
     directory,
-    caller: (user) =>
-      callerFactory(createAppContext(deps, limiter, logger, { user, clientIp: "127.0.0.1" })),
     addUser: (login, addOptions = {}) => {
       githubIdCounter += 1;
       const { user } = users.upsertFromGitHub(db, {

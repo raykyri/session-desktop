@@ -41,8 +41,8 @@ function isGuarded(method: string, path: string): boolean {
   if (!SAFE_METHODS.has(method)) {
     return true;
   }
-  // Subscriptions are GETs and are guarded too (`03-api-and-events.md` §1).
-  return path.startsWith("/api/trpc") || path.startsWith("/api/sync");
+  // The sync stream is a GET and is guarded too (`03-api-and-events.md` §1).
+  return path.startsWith("/api/sync");
 }
 
 export function csrfGuard(config: Config): MiddlewareHandler<AppEnv> {

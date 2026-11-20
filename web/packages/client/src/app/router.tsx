@@ -1,11 +1,11 @@
-// The web client's routes (phase 2a: the shell phase 2b builds the spaces
-// client in): sign-in, a sign-up invite, settings, the admin pages and a
-// placeholder Home. Spaces are not served here yet.
+// The web client's routes (phase 2b): the spaces client at the mockup's
+// addresses (Home, `/s/<space>`, `/s/<space>/t/<thread>`, Search,
+// Notifications, Saved), and the shell's pages from phase 2a (sign-in, a
+// sign-up invite, settings, admin) under the older shell.
 
-import type { QueryClient } from "@tanstack/react-query";
 import {
   Outlet,
-  createRootRouteWithContext,
+  createRootRoute,
   createRoute,
   createRouter,
   lazyRouteComponent,
@@ -15,19 +15,22 @@ import {
 } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { meQueryOptions } from "../api/account.js";
+import { ensureMe } from "../api/account.js";
 import { loadAdminRoute, loadSettingsRoute } from "../routes/chunks.js";
-import { HomePage } from "../routes/home.js";
 import { InvitePage } from "../routes/invite.js";
 import { LoginPage } from "../routes/login.js";
+import { HomePage } from "../spaces/HomePage.js";
+import { BackRow } from "../spaces/nav.js";
+import { NotificationsPage } from "../spaces/Notifications.js";
+import { NotFound, Page } from "../spaces/Page.js";
+import { SavedPage } from "../spaces/SavedPage.js";
+import { SearchPage } from "../spaces/SearchPage.js";
+import { SpacePage } from "../spaces/SpacePage.js";
+import { ThreadPage } from "../spaces/ThreadPage.js";
 
-import { RouteErrorPanel, RouteNotFoundPanel, RoutePendingPanel } from "./RouteBoundary.js";
+import { RouteErrorPanel, RoutePendingPanel } from "./RouteBoundary.js";
 import { AppShell } from "./layout/AppShell.js";
-import { appQueryClient } from "./queryClient.js";
-
-interface RouterContext {
-  queryClient: QueryClient;
-}
+import { SpacesRoot } from "./SpacesRoot.js";
 
 /** /login: an error code from the OAuth callback, where to go after, and a
  * sign-up code. */
@@ -40,43 +43,155 @@ const loginSearchSchema = z.object({
 /** /invite: a sign-up code. */
 const inviteSearchSchema = z.object({ code: z.string().optional() });
 
-const rootRoute = createRootRouteWithContext<RouterContext>()({ component: Outlet });
+const searchSchema = z.object({ q: z.string().optional(), in: z.string().optional() });
+
+function NotFoundPage() {
+  return (
+    <Page place={{ kind: "other" }}>
+      <NotFound />
+    </Page>
+  );
+}
+
+const rootRoute = createRootRoute({ component: SpacesRoot, notFoundComponent: NotFoundPage });
 
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
   validateSearch: loginSearchSchema,
-  beforeLoad: async ({ context, search }) => {
-    const me = await context.queryClient.ensureQueryData(meQueryOptions()).catch(() => null);
+  beforeLoad: async ({ search }) => {
+    const me = await ensureMe();
     // eslint-disable-next-line @typescript-eslint/only-throw-error
     if (me) throw redirect({ to: search.redirect?.startsWith("/") ? search.redirect : "/" });
   },
   component: LoginPage,
 });
 
-const shellRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  id: "shell",
-  component: AppShell,
-});
-
-const requireSignedIn = async ({
-  context,
-  location,
-}: {
-  context: RouterContext;
-  location: { href: string };
-}) => {
-  const me = await context.queryClient.ensureQueryData(meQueryOptions()).catch(() => null);
+const requireSignedIn = async ({ location }: { location: { href: string } }) => {
+  const me = await ensureMe();
   // eslint-disable-next-line @typescript-eslint/only-throw-error
   if (!me) throw redirect({ to: "/login", search: { redirect: location.href } });
 };
 
-const homeRoute = createRoute({
-  getParentRoute: () => shellRoute,
-  path: "/",
-  component: HomePage,
+// ---- the spaces client ----
+
+const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage });
+
+const spaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/s/$space",
+  component: function SpaceRoute() {
+    const { space } = spaceRoute.useParams();
+    return <SpacePage name={space} />;
+  },
 });
+
+const threadRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/s/$space/t/$thread",
+  component: function ThreadRoute() {
+    const { space, thread } = threadRoute.useParams();
+    return <ThreadPage spaceName={space} id={thread} />;
+  },
+});
+
+const askRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/s/$space/t/$thread/a/$node",
+  component: function AskRoute() {
+    const { space, thread } = askRoute.useParams();
+    return <ThreadPage spaceName={space} id={thread} />;
+  },
+});
+
+const manageRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/s/$space/manage/$tab",
+  component: function ManageRoute() {
+    const { space } = manageRoute.useParams();
+    return <SpacePage name={space} />;
+  },
+});
+
+const searchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/search",
+  validateSearch: searchSchema,
+  component: function SearchRoute() {
+    const s = searchRoute.useSearch();
+    return <SearchPage q={s.q ?? ""} scope={s.in} />;
+  },
+});
+
+const notificationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/notifications",
+  beforeLoad: requireSignedIn,
+  component: function NotificationsRoute() {
+    return (
+      <Page place={{ kind: "notifications" }}>
+        <NotificationsPage />
+      </Page>
+    );
+  },
+});
+
+const savedRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/saved",
+  beforeLoad: requireSignedIn,
+  component: SavedPage,
+});
+
+/** A screen the later slices of phase 2b build: its title under the header. */
+function Later({ title }: { title: string }) {
+  return (
+    <Page place={{ kind: "other", label: title }}>
+      <div className="home-wide sub-page">
+        <BackRow />
+        <div className="sub-top">
+          <h2>{title}</h2>
+        </div>
+      </div>
+    </Page>
+  );
+}
+
+const profileRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/u/$handle",
+  component: function ProfileRoute() {
+    const { handle } = profileRoute.useParams();
+    return <Later title={handle} />;
+  },
+});
+const browseRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/spaces/browse",
+  component: () => <Later title="Browse spaces" />,
+});
+const createSpaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/spaces/new",
+  beforeLoad: requireSignedIn,
+  component: () => <Later title="Create a space" />,
+});
+const yourSpacesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/spaces",
+  beforeLoad: requireSignedIn,
+  component: () => <Later title="Your spaces" />,
+});
+const keysRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/keys",
+  beforeLoad: requireSignedIn,
+  component: () => <Later title="API keys" />,
+});
+
+// ---- the shell's pages (phase 2a) ----
+
+const shellRoute = createRoute({ getParentRoute: () => rootRoute, id: "shell", component: AppShell });
 
 const inviteRoute = createRoute({
   getParentRoute: () => shellRoute,
@@ -101,24 +216,38 @@ const adminRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
-  shellRoute.addChildren([homeRoute, inviteRoute, settingsRoute, adminRoute]),
+  homeRoute,
+  spaceRoute,
+  threadRoute,
+  askRoute,
+  manageRoute,
+  searchRoute,
+  notificationsRoute,
+  savedRoute,
+  profileRoute,
+  browseRoute,
+  createSpaceRoute,
+  yourSpacesRoute,
+  keysRoute,
+  shellRoute.addChildren([inviteRoute, settingsRoute, adminRoute]),
 ]);
 
-export function createAppRouter(options: { queryClient: QueryClient; history?: RouterHistory }) {
+export function createAppRouter(options: { history?: RouterHistory } = {}) {
   return createRouter({
     routeTree,
-    context: { queryClient: options.queryClient },
     ...(options.history ? { history: options.history } : {}),
     defaultPendingComponent: RoutePendingPanel,
     defaultErrorComponent: RouteErrorPanel,
-    defaultNotFoundComponent: RouteNotFoundPanel,
+    defaultNotFoundComponent: NotFoundPage,
   });
 }
 
-export const router: Router<typeof routeTree> = createAppRouter({ queryClient: appQueryClient });
+export const router: Router<typeof routeTree> = createAppRouter();
 
 declare module "@tanstack/react-router" {
   interface Register {
     router: typeof router;
   }
 }
+
+export { Outlet };

@@ -140,13 +140,13 @@ test("the event stream pokes a reader for a change it may read, and closes on si
     new RegExp(`event: poke\\nid: .*\\ndata: \\{"type":"poke","logs":\\["space:${sp}"\\]\\}`),
   );
   // signing out ends this session's streams
-  const logout = await h.request("/api/trpc/auth.logout", {
+  const logout = await h.request("/auth/logout", {
     method: "POST",
     cookie: (mel.auth as { cookie: string }).cookie,
     headers: { "Content-Type": "application/json" },
     body: "{}",
   });
-  t.is(logout.status, 200);
+  t.is(logout.status, 204);
   await stream.until(null);
   t.true(stream.ended());
   await stream.close();

@@ -180,6 +180,9 @@ export type EntryState =
   | "dropped"
   | "refused";
 
+/** An `event: run` frame of the stream: in-flight text of a run. */
+export type RunFrame = Extract<SseEvent, { type: "run" }>;
+
 export const SHOWN: ReadonlySet<EntryState> = new Set(["failed", "expired", "dropped", "refused"]);
 const PENDING: ReadonlySet<EntryState> = new Set(["queued", "held", "answered"]);
 
@@ -298,6 +301,7 @@ export interface ClientOptions {
  * by staff or by their person only, or span spaces. */
 const PARTIAL_SCANS: ReadonlySet<pkg.IndexName> = new Set<pkg.IndexName>([
   "invite.code",
+  "space.vis",
   "invite.sp",
   "request.sp",
   "ban.sp",
@@ -392,6 +396,7 @@ export class SyncClient implements Changing {
   private readonly derivedCache = new Map<string, Set<string>>();
   private readonly waiters = new Map<string, ((a: Answer | null) => void)[]>();
   private readonly listeners = new Set<() => void>();
+  private readonly runListeners = new Set<(frame: RunFrame) => void>();
   private ver = 0;
   private tick = 0;
   private loading: Promise<void> | null = null;
@@ -1992,14 +1997,26 @@ export class SyncClient implements Changing {
     this.stream?.abort();
   }
 
+  /** In-flight text of runs (ADR-22): each `event: run` frame of the stream
+   * (`{ run, attempt, seq, text }`, `text` the text since the frame before)
+   * is passed to the listeners. It is not stored and changes no log: the
+   * turns, the answer and the run's end arrive as records. */
+  onRun(listener: (frame: RunFrame) => void): () => void {
+    this.runListeners.add(listener);
+    return () => void this.runListeners.delete(listener);
+  }
+
   /** Listen for pokes until `signal` aborts: each poke pulls its open logs,
-   * then the outbox is sent (an answer that arrived as a change). The
-   * stream reconnects when the open logs or their cursors change. A stream
-   * the server refused ends it: UNAUTHORIZED signs the client out,
-   * UPDATE_REQUIRED holds the outbox. */
+   * then the outbox is sent (an answer that arrived as a change); a run
+   * frame goes to the `onRun` listeners. The stream reconnects when the
+   * open logs or their cursors change. A stream the server refused ends it:
+   * UNAUTHORIZED signs the client out, UPDATE_REQUIRED holds the outbox. */
   async listen(signal: AbortSignal): Promise<void> {
     const onEvent = (e: SseEvent) => {
-      if (e.type !== "poke") return;
+      if (e.type === "run") {
+        for (const l of [...this.runListeners]) l(e);
+        return;
+      }
       const logs = e.logs.filter((l) => this.logs.has(l));
       if (!logs.length) return;
       void this.sync(...logs)

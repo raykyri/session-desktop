@@ -13,6 +13,8 @@ import test from "ava";
 const stylesDirectory = join(import.meta.dirname, "..", "src", "styles");
 
 const tokensCss = readFileSync(join(stylesDirectory, "tokens.css"), "utf8");
+/** The older shell pages' tokens, scoped to `.shell-legacy` (phase 2b). */
+const shellCss = readFileSync(join(stylesDirectory, "shell-tokens.css"), "utf8");
 const proseCss = readFileSync(join(stylesDirectory, "prose.css"), "utf8");
 const appCss = readFileSync(join(stylesDirectory, "app.css"), "utf8");
 
@@ -32,53 +34,46 @@ function ruleBody(css: string, selector: string): string {
   return match[1];
 }
 
-function tokensDeclaredIn(selectorFilter: (selector: string) => boolean): Set<string> {
-  const declared = new Set<string>();
-  const blockPattern = /(:root[^{]*)\{((?:[^{}]|\{[^{}]*\})*)\}/g;
-  for (const match of withoutComments(tokensCss).matchAll(blockPattern)) {
-    if (!match[1] || !match[2] || !selectorFilter(match[1])) continue;
-    for (const token of match[2].matchAll(/(--[a-z0-9-]+):/g)) {
-      if (token[1]) declared.add(token[1]);
-    }
+/** The custom properties a block of `css` declares, for each selector. */
+function tokensBy(css: string): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  const blockPattern = /([^{}]+)\{([^{}]*)\}/g;
+  for (const match of withoutComments(css).matchAll(blockPattern)) {
+    const selector = (match[1] ?? "").trim();
+    const set = out.get(selector) ?? new Set<string>();
+    for (const token of (match[2] ?? "").matchAll(/(--[a-z0-9-]+):/g)) if (token[1]) set.add(token[1]);
+    out.set(selector, set);
   }
-  return declared;
+  return out;
 }
 
-// ---------------------------------------------------------------- §6 item 1
+// ---------------------------------------------------------------- §6 items 1 and 2
+// The spaces client's tokens are the mockup's (phase 2b): dark on `:root`;
+// light with the system's light appearance (unless `data-theme="dark"`) or
+// `data-theme="light"`; and `data-theme="dark"` restores dark under a light
+// system. The three override blocks set the same tokens.
 
-test("every dark color token has a light-appearance override", (t) => {
-  const dark = tokensDeclaredIn((selector) => !selector.includes("data-appearance"));
-  const light = tokensDeclaredIn((selector) => selector.includes('data-appearance="light"'));
-  // Layout, type, motion and stacking tokens are appearance-independent, as are
-  // the lightbox scrims that sit over images.
-  const appearanceIndependent =
-    /^--(fs|control-h|radius|z|font|transition|research-feed|lightbox)-|^--control-fg$/;
-  const missing = [...dark].filter(
-    (token) => !light.has(token) && !appearanceIndependent.test(token),
-  );
-
-  t.deepEqual(missing, [], "dark tokens without a light override");
+test("each appearance block sets the same tokens, and dark covers them all", (t) => {
+  const by = tokensBy(tokensCss);
+  const root = by.get(":root") ?? new Set();
+  const light = by.get(':root[data-theme="light"]') ?? new Set();
+  const system = by.get(':root:not([data-theme="dark"])') ?? new Set();
+  const dark = by.get(':root[data-theme="dark"]') ?? new Set();
+  t.true(light.size > 30, "sanity: the light block was found");
+  t.deepEqual([...system].sort(), [...light].sort(), "the system's light block matches data-theme=light");
+  t.deepEqual([...dark].sort(), [...light].sort(), "data-theme=dark restores every token light changes");
+  t.deepEqual([...light].filter((x) => !root.has(x)), [], "light changes only tokens dark sets");
 });
 
-// ---------------------------------------------------------------- §6 item 2
-
-test("light blocks follow the dark theme blocks and flip color-scheme", (t) => {
-  const firstLight = tokensCss.indexOf(':root[data-appearance="light"]');
-  const lastDarkTheme = tokensCss.lastIndexOf(':root[data-color-theme="orange-blob"] {');
-
-  t.true(firstLight > lastDarkTheme, "light overrides must win the cascade over dark themes");
+test("the appearance blocks flip color-scheme, and the page has the pane's background", (t) => {
   t.regex(tokensCss, /:root\s*\{[^}]*color-scheme:\s*dark/s);
-  t.regex(tokensCss, /:root\[data-appearance="light"\]\s*\{[^}]*color-scheme:\s*light/s);
-  t.true(
-    tokensCss.includes(':root[data-appearance="light"][data-color-theme="orange-blob"]'),
-    "each color theme needs its own light variant",
-  );
+  t.regex(tokensCss, /:root\[data-theme="light"\]\s*\{[^}]*color-scheme:\s*light/s);
+  t.regex(tokensCss, /@media \(prefers-color-scheme: light\)\s*\{\s*:root:not\(\[data-theme="dark"\]\)\s*\{[^}]*color-scheme:\s*light/s);
+  t.regex(withoutComments(appCss), /body\s*\{[^}]*background:\s*var\(--pane\)/);
 });
 
-test("root element applies workspace background color instead of transparent background", (t) => {
-  const root = ruleBody(tokensCss, ":root");
-  t.regex(root, /background:\s*var\(--workspace-bg\)/);
-  t.notRegex(root, /background:\s*transparent/);
+test("the older shell's tokens are scoped to .shell-legacy", (t) => {
+  for (const selector of tokensBy(shellCss).keys()) t.regex(selector, /\.shell-legacy$/, selector);
 });
 
 // ---------------------------------------------------------------- §6 item 3
@@ -162,7 +157,7 @@ test("research prose restores list markers that Tailwind preflight strips", (t) 
 // ---------------------------------------------------------------- §6 item 5
 
 test("DM Sans adds one optical half-pixel to UI type but not to monospace", (t) => {
-  const root = ruleBody(tokensCss, ":root");
+  const root = ruleBody(shellCss, ":root .shell-legacy");
   for (const step of ["xs", "sm", "base", "input"]) {
     t.regex(
       root,
@@ -170,7 +165,7 @@ test("DM Sans adds one optical half-pixel to UI type but not to monospace", (t) 
     );
   }
   t.regex(
-    ruleBody(tokensCss, ':root[data-body-font="dm-sans"]'),
+    ruleBody(shellCss, ':root[data-body-font="dm-sans"] .shell-legacy'),
     /--font-ui-size-offset:\s*0\.5px/,
   );
 
@@ -193,7 +188,7 @@ test("the theme maps the app's color ramp under fg-* and every surface under sur
 
   const textTokens = [
     ...new Set(
-      [...ruleBody(tokensCss, ":root").matchAll(/(--text-[a-z0-9-]+):/g)].map((match) => match[1]),
+      [...ruleBody(shellCss, ":root .shell-legacy").matchAll(/(--text-[a-z0-9-]+):/g)].map((match) => match[1]),
     ),
   ];
   t.true(textTokens.length > 10, "sanity: the ramp was found");

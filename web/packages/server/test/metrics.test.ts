@@ -52,7 +52,7 @@ test("/metrics reports the process and the database", async (t) => {
   const harness = createHarness(t, { env: { SESSION_METRICS_TOKEN: TOKEN } });
   // One request of each class, so the histogram has something to say.
   await harness.request("/healthz");
-  await harness.request("/api/trpc/nope");
+  await harness.request("/api/nope");
 
   const response = await harness.request("/metrics", {
     headers: { Authorization: `Bearer ${TOKEN}` },
@@ -121,8 +121,11 @@ test("active runs, queue depth, daily usage and sync housekeeping faults come ou
 });
 
 test("the histogram labels stay bounded", (t) => {
-  t.is(routeLabel("/w/9f3c1d"), "/w");
-  t.is(routeLabel("/api/trpc/research.ask"), "/api/trpc");
+  t.is(routeLabel("/api/sync/pull"), "/api/sync");
+  t.is(routeLabel("/api/rpc/runs.claim"), "/api/rpc");
+  t.is(routeLabel("/api/me/preferences"), "/api/me");
+  t.is(routeLabel("/api/spaces"), "/api");
+  t.is(routeLabel("/auth/logout"), "/auth");
   t.is(routeLabel("/healthz"), "/healthz");
   t.is(routeLabel("/assets/index-abc123.js"), "static");
   t.is(statusClass(204), "2xx");

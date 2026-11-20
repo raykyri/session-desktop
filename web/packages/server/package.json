@@ -10,10 +10,6 @@
       "types": "./dist/src/app.d.ts",
       "default": "./src/app.ts"
     },
-    "./router": {
-      "types": "./dist/src/trpc/router.d.ts",
-      "default": "./src/trpc/router.ts"
-    },
     "./test-server": {
       "types": "./dist/src/testServer.d.ts",
       "default": "./src/testServer.ts"
@@ -32,14 +28,12 @@
     "@ai-sdk/provider-utils": "^5.0.44",
     "@aws-sdk/client-s3": "^3.1135.0",
     "@hono/node-server": "^2.1.1",
-    "@hono/trpc-server": "^0.4.2",
     "@mozilla/readability": "^0.6.0",
     "@openrouter/ai-sdk-provider": "^3.0.0",
     "@session/db": "*",
     "@session/mutators": "*",
     "@session/shared": "*",
     "@session/sync": "*",
-    "@trpc/server": "^11.19.0",
     "ai": "^7.0.106",
     "arctic": "^3.7.0",
     "hono": "^4.13.8",

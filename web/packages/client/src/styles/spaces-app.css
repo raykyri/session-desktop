@@ -1,0 +1,35 @@
+/* Where the client's page differs from the mockup's framed one: the app is
+   the browser's viewport, not a 780px frame in a page of mock controls. */
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  color: var(--t-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+#app.app {
+  min-height: 100vh;
+}
+
+/* the mockup's frame is 780px tall: its body fills what the header leaves */
+.A > .body {
+  min-height: calc(100vh - 51px);
+}
+
+/* the legacy shell pages keep their own face and colours */
+.shell-legacy {
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  background: var(--workspace-bg);
+}
+
+/* a heading focused on arrival (a thread opened from a notification) */
+.th-q:focus {
+  outline: none;
+}
+.th-q:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}

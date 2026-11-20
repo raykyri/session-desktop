@@ -218,6 +218,14 @@ type RowView = pkg.StoredRecord | true | null;
  * UPDATE_REQUIRED. */
 export type ReadOpts = ReadOptions & { protocolVersion?: number };
 
+/** The spaces a person may find, and the stats of those they read
+ * (`SyncServer.directory`). */
+export interface Directory {
+  spaces: pkg.SpaceRec[];
+  stats: pkg.StatsRec[];
+  serverTime: number;
+}
+
 export class SyncServer {
   readonly store: ServerStore;
   private readonly clock: Clock;
@@ -1309,6 +1317,37 @@ export class SyncServer {
         if (row && this.readRow(tx, row, u) !== null) return true;
       }
       return false;
+    });
+  }
+
+  /** The spaces `actor` may find (phase 2b: the web's space directory, `GET
+   * /api/spaces`): every open and listed space that is not deleted, and the
+   * unlisted ones they are a member of, by name; with the stats record of
+   * each space whose content they read. A space record is public
+   * (`readsAudience`); an unlisted one is found only through a link or a
+   * membership, so it is listed to its members only. */
+  directory(actor: Actor | null): Directory {
+    const u = this.userOf(actor);
+    return this.run((tx) => {
+      const g = readerOf(tx);
+      const found = new Map<string, pkg.SpaceRec>();
+      const add = (r: pkg.StoredRecord | undefined) => {
+        if (r?.kind === "space" && !r.deleted) found.set(r.id, r);
+      };
+      for (const vis of ["open", "listed"]) for (const r of tx.scan("space", "vis", vis)) add(r);
+      if (u !== null)
+        for (const m of tx.scan("member", "u", u))
+          if (m.kind === "member") add(tx.get(pkg.spaceKey(m.sp)));
+      const spaces = [...found.values()].sort((a, b) =>
+        a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+      );
+      const stats: pkg.StatsRec[] = [];
+      for (const s of spaces) {
+        if (!pkg.readsSpace(g, s.id, u)) continue;
+        const st = tx.get(pkg.statsKey(s.id));
+        if (st?.kind === "stats") stats.push(st);
+      }
+      return { spaces, stats, serverTime: this.clockNow() };
     });
   }
 

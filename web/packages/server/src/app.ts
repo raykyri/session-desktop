@@ -7,20 +7,19 @@
 // the session loader (a session cookie, or a device's bearer token: the
 // actor the sync server takes). Routes: `/healthz`, `/metrics`, GitHub
 // OAuth, uploads, the sync protocol and the account reads
-// (`sync/routes.ts`), the account procedures over tRPC, and the client
-// bundle.
+// (`sync/routes.ts`), the shell's account routes (`account/routes.ts`),
+// and the client bundle.
 
 import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-import { trpcServer } from "@hono/trpc-server";
 import { version } from "@session/shared";
-import type { Context } from "hono";
 import { Hono } from "hono";
 
+import { accountRoutes } from "./account/routes.js";
 import type { OAuthClient } from "./auth/github.js";
 import { githubRoutes } from "./auth/github.js";
-import { clearSessionCookie, sessionLoader } from "./auth/session.js";
+import { sessionLoader } from "./auth/session.js";
 import type { AppEnv, ServerDeps } from "./deps.js";
 import type { Readiness } from "./health.js";
 import { createReadiness } from "./health.js";
@@ -36,9 +35,6 @@ import { securityHeaders } from "./middleware/security.js";
 import { clientStatic } from "./middleware/static.js";
 import { syncRoutes } from "./sync/routes.js";
 import { scenarioRoutes } from "./sync/scenario.js";
-import type { AppContext } from "./trpc/base.js";
-import { createAppContext } from "./trpc/base.js";
-import { appRouter } from "./trpc/router.js";
 import { imageRoutes } from "./uploads/route.js";
 
 /** Constant-time string comparison for the metrics bearer token. */
@@ -137,43 +133,7 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
     app.route("/", scenarioRoutes({ ...deps, logger }, mockupsDirectory));
   app.route("/", syncRoutes({ ...deps, logger }));
 
-  // `auth.logout` clears the session rows; the cookie is this layer's to
-  // clear, so the mutation is mirrored here rather than given a `Set-Cookie`
-  // from inside tRPC. Registered before the tRPC handler, which terminates.
-  app.use("/api/trpc/auth.logout", async (c, next) => {
-    await next();
-    if (c.res.ok) {
-      clearSessionCookie(c as Context<AppEnv>, deps.config);
-    }
-  });
-
-  app.use(
-    "/api/trpc/*",
-    trpcServer({
-      router: appRouter,
-      endpoint: "/api/trpc",
-      createContext: (_opts, honoContext) => {
-        const c = honoContext as Context<AppEnv>;
-        return createAppContext({ ...deps, logger }, limiter, c.get("logger"), {
-          // a device token signs in to the sync API, not to the browser's
-          // account procedures
-          user: c.get("bearer") ? null : c.get("user"),
-          clientIp: c.get("clientIp"),
-          sessionToken: c.get("sessionToken"),
-        }) as unknown as Record<string, unknown>;
-      },
-      onError: ({ error, path, type, ctx }) => {
-        if (error.code !== "INTERNAL_SERVER_ERROR") {
-          return;
-        }
-        const requestLogger = (ctx as AppContext | undefined)?.logger ?? logger;
-        requestLogger.error(
-          { err: error.cause ?? error, path, type, code: error.code },
-          "trpc procedure failed",
-        );
-      },
-    }),
-  );
+  app.route("/", accountRoutes({ ...deps, logger }, limiter));
 
   const serveClient = clientStatic(clientDistDirectory ?? CLIENT_DIST);
   if (serveClient) {

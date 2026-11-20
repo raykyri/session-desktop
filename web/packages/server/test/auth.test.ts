@@ -117,8 +117,8 @@ test("the callback exchanges the code, creates the account, and sets the cookie"
   t.is(user?.login, "octocat");
   const token = /session=([^;]+)/.exec(cookie)?.[1] ?? "";
   t.is(auth.readSession(harness.db, token)?.userId, user?.id);
-  const me = await harness.caller(user).auth.me();
-  t.is(me?.login, "octocat");
+  const me = await harness.request("/api/me", { cookie: token });
+  t.like(await me.json(), { login: "octocat", u: user?.handle, handle: user?.handle, isAdmin: false });
 });
 
 test("a state is single use", async (t) => {
@@ -161,10 +161,8 @@ test("an invite is required, redeemed once, and recorded", async (t) => {
   t.true(refused.headers.get("location")?.includes("error=invite_required"));
 
   const admin = harness.addUser("inviter", { isAdmin: true });
-  const [code] = await harness
-    .caller(admin)
-    .admin.createInvites({ count: 1 })
-    .then((r) => r.codes);
+  const made = await harness.post("/api/admin/invites", { count: 1 }, harness.signIn(admin));
+  const [code] = (made.body as { codes: string[] }).codes;
   t.truthy(code);
 
   const bad = await startLogin(harness, "?invite=nope");
@@ -281,13 +279,13 @@ test("signing out ends this session and leaves the account's others", async (t) 
   const user = harness.addUser("two-browsers");
   const laptop = harness.signIn(user);
   const phone = harness.signIn(user);
-  const response = await harness.request("/api/trpc/auth.logout", {
+  const response = await harness.request("/auth/logout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{}",
     cookie: laptop,
   });
-  t.is(response.status, 200);
+  t.is(response.status, 204);
   t.true((response.headers.get("set-cookie") ?? "").startsWith("session=;"));
   t.is(auth.readSession(harness.db, laptop), null);
   t.truthy(auth.readSession(harness.db, phone));

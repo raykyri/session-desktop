@@ -27,7 +27,7 @@ export function routeLabel(pathname: string): string {
   if (pathname === "/healthz" || pathname === "/metrics") {
     return pathname;
   }
-  for (const prefix of ["/api/trpc", "/auth", "/w"]) {
+  for (const prefix of ["/api/sync", "/api/rpc", "/api/me", "/api/admin", "/api", "/auth"]) {
     if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
       return prefix;
     }

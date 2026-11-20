@@ -13,7 +13,7 @@ test.afterEach.always(() => {
 });
 
 const adminUser = (usage: Record<string, number>) => ({
-  ...testUser({ id: "u2", login: "someone", isAdmin: false }),
+  ...testUser({ id: "u2", login: "someone", handle: "someone", isAdmin: false }),
   usage: {
     day: 1_700_000_000_000,
     inputTokens: 0,
@@ -33,8 +33,8 @@ test.serial(
   async (t) => {
     await renderApp("/admin", {
       user: testUser({ isAdmin: true }),
-      responses: {
-        "admin.listUsers": [
+      routes: {
+        "GET /api/admin/users": [
           adminUser({ inputTokens: 1_000, outputTokens: 500, reasoningTokens: 400 }),
         ],
       },
@@ -53,8 +53,8 @@ test.serial(
 test.serial("the model access column names the gated model only where it applies", async (t) => {
   await renderApp("/admin", {
     user: testUser({ isAdmin: true }),
-    responses: {
-      "admin.listUsers": [
+    routes: {
+      "GET /api/admin/users": [
         adminUser({}),
         { ...adminUser({}), id: "u3", login: "boss", isAdmin: true },
       ],
