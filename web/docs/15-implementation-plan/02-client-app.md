@@ -588,7 +588,7 @@ upper-cased), with "Enter the code from your invite." for an empty field, the
 unusable message otherwise, and "Invite from <Name>" on success; provider
 explainer; no account for this identity ("Enter an invite code", "Continue
 without one"); create account (name, handle 3-20 of `[a-z0-9._]` with the
-mock's three errors, the Session-wide community-rules checkbox). Focus moves
+mock's three errors; no rules checkbox). Focus moves
 to the first field or the step heading on each step and returns to the opener
 on close. Acceptance: a test per flow on a fake `auth.checkInvite`; code parser
 test for `SESS-9TQ2-X8`, `https://session.dev/i#sess-9tq2-x8` and the pasted

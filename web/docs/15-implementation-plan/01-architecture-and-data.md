@@ -723,8 +723,8 @@ removed; the mockup's `chInfoDlg` has none. Change: drop `rules`, `rulesPrev`,
 `rulesAt`, `rulesBy`, the rules variant of `editConflictCurrentSchema`,
 `rulesAccepted` in `spaces.join` and `joinRequests.create`, and `rules` in
 `spaceSettingsSchema` and `createSpaceInputSchema`; `spaces.create` stores no
-default rules; the prototype's `rulesRev` and its CONFLICT path go. The sign-up checkbox "I have read the
-community rules" refers to Session-wide rules, not channel rules (`04-membership-moderation-security.md`).
+default rules; the prototype's `rulesRev` and its CONFLICT path go. Sign-up has no rules checkbox: there is
+no Session-wide community guidelines page (`05` §6, Q10).
 
 **C7. The "All" scope.** The scope picker (`SCOPES()`) offers Joined,
 Channels you manage, and All; All lists every open channel and every private

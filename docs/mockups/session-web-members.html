@@ -411,7 +411,7 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .preview .rtext { max-height: 240px; overflow-y: auto; }
 .rnote { font-size: var(--fs-xs); color: var(--t-faint); }
 .saved-empty { grid-column: 1; padding: 24px 4px; }
-/* empty states B and C */
+/* empty states */
 .estate { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 36px 24px 32px; border-radius: var(--r-xl); background: var(--card); box-shadow: var(--shadow); }
 .saved-empty .estate { margin: 0; }
 .estate .eic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); }
@@ -419,17 +419,6 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .estate h3 { margin: 4px 0 0; font-size: var(--fs-md); color: var(--t-heading); }
 .estate p { margin: 0; max-width: 46ch; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.5; }
 .estate .btn2 { margin-top: 6px; }
-.edemo { position: relative; width: min(340px, 100%); margin: 8px 0 22px; padding: 12px 14px 10px; border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--divider); text-align: left; }
-.edemo-t { display: block; color: var(--t-faint); font-size: var(--fs-sm); padding-bottom: 10px; border-bottom: 1px solid var(--divider); }
-.edemo-f { display: flex; justify-content: flex-end; gap: 10px; padding-top: 8px; color: var(--t-faint); font-size: var(--fs-xs); }
-.edemo-b { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border-radius: 12px; }
-.edemo-b i { font-style: normal; }
-.edemo-b svg.i { width: 12px; height: 12px; }
-.edemo-b.on { color: var(--accent); box-shadow: 0 0 0 1.5px var(--accent); }
-.edemo-l { position: absolute; right: 4px; bottom: -22px; font-size: var(--fs-xs); font-weight: 600; color: var(--accent); }
-.ekinds { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; text-align: left; }
-.ekinds li { display: flex; align-items: center; gap: 8px; color: var(--t-secondary); font-size: var(--fs-sm); }
-.ekinds .nk { position: static; }
 .hsaved { width: 30px; height: 30px; }
 .hsaved.on { background: var(--control); color: var(--t-heading); }
 .hsaved.on svg.i { fill: currentColor; }
@@ -1090,33 +1079,10 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 .amrow > .radio { flex: 1; min-width: 0; }
 .amrow .radio b small { font-weight: 400; color: var(--t-faint); margin-left: 4px; }
 .amrow.on .radio b small { color: var(--accent); }
-/* ---- answer widget (mock option) ---- */
-.prose .wdg { margin: 14px 0 4px; }
-.wdg { border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--border-strong); background: var(--card); overflow: visible; font-size: var(--fs-sm); line-height: 1.45; }
-.wh { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 7px 8px 7px 12px; border-bottom: 1px solid var(--divider); background: var(--inset); border-radius: var(--r-lg) var(--r-lg) 0 0; }
-.wctr { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-.wtitle { color: var(--t-heading); font-weight: 600; font-size: var(--fs-sm); }
-.wst { display: inline-flex; align-items: center; gap: 5px; color: var(--t-faint); font-size: var(--fs-xs); }
-.wst::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--t-dim); }
-.wst.on { color: var(--good); } .wst.on::before { background: var(--good); }
-.wbtn { height: 24px; padding: 0 10px; border-radius: 12px; background: var(--control); color: var(--t-heading); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; }
-.wbtn:hover, .wbtn[aria-pressed="true"] { background: var(--control-hover); }
-.wh .mpick .menu { min-width: 220px; }
-.wbody { padding: 12px 14px 14px; }
-.prose .wdg p.wcap { margin: 0 0 8px; color: var(--t-secondary); font-size: var(--fs-xs); }
-.wchart { display: block; width: 100%; max-width: 460px; height: auto; }
-.wchart .wg { stroke: var(--divider); stroke-width: 1; }
-.wchart .wt { fill: var(--t-faint); font-size: 11.5px; font-family: var(--font); }
-.wchart .wl { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
-.wchart .wp { fill: var(--card); stroke: var(--accent); stroke-width: 1.75; }
-.wchart .wp.on { fill: var(--accent); }
-.wchart .wm { stroke: var(--t-dim); stroke-width: 1; stroke-dasharray: 3 3; }
-.wctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; font-size: var(--fs-xs); color: var(--t-secondary); }
-.wctl input[type="range"] { flex: 1; min-width: 140px; max-width: 280px; accent-color: var(--accent-strong); }
-.wctl output { min-width: 34px; color: var(--t-heading); font-weight: 600; font-variant-numeric: tabular-nums; }
-.wnums { display: flex; gap: 6px 18px; flex-wrap: wrap; margin-bottom: 8px; font-size: var(--fs-xs); color: var(--t-faint); }
-.wnums b { color: var(--t-heading); font-size: var(--fs-md); font-variant-numeric: tabular-nums; margin-left: 4px; }
-.wsrc { margin: 0; max-height: 260px; overflow: auto; padding: 10px 12px; border-radius: var(--r-md); background: var(--inset); color: var(--t-primary); font: 11.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre; }
+/* site footer */
+.sfoot { display: block; margin: 40px 0 0; padding-top: 14px; border-top: 1px solid var(--divider); color: var(--t-faint); font-size: var(--fs-xs); text-align: center; }
+.sfoot a { color: var(--t-muted); }
+.sfoot a:hover { color: var(--t-heading); }
 </style>
 
 
@@ -1195,7 +1161,7 @@ const mark = (c = '') => `<span class="mark ${c}" aria-hidden="true">${I.agent}<
 
 const byId = id => D.posts.find(p => p.id === id);
 const byNew = (a, b) => (a.createdAt < b.createdAt ? 1 : -1);
-const streamFor = s => D.posts.filter(p => (s === 'saved' ? !st.emptyPv && SAVED()[p.id] : s === 'home' ? !p.rf && SPACE_META[p.s] && (st.auth === 'out' ? !isPrivate(p.s) : isJoined(p.s)) : p.s === s)).sort(byNew);
+const streamFor = s => D.posts.filter(p => (s === 'saved' ? SAVED()[p.id] : s === 'home' ? !p.rf && SPACE_META[p.s] && (st.auth === 'out' ? !isPrivate(p.s) : isJoined(p.s)) : p.s === s)).sort(byNew);
 const spacesWithPosts = D.spaces.filter(s => D.posts.some(p => p.s === s.id));
 
 /* What people typed: each ask and branch question as it is typed to an agent (lowercase, terse,
@@ -1478,7 +1444,7 @@ function card(p) {
   const from = src0 ? `<button class="fromln" data-a="gofrom" data-id="${p.from.pid}" data-node="${p.from.nid}">${ARROW_REPLY}<span>Branched from <b>${esc(clip(tree(src0).nodes.r.q, 70))}</b></span></button>` : '';
   return `<article class="${cls}" id="card-${p.id}">${head}${from}${titleRow('ask', esc(T.nodes.r.q))}
     <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok), spName(p.s)].filter(Boolean).join(' · ')}</span></div>
-    <div class="prose" id="pr-${p.id}">${T.nodes.r.html}${p.id === WX_PID ? widgetBlock(p) : ''}</div>
+    <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
     <div class="card-f">${lead}${count('')}${p.pending ? '' : rbtn(T.count, `data-a="ask" data-id="${p.id}"`, st.asking === p.id, 'Ask a follow-up', ['branch', 'branches'])}${acts}${tail}</div></article>`;
 }
 
@@ -1890,7 +1856,7 @@ function renderNetwork() {
     : SP[st.space] && !posts.length ? '<div class="row"><p class="empty saved-empty">No threads here yet. Ask the first question.</p><div></div></div>' : '';
   $('#page').innerHTML = `<div class="spshell sd-${d} spv-${spv()} pl-${st.ui.pl || 'a'}${SP[st.space] && SPACE_META[st.space] ? ' chfeed' : ''}">${side}<div class="mg" id="k-mg"><div class="mg-inner">${navTop}
     ${pendingBanner()}${spaceHead()}${locked || (SP[st.space] && !isJoined(st.space) && st.auth === 'in') ? '' : composerOrLock(v)}
-    ${empty}${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div></div>`;
+    ${empty}${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}${siteFoot()}</div></div></div>`;
   const mg = $('#k-mg'), ta = $('#in-new');
   mg.classList.add('ncw');  /* below 520px the composer's controls wrap to a second row */
   if (v.fs) mg.style.setProperty('--title-fs', v.fs);
@@ -1987,10 +1953,6 @@ app.addEventListener('click', e => {
   if (a === 'notif') { openNotif(d.id); return; }
   if (a === 'notifall') { notifs().forEach(n => { n.read = true; }); toast('All notifications marked as read.'); render(); return; }
   if (a === 'admdtab') { st.admDTab = d.k; render(); app.querySelector(`[data-a="admdtab"][data-k="${d.k}"]`)?.focus(); return; }
-  if (a === 'wxview') { st.wx.view = d.v; render(); return; }
-  if (a === 'wxrun') { st.wx.run = true; st.wx.view = 'preview'; render(); $('#wx-void')?.focus({ preventScroll: true }); if (t.textContent === 'Reload') toast('Widget reloaded.'); return; }
-  if (a === 'wxcopy') { st.menu = null; try { navigator.clipboard.writeText(wxSource()).catch(() => {}); } catch {} toast('Widget HTML copied.'); render(); return; }
-  if (a === 'wxdl') { st.menu = null; wxDownload(); render(); return; }
   if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; st.askPar = null; st.brReplying = null; render(); return; }
 });
 /* citations: the superscript numbers open a small card for that source (the thread's sources, 1-based) */
@@ -2025,7 +1987,7 @@ app.addEventListener('mouseup', e => {
     const sel = getSelection(), t = sel && sel.toString().replace(/\s+/g, ' ').trim();
     if (!t || t.length < 3 || !canWrite() || !sel.rangeCount) return;
     const an = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement), pr = an?.closest('.card .prose[id^="pr-"]');
-    if (!pr || !pr.contains(sel.focusNode) || an.closest('.wdg')) return;
+    if (!pr || !pr.contains(sel.focusNode)) return;
     const pid = pr.id.slice(3); if (byId(pid)?.pending) return;
     const r = sel.getRangeAt(0).getBoundingClientRect(), A = app.getBoundingClientRect();
     { const f = sel.getRangeAt(0).cloneContents(); f.querySelectorAll('.anc, sup').forEach(x => x.remove()); st.selText = f.textContent.replace(/\s+/g, ' ').trim() || t; }
@@ -2103,7 +2065,6 @@ app.addEventListener('keydown', e => {
 });
 app.addEventListener('input', e => {
   const t = e.target;
-  if (t.id === 'wx-void') { st.wx.void = +t.value; const v = st.wx.void / 100; $('#wx-vo').textContent = t.value + '%'; $('#wx-ret').textContent = pct1(wxRet(v)); $('#wx-ev').textContent = ((1 - v) * WX_PE + v * WX_PRICE).toFixed(3); $('#wx-chart').innerHTML = wxChart(v); return; }
   if (t.dataset.ce === 'desc' && st.chEdit) { st.chEdit.desc = t.value; const n = $('#ce-count'); if (n) n.textContent = `${t.value.length} / ${DESC_MAX}`; }
   if (t.id === 'in-spq' || t.id === 'in-sideq' || t.id === 'in-browseq' || t.id === 'in-admq') { st[{ 'in-spq': 'spq', 'in-sideq': 'sideq', 'in-browseq': 'browseq', 'in-admq': 'admq' }[t.id]] = t.value; const pos = t.selectionStart; render(); const n = document.getElementById(t.id); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; } if (t.tagName !== 'TEXTAREA' || !t.form) return;
   t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
@@ -2161,7 +2122,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { wx: 'a', pl: 'a', emp: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pl: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 /* seeds: moderation logs list removals and bans only.
    #sci-fi (owned by @ines.v): one removed sales post. #replication (owned by @mira_k): a ban from the fixtures,
    and @ines.v's speculative-decoding ask, removed with a reason (she is notified, see NOTIFS). */
@@ -2279,13 +2240,13 @@ function savedBtn() {
   return `<button class="iconbtn hsaved${on ? ' on' : ''}" ${attrs}>${I.save}</button>`;
 }
 /* switches the feed between layout A (main column centred, side column to its right) and B (wider main
-   column and narrower side, centred as a pair). The icon shows the layout the button switches to. */
-const LAY_A = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="3" width="12.5" height="10" rx="1.5"/><path d="M5.25 3v10M10.75 3v10"/></svg>';
-const LAY_B = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="3" width="12.5" height="10" rx="1.5"/><path d="M10.25 3v10"/></svg>';
+   column and narrower side, centred as a pair). Expand (arrows outward) goes to B, collapse (arrows inward) to A. */
+const LAY_EXPAND = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9"/></svg>';
+const LAY_COLLAPSE = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 2.5 9 7M9 3v4h4M2.5 13.5 7 9M7 13V9H3"/></svg>';
 function layoutBtn() {
   if (st.screen !== 'network') return '';
-  const wide = st.ui.pl === 'b', label = wide ? 'Centre the main column' : 'Wider main column';
-  return `<button class="hlay" data-a="laytoggle" aria-label="${label}" title="${label}">${wide ? LAY_A : LAY_B}</button>`;
+  const wide = st.ui.pl === 'b', label = wide ? 'Collapse' : 'Expand';
+  return `<button class="hlay" data-a="laytoggle" aria-label="${label}" title="${label}">${wide ? LAY_COLLAPSE : LAY_EXPAND}</button>`;
 }
 function appbar() {
   const m = meM();
@@ -2341,7 +2302,6 @@ function authScreen() {
       <form class="pform" data-mform="profile"><label>Name<input id="pf-name" value="${esc(pf.name)}" autocomplete="off"></label>
       <label>Handle on Session<span class="hwrap"><span>@</span><input id="pf-handle" value="${esc(pf.handle)}" autocomplete="off" spellcheck="false"></span><small>Lowercase letters, numbers, dots and underscores; 3 to 20 characters.</small></label>
       ${pf.err ? `<p class="ferr">${esc(pf.err)}</p>` : ''}
-      <label class="chk"><input type="checkbox" id="pf-rules"${pf.rules ? ' checked' : ''}> I have read the community rules and will follow them.</label>
       <button type="submit" class="btn1 wide">Create account</button></form></div>`;
   }
   return body;
@@ -2448,7 +2408,7 @@ function usagePage() {
 
 
 /* ---- notifications page ---- */
-const notifs = () => isActive() && !st.emptyPv ? (NOTIFS[st.user] ||= []) : [];
+const notifs = () => isActive() ? (NOTIFS[st.user] ||= []) : [];
 const nUnread = () => notifs().filter(n => !n.read).length;
 const isAdmin = () => isActive() && meM()?.staff === 'admin';  /* users.is_admin */
 const AT_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.4"/><path d="M10.4 8v1a1.9 1.9 0 0 0 3.6.8A6 6 0 1 0 11 13"/></svg>';
@@ -2465,35 +2425,19 @@ function notifText(n) {
   if (n.k === 'invite') return `${who} joined Session with your invite <span class="nt">${esc(n.code)}</span>`;
   return '';
 }
-/* ---- empty states (mock variant st.ui.emp) ----
-   A one line of text · B an icon, a heading, one sentence on what appears here and a next step ·
-   C the same with a faded example of what appears: the save button on a thread footer, or the kinds of
-   notification */
+/* ---- empty states: an icon, a heading, one sentence on what appears here and a next step ---- */
 const EMPTY_SAVE = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.5h7v11l-3.5-2.6-3.5 2.6Z"/></svg>';
 const EMPTY_BELL = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 11.5V7.25a4 4 0 0 1 8 0v4.25l1 1.25H3Z"/><path d="M6.6 14a1.5 1.5 0 0 0 2.8 0"/></svg>';
-const emptyBox = (ic, h, p, extra, cta) => `<div class="estate"><span class="eic" aria-hidden="true">${ic}</span><h3>${h}</h3><p>${p}</p>${extra || ''}${cta || ''}</div>`;
-function savedEmpty() {
-  const v = st.ui.emp || 'a';
-  if (v === 'a') return '<p class="empty saved-empty">Nothing saved yet. Use the bookmark on any thread to keep it here.</p>';
-  const p = 'Threads you save appear here, newest first. Save one with the bookmark at the bottom of the thread; saving again removes it.';
-  const demo = v === 'c' ? `<div class="edemo" aria-hidden="true"><span class="edemo-t">A thread you want to come back to</span><span class="edemo-f"><span class="edemo-b">${ARROW_REPLY}<i>4</i></span><span class="edemo-b on">${I.save}<i>12</i></span></span><span class="edemo-l">Save</span></div>` : '';
-  return `<div class="saved-empty">${emptyBox(EMPTY_SAVE, 'Nothing saved yet', p, demo, `<button class="btn2 sm" data-a="space" data-id="home">Go to Home</button>`)}</div>`;
-}
-function notifEmpty() {
-  const v = st.ui.emp || 'a';
-  if (v === 'a') return '<p class="empty">No notifications yet.</p>';
-  const p = 'You are notified when someone mentions you, replies to your post, branches or comments on your ask, uses one of your invites, or when a channel owner removes your thread.';
-  const kinds = [['mention', 'Mentions of @' + esc(st.user || 'you')], ['reply', 'Replies to your posts'], ['branch', 'Branches from your asks'], ['comment', 'Comments on your asks'], ['invite', 'Invites people used'], ['removed', 'Threads of yours an owner removed']];
-  const demo = v === 'c' ? `<ul class="ekinds">${kinds.map(([k, l]) => `<li><span class="nk nk-${k}" aria-hidden="true">${N_KIND[k]}</span>${l}</li>`).join('')}</ul>` : '';
-  return emptyBox(EMPTY_BELL, 'No notifications yet', v === 'c' ? 'These appear here, newest first:' : p, demo, v === 'b' ? `<button class="btn2 sm" data-ma="go" data-to="members">Invite someone</button>` : '');
-}
+const emptyBox = (ic, h, p, cta) => `<div class="estate"><span class="eic" aria-hidden="true">${ic}</span><h3>${h}</h3><p>${p}</p>${cta || ''}</div>`;
+const savedEmpty = () => `<div class="saved-empty">${emptyBox(EMPTY_SAVE, 'Nothing saved yet', 'Threads you save appear here, newest first. Save one with the bookmark at the bottom of the thread; saving again removes it.', '<button class="btn2 sm" data-a="space" data-id="home">Go to Home</button>')}</div>`;
+const notifEmpty = () => emptyBox(EMPTY_BELL, 'No notifications yet', 'You are notified when someone mentions you, replies to your post, branches or comments on your ask, uses one of your invites, or when a channel owner removes your thread.', '<button class="btn2 sm" data-ma="go" data-to="members">Invite someone</button>');
 function notifPage() {
   const list = notifs().slice().sort((a, b) => a.at < b.at ? 1 : -1), un = nUnread();
   const row = n => { const p = n.pid ? byId(n.pid) : null;
     return `<li><button class="nrow${n.read ? '' : ' unread'}" data-a="notif" data-id="${n.id}"><span class="nav-av">${av(n.by)}<span class="nk nk-${n.k}" aria-hidden="true">${N_KIND[n.k]}</span></span>
       <span class="ntx">${notifText(n)}<small>${p ? esc(spName(p.s)) + ' · ' : n.k === 'invite' ? 'Invites · ' : ''}<time>${rel(n.at)}</time></small></span>${n.read ? '' : '<span class="ndot" aria-label="Unread"></span>'}</button></li>`; };
   return `<div class="page"><div class="page-in narrow"><div class="shead nhead"><h2>Notifications</h2><button class="btn2 sm" data-a="notifall"${un ? '' : ' disabled'}>Mark all as read</button></div>
-    ${!list.length && (st.ui.emp || 'a') !== 'a' ? '' : `<p class="sub">${un ? `${noun(un, 'unread notification', 'unread notifications')}.` : 'All caught up.'} Mentions, replies to your posts, branches and comments on your asks, removals, and invites people used.</p>`}
+    ${!list.length ? '' : `<p class="sub">${un ? `${noun(un, 'unread notification', 'unread notifications')}.` : 'All caught up.'} Mentions, replies to your posts, branches and comments on your asks, removals, and invites people used.</p>`}
     ${list.length ? `<ul class="nlist box">${list.map(row).join('')}</ul>` : notifEmpty()}</div></div>`;
 }
 function openNotif(id) {
@@ -2529,50 +2473,6 @@ function adminPage() {
     <section class="box adm"><h3>Default effort</h3><div class="amrows" role="radiogroup" aria-label="Default effort">${EFFORT_OPTS.map(e => row('eff', e, cap1(e), '', e === ADMIN.effort)).join('')}</div></section></div></div>`;
 }
 
-/* ---- answer extras (mock option): an interactive widget in one answer ----
-   B a widget block.
-   web/docs/11-artifacts-and-browser.md §3–§4: the frame starts on a static page with scripts removed; Run scripts
-   loads the run page. Here both are drawn inline instead of in a sandboxed frame. */
-const WX_PID = '01M7HGRPJ0E7RGZ45D4KENBQ6P';
-const WX0 = { view: 'preview', run: false, void: 20 };
-st.wx = { ...WX0 };
-const WX_PRICE = 0.58, WX_PE = 0.66;
-const wxRet = v => ((1 - v) * WX_PE + v * WX_PRICE) / WX_PRICE - 1;
-const pct1 = x => (x * 100).toFixed(1) + '%';
-const WX_TITLE = 'Void-adjusted return';
-function wxChart(v) {
-  const W = 460, H = 170, L = 36, R = 10, T = 10, B = 26, x = f => L + f / .4 * (W - L - R), y = r => T + (1 - r / .16) * (H - T - B);
-  const pts = [0, .1, .2, .3, .4], line = pts.map((f, i) => `${i ? 'L' : 'M'}${x(f).toFixed(1)} ${y(wxRet(f)).toFixed(1)}`).join(' ');
-  const grid = [0, .04, .08, .12, .16].map(r => `<line class="wg" x1="${L}" x2="${W - R}" y1="${y(r)}" y2="${y(r)}"/><text class="wt" x="${L - 6}" y="${y(r) + 3.5}" text-anchor="end">${r * 100}%</text>`).join('');
-  const xs = pts.map(f => `<text class="wt" x="${x(f)}" y="${H - 8}" text-anchor="middle">${f * 100}%</text>`).join('');
-  const mk = v == null ? pts.map(f => `<circle class="wp" cx="${x(f)}" cy="${y(wxRet(f))}" r="3"/>`).join('') : `<line class="wm" x1="${x(v)}" x2="${x(v)}" y1="${T}" y2="${H - B}"/><circle class="wp on" cx="${x(v)}" cy="${y(wxRet(v))}" r="4.5"/>`;
-  return `<svg class="wchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Expected return falls from ${pct1(wxRet(0))} with no void risk to ${pct1(wxRet(.4))} at 40% void probability">${grid}${xs}<path class="wl" d="${line}"/>${mk}</svg>`;
-}
-function wxBody(run) {
-  const v = st.wx.void / 100;
-  const head = `<p class="wcap">Buying YES at ${WX_PRICE} with a ${WX_PE * 100}% event probability. A void refunds the price.</p>`;
-  const live = run ? `<div class="wctl"><label for="wx-void">Void probability</label><input type="range" id="wx-void" min="0" max="40" step="1" value="${st.wx.void}"><output id="wx-vo">${st.wx.void}%</output></div>
-    <div class="wnums"><span>Expected return <b id="wx-ret">${pct1(wxRet(v))}</b></span><span>Expected value <b id="wx-ev">${((1 - v) * WX_PE + v * WX_PRICE).toFixed(3)}</b></span></div>` : '';
-  return `${head}${live}<div id="wx-chart">${wxChart(run ? v : null)}</div>`;
-}
-const wxSource = () => `<div class="wrap">\n  <p>Buying YES at 0.58 with a 66% event probability. A void refunds the price.</p>\n  <label>Void probability <input type="range" id="v" min="0" max="40" value="20"></label>\n  <output id="r"></output>\n  <svg id="chart" viewBox="0 0 320 150"></svg>\n</div>\n<script>\n  const ret = v => ((1 - v) * 0.66 + v * 0.58) / 0.58 - 1;\n  const draw = () => { const v = document.getElementById('v').value / 100;\n    document.getElementById('r').textContent = (ret(v) * 100).toFixed(1) + '%'; };\n  document.getElementById('v').addEventListener('input', draw); draw();\n<\/script>`;
-function widgetBlock() {
-  if (st.ui.wx !== 'b') return '';
-  const w = st.wx, open = st.menu === 'wxmenu';
-  const menu = open ? `<div class="menu right" role="menu" aria-label="Widget">
-      <button type="button" class="mi" role="menuitem" data-a="wxcopy"><span>Copy HTML</span></button>
-      <button type="button" class="mi" role="menuitem" data-a="wxdl"><span>Download HTML</span></button></div>` : '';
-  return `<div class="wdg${w.run ? ' running' : ''}" aria-label="Widget: ${esc(WX_TITLE)}"><div class="wh"><b class="wtitle">${esc(WX_TITLE)}</b> <span class="wst${w.run ? ' on' : ''}">${w.run ? 'Running' : 'Scripts off'}</span>
-    <span class="wctr"><span class="modes" role="group" aria-label="View">${[['preview', 'Preview'], ['source', 'Source']].map(([k, l]) => `<button type="button" data-a="wxview" data-v="${k}" aria-pressed="${w.view === k}">${l}</button>`).join('')}</span>
-    <button type="button" class="wbtn" data-a="wxrun">${w.run ? 'Reload' : 'Run scripts'}</button>
-    <span class="mpick"><button type="button" class="more-btn" data-a="menu" data-m="wxmenu" aria-haspopup="menu" aria-expanded="${open}" aria-label="Widget menu">${I.dots}</button>${menu}</span></span></div>
-    <div class="wbody">${w.view === 'source' ? `<pre class="wsrc"><code>${esc(wxSource())}</code></pre>` : wxBody(w.run)}</div></div>`;
-}
-function wxDownload() {
-  const html = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">\n${wxSource().replace(/<script>[\s\S]*<\/script>/, '')}`;
-  try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' })); a.download = 'void-adjusted-return.html'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); } catch {}
-  toast('Downloaded void-adjusted-return.html (static, scripts removed).');
-}
 
 /* ---- app render ---- */
 function renderMock() {
@@ -2582,9 +2482,6 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
-    ${seg('pl', 'Layout', 2)}
-    ${seg('wx', 'Answer extras', 2)}
-    ${seg('emp', 'Empty states', 3)}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -2618,7 +2515,7 @@ function renderInner() {
   if (st.auth === 'out') st.screen = 'network';
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
   if (st.screen === 'network') renderNetwork();
-  else { pg.innerHTML = (st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : st.screen === 'notifications' && isActive() ? notifPage() : st.screen === 'admin' && isAdmin() ? adminPage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
+  else { pg.innerHTML = (st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : st.screen === 'notifications' && isActive() ? notifPage() : st.screen === 'admin' && isAdmin() ? adminPage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page .page-in')?.insertAdjacentHTML('beforeend', siteFoot()); $('#k-page').scrollTop = keep; }
   app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg, :scope > #selbranch, :scope > #sellook, :scope > #citepop').forEach(x => x.remove());
   citeReady();
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
@@ -2628,17 +2525,13 @@ function renderInner() {
   if (st.rm) app.insertAdjacentHTML('beforeend', rmDlg());
   if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
+const siteFoot = () => '<footer class="sfoot">Session · Report abuse: <a href="mailto:abuse@session.dev">abuse@session.dev</a></footer>';
 const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}</div>` : '';
 /* Each variant control also sets up a view that shows it: the signed-out landing for Sign-in,
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
-  if (k !== 'emp') st.emptyPv = false;
-  if (k === 'emp') { if (st.auth !== 'in' || !isActive()) signIn('ines.v'); st.emptyPv = true; st.screen = 'network'; st.space = 'saved'; render(); return; }
-  if (k === 'pl') { st.screen = 'network'; st.authOpen = false; render(); return; }
   if (k === 'adm') { if (st.auth !== 'in' || !isAdmin()) signIn('sol'); st.screen = 'admin'; render(); $('#k-page') && ($('#k-page').scrollTop = 0); return; }
-  if (k === 'wx') { st.wx = { ...WX0 }; if (st.auth !== 'in' || !isActive()) signIn('ines.v'); st.screen = 'network'; st.space = 'markets'; render();
-    const w = $('.wdg') || $('#card-' + WX_PID), mg = $('#k-mg'); if (w && mg) { st.keepBar = true; mg.scrollTop += w.getBoundingClientRect().top - mg.getBoundingClientRect().top - 120; } return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'network' : 'usage';
@@ -2724,8 +2617,8 @@ app.addEventListener('submit', e => {
     toast(`You're in. ${nameOf(inv.by)} invited you.`); render(); return;
   }
   if (kind === 'profile') {
-    const pf = st.profile; pf.name = $('#pf-name').value.trim(); pf.handle = $('#pf-handle').value.trim().toLowerCase(); pf.rules = $('#pf-rules').checked;
-    pf.err = !pf.name ? 'Enter a name.' : !/^[a-z0-9._]{3,20}$/.test(pf.handle) ? 'Handles use 3 to 20 lowercase letters, numbers, dots or underscores.' : member(pf.handle) ? `@${pf.handle} is taken. Try another.` : !pf.rules ? 'Confirm that you will follow the community rules.' : '';
+    const pf = st.profile; pf.name = $('#pf-name').value.trim(); pf.handle = $('#pf-handle').value.trim().toLowerCase();
+    pf.err = !pf.name ? 'Enter a name.' : !/^[a-z0-9._]{3,20}$/.test(pf.handle) ? 'Handles use 3 to 20 lowercase letters, numbers, dots or underscores.' : member(pf.handle) ? `@${pf.handle} is taken. Try another.` : '';
     if (pf.err) { render(); return; }
     const inv = INVITES.find(i => i.code === st.code);
     inv.used = pf.handle;

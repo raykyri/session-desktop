@@ -223,8 +223,8 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
   - New questions from the web-only scope (05 §6, Q1-Q12): the recommended
     answers are accepted for Q1 (ADR scope notes, web-only `AGENTS.md`), Q2,
     Q4 (in-flight writes only), Q5 (protocol header kept), Q6 (admin
-    seeding with `db:admin`), Q8 (staging X app before M6) and Q10 (contact
-    address on the community-rules page). Q3: the branch is `session-web`
+    seeding with `db:admin`), Q8 (staging X app before M6) and Q10 (an abuse
+    address in the site footer; no community guidelines page). Q3: the branch is `session-web`
     and `main` is kept as it is. Q7: each account's email from the provider
     is stored and updated on every sign-in, never used to match, deduplicate
     or merge accounts; the handle stays the only unique name (04 I1, Z2).

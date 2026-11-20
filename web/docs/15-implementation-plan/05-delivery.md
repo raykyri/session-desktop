@@ -727,7 +727,7 @@ Security, Operations (deploys, backups). The Desktop role is removed
 | Invite code enumeration through `auth.checkInvite` | Low | Medium | 30-bit codes (S2) with one failure answer, per-IP limits (about 36,000 IP-hours per hit at 3,000 open codes, `04` §13) and the failed-check alert | Security |
 | Invite tree slows growth or concentrates invites in admins | Medium | Low | Admin exemption from slots; redemption metrics | Product |
 | Spam or abuse in open channels | Medium | Medium | Invite-only accounts; the owner's removal and ban; per-user limits; suspension; the invite tree to find an abusive account's inviter | Product |
-| Abuse goes unnoticed because there is no reporting: an owner who does not watch a channel, or an abusive owner | Medium | Medium | Site admins can suspend an account, which freezes its channels (`04` B6); a contact address outside the app (Q10) | Product |
+| Abuse goes unnoticed because there is no reporting: an owner who does not watch a channel, or an abusive owner | Medium | Medium | Site admins can suspend an account, which freezes its channels (`04` B6); the abuse email address in the site footer (Q10) | Product |
 | X sign-in breaks or costs more than expected (API access level, rate limits, policy changes) | Medium | Medium | GitHub sign-in stays available; a staging X app before M6 (Q8); sign-in failure alert by provider (§4); existing X accounts cannot move to GitHub (no linking), which the risk accepts | Product |
 | A person holds two accounts, one per provider | Medium | Low | Each needs its own invite; both appear in the invite tree under their inviters; suspension per account (`04` §13) | Product |
 | A channel cannot be moderated because its only owner is absent, suspended or deleted (ownership is not transferable) | Medium | Medium | Suspension and deletion freeze the owner's channels (`04` B6); a site admin deletes a channel by operator job; P24 | Product |
@@ -897,8 +897,9 @@ The product owner's answers, each with its source.
   default effort; there is no per-member override and no availability
   setting. `03` K15, `02` W8.2.
 - **Q10. How members reach site admins about abuse, with no reporting.**
-  Decided: a contact address on the community-rules page, read by site
-  admins. `04` §13, `05` §5.
+  Decided: an abuse email address in the site footer, on every page, read
+  by site admins. There is no community guidelines page and no rules
+  checkbox at sign-up. `04` §13, `05` §5.
 - **Q11. Launch date, notice period and the first members.** Decided:
   no launch date, notice period or banner, because the current web app is
   not in use and the wipe needs no announcement; site admins invite a

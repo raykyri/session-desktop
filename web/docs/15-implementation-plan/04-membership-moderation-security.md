@@ -199,9 +199,8 @@ in the mockup's order.
   provider_user_id)`. An existing account signs in and the code is
   untouched; signing in with the other provider is a different identity and
   follows the new-identity path (it does not reach the existing account).
-  A new identity with a usable code goes to the profile step (name, handle,
-  the Session-wide community-rules checkbox; these are a static page, not
-  channel rules), and `account.create` redeems the code and activates the
+  A new identity with a usable code goes to the profile step (name and handle;
+  there is no rules checkbox and no community guidelines page), and `account.create` redeems the code and activates the
   account in one transaction. A new identity without a usable code becomes a
   waiting account. `SESSION_REQUIRE_INVITE` is removed: invite-only is the
   only mode.
@@ -794,8 +793,8 @@ none of them.
 - **No reporting.** Members cannot flag content to the owner or to site
   admins in the app (decision F). An owner sees their channel's content
   directly; abuse by an owner, or in a channel its owner does not watch,
-  reaches site admins only outside the app, through a contact address on
-  the community-rules page (decided, `05` §6, Q10).
+  reaches site admins only outside the app, by email to the abuse address
+  in the site footer (decided, `05` §6, Q10).
 - **Owner exposure.** "Removed by @owner" names the owner to every reader,
   as the mockup decides; the owner can ban members who harass them.
 - **Abusive or absent owner.** Nobody can ban an owner or take over a
