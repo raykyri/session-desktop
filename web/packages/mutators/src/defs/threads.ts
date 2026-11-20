@@ -13,7 +13,7 @@
 // asker's (its `device` record is in their user log, phase 1b, Part 0 item
 // 2), and the server's pre-check the limit of device runs an hour.
 
-import { spaces } from "@session/shared";
+import { findModel, spaces } from "@session/shared";
 import { z } from "zod";
 
 import { canRead, isClosed, reviewedFor } from "../access.js";
@@ -91,6 +91,30 @@ function deviceCheck(ctx: PreCtx, ex: z.infer<typeof executorS> | null | undefin
       isoAt((recent[recent.length - DEVICE_RUNS_PER_HOUR] ?? ctx.nowMs) + HOUR),
     );
   return {};
+}
+
+/** Whether a model is one the included tokens run for admins only
+ * (`adminOnly` in the model registry). An ask that names one needs the
+ * server's pre-check. */
+export const adminOnlyModel = (model: string | null | undefined): model is string =>
+  model != null && findModel(model)?.adminOnly === true;
+
+/** The pre-check of an ask's model (review round 1 of phase 2, F1): an
+ * admin-only model runs on the included tokens for an admin only, so a
+ * person who is not one names an API key of theirs to pay for it. A device
+ * run uses no tokens of the server's. */
+function modelCheck(
+  ctx: PreCtx,
+  model: string | null | undefined,
+  pay: string | null | undefined,
+  ex?: z.infer<typeof executorS> | null,
+) {
+  if (ex || !adminOnlyModel(model) || paidByKey(pay)) return;
+  if (ctx.includedModel?.(ctx.me, model) !== true)
+    throw refuse(
+      "FORBIDDEN",
+      "This model doesn’t run on the included tokens. Choose an API key of yours to pay for it.",
+    );
 }
 
 const executorOf = (tx: Tx, ex: z.infer<typeof executorS> | null | undefined): Executor | null =>
@@ -215,8 +239,11 @@ export const threadMutators = [
       if (i.kind === "ask") ownDevice(tx, i.executor);
       return scope;
     },
-    needsPre: (i) => !i.from && i.kind === "ask" && !!i.executor,
-    pre: (ctx, i) => deviceCheck(ctx, i.executor),
+    needsPre: (i) => !i.from && i.kind === "ask" && (!!i.executor || adminOnlyModel(i.model)),
+    pre: (ctx, i) => {
+      modelCheck(ctx, i.model, i.pay, i.executor);
+      return deviceCheck(ctx, i.executor);
+    },
     run: (tx, i) => {
       const s = writable(tx, i.space);
       if (i.kind === "post" && s.postsOff)
@@ -281,6 +308,13 @@ export const threadMutators = [
       author(tx, p.u);
       if (i.run) ownPayer(tx, i.pay);
       return scope;
+    },
+    // a run again with an admin-only model named; one that keeps the
+    // thread's model is checked when its job starts (the payer rule)
+    needsPre: (i) => !!i.run && adminOnlyModel(i.model),
+    pre: (ctx, i) => {
+      modelCheck(ctx, i.model, i.pay);
+      return {};
     },
     run: (tx, i) => {
       const p = readableThread(tx, i.id);
@@ -541,8 +575,11 @@ export const threadMutators = [
       ownDevice(tx, i.executor);
       return scope;
     },
-    needsPre: (i) => !!i.executor,
-    pre: (ctx, i) => deviceCheck(ctx, i.executor),
+    needsPre: (i) => !!i.executor || adminOnlyModel(i.model),
+    pre: (ctx, i) => {
+      modelCheck(ctx, i.model, i.pay, i.executor);
+      return deviceCheck(ctx, i.executor);
+    },
     run: (tx, i) => {
       const p = readableThread(tx, i.thread);
       writable(tx, p.s);

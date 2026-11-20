@@ -114,28 +114,29 @@ test.serial(
       provider: "x",
       inputTokens: 100,
     });
-    const none = await ask(mel, sp, { model: "claude-fable" });
+    const none = await ask(mel, sp, { model: "deepseek-flash" });
     await drive(h);
     t.like(rec(h, `run:${none.run}`), { status: "failed", end: "tokens" });
     t.like(rec(h, `thread:${none.th}`), { running: false, sum: null });
-    // a key of mel's: it pays for an Anthropic model
-    const k = await mel.call("apiKeys.create", { raw: "sk-ant-MEL-KEY-0001", label: "" });
+    // a key of mel's pays for a model of its provider (an admin-only
+    // model on the included tokens: runs.limits.test.ts)
+    const k = await mel.call("apiKeys.create", { raw: "sk-or-MEL-KEY-0001", label: "" });
     const key = (k.body.result as { id: string }).id;
-    const paid = await ask(mel, sp, { model: "claude-fable" });
+    const paid = await ask(mel, sp, { model: "deepseek-flash" });
     await drive(h);
     t.like(rec(h, `run:${paid.run}`), { status: "complete", pay: key });
     t.true(usage.monthlyUsed(h.db, melId, key) > 0);
     // a key named as the payer pays whatever the included tokens have left
-    const named = await ask(mel, sp, { model: "claude-fable", pay: key });
+    const named = await ask(mel, sp, { model: "deepseek-flash", pay: key });
     await drive(h);
     t.like(rec(h, `run:${named.run}`), { status: "complete", pay: key });
-    // a Google model is not paid by an Anthropic key: `key`
+    // a Google model is not paid by an OpenRouter key: `key`
     const wrong = await ask(mel, sp, { model: "gemini-flash", pay: key });
     await drive(h);
     t.like(rec(h, `run:${wrong.run}`), { status: "failed", end: "key" });
     // a key the check rejected pays nothing
     const bad = await mel.call("apiKeys.create", {
-      raw: "sk-ant-REVOKED-0002",
+      raw: "sk-or-REVOKED-0002",
       label: "x",
       check: true,
     });

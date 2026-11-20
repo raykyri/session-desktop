@@ -492,7 +492,12 @@ for (const kind of STORES) {
 
 test("sqlite: the migrations apply once, and the schema is the package's", (t) => {
   const db = new BetterSqlite(":memory:");
-  t.deepEqual(migrate(db), ["0001_sync.sql", "0002_review_r1.sql", "0003_space_vis.sql"]);
+  t.deepEqual(migrate(db), [
+    "0001_sync.sql",
+    "0002_review_r1.sql",
+    "0003_space_vis.sql",
+    "0004_review_r1_phase2.sql",
+  ]);
   t.deepEqual(migrate(db), []);
   const store = new SqliteServerStore(db);
   const tables = (

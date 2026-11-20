@@ -78,8 +78,10 @@ export function tokenSource(
 
 /** Who pays for a run of `u`'s whose ask named `pay`: that source when it
  * has tokens left; with no payer named, the included tokens, then the
- * default key (the mock's `payer`). `fail`: the run ends (`tokens`, or `key`
- * for a key that is not valid). */
+ * default key (the mock's `payer`). `included`: whether the included tokens
+ * may pay for the run's model (an admin-only model runs on them for an
+ * admin only: `canUseModel`); when not, they pay nothing. `fail`: the run
+ * ends (`tokens`, or `key` for a key that is not valid). */
 export function payerFor(
   db: SessionDatabase,
   sync: SyncServer,
@@ -88,14 +90,16 @@ export function payerFor(
   u: string,
   pay: string | null,
   at = Date.now(),
+  included = true,
 ): { ok: true; source: TokenSource } | { ok: false; why: "tokens" | "key" } {
   if (pay !== null) {
+    if (pay === "session" && !included) return { ok: false, why: "tokens" };
     const s = tokenSource(db, sync, config, userId, u, pay, at);
     if (!s) return { ok: false, why: "key" };
     if (s.kind === "key" && s.key?.status !== "valid") return { ok: false, why: "key" };
     return s.left > 0 ? { ok: true, source: s } : { ok: false, why: "tokens" };
   }
-  const order = ["session"];
+  const order = included ? ["session"] : [];
   const d = defaultKey(db, sync, userId, u);
   if (d) order.push(d.id);
   for (const id of order) {

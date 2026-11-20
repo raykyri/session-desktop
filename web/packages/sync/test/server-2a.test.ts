@@ -174,9 +174,19 @@ for (const kind of STORES) {
   test(`${kind}: a job's start ends a run whose person lost access, and resumes a running one`, (t) => {
     const { w, open, closed } = cast(t, kind);
     const { run } = ask(t, w, "mel", closed);
+    // the leave ends the run in its commit (review round 1 of phase 2, F3)
     ok(t, w.as("mel", "spaces.leave", { space: closed }));
-    t.deepEqual(w.server.runJobs.start(run), { ok: false, why: "access" });
     t.like(w.get(`run:${run}`), { status: "failed", end: "access" });
+    t.deepEqual(w.server.runJobs.start(run), { ok: false, why: "done" });
+    // a lost access the job hears of first: its start ends the run
+    const { run: r0 } = ask(t, w, "mel", open);
+    w.server.run((tx) => {
+      const ban = { kind: "ban", id: `${open}:mel`, sp: open, u: "mel", createdAt: "2026-01-01T00:00:00Z" };
+      w.server.commit(tx, [[`ban:${open}:mel`, ban as never]], w.server.time(tx));
+    });
+    t.deepEqual(w.server.runJobs.start(r0), { ok: false, why: "access" });
+    t.like(w.get(`run:${r0}`), { status: "failed", end: "access" });
+    w.server.run((tx) => w.server.commit(tx, [[`ban:${open}:mel`, null]], w.server.time(tx)));
     const { th, run: r2 } = ask(t, w, "mel", open);
     const a = w.server.runJobs.start(r2);
     t.true(a.ok);

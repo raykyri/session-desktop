@@ -128,6 +128,15 @@ export interface SyncServerOptions {
    * default MIN_PROTOCOL_VERSION): a write or a read below it answers
    * UPDATE_REQUIRED (phase 2a). */
   minProtocol?: number;
+  /** The most queued and running server runs one person may have (a
+   * deployment setting: the HTTP server passes `SESSION_QUEUED_PER_USER`;
+   * default no limit). A write that would start one more answers
+   * TOO_MANY_REQUESTS, unrecorded (review round 1 of phase 2, F5). */
+  queuedRunsPerUser?: number;
+  /** Whether `u` may run an admin-only model on the included tokens (the
+   * HTTP server's `canUseModel`). Without it, nobody may (review round 1 of
+   * phase 2, F1). */
+  includedModel?: (u: string, model: string) => boolean;
   /** Test only: an effect for which this answers true fails on that attempt. */
   failEffect?: (effect: pkg.Effect, attempt: number) => boolean;
   /** Hears each fault of a housekeeping pass (counted in
@@ -246,6 +255,10 @@ export class SyncServer {
   private readonly jobRunner: JobRunner;
   private readonly tokens: Tokens;
   private readonly failEffect: SyncServerOptions["failEffect"];
+  /** `SyncServerOptions.includedModel`. */
+  readonly includedModel: (u: string, model: string) => boolean;
+  /** `SyncServerOptions.queuedRunsPerUser`. */
+  readonly queuedRunsPerUser: number;
   private readonly onError: SyncServerOptions["onError"];
   readonly online: OnlineCalls;
   /** The lowest protocol version taken (`SyncServerOptions.minProtocol`). */
@@ -273,6 +286,8 @@ export class SyncServer {
     this.jobRunner = o.jobs ?? { start: () => {} };
     this.tokens = new Tokens(o.cursorKeys);
     this.failEffect = o.failEffect;
+    this.includedModel = o.includedModel ?? (() => false);
+    this.queuedRunsPerUser = o.queuedRunsPerUser ?? Infinity;
     this.onError = o.onError;
     this.minProtocol = Math.max(MIN_PROTOCOL_VERSION, o.minProtocol ?? MIN_PROTOCOL_VERSION);
     this.online = new OnlineCalls(this, o.online, o.keys, {
@@ -764,6 +779,7 @@ export class SyncServer {
       server: {
         random: this.random,
         deviceRunStarts: (who, since) => tx.deviceRunsSince(who, since),
+        includedModel: (who, model) => this.includedModel(who, model),
       },
     });
     if (res.status === "unknown") return out(err("INTERNAL_SERVER_ERROR"));
@@ -779,6 +795,8 @@ export class SyncServer {
       record({ ok: false, error: e, ...(reads ? { reads } : {}), seq: m.seq });
       return this.withReads(tx, u, out(e, m.seq), reads);
     }
+    const many = this.tooManyRuns(tx, u, res.writes);
+    if (many) return out(many);
     const started = pkg.deviceRunsStarted(res.writes, (key) => tx.get(key) !== undefined);
     // spaces this write archives (review round 2 of phase 1)
     const archived = res.writes.flatMap(([key, d]) => {
@@ -798,6 +816,30 @@ export class SyncServer {
     for (const effect of res.effects) tx.effectAdd(effect, now);
     record({ ok: true, result: res.result ?? null, seq: m.seq });
     return { ok: true, result: res.result ?? null, serverTime: now, seq: m.seq };
+  }
+
+  /** The refusal of staged `writes` that start a server run of `u`'s and
+   * leave them more than `queuedRunsPerUser` queued and running server runs
+   * (TOO_MANY_REQUESTS, unrecorded: it can be sent again once one ends), or
+   * null. Device runs have their own limit. */
+  tooManyRuns(tx: StoreTx, u: string, writes: readonly pkg.Write[]): AnswerError | null {
+    const mine = (d: pkg.Draft | null): boolean =>
+      d?.kind === "run" &&
+      d.u === u &&
+      d.executor === null &&
+      (d.status === "queued" || d.status === "running");
+    if (!writes.some(([key, d]) => mine(d) && tx.get(key) === undefined)) return null;
+    const live = new Set<string>();
+    for (const status of ["queued", "running"])
+      for (const r of tx.scan("run", "status", status)) if (r.kind === "run" && mine(r)) live.add(`run:${r.id}`);
+    for (const [key, d] of writes)
+      if (mine(d)) live.add(key);
+      else if (d === null || d.kind === "run") live.delete(key);
+    if (live.size <= this.queuedRunsPerUser) return null;
+    return err(
+      "TOO_MANY_REQUESTS",
+      `You have ${this.queuedRunsPerUser} asks waiting or running. Ask again once one of them finishes.`,
+    );
   }
 
   /** Whether an input id of the write (the mutator's `ids`) is in the id

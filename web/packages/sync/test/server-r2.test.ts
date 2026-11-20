@@ -458,7 +458,8 @@ for (const kind of STORES) {
       t.like(get(w, `run:${x.run}`), { status: "failed", end: "interrupted" });
       t.false(get(w, `thread:${x.th}`).running);
     }
-    t.like(get(w, `run:${job.run}`), { status: "queued" }, "a server job is not a device run");
+    // a server job's run ends too (review round 1 of phase 2, F3)
+    t.like(get(w, `run:${job.run}`), { status: "failed", end: "interrupted" });
     t.is(
       code(w.server.call(d.as, "runs.claim", { run: q.run, device: d.id })),
       "PRECONDITION_FAILED",

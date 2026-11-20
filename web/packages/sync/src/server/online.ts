@@ -132,8 +132,8 @@ export function writesIn(g: pkg.Reader, sp: string, u: string): boolean {
   return !pkg.isClosed(s) || pkg.roleIn(g, sp, u) !== null;
 }
 
-/** Whether a device run's person may still run it: they read it, and may
- * write in its space. */
+/** Whether a run's person may still run it: they read it, and may write in
+ * its space. */
 const mayRun = (g: pkg.Reader, r: pkg.RunRec) => pkg.canRead(g, r, r.u) && writesIn(g, r.s, r.u);
 
 const live = (r: pkg.RunRec) => r.status === "queued" || r.status === "running";
@@ -411,6 +411,18 @@ export function defaultHandlers(
     }
     const att = (f ?? p).att + 1;
     const model = i.model ?? (f ?? p).model;
+    // an admin-only model runs on the included tokens for an admin only
+    // (review round 1 of phase 2, F1)
+    if (
+      !ex &&
+      (pay === null || pay === "session") &&
+      pkg.adminOnlyModel(model) &&
+      !ctx.server.includedModel(u, model)
+    )
+      throw fail(
+        "FORBIDDEN",
+        "This model doesn’t run on the included tokens. Choose an API key of yours to pay for it.",
+      );
     const id = ctx.server.newId(ctx.tx, ctx.now);
     const writes: pkg.Write[] = [
       ...answerWrites(
@@ -450,6 +462,8 @@ export function defaultHandlers(
         createdAt: pkg.isoAt(ctx.now),
       },
     ]);
+    const many = ctx.server.tooManyRuns(ctx.tx, u, writes);
+    if (many) throw pkg.refuse(many.code, many.message);
     ctx.server.commit(ctx.tx, writes, ctx.now);
     if (ex) ctx.tx.deviceRunAdd(u, ctx.now);
     ctx.tx.effectAdd({ type: "job", kind: "run", id }, ctx.now);
@@ -731,9 +745,16 @@ export class OnlineCalls {
     private readonly server: SyncServer,
     extra: Partial<OnlineHandlers> = {},
     vault?: KeyVault,
-    hooks: { cancelled?: (run: string) => void } = {},
+    private readonly hooks: { cancelled?: (run: string) => void } = {},
   ) {
     this.handlers = { ...defaultHandlers(vault, hooks), ...(extra as OnlineHandlers) };
+  }
+
+  /** End run `r` (`why`) in the commit in progress; a server job's run is
+   * also stopped once that commit is stored (its loop aborts). */
+  private endLive(ctx: CallCtx, r: pkg.RunRec, why: pkg.RunEnd) {
+    endRun(ctx, r, why);
+    if (r.executor === null) this.server.afterCommit(() => this.hooks.cancelled?.(r.id));
   }
 
   /** Whether a call of this name is served (a handler that is no stub). */
@@ -807,15 +828,17 @@ export class OnlineCalls {
     });
   }
 
-  /** End the queued and running device runs `u` may no longer run in space
-   * `sp` (their membership ended, or they were banned): called in the commit
-   * of the write that changed it. */
+  /** End the queued and running runs `u` may no longer run in space `sp`
+   * (their membership ended, or they were banned), device runs and server
+   * jobs alike: called in the commit of the write that changed it. A server
+   * job's loop is stopped once that commit is stored (review round 1 of
+   * phase 2, F3). */
   accessChanged(tx: StoreTx, now: number, sp: string, u: string) {
     const g = readerOf(tx);
     const ctx: CallCtx = { tx, now, actor: null, server: this.server };
     for (const r of tx.scan("run", "u", u))
-      if (r.kind === "run" && r.s === sp && r.executor !== null && live(r) && !mayRun(g, r))
-        endRun(ctx, r, "access");
+      if (r.kind === "run" && r.s === sp && live(r) && !mayRun(g, r))
+        this.endLive(ctx, r, "access");
   }
 
   /** Whether `u` may read run `r`'s in-flight text now: they read the run,
@@ -827,13 +850,14 @@ export class OnlineCalls {
     return pkg.canRead(g, r, u) && n !== undefined && n.mod === null && unredacted(g, n, u);
   }
 
-  /** End the queued and running device runs of a space being archived
-   * (`interrupted`): called in the commit that archives it. */
+  /** End the queued and running runs of a space being archived
+   * (`interrupted`), device runs and server jobs alike: called in the commit
+   * that archives it. */
   spaceArchived(tx: StoreTx, now: number, sp: string) {
     const ctx: CallCtx = { tx, now, actor: null, server: this.server };
     for (const p of tx.scan("thread", "s", sp))
       for (const r of p.kind === "thread" ? tx.scan("run", "th", p.id) : [])
-        if (r.kind === "run" && r.executor !== null && live(r)) endRun(ctx, r, "interrupted");
+        if (r.kind === "run" && live(r)) this.endLive(ctx, r, "interrupted");
   }
 
   /** End a run whose job became a dead letter (`failed`, `interrupted`): it

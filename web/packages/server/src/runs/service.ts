@@ -24,12 +24,12 @@ import {
   users as usersRepo,
 } from "@session/db";
 import type { JobKind } from "@session/mutators";
-import { DEFAULT_MODEL_ID, findModel } from "@session/shared";
+import { DEFAULT_MODEL_ID, canUseModel, findModel } from "@session/shared";
 import type { JobRunner, SyncServer } from "@session/sync/server";
 
 import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";
-import { payerFor } from "../sync/account.js";
+import { payerFor, tokenSource } from "../sync/account.js";
 
 import { backoffFor, MAX_RATE_LIMIT_REQUEUES } from "./errors.js";
 import { runAttempt, type AttemptResult, type LoopDeps } from "./loop.js";
@@ -199,7 +199,19 @@ export function createRunsService(deps: RunsServiceDeps): RunsService {
     }
     const modelId = run.model ?? DEFAULT_MODEL_ID;
     const entry = findModel(modelId);
-    const payer = payerFor(db, sync, config, userId, user.handle, run.pay);
+    // an admin-only model runs on the included tokens for an admin only;
+    // a key of the person's own pays for any model of its provider
+    // (review round 1 of phase 2, F1)
+    const payer = payerFor(
+      db,
+      sync,
+      config,
+      userId,
+      user.handle,
+      run.pay,
+      Date.now(),
+      canUseModel(user, modelId),
+    );
     const end = (why: "tokens" | "key" | "interrupted") => {
       if (sync.runJobs.start(runId).ok) sync.runJobs.fail(runId, run.attempt, why);
       runsRepo.release(db, runId);
@@ -250,6 +262,13 @@ export function createRunsService(deps: RunsServiceDeps): RunsService {
         seqStart: runsRepo.get(db, runId)?.seq ?? 0,
         signal: controller.signal,
         isDraining: () => draining,
+        // the weekly allowance or the key's monthly cap, read again after
+        // each step: other runs of the person's spend it too (F4)
+        payerLeft: () => {
+          const s = tokenSource(db, sync, config, userId, user.handle, payer.source.id);
+          if (s === null || (s.kind === "key" && s.key?.status !== "valid")) return "key";
+          return s.left;
+        },
       });
     } catch (error) {
       logger.error({ error, runId }, "a run attempt threw");

@@ -19,6 +19,8 @@ import {
   type SyncServerOptions,
 } from "@session/sync/server";
 
+import { canUseModel } from "@session/shared";
+
 import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";
 
@@ -87,6 +89,9 @@ export function createSync(o: CreateSyncOptions): SyncServer {
     },
     keys: new DbKeyVault(o.db, o.keys),
     minProtocol: o.config.sync.minProtocol,
+    queuedRunsPerUser: o.config.limits.queuedPerUser,
+    // an admin-only model runs on the included tokens for an admin only
+    includedModel: (u, model) => canUseModel(users.findByHandle(o.db, u), model),
     // a housekeeping fault is counted by the server (`housekeepingFaults`,
     // on `/metrics`) and logged here
     onError: (error, where) => o.logger.error({ err: error, where }, "sync housekeeping failed"),

@@ -14,9 +14,14 @@
 // - the answer and the run's end are `RunJobs.finish` / `fail`.
 // When a write answers that the job no longer holds the run (it was
 // cancelled, a later run of the ask replaced it, the person lost access), the
-// attempt stops. Usage is recorded by run, payer and space.
+// attempt stops. Usage is recorded by run, payer and space as each step
+// finishes, so an attempt that is stopped, times out, is drained or fails
+// still records the steps it finished. After each step the payer's
+// allowance (the weekly included tokens, or a key's monthly cap) is checked
+// again (`payerLeft`): a payer with nothing left ends the run `tokens`, and
+// a key that is no longer valid ends it `key`.
 
-import type { SessionDatabase } from "@session/db";
+import type { AttemptUsage, SessionDatabase } from "@session/db";
 import { runs as runsRepo } from "@session/db";
 import type { RunEnd } from "@session/mutators";
 import type { Turn } from "@session/shared";
@@ -39,7 +44,13 @@ import type { ResolvedModel } from "./providers.js";
 import type { RunToolContext, ToolCaches } from "./tools/context.js";
 import { ToolBudget } from "./tools/context.js";
 import { buildTools } from "./tools/index.js";
-import { attemptUsageOf, costOf, recordAttemptUsage, recordToolUsage } from "./usage.js";
+import {
+  addUsage,
+  attemptUsageOf,
+  costOf,
+  recordAttemptUsage,
+  recordToolUsage,
+} from "./usage.js";
 
 /** `04-agent-runtime.md` §3. */
 export const MAX_STEPS = 25;
@@ -84,6 +95,10 @@ export interface RunAttemptInput {
   seqStart: number;
   signal: AbortSignal;
   isDraining: () => boolean;
+  /** What the payer has left now, the attempt's recorded steps counted: a
+   * number of tokens, or "key" when the key that pays is no longer valid.
+   * Checked after each step. */
+  payerLeft?: () => number | "key";
 }
 
 /** The answer of a run: the text of its last assistant turn that has text. */
@@ -155,7 +170,10 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     });
     runsRepo.setSeq(db, run.id, seq);
   };
-  const recordUsage = (): void => {
+  /** One finished step's tokens, recorded as the step finishes. */
+  const recordStep = (step: AttemptUsage): void => {
+    usage = addUsage(usage, step);
+    if (step.inputTokens + step.outputTokens === 0) return;
     recordAttemptUsage({
       db,
       userId: input.userId,
@@ -164,8 +182,10 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       payer: input.payer,
       entry: resolved.entry,
       kind: "research",
-      usage,
+      usage: step,
     });
+  };
+  const recordUsage = (): void => {
     recordToolUsage(db, input.userId, run.id, "search", "search", toolUsage.search);
     recordToolUsage(db, input.userId, run.id, "fetch", "fetch", toolUsage.fetch);
   };
@@ -174,9 +194,12 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   // the attempt's own abort: the caller's (a cancel, the drain), and a write
   // the sync server refused because the job no longer holds the run
   const lost = new AbortController();
+  // the payer had nothing left after a step: how the run ends
+  let spent: "tokens" | "key" | null = null;
+  const outOfTokens = new AbortController();
   const timeoutMs = deps.config.limits.runTimeoutMs;
   const timeout = AbortSignal.timeout(timeoutMs);
-  const signal = AbortSignal.any([input.signal, timeout, lost.signal]);
+  const signal = AbortSignal.any([input.signal, timeout, lost.signal, outOfTokens.signal]);
 
   const system = researchSystemPrompt(input.instruction, job.skill);
   const messages: ModelMessage[] = runMessages(job.history, job.q);
@@ -250,13 +273,22 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       }
       if (part.type === "abort") break;
       mapper.handle(await resolveGroundingRedirects(part, groundingRedirects));
-      if (part.type === "finish-step") steps += 1;
+      if (part.type === "finish-step") {
+        steps += 1;
+        recordStep(attemptUsageOf(part.usage));
+        const left = input.payerLeft?.();
+        const more = part.finishReason === "tool-calls";
+        if (more && (left === "key" || (left !== undefined && left <= 0))) {
+          spent = left === "key" ? "key" : "tokens";
+          outOfTokens.abort();
+          break;
+        }
+      }
       if (part.type === "finish") {
         finishReason = part.finishReason;
         rawFinishReason = part.rawFinishReason;
       }
     }
-    if (streamError === null && !signal.aborted) usage = attemptUsageOf(await result.totalUsage);
   } catch (error) {
     streamError = error;
   }
@@ -275,6 +307,14 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     finishAttempt("cancelled");
     recordUsage();
     return { outcome: lost.signal.aborted ? "superseded" : "cancelled" };
+  }
+  if (spent !== null) {
+    // the payer ran out while the agent worked: the run ends, and the
+    // thread keeps the tokens it used (the mock's `tokens` end)
+    finishAttempt("failed");
+    recordUsage();
+    jobs.fail(run.id, attempt, spent, tokens());
+    return { outcome: "failed", end: spent };
   }
   if (input.signal.aborted) {
     // a cancel: `research.cancelNode` ended the run already
