@@ -1413,7 +1413,7 @@ const TREE_COPY = {
 };
 function treeSection() {
   const T = TREE_COPY[st.ui.treecopy];
-  const copy = T ? T.map(t => `<p class="sub tcopy">${t}</p>`).join('') : `<ul class="tfacts"><li>Every account starts from a member's invite link.</li><li>Each link works for one person and expires after ${INVITE_DAYS} days.</li><li>You can have ${SLOTS} open links at a time; a slot frees when one is used, expires or is revoked.</li></ul>`;
+  const copy = T ? T.map(t => `<p class="sub tcopy">${t}</p>`).join('') : `<ul class="tfacts"><li>Every account starts from a member's invite link.</li><li>Each link works for one person and expires after ${INVITE_DAYS} days.</li><li>You can have ${SLOTS} open links at a time.</li></ul>`;
   st.treeScope = 'all';
   return `<section><h3>Invite tree</h3>${copy}<div class="tgap"></div>${treeA()}</section>`;
 }
