@@ -319,7 +319,7 @@ const replyTree = list => list.map(r => `<div class="reply">${av(r.u, 'sm')}<div
 const st = { v: 'pinned', space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, layer: {}, asking: null };
 
 function card(p) {
-  const head = `<div class="card-h">${av(p.u)}<div class="who"><b>${esc(p.u)}</b><span>${p.k === 'ask' ? 'asked in' : 'posted in'}</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div></div>`;
+  const head = `<div class="card-h">${av(p.u)}<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div></div>`;
   const acts = `<button class="iconbtn" aria-label="Like">${I.heart}</button><button class="iconbtn" aria-label="Save">${I.save}</button>`;
   if (p.k === 'post') {
     const n = replyCount(p);
