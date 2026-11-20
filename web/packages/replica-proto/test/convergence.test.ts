@@ -118,8 +118,9 @@ interface Ctx {
   /** Writes planned by earlier steps (a banned person's own writes, a second
    * decision on the same request, asking again after a decline). */
   plan: { u: Person; name: string; input: (c: Ctx, d: Device) => unknown; what: string }[];
-  /** marker → the record and field it was written to */
-  origins: Map<string, { key: string; field: string }>;
+  /** marker → the record and field it was written to, and where a write may
+   * copy it (a node opened as its own thread: `also`) */
+  origins: Map<string, { key: string; field: string; also?: { key: string; field: string }[] }>;
   marks: number;
   /** Fault switches. */
   faults: { random: boolean; loss: boolean };
@@ -184,12 +185,13 @@ function nodeRef(c: Ctx, th: string): string {
   );
 }
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
-/** A model and an effort, now and then a missing or an unknown effort. */
+/** A model and an effort, now and then a missing or an unknown effort, a
+ * model outside the registry or an effort the model does not accept. */
 const model = (c: Ctx) =>
   chance(c.r, 0.04)
     ? { model: "m" }
     : {
-        model: pick(c.r, ["claude-fable-5-1", "m"]),
+        model: pick(c.r, ["claude-fable", "claude-fable", "gemini-flash", "m"]),
         effort: pick(c.r, [...EFFORTS, ...(chance(c.r, 0.05) ? ["huge"] : [])]),
       };
 
@@ -247,7 +249,7 @@ const GENERATORS: Record<string, Gen> = {
     const id = newId(c, d);
     return {
       id,
-      name: pick(c.r, ["lounge", "lab", "new", "other", "#Lab", " -Lab ünd #2"]),
+      name: pick(c.r, ["lounge", "lab", "new", "other", "#Lab", " -Lab ünd #2", "-lab", "x"]),
       ...(chance(c.r, 0.5) ? { vis: pick(c.r, ["open", "private"]) } : {}),
       ...(chance(c.r, 0.5) ? { desc: marked(c, `space:${id}`, "desc") } : {}),
     };
@@ -269,6 +271,25 @@ const GENERATORS: Record<string, Gen> = {
   "spaces.leave": (c) => ({ space: spaceId(c) }),
   "threads.create": (c, _u, d) => {
     const id = newId(c, d);
+    // now and then a node opened as its own thread (`03` G5), usually one
+    // with an answer: its question and answer are copied to the new thread,
+    // so their markers may be stored there too
+    const nodes = records(c, "node");
+    if (nodes.length && chance(c.r, 0.12)) {
+      const answered = nodes.filter((n) => c.w.get(`answer:${n.id}`));
+      const n = pick(c.r, answered.length && chance(c.r, 0.8) ? answered : nodes);
+      const copied = JSON.stringify([n.q, c.w.get(`answer:${n.id}`)]).match(MARKER) ?? [];
+      for (const m of copied) {
+        const o = c.origins.get(m);
+        if (o)
+          o.also = [
+            ...(o.also ?? []),
+            { key: "thread:*", field: "q" },
+            { key: "answer:*", field: "md" },
+          ];
+      }
+      return { id, from: { th: n.th, node: n.id } };
+    }
     const kind = pick(c.r, ["ask", "post"]);
     // a post mentions people now and then
     const at = chance(c.r, 0.3) ? ` @${pick(c.r, PEOPLE)}` : "";
@@ -302,20 +323,22 @@ const GENERATORS: Record<string, Gen> = {
     const id = newId(c, d);
     const thread = threadId(c);
     const look = chance(c.r, 0.3);
+    // the phrase ends on a letter, so the marker survives the trim
+    const phrase = chance(c.r, 0.1)
+      ? "one two three four five"
+      : `${marked(c, `node:${id}`, "look")}x`;
+    // a look-up's quote holds its phrase, on word boundaries, usually; now
+    // and then the phrase starts inside a word of it
+    const quote = marked(c, `node:${id}`, "quote");
+    const around = pick(c.r, [` ${phrase}.`, ` (${phrase})`, ` ${phrase}`, `x${phrase}`, ""]);
     return {
       id,
       thread,
       parent: nodeRef(c, thread),
       ...(look
-        ? {
-            kind: "lookup",
-            // the phrase ends on a letter, so the marker survives the trim
-            look: chance(c.r, 0.1)
-              ? "one two three four five"
-              : `${marked(c, `node:${id}`, "look")}x`,
-          }
+        ? { kind: "lookup", look: phrase }
         : { kind: "ask", q: marked(c, `node:${id}`, "q") }),
-      ...(chance(c.r, 0.3) ? { quote: marked(c, `node:${id}`, "quote"), b: 1 } : {}),
+      ...(chance(c.r, 0.3) ? { quote: look ? `${quote}${around}` : quote, b: 1 } : {}),
       ...model(c),
     };
   },
@@ -334,6 +357,48 @@ const GENERATORS: Record<string, Gen> = {
       ...(top ? { parent: top.id } : {}),
     };
   },
+  // the author's edit of a node's question, as they saw it
+  "followups.update": (c, u) => {
+    const own = records(c, "node").filter((n) => n.u === u);
+    const n = own.length && chance(c.r, 0.7) ? pick(c.r, own) : null;
+    const thread = n ? n.th : threadId(c);
+    const node = n ? n.id : nodeRef(c, thread);
+    return {
+      thread,
+      node,
+      q: marked(c, `node:${node}`, "q"),
+      base: { rev: seenRev(c, `node:${node}`) },
+    };
+  },
+  "followups.delete": (c, u) => {
+    const own = records(c, "node").filter((n) => n.u === u);
+    const n = own.length && chance(c.r, 0.6) ? pick(c.r, own) : null;
+    const thread = n ? n.th : threadId(c);
+    return { thread, node: n ? n.id : nodeRef(c, thread) };
+  },
+  // stop a run, usually one that has not ended
+  "research.cancelNode": (c, u) => {
+    const runs = records(c, "run");
+    const live = runs.filter((r) => r.u === u && (r.status === "queued" || r.status === "running"));
+    const r =
+      live.length && chance(c.r, 0.7) ? pick(c.r, live) : runs.length ? pick(c.r, runs) : null;
+    return r ? { thread: r.th, node: r.node } : { thread: threadId(c), node: "r" };
+  },
+  // run a stopped run again, on a model now and then outside the registry
+  "research.retryNode": (c, u) => {
+    const runs = records(c, "run");
+    const stopped = runs.filter((r) => r.u === u && r.status === "cancelled");
+    const r =
+      stopped.length && chance(c.r, 0.7)
+        ? pick(c.r, stopped)
+        : runs.length
+          ? pick(c.r, runs)
+          : null;
+    return {
+      ...(r ? { thread: r.th, node: r.node } : { thread: threadId(c), node: "r" }),
+      ...model(c),
+    };
+  },
   "research.createPostFollowUp": (c, _u, d) => {
     const replies = records(c, "reply").filter((x) => x.parent === null);
     const top = replies.length && chance(c.r, 0.3) ? pick(c.r, replies) : null;
@@ -344,6 +409,26 @@ const GENERATORS: Record<string, Gen> = {
       thread: top ? top.th : threadId(c),
       t: marked(c, `reply:${id}`, "t") + at,
       ...(top ? { parent: top.id } : {}),
+    };
+  },
+  "replies.update": (c, u) => edit(c, u, "reply"),
+  "comments.update": (c, u) => edit(c, u, "comment"),
+  "replies.delete": (c, u) => {
+    const own = records(c, "reply").filter((x) => x.u === u);
+    return {
+      id: some(
+        c,
+        (own.length && chance(c.r, 0.7) ? own : records(c, "reply")).map((x) => x.id),
+      ),
+    };
+  },
+  "comments.delete": (c, u) => {
+    const own = records(c, "comment").filter((x) => x.u === u);
+    return {
+      id: some(
+        c,
+        (own.length && chance(c.r, 0.7) ? own : records(c, "comment")).map((x) => x.id),
+      ),
     };
   },
   "joinRequests.create": (c) => {
@@ -387,6 +472,18 @@ const GENERATORS: Record<string, Gen> = {
     space: spaceId(c),
     days: pick(c.r, [1, 7, 7, 30, ...(chance(c.r, 0.1) ? [0, 31] : [])]),
   }),
+  "invites.revoke": (c) => ({
+    id: some(
+      c,
+      records(c, "invite").map((l) => l.id),
+    ),
+  }),
+  "invites.restore": (c) => ({
+    id: some(
+      c,
+      records(c, "invite").map((l) => l.id),
+    ),
+  }),
   "moderation.decide": (c) => {
     // a removal of a thread that has nodes or replies, often; a removal's
     // reason is the owner's text, with no marker
@@ -416,8 +513,24 @@ const GENERATORS: Record<string, Gen> = {
       ),
     };
   },
+  "notifications.markAllRead": () => ({}),
   "prefs.set": (c) => ({ layout: pick(c.r, ["centred", "wide"]) }),
 };
+
+/** An author's edit of a reply or a comment: usually their own, as they saw it. */
+function edit(c: Ctx, u: Who, kind: "reply" | "comment") {
+  const all = records(c, kind);
+  const own = all.filter((x) => x.u === u);
+  const id = some(
+    c,
+    (own.length && chance(c.r, 0.7) ? own : all).map((x) => x.id),
+  );
+  return {
+    id,
+    t: marked(c, `${kind}:${id}`, "t"),
+    base: { rev: seenRev(c, `${kind}:${id}`) },
+  };
+}
 const NAMES = Object.keys(GENERATORS);
 // membership changes come often, so scopes change mid-sequence
 const WEIGHTED = [
@@ -448,6 +561,8 @@ const OWNER_WRITES = new Set([
   "members.unban",
   "moderation.decide",
   "invites.create",
+  "invites.revoke",
+  "invites.restore",
 ]);
 
 /** The writes a banned person might still try in the space they are banned from. */
@@ -633,14 +748,16 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
   const storedNow = (m: string) => {
     const o = c.origins.get(m);
     if (!o) return null;
-    // a key ending in "*": any record whose key starts with the rest
-    const recs = o.key.endsWith("*")
-      ? [...w.server.dump()].filter(([k]) => k.startsWith(o.key.slice(0, -1))).map(([, r]) => r)
-      : [w.get(o.key)];
-    for (const r of recs) {
-      const rec = r as Record<string, unknown> | undefined;
-      if (rec && JSON.stringify(rec[o.field] ?? null).includes(m) && rec["mod"] !== "removed")
-        return rec;
+    for (const at of [o, ...(o.also ?? [])]) {
+      // a key ending in "*": any record whose key starts with the rest
+      const recs = at.key.endsWith("*")
+        ? [...w.server.dump()].filter(([k]) => k.startsWith(at.key.slice(0, -1))).map(([, r]) => r)
+        : [w.get(at.key)];
+      for (const r of recs) {
+        const rec = r as Record<string, unknown> | undefined;
+        if (rec && JSON.stringify(rec[at.field] ?? null).includes(m) && rec["mod"] !== "removed")
+          return rec;
+      }
     }
     return null;
   };

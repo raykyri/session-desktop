@@ -246,8 +246,9 @@ export async function admit(t: ExecutionContext, w: World, space: string, u: str
   );
 }
 
-/** The model and effort every ask in the suite names. */
-export const MODEL = { model: "claude-fable-5-1", effort: "medium" } as const;
+/** The model and effort every ask in the suite names: a registry entry
+ * (`@session/shared` `MODEL_REGISTRY`) and an effort it accepts. */
+export const MODEL = { model: "claude-fable", effort: "medium" } as const;
 
 /** The input of a new thread: an ask carries a model and an effort. */
 export const threadInput = (
@@ -258,6 +259,9 @@ export const threadInput = (
 ): Record<string, unknown> =>
   kind === "ask" ? { id, space, kind, q, ...MODEL } : { id, space, kind, q };
 
+/** A new thread by `u`. An ask's root run is answered at once (`finishJob`:
+ * its run `complete`, a summary written), so asks can be continued and
+ * branched under it (`03` G1); `pending` leaves it queued. */
 export async function thread(
   t: ExecutionContext,
   w: World,
@@ -265,13 +269,22 @@ export async function thread(
   space: string,
   kind: "ask" | "post" = "ask",
   q = "What changed?",
+  pending = false,
 ): Promise<string> {
   const id = w.id();
   await ok(t, w.as(u, "threads.create", threadInput(id, space, kind, q)));
+  if (kind === "ask" && !pending) await answer(w, `thread:${id}`);
   return id;
 }
 
-/** An ask node under `parent` (`r`: the thread's root): Continue or Branch. */
+/** A run finishes: a thread's summary or a node's answer, its run
+ * `complete`. */
+export async function answer(w: World, key: string, text = "An answer.") {
+  await w.server.finishJob(key, text);
+}
+
+/** An ask node under `parent` (`r`: the thread's root): Continue or Branch,
+ * answered at once. */
 export async function fork(
   t: ExecutionContext,
   w: World,
@@ -282,6 +295,7 @@ export async function fork(
 ): Promise<string> {
   const id = w.id();
   await ok(t, w.as(u, "research.forkNode", { id, thread, parent, kind: "ask", q, ...MODEL }));
+  await answer(w, `node:${id}`);
   return id;
 }
 

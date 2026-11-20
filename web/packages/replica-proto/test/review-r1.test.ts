@@ -5,7 +5,7 @@
 import test from "ava";
 
 import {
-  MUTATORS,
+  PROTO_MUTATORS,
   PROTOCOL_VERSION,
   ReplicaClient,
   type AnyMutator,
@@ -386,7 +386,7 @@ test("R8: an input outside the bounds is a recorded BAD_REQUEST, and the writes 
 
 test("R8: a fault that is not a refusal is INTERNAL_SERVER_ERROR, writes nothing and records nothing; the client keeps the write", async (t) => {
   let broken = true;
-  const create = MUTATORS["threads.create"] as AnyMutator;
+  const create = PROTO_MUTATORS["threads.create"] as AnyMutator;
   const faulty: AnyMutator = {
     ...create,
     // the real run stages its writes, then the server fails
@@ -396,7 +396,9 @@ test("R8: a fault that is not a refusal is INTERNAL_SERVER_ERROR, writes nothing
       return result;
     },
   };
-  const { w, open } = await cast(t, 1, { mutators: { ...MUTATORS, "threads.create": faulty } });
+  const { w, open } = await cast(t, 1, {
+    mutators: { ...PROTO_MUTATORS, "threads.create": faulty },
+  });
   const before = JSON.stringify([...w.server.dump()]);
   const jobs = w.server.jobs().length;
   const mel = w.client("mel");
@@ -440,7 +442,7 @@ test("R9: a write and its notifications commit together: a fault in the notify s
   // there is no effect queue (`01` U6): notifications are written by the
   // mutator's `notify` stage in the write's transaction
   let broken = true;
-  const reply = MUTATORS["research.createPostFollowUp"] as AnyMutator;
+  const reply = PROTO_MUTATORS["research.createPostFollowUp"] as AnyMutator;
   const faulty: AnyMutator = {
     ...reply,
     notify: (tx, i, result) => {
@@ -449,7 +451,7 @@ test("R9: a write and its notifications commit together: a fault in the notify s
     },
   };
   const { w, open } = await cast(t, 1, {
-    mutators: { ...MUTATORS, "research.createPostFollowUp": faulty },
+    mutators: { ...PROTO_MUTATORS, "research.createPostFollowUp": faulty },
   });
   const th = await thread(t, w, "olga", open, "post", "x");
   const before = JSON.stringify([...w.server.dump()]);
@@ -892,7 +894,7 @@ test("every tombstone is pruned after 30 days, whatever its kind", async (t) => 
   await ok(t, w.as("mel", "spaces.leave", { space: open }));
   const kinds = async () =>
     [...new Set((await w.server.scanStorage()).tombstones.map((x) => x.kind))].sort();
-  const all = ["comment", "member", "node", "notif", "reply", "run", "save"];
+  const all = ["answer", "comment", "member", "node", "notif", "reply", "run", "save"];
   t.deepEqual(await kinds(), all);
   w.clock.advance(30 * DAY);
   t.deepEqual(await kinds(), all);

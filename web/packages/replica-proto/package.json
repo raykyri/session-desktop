@@ -17,6 +17,7 @@
     "mutate": "tsx test/mutations/mutate.ts"
   },
   "dependencies": {
+    "@session/mutators": "*",
     "@session/shared": "*",
     "zod": "^4.6.5"
   }

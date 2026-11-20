@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "./packages/shared" },
+    { "path": "./packages/mutators" },
     { "path": "./packages/db" },
     { "path": "./packages/server" },
     { "path": "./packages/client" },

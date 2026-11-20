@@ -10,7 +10,7 @@
 import test from "ava";
 
 import {
-  MUTATORS,
+  PROTO_MUTATORS,
   ReplicaClient,
   refuse,
   type Actor,
@@ -357,12 +357,12 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
 
 test("Q3: a write that keeps getting INTERNAL_SERVER_ERROR backs off, fails after 5 answers and is shown; the writes behind it are sent", async (t) => {
   const faulty: AnyMutator = {
-    ...(MUTATORS["saved.set"] as AnyMutator),
+    ...(PROTO_MUTATORS["saved.set"] as AnyMutator),
     run: () => {
       throw new TypeError("a server bug that this input always hits");
     },
   };
-  const { w, open } = await cast(t, 7, { mutators: { ...MUTATORS, "saved.set": faulty } });
+  const { w, open } = await cast(t, 7, { mutators: { ...PROTO_MUTATORS, "saved.set": faulty } });
   const th = await thread(t, w, "mel", open, "post");
   const mel = w.client("mel");
   mel.queue("saved.set", { kind: "thread", id: th, on: true });
@@ -394,7 +394,7 @@ test("N10: a pre-check that refuses with TOO_MANY_REQUESTS or SERVICE_UNAVAILABL
   // a limit in the pre-check stage (AGENTS.md: "server-only pre-checks that
   // may refuse (invite codes, limits)")
   const limits: ("TOO_MANY_REQUESTS" | "SERVICE_UNAVAILABLE")[] = [];
-  const create = MUTATORS["invites.create"] as AnyMutator;
+  const create = PROTO_MUTATORS["invites.create"] as AnyMutator;
   const limited: AnyMutator = {
     ...create,
     pre: (ctx, i) => {
@@ -403,7 +403,9 @@ test("N10: a pre-check that refuses with TOO_MANY_REQUESTS or SERVICE_UNAVAILABL
       return create.pre?.(ctx, i) ?? {};
     },
   };
-  const { w, closed } = await cast(t, 1, { mutators: { ...MUTATORS, "invites.create": limited } });
+  const { w, closed } = await cast(t, 1, {
+    mutators: { ...PROTO_MUTATORS, "invites.create": limited },
+  });
   const e = await w.envelope("olga", "invites.create", { id: w.id(), space: closed, days: 7 });
   for (const code of ["TOO_MANY_REQUESTS", "SERVICE_UNAVAILABLE"] as const) {
     limits.push(code);
@@ -416,12 +418,14 @@ test("N10: a pre-check that refuses with TOO_MANY_REQUESTS or SERVICE_UNAVAILABL
 
 test("Q3: a write that depends on a failed write gets its own refusal", async (t) => {
   const faulty: AnyMutator = {
-    ...(MUTATORS["threads.create"] as AnyMutator),
+    ...(PROTO_MUTATORS["threads.create"] as AnyMutator),
     run: () => {
       throw new TypeError("a server bug that this input always hits");
     },
   };
-  const { w, open } = await cast(t, 7, { mutators: { ...MUTATORS, "threads.create": faulty } });
+  const { w, open } = await cast(t, 7, {
+    mutators: { ...PROTO_MUTATORS, "threads.create": faulty },
+  });
   const mel = w.client("mel");
   const th = mel.newId();
   mel.queue("threads.create", { id: th, space: open, kind: "ask", q: "never saved", ...MODEL });
@@ -525,7 +529,7 @@ test("E1: a write that notifies several people commits all of their notification
   // recipients. Notifications are written in the write's transaction now
   // (`01` U1, C16), so a fault after the first one commits nothing at all.
   let fail = true;
-  const create = MUTATORS["research.createPostFollowUp"] as AnyMutator;
+  const create = PROTO_MUTATORS["research.createPostFollowUp"] as AnyMutator;
   const faulty: AnyMutator = {
     ...create,
     notify: (tx, i, result) => {
@@ -534,7 +538,7 @@ test("E1: a write that notifies several people commits all of their notification
     },
   };
   const { w, open } = await cast(t, 7, {
-    mutators: { ...MUTATORS, "research.createPostFollowUp": faulty },
+    mutators: { ...PROTO_MUTATORS, "research.createPostFollowUp": faulty },
   });
   const th = await thread(t, w, "eve", open, "post");
   const notifs = () =>

@@ -48,6 +48,14 @@
 // the client estimates it) is dropped and shown to the person.
 
 import {
+  memberKey,
+  refuse,
+  type ErrorCode,
+  type LogId,
+  type StoredRecord,
+} from "@session/mutators";
+
+import {
   PROTOCOL_VERSION,
   UNRECORDED,
   type Actor,
@@ -55,13 +63,11 @@ import {
   type Clock,
   type Cursor,
   type Envelope,
-  type ErrorCode,
   type LastSeq,
   type ServerHalf,
   type Tier,
 } from "./contract.js";
-import { MUTATORS, refuse } from "./mutators.js";
-import { memberKey, type LogId, type StoredRecord } from "./records.js";
+import { PROTO_MUTATORS } from "./join-requests.js";
 import { ulid } from "./ulid.js";
 
 interface Replica {
@@ -354,7 +360,7 @@ export class ReplicaClient {
 
   /** Queue a write. Online-only mutators (`spaces.create`) are never queued. */
   queue(name: string, input: unknown, mutationId = this.newId()): Pending {
-    if (Object.hasOwn(MUTATORS, name) && MUTATORS[name]?.online)
+    if (Object.hasOwn(PROTO_MUTATORS, name) && PROTO_MUTATORS[name]?.online)
       throw new Error(`${name} is online only`);
     return this.push(name, input, mutationId);
   }
@@ -407,7 +413,7 @@ export class ReplicaClient {
     const map = new Map<string, string>();
     for (const p of this.outbox) {
       if (p.sent) continue;
-      const def = Object.hasOwn(MUTATORS, p.name) ? MUTATORS[p.name] : undefined;
+      const def = Object.hasOwn(PROTO_MUTATORS, p.name) ? PROTO_MUTATORS[p.name] : undefined;
       const parsed = def?.input.safeParse(p.input);
       for (const id of parsed?.success ? (def?.ids?.(parsed.data) ?? []) : [])
         map.set(id, this.newId());

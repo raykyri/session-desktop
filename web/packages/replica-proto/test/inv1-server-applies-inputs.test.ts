@@ -5,9 +5,9 @@
 import { spaces } from "@session/shared";
 import test from "ava";
 
-import { MUTATORS, PROTOCOL_VERSION, type CountsRec, type ThreadRec } from "../src/index.js";
+import { PROTO_MUTATORS, PROTOCOL_VERSION, type CountsRec, type ThreadRec } from "../src/index.js";
 
-import { MODEL, World, actor, cast, forkInput, ok, refused, thread } from "./harness.js";
+import { MODEL, World, actor, answer, cast, forkInput, ok, refused, thread } from "./harness.js";
 
 test("a write the actor's role forbids is refused and changes nothing", async (t) => {
   const { w, closed } = await cast(t);
@@ -238,7 +238,10 @@ test("mutators read no clock, no random source and no Intl while the server appl
       t,
       w.as("mel", "threads.create", { id: th, space: closed, kind: "ask", q: "Q", ...MODEL }),
     );
+    // the runs finish (the server's run loop, outside the mutators)
+    await answer(w, `thread:${th}`);
     await ok(t, w.as("mona", "research.forkNode", forkInput(fu, th, "F")));
+    await answer(w, `node:${fu}`, "F's answer");
     await ok(
       t,
       w.as("ada", "research.forkNode", {
@@ -298,6 +301,35 @@ test("mutators read no clock, no random source and no Intl while the server appl
     await ok(t, w.as("mel", "prefs.set", { layout: "wide" }));
     const n = w.notifs("mona")[0];
     await ok(t, w.as("mona", "notifications.markRead", { id: n?.id ?? "" }));
+    await ok(t, w.as("mona", "notifications.markAllRead", {}));
+    // the nodes, replies, comments, runs and links the plan adds (`01` U5)
+    const node = w.rev(`node:${fu}`);
+    await ok(
+      t,
+      w.as("mona", "followups.update", { thread: th, node: fu, q: "F2", base: { rev: node } }),
+    );
+    await ok(t, w.as("ada", "research.cancelNode", { thread: th, node: look }));
+    await ok(t, w.as("ada", "research.retryNode", { thread: th, node: look, ...MODEL }));
+    await ok(t, w.as("mel", "threads.create", { id: w.id(), from: { th, node: fu } }));
+    const c = w.id();
+    await ok(t, w.as("ada", "comments.create", { id: c, thread: th, node: fu, t: "C" }));
+    await ok(
+      t,
+      w.as("ada", "comments.update", { id: c, t: "C2", base: { rev: w.rev(`comment:${c}`) } }),
+    );
+    await ok(t, w.as("ada", "comments.delete", { id: c }));
+    const r2 = w.id();
+    await ok(t, w.as("mona", "research.createPostFollowUp", { id: r2, thread: post, t: "R2" }));
+    await ok(
+      t,
+      w.as("mona", "replies.update", { id: r2, t: "R3", base: { rev: w.rev(`reply:${r2}`) } }),
+    );
+    await ok(t, w.as("mona", "replies.delete", { id: r2 }));
+    const link = w.id();
+    await ok(t, w.as("olga", "invites.create", { id: link, space: closed, days: 1 }));
+    await ok(t, w.as("olga", "invites.revoke", { id: link }));
+    await ok(t, w.as("olga", "invites.restore", { id: link }));
+    await ok(t, w.as("ada", "followups.delete", { thread: th, node: look }));
   } finally {
     globalThis.Date = RealDate;
     Math.random = realRandom;
@@ -314,6 +346,7 @@ test("mutators read no clock, no random source and no Intl while the server appl
     for (const f of ["mine", "saved", "liked", "likes"]) t.false(f in r, `${k} has ${f}`);
   }
   t.deepEqual([...kinds].sort(), [
+    "answer",
     "comment",
     "counts",
     "invite",
@@ -334,7 +367,7 @@ test("mutators read no clock, no random source and no Intl while the server appl
 
 test("every ported mutator refuses a signed-out caller and extra input fields", async (t) => {
   const { w } = await cast(t);
-  for (const name of Object.keys(MUTATORS)) {
+  for (const name of Object.keys(PROTO_MUTATORS)) {
     await refused(t, w.as(null, name, {}), "UNAUTHORIZED");
     await refused(t, w.as("eve", name, { forged: true }), "BAD_REQUEST");
   }
