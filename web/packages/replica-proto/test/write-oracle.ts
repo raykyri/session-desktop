@@ -4,7 +4,9 @@
 // answer is recorded, from:
 // - the rules below, taken from the mock's PROCS and `who` checks
 //   (`docs/mockups/session-web-spaces-mock-api.js`, sections 5a and 5b), the
-//   decided rules in AGENTS.md and the owner's decisions of phase 0b;
+//   decided rules in AGENTS.md, the owner's decisions of phase 0b and the
+//   implementation plan (`01` C1-C18: one owner per space, no likes, rules or
+//   reporting, nodes and comments);
 // - the server's stored records, read as facts (who has which role, which
 //   ids exist), and the read oracle (`oracle.ts`) for "may the actor read the
 //   target";
@@ -18,17 +20,20 @@
 // predicted `ok`, `effect-model.ts` predicts what it changes.
 //
 // The protocol, in order (the first that applies decides):
-//   0. an input nested more than 32 deep, or an envelope larger than 256 KB
-//      as JSON: BAD_REQUEST (round 2, decision 8)              unrecorded
-//   1. protocolVersion an integer below 3: UPGRADE_REQUIRED    unrecorded
+//   0. an input nested more than 32 deep: BAD_REQUEST; an envelope larger
+//      than 256 KB as JSON: TOO_LARGE (round 2, decision 8; `01` Y1)
+//                                                              unrecorded
+//   1. protocolVersion an integer below 4: UPGRADE_REQUIRED    unrecorded
 //   2. envelope: exactly { clientId, seq ≥ 1, mutationId, name, input,
-//      protocolVersion, clientTime ≥ 0 }, else BAD_REQUEST     unrecorded
+//      protocolVersion, clientTime ≥ 0, queuedAt ≥ 0 } and optionally
+//      `replaces` (at most 16 ULIDs), else BAD_REQUEST          unrecorded
 //   3. signed out, or a handle no person may have: UNAUTHORIZED unrecorded
 //   4. the client id unknown, another user's, or not used for 90 days:
 //      WRONG_CLIENT                                            unrecorded
 //   5. a stored answer for (user, mutation id) with the same name and input
-//      (key order aside), within 7 days: that answer, under any client id
-//      or seq of the user                                      unrecorded
+//      (key order aside), or stored under that id by an envelope that
+//      replaced it, within 7 days: that answer, under any client id or seq
+//      of the user                                             unrecorded
 //   6. an answer stored for (client, seq) with the same mutation id, name
 //      and input, within 7 days: that answer                   unrecorded
 //   7. seq not the client's last + 1: OUT_OF_ORDER             unrecorded
@@ -38,7 +43,8 @@
 //      (round 2, decision 3: only the device's clock against the server's)
 //                                                              unrecorded
 //  10. the mutation id's age on the device (clientTime − its time) above 4
-//      days or below −1 minute: EXPIRED                        stored
+//      days or below −1 minute: EXPIRED; then the same for queuedAt
+//                                                              stored
 //  11. an unknown name: NOT_FOUND; 12. an input outside the schema:
 //      BAD_REQUEST                                             stored
 //  13. a new id in the input with such an age: EXPIRED         stored
@@ -46,8 +52,8 @@
 //      minute old on the device: EXPIRED (it waited in an outbox) stored
 //  15. the mutator's own rules (RULES below)                   stored
 // "Stored" answers use the seq and are kept for replays for 7 days, under
-// (user, mutation id). An answer that uses the seq is always stored (round
-// 1, R7b). INTERNAL_SERVER_ERROR (the server's random source failed, in the
+// (user, mutation id) and under each id in `replaces` that has no answer.
+// An answer that uses the seq is always stored (round 1, R7b). INTERNAL_SERVER_ERROR (the server's random source failed, in the
 // invite code's pre-check) is unrecorded.
 //
 // Registration (round 2, decision 5): UNAUTHORIZED for a signed-out caller
@@ -78,17 +84,16 @@ const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 const HANDLE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const RESERVED = ["null", "undefined"];
-const ROLES = ["member", "mod", "admin", "owner"] as const;
-type Role = (typeof ROLES)[number];
-const RANK: Record<Role, number> = { member: 1, mod: 2, admin: 3, owner: 4 };
 
 const isHandle = (u: unknown) => typeof u === "string" && HANDLE.test(u) && !RESERVED.includes(u);
 const timeOf = (id: string) => [...id.slice(0, 10)].reduce((t, ch) => t * 32 + B32.indexOf(ch), 0);
-/** An id's age on the device's clock is from −1 minute to 4 days. */
-const fresh = (id: string, deviceNow: number) => {
-  const age = deviceNow - timeOf(id);
+/** A time's age on the device's clock is from −1 minute to 4 days. */
+const freshTime = (ms: number, deviceNow: number) => {
+  const age = deviceNow - ms;
   return age >= -MINUTE_MS && age <= 4 * MIN_DAY;
 };
+/** An id's age on the device's clock is from −1 minute to 4 days. */
+const fresh = (id: string, deviceNow: number) => freshTime(timeOf(id), deviceNow);
 /** How deep a value nests (a scalar 0, `[1]` 1), walked without recursion;
  * Infinity past 10,000 levels or 300,000 values. */
 function depthOf(v: unknown): number {
@@ -119,6 +124,11 @@ function sortedJson(v: unknown): string {
 
 type Check = (v: unknown) => boolean;
 const str: Check = (v) => typeof v === "string";
+/** A string of at most `n` characters (UTF-16 units, as zod counts). */
+const upTo =
+  (n: number): Check =>
+  (v) =>
+    typeof v === "string" && v.length <= n;
 const bool: Check = (v) => typeof v === "boolean";
 const ulid: Check = (v) => typeof v === "string" && ULID.test(v);
 const nat: Check = (v) => typeof v === "number" && Number.isInteger(v) && v >= 0;
@@ -126,12 +136,13 @@ const oneOf =
   (...xs: unknown[]): Check =>
   (v) =>
     xs.includes(v);
-const role = oneOf(...ROLES);
 const handle: Check = isHandle;
-const strings: Check = (v) => Array.isArray(v) && v.every(str);
-const questions: Check = (v) => Array.isArray(v) && v.every(obj({ q: str }, { req: bool }));
 const itemKey: Check = (v) =>
   typeof v === "string" && /^[a-z]+:[0-9A-HJKMNP-TV-Z]{26}(:.*)?$/.test(v);
+/** `r` (a thread's root ask) or a node's id. */
+const nodeRef: Check = (v) => v === "r" || ulid(v);
+const model: Check = (v) => typeof v === "string" && v.length >= 1 && v.length <= 100;
+const effort = oneOf("low", "medium", "high", "xhigh", "max");
 const obj =
   (req: Record<string, Check>, opt: Record<string, Check> = {}): Check =>
   (v) => {
@@ -143,7 +154,14 @@ const obj =
       if (k in o && o[k] !== undefined && !c(o[k])) return false;
     return true;
   };
-const vis = oneOf("open", "listed", "unlisted");
+/** An input whose shape depends on its `kind`. */
+const byKind =
+  (shapes: Record<string, Check>): Check =>
+  (v) => {
+    const k = (v as { kind?: unknown } | null)?.kind;
+    return typeof k === "string" && Object.hasOwn(shapes, k) && (shapes[k] as Check)(v);
+  };
+const vis = oneOf("open", "private");
 /** `base` of a write on another record: that record's rev as the client saw it. */
 const rev = obj({ rev: nat });
 /** `base` of joinRequests.decide: one rev for each person in `users`, by handle. */
@@ -159,53 +177,39 @@ const revsFor =
       users.every((u) => keys.includes(String(u)))
     );
   };
+const title = (v: unknown) => v === null || str(v);
 
 const SCHEMA: Record<string, Check> = {
   "spaces.create": obj(
-    { id: ulid, name: str },
-    {
-      vis,
-      policy: oneOf("request", "invite"),
-      invite: oneOf("mods", "members"),
-      desc: str,
-      rules: strings,
-      qs: questions,
-    },
+    { id: ulid, name: (v) => str(v) && (v as string).length >= 1 && (v as string).length <= 64 },
+    { vis, desc: upTo(300) },
   ),
-  "spaces.update": obj(
-    { id: ulid },
-    {
-      set: obj(
-        {},
-        {
-          name: str,
-          title: str,
-          desc: str,
-          rules: strings,
-          qs: questions,
-          vis,
-          policy: oneOf("request", "invite"),
-          invite: oneOf("mods", "members"),
-          postsOff: bool,
-        },
-      ),
-      base: obj({ rulesRev: nat }),
-      force: bool,
-    },
-  ),
-  "spaces.join": obj({ space: ulid }, { invite: str }),
+  "spaces.update": obj({ id: ulid, desc: upTo(300) }),
+  "spaces.join": obj({ space: ulid }, { invite: upTo(64) }),
   "spaces.leave": obj({ space: ulid }),
-  "threads.create": obj(
-    { id: ulid, space: ulid, kind: oneOf("ask", "post"), q: str },
-    { title: (v) => v === null || str(v) },
-  ),
-  "threads.update": obj({ id: ulid, q: str, base: obj({ rev: nat }) }),
+  "threads.create": byKind({
+    ask: obj({ id: ulid, space: ulid, kind: str, q: upTo(8000), model, effort }, { title }),
+    post: obj({ id: ulid, space: ulid, kind: str, q: upTo(8000) }, { title }),
+  }),
+  "threads.update": obj({ id: ulid, q: upTo(8000), base: obj({ rev: nat }) }),
   "threads.delete": obj({ id: ulid }),
-  "likes.set": obj({ thread: ulid, on: bool }),
   "saved.set": obj({ kind: oneOf("thread"), id: ulid, on: bool }),
-  "followups.ask": obj({ id: ulid, thread: ulid, q: str }),
-  "research.createPostFollowUp": obj({ id: ulid, thread: ulid, t: str }, { parent: ulid }),
-  "joinRequests.create": obj({ space: ulid }, { answers: strings, rulesAccepted: bool }),
+  "research.forkNode": byKind({
+    ask: obj(
+      { id: ulid, thread: ulid, parent: nodeRef, kind: str, q: upTo(8000), model, effort },
+      { quote: upTo(2000), b: nat },
+    ),
+    lookup: obj(
+      { id: ulid, thread: ulid, parent: nodeRef, kind: str, look: upTo(80), model, effort },
+      { quote: upTo(2000), b: nat },
+    ),
+  }),
+  "research.createPostFollowUp": obj({ id: ulid, thread: ulid, t: upTo(8000) }, { parent: ulid }),
+  "comments.create": obj(
+    { id: ulid, thread: ulid, node: nodeRef, t: upTo(8000) },
+    { parent: ulid },
+  ),
+  "joinRequests.create": obj({ space: ulid }),
   "joinRequests.decide": (v) =>
     obj(
       {
@@ -214,28 +218,32 @@ const SCHEMA: Record<string, Check> = {
         decision: oneOf("approve", "decline", "reopen"),
         base: revsFor(v),
       },
-      { why: str },
+      { why: upTo(300) },
     )(v),
-  "members.setRole": obj({ space: ulid, user: handle, role, base: rev }),
-  "members.remove": obj({ space: ulid, user: handle, base: obj({ adm: str }) }),
+  "members.remove": obj({ space: ulid, user: handle, base: obj({ adm: upTo(64) }) }),
   "members.ban": obj({ space: ulid, user: handle }),
-  "invites.create": obj({ id: ulid, space: ulid }, { days: (v) => v === null || nat(v) }),
-  "reports.create": obj({ id: ulid, item: itemKey, why: str }, { note: str }),
-  "moderation.decide": obj({
-    item: itemKey,
-    decision: oneOf("hidden", "removed", "shown"),
-    base: rev,
+  "members.unban": obj({ space: ulid, user: handle }),
+  "invites.create": obj({
+    id: ulid,
+    space: ulid,
+    days: (v) => nat(v) && (v as number) >= 1 && (v as number) <= 30,
   }),
+  "moderation.decide": obj(
+    { item: itemKey, decision: oneOf("hidden", "removed", "shown") },
+    { note: upTo(300), base: rev },
+  ),
+  "notifications.markRead": obj({ id: ulid }),
+  "prefs.set": obj({ layout: oneOf("centred", "wide") }),
 };
 
 /** The input fields that carry a new client-made id. */
 const NEW_IDS: Record<string, string[]> = {
   "spaces.create": ["id"],
   "threads.create": ["id"],
-  "followups.ask": ["id"],
+  "research.forkNode": ["id"],
   "research.createPostFollowUp": ["id"],
+  "comments.create": ["id"],
   "invites.create": ["id"],
-  "reports.create": ["id"],
 };
 
 // ---- the mutators' rules ----
@@ -263,34 +271,28 @@ const no = (code: ErrorCode): never => {
 
 type Space = Extract<StoredRecord, { kind: "space" }>;
 type Thread = Extract<StoredRecord, { kind: "thread" }>;
+type AskNode = Extract<StoredRecord, { kind: "node" }>;
 
 const spaceAt = (f: Facts, sp: string) => {
   const s = f.dump.get(`space:${sp}`);
   return s?.kind === "space" ? s : undefined;
 };
-const closed = (s: Space) => s.vis !== "open";
-const roleOf = (f: Facts, sp: string, u: string): Role | null => {
+const closed = (s: Space) => s.vis === "private";
+const roleOf = (f: Facts, sp: string, u: string): string | null => {
   const m = f.dump.get(`member:${sp}:${u}`);
   return m?.kind === "member" ? m.role : null;
 };
-const rank = (f: Facts, sp: string, u: string) => {
-  const r = roleOf(f, sp, u);
-  return r ? RANK[r] : 0;
-};
 const banned = (f: Facts, sp: string, u: string) => f.dump.has(`ban:${sp}:${u}`);
-/** A stored record's rev, 0 when there is none. */
-const revAt = (f: Facts, key: string) => f.dump.get(key)?.rev ?? 0;
-const baseRev = (i: In) => (i["base"] as { rev: number }).rev;
+const baseRev = (i: In) => (i["base"] as { rev: number } | undefined)?.rev;
 const blank = (v: unknown) => String(v).trim() === "";
 /** The space's record, or NOT_FOUND; then: a banned actor is refused every
  * write there; then the role `need` (0: any signed-in person; "member": a
- * member of a closed space, anyone in an open one). */
-function inSpace(f: Facts, sp: string, need: 0 | "member" | Role): Space {
+ * member of a private space, anyone in an open one; "owner": the owner). */
+function inSpace(f: Facts, sp: string, need: 0 | "member" | "owner"): Space {
   const s = spaceAt(f, sp) ?? no("NOT_FOUND");
   if (banned(f, sp, f.me)) no("FORBIDDEN");
-  if (need === "member") {
-    if (closed(s) && roleOf(f, sp, f.me) === null) no("FORBIDDEN");
-  } else if (need !== 0 && rank(f, sp, f.me) < RANK[need]) no("FORBIDDEN");
+  if (need === "member" && closed(s) && roleOf(f, sp, f.me) === null) no("FORBIDDEN");
+  if (need === "owner" && roleOf(f, sp, f.me) !== "owner") no("FORBIDDEN");
   return s;
 }
 
@@ -299,6 +301,15 @@ function seenThread(f: Facts, id: unknown): Thread {
   const p = f.dump.get(`thread:${String(id)}`);
   if (p?.kind !== "thread" || !mayRead(f.dump, p, f.me)) no("NOT_FOUND");
   return p as Thread;
+}
+
+/** The node a reference names in a thread the actor reads: the thread for
+ * `r`, else a node of that thread the actor may read, or NOT_FOUND. */
+function seenNode(f: Facts, p: Thread, ref: unknown): Thread | AskNode {
+  if (ref === "r") return p;
+  const n = f.dump.get(`node:${String(ref)}`);
+  if (n?.kind !== "node" || n.th !== p.id || !mayRead(f.dump, n, f.me)) no("NOT_FOUND");
+  return n as AskNode;
 }
 
 /** The item a moderation key names, if the actor may read it. */
@@ -311,30 +322,28 @@ function seenItem(f: Facts, key: string) {
     if ((p.k === "ask") !== (k === "a")) no("NOT_FOUND");
     return p;
   }
-  if ((k === "f" || k === "r") && sub) {
-    const r = f.dump.get(`${k === "f" ? "followup" : "reply"}:${sub}`);
-    const want = k === "f" ? "followup" : "reply";
+  const want = k === "f" ? "node" : k === "r" ? "reply" : k === "c" ? "comment" : null;
+  if (want && sub) {
+    const r = f.dump.get(`${want}:${sub}`);
     if (!r || r.kind !== want || r.th !== th || !mayRead(f.dump, r, f.me)) no("NOT_FOUND");
-    return r as Extract<StoredRecord, { kind: "followup" | "reply" }>;
+    return r as Extract<StoredRecord, { kind: "node" | "reply" | "comment" }>;
   }
   return no("NOT_FOUND");
 }
 
-/** The mock's `actsOn` (the page's cxCanAct): on members ranked below you;
- * admins and the owner on admins too; never on the owner or yourself. "Someone
- * not in the list counts as a member" (the mock's words), so a moderator may
- * ban a person who never joined. */
-function actOn(f: Facts, sp: string, u: string) {
-  if (u === f.me) no("FORBIDDEN");
-  const target = roleOf(f, sp, u) ?? "member";
-  if (target === "owner") no("FORBIDDEN");
-  const mine = rank(f, sp, f.me);
-  if (target === "admin" ? mine < RANK.admin : mine <= RANK[target]) no("FORBIDDEN");
+/** A look-up phrase is 1 to 4 words, once what is not a letter or a digit is
+ * taken off both ends (`03` G2). */
+function phraseOk(v: string): boolean {
+  const chars = [...v];
+  const word = (ch: string) => /[\p{L}\p{N}]/u.test(ch);
+  while (chars.length && !word(chars[0] as string)) chars.shift();
+  while (chars.length && !word(chars[chars.length - 1] as string)) chars.pop();
+  const n = chars
+    .join("")
+    .split(/\s+/)
+    .filter((x) => x !== "").length;
+  return n >= 1 && n <= 4;
 }
-
-const makesLinks = (f: Facts, s: Space, u: string) =>
-  rank(f, s.id, u) >= RANK.mod ||
-  (closed(s) && s.invite === "members" && roleOf(f, s.id, u) !== null);
 
 const RULES: Record<string, (f: Facts, i: In) => void> = {
   "spaces.create": (f, i) => {
@@ -343,26 +352,9 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     for (const r of f.dump.values()) if (r.kind === "space" && r.name === name) no("CONFLICT");
     if (f.idTaken(String(i["id"]))) no("CONFLICT");
   },
+  // About only, by the owner (`01` C11)
   "spaces.update": (f, i) => {
-    const s = inSpace(f, String(i["id"]), "admin");
-    const set = (i["set"] ?? {}) as In;
-    if (set["name"] !== undefined) {
-      const name = slug(set["name"] as string);
-      if (!name) no("BAD_REQUEST");
-      if (name !== s.name)
-        for (const r of f.dump.values()) if (r.kind === "space" && r.name === name) no("CONFLICT");
-    }
-    const rules = set["rules"]
-      ? (set["rules"] as string[]).map((x) => x.trim()).filter(Boolean)
-      : s.rules;
-    const base = i["base"] as { rulesRev: number } | undefined;
-    if (
-      rules.join("\n") !== s.rules.join("\n") &&
-      base &&
-      !i["force"] &&
-      base.rulesRev !== s.rulesRev
-    )
-      no("CONFLICT");
+    inSpace(f, String(i["id"]), "owner");
   },
   "spaces.join": (f, i) => {
     const s = inSpace(f, String(i["space"]), 0);
@@ -374,23 +366,17 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
       link?.kind === "invite" &&
       link.sp === s.id &&
       link.dead === null &&
-      (link.expiresAt === null || Date.parse(link.expiresAt) > f.nowSec) &&
-      makesLinks(f, s, link.by);
+      Date.parse(link.expiresAt) > f.nowSec;
     if (!live) no("FORBIDDEN");
   },
+  // the owner cannot leave (`01` C18)
   "spaces.leave": (f, i) => {
     const sp = String(i["space"]);
     inSpace(f, sp, "member");
-    if (roleOf(f, sp, f.me) === "owner") {
-      const others = [...f.dump.values()].some(
-        (r) => r.kind === "member" && r.sp === sp && r.role === "owner" && r.u !== f.me,
-      );
-      if (!others) no("PRECONDITION_FAILED");
-    }
+    if (roleOf(f, sp, f.me) === "owner") no("PRECONDITION_FAILED");
   },
   "threads.create": (f, i) => {
-    const s = inSpace(f, String(i["space"]), "member");
-    if (i["kind"] === "post" && s.postsOff) no("PRECONDITION_FAILED");
+    inSpace(f, String(i["space"]), "member");
     if (blank(i["q"])) no("BAD_REQUEST");
     if (f.idTaken(String(i["id"]))) no("CONFLICT");
   },
@@ -399,7 +385,7 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     inSpace(f, p.s, 0);
     if (p.u !== f.me) no("FORBIDDEN");
     if (p.mod === "removed" || p.del || p.gone) no("PRECONDITION_FAILED");
-    if (p.rev !== (i["base"] as { rev: number }).rev) no("STALE");
+    if (p.rev !== baseRev(i)) no("STALE");
     if (blank(i["q"])) no("BAD_REQUEST");
   },
   "threads.delete": (f, i) => {
@@ -410,31 +396,24 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     inSpace(f, p.s, 0);
     if (p.u !== f.me) no("FORBIDDEN");
   },
-  "likes.set": (f, i) => {
-    const mine = f.dump.has(`like:${f.me}:${String(i["thread"])}`);
+  "saved.set": (f, i) => {
+    const mine = f.dump.has(`save:${f.me}:${String(i["id"])}`);
     if (i["on"] === false) {
-      const p = f.dump.get(`thread:${String(i["thread"])}`);
+      const p = f.dump.get(`thread:${String(i["id"])}`);
       if (mine && p?.kind === "thread") inSpace(f, p.s, 0);
       return;
     }
-    const p = seenThread(f, i["thread"]);
+    const p = seenThread(f, i["id"]);
     inSpace(f, p.s, 0);
     if (!mine && p.mod === "removed") no("PRECONDITION_FAILED");
   },
-  "saved.set": (f, i) => {
-    if (i["on"] === false) {
-      const p = f.dump.get(`thread:${String(i["id"])}`);
-      if (f.dump.has(`save:${f.me}:${String(i["id"])}`) && p?.kind === "thread") inSpace(f, p.s, 0);
-      return;
-    }
-    inSpace(f, seenThread(f, i["id"]).s, 0);
-  },
-  "followups.ask": (f, i) => {
+  "research.forkNode": (f, i) => {
     const p = seenThread(f, i["thread"]);
     inSpace(f, p.s, "member");
     if (p.k !== "ask") no("BAD_REQUEST");
     if (p.mod === "removed") no("PRECONDITION_FAILED");
-    if (blank(i["q"])) no("BAD_REQUEST");
+    if (seenNode(f, p, i["parent"]).mod === "removed") no("PRECONDITION_FAILED");
+    if (i["kind"] === "ask" ? blank(i["q"]) : !phraseOk(String(i["look"]))) no("BAD_REQUEST");
     if (f.idTaken(String(i["id"]))) no("CONFLICT");
   },
   "research.createPostFollowUp": (f, i) => {
@@ -457,17 +436,36 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     if (blank(i["t"])) no("BAD_REQUEST");
     if (f.idTaken(String(i["id"]))) no("CONFLICT");
   },
+  // a comment hangs under a node, or under a top-level comment on it (`01` C4)
+  "comments.create": (f, i) => {
+    const p = seenThread(f, i["thread"]);
+    inSpace(f, p.s, "member");
+    if (p.k !== "ask") no("BAD_REQUEST");
+    if (p.mod === "removed") no("PRECONDITION_FAILED");
+    if (seenNode(f, p, i["node"]).mod === "removed") no("PRECONDITION_FAILED");
+    if (i["parent"] !== undefined) {
+      const top = f.dump.get(`comment:${i["parent"] as string}`);
+      if (
+        top?.kind !== "comment" ||
+        !mayRead(f.dump, top, f.me) ||
+        top.th !== p.id ||
+        top.node !== i["node"] ||
+        top.parent !== null
+      )
+        no("NOT_FOUND");
+      if ((top as Extract<StoredRecord, { kind: "comment" }>).mod === "removed")
+        no("PRECONDITION_FAILED");
+    }
+    if (blank(i["t"])) no("BAD_REQUEST");
+    if (f.idTaken(String(i["id"]))) no("CONFLICT");
+  },
   "joinRequests.create": (f, i) => {
     const s = inSpace(f, String(i["space"]), 0);
-    if (!closed(s) || s.policy === "invite" || roleOf(f, s.id, f.me) !== null)
-      no("PRECONDITION_FAILED");
-    const answers = (i["answers"] as string[] | undefined) ?? [];
-    if (s.qs.some((q, k) => q.req && !(answers[k] ?? "").trim())) no("BAD_REQUEST");
-    if (s.rules.length > 0 && i["rulesAccepted"] !== true) no("BAD_REQUEST");
+    if (!closed(s) || roleOf(f, s.id, f.me) !== null) no("PRECONDITION_FAILED");
   },
   "joinRequests.decide": (f, i) => {
     const sp = String(i["space"]);
-    inSpace(f, sp, "mod");
+    inSpace(f, sp, "owner");
     const from = i["decision"] === "reopen" ? "declined" : "open";
     const base = i["base"] as Record<string, number>;
     for (const u of new Set(i["users"] as string[])) {
@@ -480,53 +478,47 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
       if (i["decision"] === "approve" && banned(f, sp, u)) no("PRECONDITION_FAILED");
     }
   },
-  "members.setRole": (f, i) => {
-    const sp = String(i["space"]);
-    const user = String(i["user"]);
-    const next = i["role"] as Role;
-    inSpace(f, sp, "admin");
-    if (next === "owner" && roleOf(f, sp, f.me) !== "owner") no("FORBIDDEN");
-    actOn(f, sp, user);
-    if (next !== "owner" && RANK[next] > rank(f, sp, f.me)) no("FORBIDDEN");
-    if (revAt(f, `member:${sp}:${user}`) !== baseRev(i)) no("STALE");
-    if (roleOf(f, sp, user) === null) no("NOT_FOUND");
-  },
+  // the owner acts on anyone but themselves (`01` C18)
   "members.remove": (f, i) => {
-    inSpace(f, String(i["space"]), "mod");
-    actOn(f, String(i["space"]), String(i["user"]));
-    // round 2: the admission id the moderator saw; nothing to do for a person
-    // who is no longer a member
+    inSpace(f, String(i["space"]), "owner");
+    if (i["user"] === f.me) no("FORBIDDEN");
+    // round 2: the admission id the owner saw; nothing to do for a person who
+    // is no longer a member
     const m = f.dump.get(`member:${String(i["space"])}:${String(i["user"])}`);
     if (m?.kind === "member" && m.adm !== (i["base"] as { adm: string }).adm) no("STALE");
   },
   // round 2: a ban takes the person as they are, and has no base
   "members.ban": (f, i) => {
-    inSpace(f, String(i["space"]), "mod");
-    actOn(f, String(i["space"]), String(i["user"]));
+    inSpace(f, String(i["space"]), "owner");
+    if (i["user"] === f.me) no("FORBIDDEN");
+  },
+  "members.unban": (f, i) => {
+    inSpace(f, String(i["space"]), "owner");
   },
   "invites.create": (f, i) => {
-    const s = inSpace(f, String(i["space"]), "member");
-    if (!makesLinks(f, s, f.me)) no("FORBIDDEN");
+    inSpace(f, String(i["space"]), "owner");
     // the code comes from the server's random source, before the record is written
     if (f.randomDown) no("INTERNAL_SERVER_ERROR");
     if (f.idTaken(String(i["id"]))) no("CONFLICT");
   },
-  "reports.create": (f, i) => {
-    const item = seenItem(f, String(i["item"]));
-    inSpace(f, item.s, "member");
-    if (blank(i["why"])) no("BAD_REQUEST");
-    if (f.idTaken(String(i["id"]))) no("CONFLICT");
-  },
   "moderation.decide": (f, i) => {
     const item = seenItem(f, String(i["item"]));
-    inSpace(f, item.s, "mod");
+    inSpace(f, item.s, "owner");
     const d = i["decision"];
+    if (d === "shown" && i["base"] === undefined) no("BAD_REQUEST");
     // round 2: only "shown" could expose text, so only it compares the rev
     if (d === "shown" && item.rev !== baseRev(i)) no("STALE");
     if (item.mod === "removed") no("PRECONDITION_FAILED");
     if (d === "hidden" && item.mod !== null) no("PRECONDITION_FAILED");
     if (d === "shown" && item.mod !== "hidden") no("PRECONDITION_FAILED");
   },
+  // your own notification, while you may read its space
+  "notifications.markRead": (f, i) => {
+    const n = f.dump.get(`notif:${String(i["id"])}`);
+    if (n?.kind !== "notif" || n.to !== f.me || !mayRead(f.dump, n, f.me)) return no("NOT_FOUND");
+    if (n.sp !== null) inSpace(f, n.sp, 0);
+  },
+  "prefs.set": () => {},
 };
 
 const ENVELOPE_KEYS = [
@@ -536,8 +528,11 @@ const ENVELOPE_KEYS = [
   "mutationId",
   "name",
   "protocolVersion",
+  "queuedAt",
   "seq",
 ];
+/** The digest of an answer stored under a replaced mutation id. */
+const REPLACED = "*";
 /** Clients unused this long are gone (round 2, decision 5). */
 const CLIENT_IDLE = 90 * MIN_DAY;
 
@@ -611,18 +606,23 @@ export class WriteModel {
     const pass = (code: Code): Prediction => ({ code, usesSeq: false, stored: false });
     const e = envelope as Envelope;
     const isObject = e !== null && typeof e === "object";
-    if (
-      isObject &&
-      (depthOf((e as { input?: unknown }).input) > 32 ||
-        new TextEncoder().encode(JSON.stringify(e)).length > 256 * 1024)
-    )
-      return pass("BAD_REQUEST");
+    if (isObject && depthOf((e as { input?: unknown }).input) > 32) return pass("BAD_REQUEST");
+    if (isObject && new TextEncoder().encode(JSON.stringify(e)).length > 256 * 1024)
+      return pass("TOO_LARGE");
     const version = isObject ? (e as { protocolVersion?: unknown }).protocolVersion : undefined;
-    if (typeof version === "number" && Number.isInteger(version) && version < 3)
+    if (typeof version === "number" && Number.isInteger(version) && version < 4)
       return pass("UPGRADE_REQUIRED");
+    const replaces = isObject ? (e as { replaces?: unknown }).replaces : undefined;
     const shape =
       isObject &&
-      Object.keys(e).sort().join() === ENVELOPE_KEYS.join() &&
+      Object.keys(e)
+        .filter((k) => k !== "replaces")
+        .sort()
+        .join() === ENVELOPE_KEYS.join() &&
+      (replaces === undefined ||
+        (Array.isArray(replaces) &&
+          replaces.length <= 16 &&
+          replaces.every((x) => typeof x === "string" && ULID.test(x)))) &&
       typeof e.clientId === "string" &&
       typeof e.mutationId === "string" &&
       typeof e.name === "string" &&
@@ -630,7 +630,9 @@ export class WriteModel {
       e.seq >= 1 &&
       Number.isInteger(e.protocolVersion) &&
       Number.isInteger(e.clientTime) &&
-      e.clientTime >= 0;
+      e.clientTime >= 0 &&
+      Number.isInteger(e.queuedAt) &&
+      e.queuedAt >= 0;
     if (!shape) return pass("BAD_REQUEST");
     if (u === null || !isHandle(u)) return pass("UNAUTHORIZED");
     const client = this.client(e.clientId, now);
@@ -640,7 +642,7 @@ export class WriteModel {
     const payload = sortedJson([e.name, e.input]);
     const prior = formed ? this.answers.get(`${u} ${e.mutationId}`) : undefined;
     const live = prior && now - prior.at < 7 * MIN_DAY ? prior : undefined;
-    if (live && live.payload === payload) return pass(live.code);
+    if (live && (live.payload === payload || live.payload === REPLACED)) return pass(live.code);
     const again = client.bySeq.get(e.seq);
     if (again && now - again.at < 7 * MIN_DAY && again.sent === sortedJson([e.mutationId, payload]))
       return pass(again.code);
@@ -650,6 +652,7 @@ export class WriteModel {
     if (Math.abs(e.clientTime - now) > MINUTE_MS) return pass("CLOCK_SKEW");
     const stored = (code: Code): Prediction => ({ code, usesSeq: true, stored: true });
     if (!fresh(e.mutationId, e.clientTime)) return stored("EXPIRED");
+    if (!freshTime(e.queuedAt, e.clientTime)) return stored("EXPIRED");
     const schema = Object.hasOwn(SCHEMA, e.name) ? SCHEMA[e.name] : undefined;
     const rules = Object.hasOwn(RULES, e.name) ? RULES[e.name] : undefined;
     if (!schema || !rules) return stored("NOT_FOUND");
@@ -688,12 +691,18 @@ export class WriteModel {
         code: p.code,
         at: now,
       });
-    if (p.stored)
+    if (p.stored) {
       this.answers.set(`${u} ${envelope.mutationId}`, {
         payload: sortedJson([envelope.name, envelope.input]),
         code: p.code,
         at: now,
       });
+      for (const id of envelope.replaces ?? []) {
+        const old = this.answers.get(`${u} ${id}`);
+        if (id !== envelope.mutationId && !(old && now - old.at < 7 * MIN_DAY))
+          this.answers.set(`${u} ${id}`, { payload: REPLACED, code: p.code, at: now });
+      }
+    }
     for (const [k, a] of this.answers) if (now - a.at >= 7 * MIN_DAY) this.answers.delete(k);
   }
 }

@@ -8,10 +8,14 @@
 // once. `--slots <n>` sets how many copies run at once (default 4).
 //
 // X1 to X31 are review round 1's mutations and the ones round 1's fixes
-// added, N1 to N34 review round 2's, R2-1 on cover round 2's fixes. Each
-// pattern is moved with the code; the fault stays the same, or, where the
-// code it named is gone, is the same fault in the code that replaced it (the
-// comment says so).
+// added, N1 to N34 review round 2's, R2-1 on cover round 2's fixes, U6-1 on
+// the build's contract (`01` U6). Each pattern is moved with the code; the
+// fault stays the same, or, where the code it named is gone, is the same
+// fault in the code that replaced it (the comment says so). Removed with the
+// code they named (`01` U6): X2 (opening a space; visibility no longer
+// changes), X9 (ownership transfer), X11, N24's report form and R2-5
+// (reporting), N13 and N14 (members making invite links), N11, N17, R2-15,
+// R2-16 and R2-17 (the effect queue).
 
 import { spawn } from "node:child_process";
 import {
@@ -46,12 +50,6 @@ const MUTATIONS: Mutation[] = [
     to: "      if (!tx.get(banKey",
   },
   {
-    name: "X2 opening a space admits banned requesters",
-    file: "src/mutators.ts",
-    from: 'if (!bannedFrom(tx, s0.id, r.u)) addMember(tx, s0.id, r.u, "member", tx.id(k));',
-    to: 'addMember(tx, s0.id, r.u, "member", tx.id(k));',
-  },
-  {
     name: "X3 an author's delete keeps the text",
     file: "src/mutators.ts",
     from: '        q: "",\n        t: null,\n        edited: false,',
@@ -60,8 +58,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "X4 a hidden thread keeps its title and summary",
     file: "src/access.ts",
-    from: 'return { ...r, q: "", t: null, sum: null } satisfies ThreadRec;',
-    to: 'return { ...r, q: "" } satisfies ThreadRec;',
+    from: "        t: null,\n        sum: null,\n        u: r.mod",
+    to: "        u: r.mod",
   },
   {
     name: "X5 lastSeq of anyone's client",
@@ -73,7 +71,7 @@ const MUTATIONS: Mutation[] = [
     name: "X6 the invite code is taken from the client's id",
     file: "src/mutators.ts",
     from: "    pre: (ctx) => {\n      const B32",
-    to: "    pre: (ctx, i) => {\n      if (i.id) return { code: i.id.slice(-10).toLowerCase() };\n      const B32",
+    to: "    pre: (ctx, i) => {\n      if (i.id) return { code: i.id.toLowerCase() };\n      const B32",
   },
   {
     name: "X7 an invite link is not used up",
@@ -88,22 +86,10 @@ const MUTATIONS: Mutation[] = [
     to: "      return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;",
   },
   {
-    name: "X9 an ownership transfer keeps the old owner",
-    file: "src/mutators.ts",
-    from: 'if (me?.kind === "member") tx.put({ ...me, role: "admin" });',
-    to: "",
-  },
-  {
     name: "X10 a del sent for tombstones the reader may not read",
     file: "src/server.ts",
     from: "return t && readsAudience(this.store, t, u) ? true : null;",
     to: "return t ? true : null;",
-  },
-  {
-    name: "X11 report notifications go to every member",
-    file: "src/server.ts",
-    from: '    const staff = spaceRec(this.store, effect.sp)?.mods ?? [];\n    for (const [to, role] of staff) {\n      if (role === "member") continue;',
-    to: '    const staff = [...this.store.records.values()].flatMap((r) =>\n      r.kind === "member" && r.sp === effect.sp ? [[r.u, "x"] as const] : [],\n    );\n    for (const [to, role] of staff) {\n      if (role === "member") continue;',
   },
   {
     name: "X12 idempotency kept 5 days",
@@ -112,11 +98,11 @@ const MUTATIONS: Mutation[] = [
     to: "export const DEDUP_TTL = 5 * DAY;",
   },
   {
-    // the count moved to the counts record (decision 4 of round 1)
-    name: "X13 a like counts twice",
+    // likes are gone (`01` C1); the count is the saves' now
+    name: "X13 a save counts twice",
     file: "src/mutators.ts",
-    from: "likes: Math.max(0, c.likes + (i.on ? 1 : -1))",
-    to: "likes: Math.max(0, c.likes + (i.on ? 2 : -1))",
+    from: 'const n = tx.find("save", (x) => x.th === th).length;',
+    to: 'const n = 2 * tx.find("save", (x) => x.th === th).length;',
   },
   {
     name: "X14 a removal keeps the title and summary",
@@ -131,16 +117,18 @@ const MUTATIONS: Mutation[] = [
     to: "",
   },
   {
-    name: "X18 a hidden follow-up keeps its answer",
+    // a follow-up's answer is the node's `answer` record now (`01` C3)
+    name: "X18 a hidden node's answer keeps its text",
     file: "src/access.ts",
-    from: 'return { ...r, q: "", a: null } satisfies FollowUpRec;',
-    to: 'return { ...r, q: "" } satisfies FollowUpRec;',
+    from: 'return { ...r, md: "", pages: [] } satisfies AnswerRec;',
+    to: "return r;",
   },
   {
-    name: "X19 follow-up tombstones are never pruned",
+    // follow-ups are nodes now (`01` U6)
+    name: "X19 node tombstones are never pruned",
     file: "src/server.ts",
     from: "      if (t.at >= cutoff) break;\n      this.tombs.delete(key);",
-    to: '      if (t.at >= cutoff) break;\n      if (t.kind !== "followup") this.tombs.delete(key);',
+    to: '      if (t.at >= cutoff) break;\n      if (t.kind !== "node") this.tombs.delete(key);',
   },
   {
     name: "X20 threads.delete gets kept wrong",
@@ -171,7 +159,7 @@ const MUTATIONS: Mutation[] = [
   {
     name: "X23 a 'shown' ignores the item's rev",
     file: "src/mutators.ts",
-    from: '      if (i.decision === "shown" && r.rev !== i.base.rev) throw stale();\n',
+    from: '      if (i.decision === "shown" && r.rev !== i.base?.rev) throw stale();\n',
     to: "",
   },
   {
@@ -188,7 +176,8 @@ const MUTATIONS: Mutation[] = [
     to: "const tomb = { ...old, key, ...audience(this, old), at } as Tombstone;",
   },
   {
-    name: "X26 likes and saves ignore access to their space",
+    // likes are gone; saves and notifications share the rule
+    name: "X26 saves and notifications ignore access to their space",
     file: "src/access.ts",
     from: "      return own && (sp === null || readsSpace(g, sp, u));",
     to: "      return own;",
@@ -196,8 +185,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "X27 INTERNAL_SERVER_ERROR is recorded",
     file: "src/contract.ts",
-    from: '  "INTERNAL_SERVER_ERROR",\n]);',
-    to: "]);",
+    from: '  "INTERNAL_SERVER_ERROR",\n  "TOO_LARGE",\n]);',
+    to: '  "TOO_LARGE",\n]);',
   },
   {
     name: "X28 the client does not follow OUT_OF_ORDER's expected seq",
@@ -287,28 +276,10 @@ const MUTATIONS: Mutation[] = [
     to: "",
   },
   {
-    name: "N11 a failed effect is dropped",
-    file: "src/server.ts",
-    from: "        if (q.attempts >= EFFECT_MAX_ATTEMPTS) {\n          this.effectQueue.splice(k, 1);\n          this.deadLetters.push({ ...q, failedAt: now });\n        } else {",
-    to: "        if (q.attempts >= 1) {\n          this.effectQueue.splice(k, 1);\n        } else {",
-  },
-  {
     name: "N12 an invite link ignores its expiry",
     file: "src/mutators.ts",
-    from: "        (link.expiresAt === null || Date.parse(link.expiresAt) > Date.parse(tx.now)) &&\n",
-    to: "",
-  },
-  {
-    name: "N13 a link's maker reads it after leaving the space",
-    file: "src/access.ts",
-    from: "(isModOf(g, sp, u) || (u !== null && a.by === u && roleIn(g, sp, u) !== null))",
-    to: "(isModOf(g, sp, u) || (u !== null && a.by === u))",
-  },
-  {
-    name: "N14 any settings save lets every member make invite links",
-    file: "src/mutators.ts",
-    from: 'invite: closed ? (set.invite ?? s0.invite ?? "mods") : null,',
-    to: 'invite: closed ? "members" : null,',
+    from: "        link.dead === null &&\n        Date.parse(link.expiresAt) > Date.parse(tx.now);",
+    to: "        link.dead === null;",
   },
   {
     name: "N15 answers under (client, seq) are never expired",
@@ -317,16 +288,12 @@ const MUTATIONS: Mutation[] = [
     to: "      if (a.at > now - DEDUP_TTL * 1000) break;\n      this.seqAnswers.delete(k);",
   },
   {
-    name: "N16 a job effect is lost",
-    file: "src/server.ts",
-    from: "      this.jobList.push({ kind: effect.kind, id: effect.id });\n      return;",
-    to: "      return;",
-  },
-  {
-    name: "N17 an effect that failed once runs twice",
-    file: "src/server.ts",
-    from: "        this.runEffect(q.effect, now);\n        this.effectQueue.splice(k, 1);\n        ran++;",
-    to: "        this.runEffect(q.effect, now);\n        if (q.attempts === 1) this.effectQueue.splice(k, 1);\n        else {\n          q.attempts = 0;\n          k++;\n        }\n        ran++;",
+    // the job effect is gone: the run record with status `queued` is the
+    // run queue (`01` U6), so the same fault is that record not written
+    name: "N16 an ask's queued run is not written",
+    file: "src/mutators.ts",
+    from: "(`03` E2)\n      const run = tx.id(1);\n      tx.create({",
+    to: "(`03` E2)\n      const run = tx.id(1);\n      void ({",
   },
   {
     // the served-cursor table is gone (decision 1); the table that grows
@@ -337,28 +304,32 @@ const MUTATIONS: Mutation[] = [
     to: "      if (c.seen > now - CLIENT_IDLE_TTL * 1000) break;\n      this.clients.delete(id);",
   },
   {
-    name: "N21 a like or save tombstone is served to its person whatever their access",
+    // likes are gone; notifications follow the same rule as saves
+    name: "N21 a save or notification tombstone is served to its person whatever their access",
     file: "src/server.ts",
     from: "    return t && readsAudience(this.store, t, u) ? true : null;",
-    to: '    return t &&\n      (readsAudience(this.store, t, u) ||\n        ((t.kind === "like" || t.kind === "save") && t.person === u))\n      ? true\n      : null;',
+    to: '    return t &&\n      (readsAudience(this.store, t, u) ||\n        ((t.kind === "save" || t.kind === "notif") && t.person === u))\n      ? true\n      : null;',
   },
   {
-    name: "N22 control: spaces.update needs only a moderator",
+    // admins are gone (`01` C18): About is the owner's
+    name: "N22 control: spaces.update needs only a member",
     file: "src/mutators.ts",
-    from: '    who: "admin",\n    space: (_tx, i) => i.id,',
-    to: '    who: "moderator",\n    space: (_tx, i) => i.id,',
+    from: '    who: "owner",\n    space: (_tx, i) => i.id,',
+    to: '    who: "member",\n    space: (_tx, i) => i.id,',
   },
   {
     name: "N23 a decline reason survives the person asking again",
     file: "src/mutators.ts",
-    from: "        a,\n        why: null,\n        createdAt: old",
-    to: '        a,\n        why: old?.kind === "request" ? old.why : null,\n        createdAt: old',
+    from: "        why: null,\n        createdAt: old",
+    to: '        why: old?.kind === "request" ? old.why : null,\n        createdAt: old',
   },
   {
-    name: "N24 control: one report in 32 notifies nobody",
-    file: "src/server.ts",
-    from: "    this.store.commit(staged, now);\n  }\n\n  /** Expire",
-    to: "    if (effect.report.endsWith('0')) staged.clear();\n    this.store.commit(staged, now);\n  }\n\n  /** Expire",
+    // reports are gone; the same control on a notification the notify stage
+    // writes (`01` U6)
+    name: "N24 control: one notification in 32 is not written",
+    file: "src/mutators.ts",
+    from: '    tx.create({\n      kind: "notif",',
+    to: '    if (tx.id(NOTIFY_ORDINAL + this.k + 1).endsWith("0")) return;\n    tx.create({\n      kind: "notif",',
   },
   {
     // tombstones no longer hold the rev; the registry does
@@ -417,12 +388,11 @@ const MUTATIONS: Mutation[] = [
     from: "  private readonly key = randomBytes(32);",
     to: "  private readonly key = Buffer.alloc(32);",
   },
-  // ---- round 2's fixes ----
   {
     name: "R2-1 a hide or a removal is STALE after the item changed",
     file: "src/mutators.ts",
-    from: '      if (i.decision === "shown" && r.rev !== i.base.rev) throw stale();',
-    to: "      if (r.rev !== i.base.rev) throw stale();",
+    from: '      if (i.decision === "shown" && r.rev !== i.base?.rev) throw stale();',
+    to: "      if (r.rev !== i.base?.rev) throw stale();",
   },
   {
     name: "R2-2 a decline is STALE after the request changed",
@@ -437,16 +407,11 @@ const MUTATIONS: Mutation[] = [
     to: '      addMember(tx, s.id, tx.me, "member", `${s.id}:${tx.me}`);',
   },
   {
-    name: "R2-4 a like changes the thread record",
+    // likes are gone; a save is the write that changes the counts
+    name: "R2-4 a save changes the thread record",
     file: "src/mutators.ts",
-    from: '      if (c?.kind === "counts") tx.put({ ...c, likes: Math.max(0, c.likes + (i.on ? 1 : -1)) });',
-    to: '      if (c?.kind === "counts") tx.put({ ...c, likes: Math.max(0, c.likes + (i.on ? 1 : -1)) });\n      const th = tx.get(threadKey(i.thread));\n      if (th?.kind === "thread") tx.put({ ...th, tok: th.tok + 1 });',
-  },
-  {
-    name: "R2-5 report notifications are served to people who are not staff",
-    file: "src/access.ts",
-    from: "      return own && sp !== null && readsSpace(g, sp, u) && isModOf(g, sp, u);",
-    to: "      return own && sp !== null && readsSpace(g, sp, u);",
+    from: "  tx.put({ ...c, saves });\n}",
+    to: '  tx.put({ ...c, saves });\n  const p = tx.get(threadKey(th));\n  if (p?.kind === "thread") tx.put({ ...p, tok: p.tok + 1 });\n}',
   },
   {
     name: "R2-6 the client gives a sent write new ids",
@@ -509,34 +474,22 @@ const MUTATIONS: Mutation[] = [
     to: "if (p.queuedAt < now - OUTBOX_TTL) this.outbox.splice(this.outbox.indexOf(p), 1);",
   },
   {
-    name: "R2-15 a request runs the queued effects",
-    file: "src/server.ts",
-    from: "      setLast(this.dedup, dk, { result: out.result, digest: payload, at: now });\n      client.last = m.seq;\n    }",
-    to: "      setLast(this.dedup, dk, { result: out.result, digest: payload, at: now });\n      client.last = m.seq;\n      this.work();\n    }",
-  },
-  {
-    name: "R2-16 a failing effect never ends in the dead letters",
-    file: "src/server.ts",
-    from: "        if (q.attempts >= EFFECT_MAX_ATTEMPTS) {",
-    to: "        if (q.attempts >= EFFECT_MAX_ATTEMPTS * 1000) {",
-  },
-  {
-    name: "R2-17 a failing effect is tried again with no backoff",
-    file: "src/server.ts",
-    from: "          q.next = now + Math.min(EFFECT_BACKOFF_MAX, EFFECT_BACKOFF_MIN * 2 ** (q.attempts - 1));",
-    to: "          q.next = now;",
-  },
-  {
     name: "R2-18 an input's depth is not bounded",
     file: "src/server.ts",
-    from: "      !withinBounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES) ||",
-    to: "      !withinBounds(envelope, 1e9, 1e9) ||",
+    from: "    const bounds = outOfBounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES);",
+    to: "    const bounds = outOfBounds(envelope, 1e9, MAX_ENVELOPE_BYTES);",
   },
   {
     name: "R2-19 an envelope's size is not bounded",
     file: "src/server.ts",
-    from: '      Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES',
-    to: '      Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES * 1000',
+    from: '      Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES\n',
+    to: '      Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES * 1000\n',
+    also: [
+      {
+        from: "    const bounds = outOfBounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES);",
+        to: "    const bounds = outOfBounds(envelope, MAX_INPUT_DEPTH + 1, 1e9);",
+      },
+    ],
   },
   {
     name: "R2-20 an exception outside the mutator stages is thrown",
@@ -568,6 +521,116 @@ const MUTATIONS: Mutation[] = [
     file: "src/client.ts",
     from: "      } catch {\n        res = noAnswer();\n      }",
     to: '      } catch {\n        res = { ok: false, error: { code: "NOT_FOUND", message: "" } };\n      }',
+  },
+  // ---- the build's contract (`01` U6): saves, notifications, removal,
+  // owner-only writes, look-ups, counts and protocol version 4 ----
+  {
+    name: "U6-1 a private space serves a save count below 3",
+    file: "src/mutators.ts",
+    from: "  const saves = s && isClosed(s) && n < PRIVATE_SAVES_MIN ? 0 : n;",
+    to: "  const saves = s ? n : n;",
+  },
+  {
+    name: "U6-2 a removal keeps the saves of the thread",
+    file: "src/mutators.ts",
+    from: '      for (const x of tx.find("save", (y) => y.th === r.id)) drop(saveKey(x.u, x.th));\n',
+    to: "",
+  },
+  {
+    name: "U6-3 a removal keeps the mention notifications about the thread",
+    file: "src/mutators.ts",
+    from: '      for (const x of tx.find("notif", (y) => y.type === "mention" && y.th === r.id))\n        drop(`notif:${x.id}`);\n',
+    to: "",
+  },
+  {
+    name: "U6-4 a removed thread's author is served to every reader",
+    file: "src/access.ts",
+    from: '        u: r.mod === "removed" && !author ? null : r.u,',
+    to: "        u: r.u,",
+  },
+  {
+    name: "U6-5 a person is notified of their own action",
+    file: "src/mutators.ts",
+    from: "    if (to === tx.me) return;\n",
+    to: "",
+  },
+  {
+    name: "U6-6 reply, branch and comment notifications do not coalesce",
+    file: "src/mutators.ts",
+    from: "    if (COALESCED.has(type)) {",
+    to: "    if (COALESCED.has(type) && type.length < 0) {",
+  },
+  {
+    name: "U6-7 a mention notifies a person who is not a member",
+    file: "src/mutators.ts",
+    from: "if (isHandle(h) && roleIn(this.tx, sp, h) !== null)",
+    to: "if (isHandle(h))",
+  },
+  {
+    name: "U6-8 a removal writes no moderation log entry",
+    file: "src/mutators.ts",
+    from: "      // keeps no text of it\n      tx.create({",
+    to: "      // keeps no text of it\n      void ({",
+  },
+  {
+    name: "U6-9 a reminted envelope's answer is not stored under the ids it replaces",
+    file: "src/server.ts",
+    from: "if (id !== m.mutationId && !this.dedup.has(rk))",
+    to: "if (id !== m.mutationId && !this.dedup.has(rk) && id.length < 0)",
+  },
+  {
+    name: "U6-10 an envelope's queuedAt is not checked",
+    file: "src/server.ts",
+    from: '    if (!timeOk(m.queuedAt, m.clientTime)) return expired("queuedAt");\n',
+    to: "",
+  },
+  {
+    name: "U6-11 an oversized envelope answers BAD_REQUEST",
+    file: "src/server.ts",
+    from: '        refuse("TOO_LARGE", undefined, [',
+    to: '        refuse("BAD_REQUEST", undefined, [',
+  },
+  {
+    name: "U6-12 the owner may leave their space",
+    file: "src/mutators.ts",
+    from: '      if (isOwnerOf(tx, i.space, tx.me))\n        throw refuse("PRECONDITION_FAILED", "You own this channel: the owner can’t leave it.");\n',
+    to: "",
+  },
+  {
+    name: "U6-13 the owner may ban or remove themselves",
+    file: "src/mutators.ts",
+    from: '  if (u === tx.me) throw refuse("FORBIDDEN", "You can’t change your own membership here.");\n',
+    to: "",
+  },
+  {
+    name: "U6-14 hiding a node leaves its answer shown",
+    file: "src/mutators.ts",
+    from: '        if (a?.kind === "answer") tx.put({ ...a, mod });\n',
+    to: "",
+  },
+  {
+    name: "U6-15 a look-up stores the phrase as its prompt",
+    file: "src/mutators.ts",
+    from: "        q = LOOKUP_PROMPT_V1(look);",
+    to: "        q = look;",
+  },
+  {
+    name: "U6-16 a reply to a reply does not count",
+    file: "src/mutators.ts",
+    from: '      : tx.find("reply", (x) => x.th === th.id).length;',
+    to: '      : tx.find("reply", (x) => x.th === th.id && x.parent === null).length;',
+  },
+  {
+    name: "U6-17 a member makes channel invite links",
+    file: "src/mutators.ts",
+    from: '    input: M["invites.create"].input.extend({ id: ulidS, space: ulidS }).strict(),\n    who: "owner",',
+    to: '    input: M["invites.create"].input.extend({ id: ulidS, space: ulidS }).strict(),\n    who: "member",',
+  },
+  {
+    name: "U6-18 a removal's reason is not kept on the placeholder",
+    file: "src/mutators.ts",
+    from: "        modNote: note,",
+    to: "        modNote: null,",
   },
 ];
 

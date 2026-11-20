@@ -13,14 +13,17 @@
 // dropped from the outbox (expired after 3 days, failed, or cancelled) leaves
 // no gap (review round 1, R7). Writes are sent one at a time, in queue order.
 // Each envelope carries `clientTime`, the client's clock corrected by the
-// offset it learned from the server.
+// offset it learned from the server, and `queuedAt`, when the write was
+// queued on the same clock.
 //
 // A write's identity: its mutation id. Once an envelope of a write may have
 // reached the server without a definite answer (no answer arrived, or a
 // transient one), the write keeps its mutation id for good, so a resend is
 // either the stored answer or, if the server no longer has it, EXPIRED; it is
 // never applied a second time (review round 2, finding 3). Only a write that
-// was never sent that way gets new ids after CLOCK_SKEW.
+// was never sent that way gets new ids after CLOCK_SKEW, and its envelope
+// lists the mutation ids it had before in `replaces`, so the server stores
+// its answer under them too.
 //
 // Answers:
 // - recorded (applied or refused): the seq is acknowledged, the write leaves
@@ -96,6 +99,8 @@ export interface Pending {
   /** When it was queued, in the server's time as the client estimates it
    * (its clock plus the learned offset). */
   queuedAt: number;
+  /** The mutation ids it had before the client reminted it. */
+  replaces: string[];
   /** An envelope of it may have reached the server without a definite
    * answer: it keeps its mutation id from then on. */
   sent: boolean;
@@ -138,7 +143,11 @@ export interface ClientState {
 const threadOf = (r: StoredRecord): string | null =>
   r.kind === "thread"
     ? r.id
-    : r.kind === "followup" || r.kind === "reply" || r.kind === "run"
+    : r.kind === "node" ||
+        r.kind === "reply" ||
+        r.kind === "comment" ||
+        r.kind === "run" ||
+        r.kind === "answer"
       ? r.th
       : null;
 
@@ -158,10 +167,10 @@ const noAnswer = (): ApplyResult => ({
 
 export class ReplicaClient {
   private readonly replicas = new Map<LogId, Replica>();
-  /** Per space log: the caller's own threads, with the follow-ups, replies
+  /** Per space log: the caller's own threads, with the nodes, replies
    * and runs the caller wrote under them, as the replica last held them, kept
    * after the caller lost read access to the space. The server sends no
-   * further updates for them. Other people's follow-ups and replies are not
+   * further updates for them. Other people's nodes and replies are not
    * kept: AGENTS.md has a device replicate nothing of a closed space its
    * user does not belong to, and the owner's exception covers the user's own
    * threads only. */
@@ -194,7 +203,7 @@ export class ReplicaClient {
   ) {
     this.owner = restore ? restore.owner : (actor?.u ?? null);
     this.clientIdValue = restore?.clientId ?? null;
-    this.outbox = (restore?.outbox ?? []).map((e) => ({ ...e }));
+    this.outbox = (restore?.outbox ?? []).map((e) => ({ ...e, replaces: [...e.replaces] }));
     this.acked = restore?.acked ?? 0;
     this.offset = restore?.offset ?? 0;
     this.shown = (restore?.problems ?? []).map((x) => ({ ...x }));
@@ -235,7 +244,7 @@ export class ReplicaClient {
     return {
       owner: this.owner,
       clientId: this.clientIdValue,
-      outbox: this.outbox.map((e) => ({ ...e })),
+      outbox: this.outbox.map((e) => ({ ...e, replaces: [...e.replaces] })),
       acked: this.acked,
       offset: this.offset,
       problems: this.shown.map((x) => ({ ...x })),
@@ -333,6 +342,7 @@ export class ReplicaClient {
       name,
       input,
       queuedAt: now,
+      replaces: [],
       sent: false,
       attempts: 0,
       errors: 0,
@@ -391,7 +401,8 @@ export class ReplicaClient {
    * client-made ids, from the corrected clock, for every queued write that
    * was never sent (their ids came from the clock that was off). The writes
    * that name those ids get the new ones too. A write that was sent keeps
-   * its ids. */
+   * its ids. An envelope of a reminted write lists its earlier mutation ids
+   * in `replaces`: one of them may have reached the server after all. */
   private remint() {
     const map = new Map<string, string>();
     for (const p of this.outbox) {
@@ -400,6 +411,7 @@ export class ReplicaClient {
       const parsed = def?.input.safeParse(p.input);
       for (const id of parsed?.success ? (def?.ids?.(parsed.data) ?? []) : [])
         map.set(id, this.newId());
+      p.replaces.push(p.mutationId);
       p.mutationId = this.newId();
     }
     for (const x of this.outbox) if (!x.sent) x.input = remap(x.input, map);
@@ -430,10 +442,12 @@ export class ReplicaClient {
         clientId,
         seq: this.acked + 1,
         mutationId: p.mutationId,
+        ...(p.replaces.length ? { replaces: [...p.replaces] } : {}),
         name: p.name,
         input: structuredClone(p.input),
         protocolVersion: PROTOCOL_VERSION,
         clientTime: Math.max(0, Math.round(now)),
+        queuedAt: Math.max(0, Math.round(p.queuedAt)),
       };
       this.sent.push(e);
       let res: ApplyResult;
@@ -447,6 +461,11 @@ export class ReplicaClient {
         const { code, serverTime, expectedSeq } = res.error;
         if (code === "CLOCK_SKEW" && serverTime !== undefined && skews++ < 3) {
           this.offset = serverTime - this.env.clock.now();
+          // a queue time ahead of the corrected clock was read from the
+          // clock that was off; one behind it may be right (the clock went
+          // wrong after the write was queued), so it stays
+          const corrected = this.now();
+          for (const x of this.outbox) x.queuedAt = Math.min(x.queuedAt, corrected);
           this.remint();
           continue;
         }
@@ -511,7 +530,9 @@ export class ReplicaClient {
   async send(name: string, input: unknown, mutationId = this.newId()): Promise<ApplyResult> {
     const p = this.push(name, input, mutationId);
     await this.flush();
-    this.drop(p.mutationId);
+    // this write only: another queued write may carry the same mutation id
+    const k = this.outbox.indexOf(p);
+    if (k >= 0) this.outbox.splice(k, 1);
     return (
       this.lastAnswer.get(p.local) ?? {
         ok: false,

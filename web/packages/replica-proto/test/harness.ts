@@ -108,6 +108,7 @@ export class World {
       input,
       protocolVersion: PROTOCOL_VERSION,
       clientTime: this.clock.now(),
+      queuedAt: this.clock.now(),
     };
   }
 
@@ -129,9 +130,13 @@ export class World {
     return this.server.apply(actor(u), { ...e, seq, clientTime: this.clock.now() });
   }
 
-  /** One pass of the server's effect worker. */
-  async work(): Promise<number> {
-    return this.server.work();
+  /** The notifications stored for `u`, oldest first. */
+  notifs(u: string): Extract<StoredRecord, { kind: "notif" }>[] {
+    return [...this.server.dump().values()]
+      .filter(
+        (r): r is Extract<StoredRecord, { kind: "notif" }> => r.kind === "notif" && r.to === u,
+      )
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
   }
 
   client(u: string | null): ReplicaClient {
@@ -148,11 +153,6 @@ export class World {
     return this.get(key)?.rev ?? 0;
   }
 
-  /** `base` of a role change of `u` in `sp`, as the member record is now. */
-  member(sp: string, u: string): { rev: number } {
-    return { rev: this.rev(`member:${sp}:${u}`) };
-  }
-
   /** `base` of a removal of `u` from `sp`: the admission id as it is now
    * ("" for a person who is not a member). */
   admission(sp: string, u: string): { adm: string } {
@@ -163,7 +163,14 @@ export class World {
   /** `base` of a moderation decision on `item`, as the item is now. */
   item(item: string): { rev: number } {
     const [k, th, sub] = item.split(":");
-    const key = k === "f" ? `followup:${sub}` : k === "r" ? `reply:${sub}` : `thread:${th ?? ""}`;
+    const key =
+      k === "f"
+        ? `node:${sub}`
+        : k === "r"
+          ? `reply:${sub}`
+          : k === "c"
+            ? `comment:${sub}`
+            : `thread:${th ?? ""}`;
     return { rev: this.rev(key) };
   }
 
@@ -194,11 +201,13 @@ export async function refused(
 }
 
 /** A fixed cast of people and spaces most tests start from:
- * - `open` (#lounge): owner olga, moderator mona, members mel and otto.
- * - `closed` (#lab, listed, join by request, members may make invite links):
- *   owner olga, admin ada, moderator mona, member mel.
- * - `vault` (#vault, unlisted, invite only): owner olga.
- * Nobody else is a member of anything. `eve` is the hostile client. */
+ * - `open` (#lounge, open): owner olga, members mona, mel and otto.
+ * - `closed` (#lab, private; its members came in by join requests the owner
+ *   approved, which the prototype keeps): owner olga, members ada, mona and
+ *   mel.
+ * - `vault` (#vault, private): owner olga.
+ * A space has one owner and members; nobody else is a member of anything.
+ * `eve` is the hostile client. */
 export interface Cast {
   w: World;
   open: string;
@@ -216,55 +225,16 @@ export async function cast(
   const closed = w.id();
   const vault = w.id();
   await ok(t, w.as("olga", "spaces.create", { id: open, name: "lounge" }));
-  await ok(
-    t,
-    w.as("olga", "spaces.create", {
-      id: closed,
-      name: "lab",
-      vis: "listed",
-      policy: "request",
-      invite: "members",
-    }),
-  );
-  await ok(
-    t,
-    w.as("olga", "spaces.create", { id: vault, name: "vault", vis: "unlisted", policy: "invite" }),
-  );
+  await ok(t, w.as("olga", "spaces.create", { id: closed, name: "lab", vis: "private" }));
+  await ok(t, w.as("olga", "spaces.create", { id: vault, name: "vault", vis: "private" }));
   for (const u of ["mona", "mel", "otto"]) await ok(t, w.as(u, "spaces.join", { space: open }));
-  await ok(
-    t,
-    w.as("olga", "members.setRole", {
-      space: open,
-      user: "mona",
-      role: "mod",
-      base: w.member(open, "mona"),
-    }),
-  );
   for (const u of ["ada", "mona", "mel"]) await admit(t, w, closed, u);
-  await ok(
-    t,
-    w.as("olga", "members.setRole", {
-      space: closed,
-      user: "ada",
-      role: "admin",
-      base: w.member(closed, "ada"),
-    }),
-  );
-  await ok(
-    t,
-    w.as("olga", "members.setRole", {
-      space: closed,
-      user: "mona",
-      role: "mod",
-      base: w.member(closed, "mona"),
-    }),
-  );
   return { w, open, closed, vault };
 }
 
 /** Let `u` into a closed space: a request, approved by its owner olga. */
 export async function admit(t: ExecutionContext, w: World, space: string, u: string) {
-  await ok(t, w.as(u, "joinRequests.create", { space, rulesAccepted: true }));
+  await ok(t, w.as(u, "joinRequests.create", { space }));
   await ok(
     t,
     w.as("olga", "joinRequests.decide", {
@@ -276,6 +246,18 @@ export async function admit(t: ExecutionContext, w: World, space: string, u: str
   );
 }
 
+/** The model and effort every ask in the suite names. */
+export const MODEL = { model: "claude-fable-5-1", effort: "medium" } as const;
+
+/** The input of a new thread: an ask carries a model and an effort. */
+export const threadInput = (
+  id: string,
+  space: string,
+  kind: "ask" | "post",
+  q: string,
+): Record<string, unknown> =>
+  kind === "ask" ? { id, space, kind, q, ...MODEL } : { id, space, kind, q };
+
 export async function thread(
   t: ExecutionContext,
   w: World,
@@ -285,9 +267,33 @@ export async function thread(
   q = "What changed?",
 ): Promise<string> {
   const id = w.id();
-  await ok(t, w.as(u, "threads.create", { id, space, kind, q }));
+  await ok(t, w.as(u, "threads.create", threadInput(id, space, kind, q)));
   return id;
 }
+
+/** An ask node under `parent` (`r`: the thread's root): Continue or Branch. */
+export async function fork(
+  t: ExecutionContext,
+  w: World,
+  u: string,
+  thread: string,
+  q = "And then?",
+  parent = "r",
+): Promise<string> {
+  const id = w.id();
+  await ok(t, w.as(u, "research.forkNode", { id, thread, parent, kind: "ask", q, ...MODEL }));
+  return id;
+}
+
+/** The input of an ask node under `parent`. */
+export const forkInput = (id: string, thread: string, q: string, parent = "r") => ({
+  id,
+  thread,
+  parent,
+  kind: "ask",
+  q,
+  ...MODEL,
+});
 
 /** The keys and records of a replica or a snapshot, sorted, for comparison. */
 export const sorted = (m: ReadonlyMap<string, StoredRecord>) =>

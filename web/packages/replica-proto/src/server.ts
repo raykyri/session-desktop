@@ -1,20 +1,22 @@
 // The prototype server half: a multi-user in-memory store with one change-log
 // table, `register` and `apply` (in order per client, idempotent by user and
 // mutation id), `snapshot` and `pull` filtered by the reader's scope at the
-// time of the read, and a worker that runs post-commit effects.
+// time of the read. There is no effect queue: a write's notifications are
+// written by its mutator's `notify` stage in the same commit, and an ask's
+// run is a `run` record with status `queued` (`01` U6).
 //
 // Apply, in order. "Unrecorded" answers use up nothing: the client may send
 // the same `seq` again. Everything below runs inside one error handler: an
 // exception anywhere is INTERNAL_SERVER_ERROR, unrecorded.
-//   the envelope nests at most 33 deep (its input at most 32) and is at most
-//     256 KB as JSON (BAD_REQUEST): unrecorded, checked before anything
-//     hashes or parses the input
+//   the envelope nests at most 33 deep (its input at most 32; BAD_REQUEST)
+//     and is at most 256 KB as JSON (TOO_LARGE): unrecorded, checked before
+//     anything hashes or parses the input
 //   protocol version (UPGRADE_REQUIRED) and envelope shape (BAD_REQUEST): unrecorded
 //   signed in with a valid handle (UNAUTHORIZED): unrecorded
 //   the client id is the caller's and has not expired (WRONG_CLIENT): unrecorded
-//   a stored result for (user, mutation id) whose payload digest matches:
-//     returned as it is, under any client id or seq; nothing runs and no seq
-//     is used
+//   a stored result for (user, mutation id) whose payload digest matches,
+//     or that a reminted envelope stored under the id it replaced: returned
+//     as it is, under any client id or seq; nothing runs and no seq is used
 //   a result stored for (client, seq) with the same mutation id and payload:
 //     returned as it is
 //   `seq` is the client's next one (OUT_OF_ORDER, with `expectedSeq`): unrecorded
@@ -24,20 +26,18 @@
 //   `clientTime` is within a minute of the server's time (CLOCK_SKEW, with
 //     the server's time): unrecorded
 //   the mutation id's age on the device's clock (`clientTime`) is at most 4
-//     days and at least −1 minute (EXPIRED)
+//     days and at least −1 minute (EXPIRED); so is `queuedAt`'s
 //   the mutator name and its strict input schema
 //   the input's new ids pass the same age check (EXPIRED)
 //   an online-only mutator's mutation id is at most a minute old on the
 //     device's clock (EXPIRED)
-//   ban, who and can, pre (server values), run
+//   ban, who and can, pre (server values), run, notify
 // A refusal from these stages is recorded unless its code is in UNRECORDED;
 // an exception that is not a refusal is INTERNAL_SERVER_ERROR, unrecorded,
 // and nothing it staged is written. A recorded result is committed in one
-// step with the write's changes and its post-commit effects (queued): stored
-// for 7 days with a digest of the name and input, and the client's last
-// processed `seq` becomes this one. The effect worker (`work`) runs the
-// queued effects later, with backoff, and moves an effect that failed 10
-// times to the dead letters. No request handler runs effects.
+// step with the write's changes, its notifications included: stored for 7
+// days with a digest of the name and input, under the mutation id and each
+// id in `replaces`, and the client's last processed `seq` becomes this one.
 //
 // Change log: one row per (log, key), holding key, op and version only; a
 // write replaces the key's row. Versions come from one sequence for the whole
@@ -50,10 +50,10 @@
 //
 // Resync: a pull answers `{ resync: true }` when the token was not sealed by
 // this server for this reader and log, or was served more than 30 days ago,
-// or the log's history was replaced since (a space's visibility changed), or
-// the reader's scope changed since: their own membership or role in the
-// space, and for their user log, their membership or role in any space or a
-// space opening or closing that a record in the log is about.
+// or the log's history was replaced since (a restore, `replaceHistory`), or
+// the reader's scope changed since: their own membership in the space, and
+// for their user log, their membership in any space or the history of a
+// space log that a record in the log is about being replaced.
 //
 // Expiry: every table that expires is a Map kept in expiry order (a value
 // written again moves to the end), so each call drops only what expired from
@@ -63,7 +63,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 import { z } from "zod";
 
-import { audience, isClosed, readsAudience, spaceRec, view, type Audience } from "./access.js";
+import { audience, readsAudience, view, type Audience } from "./access.js";
 import {
   MIN_PROTOCOL_VERSION,
   UNRECORDED,
@@ -88,12 +88,11 @@ import {
   isHandle,
   refuse,
   type AnyMutator,
-  type Effect,
-  type NotifDraft,
   type PreCtx,
   type Tx,
 } from "./mutators.js";
 import {
+  answerKey,
   audienceOf,
   createdOf,
   idOf,
@@ -105,6 +104,7 @@ import {
   type LogId,
   type Kind,
   type RecordOf,
+  type RunRec,
   type StoredRecord,
 } from "./records.js";
 import {
@@ -117,7 +117,9 @@ import {
   digest,
   isUlid,
   ulid,
+  timeOk,
   ulidTime,
+  ULID_RE,
 } from "./ulid.js";
 
 export const DEDUP_TTL = 7 * DAY;
@@ -134,20 +136,19 @@ export const REGISTRATIONS_PER_DAY = 20;
  * be as JSON. */
 export const MAX_INPUT_DEPTH = 32;
 export const MAX_ENVELOPE_BYTES = 256 * 1024;
-/** The effect worker tries an effect this many times, then moves it to the
- * dead letters. Between attempts it waits 1 s, 2 s, 4 s, … up to 10 minutes. */
-export const EFFECT_MAX_ATTEMPTS = 10;
-export const EFFECT_BACKOFF_MIN = 1000;
-export const EFFECT_BACKOFF_MAX = 10 * MINUTE;
+/** The most mutation ids a reminted envelope may name in `replaces`. */
+export const MAX_REPLACES = 16;
 
 const envelopeS = z.strictObject({
   clientId: z.string(),
   seq: z.number().int().positive(),
   mutationId: z.string(),
+  replaces: z.array(z.string().regex(ULID_RE)).max(MAX_REPLACES).optional(),
   name: z.string(),
   input: z.unknown(),
   protocolVersion: z.number().int(),
   clientTime: z.number().int().nonnegative(),
+  queuedAt: z.number().int().nonnegative(),
 });
 type Env = z.infer<typeof envelopeS>;
 const logS = z
@@ -172,25 +173,30 @@ function canonical(v: unknown): string {
   return JSON.stringify(v) ?? "undefined";
 }
 
-/** Whether `v` nests at most `maxDepth` levels (a scalar is 0 deep, `[1]`
- * 1) and holds at most `maxNodes` values. Walked with a stack, not by
- * recursion, so a deep value cannot overflow the call stack. */
-function withinBounds(v: unknown, maxDepth: number, maxNodes: number): boolean {
+/** Whether `v` nests deeper than `maxDepth` levels (a scalar is 0 deep,
+ * `[1]` 1: "deep") or holds more than `maxNodes` values ("large"), or null
+ * when it does neither. Walked with a stack, not by recursion, so a deep
+ * value cannot overflow the call stack. */
+function outOfBounds(v: unknown, maxDepth: number, maxNodes: number): "deep" | "large" | null {
   const stack: [unknown, number][] = [[v, 0]];
   let nodes = 0;
   for (let top = stack.pop(); top; top = stack.pop()) {
     const [x, level] = top;
-    if (++nodes > maxNodes) return false;
+    if (++nodes > maxNodes) return "large";
     if (x === null || typeof x !== "object") continue;
-    if (level >= maxDepth) return false;
+    if (level >= maxDepth) return "deep";
     for (const y of Object.values(x)) stack.push([y, level + 1]);
   }
-  return true;
+  return null;
 }
 
 /** The id-collision answer: one message, whether or not the caller may read
  * the record that holds the id. */
 const ID_TAKEN = "An item with this id exists.";
+/** The digest an answer is stored with under a mutation id that a reminted
+ * envelope replaced: a replay of that id with any payload gets the answer
+ * (its payload had the ids the client reminted). */
+const REPLACED = "*";
 
 /** What a deleted record leaves for 30 days: its key, kind and audience (the
  * fields that decide who gets the `del`). No text and no other field (review
@@ -203,12 +209,11 @@ export interface Tombstone extends Audience {
 }
 
 /** The logs a record with this audience is written to: its space's log
- * (none for likes, saves and notifications, which live in user logs only)
- * and its person's user log. */
+ * (none for saves and notifications, which live in user logs only) and its
+ * person's user log. */
 function logsOfAudience(a: Audience): LogId[] {
   const out: LogId[] = [];
-  if (a.sp !== null && a.kind !== "like" && a.kind !== "save" && a.kind !== "notif")
-    out.push(`space:${a.sp}`);
+  if (a.sp !== null && a.kind !== "save" && a.kind !== "notif") out.push(`space:${a.sp}`);
   if (a.person !== null) out.push(`user:${a.person}`);
   return out;
 }
@@ -305,14 +310,16 @@ class Store {
       kind.add(key);
       this.tombs.delete(key);
       for (const log of logsOf(rec)) this.row(log, key, "put", version);
-      // who may read a space's records depends on whether it is closed: a
-      // change replaces the log's history (every cursor resyncs)
-      if (rec.kind === "space" && prev?.kind === "space" && isClosed(prev) !== isClosed(rec)) {
-        const log: LogId = `space:${rec.id}`;
-        this.epochs.set(log, { n: (this.epochs.get(log)?.n ?? 0) + 1, start: version });
-      }
     }
     return version;
+  }
+
+  /** Replace a log's history (a restore): a new history that begins at a new
+   * version, so every cursor of the log resyncs. A space's visibility never
+   * changes (`01` C11), so nothing else replaces a history. */
+  replaceHistory(log: LogId) {
+    const version = ++this.head;
+    this.epochs.set(log, { n: (this.epochs.get(log)?.n ?? 0) + 1, start: version });
   }
 
   /** Drop the tombstones (and their `del` rows) committed strictly before the
@@ -390,12 +397,11 @@ class StagedTx implements Tx {
 }
 
 /** What `execute` decided: the answer, whether it is recorded, and for an
- * applied write the staged changes and the effects to queue. */
+ * applied write the staged changes, its notifications included. */
 interface Outcome {
   result: ApplyResult;
   recorded: boolean;
   staged?: Map<string, StoredRecord | null>;
-  effects?: Effect[];
 }
 
 /** A registered client: the user it is bound to, its last processed seq and
@@ -414,17 +420,6 @@ interface SeqAnswer {
   digest: string;
   result: ApplyResult;
   at: number;
-}
-
-/** One entry of the effect queue: kept until the effect has run or failed
- * `EFFECT_MAX_ATTEMPTS` times. */
-interface QueuedEffect {
-  effect: Effect;
-  /** The commit time of the write that queued it. */
-  at: number;
-  attempts: number;
-  /** The time of the next attempt. */
-  next: number;
 }
 
 /** What a cursor token holds. `v`: the version of the newest row of the log
@@ -511,23 +506,15 @@ export class ProtoServer implements TestServer {
   /** Each person's registrations in the past day, by the time of their
    * latest, oldest first. */
   private readonly registrations = new Map<string, number[]>();
-  /** The post-commit effects not yet run, in commit order: written in the
-   * same step as the write that queued them (durable with it), and removed
-   * once they ran or failed for good. */
-  private readonly effectQueue: QueuedEffect[] = [];
-  private readonly deadLetters: (QueuedEffect & { failedAt: number })[] = [];
-  private readonly jobList: { kind: string; id: string }[] = [];
   private readonly clock: ServerOptions["clock"];
   private readonly random: () => number;
   private readonly mutators: Readonly<Record<string, AnyMutator>>;
-  private readonly failEffect: ServerOptions["failEffect"];
   private readonly tokens = new Tokens();
 
   constructor(options: ServerOptions) {
     this.clock = options.clock;
     this.random = options.random ?? cryptoRandom;
     this.mutators = options.mutators ?? MUTATORS;
-    this.failEffect = options.failEffect;
     this.store = new Store(this.clock.now());
   }
 
@@ -579,13 +566,20 @@ export class ProtoServer implements TestServer {
 
   private applyEnvelope(actor: Actor | null, envelope: unknown): ApplyResult {
     // bounds first: nothing below may walk an input deeper or larger than this
+    const bounds = outOfBounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES);
+    if (bounds === "deep")
+      return fail(
+        refuse("BAD_REQUEST", undefined, [
+          `envelope: expected input nested at most ${MAX_INPUT_DEPTH} deep`,
+        ]),
+      );
     if (
-      !withinBounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES) ||
+      bounds === "large" ||
       Buffer.byteLength(JSON.stringify(envelope) ?? "") > MAX_ENVELOPE_BYTES
     )
       return fail(
-        refuse("BAD_REQUEST", undefined, [
-          `envelope: expected input nested at most ${MAX_INPUT_DEPTH} deep, and at most ${MAX_ENVELOPE_BYTES} bytes as JSON`,
+        refuse("TOO_LARGE", undefined, [
+          `envelope: expected at most ${MAX_ENVELOPE_BYTES} bytes as JSON`,
         ]),
       );
     const version =
@@ -602,7 +596,7 @@ export class ProtoServer implements TestServer {
     if (!env.success)
       return fail(
         refuse("BAD_REQUEST", undefined, [
-          "envelope: expected { clientId, seq, mutationId, name, input, protocolVersion, clientTime }",
+          "envelope: expected { clientId, seq, mutationId, replaces?, name, input, protocolVersion, clientTime, queuedAt }",
         ]),
       );
     const m = env.data;
@@ -616,9 +610,11 @@ export class ProtoServer implements TestServer {
     const dk = `${u}\u0000${m.mutationId}`;
     const payload = digest(canonical([m.name, m.input]));
     const hit = wellFormed ? this.dedup.get(dk) : undefined;
-    // a write this user's devices sent before, under any client id or seq:
-    // its recorded answer, and the seq is not used (R7c)
-    if (hit && hit.digest === payload) return structuredClone(hit.result);
+    // a write this user's devices sent before, under any client id or seq,
+    // or one a reminted envelope replaced: its recorded answer, and the seq
+    // is not used (R7c)
+    if (hit && (hit.digest === payload || hit.digest === REPLACED))
+      return structuredClone(hit.result);
     // an answer recorded under this client's seq: the same envelope again
     const sk = `${m.clientId}\u0000${m.seq}`;
     const sent = digest(canonical([m.mutationId, m.name, m.input]));
@@ -655,13 +651,17 @@ export class ProtoServer implements TestServer {
     }
     const out = this.execute(u, m, now);
     if (out.recorded) {
-      // one step, with nothing in it that can fail: the record changes, the
-      // queued effects, the stored answer and the client's seq (R9). On the
-      // real server, one transaction.
+      // one step, with nothing in it that can fail: the record changes and
+      // notifications, the stored answer (under the mutation id and each id
+      // it replaces) and the client's seq (R9). On the real server, one
+      // transaction.
       if (out.staged) this.store.commit(out.staged, now);
-      for (const effect of out.effects ?? [])
-        this.effectQueue.push({ effect, at: now, attempts: 0, next: now });
       setLast(this.dedup, dk, { result: out.result, digest: payload, at: now });
+      for (const id of new Set(m.replaces ?? [])) {
+        const rk = `${u}\u0000${id}`;
+        if (id !== m.mutationId && !this.dedup.has(rk))
+          setLast(this.dedup, rk, { result: out.result, digest: REPLACED, at: now });
+      }
       client.last = m.seq;
     }
     return structuredClone(out.result);
@@ -696,6 +696,7 @@ export class ProtoServer implements TestServer {
         ]),
       );
     if (!ageOk(m.mutationId, m.clientTime)) return expired("mutationId");
+    if (!timeOk(m.queuedAt, m.clientTime)) return expired("queuedAt");
     const def = Object.hasOwn(this.mutators, m.name) ? this.mutators[m.name] : undefined;
     if (!def)
       return final(refuse("NOT_FOUND", "The server has no procedure with this name.", ["name"]));
@@ -734,78 +735,14 @@ export class ProtoServer implements TestServer {
       };
       const values = def.pre?.(pre, input) ?? {};
       const result = def.run(tx, input, values);
-      const effects = def.post?.(input, result) ?? [];
-      return { result: { ok: true, result }, recorded: true, staged: tx.staged, effects };
+      def.notify?.(tx, input, result);
+      return { result: { ok: true, result }, recorded: true, staged: tx.staged };
     } catch (e) {
       if (e instanceof Refusal) return final(e);
       // not a refusal: a fault of the server, not of the input. Nothing is
       // written or recorded; the client sends the write again later (R8).
       return final(refuse("INTERNAL_SERVER_ERROR"));
     }
-  }
-
-  // ---- the effect worker ----
-
-  work(): number {
-    const now = this.begin();
-    let ran = 0;
-    for (let k = 0; k < this.effectQueue.length;) {
-      const q = this.effectQueue[k] as QueuedEffect;
-      if (q.next > now) {
-        k++;
-        continue;
-      }
-      q.attempts++;
-      try {
-        if (this.failEffect?.(q.effect, q.attempts)) throw new Error("the effect's service failed");
-        this.runEffect(q.effect, now);
-        this.effectQueue.splice(k, 1);
-        ran++;
-      } catch {
-        // its write's answer is recorded already and does not change
-        if (q.attempts >= EFFECT_MAX_ATTEMPTS) {
-          this.effectQueue.splice(k, 1);
-          this.deadLetters.push({ ...q, failedAt: now });
-        } else {
-          q.next = now + Math.min(EFFECT_BACKOFF_MAX, EFFECT_BACKOFF_MIN * 2 ** (q.attempts - 1));
-          k++;
-        }
-      }
-    }
-    return ran;
-  }
-
-  /** Run one effect. Its writes commit together, or not at all. */
-  private runEffect(effect: Effect, now: number) {
-    if (effect.type === "job") {
-      this.jobList.push({ kind: effect.kind, id: effect.id });
-      return;
-    }
-    const staged = new Map<string, StoredRecord | null>();
-    // the staff as they are when the effect runs
-    const staff = spaceRec(this.store, effect.sp)?.mods ?? [];
-    for (const [to, role] of staff) {
-      if (role === "member") continue;
-      let id: string;
-      do id = ulid(now, this.random);
-      while (this.store.registry.has(id) || staged.has(`notif:${id}`));
-      const n: NotifDraft = {
-        to,
-        type: "report",
-        sp: effect.sp,
-        report: effect.report,
-        item: effect.item,
-      };
-      staged.set(`notif:${id}`, {
-        ...n,
-        kind: "notif",
-        id,
-        read: false,
-        createdAt: isoAt(now),
-        rev: 0,
-      });
-    }
-    this.store.commit(staged, now);
   }
 
   /** Expire what is past its lifetime: each table from its oldest value,
@@ -905,7 +842,11 @@ export class ProtoServer implements TestServer {
       if (v === true) continue;
       if (
         options.tier === "summary" &&
-        (v.kind === "followup" || v.kind === "reply" || v.kind === "run")
+        (v.kind === "node" ||
+          v.kind === "answer" ||
+          v.kind === "reply" ||
+          v.kind === "comment" ||
+          v.kind === "run")
       )
         continue;
       records.push({ key: row.key, record: structuredClone(v) });
@@ -963,11 +904,11 @@ export class ProtoServer implements TestServer {
 
   /** Whether what `u` may read of `log` changed, after the token at
    * `version` was served (when the server's head was `head`), in a way the
-   * log's rows do not carry: `u`'s own membership or role in the space; for
-   * `u`'s user log, `u`'s membership or role in any space, or a space opening
-   * or closing that a record in the log is about (likes, saves and
-   * notifications follow the person's access to their space, notifications
-   * their role too). Either way the reader resyncs. `u`'s member rows are
+   * log's rows do not carry: `u`'s own membership in the space; for `u`'s
+   * user log, `u`'s membership in any space, or the history of a space log
+   * that a record in the log is about being replaced (saves and
+   * notifications follow the person's access to their space). Either way the
+   * reader resyncs. `u`'s member rows are
    * rows `u` may read, so their versions compare with the token's; a space's
    * history is not a row of the user log, so the version it began at
    * compares with the head. */
@@ -998,7 +939,17 @@ export class ProtoServer implements TestServer {
   }
 
   jobs() {
-    return this.jobList;
+    const out: { kind: string; id: string }[] = [];
+    for (const key of this.store.keysOf("run")) {
+      const r = this.store.get(key) as RunRec;
+      if (r.status === "queued") out.push({ kind: "run", id: r.id });
+    }
+    return out;
+  }
+
+  replaceHistory(log: LogId): void {
+    this.begin();
+    this.store.replaceHistory(log);
   }
 
   scanStorage(): StorageScan {
@@ -1029,9 +980,6 @@ export class ProtoServer implements TestServer {
       registry: [...this.store.registry].map(([id, rev]) => ({ id, rev })),
       born: [...this.store.born].map(([key, version]) => ({ key, version })),
       epochs: [...this.store.epochs].map(([log, e]) => ({ log, ...e })),
-      effects: this.effectQueue.map((q) => ({ ...q })),
-      deadLetters: this.deadLetters.map((q) => ({ ...q })),
-      jobs: [...this.jobList],
     });
   }
 
@@ -1041,8 +989,23 @@ export class ProtoServer implements TestServer {
     if (!r || !("mod" in r) || r.mod === "removed") return false;
     if (r.kind === "thread" && !r.del)
       return this.store.commit(new Map([[key, { ...r, sum: text }]]), now) !== null;
-    if (r.kind === "followup")
-      return this.store.commit(new Map([[key, { ...r, a: text }]]), now) !== null;
+    if (r.kind === "node") {
+      const answer: StoredRecord = {
+        kind: "answer",
+        node: r.id,
+        th: r.th,
+        s: r.s,
+        u: r.u,
+        md: text,
+        pages: [],
+        tok: 0,
+        run: r.run,
+        attempt: 1,
+        mod: r.mod,
+        rev: 0,
+      };
+      return this.store.commit(new Map([[answerKey(r.id), answer]]), now) !== null;
+    }
     return false;
   }
 }

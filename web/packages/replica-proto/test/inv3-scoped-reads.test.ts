@@ -5,7 +5,20 @@ import test, { type ExecutionContext } from "ava";
 
 import type { LogId, Pull, StoredRecord, ThreadRec } from "../src/index.js";
 
-import { DAY, HOUR, World, actor, admit, cast, ok, refused, thread, type Cast } from "./harness.js";
+import {
+  DAY,
+  HOUR,
+  World,
+  actor,
+  admit,
+  cast,
+  fork,
+  forkInput,
+  ok,
+  refused,
+  thread,
+  type Cast,
+} from "./harness.js";
 import { diff, expected } from "./oracle.js";
 
 const kinds = (m: ReadonlyMap<string, StoredRecord>) =>
@@ -15,7 +28,7 @@ const snap = async (c: Cast, u: string | null, log: LogId) =>
 const changes = (p: Pull) => ("resync" in p ? null : p.changes);
 /** The person a record belongs to: its author, maker or subject. */
 const ownerOf = (r: StoredRecord) =>
-  r.kind === "report" || r.kind === "invite"
+  r.kind === "invite" || r.kind === "modlog"
     ? r.by
     : r.kind === "notif"
       ? r.to
@@ -27,19 +40,28 @@ const ownerOf = (r: StoredRecord) =>
 async function busy(t: ExecutionContext, c: Cast) {
   const { w, open, closed } = c;
   const ask = await thread(t, w, "mel", closed, "ask");
-  await ok(t, w.as("mona", "followups.ask", { id: w.id(), thread: ask, q: "and?" }));
+  const node = await fork(t, w, "mona", ask, "and?");
+  await ok(t, w.as("ada", "comments.create", { id: w.id(), thread: ask, node, t: "@mel see" }));
+  await ok(t, w.as("mel", "saved.set", { kind: "thread", id: ask, on: true }));
   const post = await thread(t, w, "mona", closed, "post");
   await ok(
     t,
     w.as("mel", "research.createPostFollowUp", { id: w.id(), thread: post, t: "a reply" }),
   );
-  await ok(t, w.as("mel", "reports.create", { id: w.id(), item: `p:${post}`, why: "off topic" }));
-  await ok(t, w.as("mona", "reports.create", { id: w.id(), item: `a:${ask}`, why: "spam" }));
-  await ok(t, w.as("mona", "invites.create", { id: w.id(), space: closed }));
-  await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
-  await ok(t, w.as("mel", "likes.set", { thread: post, on: true }));
-  await ok(t, w.as("mel", "saved.set", { kind: "thread", id: ask, on: true }));
-  await ok(t, w.as("mona", "members.ban", { space: open, user: "eve" }));
+  await ok(t, w.as("mel", "saved.set", { kind: "thread", id: post, on: true }));
+  const gone = await thread(t, w, "mel", closed, "post", "off topic");
+  await ok(
+    t,
+    w.as("olga", "moderation.decide", {
+      item: `p:${gone}`,
+      decision: "removed",
+      note: "Off topic.",
+    }),
+  );
+  await ok(t, w.as("olga", "invites.create", { id: w.id(), space: closed, days: 7 }));
+  await ok(t, w.as("otto", "joinRequests.create", { space: closed }));
+  await ok(t, w.as("olga", "members.ban", { space: open, user: "eve" }));
+  await ok(t, w.as("mel", "prefs.set", { layout: "wide" }));
   const openPost = await thread(t, w, "otto", open, "post");
   await ok(
     t,
@@ -66,19 +88,19 @@ test("every snapshot equals the read rules' projection, for every reader and log
   t.pass();
 });
 
-test("a non-member of a closed space gets its landing, the staff list and their own request, not their threads", async (t) => {
+test("a non-member of a private space gets its landing, its owner and their own request, not their threads", async (t) => {
   const c = await cast(t);
   const { w, closed } = c;
   await busy(t, c);
   await admit(t, w, closed, "rita");
   const mine = await thread(t, w, "rita", closed, "ask");
-  await ok(t, w.as("rita", "followups.ask", { id: w.id(), thread: mine, q: "more" }));
+  await fork(t, w, "rita", mine, "more");
   await ok(t, w.as("rita", "spaces.leave", { space: closed }));
   const got = await snap(c, "rita", `space:${closed}`);
   t.deepEqual(kinds(got), ["request", "space"]);
   for (const r of got.values()) if (r.kind !== "space") t.is((r as { u: string }).u, "rita");
   const space = got.get(`space:${closed}`);
-  t.deepEqual(space?.kind === "space" ? space.mods.map(([u]) => u) : [], ["olga", "ada", "mona"]);
+  t.is(space?.kind === "space" ? space.owner : null, "olga");
   // otto, who only asked to join, gets the landing and his own request (through his user log)
   t.deepEqual(kinds(await snap(c, "otto", `space:${closed}`)), ["request", "space"]);
   t.deepEqual(kinds(await snap(c, "otto", "user:otto")), ["member", "request"]);
@@ -110,7 +132,7 @@ test("a removed member's cursor resyncs, and the new snapshot has none of the sp
   const cursor = mel.cursor(`space:${closed}`);
   await ok(
     t,
-    w.as("mona", "members.remove", {
+    w.as("olga", "members.remove", {
       space: closed,
       user: "mel",
       base: w.admission(closed, "mel"),
@@ -178,34 +200,37 @@ test("a user log holds only that user's records", async (t) => {
   }
 });
 
-test("a plain member gets no moderator-only records, in snapshots or pulls", async (t) => {
+test("a member gets no owner-only records, in snapshots or pulls", async (t) => {
   const c = await cast(t);
   const { w, closed } = c;
   const mel = w.client("mel");
-  const mona = w.client("mona");
+  const olga = w.client("olga");
   await mel.sync(`space:${closed}`);
-  await mona.sync(`space:${closed}`);
+  await olga.sync(`space:${closed}`);
   const before = mel.cursor(`space:${closed}`)!;
   await busy(t, c);
   await mel.sync(`space:${closed}`);
-  await mona.sync(`space:${closed}`);
+  await olga.sync(`space:${closed}`);
   const own = (r: StoredRecord) => ownerOf(r) === "mel";
   for (const r of mel.records(`space:${closed}`).values())
     t.false(
-      ["request", "ban", "invite", "report"].includes(r.kind) && !own(r),
+      ["request", "ban", "invite", "modlog"].includes(r.kind) && !own(r),
       `mel holds ${r.kind}`,
     );
   t.deepEqual(
-    kinds(mona.records(`space:${closed}`)).filter((k) =>
-      ["request", "report", "invite"].includes(k),
+    kinds(olga.records(`space:${closed}`)).filter((k) =>
+      ["request", "invite", "modlog"].includes(k),
     ),
-    ["invite", "report", "request"],
+    ["invite", "modlog", "request"],
   );
   // the rows mel may not read are left out of the pull: not even a key
   const p = changes(await w.server.pull(actor("mel"), `space:${closed}`, before)) ?? [];
   const keys = p.map((x) => x.key);
-  t.false(keys.some((k) => k.startsWith("request:") || k.startsWith("invite:")));
-  t.is(keys.filter((k) => k.startsWith("report:")).length, 1);
+  t.false(
+    keys.some(
+      (k) => k.startsWith("request:") || k.startsWith("invite:") || k.startsWith("modlog:"),
+    ),
+  );
 });
 
 test("a read carries no version: its cursor is an opaque token whose length does not change with writes", async (t) => {
@@ -221,7 +246,7 @@ test("a read carries no version: its cursor is an opaque token whose length does
   t.regex(s.cursor, /^[A-Za-z0-9_-]+$/);
   for (let k = 0; k < 120; k++) await thread(t, w, "mel", closed, "post", "eve should not see");
   const other = await thread(t, w, "mel", closed);
-  await ok(t, w.as("mel", "likes.set", { thread: other, on: true }));
+  await ok(t, w.as("mel", "saved.set", { kind: "thread", id: other, on: true }));
   // a pull with nothing eve may read: no change, and a token of the same length
   const p1 = await w.server.pull(actor("eve"), `space:${closed}`, s.cursor);
   if ("resync" in p1) return t.fail("unexpected resync");
@@ -271,7 +296,7 @@ test("a signed-out caller can tell neither how many writes happened nor when, in
   const ids = [w.id(), w.id(), w.id()];
   for (const id of ids)
     await ok(t, w.as("mel", "threads.create", { id, space: closed, kind: "post", q: "private" }));
-  await ok(t, w.as("ada", "likes.set", { thread: ids[0], on: true }));
+  await ok(t, w.as("ada", "saved.set", { kind: "thread", id: ids[0], on: true }));
   await ok(t, w.as("mel", "threads.delete", { id: ids[1] }));
   t.is(await read(), before);
   // as time passes on a quiet server, the same cursors keep working
@@ -296,13 +321,9 @@ test("a non-member sees no change to any record after a post in a closed space",
   const th = await thread(t, w, "mel", closed, "post", "activity");
   await ok(
     t,
-    w.as("mona", "followups.ask", {
-      id: w.id(),
-      thread: await thread(t, w, "ada", closed),
-      q: "x",
-    }),
+    w.as("mona", "research.forkNode", forkInput(w.id(), await thread(t, w, "ada", closed), "x")),
   );
-  await ok(t, w.as("ada", "likes.set", { thread: th, on: true }));
+  await ok(t, w.as("ada", "saved.set", { kind: "thread", id: th, on: true }));
   await ok(t, w.as("ada", "research.createPostFollowUp", { id: w.id(), thread: th, t: "x" }));
   for (const u of readers)
     for (const log of logs) {
@@ -377,11 +398,13 @@ test("a token of another reader, another log or another server resyncs", async (
 test("a cursor from before the log's history was replaced resyncs, so it gets no tombstones of the old history", async (t) => {
   // attack B of the phase 0 review: a forged cursor at version 0 after a
   // closed space opened returned the `del` of a member who left while it was
-  // closed; review round 2, N30: a valid version-0 token of the old history
+  // closed; review round 2, N30: a valid version-0 token of the old history.
+  // A space's visibility no longer changes (`01` C11); a restore replaces a
+  // log's history (`01` D6).
   const c = await cast(t);
   const { w, closed } = c;
   const lab = `space:${closed}` as LogId;
-  const readers = ["eve", null, "otto"];
+  const readers = ["eve", null, "otto", "ada"];
   const old: { u: string | null; cursor: string }[] = [];
   const take = async () => {
     for (const u of readers)
@@ -397,34 +420,41 @@ test("a cursor from before the log's history was replaced resyncs, so it gets no
   await take();
   await ok(t, w.as("mel", "spaces.leave", { space: closed }));
   await take();
-  await ok(t, w.as("olga", "spaces.update", { id: closed, set: { vis: "open" } }));
-  const s = await w.server.snapshot(actor("eve"), lab);
+  await w.server.replaceHistory(lab);
+  const s = await w.server.snapshot(actor("ada"), lab);
   t.false(s.records.some((x) => x.key === `member:${closed}:mel`));
   for (const { u, cursor } of old)
     t.deepEqual(await w.server.pull(actor(u), lab, cursor), { resync: true }, `${u}`);
   // the token of the snapshot after the change is served
-  t.deepEqual(changes(await w.server.pull(actor("eve"), lab, s.cursor)), []);
-  // a version-0 token of a log whose space then was made, closed and opened
-  await ok(t, w.as("eve", "spaces.create", { id: later, name: "later", vis: "listed" }));
-  await ok(t, w.as("eve", "spaces.update", { id: later, set: { vis: "open" } }));
+  t.deepEqual(changes(await w.server.pull(actor("ada"), lab, s.cursor)), []);
+  // a version-0 token of a log whose space then was made and restored
+  await ok(t, w.as("eve", "spaces.create", { id: later, name: "later", vis: "private" }));
+  await w.server.replaceHistory(`space:${later}`);
   for (const { u, cursor } of zero)
     t.deepEqual(await w.server.pull(actor(u), `space:${later}`, cursor), { resync: true }, `${u}`);
 });
 
-test("a space that becomes closed resyncs every reader, and non-members lose its content", async (t) => {
+test("a log whose history was replaced resyncs every reader into the current state", async (t) => {
   const c = await cast(t);
   const { w, open } = c;
   const { openPost } = await busy(t, c);
   const eve = w.client("eve");
   const anon = w.client(null);
+  const ada = w.client("ada");
   await eve.sync(`space:${open}`);
   await anon.sync(`space:${open}`);
+  await ada.sync("user:ada");
   t.true(eve.records(`space:${open}`).has(`thread:${openPost}`));
-  await ok(t, w.as("olga", "spaces.update", { id: open, set: { vis: "listed" } }));
+  await w.server.replaceHistory(`space:${open}`);
   t.is(await eve.sync(`space:${open}`), "resync");
   t.is(await anon.sync(`space:${open}`), "resync");
-  t.deepEqual(kinds(eve.records(`space:${open}`)), ["space"]);
-  t.deepEqual(kinds(anon.records(`space:${open}`)), ["space"]);
+  t.is(diff(eve.records(`space:${open}`), expected(w.server.dump(), "eve", `space:${open}`)), null);
+  t.is(diff(anon.records(`space:${open}`), expected(w.server.dump(), null, `space:${open}`)), null);
+  // ada's user log has records about the private space only: it does not
+  // resync until that space's log is replaced
+  t.is(await ada.sync("user:ada"), "pull");
+  await w.server.replaceHistory(`space:${c.closed}`);
+  t.is(await ada.sync("user:ada"), "resync");
 });
 
 test("a summary-tier snapshot is scoped as a full one, and holds no more", async (t) => {
@@ -436,7 +466,11 @@ test("a summary-tier snapshot is scoped as a full one, and holds no more", async
       const summary = await c.w.server.snapshot(actor(u), log, { tier: "summary" });
       for (const { key, record } of summary.records)
         t.deepEqual(record, want.get(key), `${u} ${key}`);
-      t.false(summary.records.some((x) => ["followup", "reply", "run"].includes(x.record.kind)));
+      t.false(
+        summary.records.some((x) =>
+          ["node", "answer", "reply", "comment", "run"].includes(x.record.kind),
+        ),
+      );
     }
 });
 
@@ -477,7 +511,7 @@ test("a removed member's device keeps a frozen copy of their threads, and can st
   // no further updates reach it, and the server serves none of it
   await ok(
     t,
-    w.as("mona", "moderation.decide", {
+    w.as("olga", "moderation.decide", {
       item: `p:${th}`,
       decision: "hidden",
       base: w.item(`p:${th}`),

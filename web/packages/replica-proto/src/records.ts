@@ -1,33 +1,36 @@
 // The stored shape: what mutators write and what snapshots and pulls carry.
-// Fields follow the mock's records (`docs/mockups/session-web-spaces-mock-api.js`
-// section 3, `web/packages/shared/src/schemas/spaces.ts`) with these changes for
-// a multi-user server:
+// The record types are the shared contract's (`Spaces.*Record`, from
+// `web/packages/shared/src/schemas/spaces.ts`), which this prototype writes
+// and the suite parses every stored record with. Notes for a multi-user
+// server:
 //
 // - Every record has `kind` and an integer `rev`, which the store sets on each
 //   write. A record written again at a key that was deleted continues from
-//   the key's last rev. Counts (`likes`, `r`, `members`, `posts`) are stored
+//   the key's last rev. Counts (`saves`, `r`, `members`, `posts`) are stored
 //   fields that mutators maintain; no field is derived on read, and
-//   per-viewer fields (`liked`, `mine`) are left to the client.
-// - A thread's like and follow-up counts are a separate `counts` record, so a
-//   like or a follow-up does not change the thread's rev, and a moderator's
-//   queued "shown" based on that rev stays valid (decision 4 of review
-//   round 1).
+//   per-viewer fields (`saved`, `mine`) are left to the client. There are no
+//   likes.
+// - A thread's save and branch counts are a separate `counts` record, so a
+//   save or a branch does not change the thread's rev, and an owner's queued
+//   "shown" based on that rev stays valid.
 // - Optional fields are `null` when absent, so two writes of the same state
 //   produce equal records.
-// - The mock's per-person collections (`joined`, `rel`, `roles`, `liked`,
-//   `saved`) become records keyed by person: `member`, `like` and `save`. A
-//   space's member list is one `member` record per person; the staff list a
-//   non-member may read is the space record's `mods`.
-// - A moderation state is the moderated record's `mod` field instead of the
-//   mock's separate `modSt` map, so a pull of the record alone serves the
-//   redacted form.
-// - Space ids are ULIDs (AGENTS.md); the mock's `sp-<name>` slugs are not used.
-// - A space's rules version is an integer `rulesRev` instead of `rulesAt`.
-// - A space's activity (its thread count and the time of its last thread) is
-//   a separate `stats` record that only the space's readers get. The space
-//   record is public, so it carries nothing that changes when someone posts.
+// - Per-person records (`member`, `save`, `notif`, `prefs`, and the
+//   prototype's `request`) live in the person's user log, the first two also
+//   in the space log.
+// - A moderation state is the moderated record's `mod` field, so a pull of
+//   the record alone serves the redacted form.
+// - Space ids are ULIDs. A space's activity (its thread count and the time of
+//   its last thread) is a separate `stats` record that only the space's
+//   readers get: the space record is public, so it carries nothing that
+//   changes when someone posts.
 // - A moderated record's text is erased from storage when it is removed; a
 //   hidden record keeps its text, and `view` decides who gets it.
+// - An ask thread's root ask is the thread itself: nodes, runs and comments
+//   name it `r`, and its answer is `answer:<thread>`.
+// - Join requests (`request`) are not part of the build (C10). The prototype
+//   keeps them because their stale-intent rules (approve, decline, reopen)
+//   are tested here.
 
 import type { Spaces } from "@session/shared";
 
@@ -35,208 +38,36 @@ import type { Spaces } from "@session/shared";
 export type LogId = `space:${string}` | `user:${string}`;
 
 export type SpaceRole = Spaces.SpaceMemberRole;
-export type ModState = "hidden" | "removed";
-export type Visibility = "open" | "listed" | "unlisted";
+export type ModState = Spaces.ModerationState;
+export type Visibility = Spaces.SpaceVisibility;
 
-export interface SpaceRec {
-  kind: "space";
-  id: string;
-  name: string;
-  title: string;
-  desc: string;
-  rules: string[];
-  /** The rules' version: counts the saves that changed them. */
-  rulesRev: number;
-  vis: Visibility;
-  policy: "request" | "invite" | null;
-  invite: "mods" | "members" | null;
-  qs: { q: string; req: boolean }[];
-  postsOff: boolean;
-  /** Stored count of member records. Public, as on the mock's landing. */
-  members: number;
-  /** The owner, admins and moderators (the staff list), by rank then handle.
-   * Public with the space record. */
-  mods: [string, SpaceRole][];
-  createdAt: string;
-  rev: number;
-}
+export type SpaceRec = Spaces.SpaceRecord;
+export type StatsRec = Spaces.StatsRecord;
+export type MemberRec = Spaces.MemberRecord;
+export type ThreadRec = Spaces.ThreadRecord;
+export type CountsRec = Spaces.CountsRecord;
+export type NodeRec = Spaces.NodeRecord;
+export type RunRec = Spaces.RunRecord;
+export type AnswerRec = Spaces.AnswerRecord;
+export type ReplyRec = Spaces.ReplyRecord;
+export type CommentRec = Spaces.CommentRecord;
+export type BanRec = Spaces.BanRecord;
+export type InviteRec = Spaces.InviteRecord;
+export type SaveRec = Spaces.SaveRecord;
+export type NotifRec = Spaces.NotificationRecord;
+export type PrefsRec = Spaces.PrefsRecord;
+export type ModlogRec = Spaces.ModlogRecord;
 
-/** A space's activity, read with its content: by everyone for an open space,
- * by members for a closed one. Keyed `stats:<space>`. */
-export interface StatsRec {
-  kind: "stats";
-  sp: string;
-  /** Stored count of threads. */
-  posts: number;
-  /** The time of the last thread, or the space's creation. */
-  updatedAt: string;
-  rev: number;
-}
-
-export interface MemberRec {
-  kind: "member";
-  sp: string;
-  u: string;
-  role: SpaceRole;
-  /** The admission id, derived from the write that let the person in: the
-   * space's creation, a moderator's approval, an invite, the space opening,
-   * or the person joining an open space. A role change keeps it. A removal
-   * names it, so a removal decided before the person was let in again is
-   * STALE (review round 2, finding 2). */
-  adm: string;
-  joinedAt: string;
-  rev: number;
-}
-
-export interface ThreadRec {
-  kind: "thread";
-  id: string;
-  s: string;
-  u: string;
-  k: "ask" | "post";
-  q: string;
-  t: string | null;
-  sum: string | null;
-  tok: number;
-  running: boolean;
-  edited: boolean;
-  del: boolean;
-  gone: boolean;
-  mod: ModState | null;
-  createdAt: string;
-  updatedAt: string;
-  rev: number;
-}
-
-/** A thread's counts, keyed `counts:<thread>`, read by the thread's readers. */
-export interface CountsRec {
-  kind: "counts";
-  th: string;
-  s: string;
-  /** Stored count of like records. */
-  likes: number;
-  /** Stored count of follow-ups (an ask) or top-level replies (a post). */
-  r: number;
-  rev: number;
-}
-
-export interface FollowUpRec {
-  kind: "followup";
-  id: string;
-  th: string;
-  s: string;
-  u: string;
-  q: string;
-  a: string | null;
-  mod: ModState | null;
-  createdAt: string;
-  rev: number;
-}
-
-export interface ReplyRec {
-  kind: "reply";
-  id: string;
-  th: string;
-  s: string;
-  u: string;
-  t: string;
-  /** The top-level reply this one answers (one level of nesting), or null. */
-  parent: string | null;
-  mod: ModState | null;
-  createdAt: string;
-  rev: number;
-}
-
-/** A run of a thread's ask, queued by `threads.create`; a server job takes
- * it from there (not modelled). Its id is derived from the mutation id. */
-export interface RunRec {
-  kind: "run";
-  id: string;
-  th: string;
-  s: string;
-  u: string;
-  node: "r";
-  status: "queued";
-  attempt: number;
-  createdAt: string;
-  rev: number;
-}
-
-export interface ReportRec {
-  kind: "report";
-  id: string;
-  sp: string;
-  key: string;
-  by: string;
-  st: "open";
-  why: string;
-  note: string;
-  createdAt: string;
-  rev: number;
-}
-
+/** A join request (prototype only, C10): one per person and space. */
 export interface RequestRec {
   kind: "request";
   sp: string;
   u: string;
   st: "open" | "approved" | "declined";
-  a: string[];
+  /** The owner's note to a declined person. */
   why: string | null;
   createdAt: string;
   updatedAt: string;
-  rev: number;
-}
-
-export interface BanRec {
-  kind: "ban";
-  id: string;
-  sp: string;
-  u: string;
-  createdAt: string;
-  rev: number;
-}
-
-export interface InviteRec {
-  kind: "invite";
-  id: string;
-  /** Server-made in the pre-check stage; never from the client. */
-  code: string;
-  by: string;
-  sp: string;
-  expiresAt: string | null;
-  dead: string | null;
-  usedBy: string | null;
-  createdAt: string;
-  rev: number;
-}
-
-export interface LikeRec {
-  kind: "like";
-  u: string;
-  th: string;
-  createdAt: string;
-  rev: number;
-}
-
-export interface SaveRec {
-  kind: "save";
-  u: string;
-  th: string;
-  createdAt: string;
-  rev: number;
-}
-
-/** A notification the server writes after a commit (a post-commit effect). */
-export interface NotifRec {
-  kind: "notif";
-  id: string;
-  to: string;
-  type: "report";
-  sp: string;
-  report: string;
-  item: string;
-  read: boolean;
-  createdAt: string;
   rev: number;
 }
 
@@ -246,16 +77,18 @@ export type StoredRecord =
   | MemberRec
   | ThreadRec
   | CountsRec
-  | FollowUpRec
-  | ReplyRec
+  | NodeRec
   | RunRec
-  | ReportRec
+  | AnswerRec
+  | ReplyRec
+  | CommentRec
   | RequestRec
   | BanRec
   | InviteRec
-  | LikeRec
   | SaveRec
-  | NotifRec;
+  | NotifRec
+  | PrefsRec
+  | ModlogRec;
 
 export type Kind = StoredRecord["kind"];
 export type RecordOf<K extends Kind> = Extract<StoredRecord, { kind: K }>;
@@ -269,12 +102,13 @@ export type Draft<R extends StoredRecord = StoredRecord> = R extends unknown
 export const ID_KINDS: ReadonlySet<Kind> = new Set<Kind>([
   "space",
   "thread",
-  "followup",
+  "node",
   "reply",
+  "comment",
   "run",
-  "report",
   "invite",
   "notif",
+  "modlog",
 ]);
 
 export const spaceKey = (id: string) => `space:${id}`;
@@ -282,10 +116,12 @@ export const statsKey = (sp: string) => `stats:${sp}`;
 export const memberKey = (sp: string, u: string) => `member:${sp}:${u}`;
 export const threadKey = (id: string) => `thread:${id}`;
 export const countsKey = (th: string) => `counts:${th}`;
+export const nodeKey = (id: string) => `node:${id}`;
+export const answerKey = (node: string) => `answer:${node}`;
 export const requestKey = (sp: string, u: string) => `request:${sp}:${u}`;
 export const banKey = (sp: string, u: string) => `ban:${sp}:${u}`;
-export const likeKey = (u: string, th: string) => `like:${u}:${th}`;
 export const saveKey = (u: string, th: string) => `save:${u}:${th}`;
+export const prefsKey = (u: string) => `prefs:${u}`;
 
 export function keyOf(r: Draft | StoredRecord): string {
   switch (r.kind) {
@@ -295,14 +131,16 @@ export function keyOf(r: Draft | StoredRecord): string {
       return countsKey(r.th);
     case "member":
       return memberKey(r.sp, r.u);
+    case "answer":
+      return answerKey(r.node);
     case "request":
       return requestKey(r.sp, r.u);
     case "ban":
       return banKey(r.sp, r.u);
-    case "like":
-      return likeKey(r.u, r.th);
     case "save":
       return saveKey(r.u, r.th);
+    case "prefs":
+      return prefsKey(r.u);
     default:
       return `${r.kind}:${r.id}`;
   }
@@ -324,20 +162,22 @@ export function spaceOf(r: Draft | StoredRecord): string | null {
       return r.id;
     case "thread":
     case "counts":
-    case "followup":
+    case "node":
     case "reply":
+    case "comment":
     case "run":
+    case "answer":
       return r.s;
     case "stats":
     case "member":
-    case "report":
     case "request":
     case "ban":
     case "invite":
+    case "modlog":
       return r.sp;
-    case "like":
     case "save":
     case "notif":
+    case "prefs":
       return null;
   }
 }
@@ -347,11 +187,9 @@ export function personOf(r: Draft | StoredRecord): string | null {
   switch (r.kind) {
     case "member":
     case "request":
-    case "like":
     case "save":
+    case "prefs":
       return r.u;
-    case "report":
-      return r.by;
     case "notif":
       return r.to;
     default:
@@ -360,8 +198,8 @@ export function personOf(r: Draft | StoredRecord): string | null {
 }
 
 /** The logs a record is written to: its space's log, and the user log of the
- * person it belongs to (a membership, a join request, a report, a like, a
- * save, a notification). */
+ * person it belongs to (a membership, a join request, a save, a
+ * notification, preferences). */
 export function logsOf(r: Draft | StoredRecord): LogId[] {
   const out: LogId[] = [];
   const sp = spaceOf(r);

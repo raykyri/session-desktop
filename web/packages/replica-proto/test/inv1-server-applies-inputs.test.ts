@@ -2,63 +2,41 @@
 // the pre-checks, `can` and `run` itself, on its own state, and never accepts
 // client-computed changes.
 
+import { spaces } from "@session/shared";
 import test from "ava";
 
 import { MUTATORS, PROTOCOL_VERSION, type CountsRec, type ThreadRec } from "../src/index.js";
 
-import { World, actor, cast, ok, refused, thread } from "./harness.js";
+import { MODEL, World, actor, cast, forkInput, ok, refused, thread } from "./harness.js";
 
 test("a write the actor's role forbids is refused and changes nothing", async (t) => {
   const { w, closed } = await cast(t);
+  const th = await thread(t, w, "ada", closed, "post");
   const before = JSON.stringify([...w.server.dump()]);
-  // mel is a plain member: admins change roles, moderators remove people
+  // mel is a member: only the owner removes, bans, edits About, makes
+  // invite links and moderates (`01` C18)
+  for (const [name, input] of [
+    ["members.remove", { space: closed, user: "mona", base: w.admission(closed, "mona") }],
+    ["members.ban", { space: closed, user: "mona" }],
+    ["members.unban", { space: closed, user: "mona" }],
+    ["spaces.update", { id: closed, desc: "Mine now." }],
+    ["invites.create", { id: w.id(), space: closed, days: 7 }],
+    ["moderation.decide", { item: `p:${th}`, decision: "removed" }],
+    ["moderation.decide", { item: `p:${th}`, decision: "hidden" }],
+    [
+      "joinRequests.decide",
+      { space: closed, users: ["mel"], decision: "decline", base: { mel: 0 } },
+    ],
+  ] as const)
+    await refused(t, w.as("mel", name, input), "FORBIDDEN");
+  // the owner acts on anyone but themselves
+  await refused(t, w.as("olga", "members.ban", { space: closed, user: "olga" }), "FORBIDDEN");
   await refused(
     t,
-    w.as("mel", "members.setRole", {
+    w.as("olga", "members.remove", {
       space: closed,
-      user: "mel",
-      role: "owner",
-      base: w.member(closed, "mel"),
-    }),
-    "FORBIDDEN",
-  );
-  await refused(
-    t,
-    w.as("mel", "members.setRole", {
-      space: closed,
-      user: "mona",
-      role: "member",
-      base: w.member(closed, "mona"),
-    }),
-    "FORBIDDEN",
-  );
-  await refused(
-    t,
-    w.as("mel", "members.remove", {
-      space: closed,
-      user: "mona",
-      base: w.admission(closed, "mona"),
-    }),
-    "FORBIDDEN",
-  );
-  await refused(t, w.as("mel", "spaces.update", { id: closed, set: { vis: "open" } }), "FORBIDDEN");
-  // a moderator cannot act on an admin, nor give a role above their own
-  await refused(
-    t,
-    w.as("mona", "members.remove", {
-      space: closed,
-      user: "ada",
-      base: w.admission(closed, "ada"),
-    }),
-    "FORBIDDEN",
-  );
-  await refused(
-    t,
-    w.as("ada", "members.setRole", {
-      space: closed,
-      user: "mel",
-      role: "owner",
-      base: w.member(closed, "mel"),
+      user: "olga",
+      base: w.admission(closed, "olga"),
     }),
     "FORBIDDEN",
   );
@@ -74,7 +52,11 @@ test("a write the actor's role forbids is refused and changes nothing", async (t
 test("client-computed fields in an input are refused, not stored", async (t) => {
   const { w, open } = await cast(t);
   const th = await thread(t, w, "mel", open, "post");
-  await refused(t, w.as("eve", "likes.set", { thread: th, on: true, likes: 999 }), "BAD_REQUEST");
+  await refused(
+    t,
+    w.as("eve", "saved.set", { kind: "thread", id: th, on: true, saves: 999 }),
+    "BAD_REQUEST",
+  );
   await refused(
     t,
     w.as("eve", "threads.create", { id: w.id(), space: open, kind: "post", q: "x", u: "olga" }),
@@ -104,12 +86,17 @@ test("client-computed fields in an input are refused, not stored", async (t) => 
   );
   await refused(
     t,
-    w.as("eve", "spaces.update", { id: open, set: { members: 999 } }),
+    w.as("olga", "spaces.update", { id: open, desc: "x", members: 999 }),
+    "BAD_REQUEST",
+  );
+  await refused(
+    t,
+    w.as("olga", "spaces.update", { id: open, desc: "x", owner: "eve" }),
     "BAD_REQUEST",
   );
   await refused(t, w.as("eve", "spaces.join", { space: open, role: "owner" }), "BAD_REQUEST");
   const p = w.get(`thread:${th}`) as ThreadRec;
-  t.is((w.get(`counts:${th}`) as CountsRec).likes, 0);
+  t.is((w.get(`counts:${th}`) as CountsRec).saves, 0);
   t.is(p.u, "mel");
   t.is(w.get(`member:${open}:eve`), undefined);
 });
@@ -117,15 +104,38 @@ test("client-computed fields in an input are refused, not stored", async (t) => 
 test("the server writes the author, the counts and the time from its own state", async (t) => {
   const { w, open } = await cast(t);
   const th = await thread(t, w, "mel", open, "post");
-  // two clients that each saw likes: 0 like the thread: the stored count is 2
-  await ok(t, w.as("otto", "likes.set", { thread: th, on: true }));
-  await ok(t, w.as("mona", "likes.set", { thread: th, on: true }));
-  // a repeated like changes nothing
-  await ok(t, w.as("mona", "likes.set", { thread: th, on: true }));
+  // two clients that each saw saves: 0 save the thread: the stored count is 2
+  await ok(t, w.as("otto", "saved.set", { kind: "thread", id: th, on: true }));
+  await ok(t, w.as("mona", "saved.set", { kind: "thread", id: th, on: true }));
+  // a repeated save changes nothing
+  await ok(t, w.as("mona", "saved.set", { kind: "thread", id: th, on: true }));
   const p = w.get(`thread:${th}`) as ThreadRec;
-  t.is((w.get(`counts:${th}`) as CountsRec).likes, 2);
+  t.is((w.get(`counts:${th}`) as CountsRec).saves, 2);
   t.is(p.u, "mel");
   t.is(p.createdAt, new Date(w.clock.now()).toISOString().replace(/\.\d{3}Z$/, "Z"));
+});
+
+test("a private space serves a save count of 3 or more only; an open space every count", async (t) => {
+  // `01` C1, decision S6: with few members a count of 1 could name the saver
+  const { w, open, closed } = await cast(t);
+  const th = await thread(t, w, "ada", closed, "post");
+  const counts = () => w.get(`counts:${th}`) as CountsRec;
+  const rev = counts().rev;
+  const save = (u: string, on: boolean) =>
+    ok(t, w.as(u, "saved.set", { kind: "thread", id: th, on }));
+  await save("mel", true);
+  await save("mona", true);
+  // below 3 the counts record is not written: no change reaches a reader
+  t.deepEqual([counts().saves, counts().rev], [0, rev]);
+  await save("olga", true);
+  t.is(counts().saves, 3);
+  await save("mel", false);
+  t.is(counts().saves, 0);
+  const snap = await w.server.snapshot(actor("ada"), `space:${closed}`);
+  t.is((snap.records.find((x) => x.key === `counts:${th}`)?.record as CountsRec).saves, 0);
+  const post = await thread(t, w, "mel", open, "post");
+  await ok(t, w.as("otto", "saved.set", { kind: "thread", id: post, on: true }));
+  t.is((w.get(`counts:${post}`) as CountsRec).saves, 1);
 });
 
 test("an envelope that carries changes or other extra fields is refused", async (t) => {
@@ -184,16 +194,7 @@ test("the handles null and undefined are reserved, and a signed-out caller has n
   for (const u of ["null", "undefined"]) {
     await refused(t, w.as(u, "spaces.join", { space: open }), "UNAUTHORIZED");
     t.false((await w.server.register(actor(u))).ok);
-    await refused(
-      t,
-      w.as("olga", "members.setRole", {
-        space: open,
-        user: u,
-        role: "mod",
-        base: w.member(open, u),
-      }),
-      "BAD_REQUEST",
-    );
+    await refused(t, w.as("olga", "members.ban", { space: open, user: u }), "BAD_REQUEST");
   }
   t.false([...w.server.dump().keys()].some((k) => k.endsWith(":null") || k.endsWith(":undefined")));
   for (const log of ["user:null", "user:undefined"] as const) {
@@ -228,54 +229,107 @@ test("mutators read no clock, no random source and no Intl while the server appl
   const fu = w.id();
   const rep = w.id();
   const post = w.id();
+  const look = w.id();
   try {
     globalThis.Date = Trapped;
     Math.random = trap("Math.random");
     Object.defineProperty(globalThis, "Intl", { value: undefined, configurable: true });
-    await ok(t, w.as("mel", "threads.create", { id: th, space: closed, kind: "ask", q: "Q" }));
-    await ok(t, w.as("mona", "followups.ask", { id: fu, thread: th, q: "F" }));
-    await ok(t, w.as("mel", "threads.create", { id: post, space: open, kind: "post", q: "P" }));
-    await ok(t, w.as("otto", "research.createPostFollowUp", { id: rep, thread: post, t: "R" }));
-    await ok(t, w.as("otto", "likes.set", { thread: post, on: true }));
-    await ok(t, w.as("otto", "saved.set", { kind: "thread", id: post, on: true }));
-    const rev = (w.get(`thread:${th}`) as ThreadRec).rev;
-    await ok(t, w.as("mel", "invites.create", { id: w.id(), space: closed, days: 3 }));
-    await ok(t, w.as("mel", "reports.create", { id: w.id(), item: `p:${post}`, why: "spam" }));
     await ok(
       t,
-      w.as("mona", "moderation.decide", {
+      w.as("mel", "threads.create", { id: th, space: closed, kind: "ask", q: "Q", ...MODEL }),
+    );
+    await ok(t, w.as("mona", "research.forkNode", forkInput(fu, th, "F")));
+    await ok(
+      t,
+      w.as("ada", "research.forkNode", {
+        id: look,
+        thread: th,
+        parent: fu,
+        kind: "lookup",
+        look: "“tide gauge”,",
+        quote: "Each tide gauge records the sea level.",
+        b: 2,
+        ...MODEL,
+      }),
+    );
+    await ok(
+      t,
+      w.as("mel", "comments.create", { id: w.id(), thread: th, node: fu, t: "@mona why?" }),
+    );
+    await ok(
+      t,
+      w.as("mel", "threads.create", { id: post, space: open, kind: "post", q: "P @otto" }),
+    );
+    await ok(t, w.as("otto", "research.createPostFollowUp", { id: rep, thread: post, t: "R" }));
+    await ok(t, w.as("otto", "saved.set", { kind: "thread", id: post, on: true }));
+    const rev = (w.get(`thread:${th}`) as ThreadRec).rev;
+    await ok(t, w.as("olga", "invites.create", { id: w.id(), space: closed, days: 3 }));
+    await ok(
+      t,
+      w.as("olga", "moderation.decide", {
         item: `p:${post}`,
         decision: "hidden",
         base: w.item(`p:${post}`),
       }),
     );
-    await ok(t, w.as("mel", "threads.update", { id: th, q: "Q2", base: { rev } }));
     await ok(
       t,
-      w.as("ada", "spaces.update", {
-        id: closed,
-        set: { rules: ["Be kind."] },
-        base: { rulesRev: 0 },
+      w.as("olga", "moderation.decide", {
+        item: `r:${post}:${rep}`,
+        decision: "removed",
+        note: "x",
       }),
     );
-    await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
+    await ok(t, w.as("mel", "threads.update", { id: th, q: "Q2", base: { rev } }));
+    await ok(t, w.as("olga", "spaces.update", { id: closed, desc: "Be kind." }));
+    await ok(t, w.as("otto", "joinRequests.create", { space: closed }));
     await ok(
       t,
-      w.as("mona", "joinRequests.decide", {
+      w.as("olga", "joinRequests.decide", {
         space: closed,
         users: ["otto"],
         decision: "approve",
         base: w.requests(closed, ["otto"]),
       }),
     );
-    await ok(t, w.as("mona", "members.ban", { space: closed, user: "otto" }));
+    await ok(t, w.as("olga", "members.ban", { space: closed, user: "otto" }));
+    await ok(t, w.as("olga", "members.unban", { space: closed, user: "otto" }));
     await ok(t, w.as("mel", "threads.delete", { id: post }));
+    await ok(t, w.as("mel", "prefs.set", { layout: "wide" }));
+    const n = w.notifs("mona")[0];
+    await ok(t, w.as("mona", "notifications.markRead", { id: n?.id ?? "" }));
   } finally {
     globalThis.Date = RealDate;
     Math.random = realRandom;
     Object.defineProperty(globalThis, "Intl", { value: realIntl, configurable: true });
   }
-  t.pass();
+  // every record a mutator wrote has the shared contract's stored shape, with
+  // no per-viewer field (`01` U3); join requests are the prototype's own kind
+  const kinds = new Set<string>();
+  for (const [k, r] of w.server.dump()) {
+    kinds.add(r.kind);
+    if (r.kind === "request") continue;
+    const p = spaces.storedRecordSchema.safeParse(r);
+    t.true(p.success, `${k}: ${JSON.stringify(p.error?.issues[0])}`);
+    for (const f of ["mine", "saved", "liked", "likes"]) t.false(f in r, `${k} has ${f}`);
+  }
+  t.deepEqual([...kinds].sort(), [
+    "comment",
+    "counts",
+    "invite",
+    "member",
+    "modlog",
+    "node",
+    "notif",
+    "prefs",
+    "reply",
+    "request",
+    "run",
+    "save",
+    "space",
+    "stats",
+    "thread",
+  ]);
 });
 
 test("every ported mutator refuses a signed-out caller and extra input fields", async (t) => {

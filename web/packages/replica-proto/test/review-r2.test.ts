@@ -1,7 +1,11 @@
-// The attacks of review round 2 (S1, S2, H1, H2, Q1, Q3, Q2, E1, R1, T1) and
+// The attacks of review round 2 (S1, S2, H1, Q1, Q3, Q2, E1, R1, T1) and
 // the mutations that survived it (N2, N3, N23, N28, N29, N30), each ported
-// as a test that the server refuses or filters the attack. The invariant
-// files hold the general cases; these keep each attack's own scenario.
+// as a test that the server refuses or filters the attack, and the envelope
+// fields of protocol version 4 (Y1: `queuedAt`, `replaces`, TOO_LARGE). The
+// invariant files hold the general cases; these keep each attack's own
+// scenario. H2 (report notifications for staff) and the first E1 test (the
+// effect worker's retries and dead letters) went with reporting and the
+// effect queue (`01` U6).
 
 import test from "ava";
 
@@ -13,6 +17,7 @@ import {
   type AnyMutator,
   type CountsRec,
   type ApplyResult,
+  type Envelope,
   type LogId,
   type ServerHalf,
   type ThreadRec,
@@ -22,20 +27,18 @@ import {
   DAY,
   HOUR,
   MINUTE,
+  MODEL,
   ManualClock,
-  type World,
   actor,
   admit,
   cast,
+  forkInput,
   ok,
   refused,
-  rng,
   thread,
 } from "./harness.js";
 
 const codes = (rs: ApplyResult[]) => rs.map((r) => (r.ok ? "ok" : r.error.code));
-const notifsOf = async (w: World, u: string) =>
-  (await w.server.snapshot(actor(u), `user:${u}`)).records.filter((r) => r.record.kind === "notif");
 
 test("S1: a read shows no version, and its token's length depends only on the log and the reader", async (t) => {
   const { w, open, closed } = await cast(t);
@@ -57,20 +60,12 @@ test("S1: a read shows no version, and its token's length depends only on the lo
   await ok(t, w.as("eve", "spaces.create", { id: mine, name: "probe" }));
   const probe = await thread(t, w, "eve", mine, "post");
   const sample = async (on: boolean) => {
-    await ok(t, w.as("eve", "likes.set", { thread: probe, on }));
+    await ok(t, w.as("eve", "saved.set", { kind: "thread", id: probe, on }));
     return (await w.server.snapshot(actor("eve"), `space:${mine}`)).cursor;
   };
   const tokens = [await sample(true)];
   await thread(t, w, "mel", closed, "post", "secret A");
-  await ok(
-    t,
-    w.as("olga", "members.setRole", {
-      space: closed,
-      user: "mel",
-      role: "mod",
-      base: w.member(closed, "mel"),
-    }),
-  );
+  await ok(t, w.as("olga", "members.ban", { space: closed, user: "otto" }));
   tokens.push(await sample(false));
   w.clock.advance(HOUR);
   tokens.push(await sample(true));
@@ -130,7 +125,7 @@ test("S2: a client whose id expired registers again and sends its write; a store
     { clock: w.clock, random: w.random },
     old.state(),
   );
-  back.queue("likes.set", { thread: th, on: true });
+  back.queue("saved.set", { kind: "thread", id: th, on: true });
   t.deepEqual(codes(await back.flush()), ["ok"]);
   t.deepEqual(
     (await Promise.all(back.sent.map((e) => w.resend("otto", e)))).map((r) =>
@@ -139,7 +134,7 @@ test("S2: a client whose id expired registers again and sends its write; a store
     ["WRONG_CLIENT", "ok"],
   );
   t.not(back.clientId, old.clientId);
-  t.is((w.get(`counts:${th}`) as CountsRec).likes, 1);
+  t.is((w.get(`counts:${th}`) as CountsRec).saves, 1);
   // a write whose answer was lost, sent again from a client id the server no
   // longer knows: the device registers again, and the stored answer replays
   let lose = true;
@@ -155,9 +150,9 @@ test("S2: a client whose id expired registers again and sends its write; a store
     },
   };
   const mel = new ReplicaClient(lossy, actor("mel"), { clock: w.clock, random: w.random });
-  mel.queue("likes.set", { thread: th, on: true });
+  mel.queue("saved.set", { kind: "thread", id: th, on: true });
   t.deepEqual(codes(await mel.flush()), ["SERVICE_UNAVAILABLE"]);
-  t.is((w.get(`counts:${th}`) as CountsRec).likes, 2);
+  t.is((w.get(`counts:${th}`) as CountsRec).saves, 2);
   w.clock.advance(MINUTE);
   const moved = new ReplicaClient(
     w.server,
@@ -170,7 +165,7 @@ test("S2: a client whose id expired registers again and sends its write; a store
     moved.sent.map((e) => e.mutationId),
     [mel.sent[0]?.mutationId, mel.sent[0]?.mutationId],
   );
-  t.is((w.get(`counts:${th}`) as CountsRec).likes, 2);
+  t.is((w.get(`counts:${th}`) as CountsRec).saves, 2);
   // the new client used no seq for the replayed answer
   t.is(await w.nextSeq("mel", moved.clientId ?? ""), 1);
 });
@@ -178,7 +173,7 @@ test("S2: a client whose id expired registers again and sends its write; a store
 test("H1: a restricting decision applies whatever the target does in between", async (t) => {
   const { w, open } = await cast(t);
   await ok(t, w.as("eve", "spaces.join", { space: open }));
-  // the author edits faster than the moderator decides
+  // the author edits faster than the owner decides
   const th = await thread(t, w, "eve", open, "post", "ABUSE v0");
   const item = `p:${th}`;
   const out: string[] = [];
@@ -193,7 +188,7 @@ test("H1: a restricting decision applies whatever the target does in between", a
         base: { rev: w.rev(`thread:${th}`) },
       }),
     );
-    const r = await w.as("mona", "moderation.decide", { item, decision: "hidden", base: seen });
+    const r = await w.as("olga", "moderation.decide", { item, decision: "hidden", base: seen });
     out.push(r.ok ? "ok" : r.error.code);
   }
   t.deepEqual(out, ["ok", "PRECONDITION_FAILED", "PRECONDITION_FAILED"]);
@@ -201,24 +196,24 @@ test("H1: a restricting decision applies whatever the target does in between", a
     (x) => x.key === `thread:${th}`,
   )?.record as ThreadRec;
   t.deepEqual([pub.q, pub.mod], ["", "hidden"]);
-  // likes and follow-ups do not make a "shown" STALE: they change the counts
+  // saves and replies do not make a "shown" STALE: they change the counts
   const seen = w.item(item);
   for (let k = 0; k < 3; k++)
-    await ok(t, w.as("otto", "likes.set", { thread: th, on: k % 2 === 0 }));
+    await ok(t, w.as("otto", "saved.set", { kind: "thread", id: th, on: k % 2 === 0 }));
   await ok(t, w.as("otto", "research.createPostFollowUp", { id: w.id(), thread: th, t: "hm" }));
   t.is(w.rev(`thread:${th}`), seen.rev);
-  await ok(t, w.as("mona", "moderation.decide", { item, decision: "shown", base: seen }));
+  await ok(t, w.as("olga", "moderation.decide", { item, decision: "shown", base: seen }));
   // a removal with an old base applies
   const old = w.item(item);
   await ok(t, w.as("eve", "threads.update", { id: th, q: "ABUSE v9", base: { rev: old.rev } }));
-  await ok(t, w.as("mona", "moderation.decide", { item, decision: "removed", base: old }));
+  await ok(t, w.as("olga", "moderation.decide", { item, decision: "removed", base: old }));
   t.is((w.get(`thread:${th}`) as ThreadRec).q, "");
   // a ban, while the target leaves and joins again
   for (let k = 0; k < 2; k++) {
     await ok(t, w.as("eve", "spaces.leave", { space: open }));
     await ok(t, w.as("eve", "spaces.join", { space: open }));
   }
-  await ok(t, w.as("mona", "members.ban", { space: open, user: "eve" }));
+  await ok(t, w.as("olga", "members.ban", { space: open, user: "eve" }));
   t.truthy(w.get(`ban:${open}:eve`));
   await refused(
     t,
@@ -235,60 +230,15 @@ test("H1: a restricting decision applies whatever the target does in between", a
   await ok(t, w.as("otto", "spaces.join", { space: open }));
   await refused(
     t,
-    w.as("mona", "members.remove", { space: open, user: "otto", base: adm }),
+    w.as("olga", "members.remove", { space: open, user: "otto", base: adm }),
     "STALE",
   );
   await ok(
     t,
-    w.as("mona", "members.remove", { space: open, user: "otto", base: w.admission(open, "otto") }),
+    w.as("olga", "members.remove", { space: open, user: "otto", base: w.admission(open, "otto") }),
   );
   // a person who is no longer a member: nothing to remove
-  await ok(t, w.as("mona", "members.remove", { space: open, user: "otto", base: adm }));
-});
-
-test("H2: report notifications are served only while their person is staff of the space", async (t) => {
-  const { w, open, closed } = await cast(t);
-  const th = await thread(t, w, "mel", open, "post", "reported post");
-  await ok(t, w.as("otto", "reports.create", { id: w.id(), item: `p:${th}`, why: "spam" }));
-  await w.work();
-  t.is((await notifsOf(w, "mona")).length, 1);
-  const mona = w.client("mona");
-  await mona.sync("user:mona");
-  await ok(t, w.as("olga", "members.ban", { space: open, user: "mona" }));
-  t.deepEqual(await notifsOf(w, "mona"), []);
-  t.is(await mona.sync("user:mona"), "resync");
-  t.false([...mona.records("user:mona").values()].some((r) => r.kind === "notif"));
-  // a demotion: the notification is not served, and the user log resyncs
-  const c = await thread(t, w, "mel", closed, "post", "closed post");
-  await ok(t, w.as("mona", "reports.create", { id: w.id(), item: `p:${c}`, why: "off topic" }));
-  await w.work();
-  const ada = w.client("ada");
-  await ada.sync("user:ada");
-  t.is([...ada.records("user:ada").values()].filter((r) => r.kind === "notif").length, 1);
-  await ok(
-    t,
-    w.as("olga", "members.setRole", {
-      space: closed,
-      user: "ada",
-      role: "member",
-      base: w.member(closed, "ada"),
-    }),
-  );
-  t.deepEqual(await notifsOf(w, "ada"), []);
-  t.is(await ada.sync("user:ada"), "resync");
-  t.false([...ada.records("user:ada").values()].some((r) => r.kind === "notif"));
-  // made staff again, she gets it again
-  await ok(
-    t,
-    w.as("olga", "members.setRole", {
-      space: closed,
-      user: "ada",
-      role: "mod",
-      base: w.member(closed, "ada"),
-    }),
-  );
-  t.is(await ada.sync("user:ada"), "resync");
-  t.is([...ada.records("user:ada").values()].filter((r) => r.kind === "notif").length, 1);
+  await ok(t, w.as("olga", "members.remove", { space: open, user: "otto", base: adm }));
 });
 
 test("Q1: a write whose answer was lost is never applied a second time, whatever the device's clock does", async (t) => {
@@ -354,8 +304,8 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
   // an approval queued 20 days ago, device clock reset: dropped at 3 days of
   // server time, and shown; never applied
   const dev2 = new ManualClock(w.clock.now());
-  const m = new ReplicaClient(w.server, actor("mona"), { clock: dev2, random: w.random });
-  await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
+  const m = new ReplicaClient(w.server, actor("olga"), { clock: dev2, random: w.random });
+  await ok(t, w.as("otto", "joinRequests.create", { space: closed }));
   m.queue("joinRequests.decide", {
     space: closed,
     users: ["otto"],
@@ -374,7 +324,7 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
   // A write it queued before its clock was corrected is 10 days old by the
   // corrected clock: dropped and shown (a design finding of round 2's fixes)
   const slow = { now: () => w.clock.now() - 10 * DAY };
-  const s1 = new ReplicaClient(w.server, actor("mona"), { clock: slow, random: w.random });
+  const s1 = new ReplicaClient(w.server, actor("olga"), { clock: slow, random: w.random });
   const t4 = await thread(t, w, "mel", open, "post");
   s1.queue("saved.set", { kind: "thread", id: t4, on: true });
   t.deepEqual(codes(await s1.flush()), []);
@@ -382,10 +332,10 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
     s1.problems().map((p) => [p.name, p.reason, p.sent]),
     [["saved.set", "DROPPED", false]],
   );
-  s1.queue("likes.set", { thread: t4, on: true });
+  s1.queue("saved.set", { kind: "thread", id: t4, on: true });
   t.deepEqual(codes(await s1.flush()), ["ok"]);
   t.is(s1.sent.length, 2);
-  await ok(t, w.as("eve", "joinRequests.create", { space: closed, rulesAccepted: true }));
+  await ok(t, w.as("eve", "joinRequests.create", { space: closed }));
   s1.queue("joinRequests.decide", {
     space: closed,
     users: ["eve"],
@@ -395,7 +345,7 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
   const kept = s1.state();
   t.is(Math.round(kept.offset / DAY), 10);
   w.clock.advance(12 * DAY);
-  const s2 = new ReplicaClient(w.server, actor("mona"), { clock: slow, random: w.random }, kept);
+  const s2 = new ReplicaClient(w.server, actor("olga"), { clock: slow, random: w.random }, kept);
   t.deepEqual(codes(await s2.flush()), []);
   t.deepEqual(
     s2.problems().map((p) => p.reason),
@@ -407,15 +357,15 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
 
 test("Q3: a write that keeps getting INTERNAL_SERVER_ERROR backs off, fails after 5 answers and is shown; the writes behind it are sent", async (t) => {
   const faulty: AnyMutator = {
-    ...(MUTATORS["likes.set"] as AnyMutator),
+    ...(MUTATORS["saved.set"] as AnyMutator),
     run: () => {
       throw new TypeError("a server bug that this input always hits");
     },
   };
-  const { w, open } = await cast(t, 7, { mutators: { ...MUTATORS, "likes.set": faulty } });
+  const { w, open } = await cast(t, 7, { mutators: { ...MUTATORS, "saved.set": faulty } });
   const th = await thread(t, w, "mel", open, "post");
   const mel = w.client("mel");
-  mel.queue("likes.set", { thread: th, on: true });
+  mel.queue("saved.set", { kind: "thread", id: th, on: true });
   const reply = mel.newId();
   mel.queue("research.createPostFollowUp", { id: reply, thread: th, t: "a reply behind it" });
   const seen: string[] = [];
@@ -424,18 +374,18 @@ test("Q3: a write that keeps getting INTERNAL_SERVER_ERROR backs off, fails afte
     w.clock.advance(k < 3 ? 100 : 20 * MINUTE);
   }
   // the first flushes find it waiting out its backoff
-  t.is(mel.sent.filter((e) => e.name === "likes.set").length, 5);
+  t.is(mel.sent.filter((e) => e.name === "saved.set").length, 5);
   t.deepEqual(
     seen.filter((x) => x !== "INTERNAL_SERVER_ERROR"),
     ["ok"],
   );
   t.deepEqual(
     mel.problems().map((p) => [p.name, p.reason]),
-    [["likes.set", "FAILED"]],
+    [["saved.set", "FAILED"]],
   );
   t.truthy(w.get(`reply:${reply}`));
   // the backoff doubles: 1 s, 2 s, 4 s, 8 s between the attempts
-  const times = mel.sent.filter((e) => e.name === "likes.set").map((e) => e.clientTime);
+  const times = mel.sent.filter((e) => e.name === "saved.set").map((e) => e.clientTime);
   for (let k = 2; k < times.length; k++)
     t.true((times[k] ?? 0) - (times[k - 1] ?? 0) >= 2 ** (k - 1) * 1000);
 });
@@ -454,14 +404,14 @@ test("N10: a pre-check that refuses with TOO_MANY_REQUESTS or SERVICE_UNAVAILABL
     },
   };
   const { w, closed } = await cast(t, 1, { mutators: { ...MUTATORS, "invites.create": limited } });
-  const e = await w.envelope("mona", "invites.create", { id: w.id(), space: closed });
+  const e = await w.envelope("olga", "invites.create", { id: w.id(), space: closed, days: 7 });
   for (const code of ["TOO_MANY_REQUESTS", "SERVICE_UNAVAILABLE"] as const) {
     limits.push(code);
-    await refused(t, Promise.resolve(w.server.apply(actor("mona"), e)), code);
-    t.is(await w.nextSeq("mona", e.clientId), e.seq);
+    await refused(t, Promise.resolve(w.server.apply(actor("olga"), e)), code);
+    t.is(await w.nextSeq("olga", e.clientId), e.seq);
   }
-  await ok(t, w.server.apply(actor("mona"), e));
-  t.is(await w.nextSeq("mona", e.clientId), e.seq + 1);
+  await ok(t, w.server.apply(actor("olga"), e));
+  t.is(await w.nextSeq("olga", e.clientId), e.seq + 1);
 });
 
 test("Q3: a write that depends on a failed write gets its own refusal", async (t) => {
@@ -474,8 +424,8 @@ test("Q3: a write that depends on a failed write gets its own refusal", async (t
   const { w, open } = await cast(t, 7, { mutators: { ...MUTATORS, "threads.create": faulty } });
   const mel = w.client("mel");
   const th = mel.newId();
-  mel.queue("threads.create", { id: th, space: open, kind: "ask", q: "never saved" });
-  mel.queue("followups.ask", { id: mel.newId(), thread: th, q: "under it" });
+  mel.queue("threads.create", { id: th, space: open, kind: "ask", q: "never saved", ...MODEL });
+  mel.queue("research.forkNode", forkInput(mel.newId(), th, "under it"));
   const seen: string[] = [];
   for (let k = 0; k < 10 && mel.pending().length; k++) {
     seen.push(...codes(await mel.flush()));
@@ -488,11 +438,11 @@ test("Q3: a write that depends on a failed write gets its own refusal", async (t
   );
   t.deepEqual(
     mel.answered.map((a) => [a.name, a.result.ok ? "ok" : a.result.error.code]),
-    [["followups.ask", "NOT_FOUND"]],
+    [["research.forkNode", "NOT_FOUND"]],
   );
 });
 
-test("Q2: every exception in apply is answered; a deep or large input is BAD_REQUEST before anything parses it", async (t) => {
+test("Q2: every exception in apply is answered; a deep input is BAD_REQUEST and a large one TOO_LARGE before anything parses it", async (t) => {
   const { w, open } = await cast(t);
   let deep: unknown = [];
   for (let k = 0; k < 20_000; k++) deep = [deep];
@@ -507,7 +457,7 @@ test("Q2: every exception in apply is answered; a deep or large input is BAD_REQ
   for (let k = 0; k < 33; k++) nested = [nested];
   await refused(
     t,
-    w.as("eve", "likes.set", { thread: w.id(), on: false, x: nested }),
+    w.as("eve", "saved.set", { kind: "thread", id: w.id(), on: false, x: nested }),
     "BAD_REQUEST",
   );
   await refused(
@@ -518,17 +468,25 @@ test("Q2: every exception in apply is answered; a deep or large input is BAD_REQ
       kind: "post",
       q: "x".repeat(300_000),
     }),
-    "BAD_REQUEST",
+    "TOO_LARGE",
   );
+  let wide: unknown[] = [];
+  for (let k = 0; k < 300_000; k++) wide.push(0);
+  await refused(t, w.as("eve", "saved.set", { x: wide }), "TOO_LARGE");
+  wide = [];
   // unrecorded: the seq was not used
   t.is(await w.nextSeq("eve", e.clientId), e.seq);
   // 32 deep is parsed: refused by the schema, recorded
   let edge: unknown = 1;
   for (let k = 0; k < 31; k++) edge = [edge];
-  await refused(t, w.as("eve", "likes.set", { thread: w.id(), on: false, x: edge }), "BAD_REQUEST");
+  await refused(
+    t,
+    w.as("eve", "saved.set", { kind: "thread", id: w.id(), on: false, x: edge }),
+    "BAD_REQUEST",
+  );
   t.is(await w.nextSeq("eve", e.clientId), e.seq + 1);
   // an envelope whose input throws when read: INTERNAL_SERVER_ERROR, not a throw
-  const trap = await w.envelope("eve", "likes.set", {});
+  const trap = await w.envelope("eve", "saved.set", {});
   Object.defineProperty(trap, "input", {
     enumerable: true,
     get: () => {
@@ -541,11 +499,6 @@ test("Q2: every exception in apply is answered; a deep or large input is BAD_REQ
     ["olga", "members.ban", { space: open, user: "constructor" }],
     [
       "olga",
-      "members.setRole",
-      { space: open, user: "constructor", role: "mod", base: { rev: 0 } },
-    ],
-    [
-      "olga",
       "joinRequests.decide",
       { space: open, users: ["constructor"], decision: "approve", base: { constructor: 0 } },
     ],
@@ -554,120 +507,53 @@ test("Q2: every exception in apply is answered; a deep or large input is BAD_REQ
       "moderation.decide",
       { item: `f:${w.id()}:__proto__`, decision: "hidden", base: { rev: 0 } },
     ],
-    ["olga", "invites.create", { id: w.id(), space: open, days: 0 }],
-    ["olga", "spaces.update", { id: open, set: { name: "#" } }],
+    ["olga", "invites.create", { id: w.id(), space: open, days: 1 }],
+    ["olga", "spaces.update", { id: open, desc: "x".repeat(301) }],
   ];
   const got: string[] = [];
   for (const [u, name, input] of odd) {
     const r = await w.as(u, name, input);
     got.push(r.ok ? "ok" : r.error.code);
   }
-  t.deepEqual(got, ["ok", "NOT_FOUND", "NOT_FOUND", "NOT_FOUND", "ok", "BAD_REQUEST"]);
+  t.deepEqual(got, ["ok", "NOT_FOUND", "NOT_FOUND", "ok", "BAD_REQUEST"]);
   t.true((await w.server.register(actor("constructor"))).ok);
   t.deepEqual(await w.server.pull(null, "space:x:y", "e"), { resync: true });
 });
 
-test("E1: effects run from the worker with backoff, end in the dead letters after 10 failures, and never from a request", async (t) => {
-  let failing = 0;
-  const { w, open } = await cast(t, 7, { failEffect: () => failing-- > 0 });
-  const th = await thread(t, w, "eve", open, "post", "ABUSE");
-  failing = 1000;
-  const report = w.id();
-  await ok(t, w.as("otto", "reports.create", { id: report, item: `p:${th}`, why: "abuse" }));
-  const attempts = async () => (await w.server.scanStorage()).effects.map((x) => x.attempts);
-  // requests do not run effects, signed-out reads included
-  for (let k = 0; k < 50; k++) await w.server.pull(null, `space:${open}`, "x");
-  t.deepEqual(await attempts(), [0]);
-  // the worker tries, then waits 1 s, 2 s, 4 s, …, at most 10 minutes
-  const at: number[] = [];
-  for (let k = 0; k < 200 && (await w.server.scanStorage()).effects.length; k++) {
-    const before = (await attempts())[0] ?? 0;
-    await w.work();
-    if (((await attempts())[0] ?? 10) > before) at.push(w.clock.now());
-    w.clock.advance(500);
-    if (k > 20) w.clock.advance(5 * MINUTE);
-  }
-  const scan = await w.server.scanStorage();
-  t.deepEqual(scan.effects, []);
-  t.is(scan.deadLetters.length, 1);
-  t.is(scan.deadLetters[0]?.attempts, 10);
-  t.deepEqual(scan.deadLetters[0]?.effect, {
-    type: "notifyStaff",
-    sp: open,
-    report,
-    item: `p:${th}`,
-  });
-  for (let k = 2; k < at.length; k++)
-    t.true((at[k] ?? 0) - (at[k - 1] ?? 0) >= Math.min(10 * MINUTE, 2 ** (k - 1) * 1000) - 500);
-  t.false([...w.server.dump().values()].some((r) => r.kind === "notif"));
-  // an effect that runs after the item was removed and the staff changed
-  // notifies the staff as they are when it runs
-  failing = 1;
-  const th2 = await thread(t, w, "eve", open, "post", "ABUSE 2");
-  await ok(t, w.as("otto", "reports.create", { id: w.id(), item: `p:${th2}`, why: "abuse" }));
-  await w.work();
-  await ok(
-    t,
-    w.as("mona", "moderation.decide", {
-      item: `p:${th2}`,
-      decision: "removed",
-      base: w.item(`p:${th2}`),
-    }),
-  );
-  await ok(
-    t,
-    w.as("olga", "members.setRole", {
-      space: open,
-      user: "mona",
-      role: "member",
-      base: w.member(open, "mona"),
-    }),
-  );
-  await ok(
-    t,
-    w.as("olga", "members.setRole", {
-      space: open,
-      user: "otto",
-      role: "mod",
-      base: w.member(open, "otto"),
-    }),
-  );
-  w.clock.advance(2000);
-  t.is(await w.work(), 1);
-  const to = [...w.server.dump().values()]
-    .flatMap((r) => (r.kind === "notif" ? [r.to] : []))
-    .sort();
-  t.deepEqual(to, ["olga", "otto"]);
-});
-
-test("E1: an effect whose random source fails between two recipients writes nothing, and once each on the retry", async (t) => {
-  let n = 0;
-  let arm = false;
-  const inner = rng(12345);
-  const random = () => {
-    if (arm && ++n === 2) throw new Error("down once");
-    return inner();
+test("E1: a write that notifies several people commits all of their notifications or none, and a later one coalesces", async (t) => {
+  // review round 2's E1 had an effect whose random source failed between two
+  // recipients. Notifications are written in the write's transaction now
+  // (`01` U1, C16), so a fault after the first one commits nothing at all.
+  let fail = true;
+  const create = MUTATORS["research.createPostFollowUp"] as AnyMutator;
+  const faulty: AnyMutator = {
+    ...create,
+    notify: (tx, i, result) => {
+      create.notify?.(tx, i, result);
+      if (fail) throw new Error("down once, after the notifications were staged");
+    },
   };
-  const { w, open } = await cast(t, 7, { random });
-  await ok(
-    t,
-    w.as("olga", "members.setRole", {
-      space: open,
-      user: "mel",
-      role: "admin",
-      base: w.member(open, "mel"),
-    }),
-  );
+  const { w, open } = await cast(t, 7, {
+    mutators: { ...MUTATORS, "research.createPostFollowUp": faulty },
+  });
   const th = await thread(t, w, "eve", open, "post");
-  await ok(t, w.as("otto", "reports.create", { id: w.id(), item: `p:${th}`, why: "x" }));
-  arm = true;
-  t.is(await w.work(), 0);
   const notifs = () =>
-    [...w.server.dump().values()].flatMap((r) => (r.kind === "notif" ? [r.to] : [])).sort();
+    [...w.server.dump().values()]
+      .flatMap((r) => (r.kind === "notif" ? [`${r.to}:${r.type}:${r.n}`] : []))
+      .sort();
+  const input = { id: w.id(), thread: th, t: "@mona @mel @olga and @eve, @nobody" };
+  await refused(t, w.as("otto", "research.createPostFollowUp", input), "INTERNAL_SERVER_ERROR");
   t.deepEqual(notifs(), []);
-  w.clock.advance(1000);
-  t.is(await w.work(), 1);
-  t.deepEqual(notifs(), ["mel", "mona", "olga"]);
+  t.false(w.server.dump().has(`reply:${input.id}`));
+  fail = false;
+  await ok(t, w.as("otto", "research.createPostFollowUp", input));
+  // the post's author gets a reply; members of the space a mention; a
+  // handle that names no member (eve posted without joining; nobody) gets
+  // no mention
+  t.deepEqual(notifs(), ["eve:reply:1", "mel:mention:1", "mona:mention:1", "olga:mention:1"]);
+  // another reply to the same post: the unread reply notification counts it
+  await ok(t, w.as("mel", "research.createPostFollowUp", { id: w.id(), thread: th, t: "me too" }));
+  t.deepEqual(notifs(), ["eve:reply:2", "mel:mention:1", "mona:mention:1", "olga:mention:1"]);
 });
 
 test("R1: a record written again at a deleted key continues from its last rev, after the tombstone is pruned too", async (t) => {
@@ -683,13 +569,7 @@ test("R1: a record written again at a deleted key continues from its last rev, a
   t.not(w.admission(closed, "otto").adm, seen.adm);
   await refused(
     t,
-    w.as("mona", "members.remove", { space: closed, user: "otto", base: seen }),
-    "STALE",
-  );
-  // and a role change made from the old record is STALE
-  await refused(
-    t,
-    w.as("olga", "members.setRole", { space: closed, user: "otto", role: "mod", base: { rev } }),
+    w.as("olga", "members.remove", { space: closed, user: "otto", base: seen }),
     "STALE",
   );
   const reg = (await w.server.scanStorage()).registry.find((x) => x.id === `member:${closed}:otto`);
@@ -706,7 +586,7 @@ test("N29: a deleted record's id is never used again, after its tombstone is pru
   );
   await ok(
     t,
-    w.as("mona", "moderation.decide", {
+    w.as("olga", "moderation.decide", {
       item: `p:${post}`,
       decision: "removed",
       base: w.item(`p:${post}`),
@@ -733,7 +613,7 @@ test("N29: a deleted record's id is never used again, after its tombstone is pru
 
 test("N23: a decline's reason does not survive the person asking again", async (t) => {
   const { w, closed } = await cast(t);
-  await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
+  await ok(t, w.as("otto", "joinRequests.create", { space: closed }));
   await ok(
     t,
     w.as("olga", "joinRequests.decide", {
@@ -745,7 +625,7 @@ test("N23: a decline's reason does not survive the person asking again", async (
     }),
   );
   t.is((w.get(`request:${closed}:otto`) as { why: string | null }).why, "not now");
-  await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
+  await ok(t, w.as("otto", "joinRequests.create", { space: closed }));
   const r = w.get(`request:${closed}:otto`) as { st: string; why: string | null };
   t.deepEqual([r.st, r.why], ["open", null]);
 });
@@ -801,14 +681,86 @@ test("T1: token cursors: another reader, a signed-out caller, another log, a cha
     "answers",
     "born",
     "clients",
-    "deadLetters",
-    "effects",
     "epochs",
-    "jobs",
     "logRows",
     "records",
     "registrations",
     "registry",
     "tombstones",
   ]);
+});
+
+test("Y1: an envelope's queuedAt is checked like a mutation id's age, and the answer is recorded", async (t) => {
+  const { w, open } = await cast(t);
+  const input = (q: string) => ({ id: w.id(), space: open, kind: "post", q });
+  const send = async (q: string, queued: number) => {
+    const e = await w.envelope("mel", "threads.create", input(q));
+    return { e, r: await w.server.apply(actor("mel"), { ...e, queuedAt: e.clientTime + queued }) };
+  };
+  const old = await send("queued too long ago", -4 * DAY - 1);
+  t.is(old.r.ok ? null : old.r.error.code, "EXPIRED");
+  // recorded: the seq is used, and the same envelope gets the same answer
+  t.is(await w.nextSeq("mel", old.e.clientId), old.e.seq + 1);
+  const again = await w.server.apply(actor("mel"), {
+    ...old.e,
+    queuedAt: old.e.clientTime - 4 * DAY - 1,
+  });
+  t.deepEqual(again, old.r);
+  const ahead = await send("queued in the future", MINUTE + 1);
+  t.is(ahead.r.ok ? null : ahead.r.error.code, "EXPIRED");
+  await ok(t, (await send("queued 4 days ago", -4 * DAY)).r);
+  await ok(t, (await send("queued just now", MINUTE)).r);
+  // an envelope without it is malformed, and records nothing
+  const full = await w.envelope("mel", "threads.create", input("bare"));
+  const bare: Record<string, unknown> = { ...full };
+  delete bare["queuedAt"];
+  await refused(
+    t,
+    Promise.resolve(w.server.apply(actor("mel"), bare as unknown as Envelope)),
+    "BAD_REQUEST",
+  );
+  t.is(await w.nextSeq("mel", full.clientId), full.seq);
+  const posts = [...w.server.dump().values()].flatMap((r) =>
+    r.kind === "thread" && r.u === "mel" ? [r.q] : [],
+  );
+  t.deepEqual(posts.sort(), ["queued 4 days ago", "queued just now"]);
+});
+
+test("Y1: a reminted envelope's answer is stored under the ids it replaces: a delayed original gets it and is never applied", async (t) => {
+  const { w, open } = await cast(t);
+  const first = { id: w.id(), space: open, kind: "post", q: "typed once" };
+  const original = await w.envelope("mel", "threads.create", first);
+  // the client reminted the write (new ids) before it knew the original's fate
+  const second = { ...first, id: w.id() };
+  const reminted = {
+    ...(await w.envelope("mel", "threads.create", second)),
+    replaces: [original.mutationId],
+  };
+  const answer = await w.server.apply(actor("mel"), reminted);
+  t.deepEqual(answer, { ok: true, result: { id: second.id, run: null } });
+  // the original arrives late, under the client's next seq: it gets the
+  // stored answer, uses no seq and writes nothing
+  const seq = await w.nextSeq("mel", original.clientId);
+  t.deepEqual(await w.server.apply(actor("mel"), { ...original, seq }), answer);
+  t.is(await w.nextSeq("mel", original.clientId), seq);
+  t.is(w.get(`thread:${first.id}`), undefined);
+  t.is(
+    [...w.server.dump().values()].filter((r) => r.kind === "thread" && r.q === "typed once").length,
+    1,
+  );
+  // an id that has its own answer keeps it; another user's ids are their own
+  const other = await w.envelope("mel", "spaces.leave", { space: open });
+  await ok(t, w.server.apply(actor("mel"), { ...other, replaces: [reminted.mutationId] }));
+  t.deepEqual(await w.resend("mel", reminted, true), answer);
+  await ok(t, w.as("otto", "threads.create", first, original.mutationId));
+  // `replaces` holds at most 16 ULIDs, or the envelope is malformed
+  for (const replaces of [["not-a-ulid"], Array.from({ length: 17 }, () => w.id()), "x"]) {
+    const e = await w.envelope("mel", "threads.create", { ...first, id: w.id() });
+    await refused(
+      t,
+      Promise.resolve(w.server.apply(actor("mel"), { ...e, replaces } as unknown as Envelope)),
+      "BAD_REQUEST",
+    );
+    t.is(await w.nextSeq("mel", e.clientId), e.seq);
+  }
 });

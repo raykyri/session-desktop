@@ -18,7 +18,18 @@ import {
   type ThreadRec,
 } from "../src/index.js";
 
-import { DAY, MINUTE, World, actor, cast, ok, refused, thread } from "./harness.js";
+import {
+  DAY,
+  MINUTE,
+  MODEL,
+  World,
+  actor,
+  cast,
+  forkInput,
+  ok,
+  refused,
+  thread,
+} from "./harness.js";
 
 test("a duplicate id is the same CONFLICT for a readable and an unreadable record", async (t) => {
   const { w, open, closed } = await cast(t);
@@ -35,7 +46,9 @@ test("a duplicate id is the same CONFLICT for a readable and an unreadable recor
     "CONFLICT",
   );
   t.is(a, b);
-  // ids are unique across kinds: a follow-up, a report or a space cannot take a thread's id
+  // ids are unique across kinds: a reply, a node, a comment or a space cannot
+  // take a thread's id
+  const ask = await thread(t, w, "mel", open, "ask");
   const c = await refused(
     t,
     w.as("otto", "research.createPostFollowUp", { id: hidden, thread: visible, t: "x" }),
@@ -43,7 +56,12 @@ test("a duplicate id is the same CONFLICT for a readable and an unreadable recor
   );
   const d = await refused(
     t,
-    w.as("otto", "reports.create", { id: hidden, item: `p:${visible}`, why: "x" }),
+    w.as("otto", "comments.create", { id: hidden, thread: ask, node: "r", t: "x" }),
+    "CONFLICT",
+  );
+  const f = await refused(
+    t,
+    w.as("otto", "research.forkNode", forkInput(hidden, ask, "x")),
     "CONFLICT",
   );
   const e = await refused(
@@ -51,7 +69,7 @@ test("a duplicate id is the same CONFLICT for a readable and an unreadable recor
     w.as("otto", "spaces.create", { id: hidden, name: "fresh" }),
     "CONFLICT",
   );
-  t.deepEqual([c, d, e], [a, a, a]);
+  t.deepEqual([c, d, e, f], [a, a, a, a]);
   t.is((w.get(`thread:${hidden}`) as ThreadRec).q, "What changed?");
 });
 
@@ -72,15 +90,16 @@ test("a missing target and one the caller may not read answer the same", async (
   const post = await thread(t, w, "mel", closed, "post");
   const fu = w.id();
   const top = w.id();
-  await ok(t, w.as("ada", "followups.ask", { id: fu, thread: hidden, q: "x" }));
+  const cm = w.id();
+  await ok(t, w.as("ada", "research.forkNode", forkInput(fu, hidden, "x")));
   await ok(t, w.as("ada", "research.createPostFollowUp", { id: top, thread: post, t: "x" }));
+  await ok(t, w.as("ada", "comments.create", { id: cm, thread: hidden, node: fu, t: "x" }));
   const openPost = await thread(t, w, "otto", open, "post");
   const missing = w.id();
   for (const [name, input] of [
-    ["likes.set", (id: string) => ({ thread: id, on: true })],
     ["saved.set", (id: string) => ({ kind: "thread", id, on: true })],
-    ["followups.ask", (id: string) => ({ id: w.id(), thread: id, q: "x" })],
-    ["reports.create", (id: string) => ({ id: w.id(), item: `a:${id}`, why: "x" })],
+    ["research.forkNode", (id: string) => forkInput(w.id(), id, "x")],
+    ["comments.create", (id: string) => ({ id: w.id(), thread: id, node: "r", t: "x" })],
     ["threads.update", (id: string) => ({ id, q: "x", base: { rev: 1 } })],
     ["threads.delete", (id: string) => ({ id })],
     [
@@ -92,10 +111,9 @@ test("a missing target and one the caller may not read answer the same", async (
     const b = await refused(t, w.as("eve", name, input(missing)), "NOT_FOUND");
     t.is(a, b, name);
   }
-  // follow-up and reply keys, for a report and a moderation decision: mona
-  // moderates the open space, not the closed one
+  // node, reply and comment keys, for a moderation decision: otto is a member
+  // of the open space only
   for (const [name, who, input] of [
-    ["reports.create", "eve", (key: string) => ({ id: w.id(), item: key, why: "x" })],
     [
       "moderation.decide",
       "eve",
@@ -115,6 +133,9 @@ test("a missing target and one the caller may not read answer the same", async (
       `r:${post}:${top}`,
       `r:${post}:${missing}`,
       `r:${openPost}:${top}`,
+      `c:${hidden}:${cm}`,
+      `c:${hidden}:${missing}`,
+      `c:${post}:${cm}`,
       `p:${hidden}`,
       `a:${post}`,
     ])
@@ -138,9 +159,33 @@ test("a missing target and one the caller may not read answer the same", async (
       ),
     );
   t.is(parents.size, 1);
-  // taking back a like you never gave answers ok whether or not the thread exists
-  await ok(t, w.as("eve", "likes.set", { thread: hidden, on: false }));
-  await ok(t, w.as("eve", "likes.set", { thread: missing, on: false }));
+  // a comment's node and parent: one the caller may not read and a missing
+  // one answer the same
+  const openAsk = await thread(t, w, "otto", open, "ask");
+  const nodes = new Set<string>();
+  for (const [node, parent] of [
+    [fu, undefined],
+    [missing, undefined],
+    ["r", cm],
+    ["r", missing],
+  ] as const)
+    nodes.add(
+      await refused(
+        t,
+        w.as("eve", "comments.create", {
+          id: w.id(),
+          thread: openAsk,
+          node,
+          t: "x",
+          ...(parent ? { parent } : {}),
+        }),
+        "NOT_FOUND",
+      ),
+    );
+  t.is(nodes.size, 1);
+  // taking back a save you never made answers ok whether or not the thread exists
+  await ok(t, w.as("eve", "saved.set", { kind: "thread", id: hidden, on: false }));
+  await ok(t, w.as("eve", "saved.set", { kind: "thread", id: missing, on: false }));
 });
 
 test("a client ULID more than 4 days old or more than 1 minute ahead on the device's clock is EXPIRED, and the answer is recorded", async (t) => {
@@ -169,16 +214,16 @@ test("a client ULID more than 4 days old or more than 1 minute ahead on the devi
   const th = await thread(t, w, "mel", closed, "ask");
   const post = await thread(t, w, "mel", closed, "post");
   for (const [name, input] of [
-    ["followups.ask", { id: at(2 * MINUTE), thread: th, q: "x" }],
+    ["research.forkNode", forkInput(at(2 * MINUTE), th, "x")],
     ["research.createPostFollowUp", { id: at(2 * MINUTE), thread: post, t: "x" }],
-    ["reports.create", { id: at(2 * MINUTE), item: `a:${th}`, why: "x" }],
-    ["invites.create", { id: at(2 * MINUTE), space: closed }],
+    ["comments.create", { id: at(2 * MINUTE), thread: th, node: "r", t: "x" }],
+    ["invites.create", { id: at(2 * MINUTE), space: closed, days: 7 }],
   ] as const)
     await skew(w.as("mel", name, input));
   // moderation.decide brings no new id; its mutation id is checked
   await skew(
     w.as(
-      "mona",
+      "olga",
       "moderation.decide",
       { item: `a:${th}`, decision: "hidden", base: w.item(`a:${th}`) },
       at(2 * MINUTE),
@@ -190,7 +235,7 @@ test("a client ULID more than 4 days old or more than 1 minute ahead on the devi
 test("a device clock more than a minute from the server's is CLOCK_SKEW with the server's time, and nothing is recorded", async (t) => {
   const { w, open } = await cast(t);
   for (const off of [MINUTE + 1, -MINUTE - 1, -10 * DAY, 400 * DAY]) {
-    const e = await w.envelope("otto", "likes.set", { thread: w.id(), on: false });
+    const e = await w.envelope("otto", "saved.set", { kind: "thread", id: w.id(), on: false });
     const r = await w.server.apply(actor("otto"), { ...e, clientTime: e.clientTime + off });
     t.is(r.ok ? null : r.error.code, "CLOCK_SKEW");
     t.is(r.ok ? null : r.error.serverTime, w.clock.now());
@@ -209,8 +254,8 @@ test("a fast clock is corrected from the server's time, and the write sent again
   const fast = { now: () => w.clock.now() + 2 * MINUTE };
   const mel = new ReplicaClient(w.server, actor("mel"), { clock: fast, random: w.random });
   const id = mel.newId();
-  mel.queue("threads.create", { id, space: open, kind: "ask", q: "from a fast clock" });
-  mel.queue("followups.ask", { id: mel.newId(), thread: id, q: "and a follow-up" });
+  mel.queue("threads.create", { id, space: open, kind: "ask", q: "from a fast clock", ...MODEL });
+  mel.queue("research.forkNode", forkInput(mel.newId(), id, "and a follow-up"));
   const results = await mel.flush();
   t.deepEqual(
     results.map((r) => (r.ok ? "ok" : r.error.code)),
@@ -282,7 +327,8 @@ test("space ids are ULIDs and names are unique, after normalization", async (t) 
   t.is((JSON.parse(a) as { message: string }).message, "#vault already exists.");
   const mine = w.id();
   await ok(t, w.as("eve", "spaces.create", { id: mine, name: "Eve's Space" }));
-  await refused(t, w.as("eve", "spaces.update", { id: mine, set: { name: "lab" } }), "CONFLICT");
+  // name and visibility are set at creation: `spaces.update` changes About only
+  await refused(t, w.as("eve", "spaces.update", { id: mine, name: "lab" }), "BAD_REQUEST");
   t.is(
     w.get(`space:${mine}`)?.kind === "space"
       ? (w.get(`space:${mine}`) as { name: string }).name
@@ -318,32 +364,44 @@ test("invite codes are made by the server: a client can neither choose nor predi
   const id = w.id();
   await refused(
     t,
-    w.as("mona", "invites.create", { id, space: closed, code: "letmein" }),
+    w.as("olga", "invites.create", { id, space: closed, days: 7, code: "letmein" }),
     "BAD_REQUEST",
   );
-  const res = (await ok(t, w.as("mona", "invites.create", { id, space: closed }))) as {
+  const res = (await ok(t, w.as("olga", "invites.create", { id, space: closed, days: 7 }))) as {
     code: string;
   };
   t.is((w.get(`invite:${id}`) as InviteRec).code, res.code);
   // the mock took the code from the id; here it does not depend on it
   t.not(res.code, id.slice(-5).toLowerCase());
+  t.not(res.code, id.toLowerCase());
   t.false(id.toLowerCase().includes(res.code));
   // the same input on two servers with different random sources gets different codes
   const codes = new Set<string>();
   for (const seed of [11, 12, 13]) {
     const c = await cast(t, seed);
-    const r = (await ok(t, c.w.as("olga", "invites.create", { id, space: c.closed }))) as {
+    const r = (await ok(t, c.w.as("olga", "invites.create", { id, space: c.closed, days: 7 }))) as {
       code: string;
     };
     codes.add(r.code);
   }
   t.is(codes.size, 3);
-  t.regex(res.code, /^[0-9a-hjkmnp-tv-z]{10}$/);
+  // 26 base32 characters: 130 bits from the server's random source (`04` B4)
+  t.regex(res.code, /^[0-9a-hjkmnp-tv-z]{26}$/);
+  // a link lasts 1 to 30 days; one that does not expire is refused
+  for (const days of [0, 31, null])
+    await refused(
+      t,
+      w.as("olga", "invites.create", { id: w.id(), space: closed, days }),
+      "BAD_REQUEST",
+    );
 });
 
 test("joining by invite needs the server's code for that space, once", async (t) => {
   const { w, closed, vault } = await cast(t);
-  const res = (await ok(t, w.as("olga", "invites.create", { id: w.id(), space: vault }))) as {
+  const res = (await ok(
+    t,
+    w.as("olga", "invites.create", { id: w.id(), space: vault, days: 7 }),
+  )) as {
     code: string;
   };
   const wrong = await refused(
@@ -369,7 +427,7 @@ test("joining by invite needs the server's code for that space, once", async (t)
 test("stored times are the server's, not the time in a client's ULID", async (t) => {
   const { w, open } = await cast(t);
   const id = w.id(-2 * DAY);
-  await ok(t, w.as("mel", "threads.create", { id, space: open, kind: "ask", q: "x" }));
+  await ok(t, w.as("mel", "threads.create", { id, space: open, kind: "ask", q: "x", ...MODEL }));
   const p = w.get(`thread:${id}`) as ThreadRec;
   t.is(Date.parse(p.createdAt), Math.floor(w.clock.now() / 1000) * 1000);
 });
@@ -380,7 +438,7 @@ test("later ids of a mutation derive from the user, the mutation id and an ordin
   const th = w.id();
   const res = (await ok(
     t,
-    w.as("mel", "threads.create", { id: th, space: open, kind: "ask", q: "x" }, mid),
+    w.as("mel", "threads.create", { id: th, space: open, kind: "ask", q: "x", ...MODEL }, mid),
   )) as {
     run: string;
   };
@@ -388,6 +446,8 @@ test("later ids of a mutation derive from the user, the mutation id and an ordin
   t.truthy(w.get(`run:${res.run}`));
   t.not(deriveId("otto", mid, 1), res.run);
   t.not(deriveId("mel", mid, 2), res.run);
-  await w.work();
+  // the run record with status `queued` is the run queue: no job is started
+  // apart from it (`01` U6)
   t.deepEqual(w.server.jobs().at(-1), { kind: "run", id: res.run });
+  t.is((w.get(`run:${res.run}`) as { status: string }).status, "queued");
 });

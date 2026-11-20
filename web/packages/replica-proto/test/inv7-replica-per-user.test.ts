@@ -6,7 +6,7 @@ import test, { type ExecutionContext } from "ava";
 import type { Actor, LogId, Pull, ServerHalf, Snapshot, StoredRecord } from "../src/index.js";
 import { ReplicaClient } from "../src/index.js";
 
-import { actor, admit, cast, ok, thread, type Cast } from "./harness.js";
+import { actor, admit, cast, fork, ok, thread, type Cast } from "./harness.js";
 import { expected } from "./oracle.js";
 
 const PEOPLE = ["olga", "ada", "mona", "mel", "otto", "rita", "eve"];
@@ -15,24 +15,27 @@ async function activity(t: ExecutionContext, c: Cast) {
   const { w, open, closed, vault } = c;
   await admit(t, w, closed, "rita");
   const ask = await thread(t, w, "rita", closed, "ask", "rita's question");
-  await ok(t, w.as("mona", "followups.ask", { id: w.id(), thread: ask, q: "mona's follow-up" }));
+  const node = await fork(t, w, "mona", ask, "mona's follow-up");
+  await ok(t, w.as("rita", "comments.create", { id: w.id(), thread: ask, node, t: "@mona ok" }));
+  await ok(t, w.as("rita", "saved.set", { kind: "thread", id: ask, on: true }));
   await ok(t, w.as("rita", "spaces.leave", { space: closed }));
-  const post = await thread(t, w, "mel", closed, "post", "mel's post");
+  const post = await thread(t, w, "mel", closed, "post", "mel's post @ada");
   await ok(
     t,
     w.as("ada", "research.createPostFollowUp", { id: w.id(), thread: post, t: "ada's reply" }),
   );
-  await ok(t, w.as("mel", "reports.create", { id: w.id(), item: `p:${post}`, why: "spam" }));
-  await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
-  await ok(t, w.as("mona", "invites.create", { id: w.id(), space: closed }));
-  await ok(t, w.as("olga", "invites.create", { id: w.id(), space: vault }));
-  await ok(t, w.as("mona", "members.ban", { space: open, user: "eve" }));
+  await ok(t, w.as("otto", "joinRequests.create", { space: closed }));
+  await ok(t, w.as("olga", "invites.create", { id: w.id(), space: closed, days: 7 }));
+  await ok(t, w.as("olga", "invites.create", { id: w.id(), space: vault, days: 7 }));
+  await ok(t, w.as("olga", "members.ban", { space: open, user: "eve" }));
+  const gone = await thread(t, w, "otto", open, "post", "otto's post");
+  await ok(t, w.as("olga", "moderation.decide", { item: `p:${gone}`, decision: "removed" }));
   for (const u of ["mona", "mel", "ada"])
-    await ok(t, w.as(u, "likes.set", { thread: post, on: true }));
-  await ok(t, w.as("ada", "saved.set", { kind: "thread", id: post, on: true }));
+    await ok(t, w.as(u, "saved.set", { kind: "thread", id: post, on: true }));
+  await ok(t, w.as("mel", "prefs.set", { layout: "wide" }));
   await ok(
     t,
-    w.as("mona", "moderation.decide", {
+    w.as("olga", "moderation.decide", {
       item: `p:${post}`,
       decision: "hidden",
       base: w.item(`p:${post}`),
@@ -72,19 +75,24 @@ test("no client holds a record another person could read and it could not", asyn
   }
 });
 
-test("other people's likes, saves, requests and notifications stay in their replicas", async (t) => {
+test("other people's saves, preferences, requests and notifications stay in their replicas", async (t) => {
   const c = await cast(t);
   await activity(t, c);
-  const mel = c.w.client("mel");
-  for (const log of allLogs(c)) await mel.sync(log);
-  for (const [k, r] of mel.allRecords()) {
-    if (r.kind === "like" || r.kind === "save" || r.kind === "notif")
-      t.is(r.kind === "notif" ? r.to : r.u, "mel", k);
-    if (r.kind === "request") t.is(r.u, "mel", k);
+  t.true(c.w.notifs("mel").length > 0);
+  t.true(c.w.notifs("ada").length > 0);
+  for (const u of ["mel", "ada", "otto"]) {
+    const cl = c.w.client(u);
+    for (const log of allLogs(c)) await cl.sync(log);
+    for (const [k, r] of cl.allRecords()) {
+      if (r.kind === "save" || r.kind === "notif" || r.kind === "prefs" || r.kind === "request")
+        t.is(r.kind === "notif" ? r.to : r.u, u, k);
+    }
+    t.false(
+      [...cl.allRecords().keys()].some(
+        (k) => k.startsWith("ban:") || k.startsWith("invite:") || k.startsWith("modlog:"),
+      ),
+    );
   }
-  t.false(
-    [...mel.allRecords().keys()].some((k) => k.startsWith("ban:") || k.startsWith("invite:")),
-  );
 });
 
 test("a client reads only as its own actor", async (t) => {
@@ -105,7 +113,7 @@ test("a client reads only as its own actor", async (t) => {
   };
   const mel = new ReplicaClient(spy, { u: "mel" }, { clock: c.w.clock, random: c.w.random });
   for (const log of allLogs(c)) await mel.sync(log);
-  mel.queue("likes.set", { thread: c.w.id(), on: false });
+  mel.queue("saved.set", { kind: "thread", id: c.w.id(), on: false });
   await mel.flush();
   for (const log of allLogs(c)) await mel.sync(log);
   t.true(seen.length > 0);
@@ -119,7 +127,7 @@ test("an outbox queued by one person and flushed after another signs in on the d
   // mel's device queues writes, then mel signs out before they are sent
   const mel = w.client("mel");
   await mel.register();
-  mel.queue("likes.set", { thread: th, on: true });
+  mel.queue("saved.set", { kind: "thread", id: th, on: true });
   mel.queue("threads.create", { id: mel.newId(), space: closed, kind: "post", q: "as mel" });
   mel.queue("spaces.leave", { space: open });
   // otto signs in on the same device; the stored outbox and client id are restored
