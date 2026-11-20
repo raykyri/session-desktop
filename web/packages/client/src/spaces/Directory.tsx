@@ -4,7 +4,7 @@
 // the reader reads, Mute and Block).
 
 import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { ago, isClosed, spaceName } from "../data/format.js";
 import { threadRows, type Space } from "../data/spaces.js";
@@ -296,10 +296,10 @@ export function CreateSpacePage() {
                 </div>
                 <dl className="cs-vdl">
                   {facts.map(([t, o, c]) => (
-                    <div key={t}>
+                    <Fragment key={t}>
                       <dt>{t}</dt>
                       <dd>{closed ? c : o}</dd>
-                    </div>
+                    </Fragment>
                   ))}
                 </dl>
               </div>
