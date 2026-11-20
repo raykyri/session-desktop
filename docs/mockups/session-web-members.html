@@ -589,7 +589,7 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 .sphead.wide { grid-column: 1 / -1; }
 .sphead .chinfo { width: 28px; height: 28px; color: var(--t-muted); }
 .sphead .chinfo svg.i { width: 15px; height: 15px; }
-/* channel dialogs: info, editor (stacked above info), moderation log, rules gate, remove / report */
+/* channel dialogs: info, editor (stacked above info), moderation log, rules gate, remove */
 .dialog.chdlg { display: flex; flex-direction: column; gap: 12px; top: 50%; transform: translate(-50%, -50%); max-height: calc(100% - 40px); overflow: auto; overscroll-behavior: contain; }
 .chdlg-h { display: flex; align-items: center; gap: 10px; }
 .chdlg-h h3 { flex: 1; display: flex; align-items: center; }
@@ -627,8 +627,7 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 .mlist li small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
 .mlist .acts { display: flex; gap: 6px; flex: none; }
 .mlkind { flex: none; height: 18px; padding: 0 6px; border-radius: 9px; font-size: 10px; font-weight: 600; line-height: 18px; background: var(--control); color: var(--t-muted); margin-top: 1px; }
-.mlkind.rm { background: color-mix(in srgb, var(--bad) 14%, var(--card)); color: var(--bad); }
-.mltabs { align-self: flex-start; }
+.mlkind.rm, .mlkind.ban { background: color-mix(in srgb, var(--bad) 14%, var(--card)); color: var(--bad); }
 .sphead.wide p { max-width: 80ch; }
 .sphead > .chip { flex: none; height: 28px; padding: 0 12px; border-radius: 14px; font-size: var(--fs-xs); font-weight: 600; }
 .sphead h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; color: var(--t-heading); }
@@ -1017,6 +1016,141 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
   .mg-inner { padding: 0 12px 30px; }
   .mgn { padding-left: 12px; }
 }
+
+/* ---- notifications ---- */
+.acct { position: relative; }
+.adot { position: absolute; top: 3px; left: 20px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent-strong); box-shadow: 0 0 0 2px var(--chrome); }
+.mi > b.nbadge { flex: none; margin-left: 12px; }
+.nhead { align-items: center; }
+.nhead h2 { margin: 0; }
+.nlist { list-style: none; margin: 0; padding: 4px 6px; }
+.nlist li + li { border-top: 1px solid var(--divider); }
+.nrow { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 11px 10px; margin: 2px 0; border-radius: var(--r-lg); text-align: left; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.45; }
+.nrow:hover { background: var(--fill-hover); }
+.nrow.unread { background: color-mix(in srgb, var(--accent) 6%, transparent); color: var(--t-primary); }
+.nrow.unread:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.nav-av { position: relative; flex: none; display: inline-flex; }
+.nk { position: absolute; right: -5px; bottom: -4px; width: 17px; height: 17px; border-radius: 50%; display: grid; place-items: center; background: var(--card); color: var(--t-muted); box-shadow: 0 0 0 1px var(--divider); }
+.nk svg.i { width: 11px; height: 11px; }
+.nk-removed { color: var(--bad); } .nk-mention { color: var(--accent); }
+.ntx { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ntx b { color: var(--t-heading); font-weight: 600; }
+.ntx .nt { color: var(--t-heading); }
+.nrow:not(.unread) .ntx .nt { color: var(--t-primary); }
+.ntx .nr { color: var(--t-secondary); font-style: italic; }
+.ntx small { display: block; margin-top: 2px; color: var(--t-faint); font-size: var(--fs-xs); }
+.ndot { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--accent-strong); }
+.card.flash { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow); transition: box-shadow .4s; }
+/* ---- admin ---- */
+.fsel-w { position: relative; display: inline-flex; align-items: center; max-width: 100%; }
+.fsel { appearance: none; -webkit-appearance: none; height: 36px; min-width: 220px; max-width: 100%; padding: 0 32px 0 12px; border-radius: var(--r-lg); border: 1px solid var(--control-border); background: var(--field); color: var(--t-heading); font-size: var(--fs-sm); font-weight: 500; cursor: pointer; }
+.fsel:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.fsel-w > svg.i { position: absolute; right: 11px; width: 12px; height: 12px; color: var(--t-muted); pointer-events: none; }
+.fsel-w.sm .fsel { height: 30px; min-width: 150px; font-size: var(--fs-xs); }
+.fsel option:disabled { color: var(--t-dim); }
+.amods { list-style: none; margin: 14px 0 0; padding: 0; }
+.amods li { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 150px) minmax(0, 1fr); gap: 4px 14px; align-items: baseline; padding: 9px 10px; border-radius: var(--r-md); font-size: var(--fs-sm); }
+.amods li + li { border-top: 1px solid var(--divider); }
+.amods li.on { background: var(--accent-soft); border-top-color: transparent; }
+.amods li.on + li { border-top-color: transparent; }
+.amn b { display: block; color: var(--t-heading); font-weight: 600; }
+.amn small, .amp small { display: block; color: var(--t-faint); font-size: var(--fs-xs); font-weight: 400; }
+.amp { color: var(--t-primary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.amnote { color: var(--t-secondary); font-size: var(--fs-xs); }
+.afact { display: flex; flex-direction: column; gap: 2px; margin-top: 16px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--inset); }
+.afact b { color: var(--t-heading); font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
+.afact small { color: var(--t-faint); font-size: var(--fs-xs); }
+.awho { display: flex; flex-direction: column; }
+.awrow { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-height: 34px; padding: 4px 0; font-size: var(--fs-sm); border-bottom: 1px solid var(--divider); }
+.awrow:last-child { border-bottom: 0; }
+.awrow > b { min-width: 120px; color: var(--t-heading); font-weight: 500; }
+.awrow > small { margin-left: auto; color: var(--t-faint); font-size: var(--fs-xs); white-space: nowrap; }
+.avs .av.xs { box-shadow: 0 0 0 1.5px var(--card); }
+.avw { display: inline-flex; align-items: center; }
+.amore { margin-left: 4px; color: var(--t-faint); font-size: var(--fs-xs); }
+.atable { overflow-x: auto; margin: 4px -18px 0; padding: 0 18px; }
+.atr { display: grid; grid-template-columns: minmax(190px, 2fr) 80px 130px 110px 60px 90px; gap: 12px; align-items: center; min-width: 700px; min-height: 52px; padding: 6px 0; border-bottom: 1px solid var(--divider); font-size: var(--fs-sm); color: var(--t-secondary); }
+.atr:last-child { border-bottom: 0; }
+.atr.ath { min-height: 30px; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--t-faint); }
+.atr.on .amn b::after { content: " · default"; font-weight: 400; color: var(--accent); }
+.arad { display: inline-flex; justify-content: center; }
+.arad input { accent-color: var(--accent-strong); width: 16px; height: 16px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tog { position: relative; width: 34px; height: 20px; border-radius: 10px; background: var(--control-hover); transition: background .15s; }
+.tog > span { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.tog[aria-checked="true"] { background: var(--accent-strong); }
+.tog[aria-checked="true"] > span { transform: translateX(14px); }
+.tog:disabled { opacity: .55; cursor: default; }
+.asave { position: sticky; bottom: 12px; z-index: 5; display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 12px 10px 16px; border-radius: var(--r-xl); background: var(--card); box-shadow: var(--shadow), var(--shadow-soft); font-size: var(--fs-sm); color: var(--t-faint); }
+.asave.dirty { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), var(--shadow-pop); color: var(--t-heading); font-weight: 500; }
+.page-in.awide { max-width: 940px; }
+@media (max-width: 600px) {
+  .atable { margin: 4px 0 0; padding: 0; overflow: visible; }
+  .atr { min-width: 0; grid-template-columns: minmax(0, 1fr) 44px 44px; gap: 2px 8px; }
+  .atr > :nth-child(2), .atr > :nth-child(4), .atr.ath > :nth-child(3) { display: none; }
+  .atr > :nth-child(1) { grid-row: 1; grid-column: 1; }
+  .atr > .amp { grid-row: 2; grid-column: 1; font-size: var(--fs-xs); color: var(--t-secondary); }
+  .atr > :nth-child(5), .atr > :nth-child(6) { grid-row: 1 / span 2; justify-self: center; }
+  .atr.ath > :nth-child(5), .atr.ath > :nth-child(6) { grid-row: 1; font-size: 10px; letter-spacing: 0; text-align: center; }
+  .atr.ath > :nth-child(6) { font-size: 0; } .atr.ath > :nth-child(6)::after { content: "On"; font-size: 10px; }
+}
+.adm-c { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 20px; align-items: start; }
+.anav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; }
+.anav .si { font-weight: 500; }
+.aradios { display: flex; flex-direction: column; gap: 8px; }
+.radio.acard { padding: 12px 14px; border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--divider); }
+.radio.acard.on { box-shadow: inset 0 0 0 1.5px var(--accent); background: var(--accent-soft); }
+.radio.acard b small { font-weight: 400; color: var(--t-faint); margin-left: 4px; }
+.amem .li { flex-wrap: wrap; row-gap: 6px; }
+.amem .li > .grow { min-width: 140px; }
+@media (max-width: 700px) {
+  .adm-c { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .anav { position: static; flex-direction: row; overflow-x: auto; background: var(--control); border-radius: var(--r-lg); padding: 2px; }
+  .anav .si { width: auto; flex: 1; justify-content: center; padding: 5px 10px; }
+  .anav .si.on { background: var(--card); box-shadow: var(--shadow); }
+  .amods li { grid-template-columns: minmax(0, 1fr) auto; }
+  .amods li .amnote { grid-column: 1 / -1; }
+  .fsel { min-width: 0; width: 100%; }
+  .fsel-w:not(.sm) { width: 100%; }
+}
+/* ---- answer widget (mock option) ---- */
+.prose .wdg { margin: 14px 0 4px; }
+.wdg { border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--border-strong); background: var(--card); overflow: visible; font-size: var(--fs-sm); line-height: 1.45; }
+.wh { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 7px 8px 7px 12px; border-bottom: 1px solid var(--divider); background: var(--inset); border-radius: var(--r-lg) var(--r-lg) 0 0; }
+.wctr { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.wtitle { color: var(--t-heading); font-weight: 600; font-size: var(--fs-sm); }
+.wrev { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 8px; background: var(--control); color: var(--t-muted); font-size: 10.5px; font-weight: 600; vertical-align: 1px; }
+.wst { display: inline-flex; align-items: center; gap: 5px; color: var(--t-faint); font-size: var(--fs-xs); }
+.wst::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--t-dim); }
+.wst.on { color: var(--good); } .wst.on::before { background: var(--good); }
+.wbtn { height: 24px; padding: 0 10px; border-radius: 12px; background: var(--control); color: var(--t-heading); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; }
+.wbtn:hover, .wbtn[aria-pressed="true"] { background: var(--control-hover); }
+.wh .mpick .menu { min-width: 220px; }
+.wbody { padding: 12px 14px 14px; }
+.wask { padding: 10px 12px 4px; border-bottom: 1px solid var(--divider); }
+.wask .fine { margin: 6px 4px 4px; }
+.prose .wdg p.wcap { margin: 0 0 8px; color: var(--t-secondary); font-size: var(--fs-xs); }
+.wchart { display: block; width: 100%; max-width: 460px; height: auto; }
+.wchart .wg { stroke: var(--divider); stroke-width: 1; }
+.wchart .wt { fill: var(--t-faint); font-size: 11.5px; font-family: var(--font); }
+.wchart .wl { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.wchart .wp { fill: var(--card); stroke: var(--accent); stroke-width: 1.75; }
+.wchart .wp.on { fill: var(--accent); }
+.wchart .wm { stroke: var(--t-dim); stroke-width: 1; stroke-dasharray: 3 3; }
+.wctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; font-size: var(--fs-xs); color: var(--t-secondary); }
+.wctl input[type="range"] { flex: 1; min-width: 140px; max-width: 280px; accent-color: var(--accent-strong); }
+.wctl output { min-width: 34px; color: var(--t-heading); font-weight: 600; font-variant-numeric: tabular-nums; }
+.wnums { display: flex; gap: 6px 18px; flex-wrap: wrap; margin-bottom: 8px; font-size: var(--fs-xs); color: var(--t-faint); }
+.wnums b { color: var(--t-heading); font-size: var(--fs-md); font-variant-numeric: tabular-nums; margin-left: 4px; }
+.prose .wdg table.wtab { display: table; margin: 8px 0 0; font-variant-numeric: tabular-nums; }
+.wsrc { margin: 0; max-height: 260px; overflow: auto; padding: 10px 12px; border-radius: var(--r-md); background: var(--inset); color: var(--t-primary); font: 11.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre; }
+.dialog.wxdlg { width: min(720px, calc(100% - 32px)); }
+.wxdlg h3 { gap: 4px; }
+.wdg-x .wbody { padding: 14px 16px; }
+.wdg-x .wchart { max-width: none; }
+.wdg-x .wcap { margin: 0 0 8px; }
+.wdg-x .wtab { margin-top: 8px; border-collapse: collapse; font-size: var(--fs-sm); }
+.wdg-x .wtab th, .wdg-x .wtab td { border-bottom: 1px solid var(--divider); padding: 4px 8px; text-align: left; }
 </style>
 
 
@@ -1352,7 +1486,7 @@ function card(p) {
   const mode = V[st.v].av || 'header';
   if (p.removed) { const r = p.removed; return `<article class="card removed" id="card-${p.id}"><div class="rmnote">${RM_IC}<span>Removed by @${esc(r.by)}${r.note ? `<small>Reason: “${esc(r.note)}”</small>` : ''}<small>${p.k === 'post' ? 'Post' : 'Ask'} by @${esc(p.u)} in ${esc(spName(p.s))}</small></span></div></article>`; }
   const meta = `<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div>`;
-  const modItems = !mine(p.u) && canWrite() && SPACE_META[p.s] ? (isMod(p.s) ? `<button type="button" class="mi danger" role="menuitem" data-a="rmopen" data-id="${p.id}"><span>Remove…</span></button>` : `<button type="button" class="mi" role="menuitem" data-a="reportopen" data-id="${p.id}"><span>Report…</span></button>`) : '';
+  const modItems = !mine(p.u) && SPACE_META[p.s] && isMod(p.s) ? `<button type="button" class="mi danger" role="menuitem" data-a="rmopen" data-id="${p.id}"><span>Remove…</span></button>` : '';
   const more = !mine(p.u) && modItems ? moreMenu('t:' + p.id, false, '', modItems, false) : mine(p.u) ? moreMenu('t:' + p.id, !p.pending && (p.k === 'ask' ? !othersUnderBranch(tree(p), 'r') : !othersUnderReplies(replies(p))), p.k === 'ask' ? 'ask' : 'post', '', true, p.pending ? 'Available when the answer finishes' : undefined) : '';
   /* the post title drawn like a row of the branch tree: a hollow node, the title in the tree's regular
      weight, the author's avatar on the right (name and time in its tooltip). An ask's channel follows its
@@ -1365,8 +1499,8 @@ function card(p) {
   const cls = `card av-${mode} pad-${V[st.v].pad || 'base'} tt-c`;
   const lk = 'p:' + p.id, nl = (p.likesBase || 0) + (LIKED()[lk] ? 1 : 0), off = canWrite() || st.auth === 'out' ? '' : ` disabled title="${st.auth === 'out' ? 'Sign in to like and save' : 'Liking opens once you have an invite'}"`;
   /* no likes on threads; the bookmark carries how many people saved it (the fixtures' like counts stand in for save counts) */
-  const ns = (p.likesBase || 0) + (SAVED()[p.id] ? 1 : 0);
-  const acts = `<button class="iconbtn cnt${SAVED()[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!SAVED()[p.id]}" aria-label="${SAVED()[p.id] ? 'Saved' : 'Save'}, saved by ${ns}" title="${SAVED()[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}${ns ? `<span>${ns}</span>` : ''}</button>`;
+  const ns = (p.likesBase || 0) + (SAVED()[p.id] ? 1 : 0), showN = ns && !(isPrivate(p.s) && ns < 3);  /* private channels: no count below 3, so a save is not traceable to one person */
+  const acts = `<button class="iconbtn cnt${SAVED()[p.id] ? ' on' : ''}" data-a="save" data-id="${p.id}" aria-pressed="${!!SAVED()[p.id]}" aria-label="${SAVED()[p.id] ? 'Saved' : 'Save'}${showN ? `, saved by ${ns}` : ''}" title="${SAVED()[p.id] ? 'Saved' : 'Save'}"${off}>${I.save}${showN ? `<span>${ns}</span>` : ''}</button>`;
   /* reply / follow-up button carries its count, like the like button */
   const rbtn = (n, attrs, on, label, what) => `<button class="iconbtn likes rcount${on ? ' on' : ''}" ${canWrite() ? attrs : st.auth === 'out' ? 'data-ma="openauth"' : `disabled title="${label} opens once you have an invite"`} aria-pressed="${on}" aria-label="${label}${n ? `, ${noun(n, what[0], what[1])}` : ''}" title="${label}">${ARROW_REPLY}${n ? `<span>${n}</span>` : ''}</button>`;
   if (p.k === 'post') {
@@ -1378,7 +1512,7 @@ function card(p) {
   const from = src0 ? `<button class="fromln" data-a="gofrom" data-id="${p.from.pid}" data-node="${p.from.nid}">${ARROW_REPLY}<span>Branched from <b>${esc(clip(tree(src0).nodes.r.q, 70))}</b></span></button>` : '';
   return `<article class="${cls}" id="card-${p.id}">${head}${from}${titleRow('ask', esc(T.nodes.r.q))}
     <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok), spName(p.s)].filter(Boolean).join(' · ')}</span></div>
-    <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
+    <div class="prose" id="pr-${p.id}">${T.nodes.r.html}${p.id === WX_PID ? widgetBlock(p) : ''}</div>
     <div class="card-f">${lead}${count('')}${p.pending ? '' : rbtn(T.count, `data-a="ask" data-id="${p.id}"`, st.asking === p.id, 'Ask a follow-up', ['branch', 'branches'])}${acts}${tail}</div></article>`;
 }
 
@@ -1531,7 +1665,7 @@ const V = {
 
 /* ---- composers: start a thread. Each variant below uses one. The draft survives re-renders. ---- */
 /* the picker shows the short name; the menu shows the full name. Sol runs only on the member's OpenAI key. */
-const MODEL_OPTS = ['Opus 5.5', 'Gemini 4 Neon', 'GPT-6.1 Sol'], SHORT = { 'Opus 5.5': 'Opus', 'Gemini 4 Neon': 'Gemini', 'GPT-6.1 Sol': 'Sol' }, hasOpenAI = () => keys().openai?.status === 'working', modelOpts = () => MODEL_OPTS, EFFORT_OPTS = ['low', 'medium', 'high', 'max'];
+const MODEL_OPTS = ['Opus 5.5', 'Gemini 4 Neon', 'GPT-6.1 Sol'], SHORT = { 'Opus 5.5': 'Opus', 'Gemini 4 Neon': 'Gemini', 'GPT-6.1 Sol': 'Sol' }, hasOpenAI = () => keys().openai?.status === 'working', modelOpts = () => MODEL_OPTS.filter(m => ADMIN.avail[m]), EFFORT_OPTS = ['low', 'medium', 'high', 'max'];
 /* a pill sized to its current value; the native select sits invisibly on top of it */
 const pick = (id, opts, cur, label, fmt = x => x) => `<label class="pick" title="${label}"><span>${esc(fmt(cur))}</span><select id="${id}" aria-label="${label}">${opts.map(o => `<option value="${o}"${o === cur ? ' selected' : ''}>${esc(fmt(o))}</option>`).join('')}</select>${I.down}</label>`;
 /* Space picker: a custom menu of spaces (only on Home; inside a space the thread goes there). */
@@ -1648,7 +1782,7 @@ const curScope = () => st.auth === 'out' ? 'discover' : st.spScope || 'joined';
 const scopeList = () => { const sc = curScope(); return sc === 'yours' ? yourSpaces() : sc === 'discover' ? allVisible() : navSpaces(); };
 const SCOPE_IC = { joined: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path d="m5.6 8.2 1.7 1.7 3.2-3.6"/></svg>', yours: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.6" r="2.6"/><path d="M3 13.5c.5-2.6 2.6-4 5-4s4.5 1.4 5 4"/></svg>', discover: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="m10.4 5.6-1.3 3.5-3.5 1.3 1.3-3.5Z"/></svg>' };
 function headerSpaces() {
-  if (!['network', 'usage', 'members', 'browse'].includes(st.screen)) return '<span class="hsp"></span>';
+  if (!['network', 'usage', 'members', 'browse', 'notifications', 'admin'].includes(st.screen)) return '<span class="hsp"></span>';
   const sc = curScope(), list = scopeList();
   const join = x => sc === 'discover' && canWrite() && !isJoined(x.id) ? `<span class="tj" data-a="join" data-id="${x.id}" title="Join">+</span>` : '';
   const add = canWrite() ? `<button class="tadd" data-a="newspace" title="New channel" aria-label="New channel">${PLUS2}</button>` : '';
@@ -1705,19 +1839,19 @@ function browsePage() {
 }
 /* New space dialog */
 /* ---- channel info and moderation ----
-   Channel info shows the description and facts; the owner edits the About text. Owners can remove threads,
-   members can report them; both are listed in the owner's moderation log. */
+   Channel info shows the description and facts; the owner edits the About text. Owners can remove threads;
+   removals (and bans) are listed in the owner's moderation log. */
 const RM_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path d="M4 12 12 4"/></svg>';
 const isMod = id => ownerOf(id) === me() && canWrite();
 const INFO_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7.2v3.8"/><circle cx="8" cy="5" r=".95" fill="currentColor" stroke="none"/></svg>';
 function chInfoDlg() {
   const x = SP[st.chInfo]; if (!x) return '';
-  const o = ownerOf(x.id), own = isMod(x.id), open = MODLOG.filter(m => m.s === x.id && m.k === 'report' && !m.done).length;
+  const o = ownerOf(x.id), own = isMod(x.id);
   return `<div class="scrim" data-a="chinfoclose"></div><div class="dialog chdlg" role="dialog" aria-modal="true" aria-labelledby="ci-h">
     <div class="chdlg-h">${glyph(x)}<h3 id="ci-h">${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</h3>${own ? '<button class="btn2 sm" data-a="chedit">Edit</button>' : ''}<button class="iconbtn" data-a="chinfoclose" aria-label="Close">${I.x}</button></div>
     ${x.desc ? `<p>${esc(x.desc)}</p>` : own ? '<p class="chnone">No description yet. <button class="tlink inl" data-a="chedit">Add one</button></p>' : ''}
     <dl class="chfacts"><dt>Channel by</dt><dd>${av(o, 'xs')}@${esc(o)}</dd><dt>Members</dt><dd>${memberCount(x.id)}</dd><dt>Visibility</dt><dd>${isPrivate(x.id) ? 'Private: only members can read or post' : 'Open: anyone can read and join'}</dd></dl>
-    ${own ? `<div class="chfoot"><button class="tlink" data-a="modlog">Moderation log${open ? ` (${open} open)` : ''}</button></div>` : ''}</div>`
+    ${own ? `<div class="chfoot"><button class="tlink" data-a="modlog">Moderation log</button></div>` : ''}</div>`
     + (st.chEdit ? chEditDlg(x) : '') + (st.modlog ? modLogDlg(x) : '');
 }
 /* Owner's editor: the About text, in a dialog above the info dialog */
@@ -1738,29 +1872,28 @@ function saveChEdit(id) {
 }
 function closeChEdit() { st.chEdit = null; render(); app.querySelector('.chdlg [data-a="chedit"]')?.focus(); }
 
-/* Moderation log: reports and removals */
+/* Moderation log: the owner's removals and bans, newest first */
 const MODLOG = [];
 function modLogDlg(x) {
-  const log = MODLOG.filter(m => m.s === x.id).sort((a, b) => b.at - a.at), tab = st.modlogTab || 'open';
-  const shown = tab === 'open' ? log.filter(m => m.k === 'report' && !m.done) : log;
-  const item = m => { const p = byId(m.pid), what = p?.k === 'post' ? 'post' : 'ask'; return `<li><span class="mlkind${m.k === 'remove' ? ' rm' : ''}">${m.k === 'remove' ? 'Removed' : m.done ? 'Dismissed' : 'Report'}</span><span>${m.k === 'remove' ? `@${esc(m.by)} removed @${esc(p?.u || '?')}'s ${what}` : `@${esc(m.by)} reported @${esc(p?.u || '?')}'s ${what}`}: “${esc(clip(p?.q || '', 70))}”${m.note ? `<small>“${esc(m.note)}”</small>` : ''}<small>${rel(new Date(m.at).toISOString())}</small></span>
-    ${m.k === 'report' && !m.done && p && !p.removed ? `<span class="acts"><button class="btn2 sm" data-a="mldismiss" data-i="${MODLOG.indexOf(m)}">Dismiss</button><button class="btn1 sm" data-a="rmopen" data-id="${m.pid}">Remove</button></span>` : ''}</li>`; };
+  const log = MODLOG.filter(m => m.s === x.id).sort((a, b) => b.at - a.at);
+  const item = m => { const p = m.pid ? byId(m.pid) : null, what = p?.k === 'post' ? 'post' : 'ask';
+    const line = m.k === 'ban' ? `@${esc(m.by)} banned @${esc(m.u)} from ${esc(spName(m.s))}` : `@${esc(m.by)} removed @${esc(p?.u || '?')}'s ${what}: “${esc(clip(p?.q || '', 70))}”`;
+    return `<li><span class="mlkind ${m.k === 'ban' ? 'ban' : 'rm'}">${m.k === 'ban' ? 'Banned' : 'Removed'}</span><span>${line}${m.note ? `<small>Reason: “${esc(m.note)}”</small>` : ''}<small>${rel(new Date(m.at).toISOString())}</small></span></li>`; };
   return `<div class="scrim ce-scrim" data-a="modlogclose"></div><div class="dialog chdlg cedlg mldlg" role="dialog" aria-modal="true" aria-labelledby="ml-h">
     <div class="chdlg-h">${glyph(x)}<h3 id="ml-h">Moderation log</h3><button class="iconbtn" data-a="modlogclose" aria-label="Close">${I.x}</button></div>
-    <div class="cebody"><span class="modes mltabs" role="group">${[['open', `Open reports (${log.filter(m => m.k === 'report' && !m.done).length})`], ['all', 'Everything']].map(([k, l]) => `<button type="button" data-a="mltab" data-k="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</span>
-      ${shown.length ? `<ul class="mlist">${shown.map(item).join('')}</ul>` : `<p class="chnone">${tab === 'open' ? 'No open reports.' : 'Nothing logged yet.'}</p>`}</div></div>`;
+    <div class="cebody">${log.length ? `<ul class="mlist">${log.map(item).join('')}</ul>` : `<p class="chnone">Nothing removed yet. Use “Remove…” in a thread's “…” menu to take it down.</p>`}</div></div>`;
 }
-/* Remove (owner) or report (member) a thread, with an optional reason */
+/* Remove a thread (channel owner), with an optional reason */
 function rmDlg() {
   const r = st.rm; if (!r) return '';
-  const p = byId(r.pid), rm = r.mode === 'remove';
+  const p = byId(r.pid);
   return `<div class="scrim" style="z-index:44" data-a="rmclose"></div><div class="dialog chdlg rmdlg" style="z-index:45" role="dialog" aria-modal="true" aria-labelledby="rm-h">
-    <div class="chdlg-h"><h3 id="rm-h">${rm ? `Remove @${esc(p.u)}'s ${p.k === 'post' ? 'post' : 'ask'}` : `Report this ${p.k === 'post' ? 'post' : 'ask'}`}</h3><button class="iconbtn" data-a="rmclose" aria-label="Close">${I.x}</button></div>
+    <div class="chdlg-h"><h3 id="rm-h">Remove @${esc(p.u)}'s ${p.k === 'post' ? 'post' : 'ask'}</h3><button class="iconbtn" data-a="rmclose" aria-label="Close">${I.x}</button></div>
     <p>“${esc(clip(p.q, 120))}”</p>
     <form class="pform" data-form="rm:${p.id}">
-      <label>${rm ? 'Reason, shown with the removal' : 'What is wrong with it?'} <textarea id="rm-note" rows="2" placeholder="Optional">${esc(r.note || '')}</textarea></label>
-      ${rm ? `<p class="cefine">Readers see that it was removed. Branches and replies under it go with it.</p>` : `<p class="cefine">Reports go to @${esc(ownerOf(p.s))}, who runs this channel. @${esc(p.u)} is not told who reported.</p>`}
-      <div class="dacts"><button type="button" class="btn2" data-a="rmclose">Cancel</button><button type="submit" class="btn1${rm ? ' danger' : ''}">${rm ? 'Remove' : 'Send report'}</button></div></form></div>`;
+      <label>Reason, shown with the removal <textarea id="rm-note" rows="2" placeholder="Optional">${esc(r.note || '')}</textarea></label>
+      <p class="cefine">Readers see that it was removed. Branches and replies under it go with it. @${esc(p.u)} is notified, with the reason.</p>
+      <div class="dacts"><button type="button" class="btn2" data-a="rmclose">Cancel</button><button type="submit" class="btn1 danger">Remove</button></div></form></div>`;
 }
 function newSpaceDlg() {
   const c = st.creating; if (!c) return '';
@@ -1804,6 +1937,7 @@ function renderNetwork() {
   const tabsEl = mg.querySelector('.tabs') || document.createElement('div'), edge = () => tabsEl.classList.toggle('scrolled', mg.scrollTop > 2);
   let lastY = mg.scrollTop;
   const bar = () => { const y = mg.scrollTop, dy = y - lastY, el = $('#bar'); if (!el) return;
+    if (st.keepBar) { st.keepBar = false; lastY = y; return; }  /* a jump from a notification keeps the app bar in view */
     if (y < 48 || st.menu) el.classList.remove('hid'); else if (dy > 4) el.classList.add('hid'); else if (dy < -4) el.classList.remove('hid');
     if (Math.abs(dy) > 4 || y < 48) lastY = y; };
   edge(); mg.addEventListener('scroll', () => { edge(); bar(); $('#selbranch')?.remove(); $('#sellook')?.remove(); $('#citepop')?.remove(); }, { passive: true });
@@ -1833,11 +1967,9 @@ app.addEventListener('click', e => {
   if (a === 'newspace') { st.menu = null; st.creating = { name: '', desc: '', vis: 'open', err: '' }; render(); $('#ns-name')?.focus(); return; }
   if (a === 'chedit') { const x = SP[st.chInfo]; st.chEdit = { id: x.id, desc: x.desc || '', err: '' }; render(); $('#ce-desc')?.focus(); return; }
   if (a === 'cecancel') { closeChEdit(); return; }
-  if (a === 'modlog') { st.modlog = true; st.modlogTab = 'open'; render(); app.querySelector('.mldlg .iconbtn')?.focus(); return; }
+  if (a === 'modlog') { st.modlog = true; render(); app.querySelector('.mldlg .iconbtn')?.focus(); return; }
   if (a === 'modlogclose') { st.modlog = false; render(); app.querySelector('[data-a="modlog"]')?.focus(); return; }
-  if (a === 'mltab') { st.modlogTab = d.k; render(); return; }
-  if (a === 'mldismiss') { MODLOG[+d.i].done = true; render(); toast('Report dismissed.'); return; }
-  if (a === 'rmopen' || a === 'reportopen') { st.menu = null; st.rm = { pid: d.id, mode: a === 'rmopen' ? 'remove' : 'report', note: '' }; render(); $('#rm-note')?.focus(); return; }
+  if (a === 'rmopen') { st.menu = null; st.rm = { pid: d.id, note: '' }; render(); $('#rm-note')?.focus(); return; }
   if (a === 'rmclose') { st.rm = null; render(); return; }
   if (a === 'chinfo') { st.chInfo = d.id; render(); app.querySelector('.chdlg .iconbtn')?.focus(); return; }
   if (a === 'chinfoclose') { const id = st.chInfo; st.chInfo = null; st.chEdit = null; st.modlog = false; render(); app.querySelector(`[data-a="chinfo"][data-id="${id}"]`)?.focus(); return; }
@@ -1886,6 +2018,20 @@ app.addEventListener('click', e => {
   if (a === 'menu') { st.menu = st.menu === d.m ? null : d.m; render(); if (st.menu && (d.m === 'acct' || d.m.startsWith('more:'))) app.querySelector('.mpick .menu .mi:not([aria-disabled])')?.focus({ preventScroll: true }); else if (['model', 'space', 'send'].includes(d.m)) $('#in-new')?.focus({ preventScroll: true }); return; }
   if (a === 'setmodel' || a === 'seteffort' || a === 'setspace') { st[{ setmodel: 'newModel', seteffort: 'newEffort', setspace: 'newSpace' }[a]] = d.v; st.menu = null; render(); $('#in-new')?.focus(); return; }
   if (a === 'mode') { st.newMode = d.m; st.menu = null; render(); const t = $('#in-new'); t?.focus(); t?.setSelectionRange(t.value.length, t.value.length); return; }
+  if (a === 'notif') { openNotif(d.id); return; }
+  if (a === 'notifall') { notifs().forEach(n => { n.read = true; }); toast('All notifications marked as read.'); render(); return; }
+  if (a === 'admtab') { st.admTab = d.k; render(); app.querySelector(`[data-a="admtab"][data-k="${d.k}"]`)?.focus(); return; }
+  if (a === 'admavail') { const dr = st.admDraft; if (!dr || dr.def === d.v) return; dr.avail[d.v] = !dr.avail[d.v]; render(); return; }
+  if (a === 'admdiscard') { st.admDraft = null; render(); return; }
+  if (a === 'admsave') { const dr = st.admDraft; Object.assign(ADMIN.avail, dr.avail); st.admDraft = null; if (!st.user || !ADMIN.avail[st.newModel]) st.newModel = modelFor(st.user); if (dr.def !== ADMIN.def) setDefault(dr.def); else { toast('Model settings saved.'); render(); } return; }
+  if (a === 'wxview') { st.wx.view = d.v; render(); return; }
+  if (a === 'wxrun') { st.wx.run = true; st.wx.view = 'preview'; render(); $('#wx-void')?.focus({ preventScroll: true }); if (t.textContent === 'Reload') toast('Widget reloaded.'); return; }
+  if (a === 'wxask') { st.wx.ask = !st.wx.ask; render(); if (st.wx.ask) document.getElementById('in-wx:' + WX_PID)?.focus({ preventScroll: true }); return; }
+  if (a === 'wxaskclose') { st.wx.ask = false; render(); return; }
+  if (a === 'wxcopy') { st.menu = null; try { navigator.clipboard.writeText(wxSource(wxCur())).catch(() => {}); } catch {} toast('Widget HTML copied.'); render(); return; }
+  if (a === 'wxdl') { st.menu = null; wxDownload(); render(); return; }
+  if (a === 'wxexpand') { st.menu = null; st.wx.dlg = d.v; render(); app.querySelector('.wxdlg .iconbtn')?.focus(); return; }
+  if (a === 'wxclose') { st.wx.dlg = null; render(); return; }
   if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; st.askPar = null; st.brReplying = null; render(); return; }
 });
 /* citations: the superscript numbers open a small card for that source (the thread's sources, 1-based) */
@@ -1919,8 +2065,8 @@ app.addEventListener('mouseup', e => {
     $('#selbranch')?.remove(); $('#sellook')?.remove();
     const sel = getSelection(), t = sel && sel.toString().replace(/\s+/g, ' ').trim();
     if (!t || t.length < 3 || !canWrite() || !sel.rangeCount) return;
-    const pr = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement)?.closest('.card .prose[id^="pr-"]');
-    if (!pr || !pr.contains(sel.focusNode)) return;
+    const an = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement), pr = an?.closest('.card .prose[id^="pr-"]');
+    if (!pr || !pr.contains(sel.focusNode) || an.closest('.wdg')) return;
     const pid = pr.id.slice(3); if (byId(pid)?.pending) return;
     const r = sel.getRangeAt(0).getBoundingClientRect(), A = app.getBoundingClientRect();
     { const f = sel.getRangeAt(0).cloneContents(); f.querySelectorAll('.anc, sup').forEach(x => x.remove()); st.selText = f.textContent.replace(/\s+/g, ' ').trim() || t; }
@@ -1945,12 +2091,14 @@ app.addEventListener('submit', e => {
   const f = e.target.closest('[data-form]'); if (!f) return;
   if (f.dataset.form.startsWith('chedit:')) { saveChEdit(f.dataset.form.slice(7)); return; }
   if (f.dataset.form.startsWith('rm:')) { const r = st.rm, p = byId(r.pid); r.note = $('#rm-note').value.trim();
-    if (r.mode === 'remove') { p.removed = { by: me(), note: r.note }; MODLOG.forEach(m => { if (m.pid === p.id && m.k === 'report') m.done = true; }); MODLOG.push({ k: 'remove', s: p.s, pid: p.id, by: me(), note: r.note, at: NOW + 1 }); st.rm = null; render(); toast('Removed.'); return; }
-    MODLOG.push({ k: 'report', s: p.s, pid: p.id, by: me(), note: r.note, at: NOW + 1 }); st.rm = null; render(); toast(`Reported to @${ownerOf(p.s)}.`); return; }
+    p.removed = { by: me(), note: r.note }; MODLOG.push({ k: 'remove', s: p.s, pid: p.id, by: me(), note: r.note, at: NOW + 1 });
+    if (p.u !== me()) (NOTIFS[p.u] ||= []).push({ id: 'nrm' + p.id, k: 'removed', by: me(), pid: p.id, note: r.note, at: new Date(NOW).toISOString(), read: false });
+    st.rm = null; render(); toast('Removed.'); return; }
   const inp = f.querySelector('input, textarea'), v = inp.value.trim(); if (!v) { inp.focus(); return; }
   if (f.dataset.form === 'newspace:x') { createSpace(); return; }
   const [kind, pid, node, at] = f.dataset.form.split(':'), p = byId(pid);
   const notify = t => { const m = mentionsIn(t), miss = [...new Set([...t.matchAll(MENTION)].map(x => x[1].replace(/\.$/, '')).filter(u => !member(u)))]; const parts = [m.length ? `Notified ${m.map(u => '@' + u).join(', ')}.` : '', miss.length ? `${miss.map(u => '@' + u).join(', ')} ${miss.length === 1 ? "isn't a member" : "aren't members"}.` : '']; if (m.length || miss.length) toast(parts.filter(Boolean).join(' ')); };
+  if (kind === 'wx') { inp.value = ''; st.wx.ask = false; st.sel[pid] = addBranch(p, 'r', `Change the widget "Void-adjusted return" (${wxCur()}): ${v}`); toast('Asked for changes. The new revision appears in the branch when the run finishes.'); render(); return; }
   if (kind === 'br') { inp.value = ''; const list = (BRP[pid + ':' + node] ||= []), r = { u: me(), createdAt: new Date(NOW).toISOString(), t: v, likes: 0 }; if (at === 'top') list.push(r); else (replyAtIn(list, at).kids ||= []).push(r); st.brReplying = null; notify(v); render(); return; }
   if (kind === 'new' && e.submitter?.value !== 'post' && outOfTokens() && st.newModel !== 'GPT-6.1 Sol') { toast(OUT_MSG); render(); return; }
   if (kind === 'new') { submitNew(v, e.submitter?.value === 'post' ? 'post' : (e.submitter ? 'ask' : st.newMode)); return; }
@@ -1978,6 +2126,7 @@ document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   if (st.delAsk) { st.delAsk = null; render(); return; }
   if (st.rm) { st.rm = null; render(); return; }
+  if (st.wx.dlg && !st.menu) { st.wx.dlg = null; render(); app.querySelector('[data-m="wxmenu"]')?.focus({ preventScroll: true }); return; }
   if (st.chEdit) { closeChEdit(); return; }
   if (st.modlog) { st.modlog = false; render(); app.querySelector('[data-a="modlog"]')?.focus(); return; }
   if (st.chInfo) { const id = st.chInfo; st.chInfo = null; render(); app.querySelector(`[data-a="chinfo"][data-id="${id}"]`)?.focus(); return; }
@@ -1986,7 +2135,8 @@ document.addEventListener('keydown', e => {
   if (f) { const [k, pid] = f.dataset.form.split(':');
     if (k === 'mf') { st.asking = null; st.quote = null; st.askPar = null; render(); (app.querySelector(`#mr-${CSS.escape(pid)} .grow-r.sel`) || app.querySelector(`[data-a="ask"][data-id="${pid}"]`))?.focus({ preventScroll: true }); return; }
     if (k === 'rp') { st.replying = null; render(); return; }
-    if (k === 'br') { st.brReplying = null; render(); return; } }
+    if (k === 'br') { st.brReplying = null; render(); return; }
+    if (k === 'wx') { st.wx.ask = false; render(); app.querySelector('[data-a="wxask"]')?.focus({ preventScroll: true }); return; } }
   if (e.target.closest?.('form[data-mform^="key:"]') || st.keyForm) { st.keyForm = null; st.keyErr = ''; render(); return; }
   if (st.removing) { const k = st.removing; st.removing = null; render(); app.querySelector(`[data-ma="keyask"][data-k="${k}"]`)?.focus(); return; }
 });
@@ -1997,6 +2147,7 @@ app.addEventListener('keydown', e => {
 });
 app.addEventListener('input', e => {
   const t = e.target;
+  if (t.id === 'wx-void') { st.wx.void = +t.value; const v = st.wx.void / 100; $('#wx-vo').textContent = t.value + '%'; $('#wx-ret').textContent = pct1(wxRet(v)); $('#wx-ev').textContent = ((1 - v) * WX_PE + v * WX_PRICE).toFixed(3); $('#wx-chart').innerHTML = wxChart(v); return; }
   if (t.dataset.ce === 'desc' && st.chEdit) { st.chEdit.desc = t.value; const n = $('#ce-count'); if (n) n.textContent = `${t.value.length} / ${DESC_MAX}`; }
   if (t.id === 'in-spq' || t.id === 'in-sideq' || t.id === 'in-browseq') { st[{ 'in-spq': 'spq', 'in-sideq': 'sideq', 'in-browseq': 'browseq' }[t.id]] = t.value; const pos = t.selectionStart; render(); const n = document.getElementById(t.id); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; } if (t.tagName !== 'TEXTAREA' || !t.form) return;
   t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
@@ -2054,13 +2205,53 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pl: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
-/* seeds: #sci-fi (owned by @ines.v) has reports in its moderation log */
-{ const sf = Object.keys(SPACE_META).find(k => SPACE_META[k].owner === 'ines.v'), others = D.posts.filter(p => p.s === sf && p.u !== 'ines.v');
-  if (sf && others.length) {
-    MODLOG.push({ k: 'report', s: sf, pid: others[0].id, by: 'kofi.a', note: 'The title gives away the ending.', at: NOW - 3 * 36e5 });
-    if (others[1]) MODLOG.push({ k: 'report', s: sf, pid: others[1].id, by: 'oduya', note: '', at: NOW - 26 * 36e5 });
-    if (others[2]) MODLOG.push({ k: 'report', s: sf, pid: others[2].id, by: 'mira_k', note: '', at: NOW - 6 * 864e5, done: true }); } }
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { adm: 'a', wx: 'a', pl: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+/* seeds: moderation logs list removals and bans only.
+   #sci-fi (owned by @ines.v): one removed sales post. #replication (owned by @mira_k): a ban from the fixtures,
+   and @ines.v's speculative-decoding ask, removed with a reason (she is notified, see NOTIFS). */
+const SEED_RM = { id: 'seedrm1', s: 'scifi', u: 'dmitri_k', k: 'post', createdAt: '2026-11-15T09:00:00Z', q: 'Selling signed first editions of the Culture novels, message me for prices.', tok: 0, likesBase: 0, removed: { by: 'ines.v', note: 'Sales posts are off topic here.' } };
+D.posts.push(SEED_RM);
+MODLOG.push({ k: 'remove', s: 'scifi', pid: SEED_RM.id, by: 'ines.v', note: SEED_RM.removed.note, at: Date.parse('2026-11-15T11:20:00Z') });
+(D.banned || []).forEach(b => { if (SPACE_META[b.sp]) MODLOG.push({ k: 'ban', s: b.sp, u: b.u, by: ownerOf(b.sp), note: 'Posted the same link in every thread.', at: Date.parse(b.createdAt) }); });
+const RM_ASK = byId('01M7H6F3P012CRWKEQVTVA6PV4');
+if (RM_ASK) { RM_ASK.removed = { by: 'mira_k', note: 'Duplicate of the Nov 12 thread on the same paper. Please continue there.' }; MODLOG.push({ k: 'remove', s: RM_ASK.s, pid: RM_ASK.id, by: 'mira_k', note: RM_ASK.removed.note, at: NOW - 3 * 36e5 }); }
+/* a plain post by @ines.v in #ml, so "replied to your post" and a mention in a reply have something to point at */
+const SEED_POST = { id: 'seedpost1', s: 'ml', u: 'ines.v', k: 'post', createdAt: '2026-11-15T17:40:00Z', q: 'Collecting test-time compute results outside math and code. I have three papers so far; add any you know of.', tok: 0, likesBase: 4 };
+D.posts.push(SEED_POST);
+D.rp[SEED_POST.id] = [
+  { u: 'lettie', createdAt: '2026-11-15T21:05:00Z', t: 'The agent-benchmark paper from October has a section on this, for web tasks.', likes: 2 },
+  { u: 'jun.park', createdAt: '2026-11-16T08:12:00Z', t: 'Two more from the planning literature. @ines.v the second one has released code.', likes: 1 },
+];
+
+/* ---- notifications ----
+   Kinds: mention (@handle in a post, reply or comment), reply (to your post), branch and comment (on your ask),
+   removed (your thread, by the channel owner), invite (an invite you made was used). Per member, in memory. */
+const NOTIFS = {
+  'ines.v': [
+    { id: 'n1', k: 'mention', where: 'reply', by: 'jun.park', pid: 'seedpost1', rsel: '1', at: '2026-11-16T08:12:00Z', read: false },
+    { id: 'n2', k: 'branch', by: 'hal_b', pid: '01M7HWGZJGT7JTFFVSYPX055KV', node: 'h1', at: '2026-11-16T09:54:30Z', read: false },
+    { id: 'n3', k: 'removed', by: 'mira_k', pid: '01M7H6F3P012CRWKEQVTVA6PV4', at: '2026-11-16T07:00:00Z', read: false },
+    { id: 'n4', k: 'reply', by: 'lettie', pid: 'seedpost1', rsel: '0', at: '2026-11-15T21:05:00Z', read: true },
+    { id: 'n5', k: 'comment', by: 'mira_k', pid: '01M7H6F3P02JFX3X2X804X3986', at: '2026-11-15T20:10:00Z', read: true },
+    { id: 'n6', k: 'mention', where: 'comment', by: 'oduya', pid: '01M7HGRPJ0E7RGZ45D4KENBQ6P', at: '2026-11-15T16:30:00Z', read: true },
+    { id: 'n7', k: 'invite', by: 'priya.n', code: 'SESS-4KQ7-M2', at: '2026-11-14T18:00:00Z', read: true },
+    { id: 'n8', k: 'branch', by: 'jun.park', pid: '01M7H6F3P02JFX3X2X804X3986', at: '2026-11-14T22:00:00Z', read: true },
+  ],
+};
+/* the comment in n5 exists on the first branch of that ask */
+{ const p = byId('01M7H6F3P02JFX3X2X804X3986'), k = p && tree(p).kids('r')[0]; if (k) (BRP[p.id + ':' + k.id] ||= []).push({ u: 'mira_k', createdAt: '2026-11-15T20:10:00Z', t: 'The 1964 World’s Fair Picturephone demo is the clearest case of this; worth adding.', likes: 1 }); }
+
+/* ---- site admin: the default model for asks ----
+   Prices are mock values per 1M tokens (input / output). GPT-6.1 Sol runs only on a member's own OpenAI key,
+   so it cannot be the default or a member override. */
+const MODELS = {
+  'Opus 5.5': { prov: 'Anthropic', pin: 5, pout: 25, note: 'Strongest on long research asks with many sources.' },
+  'Gemini 4 Neon': { prov: 'Google', pin: 1.25, pout: 10, note: 'About a quarter of the cost; weaker on long multi-step asks.' },
+  'GPT-6.1 Sol': { prov: 'OpenAI', pin: 3, pout: 15, note: "Runs only on a member's own OpenAI key.", byok: true },
+};
+const ADMIN = { def: 'Opus 5.5', avail: { 'Opus 5.5': true, 'Gemini 4 Neon': true, 'GPT-6.1 Sol': true }, over: { hal_b: 'Gemini 4 Neon' } };
+const modelFor = u => ADMIN.over[u] || ADMIN.def;
+st.newModel = modelFor(st.user);
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -2146,9 +2337,9 @@ function appbar() {
   const open = st.menu === 'acct';
   return `<header class="appbar">${brandBtn()}${headerSpaces()}
     <span class="grow"></span>${meter()}${savedBtn()}${layoutBtn()}
-    <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}">${av(st.user, 'sm')}${I.down}</button>
+    <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}" aria-label="Account${nUnread() ? `, ${noun(nUnread(), 'unread notification', 'unread notifications')}` : ''}">${av(st.user, 'sm')}${nUnread() ? '<span class="adot" aria-hidden="true"></span>' : ''}${I.down}</button>
     ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff ? cap1(m.staff) : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
-      ${isActive() ? `<button class="mi" data-ma="go" data-to="members"><span>Invites</span></button><button class="mi" data-a="space" data-id="saved"><span>Saved</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
+      ${isActive() ? `<button class="mi" data-ma="go" data-to="notifications"><span>Notifications</span>${nUnread() ? `<b class="nbadge">${nUnread()}</b>` : ''}</button><div class="msep"></div><button class="mi" data-ma="go" data-to="members"><span>Invites</span></button><button class="mi" data-a="space" data-id="saved"><span>Saved</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>${isAdmin() ? `<button class="mi" data-ma="go" data-to="admin"><span>Admin</span></button>` : ''}` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
       <div class="msep"></div><button class="mi" data-ma="signout"><span>Sign out</span></button></div>` : ''}</span></header>`;
 }
 
@@ -2300,6 +2491,160 @@ function usagePage() {
     ${keysSection()}</div></div>`;
 }
 
+
+/* ---- notifications page ---- */
+const notifs = () => isActive() ? (NOTIFS[st.user] ||= []) : [];
+const nUnread = () => notifs().filter(n => !n.read).length;
+const isAdmin = () => isActive() && meM()?.staff === 'admin';  /* users.is_admin */
+const AT_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.4"/><path d="M10.4 8v1a1.9 1.9 0 0 0 3.6.8A6 6 0 1 0 11 13"/></svg>';
+const PERSON_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.6" r="2.6"/><path d="M3 13.5c.5-2.6 2.6-4 5-4s4.5 1.4 5 4"/></svg>';
+const N_KIND = { mention: AT_IC, reply: ARROW_REPLY, branch: BRANCH_IC, comment: BUBBLE, removed: RM_IC, invite: PERSON_IC };
+const titleOf = p => !p ? 'a deleted thread' : clip(p.k === 'ask' ? tree(p).nodes.r.q : p.q, 64);
+function notifText(n) {
+  const p = n.pid ? byId(n.pid) : null, t = `<span class="nt">“${esc(titleOf(p))}”</span>`, who = `<b>@${esc(n.by)}</b>`;
+  if (n.k === 'mention') return `${who} mentioned you in a ${n.where || 'post'} on ${t}`;
+  if (n.k === 'reply') return `${who} replied to your post ${t}`;
+  if (n.k === 'branch') return `${who} branched from your ask ${t}`;
+  if (n.k === 'comment') return `${who} commented on your ask ${t}`;
+  if (n.k === 'removed') return `${who} removed your ${p?.k === 'post' ? 'post' : 'ask'} ${t}${p?.removed?.note || n.note ? `: <span class="nr">“${esc(p?.removed?.note || n.note)}”</span>` : ''}`;
+  if (n.k === 'invite') return `${who} joined Session with your invite <span class="nt">${esc(n.code)}</span>`;
+  return '';
+}
+function notifPage() {
+  const list = notifs().slice().sort((a, b) => a.at < b.at ? 1 : -1), un = nUnread();
+  const row = n => { const p = n.pid ? byId(n.pid) : null;
+    return `<li><button class="nrow${n.read ? '' : ' unread'}" data-a="notif" data-id="${n.id}"><span class="nav-av">${av(n.by)}<span class="nk nk-${n.k}" aria-hidden="true">${N_KIND[n.k]}</span></span>
+      <span class="ntx">${notifText(n)}<small>${p ? esc(spName(p.s)) + ' · ' : n.k === 'invite' ? 'Invites · ' : ''}<time>${rel(n.at)}</time></small></span>${n.read ? '' : '<span class="ndot" aria-label="Unread"></span>'}</button></li>`; };
+  return `<div class="page"><div class="page-in narrow"><div class="shead nhead"><h2>Notifications</h2><button class="btn2 sm" data-a="notifall"${un ? '' : ' disabled'}>Mark all as read</button></div>
+    <p class="sub">${un ? `${noun(un, 'unread notification', 'unread notifications')}.` : 'All caught up.'} Mentions, replies to your posts, branches and comments on your asks, removals, and invites people used.</p>
+    ${list.length ? `<ul class="nlist box">${list.map(row).join('')}</ul>` : '<p class="empty">No notifications yet.</p>'}</div></div>`;
+}
+function openNotif(id) {
+  const n = notifs().find(x => x.id === id); if (!n) return;
+  n.read = true; st.menu = null;
+  if (n.k === 'invite' || !byId(n.pid)) { st.screen = 'members'; render(); return; }
+  const p = byId(n.pid);
+  st.screen = 'network'; st.space = p.s; st.asking = null;
+  if (n.rsel != null) st.rsel[p.id] = n.rsel;
+  if (n.node && tree(p).nodes[n.node]) st.sel[p.id] = n.node;
+  else if (n.k === 'comment' && p.k === 'ask') { const k = tree(p).kids('r')[0]; if (k) st.sel[p.id] = k.id; }
+  render();
+  const c = document.getElementById('card-' + p.id), mg = $('#k-mg');
+  if (c && mg) { st.keepBar = true; mg.scrollTop += c.getBoundingClientRect().top - mg.getBoundingClientRect().top - 12; c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 1600); }
+}
+
+/* ---- admin page (site admins only): the default model for asks, and who has which ----
+   A one setting card · B models table with a Save bar · C settings with a left nav (Models, Members, Allowance) */
+const price = m => `$${MODELS[m].pin} in · $${MODELS[m].pout} out`;
+const activeMembers = () => MEMBERS.filter(m => m.status === 'active');
+const onModel = mod => activeMembers().filter(m => modelFor(m.u) === mod);
+const avStack = list => `<span class="avw"><span class="avs">${list.slice(0, 6).map(m => av(m.u, 'xs')).join('')}</span>${list.length > 6 ? `<small class="amore">+${list.length - 6}</small>` : ''}</span>`;
+const whoHas = () => `<div class="awho">${MODEL_OPTS.map(mod => { const l = onModel(mod); return `<div class="awrow"><b>${esc(mod)}</b>${l.length ? avStack(l) : ''}<small>${l.length ? noun(l.length, 'member', 'members') : 'Nobody'}${mod === ADMIN.def ? ' · default' : ''}</small></div>`; }).join('')}</div>`;
+const allowanceFact = () => `<div class="afact"><span class="label">Weekly allowance</span><b>${fmtTok(ALLOWANCE)} tokens per member</b><small>Read only. Set in the server config; resets Fridays 00:00 UTC.</small></div>`;
+const defSelect = (id, cur) => `<label class="fsel-w"><select id="${id}" class="fsel" data-adm="def">${MODEL_OPTS.map(m => `<option value="${m}"${m === cur ? ' selected' : ''}${MODELS[m].byok || !ADMIN.avail[m] ? ' disabled' : ''}>${esc(m)}${MODELS[m].byok ? ' (own key only)' : ''}</option>`).join('')}</select>${I.down}</label>`;
+function setDefault(m) {
+  if (!MODELS[m] || MODELS[m].byok) return;
+  ADMIN.def = m; ADMIN.avail[m] = true; if (st.user && !ADMIN.over[st.user]) st.newModel = modelFor(st.user);
+  toast(`Default model set to ${m}. Members' composers start on it.`); render();
+}
+function adminA() {
+  return `<section class="box adm-a"><div class="shead"><h3>Default model for asks</h3><small>Applies to every member</small></div>
+    <p class="sub">Each member's composer starts on this model. They can still pick another one for a single ask.</p>
+    ${defSelect('adm-def', ADMIN.def)}
+    <ul class="amods">${MODEL_OPTS.map(m => `<li class="${m === ADMIN.def ? 'on' : ''}"><span class="amn"><b>${esc(m)}</b><small>${MODELS[m].prov}</small></span><span class="amp">${price(m)}<small>per 1M tokens</small></span><span class="amnote">${esc(MODELS[m].note)}</span></li>`).join('')}</ul>
+    ${allowanceFact()}
+    <h4>Who has which</h4>${whoHas()}
+    ${Object.keys(ADMIN.over).length ? `<p class="fine">${Object.entries(ADMIN.over).map(([u, m]) => `@${esc(u)} is set to ${esc(m)}`).join('; ')}, by override.</p>` : ''}</section>`;
+}
+function adminB() {
+  const d = st.admDraft ||= { def: ADMIN.def, avail: { ...ADMIN.avail } };
+  const dirty = d.def !== ADMIN.def || MODEL_OPTS.some(m => d.avail[m] !== ADMIN.avail[m]);
+  const row = m => { const M = MODELS[m], isDef = d.def === m;
+    return `<div class="atr${isDef ? ' on' : ''}"><span class="amn"><b>${esc(m)}</b><small>${esc(M.note)}</small></span><span>${M.prov}</span><span class="amp">${price(m)}</span><span class="acnt">${onModel(m).length ? avStack(onModel(m)) : '<small>None</small>'}</span>
+      <label class="arad" title="${M.byok ? 'Runs on members’ own keys, so it cannot be the default' : 'Default'}"><input type="radio" name="admdef" value="${m}" data-adm="bdef"${isDef ? ' checked' : ''}${M.byok || !d.avail[m] ? ' disabled' : ''}><span class="sr">Default</span></label>
+      <button type="button" class="tog" role="switch" aria-checked="${!!d.avail[m]}" aria-label="${esc(m)} available to members" data-a="admavail" data-v="${m}"${isDef ? ' disabled title="The default model is always available"' : ''}><span></span></button></div>`; };
+  return `<section class="box adm-b"><div class="shead"><h3>Models</h3><small>Prices per 1M tokens, input · output</small></div>
+    <div class="atable"><div class="atr ath"><span>Model</span><span>Provider</span><span>Price</span><span>Members</span><span>Default</span><span>Available to members</span></div>${MODEL_OPTS.map(row).join('')}</div>
+    ${allowanceFact()}</section>
+    <div class="asave${dirty ? ' dirty' : ''}" role="region" aria-label="Save changes"><span>${dirty ? 'Unsaved changes' : 'All changes saved'}</span><span class="grow"></span><button class="btn2 sm" data-a="admdiscard"${dirty ? '' : ' disabled'}>Discard</button><button class="btn1 sm" data-a="admsave"${dirty ? '' : ' disabled'}>Save</button></div>`;
+}
+function adminC() {
+  const tab = st.admTab || 'models';
+  const nav = [['models', 'Models'], ['members', 'Members'], ['allowance', 'Allowance']].map(([k, l]) => `<button class="si${tab === k ? ' on' : ''}" data-a="admtab" data-k="${k}" aria-current="${tab === k}">${l}</button>`).join('');
+  let body = '';
+  if (tab === 'models') body = `<h3>Default model</h3><p class="sub">Each member's composer starts on this model unless they have an override under Members.</p>
+    <div class="aradios">${MODEL_OPTS.map(m => `<label class="radio acard${MODELS[m].byok ? ' off' : ''}${m === ADMIN.def ? ' on' : ''}"><input type="radio" name="admcdef" value="${m}" data-adm="cdef"${m === ADMIN.def ? ' checked' : ''}${MODELS[m].byok ? ' disabled' : ''}> <span><b>${esc(m)} <small>${MODELS[m].prov}</small></b><small>${price(m)} per 1M tokens. ${esc(MODELS[m].note)}</small></span></label>`).join('')}</div>`;
+  if (tab === 'members') body = `<h3>Members</h3><p class="sub">“Default” follows the default model (${esc(ADMIN.def)}). An override sets where that member's composer starts.</p>
+    <div class="list amem">${activeMembers().map(m => `<div class="li">${av(m.u, 'sm')}<span class="grow"><b>${esc(m.u)}${m.staff ? ` <span class="h">· ${cap1(m.staff)}</span>` : ''}</b><small>${esc(m.name)} · uses ${esc(modelFor(m.u))}</small></span>
+      <label class="fsel-w sm"><select class="fsel" data-adm="over" data-u="${esc(m.u)}" aria-label="Model for @${esc(m.u)}"><option value=""${ADMIN.over[m.u] ? '' : ' selected'}>Default</option>${MODEL_OPTS.filter(x => !MODELS[x].byok).map(x => `<option value="${x}"${ADMIN.over[m.u] === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>${I.down}</label></div>`).join('')}</div>`;
+  if (tab === 'allowance') body = `<h3>Allowance</h3><p class="sub">Included tokens each member can use per week before their asks pause or move to their own key.</p>${allowanceFact()}
+    <h4>This week</h4><div class="list">${activeMembers().slice(0, 5).map(m => { const u = (USAGE[m.u] || []).reduce((a, b) => a + b, 0); return `<div class="li">${av(m.u, 'xs')}<span class="grow"><b>${esc(m.u)}</b></span><small>${fmtTok(u)} of ${fmtTok(ALLOWANCE)}</small></div>`; }).join('')}</div>`;
+  return `<div class="adm-c"><nav class="anav" aria-label="Admin sections">${nav}</nav><section class="box acontent">${body}</section></div>`;
+}
+function adminPage() {
+  const v = st.ui.adm;
+  return `<div class="page"><div class="page-in${v === 'a' ? ' narrow' : ' awide'}"><h2>Admin</h2><p class="lede">Settings for everyone on Session. Only site admins see this page.</p>
+    ${v === 'b' ? adminB() : v === 'c' ? adminC() : adminA()}</div></div>`;
+}
+
+/* ---- answer extras (mock option): an interactive widget in one answer ----
+   B a widget block · C the same widget with revisions (v1, v2), Ask for changes and an expanded view.
+   web/docs/11-artifacts-and-browser.md §3–§4: the frame starts on a static page with scripts removed; Run scripts
+   loads the run page. Here both are drawn inline instead of in a sandboxed frame. */
+const WX_PID = '01M7HGRPJ0E7RGZ45D4KENBQ6P';
+const WX0 = { view: 'preview', run: false, ask: false, dlg: null, void: 20 };
+st.wx = { ...WX0 };
+const WX_PRICE = 0.58, WX_PE = 0.66;
+const wxRet = v => ((1 - v) * WX_PE + v * WX_PRICE) / WX_PRICE - 1;
+const pct1 = x => (x * 100).toFixed(1) + '%';
+const WX_REVS = { v1: { title: 'Void-adjusted return', note: 'Chart', at: '2026-11-16T06:40:00Z' }, v2: { title: 'Void-adjusted return', note: 'Chart and table', at: '2026-11-16T07:05:00Z' } };
+const wxCur = () => st.ui.wx === 'c' ? 'v2' : 'v1';
+function wxChart(v) {
+  const W = 460, H = 170, L = 36, R = 10, T = 10, B = 26, x = f => L + f / .4 * (W - L - R), y = r => T + (1 - r / .16) * (H - T - B);
+  const pts = [0, .1, .2, .3, .4], line = pts.map((f, i) => `${i ? 'L' : 'M'}${x(f).toFixed(1)} ${y(wxRet(f)).toFixed(1)}`).join(' ');
+  const grid = [0, .04, .08, .12, .16].map(r => `<line class="wg" x1="${L}" x2="${W - R}" y1="${y(r)}" y2="${y(r)}"/><text class="wt" x="${L - 6}" y="${y(r) + 3.5}" text-anchor="end">${r * 100}%</text>`).join('');
+  const xs = pts.map(f => `<text class="wt" x="${x(f)}" y="${H - 8}" text-anchor="middle">${f * 100}%</text>`).join('');
+  const mk = v == null ? pts.map(f => `<circle class="wp" cx="${x(f)}" cy="${y(wxRet(f))}" r="3"/>`).join('') : `<line class="wm" x1="${x(v)}" x2="${x(v)}" y1="${T}" y2="${H - B}"/><circle class="wp on" cx="${x(v)}" cy="${y(wxRet(v))}" r="4.5"/>`;
+  return `<svg class="wchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Expected return falls from ${pct1(wxRet(0))} with no void risk to ${pct1(wxRet(.4))} at 40% void probability">${grid}${xs}<path class="wl" d="${line}"/>${mk}</svg>`;
+}
+function wxBody(rev, run) {
+  const v = st.wx.void / 100;
+  const head = `<p class="wcap">Buying YES at ${WX_PRICE} with a ${WX_PE * 100}% event probability. A void refunds the price.</p>`;
+  const live = run ? `<div class="wctl"><label for="wx-void">Void probability</label><input type="range" id="wx-void" min="0" max="40" step="1" value="${st.wx.void}"><output id="wx-vo">${st.wx.void}%</output></div>
+    <div class="wnums"><span>Expected return <b id="wx-ret">${pct1(wxRet(v))}</b></span><span>Expected value <b id="wx-ev">${((1 - v) * WX_PE + v * WX_PRICE).toFixed(3)}</b></span></div>` : '';
+  const table = rev === 'v2' ? `<table class="wtab"><thead><tr><th>Void prob.</th><th>Expected value</th><th>Return</th></tr></thead><tbody>${[0, .05, .1, .2, .3].map(f => `<tr><td>${f * 100}%</td><td>${((1 - f) * WX_PE + f * WX_PRICE).toFixed(3)}</td><td>${pct1(wxRet(f))}</td></tr>`).join('')}</tbody></table>` : '';
+  return `${head}${live}<div id="wx-chart">${wxChart(run ? v : null)}</div>${table}`;
+}
+const wxSource = rev => `<div class="wrap">\n  <p>Buying YES at 0.58 with a 66% event probability. A void refunds the price.</p>\n  <label>Void probability <input type="range" id="v" min="0" max="40" value="20"></label>\n  <output id="r"></output>\n  <svg id="chart" viewBox="0 0 320 150"></svg>${rev === 'v2' ? '\n  <table id="t"></table>' : ''}\n</div>\n<script>\n  const ret = v => ((1 - v) * 0.66 + v * 0.58) / 0.58 - 1;\n  const draw = () => { const v = document.getElementById('v').value / 100;\n    document.getElementById('r').textContent = (ret(v) * 100).toFixed(1) + '%'; };\n  document.getElementById('v').addEventListener('input', draw); draw();\n<\/script>`;
+function widgetBlock(p) {
+  const x = st.ui.wx; if (x !== 'b' && x !== 'c') return '';
+  const w = st.wx, rev = wxCur(), R = WX_REVS[rev], open = st.menu === 'wxmenu';
+  const menu = open ? `<div class="menu right" role="menu" aria-label="Widget">
+      <button type="button" class="mi" role="menuitem" data-a="wxcopy"><span>Copy HTML</span></button>
+      <button type="button" class="mi" role="menuitem" data-a="wxdl"><span>Download HTML</span></button>
+      ${x === 'c' ? `<button type="button" class="mi" role="menuitem" data-a="wxexpand" data-v="${rev}"><span>Open expanded view</span></button><div class="msep"></div><div class="mhd">Revisions</div>
+      ${Object.entries(WX_REVS).map(([k, r]) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${k === rev}" data-a="wxexpand" data-v="${k}"><span>${k} · ${esc(r.note)}<span class="src">${rel(r.at)}</span></span>${k === rev ? CHECK : ''}</button>`).join('')}` : ''}</div>` : '';
+  return `<div class="wdg${w.run ? ' running' : ''}" aria-label="Widget: ${esc(R.title)}"><div class="wh"><b class="wtitle">${esc(R.title)}${x === 'c' ? ` <span class="wrev">${rev}</span>` : ''}</b> <span class="wst${w.run ? ' on' : ''}">${w.run ? 'Running' : 'Scripts off'}</span>
+    <span class="wctr"><span class="modes" role="group" aria-label="View">${[['preview', 'Preview'], ['source', 'Source']].map(([k, l]) => `<button type="button" data-a="wxview" data-v="${k}" aria-pressed="${w.view === k}">${l}</button>`).join('')}</span>
+    ${x === 'c' && canWrite() ? `<button type="button" class="wbtn" data-a="wxask" aria-pressed="${w.ask}">Ask for changes</button>` : ''}
+    <button type="button" class="wbtn" data-a="wxrun">${w.run ? 'Reload' : 'Run scripts'}</button>
+    <span class="mpick"><button type="button" class="more-btn" data-a="menu" data-m="wxmenu" aria-haspopup="menu" aria-expanded="${open}" aria-label="Widget menu">${I.dots}</button>${menu}</span></span></div>
+    ${w.ask && x === 'c' ? `<div class="wask">${composer('wx:' + p.id, 'What should change in this widget?', '', 'Ask', 'wxaskclose')}<p class="fine">Runs a new ask on this thread. The changed widget is saved as v3.</p></div>` : ''}
+    <div class="wbody">${w.view === 'source' ? `<pre class="wsrc"><code>${esc(wxSource(rev))}</code></pre>` : wxBody(rev, w.run)}</div></div>`;
+}
+function wxDlg() {
+  const rev = st.wx.dlg, R = WX_REVS[rev], cur = rev === wxCur();
+  return `<div class="scrim" data-a="wxclose"></div><div class="dialog chdlg wxdlg" role="dialog" aria-modal="true" aria-labelledby="wx-h">
+    <div class="chdlg-h"><h3 id="wx-h">${esc(R.title)} <span class="wrev">${rev}</span></h3><button class="iconbtn" data-a="wxclose" aria-label="Close">${I.x}</button></div>
+    <p class="fine">${cur ? 'Current revision' : `Earlier revision, ${rel(R.at)} ago. Static preview; scripts do not run here.`} · ${esc(R.note)}</p>
+    <div class="wdg wdg-x"><div class="wbody">${wxBody(rev, cur && st.wx.run)}</div></div></div>`;
+}
+function wxDownload() {
+  const html = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">\n${wxSource(wxCur()).replace(/<script>[\s\S]*<\/script>/, '')}`;
+  try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' })); a.download = 'void-adjusted-return.html'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); } catch {}
+  toast('Downloaded void-adjusted-return.html (static, scripts removed).');
+}
+
 /* ---- app render ---- */
 function renderMock() {
   const personas = [['out', 'Signed out'], ['sol', 'Admin'], ['ines.v', 'Member'], ['kofi.a', 'No invite'], ...MEMBERS.filter(m => m.created).map(m => [m.u, `@${m.u}${m.status === 'active' ? '' : ' (no invite)'}`])];
@@ -2309,6 +2654,8 @@ function renderMock() {
     
     
     ${seg('pl', 'Layout', 2)}
+    ${seg('adm', 'Admin panel', 3)}
+    ${seg('wx', 'Answer extras', 3)}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -2342,7 +2689,7 @@ function renderInner() {
   if (st.auth === 'out') st.screen = 'network';
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
   if (st.screen === 'network') renderNetwork();
-  else { pg.innerHTML = (st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
+  else { pg.innerHTML = (st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : st.screen === 'notifications' && isActive() ? notifPage() : st.screen === 'admin' && isAdmin() ? adminPage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
   app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg, :scope > #selbranch, :scope > #sellook, :scope > #citepop').forEach(x => x.remove());
   citeReady();
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
@@ -2350,6 +2697,7 @@ function renderInner() {
   if (st.creating) app.insertAdjacentHTML('beforeend', newSpaceDlg());
   if (st.chInfo) app.insertAdjacentHTML('beforeend', chInfoDlg());
   if (st.rm) app.insertAdjacentHTML('beforeend', rmDlg());
+  if (st.wx.dlg && st.screen === 'network') app.insertAdjacentHTML('beforeend', wxDlg());
   if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
 const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}</div>` : '';
@@ -2358,6 +2706,9 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
   if (k === 'pl') { st.screen = 'network'; st.authOpen = false; render(); return; }
+  if (k === 'adm') { st.wx.dlg = null; if (st.auth !== 'in' || !isAdmin()) signIn('sol'); st.screen = 'admin'; st.admDraft = null; render(); $('#k-page') && ($('#k-page').scrollTop = 0); return; }
+  if (k === 'wx') { st.wx = { ...WX0 }; if (st.auth !== 'in' || !isActive()) signIn('ines.v'); st.screen = 'network'; st.space = 'markets'; render();
+    const w = $('.wdg') || $('#card-' + WX_PID), mg = $('#k-mg'); if (w && mg) { st.keepBar = true; mg.scrollTop += w.getBoundingClientRect().top - mg.getBoundingClientRect().top - 120; } return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'network' : 'usage';
@@ -2366,7 +2717,7 @@ function previewVariant(k) {
   if (k === 'tree') $('.ttree, .ttable')?.closest('section')?.scrollIntoView({ block: 'start' });
   if (k === 'meter') $('.meter')?.focus();
 }
-function signIn(u) { st.authOpen = false; st.auth = 'in'; st.user = u; st.screen = member(u).status === 'active' ? 'network' : 'status'; st.menu = null; st.sel = {}; render(); }
+function signIn(u) { st.authOpen = false; st.auth = 'in'; st.user = u; st.newModel = modelFor(u); st.screen = member(u).status === 'active' ? 'network' : 'status'; st.menu = null; st.sel = {}; render(); }
 document.addEventListener('click', e => {
   const p = e.target.closest('[data-mp]');
   if (p) { if (p.dataset.mp === 'out') { st.auth = 'out'; st.authOpen = false; st.flow = 'landing'; st.code = ''; st.xacct = null; st.profile = null; st.fromLink = false; } else signIn(p.dataset.mp); st.confirm = null; render(); return; }
@@ -2418,6 +2769,12 @@ app.addEventListener('click', e => {
   if (a === 'keyask') { st.removing = d.k; render(); $('.kconfirm [data-ma="keykeep"]')?.focus(); return; }
   if (a === 'keykeep') { st.removing = null; render(); return; }
   if (a === 'keyremove') { delete keys()[d.k]; st.removing = null; if (!keys().anthropic && !keys().openai) BILLING[st.user] = 'pause'; if (st.newModel === 'GPT-6.1 Sol' && !keys().openai) st.newModel = 'Opus 5.5'; toast(`${PROVIDERS[d.k].name} key removed.`); render(); return; }
+});
+app.addEventListener('change', e => {
+  const t = e.target, k = t.dataset.adm; if (!k) return;
+  if (k === 'def' || k === 'cdef') setDefault(t.value);
+  if (k === 'bdef') { st.admDraft.def = t.value; render(); }
+  if (k === 'over') { if (t.value) ADMIN.over[t.dataset.u] = t.value; else delete ADMIN.over[t.dataset.u]; if (t.dataset.u === st.user) st.newModel = modelFor(st.user); toast(`@${t.dataset.u} now starts on ${modelFor(t.dataset.u)}.`); render(); }
 });
 app.addEventListener('change', e => { if (e.target.dataset.ma === 'bill') { BILLING[st.user] = e.target.value; toast(e.target.value === 'key' ? 'Asks will continue on your API key.' : 'Asks will pause until the reset.'); render(); } });
 app.addEventListener('submit', e => {
