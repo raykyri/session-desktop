@@ -206,14 +206,17 @@ export function devicesOf(sync: SyncServer, u: string) {
 
 /** `/api/users?handle=<h>`: the number of spaces each person wrote threads
  * in, closed spaces included (the mock's `people`). */
-export function peopleOf(db: SessionDatabase, handles: string[]) {
-  const out: Record<string, { spaces: number }> = {};
-  const stmt = db.$client.prepare(
-    "SELECT COUNT(DISTINCT json_extract(body, '$.s')) AS n FROM sync_records WHERE kind = 'thread' AND json_extract(body, '$.u') = ? AND json_extract(body, '$.gone') = 0",
+/** The most handles one `/api/users` read takes. */
+export const PEOPLE_MAX = 100;
+
+/** `/api/users`: the count of spaces each of the first PEOPLE_MAX `handles`
+ * that names an account wrote a thread in (`SyncServer.authorSpaces`). */
+export function peopleOf(db: SessionDatabase, sync: SyncServer, handles: readonly string[]) {
+  const known = [...new Set(handles.slice(0, PEOPLE_MAX))].filter(
+    (h) => users.findByHandle(db, h) !== null,
   );
-  for (const h of handles.slice(0, 100))
-    out[h] = { spaces: (stmt.get(h) as { n: number } | undefined)?.n ?? 0 };
-  return out;
+  const counts = sync.authorSpaces(known);
+  return Object.fromEntries(known.map((h) => [h, { spaces: counts[h] ?? 0 }]));
 }
 
 /** `usage.listAsks`: the caller's asks and follow-ups that used tokens,

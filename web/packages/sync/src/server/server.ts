@@ -1433,6 +1433,24 @@ export class SyncServer {
    * each space whose content they read. A space record is public
    * (`readsAudience`); an unlisted one is found only through a link or a
    * membership, so it is listed to its members only. */
+  /** How many spaces each of `handles` wrote a thread in, for a profile
+   * (`/api/users`): over the `thread.u` index; a removed thread's
+   * placeholder and an erased one are not counted (phase 2a design finding
+   * 7, review round 1 of phase 2). Counts closed spaces too, as the mock's
+   * profile does. */
+  authorSpaces(handles: readonly string[]): Record<string, number> {
+    return this.run((tx) => {
+      const out: Record<string, number> = {};
+      for (const u of handles) {
+        const spaces = new Set<string>();
+        for (const r of tx.scan("thread", "u", u))
+          if (r.kind === "thread" && r.u === u && r.mod !== "removed" && !r.gone) spaces.add(r.s);
+        out[u] = spaces.size;
+      }
+      return out;
+    });
+  }
+
   directory(actor: Actor | null): Directory {
     const u = this.userOf(actor);
     return this.run((tx) => {

@@ -19,7 +19,7 @@
 // calls the package; the rules are `@session/sync`'s. Every answer carries
 // the server's time, in the body and in `X-Session-Server-Time`.
 
-import { auth, users } from "@session/db";
+import { auth } from "@session/db";
 import { PROTOCOL_HEADER, type LogId, type ReadOptions } from "@session/sync";
 import { sseResponse } from "@session/sync/server";
 import type { Context } from "hono";
@@ -266,13 +266,7 @@ export function syncRoutes(deps: ServerDeps): Hono<AppEnv> {
     return c.json(devicesOf(sync, user.handle));
   });
   app.get("/api/users", (c) => {
-    const handles = c.req.queries("handle") ?? [];
-    return c.json(
-      peopleOf(
-        db,
-        handles.filter((h) => users.findByHandle(db, h) !== null),
-      ),
-    );
+    return c.json(peopleOf(db, sync, c.req.queries("handle") ?? []));
   });
 
   // the spaces the caller may find, and the stats of those they read (the
