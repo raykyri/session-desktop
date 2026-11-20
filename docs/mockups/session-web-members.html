@@ -358,6 +358,25 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .invc .ilink { display: flex; align-items: center; gap: 8px; margin: 8px 0 6px; padding: 4px 4px 4px 10px; border-radius: 10px; background: var(--inset); }
 .invc .ilink code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
 .invc > .tlink { margin-top: 4px; }
+.invc .ilink code { font-family: inherit; }
+.ippl { display: flex; flex-direction: column; gap: 6px; }
+.ip { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); }
+.ip b { color: var(--t-heading); font-weight: 500; }
+.ip small { color: var(--t-faint); font-size: var(--fs-xs); }
+.invc .ltext { display: flex; align-items: baseline; gap: 10px; margin: 6px 0 4px; font-size: var(--fs-sm); color: var(--t-heading); }
+.invc .ltext span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rrows .run.rb { grid-template-columns: minmax(0, 1fr) 54px; row-gap: 1px; }
+.run.rb .rq { grid-column: 1; grid-row: 1; }
+.run.rb .rmeta { grid-column: 1; grid-row: 2; color: var(--t-faint); font-size: var(--fs-xs); }
+.run.rb b { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+.run.rc { grid-template-columns: minmax(0, 1fr) 90px 44px; align-items: center; }
+.rbar { height: 4px; border-radius: 2px; background: var(--control); overflow: hidden; }
+.rbar > span { display: block; height: 100%; background: color-mix(in srgb, var(--accent-strong) 70%, var(--card)); }
+.run.rd { grid-template-columns: 48px minmax(0, 1fr) auto 50px; }
+.run.rd b { text-align: left; }
+.run.rd .tag { font-size: 10.5px; padding: 1px 6px; border-radius: 8px; background: var(--control); color: var(--t-secondary); }
+.run.re { grid-template-columns: minmax(0, 1fr) auto; }
+.run.re .rpct { color: var(--t-secondary); font-variant-numeric: tabular-nums; font-size: var(--fs-xs); }
 .rdet > summary { display: flex; align-items: baseline; gap: 8px; cursor: pointer; list-style: none; }
 .rdet > summary::-webkit-details-marker { display: none; }
 .rdet > summary h3 { margin: 0; }
@@ -408,7 +427,9 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .m-ring circle.arc { stroke: var(--tone); stroke-linecap: round; }
 /* auth */
 /* sign-in dialog (A) and side sheet (B) over the signed-out site */
-.scrim.auth-scrim { z-index: 30; }
+.scrim.auth-scrim { z-index: 30; background: rgba(10, 12, 14, .45); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+:root[data-theme="dark"] .scrim.auth-scrim { background: rgba(0, 0, 0, .6); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .scrim.auth-scrim { background: rgba(0, 0, 0, .6); } }
 .authdlg { position: absolute; z-index: 31; background: var(--feed); box-shadow: var(--shadow), var(--shadow-pop); overflow-y: auto; }
 .authdlg.v-a { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, calc(100% - 32px)); max-height: calc(100% - 40px); border-radius: var(--r-xl); padding: 36px 44px 32px; animation: dlgin .18s ease; }
 .authdlg .auth-c { max-width: none; }
@@ -524,6 +545,8 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .ttree svg { position: absolute; left: 12px; top: 4px; width: calc(100% - 24px); overflow: visible; pointer-events: none; }
 .ttree svg path { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
 .trow { position: relative; display: flex; align-items: center; gap: 10px; height: 40px; }
+.trole { font-weight: 400; color: var(--t-faint); }
+.tpend { font-size: var(--fs-xs); color: var(--warn); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .trow.me .tn b::after { content: " (you)"; font-weight: 400; color: var(--t-faint); }
 .tn { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 .tn b { font-size: var(--fs-sm); color: var(--t-heading); font-weight: 600; }
@@ -1382,7 +1405,7 @@ function statusPage() {
 }
 
 /* ---- members page: vouch requests, invites, tree (variants), rules ---- */
-const statusChip = m => m.status === 'active' ? (m.staff ? `<span class="chip staff">${cap1(m.staff)}</span>` : '') : `<span class="chip pend">Pending · ${progress(m).n} of ${NEED}</span>`;
+const statusChip = m => m.status === 'active' ? '' : `<span class="tpend">Pending · ${progress(m).n} of ${NEED}</span>`;
 const vouchCtl = m => {
   if (m.status !== 'pending') return '';
   if (m.vouchers.includes(st.user)) return `<span class="vdone">${CHECK}You vouched</span><button class="tlink" data-ma="unvouch" data-u="${m.u}">Withdraw</button>`;
@@ -1401,7 +1424,7 @@ function treeA() {
     const y = i * H + H / 2;
     if (d > 0 && idx[m.inviter] != null) { const px = X(d - 1), py = idx[m.inviter] * H + H / 2; paths += `<path d="M${px} ${py + 11} L${px} ${y - 6} Q${px} ${y} ${px + 6} ${y} L${X(d) - 11} ${y}"/>`; }
   });
-  return `<div class="ttree"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ m, d }) => `<div class="trow${m.u === st.user ? ' me' : ''}" style="padding-left:${X(d) - 10}px">${av(m.u, 'sm')}<span class="tn"><b>${esc(m.u)}</b><small>${esc(m.name)}</small></span>${statusChip(m)}<span class="grow"></span>${vouchCtl(m)}</div>`).join('')}</div>`;
+  return `<div class="ttree"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ m, d }) => `<div class="trow${m.u === st.user ? ' me' : ''}" style="padding-left:${X(d) - 10}px">${av(m.u, 'sm')}<span class="tn"><b>${esc(m.u)}${m.staff ? `<span class="trole"> · ${cap1(m.staff)}</span>` : ''}</b><small>${esc(m.name)}</small></span><span class="grow"></span>${statusChip(m)}${vouchCtl(m)}</div>`).join('')}</div>`;
 }
 /* ---- members page, split into sections so each has variants ----
    inv:    A slots bar + full list · B one line + open codes only · C one button that shows the newest open code
@@ -1413,24 +1436,29 @@ function treeSection() {
     <p class="sub">${sub}</p>${treeA()}</section>`;
 }
 function invSection() {
-  const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), oc = openCount(), used = slotsUsed(), can = used < SLOTS && canVouchYet(meM());
-  const why = !canVouchYet(meM()) ? `You can invite ${VOUCH_WAIT} days after your account became active.` : used >= SLOTS ? 'All slots are in use. One frees when an invite expires or someone you invited is vouched in.' : `Each code works for one person and expires in ${INVITE_DAYS} days.`;
-  const openRow = i => { const link = `session.app/i/${i.code}`; return `<div class="li inv"><code>${i.code}</code><div class="grow"><small>Expires ${day(addDays(i.created, INVITE_DAYS))}</small></div><span class="iacts"><button class="ghost" data-ma="copy" data-t="${link}">Copy link</button><button class="tlink danger" data-ma="revoke" data-code="${i.code}">Revoke</button></span></div>`; };
-  const open = inv.filter(i => inviteState(i) === 'open');
-  if (st.ui.inv === 'b') return `<section class="box"><div class="shead"><h3>Invites</h3><small>${SLOTS - used} of ${SLOTS} left</small></div>
-    <div class="list tight">${open.map(openRow).join('')}</div>
-    <button class="btn2 wide" data-ma="newinvite"${can ? '' : ' disabled'}>Create an invite</button>${can ? '' : `<p class="fine">${why}</p>`}</section>`;
-  if (st.ui.inv === 'c') { const i = open[0], link = i && `session.app/i/${i.code}`;
-    return `<section class="box invc"><h3>Invite someone</h3>${i ? `<div class="ilink"><code>${link}</code><button class="btn1 sm" data-ma="copy" data-t="${link}">Copy</button></div><p class="fine">Works once, until ${day(addDays(i.created, INVITE_DAYS))}. ${open.length > 1 ? `${open.length - 1} more open. ` : ''}<button class="tlink inl danger" data-ma="revoke" data-code="${i.code}">Revoke</button></p>`
-      : `<button class="btn1 wide" data-ma="newinvite"${can ? '' : ' disabled'}>Make an invite link</button><p class="fine">${why}</p>`}${i && can ? `<button class="tlink" data-ma="newinvite">Make another</button>` : ''}</section>`; }
-  const invRow = i => { const s = inviteState(i), link = `session.app/i/${i.code}`; return `<div class="li inv"><code>${i.code}</code><div class="grow"><b>${s === 'open' ? `Open · expires ${day(addDays(i.created, INVITE_DAYS))}` : s === 'used' ? `Used by @${esc(i.used)}` : s === 'revoked' ? 'Revoked' : 'Expired'}</b><small>${s === 'used' ? (member(i.used).status === 'active' ? 'Active' : `Pending · ${progress(member(i.used)).n} of ${NEED} vouches`) : `Made ${day(i.created)}`}</small></div>
-    ${s === 'open' ? `<span class="iacts"><button class="ghost" data-ma="copy" data-t="${link}">Copy link</button><button class="tlink danger" data-ma="revoke" data-code="${i.code}">Revoke</button></span>` : ''}</div>`; };
-  return `<section class="box"><div class="shead"><h3>Your invites</h3><small>${used} of ${SLOTS} slots in use</small></div><div class="slots" aria-hidden="true">${Array.from({ length: SLOTS }, (_, i) => `<span class="${i < oc ? 'open' : i < used ? 'pend' : ''}"></span>`).join('')}</div><p class="fine">${oc} open invite${oc === 1 ? '' : 's'}, ${pendingInvitees()} invitee${pendingInvitees() === 1 ? '' : 's'} waiting for vouches.</p>
-    <div class="list tight">${inv.map(invRow).join('') || '<p class="empty">No invites yet.</p>'}</div>
-    <button class="btn1 wide" data-ma="newinvite"${can ? '' : ' disabled'}>Create an invite</button><p class="fine">${why}</p></section>`;
+  /* all variants start from one invite link (the previous C):
+     A link field + Copy, expiry, Revoke, Make another · B one button that copies a link, made on demand
+     C A plus the people you invited · D every open link stacked · E the link as plain text, count in the heading */
+  const inv = myInvites().slice().sort((a, b) => a.created < b.created ? 1 : -1), used = slotsUsed(), can = used < SLOTS && canVouchYet(meM());
+  const why = !canVouchYet(meM()) ? `You can invite ${VOUCH_WAIT} days after your account became active.` : used >= SLOTS ? 'All invites are in use. One frees when an invite expires or someone you invited is vouched in.' : `Each link works for one person and expires in ${INVITE_DAYS} days.`;
+  const open = inv.filter(i => inviteState(i) === 'open'), i = open[0], L = x => `session.app/i/${x.code}`, exp = x => day(addDays(x.created, INVITE_DAYS));
+  const left = SLOTS - used, make = (cls = 'btn1 wide', t = 'Make an invite link') => `<button class="${cls}" data-ma="newinvite"${can ? '' : ' disabled'}>${t}</button>`;
+  const field = x => `<div class="ilink"><code>${L(x)}</code><button class="btn1 sm" data-ma="copy" data-t="${L(x)}">Copy</button></div>`;
+  const revoke = x => `<button class="tlink inl danger" data-ma="revoke" data-code="${x.code}">Revoke</button>`;
+  const v = st.ui.inv;
+  if (v === 'b') return `<section class="box invc"><h3>Invite someone</h3><p class="sub">Send the link to one person. ${left} of ${SLOTS} invites left.</p>
+    <button class="btn1 wide" data-ma="copynew"${i || can ? '' : ' disabled'}>Copy invite link</button>
+    <p class="fine">${i ? `${open.length} link${open.length === 1 ? '' : 's'} open, expires ${exp(i)}. ${revoke(i)}` : why}</p></section>`;
+  if (v === 'd') return `<section class="box invc"><div class="shead"><h3>Invite someone</h3><small>${left} of ${SLOTS} left</small></div>
+    ${open.map(x => `${field(x)}<p class="fine">Until ${exp(x)}. ${revoke(x)}</p>`).join('')}${can ? make(open.length ? 'btn2 wide' : 'btn1 wide', open.length ? 'Make another' : 'Make an invite link') : `<p class="fine">${why}</p>`}</section>`;
+  if (v === 'e') return `<section class="box invc e"><div class="shead"><h3>Invite someone</h3><small>${left} left</small></div>
+    ${i ? `<div class="ltext"><span>${L(i)}</span><button class="tlink" data-ma="copy" data-t="${L(i)}">Copy</button></div><p class="fine">Works once, until ${exp(i)}. ${revoke(i)}${can ? ` · <button class="tlink inl" data-ma="newinvite">New link</button>` : ''}</p>` : `${make('tlink', 'Make an invite link')}<p class="fine">${why}</p>`}</section>`;
+  const base = i ? `${field(i)}<p class="fine">Works once, until ${exp(i)}. ${open.length > 1 ? `${open.length - 1} more open. ` : ''}${revoke(i)}</p>${can ? make('tlink', 'Make another') : ''}` : `${make()}<p class="fine">${why}</p>`;
+  if (v === 'c') { const ppl = MEMBERS.filter(m => m.inviter === st.user);
+    return `<section class="box invc"><h3>Invite someone</h3>${base}${ppl.length ? `<h4>You invited</h4><div class="ippl">${ppl.map(m => `<div class="ip">${av(m.u, 'xs')}<b>${esc(m.u)}</b><span class="grow"></span><small>${m.status === 'active' ? 'Active' : `Pending · ${progress(m).n} of ${NEED}`}</small></div>`).join('')}</div>` : ''}</section>`; }
+  return `<section class="box invc"><h3>Invite someone</h3>${base}</section>`;
 }
 function membersPage() {
-  if (st.ui.layout === 'b') return `<div class="page"><div class="page-in narrow mone">${invSection()}${treeSection()}</div></div>`;
   return `<div class="page"><div class="page-in"><div class="mcols"><div class="mmain">${treeSection()}</div>
     <aside class="mside">${invSection()}</aside></div></div></div>`;
 }
@@ -1449,8 +1477,7 @@ function keysSection() {
   return `<section class="box"><h3>API keys</h3>${['anthropic', 'openai'].map(id => { const b = keyBlock(id); return `<div class="krow"><b class="kname">${b.P.name}</b><div class="kb">${b.body}${b.form}</div></div>`; }).join('')}</section>`;
 }
 /* ---- usage page ----
-   utop: A big number, bar, day chart · B one line and a bar · C day chart, total in the heading · D one sentence
-   runs: A table with date and billing · B question and tokens, billing only when not included · C collapsed · D none */
+   top: one sentence with the share of included usage left, and a bar of what is left  */
 function usageRuns() {
   const runs = (RUNLOG[st.user] || []).slice().reverse();
   D.posts.filter(p => p.u === st.user && p.k === 'ask' && p.tok && !p.id.startsWith('new')).forEach(p => runs.push({ q: tree(p).nodes.r.q, at: p.createdAt, tok: p.tok }));
@@ -1458,23 +1485,22 @@ function usageRuns() {
   return runs.sort((a, b) => a.at < b.at ? 1 : a.at > b.at ? -1 : 0).slice(0, 6);
 }
 function usageTop() {
-  const u = usage(), tot = used(), max = Math.max(...u, 1), pct = Math.min(1, tot / ALLOWANCE), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok';
-  const bar = `<div class="utrack ${tone}"><span style="width:${(pct * 100).toFixed(1)}%"></span></div>`;
-  const chart = labels => `<div class="uchart${labels ? '' : ' bare'}" role="img" aria-label="Tokens used per day this week">${u.map((v, i) => `<div class="ucol${i === TODAY ? ' today' : ''}${i > TODAY ? ' future' : ''}">${labels ? `<span class="uv">${i <= TODAY ? fmtTok(v) : ''}</span>` : ''}<span class="ub" style="height:${i <= TODAY ? Math.max(2, v / max * (labels ? 64 : 40)) : 2}px"></span><span class="ul">${WEEK[i]}</span></div>`).join('')}</div>`;
-  const reset = `resets ${WEEK[0]} in ${resetIn()}`;
-  if (st.ui.utop === 'b') return `<section class="box"><div class="uline ${tone}"><b>${fmtTok(left())} left</b><span>of ${fmtTok(ALLOWANCE)} included · ${reset}</span></div>${bar}</section>`;
-  if (st.ui.utop === 'c') return `<section class="box"><div class="shead"><h3>${fmtTok(tot)} of ${fmtTok(ALLOWANCE)} used this week</h3><small>${cap1(reset)}</small></div>${chart(false)}</section>`;
-  if (st.ui.utop === 'd') return `<section class="box"><p class="usent ${tone}">You have <b>${fmtTok(left())}</b> of ${fmtTok(ALLOWANCE)} included tokens left. They reset on ${WEEK[0]}, in ${resetIn()}.</p>${bar}</section>`;
-  return `<section class="box"><div class="shead"><h3>Included tokens this week</h3><small>Resets ${WEEK[0]}, ${day(new Date(RESET).toISOString())} at 00:00 UTC, in ${resetIn()}</small></div>
-    <p class="sub">Covers asks and branches on Opus 5.5 and Gemini 4 Neon. GPT-6.1 Sol runs only on your OpenAI key.</p><div class="ubig ${tone}"><b>${fmtTok(left())}</b><span>left of ${fmtTok(ALLOWANCE)}</span></div>${bar}${chart(true)}</section>`;
+  const pct = Math.min(1, used() / ALLOWANCE), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok', lp = Math.round((1 - pct) * 100);
+  return `<section class="box"><p class="usent ${tone}">You have <b>${lp}%</b> of your included usage left this week. It resets on ${WEEK[0]}, in ${resetIn()}.</p><div class="utrack ${tone}" role="img" aria-label="${lp}% left"><span style="width:${((1 - pct) * 100).toFixed(1)}%"></span></div></section>`;
 }
 function usageRunsSection() {
-  if (st.ui.runs === 'd') return '';
-  const runs = usageRuns(), none = '<p class="empty">No runs yet this week.</p>';
-  if (st.ui.runs === 'b') return `<section class="box"><h3>Recent runs</h3><div class="runs">${runs.map(r => `<div class="run b"><span class="rq">${esc(clip(r.q, 90))}</span>${r.bill && r.bill !== 'Included' ? `<small class="bill">${esc(r.bill)}</small>` : ''}<b>${fmtTok(r.tok)}</b></div>`).join('') || none}</div></section>`;
-  const table = `<div class="runs">${runs.map(r => `<div class="run"><span class="rq">${esc(clip(r.q, 70))}</span><small>${day(r.at)}</small><b>${fmtTok(r.tok)}</b><small class="bill">${r.bill || 'Included'}</small></div>`).join('') || none}</div>`;
-  if (st.ui.runs === 'c') return `<section class="box"><details class="rdet"><summary><h3>Recent runs</h3><small>${runs.length}</small></summary>${table}</details></section>`;
-  return `<section class="box"><h3>Recent runs</h3>${table}</section>`;
+  /* row variants: A question, date, tokens, billing · B two lines: question over date and billing, tokens right
+     C question, a bar sized against the largest run, tokens · D tokens first, billing as a tag only when not included
+     E question, then tokens and the share of the weekly allowance */
+  const runs = usageRuns(), max = Math.max(1, ...runs.map(r => r.tok)), bill = r => r.bill || 'Included', paid = r => r.bill && r.bill !== 'Included';
+  const row = ({
+    a: r => `<div class="run"><span class="rq">${esc(clip(r.q, 70))}</span><small>${day(r.at)}</small><b>${fmtTok(r.tok)}</b><small class="bill">${bill(r)}</small></div>`,
+    b: r => `<div class="run rb"><span class="rq">${esc(clip(r.q, 90))}</span><b>${fmtTok(r.tok)}</b><span class="rmeta">${day(r.at)} · ${bill(r)}</span></div>`,
+    c: r => `<div class="run rc"><span class="rq">${esc(clip(r.q, 80))}</span><span class="rbar"><span style="width:${(r.tok / max * 100).toFixed(1)}%"></span></span><b>${fmtTok(r.tok)}</b></div>`,
+    d: r => `<div class="run rd"><b>${fmtTok(r.tok)}</b><span class="rq">${esc(clip(r.q, 80))}</span>${paid(r) ? `<span class="tag">${esc(r.bill)}</span>` : '<span></span>'}<small>${day(r.at)}</small></div>`,
+    e: r => `<div class="run re"><span class="rq">${esc(clip(r.q, 90))}</span><span class="rpct">${fmtTok(r.tok)} · ${Math.max(1, Math.round(r.tok / ALLOWANCE * 100))}% of week</span></div>`,
+  })[st.ui.runs] || (r => '');
+  return `<section class="box"><h3>Recent runs</h3><div class="runs rrows">${runs.map(row).join('') || '<p class="empty">No runs yet this week.</p>'}</div></section>`;
 }
 function usagePage() {
   const hasKey = keys().anthropic?.status === 'working' || keys().openai?.status === 'working';
@@ -1492,7 +1518,7 @@ function renderMock() {
   const cur = st.auth === 'out' ? 'out' : st.user;
   const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcde'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
-    ${seg('layout', 'Members layout', 2)}${seg('inv', 'Invites', 3)}${seg('utop', 'Usage top', 4)}${seg('runs', 'Recent runs', 4)}
+    ${seg('inv', 'Invites', 5)}${seg('runs', 'Run rows', 5)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -1524,7 +1550,7 @@ function previewVariant(k) {
   st.confirm = null; st.menu = null;
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
-  st.screen = ['layout', 'inv'].includes(k) ? 'members' : k === 'meter' ? 'feed' : 'usage';
+  st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'feed' : 'usage';
   render();
   if (k === 'keys') $('.kcards, .krow')?.closest('section')?.scrollIntoView({ block: 'start' });
   if (k === 'tree') $('.ttree, .ttable')?.closest('section')?.scrollIntoView({ block: 'start' });
@@ -1577,6 +1603,7 @@ app.addEventListener('click', e => {
   if (a === 'scope') { st.treeScope = d.s; render(); return; }
   if (a === 'remind') { st.reminded[d.u] = true; toast(`Reminder sent to ${nameOf(d.u)}.`); render(); return; }
   if (a === 'newinvite') { if (slotsUsed() >= SLOTS || !canVouchYet(meM())) return; const code = newCode(); INVITES.push({ code, by: st.user, created: new Date(NOW).toISOString(), used: null }); toast(`Invite ${code} created. Send the link to one person.`); render(); return; }
+  if (a === 'copynew') { let i = myInvites().find(x => inviteState(x) === 'open'); if (!i) { if (slotsUsed() >= SLOTS || !canVouchYet(meM())) return; i = { code: newCode(), by: st.user, created: new Date(NOW).toISOString(), used: null }; INVITES.push(i); } const t = `session.app/i/${i.code}`; try { navigator.clipboard.writeText(t).catch(() => {}); } catch {} toast('Invite link copied. Send it to one person.'); render(); return; }
   if (a === 'revoke') { INVITES.find(i => i.code === d.code).revoked = true; toast('Invite revoked.'); render(); return; }
   if (a === 'copy') { const done = () => { toast('Link copied.'); render(); }; try { navigator.clipboard.writeText(d.t).then(done, () => { toast(d.t); render(); }); } catch { toast(d.t); render(); } return; }
   if (a === 'keyadd') { st.keyForm = d.k; st.keyErr = ''; render(); $('#in-key')?.focus(); return; }
