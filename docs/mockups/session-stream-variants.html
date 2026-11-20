@@ -441,7 +441,10 @@ const replyTree = list => list.map(r => `<div class="reply">${av(r.u, 'sm')}<div
 /* Both variants show the same stream of whole posts and pin the branches to the passage of the answer
    they ask about. Pinned map draws each passage's branches as an outline; Layers draws them as a stack
    of cards, one card per level of depth. */
-const st = { v: 'pinned', data: 'written', space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, layer: {}, asking: null };
+/* the test-data choice is remembered in this browser */
+const DATA_KEY = 'session-mock-data';
+const savedData = () => { try { return localStorage.getItem(DATA_KEY) === 'prompts' ? 'prompts' : 'written'; } catch { return 'written'; } };
+const st = { v: 'pinned', data: savedData(), space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, layer: {}, asking: null };
 
 function card(p) {
   const head = `<div class="card-h">${av(p.u)}<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div></div>`;
@@ -568,13 +571,13 @@ function render() {
 }
 function renderBar() {
   $('#variant-seg').innerHTML = ORDER.map((k, i) => `<button data-v="${k}" aria-pressed="${st.v === k}"><b>${String.fromCharCode(65 + i)}</b>${V[k].name}</button>`).join('');
-  $('#data-seg').innerHTML = [['written', 'Written questions'], ['prompts', 'Typed prompts']].map(([k, l]) => `<button data-d="${k}" aria-pressed="${st.data === k}">${l}</button>`).join('');
+  $('#data-seg').innerHTML = [['written', 'Written'], ['prompts', 'Typed']].map(([k, l]) => `<button data-d="${k}" aria-pressed="${st.data === k}">${l}</button>`).join('');
   $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${st.theme === k}">${l}</button>`).join('');
   $('#thesis').innerHTML = `<span class="qtag">${V[st.v].q}</span>` + V[st.v].thesis;
 }
 function go(v) { if (!V[v]) v = 'pinned'; st.v = v; st.asking = null; renderBar(); render(); }
 $('#variant-seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { history.replaceState(null, '', '#' + b.dataset.v); go(b.dataset.v); } });
-$('#data-seg').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b) return; st.data = b.dataset.d; renderBar(); render(); });
+$('#data-seg').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b) return; st.data = b.dataset.d; try { localStorage.setItem(DATA_KEY, st.data); } catch {} renderBar(); render(); });
 $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; st.theme = b.dataset.t; if (st.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = st.theme; renderBar(); });
 
 app.addEventListener('click', e => {
