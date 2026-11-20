@@ -188,6 +188,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .preview .rq { margin: 4px 0 8px; font-size: var(--fs-base); font-weight: 600; color: var(--t-heading); line-height: 1.4; }
 .preview .prose { font-size: var(--fs-sm); max-height: 260px; overflow-y: auto; }
 .preview .pf { display: flex; gap: 12px; margin-top: 8px; font-size: var(--fs-xs); color: var(--t-faint); align-items: center; }
+.preview .pf .tlink { font-size: inherit; font-weight: inherit; }
 
 /* Layers */
 .laygrp { border-left: 0; padding-left: 0; }
@@ -502,7 +503,7 @@ function pinGroups(p, draw, cls = '') {
 /* The read-out under a drawing: the selected branch's question and answer. */
 function preview(p, T, n) {
   const k = T.kids(n.id).length;
-  return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${n.tok ? `<span>${ktok(n.tok)}</span>` : ''}</div><p class="rq">${esc(n.q)}</p>${status(n)}<div class="prose">${answerHtml(n)}</div>
+  return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time></div><p class="rq">${esc(n.q)}</p>${status(n)}<div class="prose">${answerHtml(n)}</div>
     <div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches under this'}</span><button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.id}">Branch from here</button></div>
     ${st.asking === p.id ? composer('mf:' + p.id + ':' + n.id, 'Ask a branch question') : ''}</div>`;
 }
