@@ -16,7 +16,7 @@
 import { findModel, spaces } from "@session/shared";
 import { z } from "zod";
 
-import { canRead, isClosed, reviewedFor } from "../access.js";
+import { bannedFrom, canRead, isClosed, isModOf, reviewedFor, roleIn } from "../access.js";
 import { defineMutator, inSpace, inSpaces, personal, type PreCtx, type Tx } from "../engine.js";
 import { bad, notFound, refuse, stale } from "../errors.js";
 import type { Executor, FollowUpRec, ThreadRec } from "../records.js";
@@ -227,11 +227,16 @@ export const threadMutators = [
             "A branch of a thread in a closed space can only become a thread in the same space.",
           );
         if (i.from.node !== "r") {
-          // DESIGN: the mock makes the new thread the asker's (the node's
-          // author). Here only the asker may start a thread from their ask.
+          // the asker of the branch, the thread's owner and the space's
+          // moderators may start a thread from it; the new thread is the
+          // asker's (the mockup's rule; review round 1 of phase 2, 2b design
+          // finding 4)
           const n = followUpOf(tx, src.id, i.from.node);
-          if (n.u !== tx.me)
-            throw refuse("FORBIDDEN", "Only the person who asked this can start a thread from it.");
+          if (n.u !== tx.me && src.u !== tx.me && !isModOf(tx, src.s, tx.me))
+            throw refuse(
+              "FORBIDDEN",
+              "Only the asker of this branch, the thread owner and moderators can do this.",
+            );
         }
         return inSpaces(tx, [...scope.spaces, src.s], "user");
       }
@@ -817,6 +822,13 @@ function fromBranch(
   if (n.mod === "removed") throw removed();
   if (hideOf(tx, n)) throw refuse("PRECONDITION_FAILED", "This item is hidden.");
   if (n.del) throw deleted("follow-up");
+  // the new thread is the asker's: they must be able to post in its space
+  const asker = n.u;
+  if (asker !== tx.me) {
+    const target = needSpace(tx, sp);
+    if (bannedFrom(tx, sp, asker) || (isClosed(target) && roleIn(tx, sp, asker) === null))
+      throw refuse("FORBIDDEN", "The person who asked this can no longer post in this space.");
+  }
   const nodes = tx.scan("followup.th", src.id);
   const byId = new Map(nodes.map((x) => [x.id, x]));
   const path = (x: FollowUpRec) => {
@@ -836,7 +848,7 @@ function fromBranch(
       ? nodes.filter((x) => {
           const down = fromN(x);
           return (
-            down.length > 0 && down.every((y) => y.mod === null && !hideOf(tx, y) && y.u === tx.me)
+            down.length > 0 && down.every((y) => y.mod === null && !hideOf(tx, y) && y.u === asker)
           );
         })
       : [];
@@ -846,7 +858,7 @@ function fromBranch(
     kind: "thread",
     id,
     s: sp,
-    u: tx.me,
+    u: asker,
     k: "ask",
     q: n.q,
     t: (title || n.q).trim(),
@@ -875,6 +887,7 @@ function fromBranch(
     if (par === null) first++;
     tx.create({
       ...followUp(tx, newId.get(x.id) as string, p, par, x.q, null, null, null),
+      u: asker,
       a: x.a,
       del: x.del,
       createdAt: x.createdAt,

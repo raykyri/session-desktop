@@ -382,16 +382,19 @@ export const contentMutators = [
     },
   }),
 
-  // Swap a page with another in the list (About's up and down), both by id.
+  // Move a page, by id, to position `to` of the list (0 is the first;
+  // About's up and down). The position is absolute, as a skills reorder's
+  // order is, so the same move applied twice leaves the list as once (review
+  // round 1 of phase 2, 2b design finding 5).
   defineMutator({
     name: "pages.move",
-    input: z.strictObject({ space: ulidS, page: ulidS, other: ulidS }),
+    input: z.strictObject({ space: ulidS, page: ulidS, to: count }),
     can: (tx, i) => inSpace(tx, i.space, "moderator"),
     run: (tx, i) => {
       const a = pageIn(tx, i.space, i.page);
-      const b = pageIn(tx, i.space, i.other);
-      const list = pagesOf(tx, i.space).map((p) => (p.id === a.id ? b : p.id === b.id ? a : p));
-      tx.put({ kind: "pages", sp: i.space, list });
+      const rest = pagesOf(tx, i.space).filter((p) => p.id !== a.id);
+      if (i.to > rest.length) throw bad("to", `a position from 0 to ${rest.length}`);
+      tx.put({ kind: "pages", sp: i.space, list: [...rest.slice(0, i.to), a, ...rest.slice(i.to)] });
       return null;
     },
   }),

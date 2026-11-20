@@ -365,4 +365,33 @@ for (const kind of STORES) {
     t.is(calls.length, 2);
     t.deepEqual(w.server.streamPulls([]), []);
   });
+  test(`${kind}: 2b design finding 6: spaces.create answers the new space as the directory serves it`, (t) => {
+    const { w } = cast(t, kind);
+    const id = w.id();
+    const a = w.as("mel", "spaces.create", { id, name: "garden" });
+    if (!a.ok) return t.fail(JSON.stringify(a.error));
+    const listed = w.server.directory({ u: "mel" }).spaces.find((s) => s.id === id);
+    t.deepEqual(a.result, { id, space: listed });
+    t.like((a.result as Any).space, { kind: "space", id, name: "garden", rev: 1 });
+    // the stored answer keeps the id only: a replay reads the space again
+    const stored = JSON.stringify(w.server.store.dump());
+    t.is(stored.split('"name":"garden"').length - 1, 1, "the name is stored in the record only");
+    // a replay reads the space as it is now; once deleted, the answer has
+    // no space
+    const env = w.envelope("mel", "spaces.create", { id: w.id(), name: "pond" });
+    const first = w.server.apply({ u: "mel" }, env);
+    ok(t, w.as("mel", "spaces.update", { id: (first as Any).result.id, set: { desc: "Ducks" }, base: { rulesRev: 0 } }));
+    const again = w.server.apply({ u: "mel" }, env) as Any;
+    t.true(again.replayed);
+    t.like(again.result.space, { name: "pond", desc: "Ducks" });
+    ok(t, w.as("mel", "spaces.delete", { id: again.result.id }));
+    const gone = w.server.apply({ u: "mel" }, env) as Any;
+    t.true(gone.replayed);
+    t.deepEqual(gone.result, { id: again.result.id });
+    // a refused create has no space
+    t.like(w.as("mel", "spaces.create", { id: w.id(), name: "garden" }), {
+      ok: false,
+      error: { code: "CONFLICT" },
+    });
+  });
 }

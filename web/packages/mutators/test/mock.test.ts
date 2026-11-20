@@ -886,11 +886,15 @@ const HISTORY: Step[] = [
   },
   {
     name: "pages.move",
-    input: (x) => ({
-      space: x.id("lounge"),
-      page: x.page("lounge", 0),
-      other: x.page("lounge", 1),
-    }),
+    input: (x) => ({ space: x.id("lounge"), page: x.page("lounge", 0), to: 1 }),
+  },
+  {
+    name: "pages.move",
+    input: (x) => ({ space: x.id("lounge"), page: x.page("lounge", 1), to: 1 }),
+  },
+  {
+    name: "pages.move",
+    input: (x) => ({ space: x.id("lounge"), page: x.page("lounge", 0), to: 5 }),
   },
   { name: "pages.remove", input: (x) => ({ space: x.id("lounge"), page: x.page("lounge", 1) }) },
   {

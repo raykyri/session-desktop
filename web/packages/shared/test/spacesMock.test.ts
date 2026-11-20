@@ -754,8 +754,8 @@ const PROC_CALLS: Record<keyof typeof spaceProcedures, ProcCall> = {
   "pages.remove": { input: async () => ({ space: "scifi", page: (await pageIds("scifi"))[0] }) },
   "pages.move": {
     input: async () => {
-      const [a, b] = await pageIds("scifi");
-      return { space: "scifi", page: a, other: b };
+      const [a] = await pageIds("scifi");
+      return { space: "scifi", page: a, to: 1 };
     },
   },
   "apiKeys.create": {

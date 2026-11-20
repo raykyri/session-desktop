@@ -1421,7 +1421,12 @@ export const spaceProcedures = {
   /** wire: `ThreadInvite` */
   "invites.restore": { input: z.object({ id: spaceRecordIdSchema }), result: nullResultSchema },
   // -- spaces
-  "spaces.create": { input: createSpaceInputSchema, result: z.object({ id: spaceIdSchema }) },
+  /** The answer holds the new space as the server stores it (`space`, the
+   * record `GET /api/spaces` lists), when the server has it. */
+  "spaces.create": {
+    input: createSpaceInputSchema,
+    result: z.object({ id: spaceIdSchema, space: z.record(z.string(), z.unknown()).optional() }),
+  },
   "spaces.update": { input: updateSpaceInputSchema, result: nullResultSchema },
   "spaces.verifyDomain": {
     input: z.object({ id: spaceIdSchema, domain: z.string(), method: z.literal("dns").optional() }),
@@ -1469,9 +1474,9 @@ export const spaceProcedures = {
     input: z.object({ ...spaceInput, page: z.string() }),
     result: nullResultSchema,
   },
-  /** Swap two pages, by id. */
+  /** Move a page, by id, to position `to` of the list (0 is the first). */
   "pages.move": {
-    input: z.object({ ...spaceInput, page: z.string(), other: z.string() }),
+    input: z.object({ ...spaceInput, page: z.string(), to: count }),
     result: nullResultSchema,
   },
   // -- API keys (TODO(limits)); `raw` is write-only

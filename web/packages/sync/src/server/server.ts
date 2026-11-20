@@ -792,18 +792,19 @@ export class SyncServer {
       const hit = wellFormed ? live(tx.answerGet(u, m.mutationId)) : undefined;
       // a write this user's devices sent before, under any client id or seq
       if (hit && (hit.digest === payload || hit.digest.startsWith("replaced:")))
-        return this.replay(tx, u, hit.answer, now);
+        return this.withCreated(tx, m.name, this.replay(tx, u, hit.answer, now));
       // a reminted write: processed already under an id it replaces
       if (wellFormed && !hit)
         for (const old of m.replaces) {
           const prior = live(tx.answerGet(u, old));
           if (!prior) continue;
           tx.answerPut(u, m.mutationId, { digest: payload, answer: prior.answer, at: now });
-          return this.replay(tx, u, prior.answer, now);
+          return this.withCreated(tx, m.name, this.replay(tx, u, prior.answer, now));
         }
       const sent = sha256(canonical([m.mutationId, m.name, m.input]));
       const kept = live(tx.seqAnswerGet(m.clientId, m.seq));
-      if (kept && kept.digest === sent) return this.replay(tx, u, kept.answer, now);
+      if (kept && kept.digest === sent)
+        return this.withCreated(tx, m.name, this.replay(tx, u, kept.answer, now));
       if (m.seq !== client.last + 1)
         return out({
           ...err("OUT_OF_ORDER", undefined, [`seq: expected ${client.last + 1}`]),
@@ -910,7 +911,26 @@ export class SyncServer {
     for (const sp of archived) this.online.spaceArchived(tx, now, sp);
     for (const effect of res.effects) tx.effectAdd(effect, now);
     record({ ok: true, result: res.result ?? null, seq: m.seq });
-    return { ok: true, result: res.result ?? null, serverTime: now, seq: m.seq };
+    return this.withCreated(tx, m.name, {
+      ok: true,
+      result: res.result ?? null,
+      serverTime: now,
+      seq: m.seq,
+    });
+  }
+
+  /** `spaces.create`'s answer with the new space as it is stored now
+   * (`space`: the record `directory` serves), so a client that holds no log
+   * of it shows it at once (review round 1 of phase 2, 2b design finding 6).
+   * The stored answer keeps only the id (no record text is stored with an
+   * answer): a replay reads the space again, and has no `space` once it was
+   * deleted. */
+  private withCreated(tx: StoreTx, name: string, a: Answer): Answer {
+    if (name !== "spaces.create" || !a.ok) return a;
+    const id = (a.result as { id?: unknown } | null)?.id;
+    const s = typeof id === "string" ? tx.get(pkg.spaceKey(id)) : undefined;
+    if (s?.kind !== "space" || s.deleted) return a;
+    return { ...a, result: { ...(a.result as object), space: s } };
   }
 
   /** The refusal of staged `writes` that start a server run of `u`'s and
