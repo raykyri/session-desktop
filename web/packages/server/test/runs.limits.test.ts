@@ -229,8 +229,14 @@ test.serial("F3: the job's checks end a run whose person lost access", async (t)
   h.deps.sync.work();
   t.true(h.deps.sync.runJobs.start(run, "session").ok);
   h.deps.sync.run((tx) => {
-    const ban = { kind: "ban" as const, id: `${sp}:mel`, sp, u: "mel", createdAt: "2026-01-01T00:00:00Z" };
-    h.deps.sync.commit(tx, [[`ban:${sp}:mel`, ban as never]], h.deps.sync.time(tx));
+    const ban = {
+      kind: "ban" as const,
+      id: `${sp}:mel`,
+      sp,
+      u: "mel",
+      createdAt: "2026-01-01T00:00:00Z",
+    };
+    h.deps.sync.commit(tx, [[`ban:${sp}:mel`, ban]], h.deps.sync.time(tx));
   });
   t.like(rec(h, `run:${run}`), { status: "running" });
   t.false(h.deps.sync.runJobs.holds(run, 1));
@@ -331,10 +337,9 @@ test.serial(
     );
     // Run again of one of the three replaces its run: allowed
     const first = answers[0]?.body.result as { id: string };
-    t.like(
-      (await mel.call("research.cancelNode", { thread: first.id, node: "r" })).body,
-      { ok: true },
-    );
+    t.like((await mel.call("research.cancelNode", { thread: first.id, node: "r" })).body, {
+      ok: true,
+    });
     t.like((await mel.call("research.retryNode", { thread: first.id, node: "r" })).body, {
       ok: true,
     });

@@ -11,7 +11,8 @@ import { openStream, type CallAnswer } from "../src/server/index.js";
 import { STORES, cast, ok, refused, turnOf, type World } from "./helpers.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access,
-   @typescript-eslint/no-unsafe-assignment --
+   @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return,
+   @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call --
    records and call results are read as `any` */
 type Any = any;
 
@@ -62,7 +63,13 @@ for (const kind of STORES) {
     // a ban the job hears of first
     const a = ask(w, "mel", open);
     t.true(w.server.runJobs.start(a.run).ok);
-    commit(`ban:${open}:mel`, { kind: "ban", id: `${open}:mel`, sp: open, u: "mel", createdAt: "2026-01-01T00:00:00Z" });
+    commit(`ban:${open}:mel`, {
+      kind: "ban",
+      id: `${open}:mel`,
+      sp: open,
+      u: "mel",
+      createdAt: "2026-01-01T00:00:00Z",
+    });
     t.like(get(w, `run:${a.run}`), { status: "running" });
     t.false(w.server.runJobs.delta(a.run, 1, 1, "x"));
     t.like(get(w, `run:${a.run}`), { status: "failed", end: "access" });
@@ -114,21 +121,36 @@ for (const kind of STORES) {
     ask(w, "otto", open);
     // a running run counts; one that ended does not
     t.true(w.server.runJobs.start(a.run).ok);
-    refused(t, w.as("mel", "threads.create", { id: w.id(), space: open, kind: "ask", q: "4" }), "TOO_MANY_REQUESTS");
+    refused(
+      t,
+      w.as("mel", "threads.create", { id: w.id(), space: open, kind: "ask", q: "4" }),
+      "TOO_MANY_REQUESTS",
+    );
     t.true(w.server.runJobs.fail(a.run, 1, "rate"));
     ask(w, "mel", open);
     // Run again of an ask whose run is live replaces it: the count stays;
     // of one whose run ended, it is one more
     const again = (th: string) =>
-      w.as("mel", "threads.update", { id: th, q: "Q?", run: true, base: { rev: get(w, `thread:${th}`).rev } });
+      w.as("mel", "threads.update", {
+        id: th,
+        q: "Q?",
+        run: true,
+        base: { rev: get(w, `thread:${th}`).rev },
+      });
     ok(t, again(second.th));
     refused(t, again(a.th), "TOO_MANY_REQUESTS");
     // online: retryNode of a stopped ask
     const b = ask(w, "otto", open);
-    ok(t, w.server.call({ u: "otto" }, "research.cancelNode", { thread: b.th, node: "r" }) as never);
+    ok(
+      t,
+      w.server.call({ u: "otto" }, "research.cancelNode", { thread: b.th, node: "r" }),
+    );
     const o = cast(t, kind, 2, { queuedRunsPerUser: 1 });
     const x = ask(o.w, "mel", o.open);
-    t.is(code(o.w.server.call({ u: "mel" }, "research.cancelNode", { thread: x.th, node: "r" })), "ok");
+    t.is(
+      code(o.w.server.call({ u: "mel" }, "research.cancelNode", { thread: x.th, node: "r" })),
+      "ok",
+    );
     ask(o.w, "mel", o.open);
     t.is(
       code(o.w.server.call({ u: "mel" }, "research.retryNode", { thread: x.th, node: "r" })),
@@ -167,7 +189,13 @@ for (const kind of STORES) {
     // forkNode and a run again that names it
     refused(
       t,
-      w.as("mel", "research.forkNode", { id: w.id(), thread: a.th, parent: "r", q: "and?", model: "claude-fable" }),
+      w.as("mel", "research.forkNode", {
+        id: w.id(),
+        thread: a.th,
+        parent: "r",
+        q: "and?",
+        model: "claude-fable",
+      }),
       "FORBIDDEN",
     );
     const m = ask(w, "mel", open);
@@ -200,7 +228,13 @@ for (const kind of STORES) {
     const o = cast(t, kind, 2);
     refused(
       t,
-      o.w.as("olga", "threads.create", { id: o.w.id(), space: o.open, kind: "ask", q: "Q?", model: "claude-fable" }),
+      o.w.as("olga", "threads.create", {
+        id: o.w.id(),
+        space: o.open,
+        kind: "ask",
+        q: "Q?",
+        model: "claude-fable",
+      }),
       "FORBIDDEN",
     );
   });
@@ -208,7 +242,12 @@ for (const kind of STORES) {
   test(`${kind}: device sign-in: one click from the address that asked, else the code`, (t) => {
     const { w } = cast(t, kind);
     const authorize = (ip: string | null) =>
-      w.server.call(null, "devices.authorize", { name: "Mac", device: "MacBook Air", app: "Session 1.0" }, { ip }) as Any;
+      w.server.call(
+        null,
+        "devices.authorize",
+        { name: "Mac", device: "MacBook Air", app: "Session 1.0" },
+        { ip },
+      ) as Any;
     const approve = (input: object, ip: string | null) =>
       code(w.server.call({ u: "mel" }, "devices.approve", input, { ip }));
     const a = authorize("203.0.113.5");
@@ -353,7 +392,8 @@ for (const kind of STORES) {
     ok(t, w.as("olga", "threads.create", { id: w.id(), space: open, kind: "post", q: "ALL" }));
     await new Promise((r) => setTimeout(r, 0));
     t.deepEqual(calls, [["cursor", "cursor", "cursor"]], "one batch for the three streams");
-    for (const s of streams) t.regex(s.text(), /event: poke\nid: .*\ndata: \{"type":"poke","logs":\["space:/);
+    for (const s of streams)
+      t.regex(s.text(), /event: poke\nid: .*\ndata: \{"type":"poke","logs":\["space:/);
     // a closed space's post: mel reads it, otto and a signed-out reader skip it
     ok(t, w.as("mel", "threads.create", { id: w.id(), space: closed, kind: "post", q: "MEMBERS" }));
     await new Promise((r) => setTimeout(r, 0));
@@ -380,7 +420,14 @@ for (const kind of STORES) {
     // no space
     const env = w.envelope("mel", "spaces.create", { id: w.id(), name: "pond" });
     const first = w.server.apply({ u: "mel" }, env);
-    ok(t, w.as("mel", "spaces.update", { id: (first as Any).result.id, set: { desc: "Ducks" }, base: { rulesRev: 0 } }));
+    ok(
+      t,
+      w.as("mel", "spaces.update", {
+        id: (first as Any).result.id,
+        set: { desc: "Ducks" },
+        base: { rulesRev: 0 },
+      }),
+    );
     const again = w.server.apply({ u: "mel" }, env) as Any;
     t.true(again.replayed);
     t.like(again.result.space, { name: "pond", desc: "Ducks" });

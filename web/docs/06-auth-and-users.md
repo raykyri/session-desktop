@@ -140,6 +140,17 @@ included tokens are one weekly allowance per person (Monday 00:00 UTC,
 from the admin page; admins are not exempt); past it, the person's default API
 key pays. The paragraph below describes the removed daily check.
 
+Review round 1 of phase 2: a run's payer is read again after every step that
+calls tools (the weekly allowance, or a key's monthly cap); a payer with
+nothing left ends the run `tokens`, and its thread keeps the tokens used
+(`tok`). Each step's tokens are recorded as it finishes, whatever ends the
+run. An admin-only model runs on the included tokens for an admin only; a
+key of the person's own pays for any model of its provider. A person has at
+most `SESSION_QUEUED_PER_USER` server runs queued or running, and a budget
+of writes and online calls (`SESSION_WRITE_BURST`, refilled at
+`SESSION_WRITES_PER_MINUTE`); past either the write answers
+`TOO_MANY_REQUESTS`, unrecorded.
+
 Usage-level (removed in phase 2b): per account per UTC day, `daily_tokens` (input + output across all models,
 from `usage_events`) and `daily_runs` (research attempts started, counted
 from the `run` rows of `usage_events`, which deleting the research does not

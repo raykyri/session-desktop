@@ -484,6 +484,21 @@ Choice: option 3.
   removed from the server and the client, and TanStack Query from the
   client, which reads the replica through `useQuery` and the rest through a
   small cached-read helper.
+- Reads outside the logs that a link needs (review round 1 of phase 2):
+  `GET /api/spaces/named/:name` (`SyncServer.spaceNamed`) answers `{ space,
+  serverTime }`, the record of an open or listed space, and of an unlisted
+  one only its name unless the reader is a member, or NOT_FOUND (404);
+  `GET /api/invites/:code` (`SyncServer.invite`), an invite link's landing,
+  signed out too, answers `{ space, by, expiresAt, state: "live" | "expired",
+  serverTime }` or NOT_FOUND; `GET /api/devices/requests/:request`
+  (`OnlineCalls.signinView`), for the browser that approves a device's
+  sign-in, answers `{ request, name, kind, device, app, askedAt, state,
+  sameComputer, serverTime }` and never the code.
+- A per-account budget of writes and online calls (`writeBudget`; review
+  round 1 of phase 2): past it a write or a call answers TOO_MANY_REQUESTS
+  (429) with `retryAt`, unrecorded, which the client treats as any limit's.
+  `spaces.create` answers `{ id, space }`, the new space as `GET
+  /api/spaces` lists it.
 
 Why: phase 0 (`web/packages/replica-proto`) showed with an adversarial
 suite, two review rounds and mutation testing that replicas are safe under
@@ -543,9 +558,12 @@ connection, keyed by run, attempt and a per-attempt sequence; a client
 drops events it has already applied and refetches the run on a gap. A
 device run that loses its lease ends `interrupted`, and Run again starts a
 new attempt. A server run interrupted by a restart resumes in the same
-attempt: its context is rebuilt from the stored turns and the answer is
-generated again after them (phase 2a); after two resumes it ends
-`interrupted`.
+attempt and continues after its stored turns: they are given to the model,
+tool calls with their results, so no step it stored is done again, and a
+stored answer turn finishes the run with no provider call (review round 1
+of phase 2; phase 2a regenerated the answer); after two resumes it ends
+`interrupted`. A run's context also holds the tool calls and results of the
+earlier answers on its branch, within a size budget.
 
 Why: one connection carries both replicated changes and streaming, and the
 durable state is the same for owned and device runs.

@@ -394,7 +394,11 @@ export const contentMutators = [
       const a = pageIn(tx, i.space, i.page);
       const rest = pagesOf(tx, i.space).filter((p) => p.id !== a.id);
       if (i.to > rest.length) throw bad("to", `a position from 0 to ${rest.length}`);
-      tx.put({ kind: "pages", sp: i.space, list: [...rest.slice(0, i.to), a, ...rest.slice(i.to)] });
+      tx.put({
+        kind: "pages",
+        sp: i.space,
+        list: [...rest.slice(0, i.to), a, ...rest.slice(i.to)],
+      });
       return null;
     },
   }),

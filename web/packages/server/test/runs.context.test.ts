@@ -4,7 +4,7 @@
 // holds the tool calls and results of the answers before it.
 
 import { runs as runsRepo } from "@session/db";
-import type { RunRec, ThreadRec } from "@session/mutators";
+import type { ThreadRec } from "@session/mutators";
 import test from "ava";
 
 import {
@@ -109,7 +109,12 @@ test.serial(
       1,
       assistant(run, 0, [
         { type: "text", text: "Looking it up." },
-        { type: "toolUse", id: "call-1", name: "web_fetch", input: { url: "https://example.com/a" } },
+        {
+          type: "toolUse",
+          id: "call-1",
+          name: "web_fetch",
+          input: { url: "https://example.com/a" },
+        },
       ]),
     );
     jobs.turn(run, 1, {
@@ -196,7 +201,7 @@ test.serial(
     next.tick();
     await next.idle();
     t.is(calls, 0);
-    t.like(rec(h, `run:${run}`) as RunRec, { status: "complete" });
+    t.like(rec(h, `run:${run}`), { status: "complete" });
     t.is((rec(h, `thread:${th}`) as ThreadRec).sum, "THE STORED ANSWER");
     await next.drain();
   },

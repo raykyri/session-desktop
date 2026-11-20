@@ -201,7 +201,20 @@ export function predictEffects(
         role: "owner",
         adm: new Is("an admission id", (v) => typeof v === "string" && ULID.test(v)),
       });
-      out.result = (r) => JSON.stringify(r) === JSON.stringify({ id });
+      // the sync server's answer also holds the new space (review round 1
+      // of phase 2, 2b design finding 6)
+      out.result = (r) => {
+        const x = r as { id?: unknown; space?: { kind?: unknown; id?: unknown; name?: unknown } };
+        const keys = Object.keys(x ?? {}).sort().join(",");
+        if (x?.id !== id) return false;
+        if (keys === "id") return true;
+        return (
+          keys === "id,space" &&
+          x.space?.kind === "space" &&
+          x.space.id === id &&
+          x.space.name === name
+        );
+      };
       break;
     }
     case "spaces.update": {

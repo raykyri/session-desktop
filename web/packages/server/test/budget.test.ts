@@ -36,13 +36,22 @@ test.serial(
     // one write was the create
     t.deepEqual(
       answers.map((a) => (a.body.ok ? "ok" : a.body.error?.code)),
-      [...Array<string>(9).fill("ok"), "TOO_MANY_REQUESTS", "TOO_MANY_REQUESTS", "TOO_MANY_REQUESTS"],
+      [
+        ...Array<string>(9).fill("ok"),
+        "TOO_MANY_REQUESTS",
+        "TOO_MANY_REQUESTS",
+        "TOO_MANY_REQUESTS",
+      ],
     );
     const refused = answers[9];
     t.is(refused?.status, 429);
     const retryAt = (refused?.body.error as { retryAt?: string } | undefined)?.retryAt;
     const at = Math.ceil((clock.ms + 10_000) / 1000) * 1000;
-    t.is(retryAt, new Date(at).toISOString().replace(".000Z", "Z"), "one more in 10 s at 6 a minute");
+    t.is(
+      retryAt,
+      new Date(at).toISOString().replace(".000Z", "Z"),
+      "one more in 10 s at 6 a minute",
+    );
     for (let n = 0; n < 5; n++) {
       h.deps.sync.work(1000);
       await h.deps.runs.idle();
@@ -57,16 +66,19 @@ test.serial(
     // the bucket refills
     clock.ms += 10_000;
     t.like((await mel.write("spaces.join", { space: sp })).body, { ok: true });
-    t.like((await mel.write("threads.create", { id: mel.id(), space: sp, kind: "post", q: "p" })).body, {
-      ok: false,
-      error: { code: "TOO_MANY_REQUESTS" },
-    });
+    t.like(
+      (await mel.write("threads.create", { id: mel.id(), space: sp, kind: "post", q: "p" })).body,
+      {
+        ok: false,
+        error: { code: "TOO_MANY_REQUESTS" },
+      },
+    );
     clock.ms += 60_000;
     let ok = 0;
     for (let n = 0; n < 8; n++)
       if (
-        (await mel.write("threads.create", { id: mel.id(), space: sp, kind: "post", q: `p${n}` })).body
-          .ok
+        (await mel.write("threads.create", { id: mel.id(), space: sp, kind: "post", q: `p${n}` }))
+          .body.ok
       )
         ok++;
     t.is(ok, 6, "a minute refilled six");
@@ -77,8 +89,12 @@ test.serial(
     for (let n = 0; n < 12; n++)
       if ((await anon.call("devices.authorize", { name: "Mac" }, here)).body.ok) signins++;
     t.is(signins, 10);
-    t.like((await anon.call("devices.authorize", { name: "Mac" }, { "Fly-Client-IP": "198.51.100.9" })).body, {
-      ok: true,
-    });
+    t.like(
+      (await anon.call("devices.authorize", { name: "Mac" }, { "Fly-Client-IP": "198.51.100.9" }))
+        .body,
+      {
+        ok: true,
+      },
+    );
   },
 );

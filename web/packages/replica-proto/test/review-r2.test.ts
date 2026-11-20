@@ -773,6 +773,13 @@ test("N23: a decline's reason does not survive the person asking again", async (
     }),
   );
   t.is((w.get(`request:${closed}:otto`) as { why: string | null }).why, "not now");
+  // a declined request waits 14 days (review round 1 of phase 2)
+  await refused(
+    t,
+    w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }),
+    "PRECONDITION_FAILED",
+  );
+  w.clock.advance(14 * DAY);
   await ok(t, w.as("otto", "joinRequests.create", { space: closed, rulesAccepted: true }));
   const r = w.get(`request:${closed}:otto`) as { st: string; why: string | null };
   t.deepEqual([r.st, r.why], ["open", null]);

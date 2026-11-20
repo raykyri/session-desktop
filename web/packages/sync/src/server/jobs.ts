@@ -88,12 +88,7 @@ export class RunJobs {
    * `interrupted`), in the transaction of the call. */
   private held(tx: StoreTx, now: number, id: string, attempt: number): pkg.RunRec | null {
     const r = tx.get(`run:${id}`);
-    if (
-      r?.kind !== "run" ||
-      r.executor !== null ||
-      r.status !== "running" ||
-      r.attempt !== attempt
-    )
+    if (r?.kind !== "run" || r.executor !== null || r.status !== "running" || r.attempt !== attempt)
       return null;
     const g = readerOf(tx);
     if (!pkg.canRead(g, r, r.u) || !writesIn(g, r.s, r.u)) {

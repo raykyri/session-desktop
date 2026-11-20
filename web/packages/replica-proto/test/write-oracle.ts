@@ -491,6 +491,11 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     const answers = (i["answers"] as string[] | undefined) ?? [];
     if (s.qs.some((q, k) => q.req && !(answers[k] ?? "").trim())) no("BAD_REQUEST");
     if (s.rules.length > 0 && i["rulesAccepted"] !== true) no("BAD_REQUEST");
+    // review round 1 of phase 2: a declined request waits 14 days
+    const r = f.dump.get(`request:${s.id}:${f.me}`) as
+      { st?: string; retryAt?: string | null } | undefined;
+    if (r?.st === "declined" && r.retryAt && Date.parse(r.retryAt) > f.nowSec)
+      no("PRECONDITION_FAILED");
   },
   "joinRequests.decide": (f, i) => {
     const sp = String(i["space"]);

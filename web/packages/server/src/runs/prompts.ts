@@ -70,7 +70,7 @@ export function parseTurns(turns: readonly unknown[]): Turn[] | null {
   for (const t of turns) {
     const r = turnSchema.safeParse(t);
     if (!r.success) return null;
-    out.push(r.data as Turn);
+    out.push(r.data);
   }
   return out;
 }
@@ -87,7 +87,9 @@ const textOf = (t: Turn) =>
 export function endsWithAnswer(turns: readonly Turn[]): boolean {
   const last = turns[turns.length - 1];
   return (
-    last?.role === "assistant" && textOf(last) !== "" && !last.blocks.some((b) => b.type === "toolUse")
+    last?.role === "assistant" &&
+    textOf(last) !== "" &&
+    !last.blocks.some((b) => b.type === "toolUse")
   );
 }
 

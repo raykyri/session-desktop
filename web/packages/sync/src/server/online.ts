@@ -833,7 +833,9 @@ export class OnlineCalls {
     if (actor.device != null)
       return no(fail("FORBIDDEN", "Approve a device’s sign-in from a browser, not from a device."));
     if (typeof request !== "string" || request.length > 64)
-      return no(fail("NOT_FOUND", "The server has no record of this sign-in. It may have expired."));
+      return no(
+        fail("NOT_FOUND", "The server has no record of this sign-in. It may have expired."),
+      );
     return this.server.run((tx) => {
       const now = this.server.time(tx);
       const s = tx.signinGet(request);

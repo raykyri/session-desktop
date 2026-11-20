@@ -193,7 +193,13 @@ for (const kind of STORES) {
     // a lost access the job hears of first: its start ends the run
     const { run: r0 } = ask(t, w, "mel", open);
     w.server.run((tx) => {
-      const ban = { kind: "ban", id: `${open}:mel`, sp: open, u: "mel", createdAt: "2026-01-01T00:00:00Z" };
+      const ban = {
+        kind: "ban",
+        id: `${open}:mel`,
+        sp: open,
+        u: "mel",
+        createdAt: "2026-01-01T00:00:00Z",
+      };
       w.server.commit(tx, [[`ban:${open}:mel`, ban as never]], w.server.time(tx));
     });
     t.deepEqual(w.server.runJobs.start(r0), { ok: false, why: "access" });

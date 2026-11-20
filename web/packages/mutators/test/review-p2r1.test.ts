@@ -8,14 +8,18 @@ import test from "ava";
 import { DECLINE_WAIT_DAYS } from "../src/defs/members.js";
 import type { FollowUpRec, PagesRec, RequestRec, ThreadRec } from "../src/index.js";
 
-import { DAY, World, admit, cast, ok, refused, thread } from "./world.js";
+import type { World} from "./world.js";
+import { DAY, admit, cast, ok, refused, thread } from "./world.js";
 
 const rec = <T>(w: World, key: string) => w.get(key) as T;
 
 test("a declined request: asked again or withdrawn only once 14 days passed; reopen and approve clear the wait", (t) => {
   const { w, closed } = cast(t);
   ok(t, w.run("eve", "joinRequests.create", { space: closed, rulesAccepted: true }));
-  ok(t, w.run("olga", "joinRequests.decide", { space: closed, users: ["eve"], decision: "decline" }));
+  ok(
+    t,
+    w.run("olga", "joinRequests.decide", { space: closed, users: ["eve"], decision: "decline" }),
+  );
   const r = rec<RequestRec>(w, `request:${closed}:eve`);
   t.is(r.st, "declined");
   t.is(r.retryAt, new Date(w.now + DECLINE_WAIT_DAYS * DAY).toISOString().replace(".000Z", "Z"));
@@ -36,7 +40,10 @@ test("a declined request: asked again or withdrawn only once 14 days passed; reo
   ok(t, w.run("eve", "joinRequests.create", { space: closed, rulesAccepted: true }));
   t.like(rec<RequestRec>(w, `request:${closed}:eve`), { st: "open", retryAt: null });
   // reopen (Undo) clears the wait; so does an approval
-  ok(t, w.run("olga", "joinRequests.decide", { space: closed, users: ["eve"], decision: "decline" }));
+  ok(
+    t,
+    w.run("olga", "joinRequests.decide", { space: closed, users: ["eve"], decision: "decline" }),
+  );
   ok(
     t,
     w.run("olga", "joinRequests.decide", {
@@ -151,6 +158,9 @@ test("an admin-only model on the included tokens needs the server's yes; a key o
   w.key("mel", "K1");
   ok(t, askWith({ model: "claude-fable", pay: "K1" }));
   w.device("mel", "D1");
-  ok(t, askWith({ model: "claude-fable", executor: { kind: "device", cli: "claude", device: "D1" } }));
+  ok(
+    t,
+    askWith({ model: "claude-fable", executor: { kind: "device", cli: "claude", device: "D1" } }),
+  );
   ok(t, askWith({ model: "gemini-flash" }));
 });

@@ -376,7 +376,10 @@ for (const kind of STORES) {
     const { w, open } = cast(t, kind);
     const s = w.server.call(null, "devices.authorize", { name: "Mac" });
     const request = s.ok ? (s.result as { request: string }).request : "";
-    const ap = w.server.call({ u: "mel" }, "devices.approve", { request, code: s.ok ? (s.result as { code: string }).code : "" });
+    const ap = w.server.call({ u: "mel" }, "devices.approve", {
+      request,
+      code: s.ok ? (s.result as { code: string }).code : "",
+    });
     const device = ap.ok ? (ap.result as { device: string }).device : "";
     ok(t, w.server.call(null, "devices.token", { request }));
     const mac = { kind: "device", cli: "claude", device };

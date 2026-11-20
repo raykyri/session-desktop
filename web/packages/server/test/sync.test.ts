@@ -205,7 +205,12 @@ test("device sign-in: one click only from the computer that asked; elsewhere the
   const ask = async () => {
     const a = await anon.call(
       "devices.authorize",
-      { name: "Mira’s Mac", kind: "mac", device: "MacBook Air · macOS 15.1", app: "Session for Mac 1.0.0" },
+      {
+        name: "Mira’s Mac",
+        kind: "mac",
+        device: "MacBook Air · macOS 15.1",
+        app: "Session for Mac 1.0.0",
+      },
       mac,
     );
     return a.body.result as { request: string; code: string };
@@ -234,10 +239,13 @@ test("device sign-in: one click only from the computer that asked; elsewhere the
     ok: false,
     error: { code: "BAD_REQUEST" },
   });
-  t.like((await mel.call("devices.approve", { request: a.request, code: "ZZZ-ZZZ" }, elsewhere)).body, {
-    ok: false,
-    error: { code: "BAD_REQUEST" },
-  });
+  t.like(
+    (await mel.call("devices.approve", { request: a.request, code: "ZZZ-ZZZ" }, elsewhere)).body,
+    {
+      ok: false,
+      error: { code: "BAD_REQUEST" },
+    },
+  );
   // without an address at all (none known): the code too
   t.like((await mel.call("devices.approve", { request: a.request })).body, {
     ok: false,
@@ -248,9 +256,12 @@ test("device sign-in: one click only from the computer that asked; elsewhere the
     error: { code: "PRECONDITION_FAILED" },
   });
   // with the code it is approved
-  t.like((await mel.call("devices.approve", { request: a.request, code: a.code }, elsewhere)).body, {
-    ok: true,
-  });
+  t.like(
+    (await mel.call("devices.approve", { request: a.request, code: a.code }, elsewhere)).body,
+    {
+      ok: true,
+    },
+  );
   t.like((await anon.call("devices.token", { request: a.request })).body, { ok: true });
   // one click from the computer that asked
   const b = await ask();

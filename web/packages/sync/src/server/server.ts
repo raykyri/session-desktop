@@ -602,7 +602,10 @@ export class SyncServer {
     if (!b || key === null) return null;
     const now = this.clockNow();
     const prev = this.buckets.get(key) ?? { tokens: b.burst, at: now };
-    const tokens = Math.min(b.burst, prev.tokens + (Math.max(0, now - prev.at) * b.perMinute) / 60_000);
+    const tokens = Math.min(
+      b.burst,
+      prev.tokens + (Math.max(0, now - prev.at) * b.perMinute) / 60_000,
+    );
     if (tokens < 1) {
       this.buckets.set(key, { tokens, at: Math.max(now, prev.at) });
       const wait = Math.ceil(((1 - tokens) * 60_000) / b.perMinute);
@@ -946,7 +949,8 @@ export class SyncServer {
     if (!writes.some(([key, d]) => mine(d) && tx.get(key) === undefined)) return null;
     const live = new Set<string>();
     for (const status of ["queued", "running"])
-      for (const r of tx.scan("run", "status", status)) if (r.kind === "run" && mine(r)) live.add(`run:${r.id}`);
+      for (const r of tx.scan("run", "status", status))
+        if (r.kind === "run" && mine(r)) live.add(`run:${r.id}`);
     for (const [key, d] of writes)
       if (mine(d)) live.add(key);
       else if (d === null || d.kind === "run") live.delete(key);

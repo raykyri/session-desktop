@@ -67,7 +67,12 @@ test("a long tool result is clipped; an exchange over the budget with its turns 
   t.true(JSON.stringify(h).includes('"q39"'));
   t.true(h.some((x) => x.role === "tool"));
   const huge = "z".repeat(HISTORY_MAX_CHARS);
-  const one = runMessages([{ q: "old", a: huge, turns: [] }, exchange("new", "A", "r")], "q", [], tools);
+  const one = runMessages(
+    [{ q: "old", a: huge, turns: [] }, exchange("new", "A", "r")],
+    "q",
+    [],
+    tools,
+  );
   t.false(JSON.stringify(one).includes('"old"'), "an exchange over the budget is left out");
   t.true(JSON.stringify(one).includes('"new"'));
 });

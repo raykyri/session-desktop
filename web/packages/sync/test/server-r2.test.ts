@@ -513,7 +513,9 @@ for (const kind of STORES) {
     const { w } = cast(t, kind);
     const a = w.server.call(null, "devices.authorize", { name: "attacker's mac" }) as Any;
     const req = a.result.request;
-    t.true(w.server.call({ u: "mel" }, "devices.approve", { request: req, code: a.result.code }).ok);
+    t.true(
+      w.server.call({ u: "mel" }, "devices.approve", { request: req, code: a.result.code }).ok,
+    );
     t.is(
       code(w.server.call({ u: "otto" }, "devices.approve", { request: req, deny: true })),
       "NOT_FOUND",

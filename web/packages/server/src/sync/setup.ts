@@ -6,6 +6,7 @@
 
 import { apiKeys, users, type KeyCipher, type SessionDatabase } from "@session/db";
 import type { Registry } from "@session/mutators";
+import { canUseModel } from "@session/shared";
 import {
   SqliteServerStore,
   SyncServer,
@@ -19,7 +20,6 @@ import {
   type SyncServerOptions,
 } from "@session/sync/server";
 
-import { canUseModel } from "@session/shared";
 
 import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";

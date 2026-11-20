@@ -77,7 +77,9 @@ class Hub {
 
   add(l: Listener): () => void {
     this.streams.add(l);
-    this.unsub ??= this.server.subscribe((logs, keys) => this.check([...this.streams], [...logs], keys));
+    this.unsub ??= this.server.subscribe((logs, keys) =>
+      this.check([...this.streams], [...logs], keys),
+    );
     return () => {
       this.streams.delete(l);
       if (this.streams.size === 0 && this.unsub) {

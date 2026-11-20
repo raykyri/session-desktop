@@ -2,8 +2,9 @@
 // it the jobs the mutators queued (`JobRunner.start`), and it runs them.
 // - `run`: a run of an ask with the included tokens (an owned agent loop; a
 //   device run is its device's, never a server job). It goes to `run_queue`
-//   and starts when the caps allow: per user, per provider, the daily limits
-//   when enforced. The payer is chosen when it starts (`payerFor`: the ask's
+//   and starts when the caps allow: per user and per provider (how many a
+//   person may queue is the sync server's `queuedRunsPerUser`). The payer is
+//   chosen when it starts (`payerFor`: the ask's
 //   payer, else the included tokens, then the asker's default API key), and
 //   a user's key is decrypted for the provider call it pays. A 429 requeues
 //   with backoff (MAX_RATE_LIMIT_REQUEUES), then ends the run `rate`.

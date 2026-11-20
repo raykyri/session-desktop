@@ -16,10 +16,10 @@
 // cancelled, a later run of the ask replaced it, the person lost access), the
 // attempt stops. Usage is recorded by run, payer and space as each step
 // finishes, so an attempt that is stopped, times out, is drained or fails
-// still records the steps it finished. After each step the payer's
-// allowance (the weekly included tokens, or a key's monthly cap) is checked
-// again (`payerLeft`): a payer with nothing left ends the run `tokens`, and
-// a key that is no longer valid ends it `key`.
+// still records the steps it finished. After each step that called tools (so
+// another follows) the payer's allowance (the weekly included tokens, or a
+// key's monthly cap) is read again (`payerLeft`): a payer with nothing left
+// ends the run `tokens`, and a key that is no longer valid ends it `key`.
 
 import type { AttemptUsage, SessionDatabase } from "@session/db";
 import { runs as runsRepo } from "@session/db";
@@ -44,13 +44,7 @@ import type { ResolvedModel } from "./providers.js";
 import type { RunToolContext, ToolCaches } from "./tools/context.js";
 import { ToolBudget } from "./tools/context.js";
 import { buildTools } from "./tools/index.js";
-import {
-  addUsage,
-  attemptUsageOf,
-  costOf,
-  recordAttemptUsage,
-  recordToolUsage,
-} from "./usage.js";
+import { addUsage, attemptUsageOf, costOf, recordAttemptUsage, recordToolUsage } from "./usage.js";
 
 /** `04-agent-runtime.md` §3. */
 export const MAX_STEPS = 25;
