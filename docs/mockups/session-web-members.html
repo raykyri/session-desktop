@@ -91,7 +91,7 @@ body.fs .fsexit:focus-visible, body.fs.fs-peek .fsexit { transform: translate(-5
 
 /* ---- shared pieces ---- */
 .av { width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
-  color: var(--av-fg); font-size: 10.5px; font-weight: 600; letter-spacing: .02em; padding-top: 2px; }  /* initials sit 1px below center */
+  color: var(--av-fg); font-size: 10.5px; font-weight: 600; letter-spacing: .02em; padding-top: 1px; }  /* initials sit .5px below center */
 .av.sm { width: 20px; height: 20px; font-size: 8.5px; }
 .av.xs { width: 16px; height: 16px; font-size: 7.5px; }
 .avs { display: inline-flex; } .avs .av { box-shadow: 0 0 0 2px var(--pane); } .avs .av + .av { margin-left: -5px; }
@@ -540,6 +540,8 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 .sact svg.i { width: 14px; height: 14px; margin: 0 3px; }
 /* space header, browse, new space */
 .sphead { display: flex; align-items: flex-start; gap: 12px; padding: 4px 2px 14px; border-bottom: 1px solid var(--divider); }
+.sphead.wide { grid-column: 1 / -1; }
+.sphead.wide p { max-width: 80ch; }
 .sphead h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; color: var(--t-heading); }
 .sphead h2 .glyph { width: 26px; height: 26px; border-radius: 7px; font-size: 13px; }
 .sphead p { margin: 3px 0 4px; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.45; }
@@ -1362,11 +1364,11 @@ const readout = (p, T, ns) => inGroup(T, ns, st.sel[p.id]) ? preview(p, T, T.nod
    after layout from each row's measured position (drawGraph). */
 function outline(p, T, G) {
   const sel = st.sel[p.id], on = onPath(p, T), g = G.g;
-  const rows = G.ns.flatMap(n => T.dfs(n.id, 0, [])), X = d => 6 + d * 13;
+  const rows = G.ns.flatMap(n => T.dfs(n.id, 0, [])), X = d => 10 + d * 13;
   return `<div class="graph" data-draw><svg aria-hidden="true"></svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}${n.id === sel ? ' sel' : ''}" style="padding-left:${X(d) + 10}px" data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-par="${d ? n.par : ''}" data-d="${d}" data-grp="${g}"><span class="gq">${esc(n.q)}</span>${n.u !== T.nodes[n.par].u ? `<span class="rav rav-r" title="${esc(n.u)}">${av(n.u, 'xs')}</span>` : ''}</button>`).join('')}</div>${readout(p, T, G.ns)}`;
 }
 function drawGraph(graph) {
-  const X = d => 6 + d * 13, at = {};
+  const X = d => 10 + d * 13, at = {};
   let paths = '', dots = '';
   for (const r of graph.querySelectorAll(':scope > .grow-r')) {
     const d = +r.dataset.d, y = r.offsetTop + 13, on = r.classList.contains('on');
@@ -1404,7 +1406,7 @@ const replyLink = (p, id, label = 'Reply') => canWrite() ? `<button class="tlink
 /* Avatar tree: the same line graph as the branch trees, one row per reply led by its author's avatar; click a row to read it. */
 function replyLines(p) {
   const rows = flatReplies(replies(p), 0, '', (id, r) => st.rcol[rid(r)]); if (!rows.length) return st.replying === rkey(p, 'top') ? `<div class="grp">${replyBox(p, 'top', 'Reply to @' + p.u)}</div>` : '';
-  const sel = st.rsel[p.id], H = 26, X = d => 6 + d * 13, idx = Object.fromEntries(rows.map((x, i) => [x.id, i]));
+  const sel = st.rsel[p.id], H = 26, X = d => 10 + d * 13, idx = Object.fromEntries(rows.map((x, i) => [x.id, i]));
   const on = new Set(); if (sel) sel.split('.').forEach((_, i, a) => on.add(a.slice(0, i + 1).join('.')));
   const cur = sel && idx[sel] != null ? rows[idx[sel]] : null;
   return `<div class="grp"><div class="graph" data-draw><svg aria-hidden="true"></svg>${rows.map(({ r, d, id, hid }) => `<button class="grow-r${on.has(id) ? ' on' : ''}${id === sel ? ' sel' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}" data-d="${d}" data-par="${d ? id.split('.').slice(0, -1).join('.') : ''}"><span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(plainReply(r.t))}</span>${hid ? `<span class="rhid">+${hid}</span>` : ''}</span></button>`).join('')}</div>
@@ -1577,7 +1579,8 @@ function spaceHead() {
   const act = !canWrite() ? '' : own ? '<span class="chip">Your channel</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : isPrivate(x.id) ? '<span class="chip">Members only</span>' : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`;
   const name = `${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}`, by = `Channel by ${av(ownerOf(x.id), 'xs')}@${esc(ownerOf(x.id))}`, cnt = noun(memberCount(x.id), 'member', 'members');
   const meta = `${by} · ${cnt}${isPrivate(x.id) ? ' · private' : ''}`, desc = x.desc ? `<p>${esc(clip(x.desc, 170))}</p>` : '';
-  return `<div class="row new-row"><div class="sphead"><div class="grow"><h2>${glyph(x)}${name}</h2>${desc}<small>${meta}</small></div>${act}</div><div></div></div>`;
+  const wide = st.ui.ch === 'b';  /* A in the post column · B across both columns */
+  return `<div class="row new-row"><div class="sphead${wide ? ' wide' : ''}"><div class="grow"><h2>${glyph(x)}${name}</h2>${desc}<small>${meta}</small></div>${act}</div>${wide ? '' : '<div></div>'}</div>`;
 }
 const spaceLocked = () => SP[st.space] && SPACE_META[st.space] && isPrivate(st.space) && !isJoined(st.space);
 /* Browse: every open space, plus private ones you are in */
@@ -1662,7 +1665,10 @@ app.addEventListener('click', e => {
   if (a === 'spscope') { st.spScope = d.s; st.menu = null; render(); return; }
   if (a === 'star') { e.stopPropagation(); const s0 = (STARRED[st.user] ||= []), i = s0.indexOf(d.id); if (i < 0) s0.push(d.id); else s0.splice(i, 1); render(); return; }
   if (a === 'seccol') { st.secCol = { ...(st.secCol || {}), [d.k]: !(st.secCol || {})[d.k] }; render(); return; }
-  if (a === 'ask' && st.asking === d.id) { (document.getElementById(`in-mf:${d.id}:${st.askPar ?? 'r'}`) || $(`[id^="in-mf\\:${d.id}"]`))?.focus(); return; }
+  if (a === 'ask' && st.asking === d.id) { /* the Reply button again: close an empty composer, else go back to it */
+    const box = document.getElementById(`in-mf:${d.id}:${st.askPar ?? 'r'}`) || $(`[id^="in-mf\\:${d.id}"]`);
+    if (!box || !box.value.trim()) { st.asking = null; st.quote = null; st.askPar = null; render(); return; }
+    box.focus(); return; }
   if (a === 'ask') { st.asking = d.id; st.sel[d.id] = null; st.quote = null; st.askPar = null; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
   if (a === 'baopen') { st.baOpen = st.baOpen === d.k ? null : d.k; render(); return; }
   if (a === 'askfrom') { st.baOpen = null; st.sel[d.id] = d.sel || d.node; st.askPar = d.node; st.asking = d.id; st.quote = null; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
@@ -1845,7 +1851,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { ba: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { ch: 'a', ba: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -2084,6 +2090,7 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
+    ${seg('ch', 'Channel header', 2)}
     ${seg('ba', 'Branch actions', 5)}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
@@ -2131,6 +2138,7 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
+  if (k === 'ch') { st.screen = 'network'; st.authOpen = false; if (!SP[st.space] || !SPACE_META[st.space]) st.space = navSpaces()[0].id; render(); $('#k-mg') && ($('#k-mg').scrollTop = 0); return; }
   if (k === 'ba') { /* open the first branch on screen so its actions show */
     if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
     st.screen = 'network'; st.authOpen = false; st.asking = null; st.baOpen = null;
