@@ -20,6 +20,7 @@ import { cx } from "./cx.js";
 import { CI, I, MI, MII, SVG } from "./icons.js";
 import { useOverlay } from "./overlay.js";
 import { canRead, useWorld } from "./world.js";
+import { refusalToast, toast, useWrite } from "./writes.js";
 
 const ROLE_LABEL: Record<string, string> = { owner: "Owner", admin: "Admin", mod: "Moderator" };
 const ROLE_TITLE: Record<string, string> = {
@@ -127,6 +128,21 @@ function Banner({
 type SideTab = "sources" | "wiki";
 
 function SourcesTab({ s }: { s: Space }) {
+  const write = useWrite();
+  const [url, setUrl] = useState("");
+  // a link pasted or entered: added to the space (the server reads the page);
+  // one already there says who added it
+  const add = async (v = url.trim()) => {
+    if (!/^https?:\/\/\S+$/.test(v)) return;
+
+    const o = await write("spaceSources.add", { space: s.id, url: v }, { quiet: true });
+    if (!o.ok && o.error?.code === "PRECONDITION_FAILED") toast(`Already in ${spaceName(s)}.`);
+    else if (!o.ok && o.error) refusalToast(o.error);
+    if (!o.ok) return;
+    setUrl("");
+    if ((o.result as { review?: boolean } | null)?.review)
+      toast("Added. A moderator reviews it before others see it.");
+  };
   const now = useNow();
   const list =
     useRecords(
@@ -148,6 +164,18 @@ function SourcesTab({ s }: { s: Space }) {
             placeholder="Paste a link or drop a file"
             aria-label={`Add a source to ${spaceName(s)}: paste a link`}
             autoComplete="off"
+            value={url}
+            onChange={(e) => setUrl(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void add();
+            }}
+            onPaste={(e) => {
+              const v = e.clipboardData.getData("text").trim();
+              if (/^https?:\/\//.test(v)) {
+                e.preventDefault();
+                void add(v);
+              }
+            }}
           />
         </div>
       </div>
@@ -196,7 +224,17 @@ function AboutTab({ s }: { s: Space }) {
   const now = useNow();
   const w = useWorld();
   const role = w.roles[s.id];
-  const pages = useRecords((r) => r.get("pages", s.id)?.list ?? [], [s.id]) ?? [];
+  const navigate = useNavigate();
+  const pages =
+    useRecords(
+      (r) =>
+        (r.get("pages", s.id)?.list ?? []).map((p) => ({
+          ...p,
+          slug: r.get("page", p.id)?.slug ?? null,
+        })),
+      [s.id],
+    ) ?? [];
+  const editsPages = isStaff(role) || (role !== undefined && s.pageEdit === "members");
   const skills =
     useRecords(
       (r) => {
@@ -228,12 +266,39 @@ function AboutTab({ s }: { s: Space }) {
       <div className="note-card ab-pages">
         <div className="ab-ch">
           <h3>Pages</h3>
+          {editsPages ? (
+            <button
+              className="iconbtn"
+              type="button"
+              aria-label="New page"
+              title="New page"
+              onClick={() =>
+                void navigate({
+                  to: "/s/$space/pages/$slug",
+                  params: { space: s.name, slug: "untitled-page" },
+                })
+              }
+            >
+              <Svg src={SVG.PLUS} />
+            </button>
+          ) : null}
         </div>
         {pages.length ? (
           <ul className="links ab-pgl">
             {pages.map((p) => (
               <li key={p.id}>
-                <button className="ab-pgr" type="button">
+                <button
+                  className="ab-pgr"
+                  type="button"
+                  disabled={!p.slug}
+                  onClick={() =>
+                    p.slug &&
+                    void navigate({
+                      to: "/s/$space/pages/$slug",
+                      params: { space: s.name, slug: p.slug },
+                    })
+                  }
+                >
                   <Svg src={I.page} />
                   <span>{p.t}</span>
                   <small>{ago(p.at, now)}</small>
@@ -469,16 +534,19 @@ export type SpaceView = { kind: "threads" } | { kind: "latest" } | { kind: "topi
 export function SpacePage({
   name,
   view = { kind: "threads" },
+  side,
 }: {
   name: string;
   view?: SpaceView;
+  /** The sidebar tab a link opens (`/s/<space>/about`). */
+  side?: SideTab;
 }) {
   const w = useWorld();
   const f = useFeedState();
   const navigate = useNavigate();
   const [sideOpen, setSideOpen] = useState(true);
-  const [mWiki, setMWiki] = useState(false);
-  const [sideTab, setSideTab] = useState<SideTab | null>(null);
+  const [mWiki, setMWiki] = useState(side !== undefined && window.innerWidth <= 760);
+  const [sideTab, setSideTab] = useState<SideTab | null>(side ?? null);
   useOverlay(mWiki, () => setMWiki(false));
   const s = useMemo(() => w.spaces.find((x) => x.name === name), [w.spaces, name]);
   const session = w.session;

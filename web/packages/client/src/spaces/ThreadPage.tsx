@@ -21,7 +21,7 @@ import { useNow, useRecords, useRunText } from "../sync/react.js";
 
 import { ItemMenu, ModNote, type Item } from "./ItemMenu.js";
 import { MissingSpace, ThreadGate } from "./Membership.js";
-import { NotFound, Page } from "./Page.js";
+import { Modal, NotFound, Page } from "./Page.js";
 import { Svg } from "./Svg.js";
 import {
   AskBox,
@@ -248,24 +248,40 @@ function Actions({
 function FollowUpItem({
   t,
   f,
-  below,
   level,
   space,
   me,
+  sel,
+  path,
 }: {
   t: ThreadView;
   f: FollowUp;
-  below: number;
   level: number;
   space: Space;
   me: string | null;
+  sel: string;
+  path: Set<string>;
 }) {
   const now = useNow();
   const [asking, setAsking] = useState(false);
+  const kids = t.followups.filter((x) => x.par === f.id);
+  const count = (id: string): number =>
+    t.followups.filter((x) => x.par === id).reduce((n, x) => n + 1 + count(x.id), 0);
+  const below = count(f.id);
+  const [open, setOpen] = useState(path.has(f.id) && sel !== f.id);
+  const [onPath, setOnPath] = useState(path.has(f.id));
+  if (onPath !== path.has(f.id)) {
+    setOnPath(path.has(f.id));
+    if (path.has(f.id) && sel !== f.id) setOpen(true);
+  }
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (sel === f.id) ref.current?.scrollIntoView({ block: "center" });
+  }, [sel, f.id]);
   const running = f.run && (f.run.status === "queued" || f.run.status === "running");
   const live = useRunText(running && f.run ? f.run.id : null, f.run?.attempt);
   return (
-    <div className="fu qt-fu" id={`qt-n-${f.id}`}>
+    <div className={cx("fu qt-fu", sel === f.id && "on")} id={`qt-n-${f.id}`} ref={ref}>
       <div className="meta">
         <Avatar u={f.u} className="sm" />
         <b>{f.u}</b>
@@ -333,9 +349,32 @@ function FollowUpItem({
       </div>
       {asking ? <AskBox t={t} par={f.id} level={level} onClose={() => setAsking(false)} /> : null}
       {below ? (
-        <button className="tlink qt-fub" type="button" aria-expanded="false">
-          Show {below} {below === 1 ? "ask" : "asks"} below
+        <button
+          className="tlink qt-fub"
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+        >
+          {open
+            ? `Hide ${below === 1 ? "the ask" : `${below} asks`} below`
+            : `Show ${below} ${below === 1 ? "ask" : "asks"} below`}
         </button>
+      ) : null}
+      {open && kids.length ? (
+        <div className="qt-fuk">
+          {kids.map((k) => (
+            <FollowUpItem
+              key={k.id}
+              t={t}
+              f={k}
+              level={level + 1}
+              space={space}
+              me={me}
+              sel={sel}
+              path={path}
+            />
+          ))}
+        </div>
       ) : null}
     </div>
   );
@@ -401,7 +440,22 @@ function ReplyItem({ t, r, kids }: { t: ThreadView; r: Reply; kids: Reply[] }) {
 }
 
 /** The ask tree's outline: the thread's ask and its follow-ups by parent. */
-function Outline({ t, title }: { t: ThreadView; title: string }) {
+function Outline({
+  t,
+  title,
+  sel,
+  path,
+  go,
+  sheet = false,
+}: {
+  t: ThreadView;
+  title: string;
+  sel: string;
+  path: Set<string>;
+  go: (node: string) => void;
+  /** In the phone's Outline sheet (no second #qt-ol). */
+  sheet?: boolean;
+}) {
   const kids = (par: string | null) => t.followups.filter((f) => f.par === par);
   const depth = (id: string | null): number => {
     let d = 0;
@@ -421,14 +475,15 @@ function Outline({ t, title }: { t: ThreadView; title: string }) {
         key={f.id}
         role="treeitem"
         aria-level={d + 1}
-        aria-selected="false"
+        aria-selected={f.id === sel}
         aria-expanded={sub.length ? true : undefined}
       >
         <button
-          className="qt-olr"
+          className={cx("qt-olr", path.has(f.id) && "path")}
           type="button"
           style={{ ["--d" as string]: d }}
-          aria-current="false"
+          aria-current={f.id === sel}
+          onClick={() => go(f.id)}
         >
           <Avatar u={f.u} />
           <span className="qt-olt">{f.q}</span>
@@ -443,7 +498,7 @@ function Outline({ t, title }: { t: ThreadView; title: string }) {
     );
   };
   return (
-    <nav className="qt-ol" id="qt-ol" aria-label="Outline of this thread">
+    <nav className="qt-ol" id={sheet ? undefined : "qt-ol"} aria-label="Outline of this thread">
       <div className="qt-ol-h">
         <h3>Outline</h3>
         <span className="num">
@@ -451,12 +506,13 @@ function Outline({ t, title }: { t: ThreadView; title: string }) {
         </span>
       </div>
       <ul role="tree">
-        <li role="treeitem" aria-level={1} aria-selected="true" aria-expanded="true">
+        <li role="treeitem" aria-level={1} aria-selected={sel === "r"} aria-expanded="true">
           <button
             className="qt-olr top path"
             type="button"
             style={{ ["--d" as string]: 0 }}
-            aria-current="true"
+            aria-current={sel === "r"}
+            onClick={() => go("r")}
           >
             <Avatar u={t.u} />
             <span className="qt-olt">{title}</span>
@@ -643,7 +699,17 @@ function Deleted({ t, space }: { t: ThreadView; space: Space }) {
   );
 }
 
-export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: string }) {
+export function ThreadPage({
+  spaceName: name,
+  id,
+  node = "r",
+}: {
+  spaceName: string;
+  id: string;
+  /** The selected ask ("r": the thread's), from `/a/<node>`. */
+  node?: string;
+}) {
+  const navigate = useNavigate();
   const w = useWorld();
   const now = useNow();
   const { focus } = useNavState();
@@ -651,6 +717,7 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
   const session = w.session;
   const [view, setView] = useState<"docsrc" | "chat">("docsrc");
   const [askingRoot, setAskingRoot] = useState(false);
+  const [olSheet, setOlSheet] = useState(false);
   useEffect(() => {
     if (s) void session?.openThread(s.id, id);
   }, [s, id, session]);
@@ -733,10 +800,19 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
     );
   }
   const first = t.followups.filter((f) => f.par === null);
-  const below = (fid: string): number => {
-    const kids = t.followups.filter((f) => f.par === fid);
-    return kids.reduce((n, k) => n + 1 + below(k.id), 0);
-  };
+  // the selected ask and the asks above it
+  const path = new Set<string>();
+  for (let cur: string | null = node; cur && cur !== "r";) {
+    path.add(cur);
+    const at: string = cur;
+    cur = t.followups.find((f) => f.id === at)?.par ?? null;
+  }
+  const go = (n: string) =>
+    void navigate(
+      n === "r"
+        ? { to: "/s/$space/t/$thread", params: { space: s.name, thread: t.id } }
+        : { to: "/s/$space/t/$thread/a/$node", params: { space: s.name, thread: t.id, node: n } },
+    );
   return (
     <Page place={{ kind: "thread", id: s.id }}>
       <div className="th-page qt-page">
@@ -769,7 +845,8 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
             <button
               className="btn sm qt-olbtn"
               type="button"
-              aria-pressed="false"
+              onClick={() => setOlSheet(true)}
+              aria-pressed={olSheet}
               aria-label="Outline"
               title="Outline"
             >
@@ -822,10 +899,11 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
                       key={f.id}
                       t={t}
                       f={f}
-                      below={below(f.id)}
                       level={1}
                       space={s}
                       me={w.me?.u ?? null}
+                      sel={node}
+                      path={path}
                     />
                   ))
                 ) : (
@@ -835,7 +913,22 @@ export function ThreadPage({ spaceName: name, id }: { spaceName: string; id: str
             </article>
           </div>
           <aside className="qt-aside">
-            <Outline t={t} title={t.t ?? t.q} />
+            <Outline t={t} title={t.t ?? t.q} sel={node} path={path} go={go} />
+            {olSheet ? (
+              <Modal title="Outline" wrap="qt-olm-sheet" onClose={() => setOlSheet(false)}>
+                <Outline
+                  sheet
+                  t={t}
+                  title={t.t ?? t.q}
+                  sel={node}
+                  path={path}
+                  go={(n) => {
+                    setOlSheet(false);
+                    go(n);
+                  }}
+                />
+              </Modal>
+            ) : null}
             <Sources md={t.sum} />
             <Facts t={t} space={s} kind="ask" />
           </aside>

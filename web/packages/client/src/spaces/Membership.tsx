@@ -765,6 +765,7 @@ export function MissingSpace({ name, thread }: { name: string; thread: boolean }
           postsOff: false,
           rules: [],
           qs: [],
+          pageEdit: null,
           mods: [],
           members: 0,
           posts: null,

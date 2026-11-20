@@ -24,6 +24,7 @@ import { InviteLanding } from "../spaces/InviteLanding.js";
 import { ManagePage } from "../spaces/Manage.js";
 import { NotificationsPage } from "../spaces/Notifications.js";
 import { NotFound, Page } from "../spaces/Page.js";
+import { PagePage } from "../spaces/PagesView.js";
 import { SavedPage } from "../spaces/SavedPage.js";
 import { SearchPage } from "../spaces/SearchPage.js";
 import { SpacePage } from "../spaces/SpacePage.js";
@@ -119,8 +120,8 @@ const askRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/s/$space/t/$thread/a/$node",
   component: function AskRoute() {
-    const { space, thread } = askRoute.useParams();
-    return <ThreadPage spaceName={space} id={thread} />;
+    const { space, thread, node } = askRoute.useParams();
+    return <ThreadPage spaceName={space} id={thread} node={node} />;
   },
 });
 
@@ -130,6 +131,24 @@ const manageRoute = createRoute({
   component: function ManageRoute() {
     const { space, tab } = manageRoute.useParams();
     return <ManagePage name={space} tab={tab} />;
+  },
+});
+
+const pageRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/s/$space/pages/$slug",
+  component: function PageRoute() {
+    const { space, slug } = pageRoute.useParams();
+    return <PagePage name={space} slug={slug} />;
+  },
+});
+
+const aboutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/s/$space/about",
+  component: function AboutRoute() {
+    const { space } = aboutRoute.useParams();
+    return <SpacePage name={space} side="wiki" />;
   },
 });
 
@@ -256,6 +275,8 @@ const routeTree = rootRoute.addChildren([
   threadRoute,
   askRoute,
   manageRoute,
+  pageRoute,
+  aboutRoute,
   inviteLinkRoute,
   searchRoute,
   notificationsRoute,

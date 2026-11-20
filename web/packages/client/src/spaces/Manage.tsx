@@ -15,6 +15,7 @@ import type { Reader } from "../sync/reader.js";
 
 import { Modal, NotFound, Page } from "./Page.js";
 import { Scrim } from "./Scrim.js";
+import { SkillsManage } from "./Skills.js";
 import { Svg } from "./Svg.js";
 import { Author, Avatar } from "./atoms.js";
 import { cx } from "./cx.js";
@@ -23,7 +24,7 @@ import { useOverlay } from "./overlay.js";
 import { useWorld } from "./world.js";
 import { refusalToast, toast, useWrite } from "./writes.js";
 
-export type ManageTab = "requests" | "reports" | "members" | "invites";
+export type ManageTab = "requests" | "reports" | "members" | "invites" | "skills";
 
 const ROLES: [Role, string][] = [
   ["member", "Member"],
@@ -1106,6 +1107,7 @@ export function ManagePage({ name, tab }: { name: string; tab: string }) {
       </>,
     ],
     ...(closed ? ([["invites", "Invites"]] as [ManageTab, React.ReactNode][]) : []),
+    ["skills", "Skills"],
   ];
   const cur = (tabs.find((t) => t[0] === tab) ?? tabs[0])?.[0] ?? "members";
   const go = (t: ManageTab) =>
@@ -1155,6 +1157,8 @@ export function ManagePage({ name, tab }: { name: string; tab: string }) {
           <Reports s={s} />
         ) : cur === "members" ? (
           <Members s={s} myRole={role} />
+        ) : cur === "skills" ? (
+          <SkillsManage s={s} />
         ) : (
           <Invites s={s} />
         )}

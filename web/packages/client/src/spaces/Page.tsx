@@ -139,6 +139,7 @@ export function Modal({
   role = "dialog",
   bare = false,
   back = true,
+  wrap,
 }: {
   title: ReactNode;
   onClose: () => void;
@@ -152,6 +153,8 @@ export function Modal({
   /** Back closes it (a history entry); off for a dialog that a blocked
    * navigation opened, which goes on once it closes. */
   back?: boolean;
+  /** A class for an element around the dialog (the mockup's qt-olm-sheet). */
+  wrap?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useOverlay(true, onClose, { back });
@@ -159,7 +162,7 @@ export function Modal({
   const id = "cs-dt";
   // a dialog sits at the top of the app element (as the mockup's do), not
   // inside the menu or row that opened it
-  return createPortal(
+  const dialog = (
     // a press outside the dialog closes it; Escape does from the keyboard
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
@@ -188,7 +191,10 @@ export function Modal({
         {children}
         {footer ? <div className="modal-f">{footer}</div> : null}
       </div>
-    </div>,
+    </div>
+  );
+  return createPortal(
+    wrap ? <div className={wrap}>{dialog}</div> : dialog,
     document.getElementById("app") ?? document.body,
   );
 }

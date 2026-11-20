@@ -30,6 +30,8 @@ export interface Space {
   rules: string[];
   /** The request form's questions. */
   qs: { q: string; req: boolean }[];
+  /** Who edits pages: moderators (null) or members. */
+  pageEdit: "mods" | "members" | null;
   mods: [string, Role][];
   members: number;
   /** Threads, from its stats (null where the reader may not read them). */
@@ -56,6 +58,7 @@ export function toSpace(s: pkg.SpaceRec, stats: pkg.StatsRec | undefined): Space
     postsOff: s.postsOff,
     rules: s.rules,
     qs: s.qs,
+    pageEdit: s.pageEdit,
     mods: s.mods,
     members: s.members,
     posts: stats ? stats.posts : null,
