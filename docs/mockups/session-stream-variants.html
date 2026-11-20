@@ -156,10 +156,14 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .card { display: flex; flex-direction: column; }
 .card > :nth-last-child(2) { margin-bottom: 13px; }
 .tip { position: relative; display: inline-flex; cursor: default; border-radius: 6px; }
-.tip::after { content: attr(data-tip); position: absolute; left: -4px; bottom: calc(100% + 6px); z-index: 6; white-space: nowrap; pointer-events: none;
+/* tooltip to the right of the icon, with a triangle pointing back at it */
+.tip::after { content: attr(data-tip); position: absolute; left: calc(100% + 9px); top: 50%; z-index: 6; white-space: nowrap; pointer-events: none;
   padding: 4px 8px; border-radius: var(--r-md); background: var(--t-heading); color: var(--card); font-size: var(--fs-xs); font-weight: 500;
-  opacity: 0; transform: translateY(2px); transition: opacity .12s, transform .12s; }
-.tip:hover::after, .tip:focus-visible::after { opacity: 1; transform: none; }
+  opacity: 0; transform: translate(-3px, -50%); transition: opacity .12s, transform .12s; }
+.tip::before { content: ""; position: absolute; left: calc(100% + 4px); top: 50%; z-index: 6; pointer-events: none;
+  border-style: solid; border-width: 5px 5px 5px 0; border-color: transparent var(--t-heading) transparent transparent;
+  opacity: 0; transform: translate(-3px, -50%); transition: opacity .12s, transform .12s; }
+.tip:hover::after, .tip:focus-visible::after, .tip:hover::before, .tip:focus-visible::before { opacity: 1; transform: translate(0, -50%); }
 .card-f { display: flex; align-items: center; gap: 4px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--divider); }
 .card-f .notes { font-weight: 400; color: var(--t-muted); font-size: var(--fs-sm); margin-right: auto; }
 .iconbtn.likes { width: auto; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
@@ -184,10 +188,10 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .graph { position: relative; }
 .graph svg { position: absolute; inset: 0; width: 100%; overflow: visible; pointer-events: none; }
 .graph svg path { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
-.graph svg path.on { stroke: var(--accent); stroke-width: 2; }
+.graph svg path.on { stroke: color-mix(in srgb, var(--accent) 55%, var(--border-strong)); stroke-width: 1.5; }
 .graph svg circle { fill: var(--feed); stroke: var(--t-dim); stroke-width: 1.5; }
-.graph svg circle.on { fill: var(--accent); stroke: var(--accent); }
-.graph svg circle.sel { fill: var(--accent); stroke: var(--accent-soft); stroke-width: 5; }
+.graph svg circle.on { fill: var(--feed); stroke: color-mix(in srgb, var(--accent) 70%, var(--border-strong)); }
+.graph svg circle.sel { fill: var(--accent); stroke: var(--accent); stroke-width: 1.5; }
 .grow-r { position: relative; display: block; width: 100%; text-align: left; height: 26px; border-radius: var(--r-md); padding-right: 6px; white-space: nowrap; overflow: hidden; }
 .grow-r:hover { background: var(--fill-hover); }
 .grow-r:has(.rav-r) { display: flex; align-items: center; gap: 6px; }
@@ -198,7 +202,8 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .grow-r.on:has(.rav-r) { align-items: flex-start; }
 .grow-r .gq { display: block; font-size: var(--fs-sm); color: var(--t-secondary); overflow: hidden; text-overflow: ellipsis; line-height: 26px; }
 .grow-r.on .gq, .grp.hl .grow-r .gq { color: var(--t-heading); }
-.grow-r.on .gq { font-weight: 600; }
+.grow-r.on .gq { font-weight: 400; }
+.grow-r.sel .gq { font-weight: 500; }
 .preview { margin-top: 10px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
 .preview .rq { margin: 4px 0 8px; font-size: var(--fs-base); font-weight: 600; color: var(--t-heading); line-height: 1.4; }
 /* the question is already the selected row above, so the card holds only the answer; its scroll area fades out above the footer */
