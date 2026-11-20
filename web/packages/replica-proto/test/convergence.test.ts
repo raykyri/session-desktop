@@ -938,7 +938,10 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       if (res.ok || !UNRECORDED.has(res.error.code)) c.sent.push({ u: d.u, e });
       if (faults.loss && chance(c.r, 0.3)) {
         if (chance(c.r, 0.5)) throw new Error("the connection dropped");
-        return { ok: false, error: { code: "SERVICE_UNAVAILABLE", message: "lost" } };
+        return {
+          ok: false,
+          error: { code: "SERVICE_UNAVAILABLE", message: "lost", serverTime: 0 },
+        };
       }
       return res;
     },

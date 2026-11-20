@@ -86,7 +86,16 @@ export const UNRECORDED: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
   "TOO_LARGE",
 ]);
 
-export type ApplyResult = { ok: true; result: unknown } | { ok: false; error: ApiError };
+/** An answer as the server keeps it for replays (`StorageScan.answers`). */
+export type StoredAnswer = { ok: true; result: unknown } | { ok: false; error: ApiError };
+
+/** An answer as the server sends it: every answer, a replayed one and a
+ * refusal included, carries `serverTime`, the server's time when it answered
+ * (milliseconds since the epoch; `01` Y2). A replay carries the time of the
+ * replay, not of the first answer. */
+export type ApplyResult =
+  | { ok: true; result: unknown; serverTime: number }
+  | { ok: false; error: ApiError & { serverTime: number } };
 
 /** A new client id; or TOO_MANY_REQUESTS (the person registered 20 clients
  * in the past day), UNAUTHORIZED or INTERNAL_SERVER_ERROR. */
@@ -175,7 +184,7 @@ export interface StorageScan {
     clientId?: string;
     seq?: number;
     digest: string;
-    result: ApplyResult;
+    result: StoredAnswer;
     at: number;
   }[];
   /** Registered clients: the user each is bound to, its last processed seq

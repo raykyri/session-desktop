@@ -106,8 +106,17 @@ test("the sync codes are answer codes, and the unrecorded ones are listed", (t) 
     code: "PRECONDITION_FAILED",
     message: "You have 20 asks waiting to run.",
     reason: "queue_full",
+    serverTime: 1_794_823_200_000,
   };
   t.true(spaces.spaceErrorSchema.safeParse(queueFull).success);
+  // every answer carries the server's time (`01` Y2)
+  const untimed: Partial<typeof queueFull> = { ...queueFull };
+  delete untimed.serverTime;
+  t.false(spaces.spaceErrorSchema.safeParse(untimed).success);
+  t.true(
+    spaces.spaceApplyAnswerSchema.safeParse({ ok: true, result: null, serverTime: 1 }).success,
+  );
+  t.false(spaces.spaceApplyAnswerSchema.safeParse({ ok: true, result: null }).success);
 });
 
 test("a moderation decision is discriminated: shown needs base, a reason goes with a removal only", (t) => {

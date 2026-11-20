@@ -167,9 +167,11 @@ function remap(v: unknown, map: ReadonlyMap<string, string>): unknown {
   return v;
 }
 
-const noAnswer = (): ApplyResult => ({
+/** What the client records when no answer arrived; `serverTime` is its own
+ * estimate of the server's time (`now`). */
+const noAnswer = (now: number): ApplyResult => ({
   ok: false,
-  error: { code: "SERVICE_UNAVAILABLE", message: "No answer from the server." },
+  error: { code: "SERVICE_UNAVAILABLE", message: "No answer from the server.", serverTime: now },
 });
 
 export class ReplicaClient {
@@ -463,7 +465,7 @@ export class ReplicaClient {
       try {
         res = await this.server.apply(this.actor, e);
       } catch {
-        res = noAnswer();
+        res = noAnswer(this.now());
       }
       this.lastAnswer.set(p.local, res);
       if (!res.ok) {
@@ -545,7 +547,10 @@ export class ReplicaClient {
     return (
       this.lastAnswer.get(p.local) ?? {
         ok: false,
-        error: refuse(this.actor === null ? "UNAUTHORIZED" : "SERVICE_UNAVAILABLE").toError(),
+        error: {
+          ...refuse(this.actor === null ? "UNAUTHORIZED" : "SERVICE_UNAVAILABLE").toError(),
+          serverTime: this.now(),
+        },
       }
     );
   }

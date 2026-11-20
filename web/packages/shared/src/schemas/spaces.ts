@@ -1062,13 +1062,20 @@ export const spaceRefusalReasonSchema = z.enum(["queue_full"]);
 
 /** An error answer. `message` is user-facing text; `issues`: the input paths
  * that failed validation (`BAD_REQUEST`); `reason`: see
- * `spaceRefusalReasonSchema`; `serverTime` (ms) with every answer that the
- * protocol sends it with; `expectedSeq` with `OUT_OF_ORDER`. */
+ * `spaceRefusalReasonSchema`; `serverTime` (ms): the server's time, on every
+ * answer (`01` Y2); `expectedSeq` with `OUT_OF_ORDER`. */
 export const spaceErrorSchema = z.object({
   code: spaceErrorCodeSchema,
   message: z.string(),
   issues: z.array(z.string()).optional(),
   reason: spaceRefusalReasonSchema.optional(),
-  serverTime: z.number().optional(),
+  serverTime: z.number(),
   expectedSeq: z.number().int().positive().optional(),
 });
+
+/** The answer to one write (`01` Y2): applied with its result, or refused.
+ * Every answer carries `serverTime`, a refusal's in its error. */
+export const spaceApplyAnswerSchema = z.union([
+  z.object({ ok: z.literal(true), result: z.unknown(), serverTime: z.number() }),
+  z.object({ ok: z.literal(false), error: spaceErrorSchema }),
+]);

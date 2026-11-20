@@ -101,6 +101,7 @@ import {
   UNRECORDED,
   type Actor,
   type ApplyResult,
+  type StoredAnswer,
   type Change,
   type Cursor,
   type LastSeq,
@@ -149,7 +150,7 @@ const logS = z
   .regex(/^(space|user):[^:]+$/);
 
 const isoAt = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
-const fail = (e: Refusal): ApplyResult => ({ ok: false, error: e.toError() });
+const fail = (e: Refusal): StoredAnswer => ({ ok: false, error: e.toError() });
 const same = (a: StoredRecord, b: StoredRecord) =>
   JSON.stringify({ ...a, rev: 0 }) === JSON.stringify({ ...b, rev: 0 });
 
@@ -380,7 +381,7 @@ class Store implements Source {
 /** What `execute` decided: the answer, whether it is recorded, and for an
  * applied write the staged changes, its notifications included. */
 interface Outcome {
-  result: ApplyResult;
+  result: StoredAnswer;
   recorded: boolean;
   staged?: Map<string, StoredRecord | null>;
 }
@@ -399,7 +400,7 @@ interface SeqAnswer {
   clientId: string;
   seq: number;
   digest: string;
-  result: ApplyResult;
+  result: StoredAnswer;
   at: number;
 }
 
@@ -479,7 +480,7 @@ class Tokens {
 export class ProtoServer implements TestServer {
   private readonly store: Store;
   /** Answers by (user, mutation id), oldest first. */
-  private readonly dedup = new Map<string, { result: ApplyResult; digest: string; at: number }>();
+  private readonly dedup = new Map<string, { result: StoredAnswer; digest: string; at: number }>();
   /** Answers by (client, seq), oldest first. */
   private readonly seqAnswers = new Map<string, SeqAnswer>();
   /** Registered clients, least recently used first. */
@@ -535,6 +536,15 @@ export class ProtoServer implements TestServer {
   }
 
   apply(actor: Actor | null, envelope: unknown): ApplyResult {
+    const a = this.answer(actor, envelope);
+    // every answer carries the server's time (`01` Y2)
+    const serverTime = this.store.time(this.clock.now());
+    return a.ok
+      ? { ...a, serverTime }
+      : { ok: false, error: { ...a.error, serverTime: a.error.serverTime ?? serverTime } };
+  }
+
+  private answer(actor: Actor | null, envelope: unknown): StoredAnswer {
     try {
       return this.applyEnvelope(actor, envelope);
     } catch {
@@ -545,7 +555,7 @@ export class ProtoServer implements TestServer {
     }
   }
 
-  private applyEnvelope(actor: Actor | null, envelope: unknown): ApplyResult {
+  private applyEnvelope(actor: Actor | null, envelope: unknown): StoredAnswer {
     // bounds first: nothing below may walk an input deeper or larger than this
     const bounds = outOfBounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES);
     if (bounds === "deep")

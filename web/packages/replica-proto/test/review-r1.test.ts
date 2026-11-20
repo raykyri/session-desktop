@@ -23,6 +23,7 @@ import {
   MODEL,
   World,
   actor,
+  bare,
   cast,
   fork,
   forkInput,
@@ -299,7 +300,7 @@ test("R7b: a reused mutation id's refusal is recorded, so the same envelope sent
   const b = await refused(t, w.server.apply(actor("mel"), reuse), "BAD_REQUEST");
   t.is(a, b);
   // the first write's answer stays: its replay answers it
-  t.deepEqual(await w.server.apply(actor("mel"), first), { ok: true, result: { on: false } });
+  t.deepEqual(bare(await w.server.apply(actor("mel"), first)), { ok: true, result: { on: false } });
   // a client whose queued write has a reused id gets the refusal, and the next write goes through
   const mel = w.client("mel");
   mel.queue("threads.create", { id: w.id(), space: open, kind: "post", q: "y" }, first.mutationId);
@@ -465,7 +466,7 @@ test("R9: a write and its notifications commit together: a fault in the notify s
   t.is(JSON.stringify([...w.server.dump()]), before);
   t.is(await w.nextSeq("mel", e.clientId), e.seq);
   broken = false;
-  const first = await w.server.apply(actor("mel"), e);
+  const first = bare(await w.server.apply(actor("mel"), e));
   t.deepEqual(first, { ok: true, result: null });
   const notifs = () =>
     [...w.server.dump().values()]
@@ -473,7 +474,7 @@ test("R9: a write and its notifications commit together: a fault in the notify s
       .sort();
   t.deepEqual(notifs(), [`olga:reply:reply:${id}`, `otto:mention:reply:${id}`]);
   // the same envelope again gets the stored answer, and writes nothing more
-  t.deepEqual(await w.server.apply(actor("mel"), e), first);
+  t.deepEqual(bare(await w.server.apply(actor("mel"), e)), first);
   t.deepEqual(notifs(), [`olga:reply:reply:${id}`, `otto:mention:reply:${id}`]);
   // a refused write notifies nobody: its id is taken
   await refused(
@@ -495,7 +496,7 @@ test("R15: TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE and INTERNAL_SERVER_ERROR keep
     pull: (a, l, c, o) => w.server.pull(a, l, c, o),
     apply: (a, e) => {
       const code = answers.shift();
-      if (code) return { ok: false, error: { code, message: "Try again later." } };
+      if (code) return { ok: false, error: { code, message: "Try again later.", serverTime: 0 } };
       return w.server.apply(a, e);
     },
   };
@@ -593,7 +594,7 @@ test("R4b: a removed author's delete answers null, not whether the thread got re
   const a = await w.as("mel", "threads.delete", { id: t2 });
   const b = await w.as("mel", "threads.delete", { id: t3 });
   t.deepEqual(
-    [a, b],
+    [bare(a), bare(b)],
     [
       { ok: true, result: null },
       { ok: true, result: null },
@@ -605,7 +606,7 @@ test("R4b: a removed author's delete answers null, not whether the thread got re
   t.true((w.get(`thread:${t3}`) as ThreadRec).gone);
   // a member who may read the thread is told
   const t4 = await thread(t, w, "ada", closed, "post");
-  t.deepEqual(await w.as("ada", "threads.delete", { id: t4 }), {
+  t.deepEqual(bare(await w.as("ada", "threads.delete", { id: t4 })), {
     ok: true,
     result: { kept: false },
   });
@@ -740,7 +741,7 @@ test("R11 (kept): writes on a gone thread follow the mock, and an author may del
       base: w.item(`p:${th2}`),
     }),
   );
-  t.deepEqual(await w.as("otto", "threads.delete", { id: th2 }), {
+  t.deepEqual(bare(await w.as("otto", "threads.delete", { id: th2 })), {
     ok: true,
     result: { kept: false },
   });
@@ -918,7 +919,10 @@ test("an author's delete keeps a thread with nodes or replies, and makes one wit
     [post, true],
     [lone, false],
   ] as const) {
-    t.deepEqual(await w.as("mel", "threads.delete", { id: th }), { ok: true, result: { kept } });
+    t.deepEqual(bare(await w.as("mel", "threads.delete", { id: th })), {
+      ok: true,
+      result: { kept },
+    });
     const p = w.get(`thread:${th}`) as ThreadRec;
     const pCounts = w.get(`counts:${th}`) as CountsRec;
     t.deepEqual([p.del, p.gone, pCounts.saves], [true, !kept, kept ? 1 : 0]);

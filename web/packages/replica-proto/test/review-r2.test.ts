@@ -30,6 +30,7 @@ import {
   MODEL,
   ManualClock,
   actor,
+  bare,
   admit,
   cast,
   forkInput,
@@ -146,7 +147,7 @@ test("S2: a client whose id expired registers again and sends its write; a store
       const r = await w.server.apply(a, e);
       if (!lose) return r;
       lose = false;
-      return { ok: false, error: { code: "SERVICE_UNAVAILABLE", message: "lost" } };
+      return { ok: false, error: { code: "SERVICE_UNAVAILABLE", message: "lost", serverTime: 0 } };
     },
   };
   const mel = new ReplicaClient(lossy, actor("mel"), { clock: w.clock, random: w.random });
@@ -253,7 +254,7 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
       const r = await w.server.apply(a, e);
       if (!lose) return r;
       lose = false; // the server applied it; the answer never arrived
-      return { ok: false, error: { code: "SERVICE_UNAVAILABLE", message: "lost" } };
+      return { ok: false, error: { code: "SERVICE_UNAVAILABLE", message: "lost", serverTime: 0 } };
     },
   };
   const env = { clock: dev, random: w.random };
@@ -747,12 +748,12 @@ test("Y1: a reminted envelope's answer is stored under the ids it replaces: a de
     ...(await w.envelope("mel", "threads.create", second)),
     replaces: [original.mutationId],
   };
-  const answer = await w.server.apply(actor("mel"), reminted);
+  const answer = bare(await w.server.apply(actor("mel"), reminted));
   t.deepEqual(answer, { ok: true, result: { id: second.id, run: null } });
   // the original arrives late, under the client's next seq: it gets the
   // stored answer, uses no seq and writes nothing
   const seq = await w.nextSeq("mel", original.clientId);
-  t.deepEqual(await w.server.apply(actor("mel"), { ...original, seq }), answer);
+  t.deepEqual(bare(await w.server.apply(actor("mel"), { ...original, seq })), answer);
   t.is(await w.nextSeq("mel", original.clientId), seq);
   t.is(w.get(`thread:${first.id}`), undefined);
   t.is(
@@ -762,7 +763,7 @@ test("Y1: a reminted envelope's answer is stored under the ids it replaces: a de
   // an id that has its own answer keeps it; another user's ids are their own
   const other = await w.envelope("mel", "spaces.leave", { space: open });
   await ok(t, w.server.apply(actor("mel"), { ...other, replaces: [reminted.mutationId] }));
-  t.deepEqual(await w.resend("mel", reminted, true), answer);
+  t.deepEqual(bare(await w.resend("mel", reminted, true)), answer);
   await ok(t, w.as("otto", "threads.create", first, original.mutationId));
   // `replaces` holds at most 16 ULIDs, or the envelope is malformed
   for (const replaces of [["not-a-ulid"], Array.from({ length: 17 }, () => w.id()), "x"]) {
