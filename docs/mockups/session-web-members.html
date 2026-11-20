@@ -257,20 +257,20 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .row { display: grid; grid-template-columns: minmax(0, 600px) minmax(0, 330px); gap: 21px; padding: 14px 0; justify-content: center; }
 .card { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 18px 20px 12px; min-width: 0; transition: opacity .2s; }
 .card-h { display: flex; align-items: center; gap: 10px; margin-bottom: 11px; }
-.card .ask { margin: 0 0 14px; color: var(--t-heading); font-size: var(--title-fs, var(--fs-md)); line-height: 1.44; }
+.card .ask { margin: -1px 0 13px; color: var(--t-heading); font-size: var(--title-fs, var(--fs-md)); line-height: 1.44; }
 .card .ask, .card .post { white-space: pre-line; }
 .card .post { margin: 0 0 6px; color: var(--t-primary); font-size: var(--title-fs, var(--fs-md)); line-height: 1.44; }
 .card .byline { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: var(--fs-sm); color: var(--t-faint); }
 /* padding variants (the base values are on .card, .card-h, .card .ask and .card-f) */
 .card.pad-compact { padding: 14px 16px 10px; }
 .pad-compact .card-h { margin-bottom: 8px; }
-.pad-compact .ask { margin-bottom: 10px !important; }
+.pad-compact .ask { margin-bottom: 9px !important; }
 .pad-compact .byline { margin-bottom: 10px !important; }
 .pad-compact > :nth-last-child(2) { margin-bottom: 10px !important; }
 .pad-compact .card-f { padding-top: 8px; }
 .card.pad-roomy { padding: 24px 28px 16px; }
 .pad-roomy .card-h { margin-bottom: 16px; }
-.pad-roomy .ask { margin-bottom: 18px !important; }
+.pad-roomy .ask { margin-bottom: 17px !important; }
 .pad-roomy .byline { margin-bottom: 16px !important; }
 .pad-roomy > :nth-last-child(2) { margin-bottom: 18px !important; }
 .pad-roomy .card-f { padding-top: 12px; }
@@ -311,7 +311,7 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .pinned > .pin { position: absolute; left: 0; right: 0; }
 .grp { padding: 2px 0 4px 8px; border-left: 1.5px solid var(--border-strong); transition: border-color .15s; }
 .grp.hl { border-left-color: color-mix(in srgb, var(--accent) 30%, var(--border-strong)); }
-.grp .preview { margin: 6px 0 4px 8px; }
+.grp .preview { margin: 8px 0 4px 8px; }
 /* passages with branches are marked at all times, in a neutral tint */
 .prose [data-grp] { background: var(--mark); box-shadow: -6px 0 0 var(--mark), 6px 0 0 var(--mark); border-radius: 2px; }
 .anc { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 0 6px; height: 18px; border-radius: 9px; vertical-align: 1px;
@@ -339,7 +339,7 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .grow-r.on .gq, .grp.hl .grow-r .gq { color: var(--t-heading); }
 .grow-r.on .gq { font-weight: 400; }
 .grow-r.sel .gq { font-weight: 500; }
-.preview { margin-top: 10px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
+.preview { margin-top: 12px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
 .preview .rq { margin: 4px 0 8px; font-size: var(--fs-base); font-weight: 600; color: var(--t-heading); line-height: 1.4; }
 /* the question is already the selected row above, so the card holds only the answer; its scroll area fades out above the footer */
 .preview .prose { font-size: var(--fs-sm); max-height: 260px; overflow-y: auto; margin-top: 6px; padding-bottom: 8px;
@@ -559,26 +559,36 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 .chnone { color: var(--t-faint) !important; }
 .chdlg-h .btn2 { flex: none; }
 .cedlg { width: min(520px, calc(100% - 32px)); max-height: 80vh; overflow: auto; }
-.cedlg fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
-.cedlg legend { padding: 0; margin-bottom: 4px; font-size: var(--fs-sm); font-weight: 500; color: var(--t-heading); }
-.cedlg legend small { margin-left: 6px; font-weight: 400; color: var(--t-faint); }
-.cedlg textarea { padding: 9px 12px; border-radius: var(--r-lg); border: 1px solid var(--control-border); background: var(--field); font: inherit; font-size: var(--fs-sm); color: inherit; resize: vertical; line-height: 1.45; }
-.cedlg textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+:is(.cedlg, .cepage, .ceinline) fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
+:is(.cedlg, .cepage, .ceinline) legend { padding: 0; margin-bottom: 4px; font-size: var(--fs-sm); font-weight: 500; color: var(--t-heading); }
+:is(.cedlg, .cepage, .ceinline) legend small { margin-left: 6px; font-weight: 400; color: var(--t-faint); }
+:is(.cedlg, .cepage, .ceinline) textarea { padding: 9px 12px; border-radius: var(--r-lg); border: 1px solid var(--control-border); background: var(--field); font: inherit; font-size: var(--fs-sm); color: inherit; resize: vertical; line-height: 1.45; }
+:is(.cedlg, .cepage, .ceinline) textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+:is(.cedlg, .cepage, .ceinline) .radio { flex-direction: row; font-weight: 400; padding: 4px 0; }
+:is(.cedlg, .cepage, .ceinline) .radio small { display: block; color: var(--t-muted); font-size: var(--fs-xs); }
+:is(.cedlg, .cepage, .ceinline) .cerule textarea { flex: 1; min-width: 0; padding: 7px 10px; resize: none; overflow: hidden; }
+.dialog.cesheet { top: 0; bottom: 0; left: auto; right: 0; transform: none; width: min(460px, 100%); max-height: none; border-radius: 0; padding: 20px 22px; align-content: start; }
+.cepage .ceback::before { content: '‹ '; }
+.cepage .ceback { margin-bottom: 10px; }
+.cepage .ceform { margin-top: 10px; gap: 20px; }
+.cepage .dacts { justify-content: flex-start; flex-direction: row-reverse; }
+.sphead.ceinline { padding-bottom: 18px; }
+.ceinline .chdlg-h { margin-bottom: 12px; }
+.ceinline .chdlg-h .glyph { width: 26px; height: 26px; border-radius: 7px; font-size: 13px; }
+.ceinline .ceform { max-width: 640px; }
 .cecount { align-self: flex-end; font-weight: 400; color: var(--t-faint); font-size: var(--fs-xs); }
 .cerules ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .cerule { display: flex; align-items: flex-start; gap: 4px; }
 .cerule .cenum { padding-top: 9px; }
 .cerule .iconbtn { margin-top: 4px; }
 .cerule .cenum { flex: none; width: 18px; text-align: right; margin-right: 4px; font-size: var(--fs-xs); color: var(--t-faint); font-variant-numeric: tabular-nums; }
-.cedlg .radio { flex-direction: row; font-weight: 400; padding: 4px 0; }
-.cedlg .radio small { display: block; color: var(--t-muted); font-size: var(--fs-xs); }
-.cedlg .cerule textarea { flex: 1; min-width: 0; padding: 7px 10px; resize: none; overflow: hidden; }
 .cerule .iconbtn { width: 26px; height: 26px; flex: none; color: var(--t-muted); }
 .cerule .iconbtn:disabled { opacity: .3; }
 .cerule .iconbtn svg.i { width: 13px; height: 13px; }
 .cadd { justify-self: start; margin-left: 26px; }
 .chrules { margin: 0; padding-left: 18px; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.45; display: grid; gap: 4px; }
 .sphead.wide p { max-width: 80ch; }
+.sphead > .chip { flex: none; height: 28px; padding: 0 12px; border-radius: 14px; font-size: var(--fs-xs); font-weight: 600; }
 .sphead h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; color: var(--t-heading); }
 .sphead h2 .glyph { width: 26px; height: 26px; border-radius: 7px; font-size: 13px; }
 .sphead p { margin: 3px 0 4px; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.45; }
@@ -941,6 +951,27 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
   .meter { padding: 0 6px; }
 }
 
+/* channel feeds: 2px less above each post */
+.chfeed .row:not(.new-row) { padding-top: 12px; }
+/* page layouts (mock variants): A main + side, centered as a pair · B main column centered, side column to its right
+   C one column, branches and replies below each card · D wider main column, narrower side */
+@media (min-width: 861px) {
+  .pl-b .mg-inner { max-width: 1340px; }
+  .pl-b .row { grid-template-columns: minmax(0, 1fr) minmax(0, 600px) minmax(0, 1fr); justify-content: stretch; }
+  .pl-b .row > :nth-child(1) { grid-column: 2; }
+  .pl-b .row > :nth-child(2) { grid-column: 3; max-width: 330px; }
+  .pl-b .row > .sphead.wide { grid-column: 2 / 4; max-width: 951px; }
+  .pl-c .row { grid-template-columns: minmax(0, 640px); gap: 8px; }
+  .pl-c .stick { position: static; max-height: none; }
+  .pl-c .pinned > .pin { position: static; margin-bottom: 8px; }
+  .pl-c .mgn { padding-left: 12px; }
+  .pl-d .row { grid-template-columns: minmax(0, 720px) minmax(0, 300px); }
+}
+@media (min-width: 861px) and (max-width: 1320px) {
+  .pl-b .row { grid-template-columns: minmax(0, 600px) minmax(0, 330px); justify-content: center; }
+  .pl-b .row > :nth-child(1), .pl-b .row > :nth-child(2) { grid-column: auto; }
+  .pl-b .row > .sphead.wide { grid-column: 1 / -1; }
+}
 @media (max-width: 860px) {
     .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .stick { position: static; max-height: none; }
@@ -1343,7 +1374,7 @@ function preview(p, T, n) {
   const par = st.asking === p.id ? (st.askPar ?? n.id) : null;
   return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${more}</div>${n.quote ? `<blockquote class="bq">${esc(clip(n.quote, 180))}</blockquote>` : ''}${status(n)}<div class="prose">${answerHtml(n)}</div>
     ${branchActs(p, n, k, promoted)}
-    ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? 'Continue from here' : 'Ask beside this', '', 'Ask', 'askclose') : st.brReplying === p.id + ':' + n.id + '/top' ? composer('br:' + p.id + ':' + n.id + ':top', 'Comment here', '', 'Comment', 'brclose') : ''}
+    ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? 'Continue ask' : 'Ask beside this', '', 'Ask', 'askclose') : st.brReplying === p.id + ':' + n.id + '/top' ? composer('br:' + p.id + ':' + n.id + ':top', 'Comment here', '', 'Comment', 'brclose') : ''}
     ${branchReplies(p, n)}</div>`;
 }
 /* Continue ask: a down arrow (asks under this answer); Branch: a down-and-right arrow (asks beside it) */
@@ -1356,7 +1387,7 @@ function branchActs(p, n, k, promoted) {
   const ckey = p.id + ':' + n.id + '/top', con = st.brReplying === ckey;
   const cmt = `<button class="tlink bact${con ? ' on' : ''}" data-a="brreply" data-k="${ckey}" aria-pressed="${con}" title="Comment on this branch. Does not run an answer.">${BUBBLE}Comment</button>`;
   return `<div class="pf">${canWrite() && !n.pending ? cmt : ''}${open}<span class="grow"></span>${canWrite() && !n.pending
-    ? b(n.id, 'Continue ask', 'Ask a new question under this answer. Runs an answer.', CONT_IC) + b(n.par, 'Branch', 'Ask a different question at the same point, next to this one. Runs an answer.', BRANCH_IC) : ''}</div>`;
+    ? b(n.id, 'Continue', 'Ask a new question under this answer. Runs an answer.', CONT_IC) + b(n.par, 'Branch', 'Ask a different question at the same point, next to this one. Runs an answer.', BRANCH_IC) : ''}</div>`;
 }
 /* replies on a branch's answer: a short discussion without running another ask */
 function branchReplies(p, n) {
@@ -1541,11 +1572,11 @@ const ddButton = (cls, label) => { const open = st.menu === 'spaces'; return `<s
 
 /* ---- A: the top strip, showing different things ---- */
 /* ---- the spaces strip in the app bar: a scope dropdown, then the space chips ---- */
-const SCOPES = () => [['joined', st.auth === 'out' ? 'Open' : 'Joined'], ...(canWrite() ? [['yours', 'Yours']] : []), ['discover', 'Discover']];
+const SCOPES = () => [['joined', st.auth === 'out' ? 'Open' : 'Joined'], ...(canWrite() ? [['yours', 'Channels you manage']] : []), ['discover', 'Discover']];
 const scopeList = () => { const sc = st.spScope || 'joined'; return sc === 'yours' ? yourSpaces() : sc === 'discover' ? discover() : navSpaces(); };
 const SCOPE_IC = { joined: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path d="m5.6 8.2 1.7 1.7 3.2-3.6"/></svg>', yours: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.6" r="2.6"/><path d="M3 13.5c.5-2.6 2.6-4 5-4s4.5 1.4 5 4"/></svg>', discover: '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="m10.4 5.6-1.3 3.5-3.5 1.3 1.3-3.5Z"/></svg>' };
 function headerSpaces() {
-  if (!['network', 'usage', 'members', 'browse'].includes(st.screen)) return '<span class="hsp"></span>';
+  if (!['network', 'usage', 'members', 'browse', 'chedit'].includes(st.screen)) return '<span class="hsp"></span>';
   const sc = st.spScope || 'joined', list = scopeList();
   const join = x => sc === 'discover' && canWrite() ? `<span class="tj" data-a="join" data-id="${x.id}" title="Join">+</span>` : '';
   const add = canWrite() ? `<button class="tadd" data-a="newspace" title="New channel" aria-label="New channel">${PLUS2}</button>` : '';
@@ -1586,6 +1617,7 @@ function navSidebar() {
 /* the header of a space: what it is, who made it, and joining */
 function spaceHead() {
   const x = SP[st.space]; if (!x || !SPACE_META[x.id]) return '';
+  if (st.chEdit && st.chEdit.id === x.id && st.ui.ed === 'd') return chEditDlg(x);
   const own = ownerOf(x.id) === me() && st.auth === 'in', j = isJoined(x.id);
   const act = !canWrite() ? '' : own ? '<span class="chip">Your channel</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : isPrivate(x.id) ? '<span class="chip">Members only</span>' : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`;
   const name = `${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}`, desc = x.desc ? `<p>${esc(clip(x.desc, 170))}</p>` : '';
@@ -1605,7 +1637,7 @@ function browsePage() {
 const INFO_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7.2v3.8"/><circle cx="8" cy="5" r=".4" fill="currentColor"/></svg>';
 function chInfoDlg() {
   const x = SP[st.chInfo]; if (!x) return '';
-  if (st.chEdit) return chEditDlg(x);
+  if (st.chEdit && 'ab'.includes(st.ui.ed || 'a')) return chEditDlg(x);
   const o = ownerOf(x.id), rules = x.rules || [], own = o === me() && canWrite();
   return `<div class="scrim" data-a="chinfoclose"></div><div class="dialog chdlg" role="dialog" aria-modal="true" aria-labelledby="ci-h">
     <div class="chdlg-h">${glyph(x)}<h3 id="ci-h">${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</h3>${own ? '<button class="btn2 sm" data-a="chedit">Edit</button>' : ''}<button class="iconbtn" data-a="chinfoclose" aria-label="Close">${I.x || '×'}</button></div>
@@ -1620,22 +1652,32 @@ function chEditDlg(x) {
   const c = st.chEdit, n = c.rules.length;
   const row = (r, i) => `<li class="cerule"><span class="cenum">${i + 1}</span><textarea data-ce="rule" data-i="${i}" id="ce-r-${i}" rows="1" placeholder="A rule members should follow" maxlength="200" aria-label="Rule ${i + 1}">${esc(r)}</textarea>
     <button type="button" class="iconbtn" data-a="cerule" data-op="up" data-i="${i}" aria-label="Move rule ${i + 1} up"${i ? '' : ' disabled'}>${CE_UP}</button><button type="button" class="iconbtn" data-a="cerule" data-op="down" data-i="${i}" aria-label="Move rule ${i + 1} down"${i < n - 1 ? '' : ' disabled'}>${CE_DOWN}</button><button type="button" class="iconbtn" data-a="cerule" data-op="del" data-i="${i}" aria-label="Remove rule ${i + 1}">${I.x}</button></li>`;
-  return `<div class="scrim" data-a="chinfoclose"></div><div class="dialog chdlg cedlg" role="dialog" aria-modal="true" aria-labelledby="ce-h">
-    <div class="chdlg-h">${glyph(x)}<h3 id="ce-h">Edit ${esc(spName(x.id))}</h3></div>
-    <form class="pform" data-form="chedit:${x.id}">
+  const form = `<form class="pform ceform" data-form="chedit:${x.id}">
       <label>About<textarea data-ce="desc" id="ce-desc" rows="3" maxlength="${DESC_MAX}" placeholder="What the channel is for. Shown at the top of the channel.">${esc(c.desc)}</textarea><small class="cecount" id="ce-count">${c.desc.length} / ${DESC_MAX}</small></label>
       <fieldset class="nsvis"><legend>Visibility</legend>${[['open', 'Open', 'Anyone can read and join.'], ['private', 'Private', 'Only members can read or post. Current members stay.']].map(([k, l, h]) => `<label class="radio"><input type="radio" name="cevis" value="${k}"${c.vis === k ? ' checked' : ''}> <span><b>${l}</b><small>${h}</small></span></label>`).join('')}</fieldset>
       <fieldset class="cerules"><legend>Rules <small>${n} of ${RULES_MAX}</small></legend>${n ? `<ol>${c.rules.map(row).join('')}</ol>` : '<p class="chnone">No rules. Members see these in the channel info.</p>'}
         ${n < RULES_MAX ? '<button type="button" class="tlink cadd" data-a="cerule" data-op="add">+ Add rule</button>' : ''}</fieldset>
       ${c.err ? `<p class="ferr">${esc(c.err)}</p>` : ''}
-      <div class="dacts"><button type="button" class="btn2" data-a="cecancel">Cancel</button><button type="submit" class="btn1">Save</button></div></form></div>`;
+      <div class="dacts"><button type="button" class="btn2" data-a="cecancel">Cancel</button><button type="submit" class="btn1">Save</button></div></form>`;
+  const head = `<div class="chdlg-h">${glyph(x)}<h3 id="ce-h">Edit ${esc(spName(x.id))}</h3></div>`;
+  const ed = st.ui.ed || 'a';
+  /* where the editor opens: A dialog · B side sheet · C a settings page · D in place, in the channel header */
+  if (ed === 'c') return `<div class="page"><div class="page-in narrow cepage"><button class="tlink ceback" data-a="cecancel">${esc(spName(x.id))}</button><div class="shead"><h2>Channel settings</h2></div>${form}</div></div>`;
+  if (ed === 'd') return `<div class="row new-row"><div class="sphead wide ceinline"><div class="grow">${head}${form}</div></div></div>`;
+  return `<div class="scrim" data-a="chinfoclose"></div><div class="dialog chdlg cedlg${ed === 'b' ? ' cesheet' : ''}" role="dialog" aria-modal="true" aria-labelledby="ce-h">${head}${form}</div>`;
 }
 const CE_UP = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg>', CE_DOWN = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>';
 function saveChEdit(id) {
   const x = SP[id], c = st.chEdit, rules = c.rules.map(r => r.trim()).filter(Boolean);
   if (c.desc.trim().length > DESC_MAX) { c.err = `Keep the description under ${DESC_MAX} characters.`; render(); return; }
   x.desc = c.desc.trim(); x.rules = rules; (SPACE_META[id] ||= {}).vis = c.vis;
-  st.chEdit = null; render(); app.querySelector('[data-a="chedit"]')?.focus(); toast('Channel updated.');
+  closeChEdit(); toast('Channel updated.');
+}
+/* leave the editor: back to the info dialog (A, B) or to the channel (C, D) */
+function closeChEdit() {
+  const id = st.chEdit.id; st.chEdit = null;
+  if (st.screen === 'chedit') { st.screen = 'network'; st.space = id; }
+  render(); (app.querySelector('[data-a="chedit"]') || app.querySelector(`[data-a="chinfo"][data-id="${id}"]`))?.focus();
 }
 function newSpaceDlg() {
   const c = st.creating; if (!c) return '';
@@ -1664,7 +1706,7 @@ function renderNetwork() {
     : st.space === 'saved' && !posts.length ? '<div class="row"><p class="empty saved-empty">Nothing saved yet. Use the bookmark on any thread to keep it here.</p><div></div></div>'
     : st.space === 'home' && !posts.length ? '<div class="row"><p class="empty saved-empty">Join a few channels to fill Home. <button class="tlink inl" data-a="browse">Browse channels</button></p><div></div></div>'
     : SP[st.space] && !posts.length ? '<div class="row"><p class="empty saved-empty">No threads here yet. Ask the first question.</p><div></div></div>' : '';
-  $('#page').innerHTML = `<div class="spshell sd-${d} spv-${spv()}">${side}<div class="mg" id="k-mg"><div class="mg-inner">${navTop}
+  $('#page').innerHTML = `<div class="spshell sd-${d} spv-${spv()} pl-${st.ui.pl || 'a'}${SP[st.space] && SPACE_META[st.space] ? ' chfeed' : ''}">${side}<div class="mg" id="k-mg"><div class="mg-inner">${navTop}
     ${pendingBanner()}${spaceHead()}${locked || (SP[st.space] && !isJoined(st.space) && st.auth === 'in') ? '' : composerOrLock(v)}
     ${empty}${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div></div>`;
   const mg = $('#k-mg'), ta = $('#in-new');
@@ -1706,8 +1748,8 @@ app.addEventListener('click', e => {
   if (a === 'join') { e.stopPropagation(); if (!canWrite()) return; joinedIds().push(d.id); SEEN[st.user + ':' + d.id] = true; toast(`Joined ${spName(d.id)}.`); render(); return; }
   if (a === 'leave') { const j = joinedIds(); j.splice(j.indexOf(d.id), 1); toast(`Left ${spName(d.id)}.`); if (isPrivate(d.id)) st.space = 'home'; render(); return; }
   if (a === 'newspace') { st.menu = null; st.creating = { name: '', desc: '', vis: 'open', err: '' }; render(); $('#ns-name')?.focus(); return; }
-  if (a === 'chedit') { const x = SP[st.chInfo]; st.chEdit = { desc: x.desc || '', vis: isPrivate(x.id) ? 'private' : 'open', rules: [...(x.rules || [])], err: '' }; render(); $('#ce-desc')?.focus(); return; }
-  if (a === 'cecancel') { st.chEdit = null; render(); app.querySelector('[data-a="chedit"]')?.focus(); return; }
+  if (a === 'chedit') { const x = SP[st.chInfo]; const ed = st.ui.ed || 'a'; if (ed === 'c' || ed === 'd') { st.chInfo = null; if (ed === 'c') st.screen = 'chedit'; } st.chEdit = { id: x.id, desc: x.desc || '', vis: isPrivate(x.id) ? 'private' : 'open', rules: [...(x.rules || [])], err: '' }; render(); $('#ce-desc')?.focus(); return; }
+  if (a === 'cecancel') { closeChEdit(); return; }
   if (a === 'cerule') { const r = st.chEdit.rules, i = +d.i;
     if (d.op === 'add') { r.push(''); render(); $(`#ce-r-${r.length - 1}`)?.focus(); return; }
     if (d.op === 'del') { r.splice(i, 1); render(); ($(`#ce-r-${Math.min(i, r.length - 1)}`) || app.querySelector('.cadd'))?.focus(); return; }
@@ -1833,7 +1875,7 @@ document.addEventListener('keydown', e => {
   }
   if (e.key !== 'Escape') return;
   if (st.delAsk) { st.delAsk = null; render(); return; }
-  if (st.chEdit) { st.chEdit = null; render(); app.querySelector('[data-a="chedit"]')?.focus(); return; }
+  if (st.chEdit) { closeChEdit(); return; }
   if (st.chInfo) { const id = st.chInfo; st.chInfo = null; render(); app.querySelector(`[data-a="chinfo"][data-id="${id}"]`)?.focus(); return; }
   if (st.menu) { const m = st.menu; st.menu = null; render(); app.querySelector(`[data-m="${CSS.escape(m)}"]`)?.focus({ preventScroll: true }); return; }
   const f = e.target.closest?.('form[data-form]');
@@ -1909,7 +1951,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { pl: 'a', ed: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -2148,6 +2190,8 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
+    ${seg('pl', 'Layout', 4)}
+    ${seg('ed', 'Channel editor', 4)}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -2164,7 +2208,7 @@ function findSig(g) {
 let lastFlow = null;
 function render() {
   const focusSig = sigOf(document.activeElement), drafts = {};
-  app.querySelectorAll('#page textarea').forEach(t => { if (t.id && t.id !== 'in-new' && t.value) drafts[t.id] = t.value; });
+  app.querySelectorAll('#page textarea').forEach(t => { if (t.id && t.id !== 'in-new' && !t.id.startsWith('ce-') && t.value) drafts[t.id] = t.value; });
   renderInner();
   for (const id in drafts) { const t = document.getElementById(id); if (t && !t.value) { t.value = drafts[id]; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } }
   if (focusSig && (document.activeElement === document.body || !document.activeElement)) { const el = findSig(focusSig); if (el) { el.focus({ preventScroll: true }); if (el.tagName === 'TEXTAREA') el.setSelectionRange(el.value.length, el.value.length); } }
@@ -2181,13 +2225,14 @@ function renderInner() {
   if (st.auth === 'out') st.screen = 'network';
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
   if (st.screen === 'network') renderNetwork();
-  else { pg.innerHTML = (st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
+  else { pg.innerHTML = (st.screen === 'chedit' && st.chEdit ? chEditDlg(SP[st.chEdit.id]) : st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
   app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg, :scope > #selbranch, :scope > #citepop').forEach(x => x.remove());
   citeReady();
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
   if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
   if (st.creating) app.insertAdjacentHTML('beforeend', newSpaceDlg());
-  if (st.chInfo) { app.insertAdjacentHTML('beforeend', chInfoDlg()); app.querySelectorAll('.cerule textarea').forEach(t => { t.style.height = t.scrollHeight + 2 + 'px'; }); }
+  if (st.chInfo) app.insertAdjacentHTML('beforeend', chInfoDlg());
+  app.querySelectorAll('.cerule textarea').forEach(t => { t.style.height = t.scrollHeight + 2 + 'px'; });
   if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
 const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}</div>` : '';
@@ -2195,6 +2240,11 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
+  if (k === 'pl') { st.screen = 'network'; st.authOpen = false; render(); return; }
+  if (k === 'ed') { /* open the editor on a channel you own */
+    st.auth = 'in'; st.user = 'ines.v'; st.authOpen = false; st.chEdit = null; st.chInfo = null; st.screen = 'network';
+    const id = Object.keys(SPACE_META).find(k => ownerOf(k) === me()); if (!id) { render(); return; }
+    st.space = id; st.chInfo = id; render(); app.querySelector('[data-a="chedit"]')?.click(); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'network' : 'usage';
