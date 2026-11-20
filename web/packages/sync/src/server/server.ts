@@ -75,7 +75,7 @@ import {
 
 import { RunJobs } from "./jobs.js";
 import { answerWrites, bounds } from "./limits.js";
-import { OnlineCalls, type KeyVault, type OnlineHandlers } from "./online.js";
+import { OnlineCalls, type CallMeta, type KeyVault, type OnlineHandlers } from "./online.js";
 import type {
   LogRow,
   ServerStore,
@@ -897,8 +897,10 @@ export class SyncServer {
 
   // ---- the online-only calls ----
 
-  call(actor: Actor | null, name: string, input: unknown): CallAnswer {
-    return this.online.call(actor, name, input);
+  /** An online call; `meta`: what the HTTP layer knows of the request (the
+   * caller's network address, for a device sign-in). */
+  call(actor: Actor | null, name: string, input: unknown, meta?: CallMeta): CallAnswer {
+    return this.online.call(actor, name, input, meta);
   }
 
   // ---- the effect worker ----

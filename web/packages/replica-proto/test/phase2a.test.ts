@@ -20,7 +20,10 @@ test("a device's turns are records: blanked with a hidden node, erased with a re
   const on = w.server.online;
   if (!on) return t.pass("the server under test has no online calls");
   const a = (await on.call(null, "devices.authorize", { name: "mel's mac" })) as Any;
-  await on.call({ u: "mel" }, "devices.approve", { request: a.result.request });
+  await on.call({ u: "mel" }, "devices.approve", {
+    request: a.result.request,
+    code: a.result.code,
+  });
   const c = (await on.call(null, "devices.token", { request: a.result.request })) as Any;
   const device = c.result.device as string;
   const as = { u: "mel", device };

@@ -29,7 +29,10 @@ type Any = any;
 /** Sign a device in for `u` (approved in the browser, the token taken). */
 function device(w: World, u: string): { id: string; token: string; as: Actor } {
   const a = w.server.call(null, "devices.authorize", { name: "mac" }) as Any;
-  const b = w.server.call({ u }, "devices.approve", { request: a.result.request }) as Any;
+  const b = w.server.call({ u }, "devices.approve", {
+    request: a.result.request,
+    code: a.result.code,
+  }) as Any;
   const c = w.server.call(null, "devices.token", { request: a.result.request }) as Any;
   if (!a.ok || !b.ok || !c.ok) throw new Error(JSON.stringify([a, b, c]));
   return { id: c.result.device, token: c.result.token, as: { u, device: c.result.device } };
@@ -439,7 +442,13 @@ for (const kind of STORES) {
     const off2 = w.server.subscribe((logs) => void heard.push([...logs].join(",")));
     ok(t, w.as("mel", "threads.create", { id: w.id(), space: open, kind: "post", q: "p" }));
     const a = w.server.call(null, "devices.authorize", { name: "mac" }) as Any;
-    ok(t, w.server.call({ u: "mel" }, "devices.approve", { request: a.result.request }));
+    ok(
+      t,
+      w.server.call({ u: "mel" }, "devices.approve", {
+        request: a.result.request,
+        code: a.result.code,
+      }),
+    );
     t.true(w.server.call(null, "devices.token", { request: a.result.request }).ok);
     t.true(heard.length >= 2);
     off();
@@ -489,7 +498,13 @@ for (const kind of STORES) {
   test(`${kind}: E20: a sign-in approved but never taken leaves no device and no token`, (t) => {
     const { w } = cast(t, kind);
     const s = w.server.call(null, "devices.authorize", { name: "mac" }) as Any;
-    ok(t, w.server.call({ u: "mel" }, "devices.approve", { request: s.result.request }));
+    ok(
+      t,
+      w.server.call({ u: "mel" }, "devices.approve", {
+        request: s.result.request,
+        code: s.result.code,
+      }),
+    );
     t.deepEqual(w.server.store.dump().tokens, []);
     w.clock.advance(11 * MINUTE);
     t.is(code(w.server.call(null, "devices.token", { request: s.result.request })), "NOT_FOUND");

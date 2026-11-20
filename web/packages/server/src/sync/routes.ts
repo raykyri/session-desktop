@@ -11,6 +11,8 @@
 //   GET  /api/spaces          the spaces the caller may find (the directory)
 //   GET  /api/invites/:code   an invite link's landing: its space and state
 //   GET  /api/spaces/named/:name  a space by its name (an unlisted one: its name)
+//   GET  /api/devices/requests/:request  a device sign-in, for the browser
+//                              that approves it (no code)
 //   POST /api/admin/reset-time  an operator resets the stored server time
 // A route parses the request, authenticates (the session cookie, or a
 // device's bearer token: `auth/actor.ts`), checks the protocol header, and
@@ -53,6 +55,13 @@ export const STATUS: Record<string, number> = {
 const MAX_BODY_BYTES = 1024 * 1024 + 4096;
 
 type Answerish = { ok?: boolean; error?: { code: string }; serverTime: number };
+
+/** The caller's network address (`clientIp`, from the trusted proxy header
+ * or the socket), or null when not known. */
+const ipOf = (c: Context<AppEnv>): string | null => {
+  const ip = c.get("clientIp");
+  return ip && ip !== "unknown" ? ip : null;
+};
 
 function answer(c: Context<AppEnv>, a: Answerish) {
   const status = a.ok === false && a.error ? (STATUS[a.error.code] ?? 400) : 200;
@@ -200,7 +209,20 @@ export function syncRoutes(deps: ServerDeps): Hono<AppEnv> {
     const b = await body(c);
     if (b === null) return error(c, "BAD_REQUEST", "The body is not JSON.");
     if (b.value === undefined) return error(c, "TOO_LARGE");
-    return answer(c, sync.call(c.get("actor"), c.req.param("name"), b.value));
+    return answer(c, sync.call(c.get("actor"), c.req.param("name"), b.value, { ip: ipOf(c) }));
+  });
+
+  // a device's sign-in as the browser that approves it reads it (the
+  // /device page): the device, the app, when it was asked and whether from
+  // this computer; never the code (review round 1 of phase 2)
+  app.get("/api/devices/requests/:request", (c) => {
+    if (c.get("bearer"))
+      return error(c, "FORBIDDEN", "Approve a device’s sign-in from a browser, not from a device.");
+    const v = sync.online.signinView(c.get("actor"), c.req.param("request"), { ip: ipOf(c) });
+    if (!v.ok) return answer(c, v);
+    c.header("X-Session-Server-Time", String(v.view.serverTime));
+    c.header("Cache-Control", "no-store");
+    return c.json(v.view);
   });
 
   // ---- account reads (the mock's /api/me rows that are not replicated) ----

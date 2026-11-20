@@ -195,6 +195,86 @@ test("device sign-in: approved from the browser with one click; the bearer token
   t.is((await fake.post("/api/sync/register", {})).status, 401);
 });
 
+test("device sign-in: one click only from the computer that asked; elsewhere the code; the /device page's read", async (t) => {
+  const h = createHarness(t);
+  const [mel] = people(h, "mel");
+  if (!mel) return t.fail();
+  const anon = new HttpClient(h, null);
+  const mac = { "Fly-Client-IP": "203.0.113.5" };
+  const elsewhere = { "Fly-Client-IP": "198.51.100.9" };
+  const ask = async () => {
+    const a = await anon.call(
+      "devices.authorize",
+      { name: "Mira’s Mac", kind: "mac", device: "MacBook Air · macOS 15.1", app: "Session for Mac 1.0.0" },
+      mac,
+    );
+    return a.body.result as { request: string; code: string };
+  };
+  const cookie = (mel.auth as { cookie: string }).cookie;
+  const view = (request: string, headers: Record<string, string>) =>
+    h.request(`/api/devices/requests/${request}`, { cookie, headers });
+  // a crafted /device?request= link opened on another computer
+  const a = await ask();
+  const seen = await view(a.request, elsewhere);
+  t.is(seen.status, 200);
+  const body = (await seen.json()) as Record<string, unknown>;
+  t.like(body, {
+    request: a.request,
+    name: "Mira’s Mac",
+    kind: "mac",
+    device: "MacBook Air · macOS 15.1",
+    app: "Session for Mac 1.0.0",
+    state: "waiting",
+    sameComputer: false,
+  });
+  t.is(typeof body["askedAt"], "string");
+  t.false(JSON.stringify(body).includes(a.code.replace("-", "")), "never the code");
+  t.false("code" in body);
+  t.like((await mel.call("devices.approve", { request: a.request }, elsewhere)).body, {
+    ok: false,
+    error: { code: "BAD_REQUEST" },
+  });
+  t.like((await mel.call("devices.approve", { request: a.request, code: "ZZZ-ZZZ" }, elsewhere)).body, {
+    ok: false,
+    error: { code: "BAD_REQUEST" },
+  });
+  // without an address at all (none known): the code too
+  t.like((await mel.call("devices.approve", { request: a.request })).body, {
+    ok: false,
+    error: { code: "BAD_REQUEST" },
+  });
+  t.like((await anon.call("devices.token", { request: a.request })).body, {
+    ok: false,
+    error: { code: "PRECONDITION_FAILED" },
+  });
+  // with the code it is approved
+  t.like((await mel.call("devices.approve", { request: a.request, code: a.code }, elsewhere)).body, {
+    ok: true,
+  });
+  t.like((await anon.call("devices.token", { request: a.request })).body, { ok: true });
+  // one click from the computer that asked
+  const b = await ask();
+  t.like(await (await view(b.request, mac)).json(), { sameComputer: true, state: "waiting" });
+  t.like((await mel.call("devices.approve", { request: b.request }, mac)).body, { ok: true });
+  // a deny never needs the code
+  const c = await ask();
+  t.like((await mel.call("devices.approve", { request: c.request, deny: true }, elsewhere)).body, {
+    ok: true,
+    result: { device: null },
+  });
+  // the read: signed in with a cookie only, and an unknown request is NOT_FOUND
+  t.is((await h.request(`/api/devices/requests/${b.request}`, { headers: mac })).status, 401);
+  t.is((await view("01JUNKJUNKJUNKJUNKJUNKJUNK", mac)).status, 404);
+  const d = await signInDevice(h, mel);
+  const dev = await h.app.request(`/api/devices/requests/${b.request}`, {
+    headers: { Authorization: `Bearer ${d.token}`, Origin: "tauri://localhost" },
+  });
+  t.is(dev.status, 403);
+  // the name, device and app are bounded
+  const long = await anon.call("devices.authorize", { name: "m", device: "x".repeat(201) }, mac);
+  t.like(long.body, { ok: false, error: { code: "BAD_REQUEST" } });
+});
+
 test("CORS admits the desktop origin for bearer requests only", async (t) => {
   const h = createHarness(t);
   const pre = await h.app.request("/api/sync/write", {

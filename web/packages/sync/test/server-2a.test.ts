@@ -28,8 +28,9 @@ const code = (a: CallAnswer) => (a.ok ? "ok" : a.error.code);
 function device(t: { fail(m: string): void }, w: World, u: string) {
   const a = okCall(t, w.server.call(null, "devices.authorize", { name: `${u}'s Mac` })) as {
     request: string;
+    code: string;
   };
-  okCall(t, w.server.call({ u }, "devices.approve", { request: a.request }));
+  okCall(t, w.server.call({ u }, "devices.approve", { request: a.request, code: a.code }));
   const c = okCall(t, w.server.call(null, "devices.token", { request: a.request })) as {
     device: string;
   };

@@ -583,7 +583,7 @@ test("finding 8: a revoked device token signs the client out; no log is replaced
   const { w, open } = cast(t);
   const s = w.server.call(null, "devices.authorize", { name: "Mac" });
   const request = s.ok ? (s.result as { request: string }).request : "";
-  w.server.call({ u: "mel" }, "devices.approve", { request });
+  w.server.call({ u: "mel" }, "devices.approve", { request, code: s.ok ? (s.result as { code: string }).code : "" });
   const tok = w.server.call(null, "devices.token", { request });
   const token = tok.ok ? (tok.result as { token: string }).token : "";
   const mel = client(w, "mel", {

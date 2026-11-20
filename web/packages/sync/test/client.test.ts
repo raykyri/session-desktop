@@ -423,7 +423,7 @@ test("fetch transport: bearer token, the protocol header, SSE, and Update Sessio
   const { w, open } = cast(t);
   const s = w.server.call(null, "devices.authorize", { name: "Mac" });
   const request = s.ok ? (s.result as { request: string }).request : "";
-  w.server.call({ u: "mel" }, "devices.approve", { request });
+  w.server.call({ u: "mel" }, "devices.approve", { request, code: s.ok ? (s.result as { code: string }).code : "" });
   const tok = w.server.call(null, "devices.token", { request });
   const token = tok.ok ? (tok.result as { token: string }).token : "";
   let min = 4;

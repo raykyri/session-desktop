@@ -1527,7 +1527,14 @@ export const spaceProcedures = {
   // -- devices and device runs: online calls (not mutators)
   "devices.revoke": { input: z.object({ id: spaceRecordIdSchema }), result: nullResultSchema },
   "devices.authorize": {
-    input: z.object({ name: z.string(), kind: z.enum(["mac", "phone"]).optional() }),
+    input: z.object({
+      name: z.string().max(200),
+      kind: z.enum(["mac", "phone"]).optional(),
+      /** The device, as the app describes it ("MacBook Air · macOS 15.1"). */
+      device: z.string().max(200).optional(),
+      /** The app and its version ("Session for Mac 1.0.0"). */
+      app: z.string().max(200).optional(),
+    }),
     result: z.object({ request: z.string(), code: z.string(), url: z.string() }),
   },
   "devices.approve": {

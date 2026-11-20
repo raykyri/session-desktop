@@ -44,6 +44,18 @@
 // - A run whose job became a dead letter ends (`jobDead`).
 // - The approver may deny an approved sign-in whose token nobody took; a
 //   revoked device's streams close.
+//
+// Review round 1 of phase 2 (reviewer B, F1): a sign-in records the network
+// address it was asked from (the HTTP server's trusted client address) and
+// the device and app the app names. `devices.approve` without the code
+// approves only from a browser at that same address (the mockup's "Asked:
+// Just now, from this computer"); from any other address, or when either
+// address is not known, it takes the request's code, and a missing or
+// wrong code is refused (BAD_REQUEST). A deny never needs the code. The
+// browser's /device page reads the request (`signinView`): the device, the
+// app, when it was asked and whether from the same address, never the code.
+// What remains: people behind one network address (a shared NAT) count as
+// the same computer.
 
 import { createHash, randomBytes } from "node:crypto";
 
@@ -51,11 +63,11 @@ import * as pkg from "@session/mutators";
 import { spaces } from "@session/shared";
 import { z } from "zod";
 
-import { HOUR, MINUTE, type Actor, type CallAnswer } from "../protocol.js";
+import { HOUR, MINUTE, type Actor, type AnswerError, type CallAnswer } from "../protocol.js";
 
 import { answerWrites, bounds } from "./limits.js";
 import type { SyncServer } from "./server.js";
-import type { Lease, StoreTx } from "./store.js";
+import type { Lease, Signin, StoreTx } from "./store.js";
 
 /** A device run's lease, and the largest device answer (server settings). */
 export const LEASE_MS = 90_000;
@@ -79,7 +91,37 @@ export interface CallCtx {
   now: number;
   actor: Actor | null;
   server: SyncServer;
+  /** The caller's network address, as the HTTP server's trusted proxy
+   * header or socket gives it; null when not known. */
+  ip?: string | null;
 }
+
+/** What the HTTP layer knows of a call's request. */
+export interface CallMeta {
+  /** The caller's network address, or null when not known. */
+  ip?: string | null;
+}
+
+/** A sign-in request as the browser that approves it reads it
+ * (`OnlineCalls.signinView`): never its code. */
+export interface SigninView {
+  request: string;
+  name: string;
+  kind: "mac" | "phone";
+  /** The device the app named ("MacBook Air · macOS 15.1"), or null. */
+  device: string | null;
+  /** The app the app named ("Session for Mac 1.0.0"), or null. */
+  app: string | null;
+  askedAt: string;
+  state: "waiting" | "approved" | "denied" | "taken";
+  /** The request was asked from the reader's network address: approving
+   * needs no code. */
+  sameComputer: boolean;
+  serverTime: number;
+}
+
+/** The most characters of a sign-in's name, device and app. */
+export const SIGNIN_TEXT_MAX = 200;
 
 export type Handler = (ctx: CallCtx, input: unknown) => unknown;
 
@@ -247,6 +289,10 @@ function turnsOf(tx: StoreTx, r: pkg.RunRec) {
   const ask = shown(p) === null ? [] : [{ q: p.q, a: p.sum ?? "" }];
   return [...ask, ...fus.map((f) => ({ q: f.q, a: f.a ?? "" }))];
 }
+
+/** Whether sign-in `s` was asked from network address `ip` (both known). */
+const sameAddress = (s: Signin, ip: string | null | undefined) =>
+  typeof s.ip === "string" && s.ip !== "" && typeof ip === "string" && s.ip === ip;
 
 const stub =
   (name: string): Handler =>
@@ -556,8 +602,9 @@ export function defaultHandlers(
 
   h["devices.authorize"] = (ctx, input) => {
     const i = parse(P["devices.authorize"].input.strict(), input);
-    const name = i.name.trim();
+    const name = i.name.trim().slice(0, SIGNIN_TEXT_MAX);
     if (!name) throw fail("BAD_REQUEST", undefined, ["input.name: expected some text"]);
+    const about = (s: string | undefined) => s?.trim().slice(0, SIGNIN_TEXT_MAX) || null;
     const request = ctx.server.newId(ctx.tx, ctx.now);
     let code = "";
     for (let k = 0; k < 6; k++)
@@ -571,6 +618,9 @@ export function defaultHandlers(
       state: "waiting",
       u: null,
       device: null,
+      ip: ctx.ip ?? null,
+      desc: about(i.device),
+      app: about(i.app),
     });
     return { request, code: `${code.slice(0, 3)}-${code.slice(3)}`, url: "session.app/device" };
   };
@@ -593,14 +643,21 @@ export function defaultHandlers(
     }
     if (!s || s.state !== "waiting" || s.at < ctx.now - SIGNIN_TTL)
       throw fail("NOT_FOUND", "The server has no record of this sign-in. It may have expired.");
-    if (i.code !== undefined && i.code.replace(/[^A-Z0-9]/gi, "").toUpperCase() !== s.code)
-      throw fail("BAD_REQUEST", "This code doesn’t match the one on your Mac.", [
-        "input.code: expected the code the app shows",
-      ]);
+    // a deny never needs the code
     if (i.deny) {
       ctx.tx.signinPut({ ...s, state: "denied" });
       return { device: null };
     }
+    // one click from the computer that asked; the code from anywhere else
+    const given = (i.code ?? "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+    if (given === "" && !sameAddress(s, ctx.ip))
+      throw fail("BAD_REQUEST", "Enter the code your Mac shows.", [
+        "input.code: expected the code the app shows",
+      ]);
+    if (given !== "" && given !== s.code)
+      throw fail("BAD_REQUEST", "This code doesn’t match the one on your Mac.", [
+        "input.code: expected the code the app shows",
+      ]);
     const id = ctx.server.newId(ctx.tx, ctx.now);
     ctx.tx.registrySet(id, 0);
     ctx.tx.signinPut({ ...s, state: "approved", u: a.u, device: id });
@@ -762,7 +819,51 @@ export class OnlineCalls {
     return Object.hasOwn(this.handlers, name);
   }
 
-  call(actor: Actor | null, name: string, input: unknown): CallAnswer {
+  /** Sign-in `request` as `actor`'s browser reads it on the /device page
+   * (review round 1 of phase 2): a signed-in browser only (a device's token
+   * approves nothing), never the code. */
+  signinView(
+    actor: Actor | null,
+    request: string,
+    meta: CallMeta = {},
+  ): { ok: true; view: SigninView } | { ok: false; error: AnswerError; serverTime: number } {
+    const t0 = this.server.clockNow();
+    const no = (e: pkg.Refusal) => ({ ok: false as const, error: e.toError(), serverTime: t0 });
+    if (!actor || !pkg.isHandle(actor.u)) return no(fail("UNAUTHORIZED"));
+    if (actor.device != null)
+      return no(fail("FORBIDDEN", "Approve a device’s sign-in from a browser, not from a device."));
+    if (typeof request !== "string" || request.length > 64)
+      return no(fail("NOT_FOUND", "The server has no record of this sign-in. It may have expired."));
+    return this.server.run((tx) => {
+      const now = this.server.time(tx);
+      const s = tx.signinGet(request);
+      if (!s || s.at < now - SIGNIN_TTL || (s.u !== null && s.u !== actor.u))
+        return {
+          ok: false as const,
+          error: fail(
+            "NOT_FOUND",
+            "The server has no record of this sign-in. It may have expired.",
+          ).toError(),
+          serverTime: now,
+        };
+      return {
+        ok: true as const,
+        view: {
+          request: s.request,
+          name: s.name,
+          kind: s.kind,
+          device: s.desc ?? null,
+          app: s.app ?? null,
+          askedAt: pkg.isoAt(s.at),
+          state: s.state,
+          sameComputer: sameAddress(s, meta.ip),
+          serverTime: now,
+        },
+      };
+    });
+  }
+
+  call(actor: Actor | null, name: string, input: unknown, meta: CallMeta = {}): CallAnswer {
     const t0 = this.server.clockNow();
     const handler = Object.hasOwn(this.handlers, name) ? this.handlers[name] : undefined;
     if (!handler)
@@ -791,7 +892,10 @@ export class OnlineCalls {
       return this.server.run((tx): CallAnswer => {
         const now = this.server.time(tx);
         try {
-          const result = handler({ tx, now, actor, server: this.server }, input);
+          const result = handler(
+            { tx, now, actor, server: this.server, ip: meta.ip ?? null },
+            input,
+          );
           // the call's writes commit, and it answers the refusal
           if (result instanceof CommittedRefusal)
             return { ok: false, error: result.refusal.toError(), serverTime: now };

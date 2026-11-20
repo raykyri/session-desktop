@@ -86,7 +86,8 @@ export function scenarioRoutes(deps: ServerDeps, mockupsDirectory?: string): Hon
     const { user } = users.upsertFromGitHub(deps.db, { githubId, login, name: login });
     const a = deps.sync.call(null, "devices.authorize", { name: `${login}'s Mac` });
     const request = a.ok ? (a.result as { request: string }).request : "";
-    deps.sync.call({ u: user.handle }, "devices.approve", { request });
+    const code = a.ok ? (a.result as { code: string }).code : "";
+    deps.sync.call({ u: user.handle }, "devices.approve", { request, code });
     const t = deps.sync.call(null, "devices.token", { request });
     if (!t.ok) return c.json({ error: t.error }, 500);
     return c.json({ ...(t.result as object), handle: user.handle });
