@@ -1016,7 +1016,7 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
   .pl-a .row { grid-template-columns: minmax(0, 1fr) minmax(0, 600px) minmax(0, 1fr); justify-content: stretch; }
   .pl-a .row > :nth-child(1) { grid-column: 2; grid-row: 1; }
   .pl-a .row > :nth-child(2) { grid-column: 3; max-width: 330px; }
-  .pl-a .row > .sphead.wide { grid-column: 2 / 4; max-width: 951px; }
+  .pl-a .row > .sphead.wide { grid-column: 2; }  /* the channel header takes the centred main column only */
   .pl-b .row { grid-template-columns: minmax(0, 720px) minmax(0, 300px); }
 }
 @media (min-width: 861px) and (max-width: 1320px) {
@@ -2530,15 +2530,18 @@ function renderInner() {
   if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
 const siteFoot = () => '<footer class="sfoot">Session · Report abuse: <a href="mailto:abuse@session.dev">abuse@session.dev</a></footer>';
-/* In layout A on screens wider than the one-column breakpoint, the app bar takes the left edge and width of
-   the main column (the first row's first cell that is not a full-width channel header). */
+/* In layout A on screens wider than the one-column breakpoint, the app bar lines up with the feed's columns
+   (measured on the first row whose first cell is not a full-width channel header):
+   - above 1320px the main column is centred on its own, so the bar takes the main column's left edge and width;
+   - from 861px to 1320px the main and side columns are centred as a pair, so the bar spans both. */
 function alignBar() {
   const sh = $('#shell'); if (!sh) return;
   const cell = st.screen === 'network' && (st.ui.pl || 'a') === 'a' && innerWidth > 860
     ? [...app.querySelectorAll('#k-mg .row')].map(r => r.firstElementChild).find(e => e && !e.classList.contains('wide')) : null;
   if (!cell) { sh.classList.remove('colbar'); return; }
-  const a = sh.getBoundingClientRect(), b = cell.getBoundingClientRect();
-  sh.style.setProperty('--bl', (b.left - a.left) + 'px'); sh.style.setProperty('--bw', b.width + 'px'); sh.classList.add('colbar');
+  const side = matchMedia('(max-width: 1320px)').matches ? cell.nextElementSibling : null;
+  const a = sh.getBoundingClientRect(), b = cell.getBoundingClientRect(), right = side ? side.getBoundingClientRect().right : b.right;
+  sh.style.setProperty('--bl', (b.left - a.left) + 'px'); sh.style.setProperty('--bw', (right - b.left) + 'px'); sh.classList.add('colbar');
 }
 addEventListener('resize', alignBar);
 const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}</div>` : '';
