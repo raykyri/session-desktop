@@ -1,6 +1,5 @@
 // Event envelope and the research events carried in it. The desktop backend
-// emits `SessionEvent` (src-tauri/src/events.rs); `parseResearchEvent` in
-// `lib/researchEvents.ts` narrows a raw envelope into `ParsedResearchEvent`.
+// emits `SessionEvent` (src-tauri/src/events.rs).
 
 import type {
   ResearchFollowupQueueItem,
