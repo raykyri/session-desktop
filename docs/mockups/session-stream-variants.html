@@ -182,44 +182,6 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .left-h { text-align: right; }
 .unplaced { font-size: var(--fs-xs); color: var(--t-faint); }
 
-/* Reader: margin is an index; opening a branch widens it into a reading column */
-.row.rd { transition: grid-template-columns .25s ease; }
-.row.rd.reading { grid-template-columns: minmax(0, 430px) minmax(0, 560px); }
-.row.rd.reading .card { opacity: .62; }
-.row.rd.reading .card:hover { opacity: 1; }
-.idx { list-style: none; margin: 0; padding: 0; }
-.irow { display: block; width: 100%; text-align: left; padding: 5px 8px 5px calc(8px + var(--d) * 14px); border-radius: var(--r-md); position: relative; }
-.irow::before { content: ""; position: absolute; left: calc(var(--d) * 14px - 2px); top: 0; bottom: 0; width: 1.5px; background: var(--border-strong); }
-.irow.d0::before { display: none; }
-.irow:hover { background: var(--fill-hover); }
-.irow .iq { display: block; font-size: var(--fs-sm); color: var(--t-heading); font-weight: 500; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.irow .im { display: block; font-size: var(--fs-xs); color: var(--t-faint); }
-.reader { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); border: 1px solid var(--accent-soft); padding: 14px 18px 14px; display: flex; flex-direction: column; gap: 10px; }
-.reader-h { display: flex; align-items: flex-start; gap: 8px; }
-.crumbs { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; font-size: var(--fs-xs); color: var(--t-faint); min-width: 0; }
-.crumbs button { color: var(--t-secondary); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 4px; border-radius: var(--r-sm); }
-.crumbs button:hover { background: var(--fill-hover); color: var(--t-heading); }
-.crumbs svg.i { width: 11px; height: 11px; color: var(--t-dim); }
-.reader .rq { margin: 0; font-size: var(--fs-lg); line-height: 1.35; color: var(--t-heading); font-weight: 600; text-wrap: balance; }
-.reader .kidlist { display: flex; flex-direction: column; gap: 2px; }
-.kid { display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: var(--r-lg); background: var(--inset); }
-.kid:hover { background: var(--fill-hover); }
-.kid b { display: block; font-weight: 600; color: var(--t-heading); font-size: var(--fs-sm); line-height: 1.4; }
-.kid span { display: block; font-size: var(--fs-xs); color: var(--t-faint); margin-top: 2px; }
-
-/* Activity */
-.act-sum { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--t-secondary); margin-bottom: 10px; }
-.act-grp { font-size: var(--fs-xs); color: var(--t-faint); font-weight: 600; margin: 14px 0 4px; }
-.ev { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; width: 100%; text-align: left; padding: 8px 6px; border-radius: var(--r-lg); }
-.ev:hover { background: var(--fill-hover); }
-.ev.open { background: var(--card); box-shadow: var(--shadow); }
-.ev .line { font-size: var(--fs-sm); color: var(--t-faint); line-height: 1.4; }
-.ev .line b { color: var(--t-heading); font-weight: 600; }
-.ev .line i { font-style: normal; color: var(--t-secondary); }
-.ev .eq { margin-top: 3px; color: var(--t-heading); font-size: var(--fs-base); line-height: 1.4; font-weight: 500; }
-.ev .es { margin-top: 3px; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.45; }
-.ev .prose { font-size: var(--fs-sm); margin-top: 6px; }
-
 /* Map */
 .graph { position: relative; }
 .graph svg { position: absolute; inset: 0; width: 100%; overflow: visible; pointer-events: none; }
@@ -237,8 +199,21 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .preview .prose { font-size: var(--fs-sm); max-height: 260px; overflow-y: auto; }
 .preview .pf { display: flex; gap: 12px; margin-top: 8px; font-size: var(--fs-xs); color: var(--t-faint); align-items: center; }
 
+/* Pinned map and Trunk */
+.tgrp { padding: 2px 0 4px; }
+.tgrp:not(.t) { padding-left: 8px; border-left: 1.5px solid var(--border-strong); }
+.tgrp:not(.t).hl { border-left-color: var(--accent); }
+.tgrp .preview { margin: 6px 0 4px 16px; }
+.tgrp.hl .grow-r .gq { color: var(--t-heading); }
+.trunk .trunkline { position: absolute; left: 0; bottom: 0; width: 1.5px; background: var(--border-strong); }
+.trunk .trunk-l { position: absolute; left: -4px; font-size: var(--fs-xs); font-weight: 600; color: var(--t-faint); }
+.trunk .wire { position: absolute; left: -28px; width: 28px; height: 1.5px; background: var(--border-strong); }
+.row.lr .trunk .wire { left: -24px; width: 24px; }
+.trunk .wire::before { content: ""; position: absolute; left: -3px; top: -2.25px; width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); }
+.trunk .wire.hl, .trunk .wire.hl::before { background: var(--accent); }
+
 @media (max-width: 860px) {
-  .row, .row.lr, .row.rd.reading { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .row, .row.lr { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .row.lr .mgn.left { order: 3; }
   .stick { position: static; max-height: none; }
   .pinned > .pin { position: static; margin-bottom: 8px; }
@@ -344,9 +319,8 @@ const replyTree = list => list.map(r => `<div class="reply">${av(r.u, 'sm')}<div
 
 /* ================= margin family ================= */
 /* Every variant shows the same stream of whole posts. They differ in what the margin holds and how it
-   relates to the post: a list, notes pinned to passages, two margins, an index that opens a reader,
-   an activity log, or a tree map. */
-const st = { v: 'notes', space: 'home', theme: 'system', exp: new Set(['01M7HWGZJGT7JTFFVSYPX055KV:f0']), open: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1', '01M7HGRPJ0E7RGZ45D4KENBQ6P': 'b2' }, sel: {}, hover: {}, asking: null };
+   relates to the post: notes pinned to passages, two margins (sources and branches), or a tree map. */
+const st = { v: 'anchored', space: 'home', theme: 'system', exp: new Set(['01M7HWGZJGT7JTFFVSYPX055KV:f0']), sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, hover: {}, asking: null };
 const key = (p, n) => p.id + ':' + n;
 
 function card(p, full) {
@@ -424,19 +398,44 @@ function anchorSources(p) {
   if (!narrow()) place(margin, items);
 }
 
-/* ---- tree helpers for Reader and Map ---- */
-const pathLabel = (T, n) => n.id === 'r' ? 'Answer' : clip(n.q, 34);
+/* ---- tree maps pinned to passages (Pinned map, Trunk, Trunk + sources) ---- */
+function subtree(p, T, tops, g, trunk) {
+  const sel = st.sel[p.id], on = new Set(sel && T.nodes[sel] ? T.path(sel).map(n => n.id) : []);
+  const rows = tops.flatMap(n => T.dfs(n.id, 0, [])), H = 26, X0 = trunk ? 16 : 6, X = d => X0 + d * 13, idx = Object.fromEntries(rows.map((r, i) => [r.n.id, i]));
+  let paths = '', dots = '';
+  rows.forEach(({ n, d }, i) => {
+    const y = i * H + 13;
+    if (d > 0) { const px = X(d - 1), py = idx[n.par] * H + 13; paths += `<path class="${on.has(n.id) ? 'on' : ''}" d="M${px} ${py} L${px} ${y - 6} Q${px} ${y} ${px + 6} ${y} L${X(d)} ${y}"/>`; }
+    else if (trunk) paths += `<path class="${on.has(n.id) ? 'on' : ''}" d="M0 ${y} L${X(0)} ${y}"/>`;
+    dots += `<circle class="${n.id === sel ? 'sel' : on.has(n.id) ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="3.5"/>`;
+  });
+  const cur = rows.find(r => r.n.id === sel)?.n;
+  return `<div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-grp="${g}"><span class="gq">${esc(n.q)}</span></button>`).join('')}</div>${cur ? V.map.preview(p, T, cur) : ''}`;
+}
+function anchorTrees(p, trunk) {
+  const prose = document.getElementById('pr-' + p.id), margin = document.getElementById('mr-' + p.id);
+  if (!prose || !margin) return;
+  const T = tree(p), blocks = blocksOf(prose), groups = new Map(), items = [];
+  for (const n of T.kids('r')) { const b = bestBlock(blocks, n.q + ' ' + summ(n)); if (!groups.has(b)) groups.set(b, []); groups.get(b).push(n); }
+  if (st.asking === p.id) { margin.insertAdjacentHTML('beforeend', `<div class="pin">${composer('mf:' + p.id + ':r', 'Ask a branch question about the answer')}</div>`); items.push({ el: margin.lastElementChild, anchor: prose.firstElementChild }); }
+  let gi = 0;
+  for (const [b, ns] of groups) {
+    const g = 't' + p.id + '-' + (gi++);
+    b.dataset.grp = g;
+    const total = ns.reduce((s, n) => s + 1 + T.desc(n.id), 0);
+    b.insertAdjacentHTML('beforeend', `<span class="anc" aria-label="${noun(total, 'branch', 'branches')} on this passage">${I.branch}${total}</span>`);
+    margin.insertAdjacentHTML('beforeend', `<div class="pin tgrp${trunk ? ' t' : ''}" data-grp-box="${g}">${subtree(p, T, ns, g, trunk)}</div>`);
+    items.push({ el: margin.lastElementChild, anchor: b, g });
+  }
+  if (narrow()) return;
+  place(margin, items);
+  if (!trunk) return;
+  const top0 = margin.getBoundingClientRect().top, first = prose.firstElementChild.getBoundingClientRect().top - top0;
+  margin.insertAdjacentHTML('afterbegin', `<i class="trunkline" style="top:${first + 6}px"></i><span class="trunk-l" style="top:${first - 16}px">Answer</span>`);
+  for (const it of items) if (it.g) { const y = it.anchor.getBoundingClientRect().top - top0 + 11; margin.insertAdjacentHTML('beforeend', `<i class="wire" data-wire="${it.g}" style="top:${y}px"></i>`); }
+}
 
 const V = {
-  notes: {
-    name: 'Notes',
-    thesis: '<strong>Branches as a list beside the post.</strong> The answer is clamped like a feed item. Its top-level branches are listed in the right margin and stay pinned while you read; open one to read it and the branches under it.',
-    margin(p) {
-      if (p.k === 'post') return `<div class="stick">${repliesMargin(p)}</div>`;
-      const T = tree(p), top = T.kids('r');
-      return `<div class="stick"><span class="label">Branches${T.count ? ' · ' + T.count : ''}</span>${top.map(n => note(p, T, n)).join('') || '<p class="empty">No branches yet.</p>'}${askBox(p)}</div>`;
-    },
-  },
   anchored: {
     name: 'Anchored',
     full: true,
@@ -455,45 +454,6 @@ const V = {
     left(p) { return p.k === 'post' ? '' : `<div class="pinned" id="ml-${p.id}"></div>`; },
     margin(p) { return V.anchored.margin(p); },
     layout(p) { anchorSources(p); anchorBranches(p); },
-  },
-  reader: {
-    name: 'Reader',
-    rd: true,
-    thesis: '<strong>The margin is an index that opens into a reader.</strong> Closed, it lists every branch as one line in its tree. Open a branch and the margin widens into a reading column while the post steps back; the path above the question walks back up the tree.',
-    margin(p) {
-      if (p.k === 'post') return `<div class="stick">${repliesMargin(p)}</div>`;
-      const T = tree(p), id = st.open[p.id];
-      if (id && T.nodes[id]) return `<div class="stick">${this.reader(p, T, T.nodes[id])}</div>`;
-      const rows = T.dfs().slice(1);
-      return `<div class="stick"><span class="label">Branches${T.count ? ' · ' + T.count : ''}</span><div class="idx">${rows.map(({ n, d }) => `<button class="irow d${d - 1}" style="--d:${d - 1}" data-a="read" data-id="${p.id}" data-node="${n.id}"><span class="iq">${esc(n.q)}</span><span class="im">${esc(n.u)} · ${rel(n.createdAt)}${n.pending ? ' · researching' : ''}</span></button>`).join('') || '<p class="empty">No branches yet.</p>'}</div>${askBox(p)}</div>`;
-    },
-    reader(p, T, n) {
-      const path = T.path(n.id), kids = T.kids(n.id);
-      return `<div class="reader fadein"><div class="reader-h"><nav class="crumbs" aria-label="Path">${path.map((x, i) => `${i ? I.right : ''}<button data-a="read" data-id="${p.id}" data-node="${x.id}">${esc(pathLabel(T, x))}</button>`).join('')}</nav><button class="iconbtn" data-a="unread" data-id="${p.id}" aria-label="Back to the branch list">${I.x}</button></div>
-        <div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${n.tok ? `<span>${ktok(n.tok)}</span>` : ''}</div>
-        <p class="rq">${esc(n.q)}</p>${status(n)}<div class="prose">${answerHtml(n)}</div>
-        ${kids.length ? `<span class="label" style="margin:6px 0 0">${noun(kids.length, 'branch', 'branches')} from here</span><div class="kidlist">${kids.map(c => `<button class="kid" data-a="read" data-id="${p.id}" data-node="${c.id}"><b>${esc(c.q)}</b><span>${esc(c.u)} · ${rel(c.createdAt)}${T.desc(c.id) ? ` · ${T.desc(c.id)} more inside` : ''}</span></button>`).join('')}</div>` : ''}
-        ${composer('rd:' + p.id, 'Ask a branch question about this answer')}</div>`;
-    },
-  },
-  activity: {
-    name: 'Activity',
-    thesis: '<strong>The margin is a live log of what people did with the post.</strong> Newest first: who branched from which answer, and when, with runs still researching at the top. The box to ask is always there.',
-    margin(p) {
-      if (p.k === 'post') return `<div class="stick">${repliesMargin(p)}</div>`;
-      const T = tree(p), evs = Object.values(T.nodes).filter(n => n.id !== 'r').sort((a, b) => (a.pending ? -1 : b.pending ? 1 : a.createdAt < b.createdAt ? 1 : -1));
-      const us = T.users();
-      let grp = '';
-      const list = evs.map(n => {
-        const m = (NOW - Date.parse(n.createdAt)) / 6e4, g = n.pending ? 'Running now' : m < 60 ? 'Last hour' : m < 1440 ? 'Today' : 'Earlier';
-        const head = g !== grp ? `<div class="act-grp">${g}</div>` : ''; grp = g;
-        const par = T.nodes[n.par], k = key(p, n.id), o = st.exp.has(k);
-        return head + `<button class="ev${o ? ' open' : ''}" data-a="note" data-id="${k}">${av(n.u, 'sm')}<div style="min-width:0"><div class="line"><b>${esc(n.u)}</b> branched from <i>${par.id === 'r' ? 'the answer' : '“' + esc(clip(par.q, 46)) + '”'}</i> · ${rel(n.createdAt)}</div>
-          <div class="eq">${esc(n.q)}</div>${status(n)}${o ? `<div class="prose">${answerHtml(n)}</div>` : `<div class="es">${esc(clip(summ(n), 110))}</div>`}</div></button>`;
-      }).join('');
-      return `<div class="stick"><div class="act-sum"><span class="avs">${us.slice(0, 5).map(u => av(u, 'xs')).join('')}</span><span>${T.count ? `${noun(T.count, 'branch', 'branches')} by ${noun(us.length, 'person', 'people')} · last ${rel(T.last())}` : 'No branches yet'}</span></div>
-        ${composer('m:' + p.id, 'Ask about this post')}${list}</div>`;
-    },
   },
   map: {
     name: 'Map',
@@ -518,10 +478,33 @@ const V = {
     preview(p, T, n) {
       if (n.id === 'r') return `<div class="preview"><span class="label">Answer</span><p class="rq">${esc(p.t || clip(p.q, 80))}</p><div class="pf">${noun(T.kids('r').length, 'branch', 'branches')} start here</div></div>`;
       const k = T.kids(n.id).length;
-      return `<div class="preview"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${n.tok ? `<span>${ktok(n.tok)}</span>` : ''}</div><p class="rq">${esc(n.q)}</p>${status(n)}<div class="prose">${answerHtml(n)}</div>
+      return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${n.tok ? `<span>${ktok(n.tok)}</span>` : ''}</div><p class="rq">${esc(n.q)}</p>${status(n)}<div class="prose">${answerHtml(n)}</div>
         <div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches under this'}</span><button class="tlink" data-a="askfrom" data-id="${p.id}" data-node="${n.id}">Branch from here</button></div>
         ${st.asking === p.id ? composer('mf:' + p.id + ':' + n.id, 'Ask a branch question') : ''}</div>`;
     },
+  },
+  pinned: {
+    name: 'Pinned map',
+    full: true,
+    thesis: '<strong>The tree, split up and pinned to passages.</strong> Each paragraph that has branches gets its own small tree beside it, drawn the same way as Map. Click a node to read it under its tree; hover a tree to see its passage.',
+    margin(p) { return p.k === 'post' ? repliesMargin(p) : `<div class="pinned" id="mr-${p.id}"></div>`; },
+    layout(p) { anchorTrees(p, false); },
+  },
+  trunk: {
+    name: 'Trunk',
+    full: true,
+    thesis: '<strong>The answer is the trunk of the tree.</strong> A line runs down the margin beside the answer, and each branch leaves it at the paragraph it asks about, with a wire into the text. Where branches crowd together they slide down the trunk instead of overlapping.',
+    margin(p) { return p.k === 'post' ? repliesMargin(p) : `<div class="pinned trunk" id="mr-${p.id}"></div>`; },
+    layout(p) { anchorTrees(p, true); },
+  },
+  trunkgloss: {
+    name: 'Trunk + sources',
+    full: true,
+    lr: true,
+    thesis: '<strong>Trunk, with the sources in the left margin.</strong> What the answer is built on sits at its citations on the left; the branches it grew sit on the trunk on the right. Hover a source, a citation or a tree to link it to its line.',
+    left(p) { return V.gloss.left(p); },
+    margin(p) { return V.trunk.margin(p); },
+    layout(p) { anchorSources(p); anchorTrees(p, true); },
   },
 };
 
@@ -534,7 +517,7 @@ function render() {
   const tabs = [['home', 'Home'], ...spacesWithPosts.filter(x => x.id !== 'sablefield').map(x => [x.id, spName(x.id)])];
   const posts = streamFor(st.space);
   app.innerHTML = `<div class="mg" id="k-mg"><div class="mg-inner"><nav class="tabs">${tabs.map(([id, l]) => `<button data-a="space" data-id="${id}" aria-current="${st.space === id}">${esc(l)}</button>`).join('')}</nav>
-    ${posts.map(p => `<div class="row${v.lr ? ' lr' : ''}${v.rd ? ' rd' : ''}${v.rd && st.open[p.id] ? ' reading' : ''}">${v.lr ? `<aside class="mgn left">${v.left(p)}</aside>` : ''}${card(p, v.full)}<aside class="mgn">${v.margin(p)}</aside></div>`).join('')}</div></div>`;
+    ${posts.map(p => `<div class="row${v.lr ? ' lr' : ''}">${v.lr ? `<aside class="mgn left">${v.left(p)}</aside>` : ''}${card(p, v.full)}<aside class="mgn">${v.margin(p)}</aside></div>`).join('')}</div></div>`;
   layout();
   $('#k-mg').scrollTop = top;
   lastV = st.v;
@@ -545,7 +528,7 @@ function renderBar() {
   $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${st.theme === k}">${l}</button>`).join('');
   $('#thesis').innerHTML = V[st.v].thesis;
 }
-function go(v) { if (!V[v]) v = 'notes'; st.v = v; st.asking = null; renderBar(); render(); }
+function go(v) { if (!V[v]) v = 'anchored'; st.v = v; st.asking = null; renderBar(); render(); }
 $('#variant-seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { history.replaceState(null, '', '#' + b.dataset.v); go(b.dataset.v); } });
 $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; st.theme = b.dataset.t; if (st.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = st.theme; renderBar(); });
 
@@ -557,20 +540,17 @@ app.addEventListener('click', e => {
   if (a === 'note') { st.exp.has(d.id) ? st.exp.delete(d.id) : st.exp.add(d.id); render(); return; }
   if (a === 'ask') {
     const p = byId(d.id);
-    if (st.v === 'reader' && st.open[p.id]) { $(`#in-rd\\:${p.id}`)?.focus(); return; }
-    if (st.v === 'activity') { $(`#in-m\\:${p.id}`)?.focus(); return; }
-    st.asking = st.asking === p.id ? null : p.id; if (st.v === 'map') st.sel[p.id] ||= 'r'; render(); $(`[id^="in-m"][id*="${p.id}"]`)?.focus(); return;
+    st.asking = st.asking === p.id ? null : p.id; if (st.v === 'map') st.sel[p.id] ||= 'r'; if (V[st.v].layout === V.trunk.layout || st.v === 'pinned' || st.v === 'trunkgloss') st.sel[p.id] = null; render(); $(`[id^="in-m"][id*="${p.id}"]`)?.focus(); return;
   }
   if (a === 'askfrom') { st.sel[d.id] = d.node; st.hover[d.id] = null; st.asking = d.id; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
   if (a === 'anc') { const g = d.grp, box = app.querySelector(`[data-grp-box="${g}"]`); box?.querySelectorAll('.note').forEach(n => { if (!st.exp.has(n.dataset.id)) st.exp.add(n.dataset.id); }); render(); return; }
-  if (a === 'read') { st.open[d.id] = d.node; render(); return; }
-  if (a === 'unread') { delete st.open[d.id]; render(); return; }
+  if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; render(); return; }
   if (a === 'pin') { st.sel[d.id] = d.node; st.hover[d.id] = null; st.asking = null; render(); return; }
 });
 /* hover links: note and its passage; source and its citation; map row and preview */
 function hl(e, on) {
   const n = e.target.closest('[data-grp]');
-  if (n) { const g = n.dataset.grp; app.querySelectorAll(`[data-grp="${g}"]`).forEach(x => { if (x.classList.contains('note') || x.classList.contains('anc')) return; x.classList.toggle('blk-hl', on); }); app.querySelector(`[data-grp-box="${g}"]`)?.classList.toggle('hl', on); }
+  if (n) { const g = n.dataset.grp; app.querySelectorAll(`[data-grp="${g}"]`).forEach(x => { if (x.closest('.mgn') || x.classList.contains('anc')) return; x.classList.toggle('blk-hl', on); }); app.querySelector(`[data-grp-box="${g}"]`)?.classList.toggle('hl', on); app.querySelectorAll(`[data-wire="${g}"]`).forEach(w => w.classList.toggle('hl', on)); }
   const s = e.target.closest('[data-src], sup[data-cite]');
   if (s) { const id = s.dataset.src || s.dataset.cite; app.querySelector(`[data-src="${id}"]`)?.classList.toggle('hl', on); app.querySelector(`sup[data-cite="${id}"]`)?.classList.toggle('hl', on); }
   const r = e.target.closest('[data-hov]');
@@ -582,12 +562,11 @@ app.addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target.closest('[data-form]'), inp = f.querySelector('input'), v = inp.value.trim(); if (!v) { inp.focus(); return; }
   const [kind, pid, node] = f.dataset.form.split(':'), p = byId(pid);
-  if (kind === 'rd') { st.open[pid] = addBranch(p, st.open[pid], v); }
-  else if (kind === 'mf') { st.sel[pid] = addBranch(p, node, v); }
+  if (kind === 'mf') { st.sel[pid] = addBranch(p, node, v); }
   else { const nid = addBranch(p, 'r', v); st.exp.add(key(p, nid)); if (st.v === 'map') st.sel[pid] = nid; }
   st.asking = null; render();
 });
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(render, 150); });
 window.addEventListener('hashchange', () => go(location.hash.slice(1)));
-go(location.hash.slice(1) || 'notes');
+go(location.hash.slice(1) || 'anchored');
 </script>
