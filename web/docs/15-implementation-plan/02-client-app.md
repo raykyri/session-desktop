@@ -2,8 +2,10 @@
 
 Status: draft. This file plans the client that implements the members mockup
 (`docs/mockups/session-web-members.html`): one React codebase in
-`web/packages/client` that ships as the web client and, inside Tauri, as the
-macOS desktop client (`AGENTS.md`, "Desktop"). Screens read a replica through
+`web/packages/client` that ships as the web client. This build is web only
+(`00-overview.md`, "Scope of this build"): the Tauri desktop client of
+`AGENTS.md` "Desktop" and the phone client are not built, and items that
+existed only for them are marked "(removed: web-only build)". Screens read a replica through
 reactive queries (ADR-20) and write through shared mutators applied
 optimistically from an outbox (ADR-19). Styling follows ADR-8 (Tailwind v4 over
 `tokens.css`), ADR-9 (Base UI wrappers in `src/ui/`) and
@@ -33,17 +35,17 @@ folders or the TanStack Query research cache.
 | `app/captureInvite.ts`, `lib/pendingInvite.ts` | Kept; the fragment capture is reused for `/i#<code>` and channel links (§2.1) |
 | `routes/home.tsx`, `research.$treeId.tsx`, `highlights.tsx`, `places.tsx` | Deleted; new route modules per §2.1 |
 | `routes/notifications.tsx` | Rewritten for W2.6 |
-| `routes/admin.tsx`, `settings.tsx`, `login.tsx`, `devUi.tsx`, `invite.tsx`, `chunks.ts` | Kept and restyled; `invite.tsx` rewritten for account invites |
+| `routes/admin.tsx`, `settings.tsx`, `login.tsx`, `devUi.tsx`, `invite.tsx`, `chunks.ts` | Kept and restyled; `invite.tsx` rewritten for account invites; `admin.tsx` gains the models panel (W8.2); `settings.tsx` is not linked from the account menu at launch (decision P23) |
 | `api/trpc.ts` | Kept for online-only procedures (auth, usage, API keys, invites, directory, settings) |
 | `api/api.ts`, `cache.ts`, `events.ts`, `queries.ts` | Deleted; replaced by `replica/` (§9) |
 | `stores/settings`, `overlays`, `notifications`, `connection`, `localAccount`, `lightboxes` | Kept |
 | `stores/navigation`, `drafts` | Rewritten (§9.4) |
 | `stores/liveTurns`, `recapPending`, `homeFocus` | Deleted; `replica/runStream.ts` replaces `liveTurns` (ADR-22) |
-| `lib/platform.ts`, `motion.ts`, `clipboard.ts`, `relativeTime.ts`, `toast.ts` | Kept; `platform.ts` gains `isDesktop`, `motion.ts` gains `scrollIntoPadded` |
+| `lib/platform.ts`, `motion.ts`, `clipboard.ts`, `relativeTime.ts`, `toast.ts` | Kept; `motion.ts` gains `scrollIntoPadded` |
 | `lib/researchDraftAutosave.ts`, `researchImages.ts`, `transcriptSearch.ts`, `tabMerge.ts`, `localOwner.ts` | Deleted with the research client |
-| `features/markdown` | Kept; gains citation and passage plugins (§4.4) |
+| `features/markdown` | Kept; gains citation and passage plugins (§4.4); the widget and artifact plugins are removed (P21) |
 | `features/composer` | Rewritten (§5); `QuestionModelPicker.tsx` is the base of `ModelPicker` |
-| `features/home`, `sidebar`, `thread`, `drafts`, `highlights`, `import`, `journal`, `research`, `sharing`, `palette`, `account`, `widgets` | Deleted at cutover (`widgets` pending open question 6) |
+| `features/home`, `sidebar`, `thread`, `drafts`, `highlights`, `import`, `journal`, `research`, `sharing`, `palette`, `account`, `widgets` | Deleted in M4 (`widgets` too: answers are plain Markdown, decision P21) |
 | `features/notifications` | Rewritten for W2.6 over the user log's notification records |
 | `ui/*` | Kept; new `RoundButton`, `SplitButton`, `TreeRail` |
 | `styles/tokens.css`, `fonts.css`, `prose.css`, `app.css` | Kept, extended (§11); `feed.css`, `tweet.css` deleted |
@@ -57,11 +59,12 @@ src/features/feed/        FeedPage, FeedRow, ThreadCard, TitleRow, Byline, Answe
 src/features/branches/    BranchTree, BranchCard, BranchActions, BranchComments, SelectionActions, lookPhrase.ts, geometry.ts
 src/features/replies/     ReplyTree, ReplyCard
 src/features/composer/    NewThreadComposer, InlineComposer, SendSplitButton, ChannelPicker, ModelPicker
-src/features/channels/    ChannelHeader, ChannelInfoDialog, AboutEditorDialog, ModerationLogDialog, RemoveDialog, ReportDialog,
+src/features/channels/    ChannelHeader, ChannelInfoDialog, AboutEditorDialog, ModerationLogDialog, RemoveDialog,
                           MemberListDialog, ChannelInviteDialog, NewChannelDialog, BrowsePage, FrozenBanner
 src/features/membership/  MembersPage, InviteTree, InviteLinks, AuthDialog, InviteRequiredPage
 src/features/usage/       UsagePage, RecentRuns, OutOfTokensChoice, ApiKeys
-src/features/notifications/ NotificationsPage, NotificationRow
+src/features/notifications/ NotificationsPage, NotificationRow, UnreadDot
+src/features/admin/       ModelsPanel
 ```
 
 **W1.1 Remove the research client.** Acceptance: `npm run check` passes;
@@ -69,9 +72,10 @@ src/features/notifications/ NotificationsPage, NotificationRow
 finds no procedure calls; the build contains no `tweet.css` or `feed.css`
 rules.
 
-**W1.2 One web/desktop seam.** `lib/platform.ts` exposes `isDesktop` and the
-storage adapter choice. Acceptance: an ESLint `no-restricted-imports` rule
-limits `@tauri-apps/*` to `replica/adapters/` and `lib/platform.ts`.
+**W1.2 One web/desktop seam (removed: web-only build).** There is no desktop
+client, so no `isDesktop` and no adapter choice; the replica uses the memory
+adapter (01 Y9). Acceptance replaced by: `rg "@tauri-apps" packages/client`
+finds nothing.
 
 ## 2. App shell
 
@@ -87,12 +91,18 @@ limits `@tauri-apps/*` to `replica/adapters/` and `lib/platform.ts`.
 | `/usage` | Usage and API keys |
 | `/welcome` | Invite required (`statusPage`) |
 | `/notifications` | Notifications (W2.6) |
+| `/admin` | Site admins only: the existing admin page with the models panel (W8.2) |
 | `/i` | Account invite link; the code is in the fragment (`<SESSION_PUBLIC_ORIGIN>/i#<code>`, in production `https://session.dev/i#<code>`; 04 §3.2, §3.4), captured into memory, removed from the URL, and opens the auth dialog over `/` |
-| `/settings`, `/admin` | Kept from the current client, restyled |
+| `/settings` | Kept from the current client, restyled; no menu entry at launch (P23) |
 
 Feed routes take `?t=<threadId>&sel=<nodeId>`: the feed scrolls to that row and
-selects that branch (the mock's `gothread`, `gofrom`). The mock has no
-single-thread page (open question 3).
+selects that branch (the mock's `gothread`, `gofrom`). This is a thread's
+address (decision P9): `/c/<name>?t=<threadId>` opens the thread in its
+channel feed, scrolled into view. There is no single-thread page. A thread
+outside the loaded feed (older than the window, 01 R1) is fetched with
+`snapshot(log, { threads: [id] })` and inserted in the feed at its date
+order; a thread the viewer cannot read shows the toast "This thread is not
+available." and the feed. Notifications and shared links use this address.
 
 **W2.1 Route tree.** Rewrite `app/router.tsx` with zod-validated search params
 and a guard sending a signed-in account without an invite from `/invites` and
@@ -132,10 +142,14 @@ Left to right (`appbar`):
 6. **Layout toggle round button** (`layoutBtn`): switches between `centred` and
    `wide` (§3.1); its icon shows the target layout, its label is "Wider main
    column" or "Centre the main column"; feed routes only.
-7. **Account menu**: header with avatar, name, `@handle` and "Member", "Admin"
-   or "No invite yet"; Notifications (with the unread count, W2.6), Invites,
-   Saved, Usage and API keys, Sign out. Without an invite: Enter an invite
-   code, Sign out.
+7. **Account menu**: the avatar button carries an unread dot while any
+   notification is unread (W2.6; decision P10), and its label becomes
+   "Account, N unread notifications". Menu: header with avatar, name,
+   `@handle` and "Member", "Admin" or "No invite yet"; Notifications (with
+   the unread count, W2.6), Invites, Saved, Usage and API keys, Admin (site
+   admins only, W8.2), Sign out. No Settings entry until there are settings
+   beyond Usage (decision P23). Without an invite: Enter an invite code,
+   Sign out.
 
 Items 4-6 are not rendered for accounts without an invite.
 **Signed out** (`appbarOut`): name, strip of open channels, "Join with invite"
@@ -160,11 +174,10 @@ Shift+Tab from the first feed control while hidden (shown, focus on the last
 bar control).
 
 **W2.4 Full window, no fullscreen.** The mock's Fullscreen button, window frame
-(`.frame`) and `fs-exit` are scaffolding. The shell fills the viewport or
-window, with one scroll container below the bar. On macOS desktop the bar's
-empty areas are the Tauri drag region and it reserves the traffic-light inset
-under an overlay title bar. Acceptance: no `requestFullscreen` in the client;
-the desktop checklist (§12.3) drags the window by the bar.
+(`.frame`) and `fs-exit` are scaffolding. The shell fills the viewport, with
+one scroll container below the bar. The Tauri drag region and traffic-light
+inset are not built (removed: web-only build). Acceptance: no
+`requestFullscreen` in the client.
 
 **W2.5 Phone width.** ≤ 520 px: brand word hidden, composer controls wrap to a
 second row under the text (`ncw`), menus right-anchored and capped at
@@ -172,18 +185,31 @@ second row under the text (`ncw`), menus right-anchored and capped at
 Acceptance: Playwright at 360×740 and 390×844 asserts
 `scrollWidth <= innerWidth` on every route and that the send button is visible.
 
-**W2.6 Notifications page** (`/notifications`; not in the mock, which only
-toasts "Notified @x."). Lists the notification records of the user log
-(01 C16, 04 O1): "@x mentioned you in #name" (mention), "New report in #name"
-(`report`, channel owner only, 04 O1), "Your report in #name was resolved: removed /
-dismissed" (`report_resolved`), newest first, each linking to
-`/c/$name?t=&sel=`; an item the viewer can no longer read is not served, so
-it is not listed. Opening the page writes `notifications.markSeen`; a row
-click writes `notifications.markRead`; "Mark all read" writes
-`notifications.markAllRead`. The account menu shows the unread count; no app
-bar control is added. Empty state "No notifications yet.". Acceptance:
-component tests per notification type and for the unread count; a test that
-a mention in a private channel the viewer left is not listed.
+**W2.6 Notifications page** (`/notifications`, reached from the account
+menu; decision G). Lists the notification records of the user log (01 C16),
+newest first:
+- `mention`: "@x mentioned you in #name";
+- `reply`: "@x replied to your post in #name" ("@x and N others" when
+  coalesced);
+- `branch`: "@x branched from your ask in #name" (a look-up reads "@x looked
+  up a phrase in your ask");
+- `comment`: "@x commented on your ask in #name";
+- `removed`: "Your thread in #name was removed by @owner", with "Reason:
+  “…”" when the owner gave one; it links to the placeholder;
+- `invite_used`: "@x joined Session with your invite", linking to `/invites`.
+
+Each channel row links to the thread's address (§2.1, `/c/$name?t=&sel=`);
+an item the viewer can no longer read is not served, so it is not listed.
+Opening the page writes `notifications.markSeen`; a row click writes
+`notifications.markRead`; "Mark all read" writes
+`notifications.markAllRead`. An unread dot on the account avatar in the app
+bar (`UnreadDot`, 6 px, accent, with the label of §2.2 item 7) shows while
+any notification is unread, and the menu's Notifications entry shows the
+count; no other app bar control is added. Empty state "No notifications
+yet.". Acceptance: component tests per notification type, for the coalesced
+text, for the unread dot appearing and clearing after `markSeen`, and for
+the unread count; a test that a mention in a private channel the viewer left
+is not listed.
 
 ## 3. Feed
 
@@ -224,33 +250,37 @@ account applies it.
 - **Branched from** (`fromln`): on a thread opened from a branch, "Branched
   from <title>" linking to the source row with that branch selected.
 - **Byline** (asks): agent mark with a tooltip "model · effort" (03 §1,
-  K12; "Opus 5.5 · high effort"), then "N sources · Nk tokens · #channel", omitting empty parts. A
-  device run shows its label ("Claude Code", "Codex") in place of the token
-  count (03 V6). An ask's channel is in the byline, not the title row.
+  K12; "Opus 5.5 · high effort"), then "N sources · Nk tokens · #channel",
+  omitting empty parts. An ask's channel is in the byline, not the title
+  row.
 - **Answer prose** (§4.4).
 - **Footer**: follow-up button (reply-arrow icon, label "Ask a follow-up") with
   the total branch count for an ask, Reply with the total reply count for a
   post, then Save with the save count (01 C1, C5). A zero count is not drawn;
-  the label then omits the number. No likes anywhere.
+  the label then omits the number. In a private channel a save count below 3
+  is not drawn (decision S6, 01 C1). No likes anywhere.
 - **"…" menu**: own thread, Delete (disabled with "Not available once someone
   else has responded" or "Available when the answer finishes"; 01 C15);
   another member's thread, for the channel's owner (04 §4.3), Remove… and
-  "Ban from #name"; otherwise Report… for writers.
+  "Ban from #name"; for anyone else no menu (there is no reporting, 04
+  §6.1).
 - **Removed thread** (`card.removed`, 01 C12, 04 §6.2): "Removed by @owner",
   "Reason: “…”" when given, "Ask by [deleted] in #name" or "Post by [deleted]
   in #name" for every reader, the author included; no prose, footer or side
   column. The author's "…" menu keeps Delete (04 §6.2).
 - **Hidden thread** (04 §6.3): the author and the owner see the text under
-  "Hidden by the channel owner"; others see the placeholder. No Hide command.
+  "Hidden by the channel owner"; others see the placeholder. No Hide command
+  (decision P7).
 
 Signed out, the follow-up, Reply and Save controls open the auth dialog and
 focus returns to the control on close; without an invite they are disabled
 with "… opens once you have an invite".
 
-**W3.2 `ThreadCard` and parts.** Acceptance: tests for no zero counts, no like
-control, byline omissions and the device label, Delete eligibility, Remove and
-Ban vs Report by role, the removed and hidden placeholders, and the three
-viewer states of the footer.
+**W3.2 `ThreadCard` and parts.** Acceptance: tests for no zero counts, no
+save count below 3 in a private channel, no like control, byline omissions,
+Delete eligibility, Remove and Ban for the owner and no menu for other
+members, no Report anywhere, the removed and hidden placeholders, and the
+three viewer states of the footer.
 
 ### 3.3 Run states
 
@@ -259,9 +289,9 @@ cards:
 
 | `status` | Shown |
 |---|---|
-| `queued` | "Queued"; a device run "Waiting for your Mac" (03 V7) |
+| `queued` | "Queued" |
 | `running` | "Researching · Step N of 4" (`step` 0-3, 03 E3) with a pulsing dot, replaced by streamed text as it arrives (ADR-22) |
-| `failed` | the reason for `fail.why` (`tokens`: the out-of-tokens copy; `key`, `rate`, `access`, `device_limit`, `too_large`, `stopped`) |
+| `failed` | the reason for `fail.why` (`tokens`: the out-of-tokens copy; `key`, `rate`, `access`, `error`, `stopped`) |
 | `cancelled`, `interrupted` | "Stopped" / "Interrupted" with the partial text |
 
 While `queued` or `running` the asker gets Stop (`research.cancelNode`); this
@@ -305,7 +335,8 @@ centre.
 ### 4.2 Selected-row card
 
 Selecting a row toggles its card below the tree (`preview`): who line with "…"
-(Open as its own thread, 03 G5; Delete branch with the thread rules plus "Not
+(Open as its own thread, for anyone who can read the branch, shown with the
+branch's author, 03 G5, decision P14; Delete branch with the thread rules plus "Not
 available after it was opened as a thread"); a "Look up <phrase>" header or the
 quoted passage clipped at 180 characters; run status (§3.3); prose scrolling
 within 260 px; actions (`branchActs`) Comment (speech bubble, left,
@@ -397,15 +428,17 @@ The new-thread composer is the mock's `COMPOSERS.split` with `nb-a`:
   post"), controls held on the last line;
 - channel picker on Home and Saved (joined channels, `menuitemradio`); on a
   channel route the name as static text;
-- model picker for asks: short names, full names in the menu from the server's
-  model registry (03 K11); a model needing a missing key shows "Add a key"
-  linking to `/usage`; a key-billed model shows "your OpenAI key". On the
-  desktop, "Claude Code on this Mac" and "Codex on this Mac" when found
-  (03 V1). An Effort submenu (the shipped `QuestionModelPicker`'s) lists
-  Default and only the efforts the chosen model accepts
-  (`ModelEntry.efforts`, 03 K12); it is rebuilt when the model changes, and an
-  effort the new model does not accept falls back to Default. Hidden for
-  device executors (03 V1);
+- model picker for asks: short names, full names in the menu, listing the
+  models a site admin made available (`models.list`, 03 K11, K15) and
+  starting on the admin's default unless the person picked another model in
+  this tab; a model needing a missing key shows "Add a key" linking to
+  `/usage`; a key-billed model shows "your OpenAI key". No device entries
+  ("Claude Code on this Mac"; removed: web-only build). An Effort submenu
+  (the shipped `QuestionModelPicker`'s) lists Default and only the efforts
+  the chosen model accepts (`ModelEntry.efforts`, 03 K12); it is rebuilt
+  when the model changes, and an effort the new model does not accept falls
+  back to Default. No cost estimate is shown for high efforts (decision
+  P13);
 - split send button: main part Ask (arrow) or Post (pencil), disabled while
   empty; the arrow part ("Ask or post") opens Ask / Post with icons,
   descriptions ("Agent researches and answers", "A message to people in the
@@ -418,9 +451,9 @@ The new-thread composer is the mock's `COMPOSERS.split` with `nb-a`:
   a run (Ask, follow-up, Continue, Branch, Branch here, Look up) on an
   included-token model is refused before sending with "You're out of tokens
   until Friday. You can still post, or add an API key in Usage." (weekday from
-  `usage.get`'s reset time); posts, replies and comments still send. Offline on
-  the desktop the write is queued and may come back as `failed { why:
-  "tokens" }` (§3.3).
+  `usage.get`'s reset time); posts, replies and comments still send. A write
+  sent with tokens left may still come back as `failed { why: "tokens" }`
+  when the allowance ran out before the server applied it (§3.3, 03 K8).
 
 Inline composers (asks on a thread, comments, replies) are one `InlineComposer`
 with a text submit ("Ask", "Comment", "Reply") and a close button.
@@ -431,8 +464,9 @@ for mode switching (icon, label, placeholder, model picker hidden for Post), the
 empty-text state, the signed-out cover, out-of-tokens refusal for each run-
 starting write and not for Post, reply or comment, draft restore across routes,
 focus back to the field after a menu choice, the Effort submenu listing only
-the chosen model's efforts and resetting on a model change;
-`admin.spec.ts` still finds the admin-only model only for administrators.
+the chosen model's efforts and resetting on a model change, the picker
+starting on the default model of `models.list`; `admin.spec.ts` finds a
+model that a site admin made unavailable absent from a member's picker.
 
 ## 6. Channels
 
@@ -447,7 +481,7 @@ optimistic writes (§9.2).
 **W6.2 Info dialog** (`chInfoDlg`, 04 §4.4): About (owner without one sees "No
 description yet. Add one"), Channel by, Members (opens W6.8), Visibility
 ("Private: only members can read or post" / "Open: anyone can read and join");
-the owner gets Edit, "Moderation log (N open)" and, in private channels,
+the owner gets Edit, "Moderation log" and, in private channels,
 "Invite to #name" (W6.9). No rules (01 C6). Acceptance: content per role;
 focus and Escape per §10.
 
@@ -458,24 +492,19 @@ desc }`, 01 C11); toast "Channel updated."; owners only. Acceptance: nested
 Base UI dialog; Escape closes only the editor; a non-owner has no Edit.
 
 **W6.4 Moderation log** (`modLogDlg`, 04 §6.5): stacked over the info dialog;
-tabs "Open reports (N)" and "Everything"; entries with kind (Report,
-Dismissed, Removed, Banned, Unbanned), "@reporter reported @author's ask" or
-"@owner removed @author's ask", the note and relative time. The current title is
-shown only for an item present in the replica; a removed item shows kind,
-author and channel, never its text (01 C12). Open reports on live items offer
-Dismiss (`reports.resolve`, toast "Report dismissed.") and Remove (W6.5).
-Acceptance: renders from `modlog` and report records; empty states "No open
-reports." and "Nothing logged yet."; no removed text in the DOM.
+one list, without the mock's report tab, of the owner's removals and bans:
+kind (Removed, Banned, Unbanned), "@owner removed @author's ask" or "@owner
+banned @member", the note and relative time. A removed item shows kind,
+author and channel, never its text (01 C12). Acceptance: renders from
+`modlog` records; empty state "Nothing logged yet."; no removed text in the
+DOM; no report, Dismiss or open-count control.
 
-**W6.5 Remove and report dialogs** (`rmDlg`, 04 §6.1-6.2): the title clipped
-at 120 characters; optional reason ("Reason, shown with the removal", at most
-300; "What is wrong with it?", at most 500); remove says "Readers see that it
-was removed. Branches and replies under it go with it."; report says "Reports
-go to @owner, the owner of #name. @author is not told who reported." Writes
-`moderation.decide` and `reports.create`; a second report on the same item
-shows "You already reported this.". Acceptance: the removed placeholder appears
-optimistically; the thread's open reports show as resolved; the duplicate-
-report refusal keeps the dialog open with the message.
+**W6.5 Remove dialog** (`rmDlg` in remove mode, 04 §6.2; the report mode is
+not built, decision F): the title clipped at 120 characters; optional reason
+("Reason, shown with the removal", at most 300); "Readers see that it was
+removed. Branches and replies under it go with it." Writes
+`moderation.decide`. Acceptance: the removed placeholder appears
+optimistically; the reason over 300 characters is refused in the dialog.
 
 **W6.6 Browse page** (`browsePage`): heading "Browse channels", New channel for
 writers, search over name and description; cards with glyph, `#name`, lock,
@@ -514,17 +543,18 @@ with the code kept in memory. An unusable link shows "This invite link has
 expired or was already used." Acceptance: component test for create, copy,
 revoke and undo; `spaces-channels.spec.ts` covers the join (04 B4).
 
-**W6.10 Frozen and refused states** (04 §8, §9): on the desktop, a channel the
-viewer was removed from shows "You are no longer a member of #name. This is the
-copy on this device." and offers only Delete on the viewer's own threads.
-Refusals of queued writes show the 04 §9 messages (the ban message, "#name is
+**W6.10 Frozen and refused states** (04 §8, §9): a channel the viewer was
+removed or banned from is dropped from the replica at the resync that
+follows, with the toast "You are no longer a member of #name."; the
+desktop's frozen copy is not built (removed: web-only build; no copy after a
+voluntary Leave either, decision P8). Refusals of queued writes show the 04 §9 messages (the ban message, "#name is
 frozen because its owner's account is not active.", the expired-link
 message) and restore composer text. A frozen channel (04 §4.5, `frozen` on
 the space record) shows the banner "#name is frozen: its owner's account is
 not active. You can read it and delete your own posts.", offers only Delete
 on the viewer's own items and Leave, and is left out of the composer's
 channel picker. Acceptance: fixture-replica tests for each message, the
-restored text and the frozen-channel banner.
+restored text, the removed-member toast and the frozen-channel banner.
 
 ## 7. Membership and sign-in
 
@@ -544,8 +574,11 @@ fixture (04 §3.3); no create button at 3 open links; Copy through
 
 **W7.2 Auth dialog** (`authScreen`): modal with a focus trap, opened from Sign
 in, Join with invite, a signed-out write control, `/i#<code>` or a channel
-link. The provider is GitHub (ADR-5, 04 §1); the mock's X copy becomes GitHub
-copy. Flows: landing ("Explore together."); valid invite link ("<Name> invited
+link. The providers are GitHub and X (decision D, 04 §1, §3.4): "Continue
+with GitHub" and "Continue with X", keeping the mock's X copy and adding the
+GitHub button; an account stays bound to the provider it was created with,
+and the provider explainer says so ("Use the same account each time you sign
+in."). Flows: landing ("Explore together."); valid invite link ("<Name> invited
 you to Session"); unusable link: used, revoked and unknown codes get one
 answer from `auth.checkInvite` and one message, "This invite code doesn't
 work. Ask the person who invited you for a new one." (04 I4); code step (`CODE_COPY`:
@@ -588,12 +621,27 @@ Acceptance: tone thresholds; disabled key radio and its reason; key add,
 check state and remove; the model picker drops a key-only model when its key is
 removed; the ring updates within 1 s of a fixture run's finish.
 
+**W8.2 Admin models panel** (`/admin`, site admins only; decision H, 03 K15).
+The mockup draws three variants; this build ships the second, a models table:
+one row per registry entry with short and full name, provider, payers
+(included, key), efforts, an Available switch
+(`admin.models.setAvailable`) and a Default radio
+(`admin.models.setDefault`); the default row's switch is disabled with
+"Choose another default first."; a key-only model's Default radio is
+disabled with "Members need their own key for this model." The first
+variant (a single default-model setting) is the same data without the
+table. Per-member overrides (the third variant) are not built (`05` §6,
+Q9). All online-only through TanStack Query, with inline errors. Acceptance:
+component tests for the two disabled states, a non-admin reaching `/admin`
+gets the not-found page, and a change refetches `models.list`.
+
 ## 9. Client state
 
 ### 9.1 Replica and queries
 
-`ReplicaProvider` creates the `@session/sync` client (01 Y9) with a memory
-adapter on the web (no IndexedDB) and SQLite through Tauri on the desktop.
+`ReplicaProvider` creates the `@session/sync` client (01 Y9) with the memory
+adapter (no IndexedDB); a reload starts from a fresh snapshot within the web
+window of 01 R1.
 Screens read named reactive queries from `replica/queries.ts` (01 Y12), or
 TanStack Query for online-only calls:
 
@@ -611,19 +659,21 @@ TanStack Query for online-only calls:
 | `useReplies(id)` | reply tree | replies |
 | `useRun(node)` | run states | run record plus the stream buffer |
 | `useSources(id)` | byline, citation popover | cited pages of the answer |
-| `useModerationLog(space)` | moderation log | `modlog` entries, reports |
+| `useModerationLog(space)` | moderation log | `modlog` entries |
+| `useNotifications()` | notifications page, unread dot | notification records (user log) |
+| `useModels()` | composer, admin panel | `models.list`, `admin.models.list` (TanStack, online-only, 03 K15) |
 | `useInvites()` | invites page | `accountInvites.*`, `members.tree` (TanStack, online-only, 01 C8) |
 | `useUsage()` | ring, usage page, composer | `usage.get`, `usage.listRuns` (TanStack) |
 
 A summary-only thread renders title, byline and counts; opening its side column
-requests the full records (01 R3); offline on the desktop it shows "Available
-when online". Unjoined open channels under All are read into an ephemeral
+requests the full records (01 R3); offline it shows "Available when
+online". Unjoined open channels under All are read into an ephemeral
 replica that is dropped on leaving the channel view (01 R5).
 
 **W9.1 `replica/`.** Acceptance: on the fixture replica, a write to thread A
 does not re-render thread B's row (render counter); a query the replica cannot
 answer yields `unknown` and a loading row, not an empty state; opening ten
-unjoined channels on the desktop adapter writes nothing to SQLite.
+unjoined channels leaves the joined logs unchanged.
 
 ### 9.2 Writes from the outbox
 
@@ -634,7 +684,7 @@ and Open as its own thread with `from`), `threads.delete`, `research.forkNode`
 `kind: "lookup"`), `followups.delete`, replies (`research.createPostFollowUp`,
 `replies.delete`), `comments.create`, `comments.delete`, `saved.set`,
 `prefs.set`, `spaces.join`, `spaces.leave`, `spaces.update`,
-`reports.create`, `reports.resolve`, `moderation.decide`, `members.ban`,
+`moderation.decide`, `members.ban`,
 `members.unban`, `members.remove`, `invites.create`,
 `invites.revoke`, `invites.restore`, `notifications.markSeen`,
 `notifications.markRead`, `notifications.markAllRead`, `research.cancelNode`,
@@ -645,18 +695,23 @@ replica and enqueues the envelope.
 - A recorded refusal rolls the prediction back and shows a toast for the code
   (STALE, FORBIDDEN, CONFLICT, PRECONDITION_FAILED, …, with the 04 §9 copy
   where it applies); typed text returns to its composer.
-- Web: the outbox holds a write only while its request is in flight; a network
-  failure marks the item "Not sent" with Retry (same mutation id) and Discard.
-- Desktop: writes are kept 3 days in server time; one that failed 5 times or was
-  dropped is listed with its text in a "Not sent" toast while the outbox
-  continues (`AGENTS.md`, 01 Y10).
-- `UPGRADE_REQUIRED` shows "Update Session" (01 S1).
+- The outbox holds a write only while its request is in flight; a network
+  failure marks the item "Not sent" with Retry (same mutation id) and
+  Discard. A reload drops unsent writes; typed text survives in `drafts`
+  (sessionStorage, §9.4). The desktop's 3-day outbox is not built (removed:
+  web-only build; 01 Y10).
+- `UPGRADE_REQUIRED` (01 S1): the client keeps unsent composer text in
+  `drafts` and reloads the page once; if the reloaded page gets
+  `UPGRADE_REQUIRED` again within 60 s, it shows "Session was updated.
+  Reload to continue." with a Reload button instead of reloading in a loop.
 - Online-only actions (new channel, account invites, keys, billing, sign-in)
   show a busy state and inline errors.
 
 **W9.2** Acceptance: a fake server refusing a reply (rolled back, text
-restored), answering STALE to a member removal (toast, record reloaded), and
-dropping the web connection (Not sent; Retry reuses the mutation id).
+restored), answering STALE to a member removal (toast, record reloaded),
+dropping the connection (Not sent; Retry reuses the mutation id), and
+answering `UPGRADE_REQUIRED` (one reload, draft kept; a second answer shows
+the Reload message).
 
 ### 9.3 Per-viewer fields
 
@@ -709,8 +764,8 @@ lands. Acceptance: no fixture strings in `vite build` output.
 | `MEMBERS`, `INVITES`, `newCode`, `inviteState` | account invites and `members.tree` (01 C8, 04 §3) |
 | `BRP`, `n.look`, `n.quote`, `addLookup` prompt | comments, `look`, `quote`, server-built `q` (01 C3, C4) |
 | `PROMOTED`, `from` | `promoted` on the node, `from` on the thread (03 G5) |
-| `MODLOG` seeds, `p.removed` | `modlog` and report records, the placeholder fields (01 C12) |
-| `mentionsIn` toast ("Notified @x.") | server mention notifications (01 C16) listed on the notifications page (W2.6); no client toast |
+| `MODLOG` seeds, `p.removed` | `modlog` records (removals and bans; no reports), the placeholder fields (01 C12) |
+| `mentionsIn` toast ("Notified @x.") | server notifications (01 C16) listed on the notifications page with the unread dot (W2.6); no client toast |
 | `render()` with focus restored by signature | React reconciliation and §10 focus rules |
 
 ### 9.8 Scaffolding that does not ship
@@ -751,9 +806,10 @@ composer moves focus as follows:
 | Scope, channel, model, send menus | the checked item; composer menus keep the field as return target | trigger, or the text field |
 | Info dialog | Close | info button |
 | About editor | About field | Edit |
-| Moderation log | the active tab | "Moderation log" button |
+| Moderation log | Close | "Moderation log" button |
 | Member list, channel invite dialog | Close | the opening row |
-| Remove / report | reason field | the card's "…" button |
+| Remove | reason field | the card's "…" button |
+| Admin models panel | the page heading | — |
 | Delete confirmation (`alertdialog`) | Cancel (the mock focuses Delete) | "…" button, or the next row if the item is gone |
 | New channel | Name | opener, or the new channel's heading |
 | Auth dialog | first field or step heading | opener |
@@ -762,7 +818,7 @@ composer moves focus as follows:
 | Selection actions, Escape | — | the answer, selection kept |
 | API key form, Escape | — | Add key or Remove |
 
-Route changes to Browse, Invites, Usage, Notifications and Welcome focus the
+Route changes to Browse, Invites, Usage, Notifications, Admin and Welcome focus the
 page heading (`tabindex="-1"`). Branch and reply trees are `role="tree"`
 with `treeitem` rows (`aria-level`, `aria-selected`, `aria-expanded` on
 collapsible replies); Up/Down move, Left goes to the parent, Right to the first child, Enter or Space
@@ -774,7 +830,7 @@ above, opens and closes every dialog and menu, and checks
 
 ### 10.2 Escape order
 
-Innermost first, one layer per press: delete confirmation; remove/report;
+Innermost first, one layer per press: delete confirmation; remove dialog;
 About editor; moderation log; member list and channel invite dialog; info
 dialog; auth dialog; open menu (focus to its trigger); citation popover;
 selection actions; the focused inline composer (closes it); API key form, then
@@ -803,12 +859,16 @@ and card and `animation-name` (`none`) on the status dot, and checks that
 
 `tokens.css` stays the token source (08 §1). The mock's roles map to existing
 tokens; only these are added, each with a dark value and a light override in
-both colour themes and exposed through `@theme inline`: `--passage-mark` (mock:
+both colour themes and exposed through `@theme inline`: `--unread-dot`,
+`--passage-mark` (mock:
 light `rgba(60,40,20,.06)`, dark `rgba(255,255,255,.07)`), `--avatar-1`…
 `--avatar-6` and `--avatar-fg`, `--tree-rail`, `--tree-rail-on`,
-`--tree-dot-selected`, and meter tones where status tokens do not fit. Title
-and input sizes become `--fs-title` and `--fs-input` with the DM Sans
-half-pixel offset (08 §6.5).
+`--tree-dot-selected`, and meter tones where status tokens do not fit.
+Typography follows the mockup (decision P22): Inter for the client's text,
+title 16.5 px and composer input 15 px as `--fs-title` and `--fs-input`;
+the app's font setting is not offered at launch (there is no Settings
+entry, P23). 08 §6.5's DM Sans half-pixel offset no longer applies to these
+sizes; 08 gets a note.
 
 **W11.1 Tokens.** Acceptance: 08 §6 contract tests pass (light override per
 dark token, no colour literals in components or built CSS); visual baselines
@@ -848,7 +908,8 @@ delivers them.
 | `spaces-replies.spec.ts` | M4 | reply trees, Reply at root, mentions |
 | `spaces-signed-out.spec.ts` | M4 | signed-out reading of a thread, its branches and replies (§9.5); write controls open the auth dialog |
 | `spaces-keyboard.spec.ts` | M4 | §10 focus order, Escape order, reduced motion |
-| `spaces-channels.spec.ts` | M4, M6 | join, leave, New channel, About (M4); channel invite links, report, moderation log, removal with reason, dismissal, ban (M6; 04 B3, B4, §6.6) |
+| `spaces-channels.spec.ts` | M4, M6 | join, leave, New channel, About (M4); channel invite links, removal with reason, the moderation log, ban (M6; 04 B3, B4, §6.6) |
+| `spaces-notifications.spec.ts` | M6 | each notification kind of 01 C16 reaches its recipient, the unread dot, Mark all read, a link opening the thread in its feed (§2.1) |
 | `spaces-branches.spec.ts` | M5a | follow-up, Continue, Branch, Branch here, Look up, Comment, dot alignment |
 | `spaces-runs.spec.ts` | M5a | run states, Stop and Run again (05 M5a) |
 | `spaces-usage.spec.ts` | M5b | usage page, keys, billing setting, out-of-tokens refusal |
@@ -856,22 +917,21 @@ delivers them.
 
 `visual.spec.ts` is rewritten for Home in `centred` and `wide` at 1440 and
 1100 px, a channel at 800 px, an open branch card, the stacked dialogs, Usage,
-Invites and the auth dialog. `admin.spec.ts` stays. The `library`, `research`,
+Invites and the auth dialog. `admin.spec.ts` stays and gains the models panel
+(W8.2): a site admin makes a model unavailable and changes the default, and a
+member's composer reflects both after a reload. The `library`, `research`,
 `collaboration`, `live` and `widgets` specs are deleted.
 
-### 12.3 Desktop
+### 12.3 Desktop (removed: web-only build)
 
-A macOS checklist (CI when available, a documented manual step until then;
-tauri-driver has no macOS support, 05 risks): pair with a device token, quit,
-relaunch offline, the feed renders from SQLite, a reply queued offline sends on
-reconnect, the window drags by the app bar, a device run shows "Waiting for
-your Mac" and then the agent label.
+No desktop client, so no macOS checklist. The browser specs of §12.2 are the
+whole end-to-end suite.
 
 ## 13. Dependencies on the server and sync work
 
 | Id | Needs | Provided by |
 |---|---|---|
-| N1 | `@session/sync` client half (replica, outbox, rebase, reactive queries, memory and SQLite adapters) and `@session/mutators` | 01 Y9-Y12, U1-U5 |
+| N1 | `@session/sync` client half (replica, outbox, rebase, reactive queries, the memory adapter) and `@session/mutators` | 01 Y9-Y12, U1-U5 |
 | N2 | Signed-out and unjoined reading of open channels | 01 Y5, R5; 04 §3.5 |
 | N3 | Passage index on ask nodes (block index of the quoted passage, absent for footer asks), over a block structure that is the same for streamed and final text | 01 C3, 03 §1 (`b`) |
 | N4 | Counts record `{ th, s, saves, r }` with totals; no likes | 01 C1, C5 |
@@ -880,12 +940,12 @@ your Mac" and then the agent label.
 | N7 | Account invites, waiting accounts, `members.tree` (online-only) | 01 C8; 04 §3 |
 | N8 | Placeholder fields `mod`, `modBy`, `modNote`; `modlog` with ban entries | 01 C12; 04 §6.5 |
 | N9 | Run records, `step`, failure reasons, stream deltas and `/live`, cancel and retry | 03 §1, E3, G6, T1-T3; 01 Y7 |
-| N10 | `usage.*`, `apiKeys.*`, `usage.changed`, model registry with payers, device executors | 03 K4-K8, K11, V1 |
-| N11 | GitHub sign-in with the profile step, `auth.checkInvite`, desktop device tokens | 04 §1, §3.4; 01 S2 |
+| N10 | `usage.*`, `apiKeys.*`, `usage.changed`, model registry with payers, `models.list` and `admin.models.*` | 03 K4-K8, K11, K15 |
+| N11 | GitHub and X sign-in with the profile step, `auth.checkInvite` | 04 §1, §3.4, Z2 |
 | N12 | Stored answer and stream format: both Markdown | 01 C3; 03 §1 |
 | N13 | `prefs` record and `prefs.set` | 01 C13 |
 | N14 | Member list, ban, unban, remove and channel invite link mutators | 04 §4.3, §5, §6.4 |
-| N15 | Notification records (mention, `report`, `report_resolved`) and the `notifications.*` mutators, for W2.6 | 01 C16, U5; 04 O1, O2 |
+| N15 | Notification records (`mention`, `reply`, `branch`, `comment`, `removed`, `invite_used`) and the `notifications.*` mutators, for W2.6 | 01 C16, U5; 04 O2, I4 |
 
 Shell, feed, side column, composer and dialogs are built against the fixture
 replica (§9.6) and do not wait on N1-N15.
@@ -896,20 +956,18 @@ replica (§9.6) and do not wait on N1-N15.
    in `research.forkNode` input (N3).
 2. **Stop.** The mock has no Stop control; 03 G6 and 05 M5a need one. Placement
    proposed in §3.3 (beside the run status, asker only).
-3. **Thread addresses.** Notifications and shared links need one; the plan uses
-   `/c/$name?t=&sel=`, which needs a single-thread fallback for threads outside
-   the loaded feed.
+3. **Thread addresses.** Decided (P9): `/c/$name?t=&sel=` opens the thread in
+   its channel feed scrolled into view; a thread outside the loaded feed is
+   fetched and inserted (§2.1).
 4. **Removal placeholder author.** Decided: "[deleted]" (04 §6.2).
-5. **Notifications inbox.** The mock has no surface for the notifications
-   01 C16 and 04 O1-O2 produce. W2.6 adds a minimal page reached from the
-   account menu; whether it needs an app bar control or push notifications
-   on the desktop is open.
-6. **Widgets and artifacts** in answers, which the current Markdown pipeline
-   renders and the mock does not show.
-7. **Typography.** The mock uses Inter; the client keeps the app's font setting
-   and needs title and input sizes decided.
-8. **Settings.** The account menu has no Settings entry for appearance, theme,
-   reduced motion and the send shortcut.
+5. **Notifications inbox.** Decided (G, P10): a notifications page in the
+   account menu and an unread dot on the account avatar (W2.6); no push
+   notifications.
+6. **Widgets and artifacts.** Decided (P21): not rendered; answers are plain
+   Markdown.
+7. **Typography.** Decided (P22): as in the mockup (§11).
+8. **Settings.** Decided (P23): a Settings entry only once there are
+   settings beyond Usage; none at launch.
 9. **Effort.** Settled: the submenu ships with the efforts of the chosen
    model (§5, 03 K12); whether effort is capped for included tokens is 03
    question 6.

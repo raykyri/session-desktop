@@ -9,8 +9,14 @@ records where the members mockup (`docs/mockups/session-web-members.html`)
 adds to them or disagrees with them. The server half, record kinds and
 contract changes are specified in `01-architecture-and-data.md` (cited as
 `01` with its item ids, always prefixed: `01` S2, `01` C12); runs, allowances
-and device runs in `03-agents-and-research.md`. This file names what it needs
-from them and does not redesign them.
+in `03-agents-and-research.md`. This file names what it needs from them and
+does not redesign them.
+
+Scope: web only (`00-overview.md`, "Scope of this build"). Desktop
+authentication (device tokens, pairing, the desktop CORS origin) is not
+built, and there is no reporting (decision F). Items that existed only for
+those keep their ids and are marked "(removed: web-only build)" or
+"(removed: no reporting)".
 
 Terms: "channel" is the product word; code and wire keep `space`. A channel
 has exactly one owner and everyone else in it is a member; there are no
@@ -23,26 +29,26 @@ half must pass (`05-delivery.md`, M3); `R…` and `S…` there are the
 
 Work items have ids `I` (accounts and invites), `B` (channels and ownership), `O`
 (moderation), `P` (privacy and user logs) and `Z` (limits, authentication,
-client security), so that `05-delivery.md` (M4, M6 and M7a) can schedule them.
+client security), so that `05-delivery.md` (M4 and M6) can schedule them.
 
 ## 1. Precedence and conflicts
 
 | Topic | Mockup | Decision | Reason |
 |---|---|---|---|
-| Sign-in provider | Sign in with X; a Session handle chosen at sign-up | GitHub OAuth (ADR-5, `06-auth-and-users.md`); the handle step is kept | ADR-5 is in force; the overview records no provider decision. X is question 7. |
+| Sign-in provider | Sign in with X; a Session handle chosen at sign-up | GitHub or X (decision D); an account is created with one provider and stays bound to it: no linking of a second provider and no merging of accounts; the handle step is kept | Product decision; amends ADR-5, which names GitHub only (§12 Z2). |
 | Account without an invite | "Continue without one" creates a `waiting` member who reads open channels | A `users` row with `status: "waiting"` (`01` C8), with no handle, which owns nothing and cannot write | The overview records invite-only membership. This replaces `06` §3 and the current callback, which deletes a new account whose code fails (`auth/github.ts`); the purpose, no writes and no spend without a code, still holds. |
 | Moderators | `isMod` is the owner only | The owner is the only person who moderates a channel; no moderator role and no "Make moderator" (`01` C18) | Product decision (00); agrees with the mockup. The schema's and replica-proto's `mod` role is removed (`01` U6). |
 | Admin role and ownership transfer | Absent | Removed: no `admin` role, no `members.setRole`, ownership is not transferable (`01` C18) | Product decision (00). |
-| Hide | Not offered | Server keeps `hidden`; no Hide command at launch | Phase 0 rules and suites cover it. |
+| Hide | Not offered | Server keeps `hidden`; no Hide command (decision P7) | Phase 0 rules and suites cover it. |
 | Ban | Not offered | Offered to the owner | `AGENTS.md`: removal in an open space is STALE after leave and rejoin; "the UI offers ban as the tool there". |
-| Report and removal text | One optional free-text field each | `reports.create { item, note? }`; `moderation.decide { …, note? }` (`01` C12) | Overview product decision. |
-| Who may report | Any active account (`canWrite()`) | Members of the channel (`reports.create` is `who: "member"` in replica-proto); a non-member in an open channel sees "Join #name to report." | Keeps the tested rule and ties each report to a person the owner can ban. |
+| Removal text | One optional free-text field | `moderation.decide { …, note? }` (`01` C12) | Overview product decision. |
+| Reporting | Report… on others' threads; reports in the moderation log | Not built: no `reports.*`, no report notifications, no report part of the moderation log, no report limits | Decision F. The owner's Remove and Ban stay. |
 | Removal placeholder | "Removed by @mod", "Reason: …", "Ask by @author in #channel" | The author shows as "[deleted]" (product decision); §6.2 lists exactly what is stored and served | `AGENTS.md` erases content (text and everything under the thread), not the record's attribution; replica-proto's `erase` and `redact` keep `u` on the placeholder. |
 | Moderation log excerpt | Quotes a removed thread's title | No text of a removed item | `AGENTS.md`: removed content is erased and never served again (`01` C12 agrees). |
 | Channel rules | Removed | Client never sends `rules`; no default rule is stored | Overview product decision. |
 | Visibility | Open or Private | Wire `vis: "open" \| "private"`; private is closed, unlisted and invite-only (`01` C9) | Matches the product; the closed-space rules of phase 0 apply unchanged. |
 | Private admission | "Ask @owner to add you"; no add flow drawn | One-use channel invite links made by the owner | The contract and phase 0 define them (`inv2`, `inv4`). |
-| Join requests | Absent | Deferred (`01` C10); their prototype tests stay in the suite | `01` question 6. |
+| Join requests | Absent | Not built (decision P4; `01` C10); their prototype tests stay in the suite | Private channels admit through channel invite links only. |
 | Channel deletion | Absent | Not offered at launch; `spaces.delete` stays out of `@session/mutators` v1; a site admin deletes a channel by operator job (with suspension, §3.6 and §4.5, the only site-admin action on a channel) | Nothing in the mockup draws it. |
 | Invite link form | `session.app/i/<code>` (code in the path) | `<SESSION_PUBLIC_ORIGIN>/i#<code>` (code in the fragment); a pasted path form is still parsed | A path puts the code in request lines, access logs and `Referer` (§3.2). |
 | Showing an open code again | Every open link has Copy | Kept: the code is stored encrypted for its creator until used or revoked (§3.1) | Resolves question 4. |
@@ -77,13 +83,19 @@ separate limits.
   the column. `users.invites_remaining` is dropped in favour of the open-slot
   rule.
 - `users.status`: `waiting | active | suspended` (`01` C8 plus `suspended`,
-  §3.6). `users.handle` (unique, `^[a-z0-9._]{3,20}$`, the mockup's rule,
-  null while waiting) and `users.display_name`. Handles are the values of
+  §3.6). Sign-in identity (decision D): `github_id` becomes `provider`
+  (`github` or `x`) and `provider_user_id`, unique together; `login` is the
+  provider's username, shown nowhere and unique nowhere;
+  `github_created_at` becomes `provider_created_at` (the account-age check
+  of `06` §3 applies to both providers). An identity belongs to one account
+  for its lifetime; there is no second identity per account and no merge.
+  `users` holds no email address for either provider. `users.handle`
+  (unique, `^[a-z0-9._]{3,20}$`, the mockup's rule, null while waiting) and `users.display_name`. Handles are the values of
   `spaceHandleSchema` and are never reused; a waiting account gets no handle,
   so the sweep below cannot be used to reserve handles.
 - A waiting account owns no records, has no user log, cannot register a sync
-  client for writing, and is deleted by the maintenance sweep 14 days after
-  creation unless redeemed (question 8). Waiting accounts created per hashed
+  client for writing, and is deleted by the maintenance sweep 90 days after
+  creation unless redeemed (decision S4). Waiting accounts created per hashed
   IP are counted in `signup_attempts` (outcome `waiting`); above 5 per IP per
   day the callback answers the sign-in error page instead of creating one.
 - `oauth_states` stores `code_hash`, not the code, in its payload.
@@ -110,9 +122,9 @@ refused.
 - `revoke`: the caller's own open link; frees the slot and nulls `code_enc`.
   No restore. A revoked code answers `unusable` from then on.
 - Codes come from a CSPRNG (`crypto.randomInt`) over the mockup's alphabet
-  (no `0`, `O`, `1`, `I`). The mockup's `SESS-XXXX-XX` holds 30 bits; this
-  plan proposes `SESS-XXXXX-XXXXX` (50 bits), question 3. Input is
-  normalized (upper-cased, spaces and dashes removed) before hashing.
+  (no `0`, `O`, `1`, `I`), in the mockup's form `SESS-XXXX-XX` (30 bits,
+  decision S2). Input is normalized (upper-cased, spaces and dashes removed)
+  before hashing.
 - The link is `<SESSION_PUBLIC_ORIGIN>/i#<code>` (in production
   `https://session.dev/i#<code>`): the code stays in the
   fragment and out of request lines, logs and `Referer`, as the existing
@@ -172,14 +184,18 @@ in the mockup's order.
 - **Code step** (`CODE_COPY`): "Join with invite?", "Paste the code or link a
   member sent you.", "Continue"; on `open`, "Invite from <name>" and the
   sign-in button.
-- **Starting OAuth.** The current `GET /auth/github?invite=<code>` puts the
-  code in a request line. It is replaced by `POST /auth/github/start` (JSON
-  `{ code?, returnTo? }`, `X-Requested-With: session`, same-origin), which
-  writes the `oauth_states` row with the code's hash, sets the state cookie
-  and answers `{ url }`; the client then navigates to `url`. `GET
-  /auth/github` stays for sign-in without a code and ignores an `invite`
-  parameter.
-- **OAuth callback.** An existing account signs in and the code is untouched.
+- **Starting OAuth.** The dialog offers "Continue with GitHub" and "Continue
+  with X". The current `GET /auth/github?invite=<code>` puts the code in a
+  request line. It is replaced by `POST /auth/<provider>/start` for
+  `github` and `x` (JSON `{ code?, returnTo? }`, `X-Requested-With:
+  session`, same-origin), which writes the `oauth_states` row with the
+  code's hash and the provider, sets the state cookie and answers `{ url }`;
+  the client then navigates to `url`. `GET /auth/github` and `GET /auth/x`
+  stay for sign-in without a code and ignore an `invite` parameter.
+- **OAuth callback.** The account is found by `(provider,
+  provider_user_id)`. An existing account signs in and the code is
+  untouched; signing in with the other provider is a different identity and
+  follows the new-identity path (it does not reach the existing account).
   A new identity with a usable code goes to the profile step (name, handle,
   the Session-wide community-rules checkbox; these are a static page, not
   channel rules), and `account.create` redeems the code and activates the
@@ -224,13 +240,13 @@ active account must be banned channel by channel. `admin.suspend { user,
 on }` (admin only, in `/admin`) sets `users.status` to `suspended` or back to
 `active`. A suspended account is refused every write at apply time (the same
 check as a waiting account, `FORBIDDEN`, recorded), its open account invites
-are revoked, its sessions and device tokens are revoked (streams end within
-60 seconds), and it reads like a waiting account after signing in again.
+are revoked, its sessions are revoked (streams end within 60 seconds), and
+it reads like a waiting account after signing in again.
 Records it wrote stay; channel owners remove them as usual. Channels the
 account owns are frozen while it is suspended (§4.5).
 
 Acceptance: a server test that a queued envelope from a suspended user is
-refused, its open links answer `unusable`, and its device token answers
+refused, its open links answer `unusable`, and its session cookie answers
 `401`; unsuspending restores writes but not the revoked links; the frozen
 channel tests of §4.5.
 
@@ -276,8 +292,7 @@ transferable and there are no admins or moderators. Site admins
 | Action | Member | Owner |
 |---|---|---|
 | Read, ask, post, reply, save | yes | yes |
-| Report a thread | yes | — |
-| Remove a thread, dismiss a report, read the moderation log | | yes |
+| Remove a thread, read the moderation log | | yes |
 | Ban and unban; remove from a private channel | | yes, anyone but themselves |
 | Make channel invite links | | yes |
 | Edit About (`01` C11) | | yes |
@@ -310,7 +325,7 @@ read or post" / "Open: anyone can read and join"), and for the owner
 
 - Save sends `spaces.update { id, desc }` (`01` C11). The server trims,
   bounds (`BAD_REQUEST` above 300, recorded, per `R8`) and checks ownership at
-  apply time. No `base`: one person edits, so a second device's save
+  apply time. No `base`: one person edits, so a save from a second tab
   overwrites.
 - An empty About shows "No description yet. Add one" to the owner, nothing to
   others.
@@ -323,8 +338,8 @@ shows the new About without a reload.
 ### 4.5 A channel whose owner is suspended or deleted
 
 **B6.** Ownership cannot move (`01` C18), so a channel whose owner's account
-is suspended (§3.6) or deleted (§8) has nobody who can remove threads,
-handle reports or ban. Rule: the channel is frozen (a state of the whole
+is suspended (§3.6) or deleted (§8) has nobody who can remove threads or
+ban. Rule: the channel is frozen (a state of the whole
 channel, distinct from a removed member's frozen copy, §8).
 
 - `admin.suspend { on: true }` and the account-deletion operator job set
@@ -338,8 +353,8 @@ channel, distinct from a removed member's frozen copy, §8).
 - Every write in a frozen channel is refused at apply time with
   `FORBIDDEN`, recorded ("#name is frozen because its owner's account is
   not active."), except a person deleting their own threads, follow-ups,
-  replies and comments, and leaving. Joins, channel invite links and
-  reports are refused too. Saves are user-log records and are unaffected.
+  replies and comments, and leaving. Joins and channel invite links are
+  refused too. Saves are user-log records and are unaffected.
 - Channel info and the header show the banner "#name is frozen: its
   owner's account is not active. You can read it and delete your own
   posts." The composer's channel picker omits the channel.
@@ -351,8 +366,8 @@ channel, distinct from a removed member's frozen copy, §8).
   indefinitely; no job deletes them (question 11, decided).
 
 Acceptance: a server test that, after `admin.suspend` of an owner, a
-member's post, a join, a channel link redemption and a report in that
-owner's channel answer `FORBIDDEN`, a member's delete of their own thread
+member's post, a join and a channel link redemption in that owner's channel
+answer `FORBIDDEN`, a member's delete of their own thread
 succeeds, and the threads are still served to a signed-out reader (open
 channel) and to a member (private channel); after unsuspension the same
 writes succeed; an operator-job test that deleting an owner's account
@@ -391,9 +406,14 @@ snapshot holds no link record.
 
 ## 6. Moderation
 
-### 6.1 Reporting
+### 6.1 Reporting (removed: no reporting)
 
-**O1.**
+Decision F: there is no reporting. `reports.create`, `reports.resolve`, the
+`report` record kind, the `report` and `report_resolved` notifications, the
+report rate limit and the report e2e steps are not built (`01` C12, U6).
+The text below is kept for reference and is not scheduled.
+
+**O1 (removed: no reporting).**
 - Members of the channel other than the owner: "Report…" (`reportopen`)
   opens `rmDlg` in report mode: the clipped title, "What is wrong with it?"
   (optional), and "Reports go to @owner, the owner of #name. @author is not
@@ -419,23 +439,21 @@ leave one unread notification for the owner.
 ### 6.2 Removing
 
 **O2.**
-- The owner: "Remove…" (`rmopen`) in the thread menu and the moderation log;
+- The owner: "Remove…" (`rmopen`) in the thread menu;
   `rmDlg` in remove mode: "Reason, shown with the removal" (optional, at most
   300 characters, with the hint "Readers see this. Do not quote the removed
   text.") and "Readers see that it was removed. Branches and replies under it
   go with it."
-- `moderation.decide { item, decision: "removed", note? }` or
-  `reports.resolve { report, outcome: "removed", note? }`. Either resolves
-  every open report on the item as `removed`, sends `report_resolved` to each
-  reporter, and writes a `modlog` entry.
+- `moderation.decide { item, decision: "removed", note? }` writes a
+  `modlog` entry and sends a `removed` notification to the author with the
+  note and no thread text (`01` C16).
 - `removed`, `hidden`, `decline` and `members.ban` apply to the record as it
   is, without `base` (`AGENTS.md`; `H1`). Removing an item that is already
   removed answers `PRECONDITION_FAILED` ("This item was removed.", as
   replica-proto does); the client treats it as done.
 - A run in progress ends and writes nothing after the removal
   (`03-agents-and-research.md`). Not reversible: the content no longer
-  exists. `reports.resolve { outcome: "open" }` after a removal reopens the
-  report only. The author may still delete a removed thread (`R11`), which
+  exists. The author may still delete a removed thread (`R11`), which
   deletes the placeholder.
 
 What the removal commit leaves, and who gets it:
@@ -448,7 +466,7 @@ What the removal commit leaves, and who gets it:
 | Thread text: `q`, `t`, `sum`, quotes, look-up phrases | emptied in the same commit | nobody |
 | Ask nodes and follow-ups, answers, replies, comments, runs and turns, `run_live` checkpoints, mention notifications about it, saves of it | deleted; tombstones keep key, kind, audience fields and rev | readers get `del` |
 | Counts record | `r: 0`, `saves: 0` | every reader |
-| Reports on the item | kept with `st: "removed"` and their notes | reporter and owner; deleted after 180 days |
+| `removed` notification | `sp`, `th`, `modNote`; no thread text | the author |
 | `modlog` entry | `kind`, `item`, `by`, `author`, `note`, `at` | owner; deleted after 180 days |
 | `usage_events` of its runs | kept, no text (`03` K1) | the payer |
 
@@ -461,8 +479,8 @@ removed thread in snapshot and pull, and a client test that the placeholder
 prints "[deleted]" for both the author and another reader. Deleting saves of a removed thread is a change to
 replica-proto's `erase` (`01` U6), which today keeps them.
 
-Placeholder lifetime: until the author deletes it or the channel is deleted;
-tombstones of the erased records are pruned after 30 days (question 2).
+Placeholder lifetime: until the author deletes it or the channel is deleted
+(decision P5); tombstones of the erased records are pruned after 30 days.
 
 Acceptance: `inv6` "removing a thread erases it and everything under it from
 storage, for good", `R5`, `R11`; a `@session/mutators` test that the
@@ -476,8 +494,7 @@ hidden-text rules stay implemented and tested (`inv6`: hidden text to the
 author and the owner). `shown` carries `base.rev` and answers STALE when the
 author edited after the owner read it (`R2`). The client renders hidden
 items (author and owner see the text under "Hidden by the channel owner";
-others the placeholder) but offers no Hide
-command (question 10).
+others the placeholder) but offers no Hide command (decision P7).
 
 Acceptance: `inv6` hide tests, `R2`, `R14`; a client test of both renderings.
 
@@ -491,7 +508,7 @@ Acceptance: `inv6` hide tests, `R2`, `R14`; a client test of both renderings.
   write in the channel, the person's own included, and any join by link
   (`inv2`, `review-r1` ban test). In an open channel the banned person can
   still read, because open content is readable by anyone. A person banned
-  from a private channel is a removed member there: frozen copy, §8.
+  from a private channel is a removed member there (§8).
 - Remove from channel is offered only in private channels. In open channels it
   would be STALE after the person leaves and rejoins (`AGENTS.md`), so Ban is
   the tool there.
@@ -504,22 +521,16 @@ on their own threads.
 
 ### 6.5 Moderation log
 
-**O5.** `modLogDlg`: tabs "Open reports (N)" and "Everything"; each entry
-shows the kind (Report, Dismissed, Removed, Banned, Unbanned), "@reporter
-reported @author's ask" or "@owner removed @author's ask", the note, and the
-relative time; open reports carry Dismiss and Remove.
+**O5.** `modLogDlg`, without the mockup's report tab: one list of the
+owner's removals and bans, newest first; each entry shows the kind (Removed,
+Banned, Unbanned), "@owner removed @author's ask" or "@owner banned
+@member", the note, and the relative time.
 
-- Data: the channel's reports plus the owner-only `modlog` record kind of
-  `01` C12 (`{ id, sp, kind, item, by, author, note, at }`), whose `kind`
-  includes `ban` and `unban`, with `item` null and `author` naming the banned
-  person.
-- An entry shows the item's current title only when the item exists and is
-  not removed in the reader's replica. For a removed item it shows kind,
-  author and channel.
-- Dismiss sends `reports.resolve { outcome: "dismissed" }`; the reporter gets
-  `report_resolved` with that outcome.
-- "(N open)" counts open reports in the replica. `modlog` entries and resolved
-  reports are deleted 180 days after `at` by the retention job (`01` Y8).
+- Data: the owner-only `modlog` record kind of `01` C12 (`{ id, sp, kind,
+  item, by, author, note, at }`) with `kind` `remove`, `ban` or `unban`; for
+  bans `item` is null and `author` names the banned person.
+- A removed item shows kind, author and channel, never a title or text.
+- Entries are deleted 180 days after `at` by the retention job (`01` Y8).
 
 Acceptance: `inv3` "a plain member gets no moderator-only records, in
 snapshots or pulls", rewritten for the owner (`01` U6) and extended to
@@ -530,15 +541,15 @@ clock; a client test that an entry for a removed item renders no title.
 
 - replica-proto `inv2`, `inv6`, `review-r1`, `review-r2` against the real
   server half (M3).
-- `@session/mutators` tests: note bounds; one open report per reporter and
-  item; a removal resolves every open report on the item; the placeholder
-  holds no field of the removed content.
-- `e2e/spaces-channels.spec.ts`: a member reports a thread with a note; the
-  owner's channel info shows "Moderation log (1 open)" without a reload; the
-  owner removes it with a reason; the member's feed shows the placeholder
-  with the reason and no text, also after a reload; a second report is
-  dismissed and the reporter sees the resolved notification; the owner bans a member of an
-  open channel and that member's Ask is refused with the ban message.
+- `@session/mutators` tests: note bounds; the placeholder holds no field of
+  the removed content; a removal writes one `modlog` entry and one `removed`
+  notification.
+- `e2e/spaces-channels.spec.ts`: the owner removes a member's thread with a
+  reason; the member's feed shows the placeholder with the reason and no
+  text, also after a reload, and the member's notifications page lists the
+  removal with the reason; the owner's moderation log lists the removal
+  without a reload; the owner bans a member of an open channel, the log
+  lists the ban, and that member's Ask is refused with the ban message.
 - The storage scan of `01` D4 after a removal: the question text appears
   nowhere in the SQLite file, the WAL included, nor in the `effects` table.
 
@@ -553,7 +564,8 @@ current access (`AGENTS.md`; `inv7`). Likes are removed (`01` C1).
   (`R4a`: no deletions reach a removed member's log).
 - A removed thread's saves are deleted with it (§6.2).
 - The Saved count is computed on the client from the user log.
-- Report notifications go to the channel's owner only (§6.1).
+- Notifications (`01` C16: mention, reply, branch, comment, removed, invite
+  used) are served only while their person may read the item.
 
 Acceptance: a client test that Saved's count drops when a resync removes a
 channel's saves; `R4a`.
@@ -568,18 +580,18 @@ channel's saves; `R4a`.
   text (`05` §4). Litestream generations hold the text until they expire. Product
   decision: there is no retention requirement for backups, so removed text
   may stay in backups for as long as they are kept; "never served again"
-  applies to what the server serves, not to backups (`01` question 3). Report notes and removal
-  reasons are owner- or reporter-written text and are kept as §6.2 says.
+  applies to what the server serves, not to backups (`01` question 3).
+  Removal reasons are owner-written text and are kept as §6.2 says.
 - **Hidden text** goes to its author and the channel's owner only.
-- **Frozen copy.** A member removed or banned from a private channel keeps
-  the copy on their desktop, frozen: the server serves them nothing further
-  from it, but they can still delete their own threads there (`inv3`
-  frozen-copy test; `R4b`: the delete answers `null` and reveals nothing about
-  later replies). The client marks the channel "You are no longer a member of
-  #name. This is the copy on this device." and offers only Delete on the
-  person's own threads. The web client has no frozen copy after a reload. On
-  a voluntary Leave the desktop drops the copy (question 5).
-- **Reporter identity** goes to the reporter and the channel's owner only.
+- **Frozen copy.** The server keeps the prototype rule: a member removed or
+  banned from a private channel is served nothing further from it, but can
+  still delete their own threads there (`inv3` frozen-copy test; `R4b`: the
+  delete answers `null` and reveals nothing about later replies). The web
+  client persists no replica, so it keeps no frozen copy: on the resync that
+  follows the removal it drops the channel and shows "You are no longer a
+  member of #name." (`02` W6.10). There is no frozen copy after a voluntary
+  Leave either (decision P8). The desktop's frozen copy is not built
+  (removed: web-only build).
 - **No existence oracle.** A missing target and one the caller may not read
   answer the same (`inv4`); an id collision answers the same `CONFLICT`
   whether or not the caller can read the record (`inv4`). `auth.checkInvite`
@@ -587,15 +599,15 @@ channel's saves; `R4a`.
 - **Account deletion** stays an operator job (`06` §7). With spaces it
   deletes the person's threads, follow-ups, replies and comments through the
   author's delete path (a thread with others' replies stays an empty shell,
-  `AGENTS.md`), their user log, member records and device tokens; it keeps
-  their handle reserved, reports and `modlog` entries naming them until
-  retention, and their node in the invite tree as "Deleted account".
+  `AGENTS.md`), their user log, member records and sessions; it keeps
+  their handle reserved, `modlog` entries naming them until retention, and
+  their node in the invite tree as "Deleted account".
   Channels the person owns are not deleted with the account; they are
   frozen (§4.5).
 
-Acceptance: the frozen-copy test, `R4b`; a client test of the frozen banner
-and that only own threads offer Delete; an operator-job test on a fixture
-account that leaves no record with its `u` except retained reports and
+Acceptance: the frozen-copy test, `R4b`; a client test that the removed
+member's tab drops the channel and shows the message; an operator-job test
+on a fixture account that leaves no record with its `u` except retained
 `modlog` entries.
 
 ## 9. Permissions at apply time
@@ -631,11 +643,10 @@ refusals answer `TOO_MANY_REQUESTS` unrecorded, and the client backs off
 | Replicated writes | 60/min per user (the existing mutation bucket; a batch of 20 counts 20) | `/api/sync/apply` (`01` A3) |
 | Snapshots | 30/min per user; 30/min per IP signed out | `/api/sync/snapshot` |
 | SSE | one connection per client id; 10 per user | `/api/sync/events` |
-| `reports.create` | 20/hour per user; one open per (reporter, item) | `pre` stage |
 | `accountInvites.create` | 3 open; 10 created per day | procedure |
 | `accountInvites.list`, `members.tree` | 60/min per user | procedure |
 | `auth.checkInvite`, `accountInvites.redeem`, `account.create` | 20/min per IP (the `/auth/*` bucket); 10 failed checks per hour per IP and per user | Hono middleware |
-| `POST /auth/github/start` | the `/auth/*` bucket | Hono middleware |
+| `POST /auth/github/start`, `POST /auth/x/start` | the `/auth/*` bucket | Hono middleware |
 | Waiting accounts | 5 per IP per day (`signup_attempts`) | OAuth callback |
 | Handle availability in the profile step | 30/min per user | procedure |
 | `spaces.create` | 5/day per user | `pre` |
@@ -643,12 +654,13 @@ refusals answer `TOO_MANY_REQUESTS` unrecorded, and the client backs off
 | `spaces.join` | 60/hour per user | `pre` |
 | `spaces.directory` | 60/min per user or IP | procedure |
 | Client registration | 20/day per user (`01` D2, Y3; `review-r2` S2) | sync server |
-| Device pairing codes | 5 created per hour per user; 5 failed redemptions invalidate a code | `devices.*` |
 | Envelope size | `TOO_LARGE` above 256 KB, unrecorded (`01` Y1) | `/api/sync` |
-| Text | About 300, removal note 300, report note 500 characters; `BAD_REQUEST`, recorded (`R8`) | input schemas |
-| Runs | Weekly allowance, 20 queued per user, 100 device runs/hour, 200 KB per device answer | `03-agents-and-research.md` |
+| Text | About 300, removal note 300 characters; `BAD_REQUEST`, recorded (`R8`) | input schemas |
+| Runs | Weekly allowance, 20 queued per user | `03-agents-and-research.md` |
+| `admin.models.*` | 60/min per site admin | procedure |
 
-Buckets are in memory in the single process (`06` §8). The invite tree lets
+The report row and the device pairing row are removed (no reporting;
+web-only build). Buckets are in memory in the single process (`06` §8). The invite tree lets
 a site admin find who invited an abusive account; suspension (§3.6) and revoking
 that member's open links are site-admin actions in `/admin`.
 
@@ -659,9 +671,9 @@ Acceptance: a middleware test per row that the limit plus one answers
 ## 11. Contract items this file depends on
 
 Made by `01`: C8 (account invites on `invites`, `status`, `members.tree`),
-C9 (`vis: "private"`), C10 (join requests deferred), C11 (`spaces.update {
-id, desc }`, owner only), C12 (report and removal notes, `modlog` with `ban`
-and `unban`, one open report per person and item), C18 (roles `owner` and
+C9 (`vis: "private"`), C10 (join requests not built), C11 (`spaces.update {
+id, desc }`, owner only), C12 (removal notes, `modlog` with `remove`, `ban`
+and `unban`, no reporting), C16 (notification kinds), C18 (roles `owner` and
 `member` only, `owner` on the space record, `frozen`). Requested here in
 addition (`01` now records the first three, in C12, U6 and C8):
 
@@ -673,13 +685,22 @@ addition (`01` now records the first three, in C12, U6 and C8):
 - `users.status` gains `suspended` (§3.6); account invites store
   `code_enc` beside `code_hash` (§3.1);
 - the `pre`-stage limits in §10; `auth.checkInvite` with a single `unusable`
-  answer; `POST /auth/github/start`;
+  answer; `POST /auth/<provider>/start`; `users.provider` and
+  `provider_user_id` (§3.1);
 - `invites.create` codes of 128 bits made in `pre`, `days` between 1 and 30;
 - no default rules on `spaces.create`.
 
 ## 12. Authentication
 
-**Z2. Web.** GitHub OAuth with PKCE and database sessions (`06`): cookie
+**Z2. Web.** GitHub OAuth or X OAuth 2.0, both with PKCE, and database
+sessions (`06`). X sign-in is new: an X developer app with the callback
+`<SESSION_PUBLIC_ORIGIN>/auth/x/callback`, scopes `users.read` and
+`tweet.read` (X requires the second to read the signed-in user), and
+`GET /2/users/me` with `user.fields=created_at,profile_image_url` for the
+id, username, name, avatar and account age. Configuration
+`SESSION_X_CLIENT_ID` and `SESSION_X_CLIENT_SECRET` (a Fly secret),
+validated at boot like the GitHub settings; staging has its own X app.
+ADR-5 gets an amendment naming both providers. Sessions: cookie
 `HttpOnly; Secure; SameSite=Lax`, 30 days idle, 90 absolute. CSRF:
 `csrfGuard` (`server/src/middleware/csrf.ts`) refuses a cookie request whose
 `Origin` differs from `SESSION_PUBLIC_ORIGIN` or whose `Sec-Fetch-Site` is
@@ -688,7 +709,8 @@ already covers every POST; its GET guard extends from `/api/trpc` to
 `/api/sync/*` and `/api/runs/*`, so a cross-site page cannot open a cookie
 SSE stream or snapshot. Logout ends the streams opened with the session.
 
-**Z3. Desktop.** A bearer device token, 256 random bits, stored hashed in
+**Z3. Desktop (removed: web-only build).** Not built. The original text,
+kept for a later desktop build: a bearer device token, 256 random bits, stored hashed in
 `device_tokens` and in the macOS Keychain under the app's
 `dev.session.desktop` identity (`01` S2).
 - Pairing: a signed-in web session creates a one-time code (8 characters
@@ -708,21 +730,18 @@ SSE stream or snapshot. Logout ends the streams opened with the session.
   another signs in is refused (`inv7`). The sync client id is registered
   under the token's user.
 
-**Z4. CORS and credential separation.** An allowlist of exact desktop origins
-(`tauri://localhost`, and the dev origin in development; `01` S2), parsed at
-boot; boot refuses `*` and any `http:` origin in production. Responses never
-send `Access-Control-Allow-Credentials`, so no allowed origin can make cookie
-requests. A request carrying `Authorization: Bearer` is authenticated by the
-token alone and skips `csrfGuard`'s cookie checks, because a browser never
-attaches the token by itself; a request carrying both a bearer token and a
-session cookie answers `400`, so the server never falls back from one to the
-other.
+**Z4. CORS and credential separation.** The desktop origin allowlist and
+bearer tokens are not built (removed: web-only build). The web client is
+same-origin, so the server sends no CORS headers on any route, and the
+session cookie is the only credential. A request carrying an
+`Authorization` header on `/api/sync/*`, `/api/runs/*` or tRPC answers
+`400`, so a credential the server does not accept is never ignored
+silently.
 
-**Z5. Rendering untrusted text.** Answers (from included runs and from
-device runs, which are text from a user's own CLI), posts, replies, comments,
-About, report notes and removal reasons are untrusted.
-- Plain-text fields (About, notes, reasons, names, handles) render as React
-  text, never as HTML.
+**Z5. Rendering untrusted text.** Answers, posts, replies, comments, About
+and removal reasons are untrusted.
+- Plain-text fields (About, reasons, names, handles) render as React text,
+  never as HTML.
 - Answers are stored as Markdown and the server stores no HTML (`03` §1).
   Answers, posts, replies and comments render through the client's Markdown
   pipeline (`02` §4.4) with raw HTML disabled and DOMPurify on its output;
@@ -730,20 +749,20 @@ About, report notes and removal reasons are untrusted.
 - Links pass `safeHref` (`http:`, `https:`, `mailto:` only) and open with
   `rel="noopener noreferrer nofollow ugc"`; remote images stay blocked
   (`07-client-architecture.md` §9), so a post cannot learn a reader's IP.
-- The web CSP of `07` §9 applies unchanged; the Tauri window sets the same
-  policy with `connect-src` limited to the server origin.
+- Answers are plain Markdown: the widget and artifact rendering of the
+  current pipeline is removed (decision P21).
+- The web CSP of `07` §9 applies unchanged.
 
-Acceptance (Z2–Z5): `01` S1 and S2 tests, plus: a cookie `GET
+Acceptance (Z2, Z4, Z5): `01` S1 tests, plus: a cookie `GET
 /api/sync/events` with `Sec-Fetch-Site: cross-site` is refused; a cookie
-`POST /api/sync/apply` without `X-Requested-With` is refused; a bearer
-request from `tauri://localhost` is accepted without that header; a request
-with both credentials answers `400`; a response to an allowed origin has no
-`Access-Control-Allow-Credentials`; a revoked token's open stream ends and the
-desktop wipes its replica (`05` M7a checklist); a pairing code fails after 10
-minutes and after 5 wrong attempts; a client test renders fixture answers and
-posts containing `<script>`, `<img onerror>`, `javascript:` links and a remote
-image, and the DOM holds none of them; a Tauri test that no command returns
-the token.
+`POST /api/sync/apply` without `X-Requested-With` is refused; a request with
+an `Authorization` header answers `400`; no response carries an
+`Access-Control-Allow-*` header; the X callback test with a fixture X
+token endpoint (new account, existing account, an X identity whose GitHub
+counterpart has an account stays a separate identity); a client test renders
+fixture answers and posts containing `<script>`, `<img onerror>`,
+`javascript:` links, a remote image and a widget fence, and the DOM holds
+none of them.
 
 ## 13. Threat notes
 
@@ -752,20 +771,22 @@ the token.
   its landing (§3.5). Accepted (`AGENTS.md`, `R10`). The Private option's
   help text says so (§4.1).
 - **Invite code enumeration.** `auth.checkInvite` reveals an inviter's name
-  for a valid code. Mitigations: 50-bit codes, one answer for every failure,
-  the per-IP and per-user limits, and an alert on failed checks above 100 per
-  hour (`05` §4). At 10 failures per hour per IP, a 50-bit space with at most
-  a few thousand open codes takes on the order of 10^8 IP-hours per hit.
+  for a valid code. Mitigations: one answer for every failure, the per-IP and
+  per-user limits, and an alert on failed checks above 100 per hour (`05`
+  §4). Codes are 30 bits (decision S2): with 3,000 open codes a guess hits
+  with probability about 2.8 × 10^-6, so at 10 failures per hour per IP a
+  hit takes about 36,000 IP-hours on average. An attacker with many IPs
+  reduces that in proportion; the failed-check alert is the control.
 - **Invite link leakage.** Account and channel codes are one-use and travel
   in fragments. A leaked account link admits one person, who appears under
   the inviter in the tree; the inviter can revoke open links at any time, and
   an admin can suspend the account it created (§3.6).
 - **Handle enumeration.** Handles are public by design (bylines, the tree);
   the availability check is rate-limited only to bound load.
-- **Report abuse.** One open report per reporter and item, 20 per hour,
-  coalesced owner notifications (§6.1), reports only from channel members,
-  and reporters visible to the owner, who can ban a reporter who abuses
-  reports.
+- **No reporting.** Members cannot flag content to the owner or to site
+  admins in the app (decision F). An owner sees their channel's content
+  directly; abuse by an owner, or in a channel its owner does not watch,
+  reaches site admins only outside the app (`05` §6, Q10).
 - **Owner exposure.** "Removed by @owner" names the owner to every reader,
   as the mockup decides; the owner can ban members who harass them.
 - **Abusive or absent owner.** Nobody can ban an owner or take over a
@@ -777,15 +798,16 @@ the token.
   configured, the previous key accepted for 30 days. A forged token, another
   reader's, or another server's resyncs (`inv3`, `T1`), so a stolen cursor
   gives its holder nothing. A rotation runbook goes into `web/docs/runbooks/`.
-- **CORS allowlist.** A wildcard would let any page make bearer requests to
-  the API; hence exact origins, the boot check, and no credentialed CORS
-  (Z4).
-- **Token theft.** A device token is held by the Rust side and the Keychain
-  item is bound to the app's signing identity (Z3); a web session cookie is
-  `HttpOnly`. XSS in rendered answers or posts is the main path to acting as
-  a user, which Z5 and the CSP address. A stolen Mac: the replica and frozen
-  copies rely on FileVault; revocation stops further reads and wipes the
-  replica on the next connection, but cannot erase a copy read offline.
+- **CORS.** The server sends no CORS headers (Z4), so no other origin can
+  read its responses.
+- **Session theft.** The session cookie is `HttpOnly`. XSS in rendered
+  answers or posts is the main path to acting as a user, which Z5 and the
+  CSP address. The web replica lives in tab memory and is gone when the tab
+  closes.
+- **Two accounts per person.** Accounts are bound to one provider (§3.1), so
+  a person with a GitHub and an X account can hold two Session accounts,
+  each admitted by its own invite. The invite tree shows both under their
+  inviters.
 - **CSRF.** Cookie requests need a same-origin `Origin`/`Sec-Fetch-Site` and
   the custom header; sync GETs are guarded too (Z2). Login CSRF is prevented
   by the single-use `oauth_states` row bound to the state cookie.
@@ -799,35 +821,35 @@ the token.
 - `01-architecture-and-data.md`: server half, record kinds and audiences,
   C1, C8–C14, C18, S1–S3, D2, D3, D4, U6, Y3, Y8.
 - `02-client-app.md`: the dialogs and pages named here (channel info, edit,
-  member list, moderation log, remove/report, members page, invite flow,
-  frozen-channel banner).
+  member list, moderation log, remove dialog, members page, invite flow,
+  frozen-channel banner, notifications page, admin models page).
 - `03-agents-and-research.md`: run cancellation on removal; run limits;
   answers stored as Markdown (§1).
 - `05-delivery.md`: M4 schedules I5, B1, B3 and P1; M6 schedules the other
-  I, B, O and P items and Z1, Z2, Z4, Z5; M7a schedules Z3; M3 makes the conformance suites that most acceptance checks
-  here rely on.
+  I, B, O and P items (not O1) and Z1, Z2, Z4, Z5; Z3 and O1 are removed;
+  M3 makes the conformance suites that most acceptance checks here rely
+  on.
 
 ## 15. Open questions
 
 1. Decided: the removal placeholder shows "[deleted]" for the author; `u` is
    served to the author only (§6.2). replica-proto's `erase` and `redact`
    serve `u` to every reader today; `01` U6 changes that.
-2. Does a removal placeholder stay until the author deletes it, or expire (for
-   example after 90 days)?
-3. Account invite codes: the mockup's 30-bit `SESS-XXXX-XX` or 50-bit
-   `SESS-XXXXX-XXXXX`?
-4. Can a member see an open code again after creating it? Proposed in §3.1:
-   yes, from `code_enc`, readable only by its creator and cleared on use or
-   revoke.
-5. Does the desktop keep a frozen copy after a voluntary Leave? Proposed: no.
+2. Decided (P5): a removal placeholder stays until the author deletes it.
+3. Decided (S2): 30-bit `SESS-XXXX-XX`.
+4. Decided (S3): yes, from `code_enc`, readable only by its creator and
+   cleared on use or revoke (§3.1).
+5. Decided (P8): no frozen copy after a voluntary Leave.
 6. Decided: no site-wide moderators and no channel admins or moderators.
    A channel has one owner, not transferable (§4.3, `01` C18);
    `users.is_admin` stays for the people who run Session (tree roots, the
    invite-limit exemption, suspension).
-7. Sign in with X in addition to or instead of GitHub (ADR-5).
-8. How long does a waiting account live without a code (proposed 14 days),
-   and how many may one IP create (proposed 5 per day)?
-9. Report and remove follow-ups and replies individually at launch?
-10. Offer Hide to the owner, given the server supports it?
+7. Decided (D): GitHub or X; an account stays bound to the provider it was
+   created with; no linking and no merging.
+8. Decided (S4): a waiting account lives 90 days without a code; one IP may
+   create 5 per day.
+9. Moot (P6): there is no reporting. Removing follow-ups and replies
+   individually is not offered at launch; the owner removes threads.
+10. Decided (P7): no Hide for owners.
 11. Decided: a deleted owner's channels stay frozen and readable
     indefinitely (§4.5); no job deletes them.

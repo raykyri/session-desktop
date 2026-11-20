@@ -1,8 +1,10 @@
 # 03 — Agents and research
 
 Status: draft. This file plans how asks, branches, comments and look-ups
-become runs; which models and effort levels a run may use; the two executors
-(the owned agent loop and device CLI runs, ADR-21 and `AGENTS.md` "Desktop");
+become runs; which models and effort levels a run may use, and how a site
+admin sets the default model and model availability (K15); the owned agent
+loop, which is the only executor in this build (device CLI runs of ADR-21
+and `AGENTS.md` "Desktop" are out of scope: web-only build, `00-overview.md`);
 streaming over the sync connection (ADR-22); token accounting, the weekly
 allowance, the behaviour when included tokens run out and API keys, as the
 mockup's Usage page shows them (`usagePage()`, `meter()`, `keysSection()`,
@@ -17,8 +19,10 @@ the form `04-agent-runtime.md` §n and `05-run-lifecycle-and-streaming.md` §n
 are to the existing documents in `web/docs/`, not to the plan files `04-…`
 and `05-…` in this directory.
 
-Work items have ids `G` (graph), `E` (executors), `V` (device runs), `T`
-(streaming), `K` (tokens and keys), `L` (limits).
+Work items have ids `G` (graph), `E` (executors), `V` (device runs, all
+removed: web-only build), `T` (streaming), `K` (tokens, keys and models),
+`L` (limits). Items that existed only for device runs keep their ids and are
+marked "(removed: web-only build)".
 
 ## 1. Records
 
@@ -29,11 +33,14 @@ node, so the record set grows:
 
 | kind | key | fields (stored shape) | tier |
 |---|---|---|---|
-| `node` | `node:<id>` | `th`, `s`, `par` (`null` for the root), `kind` (`ask`, `lookup`), `u`, `q` (the prompt), `tpl?` (look-up template version), `look?`, `quote?`, `b?` (passage: index of the top-level block of the parent's answer that holds `quote`), `model`, `effort`, `executor`, `agent?`, `run` (current run id), `mod`, `del`, `createdAt`, `rev` | full |
-| `run` | `run:<id>` | `th`, `s`, `node`, `u` (asker and payer), `executor` (`owned`, `device`), `agent?` (`claude-code`, `codex`), `model`, `effort`, `status`, `attempt`, `step`, `fail?`, `tok?`, `bill?`, `createdAt`, `startedAt?`, `finishedAt?`, `rev` | full; status also on the summary of the root's run |
+| `node` | `node:<id>` | `th`, `s`, `par` (`null` for the root), `kind` (`ask`, `lookup`), `u`, `q` (the prompt), `tpl?` (look-up template version), `look?`, `quote?`, `b?` (passage: index of the top-level block of the parent's answer that holds `quote`), `model`, `effort`, `run` (current run id), `mod`, `del`, `createdAt`, `rev` | full |
+| `run` | `run:<id>` | `th`, `s`, `node`, `u` (asker and payer), `model`, `effort`, `status`, `attempt`, `step`, `fail?`, `tok?`, `bill?`, `createdAt`, `startedAt?`, `finishedAt?`, `rev` | full; status also on the summary of the root's run |
 | `turn` | `turn:<run>:<attempt>:<n>` | `role`, `blocks` (text, tool use, tool result, citations), `createdAt` | full |
 | `answer` | `answer:<node>` | the final answer as Markdown, cited pages, `tok`, `run`, `attempt` | full |
 | `comment` | `comment:<id>` | C4 of 01 | full |
+
+The `executor` and `agent` fields of device runs are not added (removed:
+web-only build); every run is an owned run.
 
 `status` is `queued | running | complete | failed | cancelled | interrupted`
 (ADR-14), plus `superseded` for an attempt stopped by the attempt fence (E1,
@@ -47,26 +54,23 @@ and adds:
   (`RunErrorClass` in `web/packages/server/src/runs/errors.ts`: `auth`,
   `content_filter`, `context_too_long`, `provider_unavailable`, `network`,
   `timeout`, `unknown`), shown with that file's copy;
-- `device` with `cls` (`cli_missing`, `cli_auth`, `cli_exit`) for a CLI that
-  could not start or exited with an error (V4);
-- `too_large` for a device answer over the cap (V5).
+- `device` and `too_large` are not added (removed: web-only build).
 
 `bill` is the payer label of K9: `included`, `key:anthropic`, `key:openai`,
 or `included+key:anthropic` for a run that crossed the allowance.
 
 Answers are stored as Markdown, as turns are today, and rendered and
 sanitized by the client's Markdown pipeline (`02-client-app.md` §4.4, its
-N12). Streamed deltas (§5) are Markdown as well. Device answers are Markdown from the CLI and pass through the same
-pipeline; the server stores no HTML.
+N12). Streamed deltas (§5) are Markdown as well; the server stores no HTML.
+Answers are plain Markdown: widgets and artifacts are not rendered
+(decision P21; the mockup shows them only as options).
 
 The thread record keeps `tok` and `src` (the root answer's token count and
 number of cited pages), `sum` (the root answer's summary line) and `running`.
 The thread byline reads "N sources · Nk tokens · #channel" from `src` and
 `tok` (`card()` uses the root's `p.tok`); a branch card shows its own
 answer's counts. The answer icon's tooltip reads "model · effort"
-(`runOf()`, e.g. "Opus 5.5 · high effort"). A device answer shows its agent
-label ("Claude Code" or "Codex") in light text in place of the token count,
-and its tooltip names the agent (ADR-21).
+(`runOf()`, e.g. "Opus 5.5 · high effort").
 
 ## 2. The ask graph
 
@@ -79,11 +83,11 @@ names the thread's root as it does there.
 
 | Action | Mockup | Parent | Input |
 |---|---|---|---|
-| Ask | composer, kind `ask` (`newThread`) | none: thread root | `threads.create { id, space, kind: "ask", q, model, effort, executor, agent? }` |
-| Continue | `branchActs` "Continue" (`askfrom` with `n.id`) on a selected node `n`; the footer follow-up button is Continue on the root | `n` | `research.forkNode { id, thread, parent: n, kind: "ask", q, model, effort, executor, agent? }` |
+| Ask | composer, kind `ask` (`newThread`) | none: thread root | `threads.create { id, space, kind: "ask", q, model, effort }` |
+| Continue | `branchActs` "Continue" (`askfrom` with `n.id`) on a selected node `n`; the footer follow-up button is Continue on the root | `n` | `research.forkNode { id, thread, parent: n, kind: "ask", q, model, effort }` |
 | Branch | `branchActs` "Branch" (`askfrom` with `n.par`) on `n` | `n.par` (a sibling of `n`) | same, `parent: n.par` |
 | Branch here | select text in an answer, "Branch here" | the node whose answer holds the selection | same, plus `quote`, `b` |
-| Look up | select 1-4 whole words, "Look up" | the node whose answer holds the selection | `research.forkNode { id, thread, parent, kind: "lookup", look, quote?, b?, model, effort, executor, agent? }` |
+| Look up | select 1-4 whole words, "Look up" | the node whose answer holds the selection | `research.forkNode { id, thread, parent, kind: "lookup", look, quote?, b?, model, effort }` |
 
 `forkNodeInputSchema` becomes a union on `kind`; `uses` and `pay` are
 dropped (K8). `followups.ask` has no parent and is not used for ask threads;
@@ -99,7 +103,8 @@ mutator refuses `parent` equal to the root's own `par` (`null`) with
 be readable, not removed and not running or queued (the mockup hides Continue
 and Branch while `n.pending`). `q` is 1 to 8,000 characters; `quote` at most
 2,000; `b` an integer the client takes from the passage index (02 §4.4, W4.4). The
-model must be one the person may use (K13) and `effort` one the model accepts
+model must be one the person may use (K13, checked in `pre` against the
+availability a site admin sets, K15) and `effort` one the model accepts
 (`ModelEntry.efforts`), else `BAD_REQUEST`, as `research.forkNode` refuses
 today. `post` queues a `job` effect with the run id. Acceptance: mutator tests
 for each parent rule and each refusal; a convergence-suite generator that adds
@@ -142,9 +147,14 @@ notify (01 C16). Acceptance: a test asserts that `comments.create` queues no
 thread and sets `promoted` on the node. No run starts and no usage is
 written; the new thread's `tok` and `src` are copied from the answer. The
 server sets the new thread's author from stored state; it does not take an
-author from input. Who may do this and who is shown as author is open
-question 4. Acceptance: a test promotes a node and finds no `job` effect and
-the answer text equal to the source node's.
+author from input. Decided (P14): anyone who can read the branch may open it
+as its own thread (`who: "member"`; in an open channel a reader joins first,
+as for any write), and the new thread is shown with the branch's author, not
+with the person who opened it. The new thread is in the same channel.
+Acceptance: a test promotes a node and finds no `job` effect and the answer
+text equal to the source node's; a test in which a member who is not the
+branch's author promotes it and the new thread's `u` is the branch's
+author.
 
 **G6. Delete and stop.** `followups.delete` erases a node's text when nobody
 else has written under it, else leaves a shell (the AGENTS.md rule for
@@ -167,16 +177,15 @@ is no CLI session resume (ADR-21). Context over the model's window is cut by
 the existing budget rules (`04-agent-runtime.md` §4). Acceptance: snapshot
 tests of the built message list for each action in §2.1.
 
-**G8. Access at start.** When a run starts (owned) or is claimed (device), the
-server checks that the asker can still read the thread; if not, the run ends
-`failed { why: "access" }` without calling a model or handing the context to
-a device. Acceptance: a test removes the asker from a private channel while
+**G8. Access at start.** When a run starts, the server checks that the asker
+can still read the thread; if not, the run ends `failed { why: "access" }`
+without calling a model. Acceptance: a test removes the asker from a private channel while
 the run is queued and finds the run `access` with no usage row.
 
 ## 3. The owned agent loop
 
 ADR-10 as amended by ADR-21: the owned loop is the default executor
-("included tokens"). The existing loop in `web/packages/server/src/runs/`
+("included tokens"), and in this build the only one. The existing loop in `web/packages/server/src/runs/`
 (`loop.ts`, `service.ts`, `providers.ts`, `errors.ts`, `tools/`) is kept and
 re-pointed at the new records.
 
@@ -219,31 +228,33 @@ millisecond leaves one live attempt (the existing test for
 `05-run-lifecycle-and-streaming.md` §7, ported).
 
 **E5. Failure handling.** Each failure ends the attempt as below; committed
-turns are kept in every case, and usage already recorded stays recorded.
+turns are kept in every case, and usage already recorded stays recorded. The
+device-run column of this table is removed (web-only build).
 
-| Failure | Owned run | Device run |
-|---|---|---|
-| Provider `429` | Re-queued with backoff 5 s, 20 s, 60 s (`05-run-lifecycle-and-streaming.md` §8); after the third, `failed { why: "rate", at }` with `at` 60 s ahead | Reported by the CLI as an error: `failed { why: "device", cls: "cli_exit" }` |
-| Other provider error | `failed { why: "error", cls }` from `classifyRunError` | as above |
-| Deployment credential rejected (`401`/`403` on included tokens) | `failed { why: "error", cls: "auth" }`; logged with the class, and a new `session_run_failures_total{cls}` counter alerts on any `auth` | n/a |
-| Person's key rejected mid-run (`401`/`403`, or key removed) | `failed { why: "key" }` at that step; the key becomes `invalid` (K4) | n/a |
-| Wall clock (`SESSION_RUN_TIMEOUT_SECONDS`, 900) | `failed { why: "error", cls: "timeout" }`, as now | Desktop kills the CLI at 30 min and finishes `failed { why: "device", cls: "cli_exit" }` (L3) |
-| Per-run token cap (L1) | `complete`, with the note "Stopped at the run's token limit." after the answer | n/a |
-| Allowance exhausted mid-run | K9 | n/a (no usage) |
-| Lease expiry | n/a | `interrupted` (V3) |
-| Server deploy or crash | `interrupted`, auto-resumed (E2) | Lease kept; V3 |
-| Thread removed or node deleted | `superseded`, nothing written (E1) | Next heartbeat or turn answers `NOT_FOUND`; the desktop kills the CLI (V3) |
-| Asker lost access before start | `failed { why: "access" }` (G8) | same, at claim |
+| Failure | Owned run |
+|---|---|
+| Provider `429` | Re-queued with backoff 5 s, 20 s, 60 s (`05-run-lifecycle-and-streaming.md` §8); after the third, `failed { why: "rate", at }` with `at` 60 s ahead |
+| Other provider error | `failed { why: "error", cls }` from `classifyRunError` |
+| Deployment credential rejected (`401`/`403` on included tokens) | `failed { why: "error", cls: "auth" }`; logged with the class, and a new `session_run_failures_total{cls}` counter alerts on any `auth` |
+| Person's key rejected mid-run (`401`/`403`, or key removed) | `failed { why: "key" }` at that step; the key becomes `invalid` (K4) |
+| Wall clock (`SESSION_RUN_TIMEOUT_SECONDS`, 900) | `failed { why: "error", cls: "timeout" }`, as now |
+| Per-run token cap (L1) | `complete`, with the note "Stopped at the run's token limit." after the answer |
+| Allowance exhausted mid-run | K9 |
+| Server deploy or crash | `interrupted`, auto-resumed (E2) |
+| Thread removed or node deleted | `superseded`, nothing written (E1) |
+| Asker lost access before start | `failed { why: "access" }` (G8) |
 
-Acceptance: a fixture-provider test per owned row, and a fake-CLI test per
-device row.
+Acceptance: a fixture-provider test per row.
 
-## 4. Device runs
+## 4. Device runs (removed: web-only build)
 
 ADR-21 and `AGENTS.md` "Desktop": a device run is a Claude Code or Codex CLI
-process on the user's own Mac. Grok is dropped.
+process on the user's own Mac. This build has no desktop client, so device
+runs are not built: V1-V7 are removed, and no device-run route, lease table,
+setting or picker entry exists. The text below is kept for a later desktop
+build and is not scheduled (`05` §1.2).
 
-**V1. Choosing a device executor.** On the desktop the model picker lists
+**V1. Choosing a device executor (removed: web-only build).** On the desktop the model picker lists
 "Claude Code on this Mac" and "Codex on this Mac" when the CLI is found on
 `PATH` (checked at launch and when the picker opens); the Effort submenu is
 hidden for them. The ask is written with `executor: "device"`, `agent`, and
@@ -253,7 +264,7 @@ only when a paired desktop has reported the CLI in the past 7 days; the run
 then waits for that user's desktop. Acceptance: the picker test in the client
 package; the mutator refuses `executor: "device"` with an unknown `agent`.
 
-**V2. Claim.** `POST /api/runs/claim { deviceId }` (bearer device token)
+**V2. Claim (removed: web-only build).** `POST /api/runs/claim { deviceId }` (bearer device token)
 returns the oldest queued device run whose asker is the token's user, with
 its attempt number and the context built by G7, after the G8 access check.
 The claim is a conditional insert into `run_leases` (01 D3) keyed by run and
@@ -261,7 +272,7 @@ attempt, so a run is held by at most one device; a claim with nothing to hand
 out answers `204`. Acceptance: two desktops of one user claiming at once get
 different runs, or one gets the run and the other `204`.
 
-**V3. Lease and heartbeat.** The lease is held by `POST /api/runs/heartbeat
+**V3. Lease and heartbeat (removed: web-only build).** The lease is held by `POST /api/runs/heartbeat
 { run, attempt }` every 10 s, separate from progress; it expires after 30 s
 without a heartbeat. The heartbeat answers `{ cancel: true }` after
 `research.cancelNode`, and `NOT_FOUND` once the thread is removed or the node
@@ -275,7 +286,7 @@ sending heartbeats. Acceptance: a test stops heartbeats and finds the run
 test restarts the server mid-run and finds the run still `running` after the
 next heartbeat.
 
-**V4. Process.** The desktop spawns the CLI in a new empty temporary
+**V4. Process (removed: web-only build).** The desktop spawns the CLI in a new empty temporary
 directory (`mkdtemp`), with the prompt built from the claimed context, in
 non-interactive mode (`claude -p` with stream-JSON output; `codex exec` with
 JSON output). The CLIs keep their read-only tools for now; locking down local
@@ -290,7 +301,7 @@ fake-CLI fixture (a script that prints recorded JSONL) drives the parser
 tests; a test asserts the working directory is empty at spawn; one test per
 `cls`.
 
-**V5. Reporting.** `POST /api/runs/turn { run, attempt, seq, turn?, delta? }`
+**V5. Reporting (removed: web-only build).** `POST /api/runs/turn { run, attempt, seq, turn?, delta? }`
 commits a turn and carries in-flight text as `delta` batches, fanned out as
 ephemeral events (§5); `POST /api/runs/finish { run, attempt, outcome,
 answer?, fail? }` ends it with `complete`, `failed` or `cancelled`. Both
@@ -300,7 +311,7 @@ or an expired lease. The server rejects an answer over 200 KB
 `failed { why: "too_large" }`. Acceptance: tests for stale attempt, oversized
 answer, and a finish without turns.
 
-**V6. Labels, usage and limits.** A device answer's meta line carries a
+**V6. Labels, usage and limits (removed: web-only build).** A device answer's meta line carries a
 light-text label ("Claude Code" or "Codex") in place of the token count; the
 run reports no usage, writes no ledger row and counts toward no allowance or
 limit except the device cap: 100 device runs per hour per user
@@ -309,7 +320,7 @@ answers `TOO_MANY_REQUESTS` with `Retry-After` and the run stays queued.
 Acceptance: the 101st claim within an hour is refused and the run is still
 `queued`.
 
-**V7. Queued with no device.** A device run that no device claims stays
+**V7. Queued with no device (removed: web-only build).** A device run that no device claims stays
 `queued`, shown as "Waiting for your Mac". The asker may cancel it or Run
 again on the owned executor. How long it may wait is open question 3.
 
@@ -345,7 +356,7 @@ to `records`, so streaming does not add change-log rows; only step finishes
 do. Acceptance: a 25-step run adds at most 25 turn rows and a constant number
 of run-record writes per step to the change log.
 
-**T5. Device deltas.** Device runs post deltas on `POST /api/runs/turn` (V5); the
+**T5. Device deltas (removed: web-only build).** Device runs post deltas on `POST /api/runs/turn` (V5); the
 server assigns nothing and forwards them with the device's `seq`, after
 checking that it increases. Owned and device runs are indistinguishable to
 the reader except for the label. Acceptance: a non-increasing device `seq`
@@ -383,12 +394,15 @@ overview's decision or the shipped code wins in each:
 (`included`, `key:anthropic`, `key:openai`) and `week` (the ISO date of the
 Friday that starts the week). One row per provider call step, written in the
 transaction that commits the step's turn. Rows hold ids and numbers, no text;
-deleting or removing a thread does not delete its usage. Device runs write no
-rows. Acceptance: the sum of a run's rows equals the run record's `tok`.
+deleting or removing a thread does not delete its usage. Acceptance: the sum of a run's rows equals the run record's `tok`.
 
 **K2. What counts.** Input plus output tokens, with reasoning tokens inside
-output as the AI SDK reports them (`06-auth-and-users.md` §8); cached input
-tokens count in full until open question 2 is settled. Title and summary jobs
+output as the AI SDK reports them (`06-auth-and-users.md` §8). Cached input
+tokens count at the provider's discount ratio (decision P12): a cached input
+token counts as the ratio of the provider's cached-input price to its input
+price for that model (for example 0.1 where cached input costs a tenth),
+taken from the model registry entry (`ModelEntry.cachedInputRatio`, new), and
+the ledger stores both the raw token counts and the counted total. Title and summary jobs
 for a thread count toward the asker's allowance
 (`05-run-lifecycle-and-streaming.md` §8 bills them to the asker). Tokens paid
 by a person's key are recorded but do not count toward the allowance.
@@ -429,7 +443,7 @@ returns the person's owned runs of the current week, newest first, paged (the
 page shows 6): question (clipped at 90 characters on the client), the share
 of the allowance ("<1%" below 0.5%) or, when not `included`, the payer label
 ("Anthropic key", "OpenAI key", "Included + Anthropic key"), and the date;
-"No runs yet this week." when empty. Device runs are not listed. A run in a
+"No runs yet this week." when empty. A run in a
 thread the person can no longer read, or whose node was removed, is listed
 without its question ("No longer available"), because the ledger holds ids
 and the text is read through current scope. Acceptance: a test removes a
@@ -467,10 +481,10 @@ mutator's `pre` stage (01 U1); `pay` is removed from `threads.create`,
 is `key:openai` for OpenAI models (which run only on the person's key, K11);
 for other models `included` while tokens are left, `key:anthropic` when the
 allowance is spent, billing is `key` and the model is an Anthropic model, and
-`none` otherwise. A device run has no payer. With `none` the write still
-applies: the thread or node is created and its run is written
-`failed { why: "tokens" }`, so an ask queued offline on the desktop is not
-lost and can be run again after the reset. Online, the client computes the
+`none` otherwise. With `none` the write still applies: the thread or node is
+created and its run is written `failed { why: "tokens" }`, so an ask whose
+payer changed between the client's check and the server's apply (another
+tab spent the allowance) is not lost and can be run again after the reset. Online, the client computes the
 same payer from `usage.get` before sending Ask, Continue, Branch, Branch here
 and Look up, and on `none` sends nothing and shows the toast "You're out of
 tokens until Friday. You can still post, or add an API key in Usage."
@@ -506,16 +520,17 @@ allowance is spent ends `tokens` without a provider call.
 **K11. Model registry.** Models come from
 `web/packages/shared/src/models/registry.ts` (ADR-16). The mockup's names
 ("Opus 5.5", "Gemini 4 Neon", "GPT-6.1 Sol") are placeholders; the picker
-shows registry entries the person may use, short names on the button and
-full names in the menu. Each entry gains `payers`: `included` and/or
+shows the registry entries a site admin made available (K15), short names on
+the button and full names in the menu. Each entry gains `payers`: `included` and/or
 `key:<provider>`. The mockup's key-only OpenAI model ("GPT-6.1 Sol", "your
 OpenAI key", "Add a key" linking to Usage when missing) becomes an entry
 with `payers: ["key:openai"]`, called with the person's OpenAI key directly,
 not through OpenRouter. When that key is removed, a composer that had the
 model selected falls back to the default model. ADR-16 restricts
 `claude-fable` to admins "until per-account usage limits are active"; the
-weekly allowance is such a limit, so lifting the gate is a decision for
-ADR-23 (open question 1). Acceptance: a picker test for a key-only model with
+weekly allowance is such a limit, and the gate is replaced by K15: a site
+admin decides at runtime which models members may use (decision H, which
+replaces question P11). ADR-23 records this. Acceptance: a picker test for a key-only model with
 and without the key.
 
 **K12. Effort.** The mockup's model menu has an Effort submenu (`modelMenu`,
@@ -525,20 +540,57 @@ the chosen model accepts (`ModelEntry.efforts`: low, medium and high for most
 models; Fable adds xhigh and max). v1 keeps that: the submenu lists the
 chosen model's efforts, `effort` is stored on node and run (null for the
 model's `defaultEffort`, medium), and the tooltip shows "model · effort".
-Device runs have no effort. Acceptance: a picker test that the submenu
+Decided (P13): no cost estimate is shown for high efforts and effort is not
+capped on included tokens; the per-run token cap (L1) bounds a single run.
+Acceptance: a picker test that the submenu
 changes with the model; the mutator refuses an effort the model does not
 accept.
 
 **K13. Model per run.** A follow-up may use a different model than its parent
-(`04-agent-runtime.md` §1); device runs record the agent and no model id. The
-server re-checks model access, effort and payer on every `threads.create`,
-`research.forkNode` and `research.retryNode`. Acceptance: a non-admin's
-`research.forkNode` with an admin-only model answers `FORBIDDEN`.
+(`04-agent-runtime.md` §1). The server re-checks model access (K15
+availability), effort and payer in `pre` on every `threads.create`,
+`research.forkNode` and `research.retryNode`; the client predicts with the
+`models.list` answer it holds. A run already queued keeps its model when a
+site admin later makes the model unavailable. Acceptance: a member's
+`research.forkNode` with a model that is not available answers `FORBIDDEN`.
 
 **K14. Key-run privacy.** OpenRouter's zero-data-retention routing
 (`04-agent-runtime.md` §1) does not apply to calls made with a person's own
 Anthropic or OpenAI key; those calls fall under the person's own agreement
 with the provider. The Usage page says so next to each key.
+
+**K15. Default model and model availability (site admin).** Decision H: a
+site admin (`users.is_admin`) chooses at runtime, on an admin page, which
+models members may use and which one is the default for asks. The mockup
+draws three variants of that page (a single default-model setting; a models
+table with default and availability; a settings page with per-member
+overrides); the server below supports the first two, and per-member
+overrides are an open question (`05` §6, Q9).
+- Storage (non-replicated, `01` D3): `model_settings(model_id PK, available
+  boolean, updated_by, updated_at)` with one row per registry entry, and
+  `site_settings(key PK, value_json, updated_by, updated_at)` holding
+  `default_model`. A registry entry without a row is unavailable, so a model
+  added to the registry is off until an admin turns it on. The launch seed
+  makes the registry's current default available and the default.
+- API (tRPC, online-only, site admins only, ADR-19): `admin.models.list`
+  (every registry entry with `available`, `payers`, efforts and whether it
+  is the default), `admin.models.setAvailable { model, available }`,
+  `admin.models.setDefault { model }`. The default must be available and
+  payable with `included` (K11 `payers`); making the default unavailable
+  answers `PRECONDITION_FAILED` until another default is set. Every change
+  is logged with the admin's id.
+- Members read `models.list` (tRPC, online, cached 60 s): the available
+  entries with their payers and efforts, and the default. The composer starts
+  on the default unless the person picked another model in this tab
+  (`02` §5). Changes reach open tabs on the next fetch.
+- The `pre` stage of K13 checks availability on the server; `run` does not
+  read it, so prediction is unaffected. ADR-16's `claude-fable` admin gate is
+  replaced by this setting.
+Acceptance: server tests that a non-admin's `admin.models.*` answers
+`FORBIDDEN`, that an unavailable model is refused in `pre`, that the default
+cannot be unavailable or key-only, and that a new registry entry starts
+unavailable; a client test of the admin page (`02` W8.2) and of the composer
+starting on the default.
 
 ## 7. Per-run limits
 
@@ -557,7 +609,7 @@ at the token cap with the note; the 21st queued ask is refused.
 minutes, because the prompt asks for two or three sentences with a source.
 Acceptance: a fixture run that keeps calling tools stops at 2 searches.
 
-**L3. Device runs.** 200 KB per answer, 100 runs per hour per user, a 30 s
+**L3. Device runs (removed: web-only build).** 200 KB per answer, 100 runs per hour per user, a 30 s
 lease (V3), and a 30-minute wall clock enforced by the desktop (open question
 3 for the server side).
 
@@ -569,11 +621,11 @@ lease (V3), and a 30-minute wall clock enforced by the desktop (open question
 
 ```
 01 C3, C4 (schema) ─► G1-G6 (mutators) ─► E1 (serverApply) ─► E2-E5
-01 Y7 (SSE) ─► T1-T5
-01 S2 (device tokens), D3 (run_leases) ─► V2-V5 ─► V6, V7
+01 Y7 (SSE) ─► T1-T4
 K1 (ledger) ─► K3, K5, K8, K9
 K4 (keys) ─► K7, K8, K11
-ADR-23 (keys, models, effort) ─► K4, K11, K12
+K15 (model settings) ─► K11, K13
+ADR-23 (keys, models, effort) ─► K4, K11, K12, K15
 L1-L2 alongside E2
 ```
 
@@ -583,24 +635,16 @@ and T tests without network access.
 
 ## 9. Open questions
 
-1. **Which models at launch, and the admin gate.** The mockup implies an
-   Anthropic model for everyone as the default and an OpenAI model on the
-   person's key. ADR-16's default is `gemini-flash`, and Fable is admin-only.
-   Should ADR-23 make an Anthropic model the default for all members now that
-   the weekly allowance exists? The allowance itself is decided: 2,000,000
-   tokens a week per member.
-2. **Cached tokens.** Count cached input tokens in full, at the provider's
-   discount ratio, or not at all? Long branch chains resend the same context,
-   so this changes how fast the allowance runs out.
-3. **Device runs without a device.** How long may a device run stay queued
-   before it fails, and should the server enforce a wall clock on a claimed
-   device run as well as the lease?
-4. **Open as its own thread.** Who may promote a branch (the branch's author,
-   the thread's author, any member), and is the new thread attributed to the
-   branch's author (as the mockup does) or to the person who promoted it?
-5. **Out-of-tokens copy on the desktop.** Should the message also offer
-   "Run on this Mac" when a CLI is available, given that device runs count
-   toward no limit?
-6. **Effort and the allowance.** Max effort on an expensive model can use a
-   large share of a week's allowance in one run. Should the picker show an
-   estimate, or should ADR-23 cap effort for included tokens?
+1. **Which models at launch, and the admin gate.** Decided (H, replacing
+   P11): a site admin chooses the default model and model availability at
+   runtime (K15). The allowance is 2,000,000 tokens a week per member.
+   Per-member model overrides are open (`05` §6, Q9).
+2. **Cached tokens.** Decided (P12): counted at the provider's discount
+   ratio (K2).
+3. **Device runs without a device.** Moot: no device runs in this build.
+4. **Open as its own thread.** Decided (P14): anyone who can read the branch
+   may open it; the new thread is shown with the branch's author (G5).
+5. **Out-of-tokens copy on the desktop.** Decided (P15): no "Run on this
+   Mac"; there are no device runs.
+6. **Effort and the allowance.** Decided (P13): no cost estimate and no
+   effort cap (K12).

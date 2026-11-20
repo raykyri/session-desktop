@@ -5,14 +5,23 @@ the Node web server over one SQLite database, the tables and migrations, the
 two packages `AGENTS.md` schedules next (`@session/mutators` and
 `@session/sync`), replication tiers, the HTTP surface, and the changes the
 members mockup (`docs/mockups/session-web-members.html`) makes to the spaces
-contract (`web/packages/shared/src/schemas/spaces.ts`). Runs, models, tokens
-and device runs are in `03-agents-and-research.md`; invites, channel ownership
-and moderation policy in `04-membership-moderation-security.md`.
+contract (`web/packages/shared/src/schemas/spaces.ts`). Runs, models and
+tokens are in `03-agents-and-research.md`; invites, channel ownership and
+moderation policy in `04-membership-moderation-security.md`.
 
 Authority, as in `00-overview.md`: `AGENTS.md` ("Planned: desktop client and
 sync core") and ADR-19 to ADR-22 win over the mockup, except where the
 overview records an explicit product decision. Each conflict below says which
 side wins.
+
+Scope: this build is web only (`00-overview.md`, "Scope of this build"). The
+parts of `AGENTS.md` and ADR-19 to ADR-22 that assume a desktop client, a
+phone client or device runs (bearer device tokens, the desktop CORS origin,
+a persistent SQLite replica, the 3-day offline outbox of a client, the
+Phone window, device-run routes and leases) are not built. The sync core is
+kept: server authority, the outbox, replicas, shared mutators, and the web
+client's in-memory replica. Items that existed only for those parts are
+marked "(removed: web-only build)" and keep their ids.
 
 Work items have ids (`S`, `D`, `U`, `Y`, `R`, `A`, `C`) so that
 `05-delivery.md` can schedule them. The mutator items use `U` because
@@ -29,17 +38,21 @@ requires: a mutator's `run` executes inside one `db.transaction()` with no
 
 **S1. Request pipeline for sync routes.** Add a Hono sub-app
 `web/packages/server/src/sync/` mounted at `/api/sync`. Middleware order:
-request id, CORS for the desktop origin, protocol version check,
-authentication (cookie or bearer device token; optional on `snapshot` and
-`pull`, see R5), rate limit, handler. The same version check runs on
-`/api/runs/*` and on tRPC requests that carry the header; from the cutover
-(M8 in `05-delivery.md`) the header is required on tRPC too.
+request id, protocol version check, authentication (session cookie, ADR-5;
+optional on `snapshot` and `pull`, see R5), rate limit, handler. The same
+version check runs on `/api/runs/:id/live` and on tRPC. The web client is
+same-origin, so the server sends no CORS headers at all. On
+`426 UPGRADE_REQUIRED` the web client reloads the page once (`05` §3.4).
 Acceptance: a request without the `Session-Protocol` header, or below
 `SESSION_MIN_PROTOCOL`, answers `426` with `{ code: "UPGRADE_REQUIRED" }`;
 one test per refusal (version, authentication `401`, rate limit `429`) and
 one asserting that a foreign origin gets no CORS headers.
 
-**S2. Desktop authentication.** A bearer device token (random 256-bit value,
+**S2. Desktop authentication (removed: web-only build).** Not built: no
+`device_tokens` table, no bearer authentication, no pairing, no CORS
+allowlist. The web client authenticates with the session cookie of ADR-5
+and the CSRF rules of `03-api-and-events.md` §1. The original text, kept
+for a later desktop build: a bearer device token (random 256-bit value,
 stored hashed in `device_tokens`, held in the macOS Keychain by the desktop)
 authenticates `/api/sync/*`, `/api/runs/*` and the tRPC account procedures.
 Issued by a signed-in web session through a one-time pairing code; revocable
@@ -57,14 +70,17 @@ origin outside the allowlist gets no CORS headers; the CSRF rules of
 **S3. Configuration.** New settings in `web/packages/server/src/config.ts`,
 validated at boot like the existing ones: `SESSION_MIN_PROTOCOL`,
 `SESSION_CURSOR_KEY`, `SESSION_CURSOR_KEY_PREVIOUS` (accepted 30 days after a
-rotation, then removed), `SESSION_SECRET_KEY` (API key encryption, see 03),
-`SESSION_DESKTOP_ORIGINS` (S2's allowlist, exact origins),
-`SESSION_DEVICE_ANSWER_MAX_BYTES` (200 KB), `SESSION_DEVICE_RUNS_PER_HOUR`
-(100), and the run and allowance settings of `03-agents-and-research.md`:
-`SESSION_WEEKLY_TOKENS` (2,000,000), `SESSION_RUN_MAX_TOKENS` (400,000) and
-`SESSION_QUEUED_PER_USER` (20); the abuse limits of 04 Z1. Acceptance: boot refuses a cursor key that is
-not 32 bytes of base64 and an origin list containing `*`; `web/.env.example`
-documents every new variable.
+rotation, then removed), `SESSION_SECRET_KEY` (API key and invite code
+encryption, see 03 and C8), the X OAuth client settings (04 Z2), the web
+replication window of R1, and the run and allowance settings of
+`03-agents-and-research.md`: `SESSION_WEEKLY_TOKENS` (2,000,000),
+`SESSION_RUN_MAX_TOKENS` (400,000) and `SESSION_QUEUED_PER_USER` (20); the
+abuse limits of 04 Z1. The default model and model availability are not
+configuration: a site admin sets them at runtime (03 K15).
+`SESSION_DESKTOP_ORIGINS`, `SESSION_DEVICE_ANSWER_MAX_BYTES` and
+`SESSION_DEVICE_RUNS_PER_HOUR` are not added (removed: web-only build).
+Acceptance: boot refuses a cursor key that is not 32 bytes of base64;
+`web/.env.example` documents every new variable.
 
 **S4. Effect worker.** A loop in the server process that takes rows from
 `effects` (D2) in `next_at` order, runs them (notifications, run jobs, key
@@ -92,10 +108,12 @@ The database keeps `users`, `sessions`, `oauth_states`, `invites`,
 `response_snapshots`, `tree_*`, `folders`, `workspaces`, `highlights`,
 `feed_items`, `research_drafts`, `interface_drafts`, `widget_*`,
 `research_images`, `image_refs`, `notifications`, `followup_queue`,
-`run_queue`, `collapsed_*`) are dropped: `AGENTS.md` says existing web data is
-dropped at the cutover. `embed_assets` and `tweet_cache` (with the files under
-`/data/embeds/`) serve only research content and are dropped with it
-(`05-delivery.md` §3.5).
+`run_queue`, `collapsed_*`) are dropped. `embed_assets` and `tweet_cache`
+(with the files under `/data/embeds/`) serve only research content and are
+dropped with them. At launch the production database is replaced by an
+empty one: every row, accounts included, is wiped (`05-delivery.md` §3.5,
+decision P19), so no migration has to carry data from the current schema.
+`users` changes for sign-in with GitHub or X (04 I1).
 
 ### 2.1 Record storage: one table, typed at the boundary
 
@@ -158,11 +176,13 @@ transaction (AGENTS.md). A test injects a failure into the `effects` insert
 and finds no record, log, registry, answer or `last_seq` change, and an
 `INTERNAL_SERVER_ERROR` answer that a resend replaces.
 
-**D3. Non-replicated server tables.** New: `device_tokens`, `api_keys`
-(encrypted value, provider, mask, status, last used), `run_leases` (device
-runs: run id, attempt, device id, lease expiry, last heartbeat), `run_live`
-(in-flight checkpoint text per run and attempt, deleted at finish). Changed:
-`usage_events` (03), `invites` and `users` (C8). Acceptance: no row of these
+**D3. Non-replicated server tables.** New: `api_keys` (encrypted value,
+provider, mask, status, last used), `run_live` (in-flight checkpoint text per
+run and attempt, deleted at finish), `site_settings` and `model_settings`
+(the default model and model availability a site admin sets, 03 K15),
+`server_meta` (the Litestream generation id of D6). Changed: `usage_events`
+(03), `invites` and `users` (C8, 04 I1). `device_tokens` and `run_leases`
+are not created (removed: web-only build). Acceptance: no row of these
 tables appears in any `snapshot` or `pull` (a test lists every served record
 kind and checks it against D1's kinds).
 
@@ -176,15 +196,16 @@ expires; there is no retention requirement for backups (question 3, decided).
 
 ### 2.2 Migrations
 
-**D5. Migration sequence.** Following `02-domain-model-and-database.md` §4:
-a generated migration (`0001_*`) adds D1-D3 and the C8 columns; a second
-(`0002_*`) drops the research tables once the new client has replaced the old
-one in production. Because
-existing web data is dropped, a database reset (`runbooks/reset-database.md`)
-is an acceptable alternative to `0002`; the choice is recorded in
-`05-delivery.md`. Acceptance: `db:generate` produces no diff in CI;
-`migrations.test.ts` opens a fresh database and a database at `0000` and
-migrates both.
+**D5. Migration sequence.** Following `02-domain-model-and-database.md` §4,
+on the build branch (`05` §3.0): a generated migration `0001_spaces.sql`
+adds D1-D3, the C8 columns and the provider columns of 04 I1 in M3. Once the
+research schema files are deleted (with A2 and `02` W1.1 in M4), the
+migrations are squashed into one generated `0000_initial.sql` in M8a. No
+database at an older migration has to be upgraded: production is wiped at
+launch (decision P19) and staging is reset after the squash, both with
+`runbooks/reset-database.md`. There is no `0002_drop_research.sql`.
+Acceptance: `db:generate` produces no diff in CI; `migrations.test.ts`
+migrates a fresh database, and after the squash finds no research table.
 
 **D6. Log epochs and restores.** A log's epoch increments when its history
 is replaced: a space's visibility changes (prototype test "a space that
@@ -192,12 +213,18 @@ becomes closed resyncs every reader") or the database is restored from
 Litestream. Cursors older than 30 days resync through `servedAt` (Y5), not
 through the epoch. Visibility is fixed at creation in v1 (C11), so in
 production only a restore bumps epochs; the visibility path stays because the
-prototype suite tests it. A restore is detected at boot by a `restore_marker` row
-that the restore runbook writes; on a mismatch every log's epoch is
-incremented, so every cursor issued before the restore resyncs instead of
-pulling from a version the restored database has reused. Acceptance: a test restores an
-older copy of the database file, boots, and finds that a pre-restore cursor
-answers `resync`. `runbooks/restore.md` gets the marker step.
+prototype suite tests it. A restore is detected at boot (decision E6): the
+server compares the Litestream generation id recorded in `server_meta` with
+the generation Litestream reports for the file; a different id, or none
+recorded, increments every log's epoch, so every cursor issued before the
+restore resyncs instead of pulling from a version the restored database has
+reused, and the current id is then recorded. Litestream also starts a new
+generation without a restore (for example after losing its WAL position);
+that bumps epochs needlessly and costs one resync per client. No manual
+runbook step is needed. Acceptance: a test restores an older copy of the
+database file with a different generation id, boots, and finds that a
+pre-restore cursor answers `resync`; a boot with an unchanged id bumps
+nothing. `runbooks/restore.md` states that the check runs at boot.
 
 **D7. Record shape versions.** A record kind's stored shape changes through a
 versioned backfill in `web/packages/db/src/backfills/` that rewrites `body`
@@ -261,8 +288,8 @@ replica-proto review-r1/r2 tests for these cases pass.
 `spaces.ts`; this plan adds only `comments.*` (C4) and `prefs.set` (C13),
 renames `saved.toggle` to `saved.set` (C1), and removes `members.setRole`
 (C18). One file per area under `src/`:
-- `spaces`, `members`, `threads`, `saves`, `reports`, `moderation`,
-  `invites`, `notifications`;
+- `spaces`, `members`, `threads`, `saves`, `moderation`, `invites`,
+  `notifications` (no `reports`: there is no reporting, C12);
 - `nodes`: `research.forkNode` (Continue, Branch, Branch here and Look up,
   with `kind: "ask" | "lookup"`), `followups.update`, `followups.delete`,
   `research.cancelNode`, `research.retryNode` (03 §2);
@@ -279,9 +306,9 @@ prototype ports 19 mock procedures, `members.setRole` among them until U6
 removes it; the others (`research.createPostFollowUp`,
 `replies.*`, `comments.*`, `research.forkNode`, `followups.update`,
 `followups.delete`, `research.cancelNode`, `research.retryNode`,
-`reports.resolve`, `members.unban`, `invites.revoke`, `notifications.*`,
-`prefs.set`) are covered only once the read and write oracles have rules for
-them (U6).
+`members.unban`, `invites.revoke`, `notifications.*`, `prefs.set`) are
+covered only once the read and write oracles have rules for them (U6).
+`reports.create` and `reports.resolve` are removed from the contract (C12).
 Acceptance: a table test lists every mutator with its `who`, its
 stale-intent rule and whether it is `online`; space creation is
 `online: true` (AGENTS.md); the write oracle has a rule for every listed
@@ -301,7 +328,7 @@ porting, change `replica-proto` itself to the revised contract:
   `RANK`, the rank comparison in `actsOn`, `isModOf`, the space's `invite`
   setting and its `mods` list go (`owner` replaces `mods`); `who:
   "moderator"` and `who: "admin"` become `who: "owner"`; the `report`
-  notification effect writes to the owner only. The `cast` fixture in
+  notification effect is removed with reporting (below). The `cast` fixture in
   `test/harness.ts` no longer calls `setRole`: mona (#lounge, #lab) and ada
   (#lab) are plain members, and every test in which they act as staff
   (removals, bans, decisions, `spaces.update`) acts as the owner olga
@@ -329,8 +356,7 @@ porting, change `replica-proto` itself to the revised contract:
   everyone else the placeholder" and "hidden follow-ups and replies lose
   their text for readers who are not their author or staff" (the owner for
   moderators); `review-r1` `R1b` (drops ada's queued `setRole` and its
-  STALE answer) and "a report notifies the space's owner, admins and
-  moderators, and nobody else" (the owner and nobody else); `inv5` "a replay
+  STALE answer); `inv5` "a replay
   with a different name or input is refused, and the stored result stays",
   `review-r2` `S1`, `Q2`, both `E1` tests and `R1` "a record written again at
   a deleted key continues from its last rev, after the tombstone is pruned
@@ -342,9 +368,18 @@ porting, change `replica-proto` itself to the revised contract:
   keeps the old owner"), N13 (a link's maker reads it after leaving), N14
   (the `invite` setting) and R2-5 (report notifications served to people
   who are not staff, an equivalent mutant once only the owner is notified)
-  are removed; X11 (report notifications go to every member) and the N22
-  control are rewritten for `owner` (N22: "spaces.update needs only a
-  member");
+  are removed; the N22 control is rewritten for `owner` (N22:
+  "spaces.update needs only a member"); X11 goes with reporting (below);
+- reporting (C12): `reports.create`, `reports.resolve`, the `report` record
+  kind and the `report` and `report_resolved` notification types are
+  removed. Tests whose subject is reporting are removed, among them
+  `review-r1` "a report notifies the space's owner, admins and moderators,
+  and nobody else" (no longer rewritten), `R4c` and `H2` (already removed
+  above); tests that use `reports.create` as a sample write (in
+  `convergence`, `inv2`, `inv3`, `inv4`) take another mutator. Mutation
+  pattern X11 (no longer rewritten) and the N24 control ("one report in 32
+  notifies nobody") are removed or re-pointed at the mention effect, and
+  `npm run mutate -- --check` lists the result;
 - protocol: `queuedAt` and `replaces` in the envelope (Y1), an oversized
   envelope answering `TOO_LARGE` instead of `BAD_REQUEST`, and
   `PROTOCOL_VERSION` raised to 4;
@@ -449,8 +484,8 @@ carries no version…", review-r2 `T1`, and a test that a token sealed with
 the previous key pulls, and resyncs once that key is removed.
 
 **Y7. SSE.** `GET /api/sync/events` streams `text/event-stream`, read by the
-client with `fetch` (so it can send the bearer token and protocol header; an
-`EventSource` cannot). Each `changes` event carries pull batches for one or
+client with `fetch` (so it can send the protocol header; an `EventSource`
+cannot). Each `changes` event carries pull batches for one or
 more logs; its event id is an encrypted map `{ log: cursorToken }`, so a
 reconnect with `Last-Event-ID` resumes every log. Run deltas travel on the
 same stream as ephemeral events without ids (ADR-22; 03 §5). After a commit
@@ -465,8 +500,8 @@ change; a member removed while connected gets `resync` for the space log and
 no record written after the removal.
 
 **Y8. Retention jobs.** Hourly: prune tombstones over 30 days, recorded
-answers over 7 days, clients idle 90 days, and `modlog` entries and resolved
-reports over 180 days (C12; replicated deletes). `registry` is never pruned.
+answers over 7 days, clients idle 90 days, and `modlog` entries over 180
+days (C12; replicated deletes). `registry` is never pruned.
 Acceptance: one test per table with an injected clock, at the boundary
 millisecond (as inv6 "a delete committed in the same millisecond as a
 cursor…").
@@ -474,17 +509,21 @@ cursor…").
 ### 4.3 Client half
 
 **Y9. Replica and storage adapter.** The replica keeps a working set in
-memory; a `StorageAdapter` loads and persists it (SQLite on the desktop
-through Tauri, in-memory on the web, a React Native SQLite binding on the
-Phone). Acceptance: the same client test suite runs against the memory
-adapter and a SQLite adapter (better-sqlite3 in tests, in place of the
-Tauri binding).
+memory behind a `StorageAdapter` interface. This build ships the in-memory
+adapter only (the web client, no IndexedDB); the SQLite adapters for the
+desktop and the phone are not built (removed: web-only build). The interface
+stays so that a persistent adapter can be added without changing the
+replica. Acceptance: the client test suite runs against the memory
+adapter.
 
-**Y10. Outbox.** One global order across logs. Desktop keeps writes 3 days in
-server time; the web client holds a write only while its request is in flight
-(AGENTS.md, ADR-20). Transient answers pause the outbox with backoff (1 s to
-10 minutes); a write that fails 5 times is shown to the person and the rest of
-the outbox continues; a write dropped at 3 days is reported. After
+**Y10. Outbox.** One global order across logs. The web client holds a write
+only while its request is in flight (AGENTS.md, ADR-20); a write whose
+request fails is shown as "Not sent" with Retry (same mutation id) and
+Discard (02 §9.2), and nothing is kept across a reload. The library keeps
+the queue rules the replica-proto suites drive (3 days in server time,
+backoff on transient answers from 1 s to 10 minutes, a write that fails 5
+times shown while the rest continues, a write dropped at 3 days reported),
+as a policy the web client does not enable. After
 `CLOCK_SKEW` the client corrects its clock offset and remints the writes it
 has not sent (new mutation id and new client-made ids, as `remint` in
 `replica-proto/src/client.ts`); a sent write keeps its mutation id, and a
@@ -514,34 +553,43 @@ whose `fn` refuses commits nothing.
 
 ## 5. Replication tiers
 
-**R1. Full and summary tiers.** Per space the client holds full records for
-the last 90 days or the newest 500 threads, whichever covers more, capped at
-5,000; plus every thread the user wrote or saved and every thread opened in
-the past 14 days. Every other readable thread is a summary: the thread record
-and its counts record, without ask nodes, turns, comments or replies. Past
-5,000 threads a space's summaries cover only the past 2 years. Phone: 30 days
-or 200 threads. (AGENTS.md "Replication".)
+**R1. Full and summary tiers.** `AGENTS.md` "Replication" sets the desktop
+window (90 days or the newest 500 threads, capped at 5,000) and a Phone
+window; neither client is built. The web client's in-memory replica is
+loaded by a snapshot on every page load, so its window is smaller (decision
+E7): per space, full records for the last 30 days or the newest 100 threads,
+whichever covers more, capped at 500; plus every thread the user wrote or
+saved in the past 90 days and every thread opened in the current tab. Every
+other readable thread is a summary: the thread record and its counts record,
+without ask nodes, turns, comments or replies, for the past 2 years. The
+numbers are server settings (`SESSION_WEB_WINDOW_DAYS`,
+`SESSION_WEB_WINDOW_THREADS`, `SESSION_WEB_WINDOW_CAP`) so that M3's load
+check can change them.
 
 **R2. Who computes the window.** The server computes the full set from the
 space log and the user's saves and authorship; the client adds the threads it
-opened in the past 14 days as an explicit list (at most 500 ids) in the
-snapshot request body, filtered by scope like everything else. Opens stay on
-the device; the server does not record them. Pulls are not tiered (Y5): the
+opened in the current tab as an explicit list (at most 500 ids) in the
+snapshot request body, filtered by scope like everything else. Opens stay in
+the tab; the server does not record them. Pulls are not tiered (Y5): the
 client applies changes to summary records and drops node, run, turn, answer
 and comment changes of threads outside its full set; a thread that leaves
 the window is demoted at the next snapshot. Acceptance: a snapshot test
-checks each of the four inclusion rules, the 5,000 cap and the 2-year
-summary bound; a client test drops a turn change for a summary-tier thread.
+checks each of the four inclusion rules, the cap and the 2-year summary
+bound; a client test drops a turn change for a summary-tier thread.
 
 **R3. Promotion.** Opening a summary-tier thread fetches its full records
-through `snapshot(log, { threads: [id] })` and keeps them for 14 days.
-Acceptance: an offline desktop opening a summary-tier thread shows the
-summary and an "available when online" state.
+through `snapshot(log, { threads: [id] })` and keeps them for the life of the
+tab. Acceptance: a client opening a summary-tier thread while offline shows
+the summary and an "Available when online" state.
 
-**R4. Closed spaces.** A device replicates the closed spaces its user belongs
-to and nothing else of any closed space (AGENTS.md). A removed member's
-device keeps a frozen copy and may still delete their own threads there
-(prototype test). Acceptance: `inv7` and the frozen-copy test pass.
+**R4. Closed spaces.** A client replicates the closed spaces its user belongs
+to and nothing else of any closed space (AGENTS.md). The server keeps the
+prototype's rule that a removed member may still delete their own threads in
+a closed space (the frozen-copy test). The web client persists nothing, so
+it keeps no frozen copy: on the resync that follows a removal or ban it drops
+the channel's records and shows "You are no longer a member of #name." (02
+W6.10; decision P8 for a voluntary Leave). Acceptance: `inv7` and the
+frozen-copy test pass against the server.
 
 **R5. Open spaces the user has not joined, and signed-out readers.** The
 "All" scope (C7) lists open channels the user has not joined. Their threads
@@ -552,14 +600,16 @@ user leaves the channel view and refreshed by `pull` on navigation and every
 readers and `waiting` accounts use the same path; it is the public read path
 of `02-client-app.md` §9.5. `snapshot` and `pull` accept an unauthenticated
 caller, as the prototype does ("a signed-out caller gets open spaces and the
-landings of closed ones"). Acceptance: browsing ten unjoined channels on the
-desktop writes nothing to the local database; a signed-out `snapshot` of a
-private channel returns its landing only.
+landings of closed ones"). Acceptance: browsing ten unjoined channels leaves
+the replica's joined logs unchanged and drops each ephemeral replica when
+its view closes; a signed-out `snapshot` of a private channel returns its
+landing only.
 
 ## 6. API surface
 
 Replicated data uses only the sync routes. Online-only account calls stay tRPC
-procedures (ADR-19). Run execution by devices has its own routes (`03-agents-and-research.md` §4).
+procedures (ADR-19). The device-run routes of ADR-21 are not built (removed:
+web-only build).
 
 | Route | Kind | Purpose |
 |---|---|---|
@@ -568,13 +618,15 @@ procedures (ADR-19). Run execution by devices has its own routes (`03-agents-and
 | `POST /api/sync/snapshot` | sync | records now, scope-filtered; body `{ log, tier, threads? }` (500 ids do not fit a URL) |
 | `GET /api/sync/pull?log&cursor&clientId` | sync | changes since a cursor |
 | `GET /api/sync/events` | SSE via fetch | pull batches and run deltas |
-| `POST /api/runs/claim`, `/heartbeat`, `/turn`, `/finish` | device runs | ADR-21; `03-agents-and-research.md` §4 |
+| `POST /api/runs/claim`, `/heartbeat`, `/turn`, `/finish` | — | removed: web-only build (ADR-21 device runs) |
 | `GET /api/runs/:id/live` | read | in-flight checkpoint of a run after a gap (ADR-22) |
-| tRPC `account.*`, `devices.*` | online | profile, settings, device pairing and revocation; `devices.setAgents` records the CLIs a desktop found (03 V1) |
+| tRPC `account.*` | online | profile and account settings; `devices.*` is not built (removed: web-only build) |
 | tRPC `apiKeys.*`, `usage.*` | online | keys, allowance, recent runs (`03-agents-and-research.md` §6) |
+| tRPC `models.list` | online | the models a member may pick and the default model (03 K15) |
+| tRPC `admin.models.*`, `admin.suspend` | online, site admins | default model and model availability (03 K15); suspension (04 I6) |
 | tRPC `accountInvites.*`, `members.tree` | online | Session invites and the invite tree (C8) |
 | tRPC `spaces.directory` | online | the "All" list of open channels (C7) |
-| `GET /healthz`, `/auth/*` | Hono | unchanged |
+| `GET /healthz`, `/auth/*` | Hono | `/auth/github/*` and the new `/auth/x/*` (04 Z2) |
 
 **A1.** Implement the sync routes over `@session/sync/server` (S1, Y3-Y7).
 Acceptance: `web/packages/server/test/conformance/` implements replica-proto's
@@ -612,7 +664,11 @@ becomes `{ th, s, saves, r }`; `saved.set` (the prototype's form of the
 schema's `saved.toggle`; threads only) writes the save
 record in the user log and increments or decrements `saves`. Who saved a
 thread is not served; only the count is. The overview decided "there are no
-likes", so the product decision wins and no ADR conflicts.
+likes", so the product decision wins and no ADR conflicts. In a private
+channel a save count below 3 is not served (decision S6): the read filter
+(Y5) serves `saves: 0` on a private space's counts record while the stored
+count is 1 or 2, and the client draws no count below 3 there, its own
+prediction included. Open channels show every count.
 
 **C2. Save counts and the Saved count.** The thread footer shows the save
 count (`saves` from C1). The app bar's Saved button (`savedBtn()`) shows how
@@ -633,8 +689,8 @@ the full field list in 03 §1:
   parent's answer that holds the quote, used to place the branch tree and
   shade the passage; absent for asks from the footer) and, for look-ups,
   `look` (1-4 words, at most 80 characters) and `tpl` (template version);
-- every node records `model`, `effort` (03 K12), `executor` (`owned` or
-  `device`) and, for device runs, `agent` (`claude-code` or `codex`);
+- every node records `model` and `effort` (03 K12); `executor` and `agent`
+  are not added (removed: web-only build; every run is an owned run);
 - `pay` and `uses` are dropped from the node and from `forkNodeInputSchema`
   (the payer is a server value, 03 K8); `forkNodeInputSchema` becomes a
   union on `kind`;
@@ -707,8 +763,9 @@ Account invites and the tree are online-only tRPC (`accountInvites.*`,
 post"); private channels are not listed to non-members (`allVisible`). The
 schema has `vis: open | listed | unlisted` with `policy: request | invite` and
 request questions. Change: the wire carries `vis: "open" | "private"`; private
-means closed, unlisted and invite-only; `policy` and `qs` are dropped. Join
-requests and request questions are deferred (C10). The prototype's closed-space rules apply to private
+means closed, unlisted and invite-only; `policy` and `qs` are dropped. A
+private channel admits only through channel invite links; join requests and
+request questions are not part of this build (C10; decision P4). The prototype's closed-space rules apply to private
 channels unchanged.
 
 **C10. Surfaces deferred.** The mockup has no pages, skills, space sources
@@ -726,14 +783,16 @@ Change: `spaces.update` takes `{ id, desc }`, `who: "owner"`; name and
 visibility are set at creation; no `base` is needed, because only one person
 edits. Admin and moderator roles are removed (C18).
 
-**C12. Remove and report with a free-text reason; the moderation log.**
-`rmDlg` takes an optional reason for both. A removal's reason is shown to
-readers on the placeholder ("Removed by @x", "Reason: …"); a report's text
-goes to the owner, and the author is not told who reported. `modLogDlg` lists
-open reports, removals and dismissals. The schema's `reports.create` requires
-a `why` category plus an optional `note`, and `moderation.decide` has no
-reason. Change:
-- `reports.create { item, note? }` (note at most 500 characters); `why` goes.
+**C12. Remove with a free-text reason; the moderation log; no reporting.**
+`rmDlg` takes an optional reason. A removal's reason is shown to readers on
+the placeholder ("Removed by @x", "Reason: …"). The mockup's report mode and
+the moderation log's reports are not built: there is no reporting at all
+(decision F). The schema's `reports.create` requires a `why` category plus an
+optional `note`, and `moderation.decide` has no reason. Change:
+- `reports.create`, `reports.resolve`, the `report` record kind, the
+  `report` and `report_resolved` notification types and the report rate
+  limit are removed from `spaces.ts` (moved to `spaces.deferred.ts`, C10) and
+  from replica-proto (U6).
 - `moderation.decide { item, decision, note?, base? }`; the thread placeholder
   keeps `id`, `s`, its kind (ask or post), `u` (author), `createdAt`, `mod`,
   `modBy` and `modNote`, and nothing else of the removed content. `u` is
@@ -741,23 +800,22 @@ reason. Change:
   prints "[deleted]" (product decision; the stored and served table is in
   04 §6.2). This is a change to replica-proto's `erase`/`redact` (U6).
 - A `modlog` record kind in the space log, readable by the owner only: `{ id, sp,
-  kind: "report" | "remove" | "dismiss" | "ban" | "unban", item, by, author,
-  note, at }`; for `ban` and `unban`, `item` is null and `author` names the
-  banned person (04 §6.5). `reports.resolve` with `dismissed` writes a
-  `dismiss` entry; a removal closes the item's open reports. A person holds
-  at most one open report per item (`CONFLICT` otherwise). Entries and
-  resolved reports are pruned after 180 days (Y8).
+  kind: "remove" | "ban" | "unban", item, by, author, note, at }`; for `ban`
+  and `unban`, `item` is null and `author` names the banned person (04
+  §6.5). The log lists the owner's removals and bans. Entries are pruned
+  after 180 days (Y8).
+- The removal also writes a `removed` notification to the author (C16), with
+  the owner's note and no text of the removed item.
 - Conflict: `modLogDlg` quotes the removed thread's question. AGENTS.md wins:
   removed content is erased and never served again, so the log shows the
-  item's kind, author and channel, and no text of a removed item. Open
-  reports on items still present link to the item.
+  item's kind, author and channel, and no text of a removed item.
 
 **C13. The layout toggle as a per-user preference.** `layoutBtn()` switches
 between a centred main column and a wider one. ADR-20 keeps layout in
 Zustand; the overview lists the toggle as an app bar feature without saying
 where it persists. Change: a `prefs` record in the user log (`{ layout:
 "centred" | "wide" }`, `prefs.set`), so it follows the person to other
-devices and works offline; Zustand applies it. `user_preferences` (tRPC) is
+browsers and sessions; Zustand applies it. `user_preferences` (tRPC) is
 not used for it because it would make an app bar control depend on being
 online. This supersedes ADR-20's "layout stays in Zustand" for this one
 preference: the persisted value is the `prefs` record, and Zustand holds only
@@ -775,14 +833,34 @@ has responded (`moreMenu`). AGENTS.md keeps the server rule: a thread deleted
 while it had replies stays as an empty shell. The client may hide Delete
 under the mockup's condition; the server does not enforce it.
 
-**C16. Mentions.** Posts, replies and comments notify mentioned members
-(`notify` in the submit handler). The schema's notification types have no
-mention, and `report` exists only in the prototype. Change: a `mention`
-notification type, written by a post-commit effect to the mentioned person's
-user log, only if that person can read the item at effect time; the
-prototype's `report` type, sent to the channel owner only, joins the schema (04 O1), beside the
-schema's `report_resolved`. The client lists notifications (mention, `report`,
-`report_resolved`) on a notifications page (`02-client-app.md` W2.6).
+**C16. Notifications.** Posts, replies and comments notify mentioned
+members (`notify` in the submit handler); the schema's notification types
+have no mention, and `report` exists only in the prototype. Decision G sets
+the kinds; each is a `notification` record in the recipient's user log,
+written by a post-commit effect (or by `serverApply`, Y13, for the invite
+case), carrying ids and no item text, and served only while the recipient
+can read the item (AGENTS.md "User logs follow current access"). Nobody is
+notified of their own action.
+
+| `type` | Written when | To | Payload |
+|---|---|---|---|
+| `mention` | a post, reply or comment mentions `@handle` | the mentioned member, if they can read the item at effect time | `sp`, `th`, item key, actor |
+| `reply` | a reply to a post (`research.createPostFollowUp`) | the post's author | `sp`, `th`, reply id, actor |
+| `branch` | `research.forkNode` (an ask or look-up) under a node | the author of the parent node | `sp`, `th`, node id, actor |
+| `comment` | `comments.create` on a node | the author of that node | `sp`, `th`, comment id, actor |
+| `removed` | `moderation.decide { decision: "removed" }` on a thread | the thread's author | `sp`, `th`, `modNote`; no thread text |
+| `invite_used` | an account invite is redeemed (`account.create`, `accountInvites.redeem`, 04 I4) | the invite's creator | the new member's handle |
+
+`reply`, `branch` and `comment` notifications coalesce: at most one unread
+notification per (recipient, type, thread), with a count. The `removed`
+notification survives the erasure of the thread (it holds no text), while
+mention notifications about the removed thread are erased with it (04 §6.2).
+The prototype's `report` type and the schema's `report_resolved` are removed
+(C12). The client lists notifications on a notifications page reached from
+the account menu, and an unread dot on the account avatar (`02-client-app.md`
+W2.6; decision P10). Acceptance: one effect test per row, including "not
+notified of one's own action" and the coalescing rule; a test that a
+`removed` notification holds no thread text.
 
 **C17. Runs streamed.** The mock API's note "Answers are not streamed" is
 superseded by ADR-22; the `spaceRunSchema` record becomes the run record of
@@ -816,15 +894,15 @@ in `web/packages/shared/src/schemas/spaces.ts`:
 
 In `@session/mutators`: `who` is `user`, `member`, `author` or `owner`.
 `who: "owner"` covers `spaces.update` (C11), `moderation.decide`,
-`reports.resolve`, `members.remove`, `members.ban`, `members.unban`,
+`members.remove`, `members.ban`, `members.unban`,
 `invites.create`, `invites.revoke` and `invites.restore` (and the deferred
 `joinRequests.decide`, which stays in the prototype suite, C10). `actsOn`
 reduces to "the actor is the owner and the target is someone else". The
 owner cannot leave (`spaces.leave` answers `PRECONDITION_FAILED`). Records
-that replica-proto serves to staff (`report`, `modlog`, `ban`, `invite`
-link records, hidden text, `report` notifications) are served to the owner,
-and where they are today also to the reporter, the link's maker or the
-author. Site admins (`users.is_admin`) get no channel rights from the role
+that replica-proto serves to staff (`modlog`, `ban`, `invite` link records,
+hidden text) are served to the owner, and where they are today also to the
+link's maker or the author; the `report` records and notifications are
+removed (C12). Site admins (`users.is_admin`) get no channel rights from the role
 model; the channel-level actions a site admin already has in this plan stay:
 deleting a channel by operator job (04 §1) and suspending an account, which
 freezes the channels it owns (04 I6, §4.5). `AGENTS.md` ("Stale intent:
@@ -853,28 +931,26 @@ them.
 
 ## 9. Open questions
 
-1. **Record table or typed tables.** D1 chooses one `records` table with JSON
+1. **Record table or typed tables.** Decided (E3): one `records` table. D1 chooses one `records` table with JSON
    bodies. If feed queries (C7, R5) need indexes on fields inside `body`,
    generated columns are added per field; is that acceptable, or should
    threads and nodes get typed tables now?
-2. **Who sees save counts.** C1 serves the count to every reader of the
-   space. In a private channel with few members a count of 1 can identify the
-   saver. Show save counts only above a threshold, or only to the author?
+2. **Who sees save counts.** Decided (S6): in private channels counts below
+   3 are not served or shown (C1). C1 serves the count to every reader of the
+   space; in a private channel with few members a count of 1 can identify the
+   saver.
 3. **Erasure and backups.** Decided: no retention requirement. D4 erases
    from the live file; Litestream generations and the nightly archive may keep
    removed text for as long as they are retained, and the retention period is
    set for recovery, not for erasure. A restore must still repeat the
    removals applied after its restore point (05 §3.3).
-4. **Restore marker.** D6 relies on the restore runbook to write a marker. Is
-   a boot-time check of the Litestream generation id more reliable than a
-   manual step?
+4. **Restore marker.** Decided (E6): a boot-time check of the Litestream
+   generation id (D6), not a runbook-written marker.
 5. **Admin and moderator roles.** Decided: channels have only an owner and
    members; admin and moderator roles, `members.setRole` and ownership
    transfer are removed from the contract and the prototype (C18, U6).
-6. **Join requests.** C9 defers them, so a private channel admits only
-   through links. Is that the intended product, or did the mockup leave them
-   out only for space?
-7. **Snapshot cost on the web.** The web client keeps an in-memory replica
-   and snapshots on every load. At 5,000 full threads per space this is
-   megabytes per tab; should the web client use a smaller window than the
-   desktop? Untiered pulls (R2) add the same cost in busy spaces.
+6. **Join requests.** Decided (P4): a private channel admits only through
+   channel invite links (C9).
+7. **Snapshot cost on the web.** Decided (E7): the web window of R1 (30 days
+   or the newest 100 threads, capped at 500 per space). Untiered pulls (R2)
+   still cost in busy spaces; M3's load check measures both.
