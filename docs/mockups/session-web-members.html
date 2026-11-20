@@ -139,6 +139,7 @@ body.fs .fsexit:focus-visible, body.fs.fs-peek .fsexit { transform: translate(-5
 .row.new-row + .row { padding-top: 14px; }
 /* composer parts */
 .nb { min-width: 0; }
+.nb-dock > .av, .nb-dock > textarea { position: relative; top: -1px; }
 .nb textarea { display: block; width: 100%; resize: none; border: 0; outline: none; background: none; color: var(--t-heading); font: inherit; font-size: var(--input-fs, var(--fs-md)); line-height: 1.5; padding: 3px 0; min-height: 28px; max-height: 240px; }
 .nb textarea::placeholder { color: var(--placeholder); }
 .nb-f { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
@@ -1012,40 +1013,20 @@ section > h3 + .tcopy, section > h3 + .tfacts { margin-top: 6px; }
 /* channel feeds: 2px less above each post */
 .chfeed .row:not(.new-row) { padding-top: 12px; }
 /* page layouts (mock variants): A main + side, centered as a pair · B main column centered, side column to its right
-   C one column, branches and replies below each card · D wider main column, narrower side
-   E main column centered, branches on the left · F main column centered, each reader puts branches left or right */
+   C wider main column, narrower side */
 @media (min-width: 861px) {
-  :is(.pl-b, .pl-e, .pl-f) .mg-inner { max-width: 1340px; }
-  :is(.pl-b, .pl-e, .pl-f) .row { grid-template-columns: minmax(0, 1fr) minmax(0, 600px) minmax(0, 1fr); justify-content: stretch; }
-  :is(.pl-b, .pl-e, .pl-f) .row > :nth-child(1) { grid-column: 2; grid-row: 1; }
-  :is(.pl-b, .pl-f.side-r) .row > :nth-child(2) { grid-column: 3; max-width: 330px; }
-  :is(.pl-e, .pl-f.side-l) .row > :nth-child(2) { grid-column: 1; grid-row: 1; justify-self: end; width: 100%; max-width: 330px; }
-  :is(.pl-b, .pl-f.side-r) .row > .sphead.wide { grid-column: 2 / 4; max-width: 951px; }
-  :is(.pl-e, .pl-f.side-l) .row > .sphead.wide { grid-column: 2; }
-  .pl-c .row { grid-template-columns: minmax(0, 640px); gap: 8px; }
-  .pl-c .stick { position: static; max-height: none; }
-  .pl-c .pinned > .pin { position: static; margin-bottom: 8px; }
-  .pl-c .mgn { padding-left: 12px; }
-  .pl-d .row { grid-template-columns: minmax(0, 720px) minmax(0, 300px); }
+  .pl-b .mg-inner { max-width: 1340px; }
+  .pl-b .row { grid-template-columns: minmax(0, 1fr) minmax(0, 600px) minmax(0, 1fr); justify-content: stretch; }
+  .pl-b .row > :nth-child(1) { grid-column: 2; grid-row: 1; }
+  .pl-b .row > :nth-child(2) { grid-column: 3; max-width: 330px; }
+  .pl-b .row > .sphead.wide { grid-column: 2 / 4; max-width: 951px; }
+  .pl-c .row { grid-template-columns: minmax(0, 720px) minmax(0, 300px); }
 }
 @media (min-width: 861px) and (max-width: 1320px) {
-  :is(.pl-b, .pl-f.side-r) .row { grid-template-columns: minmax(0, 600px) minmax(0, 330px); justify-content: center; }
-  :is(.pl-b, .pl-f.side-r) .row > :nth-child(1), :is(.pl-b, .pl-f.side-r) .row > :nth-child(2) { grid-column: auto; }
-  :is(.pl-b, .pl-f.side-r) .row > .sphead.wide { grid-column: 1 / -1; }
-  :is(.pl-e, .pl-f.side-l) .row { grid-template-columns: minmax(0, 330px) minmax(0, 600px); justify-content: center; }
-  :is(.pl-e, .pl-f.side-l) .row > :nth-child(1) { grid-column: 2; }
-  :is(.pl-e, .pl-f.side-l) .row > :nth-child(2) { grid-column: 1; max-width: none; }
-  :is(.pl-e, .pl-f.side-l) .row > .sphead.wide { grid-column: 1 / -1; }
+  .pl-b .row { grid-template-columns: minmax(0, 600px) minmax(0, 330px); justify-content: center; }
+  .pl-b .row > :nth-child(1), .pl-b .row > :nth-child(2) { grid-column: auto; }
+  .pl-b .row > .sphead.wide { grid-column: 1 / -1; }
 }
-/* F: the switch at the top of each side column */
-.sideflip { display: none; }
-.pl-f .sideflip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; margin: 0 0 6px; border-radius: 12px; font-size: var(--fs-xs); color: var(--t-faint); }
-.pl-f .sideflip:hover { color: var(--t-heading); background: var(--fill-hover); }
-.pl-f .sideflip svg.i { width: 12px; height: 12px; }
-.pl-f.side-l .mgn { text-align: right; }
-.pl-f.side-l .mgn > * { text-align: left; }
-.pl-f.side-l .mgn > .sideflip { text-align: right; }
-@media (max-width: 860px) { .pl-f .sideflip { display: none; } }
 @media (max-width: 860px) {
     .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .stick { position: static; max-height: none; }
@@ -1726,7 +1707,6 @@ const RULE_TEMPLATES = {
   'Reading group': [{ t: 'Mark spoilers in titles.', d: 'Use [spoilers] at the start of the title.' }, { t: 'Cite editions and page numbers when quoting.' }, { t: 'Be generous with first-time readers.' }],
   Workplace: [{ t: 'Do not share drafts or data outside the channel.' }, { t: 'No personal data about customers or colleagues.', check: true }, { t: 'Asks use the channel\'s token budget. Keep each ask to one result.' }],
 };
-const SIDE_L = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6.5 3v10"/></svg>', SIDE_R = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M9.5 3v10"/></svg>';
 const AGENT_I = I.agent.replace('<svg', '<svg class="i"');
 const rT = r => typeof r === 'string' ? r : r.t, rD = r => typeof r === 'string' ? '' : (r.d || ''), rC = r => typeof r !== 'string' && !!r.check;
 const rulesOf = id => SP[id]?.rules || [];
@@ -1734,7 +1714,7 @@ const CAPS = [[0, 'No limit'], [25000, '25k tokens'], [50000, '50k tokens'], [10
 const capOf = id => SP[id]?.askCap || 0;
 const ruleItem = (r, extra = '') => `<li${extra}><b>${esc(rT(r))}</b>${rC(r) ? `<span class="rtag chk" title="The agent checks asks against this rule before they run">${AGENT_I}checked</span>` : ''}${rD(r) ? `<span>${esc(rD(r))}</span>` : ''}</li>`;
 const RULES_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 2.5h7l2 2v9h-9Z"/><path d="M6 7h4.5M6 9.5h4.5M6 12h2.5"/></svg>';
-const WARN_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5 14 13H2Z"/><path d="M8 6.5v3"/><circle cx="8" cy="11.3" r=".4" fill="currentColor"/></svg>';
+const WARN_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5 14 13H2Z"/><path d="M8 6.5v3"/><circle cx="8" cy="11.4" r=".9" fill="currentColor" stroke="none"/></svg>';
 const RM_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path d="M4 12 12 4"/></svg>';
 const HANDLE = '<svg viewBox="0 0 10 14" aria-hidden="true"><circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="3" cy="11" r="1.2"/><circle cx="7" cy="11" r="1.2"/></svg>';
 const isMod = id => ownerOf(id) === me() && canWrite();
@@ -1744,7 +1724,7 @@ const rulesNew = id => { const x = SP[id]; return !!(x?.rulesAt && st.auth === '
 const ruleDiff = id => { const x = SP[id], prev = (x.rulesPrev || []).map(rT), now = rulesOf(id).map(rT); return { added: new Set(now.filter(t => !prev.includes(t))), removed: prev.filter(t => !now.includes(t)) }; };
 
 /* About a channel: owner, members, visibility, ask limit, rules, community rules */
-const INFO_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7.2v3.8"/><circle cx="8" cy="5" r=".4" fill="currentColor"/></svg>';
+const INFO_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7.2v3.8"/><circle cx="8" cy="5" r=".95" fill="currentColor" stroke="none"/></svg>';
 function chInfoDlg() {
   const x = SP[st.chInfo]; if (!x) return '';
   const o = ownerOf(x.id), rules = rulesOf(x.id), own = isMod(x.id), diff = st.showDiff === x.id ? ruleDiff(x.id) : null;
@@ -1892,9 +1872,9 @@ function renderNetwork() {
     : st.space === 'saved' && !posts.length ? '<div class="row"><p class="empty saved-empty">Nothing saved yet. Use the bookmark on any thread to keep it here.</p><div></div></div>'
     : st.space === 'home' && !posts.length ? '<div class="row"><p class="empty saved-empty">Join a few channels to fill Home. <button class="tlink inl" data-a="browse">Browse channels</button></p><div></div></div>'
     : SP[st.space] && !posts.length ? '<div class="row"><p class="empty saved-empty">No threads here yet. Ask the first question.</p><div></div></div>' : '';
-  $('#page').innerHTML = `<div class="spshell sd-${d} spv-${spv()} pl-${st.ui.pl || 'a'} side-${st.side || 'r'}${SP[st.space] && SPACE_META[st.space] ? ' chfeed' : ''}">${side}<div class="mg" id="k-mg"><div class="mg-inner">${navTop}
+  $('#page').innerHTML = `<div class="spshell sd-${d} spv-${spv()} pl-${st.ui.pl || 'a'}${SP[st.space] && SPACE_META[st.space] ? ' chfeed' : ''}">${side}<div class="mg" id="k-mg"><div class="mg-inner">${navTop}
     ${pendingBanner()}${spaceHead()}${locked || (SP[st.space] && !isJoined(st.space) && st.auth === 'in') ? '' : composerOrLock(v)}
-    ${empty}${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${st.ui.pl === 'f' ? `<button class="sideflip" data-a="sideflip" title="Show branches and replies on the ${st.side === 'l' ? 'right' : 'left'}">${st.side === 'l' ? SIDE_R : SIDE_L}Move to the ${st.side === 'l' ? 'right' : 'left'}</button>` : ''}${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div></div>`;
+    ${empty}${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div></div>`;
   const mg = $('#k-mg'), ta = $('#in-new');
   mg.classList.add('ncw');  /* below 520px the composer's controls wrap to a second row */
   if (v.fs) mg.style.setProperty('--title-fs', v.fs);
@@ -1934,7 +1914,6 @@ app.addEventListener('click', e => {
   if (a === 'join') { e.stopPropagation(); if (!canWrite()) return; joinedIds().push(d.id); SEEN[st.user + ':' + d.id] = true; toast(`Joined ${spName(d.id)}.`); render(); return; }
   if (a === 'leave') { const j = joinedIds(); j.splice(j.indexOf(d.id), 1); toast(`Left ${spName(d.id)}.`); if (isPrivate(d.id)) st.space = 'home'; render(); return; }
   if (a === 'newspace') { st.menu = null; st.creating = { name: '', desc: '', vis: 'open', err: '' }; render(); $('#ns-name')?.focus(); return; }
-  if (a === 'sideflip') { st.side = st.side === 'l' ? 'r' : 'l'; render(); app.querySelector('.sideflip')?.focus({ preventScroll: true }); return; }
   if (a === 'chedit') { const x = SP[st.chInfo]; st.chEdit = { id: x.id, desc: x.desc || '', vis: isPrivate(x.id) ? 'private' : 'open', cap: capOf(x.id), rules: rulesOf(x.id).map(r => ({ t: rT(r), d: rD(r), check: rC(r) })), err: '' }; render(); $('#ce-desc')?.focus(); return; }
   if (a === 'cecancel') { closeChEdit(); return; }
   if (a === 'cetpl') { st.chEdit.rules = RULE_TEMPLATES[d.k].map(r => ({ t: r.t, d: r.d || '', check: !!r.check })); render(); $('#ce-r-0')?.focus(); return; }
@@ -2411,7 +2390,7 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
-    ${seg('pl', 'Layout', 6)}
+    ${seg('pl', 'Layout', 3)}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
