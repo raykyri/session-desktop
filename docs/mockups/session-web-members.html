@@ -1070,7 +1070,7 @@ function place(margin, items) {
   margin.style.minHeight = y + 'px';
 }
 const narrow = () => matchMedia('(max-width: 860px)').matches;
-const badge = (b, g, total, pid, bi) => { b.dataset.grp = g; b.insertAdjacentHTML('beforeend', canWrite() ? `<button type="button" class="anc" data-a="askpass" data-id="${pid}" data-bi="${bi}" title="Ask about this passage" aria-label="${noun(total, 'branch', 'branches')} on this passage. Ask about it">${I.branch}${total}</button>` : `<span class="anc" aria-label="${noun(total, 'branch', 'branches')} on this passage">${I.branch}${total}</span>`); };
+const badge = (b, g, total, pid, bi) => { b.dataset.grp = g; b.insertAdjacentHTML('beforeend', canWrite() ? `<button type="button" class="anc" data-a="askpass" data-id="${pid}" data-bi="${bi}" title="Ask about this passage" aria-label="${noun(total, 'branch', 'branches')} on this passage. Ask about it">${ARROW_REPLY}${total}</button>` : `<span class="anc" aria-label="${noun(total, 'branch', 'branches')} on this passage">${ARROW_REPLY}${total}</span>`); };
 const onPath = (p, T) => { const s = st.sel[p.id]; return new Set(s && T.nodes[s] ? T.path(s).map(n => n.id) : []); };
 const inGroup = (T, ns, id) => !!id && T.nodes[id] && ns.some(n => T.path(id).some(x => x.id === n.id));
 const leaves = (T, id) => { const k = T.kids(id); return k.length ? k.reduce((s, c) => s + leaves(T, c.id), 0) : 1; };
@@ -1644,7 +1644,7 @@ function renderMock() {
     
     
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>
-    <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
+    <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
 }
 function render() {
