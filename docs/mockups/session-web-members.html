@@ -415,8 +415,6 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 /* the bar on wide layouts; a ring (no percentage) on narrow ones */
 .meter .m-l, .meter .m-track { display: none !important; }
 .meter { position: relative; }
-.meter .m-tip { position: absolute; top: calc(100% + 8px); right: -6px; white-space: nowrap; padding: 5px 9px; border-radius: 8px; background: var(--t-heading); color: var(--feed); font-size: var(--fs-xs); font-weight: 500; font-variant-numeric: tabular-nums; opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 20; }
-.meter:hover .m-tip, .meter:focus-visible .m-tip { opacity: 1; }
 .meter .m-ring { display: block; width: 18px; height: 18px; transform: rotate(-90deg); }
 .m-ring circle { fill: none; stroke: var(--control); stroke-width: 3; }
 .m-ring circle.arc { stroke: var(--tone); stroke-linecap: round; }
@@ -1258,7 +1256,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'feed', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { xcopy: 'a', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1279,7 +1277,6 @@ const keys = () => (KEYS[st.user] ||= {});
 const billing = () => BILLING[st.user] || 'pause';
 const outOfTokens = () => left() <= 0 && !(billing() === 'key' && keys().anthropic?.status === 'working');
 const resetIn = () => { const h = Math.round((RESET - NOW) / 36e5), d = Math.floor(h / 24); return d ? `${d} day${d === 1 ? '' : 's'} ${h % 24} h` : `${h} h`; };
-const resetShort = () => { const h = Math.round((RESET - NOW) / 36e5), d = Math.floor(h / 24); return d ? `${d}d ${h % 24}h` : `${h}h`; };
 /* charge a finished run: included tokens first, then the key the member chose; logged for the Usage page */
 const RUNLOG = {};
 function charge(q, tok) {
@@ -1311,7 +1308,7 @@ function meter() {
   const u = used(), pct = Math.min(1, u / ALLOWANCE), l = left(), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok';
   const title = `${fmtTok(l)} of ${fmtTok(ALLOWANCE)} included tokens left this week; resets in ${resetIn()}`;
   const r = 7, c = 2 * Math.PI * r;
-  return `<button class="meter ${tone}" data-ma="go" data-to="usage" aria-label="${title}"><span class="m-tip" aria-hidden="true">${Math.round((1 - pct) * 100)}% left · ${resetShort()} left</span><span class="m-l">${fmtTok(l)} left</span><span class="m-track"><span style="width:${(pct * 100).toFixed(1)}%"></span></span><svg class="m-ring" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}"/><circle class="arc" cx="9" cy="9" r="${r}" stroke-dasharray="${(c * pct).toFixed(2)} ${c.toFixed(2)}"/></svg></button>`;
+  return `<button class="meter ${tone}" data-ma="go" data-to="usage" aria-label="${title}"><span class="m-l">${fmtTok(l)} left</span><span class="m-track"><span style="width:${(pct * 100).toFixed(1)}%"></span></span><svg class="m-ring" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}"/><circle class="arc" cx="9" cy="9" r="${r}" stroke-dasharray="${(c * pct).toFixed(2)} ${c.toFixed(2)}"/></svg></button>`;
 }
 
 /* ---- app bar ---- */
@@ -1336,6 +1333,14 @@ const authDialog = () => `<div class="scrim auth-scrim" data-ma="closeauth"></di
 const xBtn = (label = 'Sign in with X') => `<button class="xbtn" data-ma="xauth">${label}</button>`;
 /* copy for the invite-code step: heading, line under it, check button, valid-invite line, X button */
 const CODE_COPY = { h: 'Have an invite?', p: 'Paste the code or link a member sent you.', btn: 'Continue', ok: n => `Invite from ${n}`, x: 'Sign up with X' };
+/* copy variants for the X sign-in step */
+const X_COPY = {
+  a: 'X asks you to let Session see your name, handle and profile picture. Session cannot post for you or read your messages.',
+  b: 'Session gets your name, handle and profile picture from X. It cannot post or read your messages.',
+  c: 'Session uses your X name, handle and picture for your profile. Nothing is posted to X.',
+  d: 'Session only reads your public X profile. It never posts or sees your DMs.',
+  e: 'Session can see your X name, handle and profile picture, and nothing else.',
+};
 function authScreen() {
   const back = to => `<button class="tlink back" data-ma="flow" data-to="${to}">${I.left}Back</button>`;
   let body = '';
@@ -1356,7 +1361,7 @@ function authScreen() {
       ${st.codeErr ? `<p class="ferr">${esc(st.codeErr)}</p>` : ''}
       ${inv ? `<div class="inviter">${av(inv.by)}<div><b>${C.ok(esc(nameOf(inv.by)))}</b><small>@${esc(inv.by)}</small></div></div><div class="auth-acts">${st.xacct && !MEMBERS.some(m => m.x === st.xacct) ? `<button class="btn1" data-ma="toprofile">Continue as @${esc(st.xacct)}</button>${xBtn('Use a different X account')}` : xBtn(C.x)}</div>` : ''}</div>`;
   } else if (st.flow === 'xauth') {
-    body = `<div class="auth-c">${back(st.intent === 'signup' ? 'code' : 'landing')}<h2>Sign in with X</h2><p>X asks you to let Session see your name, handle and profile picture. Session cannot post for you or read your messages.</p>
+    body = `<div class="auth-c">${back(st.intent === 'signup' ? 'code' : 'landing')}<h2>Sign in with X</h2><p>${X_COPY[st.ui.xcopy] || X_COPY.a}</p>
       <div class="auth-acts"><button class="xbtn" data-ma="xgo">Continue to X</button></div></div>`;
   } else if (st.flow === 'noaccount') {
     const a = X_ACCOUNTS.find(x => x.x === st.xacct);
@@ -1450,9 +1455,9 @@ function usageTop() {
   return `<section class="box"><p class="usent ${tone}">You have <b>${lp}%</b> of your included usage left this week. It resets on ${WEEK[0]}, in ${resetIn()}.</p><div class="utrack ${tone}" role="img" aria-label="${lp}% left"><span style="width:${((1 - pct) * 100).toFixed(1)}%"></span></div></section>`;
 }
 function usageRunsSection() {
-  /* each row: the question, then tokens and date on the right */
+  /* each row: the question, then the share of the weekly allowance it used and the date */
   const runs = usageRuns();
-  return `<section class="box"><h3>Recent runs</h3><div class="runs rrows">${runs.map(r => `<div class="run re"><span class="rq">${esc(clip(r.q, 90))}</span><span class="rpct">${fmtTok(r.tok)} · ${day(r.at)}</span></div>`).join('') || '<p class="empty">No runs yet this week.</p>'}</div></section>`;
+  return `<section class="box"><h3>Recent runs</h3><div class="runs rrows">${runs.map(r => `<div class="run re"><span class="rq">${esc(clip(r.q, 90))}</span><span class="rpct">${r.tok / ALLOWANCE < .005 ? '<1' : Math.round(r.tok / ALLOWANCE * 100)}% · ${day(r.at)}</span></div>`).join('') || '<p class="empty">No runs yet this week.</p>'}</div></section>`;
 }
 function usagePage() {
   const hasKey = keys().anthropic?.status === 'working' || keys().openai?.status === 'working';
@@ -1471,6 +1476,7 @@ function renderMock() {
   const seg = (k, label, n) => `<span class="mk"><span class="mkl">${label}</span><span class="seg">${'abcdef'.slice(0, n).split('').map(x => `<button data-mv="${k}" data-x="${x}" aria-pressed="${st.ui[k] === x}">${x.toUpperCase()}</button>`).join('')}</span></span>`;
   $('#mock').innerHTML = `<span class="mk"><span class="mkl">View as</span><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
+    ${seg('xcopy', 'X step copy', 5)}
     <span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin">Open sign-in</button><button data-mo="link">Open invite link</button><button data-mo="code">Fill open code</button></span></span>
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Used up']].map(([k, l]) => `<button data-mt="${k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -1492,6 +1498,7 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the feed for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
+  if (k === 'xcopy') { st.auth = 'out'; st.authOpen = true; st.flow = 'xauth'; st.intent = 'signin'; st.fromLink = false; render(); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'feed' : 'usage';
