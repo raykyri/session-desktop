@@ -201,9 +201,61 @@ test("RunTexts: frames in seq order add up; one at or below the last seq is drop
   t.is(r.version(), v);
   t.is(calls, 2);
   stop();
-  r.add({ run: "R", attempt: 1, seq: 4, text: "." });
+  r.add({ run: "R", attempt: 1, seq: 3, text: "." });
   t.is(r.get("R"), "Shortlist.");
   t.is(calls, 2);
+});
+
+// review round 2 of phase 2, finding 6 (reviewer B's runtexts-gap): a frame
+// carries only the text since the frame before, so a reader shows text only
+// while it has every frame of the attempt
+const FRAMES = ["Three novels ", "treat agents ", "bargaining for ", "their owners."];
+
+test("RunTexts: a gap in seq drops the text, and later frames of the attempt add none", (t) => {
+  const r = new RunTexts();
+  let calls = 0;
+  r.onChange(() => calls++);
+  r.add({ run: "R", attempt: 1, seq: 1, text: FRAMES[0] ?? "" });
+  r.add({ run: "R", attempt: 1, seq: 2, text: FRAMES[1] ?? "" });
+  t.is(r.get("R", 1), "Three novels treat agents ");
+  // the stream reconnected and missed seq 3
+  r.add({ run: "R", attempt: 1, seq: 4, text: FRAMES[3] ?? "" });
+  t.is(r.get("R", 1), null);
+  t.is(calls, 3);
+  r.add({ run: "R", attempt: 1, seq: 5, text: " More." });
+  t.is(r.get("R", 1), null);
+  // nothing shown changed
+  t.is(calls, 3);
+  // Run again: a new attempt from seq 1 shows its text
+  r.add({ run: "R", attempt: 2, seq: 1, text: "Again." });
+  t.is(r.get("R", 2), "Again.");
+});
+
+test("RunTexts: a reader that joins mid-run shows no text for that attempt", (t) => {
+  const r = new RunTexts();
+  r.add({ run: "R", attempt: 1, seq: 3, text: FRAMES[2] ?? "" });
+  t.is(r.get("R", 1), null);
+  r.add({ run: "R", attempt: 1, seq: 4, text: FRAMES[3] ?? "" });
+  t.is(r.get("R", 1), null);
+  // a later attempt's first frame is not at seq 1 either: none
+  r.add({ run: "R", attempt: 2, seq: 2, text: "late" });
+  t.is(r.get("R", 2), null);
+});
+
+test("RunTexts: a server run resumed after a restart (seq jumps above the last) drops the text before it", (t) => {
+  const r = new RunTexts();
+  for (let s = 1; s <= 73; s++)
+    r.add({ run: "R", attempt: 1, seq: s, text: s === 73 ? "half a sent" : "x" });
+  t.is(r.get("R", 1)?.endsWith("half a sent"), true);
+  // the resumed loop continues above every seq it sent before (the server
+  // starts above the last persisted seq plus the persist interval)
+  r.add({ run: "R", attempt: 1, seq: 101, text: "The answer again." });
+  t.is(r.get("R", 1), null);
+  r.add({ run: "R", attempt: 1, seq: 102, text: " More." });
+  t.is(r.get("R", 1), null);
+  // replays of frames before the restart change nothing
+  r.add({ run: "R", attempt: 1, seq: 74, text: "late" });
+  t.is(r.get("R", 1), null);
 });
 
 test("RunTexts: a newer attempt starts over, an older one is dropped, and get names the attempt", (t) => {

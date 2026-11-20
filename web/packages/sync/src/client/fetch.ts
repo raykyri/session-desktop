@@ -19,7 +19,12 @@
 //   that is not an answer is SERVICE_UNAVAILABLE. A read error changes no log.
 //   A network failure throws Offline;
 // - the event stream: 426 ends it with UPDATE_REQUIRED and 401 or 403 with
-//   UNAUTHORIZED (`onUnauthorized`), instead of reconnecting.
+//   UNAUTHORIZED (`onUnauthorized`), instead of reconnecting. Any other
+//   status that opens no stream (TOO_MANY_REQUESTS: the caller has too many
+//   streams open; a 5xx) and a connection that fails before a response are
+//   retried with backoff, doubling from `reconnectMs` to `maxReconnectMs`,
+//   and never sooner than the refusal's `Retry-After` or `retryAt`; a stream
+//   that opened starts the backoff over. One stream is open at a time.
 // An answer the transport makes up carries `serverTime: NaN` (the server
 // sent no time).
 
@@ -66,7 +71,45 @@ export interface FetchTransportOptions {
   onUnauthorized?: () => void;
   /** Wait before reconnecting the event stream (ms). */
   reconnectMs?: number;
+  /** The longest wait before reconnecting after refusals (ms). */
+  maxReconnectMs?: number;
+  /** Waits `ms` (tests); `setTimeout` by default. A wait ends early when
+   * the stream is stopped. */
+  sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
 }
+
+/** The longest wait a refusal's `Retry-After` or `retryAt` can ask for. */
+const MAX_RETRY_AFTER_MS = 5 * 60_000;
+
+/** How long a refusal asks to wait (ms): its `Retry-After` header (seconds
+ * or a date), or its body's `error.retryAt` (ISO); 0 when it names none. */
+async function retryAfterMs(res: Response, now: number): Promise<number> {
+  let at: number | null = null;
+  const h = res.headers.get("Retry-After");
+  if (h !== null && h.trim() !== "") {
+    const secs = Number(h);
+    at = Number.isFinite(secs) ? now + secs * 1000 : Date.parse(h);
+  }
+  if (at === null || Number.isNaN(at)) {
+    const d: unknown = await res.json().catch(() => undefined);
+    const retry = errorBody(d) ? (d.error as { retryAt?: unknown }).retryAt : undefined;
+    at = typeof retry === "string" ? Date.parse(retry) : null;
+  }
+  if (at === null || Number.isNaN(at)) return 0;
+  return Math.min(MAX_RETRY_AFTER_MS, Math.max(0, at - now));
+}
+
+const wait = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    if (signal.aborted) return resolve();
+    const t = setTimeout(done, ms);
+    function done() {
+      clearTimeout(t);
+      signal.removeEventListener("abort", done);
+      resolve();
+    }
+    signal.addEventListener("abort", done);
+  });
 
 interface Response1 {
   status: number;
@@ -210,10 +253,18 @@ export class FetchTransport implements Transport {
     onEvent: (e: SseEvent, id?: string) => void,
     signal: AbortSignal,
   ): Promise<void | ReadError> {
+    const base = this.o.reconnectMs ?? 2000;
+    const max = Math.max(base, this.o.maxReconnectMs ?? 30_000);
+    const sleep = this.o.sleep ?? wait;
+    // the wait before the next connection: `base` after a stream that
+    // opened, doubled after each refusal or failed connection
+    let backoff = base;
     while (!signal.aborted) {
       // each connection starts from the client's own tokens, so a poke the
       // client did not act on before a drop is sent again
       const last = JSON.stringify(cursors());
+      let opened = false;
+      let asked = 0;
       try {
         const res = await this.f(`${this.o.baseUrl}/api/sync/events`, {
           method: "GET",
@@ -228,12 +279,22 @@ export class FetchTransport implements Transport {
           this.o.onUnauthorized?.();
           return statusError(res.status) ?? undefined;
         }
-        if (res.ok && res.body) await readSse(res.body, onEvent, signal);
+        if (res.ok && res.body) {
+          opened = true;
+          await readSse(res.body, onEvent, signal);
+        } else asked = await retryAfterMs(res, Date.now());
       } catch {
-        // the connection dropped: reconnect
+        // the connection dropped, or never opened: reconnect
       }
       if (signal.aborted) break;
-      await new Promise((r) => setTimeout(r, this.o.reconnectMs ?? 2000));
+      let delay = base;
+      if (opened) backoff = base;
+      else {
+        // refused (too many streams open) or failed: wait longer each time
+        delay = Math.max(backoff, asked);
+        backoff = Math.min(max, backoff * 2);
+      }
+      await sleep(delay, signal);
     }
   }
 }

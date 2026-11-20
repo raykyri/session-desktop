@@ -734,3 +734,82 @@ for (const signedIn of [true, false])
     events.send({ type: "run", run: fuRun, attempt, seq: 2, text: " Accelerando and Walkaway." });
     await expect(node.locator(".as-live")).toHaveText("Two of them: Accelerando and Walkaway.");
   });
+
+// Review round 2 of phase 2, finding 6: a frame carries only the text since
+// the frame before it, so a reader that joins mid-run (its first frame is
+// above seq 1) or misses frames (a gap) shows no streamed text, only the
+// run's steps, until the answer arrives.
+test("streamed answer text: a late join and a gap show the steps, not partial text", async ({
+  page,
+}) => {
+  const { records } = await loadScenario(page.context().request, "asks: your ask", {
+    args: ASK("running"),
+  });
+  await signInAs(page.context());
+  const run = records.find(
+    (r) =>
+      r.record.kind === "run" &&
+      r.record["status"] === "running" &&
+      r.record["node"] === "r" &&
+      r.record["executor"] === null,
+  );
+  const th = String(run?.record["th"]);
+  const thread = records.find((r) => r.key === `thread:${th}`);
+  expect(run && thread).toBeTruthy();
+  const id = String(run?.record["id"]);
+  const attempt = Number(run?.record["attempt"]);
+  const space = `space:${String(thread?.record["s"])}`;
+  const events = await holdEvents(page);
+  await page.goto(`/s/public/t/${th}`);
+  const box = page.locator("#th-a");
+  await expect(box.getByText("Researching")).toBeVisible();
+  await page.waitForTimeout(500);
+  // joined at seq 3: the text before it never arrived
+  events.send(
+    { type: "run", run: id, attempt, seq: 3, text: "bargaining for " },
+    { type: "run", run: id, attempt, seq: 4, text: "their owners." },
+  );
+  await page.waitForTimeout(500);
+  await expect(box.locator(".as-live")).toHaveCount(0);
+  await expect(box.getByText("their owners.")).toHaveCount(0);
+  await expect(box.getByText("Researching")).toBeVisible();
+  // a later attempt from seq 1 streams; a gap in it drops the text
+  const next = attempt + 1;
+  const again = await page.request.post(`${APP_ORIGIN}/api/test/records`, {
+    headers: RUN_HEADERS,
+    data: {
+      records: [{ key: run?.key, record: { ...run?.record, attempt: next, rev: undefined } }],
+    },
+  });
+  expect(again.ok()).toBe(true);
+  events.send({ type: "poke", logs: [space] });
+  await page.waitForTimeout(500);
+  events.send(
+    { type: "run", run: id, attempt: next, seq: 1, text: "Three novels " },
+    { type: "run", run: id, attempt: next, seq: 2, text: "treat agents" },
+  );
+  await expect(box.locator(".as-live")).toHaveText("Three novels treat agents");
+  events.send({ type: "run", run: id, attempt: next, seq: 4, text: " their owners." });
+  await expect(box.locator(".as-live")).toHaveCount(0);
+  await expect(box.getByText("Researching")).toBeVisible();
+  // the answer arrives
+  const answer = "Three novels treat agents bargaining for their owners.";
+  const put = await page.request.post(`${APP_ORIGIN}/api/test/records`, {
+    headers: RUN_HEADERS,
+    data: {
+      records: [
+        {
+          key: run?.key,
+          record: { ...run?.record, attempt: next, status: "complete", rev: undefined },
+        },
+        {
+          key: thread?.key,
+          record: { ...thread?.record, sum: answer, running: false, rev: undefined },
+        },
+      ],
+    },
+  });
+  expect(put.ok()).toBe(true);
+  events.send({ type: "poke", logs: [space] });
+  await expect(box.getByText(answer)).toBeVisible();
+});
