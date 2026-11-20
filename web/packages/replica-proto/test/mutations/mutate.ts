@@ -115,8 +115,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "X14 a removal keeps the title and summary",
     file: "../mutators/src/rules.ts",
-    from: '        q: "",\n        t: null,\n        sum: null,\n        running: false,',
-    to: '        q: "",\n        running: false,',
+    from: '        q: "",\n        t: null,\n        sum: null,\n        tok: 0,',
+    to: '        q: "",\n        tok: 0,',
   },
   {
     name: "X16 an approval ignores the ban",
@@ -531,8 +531,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "R2-23 the client gives up on a write after a lost answer",
     file: "src/client.ts",
-    from: "      } catch {\n        res = noAnswer();\n      }",
-    to: '      } catch {\n        res = { ok: false, error: { code: "NOT_FOUND", message: "" } };\n      }',
+    from: "      } catch {\n        res = noAnswer(this.now());\n      }",
+    to: '      } catch {\n        res = { ok: false, error: { code: "NOT_FOUND", message: "", serverTime: 0 } };\n      }',
   },
   // ---- the build's contract (`01` U6): saves, notifications, removal,
   // owner-only writes, look-ups, counts and protocol version 4 ----
@@ -563,7 +563,7 @@ const MUTATIONS: Mutation[] = [
   {
     name: "U6-5 a person is notified of their own action",
     file: "../mutators/src/notify.ts",
-    from: "    if (to === tx.me) return;\n",
+    from: "    if (to === tx.me) return false;\n",
     to: "",
   },
   {
@@ -573,10 +573,12 @@ const MUTATIONS: Mutation[] = [
     to: "    if (COALESCED.has(type) && type.length < 0) {",
   },
   {
+    // mentions notify every account that may read the item (M1a review
+    // 11): the same fault is a mention of a person who may not read it
     name: "U6-7 a mention notifies a person who is not a member",
     file: "../mutators/src/notify.ts",
-    from: "if (isHandle(h) && roleIn(this.tx, sp, h) !== null)",
-    to: "if (isHandle(h))",
+    from: "    if (!readsSpace(tx, sp, to)) return false;",
+    to: '    if (!readsSpace(tx, sp, to) && type !== "mention") return false;',
   },
   {
     name: "U6-8 a removal writes no moderation log entry",
@@ -662,6 +664,18 @@ const MUTATIONS: Mutation[] = [
     file: "src/client.ts",
     from: "      if (p.replaces.length > MAX_REPLACES) p.replaces.splice(0, p.replaces.length - MAX_REPLACES);\n",
     to: "",
+  },
+  {
+    name: "M1a-11 a mention of a handle that is no account is not reported",
+    file: "../mutators/src/notify.ts",
+    from: "      if (!isHandle(h) || !this.ctx.isAccount(h)) out.notMembers.push(h);",
+    to: "      if (!isHandle(h) || !this.ctx.isAccount(h)) continue;",
+  },
+  {
+    name: "M1a-16 a reply, branch, comment or removal notifies a person who may not read the space",
+    file: "../mutators/src/notify.ts",
+    from: "    if (!readsSpace(tx, sp, to)) return false;",
+    to: '    if (!readsSpace(tx, sp, to) && type === "mention") return false;',
   },
   // ---- M1b: `@session/mutators` ----
   {

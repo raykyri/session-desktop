@@ -446,9 +446,10 @@ test("R9: a write and its notifications commit together: a fault in the notify s
   const reply = PROTO_MUTATORS["research.createPostFollowUp"] as AnyMutator;
   const faulty: AnyMutator = {
     ...reply,
-    notify: (tx, i, result) => {
-      reply.notify?.(tx, i, result);
+    notify: (tx, i, result, ctx) => {
+      const told = reply.notify?.(tx, i, result, ctx);
       if (broken) throw new RangeError("the server failed after staging the notifications");
+      return told;
     },
   };
   const { w, open } = await cast(t, 1, {
@@ -467,7 +468,7 @@ test("R9: a write and its notifications commit together: a fault in the notify s
   t.is(await w.nextSeq("mel", e.clientId), e.seq);
   broken = false;
   const first = bare(await w.server.apply(actor("mel"), e));
-  t.deepEqual(first, { ok: true, result: null });
+  t.deepEqual(first, { ok: true, result: { notified: ["otto"], notMembers: [] } });
   const notifs = () =>
     [...w.server.dump().values()]
       .flatMap((x) => (x.kind === "notif" ? [`${x.to}:${x.type}:${x.item}`] : []))

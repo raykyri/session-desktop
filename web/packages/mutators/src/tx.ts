@@ -73,6 +73,12 @@ export interface Tx extends Reads {
   id(ordinal: number): string;
 }
 
+/** What `notify` may ask the server: whether a handle is a Session account
+ * (a mention of anyone else is reported back, `notMembers`). */
+export interface NotifyCtx {
+  isAccount(handle: string): boolean;
+}
+
 /** Values the pre-check stage makes for `run` (server only). */
 export type ServerValues = Readonly<Record<string, string>>;
 
@@ -123,8 +129,9 @@ export interface MutatorDef<I> {
   can?: (tx: Tx, i: I) => void;
   run: (tx: Tx, i: I, values: ServerValues) => unknown;
   /** Server only, after `run` in the same transaction: the notifications
-   * the write causes. */
-  notify?: (tx: Tx, i: I, result: unknown) => void;
+   * the write causes. It may return the write's result with server values
+   * added (the mentions it notified, 02 N16); undefined keeps `run`'s. */
+  notify?: (tx: Tx, i: I, result: unknown, ctx: NotifyCtx) => unknown;
 }
 
 export type AnyMutator = MutatorDef<unknown>;

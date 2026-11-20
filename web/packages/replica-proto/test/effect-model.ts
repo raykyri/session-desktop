@@ -145,6 +145,9 @@ export function predictEffects(
   input: In,
   nowMs: number,
   had: Admissions = new Map(),
+  /** Whether a handle is a Session account (a mention of anyone else is
+   * reported back, not notified). */
+  isAccount: (h: string) => boolean = () => true,
 ): Prediction {
   const keys = new Map<string, Fields | null>();
   const fresh: Fields[] = [];
@@ -171,8 +174,10 @@ export function predictEffects(
     th: string,
     item: string,
     note: string | null = null,
-  ) => {
-    if (to === me) return;
+  ): boolean => {
+    if (to === me) return false;
+    // nobody who may not read the space when the write commits
+    if (!readsSpace(sp, to)) return false;
     if (type === "reply" || type === "branch" || type === "comment") {
       const old = [...dump.entries()].find(
         ([, r]) => r.kind === "notif" && r.to === to && r.type === type && r.th === th && !r.read,
@@ -180,7 +185,7 @@ export function predictEffects(
       if (old) {
         const n = old[1] as StoredRecord & { n: number };
         keys.set(old[0], { to, type, th, item, actor: me, n: n.n + 1, read: false });
-        return;
+        return true;
       }
     }
     fresh.push({
@@ -196,12 +201,24 @@ export function predictEffects(
       note,
       read: false,
     });
+    return true;
   };
   /** Mention notifications for the members of `sp` that `t` names. */
+  /** May `u` read the content of `sp`: it is open, or `u` is a member. */
+  const readsSpace = (sp: string, u: string) =>
+    !isClosed(dump, sp) || dump.get(`member:${sp}:${u}`)?.kind === "member";
+  /** Mention notifications for the accounts `t` names that may read `sp`; the
+   * answer names them, and the handles that are not accounts (02 N16). */
   const mentions = (t: string, sp: string, th: string, item: string) => {
-    for (const h of mentioned(t))
-      if (dump.get(`member:${sp}:${h}`)?.kind === "member") notify(h, "mention", sp, th, item);
+    const notified: string[] = [];
+    const notMembers: string[] = [];
+    for (const h of mentioned(t)) {
+      if (!isAccount(h)) notMembers.push(h);
+      else if (notify(h, "mention", sp, th, item)) notified.push(h);
+    }
+    return { notified, notMembers };
   };
+  const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   /** The author of the node a reference names in a thread: `r` the thread's. */
   const authorAt = (th: string, ref: string) =>
     String(get(ref === "r" ? `thread:${th}` : `node:${ref}`)?.["u"]);
@@ -362,12 +379,18 @@ export function predictEffects(
       keys.set(`counts:${id}`, { th: id, s: sp, saves: 0, r: 0 });
       const stats = get(`stats:${sp}`);
       if (stats) keys.set(`stats:${sp}`, { posts: Number(stats["posts"]) + 1 });
-      // an ask queues its root run; a post notifies the members it mentions
+      // an ask queues its root run; a post notifies the accounts it mentions
       if (ask) run(id, sp, "r");
-      else mentions(str("q"), sp, id, `thread:${id}`);
+      const told = ask
+        ? { notified: [], notMembers: [] }
+        : mentions(str("q"), sp, id, `thread:${id}`);
       out.result = (r) => {
-        const x = r as { id?: unknown; run?: unknown } | null;
-        return x?.id === id && (ask ? typeof x.run === "string" : x.run === null);
+        const x = r as { id?: unknown; run?: unknown; notified?: unknown; notMembers?: unknown };
+        return (
+          x.id === id &&
+          (ask ? typeof x.run === "string" : x.run === null) &&
+          sameJson({ notified: x.notified, notMembers: x.notMembers }, told)
+        );
       };
       break;
     }
@@ -557,7 +580,8 @@ export function predictEffects(
       // every reply counts for its post, at every depth (C5)
       keys.set(`counts:${p.id}`, { r: ofThread(p.id, "reply").length + 1 });
       notify(String(p.u), "reply", p.s, p.id, `reply:${id}`);
-      mentions(str("t"), p.s, p.id, `reply:${id}`);
+      const told = mentions(str("t"), p.s, p.id, `reply:${id}`);
+      out.result = (r) => sameJson(r, told);
       break;
     }
     case "comments.create": {
@@ -574,7 +598,8 @@ export function predictEffects(
       });
       // a comment starts no run and changes no count (`03` G4)
       notify(authorAt(p.id, str("node")), "comment", p.s, p.id, `comment:${id}`);
-      mentions(str("t"), p.s, p.id, `comment:${id}`);
+      const told = mentions(str("t"), p.s, p.id, `comment:${id}`);
+      out.result = (r) => sameJson(r, told);
       break;
     }
     case "joinRequests.create": {

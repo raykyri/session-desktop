@@ -55,13 +55,14 @@ export const MODERATION = {
       return null;
     },
     // a thread's removal notifies its author, with the reason and no text
-    notify: (tx, i) => {
-      if (i.decision !== "removed") return;
+    notify: (tx, i, _result, ctx) => {
+      if (i.decision !== "removed") return undefined;
       const [k, th] = i.item.split(":");
-      if ((k !== "a" && k !== "p") || !th) return;
+      if ((k !== "a" && k !== "p") || !th) return undefined;
       const p = tx.byKey(threadKey(th));
-      if (p?.kind !== "thread" || p.u === null) return;
-      new Notifier(tx).send(p.u, "removed", p.s, p.id, threadKey(p.id), p.modNote);
+      if (p?.kind !== "thread" || p.u === null) return undefined;
+      new Notifier(tx, ctx).send(p.u, "removed", p.s, p.id, threadKey(p.id), p.modNote);
+      return undefined;
     },
   }),
 };

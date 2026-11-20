@@ -31,14 +31,73 @@ test("an ask writes its thread, counts and a queued root run, the run record bei
   t.like(w.get(`stats:${open}`), { posts: 1 });
 });
 
-test("a post writes no run and notifies the members it mentions, not its author", (t) => {
-  const { w, open } = cast(t);
-  const id = post(t, w, "mel", open, "Hi @mona @eve @mel");
+test("a post writes no run, notifies the accounts it mentions that may read it, and says who", (t) => {
+  const { w, open, closed } = cast(t);
+  const id = w.id();
+  const r = ok(
+    t,
+    w.apply("mel", "threads.create", {
+      id,
+      space: open,
+      kind: "post",
+      q: "Hi @mona @eve @mel @nobody",
+    }),
+  );
   t.is(w.all("run").length, 0);
+  // eve, an account who has not joined the open space, is notified too; the
+  // author is not; nobody is no account (02 N16, M1a review 11)
   t.deepEqual(
     w.all("notif").map((n) => [n.to, n.type, n.item]),
-    [["mona", "mention", `thread:${id}`]],
+    [
+      ["mona", "mention", `thread:${id}`],
+      ["eve", "mention", `thread:${id}`],
+    ],
   );
+  t.deepEqual(r, { id, run: null, notified: ["mona", "eve"], notMembers: ["nobody"] });
+  // in a private space only its members are notified; eve is an account
+  // who may not read it, so she is neither notified nor reported
+  const p = w.id();
+  const q = ok(
+    t,
+    w.apply("ada", "threads.create", { id: p, space: closed, kind: "post", q: "@olga @eve @x" }),
+  );
+  t.deepEqual(q, { id: p, run: null, notified: ["olga"], notMembers: ["x"] });
+  // the client's prediction names none: they are server values
+  const { prediction } = w.predict("ada", "threads.create", {
+    id: w.id(),
+    space: closed,
+    kind: "post",
+    q: "@olga",
+  });
+  t.like(prediction, { ok: true, result: { notified: [], notMembers: [] } });
+});
+
+test("nobody is notified who may not read the space when the write commits", (t) => {
+  // M1a review 16: a reply, a branch, a comment or a removal to a person
+  // removed from the private space
+  const { w, closed } = cast(t);
+  const p = w.id();
+  ok(t, w.apply("ada", "threads.create", { id: p, space: closed, kind: "post", q: "x" }));
+  const a = w.id();
+  ok(t, w.apply("ada", "threads.create", { id: a, space: closed, kind: "ask", q: "x", ...MODEL }));
+  finish(w, a, "r");
+  const adm = (w.get(`member:${closed}:ada`) as { adm: string }).adm;
+  ok(t, w.apply("olga", "members.remove", { space: closed, user: "ada", base: { adm } }));
+  ok(t, w.apply("olga", "research.createPostFollowUp", { id: w.id(), thread: p, t: "x" }));
+  ok(
+    t,
+    w.apply("olga", "research.forkNode", {
+      id: w.id(),
+      thread: a,
+      parent: "r",
+      kind: "ask",
+      q: "y",
+      ...MODEL,
+    }),
+  );
+  ok(t, w.apply("olga", "comments.create", { id: w.id(), thread: a, node: "r", t: "z" }));
+  ok(t, w.apply("olga", "moderation.decide", { item: `p:${p}`, decision: "removed" }));
+  t.deepEqual(w.notifs("ada"), []);
 });
 
 test("an author's edit compares the thread's rev", (t) => {
@@ -74,6 +133,8 @@ test("G5: opening a branch as its own thread copies its question and answer and 
   t.deepEqual(ok(t, w.apply("otto", "threads.create", { id, from: { th, node } })), {
     id,
     run: null,
+    notified: [],
+    notMembers: [],
   });
   t.is(w.all("run").length, runs);
   t.like(w.get(`thread:${id}`), {

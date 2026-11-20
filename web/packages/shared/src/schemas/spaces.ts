@@ -638,6 +638,15 @@ export const forkNodeInputSchema = z.discriminatedUnion("kind", [
 
 const nodeInput = { thread: spaceThreadIdSchema, node: askNodeRefSchema };
 
+/** The mentions a post, reply or comment made (02 N16): `notified`, the
+ * handles that got a mention notification; `notMembers`, the mentioned
+ * handles that are not Session accounts. Server values: a client's
+ * prediction has both empty. */
+const mentioned = {
+  notified: z.array(spaceHandleSchema),
+  notMembers: z.array(z.string()),
+};
+
 /** A delete's answer: `kept`, the item stays as an empty shell for what is
  * under it. Null for an author who may no longer read the item. */
 export const deleteResultSchema = z.object({ kept: z.boolean() }).nullable();
@@ -691,7 +700,11 @@ export const spaceMutators = {
     who: "member",
     online: false,
     input: createThreadInputSchema,
-    result: z.object({ id: spaceThreadIdSchema, run: spaceUlidSchema.nullable() }),
+    result: z.object({
+      id: spaceThreadIdSchema,
+      run: spaceUlidSchema.nullable(),
+      ...mentioned,
+    }),
   },
   "threads.update": {
     who: "author",
@@ -759,7 +772,7 @@ export const spaceMutators = {
       t: words(ASK_TEXT_MAX),
       parent: ulid.optional(),
     }),
-    result: nullResult,
+    result: z.object(mentioned),
   },
   "replies.update": {
     who: "author",
@@ -784,7 +797,7 @@ export const spaceMutators = {
       t: words(ASK_TEXT_MAX),
       parent: ulid.optional(),
     }),
-    result: nullResult,
+    result: z.object(mentioned),
   },
   "comments.update": {
     who: "author",

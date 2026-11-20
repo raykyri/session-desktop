@@ -102,6 +102,8 @@ export class World {
   ms = isoToMs("2026-11-16T10:00:00Z");
   private n = 0;
   readonly random: () => number;
+  /** The Session accounts: the cast, and whoever writes. */
+  readonly accounts = new Set(["olga", "ada", "mona", "mel", "otto", "eve"]);
 
   constructor(seed = 1) {
     this.random = rng(seed);
@@ -146,6 +148,7 @@ export class World {
   /** The server's apply, without the protocol: the stages in order, and a
    * commit of everything they wrote, or nothing. */
   apply(me: string, name: string, input: unknown, o: ApplyOptions = {}): Answer {
+    this.accounts.add(me);
     const def = (o.defs ?? MUTATORS)[name];
     if (!def) return { ok: false, error: { code: "NOT_FOUND", message: name } };
     const parsed = def.input.safeParse(input);
@@ -169,8 +172,11 @@ export class World {
     try {
       authorize(tx, def, parsed.data);
       const values = def.pre?.(ctx, parsed.data) ?? {};
-      const result = def.run(tx, parsed.data, values);
-      def.notify?.(tx, parsed.data, result);
+      const ran = def.run(tx, parsed.data, values);
+      const told = def.notify?.(tx, parsed.data, ran, {
+        isAccount: (h) => this.accounts.has(h),
+      });
+      const result = told === undefined ? ran : told;
       this.store.commit(tx.staged);
       return { ok: true, result };
     } catch (e) {

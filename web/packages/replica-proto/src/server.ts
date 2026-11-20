@@ -492,6 +492,10 @@ export class ProtoServer implements TestServer {
   private readonly random: () => number;
   private readonly mutators: Readonly<Record<string, AnyMutator>>;
   private readonly tokens = new Tokens();
+  /** The Session accounts: every handle that ever registered a client (the
+   * prototype has no users table). A mention of anyone else is reported as
+   * not a member (02 N16). */
+  private readonly accounts = new Set<string>();
 
   constructor(options: ServerOptions) {
     this.clock = options.clock;
@@ -527,6 +531,7 @@ export class ProtoServer implements TestServer {
       do id = ulid(now, this.random);
       while (this.clients.has(id));
       setLast(this.registrations, u, [...times, now]);
+      this.accounts.add(u);
       this.clients.set(id, { u, last: 0, seen: now });
       return { ok: true, clientId: id };
     } catch {
@@ -738,8 +743,9 @@ export class ProtoServer implements TestServer {
           ).length,
       };
       const values = def.pre?.(pre, input) ?? {};
-      const result = def.run(tx, input, values);
-      def.notify?.(tx, input, result);
+      const ran = def.run(tx, input, values);
+      const told = def.notify?.(tx, input, ran, { isAccount: (h) => this.accounts.has(h) });
+      const result = told === undefined ? ran : told;
       return { result: { ok: true, result }, recorded: true, staged: tx.staged };
     } catch (e) {
       if (e instanceof Refusal) return final(e);

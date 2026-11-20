@@ -64,8 +64,8 @@ for (const [name, make] of Object.entries(CASES))
       const def = MUTATORS[name] as AnyMutator;
       const faulty: AnyMutator = {
         ...def,
-        notify: (tx, i, r) => {
-          def.notify?.(tx, i, r);
+        notify: (tx, i, r, ctx) => {
+          def.notify?.(tx, i, r, ctx);
           throw new TypeError("the commit failed");
         },
       };

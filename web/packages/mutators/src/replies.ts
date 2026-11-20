@@ -56,14 +56,15 @@ export const REPLIES = {
         createdAt: tx.now,
       });
       recount(tx, p);
-      return null;
+      return { notified: [], notMembers: [] };
     },
-    // the post's author gets a `reply` notification; mentioned members a `mention`
-    notify: (tx, i) => {
+    // the post's author gets a `reply` notification; mentioned accounts a
+    // `mention`, named in the answer
+    notify: (tx, i, _result, ctx) => {
       const p = tx.byKey(threadKey(i.thread)) as ThreadRec;
-      const n = new Notifier(tx);
+      const n = new Notifier(tx, ctx);
       n.send(p.u ?? "", "reply", p.s, p.id, `reply:${i.id}`);
-      n.mentions(i.t, p.s, p.id, `reply:${i.id}`);
+      return n.mentions(i.t, p.s, p.id, `reply:${i.id}`);
     },
   }),
 

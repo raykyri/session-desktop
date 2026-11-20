@@ -291,8 +291,8 @@ const GENERATORS: Record<string, Gen> = {
       return { id, from: { th: n.th, node: n.id } };
     }
     const kind = pick(c.r, ["ask", "post"]);
-    // a post mentions people now and then
-    const at = chance(c.r, 0.3) ? ` @${pick(c.r, PEOPLE)}` : "";
+    // a post mentions people now and then, and a handle that is no account
+    const at = chance(c.r, 0.3) ? ` @${pick(c.r, [...PEOPLE, "nobody"])}` : "";
     return {
       id,
       space: spaceId(c),
@@ -820,7 +820,15 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
     // model predicts; anything else changes nothing
     const fresh = p.code === "ok" && p.stored && u !== null && u !== "null";
     const effects = fresh
-      ? predictEffects(before, u, e.name, e.input as Record<string, unknown>, now, c.admissions)
+      ? predictEffects(
+          before,
+          u,
+          e.name,
+          e.input as Record<string, unknown>,
+          now,
+          c.admissions,
+          (h) => (PEOPLE as readonly string[]).includes(h),
+        )
       : { keys: new Map(), fresh: [] };
     const fault = checkEffects(before, w.server.dump(), effects, res.ok ? res.result : null);
     if (fault) failures.push(`${what}: the effect model: ${fault}\n${JSON.stringify(e)}`);

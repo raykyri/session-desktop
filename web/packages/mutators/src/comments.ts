@@ -59,15 +59,16 @@ export const COMMENTS = {
         mod: null,
         createdAt: tx.now,
       });
-      return null;
+      return { notified: [], notMembers: [] };
     },
-    // the node's author gets a `comment` notification; mentioned members a `mention`
-    notify: (tx, i) => {
+    // the node's author gets a `comment` notification; mentioned accounts a
+    // `mention`, named in the answer
+    notify: (tx, i, _result, ctx) => {
       const p = tx.byKey(threadKey(i.thread)) as ThreadRec;
       const node = i.node === "r" ? p : (tx.byKey(nodeKey(i.node)) as NodeRec);
-      const n = new Notifier(tx);
+      const n = new Notifier(tx, ctx);
       n.send(authorOf(node), "comment", p.s, p.id, `comment:${i.id}`);
-      n.mentions(i.t, p.s, p.id, `comment:${i.id}`);
+      return n.mentions(i.t, p.s, p.id, `comment:${i.id}`);
     },
   }),
 

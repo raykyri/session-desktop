@@ -540,9 +540,10 @@ test("E1: a write that notifies several people commits all of their notification
   const create = PROTO_MUTATORS["research.createPostFollowUp"] as AnyMutator;
   const faulty: AnyMutator = {
     ...create,
-    notify: (tx, i, result) => {
-      create.notify?.(tx, i, result);
+    notify: (tx, i, result, ctx) => {
+      const told = create.notify?.(tx, i, result, ctx);
       if (fail) throw new Error("down once, after the notifications were staged");
+      return told;
     },
   };
   const { w, open } = await cast(t, 7, {
@@ -558,14 +559,27 @@ test("E1: a write that notifies several people commits all of their notification
   t.deepEqual(notifs(), []);
   t.false(w.server.dump().has(`reply:${input.id}`));
   fail = false;
-  await ok(t, w.as("otto", "research.createPostFollowUp", input));
-  // the post's author gets a reply; members of the space a mention; a
-  // handle that names no member (eve posted without joining; nobody) gets
-  // no mention
-  t.deepEqual(notifs(), ["eve:reply:1", "mel:mention:1", "mona:mention:1", "olga:mention:1"]);
+  const told = await ok(t, w.as("otto", "research.createPostFollowUp", input));
+  // the post's author gets a reply; every account that may read the open
+  // space a mention, eve too, who posted without joining (M1a review 11);
+  // a handle that is no account (nobody) gets none, and the answer says so
+  t.deepEqual(notifs(), [
+    "eve:mention:1",
+    "eve:reply:1",
+    "mel:mention:1",
+    "mona:mention:1",
+    "olga:mention:1",
+  ]);
+  t.deepEqual(told, { notified: ["mona", "mel", "olga", "eve"], notMembers: ["nobody"] });
   // another reply to the same post: the unread reply notification counts it
   await ok(t, w.as("mel", "research.createPostFollowUp", { id: w.id(), thread: th, t: "me too" }));
-  t.deepEqual(notifs(), ["eve:reply:2", "mel:mention:1", "mona:mention:1", "olga:mention:1"]);
+  t.deepEqual(notifs(), [
+    "eve:mention:1",
+    "eve:reply:2",
+    "mel:mention:1",
+    "mona:mention:1",
+    "olga:mention:1",
+  ]);
 });
 
 test("R1: a record written again at a deleted key continues from its last rev, after the tombstone is pruned too", async (t) => {
@@ -749,7 +763,10 @@ test("Y1: a reminted envelope's answer is stored under the ids it replaces: a de
     replaces: [original.mutationId],
   };
   const answer = bare(await w.server.apply(actor("mel"), reminted));
-  t.deepEqual(answer, { ok: true, result: { id: second.id, run: null } });
+  t.deepEqual(answer, {
+    ok: true,
+    result: { id: second.id, run: null, notified: [], notMembers: [] },
+  });
   // the original arrives late, under the client's next seq: it gets the
   // stored answer, uses no seq and writes nothing
   const seq = await w.nextSeq("mel", original.clientId);

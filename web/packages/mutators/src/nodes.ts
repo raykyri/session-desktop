@@ -124,10 +124,11 @@ export const NODES = {
       return { id: i.id, run };
     },
     // the parent's author gets a `branch` notification
-    notify: (tx, i) => {
+    notify: (tx, i, _result, ctx) => {
       const p = tx.byKey(threadKey(i.thread)) as ThreadRec;
       const parent = i.parent === "r" ? p : (tx.byKey(nodeKey(i.parent)) as NodeRec);
-      new Notifier(tx).send(authorOf(parent), "branch", p.s, p.id, nodeKey(i.id));
+      new Notifier(tx, ctx).send(authorOf(parent), "branch", p.s, p.id, nodeKey(i.id));
+      return undefined;
     },
   }),
 

@@ -83,16 +83,17 @@ export const THREADS = {
         effort: ask ? i.effort : null,
         running: ask,
       });
-      if (!ask) return { id: i.id, run: null };
+      if (!ask) return { id: i.id, run: null, notified: [], notMembers: [] };
       // the run record with status `queued` is the run queue (`03` E2)
       const run = tx.id(1);
       queueRun(tx, run, tx.byKey(threadKey(i.id)) as ThreadRec, "r", i.model, i.effort);
-      return { id: i.id, run };
+      return { id: i.id, run, notified: [], notMembers: [] };
     },
-    // a post notifies the members it mentions
-    notify: (tx, i) => {
-      if ("kind" in i && i.kind === "post")
-        new Notifier(tx).mentions(i.q, i.space, i.id, threadKey(i.id));
+    // a post notifies the accounts it mentions, and says who in its answer
+    notify: (tx, i, result, ctx) => {
+      if (!("kind" in i) || i.kind !== "post") return undefined;
+      const m = new Notifier(tx, ctx).mentions(i.q, i.space, i.id, threadKey(i.id));
+      return { ...(result as object), ...m };
     },
   }),
 
@@ -199,5 +200,5 @@ function promote(tx: Tx, id: string, th: string, nodeId: string) {
   });
   tx.put({ ...a, node: "r", th: id, mod: null });
   tx.put({ ...n, promoted: id });
-  return { id, run: null };
+  return { id, run: null, notified: [], notMembers: [] };
 }
