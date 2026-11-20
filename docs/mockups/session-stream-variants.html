@@ -199,18 +199,12 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .preview .prose { font-size: var(--fs-sm); max-height: 260px; overflow-y: auto; }
 .preview .pf { display: flex; gap: 12px; margin-top: 8px; font-size: var(--fs-xs); color: var(--t-faint); align-items: center; }
 
-/* Pinned map and Trunk */
+/* Pinned map */
 .tgrp { padding: 2px 0 4px; }
-.tgrp:not(.t) { padding-left: 8px; border-left: 1.5px solid var(--border-strong); }
-.tgrp:not(.t).hl { border-left-color: var(--accent); }
+.tgrp { padding-left: 8px; border-left: 1.5px solid var(--border-strong); }
+.tgrp.hl { border-left-color: var(--accent); }
 .tgrp .preview { margin: 6px 0 4px 16px; }
 .tgrp.hl .grow-r .gq { color: var(--t-heading); }
-.trunk .trunkline { position: absolute; left: 0; bottom: 0; width: 1.5px; background: var(--border-strong); }
-.trunk .trunk-l { position: absolute; left: -4px; font-size: var(--fs-xs); font-weight: 600; color: var(--t-faint); }
-.trunk .wire { position: absolute; left: -28px; width: 28px; height: 1.5px; background: var(--border-strong); }
-.row.lr .trunk .wire { left: -24px; width: 24px; }
-.trunk .wire::before { content: ""; position: absolute; left: -3px; top: -2.25px; width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); }
-.trunk .wire.hl, .trunk .wire.hl::before { background: var(--accent); }
 
 @media (max-width: 860px) {
   .row, .row.lr { grid-template-columns: minmax(0, 1fr); gap: 8px; }
@@ -398,21 +392,20 @@ function anchorSources(p) {
   if (!narrow()) place(margin, items);
 }
 
-/* ---- tree maps pinned to passages (Pinned map, Trunk, Trunk + sources) ---- */
-function subtree(p, T, tops, g, trunk) {
+/* ---- tree maps pinned to passages (Pinned map) ---- */
+function subtree(p, T, tops, g) {
   const sel = st.sel[p.id], on = new Set(sel && T.nodes[sel] ? T.path(sel).map(n => n.id) : []);
-  const rows = tops.flatMap(n => T.dfs(n.id, 0, [])), H = 26, X0 = trunk ? 16 : 6, X = d => X0 + d * 13, idx = Object.fromEntries(rows.map((r, i) => [r.n.id, i]));
+  const rows = tops.flatMap(n => T.dfs(n.id, 0, [])), H = 26, X = d => 6 + d * 13, idx = Object.fromEntries(rows.map((r, i) => [r.n.id, i]));
   let paths = '', dots = '';
   rows.forEach(({ n, d }, i) => {
     const y = i * H + 13;
     if (d > 0) { const px = X(d - 1), py = idx[n.par] * H + 13; paths += `<path class="${on.has(n.id) ? 'on' : ''}" d="M${px} ${py} L${px} ${y - 6} Q${px} ${y} ${px + 6} ${y} L${X(d)} ${y}"/>`; }
-    else if (trunk) paths += `<path class="${on.has(n.id) ? 'on' : ''}" d="M0 ${y} L${X(0)} ${y}"/>`;
     dots += `<circle class="${n.id === sel ? 'sel' : on.has(n.id) ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="3.5"/>`;
   });
   const cur = rows.find(r => r.n.id === sel)?.n;
   return `<div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ n, d }) => `<button class="grow-r${on.has(n.id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="tsel" data-id="${p.id}" data-node="${n.id}" data-grp="${g}"><span class="gq">${esc(n.q)}</span></button>`).join('')}</div>${cur ? V.map.preview(p, T, cur) : ''}`;
 }
-function anchorTrees(p, trunk) {
+function anchorTrees(p) {
   const prose = document.getElementById('pr-' + p.id), margin = document.getElementById('mr-' + p.id);
   if (!prose || !margin) return;
   const T = tree(p), blocks = blocksOf(prose), groups = new Map(), items = [];
@@ -424,15 +417,10 @@ function anchorTrees(p, trunk) {
     b.dataset.grp = g;
     const total = ns.reduce((s, n) => s + 1 + T.desc(n.id), 0);
     b.insertAdjacentHTML('beforeend', `<span class="anc" aria-label="${noun(total, 'branch', 'branches')} on this passage">${I.branch}${total}</span>`);
-    margin.insertAdjacentHTML('beforeend', `<div class="pin tgrp${trunk ? ' t' : ''}" data-grp-box="${g}">${subtree(p, T, ns, g, trunk)}</div>`);
-    items.push({ el: margin.lastElementChild, anchor: b, g });
+    margin.insertAdjacentHTML('beforeend', `<div class="pin tgrp" data-grp-box="${g}">${subtree(p, T, ns, g)}</div>`);
+    items.push({ el: margin.lastElementChild, anchor: b });
   }
-  if (narrow()) return;
-  place(margin, items);
-  if (!trunk) return;
-  const top0 = margin.getBoundingClientRect().top, first = prose.firstElementChild.getBoundingClientRect().top - top0;
-  margin.insertAdjacentHTML('afterbegin', `<i class="trunkline" style="top:${first + 6}px"></i><span class="trunk-l" style="top:${first - 16}px">Answer</span>`);
-  for (const it of items) if (it.g) { const y = it.anchor.getBoundingClientRect().top - top0 + 11; margin.insertAdjacentHTML('beforeend', `<i class="wire" data-wire="${it.g}" style="top:${y}px"></i>`); }
+  if (!narrow()) place(margin, items);
 }
 
 const V = {
@@ -488,23 +476,7 @@ const V = {
     full: true,
     thesis: '<strong>The tree, split up and pinned to passages.</strong> Each paragraph that has branches gets its own small tree beside it, drawn the same way as Map. Click a node to read it under its tree; hover a tree to see its passage.',
     margin(p) { return p.k === 'post' ? repliesMargin(p) : `<div class="pinned" id="mr-${p.id}"></div>`; },
-    layout(p) { anchorTrees(p, false); },
-  },
-  trunk: {
-    name: 'Trunk',
-    full: true,
-    thesis: '<strong>The answer is the trunk of the tree.</strong> A line runs down the margin beside the answer, and each branch leaves it at the paragraph it asks about, with a wire into the text. Where branches crowd together they slide down the trunk instead of overlapping.',
-    margin(p) { return p.k === 'post' ? repliesMargin(p) : `<div class="pinned trunk" id="mr-${p.id}"></div>`; },
-    layout(p) { anchorTrees(p, true); },
-  },
-  trunkgloss: {
-    name: 'Trunk + sources',
-    full: true,
-    lr: true,
-    thesis: '<strong>Trunk, with the sources in the left margin.</strong> What the answer is built on sits at its citations on the left; the branches it grew sit on the trunk on the right. Hover a source, a citation or a tree to link it to its line.',
-    left(p) { return V.gloss.left(p); },
-    margin(p) { return V.trunk.margin(p); },
-    layout(p) { anchorSources(p); anchorTrees(p, true); },
+    layout(p) { anchorTrees(p); },
   },
 };
 
@@ -540,7 +512,7 @@ app.addEventListener('click', e => {
   if (a === 'note') { st.exp.has(d.id) ? st.exp.delete(d.id) : st.exp.add(d.id); render(); return; }
   if (a === 'ask') {
     const p = byId(d.id);
-    st.asking = st.asking === p.id ? null : p.id; if (st.v === 'map') st.sel[p.id] ||= 'r'; if (V[st.v].layout === V.trunk.layout || st.v === 'pinned' || st.v === 'trunkgloss') st.sel[p.id] = null; render(); $(`[id^="in-m"][id*="${p.id}"]`)?.focus(); return;
+    st.asking = st.asking === p.id ? null : p.id; if (st.v === 'map') st.sel[p.id] ||= 'r'; if (st.v === 'pinned') st.sel[p.id] = null; render(); $(`[id^="in-m"][id*="${p.id}"]`)?.focus(); return;
   }
   if (a === 'askfrom') { st.sel[d.id] = d.node; st.hover[d.id] = null; st.asking = d.id; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
   if (a === 'anc') { const g = d.grp, box = app.querySelector(`[data-grp-box="${g}"]`); box?.querySelectorAll('.note').forEach(n => { if (!st.exp.has(n.dataset.id)) st.exp.add(n.dataset.id); }); render(); return; }
@@ -550,7 +522,7 @@ app.addEventListener('click', e => {
 /* hover links: note and its passage; source and its citation; map row and preview */
 function hl(e, on) {
   const n = e.target.closest('[data-grp]');
-  if (n) { const g = n.dataset.grp; app.querySelectorAll(`[data-grp="${g}"]`).forEach(x => { if (x.closest('.mgn') || x.classList.contains('anc')) return; x.classList.toggle('blk-hl', on); }); app.querySelector(`[data-grp-box="${g}"]`)?.classList.toggle('hl', on); app.querySelectorAll(`[data-wire="${g}"]`).forEach(w => w.classList.toggle('hl', on)); }
+  if (n) { const g = n.dataset.grp; app.querySelectorAll(`[data-grp="${g}"]`).forEach(x => { if (x.closest('.mgn') || x.classList.contains('anc')) return; x.classList.toggle('blk-hl', on); }); app.querySelector(`[data-grp-box="${g}"]`)?.classList.toggle('hl', on); }
   const s = e.target.closest('[data-src], sup[data-cite]');
   if (s) { const id = s.dataset.src || s.dataset.cite; app.querySelector(`[data-src="${id}"]`)?.classList.toggle('hl', on); app.querySelector(`sup[data-cite="${id}"]`)?.classList.toggle('hl', on); }
   const r = e.target.closest('[data-hov]');
