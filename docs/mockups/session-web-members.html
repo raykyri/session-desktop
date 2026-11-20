@@ -546,25 +546,8 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 .sphead h2 .glyph { width: 26px; height: 26px; border-radius: 7px; font-size: 13px; }
 .sphead p { margin: 3px 0 4px; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.45; }
 .sphead small { display: inline-flex; align-items: center; gap: 4px; color: var(--t-faint); font-size: var(--fs-xs); }
-/* branch action variants */
-.preview .pf2 > span:first-child { flex-basis: 100%; }
-.preview .pf2 > .grow { display: none; }
-.preview .pf2 { gap: 8px 12px; }
-.preview .pf { flex-wrap: wrap; row-gap: 6px; }
-.preview .pf > * { white-space: nowrap; }
-.pf .bagrp { gap: 8px !important; }
-.pf .bagrp { display: inline-flex; align-items: center; gap: 10px; }
-.pf .bal { color: var(--t-faint); }
-.pf .basep { width: 1px; height: 12px; background: var(--divider); }
-.pf .bapill { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 9px 0 6px; white-space: nowrap; border-radius: 12px; border: 1px solid var(--control-border); color: var(--t-heading); font-weight: 500; }
-.pf .bapill:hover { background: var(--fill-hover); }
-.pf .bapill .mark svg { width: 12px; height: 12px; }
-.pf + .bachoose, .bachoose { display: grid; gap: 2px; margin-top: 8px; padding: 4px; border-radius: var(--r-md); background: var(--control); }
-.bachoose button { display: grid; gap: 1px; padding: 6px 9px; border-radius: 7px; text-align: left; font-size: var(--fs-xs); }
-.bachoose button:hover { background: var(--card); }
-.bachoose b { color: var(--t-heading); font-weight: 600; }
-.bachoose span { color: var(--t-muted); }
-.pf .tlink svg.i { width: 10px; height: 10px; margin-left: 3px; vertical-align: -1px; }
+.pf .bact { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.pf .bact svg { width: 12px; height: 12px; flex: none; }
 .bgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .bcard { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
 .bcard p { margin: 0; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.45; flex: 1; }
@@ -1319,43 +1302,24 @@ function preview(p, T, n) {
   const par = st.asking === p.id ? (st.askPar ?? n.id) : null;
   return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${more}</div>${n.quote ? `<blockquote class="bq">${esc(clip(n.quote, 180))}</blockquote>` : ''}${status(n)}<div class="prose">${answerHtml(n)}</div>
     ${branchActs(p, n, k, promoted)}
-    ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? BA().phF : BA().phI, '', 'Ask', 'askclose') : ''}
+    ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? 'Continue from here' : 'Ask beside this', '', 'Ask', 'askclose') : ''}
     ${branchReplies(p, n)}</div>`;
 }
-/* ---- branch actions (variants) ----
-   A as built: Continue / Branch / Reply to this branch · B renamed: Follow up / Ask instead / Reply
-   C grouped: "Ask" label over the two asking actions, Reply in the same row · D asking actions as pills with the
-   agent mark (they run an answer and use tokens), Reply as plain text · E one "Ask" control that opens an inline
-   chooser with a line on where each question goes */
-const BA_COPY = {
-  a: { cnt: k => k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches', fol: 'Continue', ins: 'Branch', reply: 'Reply to this branch', phF: 'Continue from here', phI: 'Ask beside this', phR: 'Reply' },
-  b: { cnt: k => k ? noun(k, 'follow-up', 'follow-ups') : 'No follow-ups', fol: 'Follow up', ins: 'Ask instead', reply: 'Reply', phF: 'Follow up on this answer', phI: 'Ask a different question here', phR: 'Reply (does not ask for an answer)' },
-};
-const BA = () => ({ ...BA_COPY[(st.ui.ba || 'a') === 'a' ? 'a' : 'b'], inRow: st.ui.ba === 'c' });
+/* branch actions: Continue asks under this answer, Branch asks beside it; both run an answer, so both carry the agent mark */
 function branchActs(p, n, k, promoted) {
-  const c = BA(), v = st.ui.ba || 'a', key = p.id + ':' + n.id, can = canWrite() && !n.pending;
   const open = promoted ? `<button class="tlink" data-a="gothread" data-id="${promoted}">Open thread</button>` : '';
-  const b = (node, label, tip, cls = 'tlink') => `<button class="${cls}" data-a="askfrom" data-id="${p.id}" data-node="${node}" data-sel="${n.id}" title="${tip}">${label}</button>`;
-  const fol = cls => b(n.id, (v === 'd' ? mark('sm') : '') + c.fol, 'Ask a new question under this answer. Runs an answer.', cls);
-  const ins = cls => b(n.par, (v === 'd' ? mark('sm') : '') + c.ins, 'Ask a different question at the same point, next to this one. Runs an answer.', cls);
-  const head = `<span>${c.cnt(k)}</span>${open}<span class="grow"></span>`;
-  if (!can) return `<div class="pf">${head}</div>`;
-  if (v === 'c') return `<div class="pf pf2">${head}<span class="bagrp"><span class="bal">Ask</span>${fol()}${ins()}</span><span class="basep"></span><button class="tlink" data-a="brreply" data-k="${key}/top">${c.reply}</button></div>`;
-  if (v === 'd') return `<div class="pf pf2">${head}${fol('bapill')}${ins('bapill')}</div>`;
-  if (v === 'e') { const on = st.baOpen === key;
-    return `<div class="pf">${head}<button class="tlink" data-a="baopen" data-k="${key}" aria-expanded="${on}">Ask${I.down}</button></div>${on ? `<div class="bachoose">
-      <button data-a="askfrom" data-id="${p.id}" data-node="${n.id}" data-sel="${n.id}"><b>${c.fol}</b><span>A new question under this answer, using it as context</span></button>
-      <button data-a="askfrom" data-id="${p.id}" data-node="${n.par}" data-sel="${n.id}"><b>${c.ins}</b><span>A different question at the same point, next to this one</span></button></div>` : ''}`; }
-  return `<div class="pf">${head}${fol()}${ins()}</div>`;
+  const b = (node, label, tip) => `<button class="tlink bact" data-a="askfrom" data-id="${p.id}" data-node="${node}" data-sel="${n.id}" title="${tip}">${I.agent}${label}</button>`;
+  return `<div class="pf"><span>${k ? noun(k, 'branch', 'branches') + ' under this' : 'No branches'}</span>${open}<span class="grow"></span>${canWrite() && !n.pending
+    ? b(n.id, 'Continue', 'Ask a new question under this answer. Runs an answer.') + b(n.par, 'Branch', 'Ask a different question at the same point, next to this one. Runs an answer.') : ''}</div>`;
 }
 /* replies on a branch's answer: a short discussion without running another ask */
 function branchReplies(p, n) {
   if (n.pending) return '';
   const key = p.id + ':' + n.id, rows = flatReplies(BRP[key] || []);
-  const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, BA().phR, '', 'Reply', 'brclose') : '';
+  const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, 'Reply', '', 'Reply', 'brclose') : '';
   if (!rows.length && !canWrite()) return '';
   return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'reply', 'replies')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 3) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><div class="rtext">${fmtReply(r.t)}</div><div class="pf">${likeBtnK('b:' + rid(r), r)}${canWrite() ? `<button class="tlink" data-a="brreply" data-k="${key}/${id}">${st.brReplying === key + '/' + id ? 'Close reply' : 'Reply'}</button>` : ''}</div>${box(id)}</div>`).join('')}
-    ${canWrite() && st.brReplying !== key + '/top' && !BA().inRow ? `<button class="tlink brp-add" data-a="brreply" data-k="${key}/top">${BA().reply}</button>` : ''}${box('top')}</div>`;
+    ${canWrite() && st.brReplying !== key + '/top' ? `<button class="tlink brp-add" data-a="brreply" data-k="${key}/top">Reply to this branch</button>` : ''}${box('top')}</div>`;
 }
 const readout = (p, T, ns) => inGroup(T, ns, st.sel[p.id]) ? preview(p, T, T.nodes[st.sel[p.id]]) : '';
 
@@ -1670,8 +1634,7 @@ app.addEventListener('click', e => {
     if (!box || !box.value.trim()) { st.asking = null; st.quote = null; st.askPar = null; render(); return; }
     box.focus(); return; }
   if (a === 'ask') { st.asking = d.id; st.sel[d.id] = null; st.quote = null; st.askPar = null; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
-  if (a === 'baopen') { st.baOpen = st.baOpen === d.k ? null : d.k; render(); return; }
-  if (a === 'askfrom') { st.baOpen = null; st.sel[d.id] = d.sel || d.node; st.askPar = d.node; st.asking = d.id; st.quote = null; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
+  if (a === 'askfrom') { st.sel[d.id] = d.sel || d.node; st.askPar = d.node; st.asking = d.id; st.quote = null; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
   if (a === 'grpopen') { const G = groupsFor(byId(d.id), document.getElementById('pr-' + d.id)).find(x => x.bi === +d.bi); if (!G) return;
     const first = G.ns[0].id; st.sel[d.id] = first; st.asking = null; st.askPar = null; st.quote = null; render();
     const row = document.querySelector(`#mr-${d.id} .grow-r[data-node="${first}"]`); row?.focus({ preventScroll: true }); row?.closest('.pin')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
@@ -1851,7 +1814,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { ch: 'a', ba: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { ch: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -2091,7 +2054,6 @@ function renderMock() {
     
     
     ${seg('ch', 'Channel header', 2)}
-    ${seg('ba', 'Branch actions', 5)}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -2139,13 +2101,6 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
   if (k === 'ch') { st.screen = 'network'; st.authOpen = false; if (!SP[st.space] || !SPACE_META[st.space]) st.space = navSpaces()[0].id; render(); $('#k-mg') && ($('#k-mg').scrollTop = 0); return; }
-  if (k === 'ba') { /* open the first branch on screen so its actions show */
-    if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
-    st.screen = 'network'; st.authOpen = false; st.asking = null; st.baOpen = null;
-    const p = streamFor(st.space).find(p => p.k === 'ask' && Object.keys(tree(p).nodes).length > 1) || streamFor('home').find(p => p.k === 'ask' && Object.keys(tree(p).nodes).length > 1);
-    if (p && !streamFor(st.space).includes(p)) st.space = 'home';
-    if (p && !st.sel[p.id]) st.sel[p.id] = Object.keys(tree(p).nodes).find(id => id !== 'r');
-    render(); if (p) $('#card-' + p.id)?.scrollIntoView({ block: 'start' }); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'network' : 'usage';
