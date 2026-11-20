@@ -544,6 +544,27 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 .sphead h2 { margin: 0; font-size: 18px; color: var(--t-heading); display: flex; align-items: center; }
 .sphead p { margin: 3px 0 4px; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.45; }
 .sphead small { display: inline-flex; align-items: center; gap: 4px; color: var(--t-faint); font-size: var(--fs-xs); }
+/* channel header variants: A card · B plain, no card, a rule below · C one line · D color band · E centered intro */
+.sphead.ch-b { background: none; box-shadow: none; border-radius: 0; padding: 4px 2px 14px; border-bottom: 1px solid var(--divider); }
+.ch-b h2 { gap: 8px; font-size: 20px; }
+.ch-b h2 .glyph { width: 26px; height: 26px; border-radius: 7px; font-size: 13px; }
+.sphead.ch-c { align-items: center; gap: 10px; padding: 8px 10px 8px 12px; border-radius: var(--r-lg); }
+.ch-c > .glyph { width: 26px !important; height: 26px !important; border-radius: 7px !important; font-size: 13px !important; }
+.ch-c h2 { font-size: 15px; flex: none; }
+.ch-c p { flex: 1; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--t-muted); }
+.ch-c small { flex: none; }
+.sphead.ch-d { display: block; padding: 0; overflow: hidden; }
+.chband { height: 44px; background: color-mix(in srgb, var(--chc) 70%, var(--card)); }
+.chbody { display: flex; align-items: flex-start; gap: 12px; padding: 0 16px 14px; }
+.chbody > .glyph { width: 52px; height: 52px; border-radius: 14px; font-size: 22px; margin-top: -24px; box-shadow: 0 0 0 3px var(--card); }
+.chbody .grow { padding-top: 8px; }
+.chbody > .btn1, .chbody > .btn2, .chbody > .chip { margin-top: 10px; }
+.sphead.ch-e { flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 22px 20px 18px; }
+.ch-e > .glyph { width: 48px; height: 48px; border-radius: 13px; font-size: 21px; }
+.ch-e h2 { font-size: 20px; justify-content: center; }
+.ch-e p { margin: 0; max-width: 52ch; }
+.ch-e > .btn1, .ch-e > .btn2, .ch-e > .chip { margin-top: 6px; }
+@media (max-width: 860px) { .ch-c p { display: none; } .ch-c h2 { flex: 1; } }
 .bgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .bcard { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
 .bcard p { margin: 0; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.45; flex: 1; }
@@ -1384,7 +1405,7 @@ const spaceField = () => {
   if (st.space !== 'home' && st.space !== 'saved') return `<span class="pick static">${esc(spName(st.space))}</span>`;
   if (!isJoined(st.newSpace) && navSpaces()[0]) st.newSpace = navSpaces()[0].id;
   const open = st.menu === 'space', list = navSpaces();
-  return `<span class="mpick"><button type="button" class="pick" data-a="menu" data-m="space" aria-haspopup="menu" aria-expanded="${open}" title="Space"><span>${esc(spName(st.newSpace))}</span>${I.down}</button>
+  return `<span class="mpick"><button type="button" class="pick" data-a="menu" data-m="space" aria-haspopup="menu" aria-expanded="${open}" title="Channel"><span>${esc(spName(st.newSpace))}</span>${I.down}</button>
     ${open ? `<div class="menu menu-scroll" role="menu" aria-label="Space">${list.map(x => `<button type="button" class="mi" role="menuitemradio" aria-checked="${x.id === st.newSpace}" data-a="setspace" data-v="${x.id}">${glyph(x)}<span>${esc(spName(x.id))}</span>${x.id === st.newSpace ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>`;
 };
 const newSpaceId = () => st.space === 'home' || st.space === 'saved' ? st.newSpace : st.space;
@@ -1413,7 +1434,7 @@ const COMPOSERS = {
     const opt = (m, t, sub) => `<button type="button" class="mi mi-2" role="menuitemradio" aria-checked="${st.newMode === m}" data-a="mode" data-m="${m}"><span><b>${t}</b><small>${sub}</small></span>${st.newMode === m ? CHECK : ''}</button>`;
     return `<div class="row new-row"><form class="${nbClass('nb-dock' + extra)}" data-form="new:x">${face ? av(me(), 'sm') : ''}${draft(ph())}${spaceField()}${isAsk() ? modelMenu() : ''}
       <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter${st.draft.trim() ? '' : ' disabled'}>${isAsk() ? 'Ask' : 'Post'}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
-      ${open ? `<div class="menu right" role="menu">${opt('ask', 'Ask', 'The agent researches and answers')}${opt('post', 'Post', 'A message to people in the space')}</div>` : ''}</span></form><div></div></div>`;
+      ${open ? `<div class="menu right" role="menu">${opt('ask', 'Ask', 'The agent researches and answers')}${opt('post', 'Post', 'A message to people in the channel')}</div>` : ''}</span></form><div></div></div>`;
   },
   /* Split, with the avatar held at the first line and the controls at the last as the text grows. */
   splitEnds: () => COMPOSERS.split(' nb-a'),
@@ -1469,17 +1490,17 @@ const spv = () => st.ui.sd + st.ui.sv;
 const curLabel = () => st.space === 'home' ? 'Home' : st.space === 'saved' ? 'Saved' : spName(st.space);
 const chipBtn = (id, inner, cls = '') => `<button class="${cls}" data-a="space" data-id="${id}" aria-current="${st.space === id}">${inner}</button>`;
 const spItem = (x, extra = '') => `<button type="button" class="mi" role="menuitemradio" aria-checked="${st.space === x.id}" data-a="space" data-id="${x.id}">${glyph(x)}<span>${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</span>${extra}${st.space === x.id ? CHECK : ''}</button>`;
-const newBtns = (cls = 'mi') => canWrite() ? `<button type="button" class="${cls}" data-a="newspace">${PLUS2}<span>New space</span></button><button type="button" class="${cls}" data-a="browse">${COMPASS}<span>Browse spaces</span></button>` : `<button type="button" class="${cls}" data-a="browse">${COMPASS}<span>Browse spaces</span></button>`;
+const newBtns = (cls = 'mi') => canWrite() ? `<button type="button" class="${cls}" data-a="newspace">${PLUS2}<span>New channel</span></button><button type="button" class="${cls}" data-a="browse">${COMPASS}<span>Browse channels</span></button>` : `<button type="button" class="${cls}" data-a="browse">${COMPASS}<span>Browse channels</span></button>`;
 /* the list inside every dropdown: Home, your spaces, joined, then New and Browse */
 function spacesMenuItems(q = '') {
   const f = x => !q || x.name.includes(q.toLowerCase()) || (x.title || '').toLowerCase().includes(q.toLowerCase());
   const sec = (t, list) => list.length ? `<div class="mhd">${t}</div>${list.map(x => spItem(x)).join('')}` : '';
   const disc = q ? discover().filter(f) : [];
   return `${!q ? `<button type="button" class="mi" role="menuitemradio" aria-checked="${st.space === 'home'}" data-a="space" data-id="home">${HOME}<span>Home</span>${st.space === 'home' ? CHECK : ''}</button>` : ''}
-    ${sec('Your spaces', yourSpaces().filter(f))}${sec(st.auth === 'out' ? 'Open spaces' : 'Joined', joinedOthers().filter(f))}${sec('Not joined', disc)}
-    ${q && !yourSpaces().filter(f).length && !joinedOthers().filter(f).length && !disc.length ? '<div class="mi-note">No spaces match.</div>' : ''}<div class="msep"></div>${newBtns()}`;
+    ${sec('Your channels', yourSpaces().filter(f))}${sec(st.auth === 'out' ? 'Open channels' : 'Joined', joinedOthers().filter(f))}${sec('Not joined', disc)}
+    ${q && !yourSpaces().filter(f).length && !joinedOthers().filter(f).length && !disc.length ? '<div class="mi-note">No channels match.</div>' : ''}<div class="msep"></div>${newBtns()}`;
 }
-const ddButton = (cls, label) => { const open = st.menu === 'spaces'; return `<span class="mpick ${cls}"><button type="button" class="spdd" data-a="menu" data-m="spaces" aria-haspopup="menu" aria-expanded="${open}">${label}${I.down}</button>${open ? `<div class="menu menu-scroll spmenu" role="menu" aria-label="Spaces">${spacesMenuItems()}</div>` : ''}</span>`; };
+const ddButton = (cls, label) => { const open = st.menu === 'spaces'; return `<span class="mpick ${cls}"><button type="button" class="spdd" data-a="menu" data-m="spaces" aria-haspopup="menu" aria-expanded="${open}">${label}${I.down}</button>${open ? `<div class="menu menu-scroll spmenu" role="menu" aria-label="Channels">${spacesMenuItems()}</div>` : ''}</span>`; };
 
 /* ---- A: the top strip, showing different things ---- */
 /* ---- the spaces strip in the app bar: a scope dropdown, then the space chips ---- */
@@ -1490,8 +1511,8 @@ function headerSpaces() {
   if (st.screen !== 'network') return '<span class="hsp"></span>';
   const sc = st.spScope || 'joined', list = scopeList();
   const join = x => sc === 'discover' && canWrite() ? `<span class="tj" data-a="join" data-id="${x.id}" title="Join">+</span>` : '';
-  const add = canWrite() ? `<button class="tadd" data-a="newspace" title="New space" aria-label="New space">${PLUS2}</button>` : '';
-  const empty = list.length ? '' : `<span class="tempty">${sc === 'yours' ? 'You have not made a space yet.' : 'Nothing here yet.'}</span>`;
+  const add = canWrite() ? `<button class="tadd" data-a="newspace" title="New channel" aria-label="New channel">${PLUS2}</button>` : '';
+  const empty = list.length ? '' : `<span class="tempty">${sc === 'yours' ? 'You have not made a channel yet.' : 'Nothing here yet.'}</span>`;
   const open = st.menu === 'hscope';
   return `<div class="hsp"><nav class="tabs"><div class="tabs-s" id="k-tabs"><span class="mpick"><button type="button" class="hsdd" data-a="menu" data-m="hscope" aria-haspopup="menu" aria-expanded="${open}">${SCOPES().find(x => x[0] === sc)[1]}${I.down}</button>${open ? `<div class="menu" role="menu">${SCOPES().map(([k, l]) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${sc === k}" data-a="spscope" data-s="${k}">${SCOPE_IC[k]}<span>${l}</span>${sc === k ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>${list.map(x => chipBtn(x.id, esc(spName(x.id)) + join(x))).join('')}${empty}${add}</div></nav></div>`;
 }
@@ -1501,16 +1522,16 @@ function navDropTop() {
   if (v === '1') return `<div class="tabs tabs-min"></div>`;  /* the dropdown sits in the app bar */
   if (v === '2') return `<nav class="tabs tabs-dd sptitle">${ddButton('big', `<span class="spt-l">${st.space !== 'home' && SP[st.space] ? glyph(SP[st.space]) : HOME}${esc(curLabel())}</span>`)}</nav>`;
   const open = st.menu === 'spsearch', q = st.spq || '';
-  return `<nav class="tabs tabs-dd"><span class="mpick spfind"><button type="button" class="spdd" data-a="menu" data-m="spsearch" aria-haspopup="dialog" aria-expanded="${open}">${SEARCH}<span>${esc(curLabel())}</span><kbd>⌘K</kbd></button>${open ? `<div class="menu menu-scroll spmenu spsearch" role="dialog" aria-label="Find a space"><input id="in-spq" class="spq" value="${esc(q)}" placeholder="Find a space" autocomplete="off" spellcheck="false">${spacesMenuItems(q)}</div>` : ''}</span></nav>`;
+  return `<nav class="tabs tabs-dd"><span class="mpick spfind"><button type="button" class="spdd" data-a="menu" data-m="spsearch" aria-haspopup="dialog" aria-expanded="${open}">${SEARCH}<span>${esc(curLabel())}</span><kbd>⌘K</kbd></button>${open ? `<div class="menu menu-scroll spmenu spsearch" role="dialog" aria-label="Find a channel"><input id="in-spq" class="spq" value="${esc(q)}" placeholder="Find a channel" autocomplete="off" spellcheck="false">${spacesMenuItems(q)}</div>` : ''}</span></nav>`;
 }
 /* ---- C: a left rail of space icons ---- */
 function navRail() {
   const v = st.ui.sv, wide = v === '3';
   const item = (id, ic, label, extra = '') => `<button class="ri${st.space === id ? ' on' : ''}" data-a="space" data-id="${id}" aria-current="${st.space === id}" title="${esc(label)}" aria-label="${esc(label)}">${ic}${wide ? `<span class="rl">${esc(label)}</span>` : ''}${extra}</button>`;
-  const sp = x => item(x.id, glyph(x), spName(x.id), v === '2' ? `${unread(x.id) ? `<span class="rdot">${unread(x.id)}</span>` : ''}${ownerOf(x.id) === me() ? '<span class="rown" title="Your space"></span>' : ''}` : '');
+  const sp = x => item(x.id, glyph(x), spName(x.id), v === '2' ? `${unread(x.id) ? `<span class="rdot">${unread(x.id)}</span>` : ''}${ownerOf(x.id) === me() ? '<span class="rown" title="Your channel"></span>' : ''}` : '');
   const list = [...yourSpaces(), ...joinedOthers()];
-  return `<aside class="srail${wide ? ' xr' : ''}" aria-label="Spaces">${item('home', `<span class="rh">${HOME}</span>`, 'Home')}<div class="rsep"></div>${list.map(sp).join('')}<div class="rsep"></div>
-    ${canWrite() ? `<button class="ri radd" data-a="newspace" title="New space" aria-label="New space"><span class="rh">${PLUS2}</span>${wide ? '<span class="rl">New space</span>' : ''}</button>` : ''}<button class="ri radd" data-a="browse" title="Browse spaces" aria-label="Browse spaces"><span class="rh">${COMPASS}</span>${wide ? '<span class="rl">Browse spaces</span>' : ''}</button></aside>`;
+  return `<aside class="srail${wide ? ' xr' : ''}" aria-label="Channels">${item('home', `<span class="rh">${HOME}</span>`, 'Home')}<div class="rsep"></div>${list.map(sp).join('')}<div class="rsep"></div>
+    ${canWrite() ? `<button class="ri radd" data-a="newspace" title="New channel" aria-label="New channel"><span class="rh">${PLUS2}</span>${wide ? '<span class="rl">New channel</span>' : ''}</button>` : ''}<button class="ri radd" data-a="browse" title="Browse channels" aria-label="Browse channels"><span class="rh">${COMPASS}</span>${wide ? '<span class="rl">Browse channels</span>' : ''}</button></aside>`;
 }
 /* ---- D: a left sidebar with names ---- */
 function navSidebar() {
@@ -1521,40 +1542,47 @@ function navSidebar() {
   const top = `<button class="si${st.space === 'home' ? ' on' : ''}" data-a="space" data-id="home" aria-current="${st.space === 'home'}"><span class="glyph sgh">${HOME}</span><span class="sn"><span>Home</span></span></button>${isActive() ? `<button class="si${st.space === 'saved' ? ' on' : ''}" data-a="space" data-id="saved" aria-current="${st.space === 'saved'}"><span class="glyph sgh">${I.save}</span><span class="sn"><span>Saved</span></span></button>` : ''}`;
   const star = v === '3' ? sec('star', 'Starred', navSpaces().filter(x => starred().includes(x.id)).filter(f)) : '';
   const rest = v === '3' ? navSpaces().filter(x => !starred().includes(x.id)) : null;
-  return `<aside class="sside" aria-label="Spaces">${v === '3' ? `<label class="sfind">${SEARCH}<input id="in-sideq" value="${esc(q)}" placeholder="Find a space" autocomplete="off"></label>` : ''}${top}
-    ${star}${rest ? sec('all', st.auth === 'out' ? 'Open spaces' : 'Spaces', rest.filter(f)) : sec('yours', 'Your spaces', yourSpaces()) + sec('joined', st.auth === 'out' ? 'Open spaces' : 'Joined', joinedOthers())}
+  return `<aside class="sside" aria-label="Channels">${v === '3' ? `<label class="sfind">${SEARCH}<input id="in-sideq" value="${esc(q)}" placeholder="Find a channel" autocomplete="off"></label>` : ''}${top}
+    ${star}${rest ? sec('all', st.auth === 'out' ? 'Open channels' : 'Channels', rest.filter(f)) : sec('yours', 'Your channels', yourSpaces()) + sec('joined', st.auth === 'out' ? 'Open channels' : 'Joined', joinedOthers())}
     <div class="sfoot">${newBtns('si sact')}</div></aside>`;
 }
 /* the header of a space: what it is, who made it, and joining */
 function spaceHead() {
   const x = SP[st.space]; if (!x || !SPACE_META[x.id]) return '';
   const own = ownerOf(x.id) === me() && st.auth === 'in', j = isJoined(x.id);
-  const act = !canWrite() ? '' : own ? '<span class="chip">Your space</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : isPrivate(x.id) ? '<span class="chip">Members only</span>' : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`;
-  return `<div class="row new-row"><div class="sphead">${glyph(x)}<div class="grow"><h2>${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</h2>${x.desc ? `<p>${esc(clip(x.desc, 170))}</p>` : ''}<small>Made by ${av(ownerOf(x.id), 'xs')}@${esc(ownerOf(x.id))} · ${noun(memberCount(x.id), 'member', 'members')}${isPrivate(x.id) ? ' · private' : ''}</small></div>${act}</div><div></div></div>`;
+  const act = !canWrite() ? '' : own ? '<span class="chip">Your channel</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : isPrivate(x.id) ? '<span class="chip">Members only</span>' : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`;
+  const name = `${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}`, by = `Channel by ${av(ownerOf(x.id), 'xs')}@${esc(ownerOf(x.id))}`, cnt = noun(memberCount(x.id), 'member', 'members');
+  const meta = `${by} · ${cnt}${isPrivate(x.id) ? ' · private' : ''}`, desc = x.desc ? `<p>${esc(clip(x.desc, 170))}</p>` : '';
+  const v = st.ui.ch || 'a', wrap = h => `<div class="row new-row"><div class="sphead ch-${v}" style="--chc:var(--av${x.av})">${h}</div><div></div></div>`;
+  if (v === 'b') return wrap(`<div class="grow"><h2>${glyph(x)}${name}</h2>${desc}<small>${meta}</small></div>${act}`);
+  if (v === 'c') return wrap(`${glyph(x)}<h2>${name}</h2>${x.desc ? `<p title="${esc(x.desc)}">${esc(x.desc)}</p>` : '<span class="grow"></span>'}<small>${cnt}</small>${act}`);
+  if (v === 'd') return wrap(`<div class="chband"></div><div class="chbody">${glyph(x)}<div class="grow"><h2>${name}</h2>${desc}<small>${meta}</small></div>${act}</div>`);
+  if (v === 'e') return wrap(`${glyph(x)}<h2>${name}</h2>${desc}<small>${meta}</small>${act}`);
+  return wrap(`${glyph(x)}<div class="grow"><h2>${name}</h2>${desc}<small>${meta}</small></div>${act}`);
 }
 const spaceLocked = () => SP[st.space] && SPACE_META[st.space] && isPrivate(st.space) && !isJoined(st.space);
 /* Browse: every open space, plus private ones you are in */
 function browsePage() {
   const q = (st.browseq || '').toLowerCase(), list = spaceList().filter(x => (!isPrivate(x.id) || isJoined(x.id)) && (!q || x.name.includes(q) || (x.desc || '').toLowerCase().includes(q)));
-  return `<div class="page"><div class="page-in narrow"><div class="shead"><h2>Browse spaces</h2>${canWrite() ? '<button class="btn1 sm" data-a="newspace">New space</button>' : ''}</div>
-    <label class="sfind big">${SEARCH}<input id="in-browseq" value="${esc(st.browseq || '')}" placeholder="Search spaces" autocomplete="off"></label>
-    <div class="bgrid">${list.map(x => { const own = ownerOf(x.id) === me() && st.auth === 'in', j = isJoined(x.id); return `<div class="bcard"><button class="bopen" data-a="space" data-id="${x.id}">${glyph(x)}<span><b>${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</b><small>by @${esc(ownerOf(x.id))} · ${noun(memberCount(x.id), 'member', 'members')}</small></span></button><p>${esc(clip(x.desc || '', 120))}</p>${!canWrite() ? '' : own ? '<span class="chip">Yours</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`}</div>`; }).join('') || '<p class="empty">No spaces match.</p>'}</div></div></div>`;
+  return `<div class="page"><div class="page-in narrow"><div class="shead"><h2>Browse channels</h2>${canWrite() ? '<button class="btn1 sm" data-a="newspace">New channel</button>' : ''}</div>
+    <label class="sfind big">${SEARCH}<input id="in-browseq" value="${esc(st.browseq || '')}" placeholder="Search channels" autocomplete="off"></label>
+    <div class="bgrid">${list.map(x => { const own = ownerOf(x.id) === me() && st.auth === 'in', j = isJoined(x.id); return `<div class="bcard"><button class="bopen" data-a="space" data-id="${x.id}">${glyph(x)}<span><b>${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</b><small>by @${esc(ownerOf(x.id))} · ${noun(memberCount(x.id), 'member', 'members')}</small></span></button><p>${esc(clip(x.desc || '', 120))}</p>${!canWrite() ? '' : own ? '<span class="chip">Yours</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`}</div>`; }).join('') || '<p class="empty">No channels match.</p>'}</div></div></div>`;
 }
 /* New space dialog */
 function newSpaceDlg() {
   const c = st.creating; if (!c) return '';
-  return `<div class="scrim" data-a="newspaceclose"></div><div class="dialog nsdlg" role="dialog" aria-modal="true" aria-labelledby="ns-h"><h3 id="ns-h">New space</h3>
+  return `<div class="scrim" data-a="newspaceclose"></div><div class="dialog nsdlg" role="dialog" aria-modal="true" aria-labelledby="ns-h"><h3 id="ns-h">New channel</h3>
     <form class="pform" data-form="newspace:x"><label>Name<span class="hwrap"><span>#</span><input id="ns-name" value="${esc(c.name)}" placeholder="reading-group" autocomplete="off" spellcheck="false"></span><small>Lowercase letters, numbers and dashes.</small></label>
-    <label>What is it for?<textarea id="ns-desc" rows="2" placeholder="One or two sentences shown at the top of the space">${esc(c.desc)}</textarea></label>
+    <label>What is it for?<textarea id="ns-desc" rows="2" placeholder="One or two sentences shown at the top of the channel">${esc(c.desc)}</textarea></label>
     <div class="nsvis">${[['open', 'Open', 'Anyone can read and join.'], ['private', 'Private', 'Only people you add can read or post.']].map(([k, l, h]) => `<label class="radio"><input type="radio" name="nsvis" value="${k}"${c.vis === k ? ' checked' : ''}> <span><b>${l}</b><small>${h}</small></span></label>`).join('')}</div>
-    ${c.err ? `<p class="ferr">${esc(c.err)}</p>` : ''}<div class="dacts"><button type="button" class="btn2" data-a="newspaceclose">Cancel</button><button type="submit" class="btn1">Create space</button></div></form></div>`;
+    ${c.err ? `<p class="ferr">${esc(c.err)}</p>` : ''}<div class="dacts"><button type="button" class="btn2" data-a="newspaceclose">Cancel</button><button type="submit" class="btn1">Create channel</button></div></form></div>`;
 }
 function createSpace() {
   const c = st.creating, name = $('#ns-name').value.trim().toLowerCase().replace(/^#/, ''), desc = $('#ns-desc').value.trim(), vis = $('input[name="nsvis"]:checked')?.value || 'open';
   c.name = name; c.desc = desc; c.vis = vis;
   c.err = !/^[a-z0-9][a-z0-9-]{1,29}$/.test(name) ? 'Use 2 to 30 lowercase letters, numbers or dashes.' : SP[name] ? `#${name} already exists.` : '';
   if (c.err) { render(); $('#ns-name')?.focus(); return; }
-  const x = { id: name, name, title: name, desc: desc || `Made by @${st.user}.`, createdAt: new Date(NOW).toISOString(), av: 1 + hashN(name, 6), online: 1, posts: 0 };
+  const x = { id: name, name, title: name, desc: desc || `Channel by @${st.user}.`, createdAt: new Date(NOW).toISOString(), av: 1 + hashN(name, 6), online: 1, posts: 0 };
   D.spaces.push(x); SP[name] = x; SPACE_META[name] = { owner: st.user, vis, members: 1 }; joinedIds().push(name);
   st.creating = null; st.space = name; st.newSpace = name; st.screen = 'network'; toast(`#${name} is ready. Invite people by sharing its link.`); render();
 }
@@ -1564,9 +1592,9 @@ function renderNetwork() {
   const d = st.ui.sd, locked = spaceLocked(), posts = locked ? [] : streamFor(st.space);
   const navTop = d === 'a' ? '' : d === 'b' ? navDropTop() : `<nav class="tabs tabs-dd tabs-min sp-mob">${ddButton('big', `<span class="spt-l">${st.space !== 'home' && SP[st.space] ? glyph(SP[st.space]) : HOME}${esc(curLabel())}</span>`)}</nav>`;
   const side = d === 'c' ? navRail() : d === 'd' ? navSidebar() : '';
-  const empty = locked ? `<div class="row"><p class="empty saved-empty">This space is private. Ask @${esc(ownerOf(st.space))} to add you.</p><div></div></div>`
+  const empty = locked ? `<div class="row"><p class="empty saved-empty">This channel is private. Ask @${esc(ownerOf(st.space))} to add you.</p><div></div></div>`
     : st.space === 'saved' && !posts.length ? '<div class="row"><p class="empty saved-empty">Nothing saved yet. Use the bookmark on any thread to keep it here.</p><div></div></div>'
-    : st.space === 'home' && !posts.length ? '<div class="row"><p class="empty saved-empty">Join a few spaces to fill Home. <button class="tlink inl" data-a="browse">Browse spaces</button></p><div></div></div>'
+    : st.space === 'home' && !posts.length ? '<div class="row"><p class="empty saved-empty">Join a few channels to fill Home. <button class="tlink inl" data-a="browse">Browse channels</button></p><div></div></div>'
     : SP[st.space] && !posts.length ? '<div class="row"><p class="empty saved-empty">No threads here yet. Ask the first question.</p><div></div></div>' : '';
   $('#page').innerHTML = `<div class="spshell sd-${d} spv-${spv()}">${side}<div class="mg" id="k-mg"><div class="mg-inner">${navTop}
     ${pendingBanner()}${spaceHead()}${locked || (SP[st.space] && !isJoined(st.space) && st.auth === 'in') ? '' : composerOrLock(v)}
@@ -1797,7 +1825,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { ch: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1837,7 +1865,7 @@ function toast(t) { st.toast = t; clearTimeout(toastTimer); toastTimer = setTime
 const pendingBanner = () => {
   if (st.auth === 'out') return '';
   if (isActive() || st.auth !== 'in') return '';
-  return `<div class="row new-row"><div class="pbanner"><span class="pdot"></span><div><b>You don't have an invite yet.</b> You can read every open space. Asking, posting and replying open once you enter an invite code.</div><button class="ghost" data-ma="go" data-to="status">Enter a code</button></div><div></div></div>`;
+  return `<div class="row new-row"><div class="pbanner"><span class="pdot"></span><div><b>You don't have an invite yet.</b> You can read every open channel. Asking, posting and replying open once you enter an invite code.</div><button class="ghost" data-ma="go" data-to="status">Enter a code</button></div><div></div></div>`;
 };
 function composerOrLock(v) {
   if (st.auth === 'out') { const c = typeof v.composer === 'function' ? v.composer() : COMPOSERS[v.composer](); return `<div class="nb-offw"><fieldset class="nb-off" disabled aria-hidden="true">${c}</fieldset><button type="button" class="nb-cover" data-ma="openauth" aria-label="Sign in to ask or post"></button></div>`; }
@@ -1916,14 +1944,14 @@ function authScreen() {
       <div class="auth-acts"><button class="xbtn" data-ma="xgo">Continue to X</button></div></div>`;
   } else if (st.flow === 'noaccount') {
     const a = X_ACCOUNTS.find(x => x.x === st.xacct);
-    body = `<div class="auth-c">${back('landing')}<h2>No Session account for @${esc(a.x)}</h2><p>Session is invite-only. Ask a member for an invite code, then sign up with it. If you already have a code, enter it now.</p><div class="auth-acts"><button class="btn1" data-ma="flow" data-to="code">Enter an invite code</button><button class="btn2" data-ma="waitlist">Continue without one</button></div><p class="fine">Without an invite you can read every open space, and enter a code later.</p></div>`;
+    body = `<div class="auth-c">${back('landing')}<h2>No Session account for @${esc(a.x)}</h2><p>Session is invite-only. Ask a member for an invite code, then sign up with it. If you already have a code, enter it now.</p><div class="auth-acts"><button class="btn1" data-ma="flow" data-to="code">Enter an invite code</button><button class="btn2" data-ma="waitlist">Continue without one</button></div><p class="fine">Without an invite you can read every open channel, and enter a code later.</p></div>`;
   } else if (st.flow === 'profile') {
     const a = X_ACCOUNTS.find(x => x.x === st.xacct), inv = INVITES.find(i => i.code === st.code), pf = st.profile;
     body = `<div class="auth-c">${back('xauth')}<h2>Create your account</h2><div class="inviter">${av(a.x)}<div><b>Signed in with X as @${esc(a.x)}</b><small>Invited by ${esc(nameOf(inv.by))} · code ${esc(inv.code)}</small></div></div>
       <form class="pform" data-mform="profile"><label>Name<input id="pf-name" value="${esc(pf.name)}" autocomplete="off"></label>
       <label>Handle on Session<span class="hwrap"><span>@</span><input id="pf-handle" value="${esc(pf.handle)}" autocomplete="off" spellcheck="false"></span><small>Lowercase letters, numbers, dots and underscores; 3 to 20 characters.</small></label>
       ${pf.err ? `<p class="ferr">${esc(pf.err)}</p>` : ''}
-      <label class="chk"><input type="checkbox" id="pf-rules"${pf.rules ? ' checked' : ''}> I have read the space rules and will follow them.</label>
+      <label class="chk"><input type="checkbox" id="pf-rules"${pf.rules ? ' checked' : ''}> I have read the community rules and will follow them.</label>
       <button type="submit" class="btn1 wide">Create account</button></form></div>`;
   }
   return body;
@@ -1937,7 +1965,7 @@ function statusPage() {
   const browse = `<div class="auth-acts"><button class="btn2" data-ma="go" data-to="network">Browse the network</button></div>`;
   return `<div class="page"><div class="page-in narrow pend-a"><h2>Invite required</h2><p class="lede">You're signed in as @${esc(m.u)}, but Session is invite-only. Enter a code or link from a member to start asking and posting.</p>
     ${redeemForm()}
-    <div class="pcard"><ul class="checks"><li class="ok">${CHECK}Read every open space and its branches</li><li><span class="ring"></span>Ask, post, branch and reply</li><li><span class="ring"></span>Invite people</li></ul></div>${browse}</div></div>`;
+    <div class="pcard"><ul class="checks"><li class="ok">${CHECK}Read every open channel and its branches</li><li><span class="ring"></span>Ask, post, branch and reply</li><li><span class="ring"></span>Invite people</li></ul></div>${browse}</div></div>`;
 }
 
 /* ---- members page: invite tree and invites ---- */
@@ -2036,9 +2064,10 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
+    ${seg('ch', 'Channel header', 5)}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
-  $('#thesis').innerHTML = '<span class="qtag">Spaces</span>Spaces are made by members. Home shows the spaces you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
+  $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
 }
 /* Every render rebuilds the page. Keep what people typed in open boxes, and put focus back on the
    control that had it (matched by id or by its data attributes). */
@@ -2081,6 +2110,7 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
+  if (k === 'ch') { st.screen = 'network'; st.authOpen = false; if (!SP[st.space] || !SPACE_META[st.space]) st.space = (navSpaces()[0] || discover()[0]).id; render(); $('#k-mg') && ($('#k-mg').scrollTop = 0); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'network' : 'usage';
@@ -2162,7 +2192,7 @@ app.addEventListener('submit', e => {
   }
   if (kind === 'profile') {
     const pf = st.profile; pf.name = $('#pf-name').value.trim(); pf.handle = $('#pf-handle').value.trim().toLowerCase(); pf.rules = $('#pf-rules').checked;
-    pf.err = !pf.name ? 'Enter a name.' : !/^[a-z0-9._]{3,20}$/.test(pf.handle) ? 'Handles use 3 to 20 lowercase letters, numbers, dots or underscores.' : member(pf.handle) ? `@${pf.handle} is taken. Try another.` : !pf.rules ? 'Confirm that you will follow the space rules.' : '';
+    pf.err = !pf.name ? 'Enter a name.' : !/^[a-z0-9._]{3,20}$/.test(pf.handle) ? 'Handles use 3 to 20 lowercase letters, numbers, dots or underscores.' : member(pf.handle) ? `@${pf.handle} is taken. Try another.` : !pf.rules ? 'Confirm that you will follow the community rules.' : '';
     if (pf.err) { render(); return; }
     const inv = INVITES.find(i => i.code === st.code);
     inv.used = pf.handle;
