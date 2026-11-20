@@ -46,7 +46,7 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      testIgnore: /desktop\//,
+      testIgnore: "**/e2e/desktop/**",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 900 } },
     },
     // Phase 3: the Desktop app's frontend in Chromium, with its Tauri bridge
@@ -62,7 +62,7 @@ export default defineConfig({
       use: { ...devices["Desktop Safari"], viewport: { width: 1280, height: 900 } },
       // Best-effort: WebKit is excluded from the default local run so a
       // machine without the browser still gets a green suite.
-      testIgnore: /desktop\//,
+      testIgnore: "**/e2e/desktop/**",
       grepInvert: /@visual/,
     },
   ],
