@@ -556,6 +556,27 @@ button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
 .chfacts dt { color: var(--t-faint); }
 .chfacts dd { margin: 0; display: inline-flex; align-items: center; gap: 5px; color: var(--t-primary); }
 .chdlg h4 { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--t-heading); }
+.chnone { color: var(--t-faint) !important; }
+.chdlg-h .btn2 { flex: none; }
+.cedlg { width: min(520px, calc(100% - 32px)); max-height: 80vh; overflow: auto; }
+.cedlg fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cedlg legend { padding: 0; margin-bottom: 4px; font-size: var(--fs-sm); font-weight: 500; color: var(--t-heading); }
+.cedlg legend small { margin-left: 6px; font-weight: 400; color: var(--t-faint); }
+.cedlg textarea { padding: 9px 12px; border-radius: var(--r-lg); border: 1px solid var(--control-border); background: var(--field); font: inherit; font-size: var(--fs-sm); color: inherit; resize: vertical; line-height: 1.45; }
+.cedlg textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.cecount { align-self: flex-end; font-weight: 400; color: var(--t-faint); font-size: var(--fs-xs); }
+.cerules ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cerule { display: flex; align-items: flex-start; gap: 4px; }
+.cerule .cenum { padding-top: 9px; }
+.cerule .iconbtn { margin-top: 4px; }
+.cerule .cenum { flex: none; width: 18px; text-align: right; margin-right: 4px; font-size: var(--fs-xs); color: var(--t-faint); font-variant-numeric: tabular-nums; }
+.cedlg .radio { flex-direction: row; font-weight: 400; padding: 4px 0; }
+.cedlg .radio small { display: block; color: var(--t-muted); font-size: var(--fs-xs); }
+.cedlg .cerule textarea { flex: 1; min-width: 0; padding: 7px 10px; resize: none; overflow: hidden; }
+.cerule .iconbtn { width: 26px; height: 26px; flex: none; color: var(--t-muted); }
+.cerule .iconbtn:disabled { opacity: .3; }
+.cerule .iconbtn svg.i { width: 13px; height: 13px; }
+.cadd { justify-self: start; margin-left: 26px; }
 .chrules { margin: 0; padding-left: 18px; font-size: var(--fs-sm); color: var(--t-secondary); line-height: 1.45; display: grid; gap: 4px; }
 .sphead.wide p { max-width: 80ch; }
 .sphead h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; color: var(--t-heading); }
@@ -690,7 +711,7 @@ button.brand.home:focus-visible { outline: 2px solid var(--accent); outline-offs
 .fine { color: var(--t-faint) !important; font-size: var(--fs-xs) !important; line-height: 1.5; }
 .ferr { color: var(--bad) !important; font-size: var(--fs-sm) !important; }
 .code-f { display: flex; gap: 8px; }
-.code-f input, .pform input:not([type="checkbox"]), .kform input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: var(--r-lg); border: 1px solid var(--control-border); background: var(--field); color: var(--t-heading); font: inherit; font-size: var(--fs-md); outline: none; }
+.code-f input, .pform input:not([type="checkbox"]):not([type="radio"]), .kform input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: var(--r-lg); border: 1px solid var(--control-border); background: var(--field); color: var(--t-heading); font: inherit; font-size: var(--fs-md); outline: none; }
 .code-f input { text-transform: uppercase; }
 .code-f input:focus, .pform input:focus, .kform input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .inviter { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
@@ -1325,7 +1346,8 @@ function preview(p, T, n) {
     ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? 'Continue from here' : 'Ask beside this', '', 'Ask', 'askclose') : st.brReplying === p.id + ':' + n.id + '/top' ? composer('br:' + p.id + ':' + n.id + ':top', 'Comment here', '', 'Comment', 'brclose') : ''}
     ${branchReplies(p, n)}</div>`;
 }
-/* Continue ask carries the agent mark; Branch a down-and-right arrow */
+/* Continue ask: a down arrow (asks under this answer); Branch: a down-and-right arrow (asks beside it) */
+const CONT_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10"/><path d="M4 9l4 4 4-4"/></svg>';
 const BRANCH_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3v5a2 2 0 0 0 2 2h6"/><path d="M9.5 7.5 12 10l-2.5 2.5"/></svg>';
 /* branch actions: Continue asks under this answer, Branch asks beside it; both run an answer, so both carry the agent mark */
 function branchActs(p, n, k, promoted) {
@@ -1334,7 +1356,7 @@ function branchActs(p, n, k, promoted) {
   const ckey = p.id + ':' + n.id + '/top', con = st.brReplying === ckey;
   const cmt = `<button class="tlink bact${con ? ' on' : ''}" data-a="brreply" data-k="${ckey}" aria-pressed="${con}" title="Comment on this branch. Does not run an answer.">${BUBBLE}Comment</button>`;
   return `<div class="pf">${canWrite() && !n.pending ? cmt : ''}${open}<span class="grow"></span>${canWrite() && !n.pending
-    ? b(n.id, 'Continue ask', 'Ask a new question under this answer. Runs an answer.', I.agent) + b(n.par, 'Branch', 'Ask a different question at the same point, next to this one. Runs an answer.', BRANCH_IC) : ''}</div>`;
+    ? b(n.id, 'Continue ask', 'Ask a new question under this answer. Runs an answer.', CONT_IC) + b(n.par, 'Branch', 'Ask a different question at the same point, next to this one. Runs an answer.', BRANCH_IC) : ''}</div>`;
 }
 /* replies on a branch's answer: a short discussion without running another ask */
 function branchReplies(p, n) {
@@ -1583,12 +1605,37 @@ function browsePage() {
 const INFO_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7.2v3.8"/><circle cx="8" cy="5" r=".4" fill="currentColor"/></svg>';
 function chInfoDlg() {
   const x = SP[st.chInfo]; if (!x) return '';
-  const o = ownerOf(x.id), rules = x.rules || [];
+  if (st.chEdit) return chEditDlg(x);
+  const o = ownerOf(x.id), rules = x.rules || [], own = o === me() && canWrite();
   return `<div class="scrim" data-a="chinfoclose"></div><div class="dialog chdlg" role="dialog" aria-modal="true" aria-labelledby="ci-h">
-    <div class="chdlg-h">${glyph(x)}<h3 id="ci-h">${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</h3><button class="iconbtn" data-a="chinfoclose" aria-label="Close">${I.x || '×'}</button></div>
+    <div class="chdlg-h">${glyph(x)}<h3 id="ci-h">${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</h3>${own ? '<button class="btn2 sm" data-a="chedit">Edit</button>' : ''}<button class="iconbtn" data-a="chinfoclose" aria-label="Close">${I.x || '×'}</button></div>
     ${x.desc ? `<p>${esc(x.desc)}</p>` : ''}
     <dl class="chfacts"><dt>Channel by</dt><dd>${av(o, 'xs')}@${esc(o)}</dd><dt>Members</dt><dd>${memberCount(x.id)}</dd><dt>Visibility</dt><dd>${isPrivate(x.id) ? 'Private: only members can read or post' : 'Open: anyone can read and join'}</dd></dl>
-    ${rules.length ? `<h4>Rules</h4><ol class="chrules">${rules.map(r => `<li>${esc(r)}</li>`).join('')}</ol>` : ''}</div>`;
+    ${rules.length ? `<h4>Rules</h4><ol class="chrules">${rules.map(r => `<li>${esc(r)}</li>`).join('')}</ol>` : own ? '<p class="chnone">No rules yet. <button class="tlink inl" data-a="chedit">Add rules</button></p>' : ''}</div>`;
+}
+/* Owner's edit view: description, visibility and an ordered list of rules. Edits are held in st.chEdit
+   until Save; empty rules are dropped. */
+const RULES_MAX = 10, DESC_MAX = 300;
+function chEditDlg(x) {
+  const c = st.chEdit, n = c.rules.length;
+  const row = (r, i) => `<li class="cerule"><span class="cenum">${i + 1}</span><textarea data-ce="rule" data-i="${i}" id="ce-r-${i}" rows="1" placeholder="A rule members should follow" maxlength="200" aria-label="Rule ${i + 1}">${esc(r)}</textarea>
+    <button type="button" class="iconbtn" data-a="cerule" data-op="up" data-i="${i}" aria-label="Move rule ${i + 1} up"${i ? '' : ' disabled'}>${CE_UP}</button><button type="button" class="iconbtn" data-a="cerule" data-op="down" data-i="${i}" aria-label="Move rule ${i + 1} down"${i < n - 1 ? '' : ' disabled'}>${CE_DOWN}</button><button type="button" class="iconbtn" data-a="cerule" data-op="del" data-i="${i}" aria-label="Remove rule ${i + 1}">${I.x}</button></li>`;
+  return `<div class="scrim" data-a="chinfoclose"></div><div class="dialog chdlg cedlg" role="dialog" aria-modal="true" aria-labelledby="ce-h">
+    <div class="chdlg-h">${glyph(x)}<h3 id="ce-h">Edit ${esc(spName(x.id))}</h3></div>
+    <form class="pform" data-form="chedit:${x.id}">
+      <label>About<textarea data-ce="desc" id="ce-desc" rows="3" maxlength="${DESC_MAX}" placeholder="What the channel is for. Shown at the top of the channel.">${esc(c.desc)}</textarea><small class="cecount" id="ce-count">${c.desc.length} / ${DESC_MAX}</small></label>
+      <fieldset class="nsvis"><legend>Visibility</legend>${[['open', 'Open', 'Anyone can read and join.'], ['private', 'Private', 'Only members can read or post. Current members stay.']].map(([k, l, h]) => `<label class="radio"><input type="radio" name="cevis" value="${k}"${c.vis === k ? ' checked' : ''}> <span><b>${l}</b><small>${h}</small></span></label>`).join('')}</fieldset>
+      <fieldset class="cerules"><legend>Rules <small>${n} of ${RULES_MAX}</small></legend>${n ? `<ol>${c.rules.map(row).join('')}</ol>` : '<p class="chnone">No rules. Members see these in the channel info.</p>'}
+        ${n < RULES_MAX ? '<button type="button" class="tlink cadd" data-a="cerule" data-op="add">+ Add rule</button>' : ''}</fieldset>
+      ${c.err ? `<p class="ferr">${esc(c.err)}</p>` : ''}
+      <div class="dacts"><button type="button" class="btn2" data-a="cecancel">Cancel</button><button type="submit" class="btn1">Save</button></div></form></div>`;
+}
+const CE_UP = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg>', CE_DOWN = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>';
+function saveChEdit(id) {
+  const x = SP[id], c = st.chEdit, rules = c.rules.map(r => r.trim()).filter(Boolean);
+  if (c.desc.trim().length > DESC_MAX) { c.err = `Keep the description under ${DESC_MAX} characters.`; render(); return; }
+  x.desc = c.desc.trim(); x.rules = rules; (SPACE_META[id] ||= {}).vis = c.vis;
+  st.chEdit = null; render(); app.querySelector('[data-a="chedit"]')?.focus(); toast('Channel updated.');
 }
 function newSpaceDlg() {
   const c = st.creating; if (!c) return '';
@@ -1659,8 +1706,14 @@ app.addEventListener('click', e => {
   if (a === 'join') { e.stopPropagation(); if (!canWrite()) return; joinedIds().push(d.id); SEEN[st.user + ':' + d.id] = true; toast(`Joined ${spName(d.id)}.`); render(); return; }
   if (a === 'leave') { const j = joinedIds(); j.splice(j.indexOf(d.id), 1); toast(`Left ${spName(d.id)}.`); if (isPrivate(d.id)) st.space = 'home'; render(); return; }
   if (a === 'newspace') { st.menu = null; st.creating = { name: '', desc: '', vis: 'open', err: '' }; render(); $('#ns-name')?.focus(); return; }
+  if (a === 'chedit') { const x = SP[st.chInfo]; st.chEdit = { desc: x.desc || '', vis: isPrivate(x.id) ? 'private' : 'open', rules: [...(x.rules || [])], err: '' }; render(); $('#ce-desc')?.focus(); return; }
+  if (a === 'cecancel') { st.chEdit = null; render(); app.querySelector('[data-a="chedit"]')?.focus(); return; }
+  if (a === 'cerule') { const r = st.chEdit.rules, i = +d.i;
+    if (d.op === 'add') { r.push(''); render(); $(`#ce-r-${r.length - 1}`)?.focus(); return; }
+    if (d.op === 'del') { r.splice(i, 1); render(); ($(`#ce-r-${Math.min(i, r.length - 1)}`) || app.querySelector('.cadd'))?.focus(); return; }
+    const j = d.op === 'up' ? i - 1 : i + 1; [r[i], r[j]] = [r[j], r[i]]; render(); app.querySelector(`[data-a="cerule"][data-op="${d.op}"][data-i="${j}"]:not(:disabled)`)?.focus() || $(`#ce-r-${j}`)?.focus(); return; }
   if (a === 'chinfo') { st.chInfo = d.id; render(); app.querySelector('.chdlg .iconbtn')?.focus(); return; }
-  if (a === 'chinfoclose') { const id = st.chInfo; st.chInfo = null; render(); app.querySelector(`[data-a="chinfo"][data-id="${id}"]`)?.focus(); return; }
+  if (a === 'chinfoclose') { const id = st.chInfo; st.chInfo = null; st.chEdit = null; render(); app.querySelector(`[data-a="chinfo"][data-id="${id}"]`)?.focus(); return; }
   if (a === 'newspaceclose') { st.creating = null; render(); return; }
   if (a === 'browse') { st.menu = null; st.screen = 'browse'; render(); $('#in-browseq')?.focus({ preventScroll: true }); return; }
   if (a === 'spscope') { st.spScope = d.s; st.menu = null; render(); return; }
@@ -1749,6 +1802,7 @@ app.addEventListener('mouseout', e => hl(e, false));
 app.addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target.closest('[data-form]'); if (!f) return;
+  if (f.dataset.form.startsWith('chedit:')) { saveChEdit(f.dataset.form.slice(7)); return; }
   const inp = f.querySelector('input, textarea'), v = inp.value.trim(); if (!v) { inp.focus(); return; }
   if (f.dataset.form === 'newspace:x') { createSpace(); return; }
   const [kind, pid, node, at] = f.dataset.form.split(':'), p = byId(pid);
@@ -1779,6 +1833,7 @@ document.addEventListener('keydown', e => {
   }
   if (e.key !== 'Escape') return;
   if (st.delAsk) { st.delAsk = null; render(); return; }
+  if (st.chEdit) { st.chEdit = null; render(); app.querySelector('[data-a="chedit"]')?.focus(); return; }
   if (st.chInfo) { const id = st.chInfo; st.chInfo = null; render(); app.querySelector(`[data-a="chinfo"][data-id="${id}"]`)?.focus(); return; }
   if (st.menu) { const m = st.menu; st.menu = null; render(); app.querySelector(`[data-m="${CSS.escape(m)}"]`)?.focus({ preventScroll: true }); return; }
   const f = e.target.closest?.('form[data-form]');
@@ -1796,12 +1851,14 @@ app.addEventListener('keydown', e => {
 });
 app.addEventListener('input', e => {
   const t = e.target;
+  if (t.dataset.ce && st.chEdit) { if (t.dataset.ce === 'desc') { st.chEdit.desc = t.value; const n = $('#ce-count'); if (n) n.textContent = `${t.value.length} / ${DESC_MAX}`; } else st.chEdit.rules[+t.dataset.i] = t.value; if (t.tagName === 'INPUT') return; }
   if (t.id === 'in-spq' || t.id === 'in-sideq' || t.id === 'in-browseq') { st[{ 'in-spq': 'spq', 'in-sideq': 'sideq', 'in-browseq': 'browseq' }[t.id]] = t.value; const pos = t.selectionStart; render(); const n = document.getElementById(t.id); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; } if (t.tagName !== 'TEXTAREA' || !t.form) return;
   t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
   if (t.id !== 'in-new') return;
   st.draft = t.value; t.form.classList.toggle('has-text', !!t.value.trim()); t.form.querySelectorAll('.split-main').forEach(b => { b.disabled = !t.value.trim(); });
 });
 app.addEventListener('change', e => {
+  if (e.target.name === 'cevis' && st.chEdit) { st.chEdit.vis = e.target.value; return; }
   const k = { 'new-space': 'newSpace', 'new-model': 'newModel', 'new-effort': 'newEffort' }[e.target.id];
   if (k) { st[k] = e.target.value; render(); $('#in-new')?.focus(); }
 });
@@ -2130,7 +2187,7 @@ function renderInner() {
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
   if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
   if (st.creating) app.insertAdjacentHTML('beforeend', newSpaceDlg());
-  if (st.chInfo) app.insertAdjacentHTML('beforeend', chInfoDlg());
+  if (st.chInfo) { app.insertAdjacentHTML('beforeend', chInfoDlg()); app.querySelectorAll('.cerule textarea').forEach(t => { t.style.height = t.scrollHeight + 2 + 'px'; }); }
   if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
 const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}</div>` : '';
