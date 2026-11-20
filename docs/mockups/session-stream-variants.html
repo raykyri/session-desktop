@@ -215,21 +215,10 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .grow-r .ru { color: var(--t-faint); }
 .grow-r.on .ru { color: var(--t-secondary); font-weight: 600; }
 .preview .rtext { margin: 6px 0 2px; }
-.th-acts { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
-.th-row { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; padding: 6px 0; }
-.th-b { min-width: 0; }
-.th-kids { position: relative; margin-left: 9px; padding-left: 16px; }
-.th-kids > .th { position: relative; }
-.th-kids > .th::before { content: ""; position: absolute; left: -16px; top: 0; height: 16px; width: 12px; border-left: 1.5px solid var(--border-strong); border-bottom: 1.5px solid var(--border-strong); border-bottom-left-radius: 8px; }
-.th-kids > .th:not(:last-child)::after { content: ""; position: absolute; left: -16px; top: 16px; bottom: 0; border-left: 1.5px solid var(--border-strong); }
-.th-root { margin-left: 0; padding-left: 16px; }
-.cols-h { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 6px; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--t-faint); }
-.replies .crow + .composer { margin: -4px 0 10px; }
-.crow { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 10px; align-items: start; }
-.rc { background: var(--card); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 8px 10px; min-width: 0; }
-.rc .rtext { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
-.ckids { display: flex; flex-direction: column; gap: 6px; position: relative; }
-.crow.has .ckids::before { content: ""; position: absolute; left: -16px; top: 18px; width: 16px; border-top: 1.5px solid var(--border-strong); }
+.grow-r .gq-av { display: flex; align-items: center; gap: 6px; height: 26px; }
+.gq-av .gt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rav { display: inline-flex; flex: none; line-height: 1; }
+.rav .av.xs { box-shadow: 0 0 0 1.5px var(--feed); }
 
 @media (max-width: 860px) {
   .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
@@ -580,7 +569,7 @@ const replyBox = (p, at, ph) => st.replying === rkey(p, at) ? composer('rp:' + p
 const replyLink = (p, id) => `<button class="tlink" data-a="reply" data-id="${rkey(p, id)}">Reply</button>`;
 
 /* Line tree: the same line graph as the branch trees, one row per reply; click a row to read it. */
-function replyLines(p) {
+function replyLines(p, faces = false) {
   const rows = flatReplies(replies(p)); if (!rows.length) return '';
   const sel = st.rsel[p.id], H = 26, X = d => 6 + d * 13, idx = Object.fromEntries(rows.map((x, i) => [x.id, i]));
   const on = new Set(); if (sel) sel.split('.').forEach((_, i, a) => on.add(a.slice(0, i + 1).join('.')));
@@ -591,25 +580,9 @@ function replyLines(p) {
     dots += `<circle class="${id === sel ? 'sel' : on.has(id) ? 'on' : ''}" cx="${X(d)}" cy="${y}" r="3.5"/>`;
   });
   const cur = sel && idx[sel] != null ? rows[idx[sel]] : null;
-  return `<div class="grp"><div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ r, d, id }) => `<button class="grow-r${on.has(id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}"><span class="gq"><span class="ru">${esc(r.u)}</span> ${esc(r.t)}</span></button>`).join('')}</div>
+  return `<div class="grp"><div class="graph"><svg height="${rows.length * H}" aria-hidden="true">${paths}${dots}</svg>${rows.map(({ r, d, id }) => `<button class="grow-r${on.has(id) ? ' on' : ''}" style="padding-left:${X(d) + 10}px" data-a="rsel" data-id="${p.id}" data-node="${id}">${faces ? `<span class="gq gq-av"><span class="rav" title="${esc(r.u)}">${av(r.u, 'xs')}</span><span class="gt">${esc(r.t)}</span></span>` : `<span class="gq"><span class="ru">${esc(r.u)}</span> ${esc(r.t)}</span>`}</button>`).join('')}</div>
     ${cur ? `<div class="preview fadein"><div class="who">${av(cur.r.u, 'xs')}<b>${esc(cur.r.u)}</b><time>${rel(cur.r.createdAt)}</time></div><p class="rtext">${esc(cur.r.t)}</p><div class="pf">${likeBtn(cur.r)}${replyLink(p, cur.id)}</div>${replyBox(p, cur.id, 'Reply to ' + cur.r.u)}</div>` : ''}
     <div class="rfoot">${replyLink(p, 'top')}</div>${replyBox(p, 'top', 'Reply to the post')}</div>`;
-}
-
-/* Thread lines: full replies, joined to their parent by elbow lines, the way threads read on social sites. */
-function replyThreads(p) {
-  const node = (r, id) => `<div class="th"><div class="th-row">${av(r.u, 'sm')}<div class="th-b"><div class="who"><b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><p class="rtext">${esc(r.t)}</p><div class="th-acts">${likeBtn(r)}${replyLink(p, id)}</div>${replyBox(p, id, 'Reply to ' + r.u)}</div></div>
-    ${r.kids?.length ? `<div class="th-kids">${r.kids.map((k, i) => node(k, id + '.' + i)).join('')}</div>` : ''}</div>`;
-  const list = replies(p);
-  return list.length ? `<div class="th-kids th-root">${list.map((r, i) => node(r, String(i))).join('')}</div><div class="rfoot">${replyLink(p, 'top')}</div>${replyBox(p, 'top', 'Reply to the post')}` : '';
-}
-
-/* Columns: depth runs left to right. Each reply sits in the first column with its replies beside it. */
-function replyColumns(p) {
-  const card = (r, id) => `<div class="rc"><div class="who">${av(r.u, 'xs')}<b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><p class="rtext">${esc(r.t)}</p><div class="th-acts">${likeBtn(r)}${replyLink(p, id)}</div></div>`;
-  const list = replies(p);
-  const boxes = (r, i) => replyBox(p, String(i), 'Reply to ' + r.u) + (r.kids || []).map((k, j) => replyBox(p, i + '.' + j, 'Reply to ' + k.u)).join('');
-  return list.length ? `<div class="cols-h"><span>Replies</span><span>Replies to them</span></div>${list.map((r, i) => `<div class="crow${r.kids?.length ? ' has' : ''}">${card(r, String(i))}<div class="ckids">${(r.kids || []).map((k, j) => card(k, i + '.' + j)).join('')}</div></div>${boxes(r, i)}`).join('')}<div class="rfoot">${replyLink(p, 'top')}</div>${replyBox(p, 'top', 'Reply to the post')}` : '';
 }
 
 const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches is shaded and gets its own small tree beside it.';
@@ -621,18 +594,11 @@ const V = {
     replies: replyLines,
     layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); },
   },
-  threads: {
-    name: 'Thread lines',
+  faces: {
+    name: 'Avatar tree',
     q: 'Replies',
-    thesis: `<strong>Full replies joined by elbow lines.</strong> Every reply is shown in full, and a line runs from each one to the replies under it, so the shape of the conversation stays visible while you read. ${ASK_THESIS}`,
-    replies: replyThreads,
-    layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); },
-  },
-  columns: {
-    name: 'Columns',
-    q: 'Replies',
-    thesis: `<strong>Depth runs left to right.</strong> Replies to the post fill the first column, and the replies to each of them sit beside it in the second, joined by a short line. ${ASK_THESIS}`,
-    replies: replyColumns,
+    thesis: `<strong>The same line tree, with faces instead of names.</strong> Each row starts with the author's avatar, which leaves more of the line for what they said; hover an avatar for the name. Click a row to read the reply and answer it. ${ASK_THESIS}`,
+    replies: p => replyLines(p, true),
     layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); },
   },
 };
