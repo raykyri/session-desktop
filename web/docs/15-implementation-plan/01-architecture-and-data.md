@@ -369,7 +369,7 @@ database.
 ## 6. API surface
 
 Replicated data uses only the sync routes. Online-only account calls stay tRPC
-procedures (ADR-19). Run execution by devices has its own routes (03 §4).
+procedures (ADR-19). Run execution by devices has its own routes (`03-agents-and-research.md` §4).
 
 | Route | Kind | Purpose |
 |---|---|---|
@@ -378,10 +378,10 @@ procedures (ADR-19). Run execution by devices has its own routes (03 §4).
 | `GET /api/sync/snapshot?log&tier&threads` | sync | records now, scope-filtered |
 | `GET /api/sync/pull?log&cursor` | sync | changes since a cursor |
 | `GET /api/sync/events` | SSE via fetch | pull batches and run deltas |
-| `POST /api/runs/claim`, `/heartbeat`, `/turn`, `/finish` | device runs | ADR-21; 03 §4 |
+| `POST /api/runs/claim`, `/heartbeat`, `/turn`, `/finish` | device runs | ADR-21; `03-agents-and-research.md` §4 |
 | `GET /api/runs/:id/live` | read | in-flight checkpoint of a run after a gap (ADR-22) |
 | tRPC `account.*`, `devices.*` | online | profile, settings, device pairing and revocation |
-| tRPC `apiKeys.*`, `usage.*` | online | keys, allowance, recent runs (03 §6) |
+| tRPC `apiKeys.*`, `usage.*` | online | keys, allowance, recent runs (`03-agents-and-research.md` §6) |
 | tRPC `accountInvites.*`, `members.tree` | online | Session invites and the invite tree (C8) |
 | tRPC `spaces.directory` | online | the "All" list of open channels (C7) |
 | `GET /healthz`, `/auth/*` | Hono | unchanged |
@@ -456,7 +456,7 @@ removed; the mockup's `chInfoDlg` has none. Change: drop `rules`, `rulesPrev`,
 `rulesAccepted` in `spaces.join` and `joinRequests.create`, and `rules` in
 `spaceSettingsSchema` and `createSpaceInputSchema`; the prototype's
 `rulesRev` and its CONFLICT path go. The sign-up checkbox "I have read the
-community rules" refers to Session-wide rules, not channel rules (04).
+community rules" refers to Session-wide rules, not channel rules (`04-membership-moderation-security.md`).
 
 **C7. The "All" scope.** The scope picker (`SCOPES()`) offers Joined,
 Channels you manage, and All; All lists every open channel and every private
@@ -479,7 +479,7 @@ channels, and add account invites, built on the existing `invites` table and
 3-open-links rule checked in the `pre` stage. The user record gains
 `status: "waiting" | "active"`. The invite tree is served by `members.tree`
 (online-only). Whether the whole tree is visible to every member is a privacy
-decision for 04.
+decision for `04-membership-moderation-security.md`.
 
 **C9. Visibility: open or private.** The mockup creates a channel as Open
 ("Anyone can read and join") or Private ("Only people you add can read or
