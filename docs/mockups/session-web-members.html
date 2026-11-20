@@ -215,7 +215,8 @@ fieldset.nb-off { border: 0; padding: 0; margin: 0; min-width: 0; }
 .split { display: inline-flex; flex: none; }
 .nb > .mpick.split { margin-right: 2px; }
 .split :is(.split-main, .split-more) { transition: background .15s, color .15s, opacity .15s, box-shadow .15s; }
-.split-main { height: 26px; padding: 0 10px 0 12px; border-radius: 13px 0 0 13px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); }
+.split-main svg.i { width: 14px; height: 14px; display: block; }
+.split-main { height: 26px; padding: 0 7px 0 10px; border-radius: 13px 0 0 13px; background: var(--accent-strong); color: var(--on-accent-light); font-weight: 600; font-size: var(--fs-sm); }
 .split-more { height: 26px; width: 24px; display: inline-grid; place-items: center; border-radius: 0 13px 13px 0; background: var(--accent-strong); color: var(--on-accent-light); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--on-accent-light) 16%, transparent); }
 .split-main:disabled { cursor: default; }
 .split-more svg.i { width: 13px; height: 13px; }
@@ -1224,6 +1225,7 @@ function deleteItem(key) {
    gutter  20px avatar in a left gutter at the composer's position; text lines up with the composer's text
    footer  no header; a 20px avatar, name, space and time lead the footer row */
 const BUBBLE = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13 4.5v5a1.5 1.5 0 0 1-1.5 1.5H7l-3 2.5V11h0.5A1.5 1.5 0 0 1 3 9.5Z"/></svg>';
+const ARROW_SEND = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10"/><path d="M8.5 3.5 13 8l-4.5 4.5"/></svg>';
 const ARROW_REPLY = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 4 3 7.5 6.5 11"/><path d="M3.5 7.5h5.5a4 4 0 0 1 4 4v1"/></svg>';
 function card(p) {
   const mode = V[st.v].av || 'header';
@@ -1309,26 +1311,28 @@ function preview(p, T, n) {
   const par = st.asking === p.id ? (st.askPar ?? n.id) : null;
   return `<div class="preview fadein"><div class="who">${av(n.u, 'xs')}<b>${esc(n.u)}</b><time>${rel(n.createdAt)}</time>${more}</div>${n.quote ? `<blockquote class="bq">${esc(clip(n.quote, 180))}</blockquote>` : ''}${status(n)}<div class="prose">${answerHtml(n)}</div>
     ${branchActs(p, n, k, promoted)}
-    ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? 'Continue from here' : 'Ask beside this', '', 'Ask', 'askclose') : ''}
+    ${par != null ? composer('mf:' + p.id + ':' + par, par === n.id ? 'Continue from here' : 'Ask beside this', '', 'Ask', 'askclose') : st.brReplying === p.id + ':' + n.id + '/top' ? composer('br:' + p.id + ':' + n.id + ':top', 'Comment here', '', 'Comment', 'brclose') : ''}
     ${branchReplies(p, n)}</div>`;
 }
+/* Continue ask carries the agent mark; Branch a down-and-right arrow */
+const BRANCH_IC = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3v5a2 2 0 0 0 2 2h6"/><path d="M9.5 7.5 12 10l-2.5 2.5"/></svg>';
 /* branch actions: Continue asks under this answer, Branch asks beside it; both run an answer, so both carry the agent mark */
 function branchActs(p, n, k, promoted) {
   const open = promoted ? `<button class="tlink" data-a="gothread" data-id="${promoted}">Open thread</button>` : '';
-  const b = (node, label, tip) => `<button class="tlink bact" data-a="askfrom" data-id="${p.id}" data-node="${node}" data-sel="${n.id}" title="${tip}">${I.agent}${label}</button>`;
+  const b = (node, label, tip, ic) => `<button class="tlink bact" data-a="askfrom" data-id="${p.id}" data-node="${node}" data-sel="${n.id}" title="${tip}">${ic}${label}</button>`;
   const ckey = p.id + ':' + n.id + '/top', con = st.brReplying === ckey;
   const cmt = `<button class="tlink bact${con ? ' on' : ''}" data-a="brreply" data-k="${ckey}" aria-pressed="${con}" title="Comment on this branch. Does not run an answer.">${BUBBLE}Comment</button>`;
-  return `<div class="pf">${open}<span class="grow"></span>${canWrite() && !n.pending
-    ? cmt + b(n.id, 'Continue', 'Ask a new question under this answer. Runs an answer.') + b(n.par, 'Branch', 'Ask a different question at the same point, next to this one. Runs an answer.') : ''}</div>`;
+  return `<div class="pf">${canWrite() && !n.pending ? cmt : ''}${open}<span class="grow"></span>${canWrite() && !n.pending
+    ? b(n.id, 'Continue ask', 'Ask a new question under this answer. Runs an answer.', I.agent) + b(n.par, 'Branch', 'Ask a different question at the same point, next to this one. Runs an answer.', BRANCH_IC) : ''}</div>`;
 }
 /* replies on a branch's answer: a short discussion without running another ask */
 function branchReplies(p, n) {
   if (n.pending) return '';
   const key = p.id + ':' + n.id, rows = flatReplies(BRP[key] || []);
-  const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, at === 'top' ? 'Comment on this branch' : 'Reply', '', at === 'top' ? 'Comment' : 'Reply', 'brclose') : '';
-  if (!rows.length && st.brReplying !== key + '/top') return '';
-  return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'reply', 'replies')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 3) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><div class="rtext">${fmtReply(r.t)}</div><div class="pf">${likeBtnK('b:' + rid(r), r)}${canWrite() ? replyIcon(`data-a="brreply" data-k="${key}/${id}"`, st.brReplying === key + '/' + id) : ''}</div>${box(id)}</div>`).join('')}
-    ${box('top')}</div>`;
+  const box = at => st.brReplying === key + '/' + at ? composer('br:' + p.id + ':' + n.id + ':' + at, 'Reply', '', 'Reply', 'brclose') : '';
+  if (!rows.length) return '';
+  return `<div class="brp">${rows.length ? `<div class="brp-h">${noun(rows.length, 'comment', 'comments')}</div>` : ''}${rows.map(({ r, d, id }) => `<div class="brr" style="margin-left:${Math.min(d, 3) * 14}px"><div class="who">${av(r.u, 'xs')}<b>${esc(r.u)}</b><time>${rel(r.createdAt)}</time></div><div class="rtext">${fmtReply(r.t)}</div><div class="pf">${likeBtnK('b:' + rid(r), r)}${canWrite() ? replyIcon(`data-a="brreply" data-k="${key}/${id}"`, st.brReplying === key + '/' + id) : ''}</div>${box(id)}</div>`).join('')}
+    </div>`;
 }
 const readout = (p, T, ns) => inGroup(T, ns, st.sel[p.id]) ? preview(p, T, T.nodes[st.sel[p.id]]) : '';
 
@@ -1433,7 +1437,7 @@ const COMPOSERS = {
     const open = st.menu === 'send';
     const opt = (m, t, sub) => `<button type="button" class="mi mi-2" role="menuitemradio" aria-checked="${st.newMode === m}" data-a="mode" data-m="${m}"><span><b>${t}</b><small>${sub}</small></span>${st.newMode === m ? CHECK : ''}</button>`;
     return `<div class="row new-row"><form class="${nbClass('nb-dock' + extra)}" data-form="new:x">${face ? av(me(), 'sm') : ''}${draft(ph())}${spaceField()}${isAsk() ? modelMenu() : ''}
-      <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter${st.draft.trim() ? '' : ' disabled'}>${isAsk() ? 'Ask' : 'Post'}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
+      <span class="mpick split"><button type="submit" value="${st.newMode}" class="split-main" data-enter${st.draft.trim() ? '' : ' disabled'} aria-label="${isAsk() ? 'Ask' : 'Post'}" title="${isAsk() ? 'Ask' : 'Post'}">${ARROW_SEND}</button><button type="button" class="split-more" data-a="menu" data-m="send" aria-haspopup="menu" aria-expanded="${open}" aria-label="Ask or post">${I.down}</button>
       ${open ? `<div class="menu right" role="menu">${opt('ask', 'Ask', 'Agent researches and answers')}${opt('post', 'Post', 'A message to people in the channel')}</div>` : ''}</span></form><div></div></div>`;
   },
   /* Split, with the avatar held at the first line and the controls at the last as the text grows. */
@@ -1553,8 +1557,7 @@ function spaceHead() {
   const act = !canWrite() ? '' : own ? '<span class="chip">Your channel</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : isPrivate(x.id) ? '<span class="chip">Members only</span>' : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`;
   const name = `${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}`, by = `Channel by ${av(ownerOf(x.id), 'xs')}@${esc(ownerOf(x.id))}`, cnt = noun(memberCount(x.id), 'member', 'members');
   const meta = `${by} · ${cnt}${isPrivate(x.id) ? ' · private' : ''}`, desc = x.desc ? `<p>${esc(clip(x.desc, 170))}</p>` : '';
-  const wide = st.ui.ch === 'b';  /* A in the post column · B across both columns */
-  return `<div class="row new-row"><div class="sphead${wide ? ' wide' : ''}"><div class="grow"><h2>${glyph(x)}${name}</h2>${desc}<small>${meta}</small></div>${act}</div>${wide ? '' : '<div></div>'}</div>`;
+  return `<div class="row new-row"><div class="sphead wide"><div class="grow"><h2>${glyph(x)}${name}</h2>${desc}<small>${meta}</small></div>${act}</div></div>`;
 }
 const spaceLocked = () => SP[st.space] && SPACE_META[st.space] && isPrivate(st.space) && !isJoined(st.space);
 /* Browse: every open space, plus private ones you are in */
@@ -1644,7 +1647,7 @@ app.addEventListener('click', e => {
     if (!box || !box.value.trim()) { st.asking = null; st.quote = null; st.askPar = null; render(); return; }
     box.focus(); return; }
   if (a === 'ask') { st.asking = d.id; st.sel[d.id] = null; st.quote = null; st.askPar = null; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
-  if (a === 'askfrom') { st.sel[d.id] = d.sel || d.node; st.askPar = d.node; st.asking = d.id; st.quote = null; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
+  if (a === 'askfrom') { if (st.brReplying?.endsWith('/top')) st.brReplying = null; st.sel[d.id] = d.sel || d.node; st.askPar = d.node; st.asking = d.id; st.quote = null; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
   if (a === 'grpopen') { const G = groupsFor(byId(d.id), document.getElementById('pr-' + d.id)).find(x => x.bi === +d.bi); if (!G) return;
     const first = G.ns[0].id; st.sel[d.id] = first; st.asking = null; st.askPar = null; st.quote = null; render();
     const row = document.querySelector(`#mr-${d.id} .grow-r[data-node="${first}"]`); row?.focus({ preventScroll: true }); row?.closest('.pin')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
@@ -1660,7 +1663,7 @@ app.addEventListener('click', e => {
     D.rich[id] = n.html; PROMOTED[d.id + ':' + d.node] = id; st.menu = null; toast('Opened as its own thread.'); render(); document.getElementById('card-' + id)?.scrollIntoView({ block: 'start' }); return; }
   if (a === 'gothread') { st.space = 'home'; render(); document.getElementById('card-' + d.id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
   if (a === 'gofrom') { st.sel[d.id] = d.node; st.asking = null; render(); document.getElementById('card-' + d.id)?.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
-  if (a === 'brreply') { st.brReplying = st.brReplying === d.k ? null : d.k; render(); document.getElementById('in-br:' + d.k.replace('/', ':'))?.focus(); return; }
+  if (a === 'brreply') { st.brReplying = st.brReplying === d.k ? null : d.k; if (st.brReplying?.endsWith('/top')) { st.asking = null; st.askPar = null; } render(); document.getElementById('in-br:' + d.k.replace('/', ':'))?.focus(); return; }
   if (a === 'rcol') { const k = rid(replyAt(byId(d.id), d.node)); st.rcol[k] = !st.rcol[k]; render(); return; }
   if (a === 'rquote') { const [pid, rid] = d.id.split('/'), r = replyAt(byId(pid), rid); st.replying = d.id; render();
     const ta = document.getElementById('in-rp:' + pid + ':' + rid); if (ta) { ta.value = `> ${clip(plainReply(r.t), 200)}\n`; ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
@@ -1824,7 +1827,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { ch: 'a', sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -2063,7 +2066,6 @@ function renderMock() {
   $('#mock').innerHTML = `<span class="mk"><span class="seg">${personas.map(([k, l]) => `<button data-mp="${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join('')}</span></span>
     
     
-    ${seg('ch', 'Channel header', 2)}
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
   $('#thesis').innerHTML = '<span class="qtag">Channels</span>Channels are made by members. Home shows the channels you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
@@ -2110,7 +2112,6 @@ const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${
    an active member on Members for Tree, on the network for Meter, and on Usage at the keys for Keys. */
 function previewVariant(k) {
   st.confirm = null; st.menu = null;
-  if (k === 'ch') { st.screen = 'network'; st.authOpen = false; if (!SP[st.space] || !SPACE_META[st.space]) st.space = navSpaces()[0].id; render(); $('#k-mg') && ($('#k-mg').scrollTop = 0); return; }
   if (k === 'signin') { st.auth = 'out'; st.authOpen = true; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.codeErr = ''; render(); app.querySelector('.authdlg .xbtn')?.focus(); return; }
   if (st.auth !== 'in' || !isActive()) { st.auth = 'in'; st.user = 'ines.v'; }
   st.screen = k === 'inv' ? 'members' : k === 'meter' ? 'network' : 'usage';
