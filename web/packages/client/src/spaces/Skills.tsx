@@ -14,7 +14,7 @@ import { useRecords, useSession } from "../sync/react.js";
 import { Modal } from "./Page.js";
 import { Svg } from "./Svg.js";
 import { MII, SVG } from "./icons.js";
-import { WRITE_ERROR, refusalToast, toast, useCreate, useWrite } from "./writes.js";
+import { WRITE_ERROR, lostEditsToast, refusalToast, toast, useCreate, useWrite } from "./writes.js";
 
 /** A skill's prompt: its description, a blank line, its instructions. */
 export const skParse = (t: string) => {
@@ -62,7 +62,8 @@ function Editor({
 }: {
   s: Space;
   draft: Draft;
-  others: string[];
+  /** The space's other skills. */
+  others: { id: string; name: string }[];
   onClose: () => void;
 }) {
   const write = useWrite();
@@ -71,7 +72,12 @@ function Editor({
   const [ed, setEd] = useState(draft);
   const [seen, setSeen] = useState(false);
   const [conflict, setConflict] = useState(false);
-  const errs = check(ed, others);
+  // a new skill whose create got no answer may be in the list already: its
+  // name is its own
+  const errs = check(
+    ed,
+    others.filter((k) => k.id !== create.lostId).map((k) => k.name),
+  );
   const isNew = ed.id === null;
   const save = async (force: boolean) => {
     setSeen(true);
@@ -98,7 +104,10 @@ function Editor({
         );
     if (o.ok) {
       onClose();
-      toast(isNew ? `Added ${name}. It shows in About.` : `Saved ${name}.`);
+      // a new skill that an earlier send made holds that send's input
+      if (isNew && "lostEdits" in o && o.lostEdits)
+        lostEditsToast("skill", skFile(ed.n, ed.d, ed.b));
+      else toast(isNew ? `Added ${name}. It shows in About.` : `Saved ${name}.`);
     } else if (o.error?.code === "CONFLICT" && !isNew && /first/.test(o.error.message))
       setConflict(true);
     else if (o.error) refusalToast(o.error);
@@ -296,7 +305,7 @@ export function SkillsManage({ s }: { s: Space }) {
         <Editor
           s={s}
           draft={draft}
-          others={list.filter((k) => k.id !== draft.id).map((k) => k.name)}
+          others={list.filter((k) => k.id !== draft.id).map((k) => ({ id: k.id, name: k.name }))}
           onClose={() => setDraft(null)}
         />
       ) : null}

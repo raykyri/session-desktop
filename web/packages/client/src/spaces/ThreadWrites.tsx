@@ -310,18 +310,14 @@ export function AskBox({
     }
     setBusy(true);
     setErr(null);
-    const o = await create.send(
-      "research.forkNode",
-      (id) => ({
-        id,
-        thread: t.id,
-        parent: par,
-        q,
-        pay,
-        ...(asked.model ? { model: asked.model.id } : {}),
-      }),
-      { text: q },
-    );
+    const o = await create.send("research.forkNode", (id) => ({
+      id,
+      thread: t.id,
+      parent: par,
+      q,
+      pay,
+      ...(asked.model ? { model: asked.model.id } : {}),
+    }));
     setBusy(false);
     if (o.ok) {
       onClose();
@@ -366,10 +362,15 @@ export function AskBox({
           ) : null}
         </span>
       ) : (
-        <PayerLine pay={pay} setPay={setPay} />
+        <PayerLine pay={pay} setPay={setPay} disabled={create.lost || create.checking} />
       )}
       <div className="qt-cbar fu2-bar">
-        <ModelMenu model={model} setModel={setModel} pay={pay} />
+        <ModelMenu
+          model={model}
+          setModel={setModel}
+          pay={pay}
+          disabled={create.lost || create.checking}
+        />
         <span className="grow" />
         <button className="btn" type="button" onClick={cancel}>
           Cancel
@@ -384,7 +385,14 @@ export function AskBox({
           Ask
         </button>
       </div>
-      <LeaveGuard when={!!draft.trim() && !confirm} title="Discard your follow-up?" />
+      <LeaveGuard
+        when={!!draft.trim() && !confirm}
+        title="Discard your follow-up?"
+        onDiscard={() => {
+          setDraft("");
+          create.forget();
+        }}
+      />
       {confirm ? (
         <DiscardDialog
           title="Discard your follow-up?"
@@ -429,11 +437,12 @@ export function ReplyBox({
     if (!signedIn()) return;
     setBusy(true);
     setFailed(false);
-    const o = await create.send(
-      "research.createPostFollowUp",
-      (id) => ({ id, thread: t.id, t: text, ...(to ? { parent: to.id } : {}) }),
-      { text },
-    );
+    const o = await create.send("research.createPostFollowUp", (id) => ({
+      id,
+      thread: t.id,
+      t: text,
+      ...(to ? { parent: to.id } : {}),
+    }));
     setBusy(false);
     if (o.ok) {
       setDraft("");
@@ -491,7 +500,14 @@ export function ReplyBox({
           Reply
         </button>
       </div>
-      <LeaveGuard when={!!draft.trim() && !confirm} title="Discard your reply?" />
+      <LeaveGuard
+        when={!!draft.trim() && !confirm}
+        title="Discard your reply?"
+        onDiscard={() => {
+          setDraft("");
+          create.forget();
+        }}
+      />
       {confirm ? (
         <DiscardDialog
           title="Discard your reply?"

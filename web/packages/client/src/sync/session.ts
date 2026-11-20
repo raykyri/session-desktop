@@ -53,9 +53,19 @@ export interface SessionStatus {
 }
 
 /** In-flight text of the runs a reader watches, by run id: the text of the
- * attempt the frames are for, in `seq` order. */
+ * attempt the frames are for. A frame carries only the text since the frame
+ * before it, so the text is whole only when every frame of the attempt
+ * arrived (ADR-22; review round 2 of phase 2, finding 6): a frame applies
+ * only at the next seq (`seq === last + 1`), and an attempt's first frame
+ * only at seq 1. A frame after a gap (the stream reconnected and missed
+ * some), a first frame above seq 1 (the reader joined mid-run), or a jump
+ * in seq (a server run resumed after a restart continues above every seq it
+ * sent) leaves the attempt with no text: the screen shows the run's steps
+ * until its answer arrives. A frame at or below the last seq is a replay
+ * and is dropped. */
 export class RunTexts {
-  private readonly runs = new Map<string, { attempt: number; seq: number; text: string }>();
+  /** `text` null: the attempt's frames have a gap, so it shows none. */
+  private readonly runs = new Map<string, { attempt: number; seq: number; text: string | null }>();
   private readonly listeners = new Set<() => void>();
   private ver = 0;
 
@@ -71,13 +81,18 @@ export class RunTexts {
     if (!r || (attempt !== undefined && r.attempt !== attempt)) return null;
     return r.text;
   }
-  /** A frame: a newer attempt starts over; a frame out of order (a seq at
-   * or below the last) is dropped. */
+  /** A frame: a newer attempt starts over, an older one is dropped, a
+   * replay is dropped, and a frame that does not follow the last one ends
+   * the attempt's text. */
   add(f: Pick<RunFrame, "run" | "attempt" | "seq" | "text">) {
     const r = this.runs.get(f.run);
     if (r && (f.attempt < r.attempt || (f.attempt === r.attempt && f.seq <= r.seq))) return;
-    const base = r && r.attempt === f.attempt ? r.text : "";
-    this.runs.set(f.run, { attempt: f.attempt, seq: f.seq, text: base + f.text });
+    const same = r !== undefined && r.attempt === f.attempt;
+    const follows = same ? f.seq === r.seq + 1 : f.seq === 1;
+    const text = follows && (!same || r.text !== null) ? (same ? r.text : "") + f.text : null;
+    this.runs.set(f.run, { attempt: f.attempt, seq: f.seq, text });
+    // a frame of a broken attempt changes nothing shown
+    if (same && r.text === null && text === null) return;
     this.ver++;
     for (const l of [...this.listeners]) l();
   }

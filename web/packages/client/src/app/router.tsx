@@ -79,6 +79,11 @@ const requireSignedIn = async ({ location }: { location: { href: string } }) => 
 };
 
 // ---- the spaces client ----
+//
+// A screen of one space, thread or page is keyed by its parameters, so going
+// to another one starts it fresh: a draft, an open composer or a create with
+// no answer never follows into the next space or thread (review round 2 of
+// phase 2, finding 3).
 
 const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage });
 
@@ -87,7 +92,7 @@ const spaceRoute = createRoute({
   path: "/s/$space",
   component: function SpaceRoute() {
     const { space } = spaceRoute.useParams();
-    return <SpacePage name={space} />;
+    return <SpacePage key={space} name={space} />;
   },
 });
 
@@ -96,7 +101,7 @@ const latestRoute = createRoute({
   path: "/s/$space/latest",
   component: function LatestRoute() {
     const { space } = latestRoute.useParams();
-    return <SpacePage name={space} view={{ kind: "latest" }} />;
+    return <SpacePage key={space} name={space} view={{ kind: "latest" }} />;
   },
 });
 
@@ -105,7 +110,7 @@ const topicRoute = createRoute({
   path: "/s/$space/topics/$topic",
   component: function TopicRoute() {
     const { space, topic } = topicRoute.useParams();
-    return <SpacePage name={space} view={{ kind: "topic", topic }} />;
+    return <SpacePage key={space} name={space} view={{ kind: "topic", topic }} />;
   },
 });
 
@@ -114,7 +119,7 @@ const threadRoute = createRoute({
   path: "/s/$space/t/$thread",
   component: function ThreadRoute() {
     const { space, thread } = threadRoute.useParams();
-    return <ThreadPage spaceName={space} id={thread} />;
+    return <ThreadPage key={`${space}/${thread}`} spaceName={space} id={thread} />;
   },
 });
 
@@ -123,7 +128,7 @@ const askRoute = createRoute({
   path: "/s/$space/t/$thread/a/$node",
   component: function AskRoute() {
     const { space, thread, node } = askRoute.useParams();
-    return <ThreadPage spaceName={space} id={thread} node={node} />;
+    return <ThreadPage key={`${space}/${thread}`} spaceName={space} id={thread} node={node} />;
   },
 });
 
@@ -133,7 +138,15 @@ const compareRoute = createRoute({
   component: function CompareRoute() {
     const { space, thread, node, pair } = compareRoute.useParams();
     const [a = node, b = node] = pair.split(",");
-    return <ThreadPage spaceName={space} id={thread} node={node} compare={[a, b]} />;
+    return (
+      <ThreadPage
+        key={`${space}/${thread}`}
+        spaceName={space}
+        id={thread}
+        node={node}
+        compare={[a, b]}
+      />
+    );
   },
 });
 
@@ -142,7 +155,7 @@ const manageRoute = createRoute({
   path: "/s/$space/manage/$tab",
   component: function ManageRoute() {
     const { space, tab } = manageRoute.useParams();
-    return <ManagePage name={space} tab={tab} />;
+    return <ManagePage key={space} name={space} tab={tab} />;
   },
 });
 
@@ -151,7 +164,7 @@ const pageRoute = createRoute({
   path: "/s/$space/pages/$slug",
   component: function PageRoute() {
     const { space, slug } = pageRoute.useParams();
-    return <PagePage name={space} slug={slug} />;
+    return <PagePage key={`${space}/${slug}`} name={space} slug={slug} />;
   },
 });
 
@@ -160,7 +173,7 @@ const aboutRoute = createRoute({
   path: "/s/$space/about",
   component: function AboutRoute() {
     const { space } = aboutRoute.useParams();
-    return <SpacePage name={space} side="wiki" />;
+    return <SpacePage key={space} name={space} side="wiki" />;
   },
 });
 
@@ -248,13 +261,13 @@ const accountRoute = createRoute({
 const deviceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/device",
-  validateSearch: (s: Record<string, unknown>): { request?: string; code?: string } => ({
-    ...(typeof s["request"] === "string" ? { request: s["request"] } : {}),
-    ...(typeof s["code"] === "string" ? { code: s["code"] } : {}),
-  }),
+  // only the request: a code in the link is ignored, because whoever sent
+  // the link could have started the sign-in from their own computer
+  validateSearch: (s: Record<string, unknown>): { request?: string } =>
+    typeof s["request"] === "string" ? { request: s["request"] } : {},
   component: function DeviceRoute() {
-    const { request, code } = deviceRoute.useSearch();
-    return <DevicePage {...(request ? { request } : {})} {...(code ? { code } : {})} />;
+    const { request } = deviceRoute.useSearch();
+    return <DevicePage {...(request ? { request } : {})} />;
   },
 });
 const welcomeRoute = createRoute({

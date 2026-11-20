@@ -8,18 +8,26 @@ import type {
   PushResult,
   Change,
   CursorMap,
+  Envelope,
   LogId,
   SseEvent,
   StoredRecord,
   Transport,
 } from "@session/sync/client";
 import { act, cleanup, render, screen } from "@testing-library/react";
-import test from "ava";
+import test, { type ExecutionContext } from "ava";
 
 import { meResource } from "../src/api/account.js";
 import { setFetch } from "../src/api/http.js";
 import { useWorld } from "../src/spaces/world.js";
-import { Toasts, WRITE_ERROR, useWrite, type Outcome } from "../src/spaces/writes.js";
+import {
+  Toasts,
+  WRITE_ERROR,
+  useCreate,
+  useWrite,
+  type CreateOutcome,
+  type Outcome,
+} from "../src/spaces/writes.js";
 import { SpacesProvider, useRunText } from "../src/sync/react.js";
 import { Reader, mapSource } from "../src/sync/reader.js";
 import { RunTexts, SpacesSession } from "../src/sync/session.js";
@@ -115,7 +123,10 @@ const run = (status: string) =>
 
 /** A transport over logs held here: a snapshot serves a log's records, a
  * pull the changes queued for it, and the stream the events a test emits. */
-function scripted(logs: Record<string, StoredRecord[]>, o: { push?: () => PushResult } = {}) {
+function scripted(
+  logs: Record<string, StoredRecord[]>,
+  o: { push?: (e: Envelope) => PushResult } = {},
+) {
   const queued = new Map<string, Change[]>();
   const reads: string[] = [];
   let emit: ((e: SseEvent) => void) | null = null;
@@ -124,7 +135,7 @@ function scripted(logs: Record<string, StoredRecord[]>, o: { push?: () => PushRe
     register: () => Promise.resolve({ ok: true, clientId: "c1", serverTime: NOW }),
     push: (es) =>
       Promise.resolve(
-        es.map(() => (o.push ? o.push() : { ok: true as const, result: null, serverTime: NOW })),
+        es.map((e) => (o.push ? o.push(e) : { ok: true as const, result: null, serverTime: NOW })),
       ),
     snapshot: (log: LogId) => {
       reads.push(`snapshot ${log}`);
@@ -190,9 +201,61 @@ test("RunTexts: frames in seq order add up; one at or below the last seq is drop
   t.is(r.version(), v);
   t.is(calls, 2);
   stop();
-  r.add({ run: "R", attempt: 1, seq: 4, text: "." });
+  r.add({ run: "R", attempt: 1, seq: 3, text: "." });
   t.is(r.get("R"), "Shortlist.");
   t.is(calls, 2);
+});
+
+// review round 2 of phase 2, finding 6 (reviewer B's runtexts-gap): a frame
+// carries only the text since the frame before, so a reader shows text only
+// while it has every frame of the attempt
+const FRAMES = ["Three novels ", "treat agents ", "bargaining for ", "their owners."];
+
+test("RunTexts: a gap in seq drops the text, and later frames of the attempt add none", (t) => {
+  const r = new RunTexts();
+  let calls = 0;
+  r.onChange(() => calls++);
+  r.add({ run: "R", attempt: 1, seq: 1, text: FRAMES[0] ?? "" });
+  r.add({ run: "R", attempt: 1, seq: 2, text: FRAMES[1] ?? "" });
+  t.is(r.get("R", 1), "Three novels treat agents ");
+  // the stream reconnected and missed seq 3
+  r.add({ run: "R", attempt: 1, seq: 4, text: FRAMES[3] ?? "" });
+  t.is(r.get("R", 1), null);
+  t.is(calls, 3);
+  r.add({ run: "R", attempt: 1, seq: 5, text: " More." });
+  t.is(r.get("R", 1), null);
+  // nothing shown changed
+  t.is(calls, 3);
+  // Run again: a new attempt from seq 1 shows its text
+  r.add({ run: "R", attempt: 2, seq: 1, text: "Again." });
+  t.is(r.get("R", 2), "Again.");
+});
+
+test("RunTexts: a reader that joins mid-run shows no text for that attempt", (t) => {
+  const r = new RunTexts();
+  r.add({ run: "R", attempt: 1, seq: 3, text: FRAMES[2] ?? "" });
+  t.is(r.get("R", 1), null);
+  r.add({ run: "R", attempt: 1, seq: 4, text: FRAMES[3] ?? "" });
+  t.is(r.get("R", 1), null);
+  // a later attempt's first frame is not at seq 1 either: none
+  r.add({ run: "R", attempt: 2, seq: 2, text: "late" });
+  t.is(r.get("R", 2), null);
+});
+
+test("RunTexts: a server run resumed after a restart (seq jumps above the last) drops the text before it", (t) => {
+  const r = new RunTexts();
+  for (let s = 1; s <= 73; s++)
+    r.add({ run: "R", attempt: 1, seq: s, text: s === 73 ? "half a sent" : "x" });
+  t.is(r.get("R", 1)?.endsWith("half a sent"), true);
+  // the resumed loop continues above every seq it sent before (the server
+  // starts above the last persisted seq plus the persist interval)
+  r.add({ run: "R", attempt: 1, seq: 101, text: "The answer again." });
+  t.is(r.get("R", 1), null);
+  r.add({ run: "R", attempt: 1, seq: 102, text: " More." });
+  t.is(r.get("R", 1), null);
+  // replays of frames before the restart change nothing
+  r.add({ run: "R", attempt: 1, seq: 74, text: "late" });
+  t.is(r.get("R", 1), null);
 });
 
 test("RunTexts: a newer attempt starts over, an older one is dropped, and get names the attempt", (t) => {
@@ -441,6 +504,89 @@ test.serial(
     t.deepEqual(session.client?.problems(), []);
     meResource.reset();
     session.stop();
+  },
+);
+
+// ---- a create sent again (review round 2 of phase 2, finding 2) ----
+
+/** A create whose first envelope got no answer, sent again with `second`:
+ * the server answers the second envelope from the first (`earlier`) or
+ * applies the second. */
+async function lostThenAgain(
+  t: ExecutionContext,
+  first: Record<string, unknown>,
+  second: Record<string, unknown>,
+  earlier: boolean,
+): Promise<{ out: CreateOutcome; sent: Envelope[] }> {
+  directoryFetch();
+  const sent: Envelope[] = [];
+  const s = scripted(
+    {
+      "user:raymond": [member("raymond")],
+      [`space:${SP}`]: [space, member("raymond"), thread, counts],
+    },
+    {
+      push: (e) => {
+        sent.push(e);
+        if (sent.length === 1) return null;
+        const firstId = sent[0]?.mutationId ?? "";
+        return earlier
+          ? { ok: true, result: null, serverTime: NOW, replayed: true, recordedAs: firstId }
+          : { ok: true, result: null, serverTime: NOW };
+      },
+    },
+  );
+  const session = new SpacesSession("raymond", { transport: s.transport, listen: false });
+  meResource.set(testUser());
+  let create: ReturnType<typeof useCreate> | null = null;
+  function Probe() {
+    create = useCreate();
+    return null;
+  }
+  render(
+    <SpacesProvider make={() => session}>
+      <Probe />
+    </SpacesProvider>,
+  );
+  await waitUntil(t, () => session.status().ready, "the session started");
+  const send = async (input: Record<string, unknown>) => {
+    let out: CreateOutcome | null = null;
+    await act(async () => {
+      out = (await create?.send("threads.create", (id) => ({ id, ...input }))) ?? null;
+    });
+    return out as unknown as CreateOutcome;
+  };
+  const lost = await send(first);
+  t.like(lost, { ok: false, error: null });
+  const out = await send(second);
+  meResource.reset();
+  session.stop();
+  return { out, sent };
+}
+
+const POST = { space: SP, kind: "post", q: "Notes from Thursday are on the wiki page." };
+
+test.serial(
+  "a create sent again with another space or kind, answered from the first envelope, reports lost edits",
+  async (t) => {
+    const other = { ...POST, kind: "ask", pay: "session" };
+    const { out, sent } = await lostThenAgain(t, POST, other, true);
+    t.like(out, { ok: true, lostEdits: true });
+    // the same create: one id, the second envelope replaces the first
+    t.is(sent.length, 2);
+    t.is((sent[1]?.input as { id: string }).id, (sent[0]?.input as { id: string }).id);
+    t.deepEqual(sent[1]?.replaces, [sent[0]?.mutationId]);
+    const moved = { ...POST, space: LAB };
+    t.like((await lostThenAgain(t, POST, moved, true)).out, { ok: true, lostEdits: true });
+  },
+);
+
+test.serial(
+  "a create sent again unchanged, or applied by the second envelope, reports no lost edits",
+  async (t) => {
+    t.like((await lostThenAgain(t, POST, POST, true)).out, { ok: true, lostEdits: false });
+    const other = { ...POST, kind: "ask", pay: "session" };
+    t.like((await lostThenAgain(t, POST, other, false)).out, { ok: true, lostEdits: false });
   },
 );
 

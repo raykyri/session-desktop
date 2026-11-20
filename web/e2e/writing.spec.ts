@@ -58,6 +58,29 @@ const dialog = (p: Page, name: string | RegExp) =>
 const toastSays = (p: Page, t: string | RegExp) =>
   expect(p.locator(".cs-toast").getByText(t)).toBeVisible();
 
+/** The next write reaches the server and applies; the browser never sees
+ * the answer. */
+async function loseNextWrite(p: Page) {
+  let lose = true;
+  await p.route("**/api/sync/write", async (r) => {
+    if (!lose) return r.continue();
+    lose = false;
+    await r.fetch();
+    await r.abort("connectionreset");
+  });
+}
+
+/** Go to a space from the header's space tabs (Desktop) or chips (Mobile
+ * Web), inside the app. */
+async function goSpace(p: Page, name: string) {
+  await p
+    .locator(".hnav, .mchips")
+    .getByRole("button", { name, exact: true })
+    .filter({ visible: true })
+    .first()
+    .click();
+}
+
 const SCREENS: Screen[] = [
   {
     key: "nm-space",
@@ -515,6 +538,100 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // review round 2 of phase 2, finding 2: while a create has no answer,
+    // the space, Ask or Post, the model and who pays are fixed, and the
+    // person goes to the thread in the space its record is in
+    key: "as-post-lost-fixed",
+    url: "/",
+    run: async (p) => {
+      await p.getByRole("button", { name: /Make a query/ }).click();
+      const text = "Which anthologies collect the 1970s Nebula winners?";
+      await p.locator("#compose-text").fill(text);
+      const space = p.locator(".c2-sp");
+      await expect(space).toHaveAttribute("aria-label", "Space: #public");
+      await loseNextWrite(p);
+      await p.locator(".c2-end").getByRole("button", { name: "Ask" }).click();
+      await expect(p.locator(".as-perr")).toContainText("Couldn’t post. Try again.");
+      await expect(space).toBeDisabled();
+      for (const b of await p.locator(".c2-mode").getByRole("button").all())
+        await expect(b).toBeDisabled();
+      await expect(p.locator(".c2 .mp .chip")).toBeDisabled();
+      await p.locator(".as-perr").getByRole("button", { name: "Retry" }).click();
+      await expect(p).toHaveURL(/\/s\/public\/t\/[0-9A-Z]{26}$/);
+      await expect(p.getByText(text).first()).toBeVisible();
+      await expect(p.locator(".cs-toast")).toHaveCount(0);
+    },
+  },
+  {
+    // review round 2 of phase 2, finding 3: Discard on leaving a space with
+    // a lost create forgets it; the next space's composer starts empty
+    key: "as-post-lost-discard",
+    url: "/s/public",
+    run: async (p) => {
+      const first = "Notes for #public from Thursday’s reading group.";
+      const next = "Notes for #sci-fi: chapters 4 to 6 next week.";
+      await p.getByRole("button", { name: /Make a query/ }).click();
+      await p.locator(".c2-mode").getByRole("button", { name: "Post" }).click();
+      await p.locator("#compose-text").fill(first);
+      await loseNextWrite(p);
+      await p.locator(".c2-end").getByRole("button", { name: "Post" }).click();
+      await expect(p.locator(".as-perr")).toContainText("Couldn’t post. Try again.");
+      await goSpace(p, "#sci-fi");
+      const d = p.getByRole("alertdialog", { name: "Discard this draft?" });
+      await d.getByRole("button", { name: "Discard" }).click();
+      await expect(p).toHaveURL(/\/s\/sci-fi$/);
+      await expect(p.locator("#compose-text")).toHaveCount(0);
+      await p.getByRole("button", { name: /Make a query/ }).click();
+      await expect(p.locator("#compose-text")).toHaveValue("");
+      await expect(p.locator(".as-perr")).toHaveCount(0);
+      await p.locator(".c2-mode").getByRole("button", { name: "Post" }).click();
+      await p.locator("#compose-text").fill(next);
+      await p.locator(".c2-end").getByRole("button", { name: "Post" }).click();
+      await expect(p).toHaveURL(/\/s\/sci-fi\/t\/[0-9A-Z]{26}$/);
+      await expect(p.getByText(next).first()).toBeVisible();
+      await expect(p.locator(".cs-toast")).toHaveCount(0);
+      // the lost post applied in #public, once; the new one is in #sci-fi
+      await p.goto("/s/public");
+      await expect(p.getByText(first)).toHaveCount(1);
+      await p.goto("/s/sci-fi");
+      await expect(p.getByText(next)).toHaveCount(1);
+    },
+  },
+  {
+    // review round 2 of phase 2, finding 3: from one thread to another (the
+    // same route with another thread), Discard forgets the lost reply
+    key: "ta-reply-lost-next-thread",
+    url: "/s/public",
+    run: async (p) => {
+      const posts = p.locator("a.row-tp");
+      await posts.nth(0).click();
+      await expect(p).toHaveURL(/\/t\//);
+      const a = new URL(p.url()).pathname;
+      await goSpace(p, "#public");
+      await expect(p).toHaveURL(/\/s\/public$/);
+      await posts.nth(1).click();
+      await expect(p).toHaveURL(/\/t\//);
+      const b = new URL(p.url()).pathname;
+      expect(b).not.toBe(a);
+      await p.locator("#fu-input").fill("A reply to the second post.");
+      await loseNextWrite(p);
+      await p.locator(".fu-box2").getByRole("button", { name: "Reply" }).click();
+      await expect(p.locator(".as-perr")).toBeVisible();
+      // back two entries: the first post's thread
+      await p.evaluate(() => history.go(-2));
+      const d = p.getByRole("alertdialog", { name: "Discard your reply?" });
+      await d.getByRole("button", { name: "Discard" }).click();
+      await expect(p).toHaveURL(new RegExp(`${a}$`));
+      await expect(p.locator("#fu-input")).toHaveValue("");
+      await expect(p.locator(".as-perr")).toHaveCount(0);
+      await p.locator("#fu-input").fill("A reply to the first post.");
+      await p.locator(".fu-box2").getByRole("button", { name: "Reply" }).click();
+      await text(p, "A reply to the first post.");
+      await expect(p.getByText("A reply to the second post.")).toHaveCount(0);
+      await expect(p.locator(".cs-toast")).toHaveCount(0);
+    },
+  },
+  {
     key: "ov-compose-back",
     scenario: "replication: member",
     url: "/s/replication-club",
@@ -767,6 +884,43 @@ for (const [layout, viewport] of [
       );
       // one Undo was sent, not a second one with the new rev
       expect(writes.filter((w) => w.includes("reopen"))).toHaveLength(1);
+      await expect(p.locator(".rq-card .rq-nm .faint").getByText(who, { exact: true })).toHaveCount(
+        0,
+      );
+    });
+
+    // review round 2 of phase 2, finding 7: Undo sends the rev the decline
+    // left, so a change the page has heard of since makes it STALE
+    test("Undo of a decline after another change to the request is STALE", async ({ page: p }) => {
+      const { records } = await loadScenario(p.context().request, "replication: moderator", {
+        args: { seen: true },
+      });
+      await signInAs(p.context());
+      await p.goto("/s/replication-club/manage/requests");
+      const card = p.locator(".rq-card").first();
+      const who = ((await card.locator(".rq-nm .faint").textContent()) ?? "")
+        .replace(/^@/, "")
+        .trim();
+      await card.getByRole("button", { name: "Decline" }).click();
+      await dialog(p, `Decline the request from ${who}?`)
+        .getByRole("button", { name: "Decline" })
+        .click();
+      await toastSays(p, `Declined ${who}.`);
+      // another moderator reopens and declines it again meanwhile, and the
+      // page reads that change
+      const req = records.find((r) => r.record.kind === "request" && r.record["u"] === who);
+      expect(req).toBeTruthy();
+      const pulled = p.waitForResponse((r) => r.url().endsWith("/api/sync/pull"));
+      if (req)
+        await serverPut(p, [
+          { ...req, record: { ...req.record, st: "declined", why: "Declined again." } },
+        ]);
+      await pulled;
+      await p.locator(".cs-toast").getByRole("button", { name: "Undo" }).click();
+      await toastWithoutAction(
+        p,
+        "This item changed after you opened it, so the server didn’t apply the change. Session undid it.",
+      );
       await expect(p.locator(".rq-card .rq-nm .faint").getByText(who, { exact: true })).toHaveCount(
         0,
       );

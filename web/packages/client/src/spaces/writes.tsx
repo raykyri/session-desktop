@@ -123,9 +123,19 @@ export type Outcome =
   | { ok: false; error: ApiError }
   | { ok: false; error: null; local: string };
 
-/** The toast of a refusal (the mockup's API_ERR.write). */
+/** The text of a refusal (the mockup's API_ERR.write). TOO_MANY_REQUESTS
+ * without `retryAt` is the limit on a person's asks waiting or running, not
+ * the write budget: waiting a minute does not lift it, so the server's
+ * message, which names the limit, is shown (the mockup's API_ERR.write
+ * `queued`; review round 2 of phase 2, finding 7). */
+export function refusalText(error: ApiError): string {
+  if (error.code === "TOO_MANY_REQUESTS" && !error.retryAt && error.message) return error.message;
+  return WRITE_ERROR[error.code] ?? WRITE_ERROR["unavailable"] ?? "";
+}
+
+/** The toast of a refusal. */
 export function refusalToast(error: ApiError): void {
-  toast(WRITE_ERROR[error.code] ?? WRITE_ERROR["unavailable"] ?? "");
+  toast(refusalText(error));
 }
 
 /** Wait for a write's outcome; a refusal shows its toast unless `quiet`. */
@@ -154,8 +164,7 @@ async function settle(
     return { ok: false, error };
   }
   if (a.ok) return { ok: true, result: a.result };
-  const code = a.error.code;
-  if (!quiet) toast(WRITE_ERROR[code] ?? WRITE_ERROR["unavailable"] ?? "");
+  if (!quiet) refusalToast(a.error);
   // a refused write is shown once (here); the outbox forgets it
   session.client?.discard(w.local);
   return { ok: false, error: a.error };
@@ -194,12 +203,12 @@ export function useWrite(): Writer {
           resolve({ ok: true, result: e.result, input: e.input, earlier: e.earlier === true });
         else if (e.state === "refused" || e.state === "expired") {
           const error = e.error ?? { code: "BAD_REQUEST", message: "" };
-          toast(WRITE_ERROR[error.code] ?? WRITE_ERROR["unavailable"] ?? "");
+          refusalToast(error);
           c.discard(local);
           resolve({ ok: false, error });
         } else if (e.state === "failed" && limited(session, local)) {
           const error = limited(session, local) ?? { code: "TOO_MANY_REQUESTS", message: "" };
-          toast(WRITE_ERROR[error.code] ?? WRITE_ERROR["unavailable"] ?? "");
+          refusalToast(error);
           c.discard(local);
           resolve({ ok: false, error });
         } else if (e.state === "failed" || e.state === "dropped")
@@ -228,27 +237,32 @@ export function useQuickWrite() {
 // ---- creates ----
 
 /** How a create ended: an `Outcome`, the id of the record it made, and
- * (applied) whether an earlier send had applied with the text it had then
- * while the text sent last differs (`lostEdits`). */
+ * (applied) whether an earlier send had applied while the input sent last
+ * differs from an input sent before it (`lostEdits`): the record holds an
+ * earlier input, so the later edits were not saved. */
 export type CreateOutcome = Outcome & { id: string; lostEdits: boolean };
 
 /** A create: a write whose input names the id of the record it makes
- * (`threads.create`, a follow-up, a reply). A create that got no answer may
- * have applied (phase 2 review round 1, finding 2), so no second create is
- * made while it has none: the next send first reads the logs (`checking`);
- * a read that holds its record means it applied, and otherwise it is sent
- * again with the same id, the current input, and its earlier mutation ids
- * in `replaces`, so the server answers from an earlier envelope that
- * applied rather than making a second record. */
+ * (`threads.create`, a follow-up, a reply, a page, a skill). A create that
+ * got no answer may have applied (phase 2 review round 1, finding 2), so no
+ * second create is made while it has none: the next send first reads the
+ * logs (`checking`); a read that holds its record means it applied, and
+ * otherwise it is sent again with the same id, the current input, and its
+ * earlier mutation ids in `replaces`, so the server answers from an earlier
+ * envelope that applied rather than making a second record. An earlier
+ * envelope that applied made the record from its own input, so the whole
+ * input (`make(id)`: the text, the space, the kind, who pays, the model, the
+ * parent) is compared with every input sent before it (review round 2 of
+ * phase 2, finding 2); a difference is reported as lost edits. */
 export function useCreate() {
   const session = useSession();
   const write = useWrite();
-  const [lost, setLost] = useState<{ local: string; id: string; text: string } | null>(null);
+  const [lost, setLost] = useState<{ local: string; id: string; sent: string[] } | null>(null);
   const [checking, setChecking] = useState(false);
   const send = async (
     name: string,
     make: (id: string) => Record<string, unknown>,
-    o: { quiet?: boolean; text?: string } = {},
+    o: { quiet?: boolean } = {},
   ): Promise<CreateOutcome> => {
     const c = session?.client;
     if (!session || !c)
@@ -258,13 +272,15 @@ export function useCreate() {
         id: "",
         lostEdits: false,
       };
-    const text = o.text ?? "";
     let id: string;
-    let first: string;
+    // the inputs sent before this one, as JSON
+    let before: string[];
+    let input: Record<string, unknown>;
     let out: Outcome;
     if (lost) {
       id = lost.id;
-      first = lost.text;
+      before = lost.sent;
+      input = make(id);
       setChecking(true);
       try {
         await c.sync().catch(() => false);
@@ -274,25 +290,28 @@ export function useCreate() {
         out =
           !e || e.state === "answered"
             ? { ok: true, result: e?.result ?? null, earlier: true }
-            : await write.retry(lost.local, { input: make(id) });
+            : await write.retry(lost.local, { input });
       } finally {
         setChecking(false);
       }
     } else {
       id = session.newId();
-      first = text;
-      out = await write(name, make(id), o);
+      before = [];
+      input = make(id);
+      out = await write(name, input, o);
     }
+    const now = JSON.stringify(input);
     if (out.ok) {
       setLost(null);
       const sent = (out.input as { id?: unknown } | undefined)?.id;
       return {
         ...out,
         id: typeof sent === "string" ? sent : id,
-        lostEdits: out.earlier === true && o.text !== undefined && text !== first,
+        lostEdits: out.earlier === true && before.some((j) => j !== now),
       };
     }
-    if (out.error === null) setLost({ local: out.local, id, text: first });
+    if (out.error === null)
+      setLost({ local: out.local, id, sent: before.includes(now) ? before : [...before, now] });
     else setLost(null);
     return { ...out, id, lostEdits: false };
   };
@@ -301,7 +320,7 @@ export function useCreate() {
     if (lost) session?.client?.discard(lost.local);
     setLost(null);
   };
-  return { send, forget, checking, lost: lost !== null };
+  return { send, forget, checking, lost: lost !== null, lostId: lost?.id ?? null };
 }
 
 /** The toast of a create that had applied before the person's later edits

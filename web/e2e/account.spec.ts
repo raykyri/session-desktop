@@ -129,20 +129,48 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    key: "acx-b-spaces",
-    url: "/settings/spaces",
-    run: async (p) => {
-      await expect(p.getByRole("heading", { name: "Your spaces" })).toBeVisible();
-      await expect(p.locator(".ak-row").first()).toBeVisible();
-    },
-  },
-  {
     key: "no-devices-tab",
     url: "/settings/account",
     run: async (p) => {
       const tabs = p.getByRole("navigation", { name: "Account sections" });
       await expect(tabs.getByRole("button", { name: "Your spaces" })).toBeVisible();
       await expect(tabs.getByRole("button", { name: "Devices" })).toHaveCount(0);
+    },
+  },
+  {
+    // review round 2 of phase 2, finding 7: Your spaces as the mockup has
+    // it, with Edit header tabs (Edit tabs) and Create a space (Create)
+    key: "acx-b-spaces",
+    url: "/settings/spaces",
+    run: async (p) => {
+      const mobile = (p.viewportSize()?.width ?? 0) < 760;
+      const edit = p.getByRole("button", {
+        name: mobile ? "Edit tabs" : "Edit header tabs",
+        exact: true,
+      });
+      await expect(edit).toBeVisible();
+      await expect(
+        p.getByRole("button", { name: mobile ? "Create" : "Create a space", exact: true }),
+      ).toBeVisible();
+      await expect(p.getByRole("heading", { name: "Joined" })).toBeVisible();
+      await expect(p.getByRole("button", { name: "Browse all" })).toBeVisible();
+      const pub = p.locator(".ys-row").filter({ hasText: "#public" });
+      await expect(pub.getByRole("button", { name: "Leave" })).toBeVisible();
+      // the header's tabs: hide #public
+      const tab = p
+        .locator(".hnav, .mchips")
+        .getByRole("button", { name: "#public", exact: true })
+        .filter({ visible: true });
+      await expect(tab).toHaveCount(1);
+      await edit.click();
+      await expect(p.getByRole("heading", { name: "Header tabs" })).toBeVisible();
+      await p.getByLabel("Show #public in the header").setChecked(false, { force: true });
+      await p.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(p.getByRole("heading", { name: "Your spaces" })).toBeVisible();
+      await expect(tab).toHaveCount(0);
+      await p.reload();
+      await expect(p.getByRole("heading", { name: "Your spaces" })).toBeVisible();
+      await expect(tab).toHaveCount(0);
     },
   },
   {
@@ -219,6 +247,21 @@ const SCREENS: Screen[] = [
       await field.fill("");
       await p.getByRole("button", { name: "Deny" }).click();
       await expect(p.getByRole("heading", { name: "Sign-in denied" })).toBeVisible();
+    },
+  },
+  {
+    // review round 2 of phase 2, finding 1: a code in the link is ignored,
+    // so a link made by whoever started the sign-in elsewhere cannot fill it
+    key: "sx-si-link-code",
+    url: "/",
+    run: async (p) => {
+      const signIn = await authorize(p);
+      await answerRequest(p, signIn.request, false);
+      await p.goto(`/device?request=${signIn.request}&code=${encodeURIComponent(signIn.code)}`);
+      await expectCard(p, "Just now, from another computer");
+      await expect(p.getByLabel("The code the Mac shows")).toHaveValue("");
+      await expect(p.getByRole("button", { name: "Approve this Mac" })).toBeDisabled();
+      expect(await tokenTaken(p, signIn.request)).toBe(false);
     },
   },
   {

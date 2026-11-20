@@ -22,6 +22,18 @@ interface Screen {
 const toastSays = (p: Page, t: string | RegExp) =>
   expect(p.locator(".cs-toast").getByText(t)).toBeVisible();
 
+/** The next write reaches the server and applies; the browser never sees
+ * the answer. */
+async function loseNextWrite(p: Page) {
+  let lose = true;
+  await p.route("**/api/sync/write", async (r) => {
+    if (!lose) return r.continue();
+    lose = false;
+    await r.fetch();
+    await r.abort("connectionreset");
+  });
+}
+
 const spaceId = (rs: KeyedRecord[], name: string) =>
   String(rs.find((r) => r.record.kind === "space" && r.record["name"] === name)?.record["id"]);
 
@@ -177,6 +189,75 @@ const SCREENS: Screen[] = [
         .click();
       await toastSays(p, "Removed listing-anthologies.");
       await expect(row).toHaveCount(0);
+    },
+  },
+  {
+    key: "ab-page-new",
+    scenario: "replication: moderator",
+    url: "/s/replication-club/pages/untitled-page",
+    run: async (p) => {
+      await p.getByLabel("Page title").fill("Reading list");
+      await p.getByLabel("Page text").fill("Chapters 4 to 6, then the appendix.");
+      await p.getByRole("button", { name: "Save", exact: true }).click();
+      await toastSays(p, "Page added.");
+      await expect(p).toHaveURL(/\/s\/replication-club\/pages\/reading-list$/);
+      await expect(p.getByRole("heading", { name: "Reading list", level: 1 })).toBeVisible();
+      await expect(p.getByText("Chapters 4 to 6, then the appendix.")).toBeVisible();
+    },
+  },
+  {
+    // review round 2 of phase 2, finding 4: a new page whose answer was lost,
+    // then edited and saved again: the page the first save made opens, and
+    // the edit is reported as not saved
+    key: "ab-page-new-lost",
+    scenario: "replication: moderator",
+    url: "/s/replication-club/pages/untitled-page",
+    run: async (p) => {
+      await p.getByLabel("Page title").fill("Reading list");
+      await p.getByLabel("Page text").fill("First draft of the list.");
+      await loseNextWrite(p);
+      const save = p.getByRole("button", { name: "Save", exact: true });
+      await save.click();
+      await toastSays(
+        p,
+        "Couldn’t reach the server, so Session didn’t save the page. Try again in a moment.",
+      );
+      await p.getByLabel("Page text").fill("Second draft of the list.");
+      await save.click();
+      await toastSays(
+        p,
+        "Your page went through before the error, so Session didn’t post it again. Your later edits weren’t saved.",
+      );
+      await expect(p).toHaveURL(/\/s\/replication-club\/pages\/reading-list$/);
+      await expect(p.getByRole("heading", { name: "Reading list", level: 1 })).toBeVisible();
+      await expect(p.getByText("First draft of the list.")).toBeVisible();
+      await expect(p.getByText("Second draft of the list.")).toHaveCount(0);
+    },
+  },
+  {
+    // review round 2 of phase 2, finding 4: the same for a new skill
+    key: "ab-skill-new-lost",
+    url: "/s/sci-fi/manage/skills",
+    run: async (p) => {
+      await p.getByRole("button", { name: "Add a skill" }).click();
+      const d = p.getByRole("dialog", { name: "Add a skill" });
+      await d.locator("#ab-sk-n").fill("listing-anthologies");
+      await d.locator("#ab-sk-d").fill("Lists anthologies on a theme.");
+      await loseNextWrite(p);
+      const add = d.getByRole("button", { name: "Add skill" });
+      await add.click();
+      await toastSays(
+        p,
+        "Couldn’t reach the server, so Session undid the change. Try again in a moment.",
+      );
+      await d.locator("#ab-sk-d").fill("Lists anthologies on a theme, newest first.");
+      await add.click();
+      await toastSays(
+        p,
+        "Your skill went through before the error, so Session didn’t post it again. Your later edits weren’t saved.",
+      );
+      await expect(d).toHaveCount(0);
+      await expect(p.locator(".ab-skr").filter({ hasText: "listing-anthologies" })).toHaveCount(1);
     },
   },
   {

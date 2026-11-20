@@ -4,7 +4,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import test from "ava";
 
-import { Toasts, WRITE_ERROR, refusalToast, toast } from "../src/spaces/writes.js";
+import { Toasts, WRITE_ERROR, refusalText, refusalToast, toast } from "../src/spaces/writes.js";
 
 test.afterEach(() => cleanup());
 
@@ -41,3 +41,29 @@ test.serial("a toast's action runs once and closes it; Dismiss closes it", (t) =
   t.is(ran, 1);
   t.is(document.querySelectorAll(".cs-toast").length, 0);
 });
+
+test.serial(
+  "TOO_MANY_REQUESTS without retryAt (the queued-runs limit) shows the server's message; with retryAt, the write budget's copy",
+  (t) => {
+    render(<Toasts />);
+    const queued = "You have 3 asks waiting or running. Ask again once one of them finishes.";
+    t.is(refusalText({ code: "TOO_MANY_REQUESTS", message: queued }), queued);
+    act(() => refusalToast({ code: "TOO_MANY_REQUESTS", message: queued }));
+    t.truthy(screen.getByText(queued));
+    t.is(
+      refusalText({
+        code: "TOO_MANY_REQUESTS",
+        message: "Too many changes.",
+        retryAt: "2026-11-16T10:00:10Z",
+      }),
+      WRITE_ERROR["TOO_MANY_REQUESTS"] ?? "-",
+    );
+    // no message: the mockup's copy
+    t.is(
+      refusalText({ code: "TOO_MANY_REQUESTS", message: "" }),
+      WRITE_ERROR["TOO_MANY_REQUESTS"] ?? "-",
+    );
+    // other codes keep their copy, not the server's message
+    t.is(refusalText({ code: "STALE", message: "x" }), WRITE_ERROR["STALE"] ?? "-");
+  },
+);

@@ -180,18 +180,15 @@ test("an answered write is not played again over a log read after its answer", a
 
 test("an answered write is not played again over a read sent before its answer but served after it", async (t) => {
   const { w, closed } = cast(t);
-  // two pages; pages.move puts one at a position (absolute since review
-  // round 1 of phase 2, so playing it twice no longer shows here: the
-  // answered decline above does)
+  // pages.restore without `base` is not idempotent: each application adds a
+  // line to the page's history (`revs`) and raises `ver`, so a restore
+  // played again over the read shows a second line (review round 2 of
+  // phase 2, finding 5: pages.move takes an absolute position now, and
+  // playing it twice changes nothing visible)
   const one = w.id();
-  const two = w.id();
   ok(
     t,
     w.as("olga", "pages.update", { space: closed, page: null, id: one, title: "One", text: ["a"] }),
-  );
-  ok(
-    t,
-    w.as("olga", "pages.update", { space: closed, page: null, id: two, title: "Two", text: ["b"] }),
   );
   const inner = new InProcessTransport(w.server, { u: "olga" });
   let hold: (() => void) | null = null;
@@ -212,16 +209,24 @@ test("an answered write is not played again over a read sent before its answer b
   await olga.init();
   await olga.open(`user:olga`);
   await olga.open(`space:${closed}`);
-  const order = () =>
-    ((olga.get(`pages:${closed}`) as { list: { id: string }[] } | undefined)?.list ?? []).map(
-      (p) => p.id,
-    );
-  t.deepEqual(order(), [one, two]);
-  const move = olga.write("pages.move", { space: closed, page: one, to: 1 });
+  const page = () =>
+    olga.get(`page:${one}`) as { ver: number; revs: { note: string }[] } | undefined;
+  const before = page();
+  t.truthy(before);
+  const restore = olga.write("pages.restore", {
+    space: closed,
+    page: one,
+    rev: 0,
+    note: "Restored",
+  });
   await new Promise((r) => setTimeout(r, 0));
-  // a read of the space's log, sent before the answer: it holds the move
+  // a read of the space's log, sent before the answer: it holds the restore
   await olga.sync(`space:${closed}`);
   (hold as (() => void) | null)?.();
-  t.true((await move.answer)?.ok);
-  t.deepEqual(order(), [two, one]);
+  t.true((await restore.answer)?.ok);
+  const server = w.server.records().get(`page:${one}`) as { ver: number; revs: unknown[] };
+  t.is(server.revs.length, (before?.revs.length ?? 0) + 1);
+  // the client shows the server's page: one "Restored" line, not two
+  t.is(page()?.revs.filter((r) => r.note === "Restored").length, 1);
+  t.is(page()?.ver, server.ver);
 });

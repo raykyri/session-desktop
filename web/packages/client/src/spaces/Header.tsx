@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { logout } from "../api/account.js";
 import { count, spaceName } from "../data/format.js";
 import { headerSpaces, savedThreads, type Space } from "../data/spaces.js";
+import { useHeaderTabs } from "../stores/headerTabs.js";
 import { useSettingsStore } from "../stores/settings.js";
 import { useRecords, useSession } from "../sync/react.js";
 
@@ -305,7 +306,8 @@ export function Header({ place }: { place: Place }) {
   const w = useWorld();
   const navigate = useNavigate();
   const session = useSession();
-  const tabs = useMemo(() => headerSpaces(w.spaces, w.roles), [w.spaces, w.roles]);
+  const order = useHeaderTabs();
+  const tabs = useMemo(() => headerSpaces(w.spaces, w.roles, order), [w.spaces, w.roles, order]);
   const saved = useRecords((r) => savedThreads(r).length, []) ?? 0;
   // the current chip in view (Mobile Web)
   const chips = useRef<HTMLDivElement>(null);

@@ -22,7 +22,7 @@ import { cx } from "./cx.js";
 import { NVI, QTI, SFI } from "./icons.js";
 import { useOverlay } from "./overlay.js";
 import { useWorld } from "./world.js";
-import { WRITE_ERROR, toast, useCreate, useQuickWrite } from "./writes.js";
+import { WRITE_ERROR, lostEditsToast, toast, useCreate, useQuickWrite } from "./writes.js";
 
 const clip = (t: string, n: number) =>
   t.length > n ? `${t.slice(0, n).replace(/\s+\S*$/, "")}…` : t;
@@ -240,6 +240,7 @@ export function Compare({
     if (o.ok) {
       setQ("");
       go(o.id);
+      if (o.lostEdits) lostEditsToast("follow-up", q.trim());
     } else if (o.error === null) toast(WRITE_ERROR["unavailable"] ?? "");
   };
   return (
@@ -336,7 +337,8 @@ function PromoteDialog({
       return;
     }
     onClose();
-    toast(`Thread started in ${spaceName(space)}. The branch it came from links to it.`);
+    if (o.lostEdits) lostEditsToast("thread", title.trim() || f.q);
+    else toast(`Thread started in ${spaceName(space)}. The branch it came from links to it.`);
     void navigate({ to: "/s/$space/t/$thread", params: { space: space.name, thread: o.id } });
   };
   return (

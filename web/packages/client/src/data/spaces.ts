@@ -107,12 +107,25 @@ export const readsSpace = (s: Pick<Space, "vis">, role: Role | undefined) =>
 
 /** The header's spaces: the person's, then the others they may read, each
  * group by activity; closed spaces they are not in stay out. */
-export function headerSpaces(spaces: readonly Space[], roles: Record<string, Role>): Space[] {
+export function headerSpaces(
+  spaces: readonly Space[],
+  roles: Record<string, Role>,
+  /** The person's order and hidden tabs (Account › Your spaces › Edit
+   * header tabs): the spaces it orders first, in its order, then the rest
+   * in the default order, without the hidden ones. */
+  tabs: { order: readonly string[]; hidden: readonly string[] } = { order: [], hidden: [] },
+): Space[] {
   const byActivity = (a: Space, b: Space) =>
     (b.posts ?? 0) - (a.posts ?? 0) || b.members - a.members || (a.name < b.name ? -1 : 1);
   const mine = spaces.filter((s) => roles[s.id] !== undefined).sort(byActivity);
   const rest = spaces.filter((s) => roles[s.id] === undefined && s.vis === "open").sort(byActivity);
-  return [...mine, ...rest];
+  const all = [...mine, ...rest];
+  const at = new Map(tabs.order.map((id, k) => [id, k]));
+  const chosen = all
+    .filter((s) => at.has(s.id))
+    .sort((a, b) => (at.get(a.id) ?? 0) - (at.get(b.id) ?? 0));
+  const hidden = new Set(tabs.hidden);
+  return [...chosen, ...all.filter((s) => !at.has(s.id))].filter((s) => !hidden.has(s.id));
 }
 
 // ---- threads ----
