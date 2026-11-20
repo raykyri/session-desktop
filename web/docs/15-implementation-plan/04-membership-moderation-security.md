@@ -66,10 +66,10 @@ separate limits.
 
 **I1.** In `web/packages/db` (schema, migration) and `web/packages/server`:
 
-- Account invites, on the existing `invites` table (`01` C8, D3): ULID `id`, `code_hash` (SHA-256 of
-  the normalized code, unique), `code_enc` (AES-256-GCM under
-  `SESSION_SECRET_KEY`, `01` S3; set to null when the link is used or
-  revoked), `created_by`, `created_at`, `used_by`, `used_at`, `revoked_at`.
+- Account invites, on the existing `invites` table (`01` C8, D3): ULID
+  `id`, `code_hash` (SHA-256 of the normalized code, unique), `code_enc`
+  (AES-256-GCM under `SESSION_SECRET_KEY`, `01` S3; set to null when the
+  link is used or revoked), `created_by`, `created_at`, `used_by`, `used_at`, `revoked_at`.
   Today the table stores `code` in plain text and `redeemInvite` matches on
   it (`db/src/repos/auth.ts`); the migration hashes existing codes and drops
   the column. `users.invites_remaining` is dropped in favour of the open-slot
@@ -315,8 +315,8 @@ log (N open)". The owner's Edit opens `chEditDlg` with About only, at most
 
 Acceptance: client test that only the owner sees Edit and the length error; a
 server test that a moderator's and an admin's `spaces.update` are refused; a
-step in `e2e/spaces-channels.spec.ts` where a member's open channel info shows the
-new About without a reload.
+step in `e2e/spaces-channels.spec.ts` where a member's open channel info
+shows the new About without a reload.
 
 ## 5. Channel invite links
 
@@ -341,11 +341,11 @@ new About without a reload.
   and can remove or ban that person.
 - Limits: 20 links per user per day; 50 open per channel (§10).
 
-Acceptance: in `e2e/spaces-channels.spec.ts`, the owner of a private channel copies
-a link, a second account opens it and reads the channel, a third account using
-the same link gets "This invite link has expired or was already used."; server
-tests for the expiry bounds and that a plain member's snapshot holds no link
-record.
+Acceptance: in `e2e/spaces-channels.spec.ts`, the owner of a private channel
+copies a link, a second account opens it and reads the channel, a third
+account using the same link gets "This invite link has expired or was
+already used."; server tests for the expiry bounds and that a plain member's
+snapshot holds no link record.
 
 ## 6. Moderation
 
@@ -357,8 +357,8 @@ record.
   (optional), and "Reports go to the moderators of #name. @author is not told
   who reported." (The mockup names the owner; with moderators the copy names
   the channel.)
-- `reports.create { id, item, note? }` with `item` the moderation key `a:<thread>`
-  (ask) or `p:<thread>` (post) (`moderationKeySchema`, `itemOf` in
+- `reports.create { id, item, note? }` with `item` the moderation key
+  `a:<thread>` (ask) or `p:<thread>` (post) (`moderationKeySchema`, `itemOf` in
   replica-proto), note at most 500 characters (`01` C12). One open report per
   (reporter, item): a second answers `CONFLICT` (`01` C12) and the dialog says
   "You already reported this."
@@ -483,11 +483,11 @@ clock; a client test that an entry for a removed item renders no title.
 - `@session/mutators` tests: note bounds; one open report per reporter and
   item; a removal resolves every open report on the item; the placeholder
   holds no field of the removed content.
-- `e2e/spaces-channels.spec.ts`: a member reports a thread with a note; the owner's
-  channel info shows "Moderation log (1 open)" without a reload; the owner
-  removes it with a reason; the member's feed shows the placeholder with the
-  reason and no text, also after a reload; a second report is dismissed and
-  the reporter sees the resolved notification; the owner bans a member of an
+- `e2e/spaces-channels.spec.ts`: a member reports a thread with a note; the
+  owner's channel info shows "Moderation log (1 open)" without a reload; the
+  owner removes it with a reason; the member's feed shows the placeholder
+  with the reason and no text, also after a reload; a second report is
+  dismissed and the reporter sees the resolved notification; the owner bans a member of an
   open channel and that member's Ask is refused with the ban message.
 - The storage scan of `01` D4 after a removal: the question text appears
   nowhere in the SQLite file, the WAL included, nor in the `effects` table.
