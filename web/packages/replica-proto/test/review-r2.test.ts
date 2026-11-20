@@ -500,6 +500,8 @@ test("Q2: every exception in apply is answered; a deep input is BAD_REQUEST and 
   await refused(t, Promise.resolve(w.server.apply(actor("eve"), trap)), "INTERNAL_SERVER_ERROR");
   // odd but valid handles and keys get ordinary answers
   const odd: [string, string, unknown][] = [
+    // in place of review round 2's members.setRole (`01` U6)
+    ["olga", "members.remove", { space: open, user: "constructor", base: { adm: "constructor" } }],
     ["olga", "members.ban", { space: open, user: "constructor" }],
     [
       "olga",
@@ -519,7 +521,7 @@ test("Q2: every exception in apply is answered; a deep input is BAD_REQUEST and 
     const r = await w.as(u, name, input);
     got.push(r.ok ? "ok" : r.error.code);
   }
-  t.deepEqual(got, ["ok", "NOT_FOUND", "NOT_FOUND", "ok", "BAD_REQUEST"]);
+  t.deepEqual(got, ["ok", "ok", "NOT_FOUND", "NOT_FOUND", "ok", "BAD_REQUEST"]);
   t.true((await w.server.register(actor("constructor"))).ok);
   t.deepEqual(await w.server.pull(null, "space:x:y", "e"), { resync: true });
 });

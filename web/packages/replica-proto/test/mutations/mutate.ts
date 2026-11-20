@@ -254,7 +254,9 @@ const MUTATIONS: Mutation[] = [
     to: "    const c = this.tokens.open(cursor) ?? { log, u, n: this.store.epoch(log).n, v: 0, h: 0, at: now };\n",
   },
   {
-    name: "N6 user log: a space opening or closing is not noticed",
+    // visibility no longer changes (`01` C11): the space log whose history is
+    // replaced is the restored one (`replaceHistory`)
+    name: "N6 user log: a space log's history being replaced is not noticed",
     file: "src/server.ts",
     from: "      if (a && a.sp !== null && this.store.epoch(`space:${a.sp}`).start > head) return true;",
     to: "      if (a && a.sp !== null && this.store.epoch(`space:${a.sp}`).start > head + 1e9) return true;",

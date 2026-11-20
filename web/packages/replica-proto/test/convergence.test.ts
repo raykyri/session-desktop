@@ -1399,9 +1399,19 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
   for (let step = 0; step < STEPS; step++) {
     let what: string;
     const roll = c.r();
-    if (roll < 0.05) {
+    if (roll < 0.043) {
       w.clock.advance(Math.floor(c.r() * 6 * HOUR));
       what = "clock +hours";
+    } else if (roll < 0.05) {
+      // (its share comes from the clock steps, so forged cursors keep theirs)
+      // a restore replaces a space log's history: its cursors resync
+      const sp = pick(
+        c.r,
+        records(c, "space").map((s) => s.id),
+      );
+      await w.server.replaceHistory(`space:${sp}`);
+      c.history.set(sp, (c.history.get(sp) ?? 0) + 1);
+      what = `space:${sp} is restored`;
     } else if (roll < 0.065) {
       w.clock.advance(4 * DAY);
       what = "clock +4 days";
@@ -1416,15 +1426,6 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       // every client record expires (idle for 90 days)
       w.clock.advance(91 * DAY);
       what = "clock +91 days";
-    } else if (roll < 0.088) {
-      // a restore replaces a space log's history: its cursors resync
-      const sp = pick(
-        c.r,
-        records(c, "space").map((s) => s.id),
-      );
-      await w.server.replaceHistory(`space:${sp}`);
-      c.history.set(sp, (c.history.get(sp) ?? 0) + 1);
-      what = `space:${sp} is restored`;
     } else if (roll < 0.11) {
       if (!(await forged(step))) return false;
       what = "forged cursor";
