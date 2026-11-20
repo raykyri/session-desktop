@@ -66,8 +66,7 @@ separate limits.
 
 **I1.** In `web/packages/db` (schema, migration) and `web/packages/server`:
 
-- Account invites, on the existing `invites` table (`01` C8; `01` D3 names
-  the table `account_invites`, see §11): ULID `id`, `code_hash` (SHA-256 of
+- Account invites, on the existing `invites` table (`01` C8, D3): ULID `id`, `code_hash` (SHA-256 of
   the normalized code, unique), `code_enc` (AES-256-GCM under
   `SESSION_SECRET_KEY`, `01` S3; set to null when the link is used or
   revoked), `created_by`, `created_at`, `used_by`, `used_at`, `revoked_at`.
@@ -361,7 +360,7 @@ record.
 - `reports.create { id, item, note? }` with `item` the moderation key `a:<thread>`
   (ask) or `p:<thread>` (post) (`moderationKeySchema`, `itemOf` in
   replica-proto), note at most 500 characters (`01` C12). One open report per
-  (reporter, item): a second answers `PRECONDITION_FAILED` and the dialog says
+  (reporter, item): a second answers `CONFLICT` (`01` C12) and the dialog says
   "You already reported this."
 - Threads only at launch; follow-ups (`f:`), replies (`r:`) and comments
   (`c:`, `01` C4) have moderation keys and can follow (question 9).
@@ -606,21 +605,19 @@ Acceptance: a middleware test per row that the limit plus one answers
 
 ## 11. Contract items this file depends on
 
-Made by `01`: C8 (account invites, `status`, `members.tree`), C9 (`vis:
-"private"`), C10 (join requests deferred), C11 (`spaces.update { id, desc }`,
-owner only), C12 (report and removal notes, `modlog`). Requested here in
+Made by `01`: C8 (account invites on `invites`, `status`, `members.tree`),
+C9 (`vis: "private"`), C10 (join requests deferred), C11 (`spaces.update {
+id, desc }`, owner only), C12 (report and removal notes, `modlog` with `ban`
+and `unban`, one open report per person and item). Requested here in
 addition:
 
-- `ban` and `unban` `modlog` kinds;
-- the removal placeholder keeps `id`, `s`, kind, `u` and `createdAt` besides
-  `mod`, `modBy` and `modNote` (`01` C12 says "nothing else"; replica-proto
-  keeps them, §6.2);
+- C12 to state that the removal placeholder keeps `id`, `s`, kind, `u` and
+  `createdAt` besides `mod`, `modBy` and `modNote` (replica-proto keeps and
+  serves them; §6.2);
 - `erase` also deletes saves, comments and mention notifications of the
   removed thread (`01` M6);
-- one open report per reporter and item;
-- `users.status` gains `suspended`; account invites store `code_hash` and
-  `code_enc`, on the existing `invites` table (`01` C8) rather than a new
-  `account_invites` table (`01` D3);
+- `users.status` gains `suspended` (§3.6); account invites store
+  `code_enc` beside `code_hash` (§3.1);
 - the `pre`-stage limits in §10; `auth.checkInvite` with a single `unusable`
   answer; `POST /auth/github/start`;
 - `invites.create` codes of 128 bits made in `pre`, `days` between 1 and 30;
