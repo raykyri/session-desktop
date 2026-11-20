@@ -9,7 +9,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { ago, spaceName } from "../data/format.js";
-import type { FollowUp, Space, ThreadView } from "../data/spaces.js";
+import { isStaff, type FollowUp, type Space, type ThreadView } from "../data/spaces.js";
 import { Markdown } from "../features/markdown/index.js";
 import { useNow } from "../sync/react.js";
 
@@ -423,6 +423,9 @@ export function AskMenu({
   const [dlg, setDlg] = useState<"promote" | "report" | "delete" | null>(null);
   useOverlay(open, () => setOpen(false));
   const mine = w.me?.u === f.u && !f.del;
+  // the asker of the branch, the thread's owner and the space's moderators
+  // (2b design finding 4: the mockup's qtCanPromote, the server agent's rule)
+  const canPromote = !!w.me && (mine || w.me.u === t.u || isStaff(w.roles[space.id]));
   const pick = (fn: () => void) => () => {
     setOpen(false);
     fn();
@@ -484,8 +487,10 @@ export function AskMenu({
               QTI.out,
               "Start a thread from this branch",
               () => setDlg("promote"),
-              mine ? undefined : "Only the person who asked this can start a thread from it.",
-              !mine,
+              canPromote
+                ? undefined
+                : "Only the asker of this branch, the thread owner and moderators can do this.",
+              !canPromote,
             )}
             {mine
               ? it(NVI.trash, "Delete", () => setDlg("delete"))

@@ -38,6 +38,40 @@ function deepAsk(rs: KeyedRecord[], space: string) {
 }
 
 /** A follow-up the person asked in a #public thread. */
+/** A follow-up by someone else in a thread of `space`, in a thread the
+ * person owns (`owner`) or one they do not. */
+function othersFollowUp(rs: KeyedRecord[], space: string, owner: boolean) {
+  const sp = spaceId(rs, space);
+  const ths = new Map(
+    rs
+      .filter(
+        (r) =>
+          r.record.kind === "thread" &&
+          r.record["s"] === sp &&
+          (r.record["u"] === "ines.v") === owner,
+      )
+      .map((r) => [r.record["id"], r.record]),
+  );
+  const f = rs.find(
+    (r) =>
+      r.record.kind === "followup" &&
+      ths.has(r.record["th"]) &&
+      r.record["u"] !== "ines.v" &&
+      !r.record["del"],
+  );
+  return { th: String(f?.record["th"]), fu: String(f?.record["id"]) };
+}
+
+/** Open an ask's menu and read its Start a thread item. */
+async function promoteItem(p: Page, fu: string) {
+  await p
+    .locator(`#qt-n-${fu}`)
+    .getByRole("button", { name: "More actions for this ask" })
+    .first()
+    .click();
+  return p.getByRole("menuitem", { name: /Start a thread from this branch/ });
+}
+
 function myFollowUp(rs: KeyedRecord[]) {
   const sp = spaceId(rs, "public");
   const ths = new Set(
@@ -307,6 +341,47 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // 2b design finding 4: the thread's owner may start a thread from
+    // another person's branch (the mockup's qtCanPromote)
+    key: "qt-promote-owner",
+    url: (rs) => {
+      const { th, fu } = othersFollowUp(rs, "public", true);
+      return `/s/public/t/${th}/a/${fu}`;
+    },
+    run: async (p, rs) => {
+      const item = await promoteItem(p, othersFollowUp(rs, "public", true).fu);
+      await expect(item).not.toHaveAttribute("aria-disabled", "true");
+      await expect(item).not.toContainText("Only the asker");
+    },
+  },
+  {
+    // and a moderator of the space
+    key: "qt-promote-mod",
+    url: (rs) => {
+      const { th, fu } = othersFollowUp(rs, "ml-papers", false);
+      return `/s/ml-papers/t/${th}/a/${fu}`;
+    },
+    run: async (p, rs) => {
+      const item = await promoteItem(p, othersFollowUp(rs, "ml-papers", false).fu);
+      await expect(item).not.toHaveAttribute("aria-disabled", "true");
+    },
+  },
+  {
+    // anyone else sees why not
+    key: "qt-promote-other",
+    url: (rs) => {
+      const { th, fu } = othersFollowUp(rs, "public", false);
+      return `/s/public/t/${th}/a/${fu}`;
+    },
+    run: async (p, rs) => {
+      const item = await promoteItem(p, othersFollowUp(rs, "public", false).fu);
+      await expect(item).toHaveAttribute("aria-disabled", "true");
+      await expect(item).toContainText(
+        "Only the asker of this branch, the thread owner and moderators can do this.",
+      );
+    },
+  },
+  {
     key: "ab-page-hist",
     url: "/s/sci-fi/pages/canon-starter-list",
     run: async (p) => {
@@ -417,3 +492,18 @@ for (const [layout, viewport] of [
     }
   });
 }
+
+// After the server's branch is merged: the thread's owner starts a thread
+// from another person's branch (the server agent's promote rule).
+test("qt-promote by the thread's owner @server-r1", async ({ page }) => {
+  test.skip(process.env["SESSION_E2E_SERVER_R1"] !== "1", "needs the server's promote rule");
+  const { records } = await loadScenario(page.context().request, "seed");
+  await signInAs(page.context());
+  const { th, fu } = othersFollowUp(records, "public", true);
+  await page.goto(`/s/public/t/${th}/a/${fu}`);
+  await (await promoteItem(page, fu)).click();
+  const d = page.getByRole("dialog", { name: "Start a thread from this branch" });
+  await d.getByRole("button", { name: "Start thread" }).click();
+  await toastSays(page, /Thread started in #public/);
+  await expect(page).toHaveURL(/\/s\/public\/t\/[0-9A-Z]{26}$/);
+});
