@@ -520,7 +520,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .ul { font-size: var(--fs-xs); color: var(--t-muted); }
 .ucol.today .ul { color: var(--t-heading); font-weight: 600; }
 .runs { display: flex; flex-direction: column; }
-.run { display: grid; grid-template-columns: minmax(0, 1fr) 54px 48px 62px; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--divider); font-size: var(--fs-sm); }
+.run { display: grid; grid-template-columns: minmax(0, 1fr) 54px 48px 92px; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--divider); font-size: var(--fs-sm); }
 .run:last-child { border-bottom: 0; }
 .run .rq { color: var(--t-heading); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .run small { color: var(--t-faint); font-size: var(--fs-xs); }
@@ -814,7 +814,7 @@ function addBranch(p, par, q) {
   const id = 'x' + (++seq);
   const node = { id, par, u: me(), createdAt: new Date(NOW).toISOString(), q, html: 'Searching sources. The answer appears here when the run finishes.', pending: true };
   (EXTRA[p.id] ||= []).push(node);
-  setTimeout(() => { node.pending = false; node.html = `<p>Mock answer. In the app, the agent's answer to "${esc(clip(q, 80))}" is stored here when the run finishes, and the branch count on the thread goes up by one.</p>`; node.tok = 18000; usage()[TODAY] += 18000; render(); }, 2600);
+  setTimeout(() => { node.pending = false; node.html = `<p>Mock answer. In the app, the agent's answer to "${esc(clip(q, 80))}" is stored here when the run finishes, and the branch count on the thread goes up by one.</p>`; node.tok = 18000; node.bill = charge(q, 18000); render(); }, 2600);
   return id;
 }
 const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data-form="${id}">${ctx ? `<span class="ctx">${ctx}</span>` : ''}<textarea id="in-${id}" rows="1" placeholder="${esc(ph)}"></textarea><button type="submit">${btn}</button></form>`;
@@ -1032,7 +1032,7 @@ function newThread(space, q, kind) {
   D.posts.push({ id, s: space, u: me(), k: 'ask', createdAt: now, q, sum: '', tok: 0, likesBase: 0, run: `${st.newModel} · ${st.newEffort} effort` });
   D.rich[id] = '<p><span class="status">Researching · Step 1 of 4</span></p>';
   render();
-  setTimeout(() => { D.rich[id] = `<p>Mock answer to "${esc(clip(q, 90))}". In the app, the agent's answer appears here when the run finishes, and you can branch from any passage of it.</p>`; byId(id).tok = 41000; if (st.newModel !== 'GPT-5') usage()[TODAY] += 41000; render(); }, 2600);
+  setTimeout(() => { D.rich[id] = `<p>Mock answer to "${esc(clip(q, 90))}". In the app, the agent's answer appears here when the run finishes, and you can branch from any passage of it.</p>`; byId(id).tok = 41000; byId(id).bill = charge(q, 41000); render(); }, 2600);
 }
 
 /* ---- shell ---- */
@@ -1212,7 +1212,17 @@ const left = () => Math.max(0, ALLOWANCE - used());
 const keys = () => (KEYS[st.user] ||= {});
 const billing = () => BILLING[st.user] || 'pause';
 const outOfTokens = () => left() <= 0 && !(billing() === 'key' && keys().anthropic?.status === 'working');
-const resetIn = () => { const h = Math.round((RESET - NOW) / 36e5); return h >= 48 ? `${Math.round(h / 24)} days` : `${h} hours`; };
+const resetIn = () => { const h = Math.round((RESET - NOW) / 36e5), d = Math.floor(h / 24); return d ? `${d} day${d === 1 ? '' : 's'} ${h % 24} h` : `${h} h`; };
+/* charge a finished run: included tokens first, then the key the member chose; logged for the Usage page */
+const RUNLOG = {};
+function charge(q, tok) {
+  let bill = 'Included';
+  if (st.newModel === 'GPT-5') bill = 'OpenAI key';
+  else if (left() >= tok) usage()[TODAY] += tok;
+  else { const inc = left(); usage()[TODAY] += inc; bill = billing() === 'key' && keys().anthropic?.status === 'working' ? (inc ? 'Included + Anthropic key' : 'Anthropic key') : 'Included'; if (bill === 'Included') usage()[TODAY] += tok - inc; }
+  (RUNLOG[st.user] ||= []).push({ q, at: new Date(NOW).toISOString(), tok, bill });
+  return bill;
+}
 let toastTimer;
 function toast(t) { st.toast = t; clearTimeout(toastTimer); toastTimer = setTimeout(() => { st.toast = ''; const el = $('#toast'); if (el) el.remove(); }, 2800); }
 
@@ -1257,22 +1267,29 @@ const xBtn = (label = 'Sign in with X') => `<button class="xbtn" data-ma="xauth"
 function authScreen() {
   const back = to => `<button class="tlink back" data-ma="flow" data-to="${to}">${I.left}Back</button>`;
   let body = '';
-  if (st.flow === 'landing') {
+  const linkInv = st.fromLink && INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
+  if (st.flow === 'landing' && linkInv) {
+    body = `<div class="auth-c"><span class="brand lg">${mark()}<b>Session</b></span><div class="inviter">${av(linkInv.by)}<div><b>${esc(nameOf(linkInv.by))} invited you to Session</b><small>@${esc(linkInv.by)} · this invite expires ${day(addDays(linkInv.created, INVITE_DAYS))}</small></div></div>
+      <h2>Research with agents, in shared spaces.</h2><p>Ask a question and an agent researches it. Branch from any passage of the answer to go deeper; everyone in the space can read and build on it.</p>
+      <div class="auth-acts">${xBtn('Continue with X')}<button class="btn2" data-ma="nolink">I already have an account</button></div>
+      <p class="fine">Your account starts pending until ${NEED} members vouch for you.</p></div>`;
+  } else if (st.flow === 'landing') {
     body = `<div class="auth-c"><span class="brand lg">${mark()}<b>Session</b></span><h2>Research with agents, in shared spaces.</h2>
       <p>Ask a question and an agent researches it. Branch from any passage of the answer to go deeper; everyone in the space can read and build on it.</p>
       <div class="auth-acts">${xBtn()}<button class="btn2" data-ma="flow" data-to="code">I have an invite code</button></div>
-      <p class="fine">Session is invite-only. New accounts need an invite code from a member.</p></div>`;
+      <p class="fine">Session is invite-only. New accounts need an invite code from a member.</p>
+      <p class="fine">Mock: <button class="tlink" data-ma="openlink">open an invite link</button> (session.app/i/SESS-9TQ2-X8).</p></div>`;
     if (st.ui.signin === 'b') body = `<div class="auth-split">${body}<div class="auth-preview" aria-hidden="true">${streamFor('home').filter(p => p.k === 'ask').slice(0, 4).map(p => `<div class="pv-card"><div class="who">${av(p.u, 'xs')}<b>${esc(p.u)}</b><span class="sp">${spName(p.s)}</span></div><p>${esc(clip(tree(p).nodes.r.q, 110))}</p><span class="pv-n">${I.branch}${tree(p).count}</span></div>`).join('')}</div></div>`;
   } else if (st.flow === 'code') {
     const inv = INVITES.find(i => i.code === st.code && inviteState(i) === 'open');
     body = `<div class="auth-c">${back('landing')}<h2>Enter your invite code</h2><p>It came from the member who invited you, as a code or a link.</p>
       <form class="code-f" data-mform="code"><input id="in-code" value="${esc(st.code)}" placeholder="SESS-XXXX-XX" autocomplete="off" spellcheck="false" aria-label="Invite code"><button type="submit" class="btn1">Check</button></form>
       ${st.codeErr ? `<p class="ferr">${esc(st.codeErr)}</p>` : ''}
-      ${inv ? `<div class="inviter">${av(inv.by)}<div><b>${esc(nameOf(inv.by))} invited you</b><small>@${esc(inv.by)} · expires ${day(addDays(inv.created, INVITE_DAYS))}</small></div></div><div class="auth-acts">${xBtn('Continue with X')}</div>` : `<p class="fine">Mock: an open code is <button class="tlink" data-ma="fill" data-code="SESS-9TQ2-X8">SESS-9TQ2-X8</button>.</p>`}</div>`;
+      ${inv ? `<div class="inviter">${av(inv.by)}<div><b>${esc(nameOf(inv.by))} invited you</b><small>@${esc(inv.by)} · expires ${day(addDays(inv.created, INVITE_DAYS))}</small></div></div><div class="auth-acts">${st.xacct && !MEMBERS.some(m => m.x === st.xacct) ? `<button class="btn1" data-ma="toprofile">Continue as @${esc(st.xacct)}</button>${xBtn('Use a different X account')}` : xBtn('Continue with X')}</div>` : `<p class="fine">Mock: an open code is <button class="tlink" data-ma="fill" data-code="SESS-9TQ2-X8">SESS-9TQ2-X8</button>.</p>`}</div>`;
   } else if (st.flow === 'xauth') {
     body = `<div class="auth-c">${back(st.intent === 'signup' ? 'code' : 'landing')}<h2>Sign in with X</h2><p>X asks you to let Session see your name, handle and profile picture. Session cannot post for you or read your messages.</p>
       <div class="mock-note"><b>Mock</b> Pick the X account that comes back from X:</div>
-      <div class="xlist">${X_ACCOUNTS.map(a => `<button class="xacct" data-ma="xpick" data-x="${a.x}">${av(a.x)}<span><b>${esc(a.name)}</b><small>@${esc(a.x)} · ${esc(a.note)}</small></span>${I.right}</button>`).join('')}</div></div>`;
+      <div class="xlist">${X_ACCOUNTS.map(a => `<button class="xacct" data-ma="xpick" data-x="${a.x}">${av(MEMBERS.find(m => m.x === a.x)?.u || a.x)}<span><b>${esc(a.name)}</b><small>@${esc(a.x)} · ${esc(a.note)}</small></span>${I.right}</button>`).join('')}</div></div>`;
   } else if (st.flow === 'noaccount') {
     const a = X_ACCOUNTS.find(x => x.x === st.xacct);
     body = `<div class="auth-c">${back('landing')}<h2>No Session account for @${esc(a.x)}</h2><p>Session is invite-only. Ask a member for an invite code, then sign up with it. If you already have a code, enter it now.</p><div class="auth-acts"><button class="btn1" data-ma="flow" data-to="code">Enter an invite code</button></div></div>`;
@@ -1365,16 +1382,16 @@ function keysSection() {
 }
 function usagePage() {
   const u = usage(), tot = used(), max = Math.max(...u, 1), pct = Math.min(1, tot / ALLOWANCE), tone = pct >= .95 ? 'bad' : pct >= .8 ? 'warn' : 'ok';
-  const runs = [];
-  D.posts.filter(p => p.u === st.user && p.k === 'ask' && p.tok).forEach(p => runs.push({ q: tree(p).nodes.r.q, at: p.createdAt, tok: p.tok }));
-  D.posts.filter(p => p.k === 'ask').forEach(p => Object.values(tree(p).nodes).forEach(n => { if (n.id !== 'r' && n.u === st.user && n.tok) runs.push({ q: n.q, at: n.createdAt, tok: n.tok }); }));
-  runs.sort((a, b) => a.at < b.at ? 1 : -1);
+  const runs = (RUNLOG[st.user] || []).slice().reverse();
+  D.posts.filter(p => p.u === st.user && p.k === 'ask' && p.tok && !p.id.startsWith('new')).forEach(p => runs.push({ q: tree(p).nodes.r.q, at: p.createdAt, tok: p.tok }));
+  D.posts.filter(p => p.k === 'ask').forEach(p => Object.values(tree(p).nodes).forEach(n => { if (n.id !== 'r' && !n.id.startsWith('x') && n.u === st.user && n.tok) runs.push({ q: n.q, at: n.createdAt, tok: n.tok }); }));
+  runs.sort((a, b) => a.at < b.at ? 1 : a.at > b.at ? -1 : 0);
   const hasKey = keys().anthropic?.status === 'working' || keys().openai?.status === 'working';
   return `<div class="page"><div class="page-in narrow"><h2>Usage and API keys</h2>
     <section class="box"><div class="shead"><h3>Included tokens this week</h3><small>Resets ${WEEK[0]}, ${day(new Date(RESET).toISOString())} at 00:00 UTC, in ${resetIn()}</small></div>
-      <div class="ubig ${tone}"><b>${fmtTok(left())}</b><span>left of ${fmtTok(ALLOWANCE)}</span></div><div class="utrack ${tone}"><span style="width:${(pct * 100).toFixed(1)}%"></span></div>
+      <p class="sub">Covers asks and branches on Opus 4.8 and Sonnet 4.6. GPT-5 runs only on your OpenAI key.</p><div class="ubig ${tone}"><b>${fmtTok(left())}</b><span>left of ${fmtTok(ALLOWANCE)}</span></div><div class="utrack ${tone}"><span style="width:${(pct * 100).toFixed(1)}%"></span></div>
       <div class="uchart" role="img" aria-label="Tokens used per day this week">${u.map((v, i) => `<div class="ucol${i === TODAY ? ' today' : ''}${i > TODAY ? ' future' : ''}"><span class="uv">${i <= TODAY ? fmtTok(v) : ''}</span><span class="ub" style="height:${i <= TODAY ? Math.max(2, v / max * 64) : 2}px"></span><span class="ul">${WEEK[i]}</span></div>`).join('')}</div>
-      <h4>Recent runs</h4><div class="runs">${runs.slice(0, 6).map(r => `<div class="run"><span class="rq">${esc(clip(r.q, 70))}</span><small>${day(r.at)}</small><b>${fmtTok(r.tok)}</b><small class="bill">Included</small></div>`).join('') || '<p class="empty">No runs yet this week.</p>'}</div></section>
+      <h4>Recent runs</h4><div class="runs">${runs.slice(0, 6).map(r => `<div class="run"><span class="rq">${esc(clip(r.q, 70))}</span><small>${day(r.at)}</small><b>${fmtTok(r.tok)}</b><small class="bill">${r.bill || 'Included'}</small></div>`).join('') || '<p class="empty">No runs yet this week.</p>'}</div></section>
     <section class="box"><h3>When included tokens run out</h3>
       <label class="radio"><input type="radio" name="bill" data-ma="bill" value="pause"${billing() === 'pause' ? ' checked' : ''}> <span><b>Pause my asks until the reset</b><small>You can still read, post and reply.</small></span></label>
       <label class="radio${hasKey ? '' : ' off'}"><input type="radio" name="bill" data-ma="bill" value="key"${billing() === 'key' ? ' checked' : ''}${hasKey ? '' : ' disabled'}> <span><b>Continue on my API key</b><small>${hasKey ? 'Asks bill to your key until the reset.' : 'Add a key below to turn this on.'}</small></span></label></section>
@@ -1415,8 +1432,8 @@ function signIn(u) { st.auth = 'in'; st.user = u; st.screen = member(u).status =
 document.addEventListener('click', e => {
   const p = e.target.closest('[data-mp]');
   if (p) { if (p.dataset.mp === 'out') { st.auth = 'out'; st.flow = 'landing'; } else signIn(p.dataset.mp); st.confirm = null; render(); return; }
-  const v = e.target.closest('[data-mv]'); if (v) { st.ui[v.dataset.mv] = v.dataset.x; if (v.dataset.mv === 'signin' && st.auth === 'in') { st.auth = 'out'; st.flow = 'landing'; } render(); return; }
-  const t = e.target.closest('[data-mt]'); if (t) { const u = usage(); const need = { norm: null, low: ALLOWANCE - 90e3, out: ALLOWANCE + 20e3 }[t.dataset.mt]; if (need != null) { const others = u.reduce((a, b, i) => i === TODAY ? a : a + b, 0); u[TODAY] = Math.max(0, need - others); } else if (USAGE_BASE[st.user]) USAGE[st.user] = USAGE_BASE[st.user].slice(); render(); return; }
+  const v = e.target.closest('[data-mv]'); if (v) { st.ui[v.dataset.mv] = v.dataset.x; if (v.dataset.mv === 'signin' && st.auth === 'in') toast('Sign-in variants show on the signed-out screens: set View as to Signed out.'); render(); return; }
+  const t = e.target.closest('[data-mt]'); if (t) { const u = usage(); const need = { norm: null, low: ALLOWANCE - 90e3, out: ALLOWANCE + 20e3 }[t.dataset.mt]; if (need != null) { const others = u.reduce((a, b, i) => i === TODAY ? a : a + b, 0); u[TODAY] = Math.max(0, need - others); } else USAGE[st.user] = (USAGE_BASE[st.user] || [0, 0, 0, 0, 0, 0, 0]).slice(); render(); return; }
 });
 const USAGE_BASE = Object.fromEntries(Object.entries(USAGE).map(([k, v]) => [k, v.slice()]));
 app.addEventListener('click', e => {
@@ -1424,7 +1441,10 @@ app.addEventListener('click', e => {
   const a = t.dataset.ma, d = t.dataset;
   if (a === 'go') { st.screen = d.to; st.menu = null; render(); $('#k-page') && ($('#k-page').scrollTop = 0); return; }
   if (a === 'flow') { st.flow = d.to; st.codeErr = ''; if (d.to === 'code') st.intent = 'signup'; render(); $('#in-code')?.focus(); return; }
-  if (a === 'xauth') { if (st.flow === 'landing') st.intent = 'signin'; st.flow = 'xauth'; render(); return; }
+  if (a === 'xauth') { if (st.flow === 'landing') st.intent = st.fromLink ? 'signup' : 'signin'; st.flow = 'xauth'; render(); return; }
+  if (a === 'openlink') { st.code = 'SESS-9TQ2-X8'; st.fromLink = true; render(); return; }
+  if (a === 'nolink') { st.fromLink = false; st.code = ''; st.intent = 'signin'; st.flow = 'xauth'; render(); return; }
+  if (a === 'toprofile') { const a2 = X_ACCOUNTS.find(z => z.x === st.xacct); st.profile = { name: a2.name, handle: st.xacct.replace(/[^a-z0-9._]/g, '').slice(0, 20), rules: false, err: '' }; st.flow = 'profile'; render(); return; }
   if (a === 'fill') { st.code = d.code; st.codeErr = ''; render(); return; }
   if (a === 'xpick') {
     const x = d.x, m = MEMBERS.find(mm => mm.x === x);
@@ -1435,7 +1455,7 @@ app.addEventListener('click', e => {
     else st.flow = 'noaccount';
     render(); return;
   }
-  if (a === 'signout') { st.auth = 'out'; st.flow = 'landing'; st.menu = null; render(); return; }
+  if (a === 'signout') { st.auth = 'out'; st.flow = 'landing'; st.fromLink = false; st.code = ''; st.xacct = null; st.menu = null; render(); return; }
   if (a === 'askvouch') { st.confirm = { u: d.u }; render(); app.querySelector('.dialog .btn1')?.focus(); return; }
   if (a === 'cancel') { st.confirm = null; render(); return; }
   if (a === 'dovouch') { vouch(st.user, d.u); st.confirm = null; render(); return; }
