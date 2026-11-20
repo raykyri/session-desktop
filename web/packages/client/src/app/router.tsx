@@ -19,6 +19,7 @@ import { ensureMe } from "../api/account.js";
 import { loadAdminRoute, loadSettingsRoute } from "../routes/chunks.js";
 import { InvitePage } from "../routes/invite.js";
 import { LoginPage } from "../routes/login.js";
+import { AccountPage, DevicePage, WelcomePage } from "../spaces/Account.js";
 import { HomePage } from "../spaces/HomePage.js";
 import { InviteLanding } from "../spaces/InviteLanding.js";
 import { ManagePage } from "../spaces/Manage.js";
@@ -230,11 +231,31 @@ const yourSpacesRoute = createRoute({
   beforeLoad: requireSignedIn,
   component: () => <Later title="Your spaces" />,
 });
-const keysRoute = createRoute({
+const accountRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/settings/keys",
+  path: "/settings/$tab",
+  component: function AccountRoute() {
+    const { tab } = accountRoute.useParams();
+    return <AccountPage tab={tab} />;
+  },
+});
+const deviceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/device",
+  validateSearch: (s: Record<string, unknown>): { request?: string; code?: string } => ({
+    ...(typeof s["request"] === "string" ? { request: s["request"] } : {}),
+    ...(typeof s["code"] === "string" ? { code: s["code"] } : {}),
+  }),
+  component: function DeviceRoute() {
+    const { request, code } = deviceRoute.useSearch();
+    return <DevicePage {...(request ? { request } : {})} {...(code ? { code } : {})} />;
+  },
+});
+const welcomeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/welcome",
   beforeLoad: requireSignedIn,
-  component: () => <Later title="API keys" />,
+  component: WelcomePage,
 });
 
 // ---- the shell's pages (phase 2a) ----
@@ -285,7 +306,9 @@ const routeTree = rootRoute.addChildren([
   browseRoute,
   createSpaceRoute,
   yourSpacesRoute,
-  keysRoute,
+  accountRoute,
+  deviceRoute,
+  welcomeRoute,
   shellRoute.addChildren([inviteRoute, settingsRoute, adminRoute]),
 ]);
 

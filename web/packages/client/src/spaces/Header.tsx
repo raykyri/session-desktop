@@ -267,9 +267,9 @@ function AccountMenu() {
             <div className="um-sep" />
             {item(CI.bell, "Notifications", () => go("/notifications"))}
             {item(I.mark, "Saved", () => go("/saved"))}
-            {item(MI.grid, "Your spaces", () => go("/spaces"))}
+            {item(MI.grid, "Your spaces", () => go("/settings/spaces"))}
             {item(MI.key, "API keys", () => go("/settings/keys"))}
-            {item(MI.cog, "Account", () => go("/settings"))}
+            {item(MI.cog, "Account", () => go("/settings/account"))}
             {item(MI.kbd, "Keyboard shortcuts", () => setOpen(false), <kbd>?</kbd>)}
             <div className="um-sep" />
             <div className="um-row">
