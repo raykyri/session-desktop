@@ -21,6 +21,10 @@ export interface Actor {
 export const PROTOCOL_VERSION = 4;
 export const MIN_PROTOCOL_VERSION = 4;
 
+/** The most mutation ids a reminted envelope may name in `replaces`: a client
+ * keeps the newest ones. */
+export const MAX_REPLACES = 16;
+
 /** One outbox entry as the client sends it: a mutator's name and input, the
  * client that sends it, its place in that client's sequence, and the
  * device's time when it was sent. There is no field for client-computed

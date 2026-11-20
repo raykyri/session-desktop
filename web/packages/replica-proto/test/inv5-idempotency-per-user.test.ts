@@ -5,9 +5,15 @@
 
 import test from "ava";
 
-import type { Envelope, StatsRec, CountsRec, ThreadRec } from "../src/index.js";
+import {
+  ReplicaClient,
+  type Envelope,
+  type StatsRec,
+  type CountsRec,
+  type ThreadRec,
+} from "../src/index.js";
 
-import { DAY, HOUR, MODEL, actor, cast, ok, refused, thread } from "./harness.js";
+import { DAY, HOUR, MINUTE, MODEL, actor, cast, ok, refused, thread } from "./harness.js";
 
 test("a replay of the same mutation id is applied once and answers the first result", async (t) => {
   const { w, open } = await cast(t);
@@ -262,4 +268,74 @@ test("two devices of one person each learn whether their own write was applied",
   t.not(laptop.clientId, phone.clientId);
   t.is(laptop.lastSeq, 1);
   t.is(phone.lastSeq, 2);
+});
+
+test("a reminted write is not applied again when its original was applied after all", async (t) => {
+  // M1a review 10: the original A gets CLOCK_SKEW, a delayed copy of A is
+  // applied, then the client's remint B (replaces: [A]) arrives
+  const { w, open } = await cast(t);
+  const a = await w.envelope("mel", "threads.create", {
+    id: w.id(),
+    space: open,
+    kind: "post",
+    q: "once",
+  });
+  await refused(
+    t,
+    w.server.apply(actor("mel"), { ...a, clientTime: a.clientTime + HOUR }),
+    "CLOCK_SKEW",
+  );
+  const first = await w.server.apply(actor("mel"), a);
+  t.true(first.ok);
+  const b: Envelope = {
+    ...a,
+    seq: a.seq + 1,
+    mutationId: w.id(),
+    replaces: [a.mutationId],
+    input: { id: w.id(), space: open, kind: "post", q: "once" },
+  };
+  t.deepEqual(await w.server.apply(actor("mel"), b), first);
+  // nothing applied twice, no seq used, and B's id keeps the answer
+  const once = [...w.server.dump().values()].filter((r) => r.kind === "thread" && r.q === "once");
+  t.is(once.length, 1);
+  t.is(await w.nextSeq("mel", a.clientId), a.seq + 1);
+  t.deepEqual(await w.server.apply(actor("mel"), { ...b, seq: 99 }), first);
+});
+
+test("a device clock days behind keeps its queued writes after CLOCK_SKEW, and their queue times move with it", async (t) => {
+  // M1a review 14: queue times shift by the correction
+  const { w, open } = await cast(t);
+  const slow = { now: () => w.clock.now() - 5 * DAY };
+  const mel = new ReplicaClient(w.server, actor("mel"), { clock: slow, random: w.random });
+  mel.queue("threads.create", { id: mel.newId(), space: open, kind: "post", q: "from behind" });
+  const results = await mel.flush();
+  t.deepEqual(
+    results.map((r) => (r.ok ? "ok" : r.error.code)),
+    ["ok"],
+  );
+  t.deepEqual(mel.problems(), []);
+  t.true(Math.abs(mel.now() - w.clock.now()) < 1000);
+  const sent = mel.sent.at(-1);
+  t.true(sent !== undefined && Math.abs(sent.queuedAt - w.clock.now()) < 1000);
+});
+
+test("a write reminted many times names only its newest 16 earlier ids, and is applied", async (t) => {
+  // M1a review 15
+  const { w, open } = await cast(t);
+  let drift = true;
+  let ahead = 0;
+  const clock = { now: () => w.clock.now() + (drift ? (ahead += 2 * MINUTE) : ahead) };
+  const mel = new ReplicaClient(w.server, actor("mel"), { clock, random: w.random });
+  mel.queue("threads.create", { id: mel.newId(), space: open, kind: "post", q: "reminted" });
+  for (let k = 0; k < 8; k++) await mel.flush();
+  t.true(mel.sent.length > 17);
+  t.true((mel.pending()[0]?.replaces.length ?? 0) <= 16);
+  drift = false;
+  await mel.flush();
+  t.is(mel.pending().length, 0);
+  t.true(mel.sent.every((e) => (e.replaces?.length ?? 0) <= 16));
+  const made = [...w.server.dump().values()].filter(
+    (r) => r.kind === "thread" && r.q === "reminted",
+  );
+  t.is(made.length, 1);
 });

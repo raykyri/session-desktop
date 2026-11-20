@@ -84,6 +84,8 @@ export interface Prediction {
   stored: boolean;
   /** The answer is kept for replays of (client, seq) instead. */
   storedForSeq?: boolean;
+  /** An earlier mutation id's answer, now kept under this one as well. */
+  adopted?: boolean;
 }
 
 const MIN_DAY = 86_400_000;
@@ -831,6 +833,14 @@ export class WriteModel {
     const again = client.bySeq.get(e.seq);
     if (again && now - again.at < 7 * MIN_DAY && again.sent === sortedJson([e.mutationId, payload]))
       return pass(again.code);
+    // a reminted write whose earlier id has an answer: that answer, adopted
+    // under this id, with no seq used (the write is not applied again)
+    if (formed && !live)
+      for (const id of e.replaces ?? []) {
+        const old = this.answers.get(`${u} ${id}`);
+        if (old && now - old.at < 7 * MIN_DAY)
+          return { code: old.code, usesSeq: false, stored: false, adopted: true };
+      }
     if (e.seq !== client.last + 1) return pass("OUT_OF_ORDER");
     if (!formed || live)
       return { code: "BAD_REQUEST", usesSeq: true, stored: false, storedForSeq: true };
@@ -873,6 +883,12 @@ export class WriteModel {
     if (p.storedForSeq && client)
       client.bySeq.set(envelope.seq, {
         sent: sortedJson([envelope.mutationId, sortedJson([envelope.name, envelope.input])]),
+        code: p.code,
+        at: now,
+      });
+    if (p.adopted)
+      this.answers.set(`${u} ${envelope.mutationId}`, {
+        payload: sortedJson([envelope.name, envelope.input]),
         code: p.code,
         at: now,
       });

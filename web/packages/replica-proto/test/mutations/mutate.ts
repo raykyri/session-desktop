@@ -644,6 +644,25 @@ const MUTATIONS: Mutation[] = [
     from: "        modNote: note,",
     to: "        modNote: null,",
   },
+  // ---- the M1a review's fixes ----
+  {
+    name: "M1a-10 a reminted write is applied again after its original was",
+    file: "src/server.ts",
+    from: "    if (wellFormed && !hit)\n      for (const id of m.replaces ?? []) {",
+    to: "    if (wellFormed && !hit && m.seq < 0)\n      for (const id of m.replaces ?? []) {",
+  },
+  {
+    name: "M1a-14 CLOCK_SKEW keeps the queue times read from the wrong clock",
+    file: "src/client.ts",
+    from: "for (const x of this.outbox) if (!x.sent) x.queuedAt += offset - this.offset;",
+    to: "for (const x of this.outbox) if (!x.sent) x.queuedAt = Math.min(x.queuedAt, offset + this.env.clock.now());",
+  },
+  {
+    name: "M1a-15 a reminted write names every earlier id",
+    file: "src/client.ts",
+    from: "      if (p.replaces.length > MAX_REPLACES) p.replaces.splice(0, p.replaces.length - MAX_REPLACES);\n",
+    to: "",
+  },
   // ---- M1b: `@session/mutators` ----
   {
     name: "M1b-1 the run queue limit is not checked",

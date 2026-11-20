@@ -56,6 +56,7 @@ import {
 } from "@session/mutators";
 
 import {
+  MAX_REPLACES,
   PROTOCOL_VERSION,
   UNRECORDED,
   type Actor,
@@ -418,6 +419,8 @@ export class ReplicaClient {
       for (const id of parsed?.success ? (def?.ids?.(parsed.data) ?? []) : [])
         map.set(id, this.newId());
       p.replaces.push(p.mutationId);
+      // the newest ids only: the server takes at most `MAX_REPLACES`
+      if (p.replaces.length > MAX_REPLACES) p.replaces.splice(0, p.replaces.length - MAX_REPLACES);
       p.mutationId = this.newId();
     }
     for (const x of this.outbox) if (!x.sent) x.input = remap(x.input, map);
@@ -466,12 +469,12 @@ export class ReplicaClient {
       if (!res.ok) {
         const { code, serverTime, expectedSeq } = res.error;
         if (code === "CLOCK_SKEW" && serverTime !== undefined && skews++ < 3) {
-          this.offset = serverTime - this.env.clock.now();
-          // a queue time ahead of the corrected clock was read from the
-          // clock that was off; one behind it may be right (the clock went
-          // wrong after the write was queued), so it stays
-          const corrected = this.now();
-          for (const x of this.outbox) x.queuedAt = Math.min(x.queuedAt, corrected);
+          const offset = serverTime - this.env.clock.now();
+          // the queue times of the writes not sent yet were read from the
+          // clock that was off: they move by the correction, so a device
+          // whose clock was days behind does not drop them as old
+          for (const x of this.outbox) if (!x.sent) x.queuedAt += offset - this.offset;
+          this.offset = offset;
           this.remint();
           continue;
         }

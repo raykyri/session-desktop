@@ -96,6 +96,7 @@ import {
 import { z } from "zod";
 
 import {
+  MAX_REPLACES,
   MIN_PROTOCOL_VERSION,
   UNRECORDED,
   type Actor,
@@ -129,8 +130,6 @@ export const REGISTRATIONS_PER_DAY = 20;
  * be as JSON. */
 export const MAX_INPUT_DEPTH = 32;
 export const MAX_ENVELOPE_BYTES = 256 * 1024;
-/** The most mutation ids a reminted envelope may name in `replaces`. */
-export const MAX_REPLACES = 16;
 
 const envelopeS = z.strictObject({
   clientId: z.string(),
@@ -602,6 +601,17 @@ export class ProtoServer implements TestServer {
     const sent = digest(canonical([m.mutationId, m.name, m.input]));
     const kept = this.seqAnswers.get(sk);
     if (kept && kept.digest === sent) return structuredClone(kept.result);
+    // a reminted write whose earlier mutation id has an answer (the delayed
+    // original was applied, or answered, after all): that answer, stored
+    // under this mutation id too, and no seq used; the write is never
+    // applied a second time under its new ids
+    if (wellFormed && !hit)
+      for (const id of m.replaces ?? []) {
+        const prior = this.dedup.get(`${u}\u0000${id}`);
+        if (!prior) continue;
+        setLast(this.dedup, dk, { result: prior.result, digest: payload, at: now });
+        return structuredClone(prior.result);
+      }
     if (m.seq !== client.last + 1)
       return {
         ok: false,
