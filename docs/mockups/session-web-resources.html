@@ -386,6 +386,10 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 .rnote { font-size: var(--fs-xs); color: var(--t-faint); }
 .saved-empty { grid-column: 1; padding: 24px 4px; }
 .hsaved { width: 30px; height: 30px; }
+.ctog { width: 30px; height: 30px; }
+.ctog.on { background: var(--control); color: var(--t-heading); }
+.ctog.on svg.i path { stroke-width: 1.5; }
+.ctog.on svg.i rect { fill: none; }
 .hsaved.on { background: var(--control); color: var(--t-heading); }
 .hsaved.on svg.i { fill: currentColor; }
 .hsv-b, .hsv-d { display: inline-flex; align-items: center; gap: 5px; }
@@ -1952,6 +1956,9 @@ function canvasPos(list, w = 230, cols = 2, gx = 20, gy = 20) { list.forEach((r,
    · 4 shelves of overlapping cards · 5 a grid of stack tiles. 2-5 stack cards by kind until you move them. */
 const CV = [['Freeform', 'Cards placed anywhere on the canvas'], ['Piles', 'Stacks you place on the canvas; click one to spread it'], ['Cascade', 'Compact stacks; only titles show until you pick a card'], ['Shelves', 'One shelf per stack; cards overlap like a hand'], ['Tiles', 'A grid of stack tiles; open one to see its cards']];
 const pileCard = (r, i, n) => `<div class="pcrd" style="--i:${i}">${rcard(r, 'compact')}</div>`;
+/* show or hide the canvas (app bar button, or Ctrl+\\) */
+const CANVAS_ICON = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6.5 3v10"/></svg>';
+const canvasToggle = () => st.screen === 'network' ? `<button class="iconbtn ctog${st.canvasOff ? '' : ' on'}" data-a="canvastoggle" aria-pressed="${!st.canvasOff}" aria-label="${st.canvasOff ? 'Show canvas' : 'Hide canvas'}" title="${st.canvasOff ? 'Show canvas' : 'Hide canvas'} (Ctrl+\\)">${CANVAS_ICON}</button>` : '';
 function resourcesPane() {
   const v = st.ui.cv || 1, list = resFor(st.space), home = !SP[st.space];
   const title = home ? `<p class="rnote3">From the spaces you joined. Items you add go to ${esc(spName(resTarget() || 'public'))}.</p>` : '';
@@ -1982,7 +1989,7 @@ function renderNetwork() {
     : st.space === 'saved' && !posts.length ? '<div class="row"><p class="empty saved-empty">Nothing saved yet. Use the bookmark on any thread to keep it here.</p><div></div></div>'
     : st.space === 'home' && !posts.length ? '<div class="row"><p class="empty saved-empty">Join a few spaces to fill Home. <button class="tlink inl" data-a="browse">Browse spaces</button></p><div></div></div>'
     : SP[st.space] && !posts.length ? '<div class="row"><p class="empty saved-empty">No threads here yet. Ask the first question.</p><div></div></div>' : '';
-  const rv = st.ui.rl, pane = st.screen === 'network' && !locked ? resourcesPane() : '', shelf = TOPSHELF.includes(rv) || rv === 21;
+  const rv = st.ui.rl, pane = st.screen === 'network' && !locked && !st.canvasOff ? resourcesPane() : '', shelf = TOPSHELF.includes(rv) || rv === 21;
   $('#page').innerHTML = `<div class="rwrap"><div class="spshell rl-${rv}${rv === 4 && st.drawer === false ? ' shut' : ''}">${shelf ? '' : pane}<div class="mg" id="k-mg"><div class="mg-inner">${shelf && rv !== 21 ? pane : ''}
     ${pendingBanner()}${spaceHead()}${locked || (SP[st.space] && !isJoined(st.space) && st.auth === 'in') ? '' : composerOrLock(v)}
     ${empty}${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div>${rv === 21 ? pane : ''}</div></div>`;
@@ -2027,6 +2034,7 @@ app.addEventListener('click', e => {
   if (a === 'raddclose') { st.radding = false; render(); return; }
   if (a === 'rkind') { st.rkind = d.k || null; st.menu = null; render(); return; }
   if (a === 'rlink') { st.rlink = d.id || null; render(); return; }
+  if (a === 'canvastoggle') { st.canvasOff = !st.canvasOff; render(); return; }
   if (a === 'stackopen') { st.openStack = st.openStack === d.k ? null : d.k; render(); return; }
   if (a === 'front') { st.front = { ...(st.front || {}), [d.k]: d.id }; render(); return; }
   if (a === 'rdock') { st.dockOpen = st.dockOpen === false; render(); return; }
@@ -2190,6 +2198,7 @@ app.addEventListener('mousedown', e => {
 /* Escape closes the innermost thing: a menu (focus returns to its button), then an inline composer,
    then a key form or remove confirm. Arrow keys move through open menus. */
 document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === '\\') { e.preventDefault(); st.canvasOff = !st.canvasOff; render(); return; }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k' && st.ui.sd === 'b' && st.ui.sv === '3' && st.screen === 'network') { e.preventDefault(); st.menu = 'spsearch'; render(); $('#in-spq')?.focus(); return; }
   if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && st.menu) {
     const items = [...app.querySelectorAll('.mpick .menu .mi')].filter(x => x.offsetParent && !x.matches('[aria-disabled="true"]'));
@@ -2346,7 +2355,7 @@ function appbar() {
   const m = meM();
   const open = st.menu === 'acct';
   return `<header class="appbar">${brandBtn()}${st.screen === 'network' ? `<div class="hstrip">${navStrip()}</div>` : ''}${st.ui.sd === 'b' && st.ui.sv === '1' && st.screen === 'network' ? ddButton('inbar', esc(curLabel())) : ''}
-    <span class="grow"></span>${meter()}${savedBtn()}
+    <span class="grow"></span>${canvasToggle()}${meter()}${savedBtn()}
     <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}">${av(st.user, 'sm')}${I.down}</button>
     ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff ? cap1(m.staff) : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
       ${isActive() ? `<button class="mi" data-ma="go" data-to="members"><span>Invites</span></button><button class="mi" data-a="space" data-id="saved"><span>Saved</span></button><button class="mi" data-ma="go" data-to="usage"><span>Usage and API keys</span></button>` : `<button class="mi" data-ma="go" data-to="status"><span>Enter an invite code</span></button>`}
@@ -2355,7 +2364,7 @@ function appbar() {
 
 /* ---- signed-out site: the open network with a Sign in button; sign-in runs in a dialog (A) or a side sheet (B) ---- */
 const brandBtn = () => `<button class="brand home" data-ma="go" data-to="network" aria-label="Session home">${mark('sm')}<b>Session</b></button>`;
-const appbarOut = () => `<header class="appbar">${brandBtn()}<div class="hstrip">${navStrip()}</div>${st.ui.sd === 'b' && st.ui.sv === '1' ? ddButton('inbar', esc(curLabel())) : ''}<span class="grow"></span>
+const appbarOut = () => `<header class="appbar">${brandBtn()}<div class="hstrip">${navStrip()}</div>${canvasToggle()}${st.ui.sd === 'b' && st.ui.sv === '1' ? ddButton('inbar', esc(curLabel())) : ''}<span class="grow"></span>
   <button class="ghost" data-ma="openauth" data-to="code">Join with invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></header>`;
 const authDialog = () => `<div class="scrim auth-scrim" data-ma="closeauth"></div><div class="authdlg v-a" role="dialog" aria-modal="true" aria-label="Sign in to Session"><button class="iconbtn dclose" data-ma="closeauth" aria-label="Close">${I.x}</button>${authScreen()}</div>`;
 /* ---- sign-in steps ---- */
