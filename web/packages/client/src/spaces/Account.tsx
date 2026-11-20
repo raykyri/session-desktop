@@ -28,7 +28,7 @@ import { cx } from "./cx.js";
 import { I, MI, SVG, SXI } from "./icons.js";
 import { useOverlay } from "./overlay.js";
 import { useWorld } from "./world.js";
-import { refusalToast, toast, useWrite } from "./writes.js";
+import { refusalToast, savedToast, toast, useWrite } from "./writes.js";
 
 // ---- reads ----
 
@@ -603,7 +603,7 @@ function AccountTab() {
                       if (o.ok) {
                         setName(null);
                         setBio(null);
-                        toast("Profile saved.");
+                        savedToast(o, "Profile saved.");
                       }
                     },
                   )
@@ -917,11 +917,17 @@ export function AccountPage({ tab }: { tab: string }) {
   const w = useWorld();
   const navigate = useNavigate();
   const me = useMe();
+  // the window's title names the section (the mockup's ACX_SECS)
+  const title = TABS.find((x) => x[0] === tab)?.[1] ?? "Account";
   if (!w.me) {
     if (me.status === "loading" || me.status === "idle")
-      return <Page place={{ kind: "other" }}>{null}</Page>;
+      return (
+        <Page place={{ kind: "other" }} title={title}>
+          {null}
+        </Page>
+      );
     return (
-      <Page place={{ kind: "other" }}>
+      <Page place={{ kind: "other" }} title={title}>
         <div className="cs-napage">
           <div className="cs-na">
             <h2>Account</h2>
@@ -949,7 +955,7 @@ export function AccountPage({ tab }: { tab: string }) {
     spaces: <YourSpaces />,
   };
   return (
-    <Page place={{ kind: "other" }}>
+    <Page place={{ kind: "other" }} title={title}>
       <div className="home-wide sub-page acx-page acx-tabs-v">
         <div className="nv-backrow">
           <button
@@ -1087,7 +1093,7 @@ export function DevicePage({ request }: { request?: string }) {
       </section>
     ) : null;
   return (
-    <Page place={{ kind: "other" }}>
+    <Page place={{ kind: "other" }} title="Sign in on a device">
       <div className="cs-napage sx-sign">
         <div className="cs-na">
           {done === "approved" ? (
@@ -1218,7 +1224,7 @@ export function WelcomePage() {
     void navigate({ to: "/" });
   };
   return (
-    <Page place={{ kind: "other" }}>
+    <Page place={{ kind: "other" }} title="Welcome">
       <div className="cs-napage">
         <div className="cs-na">
           {step === "terms" ? (

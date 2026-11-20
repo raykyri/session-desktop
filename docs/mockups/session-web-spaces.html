@@ -13831,7 +13831,7 @@ function sxStaleDone(x) { st.sxObx = st.sxObx.filter(o => o.state !== 'stale'); 
 
 /* ---------- Update Session ---------- */
 const sxUpdText = () => sxNat() ? `This version of Session is too old to sync. ${st.sxObx.length ? `${st.sxObx.length} changes wait on this phone until you update.` : ''}`
-  : sxApp() ? `This version of Session is too old to sync. ${st.sxObx.length ? `${st.sxObx.length} changes wait on this Mac and are sent after the update.` : ''}`
+  : sxApp() ? `This version of Session is too old to sync. ${st.sxObx.length === 1 ? '1 change waits on this Mac and is sent after the update.' : st.sxObx.length ? `${st.sxObx.length} changes wait on this Mac and are sent after the update.` : ''}`
   : 'Session has been updated. Reload the page to keep saving changes.';
 const sxUpdDlg = () => dlg('Update Session', `<p class="muted">${sxUpdText()}</p>${sxApp() ? '<p class="cs-fine">' + SXI.dl + '<span>Session 1.1.0 downloads in the background, then the app restarts.</span></p>' : ''}`, `<button class="btn" type="button" data-act="modal-close">Later</button><button class="btn primary" type="button" data-sx="update:">${sxUpdLabel()}</button>`);
 

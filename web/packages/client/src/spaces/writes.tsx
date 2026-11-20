@@ -9,10 +9,12 @@
 // write only while it is being sent: once it waits in the outbox (offline,
 // behind other writes, held for an update, or after a try without an
 // answer) the screen goes on as if it applied, and Unsent changes and its
-// toasts (`Outbox.tsx`) show what becomes of it.
+// toasts (`Outbox.tsx`) show what becomes of it. An online-only call
+// (`NOT_MUTATORS`) never waits in the outbox: with no answer it ends as on
+// the web.
 
 import type { Answer, ApiError, OutboxEntry, SyncClient } from "@session/sync/client";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { useSession } from "../sync/react.js";
 import type { SpacesSession } from "../sync/session.js";
@@ -47,8 +49,16 @@ interface ToastAction {
 
 interface Toast {
   id: number;
-  text: string;
+  /** A function is read again each second (a countdown). */
+  text: string | (() => string);
   actions: ToastAction[];
+  /** Kept until the person dismisses it or `live` says it no longer
+   * applies (the outbox's toasts, as the mockup's sxShowToast); otherwise it
+   * goes after 6 s (12 s with an action). */
+  sticky: boolean;
+  /** A sticky toast with the same key replaces it. */
+  key: string | null;
+  live: (() => boolean) | null;
 }
 
 let toasts: Toast[] = [];
@@ -58,17 +68,49 @@ const emit = () => {
   for (const l of [...toastListeners]) l();
 };
 
-/** Show a toast (the mockup's `cs-toast`): one at a time, the newest. It goes
- * after 6 s (12 s with an action), on Dismiss, or on an action. */
+/** Show a toast (the mockup's `cs-toast`): one is on screen, the newest. It
+ * goes after 6 s (12 s with an action), on Dismiss, or on an action; a sticky
+ * toast it covered shows again after it. */
 export function toast(text: string, ...actions: ToastAction[]): void {
-  const t: Toast = { id: nextToast++, text, actions };
-  toasts = [t];
+  const t: Toast = { id: nextToast++, text, actions, sticky: false, key: null, live: null };
+  toasts = [...toasts.filter((x) => x.sticky), t];
   emit();
   setTimeout(() => dismissToast(t.id), actions.length ? 12_000 : 6_000);
 }
 
+/** A toast kept until the person dismisses it (the Desktop app's outbox
+ * toasts): it replaces the toast with the same `key`, and goes once `live`
+ * returns false (`pruneToasts`). */
+export function stickyToast(o: {
+  key: string;
+  text: string | (() => string);
+  actions?: ToastAction[];
+  live?: () => boolean;
+}): void {
+  const t: Toast = {
+    id: nextToast++,
+    text: o.text,
+    actions: o.actions ?? [],
+    sticky: true,
+    key: o.key,
+    live: o.live ?? null,
+  };
+  toasts = [...toasts.filter((x) => x.key !== o.key), t];
+  emit();
+}
+
 export function dismissToast(id: number): void {
-  toasts = toasts.filter((x) => x.id !== id);
+  const next = toasts.filter((x) => x.id !== id);
+  if (next.length === toasts.length) return;
+  toasts = next;
+  emit();
+}
+
+/** Drop the sticky toasts that no longer apply. */
+export function pruneToasts(): void {
+  const next = toasts.filter((x) => !x.live || x.live());
+  if (next.length === toasts.length) return;
+  toasts = next;
   emit();
 }
 
@@ -78,9 +120,20 @@ const subscribe = (l: () => void) => {
 };
 const snapshot = () => toasts;
 
+function ToastText({ text }: { text: Toast["text"] }) {
+  const [, tick] = useState(0);
+  const live = typeof text === "function";
+  useEffect(() => {
+    if (!live) return;
+    const h = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(h);
+  }, [live]);
+  return <span>{typeof text === "function" ? text() : text}</span>;
+}
+
 export function Toasts() {
   const list = useSyncExternalStore(subscribe, snapshot, snapshot);
-  const t = list[0];
+  const t = list.at(-1);
   if (!t) return null;
   const buttons = t.actions.map((a) => (
     <button
@@ -98,7 +151,7 @@ export function Toasts() {
   return (
     <div className={t.actions.length > 1 ? "cs-toast-wrap sx-toastw" : "cs-toast-wrap"}>
       <div className="cs-toast" role="status">
-        <span>{t.text}</span>
+        <ToastText key={t.id} text={t.text} />
         {t.actions.length > 1 ? <span className="sx-tacts">{buttons}</span> : buttons}
         <button
           className="iconbtn"
@@ -146,6 +199,14 @@ export function refusalText(error: ApiError): string {
 /** The toast of a refusal. */
 export function refusalToast(error: ApiError): void {
   toast(refusalText(error));
+}
+
+/** The toast that says the server took a write ("Settings saved.", "Report
+ * sent to the moderators …"): shown only once the write applied. In the
+ * Desktop app a write that waits in the outbox (`queued`) is not saved yet,
+ * and Unsent changes and its toasts say what becomes of it. */
+export function savedToast(o: Outcome, text: string): void {
+  if (o.ok && !o.queued) toast(text);
 }
 
 /** Wait for a write's outcome; a refusal shows its toast unless `quiet`. */
@@ -209,6 +270,11 @@ async function settleKept(
         if (done) return;
         if (a === null) {
           const error = limited(session, w.local);
+          // an online-only call (`spaces.create`, `research.retryNode`, …)
+          // is never in the outbox: with no answer it ends as on the web,
+          // and the screen offers Try again
+          if (!error && !c.outbox().some((x) => x.local === w.local))
+            return finish({ ok: false, error: null, local: w.local });
           if (!error) return finish({ ok: true, result: null, queued: true });
           if (!quiet) refusalToast(error);
           c.discard(w.local);

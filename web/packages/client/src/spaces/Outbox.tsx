@@ -4,21 +4,24 @@
 // Unsent changes page (`/unsent`), the status of a write the outbox holds
 // under its item, and the toasts of the writes that need the person
 // (failed after 5 tries, EXPIRED, dropped after 3 days, refused). A STALE
-// decision is not applied again: its toast says why and it leaves the list;
-// a refused write with text stays in the list, where Copy text recovers it.
-// Only a session that keeps its outbox (`persist: true`) shows any of this.
+// decision is not applied again: its toast says why, and it stays in the
+// list with Dismiss; a refused write with text stays in the list, where Copy
+// text recovers it. The toasts stay until the person dismisses them or the
+// write they name changes (the mockup's sxShowToast). Only a session that
+// keeps its outbox (`persist: true`) shows any of this.
 
 import type { OutboxEntry, SyncClient } from "@session/sync/client";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
-import { ago, spaceName } from "../data/format.js";
+import { agoText, spaceName } from "../data/format.js";
 import { writeClipboardText } from "../lib/clipboard.js";
 import { platform } from "../platform.js";
 import { useNow, useSession, useStatus } from "../sync/react.js";
 import type { SpacesSession } from "../sync/session.js";
 
 import { Svg } from "./Svg.js";
+import { Avatar } from "./atoms.js";
 import { cx } from "./cx.js";
 import { CI, I, SXI } from "./icons.js";
 import {
@@ -33,7 +36,7 @@ import {
   type ObKind,
 } from "./outbox.js";
 import { useOverlay } from "./overlay.js";
-import { isAwaited, toast } from "./writes.js";
+import { isAwaited, pruneToasts, stickyToast, toast } from "./writes.js";
 
 const KIND_ICON: Record<ObKind, string> = {
   reply: SXI.reply,
@@ -54,7 +57,15 @@ const KIND_ICON: Record<ObKind, string> = {
 /** The outbox's writes the person sees: every write not answered yet. */
 const shownEntries = (c: SyncClient) => c.outbox().filter((e) => e.state !== "answered");
 
-/** The client's outbox, as items, kept current. */
+/** What the sync-state copy calls this device ("this Mac"). */
+const hereName = () => platform().here ?? "this device";
+
+/** When each write of this window was sent (the mockup's sxSent): Unsent
+ * changes says how many were sent in the past minute. */
+let sentAt: number[] = [];
+const SENT_WINDOW = 60_000;
+const sentLately = (now: number) => sentAt.filter((t) => now - t < SENT_WINDOW).length;
+
 /** A space's name as the list shows it, from the replica. */
 const labelIn = (session: SpacesSession) => (sp: string) => {
   const s = session.reader().get("space", sp);
@@ -84,7 +95,7 @@ export function useOutbox(): { items: ObItem[]; sent: number; client: SyncClient
     const r = session.reader();
     return {
       items: shownEntries(c).map((e) => describe(e, r, labelIn(session), now, c.updateRequired)),
-      sent: c.outbox().filter((e) => e.state === "answered").length,
+      sent: sentLately(now),
       client: c,
     };
   }, [c, session, ver, now]);
@@ -216,7 +227,7 @@ function Acts({ o, s }: { o: ObItem; s: ReturnType<typeof statusOf> }) {
 function Row({ o }: { o: ObItem }) {
   const status = useStatus();
   const now = useNow(1000);
-  const s = statusOf(o, { here: platform().here ?? "this Mac", offline: !status.online, now });
+  const s = statusOf(o, { here: hereName(), offline: !status.online, now });
   return (
     <div className={cx("sx-row", `sx-${s.tone}`)} data-sxrow={o.local}>
       <span className="sx-ric">
@@ -225,7 +236,7 @@ function Row({ o }: { o: ObItem }) {
       <div className="sx-rb">
         <div className="sx-rh">
           <b>{o.title}</b>
-          <span className="faint num">{ago(o.made, now, "now")} ago</span>
+          <span className="faint num">{agoText(o.made, now)}</span>
         </div>
         {o.text && o.kind !== "page" ? <p className="sx-rt">{o.text}</p> : null}
         <p className="sx-rs">
@@ -244,7 +255,7 @@ function Row({ o }: { o: ObItem }) {
 export function UnsentList() {
   const { items, sent } = useOutbox();
   const status = useStatus();
-  const here = platform().here ?? "this Mac";
+  const here = hereName();
   const bad = items.filter(isBad);
   const wait = items.filter((o) => !isBad(o));
   return (
@@ -372,7 +383,7 @@ export function useHeldReplies(thread: string): ObItem[] {
 export function ItemStatus({ o }: { o: ObItem }) {
   const status = useStatus();
   const now = useNow(1000);
-  const s = statusOf(o, { here: platform().here ?? "this Mac", offline: !status.online, now });
+  const s = statusOf(o, { here: hereName(), offline: !status.online, now });
   const full = o.state !== "retry" && !isBad(o);
   const bad = s.tone === "bad";
   if (!full)
@@ -397,9 +408,7 @@ export function ItemStatus({ o }: { o: ObItem }) {
 export function HeldReply({ o, me }: { o: ObItem; me: string }) {
   return (
     <div className={cx("rp sx-rp", (o.state === "expired" || o.state === "dropped") && "sx-gone")}>
-      <span className="av sm" aria-hidden="true">
-        {me.slice(0, 2).toUpperCase()}
-      </span>
+      <Avatar u={me} className="sm" />
       <div className="rp-b">
         <div className="meta">
           <b>{me}</b>
@@ -428,6 +437,14 @@ export function OutboxToasts() {
   return session?.persistent ? <Watcher /> : null;
 }
 
+/** FORBIDDEN refusals of one space: one toast, except a single write that is
+ * not a moderator's, which gets its own (with Copy text). */
+function forbiddenGroups(list: ObItem[]): ObItem[][] {
+  const by = new Map<string, ObItem[]>();
+  for (const o of list) by.set(o.space ?? "", [...(by.get(o.space ?? "") ?? []), o]);
+  return [...by.values()];
+}
+
 function Watcher() {
   const session = useSession();
   const navigate = useNavigate();
@@ -436,39 +453,81 @@ function Watcher() {
   const forbidden = useRef<ObItem[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const actRef = useRef(act);
-  actRef.current = act;
+  useEffect(() => {
+    actRef.current = act;
+  });
   useEffect(() => {
     const c = session?.persistent ? session.client : null;
     if (!c || !session) return;
     const details = { label: "Details", run: () => void navigate({ to: "/unsent" }) };
     const describeNow = (e: OutboxEntry) =>
-      describe(e, session.reader(), labelIn(session), c.now());
+      describe(e, session.reader(), labelIn(session), c.now(), c.updateRequired);
+    const entry = (local: string) => c.outbox().find((x) => x.local === local);
+    /** Not over the list the toast points to (the popover, `/unsent`). */
+    const hidden = () => popOpen || location.pathname === "/unsent";
+    /** A write's toast: it stays until dismissed, and goes once the write
+     * left the state it names (sent, retried, dismissed in the list). */
+    const say = (
+      o: ObItem,
+      k: string,
+      text: string | (() => string),
+      ...actions: { label: string; run: () => void }[]
+    ) => {
+      if (hidden()) return;
+      stickyToast({
+        key: `ob:${o.local}`,
+        text,
+        actions,
+        live: () => {
+          const e = entry(o.local);
+          return e !== undefined && toastKey(e) === k;
+        },
+      });
+    };
+    /** The toast of a write shown to the person (`sxStatus`'s head, its
+     * first action, and Details). */
+    const badToast = (o: ObItem, k: string) => {
+      const s = statusOf(o, { here: hereName(), offline: !session.status().online, now: c.now() });
+      const first = s.acts[0];
+      say(
+        o,
+        k,
+        `${s.head ?? "Not saved"}: your ${o.noun}${o.spaceLabel ? ` in ${o.spaceLabel}` : ""}.`,
+        ...(first ? [{ label: first[0], run: () => actRef.current(o, first[1]) }] : []),
+        details,
+      );
+    };
     const flushForbidden = () => {
       timer.current = null;
       const list = forbidden.current;
       forbidden.current = [];
-      if (!list.length) return;
-      const where = list[0]?.spaceLabel;
-      const mod = list.every(isModeration);
-      const n = list.length;
-      const what = mod
-        ? n === 1
-          ? "moderation action"
-          : "moderation actions"
-        : n === 1
-          ? "change"
-          : "changes";
-      say(
-        `${n} ${what}${where ? ` in ${where}` : ""} ${n === 1 ? "wasn’t" : "weren’t"} applied.`,
-        details,
-      );
-    };
-    const say = (text: string, ...actions: { label: string; run: () => void }[]) => {
-      if (popOpen || location.pathname === "/unsent") return;
-      toast(text, ...actions);
+      for (const group of forbiddenGroups(list)) {
+        const one = group[0];
+        if (!one) continue;
+        if (group.length === 1 && !isModeration(one)) {
+          badToast(one, "refused");
+          continue;
+        }
+        if (hidden()) continue;
+        const where = one.spaceLabel;
+        const mod = group.every(isModeration);
+        const n = group.length;
+        const what = mod
+          ? n === 1
+            ? "moderation action"
+            : "moderation actions"
+          : n === 1
+            ? "change"
+            : "changes";
+        stickyToast({
+          key: `ob-forbidden:${one.local}`,
+          text: `${n} ${what}${where ? ` in ${where}` : ""} ${n === 1 ? "wasn’t" : "weren’t"} applied.`,
+          actions: [details],
+          live: () => group.some((o) => entry(o.local)?.state === "refused"),
+        });
+      }
     };
     const check = () => {
-      const first = seen.current === null;
       const next: Seen = new Map();
       let again = false;
       for (const e of c.outbox()) {
@@ -476,48 +535,43 @@ function Watcher() {
         const was = seen.current?.get(e.local);
         // a write a screen still waits on is the screen's; it is looked at
         // again once the screen let it go (in the same change)
-        if (!first && was !== k && isAwaited(e.local)) {
+        if (was !== k && isAwaited(e.local)) {
           next.set(e.local, was ?? "");
           again = true;
           continue;
         }
         next.set(e.local, k);
-        if (first || was === k) continue;
+        if (was === k) continue;
+        if (k === "answered" && was !== undefined) sentAt = [...sentAt, c.now()];
         if (k === "wait" || k === "held" || k === "answered") continue;
         const o = describeNow(e);
-        const where = o.spaceLabel ? ` in ${o.spaceLabel}` : "";
         if (o.state === "retry") {
+          // the countdown is read from the entry as it is now
           say(
-            `Not sent yet: the server didn’t answer. Next try in ${o.next} s (try ${o.tries} of 5).`,
+            o,
+            k,
+            () => {
+              const now = entry(o.local);
+              const x = now ? describeNow(now) : o;
+              return `Not sent yet: the server didn’t answer. Next try in ${x.next} s (try ${x.tries} of 5).`;
+            },
             { label: "Retry now", run: () => actRef.current(o, "retryNow") },
           );
         } else if (o.state === "stale" && !o.text) {
-          // a decision whose item changed: not applied again, and gone
-          say(staleText(o));
-          c.discard(e.local);
+          // a decision whose item changed: not applied again; it stays in
+          // Unsent changes until the person dismisses it
+          say(o, k, staleText(o));
         } else if (o.state === "forbidden") {
-          // the writes the same replay refuses are one toast: it waits until
-          // none came for half a second
+          // the writes the same replay refuses are one toast per space: it
+          // waits until none came for half a second
           forbidden.current.push(o);
           if (timer.current) clearTimeout(timer.current);
           timer.current = setTimeout(flushForbidden, 500);
-        } else if (isBad(o)) {
-          const s = statusOf(o, {
-            here: platform().here ?? "this Mac",
-            offline: !session.status().online,
-            now: c.now(),
-          });
-          const first = s.acts[0];
-          say(
-            `${s.head ?? "Not saved"}: your ${o.noun}${where}.`,
-            ...(first && first[1] !== "discard"
-              ? [{ label: first[0], run: () => actRef.current(o, first[1]) }]
-              : []),
-            details,
-          );
-        }
+        } else if (isBad(o)) badToast(o, k);
       }
       seen.current = next;
+      sentAt = sentAt.filter((t) => c.now() - t < SENT_WINDOW);
+      pruneToasts();
       if (again) setTimeout(check, 0);
     };
     check();

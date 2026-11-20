@@ -18,7 +18,7 @@ import { Avatar, SpaceGlyph, Seal } from "./atoms.js";
 import { CI, I, MI, SVG } from "./icons.js";
 import { useOverlay } from "./overlay.js";
 import { useWorld } from "./world.js";
-import { toast, useWrite } from "./writes.js";
+import { savedToast, toast, useWrite } from "./writes.js";
 
 export const policyLabel = (s: Space) =>
   s.policy === "invite" ? "Invite only" : "Join by request";
@@ -351,7 +351,8 @@ function RequestDialog({ s, onClose }: { s: Space; onClose: () => void }) {
     setBusy(false);
     if (o.ok) {
       onClose();
-      toast(
+      savedToast(
+        o,
         `Request sent to the moderators of ${spaceName(s)}. You get a notification when they decide.`,
       );
     }

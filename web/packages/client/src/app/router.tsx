@@ -9,6 +9,7 @@ import {
   createRoute,
   createRouter,
   lazyRouteComponent,
+  notFound,
   redirect,
   type RouterHistory,
   type Router,
@@ -16,6 +17,7 @@ import {
 import { z } from "zod";
 
 import { ensureMe } from "../api/account.js";
+import { isDesktop } from "../platform.js";
 import { loadAdminRoute, loadSettingsRoute } from "../routes/chunks.js";
 import { InvitePage } from "../routes/invite.js";
 import { LoginPage } from "../routes/login.js";
@@ -226,11 +228,16 @@ const savedRoute = createRoute({
   component: SavedPage,
 });
 
-/** Unsent changes (the Desktop app: the outbox; the web has none). */
+/** Unsent changes (the Desktop app: the outbox; the web has none, and
+ * no such page). */
 const unsentRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/unsent",
-  beforeLoad: requireSignedIn,
+  beforeLoad: async (ctx) => {
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
+    if (!isDesktop()) throw notFound();
+    return requireSignedIn(ctx);
+  },
   component: UnsentPage,
 });
 

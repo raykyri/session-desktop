@@ -4,6 +4,7 @@
 // writes an earlier run left sent at start, and the session's watch of its
 // connection.
 
+import * as pkg from "@session/mutators";
 import type {
   Change,
   CursorMap,
@@ -14,15 +15,32 @@ import type {
   StoredRecord,
   Transport,
 } from "@session/sync/client";
-import { MemoryStorage, NO_RESPONSE } from "@session/sync/client";
+import { MemoryStorage, NO_RESPONSE, Offline } from "@session/sync/client";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import test from "ava";
 
 import { meResource } from "../src/api/account.js";
 import { setFetch } from "../src/api/http.js";
 import { setPlatform, webPlatform } from "../src/platform.js";
-import { describe, listHead, statusOf, type ObItem } from "../src/spaces/outbox.js";
-import { Toasts, WRITE_ERROR, isAwaited, useWrite, type Outcome } from "../src/spaces/writes.js";
+import {
+  MODERATION,
+  describe,
+  isModeration,
+  listHead,
+  statusOf,
+  type ObItem,
+} from "../src/spaces/outbox.js";
+import {
+  Toasts,
+  WRITE_ERROR,
+  isAwaited,
+  pruneToasts,
+  savedToast,
+  stickyToast,
+  toast,
+  useWrite,
+  type Outcome,
+} from "../src/spaces/writes.js";
 import { SpacesProvider } from "../src/sync/react.js";
 import { Reader } from "../src/sync/reader.js";
 import { SpacesSession } from "../src/sync/session.js";
@@ -112,7 +130,7 @@ test("each write is described by what it is and where, with the person's text", 
       text: ["One", "Two"],
       base: { rev: 0 },
     }),
-    { kind: "page", title: "Edit of Canon in Sablefield", text: "One\nTwo", page: PG },
+    { kind: "page", title: "Edit of Canon in Sablefield", text: "One\n\nTwo", page: PG },
   );
   t.like(d("moderation.decide", { item: `r:${TH}:${RP}`, decision: "shown", base: { rev: 1 } }), {
     kind: "show",
@@ -247,7 +265,7 @@ const keyOf = (r: StoredRecord) => {
     : `${r.kind}:${String(x["id"])}`;
 };
 
-function transport(push: (e: Envelope) => PushResult) {
+function transport(push: (e: Envelope) => PushResult, call?: Transport["call"]) {
   const pushed: Envelope[] = [];
   const t: Transport = {
     register: () => Promise.resolve({ ok: true, clientId: "c1", serverTime: NOW }),
@@ -271,7 +289,7 @@ function transport(push: (e: Envelope) => PushResult) {
       }),
     listen: (_c: () => CursorMap, _e, signal) =>
       new Promise<void>((r) => signal.addEventListener("abort", () => r())),
-    call: () => Promise.resolve({ ok: true, result: null, serverTime: NOW }),
+    call: call ?? (() => Promise.resolve({ ok: true, result: null, serverTime: NOW })),
   };
   return { t, pushed };
 }
@@ -285,11 +303,15 @@ function Probe({ name, input, out }: { name: string; input: unknown; out: (o: Ou
   );
 }
 
-function kept(push: (e: Envelope) => PushResult, storage = new MemoryStorage()) {
+function kept(
+  push: (e: Envelope) => PushResult,
+  storage = new MemoryStorage(),
+  call?: Transport["call"],
+) {
   setFetch(
     createFetchStub({ "GET /api/spaces": { spaces: [], stats: [], serverTime: NOW } }).fetch,
   );
-  const { t, pushed } = transport(push);
+  const { t, pushed } = transport(push, call);
   const session = new SpacesSession("ines.v", {
     transport: t,
     persist: true,
@@ -384,4 +406,215 @@ test.serial("the web’s session keeps no outbox; the desktop platform's does", 
   t.false(new SpacesSession("ines.v", { listen: false }).persistent);
   setPlatform({ ...webPlatform, kind: "desktop", persist: true, here: "this Mac" });
   t.true(new SpacesSession("ines.v", { listen: false }).persistent);
+});
+
+// ---- phase 3 review round 1 (reviewer B) ----
+
+test.serial(
+  "useWrite on a session that keeps its outbox: an online-only call with no answer ends as on the web",
+  async (t) => {
+    // spaces.create is not a mutator: it is sent at once, never queued
+    const { session } = kept(
+      () => NO_RESPONSE,
+      new MemoryStorage(),
+      () => Promise.reject(new Offline("no response")),
+    );
+    let out: Outcome | null = null;
+    render(
+      <SpacesProvider make={() => session}>
+        <Probe
+          name="spaces.create"
+          input={{ id: "01M7E1650000000000000000SP", name: "x", desc: "", rules: [], vis: "open" }}
+          out={(o) => (out = o)}
+        />
+      </SpacesProvider>,
+    );
+    await waitUntil(t, () => session.status().ready, "the session started");
+    await act(async () => {
+      screen.getByRole("button", { name: "Write" }).click();
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    await waitUntil(t, () => out !== null, "the call ended");
+    t.like(out, { ok: false, error: null });
+    t.is(typeof (out as unknown as { local?: unknown }).local, "string");
+    t.deepEqual(session.client?.outbox(), []);
+    meResource.reset();
+    session.stop();
+  },
+);
+
+test("every write that holds the person's text keeps it for Copy text", (t) => {
+  const d = (name: string, input: unknown) =>
+    describe(
+      entry(name, input, { state: "refused", error: { code: "FORBIDDEN", message: "" } }),
+      reader,
+      label,
+      NOW,
+    );
+  const SK = "01M2JF0CG0SK00000000000001";
+  t.like(d("skills.create", { space: SP, id: SK, name: "triage", prompt: "Sort the reports." }), {
+    title: "New skill triage in Sablefield",
+    noun: "skill",
+    text: "triage\n\nSort the reports.",
+  });
+  t.like(
+    d("skills.update", {
+      space: SP,
+      id: SK,
+      name: "triage",
+      prompt: "Sort them.",
+      base: { rev: 0 },
+    }),
+    { title: "Edit of skill triage in Sablefield", text: "triage\n\nSort them." },
+  );
+  // spaces.update names its space as `id`
+  t.like(
+    d("spaces.update", {
+      id: SP,
+      set: {
+        desc: "A description I wrote",
+        rules: ["Rule one", "Rule two"],
+        qs: [{ q: "Why join?" }],
+      },
+      base: { rulesRev: 0 },
+    }),
+    {
+      space: SP,
+      spaceLabel: "Sablefield",
+      title: "Settings in Sablefield",
+      noun: "settings change",
+      text: "A description I wrote\n\nRule one\nRule two\n\nWhy join?",
+    },
+  );
+  t.like(d("profile.update", { name: "Ines", bio: "A bio I wrote" }), {
+    title: "Profile",
+    text: "Ines\n\nA bio I wrote",
+  });
+  t.like(d("reports.create", { id: "x", item: `p:${TH}`, why: "spam", note: "A note I wrote" }), {
+    title: "Report in Sablefield",
+    noun: "report",
+    text: "A note I wrote",
+  });
+  t.like(d("joinRequests.create", { space: SP, answers: ["First answer", "Second answer"] }), {
+    title: "Request to join in Sablefield",
+    text: "First answer\n\nSecond answer",
+  });
+  t.like(d("spaceSources.add", { space: SP, url: "https://a.example/x", note: "Why it matters" }), {
+    text: "https://a.example/x\n\nWhy it matters",
+  });
+  // each of them offers Copy text
+  for (const name of ["skills.create", "spaces.update", "profile.update", "reports.create"]) {
+    const o = d(name, {
+      space: SP,
+      id: SP,
+      name: "n",
+      prompt: "p",
+      bio: "b",
+      note: "n",
+      item: `p:${TH}`,
+      set: { desc: "d" },
+    });
+    t.true(
+      statusOf(o, here).acts.some((a) => a[1] === "copy"),
+      name,
+    );
+  }
+});
+
+test("the moderation writes are mutators that need a moderator's role", (t) => {
+  for (const name of MODERATION) t.not(pkg.MUTATORS.get(name), undefined, name);
+  for (const name of [
+    "reports.resolve",
+    "spaceSources.review",
+    "invites.restore",
+    "invites.revoke",
+  ])
+    t.true(isModeration({ name }), name);
+  t.false(isModeration({ name: "reports.decide" }));
+  t.false(isModeration({ name: "research.createPostFollowUp" }));
+});
+
+test("a STALE write without text stays in the list with Dismiss, and says why", (t) => {
+  const o = describe(
+    entry(
+      "moderation.decide",
+      { item: `r:${TH}:${RP}`, decision: "shown", base: { rev: 1 } },
+      { state: "refused", error: { code: "STALE", message: "" } },
+    ),
+    reader,
+    label,
+    NOW,
+  );
+  t.deepEqual(statusOf(o, here), {
+    tone: "bad",
+    head: "Not saved",
+    text: "The item changed on the server after you made this change on this Mac, so the server didn’t apply the change.",
+    acts: [["Dismiss", "discard", true]],
+  });
+});
+
+test.serial(
+  "toasts: a sticky toast stays until dismissed or no longer live; a toast over it goes first",
+  async (t) => {
+    let live = true;
+    render(<Toasts />);
+    await act(async () => {
+      stickyToast({
+        key: "ob:1",
+        text: "Not applied: your reply in Sablefield.",
+        live: () => live,
+      });
+      await Promise.resolve();
+    });
+    t.truthy(screen.getByText("Not applied: your reply in Sablefield."));
+    await act(async () => {
+      toast("Text copied.");
+      await Promise.resolve();
+    });
+    t.truthy(screen.getByText("Text copied."));
+    t.is(screen.queryByText("Not applied: your reply in Sablefield."), null);
+    // a second toast replaces the first transient one; the sticky one waits
+    await act(async () => {
+      toast("Copied your edits.");
+      await Promise.resolve();
+    });
+    await act(async () => {
+      screen.getByRole("button", { name: "Dismiss" }).click();
+      await Promise.resolve();
+    });
+    t.truthy(screen.getByText("Not applied: your reply in Sablefield."));
+    // the same key replaces it
+    await act(async () => {
+      stickyToast({ key: "ob:1", text: () => "Next try in 3 s.", live: () => live });
+      await Promise.resolve();
+    });
+    t.truthy(screen.getByText("Next try in 3 s."));
+    t.is(screen.queryByText("Not applied: your reply in Sablefield."), null);
+    // it goes once the write it names changed
+    live = false;
+    await act(async () => {
+      pruneToasts();
+      await Promise.resolve();
+    });
+    t.is(screen.queryByText("Next try in 3 s."), null);
+  },
+);
+
+test.serial("savedToast: a write that waits in the outbox is not saved yet", async (t) => {
+  render(<Toasts />);
+  await act(async () => {
+    savedToast({ ok: true, result: null, queued: true }, "Settings saved.");
+    await Promise.resolve();
+  });
+  t.is(screen.queryByText("Settings saved."), null);
+  await act(async () => {
+    savedToast({ ok: false, error: { code: "FORBIDDEN", message: "" } }, "Settings saved.");
+    await Promise.resolve();
+  });
+  t.is(screen.queryByText("Settings saved."), null);
+  await act(async () => {
+    savedToast({ ok: true, result: null }, "Settings saved.");
+    await Promise.resolve();
+  });
+  t.truthy(screen.getByText("Settings saved."));
 });
