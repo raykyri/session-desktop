@@ -1299,7 +1299,7 @@ app.addEventListener('mouseup', e => {
     const pid = pr.id.slice(3); if (byId(pid)?.pending) return;
     const r = sel.getRangeAt(0).getBoundingClientRect(), A = app.getBoundingClientRect();
     st.selText = clip(t, 300);
-    app.insertAdjacentHTML('beforeend', `<button id="selbranch" data-a="selbranch" data-id="${pid}" style="left:${Math.max(8, Math.min(r.left + r.width / 2 - A.left - 64, A.width - 140))}px;top:${r.top - A.top - 36}px">${I.branch}Branch from this</button>`);
+    app.insertAdjacentHTML('beforeend', `<button id="selbranch" data-a="selbranch" data-id="${pid}" style="left:${Math.max(8, Math.min(r.left + r.width / 2 - A.left - 64, A.width - 140))}px;top:${r.top - A.top - 36}px">${I.branch}Branch here</button>`);
   });
 });
 /* hover: outline the drawing under the pointer */
