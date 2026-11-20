@@ -532,25 +532,37 @@ const nullResult = z.null();
 const baseRev = z.strictObject({ rev: count });
 const text = (max: number) => z.string().max(max);
 
+/** `threads.create` with `from` (`03` G5): a node opened as its own thread,
+ * in the node's space. The server copies the node's question and answer and
+ * the branch's author, so the input names only the new id and the node: no
+ * `kind`, `q`, model or space. No run starts. */
+export const promoteThreadInputSchema = z.strictObject({
+  id: ulid,
+  from: z.strictObject({ th: spaceThreadIdSchema, node: spaceUlidSchema }),
+});
+
 /** `threads.create`: an ask, which writes the thread and its root run
- * (`queued`), or a post. */
-export const createThreadInputSchema = z.discriminatedUnion("kind", [
-  z.strictObject({
-    id: ulid,
-    space: spaceIdSchema,
-    kind: z.literal("ask"),
-    q: text(ASK_TEXT_MAX),
-    title: z.string().nullable().optional(),
-    model: spaceModelSchema,
-    effort: spaceEffortSchema,
-  }),
-  z.strictObject({
-    id: ulid,
-    space: spaceIdSchema,
-    kind: z.literal("post"),
-    q: text(ASK_TEXT_MAX),
-    title: z.string().nullable().optional(),
-  }),
+ * (`queued`), a post, or a node opened as its own thread (`from`). */
+export const createThreadInputSchema = z.union([
+  z.discriminatedUnion("kind", [
+    z.strictObject({
+      id: ulid,
+      space: spaceIdSchema,
+      kind: z.literal("ask"),
+      q: text(ASK_TEXT_MAX),
+      title: z.string().nullable().optional(),
+      model: spaceModelSchema,
+      effort: spaceEffortSchema,
+    }),
+    z.strictObject({
+      id: ulid,
+      space: spaceIdSchema,
+      kind: z.literal("post"),
+      q: text(ASK_TEXT_MAX),
+      title: z.string().nullable().optional(),
+    }),
+  ]),
+  promoteThreadInputSchema,
 ]);
 
 /** `research.forkNode` (C3; `03` §2.1): Continue, Branch and Branch here
