@@ -154,7 +154,12 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .card .byline { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: var(--fs-sm); color: var(--t-faint); }
 /* the footer sits at the bottom of the card when the margin makes the row taller */
 .card { display: flex; flex-direction: column; }
-.card > :nth-last-child(2) { margin-bottom: 12px; }
+.card > :nth-last-child(2) { margin-bottom: 13px; }
+.tip { position: relative; display: inline-flex; cursor: default; border-radius: 6px; }
+.tip::after { content: attr(data-tip); position: absolute; left: -4px; bottom: calc(100% + 6px); z-index: 6; white-space: nowrap; pointer-events: none;
+  padding: 4px 8px; border-radius: var(--r-md); background: var(--t-heading); color: var(--card); font-size: var(--fs-xs); font-weight: 500;
+  opacity: 0; transform: translateY(2px); transition: opacity .12s, transform .12s; }
+.tip:hover::after, .tip:focus-visible::after { opacity: 1; transform: none; }
 .card-f { display: flex; align-items: center; gap: 4px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--divider); }
 .card-f .notes { font-weight: 400; color: var(--t-muted); font-size: var(--fs-sm); margin-right: auto; }
 .iconbtn.likes { width: auto; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
@@ -479,6 +484,10 @@ const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data
    as a small outline tree per passage. */
 const st = { v: 'lines', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
 
+/* Which model answered and at what thinking effort. The fixtures do not record it; the mock picks one
+   per thread. Shown in a tooltip on the answer's icon. */
+const RUNS = ['Opus 4.8 · high effort', 'Opus 4.8 · medium effort', 'Sonnet 4.6 · high effort', 'Opus 4.8 · max effort'];
+const runOf = p => RUNS[[...p.id].reduce((s, c) => s + c.charCodeAt(0), 0) % RUNS.length];
 function card(p) {
   const head = `<div class="card-h">${av(p.u)}<div class="who"><b>${esc(p.u)}</b><span>in</span><span class="sp">${spName(p.s)}</span><time>${rel(p.createdAt)}</time></div></div>`;
   const acts = `<button class="iconbtn likes" aria-label="Like, ${p.likesBase || 0} likes">${I.heart}<span>${p.likesBase || 0}</span></button><button class="iconbtn" aria-label="Save">${I.save}</button>`;
@@ -488,7 +497,7 @@ function card(p) {
   }
   const T = tree(p), src = (D.srcd[p.id] || []).length;
   return `<article class="card" id="card-${p.id}">${head}<p class="ask">${esc(T.nodes.r.q)}</p>
-    <div class="byline">${mark('sm')}<span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok)].filter(Boolean).join(' · ')}</span></div>
+    <div class="byline"><span class="tip" tabindex="0" data-tip="${esc(runOf(p))}" aria-label="${esc(runOf(p))}">${mark('sm')}</span><span>${[src ? noun(src, 'source', 'sources') : '', ktok(p.tok)].filter(Boolean).join(' · ')}</span></div>
     <div class="prose" id="pr-${p.id}">${T.nodes.r.html}</div>
     <div class="card-f"><span class="notes">${noun(T.count, 'branch', 'branches')}</span><button class="iconbtn" data-a="ask" data-id="${p.id}" aria-label="${st.asking === p.id ? 'Close the branch box' : 'Branch'}">${st.asking === p.id ? I.x : I.branch}</button>${acts}</div></article>`;
 }
