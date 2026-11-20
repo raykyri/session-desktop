@@ -125,8 +125,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .nb { min-width: 0; }
 .nb textarea { display: block; width: 100%; resize: none; border: 0; outline: none; background: none; color: var(--t-heading); font: inherit; font-size: var(--fs-md); line-height: 1.5; padding: 3px 0; min-height: 28px; max-height: 240px; }
 .nb textarea::placeholder { color: var(--placeholder); }
-.nb-f { display: flex; align-items: center; gap: 6px; }
-.nb-hint { margin-right: auto; color: var(--t-faint); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.nb-f { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .pick { position: relative; display: inline-flex; align-items: center; height: 26px; padding: 0 22px 0 9px; border-radius: 13px; background: var(--control); flex: none; }
 .pick:hover { background: var(--control-hover); }
 .pick:focus-within { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent); }
@@ -143,27 +142,35 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .modes { display: inline-flex; background: var(--control); border-radius: 13px; padding: 2px; flex: none; }
 .modes button { height: 22px; padding: 0 10px; border-radius: 11px; font-size: var(--fs-xs); font-weight: 500; color: var(--t-muted); }
 .modes button[aria-pressed="true"] { background: var(--card); color: var(--t-heading); box-shadow: var(--shadow); }
-/* A: card */
-.nb-card { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 12px 14px 12px 14px; transition: box-shadow .15s; }
-.nb-card:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow-soft); }
-.nb-card .nb-f { max-height: 0; opacity: 0; overflow: hidden; transition: max-height .18s ease, opacity .15s, margin-top .18s ease; }
-.nb-card:focus-within .nb-f, .nb-card.has-text .nb-f { max-height: 44px; opacity: 1; margin-top: 8px; }
-/* B: inline */
-.nb-inline { display: flex; align-items: flex-start; gap: 10px; padding: 8px 2px 12px; border-bottom: 1px solid var(--border-strong); transition: border-color .15s; }
-.nb-inline:focus-within { border-bottom-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong)); }
-.nb-inline .av { margin-top: 4px; }
-.nb-inline textarea { flex: 1; min-width: 0; }
-.nb-side { display: flex; align-items: center; gap: 6px; flex: none; }
-/* C: dock */
-.dock-row { position: sticky; bottom: 0; z-index: 8; padding: 18px 0 14px; background: linear-gradient(to bottom, transparent, var(--feed) 45%); }
-.nb-dock { display: flex; align-items: center; gap: 8px; background: var(--card); border-radius: 24px; box-shadow: var(--shadow), var(--shadow-pop); padding: 7px 7px 7px 10px; }
+/* Dock: a chat-style bar at the head of the stream, in the flow of the page */
+.row.dock-row { padding: 2px 0 0; }
+.row.dock-row + .row { padding-top: 14px; }
+.nb-dock { display: flex; align-items: center; gap: 8px; background: var(--card); border-radius: 24px; box-shadow: var(--shadow); padding: 7px 7px 7px 10px; transition: box-shadow .15s; }
+.nb-dock:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow-soft); }
 .nb-dock textarea { flex: 1; min-width: 0; }
-/* D: modes */
+/* model menu */
+.mpick { position: relative; display: inline-flex; }
+.mpick > .pick { cursor: pointer; }
+.menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; min-width: 190px; padding: 4px; border-radius: var(--r-lg);
+  background: var(--card); box-shadow: var(--shadow), var(--shadow-pop); display: flex; flex-direction: column; }
+.mi { position: relative; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: var(--r-md); text-align: left;
+  font-size: var(--fs-sm); color: var(--t-primary); cursor: pointer; white-space: nowrap; }
+.mi > span:first-child { flex: 1; }
+.mi:hover, .mi:focus-visible, .mi-sub:focus-within { background: var(--fill-hover); }
+.mi svg.i { width: 13px; height: 13px; color: var(--accent); }
+.mi-sub > svg.i { color: var(--t-muted); }
+.mi-v { color: var(--t-faint); }
+.msep { height: 1px; margin: 4px 6px; background: var(--divider); }
+.submenu { display: none; top: -4px; left: calc(100% + 4px); min-width: 140px; }
+.mi-sub:hover > .submenu, .mi-sub:focus-within > .submenu { display: flex; }
+.mi-sub::after { content: ""; position: absolute; left: 100%; top: 0; width: 8px; height: 100%; }
+/* Modes */
 .nb-modecard { background: var(--card); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 10px 14px 10px; transition: box-shadow .15s; }
 .nb-modecard:focus-within { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow-soft); }
 .nb-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 .nb-top .modes { margin-right: 4px; }
 .nb-modecard .nb-f { margin-top: 6px; }
+.nb-modecard textarea { font-size: 15.5px; line-height: 1.5; }
 .composer button { height: 30px; padding: 0 12px; border-radius: 15px; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: var(--fs-sm); }
 .composer .ctx { font-size: var(--fs-xs); color: var(--t-faint); white-space: nowrap; max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
 .status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--warn); }
@@ -275,9 +282,7 @@ svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor;
 .rav .av.xs { box-shadow: 0 0 0 1.5px var(--feed); }
 
 @media (max-width: 860px) {
-  .nb-hint { display: none; }
-  .nb-inline { flex-wrap: wrap; } .nb-side { width: 100%; justify-content: flex-end; }
-  .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .stick { position: static; max-height: none; }
   .pinned > .pin { position: static; margin-bottom: 8px; }
   .mg-inner { padding: 0 12px 30px; }
@@ -529,7 +534,7 @@ const composer = (id, ph, ctx = '', btn = 'Ask') => `<form class="composer" data
 /* ================= pinned maps ================= */
 /* A stream of whole posts with each answer's branches pinned beside the passage they ask about, drawn
    as a small outline tree per passage. */
-const st = { v: 'card', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
+const st = { v: 'dock', newSpace: 'public', newMode: 'ask', newModel: 'Opus 4.8', newEffort: 'high', draft: '', rsel: {}, replying: null, space: 'home', theme: 'system', sel: { '01M7HWGZJGT7JTFFVSYPX055KV': 'g1' }, asking: null };
 
 /* Which model answered and at what thinking effort. The fixtures do not record it; the mock picks one
    per thread. Shown in a tooltip on the answer's icon. */
@@ -656,9 +661,7 @@ const ASK_THESIS = 'Asks keep the pinned map: each paragraph that has branches i
 const TREE_NOTE = 'Posts keep the pinned branch trees and avatar reply trees.';
 const variant = (name, thesis, composer, dock = false) => ({ name, q: 'Composer', thesis: `${thesis} ${TREE_NOTE}`, composer, dock, replies: replyLines, layout(p) { pinGroups(p, (T, G) => outline(p, T, G)); } });
 const V = {
-  card: variant('Card', '<strong>A quiet card that opens when you use it.</strong> At rest it is one line with your avatar. Focus it and the space, a Post button and a send arrow appear; Enter asks.', 'card'),
-  inline: variant('Inline', '<strong>No box at all.</strong> The composer is a ruled line at the head of the stream. Pick Ask or Post beside it; the arrow sends in that mode.', 'inline'),
-  dock: variant('Dock', '<strong>Docked like a chat input.</strong> The composer stays at the bottom of the window while the stream scrolls behind it, so you can ask from anywhere in the feed.', 'dock', true),
+  dock: variant('Dock', '<strong>A chat-style bar at the head of the stream.</strong> One rounded line with your avatar, the space, Post and a send arrow, sitting above the first post; Enter asks.', 'dock'),
   modes: variant('Modes', '<strong>Choose the kind of thread first.</strong> Ask shows the run settings, model and thinking effort, which then appear in the answer\'s tooltip; Post hides them.', 'modes'),
 };
 
@@ -674,21 +677,26 @@ const draft = (ph, extra = '') => `<textarea id="in-new" rows="1" placeholder="$
 const sendBtn = (val, label) => `<button type="submit" value="${val}" class="send" data-enter aria-label="${label}" title="${label}">${I.up}</button>`;
 const modeSeg = () => `<span class="modes" role="group" aria-label="Ask or post">${['ask', 'post'].map(m => `<button type="button" data-a="mode" data-m="${m}" aria-pressed="${st.newMode === m}">${m === 'ask' ? 'Ask' : 'Post'}</button>`).join('')}</span>`;
 const nbClass = extra => `nb ${extra}${st.draft.trim() ? ' has-text' : ''}`;
+/* Custom model menu: models first, then Effort at the bottom as a submenu (opens on hover or focus). */
+const cap1 = x => x[0].toUpperCase() + x.slice(1);
+const CHECK = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>';
+const modelMenu = () => {
+  const open = st.menu === 'model';
+  const item = (a, v, label, on) => `<button type="button" class="mi" role="menuitemradio" aria-checked="${on}" data-a="${a}" data-v="${v}"><span>${label}</span>${on ? CHECK : ''}</button>`;
+  return `<span class="mpick"><button type="button" class="pick" data-a="menu" aria-haspopup="menu" aria-expanded="${open}" title="Model and effort"><span>${esc(st.newModel)} · ${esc(st.newEffort)}</span>${I.down}</button>
+    ${open ? `<div class="menu" role="menu" aria-label="Model">${MODEL_OPTS.map(m => item('setmodel', m, m, m === st.newModel)).join('')}<div class="msep"></div>
+      <div class="mi mi-sub" role="menuitem" aria-haspopup="menu" tabindex="-1"><span>Effort</span><span class="mi-v">${cap1(st.newEffort)}</span>${I.right}
+        <div class="menu submenu" role="menu" aria-label="Effort">${EFFORT_OPTS.map(e => item('seteffort', e, cap1(e), e === st.newEffort)).join('')}</div></div></div>` : ''}</span>`;
+};
 const COMPOSERS = {
-  /* A card that is one line at rest and opens its controls when focused or filled. */
-  card: () => `<div class="row new-row"><form class="${nbClass('nb-card')}" data-form="new:x">${av(F.me.u)}<div class="nb-main">${draft('ask anything, or write a post')}
-    <div class="nb-f">${spaceField()}<span class="nb-hint">Enter to ask · Shift+Enter for a new line</span><button type="submit" value="post" class="ghost">Post</button>${sendBtn('ask', 'Ask')}</div></div></form><div></div></div>`,
-  /* No box: a ruled line at the head of the stream, with the mode chosen beside it. */
-  inline: () => `<div class="row new-row"><form class="${nbClass('nb-inline')}" data-form="new:x">${av(F.me.u, 'sm')}${draft(st.newMode === 'ask' ? 'ask anything' : 'write a post')}
-    <div class="nb-side">${modeSeg()}${spaceField()}${sendBtn(st.newMode, st.newMode === 'ask' ? 'Ask' : 'Post')}</div></form><div></div></div>`,
-  /* Docked to the bottom of the window, like a chat input; the stream scrolls behind it. */
-  dock: () => `<div class="row dock-row"><form class="${nbClass('nb-dock')}" data-form="new:x">${av(F.me.u, 'sm')}${draft(`ask, or post to ${spName(newSpaceId())}`)}
+  /* A chat-style bar at the head of the stream: avatar, one line, space, Post and send. */
+  dock: () => `<div class="row dock-row"><form class="${nbClass('nb-dock')}" data-form="new:x">${av(F.me.u, 'sm')}${draft(`Ask, or post to ${spName(newSpaceId())}`)}
     ${spaceField()}<button type="submit" value="post" class="ghost">Post</button>${sendBtn('ask', 'Ask')}</form><div></div></div>`,
   /* Mode first: Ask shows the run settings (model and effort), Post hides them. */
   modes: () => `<div class="row new-row"><form class="${nbClass('nb-modecard')}" data-form="new:x"><div class="nb-top">${modeSeg()}${spaceField()}
-    ${st.newMode === 'ask' ? pick('new-model', MODEL_OPTS, st.newModel, 'Model') + pick('new-effort', EFFORT_OPTS, st.newEffort, 'Thinking effort', e => e + ' effort') : ''}</div>
-    ${draft(st.newMode === 'ask' ? 'ask anything' : 'write a post')}
-    <div class="nb-f"><span class="nb-hint">Enter to ${st.newMode} · Shift+Enter for a new line</span><button type="submit" value="${st.newMode}" class="primary" data-enter>${st.newMode === 'ask' ? 'Ask' : 'Post'}</button></div></form><div></div></div>`,
+    ${st.newMode === 'ask' ? modelMenu() : ''}</div>
+    ${draft(st.newMode === 'ask' ? 'Ask anything' : 'Write a post')}
+    <div class="nb-f"><button type="submit" value="${st.newMode}" class="primary" data-enter>${st.newMode === 'ask' ? 'Ask' : 'Post'}</button></div></form><div></div></div>`,
 };
 let nseq = 0;
 function newThread(space, q, kind) {
@@ -730,7 +738,7 @@ function renderBar() {
   $('#theme-seg').innerHTML = [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([k, l]) => `<button data-t="${k}" aria-pressed="${st.theme === k}">${l}</button>`).join('');
   $('#thesis').innerHTML = `<span class="qtag">${V[st.v].q}</span>` + V[st.v].thesis;
 }
-function go(v) { if (!V[v]) v = 'card'; st.v = v; st.asking = null; renderBar(); render(); }
+function go(v) { if (!V[v]) v = 'dock'; st.v = v; st.asking = null; renderBar(); render(); }
 $('#variant-seg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { history.replaceState(null, '', '#' + b.dataset.v); go(b.dataset.v); } });
 $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (!b) return; st.theme = b.dataset.t; if (st.theme === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = st.theme; renderBar(); });
 
@@ -742,6 +750,8 @@ app.addEventListener('click', e => {
   if (a === 'askfrom') { st.sel[d.id] = d.node; st.asking = d.id; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
   if (a === 'rsel') { st.rsel[d.id] = st.rsel[d.id] === d.node ? null : d.node; st.replying = null; render(); return; }
   if (a === 'reply') { st.replying = st.replying === d.id ? null : d.id; render(); document.getElementById('in-rp:' + d.id.replace('/', ':'))?.focus(); return; }
+  if (a === 'menu') { st.menu = st.menu === 'model' ? null : 'model'; render(); $('#in-new')?.focus(); return; }
+  if (a === 'setmodel' || a === 'seteffort') { st[a === 'setmodel' ? 'newModel' : 'newEffort'] = d.v; st.menu = null; render(); $('#in-new')?.focus(); return; }
   if (a === 'mode') { st.newMode = d.m; render(); const t = $('#in-new'); t?.focus(); t?.setSelectionRange(t.value.length, t.value.length); return; }
   if (a === 'tsel') { st.sel[d.id] = st.sel[d.id] === d.node ? null : d.node; st.asking = null; render(); return; }
 });
@@ -761,6 +771,13 @@ app.addEventListener('submit', e => {
   st.sel[pid] = addBranch(p, node, v);
   st.asking = null; render();
 });
+/* composer: a click anywhere in it keeps the cursor in the text (controls still work); a click outside the model menu closes it */
+app.addEventListener('mousedown', e => {
+  if (st.menu && !e.target.closest('.mpick')) { st.menu = null; if (!e.target.closest('.nb')) render(); else setTimeout(render); }
+  const f = e.target.closest('.nb'); if (!f || e.target.closest('textarea, select')) return;
+  e.preventDefault(); const t = f.querySelector('textarea'); if (document.activeElement !== t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && st.menu) { st.menu = null; render(); $('#in-new')?.focus(); } });
 /* composer: Enter sends with the form's default button; Shift+Enter starts a new line */
 app.addEventListener('keydown', e => {
   if (e.target.id !== 'in-new') return;
@@ -784,6 +801,6 @@ document.addEventListener('keydown', e => {
   if (e.key.length !== 1 || !k) return;
   e.preventDefault(); history.replaceState(null, '', '#' + k); go(k);
 });
-go(location.hash.slice(1) || 'card');
+go(location.hash.slice(1) || 'dock');
 document.fonts?.ready.then(() => render());
 </script>
