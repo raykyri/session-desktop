@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-replica-open"
+description = "Enables the replica_open command without any pre-configured scope."
+commands.allow = ["replica_open"]
+
+[[permission]]
+identifier = "deny-replica-open"
+description = "Denies the replica_open command without any pre-configured scope."
+commands.deny = ["replica_open"]

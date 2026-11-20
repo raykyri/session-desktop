@@ -29,7 +29,10 @@ export interface Platform {
    * headers). */
   headers(): Record<string, string>;
   /** The bearer device token, sent as `Authorization: Bearer`, or null
-   * (the web's cookie needs none). */
+   * (the web's cookie needs none). A sign-in's token is also what an answer
+   * is bound to: an answer to a request made with an earlier sign-in's
+   * token changes nothing of a later one (review round 1 of phase 3,
+   * finding 1). */
   token(): string | null;
   /** `fetch`'s credentials mode. */
   readonly credentials: RequestCredentials;
@@ -41,15 +44,22 @@ export interface Platform {
   /** The account (`/api/me`) as last read, for a start without a
    * connection; null when none is kept. */
   lastMe(): unknown;
-  /** Keep the account as read now (null: signed out). */
-  rememberMe(me: unknown): void;
+  /** Keep the account as read now (null: signed out), read with `token`:
+   * kept only while `token` is still the sign-in's, and the account is its
+   * person's. */
+  rememberMe(me: unknown, token: string | null): void;
   /** Open a link of the server's site in the system browser. */
   openExternal(url: string): void;
   /** Sign this device or browser out. */
   signOut(): Promise<void>;
-  /** The server no longer takes this device's token (revoked or expired):
-   * the desktop forgets it and shows its sign-in. */
-  unauthorized(): void;
+  /** The server no longer takes `token` (revoked or expired): the desktop
+   * forgets its sign-in and shows the sign-in, when `token` is still the
+   * sign-in's. */
+  unauthorized(token: string | null): void;
+  /** `user`'s replica could not be opened or made (the desktop: another
+   * copy of the app holds its file, or SQLite failed): the desktop shows
+   * what happened, with Try again and Reset. */
+  storageFailed(user: string, error: unknown): void;
   /** Update Session's action: the web reloads the page. */
   update(): void;
   /** What the person calls this device in the sync-state copy ("this
@@ -76,6 +86,7 @@ export const webPlatform: Platform = {
   // the web's sign-out is `logout` (api/account.ts): POST /auth/logout
   signOut: () => Promise.resolve(),
   unauthorized: () => undefined,
+  storageFailed: () => undefined,
   update: () => location.reload(),
   here: null,
 };

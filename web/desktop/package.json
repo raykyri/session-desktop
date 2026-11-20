@@ -7,14 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "test": "ava",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "app:dev": "tauri dev --config src-tauri/tauri.dev.conf.json"
   },
   "dependencies": {
     "@session/client": "*",
     "@session/sync": "*",
     "@tauri-apps/api": "^2.12.5",
     "@tauri-apps/plugin-opener": "^2.7.3",
-    "@tauri-apps/plugin-sql": "^2.6.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

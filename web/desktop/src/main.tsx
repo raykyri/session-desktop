@@ -1,12 +1,14 @@
 // The Desktop app's entry: the bridge (Tauri's, or the test's under
 // Playwright), the platform the client reads (`platform.ts`), then the
-// sign-in or the client's screens.
+// sign-in, the client's screens, or the storage problem (the person's
+// replica could not be opened).
 
 import { ClientApp, meResource, setPlatform } from "@session/client/shell";
 import { useEffect, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 
 import { SignIn } from "./SignIn.js";
+import { StorageProblem } from "./StorageProblem.js";
 import type { DesktopBridge } from "./bridge.js";
 import { Desktop } from "./platform.js";
 import { inTauri, tauriBridge } from "./tauri.js";
@@ -29,7 +31,9 @@ function DesktopRoot({ desktop }: { desktop: Desktop }) {
     if (state === "app") void meResource.load(true).catch(() => undefined);
     else meResource.set(null);
   }, [state]);
-  return state === "app" ? <ClientApp key={desktop.handle()} /> : <SignIn desktop={desktop} />;
+  if (state === "app") return <ClientApp key={desktop.handle()} />;
+  if (state === "storage") return <StorageProblem desktop={desktop} />;
+  return <SignIn desktop={desktop} />;
 }
 
 async function boot() {

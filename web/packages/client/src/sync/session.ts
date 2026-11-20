@@ -158,12 +158,16 @@ export class SpacesSession {
     this.listens = o.listen !== false;
     const p = platform();
     this.persistent = o.persist ?? p.persist;
+    // the session is its sign-in's: once another sign-in (or none) holds
+    // the device, its requests carry no token (review round 1 of phase 3,
+    // finding 1)
+    const token = p.token();
     const transport =
       o.transport ??
       new FetchTransport({
         baseUrl: p.origin,
         headers: p.headers(),
-        token: () => p.token(),
+        token: () => (p.token() === token ? token : null),
         fetch: this.watch(o.fetch ?? ((...a) => currentFetch()(...a))),
         onUpdateRequired: () => this.setStatus({ updateRequired: true }),
         onUnauthorized: () => {
@@ -351,8 +355,18 @@ export class SpacesSession {
         for (const r of this.endedRuns()) this.runs.drop(r);
         if (c.signedOut) this.setStatus({ signedOut: true });
       });
+      // the replica's storage: a failure to open it is the platform's to
+      // show (the desktop's storage problem, with Try again and Reset), not
+      // a lost connection (review round 1 of phase 3, finding 7)
       try {
         await c.init();
+      } catch (e) {
+        if (this.abort.signal.aborted || this.me === null) return;
+        this.setStatus({ ready: true });
+        platform().storageFailed(this.me, e);
+        return;
+      }
+      try {
         await c.open(`user:${this.me}`);
         await this.openJoined();
         if (this.persistent) {

@@ -69,7 +69,12 @@ export class MockTransport implements Transport {
     }
     const serverTime = num(r.body["serverTime"]);
     if (r.ok && typeof r.body["clientId"] === "string")
-      return { ok: true, clientId: r.body["clientId"], serverTime };
+      return {
+        ok: true,
+        clientId: r.body["clientId"],
+        serverTime,
+        ...(typeof r.body["u"] === "string" ? { u: r.body["u"] } : {}),
+      };
     const a = fromMock(r, () => {});
     return {
       ok: false,

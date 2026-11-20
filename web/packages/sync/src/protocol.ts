@@ -142,8 +142,11 @@ export type Answer =
       recordedAs?: string;
     };
 
+/** `u`: the person the client id is for (the caller). A client takes no
+ * client id for anyone but its own person (review round 1 of phase 3,
+ * finding 1); the mock backend's answer may leave it out. */
 export type RegisterAnswer =
-  | { ok: true; clientId: string; serverTime: number }
+  | { ok: true; clientId: string; serverTime: number; u?: string }
   | { ok: false; error: ApiError; serverTime: number };
 
 /** The answers that record nothing: the envelope's seq is not used up, the

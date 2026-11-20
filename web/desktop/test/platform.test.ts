@@ -55,11 +55,11 @@ test("the account as last read is kept for a start offline", async (t) => {
   const d = await Desktop.start(b);
   t.is(d.lastMe(), null);
   await d.signedIn(signIn);
-  d.rememberMe({ u: "ines.v", name: "Ines" });
+  d.rememberMe({ u: "ines.v", name: "Ines" }, "tok-1");
   await new Promise((r) => setTimeout(r, 0));
   t.deepEqual((await Desktop.start(b)).lastMe(), { u: "ines.v", name: "Ines" });
   // null (signed out) does not replace it; the platform's unauthorized does
-  d.rememberMe(null);
+  d.rememberMe(null, "tok-1");
   t.deepEqual(d.lastMe(), { u: "ines.v", name: "Ines" });
 });
 
@@ -72,7 +72,7 @@ test("each person's replica is a SQLite file that outlives the app", async (t) =
   t.is(d.storage("ines.v"), s);
   await s.saveMeta({ user: "ines.v", clientId: "c1", lastSeq: 3, offset: 0 });
   await s.saveOutbox([{ local: "w1" }]);
-  t.true(b.hasDatabase("replica-ines.v.sqlite"));
+  t.true(b.hasReplica("ines.v"));
   const after = await Desktop.start(b);
   const s2 = after.storage("ines.v");
   t.like(await s2.loadMeta(), { user: "ines.v", clientId: "c1", lastSeq: 3 });
@@ -90,15 +90,18 @@ test("a token the server no longer takes: the replica, the outbox and the Keycha
   await s.saveOutbox([{ local: "w1" }]);
   const states: string[] = [];
   d.onChange(() => states.push(d.state()));
-  d.unauthorized();
+  d.unauthorized("tok-1");
   t.deepEqual(states, ["signin"]);
   t.is(d.token(), null);
   await new Promise((r) => setTimeout(r, 10));
   t.is(b.keychain, null);
-  t.is(await s.loadMeta(), null);
-  t.deepEqual(await s.loadOutbox(), []);
+  // the replica's file is deleted
+  t.deepEqual(b.deleted, ["ines.v"]);
+  t.false(b.hasReplica("ines.v"));
+  t.is(await d.storage("ines.v").loadMeta(), null);
+  t.deepEqual(await d.storage("ines.v").loadOutbox(), []);
   // signed out already: nothing more
-  d.unauthorized();
+  d.unauthorized("tok-1");
   t.deepEqual(states, ["signin"]);
 });
 

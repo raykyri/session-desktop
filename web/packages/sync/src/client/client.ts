@@ -99,6 +99,11 @@
 //   calls) are sent at once, never queued, predicted or stored; held, signed
 //   out, or when a flush ends blocked (offline, a registration the server
 //   refused), they fail.
+// - `stop` ends the client (its person signed out): no request is sent
+//   after it, no registration is made, and nothing more is stored, whatever
+//   answer arrives late (review round 1 of phase 3, finding 1). A
+//   registration whose answer names another person (`u`) is not taken: the
+//   client signs out.
 // `persist: false` (the web): no wait across time: a write is sent at once,
 // a transient failure, no response, ids ahead, or a sign-out ends it as
 // failed (shown with Try again), and nothing is kept across a reload.
@@ -381,6 +386,28 @@ const remapValue = (v: unknown, map: ReadonlyMap<string, string>): unknown =>
         ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, remapValue(x, map)]))
         : v;
 
+/** The storage as a client writes it: once `stopped()`, a write stores
+ * nothing (a read's or a write's answer that arrives after the client
+ * stopped; review round 1 of phase 3, finding 1). Reads go through. */
+function stoppable(s: StorageAdapter, stopped: () => boolean): StorageAdapter {
+  const write =
+    <A extends unknown[]>(f: (...a: A) => Promise<void>) =>
+    (...a: A) =>
+      stopped() ? Promise.resolve() : f(...a);
+  return {
+    persistent: s.persistent,
+    loadMeta: () => s.loadMeta(),
+    saveMeta: write((m: ClientMeta) => s.saveMeta(m)),
+    logs: () => s.logs(),
+    loadLog: (log) => s.loadLog(log),
+    saveLog: write((log: LogId, c: Parameters<StorageAdapter["saveLog"]>[1]) => s.saveLog(log, c)),
+    dropLog: write((log: LogId) => s.dropLog(log)),
+    loadOutbox: () => s.loadOutbox(),
+    saveOutbox: write((e: readonly unknown[]) => s.saveOutbox(e)),
+    clear: write(() => s.clear()),
+  };
+}
+
 const defaultTimer: Timer = {
   set: (fn, ms) => {
     const h = setTimeout(fn, ms) as unknown as { unref?: () => void };
@@ -447,7 +474,7 @@ export class SyncClient implements Changing {
   constructor(o: ClientOptions) {
     this.user = o.user;
     this.transport = o.transport;
-    this.storage = o.storage ?? new MemoryStorage();
+    this.storage = stoppable(o.storage ?? new MemoryStorage(), () => this.stopped);
     this.clock = o.clock ?? { now: () => Date.now() };
     this.random = o.random ?? Math.random;
     this.registry = o.registry ?? pkg.MUTATORS;
@@ -461,9 +488,14 @@ export class SyncClient implements Changing {
 
   /** Load the stored meta and outbox (a client restored after a restart).
    * A stored state of another person, or of nobody, is discarded, and the
-   * storage is marked as this person's. Runs once; `open` waits for it. */
+   * storage is marked as this person's. Runs once; `open` waits for it. A
+   * load that failed (the storage could not be opened) runs again on the
+   * next call (review round 1 of phase 3, finding 7). */
   init(): Promise<void> {
-    this.loading ??= this.load();
+    this.loading ??= this.load().catch((e: unknown) => {
+      this.loading = null;
+      throw e;
+    });
     return this.loading;
   }
 
@@ -1371,6 +1403,7 @@ export class SyncClient implements Changing {
   }
 
   private async persist() {
+    if (this.stopped) return;
     if (this.keep)
       await this.storage.saveOutbox(
         // what holds for this process only is not stored
@@ -1575,6 +1608,7 @@ export class SyncClient implements Changing {
    * "offline" when no answer arrived. One registration at a time. */
   private register(): Promise<true | false | "offline"> {
     if (this.meta.clientId !== null) return Promise.resolve(true);
+    if (this.stopped) return Promise.resolve(false);
     this.registering ??= this.registerOnce().finally(() => {
       this.registering = null;
     });
@@ -1589,10 +1623,18 @@ export class SyncClient implements Changing {
       if (e instanceof Offline) return "offline";
       throw e;
     }
+    // an answer after the client stopped is not taken
+    if (this.stopped) return false;
     this.seen(r.serverTime);
     if (!r.ok) {
       if (r.error.code === "UPDATE_REQUIRED") this.hold();
       else if (r.error.code === "UNAUTHORIZED") this.signOut();
+      return false;
+    }
+    // a client id for another person (a token of someone else's): the
+    // client does not take it, and signs out
+    if (r.u !== undefined && r.u !== this.user) {
+      this.signOut();
       return false;
     }
     this.meta.clientId = r.clientId;
@@ -1743,6 +1785,7 @@ export class SyncClient implements Changing {
   /** Send the outbox in order (one flush at a time; a write queued during a
    * flush is sent by it). */
   flush(): Promise<void> {
+    if (this.stopped) return Promise.resolve();
     if (this.flushing) {
       this.again = true;
       return this.flushing;
@@ -1752,7 +1795,7 @@ export class SyncClient implements Changing {
         for (;;) {
           this.again = false;
           const blocked = await this.flushOnce();
-          if (blocked || !(this.again || this.pick() !== null)) break;
+          if (blocked || this.stopped || !(this.again || this.pick() !== null)) break;
         }
       } finally {
         this.flushing = null;
@@ -1788,7 +1831,9 @@ export class SyncClient implements Changing {
     );
   }
 
-  /** Stop the outbox's timer (the client is no longer used). */
+  /** Stop the client (it is no longer used: its person signed out, or the
+   * screens closed): the outbox's timer ends, and so does a flush under
+   * way: nothing is sent, registered or stored after this. */
   stop() {
     this.stopped = true;
     if (this.timer && this.timerHandle !== null) this.timer.clear(this.timerHandle);
@@ -1848,6 +1893,7 @@ export class SyncClient implements Changing {
   /** One pass over the outbox. Answers whether it is blocked (no server,
    * held, signed out), so the flush does not go round again. */
   private async flushOnce(): Promise<boolean> {
+    if (this.stopped) return true;
     this.expire();
     if (this.updateRequired) this.hold();
     this.failStuck();
@@ -1913,6 +1959,11 @@ export class SyncClient implements Changing {
         e.wire = true;
         // what goes on the wire is in storage first (a remint, `uncertain`)
         if (!e.online) await this.persist();
+        // the client stopped meanwhile (a sign-out): nothing more is sent
+        if (this.stopped) {
+          blocked = true;
+          break;
+        }
         this.sent.push({ local: e.local, mutationId: e.mutationId, seq: env.seq });
         if (this.sent.length > SENT_KEPT) this.sent.splice(0, this.sent.length - SENT_KEPT);
         this.inFlight = e;
@@ -1921,6 +1972,12 @@ export class SyncClient implements Changing {
           [a] = await this.transport.push([env]);
         } finally {
           this.inFlight = null;
+        }
+        // an answer after the client stopped: nothing follows from it (no
+        // registration, no resend, nothing stored)
+        if (this.stopped) {
+          blocked = true;
+          break;
         }
         if (a === NO_RESPONSE) {
           this.noResponse(e, now, true);

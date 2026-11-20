@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-replica-close"
+description = "Enables the replica_close command without any pre-configured scope."
+commands.allow = ["replica_close"]
+
+[[permission]]
+identifier = "deny-replica-close"
+description = "Denies the replica_close command without any pre-configured scope."
+commands.deny = ["replica_close"]

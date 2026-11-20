@@ -2,17 +2,30 @@
 // sx-si-app): "Sign in with the browser" starts a sign-in, opens the
 // browser's approval page and waits for it, showing the code a browser on
 // another computer asks for; a denied sign-in can be started again. Once
-// the app has its token the client's screens open with "Signed in
-// successfully." (sx-si-done).
+// the app has its token, and the Keychain has taken it, the client's
+// screens open with "Signed in successfully." (sx-si-done). A browser that
+// could not be opened, and a Keychain that refused the token, are said so
+// (review round 1 of phase 3, findings 2 and 10).
 
 import { CI, SXI, Svg, Toasts, toast } from "@session/client/shell";
 import { useEffect, useRef, useState } from "react";
 
 import type { Desktop } from "./platform.js";
-import { SignInError, approvalUrl, authorize, waitForToken, type SignInRequest } from "./signin.js";
+import {
+  SignInError,
+  approvalUrl,
+  authorize,
+  keepToken,
+  waitForToken,
+  type SignInRequest,
+} from "./signin.js";
 
 type State =
-  { s: "start" } | { s: "starting" } | { s: "wait"; req: SignInRequest } | { s: "denied" };
+  | { s: "start" }
+  | { s: "starting" }
+  /** `opened`: whether the browser opened the approval page. */
+  | { s: "wait"; req: SignInRequest; opened: boolean }
+  | { s: "denied" };
 
 export function SignIn({ desktop }: { desktop: Desktop }) {
   const [state, setState] = useState<State>({ s: "start" });
@@ -38,8 +51,10 @@ export function SignIn({ desktop }: { desktop: Desktop }) {
       return;
     }
     if (ac.signal.aborted) return;
-    setState({ s: "wait", req });
-    await desktop.bridge.openUrl(approvalUrl(desktop.origin, req.request)).catch(() => undefined);
+    setState({ s: "wait", req, opened: true });
+    await desktop.bridge.openUrl(approvalUrl(desktop.origin, req.request)).catch(() => {
+      if (!ac.signal.aborted) setState({ s: "wait", req, opened: false });
+    });
     const r = await waitForToken(desktop.origin, req.request, { signal: ac.signal }).catch(
       () => "expired" as const,
     );
@@ -50,8 +65,15 @@ export function SignIn({ desktop }: { desktop: Desktop }) {
       toast("The sign-in request expired. Start again.");
       return;
     }
+    const kept = await keepToken(desktop, r);
+    if (!kept.ok) {
+      setState({ s: "start" });
+      toast(
+        `Session couldn’t keep the sign-in in the macOS Keychain (${kept.message}). Sign in again.`,
+      );
+      return;
+    }
     toast("Signed in successfully.");
-    await desktop.signedIn(r);
   };
 
   const cancel = () => {
@@ -83,10 +105,18 @@ export function SignIn({ desktop }: { desktop: Desktop }) {
       <>
         {icon}
         <h2>Approve this Mac in your browser</h2>
-        <p className="muted">
-          Session opened {host}/device in your browser. Approve this Mac there. The app then stores
-          a device token in the macOS Keychain.
-        </p>
+        {state.opened ? (
+          <p className="muted">
+            Session opened {host}/device in your browser. Approve this Mac there. The app then
+            stores a device token in the macOS Keychain.
+          </p>
+        ) : (
+          <p className="muted" role="alert">
+            Session couldn’t open your browser. Open{" "}
+            <span>{approvalUrl(desktop.origin, state.req.request)}</span> in a browser and approve
+            this Mac there.
+          </p>
+        )}
         <p className="sx-code-l muted">If the browser asks for a code, enter</p>
         <p className="sx-code num" aria-label="Sign-in code">
           {state.req.code}
@@ -100,8 +130,17 @@ export function SignIn({ desktop }: { desktop: Desktop }) {
             className="btn"
             type="button"
             onClick={() => {
-              void desktop.bridge.openUrl(approvalUrl(desktop.origin, state.req.request));
-              toast(`Opened ${host}/device in your browser.`);
+              const req = state.req;
+              void desktop.bridge.openUrl(approvalUrl(desktop.origin, req.request)).then(
+                () => {
+                  setState({ s: "wait", req, opened: true });
+                  toast(`Opened ${host}/device in your browser.`);
+                },
+                () => {
+                  setState({ s: "wait", req, opened: false });
+                  toast("Session couldn’t open your browser.");
+                },
+              );
             }}
           >
             Open the page again

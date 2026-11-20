@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-replica-select"
+description = "Enables the replica_select command without any pre-configured scope."
+commands.allow = ["replica_select"]
+
+[[permission]]
+identifier = "deny-replica-select"
+description = "Denies the replica_select command without any pre-configured scope."
+commands.deny = ["replica_select"]

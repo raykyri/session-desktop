@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-replica-delete"
+description = "Enables the replica_delete command without any pre-configured scope."
+commands.allow = ["replica_delete"]
+
+[[permission]]
+identifier = "deny-replica-delete"
+description = "Denies the replica_delete command without any pre-configured scope."
+commands.deny = ["replica_delete"]

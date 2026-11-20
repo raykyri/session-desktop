@@ -89,16 +89,20 @@ export function startGitHubSignIn(returnTo?: string, signupCode?: string): void 
 /** Who is signed in: null when nobody is (401). The platform keeps the
  * answer: the Desktop app starts from it when the server cannot be reached
  * (it shows its replica offline), and a 401 there means the device's token
- * was revoked or expired (`Platform.unauthorized`). */
+ * was revoked or expired (`Platform.unauthorized`). Both name the token the
+ * request was made with: an answer that arrives after another person
+ * signed in on the device changes nothing of theirs (review round 1 of
+ * phase 3, finding 1). */
 export const meResource = createResource<Me | null>(async () => {
+  const token = platform().token();
   try {
     const me = await getJson<Me>("/api/me");
-    platform().rememberMe(me);
+    platform().rememberMe(me, token);
     return me;
   } catch (e) {
     if (e instanceof HttpError && e.status === 401) {
-      platform().rememberMe(null);
-      platform().unauthorized();
+      platform().rememberMe(null, token);
+      platform().unauthorized(token);
       return null;
     }
     const last = platform().lastMe();

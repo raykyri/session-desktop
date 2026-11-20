@@ -73,6 +73,26 @@ async function call(
   };
 }
 
+/** What the app does with a token it took: it is stored (the Keychain)
+ * before the app says it is signed in; a token the app could not store is
+ * revoked with itself, so no live token is left that nobody holds (review
+ * round 1 of phase 3, finding 10). */
+export async function keepToken(
+  desktop: {
+    signedIn(t: Taken): Promise<void>;
+    revoke(t: { token: string; device: string }): Promise<void>;
+  },
+  taken: Taken,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    await desktop.signedIn(taken);
+    return { ok: true };
+  } catch (e) {
+    await desktop.revoke(taken);
+    return { ok: false, message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /** The address the browser opens: the request only, never the code. */
 export const approvalUrl = (origin: string, request: string) =>
   `${origin}/device?request=${encodeURIComponent(request)}`;

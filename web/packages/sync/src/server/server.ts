@@ -712,7 +712,7 @@ export class SyncServer {
         while (tx.clientGet(id));
         tx.registrationAdd(actor.u, now);
         tx.clientPut(id, { u: actor.u, device: actor.device ?? null, last: 0, seen: now });
-        return { ok: true as const, clientId: id, serverTime: now };
+        return { ok: true as const, clientId: id, serverTime: now, u: actor.u };
       });
     } catch {
       return { ok: false, error: err("INTERNAL_SERVER_ERROR"), serverTime };

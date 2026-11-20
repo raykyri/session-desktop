@@ -3,6 +3,7 @@
 //! JSON the page keeps there (`web/desktop/src/platform.ts`). The page never
 //! sees another item.
 
+use std::sync::Arc;
 #[cfg(test)]
 use std::sync::Mutex;
 
@@ -62,7 +63,8 @@ impl Store for Memory {
 }
 
 /// The app's state for the commands.
-pub struct Keychain(Box<dyn Store>);
+#[derive(Clone)]
+pub struct Keychain(Arc<dyn Store>);
 
 /// The largest item the page may keep (the token, ids and the account as
 /// last read are far smaller).
@@ -70,14 +72,14 @@ pub const MAX_ITEM_BYTES: usize = 64 * 1024;
 
 impl Keychain {
     pub fn system(service: &str) -> Self {
-        Self(Box::new(System {
+        Self(Arc::new(System {
             service: service.to_owned(),
             account: "device".to_owned(),
         }))
     }
     #[cfg(test)]
     pub fn new(store: Box<dyn Store>) -> Self {
-        Self(store)
+        Self(Arc::from(store))
     }
     pub fn get(&self) -> Result<Option<String>, String> {
         self.0.get()
@@ -95,19 +97,35 @@ impl Keychain {
     }
 }
 
-#[tauri::command]
-pub fn keychain_get(keychain: tauri::State<'_, Keychain>) -> Result<Option<String>, String> {
-    keychain.get()
+/// Runs `f` on the blocking pool: the Keychain may wait (an access prompt),
+/// and a command never blocks the main thread (review round 1 of phase 3,
+/// finding 12).
+async fn blocking<T: Send + 'static>(
+    keychain: tauri::State<'_, Keychain>,
+    f: impl FnOnce(&Keychain) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let k = keychain.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || f(&k))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn keychain_set(keychain: tauri::State<'_, Keychain>, value: String) -> Result<(), String> {
-    keychain.set(&value)
+pub async fn keychain_get(keychain: tauri::State<'_, Keychain>) -> Result<Option<String>, String> {
+    blocking(keychain, |k| k.get()).await
 }
 
 #[tauri::command]
-pub fn keychain_delete(keychain: tauri::State<'_, Keychain>) -> Result<(), String> {
-    keychain.delete()
+pub async fn keychain_set(
+    keychain: tauri::State<'_, Keychain>,
+    value: String,
+) -> Result<(), String> {
+    blocking(keychain, move |k| k.set(&value)).await
+}
+
+#[tauri::command]
+pub async fn keychain_delete(keychain: tauri::State<'_, Keychain>) -> Result<(), String> {
+    blocking(keychain, |k| k.delete()).await
 }
 
 #[cfg(test)]

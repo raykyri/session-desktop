@@ -40,17 +40,25 @@ fn output(cmd: &str, args: &[&str]) -> Option<String> {
         .map(|s| s.lines().next().unwrap_or("").to_owned())
 }
 
-#[tauri::command]
-pub fn app_about(app: tauri::AppHandle) -> About {
-    let version = app.package_info().version.to_string();
+/// The Mac's name and macOS version (two processes: run on the blocking
+/// pool, never on the main thread; review round 1 of phase 3, finding 12).
+fn mac() -> (Option<String>, Option<String>) {
     #[cfg(target_os = "macos")]
-    let (name, macos) = (
+    return (
         output("scutil", &["--get", "ComputerName"]),
         output("sw_vers", &["-productVersion"]),
     );
     #[cfg(not(target_os = "macos"))]
-    let (name, macos) = (std::env::var("HOSTNAME").ok(), None::<String>);
-    about_from(name, macos, &version)
+    return (std::env::var("HOSTNAME").ok(), None);
+}
+
+#[tauri::command]
+pub async fn app_about<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<About, String> {
+    let version = app.package_info().version.to_string();
+    let (name, macos) = tauri::async_runtime::spawn_blocking(mac)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(about_from(name, macos, &version))
 }
 
 #[cfg(test)]

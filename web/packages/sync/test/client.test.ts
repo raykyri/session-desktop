@@ -82,11 +82,13 @@ test("a write the replica cannot predict is pending without a prediction; derive
   // who may make one (mel may not: refused)
   c.write("invites.create", { id: w.id(), space: open });
   t.is(c.outbox()[1]?.prediction, "refused");
-  const mona = client(w, "mona", { transport: tr });
+  // her own transport: a registration answered for mel is not hers
+  const monaTr = new Forced(new InProcessTransport(w.server, { u: "mona" }));
+  const mona = client(w, "mona", { transport: monaTr });
   await mona.init();
   await mona.open(`space:${open}`);
   await mona.open("user:mona");
-  tr.queue = [null];
+  monaTr.queue = [null];
   mona.write("invites.create", { id: w.id(), space: open });
   t.is(mona.outbox()[0]?.prediction, "unknown");
 });
