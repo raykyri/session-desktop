@@ -175,7 +175,7 @@ Acceptance: Playwright at 360×740 and 390×844 asserts
 **W2.6 Notifications page** (`/notifications`; not in the mock, which only
 toasts "Notified @x."). Lists the notification records of the user log
 (01 C16, 04 O1): "@x mentioned you in #name" (mention), "New report in #name"
-(`report`, staff only, 04 P1), "Your report in #name was resolved: removed /
+(`report`, channel owner only, 04 O1), "Your report in #name was resolved: removed /
 dismissed" (`report_resolved`), newest first, each linking to
 `/c/$name?t=&sel=`; an item the viewer can no longer read is not served, so
 it is not listed. Opening the page writes `notifications.markSeen`; a row
@@ -234,14 +234,14 @@ account applies it.
   the label then omits the number. No likes anywhere.
 - **"…" menu**: own thread, Delete (disabled with "Not available once someone
   else has responded" or "Available when the answer finishes"; 01 C15);
-  another member's thread, for staff of the channel (04 §4.3), Remove… and
+  another member's thread, for the channel's owner (04 §4.3), Remove… and
   "Ban from #name"; otherwise Report… for writers.
-- **Removed thread** (`card.removed`, 01 C12, 04 §6.2): "Removed by @mod",
+- **Removed thread** (`card.removed`, 01 C12, 04 §6.2): "Removed by @owner",
   "Reason: “…”" when given, "Ask by [deleted] in #name" or "Post by [deleted]
   in #name" for every reader, the author included; no prose, footer or side
   column. The author's "…" menu keeps Delete (04 §6.2).
-- **Hidden thread** (04 §6.3): the author and staff see the text under "Hidden
-  by moderators"; others see the placeholder. No Hide command.
+- **Hidden thread** (04 §6.3): the author and the owner see the text under
+  "Hidden by the channel owner"; others see the placeholder. No Hide command.
 
 Signed out, the follow-up, Reply and Save controls open the auth dialog and
 focus returns to the control on close; without an invite they are disabled
@@ -438,16 +438,17 @@ the chosen model's efforts and resetting on a model change;
 
 **W6.1 Channel header** (`spaceHead`): glyph, `#name`, lock for private
 channels, description clipped at 170 characters, info button ("About this
-channel"), and one of: "Your channel" chip, "Joined" (leaves; the sole owner
-cannot leave, 04 §4.3), "Members only" chip, Join. Toasts "Joined #name." and
+channel"), and one of: "Your channel" chip (the owner, who cannot leave,
+04 §4.3), "Joined" (leaves), "Members only" chip, Join. A frozen channel
+(04 §4.5) shows its banner under the header and no Join. Toasts "Joined #name." and
 "Left #name.". Acceptance: a test per viewer relation; join and leave are
 optimistic writes (§9.2).
 
 **W6.2 Info dialog** (`chInfoDlg`, 04 §4.4): About (owner without one sees "No
 description yet. Add one"), Channel by, Members (opens W6.8), Visibility
 ("Private: only members can read or post" / "Open: anyone can read and join");
-the owner gets Edit; staff get "Moderation log (N open)" and "Invite to #name"
-in private channels (W6.9). No rules (01 C6). Acceptance: content per role;
+the owner gets Edit, "Moderation log (N open)" and, in private channels,
+"Invite to #name" (W6.9). No rules (01 C6). Acceptance: content per role;
 focus and Escape per §10.
 
 **W6.3 About editor** (`chEditDlg`): a dialog stacked over the info dialog with
@@ -459,7 +460,7 @@ Base UI dialog; Escape closes only the editor; a non-owner has no Edit.
 **W6.4 Moderation log** (`modLogDlg`, 04 §6.5): stacked over the info dialog;
 tabs "Open reports (N)" and "Everything"; entries with kind (Report,
 Dismissed, Removed, Banned, Unbanned), "@reporter reported @author's ask" or
-"@mod removed @author's ask", the note and relative time. The current title is
+"@owner removed @author's ask", the note and relative time. The current title is
 shown only for an item present in the replica; a removed item shows kind,
 author and channel, never its text (01 C12). Open reports on live items offer
 Dismiss (`reports.resolve`, toast "Report dismissed.") and Remove (W6.5).
@@ -470,7 +471,7 @@ reports." and "Nothing logged yet."; no removed text in the DOM.
 at 120 characters; optional reason ("Reason, shown with the removal", at most
 300; "What is wrong with it?", at most 500); remove says "Readers see that it
 was removed. Branches and replies under it go with it."; report says "Reports
-go to the moderators of #name. @author is not told who reported." Writes
+go to @owner, the owner of #name. @author is not told who reported." Writes
 `moderation.decide` and `reports.create`; a second report on the same item
 shows "You already reported this.". Acceptance: the removed placeholder appears
 optimistically; the thread's open reports show as resolved; the duplicate-
@@ -493,17 +494,18 @@ already exists."; success navigates to `/c/$name` with the toast "#name is
 ready. …". Acceptance: validation tests; offline state; CONFLICT keeps the
 typed values.
 
-**W6.8 Member list and roles** (04 §4.3, §6.4): from the info dialog's Members
-row; owner, staff, then members by join date. Staff get a per-row menu: "Ban
-from #name", and in private channels "Remove from channel"; admins and the owner
-also get Make moderator / Remove moderator, and the owner Transfer ownership; staff see a Banned
-list with Unban. Writes `members.ban`, `members.remove`, `members.setRole`
-(with `base.rev`; STALE reloads the row). Not in the mock; built only if 01
-question 5 keeps moderators, otherwise the owner gets Ban and Remove only.
-Acceptance: menu items per role; a STALE answer to `setRole` reloads the row
-and shows the toast; the sole owner's Leave explains "Transfer ownership first."
+**W6.8 Member list** (04 §4.3, §6.4): from the info dialog's Members row;
+the owner, then members by join date. The owner gets a per-row menu on every
+other member: "Ban from #name", and in private channels "Remove from
+channel"; the owner sees a Banned list with Unban. Writes `members.ban`,
+`members.unban` and `members.remove` (with `base.adm`; STALE reloads the
+row). Not in the mock. There are no role controls (Make moderator, Remove
+moderator, Transfer ownership): channels have only an owner (01 C18).
+Acceptance: menu items for a member and for the owner; a STALE answer to
+`members.remove` reloads the row and shows the toast; the owner's header
+offers no Leave.
 
-**W6.9 Channel invite links** (04 §5): staff of a private channel open "Invite
+**W6.9 Channel invite links** (04 §5): the owner of a private channel opens "Invite
 to #name": a one-use link with Copy (`lib/clipboard.ts`, toast "Link copied."),
 Revoke and Undo (`invites.create { days: 7 }`, `invites.revoke`,
 `invites.restore`). Opening a link signed in calls `spaces.join { space,
@@ -515,10 +517,14 @@ revoke and undo; `spaces-channels.spec.ts` covers the join (04 B4).
 **W6.10 Frozen and refused states** (04 §8, §9): on the desktop, a channel the
 viewer was removed from shows "You are no longer a member of #name. This is the
 copy on this device." and offers only Delete on the viewer's own threads.
-Refusals of queued writes show the 04 §9 messages ("You are no longer a
-moderator of #name.", the ban message, the expired-link message) and restore
-composer text. Acceptance: fixture-replica tests for each message and the
-restored text.
+Refusals of queued writes show the 04 §9 messages (the ban message, "#name is
+frozen because its owner's account is not active.", the expired-link
+message) and restore composer text. A frozen channel (04 §4.5, `frozen` on
+the space record) shows the banner "#name is frozen: its owner's account is
+not active. You can read it and delete your own posts.", offers only Delete
+on the viewer's own items and Leave, and is left out of the composer's
+channel picker. Acceptance: fixture-replica tests for each message, the
+restored text and the frozen-channel banner.
 
 ## 7. Membership and sign-in
 
@@ -527,7 +533,7 @@ mock's explanation of 3 open links, rows from `members.tree` (online-only,
 TanStack Query) depth-first from the roots with children by join date, 18 px
 per level, avatar, handle, " · Admin" for `staff`, and name, the viewer
 highlighted, drawn with `TreeRail`. The mock's "mod" tag is dropped (04
-question 6). "Invite someone" (`invSection`): "N of 3 left", one row per open
+question 6, decided). "Invite someone" (`invSection`): "N of 3 left", one row per open
 link (`…/i#<code>`) with Copy and revoke × ("Revoke this link"), "Create an
 invite link" / "Create a new link" while a slot is free (otherwise "You have 3
 open invites. One frees when it is used or revoked."; a waiting account sees
@@ -629,7 +635,7 @@ and Open as its own thread with `from`), `threads.delete`, `research.forkNode`
 `replies.delete`), `comments.create`, `comments.delete`, `saved.set`,
 `prefs.set`, `spaces.join`, `spaces.leave`, `spaces.update`,
 `reports.create`, `reports.resolve`, `moderation.decide`, `members.ban`,
-`members.unban`, `members.remove`, `members.setRole`, `invites.create`,
+`members.unban`, `members.remove`, `invites.create`,
 `invites.revoke`, `invites.restore`, `notifications.markSeen`,
 `notifications.markRead`, `notifications.markAllRead`, `research.cancelNode`,
 `research.retryNode`. Each makes its ULIDs, applies the prediction to the
@@ -649,13 +655,13 @@ replica and enqueues the envelope.
   show a busy state and inline errors.
 
 **W9.2** Acceptance: a fake server refusing a reply (rolled back, text
-restored), answering STALE to a role change (toast, record reloaded), and
+restored), answering STALE to a member removal (toast, record reloaded), and
 dropping the web connection (Not sent; Retry reuses the mutation id).
 
 ### 9.3 Per-viewer fields
 
 `replica/viewer.ts` computes `mine`, `saved`, `canWrite` (active account, not
-banned in the space), `isStaff(space)`, `isOwner(space)`, `canDelete(item)`
+banned in the space, space not frozen), `isOwner(space)`, `canDelete(item)`
 (mine, not running, not promoted, nothing by others under it), `showAuthorAvatar`,
 `joined(space)` and the scope lists. Acceptance: table-driven unit tests per
 field.
@@ -698,8 +704,8 @@ lands. Acceptance: no fixture strings in `vite build` output.
 | `setTimeout` answers, `pending`, "Step 1 of 4" | run records, `step` and the stream (03 E3, T1-T3) |
 | `charge`, `RUNLOG`, `USAGE`, `BILLING`, `ALLOWANCE`, `RESET` | usage procedures and the ledger (03 K1-K7) |
 | key status set to `working` by a timer, toast "key works" | `keyCheck` effect (03 K4) |
-| `SPACE_META` owner and `vis`, `JOINED`, `memberCount` hash | space, member and role records (01 C9) |
-| `isMod` as owner only | staff roles (04 §4.3) |
+| `SPACE_META` owner and `vis`, `JOINED`, `memberCount` hash | space and member records; `owner` on the space record (01 C9, C18) |
+| `isMod` as owner only | kept: the owner is the only moderator, `isOwner(space)` (04 §4.3, 01 C18) |
 | `MEMBERS`, `INVITES`, `newCode`, `inviteState` | account invites and `members.tree` (01 C8, 04 §3) |
 | `BRP`, `n.look`, `n.quote`, `addLookup` prompt | comments, `look`, `quote`, server-built `q` (01 C3, C4) |
 | `PROMOTED`, `from` | `promoted` on the node, `from` on the thread (03 G5) |
@@ -869,7 +875,7 @@ your Mac" and then the agent label.
 | N2 | Signed-out and unjoined reading of open channels | 01 Y5, R5; 04 §3.5 |
 | N3 | Passage index on ask nodes (block index of the quoted passage, absent for footer asks), over a block structure that is the same for streamed and final text | 01 C3, 03 §1 (`b`) |
 | N4 | Counts record `{ th, s, saves, r }` with totals; no likes | 01 C1, C5 |
-| N5 | `vis: open \| private`, roles, the All directory | 01 C7, C9, C11; 04 §4 |
+| N5 | `vis: open \| private`, the roles `owner` and `member`, `frozen`, the All directory | 01 C7, C9, C11, C18; 04 §4 |
 | N6 | Comments on ask nodes; look-ups through `research.forkNode` with `look` and a server-built `q` | 01 C3, C4, U5; 03 §2.1, G2-G4 |
 | N7 | Account invites, waiting accounts, `members.tree` (online-only) | 01 C8; 04 §3 |
 | N8 | Placeholder fields `mod`, `modBy`, `modNote`; `modlog` with ban entries | 01 C12; 04 §6.5 |
@@ -878,7 +884,7 @@ your Mac" and then the agent label.
 | N11 | GitHub sign-in with the profile step, `auth.checkInvite`, desktop device tokens | 04 §1, §3.4; 01 S2 |
 | N12 | Stored answer and stream format: both Markdown | 01 C3; 03 §1 |
 | N13 | `prefs` record and `prefs.set` | 01 C13 |
-| N14 | Member list, ban, set-role and channel invite link mutators | 04 §4.3, §5, §6.4 |
+| N14 | Member list, ban, unban, remove and channel invite link mutators | 04 §4.3, §5, §6.4 |
 | N15 | Notification records (mention, `report`, `report_resolved`) and the `notifications.*` mutators, for W2.6 | 01 C16, U5; 04 O1, O2 |
 
 Shell, feed, side column, composer and dialogs are built against the fixture

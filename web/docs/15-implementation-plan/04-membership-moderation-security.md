@@ -1,7 +1,7 @@
 # 04 — Membership, moderation and security
 
-Status: draft. This file covers who may join Session, how channels admit and
-rank their members, how a channel's staff moderate it, what the server serves
+Status: draft. This file covers who may join Session, how channels admit
+their members, how a channel's owner moderates it, what the server serves
 to whom, and the limits and authentication the server applies. It schedules
 work against the rules fixed in `AGENTS.md` ("Planned: desktop client and sync
 core"), ADR-19 to ADR-22 and `web/packages/shared/src/schemas/spaces.ts`, and
@@ -12,14 +12,16 @@ contract changes are specified in `01-architecture-and-data.md` (cited as
 and device runs in `03-agents-and-research.md`. This file names what it needs
 from them and does not redesign them.
 
-Terms: "channel" is the product word; code and wire keep `space`. "Staff" of
-a channel means its owner, admins and moderators (`RANK >= mod` in
-`replica-proto/src/access.ts`). Test names in parentheses (`inv2`, `R11`,
+Terms: "channel" is the product word; code and wire keep `space`. A channel
+has exactly one owner and everyone else in it is a member; there are no
+admins or moderators and ownership is not transferable (`01` C18, product
+decision). "Site admin" means an account with `users.is_admin`, which runs
+Session; it is not a channel role. Test names in parentheses (`inv2`, `R11`,
 `H2`, …) without a file prefix are replica-proto tests that the real server
 half must pass (`05-delivery.md`, M3); `R…` and `S…` there are the
 `review-r1` and `review-r2` test ids, not `01`'s replication or server items.
 
-Work items have ids `I` (accounts and invites), `B` (channels and roles), `O`
+Work items have ids `I` (accounts and invites), `B` (channels and ownership), `O`
 (moderation), `P` (privacy and user logs) and `Z` (limits, authentication,
 client security), so that `05-delivery.md` (M4, M6 and M7a) can schedule them.
 
@@ -29,19 +31,19 @@ client security), so that `05-delivery.md` (M4, M6 and M7a) can schedule them.
 |---|---|---|---|
 | Sign-in provider | Sign in with X; a Session handle chosen at sign-up | GitHub OAuth (ADR-5, `06-auth-and-users.md`); the handle step is kept | ADR-5 is in force; the overview records no provider decision. X is question 7. |
 | Account without an invite | "Continue without one" creates a `waiting` member who reads open channels | A `users` row with `status: "waiting"` (`01` C8), with no handle, which owns nothing and cannot write | The overview records invite-only membership. This replaces `06` §3 and the current callback, which deletes a new account whose code fails (`auth/github.ts`); the purpose, no writes and no spend without a code, still holds. |
-| Moderators | `isMod` is the owner only | Staff per `spaceMemberRoleSchema` and the phase 0 read rules; the client adds "Make moderator" | The schema and replica-proto define the roles. `01` question 5 asks whether v1 grants them; this plan proposes yes (§4.3). |
-| Admin role | Absent | Rendered, not granted: an ownership transfer makes the previous owner `admin` (`review-r1` "an ownership transfer leaves exactly one owner, and the old owner an admin") | The client must label and permit it even though no control assigns it. |
+| Moderators | `isMod` is the owner only | The owner is the only person who moderates a channel; no moderator role and no "Make moderator" (`01` C18) | Product decision (00); agrees with the mockup. The schema's and replica-proto's `mod` role is removed (`01` U6). |
+| Admin role and ownership transfer | Absent | Removed: no `admin` role, no `members.setRole`, ownership is not transferable (`01` C18) | Product decision (00). |
 | Hide | Not offered | Server keeps `hidden`; no Hide command at launch | Phase 0 rules and suites cover it. |
-| Ban | Not offered | Offered to staff | `AGENTS.md`: removal in an open space is STALE after leave and rejoin; "the UI offers ban as the tool there". |
+| Ban | Not offered | Offered to the owner | `AGENTS.md`: removal in an open space is STALE after leave and rejoin; "the UI offers ban as the tool there". |
 | Report and removal text | One optional free-text field each | `reports.create { item, note? }`; `moderation.decide { …, note? }` (`01` C12) | Overview product decision. |
-| Who may report | Any active account (`canWrite()`) | Members of the channel (`reports.create` is `who: "member"` in replica-proto); a non-member in an open channel sees "Join #name to report." | Keeps the tested rule and ties each report to a person the staff can ban. |
+| Who may report | Any active account (`canWrite()`) | Members of the channel (`reports.create` is `who: "member"` in replica-proto); a non-member in an open channel sees "Join #name to report." | Keeps the tested rule and ties each report to a person the owner can ban. |
 | Removal placeholder | "Removed by @mod", "Reason: …", "Ask by @author in #channel" | The author shows as "[deleted]" (product decision); §6.2 lists exactly what is stored and served | `AGENTS.md` erases content (text and everything under the thread), not the record's attribution; replica-proto's `erase` and `redact` keep `u` on the placeholder. |
 | Moderation log excerpt | Quotes a removed thread's title | No text of a removed item | `AGENTS.md`: removed content is erased and never served again (`01` C12 agrees). |
 | Channel rules | Removed | Client never sends `rules`; no default rule is stored | Overview product decision. |
 | Visibility | Open or Private | Wire `vis: "open" \| "private"`; private is closed, unlisted and invite-only (`01` C9) | Matches the product; the closed-space rules of phase 0 apply unchanged. |
-| Private admission | "Ask @owner to add you"; no add flow drawn | Staff-made one-use channel invite links | The contract and phase 0 define them (`inv2`, `inv4`). |
+| Private admission | "Ask @owner to add you"; no add flow drawn | One-use channel invite links made by the owner | The contract and phase 0 define them (`inv2`, `inv4`). |
 | Join requests | Absent | Deferred (`01` C10); their prototype tests stay in the suite | `01` question 6. |
-| Channel deletion | Absent | Not offered at launch; `spaces.delete` stays out of `@session/mutators` v1; an admin deletes a channel by operator job | Nothing in the mockup draws it. |
+| Channel deletion | Absent | Not offered at launch; `spaces.delete` stays out of `@session/mutators` v1; a site admin deletes a channel by operator job (with suspension, §3.6 and §4.5, the only site-admin action on a channel) | Nothing in the mockup draws it. |
 | Invite link form | `session.app/i/<code>` (code in the path) | `<SESSION_PUBLIC_ORIGIN>/i#<code>` (code in the fragment); a pasted path form is still parsed | A path puts the code in request lines, access logs and `Referer` (§3.2). |
 | Showing an open code again | Every open link has Copy | Kept: the code is stored encrypted for its creator until used or revoked (§3.1) | Resolves question 4. |
 
@@ -137,7 +139,8 @@ holds no fragment after `/i#<code>` loads.
 handle, displayName, avatar, invitedBy, joinedAt, staff }`; `staff` is
 `admin` for `users.is_admin`. The client draws it as `treeA` (depth-first
 from the roots, children by `joinedAt`). The mockup's account-level "mod" tag
-has no server counterpart and is dropped unless question 6 adds the role.
+has no server counterpart and is dropped: there are no site-wide moderators
+(question 6, decided).
 Suspended accounts appear as ordinary nodes to members and are marked only
 for admins. A deleted account stays as a node "Deleted account" with no
 handle, so its invitees keep their place.
@@ -202,7 +205,7 @@ code issued during it.
 
 **I5.** They read every open channel with its threads, branches, replies and
 member list, and the landing of a private channel reached by its name or id:
-name, description, owner and staff handles (`mods`), member count (`inv3`:
+name, description, owner handle (`owner`, `01` C18), member count (`inv3`:
 "a signed-out caller gets open spaces and the landings of closed ones"). The
 scope picker offers only "All" (`SCOPES`). Write controls open the sign-in
 dialog or the invite page; the server refuses the write regardless (`inv1`).
@@ -223,11 +226,13 @@ on }` (admin only, in `/admin`) sets `users.status` to `suspended` or back to
 check as a waiting account, `FORBIDDEN`, recorded), its open account invites
 are revoked, its sessions and device tokens are revoked (streams end within
 60 seconds), and it reads like a waiting account after signing in again.
-Records it wrote stay; staff remove them as usual.
+Records it wrote stay; channel owners remove them as usual. Channels the
+account owns are frozen while it is suspended (§4.5).
 
 Acceptance: a server test that a queued envelope from a suspended user is
 refused, its open links answer `unusable`, and its device token answers
-`401`; unsuspending restores writes but not the revoked links.
+`401`; unsuspending restores writes but not the revoked links; the frozen
+channel tests of §4.5.
 
 ## 4. Channels
 
@@ -239,8 +244,8 @@ refused, its open links answer `unusable`, and its device token answers
 | Private | `vis: "private"` | Members only | Holders of a channel invite link |
 
 Visibility is set at creation (`01` C11); there is no control to change it.
-The Private option's help text says what stays public: "The name, About,
-owner and moderators are visible to anyone with the link or name."
+The Private option's help text says what stays public: "The name, About
+and owner are visible to anyone with the link or name."
 
 ### 4.2 Names and creation
 
@@ -261,50 +266,46 @@ Acceptance: `inv4` "space ids are ULIDs and names are unique, after
 normalization" and the online-only tests; `R10`; a validator table test shared
 by the dialog and the mutator.
 
-### 4.3 Roles
+### 4.3 Ownership
 
-**B2.** Roles are `owner`, `admin`, `mod`, `member`. The client assigns only
-`mod` and `member`. `admin` exists after an ownership transfer and is shown
-in the member list as "Admin"; it has moderator rights and may also act on
-other admins and set roles up to its own (`actsOn`, `members.setRole` in
-replica-proto).
+**B2.** A channel has two roles, `owner` and `member` (`01` C18). The
+creator is the owner for the channel's lifetime; ownership is not
+transferable and there are no admins or moderators. Site admins
+(`users.is_admin`) have no role in a channel unless they join it as members.
 
-| Action | Member | Mod | Admin | Owner |
-|---|---|---|---|---|
-| Read, ask, post, reply, save | yes | yes | yes | yes |
-| Report a thread | yes | — | — | — |
-| Remove a thread, dismiss a report, read the moderation log | | yes | yes | yes |
-| Ban and unban; remove from a private channel | | members | members, mods, admins | everyone else |
-| Make channel invite links | | yes | yes | yes |
-| Edit About (`01` C11: owner only) | | | | yes |
-| Make or remove moderators | | | yes | yes |
-| Transfer ownership | | | | yes |
+| Action | Member | Owner |
+|---|---|---|
+| Read, ask, post, reply, save | yes | yes |
+| Report a thread | yes | — |
+| Remove a thread, dismiss a report, read the moderation log | | yes |
+| Ban and unban; remove from a private channel | | yes, anyone but themselves |
+| Make channel invite links | | yes |
+| Edit About (`01` C11) | | yes |
 
 Work items:
-- Channel info gains a Members row opening the member list (owner, staff,
-  then members by `joinedAt`). Staff get a per-row menu on people ranked
-  below them: Ban, and in private channels Remove from channel. Admins and
-  the owner also get Make moderator / Remove moderator; the owner gets
-  Transfer ownership. These controls are additions to the mockup; if `01`
-  question 5 drops moderators from v1, the owner is the only staff and
-  nothing else here changes.
-- `members.setRole` carries `base.rev` and answers STALE on a changed member
-  record; `members.remove` carries `base.adm` and answers STALE when the
-  admission id changed (`AGENTS.md`; `inv2`, `R1b`).
-- The sole owner cannot leave (`spaces.leave` answers `PRECONDITION_FAILED`);
-  the confirmation says to transfer ownership first.
+- Channel info gains a Members row opening the member list (the owner, then
+  members by `joinedAt`). The owner gets a per-row menu on every other
+  member: Ban, and in private channels Remove from channel. This control is
+  an addition to the mockup.
+- `members.remove` carries `base.adm` and answers STALE when the admission
+  id changed (`AGENTS.md`; `R1b`). `members.setRole` does not exist.
+- The owner cannot leave (`spaces.leave` answers `PRECONDITION_FAILED`);
+  the client offers no Leave to the owner and the channel header shows "Your
+  channel". Channel deletion is not offered at launch (§1).
+- Nobody can ban or remove the owner; the remedy for an abusive owner is a
+  site admin's suspension (§3.6), which freezes the channel (§4.5).
 
-Acceptance: client tests for the menu items each of the four roles sees on
-each of the four roles; `inv2` "a queued role change, show, or edit acts only
-on the state it was made from", `R1b`, and the `review-r1`
-ownership-transfer test on the server.
+Acceptance: client tests for the menu items a member and the owner see on
+each other; a server test that a member's `members.ban`, `members.remove`
+and `invites.create` and the owner's ban of themselves answer `FORBIDDEN`,
+and the owner's `spaces.leave` answers `PRECONDITION_FAILED`; `R1b`.
 
 ### 4.4 Channel info and About
 
 **B3.** `chInfoDlg`: glyph, name, lock for private, About, "Channel by
 @owner", member count, the visibility sentence ("Private: only members can
-read or post" / "Open: anyone can read and join"), and for staff "Moderation
-log (N open)". The owner's Edit opens `chEditDlg` with About only, at most
+read or post" / "Open: anyone can read and join"), and for the owner
+"Moderation log (N open)". The owner's Edit opens `chEditDlg` with About only, at most
 300 characters.
 
 - Save sends `spaces.update { id, desc }` (`01` C11). The server trims,
@@ -315,14 +316,52 @@ log (N open)". The owner's Edit opens `chEditDlg` with About only, at most
   others.
 
 Acceptance: client test that only the owner sees Edit and the length error; a
-server test that a moderator's and an admin's `spaces.update` are refused; a
+server test that a member's `spaces.update` is refused; a
 step in `e2e/spaces-channels.spec.ts` where a member's open channel info
 shows the new About without a reload.
+
+### 4.5 A channel whose owner is suspended or deleted
+
+**B6.** Ownership cannot move (`01` C18), so a channel whose owner's account
+is suspended (§3.6) or deleted (§8) has nobody who can remove threads,
+handle reports or ban. Rule: the channel is frozen (a state of the whole
+channel, distinct from a removed member's frozen copy, §8).
+
+- `admin.suspend { on: true }` and the account-deletion operator job set
+  `frozen: true` on every space record the account owns, in the same
+  transaction as the status change; `admin.suspend { on: false }` clears it.
+  The flag is in the space log, so readers get it by sync and mutators
+  check it at apply time without reading `users`. A deleted owner's
+  channels stay frozen.
+- A frozen channel stays readable as before: an open channel by anyone, a
+  private channel by its members.
+- Every write in a frozen channel is refused at apply time with
+  `FORBIDDEN`, recorded ("#name is frozen because its owner's account is
+  not active."), except a person deleting their own threads, follow-ups,
+  replies and comments, and leaving. Joins, channel invite links and
+  reports are refused too. Saves are user-log records and are unaffected.
+- Channel info and the header show the banner "#name is frozen: its
+  owner's account is not active. You can read it and delete your own
+  posts." The composer's channel picker omits the channel.
+- The space record keeps `owner`; for a deleted account the client shows
+  "Channel by Deleted account" (the handle stays reserved, §8).
+- A site admin may delete a frozen channel with the channel-deletion
+  operator job (§1). This is the existing site-admin action, not a new
+  channel power. What happens to a deleted owner's channels in the long
+  run is question 11.
+
+Acceptance: a server test that, after `admin.suspend` of an owner, a
+member's post, a join, a channel link redemption and a report in that
+owner's channel answer `FORBIDDEN`, a member's delete of their own thread
+succeeds, and the threads are still served to a signed-out reader (open
+channel) and to a member (private channel); after unsuspension the same
+writes succeed; an operator-job test that deleting an owner's account
+leaves the channel frozen and readable; a client test of the banner.
 
 ## 5. Channel invite links
 
 **B4.**
-- Staff: channel info → "Invite to #name" → a one-use link
+- The owner: channel info → "Invite to #name" → a one-use link
   `<SESSION_PUBLIC_ORIGIN>/c/<name>#<code>` with Copy (channel URLs use the
   name, `01` C14; in production `https://session.dev/c/<name>#<code>`); the
   client route clears the fragment as in §3.2. Expiry 7 days (`invites.create { days: 7
@@ -331,16 +370,17 @@ shows the new About without a reload.
 - The server makes the code in `pre` (`inv4` "invite codes are made by the
   server"): 128 bits from a CSPRNG, base32, independent of the link id (the
   mock derives it from the id, which a reader of the id could predict).
-- Link records are read by the channel's staff and by their maker while a
-  member (`access.ts`); the code is never in a record any other reader gets.
+- Link records are read by the channel's owner, who is their only maker
+  (`access.ts`); the code is never in a record any other reader gets.
 - An active account opening the link calls `spaces.join { space, invite }`; a
   signed-out or waiting reader goes through §3.4 first and keeps the channel
   code in memory, not in a URL.
-- A link works only while its maker may make links, and again once the maker
-  regains the right; expiry is checked at apply time (`inv2`, three tests). A
-  banned person cannot join with a link (`review-r1` ban test).
-- A leaked link admits at most one person; the maker and staff see `usedBy`
-  and can remove or ban that person.
+- A link works only while its channel is not frozen (§4.5) and the link has
+  not expired; both are checked at apply time (`inv2` "an expired invite
+  link is refused at apply time, whatever the client saw"; §4.5). A banned
+  person cannot join with a link (`review-r1` ban test).
+- A leaked link admits at most one person; the owner sees `usedBy` and can
+  remove or ban that person.
 - Limits: 20 links per user per day; 50 open per channel (§10).
 
 Acceptance: in `e2e/spaces-channels.spec.ts`, the owner of a private channel
@@ -354,11 +394,10 @@ snapshot holds no link record.
 ### 6.1 Reporting
 
 **O1.**
-- Members of the channel who are not staff: "Report…" (`reportopen`) opens
-  `rmDlg` in report mode: the clipped title, "What is wrong with it?"
-  (optional), and "Reports go to the moderators of #name. @author is not told
-  who reported." (The mockup names the owner; with moderators the copy names
-  the channel.)
+- Members of the channel other than the owner: "Report…" (`reportopen`)
+  opens `rmDlg` in report mode: the clipped title, "What is wrong with it?"
+  (optional), and "Reports go to @owner, the owner of #name. @author is not
+  told who reported." (as the mockup, which names the owner).
 - `reports.create { id, item, note? }` with `item` the moderation key
   `a:<thread>` (ask) or `p:<thread>` (post) (`moderationKeySchema`, `itemOf` in
   replica-proto), note at most 500 characters (`01` C12). One open report per
@@ -366,20 +405,21 @@ snapshot holds no link record.
   "You already reported this."
 - Threads only at launch; follow-ups (`f:`), replies (`r:`) and comments
   (`c:`, `01` C4) have moderation keys and can follow (question 9).
-- A report is readable by its reporter and the channel's staff. Staff get a
-  `report` notification, served only while they are staff (`R4c`, `H2`); the
-  effect writes at most one unread notification per (staff member, item), so
-  repeated reports on one item do not multiply notifications.
+- A report is readable by its reporter and the channel's owner. The owner
+  gets a `report` notification; the effect writes at most one unread
+  notification per item, so repeated reports on one item do not multiply
+  notifications.
 
 Acceptance: `review-r1` "a report notifies the space's owner, admins and
-moderators, and nobody else"; `@session/mutators` tests for the one-open rule
-and a non-member's report refused; an effect test that three reports on one
-item leave one unread notification per staff member.
+moderators, and nobody else", rewritten as "… the space's owner, and nobody
+else" (`01` U6); `@session/mutators` tests for the one-open rule and a
+non-member's report refused; an effect test that three reports on one item
+leave one unread notification for the owner.
 
 ### 6.2 Removing
 
 **O2.**
-- Staff: "Remove…" (`rmopen`) in the thread menu and the moderation log;
+- The owner: "Remove…" (`rmopen`) in the thread menu and the moderation log;
   `rmDlg` in remove mode: "Reason, shown with the removal" (optional, at most
   300 characters, with the hint "Readers see this. Do not quote the removed
   text.") and "Readers see that it was removed. Branches and replies under it
@@ -408,11 +448,11 @@ What the removal commit leaves, and who gets it:
 | Thread text: `q`, `t`, `sum`, quotes, look-up phrases | emptied in the same commit | nobody |
 | Ask nodes and follow-ups, answers, replies, comments, runs and turns, `run_live` checkpoints, mention notifications about it, saves of it | deleted; tombstones keep key, kind, audience fields and rev | readers get `del` |
 | Counts record | `r: 0`, `saves: 0` | every reader |
-| Reports on the item | kept with `st: "removed"` and their notes | reporter and staff; deleted after 180 days |
-| `modlog` entry | `kind`, `item`, `by`, `author`, `note`, `at` | staff; deleted after 180 days |
+| Reports on the item | kept with `st: "removed"` and their notes | reporter and owner; deleted after 180 days |
+| `modlog` entry | `kind`, `item`, `by`, `author`, `note`, `at` | owner; deleted after 180 days |
 | `usage_events` of its runs | kept, no text (`03` K1) | the payer |
 
-The client renders the placeholder as "Removed by @mod", "Reason: “…”" when
+The client renders the placeholder as "Removed by @owner", "Reason: “…”" when
 a note exists, and "Ask by [deleted] in #name" or "Post by [deleted] in
 #name" for every reader, the author included (product decision). The author's
 replica still receives `u`, so the author's "…" menu keeps Delete. Acceptance:
@@ -433,10 +473,10 @@ the reader's saves are gone; the D4 storage scan of §6.6.
 
 **O3.** `moderation.decide { decision: "hidden" | "shown" }` and the
 hidden-text rules stay implemented and tested (`inv6`: hidden text to the
-author and staff; a demoted moderator stops getting it). `shown` carries
-`base.rev` and answers STALE when the author edited after the moderator read
-it (`R2`). The client renders hidden items (author and staff see the text
-under "Hidden by moderators"; others the placeholder) but offers no Hide
+author and the owner). `shown` carries `base.rev` and answers STALE when the
+author edited after the owner read it (`R2`). The client renders hidden
+items (author and owner see the text under "Hidden by the channel owner";
+others the placeholder) but offers no Hide
 command (question 10).
 
 Acceptance: `inv6` hide tests, `R2`, `R14`; a client test of both renderings.
@@ -444,8 +484,9 @@ Acceptance: `inv6` hide tests, `R2`, `R14`; a client test of both renderings.
 ### 6.4 Banning
 
 **O4.**
-- Staff: "Ban from #name" on the thread menu of a person ranked below them
-  and in the member list; a Banned list with Unban in channel info.
+- The owner: "Ban from #name" on the thread menu of any other person and in
+  the member list; a Banned list with Unban in channel info. Nobody can ban
+  the owner (§4.3).
 - `members.ban` removes any membership and adds the ban. A ban stops every
   write in the channel, the person's own included, and any join by link
   (`inv2`, `review-r1` ban test). In an open channel the banned person can
@@ -458,16 +499,17 @@ Acceptance: `inv6` hide tests, `R2`, `R14`; a client test of both renderings.
 
 Acceptance: `inv2` "a ban stops writes queued before it, in a closed and in
 an open space" and "a ban stops every write in its space, the author's own
-included"; a client test that a moderator sees no Ban on another moderator.
+included"; a client test that a member sees no Ban and the owner sees none
+on their own threads.
 
 ### 6.5 Moderation log
 
 **O5.** `modLogDlg`: tabs "Open reports (N)" and "Everything"; each entry
 shows the kind (Report, Dismissed, Removed, Banned, Unbanned), "@reporter
-reported @author's ask" or "@mod removed @author's ask", the note, and the
+reported @author's ask" or "@owner removed @author's ask", the note, and the
 relative time; open reports carry Dismiss and Remove.
 
-- Data: the channel's reports plus the staff-only `modlog` record kind of
+- Data: the channel's reports plus the owner-only `modlog` record kind of
   `01` C12 (`{ id, sp, kind, item, by, author, note, at }`), whose `kind`
   includes `ban` and `unban`, with `item` null and `author` naming the banned
   person.
@@ -480,7 +522,8 @@ relative time; open reports carry Dismiss and Remove.
   reports are deleted 180 days after `at` by the retention job (`01` Y8).
 
 Acceptance: `inv3` "a plain member gets no moderator-only records, in
-snapshots or pulls" extended to `modlog`; a retention test with an injected
+snapshots or pulls", rewritten for the owner (`01` U6) and extended to
+`modlog`; a retention test with an injected
 clock; a client test that an entry for a removed item renders no title.
 
 ### 6.6 Acceptance
@@ -510,11 +553,10 @@ current access (`AGENTS.md`; `inv7`). Likes are removed (`01` C1).
   (`R4a`: no deletions reach a removed member's log).
 - A removed thread's saves are deleted with it (§6.2).
 - The Saved count is computed on the client from the user log.
-- Report notifications are served only while the person is staff (`R4c`,
-  `H2`).
+- Report notifications go to the channel's owner only (§6.1).
 
 Acceptance: a client test that Saved's count drops when a resync removes a
-channel's saves; `R4a`, `R4c`, `H2`.
+channel's saves; `R4a`.
 
 ## 8. Privacy
 
@@ -527,8 +569,8 @@ channel's saves; `R4a`, `R4c`, `H2`.
   decision: there is no retention requirement for backups, so removed text
   may stay in backups for as long as they are kept; "never served again"
   applies to what the server serves, not to backups (`01` question 3). Report notes and removal
-  reasons are moderator- or reporter-written text and are kept as §6.2 says.
-- **Hidden text** goes to its author and the channel's staff only.
+  reasons are owner- or reporter-written text and are kept as §6.2 says.
+- **Hidden text** goes to its author and the channel's owner only.
 - **Frozen copy.** A member removed or banned from a private channel keeps
   the copy on their desktop, frozen: the server serves them nothing further
   from it, but they can still delete their own threads there (`inv3`
@@ -537,7 +579,7 @@ channel's saves; `R4a`, `R4c`, `H2`.
   #name. This is the copy on this device." and offers only Delete on the
   person's own threads. The web client has no frozen copy after a reload. On
   a voluntary Leave the desktop drops the copy (question 5).
-- **Reporter identity** goes to the reporter and staff only.
+- **Reporter identity** goes to the reporter and the channel's owner only.
 - **No existence oracle.** A missing target and one the caller may not read
   answer the same (`inv4`); an id collision answers the same `CONFLICT`
   whether or not the caller can read the record (`inv4`). `auth.checkInvite`
@@ -548,6 +590,8 @@ channel's saves; `R4a`, `R4c`, `H2`.
   `AGENTS.md`), their user log, member records and device tokens; it keeps
   their handle reserved, reports and `modlog` entries naming them until
   retention, and their node in the invite tree as "Deleted account".
+  Channels the person owns are not deleted with the account; they are
+  frozen (§4.5).
 
 Acceptance: the frozen-copy test, `R4b`; a client test of the frozen banner
 and that only own threads offer Delete; an operator-job test on a fixture
@@ -562,13 +606,13 @@ replica already knows to be forbidden is refused locally; one that becomes
 forbidden while queued is refused by the server, recorded under its seq, and
 rolled back. The client renders:
 
-- a demoted moderator's queued removal: "You are no longer a moderator of
-  #name.";
 - a removed, banned or suspended member's queued post: refused, with the
   composer text restored from the outbox entry;
-- a channel link whose maker lost the right: the expired-link message;
-- STALE on a role change, a member removal or `shown`: the target is
-  reloaded and the person acts again.
+- a queued write in a channel that froze (§4.5): "#name is frozen because its
+  owner's account is not active.", with the composer text restored;
+- a link to a frozen channel: the expired-link message;
+- STALE on a member removal or `shown`: the target is reloaded and the
+  person acts again.
 
 Recorded refusals are shown at once; transient answers retry with backoff,
 and a write failing 5 times is shown while the rest of the outbox continues
@@ -605,8 +649,8 @@ refusals answer `TOO_MANY_REQUESTS` unrecorded, and the client backs off
 | Runs | Weekly allowance, 20 queued per user, 100 device runs/hour, 200 KB per device answer | `03-agents-and-research.md` |
 
 Buckets are in memory in the single process (`06` §8). The invite tree lets
-an admin find who invited an abusive account; suspension (§3.6) and revoking
-that member's open links are admin actions in `/admin`.
+a site admin find who invited an abusive account; suspension (§3.6) and revoking
+that member's open links are site-admin actions in `/admin`.
 
 Acceptance: a middleware test per row that the limit plus one answers
 `TOO_MANY_REQUESTS` and records nothing; `session_rate_limited_total{bucket}`
@@ -617,7 +661,8 @@ Acceptance: a middleware test per row that the limit plus one answers
 Made by `01`: C8 (account invites on `invites`, `status`, `members.tree`),
 C9 (`vis: "private"`), C10 (join requests deferred), C11 (`spaces.update {
 id, desc }`, owner only), C12 (report and removal notes, `modlog` with `ban`
-and `unban`, one open report per person and item). Requested here in
+and `unban`, one open report per person and item), C18 (roles `owner` and
+`member` only, `owner` on the space record, `frozen`). Requested here in
 addition (`01` now records the first three, in C12, U6 and C8):
 
 - C12 to state that the removal placeholder keeps `id`, `s`, kind, `u` and
@@ -718,10 +763,15 @@ the token.
 - **Handle enumeration.** Handles are public by design (bylines, the tree);
   the availability check is rate-limited only to bound load.
 - **Report abuse.** One open report per reporter and item, 20 per hour,
-  coalesced staff notifications (§6.1), reports only from channel members,
-  and reporters visible to staff, who can ban a reporter who abuses reports.
-- **Moderator exposure.** "Removed by @mod" names the moderator to every
-  reader, as the mockup decides; staff can ban members who harass them.
+  coalesced owner notifications (§6.1), reports only from channel members,
+  and reporters visible to the owner, who can ban a reporter who abuses
+  reports.
+- **Owner exposure.** "Removed by @owner" names the owner to every reader,
+  as the mockup decides; the owner can ban members who harass them.
+- **Abusive or absent owner.** Nobody can ban an owner or take over a
+  channel. A site admin suspends the account (§3.6), which freezes its
+  channels (§4.5); a frozen channel stays readable, with its content as the
+  owner left it, until a site admin deletes it by operator job.
 - **Cursor tokens.** Cursors and SSE ids are AEAD tokens holding log, reader,
   version, serve time and epoch; no version reaches a client. The key is
   configured, the previous key accepted for 30 days. A forged token, another
@@ -747,7 +797,7 @@ the token.
 ## 14. Dependencies
 
 - `01-architecture-and-data.md`: server half, record kinds and audiences,
-  C1, C8–C14, S1–S3, D2, D3, D4, U6, Y3, Y8.
+  C1, C8–C14, C18, S1–S3, D2, D3, D4, U6, Y3, Y8.
 - `02-client-app.md`: the dialogs and pages named here (channel info, edit,
   member list, moderation log, remove/report, members page, invite flow,
   frozen-channel banner).
@@ -770,10 +820,15 @@ the token.
    yes, from `code_enc`, readable only by its creator and cleared on use or
    revoke.
 5. Does the desktop keep a frozen copy after a voluntary Leave? Proposed: no.
-6. Site-wide moderators (the mockup's "mod" tag in the tree), or only
-   `users.is_admin`?
+6. Decided: no site-wide moderators and no channel admins or moderators.
+   A channel has one owner, not transferable (§4.3, `01` C18);
+   `users.is_admin` stays for the people who run Session (tree roots, the
+   invite-limit exemption, suspension).
 7. Sign in with X in addition to or instead of GitHub (ADR-5).
 8. How long does a waiting account live without a code (proposed 14 days),
    and how many may one IP create (proposed 5 per day)?
 9. Report and remove follow-ups and replies individually at launch?
-10. Offer Hide to staff, given the server supports it?
+10. Offer Hide to the owner, given the server supports it?
+11. A deleted owner's channels are frozen (§4.5). Do they stay frozen and
+    readable indefinitely, or does a site admin delete them after a fixed
+    period (for example 90 days), with notice to members?

@@ -6,8 +6,8 @@ two packages `AGENTS.md` schedules next (`@session/mutators` and
 `@session/sync`), replication tiers, the HTTP surface, and the changes the
 members mockup (`docs/mockups/session-web-members.html`) makes to the spaces
 contract (`web/packages/shared/src/schemas/spaces.ts`). Runs, models, tokens
-and device runs are in `03-agents-and-research.md`; invites, roles and
-moderation policy in `04-membership-moderation-security.md`.
+and device runs are in `03-agents-and-research.md`; invites, channel ownership
+and moderation policy in `04-membership-moderation-security.md`.
 
 Authority, as in `00-overview.md`: `AGENTS.md` ("Planned: desktop client and
 sync core") and ADR-19 to ADR-22 win over the mockup, except where the
@@ -250,15 +250,17 @@ the client and never stored or served. Acceptance: a test parses every record
 a mutator writes with its stored schema and finds no `mine`, `saved` or
 `liked` field.
 
-**U4. Stale intent.** `shown`, `approve`, reopen and `setRole` carry
-`base.rev` of the target and answer `STALE` on a mismatch; `hidden`,
+**U4. Stale intent.** `shown`, `approve` and reopen carry `base.rev` of the
+target and answer `STALE` on a mismatch; `members.setRole` and its rule are
+removed with the admin and moderator roles (C18); `hidden`,
 `removed`, `decline` and `members.ban` act on the record as it is;
 `members.remove` compares the admission id (AGENTS.md). Acceptance: the
 replica-proto review-r1/r2 tests for these cases pass.
 
 **U5. The mutator set.** Mutator names are the procedure names of
-`spaces.ts`; this plan adds only `comments.*` (C4) and `prefs.set` (C13), and
-renames `saved.toggle` to `saved.set` (C1). One file per area under `src/`:
+`spaces.ts`; this plan adds only `comments.*` (C4) and `prefs.set` (C13),
+renames `saved.toggle` to `saved.set` (C1), and removes `members.setRole`
+(C18). One file per area under `src/`:
 - `spaces`, `members`, `threads`, `saves`, `reports`, `moderation`,
   `invites`, `notifications`;
 - `nodes`: `research.forkNode` (Continue, Branch, Branch here and Look up,
@@ -270,9 +272,11 @@ renames `saved.toggle` to `saved.set` (C1). One file per area under `src/`:
 - `prefs`: `prefs.set` (C13).
 
 The set is the mock's procedures minus the surfaces C10 defers, with the
-changes in section 7. `followups.ask` (an ask with no parent) is not used:
+changes in section 7. `members` holds `members.remove`, `members.ban` and
+`members.unban`, all `who: "owner"` (C18). `followups.ask` (an ask with no parent) is not used:
 every ask under a thread goes through `research.forkNode` (03 §2.1). The
-prototype ports 19 of them; the others (`research.createPostFollowUp`,
+prototype ports 19 mock procedures, `members.setRole` among them until U6
+removes it; the others (`research.createPostFollowUp`,
 `replies.*`, `comments.*`, `research.forkNode`, `followups.update`,
 `followups.delete`, `research.cancelNode`, `research.retryNode`,
 `reports.resolve`, `members.unban`, `invites.revoke`, `notifications.*`,
@@ -293,6 +297,54 @@ porting, change `replica-proto` itself to the revised contract:
   `spaces.update { id, desc }` (C11); the `followup` kind renamed `node` with
   C3's fields; `comment` (C4) and `modlog` (C12) kinds; `erase` also deletes
   the removed thread's saves, comments and mention notifications (04 §6.2);
+- roles (C18): `SpaceRole` becomes `"owner" | "member"`; `members.setRole`,
+  `RANK`, the rank comparison in `actsOn`, `isModOf`, the space's `invite`
+  setting and its `mods` list go (`owner` replaces `mods`); `who:
+  "moderator"` and `who: "admin"` become `who: "owner"`; the `report`
+  notification effect writes to the owner only. The `cast` fixture in
+  `test/harness.ts` no longer calls `setRole`: mona (#lounge, #lab) and ada
+  (#lab) are plain members, and every test in which they act as staff
+  (removals, bans, decisions, `spaces.update`) acts as the owner olga
+  instead. Removed, because they test only roles:
+  `inv2` "a moderator's hide, queued before a demotion, is refused after it",
+  `inv2` "an admin's role change, queued before losing admin, is refused",
+  `inv2` "an invite link works only while its maker may still make links" and
+  "a link that stopped working when its maker lost the right works again once
+  the maker has it back" (the maker is the owner, who keeps the right; a
+  frozen channel's links are covered by the server test of 04 §4.5),
+  `inv6` "a demoted moderator stops getting hidden text, and a promoted member
+  starts", `review-r1` "an ownership transfer leaves exactly one owner, and
+  the old owner an admin", `review-r1` `R4c` "report notifications leave a
+  moderator's user log when the moderator leaves the closed space" (the
+  owner cannot leave) and `review-r2` `H2` "report notifications are served
+  only while their person is staff of the space". Rewritten: `inv1` "a
+  write the actor's role forbids is refused and changes nothing" (owner-only
+  writes by a member instead of `setRole`); `inv2` "a queued role change,
+  show, or edit acts only on the state it was made from" (drops the role
+  change and is renamed "a queued show or edit …"); `inv3` "a non-member of a
+  closed space gets its landing, the staff list and their own request, not
+  their threads" and "a plain member gets no moderator-only records, in
+  snapshots or pulls" (`owner` for `mods`, owner-only records); `inv6`
+  "after a hide, its author and the space's moderators get the text;
+  everyone else the placeholder" and "hidden follow-ups and replies lose
+  their text for readers who are not their author or staff" (the owner for
+  moderators); `review-r1` `R1b` (drops ada's queued `setRole` and its
+  STALE answer) and "a report notifies the space's owner, admins and
+  moderators, and nobody else" (the owner and nobody else); `inv5` "a replay
+  with a different name or input is refused, and the stored result stays",
+  `review-r2` `S1`, `Q2`, both `E1` tests and `R1` "a record written again at
+  a deleted key continues from its last rev, after the tombstone is pruned
+  too", which use `setRole` as a sample write and take another mutator;
+  `convergence.test.ts` drops `members.setRole` from its generated writes
+  and its setup. The write oracle drops `RANK`, its `actsOn` and its
+  `members.setRole` rule; the effect model drops its `RANK` ordering and its
+  `members.setRole` case. Mutation patterns: X9 ("an ownership transfer
+  keeps the old owner"), N13 (a link's maker reads it after leaving), N14
+  (the `invite` setting) and R2-5 (report notifications served to people
+  who are not staff, an equivalent mutant once only the owner is notified)
+  are removed; X11 (report notifications go to every member) and the N22
+  control are rewritten for `owner` (N22: "spaces.update needs only a
+  member");
 - protocol: `queuedAt` and `replaces` in the envelope (Y1), an oversized
   envelope answering `TOO_LARGE` instead of `BAD_REQUEST`, and
   `PROTOCOL_VERSION` raised to 4;
@@ -374,14 +426,14 @@ answer.
 
 **Y5. `snapshot(log, tier)` and `pull(log, cursor)`.** Read records as they
 are now, filtered by the reader's scope at read time (`replica-proto/src/access.ts`);
-hidden text goes to its author and the space's staff only. Snapshot records
+hidden text goes to its author and the space's owner only. Snapshot records
 come in `createdAt`, then `created_v`, order. `pull` returns the keys changed
 after the cursor's version, each as the current record or a `del`
 (tombstone, or a record the reader may no longer read), plus `lastSeq` when
 the request names a client id of the caller. `pull` answers `resync` for a
 token not sealed by this server (current or previous key), sealed for
 another reader, log or epoch, served more than 30 days ago, or when the
-reader's scope changed since (their membership or role in the space; for a
+reader's scope changed since (their membership in the space; for a
 user log, in any space, or a space opening or closing that a row is about).
 Pulls are not tiered, as in the prototype (R2). Acceptance:
 `inv3-scoped-reads` (including "a signed-out caller can tell neither how
@@ -672,9 +724,7 @@ the editor (`chEditDlg`) changes only the description, at most 300
 characters. The schema's `spaces.update` lets admins change every setting.
 Change: `spaces.update` takes `{ id, desc }`, `who: "owner"`; name and
 visibility are set at creation; no `base` is needed, because only one person
-edits. Admin and moderator roles stay in the role enum and in the prototype
-(their suites cover `setRole`), but no v1 screen grants them; see open
-question 5.
+edits. Admin and moderator roles are removed (C18).
 
 **C12. Remove and report with a free-text reason; the moderation log.**
 `rmDlg` takes an optional reason for both. A removal's reason is shown to
@@ -690,7 +740,7 @@ reason. Change:
   served to the author only; every other reader gets `u: null` and the client
   prints "[deleted]" (product decision; the stored and served table is in
   04 §6.2). This is a change to replica-proto's `erase`/`redact` (U6).
-- A `modlog` record kind in the space log, readable by staff only: `{ id, sp,
+- A `modlog` record kind in the space log, readable by the owner only: `{ id, sp,
   kind: "report" | "remove" | "dismiss" | "ban" | "unban", item, by, author,
   note, at }`; for `ban` and `unban`, `item` is null and `author` names the
   banned person (04 §6.5). `reports.resolve` with `dismissed` writes a
@@ -730,13 +780,58 @@ under the mockup's condition; the server does not enforce it.
 mention, and `report` exists only in the prototype. Change: a `mention`
 notification type, written by a post-commit effect to the mentioned person's
 user log, only if that person can read the item at effect time; the
-prototype's staff-only `report` type joins the schema (04 O1), beside the
+prototype's `report` type, sent to the channel owner only, joins the schema (04 O1), beside the
 schema's `report_resolved`. The client lists notifications (mention, `report`,
 `report_resolved`) on a notifications page (`02-client-app.md` W2.6).
 
 **C17. Runs streamed.** The mock API's note "Answers are not streamed" is
 superseded by ADR-22; the `spaceRunSchema` record becomes the run record of
 03 §1.
+
+**C18. Channel roles: owner and member.** Product decision (00, "Decisions
+recorded after review"): a channel has exactly one owner, ownership is not
+transferable, and everyone else is a member; there are no admins,
+moderators or other staff. The mockup agrees (`isMod` is the owner only).
+The schema defines four space roles and
+replica-proto ranks them (`RANK = { member: 1, mod: 2, admin: 3, owner: 4 }`
+in `src/access.ts`), lets a person act on members ranked below them
+(`actsOn` in `src/mutators.ts`) and changes roles with `members.setRole`
+(`who: "admin"`, `base.rev`, STALE on a changed member record; giving
+`owner` transfers ownership and makes the previous owner `admin`). Change,
+in `web/packages/shared/src/schemas/spaces.ts`:
+- `spaceMemberRoleSchema` becomes `z.enum(["member", "owner"])` and
+  `spaceRoleSchema` (`/api/me/roles`, `roles0`) becomes
+  `z.enum(["Owner", "Member"])`;
+- the `members.setRole` procedure is removed;
+- the space record's `mods` (`[handle, role][]`, "the owner, admins and
+  moderators") is replaced by `owner: spaceHandleSchema`, written by
+  `spaces.create` and never changed;
+- `invite: "mods" | "members"` is removed from `spaceSchema`,
+  `spaceSettingsSchema` and `createSpaceInputSchema`: only the owner makes
+  channel invite links;
+- `frozen: z.boolean().optional()` is added to the space record (04 §4.5);
+- the header comment ("space roles (owner, admin, moderator, member)") and
+  the comments that name admins or moderators (`spaceSettingsSchema`, the
+  invite and decline-note comments) are updated.
+
+In `@session/mutators`: `who` is `user`, `member`, `author` or `owner`.
+`who: "owner"` covers `spaces.update` (C11), `moderation.decide`,
+`reports.resolve`, `members.remove`, `members.ban`, `members.unban`,
+`invites.create`, `invites.revoke` and `invites.restore` (and the deferred
+`joinRequests.decide`, which stays in the prototype suite, C10). `actsOn`
+reduces to "the actor is the owner and the target is someone else". The
+owner cannot leave (`spaces.leave` answers `PRECONDITION_FAILED`). Records
+that replica-proto serves to staff (`report`, `modlog`, `ban`, `invite`
+link records, hidden text, `report` notifications) are served to the owner,
+and where they are today also to the reporter, the link's maker or the
+author. Site admins (`users.is_admin`) get no channel rights from the role
+model; the channel-level actions a site admin already has in this plan stay:
+deleting a channel by operator job (04 §1) and suspending an account, which
+freezes the channels it owns (04 I6, §4.5). `AGENTS.md` ("Stale intent:
+`shown`, `approve`, reopen and `setRole` carry `base.rev`", and the two
+lines that name "the space's moderators" for hidden text and "a moderator"
+for removal) is updated in the same change as C18; this plan does not edit
+it. The replica-proto impact is listed in U6.
 
 ## 8. Dependencies
 
@@ -748,7 +843,7 @@ S1-S3 ─► A1
 Y13 ─► the run jobs of 03 (E1)
 D6 needs Y6 (epoch in cursors) and the restore runbook change
 R1-R5 need Y5 and C7
-C1-C17 land in spaces.ts and replica-proto before U5
+C1-C18 land in spaces.ts and replica-proto before U5
 S4 (effects) before C16 and the run jobs of 03
 ```
 
@@ -773,9 +868,9 @@ them.
 4. **Restore marker.** D6 relies on the restore runbook to write a marker. Is
    a boot-time check of the Litestream generation id more reliable than a
    manual step?
-5. **Admin and moderator roles.** C11 keeps them in the contract with no
-   screen. Drop them from v1 (simpler permissions, but the prototype suites
-   for `setRole` then test dead code), or add a "Make moderator" control?
+5. **Admin and moderator roles.** Decided: channels have only an owner and
+   members; admin and moderator roles, `members.setRole` and ownership
+   transfer are removed from the contract and the prototype (C18, U6).
 6. **Join requests.** C9 defers them, so a private channel admits only
    through links. Is that the intended product, or did the mockup leave them
    out only for space?

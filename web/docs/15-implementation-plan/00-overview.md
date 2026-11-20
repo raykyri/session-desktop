@@ -43,7 +43,8 @@ describe and records where the mockup changes or adds to them.
 - Composer: Ask (arrow) or Post (pencil), channel and model pickers.
 - Channels: an info dialog (description, owner, members, visibility); owners
   edit only About; owners remove threads and members report them, both with an
-  optional reason, in a moderation log. Channel rules were tried and removed.
+  optional reason, in a moderation log. The owner is the only person who
+  moderates (`isMod` is the owner). Channel rules were tried and removed.
 - Membership: invite-only, with an invite tree and at most 3 open links.
 - Usage and API keys page: weekly allowance, recent runs, what happens when
   included tokens run out, Anthropic/OpenAI keys.
@@ -55,7 +56,7 @@ describe and records where the mockup changes or adds to them.
 | `01-architecture-and-data.md` | Server half, database, mutators, sync, API surface, the contract changes the mockup needs | `S`, `D`, `U`, `Y`, `R`, `A`, `C` |
 | `02-client-app.md` | The client: app shell, feed, branches, composer, channels, membership, notifications and usage screens, state, accessibility, layout | `W`; `N` for its dependencies |
 | `03-agents-and-research.md` | Asks, branches and look-ups as runs; models; streaming; tokens, allowance and API keys; device runs | `G`, `E`, `V`, `T`, `K`, `L` |
-| `04-membership-moderation-security.md` | Invites, channels and roles, moderation, privacy, permissions, abuse limits, authentication | `I`, `B`, `O`, `P`, `Z` |
+| `04-membership-moderation-security.md` | Invites, channels and ownership, moderation, privacy, permissions, abuse limits, authentication | `I`, `B`, `O`, `P`, `Z` |
 | `05-delivery.md` | Milestones `M0`-`M8`, testing and acceptance, rollout and cutover, observability, risks, open questions | milestones `M`; questions `P`, `E`, `S` |
 
 Files cite each other's items with the file number ("01 C3", "04 O2").
@@ -103,11 +104,26 @@ Files cite each other's items with the file number ("01 C3", "04 O2").
   author's handle is served to the author only (04 §6.2, 01 C12).
 - Backups have no retention requirement: removed text may remain in
   Litestream generations and archives (01 §9 q3, 05 S1).
+- A channel has exactly one owner and no other roles: no admins, moderators
+  or other staff. Ownership is not transferable; everyone else in a channel
+  is a member. Only the owner removes threads, dismisses reports, reads the
+  moderation log, bans and unbans, removes members from a private channel,
+  makes channel invite links and edits About; reports go to the owner. The
+  contract drops the `admin` and `mod` roles, `members.setRole`, the space's
+  `mods` list (replaced by `owner`) and the `invite` setting, and
+  replica-proto drops or rewrites the tests for them (01 C18, U6; 04 §4.3).
+  `users.is_admin` stays for the people who run Session: site admins seed
+  the roots of the invite tree, are exempt from the 3-open-invites limit,
+  suspend accounts (04 I6) and delete channels by operator job (04 §1); they
+  have no channel role. A channel whose owner is suspended or deleted is
+  frozen: readable as before, closed to writes other than deleting one's
+  own items and leaving (04 B6); what eventually happens to a deleted
+  owner's channels is open (05 P24).
 
 ## Open questions
 
 `05-delivery.md` §6 consolidates the open questions of 01-05, grouped by who
-decides (Product `P1`-`P23`, Engineering `E1`-`E10`, Security `S1`-`S6`), with
+decides (Product `P1`-`P24`, Engineering `E1`-`E10`, Security `S1`-`S6`), with
 the source of each. Each file keeps its own list.
 
 ## How this plan was produced

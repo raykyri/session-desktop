@@ -68,21 +68,21 @@ are split and say so: `01` D5 (`0001_spaces.sql` in M3,
 `0002_drop_research.sql` in M8b), `02` W2.4 (web in M4, the Tauri drag
 region in M7a) and `02` W6.10 (refusal messages in M6, the desktop frozen
 banner in M7a). The contract
-items `01` C1-C17 are scheduled in M1a, where they change `spaces.ts` and
+items `01` C1-C18 are scheduled in M1a, where they change `spaces.ts` and
 `replica-proto`; the server routes some of them need are built under the
 items named in the M3, M4 and M6 rows (`01` S4 runs C16's effect, `01` R5 and
 `spaces.directory` serve C7, `04` §3 builds C8's account invites).
 
 | Milestone | 01 | 02 | 03 | 04 |
 |---|---|---|---|---|
-| M1a | C1-C17, U6 | — | — (ADR-23 drafted, §6) | §11 (contract requests) |
+| M1a | C1-C18, U6 | — | — (ADR-23 drafted, §6) | §11 (contract requests) |
 | M1b | U1-U5 | — | G1, G2, G4, G5, G6 (mutators) | — |
 | M2 | Y1-Y6, Y8-Y13, R1-R4 | — | — | — |
 | M3 | S1-S5, D1-D4, D5 (0001), D6, D7, Y7, A1, A3 | — | — | — |
 | M4 | A2, R5 | W1.1, W1.2, W2.1-W2.3, W2.4 (web), W2.5, W3.1, W3.2, W4.3, W4.5, W5.1, W6.1-W6.3, W6.6, W6.7, W9.1-W9.3, §9.5, §9.6, §9.8, W10.1-W10.3, W11.1, W11.2 | — | I5, B1, B3, P1 (§4.1 visibility rules with C9) |
 | M5a | — | W3.3, W4.1, W4.2, W4.4 | G3, G7, G8, E1-E5, T1-T4, K1, K2, K12, K13, L1, L2 | — |
 | M5b | — | W8.1 | K3-K11, K14 | — |
-| M6 | — | W2.6, W6.4, W6.5, W6.8, W6.9, W6.10 (messages), W7.1-W7.3 | — | I1-I4, I6, B2, B4, B5, O1-O5, P2, Z1, Z2, Z4, Z5; §13 mitigations |
+| M6 | — | W2.6, W6.4, W6.5, W6.8, W6.9, W6.10 (messages), W7.1-W7.3 | — | I1-I4, I6, B2, B4, B5, B6, O1-O5, P2, Z1, Z2, Z4, Z5; §13 mitigations |
 | M7a | — | W2.4 (desktop), W6.10 (frozen banner), §12.3 | — | Z3 |
 | M7b | — | — | V1-V7, T5, L3 | — |
 | M8b | D5 (0002) | — | — | — |
@@ -106,19 +106,22 @@ on). Nothing in the app imports it. It is the acceptance suite for M1a-M3.
 
 Scope:
 - `web/packages/shared/src/schemas/spaces.ts`: the contract changes `01`
-  C1-C17 (likes removed and saves counted, ask-node kinds with `quote` and
+  C1-C18 (likes removed and saves counted, ask-node kinds with `quote` and
   `look`, comments, total counts, channel rules removed, the "All" scope,
   account invites and `users.status`, `vis: "open" | "private"`, deferred
   surfaces moved to `spaces.deferred.ts`, owner-only About, report and
   removal notes and the `modlog` kind, the `prefs` record, ULID space ids,
-  mentions, the run record) and the additions `04` §11 requests (`ban` and
+  mentions, the run record, space roles reduced to `owner` and `member`
+  with `owner` and `frozen` on the space record) and the additions `04` §11 requests (`ban` and
   `unban` `modlog` kinds, one open report per reporter and item,
   `auth.checkInvite` with one `unusable` answer, no default rules).
 - `replica-proto` changed to the revised contract before anything is ported
   (`01` U6): `likes.set` replaced by counted saves, rules dropped, comment and
   ask-node kinds added, `erase` extended to saves, comments and mention
-  notifications; mutation patterns that pointed at removed code are
-  rewritten with the same faults.
+  notifications; the admin and moderator roles, `members.setRole`, `RANK`
+  and the `invite` setting removed, with the tests and mutation patterns
+  `01` U6 names removed or rewritten; mutation patterns that pointed at
+  removed code are rewritten with the same faults.
 - Documents: ADR-19's `deviceNow` corrected to `clientTime` (`01` Y1); ADR-23
   (user API keys, model payers, the weekly allowance; `03` §6) drafted for
   decision before M5b.
@@ -317,8 +320,9 @@ Exit criteria:
 Scope (`04` items in §1.2; `02` W2.6, W6.4, W6.5, W6.8, W6.9, W6.10,
 W7.1-W7.3): account invites, `users.status` and handles, the invite tree,
 the "Join with invite?" flows and waiting accounts (`04` I1-I4); suspension
-(`04` I6); roles with the member list, Make moderator and Transfer ownership
-(`04` B2, `02` W6.8); channel invite links (`04` B4, `02` W6.9); report,
+(`04` I6); channel ownership and the member list (`04` B2, `02` W6.8; no
+moderator or admin roles and no ownership transfer, `01` C18); frozen
+channels of a suspended or deleted owner (`04` B6); channel invite links (`04` B4, `02` W6.9); report,
 remove with reason, ban with the Banned list, the moderation log (`04`
 O1-O5); the notifications page (`02` W2.6); privacy rules (`04` P2); client
 rendering of apply-time refusals (`04` B5); abuse limits (`04` Z1); cookie
@@ -337,16 +341,18 @@ Exit criteria:
   code), B3, B4 (private channel link, reused link refused) and §6.6
   (report, moderation log count without reload, removal with reason,
   dismissal, ban); spec names as in `02` §12.2.
-- `04` I6 and Z1-Z5 server tests pass: a suspended user's queued envelope
-  refused and its device token answering `401`; one middleware test per
+- `04` I6, B6 and Z1-Z5 server tests pass: a suspended user's queued envelope
+  refused and its device token answering `401`; a suspended owner's channel
+  refusing posts, joins, links and reports while still served to its
+  readers, and accepting them again after unsuspension; one middleware test per
   limit row; the cookie and bearer CSRF and CORS tests; the untrusted-text
   rendering test.
 - The conformance suite (M3) and `cd web/packages/replica-proto && npm test`
   still pass after the M6 mutator changes; `npm run mutate` runs on the pull
   request (§3.1).
 - Privacy check on staging, by script: after a removal, the removed text is
-  absent from the SQLite file, from `pull` and `snapshot` answers for every
-  role, and from the `effects` table (the D4 scan run with
+  absent from the SQLite file, from `pull` and `snapshot` answers for the
+  owner, a member, a non-member and a signed-out reader, and from the `effects` table (the D4 scan run with
   `fly ssh console -a session-staging`).
 
 ### M7a — Desktop shell
@@ -644,6 +650,7 @@ Desktop (Tauri shell, device runs), Security, Operations (deploys, backups).
 | Invite code enumeration through `auth.checkInvite` | Low | Medium | 50-bit codes (S2), one failure answer, per-IP limits, failed-check alert | Security |
 | Invite tree slows growth or concentrates invites in admins | Medium | Low | Admin exemption from slots; redemption metrics | Product |
 | Spam or abuse in open channels | Medium | Medium | Invite-only accounts; report, removal, ban; per-user limits; the invite tree to find an abusive account's inviter | Product |
+| A channel cannot be moderated because its only owner is absent, suspended or deleted (ownership is not transferable) | Medium | Medium | Suspension and deletion freeze the owner's channels (`04` B6); a site admin deletes a channel by operator job; P24 | Product |
 | Existing web users lose research they wanted to keep | Medium | Medium | Banner with date (M8a); export decision (P20); accounts kept | Product |
 | ADR-23 (user keys, models) is not accepted in time | Medium | Medium | Drafted in M1a; M5a ships on included tokens only; M5b waits on it | Product |
 | Scope from the mockup grows past the contract (rules, hide, join requests, inbox) | Medium | Medium | `04` §1 decisions; contract changes only through `01` §7 | Product |
@@ -658,18 +665,19 @@ reference from this file.
 
 - **P1. Sign-in provider.** X in addition to or instead of GitHub (ADR-5).
   `04` §1, §15 q7.
-- **P2. Channel moderators in v1.** Grant `mod` through "Make moderator" (as
-  `04` B2 and `02` W6.8 propose) or keep the owner as the only staff. `01` §9
-  q5, `04` §1.
-- **P3. Site-wide moderators** or only `users.is_admin`. `04` §15 q6.
+- **P2. Channel moderators in v1.** Decided: a channel has exactly one
+  owner, ownership is not transferable, and there are no admins or
+  moderators (`01` C18; `04` §4.3). `01` §9 q5, `04` §1.
+- **P3. Site-wide moderators.** Decided: none; only `users.is_admin`, which
+  marks the people who run Session. `04` §15 q6.
 - **P4. Admission to private channels.** Channel invite links only (`04` B4,
   `02` W6.9), or also join requests, which have no screen. `01` §9 q6.
 - **P5. The removal placeholder.** Decided: the author shows as "[deleted]"
   (`04` §6.2). Open: whether it stays until the author deletes it or expires. The reason is
-  moderator text and is shown (`01` C12). `02` §14 q4, `04` §15 q1, q2.
+  owner-written text and is shown (`01` C12). `02` §14 q4, `04` §15 q1, q2.
 - **P6. Report and remove follow-ups and replies individually at launch.**
   `04` §15 q9.
-- **P7. Offer Hide to staff.** `04` §15 q10.
+- **P7. Offer Hide to the owner.** `04` §15 q10.
 - **P8. Frozen copy after a voluntary Leave** (proposed: no). `04` §15 q5.
 - **P9. Thread addresses and a single-thread page** for notifications and
   shared links. `02` §14 q3.
@@ -699,6 +707,9 @@ reference from this file.
 - **P22. Typography** (Inter or the app's font; title and input sizes).
   `02` §14 q7.
 - **P23. Settings entry** in the account menu. `02` §14 q8.
+- **P24. A deleted owner's channels.** They are frozen and readable (`04`
+  B6); open: whether they stay so indefinitely or a site admin deletes them
+  after a fixed period. `04` §15 q11.
 
 ### Engineering
 
