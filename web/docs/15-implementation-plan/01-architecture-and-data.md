@@ -14,8 +14,10 @@ sync core") and ADR-19 to ADR-22 win over the mockup, except where the
 overview records an explicit product decision. Each conflict below says which
 side wins.
 
-Work items have ids (`S`, `D`, `M`, `Y`, `R`, `A`, `C`) so that
-`05-delivery.md` can schedule them.
+Work items have ids (`S`, `D`, `U`, `Y`, `R`, `A`, `C`) so that
+`05-delivery.md` can schedule them. The mutator items use `U` because
+`05-delivery.md` uses `M0`-`M8` for milestones and replica-proto's mutation
+runner uses `X` for its fault ids.
 
 ## 1. Server process
 
@@ -41,7 +43,9 @@ one asserting that a foreign origin gets no CORS headers.
 stored hashed in `device_tokens`, held in the macOS Keychain by the desktop)
 authenticates `/api/sync/*`, `/api/runs/*` and the tRPC account procedures.
 Issued by a signed-in web session through a one-time pairing code; revocable
-from the account menu. Cookie sessions (ADR-5) continue for the web client.
+from the account menu. The token never reaches the webview's JavaScript: the
+Tauri (Rust) side holds it and adds the `Authorization` header to requests
+for the server origin (04 Z3). Cookie sessions (ADR-5) continue for the web client.
 The CORS allowlist admits only the desktop origin (`tauri://localhost` and the
 dev origin in development); the web client is same-origin and needs none.
 Bearer requests skip the cookie CSRF checks, because a browser never attaches
@@ -56,8 +60,9 @@ validated at boot like the existing ones: `SESSION_MIN_PROTOCOL`,
 rotation, then removed), `SESSION_SECRET_KEY` (API key encryption, see 03),
 `SESSION_DESKTOP_ORIGINS` (S2's allowlist, exact origins),
 `SESSION_DEVICE_ANSWER_MAX_BYTES` (200 KB), `SESSION_DEVICE_RUNS_PER_HOUR`
-(100), and the run and allowance settings of `03-agents-and-research.md`
-(`SESSION_WEEKLY_TOKENS`, …). Acceptance: boot refuses a cursor key that is
+(100), and the run and allowance settings of `03-agents-and-research.md`:
+`SESSION_WEEKLY_TOKENS` (2,000,000), `SESSION_RUN_MAX_TOKENS` (400,000) and
+`SESSION_QUEUED_PER_USER` (20); the abuse limits of 04 Z1. Acceptance: boot refuses a cursor key that is
 not 32 bytes of base64 and an origin list containing `*`; `web/.env.example`
 documents every new variable.
 
@@ -88,8 +93,9 @@ The database keeps `users`, `sessions`, `oauth_states`, `invites`,
 `feed_items`, `research_drafts`, `interface_drafts`, `widget_*`,
 `research_images`, `image_refs`, `notifications`, `followup_queue`,
 `run_queue`, `collapsed_*`) are dropped: `AGENTS.md` says existing web data is
-dropped at the cutover. `embed_assets` and `tweet_cache` are caches; they stay
-while answers render embeds (`02-client-app.md` open question 7).
+dropped at the cutover. `embed_assets` and `tweet_cache` (with the files under
+`/data/embeds/`) serve only research content and are dropped with it
+(`05-delivery.md` §3.5).
 
 ### 2.1 Record storage: one table, typed at the boundary
 
@@ -205,7 +211,7 @@ New package `web/packages/mutators` (name `@session/mutators`), depending only
 on `@session/shared` and `zod`. It replaces the mock's procedures and
 generalizes `replica-proto/src/mutators.ts`.
 
-**M1. Definition shape.** Port `MutatorDef` from the prototype: `input` (the
+**U1. Definition shape.** Port `MutatorDef` from the prototype: `input` (the
 shared zod schema, strict), `who`, `space`, `ids`, `online`, and three stages:
 
 1. `pre(ctx, input)`: server only, synchronous; may refuse; makes server
@@ -228,7 +234,7 @@ no Intl while the server applies them" runs over every mutator in the
 package; an ESLint rule bans `Date`, `Math.random`, `crypto` and `Intl` in
 the whole package.
 
-**M2. Indexed reads in `tx`.** The prototype's `tx.find(kind, predicate)`
+**U2. Indexed reads in `tx`.** The prototype's `tx.find(kind, predicate)`
 scans every record of a kind, which is acceptable in memory and not on a
 large SQLite table. Replace it with declared lookups: `tx.byKey(key)`,
 `tx.list(kind, { sp } | { th } | { u })` and `tx.count(kind, index)`, each
@@ -237,33 +243,47 @@ Acceptance: an explain-plan test asserts every lookup uses an index; the
 client replica implements the same interface and returns `unknown` for a
 lookup outside its working set, which stops prediction (AGENTS.md).
 
-**M3. Stored shape and derived fields.** Mutators write the stored shape.
+**U3. Stored shape and derived fields.** Mutators write the stored shape.
 Counts (`saves`, `r`) are stored fields in the counts record, written by the
 mutators that change them. Per-viewer fields (`saved`, `mine`) are computed on
 the client and never stored or served. Acceptance: a test parses every record
 a mutator writes with its stored schema and finds no `mine`, `saved` or
 `liked` field.
 
-**M4. Stale intent.** `shown`, `approve`, reopen and `setRole` carry
+**U4. Stale intent.** `shown`, `approve`, reopen and `setRole` carry
 `base.rev` of the target and answer `STALE` on a mismatch; `hidden`,
 `removed`, `decline` and `members.ban` act on the record as it is;
 `members.remove` compares the admission id (AGENTS.md). Acceptance: the
 replica-proto review-r1/r2 tests for these cases pass.
 
-**M5. The mutator set.** One file per area under `src/`: `spaces`,
-`members`, `threads`, `nodes` (asks, branches, look-ups; see 03), `comments`,
-`replies`, `saves`, `reports`, `moderation`, `invites`, `notifications`,
-`prefs`, `runs` (cancel, retry). The set is the mock's procedures minus the
-surfaces C10 defers, with the changes in section 7. The prototype ports 19 of
-them; the others (`replies.*`, `comments.*`, `nodes.*`, `reports.resolve`,
-`members.unban`, `invites.revoke`, `notifications.*`, `prefs.set`, `runs.*`)
-are covered only once the read and write oracles have rules for them (M6).
+**U5. The mutator set.** Mutator names are the procedure names of
+`spaces.ts`; this plan adds only `comments.*` (C4) and `prefs.set` (C13), and
+renames `saved.toggle` to `saved.set` (C1). One file per area under `src/`:
+- `spaces`, `members`, `threads`, `saves`, `reports`, `moderation`,
+  `invites`, `notifications`;
+- `nodes`: `research.forkNode` (Continue, Branch, Branch here and Look up,
+  with `kind: "ask" | "lookup"`), `followups.update`, `followups.delete`,
+  `research.cancelNode`, `research.retryNode` (03 §2);
+- `replies`: `research.createPostFollowUp`, `replies.update`,
+  `replies.delete`;
+- `comments`: `comments.create`, `comments.update`, `comments.delete` (C4);
+- `prefs`: `prefs.set` (C13).
+
+The set is the mock's procedures minus the surfaces C10 defers, with the
+changes in section 7. `followups.ask` (an ask with no parent) is not used:
+every ask under a thread goes through `research.forkNode` (03 §2.1). The
+prototype ports 19 of them; the others (`research.createPostFollowUp`,
+`replies.*`, `comments.*`, `research.forkNode`, `followups.update`,
+`followups.delete`, `research.cancelNode`, `research.retryNode`,
+`reports.resolve`, `members.unban`, `invites.revoke`, `notifications.*`,
+`prefs.set`) are covered only once the read and write oracles have rules for
+them (U6).
 Acceptance: a table test lists every mutator with its `who`, its
 stale-intent rule and whether it is `online`; space creation is
 `online: true` (AGENTS.md); the write oracle has a rule for every listed
 name.
 
-**M6. Update the acceptance suite first.** The replica-proto suite exercises
+**U6. Update the acceptance suite first.** The replica-proto suite exercises
 `likes.set` (56 lines in `test/`), space rules, `rulesRev` and the
 `listed`/`unlisted` visibilities, which section 7 removes, and its strict
 envelope lacks `queuedAt` and `replaces`, which AGENTS.md requires. Before
@@ -271,7 +291,8 @@ porting, change `replica-proto` itself to the revised contract:
 - records and mutators: `likes.set` replaced by counted saves (C1); rules
   dropped (C6); `vis: "open" | "private"`, no `policy` or `qs` (C9);
   `spaces.update { id, desc }` (C11); the `followup` kind renamed `node` with
-  C3's fields; `comment` (C4) and `modlog` (C12) kinds;
+  C3's fields; `comment` (C4) and `modlog` (C12) kinds; `erase` also deletes
+  the removed thread's saves, comments and mention notifications (04 §6.2);
 - protocol: `queuedAt` and `replaces` in the envelope (Y1), an oversized
   envelope answering `TOO_LARGE` instead of `BAD_REQUEST`, and
   `PROTOCOL_VERSION` raised to 4;
@@ -302,7 +323,7 @@ the last acknowledged seq; `replaces` lists the mutation ids a reminted
 envelope supersedes. Envelopes over 256 KB as JSON answer `TOO_LARGE`, and
 input nested deeper than 32 answers `BAD_REQUEST`, both unrecorded and
 checked before the input is parsed or hashed. Acceptance: the prototype's envelope tests (extra fields
-refused, unknown names refused, depth and size limits) pass with M6's
+refused, unknown names refused, depth and size limits) pass with U6's
 changes.
 
 **Y2. Answers.** Every answer carries `serverTime`. Recorded (they use up
@@ -497,7 +518,7 @@ procedures (ADR-19). Run execution by devices has its own routes (`03-agents-and
 | `GET /api/sync/events` | SSE via fetch | pull batches and run deltas |
 | `POST /api/runs/claim`, `/heartbeat`, `/turn`, `/finish` | device runs | ADR-21; `03-agents-and-research.md` §4 |
 | `GET /api/runs/:id/live` | read | in-flight checkpoint of a run after a gap (ADR-22) |
-| tRPC `account.*`, `devices.*` | online | profile, settings, device pairing and revocation |
+| tRPC `account.*`, `devices.*` | online | profile, settings, device pairing and revocation; `devices.setAgents` records the CLIs a desktop found (03 V1) |
 | tRPC `apiKeys.*`, `usage.*` | online | keys, allowance, recent runs (`03-agents-and-research.md` §6) |
 | tRPC `accountInvites.*`, `members.tree` | online | Session invites and the invite tree (C8) |
 | tRPC `spaces.directory` | online | the "All" list of open channels (C7) |
@@ -526,7 +547,7 @@ Acceptance: middleware tests.
 
 Each item compares the mockup's behaviour with `spaces.ts` and the mock API
 (`docs/mockups/session-web-spaces-mock-api.js`) and says what changes and in
-which places: the shared schema, `replica-proto` (M6), `@session/mutators`.
+which places: the shared schema, `replica-proto` (U6), `@session/mutators`.
 
 **C1. Likes removed; saves counted.** The mockup shows no likes on threads,
 replies or branch comments (`card()` comment: "no likes on threads; the
@@ -553,14 +574,26 @@ branch node a `quote` (the passage of "Branch here") and `look` (the Look up
 phrase), and Look up's prompt is kept on the node and not shown (`addLookup`).
 The mockup matches a branch to its passage by word overlap (`groupsFor`),
 which `02-client-app.md` §4.4 does not ship. `researchNodeSchema` has none of
-these; `forkNodeInputSchema` takes `parent`, `q`, `uses`. Change: ask nodes
-get `kind: "ask" | "lookup"`, optional `quote` (at most 2,000 characters),
-optional `block` (index of the top-level block of the parent's answer that
-holds the quote, used to shade the passage) and, for look-ups, `look` (1-4
-words, at most 80 characters). Look-up input carries `look` and no `q`; the mutator builds the
-prompt from a versioned template in `@session/mutators` and stores it in `q`,
-so the client cannot place hidden text on a node. The stored prompt is served
-like any node text; the client renders `look` instead. Details in 03 §2.
+these; `forkNodeInputSchema` takes `parent`, `q`, `uses`, `pay`. Change, with
+the full field list in 03 §1:
+- ask nodes get `kind: "ask" | "lookup"`, optional `quote` (at most 2,000
+  characters), optional `b` (passage index: the top-level block of the
+  parent's answer that holds the quote, used to place the branch tree and
+  shade the passage; absent for asks from the footer) and, for look-ups,
+  `look` (1-4 words, at most 80 characters) and `tpl` (template version);
+- every node records `model`, `effort` (03 K12), `executor` (`owned` or
+  `device`) and, for device runs, `agent` (`claude-code` or `codex`);
+- `pay` and `uses` are dropped from the node and from `forkNodeInputSchema`
+  (the payer is a server value, 03 K8); `forkNodeInputSchema` becomes a
+  union on `kind`;
+- the node's `html` gives way to the `answer` record of 03 §1, stored as
+  Markdown; streamed deltas are Markdown too, and the client renders both
+  through its Markdown pipeline (`02-client-app.md` §4.4).
+
+Look-up input carries `look` and no `q`; the mutator builds the prompt from a
+versioned template in `@session/mutators` and stores it in `q`, so the client
+cannot place hidden text on a node. The stored prompt is served like any node
+text; the client renders `look` instead. Details in 03 §2.
 
 **C4. Branch comments.** The mockup's Comment action (`branchActs`, `BRP`)
 adds a discussion under any branch node without a run, nested like post
@@ -581,8 +614,8 @@ decreases when a node or reply is erased.
 removed; the mockup's `chInfoDlg` has none. Change: drop `rules`, `rulesPrev`,
 `rulesAt`, `rulesBy`, the rules variant of `editConflictCurrentSchema`,
 `rulesAccepted` in `spaces.join` and `joinRequests.create`, and `rules` in
-`spaceSettingsSchema` and `createSpaceInputSchema`; the prototype's
-`rulesRev` and its CONFLICT path go. The sign-up checkbox "I have read the
+`spaceSettingsSchema` and `createSpaceInputSchema`; `spaces.create` stores no
+default rules; the prototype's `rulesRev` and its CONFLICT path go. The sign-up checkbox "I have read the
 community rules" refers to Session-wide rules, not channel rules (`04-membership-moderation-security.md`).
 
 **C7. The "All" scope.** The scope picker (`SCOPES()`) offers Joined,
@@ -602,12 +635,17 @@ channels and cannot write (`canWrite()`). The schema's invites are per space
 (`threadInviteSchema` has `sp`). Change: keep space invite links for private
 channels, and add account invites, built on the existing `invites` table and
 `users.invited_by` in `web/packages/db/src/schema/users.ts`: a ULID `id`
-replaces `code` as the key, the code is stored only as `code_hash`,
-`revoked_at` is added, and `users.invites_remaining` is dropped in favour of
-the 3-open-links rule, checked inside the `accountInvites.create`
-transaction. `users` gains `status: "waiting" | "active"`, `handle` and
-`display_name` (rules in `04-membership-moderation-security.md` §3.1). A
-`waiting` account registers no sync client (Y3) and reads through R5.
+replaces `code` as the key, the code is stored as `code_hash` for lookup and
+as `code_enc` (AES-256-GCM under `SESSION_SECRET_KEY`, readable only by the
+link's creator, nulled when the link is used or revoked), `revoked_at` is
+added, and `users.invites_remaining` is dropped in favour of the
+3-open-links rule, checked inside the `accountInvites.create` transaction.
+`auth.checkInvite` answers `open` or one `unusable` answer for used, revoked
+and unknown codes. `users` gains `status: "waiting" | "active" |
+"suspended"`, `handle` and `display_name` (rules in
+`04-membership-moderation-security.md` §3.1; suspension in 04 I6). A
+`waiting` or `suspended` account registers no sync client for writing (Y3)
+and reads through R5.
 Account invites and the tree are online-only tRPC (`accountInvites.*`,
 `members.tree`), not replicated records; tree visibility is decided in 04
 §3.3.
@@ -626,7 +664,7 @@ library, source reports, FAQ topics, domains, archive, mutes, blocks, join
 requests or inbox. Their procedures, collections and record kinds are left out
 of `@session/mutators` v1 and moved to a `spaces.deferred.ts` section of the
 shared schema, so that the mock keeps validating. The prototype's join-request
-mutators stay in the acceptance suite because their stale-intent rules (M4)
+mutators stay in the acceptance suite because their stale-intent rules (U4)
 are the tested form of `approve`, `decline` and `reopen`.
 
 **C11. Owner-only About edit.** `chInfoDlg` offers Edit to the owner only, and
@@ -647,7 +685,9 @@ a `why` category plus an optional `note`, and `moderation.decide` has no
 reason. Change:
 - `reports.create { item, note? }` (note at most 500 characters); `why` goes.
 - `moderation.decide { item, decision, note?, base? }`; the thread placeholder
-  keeps `mod`, `modBy` and `modNote` and nothing else of the removed content.
+  keeps `id`, `s`, its kind (ask or post), `u` (author), `createdAt`, `mod`,
+  `modBy` and `modNote`, and nothing else of the removed content (the stored
+  and served table is in 04 §6.2).
 - A `modlog` record kind in the space log, readable by staff only: `{ id, sp,
   kind: "report" | "remove" | "dismiss" | "ban" | "unban", item, by, author,
   note, at }`; for `ban` and `unban`, `item` is null and `author` names the
@@ -667,12 +707,15 @@ where it persists. Change: a `prefs` record in the user log (`{ layout:
 "centred" | "wide" }`, `prefs.set`), so it follows the person to other
 devices and works offline; Zustand applies it. `user_preferences` (tRPC) is
 not used for it because it would make an app bar control depend on being
-online.
+online. This supersedes ADR-20's "layout stays in Zustand" for this one
+preference: the persisted value is the `prefs` record, and Zustand holds only
+the applied value for the first paint; ADR-20 gets a note.
 
 **C14. Space ids.** The mockup and the schema use slug space ids (`public`,
 `sp-<name>`). AGENTS.md wins: space ids are ULIDs and creating a space is
 online-only. Names stay unique slugs (`[a-z0-9][a-z0-9-]{1,29}`, from
-`createSpace`) and URLs use the name. The cost recorded in AGENTS.md (an
+`createSpace`) and URLs use the name: a channel is `/c/<name>`, and a channel
+invite link is `<SESSION_PUBLIC_ORIGIN>/c/<name>#<code>` (04 §5). The cost recorded in AGENTS.md (an
 unlisted name can be probed through CONFLICT) applies to private channels.
 
 **C15. Deleting a thread.** The mockup offers Delete only while nobody else
@@ -682,9 +725,12 @@ under the mockup's condition; the server does not enforce it.
 
 **C16. Mentions.** Posts, replies and comments notify mentioned members
 (`notify` in the submit handler). The schema's notification types have no
-mention. Change: a `mention` notification type, written by a post-commit
-effect to the mentioned person's user log, only if that person can read the
-item at effect time.
+mention, and `report` exists only in the prototype. Change: a `mention`
+notification type, written by a post-commit effect to the mentioned person's
+user log, only if that person can read the item at effect time; the
+prototype's staff-only `report` type joins the schema (04 O1), beside the
+schema's `report_resolved`. The client lists notifications (mention, `report`,
+`report_resolved`) on a notifications page (`02-client-app.md` W2.6).
 
 **C17. Runs streamed.** The mock API's note "Answers are not streamed" is
 superseded by ADR-22; the `spaceRunSchema` record becomes the run record of
@@ -693,14 +739,14 @@ superseded by ADR-22; the `spaceRunSchema` record becomes the run record of
 ## 8. Dependencies
 
 ```
-M6 (update replica-proto) ─► M1-M5 (@session/mutators)
+U6 (update replica-proto) ─► U1-U5 (@session/mutators)
 D1-D3 ─► Y3-Y6, Y13 (server half) ─► A1 (HTTP) ─► Y7 (SSE)
-M1-M5 ─► Y9-Y12 (client half)
+U1-U5 ─► Y9-Y12 (client half)
 S1-S3 ─► A1
 Y13 ─► the run jobs of 03 (E1)
 D6 needs Y6 (epoch in cursors) and the restore runbook change
 R1-R5 need Y5 and C7
-C1-C17 land in spaces.ts and replica-proto before M5
+C1-C17 land in spaces.ts and replica-proto before U5
 S4 (effects) before C16 and the run jobs of 03
 ```
 

@@ -31,7 +31,8 @@ folders or the TanStack Query research cache.
 | `main.tsx`, `app/providers.tsx`, `app/ThemeEffects.tsx`, `app/RouteBoundary.tsx`, `app/queryClient.ts` | Kept; providers gain `ReplicaProvider`; `QueryClientProvider` stays for online-only calls (ADR-20) |
 | `app/router.tsx`, `app/SessionBoot.tsx`, `app/layout/AppShell.tsx` | Rewritten; `app/layout/Sidebar.tsx` deleted (no sidebar) |
 | `app/captureInvite.ts`, `lib/pendingInvite.ts` | Kept; the fragment capture is reused for `/i#<code>` and channel links (§2.1) |
-| `routes/home.tsx`, `research.$treeId.tsx`, `highlights.tsx`, `places.tsx`, `notifications.tsx` | Deleted; new route modules per §2.1 |
+| `routes/home.tsx`, `research.$treeId.tsx`, `highlights.tsx`, `places.tsx` | Deleted; new route modules per §2.1 |
+| `routes/notifications.tsx` | Rewritten for W2.6 |
 | `routes/admin.tsx`, `settings.tsx`, `login.tsx`, `devUi.tsx`, `invite.tsx`, `chunks.ts` | Kept and restyled; `invite.tsx` rewritten for account invites |
 | `api/trpc.ts` | Kept for online-only procedures (auth, usage, API keys, invites, directory, settings) |
 | `api/api.ts`, `cache.ts`, `events.ts`, `queries.ts` | Deleted; replaced by `replica/` (§9) |
@@ -42,7 +43,8 @@ folders or the TanStack Query research cache.
 | `lib/researchDraftAutosave.ts`, `researchImages.ts`, `transcriptSearch.ts`, `tabMerge.ts`, `localOwner.ts` | Deleted with the research client |
 | `features/markdown` | Kept; gains citation and passage plugins (§4.4) |
 | `features/composer` | Rewritten (§5); `QuestionModelPicker.tsx` is the base of `ModelPicker` |
-| `features/home`, `sidebar`, `thread`, `drafts`, `highlights`, `import`, `journal`, `research`, `sharing`, `palette`, `notifications`, `account`, `widgets` | Deleted at cutover (`widgets` and `notifications` pending open questions 5, 6) |
+| `features/home`, `sidebar`, `thread`, `drafts`, `highlights`, `import`, `journal`, `research`, `sharing`, `palette`, `account`, `widgets` | Deleted at cutover (`widgets` pending open question 6) |
+| `features/notifications` | Rewritten for W2.6 over the user log's notification records |
 | `ui/*` | Kept; new `RoundButton`, `SplitButton`, `TreeRail` |
 | `styles/tokens.css`, `fonts.css`, `prose.css`, `app.css` | Kept, extended (§11); `feed.css`, `tweet.css` deleted |
 
@@ -59,6 +61,7 @@ src/features/channels/    ChannelHeader, ChannelInfoDialog, AboutEditorDialog, M
                           MemberListDialog, ChannelInviteDialog, NewChannelDialog, BrowsePage, FrozenBanner
 src/features/membership/  MembersPage, InviteTree, InviteLinks, AuthDialog, InviteRequiredPage
 src/features/usage/       UsagePage, RecentRuns, OutOfTokensChoice, ApiKeys
+src/features/notifications/ NotificationsPage, NotificationRow
 ```
 
 **W1.1 Remove the research client.** Acceptance: `npm run check` passes;
@@ -83,7 +86,8 @@ limits `@tauri-apps/*` to `replica/adapters/` and `lib/platform.ts`.
 | `/invites` | Invite tree and invite links (`membersPage`) |
 | `/usage` | Usage and API keys |
 | `/welcome` | Invite required (`statusPage`) |
-| `/i` | Account invite link; the code is in the fragment (`/i#<code>`, 04 §3.4), captured into memory, removed from the URL, and opens the auth dialog over `/` |
+| `/notifications` | Notifications (W2.6) |
+| `/i` | Account invite link; the code is in the fragment (`<SESSION_PUBLIC_ORIGIN>/i#<code>`, in production `https://session.dev/i#<code>`; 04 §3.2, §3.4), captured into memory, removed from the URL, and opens the auth dialog over `/` |
 | `/settings`, `/admin` | Kept from the current client, restyled |
 
 Feed routes take `?t=<threadId>&sel=<nodeId>`: the feed scrolls to that row and
@@ -129,8 +133,9 @@ Left to right (`appbar`):
    `wide` (§3.1); its icon shows the target layout, its label is "Wider main
    column" or "Centre the main column"; feed routes only.
 7. **Account menu**: header with avatar, name, `@handle` and "Member", "Admin"
-   or "No invite yet"; Invites, Saved, Usage and API keys, Sign out. Without an
-   invite: Enter an invite code, Sign out.
+   or "No invite yet"; Notifications (with the unread count, W2.6), Invites,
+   Saved, Usage and API keys, Sign out. Without an invite: Enter an invite
+   code, Sign out.
 
 Items 4-6 are not rendered for accounts without an invite.
 **Signed out** (`appbarOut`): name, strip of open channels, "Join with invite"
@@ -166,6 +171,19 @@ second row under the text (`ncw`), menus right-anchored and capped at
 `100vw - 40px`. ≤ 860 px: feed rows, Invites and Usage stack to one column.
 Acceptance: Playwright at 360×740 and 390×844 asserts
 `scrollWidth <= innerWidth` on every route and that the send button is visible.
+
+**W2.6 Notifications page** (`/notifications`; not in the mock, which only
+toasts "Notified @x."). Lists the notification records of the user log
+(01 C16, 04 O1): "@x mentioned you in #name" (mention), "New report in #name"
+(`report`, staff only, 04 P1), "Your report in #name was resolved: removed /
+dismissed" (`report_resolved`), newest first, each linking to
+`/c/$name?t=&sel=`; an item the viewer can no longer read is not served, so
+it is not listed. Opening the page writes `notifications.markSeen`; a row
+click writes `notifications.markRead`; "Mark all read" writes
+`notifications.markAllRead`. The account menu shows the unread count; no app
+bar control is added. Empty state "No notifications yet.". Acceptance:
+component tests per notification type and for the unread count; a test that
+a mention in a private channel the viewer left is not listed.
 
 ## 3. Feed
 
@@ -205,8 +223,8 @@ account applies it.
   avatar; then the "…" menu. An ask's title is the question as typed.
 - **Branched from** (`fromln`): on a thread opened from a branch, "Branched
   from <title>" linking to the source row with that branch selected.
-- **Byline** (asks): agent mark with a tooltip naming the model (no effort,
-  03 K12), then "N sources · Nk tokens · #channel", omitting empty parts. A
+- **Byline** (asks): agent mark with a tooltip "model · effort" (03 §1,
+  K12; "Opus 5.5 · high effort"), then "N sources · Nk tokens · #channel", omitting empty parts. A
   device run shows its label ("Claude Code", "Codex") in place of the token
   count (03 V6). An ask's channel is in the byline, not the title row.
 - **Answer prose** (§4.4).
@@ -247,7 +265,7 @@ cards:
 | `cancelled`, `interrupted` | "Stopped" / "Interrupted" with the partial text |
 
 While `queued` or `running` the asker gets Stop (`research.cancelNode`); this
-is not in the mock and is required by 05 M5. After `failed`, `cancelled` or
+is not in the mock and is required by 05 M5a. After `failed`, `cancelled` or
 `interrupted` the asker gets Run again (`research.retryNode`, a new attempt).
 While a node runs its follow-up button, Continue, Branch, Comment, selection
 actions and Delete are hidden or disabled as in the mock.
@@ -326,10 +344,11 @@ opened composer; a sent reply is selected in the tree.
 
 ### 4.4 Answer text: citations, passages, selection
 
-The stored answer is sanitised HTML (03 §1); streamed text is Markdown. Both go
-through `features/markdown`: the final answer is parsed with `rehype-parse`,
-sanitised again with the existing DOMPurify policy, and rendered through the
-same rehype plugins as streamed text (N12).
+The stored answer and the streamed deltas are both Markdown (03 §1; the
+server stores no HTML). Both go through `features/markdown` with raw HTML
+disabled and the existing DOMPurify policy on its output (04 Z5), through the
+same rehype plugins, so the block structure that passage indexes refer to is
+the same for streamed and final text (N12).
 
 - **Citations** (`citeReady`, `citeOpen`): each superscript is a button
   "Source N" opening a popover with title, note and host link (the link takes
@@ -347,9 +366,10 @@ same rehype plugins as streamed text (N12).
   inside the viewport, removed on scroll. Look up shows only for 1-4 whole words
   (`lookPhrase`: no boundary inside a `\p{L}\p{N}` run; edge punctuation
   trimmed). Branch here opens that answer's composer with the selection as
-  quote ("Ask about this passage"; long quotes clipped with Show all). Look up
-  writes `nodes.lookup { look, context }` at once (the prompt is built by the
-  mutator, 01 C3, 03 G2) and selects the new row.
+  quote ("Ask about this passage"; long quotes clipped with Show all) and its
+  passage index `b`. Look up writes `research.forkNode { kind: "lookup",
+  look, quote, b }` at once (the prompt is built by the mutator, 01 C3,
+  03 G2) and selects the new row.
 
 **W4.4 Plugins and `SelectionActions`.** `lookPhrase` moves unchanged to
 `features/branches/lookPhrase.ts`. The popover also listens to
@@ -381,7 +401,11 @@ The new-thread composer is the mock's `COMPOSERS.split` with `nb-a`:
   model registry (03 K11); a model needing a missing key shows "Add a key"
   linking to `/usage`; a key-billed model shows "your OpenAI key". On the
   desktop, "Claude Code on this Mac" and "Codex on this Mac" when found
-  (03 V1). No Effort submenu (03 K12; the mock's is not shipped);
+  (03 V1). An Effort submenu (the shipped `QuestionModelPicker`'s) lists
+  Default and only the efforts the chosen model accepts
+  (`ModelEntry.efforts`, 03 K12); it is rebuilt when the model changes, and an
+  effort the new model does not accept falls back to Default. Hidden for
+  device executors (03 V1);
 - split send button: main part Ask (arrow) or Post (pencil), disabled while
   empty; the arrow part ("Ask or post") opens Ask / Post with icons,
   descriptions ("Agent researches and answers", "A message to people in the
@@ -406,8 +430,9 @@ deleted). Drafts persist per composer key in `stores/drafts`. Acceptance: tests
 for mode switching (icon, label, placeholder, model picker hidden for Post), the
 empty-text state, the signed-out cover, out-of-tokens refusal for each run-
 starting write and not for Post, reply or comment, draft restore across routes,
-focus back to the field after a menu choice; `admin.spec.ts` still finds the
-admin-only model only for administrators.
+focus back to the field after a menu choice, the Effort submenu listing only
+the chosen model's efforts and resetting on a model change;
+`admin.spec.ts` still finds the admin-only model only for administrators.
 
 ## 6. Channels
 
@@ -470,8 +495,8 @@ typed values.
 
 **W6.8 Member list and roles** (04 §4.3, §6.4): from the info dialog's Members
 row; owner, staff, then members by join date. Staff get a per-row menu: "Ban
-from #name", and in private channels "Remove from channel"; the owner also gets
-Make moderator / Remove moderator and Transfer ownership; staff see a Banned
+from #name", and in private channels "Remove from channel"; admins and the owner
+also get Make moderator / Remove moderator, and the owner Transfer ownership; staff see a Banned
 list with Unban. Writes `members.ban`, `members.remove`, `members.setRole`
 (with `base.rev`; STALE reloads the row). Not in the mock; built only if 01
 question 5 keeps moderators, otherwise the owner gets Ban and Remove only.
@@ -485,7 +510,7 @@ Revoke and Undo (`invites.create { days: 7 }`, `invites.revoke`,
 invite }`; signed out or without an invite, the auth flow (W7.2) runs first
 with the code kept in memory. An unusable link shows "This invite link has
 expired or was already used." Acceptance: component test for create, copy,
-revoke and undo; `moderation.spec.ts` covers the join.
+revoke and undo; `spaces-channels.spec.ts` covers the join (04 B4).
 
 **W6.10 Frozen and refused states** (04 §8, §9): on the desktop, a channel the
 viewer was removed from shows "You are no longer a member of #name. This is the
@@ -515,8 +540,9 @@ fixture (04 §3.3); no create button at 3 open links; Copy through
 in, Join with invite, a signed-out write control, `/i#<code>` or a channel
 link. The provider is GitHub (ADR-5, 04 §1); the mock's X copy becomes GitHub
 copy. Flows: landing ("Explore together."); valid invite link ("<Name> invited
-you to Session"); unusable link ("This invite link no longer works": used,
-revoked and unknown codes get one answer, 04 §3.4); code step (`CODE_COPY`:
+you to Session"); unusable link: used, revoked and unknown codes get one
+answer from `auth.checkInvite` and one message, "This invite code doesn't
+work. Ask the person who invited you for a new one." (04 I4); code step (`CODE_COPY`:
 "Join with invite?", "Paste the code or link a member sent you.", Continue),
 accepting a code or a full link (the code after the last `/` or `#`,
 upper-cased), with "Enter the code from your invite." for an empty field, the
@@ -526,8 +552,9 @@ without one"); create account (name, handle 3-20 of `[a-z0-9._]` with the
 mock's three errors, the Session-wide community-rules checkbox). Focus moves
 to the first field or the step heading on each step and returns to the opener
 on close. Acceptance: a test per flow on a fake `auth.checkInvite`; code parser
-test for `SESS-9TQ2-X8`, `https://session.app/i/SESS-9TQ2-X8/` and
-`https://session.app/i#sess-9tq2-x8`.
+test for `SESS-9TQ2-X8`, `https://session.dev/i#sess-9tq2-x8` and the pasted
+path form `https://session.dev/i/SESS-9TQ2-X8/` (04 §3.2); used, revoked and
+unknown codes render the same message.
 
 **W7.3 Invite required** (`statusPage`, `/welcome`): heading "Invite
 required", the redeem form, the three-item checklist, Browse the network; on
@@ -594,15 +621,17 @@ unjoined channels on the desktop adapter writes nothing to SQLite.
 
 ### 9.2 Writes from the outbox
 
-`replica/writes.ts` wraps the mutators the screens call (names per 01 M5 and
-03 §2; the prototype names are in parentheses): `threads.create` (also Open as
-its own thread, with `from`), `threads.delete`, `nodes.ask` (follow-up,
-Continue, Branch, Branch here; prototype `followups.ask`), `nodes.lookup`,
-`nodes.delete`, replies (`research.createPostFollowUp`), `comments.create`,
-`comments.delete`, `saved.set`, `prefs.set`, `spaces.join`, `spaces.leave`,
-`spaces.update`, `reports.create`, `reports.resolve`, `moderation.decide`,
-`members.ban`, `members.remove`, `members.setRole`, `invites.create`,
-`invites.revoke`, `invites.restore`, `research.cancelNode`,
+`replica/writes.ts` wraps the mutators the screens call (names per 01 U5 and
+03 §2.1, which keep the `spaces.ts` procedure names): `threads.create` (Ask,
+and Open as its own thread with `from`), `threads.delete`, `research.forkNode`
+(follow-up, Continue, Branch and Branch here with `kind: "ask"`; Look up with
+`kind: "lookup"`), `followups.delete`, replies (`research.createPostFollowUp`,
+`replies.delete`), `comments.create`, `comments.delete`, `saved.set`,
+`prefs.set`, `spaces.join`, `spaces.leave`, `spaces.update`,
+`reports.create`, `reports.resolve`, `moderation.decide`, `members.ban`,
+`members.unban`, `members.remove`, `members.setRole`, `invites.create`,
+`invites.revoke`, `invites.restore`, `notifications.markSeen`,
+`notifications.markRead`, `notifications.markAllRead`, `research.cancelNode`,
 `research.retryNode`. Each makes its ULIDs, applies the prediction to the
 replica and enqueues the envelope.
 
@@ -664,7 +693,7 @@ lands. Acceptance: no fixture strings in `vite build` output.
 |---|---|
 | `PROMPTS` replaces fixture text with typed text | stored `q` as sent |
 | passage by word overlap (`groupsFor`, `bestBlock`) | stored passage index (N3) |
-| `runOf` hashes the id to pick a model and effort | `model` on the run record; no effort (03 K12) |
+| `runOf` hashes the id to pick a model and effort | `model` and `effort` on the node and run records (03 §1, K12) |
 | `likesBase` as save count; `T.count`, `replyCount` as totals | counts record `{ saves, r }` (01 C1, C5) |
 | `setTimeout` answers, `pending`, "Step 1 of 4" | run records, `step` and the stream (03 E3, T1-T3) |
 | `charge`, `RUNLOG`, `USAGE`, `BILLING`, `ALLOWANCE`, `RESET` | usage procedures and the ledger (03 K1-K7) |
@@ -675,7 +704,7 @@ lands. Acceptance: no fixture strings in `vite build` output.
 | `BRP`, `n.look`, `n.quote`, `addLookup` prompt | comments, `look`, `quote`, server-built `q` (01 C3, C4) |
 | `PROMOTED`, `from` | `promoted` on the node, `from` on the thread (03 G5) |
 | `MODLOG` seeds, `p.removed` | `modlog` and report records, the placeholder fields (01 C12) |
-| `mentionsIn` toast ("Notified @x.") | server mention notifications (01 C16); no client toast |
+| `mentionsIn` toast ("Notified @x.") | server mention notifications (01 C16) listed on the notifications page (W2.6); no client toast |
 | `render()` with focus restored by signature | React reconciliation and §10 focus rules |
 
 ### 9.8 Scaffolding that does not ship
@@ -689,12 +718,13 @@ switching (`go`, `V`, `ORDER`, `variant`), navigation directions B-D
 unused composer variants (`modeSeg`, `splitBare`, `splitEnds`) and Saved
 variants a-d, `previewVariant`, `renderMock`, `X_ACCOUNTS` and the fake X
 sign-in, the fixtures and seeded moderation log, the timer-driven run and key
-check, the Effort submenu and `EFFORT_OPTS`, the channel rules state and
+check, the mock's fixed `EFFORT_OPTS` list (the real submenu reads the model
+registry, §5), the channel rules state and
 `.rulesdlg` styles with the "rules gate" and "agent's rule check" named in the
 `submitNew` comment, the defined but unused like code (`likeBtn`, `likeBtnK`,
 `LIKED`), and the `data-theme` switch (the app uses `data-appearance` and
 `data-color-theme`). Acceptance: a CI `rg` finds none of "View as", "Jump to",
-"Fullscreen", "Effort", "rules gate" or the variant names in
+"Fullscreen", "EFFORT_OPTS", "rules gate" or the variant names in
 `packages/client/src`.
 
 ## 10. Accessibility
@@ -726,10 +756,10 @@ composer moves focus as follows:
 | Selection actions, Escape | — | the answer, selection kept |
 | API key form, Escape | — | Add key or Remove |
 
-Route changes to Browse, Invites, Usage and Welcome focus the page heading
-(`tabindex="-1"`). Branch and reply trees are `role="tree"` with `treeitem`
-rows (`aria-level`, `aria-selected`, `aria-expanded` on collapsible replies);
-Up/Down move, Left goes to the parent, Right to the first child, Enter or Space
+Route changes to Browse, Invites, Usage, Notifications and Welcome focus the
+page heading (`tabindex="-1"`). Branch and reply trees are `role="tree"`
+with `treeitem` rows (`aria-level`, `aria-selected`, `aria-expanded` on
+collapsible replies); Up/Down move, Left goes to the parent, Right to the first child, Enter or Space
 selects. Toasts are `role="status"`; refusals are `role="alert"`. Icon-only
 controls have the labels named in §2-§8. **W10.1** Acceptance: one test per
 table row; a keyboard-only Playwright spec tabs through a feed row in the order
@@ -801,18 +831,22 @@ with them (12 §3.5).
 
 ### 12.2 End-to-end (`web/e2e`)
 
-Real server with fixture providers, one login per spec (12 §3.6). Spec names
-follow 05:
+Real server with fixture providers, one login per spec (12 §3.6). These names
+are the ones 04 and 05 use; each spec gains steps in the milestone that
+delivers them.
 
-| Spec | Milestone | Drives |
+| Spec (`web/e2e/`) | Milestone | Drives |
 |---|---|---|
-| `feed.spec.ts` | M4 | post, reply, save and the Saved count, a second context seeing a post without a reload, delete, the removed placeholder, signed-out reading |
-| `offline.spec.ts` | M4 | the web's in-flight-only outbox (Not sent, Retry, nothing kept after a reload) |
-| `shell.spec.ts` | M4 | scope, strip, bar hide, layout toggle, phone widths |
-| `branches.spec.ts` | M4/M5 | follow-up, Continue, Branch, Branch here, Look up, Comment, dot alignment |
-| `keyboard.spec.ts` | M4 | §10 focus order, Escape order, reduced motion |
-| `runs.spec.ts` | M5 | 05 M5 list, including Stop and Run again; usage page, keys, out-of-tokens |
-| `invites.spec.ts`, `moderation.spec.ts` | M6 | 04 §3.4, §5, §6.6 |
+| `spaces-shell.spec.ts` | M4 | scope, strip, bar hide, layout toggle, phone widths |
+| `spaces-feed.spec.ts` | M4, M5a | post, save and the Saved count, a second context seeing a post without a reload, delete, the removed placeholder; the web's in-flight-only outbox (Not sent, Retry, nothing kept after a reload); from M5a, an ask streaming with a reload mid-stream |
+| `spaces-replies.spec.ts` | M4 | reply trees, Reply at root, mentions |
+| `spaces-signed-out.spec.ts` | M4 | signed-out reading of a thread, its branches and replies (§9.5); write controls open the auth dialog |
+| `spaces-keyboard.spec.ts` | M4 | §10 focus order, Escape order, reduced motion |
+| `spaces-channels.spec.ts` | M4, M6 | join, leave, New channel, About (M4); channel invite links, report, moderation log, removal with reason, dismissal, ban (M6; 04 B3, B4, §6.6) |
+| `spaces-branches.spec.ts` | M5a | follow-up, Continue, Branch, Branch here, Look up, Comment, dot alignment |
+| `spaces-runs.spec.ts` | M5a | run states, Stop and Run again (05 M5a) |
+| `spaces-usage.spec.ts` | M5b | usage page, keys, billing setting, out-of-tokens refusal |
+| `spaces-membership.spec.ts` | M6 | account invite links and codes, waiting accounts, the invite tree (04 I4) |
 
 `visual.spec.ts` is rewritten for Home in `centred` and `wide` at 1440 and
 1100 px, a channel at 800 px, an open branch card, the stacked dialogs, Usage,
@@ -831,45 +865,46 @@ your Mac" and then the agent label.
 
 | Id | Needs | Provided by |
 |---|---|---|
-| N1 | `@session/sync` client half (replica, outbox, rebase, reactive queries, memory and SQLite adapters) and `@session/mutators` | 01 Y9-Y12, M1-M5 |
+| N1 | `@session/sync` client half (replica, outbox, rebase, reactive queries, memory and SQLite adapters) and `@session/mutators` | 01 Y9-Y12, U1-U5 |
 | N2 | Signed-out and unjoined reading of open channels | 01 Y5, R5; 04 §3.5 |
-| N3 | Passage index on ask nodes (block index of the quoted passage, absent for footer asks), over a block structure that is the same for streamed and final text | not yet in 01 C3 or 03 §1 |
+| N3 | Passage index on ask nodes (block index of the quoted passage, absent for footer asks), over a block structure that is the same for streamed and final text | 01 C3, 03 §1 (`b`) |
 | N4 | Counts record `{ th, s, saves, r }` with totals; no likes | 01 C1, C5 |
 | N5 | `vis: open \| private`, roles, the All directory | 01 C7, C9, C11; 04 §4 |
-| N6 | Comments on ask nodes; look-ups with `look` and a server-built `q` | 01 C3, C4; 03 G2-G4 |
+| N6 | Comments on ask nodes; look-ups through `research.forkNode` with `look` and a server-built `q` | 01 C3, C4, U5; 03 §2.1, G2-G4 |
 | N7 | Account invites, waiting accounts, `members.tree` (online-only) | 01 C8; 04 §3 |
 | N8 | Placeholder fields `mod`, `modBy`, `modNote`; `modlog` with ban entries | 01 C12; 04 §6.5 |
 | N9 | Run records, `step`, failure reasons, stream deltas and `/live`, cancel and retry | 03 §1, E3, G6, T1-T3; 01 Y7 |
 | N10 | `usage.*`, `apiKeys.*`, `usage.changed`, model registry with payers, device executors | 03 K4-K8, K11, V1 |
 | N11 | GitHub sign-in with the profile step, `auth.checkInvite`, desktop device tokens | 04 §1, §3.4; 01 S2 |
-| N12 | Stored answer format (sanitised HTML) and the stream's format | 03 §1 (stream format not stated) |
+| N12 | Stored answer and stream format: both Markdown | 01 C3; 03 §1 |
 | N13 | `prefs` record and `prefs.set` | 01 C13 |
 | N14 | Member list, ban, set-role and channel invite link mutators | 04 §4.3, §5, §6.4 |
-| N15 | Notifications for mentions and resolved reports | 01 C16; 04 §6.1 |
+| N15 | Notification records (mention, `report`, `report_resolved`) and the `notifications.*` mutators, for W2.6 | 01 C16, U5; 04 O1, O2 |
 
 Shell, feed, side column, composer and dialogs are built against the fixture
 replica (§9.6) and do not wait on N1-N15.
 
 ## 14. Open questions
 
-1. **Passage index.** N3: 01 C3 stores `quote` but no block index; without one
-   the client cannot place a tree beside its passage. Proposed: an optional
-   `at` (block index) on `nodes.ask` and `nodes.lookup` input, bounded by the
-   parent answer's block count.
-2. **Stop.** The mock has no Stop control; 03 G6 and 05 M5 need one. Placement
+1. **Passage index.** Settled: 01 C3 and 03 §1 store `b` on the node, sent
+   in `research.forkNode` input (N3).
+2. **Stop.** The mock has no Stop control; 03 G6 and 05 M5a need one. Placement
    proposed in §3.3 (beside the run status, asker only).
 3. **Thread addresses.** Notifications and shared links need one; the plan uses
    `/c/$name?t=&sel=`, which needs a single-thread fallback for threads outside
    the loaded feed.
 4. **Removal placeholder author.** Show the author's handle as the mock does
    (04 question 1)?
-5. **Notifications inbox.** The schema has notifications and 01 C16 and 04 §6
-   produce mention and report-resolved notifications; the mock has no surface
-   for them.
+5. **Notifications inbox.** The mock has no surface for the notifications
+   01 C16 and 04 O1-O2 produce. W2.6 adds a minimal page reached from the
+   account menu; whether it needs an app bar control or push notifications
+   on the desktop is open.
 6. **Widgets and artifacts** in answers, which the current Markdown pipeline
    renders and the mock does not show.
 7. **Typography.** The mock uses Inter; the client keeps the app's font setting
    and needs title and input sizes decided.
 8. **Settings.** The account menu has no Settings entry for appearance, theme,
    reduced motion and the send shortcut.
-9. **Effort.** The mock's Effort submenu is not shipped (03 K12, question 6).
+9. **Effort.** Settled: the submenu ships with the efforts of the chosen
+   model (§5, 03 K12); whether effort is capped for included tokens is 03
+   question 6.

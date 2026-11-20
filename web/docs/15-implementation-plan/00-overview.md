@@ -50,15 +50,61 @@ describe and records where the mockup changes or adds to them.
 
 ## Plan files
 
-| File | Covers |
-|---|---|
-| `01-architecture-and-data.md` | Server half, database, mutators, sync, API surface, the contract changes the mockup needs |
-| `02-client-app.md` | The client: app shell, feed, branches, composer, channels, membership and usage screens, state, accessibility, layout |
-| `03-agents-and-research.md` | Asks, branches and look-ups as runs; models; streaming; tokens, allowance and API keys; device runs |
-| `04-membership-moderation-security.md` | Invites, channels and roles, moderation, privacy, permissions, abuse limits |
-| `05-delivery.md` | Phases and milestones, testing and acceptance, rollout and cutover, risks, open questions |
+| File | Covers | Item ids |
+|---|---|---|
+| `01-architecture-and-data.md` | Server half, database, mutators, sync, API surface, the contract changes the mockup needs | `S`, `D`, `U`, `Y`, `R`, `A`, `C` |
+| `02-client-app.md` | The client: app shell, feed, branches, composer, channels, membership, notifications and usage screens, state, accessibility, layout | `W`; `N` for its dependencies |
+| `03-agents-and-research.md` | Asks, branches and look-ups as runs; models; streaming; tokens, allowance and API keys; device runs | `G`, `E`, `V`, `T`, `K`, `L` |
+| `04-membership-moderation-security.md` | Invites, channels and roles, moderation, privacy, permissions, abuse limits, authentication | `I`, `B`, `O`, `P`, `Z` |
+| `05-delivery.md` | Milestones `M0`-`M8`, testing and acceptance, rollout and cutover, observability, risks, open questions | milestones `M`; questions `P`, `E`, `S` |
+
+Files cite each other's items with the file number ("01 C3", "04 O2").
+
+## Key decisions taken in the plan
+
+- Mutators keep the procedure names of `spaces.ts`. Every ask under a thread
+  root (Continue, Branch, Branch here, Look up) is `research.forkNode` with
+  `kind: "ask" | "lookup"`; the only new names are `comments.*` and
+  `prefs.set`, and `saved.toggle` becomes `saved.set` (01 U5, C1, C4, C13;
+  03 §2.1).
+- Replicated records live in one `records` table with JSON bodies validated
+  by the shared zod schemas, so the change log, tombstones and erasure stay
+  generic (01 D1).
+- Likes are removed from the contract; the counts record is
+  `{ th, s, saves, r }`, with `r` the total of branches or replies (01 C1,
+  C5).
+- Channels are `open` or `private`; channel rules, join requests and the
+  surfaces the mockup does not show are deferred; space ids are ULIDs and
+  URLs use the channel name (01 C6, C9, C10, C14).
+- Removal erases content: the placeholder keeps only attribution and
+  moderation fields, and the moderation log shows no text of a removed item
+  (01 C12; 04 O2, O5).
+- Account invites are online-only tRPC calls, at most 3 open links per
+  member, with the code in the URL fragment (`/i#<code>`), stored hashed and
+  encrypted for its creator, and one failure answer for used, revoked and
+  unknown codes (01 C8; 04 I1-I4).
+- Answers are stored and streamed as Markdown; runs, turns and answers are
+  records in the space log, and in-flight text travels as ephemeral deltas
+  on the sync SSE connection (03 §1, §5).
+- Included tokens are a weekly allowance; the server decides the payer in
+  the mutator's `pre` stage; members may add Anthropic and OpenAI keys
+  (ADR-23, to be written); the Effort submenu lists the chosen model's
+  efforts (03 K3, K4, K8, K12).
+- The desktop's device token is held by the Tauri Rust side and never
+  reaches the webview's JavaScript (01 S2; 04 Z3).
+- The cutover runs migration `0002`: accounts, sessions and invites are
+  kept; research tables, `embed_assets` and `tweet_cache` are dropped
+  (01 §2, D5; 05 §3.5).
+
+## Open questions
+
+`05-delivery.md` §6 consolidates the open questions of 01-05, grouped by who
+decides (Product `P1`-`P23`, Engineering `E1`-`E10`, Security `S1`-`S6`), with
+the source of each. Each file keeps its own list.
 
 ## How this plan was produced
 
 A draft outline was expanded by three agents (01 with 03, 02, 04 with 05),
-then each file was revised by its own reviewer against the sources above.
+then each file was revised by its own reviewer against the sources above, and
+the files were then made consistent with each other (names, ids, cited items
+and spec names).

@@ -12,10 +12,10 @@ Rules come from `AGENTS.md` ("Planned: desktop client and sync core") and
 ADR-19 to ADR-22; where this file restates one, the source wins.
 
 Naming: milestones are `M0`-`M8` with letter suffixes. Item ids of other files
-are always prefixed with the file number, because 01 also uses `M1`-`M6` for
-its mutator items: "`01` M6" is 01's item "Update the acceptance suite first",
-"M6" alone is the milestone. 04 has no item ids, so it is scheduled by
-section.
+are always prefixed with the file number ("`01` U6", "`04` O2"). 01's mutator
+items are `U1`-`U6`, so an unprefixed `M` id is always a milestone. Ids per
+file: 01 `S`, `D`, `U`, `Y`, `R`, `A`, `C`; 02 `W` (and `N` for its
+dependencies); 03 `G`, `E`, `V`, `T`, `K`, `L`; 04 `I`, `B`, `O`, `P`, `Z`.
 
 ## 1. Milestones at a glance
 
@@ -63,9 +63,11 @@ the current Tauri app stay in production with their rules (`AGENTS.md`); how
 
 ### 1.2 Traceability
 
-Every work item of 01-04 is scheduled in exactly one milestone. Two items are
-split and say so: `01` D5 (`0001_spaces.sql` in M3, `0002_drop_research.sql`
-in M8b) and `02` W2.4 (web in M4, the Tauri drag region in M7a). The contract
+Every work item of 01-04 is scheduled in exactly one milestone. Three items
+are split and say so: `01` D5 (`0001_spaces.sql` in M3,
+`0002_drop_research.sql` in M8b), `02` W2.4 (web in M4, the Tauri drag
+region in M7a) and `02` W6.10 (refusal messages in M6, the desktop frozen
+banner in M7a). The contract
 items `01` C1-C17 are scheduled in M1a, where they change `spaces.ts` and
 `replica-proto`; the server routes some of them need are built under the
 items named in the M3, M4 and M6 rows (`01` S4 runs C16's effect, `01` R5 and
@@ -73,20 +75,22 @@ items named in the M3, M4 and M6 rows (`01` S4 runs C16's effect, `01` R5 and
 
 | Milestone | 01 | 02 | 03 | 04 |
 |---|---|---|---|---|
-| M1a | C1-C17, M6 | — | — (ADR-23 drafted, §6) | §11 |
-| M1b | M1-M5 | — | G1, G2, G4, G5, G6 (mutators) | — |
-| M2 | Y1-Y6, Y8-Y12, R1-R4 | — | — | — |
-| M3 | S1-S5, D1-D4, D5 (0001), D6, D7, Y7, A1, A3 | — | — | §12 |
-| M4 | A2, R5 | W1.1, W1.2, W2.1-W2.3, W2.4 (web), W2.5, W3.1, W3.2, W4.3, W4.5, W5.1, W6.1-W6.3, W6.6, W6.7, W9.1-W9.3, §9.5, §9.6, §9.8, W10.1-W10.3, W11.1 | — | §3.5, §4.1, §4.2, §4.4, §7 |
-| M5a | — | W4.1, W4.2, W4.4 | G3, G7, G8, E1-E4, T1-T4, K1, K2, K12, K13, L1, L2 | — |
+| M1a | C1-C17, U6 | — | — (ADR-23 drafted, §6) | §11 (contract requests) |
+| M1b | U1-U5 | — | G1, G2, G4, G5, G6 (mutators) | — |
+| M2 | Y1-Y6, Y8-Y13, R1-R4 | — | — | — |
+| M3 | S1-S5, D1-D4, D5 (0001), D6, D7, Y7, A1, A3 | — | — | — |
+| M4 | A2, R5 | W1.1, W1.2, W2.1-W2.3, W2.4 (web), W2.5, W3.1, W3.2, W4.3, W4.5, W5.1, W6.1-W6.3, W6.6, W6.7, W9.1-W9.3, §9.5, §9.6, §9.8, W10.1-W10.3, W11.1, W11.2 | — | I5, B1, B3, P1 (§4.1 visibility rules with C9) |
+| M5a | — | W3.3, W4.1, W4.2, W4.4 | G3, G7, G8, E1-E5, T1-T4, K1, K2, K12, K13, L1, L2 | — |
 | M5b | — | W8.1 | K3-K11, K14 | — |
-| M6 | — | W6.4, W6.5, W7.1-W7.3 | — | §3.1-§3.4, §4.3, §5, §6, §8, §9, §10, §13 |
-| M7a | — | W2.4 (desktop), §12.3 | — | — |
+| M6 | — | W2.6, W6.4, W6.5, W6.8, W6.9, W6.10 (messages), W7.1-W7.3 | — | I1-I4, I6, B2, B4, B5, O1-O5, P2, Z1, Z2, Z4, Z5; §13 mitigations |
+| M7a | — | W2.4 (desktop), W6.10 (frozen banner), §12.3 | — | Z3 |
 | M7b | — | — | V1-V7, T5, L3 | — |
 | M8b | D5 (0002) | — | — | — |
 
-`03` L4 adds no work beyond `01` A3 (M3). `02` §9.7 is a reference table, not
-an item. `04` §1, §2 and §14 record decisions and dependencies only.
+`03` L4 adds no work beyond `01` A3 (M3). `01` Y13 (`serverApply`) is built
+in M2 and first used by `03` E1 in M5a. `02` §9.7 is a reference table, not
+an item. `04` §1, §2, §11 and §14 record decisions, contract requests and
+dependencies only.
 
 ## 2. Milestones
 
@@ -111,8 +115,9 @@ Scope:
   `unban` `modlog` kinds, one open report per reporter and item,
   `auth.checkInvite` with one `unusable` answer, no default rules).
 - `replica-proto` changed to the revised contract before anything is ported
-  (`01` M6): `likes.set` replaced by counted saves, rules dropped, comment and
-  ask-node kinds added; mutation patterns that pointed at removed code are
+  (`01` U6): `likes.set` replaced by counted saves, rules dropped, comment and
+  ask-node kinds added, `erase` extended to saves, comments and mention
+  notifications; mutation patterns that pointed at removed code are
   rewritten with the same faults.
 - Documents: ADR-19's `deviceNow` corrected to `clientTime` (`01` Y1); ADR-23
   (user API keys, model payers, the weekly allowance; `03` §6) drafted for
@@ -129,14 +134,15 @@ Exit criteria:
 Scope (`01` §3):
 - New package `web/packages/mutators` (npm workspace, AVA, `tsc -b`
   reference), depending on `@session/shared` and `zod` only.
-- `01` M1-M5: the three stages (`pre`, deterministic `run` over a synchronous
+- `01` U1-U5: the three stages (`pre`, deterministic `run` over a synchronous
   `tx` with `tx.now` and `tx.id(ordinal)`, `post` effects carrying ids),
   indexed reads (`tx.byKey`, `tx.list`, `tx.count`) returning `unknown`
   outside the working set, the stored shape with counts as stored fields,
   stale-intent rules, and one file per area.
 - The run-starting and graph mutators of `03` G1, G2, G4, G5, G6
-  (`threads.create`, `nodes.ask`, `nodes.lookup` with `LOOKUP_PROMPT_V1`,
-  `comments.create`, promotion, `nodes.delete`, cancel and retry). Their
+  (`threads.create`, `research.forkNode` for asks and for look-ups with
+  `LOOKUP_PROMPT_V1`, `comments.create`, promotion with `from`,
+  `followups.delete`, `research.cancelNode`, `research.retryNode`). Their
   `post` stage queues `job` effects that nothing consumes until M5a.
 - Shared validators used by forms and mutators: channel name, handle, text
   bounds (`04` §4.2, §3.1, §10).
@@ -147,11 +153,11 @@ Exit criteria:
   mutate` exits 0, with patterns that pointed into `src/mutators.ts` moved to
   the package and the faults kept the same (the runner's README rule).
 - `cd web && npm test --workspace @session/mutators` passes: one test file
-  per area of `01` M5, the table test of `01` M5 (every mutator with `who`,
+  per area of `01` U5, the table test of `01` U5 (every mutator with `who`,
   stale-intent rule and `online`), `inv1`'s determinism test run over every
   mutator, and the `03` G1, G2, G4 tests.
 - `cd web && npm run check` passes, including the ESLint rule banning `Date`,
-  `Math.random`, `crypto` and `Intl` under `src/run/` (`01` M1).
+  `Math.random`, `crypto` and `Intl` in the whole package (`01` U1).
 
 ### M2 — `@session/sync`
 
@@ -159,9 +165,9 @@ Scope (`01` §4, §5):
 - Package `web/packages/sync` with entry points `@session/sync/client` and
   `@session/sync/server`; the server half defines `ServerStore`, which this
   milestone implements in memory only.
-- Wire and server half: `01` Y1-Y6 and Y8 (envelope, answers, `register`,
-  `apply`, `snapshot` and `pull`, AEAD cursor tokens with the previous key,
-  retention jobs).
+- Wire and server half: `01` Y1-Y6, Y8 and Y13 (envelope, answers,
+  `register`, `apply`, `snapshot` and `pull`, AEAD cursor tokens with the
+  previous key, retention jobs, `serverApply` for server-originated writes).
 - Client half: `01` Y9-Y12 (replica behind a `StorageAdapter`, with the memory
   adapter and a better-sqlite3 test adapter; the outbox; rebase; reactive
   queries).
@@ -173,7 +179,7 @@ Exit criteria:
 - `replica-proto`'s harness uses the `@session/sync` client in place of
   `src/client.ts`; `cd web/packages/replica-proto && npm test && npm run
   mutate` exits 0 (patterns into `src/client.ts` moved as in M1b).
-- `cd web && npm test --workspace @session/sync` passes: the `01` Y1-Y12
+- `cd web && npm test --workspace @session/sync` passes: the `01` Y1-Y13
   acceptance tests, including outbox backoff, a write failing 5 times shown
   while later writes continue, the 3-day drop reported, `EXPIRED`,
   `CLOCK_SKEW` and `TOO_LARGE` handling, rollback with draft text restored
@@ -195,8 +201,8 @@ Scope:
 - `web/packages/server`: `01` S1-S5 (sync pipeline with `Session-Protocol` and
   `426 UPGRADE_REQUIRED`, device tokens and `devices.*` pairing, configuration,
   effect worker, drain and boot), Y7 (SSE over `fetch`), A1 (sync routes),
-  A3 (rate limits); `04` §12 (cookie and bearer authentication, CORS allowlist
-  refusing `*` at boot, one replica per user).
+  A3 (rate limits). The bearer and CORS basics of `01` S1-S3 land here;
+  `04`'s hardening of them (Z2, Z4) is M6 and the desktop side (Z3) is M7a.
 - A conformance target: replica-proto's harness gains a target interface
   (apply, snapshot, pull, register, clock control, random-source fault
   injection, storage scan); `web/packages/server/test/conformance/`
@@ -236,8 +242,9 @@ widths; feed rows and cards; reply trees on posts; the composer (Post mode
 end to end, Ask mode against the fixture replica); channel header, info
 dialog, About editor, Browse, New channel; the replica wiring, outbox
 states and per-viewer fields; signed-out reading (`02` §9.5, `04` §3.5) and
-unjoined open channels (`01` R5 with `spaces.directory`); saves and the Saved
-count (`04` §7); the fixture replica (`02` §9.6); accessibility and tokens.
+unjoined open channels (`01` R5 with `spaces.directory`, `04` I5); channel
+names and About (`04` B1, B3); saves and the Saved count (`04` P1); the
+fixture replica (`02` §9.6); accessibility and tokens.
 The usage ring renders from the fixture until M5b provides `usage.get`.
 
 Exit criteria:
@@ -263,22 +270,24 @@ access check at start (G7, G8); the owned loop re-pointed at records through
 `serverApply` with attempt fencing (E1-E4); progress steps; streaming as
 ephemeral deltas with gap refetch from `run_live` (T1-T4); the usage ledger
 and what counts (K1, K2) with every run paid as `included` and the existing
-limits; model access per run and no Effort control (K12, K13); per-run
-limits (L1, L2); the client's branch tree, branch card and selection actions
-(`02` W4.1, W4.2, W4.4) and the look-up display (G3).
+limits; failure handling (E5); model access per run and the Effort submenu
+listing the chosen model's efforts (K12, K13); per-run limits (L1, L2); the
+client's run states, branch tree, branch card and selection actions (`02`
+W3.3, W4.1, W4.2, W4.4) and the look-up display (G3).
 
 Exit criteria:
 - `cd web && npm test --workspace @session/server --workspace @session/db`
   passes, including `runs.test.ts` and `runRecovery.test.ts` rewritten
   against the new records (E2), the E1 removal-during-run test, the E3
-  fixture-provider tests, the E4 cancel-then-retry test, the T2 non-member
+  fixture-provider tests, the E4 cancel-then-retry test, the E5 test per
+  failure row (owned rows here, device rows in M7b), the T2 non-member
   delta test, the T4 change-log bound and the L2 look-up tool cap.
 - `cd web && npm run test:e2e -- spaces-feed spaces-branches spaces-runs`
   passes: ask with the `paced-answer` fixture, a reload mid-stream and a
   second tab on the same run, Continue, Branch, Branch here, Look up on a
   1-4 word selection showing the phrase and not the prompt, Comment, Stop,
   Run again creating a new attempt, dot alignment (`02` W4.1).
-  `spaces-runs.spec.ts` is new in this file.
+  `spaces-runs.spec.ts` is new in this milestone.
 - Fixture providers only; nothing reaches a model provider in CI.
 
 ### M5b — Allowance, payer, API keys, Usage page
@@ -305,15 +314,17 @@ Exit criteria:
 
 ### M6 — Membership and moderation
 
-Scope (`04` sections in §1.2; `02` W6.4, W6.5, W7.1-W7.3): account invites,
-`users.status` and handles, the invite tree, the "Join with invite?" flows
-and waiting accounts; roles with the member list, Make moderator and Transfer
-ownership; channel invite links; report, remove with reason, ban, the
-moderation log; privacy rules; client rendering of apply-time refusals; abuse
-limits; the threat notes' mitigations (merged failure answer for
-`auth.checkInvite`, the cursor-key rotation runbook in `web/docs/runbooks/`).
-`04` §4.3 and §6.4 add screens (member list, Banned list, "Invite to #name")
-that `02` has no W item for; they are built here.
+Scope (`04` items in §1.2; `02` W2.6, W6.4, W6.5, W6.8, W6.9, W6.10,
+W7.1-W7.3): account invites, `users.status` and handles, the invite tree,
+the "Join with invite?" flows and waiting accounts (`04` I1-I4); suspension
+(`04` I6); roles with the member list, Make moderator and Transfer ownership
+(`04` B2, `02` W6.8); channel invite links (`04` B4, `02` W6.9); report,
+remove with reason, ban with the Banned list, the moderation log (`04`
+O1-O5); the notifications page (`02` W2.6); privacy rules (`04` P2); client
+rendering of apply-time refusals (`04` B5); abuse limits (`04` Z1); cookie
+CSRF, CORS and rendering hardening (`04` Z2, Z4, Z5); the threat notes'
+mitigations (merged failure answer for `auth.checkInvite`, the cursor-key
+rotation runbook in `web/docs/runbooks/`).
 
 Exit criteria:
 - `cd web && npm test --workspace @session/db -- test/invites.test.ts` passes
@@ -322,11 +333,14 @@ Exit criteria:
   4th refused, revoke and use freeing a slot, concurrent creates, the admin
   exemption).
 - `cd web && npm run test:e2e -- spaces-membership spaces-channels` passes,
-  covering the scenarios of `04` §3.4 (link, code, waiting account, used
-  code), §4.4, §5 (private channel link, reused link refused) and §6.6
+  covering the scenarios of `04` I4 (link, code, waiting account, used
+  code), B3, B4 (private channel link, reused link refused) and §6.6
   (report, moderation log count without reload, removal with reason,
-  dismissal, ban). 04 names these specs `invites.spec.ts` and
-  `moderation.spec.ts`; one set of names is chosen in 02 §12.2.
+  dismissal, ban); spec names as in `02` §12.2.
+- `04` I6 and Z1-Z5 server tests pass: a suspended user's queued envelope
+  refused and its device token answering `401`; one middleware test per
+  limit row; the cookie and bearer CSRF and CORS tests; the untrusted-text
+  rendering test.
 - The conformance suite (M3) and `cd web/packages/replica-proto && npm test`
   still pass after the M6 mutator changes; `npm run mutate` runs on the pull
   request (§3.1).
@@ -347,15 +361,19 @@ Scope:
 - A SQLite `StorageAdapter` on the Rust side behind a narrow command set
   (load working set, persist batch, wipe), so the outbox survives restarts
   for 3 days.
-- Device-token sign-in through a pairing code (`01` S2), the token in the
-  Keychain, sign-out wiping replica and outbox; the frozen-channel banner
-  (`04` §8); the drag region and traffic-light inset (`02` W2.4); "Update
-  Session" through the updater on `426`.
+- Device-token sign-in through a pairing code (`01` S2, `04` Z3), the token
+  in the Keychain and held by the Rust side, never by the webview's
+  JavaScript; sign-out and a `401` wiping replica and outbox; the
+  frozen-channel banner (`04` P2, `02` W6.10); the drag region and
+  traffic-light inset (`02` W2.4); "Update Session" through the updater on
+  `426`.
 
 Exit criteria:
 - `cargo test` for the new shell covers the storage adapter (persist, load,
-  wipe, a crash between persist and acknowledge) and token storage through a
-  Keychain abstraction.
+  wipe, a crash between persist and acknowledge), token storage through a
+  Keychain abstraction, and the `04` Z3 test that no Tauri command returns
+  the token; a pairing code fails after 10 minutes and after 5 wrong
+  attempts.
 - Root `npm run check && npm test` pass; `.github/workflows/desktop.yml`'s
   `frontend`, `rust` and `native` jobs pass.
 - The manual macOS checklist in `web/docs/runbooks/desktop-release.md` (new):
@@ -496,8 +514,8 @@ single app (question E1); production keeps one database on one machine.
   `SESSION_CURSOR_KEY`, `SESSION_CURSOR_KEY_PREVIOUS`, `SESSION_SECRET_KEY`,
   `SESSION_DEVICE_ANSWER_MAX_BYTES`, `SESSION_DEVICE_RUNS_PER_HOUR`,
   `SESSION_WEEKLY_TOKENS`, `SESSION_RUN_MAX_TOKENS`,
-  `SESSION_QUEUED_PER_USER`, the CORS allowlist of desktop origins and the
-  abuse limits. All are validated at boot and documented in
+  `SESSION_QUEUED_PER_USER`, `SESSION_DESKTOP_ORIGINS` (the CORS allowlist of
+  desktop origins) and the abuse limits of `04` Z1. All are validated at boot and documented in
   `web/.env.example`; the keys are Fly secrets. Losing `SESSION_SECRET_KEY`
   makes stored API keys unreadable; it is backed up outside Fly.
 
@@ -518,8 +536,8 @@ overwritten):
   `highlights`, `feed_items`, `research_drafts`, `interface_drafts`,
   `widget_*`, `research_images`, `image_refs`, `notifications`,
   `collapsed_*` (`01` §2).
-- `embed_assets` and `tweet_cache`, which 01 §2 does not classify; proposed
-  dropped, since they serve only research content.
+- `embed_assets` and `tweet_cache`, which serve only research content (`01`
+  §2 drops them).
 - Files: `/data/documents/*` (image attachments of `research_images`) and
   `/data/embeds/*`, removed by a cutover step (§3.6), as in
   `reset-database.md` §3.
@@ -592,6 +610,7 @@ answer codes, never record text.
 | `session_invite_checks_total{outcome}` | Invite code checks | failed checks above 100/hour |
 | `session_reports_total`, `session_removals_total` | Moderation volume | — |
 | `session_weekly_tokens{payer}`, `session_weekly_cost_usd{provider}` | Included-token spend against budget | weekly cost above the budget set in question P11 |
+| `session_run_failures_total{cls}` | Owned-run failures by provider error class (`03` E5) | any `auth` (the deployment credential was rejected) |
 | `session_device_runs_active`, `session_device_leases_expired_total` | Device runs | lease expiries above 20% of claims |
 | `session_wal_bytes` | WAL size between checkpoints | above 512 MB |
 
@@ -637,33 +656,35 @@ reference from this file.
 ### Product
 
 - **P1. Sign-in provider.** X in addition to or instead of GitHub (ADR-5).
-  `02` §14 q1, `04` §15 q7.
+  `04` §1, §15 q7.
 - **P2. Channel moderators in v1.** Grant `mod` through "Make moderator" (as
-  `04` §4.3 proposes) or keep the owner as the only staff. `01` §9 q5, `02`
-  §14 q10, `04` §1.
+  `04` B2 and `02` W6.8 propose) or keep the owner as the only staff. `01` §9
+  q5, `04` §1.
 - **P3. Site-wide moderators** or only `users.is_admin`. `04` §15 q6.
-- **P4. Admission to private channels.** Channel invite links only (`04` §5),
-  or also join requests; `02` has no screen for either. `01` §9 q6, `02` §14
-  q2.
+- **P4. Admission to private channels.** Channel invite links only (`04` B4,
+  `02` W6.9), or also join requests, which have no screen. `01` §9 q6.
 - **P5. The removal placeholder.** Whether it shows the author's handle, and
   whether it stays until the author deletes it or expires. The reason is
-  moderator text and is shown (`01` C12), which settles `02` §14 q5. `04` §15
-  q1, q2.
+  moderator text and is shown (`01` C12). `02` §14 q4, `04` §15 q1, q2.
 - **P6. Report and remove follow-ups and replies individually at launch.**
   `04` §15 q9.
 - **P7. Offer Hide to staff.** `04` §15 q10.
 - **P8. Frozen copy after a voluntary Leave** (proposed: no). `04` §15 q5.
 - **P9. Thread addresses and a single-thread page** for notifications and
-  shared links. `02` §14 q4.
-- **P10. Notifications inbox.** `01` C16 writes mention notifications and
-  `04` §6 report notifications, but no screen shows them. `02` §14 q6.
+  shared links. `02` §14 q3.
+- **P10. Notifications surface.** `01` C16 writes mention notifications and
+  `04` O1-O2 report notifications; `02` W2.6 lists them on a page reached
+  from the account menu (not in the mockup). Whether it needs an app bar
+  control or desktop push notifications. `02` §14 q5.
 - **P11. Models at launch and the allowance.** Default model for members,
   lifting ADR-16's Fable gate, and whether 2,000,000 tokens a week is
   affordable at that price; the weekly budget for the cost alert. `03` §9 q1.
 - **P12. Cached tokens** counted in full, at the discount ratio, or not at
   all. `03` §9 q2.
-- **P13. Effort control.** Reopen ADR-16, or drop the mockup's Effort submenu
-  (`02` §5 and W2.5 still show it; `03` K12 removes it). `03` §9 q6.
+- **P13. Effort and the allowance.** The Effort submenu ships with the chosen
+  model's efforts (`03` K12, `02` §5; ADR-23 records it against ADR-16).
+  Open: show a cost estimate for high efforts, or cap effort on included
+  tokens. `03` §9 q6.
 - **P14. Who may promote a branch** and who is shown as its author. `03` §9 q4.
 - **P15. "Run on this Mac"** in the out-of-tokens message. `03` §9 q5.
 - **P16. Old desktop data** after the cutover: delete, offer to delete, or
@@ -673,10 +694,10 @@ reference from this file.
 - **P19. Keep accounts through the data reset** (`0002`), or reset fully and
   re-seed admins. `05` §3.5.
 - **P20. Export before the reset** for existing web users. `05` §3.5.
-- **P21. Widgets and artifacts in answers.** `02` §14 q7.
+- **P21. Widgets and artifacts in answers.** `02` §14 q6.
 - **P22. Typography** (Inter or the app's font; title and input sizes).
-  `02` §14 q8.
-- **P23. Settings entry** in the account menu. `02` §14 q9.
+  `02` §14 q7.
+- **P23. Settings entry** in the account menu. `02` §14 q8.
 
 ### Engineering
 
@@ -718,5 +739,6 @@ reference from this file.
 - **S6. Save counts in small private channels**, where a count of 1 can
   identify the saver. `01` §9 q2.
 
-Settled elsewhere: `02` §14 q3 (branch comments) by `01` C4; `02` §14 q5
-(removal reason) by `01` C12.
+Settled elsewhere: `02` §14 q1 (passage index) by `01` C3 and `03` §1;
+`02` §14 q2 (Stop) by `03` G6 and `02` §3.3; `02` §14 q9 (effort) by `03`
+K12; branch comments by `01` C4; the removal reason by `01` C12.

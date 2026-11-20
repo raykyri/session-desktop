@@ -21,7 +21,7 @@ half must pass (`05-delivery.md`, M3); `R…` and `S…` there are the
 
 Work items have ids `I` (accounts and invites), `B` (channels and roles), `O`
 (moderation), `P` (privacy and user logs) and `Z` (limits, authentication,
-client security), so that `05-delivery.md` M6 and M7 can schedule them.
+client security), so that `05-delivery.md` (M4, M6 and M7a) can schedule them.
 
 ## 1. Precedence and conflicts
 
@@ -111,7 +111,8 @@ refused.
   (no `0`, `O`, `1`, `I`). The mockup's `SESS-XXXX-XX` holds 30 bits; this
   plan proposes `SESS-XXXXX-XXXXX` (50 bits), question 3. Input is
   normalized (upper-cased, spaces and dashes removed) before hashing.
-- The link is `<SESSION_PUBLIC_ORIGIN>/i#<code>`: the code stays in the
+- The link is `<SESSION_PUBLIC_ORIGIN>/i#<code>` (in production
+  `https://session.dev/i#<code>`): the code stays in the
   fragment and out of request lines, logs and `Referer`, as the existing
   `/invite#<token>` design does (`03-api-and-events.md` `invites.create`,
   `10-home-feed-journal.md` §4b). The client route reads the fragment and
@@ -211,7 +212,7 @@ channel to a non-member.
 
 Acceptance: `inv3`; a server test that `spaces.directory` for a signed-out
 caller, a waiting account and a non-member contains no private channel; the
-signed-out spec of `02` §12.2.
+signed-out spec of `02` §12.2 (`e2e/spaces-signed-out.spec.ts`).
 
 ### 3.6 Suspension
 
@@ -322,8 +323,9 @@ shows the new About without a reload.
 
 **B4.**
 - Staff: channel info → "Invite to #name" → a one-use link
-  `<SESSION_PUBLIC_ORIGIN>/c/<name>#<code>` with Copy; the client route
-  clears the fragment as in §3.2. Expiry 7 days (`invites.create { days: 7
+  `<SESSION_PUBLIC_ORIGIN>/c/<name>#<code>` with Copy (channel URLs use the
+  name, `01` C14; in production `https://session.dev/c/<name>#<code>`); the
+  client route clears the fragment as in §3.2. Expiry 7 days (`invites.create { days: 7
   }`); the server refuses `days: null` and more than 30 days with
   `BAD_REQUEST`. Revoke and Undo use `invites.revoke` and `invites.restore`.
 - The server makes the code in `pre` (`inv4` "invite codes are made by the
@@ -412,7 +414,7 @@ What the removal commit leaves, and who gets it:
 The client renders the placeholder as the mockup does: "Removed by @mod",
 "Reason: “…”" when a note exists, and "Ask by @author in #name" or "Post by
 @author in #name". Deleting saves of a removed thread is a change to
-replica-proto's `erase` (`01` M6), which today keeps them.
+replica-proto's `erase` (`01` U6), which today keeps them.
 
 Placeholder lifetime: until the author deletes it or the channel is deleted;
 tombstones of the erased records are pruned after 30 days (question 2).
@@ -461,9 +463,9 @@ reported @author's ask" or "@mod removed @author's ask", the note, and the
 relative time; open reports carry Dismiss and Remove.
 
 - Data: the channel's reports plus the staff-only `modlog` record kind of
-  `01` C12 (`{ id, sp, kind, item, by, author, note, at }`). This file asks
-  `01` to add `ban` and `unban` to `kind`, with `item` absent and `author`
-  naming the banned person.
+  `01` C12 (`{ id, sp, kind, item, by, author, note, at }`), whose `kind`
+  includes `ban` and `unban`, with `item` null and `author` naming the banned
+  person.
 - An entry shows the item's current title only when the item exists and is
   not removed in the reader's replica. For a removed item it shows kind,
   author and channel.
@@ -568,7 +570,7 @@ for each rollback and the text restoration.
 
 ## 10. Abuse limits
 
-**Z1.** Defaults, as server settings validated at boot (`05` §3.5). Rate
+**Z1.** Defaults, as server settings validated at boot (`05` §3.4). Rate
 refusals answer `TOO_MANY_REQUESTS` unrecorded, and the client backs off
 (`R15`, `N10`). Per-IP buckets key on the hashed client IP
 (`hashClientIp`).
@@ -589,7 +591,7 @@ refusals answer `TOO_MANY_REQUESTS` unrecorded, and the client backs off
 | `invites.create` (channel) | 20/day per user; 50 open per channel | `pre` |
 | `spaces.join` | 60/hour per user | `pre` |
 | `spaces.directory` | 60/min per user or IP | procedure |
-| Client registration | 20/day per user (`review-r2` S2) | sync server |
+| Client registration | 20/day per user (`01` D2, Y3; `review-r2` S2) | sync server |
 | Device pairing codes | 5 created per hour per user; 5 failed redemptions invalidate a code | `devices.*` |
 | Envelope size | `TOO_LARGE` above 256 KB, unrecorded (`01` Y1) | `/api/sync` |
 | Text | About 300, removal note 300, report note 500 characters; `BAD_REQUEST`, recorded (`R8`) | input schemas |
@@ -609,13 +611,13 @@ Made by `01`: C8 (account invites on `invites`, `status`, `members.tree`),
 C9 (`vis: "private"`), C10 (join requests deferred), C11 (`spaces.update {
 id, desc }`, owner only), C12 (report and removal notes, `modlog` with `ban`
 and `unban`, one open report per person and item). Requested here in
-addition:
+addition (`01` now records the first three, in C12, U6 and C8):
 
 - C12 to state that the removal placeholder keeps `id`, `s`, kind, `u` and
   `createdAt` besides `mod`, `modBy` and `modNote` (replica-proto keeps and
   serves them; §6.2);
 - `erase` also deletes saves, comments and mention notifications of the
-  removed thread (`01` M6);
+  removed thread (`01` U6);
 - `users.status` gains `suspended` (§3.6); account invites store
   `code_enc` beside `code_hash` (§3.1);
 - the `pre`-stage limits in §10; `auth.checkInvite` with a single `unusable`
@@ -685,7 +687,7 @@ Acceptance (Z2–Z5): `01` S1 and S2 tests, plus: a cookie `GET
 request from `tauri://localhost` is accepted without that header; a request
 with both credentials answers `400`; a response to an allowed origin has no
 `Access-Control-Allow-Credentials`; a revoked token's open stream ends and the
-desktop wipes its replica (M7 checklist); a pairing code fails after 10
+desktop wipes its replica (`05` M7a checklist); a pairing code fails after 10
 minutes and after 5 wrong attempts; a client test renders fixture answers and
 posts containing `<script>`, `<img onerror>`, `javascript:` links and a remote
 image, and the DOM holds none of them; a Tauri test that no command returns
@@ -738,21 +740,21 @@ the token.
 ## 14. Dependencies
 
 - `01-architecture-and-data.md`: server half, record kinds and audiences,
-  C1, C8–C12, S1–S3, D3, D4, M6, Y8.
+  C1, C8–C14, S1–S3, D2, D3, D4, U6, Y3, Y8.
 - `02-client-app.md`: the dialogs and pages named here (channel info, edit,
   member list, moderation log, remove/report, members page, invite flow,
   frozen-channel banner).
 - `03-agents-and-research.md`: run cancellation on removal; run limits;
   answers stored as Markdown (§1).
-- `05-delivery.md`: M6 schedules I, B, O and P items and Z1, Z2, Z4, Z5; M7
-  schedules Z3; M3 makes the conformance suites that most acceptance checks
+- `05-delivery.md`: M4 schedules I5, B1, B3 and P1; M6 schedules the other
+  I, B, O and P items and Z1, Z2, Z4, Z5; M7a schedules Z3; M3 makes the conformance suites that most acceptance checks
   here rely on.
 
 ## 15. Open questions
 
 1. Does the removal placeholder show the author's handle, as the mockup does?
-   Proposed in §6.2: yes, as replica-proto already serves it; `01` C12 must
-   then list `u` among the kept fields.
+   Proposed in §6.2: yes, as replica-proto already serves it; `01` C12 lists
+   `u` among the kept fields.
 2. Does a removal placeholder stay until the author deletes it, or expire (for
    example after 90 days)?
 3. Account invite codes: the mockup's 30-bit `SESS-XXXX-XX` or 50-bit

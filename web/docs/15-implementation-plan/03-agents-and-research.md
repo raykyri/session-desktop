@@ -36,7 +36,10 @@ node, so the record set grows:
 | `comment` | `comment:<id>` | C4 of 01 | full |
 
 `status` is `queued | running | complete | failed | cancelled | interrupted`
-(ADR-14). `fail.why` keeps the schema's values (`stopped`, `tokens`, `key`,
+(ADR-14), plus `superseded` for an attempt stopped by the attempt fence (E1,
+`05-run-lifecycle-and-streaming.md` §7). Because the fence stops every write
+of that attempt, `superseded` appears in the server's attempt bookkeeping and
+logs, never in a served run record; the client never renders it. `fail.why` keeps the schema's values (`stopped`, `tokens`, `key`,
 `rate` with `at`, `access`, `interrupted`; `runFailureSchema` in `spaces.ts`)
 and adds:
 
@@ -53,7 +56,7 @@ or `included+key:anthropic` for a run that crossed the allowance.
 
 Answers are stored as Markdown, as turns are today, and rendered and
 sanitized by the client's Markdown pipeline (`02-client-app.md` §4.4, its
-D12). Device answers are Markdown from the CLI and pass through the same
+N12). Streamed deltas (§5) are Markdown as well. Device answers are Markdown from the CLI and pass through the same
 pipeline; the server stores no HTML.
 
 The thread record keeps `tok` and `src` (the root answer's token count and
@@ -77,7 +80,7 @@ names the thread's root as it does there.
 | Action | Mockup | Parent | Input |
 |---|---|---|---|
 | Ask | composer, kind `ask` (`newThread`) | none: thread root | `threads.create { id, space, kind: "ask", q, model, effort, executor, agent? }` |
-| Continue | `branchActs` "Continue" (`askfrom` with `n.id`) on a selected node `n`; the footer follow-up button is Continue on the root | `n` | `research.forkNode { id, thread, parent: n, q, model, effort, executor, agent? }` |
+| Continue | `branchActs` "Continue" (`askfrom` with `n.id`) on a selected node `n`; the footer follow-up button is Continue on the root | `n` | `research.forkNode { id, thread, parent: n, kind: "ask", q, model, effort, executor, agent? }` |
 | Branch | `branchActs` "Branch" (`askfrom` with `n.par`) on `n` | `n.par` (a sibling of `n`) | same, `parent: n.par` |
 | Branch here | select text in an answer, "Branch here" | the node whose answer holds the selection | same, plus `quote`, `b` |
 | Look up | select 1-4 whole words, "Look up" | the node whose answer holds the selection | `research.forkNode { id, thread, parent, kind: "lookup", look, quote?, b?, model, effort, executor, agent? }` |
@@ -95,7 +98,7 @@ mutator refuses `parent` equal to the root's own `par` (`null`) with
 `web/packages/mutators/src/nodes.ts`. `who: "member"`; the parent must exist,
 be readable, not removed and not running or queued (the mockup hides Continue
 and Branch while `n.pending`). `q` is 1 to 8,000 characters; `quote` at most
-2,000; `b` an integer the client takes from the passage index (02 W4.3). The
+2,000; `b` an integer the client takes from the passage index (02 §4.4, W4.4). The
 model must be one the person may use (K13) and `effort` one the model accepts
 (`ModelEntry.efforts`), else `BAD_REQUEST`, as `research.forkNode` refuses
 today. `post` queues a `job` effect with the run id. Acceptance: mutator tests
@@ -178,7 +181,7 @@ ADR-10 as amended by ADR-21: the owned loop is the default executor
 re-pointed at the new records.
 
 **E1. Server-originated writes.** Runs write records through a server-only
-path in `@session/sync/server` (`serverApply(kind, fn)`), which commits record
+path in `@session/sync/server` (`serverApply(fn)`, 01 Y13), which commits record
 rows, change-log rows and the registry in one transaction like a mutator,
 without an envelope or a seq. Every such write is fenced: it checks that the
 run's `attempt` is still the node's current attempt and that the thread and
@@ -268,7 +271,7 @@ resumed automatically; "Run again" starts a new attempt, which any of the
 user's devices may claim. On server boot every device lease gets a fresh 30 s
 expiry, so a deploy does not interrupt device runs whose desktop keeps
 sending heartbeats. Acceptance: a test stops heartbeats and finds the run
-`interrupted` within 40 s and a late `runs.turn` for that attempt refused; a
+`interrupted` within 40 s and a late `POST /api/runs/turn` for that attempt refused; a
 test restarts the server mid-run and finds the run still `running` after the
 next heartbeat.
 
@@ -342,7 +345,7 @@ to `records`, so streaming does not add change-log rows; only step finishes
 do. Acceptance: a 25-step run adds at most 25 turn rows and a constant number
 of run-record writes per step to the change log.
 
-**T5. Device deltas.** Device runs post deltas on `runs.turn` (V5); the
+**T5. Device deltas.** Device runs post deltas on `POST /api/runs/turn` (V5); the
 server assigns nothing and forwards them with the device's `seq`, after
 checking that it increases. Owned and device runs are indistinguishable to
 the reader except for the label. Acceptance: a non-increasing device `seq`
@@ -459,7 +462,7 @@ answers `PRECONDITION_FAILED`; removing the Anthropic key while billing is
 `key` leaves billing `pause`.
 
 **K8. Payer at apply time.** The payer is a server value made in the
-mutator's `pre` stage (01 M1); `pay` is removed from `threads.create`,
+mutator's `pre` stage (01 U1); `pay` is removed from `threads.create`,
 `research.forkNode`, `followups.update` and `research.retryNode`. The payer
 is `key:openai` for OpenAI models (which run only on the person's key, K11);
 for other models `included` while tokens are left, `key:anthropic` when the
