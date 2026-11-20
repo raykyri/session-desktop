@@ -18,7 +18,6 @@ import {
   type ClientMeta,
   type Envelope,
   type PushResult,
-  type RegisterAnswer,
   type SqlStatement,
   type Transport,
 } from "../src/client/index.js";
@@ -103,7 +102,7 @@ test("finding 1: a client stopped during the registration after WRONG_CLIENT tak
     ...watched(inner, {
       push: async (es, next) => {
         pushes.push(...es);
-        if (pushes.length === 1) return [fail("WRONG_CLIENT", w.clock.now()) as PushResult];
+        if (pushes.length === 1) return [fail("WRONG_CLIENT", w.clock.now())];
         return next();
       },
     }),
@@ -168,7 +167,7 @@ test("finding 1: a registration answered for another person is not taken: the cl
 
 test("finding 1: the server's registration names its person; a client takes its own", async (t) => {
   const { w } = cast(t);
-  const a = w.server.register({ u: "mel" }) as RegisterAnswer;
+  const a = w.server.register({ u: "mel" });
   t.like(a, { ok: true, u: "mel" });
   const c = client(w, "mel", { persist: true });
   await c.init();
@@ -291,7 +290,7 @@ for (const stored of [0, CLIENT_SCHEMA_VERSION + 1]) {
     // a file of the phase 3 tables (no version), or of a later version
     const old = new SqliteStorage(d);
     await old.saveMeta({ user: "mel", clientId: "c1", lastSeq: 4, offset: 12 });
-    await old.saveLog("space:x" as never, {
+    await old.saveLog("space:x", {
       cursor: "cur",
       puts: [["thread:1", { kind: "thread", q: "kept?" } as never]],
       dels: [],
@@ -301,7 +300,7 @@ for (const stored of [0, CLIENT_SCHEMA_VERSION + 1]) {
     d.db.exec("CREATE TABLE sync_client_extra (x)");
     const s = new SqliteStorage(d);
     t.deepEqual(await s.logs(), []);
-    t.is(await s.loadLog("space:x" as never), null);
+    t.is(await s.loadLog("space:x"), null);
     t.deepEqual(await s.loadMeta(), { user: "mel", clientId: "c1", lastSeq: 4, offset: 12 });
     t.deepEqual(await s.loadOutbox(), [
       { local: "w1", input: { t: "unsent text" } },

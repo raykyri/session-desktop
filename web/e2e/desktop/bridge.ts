@@ -67,6 +67,10 @@ export class TestBridge {
   readonly opened: string[] = [];
   /** Opening a link fails (the browser could not be started). */
   openFails = false;
+  /** The Keychain refuses to keep the item. */
+  keychainFails = false;
+  /** The next opens of a replica fail with this (then they open). */
+  failOpen: { code: string; message: string }[] = [];
   title = "";
 
   constructor(
@@ -130,6 +134,8 @@ export class TestBridge {
   /** Open and lock the person's replica, as `replica_open`. */
   private openReplica(handle: string): void {
     const name = replicaName(handle);
+    const fail = this.failOpen.shift();
+    if (fail) throw new Refused(fail.code, fail.message);
     if (this.open.has(handle)) return;
     const db = new BetterSqlite(join(this.dir, name), { timeout: 0 });
     try {
@@ -208,6 +214,7 @@ export class TestBridge {
       case "keychain.get":
         return this.keychain;
       case "keychain.set":
+        if (this.keychainFails) throw new Error("The Keychain refused the item.");
         this.keychain = args[0] as string;
         return null;
       case "keychain.delete":

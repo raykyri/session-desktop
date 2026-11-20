@@ -69,7 +69,7 @@ export function SignIn({ desktop }: { desktop: Desktop }) {
     if (!kept.ok) {
       setState({ s: "start" });
       toast(
-        `Session couldn’t keep the sign-in in the macOS Keychain (${kept.message}). Sign in again.`,
+        `Session couldn’t keep the sign-in in the macOS Keychain (${kept.message.replace(/\.$/, "")}). Sign in again.`,
       );
       return;
     }

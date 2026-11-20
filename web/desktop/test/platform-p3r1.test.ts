@@ -107,7 +107,7 @@ function server() {
       return json(200, { ok: true, clientId: id, serverTime, u });
     }
     if (path === "/api/sync/write") {
-      const e = JSON.parse(String(init?.body)) as {
+      const e = JSON.parse(init?.body as string) as {
         clientId: string;
         seq: number;
         name: string;
@@ -126,7 +126,7 @@ function server() {
     fetch,
     applied,
     log,
-    release: () => (release as (() => void) | null)?.(),
+    release: () => release?.(),
     held: () => release !== null,
   };
 }
@@ -195,7 +195,7 @@ test("finding 5 (the reviewer's experiment): after sign-out no file on the Mac h
   const s = d.storage("ines.v");
   const secret = "PRIVATE-DRAFT: the merger closes on Friday";
   await s.saveMeta({ user: "ines.v", clientId: "c1", lastSeq: 0, offset: 0 });
-  await s.saveLog("space:01M2JF0CG0R6DSGAXNG6C1ZTM5" as never, {
+  await s.saveLog("space:01M2JF0CG0R6DSGAXNG6C1ZTM5", {
     cursor: "c",
     puts: [["reply:1", { kind: "reply", t: secret } as never]],
     dels: [],

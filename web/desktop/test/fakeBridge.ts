@@ -72,21 +72,36 @@ export class FakeBridge implements DesktopBridge {
       if (this.dbs.get(handle) !== db) throw new ReplicaError("NOT_OPEN", "not open");
       return db;
     };
+    /** `f`'s value, or its exception, as a promise. */
+    const run = <T>(f: () => T): Promise<T> => {
+      try {
+        return Promise.resolve(f());
+      } catch (e) {
+        return Promise.reject(e instanceof Error ? e : new Error(String(e)));
+      }
+    };
     return Promise.resolve({
-      execute: async (sql, params) =>
-        void live()
-          .prepare(sql)
-          .run(...args(params)),
-      select: async <T>(sql: string, params?: unknown[]) =>
-        live()
-          .prepare(sql)
-          .all(...args(params)) as T[],
-      batch: async (statements: readonly SqlStatement[]) => {
-        const d = live();
-        d.transaction(() => {
-          for (const [sql, p] of statements) d.prepare(sql).run(...args(p));
-        })();
-      },
+      execute: (sql, params) =>
+        run(
+          () =>
+            void live()
+              .prepare(sql)
+              .run(...args(params)),
+        ),
+      select: <T>(sql: string, params?: unknown[]) =>
+        run(
+          () =>
+            live()
+              .prepare(sql)
+              .all(...args(params)) as T[],
+        ),
+      batch: (statements: readonly SqlStatement[]) =>
+        run(() => {
+          const d = live();
+          d.transaction(() => {
+            for (const [sql, p] of statements) d.prepare(sql).run(...args(p));
+          })();
+        }),
     });
   }
   deleteReplica(handle: string): Promise<void> {

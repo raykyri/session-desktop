@@ -403,14 +403,36 @@ rules above stay as they are. Decisions for the new client:
     first render and renders `@session/client/shell`; the web build holds
     no desktop code. Links the person copies use `siteOrigin()`.
   - Replica: each person's replica and outbox in `replica-<handle>.sqlite`
-    (`SqliteStorage`, `persist: true`), opened with `tauri-plugin-sql`; a
-    batch is the app's `sql_batch` command, one transaction on the plugin's
-    pool. Sign-out and a token the server no longer takes clear it and
-    return to the sign-in. The app starts offline from the replica and the
-    account kept in the Keychain item; it reads the server after, and sends
-    the writes an earlier run left in the outbox. A desktop session watches
-    its fetch: a network failure shows the offline bar, the next response
+    (`SqliteStorage`, `persist: true`) under the app's data directory,
+    reached only through the app's `replica_*` commands, which name it by
+    the handle (never a path): one connection holding an exclusive lock
+    (a second copy of the app is refused), one statement a call, a batch
+    one transaction; transaction control, ATTACH, DETACH, VACUUM and every
+    pragma but `user_version` are refused. Sign-out and a token the server
+    no longer takes close the storage, delete the file and return to the
+    sign-in. The app starts offline from the replica and the account kept
+    in the Keychain item; it reads the server after, and sends the writes
+    an earlier run left in the outbox. A desktop session watches its
+    fetch: a network failure shows the offline bar, the next response
     hides it and sends the outbox.
+  - Decided in review round 1 of phase 3: a session's requests carry only
+    its own sign-in's token, and `/api/me`'s `rememberMe` and
+    `unauthorized` name the token the request was made with, so a late
+    answer changes nothing of a later sign-in. `SyncClient.stop` ends a
+    flush (nothing sent, registered or stored after it); a registration
+    answer names its person (`u`) and a client takes no client id for
+    anyone else. A replica that cannot be opened is the platform's storage
+    problem (another copy of the app: quit it and Try again; else Try
+    again, or Reset after Copy text of the unsent writes), never the
+    offline bar, and is opened again on the next call. The client's
+    tables carry `PRAGMA user_version`; a file of another version is made
+    again, its logs read again from the server, its meta and outbox kept.
+    The app is one instance (a dev build has its own identifier, data
+    directory and Keychain item); links open in the system's apps for
+    http, https and mailto only, and a page's new window opens http and
+    https links in the browser. The sign-in stores its token before it
+    says it is signed in, and revokes a token the Keychain refused. The
+    CSP is the web's, plus the server's origin.
   - Writes (`writes.tsx`): a screen waits for a write only while it is
     being sent; once it waits in the outbox (offline, behind other writes,
     held, tried without an answer) the screen goes on (`queued`), and
@@ -432,12 +454,14 @@ rules above stay as they are. Decisions for the new client:
     runs (phase 4). The app's appearance settings stay on the Mac (a device
     token reads none of the browser's account routes).
   - Tests: `web/desktop/test` (platform, sign-in), `cargo test` in
-    `web/desktop/src-tauri`, `packages/client/test/desktop.test.tsx`, and
-    the desktop-mode e2e (`npm run test:e2e:desktop`, `web/e2e/desktop`):
-    the built frontend from a second origin admitted as a desktop origin,
-    a test bridge (better-sqlite3, a Keychain in memory, recorded links)
-    in place of Tauri's, against the real server; the gate is
-    `offline-day.spec.ts`.
+    `web/desktop/src-tauri` (the replica commands and the app's access
+    control on Tauri's mock runtime), `packages/client/test/desktop.test.tsx`
+    and `platformSession.test.ts`, and the desktop-mode e2e (`npm run
+    test:e2e:desktop`, `web/e2e/desktop`): the built frontend from a second
+    origin admitted as a desktop origin, a test bridge (replica files over
+    better-sqlite3, locked and refusing statements as the app's commands
+    do, a Keychain in memory, recorded links) in place of Tauri's, against
+    the real server; the gate is `offline-day.spec.ts`.
 - Ids: clients generate ULIDs. The server accepts a timestamp from 4 days in
   the past to 1 minute in the future (the outbox keeps writes 3 days), rejects an id that already exists, and
   answers a collision with the same CONFLICT whether or not the caller can
