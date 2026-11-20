@@ -1,4 +1,4 @@
-<title>Session Members Mockup</title>
+<title>Session Members</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
@@ -430,6 +430,115 @@ button.anc:hover { background: color-mix(in srgb, var(--accent) 22%, transparent
 #bar { flex: none; }
 #page { flex: 1; min-height: 0; position: relative; }
 #page > .mg, #page > .page { height: 100%; }
+/* ---- spaces made by people: navigation directions ---- */
+#page > .spshell { height: 100%; display: flex; position: relative; }
+.spshell > .mg { flex: 1; min-width: 0; height: 100%; }
+.tabs.tabs-min { padding: 4px 0; }
+/* navs that open menus can't clip their overflow; their full-width background lives on ::before */
+.tabs.tabs-dd, .tabs.tabs-dd.scrolled { box-shadow: none; clip-path: none; }
+.tabs.tabs-dd::before { content: ''; position: absolute; inset: 0; z-index: -1; box-shadow: 0 0 0 100vmax var(--canvas); clip-path: inset(0 -100vmax); }
+.tabs.tabs-dd.scrolled::after { content: ''; position: absolute; left: -100vmax; right: -100vmax; bottom: -1px; height: 1px; background: var(--divider); clip-path: inset(0 100vmax); }
+.tabs.sp-mob { display: none; }
+.lock { width: 12px; height: 12px; margin-left: 4px; color: var(--t-faint); vertical-align: -1px; flex: none; }
+.spdd { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 15px; color: var(--t-heading); font-weight: 600; font-size: var(--fs-sm); }
+.spdd:hover, .spdd[aria-expanded="true"] { background: var(--fill-hover); }
+.spdd svg.i { width: 12px; height: 12px; color: var(--t-muted); }
+.inbar { margin-left: 2px; }
+.big .spdd { height: 40px; padding: 0 12px 0 8px; font-size: 20px; letter-spacing: -.01em; border-radius: 12px; }
+.big .spdd > svg.i { width: 14px; height: 14px; }
+.spt-l { display: inline-flex; align-items: center; gap: 9px; }
+.spt-l .glyph { width: 26px; height: 26px; border-radius: 7px; font-size: 13px; }
+.spt-l > svg.i { width: 20px; height: 20px; color: var(--t-secondary); }
+.spmenu { min-width: 260px; }
+.spmenu .mi svg.i:first-child { width: 14px; height: 14px; color: var(--t-secondary); }
+.mhd { padding: 8px 10px 2px; font-size: var(--fs-xs); color: var(--t-faint); font-weight: 600; }
+.spsearch { width: 300px; }
+.spq { width: calc(100% - 8px); margin: 2px 4px 6px; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--control-border); background: var(--field); color: var(--t-heading); font: inherit; font-size: var(--fs-sm); }
+.spq:focus { outline: none; border-color: var(--accent); }
+.spfind .spdd { font-weight: 500; color: var(--t-secondary); box-shadow: inset 0 0 0 1px var(--divider); min-width: 220px; justify-content: flex-start; }
+.spfind .spdd > span { flex: 1; text-align: left; color: var(--t-heading); }
+.spfind kbd { font: inherit; font-size: 10.5px; color: var(--t-faint); padding: 1px 5px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--divider); }
+.spfind .spdd > svg.i:last-child { display: none; }
+/* A strip */
+.tabs .gchip { display: inline-flex; align-items: center; gap: 6px; padding-left: 6px; position: relative; }
+.tabs .gchip .glyph { width: 16px; height: 16px; font-size: 9px; border-radius: 4px; }
+.tabs .mine { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.tabs .tadd { width: 28px; height: 28px; padding: 0; display: inline-grid; place-items: center; border-radius: 14px; color: var(--t-muted); }
+.tabs .tadd:hover { background: var(--fill-hover); color: var(--t-heading); }
+.tabs .tlinkb { color: var(--accent); }
+.tabs .sscope { flex: none; margin-right: 6px; }
+.tabs .sscope { height: 29px; align-items: center; border-radius: 15px; }
+.tabs .sscope button { display: inline-flex; align-items: center; height: 25px; padding: 0 11px; border-radius: 13px; font-size: var(--fs-sm); line-height: 1; }
+.tabs .tj { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: 6px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 12px; line-height: 1; }
+.tabs .tempty { align-self: center; padding: 0 8px; color: var(--t-faint); font-size: var(--fs-sm); white-space: nowrap; }
+/* C rail */
+.srail { flex: none; width: 64px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0; border-right: 1px solid var(--divider); background: var(--chrome); overflow-y: auto; overflow-x: hidden; z-index: 15; }
+.ri { position: relative; flex: none; display: flex; align-items: center; gap: 10px; width: 44px; height: 44px; padding: 5px; border-radius: 12px; }
+.ri:hover { background: var(--fill-hover); }
+.ri.on { background: var(--control); }
+.ri .glyph, .ri .rh { width: 34px; height: 34px; border-radius: 10px; font-size: 14px; flex: none; }
+.ri .rh { display: grid; place-items: center; background: var(--control); color: var(--t-secondary); }
+.ri.on .rh { background: var(--t-heading); color: var(--canvas); }
+.ri .rh svg.i { width: 16px; height: 16px; }
+.ri.on::before { content: ''; position: absolute; left: -10px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 2px 2px 0; background: var(--t-heading); }
+.rsep { width: 28px; height: 1px; background: var(--divider); margin: 2px 0; flex: none; }
+.rdot { position: absolute; top: 1px; right: 1px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent-strong); color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px var(--chrome); }
+.rown { position: absolute; bottom: 3px; right: 3px; width: 9px; height: 9px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px var(--chrome); }
+.rl { display: none; white-space: nowrap; font-size: var(--fs-sm); color: var(--t-heading); font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.spv-c3 > .mg { margin-left: 64px; }
+.srail.xr { position: absolute; top: 0; bottom: 0; left: 0; align-items: stretch; padding: 12px 10px; transition: width .15s ease, box-shadow .15s ease; }
+.srail.xr .ri { width: 100%; }
+.srail.xr .rsep { width: auto; }
+.srail.xr:hover, .srail.xr:focus-within { width: 232px; box-shadow: var(--shadow-pop, 0 8px 24px rgba(0,0,0,.16)); }
+.srail.xr:hover .rl, .srail.xr:focus-within .rl { display: block; }
+/* D sidebar */
+.sside { flex: none; width: 236px; display: flex; flex-direction: column; gap: 1px; padding: 12px 10px; border-right: 1px solid var(--divider); background: var(--chrome); overflow-y: auto; }
+.si { display: flex; align-items: center; gap: 9px; width: 100%; padding: 6px 8px; border-radius: 8px; text-align: left; font-size: var(--fs-sm); color: var(--t-secondary); }
+.si:hover { background: var(--fill-hover); }
+.si.on { background: var(--control); color: var(--t-heading); font-weight: 500; }
+.si .glyph { width: 20px; height: 20px; font-size: 10px; }
+.sgh { background: var(--control) !important; color: var(--t-secondary); }
+.sgh svg.i { width: 13px; height: 13px; }
+.sn { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; }
+.sn small { color: var(--t-faint); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
+.sc { flex: none; min-width: 18px; padding: 0 5px; height: 17px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-size: 10.5px; font-weight: 700; line-height: 17px; text-align: center; }
+.ssec { margin-top: 10px; display: flex; flex-direction: column; gap: 1px; }
+.sh { display: flex; align-items: center; gap: 5px; padding: 2px 8px 4px; font-size: var(--fs-xs); color: var(--t-faint); font-weight: 600; text-align: left; }
+.sh small { margin-left: auto; font-weight: 400; }
+button.sh svg.i { width: 10px; height: 10px; transition: transform .12s; }
+button.sh[aria-expanded="false"] svg.i { transform: rotate(-90deg); }
+.sstar { flex: none; display: grid; place-items: center; width: 20px; height: 20px; color: var(--t-faint); opacity: 0; }
+.si:hover .sstar, .sstar.on { opacity: 1; }
+.sstar.on { color: var(--warn); }
+.sstar svg.i { width: 13px; height: 13px; }
+.sfind { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; margin-bottom: 8px; border-radius: 8px; background: var(--field); box-shadow: inset 0 0 0 1px var(--control-border); color: var(--t-faint); }
+.sfind:focus-within { box-shadow: inset 0 0 0 1px var(--accent); }
+.sfind input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font: inherit; font-size: var(--fs-sm); color: var(--t-heading); }
+.sfind svg.i { width: 13px; height: 13px; }
+.sfind.big { height: 40px; margin: 10px 0 16px; }
+.sfoot { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--divider); display: flex; flex-direction: column; gap: 1px; }
+.sact { color: var(--accent); }
+.sact svg.i { width: 14px; height: 14px; margin: 0 3px; }
+/* space header, browse, new space */
+.sphead { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: var(--r-xl); background: var(--card); box-shadow: var(--shadow); }
+.sphead > .glyph { width: 40px; height: 40px; border-radius: 11px; font-size: 18px; }
+.sphead h2 { margin: 0; font-size: 18px; color: var(--t-heading); display: flex; align-items: center; }
+.sphead p { margin: 3px 0 4px; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.45; }
+.sphead small { display: inline-flex; align-items: center; gap: 4px; color: var(--t-faint); font-size: var(--fs-xs); }
+.bgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.bcard { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow); }
+.bcard p { margin: 0; color: var(--t-secondary); font-size: var(--fs-sm); line-height: 1.45; flex: 1; }
+.bopen { display: flex; align-items: center; gap: 10px; text-align: left; }
+.bopen .glyph { width: 32px; height: 32px; border-radius: 9px; font-size: 14px; }
+.bopen b { display: flex; align-items: center; color: var(--t-heading); }
+.bopen small { display: block; color: var(--t-faint); font-size: var(--fs-xs); }
+.nsdlg { width: min(460px, calc(100% - 32px)); }
+.nsdlg .pform { gap: 12px; }
+.nsdlg textarea { width: 100%; padding: 8px 12px; border-radius: var(--r-lg); border: 1px solid var(--control-border); background: var(--field); color: var(--t-heading); font: inherit; font-size: var(--fs-sm); resize: vertical; }
+.nsvis { display: flex; flex-direction: column; gap: 6px; }
+@media (max-width: 1080px) { .sd-d > .sside { display: none; } .sd-d .tabs.sp-mob { display: block; } }
+@media (max-width: 860px) { .sd-c > .srail { display: none; } .spv-c3 > .mg { margin-left: 0; } .sd-c .tabs.sp-mob { display: block; } }
 .appbar { height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 14px 0 16px; border-bottom: 1px solid var(--divider); background: var(--chrome); }
 .brand { display: inline-flex; align-items: center; gap: 8px; color: var(--t-heading); font-size: var(--fs-md); }
 /* simplification variants */
@@ -858,7 +967,7 @@ const mark = (c = '') => `<span class="mark ${c}" aria-hidden="true">${I.agent}<
 
 const byId = id => D.posts.find(p => p.id === id);
 const byNew = (a, b) => (a.createdAt < b.createdAt ? 1 : -1);
-const streamFor = s => D.posts.filter(p => (s === 'saved' ? SAVED()[p.id] : s === 'home' ? !p.rf : p.s === s)).sort(byNew);
+const streamFor = s => D.posts.filter(p => (s === 'saved' ? SAVED()[p.id] : s === 'home' ? !p.rf && SPACE_META[p.s] && (st.auth === 'out' ? !isPrivate(p.s) : isJoined(p.s)) : p.s === s)).sort(byNew);
 const spacesWithPosts = D.spaces.filter(s => D.posts.some(p => p.s === s.id));
 
 /* What people typed: each ask and branch question as it is typed to an agent (lowercase, terse,
@@ -1255,7 +1364,8 @@ const pick = (id, opts, cur, label, fmt = x => x) => `<label class="pick" title=
 /* Space picker: a custom menu of spaces (only on Home; inside a space the thread goes there). */
 const spaceField = () => {
   if (st.space !== 'home' && st.space !== 'saved') return `<span class="pick static">${esc(spName(st.space))}</span>`;
-  const open = st.menu === 'space', list = spacesWithPosts.filter(x => x.id !== 'sablefield');
+  if (!isJoined(st.newSpace) && navSpaces()[0]) st.newSpace = navSpaces()[0].id;
+  const open = st.menu === 'space', list = navSpaces();
   return `<span class="mpick"><button type="button" class="pick" data-a="menu" data-m="space" aria-haspopup="menu" aria-expanded="${open}" title="Space"><span>${esc(spName(st.newSpace))}</span>${I.down}</button>
     ${open ? `<div class="menu menu-scroll" role="menu" aria-label="Space">${list.map(x => `<button type="button" class="mi" role="menuitemradio" aria-checked="${x.id === st.newSpace}" data-a="setspace" data-v="${x.id}">${glyph(x)}<span>${esc(spName(x.id))}</span>${x.id === st.newSpace ? CHECK : ''}</button>`).join('')}</div>` : ''}</span>`;
 };
@@ -1307,13 +1417,140 @@ function newThread(space, q, kind) {
 const ORDER = Object.keys(V);
 const app = $('#app');
 let lastV = null;
+
+/* ================= spaces made by people =================
+   Every space is made by a member, who owns it. Members join the spaces they want; Home shows threads from
+   the spaces you joined. Open spaces can be read and joined by anyone; private ones only by their members.
+   Navigation directions (mock bar): A top strip · B dropdown · C left rail · D left sidebar, 3-4 variants each. */
+const SP_VARIANTS = { a: ['Joined', 'Glyphs', 'Scopes', 'Recent'], b: ['In app bar', 'Title', 'Search'], c: ['Icons', 'Unread', 'Labelled'], d: ['Sections', 'Details', 'Starred'] };
+const SPACE_META = { public: { owner: 'sol' }, 'scifi': { owner: 'ines.v' }, markets: { owner: 'hal_b' }, 'ml': { owner: 'jun.park' }, bio: { owner: 'mira_k' }, history: { owner: 'tomasz' }, climate: { owner: 'oduya' }, urbanism: { owner: 'lettie' }, math: { owner: 'jun.park' }, 'replication': { owner: 'mira_k' }, 'northwind': { owner: 'hal_b', vis: 'private' }, 'grants': { owner: 'sol', vis: 'private' }, 'ward7': { owner: 'lettie', vis: 'private' } };
+const JOINED = { 'ines.v': ['public', 'scifi', 'markets', 'ml', 'urbanism', 'replication', 'grants'], sol: Object.keys(SPACE_META), hal_b: ['public', 'markets', 'northwind', 'scifi'], 'kofi.a': ['public', 'scifi'] };
+const VISITS = {}, STARRED = { 'ines.v': ['scifi', 'ml'] }, SEEN = {};
+const hashN = (id, n) => [...id].reduce((a, c) => a + c.charCodeAt(0), 0) % n;
+const spaceList = () => D.spaces.filter(x => SPACE_META[x.id]);
+const metaOf = id => SPACE_META[id] || {};
+const ownerOf = id => metaOf(id).owner;
+const isPrivate = id => metaOf(id).vis === 'private';
+const joinedIds = () => st.auth === 'out' ? [] : (JOINED[st.user] ||= ['public']);
+const isJoined = id => joinedIds().includes(id);
+const memberCount = id => metaOf(id).members ?? (4 + hashN(id, 60)) + (isJoined(id) && metaOf(id).mine ? 0 : 0);
+const unread = id => isJoined(id) && !SEEN[(st.user || '') + ':' + id] && st.space !== id ? hashN(id + 'u', 6) : 0;
+const navSpaces = () => st.auth === 'out' ? spaceList().filter(x => !isPrivate(x.id)) : spaceList().filter(x => isJoined(x.id));
+const yourSpaces = () => st.auth === 'out' ? [] : spaceList().filter(x => ownerOf(x.id) === me());
+const joinedOthers = () => navSpaces().filter(x => ownerOf(x.id) !== me());
+const discover = () => spaceList().filter(x => !isJoined(x.id) && !isPrivate(x.id));
+const recentSpaces = () => { const v = (VISITS[st.user] || []).filter(id => SP[id]); return [...v, ...navSpaces().map(x => x.id).filter(id => !v.includes(id))].slice(0, 5).map(id => SP[id]); };
+const starred = () => (STARRED[st.user] ||= []).filter(id => isJoined(id));
+const LOCK = '<svg class="i lock" viewBox="0 0 16 16" aria-label="Private"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></svg>';
+const HOME = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 7.2 8 2.8l5.5 4.4V13a.5.5 0 0 1-.5.5H9.5V10h-3v3.5H3a.5.5 0 0 1-.5-.5Z"/></svg>';
+const COMPASS = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="m10.4 5.6-1.3 3.5-3.5 1.3 1.3-3.5Z"/></svg>';
+const PLUS2 = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>';
+const STAR = on => `<svg class="i" viewBox="0 0 16 16" aria-hidden="true"${on ? ' style="fill:currentColor"' : ''}><path d="m8 2.6 1.6 3.4 3.7.5-2.7 2.5.7 3.6L8 10.8l-3.3 1.8.7-3.6-2.7-2.5 3.7-.5Z"/></svg>`;
+const SEARCH = '<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>';
+const spv = () => st.ui.sd + st.ui.sv;
+const curLabel = () => st.space === 'home' ? 'Home' : st.space === 'saved' ? 'Saved' : spName(st.space);
+const chipBtn = (id, inner, cls = '') => `<button class="${cls}" data-a="space" data-id="${id}" aria-current="${st.space === id}">${inner}</button>`;
+const spItem = (x, extra = '') => `<button type="button" class="mi" role="menuitemradio" aria-checked="${st.space === x.id}" data-a="space" data-id="${x.id}">${glyph(x)}<span>${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</span>${extra}${st.space === x.id ? CHECK : ''}</button>`;
+const newBtns = (cls = 'mi') => canWrite() ? `<button type="button" class="${cls}" data-a="newspace">${PLUS2}<span>New space</span></button><button type="button" class="${cls}" data-a="browse">${COMPASS}<span>Browse spaces</span></button>` : `<button type="button" class="${cls}" data-a="browse">${COMPASS}<span>Browse spaces</span></button>`;
+/* the list inside every dropdown: Home, your spaces, joined, then New and Browse */
+function spacesMenuItems(q = '') {
+  const f = x => !q || x.name.includes(q.toLowerCase()) || (x.title || '').toLowerCase().includes(q.toLowerCase());
+  const sec = (t, list) => list.length ? `<div class="mhd">${t}</div>${list.map(x => spItem(x)).join('')}` : '';
+  const disc = q ? discover().filter(f) : [];
+  return `${!q ? `<button type="button" class="mi" role="menuitemradio" aria-checked="${st.space === 'home'}" data-a="space" data-id="home">${HOME}<span>Home</span>${st.space === 'home' ? CHECK : ''}</button>` : ''}
+    ${sec('Your spaces', yourSpaces().filter(f))}${sec(st.auth === 'out' ? 'Open spaces' : 'Joined', joinedOthers().filter(f))}${sec('Not joined', disc)}
+    ${q && !yourSpaces().filter(f).length && !joinedOthers().filter(f).length && !disc.length ? '<div class="mi-note">No spaces match.</div>' : ''}<div class="msep"></div>${newBtns()}`;
+}
+const ddButton = (cls, label) => { const open = st.menu === 'spaces'; return `<span class="mpick ${cls}"><button type="button" class="spdd" data-a="menu" data-m="spaces" aria-haspopup="menu" aria-expanded="${open}">${label}${I.down}</button>${open ? `<div class="menu menu-scroll spmenu" role="menu" aria-label="Spaces">${spacesMenuItems()}</div>` : ''}</span>`; };
+
+/* ---- A: the top strip, showing different things ---- */
+function navStrip() {
+  const v = st.ui.sv, home = chipBtn('home', 'Home'), saved = isActive() && st.space === 'saved' ? chipBtn('saved', 'Saved') : '';
+  const tail = canWrite() ? `<button class="tadd" data-a="newspace" title="New space" aria-label="New space">${PLUS2}</button><button class="tadd" data-a="browse" title="Browse spaces" aria-label="Browse spaces">${COMPASS}</button>` : `<button class="tadd" data-a="browse" title="Browse spaces" aria-label="Browse spaces">${COMPASS}</button>`;
+  let chips = '';
+  if (v === '1') chips = navSpaces().map(x => chipBtn(x.id, esc(spName(x.id)))).join('') + (canWrite() ? '<button class="tlinkb" data-a="newspace">+ New space</button>' : '') + '<button class="tlinkb" data-a="browse">Browse</button>';
+  if (v === '2') chips = [...yourSpaces(), ...joinedOthers()].map(x => chipBtn(x.id, `${glyph(x)}<span>${esc(x.name)}</span>${ownerOf(x.id) === me() ? '<span class="mine" title="Your space"></span>' : ''}`, 'gchip')).join('') + tail;
+  if (v === '3') { const sc = st.spScope || 'joined', list = sc === 'yours' ? yourSpaces() : sc === 'discover' ? discover() : navSpaces();
+    chips = `<span class="modes sscope" role="group">${[['joined', st.auth === 'out' ? 'Open' : 'Joined'], ...(canWrite() ? [['yours', 'Yours']] : []), ['discover', 'Discover']].map(([k, l]) => `<button type="button" data-a="spscope" data-s="${k}" aria-pressed="${sc === k}">${l}</button>`).join('')}</span>` + list.map(x => chipBtn(x.id, esc(spName(x.id)) + (sc === 'discover' && canWrite() ? `<span class="tj" data-a="join" data-id="${x.id}" title="Join">+</span>` : ''))).join('') + (list.length ? '' : `<span class="tempty">${sc === 'yours' ? 'You have not made a space yet.' : 'Nothing here yet.'}</span>`) + (canWrite() ? `<button class="tadd" data-a="newspace" title="New space" aria-label="New space">${PLUS2}</button>` : ''); }
+  if (v === '4') chips = recentSpaces().map(x => chipBtn(x.id, esc(spName(x.id)))).join('') + '<button class="tlinkb" data-a="browse">All spaces…</button>';
+  return `<nav class="tabs"><div class="tabs-s" id="k-tabs">${home}${saved}${chips}</div></nav>`;
+}
+/* ---- B: a dropdown ---- */
+function navDropTop() {
+  const v = st.ui.sv;
+  if (v === '1') return `<div class="tabs tabs-min"></div>`;  /* the dropdown sits in the app bar */
+  if (v === '2') return `<nav class="tabs tabs-dd sptitle">${ddButton('big', `<span class="spt-l">${st.space !== 'home' && SP[st.space] ? glyph(SP[st.space]) : HOME}${esc(curLabel())}</span>`)}</nav>`;
+  const open = st.menu === 'spsearch', q = st.spq || '';
+  return `<nav class="tabs tabs-dd"><span class="mpick spfind"><button type="button" class="spdd" data-a="menu" data-m="spsearch" aria-haspopup="dialog" aria-expanded="${open}">${SEARCH}<span>${esc(curLabel())}</span><kbd>⌘K</kbd></button>${open ? `<div class="menu menu-scroll spmenu spsearch" role="dialog" aria-label="Find a space"><input id="in-spq" class="spq" value="${esc(q)}" placeholder="Find a space" autocomplete="off" spellcheck="false">${spacesMenuItems(q)}</div>` : ''}</span></nav>`;
+}
+/* ---- C: a left rail of space icons ---- */
+function navRail() {
+  const v = st.ui.sv, wide = v === '3';
+  const item = (id, ic, label, extra = '') => `<button class="ri${st.space === id ? ' on' : ''}" data-a="space" data-id="${id}" aria-current="${st.space === id}" title="${esc(label)}" aria-label="${esc(label)}">${ic}${wide ? `<span class="rl">${esc(label)}</span>` : ''}${extra}</button>`;
+  const sp = x => item(x.id, glyph(x), spName(x.id), v === '2' ? `${unread(x.id) ? `<span class="rdot">${unread(x.id)}</span>` : ''}${ownerOf(x.id) === me() ? '<span class="rown" title="Your space"></span>' : ''}` : '');
+  const list = [...yourSpaces(), ...joinedOthers()];
+  return `<aside class="srail${wide ? ' xr' : ''}" aria-label="Spaces">${item('home', `<span class="rh">${HOME}</span>`, 'Home')}<div class="rsep"></div>${list.map(sp).join('')}<div class="rsep"></div>
+    ${canWrite() ? `<button class="ri radd" data-a="newspace" title="New space" aria-label="New space"><span class="rh">${PLUS2}</span>${wide ? '<span class="rl">New space</span>' : ''}</button>` : ''}<button class="ri radd" data-a="browse" title="Browse spaces" aria-label="Browse spaces"><span class="rh">${COMPASS}</span>${wide ? '<span class="rl">Browse spaces</span>' : ''}</button></aside>`;
+}
+/* ---- D: a left sidebar with names ---- */
+function navSidebar() {
+  const v = st.ui.sv, q = st.sideq || '';
+  const f = x => !q || x.name.includes(q.toLowerCase());
+  const row = x => `<button class="si${st.space === x.id ? ' on' : ''}" data-a="space" data-id="${x.id}" aria-current="${st.space === x.id}">${glyph(x)}<span class="sn"><span>${esc(x.name)}${isPrivate(x.id) ? LOCK : ''}</span>${v === '2' ? `<small>${noun(memberCount(x.id), 'member', 'members')} · by @${esc(ownerOf(x.id))}</small>` : ''}</span>${unread(x.id) ? `<span class="sc">${unread(x.id)}</span>` : ''}${v === '3' && canWrite() ? `<span class="sstar${starred().includes(x.id) ? ' on' : ''}" data-a="star" data-id="${x.id}" title="${starred().includes(x.id) ? 'Unstar' : 'Star'}">${STAR(starred().includes(x.id))}</span>` : ''}</button>`;
+  const sec = (key, t, list) => { if (!list.length) return ''; const shut = v === '2' && st.secCol?.[key]; return `<div class="ssec">${v === '2' ? `<button class="sh" data-a="seccol" data-k="${key}" aria-expanded="${!shut}">${I.down}<span>${t}</span><small>${list.length}</small></button>` : `<div class="sh"><span>${t}</span></div>`}${shut ? '' : list.map(row).join('')}</div>`; };
+  const top = `<button class="si${st.space === 'home' ? ' on' : ''}" data-a="space" data-id="home" aria-current="${st.space === 'home'}"><span class="glyph sgh">${HOME}</span><span class="sn"><span>Home</span></span></button>${isActive() ? `<button class="si${st.space === 'saved' ? ' on' : ''}" data-a="space" data-id="saved" aria-current="${st.space === 'saved'}"><span class="glyph sgh">${I.save}</span><span class="sn"><span>Saved</span></span></button>` : ''}`;
+  const star = v === '3' ? sec('star', 'Starred', navSpaces().filter(x => starred().includes(x.id)).filter(f)) : '';
+  const rest = v === '3' ? navSpaces().filter(x => !starred().includes(x.id)) : null;
+  return `<aside class="sside" aria-label="Spaces">${v === '3' ? `<label class="sfind">${SEARCH}<input id="in-sideq" value="${esc(q)}" placeholder="Find a space" autocomplete="off"></label>` : ''}${top}
+    ${star}${rest ? sec('all', st.auth === 'out' ? 'Open spaces' : 'Spaces', rest.filter(f)) : sec('yours', 'Your spaces', yourSpaces()) + sec('joined', st.auth === 'out' ? 'Open spaces' : 'Joined', joinedOthers())}
+    <div class="sfoot">${newBtns('si sact')}</div></aside>`;
+}
+/* the header of a space: what it is, who made it, and joining */
+function spaceHead() {
+  const x = SP[st.space]; if (!x || !SPACE_META[x.id]) return '';
+  const own = ownerOf(x.id) === me() && st.auth === 'in', j = isJoined(x.id);
+  const act = !canWrite() ? '' : own ? '<span class="chip">Your space</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : isPrivate(x.id) ? '<span class="chip">Members only</span>' : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`;
+  return `<div class="row new-row"><div class="sphead">${glyph(x)}<div class="grow"><h2>${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</h2>${x.desc ? `<p>${esc(clip(x.desc, 170))}</p>` : ''}<small>Made by ${av(ownerOf(x.id), 'xs')}@${esc(ownerOf(x.id))} · ${noun(memberCount(x.id), 'member', 'members')}${isPrivate(x.id) ? ' · private' : ''}</small></div>${act}</div><div></div></div>`;
+}
+const spaceLocked = () => SP[st.space] && SPACE_META[st.space] && isPrivate(st.space) && !isJoined(st.space);
+/* Browse: every open space, plus private ones you are in */
+function browsePage() {
+  const q = (st.browseq || '').toLowerCase(), list = spaceList().filter(x => (!isPrivate(x.id) || isJoined(x.id)) && (!q || x.name.includes(q) || (x.desc || '').toLowerCase().includes(q)));
+  return `<div class="page"><div class="page-in narrow"><div class="shead"><h2>Browse spaces</h2>${canWrite() ? '<button class="btn1 sm" data-a="newspace">New space</button>' : ''}</div>
+    <label class="sfind big">${SEARCH}<input id="in-browseq" value="${esc(st.browseq || '')}" placeholder="Search spaces" autocomplete="off"></label>
+    <div class="bgrid">${list.map(x => { const own = ownerOf(x.id) === me() && st.auth === 'in', j = isJoined(x.id); return `<div class="bcard"><button class="bopen" data-a="space" data-id="${x.id}">${glyph(x)}<span><b>${esc(spName(x.id))}${isPrivate(x.id) ? LOCK : ''}</b><small>by @${esc(ownerOf(x.id))} · ${noun(memberCount(x.id), 'member', 'members')}</small></span></button><p>${esc(clip(x.desc || '', 120))}</p>${!canWrite() ? '' : own ? '<span class="chip">Yours</span>' : j ? `<button class="btn2 sm" data-a="leave" data-id="${x.id}">Joined</button>` : `<button class="btn1 sm" data-a="join" data-id="${x.id}">Join</button>`}</div>`; }).join('') || '<p class="empty">No spaces match.</p>'}</div></div></div>`;
+}
+/* New space dialog */
+function newSpaceDlg() {
+  const c = st.creating; if (!c) return '';
+  return `<div class="scrim" data-a="newspaceclose"></div><div class="dialog nsdlg" role="dialog" aria-modal="true" aria-labelledby="ns-h"><h3 id="ns-h">New space</h3>
+    <form class="pform" data-form="newspace:x"><label>Name<span class="hwrap"><span>#</span><input id="ns-name" value="${esc(c.name)}" placeholder="reading-group" autocomplete="off" spellcheck="false"></span><small>Lowercase letters, numbers and dashes.</small></label>
+    <label>What is it for?<textarea id="ns-desc" rows="2" placeholder="One or two sentences shown at the top of the space">${esc(c.desc)}</textarea></label>
+    <div class="nsvis">${[['open', 'Open', 'Anyone can read and join.'], ['private', 'Private', 'Only people you add can read or post.']].map(([k, l, h]) => `<label class="radio"><input type="radio" name="nsvis" value="${k}"${c.vis === k ? ' checked' : ''}> <span><b>${l}</b><small>${h}</small></span></label>`).join('')}</div>
+    ${c.err ? `<p class="ferr">${esc(c.err)}</p>` : ''}<div class="dacts"><button type="button" class="btn2" data-a="newspaceclose">Cancel</button><button type="submit" class="btn1">Create space</button></div></form></div>`;
+}
+function createSpace() {
+  const c = st.creating, name = $('#ns-name').value.trim().toLowerCase().replace(/^#/, ''), desc = $('#ns-desc').value.trim(), vis = $('input[name="nsvis"]:checked')?.value || 'open';
+  c.name = name; c.desc = desc; c.vis = vis;
+  c.err = !/^[a-z0-9][a-z0-9-]{1,29}$/.test(name) ? 'Use 2 to 30 lowercase letters, numbers or dashes.' : SP[name] ? `#${name} already exists.` : '';
+  if (c.err) { render(); $('#ns-name')?.focus(); return; }
+  const x = { id: name, name, title: name, desc: desc || `Made by @${st.user}.`, createdAt: new Date(NOW).toISOString(), av: 1 + hashN(name, 6), online: 1, posts: 0 };
+  D.spaces.push(x); SP[name] = x; SPACE_META[name] = { owner: st.user, vis, members: 1 }; joinedIds().push(name);
+  st.creating = null; st.space = name; st.newSpace = name; st.screen = 'network'; toast(`#${name} is ready. Invite people by sharing its link.`); render();
+}
+
 function renderNetwork() {
   const v = V[st.v], first = lastV !== st.v, sc = $('#k-mg'), top = sc && !first ? sc.scrollTop : 0, tabsLeft = $('#k-tabs')?.scrollLeft || 0;
-  const tabs = [['home', 'Home'], ...(isActive() && st.space === 'saved' ? [['saved', 'Saved']] : []), ...spacesWithPosts.filter(x => x.id !== 'sablefield').map(x => [x.id, spName(x.id)])];
-  const posts = streamFor(st.space);
-  $('#page').innerHTML = `<div class="mg" id="k-mg"><div class="mg-inner"><nav class="tabs"><div class="tabs-s" id="k-tabs">${tabs.map(([id, l]) => `<button data-a="space" data-id="${id}" aria-current="${st.space === id}">${esc(l)}</button>`).join('')}</div></nav>
-    ${pendingBanner()}${composerOrLock(v)}
-    ${st.space === 'saved' && !posts.length ? '<div class="row"><p class="empty saved-empty">Nothing saved yet. Use the bookmark on any thread to keep it here.</p><div></div></div>' : ''}${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div>`;
+  const d = st.ui.sd, locked = spaceLocked(), posts = locked ? [] : streamFor(st.space);
+  const navTop = d === 'a' ? navStrip() : d === 'b' ? navDropTop() : `<nav class="tabs tabs-dd tabs-min sp-mob">${ddButton('big', `<span class="spt-l">${st.space !== 'home' && SP[st.space] ? glyph(SP[st.space]) : HOME}${esc(curLabel())}</span>`)}</nav>`;
+  const side = d === 'c' ? navRail() : d === 'd' ? navSidebar() : '';
+  const empty = locked ? `<div class="row"><p class="empty saved-empty">This space is private. Ask @${esc(ownerOf(st.space))} to add you.</p><div></div></div>`
+    : st.space === 'saved' && !posts.length ? '<div class="row"><p class="empty saved-empty">Nothing saved yet. Use the bookmark on any thread to keep it here.</p><div></div></div>'
+    : st.space === 'home' && !posts.length ? '<div class="row"><p class="empty saved-empty">Join a few spaces to fill Home. <button class="tlink inl" data-a="browse">Browse spaces</button></p><div></div></div>'
+    : SP[st.space] && !posts.length ? '<div class="row"><p class="empty saved-empty">No threads here yet. Ask the first question.</p><div></div></div>' : '';
+  $('#page').innerHTML = `<div class="spshell sd-${d} spv-${spv()}">${side}<div class="mg" id="k-mg"><div class="mg-inner">${navTop}
+    ${pendingBanner()}${spaceHead()}${locked || (SP[st.space] && !isJoined(st.space) && st.auth === 'in') ? '' : composerOrLock(v)}
+    ${empty}${posts.map(p => `<div class="row">${card(p)}<aside class="mgn">${p.k === 'post' ? `<div class="stick replies">${v.replies(p)}</div>` : `<div class="pinned" id="mr-${p.id}"></div>`}</aside></div>`).join('')}${v.dock ? COMPOSERS[v.composer]() : ''}</div></div></div>`;
   const mg = $('#k-mg'), ta = $('#in-new');
   mg.classList.add('ncw');  /* below 520px the composer's controls wrap to a second row */
   if (v.fs) mg.style.setProperty('--title-fs', v.fs);
@@ -1323,9 +1560,9 @@ function renderNetwork() {
   streamFor(st.space).forEach(p => p.k === 'ask' && v.layout(p));
   mg.querySelectorAll('.stick.replies .graph[data-draw]').forEach(drawGraph);
   mg.scrollTop = top;
-  const tabsEl = mg.querySelector('.tabs'), edge = () => tabsEl.classList.toggle('scrolled', mg.scrollTop > 2);
+  const tabsEl = mg.querySelector('.tabs') || document.createElement('div'), edge = () => tabsEl.classList.toggle('scrolled', mg.scrollTop > 2);
   edge(); mg.addEventListener('scroll', () => { edge(); $('#selbranch')?.remove(); $('#citepop')?.remove(); }, { passive: true });
-  const ts = $('#k-tabs'), fade = () => { ts.style.setProperty('--fl', ts.scrollLeft > 1 ? '40px' : '0px'); ts.style.setProperty('--fr', ts.scrollLeft + ts.clientWidth < ts.scrollWidth - 1 ? '40px' : '0px'); };
+  const ts = $('#k-tabs') || document.createElement('div'), fade = () => { ts.style.setProperty('--fl', ts.scrollLeft > 1 ? '40px' : '0px'); ts.style.setProperty('--fr', ts.scrollLeft + ts.clientWidth < ts.scrollWidth - 1 ? '40px' : '0px'); };
   ts.scrollLeft = tabsLeft; { const on = ts.querySelector('[aria-current="true"]'); if (on && (on.offsetLeft + on.offsetWidth > ts.scrollLeft + ts.clientWidth - 40 || on.offsetLeft < ts.scrollLeft + 40)) ts.scrollLeft = on.offsetLeft - ts.clientWidth / 2 + on.offsetWidth / 2; }
   fade(); ts.addEventListener('scroll', fade, { passive: true });
   lastV = st.v;
@@ -1343,7 +1580,17 @@ $('#theme-seg').addEventListener('click', e => { const b = e.target.closest('[da
 app.addEventListener('click', e => {
   const t = e.target.closest('[data-a]'); if (!t) return;
   const a = t.dataset.a, d = t.dataset;
-  if (a === 'space') { st.space = d.id; st.asking = null; st.menu = null; st.screen = 'network'; render(); $('#k-mg').scrollTop = 0; return; }
+  if (a === 'space') { st.space = d.id; st.asking = null; st.menu = null; st.screen = 'network'; st.spq = '';
+    if (SP[d.id] && st.auth === 'in') { const v = (VISITS[st.user] ||= []); v.splice(v.indexOf(d.id) >>> 0, v.includes(d.id) ? 1 : 0); v.unshift(d.id); SEEN[st.user + ':' + d.id] = true; }
+    render(); $('#k-mg') && ($('#k-mg').scrollTop = 0); return; }
+  if (a === 'join') { e.stopPropagation(); if (!canWrite()) return; joinedIds().push(d.id); SEEN[st.user + ':' + d.id] = true; toast(`Joined ${spName(d.id)}.`); render(); return; }
+  if (a === 'leave') { const j = joinedIds(); j.splice(j.indexOf(d.id), 1); toast(`Left ${spName(d.id)}.`); if (isPrivate(d.id)) st.space = 'home'; render(); return; }
+  if (a === 'newspace') { st.menu = null; st.creating = { name: '', desc: '', vis: 'open', err: '' }; render(); $('#ns-name')?.focus(); return; }
+  if (a === 'newspaceclose') { st.creating = null; render(); return; }
+  if (a === 'browse') { st.menu = null; st.screen = 'browse'; render(); $('#in-browseq')?.focus({ preventScroll: true }); return; }
+  if (a === 'spscope') { st.spScope = d.s; render(); return; }
+  if (a === 'star') { e.stopPropagation(); const s0 = (STARRED[st.user] ||= []), i = s0.indexOf(d.id); if (i < 0) s0.push(d.id); else s0.splice(i, 1); render(); return; }
+  if (a === 'seccol') { st.secCol = { ...(st.secCol || {}), [d.k]: !(st.secCol || {})[d.k] }; render(); return; }
   if (a === 'ask' && st.asking === d.id) { (document.getElementById(`in-mf:${d.id}:${st.askPar ?? 'r'}`) || $(`[id^="in-mf\\:${d.id}"]`))?.focus(); return; }
   if (a === 'ask') { st.asking = d.id; st.sel[d.id] = null; st.quote = null; st.askPar = null; render(); $(`[id^="in-mf\\:${d.id}"]`)?.focus(); return; }
   if (a === 'askfrom') { st.sel[d.id] = d.sel || d.node; st.askPar = d.node; st.asking = d.id; st.quote = null; render(); document.getElementById(`in-mf:${d.id}:${d.node}`)?.focus(); return; }
@@ -1425,6 +1672,7 @@ app.addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target.closest('[data-form]'); if (!f) return;
   const inp = f.querySelector('input, textarea'), v = inp.value.trim(); if (!v) { inp.focus(); return; }
+  if (f.dataset.form === 'newspace:x') { createSpace(); return; }
   const [kind, pid, node, at] = f.dataset.form.split(':'), p = byId(pid);
   const notify = t => { const m = mentionsIn(t), miss = [...new Set([...t.matchAll(MENTION)].map(x => x[1].replace(/\.$/, '')).filter(u => !member(u)))]; const parts = [m.length ? `Notified ${m.map(u => '@' + u).join(', ')}.` : '', miss.length ? `${miss.map(u => '@' + u).join(', ')} ${miss.length === 1 ? "isn't a member" : "aren't members"}.` : '']; if (m.length || miss.length) toast(parts.filter(Boolean).join(' ')); };
   if (kind === 'br') { inp.value = ''; const list = (BRP[pid + ':' + node] ||= []), r = { u: me(), createdAt: new Date(NOW).toISOString(), t: v, likes: 0 }; if (at === 'top') list.push(r); else (replyAtIn(list, at).kids ||= []).push(r); st.brReplying = null; notify(v); render(); return; }
@@ -1445,6 +1693,7 @@ app.addEventListener('mousedown', e => {
 /* Escape closes the innermost thing: a menu (focus returns to its button), then an inline composer,
    then a key form or remove confirm. Arrow keys move through open menus. */
 document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k' && st.ui.sd === 'b' && st.ui.sv === '3' && st.screen === 'network') { e.preventDefault(); st.menu = 'spsearch'; render(); $('#in-spq')?.focus(); return; }
   if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && st.menu) {
     const items = [...app.querySelectorAll('.mpick .menu .mi')].filter(x => x.offsetParent && !x.matches('[aria-disabled="true"]'));
     if (!items.length) return; e.preventDefault();
@@ -1467,7 +1716,8 @@ app.addEventListener('keydown', e => {
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); t.form.requestSubmit(t.form.querySelector('[data-enter]') || t.form.querySelector('[type="submit"]')); }
 });
 app.addEventListener('input', e => {
-  const t = e.target; if (t.tagName !== 'TEXTAREA' || !t.form) return;
+  const t = e.target;
+  if (t.id === 'in-spq' || t.id === 'in-sideq' || t.id === 'in-browseq') { st[{ 'in-spq': 'spq', 'in-sideq': 'sideq', 'in-browseq': 'browseq' }[t.id]] = t.value; const pos = t.selectionStart; render(); const n = document.getElementById(t.id); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; } if (t.tagName !== 'TEXTAREA' || !t.form) return;
   t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
   if (t.id !== 'in-new') return;
   st.draft = t.value; t.form.classList.toggle('has-text', !!t.value.trim()); t.form.querySelectorAll('.split-main').forEach(b => { b.disabled = !t.value.trim(); });
@@ -1523,7 +1773,7 @@ const KEYS = { 'ines.v': { anthropic: { last4: 'a1f9', added: '2026-10-02T10:00:
 const BILLING = { 'ines.v': 'key', sol: 'pause' };
 
 /* ---- membership state ---- */
-Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
+Object.assign(st, { mockX: 'rheaok', auth: 'in', user: 'ines.v', screen: 'network', flow: 'landing', intent: 'signup', code: '', codeErr: '', xacct: null, profile: null, ui: { sd: 'a', sv: '3', savedbtn: 'e', signin: 'a', tree: 'a', meter: 'a', keys: 'a', layout: 'a', req: 'a', inv: 'a', rules: 'a', utop: 'a', runs: 'a' }, treeScope: 'all', confirm: null, toast: '', keyForm: null, keyErr: '', removing: null, reminded: {}, expanded: {}, dismissed: {} });
 const member = u => MEMBERS.find(m => m.u === u);
 const meM = () => member(st.user);
 const isActive = () => st.auth === 'in' && meM()?.status === 'active';
@@ -1598,7 +1848,7 @@ function savedBtn() {
 function appbar() {
   const m = meM();
   const open = st.menu === 'acct';
-  return `<header class="appbar">${brandBtn()}
+  return `<header class="appbar">${brandBtn()}${st.ui.sd === 'b' && st.ui.sv === '1' && st.screen === 'network' ? ddButton('inbar', esc(curLabel())) : ''}
     <span class="grow"></span>${meter()}${savedBtn()}
     <span class="mpick"><button class="acct" data-a="menu" data-m="acct" aria-haspopup="menu" aria-expanded="${open}">${av(st.user, 'sm')}${I.down}</button>
     ${open ? `<div class="menu right" role="menu"><div class="mhead">${av(st.user)}<div><b>${esc(m.name)}</b><small>@${esc(st.user)} · ${m.status === 'active' ? (m.staff ? cap1(m.staff) : 'Member') : 'No invite yet'}</small></div></div><div class="msep"></div>
@@ -1608,7 +1858,7 @@ function appbar() {
 
 /* ---- signed-out site: the open network with a Sign in button; sign-in runs in a dialog (A) or a side sheet (B) ---- */
 const brandBtn = () => `<button class="brand home" data-ma="go" data-to="network" aria-label="Session home">${mark('sm')}<b>Session</b></button>`;
-const appbarOut = () => `<header class="appbar">${brandBtn()}<span class="grow"></span>
+const appbarOut = () => `<header class="appbar">${brandBtn()}${st.ui.sd === 'b' && st.ui.sv === '1' ? ddButton('inbar', esc(curLabel())) : ''}<span class="grow"></span>
   <button class="ghost" data-ma="openauth" data-to="code">Join with invite</button><button class="btn1 sm" data-ma="openauth">Sign in</button></header>`;
 const authDialog = () => `<div class="scrim auth-scrim" data-ma="closeauth"></div><div class="authdlg v-a" role="dialog" aria-modal="true" aria-label="Sign in to Session"><button class="iconbtn dclose" data-ma="closeauth" aria-label="Close">${I.x}</button>${authScreen()}</div>`;
 /* ---- sign-in steps ---- */
@@ -1764,7 +2014,7 @@ function renderMock() {
     
     ${st.auth === 'in' ? '' : `<span class="mk"><span class="mkl">Jump to</span><span class="seg"><button data-mo="signin" title="Open the sign-in dialog">Sign-in</button><button data-mo="link" title="Arrive from an invite link">Invited</button><button data-mo="code" title="Enter an open invite code">Join</button></span></span>`}
     <span class="mk"><span class="mkl">Tokens</span><span class="seg">${[['norm', 'As is'], ['low', 'Low'], ['out', 'Empty']].map(([k, l]) => `<button data-mt="${k}" aria-pressed="${(st.mt || 'norm') === k}">${l}</button>`).join('')}</span></span>`;
-  $('#thesis').innerHTML = '<span class="qtag">Mock</span>Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
+  $('#thesis').innerHTML = '<span class="qtag">Spaces</span>Spaces are made by members. Home shows the spaces you joined; Browse lists the rest. ' + 'Switch who you are viewing as, and the variant of each new screen. Actions persist until reload.';
 }
 /* Every render rebuilds the page. Keep what people typed in open boxes, and put focus back on the
    control that had it (matched by id or by its data attributes). */
@@ -1793,11 +2043,12 @@ function renderInner() {
   if (st.auth === 'out') st.screen = 'network';
   const pg = $('#page'), keep = $('#k-page')?.scrollTop || 0;
   if (st.screen === 'network') renderNetwork();
-  else { pg.innerHTML = (st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
+  else { pg.innerHTML = (st.screen === 'browse' ? browsePage() : st.screen === 'members' && isActive() ? membersPage() : st.screen === 'usage' && isActive() ? usagePage() : statusPage()).replace('<div class="page">', '<div class="page" id="k-page">'); lastV = null; $('#k-page').scrollTop = keep; }
   app.querySelectorAll(':scope > .scrim, :scope > .dialog, :scope > .authdlg, :scope > #selbranch, :scope > #citepop').forEach(x => x.remove());
   citeReady();
   $('#toast')?.remove(); if (st.toast) app.insertAdjacentHTML('beforeend', toastEl());
   if (st.auth === 'out' && st.authOpen) app.insertAdjacentHTML('beforeend', authDialog());
+  if (st.creating) app.insertAdjacentHTML('beforeend', newSpaceDlg());
   if (st.delAsk) { const [k0] = st.delAsk.split(':'), w = k0 === 't' ? 'this thread' : k0 === 'b' ? 'this branch and the branches under it' : 'this reply and your replies under it'; app.insertAdjacentHTML('beforeend', `<div class="scrim" data-a="delno"></div><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="del-h"><h3 id="del-h">Delete ${w}?</h3><p>This can't be undone.</p><div class="dacts"><button class="btn2" data-a="delno">Cancel</button><button class="btn1 danger" data-a="delyes">Delete</button></div></div>`); }
 }
 const toastEl = () => st.toast ? `<div class="toast" id="toast" role="status">${esc(st.toast)}</div>` : '';
@@ -1823,6 +2074,8 @@ document.addEventListener('click', e => {
     if (k === 'link') { st.flow = 'landing'; st.fromLink = true; st.code = 'SESS-9TQ2-X8'; }
     if (k === 'code') { st.flow = 'code'; st.intent = 'signup'; st.fromLink = false; st.code = 'SESS-9TQ2-X8'; }
     render(); return; }
+  const sd = e.target.closest('[data-msd]'); if (sd) { st.ui.sd = sd.dataset.msd; st.ui.sv = '1'; st.menu = null; st.screen = 'network'; st.authOpen = false; render(); return; }
+  const sv = e.target.closest('[data-msv]'); if (sv) { st.ui.sv = sv.dataset.msv; st.menu = null; st.screen = 'network'; if (st.ui.sd === 'b' && st.ui.sv !== '1') st.menu = null; render(); return; }
   const v = e.target.closest('[data-mv]'); if (v) { st.ui[v.dataset.mv] = v.dataset.x; previewVariant(v.dataset.mv); return; }
   const t = e.target.closest('[data-mt]'); if (t) { st.mt = t.dataset.mt; const u = usage(); const need = { norm: null, low: ALLOWANCE * .85, out: ALLOWANCE + 20e3 }[t.dataset.mt]; if (need != null) { const others = u.reduce((a, b, i) => i === TODAY ? a : a + b, 0); u[TODAY] = Math.max(0, need - others); } else USAGE[st.user] = (USAGE_BASE[st.user] || [0, 0, 0, 0, 0, 0, 0]).slice(); render(); return; }
 });
