@@ -9,11 +9,16 @@
 //   drops its space log. While the stream is down the logs are pulled on
 //   each reconnect attempt.
 // - signed out, and a `waiting` account (01 R5, 02 §9.5): no user log, no
-//   outbox and no stream; every open channel of `spaces.directory`, read the
-//   same way and pulled every 60 s.
+//   outbox and no stream; every open channel of `spaces.directory`, read
+//   with `summary` snapshots and pulled every 60 s.
 // - a channel view of a channel the member has not joined (`watch`): its log
-//   is read while the view is open, pulled on each visit and every 60 s, and
-//   dropped when the view closes. Joining moves it to the stream.
+//   is read with a `summary` snapshot while the view is open, pulled on each
+//   visit and every 60 s, and dropped when the view closes. Joining moves it
+//   to the stream.
+// A summary thread's own records are fetched when its row renders (`open`,
+// 01 R3); rows rendering together are fetched together. The transport sends
+// the reads of one turn as one request (`http.ts`), so a reader of a few
+// hundred channels stays under the server's snapshot limit.
 //
 // Known versus absent (`source.ts`): a read the replica cannot answer is
 // `UNKNOWN`. The sync client says what its logs cover (`loaded`,
@@ -98,6 +103,8 @@ export interface SyncReplicaOptions {
   clock?: Clock;
   /** How often logs without a stream are pulled (01 R5: 60 s). */
   pollMs?: number;
+  /** How long summary rows' opens are gathered into one request. */
+  gatherMs?: number;
   /** The longest wait between attempts to reconnect the stream. */
   maxBackoffMs?: number;
 }
@@ -118,6 +125,9 @@ const CONTENT_KINDS: ReadonlySet<Kind> = new Set<Kind>([
   "comment",
   "run",
 ]);
+
+/** How long the opens of summary rows rendering together are gathered. */
+export const GATHER_MS = 400;
 
 /** The same empty list on every read (a snapshot for `useSyncExternalStore`). */
 const NO_WRITES: readonly UnsentWrite[] = [];
@@ -168,6 +178,9 @@ export class SyncReplica implements ReplicaSource {
   /** Logs whose first snapshot is in. */
   private readonly loadedLogs = new Set<LogId>();
   private readonly opens = new Map<string, OpenState>();
+  /** Summary threads whose rows rendered, to open together. */
+  private readonly gathered = new Set<string>();
+  private gatherTimer: ReturnType<typeof setTimeout> | null = null;
   /** Opens waiting for their channel's log. */
   private readonly wantOpen = new Map<string, string | null>();
 
@@ -218,6 +231,9 @@ export class SyncReplica implements ReplicaSource {
     this.stream = null;
     if (this.poll !== null) clearInterval(this.poll);
     this.poll = null;
+    if (this.gatherTimer !== null) clearTimeout(this.gatherTimer);
+    this.gatherTimer = null;
+    this.gathered.clear();
     for (const f of this.unsubscribe) f();
     this.unsubscribe = [];
     this.options.onConnection?.("closed");
@@ -312,12 +328,20 @@ export class SyncReplica implements ReplicaSource {
 
   // ---- logs ----
 
+  /** The tier a space log is read with (01 R1, R5): a joined channel's with
+   * the web window, an unjoined channel's and a reader's with summaries,
+   * whose threads are fetched in full when their rows render (`open`). */
+  private tierOf(log: LogId): "window" | "summary" | undefined {
+    if (!log.startsWith("space:")) return undefined;
+    return this.streamed.has(log) ? "window" : "summary";
+  }
+
   /** Read a space log for the first time, or pull it. */
   private async syncSpace(gen: number, sp: string): Promise<void> {
     const client = this.client;
     if (!client) return;
     const log = spaceLog(sp);
-    await this.persist(gen, () => client.sync(log, "window"));
+    await this.persist(gen, () => client.sync(log, this.tierOf(log)));
     if (!this.live(gen)) return;
     if (!this.loadedLogs.has(log)) {
       this.loadedLogs.add(log);
@@ -416,7 +440,7 @@ export class SyncReplica implements ReplicaSource {
     if (!client) return;
     for (const log of client.logs())
       if (!this.streamed.has(log) && this.loadedLogs.has(log))
-        void client.sync(log, "window").catch(() => undefined);
+        void client.sync(log, this.tierOf(log)).catch(() => undefined);
   }
 
   // ---- the event stream (01 Y7) ----
@@ -803,8 +827,12 @@ export class SyncReplica implements ReplicaSource {
       return;
     }
     const state = this.opens.get(thread);
-    if (state === "pending" || state === "full") return;
+    if (state === "pending" || this.gathered.has(thread)) return;
     const client = this.client;
+    // held in full (a resync may have taken an opened thread back to its
+    // summary, so the earlier answer is not trusted)
+    const held = client?.replica.logOfThread(thread);
+    if (state === "full" && held && client?.replica.isFull(held, thread)) return;
     // before the first snapshots, or before the channel's log is read: once
     // it is (`syncSpace`, `run`)
     if (
@@ -817,6 +845,25 @@ export class SyncReplica implements ReplicaSource {
       this.wantOpen.set(thread, space ?? null);
       return;
     }
+    // A summary row asks for its records when it renders: rows rendered
+    // within `GATHER_MS` go out together, one request for all of them
+    // (`http.ts`), which keeps a reader scrolling through summaries under
+    // the snapshot limit. An address names its channel and is fetched now.
+    if (space === undefined && held) {
+      this.gathered.add(thread);
+      this.gatherTimer ??= setTimeout(() => {
+        this.gatherTimer = null;
+        const threads = [...this.gathered];
+        this.gathered.clear();
+        for (const th of threads) this.openNow(client, th, undefined);
+      }, this.options.gatherMs ?? GATHER_MS);
+      (this.gatherTimer as { unref?: () => void }).unref?.();
+      return;
+    }
+    this.openNow(client, thread, space);
+  }
+
+  private openNow(client: SyncClient, thread: string, space: string | undefined): void {
     this.opens.set(thread, "pending");
     void client.open(thread, space === undefined ? undefined : spaceLog(space)).then((r) => {
       this.opens.set(thread, r);

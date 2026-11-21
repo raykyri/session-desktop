@@ -61,12 +61,23 @@ function replicaOf(
     onLeft: (name) => left.push(name),
     clock: f.clock,
     maxBackoffMs: 50,
+    gatherMs: 20,
   });
   r.activate();
   return { r, restored, left, storage, locks };
 }
 
 const query = <T>(f: () => T) => runQuery(f);
+
+/** Every read the client sent in `POST /api/sync/read` requests, in order. */
+const reads = (f: FakeSync) =>
+  f.requests
+    .filter((x) => x.path === "/api/sync/read")
+    .flatMap(
+      (x) =>
+        (x.body as { reads: { log: string; cursor?: string; tier?: string; threads?: string[] }[] })
+          .reads,
+    );
 
 /** A page that went away releases its lock once its promise settles. */
 const tick = () => new Promise((done) => setImmediate(done));
@@ -242,11 +253,10 @@ test("a thread address outside the window is fetched from its channel; one the s
   await until(() => r.get(threadKey(post)) !== UNKNOWN);
   t.is((r.get(threadKey(post)) as { q?: string }).q, "Welcome to the lounge");
   t.deepEqual(feedOf(r, { kind: "channel", id: lounge }), [fresh, post]);
-  const snapshots = f.requests.filter(
-    (x) => x.path === "/api/sync/snapshot" && (x.body as { tier?: string }).tier === "threads",
-  );
   t.deepEqual(
-    snapshots.map((x) => (x.body as { threads: string[] }).threads),
+    reads(f)
+      .filter((x) => x.tier === "threads")
+      .map((x) => x.threads),
     [[post]],
   );
 
@@ -291,6 +301,32 @@ test("a private channel's address: its landing is looked up by name; a name of n
   );
   await until(() => query(() => channelByName(r, "nowhere")) !== UNKNOWN);
   t.is(channelByName(r, "nowhere"), null);
+});
+
+test("signed out with 250 open channels: summaries in a few requests, and rows opened together", async (t) => {
+  const { f, post } = world();
+  for (let i = 0; i < 249; i++) f.ok(OLGA, "spaces.create", { id: f.id(), name: `hall-${i}` });
+  f.ok(MONA, "research.createPostFollowUp", { id: f.id(), thread: post, t: "A reply" });
+  const { r } = replicaOf(f, null);
+  t.teardown(() => r.dispose());
+  await until(() => r.ready(), 10_000);
+  const sent = f.requests.filter((x) => x.path.startsWith("/api/sync/"));
+  t.deepEqual([...new Set(sent.map((x) => x.path))], ["/api/sync/read"], "no request per channel");
+  t.is(sent.length, 3, "250 snapshots in reads of at most 100");
+  t.true(reads(f).every((x) => x.tier === "summary"));
+  t.is(reads(f).length, 250);
+
+  // a summary: its replies come when its row asks for them
+  t.is(
+    query(() => repliesOf(r, post)),
+    UNKNOWN,
+  );
+  const before = f.requests.length;
+  r.open(post);
+  r.open(post);
+  await until(() => query(() => repliesOf(r, post)) !== UNKNOWN);
+  t.is(repliesOf(r, post).length, 1);
+  t.is(f.requests.length - before, 1, "one request");
 });
 
 test("ten unjoined channels read while their views are open leave the joined logs unchanged (W9.1)", async (t) => {

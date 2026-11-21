@@ -244,6 +244,27 @@ export class FakeSync {
         });
         return json(200, p);
       }
+      case "/api/sync/read": {
+        const reads = body["reads"];
+        if (!Array.isArray(reads) || reads.length === 0 || reads.length > 100)
+          return json(400, {
+            code: "BAD_REQUEST",
+            message: "Expected { reads }.",
+            serverTime: now,
+          });
+        const clientId = typeof body["clientId"] === "string" ? body["clientId"] : undefined;
+        const answers = (reads as Record<string, unknown>[]).map((r) => {
+          const log = r["log"] as LogId;
+          if (typeof r["cursor"] === "string")
+            return this.server.pull(actor, log, r["cursor"], clientId ? { clientId } : {});
+          return this.server.snapshot(actor, log, {
+            ...(typeof r["tier"] === "string" ? { tier: r["tier"] as "window" } : {}),
+            ...(Array.isArray(r["threads"]) ? { threads: r["threads"] as string[] } : {}),
+            ...(clientId ? { clientId } : {}),
+          });
+        });
+        return json(200, { answers, serverTime: now });
+      }
       case "/api/sync/events":
         return this.events(u, url, headers, signal);
       default:

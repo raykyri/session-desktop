@@ -4,8 +4,8 @@
 //
 //   POST /api/sync/register  { clientId? }                       Y3
 //   POST /api/sync/apply     { envelopes: [envelope] }           Y4
-//   POST /api/sync/snapshot  { log, tier?, threads?, clientId? } Y5
-//   GET  /api/sync/pull      ?log&cursor&clientId                Y5
+//   POST /api/sync/read      { reads: [{ log, cursor? | tier?, threads? }], clientId? }
+//                            snapshots and pulls, several logs per request  Y5, R5
 //   GET  /api/sync/events    ?clientId, Session-Cursors, Last-Event-ID  Y7
 //
 // Every request carries `Session-Protocol`; POSTs carry the CSRF header. A
@@ -47,6 +47,19 @@ export interface HttpTransportOptions {
   fetch?: typeof globalThis.fetch;
   /** A `426 UPGRADE_REQUIRED` from any route. */
   onUpgrade?: () => void;
+}
+
+/** The most reads in one `POST /read` (the server's `MAX_READS`). */
+export const MAX_READS = 100;
+
+/** One read of `POST /read`: a pull with `cursor`, else a snapshot. */
+type ReadSpec =
+  { log: LogId; cursor: Cursor } | { log: LogId; tier?: ReadOptions["tier"]; threads?: string[] };
+
+interface ReadEntry {
+  read: ReadSpec;
+  resolve: (answer: unknown) => void;
+  reject: (error: unknown) => void;
 }
 
 /** A read the server refused, or answered with something other than JSON. */
@@ -154,28 +167,67 @@ export class HttpSyncTransport implements SyncTransport {
     throw new SyncHttpError(status, null);
   }
 
-  private async read<T>(path: string, body?: unknown): Promise<T> {
-    const r = await this.request(path, {
-      ...(body === undefined ? {} : { body }),
-      timeout: READ_TIMEOUT_MS,
-    });
-    if (r.status !== 200) throw new SyncHttpError(r.status, isRefusal(r.body) ? r.body.code : null);
-    return r.body as T;
-  }
-
   snapshot(log: LogId, options: ReadOptions = {}): Promise<Snapshot> {
-    return this.read<Snapshot>("/snapshot", {
-      log,
-      ...(options.tier ? { tier: options.tier } : {}),
-      ...(options.threads ? { threads: options.threads } : {}),
-      ...(options.clientId ? { clientId: options.clientId } : {}),
-    });
+    return this.enqueue<Snapshot>(
+      {
+        log,
+        ...(options.tier ? { tier: options.tier } : {}),
+        ...(options.threads ? { threads: options.threads } : {}),
+      },
+      options.clientId ?? null,
+    );
   }
 
   pull(log: LogId, cursor: Cursor, options: ReadOptions = {}): Promise<Pull> {
-    const q = new URLSearchParams({ log, cursor });
-    if (options.clientId) q.set("clientId", options.clientId);
-    return this.read<Pull>(`/pull?${q.toString()}`);
+    return this.enqueue<Pull>({ log, cursor }, options.clientId ?? null);
+  }
+
+  // ---- reads, several per request ----
+  //
+  // The snapshots and pulls asked for in one turn of the event loop go out
+  // as one `POST /read` (at most `MAX_READS` each), which the server counts
+  // once against its snapshot limit: a signed-out Home reads every open
+  // channel in a request or a few, not one request per channel. Each read
+  // keeps its own answer, so the sync client's reads of a log stay in order.
+
+  private batches = new Map<string, ReadEntry[]>();
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private enqueue<T>(read: ReadSpec, clientId: string | null): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const key = clientId ?? "";
+      let batch = this.batches.get(key);
+      if (!batch) this.batches.set(key, (batch = []));
+      batch.push({ read, resolve: resolve as (v: unknown) => void, reject });
+      this.flushTimer ??= setTimeout(() => {
+        this.flushTimer = null;
+        const batches = this.batches;
+        this.batches = new Map();
+        for (const [id, entries] of batches)
+          for (let i = 0; i < entries.length; i += MAX_READS)
+            void this.sendReads(id === "" ? null : id, entries.slice(i, i + MAX_READS));
+      }, 0);
+    });
+  }
+
+  private async sendReads(clientId: string | null, entries: ReadEntry[]): Promise<void> {
+    try {
+      const r = await this.request("/read", {
+        body: { reads: entries.map((e) => e.read), ...(clientId ? { clientId } : {}) },
+        timeout: READ_TIMEOUT_MS,
+      });
+      const answers = (r.body as { answers?: unknown } | null)?.answers;
+      if (r.status !== 200 || !Array.isArray(answers))
+        throw new SyncHttpError(r.status, isRefusal(r.body) ? r.body.code : null);
+      entries.forEach((e, i) => {
+        const answer = answers[i] as { error?: { code?: string } } | undefined;
+        if (answer === undefined || answer.error)
+          e.reject(new SyncHttpError(400, answer?.error?.code ?? null));
+        else e.resolve(answer);
+      });
+    } catch (error) {
+      for (const e of entries) e.reject(error);
+    }
   }
 
   /** Open the event stream of `clientId` for `cursors` (Y7). Resolves once

@@ -29,7 +29,9 @@ export function liveReplicaConfig(): ReplicaConfig {
     create: (viewer: Viewer) => {
       const member = viewer.kind === "member";
       return new SyncReplica({
-        me: viewer.kind === "signedOut" ? null : viewerHandle(viewer.user),
+        // a waiting account reads as signed out (01 R5): no user log, and
+        // Home is every open channel
+        me: member ? viewerHandle(viewer.user) : null,
         writer: member,
         userId: viewer.kind === "signedOut" ? null : viewer.user.id,
         transport,
