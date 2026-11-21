@@ -339,3 +339,43 @@ test("answers under (client, seq) expire after 7 days like those under (user, mu
   w.clock.advance(1);
   t.is((await bySeq()).length, 0);
 });
+
+test("a node with another's item under it stays as a shell, its run cancelled; a reply's edit compares its rev; a used link stays used", async (t) => {
+  const { w, open, closed } = await cast(t);
+  const ask = await thread(t, w, "mel", open, "ask");
+  // another's node under it: a shell
+  const n = await fork(t, w, "mona", ask, "mine");
+  await fork(t, w, "otto", ask, "otto's, under mine", n);
+  t.deepEqual(await ok(t, w.as("mona", "followups.delete", { thread: ask, node: n })), {
+    kept: true,
+  });
+  t.like(w.get(`node:${n}`), { del: true, q: "" });
+  // another's comment on a node whose run is still queued: a shell, and the
+  // run is cancelled
+  const q = w.id();
+  await ok(t, w.as("mona", "research.forkNode", forkInput(q, ask, "third")));
+  await ok(t, w.as("otto", "comments.create", { id: w.id(), thread: ask, node: q, t: "c" }));
+  t.deepEqual(await ok(t, w.as("mona", "followups.delete", { thread: ask, node: q })), {
+    kept: true,
+  });
+  const run = [...w.server.dump().values()].find(
+    (x): x is Rec<"run"> => x.kind === "run" && x.node === q,
+  );
+  t.is(run?.status, "cancelled");
+  // a reply's edit compares its rev
+  const p = await thread(t, w, "mel", open, "post");
+  const r = w.id();
+  await ok(t, w.as("otto", "research.createPostFollowUp", { id: r, thread: p, t: "first" }));
+  const rev = w.rev(`reply:${r}`);
+  await ok(t, w.as("otto", "replies.update", { id: r, t: "second", base: { rev } }));
+  await refused(t, w.as("otto", "replies.update", { id: r, t: "third", base: { rev } }), "STALE");
+  // a used link is neither revoked nor restored
+  const link = (await ok(
+    t,
+    w.as("olga", "invites.create", { id: w.id(), space: closed, days: 7 }),
+  )) as { id: string; code: string };
+  await ok(t, w.as("otto", "spaces.join", { space: closed, invite: link.code }));
+  await refused(t, w.as("olga", "invites.revoke", { id: link.id }), "PRECONDITION_FAILED");
+  await refused(t, w.as("olga", "invites.restore", { id: link.id }), "PRECONDITION_FAILED");
+  t.like(w.get(`invite:${link.id}`), { dead: "Used" });
+});
