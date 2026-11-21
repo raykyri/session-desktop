@@ -41,6 +41,20 @@ test("G1: a fork writes its node, a queued run and the parent author's branch no
   );
 });
 
+test("G7: a hidden parent takes forks from its author and the space's owner only", (t) => {
+  const { w, open } = cast(t);
+  const th = ask(t, w, "mel", open);
+  const n = ok(t, w.apply("mona", "research.forkNode", input(th, w.id()))) as { id: string };
+  finish(w, th, n.id);
+  ok(t, w.apply("olga", "moderation.decide", { item: `a:${th}`, decision: "hidden" }));
+  ok(t, w.apply("olga", "moderation.decide", { item: `f:${th}:${n.id}`, decision: "hidden" }));
+  refused(t, w.apply("otto", "research.forkNode", input(th, w.id())), "PRECONDITION_FAILED");
+  refused(t, w.apply("mel", "research.forkNode", input(th, w.id(), n.id)), "PRECONDITION_FAILED");
+  ok(t, w.apply("mel", "research.forkNode", input(th, w.id())));
+  ok(t, w.apply("mona", "research.forkNode", input(th, w.id(), n.id)));
+  ok(t, w.apply("olga", "research.forkNode", input(th, w.id(), n.id)));
+});
+
 test("G1: the parent exists, is readable, is not removed, and its run has ended", (t) => {
   const { w, open, closed } = cast(t);
   const th = ask(t, w, "mel", open, false);

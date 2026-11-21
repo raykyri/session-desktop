@@ -114,6 +114,37 @@ registerFixture({
   ],
 });
 
+// A step that writes 4.8 KiB of text (a checkpoint by size) and calls a
+// tool, then a 429.
+registerFixture({
+  scenario: "written-step-then-throttle",
+  steps: [
+    {
+      parts: [
+        { type: "stream-start", warnings: [] },
+        { type: "text-start", id: "t0" },
+        { type: "text-delta", id: "t0", delta: CHUNK.repeat(120) },
+        { type: "text-end", id: "t0" },
+        {
+          type: "tool-call",
+          toolCallId: "call-search-1",
+          toolName: "web_search",
+          input: '{"query":"bloom filters"}',
+        },
+        {
+          type: "finish",
+          finishReason: { unified: "tool-calls", raw: "tool_use" },
+          usage: {
+            inputTokens: { total: 100, noCache: 100, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 1_200, text: 1_200, reasoning: 0 },
+          },
+        },
+      ],
+    },
+    { error: { kind: "api", statusCode: 429, message: "rate limit exceeded", isRetryable: true } },
+  ],
+});
+
 /** One `usage_events` row of the ledger, as stored. */
 export interface LedgerRow {
   id: string;

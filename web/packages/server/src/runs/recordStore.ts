@@ -511,6 +511,7 @@ export class RecordRunStore implements RunStore {
 
   finish(request: RunRequest, summary: AttemptSummary, answer?: CompletedAnswer): void {
     this.#attempts.delete(request.runId);
+    this.#places.delete(request.runId);
     const interrupted = summary.outcome === "interrupted";
     const failed: { fail: RunRec["fail"] }[] = [];
     this.#write(request, (tx, { run, th, ask }) => {
@@ -565,6 +566,7 @@ export class RecordRunStore implements RunStore {
    * `failed { why: "access" }`, so no run stays `running` without a runner. */
   superseded(request: RunRequest): void {
     this.#attempts.delete(request.runId);
+    this.#places.delete(request.runId);
     this.#apply((tx) => {
       const run = tx.byKey(`run:${request.runId}`);
       if (run?.kind !== "run" || run.attempt !== request.attempt) return;
@@ -734,6 +736,7 @@ export class RecordRunStore implements RunStore {
     });
     // the attempt ended before it was claimed again: its checkpoint goes
     if (settled) this.#tables.dropLive(queued.runId, queued.attempt);
+    this.#places.delete(queued.runId);
     if (settled && summary.outcome === "failed" && summary.fail)
       this.#onFailure?.(failOf(summary.fail)?.cls ?? summary.fail.why);
     return settled;

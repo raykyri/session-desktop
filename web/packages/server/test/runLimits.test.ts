@@ -9,6 +9,7 @@ import test from "ava";
 
 import { registerFixture, setFixtureScenario } from "../src/runs/fixtureProvider.js";
 import { LEDGER_CHECKPOINT_MS } from "../src/runs/ledger.js";
+import { SEARCH_BUDGET_SPENT } from "../src/runs/tools/context.js";
 
 import { MODEL, newId, runsWorld } from "./recordRuns.js";
 
@@ -208,6 +209,12 @@ test.serial(
     );
     t.is(searches() - before, 2, "no search past the look-up's two");
     t.is(w.turns(look).length, 4);
+    // the third search, and the one after the re-queue, are refused
+    const refused = w
+      .turns(look)
+      .flatMap((x) => x.blocks)
+      .filter((b) => b["type"] === "toolResult" && JSON.stringify(b).includes(SEARCH_BUDGET_SPENT));
+    t.is(refused.length, 2);
   },
 );
 

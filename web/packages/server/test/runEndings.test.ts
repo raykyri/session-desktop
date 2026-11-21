@@ -415,35 +415,6 @@ test.serial(
   },
 );
 
-registerFixture({
-  scenario: "written-step-then-throttle",
-  steps: [
-    {
-      parts: [
-        { type: "stream-start", warnings: [] },
-        { type: "text-start", id: "t0" },
-        { type: "text-delta", id: "t0", delta: CHUNK.repeat(120) },
-        { type: "text-end", id: "t0" },
-        {
-          type: "tool-call",
-          toolCallId: "call-search-1",
-          toolName: "web_search",
-          input: '{"query":"bloom filters"}',
-        },
-        {
-          type: "finish",
-          finishReason: { unified: "tool-calls", raw: "tool_use" },
-          usage: {
-            inputTokens: { total: 100, noCache: 100, cacheRead: 0, cacheWrite: 0 },
-            outputTokens: { total: 1_200, text: 1_200, reasoning: 0 },
-          },
-        },
-      ],
-    },
-    { error: { kind: "api", statusCode: 429, message: "rate limit exceeded", isRetryable: true } },
-  ],
-});
-
 test.serial(
   "429 after a billed step: the re-queue writes the run's tok; a Stop during the backoff ends it cancelled and drops its checkpoint",
   async (t) => {
@@ -599,5 +570,22 @@ test.serial(
     t.true(rows.length >= 2);
     for (const r of rows.slice(1)) t.like(r, { payer: "key:anthropic", ending: "finish" });
     tokIsSum(t, w, run);
+  },
+);
+
+test.serial(
+  "a thread its author deletes while another member's branch runs stays a shell: the branch run completes, and a new ask under the shell runs",
+  async (t) => {
+    const w = await runsWorld(t);
+    const { thread, run } = await w.ask(w.mel, w.open, "A root question");
+    await w.settled(run);
+    const branch = await w.fork(w.mona, thread, "r", "fixture:paced-answer What next?");
+    await waitFor(() => w.run(branch.run).status === "running", "the branch's claim");
+    t.like(await w.mel.ok("threads.delete", { id: thread }), { kept: true });
+    t.like(w.thread(thread), { del: true, gone: false });
+    t.like(await w.settled(branch.run), { status: "complete", fail: null });
+    t.truthy(w.rec(`answer:${branch.node}`));
+    const again = await w.fork(w.mona, thread, "r", "fixture:success And then?");
+    t.like(await w.settled(again.run), { status: "complete", fail: null });
   },
 );

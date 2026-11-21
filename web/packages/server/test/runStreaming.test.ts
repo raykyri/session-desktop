@@ -5,6 +5,7 @@
 // in-flight text adds no change-log rows.
 
 import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
+import { RunTables } from "@session/db";
 import test from "ava";
 
 import { RUN_LIVE_READS } from "../src/app.js";
@@ -12,7 +13,7 @@ import { registerFixture } from "../src/runs/fixtureProvider.js";
 import { RESUME_SEQ_GAP, RecordRunStore } from "../src/runs/recordStore.js";
 import type { RunDelta, RunLive } from "../src/runs/recordStore.js";
 
-import { CHUNK, runsWorld, streamedOutput, waitFor } from "./recordRuns.js";
+import { CHUNK, MODEL, runsWorld, streamedOutput, waitFor } from "./recordRuns.js";
 import type { EventReader, Person, SseEvent } from "./syncHttp.js";
 import { newId, Person as SyncPerson } from "./syncHttp.js";
 
@@ -370,7 +371,8 @@ test.serial(
 test.serial(
   "T3: /live is a plain read, limited per reader; a waiting account gets NOT_FOUND",
   async (t) => {
-    const w = await runsWorld(t, { start: false });
+    // the bucket does not refill while the test reads
+    const w = await runsWorld(t, { start: false, limiterNow: () => 1_000_000 });
     const { run } = await w.ask(w.mel, w.closed, "fixture:success");
     const apply = w.sync.server.serverApply.bind(w.sync.server);
     let applies = 0;
@@ -413,5 +415,111 @@ test.serial(
     t.true(md.length > 0);
     t.is((await served(w.mona))?.md, md);
     t.is((await served(w.olga))?.md, md);
+  },
+);
+
+/** The `run_live` rows, every run. */
+const liveRows = (w: Awaited<ReturnType<typeof runsWorld>>) =>
+  w.db.$client.prepare("SELECT run_id, attempt FROM run_live ORDER BY run_id, attempt").all();
+
+/** A claim, a delta and a checkpoint of `run`'s current attempt, then the
+ * process dies: the run is interrupted with its checkpoint in `run_live`. */
+function crashedWithText(w: Awaited<ReturnType<typeof runsWorld>>): void {
+  const request = w.rt.store.claim(w.rt.store.queued()[0]!);
+  if (!request) throw new Error("no claim");
+  w.rt.store.delta(request, "t0", "In-flight text. ");
+  w.rt.store.checkpoint(request);
+  w.rt.store.interruptRunning();
+}
+
+test.serial(
+  "D4: the checkpoint of a run no process is streaming goes with its run record, its attempt and its claim refused",
+  async (t) => {
+    const w = await runsWorld(t, { start: false });
+    // removed while interrupted
+    const removed = await w.ask(w.mona, w.open, "fixture:success");
+    crashedWithText(w);
+    t.is(liveRows(w).length, 1);
+    await w.olga.ok("moderation.decide", { item: `a:${removed.thread}`, decision: "removed" });
+    t.deepEqual(liveRows(w), [], "the run record went, and its checkpoint with it");
+
+    // Run again on an interrupted attempt: the old attempt's checkpoint goes
+    const retried = await w.ask(w.mona, w.open, "fixture:success");
+    crashedWithText(w);
+    await w.mona.ok("research.retryNode", {
+      thread: retried.thread,
+      node: "r",
+      base: { attempt: 1 },
+      ...MODEL,
+    });
+    t.deepEqual(liveRows(w), [], "no checkpoint of attempt 1 stays");
+    await w.mona.ok("research.cancelNode", { thread: retried.thread, node: "r" });
+
+    // a resume refused at its claim: the asker left the private channel
+    const refused = await w.ask(w.mel, w.closed, "fixture:success");
+    crashedWithText(w);
+    t.like(w.rt.dispatcher.boot(), { resumed: 1 });
+    await w.olga.ok("members.remove", {
+      space: w.closed,
+      user: "mel",
+      base: { adm: (w.rec(`member:${w.closed}:mel`) as { adm: string }).adm },
+    });
+    t.is(w.rt.store.claim(w.rt.store.queued()[0]!), null);
+    t.like(w.run(refused.run), { status: "failed", fail: { why: "access" } });
+    t.deepEqual(liveRows(w), [], "the refused claim drops the attempt's checkpoint");
+  },
+);
+
+test.serial(
+  "D4: a re-queued run that ends at the payer re-check drops its checkpoint",
+  async (t) => {
+    const allowances = {
+      weekly: () => 1_000,
+      billing: () => "pause" as const,
+      validKey: () => null,
+      anthropicKey: () => null,
+      openaiKey: () => null,
+    };
+    const w = await runsWorld(t, { allowances, backoffMs: [10, 10, 10] });
+    const { run } = await w.ask(w.mona, w.open, "fixture:written-step-then-throttle");
+    t.like(await w.settled(run), { status: "failed", fail: { why: "tokens" } });
+    t.deepEqual(liveRows(w), []);
+  },
+);
+
+test.serial("D4: boot deletes the checkpoints no run continues", async (t) => {
+  const w = await runsWorld(t, { start: false });
+  const { run } = await w.ask(w.mona, w.open, "fixture:success");
+  crashedWithText(w);
+  const tables = new RunTables(w.db);
+  const row = { turnId: "", n: 0, md: "Orphaned text.", seq: 1, updatedAt: Date.now() };
+  tables.putLive({ ...row, runId: newId(), attempt: 1 });
+  tables.putLive({ ...row, runId: run, attempt: 7 });
+  t.is(liveRows(w).length, 3);
+  // the resume's write drops the other attempt's row; the sweep, the row of
+  // the run that is gone
+  t.like(w.rt.dispatcher.boot(), { resumed: 1, sweptLive: 1 });
+  t.deepEqual(liveRows(w), [{ run_id: run, attempt: 1 }], "the resumed attempt keeps its own");
+});
+
+test.serial(
+  "E1: the fence fails for a thread written removed, gone or deleted, whatever its run record says",
+  async (t) => {
+    const w = await runsWorld(t, { start: false });
+    const { thread } = await w.ask(w.mona, w.open, "fixture:success");
+    const request = w.rt.store.claim(w.rt.store.queued()[0]!);
+    if (!request) return t.fail("no claim");
+    t.true(w.rt.store.isCurrent(request));
+    const write = (fields: Record<string, unknown>) =>
+      w.sync.server.serverApply({ me: "", mutationId: "" }, (tx) => {
+        const th = tx.byKey(`thread:${thread}`);
+        if (th?.kind === "thread") tx.put({ ...th, ...fields });
+      });
+    for (const fields of [{ mod: "removed" }, { gone: true }, { del: true }]) {
+      write(fields);
+      t.false(w.rt.store.isCurrent(request), JSON.stringify(fields));
+      write({ mod: null, gone: false, del: false });
+      t.true(w.rt.store.isCurrent(request));
+    }
   },
 );
