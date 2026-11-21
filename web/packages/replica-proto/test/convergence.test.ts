@@ -338,7 +338,14 @@ const GENERATORS: Record<string, Gen> = {
       ...(look
         ? { kind: "lookup", look: phrase }
         : { kind: "ask", q: marked(c, `node:${id}`, "q") }),
-      ...(chance(c.r, 0.3) ? { quote: look ? `${quote}${around}` : quote, b: 1 } : {}),
+      // a look-up carries its quote (now and then none: BAD_REQUEST)
+      ...(look
+        ? chance(c.r, 0.95)
+          ? { quote: `${quote}${around}`, b: 1 }
+          : {}
+        : chance(c.r, 0.3)
+          ? { quote, b: 1 }
+          : {}),
       ...model(c),
     };
   },

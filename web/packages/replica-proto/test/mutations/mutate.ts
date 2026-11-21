@@ -760,8 +760,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M1b-7 a look-up phrase need not be whole words of its quote",
     file: "../mutators/src/nodes.ts",
-    from: "        if (i.quote !== undefined && !onWordBoundaries(look, i.quote))",
-    to: '        if (i.quote !== undefined && !onWordBoundaries(look, i.quote) && look === "")',
+    from: "        if (!onWordBoundaries(look, i.quote))",
+    to: '        if (!onWordBoundaries(look, i.quote) && look === "")',
   },
   {
     name: "M1b-8 a hidden branch is opened as its own thread",

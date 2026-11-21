@@ -497,13 +497,15 @@ test("hiding and removing redact every text field: question, title, summary, nod
       parent: fu,
       kind: "lookup",
       look: "MK-LK-P",
+      quote: "MK-LK-P",
       ...MODEL,
     }),
   );
   await ok(t, w.as("otto", "research.createPostFollowUp", { id: rp, thread: post, t: "MK-RP-T" }));
   await ok(t, w.as("otto", "comments.create", { id: cm, thread: ask, node: fu, t: "MK-CM-T" }));
   const markers = (s: unknown) => (JSON.stringify(s).match(/MK-[A-Z]+-[A-Z]+/g) ?? []).sort();
-  // a look-up's phrase is stored as `look` and inside its prompt `q`
+  // a look-up's phrase is stored as `look`, inside its prompt `q` and in the
+  // quote it was selected in
   const all = [
     "MK-ASK-Q",
     "MK-ASK-SUM",
@@ -512,6 +514,7 @@ test("hiding and removing redact every text field: question, title, summary, nod
     "MK-FU-A",
     "MK-FU-Q",
     "MK-FU-QT",
+    "MK-LK-P",
     "MK-LK-P",
     "MK-LK-P",
     "MK-POST-Q",
@@ -549,6 +552,7 @@ test("hiding and removing redact every text field: question, title, summary, nod
     "MK-FU-A",
     "MK-FU-Q",
     "MK-FU-QT",
+    "MK-LK-P",
     "MK-LK-P",
     "MK-LK-P",
     "MK-RP-T",

@@ -227,8 +227,17 @@ const SCHEMA: Record<string, Check> = {
       { quote: upTo(2000), b: nat },
     ),
     lookup: obj(
-      { id: ulid, thread: ulid, parent: nodeRef, kind: str, look: words(80), model, effort },
-      { quote: upTo(2000), b: nat },
+      {
+        id: ulid,
+        thread: ulid,
+        parent: nodeRef,
+        kind: str,
+        look: words(80),
+        quote: words(2000),
+        model,
+        effort,
+      },
+      { b: nat },
     ),
   }),
   "followups.update": obj({ ...nodeIn, q: words(8000), base: rev }),
@@ -415,9 +424,9 @@ function runPre(f: Facts, i: In) {
   if (queued >= 20) no("PRECONDITION_FAILED");
 }
 
-/** A look-up phrase is 1 to 4 words, once what is not a letter or a digit is
- * taken off both ends (`03` G2). */
-const isWordChar = (ch: string) => /[\p{L}\p{N}]/u.test(ch);
+/** A look-up phrase is 1 to 4 words, once what is not a letter, a combining
+ * mark or a digit is taken off both ends (`03` G2). */
+const isWordChar = (ch: string) => /[\p{L}\p{M}\p{N}]/u.test(ch);
 /** The words of a look-up phrase, once what is not a letter or a digit is
  * taken off both ends. */
 function phraseWords(v: string): string[] {
@@ -536,11 +545,7 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     // a parent whose run has not ended has no answer to build on (`03` G1)
     if (pending(runAt(f, parent))) no("PRECONDITION_FAILED");
     if (i["kind"] === "ask" ? blank(i["q"]) : !phraseOk(String(i["look"]))) no("BAD_REQUEST");
-    if (
-      i["kind"] === "lookup" &&
-      i["quote"] !== undefined &&
-      !inQuote(String(i["look"]), i["quote"] as string)
-    )
+    if (i["kind"] === "lookup" && !inQuote(String(i["look"]), i["quote"] as string))
       no("BAD_REQUEST");
     if (f.idTaken(String(i["id"]))) no("CONFLICT");
   },

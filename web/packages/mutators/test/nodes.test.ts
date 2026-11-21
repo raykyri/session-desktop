@@ -152,15 +152,27 @@ test("G2: a look-up stores the prompt of its phrase, which the client never send
     quote: "Each tide gauge records the sea level.",
     b: 0,
   });
-  // the prompt as an extra field, five words, a phrase that starts inside a word
+  // the prompt as an extra field, five words, no quote, a phrase that starts
+  // inside a word
+  const quote = "Each tide gauge records the sea level.";
   refused(
     t,
-    w.apply("mona", "research.forkNode", { ...look, id: w.id(), look: "tide", q: "x" }),
+    w.apply("mona", "research.forkNode", { ...look, id: w.id(), look: "tide", quote, q: "x" }),
     "BAD_REQUEST",
   );
   refused(
     t,
-    w.apply("mona", "research.forkNode", { ...look, id: w.id(), look: "one two three four five" }),
+    w.apply("mona", "research.forkNode", {
+      ...look,
+      id: w.id(),
+      look: "one two three four five",
+      quote: "one two three four five",
+    }),
+    "BAD_REQUEST",
+  );
+  refused(
+    t,
+    w.apply("mona", "research.forkNode", { ...look, id: w.id(), look: "tide gauge" }),
     "BAD_REQUEST",
   );
   refused(
@@ -178,7 +190,15 @@ test("G2: a look-up stores the prompt of its phrase, which the client never send
 test("G2: the client's prediction and the server's apply store the same prompt", (t) => {
   const { w, open } = cast(t);
   const th = ask(t, w, "mel", open);
-  const i = { id: w.id(), thread: th, parent: "r", kind: "lookup", look: "sea level!", ...MODEL };
+  const i = {
+    id: w.id(),
+    thread: th,
+    parent: "r",
+    kind: "lookup",
+    look: "sea level!",
+    quote: "The sea level rose.",
+    ...MODEL,
+  };
   const { prediction, tx } = w.predict("mona", "research.forkNode", i);
   t.true("ok" in prediction && prediction.ok);
   ok(t, w.apply("mona", "research.forkNode", i));
@@ -246,6 +266,7 @@ test("followups.update edits an ask's question, compares its rev, and never a lo
       parent: "r",
       kind: "lookup",
       look: "tide",
+      quote: "The tide rose.",
       ...MODEL,
     }),
   );

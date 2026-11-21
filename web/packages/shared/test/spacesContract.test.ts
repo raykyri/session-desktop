@@ -26,8 +26,13 @@ test("an ask carries an explicit effort, and a look-up carries its phrase and no
   const base = { id: ID, thread: ID2, parent: "r", model: "m", effort: "high" };
   t.true(fork.safeParse({ ...base, kind: "ask", q: "More?" }).success);
   t.false(fork.safeParse({ ...base, kind: "ask", q: "More?", effort: undefined }).success);
-  t.true(fork.safeParse({ ...base, kind: "lookup", look: "tide gauge" }).success);
-  t.false(fork.safeParse({ ...base, kind: "lookup", look: "tide gauge", q: "hidden" }).success);
+  const quote = "Each tide gauge records the sea level.";
+  t.true(fork.safeParse({ ...base, kind: "lookup", look: "tide gauge", quote }).success);
+  t.false(
+    fork.safeParse({ ...base, kind: "lookup", look: "tide gauge", quote, q: "hidden" }).success,
+  );
+  // the quote the phrase was selected in is required
+  t.false(fork.safeParse({ ...base, kind: "lookup", look: "tide gauge" }).success);
   const post = spaces.spaceMutators["threads.create"].input;
   t.false(post.safeParse({ id: ID, space: ID2, kind: "ask", q: "Why?", model: "m" }).success);
 });

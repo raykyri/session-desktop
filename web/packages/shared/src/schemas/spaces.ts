@@ -629,7 +629,9 @@ export const forkNodeInputSchema = z.discriminatedUnion("kind", [
     parent: askNodeRefSchema,
     kind: z.literal("lookup"),
     look: words(LOOKUP_PHRASE_MAX),
-    quote: text(QUOTE_MAX).optional(),
+    // the passage the phrase was selected in: required, so the whole-word
+    // check always runs (M1b review 13)
+    quote: words(QUOTE_MAX),
     b: count.optional(),
     model: spaceModelSchema,
     effort: spaceEffortSchema,

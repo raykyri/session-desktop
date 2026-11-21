@@ -76,6 +76,11 @@ test("a look-up phrase is 1 to 4 whole words of its quote", (t) => {
   t.false(onWordBoundaries("ide gauge", quote));
   t.false(onWordBoundaries("tide gaug", quote));
   t.false(onWordBoundaries("ocean", quote));
+  // combining marks are part of a word (M1b review 13): "cafe" + U+0301 keeps
+  // its accent, and "cafe" alone is not a whole word of "cafe\u0301 noir"
+  t.is(lookPhrase("«cafe\u0301»"), "cafe\u0301");
+  t.true(onWordBoundaries("cafe\u0301", "un cafe\u0301 noir"));
+  t.false(onWordBoundaries("cafe", "un cafe\u0301 noir"));
 });
 
 test("mentions are handles after @, once each", (t) => {

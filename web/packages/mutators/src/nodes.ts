@@ -95,8 +95,7 @@ export const NODES = {
       else {
         look = lookPhrase(i.look);
         if (look === null) throw bad("look", "1 to 4 words");
-        if (i.quote !== undefined && !onWordBoundaries(look, i.quote))
-          throw bad("look", "whole words of the quote");
+        if (!onWordBoundaries(look, i.quote)) throw bad("look", "whole words of the quote");
         q = LOOKUP_PROMPT_V1(look);
       }
       const run = tx.id(1);

@@ -143,6 +143,7 @@ test("a branch and a comment notify the node's author, a person cannot mark anot
       parent: "r",
       kind: "lookup",
       look: " tide gauge, ",
+      quote: "Each tide gauge records the sea level.",
       ...MODEL,
     }),
   );
