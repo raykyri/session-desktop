@@ -176,6 +176,9 @@ export class SyncReplica implements ReplicaSource {
   private readonly drafts = new Map<string, DraftRef>();
   private readonly errors = new Map<string, ApiError>();
   private readonly waiting = new Map<string, (o: WriteOutcome) => void>();
+  /** Private channels this tab left with `spaces.leave`: their resync is no
+   * news to the person. */
+  private readonly leaving = new Set<string>();
   private unsentCache: { version: number; list: UnsentWrite[] } | null = null;
 
   private active = false;
@@ -534,7 +537,8 @@ export class SyncReplica implements ReplicaSource {
         this.errors.delete(e.local);
         break;
       case "left":
-        this.options.onLeft?.(e.name);
+        // a Leave made in this tab has its own toast ("Left #name.")
+        if (!this.leaving.delete(e.space)) this.options.onLeft?.(e.name);
         break;
       case "client":
         if (this.options.userId !== null)
@@ -743,6 +747,10 @@ export class SyncReplica implements ReplicaSource {
     const def = Object.hasOwn(MUTATORS, name) ? MUTATORS[name] : undefined;
     if (!def) return { ok: false, error: { code: "BAD_REQUEST", message: `No mutator ${name}.` } };
     if (def.online) return outcomeOf(await client.send(name, input));
+    if (name === "spaces.leave") {
+      const space = (input as { space?: unknown } | null)?.space;
+      if (typeof space === "string") this.leaving.add(space);
+    }
     const p = client.write(name, input);
     if (options.draft) this.drafts.set(p.local, options.draft);
     return this.outcomeOf(p.local);

@@ -321,6 +321,22 @@ test("ten unjoined channels read while their views are open leave the joined log
   t.deepEqual([...client.logs()].sort(), joined);
 });
 
+test("leaving a private channel in this tab shows no lost-access message", async (t) => {
+  const { f, lab } = world();
+  const link = f.ok(OLGA, "invites.create", { id: f.id(), space: lab, days: 7 }) as {
+    code: string;
+  };
+  f.ok(MONA, "spaces.join", { space: lab, invite: link.code });
+  const { r, left } = replicaOf(f, MONA);
+  t.teardown(() => r.dispose());
+  await until(() => r.ready());
+  t.true(channelsOf(r).some((c) => c.name === "lab" && c.joined));
+  t.true((await r.mutate("spaces.leave", { space: lab })).ok);
+  await until(() => !channelsOf(r).some((c) => c.name === "lab" && c.joined));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  t.deepEqual(left, []);
+});
+
 test("joining an open channel moves its log to the stream", async (t) => {
   const { f } = world();
   const room = f.id();

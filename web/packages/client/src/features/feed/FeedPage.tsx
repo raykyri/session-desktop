@@ -140,14 +140,20 @@ function ThreadList({
   useImperativeHandle(handle, () => ({
     reach: (id, onRendered) => {
       const at = ids.indexOf(id);
-      if (virtual && at >= 0) virtualizer.scrollToIndex(at, { align: "start" });
-      // The row renders on the next frames; wait until it is in the DOM.
+      // The row renders on the next frames; wait until it is in the DOM. A
+      // list that has just mounted has no scroll element in the first frame,
+      // so the scroll is asked for again on each frame until the row is in.
       let tries = 0;
-      const wait = () => {
-        if (document.getElementById(`card-${id}`) || tries++ > 30) onRendered();
-        else requestAnimationFrame(wait);
+      const step = () => {
+        if (document.getElementById(`card-${id}`) || tries++ > 60) {
+          onRendered();
+          return;
+        }
+        if (virtual && at >= 0) virtualizer.scrollToIndex(at, { align: "start" });
+        requestAnimationFrame(step);
       };
-      requestAnimationFrame(wait);
+      if (virtual && at >= 0) virtualizer.scrollToIndex(at, { align: "start" });
+      requestAnimationFrame(step);
     },
   }));
   if (!virtual)
