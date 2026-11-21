@@ -48,6 +48,43 @@ function openCode(ctx: AppContext & { user: { id: string } }, sealed: string): s
   }
 }
 
+/**
+ * The `invite_used` notification (01 C16) to the invite's creator, in their
+ * user log, through `serverApply` inside the redemption's transaction: it
+ * commits with the redemption, and a failure rolls the redemption back. It
+ * names the new member (`actor`) and the code they used (`note`), which no
+ * longer admits anyone. A root invite has no creator and notifies nobody.
+ */
+function notifyInviteUsed(ctx: AppContext, redeemed: accountInvites.RedeemedInvite): void {
+  const to = redeemed.inviterHandle;
+  if (!ctx.sync || to === null || redeemed.invitedBy === null) return;
+  let code: string | null = null;
+  if (redeemed.codeEnc !== null) {
+    try {
+      code = ctx.box.open(redeemed.codeEnc, codeContext(redeemed.invitedBy));
+    } catch {
+      // `SESSION_SECRET_KEY` changed since the link was made: no code shown
+    }
+  }
+  const written = ctx.sync.server.serverApply({ me: redeemed.handle }, (tx) =>
+    tx.create({
+      kind: "notif",
+      id: tx.id(1),
+      to,
+      type: "invite_used",
+      sp: null,
+      th: null,
+      item: null,
+      actor: redeemed.handle,
+      n: 1,
+      note: code,
+      read: false,
+      createdAt: tx.now,
+    }),
+  );
+  if (!written.ok) throw new Error(`invite_used notification: ${written.error.code}`);
+}
+
 /** The `auth.me` answer: the account and its pending invite. */
 export function meOf(ctx: Pick<AppContext, "db" | "user">): Me | null {
   if (ctx.user === null) return null;
@@ -249,14 +286,18 @@ export const accountRouter = router({
           message: "Handles use 3 to 20 lowercase letters, numbers, dots or underscores.",
         });
       }
-      const result = accountInvites.activate(ctx.db, {
-        userId: ctx.user.id,
-        handle: input.handle,
-        displayName: input.name,
-        // The `invite_used` notification (01 C16) is written here, in the
-        // redemption's transaction, once the user log exists (M6
-        // notifications; `@session/sync` server).
-      });
+      const activate = () =>
+        accountInvites.activate(ctx.db, {
+          userId: ctx.user.id,
+          handle: input.handle,
+          displayName: input.name,
+          // The `invite_used` notification (01 C16), in the redemption's
+          // transaction
+          afterRedeem: (_tx, redeemed) => notifyInviteUsed(ctx, redeemed),
+        });
+      // The sync store's transaction is the outer one, so the commit wakes
+      // the inviter's event stream (`SqliteStore.transaction`).
+      const result = ctx.sync ? ctx.sync.store.transaction(activate) : activate();
       if (!result.ok) {
         if (result.reason === "taken") {
           throw new TRPCError({
