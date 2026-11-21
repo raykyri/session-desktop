@@ -45,6 +45,7 @@ export * from "./models/registry.js";
 export * from "./research/history.js";
 export * from "./research/preview.js";
 export * from "./research/prompts.js";
+export * from "./research/runFailures.js";
 
 export * from "./types/account.js";
 export * from "./types/activity.js";

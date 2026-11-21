@@ -21,7 +21,7 @@
 // mark runs still `running` `interrupted`, and queue every interrupted run
 // again that has had fewer than two automatic resumes (`03` E2, K1).
 
-import { findModel } from "@session/shared";
+import { OUT_OF_TOKENS_TEXT, findModel } from "@session/shared";
 
 import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";
@@ -42,8 +42,7 @@ export const MAX_AUTO_RESUMES = 2;
 /** How far ahead `fail.at` is set when the 429 retries are spent. */
 export const RATE_RETRY_AFTER_MS = 60_000;
 
-export const OUT_OF_TOKENS_MESSAGE =
-  "You're out of tokens until Friday. You can still post, or add an API key in Usage.";
+export const OUT_OF_TOKENS_MESSAGE = OUT_OF_TOKENS_TEXT;
 
 export interface DispatcherDeps {
   config: Pick<Config, "limits">;

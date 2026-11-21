@@ -559,6 +559,46 @@
   animation: feed-pulse 1.2s infinite;
 }
 
+/* A run that is not answering now (02 §3.3): no pulse. */
+.status.ended {
+  color: var(--text-faint);
+}
+
+.status.ended::before {
+  animation: none;
+}
+
+/* The status line of a run, with Stop or Run again for its asker. */
+.runln {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+}
+
+.runbtn {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.runbtn:hover {
+  color: var(--text-strong);
+}
+
+.runp .partial {
+  margin-top: 8px;
+}
+
+/* The stop note after an answer ended by a token limit (03 E5). */
+.runnote {
+  margin-top: 8px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
 @keyframes feed-pulse {
   50% {
     opacity: 0.3;

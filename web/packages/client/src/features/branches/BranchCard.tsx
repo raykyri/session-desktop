@@ -30,7 +30,7 @@ import { BranchIcon, BubbleIcon, ContinueIcon, SearchIcon } from "../feed/icons.
 import { revealThread } from "../feed/reveal.js";
 import { ReplyText } from "../replies/ReplyText.js";
 
-import { RunStatus } from "./RunStatus.js";
+import { RunNote, RunProgress, isStoppedRun } from "./RunStatus.js";
 import { isActiveRun, othersUnder, type TreeIndex } from "./tree.js";
 
 /** The card fades in only when the item it shows changes (`pvFade`): keyed
@@ -152,19 +152,22 @@ export function BranchCard({
         <blockquote className="bq">{clip(node.quote, 180)}</blockquote>
       ) : null}
       {node.del ? <p className="modln">[deleted]</p> : <ModerationNote mod={node.mod} />}
-      {pending ? (
-        <>
-          <RunStatus run={run} />
-          <div className="answer">
-            <p className="pending">
-              {node.look !== null
-                ? "Looking up the phrase."
-                : "Searching sources. The answer appears here when the run finishes."}
-            </p>
-          </div>
-        </>
+      {pending || (isStoppedRun(run) && !answer) ? (
+        <RunProgress
+          thread={thread}
+          node={node.id}
+          run={run}
+          pending={
+            node.look !== null
+              ? "Looking up the phrase."
+              : "Searching sources. The answer appears here when the run finishes."
+          }
+        />
       ) : answer?.md ? (
-        <AnswerProse md={answer.md} pages={answer.pages} />
+        <>
+          <AnswerProse md={answer.md} pages={answer.pages} />
+          <RunNote run={run} />
+        </>
       ) : null}
       <div className="pf">
         {writer && !pending ? (
