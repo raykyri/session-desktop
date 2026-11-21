@@ -39,7 +39,8 @@
 // above), and a client mutation runs the client test files it names
 // (`files`), not this package's suite, which does not import the client.
 // M6-C48 on cover the M6 tail: the removal toast of C12 (`removed`), the
-// ban toast of C18 (the person's own ban record).
+// ban toast of C18 (the person's own ban record) and the invite tree's
+// deleted accounts.
 //
 // Before the mutations, the suites run in an unmutated slot: a failure there
 // stops the run (a mutation is not killed by a test that fails anyway). A
@@ -1701,7 +1702,7 @@ const MUTATIONS: Mutation[] = [
     packageOnly: true,
     files: ["test/outbox.screens.test.tsx"],
   },
-  // ---- the M6 tail: C12 and C18 ----
+  // ---- the M6 tail: C12, C18 and the invite tree's deleted accounts ----
   {
     name: "M6-C48 (C12) a removal that changed nothing reads as Removed",
     file: "../client/src/features/channels/MembersDialog.tsx",
@@ -1717,6 +1718,22 @@ const MUTATIONS: Mutation[] = [
     to: "    if ((false as boolean) && this.ownBans?.has(space)) {\n      if (this.bansUntold.delete(space))",
     packageOnly: true,
     files: ["test/replica.sync.test.ts"],
+  },
+  {
+    name: "M6-C50 (item 3) the invite tree draws a deleted account as ?",
+    file: "../client/src/features/auth/InvitesPage.tsx",
+    from: '          <Avatar handle={node.handle} size="sm" />',
+    to: '          <Avatar handle={node.handle ?? "?"} size="sm" />',
+    packageOnly: true,
+    files: ["test/auth.test.tsx"],
+  },
+  {
+    name: "M6-C51 (item 3) You invited names a deleted account by nothing",
+    file: "../client/src/features/auth/InvitesPage.tsx",
+    from: "                <b>{authorName(person.handle)}</b>",
+    to: "                <b>{person.handle}</b>",
+    packageOnly: true,
+    files: ["test/auth.test.tsx"],
   },
 ];
 
