@@ -15,66 +15,15 @@ import test from "ava";
 import { bootServer } from "../src/boot.js";
 import { configAllowances } from "../src/runs/allowance.js";
 import { MAX_AUTO_RESUMES } from "../src/runs/dispatcher.js";
-import { registerFixture, setFixtureScenario } from "../src/runs/fixtureProvider.js";
+import { setFixtureScenario } from "../src/runs/fixtureProvider.js";
 import { createProviders } from "../src/runs/providers.js";
 import { createRunsRuntime } from "../src/runs/runtime.js";
 import { SqliteLedger } from "../src/runs/sqliteLedger.js";
 import { SyncService } from "../src/sync/service.js";
 
 import type { LedgerRow } from "./recordRuns.js";
-import { CHUNK, runsWorld, streamedOutput, turnText, waitFor } from "./recordRuns.js";
+import { runsWorld, streamedOutput, turnText, waitFor } from "./recordRuns.js";
 import { fakeNetwork, recordingProviders } from "./runsHelpers.js";
-
-// a tool call, then a long answer: a crash in the second step leaves two
-// committed turns for the resume to replay
-registerFixture({
-  scenario: "fetch-then-endless",
-  steps: [
-    {
-      parts: [
-        { type: "stream-start", warnings: [] },
-        { type: "text-start", id: "t0" },
-        { type: "text-delta", id: "t0", delta: "Reading the page." },
-        { type: "text-end", id: "t0" },
-        {
-          type: "tool-call",
-          toolCallId: "call-fetch-1",
-          toolName: "web_fetch",
-          input: '{"url":"https://example.com/bloom-filters"}',
-        },
-        {
-          type: "finish",
-          finishReason: { unified: "tool-calls", raw: "tool_use" },
-          usage: {
-            inputTokens: { total: 900, noCache: 900, cacheRead: 0, cacheWrite: 0 },
-            outputTokens: { total: 20, text: 20, reasoning: 0 },
-          },
-        },
-      ],
-    },
-    {
-      delayMs: 5,
-      parts: [
-        { type: "stream-start", warnings: [] },
-        { type: "text-start", id: "t1" },
-        ...Array.from({ length: 3_000 }, () => ({
-          type: "text-delta" as const,
-          id: "t1",
-          delta: CHUNK,
-        })),
-        { type: "text-end", id: "t1" },
-        {
-          type: "finish",
-          finishReason: { unified: "stop", raw: "end_turn" },
-          usage: {
-            inputTokens: { total: 1_400, noCache: 1_400, cacheRead: 0, cacheWrite: 0 },
-            outputTokens: { total: 30_000, text: 30_000, reasoning: 0 },
-          },
-        },
-      ],
-    },
-  ],
-});
 
 test.serial(
   "a drain ends the attempt interrupted, keeps its partial text as a turn and closes its row; boot resumes it",
@@ -96,6 +45,7 @@ test.serial(
 
     // the next process boots: the run is queued again as a resume and finishes
     await w.rt.close();
+    const providers = recordingProviders(createProviders(w.config));
     const next = createRunsRuntime({
       config: w.config,
       db: w.db,
@@ -103,7 +53,7 @@ test.serial(
       ledger: w.ledger,
       allowances: configAllowances(w.config),
       logger: w.logger,
-      providers: createProviders(w.config),
+      providers,
       fetch: fakeNetwork().fetch,
       pollMs: 20,
     });
@@ -118,6 +68,9 @@ test.serial(
     const all = w.turns(run);
     t.true(all.length >= 2, "the resume kept the interrupted turn and added its own");
     t.true(turnText(all[0]!).startsWith("Consistent "));
+    // the resumed request replays the partial text as the assistant's
+    const replayed = JSON.stringify(providers.streamed[0]?.prompt ?? []);
+    t.true(replayed.includes(turnText(all[0]!).slice(0, 60)), "the partial text is replayed");
     t.is(
       done.tok,
       w.rows(run).reduce((n, x) => n + x.counted, 0),
@@ -200,6 +153,17 @@ test.serial(
     // the resume replayed the committed step as context: its request holds
     // the tool call and its result
     t.true(providers.streamed.length >= 1);
+    const prompt = providers.streamed[0]?.prompt ?? [];
+    const parts = prompt.flatMap((m) =>
+      typeof m.content === "string"
+        ? []
+        : (m.content as { type: string; toolCallId?: string }[]).map(
+            (p) => `${m.role}:${p.type}:${p.toolCallId ?? ""}`,
+          ),
+    );
+    t.true(parts.includes("assistant:tool-call:call-fetch-1"), "the fetch is replayed");
+    t.true(parts.includes("tool:tool-result:call-fetch-1"), "with its result");
+    t.true(JSON.stringify(prompt).includes("Reading the page."));
     const turns = db.$client
       .prepare<[string], { body: string }>(
         "SELECT body FROM records WHERE kind = 'turn' AND key LIKE ? ORDER BY key",
@@ -247,5 +211,111 @@ test.serial(
       effort: "medium",
     });
     t.like(w.run(run), { status: "queued", attempt: 2 });
+  },
+);
+
+test.serial(
+  "a drain while a tool call runs commits the step without the unanswered call; the boot resume's request is accepted and the run completes",
+  async (t) => {
+    const w = await runsWorld(t, { start: false });
+    await w.rt.close();
+    const network = fakeNetwork();
+    let pending = 0;
+    const slow = { on: true };
+    // a page fetch that never answers until it is aborted
+    const fetch: typeof globalThis.fetch = (input, init) => {
+      if (!slow.on) return network.fetch(input, init);
+      pending += 1;
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+      });
+    };
+    const providers = recordingProviders(createProviders(w.config));
+    const make = () =>
+      createRunsRuntime({
+        config: w.config,
+        db: w.db,
+        sync: w.sync,
+        ledger: w.ledger,
+        allowances: configAllowances(w.config),
+        logger: w.logger,
+        providers,
+        fetch,
+        pollMs: 20,
+        toolOverrides: {
+          lookup: () => Promise.resolve([{ address: "93.184.216.34", family: 4 }]),
+        },
+      });
+    const first = make();
+    first.dispatcher.start();
+    const { run } = await w.ask(w.mona, w.open, "fixture:success-with-tools");
+    await waitFor(() => pending > 0, "a tool request in flight");
+    first.dispatcher.stop();
+    await first.service.drain();
+    first.store.close();
+    t.like(w.run(run), { status: "interrupted" });
+    const blocks = w.turns(run).flatMap((x) => x.blocks.map((b) => b.type));
+    t.false(blocks.includes("toolUse"), "the unanswered call is not committed");
+    t.true(blocks.includes("text"), "the step's text is");
+
+    slow.on = false;
+    const calls = providers.streamed.length;
+    const next = make();
+    t.teardown(() => next.close());
+    t.like(next.dispatcher.boot(), { resumed: 1 });
+    next.dispatcher.start();
+    await waitFor(() => !["queued", "running"].includes(w.run(run).status), "the resume");
+    await next.dispatcher.idle();
+    t.like(w.run(run), { status: "complete", attempt: 1, fail: null });
+    t.true(providers.streamed.length > calls, "the resumed request was made");
+    t.truthy(providers.streamed[calls]?.finish, "and answered");
+  },
+);
+
+test.serial(
+  "a crash between a resume's record write and its count rolls back both: the resume is never left uncounted",
+  async (t) => {
+    const w = await runsWorld(t, { start: false });
+    const { run } = await w.ask(w.mona, w.open, "fixture:success");
+    t.truthy(w.rt.store.claim(w.rt.store.queued()[0]!));
+    t.is(w.rt.store.interruptRunning(), 1);
+    // the counter's write fails, as a process killed at that statement
+    w.db.$client.exec(
+      "CREATE TRIGGER die BEFORE INSERT ON run_resumes BEGIN SELECT RAISE(ABORT, 'killed'); END",
+    );
+    t.throws(() => w.rt.dispatcher.boot());
+    t.like(w.run(run), { status: "interrupted" }, "the record write was rolled back with it");
+    w.db.$client.exec("DROP TRIGGER die");
+    t.like(w.rt.dispatcher.boot(), { resumed: 1 });
+    t.like(w.run(run), { status: "queued" });
+    t.is(
+      (
+        w.db.$client.prepare("SELECT resumes FROM run_resumes WHERE run_id = ?").get(run) as {
+          resumes: number;
+        }
+      ).resumes,
+      1,
+    );
+  },
+);
+
+test.serial(
+  "L1: the wall clock counts from the run's first claim: a resume started near the limit times out at once",
+  async (t) => {
+    const w = await runsWorld(t, {
+      start: false,
+      env: { SESSION_RUN_TIMEOUT_SECONDS: "5" },
+    });
+    const { run } = await w.ask(w.mona, w.open, "fixture:endless-answer");
+    // the run's first claim was five seconds ago
+    w.sync.server.serverApply({ me: "", mutationId: "" }, (tx) => {
+      const r = tx.byKey(`run:${run}`);
+      if (r?.kind === "run")
+        tx.put({ ...r, startedAt: new Date(Date.now() - 5_000).toISOString() });
+    });
+    const started = Date.now();
+    w.rt.dispatcher.start();
+    t.like(await w.settled(run), { status: "failed", fail: { why: "error", cls: "timeout" } });
+    t.true(Date.now() - started < 3_000, `${Date.now() - started} ms`);
   },
 );

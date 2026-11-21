@@ -117,6 +117,13 @@ export class MemoryLedger implements Ledger {
     return total;
   }
 
+  runPayers(runId: string, attempt: number): ReadonlySet<Payer> {
+    const payers = new Set<Payer>();
+    for (const row of this.#rows.values())
+      if (row.runId === runId && row.attempt === attempt) payers.add(row.payer);
+    return payers;
+  }
+
   runsOf(userId: string, week: string): LedgerRunTotal[] {
     const runs = new Map<
       string,

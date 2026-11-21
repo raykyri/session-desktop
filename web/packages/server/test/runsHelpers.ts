@@ -5,6 +5,7 @@
 
 import type {
   LanguageModelV4,
+  LanguageModelV4CallOptions,
   LanguageModelV4StreamPart,
   LanguageModelV4Usage,
 } from "@ai-sdk/provider";
@@ -336,6 +337,9 @@ export interface StreamedCall {
   output: string;
   /** The provider's counts, when the call reached its `finish`. */
   finish: LanguageModelV4Usage | null;
+  /** The request: the messages the call was given, and its output cap. */
+  prompt: LanguageModelV4CallOptions["prompt"];
+  maxOutputTokens: number | undefined;
 }
 
 /** The deployment's providers with every model recording the parts it
@@ -351,7 +355,13 @@ export function recordingProviders(base: Providers): Providers & { streamed: Str
     doGenerate: (options) => model.doGenerate(options),
     doStream: async (options) => {
       const result = await model.doStream(options);
-      const call: StreamedCall = { modelId: model.modelId, output: "", finish: null };
+      const call: StreamedCall = {
+        modelId: model.modelId,
+        output: "",
+        finish: null,
+        prompt: options.prompt,
+        maxOutputTokens: options.maxOutputTokens,
+      };
       streamed.push(call);
       const reader = result.stream.getReader();
       const stream = new ReadableStream<LanguageModelV4StreamPart>({

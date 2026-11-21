@@ -161,6 +161,19 @@ export function answerText(turns: readonly Turn[]): string {
     .trim();
 }
 
+/** The searches and fetches the tool calls of `turns` spent. */
+export function toolCallsOf(turns: readonly Turn[]): { searches: number; fetches: number } {
+  let searches = 0;
+  let fetches = 0;
+  for (const turn of turns)
+    for (const block of turn.blocks) {
+      if (block.type !== "toolUse") continue;
+      if (block.name === "web_search") searches += 1;
+      if (block.name === "web_fetch") fetches += 1;
+    }
+  return { searches, fetches };
+}
+
 function failureOf(error: ClassifiedError): RunFailure {
   return error.errorClass === "rate_limited"
     ? { why: "error", cls: "unknown" }
@@ -187,7 +200,10 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   const stopController = new AbortController();
   let superseded = false;
   let stopReason: StopReason | null = null;
-  const timeout = AbortSignal.timeout(limits.timeoutMs);
+  // `03` L1: the wall clock counts from the run's first claim, so a 429
+  // re-queue or a resume continues it rather than starting it again
+  const elapsed = Math.max(0, deps.now() - (request.startedAt ?? deps.now()));
+  const timeout = AbortSignal.timeout(Math.max(0, limits.timeoutMs - elapsed));
   const signal = AbortSignal.any([input.signal, timeout, stopController.signal]);
 
   /**
@@ -213,9 +229,12 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     }
   };
 
-  /** Why a provider call whose signal fired ended (`03` E5). */
+  /** Why a provider call whose signal fired ended (`03` E5). Read when the
+   * signal fires: a write that removed the thread or deleted the ask aborts
+   * the stream from its commit, before the loop reads the fence again, and
+   * the row closes `superseded` (`03` E1). */
   const abortEnding = (): CallEnding => {
-    if (superseded) return "superseded";
+    if (superseded || !store.isCurrent(request)) return "superseded";
     if (stopReason !== null) return stopReason;
     if (input.isDraining()) return "drain";
     if (timeout.aborted && !input.signal.aborted) return "timeout";
@@ -223,6 +242,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   };
 
   if (!owned()) {
+    store.superseded?.(request);
     return { outcome: "superseded" };
   }
 
@@ -251,10 +271,24 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     meter.closeOpen(signal.aborted ? abortEnding() : "error");
   }
 
+  /** The fence stopped the attempt: its rows close, and the store records
+   * what it may of the run (`RunStore.superseded`). */
+  function supersede(): AttemptResult {
+    meter.closeOpen("superseded");
+    store.superseded?.(request);
+    return { outcome: "superseded" };
+  }
+
   async function attempt(): Promise<AttemptResult> {
-    const toolBudget = new ToolBudget(limits.maxSearches, limits.maxFetches);
+    // A resumed attempt replays the committed turns of the one it continues
+    // (`05` §7), and its limits count what they spent: the steps (one turn
+    // record each) and the searches and fetches (`03` L1, L2).
+    const priorTurns: Turn[] = request.kind === "resume" ? [...store.committedTurns(request)] : [];
+    const spent = toolCallsOf(priorTurns);
+    const toolBudget = new ToolBudget(limits.maxSearches, limits.maxFetches, spent);
     const toolUsage = { search: 0, fetch: 0 };
-    let steps = 0;
+    let steps = priorTurns.filter((turn) => turn.role === "assistant").length;
+    const stepsLeft = limits.maxSteps - steps;
 
     /** The model of the next step, who pays for it, and the member's key
      * when a key pays (its sealed value identifies it for the per-step check
@@ -281,7 +315,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       toolUsage.search = 0;
       toolUsage.fetch = 0;
       if (!owned()) {
-        return { outcome: "superseded" };
+        return supersede();
       }
       if (outcome === "failed" && settled.error) {
         logger.warn(
@@ -316,7 +350,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     const rateLimited = (error: ClassifiedError): AttemptResult => {
       meter.closeOpen("rate_limited");
       if (!owned()) {
-        return { outcome: "superseded" };
+        return supersede();
       }
       return { outcome: "rate_limited", error };
     };
@@ -324,8 +358,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     /** The ending of an attempt that stopped early, or null. */
     const interruption = (): AttemptResult | null => {
       if (!owned()) {
-        meter.closeOpen("superseded");
-        return { outcome: "superseded" };
+        return supersede();
       }
       const cancelled = store.isCancelled(request);
       if (input.isDraining() && !cancelled) {
@@ -434,8 +467,6 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     };
 
     const system = researchSystemPrompt(request.instruction);
-    // A resumed attempt replays the committed turns of the one it continues (`05` §7).
-    const priorTurns: Turn[] = request.kind === "resume" ? [...store.committedTurns(request)] : [];
     const priorMessages: ModelMessage[] = messagesFromCommittedTurns(priorTurns);
 
     let messages: ModelMessage[];
@@ -555,99 +586,104 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     let stepText = 0;
     let stepUsedTools = false;
 
-    try {
-      const result = streamText({
-        model: modelFor(current.payer, current.resolved),
-        system,
-        messages,
-        tools,
-        // The step boundary: the overdraft limit and the token cap stop the
-        // run before its next provider call (`03` K9, L1).
-        stopWhen: [
-          stepCountIs(limits.maxSteps),
-          // `03` K4: a removed, replaced or invalid key, or billing moved
-          // away from `key`, stops a key-paid run before its next step.
-          () => {
-            if (current && !budget.keyStillPays(current.payer, current.key?.sealed)) {
-              keyLost = true;
-            }
-            return keyLost;
+    // a resume whose earlier claims used every step makes no provider call:
+    // it ends with the turns it committed
+    if (stepsLeft > 0)
+      try {
+        const result = streamText({
+          model: modelFor(current.payer, current.resolved),
+          system,
+          messages,
+          tools,
+          // The step boundary: the overdraft limit and the token cap stop the
+          // run before its next provider call (`03` K9, L1).
+          stopWhen: [
+            stepCountIs(stepsLeft),
+            // `03` K4: a removed, replaced or invalid key, or billing moved
+            // away from `key`, stops a key-paid run before its next step.
+            () => {
+              if (current && !budget.keyStillPays(current.payer, current.key?.sealed)) {
+                keyLost = true;
+              }
+              return keyLost;
+            },
+            () => {
+              const reason = budget.stopReason(current?.payer ?? request.payer);
+              if (reason !== null) stopReason ??= reason;
+              return reason !== null;
+            },
+          ],
+          prepareStep: () => {
+            payForNextStep();
+            return current ? { model: modelFor(current.payer, current.resolved) } : {};
           },
-          () => {
-            const reason = budget.stopReason(current?.payer ?? request.payer);
-            if (reason !== null) stopReason ??= reason;
-            return reason !== null;
+          abortSignal: signal,
+          providerOptions: resolved.providerOptions,
+          ...(limits.maxOutputTokens === undefined
+            ? {}
+            : { maxOutputTokens: limits.maxOutputTokens }),
+          // The dispatcher implements retry policy: a 429 queues the run again
+          // with backoff and keeps its place in the admission order, which a
+          // transport-level retry cannot do.
+          maxRetries: 0,
+          onError: ({ error }) => {
+            streamError = error;
           },
-        ],
-        prepareStep: () => {
-          payForNextStep();
-          return current ? { model: modelFor(current.payer, current.resolved) } : {};
-        },
-        abortSignal: signal,
-        providerOptions: resolved.providerOptions,
-        ...(limits.maxOutputTokens === undefined
-          ? {}
-          : { maxOutputTokens: limits.maxOutputTokens }),
-        // The dispatcher implements retry policy: a 429 queues the run again
-        // with backoff and keeps its place in the admission order, which a
-        // transport-level retry cannot do.
-        maxRetries: 0,
-        onError: ({ error }) => {
-          streamError = error;
-        },
-      });
+        });
 
-      for await (const part of result.fullStream) {
-        if (part.type === "error") {
-          streamError = part.error;
-          break;
+        for await (const part of result.fullStream) {
+          if (part.type === "error") {
+            streamError = part.error;
+            break;
+          }
+          if (part.type === "abort") {
+            break;
+          }
+          // Grounded citations arrive as Google redirect links; the mapper commits
+          // the step with the resolved target URLs (`groundingRedirects.ts`).
+          mapper.handle(await resolveGroundingRedirects(part, groundingRedirects));
+          switch (part.type) {
+            case "start-step":
+              stepText = 0;
+              stepUsedTools = false;
+              break;
+            case "text-delta":
+              stepText += part.text.length;
+              if (!stepUsedTools && stepText >= WRITING_TEXT_CHARS) advance(3);
+              checkpoint();
+              break;
+            case "tool-call":
+              stepUsedTools = true;
+              if (part.toolName === "web_search" || part.toolName === "google_search") advance(1);
+              if (part.toolName === "web_fetch") advance(2);
+              break;
+            case "source":
+              advance(2);
+              break;
+            case "finish-step":
+              steps += 1;
+              if (part.finishReason !== "tool-calls") advance(3);
+              break;
+            case "finish":
+              finishReason = part.finishReason;
+              rawFinishReason = part.rawFinishReason;
+              break;
+            default:
+              break;
+          }
         }
-        if (part.type === "abort") {
-          break;
+        if (streamError === null && !signal.aborted) {
+          responseMessages = await result.responseMessages;
         }
-        // Grounded citations arrive as Google redirect links; the mapper commits
-        // the step with the resolved target URLs (`groundingRedirects.ts`).
-        mapper.handle(await resolveGroundingRedirects(part, groundingRedirects));
-        switch (part.type) {
-          case "start-step":
-            stepText = 0;
-            stepUsedTools = false;
-            break;
-          case "text-delta":
-            stepText += part.text.length;
-            if (!stepUsedTools && stepText >= WRITING_TEXT_CHARS) advance(3);
-            checkpoint();
-            break;
-          case "tool-call":
-            stepUsedTools = true;
-            if (part.toolName === "web_search" || part.toolName === "google_search") advance(1);
-            if (part.toolName === "web_fetch") advance(2);
-            break;
-          case "source":
-            advance(2);
-            break;
-          case "finish-step":
-            steps += 1;
-            if (part.finishReason !== "tool-calls") advance(3);
-            break;
-          case "finish":
-            finishReason = part.finishReason;
-            rawFinishReason = part.rawFinishReason;
-            break;
-          default:
-            break;
-        }
+      } catch (error) {
+        streamError = error;
       }
-      if (streamError === null && !signal.aborted) {
-        responseMessages = await result.responseMessages;
-      }
-    } catch (error) {
-      streamError = error;
-    }
 
     flushDelta(true);
     // Commits the partial step, so an interrupted attempt keeps its text as
     // a turn the resume replays, and a stopped one keeps it as its last turn.
+    // A tool call the drain stopped before its result is not committed: a
+    // provider refuses a request that replays a call without its result.
     mapper.finish();
     flushDelta(true);
 

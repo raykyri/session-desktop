@@ -18,8 +18,9 @@
 // a restart a re-queued run is admitted at once.
 //
 // Boot: close the ledger rows a crash left open with their last checkpoint,
-// mark runs still `running` `interrupted`, and queue every interrupted run
-// again that has had fewer than two automatic resumes (`03` E2, K1).
+// mark runs still `running` `interrupted`, queue every interrupted run again
+// that has had fewer than two automatic resumes (`03` E2, K1), and delete the
+// in-flight checkpoints no run continues (`01` D4).
 
 import { OUT_OF_TOKENS_TEXT, findModel } from "@session/shared";
 
@@ -66,6 +67,9 @@ export interface BootReport {
   interrupted: number;
   /** Interrupted runs queued again as a `resume`. */
   resumed: number;
+  /** In-flight checkpoints deleted: their run is gone, ended, or on a newer
+   * attempt (`01` D4). */
+  sweptLive: number;
 }
 
 export interface Dispatcher {
@@ -268,8 +272,9 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
           resumed += 1;
         }
       }
-      logger.info({ closedRows, interrupted, resumed }, "runs booted");
-      return { closedRows, interrupted, resumed };
+      const sweptLive = store.sweepLive?.() ?? 0;
+      logger.info({ closedRows, interrupted, resumed, sweptLive }, "runs booted");
+      return { closedRows, interrupted, resumed, sweptLive };
     },
 
     start() {

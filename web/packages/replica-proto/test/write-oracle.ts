@@ -556,6 +556,9 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     if (p.mod === "removed" || p.gone) no("PRECONDITION_FAILED");
     const parent = seenNode(f, p, i["parent"]);
     if (parent.mod === "removed") no("PRECONDITION_FAILED");
+    // a parent hidden from the actor (`03` G7)
+    if (parent.mod === "hidden" && parent.u !== f.me && roleOf(f, p.s, f.me) !== "owner")
+      no("PRECONDITION_FAILED");
     // a parent whose run has not ended has no answer to build on (`03` G1)
     if (pending(runAt(f, parent))) no("PRECONDITION_FAILED");
     if (i["kind"] === "ask" ? blank(i["q"]) : !phraseOk(String(i["look"]))) no("BAD_REQUEST");

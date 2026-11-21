@@ -7,10 +7,12 @@
 import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
 import test from "ava";
 
+import { RUN_LIVE_READS } from "../src/app.js";
 import { registerFixture } from "../src/runs/fixtureProvider.js";
+import { RESUME_SEQ_GAP, RecordRunStore } from "../src/runs/recordStore.js";
 import type { RunDelta, RunLive } from "../src/runs/recordStore.js";
 
-import { runsWorld, waitFor } from "./recordRuns.js";
+import { CHUNK, runsWorld, streamedOutput, waitFor } from "./recordRuns.js";
 import type { EventReader, Person, SseEvent } from "./syncHttp.js";
 import { newId, Person as SyncPerson } from "./syncHttp.js";
 
@@ -236,5 +238,180 @@ test.serial(
     const commits = w.sync.store.head() - head;
     t.true(commits <= 2 * STEPS + 8, `${commits} commits`);
     t.truthy(w.rec(`answer:${thread}`));
+  },
+);
+
+test.serial(
+  "T3: a committed step moves /live to the next turn: its number goes up and its text starts empty",
+  async (t) => {
+    const w = await runsWorld(t);
+    const { run } = await w.ask(w.mona, w.open, "fixture:fetch-then-endless");
+    await waitFor(() => streamedOutput(w.streamed[1]) > 20, "text of the second step");
+    await waitFor(
+      () => (w.rt.store.live(run, "mel")?.live?.text.length ?? 0) > CHUNK.length,
+      "deltas of the second step",
+    );
+    const mid = await live(w.mel, w, run);
+    t.is(mid.status, 200);
+    t.deepEqual(
+      mid.body.turns.map((x) => x.key),
+      [`turn:${run}:1:0`],
+    );
+    t.is(mid.body.live?.n, 1, "the turn the second step's record will have");
+    t.true(mid.body.live?.text.startsWith(CHUNK) ?? false, "the first step's text is not in it");
+    t.false(mid.body.live?.text.includes("Reading the page.") ?? true);
+    await w.mona.ok("research.cancelNode", { thread: w.run(run).th, node: "r" });
+    await w.settled(run);
+  },
+);
+
+test.serial(
+  "T3: /live answers from the stored checkpoint when this process holds no text of the attempt",
+  async (t) => {
+    const w = await runsWorld(t, { start: false });
+    const { run } = await w.ask(w.mona, w.open, "fixture:success");
+    const request = w.rt.store.claim(w.rt.store.queued()[0]!);
+    if (!request) return t.fail("no claim");
+    w.rt.store.delta(request, "t0", "Checkpointed text. ");
+    w.rt.store.checkpoint(request);
+    // another process's view of the same database
+    const other = new RecordRunStore({ sync: w.sync, db: w.db });
+    t.teardown(() => other.close());
+    t.deepEqual(other.live(run, "mel")?.live, { n: 0, text: "Checkpointed text. ", seq: 1 });
+  },
+);
+
+test.serial(
+  "T3: a claim of an attempt claimed before jumps its delta sequence and starts /live empty; /live has no text while the run is queued",
+  async (t) => {
+    const w = await runsWorld(t, { start: false });
+    const sent: RunDelta[] = [];
+    const hub = w.sync.hub;
+    const ephemeral = hub.ephemeral.bind(hub);
+    hub.ephemeral = (log, event, data, audience) => {
+      sent.push(data as RunDelta);
+      ephemeral(log, event, data, audience);
+    };
+    const { run } = await w.ask(w.mona, w.open, "fixture:success");
+    let store = w.rt.store;
+    let request = store.claim(store.queued()[0]!)!;
+    store.delta(request, "t0", "A1 ");
+    store.delta(request, "t0", "A2 ");
+    store.checkpoint(request);
+    store.delta(request, "t0", "A3 ");
+    // a new process resumes the attempt
+    w.rt.store.close();
+    store = new RecordRunStore({ sync: w.sync, db: w.db });
+    t.teardown(() => store.close());
+    t.is(store.interruptRunning(), 1);
+    t.true(store.resume(store.interrupted()[0]!));
+    t.is(store.live(run, "mona")?.live, null, "nothing streams while queued");
+    request = store.claim(store.queued()[0]!)!;
+    t.deepEqual(store.live(run, "mona")?.live, { n: 0, text: "", seq: 2 + RESUME_SEQ_GAP });
+    store.delta(request, "t0", "B1 ");
+    t.is(sent.at(-1)?.seq, 2 + RESUME_SEQ_GAP + 1, "past any delta the crashed one sent");
+    // a 429 re-queue in this process, then its claim
+    t.true(store.requeue(request));
+    request = store.claim(store.queued()[0]!)!;
+    const seq = 2 + 2 * RESUME_SEQ_GAP + 1;
+    t.deepEqual(store.live(run, "mona")?.live, { n: 0, text: "", seq });
+    t.like(
+      w.db.$client.prepare("SELECT md, seq FROM run_live WHERE run_id = ?").get(run),
+      { md: "", seq },
+      "the checkpoint is the empty turn",
+    );
+    store.delta(request, "t0", "C1 ");
+    t.like(sent.at(-1), { seq: seq + 1, text: "C1 " });
+    t.is(store.live(run, "mona")?.live?.text, "C1 ");
+  },
+);
+
+test.serial(
+  "T4: in-flight text stays off the change log: a checkpoint adds no log row and no record holds its text",
+  async (t) => {
+    const w = await runsWorld(t);
+    const { run } = await w.ask(w.mona, w.open, "fixture:endless-answer");
+    await waitFor(
+      () =>
+        (
+          w.db.$client.prepare("SELECT length(md) AS n FROM run_live WHERE run_id = ?").get(run) as
+            { n: number } | undefined
+        )?.n !== undefined,
+      "a checkpoint",
+    );
+    const head = w.sync.store.head();
+    const firstCheckpoint = (
+      w.db.$client.prepare("SELECT md FROM run_live WHERE run_id = ?").get(run) as { md: string }
+    ).md;
+    await waitFor(
+      () =>
+        (
+          w.db.$client.prepare("SELECT md FROM run_live WHERE run_id = ?").get(run) as {
+            md: string;
+          }
+        ).md.length > firstCheckpoint.length,
+      "a later checkpoint",
+    );
+    t.is(w.sync.store.head(), head, "no commit while the step streams");
+    t.is(
+      (
+        w.db.$client
+          .prepare("SELECT count(*) AS n FROM records WHERE body LIKE ?")
+          .get(`%${CHUNK.trim()}%`) as { n: number }
+      ).n,
+      0,
+      "no record holds the streaming text",
+    );
+    await w.mona.ok("research.cancelNode", { thread: w.run(run).th, node: "r" });
+    await w.settled(run);
+  },
+);
+
+test.serial(
+  "T3: /live is a plain read, limited per reader; a waiting account gets NOT_FOUND",
+  async (t) => {
+    const w = await runsWorld(t, { start: false });
+    const { run } = await w.ask(w.mel, w.closed, "fixture:success");
+    const apply = w.sync.server.serverApply.bind(w.sync.server);
+    let applies = 0;
+    w.sync.server.serverApply = ((...a: Parameters<typeof apply>) => {
+      applies += 1;
+      return apply(...a);
+    }) as typeof apply;
+    t.is((await live(w.mel, w, run)).status, 200);
+    t.is(applies, 0, "no transaction for a read");
+    // a member whose account is waiting again reads nothing
+    w.db.$client.prepare("UPDATE users SET status = 'waiting' WHERE id = ?").run(w.mel.user.id);
+    t.is((await live(w.mel, w, run)).status, 404);
+    w.db.$client.prepare("UPDATE users SET status = 'active' WHERE id = ?").run(w.mel.user.id);
+    let last = 200;
+    for (let k = 2; k < RUN_LIVE_READS.limit; k += 1) last = (await live(w.mel, w, run)).status;
+    t.is(last, 200);
+    const refused = await w.request(`/api/runs/${run}/live`, { cookie: w.mel.cookie });
+    t.is(refused.status, 429);
+    t.truthy(refused.headers.get("Retry-After"));
+    // another reader has their own allowance
+    t.is((await live(w.olga, w, run)).status, 200);
+  },
+);
+
+test.serial(
+  "T2: an ask hidden while its run streams keeps its answer hidden: redacted for a reader, whole for its author and the owner",
+  async (t) => {
+    const w = await runsWorld(t);
+    const { thread, run } = await w.ask(w.mona, w.open, "fixture:paced-answer");
+    await waitFor(() => w.run(run).status === "running", "the claim");
+    await w.olga.ok("moderation.decide", { item: `a:${thread}`, decision: "hidden" });
+    t.is((await w.settled(run)).status, "complete");
+    const answer = w.rec(`answer:${thread}`);
+    t.like(answer, { kind: "answer", mod: "hidden" });
+    const served = async (p: Person) =>
+      (await p.snapshot(`space:${w.open}`)).records.find((r) => r.key === `answer:${thread}`)
+        ?.record as { md: string } | undefined;
+    t.is((await served(w.mel))?.md, "");
+    const md = answer?.kind === "answer" ? answer.md : "";
+    t.true(md.length > 0);
+    t.is((await served(w.mona))?.md, md);
+    t.is((await served(w.olga))?.md, md);
   },
 );

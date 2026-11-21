@@ -359,19 +359,28 @@ export async function buildMessages(input: BuildMessagesInput): Promise<BuiltMes
  * Committed turns are real exchanges — the model asked for a search and read
  * its result — so a resume replays them and continues, rather than paying for
  * them again. The in-flight partial is not here: it was never committed, and
- * the resumed attempt replaces it.
+ * the resumed attempt replaces it. A tool call without a result, and a result
+ * without its call, are left out: a provider refuses a request that holds
+ * either (a turn stored before the mapper dropped unanswered calls).
  */
 export function messagesFromCommittedTurns(turns: readonly Turn[]): ModelMessage[] {
   const messages: ModelMessage[] = [];
   const toolNames = new Map<string, string>();
+  const results = new Set<string>();
+  const calls = new Set<string>();
+  for (const turn of turns)
+    for (const block of turn.blocks) {
+      if (block.type === "toolResult" && block.toolUseId) results.add(block.toolUseId);
+      if (block.type === "toolUse" && block.id) calls.add(block.id);
+    }
   for (const turn of turns) {
     if (turn.role === "assistant") {
       const content: AssistantContent = [];
       for (const block of turn.blocks) {
         if (block.type === "text" && block.text !== "") {
           content.push({ type: "text", text: block.text });
-        } else if (block.type === "toolUse") {
-          const toolCallId = block.id ?? `${turn.id}-${content.length}`;
+        } else if (block.type === "toolUse" && block.id && results.has(block.id)) {
+          const toolCallId = block.id;
           toolNames.set(toolCallId, block.name);
           content.push({
             type: "tool-call",
@@ -386,16 +395,16 @@ export function messagesFromCommittedTurns(turns: readonly Turn[]): ModelMessage
       }
       continue;
     }
-    const results: ToolContent = [];
+    const answers: ToolContent = [];
     for (const block of turn.blocks) {
       if (block.type !== "toolResult") {
         continue;
       }
       const toolCallId = block.toolUseId ?? "";
-      if (toolCallId === "") {
+      if (!calls.has(toolCallId)) {
         continue;
       }
-      results.push({
+      answers.push({
         type: "tool-result",
         toolCallId,
         toolName: toolNames.get(toolCallId) ?? "web_search",
@@ -404,8 +413,8 @@ export function messagesFromCommittedTurns(turns: readonly Turn[]): ModelMessage
           : { type: "json", value: (block.content ?? null) as never },
       });
     }
-    if (results.length > 0) {
-      messages.push({ role: "tool", content: results });
+    if (answers.length > 0) {
+      messages.push({ role: "tool", content: answers });
     }
   }
   return messages;

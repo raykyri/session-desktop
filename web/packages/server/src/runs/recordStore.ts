@@ -33,6 +33,7 @@
 import type { SessionDatabase } from "@session/db";
 import { RunTables, preferences, users } from "@session/db";
 import {
+  bannedFrom,
   canRead,
   nodeKey,
   threadKey,
@@ -43,6 +44,7 @@ import {
   type RunRec,
   type StoredRecord,
   type ThreadRec,
+  type TurnRec,
   type Tx,
 } from "@session/mutators";
 import type { Spaces, Turn } from "@session/shared";
@@ -50,10 +52,12 @@ import { findModel } from "@session/shared";
 
 import type { SyncService } from "../sync/service.js";
 
-import { attemptTurns, roleOf, runContext, turnsOf } from "./context.js";
-import type { Payer } from "./ledger.js";
+import { billLabel } from "./allowance.js";
+import { roleOf, runContext, turnsOf } from "./context.js";
+import type { Ledger, Payer } from "./ledger.js";
 import type {
   AttemptSummary,
+  BillLabel,
   CompletedAnswer,
   InterruptedRun,
   QueuedRun,
@@ -121,6 +125,11 @@ export interface RecordRunStoreDeps {
   accountOf?: (handle: string) => string | null;
   /** The asker's research instruction; the stored preference when absent. */
   instructionOf?: (userId: string) => string | null;
+  /** The run record's `tok` and `bill` when an attempt ends without the
+   * loop's summary: a 429 re-queue, a claim refused, an interrupt at boot, an
+   * attempt the fence stopped (`03` K1). Absent, those writes leave both as
+   * they are. */
+  ledger?: Pick<Ledger, "runTokens" | "runPayers">;
   /** A run ended `failed`: the counter `session_run_failures_total{cls}`
    * (`03` E5), labelled with the error class or, for a failure that is not
    * a provider error, its `why`. */
@@ -207,6 +216,11 @@ export class RecordRunStore implements RunStore {
   readonly #accountOf: (handle: string) => string | null;
   readonly #instructionOf: (userId: string) => string | null;
   readonly #onFailure: ((cls: string) => void) | undefined;
+  readonly #ledger: Pick<Ledger, "runTokens" | "runPayers"> | undefined;
+  /** The admission place of attempts this process claimed: the version of
+   * the commit that queued the attempt, kept when a 429 re-queues it
+   * (`03` E2, E5). */
+  readonly #places = new Map<string, { attempt: number; v: number }>();
   /** The attempts this process runs: run id → the request. */
   readonly #attempts = new Map<string, RunRequest>();
   /** The streaming text of the attempts this process runs. */
@@ -222,6 +236,7 @@ export class RecordRunStore implements RunStore {
       deps.instructionOf ??
       ((id) => preferences.ensure(deps.db, id).researchLaunchInstruction ?? null);
     this.#onFailure = deps.onFailure;
+    this.#ledger = deps.ledger;
     this.#unsubscribe = deps.sync.onRecords((keys) => this.#committed(keys));
   }
 
@@ -247,14 +262,46 @@ export class RecordRunStore implements RunStore {
     return res.result;
   }
 
-  /** The thread and the ask of a run, if neither is removed or deleted. */
+  /** The thread and the ask of a run, if neither is removed or deleted and
+   * the asker is not banned from the space. A thread its author deleted
+   * while others wrote under it stays as a shell (`del`): that ends the
+   * root's run, not the runs of the asks under it (`threads.delete`). A ban
+   * stops every write in its space, the asker's own runs included
+   * (AGENTS.md). */
   #alive(g: Reader, run: RunRec): Omit<Fence, "run"> | null {
     const th = g.byKey(threadKey(run.th));
-    if (th?.kind !== "thread" || th.mod === "removed" || th.del || th.gone) return null;
-    if (run.node === "r") return { th, ask: th };
+    if (th?.kind !== "thread" || th.mod === "removed" || th.gone) return null;
+    if (bannedFrom(g, run.s, run.u)) return null;
+    if (run.node === "r") return th.del ? null : { th, ask: th };
     const n = g.byKey(nodeKey(run.node));
     if (n?.kind !== "node" || n.mod === "removed" || n.del) return null;
     return { th, ask: n };
+  }
+
+  /** The run record's `tok` and `bill` from the ledger, or nothing without
+   * one. */
+  #spent(run: RunRec): { tok: number; bill: BillLabel | null } | Record<string, never> {
+    if (!this.#ledger) return {};
+    return {
+      tok: this.#ledger.runTokens(run.id),
+      bill: billLabel(this.#ledger.runPayers(run.id, run.attempt)),
+    };
+  }
+
+  /** The committed turns of one attempt of a run, by number: the keys from
+   * the records table, each record through `g`. */
+  #turns(g: Reader, run: Pick<RunRec, "id" | "th">, attempt: number): TurnRec[] {
+    const runId = run.id;
+    return this.#store.sqlite
+      .prepare<[string, string], { key: string }>(
+        "SELECT key FROM records WHERE th = ? AND kind = 'turn' AND key LIKE ?",
+      )
+      .all(run.th, `turn:${runId}:${attempt}:%`)
+      .flatMap(({ key }) => {
+        const t = g.byKey(key);
+        return t?.kind === "turn" && t.run === runId && t.attempt === attempt ? [t] : [];
+      })
+      .sort((a, b) => a.n - b.n);
   }
 
   /** The fence of `03` E1: the run record, while `request` is its attempt
@@ -290,6 +337,17 @@ export class RecordRunStore implements RunStore {
       if (!key.startsWith("run:")) continue;
       const r = this.#store.byKey(key);
       if (r?.kind === "run" && r.status === "queued") queued = true;
+      // `01` D4: no streamed text outlives its run record, or the attempt it
+      // belongs to; a run stopped while queued (a Stop during a 429 backoff)
+      // has no attempt running here to drop its checkpoint
+      const runId = key.slice("run:".length);
+      if (r?.kind !== "run") {
+        this.#live.delete(runId);
+        this.#tables.dropLive(runId);
+      } else {
+        this.#tables.dropOtherAttempts(runId, r.attempt);
+        if (r.status === "cancelled") this.#tables.dropLive(runId, r.attempt);
+      }
     }
     for (const [runId, request] of this.#attempts) {
       const run = this.#store.byKey(`run:${runId}`);
@@ -346,7 +404,7 @@ export class RecordRunStore implements RunStore {
   committedTurns(request: RunRequest): Turn[] {
     const run = this.#store.byKey(`run:${request.runId}`);
     if (run?.kind !== "run") return [];
-    return this.#apply((tx) => attemptTurns(tx, run.th, run.id, request.attempt).flatMap(turnsOf));
+    return this.#turns(this.#store, run, request.attempt).flatMap(turnsOf);
   }
 
   /** The claim already wrote `running` and `startedAt` (E2). */
@@ -361,7 +419,7 @@ export class RecordRunStore implements RunStore {
   commitTurn(request: RunRequest, turn: Turn): void {
     let committed = false;
     this.#write(request, (tx, { run }) => {
-      const stored = attemptTurns(tx, run.th, run.id, run.attempt);
+      const stored = this.#turns(tx, run, run.attempt);
       const role = roleOf(turn);
       // the results of a step's tool calls join the step's record, so a
       // step is one turn record and one change-log row (`03` T4)
@@ -500,7 +558,43 @@ export class RecordRunStore implements RunStore {
     if (!interrupted) this.#dropLive(request);
   }
 
+  /** The fence stopped the attempt (`03` E1). Where the run record still
+   * holds this attempt (the asker was banned from the space, or the ask was
+   * deleted while someone else had written under it), the record gets the
+   * attempt's `tok` and `bill`, and a run still `running` ends
+   * `failed { why: "access" }`, so no run stays `running` without a runner. */
+  superseded(request: RunRequest): void {
+    this.#attempts.delete(request.runId);
+    this.#apply((tx) => {
+      const run = tx.byKey(`run:${request.runId}`);
+      if (run?.kind !== "run" || run.attempt !== request.attempt) return;
+      const running = run.status === "running";
+      tx.put({
+        ...run,
+        ...this.#spent(run),
+        ...(running
+          ? {
+              status: "failed" as const,
+              fail: { why: "access" as const, at: null, cls: null },
+              finishedAt: tx.now,
+            }
+          : {}),
+      });
+      if (running) this.#rootRunning(tx, run, false);
+    });
+  }
+
   // ── the dispatcher ─────────────────────────────────────────────────────
+
+  /** The admission place of a queued run (`03` E2): the version of the
+   * commit that queued its attempt. A run Run again queued is placed by that
+   * write, after the runs queued before it; a 429 re-queue keeps the place
+   * the claim recorded. */
+  #place(run: RunRec): number {
+    const kept = this.#places.get(run.id);
+    if (kept?.attempt === run.attempt) return kept.v;
+    return this.#store.logRow(`space:${run.s}`, `run:${run.id}`)?.version ?? 0;
+  }
 
   #runsWith(status: RunRec["status"]): RunRec[] {
     return this.#store.sqlite
@@ -516,50 +610,61 @@ export class RecordRunStore implements RunStore {
   }
 
   queued(): QueuedRun[] {
-    return this.#runsWith("queued").map((run) => ({
-      runId: run.id,
-      attempt: run.attempt,
-      userId: this.#accountOf(run.u) ?? "",
-      model: run.model,
-      effort: run.effort,
-      payer: requestedPayer(run.model),
-      queuedAt: this.#store.createdVersion(`run:${run.id}`) ?? 0,
-    }));
+    return this.#runsWith("queued")
+      .map((run) => ({
+        runId: run.id,
+        attempt: run.attempt,
+        userId: this.#accountOf(run.u) ?? "",
+        model: run.model,
+        effort: run.effort,
+        payer: requestedPayer(run.model),
+        queuedAt: this.#place(run),
+      }))
+      .sort((a, b) => a.queuedAt - b.queuedAt);
   }
 
   claim(queued: QueuedRun): RunRequest | null {
     const userId = this.#accountOf(
       (this.#store.byKey(`run:${queued.runId}`) as RunRec | undefined)?.u ?? "",
     );
+    let refused = false;
     const claimed = this.#apply((tx) => {
       const run = tx.byKey(`run:${queued.runId}`);
       if (run?.kind !== "run" || run.status !== "queued" || run.attempt !== queued.attempt)
         return null;
       const alive = this.#alive(tx, run);
       const context = alive ? runContext(tx, run) : null;
-      // `03` G8: an asker who can no longer read the thread gets no model call
+      // `03` G7, G8: an asker who can no longer read the thread or a record
+      // on its path, or who is banned from the space, gets no model call
       if (!alive || !context || userId === null || !canRead(tx, alive.th, run.u)) {
         tx.put({
           ...run,
+          ...this.#spent(run),
           status: "failed",
           fail: { why: "access", at: null, cls: null },
           finishedAt: tx.now,
         });
         this.#rootRunning(tx, run, false);
+        refused = true;
         return null;
       }
+      const place = this.#place(run);
+      const startedAt = run.startedAt ?? tx.now;
       tx.put({
         ...run,
         status: "running",
         fail: null,
-        startedAt: run.startedAt ?? tx.now,
+        startedAt,
         finishedAt: null,
       });
-      const committed = attemptTurns(tx, run.th, run.id, run.attempt).length;
-      return { run, context, committed };
+      const committed = this.#turns(tx, run, run.attempt).length;
+      return { run, context, committed, place, startedAt };
     });
+    // the attempt ended at its claim: its checkpoint goes (`01` D4)
+    if (refused) this.#tables.dropLive(queued.runId, queued.attempt);
     if (claimed === null || userId === null) return null;
-    const { run, context, committed } = claimed;
+    const { run, context, committed, place, startedAt } = claimed;
+    this.#places.set(run.id, { attempt: run.attempt, v: place });
     const request: RunRequest = {
       runId: run.id,
       userId,
@@ -572,27 +677,41 @@ export class RecordRunStore implements RunStore {
       instruction: this.#instructionOf(userId),
       userText: context.userText,
       history: context.history,
+      // the first claim's own time, not the stored one, which is to the second
+      startedAt: run.startedAt === null ? Date.now() : Date.parse(startedAt),
       ...(context.finalSteps ? { finalSteps: context.finalSteps } : {}),
     };
     this.#attempts.set(run.id, request);
-    const live = this.#live.get(run.id);
-    if (live?.attempt !== run.attempt) {
-      // a new process continues the attempt's sequence past what it sent
-      const stored = this.#tables.live(run.id, run.attempt);
-      const resumed = stored !== null || this.#tables.resumes(run.id, run.attempt) > 0;
-      this.#live.set(run.id, {
+    // The attempt's delta sequence (`03` T3). A claim of an attempt claimed
+    // before (a resume in a new process, or a 429 re-queue in this one)
+    // jumps past any delta sent before it, so a client holding text of the
+    // earlier claim sees a gap and reads `/live`, which answers the empty
+    // turn the attempt continues with.
+    const held = this.#live.get(run.id);
+    const mem = held?.attempt === run.attempt ? held : null;
+    const stored = this.#tables.live(run.id, run.attempt);
+    const resumed =
+      mem !== null || stored !== null || this.#tables.resumes(run.id, run.attempt) > 0;
+    const seq = Math.max(mem?.seq ?? 0, stored?.seq ?? 0) + (resumed ? RESUME_SEQ_GAP : 0);
+    this.#live.set(run.id, {
+      attempt: run.attempt,
+      th: run.th,
+      s: run.s,
+      n: committed,
+      turnId: "",
+      text: "",
+      seq,
+    });
+    if (resumed)
+      this.#tables.putLive({
+        runId: run.id,
         attempt: run.attempt,
-        th: run.th,
-        s: run.s,
-        n: committed,
         turnId: "",
-        text: "",
-        seq: (stored?.seq ?? 0) + (resumed ? RESUME_SEQ_GAP : 0),
+        n: committed,
+        md: "",
+        seq,
+        updatedAt: Date.now(),
       });
-    } else {
-      live.n = committed;
-      live.text = "";
-    }
     return request;
   }
 
@@ -603,16 +722,18 @@ export class RecordRunStore implements RunStore {
         return false;
       tx.put({
         ...run,
+        ...this.#spent(run),
         status: summary.outcome,
         fail: failOf(summary.fail),
         tok: summary.tok,
-        bill: summary.bill,
         note: summary.note ?? null,
         finishedAt: tx.now,
       });
       this.#rootRunning(tx, run, false);
       return true;
     });
+    // the attempt ended before it was claimed again: its checkpoint goes
+    if (settled) this.#tables.dropLive(queued.runId, queued.attempt);
     if (settled && summary.outcome === "failed" && summary.fail)
       this.#onFailure?.(failOf(summary.fail)?.cls ?? summary.fail.why);
     return settled;
@@ -623,7 +744,7 @@ export class RecordRunStore implements RunStore {
     return this.#apply((tx) => {
       const f = this.#fenced(tx, request);
       if (!f || f.run.status !== "running") return false;
-      tx.put({ ...f.run, status: "queued" });
+      tx.put({ ...f.run, ...this.#spent(f.run), status: "queued" });
       return true;
     });
   }
@@ -638,6 +759,7 @@ export class RecordRunStore implements RunStore {
         if (run?.kind !== "run" || run.status !== "running") continue;
         tx.put({
           ...run,
+          ...this.#spent(run),
           status: "interrupted",
           fail: { why: "interrupted", at: null, cls: null },
           finishedAt: tx.now,
@@ -659,7 +781,7 @@ export class RecordRunStore implements RunStore {
   }
 
   resume(interrupted: InterruptedRun): boolean {
-    const resumed = this.#apply((tx) => {
+    return this.#apply((tx) => {
       const run = tx.byKey(`run:${interrupted.runId}`);
       if (
         run?.kind !== "run" ||
@@ -670,11 +792,30 @@ export class RecordRunStore implements RunStore {
         return false;
       tx.put({ ...run, status: "queued", fail: null, finishedAt: null });
       this.#rootRunning(tx, run, true);
+      // in the record write's transaction: a crash cannot leave the resume
+      // written and not counted (`03` E2: at most two)
+      this.#tables.setResumes(interrupted.runId, interrupted.attempt, interrupted.resumes + 1);
       return true;
     });
-    if (resumed)
-      this.#tables.setResumes(interrupted.runId, interrupted.attempt, interrupted.resumes + 1);
-    return resumed;
+  }
+
+  /** Boot (`01` D4): deletes every checkpoint whose run is gone, whose
+   * attempt is not the run's current one, or whose run ended, and returns
+   * how many it deleted. */
+  sweepLive(): number {
+    let n = 0;
+    for (const { runId, attempt } of this.#tables.liveAttempts()) {
+      const run = this.#store.byKey(`run:${runId}`);
+      if (
+        run?.kind === "run" &&
+        run.attempt === attempt &&
+        (run.status === "queued" || run.status === "running" || run.status === "interrupted")
+      )
+        continue;
+      this.#tables.dropLive(runId, attempt);
+      n += 1;
+    }
+    return n;
   }
 
   // ── reads ──────────────────────────────────────────────────────────────
@@ -682,21 +823,20 @@ export class RecordRunStore implements RunStore {
   /** `GET /api/runs/:id/live` (`03` T3): the current attempt's committed
    * turns' versions and the turn still streaming, for a reader who may read
    * the run's text; null otherwise (NOT_FOUND, as for a run that does not
-   * exist). */
+   * exist). A plain read: it opens no transaction. Nothing streams while the
+   * run is queued, so `live` is null then. */
   live(runId: string, u: string | null): RunLive | null {
     const run = this.#store.byKey(`run:${runId}`);
     if (run?.kind !== "run" || !this.#mayRead(runId, u)) return null;
-    const turns = this.#apply((tx) =>
-      attemptTurns(tx, run.th, run.id, run.attempt).map((t) => ({
-        key: turnKey(t.run, t.attempt, t.n),
-        rev: t.rev,
-      })),
-    );
+    const turns = this.#turns(this.#store, run, run.attempt).map((t) => ({
+      key: turnKey(t.run, t.attempt, t.n),
+      rev: t.rev,
+    }));
     const mem = this.#live.get(runId);
     let live: RunLive["live"] = null;
     if (mem?.attempt === run.attempt && run.status === "running")
       live = { n: mem.n, text: mem.text, seq: mem.seq };
-    else if (run.status === "running" || run.status === "queued") {
+    else if (run.status === "running") {
       const stored = this.#tables.live(runId, run.attempt);
       if (stored) live = { n: stored.n, text: stored.md, seq: stored.seq };
     }

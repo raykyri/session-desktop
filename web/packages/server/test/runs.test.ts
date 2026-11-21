@@ -5,13 +5,15 @@
 // thread's title, summary line, `tok`, `src` and `running` follow.
 
 import type { NodeRec, RunRec } from "@session/mutators";
+import { view } from "@session/mutators";
 import test from "ava";
 
+import { bootServer } from "../src/boot.js";
 import { configAllowances } from "../src/runs/allowance.js";
 import { attemptTurns, runContext } from "../src/runs/context.js";
 import { createDispatcher } from "../src/runs/dispatcher.js";
 
-import { newId, runsWorld, turnText, until } from "./recordRuns.js";
+import { MODEL, newId, runsWorld, turnText, until, waitFor } from "./recordRuns.js";
 
 test.serial(
   "E2: an ask is claimed, commits a turn per step, and completes with its answer, title and summary",
@@ -300,3 +302,191 @@ test.serial(
     t.deepEqual(count("SELECT count(*) AS n FROM usage_events"), rows);
   },
 );
+
+test.serial(
+  "G7: an ask hidden from the asker gives no context: a reader's Continue is refused, a fork queued before the hide ends access at its claim, and the author's and the owner's run with the hidden text",
+  async (t) => {
+    const w = await runsWorld(t);
+    const { thread, run } = await w.ask(w.mona, w.open, "fixture:success A HIDDEN QUESTION");
+    await w.settled(run);
+    w.rt.dispatcher.stop();
+    const queued = await w.fork(w.mel, thread, "r", "fixture:success What else?");
+    await w.olga.ok("moderation.decide", { item: `a:${thread}`, decision: "hidden" });
+    // mel may no longer read the root's text, so may not build on it
+    const fork = (p: typeof w.mel, q: string) =>
+      p.write("research.forkNode", { id: newId(), thread, parent: "r", kind: "ask", q, ...MODEL });
+    t.like(await fork(w.mel, "fixture:success Again?"), {
+      ok: false,
+      error: { code: "PRECONDITION_FAILED" },
+    });
+    const author = await fork(w.mona, "fixture:success By the author?");
+    const owner = await fork(w.olga, "fixture:success By the owner?");
+    t.true(author.ok && owner.ok);
+    const runOf = (r: typeof author) => (r.ok ? (r.result as { run: string }).run : "");
+    w.rt.dispatcher.start();
+    t.like(await w.settled(queued.run), {
+      status: "failed",
+      fail: { why: "access", at: null, cls: null },
+    });
+    t.deepEqual(w.rows(queued.run), [], "no model call for the reader's run");
+    for (const r of [author, owner]) t.is((await w.settled(runOf(r))).status, "complete");
+    // the author's and the owner's requests hold the hidden question
+    const prompts = w.streamed.map((c) => JSON.stringify(c.prompt));
+    t.false(prompts.some((p) => p.includes("What else?")));
+    for (const q of ["By the author?", "By the owner?"])
+      t.true(
+        prompts.some((p) => p.includes(q) && p.includes("A HIDDEN QUESTION")),
+        q,
+      );
+  },
+);
+
+test.serial(
+  "G7: the context of a Continue under a tool-using root replays the root's stored turns, its tool calls and results included",
+  async (t) => {
+    const w = await runsWorld(t);
+    const { thread, run } = await w.ask(w.mona, w.open, "fixture:success-with-tools Root");
+    await w.settled(run);
+    w.rt.dispatcher.stop();
+    const cont = await w.fork(w.mel, thread, "r", "fixture:success Continue");
+    const req = w.rt.store.claim(w.rt.store.queued()[0]!);
+    if (!req) return t.fail("no claim");
+    t.is(req.runId, cont.run);
+    const parts = req.history.flatMap((m) =>
+      typeof m.message.content === "string"
+        ? [m.message.content]
+        : (m.message.content as { type: string; toolCallId?: string }[]).map(
+            (p) => `${p.type}:${p.toolCallId ?? ""}`,
+          ),
+    );
+    t.true(parts.includes("tool-call:call-fetch-1"), "the root's fetch");
+    t.true(parts.includes("tool-result:call-fetch-1"), "and its result");
+  },
+);
+
+test.serial(
+  "E2: queued runs are admitted in the order they were queued; Run again queues at the back, and a 429 re-queue keeps its place",
+  async (t) => {
+    const w = await runsWorld(t, { start: false });
+    const a = await w.ask(w.mona, w.open, "A");
+    await w.mona.ok("research.cancelNode", { thread: a.thread, node: "r" });
+    const b = await w.ask(w.mel, w.open, "B");
+    const c = await w.ask(w.olga, w.open, "C");
+    const order = () => w.rt.store.queued().map((q) => q.runId);
+    t.deepEqual(order(), [b.run, c.run]);
+    await w.mona.ok("research.retryNode", {
+      thread: a.thread,
+      node: "r",
+      base: { attempt: 1 },
+      ...MODEL,
+    });
+    t.deepEqual(order(), [b.run, c.run, a.run], "Run again is queued after B and C");
+    const claimed = w.rt.store.claim(w.rt.store.queued()[0]!);
+    t.is(claimed?.runId, b.run);
+    if (!claimed) return;
+    t.deepEqual(order(), [c.run, a.run]);
+    t.true(w.rt.store.requeue(claimed));
+    t.deepEqual(order(), [b.run, c.run, a.run], "the re-queued run keeps its place");
+  },
+);
+
+test.serial(
+  "thread.running follows the root's run: false after a boot interrupt and after a claim refused, true again after a resume",
+  async (t) => {
+    const w = await runsWorld(t, { start: false });
+    const { thread, run } = await w.ask(w.mona, w.open, "fixture:success");
+    t.true(w.thread(thread).running);
+    t.truthy(w.rt.store.claim(w.rt.store.queued()[0]!));
+    // the process dies; the next boots without a run dispatcher
+    t.like(
+      bootServer({
+        databasePath: w.config.databasePath,
+        sync: w.sync,
+        ledger: w.ledger,
+        logger: w.logger,
+      }),
+      { interrupted: 1 },
+    );
+    t.like(w.run(run), { status: "interrupted" });
+    t.false(w.thread(thread).running);
+    t.true(w.rt.store.resume(w.rt.store.interrupted()[0]!));
+    t.like(w.run(run), { status: "queued" });
+    t.true(w.thread(thread).running);
+    // the asker is banned before the claim: the claim ends the run
+    await w.olga.ok("members.ban", { space: w.open, user: "mona" });
+    t.is(w.rt.store.claim(w.rt.store.queued()[0]!), null);
+    t.like(w.run(run), { status: "failed", fail: { why: "access" } });
+    t.false(w.thread(thread).running);
+  },
+);
+
+test.serial(
+  "a summary snapshot holds no turn records; a full one holds the run's turns",
+  async (t) => {
+    const w = await runsWorld(t);
+    const { run } = await w.ask(w.mona, w.open, "fixture:success-with-tools");
+    await w.settled(run);
+    const keys = async (tier?: string) =>
+      (
+        (await (
+          await w.mona.post("/api/sync/snapshot", {
+            log: `space:${w.open}`,
+            ...(tier ? { tier } : {}),
+          })
+        ).json()) as { records: { key: string }[] }
+      ).records.map((r) => r.key);
+    t.true((await keys()).some((k) => k.startsWith(`turn:${run}:`)));
+    const summary = await keys("summary");
+    t.true(summary.length > 0);
+    t.false(
+      summary.some((k) => k.startsWith("turn:")),
+      "no turn in a summary",
+    );
+  },
+);
+
+test.serial("E2: the title step leaves a title written while the run ran", async (t) => {
+  const w = await runsWorld(t);
+  const { thread, run } = await w.ask(w.mona, w.open, "fixture:paced-answer");
+  await waitFor(() => w.run(run).status === "running", "the claim");
+  w.sync.server.serverApply({ me: "", mutationId: "" }, (tx) => {
+    const th = tx.byKey(`thread:${thread}`);
+    if (th?.kind === "thread") tx.put({ ...th, t: "Set while it ran" });
+  });
+  t.is((await w.settled(run)).status, "complete");
+  t.is(w.thread(thread).t, "Set while it ran");
+});
+
+test.serial(
+  "E5: the failure counter leaves out a run the person cancelled, whatever the attempt reports",
+  async (t) => {
+    const w = await runsWorld(t, { start: false });
+    const { thread, run } = await w.ask(w.mona, w.open, "fixture:success");
+    const request = w.rt.store.claim(w.rt.store.queued()[0]!);
+    if (!request) return t.fail("no claim");
+    await w.mona.ok("research.cancelNode", { thread, node: "r" });
+    w.rt.store.finish(request, {
+      outcome: "failed",
+      fail: { why: "error", cls: "network" },
+      tok: 0,
+      bill: null,
+      steps: 0,
+      toolCalls: 0,
+      usage: { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+      costEstimateMicros: 0,
+    });
+    t.like(w.run(run), { status: "cancelled", fail: { why: "stopped" } });
+    t.deepEqual(w.failures, []);
+  },
+);
+
+test.serial("a turn whose run record is gone is served without its text", async (t) => {
+  const w = await runsWorld(t);
+  const { run } = await w.ask(w.mona, w.open, "fixture:success");
+  await w.settled(run);
+  const [turn] = w.turns(run);
+  if (!turn) return t.fail("no turn");
+  t.true(turn.blocks.length > 0);
+  w.sync.server.serverApply({ me: "", mutationId: "" }, (tx) => tx.del(`run:${run}`));
+  t.like(view(w.sync.store, turn, "mona"), { kind: "turn", blocks: [] });
+});

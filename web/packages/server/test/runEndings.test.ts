@@ -11,6 +11,7 @@ import test from "ava";
 import type { Allowances } from "../src/runs/allowance.js";
 import { OVERDRAFT_STOP_NOTE, RUN_CAP_NOTE } from "../src/runs/allowance.js";
 import { registerFixture, setFixtureScenario } from "../src/runs/fixtureProvider.js";
+import { weekOf } from "../src/runs/ledger.js";
 
 import type { LedgerRow, RunsWorld } from "./recordRuns.js";
 import { CHUNK, newId, runsWorld, streamedOutput, turnText, waitFor } from "./recordRuns.js";
@@ -146,7 +147,7 @@ test.serial(
     const w = await runsWorld(t);
     const { run } = await w.ask(w.mona, w.open, "fixture:deployment-auth");
     t.like(await w.settled(run), { status: "failed", fail: { why: "error", cls: "auth" } });
-    t.like(closedRows(t, w, run)[0], { output_tokens: 0, counted: 0 });
+    t.like(closedRows(t, w, run)[0], { ending: "error", output_tokens: 0, counted: 0 });
     t.deepEqual(w.failures, ["auth"]);
   },
 );
@@ -236,32 +237,47 @@ test.serial(
   },
 );
 
+/** The `run_live` rows of a run. */
+const liveRows = (w: RunsWorld, run: string) =>
+  w.db.$client.prepare("SELECT attempt, md, seq FROM run_live WHERE run_id = ?").all(run);
+
+/** Turn records of a run by their key prefix: found after the run record is
+ * gone. */
+const turnKeys = (w: RunsWorld, run: string) =>
+  w.db.$client
+    .prepare<[string], { key: string }>("SELECT key FROM records WHERE key LIKE ?")
+    .all(`turn:${run}:%`)
+    .map((r) => r.key);
+
+/** Waits until the run has a checkpoint with text. */
+const checkpointed = (w: RunsWorld, run: string) =>
+  waitFor(
+    () =>
+      (
+        w.db.$client
+          .prepare("SELECT count(*) AS n FROM run_live WHERE run_id = ? AND length(md) > 0")
+          .get(run) as { n: number }
+      ).n > 0,
+    "a checkpoint with text",
+  );
+
 test.serial(
-  "E1: a thread removed while its run streams: no turn after the removal, the stream aborted, no text left, the row closed",
+  "E1: a thread removed in the second step of its run: its turns go, no turn after, the stream aborted, no text left, the call closed superseded",
   async (t) => {
     const w = await runsWorld(t);
-    const { thread, run } = await w.ask(w.mona, w.open, "fixture:fetch-free-endless");
-    await waitFor(() => streamedOutput(w.streamed[0]) > 50, "some text");
-    await waitFor(
-      () =>
-        w.db.$client.prepare("SELECT count(*) AS n FROM run_live WHERE run_id = ?").get(run) !==
-          undefined &&
-        (
-          w.db.$client.prepare("SELECT count(*) AS n FROM run_live WHERE run_id = ?").get(run) as {
-            n: number;
-          }
-        ).n > 0,
-      "a checkpoint",
-    );
+    const { thread, run } = await w.ask(w.mona, w.open, "fixture:fetch-then-endless");
+    await waitFor(() => streamedOutput(w.streamed[1]) > 50, "text of the second step");
+    await checkpointed(w, run);
+    t.deepEqual(turnKeys(w, run), [`turn:${run}:1:0`], "the first step committed");
     await w.olga.ok("moderation.decide", { item: `a:${thread}`, decision: "removed" });
+    t.deepEqual(liveRows(w, run), [], "the checkpoint went with the run record");
     await w.rt.dispatcher.idle();
-    t.is(w.rec(`run:${run}`), undefined, "the run went with the thread");
-    t.deepEqual(w.turns(run), []);
-    // nothing of the streamed text is stored anywhere (`01` D4)
-    const text = CHUNK.trim();
-    for (const [table, column] of [
-      ["records", "body"],
-      ["run_live", "md"],
+    t.is(w.rec(`run:${run}`), undefined);
+    t.deepEqual(turnKeys(w, run), [], "no turn of the run is left");
+    for (const [table, column, text] of [
+      ["records", "body", CHUNK.trim()],
+      ["records", "body", "Reading the page."],
+      ["run_live", "md", CHUNK.trim()],
     ] as const)
       t.is(
         (
@@ -270,24 +286,25 @@ test.serial(
             .get(`%${text}%`) as { n: number }
         ).n,
         0,
-        `no text in ${table}`,
+        `no "${text}" in ${table}`,
       );
-    t.false((w.streamed[0]?.output ?? "").length >= 3_000 * CHUNK.length, "the stream was aborted");
-    const [row] = w.rows(run);
-    t.like(row, { state: "closed" });
-    t.is(row?.output_tokens, streamedOutput(w.streamed[0]));
-    t.true((row?.output_tokens ?? 0) > 0, "billed for what streamed before the abort");
+    const [first, second] = w.rows(run).filter((r) => r.kind === "research");
+    t.like(first, { state: "closed", ending: "finish" });
+    t.like(second, { state: "closed", ending: "superseded" });
+    t.is(second?.output_tokens, streamedOutput(w.streamed[1]));
+    t.true((second?.output_tokens ?? 0) > 0, "billed for what streamed before the abort");
+    t.false((w.streamed[1]?.output ?? "").length >= 3_000 * CHUNK.length, "the stream was aborted");
   },
 );
 
 test.serial(
-  "E4: cancel then Run again within one millisecond leaves one live attempt",
+  "E4: Stop then Run again within one millisecond leaves one live attempt; the first attempt's call closes cancel with what it streamed; the run's tok counts both attempts",
   async (t) => {
     const w = await runsWorld(t);
     const { thread, run } = await w.ask(w.mona, w.open, "fixture:paced-answer");
     await waitFor(() => streamedOutput(w.streamed[0]) > 5, "some text");
     await w.mona.register();
-    const { answers } = await w.mona.send([
+    await w.mona.send([
       w.mona.envelope("research.cancelNode", { thread, node: "r" }),
       w.mona.envelope("research.retryNode", {
         thread,
@@ -297,46 +314,290 @@ test.serial(
         effort: "medium",
       }),
     ]);
-    t.true(answers.every((a) => a.ok));
-    const first = w.turns(run, 1).length;
+    const turnsAtRetry = w.turns(run, 1).length;
     const done = await w.settled(run, ["complete"]);
     t.is(done.attempt, 2);
-    t.is(w.turns(run, 1).length, first, "the first attempt wrote nothing after the retry");
+    t.is(w.turns(run, 1).length, turnsAtRetry, "the first attempt wrote nothing after the retry");
     t.true(w.turns(run, 2).length > 0);
-    const byAttempt = new Map<number, LedgerRow[]>();
-    for (const r of w.rows(run).filter((x) => x.kind === "research"))
-      byAttempt.set(r.attempt, [...(byAttempt.get(r.attempt) ?? []), r]);
-    t.like(byAttempt.get(1)?.[0], { state: "closed" });
-    t.is(byAttempt.get(1)?.length, 1);
-    t.is(byAttempt.get(2)?.length, 1);
     t.false(w.thread(thread).running);
+    t.is(w.rows(run).filter((r) => r.kind === "research" && r.attempt === 2).length, 1);
+    const first = w.rows(run).filter((r) => r.kind === "research" && r.attempt === 1);
+    t.is(first.length, 1);
+    t.like(first[0], { state: "closed", ending: "cancel" });
+    t.is(first[0]?.output_tokens, streamedOutput(w.streamed[0]));
+    t.true((first[0]?.counted ?? 0) > 0);
+    t.true(done.tok !== null && done.tok > (first[0]?.counted ?? 0));
     tokIsSum(t, w, run);
   },
 );
 
+test.serial(
+  "delete (G6) of a node nobody else wrote under while its run streams: the records go, the call closes superseded",
+  async (t) => {
+    const w = await runsWorld(t);
+    const { thread, run } = await w.ask(w.mona, w.open, "A root question");
+    await w.settled(run);
+    const calls = w.streamed.length;
+    const { node, run: nodeRun } = await w.fork(w.mel, thread, "r", "fixture:endless-answer more");
+    await waitFor(
+      () => w.streamed.length > calls && streamedOutput(w.streamed.at(-1)) > 50,
+      "some text",
+    );
+    await w.mel.ok("followups.delete", { thread, node });
+    await w.rt.dispatcher.idle();
+    t.is(w.rec(`run:${nodeRun}`), undefined);
+    t.is(w.rec(`node:${node}`), undefined);
+    t.deepEqual(turnKeys(w, nodeRun), []);
+    t.deepEqual(liveRows(w, nodeRun), []);
+    const [row] = closedRows(t, w, nodeRun);
+    t.like(row, { ending: "superseded" });
+    t.is(row?.output_tokens, streamedOutput(w.streamed.at(-1)));
+  },
+);
+
+test.serial(
+  "delete (G6) kept as a shell: the run ends cancelled with the tok and bill of what it spent, its checkpoint gone",
+  async (t) => {
+    const w = await runsWorld(t);
+    const { thread, run } = await w.ask(w.mona, w.open, "A root question");
+    await w.settled(run);
+    const { node, run: nodeRun } = await w.fork(w.mel, thread, "r", "fixture:endless-answer more");
+    await checkpointed(w, nodeRun);
+    await w.mona.ok("comments.create", { id: newId(), thread, node, t: "Watching." });
+    await w.mel.ok("followups.delete", { thread, node });
+    t.deepEqual(liveRows(w, nodeRun), []);
+    await w.rt.dispatcher.idle();
+    t.like(w.run(nodeRun), { status: "cancelled", fail: { why: "stopped" }, bill: "included" });
+    const [row] = closedRows(t, w, nodeRun);
+    t.like(row, { ending: "superseded" });
+    t.true((row?.counted ?? 0) > 0);
+    tokIsSum(t, w, nodeRun);
+    t.deepEqual(liveRows(w, nodeRun), []);
+  },
+);
+
+test.serial(
+  "a ban while the member's run streams ends it failed access with its tok: no turn after, the checkpoint gone, the call closed superseded",
+  async (t) => {
+    const w = await runsWorld(t);
+    const { thread, run } = await w.ask(w.mona, w.open, "A root question");
+    await w.settled(run);
+    const { run: melRun } = await w.fork(w.mel, thread, "r", "fixture:endless-answer more");
+    await checkpointed(w, melRun);
+    await w.olga.ok("members.ban", { space: w.open, user: "mel" });
+    await w.rt.dispatcher.idle();
+    t.like(w.run(melRun), {
+      status: "failed",
+      fail: { why: "access", at: null, cls: null },
+      bill: "included",
+    });
+    t.truthy(w.run(melRun).finishedAt);
+    t.deepEqual(w.turns(melRun), [], "no turn after the ban");
+    t.deepEqual(liveRows(w, melRun), []);
+    const [row] = closedRows(t, w, melRun);
+    t.like(row, { ending: "superseded" });
+    t.true((row?.counted ?? 0) > 0);
+    tokIsSum(t, w, melRun);
+  },
+);
+
+test.serial(
+  "a ban while the member's run is queued ends it failed access at its claim, with no model call",
+  async (t) => {
+    const w = await runsWorld(t, { start: false });
+    const { thread, run } = await w.ask(w.mona, w.open, "fixture:success");
+    await w.olga.ok("members.ban", { space: w.open, user: "mona" });
+    w.rt.dispatcher.start();
+    t.like(await w.settled(run), { status: "failed", fail: { why: "access" } });
+    t.deepEqual(w.rows(run), []);
+    t.is(w.streamed.length, 0);
+    t.is(w.rec(`answer:${thread}`), undefined);
+  },
+);
+
 registerFixture({
-  scenario: "fetch-free-endless",
+  scenario: "written-step-then-throttle",
+  steps: [
+    {
+      parts: [
+        { type: "stream-start", warnings: [] },
+        { type: "text-start", id: "t0" },
+        { type: "text-delta", id: "t0", delta: CHUNK.repeat(120) },
+        { type: "text-end", id: "t0" },
+        {
+          type: "tool-call",
+          toolCallId: "call-search-1",
+          toolName: "web_search",
+          input: '{"query":"bloom filters"}',
+        },
+        {
+          type: "finish",
+          finishReason: { unified: "tool-calls", raw: "tool_use" },
+          usage: {
+            inputTokens: { total: 100, noCache: 100, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 1_200, text: 1_200, reasoning: 0 },
+          },
+        },
+      ],
+    },
+    { error: { kind: "api", statusCode: 429, message: "rate limit exceeded", isRetryable: true } },
+  ],
+});
+
+test.serial(
+  "429 after a billed step: the re-queue writes the run's tok; a Stop during the backoff ends it cancelled and drops its checkpoint",
+  async (t) => {
+    const w = await runsWorld(t, { backoffMs: [5_000, 5_000, 5_000] });
+    const { thread, run } = await w.ask(w.mona, w.open, "fixture:written-step-then-throttle");
+    await waitFor(() => w.run(run).status === "queued" && w.rows(run).length >= 2, "the re-queue");
+    t.true((w.run(run).tok ?? 0) > 0);
+    tokIsSum(t, w, run);
+    t.is(w.run(run).bill, "included");
+    t.is(liveRows(w, run).length, 1, "the attempt's checkpoint, kept for its next claim");
+    await w.mona.ok("research.cancelNode", { thread, node: "r" });
+    t.like(w.run(run), { status: "cancelled" });
+    t.deepEqual(liveRows(w, run), []);
+    tokIsSum(t, w, run);
+  },
+);
+
+test.serial(
+  "the claim refused and a boot interrupt write the run's tok and bill from the ledger",
+  async (t) => {
+    const w = await runsWorld(t, { start: false });
+    const spend = (run: string, tokens: number) => {
+      const id = w.ledger.open({
+        runId: run,
+        attempt: 1,
+        userId: w.mona.user.id,
+        payer: "included",
+        week: weekOf(Date.now()),
+        kind: "research",
+        provider: "anthropic",
+        model: "claude-fable",
+        cachedInputRatio: 0.1,
+        counts: { inputTokens: tokens, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+        openedAt: Date.now(),
+      });
+      w.ledger.close(
+        id,
+        { inputTokens: tokens, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+        "rate_limited",
+        Date.now(),
+      );
+    };
+    // a run that spent tokens before a crash, interrupted at boot
+    const crashed = await w.ask(w.mona, w.open, "fixture:success");
+    t.truthy(w.rt.store.claim(w.rt.store.queued()[0]!));
+    spend(crashed.run, 700);
+    t.is(w.rt.store.interruptRunning(), 1);
+    t.like(w.run(crashed.run), { status: "interrupted", tok: 700, bill: "included" });
+    // a queued run with spent tokens whose claim is refused
+    const refused = await w.ask(w.mona, w.open, "fixture:success");
+    spend(refused.run, 300);
+    await w.olga.ok("members.ban", { space: w.open, user: "mona" });
+    t.is(w.rt.store.claim(w.rt.store.queued()[0]!), null);
+    t.like(w.run(refused.run), {
+      status: "failed",
+      fail: { why: "access" },
+      tok: 300,
+      bill: "included",
+    });
+  },
+);
+
+registerFixture({
+  scenario: "paced-search-then-answer",
   steps: [
     {
       delayMs: 5,
       parts: [
         { type: "stream-start", warnings: [] },
         { type: "text-start", id: "t0" },
-        ...Array.from({ length: 3_000 }, () => ({
+        ...Array.from({ length: 200 }, () => ({
           type: "text-delta" as const,
           id: "t0",
-          delta: CHUNK,
+          delta: "Looking. ",
         })),
         { type: "text-end", id: "t0" },
+        {
+          type: "tool-call",
+          toolCallId: "call-search-1",
+          toolName: "web_search",
+          input: '{"query":"bloom filters"}',
+        },
+        {
+          type: "finish",
+          finishReason: { unified: "tool-calls", raw: "tool_use" },
+          usage: {
+            inputTokens: { total: 400, noCache: 400, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 800, text: 800, reasoning: 0 },
+          },
+        },
+      ],
+    },
+    {
+      parts: [
+        { type: "stream-start", warnings: [] },
+        { type: "text-start", id: "t1" },
+        { type: "text-delta", id: "t1", delta: "A Bloom filter is a probabilistic set." },
+        { type: "text-end", id: "t1" },
         {
           type: "finish",
           finishReason: { unified: "stop", raw: "end_turn" },
           usage: {
             inputTokens: { total: 900, noCache: 900, cacheRead: 0, cacheWrite: 0 },
-            outputTokens: { total: 30_000, text: 30_000, reasoning: 0 },
+            outputTokens: { total: 20, text: 20, reasoning: 0 },
           },
         },
       ],
     },
   ],
 });
+
+const MEMBER_KEY = { apiKey: "sk-ant-member-key-0000000000", sealed: "v1.member-key" };
+
+test.serial(
+  "E5: the member's key removed mid-run: the call in progress finishes and closes normally, the run ends key at its next step",
+  async (t) => {
+    let key: typeof MEMBER_KEY | null = MEMBER_KEY;
+    const allowances: Allowances = {
+      weekly: () => 0,
+      billing: () => "key",
+      validKey: (_u, provider) => (provider === "anthropic" ? (key?.sealed ?? null) : null),
+      anthropicKey: () => key,
+      openaiKey: () => null,
+    };
+    const w = await runsWorld(t, { allowances });
+    const { run } = await w.ask(w.mona, w.open, "fixture:paced-search-then-answer");
+    await waitFor(() => streamedOutput(w.streamed[0]) > 20, "the first step streaming");
+    key = null;
+    t.like(await w.settled(run), { status: "failed", fail: { why: "key" } });
+    const rows = closedRows(t, w, run);
+    t.is(rows.length, 1, "no call after the key went");
+    t.like(rows[0], { ending: "finish", payer: "key:anthropic", output_tokens: 800 });
+    t.is(w.turns(run).length, 1, "the step that finished is kept");
+    tokIsSum(t, w, run);
+  },
+);
+
+test.serial(
+  "E5: the allowance reached mid-run with billing key: the next step's call carries the member's key",
+  async (t) => {
+    const allowances: Allowances = {
+      weekly: () => 1_000,
+      billing: () => "key",
+      validKey: (_u, provider) => (provider === "anthropic" ? MEMBER_KEY.sealed : null),
+      anthropicKey: () => MEMBER_KEY,
+      openaiKey: () => null,
+    };
+    const w = await runsWorld(t, { allowances });
+    const { run } = await w.ask(w.mona, w.open, "fixture:paced-search-then-answer");
+    t.like(await w.settled(run), { status: "complete", bill: "included+key:anthropic" });
+    const rows = closedRows(t, w, run);
+    t.like(rows[0], { payer: "included", ending: "finish" });
+    t.true(rows.length >= 2);
+    for (const r of rows.slice(1)) t.like(r, { payer: "key:anthropic", ending: "finish" });
+    tokIsSum(t, w, run);
+  },
+);

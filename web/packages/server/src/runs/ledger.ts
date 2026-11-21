@@ -121,6 +121,9 @@ export interface Ledger {
   /** The counted tokens of a run, every payer: of one attempt, or of every
    * attempt when `attempt` is absent. The run record's `tok` is the latter. */
   runTokens(runId: string, attempt?: number): number;
+  /** The payers of one attempt's rows: what the run record's `bill` names
+   * when the attempt ends without the loop's own summary (`03` K9). */
+  runPayers(runId: string, attempt: number): ReadonlySet<Payer>;
   /** The member's runs with rows in `week`, open rows counted, newest
    * `startedAt` first (ties by run id, descending): the Usage page's recent
    * runs (`03` K5). */
