@@ -827,8 +827,14 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M1b-18 the ban check runs on clients only",
     file: "../mutators/src/tx.ts",
-    from: "    if (tx.server && bannedFrom(tx, sp, tx.me))",
-    to: "    if (!tx.server && bannedFrom(tx, sp, tx.me))",
+    from: "    if (tx.server && !def.ownLog?.(input) && bannedFrom(tx, sp, tx.me))",
+    to: "    if (!tx.server && !def.ownLog?.(input) && bannedFrom(tx, sp, tx.me))",
+  },
+  {
+    name: "M1b-19 a ban stops a person's own user-log writes",
+    file: "../mutators/src/tx.ts",
+    from: "    if (tx.server && !def.ownLog?.(input) && bannedFrom(tx, sp, tx.me))",
+    to: "    if (tx.server && bannedFrom(tx, sp, tx.me))",
   },
 ];
 

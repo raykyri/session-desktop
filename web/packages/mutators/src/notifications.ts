@@ -12,6 +12,8 @@ export const NOTIFICATIONS = {
     who: "user",
     intent: "none",
     frozen: "allowed",
+    // the person's own user-log record: a ban does not stop it
+    ownLog: () => true,
     // the person's own notification, while they may read its space
     space: (tx, i) => {
       const n = tx.byKey(`notif:${i.id}`);

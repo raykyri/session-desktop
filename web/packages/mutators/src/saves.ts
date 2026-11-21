@@ -14,6 +14,8 @@ export const SAVES = {
     who: "user",
     intent: "none",
     frozen: "allowed",
+    // taking a save back writes only the person's user log: a ban allows it
+    ownLog: (i) => !i.on,
     space: (tx, i) =>
       i.on ? readableThread(tx, i.id).s : ownMarkSpace(tx, saveKey(tx.me, i.id), i.id),
     can: (tx, i) => {

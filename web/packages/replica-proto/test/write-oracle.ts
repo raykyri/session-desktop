@@ -341,9 +341,16 @@ const blank = (v: unknown) => String(v).trim() === "";
  * items, leaving, saves and notifications (`thaw`; `04` B6); then the role
  * `need` (0: any signed-in person; "member": a member of a private space,
  * anyone in an open one; "owner": the owner). */
-function inSpace(f: Facts, sp: string, need: 0 | "member" | "owner", thaw = false): Space {
+function inSpace(
+  f: Facts,
+  sp: string,
+  need: 0 | "member" | "owner",
+  thaw = false,
+  ownLog = false,
+): Space {
   const s = spaceAt(f, sp) ?? no("NOT_FOUND");
-  if (banned(f, sp, f.me)) no("FORBIDDEN");
+  // a write of the person's own user-log records only: a ban allows it
+  if (!ownLog && banned(f, sp, f.me)) no("FORBIDDEN");
   if (s.frozen && !thaw) no("FORBIDDEN");
   if (need === "member" && closed(s) && roleOf(f, sp, f.me) === null) no("FORBIDDEN");
   if (need === "owner" && roleOf(f, sp, f.me) !== "owner") no("FORBIDDEN");
@@ -527,7 +534,7 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     const mine = f.dump.has(`save:${f.me}:${String(i["id"])}`);
     if (i["on"] === false) {
       const p = f.dump.get(`thread:${String(i["id"])}`);
-      if (mine && p?.kind === "thread") inSpace(f, p.s, 0, true);
+      if (mine && p?.kind === "thread") inSpace(f, p.s, 0, true, true);
       return;
     }
     const p = seenThread(f, i["id"]);
@@ -714,7 +721,7 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
   "notifications.markRead": (f, i) => {
     const n = f.dump.get(`notif:${String(i["id"])}`);
     if (n?.kind !== "notif" || n.to !== f.me || !mayRead(f.dump, n, f.me)) return no("NOT_FOUND");
-    if (n.sp !== null) inSpace(f, n.sp, 0, true);
+    if (n.sp !== null) inSpace(f, n.sp, 0, true, true);
   },
   "notifications.markAllRead": () => {},
   "prefs.set": () => {},

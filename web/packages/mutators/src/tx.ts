@@ -137,6 +137,10 @@ export interface MutatorDef<I> {
    * and the person's own user-log records. Every other write there is
    * FORBIDDEN. */
   frozen?: "allowed";
+  /** Whether this input writes only the actor's own user-log records
+   * (marking a notification read, taking back a save): a ban does not stop
+   * it (M1b review 11). */
+  ownLog?: (i: I) => boolean;
   /** The space the write acts in, or null. Reads the target: NOT_FOUND when
    * the actor may not read it. */
   space?: (tx: Tx, i: I) => string | null;
@@ -172,8 +176,9 @@ export function authorize(tx: Tx, def: AnyMutator, input: unknown): void {
     // edits and deletes and a person's own saves included.
     // Bans are the owner's records: a client's replica does not hold them,
     // so the check is server-only (`Tx.server`), and the server's FORBIDDEN
-    // rolls a banned person's prediction back.
-    if (tx.server && bannedFrom(tx, sp, tx.me))
+    // rolls a banned person's prediction back. A write of the person's own
+    // user-log records only is not stopped by a ban.
+    if (tx.server && !def.ownLog?.(input) && bannedFrom(tx, sp, tx.me))
       throw refuse("FORBIDDEN", "You are banned from this space.");
     if (s.frozen && def.frozen !== "allowed") throw refuse("FORBIDDEN", frozenMessage(s.name));
     const who = def.who;
