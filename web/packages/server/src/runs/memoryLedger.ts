@@ -4,7 +4,15 @@
 
 import { randomUUID } from "node:crypto";
 
-import type { CallEnding, Ledger, LedgerCall, LedgerCounts, LedgerRow } from "./ledger.js";
+import type {
+  CallEnding,
+  Ledger,
+  LedgerCall,
+  LedgerCounts,
+  LedgerRow,
+  LedgerRunTotal,
+  Payer,
+} from "./ledger.js";
 import { countedTokens } from "./ledger.js";
 
 /** One checkpoint or close, kept so a test can measure the output a call
@@ -107,6 +115,38 @@ export class MemoryLedger implements Ledger {
       }
     }
     return total;
+  }
+
+  runsOf(userId: string, week: string): LedgerRunTotal[] {
+    const runs = new Map<
+      string,
+      { counted: number; includedCounted: number; payers: Set<Payer>; startedAt: number }
+    >();
+    for (const row of this.#rows.values()) {
+      if (row.userId !== userId || row.week !== week) continue;
+      const run = runs.get(row.runId) ?? {
+        counted: 0,
+        includedCounted: 0,
+        payers: new Set<Payer>(),
+        startedAt: row.openedAt,
+      };
+      run.counted += row.counted;
+      if (row.payer === "included") run.includedCounted += row.counted;
+      run.payers.add(row.payer);
+      run.startedAt = Math.min(run.startedAt, row.openedAt);
+      runs.set(row.runId, run);
+    }
+    return [...runs.entries()]
+      .map(([runId, run]) => ({ runId, ...run }))
+      .sort((a, b) =>
+        a.startedAt !== b.startedAt
+          ? b.startedAt - a.startedAt
+          : a.runId < b.runId
+            ? 1
+            : a.runId > b.runId
+              ? -1
+              : 0,
+      );
   }
 
   #write(row: MemoryLedgerRow, counts: LedgerCounts, at: number): void {

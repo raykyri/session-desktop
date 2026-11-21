@@ -246,10 +246,23 @@ const notificationsRoute = createRoute({
   component: NotificationsPage,
 });
 
+/** Site admins only: anyone else gets the not-found page (02 W8.2). */
+async function requireSiteAdmin(args: {
+  context: RouterContext;
+  location: { href: string };
+}): Promise<void> {
+  await requireSignedIn(args);
+  const viewer = await loadViewer(args.context.queryClient);
+  if (viewer.kind !== "member" || !viewer.isAdmin) {
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
+    throw notFound();
+  }
+}
+
 const adminRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/admin",
-  beforeLoad: requireSignedIn,
+  beforeLoad: requireSiteAdmin,
   component: lazyRouteComponent(loadAdminRoute, "AdminPage"),
   pendingComponent: RoutePendingPanel,
 });

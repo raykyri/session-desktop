@@ -24,6 +24,7 @@ import { createReadiness } from "./health.js";
 import { defaultLogger, type Logger } from "./logger.js";
 import { RateLimiter } from "./middleware/rateLimit.js";
 import { fixturePageFetch } from "./runs/fixtureProvider.js";
+import { MemoryLedger } from "./runs/memoryLedger.js";
 import { createNoopRunsService } from "./runs/service.js";
 
 /**
@@ -131,6 +132,10 @@ export function main(): RunningServer {
     db,
     // No attempt runs before M5a, so there is nothing to drain yet.
     runs: createNoopRunsService(),
+    // `usage.get` and `usage.listRuns` read the ledger (`03` K5). No run
+    // starts in this build, so it stays empty until the SQLite ledger and
+    // the run store replace it.
+    ledger: new MemoryLedger(),
     logger,
     // Under fixture providers outbound requests are answered in process, so
     // an end-to-end run makes no outbound request at all

@@ -111,7 +111,9 @@ check` and `npm test` before committing.
   OAuth with cookie sessions; no CORS headers. ADR-19 to ADR-22 in
   `web/docs/01-architecture-decisions.md` supersede ADR-3 (for spaces),
   ADR-6 and ADR-11, and amend ADR-10; where they assume a desktop client,
-  phone client or device runs, those parts are out of scope.
+  phone client or device runs, those parts are out of scope. ADR-23 amends
+  ADR-10 and ADR-16: member API keys, explicit effort on every run, the site
+  default model and effort, and the payer decided in `pre`.
 - Runs: every run is owned by the server and paid with included tokens (2M a
   week per member) or the member's own API key. Usage is recorded while a
   provider call streams, so an interrupted or aborted call is still billed.

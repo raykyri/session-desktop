@@ -28,6 +28,10 @@ export interface Allowances {
   /** The member's valid Anthropic key, for the duration of a call; null
    * without one. Never logged or stored by the caller. */
   anthropicKey(userId: string): string | null;
+  /** A provider rejected `apiKey`, the member's key for `provider`, during a
+   * run (`03` K4, E5): the stored key becomes `invalid` if it is still that
+   * key. Absent where no keys are stored. */
+  keyRejected?(userId: string, provider: "anthropic" | "openai", apiKey: string): void;
 }
 
 /** Every member on the configured allowance, billing `pause`, no keys: the

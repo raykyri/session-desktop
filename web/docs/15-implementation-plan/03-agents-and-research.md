@@ -338,8 +338,8 @@ overview's decision or the shipped code wins in each:
   weekly; the daily run count is dropped and replaced by the per-run limits of
   §7.
 - `04-agent-runtime.md` §11 and ADR-10 say users do not provide API keys.
-  Users may now add keys. This needs a new ADR (ADR-23) amending ADR-10 and
-  ADR-16; ADR-21's reasoning (users spend their own subscriptions without the
+  Users may now add keys. ADR-23 (accepted) amends ADR-10 and ADR-16 for
+  this; ADR-21's reasoning (users spend their own subscriptions without the
   server holding credentials) covers device runs only.
 - ADR-16 and `04-agent-runtime.md` §1 fix effort at medium and do not expose
   it, but the registry (`ModelEntry.efforts`, `defaultEffort`), the server

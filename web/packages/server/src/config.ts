@@ -147,6 +147,10 @@ const envSchema = z.object({
   SENTRY_DSN: optionalString,
   SESSION_METRICS_TOKEN: optionalString,
 
+  // AES-256-GCM key for stored secrets (members' API keys, `03` K4): 32
+  // bytes as 64 hex digits or base64. Required in production.
+  SESSION_SECRET_KEY: optionalString,
+
   SESSION_FIXTURE_PROVIDERS: flag(false),
   SESSION_TEST_AUTH: flag(false),
 });
@@ -223,6 +227,9 @@ export interface Config {
   documentsReplicaUrl: string | null;
   sentryDsn: string | null;
   metricsToken: string | null;
+  /** The 32-byte key that seals stored secrets (`SESSION_SECRET_KEY`).
+   * Outside production an unset variable gives `DEVELOPMENT_SECRET_KEY`. */
+  secretKey: Buffer;
 }
 
 /** Raised with every offending variable at once; a deploy that is missing
@@ -234,6 +241,40 @@ export class ConfigError extends Error {
     super(`invalid environment:\n${issues.map((issue) => `  - ${issue}`).join("\n")}`);
     this.name = "ConfigError";
     this.issues = issues;
+  }
+}
+
+/** The key development and test servers use when `SESSION_SECRET_KEY` is
+ * unset. Public by construction: production refuses to start without its
+ * own key, so nothing sealed under this one is a deployed secret. */
+export const DEVELOPMENT_SECRET_KEY: Buffer = Buffer.alloc(32, 0x5e);
+
+/** `SESSION_SECRET_KEY` as 32 bytes: 64 hex digits, or base64 of 32 bytes.
+ * Throws with the reason otherwise. */
+export function parseSecretKey(value: string): Buffer {
+  if (/^[0-9a-f]{64}$/i.test(value)) {
+    return Buffer.from(value, "hex");
+  }
+  if (/^[A-Za-z0-9+/_-]+={0,2}$/.test(value)) {
+    const decoded = Buffer.from(value, "base64");
+    if (decoded.length === 32) {
+      return decoded;
+    }
+  }
+  throw new Error("expected 32 bytes as 64 hex digits or base64 (openssl rand -base64 32)");
+}
+
+function secretKeyFrom(value: string | null, production: boolean): Buffer {
+  if (value === null) {
+    if (production) {
+      throw new ConfigError(["SESSION_SECRET_KEY: required in production"]);
+    }
+    return DEVELOPMENT_SECRET_KEY;
+  }
+  try {
+    return parseSecretKey(value);
+  } catch (error) {
+    throw new ConfigError([`SESSION_SECRET_KEY: ${(error as Error).message}`]);
   }
 }
 
@@ -333,6 +374,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     documentsReplicaUrl: value.SESSION_DOCUMENTS_REPLICA_URL,
     sentryDsn: value.SENTRY_DSN,
     metricsToken: value.SESSION_METRICS_TOKEN,
+    secretKey: secretKeyFrom(value.SESSION_SECRET_KEY, value.NODE_ENV === "production"),
   };
 }
 

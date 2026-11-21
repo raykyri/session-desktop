@@ -252,8 +252,9 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     const toolUsage = { search: 0, fetch: 0 };
     let steps = 0;
 
-    /** The model of the next step and who pays for it. */
-    let current: { payer: Payer; resolved: ResolvedModel } | null = null;
+    /** The model of the next step, who pays for it, and the member's key
+     * when a key pays (to report a rejection of that key, `03` K4). */
+    let current: { payer: Payer; resolved: ResolvedModel; apiKey?: string } | null = null;
 
     interface Settled {
       fail?: RunFailure;
@@ -329,20 +330,23 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     };
 
     // ── model and payer ─────────────────────────────────────────────────────
-    const resolveFor = (payer: Payer): ResolvedModel | null => {
+    const resolveFor = (payer: Payer): { resolved: ResolvedModel; apiKey?: string } | null => {
       if (payer === "included") {
-        return deps.providers.resolve(request.model, request.effort);
+        const included = deps.providers.resolve(request.model, request.effort);
+        return included ? { resolved: included } : null;
       }
       const key = payer === "key:anthropic" ? deps.allowances.anthropicKey(userId) : null;
-      return key === null
-        ? null
-        : deps.providers.resolve(request.model, request.effort, {
-            provider: "anthropic",
-            apiKey: key,
-          });
+      const keyed =
+        key === null
+          ? null
+          : deps.providers.resolve(request.model, request.effort, {
+              provider: "anthropic",
+              apiKey: key,
+            });
+      return keyed && key !== null ? { resolved: keyed, apiKey: key } : null;
     };
-    const resolved = resolveFor(request.payer);
-    if (!resolved) {
+    const first = resolveFor(request.payer);
+    if (!first) {
       if (request.payer !== "included") {
         return settle("failed", {
           fail: { why: "key" },
@@ -360,7 +364,8 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       };
       return settle("failed", { fail: failureOf(error), error });
     }
-    current = { payer: request.payer, resolved };
+    const resolved = first.resolved;
+    current = { payer: request.payer, ...first };
 
     const wrapped = new Map<Payer, ReturnType<AttemptMeter["wrap"]>>();
     const modelFor = (payer: Payer, model: ResolvedModel): ReturnType<AttemptMeter["wrap"]> => {
@@ -385,7 +390,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
         apiKey: key,
       });
       if (keyed) {
-        current = { payer: "key:anthropic", resolved: keyed };
+        current = { payer: "key:anthropic", resolved: keyed, apiKey: key };
       }
     };
 
@@ -657,8 +662,16 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       if (classified.errorClass === "rate_limited") {
         return rateLimited(classified);
       }
-      // `03` K9, E5: the asker's key was rejected after the switch.
+      // `03` K9, E5: the asker's key was rejected after the switch. The
+      // stored key becomes `invalid` (`03` K4).
       if (classified.errorClass === "auth" && current.payer !== "included") {
+        if (current.apiKey !== undefined) {
+          deps.allowances.keyRejected?.(
+            userId,
+            current.payer === "key:openai" ? "openai" : "anthropic",
+            current.apiKey,
+          );
+        }
         return settle("failed", { fail: { why: "key" }, error: classified });
       }
       return settle("failed", { fail: failureOf(classified), error: classified });

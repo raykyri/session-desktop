@@ -363,14 +363,50 @@ export function fixturePageResponse(): Response {
 export const fixtureLookup = (): Promise<{ address: string; family: number }[]> =>
   Promise.resolve([{ address: "93.184.216.34", family: 4 }]);
 
+/** The providers' model lists the API key check calls (`keys/apiKeys.ts`,
+ * `PROVIDER_MODELS_URL`). */
+const FIXTURE_KEY_CHECK_URLS = [
+  "https://api.anthropic.com/v1/models",
+  "https://api.openai.com/v1/models",
+];
+
+/** How long the fixture provider takes to answer a key with `slow` in it, so
+ * an end-to-end test sees "Checking…". */
+export const FIXTURE_SLOW_KEY_MS = 1_500;
+
+/**
+ * The API key check under fixture providers (`03` K4), chosen by the key's
+ * text: a key containing `rejected` answers 401, one containing
+ * `unreachable` fails like a network error, one containing `slow` answers
+ * after `FIXTURE_SLOW_KEY_MS`; any other key is accepted.
+ */
+async function fixtureKeyCheck(init: RequestInit | undefined): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  const key = headers.get("x-api-key") ?? headers.get("authorization") ?? "";
+  if (key.includes("unreachable")) {
+    throw new TypeError("fetch failed");
+  }
+  if (key.includes("slow")) {
+    await new Promise((resolve) => setTimeout(resolve, FIXTURE_SLOW_KEY_MS));
+  }
+  if (key.includes("rejected")) {
+    return new Response('{"error":{"type":"authentication_error"}}', { status: 401 });
+  }
+  return new Response('{"data":[]}', { headers: { "content-type": "application/json" } });
+}
+
 /**
  * What `RunToolContext.fetch` is under fixture providers: the fixture page for
- * the URL the fixtures name, and a 404 for anything else — a scenario that
- * requests an unrecorded page returns a 404 rather than silently succeeding.
+ * the URL the fixtures name, the API key check's answers, and a 404 for
+ * anything else — a scenario that requests an unrecorded page returns a 404
+ * rather than silently succeeding.
  */
-export const fixturePageFetch: typeof globalThis.fetch = (input) => {
+export const fixturePageFetch: typeof globalThis.fetch = (input, init) => {
   const url =
     typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  if (FIXTURE_KEY_CHECK_URLS.includes(url)) {
+    return fixtureKeyCheck(init);
+  }
   if (url.startsWith(FIXTURE_PAGE_URL)) {
     return Promise.resolve(fixturePageResponse());
   }
