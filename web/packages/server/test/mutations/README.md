@@ -31,7 +31,9 @@ otherwise. It exits with 1 when a mutation survives.
 - Re-expressed where the server has its own code: X19, N15, N20 and N29 (the
   in-memory store's expiry and id registry) against `SqliteStore`; N9 and
   R2-22 (the in-memory target's test access) against the test routes the
-  HTTP target reads.
+  HTTP target reads; N34 (a constant token key) against the configuration,
+  since the server always configures its cursor key and `Tokens` never makes
+  one.
 - M3-1 on: the code M3 adds (the protocol check, the transport limits, the
   drain, the event stream, the store's savepoints and log order, the restore
   check, the ledger, the run texts, `save_counts`, `secure_delete`, boot).

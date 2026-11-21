@@ -33,10 +33,9 @@ export function recordRunTexts(deps: RecordRunTextsDeps): RunTexts {
       const thread = deps.source.byKey(`thread:${run.th}`);
       const node = run.node === "r" ? thread : deps.source.byKey(`node:${run.node}`);
       if (gone(thread) || gone(node)) return { missing: "removed" };
-      const seen =
-        node && thread && view(deps.source, thread, handle)
-          ? view(deps.source, node, handle)
-          : null;
+      // the root or the node as the person may read it now (its space's
+      // scope: a private channel they left reads as nothing)
+      const seen = node ? view(deps.source, node, handle) : null;
       if (seen?.kind === "thread") return seen.q ? { question: seen.q } : { missing: "removed" };
       if (seen?.kind === "node") {
         const text = seen.look ?? seen.q;

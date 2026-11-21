@@ -18,7 +18,8 @@
 // `@session/mutators`), and re-expressed where the code is new on the
 // server: the in-memory store's faults (X19, N15, N20, N29) against
 // `SqliteStore`, and the in-memory target's (N9, R2-22) against the test
-// routes the HTTP target reads. M3-1 on cover the code M3 adds (the routes,
+// routes the HTTP target reads, and N34 against the configured cursor key.
+// M3-1 on cover the code M3 adds (the routes,
 // the event stream, the store, the ledger, boot).
 //
 // A suite runs with AVA's `--fail-fast`, so a killed mutation stops at its
@@ -347,10 +348,13 @@ const MUTATIONS: Mutation[] = [
     to: "    return { changes, cursor: this.serve(log, u, to, changes.length ? now : c.at), lastSeq, serverTime: now };",
   },
   {
+    // re-expressed: the server always configures its key (`SESSION_CURSOR_KEY`,
+    // `config.ts`), so `Tokens` never makes one; the same fault is every
+    // server sealing with the one development key whatever is configured
     name: "N34 the token key is a constant",
-    file: "../sync/src/server/tokens.ts",
-    from: "    this.key = keys?.current ?? randomBytes(32);",
-    to: "    this.key = keys?.current ?? Buffer.alloc(32);",
+    file: "src/config.ts",
+    from: '  } else current = key("SESSION_CURSOR_KEY", value.SESSION_CURSOR_KEY);',
+    to: '  } else key("SESSION_CURSOR_KEY", value.SESSION_CURSOR_KEY);',
   },
   {
     name: "R2-1 a hide or a removal is STALE after the item changed",
@@ -530,8 +534,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M3-11 a run's question is listed for a person who can no longer read its thread",
     file: "src/runs/recordRunTexts.ts",
-    from: "        node && thread && view(deps.source, thread, handle)",
-    to: "        node && thread",
+    from: "      const seen = node ? view(deps.source, node, handle) : null;",
+    to: "      const seen = node ?? null;",
   },
   {
     name: "M3-12 the true save count of a private thread is not kept",
