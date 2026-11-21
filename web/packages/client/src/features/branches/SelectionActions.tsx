@@ -5,7 +5,9 @@
 // below the selection, of equal width, right-aligned to a one-line
 // selection and left-aligned otherwise, kept 8 px inside the viewport, and
 // go on scroll. Keyboard selections count (`selectionchange`, 120 ms).
-// Escape removes them and keeps the selection (02 §10.2).
+// While they show, Tab from the card (or from nothing focused) moves to
+// them first, so a keyboard selection reaches them in one step. Escape
+// removes them and keeps the selection (02 §10.2).
 
 import type { RefObject } from "react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
@@ -142,6 +144,26 @@ export function SelectionActions({
     register(id, OVERLAY_PRIORITY.selection, () => setShown(null));
     return () => unregister(id);
   }, [shown, id, register, unregister]);
+
+  // Tab goes to the actions first. Tab elsewhere (a composer, a menu) is
+  // left alone.
+  useEffect(() => {
+    if (!shown) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey)
+        return;
+      const wrap = buttons.current;
+      const first = wrap?.querySelector<HTMLElement>("button");
+      const active = document.activeElement;
+      const card = proseRef.current?.closest(".tcard");
+      if (!wrap || !first || wrap.contains(active)) return;
+      if (active && active !== document.body && !card?.contains(active)) return;
+      event.preventDefault();
+      first.focus({ preventScroll: true });
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [shown, proseRef]);
 
   useLayoutEffect(() => {
     if (!buttons.current) return;
