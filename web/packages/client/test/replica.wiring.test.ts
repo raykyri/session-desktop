@@ -559,6 +559,22 @@ test("a summary row that cannot load is unavailable, and is fetched again after 
   t.is(repliesOf(r, post).length, 1);
 });
 
+test("a summary thread's answer and replies are unknown until it is fetched, then absent", async (t) => {
+  const { f, lounge, post } = world({ window: { days: 1, threads: 1, cap: 1 } });
+  f.clock.offset += 1000;
+  f.ok(OLGA, "threads.create", { id: f.id(), space: lounge, kind: "post", q: "Newer" });
+  const { r } = replicaOf(f, MONA);
+  t.teardown(() => r.dispose());
+  await until(() => r.ready());
+  t.like(r.get(`thread:${post}`), { q: "Welcome" }, "the summary is held");
+  t.is(r.get(`answer:${post}`), UNKNOWN);
+  t.is(r.list("reply", { th: post }), UNKNOWN);
+  r.open(post);
+  await until(() => r.list("reply", { th: post }) !== UNKNOWN);
+  t.is(r.get(`answer:${post}`), undefined);
+  t.deepEqual(r.list("reply", { th: post }), []);
+});
+
 test("a threads read the server answers with TOO_MANY_REQUESTS in its place is asked again", async (t) => {
   const { f, lounge, post } = world({ window: { days: 1, threads: 1, cap: 1 } });
   f.clock.offset += 1000;
@@ -583,16 +599,17 @@ test("a threads read the server answers with TOO_MANY_REQUESTS in its place is a
 test("a whole read refused with 429 waits its Retry-After before the next attempt", async (t) => {
   const { f, lounge } = world();
   const { r } = replicaOf(f, null, { activate: false });
-  f.refuseReads = { status: 429, code: "TOO_MANY_REQUESTS", retryAfter: 1 };
+  // two seconds: longer than the first backoff (1 s)
+  f.refuseReads = { status: 429, code: "TOO_MANY_REQUESTS", retryAfter: 2 };
   r.activate();
   t.teardown(() => r.dispose());
   await until(() => readRequests(f).length >= 1);
-  await sleep(600);
-  t.is(readRequests(f).length, 1, "no second attempt within the second named");
+  await sleep(1500);
+  t.is(readRequests(f).length, 1, "no second attempt within the two seconds named");
   f.refuseReads = null;
   await until(() => r.ready(), 5000);
   const [first, second] = readRequests(f);
-  t.true((second?.at ?? 0) - (first?.at ?? 0) >= 950);
+  t.true((second?.at ?? 0) - (first?.at ?? 0) >= 1950);
   t.true(query(() => feedOf(r, { kind: "channel", id: lounge })) !== UNKNOWN);
 });
 
@@ -788,3 +805,30 @@ test("the tab's claim keeps no id that register says is another person's", async
   const unused: RegisterOptions = {};
   t.truthy(unused);
 });
+
+// ---- leaving a channel (probe P8) ----
+
+for (const mode of ["removed from a private channel", "left on another device", "left in this tab"])
+  test(`${mode}: the log is dropped from the replica and the stream`, async (t) => {
+    const { f, lab, lounge } = world();
+    joinLab(f, lab);
+    const { r, left } = replicaOf(f, MONA);
+    t.teardown(() => r.dispose());
+    await until(() => r.ready() && f.streams.size === 1);
+    let sp = lab;
+    if (mode.startsWith("removed")) {
+      const m = f.get(`member:${lab}:${MONA}`) as { adm: string } | undefined;
+      f.ok(OLGA, "members.remove", { space: lab, user: MONA, base: { adm: m?.adm } });
+    } else if (mode.includes("another")) {
+      sp = lounge;
+      f.ok(MONA, "spaces.leave", { space: lounge });
+    } else {
+      sp = lounge;
+      t.true((await r.mutate("spaces.leave", { space: lounge })).ok);
+    }
+    await until(() => !client(r).logs().includes(`space:${sp}`), 5000);
+    t.false(internals(r).streamed.has(`space:${sp}`));
+    await until(() => [...f.streams].every((s) => !s.cursors.has(`space:${sp}`)), 5000);
+    await sleep(100);
+    t.deepEqual(left, mode.startsWith("removed") ? ["lab"] : []);
+  });

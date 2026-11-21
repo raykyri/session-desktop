@@ -1,14 +1,19 @@
 // "Not sent" in the screens (02 §9.2, W9.2) on the sync replica over the
-// sync routes (`syncFake.ts`): a save whose request fails shows the outbox
-// toast with Retry and Discard; a reply whose request fails stays in its
-// tree with "Not sent · Retry · Discard" under it, and Retry sends it.
+// sync routes (`syncFake.ts`), with the live build's `restoreDraft`: a save
+// whose request fails shows the outbox toast with Retry and Discard; a reply
+// whose request fails stays in its tree with "Not sent · Retry · Discard"
+// under it, and Retry sends it; Discard under a post takes the post away and
+// puts its text back in the composer, unless newer text was typed there; a
+// Retry the server refuses shows the refusal.
 
 import { claimClientId } from "@session/sync/client";
 import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import test from "ava";
 
+import { clearToast, currentToast } from "../src/features/shell/Toast.js";
 import { configureReplica } from "../src/replica/ReplicaProvider.js";
 import { HttpSyncTransport } from "../src/replica/http.js";
+import { restoreDraft } from "../src/replica/live.js";
 import type { DraftRef } from "../src/replica/source.js";
 import { SyncReplica } from "../src/replica/syncReplica.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
@@ -26,8 +31,30 @@ test.afterEach.always(() => {
   configureReplica(null);
 });
 
-function serve() {
+function serve(o: { refuseApply?: () => boolean } = {}) {
   const f = new FakeSync();
+  const base = f.fetchFor(ME);
+  // a refusal of every write while `refuseApply` holds (recorded: FORBIDDEN)
+  const fetch: typeof globalThis.fetch = async (input, init) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (o.refuseApply?.() && url.includes("/apply") && !f.offline)
+      return new Response(
+        JSON.stringify({
+          answers: [
+            {
+              ok: false,
+              error: {
+                code: "FORBIDDEN",
+                message: "You can't save in this channel.",
+                serverTime: f.clock.now(),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    return base(input, init);
+  };
   const lounge = f.id();
   f.ok("olga", "spaces.create", { id: lounge, name: "lounge" });
   f.ok(ME, "spaces.join", { space: lounge });
@@ -40,7 +67,7 @@ function serve() {
         me: viewer.kind === "signedOut" ? null : ME,
         writer: viewer.kind === "member",
         userId: viewer.kind === "signedOut" ? null : viewer.user.id,
-        transport: new HttpSyncTransport({ fetch: f.fetchFor(ME) }),
+        transport: new HttpSyncTransport({ fetch }),
         directory: f.directory,
         claim: (userId, register) =>
           claimClientId({
@@ -51,7 +78,7 @@ function serve() {
           }),
         restoreDraft: (d) => {
           restored.push(d);
-          useDraftsStore.getState().setDraft(d.key, d.text);
+          restoreDraft(d);
         },
         clock: f.clock,
         maxBackoffMs: 50,
@@ -60,8 +87,9 @@ function serve() {
       return r;
     },
   });
-  useDraftsStore.setState({ byKey: {}, hidden: false });
-  return { f, post, restored };
+  useDraftsStore.setState({ byKey: {}, unsent: {}, hidden: false });
+  clearToast();
+  return { f, post, lounge, restored };
 }
 
 const card = (id: string) => document.getElementById(`card-${id}`);
@@ -143,3 +171,121 @@ test.serial(
     );
   },
 );
+
+/** Choose Post in the new-thread composer and type `text`. */
+async function writePost(text: string) {
+  const field = await screen.findByRole("textbox", { name: "Ask or post" });
+  fireEvent.click(screen.getByRole("button", { name: "Ask or post" }));
+  fireEvent.click(await screen.findByRole("menuitemradio", { name: /^Post/ }));
+  fireEvent.change(field, { target: { value: text } });
+  return field as HTMLTextAreaElement;
+}
+
+const cardWithText = (text: string) =>
+  [...document.querySelectorAll<HTMLElement>("article.tcard")].find((c) =>
+    c.textContent?.includes(text),
+  ) ?? null;
+
+test.serial(
+  "a post whose request fails: Discard under its card takes it away and the composer holds its text",
+  async (t) => {
+    const { f, post } = serve();
+    await renderApp("/", { user: testUser({ login: ME }) });
+    await waitUntil(t, () => card(post) !== null, "the feed renders");
+    const field = await writePost("Offline thoughts");
+    f.offline = true;
+    fireEvent.click(screen.getByRole("button", { name: "Post" }));
+    await waitUntil(
+      t,
+      () =>
+        cardWithText("Offline thoughts")?.closest(".feed-row")?.querySelector("[data-not-sent]") !=
+        null,
+      "Not sent under the post",
+    );
+    t.is(field.value, "", "the composer is cleared: the post is the item");
+    const row = cardWithText("Offline thoughts")?.closest(".feed-row") as HTMLElement;
+    fireEvent.click(
+      within(row.querySelector("[data-not-sent]") as HTMLElement).getByRole("button", {
+        name: "Discard",
+      }),
+    );
+    await waitUntil(t, () => cardWithText("Offline thoughts") === null, "the post is gone");
+    await waitUntil(t, () => field.value === "Offline thoughts", "the text is back");
+  },
+);
+
+test.serial("Discard keeps text typed in the composer since", async (t) => {
+  const { f, post } = serve();
+  await renderApp("/", { user: testUser({ login: ME }) });
+  await waitUntil(t, () => card(post) !== null, "the feed renders");
+  const field = await writePost("First try");
+  f.offline = true;
+  fireEvent.click(screen.getByRole("button", { name: "Post" }));
+  await waitUntil(
+    t,
+    () => cardWithText("First try")?.closest(".feed-row")?.querySelector("[data-not-sent]") != null,
+    "Not sent",
+  );
+  fireEvent.change(field, { target: { value: "Something newer" } });
+  const row = cardWithText("First try")?.closest(".feed-row") as HTMLElement;
+  fireEvent.click(
+    within(row.querySelector("[data-not-sent]") as HTMLElement).getByRole("button", {
+      name: "Discard",
+    }),
+  );
+  await waitUntil(t, () => cardWithText("First try") === null, "the post is gone");
+  t.is(field.value, "Something newer");
+});
+
+test.serial("two unsent saves: Discard rolls both back", async (t) => {
+  const { f, post, lounge } = serve();
+  const second = f.id();
+  f.ok("olga", "threads.create", { id: second, space: lounge, kind: "post", q: "Second" });
+  await renderApp("/", { user: testUser({ login: ME }) });
+  await waitUntil(t, () => card(post) !== null && card(second) !== null, "both render");
+  f.offline = true;
+  for (const id of [post, second])
+    fireEvent.click(within(card(id) as HTMLElement).getByRole("button", { name: /^Save/ }));
+  await waitUntil(
+    t,
+    () => outboxToast()?.textContent?.startsWith("2 changes not sent.") === true,
+    "2 changes",
+  );
+  fireEvent.click(within(outboxToast() as HTMLElement).getByRole("button", { name: "Discard" }));
+  await waitUntil(t, () => outboxToast() === null, "the toast goes");
+  for (const id of [post, second])
+    t.truthy(within(card(id) as HTMLElement).getByRole("button", { name: /^Save\b/ }));
+});
+
+test.serial("a Retry the server refuses shows the refusal as an alert", async (t) => {
+  let refuse = false;
+  const { f, post } = serve({ refuseApply: () => refuse });
+  await renderApp("/", { user: testUser({ login: ME }) });
+  await waitUntil(t, () => card(post) !== null, "the post renders");
+  f.offline = true;
+  fireEvent.click(within(card(post) as HTMLElement).getByRole("button", { name: /^Save/ }));
+  await waitUntil(t, () => outboxToast() !== null, "Not sent");
+  f.offline = false;
+  refuse = true;
+  fireEvent.click(within(outboxToast() as HTMLElement).getByRole("button", { name: "Retry" }));
+  await waitUntil(t, () => currentToast() === "You can't save in this channel.", "the refusal");
+  const alert = document.querySelector('[data-toast-region="alert"]');
+  t.true(alert?.textContent?.includes("You can't save in this channel.") === true);
+  t.truthy(
+    within(card(post) as HTMLElement).getByRole("button", { name: /^Save\b/ }),
+    "rolled back",
+  );
+});
+
+test.serial("an offline save shows no Saved. toast", async (t) => {
+  const { f, post } = serve();
+  await renderApp("/", { user: testUser({ login: ME }) });
+  await waitUntil(t, () => card(post) !== null, "the post renders");
+  f.offline = true;
+  fireEvent.click(within(card(post) as HTMLElement).getByRole("button", { name: /^Save/ }));
+  await waitUntil(t, () => outboxToast() !== null, "Not sent");
+  t.not(currentToast(), "Saved.");
+  f.offline = false;
+  fireEvent.click(within(outboxToast() as HTMLElement).getByRole("button", { name: "Retry" }));
+  await waitUntil(t, () => currentToast() === null || outboxToast() === null, "sent");
+});

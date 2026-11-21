@@ -1,6 +1,8 @@
 // Reply trees on posts (02 §12.2 `spaces-replies`, W4.3): selecting a reply,
 // replying to it, Reply at root, the footer's Reply, the mention toast, the
-// tree's keys, and collapsing a reply's replies.
+// tree's keys, collapsing a reply's replies, and where focus goes from a
+// reply's composer (02 §10.1): Escape and Close return it to the selected
+// row, a send moves it to the new reply.
 //
 // hal's post has three replies: mira's, sol's, and one under sol's. They are
 // written through the sync routes before the specs run (`world.ts`).
@@ -122,4 +124,35 @@ test("a reply's replies collapse with Left and expand with Right or +N", async (
   await more.click();
   await expect(parent).toHaveAttribute("aria-expanded", "true");
   await expect(tree.getByRole("treeitem")).toHaveCount(count);
+});
+
+// Last: it adds a reply, which the counts above do not expect.
+test("Escape and Close on a reply's composer return focus to its row; a send moves it to the new reply", async ({
+  page,
+}) => {
+  const sol = w.sol?.handle ?? "";
+  const tree = post(page).getByRole("tree", { name: "Replies" });
+  const solRow = tree.getByRole("treeitem", { name: /Confirmed, it is on the alpha/ });
+  await solRow.click();
+  const preview = post(page).locator(".preview");
+  const field = post(page).getByRole("textbox", { name: `Reply to @${sol}` });
+
+  await preview.getByRole("button", { name: "Reply", exact: true }).click();
+  await expect(field).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(field).toHaveCount(0);
+  await expect(solRow).toBeFocused();
+
+  await preview.getByRole("button", { name: "Reply", exact: true }).click();
+  await expect(field).toBeFocused();
+  await post(page).locator("form.icomp").getByRole("button", { name: "Close" }).click();
+  await expect(field).toHaveCount(0);
+  await expect(solRow).toBeFocused();
+
+  await preview.getByRole("button", { name: "Reply", exact: true }).click();
+  await field.fill("Focus moves to this reply.");
+  await field.press("Control+Enter");
+  const fresh = tree.getByRole("treeitem", { name: /Focus moves to this reply/ });
+  await expect(fresh).toHaveAttribute("aria-selected", "true");
+  await expect(fresh).toBeFocused();
 });

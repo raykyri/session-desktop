@@ -3,13 +3,16 @@
 // placeholder, the owner's Remove… dialog, thread addresses (one outside the
 // window, 01 R1, R3), the virtualised feed past 60 rows, another person's
 // post arriving without a reload, and the in-flight-only outbox: a failed
-// request shows "Not sent", and a reload keeps nothing but the draft.
+// request shows "Not sent", Discard returns its text to the composer, and a
+// reload sends nothing and keeps only the text (the composer's draft, or the
+// text of a Not sent write when the composer is empty). `UPGRADE_REQUIRED`
+// from the sync routes reloads once and then shows the Reload message.
 //
 // The channels and threads are written through the sync routes before the
 // specs run (`world.ts`); asks are answered by the run loop with fixture
 // providers.
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Route } from "@playwright/test";
 
 import {
   card,
@@ -285,6 +288,17 @@ test("a failed request shows Not sent; Retry sends it; a reload keeps only the d
   expect((await applied).status()).toBe(200);
   await expect(notSent).toHaveCount(0);
 
+  // Discard: the post goes, and its text returns to the composer.
+  await context.setOffline(true);
+  await compose(page, "Discarded while offline", "Post");
+  await expect(notSent).toHaveCount(1);
+  await notSent.getByRole("button", { name: "Discard" }).click();
+  await expect(card(page, "Discarded while offline")).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Ask or post" })).toHaveValue(
+    "Discarded while offline",
+  );
+  await context.setOffline(false);
+
   // A second one offline, and text typed in the composer but not sent.
   await context.setOffline(true);
   await compose(page, "Lost on reload", "Post");
@@ -299,6 +313,69 @@ test("a failed request shows Not sent; Retry sends it; a reload keeps only the d
   await expect(card(page, "Lost on reload")).toHaveCount(0);
   await expect(page.locator("[data-not-sent]")).toHaveCount(0);
   await expect(field).toHaveValue("Kept as a draft");
+});
+
+test("the text of a Not sent post comes back in the composer after a plain reload, and nothing is sent", async ({
+  page,
+  context,
+}) => {
+  await context.setOffline(true);
+  await compose(page, "Kept across a reload", "Post");
+  await expect(page.locator("[data-not-sent]").filter({ hasText: "Not sent" })).toHaveCount(1);
+  const field = page.getByRole("textbox", { name: "Ask or post" });
+  await expect(field).toHaveValue("");
+  await context.setOffline(false);
+  const applies: string[] = [];
+  page.on("request", (req) => {
+    if (req.url().endsWith("/api/sync/apply")) applies.push(req.url());
+  });
+  await page.reload();
+  await expect(page.locator(".tcard").first()).toBeVisible();
+  await expect(field).toHaveValue("Kept across a reload");
+  await expect(card(page, "Kept across a reload")).toHaveCount(0);
+  await expect(page.locator("[data-not-sent]")).toHaveCount(0);
+  await page.waitForTimeout(500);
+  expect(applies).toEqual([]);
+});
+
+test("UPGRADE_REQUIRED from the sync routes: one reload with the text kept, then the Reload message", async ({
+  page,
+}) => {
+  let navigations = 0;
+  page.on("framenavigated", (frame) => {
+    if (frame === page.mainFrame()) navigations += 1;
+  });
+  const upgrade = (route: Route) =>
+    route.fulfill({
+      status: 426,
+      contentType: "application/json",
+      body: JSON.stringify({
+        code: "UPGRADE_REQUIRED",
+        message: "Update Session.",
+        serverTime: Date.now(),
+      }),
+    });
+  await page.route("**/api/sync/**", upgrade);
+  await compose(page, "Typed before the deploy", "Post");
+  const notice = page
+    .getByRole("alert")
+    .filter({ hasText: "Session was updated. Reload to continue." });
+  await expect(notice).toBeVisible();
+  expect(navigations).toBe(1);
+  const at = await page.evaluate(() => sessionStorage.getItem("session-upgrade-reload-at"));
+  expect(Number(at)).toBeGreaterThan(0);
+  const drafts = await page.evaluate(() => sessionStorage.getItem("session.drafts.v3") ?? "");
+  expect(drafts).toContain("Typed before the deploy");
+  await page.waitForTimeout(1000);
+  expect(navigations).toBe(1);
+  // the server is updated: Reload brings the text back to the composer
+  await page.unroute("**/api/sync/**", upgrade);
+  await notice.getByRole("button", { name: "Reload" }).click();
+  await expect(page.locator(".tcard").first()).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Ask or post" })).toHaveValue(
+    "Typed before the deploy",
+  );
+  await expect(card(page, "Typed before the deploy")).toHaveCount(0);
 });
 
 test("a signed-out reader reaches a post by its address", async ({ browser }) => {
