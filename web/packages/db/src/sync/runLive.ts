@@ -50,6 +50,12 @@ export class RunTables {
       ),
       drop: c.prepare<[string, number]>("DELETE FROM run_live WHERE run_id = ? AND attempt = ?"),
       dropRun: c.prepare<[string]>("DELETE FROM run_live WHERE run_id = ?"),
+      dropOthers: c.prepare<[string, number]>(
+        "DELETE FROM run_live WHERE run_id = ? AND attempt <> ?",
+      ),
+      rows: c.prepare<[], { run_id: string; attempt: number }>(
+        "SELECT run_id, attempt FROM run_live ORDER BY run_id, attempt",
+      ),
       resumes: c.prepare<[string, number], { resumes: number }>(
         "SELECT resumes FROM run_resumes WHERE run_id = ? AND attempt = ?",
       ),
@@ -83,6 +89,16 @@ export class RunTables {
   dropLive(runId: string, attempt?: number): void {
     if (attempt === undefined) this.#s.dropRun.run(runId);
     else this.#s.drop.run(runId, attempt);
+  }
+
+  /** Delete the checkpoints of every attempt of a run but `attempt`. */
+  dropOtherAttempts(runId: string, attempt: number): void {
+    this.#s.dropOthers.run(runId, attempt);
+  }
+
+  /** The attempts that hold a checkpoint, for the boot sweep. */
+  liveAttempts(): { runId: string; attempt: number }[] {
+    return this.#s.rows.all().map((r) => ({ runId: r.run_id, attempt: r.attempt }));
   }
 
   resumes(runId: string, attempt: number): number {

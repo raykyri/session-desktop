@@ -152,6 +152,31 @@ test("the event stream parser: events split across reads, CRLF, comments and ids
     id: "sealed-1",
   });
   t.is(parseStreamEvent({ event: "run.delta", data: "{}", id: undefined }), null);
+  t.deepEqual(
+    parseStreamEvent({
+      event: "run.delta",
+      data: JSON.stringify({ type: "run.delta", run: "R", attempt: 2, seq: 7, n: 1, text: "ok" }),
+      id: undefined,
+    }),
+    { type: "delta", delta: { run: "R", attempt: 2, seq: 7, n: 1, text: "ok" } },
+  );
+  t.deepEqual(
+    parseStreamEvent({
+      event: "run.delta",
+      data: JSON.stringify({ run: "R", attempt: 1, seq: 1, text: "no n" }),
+      id: undefined,
+    }),
+    { type: "delta", delta: { run: "R", attempt: 1, seq: 1, n: 0, text: "no n" } },
+    "a delta without its turn number belongs to turn 0",
+  );
+  t.is(
+    parseStreamEvent({
+      event: "run.delta",
+      data: JSON.stringify({ run: "R", attempt: "1", seq: 1, text: "x" }),
+      id: undefined,
+    }),
+    null,
+  );
 });
 
 test.serial("the tab's client id: claimed once per account; sign-out clears it", async (t) => {

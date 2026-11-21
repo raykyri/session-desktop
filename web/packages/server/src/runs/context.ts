@@ -7,7 +7,11 @@
 // branch), then the new node's question. Branch here and Look up add their
 // passage (`quote`) to the new user message as a quoted passage. A Branch's
 // context is its parent's path; the sibling it was started beside is not
-// on it. Reasoning blocks are dropped across models later, when the loop
+// on it. Every ask, answer and turn on the path is read as the asker may read
+// it (`view`): when one is redacted for them (a hidden ask they neither wrote
+// nor own), there is no context, and the run ends `failed { why: "access" }`
+// at its claim (`03` G7, G8), so the model is never given text the asker may
+// not read. Reasoning blocks are dropped across models later, when the loop
 // builds the request (`messages.ts`, `ancestorContext`); the budget rules of
 // `04-agent-runtime.md` §4 cut what is over the window.
 
@@ -15,6 +19,8 @@ import {
   answerKey,
   nodeKey,
   threadKey,
+  view,
+  type StoredRecord,
   type NodeRec,
   type Reads,
   type RunRec,
@@ -71,6 +77,17 @@ export function attemptTurns(tx: Reads, th: string, run: string, attempt: number
 
 type Ask = ThreadRec | NodeRec;
 
+/** Thrown inside `runContext` when a record on the path is redacted for the
+ * asker. */
+class Redacted extends Error {}
+
+/** `r` as `u` may read it: the record itself, or `Redacted`. A record `view`
+ * leaves as it is is the one it was given. */
+function asReader<R extends StoredRecord>(tx: Reads, r: R, u: string): R {
+  if (view(tx, r, u) !== r) throw new Redacted();
+  return r;
+}
+
 /** The asks from the root to `n`'s parent, root first. */
 function ancestors(tx: Reads, root: ThreadRec, n: NodeRec): Ask[] {
   const path: Ask[] = [];
@@ -86,8 +103,9 @@ function ancestors(tx: Reads, root: ThreadRec, n: NodeRec): Ask[] {
   return [root, ...path];
 }
 
-/** An ask's exchange as stored: its question, then its answer. */
-function exchange(tx: Reads, root: ThreadRec, ask: Ask): ContextMessage[] {
+/** An ask's exchange as `u` may read it: its question, then its answer. */
+function exchange(tx: Reads, root: ThreadRec, seen: Ask, u: string): ContextMessage[] {
+  const ask = asReader(tx, seen, u);
   const id = ask.id;
   const model = ask.model;
   const question: ModelMessage = {
@@ -98,9 +116,12 @@ function exchange(tx: Reads, root: ThreadRec, ask: Ask): ContextMessage[] {
     }),
   };
   const out: ContextMessage[] = [{ nodeId: id, message: question, model: null }];
-  const answer = tx.byKey(answerKey(id));
-  if (answer?.kind !== "answer") return out;
-  const turns = attemptTurns(tx, root.id, answer.run, answer.attempt).flatMap(turnsOf);
+  const stored = tx.byKey(answerKey(id));
+  if (stored?.kind !== "answer") return out;
+  const answer = asReader(tx, stored, u);
+  const turns = attemptTurns(tx, root.id, answer.run, answer.attempt)
+    .map((t) => asReader(tx, t, u))
+    .flatMap(turnsOf);
   const replies =
     turns.length > 0
       ? messagesFromCommittedTurns(turns)
@@ -109,9 +130,19 @@ function exchange(tx: Reads, root: ThreadRec, ask: Ask): ContextMessage[] {
   return out;
 }
 
-/** The context of `run`, from the records `tx` reads; null when its thread or
- * ask is gone. */
+/** The context of `run`, from the records `tx` reads as its asker may read
+ * them; null when its thread or ask is gone, or when a record on its path is
+ * redacted for the asker. */
 export function runContext(tx: Reads, run: RunRec): RunContext | null {
+  try {
+    return contextOf(tx, run);
+  } catch (error) {
+    if (error instanceof Redacted) return null;
+    throw error;
+  }
+}
+
+function contextOf(tx: Reads, run: RunRec): RunContext | null {
   const root = tx.byKey(threadKey(run.th));
   if (root?.kind !== "thread") return null;
   if (run.node === "r") {
@@ -129,6 +160,6 @@ export function runContext(tx: Reads, run: RunRec): RunContext | null {
   return {
     node: n.k,
     userText: researchUserText({ prompt: n.q, passage: n.quote }),
-    history: ancestors(tx, root, n).flatMap((ask) => exchange(tx, root, ask)),
+    history: ancestors(tx, root, n).flatMap((ask) => exchange(tx, root, ask, run.u)),
   };
 }

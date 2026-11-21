@@ -95,6 +95,11 @@ export class FakeSync {
   readonly broken: string[] = [];
   readonly requests: SeenRequest[] = [];
   readonly streams = new Set<Stream>();
+  /** What `GET /api/runs/:id/live` answers `u` (`03` T3): a body, null for
+   * NOT_FOUND (the default), or "fail" for a 503 the client retries. */
+  live: (u: string | null, run: string) => object | null | "fail" = () => null;
+  /** The runs `/live` was read for, in order. */
+  readonly liveReads: string[] = [];
   private readonly clientIds = new Map<string, string>();
   private readonly seqs = new Map<string, number>();
 
@@ -240,6 +245,17 @@ export class FakeSync {
     if (method === "POST" && headers["x-requested-with"] !== "session")
       return json(403, { error: "Missing required x-requested-with: session header" });
     const actor = u === null ? null : { u };
+    const live = /^\/api\/runs\/([^/]+)\/live$/.exec(url.pathname);
+    if (live && method === "GET") {
+      const run = decodeURIComponent(live[1] ?? "");
+      this.liveReads.push(run);
+      const answer = this.live(u, run);
+      if (answer === "fail")
+        return json(503, { code: "SERVICE_UNAVAILABLE", message: "Draining.", serverTime: now });
+      return answer === null
+        ? json(404, { code: "NOT_FOUND", message: "Not found.", serverTime: now })
+        : json(200, answer);
+    }
     switch (url.pathname) {
       case "/api/sync/register": {
         if (actor === null) return json(401, this.server.register(null));

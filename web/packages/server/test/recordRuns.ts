@@ -63,6 +63,88 @@ export function registerEndless(scenario: string, parts = 3_000, delayMs = 5): v
 
 registerEndless("endless-answer");
 
+// A tool call, then a long answer: a crash, a removal or a `/live` read in
+// the second step finds the first step committed.
+registerFixture({
+  scenario: "fetch-then-endless",
+  steps: [
+    {
+      parts: [
+        { type: "stream-start", warnings: [] },
+        { type: "text-start", id: "t0" },
+        { type: "text-delta", id: "t0", delta: "Reading the page." },
+        { type: "text-end", id: "t0" },
+        {
+          type: "tool-call",
+          toolCallId: "call-fetch-1",
+          toolName: "web_fetch",
+          input: '{"url":"https://example.com/bloom-filters"}',
+        },
+        {
+          type: "finish",
+          finishReason: { unified: "tool-calls", raw: "tool_use" },
+          usage: {
+            inputTokens: { total: 900, noCache: 900, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 20, text: 20, reasoning: 0 },
+          },
+        },
+      ],
+    },
+    {
+      delayMs: 5,
+      parts: [
+        { type: "stream-start", warnings: [] },
+        { type: "text-start", id: "t1" },
+        ...Array.from({ length: 3_000 }, () => ({
+          type: "text-delta" as const,
+          id: "t1",
+          delta: CHUNK,
+        })),
+        { type: "text-end", id: "t1" },
+        {
+          type: "finish",
+          finishReason: { unified: "stop", raw: "end_turn" },
+          usage: {
+            inputTokens: { total: 1_400, noCache: 1_400, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 30_000, text: 30_000, reasoning: 0 },
+          },
+        },
+      ],
+    },
+  ],
+});
+
+// A step that writes 4.8 KiB of text (a checkpoint by size) and calls a
+// tool, then a 429.
+registerFixture({
+  scenario: "written-step-then-throttle",
+  steps: [
+    {
+      parts: [
+        { type: "stream-start", warnings: [] },
+        { type: "text-start", id: "t0" },
+        { type: "text-delta", id: "t0", delta: CHUNK.repeat(120) },
+        { type: "text-end", id: "t0" },
+        {
+          type: "tool-call",
+          toolCallId: "call-search-1",
+          toolName: "web_search",
+          input: '{"query":"bloom filters"}',
+        },
+        {
+          type: "finish",
+          finishReason: { unified: "tool-calls", raw: "tool_use" },
+          usage: {
+            inputTokens: { total: 100, noCache: 100, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 1_200, text: 1_200, reasoning: 0 },
+          },
+        },
+      ],
+    },
+    { error: { kind: "api", statusCode: 429, message: "rate limit exceeded", isRetryable: true } },
+  ],
+});
+
 /** One `usage_events` row of the ledger, as stored. */
 export interface LedgerRow {
   id: string;

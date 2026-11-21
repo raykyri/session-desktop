@@ -15,10 +15,16 @@ export class ToolBudget {
   #searches = 0;
   #fetches = 0;
 
+  /** `spent`: the calls the attempt's earlier claims made (a resume, a 429
+   * re-queue), which count against the same caps. */
   constructor(
     readonly maxSearches = MAX_SEARCHES_PER_RUN,
     readonly maxFetches = MAX_FETCHES_PER_RUN,
-  ) {}
+    spent: { searches: number; fetches: number } = { searches: 0, fetches: 0 },
+  ) {
+    this.#searches = spent.searches;
+    this.#fetches = spent.fetches;
+  }
 
   get searches(): number {
     return this.#searches;

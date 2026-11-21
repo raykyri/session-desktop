@@ -44,6 +44,7 @@
 
 import {
   MUTATORS,
+  isOwnerOf,
   isUlid,
   type ApiError,
   type Index,
@@ -296,6 +297,7 @@ export class SyncReplica implements ReplicaSource {
     this.lookUpRetries.clear();
     for (const f of this.unsubscribe) f();
     this.unsubscribe = [];
+    this.runTexts.clear();
     this.options.onConnection?.("closed");
   }
 
@@ -364,6 +366,7 @@ export class SyncReplica implements ReplicaSource {
     if (!this.live(gen)) return;
     this.unsubscribe.push(
       client.subscribe(() => {
+        this.pruneRunTexts();
         this.changed();
         this.scheduleRecompute();
       }),
@@ -634,6 +637,7 @@ export class SyncReplica implements ReplicaSource {
               this.runTexts.apply(e.delta);
             } else if (e.type === "resync") {
               if (e.id) this.lastEventId = e.id;
+              this.dropRunTexts(e.log);
               void this.resync(gen, e.log);
             }
           },
@@ -810,12 +814,58 @@ export class SyncReplica implements ReplicaSource {
   }
 
   /** The streaming text of a run's current attempt while it runs (`03`
-   * T2, T3); null when none is held. */
+   * T2, T3); null when none is held, and for an ask moderated since that
+   * the viewer may not read (a hidden ask: its author and the space's owner
+   * only). */
   liveText(run: string): LiveText | null {
     const r = this.client?.get(`run:${run}`);
     const text = this.runTexts.get(run);
     if (r?.kind !== "run" || r.status !== "running" || text?.attempt !== r.attempt) return null;
-    return text;
+    return this.readsRunText(r) ? text : null;
+  }
+
+  /** Whether the viewer may read the text of `run`'s ask: it is not
+   * moderated, or the viewer wrote it or owns the space. */
+  private readsRunText(run: Spaces.RunRecord): boolean {
+    const client = this.client;
+    if (!client) return false;
+    const ask = client.get(run.node === "r" ? `thread:${run.th}` : `node:${run.node}`);
+    if (ask?.kind !== "thread" && ask?.kind !== "node") return false;
+    if (ask.mod === null) return true;
+    return (
+      (this.me !== null && ask.u === this.me) ||
+      isOwnerOf({ byKey: (key) => client.get(key) }, run.s, this.me)
+    );
+  }
+
+  /** Drops the held text of every run that is no longer running on the
+   * attempt the text belongs to, whose record is gone, or whose ask the
+   * viewer may no longer read (`03` T2, T3). */
+  private pruneRunTexts(): void {
+    const client = this.client;
+    if (!client) return;
+    for (const id of this.runTexts.runs()) {
+      const r = client.get(`run:${id}`);
+      const text = this.runTexts.get(id);
+      if (
+        r?.kind !== "run" ||
+        r.status !== "running" ||
+        text?.attempt !== r.attempt ||
+        !this.readsRunText(r)
+      )
+        this.runTexts.drop(id);
+    }
+  }
+
+  /** A space log is read again (`resync`): the held texts of its runs, and
+   * of runs the replica no longer holds, are dropped; a reconnect reads
+   * `/live` for the runs still running. */
+  private dropRunTexts(log: LogId): void {
+    const client = this.client;
+    for (const id of this.runTexts.runs()) {
+      const r = client?.get(`run:${id}`);
+      if (r?.kind !== "run" || spaceLog(r.s) === log) this.runTexts.drop(id);
+    }
   }
 
   /** The runs the replica holds as running. */

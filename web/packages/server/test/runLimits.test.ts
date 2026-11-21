@@ -8,6 +8,8 @@ import { QUEUED_RUNS_MAX } from "@session/mutators";
 import test from "ava";
 
 import { registerFixture, setFixtureScenario } from "../src/runs/fixtureProvider.js";
+import { LEDGER_CHECKPOINT_MS } from "../src/runs/ledger.js";
+import { SEARCH_BUDGET_SPENT } from "../src/runs/tools/context.js";
 
 import { MODEL, newId, runsWorld } from "./recordRuns.js";
 
@@ -117,3 +119,105 @@ test.serial(
     t.is(last?.counted, 2_000 + 10 + 120);
   },
 );
+
+const fetchStep = (index: number): { parts: LanguageModelV4StreamPart[] } => ({
+  parts: [
+    { type: "stream-start", warnings: [] },
+    {
+      type: "tool-call",
+      toolCallId: `call-fetch-${index}`,
+      toolName: "web_fetch",
+      input: JSON.stringify({ url: `https://example.com/page-${index}` }),
+    },
+    {
+      type: "finish",
+      finishReason: { unified: "tool-calls", raw: "tool_use" },
+      usage: {
+        inputTokens: { total: 100, noCache: 100, cacheRead: 0, cacheWrite: 0 },
+        outputTokens: { total: 10, text: 10, reasoning: 0 },
+      },
+    },
+  ],
+});
+
+registerFixture({
+  scenario: "fetch-forever",
+  steps: Array.from({ length: 10 }, (_, index) => fetchStep(index)),
+});
+
+/** A look-up under `thread`'s root, by mel. */
+async function lookUp(w: Awaited<ReturnType<typeof runsWorld>>, thread: string): Promise<string> {
+  const look = (await w.mel.ok("research.forkNode", {
+    id: newId(),
+    thread,
+    parent: "r",
+    kind: "lookup",
+    look: "probabilistic set",
+    quote: "A Bloom filter is a probabilistic set.",
+    b: 0,
+    ...MODEL,
+  })) as { run: string };
+  return look.run;
+}
+
+test.serial(
+  "L2: a look-up that keeps fetching stops at 2 fetches, and each of its calls asks for at most 1,000 output tokens",
+  async (t) => {
+    const w = await runsWorld(t);
+    const { thread, run } = await w.ask(w.mona, w.open, "fixture:success");
+    await w.settled(run);
+    t.is(w.streamed[0]?.maxOutputTokens, undefined, "an ask has the model's own cap");
+    const calls = w.streamed.length;
+    setFixtureScenario(() => "fetch-forever");
+    const look = await lookUp(w, thread);
+    await w.settled(look);
+    const pages = w.network.calls.filter((c) => c.url.startsWith("https://example.com/page-"));
+    t.is(pages.length, 2, "the third fetch is refused by the budget");
+    const research = w.streamed.slice(calls).filter((c) => c.prompt.length > 0);
+    t.true(research.length > 0);
+    for (const c of research) t.is(c.maxOutputTokens, 1_000);
+  },
+);
+
+registerFixture({
+  scenario: "search-then-throttle",
+  steps: [
+    searchStep(0),
+    searchStep(1),
+    searchStep(2),
+    { error: { kind: "api", statusCode: 429, message: "rate limit exceeded", isRetryable: true } },
+  ],
+});
+
+test.serial(
+  "L2: a look-up re-queued after a 429 keeps what its earlier claim spent: 4 steps and 2 searches in all",
+  async (t) => {
+    const w = await runsWorld(t, { backoffMs: [10, 10, 10] });
+    const { thread, run } = await w.ask(w.mona, w.open, "fixture:success");
+    await w.settled(run);
+    const searches = () =>
+      w.network.calls.filter((c) => c.url.startsWith("https://api.parallel.ai/")).length;
+    const before = searches();
+    setFixtureScenario(() => "search-then-throttle");
+    const look = await lookUp(w, thread);
+    await w.settled(look);
+    const rows = w.rows(look).filter((r) => r.kind === "research");
+    t.deepEqual(
+      rows.map((r) => r.ending),
+      ["finish", "finish", "finish", "rate_limited", "finish"],
+      "three steps, the 429, and one step left after it",
+    );
+    t.is(searches() - before, 2, "no search past the look-up's two");
+    t.is(w.turns(look).length, 4);
+    // the third search, and the one after the re-queue, are refused
+    const refused = w
+      .turns(look)
+      .flatMap((x) => x.blocks)
+      .filter((b) => b["type"] === "toolResult" && JSON.stringify(b).includes(SEARCH_BUDGET_SPENT));
+    t.is(refused.length, 2);
+  },
+);
+
+test("K1: the ledger checkpoints a call's output every 2 s", (t) => {
+  t.is(LEDGER_CHECKPOINT_MS, 2_000);
+});

@@ -45,6 +45,11 @@ function timingSafeEqualString(offered: string, expected: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
+/** `GET /api/runs/:id/live` per user, or per IP signed out: a client reads it
+ * on a gap in a run's deltas and once per running run on a reconnect
+ * (`03` T3). */
+export const RUN_LIVE_READS = { limit: 120, windowMs: 60_000 } as const;
+
 /** Where `npm run build --workspace @session/client` puts the bundle. */
 const CLIENT_DIST = fileURLToPath(new URL("../../client/dist/app", import.meta.url));
 
@@ -103,7 +108,9 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   // `03` T3: a client that saw a gap in a run's deltas, or reconnected, reads
   // the attempt's committed turns and the turn still streaming. The read
   // scope is `pull`'s: a reader who may not read the run's text gets
-  // NOT_FOUND, as for a run that does not exist.
+  // NOT_FOUND, as for a run that does not exist. Reads are limited per user,
+  // or per IP signed out (`04` Z1).
+  app.use("/api/runs/:id/live", rateLimitByUserOrIp(limiter, "runLive", RUN_LIVE_READS));
   app.get("/api/runs/:id/live", (c) => {
     const user = c.get("user");
     const reader = user?.status === "active" ? user.handle : null;

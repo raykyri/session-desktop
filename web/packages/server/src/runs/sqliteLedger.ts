@@ -65,6 +65,9 @@ export class SqliteLedger implements Ledger {
       attemptTokens: c.prepare<[string, number], { n: number | null }>(
         "SELECT sum(counted) AS n FROM usage_events WHERE run_id = ? AND attempt = ?",
       ),
+      payers: c.prepare<[string, number], { payer: string }>(
+        "SELECT DISTINCT payer FROM usage_events WHERE run_id = ? AND attempt = ?",
+      ),
       runsOf: c.prepare<[string, string], RunTotalRow>(
         `SELECT run_id, sum(counted) AS counted,
            sum(CASE WHEN payer = 'included' THEN counted ELSE 0 END) AS included,
@@ -132,6 +135,10 @@ export class SqliteLedger implements Ledger {
         : this.#s.attemptTokens.get(runId, attempt)
       )?.n ?? 0
     );
+  }
+
+  runPayers(runId: string, attempt: number): ReadonlySet<Payer> {
+    return new Set(this.#s.payers.all(runId, attempt).map((r) => r.payer as Payer));
   }
 
   runsOf(userId: string, week: string): LedgerRunTotal[] {

@@ -8,8 +8,10 @@ import test from "ava";
 import { configAllowances } from "../src/runs/allowance.js";
 import type { Dispatcher, DispatcherDeps } from "../src/runs/dispatcher.js";
 import { MAX_AUTO_RESUMES, RATE_RETRY_AFTER_MS, createDispatcher } from "../src/runs/dispatcher.js";
+import { RATE_LIMIT_BACKOFF_MS } from "../src/runs/errors.js";
 import { weekOf } from "../src/runs/ledger.js";
-import type { QueuedRun, RunStore } from "../src/runs/store.js";
+import type { AttemptResult } from "../src/runs/loop.js";
+import type { QueuedRun, RunRequest, RunStore } from "../src/runs/store.js";
 
 import type { LoopHarness, LoopHarnessOptions } from "./runsHelpers.js";
 import { createLoopHarness, until } from "./runsHelpers.js";
@@ -225,7 +227,7 @@ test("boot closes open rows, interrupts running runs and resumes them at most tw
   });
   const dispatcher = dispatcherFor(harness);
 
-  t.deepEqual(dispatcher.boot(), { closedRows: 1, interrupted: 1, resumed: 2 });
+  t.deepEqual(dispatcher.boot(), { closedRows: 1, interrupted: 1, resumed: 2, sweptLive: 0 });
   t.like(harness.ledger.rows({ runId: "run-crashed" })[0], { state: "closed", ending: "boot" });
   t.is(crashed.status, "queued");
   t.is(crashed.resumes, 1);
@@ -252,4 +254,55 @@ test("a started dispatcher picks up a run it is woken for", async (t) => {
   dispatcher.wake();
   await until(() => harness.store.runs.get("run-woken")?.status === "complete", "the run");
   t.pass();
+});
+
+test("E4: a run's new attempt is not claimed while its older attempt still settles here", async (t) => {
+  const harness = setup(t);
+  const user = harness.addUser("retrier");
+  const run = harness.store.enqueue({ runId: "run-e4", userId: user.id, userText: "x" });
+  const started: number[] = [];
+  let settle: () => void = () => undefined;
+  const runner = {
+    run: (request: RunRequest): Promise<AttemptResult> => {
+      started.push(request.attempt);
+      if (request.attempt > 1) return Promise.resolve({ outcome: "complete" });
+      return new Promise((resolve) => {
+        settle = () => resolve({ outcome: "cancelled" });
+      });
+    },
+  };
+  const dispatcher = dispatcherFor(harness, { runner });
+  t.is(dispatcher.tick(), 1);
+  // Stop, then Run again: attempt 2 is queued while attempt 1 settles
+  run.status = "queued";
+  run.attempt = 2;
+  t.is(dispatcher.tick(), 0);
+  t.is(run.status, "queued");
+  t.deepEqual(started, [1]);
+  settle();
+  await dispatcher.idle();
+  t.is(dispatcher.tick(), 1);
+  t.deepEqual(started, [1, 2]);
+  await dispatcher.idle();
+});
+
+test("E5: the default 429 backoff is 5 s, 20 s and 60 s, then the run fails rate", async (t) => {
+  const harness = setup(t);
+  const user = harness.addUser("defaults");
+  harness.store.enqueue({ runId: "run-default", userId: user.id, userText: "fixture:rate-limit" });
+  let now = 2_000_000;
+  const dispatcher = dispatcherFor(harness, { now: () => now });
+  const run = harness.store.runs.get("run-default")!;
+  t.deepEqual([...RATE_LIMIT_BACKOFF_MS], [5_000, 20_000, 60_000]);
+  for (const wait of [5_000, 20_000, 60_000]) {
+    t.is(dispatcher.tick(), 1);
+    await dispatcher.idle();
+    t.is(run.status, "queued");
+    now += wait - 1;
+    t.is(dispatcher.tick(), 0, `waits ${wait} ms`);
+    now += 1;
+  }
+  t.is(dispatcher.tick(), 1);
+  await dispatcher.idle();
+  t.deepEqual(run.last?.fail, { why: "rate", at: now + RATE_RETRY_AFTER_MS });
 });

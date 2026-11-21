@@ -20,8 +20,10 @@ const w = {
   me: null as Writer | null,
   space: "",
   name: "",
-  /** olga's answered ask with a passage-rich, cited answer. */
-  ask: "",
+  /** olga's answered asks with a passage-rich, cited answer: one for the
+   * follow-ups, one for the selections, so no test reads another's nodes. */
+  follow: "",
+  passage: "",
   sol: "",
 };
 
@@ -34,21 +36,23 @@ test.beforeAll(async ({ browser }) => {
   w.name = channelName("runs");
   w.space = await olga.channel(w.name);
   for (const p of [me, sol]) await p.join(w.space);
-  const { thread, run } = await olga.ask(w.space, "fixture:cited-answer what is a bloom filter");
-  w.ask = thread;
-  await olga.answered(w.space, run);
+  const follow = await olga.ask(w.space, "fixture:cited-answer what is a bloom filter");
+  const passage = await olga.ask(w.space, "fixture:cited-answer how do bloom filters fill");
+  w.follow = follow.thread;
+  w.passage = passage.thread;
+  await olga.answered(w.space, follow.run, passage.run);
 });
 
-const side = (page: Page, thread = w.ask) => page.locator(`[data-side="${thread}"]`);
-const answer = (page: Page) => page.locator(`#pr-${w.ask}`);
+const side = (page: Page, thread: string) => page.locator(`[data-side="${thread}"]`);
+const answer = (page: Page, thread: string) => page.locator(`#pr-${thread}`);
 
 /** The thread id of a card. */
 const idOf = async (page: Page, title: string) =>
   (await card(page, title).getAttribute("data-thread")) ?? "";
 
-/** Drags across the first `words` words of a passage of the answer. */
-async function selectWords(page: Page, passage: number, words: number) {
-  const box = await answer(page)
+/** Drags across the first `words` words of a passage of `thread`'s answer. */
+async function selectWords(page: Page, thread: string, passage: number, words: number) {
+  const box = await answer(page, thread)
     .locator(`[data-passage="${passage}"]`)
     .evaluate((el, n) => {
       const text = el.firstChild as Text;
@@ -100,49 +104,48 @@ test("an ask streams its answer; a reload mid-stream and a second tab show the s
 
 test("Continue, Branch and Comment on an answered ask", async ({ page }) => {
   await signInAndOpen(page, LOGIN);
-  const thread = page.locator(`#card-${w.ask}`);
+  const thread = page.locator(`#card-${w.follow}`);
   await thread.scrollIntoViewIfNeeded();
   await thread.getByRole("button", { name: /^Ask a follow-up/ }).click();
-  const field = side(page).getByRole("textbox", { name: "Ask about the answer" });
+  const field = side(page, w.follow).getByRole("textbox", { name: "Ask about the answer" });
   await field.fill("how big does the filter get");
   await field.press("Control+Enter");
-  const first = side(page).getByRole("treeitem", { name: /how big does the filter get/ });
+  const first = side(page, w.follow).getByRole("treeitem", { name: /how big does the filter get/ });
   await expect(first).toHaveAttribute("aria-selected", "true");
   await expect(first).toHaveAttribute("aria-level", "1");
   // answered by the run loop
-  await expect(side(page).locator(".preview")).toContainText("Bloom filters answer set", {
+  await expect(side(page, w.follow).locator(".preview")).toContainText("Bloom filters answer set", {
     timeout: 30_000,
   });
 
   // Continue under it
-  await side(page).getByRole("button", { name: "Continue" }).click();
-  const cont = side(page).getByRole("textbox", { name: "Continue ask" });
+  await side(page, w.follow).getByRole("button", { name: "Continue" }).click();
+  const cont = side(page, w.follow).getByRole("textbox", { name: "Continue ask" });
   await cont.fill("and when it is full");
   await cont.press("Control+Enter");
-  const under = side(page).getByRole("treeitem", { name: /and when it is full/ });
+  const under = side(page, w.follow).getByRole("treeitem", { name: /and when it is full/ });
   await expect(under).toHaveAttribute("aria-level", "2");
-  await expect(side(page).locator(".preview")).toContainText("Bloom filters answer set", {
+  await expect(side(page, w.follow).locator(".preview")).toContainText("Bloom filters answer set", {
     timeout: 30_000,
   });
 
   // Branch beside it: a sibling, at the same level
-  await side(page).getByRole("button", { name: "Branch", exact: true }).click();
-  const beside = side(page).getByRole("textbox", { name: "Ask beside this" });
+  await side(page, w.follow).getByRole("button", { name: "Branch", exact: true }).click();
+  const beside = side(page, w.follow).getByRole("textbox", { name: "Ask beside this" });
   await beside.fill("and with deletions");
-  await side(page).getByRole("button", { name: "Ask", exact: true }).click();
-  await expect(side(page).getByRole("treeitem", { name: /and with deletions/ })).toHaveAttribute(
-    "aria-level",
-    "2",
-  );
+  await side(page, w.follow).getByRole("button", { name: "Ask", exact: true }).click();
+  await expect(
+    side(page, w.follow).getByRole("treeitem", { name: /and with deletions/ }),
+  ).toHaveAttribute("aria-level", "2");
 
   // Comment on the first branch: no run
   await first.click();
-  await expect(side(page).locator(".preview")).toContainText("Bloom filters answer set");
-  await side(page).getByRole("button", { name: "Comment" }).click();
-  const comment = side(page).getByRole("textbox", { name: "Comment here" });
+  await expect(side(page, w.follow).locator(".preview")).toContainText("Bloom filters answer set");
+  await side(page, w.follow).getByRole("button", { name: "Comment" }).click();
+  const comment = side(page, w.follow).getByRole("textbox", { name: "Comment here" });
   await comment.fill(`Worth a counting filter. @${w.sol}`);
-  await side(page).getByRole("button", { name: "Comment", exact: true }).last().click();
-  await expect(side(page).getByText("1 comment")).toBeVisible();
+  await side(page, w.follow).getByRole("button", { name: "Comment", exact: true }).last().click();
+  await expect(side(page, w.follow).getByText("1 comment")).toBeVisible();
   await expect(toast(page)).toHaveText(`Notified @${w.sol}.`);
 });
 
@@ -150,31 +153,42 @@ test("Branch here quotes the selection; Look up on two words shows the phrase, n
   page,
 }) => {
   await signInAndOpen(page, LOGIN);
-  await page.locator(`#card-${w.ask}`).scrollIntoViewIfNeeded();
-  await selectWords(page, 1, 6);
+  await page.locator(`#card-${w.passage}`).scrollIntoViewIfNeeded();
+  await selectWords(page, w.passage, 1, 6);
   await expect(page.getByRole("button", { name: "Look up" })).toHaveCount(0);
   await page.getByRole("button", { name: "Branch here" }).click();
-  const field = side(page).getByRole("textbox", { name: "Ask about this passage" });
+  const field = side(page, w.passage).getByRole("textbox", { name: "Ask about this passage" });
   await expect(field).toBeFocused();
-  await expect(side(page).locator(".bq")).toContainText("In these systems, a public score");
+  await expect(side(page, w.passage).locator(".bq")).toContainText(
+    "In these systems, a public score",
+  );
   await field.fill("which score");
   await field.press("Control+Enter");
-  const quoted = side(page).getByRole("treeitem", { name: /which score/ });
+  const quoted = side(page, w.passage).getByRole("treeitem", { name: /which score/ });
   await expect(quoted).toHaveAttribute("aria-selected", "true");
-  await expect(side(page).locator(".preview .bq")).toContainText("In these systems");
+  await expect(side(page, w.passage).locator(".preview .bq")).toContainText("In these systems");
 
-  await selectWords(page, 0, 2);
+  // Look up takes 1 to 4 whole words (`03` G2)
+  await selectWords(page, w.passage, 0, 5);
+  await expect(page.getByRole("button", { name: "Branch here" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Look up" })).toHaveCount(0);
+  await selectWords(page, w.passage, 0, 4);
+  await expect(page.getByRole("button", { name: "Look up" })).toBeVisible();
+  await selectWords(page, w.passage, 0, 2);
   await page.getByRole("button", { name: "Look up" }).click();
-  const row = side(page).getByRole("treeitem", { selected: true });
+  const row = side(page, w.passage).getByRole("treeitem", { selected: true });
   await expect(row).toContainText("Bloom filters");
   await expect(row.getByTitle("Look up")).toBeVisible();
-  await expect(side(page).locator(".lookh")).toContainText("Look upBloom filters");
+  await expect(side(page, w.passage).locator(".lookh")).toContainText("Look upBloom filters");
   // the prompt the server built is stored, never shown
-  await expect(side(page)).not.toContainText("as it is used in this answer");
-  await expect(side(page).locator(".preview")).toContainText("Bloom filters answer set", {
-    timeout: 30_000,
-  });
-  await expect(side(page)).not.toContainText("as it is used in this answer");
+  await expect(side(page, w.passage)).not.toContainText("as it is used in this answer");
+  await expect(side(page, w.passage).locator(".preview")).toContainText(
+    "Bloom filters answer set",
+    {
+      timeout: 30_000,
+    },
+  );
+  await expect(side(page, w.passage)).not.toContainText("as it is used in this answer");
 });
 
 test("Stop ends the run with its partial text; Run again answers it as a new attempt", async ({
@@ -195,7 +209,9 @@ test("Stop ends the run with its partial text; Run again answers it as a new att
   await expect(thread.getByText(/^(Queued|Researching · Step \d of 4)$/)).toBeVisible();
   await expect(thread.getByText(/The trade is bookkeeping/)).toBeVisible({ timeout: 30_000 });
   await expect(thread.locator(".runp")).toHaveCount(0, { timeout: 30_000 });
+  // this thread's root run, not any run of the channel
   const runs = await w.me?.runs(w.space);
-  const root = [...(runs?.values() ?? [])].find((r) => r.attempt === 2);
-  expect(root?.status, `the thread ${id} ran a second attempt`).toBe("complete");
+  const root = [...(runs?.values() ?? [])].filter((r) => r.th === id && r.node === "r");
+  expect(root, `the root run of ${id}`).toHaveLength(1);
+  expect(root[0]).toMatchObject({ status: "complete", attempt: 2 });
 });

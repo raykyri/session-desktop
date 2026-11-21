@@ -4,7 +4,7 @@
 // status `queued` is the run queue (`03` E2), which nothing dispatches until
 // the server's run loop does.
 
-import { canRead } from "./access.js";
+import { canRead, isOwnerOf } from "./access.js";
 import { refuse } from "./errors.js";
 import { Notifier } from "./notify.js";
 import {
@@ -73,8 +73,9 @@ function cancel(tx: Tx, run: RunRec | undefined): void {
 export const NODES = {
   // Continue, Branch, Branch here and Look up (`03` §2.1): a node and its
   // run, in one write. The node id is in the input, the run's is `tx.id(1)`.
-  // The parent must exist, be readable, not be removed, and have an answer
-  // to build on: a parent whose run is still queued or running is
+  // The parent must exist, be readable, not be removed, not be hidden from
+  // the actor (who is not its author or the space's owner), and have an
+  // answer to build on: a parent whose run is still queued or running is
   // PRECONDITION_FAILED (the mockup hides Continue and Branch while a node is
   // pending).
   "research.forkNode": define({
@@ -92,6 +93,10 @@ export const NODES = {
       notGone(p);
       const parent = nodeOf(tx, p, i.parent);
       if (parent.mod === "removed") throw removed();
+      // `03` G7: a run's context is its path as its asker may read it, and a
+      // hidden ask is read by its author and the space's owner only
+      if (parent.mod === "hidden" && parent.u !== tx.me && !isOwnerOf(tx, p.s, tx.me))
+        throw refuse("PRECONDITION_FAILED", "This ask is hidden.");
       if (active(runOf(tx, parent)))
         throw refuse("PRECONDITION_FAILED", "This ask is still running: wait for its answer.");
       let q: string;

@@ -302,9 +302,20 @@ export class TurnMapper {
   /**
    * Commits whatever the stream left open. A cancelled or failed attempt keeps
    * its partial text — the user is looking at it — so the last step is closed
-   * as a turn rather than discarded.
+   * as a turn rather than discarded. A tool call the stream stopped before its
+   * result (a drain while the tool ran) is left out: it was never answered,
+   * and a resume that replayed it without a result would be refused by the
+   * provider.
    */
   finish(): void {
+    const answered = new Set(
+      this.#toolResults.flatMap((b) =>
+        b.type === "toolResult" && b.toolUseId ? [b.toolUseId] : [],
+      ),
+    );
+    this.#assistantBlocks = this.#assistantBlocks.filter(
+      (b) => b.type !== "toolUse" || (typeof b.id === "string" && answered.has(b.id)),
+    );
     if (this.#text !== "" || this.#assistantBlocks.length > 0 || this.#toolResults.length > 0) {
       this.#commitStep();
     }

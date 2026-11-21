@@ -4,7 +4,7 @@
 // channel view read; the event stream; "Not sent" with Retry and Discard;
 // `UPGRADE_REQUIRED`; known versus unknown reads; threads outside the window.
 
-import { DAY, threadKey } from "@session/mutators";
+import { DAY, QUEUED_RUNS_MAX, threadKey } from "@session/mutators";
 import { claimClientId } from "@session/sync/client";
 import test from "ava";
 
@@ -445,4 +445,162 @@ test("a reload of the tab re-attaches its client id; a duplicated tab registers 
   if ("error" in duplicate) throw new Error(duplicate.error.code);
   t.false(duplicate.reattached);
   t.not(duplicate.clientId, tab.clientId);
+});
+
+/** mona's ask in #lounge, with its run claimed (`running`), as the server's
+ * dispatcher leaves it. */
+function runningAsk(f: FakeSync, lounge: string): { th: string; run: string } {
+  const th = f.id();
+  const r = f.ok(MONA, "threads.create", {
+    id: th,
+    space: lounge,
+    kind: "ask",
+    q: "A question",
+    model: "claude-fable",
+    effort: "medium",
+  }) as { run: string };
+  setRun(f, r.run, { status: "running" });
+  return { th, run: r.run };
+}
+
+/** A server-side write of the run record, pushed to the streams. */
+function setRun(f: FakeSync, run: string, fields: Record<string, unknown>): void {
+  f.server.serverApply({ me: "", mutationId: "" }, (tx) => {
+    const r = tx.byKey(`run:${run}`);
+    if (r?.kind === "run") tx.put({ ...r, ...fields });
+  });
+  f.wake();
+}
+
+const delta = (run: string, seq: number, text: string, attempt = 1) => ({
+  type: "run.delta",
+  run,
+  attempt,
+  seq,
+  n: 0,
+  text,
+});
+
+/** Sends `data` on every open stream. */
+const send = (f: FakeSync, event: string, data: unknown) => {
+  for (const s of f.streams) s.send(event, data);
+};
+
+test("T3: a reconnect reads /live for each running run; a run.delta shows in liveText; liveText is null once the run is not running or its attempt moved", async (t) => {
+  const { f, lounge } = world();
+  const a = runningAsk(f, lounge);
+  const b = runningAsk(f, lounge);
+  f.live = (_u, run) => ({ attempt: 1, live: { n: 0, text: `Checkpoint of ${run}. `, seq: 3 } });
+  const { r } = replicaOf(f, MONA);
+  t.teardown(() => r.dispose());
+  await until(() => f.streams.size === 1);
+  await until(() => f.liveReads.length >= 2);
+  t.deepEqual([...f.liveReads].sort(), [a.run, b.run].sort());
+  await until(() => r.liveText(a.run) !== null);
+  t.like(r.liveText(a.run), { attempt: 1, seq: 3, text: `Checkpoint of ${a.run}. ` });
+  send(f, "run.delta", delta(a.run, 4, "More."));
+  await until(() => r.liveText(a.run)?.seq === 4);
+  t.is(r.liveText(a.run)?.text, `Checkpoint of ${a.run}. More.`);
+
+  // the run is interrupted, then resumed on the same attempt: the text held
+  // before is not shown again
+  setRun(f, a.run, { status: "interrupted" });
+  await until(() => r.liveText(a.run) === null);
+  f.live = () => "fail";
+  setRun(f, a.run, { status: "running" });
+  await until(
+    () => (r.get(`run:${a.run}`) as { status?: string } | undefined)?.status === "running",
+  );
+  t.is(r.liveText(a.run), null, "the held text was dropped when the run left running");
+
+  // Run again: a new attempt; the old one's text is not the new one's
+  t.not(r.liveText(b.run), null);
+  setRun(f, b.run, { attempt: 2 });
+  await until(() => r.liveText(b.run) === null);
+
+  // the stream reconnects: /live is read again for the runs still running
+  const before = f.liveReads.length;
+  f.live = (_u, run) => ({ attempt: run === b.run ? 2 : 1, live: null });
+  f.closeStreams();
+  await until(() => f.liveReads.length >= before + 2);
+  t.deepEqual(f.liveReads.slice(before).sort(), [a.run, b.run].sort());
+});
+
+test("T2: an ask hidden while its run streams: a reader's held text is dropped and not shown again; its author keeps it", async (t) => {
+  const { f, lounge } = world();
+  f.ok("mel", "spaces.join", { space: lounge });
+  const { th, run } = runningAsk(f, lounge);
+  f.live = () => ({ attempt: 1, live: { n: 0, text: "Text streamed before the hide. ", seq: 1 } });
+  const mel = replicaOf(f, "mel").r;
+  const mona = replicaOf(f, MONA).r;
+  t.teardown(() => {
+    mel.dispose();
+    mona.dispose();
+  });
+  await until(() => mel.liveText(run) !== null && mona.liveText(run) !== null);
+  f.live = () => null;
+  f.ok(OLGA, "moderation.decide", { item: `a:${th}`, decision: "hidden" });
+  f.wake();
+  await until(() => (mel.get(threadKey(th)) as { mod?: string } | undefined)?.mod === "hidden");
+  t.is(mel.liveText(run), null, "the reader may not read the hidden ask's text");
+  t.like(mona.liveText(run), { text: "Text streamed before the hide. " }, "its author may");
+  // shown again: the reader's held text was dropped, not kept back
+  const rev = (f.server.store.byKey(threadKey(th)) as { rev: number }).rev;
+  f.ok(OLGA, "moderation.decide", { item: `a:${th}`, decision: "shown", base: { rev } });
+  f.wake();
+  await until(() => (mel.get(threadKey(th)) as { mod?: string | null } | undefined)?.mod === null);
+  t.is(mel.liveText(run), null);
+
+  // a delta sent before a hide and received after it is held, not shown
+  const late = runningAsk(f, lounge);
+  f.ok(OLGA, "moderation.decide", { item: `a:${late.th}`, decision: "hidden" });
+  f.wake();
+  await until(
+    () =>
+      (mel.get(threadKey(late.th)) as { mod?: string } | undefined)?.mod === "hidden" &&
+      (mel.get(`run:${late.run}`) as { status?: string } | undefined)?.status === "running",
+  );
+  send(f, "run.delta", delta(late.run, 1, "Sent before the hide."));
+  await until(() => mona.liveText(late.run) !== null);
+  t.is(mel.liveText(late.run), null);
+});
+
+test("T3: a resync of the space log drops the held texts of its runs", async (t) => {
+  const { f, lounge } = world();
+  const { run } = runningAsk(f, lounge);
+  f.live = () => ({ attempt: 1, live: { n: 0, text: "Held. ", seq: 1 } });
+  const { r } = replicaOf(f, MONA);
+  t.teardown(() => r.dispose());
+  await until(() => r.liveText(run) !== null);
+  // reads of /live fail from now on: only the drop clears the text
+  f.live = () => "fail";
+  send(f, "resync", { log: `space:${lounge}` });
+  await until(() => r.liveText(run) === null);
+  t.is(r.liveText(run), null);
+});
+
+test("L1: a 21st queued ask is refused queue_full; its text returns to the composer", async (t) => {
+  const { f, lounge } = world();
+  for (let k = 0; k < QUEUED_RUNS_MAX; k += 1)
+    f.ok(MONA, "threads.create", {
+      id: f.id(),
+      space: lounge,
+      kind: "ask",
+      q: `Question ${k}`,
+      model: "claude-fable",
+      effort: "medium",
+    });
+  const { r, restored } = replicaOf(f, MONA);
+  t.teardown(() => r.dispose());
+  await until(() => r.ready());
+  const id = f.id();
+  const draft = { key: "new-thread", text: "One too many" };
+  const outcome = await r.mutate(
+    "threads.create",
+    { id, space: lounge, kind: "ask", q: "One too many", model: "claude-fable", effort: "medium" },
+    { draft },
+  );
+  t.like(outcome, { ok: false, error: { code: "PRECONDITION_FAILED", reason: "queue_full" } });
+  t.deepEqual(restored, [draft]);
+  t.is(r.get(threadKey(id)), UNKNOWN);
 });

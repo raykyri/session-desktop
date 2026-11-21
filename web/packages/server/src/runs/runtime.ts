@@ -50,6 +50,7 @@ export function createRunsRuntime(deps: RunsRuntimeDeps): RunsRuntime {
   const store = new RecordRunStore({
     sync: deps.sync,
     db: deps.db,
+    ledger: deps.ledger,
     ...(deps.onFailure ? { onFailure: deps.onFailure } : {}),
   });
   const service = createRunsService({

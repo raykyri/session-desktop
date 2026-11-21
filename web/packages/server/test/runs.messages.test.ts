@@ -203,3 +203,47 @@ test("a binary part is measured rather than serialized", (t) => {
     "a base64 string payload still falls through to the serialized estimate",
   );
 });
+
+test("a resume leaves out a tool call without its result and a result without its call", (t) => {
+  const messages = messagesFromCommittedTurns([
+    {
+      id: "n-assistant-0",
+      agentId: "n",
+      role: "assistant",
+      sourceIndex: 0,
+      blocks: [
+        { type: "text", text: "Reading." },
+        { type: "toolUse", id: "answered", name: "web_fetch", input: { url: "https://a.test" } },
+        { type: "toolUse", id: "unanswered", name: "web_fetch", input: { url: "https://b.test" } },
+      ],
+    },
+    {
+      id: "n-user-0",
+      agentId: "n",
+      role: "user",
+      sourceIndex: 1,
+      blocks: [
+        { type: "toolResult", toolUseId: "answered", content: { title: "A" }, isError: false },
+        { type: "toolResult", toolUseId: "stray", content: { title: "?" }, isError: false },
+      ],
+    },
+    {
+      id: "n-assistant-1",
+      agentId: "n",
+      role: "assistant",
+      sourceIndex: 2,
+      blocks: [{ type: "toolUse", id: "drained", name: "web_search", input: { query: "q" } }],
+    },
+  ]);
+  const ids = messages.flatMap((m) =>
+    (m.content as { type: string; toolCallId?: string }[]).flatMap((p) =>
+      p.toolCallId ? [`${p.type}:${p.toolCallId}`] : [],
+    ),
+  );
+  t.deepEqual(ids, ["tool-call:answered", "tool-result:answered"]);
+  t.deepEqual(
+    messages.map((m) => m.role),
+    ["assistant", "tool"],
+    "a step left with nothing is not replayed",
+  );
+});

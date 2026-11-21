@@ -59,6 +59,9 @@ export interface RunRequest {
   /** The final steps of a completed run (`03` E2): a new thread's title and
    * the root answer's summary line (`sum`). Absent: neither. */
   finalSteps?: { title: boolean; summary: boolean } | undefined;
+  /** When the run's first claim started it (epoch ms): the wall clock of
+   * `03` L1 counts from here across re-queues and resumes. Absent: now. */
+  startedAt?: number | undefined;
 }
 
 /** Token counts for one attempt, as the AI SDK reports them. */
@@ -187,6 +190,11 @@ export interface RunStore {
    * `complete`. A failed, cancelled or interrupted attempt keeps the turns it
    * committed. */
   finish(request: RunRequest, summary: AttemptSummary, answer?: CompletedAnswer): void;
+  /** The fence stopped the attempt and its ledger rows are closed. A run
+   * record that still holds the attempt gets its `tok` and `bill`, and one
+   * still `running` ends `failed { why: "access" }`. Absent: nothing is
+   * written. */
+  superseded?(request: RunRequest): void;
   /** Absent: context compaction summarizes again on every attempt. */
   summaries?: SummaryCache;
 
@@ -219,4 +227,7 @@ export interface RunStore {
    * `resumes` still match, with `resumes + 1`; the next claim answers a
    * `resume`. False when the record no longer matched. */
   resume(run: InterruptedRun): boolean;
+  /** Boot: deletes the in-flight checkpoints no run continues (`01` D4).
+   * Returns how many. Absent: there are none to delete. */
+  sweepLive?(): number;
 }
