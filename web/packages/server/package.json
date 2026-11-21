@@ -19,7 +19,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "esbuild src/index.ts --bundle --packages=external --alias:@session/db=../db/src/index.ts --alias:@session/shared=../shared/src --platform=node --format=esm --target=node22 --outfile=dist/server.mjs",
     "start": "node dist/server.mjs",
-    "test": "ava"
+    "test": "ava",
+    "mutate": "tsx test/mutations/mutate.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.57",
