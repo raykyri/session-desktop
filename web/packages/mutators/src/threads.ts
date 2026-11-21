@@ -23,6 +23,7 @@ import {
   notAuthor,
   notGone,
   ownOrReadable,
+  payOf,
   preRun,
   queueRun,
   readable,
@@ -70,13 +71,13 @@ export const THREADS = {
     intent: "none",
     space: (tx, i) => ("from" in i ? readableThread(tx, i.from.th).s : i.space),
     ids: (i) => [i.id],
-    // an ask's run: a registry model and effort (predicted), and room in the
-    // queue (server only)
+    // an ask's run: a registry model and effort (predicted), room in the
+    // queue and a payer (server only)
     can: (_tx, i) => {
       if ("kind" in i && i.kind === "ask") checkModel(i.model, i.effort);
     },
-    pre: (ctx, i) => ("kind" in i && i.kind === "ask" ? preRun(ctx) : {}),
-    run: (tx, i) => {
+    pre: (ctx, i) => ("kind" in i && i.kind === "ask" ? preRun(ctx, i.model) : {}),
+    run: (tx, i, values) => {
       if ("from" in i) return promote(tx, i.id, i.from.th, i.from.node);
       const s = needSpace(tx, i.space);
       const q = text(i.q, "q");
@@ -95,7 +96,15 @@ export const THREADS = {
       if (!ask) return { id: i.id, run: null, notified: [], notMembers: [] };
       // the run record with status `queued` is the run queue (`03` E2)
       const run = tx.id(1);
-      queueRun(tx, run, tx.byKey(threadKey(i.id)) as ThreadRec, "r", i.model, i.effort);
+      queueRun(
+        tx,
+        run,
+        tx.byKey(threadKey(i.id)) as ThreadRec,
+        "r",
+        i.model,
+        i.effort,
+        payOf(values, i.model),
+      );
       return { id: i.id, run, notified: [], notMembers: [] };
     },
     // a post notifies the accounts it mentions, and says who in its answer

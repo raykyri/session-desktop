@@ -207,3 +207,46 @@ test("no runs this week lists nothing", async (t) => {
     nextCursor: null,
   });
 });
+
+test("K3: at the reset boundary the week's usage and its runs start again", async (t) => {
+  const ledger = new MemoryLedger();
+  const texts = new MemoryRunTexts();
+  /** The last millisecond of the week of Friday 2026-11-20, and the reset. */
+  const lastMs = Date.UTC(2026, 10, 26, 23, 59, 59, 999);
+  const reset = Date.UTC(2026, 10, 27);
+  const clock = { at: lastMs };
+  const harness = createHarness(t, { deps: { ledger, runTexts: texts, now: () => clock.at } });
+  const user = harness.addUser("weekly");
+  texts.set("thursday", "Asked on Thursday", [user.id]);
+  call(ledger, {
+    runId: "thursday",
+    userId: user.id,
+    payer: "included",
+    at: lastMs - HOUR,
+    input: 1_999_000,
+  });
+  // still streaming at the reset: it counts in the week it started
+  call(
+    ledger,
+    { runId: "late", userId: user.id, payer: "included", at: lastMs - 1, input: 1_000 },
+    false,
+  );
+
+  const caller = harness.caller(user);
+  t.like(await caller.usage.get(), { used: 2_000_000, resetAt: reset });
+  t.deepEqual(
+    (await caller.usage.listRuns()).runs.map((r) => r.runId),
+    ["late", "thursday"],
+  );
+
+  clock.at = reset;
+  t.like(await caller.usage.get(), {
+    used: 0,
+    allowance: 2_000_000,
+    resetAt: reset + 7 * 24 * HOUR,
+  });
+  t.deepEqual((await caller.usage.listRuns()).runs, []);
+  // a call of the new week counts in it
+  call(ledger, { runId: "friday", userId: user.id, payer: "included", at: reset, input: 700 });
+  t.like(await caller.usage.get(), { used: 700 });
+});
