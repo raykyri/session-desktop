@@ -1,15 +1,21 @@
 import { Outlet, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useLogout, useMe } from "../../api/account.js";
+import { joinChannel } from "../../features/channels/ChannelHeader.js";
+import { NewChannelDialog, useNewChannelDialog } from "../../features/channels/NewChannelDialog.js";
+import { FeedViewerProvider } from "../../features/feed/FeedContext.js";
 import { AppBar } from "../../features/shell/AppBar.js";
 import { PageHeadingFocusContext } from "../../features/shell/Frames.js";
+import { ToastHost } from "../../features/shell/Toast.js";
 import { channelOfPath, isFeedPath, showsChannelStrip } from "../../features/shell/screens.js";
-import { scopesFor, useShellData } from "../../features/shell/shellData.js";
+import { scopesFor, useLayoutPreference, useShellData } from "../../features/shell/shellData.js";
 import { useBarAlign } from "../../features/shell/useBarAlign.js";
 import { useBarAutoHide } from "../../features/shell/useBarAutoHide.js";
-import { viewerOf } from "../../features/shell/viewer.js";
+import { viewerOf, type Viewer } from "../../features/shell/viewer.js";
+import { ReplicaProvider } from "../../replica/ReplicaProvider.js";
+import { useWrites } from "../../replica/writes.js";
 import { useNavigationStore } from "../../stores/navigation.js";
 import { useOverlaysStore } from "../../stores/overlays.js";
 import { DiagramLightbox, ImageLightbox } from "../../ui/Lightboxes.js";
@@ -40,16 +46,27 @@ const BASE_UI_LAYER_SELECTOR =
  * stack (`stores/overlays`), for the layers Base UI does not own (02 §10.2).
  */
 export function AppShell() {
+  const me = useMe();
+  const viewer = useMemo(() => viewerOf(me.data), [me.data]);
+  return (
+    <ReplicaProvider viewer={viewer}>
+      <FeedViewerProvider viewer={viewer}>
+        <ShellBody viewer={viewer} />
+      </FeedViewerProvider>
+    </ReplicaProvider>
+  );
+}
+
+function ShellBody({ viewer }: { viewer: Viewer }) {
   const navigate = useNavigate();
   const router = useRouter();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const me = useMe();
-  const viewer = viewerOf(me.data);
   const logout = useLogout();
   const { notifications, dismiss } = useUserNotifications();
+  const writes = useWrites();
+  const openNewChannel = useNewChannelDialog((state) => state.setOpen);
 
-  const layout = useNavigationStore((state) => state.layout);
-  const toggleLayout = useNavigationStore((state) => state.toggleLayout);
+  const { layout, toggle: toggleLayout } = useLayoutPreference(viewer);
   const setScope = useNavigationStore((state) => state.setScope);
 
   // Pages focus their heading on a route change, not on the screen the app
@@ -137,6 +154,8 @@ export function AppShell() {
           onScopeChange={setScope}
           channels={data.channels}
           currentChannel={channelOfPath(pathname)}
+          onJoin={(channel) => void joinChannel(writes, channel)}
+          onNewChannel={() => openNewChannel(true)}
           usage={data.usage}
           savedCount={data.savedCount}
           onSaved={pathname === "/saved"}
@@ -154,6 +173,8 @@ export function AppShell() {
           <Outlet />
         </PageHeadingFocusContext.Provider>
       </div>
+      <NewChannelDialog />
+      <ToastHost />
       <ImageLightbox />
       <DiagramLightbox />
       <NotificationStack notifications={notifications} onDismiss={dismiss} />

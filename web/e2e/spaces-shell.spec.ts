@@ -2,9 +2,8 @@
 // bar sits per layout and width band, the bar hiding on scroll without moving
 // the page, the site footer on feeds and pages, and the signed-out bar.
 //
-// The feeds render one placeholder row until the replica provides threads
-// (02 §9), so the scroll case gives the feed a tall minimum height to scroll
-// through; the row, the columns and the bar are the real ones.
+// The client reads the fixture replica (02 §9.6): the feeds are the
+// mockup's threads, read as @ines.v when signed in.
 
 import { expect, test, type Page } from "@playwright/test";
 
@@ -76,10 +75,10 @@ const bothColumns = ({ main, side }: Boxes): [number, number] => [
 const fullWidth = (width: number) => (): [number, number] => [0, width];
 
 /** Home, a channel, Browse and Usage, with the heading of each page; a feed
- * (null) shows its placeholder row until the replica lands. */
+ * (null) shows its threads. */
 const SCREENS: [string, string | null][] = [
   ["/", null],
-  ["/c/reading-group", null],
+  ["/c/sci-fi", null],
   ["/browse", "Browse channels"],
   ["/usage", "Usage and API keys"],
 ];
@@ -88,7 +87,7 @@ const SCREENS: [string, string | null][] = [
 async function expectScreen(page: Page, path: string, heading: string | null) {
   await expect(page, path).toHaveURL(`${APP_ORIGIN}${path}`);
   if (heading === null) {
-    await expect(page.getByRole("status", { name: "Loading" }), path).toBeVisible();
+    await expect(page.locator(".tcard").first(), path).toBeVisible();
   } else {
     await expect(page.getByRole("heading", { name: heading, level: 2 }), path).toBeVisible();
   }
@@ -96,7 +95,7 @@ async function expectScreen(page: Page, path: string, heading: string | null) {
 
 async function openHome(page: Page) {
   await page.goto("/");
-  await expect(page.getByRole("status", { name: "Loading" })).toBeVisible();
+  await expect(page.locator(".tcard").first()).toBeVisible();
 }
 
 test.describe("signed in", () => {
@@ -159,10 +158,6 @@ test.describe("signed in", () => {
     await openHome(page);
     const scroller = page.locator("[data-shell-scroll]");
     const slot = page.locator(".app-bar-slot");
-    // Room to scroll: the placeholder row alone fits in the viewport.
-    await page.locator(".feed-inner").evaluate((feed) => {
-      (feed as HTMLElement).style.minHeight = "4000px";
-    });
 
     /** The first row's top in the viewport, the scroll offset, and their
      * sum, which is the row's place in the scrolled content. */
@@ -249,7 +244,9 @@ test.describe("signed out", () => {
     await openHome(page);
     const bar = page.getByRole("banner");
     await expect(bar.getByRole("link", { name: "Session home" })).toBeVisible();
-    await expect(bar.getByText("Nothing here yet.")).toBeVisible();
+    // Signed out, the strip lists the open channels.
+    await expect(bar.getByRole("link", { name: "#public" })).toBeVisible();
+    await expect(bar.getByRole("link", { name: "#grant-review" })).toHaveCount(0);
     await expect(bar.getByRole("button", { name: "Join with invite" })).toBeVisible();
     await expect(bar.getByRole("button", { name: "Sign in" })).toBeVisible();
     // One scope signed out, so no picker; no ring, Saved, layout toggle or

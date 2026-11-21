@@ -105,6 +105,9 @@ export default defineConfig({
       // so a fixture that calls it fails the call locally instead of reaching
       // a vendor from CI (`04-agent-runtime.md` §11).
       SESSION_ENFORCE_LIMITS: "0",
+      // The client reads the fixture replica (02 §9.6) until the sync
+      // library and the server half land (05 M2, M3).
+      VITE_SESSION_FIXTURES: "1",
     },
   },
 });

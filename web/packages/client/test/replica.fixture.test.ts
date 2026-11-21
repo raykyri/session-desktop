@@ -68,9 +68,9 @@ test("home is newest first from joined channels; saved lists the saved threads",
   const replica = createFixtureReplica("ines.v", { runMs: null });
   const home = feedOf(replica, { kind: "home" });
   t.is(home[0], FIRST);
-  const saved = feedOf(replica, { kind: "saved" });
-  t.is(saved.length, savedCountOf(replica));
-  t.true(saved.length > 0);
+  // The members mock starts with nothing saved.
+  t.deepEqual(feedOf(replica, { kind: "saved" }), []);
+  t.is(savedCountOf(replica), 0);
   t.is(unreadCountOf(replica), 3);
   replica.dispose();
 });

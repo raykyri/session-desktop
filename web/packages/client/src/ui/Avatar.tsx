@@ -62,13 +62,31 @@ export function Avatar({ handle, size = "md", className }: AvatarProps) {
   );
 }
 
+/** The glyph sizes of the mockup: in menus (16 px), the channel header
+ * (26 px), dialog headers (28 px) and Browse cards (32 px). */
+const GLYPH_SIZE = {
+  sm: "size-4 rounded-sm text-[9px]",
+  lg: "size-[26px] rounded-[7px] text-[13px]",
+  xl: "size-7 rounded-lg text-[14px]",
+  xxl: "size-8 rounded-[9px] text-[14px]",
+} as const;
+
 /** A channel's glyph: its first letter on a fill (`glyph`). */
-export function ChannelGlyph({ name, className }: { name: string; className?: string }) {
+export function ChannelGlyph({
+  name,
+  size = "sm",
+  className,
+}: {
+  name: string;
+  size?: keyof typeof GLYPH_SIZE;
+  className?: string;
+}) {
   return (
     <span
       aria-hidden="true"
       className={cn(
-        "text-avatar-fg inline-grid size-4 shrink-0 place-items-center rounded-sm text-[9px] font-bold",
+        "text-avatar-fg inline-grid shrink-0 place-items-center leading-none font-bold",
+        GLYPH_SIZE[size],
         FILLS[fillIndex(name) - 1],
         className,
       )}

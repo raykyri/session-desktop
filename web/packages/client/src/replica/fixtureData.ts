@@ -75,7 +75,6 @@ export interface SessionFixtures {
     fu: Record<string, FixtureFollowUp[]>;
     rp: Record<string, FixtureReply[]>;
     qtd: Record<string, { nodes: FixtureNode[] }>;
-    saved: { $set: string[] };
     banned: { sp: string; u: string; createdAt: string }[];
   };
 }
@@ -366,7 +365,7 @@ export function convertFixtures(F: SessionFixtures, doc: Document): FixtureWorld
   for (const s of D.spaces) {
     const meta = SPACE_META[s.id];
     if (!meta) continue;
-    const createdAt = msToIso(isoToMs(s.createdAt) + order++ * 1000);
+    const createdAt = msToIso(isoToMs(D.spaces[0]?.createdAt ?? s.createdAt) + order++ * 1000);
     const id = fixtureUlid(`space:${s.id}`, s.createdAt);
     spaceIds[s.id] = id;
     const known = new Set<string>([meta.owner]);
@@ -402,7 +401,9 @@ export function convertFixtures(F: SessionFixtures, doc: Document): FixtureWorld
     SEED_RM,
     SEED_POST,
   ];
-  const saved = new Set(D.saved.$set);
+  // The members mock starts with nothing saved (`st.savedBy`); the
+  // fixtures' `saved` set belongs to the older mock.
+  const saved = new Set<string>();
   const posted = new Map<string, { n: number; at: string }>();
 
   for (const p of posts) {

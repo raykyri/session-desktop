@@ -11,11 +11,18 @@ import { useNavigationStore } from "../../stores/navigation.js";
 
 import { SiteFooter } from "./SiteFooter.js";
 
-/** A feed: the rows go in `children`, each a `FeedRow`. */
-export function FeedFrame({ children }: { children: ReactNode }) {
+/** A feed: the rows go in `children`, each a `FeedRow`. A channel feed
+ * passes `channel` (its rows sit 2 px closer, as the mock's `.chfeed`). */
+export function FeedFrame({
+  children,
+  channel = false,
+}: {
+  children: ReactNode;
+  channel?: boolean;
+}) {
   const layout = useNavigationStore((state) => state.layout);
   return (
-    <div className="feed-inner" data-layout={layout}>
+    <div className="feed-inner" data-layout={layout} data-channel={channel ? "" : undefined}>
       {children}
       <SiteFooter />
     </div>
@@ -24,22 +31,32 @@ export function FeedFrame({ children }: { children: ReactNode }) {
 
 /** One feed row: the card cell, then the side column. A row whose first cell
  * is the channel header passes `head`: it spans the columns as §3.1 says and
- * the app bar does not align to it. */
+ * the app bar does not align to it. The banner, header and composer rows
+ * pass `lead` (the mock's `.new-row` spacing). A thread's row passes its id
+ * (`rowId`): the side column is then `data-side` for the row's controls. */
 export function FeedRow({
   children,
   side,
   head = false,
+  lead = false,
+  rowId,
 }: {
   children: ReactNode;
   side?: ReactNode;
   head?: boolean;
+  lead?: boolean;
+  rowId?: string;
 }) {
   return (
-    <div className="feed-row">
+    <div className={lead ? "feed-row lead" : "feed-row"} data-row-thread={rowId}>
       <div data-row-head={head ? "" : undefined} className="min-w-0">
         {children}
       </div>
-      {head ? null : <aside className="min-w-0">{side}</aside>}
+      {head ? null : (
+        <aside className="mgn min-w-0" data-side={rowId}>
+          {side}
+        </aside>
+      )}
     </div>
   );
 }
@@ -81,10 +98,13 @@ export const PageHeadingFocusContext = createContext(false);
 export function PageFrame({
   title,
   narrow = false,
+  action,
   children,
 }: {
   title: string;
   narrow?: boolean;
+  /** A control beside the heading (Browse's New channel, `.shead`). */
+  action?: ReactNode;
   children?: ReactNode;
 }) {
   const focusHeading = useContext(PageHeadingFocusContext);
@@ -95,15 +115,25 @@ export function PageFrame({
     if (focusHeading) heading.current?.focus({ preventScroll: true });
   }, [focusHeading, pathname]);
 
+  const h2 = (
+    <h2
+      ref={heading}
+      tabIndex={-1}
+      className="text-fg-heading m-0 mb-2 text-[22px] font-bold tracking-[-0.015em]"
+    >
+      {title}
+    </h2>
+  );
   return (
     <div className="page-inner" data-width={narrow ? "narrow" : undefined}>
-      <h2
-        ref={heading}
-        tabIndex={-1}
-        className="text-fg-heading m-0 mb-2 text-[22px] font-bold tracking-[-0.015em]"
-      >
-        {title}
-      </h2>
+      {action ? (
+        <div className="shead">
+          {h2}
+          {action}
+        </div>
+      ) : (
+        h2
+      )}
       {children}
       <SiteFooter />
     </div>

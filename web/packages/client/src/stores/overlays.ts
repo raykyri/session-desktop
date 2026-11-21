@@ -21,6 +21,10 @@ import { create } from "zustand";
  * sidebar multi-select join when Phase 6 builds them. */
 export const OVERLAY_PRIORITY = {
   searchBar: 200,
+  /** Look up and Branch here over a selection (02 §10.2). */
+  selection: 150,
+  /** An inline composer with focus. */
+  inlineComposer: 100,
 } as const;
 
 export interface OverlayEntry {
