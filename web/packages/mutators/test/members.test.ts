@@ -46,7 +46,9 @@ test("a ban stops every write in its space, the author's own included", (t) => {
   const p = w.id();
   ok(t, w.apply("mel", "threads.create", { id: p, space: open, kind: "post", q: "x" }));
   ok(t, w.apply("olga", "members.ban", { space: open, user: "mel" }));
-  refused(t, w.apply("mel", "threads.delete", { id: p }), "FORBIDDEN");
+  const e = refused(t, w.apply("mel", "threads.delete", { id: p }), "FORBIDDEN");
+  // the message names the channel
+  t.is(e?.message, "You are banned from #lounge.");
   refused(t, w.apply("mel", "saved.set", { kind: "thread", id: p, on: true }), "FORBIDDEN");
 });
 

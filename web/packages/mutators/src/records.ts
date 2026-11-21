@@ -226,7 +226,8 @@ export function logsOf(r: Draft | StoredRecord): LogId[] {
 
 /** The fields that decide who may read a record: its kind, space, person,
  * author and maker. A write never changes them (`Tx.put` checks), so an edit
- * never moves a record to another audience. */
+ * never moves a record to another audience; `keepsAudience` names the one
+ * exception. */
 export function audienceOf(r: Draft | StoredRecord): string {
   return JSON.stringify([
     r.kind,
@@ -235,6 +236,22 @@ export function audienceOf(r: Draft | StoredRecord): string {
     "u" in r ? r.u : null,
     "by" in r ? r.by : null,
   ]);
+}
+
+/** The kinds whose author (`u`) is not part of who reads them: a thread,
+ * node, reply or comment is read by its space's readers (`readsAudience`). */
+const AUTHORED: ReadonlySet<Kind> = new Set<Kind>(["thread", "node", "reply", "comment"]);
+
+/** Whether `next` may replace `prev` at its key: their audience is the same
+ * (`audienceOf`), or the one change to it is a thread's, node's, reply's or
+ * comment's author cleared to null, as the account-deletion job does to the
+ * shells it keeps (`04` P2). Readers of those kinds are decided by the space
+ * alone, so that change gives the record to no other reader. */
+export function keepsAudience(prev: Draft | StoredRecord, next: Draft | StoredRecord): boolean {
+  const was = audienceOf(prev);
+  if (was === audienceOf(next)) return true;
+  if (!AUTHORED.has(next.kind) || !("u" in next) || next.u !== null || !("u" in prev)) return false;
+  return audienceOf({ ...next, u: prev.u } as Draft) === was;
 }
 
 /** A declared lookup (`01` U2): the records of a kind in one space, one

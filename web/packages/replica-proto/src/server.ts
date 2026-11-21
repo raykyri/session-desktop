@@ -1038,7 +1038,7 @@ export class ProtoServer implements TestServer {
     if (r.kind === "thread" && !r.del) {
       tx.put({ ...r, sum: text, running: false });
       done(r.id, "r");
-    } else if (r.kind === "node") {
+    } else if (r.kind === "node" && r.u !== null) {
       tx.put({
         kind: "answer",
         node: r.id,

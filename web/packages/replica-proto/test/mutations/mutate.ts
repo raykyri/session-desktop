@@ -834,8 +834,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M1b-15 a used invite link is revoked and restored",
     file: "../mutators/src/invites.ts",
-    from: '    space: (tx, i) => readable(tx, linkOf(i.id), "invite").sp,\n    run: (tx, i) => {\n      const l = readable(tx, linkOf(i.id), "invite");\n      if (l.dead === "Used") throw refuse("PRECONDITION_FAILED", "This link was already used.");\n      if (l.dead === "Revoked")',
-    to: '    space: (tx, i) => readable(tx, linkOf(i.id), "invite").sp,\n    run: (tx, i) => {\n      const l = readable(tx, linkOf(i.id), "invite");\n      if (l.dead === "Used" || l.dead === "Revoked")',
+    from: '      if (l.dead === "Used") throw refuse("PRECONDITION_FAILED", "This link was already used.");\n      if (l.dead !== "Revoked") return null;',
+    to: '      if (l.dead !== "Used" && l.dead !== "Revoked") return null;',
   },
   {
     name: "M1b-16 the queue-full refusal carries no reason",
@@ -1251,8 +1251,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M6-1 a used-up pre-stage limit does not refuse",
     file: "../mutators/src/rules.ts",
-    from: '  if (ctx.allow && !ctx.allow(limit)) throw refuse("TOO_MANY_REQUESTS");',
-    to: "  ctx.allow?.(limit);",
+    from: '  if (left !== true) throw refuse("TOO_MANY_REQUESTS", left);',
+    to: "  void left;",
     packageOnly: true,
   },
   {
@@ -1279,22 +1279,22 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M6-5 a channel's 51st open link is allowed",
     file: "../mutators/src/invites.ts",
-    from: "      if (open >= OPEN_LINKS_MAX)",
-    to: "      if (open > OPEN_LINKS_MAX)",
+    from: "  if (open >= OPEN_LINKS_MAX)",
+    to: "  if (open > OPEN_LINKS_MAX)",
     packageOnly: true,
   },
   {
     name: "M6-6 an expired link counts as open",
     file: "../mutators/src/invites.ts",
-    from: "        .filter((l) => l.dead === null && isoToMs(l.expiresAt) > isoToMs(tx.now)).length;",
-    to: "        .filter((l) => l.dead === null && isoToMs(l.expiresAt) >= 0).length;",
+    from: "const isOpen = (tx: Tx, l: InviteRec) => l.dead === null && isoToMs(l.expiresAt) > isoToMs(tx.now);",
+    to: "const isOpen = (tx: Tx, l: InviteRec) => l.dead === null && isoToMs(l.expiresAt) >= 0;",
     packageOnly: true,
   },
   {
     name: "M6-7 the server does not count its pre-stage limits",
     file: "../sync/src/server/server.ts",
-    from: "      if (limits) pre.allow = (limit) => limits.take(u, limit);",
-    to: "      void limits;",
+    from: "          if (left === true) uses.push(limit);\n          return left;",
+    to: "          if (left === true) uses.push(limit);\n          return true;",
     packageOnly: true,
   },
 ];

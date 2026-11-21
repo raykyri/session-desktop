@@ -294,7 +294,6 @@ export interface RedeemedInvite {
   invitedBy: string | null;
   inviterHandle: string | null;
   inviteId: string;
-  codeEnc: string | null;
 }
 
 /**
@@ -344,7 +343,7 @@ export function activate(
       // The creator is checked before the invite is marked used: a link of an
       // account that is no longer active is not open (`findOpenByHash`).
       const pending = tx
-        .select({ createdBy: invites.createdBy, codeEnc: invites.codeEnc })
+        .select({ createdBy: invites.createdBy })
         .from(invites)
         .where(eq(invites.id, account.pendingInviteId))
         .get();
@@ -387,7 +386,6 @@ export function activate(
         invitedBy: invite.createdBy,
         inviterHandle: creator?.handle ?? null,
         inviteId: invite.id,
-        codeEnc: pending.codeEnc,
       });
       return {
         ok: true,

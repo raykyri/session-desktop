@@ -52,20 +52,13 @@ function openCode(ctx: AppContext & { user: { id: string } }, sealed: string): s
  * The `invite_used` notification (01 C16) to the invite's creator, in their
  * user log, through `serverApply` inside the redemption's transaction: it
  * commits with the redemption, and a failure rolls the redemption back. It
- * names the new member (`actor`) and the code they used (`note`), which no
- * longer admits anyone. A root invite has no creator and notifies nobody.
+ * names the new member (`actor`) and carries no code: no plain code is
+ * stored anywhere (`04` I1). A root invite has no creator and notifies
+ * nobody.
  */
 function notifyInviteUsed(ctx: AppContext, redeemed: accountInvites.RedeemedInvite): void {
   const to = redeemed.inviterHandle;
   if (!ctx.sync || to === null || redeemed.invitedBy === null) return;
-  let code: string | null = null;
-  if (redeemed.codeEnc !== null) {
-    try {
-      code = ctx.box.open(redeemed.codeEnc, codeContext(redeemed.invitedBy));
-    } catch {
-      // `SESSION_SECRET_KEY` changed since the link was made: no code shown
-    }
-  }
   const written = ctx.sync.server.serverApply({ me: redeemed.handle }, (tx) =>
     tx.create({
       kind: "notif",
@@ -77,7 +70,7 @@ function notifyInviteUsed(ctx: AppContext, redeemed: accountInvites.RedeemedInvi
       item: null,
       actor: redeemed.handle,
       n: 1,
-      note: code,
+      note: null,
       read: false,
       createdAt: tx.now,
     }),

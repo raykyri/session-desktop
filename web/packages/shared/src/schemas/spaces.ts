@@ -206,7 +206,8 @@ export const memberRecordSchema = z.object({
  * `u`, `createdAt`, `mod`, `modBy` and `modNote`. `u` is served to the
  * author only once the thread is removed: every other reader, the owner
  * included, gets `u: null`. Hidden text is served to the author and the
- * owner; everyone else gets the text fields blank. */
+ * owner; everyone else gets the text fields blank. The account-deletion job
+ * stores `u: null` on every thread of the deleted person (`04` P2). */
 export const threadRecordSchema = z.object({
   kind: z.literal("thread"),
   id: spaceThreadIdSchema,
@@ -300,7 +301,9 @@ export const nodeRecordSchema = z
     s: spaceIdSchema,
     par: askNodeRefSchema,
     k: askNodeKindSchema,
-    u: spaceHandleSchema,
+    /** The author; null on a shell kept after the author's account was
+     * deleted (`04` P2). */
+    u: spaceHandleSchema.nullable(),
     q: z.string(),
     look: z.string().max(LOOKUP_PHRASE_MAX).nullable(),
     quote: z.string().max(QUOTE_MAX).nullable(),
@@ -401,7 +404,9 @@ export const replyRecordSchema = z.object({
   id: spaceUlidSchema,
   th: spaceThreadIdSchema,
   s: spaceIdSchema,
-  u: spaceHandleSchema,
+  /** The author; null on a shell kept after the author's account was
+   * deleted (`04` P2). */
+  u: spaceHandleSchema.nullable(),
   t: z.string(),
   parent: spaceUlidSchema.nullable(),
   /** Changed by its author since it was written. */
@@ -424,7 +429,9 @@ export const commentRecordSchema = z.object({
   s: spaceIdSchema,
   node: askNodeRefSchema,
   parent: spaceUlidSchema.nullable(),
-  u: spaceHandleSchema,
+  /** The author; null on a shell kept after the author's account was
+   * deleted (`04` P2). */
+  u: spaceHandleSchema.nullable(),
   t: z.string(),
   /** Changed by its author since it was written. */
   edited: z.boolean(),
@@ -458,6 +465,8 @@ export const inviteRecordSchema = z.object({
   expiresAt: spaceIsoTimeSchema,
   /** Why the link no longer works (`Used`, `Revoked`), or null. */
   dead: z.string().nullable(),
+  /** Who joined with it; null while unused, and once that person's account
+   * was deleted (`04` P2). */
   usedBy: spaceHandleSchema.nullable(),
   createdAt: spaceIsoTimeSchema,
   rev,
@@ -487,12 +496,13 @@ export const notificationTypeSchema = z.enum([
 /** A notification (`notif:<id>`) in the recipient's user log, written in the
  * same transaction as the write that causes it (the mutator's `notify`
  * stage). It carries ids, no item text; a `removed` one carries the owner's
- * note in `note`, an `invite_used` one the code that was used, which admits
- * nobody any more. Served only while the recipient may read `sp`.
+ * note in `note`; an `invite_used` one has no note: the code that was used
+ * is not stored in plain anywhere (`04` I1). Served only while the
+ * recipient may read `sp`.
  * - `item`: the key of the record it is about (`reply:<id>`, `node:<id>`,
  *   `comment:<id>`, `thread:<id>`), null for `invite_used`.
  * - `actor`: who caused it (the new member for `invite_used`), null for
- *   `removed`.
+ *   `removed`, and null once the actor's account was deleted (`04` P2).
  * - `n`: how many writes it stands for. `reply`, `branch` and `comment`
  *   coalesce: at most one unread notification per (recipient, type,
  *   thread); a later one updates it. */

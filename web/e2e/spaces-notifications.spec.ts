@@ -104,9 +104,11 @@ test("every kind reaches the viewer; the dot stays; a row opens its thread; Mark
   );
   await expect(rowOf(page, "removed")).toContainText(`${ann} removed your post: “${REASON}”`);
   await expect(rowOf(page, "removed")).not.toContainText("A post that is removed");
+  // the notification stores no code (`04` I1)
   await expect(rowOf(page, "invite_used")).toContainText(
-    `@${w.newcomer} joined Session with your invite ${w.code}`,
+    `@${w.newcomer} joined Session with your invite`,
   );
+  await expect(rowOf(page, "invite_used")).not.toContainText(w.code);
   await expect(rowOf(page, "invite_used")).toContainText("Invites · ");
   await expect(rowOf(page, "reply")).toContainText(`#${w.channel} · `);
   for (const kind of ["mention", "reply", "branch", "comment", "removed", "invite_used"])
