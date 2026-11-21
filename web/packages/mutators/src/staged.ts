@@ -14,9 +14,9 @@
 import { refuse } from "./errors.js";
 import { deriveId } from "./ids.js";
 import {
-  audienceOf,
   idOf,
   inIndex,
+  keepsAudience,
   keyOf,
   registryKey,
   uniqueOf,
@@ -122,8 +122,7 @@ export class StagedTx implements Tx {
     const key = keyOf(r);
     const prev = this.byKey(key);
     if (!prev && idOf(r) !== null) return this.create(r);
-    if (prev && audienceOf(prev) !== audienceOf(r))
-      throw new Error(`a write changed the audience of ${key}`);
+    if (prev && !keepsAudience(prev, r)) throw new Error(`a write changed the audience of ${key}`);
     this.write(key, r);
   }
 

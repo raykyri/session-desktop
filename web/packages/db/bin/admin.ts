@@ -7,7 +7,9 @@
 //                                              handle a site admin, or stop
 //   npm run db:admin -- --invite               print one root account invite
 //   npm run db:admin -- --delete <handle>      the account-deletion job, with
-//                                              the server stopped
+//                                              the server stopped: it refuses
+//                                              while a server's heartbeat is
+//                                              fresh
 //                                              (`web/docs/runbooks/delete-account.md`)
 //   npm run db:admin -- --new-history          replace the sync history id at
 //                                              the next boot, after a restore
@@ -71,7 +73,8 @@ try {
       `deleted the sign-in identity of @${deleted.handle ?? ""}; ` +
         `${deleted.sessions} session(s) ended, ${deleted.revokedInvites} open invite(s) revoked; ` +
         (spaces
-          ? `${spaces.items} item(s) deleted, ${spaces.records} record(s) removed, ` +
+          ? `${spaces.items} item(s) deleted, ${spaces.rewritten} record(s) no longer naming them, ` +
+            `${spaces.records} record(s) removed, ` +
             `frozen: ${spaces.frozen.length ? spaces.frozen.map((n) => `#${n}`).join(", ") : "none"}; `
           : "") +
         "the handle stays reserved\n",

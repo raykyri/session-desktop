@@ -20,6 +20,7 @@ import {
   closeDatabase,
   openDatabase,
   users,
+  writeHeartbeat,
 } from "../src/index.js";
 import type { SessionDatabase } from "../src/index.js";
 
@@ -224,6 +225,31 @@ async function race(
     ),
   );
 }
+
+test("an afterRedeem that throws makes activate rethrow, and the invite stays unredeemed", (t) => {
+  const { db, userId } = createFixture(t);
+  const made = invite(db, userId);
+  const waiting = addWaitingUser(db);
+  t_assertOpen(accountInvites.setPendingInvite(db, waiting.id, made.code));
+  t.throws(
+    () =>
+      accountInvites.activate(db, {
+        userId: waiting.id,
+        handle: "late.comer",
+        displayName: "Late",
+        afterRedeem: () => {
+          throw new Error("the notification failed");
+        },
+      }),
+    { message: "the notification failed" },
+  );
+  t.like(users.findById(db, waiting.id), { status: "waiting", handle: null });
+  t_assertOpen(accountInvites.checkCode(db, made.code));
+  const row = db.$client.prepare("SELECT used_by AS by FROM invites WHERE id = ?").get(made.id) as {
+    by: string | null;
+  };
+  t.is(row.by, null);
+});
 
 test("two concurrent redemptions of one code: one succeeds and one conflicts", async (t) => {
   const { db, directory, userId } = createFixture(t);
@@ -468,4 +494,20 @@ test("the deletion job deletes by handle and leaves the handle taken", async (t)
   t.is(users.findById(db, member.id), null);
   t.false(users.handleAvailable(db, "leaving.soon"));
   await t.throwsAsync(dbAdmin(directory, ["--delete", "leaving.soon"]));
+});
+
+test("the deletion job exits 1 and changes nothing while a server's heartbeat is fresh", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "session-delete-"));
+  t.teardown(() => rmSync(directory, { recursive: true, force: true }));
+  const db = openDatabase(join(directory, "session.db"));
+  t.teardown(() => closeDatabase(db));
+  const member = addActiveUser(db, "still.here");
+  writeHeartbeat(db, Date.now());
+  const refused = await t.throwsAsync(dbAdmin(directory, ["--delete", "still.here"]));
+  t.like(refused, { code: 1 });
+  t.regex(
+    String((refused as { stderr?: unknown } | undefined)?.stderr),
+    /needs the server stopped/,
+  );
+  t.not(users.findById(db, member.id), null);
 });

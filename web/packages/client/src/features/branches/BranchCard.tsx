@@ -135,8 +135,8 @@ export function BranchCard({
   return (
     <div className={cn("preview", fade && "fadein")}>
       <div className="who">
-        <Avatar handle={node.u} size="xs" />
-        <b>{node.u}</b>
+        <Avatar handle={node.u ?? "?"} size="xs" />
+        <b>{node.u ?? ""}</b>
         <time dateTime={node.createdAt}>{relTime(node.createdAt, now)}</time>
         <span className="ml-auto inline-flex self-center">
           <MoreMenu actions={actions} />
@@ -322,8 +322,8 @@ function BranchComments({
         return (
           <div key={c.id} className="brr" style={{ marginLeft: Math.min(depth, 3) * 14 }}>
             <div className="who">
-              <Avatar handle={c.u} size="xs" />
-              <b>{c.u}</b>
+              <Avatar handle={c.u ?? "?"} size="xs" />
+              <b>{c.u ?? ""}</b>
               <time dateTime={c.createdAt}>{relTime(c.createdAt, now)}</time>
             </div>
             {c.del ? (

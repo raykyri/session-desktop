@@ -2,11 +2,15 @@
 // of the scheduled maintenance, and the account-deletion operator job.
 
 import type { SyncServer } from "@session/sync/server";
-import { and, eq, isNull, lt } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
+import { apiKeys, usageBilling } from "../schema/apiKeys.js";
+import { userPreferences } from "../schema/preferences.js";
 import { sessions } from "../schema/sessions.js";
-import { invites, users } from "../schema/users.js";
+import { syncAnswers, syncClients, syncSeqAnswers } from "../schema/sync.js";
+import { invites, userLimits, users } from "../schema/users.js";
+import { assertServerStopped } from "../sync/running.js";
 import { now } from "../time.js";
 
 import {
@@ -60,8 +64,9 @@ export interface DeletedAccount {
 
 export interface DeleteAccountOptions {
   /** The sync core the spaces step writes through: the running server's in
-   * a test, otherwise one over `db` (the job runs while the server is
-   * stopped, `web/docs/runbooks/delete-account.md`). */
+   * a test, otherwise one over `db`. The job then runs only while no server
+   * has the database open (its heartbeat, `sync/running.ts`;
+   * `web/docs/runbooks/delete-account.md`). */
   server?: SyncServer;
   /** Further steps; `ACCOUNT_DELETION_STEPS` by default. */
   steps?: readonly AccountDeletionStep[];
@@ -71,9 +76,10 @@ export interface DeleteAccountOptions {
  * The account-deletion operator job (04 §8, B6, `01` C8). In one
  * transaction it erases the person from the spaces and freezes the channels
  * they own (`accountSpaces.ts`), runs the registered steps, ends every
- * session, revokes the account's open invites, and deletes the provider
- * identity: `provider`, `provider_user_id`, the email, login, names and
- * avatar. The row stays with its handle, so the handle remains taken and the
+ * session, revokes the account's open invites, deletes the account's
+ * stored API keys, billing mode, preferences, limit overrides and sync
+ * clients with their recorded answers, and deletes the provider identity:
+ * `provider`, `provider_user_id`, the email, login, names and avatar. The row stays with its handle, so the handle remains taken and the
  * account stays in the invite tree as "Deleted account". The same provider
  * identity can sign in again and gets a new waiting account with no link to
  * this one.
@@ -83,6 +89,7 @@ export function deleteAccount(
   userId: string,
   options: DeleteAccountOptions = {},
 ): DeletedAccount {
+  if (!options.server) assertServerStopped(db, now(), "The account-deletion job");
   const server = options.server ?? localSyncServer(db);
   const steps = options.steps ?? ACCOUNT_DELETION_STEPS;
   return db.transaction(
@@ -110,6 +117,21 @@ export function deleteAccount(
         )
         .returning({ id: invites.id })
         .all().length;
+      tx.delete(apiKeys).where(eq(apiKeys.userId, userId)).run();
+      tx.delete(usageBilling).where(eq(usageBilling.userId, userId)).run();
+      tx.delete(userPreferences).where(eq(userPreferences.userId, userId)).run();
+      tx.delete(userLimits).where(eq(userLimits.userId, userId)).run();
+      if (row.handle !== null) {
+        const clients = tx
+          .delete(syncClients)
+          .where(eq(syncClients.u, row.handle))
+          .returning({ id: syncClients.clientId })
+          .all()
+          .map((c) => c.id);
+        if (clients.length)
+          tx.delete(syncSeqAnswers).where(inArray(syncSeqAnswers.clientId, clients)).run();
+        tx.delete(syncAnswers).where(eq(syncAnswers.u, row.handle)).run();
+      }
       tx.update(users)
         .set({
           provider: null,

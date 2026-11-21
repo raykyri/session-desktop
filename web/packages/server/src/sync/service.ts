@@ -1,9 +1,16 @@
 // The server half of the sync core in this process (`01` §4.2, S5, Y7, Y8):
 // `SyncServer` over `SqliteStore`, the event streams it wakes after every
-// commit, the hourly retention job (with a WAL checkpoint, `01` D4), and the
-// drain.
+// commit, the hourly retention job (with a WAL checkpoint, `01` D4), the
+// heartbeat that tells operator jobs a server has the database open
+// (`@session/db` `running.ts`), and the drain.
 
-import { auth, SqliteStore, type SessionDatabase } from "@session/db";
+import {
+  HEARTBEAT_INTERVAL_MS,
+  auth,
+  writeHeartbeat,
+  SqliteStore,
+  type SessionDatabase,
+} from "@session/db";
 import { MUTATORS, type AnyMutator, type RunRec } from "@session/mutators";
 import { CLIENT_IDLE_TTL, SyncServer, type Clock } from "@session/sync/server";
 
@@ -87,6 +94,7 @@ export class SyncService {
   /** Set by the drain: every later envelope answers SERVICE_UNAVAILABLE. */
   draining = false;
   #retention: ReturnType<typeof setInterval> | null = null;
+  #heartbeat: ReturnType<typeof setInterval> | null = null;
   readonly #logger: Logger | undefined;
   readonly #killAfter: string | undefined;
   readonly #killAt: KillAtWrite | undefined;
@@ -236,6 +244,18 @@ export class SyncService {
    * the next hour. */
   startMaintenance(): void {
     if (this.#retention) return;
+    // the heartbeat: an operator job that writes records refuses while it
+    // is fresh (`runbooks/delete-account.md`); the shutdown deletes it
+    const beat = () => {
+      try {
+        writeHeartbeat(this.store.sqlite, this.clock.now());
+      } catch (error) {
+        this.#logger?.error({ error }, "the heartbeat write failed");
+      }
+    };
+    beat();
+    this.#heartbeat = setInterval(beat, HEARTBEAT_INTERVAL_MS);
+    this.#heartbeat.unref?.();
     const run = () => {
       try {
         this.server.retain();
@@ -257,6 +277,10 @@ export class SyncService {
     this.draining = true;
     if (this.#retention) clearInterval(this.#retention);
     this.#retention = null;
+    // the row stays until the shutdown deletes it (`main.ts`): the drain
+    // still writes records as running attempts end
+    if (this.#heartbeat) clearInterval(this.#heartbeat);
+    this.#heartbeat = null;
     this.hub.closeAll("draining");
   }
 }
