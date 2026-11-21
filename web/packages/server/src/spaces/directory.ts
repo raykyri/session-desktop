@@ -2,6 +2,8 @@
 // the All scope, Browse, a channel address the reader has not joined, and a
 // signed-out reader's Home. Online-only; the channels' records are read
 // through the sync routes. No page holds a private channel, whoever asks.
+// `spaces.byName` answers one channel by its name, a private one's landing
+// included, for a channel address (`/c/<name>`) the replica cannot resolve.
 
 import type { Spaces } from "@session/shared";
 
@@ -21,10 +23,13 @@ export interface SpaceDirectory {
   /** Open channels by id, after the id `after` (exclusive), at most
    * `limit`. */
   openSpaces(after: string | null, limit: number): SpaceRec[];
+  /** The channel of a name, open or private: a private channel's record is
+   * its landing (name, About, owner, member count; `04` I5). */
+  byName(name: string): SpaceRec | null;
 }
 
 /** No channels (a server without the sync store). */
-export const EMPTY_DIRECTORY: SpaceDirectory = { openSpaces: () => [] };
+export const EMPTY_DIRECTORY: SpaceDirectory = { openSpaces: () => [], byName: () => null };
 
 /** One page of the directory, in id order (ULIDs: creation order). A
  * private channel is never served, whatever the directory returns. */

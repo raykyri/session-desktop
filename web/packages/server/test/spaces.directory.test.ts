@@ -27,6 +27,7 @@ const spaces = [space(1), space(2, "private"), space(3), space(4), space(5)];
 const directory = {
   openSpaces: (after: string | null, limit: number) =>
     spaces.filter((s) => s.vis === "open" && (after === null || s.id > after)).slice(0, limit),
+  byName: (name: string) => spaces.find((s) => s.name === name) ?? null,
 };
 
 test("no private channel, for a signed-out caller or a member, and pages follow on", async (t) => {
@@ -50,7 +51,15 @@ test("no private channel, for a signed-out caller or a member, and pages follow 
 });
 
 test("a private channel the store returned is not served", async (t) => {
-  const h = createHarness(t, { deps: { directory: { openSpaces: () => spaces } } });
+  const h = createHarness(t, {
+    deps: { directory: { openSpaces: () => spaces, byName: () => null } },
+  });
   const page = await h.caller(null).spaces.directory();
   t.false(page.spaces.some((s) => s.vis !== "open"));
+});
+
+test("byName answers a private channel's landing, and null for no channel", async (t) => {
+  const h = createHarness(t, { deps: { directory } });
+  t.is((await h.caller(null).spaces.byName({ name: "room-2" })).space?.vis, "private");
+  t.is((await h.caller(null).spaces.byName({ name: "nowhere" })).space, null);
 });

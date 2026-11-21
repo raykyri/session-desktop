@@ -131,6 +131,13 @@ export class FakeSync {
     return Promise.resolve(out);
   };
 
+  /** `spaces.byName`: any channel's record (a private one's is its landing). */
+  byName = (name: string): Promise<SpaceRec | null> => {
+    for (const r of this.store.records.values())
+      if (r.kind === "space" && r.name === name) return Promise.resolve(r);
+    return Promise.resolve(null);
+  };
+
   /** The in-process transport of `u`, for clients that skip HTTP. */
   transport(u: string | null) {
     return transportFor(this.server, u === null ? null : { u });

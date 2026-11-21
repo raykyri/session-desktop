@@ -123,6 +123,10 @@ export interface ReplicaSource {
   /** Read a channel's records while its view is open (01 R5); the returned
    * function ends the view. */
   watch?(space: string): () => void;
+  /** Whether the replica can say there is no channel of this name besides
+   * those it holds: it asked the server (a private channel's landing, 04
+   * I5). The first call asks. */
+  lookUp?(name: string): boolean;
 }
 
 /** Thrown by `known` for a read the replica cannot answer; `useReplicaQuery`

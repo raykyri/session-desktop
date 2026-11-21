@@ -1,6 +1,7 @@
 // `spaces.directory` (01 C7, R5; 04 I5): the open channels, for the All
 // scope, Browse, the channel address of a channel the viewer has not joined,
-// and the signed-out reader's Home. Online-only; the replica reads each
+// and the signed-out reader's Home; `spaces.byName`: one channel by name, a
+// private channel's landing included. Online-only; the replica reads each
 // channel's records through the sync routes.
 
 import type { SpaceRec } from "@session/mutators";
@@ -21,4 +22,8 @@ export async function fetchDirectory(): Promise<SpaceRec[]> {
     if (cursor === null) break;
   }
   return out;
+}
+
+export async function fetchSpaceByName(name: string): Promise<SpaceRec | null> {
+  return (await trpc().spaces.byName.query({ name })).space;
 }

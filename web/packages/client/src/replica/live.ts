@@ -3,7 +3,7 @@
 // come back on Discard, the `UPGRADE_REQUIRED` reload and the connection
 // status the shell reads.
 
-import { fetchDirectory } from "../api/spaces.js";
+import { fetchDirectory, fetchSpaceByName } from "../api/spaces.js";
 import { showToast } from "../features/shell/Toast.js";
 import { viewerHandle, type Viewer } from "../features/shell/viewer.js";
 import { useConnectionStore } from "../stores/connection.js";
@@ -34,6 +34,7 @@ export function liveReplicaConfig(): ReplicaConfig {
         userId: viewer.kind === "signedOut" ? null : viewer.user.id,
         transport,
         directory: fetchDirectory,
+        byName: fetchSpaceByName,
         claim: (userId, register) => tabClientId(userId, register),
         keepClientId: (userId, clientId, lastSeq) =>
           void keepTabClientId(userId, clientId, lastSeq).catch(() => undefined),

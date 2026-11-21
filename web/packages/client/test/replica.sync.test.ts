@@ -9,7 +9,7 @@ import { claimClientId } from "@session/sync/client";
 import test from "ava";
 
 import { HttpSyncTransport } from "../src/replica/http.js";
-import { channelsOf, feedOf, repliesOf } from "../src/replica/queries.js";
+import { channelByName, channelsOf, feedOf, repliesOf } from "../src/replica/queries.js";
 import { UNKNOWN, runQuery, type DraftRef } from "../src/replica/source.js";
 import { SyncReplica } from "../src/replica/syncReplica.js";
 
@@ -55,6 +55,7 @@ function replicaOf(
     userId: u,
     transport,
     directory: f.directory,
+    byName: f.byName,
     claim: (userId, register) => claimClientId({ userId, storage, locks, register }),
     restoreDraft: (d) => restored.push(d),
     onLeft: (name) => left.push(name),
@@ -269,6 +270,27 @@ test("signed out: every open channel through the same source, no private channel
   const outcome = await r.mutate("saved.set", { kind: "thread", id: post, on: true });
   t.false(outcome.ok);
   t.false(f.requests.some((x) => x.path === "/api/sync/register" || x.path === "/api/sync/events"));
+});
+
+test("a private channel's address: its landing is looked up by name; a name of no channel is absent", async (t) => {
+  const { f } = world();
+  const { r } = replicaOf(f, null);
+  t.teardown(() => r.dispose());
+  await until(() => r.ready());
+  t.is(
+    query(() => channelByName(r, "lab")),
+    UNKNOWN,
+    "asked, not answered yet",
+  );
+  await until(() => query(() => channelByName(r, "lab")) !== UNKNOWN);
+  const lab = channelByName(r, "lab");
+  t.like(lab, { name: "lab", private: true, joined: false, owner: OLGA });
+  t.is(
+    query(() => channelByName(r, "nowhere")),
+    UNKNOWN,
+  );
+  await until(() => query(() => channelByName(r, "nowhere")) !== UNKNOWN);
+  t.is(channelByName(r, "nowhere"), null);
 });
 
 test("ten unjoined channels read while their views are open leave the joined logs unchanged (W9.1)", async (t) => {

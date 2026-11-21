@@ -77,6 +77,8 @@ export interface SyncReplicaOptions {
   transport: SyncHttp;
   /** `spaces.directory`: the open channels (01 C7). */
   directory: () => Promise<readonly SpaceRec[]>;
+  /** `spaces.byName`: a channel by name, a private one's landing included. */
+  byName?: (name: string) => Promise<SpaceRec | null>;
   /** The tab's client id (`tabClient.ts`). */
   claim?: (
     userId: string,
@@ -156,6 +158,9 @@ export class SyncReplica implements ReplicaSource {
 
   /** `spaces.directory`'s answer, by id; null until it arrives. */
   private directoryRecords: Map<string, SpaceRec> | null = null;
+  /** Channels looked up by name (`lookUp`), by id, and the names asked. */
+  private readonly landings = new Map<string, SpaceRec>();
+  private readonly names = new Map<string, "pending" | "done">();
   /** The logs the stream reads (a member's user log and joined spaces). */
   private readonly streamed = new Set<LogId>();
   /** Channel views open, by space id. */
@@ -602,7 +607,7 @@ export class SyncReplica implements ReplicaSource {
     const [kind, a] = key.split(":");
     switch (kind) {
       case "space": {
-        const d = a ? this.directoryRecords?.get(a) : undefined;
+        const d = a ? (this.directoryRecords?.get(a) ?? this.landings.get(a)) : undefined;
         if (d) return d;
         return this.complete("space") ? undefined : UNKNOWN;
       }
@@ -691,9 +696,33 @@ export class SyncReplica implements ReplicaSource {
       }
     }
     if (kind === "space")
-      for (const s of this.directoryRecords?.values() ?? [])
-        if (!seen.has(`space:${s.id}`)) out.push(s as RecordOf<K>);
+      for (const s of [...(this.directoryRecords?.values() ?? []), ...this.landings.values()])
+        if (!seen.has(`space:${s.id}`)) {
+          seen.add(`space:${s.id}`);
+          out.push(s as RecordOf<K>);
+        }
     return out;
+  }
+
+  lookUp(name: string): boolean {
+    const byName = this.options.byName;
+    if (!byName) return true;
+    const state = this.names.get(name);
+    if (state !== undefined) return state === "done";
+    this.names.set(name, "pending");
+    // asked from a query, which runs during a render: answer afterwards
+    queueMicrotask(() => {
+      void byName(name)
+        .then((space) => {
+          if (space) this.landings.set(space.id, space);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          this.names.set(name, "done");
+          this.changed();
+        });
+    });
+    return false;
   }
 
   complete(kind: Kind): boolean {
