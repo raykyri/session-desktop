@@ -14,12 +14,9 @@ import { SITE_EFFORTS, type SiteEffort } from "@session/shared";
 import { useState } from "react";
 
 import { useModels, useSetDefaultEffort, useSetDefaultModel } from "../../api/account.js";
+import { refusalMessage } from "../../lib/toast.js";
 import { effortLabel } from "../../replica/online.js";
 import { showToast } from "../shell/Toast.js";
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : "Something went wrong.";
-}
 
 const PROVIDER_NAME: Record<string, string> = {
   vertex: "Google",
@@ -100,7 +97,7 @@ export function SiteAdminSettings() {
     setPendingModel(id);
     setModel.mutate(id, {
       onSuccess: () => showToast(`Default model set to ${label}.`),
-      onError: (error) => setModelError(errorMessage(error)),
+      onError: (error) => setModelError(refusalMessage(error)),
       onSettled: () => setPendingModel(null),
     });
   };
@@ -112,7 +109,7 @@ export function SiteAdminSettings() {
     setPendingEffort(effort);
     setEffort.mutate(effort, {
       onSuccess: () => showToast(`Default effort set to ${effortLabel(effort)}.`),
-      onError: (error) => setEffortError(errorMessage(error)),
+      onError: (error) => setEffortError(refusalMessage(error)),
       onSettled: () => setPendingEffort(null),
     });
   };

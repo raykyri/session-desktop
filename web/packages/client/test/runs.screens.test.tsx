@@ -143,7 +143,8 @@ test.serial("failed: the reason for each fail.why, and Run again", async (t) => 
   const reasons: [RunRec["fail"], string][] = [
     [
       { why: "tokens", at: null, cls: null },
-      "You're out of tokens until Friday. You can still post, or add an API key in Usage.",
+      // the fixture member has tokens left now (`FIXTURE_USAGE`)
+      "This ask did not run: included tokens had run out. Run again to start it.",
     ],
     [
       { why: "key", at: null, cls: null },

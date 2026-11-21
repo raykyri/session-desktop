@@ -81,10 +81,11 @@ export const LOOKUP_PHRASE_MAX = 80;
 export const INVITE_DAYS_MAX = 30;
 /** Queued runs per person before `pre` refuses with `queue_full` (`03` L1). */
 export const QUEUED_RUNS_PER_USER = 20;
-/** The toast of a run-starting write the client does not send because
- * nothing can pay for it (`03` K8; `02` §5's `OUT_MSG`), and the reason a
- * run that ended `tokens` shows. The reset is always on a Friday (`03`
- * K3). */
+/** `02` §5's `OUT_MSG` for a reset read in UTC, where it is always on a
+ * Friday (`03` K3): the server's message for a run that ended `tokens`. The
+ * web client words its toast and run status from `usage.get`'s `resetAt` in
+ * the viewer's time zone instead (`outOfTokensText`), since the reset is
+ * Thursday west of UTC (`03` K8). */
 export const OUT_OF_TOKENS_TEXT =
   "You're out of tokens until Friday. You can still post, or add an API key in Usage.";
 
@@ -129,8 +130,27 @@ export const runErrorClassSchema = z.enum([
   "unknown",
 ]);
 
+/** Why a run ended `key` (`03` K4, K11, E5), from a fixed set the server
+ * writes; the provider's own text is never stored:
+ * - `key_only`: the model runs only on the member's own key, and none was set;
+ * - `key_unset`: the attempt was billed to the member's key, and no valid key
+ *   was set when it started;
+ * - `key_changed`: between two steps the key was removed, replaced or marked
+ *   invalid, or billing stopped using it;
+ * - `key_rejected`: the provider rejected the key (a 401 or an
+ *   authentication error); the key is now marked invalid;
+ * - `key_forbidden`: the provider refused the key permission for the request
+ *   (a 403); the key stays valid. */
+export const runKeyDetailSchema = z.enum([
+  "key_only",
+  "key_unset",
+  "key_changed",
+  "key_rejected",
+  "key_forbidden",
+]);
+
 /** Why a run ended without an answer: stopped (cancelled or deleted), tokens
- * (nothing could pay), key (the provider rejected the key), rate (the
+ * (nothing could pay), key (the member's key could not pay; `detail`), rate (the
  * provider limits requests; `at`: when Run again works, ms), access (the
  * asker could no longer read the thread when the run started), interrupted
  * (the server could not resume it), error (a provider error, `cls`). */
@@ -138,6 +158,9 @@ export const runFailureSchema = z.object({
   why: z.enum(["stopped", "tokens", "key", "rate", "access", "interrupted", "error"]),
   at: z.number().nullable(),
   cls: runErrorClassSchema.nullable(),
+  /** For `key`, which key failure ended the run (`runKeyDetailSchema`).
+   * Absent for the other reasons and on records written before it. */
+  detail: runKeyDetailSchema.optional(),
 });
 
 /** Who pays for a run's attempt (`03` K8): the server decides it in the

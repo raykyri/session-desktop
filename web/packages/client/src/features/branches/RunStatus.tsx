@@ -5,7 +5,8 @@
 //   dot (a static dot under reduced motion), and the text streamed so far;
 // - `complete`: the answer (the caller's), then the run's stop note when it
 //   has one;
-// - `failed`: the reason for `fail.why`;
+// - `failed`: the reason for `fail.why`, worded for the asker or for another
+//   reader (`runFailureText.ts`);
 // - `cancelled`, `interrupted`: "Stopped" / "Interrupted" with the partial
 //   text.
 //
@@ -15,20 +16,25 @@
 // effort the composer has now).
 
 import type { RunRec } from "@session/mutators";
-import { runFailureText } from "@session/shared";
 
+import { useOnlineData, useReplica } from "../../replica/ReplicaProvider.js";
+import { outOfTokens } from "../../replica/online.js";
 import { useRunText } from "../../replica/queries.js";
 import { useWrites } from "../../replica/writes.js";
 import { AnswerProse } from "../feed/AnswerProse.js";
 import { useFeedViewer, useRunChoice } from "../feed/FeedContext.js";
+import { currentReading } from "../shell/usage.js";
+
+import { failedRunText, type FailureView } from "./runFailureText.js";
 
 /** A run that ended without its answer: Run again applies. */
 export const isStoppedRun = (run: RunRec | undefined): run is RunRec =>
   run !== undefined &&
   (run.status === "failed" || run.status === "cancelled" || run.status === "interrupted");
 
-/** The status line of a run that has no answer to show. */
-export function runStatusText(run: RunRec | undefined): string | null {
+/** The status line of a run that has no answer to show; a failed run's
+ * reason is worded for `view`'s reader (`failedRunText`). */
+export function runStatusText(run: RunRec | undefined, view: FailureView): string | null {
   if (!run) return null;
   switch (run.status) {
     case "queued":
@@ -40,14 +46,30 @@ export function runStatusText(run: RunRec | undefined): string | null {
     case "interrupted":
       return "Interrupted";
     case "failed":
-      return runFailureText(run.fail ?? { why: "error", cls: "unknown" });
+      return failedRunText(run, view);
     case "complete":
       return null;
   }
 }
 
+/** Who reads `run`'s status: its asker or another reader, and for the
+ * asker whether nothing can pay for its model now (03 K8). */
+function useFailureView(run: RunRec | undefined): FailureView {
+  const { me } = useFeedViewer();
+  const online = useOnlineData();
+  const source = useReplica();
+  const asker = run !== undefined && me !== null && run.u === me;
+  const now = source.now();
+  return {
+    asker,
+    outOfTokens: asker && outOfTokens(online, run.model, now),
+    resetAt: currentReading(online.usage, now)?.resetsAt ?? null,
+  };
+}
+
 export function RunStatus({ run }: { run: RunRec | undefined }) {
-  const text = runStatusText(run);
+  const view = useFailureView(run);
+  const text = runStatusText(run, view);
   if (!text || !run) return null;
   return (
     <span

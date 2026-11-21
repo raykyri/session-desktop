@@ -17,6 +17,7 @@ import {
   testModelListing,
   testUser,
   testWeeklyUsage,
+  trpcRefusal,
   waitUntil,
 } from "./helpers.js";
 
@@ -148,7 +149,7 @@ test.serial(
         "usage.get": testWeeklyUsage({ keys: [{ ...ANTHROPIC, status: "invalid" }] }),
         "apiKeys.set": () =>
           new Promise((_resolve, reject) => {
-            answer = () => reject(new Error("That key was rejected by OpenAI."));
+            answer = () => reject(trpcRefusal("That key was rejected by OpenAI."));
           }),
       },
     });
@@ -238,7 +239,7 @@ test.serial("billing: a refused change shows its error and keeps the stored choi
     responses: {
       "usage.get": testWeeklyUsage({ keys: [ANTHROPIC] }),
       "usage.setBilling": () => {
-        throw new Error("Add a working Anthropic key to continue on it.");
+        throw trpcRefusal("Add a working Anthropic key to continue on it.");
       },
     },
   });
@@ -307,7 +308,7 @@ test.serial(
       responses: {
         "models.list": KEY_ONLY_LISTING,
         "admin.models.setDefaultEffort": (input: { effort: string }) => {
-          if (refuse) throw new Error("The default effort is low, medium, high or max.");
+          if (refuse) throw trpcRefusal("The default effort is low, medium, high or max.");
           return { defaultEffort: input.effort };
         },
       },

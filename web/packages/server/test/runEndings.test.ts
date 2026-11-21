@@ -167,7 +167,10 @@ test.serial(
     };
     const w = await runsWorld(t, { allowances });
     const { run } = await w.ask(w.mona, w.open, "fixture:deployment-auth");
-    t.like(await w.settled(run), { status: "failed", fail: { why: "key" } });
+    t.like(await w.settled(run), {
+      status: "failed",
+      fail: { why: "key", detail: "key_rejected" },
+    });
     t.deepEqual(rejected, [key.sealed]);
     const [row] = closedRows(t, w, run);
     t.like(row, { payer: "key:anthropic", output_tokens: 0 });
@@ -543,7 +546,10 @@ test.serial(
     const { run } = await w.ask(w.mona, w.open, "fixture:paced-search-then-answer");
     await waitFor(() => streamedOutput(w.streamed[0]) > 20, "the first step streaming");
     key = null;
-    t.like(await w.settled(run), { status: "failed", fail: { why: "key" } });
+    t.like(await w.settled(run), {
+      status: "failed",
+      fail: { why: "key", detail: "key_changed" },
+    });
     const rows = closedRows(t, w, run);
     t.is(rows.length, 1, "no call after the key went");
     t.like(rows[0], { ending: "finish", payer: "key:anthropic", output_tokens: 800 });

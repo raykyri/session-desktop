@@ -27,6 +27,7 @@ import type {
   runBillSchema,
   runPayerSchema,
   runFailureSchema,
+  runKeyDetailSchema,
   runRecordSchema,
   runStatusSchema,
   saveRecordSchema,
@@ -60,6 +61,7 @@ export type AskNodeKind = z.infer<typeof askNodeKindSchema>;
 export type Effort = z.infer<typeof spaceEffortSchema>;
 export type RunStatus = z.infer<typeof runStatusSchema>;
 export type RunFailure = z.infer<typeof runFailureSchema>;
+export type RunKeyDetail = z.infer<typeof runKeyDetailSchema>;
 export type RunBill = z.infer<typeof runBillSchema>;
 export type RunPayer = z.infer<typeof runPayerSchema>;
 export type CitedPage = z.infer<typeof citedPageSchema>;

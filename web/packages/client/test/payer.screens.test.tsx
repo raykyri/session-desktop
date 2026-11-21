@@ -5,11 +5,12 @@
 // write the server applies after the allowance ran out is kept, with its run
 // failed tokens, shown with the run-status copy; its composer is cleared.
 
-import { OUT_OF_TOKENS_TEXT } from "@session/shared";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import test from "ava";
 
+import { TOKENS_PAST_TEXT } from "../src/features/branches/runFailureText.js";
 import { clearToast, currentToast } from "../src/features/shell/Toast.js";
+import { outOfTokensText } from "../src/features/usage/usageText.js";
 import { configureReplica } from "../src/replica/ReplicaProvider.js";
 import {
   createFixtureReplica,
@@ -74,25 +75,30 @@ const online = (over: Partial<OnlineData>): OnlineData => ({
   ...over,
 });
 const SPENT = { used: 2_000_000, allowance: 2_000_000, resetsAt: null };
+/** The server's clock in these checks. */
+const NOW = Date.UTC(2026, 10, 25, 12);
+/** The reset `testWeeklyUsage` names, and its toast in the machine's zone
+ * (the zones themselves are `billing.review.test.tsx`'s). */
+const OUT_TEXT = outOfTokensText(Date.UTC(2026, 10, 27));
 
 test("K8: the client's payer rule is the server's over usage.get", (t) => {
-  t.false(outOfTokens(online({}), "claude-fable"), "tokens left");
-  t.false(outOfTokens(online({ usage: null }), "claude-fable"), "unknown: the server decides");
-  t.true(outOfTokens(online({ usage: SPENT }), "claude-fable"), "spent, billing pause");
+  t.false(outOfTokens(online({}), "claude-fable", NOW), "tokens left");
+  t.false(outOfTokens(online({ usage: null }), "claude-fable", NOW), "unknown: the server decides");
+  t.true(outOfTokens(online({ usage: SPENT }), "claude-fable", NOW), "spent, billing pause");
   t.true(
-    outOfTokens(online({ usage: SPENT, billing: "key" }), "claude-fable"),
+    outOfTokens(online({ usage: SPENT, billing: "key" }), "claude-fable", NOW),
     "billing key without a key",
   );
   t.false(
-    outOfTokens(online({ usage: SPENT, billing: "key", keys: ["anthropic"] }), "claude-fable"),
+    outOfTokens(online({ usage: SPENT, billing: "key", keys: ["anthropic"] }), "claude-fable", NOW),
     "the Anthropic key pays for an Anthropic model",
   );
   t.true(
-    outOfTokens(online({ usage: SPENT, billing: "key", keys: ["anthropic"] }), "gemini-flash"),
+    outOfTokens(online({ usage: SPENT, billing: "key", keys: ["anthropic"] }), "gemini-flash", NOW),
     "but not for a model it cannot run",
   );
   t.false(
-    outOfTokens(online({ usage: SPENT }), "no-such-model"),
+    outOfTokens(online({ usage: SPENT }), "no-such-model", NOW),
     "unknown model: the server decides",
   );
 });
@@ -105,13 +111,13 @@ test.serial(
     const space = channelByName(r, "public");
     if (!space) throw new Error("no #public");
     const calls = countWrites(r);
-    const writes = makeWrites(r, { outOfTokens: () => true });
+    const writes = makeWrites(r, { outOfTokensToast: () => OUT_TEXT });
     const model = { model: "claude-fable", effort: "medium" } as const;
 
     const refused = async (name: string, made_: Promise<unknown>) => {
       t.falsy(await made_, name);
       t.deepEqual(calls, [], `${name}: nothing sent`);
-      t.is(currentToast(), OUT_OF_TOKENS_TEXT, name);
+      t.is(currentToast(), OUT_TEXT, name);
     };
     await refused("Ask", writes.ask(space.id, "An ask", model.model, model.effort));
     await refused(
@@ -155,7 +161,7 @@ test.serial(
     const field = await screen.findByRole("textbox", { name: "Ask or post" });
     fireEvent.change(field, { target: { value: "One more question" } });
     fireEvent.click(screen.getByRole("button", { name: /^Ask$/ }));
-    await waitUntil(t, () => currentToast() === OUT_OF_TOKENS_TEXT, "the out-of-tokens toast");
+    await waitUntil(t, () => currentToast() === OUT_TEXT, "the out-of-tokens toast");
     t.deepEqual(calls, [], "nothing sent");
     t.is(
       screen.getByRole("textbox", { name: "Ask or post" }),
@@ -211,11 +217,11 @@ test.serial(
     fireEvent.click(screen.getByRole("button", { name: /^Ask$/ }));
     await waitUntil(
       t,
-      () => screen.queryByText(OUT_OF_TOKENS_TEXT) !== null,
+      () => screen.queryByText(TOKENS_PAST_TEXT) !== null,
       "the run's failed tokens copy",
     );
     t.truthy(screen.getByText("Sent with tokens left"), "the ask is kept");
     t.is(screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Ask or post" }).value, "");
-    t.not(currentToast(), OUT_OF_TOKENS_TEXT, "no refusal toast: the write applied");
+    t.not(currentToast(), OUT_TEXT, "no refusal toast: the write applied");
   },
 );
