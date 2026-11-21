@@ -178,8 +178,8 @@ const MUTATIONS: Mutation[] = [
     to: '    void cipher;\n    return Buffer.concat([iv, plain, Buffer.alloc(TOKEN_TAG)]).toString("base64url");',
     also: [
       {
-        from: '      const decipher = createDecipheriv("aes-256-gcm", key, raw.subarray(0, TOKEN_IV));\n      decipher.setAuthTag(raw.subarray(raw.length - TOKEN_TAG));\n      plain = Buffer.concat([\n        decipher.update(raw.subarray(TOKEN_IV, raw.length - TOKEN_TAG)),\n        decipher.final(),\n      ]);',
-        to: "      void createDecipheriv;\n      void key;\n      plain = raw.subarray(TOKEN_IV, raw.length - TOKEN_TAG);",
+        from: '      const decipher = createDecipheriv("aes-256-gcm", key, raw.subarray(0, TOKEN_IV));\n      decipher.setAAD(TOKEN_AAD);\n      decipher.setAuthTag(raw.subarray(raw.length - TOKEN_TAG));\n      plain = Buffer.concat([\n        decipher.update(raw.subarray(TOKEN_IV, raw.length - TOKEN_TAG)),\n        decipher.final(),\n      ]);',
+        to: "      void createDecipheriv;\n      void key;\n      void TOKEN_AAD;\n      plain = raw.subarray(TOKEN_IV, raw.length - TOKEN_TAG);",
       },
     ],
   },
@@ -276,15 +276,15 @@ const MUTATIONS: Mutation[] = [
     name: "N5 a token that does not open counts as version 0",
     file: "../sync/src/server/server.ts",
     from: "    const c = this.tokens.open(cursor, now);\n",
-    to: "    const c = this.tokens.open(cursor, now) ?? { log, u, n: this.store.epoch(log).n, v: 0, h: 0, at: now };\n",
+    to: "    const c = this.tokens.open(cursor, now) ?? { log, u, n: this.store.epoch(log).n, v: 0, h: 0, at: now, hid: this.store.history() };\n",
   },
   {
     // visibility no longer changes (`01` C11): the space log whose history is
     // replaced is the restored one (`replaceHistory`)
     name: "N6 user log: a space log's history being replaced is not noticed",
     file: "../sync/src/server/server.ts",
-    from: "      if (a && a.sp !== null && store.epoch(`space:${a.sp}`).start > head) return true;",
-    to: "      if (a && a.sp !== null && store.epoch(`space:${a.sp}`).start > head + 1e9) return true;",
+    from: "      if (start > head) return true;",
+    to: "      if (start > head + 1e9) return true;",
   },
   {
     name: "N7 user log: a membership change is not noticed",

@@ -83,6 +83,10 @@ test("/metrics reports the process and the database", async (t) => {
     "an unreadable path is 0, not a throw",
   );
   t.true(body.includes("# TYPE session_daily_tokens gauge"));
+  // the process's memory by kind, and the open streams, for the load check
+  for (const kind of ["rss", "heap_used", "external", "array_buffers"])
+    t.regex(body, new RegExp(`session_process_memory_bytes\\{kind="${kind}"\\} [0-9]+`));
+  t.regex(body, /session_sse_streams 0/);
   t.true(body.endsWith("\n"));
 });
 

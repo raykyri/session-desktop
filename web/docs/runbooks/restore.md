@@ -79,17 +79,38 @@ use a newer database; deploy an image that supports the restored schema.
 
 ### Sync cursors after a restore
 
-No manual step is needed for the sync clients: the restore check runs at
-boot (plan `01` D6, decision E6). The server records the generation of the
-database file in `server_meta` (`litestream_generation`); a restored file is
-a new file, so its generation differs from the one recorded in it, and the
-boot bumps the epoch of every log. Every cursor and event id issued before the
+Every cursor token and event id the server serves holds the database's
+history id, a random value in `server_meta` (`history_id`). A pull or a
+stream whose token holds another history id resyncs. The restore check at
+boot (plan `01` D6, decision E6) replaces the history id when the database
+file is not the one the server last booted on: the server records the file's
+generation in `server_meta` (`litestream_generation`); a restored file is a
+new file, so its generation differs from the one recorded in it, and the boot
+writes a new random history id. Every cursor and event id issued before the
 restore then resyncs instead of pulling from a version the restored database
-issues again. The boot log line `database generation changed: every log's
-epoch was bumped` says it happened, with the number of logs. Litestream 0.5
-reports no generation id, so the generation is the identity of the database
-file (device, inode, creation time); with a Litestream that writes a
+issues again, for every log, a log with no rows in the backup included, and
+so do the cursors served after an earlier restore from the same backup. The
+boot log line `the sync history id was replaced: every cursor served before
+this boot resyncs` says it happened, with `reason: "generation"`. Litestream
+0.5 reports no generation id, so the generation is the identity of the
+database file (device, inode, creation time); with a Litestream that writes a
 `generation` file into `.session.db-litestream/`, that id is used.
+
+The `mv` of the restored file into place above gives it a new identity, so
+no manual step is needed. A restore that keeps the file's identity is not
+detected: bytes copied over the existing file (`cp backup session.db`,
+`sqlite3 .restore`), or a volume snapshot that keeps the inode and creation
+time. After such a restore, and before starting the server, ask the next
+boot to replace the history id:
+
+```sh
+cd /app/packages/db && SESSION_DATA_DIR=/data npm run db:admin -- --new-history
+```
+
+The command leaves a marker in `server_meta` (`history_reset_requested`);
+the next boot replaces the history id, logs the line above with `reason:
+"requested"`, and removes the marker. Running it when it was not needed
+costs every client one resync.
 
 Writes confirmed after the restore point are lost with their recorded
 answers: a client that sent one gets no replay of it. Web clients hold no

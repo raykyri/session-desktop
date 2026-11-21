@@ -15,13 +15,13 @@ import SqliteDatabase from "better-sqlite3";
 
 import {
   SqliteStore,
-  bumpEveryEpoch,
   checkRestore,
   databaseGeneration,
+  requestNewHistory,
   rewriteRecords,
 } from "../src/index.js";
 
-import { KEYS, World, actor, cast, ok, post, refused, rng } from "./syncWorld.js";
+import { DAY, KEYS, MINUTE, World, actor, cast, ok, post, refused, rng } from "./syncWorld.js";
 
 const changesOf = (p: Pull): Change[] => ("changes" in p ? p.changes : []);
 
@@ -121,7 +121,7 @@ test("D1: putRecord and deleteRecord are the only code that writes the records t
   // the three statements are used by putRecord and deleteRecord only
   const uses = [...store.matchAll(/this\.s\.(insertRecord|updateRecord|deleteRecord)\.run/g)]
     .length;
-  t.is(uses, 4);
+  t.is(uses, 3);
   const body = (name: string) => {
     const at = store.indexOf(`\n  ${name}(`);
     return store.slice(at, store.indexOf("\n  }\n", at));
@@ -129,7 +129,7 @@ test("D1: putRecord and deleteRecord are the only code that writes the records t
   t.is(
     [...body("putRecord").matchAll(/this\.s\.\w+Record\.run/g)].length +
       [...body("deleteRecord").matchAll(/this\.s\.\w+Record\.run/g)].length,
-    4,
+    3,
   );
 });
 
@@ -329,12 +329,89 @@ test("D4: a removed thread's text is in neither the database file nor its WAL af
   t.true(bytes(w2.path).indexOf(MARK) >= 0);
 });
 
-test("D6: a database file restored from a backup boots with bumped epochs, and a cursor from before resyncs", (t) => {
+test("D4: a removal's commit checkpoints the WAL itself: the text is in neither file without a checkpoint by hand", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const MARK = "ERASEME-1c2d3e";
+  const bytes = (p: string) => (existsSync(p) ? readFileSync(p) : Buffer.alloc(0));
+  const th = post(t, w, "mona", open, `the question ${MARK}`);
+  ok(
+    t,
+    w.as("mel", "research.createPostFollowUp", { id: w.id(), thread: th, t: `a reply ${MARK}` }),
+  );
+  // the text is in the WAL before the removal: the scan finds what it looks for
+  t.true(bytes(`${w.path}-wal`).indexOf(MARK) >= 0);
+  ok(
+    t,
+    w.as("olga", "moderation.decide", { item: `p:${th}`, decision: "removed", note: "Off topic." }),
+  );
+  for (const file of [w.path, `${w.path}-wal`]) t.is(bytes(file).indexOf(MARK), -1, file);
+});
+
+test("D4: a checkpoint a reader blocks is skipped without waiting, and the commit stands", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const th = post(t, w, "mona", open, "to be removed");
+  const reader = new SqliteDatabase(w.path, { readonly: true });
+  t.teardown(() => reader.close());
+  // a reader holding a snapshot (as Litestream does) blocks a TRUNCATE
+  reader.prepare("BEGIN").run();
+  reader.prepare("SELECT count(*) FROM records").get();
+  const started = Date.now();
+  ok(
+    t,
+    w.as("olga", "moderation.decide", { item: `p:${th}`, decision: "removed", note: "Off topic." }),
+  );
+  t.true(Date.now() - started < 2000, "the commit did not wait for the busy timeout");
+  t.like((w.store as SqliteStore).checkpoint(), { busy: true });
+  reader.prepare("COMMIT").run();
+  t.like((w.store as SqliteStore).checkpoint(), { busy: false, log: 0 });
+  t.like(w.get(`thread:${th}`), { mod: "removed" });
+});
+
+test("the outermost transaction takes the write lock before its first read", (t) => {
+  const w = new World(t);
+  const store = w.store as SqliteStore;
+  const other = new SqliteDatabase(w.path);
+  t.teardown(() => other.close());
+  other.pragma("busy_timeout = 0");
+  let otherWrote = true;
+  store.transaction(() => {
+    store.client("nobody");
+    // another writer (Litestream's `_litestream_seq`, an operator command)
+    // cannot write between this transaction's read and its write
+    try {
+      other.prepare("INSERT INTO server_meta (key, value, updated_at) VALUES ('x', 'y', 0)").run();
+    } catch (e) {
+      otherWrote = false;
+      t.is((e as { code?: string }).code, "SQLITE_BUSY");
+    }
+    store.setLastRev("probe", 1);
+  });
+  t.false(otherWrote);
+  t.is(store.lastRev("probe"), 1);
+});
+
+test("a read-only connection's store reads another connection's commits: it keeps no record cache", (t) => {
+  const w = new World(t);
+  ok(t, w.as("mona", "prefs.set", { layout: "wide" }));
+  const ro = new SqliteStore(new SqliteDatabase(w.path, { readonly: true }));
+  t.teardown(() => ro.sqlite.close());
+  t.like(ro.byKey("prefs:mona"), { layout: "wide", rev: 1 });
+  ok(t, w.as("mona", "prefs.set", { layout: "centred" }));
+  t.like(ro.byKey("prefs:mona"), { layout: "centred", rev: 2 });
+});
+
+test("D6: a database file restored from a backup gets a new history id, and a cursor from before resyncs", (t) => {
   const a = new World(t);
   const { open } = cast(t, a);
-  t.true(checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 1).bumped > 0);
-  // a boot with the same generation bumps nothing
-  t.like(checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 2), { bumped: 0 });
+  const first = checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 1);
+  t.like(first, { replaced: true, reason: "generation" });
+  // a boot with the same generation changes nothing
+  t.like(checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 2), {
+    replaced: false,
+    history: first.history,
+  });
   post(t, a, "mona", open);
   // the backup: a copy of the file as it is now
   a.db.$client.pragma("wal_checkpoint(TRUNCATE)");
@@ -351,26 +428,71 @@ test("D6: a database file restored from a backup boots with bumped epochs, and a
   const b = new World(t, { path: restored, clock: a.clock });
   const check = checkRestore(b.store as SqliteStore, databaseGeneration(restored), 3);
   t.not(check.previous, check.current);
-  t.true(check.bumped >= 2);
+  t.true(check.replaced);
+  t.not(check.history, first.history);
   t.deepEqual(b.server.pull(actor("mel"), `space:${open}`, cursor), { resync: true });
   t.deepEqual(b.server.pull(actor("mel"), "user:mel", userCursor), { resync: true });
   // a cursor served after the restore pulls; the next boot of the same file
-  // bumps nothing
+  // changes nothing
   const fresh = b.server.snapshot(actor("mel"), `space:${open}`).cursor;
-  t.like(checkRestore(b.store as SqliteStore, databaseGeneration(restored), 4), { bumped: 0 });
+  t.like(checkRestore(b.store as SqliteStore, databaseGeneration(restored), 4), {
+    replaced: false,
+  });
   t.true("changes" in b.server.pull(actor("mel"), `space:${open}`, fresh));
   // without the check (the same file, booted again), the old cursor still pulls
   t.true("changes" in a.server.pull(actor("mel"), `space:${open}`, cursor));
 });
 
-test("D6: bumping every epoch resyncs every log's readers", (t) => {
-  const w = new World(t);
-  const { open, closed } = cast(t, w);
-  const c1 = w.server.snapshot(actor("ada"), `space:${closed}`).cursor;
-  const c2 = w.server.snapshot(null, `space:${open}`).cursor;
-  t.true(bumpEveryEpoch(w.store as SqliteStore) > 2);
-  t.deepEqual(w.server.pull(actor("ada"), `space:${closed}`, c1), { resync: true });
-  t.deepEqual(w.server.pull(null, `space:${open}`, c2), { resync: true });
+test("D6: a restore resyncs a log with no rows in the restored file, and a cursor of an earlier restore from the same backup", (t) => {
+  const a = new World(t);
+  const { open } = cast(t, a);
+  checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 1);
+  a.clientId("zed");
+  a.db.$client.pragma("wal_checkpoint(TRUNCATE)");
+  const backup = join(a.directory, "backup.db");
+  copyFileSync(a.path, backup);
+  // zed's user log has no rows in the backup
+  t.deepEqual(a.store.logRows("user:zed", 0), []);
+  ok(t, a.as("zed", "prefs.set", { layout: "wide" }));
+  const lost = a.server.snapshot(actor("zed"), "user:zed").cursor;
+  const restore = (name: string, at: number) => {
+    // a later time: the new server's ids do not repeat the lost timeline's
+    a.clock.advance(MINUTE);
+    const path = join(a.directory, name);
+    copyFileSync(backup, path);
+    const w = new World(t, { path, clock: a.clock });
+    t.true(checkRestore(w.store as SqliteStore, databaseGeneration(path), at).replaced);
+    return w;
+  };
+  const b = restore("r1.db", 2);
+  // the restored timeline writes zed's preference again, at a version the
+  // lost timeline used too
+  ok(t, b.as("zed", "prefs.set", { layout: "centred" }));
+  t.deepEqual(b.server.pull(actor("zed"), "user:zed", lost), { resync: true });
+  // the first restore serves a cursor; a second restore from the same backup
+  // writes as many commits again
+  for (let i = 0; i < 3; i++) post(t, b, "olga", open, `first restore ${i}`);
+  const served = b.server.snapshot(actor("olga"), `space:${open}`).cursor;
+  const c = restore("r2.db", 3);
+  for (let i = 0; i < 4; i++) post(t, c, "olga", open, `second restore ${i}`);
+  t.deepEqual(c.server.pull(actor("olga"), `space:${open}`, served), { resync: true });
+});
+
+test("D6: an operator's request replaces the history id at the next boot of a file restored in place", (t) => {
+  const a = new World(t);
+  const { open } = cast(t, a);
+  const first = checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 1);
+  const cursor = a.server.snapshot(actor("mona"), `space:${open}`).cursor;
+  // the bytes of a backup copied over the same file keep its identity: the
+  // generation is the same, and only the request replaces the id
+  t.like(checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 2), { replaced: false });
+  requestNewHistory(a.db.$client);
+  const check = checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 3);
+  t.like(check, { replaced: true, reason: "requested" });
+  t.not(check.history, first.history);
+  t.deepEqual(a.server.pull(actor("mona"), `space:${open}`, cursor), { resync: true });
+  // the request is used up
+  t.like(checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 4), { replaced: false });
 });
 
 test("D7: a backfill that adds a field writes a log row for every rewritten key, and a replica pulls the new shape", (t) => {
@@ -406,7 +528,52 @@ test("D7: a backfill that adds a field writes a log row for every rewritten key,
     [{ kind: "prefs", u: "mona", layout: "wide", rev: 2, density: "normal" }],
   );
   // run again: nothing left to rewrite
-  t.is(rewriteRecords(w.db, { id: "x", description: "", kind: "prefs", rewrite: (r) => r }), 0);
+  t.is(
+    rewriteRecords(w.db, {
+      id: "x",
+      description: "",
+      kind: "prefs",
+      rewrite: (r) => r as unknown as StoredRecord,
+    }),
+    0,
+  );
+});
+
+test("D7: a backfill reads a stored shape the current schema refuses, and validates only the rewritten record", (t) => {
+  const w = new World(t);
+  ok(t, w.as("mona", "prefs.set", { layout: "wide" }));
+  // the shape of an earlier build: `wide: true` in place of `layout`
+  w.db.$client
+    .prepare("UPDATE records SET body = ? WHERE key = 'prefs:mona'")
+    .run(JSON.stringify({ kind: "prefs", u: "mona", wide: true, rev: 1 }));
+  const n = rewriteRecords(w.db, {
+    id: "test-prefs-layout",
+    description: "wide becomes layout",
+    kind: "prefs",
+    rewrite: (r) =>
+      ({
+        kind: "prefs",
+        u: r["u"],
+        layout: r["wide"] ? "wide" : "centred",
+        rev: r.rev,
+      }) as StoredRecord,
+  });
+  t.is(n, 1);
+  t.like(new SqliteStore(w.db).byKey("prefs:mona"), { layout: "wide", rev: 2 });
+  // a rewrite to a shape the schema refuses is refused, and commits nothing
+  w.db.$client
+    .prepare("UPDATE records SET body = ? WHERE key = 'prefs:mona'")
+    .run(JSON.stringify({ kind: "prefs", u: "mona", wide: true, rev: 2 }));
+  const before = w.tables();
+  t.throws(() =>
+    rewriteRecords(w.db, {
+      id: "test-prefs-bad",
+      description: "",
+      kind: "prefs",
+      rewrite: (r) => ({ ...r, wide: false }) as unknown as StoredRecord,
+    }),
+  );
+  t.deepEqual(w.tables(), before);
 });
 
 test("the store refuses a record that does not match its schema, and the write commits nothing", (t) => {
@@ -461,4 +628,175 @@ test("sync review-m2 17 on SqliteStore: a nested transaction that throws takes b
   t.is(fresh.lastRev("b"), undefined);
   t.like(fresh.byKey(`thread:${p}`), { sum: null });
   fresh.sqlite.close();
+});
+
+// ---- the sync package's Y8 retention tests, on SqliteStore ----
+
+const count = (w: World, table: string) =>
+  (w.db.$client.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n;
+
+test("Y8 on SqliteStore: retention prunes each table at its boundary millisecond", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const p = post(t, w, "mel", open);
+  ok(t, w.as("mel", "threads.delete", { id: p }));
+  ok(t, w.as("otto", "saved.set", { kind: "thread", id: post(t, w, "mel", open), on: true }));
+  const saved = (
+    w.db.$client.prepare("SELECT key FROM records WHERE key LIKE 'save:otto:%'").get() as {
+      key: string;
+    }
+  ).key;
+  ok(t, w.as("otto", "saved.set", { kind: "thread", id: saved.split(":")[2], on: false }));
+  const tomb = w.store.tombstone(saved);
+  if (!tomb) return t.fail("no tombstone");
+  t.is(tomb.at, w.clock.now(), "the tombstone carries the commit time");
+  refused(t, w.as("otto", "prefs.set", { layout: "wide" }, "not-a-ulid"), "BAD_REQUEST");
+  t.is(count(w, "sync_seq_answers"), 1);
+  const answers = count(w, "sync_answers");
+  t.true(answers > 0);
+  const t0 = w.clock.now();
+  w.server.retain(t0 + 7 * DAY - 1);
+  t.is(count(w, "sync_answers"), answers, "an answer recorded 1 ms less than 7 days ago is kept");
+  t.true(count(w, "sync_clients") > 0);
+  w.server.retain(t0 + 7 * DAY);
+  t.is(count(w, "sync_answers"), 0);
+  t.is(count(w, "sync_seq_answers"), 0);
+  t.is(count(w, "sync_clients"), 0);
+  w.server.retain(tomb.at + 30 * DAY);
+  t.truthy(w.store.tombstone(saved), "a tombstone committed exactly 30 days ago is kept");
+  w.server.retain(tomb.at + 30 * DAY + 1);
+  t.is(w.store.tombstone(saved), undefined);
+  t.false(w.store.logRows("user:otto", 0).some((r) => r.key === saved));
+  t.true(w.store.idTaken(p), "the registry keeps every id");
+});
+
+test("Y8 on SqliteStore: moderation log entries over 180 days are deleted for every replica", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  ok(t, w.as("olga", "members.ban", { space: open, user: "otto" }));
+  const key = (
+    w.db.$client.prepare("SELECT key, created_at FROM records WHERE kind = 'modlog'").get() as {
+      key: string;
+      created_at: number;
+    }
+  ).key;
+  const at = w.clock.now();
+  t.is(
+    (
+      w.db.$client.prepare("SELECT created_at AS c FROM records WHERE key = ?").get(key) as {
+        c: number;
+      }
+    ).c,
+    at,
+    "the entry's row carries its creation time",
+  );
+  w.clock.ms = at + 180 * DAY;
+  const owner = w.server.snapshot(actor("olga"), `space:${open}`);
+  w.server.retain();
+  t.truthy(w.get(key), "an entry made exactly 180 days ago is kept");
+  w.clock.ms = at + 180 * DAY + 1000;
+  w.server.retain();
+  t.is(new SqliteStore(w.db).byKey(key), undefined);
+  const pull = w.server.pull(actor("olga"), `space:${open}`, owner.cursor);
+  t.true("changes" in pull && pull.changes.some((c) => c.key === key && c.op === "del"));
+});
+
+test("a record put with no creation version keeps the row's own, and a new key without one is refused", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const store = w.store as SqliteStore;
+  const key = `space:${open}`;
+  const v = store.createdVersion(key);
+  const at = (
+    w.db.$client.prepare("SELECT created_at AS c FROM records WHERE key = ?").get(key) as {
+      c: number;
+    }
+  ).c;
+  const s = store.byKey(key);
+  if (s?.kind !== "space") return t.fail("no space");
+  store.transaction(() => store.putRecord(key, { ...s, desc: "changed", rev: s.rev + 1 }, null));
+  t.is(store.createdVersion(key), v);
+  t.is(
+    (
+      w.db.$client.prepare("SELECT created_at AS c FROM records WHERE key = ?").get(key) as {
+        c: number;
+      }
+    ).c,
+    at,
+  );
+  t.throws(() =>
+    store.transaction(() =>
+      store.putRecord(`space:${w.id()}`, { ...s, id: w.id(), name: "fresh", rev: 1 }, null),
+    ),
+  );
+});
+
+test("a snapshot orders records of one creation time by the version of the commit that made them", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  // ids in reverse of the commit order, all at one server time
+  const ids = [w.id(3000), w.id(2000), w.id(1000)];
+  for (const id of ids)
+    ok(t, w.as("mona", "threads.create", { id, space: open, kind: "post", q: id }));
+  const order = w.server
+    .snapshot(actor("mona"), `space:${open}`)
+    .records.filter((r) => r.record.kind === "thread")
+    .map((r) => (r.record as { id: string }).id);
+  t.deepEqual(order, ids);
+});
+
+test("the record cache holds cacheSize records: an evicted one is read again from its row", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const ids = [
+    post(t, w, "mona", open, "a"),
+    post(t, w, "mona", open, "b"),
+    post(t, w, "mona", open, "c"),
+  ];
+  const store = new SqliteStore(w.db, { cacheSize: 3 });
+  let reads = 0;
+  const statement = (store as unknown as { s: { byKey: { get: (k: string) => unknown } } }).s.byKey;
+  const get = statement.get.bind(statement);
+  statement.get = (k: string) => {
+    reads += 1;
+    return get(k);
+  };
+  for (const id of ids) store.byKey(`thread:${id}`);
+  t.is(reads, 3);
+  for (const id of ids) store.byKey(`thread:${id}`);
+  t.is(reads, 3, "three records stay cached");
+  store.byKey(`space:${open}`);
+  t.is(reads, 4);
+  // the oldest went out
+  store.byKey(`thread:${ids[0] ?? ""}`);
+  t.is(reads, 5);
+  store.byKey(`thread:${ids[2] ?? ""}`);
+  t.is(reads, 5);
+});
+
+test("a tombstone keeps who deleted the record", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const th = post(t, w, "mona", open);
+  ok(t, w.as("otto", "saved.set", { kind: "thread", id: th, on: true }));
+  ok(t, w.as("otto", "saved.set", { kind: "thread", id: th, on: false }));
+  t.like(w.store.tombstone(`save:otto:${th}`), { kind: "save", person: "otto", by: "otto" });
+});
+
+test("a deleted record's id stays taken: a new record may not reuse it", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const th = post(t, w, "mona", open);
+  const reply = w.id();
+  ok(t, w.as("mel", "research.createPostFollowUp", { id: reply, thread: th, t: "A reply" }));
+  ok(t, w.as("olga", "moderation.decide", { item: `p:${th}`, decision: "removed", note: "No." }));
+  t.is(w.get(`reply:${reply}`), undefined, "the removal deleted the reply");
+  t.true(w.store.idTaken(reply));
+  const other = post(t, w, "mona", open);
+  const again = w.as("mel", "research.createPostFollowUp", {
+    id: reply,
+    thread: other,
+    t: "Again",
+  });
+  t.false(again.ok);
 });

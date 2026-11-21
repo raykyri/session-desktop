@@ -5,6 +5,11 @@
 // new version for the whole step, a `put` row in each log the record is
 // written to, and the registry's last rev. It runs as one of `BACKFILLS`,
 // inside the transaction `runBackfills` gives it, after the migrations.
+//
+// The stored body is read as raw JSON, not through `SqliteStore.byKey`,
+// which validates against the current schema: the old shape is the one a
+// backfill exists to change, and the current schema may refuse it. Only the
+// rewritten record is validated, by `putRecord`.
 
 import { logsOf, registryKey, type Kind, type StoredRecord } from "@session/mutators";
 
@@ -13,14 +18,18 @@ import { SqliteStore } from "../sync/store.js";
 
 import type { Backfill } from "./index.js";
 
+/** A record's body as stored: JSON with a kind and a rev, of any shape. */
+export type StoredBody = { kind: string; rev: number } & Record<string, unknown>;
+
 export interface RecordBackfillSpec {
   /** Recorded in `backfills`; never reused or renamed. */
   id: string;
   description: string;
   kind: Kind;
-  /** The new shape of one record, from its stored shape (`rev` is set by the
-   * backfill). A record returned equal is left as it is. */
-  rewrite: (record: StoredRecord) => StoredRecord;
+  /** The new shape of one record, from its stored shape as parsed JSON,
+   * which the current schema need not accept (`rev` is set by the backfill).
+   * A record returned equal is left as it is. */
+  rewrite: (record: StoredBody) => StoredRecord;
 }
 
 /** Rewrite every record of `spec.kind` with `spec.rewrite` under one new
@@ -28,17 +37,15 @@ export interface RecordBackfillSpec {
 export function rewriteRecords(db: SessionDatabase, spec: RecordBackfillSpec): number {
   const store = new SqliteStore(db);
   return store.transaction(() => {
-    const keys = store.sqlite
-      .prepare<[string], { key: string }>(
-        "SELECT key FROM records WHERE kind = ? ORDER BY created_v",
+    const rows = store.sqlite
+      .prepare<[string], { key: string; body: string }>(
+        "SELECT key, body FROM records WHERE kind = ? ORDER BY created_v, key",
       )
-      .all(spec.kind)
-      .map((r) => r.key);
+      .all(spec.kind);
     let version: number | null = null;
     let n = 0;
-    for (const key of keys) {
-      const old = store.byKey(key);
-      if (!old) continue;
+    for (const { key, body } of rows) {
+      const old = JSON.parse(body) as StoredBody;
       const next = spec.rewrite(structuredClone(old));
       if (JSON.stringify({ ...next, rev: 0 }) === JSON.stringify({ ...old, rev: 0 })) continue;
       if (next.kind !== old.kind)

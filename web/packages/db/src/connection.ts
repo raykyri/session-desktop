@@ -63,8 +63,12 @@ function applyPragmas(client: SqliteDatabase.Database, fileBacked: boolean): voi
   client.pragma("foreign_keys = ON");
   client.pragma("busy_timeout = 5000");
   client.pragma("temp_store = MEMORY");
-  // `01` D4: a deleted row's bytes are overwritten in the file, so an erased
-  // record's text is not left behind in free pages of the file or its WAL.
+  // `01` D4: a deleted row's bytes are overwritten with zeros on the page
+  // that held it, so an erased record's text is not left in free space of
+  // the database file once the page is written back. The WAL still holds the
+  // frames written before the delete until a checkpoint copies the pages back
+  // and the WAL is truncated: `SqliteStore` runs `wal_checkpoint(TRUNCATE)`
+  // after a commit that erases, and the hourly sync maintenance runs it again.
   client.pragma("secure_delete = ON");
 }
 

@@ -19,6 +19,16 @@
 // The suite has no hook for the end of a test; a target idle for 30 s
 // closes its socket and connections and opens them again if it is used
 // after all. The temp directories go when the process exits.
+//
+// The batched target (`createBatchedHttpTestServer`,
+// `convergence-batched.test.ts`) exercises the transport: it runs under the
+// default body and batch limits (`SESSION_LIMIT_APPLY_BYTES`,
+// `SESSION_LIMIT_APPLY_BATCH`; the rate limits stay raised, since the
+// suite's oracles cannot predict them), and sends each envelope in a batch
+// after the last few envelopes of the same client id and person that were
+// applied in the past hour, which the server answers as replays from their
+// stored answers (any other answer fails the test). The target returns the
+// last answer of the batch.
 
 import { randomBytes } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -157,6 +167,17 @@ export function stringify(value: unknown): string {
 
 // ---- the target ----
 
+export interface HttpTargetOptions {
+  /** Send each envelope after the client's recent applied ones, in one
+   * batch, under the default body and batch limits. */
+  batched?: boolean;
+}
+
+/** How many applied envelopes a batch resends before the new one, and how
+ * long after their answer. */
+const RESEND = 3;
+const RESEND_WITHIN = 60 * 60_000;
+
 interface Live {
   db: SessionDatabase;
   reader: SqliteDatabase.Database;
@@ -179,8 +200,14 @@ export class HttpTestServer implements TestServer {
   #dumpVersion = -1;
   #dump = new Map<string, StoredRecord>();
 
-  constructor(options: ServerOptions) {
+  readonly #batched: boolean;
+  /** Each client id's applied envelopes, newest last, with the time of the
+   * answer on the suite's clock. */
+  readonly #applied = new Map<string, { envelope: Envelope; at: number; u: string | null }[]>();
+
+  constructor(options: ServerOptions, target: HttpTargetOptions = {}) {
     this.#options = options;
+    this.#batched = target.batched ?? false;
     this.directory = mkdtempSync(join(tmpdir(), "session-conformance-"));
     dirs.add(this.directory);
     this.path = join(this.directory, "session.db");
@@ -193,11 +220,16 @@ export class HttpTestServer implements TestServer {
       SESSION_LIMIT_WRITES_PER_MINUTE: UNLIMITED,
       SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: UNLIMITED,
       SESSION_LIMIT_REGISTER_PER_MINUTE: UNLIMITED,
+      SESSION_LIMIT_THREAD_READS_PER_MINUTE: UNLIMITED,
+      SESSION_LIMIT_THREAD_READS_PER_IP_PER_MINUTE: UNLIMITED,
+      SESSION_LIMIT_STREAM_OPENS_PER_MINUTE: UNLIMITED,
+      SESSION_TEST_ROUTES: "1",
+      // the batched target keeps the default body and batch limits
+      ...(this.#batched ? {} : { SESSION_LIMIT_APPLY_BYTES: String(64 * 1024 * 1024) }),
       SESSION_LIMIT_SPACES_PER_DAY: UNLIMITED,
       SESSION_LIMIT_CHANNEL_INVITES_PER_DAY: UNLIMITED,
       SESSION_LIMIT_JOINS_PER_HOUR: UNLIMITED,
       SESSION_LIMIT_DIRECTORY_PER_MINUTE: UNLIMITED,
-      SESSION_LIMIT_APPLY_BYTES: String(64 * 1024 * 1024),
       // a key of this target's own, as the in-memory target has: another
       // target does not open its tokens
       SESSION_CURSOR_KEY: randomBytes(32).toString("base64"),
@@ -320,12 +352,18 @@ export class HttpTestServer implements TestServer {
     actor: Actor | null,
     options: { clientId?: string } = {},
   ): Promise<RegisterResult> {
-    const { json } = await this.#request<RegisterResult>(
+    const { json } = await this.#request<RegisterResult | { code: string }>(
       "POST",
       "/api/sync/register",
       actor,
       options,
     );
+    // a refusal of the request (signed out: 401 before the body is read; the
+    // day's registrations: 429) is the registration's answer
+    if ("code" in json) return { ok: false, error: json as never };
+    // the handle the route adds for the web client: the suite's server half
+    // answers without it
+    if (json.ok && "user" in json) delete (json as { user?: unknown }).user;
     return json;
   }
 
@@ -353,14 +391,58 @@ export class HttpTestServer implements TestServer {
         })
       ).json;
     }
-    const { status, json } = await this.#request<{ answers?: ApplyResult[] }>(
+    if (actor === null) {
+      // the route answers a signed-out caller 401 before it reads the body
+      // (`sync/routes.ts`); the suite checks the server half's answer, whose
+      // checks of the envelope's shape come before the sign-in, so that is
+      // read through the test route that hands the envelope to it as sent
+      const refused = await this.#request<{ code?: string }>("POST", "/api/sync/apply", null, {
+        envelopes: [envelope],
+      });
+      if (refused.status !== 401 || refused.json.code !== "UNAUTHORIZED")
+        throw new Error(`a signed-out apply answered ${refused.status}`);
+      return (
+        await this.#request<ApplyResult>("POST", "/api/sync/test/apply-unreadable", null, {
+          envelope,
+          unreadable: [],
+        })
+      ).json;
+    }
+    const now = this.#options.clock.now();
+    const sent = this.#batched
+      ? [
+          ...(this.#applied.get(envelope.clientId) ?? [])
+            // the same person's (a client id sent by someone else is not)
+            .filter(
+              (x) =>
+                x.u === (actor?.u ?? null) && x.at > now - RESEND_WITHIN && x.envelope !== envelope,
+            )
+            .slice(-RESEND)
+            .map((x) => x.envelope),
+          envelope,
+        ]
+      : [envelope];
+    const { status, json } = await this.#request<{ answers?: ApplyResult[]; code?: string }>(
       "POST",
       "/api/sync/apply",
       actor,
-      { envelopes: [envelope] },
+      { envelopes: sent },
     );
-    const a = json.answers?.[0];
+    // a refusal of the request (signed out: 401 before the body is read)
+    // is the envelope's unrecorded answer
+    if (!json.answers && typeof json.code === "string") return { ok: false, error: json as never };
+    const a = json.answers?.[sent.length - 1];
     if (!a) throw new Error(`apply answered ${status} ${JSON.stringify(json)}`);
+    if (this.#batched) {
+      for (const [i, replay] of (json.answers ?? []).slice(0, -1).entries())
+        if (!replay.ok || !("replay" in replay))
+          throw new Error(`a resent envelope was not answered from its stored answer: ${i}`);
+      if (a.ok && !("replay" in a)) {
+        const list = this.#applied.get(envelope.clientId) ?? [];
+        list.push({ envelope, at: now, u: actor?.u ?? null });
+        this.#applied.set(envelope.clientId, list.slice(-RESEND));
+      }
+    }
     return a;
   }
 
@@ -441,3 +523,6 @@ export class HttpTestServer implements TestServer {
 
 export const createHttpTestServer = (options: ServerOptions): TestServer =>
   new HttpTestServer(options);
+
+export const createBatchedHttpTestServer = (options: ServerOptions): TestServer =>
+  new HttpTestServer(options, { batched: true });

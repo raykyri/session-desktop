@@ -48,8 +48,19 @@ export function abuseBuckets(limits: AbuseLimits) {
   return {
     /** Replicated writes and tRPC mutations, per user. */
     writes: { limit: limits.writesPerMinute, windowMs: MINUTE },
-    /** `/api/sync/snapshot`, per user, or per IP signed out. */
+    /** `/api/sync/snapshot`, `/pull` and `/read`, per user, or per IP signed
+     * out. */
     snapshots: { limit: limits.snapshotsPerMinute, windowMs: MINUTE },
+    /** A `/api/sync/read` of `threads` reads only (a thread opened), per
+     * user. */
+    threadReads: { limit: limits.threadReadsPerMinute, windowMs: MINUTE },
+    /** … per IP signed out. */
+    threadReadsSignedOut: { limit: limits.threadReadsPerIpPerMinute, windowMs: MINUTE },
+    /** Opening `/api/sync/events`, per user. */
+    streamOpens: { limit: limits.streamOpensPerMinute, windowMs: MINUTE },
+    /** `spaces.byName`, per user or IP, besides the directory's bucket; each
+     * call of a tRPC batch counts. */
+    byName: { limit: limits.byNamePerMinute, windowMs: MINUTE },
     /** `/auth/*`, `auth.checkInvite`, `accountInvites.redeem`,
      * `account.create`, per IP. */
     auth: { limit: limits.authPerMinute, windowMs: MINUTE },
@@ -75,6 +86,10 @@ export function abuseBuckets(limits: AbuseLimits) {
 }
 
 export type AbuseBucket = keyof ReturnType<typeof abuseBuckets>;
+
+/** The writes bucket's key for an account: `/api/sync/apply` and every tRPC
+ * mutation take from it (`04` Z1). */
+export const writesKey = (userId: string): string => `writes:user:${userId}`;
 
 /** The bucket each `pre`-stage limit of a mutator counts in. */
 const PRE_BUCKETS = {
@@ -191,9 +206,9 @@ export function rateLimitByIp(
 }
 
 /**
- * Limits a plain HTTP route per signed-in user, or per IP key signed out
- * (`/api/sync/snapshot`, 04 Z1). Mounted ahead of the route, so it applies
- * to the sync routes as they land.
+ * Limits a plain HTTP route per signed-in user, or per IP key signed out.
+ * Mounted on the route's own path (`/api/runs/:id/live`), so it counts only
+ * requests to that route.
  */
 export function rateLimitByUserOrIp(
   limiter: RateLimiter,

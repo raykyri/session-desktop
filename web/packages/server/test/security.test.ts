@@ -303,12 +303,14 @@ test("limit: invites.create (channel), 20 a day per user (pre); 50 open per chan
 });
 
 test("limit: spaces.join, 60 an hour per user (pre)", async (t) => {
-  const harness = pinned(t);
+  // 60 joins and 60 leaves in a minute: the writes bucket is raised, so the
+  // join's own limit refuses the 61st join
+  const harness = pinned(t, { SESSION_LIMIT_WRITES_PER_MINUTE: "1000" });
   const olga = new Person(harness, harness.addUser("olga"));
   const lounge = newId();
   await olga.ok("spaces.create", { id: lounge, name: "lounge" });
   const mel = new Person(harness, harness.addUser("mel"));
-  for (let index = 0; index < 30; index += 1) {
+  for (let index = 0; index < 60; index += 1) {
     await mel.ok("spaces.join", { space: lounge });
     await mel.ok("spaces.leave", { space: lounge });
   }

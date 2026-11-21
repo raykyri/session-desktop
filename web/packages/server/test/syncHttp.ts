@@ -124,6 +124,7 @@ export class EventReader {
   readonly #decoder = new TextDecoder();
   #buffer = "";
   readonly #ready: SseEvent[] = [];
+  #pending: ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]> | null = null;
   ended = false;
 
   constructor(readonly response: Response) {
@@ -145,12 +146,16 @@ export class EventReader {
       const left = deadline - Date.now();
       if (left <= 0) return null;
       let timer: ReturnType<typeof setTimeout> | undefined;
+      // a read that loses the race is kept for the next call, so a chunk
+      // that arrives after a timeout is not dropped
+      this.#pending ??= this.#reader.read();
       const chunk = await Promise.race([
-        this.#reader.read(),
+        this.#pending,
         new Promise<null>((r) => (timer = setTimeout(() => r(null), left))),
       ]);
       clearTimeout(timer);
       if (chunk === null) return null;
+      this.#pending = null;
       if (chunk.done) {
         this.ended = true;
         continue;

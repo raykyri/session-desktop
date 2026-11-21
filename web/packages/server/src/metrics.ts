@@ -206,6 +206,25 @@ export function renderMetrics(options: RenderMetricsOptions): string {
     }
   }
 
+  // The process's memory (`runbooks/load-check.md`): the heap and the memory
+  // outside it (buffers, sockets), as well as the resident set.
+  const memory = process.memoryUsage();
+  lines.push("# HELP session_process_memory_bytes The process's memory, by kind.");
+  lines.push("# TYPE session_process_memory_bytes gauge");
+  for (const [kind, bytes] of [
+    ["rss", memory.rss],
+    ["heap_used", memory.heapUsed],
+    ["heap_total", memory.heapTotal],
+    ["external", memory.external],
+    ["array_buffers", memory.arrayBuffers],
+  ] as const)
+    lines.push(`session_process_memory_bytes${labels({ kind })} ${bytes}`);
+  if (deps.sync) {
+    lines.push("# HELP session_sse_streams Open sync event streams (`01` Y7).");
+    lines.push("# TYPE session_sse_streams gauge");
+    lines.push(`session_sse_streams ${deps.sync.hub.size()}`);
+  }
+
   lines.push("# HELP session_ready 1 when the server is admitting requests.");
   lines.push("# TYPE session_ready gauge");
   lines.push(`session_ready ${health === "ready" ? 1 : 0}`);

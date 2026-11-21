@@ -41,7 +41,9 @@ export function checkOrigin(headers: Headers, publicOrigin: string): OriginCheck
  * open a cookie SSE stream or read a snapshot (plan `04` Z2). */
 const GUARDED_GET_PREFIXES = ["/api/trpc", "/api/sync/", "/api/runs/"];
 
-/** Determines whether the request requires same-origin CSRF verification. */
+/** Whether the request requires same-origin CSRF verification. `path` is
+ * the path as the router matches it (`c.req.path`, percent-decoded), so an
+ * encoded spelling of a guarded path (`/api/%73ync/pull`) is guarded too. */
 function isGuarded(method: string, path: string): boolean {
   if (!SAFE_METHODS.has(method)) {
     return true;
@@ -60,7 +62,7 @@ const COOKIE_ONLY_PREFIXES = ["/api/trpc", "/api/sync/", "/api/runs/"];
  */
 export function rejectAuthorizationHeader(): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
-    const path = new URL(c.req.url).pathname;
+    const path = c.req.path;
     if (
       c.req.header("authorization") !== undefined &&
       COOKIE_ONLY_PREFIXES.some((prefix) => path.startsWith(prefix))
@@ -73,7 +75,8 @@ export function rejectAuthorizationHeader(): MiddlewareHandler<AppEnv> {
 
 export function csrfGuard(config: Config): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
-    const path = new URL(c.req.url).pathname;
+    // the decoded path the router matches, not the raw pathname
+    const path = c.req.path;
     const method = c.req.method;
     if (!isGuarded(method, path)) {
       return next();

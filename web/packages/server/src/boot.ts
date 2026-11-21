@@ -2,7 +2,9 @@
 // `03` K1, E2), in order:
 //
 // 1. the restore check: a database file of another generation than the one
-//    recorded bumps every log's epoch, so every cursor from before resyncs;
+//    recorded, or an operator's request (`db:admin --new-history`), replaces
+//    the database's history id, so every cursor and event id from before
+//    resyncs;
 // 2. the ledger rows a crash left `open` are closed with their last
 //    checkpoint;
 // 3. runs still `running` become `interrupted` (with a dispatcher, by its
@@ -43,10 +45,10 @@ export function bootServer(deps: BootDeps): BootReport {
   const steps: string[] = [];
   const restore = checkRestore(deps.sync.store, databaseGeneration(deps.databasePath), now());
   steps.push("restore check");
-  if (restore.bumped > 0)
+  if (restore.replaced)
     deps.logger.warn(
-      { previous: restore.previous, current: restore.current, logs: restore.bumped },
-      "database generation changed: every log's epoch was bumped",
+      { previous: restore.previous, current: restore.current, reason: restore.reason },
+      "the sync history id was replaced: every cursor served before this boot resyncs",
     );
   const closedRows = deps.ledger.closeOpen(now());
   steps.push("close open usage rows");

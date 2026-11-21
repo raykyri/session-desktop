@@ -1,33 +1,54 @@
-// Log epochs and restores (`15-implementation-plan/01-architecture-and-
-// data.md` D6, decision E6). A restore from Litestream moves the database
-// back in time while clients hold cursors sealed at versions the restored
-// database will issue again. At boot the server compares the generation id
-// recorded in `server_meta` with the generation of the file it opened; a
-// different id, or none recorded, bumps the epoch of every log, so every
-// cursor issued before the restore resyncs, and the current id is recorded.
-// A boot with the same id bumps nothing. What the id is under Litestream 0.5,
-// which has no generations, is `databaseGeneration`'s.
+// The database's history id and restores (`15-implementation-plan/01-
+// architecture-and-data.md` D6, decision E6). A restore from Litestream moves
+// the database back in time while clients hold cursors sealed at versions the
+// restored database will issue again. Every cursor token and event id holds
+// the history id recorded in `server_meta` (`HISTORY_KEY`); a pull whose
+// token holds another id answers resync.
+//
+// At boot the server compares the generation recorded in `server_meta` with
+// the generation of the file it opened (`databaseGeneration`). A different
+// generation, or none recorded, replaces the history id with a new random
+// one, so every cursor served before the restore resyncs, for every log,
+// including a log with no rows in the restored file, and including cursors
+// served after an earlier restore from the same backup (that backup holds
+// the old id, and the new one is random). The current generation is then
+// recorded. A boot with the same generation changes nothing.
+//
+// A restore that keeps the file's identity (bytes copied over the same file,
+// or a volume snapshot that keeps the inode and birth time) cannot be told
+// from a restart. The operator runs `npm run db:admin -- --new-history`
+// against the restored file before the boot (`runbooks/restore.md`); it
+// leaves a marker (`RESET_KEY`) that the next boot's check honours and
+// removes.
 //
 // A new generation without a restore (Litestream losing its WAL position,
-// under 0.3) bumps the epochs needlessly and costs each client one resync.
+// under 0.3) replaces the id needlessly and costs each client one resync.
 
+import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
-import type { LogId } from "@session/mutators";
+import type SqliteDatabase from "better-sqlite3";
 
 import type { SqliteStore } from "./store.js";
 
 /** The `server_meta` key of the generation id. */
 export const GENERATION_KEY = "litestream_generation";
+/** The `server_meta` key an operator sets to replace the history id at the
+ * next boot (`requestNewHistory`). */
+export const RESET_KEY = "history_reset_requested";
 
 export interface RestoreCheck {
-  /** The id recorded before this boot. */
+  /** The generation recorded before this boot. */
   previous: string | null;
-  /** The id of the file now; null for an in-memory database. */
+  /** The generation of the file now; null for an in-memory database. */
   current: string | null;
-  /** The logs whose epoch was bumped. */
-  bumped: number;
+  /** Whether the history id was replaced. */
+  replaced: boolean;
+  /** Why: the generation changed, or the operator asked for it. */
+  reason: "generation" | "requested" | null;
+  /** The history id after the check. */
+  history: string;
 }
 
 /**
@@ -55,49 +76,41 @@ export function databaseGeneration(databasePath: string): string | null {
   return `file:${st.dev}:${st.ino}:${st.birthtimeMs}`;
 }
 
-function recorded(store: SqliteStore): string | null {
-  const row = store.sqlite
-    .prepare<[string], { value: string }>("SELECT value FROM server_meta WHERE key = ?")
-    .get(GENERATION_KEY);
-  return row?.value ?? null;
-}
+const metaValue = (db: SqliteDatabase.Database, key: string): string | null =>
+  db.prepare<[string], { value: string }>("SELECT value FROM server_meta WHERE key = ?").get(key)
+    ?.value ?? null;
 
-/** Every log the change log or the epoch table names. */
-function allLogs(store: SqliteStore): LogId[] {
-  return store.sqlite
-    .prepare<[], { log: LogId }>(
-      "SELECT DISTINCT log FROM change_log UNION SELECT log FROM log_epochs ORDER BY log",
+const setMeta = (db: SqliteDatabase.Database, key: string, value: string, at: number) =>
+  db
+    .prepare(
+      `INSERT INTO server_meta (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
     )
-    .all()
-    .map((r) => r.log);
-}
+    .run(key, value, at);
 
-/** Bump the epoch of every log: a new history for each, beginning at one new
- * version, as `SyncServer.replaceHistory` does for one log. Returns how many
- * logs it bumped. */
-export function bumpEveryEpoch(store: SqliteStore): number {
-  return store.transaction(() => {
-    const logs = allLogs(store);
-    if (!logs.length) return 0;
-    const start = store.nextVersion();
-    for (const log of logs) store.setEpoch(log, { n: store.epoch(log).n + 1, start });
-    return logs.length;
-  });
+/** A new random history id. */
+export const newHistoryId = (): string => randomBytes(16).toString("hex");
+
+/** Ask the next boot to replace the history id: the operator path for a
+ * restore that keeps the file's identity (`npm run db:admin --
+ * --new-history`). */
+export function requestNewHistory(db: SqliteDatabase.Database, at: number = Date.now()): void {
+  setMeta(db, RESET_KEY, "1", at);
 }
 
 /** The boot-time check of D6. `current` is what `databaseGeneration`
- * reports; with null (no file) nothing is compared or recorded. */
+ * reports; with null (no file) the generation is not compared or recorded,
+ * and only an operator's request replaces the id. */
 export function checkRestore(store: SqliteStore, current: string | null, at: number): RestoreCheck {
-  const previous = recorded(store);
-  if (current === null || previous === current) return { previous, current, bumped: 0 };
+  const db = store.sqlite;
   return store.transaction(() => {
-    const bumped = bumpEveryEpoch(store);
-    store.sqlite
-      .prepare(
-        `INSERT INTO server_meta (key, value, updated_at) VALUES (?, ?, ?)
-         ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-      )
-      .run(GENERATION_KEY, current, at);
-    return { previous, current, bumped };
+    const previous = metaValue(db, GENERATION_KEY);
+    const requested = metaValue(db, RESET_KEY) !== null;
+    const moved = current !== null && previous !== current;
+    const reason = moved ? "generation" : requested ? "requested" : null;
+    if (reason !== null) store.setHistory(newHistoryId());
+    if (moved) setMeta(db, GENERATION_KEY, current, at);
+    if (requested) db.prepare("DELETE FROM server_meta WHERE key = ?").run(RESET_KEY);
+    return { previous, current, replaced: reason !== null, reason, history: store.history() };
   });
 }

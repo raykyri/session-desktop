@@ -134,6 +134,7 @@ export function privacyCheck(input: PrivacyCheckInput): PrivacyCheckReport {
         v: removedAt - 1,
         h: store.head(),
         at: now,
+        hid: store.history(),
       });
       const pulled = server.pull(actor, log, cursor);
       check(

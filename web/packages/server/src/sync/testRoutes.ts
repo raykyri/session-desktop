@@ -12,7 +12,11 @@
 //   POST /apply-unreadable { envelope, unreadable }  an envelope whose named
 //                                        fields throw when read, which no HTTP
 //                                        body can carry (a hostile caller of
-//                                        the in-process API)
+//                                        the in-process API); with none named
+//                                        and no session, the server half's
+//                                        answer to a signed-out caller, which
+//                                        `/api/sync/apply` refuses with 401
+//                                        before reading the body
 
 import { DAY, type LogId, type StoredRecord } from "@session/mutators";
 import { Hono } from "hono";

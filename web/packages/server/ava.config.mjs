@@ -12,7 +12,7 @@ const conformance =
 export default {
   files: conformance ? ["test/**/*.test.ts"] : ["test/**/*.test.ts", "!test/conformance/**"],
   extensions: ["ts"],
-  nodeArguments: ["--import=tsx"],
+  nodeArguments: ["--import=tsx", "--expose-gc"],
   environmentVariables: { TSX_TSCONFIG_PATH: "tsconfig.test.json" },
   timeout: conformance ? "20m" : "60s",
   workerThreads: false,
