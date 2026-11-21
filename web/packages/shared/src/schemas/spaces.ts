@@ -754,12 +754,19 @@ export const spaceMutators = {
     input: z.strictObject(nodeInput),
     result: nullResult,
   },
-  /** Run again: a new attempt with the model and effort the person picks; the
-   * attempt number fences it, so it carries no `base`. */
+  /** Run again: a new attempt with the model and effort the person picks.
+   * `base.attempt`: the attempt of the run the person saw stop; STALE when
+   * the run was retried since (a stale offline retry would otherwise start
+   * another attempt with the old model and effort). */
   "research.retryNode": {
     who: "author",
     online: false,
-    input: z.strictObject({ ...nodeInput, model: spaceModelSchema, effort: spaceEffortSchema }),
+    input: z.strictObject({
+      ...nodeInput,
+      model: spaceModelSchema,
+      effort: spaceEffortSchema,
+      base: z.strictObject({ attempt: count.min(1) }),
+    }),
     result: nullResult,
   },
   // -- replies to posts

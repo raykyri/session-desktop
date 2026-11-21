@@ -147,6 +147,7 @@ const words =
     typeof v === "string" && v.length >= 1 && v.length <= n;
 const ulid: Check = (v) => typeof v === "string" && ULID.test(v);
 const nat: Check = (v) => typeof v === "number" && Number.isInteger(v) && v >= 0;
+const pos: Check = (v) => nat(v) && (v as number) >= 1;
 const oneOf =
   (...xs: unknown[]): Check =>
   (v) =>
@@ -233,7 +234,7 @@ const SCHEMA: Record<string, Check> = {
   "followups.update": obj({ ...nodeIn, q: words(8000), base: rev }),
   "followups.delete": obj(nodeIn),
   "research.cancelNode": obj(nodeIn),
-  "research.retryNode": obj({ ...nodeIn, model, effort }),
+  "research.retryNode": obj({ ...nodeIn, model, effort, base: obj({ attempt: pos }) }),
   "research.createPostFollowUp": obj({ id: ulid, thread: ulid, t: words(8000) }, { parent: ulid }),
   "replies.update": obj({ id: ulid, t: words(8000), base: rev }),
   "replies.delete": obj({ id: ulid }),
@@ -578,8 +579,10 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     runPre(f, i);
     if (p.mod === "removed" || n.mod === "removed" || n.del) no("PRECONDITION_FAILED");
     const run = runAt(f, n);
-    if (run?.kind !== "run" || !["failed", "cancelled", "interrupted"].includes(run.status))
-      no("PRECONDITION_FAILED");
+    if (run?.kind !== "run") return no("PRECONDITION_FAILED");
+    // the attempt the person saw stop: a run retried since is STALE
+    if (run.attempt !== (i["base"] as { attempt: number }).attempt) no("STALE");
+    if (!["failed", "cancelled", "interrupted"].includes(run.status)) no("PRECONDITION_FAILED");
   },
   "research.createPostFollowUp": (f, i) => {
     const p = seenThread(f, i["thread"]);

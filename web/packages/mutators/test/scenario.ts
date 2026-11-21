@@ -54,7 +54,7 @@ export function everyMutator(
     ...MODEL,
   });
   as("otto", "research.cancelNode", { thread: th, node: look });
-  as("otto", "research.retryNode", { thread: th, node: look, ...MODEL });
+  as("otto", "research.retryNode", { thread: th, node: look, ...MODEL, base: { attempt: 1 } });
   as("mona", "followups.update", {
     thread: th,
     node: fu,

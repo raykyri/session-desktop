@@ -394,9 +394,12 @@ const GENERATORS: Record<string, Gen> = {
         : runs.length
           ? pick(c.r, runs)
           : null;
+    // the attempt the person saw stop; now and then an earlier one (STALE)
+    const attempt = r ? (chance(c.r, 0.85) ? r.attempt : Math.max(1, r.attempt - 1)) : 1;
     return {
       ...(r ? { thread: r.th, node: r.node } : { thread: threadId(c), node: "r" }),
       ...model(c),
+      base: { attempt },
     };
   },
   "research.createPostFollowUp": (c, _u, d) => {

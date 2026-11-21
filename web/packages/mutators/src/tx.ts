@@ -119,10 +119,12 @@ export type Who = "user" | "member" | "author" | "owner";
  * - `base.rev when shown`: `moderation.decide`: "shown" compares the rev,
  *   "hidden" and "removed" act on the item as it is;
  * - `base.adm`: `members.remove` compares the member's admission id;
+ * - `base.attempt`: `research.retryNode` compares the run's attempt;
  * - `as is`: it acts on the record as it is now (a restricting decision, a
  *   delete, a cancel, a retry fenced by the attempt number);
  * - `none`: it makes new records, or sets a value whatever it was. */
-export type Intent = "base.rev" | "base.rev when shown" | "base.adm" | "as is" | "none";
+export type Intent =
+  "base.rev" | "base.rev when shown" | "base.adm" | "base.attempt" | "as is" | "none";
 
 export interface MutatorDef<I> {
   input: z.ZodType<I>;

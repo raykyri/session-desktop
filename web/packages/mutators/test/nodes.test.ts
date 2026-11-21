@@ -267,7 +267,7 @@ test("E4: cancel stops a run that has not ended; run again queues a new attempt 
   refused(t, w.apply("mona", "research.cancelNode", { thread: th, node: "r" }), "FORBIDDEN");
   refused(
     t,
-    w.apply("mel", "research.retryNode", { thread: th, node: "r", ...MODEL }),
+    w.apply("mel", "research.retryNode", { thread: th, node: "r", ...MODEL, base: { attempt: 1 } }),
     "PRECONDITION_FAILED",
   );
   ok(t, w.apply("mel", "research.cancelNode", { thread: th, node: "r" }));
@@ -285,6 +285,7 @@ test("E4: cancel stops a run that has not ended; run again queues a new attempt 
       node: "r",
       model: "gemini-flash",
       effort: "max",
+      base: { attempt: 1 },
     }),
     "BAD_REQUEST",
   );
@@ -295,6 +296,7 @@ test("E4: cancel stops a run that has not ended; run again queues a new attempt 
       node: "r",
       model: "gemini-flash",
       effort: "low",
+      base: { attempt: 1 },
     }),
   );
   t.like(w.get(`run:${run?.id ?? ""}`), {
@@ -305,11 +307,17 @@ test("E4: cancel stops a run that has not ended; run again queues a new attempt 
     effort: "low",
   });
   t.like(w.get(`thread:${th}`), { running: true, model: "gemini-flash", effort: "low" });
+  // a retry made before that one is STALE: the run was retried since
+  refused(
+    t,
+    w.apply("mel", "research.retryNode", { thread: th, node: "r", ...MODEL, base: { attempt: 1 } }),
+    "STALE",
+  );
   // a complete run is not run again
   finish(w, th, "r");
   refused(
     t,
-    w.apply("mel", "research.retryNode", { thread: th, node: "r", ...MODEL }),
+    w.apply("mel", "research.retryNode", { thread: th, node: "r", ...MODEL, base: { attempt: 2 } }),
     "PRECONDITION_FAILED",
   );
 });

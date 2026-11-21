@@ -209,11 +209,12 @@ export const NODES = {
 
   // Run again (`03` E4): a run that ended `failed`, `cancelled` or
   // `interrupted` gets a new attempt, queued, with the model and effort the
-  // person picks. The attempt number fences it, so it carries no `base`.
+  // person picks. `base.attempt` is the attempt the person saw stop: a run
+  // retried since is STALE (M1b review 3).
   "research.retryNode": define({
     input: ulidFields(M["research.retryNode"].input, ["thread", "node"]),
     who: "author",
-    intent: "as is",
+    intent: "base.attempt",
     space: (tx, i) => readableThread(tx, i.thread).s,
     can: (tx, i) => {
       if (authorAt(tx, i.thread, i.node) !== tx.me) throw notAuthor();
@@ -228,6 +229,7 @@ export const NODES = {
       if (n.del) throw deleted();
       const run = runOf(tx, n);
       if (!run) throw refuse("PRECONDITION_FAILED", "This ask has no run.");
+      if (run.attempt !== i.base.attempt) throw stale();
       if (run.status !== "failed" && run.status !== "cancelled" && run.status !== "interrupted")
         throw refuse("PRECONDITION_FAILED", "Only a run that stopped can run again.");
       tx.put({

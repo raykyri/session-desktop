@@ -817,6 +817,19 @@ const MUTATIONS: Mutation[] = [
     from: '      undefined,\n      "queue_full",\n',
     to: "      undefined,\n      undefined,\n",
   },
+  // ---- M1b review fixes ----
+  {
+    name: "M1b-17 a retry ignores the attempt it was made for",
+    file: "../mutators/src/nodes.ts",
+    from: "      if (run.attempt !== i.base.attempt) throw stale();\n",
+    to: "",
+  },
+  {
+    name: "M1b-18 the ban check runs on clients only",
+    file: "../mutators/src/tx.ts",
+    from: "    if (tx.server && bannedFrom(tx, sp, tx.me))",
+    to: "    if (!tx.server && bannedFrom(tx, sp, tx.me))",
+  },
 ];
 
 interface Outcome {
