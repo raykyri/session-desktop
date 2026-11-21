@@ -197,11 +197,14 @@ export function spaceOf(r: Draft | StoredRecord): string | null {
   }
 }
 
-/** The person whose user log holds a record, or null. */
+/** The person whose user log holds a record, or null. A ban is in the
+ * banned person's user log, so a person banned from a private space, who
+ * no longer reads its log, gets their own ban (`01` C18). */
 export function personOf(r: Draft | StoredRecord): string | null {
   switch (r.kind) {
     case "member":
     case "request":
+    case "ban":
     case "save":
     case "prefs":
       return r.u;
@@ -213,7 +216,7 @@ export function personOf(r: Draft | StoredRecord): string | null {
 }
 
 /** The logs a record is written to: its space's log, and the user log of the
- * person it belongs to (a membership, a join request, a save, a
+ * person it belongs to (a membership, a join request, a ban, a save, a
  * notification, preferences). */
 export function logsOf(r: Draft | StoredRecord): LogId[] {
   const out: LogId[] = [];

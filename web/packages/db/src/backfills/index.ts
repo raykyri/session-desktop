@@ -12,6 +12,8 @@ import { newId } from "../ids.js";
 import { backfills } from "../schema/backfills.js";
 import { now } from "../time.js";
 
+import { banUserLogs } from "./records.js";
+
 export interface Backfill {
   /** Stable identifier, recorded in `backfills`. Never reused or renamed. */
   id: string;
@@ -60,7 +62,7 @@ const hashAccountInvites: Backfill = {
 };
 
 /** In order; each runs once per database. */
-export const BACKFILLS: readonly Backfill[] = [hashAccountInvites];
+export const BACKFILLS: readonly Backfill[] = [hashAccountInvites, banUserLogs];
 
 /** Applies every backfill supported by this build that the database has not recorded.
  * Returns the ids applied, so boot can log them. */

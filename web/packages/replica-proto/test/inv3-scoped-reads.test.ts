@@ -563,3 +563,68 @@ test("a queued run is served with its thread: to readers of the space only (M1b 
   t.deepEqual(await runs("eve", closed), []);
   t.deepEqual(await runs(null, open), [[b, "queued"]]);
 });
+
+test("a banned person's snapshots and pulls hold their own ban and no other, in a private and an open space (C18)", async (t) => {
+  const c = await cast(t);
+  const { w, open, closed } = c;
+  const bans = (m: ReadonlyMap<string, StoredRecord>) =>
+    [...m.values()].flatMap((r) => (r.kind === "ban" ? [r.id] : [])).sort();
+  const keys = (p: Pull) => {
+    t.false("resync" in p, "a pull, not a resync");
+    return (changes(p) ?? [])
+      .filter((x) => x.key.startsWith("ban:"))
+      .map((x) => x.key)
+      .sort();
+  };
+  // eve is a member of nothing: her logs pull the bans without a resync
+  const before = {
+    user: (await w.server.snapshot(actor("eve"), "user:eve")).cursor,
+    open: (await w.server.snapshot(actor("eve"), `space:${open}`)).cursor,
+  };
+  for (const [space, user] of [
+    [closed, "eve"],
+    [open, "eve"],
+    [closed, "mel"],
+    [open, "mel"],
+    [closed, "ada"],
+    [open, "mona"],
+  ] as const)
+    await ok(t, w.as("olga", "members.ban", { space, user }));
+  const own = (u: string) => [`${closed}:${u}`, `${open}:${u}`].sort();
+  // the user log: both of a person's bans, the private space's included
+  t.deepEqual(
+    keys(await w.server.pull(actor("eve"), "user:eve", before.user)),
+    own("eve").map((id) => `ban:${id}`),
+  );
+  for (const u of ["eve", "mel"]) t.deepEqual(bans(await snap(c, u, `user:${u}`)), own(u), u);
+  // the open space's log, which a banned person still reads: their own ban,
+  // not anyone else's
+  t.deepEqual(keys(await w.server.pull(actor("eve"), `space:${open}`, before.open)), [
+    `ban:${open}:eve`,
+  ]);
+  for (const u of ["eve", "mel"])
+    t.deepEqual(bans(await snap(c, u, `space:${open}`)), [`${open}:${u}`], u);
+  // the private space's log, which they no longer read as members: the
+  // landing and their own records (the ban; mel's join request), not ada's
+  // ban, and none of its content
+  for (const u of ["eve", "mel"]) {
+    const got = await snap(c, u, `space:${closed}`);
+    t.deepEqual(bans(got), [`${closed}:${u}`], u);
+    for (const r of got.values()) t.true(r.kind === "space" || ownerOf(r) === u, `${u}: ${r.kind}`);
+  }
+  // the record names nobody but the banned person: not who banned them
+  for (const r of (await snap(c, "mel", "user:mel")).values())
+    if (r.kind === "ban")
+      t.deepEqual(Object.keys(r).sort(), ["createdAt", "id", "kind", "rev", "sp", "u"]);
+  // an unban reaches them as a deletion in their user log
+  const after = (await w.server.snapshot(actor("eve"), "user:eve")).cursor;
+  await ok(t, w.as("olga", "members.unban", { space: closed, user: "eve" }));
+  t.deepEqual(changes(await w.server.pull(actor("eve"), "user:eve", after)), [
+    { key: `ban:${closed}:eve`, op: "del" },
+  ]);
+  // the owner still reads every ban of her spaces
+  t.deepEqual(
+    bans(await snap(c, "olga", `space:${open}`)),
+    [`${open}:eve`, `${open}:mel`, `${open}:mona`].sort(),
+  );
+});

@@ -160,3 +160,33 @@ test("C12: members.remove answers removed: true when it removes the member, and 
     { removed: true },
   );
 });
+
+test("C18: a banned person's snapshot and pull of their user log hold their own ban and no other, naming nobody else", async (t) => {
+  const h = createHarness(t);
+  const { olga, mona, mel, open, closed } = await channels(h);
+  const eve = new Person(h, h.addUser("eve"));
+  const before = await eve.snapshot("user:eve");
+  await olga.ok("members.ban", { space: closed, user: "eve" });
+  await olga.ok("members.ban", { space: open, user: "eve" });
+  await olga.ok("members.ban", { space: open, user: "mona" });
+  await olga.ok("members.ban", { space: closed, user: "mel" });
+  const bans = (s: Snapshot) => s.records.filter((r) => r.record.kind === "ban");
+  const keys = (s: Snapshot) => bans(s).map((r) => r.key);
+  const mine = [`ban:${closed}:eve`, `ban:${open}:eve`].sort();
+  const snap = await eve.snapshot("user:eve");
+  t.deepEqual(keys(snap).sort(), mine);
+  for (const r of bans(snap))
+    t.deepEqual(Object.keys(r.record).sort(), ["createdAt", "id", "kind", "rev", "sp", "u"]);
+  t.false(JSON.stringify(snap.records).includes("olga"), "nothing names who banned her");
+  const pulled = await pull(eve, "user:eve", before.cursor);
+  t.deepEqual(("changes" in pulled ? pulled.changes : []).map((c) => c.key).sort(), mine);
+  // the open channel's log, which she still reads: her own ban only
+  t.deepEqual(keys(await eve.snapshot(`space:${open}`)), [`ban:${open}:eve`]);
+  // a member who is not banned reads no ban; the owner reads all of them
+  t.deepEqual(keys(await mel.snapshot(`space:${open}`)), []);
+  t.deepEqual(keys(await mona.snapshot("user:mona")), [`ban:${open}:mona`]);
+  t.deepEqual(
+    keys(await olga.snapshot(`space:${open}`)).sort(),
+    [`ban:${open}:eve`, `ban:${open}:mona`].sort(),
+  );
+});

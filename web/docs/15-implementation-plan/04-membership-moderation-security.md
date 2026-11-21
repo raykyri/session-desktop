@@ -552,6 +552,12 @@ Acceptance: `inv6` hide tests, `R2`, `R14`; a client test of both renderings.
   (`inv2`, `review-r1` ban test). In an open channel the banned person can
   still read, because open content is readable by anyone. A person banned
   from a private channel is a removed member there (§8).
+- The ban record (`ban:<space>:<user>`: space, person, time) is served to
+  the channel's owner and to the banned person, in their user log, and to
+  nobody else; it names nobody but the banned person (who banned them is in
+  the moderation log, which only the owner reads). The banned person's
+  client tells them "You are banned from #name." when that record arrives,
+  and not for a membership that ends any other way (a Leave in another tab).
 - Remove from channel is offered only in private channels. In open channels it
   would be STALE after the person leaves and rejoins (`AGENTS.md`), so Ban is
   the tool there.

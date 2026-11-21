@@ -30,7 +30,8 @@
 // M6-8 on undo one fix of the M6 server review each (the deletion job, the
 // privacy check, the pre-stage limits, the invite notification), named by
 // the review's row, so that each fix's test is shown to fail without it.
-// M6-55 on cover the M6 tail: `members.remove`'s result (C12).
+// M6-55 on cover the M6 tail: `members.remove`'s result (C12) and the
+// banned person's read of their own ban record, with its backfill (C18).
 //
 // A mutation is killed only when one of its expected tests fails
 // (`EXPECTED`): the runner runs those tests alone, with AVA's `--match`, in
@@ -1777,7 +1778,7 @@ const MUTATIONS: Mutation[] = [
     from: '  for (const r of tx.list("run", { u })) dropRuns(tx, r.th, [r]);\n',
     to: "",
   },
-  // ---- the M6 tail: C12's removal result ----
+  // ---- the M6 tail: C12's removal result, C18's ban record ----
   {
     name: "M6-55 C12: a removal of a person who had left answers removed: true",
     file: "../mutators/src/members.ts",
@@ -1789,6 +1790,36 @@ const MUTATIONS: Mutation[] = [
     file: "../mutators/src/members.ts",
     from: "      refreshSpace(tx, i.space, -1);\n      return { removed: true };",
     to: "      refreshSpace(tx, i.space, -1);\n      return null;",
+  },
+  {
+    name: "M6-57 C18: a ban is not in the banned person's user log",
+    file: "../mutators/src/records.ts",
+    from: '    case "request":\n    case "ban":\n    case "save":',
+    to: '    case "request":\n    case "save":',
+  },
+  {
+    name: "M6-58 C18: the banned person may not read their ban",
+    file: "../mutators/src/access.ts",
+    from: '    case "request":\n    case "ban":\n      return own || (sp !== null && isOwnerOf(g, sp, u));\n    case "invite":',
+    to: '    case "request":\n      return own || (sp !== null && isOwnerOf(g, sp, u));\n    case "ban":\n    case "invite":',
+  },
+  {
+    name: "M6-59 C18: anyone who reads a space reads its bans",
+    file: "../mutators/src/access.ts",
+    from: '    case "request":\n    case "ban":\n      return own || (sp !== null && isOwnerOf(g, sp, u));',
+    to: '    case "ban":\n      return own || (sp !== null && readsSpace(g, sp, u));\n    case "request":\n      return own || (sp !== null && isOwnerOf(g, sp, u));',
+  },
+  {
+    name: "M6-60 C18: the ban backfill writes no log row",
+    file: "../db/src/backfills/records.ts",
+    from: "      tx.run(\n        sql`INSERT INTO change_log",
+    to: "      String(\n        sql`INSERT INTO change_log",
+  },
+  {
+    name: "M6-61 C18: boot does not run the ban backfill",
+    file: "../db/src/backfills/index.ts",
+    from: "export const BACKFILLS: readonly Backfill[] = [hashAccountInvites, banUserLogs];",
+    to: "export const BACKFILLS: readonly Backfill[] = [hashAccountInvites];\nvoid banUserLogs;",
   },
 ];
 
@@ -2223,6 +2254,32 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
     tests: [
       "C12: members.remove answers removed: true when it removes the member, and removed: false",
     ],
+  },
+  "M6-57": {
+    tests: [
+      "C18: a banned person's snapshot and pull of their user log hold their own ban",
+      "a banned person's snapshots and pulls hold their own ban and no other",
+    ],
+  },
+  "M6-58": {
+    tests: [
+      "C18: a banned person's snapshot and pull of their user log hold their own ban",
+      "a banned person's snapshots and pulls hold their own ban and no other",
+    ],
+  },
+  "M6-59": {
+    tests: [
+      "C18: a banned person's snapshot and pull of their user log hold their own ban",
+      "a banned person's snapshots and pulls hold their own ban and no other",
+    ],
+  },
+  "M6-60": {
+    in: "db",
+    tests: ["C18: the ban backfill writes a stored ban to the banned person's user log once"],
+  },
+  "M6-61": {
+    in: "db",
+    tests: ["C18: the ban backfill writes a stored ban to the banned person's user log once"],
   },
 };
 

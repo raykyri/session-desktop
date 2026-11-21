@@ -417,7 +417,7 @@ test("leaving a private channel in this tab shows no lost-access message", async
   t.deepEqual(left, []);
 });
 
-test("a ban in an open channel reaches the banned member as their lost membership, once", async (t) => {
+test("a ban in an open channel reaches the banned member as their ban record, told once (C18)", async (t) => {
   const { f, lounge } = world();
   const { r, banned, left } = replicaOf(f, MONA);
   t.teardown(() => r.dispose());
@@ -428,10 +428,65 @@ test("a ban in an open channel reaches the banned member as their lost membershi
   t.deepEqual(banned, ["lounge"], "You are banned from #lounge.");
   t.deepEqual(left, [], "an open channel stays readable: no lost-access message");
   t.true(channelsOf(r).some((c) => c.name === "lounge" && !c.joined));
+  t.like(r.get(`ban:${lounge}:${MONA}`), { kind: "ban", sp: lounge, u: MONA });
   // a later change tells nothing again
   f.ok(OLGA, "threads.create", { id: f.id(), space: lounge, kind: "post", q: "After the ban" });
   await new Promise((resolve) => setTimeout(resolve, 50));
   t.deepEqual(banned, ["lounge"]);
+});
+
+test("a ban in a private channel is told once as the ban, not as a lost membership (C18)", async (t) => {
+  const { f, lab } = world();
+  const link = f.ok(OLGA, "invites.create", { id: f.id(), space: lab, days: 7 }) as {
+    code: string;
+  };
+  f.ok(MONA, "spaces.join", { space: lab, invite: link.code });
+  const { r, banned, left } = replicaOf(f, MONA);
+  t.teardown(() => r.dispose());
+  await until(() => r.ready() && f.streams.size === 1);
+  await until(() => channelsOf(r).some((c) => c.name === "lab" && c.joined));
+  f.ok(OLGA, "members.ban", { space: lab, user: MONA });
+  await until(() => banned.length > 0);
+  await until(() => !channelsOf(r).some((c) => c.name === "lab" && c.joined));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  t.deepEqual(banned, ["lab"], "You are banned from #lab.");
+  t.deepEqual(left, []);
+});
+
+test("a Leave from another tab of the same account is not told as a ban (C18)", async (t) => {
+  const { f, lounge, lab } = world();
+  const link = f.ok(OLGA, "invites.create", { id: f.id(), space: lab, days: 7 }) as {
+    code: string;
+  };
+  f.ok(MONA, "spaces.join", { space: lab, invite: link.code });
+  const { r, banned, left } = replicaOf(f, MONA);
+  t.teardown(() => r.dispose());
+  await until(() => r.ready() && f.streams.size === 1);
+  await until(() => channelsOf(r).filter((c) => c.joined).length === 2);
+  // the other tab: its own storage and client id
+  const other = replicaOf(f, MONA);
+  t.teardown(() => other.r.dispose());
+  await until(() => other.r.ready());
+  t.true((await other.r.mutate("spaces.leave", { space: lounge })).ok);
+  await until(() => !channelsOf(r).some((c) => c.name === "lounge" && c.joined));
+  t.true((await other.r.mutate("spaces.leave", { space: lab })).ok);
+  await until(() => !channelsOf(r).some((c) => c.name === "lab" && c.joined));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  t.deepEqual(banned, [], "no ban toast in either tab");
+  t.deepEqual(other.banned, []);
+  t.deepEqual(left, ["lab"], "the private channel's loss is told as such in the first tab");
+});
+
+test("a ban made before the page loaded is not told (C18)", async (t) => {
+  const { f, lounge } = world();
+  f.ok(OLGA, "members.ban", { space: lounge, user: MONA });
+  const { r, banned } = replicaOf(f, MONA);
+  t.teardown(() => r.dispose());
+  await until(() => r.ready() && f.streams.size === 1);
+  t.like(r.get(`ban:${lounge}:${MONA}`), { kind: "ban" });
+  f.ok(OLGA, "threads.create", { id: f.id(), space: lounge, kind: "post", q: "Later" });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  t.deepEqual(banned, []);
 });
 
 test("leaving an open channel in this tab is not told as a ban", async (t) => {

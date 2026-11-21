@@ -38,7 +38,8 @@
 // of `@session/client` as well (linked to the copies of the two packages
 // above), and a client mutation runs the client test files it names
 // (`files`), not this package's suite, which does not import the client.
-// M6-C48 on cover the M6 tail: the removal toast of C12 (`removed`).
+// M6-C48 on cover the M6 tail: the removal toast of C12 (`removed`), the
+// ban toast of C18 (the person's own ban record).
 //
 // Before the mutations, the suites run in an unmutated slot: a failure there
 // stops the run (a mutation is not killed by a test that fails anyway). A
@@ -1633,18 +1634,22 @@ const MUTATIONS: Mutation[] = [
     files: ["test/membership.screens.test.tsx"],
   },
   {
-    name: "M6-C40 (C18) a ban in an open channel is not told",
+    // since the M6 tail the client tells a ban when the person's own ban
+    // record arrives (`checkOwnBans`), not from a lost membership
+    name: "M6-C40 (C18) an arrived ban record is not told",
     file: "../client/src/replica/syncReplica.ts",
-    from: "      this.options.onBanned?.(name);",
-    to: "      void name;",
+    from: "      this.options.onBanned?.(s.name);",
+    to: "      void s;",
     packageOnly: true,
     files: ["test/replica.sync.test.ts"],
   },
   {
-    name: "M6-C41 (C18) a Leave's dropped prediction reads as a ban",
+    // the lost-membership inference it named went with the M6 tail: M6-C41
+    // is the bans the first read of the user log holds
+    name: "M6-C41 (C18) a ban made before the page loaded is told",
     file: "../client/src/replica/syncReplica.ts",
-    from: "    const server = client.replica;",
-    to: "    const server = client;",
+    from: "    if (before === null) return;\n    for (const sp of now) if (!before.has(sp))",
+    to: "    for (const sp of now) if (!before?.has(sp))",
     packageOnly: true,
     files: ["test/replica.sync.test.ts"],
   },
@@ -1696,7 +1701,7 @@ const MUTATIONS: Mutation[] = [
     packageOnly: true,
     files: ["test/outbox.screens.test.tsx"],
   },
-  // ---- the M6 tail: C12 ----
+  // ---- the M6 tail: C12 and C18 ----
   {
     name: "M6-C48 (C12) a removal that changed nothing reads as Removed",
     file: "../client/src/features/channels/MembersDialog.tsx",
@@ -1704,6 +1709,14 @@ const MUTATIONS: Mutation[] = [
     to: "  return (false as boolean) && removed === false\n",
     packageOnly: true,
     files: ["test/membership.screens.test.tsx"],
+  },
+  {
+    name: "M6-C49 (C18) a ban in a private channel is told as a lost membership",
+    file: "../client/src/replica/syncReplica.ts",
+    from: "    if (this.ownBans?.has(space)) {\n      if (this.bansUntold.delete(space))",
+    to: "    if ((false as boolean) && this.ownBans?.has(space)) {\n      if (this.bansUntold.delete(space))",
+    packageOnly: true,
+    files: ["test/replica.sync.test.ts"],
   },
 ];
 
