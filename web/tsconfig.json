@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/shared" },
     { "path": "./packages/mutators" },
+    { "path": "./packages/sync" },
     { "path": "./packages/db" },
     { "path": "./packages/server" },
     { "path": "./packages/client" },

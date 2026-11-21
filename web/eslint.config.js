@@ -8,7 +8,9 @@ import tseslint from "typescript-eslint";
 /** ADR-1: client ──► shared; server ──► shared, db; db ──► shared; shared ──► nothing.
  * mutators ──► shared (`01` §3: shared by the client and the server, so it
  * depends on neither, nor on the prototype).
- * replica-proto (phase 0 prototype) ──► shared, mutators, and nothing imports it. */
+ * sync ──► shared, mutators (`01` §4: the client and server halves of the sync
+ * core; `@session/db` implements its `ServerStore`).
+ * replica-proto (phase 0 prototype) ──► shared, mutators, sync, and nothing imports it. */
 const forbidden = {
   "packages/shared": [
     "@session/db",
@@ -16,13 +18,16 @@ const forbidden = {
     "@session/client",
     "@session/replica-proto",
     "@session/mutators",
+    "@session/sync",
   ],
   "packages/mutators": [
     "@session/db",
     "@session/server",
     "@session/client",
     "@session/replica-proto",
+    "@session/sync",
   ],
+  "packages/sync": ["@session/db", "@session/server", "@session/client", "@session/replica-proto"],
   "packages/db": ["@session/server", "@session/client", "@session/replica-proto"],
   "packages/server": ["@session/client", "@session/replica-proto"],
   "packages/client": ["@session/db", "@session/server", "@session/replica-proto"],
