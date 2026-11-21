@@ -102,6 +102,9 @@ export interface SyncReplicaOptions {
   directory: () => Promise<readonly SpaceRec[]>;
   /** `spaces.byName`: a channel by name, a private one's landing included. */
   byName?: (name: string) => Promise<SpaceRec | null>;
+  /** `spaces.threadSpace`: the id of a thread's channel, null when the
+   * viewer may not read the thread. */
+  threadSpace?: (thread: string) => Promise<string | null>;
   /** The tab's client id (`tabClient.ts`). */
   claim?: (
     userId: string,
@@ -1187,8 +1190,11 @@ export class SyncReplica implements ReplicaSource {
     // rendered within `GATHER_MS` are fetched with one `threads` read per
     // log (`openMany`), which keeps a reader scrolling through summaries
     // under the server's limit. An address names its channel and is
-    // fetched now; a thread the replica does not hold is asked of the logs
-    // it holds (`SyncClient.open`).
+    // fetched now. An address without one (Home, Saved) of a thread the
+    // replica does not hold: the server names the thread's channel
+    // (`spaces.threadSpace`), and only a channel whose log the replica reads
+    // can show it; without that lookup, the thread is asked of the logs the
+    // replica holds (`SyncClient.open`).
     if (space === undefined && held) {
       this.gathered.add(thread);
       this.gatherTimer ??= setTimeout(() => {
@@ -1196,6 +1202,23 @@ export class SyncReplica implements ReplicaSource {
         this.openGathered(client);
       }, this.options.gatherMs ?? GATHER_MS);
       (this.gatherTimer as { unref?: () => void }).unref?.();
+      return;
+    }
+    const lookUp = this.options.threadSpace;
+    if (space === undefined && lookUp) {
+      this.opens.set(thread, "pending");
+      const gen = this.generation;
+      void lookUp(thread).then(
+        (sp) => {
+          if (!this.live(gen)) return;
+          this.opens.delete(thread);
+          if (sp !== null && this.loadedLogs.has(spaceLog(sp))) this.open(thread, sp);
+          else this.opened(new Map([[thread, "missing"]]), undefined, false);
+        },
+        (error: unknown) => {
+          if (this.live(gen)) this.opened(new Map([[thread, "unavailable"]]), error, false);
+        },
+      );
       return;
     }
     this.opens.set(thread, "pending");

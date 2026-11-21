@@ -39,7 +39,12 @@ function world(o: ConstructorParameters<typeof FakeSync>[0] = {}) {
 function replicaOf(
   f: FakeSync,
   u: string | null,
-  o: { onUpgrade?: () => void; storage?: FakeStorage; locks?: FakeLocks } = {},
+  o: {
+    onUpgrade?: () => void;
+    storage?: FakeStorage;
+    locks?: FakeLocks;
+    threadSpace?: (thread: string) => Promise<string | null>;
+  } = {},
 ) {
   const storage = o.storage ?? new FakeStorage();
   const locks = o.locks ?? new FakeLocks();
@@ -57,6 +62,7 @@ function replicaOf(
     transport,
     directory: f.directory,
     byName: f.byName,
+    ...(o.threadSpace ? { threadSpace: o.threadSpace } : {}),
     claim: (userId, register) => claimClientId({ userId, storage, locks, register }),
     restoreDraft: (d) => restored.push(d),
     onLeft: (name) => left.push(name),
@@ -266,6 +272,42 @@ test("a thread address outside the window is fetched from its channel; one the s
   r.open(nowhere, lounge);
   await until(() => r.get(threadKey(nowhere)) !== UNKNOWN);
   t.is(r.get(threadKey(nowhere)), undefined);
+});
+
+test("an address without its channel asks spaces.threadSpace and reads that channel's log alone", async (t) => {
+  const { f, lounge, post } = world({ window: { days: 1, threads: 1, cap: 1 } });
+  const room = f.id();
+  f.ok(OLGA, "spaces.create", { id: room, name: "room" });
+  f.ok(MONA, "spaces.join", { space: room });
+  f.clock.offset = 800 * DAY;
+  f.ok(OLGA, "threads.create", { id: f.id(), space: lounge, kind: "post", q: "Fresh" });
+  const asked: string[] = [];
+  const { r } = replicaOf(f, MONA, {
+    threadSpace: (thread) => {
+      asked.push(thread);
+      return Promise.resolve(thread === post ? lounge : null);
+    },
+  });
+  t.teardown(() => r.dispose());
+  await until(() => r.ready());
+  t.is(r.get(threadKey(post)), UNKNOWN);
+  r.open(post);
+  await until(() => r.get(threadKey(post)) !== UNKNOWN);
+  t.is((r.get(threadKey(post)) as { q?: string }).q, "Welcome to the lounge");
+  t.deepEqual(asked, [post]);
+  const threadReads = () => reads(f).filter((x) => x.tier === "threads");
+  t.deepEqual(
+    threadReads().map((x) => [x.log, x.threads]),
+    [[`space:${lounge}`, [post]]],
+    "one read, of the thread's channel only",
+  );
+
+  // a thread the server names no channel for is absent, with no read
+  const nowhere = f.id();
+  r.open(nowhere);
+  await until(() => r.get(threadKey(nowhere)) !== UNKNOWN);
+  t.is(r.get(threadKey(nowhere)), undefined);
+  t.is(threadReads().length, 1);
 });
 
 test("signed out: every open channel through the same source, no private channel, no writes and no client id", async (t) => {

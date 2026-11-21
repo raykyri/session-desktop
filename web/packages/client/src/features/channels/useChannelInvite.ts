@@ -12,11 +12,13 @@
 //   tab's `sessionStorage` for the page load after it, and the account joins
 //   then;
 // - an account without an invite: the code step opens, and an account that
-//   redeems an invite in the dialog joins next.
+//   redeems an invite in the dialog joins next; one that signed up with an
+//   account invite gets the profile step first.
 
 import { frozenMessage, type ApiError } from "@session/mutators";
 import { useEffect, useRef } from "react";
 
+import { useMe } from "../../api/account.js";
 import { clearPendingInvite, readPendingInvite } from "../../lib/pendingInvite.js";
 import { useReplica } from "../../replica/ReplicaProvider.js";
 import type { ChannelView } from "../../replica/queries.js";
@@ -44,12 +46,17 @@ export function useChannelInvite(viewer: Viewer, channel: ChannelView | null): v
   const source = useReplica();
   const asked = useRef(false);
   const kind = viewer.kind;
+  // a waiting account back from signing up with an account invite gets the
+  // profile step (`useAccountDialogs`) and joins once it is a member
+  const pendingInvite = useMe().data?.pendingInvite ?? null;
+  const holdsInvite = viewer.kind === "waiting" && pendingInvite !== null;
   const id = channel?.id;
   const name = channel?.name;
   const joined = channel?.joined ?? false;
   useEffect(() => {
     const invite = readPendingInvite();
     if (invite?.kind !== "channel" || id === undefined || invite.channel !== name) return;
+    if (holdsInvite) return;
     if (kind !== "member") {
       if (!asked.current) {
         asked.current = true;
@@ -68,5 +75,5 @@ export function useChannelInvite(viewer: Viewer, channel: ChannelView | null): v
         showToast(linkJoinMessage(outcome.error, name), { alert: true });
       }
     });
-  }, [source, kind, id, name, joined]);
+  }, [source, kind, holdsInvite, id, name, joined]);
 }

@@ -44,7 +44,7 @@ import { UNKNOWN, type ReplicaSource, type WriteOutcome } from "../src/replica/s
 import { useDraftsStore } from "../src/stores/drafts.js";
 import { useThreadUiStore } from "../src/stores/threadUi.js";
 
-import { renderApp, waitUntil } from "./helpers.js";
+import { renderApp, waitUntil, waitingTestUser } from "./helpers.js";
 
 let made: FixtureReplica[] = [];
 let prepare: (replica: FixtureReplica) => void = () => {};
@@ -833,6 +833,28 @@ test.serial(
     });
     t.is(sessionStorage.getItem(CHANNEL_INVITE_KEY), null);
     t.deepEqual(readPendingInvite(), { kind: "channel", channel: channel.name, code: "k3v8q2m9" });
+  },
+);
+
+test.serial(
+  "back from signing up with an account invite, a channel link waits for the profile step",
+  async (t) => {
+    const channel = unjoinedChannel();
+    savePendingInvite({ kind: "channel", channel: channel.name, code: "k3v8q2m9" });
+    await renderApp(`/c/${channel.name}`, {
+      user: {
+        ...waitingTestUser(),
+        pendingInvite: { name: "Ines Vidal", handle: "ines.v" },
+      } as never,
+    });
+    const dialog = await screen.findByRole("dialog", { name: "Sign in to Session" });
+    t.truthy(await within(dialog).findByRole("heading", { name: "Create your account" }));
+    t.is(within(dialog).queryByRole("heading", { name: "Join with invite?" }), null);
+    t.deepEqual(readPendingInvite(), {
+      kind: "channel",
+      channel: channel.name,
+      code: "k3v8q2m9",
+    });
   },
 );
 

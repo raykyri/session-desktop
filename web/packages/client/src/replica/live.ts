@@ -6,7 +6,7 @@
 // another person's.
 
 import { getMe, queryKeys } from "../api/account.js";
-import { fetchDirectory, fetchSpaceByName } from "../api/spaces.js";
+import { fetchDirectory, fetchSpaceByName, fetchThreadSpace } from "../api/spaces.js";
 import { appQueryClient } from "../app/queryClient.js";
 import { showToast } from "../features/shell/Toast.js";
 import { viewerHandle, type Viewer } from "../features/shell/viewer.js";
@@ -53,6 +53,7 @@ export function liveReplicaConfig(
         transport,
         directory: fetchDirectory,
         byName: fetchSpaceByName,
+        threadSpace: fetchThreadSpace,
         claim: (userId, register) => tabClientId(userId, register),
         keepClientId: (userId, clientId, lastSeq) =>
           void keepTabClientId(userId, clientId, lastSeq).catch(() => undefined),
