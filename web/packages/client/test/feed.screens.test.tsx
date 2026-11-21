@@ -1,24 +1,15 @@
 // The feed screens on the fixture replica (02 §12.1): the viewer states of
 // the card's footer and the composer, the empty states, the channel header
 // per relation, the About editor stacked over the info dialog, the layout
-// preference, and that a write to one thread re-renders no other.
+// preference. That a write re-renders one row only is in
+// `feed.states.test.tsx`.
 
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import test from "ava";
-import { useRef } from "react";
 
 import { currentToast } from "../src/features/shell/Toast.js";
-import {
-  ReplicaProvider,
-  configureReplica,
-  useReplicaQuery,
-} from "../src/replica/ReplicaProvider.js";
-import {
-  createFixtureReplica,
-  fixtureReplicaConfig,
-  type FixtureReplica,
-} from "../src/replica/fixtureReplica.js";
-import { threadOf } from "../src/replica/queries.js";
+import { configureReplica } from "../src/replica/ReplicaProvider.js";
+import { fixtureReplicaConfig, type FixtureReplica } from "../src/replica/fixtureReplica.js";
 import { makeWrites } from "../src/replica/writes.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
 import { useNavigationStore } from "../src/stores/navigation.js";
@@ -187,30 +178,3 @@ test.serial(
     await waitUntil(t, () => useNavigationStore.getState().layout === "centred", "applied");
   },
 );
-
-test.serial("a write to one thread does not re-render another thread's query", async (t) => {
-  const replica = createFixtureReplica("ines.v", { runMs: null });
-  const renders: Record<string, number> = {};
-  function Probe({ id }: { id: string }) {
-    const count = useRef(0);
-    count.current += 1;
-    renders[id] = count.current;
-    useReplicaQuery((source) => threadOf(source, id), [id]);
-    return null;
-  }
-  render(
-    <ReplicaProvider viewer={{ kind: "member", user: testUser(), isAdmin: false }} source={replica}>
-      <Probe id={FIRST} />
-      <Probe id="01M7HQMDT0RH0G2WHVJHQ6Z8C2" />
-    </ReplicaProvider>,
-  );
-  const before = { ...renders };
-  await makeWrites(replica).save(FIRST, true);
-  await waitUntil(
-    t,
-    () => (renders[FIRST] ?? 0) > (before[FIRST] ?? 0),
-    "the saved thread re-renders",
-  );
-  t.is(renders["01M7HQMDT0RH0G2WHVJHQ6Z8C2"], before["01M7HQMDT0RH0G2WHVJHQ6Z8C2"]);
-  replica.dispose();
-});
