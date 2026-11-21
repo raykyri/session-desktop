@@ -836,6 +836,12 @@ const MUTATIONS: Mutation[] = [
     from: "    if (tx.server && !def.ownLog?.(input) && bannedFrom(tx, sp, tx.me))",
     to: "    if (tx.server && bannedFrom(tx, sp, tx.me))",
   },
+  {
+    name: "M1b-20 a gone thread takes new writes",
+    file: "../mutators/src/rules.ts",
+    from: "  if (p.gone) throw threadDeleted();",
+    to: '  if (p.gone && p.q === "never") throw threadDeleted();',
+  },
 ];
 
 interface Outcome {

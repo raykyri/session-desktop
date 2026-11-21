@@ -20,6 +20,7 @@ import {
   deleted,
   needSpace,
   notAuthor,
+  notGone,
   ownOrReadable,
   preRun,
   queueRun,
@@ -186,6 +187,7 @@ function promote(tx: Tx, id: string, th: string, nodeId: string) {
   const n = readable(tx, nodeKey(nodeId), "node");
   if (n.th !== p.id) throw refuse("NOT_FOUND");
   if (p.mod === "removed" || n.mod === "removed") throw removed();
+  notGone(p);
   if (n.del) throw deleted();
   if (n.mod !== null) throw refuse("PRECONDITION_FAILED", "This branch is hidden.");
   if (n.promoted !== null)

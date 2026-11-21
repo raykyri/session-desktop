@@ -722,16 +722,40 @@ test("R10 (kept): the CONFLICT for a taken name names only the name sent, a priv
   await ok(t, w.as("eve", "spaces.create", { id: w.id(), name: "vault-2" }));
 });
 
-test("R11 (kept): writes on a gone thread follow the mock, and an author may delete a removed thread", async (t) => {
+test("R11: nothing is added to a gone thread, and an author may delete a removed thread", async (t) => {
   const { w, open } = await cast(t);
   const th = await thread(t, w, "otto", open, "ask", "x");
   await ok(t, w.as("otto", "threads.delete", { id: th }));
   t.true((w.get(`thread:${th}`) as ThreadRec).gone);
-  await ok(t, w.as("mel", "saved.set", { kind: "thread", id: th, on: true }));
-  await fork(t, w, "mel", th, "hello?");
+  // the mock took saves and nodes on a gone thread; the build refuses them
+  // (M1b review 10)
+  const before = JSON.stringify([...w.server.dump()]);
+  await refused(
+    t,
+    w.as("mel", "saved.set", { kind: "thread", id: th, on: true }),
+    "PRECONDITION_FAILED",
+  );
+  await refused(
+    t,
+    w.as("mel", "research.forkNode", forkInput(w.id(), th, "hello?")),
+    "PRECONDITION_FAILED",
+  );
+  await refused(
+    t,
+    w.as("mel", "comments.create", { id: w.id(), thread: th, node: "r", t: "hello?" }),
+    "PRECONDITION_FAILED",
+  );
+  t.is(JSON.stringify([...w.server.dump()]), before);
+  const gonePost = await thread(t, w, "otto", open, "post", "x");
+  await ok(t, w.as("otto", "threads.delete", { id: gonePost }));
+  await refused(
+    t,
+    w.as("mel", "research.createPostFollowUp", { id: w.id(), thread: gonePost, t: "late" }),
+    "PRECONDITION_FAILED",
+  );
   const p = w.get(`thread:${th}`) as ThreadRec;
   const pCounts = w.get(`counts:${th}`) as CountsRec;
-  t.deepEqual([p.gone, pCounts.saves, pCounts.r, p.q], [true, 1, 1, ""]);
+  t.deepEqual([p.gone, pCounts.saves, pCounts.r, p.q], [true, 0, 0, ""]);
   const th2 = await thread(t, w, "otto", open, "post", "x");
   await ok(t, w.as("mel", "saved.set", { kind: "thread", id: th2, on: true }));
   await ok(

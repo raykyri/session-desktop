@@ -40,6 +40,12 @@ export const notFound = () => refuse("NOT_FOUND");
 export const stale = () => refuse("STALE");
 export const removed = () => refuse("PRECONDITION_FAILED", "This item was removed.");
 export const deleted = () => refuse("PRECONDITION_FAILED", "This item was deleted.");
+/** A write under a thread its author deleted while nothing was under it
+ * (`gone`): nothing more is added to it (M1b review 10). */
+export const threadDeleted = () => refuse("PRECONDITION_FAILED", "This thread was deleted.");
+export function notGone(p: ThreadRec): void {
+  if (p.gone) throw threadDeleted();
+}
 export const notAuthor = () => refuse("FORBIDDEN", "Only the person who wrote this can change it.");
 
 /** The shared id schema, narrowed to ULIDs whose time fits 48 bits. */

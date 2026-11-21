@@ -24,6 +24,7 @@ import {
   deleted,
   nodeOf,
   notAuthor,
+  notGone,
   ownOrReadable,
   preRun,
   queueRun,
@@ -85,6 +86,7 @@ export const NODES = {
       const p = readableThread(tx, i.thread);
       if (p.k !== "ask") throw bad("thread", "an ask thread");
       if (p.mod === "removed") throw removed();
+      notGone(p);
       const parent = nodeOf(tx, p, i.parent);
       if (parent.mod === "removed") throw removed();
       if (active(runOf(tx, parent)))

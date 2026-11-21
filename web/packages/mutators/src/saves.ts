@@ -1,7 +1,7 @@
 // Saves: a person's saved threads, counted (`01` C1, C2).
 
 import { saveKey } from "./records.js";
-import { M, countSaves, ownMarkSpace, readableThread, removed, ulidS } from "./rules.js";
+import { M, countSaves, notGone, ownMarkSpace, readableThread, removed, ulidS } from "./rules.js";
 import { define } from "./tx.js";
 
 export const SAVES = {
@@ -20,7 +20,9 @@ export const SAVES = {
       i.on ? readableThread(tx, i.id).s : ownMarkSpace(tx, saveKey(tx.me, i.id), i.id),
     can: (tx, i) => {
       if (!i.on || tx.byKey(saveKey(tx.me, i.id))) return;
-      if (readableThread(tx, i.id).mod === "removed") throw removed();
+      const p = readableThread(tx, i.id);
+      if (p.mod === "removed") throw removed();
+      notGone(p);
     },
     run: (tx, i) => {
       const key = saveKey(tx.me, i.id);

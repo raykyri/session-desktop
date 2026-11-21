@@ -503,7 +503,7 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
       inSpace(f, p.s, "member");
       const n = f.dump.get(`node:${from.node}`);
       if (n?.kind !== "node" || !mayRead(f.dump, n, f.me) || n.th !== p.id) return no("NOT_FOUND");
-      if (p.mod === "removed" || n.mod === "removed" || n.del || n.mod !== null)
+      if (p.mod === "removed" || p.gone || n.mod === "removed" || n.del || n.mod !== null)
         no("PRECONDITION_FAILED");
       if (n.promoted !== null || !f.dump.has(`answer:${n.id}`)) no("PRECONDITION_FAILED");
       if (f.idTaken(String(i["id"]))) no("CONFLICT");
@@ -539,14 +539,15 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     }
     const p = seenThread(f, i["id"]);
     inSpace(f, p.s, 0, true);
-    if (!mine && p.mod === "removed") no("PRECONDITION_FAILED");
+    // nothing is added to a thread deleted with nothing under it (`gone`)
+    if (!mine && (p.mod === "removed" || p.gone)) no("PRECONDITION_FAILED");
   },
   "research.forkNode": (f, i) => {
     const p = seenThread(f, i["thread"]);
     inSpace(f, p.s, "member");
     runPre(f, i);
     if (p.k !== "ask") no("BAD_REQUEST");
-    if (p.mod === "removed") no("PRECONDITION_FAILED");
+    if (p.mod === "removed" || p.gone) no("PRECONDITION_FAILED");
     const parent = seenNode(f, p, i["parent"]);
     if (parent.mod === "removed") no("PRECONDITION_FAILED");
     // a parent whose run has not ended has no answer to build on (`03` G1)
@@ -600,7 +601,7 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     const p = seenThread(f, i["thread"]);
     inSpace(f, p.s, "member");
     if (p.k !== "post") no("BAD_REQUEST");
-    if (p.mod === "removed") no("PRECONDITION_FAILED");
+    if (p.mod === "removed" || p.gone) no("PRECONDITION_FAILED");
     if (i["parent"] !== undefined) {
       const top = f.dump.get(`reply:${i["parent"] as string}`);
       if (
@@ -621,7 +622,7 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     const p = seenThread(f, i["thread"]);
     inSpace(f, p.s, "member");
     if (p.k !== "ask") no("BAD_REQUEST");
-    if (p.mod === "removed") no("PRECONDITION_FAILED");
+    if (p.mod === "removed" || p.gone) no("PRECONDITION_FAILED");
     if (seenNode(f, p, i["node"]).mod === "removed") no("PRECONDITION_FAILED");
     if (i["parent"] !== undefined) {
       const top = f.dump.get(`comment:${i["parent"] as string}`);

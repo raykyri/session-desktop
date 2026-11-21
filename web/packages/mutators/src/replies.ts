@@ -12,6 +12,7 @@ import {
   deleted,
   notAuthor,
   notFound,
+  notGone,
   ownOrReadable,
   readable,
   readableThread,
@@ -36,6 +37,7 @@ export const REPLIES = {
       const p = readableThread(tx, i.thread);
       if (p.k !== "post") throw bad("thread", "a post");
       if (p.mod === "removed") throw removed();
+      notGone(p);
       if (i.parent !== undefined) {
         const top = readable(tx, `reply:${i.parent}`, "reply");
         if (top.th !== p.id || top.parent !== null) throw notFound();

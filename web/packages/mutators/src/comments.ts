@@ -15,6 +15,7 @@ import {
   nodeOf,
   notAuthor,
   notFound,
+  notGone,
   ownOrReadable,
   readable,
   readableThread,
@@ -37,6 +38,7 @@ export const COMMENTS = {
       const p = readableThread(tx, i.thread);
       if (p.k !== "ask") throw bad("thread", "an ask thread");
       if (p.mod === "removed") throw removed();
+      notGone(p);
       const node = nodeOf(tx, p, i.node);
       if (node.mod === "removed") throw removed();
       if (i.parent !== undefined) {
