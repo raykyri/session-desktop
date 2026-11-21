@@ -929,12 +929,16 @@ async function sequence(t: ExecutionContext, seed: number): Promise<boolean> {
       const author = PEOPLE.find((x) => x === u);
       const later = (name: string, input: (c: Ctx) => unknown) =>
         author && c.plan.push({ u: author, name, input, what: `${name} of its own` });
-      const item = { "research.createPostFollowUp": "reply", "comments.create": "comment" } as const;
+      const item = {
+        "research.createPostFollowUp": "reply",
+        "comments.create": "comment",
+      } as const;
       if (e.name in item) {
         const kind = item[e.name as keyof typeof item];
         const id = (e.input as { id: string }).id;
         const roll = c.r();
-        if (roll < 0.2) later(`${kind === "reply" ? "replies" : "comments"}.delete`, () => ({ id }));
+        if (roll < 0.2)
+          later(`${kind === "reply" ? "replies" : "comments"}.delete`, () => ({ id }));
         else if (roll < 0.4)
           later(`${kind === "reply" ? "replies" : "comments"}.update`, (c) => ({
             id,
