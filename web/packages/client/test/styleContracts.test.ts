@@ -16,6 +16,7 @@ const tokensCss = readFileSync(join(stylesDirectory, "tokens.css"), "utf8");
 const proseCss = readFileSync(join(stylesDirectory, "prose.css"), "utf8");
 const appCss = readFileSync(join(stylesDirectory, "app.css"), "utf8");
 const shellCss = readFileSync(join(stylesDirectory, "shell.css"), "utf8");
+const spacesCss = readFileSync(join(stylesDirectory, "spaces.css"), "utf8");
 
 const COLOR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\brgba?\(/;
 
@@ -90,6 +91,7 @@ test("no color literals outside tokens.css", (t) => {
     ["prose.css", proseCss],
     ["app.css", appCss],
     ["shell.css", shellCss],
+    ["spaces.css", spacesCss],
   ] as const) {
     css.split("\n").forEach((line, index) => {
       // Two escape hatches, both spelled on the line that uses them: colors

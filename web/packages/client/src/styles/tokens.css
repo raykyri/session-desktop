@@ -220,6 +220,12 @@
   --tree-rail: #373634;
   --tree-rail-on: color-mix(in srgb, var(--accent-color) 55%, var(--tree-rail));
   --tree-dot-selected: var(--accent-color);
+  /* The mockup's card and focused-composer shadows (`--shadow`,
+     `--shadow-soft`). */
+  --card-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --card-shadow-soft: 0 3px 10px rgba(0, 0, 0, 0.22);
+  /* The mockup's dialog scrim (`.scrim`), the same in both appearances. */
+  --feed-scrim: rgba(10, 12, 14, 0.32);
 
   /* Amber split-focus indicators are deliberately theme-independent so the
      active-pane cue reads the same across themes. */
@@ -575,6 +581,9 @@
   --tree-rail: #e1dcd6;
   --tree-rail-on: color-mix(in srgb, var(--accent-color) 55%, var(--tree-rail));
   --tree-dot-selected: var(--accent-color);
+  --card-shadow: 0 1px 2px rgba(60, 40, 20, 0.06), 0 0 0 1px rgba(60, 40, 20, 0.05);
+  --card-shadow-soft: 0 3px 10px rgba(20, 24, 26, 0.05);
+  --feed-scrim: rgba(10, 12, 14, 0.32);
 
   --split-border-hover: rgba(154, 107, 18, 0.65);
   --split-border-active: rgba(154, 107, 18, 0.85);

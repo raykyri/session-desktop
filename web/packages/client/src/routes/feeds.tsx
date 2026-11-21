@@ -1,31 +1,26 @@
-// The feed screens (02 §2.1, §3.1): Home, a channel and Saved. Their rows,
-// the channel header and the composer read the replica (02 §9) and are built
-// with W3.1-W6.1; until then each feed is the layout frame with one
-// placeholder row, so the shell, the bar's alignment and the footer are in
-// place.
+// The feed screens (02 §2.1, §3.1): Home, a channel and Saved, each with the
+// thread address in its search (`?t=&sel=`).
 
-import { FeedFrame, FeedPlaceholder } from "../features/shell/Frames.js";
+import { getRouteApi } from "@tanstack/react-router";
+
+import { FeedPage } from "../features/feed/FeedPage.js";
+
+const home = getRouteApi("/_shell/");
+const channel = getRouteApi("/_shell/c/$name");
+const saved = getRouteApi("/_shell/saved");
 
 export function HomeFeedPage() {
-  return (
-    <FeedFrame>
-      <FeedPlaceholder />
-    </FeedFrame>
-  );
+  const { t, sel } = home.useSearch();
+  return <FeedPage kind="home" t={t} sel={sel} />;
 }
 
 export function ChannelFeedPage() {
-  return (
-    <FeedFrame>
-      <FeedPlaceholder />
-    </FeedFrame>
-  );
+  const { name } = channel.useParams();
+  const { t, sel } = channel.useSearch();
+  return <FeedPage key={name} kind="channel" name={name} t={t} sel={sel} />;
 }
 
 export function SavedFeedPage() {
-  return (
-    <FeedFrame>
-      <FeedPlaceholder />
-    </FeedFrame>
-  );
+  const { t, sel } = saved.useSearch();
+  return <FeedPage kind="saved" t={t} sel={sel} />;
 }

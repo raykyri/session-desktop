@@ -1,14 +1,16 @@
 // What the app bar shows that is not the viewer: the channels for the strip,
 // the Saved count, the unread notification count and the usage reading.
 //
-// The app bar's parts take these as props. `useShellData` is the stub that
-// feeds them until the replica lands (02 §9.1): `useChannels(scope)` for the
-// strip, the save records of the user log for the Saved count,
-// `useNotifications()` for the unread count, and `useUsage()` (`usage.get`,
-// M5b) for the ring. Until then the strip is empty, both counts are zero and
-// the ring reads an unused allowance.
+// The app bar's parts take these as props; `useShellData` reads them from
+// the replica (02 §9.1).
 
-import { useNavigationStore, type ChannelScope } from "../../stores/navigation.js";
+import { useCallback, useEffect } from "react";
+
+import { useOnlineData, useReplicaQuery } from "../../replica/ReplicaProvider.js";
+import { savedCountOf, unreadCountOf, useChannels, usePrefsLayout } from "../../replica/queries.js";
+import { UNKNOWN } from "../../replica/source.js";
+import { useWrites } from "../../replica/writes.js";
+import { useNavigationStore, type ChannelScope, type FeedLayout } from "../../stores/navigation.js";
 
 import type { UsageReading } from "./usage.js";
 import { canWrite, type Viewer } from "./viewer.js";
@@ -66,15 +68,57 @@ export function channelsInScope(all: readonly ShellChannel[], scope: ChannelScop
 
 const EMPTY_CHANNELS: ShellChannel[] = [];
 
-/** Stub source of the app bar's data; see the head of this file. */
+/** The app bar's data, from the replica (02 §9.1: `useChannels(scope)`, the
+ * save records of the user log, `useNotifications()`) and the online data
+ * (`useUsage()`; the fixture build's reading until M5b). */
 export function useShellData(viewer: Viewer): ShellData & { scope: ChannelScope } {
   const stored = useNavigationStore((state) => state.scope);
   const scope = effectiveScope(viewer, stored);
+  const channels = useChannels();
+  const savedCount = useReplicaQuery(savedCountOf, []);
+  const unreadCount = useReplicaQuery(unreadCountOf, []);
+  const online = useOnlineData();
+  const all =
+    channels === UNKNOWN
+      ? EMPTY_CHANNELS
+      : channels.map((c) => ({
+          id: c.id,
+          name: c.name,
+          private: c.private,
+          joined: c.joined,
+          owned: c.owned,
+        }));
   return {
     scope,
-    channels: channelsInScope(EMPTY_CHANNELS, scope),
-    savedCount: 0,
-    unreadCount: 0,
-    usage: { used: 0, allowance: WEEKLY_ALLOWANCE, resetsAt: null },
+    channels: channelsInScope(all, scope),
+    savedCount: savedCount === UNKNOWN ? 0 : savedCount,
+    unreadCount: unreadCount === UNKNOWN ? 0 : unreadCount,
+    usage: online.usage ?? { used: 0, allowance: WEEKLY_ALLOWANCE, resetsAt: null },
   };
+}
+
+/**
+ * The feed layout (02 §3.1): the `prefs` record of the user log, applied to
+ * `navigation` so the first paint does not wait for the replica. A change
+ * from the replica (this account's other tab or device) is applied as it
+ * arrives; the toggle applies at once and writes one `prefs.set`.
+ */
+export function useLayoutPreference(viewer: Viewer): {
+  layout: FeedLayout;
+  toggle: () => void;
+} {
+  const layout = useNavigationStore((state) => state.layout);
+  const setLayout = useNavigationStore((state) => state.setLayout);
+  const stored = usePrefsLayout();
+  const writes = useWrites();
+  useEffect(() => {
+    if (stored === "centred" || stored === "wide") setLayout(stored);
+  }, [stored, setLayout]);
+  const toggle = useCallback(() => {
+    const next: FeedLayout =
+      useNavigationStore.getState().layout === "centred" ? "wide" : "centred";
+    setLayout(next);
+    if (canWrite(viewer)) void writes.setLayout(next);
+  }, [setLayout, viewer, writes]);
+  return { layout, toggle };
 }

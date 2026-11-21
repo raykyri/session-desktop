@@ -1,19 +1,10 @@
-// The page screens of 02 §2.1 whose content needs the replica or a
-// procedure the server does not have yet: Browse (W6.6, `spaces.directory`),
-// Invites (W7.1, `members.tree` and account invites), Usage (W8.1,
+// The page screens of 02 §2.1 whose content needs a procedure the server
+// does not have yet: Invites (W7.1, `members.tree` and account invites), Usage (W8.1,
 // `usage.get`), Notifications (W2.6, the user log) and Invite required
 // (W7.3, the redeem call). Each is its heading, a placeholder line and the
 // site footer.
 
 import { NotBuiltYet, PageFrame } from "../features/shell/Frames.js";
-
-export function BrowsePage() {
-  return (
-    <PageFrame title="Browse channels">
-      <NotBuiltYet />
-    </PageFrame>
-  );
-}
 
 export function InvitesPage() {
   return (
@@ -46,3 +37,5 @@ export function WelcomePage() {
     </PageFrame>
   );
 }
+
+export { BrowsePage } from "../features/channels/BrowsePage.js";
