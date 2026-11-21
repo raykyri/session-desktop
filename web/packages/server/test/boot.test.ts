@@ -4,7 +4,7 @@
 // maintenance runs the retention at once; a restored database file boots
 // with a new history id.
 
-import { copyFileSync } from "node:fs";
+import { copyFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { checkRestore, closeDatabase, databaseGeneration, openDatabase } from "@session/db";
@@ -59,6 +59,8 @@ test("boot: the restore check, open usage rows, running runs, then maintenance",
     .run(newId(), Date.now() - 8 * 24 * 3600 * 1000);
   const cursor = (await mona.snapshot(`space:${open}`)).cursor;
   const report = bootServer({ databasePath: h.config.databasePath, sync: h.sync, ledger, logger });
+  // the maintenance's checkpoint truncated the WAL
+  t.is(statSync(`${h.config.databasePath}-wal`).size, 0);
   t.is(report.closedRows, 1);
   t.is(report.interrupted, 1);
   // the usage row is closed by the boot
@@ -96,7 +98,7 @@ test("boot: the restore check, open usage rows, running runs, then maintenance",
   t.like(again, { closedRows: 0, interrupted: 0, restore: { replaced: false } });
 });
 
-test("boot: a restored database file bumps every epoch, and a cursor from before resyncs", async (t) => {
+test("boot: a restored database file gets a new history id, and a cursor from before resyncs", async (t) => {
   const h = createHarness(t);
   const { mona, open } = await channels(h);
   bootServer({

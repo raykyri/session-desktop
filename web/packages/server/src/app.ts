@@ -131,6 +131,11 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
     if (!timingSafeEqualString(offered, expected)) {
       return c.text("unauthorized\n", 401, { "WWW-Authenticate": "Bearer" });
     }
+    // `?gc=1` collects garbage first, so the heap gauge is what is live: only
+    // in a process started with `--expose-gc` (the load check's), never in
+    // the production image, which does not pass it
+    const gc = (globalThis as { gc?: () => void }).gc;
+    if (c.req.query("gc") === "1" && typeof gc === "function") gc();
     return c.text(
       renderMetrics({
         deps,

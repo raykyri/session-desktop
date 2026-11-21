@@ -5,13 +5,16 @@ delete this file in the same commit.
 
 It adds a `conformance` job: replica-proto's whole suite over HTTP against the
 server on a temp SQLite file (`web/packages/server/test/conformance/`, plan
-01 A1). The server's `npm test` leaves that directory out because it takes
-about 30 minutes on 4 cores, so the `test` job does not run it.
+01 A1), the batched convergence configuration included, and the check that
+every pattern of the server's mutation set matches its code once and names
+tests that exist (`npm run mutate -- --check`, seconds). The server's `npm
+test` leaves the conformance directory out because it takes about 30
+minutes on 4 cores, so the `test` job does not run it.
 
 diff --git a/.github/workflows/web.yml b/.github/workflows/web.yml
 --- a/.github/workflows/web.yml
 +++ b/.github/workflows/web.yml
-@@ -46,6 +46,22 @@ jobs:
+@@ -46,6 +46,24 @@ jobs:
        - run: npm ci
        - run: npm test
 
@@ -29,6 +32,8 @@ diff --git a/.github/workflows/web.yml b/.github/workflows/web.yml
 +          cache: npm
 +          cache-dependency-path: web/package-lock.json
 +      - run: npm ci
++      # the mutation set's patterns and expected tests (`test/mutations/`)
++      - run: npm run mutate --workspace @session/server -- --check
 +      - run: npm test --workspace @session/server -- 'test/conformance/**'
 +
    # The Playwright suite (`web/docs/12-testing-linting-ci.md` §3.6): one real

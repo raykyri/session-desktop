@@ -204,10 +204,14 @@ kind and checks it against D1's kinds).
 
 **D4. Erasure at rest.** Set `PRAGMA secure_delete = ON` so deleted rows are
 overwritten in the file, and run `erase` paths as deletes of the affected
-`records` rows plus tombstones. Acceptance: the replica-proto storage scan
+`records` rows plus tombstones. The WAL keeps the frames written before a
+delete until a checkpoint, so a commit that deletes a record or writes a
+tombstone is followed by `wal_checkpoint(TRUNCATE)`, skipped without waiting
+when a reader holds an older snapshot, and the hourly maintenance runs it
+again (Y8). Acceptance: the replica-proto storage scan
 (`inv6-removed-content.test.ts`) is ported to scan the bytes of the SQLite
-file and its WAL, after a checkpoint, for a removed thread's marker text and
-finds none. Litestream generations still hold the text until their retention
+file and its WAL for a removed thread's marker text and finds none, with no
+checkpoint run by the test. Litestream generations still hold the text until their retention
 expires; there is no retention requirement for backups (§9 q3; 05 §6 S1).
 
 ### 2.2 Migrations
@@ -224,27 +228,39 @@ launch (decision P19) and staging is reset after the squash, both with
 Acceptance: `db:generate` produces no diff in CI; `migrations.test.ts`
 migrates a fresh database, and after the squash finds no research table.
 
-**D6. Log epochs and restores.** A log's epoch increments when its history
-is replaced: the database is restored from Litestream, or (in the
-prototype suite) the `replaceHistory` test hook replaces a log's history
-("a log whose history was replaced resyncs every reader into the current
-state"). Cursors older than 30 days resync through `servedAt` (Y5), not
-through the epoch. Visibility is fixed at creation in v1 (C11), so in
-production only a restore bumps epochs. The prototype's visibility-change
-path, its test "a space that becomes closed resyncs every reader" and the
-mutation pattern X2 ("opening a space admits banned requesters") were
-removed in M1a (U6); the epoch path is tested through `replaceHistory`. A restore is detected at boot (decision E6): the
-server compares the Litestream generation id recorded in `server_meta` with
-the generation Litestream reports for the file; a different id, or none
-recorded, increments every log's epoch, so every cursor issued before the
-restore resyncs instead of pulling from a version the restored database has
-reused, and the current id is then recorded. Litestream also starts a new
-generation without a restore (for example after losing its WAL position);
-that bumps epochs needlessly and costs one resync per client. No manual
-runbook step is needed. Acceptance: a test restores an older copy of the
-database file with a different generation id, boots, and finds that a
-pre-restore cursor answers `resync`; a boot with an unchanged id bumps
-nothing. `runbooks/restore.md` states that the check runs at boot.
+**D6. Log epochs, the history id and restores.** A cursor token and an
+event id hold two history values, and a pull whose token holds either value
+out of date resyncs. A log's epoch (`log_epochs`) increments when the
+history of that one log is replaced; in v1 only the `replaceHistory` test
+hook does that ("a log whose history was replaced resyncs every reader into
+the current state"). Visibility is fixed at creation in v1 (C11). The
+prototype's visibility-change path, its test "a space that becomes closed
+resyncs every reader" and the mutation pattern X2 ("opening a space admits
+banned requesters") were removed in M1a (U6). The database's history id is
+a random 16-byte value in `server_meta` (`history_id`), replaced when the
+database is restored. Cursors older than 30 days resync through `servedAt`
+(Y5), not through either value.
+
+A restore is detected at boot (decision E6): the server compares the
+generation recorded in `server_meta` with the generation of the file it
+opened (the Litestream generation id, or the file's identity under
+Litestream 0.5); a different one, or none recorded, replaces the history id
+with a new random one, and the current generation is then recorded. A
+random id, rather than an incremented counter per log, also resyncs the
+cursors of a log that has no rows in the restored file, and the cursors
+served after an earlier restore from the same backup (the backup holds the
+old id; the new one is random). Litestream also starts a new generation
+without a restore (for example after losing its WAL position); that
+replaces the id needlessly and costs one resync per client. A restore that
+keeps the file's identity (bytes copied over the same file, a volume
+snapshot) is not detected; the operator runs `db:admin --new-history`
+before the boot, which the next boot's check honours. Acceptance: a test
+restores an older copy of the database file, boots, and finds that a
+pre-restore cursor answers `resync`, for a log with no rows in the backup
+and for a cursor of an earlier restore from the same backup; a boot of the
+same file changes nothing; the operator's request replaces the id at the
+next boot. `runbooks/restore.md` states that the check runs at boot and
+gives the command.
 
 **D7. Record shape versions.** A record kind's stored shape changes through a
 versioned backfill in `web/packages/db/src/backfills/` that rewrites `body`
@@ -543,7 +559,7 @@ pulled as a `del` (that would expose its key); what a reader may read
 changes only with their own membership or a log's history, and the reader
 resyncs then (`mutators/src/access.ts`). Every read carries `serverTime`. `pull` answers `resync` for a
 token not sealed by this server (current or previous key), sealed for
-another reader, log or epoch, served more than 30 days ago, or when the
+another reader, log, epoch or history id (D6), served more than 30 days ago, or when the
 reader's scope changed since (their membership in the space; for a
 user log, in any space, or a space opening or closing that a row is about).
 Pulls are not tiered, as in the prototype (R2). Acceptance:
@@ -552,9 +568,14 @@ many writes happened nor when"), `inv6` (tombstones and the 30-day
 boundary), `inv7-replica-per-user` and the read oracle pass.
 
 **Y6. Cursor tokens.** AES-256-GCM with a random IV per token, over `{ log,
-reader, epoch, version, server head, servedAt }`, sealed with
-`SESSION_CURSOR_KEY`; `SESSION_CURSOR_KEY_PREVIOUS` is accepted for 30 days
-after a rotation. Token length depends only on the lengths of the log id and
+reader, epoch, version, server head, servedAt, history id }` (D6), sealed
+with `SESSION_CURSOR_KEY` and additional data that names the kind of value,
+so an event id (Y7) does not open as a token nor a token as an event id;
+`SESSION_CURSOR_KEY_PREVIOUS` is accepted for 30 days after a rotation, whose
+time `SESSION_CURSOR_KEY_ROTATED_AT` gives as an ISO time not in the future.
+In production the cursor key is required and may be neither the public
+development key nor `SESSION_SECRET_KEY`, and the previous key may not be
+the current one. Token length depends only on the lengths of the log id and
 the reader's handle. Acceptance: inv3 "a forged cursor resyncs" and "a read
 carries no version…", review-r2 `T1`, and a test that a token sealed with
 the previous key pulls, and resyncs once that key is removed.
@@ -562,26 +583,37 @@ the previous key pulls, and resyncs once that key is removed.
 **Y7. SSE.** `GET /api/sync/events` streams `text/event-stream`, read by the
 client with `fetch` (so it can send the protocol header; an `EventSource`
 cannot). Each `changes` event carries pull batches for one or
-more logs; its event id is an encrypted map `{ log: cursorToken }`, so a
-reconnect with `Last-Event-ID` resumes every log. Run deltas travel on the
+more logs; its event id is an encrypted map `{ log: cursorToken }` with the
+reader's handle and the history id, so a reconnect with `Last-Event-ID`
+resumes every log; an id opens for its own reader only, and one sealed under
+another history id resyncs each of its logs. A `resync` event's id holds the
+other logs' cursors as they were before the batch of the same flush, so a
+connection lost between the two events loses no change. Last-Event-ID and
+`Session-Cursors` together name at most 64 logs. Run deltas travel on the
 same stream as ephemeral events without ids (ADR-22; 03 §5). After a commit
 the server wakes subscribers of the affected logs and runs each
 subscriber's pull under that subscriber's own scope, coalesced to at most one
 batch per 100 ms per connection. A connection whose queue exceeds 2,048
-events is closed, as in `server/src/events/bus.ts`. The stream requires a
-registered client id; signed-out and `waiting` readers pull instead (R5).
-Acceptance: two readers with different scopes on one space receive different
-batches for the same commit; a reconnect with the last event id loses no
-change; a member removed while connected gets `resync` for the space log and
-no record written after the removal.
+events or 4 MiB is closed, as is the older stream of a client id that opens
+another; a closed stream leaves the server's set of streams at once and its
+response is aborted, so a write blocked on a slow socket is released. The
+session check every 30 s reads the session without renewing it. The stream
+requires a registered client id; signed-out and `waiting` readers pull
+instead (R5). Acceptance: two readers with different scopes on one space
+receive different batches for the same commit; a reconnect with the last
+event id loses no change; a member removed while connected gets `resync`
+for the space log and no record written after the removal, and a removal and
+another log's write in one flush lose nothing across a reconnect after the
+`resync` event.
 
 **Y8. Retention jobs.** Hourly: prune tombstones over 30 days, recorded
 answers over 7 days, clients idle 7 days, and `modlog` entries over 180
-days (C12; replicated deletes). `registry` is never pruned. These are
-scheduled maintenance in the server process, not effects (S4 removed).
-Acceptance: one test per table with an injected clock, at the boundary
-millisecond (as inv6 "a delete committed in the same millisecond as a
-cursor…").
+days (C12; replicated deletes), then `wal_checkpoint(TRUNCATE)` (D4).
+`registry` is never pruned. These are scheduled maintenance in the server
+process, not effects (S4 removed). Acceptance: one test per table with an
+injected clock, at the boundary millisecond (as inv6 "a delete committed in
+the same millisecond as a cursor…"), on the in-memory store and on
+`SqliteStore`.
 
 ### 4.3 Client half
 
@@ -716,10 +748,14 @@ Acceptance: `web/packages/server/test/conformance/` implements replica-proto's
 `ServerFactory` over HTTP against a server on a temp SQLite file with an
 injected clock. The `TestServer` hooks as U6 leaves them (`dump`, `jobs`
 over queued run records, the storage scan, clock and random-source
-control, and `replaceHistory`, which replaces a log's history and bumps its
-epoch as a restore does; `work` is removed with the effect worker) are served by a route
-mounted only when `NODE_ENV=test`. Every replica-proto test file passes
-against it unchanged, the oracles and effect model included. The mutation runner
+control, and `replaceHistory`, which replaces one log's history and bumps
+its epoch (D6); `work` is removed with the effect worker) are served by a
+route mounted only with `SESSION_TEST_ROUTES=1`, which the configuration
+refuses unless `NODE_ENV=test` and `SESSION_PUBLIC_ORIGIN` is a loopback
+origin. Every replica-proto test file passes against it unchanged, the
+oracles and effect model included; one convergence configuration also runs
+with each envelope sent in a batch after the client's recent applied ones,
+under the default body and batch limits. The mutation runner
 mutates the prototype's `src/` only; the server's own mutation set is
 `05-delivery.md` M3.
 
@@ -728,10 +764,24 @@ mutates the prototype's `src/` only; the server's own mutation set is
 old client. Acceptance: `npm run check` passes with the routers gone.
 
 **A3.** Rate limits: `apply` counts envelopes against the 60 writes per
-minute per user of `06-auth-and-users.md` §8 (a batch of 20 counts 20);
-`snapshot` 30 per minute per user; one SSE connection per client id; limits
-keyed by IP (04 Z1) use the /64 prefix for IPv6. These answer
-`TOO_MANY_REQUESTS`, unrecorded (Y2). Acceptance: middleware tests.
+minute per user of `06-auth-and-users.md` §8 (a batch of 20 counts 20), the
+bucket tRPC mutations take from too; `snapshot`, `pull` and `read` take from
+the snapshots bucket, 30 per minute per user or per IP signed out, a `read`
+costing 1 plus 1 per 10 reads that are not `threads` reads; a `read` of
+`threads` reads only takes one token from its own bucket (120 a minute per
+user, 240 per IP signed out), names each log once, and names at most 20
+logs and 100 thread ids; one SSE connection per client id, 10 per user, and
+30 stream opens a minute per user; limits keyed by IP (04 Z1) use the /64
+prefix for IPv6. The limits are taken in the routes, after the route
+matched. These answer `TOO_MANY_REQUESTS`, unrecorded (Y2), as `{ code,
+message, serverTime }` with `Retry-After` in seconds; `apply` answers the
+envelopes past the budget in place when the budget admits some. A `read`
+does at most 4 MB of answers or 250 ms of reads; the reads past that answer
+`TOO_MANY_REQUESTS` in their place, as a read that fails answers
+`INTERNAL_SERVER_ERROR` in its place. A signed-out or `waiting` caller's
+`apply` and `register` are answered 401 or 403 before the body is read.
+Acceptance: route tests (`server/test/sync.limits.test.ts`,
+`sync.read.test.ts`).
 
 ## 7. Contract changes from the mockup
 

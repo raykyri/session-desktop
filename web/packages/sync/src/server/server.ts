@@ -824,11 +824,16 @@ export class SyncServer implements ServerHalf {
       const mine = store.logRow(log, memberKey(log.slice(6), u));
       return mine !== undefined && mine.version > version;
     }
+    // each space's epoch is read once, however many rows are about it
+    const starts = new Map<string, number>();
     for (const row of store.logRows(log, 0)) {
       if (row.key.startsWith("member:") && row.version > version) return true;
       const rec = store.byKey(row.key);
       const a = rec ? audience(store, rec) : store.tombstone(row.key);
-      if (a && a.sp !== null && store.epoch(`space:${a.sp}`).start > head) return true;
+      if (!a || a.sp === null) continue;
+      let start = starts.get(a.sp);
+      if (start === undefined) starts.set(a.sp, (start = store.epoch(`space:${a.sp}`).start));
+      if (start > head) return true;
     }
     return false;
   }

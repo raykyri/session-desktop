@@ -347,13 +347,15 @@ export class HttpTestServer implements TestServer {
     actor: Actor | null,
     options: { clientId?: string } = {},
   ): Promise<RegisterResult> {
-    const { json } = await this.#request<RegisterResult>(
+    const { json } = await this.#request<RegisterResult | { code: string }>(
       "POST",
       "/api/sync/register",
       actor,
       options,
     );
-    return json;
+    // a refusal of the request (signed out: 401 before the body is read; the
+    // day's registrations: 429) is the registration's answer
+    return "code" in json ? { ok: false, error: json as never } : json;
   }
 
   async apply(actor: Actor | null, envelope: Envelope): Promise<ApplyResult> {

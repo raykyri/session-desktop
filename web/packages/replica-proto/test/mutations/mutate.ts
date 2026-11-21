@@ -277,8 +277,8 @@ const MUTATIONS: Mutation[] = [
     // replaced is the restored one (`replaceHistory`)
     name: "N6 user log: a space log's history being replaced is not noticed",
     file: "../sync/src/server/server.ts",
-    from: "      if (a && a.sp !== null && store.epoch(`space:${a.sp}`).start > head) return true;",
-    to: "      if (a && a.sp !== null && store.epoch(`space:${a.sp}`).start > head + 1e9) return true;",
+    from: "      if (start > head) return true;",
+    to: "      if (start > head + 1e9) return true;",
   },
   {
     name: "N7 user log: a membership change is not noticed",

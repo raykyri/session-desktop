@@ -73,7 +73,7 @@ function stalled(port: number, cookie: string, clientId: string, cursors: object
   });
 }
 
-test("a stream whose client stops reading is closed at its queue bound and leaves the hub; the HTTP server then closes", async (t) => {
+test("a stream whose client stops reading is closed at its queue bound, leaves the hub, and its route ends", async (t) => {
   const h = createHarness(t);
   const { mona, open } = await channels(h);
   await mona.register();
@@ -86,6 +86,13 @@ test("a stream whose client stops reading is closed at its queue bound and leave
   const port = typeof address === "object" && address ? address.port : 0;
   const socket = await stalled(port, mona.cookie, mona.clientId, { [log]: cursor });
   t.teardown(() => socket.destroy());
+  // calls of `remove` for this stream: the hub's, then the route's own
+  const ended = { n: 0 };
+  const remove = h.sync.hub.remove.bind(h.sync.hub);
+  h.sync.hub.remove = (st) => {
+    if (st.u === "mona") ended.n += 1;
+    remove(st);
+  };
   for (let k = 0; k < 50 && h.sync.hub.size() === 0; k += 1) await sleep(20);
   t.is(h.sync.hub.size(), 1);
   // deltas the socket cannot take: the writes block, the queue fills
@@ -96,9 +103,11 @@ test("a stream whose client stops reading is closed at its queue bound and leave
   }
   t.is(h.sync.hub.size(), 0, "the stream was closed and removed");
   t.is(h.sync.hub.streamsOf("mona"), 0);
-  const started = Date.now();
-  await closeServer(server, 500);
-  t.true(Date.now() - started < 2000);
+  // the response was aborted: the route's write, blocked on the socket, was
+  // released and the route ended (its last step removes the stream again)
+  for (let k = 0; k < 50 && ended.n < 2; k += 1) await sleep(20);
+  t.is(ended.n, 2, "the route ended");
+  await closeServer(server, 300);
   t.true(CONNECTION_GRACE_MS > 0);
 });
 
