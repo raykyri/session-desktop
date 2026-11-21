@@ -154,7 +154,13 @@ function outOfBounds(v: unknown, maxDepth: number, maxNodes: number): "deep" | "
 const REPLACED = "*";
 
 /** The kinds a summary leaves out: what is under a thread. */
-const CONTENT_KINDS: ReadonlySet<string> = new Set(["node", "answer", "reply", "comment", "run"]);
+const CONTENT_KINDS: ReadonlySet<StoredRecord["kind"]> = new Set([
+  "node",
+  "answer",
+  "reply",
+  "comment",
+  "run",
+]);
 
 /** The logs a record with this audience is written to: its space's log
  * (none for saves and notifications, which live in user logs only) and its
@@ -195,6 +201,10 @@ export interface SyncServerOptions {
   cursorKeys?: CursorKeys;
   /** The web window of `window` snapshots (R1). */
   window?: WindowSettings;
+  /** The lowest envelope `protocolVersion` accepted (`SESSION_MIN_PROTOCOL`,
+   * `01` S1): below it an envelope answers UPGRADE_REQUIRED. Default: this
+   * build's `MIN_PROTOCOL_VERSION`. */
+  minProtocol?: number;
   /** Expire answers, tombstones and clients at the start of every call, not
    * only when `retain` runs (the prototype's behaviour, which its suite
    * reads through `scanStorage`). */
@@ -223,6 +233,7 @@ export class SyncServer implements ServerHalf {
   private readonly expireEveryCall: boolean;
   private readonly clientIdleTtl: number;
   private readonly registrationsPerDay: number;
+  private readonly minProtocol: number;
   /** The server's time: never decreasing, so every table's expiry order is
    * the order of its times. */
   private lastAt: number;
@@ -237,6 +248,7 @@ export class SyncServer implements ServerHalf {
     this.expireEveryCall = options.expireEveryCall ?? false;
     this.clientIdleTtl = options.clients?.idleTtl ?? CLIENT_IDLE_TTL;
     this.registrationsPerDay = options.clients?.perDay ?? REGISTRATIONS_PER_DAY;
+    this.minProtocol = options.minProtocol ?? MIN_PROTOCOL_VERSION;
     this.lastAt = this.clock.now();
   }
 
@@ -404,10 +416,10 @@ export class SyncServer implements ServerHalf {
       envelope !== null && typeof envelope === "object"
         ? (envelope as { protocolVersion?: unknown }).protocolVersion
         : undefined;
-    if (typeof version === "number" && Number.isInteger(version) && version < MIN_PROTOCOL_VERSION)
+    if (typeof version === "number" && Number.isInteger(version) && version < this.minProtocol)
       return fail(
         refuse("UPGRADE_REQUIRED", undefined, [
-          `protocolVersion: expected at least ${MIN_PROTOCOL_VERSION}`,
+          `protocolVersion: expected at least ${this.minProtocol}`,
         ]),
       );
     const env = envelopeSchema.safeParse(envelope);
@@ -663,6 +675,7 @@ export class SyncServer implements ServerHalf {
       v: version,
       h: this.store.head(),
       at: now,
+      hid: this.store.history(),
     });
   }
 
@@ -697,7 +710,9 @@ export class SyncServer implements ServerHalf {
     else if (tier === "summary") tiers = { full: new Set(), summary: null };
     const records: Snapshot["records"] = [];
     let version = 0;
-    for (const row of this.store.logRows(log, 0)) {
+    for (const row of tier === "threads"
+      ? this.threadRows(log, threads)
+      : this.store.logRows(log, 0)) {
       const v = this.readRow(row, u);
       if (v === null) continue;
       // the newest row the reader may read, a `del` or a row the tier leaves
@@ -736,6 +751,29 @@ export class SyncServer implements ServerHalf {
     return out;
   }
 
+  /** The rows of `log` that belong to `threads`, read from the thread index
+   * (`keysIn`) rather than from the whole log: what a `threads` snapshot
+   * reads. A key with no row in this log (a thread of another space) is left
+   * out. The snapshot's version is then the newest of these rows: a pull from
+   * its cursor resends the log's rows above it, and a `threads` snapshot is
+   * never a whole replica of the log. */
+  private threadRows(log: LogId, threads: readonly string[]): LogRow[] {
+    const rows: LogRow[] = [];
+    const seen = new Set<string>();
+    const add = (key: string) => {
+      if (seen.has(key)) return;
+      seen.add(key);
+      const row = this.store.logRow(log, key);
+      if (row) rows.push(row);
+    };
+    for (const th of threads) {
+      add(`thread:${th}`);
+      add(`counts:${th}`);
+      for (const kind of CONTENT_KINDS) for (const key of this.store.keysIn(kind, { th })) add(key);
+    }
+    return rows.sort((a, b) => a.version - b.version);
+  }
+
   pull(actor: Actor | null, log: LogId, cursor: Cursor, options: ReadOptions = {}): Pull {
     const now = this.begin();
     const u = this.userOf(actor);
@@ -749,6 +787,7 @@ export class SyncServer implements ServerHalf {
       c.log !== log ||
       c.u !== u ||
       c.n !== this.store.epoch(log).n ||
+      c.hid !== this.store.history() ||
       c.at < now - TOMBSTONE_TTL
     )
       return { resync: true };

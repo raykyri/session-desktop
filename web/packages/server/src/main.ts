@@ -12,8 +12,10 @@
 // and the stored allowances it will read are wired here.
 //
 // Shutdown (`SIGTERM`): the health check fails, later envelopes answer
-// SERVICE_UNAVAILABLE and the sync streams close, the run drain runs, the WAL
-// is checkpointed and the database closed.
+// SERVICE_UNAVAILABLE and the sync streams close, the run drain runs, the
+// HTTP server stops accepting and, after a short grace, closes every
+// connection still open (a stream whose client stopped reading included),
+// then the WAL is checkpointed and the database closed.
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -36,7 +38,7 @@ import { recordRunTexts } from "./runs/recordRunTexts.js";
 import { createNoopRunsService } from "./runs/service.js";
 import { SqliteLedger } from "./runs/sqliteLedger.js";
 import { createSecretBox } from "./secretBox.js";
-import { SyncService, type SyncServiceOptions } from "./sync/service.js";
+import { SyncService, parseKillAtWrite, type SyncServiceOptions } from "./sync/service.js";
 
 /**
  * Path to database migrations directory. Specified explicitly because the bundled
@@ -68,6 +70,17 @@ export function warnOnDevelopmentSecretKey(config: Config, logger: Logger): bool
   logger.warn(
     { env: config.env },
     "SESSION_SECRET_KEY is unset: stored API keys are sealed under the public development key",
+  );
+  return true;
+}
+
+/** Boot logs a warning when cursor tokens and event ids are sealed under
+ * the public development cursor key (`SESSION_CURSOR_KEY` unset). */
+export function warnOnDevelopmentCursorKey(config: Config, logger: Logger): boolean {
+  if (!config.cursorKeyIsDevelopment) return false;
+  logger.warn(
+    { env: config.env },
+    "SESSION_CURSOR_KEY is unset: cursor tokens are sealed under the public development key",
   );
   return true;
 }
@@ -139,20 +152,50 @@ export async function drainWithin(
   }
 }
 
+/** How long the HTTP server waits for open connections to finish after it
+ * stops accepting, before it closes them. */
+export const CONNECTION_GRACE_MS = 2_000;
+
 /** The restart tests' faults (`test/restart.test.ts`): a server whose
  * `NODE_ENV` is `test` kills itself with `SIGKILL` inside the commit of a
- * write of the named mutator (`SESSION_TEST_KILL_BEFORE_COMMIT`) or after
- * its commit, before the response (`SESSION_TEST_KILL_AFTER_COMMIT`). */
+ * write of the named mutator (`SESSION_TEST_KILL_BEFORE_COMMIT`), at one of
+ * the commit's store writes (`SESSION_TEST_KILL_AT_WRITE`, as
+ * `parseKillAtWrite` reads it), or after its commit, before the response
+ * (`SESSION_TEST_KILL_AFTER_COMMIT`). */
 function testFaults(
   config: Config,
-): Pick<SyncServiceOptions, "killBeforeCommit" | "killAfterCommit"> {
+): Pick<SyncServiceOptions, "killBeforeCommit" | "killAfterCommit" | "killAtWrite"> {
   if (config.env !== "test") return {};
   const before = process.env["SESSION_TEST_KILL_BEFORE_COMMIT"];
   const after = process.env["SESSION_TEST_KILL_AFTER_COMMIT"];
+  const at = parseKillAtWrite(process.env["SESSION_TEST_KILL_AT_WRITE"] ?? "");
   return {
     ...(before ? { killBeforeCommit: before } : {}),
     ...(after ? { killAfterCommit: after } : {}),
+    ...(at ? { killAtWrite: at } : {}),
   };
+}
+
+/** Stops `server` accepting, waits up to `graceMs` for its connections to
+ * end, then closes those still open. Resolves once every connection is
+ * gone, or `graceMs` later again at most: a socket that will not close does
+ * not hold up the checkpoint. */
+export async function closeServer(
+  server: { close(cb?: (err?: Error) => void): unknown; closeAllConnections(): void },
+  graceMs: number,
+): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+  const late = (ms: number) =>
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, ms);
+      timer.unref();
+    });
+  await Promise.race([closed, late(graceMs)]);
+  clearTimeout(timer);
+  server.closeAllConnections();
+  await Promise.race([closed, late(graceMs)]);
+  clearTimeout(timer);
 }
 
 export interface RunningServer {
@@ -164,6 +207,7 @@ export function main(): RunningServer {
   const config = loadConfig();
   const logger = defaultLogger(config.env);
   warnOnDevelopmentSecretKey(config, logger);
+  warnOnDevelopmentCursorKey(config, logger);
   prepareDataDirectories(config);
   writeVertexCredentials(config);
 
@@ -246,8 +290,12 @@ export function main(): RunningServer {
         "the drain did not finish inside its deadline; checkpointing anyway",
       );
     }
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    db.$client.pragma("wal_checkpoint(TRUNCATE)");
+    await closeServer(server as unknown as Parameters<typeof closeServer>[0], CONNECTION_GRACE_MS);
+    try {
+      db.$client.pragma("wal_checkpoint(TRUNCATE)");
+    } catch (error) {
+      logger.error({ err: error }, "the shutdown checkpoint failed");
+    }
     closeDatabase(db);
     logger.info({ signal, drained }, "shutdown complete");
   };

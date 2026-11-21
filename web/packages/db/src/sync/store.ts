@@ -14,7 +14,20 @@
 // Reads are cached by key, because the server reads the same records many
 // times in one write and in one snapshot. The cache holds only committed or
 // in-transaction values written through this store, and is dropped whole when
-// a transaction rolls back.
+// a transaction rolls back. It assumes this store is the only writer of
+// `records` on its file; a read-only connection, which by definition reads
+// another connection's writes, has no cache.
+//
+// The outermost transaction is `BEGIN IMMEDIATE`: it takes the write lock
+// before its first read, so a second writer (Litestream's `_litestream_seq`,
+// an operator command) makes it wait under `busy_timeout` at the start
+// rather than fail with SQLITE_BUSY after it read. A commit that deleted a
+// record or wrote a tombstone (an erasure, `01` D4) is followed by
+// `wal_checkpoint(TRUNCATE)`, so the deleted text leaves the WAL as well as
+// the file; a checkpoint that a reader blocks is skipped (the hourly one in
+// `server/src/sync/service.ts` tries again).
+
+import { randomBytes } from "node:crypto";
 
 import {
   indexOf,
@@ -41,6 +54,9 @@ import type SqliteDatabase from "better-sqlite3";
 import { z } from "zod";
 
 import type { SessionDatabase } from "../connection.js";
+
+/** The `server_meta` key of the history id (`restore.ts`). */
+export const HISTORY_KEY = "history_id";
 
 /** The prototype's join request (`01` C10): kept in the union so the
  * acceptance suite's join-request mutators run on this store, and not in the
@@ -105,8 +121,17 @@ export interface SqliteStoreOptions {
    * rows or history it wrote: the server wakes the event streams that read
    * them (`01` Y7). Not called for a transaction that rolled back. */
   onCommit?: (logs: ReadonlySet<LogId>) => void;
-  /** How many parsed records the read cache keeps (`RECORD_CACHE_SIZE`). */
+  /** How many parsed records the read cache keeps (`RECORD_CACHE_SIZE`);
+   * 0 on a read-only connection, whatever is given. */
   cacheSize?: number;
+}
+
+/** What a `wal_checkpoint` answered: whether a reader or writer kept it from
+ * finishing, and the WAL's frames and how many were copied. */
+export interface CheckpointResult {
+  busy: boolean;
+  log: number;
+  checkpointed: number;
 }
 
 export class SqliteStore implements ServerStore {
@@ -118,12 +143,14 @@ export class SqliteStore implements ServerStore {
   private readonly cacheSize: number;
   /** The logs the open transaction wrote. */
   private touched = new Set<LogId>();
+  /** Whether the open transaction deleted a record or wrote a tombstone. */
+  private erased = false;
 
   constructor(db: SessionDatabase | SqliteDatabase.Database, options: SqliteStoreOptions = {}) {
     this.sqlite = "$client" in db ? db.$client : db;
     this.now = options.now ?? Date.now;
     this.onCommit = options.onCommit;
-    this.cacheSize = options.cacheSize ?? RECORD_CACHE_SIZE;
+    this.cacheSize = this.sqlite.readonly ? 0 : (options.cacheSize ?? RECORD_CACHE_SIZE);
     const c = this.sqlite;
     this.s = {
       byKey: c.prepare<[string], RecordRow>("SELECT body FROM records WHERE key = ?"),
@@ -254,22 +281,44 @@ export class SqliteStore implements ServerStore {
          ON CONFLICT (th) DO UPDATE SET saves = max(saves + @d, 0)`,
       ),
       dropSaves: c.prepare<[string]>("DELETE FROM save_counts WHERE th = ? AND saves <= 0"),
+      history: c.prepare<[string], { value: string }>(
+        "SELECT value FROM server_meta WHERE key = ?",
+      ),
+      setHistory: c.prepare<[string, string, number]>(
+        `INSERT INTO server_meta (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      ),
+      seedHistory: c.prepare<[string, string, number]>(
+        "INSERT OR IGNORE INTO server_meta (key, value, updated_at) VALUES (?, ?, ?)",
+      ),
     };
-    if (!this.sqlite.readonly && !this.s.head.get()) this.s.seedHead.run();
+    if (!this.sqlite.readonly) {
+      if (!this.s.head.get()) this.s.seedHead.run();
+      this.s.seedHistory.run(HISTORY_KEY, randomBytes(16).toString("hex"), this.now());
+    }
   }
 
   transaction<T>(fn: () => T): T {
     const outer = !this.sqlite.inTransaction;
     let out: T;
     try {
+      // the outermost takes the write lock first (`BEGIN IMMEDIATE`);
       // nested: better-sqlite3 runs it in a savepoint, rolled back to on a
       // throw before the exception reaches the caller
-      out = this.sqlite.transaction(fn)();
+      const tx = this.sqlite.transaction(fn);
+      out = outer ? tx.immediate() : tx();
     } catch (e) {
       // the rows went back; so do the parsed copies of what was written
       this.cache.clear();
-      if (outer) this.touched = new Set();
+      if (outer) {
+        this.touched = new Set();
+        this.erased = false;
+      }
       throw e;
+    }
+    if (outer && this.erased) {
+      this.erased = false;
+      this.checkpoint();
     }
     if (outer && this.touched.size) {
       const logs = this.touched;
@@ -277,6 +326,41 @@ export class SqliteStore implements ServerStore {
       this.onCommit?.(logs);
     }
     return out;
+  }
+
+  /** `wal_checkpoint(TRUNCATE)` without waiting: a reader that holds an older
+   * snapshot keeps it from finishing (`busy`), and nothing waits for the
+   * reader. Errors are swallowed; the result is null then. */
+  checkpoint(): CheckpointResult | null {
+    if (this.sqlite.readonly || this.sqlite.inTransaction) return null;
+    const timeout = this.sqlite.pragma("busy_timeout", { simple: true }) as number;
+    try {
+      this.sqlite.pragma("busy_timeout = 0");
+      const row = (
+        this.sqlite.pragma("wal_checkpoint(TRUNCATE)") as {
+          busy: number;
+          log: number;
+          checkpointed: number;
+        }[]
+      )[0];
+      return row ? { busy: row.busy !== 0, log: row.log, checkpointed: row.checkpointed } : null;
+    } catch {
+      return null;
+    } finally {
+      this.sqlite.pragma(`busy_timeout = ${String(timeout)}`);
+    }
+  }
+
+  /** The history id (`ServerStore.history`), from `server_meta`. A
+   * read-only connection to a database that has none reads 32 zeros. */
+  history(): string {
+    return this.s.history.get(HISTORY_KEY)?.value ?? "0".repeat(32);
+  }
+
+  /** Replace the history id (the restore check, `restore.ts`). */
+  setHistory(id: string): void {
+    if (!/^[0-9a-f]{32}$/.test(id)) throw new Error("a history id is 32 hex digits");
+    this.s.setHistory.run(HISTORY_KEY, id, this.now());
   }
 
   // ---- Source ----
@@ -295,6 +379,7 @@ export class SqliteStore implements ServerStore {
   }
 
   private remember(key: string, rec: StoredRecord | null) {
+    if (this.cacheSize === 0) return;
     if (this.cache.size >= this.cacheSize) {
       const oldest = this.cache.keys().next();
       if (!oldest.done) this.cache.delete(oldest.value);
@@ -365,6 +450,7 @@ export class SqliteStore implements ServerStore {
     const prev = this.byKey(key);
     if (!prev) return;
     this.s.deleteRecord.run(key);
+    this.erased = true;
     if (prev.kind === "save") this.countSave(prev.th, -1);
     this.remember(key, null);
   }
@@ -413,6 +499,7 @@ export class SqliteStore implements ServerStore {
   }
 
   putTombstone(t: Tombstone): void {
+    this.erased = true;
     this.s.putTombstone.run({
       key: t.key,
       kind: t.kind,

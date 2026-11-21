@@ -46,8 +46,20 @@ export function abuseBuckets(limits: AbuseLimits) {
   return {
     /** Replicated writes and tRPC mutations, per user. */
     writes: { limit: limits.writesPerMinute, windowMs: MINUTE },
-    /** `/api/sync/snapshot`, per user, or per IP signed out. */
+    /** `/api/sync/snapshot`, `/pull` and `/read`, per user, or per IP signed
+     * out. */
     snapshots: { limit: limits.snapshotsPerMinute, windowMs: MINUTE },
+    /** A `/api/sync/read` of `threads` reads only (a thread opened), per
+     * user. */
+    threadReads: { limit: limits.threadReadsPerMinute, windowMs: MINUTE },
+    /** … per IP signed out. */
+    threadReadsSignedOut: { limit: limits.threadReadsPerIpPerMinute, windowMs: MINUTE },
+    /** Opening `/api/sync/events`, per user. */
+    streamOpens: { limit: limits.streamOpensPerMinute, windowMs: MINUTE },
+    /** `spaces.directory`, per user or IP. */
+    directory: { limit: limits.directoryPerMinute, windowMs: MINUTE },
+    /** `spaces.byName`, per user or IP; each call of a tRPC batch counts. */
+    byName: { limit: limits.byNamePerMinute, windowMs: MINUTE },
     /** `/auth/*`, `auth.checkInvite`, `accountInvites.redeem`,
      * `account.create`, per IP. */
     auth: { limit: limits.authPerMinute, windowMs: MINUTE },
@@ -63,6 +75,10 @@ export function abuseBuckets(limits: AbuseLimits) {
 }
 
 export type AbuseBucket = keyof ReturnType<typeof abuseBuckets>;
+
+/** The writes bucket's key for an account: `/api/sync/apply` and every tRPC
+ * mutation take from it (`04` Z1). */
+export const writesKey = (userId: string): string => `writes:user:${userId}`;
 
 export class RateLimiter {
   readonly #buckets = new Map<string, Bucket>();
@@ -150,29 +166,6 @@ export function rateLimitByIp(
 ): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const result = limiter.take(`${scope}:ip:${c.get("ipKey")}`, spec);
-    if (!result.allowed) {
-      return c.json({ error: RATE_LIMITED_MESSAGE }, 429, {
-        "Retry-After": String(result.retryAfter),
-      });
-    }
-    return next();
-  };
-}
-
-/**
- * Limits a plain HTTP route per signed-in user, or per IP key signed out
- * (`/api/sync/snapshot`, 04 Z1). Mounted ahead of the route, so it applies
- * to the sync routes as they land.
- */
-export function rateLimitByUserOrIp(
-  limiter: RateLimiter,
-  scope: string,
-  spec: BucketSpec,
-): MiddlewareHandler<AppEnv> {
-  return async (c, next) => {
-    const user = c.get("user");
-    const key = user ? `${scope}:user:${user.id}` : `${scope}:ip:${c.get("ipKey")}`;
-    const result = limiter.take(key, spec);
     if (!result.allowed) {
       return c.json({ error: RATE_LIMITED_MESSAGE }, 429, {
         "Retry-After": String(result.retryAfter),

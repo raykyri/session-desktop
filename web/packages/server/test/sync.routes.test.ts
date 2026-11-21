@@ -43,26 +43,35 @@ test("S1: a request without Session-Protocol, or outside the accepted range, ans
   t.is(ok.status, 200);
 });
 
-test("S1: writing needs a session (401) and an active account (403)", async (t) => {
+test("S1: writing needs a session (401) and an active account (403), answered before the server half", async (t) => {
   const h = createHarness(t);
+  let calls = 0;
+  for (const name of ["register", "apply"] as const) {
+    const f = h.sync.server[name].bind(h.sync.server) as (...a: unknown[]) => unknown;
+    (h.sync.server as unknown as Record<string, unknown>)[name] = (...a: unknown[]) => {
+      calls += 1;
+      return f(...a);
+    };
+  }
   const signedOut = await h.request("/api/sync/register", { method: "POST", body: "{}" });
   t.is(signedOut.status, 401);
-  t.like(await signedOut.json(), { ok: false, error: { code: "UNAUTHORIZED" } });
+  t.like(await signedOut.json(), { code: "UNAUTHORIZED" });
   const someone = new Person(h, h.addUser("someone"));
   await someone.register();
+  calls = 0;
   const e = someone.envelope("prefs.set", { layout: "wide" });
   const anon = await h.request("/api/sync/apply", {
     method: "POST",
     body: JSON.stringify({ envelopes: [e] }),
   });
   t.is(anon.status, 401);
-  t.like(((await anon.json()) as { answers: unknown[] }).answers[0], {
-    ok: false,
-    error: { code: "UNAUTHORIZED" },
-  });
+  t.like(await anon.json(), { code: "UNAUTHORIZED" });
   const waiting = new Person(h, h.addWaitingUser("waiter"));
   t.is((await waiting.register()).status, 403);
-  t.is((await waiting.send([e])).status, 403);
+  const refused = await waiting.post("/api/sync/apply", { envelopes: [e] });
+  t.is(refused.status, 403);
+  t.like(await refused.json(), { code: "FORBIDDEN" });
+  t.is(calls, 0, "the server half was not called");
   // a waiting account reads the public path
   t.is((await waiting.post("/api/sync/snapshot", { log: "user:someone" })).status, 200);
 });
@@ -99,10 +108,12 @@ test("A3: a batch of n envelopes counts n writes; those past the budget answer T
     first.answers.map((a) => (a.ok ? "ok" : a.error.code)),
     ["ok", "ok", "ok", "ok", "ok", "TOO_MANY_REQUESTS", "TOO_MANY_REQUESTS", "TOO_MANY_REQUESTS"],
   );
-  // the budget is spent: the whole batch is refused, with Retry-After
-  const second = await p.send(batch.slice(5));
+  // the budget is spent: the whole batch is refused, in the protocol shape,
+  // with Retry-After
+  const second = await p.post("/api/sync/apply", { envelopes: batch.slice(5) });
   t.is(second.status, 429);
-  t.true(second.answers.every((a) => !a.ok && a.error.code === "TOO_MANY_REQUESTS"));
+  t.like(await second.json(), { code: "TOO_MANY_REQUESTS" });
+  t.true(Number(second.headers.get("retry-after")) >= 1);
   // unrecorded: the same seqs apply once the budget refills
   now += 60_000;
   const third = await p.send(batch.slice(5));

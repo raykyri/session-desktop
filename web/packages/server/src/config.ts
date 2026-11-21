@@ -12,8 +12,8 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import {
   MIN_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
+  SUMMARY_WINDOW,
   WEB_WINDOW,
-  cursorKeyFrom,
   type CursorKeys,
   type WindowSettings,
 } from "@session/sync/server";
@@ -39,8 +39,9 @@ const flag = (fallback: boolean) =>
       return z.NEVER;
     });
 
-/** An integer variable, at least `minimum` (0 unless given). */
-const positiveInteger = (fallback: number, minimum = 0) =>
+/** An integer variable, at least `minimum` (0 unless given) and at most
+ * `maximum` when given. */
+const positiveInteger = (fallback: number, minimum = 0, maximum = Number.MAX_SAFE_INTEGER) =>
   z
     .string()
     .trim()
@@ -50,13 +51,15 @@ const positiveInteger = (fallback: number, minimum = 0) =>
         return fallback;
       }
       const parsed = Number(value);
-      if (!Number.isSafeInteger(parsed) || parsed < minimum) {
+      if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
         ctx.addIssue({
           code: "custom",
           message:
-            minimum === 0
-              ? `expected a non-negative integer, got ${value}`
-              : `expected an integer of at least ${minimum}, got ${value}`,
+            maximum !== Number.MAX_SAFE_INTEGER
+              ? `expected an integer from ${minimum} to ${maximum}, got ${value}`
+              : minimum === 0
+                ? `expected a non-negative integer, got ${value}`
+                : `expected an integer of at least ${minimum}, got ${value}`,
         });
         return z.NEVER;
       }
@@ -107,6 +110,13 @@ const originSchema = (name: string) =>
       }
     });
 
+/** Upper bounds of the size settings: beyond them a typo, not a choice. */
+const MAX_APPLY_BYTES = 64 * 1024 * 1024;
+const MAX_APPLY_BATCH = 1000;
+const MAX_WINDOW_DAYS = 3650;
+const MAX_WINDOW_THREADS = 10_000;
+const SUMMARY_DAYS = SUMMARY_WINDOW / 86_400_000;
+
 const envSchema = z.object({
   HOST: z.string().trim().default("127.0.0.1"),
   PORT: positiveInteger(8787),
@@ -131,20 +141,28 @@ const envSchema = z.object({
   SESSION_LIMIT_INVITES_PER_DAY: positiveInteger(10, 1),
   SESSION_LIMIT_INVITE_READS_PER_MINUTE: positiveInteger(60, 1),
   SESSION_LIMIT_HANDLE_CHECKS_PER_MINUTE: positiveInteger(30, 1),
+  SESSION_LIMIT_DIRECTORY_PER_MINUTE: positiveInteger(60, 1),
+  SESSION_LIMIT_BY_NAME_PER_MINUTE: positiveInteger(30, 1),
   // Sync transport limits (`01` A3).
+  SESSION_LIMIT_THREAD_READS_PER_MINUTE: positiveInteger(120, 1),
+  SESSION_LIMIT_THREAD_READS_PER_IP_PER_MINUTE: positiveInteger(240, 1),
   SESSION_LIMIT_REGISTER_PER_MINUTE: positiveInteger(10, 1),
   SESSION_LIMIT_STREAMS_PER_USER: positiveInteger(10, 1),
-  SESSION_LIMIT_APPLY_BYTES: positiveInteger(4 * 1024 * 1024, 1024),
-  SESSION_LIMIT_APPLY_BATCH: positiveInteger(100, 1),
+  SESSION_LIMIT_STREAM_OPENS_PER_MINUTE: positiveInteger(30, 1),
+  SESSION_LIMIT_APPLY_BYTES: positiveInteger(4 * 1024 * 1024, 1024, MAX_APPLY_BYTES),
+  SESSION_LIMIT_APPLY_BATCH: positiveInteger(100, 1, MAX_APPLY_BATCH),
 
   // The sync protocol (`01` S1, Y6, R1; `05` §3.4).
   SESSION_MIN_PROTOCOL: positiveInteger(MIN_PROTOCOL_VERSION, 1),
   SESSION_CURSOR_KEY: optionalString,
   SESSION_CURSOR_KEY_PREVIOUS: optionalString,
   SESSION_CURSOR_KEY_ROTATED_AT: optionalString,
-  SESSION_WEB_WINDOW_DAYS: positiveInteger(WEB_WINDOW.days, 1),
-  SESSION_WEB_WINDOW_THREADS: positiveInteger(WEB_WINDOW.threads, 1),
-  SESSION_WEB_WINDOW_CAP: positiveInteger(WEB_WINDOW.cap, 1),
+  SESSION_WEB_WINDOW_DAYS: positiveInteger(WEB_WINDOW.days, 1, MAX_WINDOW_DAYS),
+  SESSION_WEB_WINDOW_THREADS: positiveInteger(WEB_WINDOW.threads, 1, MAX_WINDOW_THREADS),
+  SESSION_WEB_WINDOW_CAP: positiveInteger(WEB_WINDOW.cap, 1, MAX_WINDOW_THREADS),
+  // How far back a summary reaches (`01` R1); a test server sets it low to
+  // have threads that no tier of a snapshot serves.
+  SESSION_WEB_SUMMARY_DAYS: positiveInteger(SUMMARY_DAYS, 0, MAX_WINDOW_DAYS),
 
   GOOGLE_APPLICATION_CREDENTIALS_JSON: optionalString,
   GOOGLE_VERTEX_PROJECT: optionalString,
@@ -187,6 +205,9 @@ const envSchema = z.object({
 
   SESSION_FIXTURE_PROVIDERS: flag(false),
   SESSION_TEST_AUTH: flag(false),
+  // The acceptance suite's test access (`/api/sync/test/*`, `01` A1): only
+  // with NODE_ENV=test and a loopback public origin.
+  SESSION_TEST_ROUTES: flag(false),
   // Fixture OAuth endpoints served by this server (`auth/fixtureOAuth.ts`),
   // for the end-to-end suite. Never in production.
   SESSION_FIXTURE_OAUTH: flag(false),
@@ -245,6 +266,15 @@ export interface AbuseLimits {
   registerPerMinute: number;
   /** Open `/api/sync/events` streams per user; one per client id. */
   streamsPerUser: number;
+  /** Stream opens per user per minute. */
+  streamOpensPerMinute: number;
+  /** `POST /api/sync/read` of `threads` reads only, per user, and per IP
+   * signed out, per minute. */
+  threadReadsPerMinute: number;
+  threadReadsPerIpPerMinute: number;
+  /** `spaces.directory` and `spaces.byName` per user or IP per minute. */
+  directoryPerMinute: number;
+  byNamePerMinute: number;
   /** The largest `POST /api/sync/apply` body, and the most envelopes in it. */
   applyBytes: number;
   applyBatch: number;
@@ -282,6 +312,8 @@ export interface Config {
   testAuthEnabled: boolean;
   /** OAuth endpoints answered by this server's fixture routes. */
   fixtureOAuth: boolean;
+  /** `/api/sync/test/*` is mounted (`SESSION_TEST_ROUTES`). */
+  testRoutes: boolean;
   abuse: AbuseLimits;
   sync: SyncConfig;
 
@@ -313,6 +345,9 @@ export interface Config {
   /** True when `secretKey` is the public development key: boot logs a
    * warning (`main.ts`). */
   secretKeyIsDevelopment: boolean;
+  /** True when the cursor key is the public development key: boot logs a
+   * warning (`main.ts`). */
+  cursorKeyIsDevelopment: boolean;
 }
 
 /** Raised with every offending variable at once; a deploy that is missing
@@ -336,35 +371,65 @@ export const DEVELOPMENT_SECRET_KEY: Buffer = Buffer.alloc(32, 0x5e);
  * `SESSION_CURSOR_KEY` is unset. Production refuses to start without one. */
 export const DEVELOPMENT_CURSOR_KEY: Uint8Array = new Uint8Array(32).fill(0xc5);
 
+/** 32 bytes of standard base64: 43 characters and one `=`. */
+const BASE64_32 = /^[A-Za-z0-9+/]{43}=$/;
+/** An ISO 8601 time with a date, hours and minutes, and a zone. */
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+const sameBytes = (a: Uint8Array, b: Uint8Array) => Buffer.from(a).equals(Buffer.from(b));
+
 /** `SESSION_CURSOR_KEY` and its previous key (`01` S3, Y6): 32 bytes of
- * base64 each; the previous one needs the time of the rotation. */
-function cursorKeysFrom(value: RawEnv, required: boolean): CursorKeys {
+ * base64 each; the previous one needs the time of the rotation, an ISO time
+ * not in the future. In production the cursor key is required and may be
+ * neither the development key nor `SESSION_SECRET_KEY`, and the previous key
+ * may not be the current one. */
+function cursorKeysFrom(
+  value: RawEnv,
+  options: { required: boolean; production: boolean; secretKey: Buffer; now: number },
+): CursorKeys {
   const issues: string[] = [];
   const key = (name: string, raw: string): Uint8Array | null => {
-    try {
-      return cursorKeyFrom(raw);
-    } catch {
+    if (!BASE64_32.test(raw)) {
       issues.push(`${name}: expected 32 bytes of base64 (openssl rand -base64 32)`);
       return null;
     }
+    return new Uint8Array(Buffer.from(raw, "base64"));
   };
   let current: Uint8Array | null = DEVELOPMENT_CURSOR_KEY;
   if (value.SESSION_CURSOR_KEY === null) {
-    if (required)
+    if (options.required)
       issues.push("SESSION_CURSOR_KEY: required unless NODE_ENV is development or test");
   } else current = key("SESSION_CURSOR_KEY", value.SESSION_CURSOR_KEY);
+  if (current && options.production) {
+    if (sameBytes(current, DEVELOPMENT_CURSOR_KEY))
+      issues.push("SESSION_CURSOR_KEY: the public development key is not allowed in production");
+    if (sameBytes(current, options.secretKey))
+      issues.push("SESSION_CURSOR_KEY: must differ from SESSION_SECRET_KEY");
+  }
   let previous: CursorKeys["previous"];
   if (value.SESSION_CURSOR_KEY_PREVIOUS !== null) {
     const old = key("SESSION_CURSOR_KEY_PREVIOUS", value.SESSION_CURSOR_KEY_PREVIOUS);
-    const rotatedAt = Date.parse(value.SESSION_CURSOR_KEY_ROTATED_AT ?? "");
+    const raw = value.SESSION_CURSOR_KEY_ROTATED_AT ?? "";
+    const rotatedAt = ISO_TIME.test(raw) ? Date.parse(raw) : Number.NaN;
     if (!Number.isFinite(rotatedAt))
       issues.push(
-        "SESSION_CURSOR_KEY_ROTATED_AT: required with SESSION_CURSOR_KEY_PREVIOUS, as an ISO time",
+        "SESSION_CURSOR_KEY_ROTATED_AT: required with SESSION_CURSOR_KEY_PREVIOUS, as an ISO time (2026-11-01T00:00:00Z)",
       );
+    else if (rotatedAt > options.now)
+      issues.push("SESSION_CURSOR_KEY_ROTATED_AT: is in the future");
     else if (old) previous = { key: old, rotatedAt };
+    if (old && current && options.production && sameBytes(old, current))
+      issues.push("SESSION_CURSOR_KEY_PREVIOUS: must differ from SESSION_CURSOR_KEY");
   }
   if (issues.length || current === null) throw new ConfigError(issues);
   return previous ? { current, previous } : { current };
+}
+
+/** Whether an origin is this machine's: `localhost`, `127.0.0.0/8` or
+ * `[::1]`. */
+export function isLoopbackOrigin(origin: string): boolean {
+  const host = URL.parse(origin)?.hostname ?? "";
+  return host === "localhost" || host === "[::1]" || /^127(?:\.\d{1,3}){3}$/.test(host);
 }
 
 /** `SESSION_SECRET_KEY` as 32 bytes: 64 hex digits, or base64 of 32 bytes.
@@ -449,9 +514,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ]);
   }
   const secretKey = secretKeyFrom(value.SESSION_SECRET_KEY, nodeEnv);
-  const cursorKeys = cursorKeysFrom(value, nodeEnv !== "development" && nodeEnv !== "test");
+  const cursorKeys = cursorKeysFrom(value, {
+    required: nodeEnv !== "development" && nodeEnv !== "test",
+    production: isProduction,
+    secretKey,
+    now: Date.now(),
+  });
   if (isProduction && value.SESSION_FIXTURE_OAUTH) {
     throw new ConfigError(["SESSION_FIXTURE_OAUTH: not allowed in production"]);
+  }
+  if (
+    value.SESSION_TEST_ROUTES &&
+    (value.NODE_ENV !== "test" || !isLoopbackOrigin(value.SESSION_PUBLIC_ORIGIN))
+  ) {
+    throw new ConfigError([
+      "SESSION_TEST_ROUTES: allowed only with NODE_ENV=test and a loopback SESSION_PUBLIC_ORIGIN",
+    ]);
   }
   return {
     env: value.NODE_ENV,
@@ -480,6 +558,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // Never in production, whatever the variable says (`03-api-and-events.md` §5).
     testAuthEnabled: value.SESSION_TEST_AUTH && !isProduction,
     fixtureOAuth: value.SESSION_FIXTURE_OAUTH && !isProduction,
+    testRoutes: value.SESSION_TEST_ROUTES,
     abuse: {
       writesPerMinute: value.SESSION_LIMIT_WRITES_PER_MINUTE,
       snapshotsPerMinute: value.SESSION_LIMIT_SNAPSHOTS_PER_MINUTE,
@@ -492,6 +571,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       handleChecksPerMinute: value.SESSION_LIMIT_HANDLE_CHECKS_PER_MINUTE,
       registerPerMinute: value.SESSION_LIMIT_REGISTER_PER_MINUTE,
       streamsPerUser: value.SESSION_LIMIT_STREAMS_PER_USER,
+      streamOpensPerMinute: value.SESSION_LIMIT_STREAM_OPENS_PER_MINUTE,
+      threadReadsPerMinute: value.SESSION_LIMIT_THREAD_READS_PER_MINUTE,
+      threadReadsPerIpPerMinute: value.SESSION_LIMIT_THREAD_READS_PER_IP_PER_MINUTE,
+      directoryPerMinute: value.SESSION_LIMIT_DIRECTORY_PER_MINUTE,
+      byNamePerMinute: value.SESSION_LIMIT_BY_NAME_PER_MINUTE,
       applyBytes: value.SESSION_LIMIT_APPLY_BYTES,
       applyBatch: value.SESSION_LIMIT_APPLY_BATCH,
     },
@@ -503,6 +587,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         days: value.SESSION_WEB_WINDOW_DAYS,
         threads: value.SESSION_WEB_WINDOW_THREADS,
         cap: value.SESSION_WEB_WINDOW_CAP,
+        summaryDays: value.SESSION_WEB_SUMMARY_DAYS,
       },
     },
 
@@ -548,6 +633,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     metricsToken: value.SESSION_METRICS_TOKEN,
     secretKey,
     secretKeyIsDevelopment: value.SESSION_SECRET_KEY === null,
+    cursorKeyIsDevelopment: sameBytes(cursorKeys.current, DEVELOPMENT_CURSOR_KEY),
   };
 }
 

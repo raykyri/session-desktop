@@ -26,7 +26,8 @@ const read = (h: ReturnType<typeof createHarness>, body: unknown, cookie?: strin
   });
 
 test("forty open channels and a private one in one request, signed out, each filtered by its scope", async (t) => {
-  const h = createHarness(t, { env: { SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: "2" } });
+  // 41 reads cost 1 + 4 snapshots: two such requests fit in 10
+  const h = createHarness(t, { env: { SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: "10" } });
   const olga = new Person(h, h.addUser("olga"));
   const open: string[] = [];
   for (let i = 0; i < 40; i++) {
@@ -52,11 +53,7 @@ test("forty open channels and a private one in one request, signed out, each fil
   };
   t.true(keys(0).includes(`thread:${shown}`));
   // the private channel's landing only
-  t.deepEqual(
-    keys(40).filter((k) => !k.startsWith("space:") && !k.startsWith("stats:")),
-    [],
-  );
-  t.false(keys(40).includes(`thread:${secret}`));
+  t.deepEqual(keys(40), [`space:${lab}`]);
 
   // a pull with the cursor each snapshot gave, in the same kind of request
   const cursor = (answers[0] as { cursor: string }).cursor;
@@ -65,8 +62,12 @@ test("forty open channels and a private one in one request, signed out, each fil
   const pulled = ((await again.json()) as ReadAnswers).answers[0];
   t.true(pulled !== undefined && "changes" in pulled);
 
-  // two requests within the limit of 2 a minute; the third is refused
-  t.is((await read(h, { reads })).status, 429);
+  // the third costs 5 more, past the 10 a minute: refused in the protocol
+  // shape, with Retry-After
+  const refused = await read(h, { reads });
+  t.is(refused.status, 429);
+  t.like(await refused.json(), { code: "TOO_MANY_REQUESTS" });
+  t.true(Number(refused.headers.get("retry-after")) >= 1);
 });
 
 test("a read the server half refuses answers its error in its place", async (t) => {

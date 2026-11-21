@@ -59,7 +59,7 @@ test("boot: the restore check, open usage rows, running runs, then maintenance",
   // the first boot of a file records its generation; the next bumps nothing
   t.not(report.restore.current, null);
   const again = bootServer({ databasePath: h.config.databasePath, sync: h.sync, ledger, logger });
-  t.like(again, { closedRows: 0, interrupted: 0, restore: { bumped: 0 } });
+  t.like(again, { closedRows: 0, interrupted: 0, restore: { replaced: false } });
 });
 
 test("boot: a restored database file bumps every epoch, and a cursor from before resyncs", async (t) => {
@@ -80,6 +80,6 @@ test("boot: a restored database file bumps every epoch, and a cursor from before
   const sync = new SyncService({ db, config: h.config, logger });
   t.teardown(() => sync.drain());
   const report = bootServer({ databasePath: restored, sync, ledger: new SqliteLedger(db), logger });
-  t.true(report.restore.bumped > 0);
+  t.true(report.restore.replaced);
   t.deepEqual(sync.server.pull({ u: "mona" }, `space:${open}`, cursor), { resync: true });
 });

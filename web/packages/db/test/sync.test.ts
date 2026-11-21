@@ -15,13 +15,13 @@ import SqliteDatabase from "better-sqlite3";
 
 import {
   SqliteStore,
-  bumpEveryEpoch,
   checkRestore,
   databaseGeneration,
+  requestNewHistory,
   rewriteRecords,
 } from "../src/index.js";
 
-import { KEYS, World, actor, cast, ok, post, refused, rng } from "./syncWorld.js";
+import { KEYS, MINUTE, World, actor, cast, ok, post, refused, rng } from "./syncWorld.js";
 
 const changesOf = (p: Pull): Change[] => ("changes" in p ? p.changes : []);
 
@@ -329,12 +329,89 @@ test("D4: a removed thread's text is in neither the database file nor its WAL af
   t.true(bytes(w2.path).indexOf(MARK) >= 0);
 });
 
-test("D6: a database file restored from a backup boots with bumped epochs, and a cursor from before resyncs", (t) => {
+test("D4: a removal's commit checkpoints the WAL itself: the text is in neither file without a checkpoint by hand", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const MARK = "ERASEME-1c2d3e";
+  const bytes = (p: string) => (existsSync(p) ? readFileSync(p) : Buffer.alloc(0));
+  const th = post(t, w, "mona", open, `the question ${MARK}`);
+  ok(
+    t,
+    w.as("mel", "research.createPostFollowUp", { id: w.id(), thread: th, t: `a reply ${MARK}` }),
+  );
+  // the text is in the WAL before the removal: the scan finds what it looks for
+  t.true(bytes(`${w.path}-wal`).indexOf(MARK) >= 0);
+  ok(
+    t,
+    w.as("olga", "moderation.decide", { item: `p:${th}`, decision: "removed", note: "Off topic." }),
+  );
+  for (const file of [w.path, `${w.path}-wal`]) t.is(bytes(file).indexOf(MARK), -1, file);
+});
+
+test("D4: a checkpoint a reader blocks is skipped without waiting, and the commit stands", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const th = post(t, w, "mona", open, "to be removed");
+  const reader = new SqliteDatabase(w.path, { readonly: true });
+  t.teardown(() => reader.close());
+  // a reader holding a snapshot (as Litestream does) blocks a TRUNCATE
+  reader.prepare("BEGIN").run();
+  reader.prepare("SELECT count(*) FROM records").get();
+  const started = Date.now();
+  ok(
+    t,
+    w.as("olga", "moderation.decide", { item: `p:${th}`, decision: "removed", note: "Off topic." }),
+  );
+  t.true(Date.now() - started < 2000, "the commit did not wait for the busy timeout");
+  t.like((w.store as SqliteStore).checkpoint(), { busy: true });
+  reader.prepare("COMMIT").run();
+  t.like((w.store as SqliteStore).checkpoint(), { busy: false, log: 0 });
+  t.like(w.get(`thread:${th}`), { mod: "removed" });
+});
+
+test("the outermost transaction takes the write lock before its first read", (t) => {
+  const w = new World(t);
+  const store = w.store as SqliteStore;
+  const other = new SqliteDatabase(w.path);
+  t.teardown(() => other.close());
+  other.pragma("busy_timeout = 0");
+  let otherWrote = true;
+  store.transaction(() => {
+    store.client("nobody");
+    // another writer (Litestream's `_litestream_seq`, an operator command)
+    // cannot write between this transaction's read and its write
+    try {
+      other.prepare("INSERT INTO server_meta (key, value, updated_at) VALUES ('x', 'y', 0)").run();
+    } catch (e) {
+      otherWrote = false;
+      t.is((e as { code?: string }).code, "SQLITE_BUSY");
+    }
+    store.setLastRev("probe", 1);
+  });
+  t.false(otherWrote);
+  t.is(store.lastRev("probe"), 1);
+});
+
+test("a read-only connection's store reads another connection's commits: it keeps no record cache", (t) => {
+  const w = new World(t);
+  ok(t, w.as("mona", "prefs.set", { layout: "wide" }));
+  const ro = new SqliteStore(new SqliteDatabase(w.path, { readonly: true }));
+  t.teardown(() => ro.sqlite.close());
+  t.like(ro.byKey("prefs:mona"), { layout: "wide", rev: 1 });
+  ok(t, w.as("mona", "prefs.set", { layout: "centred" }));
+  t.like(ro.byKey("prefs:mona"), { layout: "centred", rev: 2 });
+});
+
+test("D6: a database file restored from a backup gets a new history id, and a cursor from before resyncs", (t) => {
   const a = new World(t);
   const { open } = cast(t, a);
-  t.true(checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 1).bumped > 0);
-  // a boot with the same generation bumps nothing
-  t.like(checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 2), { bumped: 0 });
+  const first = checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 1);
+  t.like(first, { replaced: true, reason: "generation" });
+  // a boot with the same generation changes nothing
+  t.like(checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 2), {
+    replaced: false,
+    history: first.history,
+  });
   post(t, a, "mona", open);
   // the backup: a copy of the file as it is now
   a.db.$client.pragma("wal_checkpoint(TRUNCATE)");
@@ -351,26 +428,71 @@ test("D6: a database file restored from a backup boots with bumped epochs, and a
   const b = new World(t, { path: restored, clock: a.clock });
   const check = checkRestore(b.store as SqliteStore, databaseGeneration(restored), 3);
   t.not(check.previous, check.current);
-  t.true(check.bumped >= 2);
+  t.true(check.replaced);
+  t.not(check.history, first.history);
   t.deepEqual(b.server.pull(actor("mel"), `space:${open}`, cursor), { resync: true });
   t.deepEqual(b.server.pull(actor("mel"), "user:mel", userCursor), { resync: true });
   // a cursor served after the restore pulls; the next boot of the same file
-  // bumps nothing
+  // changes nothing
   const fresh = b.server.snapshot(actor("mel"), `space:${open}`).cursor;
-  t.like(checkRestore(b.store as SqliteStore, databaseGeneration(restored), 4), { bumped: 0 });
+  t.like(checkRestore(b.store as SqliteStore, databaseGeneration(restored), 4), {
+    replaced: false,
+  });
   t.true("changes" in b.server.pull(actor("mel"), `space:${open}`, fresh));
   // without the check (the same file, booted again), the old cursor still pulls
   t.true("changes" in a.server.pull(actor("mel"), `space:${open}`, cursor));
 });
 
-test("D6: bumping every epoch resyncs every log's readers", (t) => {
-  const w = new World(t);
-  const { open, closed } = cast(t, w);
-  const c1 = w.server.snapshot(actor("ada"), `space:${closed}`).cursor;
-  const c2 = w.server.snapshot(null, `space:${open}`).cursor;
-  t.true(bumpEveryEpoch(w.store as SqliteStore) > 2);
-  t.deepEqual(w.server.pull(actor("ada"), `space:${closed}`, c1), { resync: true });
-  t.deepEqual(w.server.pull(null, `space:${open}`, c2), { resync: true });
+test("D6: a restore resyncs a log with no rows in the restored file, and a cursor of an earlier restore from the same backup", (t) => {
+  const a = new World(t);
+  const { open } = cast(t, a);
+  checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 1);
+  a.clientId("zed");
+  a.db.$client.pragma("wal_checkpoint(TRUNCATE)");
+  const backup = join(a.directory, "backup.db");
+  copyFileSync(a.path, backup);
+  // zed's user log has no rows in the backup
+  t.deepEqual(a.store.logRows("user:zed", 0), []);
+  ok(t, a.as("zed", "prefs.set", { layout: "wide" }));
+  const lost = a.server.snapshot(actor("zed"), "user:zed").cursor;
+  const restore = (name: string, at: number) => {
+    // a later time: the new server's ids do not repeat the lost timeline's
+    a.clock.advance(MINUTE);
+    const path = join(a.directory, name);
+    copyFileSync(backup, path);
+    const w = new World(t, { path, clock: a.clock });
+    t.true(checkRestore(w.store as SqliteStore, databaseGeneration(path), at).replaced);
+    return w;
+  };
+  const b = restore("r1.db", 2);
+  // the restored timeline writes zed's preference again, at a version the
+  // lost timeline used too
+  ok(t, b.as("zed", "prefs.set", { layout: "centred" }));
+  t.deepEqual(b.server.pull(actor("zed"), "user:zed", lost), { resync: true });
+  // the first restore serves a cursor; a second restore from the same backup
+  // writes as many commits again
+  for (let i = 0; i < 3; i++) post(t, b, "olga", open, `first restore ${i}`);
+  const served = b.server.snapshot(actor("olga"), `space:${open}`).cursor;
+  const c = restore("r2.db", 3);
+  for (let i = 0; i < 4; i++) post(t, c, "olga", open, `second restore ${i}`);
+  t.deepEqual(c.server.pull(actor("olga"), `space:${open}`, served), { resync: true });
+});
+
+test("D6: an operator's request replaces the history id at the next boot of a file restored in place", (t) => {
+  const a = new World(t);
+  const { open } = cast(t, a);
+  const first = checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 1);
+  const cursor = a.server.snapshot(actor("mona"), `space:${open}`).cursor;
+  // the bytes of a backup copied over the same file keep its identity: the
+  // generation is the same, and only the request replaces the id
+  t.like(checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 2), { replaced: false });
+  requestNewHistory(a.db.$client);
+  const check = checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 3);
+  t.like(check, { replaced: true, reason: "requested" });
+  t.not(check.history, first.history);
+  t.deepEqual(a.server.pull(actor("mona"), `space:${open}`, cursor), { resync: true });
+  // the request is used up
+  t.like(checkRestore(a.store as SqliteStore, databaseGeneration(a.path), 4), { replaced: false });
 });
 
 test("D7: a backfill that adds a field writes a log row for every rewritten key, and a replica pulls the new shape", (t) => {
@@ -406,7 +528,52 @@ test("D7: a backfill that adds a field writes a log row for every rewritten key,
     [{ kind: "prefs", u: "mona", layout: "wide", rev: 2, density: "normal" }],
   );
   // run again: nothing left to rewrite
-  t.is(rewriteRecords(w.db, { id: "x", description: "", kind: "prefs", rewrite: (r) => r }), 0);
+  t.is(
+    rewriteRecords(w.db, {
+      id: "x",
+      description: "",
+      kind: "prefs",
+      rewrite: (r) => r as unknown as StoredRecord,
+    }),
+    0,
+  );
+});
+
+test("D7: a backfill reads a stored shape the current schema refuses, and validates only the rewritten record", (t) => {
+  const w = new World(t);
+  ok(t, w.as("mona", "prefs.set", { layout: "wide" }));
+  // the shape of an earlier build: `wide: true` in place of `layout`
+  w.db.$client
+    .prepare("UPDATE records SET body = ? WHERE key = 'prefs:mona'")
+    .run(JSON.stringify({ kind: "prefs", u: "mona", wide: true, rev: 1 }));
+  const n = rewriteRecords(w.db, {
+    id: "test-prefs-layout",
+    description: "wide becomes layout",
+    kind: "prefs",
+    rewrite: (r) =>
+      ({
+        kind: "prefs",
+        u: r["u"],
+        layout: r["wide"] ? "wide" : "centred",
+        rev: r.rev,
+      }) as StoredRecord,
+  });
+  t.is(n, 1);
+  t.like(new SqliteStore(w.db).byKey("prefs:mona"), { layout: "wide", rev: 2 });
+  // a rewrite to a shape the schema refuses is refused, and commits nothing
+  w.db.$client
+    .prepare("UPDATE records SET body = ? WHERE key = 'prefs:mona'")
+    .run(JSON.stringify({ kind: "prefs", u: "mona", wide: true, rev: 2 }));
+  const before = w.tables();
+  t.throws(() =>
+    rewriteRecords(w.db, {
+      id: "test-prefs-bad",
+      description: "",
+      kind: "prefs",
+      rewrite: (r) => ({ ...r, wide: false }) as unknown as StoredRecord,
+    }),
+  );
+  t.deepEqual(w.tables(), before);
 });
 
 test("the store refuses a record that does not match its schema, and the write commits nothing", (t) => {

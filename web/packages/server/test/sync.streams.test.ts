@@ -30,7 +30,7 @@ test("Y3: a re-attach returns the stored lastSeq and is not counted; the 51st ne
   for (let k = 0; k < 49; k++) t.true((await p.register()).body.ok);
   const refused = await p.register();
   t.is(refused.status, 429);
-  t.like(refused.body, { ok: false, error: { code: "TOO_MANY_REQUESTS" } });
+  t.like(refused.body, { code: "TOO_MANY_REQUESTS" });
   t.like((await p.register(id)).body, { ok: true, reattached: true, lastSeq: 2 });
 });
 

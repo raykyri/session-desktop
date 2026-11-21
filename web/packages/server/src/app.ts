@@ -20,7 +20,7 @@ import { MetricsRegistry, renderMetrics } from "./metrics.js";
 import { csrfGuard, rejectAuthorizationHeader } from "./middleware/csrf.js";
 import { requestLogging } from "./middleware/logging.js";
 import { requestMetrics } from "./middleware/metrics.js";
-import { RateLimiter, abuseBuckets, rateLimitByUserOrIp } from "./middleware/rateLimit.js";
+import { RateLimiter } from "./middleware/rateLimit.js";
 import { requestContext } from "./middleware/requestId.js";
 import { securityHeaders } from "./middleware/security.js";
 import { clientStatic } from "./middleware/static.js";
@@ -80,17 +80,12 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
     app.use(path, protocolCheck(deps.config));
   app.use("*", sessionLoader(deps));
 
-  // `04` Z1: snapshots per user, or per IP signed out. Mounted ahead of the
-  // sync routes (`01` A1, M3), so it applies as they land.
-  // `POST /api/sync/read` (several logs in one request) counts once.
-  for (const path of ["/api/sync/snapshot", "/api/sync/read"])
-    app.use(
-      path,
-      rateLimitByUserOrIp(limiter, "snapshots", abuseBuckets(deps.config.abuse).snapshots),
-    );
-
-  // The acceptance suite's test access (`01` A1): only in a test server.
-  if (deps.config.env === "test") app.route("/api/sync/test", syncTestRoutes(sync));
+  // The sync routes take the limits of `04` Z1 themselves, after the route
+  // matched (`sync/routes.ts`).
+  // The acceptance suite's test access (`01` A1): only with
+  // `SESSION_TEST_ROUTES=1`, which the configuration accepts only in a test
+  // server on a loopback origin (`config.ts`).
+  if (deps.config.testRoutes) app.route("/api/sync/test", syncTestRoutes(sync));
   app.route("/api/sync", syncRoutes({ sync, config: deps.config, limiter }));
 
   // Fly's check. 503 until migrations and run reconciliation are done and
