@@ -18,5 +18,10 @@ export function storeDirectory(store: SqliteStore): SpaceDirectory {
         .all(after === null ? "space:" : `space:${after}`, limit)
         .map((row) => store.byKey(row.key))
         .filter((r): r is Spaces.SpaceRecord => r?.kind === "space"),
+    byName: (name) => {
+      const key = store.uniqueKey("space.name", name);
+      const r = key === undefined ? undefined : store.byKey(key);
+      return r?.kind === "space" ? r : null;
+    },
   };
 }
