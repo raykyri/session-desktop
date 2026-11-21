@@ -62,6 +62,9 @@ function applyPragmas(client: SqliteDatabase.Database, fileBacked: boolean): voi
   client.pragma("foreign_keys = ON");
   client.pragma("busy_timeout = 5000");
   client.pragma("temp_store = MEMORY");
+  // `01` D4: a deleted row's bytes are overwritten in the file, so an erased
+  // record's text is not left behind in free pages of the file or its WAL.
+  client.pragma("secure_delete = ON");
 }
 
 /** Hashes recorded in `__drizzle_migrations`, oldest first. Empty when the
