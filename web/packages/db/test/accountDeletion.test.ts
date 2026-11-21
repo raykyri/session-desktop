@@ -154,9 +154,10 @@ test("the job deletes the account's keys, billing, preferences, limits and sync 
     c.prepare(
       "INSERT INTO user_preferences (user_id, settings_json, updated_at) VALUES (?, '{}', ?)",
     ).run(u.id, at);
-    c.prepare(
-      "INSERT INTO user_limits (user_id, daily_tokens, daily_runs, updated_at) VALUES (?, 1, 1, ?)",
-    ).run(u.id, at);
+    c.prepare("INSERT INTO user_limits (user_id, weekly_tokens, updated_at) VALUES (?, 1, ?)").run(
+      u.id,
+      at,
+    );
     const handle = u.handle ?? "";
     c.prepare(
       "INSERT INTO sync_clients (client_id, u, last_seq, created_at, last_used_at) VALUES (?, ?, 1, ?, ?)",

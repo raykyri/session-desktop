@@ -9,10 +9,9 @@ import { publicProcedure, router } from "../base.js";
 export interface RuntimeLimits {
   runsPerUser: number;
   runTimeoutSeconds: number;
-  dailyTokens: number;
-  dailyRuns: number;
-  /** False while `SESSION_ENFORCE_LIMITS=0`: usage is recorded either way. */
-  enforced: boolean;
+  /** Included tokens per member per week (`03` K3), before any member's
+   * own allowance. */
+  weeklyTokens: number;
 }
 
 export interface RuntimeFeatures {
@@ -61,9 +60,7 @@ export function runtimeConfigFor(config: Config): RuntimeConfig {
     limits: {
       runsPerUser: config.limits.perUser,
       runTimeoutSeconds: Math.round(config.limits.runTimeoutMs / 1000),
-      dailyTokens: config.limits.dailyTokens,
-      dailyRuns: config.limits.dailyRuns,
-      enforced: config.limits.enforceDailyLimits,
+      weeklyTokens: config.limits.weeklyTokens,
     },
     features: searchFeatures(config),
   };

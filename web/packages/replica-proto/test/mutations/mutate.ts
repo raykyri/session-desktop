@@ -338,7 +338,7 @@ const MUTATIONS: Mutation[] = [
     // run queue (`01` U6), so the same fault is that record not written
     name: "N16 an ask's queued run is not written",
     file: "../mutators/src/threads.ts",
-    from: '      queueRun(tx, run, root, "r", i.model, i.effort, payOf(values, i.model));',
+    from: '      queueRun(tx, run, root, "r", i.model, i.effort, pay);',
     to: "      void queueRun;",
   },
   {

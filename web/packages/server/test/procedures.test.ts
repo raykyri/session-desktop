@@ -32,7 +32,7 @@ test("returns health status and runtime config for unauthenticated requests", as
   t.deepEqual(await anonymous.system.health(), { ok: true, version: "0.0.0" });
   const config = await anonymous.system.runtimeConfig();
   t.is(config.limits.runsPerUser, 2);
-  t.false(config.limits.enforced);
+  t.is(config.limits.weeklyTokens, 2_000_000);
   t.deepEqual(config.features, { webSearch: true, searchVendor: "parallel" });
   t.is(await anonymous.auth.me(), null);
   await t.throwsAsync(harness.caller(null).settings.get(), { message: /sign in/ });
@@ -68,16 +68,10 @@ test("settings round-trip with the shared instruction clamp", async (t) => {
   await t.throwsAsync(caller.settings.update({ settings: { textSize: 400 } }));
 });
 
-test("usage and the admin surface are gated on is_admin", async (t) => {
+test("the admin surface is gated on is_admin", async (t) => {
   const harness = createHarness(t);
   const user = harness.addUser("plain");
   const admin = harness.addUser("chief", { isAdmin: true });
-  const summary = await harness.caller(user).usage.summary();
-  t.is(summary.runs, 0);
-  t.is(summary.dailyRunLimit, 10);
-  // @ts-expect-error Only the current UTC day is supported, including at runtime.
-  await t.throwsAsync(harness.caller(user).usage.summary({ days: 7 }));
-
   await t.throwsAsync(harness.caller(user).admin.models.list(), { message: /administrator/ });
   t.like(await harness.caller(admin).admin.models.list(), { defaultModel: "gemini-flash" });
 });

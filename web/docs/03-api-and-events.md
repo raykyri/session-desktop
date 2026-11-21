@@ -69,9 +69,8 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `settings.get` | Q | → `UserSettings & { researchLaunchInstruction, defaultWorkspaceId, defaultModel }` | localStorage `session.settings.v1`, `research_launch_instruction_get` |
 | `settings.update` | M | partial → full | `research_launch_instruction_set` |
 | `interfaceDrafts.get` / `interfaceDrafts.set` | Q/M | `{ key }` / `{ key, value }` (an empty value deletes the entry) | `interface_draft_get/set` |
-| `usage.summary` | Q | no input → `UsageSummary` (one UTC day of token counts, an estimated cost, and the account's limits; no per-model breakdown) | — (new) |
+| `usage.get`, `usage.listRuns` | Q | the week's allowance, included use, reset, billing and keys; the week's runs (plan `03` K5). The daily `usage.summary` is removed | — (new) |
 | `admin.listUsers` | Q (admin) | → `User[]` with usage totals and limits | — (new) |
-| `admin.setLimits` | M (admin) | `{ userId, dailyTokens?, dailyRuns? }`: changes only the limits given; null resets to the deployment default | — (new) |
 | `admin.createInvites` | M (admin) | `{ count }` → sign-up codes (admin page "Sign-up codes"; each allows one new account registration via `/login?signup=<code>`, which the client passes to `/auth/github?invite=<code>`; `/login?invite=<code>` is still read) | — (new; also grants `invites_remaining` to users later) |
 
 ### `drafts`

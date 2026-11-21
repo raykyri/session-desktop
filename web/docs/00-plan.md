@@ -379,18 +379,16 @@ specs under `e2e/`.
 
 ### Cost and access controls
 
-Enforcement is **on** in the default deployment configuration. `web/fly.toml` sets
-`SESSION_ENFORCE_LIMITS = "1"`, so the per-account daily token and run limits
-refuse rather than merely record, and `SESSION_REQUIRE_INVITE = "1"`, so an
-account is created only against a code an admin minted
-(`06-auth-and-users.md` §3, §8). Both default to `0` in code and in
-`web/.env.example`, so they are explicitly configured in the deployment file, ensuring any changes to these limits are tracked in source control.
+Spending is bounded in every deployment by the weekly allowance of included
+tokens per member, its per-member overdraft and the per-run token cap
+(`06-auth-and-users.md` §8; `web/fly.toml` names their values), and
+`SESSION_REQUIRE_INVITE = "1"` means an account is created only against a
+code an admin minted (`06-auth-and-users.md` §3).
 
 `SESSION_QUEUED_PER_USER` (default 20) caps what one account may have waiting.
-The concurrency cap limits only active executions, whereas queued runs represent committed resource expenditure and are capped regardless of the `SESSION_ENFORCE_LIMITS` setting.
-Per-account overrides for the daily ceilings are stored in `user_limits` and are set
-from `/admin`, so raising one account's limit is not the same as switching
-enforcement off (`13-deployment-fly.md` §2).
+The concurrency cap limits only active executions, whereas queued runs represent committed resource expenditure and are capped as well.
+A member's own weekly allowance is a `user_limits` row (`weekly_tokens`,
+`13-deployment-fly.md` §2).
 
 ### Not built, by decision
 

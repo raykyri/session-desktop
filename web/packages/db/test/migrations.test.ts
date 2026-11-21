@@ -167,13 +167,20 @@ test("the history is the initial migration and the plan's numbered ones", (t) =>
   // `01` D5). Each milestone adds its own numbered migration beside it:
   // `0003_api_keys` (M5b), `0004_accounts` (M6), `0005_spaces` (M3; the
   // plan's `0001_spaces`, numbered after the ones that landed first),
-  // `0006_runs` (M5a).
+  // `0006_runs` (M5a), `0007_weekly_tokens` (M5b's allowance override).
   const journal = JSON.parse(
     readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8"),
   ) as { entries: { tag: string }[] };
   t.deepEqual(
     journal.entries.map((entry) => entry.tag),
-    ["0000_initial", "0003_api_keys", "0004_accounts", "0005_spaces", "0006_runs"],
+    [
+      "0000_initial",
+      "0003_api_keys",
+      "0004_accounts",
+      "0005_spaces",
+      "0006_runs",
+      "0007_weekly_tokens",
+    ],
   );
   t.deepEqual(
     readdirSync(MIGRATIONS_FOLDER)
@@ -185,6 +192,7 @@ test("the history is the initial migration and the plan's numbered ones", (t) =>
       "0004_accounts.sql",
       "0005_spaces.sql",
       "0006_runs.sql",
+      "0007_weekly_tokens.sql",
     ],
   );
 });

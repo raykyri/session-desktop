@@ -114,6 +114,9 @@ test("concurrency caps of zero are refused", (t) => {
     t.true((error as ConfigError).issues.join("\n").includes(name), name);
   }
   t.is(testConfig("/tmp/session-config-caps", { SESSION_RUNS_PER_USER: "1" }).limits.perUser, 1);
-  // Daily limits may still be zero.
-  t.is(testConfig("/tmp/session-config-caps", { SESSION_DAILY_RUNS: "0" }).limits.dailyRuns, 0);
+  // The weekly allowance may be zero: every member then runs on a key.
+  t.is(
+    testConfig("/tmp/session-config-caps", { SESSION_WEEKLY_TOKENS: "0" }).limits.weeklyTokens,
+    0,
+  );
 });

@@ -10,9 +10,11 @@ import { TRPCError, initTRPC } from "@trpc/server";
 import { hashClientIp } from "../auth/session.js";
 import type { Config } from "../config.js";
 import type { ServerDeps } from "../deps.js";
+import { storedAllowances } from "../keys/allowances.js";
 import type { Logger } from "../logger.js";
 import type { AbuseBucket, RateLimiter } from "../middleware/rateLimit.js";
 import { abuseBuckets, writesKey } from "../middleware/rateLimit.js";
+import type { Allowances } from "../runs/allowance.js";
 import type { Ledger } from "../runs/ledger.js";
 import { MemoryLedger } from "../runs/memoryLedger.js";
 import type { RunTexts } from "../runs/runTexts.js";
@@ -38,6 +40,9 @@ export interface AppContext {
   /** The sync core, whose event streams sign-out ends. */
   sync: SyncService | undefined;
   ledger: Ledger;
+  /** A member's weekly allowance, keys and billing (`03` K3, K4, K7), as
+   * the run loop reads them. */
+  allowances: Allowances;
   runTexts: RunTexts;
   models: readonly ModelEntry[];
   /** Seals and opens stored API keys under `SESSION_SECRET_KEY`. */
@@ -62,6 +67,7 @@ export function createAppContext(
   input: ContextInput,
 ): AppContext {
   const clientIp = input.clientIp ?? "unknown";
+  const box = createSecretBox(deps.config.secretKey);
   return {
     config: deps.config,
     db: deps.db,
@@ -74,9 +80,18 @@ export function createAppContext(
     sessionToken: input.sessionToken ?? null,
     sync: deps.sync,
     ledger: deps.ledger ?? new MemoryLedger(),
+    allowances:
+      deps.allowances ??
+      storedAllowances({
+        db: deps.db,
+        box,
+        logger,
+        config: deps.config,
+        ...(deps.now ? { now: deps.now } : {}),
+      }),
     runTexts: deps.runTexts ?? UNAVAILABLE_RUN_TEXTS,
     models: deps.models ?? MODEL_REGISTRY,
-    box: createSecretBox(deps.config.secretKey),
+    box,
     keyCheckTimeoutMs: deps.keyCheckTimeoutMs,
     now: deps.now ?? Date.now,
     directory: deps.directory ?? EMPTY_DIRECTORY,

@@ -9,6 +9,7 @@ import type { ExecutionContext } from "ava";
 import type { Allowances } from "../src/runs/allowance.js";
 import { billLabel } from "../src/runs/allowance.js";
 import { registerFixture } from "../src/runs/fixtureProvider.js";
+import { weekOf } from "../src/runs/ledger.js";
 import { KEY_STOPPED_MESSAGE } from "../src/runs/loop.js";
 import type { Providers } from "../src/runs/providers.js";
 import { createProviders } from "../src/runs/providers.js";
@@ -217,6 +218,47 @@ for (const change of ["removed", "replaced", "invalid", "billing"] as const) {
     );
   });
 }
+
+test("K9: a key-paid run is not stopped by the overdraft limit, however far past it included usage is", async (t) => {
+  const harness = createLoopHarness(t, {
+    allowances: keyBilling,
+    env: { SESSION_OVERDRAFT_TOKENS: "1" },
+    ledgerCheckpointMs: 20,
+  });
+  const user = harness.addUser("keyholder");
+  // the member's included usage is already past allowance (1) plus overdraft (1)
+  const at = Date.now();
+  const spent = harness.ledger.open({
+    runId: "earlier",
+    attempt: 1,
+    userId: user.id,
+    payer: "included",
+    week: weekOf(at),
+    kind: "research",
+    provider: "vertex",
+    model: "gemini-flash",
+    cachedInputRatio: 1,
+    counts: { inputTokens: 5_000, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+    openedAt: at,
+  });
+  harness.ledger.close(
+    spent,
+    { inputTokens: 5_000, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+    "finish",
+    at,
+  );
+  const request = harness.runRequest(user.id, "fixture:success-with-tools", {
+    model: "claude-fable",
+    payer: "key:anthropic",
+  });
+
+  t.is((await harness.agent.run(request)).outcome, "complete");
+  const [finish] = harness.store.finishes(request.runId);
+  t.is(finish?.summary.note, undefined, "no stop note");
+  const rows = harness.ledger.rows({ runId: request.runId });
+  t.true(rows.length >= 2, "every step ran");
+  t.true(rows.every((row) => row.payer === "key:anthropic" && row.ending === "finish"));
+});
 
 test("cached input counts at the model's ratio", async (t) => {
   const harness = createLoopHarness(t);

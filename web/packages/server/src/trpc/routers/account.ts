@@ -1,7 +1,7 @@
 // `auth`, `settings`, `usage`, and `admin`
 // (`03-api-and-events.md` §2, `06-auth-and-users.md` §6, §8).
 
-import { accountInvites, preferences, usage } from "@session/db";
+import { accountInvites, preferences } from "@session/db";
 import type { Me, UserSettings } from "@session/shared";
 import { clampResearchLaunchInstruction, userSettingsSchema } from "@session/shared";
 import { z } from "zod";
@@ -74,14 +74,6 @@ export const settingsRouter = router({
 
 export const usageRouter = router({
   ...usageProcedures,
-  summary: protectedProcedure.input(z.undefined()).query(({ ctx }) =>
-    repo(() =>
-      usage.summary(ctx.db, ctx.user.id, {
-        dailyTokens: ctx.config.limits.dailyTokens,
-        dailyRuns: ctx.config.limits.dailyRuns,
-      }),
-    ),
-  ),
 });
 
 export const adminRouter = router({

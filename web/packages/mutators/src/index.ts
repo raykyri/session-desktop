@@ -20,6 +20,7 @@ export {
   firstPayer,
   NO_KEY_TEXT,
   payerFor,
+  type Payer,
   type PayerDecision,
   needSpace,
   notFound,
