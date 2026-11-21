@@ -49,7 +49,10 @@ export type FixtureScenario =
   | "long-answer"
   /** An answer with a scripted widget that probes its sandbox and saves an
    * input (the widget end-to-end test). */
-  | "widget-answer";
+  | "widget-answer"
+  /** A read page and an answer of several passages citing it as `[^1]`:
+   * what the end-to-end branch and selection specs select from. */
+  | "cited-answer";
 
 export const DEFAULT_FIXTURE_SCENARIO: FixtureScenario = "success-with-tools";
 

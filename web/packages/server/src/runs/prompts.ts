@@ -9,7 +9,8 @@
 // The widget guidance, the imported-document form and the tweet reference
 // block were removed with the research API (plan `01` A2): widgets are not
 // built (decision P21), and documents and attachments have no records in the
-// spaces contract. M5a assembles a node's question from its record (`03` G7).
+// spaces contract. `context.ts` assembles a node's question from its record
+// (`03` G7).
 
 import {
   RESEARCH_LAUNCH_INSTRUCTION_TAG,

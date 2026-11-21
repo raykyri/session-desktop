@@ -93,6 +93,20 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   if (deps.config.env === "test") app.route("/api/sync/test", syncTestRoutes(sync));
   app.route("/api/sync", syncRoutes({ sync, config: deps.config, limiter }));
 
+  // `03` T3: a client that saw a gap in a run's deltas, or reconnected, reads
+  // the attempt's committed turns and the turn still streaming. The read
+  // scope is `pull`'s: a reader who may not read the run's text gets
+  // NOT_FOUND, as for a run that does not exist.
+  app.get("/api/runs/:id/live", (c) => {
+    const user = c.get("user");
+    const reader = user?.status === "active" ? user.handle : null;
+    const live = deps.runLive?.(c.req.param("id"), reader) ?? null;
+    c.header("Cache-Control", "no-store");
+    if (live === null)
+      return c.json({ code: "NOT_FOUND", message: "Not found.", serverTime: Date.now() }, 404);
+    return c.json(live, 200);
+  });
+
   // Fly's check. 503 until migrations and run reconciliation are done and
   // again from the first moment of the drain, so the proxy never routes to a
   // process that cannot finish what it accepts (`13-deployment-fly.md` §5).

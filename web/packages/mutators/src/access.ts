@@ -51,6 +51,7 @@ import type {
   SpaceRole,
   StoredRecord,
   ThreadRec,
+  TurnRec,
 } from "./records.js";
 import { banKey, memberKey, personOf, spaceKey, spaceOf, threadKey } from "./records.js";
 
@@ -127,6 +128,7 @@ export function readsAudience(g: Reader, a: Audience, u: string | null): boolean
     case "reply":
     case "comment":
     case "run":
+    case "turn":
     case "answer":
       return sp !== null && readsSpace(g, sp, u);
     case "request":
@@ -153,6 +155,15 @@ export function canRead(g: Reader, r: StoredRecord, u: string | null): boolean {
  * one, gets the placeholder. A removed thread's author is served to the
  * author only. */
 export function redact(g: Reader, r: StoredRecord, u: string | null): StoredRecord {
+  if (r.kind === "turn") {
+    // a turn has no moderation state of its own: it follows the ask it
+    // belongs to, as its answer does (`turnItem`)
+    const item = turnItem(g, r);
+    if (item?.mod === null) return r;
+    if (item === undefined) return { ...r, blocks: [] } satisfies TurnRec;
+    if (item.mod === "hidden" && ((u !== null && item.u === u) || isOwnerOf(g, r.s, u))) return r;
+    return { ...r, blocks: [] } satisfies TurnRec;
+  }
   if (!("mod" in r) || r.mod === null) return r;
   const author = u !== null && r.u === u;
   if (r.mod === "hidden" && (author || isOwnerOf(g, r.s, u))) return r;
@@ -174,6 +185,16 @@ export function redact(g: Reader, r: StoredRecord, u: string | null): StoredReco
     case "answer":
       return { ...r, md: "", pages: [] } satisfies AnswerRec;
   }
+}
+
+/** The ask a turn belongs to: its run's node, or the thread for the root
+ * (`node: "r"`). Undefined when the run or the ask is gone (the turn is
+ * erased with them). */
+export function turnItem(g: Reader, r: TurnRec): ThreadRec | NodeRec | undefined {
+  const run = g.byKey(`run:${r.run}`);
+  if (run?.kind !== "run") return undefined;
+  const item = g.byKey(run.node === "r" ? threadKey(run.th) : `node:${run.node}`);
+  return item?.kind === "thread" || item?.kind === "node" ? item : undefined;
 }
 
 /** A record as `u` may read it now, or null when it is outside their scope. */

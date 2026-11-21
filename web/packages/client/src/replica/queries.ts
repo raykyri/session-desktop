@@ -26,7 +26,7 @@ import {
 import { useSyncExternalStore } from "react";
 
 import { useReplica, useReplicaQuery } from "./ReplicaProvider.js";
-import { NotLoaded, known, loose, type ReplicaSource, type Unknown } from "./source.js";
+import { NotLoaded, UNKNOWN, known, loose, type ReplicaSource, type Unknown } from "./source.js";
 
 const byCreation = <T extends { createdAt: string; id?: string }>(a: T, b: T) =>
   a.createdAt === b.createdAt
@@ -217,6 +217,37 @@ export function askTreeOf(source: ReplicaSource, th: string): AskTree {
 
 export function useAskTree(th: string): AskTree | Unknown {
   return useReplicaQuery((source) => askTreeOf(source, th), [th]);
+}
+
+/** The text a run's current attempt has written so far (02 §3.3, 03 T1,
+ * T2): the assistant text of its committed turns, then the text still
+ * streaming. A reader without the deltas (signed out, or between a gap and
+ * its `/live` read) shows the committed turns. */
+export function runTextOf(source: ReplicaSource, run: RunRec): string {
+  const turns = (loose(source.list("turn", { th: run.th })) ?? [])
+    .filter((t) => t.run === run.id && t.attempt === run.attempt)
+    .sort((a, b) => a.n - b.n);
+  const parts = turns
+    .filter((t) => t.role === "assistant")
+    .map((t) =>
+      t.blocks
+        .flatMap((b) => {
+          const text = (b as { text?: unknown }).text;
+          return b.type === "text" && typeof text === "string" ? [text] : [];
+        })
+        .join(""),
+    );
+  const live = source.liveText?.(run.id) ?? null;
+  if (live?.attempt === run.attempt && live.n >= turns.length) parts.push(live.text);
+  return parts
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+export function useRunText(run: RunRec | undefined): string {
+  const text = useReplicaQuery((source) => (run ? runTextOf(source, run) : ""), [run]);
+  return text === UNKNOWN ? "" : text;
 }
 
 export function repliesOf(source: ReplicaSource, th: string): ReplyRec[] {

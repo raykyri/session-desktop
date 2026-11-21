@@ -84,6 +84,11 @@ export interface Tx extends Reads {
    * changes the record's audience fields (`audienceOf`). */
   put(r: Draft): void;
   del(key: string): void;
+  /** Write a record again as it is, with the next rev, so every reader is
+   * served it again as they may read it now: a turn when the moderation
+   * state of the ask it belongs to changes (`redact`). Nothing for a key
+   * that holds no record. */
+  touch(key: string): void;
   /** The mutation's id at `ordinal` (1, 2, …): see `deriveId`. */
   id(ordinal: number): string;
 }

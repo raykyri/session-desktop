@@ -21,7 +21,7 @@
 // mark runs still `running` `interrupted`, and queue every interrupted run
 // again that has had fewer than two automatic resumes (`03` E2, K1).
 
-import { findModel } from "@session/shared";
+import { OUT_OF_TOKENS_TEXT, findModel } from "@session/shared";
 
 import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";
@@ -42,8 +42,7 @@ export const MAX_AUTO_RESUMES = 2;
 /** How far ahead `fail.at` is set when the 429 retries are spent. */
 export const RATE_RETRY_AFTER_MS = 60_000;
 
-export const OUT_OF_TOKENS_MESSAGE =
-  "You're out of tokens until Friday. You can still post, or add an API key in Usage.";
+export const OUT_OF_TOKENS_MESSAGE = OUT_OF_TOKENS_TEXT;
 
 export interface DispatcherDeps {
   config: Pick<Config, "limits">;
@@ -230,8 +229,11 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
   const tick = (): number => {
     let started = 0;
     const at = now();
+    const busy = new Set([...running.keys()].map((key) => key.slice(0, key.lastIndexOf(":"))));
     for (const run of store.queued()) {
-      if (running.has(`${run.runId}:${run.attempt}`) || !admit(run, at)) continue;
+      // an older attempt of the run still settling here (a cancel, then Run
+      // again at once, `03` E4): the new one starts once it has
+      if (busy.has(run.runId) || !admit(run, at)) continue;
       const entry = findModel(run.model);
       // `03` K10: the payer is checked again before the attempt starts.
       const payer = entry ? payerAtStart(budgetDeps, run.userId, entry, run.payer) : run.payer;

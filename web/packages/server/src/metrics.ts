@@ -63,6 +63,14 @@ function labels(pairs: Readonly<Record<string, string>>): string {
 /** The request-latency histogram. Everything else is sampled on demand. */
 export class MetricsRegistry {
   readonly #series = new Map<string, Series>();
+  readonly #runFailures = new Map<string, number>();
+
+  /** A run ended `failed` (`03` E5): `cls` is the provider error class, or
+   * the failure's `why` when it is not a provider error. An alert reads
+   * `cls="auth"`: the deployment's own credential was rejected. */
+  runFailed(cls: string): void {
+    this.#runFailures.set(cls, (this.#runFailures.get(cls) ?? 0) + 1);
+  }
 
   observeRequest(method: string, pathname: string, status: number, seconds: number): void {
     const normalizedMethod = KNOWN_METHODS.has(method) ? method : "other";
@@ -114,6 +122,10 @@ export class MetricsRegistry {
       );
       lines.push(`session_http_request_duration_seconds_count${labels(base)} ${series.count}`);
     }
+    lines.push("# HELP session_run_failures_total Runs that ended failed, by error class (03 E5).");
+    lines.push("# TYPE session_run_failures_total counter");
+    for (const [cls, total] of this.#runFailures)
+      lines.push(`session_run_failures_total${labels({ cls })} ${total}`);
     return lines;
   }
 }

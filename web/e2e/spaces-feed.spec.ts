@@ -6,12 +6,12 @@
 // request shows "Not sent", and a reload keeps nothing but the draft.
 //
 // The channels and threads are written through the sync routes before the
-// specs run (`world.ts`); asks stay queued on this server (05 M5a).
+// specs run (`world.ts`); asks are answered by the run loop with fixture
+// providers.
 
 import { expect, test } from "@playwright/test";
 
 import {
-  NO_RUNS,
   card,
   compose,
   navigate,
@@ -144,8 +144,14 @@ test("no model or effort text in a card", async ({ page }) => {
   expect(markup).not.toMatch(/claude-fable|gemini-flash|data-effort|data-model/);
 });
 
-test("an ask runs and is answered", () => {
-  test.skip(true, NO_RUNS);
+test("an ask runs and is answered", async ({ page }) => {
+  await compose(page, "fixture:success what is a skip list");
+  const thread = card(page, "what is a skip list");
+  await expect(thread.getByText(/^(Queued|Researching · Step \d of 4)$/)).toBeVisible();
+  await expect(thread.getByText(/is a layered linked list/)).toBeVisible({ timeout: 30_000 });
+  await expect(thread.locator(".status")).toHaveCount(0);
+  // the footer's meta counts the answer's tokens once it is answered
+  await expect(thread.locator(".fmeta")).toContainText(/tokens/);
 });
 
 test("deleting one's own post asks first", async ({ page }) => {

@@ -6,6 +6,7 @@ import { refuse } from "./errors.js";
 import { Notifier } from "./notify.js";
 import {
   answerKey,
+  keyOf,
   nodeKey,
   saveKey,
   statsKey,
@@ -29,6 +30,7 @@ import {
   removed,
   stale,
   text,
+  turnsOf,
   ulidFields,
   ulidS,
   userLogRecords,
@@ -156,8 +158,9 @@ export const THREADS = {
         for (const x of userLogRecords(tx, "save", p.id)) tx.del(saveKey(x.u, x.th));
         tx.del(answerKey(p.id));
       }
-      for (const r of tx.list("run", { th: p.id }).filter((x) => x.node === "r"))
-        tx.del(`run:${r.id}`);
+      const roots = tx.list("run", { th: p.id }).filter((x) => x.node === "r");
+      for (const r of roots) tx.del(`run:${r.id}`);
+      for (const x of turnsOf(tx, p.id, roots)) tx.del(keyOf(x));
       if (!kept) tx.put({ ...counts, saves: 0 });
       tx.put({
         ...p,

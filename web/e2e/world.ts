@@ -19,6 +19,10 @@ const SYNC_HEADERS = {
 /** `PROTOCOL_VERSION` of `@session/sync`. */
 const PROTOCOL_VERSION = Number(PROTOCOL_HEADERS["session-protocol"]);
 
+/** The model and effort the seeded asks run on: a registry entry and an
+ * effort it accepts. Fixture providers answer every model. */
+export const MODEL = { model: "gemini-flash", effort: "medium" } as const;
+
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /** A ULID at `at` (ms). */
@@ -168,10 +172,102 @@ export class Writer {
     return this.ok("saved.set", { kind: "thread", id: thread, on: true });
   }
 
+  /** An ask; the run loop answers it with fixture providers, the scenario
+   * chosen by a `fixture:<name>` marker in `q` (`fixtureProvider.ts`). */
+  async ask(space: string, q: string): Promise<{ thread: string; run: string }> {
+    const id = ulid();
+    const r = (await this.ok("threads.create", {
+      id,
+      space,
+      kind: "ask",
+      q,
+      ...MODEL,
+    })) as { run: string };
+    return { thread: id, run: r.run };
+  }
+
+  /** Continue, Branch or Branch here under `parent` of `thread`. */
+  async fork(
+    thread: string,
+    parent: string,
+    q: string,
+    extra: { quote?: string; b?: number } = {},
+  ): Promise<{ node: string; run: string }> {
+    const id = ulid();
+    const r = (await this.ok("research.forkNode", {
+      id,
+      thread,
+      parent,
+      kind: "ask",
+      q,
+      ...extra,
+      ...MODEL,
+    })) as { run: string };
+    return { node: id, run: r.run };
+  }
+
+  /** The run records of a space log as this person reads them. */
+  async runs(space: string): Promise<Map<string, { status: string; attempt: number }>> {
+    const res = await this.request.post(`${APP_ORIGIN}/api/sync/snapshot`, {
+      headers: SYNC_HEADERS,
+      data: { log: `space:${space}` },
+    });
+    const { records } = (await res.json()) as {
+      records: {
+        key: string;
+        record: { kind: string; id: string; status: string; attempt: number };
+      }[];
+    };
+    const out = new Map<string, { status: string; attempt: number }>();
+    for (const { record } of records)
+      if (record.kind === "run")
+        out.set(record.id, { status: record.status, attempt: record.attempt });
+    return out;
+  }
+
+  /** Waits until every run of `runs` in `space` is complete. */
+  async answered(space: string, ...runs: string[]): Promise<void> {
+    await expect
+      .poll(
+        async () => {
+          const held = await this.runs(space);
+          return runs.every((r) => held.get(r)?.status === "complete");
+        },
+        { timeout: 60_000, intervals: [200] },
+      )
+      .toBe(true);
+  }
+
   /** The owner removes a post with a reason. */
   remove(post: string, note: string) {
     return this.ok("moderation.decide", { item: `p:${post}`, decision: "removed", note });
   }
+}
+
+/** The answer's passage with the branches (the `cited-answer` fixture's
+ * second paragraph). */
+export const BRANCHED_PASSAGE =
+  "In these systems, a public score decides which entries are kept, and the filter never reports a false negative.";
+
+/** An ask of `asker` in `space`, answered by the run loop with the
+ * `cited-answer` fixture, and its branches, each answered:
+ * - on the second passage, `first` by `other` with `nested` under it, and
+ *   `darknet` by the asker (one tree of three);
+ * - from the footer, `footer` by the asker. */
+export async function branchedAsk(asker: Writer, other: Writer, space: string) {
+  const root = await asker.ask(
+    space,
+    "fixture:cited-answer which filters trade space for accuracy",
+  );
+  await asker.answered(space, root.run);
+  const quote = { quote: BRANCHED_PASSAGE, b: 1 };
+  const first = await other.fork(root.thread, "r", "which of these let you trade", quote);
+  const darknet = await asker.fork(root.thread, "r", "how does the darknet ranking work", quote);
+  const footer = await asker.fork(root.thread, "r", "what about counting filters");
+  await asker.answered(space, first.run, darknet.run, footer.run);
+  const nested = await other.fork(root.thread, first.node, "is the score public");
+  await asker.answered(space, nested.run);
+  return { thread: root.thread, first, darknet, footer, nested };
 }
 
 /** A person of the spec's world: a context of their own, signed in as the

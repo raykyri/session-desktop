@@ -131,6 +131,13 @@ export class StagedTx implements Tx {
     if (this.byKey(key)) this.staged.set(key, null);
   }
 
+  touch(key: string): void {
+    const r = this.byKey(key);
+    if (!r) return;
+    const committed = this.source.byKey(key);
+    this.staged.set(key, { ...r, rev: (committed?.rev ?? r.rev - 1) + 1 });
+  }
+
   id(ordinal: number): string {
     return deriveId(this.me, this.mutationId, ordinal);
   }

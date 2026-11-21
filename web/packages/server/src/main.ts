@@ -7,9 +7,10 @@
 // `running` as `interrupted`, then the dispatcher and the maintenance
 // jobs), and begin listening on the configured port.
 //
-// Runs are not started in this build: the dispatcher needs the `RunStore`
-// over the run records, which M5a implements; the ledger (`usage_events`)
-// and the stored allowances it will read are wired here.
+// Runs (`03` E1-E5): the run store over the run records, the service that
+// runs attempts and the dispatcher that claims queued runs
+// (`runs/runtime.ts`), over the ledger (`usage_events`) and the stored
+// allowances.
 //
 // Shutdown (`SIGTERM`): the health check fails, later envelopes answer
 // SERVICE_UNAVAILABLE and the sync streams close, the run drain runs, the WAL
@@ -30,10 +31,11 @@ import type { ServerDeps } from "./deps.js";
 import { createReadiness } from "./health.js";
 import { storedAllowances } from "./keys/allowances.js";
 import { defaultLogger, type Logger } from "./logger.js";
+import { MetricsRegistry } from "./metrics.js";
 import { RateLimiter } from "./middleware/rateLimit.js";
 import { fixturePageFetch } from "./runs/fixtureProvider.js";
 import { recordRunTexts } from "./runs/recordRunTexts.js";
-import { createNoopRunsService } from "./runs/service.js";
+import { createRunsRuntime } from "./runs/runtime.js";
 import { SqliteLedger } from "./runs/sqliteLedger.js";
 import { createSecretBox } from "./secretBox.js";
 import { SyncService, type SyncServiceOptions } from "./sync/service.js";
@@ -171,20 +173,32 @@ export function main(): RunningServer {
   const sync = new SyncService({ db, config, logger, ...testFaults(config) });
   const ledger = new SqliteLedger(db);
   // What the run loop and the dispatcher read of a member's allowance, keys
-  // and billing (`03` K4, K7, K9); handed to the dispatcher with the run
-  // store in M5a.
+  // and billing (`03` K4, K7, K9).
   const allowances = storedAllowances({
     db,
     box: createSecretBox(config.secretKey),
     logger,
     config,
   });
+  const metrics = new MetricsRegistry();
+  const runs = createRunsRuntime({
+    config,
+    db,
+    sync,
+    ledger,
+    allowances,
+    logger,
+    onFailure: (cls) => metrics.runFailed(cls),
+    ...(config.fixtureProviders ? { fetch: fixturePageFetch } : {}),
+  });
   const deps: ServerDeps = {
     config,
     db,
     sync,
-    // No attempt runs before M5a, so there is nothing to drain yet.
-    runs: createNoopRunsService(),
+    // the drain aborts every running attempt, so each records itself
+    // `interrupted` and closes its ledger row (`01` S5)
+    runs: runs.service,
+    runLive: (runId, reader) => runs.store.live(runId, reader),
     // `usage.get` and `usage.listRuns` read the ledger and the run records
     // (`03` K1, K5).
     ledger,
@@ -200,7 +214,13 @@ export function main(): RunningServer {
     ...(config.fixtureProviders ? { fetch: fixturePageFetch } : {}),
   };
 
-  bootServer({ databasePath: config.databasePath, sync, ledger, logger });
+  bootServer({
+    databasePath: config.databasePath,
+    sync,
+    ledger,
+    logger,
+    dispatcher: runs.dispatcher,
+  });
 
   const limiter = new RateLimiter();
   const maintenance = setInterval(() => {
@@ -218,7 +238,7 @@ export function main(): RunningServer {
   // Marks readiness as ready once the HTTP server begins listening
   // (`13-deployment-fly.md` §5).
   const readiness = createReadiness("starting");
-  const app = createApp({ ...deps, limiter, readiness });
+  const app = createApp({ ...deps, limiter, readiness, metrics });
   const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
     readiness.ready();
     logger.info({ host: config.host, port: info.port }, "session-server listening");
@@ -235,6 +255,7 @@ export function main(): RunningServer {
     sync.drain();
     clearInterval(maintenance);
     clearInterval(nightly);
+    runs.dispatcher.stop();
     logger.info({ signal }, "shutting down");
     // Enforces a drain deadline to guarantee database close and WAL checkpoint
     // completion before Fly sends SIGKILL (30s after SIGTERM)
