@@ -24,6 +24,8 @@ import {
 import { UNKNOWN } from "../../replica/source.js";
 import { useThreadUiStore } from "../../stores/threadUi.js";
 import { ChannelHeader } from "../channels/ChannelHeader.js";
+import { FrozenBanner } from "../channels/ChannelInfoDialog.js";
+import { useChannelInvite } from "../channels/useChannelInvite.js";
 import { NewThreadComposer } from "../composer/NewThreadComposer.js";
 import { FeedFrame, FeedPlaceholder, FeedRow } from "../shell/Frames.js";
 import { showToast } from "../shell/Toast.js";
@@ -278,6 +280,8 @@ export function FeedPage({ kind, name, t, sel }: FeedPageProps) {
   // A channel's log is read while its view is open (01 R5).
   const source = useReplica();
   useEffect(() => (channelId ? source.watch?.(channelId) : undefined), [source, channelId]);
+  // a channel invite link opened on this page (W6.9)
+  useChannelInvite(viewer, channel && channel !== UNKNOWN ? channel : null);
 
   if (ids === UNKNOWN || channel === UNKNOWN || joined === UNKNOWN)
     return (
@@ -289,8 +293,10 @@ export function FeedPage({ kind, name, t, sel }: FeedPageProps) {
 
   const ch: ChannelView | null = kind === "channel" ? channel : null;
   const locked = ch !== null && ch.private && !ch.joined;
+  // a frozen channel takes no new threads (04 B6)
   const showComposer =
     !locked &&
+    !ch?.frozen &&
     (signedOut || (writer && (ch === null || ch.joined))) &&
     (ch !== null || joined.length > 0 || signedOut);
 
@@ -321,6 +327,11 @@ export function FeedPage({ kind, name, t, sel }: FeedPageProps) {
       {ch ? (
         <FeedRow lead head>
           <ChannelHeader channel={ch} />
+        </FeedRow>
+      ) : null}
+      {ch?.frozen ? (
+        <FeedRow lead>
+          <FrozenBanner name={ch.name} />
         </FeedRow>
       ) : null}
       {showComposer ? (

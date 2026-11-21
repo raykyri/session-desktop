@@ -26,6 +26,7 @@ import {
   type Index,
   type Kind,
   type PreCtx,
+  type PreLimit,
   type Prediction,
   type Source,
   type StoredRecord,
@@ -106,6 +107,10 @@ export class World {
   readonly random: () => number;
   /** The Session accounts: the cast, and whoever writes. */
   readonly accounts = new Set(["olga", "ada", "mona", "mel", "otto", "eve"]);
+  /** The `pre`-stage limits a test sets (`04` Z1): uses left per person and
+   * limit. None set: no limits, as in the prototype's suite. */
+  limits: Partial<Record<PreLimit, number>> | null = null;
+  private readonly used = new Map<string, number>();
 
   constructor(seed = 1) {
     this.random = rng(seed);
@@ -171,6 +176,15 @@ export class World {
       inviteCodeTaken: (code) => this.store.uniqueKey("invite.code", code) !== undefined,
       queuedRuns: () => this.all("run").filter((r) => r.u === me && r.status === "queued").length,
     };
+    const limits = this.limits;
+    if (limits)
+      ctx.allow = (limit) => {
+        const key = `${me}:${limit}`;
+        const n = this.used.get(key) ?? 0;
+        if (n >= (limits[limit] ?? Infinity)) return false;
+        this.used.set(key, n + 1);
+        return true;
+      };
     try {
       authorize(tx, def, parsed.data);
       const values = def.pre?.(ctx, parsed.data) ?? {};

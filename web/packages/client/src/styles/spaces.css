@@ -2402,3 +2402,155 @@
 .rhid-btn:hover {
   background: var(--surface-fill-hover);
 }
+
+/* ---- Notifications (02 W2.6; the mock's `notifPage`) ---- */
+
+.nsub {
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.nlist {
+  list-style: none;
+  margin: 0;
+  padding: 4px 6px;
+}
+
+.nlist li + li {
+  border-top: 1px solid var(--surface-divider);
+}
+
+.nrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 10px;
+  margin: 2px 0;
+  border-radius: 10px;
+  text-align: left;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+.nrow:hover {
+  background: var(--surface-fill-hover);
+}
+
+.nrow.unread {
+  background: color-mix(in srgb, var(--accent-color) 6%, transparent);
+  color: var(--text-primary);
+}
+
+.nrow.unread:hover {
+  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+}
+
+.nav-av {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+}
+
+.nk {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--content-card-bg);
+  color: var(--text-muted);
+  box-shadow: 0 0 0 1px var(--surface-divider);
+}
+
+.nk svg.i {
+  width: 11px;
+  height: 11px;
+}
+
+.nk-removed {
+  color: var(--status-attention-fg);
+}
+
+.nk-mention {
+  color: var(--accent-color);
+}
+
+.ntx {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ntx b {
+  color: var(--text-heading);
+  font-weight: 600;
+}
+
+.ntx .nt {
+  color: var(--text-heading);
+}
+
+.nrow:not(.unread) .ntx .nt {
+  color: var(--text-primary);
+}
+
+.ntx .nr {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.ntx small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.ndot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--unread-dot);
+}
+
+/* ---- Frozen channels, the member list and channel invite links (02
+   W6.8-W6.10) ---- */
+
+.frozen-banner {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  color: var(--status-attention-fg);
+  background: color-mix(in srgb, var(--status-attention-fg) 10%, var(--content-card-bg));
+}
+
+.mbhead {
+  margin: 4px 0 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.mblist li,
+.ilist li {
+  align-items: center;
+}
+
+.ilist .ilink {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  color: var(--text-primary);
+}

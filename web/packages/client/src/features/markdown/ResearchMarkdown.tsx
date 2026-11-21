@@ -101,7 +101,7 @@ export function MarkdownLink({
   const safe = safeHref(href);
   if (!safe) return <span {...rest}>{children}</span>;
   return (
-    <a {...rest} href={safe} target="_blank" rel="noopener noreferrer">
+    <a {...rest} href={safe} target="_blank" rel="noopener noreferrer nofollow ugc">
       {children}
     </a>
   );
@@ -120,7 +120,7 @@ export function BlockedMarkdownImage({ src, alt }: ComponentPropsWithoutRef<"img
       className="text-fg-secondary underline underline-offset-2"
       href={safe}
       target="_blank"
-      rel="noopener noreferrer"
+      rel="noopener noreferrer nofollow ugc"
     >
       {alt ? `Open image: ${alt}` : "Open external image"}
     </a>

@@ -12,6 +12,7 @@ import { ipLimitKey } from "../src/net/ipKey.js";
 
 import type { Harness } from "./helpers.js";
 import { createHarness } from "./helpers.js";
+import { Person, newId } from "./syncHttp.js";
 
 /** A harness whose limiter clock stands still, so no bucket refills while a
  * test spends it. */
@@ -238,6 +239,144 @@ test("refusals are counted per bucket for /metrics", async (t) => {
   }
   const metrics = await harness.app.request("/metrics", { headers: { Authorization: "Bearer m" } });
   t.regex(await metrics.text(), /session_rate_limited_total\{bucket="handleChecks"\} 1/);
+});
+
+/* --------------------------------------------- the mutators' pre rows */
+
+/** A write past its `pre`-stage limit: TOO_MANY_REQUESTS, and nothing
+ * recorded, so the seq it carried is the client's next one still. */
+async function refusedUnrecorded(
+  t: Parameters<typeof createHarness>[0],
+  p: Person,
+  name: string,
+  input: unknown,
+) {
+  const before = recordCount(p.h);
+  const answer = await p.write(name, input);
+  t.like(answer, { ok: false, error: { code: "TOO_MANY_REQUESTS" } });
+  t.is(recordCount(p.h), before);
+  // the seq was not used: the client's last seq is the one before it
+  const sent = p.seq;
+  const again = (await p.register(p.clientId)).body;
+  t.true(again.ok && again.lastSeq === sent - 1);
+}
+
+const recordCount = (h: Harness) => rowCount(h, "records");
+
+test("limit: spaces.create, 5 a day per user (pre)", async (t) => {
+  const harness = pinned(t);
+  const olga = new Person(harness, harness.addUser("olga"));
+  for (let index = 0; index < 5; index += 1)
+    await olga.ok("spaces.create", { id: newId(), name: `room-${index}` });
+  await refusedUnrecorded(t, olga, "spaces.create", { id: newId(), name: "room-5" });
+  const mona = new Person(harness, harness.addUser("mona"));
+  await t.notThrowsAsync(mona.ok("spaces.create", { id: newId(), name: "monas" }));
+});
+
+test("limit: invites.create (channel), 20 a day per user (pre); 50 open per channel", async (t) => {
+  const harness = pinned(t, { SESSION_LIMIT_CHANNEL_INVITES_PER_DAY: "60" });
+  const olga = new Person(harness, harness.addUser("olga"));
+  const lab = newId();
+  await olga.ok("spaces.create", { id: lab, name: "lab", vis: "private" });
+  for (let index = 0; index < 50; index += 1)
+    await olga.ok("invites.create", { id: newId(), space: lab, days: 7 });
+  // the 51st open link is refused for the channel's state, and recorded
+  const full = await olga.write("invites.create", { id: newId(), space: lab, days: 7 });
+  t.like(full, {
+    ok: false,
+    error: {
+      code: "PRECONDITION_FAILED",
+      message: "This channel has 50 open invite links. Revoke one to make another.",
+    },
+  });
+  const sent = olga.seq;
+  const again = (await olga.register(olga.clientId)).body;
+  t.true(again.ok && again.lastSeq === sent);
+
+  const daily = pinned(t);
+  const ada = new Person(daily, daily.addUser("ada"));
+  const club = newId();
+  await ada.ok("spaces.create", { id: club, name: "club", vis: "private" });
+  for (let index = 0; index < 20; index += 1)
+    await ada.ok("invites.create", { id: newId(), space: club, days: 7 });
+  await refusedUnrecorded(t, ada, "invites.create", { id: newId(), space: club, days: 7 });
+});
+
+test("limit: spaces.join, 60 an hour per user (pre)", async (t) => {
+  const harness = pinned(t);
+  const olga = new Person(harness, harness.addUser("olga"));
+  const lounge = newId();
+  await olga.ok("spaces.create", { id: lounge, name: "lounge" });
+  const mel = new Person(harness, harness.addUser("mel"));
+  for (let index = 0; index < 30; index += 1) {
+    await mel.ok("spaces.join", { space: lounge });
+    await mel.ok("spaces.leave", { space: lounge });
+  }
+  await refusedUnrecorded(t, mel, "spaces.join", { space: lounge });
+});
+
+test("limit: spaces.directory and spaces.byName, 60 a minute per user or per IP, IPv6 by /64", async (t) => {
+  const harness = pinned(t);
+  const directory = (ip: string, cookie?: string) =>
+    harness.request("/api/trpc/spaces.directory", {
+      headers: { "Fly-Client-IP": ip },
+      ...(cookie ? { cookie } : {}),
+    });
+  for (let index = 0; index < 59; index += 1)
+    t.is((await directory(`2001:db8:5:6::${(index + 1).toString(16)}`)).status, 200);
+  const byName = await harness.request(
+    `/api/trpc/spaces.byName?input=${encodeURIComponent(JSON.stringify({ name: "lab" }))}`,
+    { headers: { "Fly-Client-IP": "2001:db8:5:6:ffff::1" } },
+  );
+  t.is(byName.status, 200);
+  // the 61st from the same /64 prefix, from an address it has not used
+  t.is((await directory("2001:db8:5:6:aaaa::2")).status, 429);
+  // another prefix, and a signed-in reader on the same prefix, have their own
+  t.is((await directory("2001:db8:5:7::1")).status, 200);
+  const cookie = harness.signIn(harness.addUser("reader"));
+  t.is((await directory("2001:db8:5:6::1", cookie)).status, 200);
+});
+
+test("limit: admin.models.*, 60 a minute per site admin", async (t) => {
+  const harness = pinned(t);
+  const admin = harness.caller(harness.addUser("site.admin", { isAdmin: true }));
+  for (let index = 0; index < 60; index += 1) await admin.admin.models.list();
+  await t.throwsAsync(admin.admin.models.list(), { code: "TOO_MANY_REQUESTS" } as never);
+  await t.throwsAsync(admin.admin.models.setDefaultEffort({ effort: "low" }), {
+    code: "TOO_MANY_REQUESTS",
+  } as never);
+  const other = harness.caller(harness.addUser("other.admin", { isAdmin: true }));
+  await t.notThrowsAsync(other.admin.models.list());
+});
+
+test("limit: About and the removal note, 300 characters, BAD_REQUEST and recorded", async (t) => {
+  const harness = pinned(t);
+  const olga = new Person(harness, harness.addUser("olga"));
+  const lounge = newId();
+  await olga.ok("spaces.create", { id: lounge, name: "lounge" });
+  const long = await olga.write("spaces.update", { id: lounge, desc: "x".repeat(301) });
+  t.like(long, { ok: false, error: { code: "BAD_REQUEST" } });
+  const th = newId();
+  await olga.ok("threads.create", { id: th, space: lounge, kind: "post", q: "A post" });
+  const note = await olga.write("moderation.decide", {
+    item: `p:${th}`,
+    decision: "removed",
+    note: "y".repeat(301),
+  });
+  t.like(note, { ok: false, error: { code: "BAD_REQUEST" } });
+  // both used their seq: recorded
+  const sent = olga.seq;
+  const again = (await olga.register(olga.clientId)).body;
+  t.true(again.ok && again.lastSeq === sent);
+});
+
+test("the pre-stage refusals are counted per bucket for /metrics", async (t) => {
+  const harness = pinned(t, { SESSION_METRICS_TOKEN: "m", SESSION_LIMIT_SPACES_PER_DAY: "1" });
+  const olga = new Person(harness, harness.addUser("olga"));
+  await olga.ok("spaces.create", { id: newId(), name: "one" });
+  await olga.write("spaces.create", { id: newId(), name: "two" });
+  const metrics = await harness.app.request("/metrics", { headers: { Authorization: "Bearer m" } });
+  t.regex(await metrics.text(), /session_rate_limited_total\{bucket="spacesCreated"\} 1/);
 });
 
 /* ------------------------------------------------------------- IP key */

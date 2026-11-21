@@ -131,6 +131,11 @@ const envSchema = z.object({
   SESSION_LIMIT_INVITES_PER_DAY: positiveInteger(10, 1),
   SESSION_LIMIT_INVITE_READS_PER_MINUTE: positiveInteger(60, 1),
   SESSION_LIMIT_HANDLE_CHECKS_PER_MINUTE: positiveInteger(30, 1),
+  SESSION_LIMIT_SPACES_PER_DAY: positiveInteger(5, 1),
+  SESSION_LIMIT_CHANNEL_INVITES_PER_DAY: positiveInteger(20, 1),
+  SESSION_LIMIT_JOINS_PER_HOUR: positiveInteger(60, 1),
+  SESSION_LIMIT_DIRECTORY_PER_MINUTE: positiveInteger(60, 1),
+  SESSION_LIMIT_ADMIN_PER_MINUTE: positiveInteger(60, 1),
   // Sync transport limits (`01` A3).
   SESSION_LIMIT_REGISTER_PER_MINUTE: positiveInteger(10, 1),
   SESSION_LIMIT_STREAMS_PER_USER: positiveInteger(10, 1),
@@ -241,6 +246,16 @@ export interface AbuseLimits {
   invitesPerDay: number;
   inviteReadsPerMinute: number;
   handleChecksPerMinute: number;
+  /** `spaces.create` per user (`pre`). */
+  spacesPerDay: number;
+  /** `invites.create` (channel invite links) per user (`pre`). */
+  channelInvitesPerDay: number;
+  /** `spaces.join` per user (`pre`). */
+  joinsPerHour: number;
+  /** `spaces.directory` and `spaces.byName` per user, or per IP signed out. */
+  directoryPerMinute: number;
+  /** `admin.models.*` per site admin. */
+  adminPerMinute: number;
   /** `POST /api/sync/register` per user (`01` A3). */
   registerPerMinute: number;
   /** Open `/api/sync/events` streams per user; one per client id. */
@@ -490,6 +505,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       invitesPerDay: value.SESSION_LIMIT_INVITES_PER_DAY,
       inviteReadsPerMinute: value.SESSION_LIMIT_INVITE_READS_PER_MINUTE,
       handleChecksPerMinute: value.SESSION_LIMIT_HANDLE_CHECKS_PER_MINUTE,
+      spacesPerDay: value.SESSION_LIMIT_SPACES_PER_DAY,
+      channelInvitesPerDay: value.SESSION_LIMIT_CHANNEL_INVITES_PER_DAY,
+      joinsPerHour: value.SESSION_LIMIT_JOINS_PER_HOUR,
+      directoryPerMinute: value.SESSION_LIMIT_DIRECTORY_PER_MINUTE,
+      adminPerMinute: value.SESSION_LIMIT_ADMIN_PER_MINUTE,
       registerPerMinute: value.SESSION_LIMIT_REGISTER_PER_MINUTE,
       streamsPerUser: value.SESSION_LIMIT_STREAMS_PER_USER,
       applyBytes: value.SESSION_LIMIT_APPLY_BYTES,

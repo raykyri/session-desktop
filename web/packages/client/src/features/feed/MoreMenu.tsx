@@ -18,7 +18,15 @@ export interface MoreAction {
   disabledReason?: string | undefined;
 }
 
-export function MoreMenu({ actions }: { actions: readonly MoreAction[] }) {
+/** `inDialog`: the menu opens over a feed dialog (z 40-43, `spaces.css`), as
+ * the member list's does. */
+export function MoreMenu({
+  actions,
+  inDialog = false,
+}: {
+  actions: readonly MoreAction[];
+  inDialog?: boolean;
+}) {
   if (actions.length === 0) return null;
   return (
     <span className="more inline-flex">
@@ -27,7 +35,12 @@ export function MoreMenu({ actions }: { actions: readonly MoreAction[] }) {
           <DotsIcon />
         </Menu.Trigger>
         <Menu.Portal>
-          <Menu.Positioner side="bottom" align="end" sideOffset={6} className="z-(--z-popover)">
+          <Menu.Positioner
+            side="bottom"
+            align="end"
+            sideOffset={6}
+            className={inDialog ? "z-[44]" : "z-(--z-popover)"}
+          >
             <Menu.Popup className={`${SHELL_MENU_POPUP} fpop-menu`}>
               {actions.map((action) =>
                 action.disabledReason !== undefined ? (

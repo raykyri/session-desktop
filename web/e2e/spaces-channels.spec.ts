@@ -1,6 +1,12 @@
-// Channels end to end, M4 parts (02 §12.2 `spaces-channels`; W6.1-W6.3,
-// W6.6, W6.7): join and leave from the header and Browse, leaving a private
-// channel, New channel with its validation and CONFLICT, and About.
+// Channels end to end (02 §12.2 `spaces-channels`). M4: join and leave from
+// the header and Browse, leaving a private channel, New channel with its
+// validation and CONFLICT, and About (W6.1-W6.3, W6.6, W6.7). M6 (04 B3, B4,
+// §6.6): a member sees a new About without a reload; a private channel's
+// invite link admits one person and refuses the next; the owner removes a
+// member's post with a reason, which the member sees as the placeholder and
+// a notification and the moderation log lists; the owner bans a member of
+// an open channel, the log lists the ban, and the member's writes there are
+// refused with the ban message.
 //
 // The viewer owns one open channel; olga owns two open channels the viewer
 // has not joined, two private ones the viewer joined by invite links, and a
@@ -9,14 +15,16 @@
 
 import { expect, test } from "@playwright/test";
 
-import { initials, signInAndOpen, toast } from "./spaces.js";
-import { channelName, person, type Writer } from "./world.js";
+import { signIn } from "./helpers.js";
+import { card, initials, signInAndOpen, toast } from "./spaces.js";
+import { MODEL, channelName, person, ulid, type Writer } from "./world.js";
 
 const LOGIN = "e2e-channels";
 
 const w = {
   me: null as Writer | null,
   own: "",
+  ownId: "",
   open: "",
   browse: "",
   lab: "",
@@ -30,6 +38,7 @@ test.beforeAll(async ({ browser }) => {
   w.me = me;
   w.own = channelName("chan-own");
   const own = await me.channel(w.own);
+  w.ownId = own;
   await me.post(own, "A thread in the viewer's channel");
   w.open = channelName("chan-open");
   const open = await olga.channel(w.open);
@@ -165,4 +174,180 @@ test("the moderation log stacks over the info dialog and Escape closes it", asyn
   await expect(log).toHaveCount(0);
   await expect(info).toBeVisible();
   await expect(open).toBeFocused();
+});
+
+// ---------------------------------------------------------------- M6
+
+const REMOVED_POST = "A post the owner of the channel removes";
+const REASON = "Off topic for this channel.";
+
+const m = {
+  mona: null as Writer | null,
+  nick: null as Writer | null,
+  priv: "",
+  removed: "",
+};
+
+test.beforeAll(async ({ browser }) => {
+  const me = w.me;
+  if (!me) throw new Error("the viewer is made first");
+  const mona = await person(browser, "e2e-channels-mona");
+  const nick = await person(browser, "e2e-channels-nick");
+  m.mona = mona;
+  m.nick = nick;
+  await mona.join(w.ownId);
+  await nick.join(w.ownId);
+  m.removed = await mona.post(w.ownId, REMOVED_POST);
+  m.priv = channelName("chan-priv");
+  const priv = await me.channel(m.priv, { vis: "private" });
+  await me.post(priv, "Notes for the members of the private channel");
+});
+
+test("B3: a member's open info dialog shows the new About without a reload", async ({
+  browser,
+}) => {
+  const context = await browser.newContext();
+  const member = await context.newPage();
+  await signIn(member, { login: "e2e-channels-mona" });
+  await member.goto(`/c/${w.own}`);
+  await member.getByRole("button", { name: "About this channel" }).click();
+  const info = member.getByRole("dialog", { name: `#${w.own}` });
+  await expect(info).toBeVisible();
+  await w.me?.ok("spaces.update", { id: w.ownId, desc: "Read slowly, and argue kindly." });
+  await expect(info).toContainText("Read slowly, and argue kindly.");
+  await context.close();
+});
+
+test("B4: a private channel's link admits one person; the same link is refused to the next", async ({
+  browser,
+  page,
+}) => {
+  await page.goto(`/c/${m.priv}`);
+  await page.getByRole("button", { name: "About this channel" }).click();
+  const info = page.getByRole("dialog", { name: new RegExp(`^#${m.priv}`) });
+  await info.getByRole("button", { name: `Invite to #${m.priv}` }).click();
+  const links = page.getByRole("dialog", { name: `Invite to #${m.priv}` });
+  await links.getByRole("button", { name: "Create an invite link" }).click();
+  await expect(toast(page)).toHaveText("Invite link created.");
+  const link = (await links.locator(".ilink").first().textContent()) ?? "";
+  expect(link).toMatch(new RegExp(`/c/${m.priv}#[0-9a-z]{26}$`));
+
+  // a second account opens it, joins and reads the channel
+  const guest = await browser.newContext();
+  const guestPage = await guest.newPage();
+  const joined = await signIn(guestPage, { login: "e2e-channels-guest" });
+  await guestPage.goto(link);
+  await expect(toast(guestPage)).toHaveText(`Joined #${m.priv}.`);
+  await expect(guestPage).toHaveURL(new RegExp(`/c/${m.priv}$`));
+  await expect(card(guestPage, "Notes for the members of the private channel")).toBeVisible();
+  await expect(guestPage.locator(".sphead").getByRole("button", { name: "Joined" })).toBeVisible();
+
+  // a third account using the same link is refused
+  const late = await browser.newContext();
+  const latePage = await late.newPage();
+  await signIn(latePage, { login: "e2e-channels-late" });
+  await latePage.goto(link);
+  await expect(toast(latePage, "alert")).toHaveText(
+    "This invite link has expired or was already used.",
+  );
+  await expect(latePage.locator(".sphead").getByText("Members only")).toBeVisible();
+  await expect(card(latePage, "Notes for the members of the private channel")).toHaveCount(0);
+
+  // the owner sees who used it
+  const handle = (joined as { handle?: string }).handle ?? "";
+  await expect(links).toContainText(`Used by @${handle}`);
+  await guest.close();
+  await late.close();
+});
+
+test("§6.6: a removal with a reason reaches the member, their notifications and the log", async ({
+  browser,
+  page,
+}) => {
+  const mona = m.mona?.handle ?? "";
+  const me = w.me?.handle ?? "";
+  const context = await browser.newContext();
+  const member = await context.newPage();
+  await signIn(member, { login: "e2e-channels-mona" });
+  await member.goto(`/c/${w.own}`);
+  await expect(card(member, REMOVED_POST)).toBeVisible();
+
+  // the owner opens the log first: it lists the removal without a reload
+  await page.goto(`/c/${w.own}`);
+  const post = card(page, REMOVED_POST);
+  await post.getByRole("button", { name: "More" }).click();
+  await page.getByRole("menuitem", { name: "Remove…" }).click();
+  const dialog = page.getByRole("dialog", { name: `Remove @${mona}'s post` });
+  await expect(dialog).toContainText(`“${REMOVED_POST}”`);
+  await dialog.getByRole("textbox", { name: /Reason, shown with the removal/ }).fill(REASON);
+  await dialog.getByRole("button", { name: "Remove" }).click();
+  await expect(toast(page)).toHaveText("Removed.");
+  const placeholder = page.locator(`#card-${m.removed}`);
+  await expect(placeholder).toContainText(`Removed by @${me}`);
+  await page.getByRole("button", { name: "About this channel" }).click();
+  await page
+    .getByRole("dialog", { name: `#${w.own}` })
+    .getByRole("button", { name: "Moderation log" })
+    .click();
+  const log = page.getByRole("dialog", { name: "Moderation log" });
+  await expect(log).toContainText(`@${me} removed @${mona}'s post`);
+  await expect(log).toContainText(`Reason: “${REASON}”`);
+  await expect(log).not.toContainText(REMOVED_POST);
+
+  // the member's feed shows the placeholder with the reason and no text, also
+  // after a reload
+  const theirs = member.locator(`#card-${m.removed}`);
+  for (const reload of [false, true]) {
+    if (reload) await member.reload();
+    await expect(theirs).toContainText(`Removed by @${me}`);
+    await expect(theirs).toContainText(`Reason: “${REASON}”`);
+    await expect(theirs).toContainText(`Post by [deleted] in #${w.own}`);
+    await expect(theirs).not.toContainText(REMOVED_POST);
+  }
+  // and the member's notifications list the removal with the reason
+  await member.goto("/notifications");
+  await expect(member.locator('.nrow[data-notif="removed"]')).toContainText(
+    `@${me} removed your post: “${REASON}”`,
+  );
+  await context.close();
+});
+
+test("§6.6: the owner bans a member of an open channel; the log lists it; their writes are refused", async ({
+  browser,
+  page,
+}) => {
+  const nick = m.nick?.handle ?? "";
+  const me = w.me?.handle ?? "";
+  await page.goto(`/c/${w.own}`);
+  await page.getByRole("button", { name: "About this channel" }).click();
+  const info = page.getByRole("dialog", { name: `#${w.own}` });
+  await info.getByRole("button", { name: /^Members, \d+$/ }).click();
+  const members = page.getByRole("dialog", { name: `Members of #${w.own}` });
+  const row = members.locator(`[data-member="${nick}"]`);
+  await row.getByRole("button", { name: "More" }).click();
+  await page.getByRole("menuitem", { name: `Ban from #${w.own}` }).click();
+  await expect(toast(page)).toHaveText(`Banned @${nick} from #${w.own}.`);
+  await expect(members.locator(`[data-banned="${nick}"]`)).toBeVisible();
+  await expect(members.locator(`[data-member="${nick}"]`)).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await info.getByRole("button", { name: "Moderation log" }).click();
+  const log = page.getByRole("dialog", { name: "Moderation log" });
+  await expect(log).toContainText(`@${me} banned @${nick} from #${w.own}`);
+
+  // the banned member still reads the open channel; an ask there is refused
+  // with the ban message, and so is joining again
+  const answer = await m.nick?.send([
+    ["threads.create", { id: ulid(), space: w.ownId, kind: "ask", q: "Still here?", ...MODEL }],
+  ]);
+  expect(answer?.[0]?.error?.message).toBe(`You are banned from #${w.own}.`);
+  const context = await browser.newContext();
+  const banned = await context.newPage();
+  await signIn(banned, { login: "e2e-channels-nick" });
+  await banned.goto(`/c/${w.own}`);
+  await expect(card(banned, "A thread in the viewer's channel")).toBeVisible();
+  await expect(banned.getByRole("textbox", { name: "Ask or post" })).toHaveCount(0);
+  await banned.locator(".sphead").getByRole("button", { name: "Join" }).click();
+  await expect(toast(banned, "alert")).toHaveText(`You are banned from #${w.own}.`);
+  await expect(banned.locator(".sphead").getByRole("button", { name: "Join" })).toBeVisible();
+  await context.close();
 });

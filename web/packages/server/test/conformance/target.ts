@@ -193,6 +193,10 @@ export class HttpTestServer implements TestServer {
       SESSION_LIMIT_WRITES_PER_MINUTE: UNLIMITED,
       SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: UNLIMITED,
       SESSION_LIMIT_REGISTER_PER_MINUTE: UNLIMITED,
+      SESSION_LIMIT_SPACES_PER_DAY: UNLIMITED,
+      SESSION_LIMIT_CHANNEL_INVITES_PER_DAY: UNLIMITED,
+      SESSION_LIMIT_JOINS_PER_HOUR: UNLIMITED,
+      SESSION_LIMIT_DIRECTORY_PER_MINUTE: UNLIMITED,
       SESSION_LIMIT_APPLY_BYTES: String(64 * 1024 * 1024),
       // a key of this target's own, as the in-memory target has: another
       // target does not open its tokens

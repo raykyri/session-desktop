@@ -8,6 +8,7 @@ export * from "./access.js";
 export * from "./errors.js";
 export * from "./ids.js";
 export * from "./mutators.js";
+export { OPEN_LINKS_MAX } from "./invites.js";
 export * from "./notify.js";
 export * from "./records.js";
 export {

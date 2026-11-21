@@ -74,6 +74,7 @@ import {
   type Audience,
   type LogId,
   type PreCtx,
+  type PreLimit,
   type RunRec,
   type StoredRecord,
   type Tx,
@@ -216,6 +217,12 @@ export interface SyncServerOptions {
 /** The result of `serverApply`: the function's result and the version of
  * the commit (null when it changed nothing), or the refusal; a refusal or a
  * fault commits nothing. */
+/** The counter of the `pre`-stage limits (`SyncServer.setPreLimits`). */
+export interface PreLimits {
+  /** Whether `u` has a use of `limit` left; uses it when so. */
+  take(u: string, limit: PreLimit): boolean;
+}
+
 export type ServerApplyResult<T> =
   | { ok: true; result: T; version: number | null }
   | { ok: false; error: ReturnType<Refusal["toError"]> };
@@ -233,6 +240,17 @@ export class SyncServer implements ServerHalf {
   /** The server's time: never decreasing, so every table's expiry order is
    * the order of its times. */
   private lastAt: number;
+  /** Counts the `pre`-stage limits of `04` Z1 (`setPreLimits`). */
+  private preLimits: PreLimits | null = null;
+
+  /** Sets what counts the `pre`-stage limits (channels made, channel invite
+   * links made and joins, per person; `04` Z1): `take` answers whether the
+   * person has a use of the limit left, and uses it. Null (the default)
+   * applies none: the prototype's suite and the tests of other rules. The
+   * web server sets its in-memory buckets here at boot. */
+  setPreLimits(limits: PreLimits | null): void {
+    this.preLimits = limits;
+  }
 
   constructor(options: SyncServerOptions) {
     this.store = options.store;
@@ -585,6 +603,8 @@ export class SyncServer implements ServerHalf {
             (k) => (this.store.byKey(k) as RunRec).status === "queued",
           ).length,
       };
+      const limits = this.preLimits;
+      if (limits) pre.allow = (limit) => limits.take(u, limit);
       const values = def.pre?.(pre, input) ?? {};
       const ran = def.run(tx, input, values);
       const told = def.notify?.(tx, input, ran, { isAccount: (h) => this.store.isAccount(h) });

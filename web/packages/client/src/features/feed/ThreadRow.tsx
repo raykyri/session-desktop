@@ -32,7 +32,7 @@ import { NotSentLine } from "../shell/NotSent.js";
 import { showToast } from "../shell/Toast.js";
 
 import { AnswerProse, type PassageGroup } from "./AnswerProse.js";
-import { useFeedViewer, useRunChoice } from "./FeedContext.js";
+import { FrozenChannel, useFeedViewer, useRunChoice } from "./FeedContext.js";
 import { ConfirmDelete } from "./FeedDialog.js";
 import { ModerationNote, rowText } from "./Moderated.js";
 import { MoreMenu, type MoreAction } from "./MoreMenu.js";
@@ -57,7 +57,10 @@ export const ThreadRow = memo(function ThreadRow({ id, now }: { id: string; now:
         <RemovedCard view={view} />
       </FeedRow>
     );
-  return thread.k === "post" ? <PostRow view={view} now={now} /> : <AskRow view={view} now={now} />;
+  const row =
+    thread.k === "post" ? <PostRow view={view} now={now} /> : <AskRow view={view} now={now} />;
+  // a frozen channel's threads: the viewer's own Delete, nothing new
+  return view.space?.frozen ? <FrozenChannel name={view.space.name}>{row}</FrozenChannel> : row;
 });
 
 /** The card after a thread's, for focus once the thread is gone (02 §10.1),
@@ -292,7 +295,7 @@ function ThreadCard({
   unavailable?: boolean;
 }) {
   const { thread, counts, space, saved } = view;
-  const { writer, signedOut, signIn, me } = useFeedViewer();
+  const { writer, active, frozen, signedOut, signIn, me } = useFeedViewer();
   const writes = useWrites();
   const choice = useRunChoice();
   const navigate = useNavigate();
@@ -384,11 +387,14 @@ function ThreadCard({
     ? { onClick: signIn }
     : writer
       ? { onClick: followUp }
-      : { disabled: true, title: `${label} opens once you have an invite` };
+      : frozen !== null
+        ? { disabled: true, title: `#${frozen} is frozen` }
+        : { disabled: true, title: `${label} opens once you have an invite` };
 
+  // a save is the viewer's own record: a frozen channel allows it (04 B6)
   const saveGate = signedOut
     ? { onClick: signIn }
-    : writer
+    : active
       ? { onClick: () => void writes.save(thread.id, !saved) }
       : { disabled: true, title: "Saving opens once you have an invite" };
 
