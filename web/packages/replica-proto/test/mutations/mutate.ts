@@ -855,6 +855,12 @@ const MUTATIONS: Mutation[] = [
     from: '        for (const x of tx.list("run", th)) if (under.has(x.node)) tx.del(`run:${x.id}`);\n',
     to: "",
   },
+  {
+    name: "M1b-23 a removed node's copies keep their text",
+    file: "../mutators/src/rules.ts",
+    from: '  if (p?.kind === "thread" && p.mod !== "removed") erase(tx, p, note);',
+    to: "  void p;",
+  },
 ];
 
 interface Outcome {

@@ -739,9 +739,12 @@ export function predictEffects(
         erased.add(ck);
         keys.set(ck, null);
       };
-      if (r.kind === "thread") {
-        // nothing else of the removed content is kept (C12)
-        keys.set(key, {
+      /** A removed thread: nothing else of its content is kept (C12); the
+       * threads opened from its nodes are removed the same way (M1b review
+       * 14). */
+      const eraseThread = (t: StoredRecord & Fields) => {
+        const tk = `thread:${String(t["id"])}`;
+        keys.set(tk, {
           mod: "removed",
           q: "",
           t: null,
@@ -756,11 +759,22 @@ export function predictEffects(
           modBy: me,
           modNote: note,
         });
-        keys.set(`counts:${r.id}`, { r: 0, saves: 0 });
-        for (const [ck] of ofThread(r.id, "node", "answer", "reply", "comment", "run", "save"))
+        const id = String(t["id"]);
+        keys.set(`counts:${id}`, { r: 0, saves: 0 });
+        for (const [ck] of ofThread(id, "node", "answer", "reply", "comment", "run", "save"))
           drop(ck);
         for (const [ck, x] of dump)
-          if (x.kind === "notif" && x.type === "mention" && x.th === r.id) keys.set(ck, null);
+          if (x.kind === "notif" && x.type === "mention" && x.th === id) keys.set(ck, null);
+        for (const [, x] of ofThread(id, "node")) copies(x);
+      };
+      /** The thread a node was opened as, unless it is removed already. */
+      const copies = (n: StoredRecord) => {
+        if (n.kind !== "node" || n.promoted === null) return;
+        const p = get(`thread:${n.promoted}`);
+        if (p?.kind === "thread" && p["mod"] !== "removed") eraseThread(p);
+      };
+      if (r.kind === "thread") {
+        eraseThread(r);
         notify(String(r.u), "removed", r.s, r.id, key, note);
       } else if (r.kind === "node") {
         // the node's subtree: its descendants go, and every answer, comment
@@ -780,6 +794,7 @@ export function predictEffects(
           if (x.kind === "answer" && x.th === r.th && under.has(x.node)) drop(ck);
         }
         keys.set(`counts:${r.th}`, { r: ofThread(r.th, "node").length - (under.size - 1) });
+        for (const x of dump.values()) if (x.kind === "node" && under.has(x.id)) copies(x);
       } else if (r.kind === "reply" || r.kind === "comment") {
         keys.set(key, { mod: "removed", t: "" });
         if (r.parent === null)

@@ -234,11 +234,21 @@ export function nodesUnder(nodes: readonly NodeRec[], id: string): Set<string> {
   return under;
 }
 
+/** Erase the thread a node was opened as (`promoted`), if it is not removed
+ * already: removing a node removes its copies (M1b review 14). */
+function erasePromoted(tx: Tx, n: NodeRec, note: string | null): void {
+  if (n.promoted === null) return;
+  const p = tx.byKey(threadKey(n.promoted));
+  if (p?.kind === "thread" && p.mod !== "removed") erase(tx, p, note);
+}
+
 /** Remove a moderated item for good: its text is erased from storage, and so
  * is everything under it (a thread's nodes, answers, runs, replies,
  * comments, saves and the mention notifications about it; a node's answer
- * and comments; a top-level reply's or comment's replies). The item stays
- * as a placeholder; a thread's keeps who removed it and the reason. */
+ * and comments; a top-level reply's or comment's replies), and so is every
+ * thread opened from an erased node (`from`), with the same placeholder
+ * rules. The item stays as a placeholder; a thread's keeps who removed it
+ * and the reason. */
 export function erase(
   tx: Tx,
   r: ThreadRec | NodeRec | ReplyRec | CommentRec,
@@ -253,7 +263,8 @@ export function erase(
   switch (r.kind) {
     case "thread": {
       const th = { th: r.id };
-      for (const x of tx.list("node", th)) drop(`node:${x.id}`);
+      const nodes = tx.list("node", th);
+      for (const x of nodes) drop(`node:${x.id}`);
       for (const x of tx.list("answer", th)) drop(keyOf(x));
       for (const x of tx.list("reply", th)) drop(`reply:${x.id}`);
       for (const x of tx.list("comment", th)) drop(`comment:${x.id}`);
@@ -281,6 +292,7 @@ export function erase(
         modNote: note,
         updatedAt: tx.now,
       });
+      for (const x of nodes) erasePromoted(tx, x, note);
       return;
     }
     case "node": {
@@ -298,6 +310,7 @@ export function erase(
       for (const x of tx.list("run", th).filter((y) => under.has(y.node))) drop(`run:${x.id}`);
       tx.put({ ...r, q: "", look: null, quote: null, mod: "removed" });
       recount(tx, tx.byKey(threadKey(r.th)) as ThreadRec);
+      for (const x of nodes) if (under.has(x.id)) erasePromoted(tx, x, note);
       break;
     }
     case "reply":

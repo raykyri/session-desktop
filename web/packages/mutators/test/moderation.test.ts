@@ -140,3 +140,35 @@ test("prefs.set keeps the layout in the person's user log", (t) => {
   t.like(w.get("prefs:mel"), { u: "mel", layout: "wide" });
   refused(t, w.apply("mel", "prefs.set", { layout: "narrow" }), "BAD_REQUEST");
 });
+
+test("removing a node or its thread also removes the threads opened from it (M1b review 14)", (t) => {
+  const { w, open } = cast(t);
+  const th = ask(t, w, "mel", open);
+  const n = fork(t, w, "mona", th);
+  const deep = fork(t, w, "otto", th, n);
+  const copy = w.id();
+  const deepCopy = w.id();
+  ok(t, w.apply("otto", "threads.create", { id: copy, from: { th, node: n } }));
+  ok(t, w.apply("mel", "threads.create", { id: deepCopy, from: { th, node: deep } }));
+  // the node's removal: its copy, and the copy of a node under it
+  ok(
+    t,
+    w.apply("olga", "moderation.decide", {
+      item: `f:${th}:${n}`,
+      decision: "removed",
+      note: "spam",
+    }),
+  );
+  for (const id of [copy, deepCopy]) {
+    t.like(w.get(`thread:${id}`), { mod: "removed", q: "", from: null, modNote: "spam" });
+    t.is(w.get(`answer:${id}`), undefined);
+  }
+  // the thread's removal: the copy of a node of it
+  const th2 = ask(t, w, "mel", open);
+  const m = fork(t, w, "mona", th2);
+  const copy2 = w.id();
+  ok(t, w.apply("otto", "threads.create", { id: copy2, from: { th: th2, node: m } }));
+  ok(t, w.apply("olga", "moderation.decide", { item: `a:${th2}`, decision: "removed" }));
+  t.like(w.get(`thread:${copy2}`), { mod: "removed", q: "", from: null });
+  t.is(w.get(`answer:${copy2}`), undefined);
+});
