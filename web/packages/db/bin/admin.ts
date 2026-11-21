@@ -6,7 +6,9 @@
 //   npm run db:admin -- <handle> [--revoke]    make the account with this
 //                                              handle a site admin, or stop
 //   npm run db:admin -- --invite               print one root account invite
-//   npm run db:admin -- --delete <handle>      the account-deletion job
+//   npm run db:admin -- --delete <handle>      the account-deletion job, with
+//                                              the server stopped
+//                                              (`web/docs/runbooks/delete-account.md`)
 //   npm run db:admin -- --new-history          replace the sync history id at
 //                                              the next boot, after a restore
 //                                              that kept the file's identity
@@ -64,9 +66,14 @@ try {
       throw new Error(`No account has the handle @${handle ?? ""}.`);
     }
     const deleted = accounts.deleteAccount(db, account.id);
+    const spaces = deleted.spaces;
     process.stdout.write(
       `deleted the sign-in identity of @${deleted.handle ?? ""}; ` +
         `${deleted.sessions} session(s) ended, ${deleted.revokedInvites} open invite(s) revoked; ` +
+        (spaces
+          ? `${spaces.items} item(s) deleted, ${spaces.records} record(s) removed, ` +
+            `frozen: ${spaces.frozen.length ? spaces.frozen.map((n) => `#${n}`).join(", ") : "none"}; `
+          : "") +
         "the handle stays reserved\n",
     );
   } else {

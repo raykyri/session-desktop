@@ -21,6 +21,13 @@ import { channels, keysOf, newId, Person } from "./syncHttp.js";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Holds the event loop open: `closeServer` waits on unref'd timers, which
+ * alone would let the worker end before the test does. */
+function holdOpen(t: { teardown(fn: () => void): void }) {
+  const keep = setInterval(() => undefined, 1000);
+  t.teardown(() => clearInterval(keep));
+}
+
 /** How many pulls the server half ran under `u`'s scope. */
 function countPulls(h: Harness, u: string) {
   const counter = { n: 0 };
@@ -74,6 +81,7 @@ function stalled(port: number, cookie: string, clientId: string, cursors: object
 }
 
 test("a stream whose client stops reading is closed at its queue bound, leaves the hub, and its route ends", async (t) => {
+  holdOpen(t);
   const h = createHarness(t);
   const { mona, open } = await channels(h);
   await mona.register();
@@ -112,6 +120,7 @@ test("a stream whose client stops reading is closed at its queue bound, leaves t
 });
 
 test("closeServer closes a connection that never ends after the grace", async (t) => {
+  holdOpen(t);
   const server = await new Promise<ServerType>((resolve) => {
     // a handler that never answers
     const s = serve(

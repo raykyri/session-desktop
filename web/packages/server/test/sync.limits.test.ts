@@ -187,9 +187,15 @@ test("spaces.directory and spaces.byName are limited per caller, each call of a 
   await anon.spaces.directory();
   await anon.spaces.directory();
   await t.throwsAsync(anon.spaces.directory(), { code: "TOO_MANY_REQUESTS" } as never);
+  // byName takes from the directory's bucket too; its own bucket is the
+  // smaller one here, from another address
+  const own = pinned(t, {
+    SESSION_LIMIT_DIRECTORY_PER_MINUTE: "100",
+    SESSION_LIMIT_BY_NAME_PER_MINUTE: "3",
+  });
   const names = ["a", "b", "c", "d"];
   const input = Object.fromEntries(names.map((name, i) => [i, { name }]));
-  const res = await h.request(
+  const res = await own.request(
     `/api/trpc/${names.map(() => "spaces.byName").join(",")}?batch=1&input=${encodeURIComponent(JSON.stringify(input))}`,
     { headers: { "Fly-Client-IP": "3.3.3.3" } },
   );

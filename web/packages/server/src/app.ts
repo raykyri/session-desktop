@@ -20,7 +20,7 @@ import { MetricsRegistry, renderMetrics } from "./metrics.js";
 import { csrfGuard, rejectAuthorizationHeader } from "./middleware/csrf.js";
 import { requestLogging } from "./middleware/logging.js";
 import { requestMetrics } from "./middleware/metrics.js";
-import { RateLimiter } from "./middleware/rateLimit.js";
+import { RateLimiter, preLimits } from "./middleware/rateLimit.js";
 import { requestContext } from "./middleware/requestId.js";
 import { securityHeaders } from "./middleware/security.js";
 import { clientStatic } from "./middleware/static.js";
@@ -66,6 +66,8 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   const logger = deps.logger ?? defaultLogger(deps.config.env);
   const sync = deps.sync ?? new SyncService({ db: deps.db, config: deps.config, logger });
   deps.sync = sync;
+  // `04` Z1: the mutators' `pre`-stage limits count in this app's buckets
+  sync.server.setPreLimits(preLimits(limiter, deps.config.abuse));
   deps.directory ??= storeDirectory(sync.store);
   const app = new Hono<AppEnv>();
 

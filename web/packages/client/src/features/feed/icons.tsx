@@ -135,3 +135,27 @@ export const EmptySaveIcon = () => (
     <path d="M4.5 2.5h7v11l-3.5-2.6-3.5 2.6Z" />
   </I>
 );
+
+/** The mock's `AT_IC`: a mention. */
+export const AtIcon = () => (
+  <I>
+    <circle cx="8" cy="8" r="2.4" />
+    <path d="M10.4 8v1a1.9 1.9 0 0 0 3.6.8A6 6 0 1 0 11 13" />
+  </I>
+);
+
+/** The mock's `PERSON_IC`: an invite used. */
+export const PersonIcon = () => (
+  <I>
+    <circle cx="8" cy="5.6" r="2.6" />
+    <path d="M3 13.5c.5-2.6 2.6-4 5-4s4.5 1.4 5 4" />
+  </I>
+);
+
+/** The mock's `EMPTY_BELL`: the empty notifications page. */
+export const BellIcon = () => (
+  <I>
+    <path d="M4 11.5V7.25a4 4 0 0 1 8 0v4.25l1 1.25H3Z" />
+    <path d="M6.6 14a1.5 1.5 0 0 0 2.8 0" />
+  </I>
+);

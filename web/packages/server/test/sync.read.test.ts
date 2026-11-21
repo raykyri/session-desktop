@@ -27,7 +27,9 @@ const read = (h: ReturnType<typeof createHarness>, body: unknown, cookie?: strin
 
 test("forty open channels and a private one in one request, signed out, each filtered by its scope", async (t) => {
   // 41 reads cost 1 + 4 snapshots: two such requests fit in 10
-  const h = createHarness(t, { env: { SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: "10" } });
+  const h = createHarness(t, {
+    env: { SESSION_LIMIT_SNAPSHOTS_PER_MINUTE: "10", SESSION_LIMIT_SPACES_PER_DAY: "41" },
+  });
   const olga = new Person(h, h.addUser("olga"));
   const open: string[] = [];
   for (let i = 0; i < 40; i++) {
@@ -362,7 +364,7 @@ test("a read that fails answers INTERNAL_SERVER_ERROR in its place, is logged, a
 });
 
 test("the directory over the store: pages of open channels in creation order, none repeated or skipped, none private, for any caller", async (t) => {
-  const h = createHarness(t);
+  const h = createHarness(t, { env: { SESSION_LIMIT_SPACES_PER_DAY: "100" } });
   const olga = new Person(h, h.addUser("olga"));
   // ids chosen in reverse: the walk follows the server's order, not the id's
   const at = Date.now();

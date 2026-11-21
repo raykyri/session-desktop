@@ -474,7 +474,8 @@ export const notificationTypeSchema = z.enum([
 /** A notification (`notif:<id>`) in the recipient's user log, written in the
  * same transaction as the write that causes it (the mutator's `notify`
  * stage). It carries ids, no item text; a `removed` one carries the owner's
- * note. Served only while the recipient may read `sp`.
+ * note in `note`, an `invite_used` one the code that was used, which admits
+ * nobody any more. Served only while the recipient may read `sp`.
  * - `item`: the key of the record it is about (`reply:<id>`, `node:<id>`,
  *   `comment:<id>`, `thread:<id>`), null for `invite_used`.
  * - `actor`: who caused it (the new member for `invite_used`), null for

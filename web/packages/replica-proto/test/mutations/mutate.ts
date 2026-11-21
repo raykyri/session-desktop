@@ -97,8 +97,14 @@ const MUTATIONS: Mutation[] = [
   {
     name: "X6 the invite code is taken from the client's id",
     file: "../mutators/src/invites.ts",
-    from: "    pre: (ctx) => {\n      const B32",
-    to: "    pre: (ctx, i) => {\n      if (i.id) return { code: i.id.toLowerCase() };\n      const B32",
+    from: '      within(ctx, "invites.create");\n      const B32',
+    to: '      within(ctx, "invites.create");\n      if (i.id) return { code: i.id.toLowerCase() };\n      const B32',
+    also: [
+      {
+        from: "    pre: (ctx) => {\n      // 20 links",
+        to: "    pre: (ctx, i) => {\n      // 20 links",
+      },
+    ],
   },
   {
     name: "X7 an invite link is not used up",
@@ -1235,6 +1241,60 @@ const MUTATIONS: Mutation[] = [
     file: "../sync/src/client/client.ts",
     from: 'new StagedTx(source, me, msToIso(p.queuedAt), p.mutationId, "client")',
     to: 'new StagedTx(source, me, msToIso(this.now()), p.mutationId, "client")',
+    packageOnly: true,
+  },
+  // ---- M6: the pre-stage limits and the open-link cap of `04` Z1 ----
+  // package only: the prototype's server applies no limits (its `PreCtx`
+  // has no `allow`), so the acceptance suite cannot reach them;
+  // @session/mutators' `limits.test.ts` and @session/sync's
+  // `preLimits.test.ts` kill them
+  {
+    name: "M6-1 a used-up pre-stage limit does not refuse",
+    file: "../mutators/src/rules.ts",
+    from: '  if (ctx.allow && !ctx.allow(limit)) throw refuse("TOO_MANY_REQUESTS");',
+    to: "  ctx.allow?.(limit);",
+    packageOnly: true,
+  },
+  {
+    name: "M6-2 spaces.create uses no limit",
+    file: "../mutators/src/spaces.ts",
+    from: '    pre: (ctx) => (within(ctx, "spaces.create"), {}),',
+    to: "    pre: () => ({}),",
+    packageOnly: true,
+  },
+  {
+    name: "M6-3 spaces.join uses no limit",
+    file: "../mutators/src/spaces.ts",
+    from: '    pre: (ctx) => (within(ctx, "spaces.join"), {}),',
+    to: "    pre: () => ({}),",
+    packageOnly: true,
+  },
+  {
+    name: "M6-4 invites.create uses no limit",
+    file: "../mutators/src/invites.ts",
+    from: '      within(ctx, "invites.create");\n',
+    to: "      void within;\n",
+    packageOnly: true,
+  },
+  {
+    name: "M6-5 a channel's 51st open link is allowed",
+    file: "../mutators/src/invites.ts",
+    from: "      if (open >= OPEN_LINKS_MAX)",
+    to: "      if (open > OPEN_LINKS_MAX)",
+    packageOnly: true,
+  },
+  {
+    name: "M6-6 an expired link counts as open",
+    file: "../mutators/src/invites.ts",
+    from: "        .filter((l) => l.dead === null && isoToMs(l.expiresAt) > isoToMs(tx.now)).length;",
+    to: "        .filter((l) => l.dead === null && isoToMs(l.expiresAt) >= 0).length;",
+    packageOnly: true,
+  },
+  {
+    name: "M6-7 the server does not count its pre-stage limits",
+    file: "../sync/src/server/server.ts",
+    from: "      if (limits) pre.allow = (limit) => limits.take(u, limit);",
+    to: "      void limits;",
     packageOnly: true,
   },
 ];

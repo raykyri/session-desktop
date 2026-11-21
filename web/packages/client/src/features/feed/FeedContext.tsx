@@ -13,8 +13,14 @@ import { canWrite, type Viewer } from "../shell/viewer.js";
 
 export interface FeedViewer {
   viewer: Viewer;
-  /** An active account: asks, posts, replies, saves, joins. */
+  /** An active account that may add to what it reads: asks, posts,
+   * replies, joins. False inside a frozen channel (`FrozenChannel`). */
   writer: boolean;
+  /** An active account, whatever the channel: it deletes its own items and
+   * saves, which a frozen channel allows (04 B6). */
+  active: boolean;
+  /** The name of the frozen channel the controls are in, or null. */
+  frozen: string | null;
   signedOut: boolean;
   /** The viewer's handle in the replica; null signed out. */
   me: string | null;
@@ -25,6 +31,8 @@ export interface FeedViewer {
 const FeedViewerContext = createContext<FeedViewer>({
   viewer: { kind: "signedOut" },
   writer: false,
+  active: false,
+  frozen: null,
   signedOut: true,
   me: null,
   signIn: () => {},
@@ -38,6 +46,8 @@ export function FeedViewerProvider({ viewer, children }: { viewer: Viewer; child
     () => ({
       viewer,
       writer: canWrite(viewer),
+      active: canWrite(viewer),
+      frozen: null,
       signedOut: viewer.kind === "signedOut",
       me: source.me,
       signIn,
@@ -49,6 +59,14 @@ export function FeedViewerProvider({ viewer, children }: { viewer: Viewer; child
 
 export function useFeedViewer(): FeedViewer {
   return useContext(FeedViewerContext);
+}
+
+/** The controls of a thread in a frozen channel (04 B6, 02 W6.10): nothing
+ * new can be added, and the viewer's own items keep Delete. */
+export function FrozenChannel({ name, children }: { name: string; children: ReactNode }) {
+  const outer = useFeedViewer();
+  const value = useMemo(() => ({ ...outer, writer: false, frozen: name }), [outer, name]);
+  return <FeedViewerContext.Provider value={value}>{children}</FeedViewerContext.Provider>;
 }
 
 /** The model and effort picked in this tab (02 §5): unset, the composer

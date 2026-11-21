@@ -2,11 +2,14 @@
 // by the owner only. Revoke and its Undo (restore).
 
 import { refuse } from "./errors.js";
-import { M, readable, ulidS } from "./rules.js";
-import { addDays } from "./time.js";
+import { M, readable, ulidS, within } from "./rules.js";
+import { addDays, isoToMs } from "./time.js";
 import { define, UnknownRead } from "./tx.js";
 
 const linkOf = (id: string) => `invite:${id}`;
+
+/** Open invite links a channel may have at once (`04` Z1). */
+export const OPEN_LINKS_MAX = 50;
 
 export const INVITES = {
   // `days` is bounded in the schema: an input that passes the schema never
@@ -23,6 +26,8 @@ export const INVITES = {
     // takes it from the id (`id.slice(-5)`), which the client now chooses, so
     // the client would choose the code. 26 characters: 130 bits (`04` B4).
     pre: (ctx) => {
+      // 20 links a day per person (`04` Z1)
+      within(ctx, "invites.create");
       const B32 = "0123456789abcdefghjkmnpqrstvwxyz";
       for (;;) {
         let code = "";
@@ -31,6 +36,16 @@ export const INVITES = {
       }
     },
     run: (tx, i, v) => {
+      // at most 50 open links per channel (`04` Z1): open is neither used,
+      // revoked nor expired. Recorded: the state decides it, not a rate.
+      const open = tx
+        .list("invite", { sp: i.space })
+        .filter((l) => l.dead === null && isoToMs(l.expiresAt) > isoToMs(tx.now)).length;
+      if (open >= OPEN_LINKS_MAX)
+        throw refuse(
+          "PRECONDITION_FAILED",
+          `This channel has ${OPEN_LINKS_MAX} open invite links. Revoke one to make another.`,
+        );
       const code = v["code"];
       // a client predicting this mutation has no code: the value is unknown
       if (code === undefined) throw new UnknownRead("the invite code");

@@ -285,6 +285,18 @@ export type ActivateResult =
   | { ok: true; user: User; inviter: Inviter; inviteId: string; invitedBy: string | null }
   | { ok: false; reason: "invalid_handle" | "invalid_name" | "taken" | "unusable" | "not_waiting" };
 
+/** What `activate` hands `afterRedeem`: the new member, and the invite with
+ * its creator (null for a root invite) and the code as it was sealed for the
+ * creator before the redemption cleared it. */
+export interface RedeemedInvite {
+  userId: string;
+  handle: string;
+  invitedBy: string | null;
+  inviterHandle: string | null;
+  inviteId: string;
+  codeEnc: string | null;
+}
+
 /**
  * The profile step (`account.create`): redeems the account's pending invite
  * and makes the account active with its handle and name, in one immediate
@@ -294,7 +306,7 @@ export type ActivateResult =
  *
  * `afterRedeem` runs inside the transaction, after the account is active:
  * the hook for the `invite_used` notification (01 C16), which commits with
- * the redemption.
+ * the redemption. A throw from it rolls the redemption back.
  */
 export function activate(
   db: SessionDatabase,
@@ -302,10 +314,7 @@ export function activate(
     userId: string;
     handle: string;
     displayName: string;
-    afterRedeem?: (
-      tx: SessionDatabase,
-      result: { userId: string; invitedBy: string | null },
-    ) => void;
+    afterRedeem?: (tx: SessionDatabase, result: RedeemedInvite) => void;
   },
 ): ActivateResult {
   if (!isAccountHandle(input.handle)) return { ok: false, reason: "invalid_handle" };
@@ -335,7 +344,7 @@ export function activate(
       // The creator is checked before the invite is marked used: a link of an
       // account that is no longer active is not open (`findOpenByHash`).
       const pending = tx
-        .select({ createdBy: invites.createdBy })
+        .select({ createdBy: invites.createdBy, codeEnc: invites.codeEnc })
         .from(invites)
         .where(eq(invites.id, account.pendingInviteId))
         .get();
@@ -372,7 +381,14 @@ export function activate(
         .where(eq(users.id, account.id))
         .returning()
         .get();
-      input.afterRedeem?.(tx, { userId: account.id, invitedBy: invite.createdBy });
+      input.afterRedeem?.(tx, {
+        userId: account.id,
+        handle: input.handle,
+        invitedBy: invite.createdBy,
+        inviterHandle: creator?.handle ?? null,
+        inviteId: invite.id,
+        codeEnc: pending.codeEnc,
+      });
       return {
         ok: true,
         user: toUser(updated),

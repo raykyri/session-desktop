@@ -2,6 +2,8 @@
 // process, `06` §8). A refusal answers `TOO_MANY_REQUESTS` (HTTP 429) and
 // records nothing.
 
+import type { PreLimit } from "@session/mutators";
+import type { PreLimits } from "@session/sync/server";
 import type { MiddlewareHandler } from "hono";
 
 import type { AbuseLimits } from "../config.js";
@@ -56,9 +58,8 @@ export function abuseBuckets(limits: AbuseLimits) {
     threadReadsSignedOut: { limit: limits.threadReadsPerIpPerMinute, windowMs: MINUTE },
     /** Opening `/api/sync/events`, per user. */
     streamOpens: { limit: limits.streamOpensPerMinute, windowMs: MINUTE },
-    /** `spaces.directory`, per user or IP. */
-    directory: { limit: limits.directoryPerMinute, windowMs: MINUTE },
-    /** `spaces.byName`, per user or IP; each call of a tRPC batch counts. */
+    /** `spaces.byName`, per user or IP, besides the directory's bucket; each
+     * call of a tRPC batch counts. */
     byName: { limit: limits.byNamePerMinute, windowMs: MINUTE },
     /** `/auth/*`, `auth.checkInvite`, `accountInvites.redeem`,
      * `account.create`, per IP. */
@@ -71,6 +72,16 @@ export function abuseBuckets(limits: AbuseLimits) {
     inviteReads: { limit: limits.inviteReadsPerMinute, windowMs: MINUTE },
     /** Handle availability at the profile step, per user. */
     handleChecks: { limit: limits.handleChecksPerMinute, windowMs: MINUTE },
+    /** `spaces.create`, per user, counted in the mutator's `pre` stage. */
+    spacesCreated: { limit: limits.spacesPerDay, windowMs: DAY },
+    /** `invites.create` (channel invite links), per user, in `pre`. */
+    channelInvites: { limit: limits.channelInvitesPerDay, windowMs: DAY },
+    /** `spaces.join`, per user, in `pre`. */
+    joins: { limit: limits.joinsPerHour, windowMs: HOUR },
+    /** `spaces.directory` and `spaces.byName`, per user or per IP. */
+    directory: { limit: limits.directoryPerMinute, windowMs: MINUTE },
+    /** `admin.models.*`, per site admin. */
+    adminModels: { limit: limits.adminPerMinute, windowMs: MINUTE },
   } as const satisfies Record<string, BucketSpec>;
 }
 
@@ -79,6 +90,25 @@ export type AbuseBucket = keyof ReturnType<typeof abuseBuckets>;
 /** The writes bucket's key for an account: `/api/sync/apply` and every tRPC
  * mutation take from it (`04` Z1). */
 export const writesKey = (userId: string): string => `writes:user:${userId}`;
+
+/** The bucket each `pre`-stage limit of a mutator counts in. */
+const PRE_BUCKETS = {
+  "spaces.create": "spacesCreated",
+  "invites.create": "channelInvites",
+  "spaces.join": "joins",
+} as const satisfies Record<PreLimit, AbuseBucket>;
+
+/** The `pre`-stage limits of `04` Z1 over `limiter`'s buckets, keyed by the
+ * person's handle (`SyncServer.setPreLimits`). */
+export function preLimits(limiter: RateLimiter, limits: AbuseLimits): PreLimits {
+  const buckets = abuseBuckets(limits);
+  return {
+    take: (u, limit) => {
+      const bucket = PRE_BUCKETS[limit];
+      return limiter.take(`${bucket}:user:${u}`, buckets[bucket]).allowed;
+    },
+  };
+}
 
 export class RateLimiter {
   readonly #buckets = new Map<string, Bucket>();

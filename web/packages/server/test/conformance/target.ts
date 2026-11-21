@@ -226,6 +226,10 @@ export class HttpTestServer implements TestServer {
       SESSION_TEST_ROUTES: "1",
       // the batched target keeps the default body and batch limits
       ...(this.#batched ? {} : { SESSION_LIMIT_APPLY_BYTES: String(64 * 1024 * 1024) }),
+      SESSION_LIMIT_SPACES_PER_DAY: UNLIMITED,
+      SESSION_LIMIT_CHANNEL_INVITES_PER_DAY: UNLIMITED,
+      SESSION_LIMIT_JOINS_PER_HOUR: UNLIMITED,
+      SESSION_LIMIT_DIRECTORY_PER_MINUTE: UNLIMITED,
       // a key of this target's own, as the in-memory target has: another
       // target does not open its tokens
       SESSION_CURSOR_KEY: randomBytes(32).toString("base64"),

@@ -1,9 +1,11 @@
 // The channel's info dialog (02 W6.2; the mock's `chInfoDlg`) and the About
 // editor stacked over it (W6.3, `chEditDlg`). The info dialog: glyph,
-// `#name`, the lock, Edit (owner) and Close; the description, or for an owner
-// without one "No description yet." with "Add one"; the facts "Channel by",
-// "Members", "Visibility"; for the owner, "Moderation log" (W6.4). The member
-// list is M6 (W6.8). The editor: "About" with a live "N / 300" counter,
+// `#name`, the lock, Edit (owner) and Close; the frozen-channel banner (W6.10);
+// the description, or for an owner without one "No description yet." with
+// "Add one"; the facts "Channel by" ("Deleted account" for a frozen
+// channel, whose owner's account was deleted), "Members" (a button opening
+// the member list, W6.8), "Visibility"; for the owner, "Moderation log" (W6.4)
+// and, in a private channel, "Invite to #name" (W6.9). The editor: "About" with a live "N / 300" counter,
 // Cancel and Save (`spaces.update`), the toast "Channel updated." and focus
 // back on Edit. Escape closes the editor first, then the info dialog (02
 // W10.2).
@@ -16,10 +18,27 @@ import { useNow, type ChannelView } from "../../replica/queries.js";
 import { UNKNOWN, known } from "../../replica/source.js";
 import { useWrites } from "../../replica/writes.js";
 import { Avatar, ChannelGlyph } from "../../ui/Avatar.js";
+import { useFeedViewer } from "../feed/FeedContext.js";
 import { FeedDialog } from "../feed/FeedDialog.js";
 import { relTime } from "../feed/format.js";
 import { CloseIcon, LockIcon } from "../feed/icons.js";
 import { showToast } from "../shell/Toast.js";
+
+import { InviteLinksDialog } from "./InviteLinksDialog.js";
+import { MembersDialog } from "./MembersDialog.js";
+
+/** The banner of a frozen channel (04 B6, 02 W6.10). */
+export function frozenBanner(name: string): string {
+  return `#${name} is frozen: its owner’s account is not active. You can read it and delete your own posts.`;
+}
+
+export function FrozenBanner({ name }: { name: string }) {
+  return (
+    <p className="frozen-banner" role="note">
+      {frozenBanner(name)}
+    </p>
+  );
+}
 
 export const DESC_MAX = 300;
 
@@ -34,10 +53,15 @@ export function ChannelInfoDialog({
 }) {
   const [editing, setEditing] = useState(false);
   const [log, setLog] = useState(false);
+  const [members, setMembers] = useState(false);
+  const [links, setLinks] = useState(false);
+  const { me } = useFeedViewer();
   const logButton = useRef<HTMLButtonElement>(null);
+  const membersButton = useRef<HTMLButtonElement>(null);
+  const linksButton = useRef<HTMLButtonElement>(null);
   const editButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
-  const owner = channel.owned;
+  const owner = channel.owned && !channel.frozen;
   return (
     <FeedDialog
       open={open}
@@ -69,6 +93,7 @@ export function ChannelInfoDialog({
           <CloseIcon />
         </Dialog.Close>
       </div>
+      {channel.frozen ? <FrozenBanner name={channel.name} /> : null}
       {channel.desc ? (
         <p>{channel.desc}</p>
       ) : owner ? (
@@ -82,10 +107,26 @@ export function ChannelInfoDialog({
       <dl className="chfacts">
         <dt>Channel by</dt>
         <dd>
-          <Avatar handle={channel.owner} size="xs" />@{channel.owner}
+          {channel.frozen ? (
+            "Deleted account"
+          ) : (
+            <>
+              <Avatar handle={channel.owner} size="xs" />@{channel.owner}
+            </>
+          )}
         </dd>
         <dt>Members</dt>
-        <dd>{channel.members}</dd>
+        <dd>
+          <button
+            ref={membersButton}
+            type="button"
+            className="tlink inl"
+            aria-label={`Members, ${channel.members}`}
+            onClick={() => setMembers(true)}
+          >
+            {channel.members}
+          </button>
+        </dd>
         <dt>Visibility</dt>
         <dd>
           {channel.private
@@ -98,7 +139,32 @@ export function ChannelInfoDialog({
           <button ref={logButton} type="button" className="tlink" onClick={() => setLog(true)}>
             Moderation log
           </button>
+          {channel.private ? (
+            <button
+              ref={linksButton}
+              type="button"
+              className="tlink"
+              onClick={() => setLinks(true)}
+            >
+              Invite to #{channel.name}
+            </button>
+          ) : null}
         </div>
+      ) : null}
+      <MembersDialog
+        channel={channel}
+        me={me}
+        open={members}
+        onOpenChange={setMembers}
+        returnFocus={membersButton}
+      />
+      {owner && channel.private ? (
+        <InviteLinksDialog
+          channel={channel}
+          open={links}
+          onOpenChange={setLinks}
+          returnFocus={linksButton}
+        />
       ) : null}
       {owner ? (
         <AboutEditorDialog
@@ -181,7 +247,7 @@ export function ModerationLogDialog({
                       ? `@${m.by} removed @${m.author}'s ${what}`
                       : m.act === "ban"
                         ? `@${m.by} banned @${m.author} from #${channel.name}`
-                        : `@${m.by} unbanned @${m.author} in #${channel.name}`}
+                        : `@${m.by} unbanned @${m.author} from #${channel.name}`}
                     {m.note ? <small>Reason: “{m.note}”</small> : null}
                     <small>{relTime(m.createdAt, now)}</small>
                   </span>

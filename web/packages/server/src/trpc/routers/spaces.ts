@@ -15,9 +15,12 @@ import { z } from "zod";
 import { directoryPage, type DirectoryPage } from "../../spaces/directory.js";
 import { limit, publicProcedure, router } from "../base.js";
 
+/** 60 a minute per user, or per IP signed out (`04` Z1). */
+const directoryBucket = limit("directory", "userOrIp");
+
 export const spacesRouter = router({
   directory: publicProcedure
-    .use(limit("directory", "userOrIp"))
+    .use(directoryBucket)
     .input(
       z
         .object({
@@ -29,6 +32,7 @@ export const spacesRouter = router({
     .query(({ ctx, input }): DirectoryPage => directoryPage(ctx.directory, input ?? {})),
   /** The channel of a name; a private channel's record is its landing. */
   byName: publicProcedure
+    .use(directoryBucket)
     .use(limit("byName", "userOrIp"))
     .input(z.object({ name: z.string().min(1).max(64) }))
     .query(({ ctx, input }): { space: Spaces.SpaceRecord | null } => ({
