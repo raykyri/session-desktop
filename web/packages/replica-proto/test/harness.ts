@@ -189,6 +189,8 @@ export async function ok(
   return r.ok ? r.result : undefined;
 }
 
+/** The refusal's error as JSON, without `serverTime`, which every answer
+ * carries (`01` Y2): two answers with the same cause compare equal. */
 export async function refused(
   t: ExecutionContext,
   res: ApplyResult | Promise<ApplyResult>,
@@ -197,8 +199,21 @@ export async function refused(
   const r = await res;
   if (r.ok) t.fail(`expected ${code}, got ok`);
   else t.is(r.error.code, code, JSON.stringify(r.error));
-  return JSON.stringify(r.ok ? null : r.error);
+  const b = bare(r);
+  return JSON.stringify(b.ok ? null : b.error);
 }
+
+/** An answer without `serverTime`, the time it was given at: for comparing
+ * what answers say. */
+export function bare(r: ApplyResult) {
+  if (r.ok) return { ok: true as const, result: r.result };
+  const error: Partial<typeof r.error> = { ...r.error };
+  delete error.serverTime;
+  return { ok: false as const, error };
+}
+
+/** `serverTime` is present and the server's: every answer carries it. */
+export const timed = (r: ApplyResult) => (r.ok ? r.serverTime : r.error.serverTime);
 
 /** A fixed cast of people and spaces most tests start from:
  * - `open` (#lounge, open): owner olga, members mona, mel and otto.
@@ -246,8 +261,9 @@ export async function admit(t: ExecutionContext, w: World, space: string, u: str
   );
 }
 
-/** The model and effort every ask in the suite names. */
-export const MODEL = { model: "claude-fable-5-1", effort: "medium" } as const;
+/** The model and effort every ask in the suite names: a registry entry
+ * (`@session/shared` `MODEL_REGISTRY`) and an effort it accepts. */
+export const MODEL = { model: "claude-fable", effort: "medium" } as const;
 
 /** The input of a new thread: an ask carries a model and an effort. */
 export const threadInput = (
@@ -258,6 +274,9 @@ export const threadInput = (
 ): Record<string, unknown> =>
   kind === "ask" ? { id, space, kind, q, ...MODEL } : { id, space, kind, q };
 
+/** A new thread by `u`. An ask's root run is answered at once (`finishJob`:
+ * its run `complete`, a summary written), so asks can be continued and
+ * branched under it (`03` G1); `pending` leaves it queued. */
 export async function thread(
   t: ExecutionContext,
   w: World,
@@ -265,13 +284,22 @@ export async function thread(
   space: string,
   kind: "ask" | "post" = "ask",
   q = "What changed?",
+  pending = false,
 ): Promise<string> {
   const id = w.id();
   await ok(t, w.as(u, "threads.create", threadInput(id, space, kind, q)));
+  if (kind === "ask" && !pending) await answer(w, `thread:${id}`);
   return id;
 }
 
-/** An ask node under `parent` (`r`: the thread's root): Continue or Branch. */
+/** A run finishes: a thread's summary or a node's answer, its run
+ * `complete`. */
+export async function answer(w: World, key: string, text = "An answer.") {
+  await w.server.finishJob(key, text);
+}
+
+/** An ask node under `parent` (`r`: the thread's root): Continue or Branch,
+ * answered at once. */
 export async function fork(
   t: ExecutionContext,
   w: World,
@@ -282,6 +310,7 @@ export async function fork(
 ): Promise<string> {
   const id = w.id();
   await ok(t, w.as(u, "research.forkNode", { id, thread, parent, kind: "ask", q, ...MODEL }));
+  await answer(w, `node:${id}`);
   return id;
 }
 

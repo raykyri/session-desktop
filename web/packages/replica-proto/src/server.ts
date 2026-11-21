@@ -61,14 +61,47 @@
 
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
+import {
+  DAY,
+  MINUTE,
+  Refusal,
+  StagedTx,
+  ULID_RE,
+  answerKey,
+  audience,
+  authorize,
+  createdOf,
+  indexOf,
+  isHandle,
+  isUlid,
+  logsOf,
+  memberKey,
+  readsAudience,
+  refuse,
+  registryKey,
+  ulidTime,
+  uniqueOf,
+  view,
+  type AnyMutator,
+  type Audience,
+  type Index,
+  type Kind,
+  type LogId,
+  type PreCtx,
+  type RunRec,
+  type Source,
+  type StoredRecord,
+  type UniqueIndex,
+} from "@session/mutators";
 import { z } from "zod";
 
-import { audience, readsAudience, view, type Audience } from "./access.js";
 import {
+  MAX_REPLACES,
   MIN_PROTOCOL_VERSION,
   UNRECORDED,
   type Actor,
   type ApplyResult,
+  type StoredAnswer,
   type Change,
   type Cursor,
   type LastSeq,
@@ -81,46 +114,8 @@ import {
   type StorageScan,
   type TestServer,
 } from "./contract.js";
-import {
-  MUTATORS,
-  Refusal,
-  authorize,
-  isHandle,
-  refuse,
-  type AnyMutator,
-  type PreCtx,
-  type Tx,
-} from "./mutators.js";
-import {
-  answerKey,
-  audienceOf,
-  createdOf,
-  idOf,
-  keyOf,
-  logsOf,
-  memberKey,
-  registryKey,
-  type Draft,
-  type LogId,
-  type Kind,
-  type RecordOf,
-  type RunRec,
-  type StoredRecord,
-} from "./records.js";
-import {
-  CLOCK_MAX_SKEW,
-  DAY,
-  MINUTE,
-  ageOk,
-  cryptoRandom,
-  deriveId,
-  digest,
-  isUlid,
-  ulid,
-  timeOk,
-  ulidTime,
-  ULID_RE,
-} from "./ulid.js";
+import { PROTO_MUTATORS } from "./join-requests.js";
+import { CLOCK_MAX_SKEW, ageOk, cryptoRandom, digest, timeOk, ulid } from "./ulid.js";
 
 export const DEDUP_TTL = 7 * DAY;
 export const TOMBSTONE_TTL = 30 * DAY;
@@ -136,8 +131,6 @@ export const REGISTRATIONS_PER_DAY = 20;
  * be as JSON. */
 export const MAX_INPUT_DEPTH = 32;
 export const MAX_ENVELOPE_BYTES = 256 * 1024;
-/** The most mutation ids a reminted envelope may name in `replaces`. */
-export const MAX_REPLACES = 16;
 
 const envelopeS = z.strictObject({
   clientId: z.string(),
@@ -157,7 +150,7 @@ const logS = z
   .regex(/^(space|user):[^:]+$/);
 
 const isoAt = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
-const fail = (e: Refusal): ApplyResult => ({ ok: false, error: e.toError() });
+const fail = (e: Refusal): StoredAnswer => ({ ok: false, error: e.toError() });
 const same = (a: StoredRecord, b: StoredRecord) =>
   JSON.stringify({ ...a, rev: 0 }) === JSON.stringify({ ...b, rev: 0 });
 
@@ -190,9 +183,6 @@ function outOfBounds(v: unknown, maxDepth: number, maxNodes: number): "deep" | "
   return null;
 }
 
-/** The id-collision answer: one message, whether or not the caller may read
- * the record that holds the id. */
-const ID_TAKEN = "An item with this id exists.";
 /** The digest an answer is stored with under a mutation id that a reminted
  * envelope replaced: a replay of that id with any payload gets the answer
  * (its payload had the ids the client reminted). */
@@ -224,9 +214,18 @@ function setLast<K, V>(m: Map<K, V>, key: K, value: V) {
   m.set(key, value);
 }
 
-class Store {
+/** The name of an index entry: a kind and one of its index columns. */
+const indexName = (kind: Kind, col: "sp" | "th" | "u", v: string) =>
+  `${kind}\u0000${col}\u0000${v}`;
+const UNIQUE: readonly UniqueIndex[] = ["space.name", "invite.code"];
+
+class Store implements Source {
   readonly records = new Map<string, StoredRecord>();
   readonly byKind = new Map<Kind, Set<string>>();
+  /** The indexes of the records table (`01` D1): by kind and space, thread
+   * or person; and the unique lookups, by index and value. */
+  private readonly indexes = new Map<string, Set<string>>();
+  private readonly uniques = new Map<string, string>();
   /** In the order they were made, so oldest first. */
   readonly tombs = new Map<string, Tombstone>();
   /** The version of the commit that created each record now stored: lists
@@ -255,12 +254,50 @@ class Store {
     return (this.lastAt = Math.max(clock, this.lastAt));
   }
 
-  get(key: string) {
+  byKey(key: string) {
     return this.records.get(key);
   }
 
   keysOf(kind: Kind): Iterable<string> {
     return this.byKind.get(kind) ?? [];
+  }
+
+  keysIn(kind: Kind, index: Index): Iterable<string> {
+    const [col, v] = Object.entries(index)[0] as ["sp" | "th" | "u", string];
+    return this.indexes.get(indexName(kind, col, v)) ?? [];
+  }
+
+  uniqueKey(index: UniqueIndex, value: string): string | undefined {
+    return this.uniques.get(`${index}\u0000${value}`);
+  }
+
+  idTaken(id: string): boolean {
+    return this.registry.has(id);
+  }
+
+  /** Add a record's key to its indexes, or take it out. */
+  private index(r: StoredRecord, key: string, on: boolean) {
+    const cols = indexOf(r);
+    for (const col of ["sp", "th", "u"] as const) {
+      const v = cols[col];
+      if (v === null) continue;
+      const name = indexName(r.kind, col, v);
+      let set = this.indexes.get(name);
+      if (on) {
+        if (!set) this.indexes.set(name, (set = new Set<string>()));
+        set.add(key);
+      } else {
+        set?.delete(key);
+        if (set?.size === 0) this.indexes.delete(name);
+      }
+    }
+    for (const u of UNIQUE) {
+      const v = uniqueOf(r, u);
+      if (v === null) continue;
+      const name = `${u}\u0000${v}`;
+      if (on) this.uniques.set(name, key);
+      else if (this.uniques.get(name) === key) this.uniques.delete(name);
+    }
   }
 
   /** A log's history: how many times it was replaced, and the version the
@@ -293,6 +330,7 @@ class Store {
         const old = prev as StoredRecord;
         const tomb: Tombstone = { key, ...audience(this, old), at };
         this.records.delete(key);
+        this.index(old, key, false);
         this.byKind.get(old.kind)?.delete(key);
         this.born.delete(key);
         setLast(this.tombs, key, tomb);
@@ -302,6 +340,8 @@ class Store {
       const reg = registryKey(next);
       const rev = (prev?.rev ?? this.registry.get(reg) ?? 0) + 1;
       const rec = { ...next, rev };
+      if (prev) this.index(prev, key, false);
+      this.index(rec, key, true);
       this.records.set(key, rec);
       this.registry.set(reg, rev);
       if (!prev) this.born.set(key, version);
@@ -338,68 +378,10 @@ class Store {
   }
 }
 
-class StagedTx implements Tx {
-  readonly staged = new Map<string, StoredRecord | null>();
-  private readonly newIds = new Set<string>();
-
-  constructor(
-    private readonly store: Store,
-    readonly me: string,
-    readonly now: string,
-    private readonly mutationId: string,
-  ) {}
-
-  get(key: string): StoredRecord | undefined {
-    if (this.staged.has(key)) return this.staged.get(key) ?? undefined;
-    return this.store.get(key);
-  }
-
-  find<K extends Kind>(kind: K, pred?: (r: RecordOf<K>) => boolean): RecordOf<K>[] {
-    const keys = new Set(this.store.keysOf(kind));
-    for (const [key, r] of this.staged) if (r?.kind === kind) keys.add(key);
-    const out: RecordOf<K>[] = [];
-    for (const key of [...keys].sort()) {
-      const r = this.get(key);
-      if (r?.kind === kind && (!pred || pred(r as RecordOf<K>))) out.push(r as RecordOf<K>);
-    }
-    return out;
-  }
-
-  create(r: Draft): void {
-    const key = keyOf(r);
-    const id = idOf(r);
-    if (this.get(key) || (id !== null && (this.store.registry.has(id) || this.newIds.has(id))))
-      throw refuse("CONFLICT", ID_TAKEN);
-    this.write(key, r);
-    if (id !== null) this.newIds.add(id);
-  }
-
-  put(r: Draft): void {
-    const key = keyOf(r);
-    const prev = this.get(key);
-    if (!prev && idOf(r) !== null) return this.create(r);
-    if (prev && audienceOf(prev) !== audienceOf(r))
-      throw new Error(`a write changed the audience of ${key}`);
-    this.write(key, r);
-  }
-
-  del(key: string): void {
-    if (this.get(key)) this.staged.set(key, null);
-  }
-
-  id(ordinal: number): string {
-    return deriveId(this.me, this.mutationId, ordinal);
-  }
-
-  private write(key: string, r: Draft) {
-    this.staged.set(key, { ...r, rev: 0 });
-  }
-}
-
 /** What `execute` decided: the answer, whether it is recorded, and for an
  * applied write the staged changes, its notifications included. */
 interface Outcome {
-  result: ApplyResult;
+  result: StoredAnswer;
   recorded: boolean;
   staged?: Map<string, StoredRecord | null>;
 }
@@ -418,7 +400,7 @@ interface SeqAnswer {
   clientId: string;
   seq: number;
   digest: string;
-  result: ApplyResult;
+  result: StoredAnswer;
   at: number;
 }
 
@@ -498,7 +480,7 @@ class Tokens {
 export class ProtoServer implements TestServer {
   private readonly store: Store;
   /** Answers by (user, mutation id), oldest first. */
-  private readonly dedup = new Map<string, { result: ApplyResult; digest: string; at: number }>();
+  private readonly dedup = new Map<string, { result: StoredAnswer; digest: string; at: number }>();
   /** Answers by (client, seq), oldest first. */
   private readonly seqAnswers = new Map<string, SeqAnswer>();
   /** Registered clients, least recently used first. */
@@ -510,11 +492,15 @@ export class ProtoServer implements TestServer {
   private readonly random: () => number;
   private readonly mutators: Readonly<Record<string, AnyMutator>>;
   private readonly tokens = new Tokens();
+  /** The Session accounts: every handle that ever registered a client (the
+   * prototype has no users table). A mention of anyone else is reported as
+   * not a member (02 N16). */
+  private readonly accounts = new Set<string>();
 
   constructor(options: ServerOptions) {
     this.clock = options.clock;
     this.random = options.random ?? cryptoRandom;
-    this.mutators = options.mutators ?? MUTATORS;
+    this.mutators = options.mutators ?? PROTO_MUTATORS;
     this.store = new Store(this.clock.now());
   }
 
@@ -545,6 +531,7 @@ export class ProtoServer implements TestServer {
       do id = ulid(now, this.random);
       while (this.clients.has(id));
       setLast(this.registrations, u, [...times, now]);
+      this.accounts.add(u);
       this.clients.set(id, { u, last: 0, seen: now });
       return { ok: true, clientId: id };
     } catch {
@@ -554,6 +541,15 @@ export class ProtoServer implements TestServer {
   }
 
   apply(actor: Actor | null, envelope: unknown): ApplyResult {
+    const a = this.answer(actor, envelope);
+    // every answer carries the server's time (`01` Y2)
+    const serverTime = this.store.time(this.clock.now());
+    return a.ok
+      ? { ...a, serverTime }
+      : { ok: false, error: { ...a.error, serverTime: a.error.serverTime ?? serverTime } };
+  }
+
+  private answer(actor: Actor | null, envelope: unknown): StoredAnswer {
     try {
       return this.applyEnvelope(actor, envelope);
     } catch {
@@ -564,7 +560,7 @@ export class ProtoServer implements TestServer {
     }
   }
 
-  private applyEnvelope(actor: Actor | null, envelope: unknown): ApplyResult {
+  private applyEnvelope(actor: Actor | null, envelope: unknown): StoredAnswer {
     // bounds first: nothing below may walk an input deeper or larger than this
     const bounds = outOfBounds(envelope, MAX_INPUT_DEPTH + 1, MAX_ENVELOPE_BYTES);
     if (bounds === "deep")
@@ -620,6 +616,17 @@ export class ProtoServer implements TestServer {
     const sent = digest(canonical([m.mutationId, m.name, m.input]));
     const kept = this.seqAnswers.get(sk);
     if (kept && kept.digest === sent) return structuredClone(kept.result);
+    // a reminted write whose earlier mutation id has an answer (the delayed
+    // original was applied, or answered, after all): that answer, stored
+    // under this mutation id too, and no seq used; the write is never
+    // applied a second time under its new ids
+    if (wellFormed && !hit)
+      for (const id of m.replaces ?? []) {
+        const prior = this.dedup.get(`${u}\u0000${id}`);
+        if (!prior) continue;
+        setLast(this.dedup, dk, { result: prior.result, digest: payload, at: now });
+        return structuredClone(prior.result);
+      }
     if (m.seq !== client.last + 1)
       return {
         ok: false,
@@ -726,16 +733,19 @@ export class ProtoServer implements TestServer {
       const tx = new StagedTx(this.store, u, isoAt(now), m.mutationId);
       authorize(tx, def, input);
       const pre: PreCtx = {
+        me: u,
         now,
         random: this.random,
-        inviteCodeTaken: (code) =>
-          [...this.store.keysOf("invite")].some(
-            (k) => (this.store.get(k) as RecordOf<"invite">).code === code,
-          ),
+        inviteCodeTaken: (code) => this.store.uniqueKey("invite.code", code) !== undefined,
+        queuedRuns: () =>
+          [...this.store.keysIn("run", { u })].filter(
+            (k) => (this.store.byKey(k) as RunRec).status === "queued",
+          ).length,
       };
       const values = def.pre?.(pre, input) ?? {};
-      const result = def.run(tx, input, values);
-      def.notify?.(tx, input, result);
+      const ran = def.run(tx, input, values);
+      const told = def.notify?.(tx, input, ran, { isAccount: (h) => this.accounts.has(h) });
+      const result = told === undefined ? ran : told;
       return { result: { ok: true, result }, recorded: true, staged: tx.staged };
     } catch (e) {
       if (e instanceof Refusal) return final(e);
@@ -805,7 +815,7 @@ export class ProtoServer implements TestServer {
    * `del` whose tombstone `u` may read, or null. */
   private readRow(row: LogRow, u: string | null): StoredRecord | true | null {
     if (row.op === "put") {
-      const rec = this.store.get(row.key);
+      const rec = this.store.byKey(row.key);
       return rec ? view(this.store, rec, u) : null;
     }
     const t = this.store.tombs.get(row.key);
@@ -920,7 +930,7 @@ export class ProtoServer implements TestServer {
     }
     for (const row of rows.values()) {
       if (row.key.startsWith("member:") && row.version > version) return true;
-      const rec = this.store.get(row.key);
+      const rec = this.store.byKey(row.key);
       const a = rec ? audience(this.store, rec) : this.store.tombs.get(row.key);
       if (a && a.sp !== null && this.store.epoch(`space:${a.sp}`).start > head) return true;
     }
@@ -941,7 +951,7 @@ export class ProtoServer implements TestServer {
   jobs() {
     const out: { kind: string; id: string }[] = [];
     for (const key of this.store.keysOf("run")) {
-      const r = this.store.get(key) as RunRec;
+      const r = this.store.byKey(key) as RunRec;
       if (r.status === "queued") out.push({ kind: "run", id: r.id });
     }
     return out;
@@ -985,10 +995,30 @@ export class ProtoServer implements TestServer {
 
   finishJob(key: string, text: string): boolean {
     const now = this.begin();
-    const r = this.store.get(key);
+    const r = this.store.byKey(key);
     if (!r || !("mod" in r) || r.mod === "removed") return false;
+    /** The ask's run, `complete` if it had not ended (the run loop's last
+     * write, `03` E2). */
+    const done = (th: string, node: string): [string, StoredRecord][] => {
+      const run = [...this.store.keysIn("run", { th })]
+        .map((k) => this.store.byKey(k) as RunRec)
+        .find((x) => x.node === node);
+      if (!run || (run.status !== "queued" && run.status !== "running")) return [];
+      const at = isoAt(now);
+      return [
+        [
+          `run:${run.id}`,
+          { ...run, status: "complete", step: 3, startedAt: run.startedAt ?? at, finishedAt: at },
+        ],
+      ];
+    };
     if (r.kind === "thread" && !r.del)
-      return this.store.commit(new Map([[key, { ...r, sum: text }]]), now) !== null;
+      return (
+        this.store.commit(
+          new Map([[key, { ...r, sum: text, running: false }], ...done(r.id, "r")]),
+          now,
+        ) !== null
+      );
     if (r.kind === "node") {
       const answer: StoredRecord = {
         kind: "answer",
@@ -1004,7 +1034,9 @@ export class ProtoServer implements TestServer {
         mod: r.mod,
         rev: 0,
       };
-      return this.store.commit(new Map([[answerKey(r.id), answer]]), now) !== null;
+      return (
+        this.store.commit(new Map([[answerKey(r.id), answer], ...done(r.th, r.id)]), now) !== null
+      );
     }
     return false;
   }

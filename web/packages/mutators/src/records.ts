@@ -28,9 +28,16 @@
 //   hidden record keeps its text, and `view` decides who gets it.
 // - An ask thread's root ask is the thread itself: nodes, runs and comments
 //   name it `r`, and its answer is `answer:<thread>`.
-// - Join requests (`request`) are not part of the build (C10). The prototype
-//   keeps them because their stale-intent rules (approve, decline, reopen)
-//   are tested here.
+// - Join requests (`request`) are not part of the build (C10), and no mutator
+//   of this package writes one. The kind stays in the union so that
+//   `@session/replica-proto` keeps its join-request mutators, whose
+//   stale-intent rules (approve, decline, reopen) are tested only there
+//   (`01` U4), on this package's `Tx`. It is not in the contract's
+//   `storedRecordSchema`.
+// - Reads go through three indexes (`01` D1, U2): by space (`sp`), by thread
+//   (`th`) and by person (`u`), each per kind (`indexOf`); and two unique
+//   lookups, a space by its name and a channel invite link by its code
+//   (`uniqueOf`).
 
 import type { Spaces } from "@session/shared";
 
@@ -132,7 +139,7 @@ export function keyOf(r: Draft | StoredRecord): string {
     case "member":
       return memberKey(r.sp, r.u);
     case "answer":
-      return answerKey(r.node);
+      return answerKey(r.node === "r" ? r.th : r.node);
     case "request":
       return requestKey(r.sp, r.u);
     case "ban":
@@ -220,6 +227,47 @@ export function audienceOf(r: Draft | StoredRecord): string {
     "u" in r ? r.u : null,
     "by" in r ? r.by : null,
   ]);
+}
+
+/** A declared lookup (`01` U2): the records of a kind in one space, one
+ * thread, or of one person. */
+export type Index = { sp: string } | { th: string } | { u: string };
+
+/** The index columns of a record (`01` D1: `sp`, `th`, `u`):
+ * - `sp`: its space (`spaceOf`), and for a notification the space it is about;
+ * - `th`: the thread it belongs to or is about;
+ * - `u`: the person whose user log holds it (`personOf`), else its author or
+ *   maker (a run's asker, an invite link's maker, a moderation log entry's
+ *   owner). */
+export function indexOf(r: Draft | StoredRecord): {
+  sp: string | null;
+  th: string | null;
+  u: string | null;
+} {
+  const sp = r.kind === "notif" ? r.sp : spaceOf(r);
+  const th = r.kind === "thread" ? r.id : "th" in r && typeof r.th === "string" ? r.th : null;
+  const u = personOf(r) ?? ("u" in r ? r.u : "by" in r ? r.by : null);
+  return { sp, th, u };
+}
+
+/** Whether a record is in an index. */
+export function inIndex(r: Draft | StoredRecord, index: Index): boolean {
+  const cols = indexOf(r);
+  if ("sp" in index) return cols.sp === index.sp;
+  if ("th" in index) return cols.th === index.th;
+  return cols.u === index.u;
+}
+
+/** The unique lookups: a space by its name, a channel invite link by its code. */
+export type UniqueIndex = "space.name" | "invite.code";
+
+/** The kind each unique lookup finds. */
+export type UniqueKind<I extends UniqueIndex> = I extends "space.name" ? "space" : "invite";
+
+/** A record's value in a unique lookup, or null when it is not in it. */
+export function uniqueOf(r: Draft | StoredRecord, index: UniqueIndex): string | null {
+  if (index === "space.name") return r.kind === "space" ? r.name : null;
+  return r.kind === "invite" ? r.code : null;
 }
 
 /** The server's creation time of a record (a member record's `joinedAt`), or

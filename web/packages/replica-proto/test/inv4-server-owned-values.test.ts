@@ -254,14 +254,14 @@ test("a fast clock is corrected from the server's time, and the write sent again
   const fast = { now: () => w.clock.now() + 2 * MINUTE };
   const mel = new ReplicaClient(w.server, actor("mel"), { clock: fast, random: w.random });
   const id = mel.newId();
-  mel.queue("threads.create", { id, space: open, kind: "ask", q: "from a fast clock", ...MODEL });
-  mel.queue("research.forkNode", forkInput(mel.newId(), id, "and a follow-up"));
+  mel.queue("threads.create", { id, space: open, kind: "post", q: "from a fast clock" });
+  mel.queue("research.createPostFollowUp", { id: mel.newId(), thread: id, t: "and a reply" });
   const results = await mel.flush();
   t.deepEqual(
     results.map((r) => (r.ok ? "ok" : r.error.code)),
     ["ok", "ok"],
   );
-  // the thread got a new id inside the window, and the follow-up names it
+  // the thread got a new id inside the window, and the reply names it
   const made = [...w.server.dump().values()].filter(
     (r): r is ThreadRec => r.kind === "thread" && r.q === "from a fast clock",
   );
@@ -314,6 +314,8 @@ test("a malformed ULID is refused", async (t) => {
 });
 
 test("space ids are ULIDs and names are unique, after normalization", async (t) => {
+  // the channel name rule (`04` B1): trimmed, lower case, a leading "#"
+  // dropped, then `[a-z0-9][a-z0-9-]{1,29}`; anything else is BAD_REQUEST
   const { w } = await cast(t);
   await refused(t, w.as("eve", "spaces.create", { id: "sp-new", name: "new" }), "BAD_REQUEST");
   await refused(t, w.as("eve", "spaces.create", { id: w.id(), name: "lounge" }), "CONFLICT");
@@ -326,23 +328,25 @@ test("space ids are ULIDs and names are unique, after normalization", async (t) 
   );
   t.is((JSON.parse(a) as { message: string }).message, "#vault already exists.");
   const mine = w.id();
-  await ok(t, w.as("eve", "spaces.create", { id: mine, name: "Eve's Space" }));
+  for (const name of ["Eve's Space", "-eve", "e", "#", "x".repeat(31), "eve space"])
+    await refused(t, w.as("eve", "spaces.create", { id: w.id(), name }), "BAD_REQUEST");
+  await ok(t, w.as("eve", "spaces.create", { id: mine, name: " #Eve-Space " }));
   // name and visibility are set at creation: `spaces.update` changes About only
   await refused(t, w.as("eve", "spaces.update", { id: mine, name: "lab" }), "BAD_REQUEST");
   t.is(
     w.get(`space:${mine}`)?.kind === "space"
       ? (w.get(`space:${mine}`) as { name: string }).name
       : null,
-    "eve-s-space",
+    "eve-space",
   );
 });
 
 test("spaces.create is online only: the client never queues it", async (t) => {
   const w = new World();
   const c = w.client("eve");
-  t.throws(() => c.queue("spaces.create", { id: c.newId(), name: "x" }));
+  t.throws(() => c.queue("spaces.create", { id: c.newId(), name: "xy" }));
   t.is(c.pending().length, 0);
-  await ok(t, c.send("spaces.create", { id: c.newId(), name: "x" }));
+  await ok(t, c.send("spaces.create", { id: c.newId(), name: "xy" }));
 });
 
 test("the server refuses an online-only write that waited in an outbox with EXPIRED, and records it", async (t) => {

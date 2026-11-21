@@ -10,7 +10,7 @@
 import test from "ava";
 
 import {
-  MUTATORS,
+  PROTO_MUTATORS,
   ReplicaClient,
   refuse,
   type Actor,
@@ -30,6 +30,7 @@ import {
   MODEL,
   ManualClock,
   actor,
+  bare,
   admit,
   cast,
   forkInput,
@@ -146,7 +147,7 @@ test("S2: a client whose id expired registers again and sends its write; a store
       const r = await w.server.apply(a, e);
       if (!lose) return r;
       lose = false;
-      return { ok: false, error: { code: "SERVICE_UNAVAILABLE", message: "lost" } };
+      return { ok: false, error: { code: "SERVICE_UNAVAILABLE", message: "lost", serverTime: 0 } };
     },
   };
   const mel = new ReplicaClient(lossy, actor("mel"), { clock: w.clock, random: w.random });
@@ -253,7 +254,7 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
       const r = await w.server.apply(a, e);
       if (!lose) return r;
       lose = false; // the server applied it; the answer never arrived
-      return { ok: false, error: { code: "SERVICE_UNAVAILABLE", message: "lost" } };
+      return { ok: false, error: { code: "SERVICE_UNAVAILABLE", message: "lost", serverTime: 0 } };
     },
   };
   const env = { clock: dev, random: w.random };
@@ -301,8 +302,10 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
       .length,
     1,
   );
-  // an approval queued 20 days ago, device clock reset: dropped at 3 days of
-  // server time, and shown; never applied
+  // an approval queued 20 days ago, device clock reset after it was queued:
+  // the correction moves its queue time with the clock (M1a review 14), so
+  // it lands in the future and the server answers EXPIRED; shown, never
+  // applied
   const dev2 = new ManualClock(w.clock.now());
   const m = new ReplicaClient(w.server, actor("olga"), { clock: dev2, random: w.random });
   await ok(t, w.as("otto", "joinRequests.create", { space: closed }));
@@ -314,27 +317,24 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
   });
   w.clock.advance(20 * DAY);
   dev2.ms = Date.parse("2020-01-01T00:00:00Z");
-  t.deepEqual(codes(await m.flush()), []);
+  t.deepEqual(codes(await m.flush()), ["EXPIRED"]);
   t.deepEqual(
     m.problems().map((p) => p.reason),
-    ["DROPPED"],
+    ["EXPIRED"],
   );
   t.is(w.get(`member:${closed}:otto`), undefined);
   // a device 10 days slow: corrected once, and the offset survives a restart.
-  // A write it queued before its clock was corrected is 10 days old by the
-  // corrected clock: dropped and shown (a design finding of round 2's fixes)
+  // A write it queued before its clock was corrected moves with the
+  // correction and is applied (M1a review 14; round 2's fixes dropped it)
   const slow = { now: () => w.clock.now() - 10 * DAY };
   const s1 = new ReplicaClient(w.server, actor("olga"), { clock: slow, random: w.random });
   const t4 = await thread(t, w, "mel", open, "post");
   s1.queue("saved.set", { kind: "thread", id: t4, on: true });
-  t.deepEqual(codes(await s1.flush()), []);
-  t.deepEqual(
-    s1.problems().map((p) => [p.name, p.reason, p.sent]),
-    [["saved.set", "DROPPED", false]],
-  );
-  s1.queue("saved.set", { kind: "thread", id: t4, on: true });
   t.deepEqual(codes(await s1.flush()), ["ok"]);
-  t.is(s1.sent.length, 2);
+  t.deepEqual(s1.problems(), []);
+  s1.queue("saved.set", { kind: "thread", id: t4, on: false });
+  t.deepEqual(codes(await s1.flush()), ["ok"]);
+  t.is(s1.sent.length, 3);
   await ok(t, w.as("eve", "joinRequests.create", { space: closed }));
   s1.queue("joinRequests.decide", {
     space: closed,
@@ -347,9 +347,10 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
   w.clock.advance(12 * DAY);
   const s2 = new ReplicaClient(w.server, actor("olga"), { clock: slow, random: w.random }, kept);
   t.deepEqual(codes(await s2.flush()), []);
+  // the approval, queued 12 days ago in server time, is dropped and shown
   t.deepEqual(
-    s2.problems().map((p) => p.reason),
-    ["DROPPED", "DROPPED"],
+    s2.problems().map((p) => [p.name, p.reason]),
+    [["joinRequests.decide", "DROPPED"]],
   );
   t.is(s2.sent.length, 0);
   t.is(w.get(`member:${closed}:eve`), undefined);
@@ -357,12 +358,12 @@ test("Q1: a write whose answer was lost is never applied a second time, whatever
 
 test("Q3: a write that keeps getting INTERNAL_SERVER_ERROR backs off, fails after 5 answers and is shown; the writes behind it are sent", async (t) => {
   const faulty: AnyMutator = {
-    ...(MUTATORS["saved.set"] as AnyMutator),
+    ...(PROTO_MUTATORS["saved.set"] as AnyMutator),
     run: () => {
       throw new TypeError("a server bug that this input always hits");
     },
   };
-  const { w, open } = await cast(t, 7, { mutators: { ...MUTATORS, "saved.set": faulty } });
+  const { w, open } = await cast(t, 7, { mutators: { ...PROTO_MUTATORS, "saved.set": faulty } });
   const th = await thread(t, w, "mel", open, "post");
   const mel = w.client("mel");
   mel.queue("saved.set", { kind: "thread", id: th, on: true });
@@ -394,7 +395,7 @@ test("N10: a pre-check that refuses with TOO_MANY_REQUESTS or SERVICE_UNAVAILABL
   // a limit in the pre-check stage (AGENTS.md: "server-only pre-checks that
   // may refuse (invite codes, limits)")
   const limits: ("TOO_MANY_REQUESTS" | "SERVICE_UNAVAILABLE")[] = [];
-  const create = MUTATORS["invites.create"] as AnyMutator;
+  const create = PROTO_MUTATORS["invites.create"] as AnyMutator;
   const limited: AnyMutator = {
     ...create,
     pre: (ctx, i) => {
@@ -403,7 +404,9 @@ test("N10: a pre-check that refuses with TOO_MANY_REQUESTS or SERVICE_UNAVAILABL
       return create.pre?.(ctx, i) ?? {};
     },
   };
-  const { w, closed } = await cast(t, 1, { mutators: { ...MUTATORS, "invites.create": limited } });
+  const { w, closed } = await cast(t, 1, {
+    mutators: { ...PROTO_MUTATORS, "invites.create": limited },
+  });
   const e = await w.envelope("olga", "invites.create", { id: w.id(), space: closed, days: 7 });
   for (const code of ["TOO_MANY_REQUESTS", "SERVICE_UNAVAILABLE"] as const) {
     limits.push(code);
@@ -416,12 +419,14 @@ test("N10: a pre-check that refuses with TOO_MANY_REQUESTS or SERVICE_UNAVAILABL
 
 test("Q3: a write that depends on a failed write gets its own refusal", async (t) => {
   const faulty: AnyMutator = {
-    ...(MUTATORS["threads.create"] as AnyMutator),
+    ...(PROTO_MUTATORS["threads.create"] as AnyMutator),
     run: () => {
       throw new TypeError("a server bug that this input always hits");
     },
   };
-  const { w, open } = await cast(t, 7, { mutators: { ...MUTATORS, "threads.create": faulty } });
+  const { w, open } = await cast(t, 7, {
+    mutators: { ...PROTO_MUTATORS, "threads.create": faulty },
+  });
   const mel = w.client("mel");
   const th = mel.newId();
   mel.queue("threads.create", { id: th, space: open, kind: "ask", q: "never saved", ...MODEL });
@@ -496,11 +501,18 @@ test("Q2: every exception in apply is answered; a deep input is BAD_REQUEST and 
   await refused(t, Promise.resolve(w.server.apply(actor("eve"), trap)), "INTERNAL_SERVER_ERROR");
   // odd but valid handles and keys get ordinary answers
   const odd: [string, string, unknown][] = [
+    // in place of review round 2's members.setRole (`01` U6)
+    ["olga", "members.remove", { space: open, user: "constructor", base: { adm: "constructor" } }],
     ["olga", "members.ban", { space: open, user: "constructor" }],
     [
       "olga",
       "joinRequests.decide",
       { space: open, users: ["constructor"], decision: "approve", base: { constructor: 0 } },
+    ],
+    [
+      "olga",
+      "moderation.decide",
+      { item: `f:${w.id()}:${w.id()}`, decision: "hidden", base: { rev: 0 } },
     ],
     [
       "olga",
@@ -515,7 +527,7 @@ test("Q2: every exception in apply is answered; a deep input is BAD_REQUEST and 
     const r = await w.as(u, name, input);
     got.push(r.ok ? "ok" : r.error.code);
   }
-  t.deepEqual(got, ["ok", "NOT_FOUND", "NOT_FOUND", "ok", "BAD_REQUEST"]);
+  t.deepEqual(got, ["ok", "ok", "NOT_FOUND", "NOT_FOUND", "BAD_REQUEST", "ok", "BAD_REQUEST"]);
   t.true((await w.server.register(actor("constructor"))).ok);
   t.deepEqual(await w.server.pull(null, "space:x:y", "e"), { resync: true });
 });
@@ -525,16 +537,17 @@ test("E1: a write that notifies several people commits all of their notification
   // recipients. Notifications are written in the write's transaction now
   // (`01` U1, C16), so a fault after the first one commits nothing at all.
   let fail = true;
-  const create = MUTATORS["research.createPostFollowUp"] as AnyMutator;
+  const create = PROTO_MUTATORS["research.createPostFollowUp"] as AnyMutator;
   const faulty: AnyMutator = {
     ...create,
-    notify: (tx, i, result) => {
-      create.notify?.(tx, i, result);
+    notify: (tx, i, result, ctx) => {
+      const told = create.notify?.(tx, i, result, ctx);
       if (fail) throw new Error("down once, after the notifications were staged");
+      return told;
     },
   };
   const { w, open } = await cast(t, 7, {
-    mutators: { ...MUTATORS, "research.createPostFollowUp": faulty },
+    mutators: { ...PROTO_MUTATORS, "research.createPostFollowUp": faulty },
   });
   const th = await thread(t, w, "eve", open, "post");
   const notifs = () =>
@@ -546,14 +559,27 @@ test("E1: a write that notifies several people commits all of their notification
   t.deepEqual(notifs(), []);
   t.false(w.server.dump().has(`reply:${input.id}`));
   fail = false;
-  await ok(t, w.as("otto", "research.createPostFollowUp", input));
-  // the post's author gets a reply; members of the space a mention; a
-  // handle that names no member (eve posted without joining; nobody) gets
-  // no mention
-  t.deepEqual(notifs(), ["eve:reply:1", "mel:mention:1", "mona:mention:1", "olga:mention:1"]);
+  const told = await ok(t, w.as("otto", "research.createPostFollowUp", input));
+  // the post's author gets a reply; every account that may read the open
+  // space a mention, eve too, who posted without joining (M1a review 11);
+  // a handle that is no account (nobody) gets none, and the answer says so
+  t.deepEqual(notifs(), [
+    "eve:mention:1",
+    "eve:reply:1",
+    "mel:mention:1",
+    "mona:mention:1",
+    "olga:mention:1",
+  ]);
+  t.deepEqual(told, { notified: ["mona", "mel", "olga", "eve"], notMembers: ["nobody"] });
   // another reply to the same post: the unread reply notification counts it
   await ok(t, w.as("mel", "research.createPostFollowUp", { id: w.id(), thread: th, t: "me too" }));
-  t.deepEqual(notifs(), ["eve:reply:2", "mel:mention:1", "mona:mention:1", "olga:mention:1"]);
+  t.deepEqual(notifs(), [
+    "eve:mention:1",
+    "eve:reply:2",
+    "mel:mention:1",
+    "mona:mention:1",
+    "olga:mention:1",
+  ]);
 });
 
 test("R1: a record written again at a deleted key continues from its last rev, after the tombstone is pruned too", async (t) => {
@@ -736,12 +762,15 @@ test("Y1: a reminted envelope's answer is stored under the ids it replaces: a de
     ...(await w.envelope("mel", "threads.create", second)),
     replaces: [original.mutationId],
   };
-  const answer = await w.server.apply(actor("mel"), reminted);
-  t.deepEqual(answer, { ok: true, result: { id: second.id, run: null } });
+  const answer = bare(await w.server.apply(actor("mel"), reminted));
+  t.deepEqual(answer, {
+    ok: true,
+    result: { id: second.id, run: null, notified: [], notMembers: [] },
+  });
   // the original arrives late, under the client's next seq: it gets the
   // stored answer, uses no seq and writes nothing
   const seq = await w.nextSeq("mel", original.clientId);
-  t.deepEqual(await w.server.apply(actor("mel"), { ...original, seq }), answer);
+  t.deepEqual(bare(await w.server.apply(actor("mel"), { ...original, seq })), answer);
   t.is(await w.nextSeq("mel", original.clientId), seq);
   t.is(w.get(`thread:${first.id}`), undefined);
   t.is(
@@ -751,7 +780,7 @@ test("Y1: a reminted envelope's answer is stored under the ids it replaces: a de
   // an id that has its own answer keeps it; another user's ids are their own
   const other = await w.envelope("mel", "spaces.leave", { space: open });
   await ok(t, w.server.apply(actor("mel"), { ...other, replaces: [reminted.mutationId] }));
-  t.deepEqual(await w.resend("mel", reminted, true), answer);
+  t.deepEqual(bare(await w.resend("mel", reminted, true)), answer);
   await ok(t, w.as("otto", "threads.create", first, original.mutationId));
   // `replaces` holds at most 16 ULIDs, or the envelope is malformed
   for (const replaces of [["not-a-ulid"], Array.from({ length: 17 }, () => w.id()), "x"]) {

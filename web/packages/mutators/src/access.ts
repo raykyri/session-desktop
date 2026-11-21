@@ -1,6 +1,8 @@
 // Roles and read scope: the mock's section 5a (`roleIn`, `readsSpace`,
 // `readScope`) over multi-user records, with the owner's decisions of phase
-// 0b, the reviews and the implementation plan (`01` C12, C18; `04` §6).
+// 0b, the reviews and the implementation plan (`01` C12, C18; `04` §6). The
+// mutators read through these rules (a target the actor may not read is
+// NOT_FOUND), and a server half filters every snapshot and pull with them.
 //
 // Roles: a space has one owner, for its lifetime, and members (`01` C18).
 //
@@ -10,9 +12,7 @@
 //   replies, comments, runs, its `stats` record and its member list) is
 //   readable by anyone, signed out included; a private space's by its
 //   members only. A non-member gets none of a private space's content, the
-//   threads they wrote included: a device that lost membership keeps the
-//   copy it had, frozen (`ReplicaClient.frozen`), and gets no further
-//   updates.
+//   threads they wrote included, and no further updates of it.
 // - Join requests (prototype only): the person's own, and all of them for
 //   the space's owner. Bans, invite links and the moderation log: the
 //   space's owner only.
@@ -55,27 +55,30 @@ import type {
 import { banKey, memberKey, personOf, spaceKey, spaceOf, threadKey } from "./records.js";
 
 export interface Reader {
-  get(key: string): StoredRecord | undefined;
+  /** The record at `key`, or undefined. A replica throws `UnknownRead` for a
+   * key outside its working set (`tx.ts`). */
+  byKey(key: string): StoredRecord | undefined;
 }
 
 export const isClosed = (s: SpaceRec) => s.vis !== "open";
 
 export function spaceRec(g: Reader, sp: string): SpaceRec | undefined {
-  const s = g.get(spaceKey(sp));
+  const s = g.byKey(spaceKey(sp));
   return s?.kind === "space" ? s : undefined;
 }
 
 /** A person's role in a space: their member record's role, or null. */
 export function roleIn(g: Reader, sp: string, u: string | null): SpaceRole | null {
   if (u === null) return null;
-  const m = g.get(memberKey(sp, u));
+  const m = g.byKey(memberKey(sp, u));
   return m?.kind === "member" ? m.role : null;
 }
 
 /** Whether `u` is the space's owner (by their member record). */
 export const isOwnerOf = (g: Reader, sp: string, u: string | null) => roleIn(g, sp, u) === "owner";
 
-export const bannedFrom = (g: Reader, sp: string, u: string) => g.get(banKey(sp, u)) !== undefined;
+export const bannedFrom = (g: Reader, sp: string, u: string) =>
+  g.byKey(banKey(sp, u)) !== undefined;
 
 /** May `u` read a space's content (threads and their counts, nodes, answers,
  * replies, comments, runs, stats, member list). */
@@ -99,7 +102,7 @@ export interface Audience {
 export function audience(g: Reader, r: StoredRecord): Audience {
   let sp = spaceOf(r);
   if (r.kind === "save") {
-    const p = g.get(threadKey(r.th));
+    const p = g.byKey(threadKey(r.th));
     sp = p?.kind === "thread" ? p.s : null;
   }
   if (r.kind === "notif") sp = r.sp;

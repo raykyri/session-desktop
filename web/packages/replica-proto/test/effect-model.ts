@@ -53,24 +53,17 @@ export interface Prediction {
   result?: (r: unknown) => boolean;
 }
 
-/** The mock's name rule (its spaces.create), written out step by step: lower
- * case; a leading "#" dropped; each run of characters other than a to z, 0
- * to 9 and "-" becomes one "-"; the "-"s at the start dropped; the first 32
- * characters. */
+/** The channel name rule (`04` B1), written out step by step: spaces at
+ * both ends dropped; lower case; a leading "#" dropped; then 2 to 30
+ * characters, each a to z, 0 to 9 or "-", the first not "-". "" when the
+ * name breaks the rule (the write is BAD_REQUEST). */
 export function slug(n: string): string {
-  let s = n.toLowerCase();
+  let s = n.trim().toLowerCase();
   if (s.startsWith("#")) s = s.slice(1);
-  let out = "";
-  let inRun = false;
-  for (const ch of s) {
-    const kept = (ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9") || ch === "-";
-    if (kept) out += ch;
-    else if (!inRun) out += "-";
-    inRun = !kept;
-  }
-  let start = 0;
-  while (out[start] === "-") start++;
-  return out.slice(start, start + 32);
+  const ok = (ch: string) => (ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9") || ch === "-";
+  if (s.length < 2 || s.length > 30 || s[0] === "-") return "";
+  for (const ch of s) if (!ok(ch)) return "";
+  return s;
 }
 
 /** A look-up phrase as stored: the words between the first and the last
@@ -152,6 +145,9 @@ export function predictEffects(
   input: In,
   nowMs: number,
   had: Admissions = new Map(),
+  /** Whether a handle is a Session account (a mention of anyone else is
+   * reported back, not notified). */
+  isAccount: (h: string) => boolean = () => true,
 ): Prediction {
   const keys = new Map<string, Fields | null>();
   const fresh: Fields[] = [];
@@ -178,8 +174,10 @@ export function predictEffects(
     th: string,
     item: string,
     note: string | null = null,
-  ) => {
-    if (to === me) return;
+  ): boolean => {
+    if (to === me) return false;
+    // nobody who may not read the space when the write commits
+    if (!readsSpace(sp, to)) return false;
     if (type === "reply" || type === "branch" || type === "comment") {
       const old = [...dump.entries()].find(
         ([, r]) => r.kind === "notif" && r.to === to && r.type === type && r.th === th && !r.read,
@@ -187,7 +185,7 @@ export function predictEffects(
       if (old) {
         const n = old[1] as StoredRecord & { n: number };
         keys.set(old[0], { to, type, th, item, actor: me, n: n.n + 1, read: false });
-        return;
+        return true;
       }
     }
     fresh.push({
@@ -203,12 +201,24 @@ export function predictEffects(
       note,
       read: false,
     });
+    return true;
   };
   /** Mention notifications for the members of `sp` that `t` names. */
+  /** May `u` read the content of `sp`: it is open, or `u` is a member. */
+  const readsSpace = (sp: string, u: string) =>
+    !isClosed(dump, sp) || dump.get(`member:${sp}:${u}`)?.kind === "member";
+  /** Mention notifications for the accounts `t` names that may read `sp`; the
+   * answer names them, and the handles that are not accounts (02 N16). */
   const mentions = (t: string, sp: string, th: string, item: string) => {
-    for (const h of mentioned(t))
-      if (dump.get(`member:${sp}:${h}`)?.kind === "member") notify(h, "mention", sp, th, item);
+    const notified: string[] = [];
+    const notMembers: string[] = [];
+    for (const h of mentioned(t)) {
+      if (!isAccount(h)) notMembers.push(h);
+      else if (notify(h, "mention", sp, th, item)) notified.push(h);
+    }
+    return { notified, notMembers };
   };
+  const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   /** The author of the node a reference names in a thread: `r` the thread's. */
   const authorAt = (th: string, ref: string) =>
     String(get(ref === "r" ? `thread:${th}` : `node:${ref}`)?.["u"]);
@@ -231,6 +241,24 @@ export function predictEffects(
       attempt: 1,
       step: 0,
     });
+  /** A run that has not ended, stopped by its asker (`03` E4). */
+  const stopRun = (run: StoredRecord | undefined) => {
+    if (run?.kind === "run" && (run.status === "queued" || run.status === "running"))
+      keys.set(`run:${run.id}`, {
+        status: "cancelled",
+        fail: { why: "stopped", at: null, cls: null },
+        attempt: run.attempt,
+      });
+  };
+  /** The run of a node, or of the root (`r`). */
+  const runAt = (th: string, ref: string) =>
+    [...dump.values()].find(
+      (r) =>
+        r.kind === "run" &&
+        (ref === "r"
+          ? r.th === th && r.node === "r"
+          : r.id === (get(`node:${ref}`) as { run?: string } | undefined)?.run),
+    );
   /** A moderation log entry (`01` C12). */
   const modlog = (sp: string, act: string, item: string | null, author: string, note: unknown) =>
     fresh.push({ kind: "modlog", id: anId(), sp, act, item, by: me, author, note });
@@ -294,6 +322,38 @@ export function predictEffects(
     }
     case "threads.create": {
       const id = str("id");
+      const from = input["from"] as { th: string; node: string } | undefined;
+      if (from) {
+        // a node opened as its own thread (`03` G5): its question, author,
+        // model and effort, a copy of its answer; no run
+        const n = get(`node:${from.node}`) as Extract<StoredRecord, { kind: "node" }>;
+        const a = get(`answer:${n.id}`) as Extract<StoredRecord, { kind: "answer" }>;
+        keys.set(`thread:${id}`, {
+          id,
+          s: n.s,
+          u: n.u,
+          k: "ask",
+          q: n.q,
+          t: null,
+          sum: null,
+          tok: a.tok,
+          src: a.pages.length,
+          model: n.model,
+          effort: n.effort,
+          running: false,
+          del: false,
+          gone: false,
+          mod: null,
+          from: { th: n.th, node: n.id },
+        });
+        keys.set(`counts:${id}`, { th: id, s: n.s, saves: 0, r: 0 });
+        const st = get(`stats:${n.s}`);
+        if (st) keys.set(`stats:${n.s}`, { posts: Number(st["posts"]) + 1 });
+        keys.set(`answer:${id}`, { node: "r", th: id, s: n.s, u: n.u, md: a.md, mod: null });
+        keys.set(`node:${n.id}`, { promoted: id, q: n.q });
+        out.result = (r) => JSON.stringify(r) === JSON.stringify({ id, run: null });
+        break;
+      }
       const sp = str("space");
       const ask = input["kind"] === "ask";
       keys.set(`thread:${id}`, {
@@ -319,12 +379,18 @@ export function predictEffects(
       keys.set(`counts:${id}`, { th: id, s: sp, saves: 0, r: 0 });
       const stats = get(`stats:${sp}`);
       if (stats) keys.set(`stats:${sp}`, { posts: Number(stats["posts"]) + 1 });
-      // an ask queues its root run; a post notifies the members it mentions
+      // an ask queues its root run; a post notifies the accounts it mentions
       if (ask) run(id, sp, "r");
-      else mentions(str("q"), sp, id, `thread:${id}`);
+      const told = ask
+        ? { notified: [], notMembers: [] }
+        : mentions(str("q"), sp, id, `thread:${id}`);
       out.result = (r) => {
-        const x = r as { id?: unknown; run?: unknown } | null;
-        return x?.id === id && (ask ? typeof x.run === "string" : x.run === null);
+        const x = r as { id?: unknown; run?: unknown; notified?: unknown; notMembers?: unknown };
+        return (
+          x.id === id &&
+          (ask ? typeof x.run === "string" : x.run === null) &&
+          sameJson({ notified: x.notified, notMembers: x.notMembers }, told)
+        );
       };
       break;
     }
@@ -343,7 +409,7 @@ export function predictEffects(
       const p = get(`thread:${str("id")}`) as Extract<StoredRecord, { kind: "thread" }>;
       // a thread with nodes (an ask) or replies (a post) keeps its place; one
       // without is gone, leaves Saved and loses its root answer
-      const kept = ofThread(p.id, p.k === "ask" ? "node" : "reply").length > 0;
+      const kept = ofThread(p.id, p.k === "ask" ? "node" : "reply", "comment").length > 0;
       keys.set(`thread:${p.id}`, {
         del: true,
         gone: !kept,
@@ -414,6 +480,91 @@ export function predictEffects(
       };
       break;
     }
+    case "followups.update": {
+      keys.set(`node:${str("node")}`, { q: str("q").trim(), mod: null, del: false });
+      break;
+    }
+    case "followups.delete": {
+      // a node with nodes or comments under it stays as a shell without
+      // text; one without goes with its answer. Its run, if it has not
+      // ended, is cancelled first (`03` G6).
+      const n = get(`node:${str("node")}`) as Extract<StoredRecord, { kind: "node" }>;
+      const kept = [...dump.values()].some(
+        (r) => (r.kind === "node" && r.par === n.id) || (r.kind === "comment" && r.node === n.id),
+      );
+      stopRun(get(`run:${n.run}`));
+      if (kept) keys.set(`node:${n.id}`, { q: "", look: null, quote: null, del: true });
+      else {
+        keys.set(`node:${n.id}`, null);
+        if (dump.has(`answer:${n.id}`)) keys.set(`answer:${n.id}`, null);
+        keys.set(`counts:${n.th}`, { r: ofThread(n.th, "node").length - 1 });
+      }
+      const reads = mayRead(dump, n, me);
+      out.result = (r) => JSON.stringify(r) === JSON.stringify(reads ? { kept } : null);
+      break;
+    }
+    case "research.cancelNode": {
+      const th = str("thread");
+      const run = runAt(th, str("node"));
+      if (run?.kind === "run" && (run.status === "queued" || run.status === "running")) {
+        stopRun(run);
+        if (str("node") === "r") keys.set(`thread:${th}`, { running: false });
+      }
+      break;
+    }
+    case "research.retryNode": {
+      // a new attempt, queued, on the model and effort picked now
+      const th = str("thread");
+      const ref = str("node");
+      const run = runAt(th, ref) as Extract<StoredRecord, { kind: "run" }>;
+      keys.set(`run:${run.id}`, {
+        status: "queued",
+        attempt: run.attempt + 1,
+        model: input["model"],
+        effort: input["effort"],
+        fail: null,
+        step: 0,
+        finishedAt: null,
+      });
+      if (ref === "r")
+        keys.set(`thread:${th}`, {
+          model: input["model"],
+          effort: input["effort"],
+          running: true,
+        });
+      else keys.set(`node:${ref}`, { model: input["model"], effort: input["effort"] });
+      break;
+    }
+    case "replies.update":
+    case "comments.update": {
+      const kind = name === "replies.update" ? "reply" : "comment";
+      const old = get(`${kind}:${str("id")}`) as { t: string; edited: boolean };
+      const t = str("t").trim();
+      keys.set(`${kind}:${str("id")}`, {
+        t,
+        mod: null,
+        del: false,
+        edited: old.edited || t !== old.t,
+      });
+      break;
+    }
+    case "replies.delete":
+    case "comments.delete": {
+      // a top-level one with others under it stays, emptied; any other goes
+      const kind = name === "replies.delete" ? "reply" : "comment";
+      const r = get(`${kind}:${str("id")}`) as Extract<StoredRecord, { kind: "reply" | "comment" }>;
+      const kept =
+        r.parent === null &&
+        [...dump.values()].some((x) => x.kind === kind && x.th === r.th && x.parent === r.id);
+      if (kept) keys.set(`${kind}:${r.id}`, { t: "", del: true });
+      else {
+        keys.set(`${kind}:${r.id}`, null);
+        if (kind === "reply") keys.set(`counts:${r.th}`, { r: ofThread(r.th, "reply").length - 1 });
+      }
+      const reads = mayRead(dump, r, me);
+      out.result = (x) => JSON.stringify(x) === JSON.stringify(reads ? { kept } : null);
+      break;
+    }
     case "research.createPostFollowUp": {
       const p = get(`thread:${str("thread")}`) as Extract<StoredRecord, { kind: "thread" }>;
       const parent = (input["parent"] as string | undefined) ?? null;
@@ -429,7 +580,8 @@ export function predictEffects(
       // every reply counts for its post, at every depth (C5)
       keys.set(`counts:${p.id}`, { r: ofThread(p.id, "reply").length + 1 });
       notify(String(p.u), "reply", p.s, p.id, `reply:${id}`);
-      mentions(str("t"), p.s, p.id, `reply:${id}`);
+      const told = mentions(str("t"), p.s, p.id, `reply:${id}`);
+      out.result = (r) => sameJson(r, told);
       break;
     }
     case "comments.create": {
@@ -446,7 +598,8 @@ export function predictEffects(
       });
       // a comment starts no run and changes no count (`03` G4)
       notify(authorAt(p.id, str("node")), "comment", p.s, p.id, `comment:${id}`);
-      mentions(str("t"), p.s, p.id, `comment:${id}`);
+      const told = mentions(str("t"), p.s, p.id, `comment:${id}`);
+      out.result = (r) => sameJson(r, told);
       break;
     }
     case "joinRequests.create": {
@@ -519,6 +672,14 @@ export function predictEffects(
       };
       break;
     }
+    case "invites.revoke":
+    case "invites.restore": {
+      const key = `invite:${str("id")}`;
+      const dead = get(key)?.["dead"];
+      if (name === "invites.revoke" && dead === null) keys.set(key, { dead: "Revoked" });
+      if (name === "invites.restore" && dead === "Revoked") keys.set(key, { dead: null });
+      break;
+    }
     case "moderation.decide": {
       const item = str("item");
       const [k, th, sub] = item.split(":");
@@ -551,11 +712,18 @@ export function predictEffects(
         keys.set(ck, null);
       };
       if (r.kind === "thread") {
+        // nothing else of the removed content is kept (C12)
         keys.set(key, {
           mod: "removed",
           q: "",
           t: null,
           sum: null,
+          tok: 0,
+          src: 0,
+          model: null,
+          effort: null,
+          edited: false,
+          from: null,
           running: false,
           modBy: me,
           modNote: note,
@@ -567,9 +735,23 @@ export function predictEffects(
           if (x.kind === "notif" && x.type === "mention" && x.th === r.id) keys.set(ck, null);
         notify(String(r.u), "removed", r.s, r.id, key, note);
       } else if (r.kind === "node") {
+        // the node's subtree: its descendants go, and every answer, comment
+        // and run in it (M1a review 13)
         keys.set(key, { mod: "removed", q: "", look: null, quote: null });
-        if (dump.has(`answer:${r.id}`)) drop(`answer:${r.id}`);
-        for (const [ck, x] of dump) if (x.kind === "comment" && x.node === r.id) drop(ck);
+        const under = new Set([r.id]);
+        let size = 0;
+        while (size !== under.size) {
+          size = under.size;
+          for (const x of dump.values())
+            if (x.kind === "node" && x.th === r.th && under.has(x.par)) under.add(x.id);
+        }
+        for (const [ck, x] of dump) {
+          if (x.kind === "node" && x.id !== r.id && under.has(x.id)) drop(ck);
+          if ((x.kind === "comment" || x.kind === "run") && x.th === r.th && under.has(x.node))
+            drop(ck);
+          if (x.kind === "answer" && x.th === r.th && under.has(x.node)) drop(ck);
+        }
+        keys.set(`counts:${r.th}`, { r: ofThread(r.th, "node").length - (under.size - 1) });
       } else if (r.kind === "reply" || r.kind === "comment") {
         keys.set(key, { mod: "removed", t: "" });
         if (r.parent === null)
@@ -584,6 +766,13 @@ export function predictEffects(
     case "notifications.markRead": {
       const key = `notif:${str("id")}`;
       if (get(key)?.["read"] === false) keys.set(key, { read: true });
+      break;
+    }
+    case "notifications.markAllRead": {
+      // the person's unread notifications they may read now
+      for (const [k, r] of dump)
+        if (r.kind === "notif" && r.to === me && !r.read && mayRead(dump, r, me))
+          keys.set(k, { read: true });
       break;
     }
     case "prefs.set": {

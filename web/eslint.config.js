@@ -6,9 +6,18 @@ import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 /** ADR-1: client ──► shared; server ──► shared, db; db ──► shared; shared ──► nothing.
- * replica-proto (phase 0 prototype) ──► shared, and nothing imports it. */
+ * mutators ──► shared (`01` §3: shared by the client and the server, so it
+ * depends on neither, nor on the prototype).
+ * replica-proto (phase 0 prototype) ──► shared, mutators, and nothing imports it. */
 const forbidden = {
   "packages/shared": [
+    "@session/db",
+    "@session/server",
+    "@session/client",
+    "@session/replica-proto",
+    "@session/mutators",
+  ],
+  "packages/mutators": [
     "@session/db",
     "@session/server",
     "@session/client",
@@ -20,16 +29,47 @@ const forbidden = {
   "packages/replica-proto": ["@session/db", "@session/server", "@session/client"],
 };
 
+/** `@session/mutators` runs deterministically on the client and the server
+ * (`01` U1): no clock, random source, `Intl` or `Date` anywhere in it. Times
+ * come from `tx.now` (`run`) or `ctx.now` (`pre`), randomness from
+ * `ctx.random()`, ids from the input and `tx.id(ordinal)`. */
+const DETERMINISTIC = "@session/mutators is deterministic (01 U1)";
+const nondeterministic = {
+  globals: [
+    { name: "Date", message: `${DETERMINISTIC}: use tx.now, ctx.now or ./time.ts.` },
+    { name: "Intl", message: `${DETERMINISTIC}: no locale formatting.` },
+    { name: "crypto", message: `${DETERMINISTIC}: randomness comes from ctx.random().` },
+    { name: "performance", message: `${DETERMINISTIC}: no clock.` },
+  ],
+  properties: [
+    { object: "Math", property: "random", message: `${DETERMINISTIC}: use ctx.random().` },
+    ...["Date", "Intl", "crypto", "performance"].map((property) => ({
+      object: "globalThis",
+      property,
+      message: `${DETERMINISTIC}.`,
+    })),
+  ],
+  imports: [
+    {
+      group: ["crypto", "node:crypto", "node:perf_hooks", "perf_hooks"],
+      message: `${DETERMINISTIC}: randomness comes from ctx.random().`,
+    },
+  ],
+};
+
 const boundaries = Object.entries(forbidden).map(([directory, packages]) => ({
   files: [`${directory}/**/*.{ts,tsx}`],
   rules: {
     "@typescript-eslint/no-restricted-imports": [
       "error",
       {
-        patterns: packages.map((name) => ({
-          group: [name, `${name}/*`],
-          message: `${directory} may not import ${name} (ADR-1 package dependency graph).`,
-        })),
+        patterns: [
+          ...packages.map((name) => ({
+            group: [name, `${name}/*`],
+            message: `${directory} may not import ${name} (ADR-1 package dependency graph).`,
+          })),
+          ...(directory === "packages/mutators" ? nondeterministic.imports : []),
+        ],
       },
     ],
   },
@@ -140,6 +180,19 @@ export default tseslint.config(
     },
   },
   ...boundaries,
+  {
+    files: ["packages/mutators/**/*.ts"],
+    rules: {
+      "no-restricted-globals": ["error", ...nondeterministic.globals],
+      "no-restricted-properties": ["error", ...nondeterministic.properties],
+    },
+  },
+  // the test that mutators read no clock, random source or Intl replaces
+  // them with traps, so it names them
+  {
+    files: ["packages/mutators/test/determinism.test.ts"],
+    rules: { "no-restricted-globals": "off", "no-restricted-properties": "off" },
+  },
   // The tRPC client imports the server router's type. `verbatimModuleSyntax`
   // erases an
   // `import type` at emit, so the bundle has no edge (ADR-1,

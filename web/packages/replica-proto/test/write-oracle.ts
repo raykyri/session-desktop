@@ -50,7 +50,13 @@
 //  13. a new id in the input with such an age: EXPIRED         stored
 //  14. an online-only write (spaces.create) whose mutation id is over a
 //      minute old on the device: EXPIRED (it waited in an outbox) stored
-//  15. the mutator's own rules (RULES below)                   stored
+//  15. the mutator's own rules (RULES below), in the server's order: the
+//      target (NOT_FOUND), a ban (FORBIDDEN), a frozen space (FORBIDDEN, but
+//      for deleting one's own items, leaving, saves and notifications), the
+//      role, then the pre-checks of a write that queues a run (a registry
+//      model and an effort it accepts, BAD_REQUEST; at most 20 queued runs
+//      per person, PRECONDITION_FAILED with reason queue_full), then the
+//      rest                                                    stored
 // "Stored" answers use the seq and are kept for replays for 7 days, under
 // (user, mutation id) and under each id in `replaces` that has no answer.
 // An answer that uses the seq is always stored (round 1, R7b). INTERNAL_SERVER_ERROR (the server's random source failed, in the
@@ -60,6 +66,8 @@
 // or a reserved handle, TOO_MANY_REQUESTS for a person who registered 20
 // clients in the past day, INTERNAL_SERVER_ERROR when the random source
 // fails.
+
+import { MODEL_REGISTRY } from "@session/shared";
 
 import type { Envelope, ErrorCode, StoredRecord } from "../src/index.js";
 
@@ -76,6 +84,8 @@ export interface Prediction {
   stored: boolean;
   /** The answer is kept for replays of (client, seq) instead. */
   storedForSeq?: boolean;
+  /** An earlier mutation id's answer, now kept under this one as well. */
+  adopted?: boolean;
 }
 
 const MIN_DAY = 86_400_000;
@@ -130,6 +140,11 @@ const upTo =
   (v) =>
     typeof v === "string" && v.length <= n;
 const bool: Check = (v) => typeof v === "boolean";
+/** Text a write must carry: 1 to `n` characters. */
+const words =
+  (n: number): Check =>
+  (v) =>
+    typeof v === "string" && v.length >= 1 && v.length <= n;
 const ulid: Check = (v) => typeof v === "string" && ULID.test(v);
 const nat: Check = (v) => typeof v === "number" && Number.isInteger(v) && v >= 0;
 const oneOf =
@@ -137,8 +152,14 @@ const oneOf =
   (v) =>
     xs.includes(v);
 const handle: Check = isHandle;
-const itemKey: Check = (v) =>
-  typeof v === "string" && /^[a-z]+:[0-9A-HJKMNP-TV-Z]{26}(:.*)?$/.test(v);
+/** A moderation key: `a:` or `p:` and a thread id; `f:`, `r:` or `c:`, a
+ * thread id and an item id. */
+const itemKey: Check = (v) => {
+  if (typeof v !== "string") return false;
+  const [k, ...ids] = v.split(":");
+  const n = k === "a" || k === "p" ? 1 : k === "f" || k === "r" || k === "c" ? 2 : 0;
+  return n > 0 && ids.length === n && ids.every((x) => /^[0-9A-HJKMNP-TV-Z]{26}$/.test(x));
+};
 /** `r` (a thread's root ask) or a node's id. */
 const nodeRef: Check = (v) => v === "r" || ulid(v);
 const model: Check = (v) => typeof v === "string" && v.length >= 1 && v.length <= 100;
@@ -178,6 +199,8 @@ const revsFor =
     );
   };
 const title = (v: unknown) => v === null || str(v);
+/** A node of a thread and the thread (`followups.*`, `research.cancelNode`). */
+const nodeIn = { thread: ulid, node: nodeRef };
 
 const SCHEMA: Record<string, Check> = {
   "spaces.create": obj(
@@ -187,26 +210,37 @@ const SCHEMA: Record<string, Check> = {
   "spaces.update": obj({ id: ulid, desc: upTo(300) }),
   "spaces.join": obj({ space: ulid }, { invite: upTo(64) }),
   "spaces.leave": obj({ space: ulid }),
-  "threads.create": byKind({
-    ask: obj({ id: ulid, space: ulid, kind: str, q: upTo(8000), model, effort }, { title }),
-    post: obj({ id: ulid, space: ulid, kind: str, q: upTo(8000) }, { title }),
-  }),
-  "threads.update": obj({ id: ulid, q: upTo(8000), base: obj({ rev: nat }) }),
+  "threads.create": (v) =>
+    byKind({
+      ask: obj({ id: ulid, space: ulid, kind: str, q: words(8000), model, effort }, { title }),
+      post: obj({ id: ulid, space: ulid, kind: str, q: words(8000) }, { title }),
+    })(v) ||
+    // a node opened as its own thread (`03` G5): no kind
+    obj({ id: ulid, from: obj({ th: ulid, node: ulid }) })(v),
+  "threads.update": obj({ id: ulid, q: words(8000), base: obj({ rev: nat }) }),
   "threads.delete": obj({ id: ulid }),
   "saved.set": obj({ kind: oneOf("thread"), id: ulid, on: bool }),
   "research.forkNode": byKind({
     ask: obj(
-      { id: ulid, thread: ulid, parent: nodeRef, kind: str, q: upTo(8000), model, effort },
+      { id: ulid, thread: ulid, parent: nodeRef, kind: str, q: words(8000), model, effort },
       { quote: upTo(2000), b: nat },
     ),
     lookup: obj(
-      { id: ulid, thread: ulid, parent: nodeRef, kind: str, look: upTo(80), model, effort },
+      { id: ulid, thread: ulid, parent: nodeRef, kind: str, look: words(80), model, effort },
       { quote: upTo(2000), b: nat },
     ),
   }),
-  "research.createPostFollowUp": obj({ id: ulid, thread: ulid, t: upTo(8000) }, { parent: ulid }),
+  "followups.update": obj({ ...nodeIn, q: words(8000), base: rev }),
+  "followups.delete": obj(nodeIn),
+  "research.cancelNode": obj(nodeIn),
+  "research.retryNode": obj({ ...nodeIn, model, effort }),
+  "research.createPostFollowUp": obj({ id: ulid, thread: ulid, t: words(8000) }, { parent: ulid }),
+  "replies.update": obj({ id: ulid, t: words(8000), base: rev }),
+  "replies.delete": obj({ id: ulid }),
+  "comments.update": obj({ id: ulid, t: words(8000), base: rev }),
+  "comments.delete": obj({ id: ulid }),
   "comments.create": obj(
-    { id: ulid, thread: ulid, node: nodeRef, t: upTo(8000) },
+    { id: ulid, thread: ulid, node: nodeRef, t: words(8000) },
     { parent: ulid },
   ),
   "joinRequests.create": obj({ space: ulid }),
@@ -228,11 +262,18 @@ const SCHEMA: Record<string, Check> = {
     space: ulid,
     days: (v) => nat(v) && (v as number) >= 1 && (v as number) <= 30,
   }),
-  "moderation.decide": obj(
-    { item: itemKey, decision: oneOf("hidden", "removed", "shown") },
-    { note: upTo(300), base: rev },
-  ),
+  "invites.revoke": obj({ id: ulid }),
+  "invites.restore": obj({ id: ulid }),
+  // by decision: a reason only with a removal; "shown" needs the item's rev
+  "moderation.decide": (v) => {
+    const d = (v as { decision?: unknown } | null)?.decision;
+    if (d === "removed")
+      return obj({ item: itemKey, decision: str }, { note: upTo(300), base: rev })(v);
+    if (d === "hidden") return obj({ item: itemKey, decision: str }, { base: rev })(v);
+    return d === "shown" && obj({ item: itemKey, decision: str, base: rev })(v);
+  },
   "notifications.markRead": obj({ id: ulid }),
+  "notifications.markAllRead": obj({}),
   "prefs.set": obj({ layout: oneOf("centred", "wide") }),
 };
 
@@ -286,11 +327,14 @@ const banned = (f: Facts, sp: string, u: string) => f.dump.has(`ban:${sp}:${u}`)
 const baseRev = (i: In) => (i["base"] as { rev: number } | undefined)?.rev;
 const blank = (v: unknown) => String(v).trim() === "";
 /** The space's record, or NOT_FOUND; then: a banned actor is refused every
- * write there; then the role `need` (0: any signed-in person; "member": a
- * member of a private space, anyone in an open one; "owner": the owner). */
-function inSpace(f: Facts, sp: string, need: 0 | "member" | "owner"): Space {
+ * write there; then a frozen space refuses every write but deleting one's own
+ * items, leaving, saves and notifications (`thaw`; `04` B6); then the role
+ * `need` (0: any signed-in person; "member": a member of a private space,
+ * anyone in an open one; "owner": the owner). */
+function inSpace(f: Facts, sp: string, need: 0 | "member" | "owner", thaw = false): Space {
   const s = spaceAt(f, sp) ?? no("NOT_FOUND");
   if (banned(f, sp, f.me)) no("FORBIDDEN");
+  if (s.frozen && !thaw) no("FORBIDDEN");
   if (need === "member" && closed(s) && roleOf(f, sp, f.me) === null) no("FORBIDDEN");
   if (need === "owner" && roleOf(f, sp, f.me) !== "owner") no("FORBIDDEN");
   return s;
@@ -331,18 +375,76 @@ function seenItem(f: Facts, key: string) {
   return no("NOT_FOUND");
 }
 
+/** A record the actor wrote, or one of another person's the actor may read
+ * (an author deletes what they wrote without read access), or NOT_FOUND. */
+function ownOrSeen(f: Facts, key: string, kind: "node" | "reply" | "comment") {
+  const r = f.dump.get(key);
+  if (r?.kind !== kind) return no("NOT_FOUND");
+  const x = r;
+  if (x.u !== f.me && !mayRead(f.dump, x, f.me)) no("NOT_FOUND");
+  return x;
+}
+
+/** A record of `kind` the actor may read, or NOT_FOUND. */
+function seen<K extends StoredRecord["kind"]>(f: Facts, key: string, kind: K) {
+  const r = f.dump.get(key);
+  if (r?.kind !== kind || !mayRead(f.dump, r, f.me)) no("NOT_FOUND");
+  return r as Extract<StoredRecord, { kind: K }>;
+}
+
+/** The run of a node, or of the root (`r`): the thread's run on `r`. */
+function runAt(f: Facts, n: Thread | AskNode) {
+  for (const r of f.dump.values())
+    if (r.kind === "run" && (n.kind === "node" ? r.id === n.run : r.th === n.id && r.node === "r"))
+      return r;
+  return undefined;
+}
+const pending = (r: StoredRecord | undefined) =>
+  r?.kind === "run" && (r.status === "queued" || r.status === "running");
+
+/** The pre-checks of a write that queues a run: the model is a registry
+ * entry and the effort one it accepts (`03` K11, K13); the person has fewer
+ * than 20 queued runs (`03` L1). */
+function runPre(f: Facts, i: In) {
+  const m = MODEL_REGISTRY.find((x) => x.id === i["model"]);
+  if (!m || !(m.efforts as readonly unknown[]).includes(i["effort"])) no("BAD_REQUEST");
+  let queued = 0;
+  for (const r of f.dump.values())
+    if (r.kind === "run" && r.u === f.me && r.status === "queued") queued++;
+  if (queued >= 20) no("PRECONDITION_FAILED");
+}
+
 /** A look-up phrase is 1 to 4 words, once what is not a letter or a digit is
  * taken off both ends (`03` G2). */
-function phraseOk(v: string): boolean {
+const isWordChar = (ch: string) => /[\p{L}\p{N}]/u.test(ch);
+/** The words of a look-up phrase, once what is not a letter or a digit is
+ * taken off both ends. */
+function phraseWords(v: string): string[] {
   const chars = [...v];
-  const word = (ch: string) => /[\p{L}\p{N}]/u.test(ch);
-  while (chars.length && !word(chars[0] as string)) chars.shift();
-  while (chars.length && !word(chars[chars.length - 1] as string)) chars.pop();
-  const n = chars
+  while (chars.length && !isWordChar(chars[0] as string)) chars.shift();
+  while (chars.length && !isWordChar(chars[chars.length - 1] as string)) chars.pop();
+  return chars
     .join("")
     .split(/\s+/)
-    .filter((x) => x !== "").length;
+    .filter((x) => x !== "");
+}
+function phraseOk(v: string): boolean {
+  const n = phraseWords(v).length;
   return n >= 1 && n <= 4;
+}
+/** A look-up with a quote: the phrase is whole words of the quote (each run
+ * of spaces counted as one), with no letter or digit right before or after
+ * it (`03` G2). */
+function inQuote(look: string, quote: string): boolean {
+  const p = phraseWords(look).join(" ");
+  const q = quote.split(/\s+/).join(" ");
+  for (let k = 0; k + p.length <= q.length; k++) {
+    if (q.slice(k, k + p.length) !== p) continue;
+    if (k > 0 && isWordChar(q.charAt(k - 1))) continue;
+    if (k + p.length < q.length && isWordChar(q.charAt(k + p.length))) continue;
+    return true;
+  }
+  return false;
 }
 
 const RULES: Record<string, (f: Facts, i: In) => void> = {
@@ -372,11 +474,26 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
   // the owner cannot leave (`01` C18)
   "spaces.leave": (f, i) => {
     const sp = String(i["space"]);
-    inSpace(f, sp, "member");
+    inSpace(f, sp, "member", true);
     if (roleOf(f, sp, f.me) === "owner") no("PRECONDITION_FAILED");
   },
   "threads.create": (f, i) => {
+    const from = i["from"] as { th: string; node: string } | undefined;
+    if (from) {
+      // a node opened as its own thread (`03` G5): copied from a node with
+      // an answer, once, in the node's space
+      const p = seenThread(f, from.th);
+      inSpace(f, p.s, "member");
+      const n = f.dump.get(`node:${from.node}`);
+      if (n?.kind !== "node" || !mayRead(f.dump, n, f.me) || n.th !== p.id) return no("NOT_FOUND");
+      if (p.mod === "removed" || n.mod === "removed" || n.del || n.mod !== null)
+        no("PRECONDITION_FAILED");
+      if (n.promoted !== null || !f.dump.has(`answer:${n.id}`)) no("PRECONDITION_FAILED");
+      if (f.idTaken(String(i["id"]))) no("CONFLICT");
+      return;
+    }
     inSpace(f, String(i["space"]), "member");
+    if (i["kind"] === "ask") runPre(f, i);
     if (blank(i["q"])) no("BAD_REQUEST");
     if (f.idTaken(String(i["id"]))) no("CONFLICT");
   },
@@ -393,28 +510,76 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     if (p?.kind !== "thread") return no("NOT_FOUND");
     // the author deletes without read access (a removed member's own threads)
     if (p.u !== f.me) seenThread(f, p.id);
-    inSpace(f, p.s, 0);
+    inSpace(f, p.s, 0, true);
     if (p.u !== f.me) no("FORBIDDEN");
   },
   "saved.set": (f, i) => {
     const mine = f.dump.has(`save:${f.me}:${String(i["id"])}`);
     if (i["on"] === false) {
       const p = f.dump.get(`thread:${String(i["id"])}`);
-      if (mine && p?.kind === "thread") inSpace(f, p.s, 0);
+      if (mine && p?.kind === "thread") inSpace(f, p.s, 0, true);
       return;
     }
     const p = seenThread(f, i["id"]);
-    inSpace(f, p.s, 0);
+    inSpace(f, p.s, 0, true);
     if (!mine && p.mod === "removed") no("PRECONDITION_FAILED");
   },
   "research.forkNode": (f, i) => {
     const p = seenThread(f, i["thread"]);
     inSpace(f, p.s, "member");
+    runPre(f, i);
     if (p.k !== "ask") no("BAD_REQUEST");
     if (p.mod === "removed") no("PRECONDITION_FAILED");
-    if (seenNode(f, p, i["parent"]).mod === "removed") no("PRECONDITION_FAILED");
+    const parent = seenNode(f, p, i["parent"]);
+    if (parent.mod === "removed") no("PRECONDITION_FAILED");
+    // a parent whose run has not ended has no answer to build on (`03` G1)
+    if (pending(runAt(f, parent))) no("PRECONDITION_FAILED");
     if (i["kind"] === "ask" ? blank(i["q"]) : !phraseOk(String(i["look"]))) no("BAD_REQUEST");
+    if (
+      i["kind"] === "lookup" &&
+      i["quote"] !== undefined &&
+      !inQuote(String(i["look"]), i["quote"] as string)
+    )
+      no("BAD_REQUEST");
     if (f.idTaken(String(i["id"]))) no("CONFLICT");
+  },
+  // the author edits an ask node's question, as they saw it (`03` G6)
+  "followups.update": (f, i) => {
+    if (i["node"] === "r") no("BAD_REQUEST");
+    const n = seen(f, `node:${String(i["node"])}`, "node");
+    if (n.th !== i["thread"]) no("NOT_FOUND");
+    inSpace(f, n.s, 0);
+    if (n.u !== f.me) no("FORBIDDEN");
+    if (n.mod === "removed" || n.del) no("PRECONDITION_FAILED");
+    if (n.k !== "ask") no("BAD_REQUEST");
+    if (n.rev !== baseRev(i)) no("STALE");
+    if (blank(i["q"])) no("BAD_REQUEST");
+  },
+  // the author deletes a node they wrote, read or not
+  "followups.delete": (f, i) => {
+    if (i["node"] === "r") no("BAD_REQUEST");
+    const n = ownOrSeen(f, `node:${String(i["node"])}`, "node");
+    if (n.th !== i["thread"]) no("NOT_FOUND");
+    inSpace(f, n.s, 0, true);
+    if (n.u !== f.me) no("FORBIDDEN");
+  },
+  // the asker stops a run; one that ended is left as it is
+  "research.cancelNode": (f, i) => {
+    const p = seenThread(f, i["thread"]);
+    inSpace(f, p.s, 0);
+    if (seenNode(f, p, i["node"]).u !== f.me) no("FORBIDDEN");
+  },
+  // the asker runs a stopped run again, on a registry model (`03` E4)
+  "research.retryNode": (f, i) => {
+    const p = seenThread(f, i["thread"]);
+    inSpace(f, p.s, 0);
+    const n = seenNode(f, p, i["node"]);
+    if (n.u !== f.me) no("FORBIDDEN");
+    runPre(f, i);
+    if (p.mod === "removed" || n.mod === "removed" || n.del) no("PRECONDITION_FAILED");
+    const run = runAt(f, n);
+    if (run?.kind !== "run" || !["failed", "cancelled", "interrupted"].includes(run.status))
+      no("PRECONDITION_FAILED");
   },
   "research.createPostFollowUp": (f, i) => {
     const p = seenThread(f, i["thread"]);
@@ -459,6 +624,21 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     if (blank(i["t"])) no("BAD_REQUEST");
     if (f.idTaken(String(i["id"]))) no("CONFLICT");
   },
+  // the author's edit of a reply or a comment compares its rev; an emptied
+  // one (a deleted shell) is not edited
+  "replies.update": (f, i) => edit(f, i, "reply"),
+  "comments.update": (f, i) => edit(f, i, "comment"),
+  // the author deletes a reply or a comment they wrote, read or not
+  "replies.delete": (f, i) => {
+    const r = ownOrSeen(f, `reply:${String(i["id"])}`, "reply");
+    inSpace(f, r.s, 0, true);
+    if (r.u !== f.me) no("FORBIDDEN");
+  },
+  "comments.delete": (f, i) => {
+    const r = ownOrSeen(f, `comment:${String(i["id"])}`, "comment");
+    inSpace(f, r.s, 0, true);
+    if (r.u !== f.me) no("FORBIDDEN");
+  },
   "joinRequests.create": (f, i) => {
     const s = inSpace(f, String(i["space"]), 0);
     if (!closed(s) || roleOf(f, s.id, f.me) !== null) no("PRECONDITION_FAILED");
@@ -501,11 +681,21 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
     if (f.randomDown) no("INTERNAL_SERVER_ERROR");
     if (f.idTaken(String(i["id"]))) no("CONFLICT");
   },
+  // a used link stays used (`04` §5)
+  "invites.revoke": (f, i) => {
+    const l = seen(f, `invite:${String(i["id"])}`, "invite");
+    inSpace(f, l.sp, "owner");
+    if (l.dead === "Used") no("PRECONDITION_FAILED");
+  },
+  "invites.restore": (f, i) => {
+    const l = seen(f, `invite:${String(i["id"])}`, "invite");
+    inSpace(f, l.sp, "owner");
+    if (l.dead === "Used") no("PRECONDITION_FAILED");
+  },
   "moderation.decide": (f, i) => {
     const item = seenItem(f, String(i["item"]));
     inSpace(f, item.s, "owner");
     const d = i["decision"];
-    if (d === "shown" && i["base"] === undefined) no("BAD_REQUEST");
     // round 2: only "shown" could expose text, so only it compares the rev
     if (d === "shown" && item.rev !== baseRev(i)) no("STALE");
     if (item.mod === "removed") no("PRECONDITION_FAILED");
@@ -516,10 +706,21 @@ const RULES: Record<string, (f: Facts, i: In) => void> = {
   "notifications.markRead": (f, i) => {
     const n = f.dump.get(`notif:${String(i["id"])}`);
     if (n?.kind !== "notif" || n.to !== f.me || !mayRead(f.dump, n, f.me)) return no("NOT_FOUND");
-    if (n.sp !== null) inSpace(f, n.sp, 0);
+    if (n.sp !== null) inSpace(f, n.sp, 0, true);
   },
+  "notifications.markAllRead": () => {},
   "prefs.set": () => {},
 };
+
+/** An author's edit of a reply or a comment. */
+function edit(f: Facts, i: In, kind: "reply" | "comment") {
+  const r = seen(f, `${kind}:${String(i["id"])}`, kind);
+  inSpace(f, r.s, 0);
+  if (r.u !== f.me) no("FORBIDDEN");
+  if (r.mod === "removed" || r.del) no("PRECONDITION_FAILED");
+  if (r.rev !== baseRev(i)) no("STALE");
+  if (blank(i["t"])) no("BAD_REQUEST");
+}
 
 const ENVELOPE_KEYS = [
   "clientId",
@@ -646,6 +847,14 @@ export class WriteModel {
     const again = client.bySeq.get(e.seq);
     if (again && now - again.at < 7 * MIN_DAY && again.sent === sortedJson([e.mutationId, payload]))
       return pass(again.code);
+    // a reminted write whose earlier id has an answer: that answer, adopted
+    // under this id, with no seq used (the write is not applied again)
+    if (formed && !live)
+      for (const id of e.replaces ?? []) {
+        const old = this.answers.get(`${u} ${id}`);
+        if (old && now - old.at < 7 * MIN_DAY)
+          return { code: old.code, usesSeq: false, stored: false, adopted: true };
+      }
     if (e.seq !== client.last + 1) return pass("OUT_OF_ORDER");
     if (!formed || live)
       return { code: "BAD_REQUEST", usesSeq: true, stored: false, storedForSeq: true };
@@ -688,6 +897,12 @@ export class WriteModel {
     if (p.storedForSeq && client)
       client.bySeq.set(envelope.seq, {
         sent: sortedJson([envelope.mutationId, sortedJson([envelope.name, envelope.input])]),
+        code: p.code,
+        at: now,
+      });
+    if (p.adopted)
+      this.answers.set(`${u} ${envelope.mutationId}`, {
+        payload: sortedJson([envelope.name, envelope.input]),
         code: p.code,
         at: now,
       });

@@ -6,10 +6,7 @@
 // Everything is synchronous in this prototype; the suite awaits every call,
 // so an implementation may return promises (`Awaitable`).
 
-import type { Spaces } from "@session/shared";
-
-import type { AnyMutator } from "./mutators.js";
-import type { LogId, StoredRecord } from "./records.js";
+import type { AnyMutator, ApiError, ErrorCode, LogId, StoredRecord } from "@session/mutators";
 
 export type Awaitable<T> = T | Promise<T>;
 
@@ -23,6 +20,10 @@ export interface Actor {
  * Version 4 added `queuedAt` and `replaces`, and `TOO_LARGE`. */
 export const PROTOCOL_VERSION = 4;
 export const MIN_PROTOCOL_VERSION = 4;
+
+/** The most mutation ids a reminted envelope may name in `replaces`: a client
+ * keeps the newest ones. */
+export const MAX_REPLACES = 16;
 
 /** One outbox entry as the client sends it: a mutator's name and input, the
  * client that sends it, its place in that client's sequence, and the
@@ -59,28 +60,6 @@ export interface Envelope {
   queuedAt: number;
 }
 
-/** The answer codes (`Spaces.SpaceErrorCode`, `01` Y2), the sync protocol's
- * included:
- * - `UPGRADE_REQUIRED`: the client's protocol version is below the minimum
- *   (the client reloads).
- * - `STALE`: the record a decision acts on is no longer in the state the
- *   client saw (a thread edited since `base.rev`, a member admitted again
- *   since the decision was made).
- * - `CLOCK_SKEW`: the envelope's `clientTime` is more than a minute from the
- *   server's time. Not recorded; the error carries `serverTime`, and the
- *   client corrects its clock and sends the write again.
- * - `EXPIRED`: the write is too old to apply. Measured on the device's clock
- *   (`clientTime`), its mutation id, its `queuedAt` or a new id in its input
- *   is more than 4 days old or more than a minute in the future, or an
- *   online-only write's mutation id is more than a minute old. Recorded; the
- *   client drops the write and tells the person.
- * - `OUT_OF_ORDER`: `seq` is not the client's next one. Not recorded; the
- *   error carries `expectedSeq`.
- * - `WRONG_CLIENT`: the client id is unknown, expired, or bound to another
- *   user. Not recorded.
- * - `TOO_LARGE`: the envelope is over 256 KB as JSON. Not recorded. */
-export type ErrorCode = Spaces.SpaceErrorCode;
-
 /** The answers that record nothing: the envelope's `seq` is not used up, the
  * same `seq` may be sent again, and the client keeps the write queued. The
  * transient ones (TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE,
@@ -107,21 +86,16 @@ export const UNRECORDED: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
   "TOO_LARGE",
 ]);
 
-/** An error answer. `message` is fixed per code and cause, so two answers
- * with the same cause are byte-identical. `serverTime` (milliseconds since
- * the epoch) comes with CLOCK_SKEW; `expectedSeq`, the seq the server takes
- * next from this client, with OUT_OF_ORDER. */
-export interface ApiError {
-  code: ErrorCode;
-  message: string;
-  issues?: string[];
-  /** Why a PRECONDITION_FAILED was answered, where the client acts on it. */
-  reason?: Spaces.SpaceRefusalReason;
-  serverTime?: number;
-  expectedSeq?: number;
-}
+/** An answer as the server keeps it for replays (`StorageScan.answers`). */
+export type StoredAnswer = { ok: true; result: unknown } | { ok: false; error: ApiError };
 
-export type ApplyResult = { ok: true; result: unknown } | { ok: false; error: ApiError };
+/** An answer as the server sends it: every answer, a replayed one and a
+ * refusal included, carries `serverTime`, the server's time when it answered
+ * (milliseconds since the epoch; `01` Y2). A replay carries the time of the
+ * replay, not of the first answer. */
+export type ApplyResult =
+  | { ok: true; result: unknown; serverTime: number }
+  | { ok: false; error: ApiError & { serverTime: number } };
 
 /** A new client id; or TOO_MANY_REQUESTS (the person registered 20 clients
  * in the past day), UNAUTHORIZED or INTERNAL_SERVER_ERROR. */
@@ -210,7 +184,7 @@ export interface StorageScan {
     clientId?: string;
     seq?: number;
     digest: string;
-    result: ApplyResult;
+    result: StoredAnswer;
     at: number;
   }[];
   /** Registered clients: the user each is bound to, its last processed seq
@@ -261,7 +235,7 @@ export interface ServerOptions {
    * `crypto.randomBytes`; the suite passes a seeded one, or one that fails.
    * The cursor key always comes from `crypto.randomBytes`. */
   random?: () => number;
-  /** The mutator definitions the server runs, by name (default: `MUTATORS`).
+  /** The mutator definitions the server runs, by name (default: `PROTO_MUTATORS`).
    * The suite passes a set with a faulty definition to test that a fault
    * writes nothing. */
   mutators?: Readonly<Record<string, AnyMutator>>;

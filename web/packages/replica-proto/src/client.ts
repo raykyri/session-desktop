@@ -48,6 +48,15 @@
 // the client estimates it) is dropped and shown to the person.
 
 import {
+  memberKey,
+  refuse,
+  type ErrorCode,
+  type LogId,
+  type StoredRecord,
+} from "@session/mutators";
+
+import {
+  MAX_REPLACES,
   PROTOCOL_VERSION,
   UNRECORDED,
   type Actor,
@@ -55,13 +64,11 @@ import {
   type Clock,
   type Cursor,
   type Envelope,
-  type ErrorCode,
   type LastSeq,
   type ServerHalf,
   type Tier,
 } from "./contract.js";
-import { MUTATORS, refuse } from "./mutators.js";
-import { memberKey, type LogId, type StoredRecord } from "./records.js";
+import { PROTO_MUTATORS } from "./join-requests.js";
 import { ulid } from "./ulid.js";
 
 interface Replica {
@@ -160,9 +167,11 @@ function remap(v: unknown, map: ReadonlyMap<string, string>): unknown {
   return v;
 }
 
-const noAnswer = (): ApplyResult => ({
+/** What the client records when no answer arrived; `serverTime` is its own
+ * estimate of the server's time (`now`). */
+const noAnswer = (now: number): ApplyResult => ({
   ok: false,
-  error: { code: "SERVICE_UNAVAILABLE", message: "No answer from the server." },
+  error: { code: "SERVICE_UNAVAILABLE", message: "No answer from the server.", serverTime: now },
 });
 
 export class ReplicaClient {
@@ -354,7 +363,7 @@ export class ReplicaClient {
 
   /** Queue a write. Online-only mutators (`spaces.create`) are never queued. */
   queue(name: string, input: unknown, mutationId = this.newId()): Pending {
-    if (Object.hasOwn(MUTATORS, name) && MUTATORS[name]?.online)
+    if (Object.hasOwn(PROTO_MUTATORS, name) && PROTO_MUTATORS[name]?.online)
       throw new Error(`${name} is online only`);
     return this.push(name, input, mutationId);
   }
@@ -407,11 +416,13 @@ export class ReplicaClient {
     const map = new Map<string, string>();
     for (const p of this.outbox) {
       if (p.sent) continue;
-      const def = Object.hasOwn(MUTATORS, p.name) ? MUTATORS[p.name] : undefined;
+      const def = Object.hasOwn(PROTO_MUTATORS, p.name) ? PROTO_MUTATORS[p.name] : undefined;
       const parsed = def?.input.safeParse(p.input);
       for (const id of parsed?.success ? (def?.ids?.(parsed.data) ?? []) : [])
         map.set(id, this.newId());
       p.replaces.push(p.mutationId);
+      // the newest ids only: the server takes at most `MAX_REPLACES`
+      if (p.replaces.length > MAX_REPLACES) p.replaces.splice(0, p.replaces.length - MAX_REPLACES);
       p.mutationId = this.newId();
     }
     for (const x of this.outbox) if (!x.sent) x.input = remap(x.input, map);
@@ -454,18 +465,18 @@ export class ReplicaClient {
       try {
         res = await this.server.apply(this.actor, e);
       } catch {
-        res = noAnswer();
+        res = noAnswer(this.now());
       }
       this.lastAnswer.set(p.local, res);
       if (!res.ok) {
         const { code, serverTime, expectedSeq } = res.error;
         if (code === "CLOCK_SKEW" && serverTime !== undefined && skews++ < 3) {
-          this.offset = serverTime - this.env.clock.now();
-          // a queue time ahead of the corrected clock was read from the
-          // clock that was off; one behind it may be right (the clock went
-          // wrong after the write was queued), so it stays
-          const corrected = this.now();
-          for (const x of this.outbox) x.queuedAt = Math.min(x.queuedAt, corrected);
+          const offset = serverTime - this.env.clock.now();
+          // the queue times of the writes not sent yet were read from the
+          // clock that was off: they move by the correction, so a device
+          // whose clock was days behind does not drop them as old
+          for (const x of this.outbox) if (!x.sent) x.queuedAt += offset - this.offset;
+          this.offset = offset;
           this.remint();
           continue;
         }
@@ -536,7 +547,10 @@ export class ReplicaClient {
     return (
       this.lastAnswer.get(p.local) ?? {
         ok: false,
-        error: refuse(this.actor === null ? "UNAUTHORIZED" : "SERVICE_UNAVAILABLE").toError(),
+        error: {
+          ...refuse(this.actor === null ? "UNAUTHORIZED" : "SERVICE_UNAVAILABLE").toError(),
+          serverTime: this.now(),
+        },
       }
     );
   }

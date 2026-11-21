@@ -63,7 +63,9 @@ export const askNodeRefSchema = z.union([z.literal("r"), spaceUlidSchema]);
 
 /** An item that can be moderated, `"<kind>:<thread>[:<item>]"`: `a:` an ask
  * thread, `p:` a post, `f:` an ask node, `r:` a reply, `c:` a comment (C4). */
-export const moderationKeySchema = z.string().regex(/^[a-z]+:[0-9A-HJKMNP-TV-Z]{26}(:.*)?$/);
+export const moderationKeySchema = z
+  .string()
+  .regex(/^(?:[ap]:[0-9A-HJKMNP-TV-Z]{26}|[frc]:[0-9A-HJKMNP-TV-Z]{26}:[0-9A-HJKMNP-TV-Z]{26})$/);
 
 /** A moderated record's state. */
 export const moderationStateSchema = z.enum(["hidden", "removed"]);
@@ -226,9 +228,30 @@ export const threadRecordSchema = z.object({
   /** Who removed it, and the reason shown with the placeholder (C12). */
   modBy: spaceHandleSchema.nullable(),
   modNote: z.string().max(MODERATION_NOTE_MAX).nullable(),
+  /** The thread and node it was opened from (`03` G5), or null. */
+  from: z.object({ th: spaceThreadIdSchema, node: spaceUlidSchema }).nullable(),
   createdAt: spaceIsoTimeSchema,
   updatedAt: spaceIsoTimeSchema,
   rev,
+});
+
+/** A removed thread as stored (C12; `04` §6.2): the placeholder keeps its
+ * id, space, kind, author, times, `mod`, `modBy` and `modNote`, and nothing
+ * else of the removed content: no text, title, summary, token or source
+ * count, model, effort or source node. Readers other than the author get it
+ * with `u: null`. */
+export const removedThreadRecordSchema = threadRecordSchema.extend({
+  q: z.literal(""),
+  t: z.null(),
+  sum: z.null(),
+  tok: z.literal(0),
+  src: z.literal(0),
+  model: z.null(),
+  effort: z.null(),
+  running: z.literal(false),
+  edited: z.literal(false),
+  mod: z.literal("removed"),
+  from: z.null(),
 });
 
 /** A thread's counts (`counts:<thread>`), read with the thread, so a save or
@@ -257,29 +280,36 @@ export const askNodeKindSchema = z.enum(["ask", "lookup"]);
  * `quote` is the passage of the parent's answer it was started from, `b` the
  * index of the top-level block that holds it. `promoted`: the thread it was
  * opened as (`03` G5). */
-export const nodeRecordSchema = z.object({
-  kind: z.literal("node"),
-  id: spaceUlidSchema,
-  th: spaceThreadIdSchema,
-  s: spaceIdSchema,
-  par: askNodeRefSchema,
-  k: askNodeKindSchema,
-  u: spaceHandleSchema,
-  q: z.string(),
-  look: z.string().max(LOOKUP_PHRASE_MAX).nullable(),
-  quote: z.string().max(QUOTE_MAX).nullable(),
-  b: count.nullable(),
-  tpl: count.nullable(),
-  model: spaceModelSchema,
-  effort: spaceEffortSchema,
-  /** The node's current run. */
-  run: spaceUlidSchema,
-  promoted: spaceThreadIdSchema.nullable(),
-  mod: moderationStateSchema.nullable(),
-  del: z.boolean(),
-  createdAt: spaceIsoTimeSchema,
-  rev,
-});
+export const nodeRecordSchema = z
+  .object({
+    kind: z.literal("node"),
+    id: spaceUlidSchema,
+    th: spaceThreadIdSchema,
+    s: spaceIdSchema,
+    par: askNodeRefSchema,
+    k: askNodeKindSchema,
+    u: spaceHandleSchema,
+    q: z.string(),
+    look: z.string().max(LOOKUP_PHRASE_MAX).nullable(),
+    quote: z.string().max(QUOTE_MAX).nullable(),
+    b: count.nullable(),
+    tpl: count.nullable(),
+    model: spaceModelSchema,
+    effort: spaceEffortSchema,
+    /** The node's current run. */
+    run: spaceUlidSchema,
+    promoted: spaceThreadIdSchema.nullable(),
+    mod: moderationStateSchema.nullable(),
+    del: z.boolean(),
+    createdAt: spaceIsoTimeSchema,
+    rev,
+  })
+  .refine(
+    // an ask has no phrase or template; a look-up has its template version, and
+    // its phrase until it is removed, deleted or redacted
+    (n) => (n.k === "ask" ? n.look === null && n.tpl === null : n.tpl !== null),
+    { message: "look and tpl are null for an ask; a look-up has tpl" },
+  );
 
 /** A run of an ask (`run:<id>`, C17; `03` §1). A run record with status
  * `queued` is the run queue: the dispatcher claims it with a compare-and-set
@@ -329,13 +359,14 @@ export const turnRecordSchema = z.object({
 /** A page an answer cites: [title, host, note]. */
 export const citedPageSchema = z.tuple([z.string(), z.string(), z.string()]);
 
-/** An answer (`answer:<node>`, with the thread's id for the root ask): the
- * final answer as Markdown. The server stores no HTML (C3). `u` is the
+/** An answer (`answer:<node>`; the root ask's is `answer:<thread>`, with
+ * `node: "r"`, as runs and comments name the root): the final answer as
+ * Markdown. The server stores no HTML (C3). `u` is the
  * asker; `mod` follows its node's (or root thread's) moderation state, so a
  * hidden ask's answer is served to the asker and the owner only. */
 export const answerRecordSchema = z.object({
   kind: z.literal("answer"),
-  node: spaceUlidSchema,
+  node: askNodeRefSchema,
   th: spaceThreadIdSchema,
   s: spaceIdSchema,
   u: spaceHandleSchema,
@@ -358,6 +389,10 @@ export const replyRecordSchema = z.object({
   u: spaceHandleSchema,
   t: z.string(),
   parent: spaceUlidSchema.nullable(),
+  /** Changed by its author since it was written. */
+  edited: z.boolean(),
+  /** Deleted by its author while it had replies: an empty shell (`t: ""`). */
+  del: z.boolean(),
   mod: moderationStateSchema.nullable(),
   createdAt: spaceIsoTimeSchema,
   rev,
@@ -375,6 +410,10 @@ export const commentRecordSchema = z.object({
   parent: spaceUlidSchema.nullable(),
   u: spaceHandleSchema,
   t: z.string(),
+  /** Changed by its author since it was written. */
+  edited: z.boolean(),
+  /** Deleted by its author while it had comments: an empty shell (`t: ""`). */
+  del: z.boolean(),
   mod: moderationStateSchema.nullable(),
   createdAt: spaceIsoTimeSchema,
   rev,
@@ -513,7 +552,7 @@ export const spaceRecordKeys = {
   node: "node:<id>",
   run: "run:<id>",
   turn: "turn:<run>:<attempt>:<n>",
-  answer: "answer:<node>",
+  answer: "answer:<node> (answer:<thread> for the root)",
   reply: "reply:<id>",
   comment: "comment:<id>",
   ban: "ban:<space>:<user>",
@@ -531,26 +570,41 @@ const nullResult = z.null();
 /** `base` of a write that compares the target's rev (stale intent). */
 const baseRev = z.strictObject({ rev: count });
 const text = (max: number) => z.string().max(max);
+/** Text a write must carry: a question, a post, a reply, a comment, a look-up
+ * phrase (the mutator also refuses text that is only spaces). */
+const words = (max: number) => z.string().min(1).max(max);
+
+/** `threads.create` with `from` (`03` G5): a node opened as its own thread,
+ * in the node's space. The server copies the node's question and answer and
+ * the branch's author, so the input names only the new id and the node: no
+ * `kind`, `q`, model or space. No run starts. */
+export const promoteThreadInputSchema = z.strictObject({
+  id: ulid,
+  from: z.strictObject({ th: spaceThreadIdSchema, node: spaceUlidSchema }),
+});
 
 /** `threads.create`: an ask, which writes the thread and its root run
- * (`queued`), or a post. */
-export const createThreadInputSchema = z.discriminatedUnion("kind", [
-  z.strictObject({
-    id: ulid,
-    space: spaceIdSchema,
-    kind: z.literal("ask"),
-    q: text(ASK_TEXT_MAX),
-    title: z.string().nullable().optional(),
-    model: spaceModelSchema,
-    effort: spaceEffortSchema,
-  }),
-  z.strictObject({
-    id: ulid,
-    space: spaceIdSchema,
-    kind: z.literal("post"),
-    q: text(ASK_TEXT_MAX),
-    title: z.string().nullable().optional(),
-  }),
+ * (`queued`), a post, or a node opened as its own thread (`from`). */
+export const createThreadInputSchema = z.union([
+  z.discriminatedUnion("kind", [
+    z.strictObject({
+      id: ulid,
+      space: spaceIdSchema,
+      kind: z.literal("ask"),
+      q: words(ASK_TEXT_MAX),
+      title: z.string().nullable().optional(),
+      model: spaceModelSchema,
+      effort: spaceEffortSchema,
+    }),
+    z.strictObject({
+      id: ulid,
+      space: spaceIdSchema,
+      kind: z.literal("post"),
+      q: words(ASK_TEXT_MAX),
+      title: z.string().nullable().optional(),
+    }),
+  ]),
+  promoteThreadInputSchema,
 ]);
 
 /** `research.forkNode` (C3; `03` §2.1): Continue, Branch and Branch here
@@ -563,7 +617,7 @@ export const forkNodeInputSchema = z.discriminatedUnion("kind", [
     thread: spaceThreadIdSchema,
     parent: askNodeRefSchema,
     kind: z.literal("ask"),
-    q: text(ASK_TEXT_MAX),
+    q: words(ASK_TEXT_MAX),
     quote: text(QUOTE_MAX).optional(),
     b: count.optional(),
     model: spaceModelSchema,
@@ -574,7 +628,7 @@ export const forkNodeInputSchema = z.discriminatedUnion("kind", [
     thread: spaceThreadIdSchema,
     parent: askNodeRefSchema,
     kind: z.literal("lookup"),
-    look: text(LOOKUP_PHRASE_MAX),
+    look: words(LOOKUP_PHRASE_MAX),
     quote: text(QUOTE_MAX).optional(),
     b: count.optional(),
     model: spaceModelSchema,
@@ -583,6 +637,15 @@ export const forkNodeInputSchema = z.discriminatedUnion("kind", [
 ]);
 
 const nodeInput = { thread: spaceThreadIdSchema, node: askNodeRefSchema };
+
+/** The mentions a post, reply or comment made (02 N16): `notified`, the
+ * handles that got a mention notification; `notMembers`, the mentioned
+ * handles that are not Session accounts. Server values: a client's
+ * prediction has both empty. */
+const mentioned = {
+  notified: z.array(spaceHandleSchema),
+  notMembers: z.array(z.string()),
+};
 
 /** A delete's answer: `kept`, the item stays as an empty shell for what is
  * under it. Null for an author who may no longer read the item. */
@@ -637,12 +700,16 @@ export const spaceMutators = {
     who: "member",
     online: false,
     input: createThreadInputSchema,
-    result: z.object({ id: spaceThreadIdSchema, run: spaceUlidSchema.nullable() }),
+    result: z.object({
+      id: spaceThreadIdSchema,
+      run: spaceUlidSchema.nullable(),
+      ...mentioned,
+    }),
   },
   "threads.update": {
     who: "author",
     online: false,
-    input: z.strictObject({ id: spaceThreadIdSchema, q: text(ASK_TEXT_MAX), base: baseRev }),
+    input: z.strictObject({ id: spaceThreadIdSchema, q: words(ASK_TEXT_MAX), base: baseRev }),
     result: nullResult,
   },
   /** A thread deleted while it has asks or replies under it stays as an
@@ -672,7 +739,7 @@ export const spaceMutators = {
   "followups.update": {
     who: "author",
     online: false,
-    input: z.strictObject({ ...nodeInput, q: text(ASK_TEXT_MAX), base: baseRev }),
+    input: z.strictObject({ ...nodeInput, q: words(ASK_TEXT_MAX), base: baseRev }),
     result: nullResult,
   },
   "followups.delete": {
@@ -702,15 +769,15 @@ export const spaceMutators = {
     input: z.strictObject({
       id: ulid,
       thread: spaceThreadIdSchema,
-      t: text(ASK_TEXT_MAX),
+      t: words(ASK_TEXT_MAX),
       parent: ulid.optional(),
     }),
-    result: nullResult,
+    result: z.object(mentioned),
   },
   "replies.update": {
     who: "author",
     online: false,
-    input: z.strictObject({ id: ulid, t: text(ASK_TEXT_MAX), base: baseRev }),
+    input: z.strictObject({ id: ulid, t: words(ASK_TEXT_MAX), base: baseRev }),
     result: nullResult,
   },
   "replies.delete": {
@@ -727,15 +794,15 @@ export const spaceMutators = {
       id: ulid,
       thread: spaceThreadIdSchema,
       node: askNodeRefSchema,
-      t: text(ASK_TEXT_MAX),
+      t: words(ASK_TEXT_MAX),
       parent: ulid.optional(),
     }),
-    result: nullResult,
+    result: z.object(mentioned),
   },
   "comments.update": {
     who: "author",
     online: false,
-    input: z.strictObject({ id: ulid, t: text(ASK_TEXT_MAX), base: baseRev }),
+    input: z.strictObject({ id: ulid, t: words(ASK_TEXT_MAX), base: baseRev }),
     result: nullResult,
   },
   "comments.delete": {
@@ -800,12 +867,20 @@ export const spaceMutators = {
   "moderation.decide": {
     who: "owner",
     online: false,
-    input: z.strictObject({
-      item: moderationKeySchema,
-      decision: z.enum(["hidden", "removed", "shown"]),
-      note: text(MODERATION_NOTE_MAX).optional(),
-      base: baseRev.optional(),
-    }),
+    input: z.discriminatedUnion("decision", [
+      z.strictObject({
+        item: moderationKeySchema,
+        decision: z.literal("hidden"),
+        base: baseRev.optional(),
+      }),
+      z.strictObject({
+        item: moderationKeySchema,
+        decision: z.literal("removed"),
+        note: text(MODERATION_NOTE_MAX).optional(),
+        base: baseRev.optional(),
+      }),
+      z.strictObject({ item: moderationKeySchema, decision: z.literal("shown"), base: baseRev }),
+    ]),
     result: nullResult,
   },
   // -- notifications and preferences
@@ -1000,13 +1075,20 @@ export const spaceRefusalReasonSchema = z.enum(["queue_full"]);
 
 /** An error answer. `message` is user-facing text; `issues`: the input paths
  * that failed validation (`BAD_REQUEST`); `reason`: see
- * `spaceRefusalReasonSchema`; `serverTime` (ms) with every answer that the
- * protocol sends it with; `expectedSeq` with `OUT_OF_ORDER`. */
+ * `spaceRefusalReasonSchema`; `serverTime` (ms): the server's time, on every
+ * answer (`01` Y2); `expectedSeq` with `OUT_OF_ORDER`. */
 export const spaceErrorSchema = z.object({
   code: spaceErrorCodeSchema,
   message: z.string(),
   issues: z.array(z.string()).optional(),
   reason: spaceRefusalReasonSchema.optional(),
-  serverTime: z.number().optional(),
+  serverTime: z.number(),
   expectedSeq: z.number().int().positive().optional(),
 });
+
+/** The answer to one write (`01` Y2): applied with its result, or refused.
+ * Every answer carries `serverTime`, a refusal's in its error. */
+export const spaceApplyAnswerSchema = z.union([
+  z.object({ ok: z.literal(true), result: z.unknown(), serverTime: z.number() }),
+  z.object({ ok: z.literal(false), error: spaceErrorSchema }),
+]);

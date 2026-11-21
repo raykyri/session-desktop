@@ -5,9 +5,27 @@
 
 import test from "ava";
 
-import type { Envelope, StatsRec, CountsRec, ThreadRec } from "../src/index.js";
+import {
+  ReplicaClient,
+  type Envelope,
+  type StatsRec,
+  type CountsRec,
+  type ThreadRec,
+} from "../src/index.js";
 
-import { DAY, HOUR, MODEL, actor, cast, ok, refused, thread } from "./harness.js";
+import {
+  DAY,
+  HOUR,
+  MINUTE,
+  MODEL,
+  actor,
+  bare,
+  cast,
+  ok,
+  refused,
+  thread,
+  timed,
+} from "./harness.js";
 
 test("a replay of the same mutation id is applied once and answers the first result", async (t) => {
   const { w, open } = await cast(t);
@@ -21,17 +39,17 @@ test("a replay of the same mutation id is applied once and answers the first res
   ] as const) {
     const e = await w.envelope("otto", name, input);
     sent.push(e);
-    first.push(JSON.stringify(await w.server.apply(actor("otto"), e)));
+    first.push(JSON.stringify(bare(await w.server.apply(actor("otto"), e))));
   }
   const before = JSON.stringify([...w.server.dump()]);
   for (let k = 0; k < 3; k++) {
     w.clock.advance(HOUR);
     const again: string[] = [];
-    for (const e of sent) again.push(JSON.stringify(await w.server.apply(actor("otto"), e)));
+    for (const e of sent) again.push(JSON.stringify(bare(await w.server.apply(actor("otto"), e))));
     t.deepEqual(again, first);
     // a replay under a later seq is answered the same: the mutation id decides
     const late = await w.resend("otto", sent[0] as Envelope, true);
-    t.is(JSON.stringify(late), first[0] ?? "");
+    t.is(JSON.stringify(bare(late)), first[0] ?? "");
   }
   t.is(JSON.stringify([...w.server.dump()]), before);
   const pCounts = w.get(`counts:${th}`) as CountsRec;
@@ -57,7 +75,9 @@ test("a replay with a different name or input is refused, and the stored result 
   t.truthy(w.get(`save:otto:${th}`));
   // the same payload with its keys in another order is the same payload
   t.deepEqual(
-    await w.server.apply(actor("otto"), { ...e, input: { on: true, id: th, kind: "thread" } }),
+    bare(
+      await w.server.apply(actor("otto"), { ...e, input: { on: true, id: th, kind: "thread" } }),
+    ),
     {
       ok: true,
       result: { on: true },
@@ -123,7 +143,7 @@ test("another user's mutation id neither blocks nor replays your write", async (
   t.truthy(w.get(`run:${b.run}`));
   // and mel's replay still answers mel's result
   const melsInput = { id: a.id, space: open, kind: "ask", q: "mel's", ...MODEL };
-  t.deepEqual(await w.as("mel", "threads.create", melsInput, mid), { ok: true, result: a });
+  t.deepEqual(bare(await w.as("mel", "threads.create", melsInput, mid)), { ok: true, result: a });
   // eve sending mel's exact envelope, mel's client id included, is refused
   const melsEnvelope = { ...(await w.envelope("mel", "threads.create", melsInput, mid)), seq: 1 };
   await refused(t, w.server.apply(actor("eve"), melsEnvelope), "WRONG_CLIENT");
@@ -174,10 +194,13 @@ test("a replay within 7 days answers the stored result; after 7 days it is refus
   const { w, open } = await cast(t);
   const th = await thread(t, w, "mel", open, "post");
   const e = await w.envelope("otto", "saved.set", { kind: "thread", id: th, on: true });
-  t.deepEqual(await w.server.apply(actor("otto"), e), { ok: true, result: { on: true } });
+  t.deepEqual(bare(await w.server.apply(actor("otto"), e)), { ok: true, result: { on: true } });
   await ok(t, w.as("otto", "saved.set", { kind: "thread", id: th, on: false }));
   w.clock.advance(6 * DAY);
-  t.deepEqual(await w.server.apply(actor("otto"), e), { ok: true, result: { on: true } });
+  const replay = await w.server.apply(actor("otto"), e);
+  t.deepEqual(bare(replay), { ok: true, result: { on: true } });
+  // a replay carries the time it is answered at
+  t.is(timed(replay), w.clock.now());
   t.is(w.get(`save:otto:${th}`), undefined);
   w.clock.advance(DAY + HOUR);
   // the stored result is gone; the seq was used up, and the mutation id is
@@ -262,4 +285,91 @@ test("two devices of one person each learn whether their own write was applied",
   t.not(laptop.clientId, phone.clientId);
   t.is(laptop.lastSeq, 1);
   t.is(phone.lastSeq, 2);
+});
+
+test("a reminted write is not applied again when its original was applied after all", async (t) => {
+  // M1a review 10: the original A gets CLOCK_SKEW, a delayed copy of A is
+  // applied, then the client's remint B (replaces: [A]) arrives
+  const { w, open } = await cast(t);
+  const a = await w.envelope("mel", "threads.create", {
+    id: w.id(),
+    space: open,
+    kind: "post",
+    q: "once",
+  });
+  await refused(
+    t,
+    w.server.apply(actor("mel"), { ...a, clientTime: a.clientTime + HOUR }),
+    "CLOCK_SKEW",
+  );
+  const first = await w.server.apply(actor("mel"), a);
+  t.true(first.ok);
+  const b: Envelope = {
+    ...a,
+    seq: a.seq + 1,
+    mutationId: w.id(),
+    replaces: [a.mutationId],
+    input: { id: w.id(), space: open, kind: "post", q: "once" },
+  };
+  t.deepEqual(await w.server.apply(actor("mel"), b), first);
+  // nothing applied twice, no seq used, and B's id keeps the answer
+  const once = [...w.server.dump().values()].filter((r) => r.kind === "thread" && r.q === "once");
+  t.is(once.length, 1);
+  t.is(await w.nextSeq("mel", a.clientId), a.seq + 1);
+  t.deepEqual(await w.server.apply(actor("mel"), { ...b, seq: 99 }), first);
+});
+
+test("a device clock days behind keeps its queued writes after CLOCK_SKEW, and their queue times move with it", async (t) => {
+  // M1a review 14: queue times shift by the correction
+  const { w, open } = await cast(t);
+  const slow = { now: () => w.clock.now() - 5 * DAY };
+  const mel = new ReplicaClient(w.server, actor("mel"), { clock: slow, random: w.random });
+  mel.queue("threads.create", { id: mel.newId(), space: open, kind: "post", q: "from behind" });
+  const results = await mel.flush();
+  t.deepEqual(
+    results.map((r) => (r.ok ? "ok" : r.error.code)),
+    ["ok"],
+  );
+  t.deepEqual(mel.problems(), []);
+  t.true(Math.abs(mel.now() - w.clock.now()) < 1000);
+  const sent = mel.sent.at(-1);
+  t.true(sent !== undefined && Math.abs(sent.queuedAt - w.clock.now()) < 1000);
+});
+
+test("a write reminted many times names only its newest 16 earlier ids, and is applied", async (t) => {
+  // M1a review 15
+  const { w, open } = await cast(t);
+  let drift = true;
+  let ahead = 0;
+  const clock = { now: () => w.clock.now() + (drift ? (ahead += 2 * MINUTE) : ahead) };
+  const mel = new ReplicaClient(w.server, actor("mel"), { clock, random: w.random });
+  mel.queue("threads.create", { id: mel.newId(), space: open, kind: "post", q: "reminted" });
+  for (let k = 0; k < 8; k++) await mel.flush();
+  t.true(mel.sent.length > 17);
+  t.true((mel.pending()[0]?.replaces.length ?? 0) <= 16);
+  drift = false;
+  await mel.flush();
+  t.is(mel.pending().length, 0);
+  t.true(mel.sent.every((e) => (e.replaces?.length ?? 0) <= 16));
+  const made = [...w.server.dump().values()].filter(
+    (r) => r.kind === "thread" && r.q === "reminted",
+  );
+  t.is(made.length, 1);
+});
+
+test("every answer carries the server's time: applied, refused, unrecorded and replayed", async (t) => {
+  // M1a review 4 (`01` Y2)
+  const { w, open } = await cast(t);
+  const answers = [
+    await w.as("mel", "threads.create", { id: w.id(), space: open, kind: "post", q: "x" }),
+    await w.as("eve", "spaces.update", { id: open, desc: "x" }),
+    await w.as("mel", "nope", {}),
+    await w.server.apply(null, await w.envelope("mel", "prefs.set", { layout: "wide" })),
+    await w.server.apply(actor("mel"), { bad: true } as unknown as Envelope),
+  ];
+  for (const a of answers) t.is(timed(a), w.clock.now(), JSON.stringify(a));
+  const e = await w.envelope("mel", "prefs.set", { layout: "wide" });
+  await ok(t, w.server.apply(actor("mel"), e));
+  w.clock.advance(HOUR);
+  t.is(timed(await w.server.apply(actor("mel"), e)), w.clock.now());
 });
