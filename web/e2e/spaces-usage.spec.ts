@@ -13,7 +13,7 @@ import { query, signIn } from "./helpers.js";
 import { toast } from "./spaces.js";
 
 const ACCEPTED = "sk-ant-e2e-accepted-key-0000000000a1f9";
-const SLOW = "sk-ant-e2e-slow-key-00000000000000b2c3";
+const HELD = "sk-ant-e2e-held-key-00000000000000b2c3";
 const REJECTED = "sk-ant-e2e-rejected-key-000000000000d4";
 const UNREACHABLE = "sk-e2e-unreachable-openai-key-0000e5f6";
 const OPENAI = "sk-proj-e2e-accepted-openai-key-0077c2";
@@ -32,10 +32,25 @@ async function openUsage(page: Page, login: string) {
 async function addKey(page: Page, provider: "anthropic" | "openai", raw: string) {
   const row = keyRow(page, provider);
   const add = row.getByRole("button", { name: "Add key" });
-  if (await add.isVisible()) await add.click();
   const name = provider === "anthropic" ? "Anthropic API key" : "OpenAI API key";
-  await row.getByLabel(name).fill(raw);
+  const field = row.getByLabel(name);
+  // The row shows either Add key or, after a refusal, the open form.
+  await expect(add.or(field)).toBeVisible();
+  if (await add.isVisible()) await add.click();
+  await field.fill(raw);
   await row.getByRole("button", { name: "Save" }).click();
+}
+
+/** Holds every `apiKeys.set` request until the returned release is called,
+ * so the test sees the row while the check runs. */
+async function holdKeyChecks(page: Page): Promise<() => void> {
+  let release: () => void = () => undefined;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/trpc/apiKeys.set**", async (route) => {
+    await released;
+    await route.continue();
+  });
+  return release;
 }
 
 test("the week's usage and no runs yet", async ({ page }) => {
@@ -57,17 +72,21 @@ test("a key is checked during the request: Checking…, then Valid and the toast
   await expect(page.getByRole("radio", { name: /Continue on my Anthropic key/ })).toBeDisabled();
   await expect(page.getByText("Add a key below to turn this on.")).toBeVisible();
 
-  await addKey(page, "anthropic", SLOW);
-  await expect(row.getByText("Checking…")).toBeVisible();
+  const release = await holdKeyChecks(page);
+  await addKey(page, "anthropic", HELD);
+  await expect(row.locator(".chip", { hasText: "Checking…" })).toBeVisible();
   await expect(row.getByText("sk-ant-••••b2c3")).toBeVisible();
+  await expect(row.locator(".chip", { hasText: "Valid" })).toHaveCount(0);
+  release();
   await expect(toast(page)).toHaveText("Anthropic key works.");
-  await expect(row.getByText("Valid")).toBeVisible();
+  await expect(row.locator(".chip", { hasText: "Checking…" })).toHaveCount(0);
+  await expect(row.locator(".chip", { hasText: "Valid" })).toBeVisible();
   await expect(row.getByText("sk-ant-••••b2c3")).toBeVisible();
 
   // Stored: the page reads it back after a reload, and the key never
   // reaches the client.
   await page.reload();
-  await expect(keyRow(page, "anthropic").getByText("Valid")).toBeVisible();
+  await expect(keyRow(page, "anthropic").locator(".chip", { hasText: "Valid" })).toBeVisible();
   const usage = await query<{ keys: { provider: string; last4: string; status: string }[] }>(
     page.request,
     "usage.get",
@@ -76,7 +95,7 @@ test("a key is checked during the request: Checking…, then Valid and the toast
   expect(usage.keys).toEqual([
     expect.objectContaining({ provider: "anthropic", last4: "b2c3", status: "valid" }),
   ]);
-  expect(JSON.stringify(usage)).not.toContain(SLOW);
+  expect(JSON.stringify(usage)).not.toContain(HELD);
 
   // The Anthropic key enables the billing setting.
   const keyRadio = page.getByRole("radio", { name: /Continue on my Anthropic key/ });
@@ -90,7 +109,7 @@ test("a key is checked during the request: Checking…, then Valid and the toast
   await row.getByRole("button", { name: "Remove" }).click();
   await expect(row).toContainText("Remove the Anthropic key? Asks billed to it will stop.");
   await row.getByRole("button", { name: "Keep" }).click();
-  await expect(row.getByText("Valid")).toBeVisible();
+  await expect(row.locator(".chip", { hasText: "Valid" })).toBeVisible();
   await row.getByRole("button", { name: "Remove" }).click();
   await row.getByRole("button", { name: "Remove" }).click();
   await expect(toast(page)).toHaveText("Anthropic key removed.");
@@ -120,7 +139,7 @@ test("a rejected key and an unreachable provider are refused and nothing is save
   // A key that works afterwards saves.
   await addKey(page, "anthropic", ACCEPTED);
   await expect(toast(page)).toHaveText("Anthropic key works.");
-  await expect(anthropic.getByText("Valid")).toBeVisible();
+  await expect(anthropic.locator(".chip", { hasText: "Valid" })).toBeVisible();
 });
 
 test("format errors are shown before anything is sent", async ({ page }) => {
