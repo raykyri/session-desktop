@@ -9,7 +9,7 @@
 // route change, a reload and a refused write.
 
 import type { FormEvent, KeyboardEvent } from "react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { scrollIntoPadded } from "../../lib/motion.js";
 import { useDraftsStore } from "../../stores/drafts.js";
@@ -60,6 +60,7 @@ export function InlineComposer({
   focusOnOpen = true,
 }: InlineComposerProps) {
   const field = useRef<HTMLTextAreaElement>(null);
+  const form = useRef<HTMLFormElement>(null);
   const draft = useDraftsStore((state) => (state.hidden ? undefined : state.byKey[draftKey]));
   const setDraft = useDraftsStore((state) => state.setDraft);
   const clearDraft = useDraftsStore((state) => state.clearDraft);
@@ -70,18 +71,28 @@ export function InlineComposer({
   const unregister = useOverlaysStore((state) => state.unregister);
   const layer = `composer:${useId()}`;
 
-  useEffect(() => {
-    if (field.current && text) growField(field.current);
-    if (focusOnOpen) scrollIntoPadded(field.current);
-    // Once, when the composer opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const close = () => {
     onClose();
     focusSoon(returnFocus);
   };
-  useEffect(() => () => unregister(layer), [layer, unregister]);
+  // The Escape layer calls the latest `close`.
+  const latestClose = useRef(close);
+  useLayoutEffect(() => {
+    latestClose.current = close;
+  });
+  const escape = useRef(() => latestClose.current());
+  const enter = () => register(layer, OVERLAY_PRIORITY.inlineComposer, escape.current);
+
+  useEffect(() => {
+    if (field.current && text) growField(field.current);
+    if (focusOnOpen) scrollIntoPadded(field.current);
+    // Focus that arrived before this effect (or survived a remount of it)
+    // fires no focus event, so the layer is entered here too.
+    if (form.current?.contains(document.activeElement)) enter();
+    return () => unregister(layer);
+    // Once, when the composer opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
@@ -111,7 +122,8 @@ export function InlineComposer({
     <form
       className="icomp"
       onSubmit={(event) => void submit(event)}
-      onFocus={() => register(layer, OVERLAY_PRIORITY.inlineComposer, close)}
+      ref={form}
+      onFocus={enter}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) unregister(layer);
       }}
