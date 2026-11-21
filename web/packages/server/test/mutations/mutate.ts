@@ -309,7 +309,7 @@ const MUTATIONS: Mutation[] = [
     // run queue (`01` U6), so the same fault is that record not written
     name: "N16 an ask's queued run is not written",
     file: "../mutators/src/threads.ts",
-    from: '      queueRun(tx, run, root, "r", i.model, i.effort, payOf(values, i.model));',
+    from: '      queueRun(tx, run, root, "r", i.model, i.effort, pay);',
     to: "      void queueRun;",
   },
   {
@@ -1415,14 +1415,14 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M5b-1 pre decides no payer: every run is paid by its model's first payer",
     file: "../mutators/src/rules.ts",
-    from: "  return { pay: prePayer(ctx, model) };",
-    to: "  return { pay: firstPayer(model) };",
+    from: "  return { pay: prePayer(ctx, model) ?? NO_PAYER };",
+    to: "  return { pay: firstPayer(model) || NO_PAYER };",
   },
   {
-    name: "M5b-2 the out-of-tokens refusal carries no reason",
+    name: "M5b-2 a run nothing can pay for is queued on included tokens",
     file: "../mutators/src/rules.ts",
-    from: 'new Refusal("PRECONDITION_FAILED", spaces.OUT_OF_TOKENS_TEXT, undefined, "out_of_tokens")',
-    to: 'new Refusal("PRECONDITION_FAILED", spaces.OUT_OF_TOKENS_TEXT)',
+    from: "  return { pay: prePayer(ctx, model) ?? NO_PAYER };",
+    to: '  return { pay: prePayer(ctx, model) ?? "included" };',
   },
   {
     name: "M5b-3 the Anthropic key pays whatever the billing setting",
@@ -1779,12 +1779,12 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
   "M5a-66": { tests: ["E1: a thread removed in the second step of its run"] },
   "M5b-1": {
     tests: [
-      "K8: an ask while the allowance is spent is refused out_of_tokens",
+      "K8: an ask while the allowance is spent is kept, its run failed tokens",
       "K8: once the allowance is spent, billing key and a valid Anthropic key pay",
     ],
   },
   "M5b-2": {
-    tests: ["K8: an ask while the allowance is spent is refused out_of_tokens"],
+    tests: ["K8: an ask while the allowance is spent is kept, its run failed tokens"],
   },
   "M5b-3": {
     tests: ["K8: with billing pause a valid Anthropic key does not pay"],
@@ -1792,13 +1792,13 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
   "M5b-4": {
     in: "sync",
     tests: [
-      "K8: an ask queued with tokens left and applied after they ran out is refused",
+      "K8: an ask queued with tokens left and applied after they ran out is kept",
       "K8: an ask queued with tokens left and applied once the member's key pays",
     ],
   },
   "M5b-5": {
     tests: [
-      "K8: an ask while the allowance is spent is refused out_of_tokens",
+      "K8: an ask while the allowance is spent is kept, its run failed tokens",
       "K10: a run queued while tokens were left and claimed after they ran out ends tokens",
     ],
   },

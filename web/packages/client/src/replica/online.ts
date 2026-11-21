@@ -192,7 +192,8 @@ export function defaultOnlineData(): OnlineData {
  * Whether a run on `model` has no payer now (03 K8): the server's rule
  * (`payerFor`) over the member's `usage.get` reading, so the composer sends
  * no Ask, follow-up, Continue, Branch, Branch here, Look up or Run again
- * that the server would refuse `out_of_tokens`. False while the reading is
+ * whose run the server would write `failed { why: "tokens" }`. False while
+ * the reading is
  * unknown, and for a model the client does not know: the server decides.
  * A key-only model without its key is not offered (`composerModel`).
  */

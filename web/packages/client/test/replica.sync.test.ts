@@ -605,7 +605,7 @@ test("L1: a 21st queued ask is refused queue_full; its text returns to the compo
   t.is(r.get(threadKey(id)), UNKNOWN);
 });
 
-test("K8: an ask the server applies after the allowance ran out is refused out_of_tokens; its prediction rolls back and its text returns to the composer", async (t) => {
+test("K8: an ask the server applies after the allowance ran out is kept with its run failed tokens; its text does not return to the composer", async (t) => {
   const { f, lounge } = world();
   const { r, restored } = replicaOf(f, MONA);
   t.teardown(() => r.dispose());
@@ -627,11 +627,18 @@ test("K8: an ask the server applies after the allowance ran out is refused out_o
     },
     { draft },
   );
-  t.like(outcome, {
-    ok: false,
-    error: { code: "PRECONDITION_FAILED", reason: "out_of_tokens" },
+  t.like(outcome, { ok: true });
+  t.deepEqual(restored, []);
+  const run = (outcome.ok ? outcome.result : null) as { run: string } | null;
+  await until(() => {
+    const rec = r.get(`run:${run?.run ?? ""}`);
+    return rec !== UNKNOWN && rec?.kind === "run" && rec.status === "failed";
   });
-  t.deepEqual(restored, [draft]);
-  t.is(r.get(threadKey(id)), UNKNOWN);
-  t.false(feedOf(r, { kind: "home" }).includes(id));
+  t.like(r.get(`run:${run?.run ?? ""}`), {
+    status: "failed",
+    fail: { why: "tokens", at: null, cls: null },
+    pay: null,
+  });
+  t.like(r.get(threadKey(id)), { q: "Sent with tokens left", running: false });
+  t.true(feedOf(r, { kind: "home" }).includes(id));
 });

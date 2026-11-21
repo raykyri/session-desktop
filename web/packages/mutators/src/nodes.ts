@@ -27,6 +27,7 @@ import {
   notAuthor,
   nodesUnder,
   notGone,
+  attemptState,
   ownOrReadable,
   payOf,
   preRun,
@@ -255,22 +256,24 @@ export const NODES = {
       if (run.attempt !== i.base.attempt) throw stale();
       if (run.status !== "failed" && run.status !== "cancelled" && run.status !== "interrupted")
         throw refuse("PRECONDITION_FAILED", "Only a run that stopped can run again.");
+      const pay = payOf(values, i.model);
       tx.put({
         ...run,
         model: i.model,
         effort: i.effort,
-        pay: payOf(values, i.model),
-        status: "queued",
+        pay,
         attempt: run.attempt + 1,
         step: 0,
-        fail: null,
         tok: null,
         bill: null,
         note: null,
         startedAt: null,
-        finishedAt: null,
+        // with nothing to pay the new attempt is failed tokens at once
+        // (`03` K8)
+        ...attemptState(tx, pay),
       });
-      if (n.kind === "thread") tx.put({ ...n, model: i.model, effort: i.effort, running: true });
+      if (n.kind === "thread")
+        tx.put({ ...n, model: i.model, effort: i.effort, running: pay !== null });
       else tx.put({ ...n, model: i.model, effort: i.effort });
       return null;
     },

@@ -402,13 +402,16 @@ export function within(ctx: PreCtx, limit: PreLimit): void {
   if (ctx.allow && !ctx.allow(limit)) throw refuse("TOO_MANY_REQUESTS");
 }
 
+/** Who may pay for a run. */
+export type Payer = NonNullable<RunRec["pay"]>;
+
 /** Who pays for a run (`03` K8), or why nothing can: `out_of_tokens` for a
  * model included tokens may pay for, `no_key` for a model only the
  * person's own key pays for (K11). */
-export type PayerDecision = RunRec["pay"] | "out_of_tokens" | "no_key";
+export type PayerDecision = Payer | "out_of_tokens" | "no_key";
 
 /** The key a payer names: `key:anthropic` is the Anthropic key. */
-const keyProviderOf = (payer: RunRec["pay"]) =>
+const keyProviderOf = (payer: Payer) =>
   payer === "key:openai" ? "openai" : payer === "key:anthropic" ? "anthropic" : null;
 
 /**
@@ -424,7 +427,7 @@ const keyProviderOf = (payer: RunRec["pay"]) =>
  * The same rule decides in `pre` and again when the dispatcher claims the
  * run (K10).
  */
-export function payerFor(payers: readonly RunRec["pay"][], facts: PayerFacts): PayerDecision {
+export function payerFor(payers: readonly Payer[], facts: PayerFacts): PayerDecision {
   if (!payers.includes("included")) {
     for (const payer of payers) {
       const key = keyProviderOf(payer);
@@ -443,54 +446,72 @@ export function payerFor(payers: readonly RunRec["pay"][], facts: PayerFacts): P
 }
 
 /** The payer a run is written with where no payer was decided: a client's
- * prediction, and a server without a ledger. The model's first payer. */
-export function firstPayer(model: string): RunRec["pay"] {
+ * prediction, and a server without a ledger. The model's first payer: for a
+ * key-only model, its key (`03` K11). */
+export function firstPayer(model: string): Payer {
   const entry = MODEL_REGISTRY.find((m) => m.id === model);
   return entry?.payers[0] ?? "included";
 }
 
-/** The refusal of a run nothing can pay for (`03` K8): recorded, with the
- * reason the client acts on (it restores the composer's text). */
-export function payerRefusal(decision: "out_of_tokens" | "no_key"): Refusal {
-  return decision === "out_of_tokens"
-    ? new Refusal("PRECONDITION_FAILED", spaces.OUT_OF_TOKENS_TEXT, undefined, "out_of_tokens")
-    : new Refusal("PRECONDITION_FAILED", NO_KEY_TEXT);
-}
-
-/** The refusal of a run on a key-only model without its key (`03` K11). */
+/** The message of a run on a key-only model that ended `failed { why:
+ * "key" }` because the person holds no valid key for it (`03` K11, E5). */
 export const NO_KEY_TEXT = "This model runs on your own API key. Add the key in Usage.";
 
-/** The payer of a run on `model` the actor queues (`03` K8): decided from
- * the facts the server reads, or the model's first payer without them.
- * Refuses when nothing can pay. */
-export function prePayer(ctx: PreCtx, model: string): RunRec["pay"] {
+/**
+ * The payer of a run on `model` the actor queues (`03` K8, K11), decided
+ * from the facts the server reads, or the model's first payer without them.
+ * Null when nothing can pay: the write still applies, and its run is written
+ * `failed { why: "tokens" }`, so the ask is kept and can run again after the
+ * reset. A key-only model's payer is its key whether or not the person holds
+ * one; without one the run ends `failed { why: "key" }` when the dispatcher
+ * claims it (E5).
+ */
+export function prePayer(ctx: PreCtx, model: string): Payer | null {
   const facts = ctx.payerFacts?.();
   if (!facts) return firstPayer(model);
   const entry = MODEL_REGISTRY.find((m) => m.id === model);
   if (!entry) throw bad("model", "a model of the registry");
   const decision = payerFor(entry.payers, facts);
-  if (decision === "out_of_tokens" || decision === "no_key") throw payerRefusal(decision);
+  if (decision === "out_of_tokens") return null;
+  if (decision === "no_key") return firstPayer(model);
   return decision;
 }
 
+/** The server value of a payer: `none` when nothing can pay. */
+const NO_PAYER = "none";
+
 /** The pre-check of a write that queues a run on `model`: room in the
- * person's queue and a payer (server only; the model is checked in `can`).
- * The payer goes to `run` as the server value `pay`. */
+ * person's queue and its payer (server only; the model is checked in
+ * `can`). The payer goes to `run` as the server value `pay`. */
 export const preRun = (ctx: PreCtx, model: string): ServerValues => {
   checkQueue(ctx);
-  return { pay: prePayer(ctx, model) };
+  return { pay: prePayer(ctx, model) ?? NO_PAYER };
 };
 
-/** The payer `pre` decided, or the model's first payer in a prediction,
- * which the server's record replaces. */
-export function payOf(values: ServerValues, model: string): RunRec["pay"] {
+/** The payer `pre` decided (null: nothing can pay), or the model's first
+ * payer in a prediction, which the server's record replaces. */
+export function payOf(values: ServerValues, model: string): Payer | null {
   const pay = values["pay"];
+  if (pay === NO_PAYER) return null;
   return pay === "included" || pay === "key:anthropic" || pay === "key:openai"
     ? pay
     : firstPayer(model);
 }
 
-/** A new run of an ask, queued: the run record is the queue (`03` E2). */
+/** The status, failure and end of a new attempt paid by `pay` (`03` K8):
+ * queued, or, with nothing to pay, `failed { why: "tokens" }` at once. */
+export function attemptState(
+  tx: Tx,
+  pay: Payer | null,
+): Pick<RunRec, "status" | "fail" | "finishedAt"> {
+  return pay === null
+    ? { status: "failed", fail: { why: "tokens", at: null, cls: null }, finishedAt: tx.now }
+    : { status: "queued", fail: null, finishedAt: null };
+}
+
+/** A new run of an ask, queued: the run record is the queue (`03` E2).
+ * With nothing to pay (`pay` null) it is written `failed { why: "tokens" }`
+ * instead (`03` K8). */
 export function queueRun(
   tx: Tx,
   id: string,
@@ -498,7 +519,7 @@ export function queueRun(
   node: string,
   model: string,
   effort: RunRec["effort"],
-  pay: RunRec["pay"],
+  pay: Payer | null,
 ): void {
   tx.create({
     kind: "run",
@@ -510,15 +531,13 @@ export function queueRun(
     model,
     effort,
     pay,
-    status: "queued",
     attempt: 1,
     step: 0,
-    fail: null,
     tok: null,
     bill: null,
     note: null,
     createdAt: tx.now,
     startedAt: null,
-    finishedAt: null,
+    ...attemptState(tx, pay),
   });
 }

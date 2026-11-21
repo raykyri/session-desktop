@@ -82,6 +82,7 @@ export const THREADS = {
       const s = needSpace(tx, i.space);
       const q = text(i.q, "q");
       const ask = i.kind === "ask";
+      const pay = ask ? payOf(values, i.model) : null;
       newThread(tx, s, {
         ...blank,
         id: i.id,
@@ -91,13 +92,14 @@ export const THREADS = {
         t: i.title ?? null,
         model: ask ? i.model : null,
         effort: ask ? i.effort : null,
-        running: ask,
+        // an ask nothing can pay for is written with its run failed (`03` K8)
+        running: ask && pay !== null,
       });
       if (!ask) return { id: i.id, run: null, notified: [], notMembers: [] };
       // the run record with status `queued` is the run queue (`03` E2)
       const run = tx.id(1);
       const root = tx.byKey(threadKey(i.id)) as ThreadRec;
-      queueRun(tx, run, root, "r", i.model, i.effort, payOf(values, i.model));
+      queueRun(tx, run, root, "r", i.model, i.effort, pay);
       return { id: i.id, run, notified: [], notMembers: [] };
     },
     // a post notifies the accounts it mentions, and says who in its answer

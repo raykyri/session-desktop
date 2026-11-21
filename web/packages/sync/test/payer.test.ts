@@ -1,13 +1,11 @@
 // The payer of a run decided when the server applies the write (`03` K8,
-// `01` Y11): a client predicts an ask while included tokens are left; by the
-// time the server applies it they have run out. With nothing to pay, the
-// server refuses it (`out_of_tokens`, recorded) and the client rolls the
-// prediction back to the server's answer and hands the input back for the
-// composer. With the member's key paying, the server's run record (`pay`)
-// replaces the predicted one.
+// `01` Y11): a client predicts an ask while included tokens are left, as a
+// queued run; by the time the server applies it they have run out. The write
+// still applies: the thread exists and its run is `failed { why: "tokens" }`,
+// and the client's view converges on the server's records. With the
+// member's key paying, the server's payer (`pay`) replaces the predicted one.
 
 import { MUTATORS, type PayerFacts, type StoredRecord } from "@session/mutators";
-import { OUT_OF_TOKENS_TEXT } from "@session/shared";
 import type { ExecutionContext } from "ava";
 import test from "ava";
 
@@ -49,7 +47,7 @@ function views(w: World, mona: SyncClient, space: string) {
 const runIn = (records: Iterable<StoredRecord>, th: string) =>
   [...records].find((r) => r.kind === "run" && r.th === th);
 
-test("K8: an ask queued with tokens left and applied after they ran out is refused, and the prediction rolls back", async (t) => {
+test("K8: an ask queued with tokens left and applied after they ran out is kept; its run is failed tokens", async (t) => {
   const { w, open, facts, mona, seen } = setup(t);
   await mona.sync(`space:${open}`);
   await mona.sync("user:mona");
@@ -66,20 +64,21 @@ test("K8: an ask queued with tokens left and applied after they ran out is refus
   // another tab spends the rest of the week's tokens before this write is sent
   facts["mona"] = { includedLeft: false, billing: "pause", keys: [] };
   const [answer] = await mona.flush();
-  t.like(answer, {
-    ok: false,
-    error: { code: "PRECONDITION_FAILED", reason: "out_of_tokens", message: OUT_OF_TOKENS_TEXT },
+  t.true(answer?.ok, "applied");
+  t.false(
+    seen.some((e) => e.type === "refused"),
+    "nothing refused: the composer keeps nothing",
+  );
+  t.like(runIn(w.store.records.values(), id), {
+    status: "failed",
+    fail: { why: "tokens", at: null, cls: null },
+    pay: null,
   });
 
-  // rolled back to the server's answer: nothing of it shows, and the
-  // composer gets its text back
-  t.is(mona.get(`thread:${id}`), undefined);
-  t.is(runIn(mona.view().values(), id), undefined);
-  t.like(
-    seen.find((e) => e.type === "refused"),
-    { type: "refused", input: { q }, error: { reason: "out_of_tokens" } },
-  );
+  // the prediction gives way to the server's records
   await mona.sync(`space:${open}`);
+  t.like(mona.get(`thread:${id}`), { q, running: false });
+  t.like(runIn(mona.view().values(), id), { status: "failed", fail: { why: "tokens" } });
   const { shown, held } = views(w, mona, open);
   t.deepEqual(shown, held);
 });

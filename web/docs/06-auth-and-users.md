@@ -153,11 +153,14 @@ metered, admins included.
   mutator's `pre` stage (K8): included tokens while any are left; once they
   are spent, the member's Anthropic key when the Usage page's setting is
   "Continue on my Anthropic key" (billing `key`) and the model may run on it;
-  otherwise the write is refused `PRECONDITION_FAILED` with reason
-  `out_of_tokens` (recorded), and the client restores the composer's text.
-  The client applies the same rule to `usage.get` before sending and sends
-  nothing while out of tokens. Posts, replies and comments are never refused.
-  The run record carries the payer (`pay`).
+  otherwise nothing can pay, and the write still applies: the thread or node
+  is created and its run is written `failed { why: "tokens" }`, so the ask is
+  kept and can run again after the reset. A key-only model's payer is the
+  member's key for it (K11); without a valid one its run ends
+  `failed { why: "key" }` when it is claimed. The client applies the same
+  rule to `usage.get` before sending and sends nothing while out of tokens.
+  Posts, replies and comments are never affected. The run record carries the
+  payer (`pay`, null when nothing could pay).
 - The dispatcher decides the payer again with the same rule when it claims a
   queued run (K10); a run nothing can pay for then ends
   `failed { why: "tokens" }` without a provider call and is not run again at
