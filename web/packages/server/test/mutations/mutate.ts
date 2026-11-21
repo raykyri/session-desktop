@@ -26,7 +26,8 @@
 // cover the owned runs of M5a (the run store and its fence, the loop's
 // limits and endings, the ledger, `/live`, and the mutators' run rules);
 // M5b-1 on cover the payer, the allowance and the overdraft of M5b (the
-// pre stage's payer, the claim's re-check, the reset, the crossing).
+// pre stage's payer, the claim's re-check, the reset, the crossing, the
+// key-only model, a member's own allowance).
 //
 // A mutation is killed only when one of its expected tests fails
 // (`EXPECTED`): the runner runs those tests alone, with AVA's `--match`, in
@@ -1478,6 +1479,30 @@ const MUTATIONS: Mutation[] = [
     from: "    const limit = this.#deps.allowances.weekly(this.#userId) + this.#deps.limits.overdraftTokens;",
     to: "    const limit = this.#deps.allowances.weekly(this.#userId) + this.#deps.limits.overdraftTokens * 10;",
   },
+  {
+    name: "M5b-12 a key-only model runs without its key",
+    file: "../mutators/src/rules.ts",
+    from: "      if (key !== null && facts.keys.includes(key)) return payer;",
+    to: "      if (key !== null) return payer;",
+  },
+  {
+    name: "M5b-13 the overdraft limit stops key-paid steps too",
+    file: "src/runs/allowance.ts",
+    from: '    if (payer !== "included") {\n      return null;\n    }\n',
+    to: "    void payer;\n",
+  },
+  {
+    name: "M5b-14 a member's allowance override is ignored",
+    file: "src/keys/allowances.ts",
+    from: "  return usageRepo.weeklyAllowance(deps.db, userId) ?? deps.config.limits.weeklyTokens;",
+    to: "  return (usageRepo.weeklyAllowance(deps.db, userId) && null) ?? deps.config.limits.weeklyTokens;",
+  },
+  {
+    name: "M5b-15 usage.get reads the deployment's allowance",
+    file: "src/trpc/routers/keys.ts",
+    from: "      allowance: ctx.allowances.weekly(ctx.user.id),",
+    to: "      allowance: ctx.config.limits.weeklyTokens,",
+  },
 ];
 
 /** The tests that must fail for a mutation to count as killed, by id: the
@@ -1831,6 +1856,19 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
   },
   "M5b-11": {
     tests: ["two concurrent runs of one member never exceed allowance plus overdraft"],
+  },
+  "M5b-12": {
+    in: "mutators",
+    tests: ["K8, K11: the payer rule for each kind of model"],
+  },
+  "M5b-13": {
+    tests: ["K9: a key-paid run is not stopped by the overdraft limit"],
+  },
+  "M5b-14": {
+    tests: ["K3: a member with an allowance override is metered against it"],
+  },
+  "M5b-15": {
+    tests: ["K3: a member with an allowance override is metered against it"],
   },
 };
 
