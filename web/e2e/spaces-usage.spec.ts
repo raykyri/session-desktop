@@ -4,8 +4,8 @@
 // saved), the format errors, Remove with its confirmation, and the billing
 // setting the Anthropic key enables. The server runs with fixture providers,
 // which answer the key check by the key's text (`runs/fixtureProvider.ts`):
-// no request leaves the machine. The allowance crossing and the
-// out-of-tokens refusal (K3, K8, K9) come with the SQLite server half.
+// no request leaves the machine. The allowance crossing, the overdraft stop
+// and the out-of-tokens refusal (K8, K9) are `spaces-billing.spec.ts`.
 
 import { expect, test, type Page } from "@playwright/test";
 

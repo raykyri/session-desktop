@@ -108,6 +108,10 @@ export default defineConfig({
       // so a fixture that calls it fails the call locally instead of reaching
       // a vendor from CI (`04-agent-runtime.md` §11).
       SESSION_ENFORCE_LIMITS: "0",
+      // A member's overdraft past the weekly allowance (`03` K9): small, so
+      // the billing spec's run reaches it in seconds. Only that spec's
+      // member, who starts near the allowance, comes near it.
+      SESSION_OVERDRAFT_TOKENS: "1000",
       // The specs write their channels and threads through the sync routes,
       // many in a few seconds, and sign in several people from one address
       // (`e2e/world.ts`): the abuse limits of `04` Z1 are raised.
