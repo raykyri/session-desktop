@@ -1064,12 +1064,7 @@ const EXPECTED: Record<string, { in?: "db" | "sync"; tests: string[] }> = {
   X19: { tests: ["every tombstone is pruned after 30 days"] },
   N15: { tests: ["answers under (client, seq) expire after 7 days"] },
   N20: { tests: ["S2: reads keep no state"] },
-  N29: {
-    tests: [
-      "timeout: the stream is aborted and the row closes",
-      "R1: a record written again at a deleted key",
-    ],
-  },
+  N29: { in: "db", tests: ["a deleted record's id stays taken"] },
   N9: { tests: ["R5: a removed thread's text is in no value at rest"] },
   "R2-22": { tests: ["S2: reads keep no state"] },
   "M3-1": { tests: ["S1: a request without Session-Protocol"] },
@@ -1093,7 +1088,7 @@ const EXPECTED: Record<string, { in?: "db" | "sync"; tests: string[] }> = {
   "M3-16": { tests: ["A3: a person has at most SESSION_LIMIT_STREAMS_PER_USER streams"] },
   "M3-17": { tests: ["a chunked body past the limit"] },
   "M3-18": { tests: ["a chunked body past the limit"] },
-  "M3-19": { tests: ["a client id's replaced stream leaves the hub"] },
+  "M3-19": { tests: ["open() removes the client id's older stream at once"] },
   "M3-20": { tests: ["a stream whose client stops reading"] },
   "M3-21": { tests: ["the queue is bounded in bytes"] },
   "M3-22": { tests: ["a resync event's id holds the other logs' cursors"] },

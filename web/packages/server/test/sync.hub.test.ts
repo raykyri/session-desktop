@@ -300,3 +300,34 @@ test("EventIds: the previous key opens ids until 30 days after the rotation, to 
   now = rotatedAt + 30 * DAY + 1;
   t.is(ids.open(old, scope), null);
 });
+
+test("open() removes the client id's older stream at once, whatever its sink does", async (t) => {
+  const h = createHarness(t);
+  const { mona, open } = await channels(h);
+  await mona.register();
+  const log: LogId = `space:${open}`;
+  const cursor = (await mona.snapshot(log)).cursor;
+  const closed: string[] = [];
+  // a sink that does nothing when closed: only the hub's own removal counts
+  const sink = (name: string) => ({
+    send: () => undefined,
+    queued: () => 0,
+    queuedBytes: () => 0,
+    close: (why: string) => closed.push(`${name}: ${why}`),
+  });
+  const spec = {
+    u: "mona",
+    clientId: mona.clientId,
+    sessionToken: null,
+    cursors: new Map([[log, cursor]]),
+  };
+  const first = h.sync.hub.open({ ...spec, sink: sink("first") });
+  t.is(h.sync.hub.size(), 1);
+  const second = h.sync.hub.open({ ...spec, sink: sink("second") });
+  t.deepEqual(closed, ["first: replaced"]);
+  t.true(first.closed);
+  t.false(second.closed);
+  t.is(h.sync.hub.size(), 1);
+  t.is(h.sync.hub.streamsOf("mona"), 1);
+  h.sync.hub.remove(second);
+});

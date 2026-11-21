@@ -782,3 +782,21 @@ test("a tombstone keeps who deleted the record", (t) => {
   ok(t, w.as("otto", "saved.set", { kind: "thread", id: th, on: false }));
   t.like(w.store.tombstone(`save:otto:${th}`), { kind: "save", person: "otto", by: "otto" });
 });
+
+test("a deleted record's id stays taken: a new record may not reuse it", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const th = post(t, w, "mona", open);
+  const reply = w.id();
+  ok(t, w.as("mel", "research.createPostFollowUp", { id: reply, thread: th, t: "A reply" }));
+  ok(t, w.as("olga", "moderation.decide", { item: `p:${th}`, decision: "removed", note: "No." }));
+  t.is(w.get(`reply:${reply}`), undefined, "the removal deleted the reply");
+  t.true(w.store.idTaken(reply));
+  const other = post(t, w, "mona", open);
+  const again = w.as("mel", "research.createPostFollowUp", {
+    id: reply,
+    thread: other,
+    t: "Again",
+  });
+  t.false(again.ok);
+});
