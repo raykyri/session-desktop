@@ -17,6 +17,7 @@
 
 import type { SessionDatabase } from "@session/db";
 import type { Turn } from "@session/shared";
+import { defaultTitle, estimateTokenCount } from "@session/shared";
 import type { ModelMessage } from "ai";
 import { stepCountIs, streamText } from "ai";
 
@@ -420,13 +421,33 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       wrapped.set(payer, next);
       return next;
     };
-    /** Metadata calls bill the asker's included tokens (`03` K2). */
+    /** Metadata calls bill the asker's included tokens (`03` K2), whoever
+     * pays for the run. Each is one call with no checkpoint, so none starts
+     * once included usage is at the allowance plus the overdraft limit (K9,
+     * `RunBudget.includedExhausted`): the title falls back to the question
+     * (`defaultTitle`), the summary line is left out, and context compaction
+     * goes on without a new summary. */
     const wrapMetadata: ModelWrap = (model, entry, kind) =>
       meter.wrap(model, { entry, payer: "included", kind });
 
     /** `03` K9: once the allowance is spent, the next step of an included
-     * run moves to the asker's Anthropic key when billing is `key`. */
-    const payForNextStep = (): void => {
+     * run moves to the asker's Anthropic key when billing is `key`. At a
+     * step boundary (`stepNumber` past 0; the first step's payer is the
+     * claim's) while the allowance is not spent, after the weekly reset or
+     * a larger allowance, the next step of a run the Anthropic key pays for,
+     * on a model included tokens may pay for, moves back to included tokens
+     * (K8). */
+    const payForNextStep = (stepNumber: number): void => {
+      if (
+        stepNumber > 0 &&
+        current?.payer === "key:anthropic" &&
+        current.resolved.entry.payers.includes("included") &&
+        !budget.allowanceSpent()
+      ) {
+        const included = deps.providers.resolve(request.model, request.effort);
+        if (included) current = { payer: "included", resolved: included };
+        return;
+      }
       if (current?.payer !== "included") return;
       const key = budget.keyForNextStep(current.resolved.entry);
       if (key === null) return;
@@ -436,6 +457,19 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       });
       if (keyed) {
         current = { payer: "key:anthropic", resolved: keyed, key };
+      }
+    };
+
+    /** The estimated input of the request after a step (`03` K9, L1): the
+     * input estimate of the step's own request, plus what the step adds to
+     * the conversation (its text, reasoning, tool calls and tool results,
+     * `content`), estimated as the meter estimates a request. */
+    const nextInputEstimate = (content: readonly unknown[] | undefined): number => {
+      if (content === undefined || content.length === 0) return meter.lastResearchInput;
+      try {
+        return meter.lastResearchInput + estimateTokenCount(JSON.stringify(content));
+      } catch {
+        return meter.lastResearchInput;
       }
     };
 
@@ -476,8 +510,13 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
         model: request.model,
         userText: request.userText,
         priorMessages,
+        // A summary already cached is read before this is called; past the
+        // limit a new one is not made, and the context goes as it is, with
+        // old tool results elided (`compactContext`)
         summarize: ({ text, signal: summarySignal }) =>
-          deps.metadata.summarize({ text, userId, signal: summarySignal, wrap: wrapMetadata }),
+          budget.includedExhausted()
+            ? Promise.resolve(null)
+            : deps.metadata.summarize({ text, userId, signal: summarySignal, wrap: wrapMetadata }),
         summaries: store.summaries,
         signal,
       });
@@ -607,14 +646,19 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
               }
               return keyLost;
             },
-            () => {
-              const reason = budget.stopReason(current?.payer ?? request.payer);
+            // the next request's input counts: it opens its ledger row with
+            // it, before the first checkpoint can stop the call
+            ({ steps: done }) => {
+              const reason = budget.stopReason(
+                current?.payer ?? request.payer,
+                nextInputEstimate(done.at(-1)?.content),
+              );
               if (reason !== null) stopReason ??= reason;
               return reason !== null;
             },
           ],
-          prepareStep: () => {
-            payForNextStep();
+          prepareStep: ({ stepNumber }) => {
+            payForNextStep(stepNumber);
             return current ? { model: modelFor(current.payer, current.resolved) } : {};
           },
           abortSignal: signal,
@@ -766,21 +810,26 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
 
     // `03` E2: a new thread's title and the root's summary line are the
     // run's final steps, billed like the others and fenced like every write.
+    // Past the allowance plus the overdraft limit neither call is made (K2,
+    // K9): the title is the question, clipped as a title with no generated
+    // one is (`defaultTitle`), and there is no summary line.
     const text = answerText(turns);
     if (request.finalSteps?.title && owned() && !signal.aborted) {
-      const title = await deps.metadata.generateTitle({
-        userId,
-        runId,
-        question: request.userText,
-        opening: text.slice(0, 2_000),
-        wrap: wrapMetadata,
-        signal,
-      });
+      const title = budget.includedExhausted()
+        ? defaultTitle(request.userText)
+        : await deps.metadata.generateTitle({
+            userId,
+            runId,
+            question: request.userText,
+            opening: text.slice(0, 2_000),
+            wrap: wrapMetadata,
+            signal,
+          });
       if (title !== null && owned()) {
         store.writeTitle(request, title);
       }
     }
-    if (request.finalSteps?.summary && owned() && !signal.aborted) {
+    if (request.finalSteps?.summary && owned() && !signal.aborted && !budget.includedExhausted()) {
       const line = await deps.metadata.generateSummaryLine({
         userId,
         runId,

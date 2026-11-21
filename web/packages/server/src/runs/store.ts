@@ -101,7 +101,10 @@ export interface AttemptSummary {
   /** The run record's `tok`: the counted tokens of every ledger row of the
    * run, every attempt (`03` K1). */
   tok: number;
-  /** Null when no provider call was made. */
+  /** The payers of the research calls the writer of the summary knows of
+   * (`billLabel`): the loop's, this claim's calls; the dispatcher's and a
+   * thrown write's, none. A store with a ledger writes the run's `bill`
+   * from the ledger instead (`runBill`, `RecordRunStore.finish`). */
   bill: BillLabel | null;
   steps: number;
   toolCalls: number;
@@ -142,6 +145,11 @@ export interface QueuedRun {
   payer: Payer;
   /** When the record was written `queued` (epoch ms): the admission order. */
   queuedAt: number;
+  /** The attempt has been claimed before (`startedAt` set): a re-queue after
+   * a 429 or a resume. Its claim admits it on overdraft (`payerAtStart`,
+   * `03` K9, K10). Absent: the dispatcher reads the ledger rows of the
+   * attempt alone. */
+  ran?: boolean;
 }
 
 /** A `run` record in status `interrupted`, as boot reads it. */

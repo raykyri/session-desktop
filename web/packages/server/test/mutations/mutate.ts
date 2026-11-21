@@ -1455,8 +1455,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M5b-7 the claim keeps the payer it was queued with",
     file: "src/runs/dispatcher.ts",
-    from: "      const payer = entry ? payerAtStart(budgetDeps, run.userId, entry) : run.payer;",
-    to: "      const payer = run.payer as ReturnType<typeof payerAtStart>;\n      void budgetDeps;",
+    from: "      const payer = entry ? payerAtStart(budgetDeps, run.userId, entry, ran) : run.payer;",
+    to: "      const payer = run.payer as ReturnType<typeof payerAtStart>;\n      void budgetDeps;\n      void ran;",
   },
   {
     name: "M5b-8 the claim does not write the payer to the run record",
@@ -1505,6 +1505,79 @@ const MUTATIONS: Mutation[] = [
     file: "src/trpc/routers/keys.ts",
     from: "      allowance: ctx.allowances.weekly(ctx.user.id),",
     to: "      allowance: ctx.config.limits.weeklyTokens,",
+  },
+  // ---- M5b review fixes (S1-S6), named by the review's row ----
+  {
+    name: "M5b-16 S1: a re-claim of an attempt that ran is held to the first claim's rule",
+    file: "src/runs/dispatcher.ts",
+    from: "      const payer = entry ? payerAtStart(budgetDeps, run.userId, entry, ran) : run.payer;",
+    to: "      const payer = entry ? payerAtStart(budgetDeps, run.userId, entry, false) : run.payer;\n      void ran;",
+  },
+  {
+    name: "M5b-17 S1: an attempt with ledger rows of its own is not taken as one that ran",
+    file: "src/runs/dispatcher.ts",
+    from: "      const ran = run.ran === true || ledger.runTokens(run.runId, run.attempt) > 0;",
+    to: "      const ran = run.ran === true;",
+  },
+  {
+    name: "M5b-18 S1: a re-claim is admitted past the allowance plus overdraft",
+    file: "src/runs/allowance.ts",
+    from: '  if (decision === "out_of_tokens" && ran && withinOverdraft(deps, userId)) {',
+    to: '  if (decision === "out_of_tokens" && ran) {',
+  },
+  {
+    name: "M5b-19 S2: the title call is made past the allowance plus overdraft",
+    file: "src/runs/loop.ts",
+    from: "      const title = budget.includedExhausted()\n",
+    to: "      const title = false\n",
+  },
+  {
+    name: "M5b-20 S2: the summary line call is made past the allowance plus overdraft",
+    file: "src/runs/loop.ts",
+    from: "    if (request.finalSteps?.summary && owned() && !signal.aborted && !budget.includedExhausted()) {",
+    to: "    if (request.finalSteps?.summary && owned() && !signal.aborted) {",
+  },
+  {
+    name: "M5b-21 S2: the context summary call is made past the allowance plus overdraft",
+    file: "src/runs/loop.ts",
+    from: "          budget.includedExhausted()\n            ? Promise.resolve(null)\n",
+    to: "          false\n            ? Promise.resolve(null)\n",
+  },
+  {
+    name: "M5b-22 S2: the bill counts the title and summary calls",
+    file: "src/runs/allowance.ts",
+    from: "  return billLabel(ledger.runPayers(runId, BILLED_KIND)) ?? billLabel(ledger.runPayers(runId));",
+    to: "  return billLabel(ledger.runPayers(runId)) ?? billLabel(ledger.runPayers(runId, BILLED_KIND));",
+  },
+  {
+    name: "M5b-23 S3: the end of an attempt writes the summary's bill",
+    file: "src/runs/recordStore.ts",
+    from: "      const bill = spent.bill === undefined ? summary.bill : spent.bill;",
+    to: "      const bill = summary.bill;",
+  },
+  {
+    name: "M5b-24 S3: the bill names the latest attempt's payers only",
+    file: "src/runs/sqliteLedger.ts",
+    from: '        "SELECT DISTINCT payer FROM usage_events WHERE run_id = ? AND kind = ?",',
+    to: '        "SELECT DISTINCT payer FROM usage_events e WHERE run_id = ? AND kind = ? AND attempt = (SELECT max(attempt) FROM usage_events m WHERE m.run_id = e.run_id)",',
+  },
+  {
+    name: "M5b-25 S4: a run on the member's key never moves back to included tokens",
+    file: "src/runs/loop.ts",
+    from: "        stepNumber > 0 &&\n",
+    to: "        stepNumber < 0 &&\n",
+  },
+  {
+    name: "M5b-26 S5: the step boundary ignores the next request's input",
+    file: "src/runs/loop.ts",
+    from: "                nextInputEstimate(done.at(-1)?.content),",
+    to: "                0 * nextInputEstimate(done.at(-1)?.content),",
+  },
+  {
+    name: "M5b-27 S6: a stored valid key that does not open counts for the payer",
+    file: "src/keys/apiKeys.ts",
+    from: '  return row !== null && view(deps, row).status === "valid" ? row.sealed : null;',
+    to: '  return row?.status === "valid" ? row.sealed : null;',
   },
   // ---- M6: membership, moderation and the deletion job (the M6 review fixes) ----
   {
@@ -2167,6 +2240,57 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
   },
   "M5b-15": {
     tests: ["K3: a member with an allowance override is metered against it"],
+  },
+  "M5b-16": {
+    tests: [
+      "K9, K10: an attempt re-queued by 429s after it crossed the allowance is claimed again on overdraft",
+    ],
+  },
+  "M5b-17": {
+    tests: ["K9, K10: a queued attempt with ledger rows of its own is claimed on overdraft"],
+  },
+  "M5b-18": {
+    tests: [
+      "K9, K10: a claim of an attempt that ran is admitted below the allowance plus overdraft",
+    ],
+  },
+  "M5b-19": {
+    tests: [
+      "K2, K9: past the allowance plus overdraft, key-paid asks make no title or summary call",
+    ],
+  },
+  "M5b-20": {
+    tests: [
+      "K2, K9: past the allowance plus overdraft, key-paid asks make no title or summary call",
+    ],
+  },
+  "M5b-21": {
+    tests: [
+      "K2, K9: past the allowance plus overdraft a key-paid run makes no context summary call",
+    ],
+  },
+  "M5b-22": {
+    tests: ["K8: once the allowance is spent, billing key and a valid Anthropic key pay"],
+  },
+  "M5b-23": {
+    tests: [
+      "K1, K9: a run failed rate after a billed step has the tok and bill of its rows",
+      "K1, K9: a run failed by a store write that threw has the tok and bill of its rows",
+      "K1, K9: a re-claim on another payer keeps the first claim's payer in the bill",
+      "K1, K9: after Run again on another payer, tok and bill cover both attempts",
+    ],
+  },
+  "M5b-24": {
+    tests: ["K1, K9: after Run again on another payer, tok and bill cover both attempts"],
+  },
+  "M5b-25": {
+    tests: ["K8, K9: a run on the member's key moves back to included tokens at the next step"],
+  },
+  "M5b-26": {
+    tests: ["K9: the step boundary counts the next request's input"],
+  },
+  "M5b-27": {
+    tests: ["K4, K8: a stored key that does not open is no payer"],
   },
   "M6-8": { tests: ["P2: the job deletes comments, branches and bans of the person"] },
   "M6-9": { tests: ["P2: the job deletes comments, branches and bans of the person"] },

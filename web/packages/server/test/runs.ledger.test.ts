@@ -327,6 +327,27 @@ test("two concurrent runs of one member never exceed allowance plus overdraft by
   t.true(total <= bound, `spent ${total}, bound ${bound}`);
 });
 
+test("K9: the step boundary counts the next request's input: a request that would pass the overdraft limit is not made", async (t) => {
+  const harness = createLoopHarness(t, {
+    env: { SESSION_WEEKLY_TOKENS: "500", SESSION_OVERDRAFT_TOKENS: "500" },
+  });
+  const user = harness.addUser("boundary");
+  // a question of about 3,000 tokens: every request of the run is larger
+  // than the limit, while the first step is billed 940 by the provider
+  const request = harness.runRequest(user.id, `${"word ".repeat(2_400)}fixture:success-with-tools`);
+
+  t.is((await harness.agent.run(request)).outcome, "complete");
+  t.is(harness.store.finishes(request.runId)[0]?.summary.note, OVERDRAFT_STOP_NOTE);
+  const rows = harness.ledger.rows({ runId: request.runId });
+  t.deepEqual(
+    rows.map((row) => [row.ending, row.counted]),
+    [["finish", 940]],
+    "no request after the first step",
+  );
+  t.is(harness.ledger.includedUsage(user.id, weekOf(Date.now())), 940);
+  assertTok(t, harness, request.runId);
+});
+
 test("the run's token cap ends it complete with its note", async (t) => {
   const harness = createLoopHarness(t, {
     env: { SESSION_RUN_MAX_TOKENS: "2500" },

@@ -133,16 +133,17 @@ export function listKeys(deps: Pick<ApiKeysDeps, "db" | "box">, userId: string):
   return keyRepo.list(deps.db, userId).map((row) => view(deps, row));
 }
 
-/** The sealed value of the member's `valid` key for `provider`, or null: a
- * status check that decrypts nothing (the run loop's per-step check and the
- * payer at start, `03` K4, K8). */
+/** The sealed value of the member's key for `provider` when reads call it
+ * `valid` (`view`: stored `valid` and it still opens under the secret key),
+ * or null. The payer facts of `pre` and the claim, and the run loop's
+ * per-step check, read it (`03` K4, K8); the opened value is not kept. */
 export function validSealed(
-  deps: Pick<ApiKeysDeps, "db">,
+  deps: Pick<ApiKeysDeps, "db" | "box">,
   userId: string,
   provider: ApiKeyProvider,
 ): string | null {
   const row = keyRepo.find(deps.db, userId, provider);
-  return row?.status === "valid" ? row.sealed : null;
+  return row !== null && view(deps, row).status === "valid" ? row.sealed : null;
 }
 
 /**

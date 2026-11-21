@@ -18,7 +18,9 @@ import {
   checkWithProvider,
   keyContext,
 } from "../src/keys/apiKeys.js";
+import { payerFacts } from "../src/runs/allowance.js";
 import { fixturePageFetch } from "../src/runs/fixtureProvider.js";
+import { MemoryLedger } from "../src/runs/memoryLedger.js";
 import { createSecretBox } from "../src/secretBox.js";
 
 import type { Harness } from "./helpers.js";
@@ -448,6 +450,32 @@ test("a stored key that does not open under the secret key reads invalid and pay
   );
   t.like((await caller.usage.get()).keys[0], { status: "invalid" });
   await t.throwsAsync(caller.usage.setBilling({ mode: "key" }), { code: "PRECONDITION_FAILED" });
+});
+
+test("K4, K8: a stored key that does not open is no payer: validKey and the payer facts leave it out", (t) => {
+  const harness = createHarness(t);
+  const user = harness.addUser("unopened");
+  const other = createSecretBox(Buffer.alloc(32, 9));
+  keyRepo.save(harness.db, {
+    userId: user.id,
+    provider: "anthropic",
+    sealed: other.seal(ANTHROPIC_KEY, keyContext(user.id, "anthropic")),
+    last4: "a1f9",
+  });
+  billing.set(harness.db, user.id, "key");
+  const allowances = storedAllowances({
+    db: harness.db,
+    box: createSecretBox(DEVELOPMENT_SECRET_KEY),
+    logger: harness.logger,
+    config: harness.config,
+  });
+  t.is(keyRepo.find(harness.db, user.id, "anthropic")?.status, "valid", "stored valid");
+  t.is(allowances.validKey(user.id, "anthropic"), null);
+  const facts = payerFacts(
+    { ledger: new MemoryLedger(), allowances, limits: harness.config.limits, now: Date.now },
+    user.id,
+  );
+  t.deepEqual(facts.keys, []);
 });
 
 test("fixture providers answer the key check by the key's text, without a network", async (t) => {

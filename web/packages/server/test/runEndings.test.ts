@@ -589,3 +589,143 @@ test.serial(
     t.like(await w.settled(again.run), { status: "complete", fail: null });
   },
 );
+
+/** A weekly allowance of `weekly`, billing `key` with a valid Anthropic key. */
+const keyBilling = (weekly: number): Allowances => ({
+  weekly: () => weekly,
+  billing: () => "key",
+  validKey: (_u, provider) => (provider === "anthropic" ? MEMBER_KEY.sealed : null),
+  anthropicKey: () => MEMBER_KEY,
+  openaiKey: () => null,
+});
+
+test.serial(
+  "K1, K9: a run failed rate after a billed step has the tok and bill of its rows",
+  async (t) => {
+    const w = await runsWorld(t, { backoffMs: [1, 1, 1] });
+    const { run } = await w.ask(w.mona, w.open, "fixture:written-step-then-throttle");
+    t.like(await w.settled(run), { status: "failed", fail: { why: "rate" }, bill: "included" });
+    t.true((w.run(run).tok ?? 0) > 0);
+    tokIsSum(t, w, run);
+  },
+);
+
+test.serial(
+  "K1, K9: a run failed by a store write that threw has the tok and bill of its rows",
+  async (t) => {
+    const w = await runsWorld(t);
+    w.rt.store.writeTitle = () => {
+      throw new Error("the title write failed");
+    };
+    const { run } = await w.ask(w.mona, w.open, "fixture:success");
+    t.like(await w.settled(run), {
+      status: "failed",
+      fail: { why: "error", cls: "unknown" },
+      bill: "included",
+    });
+    t.true((w.run(run).tok ?? 0) > 0);
+    tokIsSum(t, w, run);
+  },
+);
+
+test.serial(
+  "K1, K9: a re-claim on another payer keeps the first claim's payer in the bill",
+  async (t) => {
+    const clock = { at: Date.now() };
+    const w = await runsWorld(t, {
+      allowances: keyBilling(2_000),
+      backoffMs: [60_000],
+      now: () => clock.at,
+    });
+    // the first claim bills a 1,300-token step on included tokens, then a
+    // 429; the second, on the member's key, answers
+    let calls = 0;
+    setFixtureScenario(() => {
+      calls += 1;
+      return calls <= 2 ? "written-step-then-throttle" : "success";
+    });
+    const { run } = await w.ask(w.mona, w.open, "A question across two claims");
+    await waitFor(() => w.run(run).status === "queued" && w.rows(run).length >= 2, "the re-queue");
+    // another run spends the allowance during the backoff
+    const id = w.ledger.open({
+      runId: "another-run",
+      attempt: 1,
+      userId: w.mona.user.id,
+      payer: "included",
+      week: weekOf(clock.at),
+      kind: "research",
+      provider: "anthropic",
+      model: "claude-fable",
+      cachedInputRatio: 1,
+      counts: { inputTokens: 2_000, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+      openedAt: clock.at,
+    });
+    w.ledger.close(
+      id,
+      { inputTokens: 2_000, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+      "finish",
+      clock.at,
+    );
+    clock.at += 60_000;
+    t.like(await w.settled(run), {
+      status: "complete",
+      attempt: 1,
+      pay: "key:anthropic",
+      bill: "included+key:anthropic",
+    });
+    const research = closedRows(t, w, run);
+    t.deepEqual(
+      [...new Set(research.map((r) => r.payer))],
+      ["included", "key:anthropic"],
+      "both claims' calls",
+    );
+    tokIsSum(t, w, run);
+  },
+);
+
+test.serial(
+  "K1, K9: after Run again on another payer, tok and bill cover both attempts",
+  async (t) => {
+    const w = await runsWorld(t, { allowances: keyBilling(10_000), backoffMs: [1, 1, 1] });
+    // the first attempt bills four 1,300-token steps on included tokens and
+    // ends rate; another run then spends the allowance
+    setFixtureScenario(() => "written-step-then-throttle");
+    const { thread, run } = await w.ask(w.mona, w.open, "A question run twice");
+    t.like(await w.settled(run), { status: "failed", attempt: 1, bill: "included" });
+    const id = w.ledger.open({
+      runId: "another-run",
+      attempt: 1,
+      userId: w.mona.user.id,
+      payer: "included",
+      week: weekOf(Date.now()),
+      kind: "research",
+      provider: "anthropic",
+      model: "claude-fable",
+      cachedInputRatio: 1,
+      counts: { inputTokens: 10_000, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+      openedAt: Date.now(),
+    });
+    w.ledger.close(
+      id,
+      { inputTokens: 10_000, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 },
+      "finish",
+      Date.now(),
+    );
+    setFixtureScenario("success");
+    await w.mona.ok("research.retryNode", {
+      thread,
+      node: "r",
+      model: "claude-fable",
+      effort: "medium",
+      base: { attempt: 1 },
+    });
+    t.like(await w.settled(run), {
+      status: "complete",
+      attempt: 2,
+      pay: "key:anthropic",
+      bill: "included+key:anthropic",
+    });
+    t.deepEqual([...new Set(w.rows(run).map((r) => r.attempt))], [1, 2]);
+    tokIsSum(t, w, run);
+  },
+);

@@ -7,13 +7,20 @@
 // on Friday 00:00 UTC, read through an injected clock.
 
 import { usage as usageRepo } from "@session/db";
-import { OUT_OF_TOKENS_TEXT, runFailureText } from "@session/shared";
+import { OUT_OF_TOKENS_TEXT, defaultTitle, findModel, runFailureText } from "@session/shared";
 import type { ApplyResult } from "@session/sync/server";
 import type { ExecutionContext } from "ava";
 import test from "ava";
 
 import type { Allowances } from "../src/runs/allowance.js";
-import { OVERDRAFT_STOP_NOTE, RunBudget, configAllowances } from "../src/runs/allowance.js";
+import {
+  OVERDRAFT_STOP_NOTE,
+  RunBudget,
+  configAllowances,
+  payerAtStart,
+  withinOverdraft,
+} from "../src/runs/allowance.js";
+import { setFixtureScenario } from "../src/runs/fixtureProvider.js";
 import type { Payer } from "../src/runs/ledger.js";
 import { ZERO_COUNTS, weekOf } from "../src/runs/ledger.js";
 import { MemoryLedger } from "../src/runs/memoryLedger.js";
@@ -148,7 +155,9 @@ test.serial(
     const rows = w.rows(run).filter((r) => r.kind === "research");
     t.true(rows.length > 0);
     for (const r of rows) t.is(r.payer, "key:anthropic");
-    t.true(["key:anthropic", "included+key:anthropic"].includes(w.run(run).bill ?? ""));
+    // the label names the payers of the research calls only (`billLabel`)
+    t.true(w.rows(run).some((r) => r.kind !== "research" && r.payer === "included"));
+    t.is(w.run(run).bill, "key:anthropic");
   },
 );
 
@@ -333,5 +342,121 @@ test.serial(
     w.rt.dispatcher.tick();
     t.like(w.run(queued.run), { status: "failed", fail: { why: "tokens" } });
     t.like(await w.caller(w.mona.user).usage.get(), { allowance: 1_000 });
+  },
+);
+
+test.serial(
+  "K9, K10: an attempt re-queued by 429s after it crossed the allowance is claimed again on overdraft and ends rate",
+  async (t) => {
+    const w = await runsWorld(t, {
+      env: { SESSION_WEEKLY_TOKENS: "1000", SESSION_OVERDRAFT_TOKENS: "1000000" },
+      backoffMs: [1, 1, 1],
+    });
+    // each claim bills a 1,300-token step, then the provider answers 429
+    const { run } = await w.ask(w.mona, w.open, "fixture:written-step-then-throttle");
+    t.like(await w.settled(run), { status: "failed", fail: { why: "rate" }, attempt: 1 });
+    const research = w.rows(run).filter((r) => r.kind === "research");
+    t.is(research.filter((r) => r.ending === "rate_limited").length, 4, "four claims");
+    for (const r of research) t.is(r.payer, "included");
+    t.true(w.ledger.includedUsage(w.mona.user.id, weekOf(Date.now())) > 1_000);
+  },
+);
+
+test("K9, K10: a claim of an attempt that ran is admitted below the allowance plus overdraft, not at it; a first claim is not", (t) => {
+  const ledger = new MemoryLedger();
+  const config = testConfig("/tmp/session-billing-unused", {
+    SESSION_WEEKLY_TOKENS: "1000",
+    SESSION_OVERDRAFT_TOKENS: "500",
+  });
+  const deps = {
+    ledger,
+    allowances: configAllowances(config),
+    limits: config.limits,
+    now: Date.now,
+  };
+  const entry = findModel(MODEL.model);
+  if (!entry) throw new Error("no model");
+  const spent = (tokens: number) => {
+    const id = ledger.open({
+      runId: `spent-${tokens}`,
+      attempt: 1,
+      userId: "u1",
+      payer: "included",
+      week: weekOf(Date.now()),
+      kind: "research",
+      provider: "vertex",
+      model: "gemini-flash",
+      cachedInputRatio: 1,
+      counts: { ...ZERO_COUNTS, inputTokens: tokens },
+      openedAt: Date.now(),
+    });
+    ledger.close(id, { ...ZERO_COUNTS, inputTokens: tokens }, "finish", Date.now());
+  };
+  spent(1_499);
+  t.is(payerAtStart(deps, "u1", entry), "out_of_tokens", "a first claim");
+  t.is(payerAtStart(deps, "u1", entry, true), "included", "a re-claim, below the limit");
+  spent(1);
+  t.false(withinOverdraft(deps, "u1"));
+  t.is(payerAtStart(deps, "u1", entry, true), "out_of_tokens", "a re-claim at the limit");
+});
+
+test.serial(
+  "K2, K9: past the allowance plus overdraft, key-paid asks make no title or summary call; the title is the question",
+  async (t) => {
+    const w = await runsWorld(t, {
+      allowances: keyBilling(1_000),
+      env: { SESSION_OVERDRAFT_TOKENS: "500" },
+      start: false,
+    });
+    spend(w, w.mona.user.id, 5_000, Date.now());
+    const questions = [1, 2, 3].map(
+      (n) =>
+        `fixture:success key-paid ask ${n}, with a question long enough to be clipped as a title`,
+    );
+    const asks = [];
+    for (const q of questions) asks.push({ q, ...(await w.ask(w.mona, w.open, q)) });
+    w.rt.dispatcher.start();
+    for (const { q, thread, run } of asks) {
+      t.like(await w.settled(run), {
+        status: "complete",
+        pay: "key:anthropic",
+        bill: "key:anthropic",
+      });
+      t.deepEqual(
+        w.rows(run).map((r) => [r.kind, r.payer]),
+        [["research", "key:anthropic"]],
+        "no title or summary call",
+      );
+      t.like(w.thread(thread), { t: defaultTitle(q), sum: null });
+    }
+    t.true(defaultTitle(questions[0] ?? "").endsWith("…"));
+    t.is(w.ledger.includedUsage(w.mona.user.id, weekOf(Date.now())), 5_000);
+  },
+);
+
+test.serial(
+  "K8, K9: a run on the member's key moves back to included tokens at the next step after the reset",
+  async (t) => {
+    const c = clock(BEFORE_RESET);
+    // an allowance the run does not reach again in the new week
+    const w = await runsWorld(t, { allowances: keyBilling(50_000), start: false, now: c.now });
+    spend(w, w.mona.user.id, 50_000, BEFORE_RESET - HOUR);
+    const { run } = await w.ask(w.mona, w.open, "fixture:success-with-tools across the reset");
+    t.like(w.run(run), { pay: "key:anthropic" });
+    // the reset comes while the first step streams, on the member's key
+    let first = true;
+    setFixtureScenario(() => {
+      if (first) {
+        first = false;
+        c.at = RESET;
+      }
+      return "success-with-tools";
+    });
+    w.rt.dispatcher.start();
+    t.like(await w.settled(run), { status: "complete", bill: "included+key:anthropic" });
+    const research = w.rows(run).filter((r) => r.kind === "research");
+    t.true(research.length >= 2);
+    t.is(research[0]?.payer, "key:anthropic");
+    for (const r of research.slice(1)) t.is(r.payer, "included");
   },
 );

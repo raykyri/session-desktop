@@ -218,6 +218,7 @@ export class AttemptMeter {
   readonly #open = new Set<OpenCall>();
   readonly #payers = new Set<Payer>();
   readonly #totals: MeterTotals = { ...ZERO_COUNTS, calls: 0 };
+  #lastResearchInput = 0;
 
   constructor(deps: MeterDeps, scope: MeterScope, hooks: MeterHooks) {
     this.deps = deps;
@@ -225,9 +226,16 @@ export class AttemptMeter {
     this.hooks = hooks;
   }
 
-  /** The payers of the calls made so far, in order of first use. */
+  /** The payers of the research calls made so far, in order of first use:
+   * what the run's `bill` names (`billLabel`). */
   get payers(): ReadonlySet<Payer> {
     return this.#payers;
+  }
+
+  /** The input estimate of the latest research call: the step boundary's
+   * estimate of the next request starts from it (`loop.ts`, `03` K9). */
+  get lastResearchInput(): number {
+    return this.#lastResearchInput;
   }
 
   get totals(): Readonly<MeterTotals> {
@@ -281,7 +289,10 @@ export class AttemptMeter {
       counts: { ...ZERO_COUNTS, inputTokens: input },
       openedAt,
     });
-    this.#payers.add(model.payer);
+    if (model.kind === "research") {
+      this.#payers.add(model.payer);
+      this.#lastResearchInput = input;
+    }
     const call = new OpenCall(this, id, input, openedAt);
     this.#open.add(call);
     return call;

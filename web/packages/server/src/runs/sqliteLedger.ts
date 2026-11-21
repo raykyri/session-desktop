@@ -12,6 +12,7 @@ import { newId } from "@session/db";
 
 import type {
   CallEnding,
+  CallKind,
   Ledger,
   LedgerCall,
   LedgerCounts,
@@ -24,7 +25,7 @@ interface RunTotalRow {
   run_id: string;
   counted: number;
   included: number;
-  payers: string;
+  payers: string | null;
   started_at: number;
 }
 
@@ -65,13 +66,17 @@ export class SqliteLedger implements Ledger {
       attemptTokens: c.prepare<[string, number], { n: number | null }>(
         "SELECT sum(counted) AS n FROM usage_events WHERE run_id = ? AND attempt = ?",
       ),
-      payers: c.prepare<[string, number], { payer: string }>(
-        "SELECT DISTINCT payer FROM usage_events WHERE run_id = ? AND attempt = ?",
+      payers: c.prepare<[string], { payer: string }>(
+        "SELECT DISTINCT payer FROM usage_events WHERE run_id = ?",
+      ),
+      kindPayers: c.prepare<[string, string], { payer: string }>(
+        "SELECT DISTINCT payer FROM usage_events WHERE run_id = ? AND kind = ?",
       ),
       runsOf: c.prepare<[string, string], RunTotalRow>(
         `SELECT run_id, sum(counted) AS counted,
            sum(CASE WHEN payer = 'included' THEN counted ELSE 0 END) AS included,
-           group_concat(DISTINCT payer) AS payers, min(created_at) AS started_at
+           group_concat(DISTINCT CASE WHEN kind = 'research' THEN payer END) AS payers,
+           min(created_at) AS started_at
          FROM usage_events WHERE user_id = ? AND week = ? AND run_id IS NOT NULL
          GROUP BY run_id ORDER BY started_at DESC, run_id DESC`,
       ),
@@ -137,8 +142,10 @@ export class SqliteLedger implements Ledger {
     );
   }
 
-  runPayers(runId: string, attempt: number): ReadonlySet<Payer> {
-    return new Set(this.#s.payers.all(runId, attempt).map((r) => r.payer as Payer));
+  runPayers(runId: string, kind?: CallKind): ReadonlySet<Payer> {
+    const rows =
+      kind === undefined ? this.#s.payers.all(runId) : this.#s.kindPayers.all(runId, kind);
+    return new Set(rows.map((r) => r.payer as Payer));
   }
 
   runsOf(userId: string, week: string): LedgerRunTotal[] {
@@ -146,7 +153,7 @@ export class SqliteLedger implements Ledger {
       runId: r.run_id,
       counted: r.counted,
       includedCounted: r.included,
-      payers: new Set(r.payers.split(",") as Payer[]),
+      payers: new Set((r.payers === null ? [] : r.payers.split(",")) as Payer[]),
       startedAt: r.started_at,
     }));
   }
