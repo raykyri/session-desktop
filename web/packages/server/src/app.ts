@@ -24,8 +24,12 @@ import { RateLimiter, abuseBuckets, rateLimitByUserOrIp } from "./middleware/rat
 import { requestContext } from "./middleware/requestId.js";
 import { securityHeaders } from "./middleware/security.js";
 import { clientStatic } from "./middleware/static.js";
-import type { AppContext } from "./trpc/base.js";
+import { protocolCheck } from "./sync/protocol.js";
+import { syncRoutes } from "./sync/routes.js";
+import { SyncService } from "./sync/service.js";
+import { syncTestRoutes } from "./sync/testRoutes.js";
 import { createAppContext } from "./trpc/base.js";
+import type { AppContext } from "./trpc/base.js";
 import { appRouter } from "./trpc/router.js";
 
 /** Constant-time string comparison for the metrics bearer token. */
@@ -56,6 +60,8 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
     ...deps
   } = options;
   const logger = deps.logger ?? defaultLogger(deps.config.env);
+  const sync = deps.sync ?? new SyncService({ db: deps.db, config: deps.config, logger });
+  deps.sync = sync;
   const app = new Hono<AppEnv>();
 
   app.use("*", requestContext(logger));
@@ -66,6 +72,10 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
 
   app.use("*", rejectAuthorizationHeader());
   app.use("*", csrfGuard(deps.config));
+  // `01` S1: the protocol version before authentication, on the sync routes,
+  // the run reads and tRPC.
+  for (const path of ["/api/sync/*", "/api/runs/*", "/api/trpc/*"])
+    app.use(path, protocolCheck(deps.config));
   app.use("*", sessionLoader(deps));
 
   // `04` Z1: snapshots per user, or per IP signed out. Mounted ahead of the
@@ -74,6 +84,10 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
     "/api/sync/snapshot",
     rateLimitByUserOrIp(limiter, "snapshots", abuseBuckets(deps.config.abuse).snapshots),
   );
+
+  // The acceptance suite's test access (`01` A1): only in a test server.
+  if (deps.config.env === "test") app.route("/api/sync/test", syncTestRoutes(sync));
+  app.route("/api/sync", syncRoutes({ sync, config: deps.config, limiter }));
 
   // Fly's check. 503 until migrations and run reconciliation are done and
   // again from the first moment of the drain, so the proxy never routes to a

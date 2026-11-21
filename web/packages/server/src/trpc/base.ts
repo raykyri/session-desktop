@@ -20,6 +20,7 @@ import { UNAVAILABLE_RUN_TEXTS } from "../runs/runTexts.js";
 import type { SecretBox } from "../secretBox.js";
 import { createSecretBox } from "../secretBox.js";
 import { EMPTY_DIRECTORY, type SpaceDirectory } from "../spaces/directory.js";
+import type { SyncService } from "../sync/service.js";
 
 export interface AppContext {
   config: Config;
@@ -34,6 +35,8 @@ export interface AppContext {
   /** The cookie this request arrived with, so `auth.logout` can end this
    * session and leave the account's other browsers signed in. */
   sessionToken: string | null;
+  /** The sync core, whose event streams sign-out ends. */
+  sync: SyncService | undefined;
   ledger: Ledger;
   runTexts: RunTexts;
   models: readonly ModelEntry[];
@@ -69,6 +72,7 @@ export function createAppContext(
     clientIp,
     ipKey: input.ipKey ?? hashClientIp(deps.config, clientIp),
     sessionToken: input.sessionToken ?? null,
+    sync: deps.sync,
     ledger: deps.ledger ?? new MemoryLedger(),
     runTexts: deps.runTexts ?? UNAVAILABLE_RUN_TEXTS,
     models: deps.models ?? MODEL_REGISTRY,

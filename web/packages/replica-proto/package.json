@@ -10,6 +10,10 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "default": "./src/index.ts"
+    },
+    "./test/*": {
+      "types": "./dist/test/*.d.ts",
+      "default": "./test/*.ts"
     }
   },
   "scripts": {

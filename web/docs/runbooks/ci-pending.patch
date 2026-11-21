@@ -1,0 +1,36 @@
+The M3 change to the web workflow, not applied from the session that wrote
+it (it could not push workflow files). Apply it with
+`git apply web/docs/runbooks/ci-pending.patch` from the repository root and
+delete this file in the same commit.
+
+It adds a `conformance` job: replica-proto's whole suite over HTTP against the
+server on a temp SQLite file (`web/packages/server/test/conformance/`, plan
+01 A1). The server's `npm test` leaves that directory out because it takes
+about 30 minutes on 4 cores, so the `test` job does not run it.
+
+diff --git a/.github/workflows/web.yml b/.github/workflows/web.yml
+--- a/.github/workflows/web.yml
++++ b/.github/workflows/web.yml
+@@ -46,6 +46,22 @@ jobs:
+       - run: npm ci
+       - run: npm test
+
++  # replica-proto's suite over HTTP against the SQLite server (plan 01 A1,
++  # M3). About 30 minutes, most of it the 200 convergence sequences; the
++  # server's `npm test` leaves it out.
++  conformance:
++    runs-on: ubuntu-latest
++    timeout-minutes: 60
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-node@v4
++        with:
++          node-version: 22
++          cache: npm
++          cache-dependency-path: web/package-lock.json
++      - run: npm ci
++      - run: npm test --workspace @session/server -- 'test/conformance/**'
++
+   # The Playwright suite (`web/docs/12-testing-linting-ci.md` §3.6): one real
+   # server with fixture providers, a temp data directory and the test-only
+   # sign-in route, serving a client build through its own static middleware.

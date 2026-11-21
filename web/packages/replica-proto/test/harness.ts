@@ -1,6 +1,11 @@
 // The suite's only link to an implementation is `makeServer`: the server half
 // of `@session/sync` on its in-memory store (M2), or with
-// `REPLICA_PROTO_SERVER=proto` the prototype server, kept as the reference.
+// `REPLICA_PROTO_SERVER=proto` the prototype server, kept as the reference,
+// or the target a runner installs with `useTarget` before the suite's tests
+// run: `@session/server`'s HTTP target over SQLite (`test/conformance/`,
+// M3). A target is a `ServerFactory`: the API (`register`, `apply`,
+// `snapshot`, `pull`), the clock and random source it is made with, and the
+// test access of `TestServer` (the stored records, the storage scan).
 
 import type { ExecutionContext } from "ava";
 
@@ -21,9 +26,19 @@ import {
   type TestServer,
 } from "../src/index.js";
 
+let target: ServerFactory | null = null;
+
+/** Run the suite against another implementation of the server half. */
+export function useTarget(factory: ServerFactory): void {
+  target = factory;
+}
+
 /** The server under test. */
-export const makeServer: ServerFactory =
-  process.env["REPLICA_PROTO_SERVER"] === "proto" ? createProtoServer : createSyncTestServer;
+export const makeServer: ServerFactory = (options) =>
+  (
+    target ??
+    (process.env["REPLICA_PROTO_SERVER"] === "proto" ? createProtoServer : createSyncTestServer)
+  )(options);
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;

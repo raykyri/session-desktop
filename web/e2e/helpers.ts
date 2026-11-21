@@ -9,8 +9,15 @@ import { expect, test, type APIRequestContext, type Browser, type Page } from "@
 
 import { APP_ORIGIN, E2E_RUN_ID_VARIABLE } from "./constants.js";
 
+/** Every API request names the protocol version (`01` S1); a request without
+ * it answers 426. `PROTOCOL_VERSION` of `@session/sync`. */
+export const PROTOCOL_HEADERS = { "session-protocol": "4" };
 /** Required CSRF header for mutation requests (`06-auth-and-users.md` §5). */
-const MUTATION_HEADERS = { "x-requested-with": "session", "content-type": "application/json" };
+const MUTATION_HEADERS = {
+  "x-requested-with": "session",
+  "content-type": "application/json",
+  ...PROTOCOL_HEADERS,
+};
 
 export interface SignInOptions {
   /** One login per spec keeps the accounts, and therefore the feeds, apart. */
@@ -168,7 +175,9 @@ export async function query<T>(
   input: unknown,
 ): Promise<T> {
   const search = input === undefined ? "" : `?input=${encodeURIComponent(JSON.stringify(input))}`;
-  const response = await request.get(`${APP_ORIGIN}/api/trpc/${path}${search}`);
+  const response = await request.get(`${APP_ORIGIN}/api/trpc/${path}${search}`, {
+    headers: PROTOCOL_HEADERS,
+  });
   expect(response.ok(), `${path}: ${response.status()} ${await response.text()}`).toBe(true);
   return ((await response.json()) as { result: { data: T } }).result.data;
 }

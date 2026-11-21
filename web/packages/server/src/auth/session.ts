@@ -82,13 +82,11 @@ export function sessionLoader(deps: ServerDeps): MiddlewareHandler<AppEnv> {
 }
 
 /**
- * Deletes the session identified by `token`. Other sessions for the account
- * remain unchanged.
- *
- * The research event stream that sign-out also closed was removed with the
- * research API (plan `01` A2). The sync SSE stream of `01` Y7 (M3) is to be
- * closed here too, and checked against session expiry while it is open.
+ * Deletes the session identified by `token` and ends its sync event streams
+ * (`01` Y7; an open stream is also checked against its session every 30 s).
+ * Other sessions for the account remain unchanged.
  */
-export function endSession(deps: Pick<ServerDeps, "db">, token: string): void {
+export function endSession(deps: Pick<ServerDeps, "db" | "sync">, token: string): void {
   auth.deleteSession(deps.db, token);
+  deps.sync?.hub.closeSession(token);
 }

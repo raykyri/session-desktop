@@ -7,9 +7,11 @@
 // is defined in.
 
 export * from "./backfills/index.js";
+export * from "./backfills/records.js";
 export * from "./connection.js";
 export * from "./ids.js";
 export * from "./json.js";
 export * from "./repos/index.js";
 export * from "./schema/namespace.js";
+export * from "./sync/index.js";
 export * from "./time.js";
