@@ -86,6 +86,8 @@ export class Writer {
   constructor(
     readonly request: APIRequestContext,
     readonly user: SignedInUser & { handle: string },
+    /** The server written to: the suite's, or the side server. */
+    readonly origin: string = APP_ORIGIN,
   ) {}
 
   get handle(): string {
@@ -93,7 +95,7 @@ export class Writer {
   }
 
   private async register(): Promise<void> {
-    const res = await this.request.post(`${APP_ORIGIN}/api/sync/register`, {
+    const res = await this.request.post(`${this.origin}/api/sync/register`, {
       headers: SYNC_HEADERS,
       data: {},
     });
@@ -118,7 +120,7 @@ export class Writer {
       clientTime: now,
       queuedAt: now,
     }));
-    const res = await this.request.post(`${APP_ORIGIN}/api/sync/apply`, {
+    const res = await this.request.post(`${this.origin}/api/sync/apply`, {
       headers: SYNC_HEADERS,
       data: { envelopes },
     });
@@ -234,7 +236,7 @@ export class Writer {
   async runs(
     space: string,
   ): Promise<Map<string, { status: string; attempt: number; th: string; node: string }>> {
-    const res = await this.request.post(`${APP_ORIGIN}/api/sync/snapshot`, {
+    const res = await this.request.post(`${this.origin}/api/sync/snapshot`, {
       headers: SYNC_HEADERS,
       data: { log: `space:${space}` },
     });
@@ -261,6 +263,28 @@ export class Writer {
           node: record.node,
         });
     return out;
+  }
+
+  /** The record keys of a space log's snapshot of `tier`, as this person
+   * reads them. */
+  async keys(space: string, tier: "window" | "summary"): Promise<string[]> {
+    const res = await this.request.post(`${this.origin}/api/sync/snapshot`, {
+      headers: SYNC_HEADERS,
+      data: { log: `space:${space}`, tier },
+    });
+    expect(res.ok(), `snapshot: ${res.status()}`).toBe(true);
+    const { records } = (await res.json()) as { records: { key: string }[] };
+    return records.map((r) => r.key);
+  }
+
+  /** Freezes a space as the account-deletion job does (`04` B6), through
+   * the side server's test route (`NODE_ENV=test` only). */
+  async freeze(space: string): Promise<void> {
+    const res = await this.request.post(`${this.origin}/api/sync/test/freeze`, {
+      headers: SYNC_HEADERS,
+      data: { space },
+    });
+    expect(((await res.json()) as { ok?: boolean }).ok, "freeze").toBe(true);
   }
 
   /** Waits until every run of `runs` in `space` is complete. */
@@ -309,12 +333,16 @@ export async function branchedAsk(asker: Writer, other: Writer, space: string) {
 }
 
 /** A person of the spec's world: a context of their own, signed in as the
- * run's account for `login`. */
-export async function person(browser: Browser, login: string): Promise<Writer> {
+ * run's account for `login`, on the suite's server or on `origin`. */
+export async function person(
+  browser: Browser,
+  login: string,
+  origin: string = APP_ORIGIN,
+): Promise<Writer> {
   const context = await browser.newContext();
   const page = await context.newPage();
-  const user = await signIn(page, { login });
+  const user = await signIn(page, { login, origin });
   const handle = (user as SignedInUser & { handle?: string | null }).handle;
   if (!handle) throw new Error(`${login} has no handle`);
-  return new Writer(context.request, { ...user, handle });
+  return new Writer(context.request, { ...user, handle }, origin);
 }

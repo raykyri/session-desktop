@@ -326,6 +326,10 @@ test("§6.6: the owner bans a member of an open channel; the log lists it; their
   const row = members.locator(`[data-member="${nick}"]`);
   await row.getByRole("button", { name: "More" }).click();
   await page.getByRole("menuitem", { name: `Ban from #${w.own}` }).click();
+  // the ban asks first, naming the person and the channel
+  const confirm = page.getByRole("alertdialog", { name: `Ban @${nick} from #${w.own}?` });
+  await expect(confirm.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await confirm.getByRole("button", { name: "Ban" }).click();
   await expect(toast(page)).toHaveText(`Banned @${nick} from #${w.own}.`);
   await expect(members.locator(`[data-banned="${nick}"]`)).toBeVisible();
   await expect(members.locator(`[data-member="${nick}"]`)).toHaveCount(0);
