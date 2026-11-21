@@ -1382,6 +1382,7 @@ button.bq.bqx:hover {
 
 .estate h3 {
   margin: 4px 0 0;
+  font-weight: 700;
   font-size: var(--fs-md);
   color: var(--text-heading);
 }
@@ -1445,6 +1446,7 @@ button.bq.bqx:hover {
 
 .sphead h2 {
   margin: 0;
+  font-weight: 700;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1506,6 +1508,7 @@ button.bq.bqx:hover {
 
 .fdialog h3 {
   margin: 0;
+  font-weight: 700;
   font-size: var(--fs-lg);
   color: var(--text-heading);
 }
@@ -1572,6 +1575,57 @@ button.bq.bqx:hover {
 
 .fdialog p.chnone {
   color: var(--text-faint);
+}
+
+.chfoot {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid var(--surface-divider);
+}
+
+.mlist {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mlist li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 9px 0;
+  border-top: 1px solid var(--surface-divider);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.mlist li > span:not(.mlkind) {
+  flex: 1;
+  min-width: 0;
+}
+
+.mlist li small {
+  display: block;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.mlkind {
+  flex: none;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 18px;
+  margin-top: 1px;
+  background: color-mix(in srgb, var(--status-attention-fg) 14%, var(--content-card-bg));
+  color: var(--status-attention-fg);
 }
 
 .fscrim.ce-scrim {

@@ -2,18 +2,22 @@
 // editor stacked over it (W6.3, `chEditDlg`). The info dialog: glyph,
 // `#name`, the lock, Edit (owner) and Close; the description, or for an owner
 // without one "No description yet." with "Add one"; the facts "Channel by",
-// "Members", "Visibility". The moderation log and the member list are M6
-// (W6.4, W6.8). The editor: "About" with a live "N / 300" counter, Cancel and
-// Save (`spaces.update`), the toast "Channel updated." and focus back on
-// Edit. Escape closes the editor first, then the info dialog (02 W10.2).
+// "Members", "Visibility"; for the owner, "Moderation log" (W6.4). The member
+// list is M6 (W6.8). The editor: "About" with a live "N / 300" counter,
+// Cancel and Save (`spaces.update`), the toast "Channel updated." and focus
+// back on Edit. Escape closes the editor first, then the info dialog (02
+// W10.2).
 
 import { Dialog } from "@base-ui/react/dialog";
 import { useRef, useState } from "react";
 
-import type { ChannelView } from "../../replica/queries.js";
+import { useReplicaQuery } from "../../replica/ReplicaProvider.js";
+import { useNow, type ChannelView } from "../../replica/queries.js";
+import { UNKNOWN } from "../../replica/source.js";
 import { useWrites } from "../../replica/writes.js";
 import { Avatar, ChannelGlyph } from "../../ui/Avatar.js";
 import { FeedDialog } from "../feed/FeedDialog.js";
+import { relTime } from "../feed/format.js";
 import { CloseIcon, LockIcon } from "../feed/icons.js";
 import { showToast } from "../shell/Toast.js";
 
@@ -29,6 +33,8 @@ export function ChannelInfoDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [log, setLog] = useState(false);
+  const logButton = useRef<HTMLButtonElement>(null);
   const editButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const owner = channel.owned;
@@ -88,6 +94,13 @@ export function ChannelInfoDialog({
         </dd>
       </dl>
       {owner ? (
+        <div className="chfoot">
+          <button ref={logButton} type="button" className="tlink" onClick={() => setLog(true)}>
+            Moderation log
+          </button>
+        </div>
+      ) : null}
+      {owner ? (
         <AboutEditorDialog
           channel={channel}
           open={editing}
@@ -95,6 +108,89 @@ export function ChannelInfoDialog({
           returnFocus={editButton}
         />
       ) : null}
+      {owner ? (
+        <ModerationLogDialog
+          channel={channel}
+          open={log}
+          onOpenChange={setLog}
+          returnFocus={logButton}
+        />
+      ) : null}
+    </FeedDialog>
+  );
+}
+
+/** The owner's removals and bans, newest first (02 W6.4; the mock's
+ * `modLogDlg`), stacked over the info dialog. No removed text: the removal
+ * erased it (01 C12). */
+export function ModerationLogDialog({
+  channel,
+  open,
+  onOpenChange,
+  returnFocus,
+}: {
+  channel: ChannelView;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  returnFocus: React.RefObject<HTMLButtonElement | null>;
+}) {
+  const now = useNow();
+  const close = useRef<HTMLButtonElement>(null);
+  const entries = useReplicaQuery(
+    (source) =>
+      source
+        .list("modlog", { sp: channel.id })
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+    [channel.id],
+  );
+  const list = entries === UNKNOWN ? [] : entries;
+  return (
+    <FeedDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      labelledBy="ml-h"
+      className="chdlg cedlg mldlg"
+      stacked
+      initialFocus={close}
+      finalFocus={returnFocus}
+    >
+      <div className="chdlg-h">
+        <ChannelGlyph name={channel.name} size="xl" className="glyph" />
+        <h3 id="ml-h">Moderation log</h3>
+        <Dialog.Close ref={close} className="ibtn" aria-label="Close">
+          <CloseIcon />
+        </Dialog.Close>
+      </div>
+      <div className="cebody">
+        {list.length === 0 ? (
+          <p className="chnone">
+            Nothing removed yet. Use “Remove…” in a thread&apos;s “…” menu to take it down.
+          </p>
+        ) : (
+          <ul className="mlist">
+            {list.map((m) => {
+              const ban = m.act !== "remove";
+              const what = m.item?.startsWith("p:") ? "post" : "ask";
+              return (
+                <li key={m.id}>
+                  <span className={ban ? "mlkind ban" : "mlkind rm"}>
+                    {m.act === "remove" ? "Removed" : m.act === "ban" ? "Banned" : "Unbanned"}
+                  </span>
+                  <span>
+                    {m.act === "remove"
+                      ? `@${m.by} removed @${m.author}'s ${what}`
+                      : m.act === "ban"
+                        ? `@${m.by} banned @${m.author} from #${channel.name}`
+                        : `@${m.by} unbanned @${m.author} in #${channel.name}`}
+                    {m.note ? <small>Reason: “{m.note}”</small> : null}
+                    <small>{relTime(m.createdAt, now)}</small>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </FeedDialog>
   );
 }

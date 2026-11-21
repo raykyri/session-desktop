@@ -74,6 +74,16 @@ test.describe("focus and Escape", () => {
       .click();
     const field = side.getByRole("textbox", { name: "Ask about the answer" });
     await field.fill("draft");
+    // A scroll removes the selection actions; start from a feed at rest at
+    // its top, where the composer's menus are in view.
+    const scroller = page.locator("[data-shell-scroll]");
+    await expect
+      .poll(() =>
+        scroller.evaluate((el) => (el.scrollTo({ top: 0, behavior: "instant" }), el.scrollTop)),
+      )
+      .toBe(0);
+    await page.waitForTimeout(300);
+    await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBe(0);
     // A selection in the answer shows its actions.
     await page.locator(`#pr-${FIRST_ASK} [data-passage="2"]`).evaluate((el) => {
       const range = document.createRange();

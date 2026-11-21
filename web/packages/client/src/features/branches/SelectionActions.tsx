@@ -59,11 +59,16 @@ export function SelectionActions({
     const read = (keyboard: boolean) => {
       const prose = proseRef.current;
       const selection = document.getSelection();
-      // Focus moving into a field moves the selection there; the actions
-      // stay until a pointer, a scroll or Escape removes them.
+      // Focus moving elsewhere (a field, a menu) moves the selection there;
+      // the actions stay until a pointer, a scroll or Escape removes them. A
+      // selection change inside an answer (a keyboard deselect, or a
+      // selection in another answer) removes them.
       const hide = () => {
-        const active = document.activeElement;
-        if (keyboard && active && active.matches("textarea, input")) return;
+        if (keyboard) {
+          const node = selection?.anchorNode;
+          const at = node ? (node.nodeType === 1 ? (node as Element) : node.parentElement) : null;
+          if (!at?.closest(".answer")) return;
+        }
         setShown(null);
       };
       if (!prose || !selection || selection.rangeCount === 0 || selection.isCollapsed)
