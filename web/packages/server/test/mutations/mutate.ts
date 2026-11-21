@@ -1583,6 +1583,12 @@ const MUTATIONS: Mutation[] = [
     from: '  return row !== null && view(deps, row).status === "valid" ? row.sealed : null;',
     to: '  return row?.status === "valid" ? row.sealed : null;',
   },
+  {
+    name: "M5b-28 S5: the step boundary checks the limits of the step that ended, not the next",
+    file: "src/runs/loop.ts",
+    from: "              payForNextStep(done.length);\n",
+    to: "",
+  },
   // ---- M5b test-strength review: breakages no test caught, named by the review's row ----
   {
     name: "M5b-T1 A1: included usage at the allowance leaves it unspent",
@@ -2430,6 +2436,9 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
   },
   "M5b-27": {
     tests: ["K4, K8: a stored key that does not open is no payer"],
+  },
+  "M5b-28": {
+    tests: ["K9: a step that crosses allowance plus overdraft with billing key moves to the key"],
   },
   "M5b-T1": { tests: ["K9: included usage exactly at the allowance spends it"] },
   "M5b-T2": {

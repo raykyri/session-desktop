@@ -522,9 +522,11 @@ checkpoint.
   the last turn, and the run ends `complete` with the note "Stopped: this
   week's included tokens ran out." (E5). Overdraft does not carry into the
   next week.
-- The step-boundary check counts the estimated input of the next request: a
-  request whose input would reach allowance plus the limit, or the run's
-  token cap, is not made, and the run stops there as at a checkpoint. A call
+- The step-boundary check applies the limits of the next step's payer (a
+  step that moves to the person's key is not stopped by the overdraft limit)
+  and counts the estimated input of the next request: a request whose input
+  would reach allowance plus the limit, or the run's token cap, is not made,
+  and the run stops there as at a checkpoint. A call
   therefore starts only while its input estimate fits, and each running
   attempt passes the limit by at most one checkpoint interval of output,
   plus the amount by which the provider's input count exceeds the estimate.

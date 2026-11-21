@@ -646,9 +646,13 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
               }
               return keyLost;
             },
-            // the next request's input counts: it opens its ledger row with
-            // it, before the first checkpoint can stop the call
+            // the limits of the next step's payer, decided first (K9: past the
+            // allowance with billing `key` the next step is the key's, which
+            // the overdraft limit does not stop); the next request's input
+            // counts: it opens its ledger row with it, before the first
+            // checkpoint can stop the call
             ({ steps: done }) => {
+              payForNextStep(done.length);
               const reason = budget.stopReason(
                 current?.payer ?? request.payer,
                 nextInputEstimate(done.at(-1)?.content),

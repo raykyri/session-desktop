@@ -50,6 +50,26 @@ test("an included run that crosses the allowance moves to the member's Anthropic
   t.is(finish?.summary.note, undefined, "key-paid steps are not stopped by the overdraft limit");
 });
 
+test("K9: a step that crosses allowance plus overdraft with billing key moves to the key, not to the stop", async (t) => {
+  // allowance 1 plus overdraft 1,000: the first step's 940 and the next
+  // request's input pass the limit, but the next step is the key's
+  const harness = createLoopHarness(t, {
+    allowances: keyBilling,
+    env: { SESSION_OVERDRAFT_TOKENS: "1000" },
+  });
+  const user = harness.addUser("crosser-near-the-limit");
+  const request = harness.runRequest(user.id, "fixture:success-with-tools", {
+    model: "claude-fable",
+  });
+
+  t.is((await harness.agent.run(request)).outcome, "complete");
+  const rows = harness.ledger.rows({ runId: request.runId });
+  t.is(rows[0]?.payer, "included");
+  t.true(rows.length >= 2);
+  t.true(rows.slice(1).every((row) => row.payer === "key:anthropic"));
+  t.is(harness.store.finishes(request.runId)[0]?.summary.note, undefined);
+});
+
 test("with billing pause the run continues on overdraft", async (t) => {
   const harness = createLoopHarness(t, {
     allowances: { ...keyBilling, billing: () => "pause" },
