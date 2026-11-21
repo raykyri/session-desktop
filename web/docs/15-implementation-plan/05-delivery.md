@@ -163,8 +163,7 @@ Scope:
   and device-run parts that are not built and the removal of the effect
   queue (question Q1); ADR-5 amended for
   X sign-in (`04` Z2); ADR-23 (user API keys, model payers, the weekly
-  allowance, runtime model settings; `03` §6, K15) drafted for decision
-  before M5b.
+  allowance, runtime model settings; `03` §6, K15), accepted before M5b.
 
 Exit criteria:
 - `cd web/packages/replica-proto && npm test && npm run mutate` exits 0.
