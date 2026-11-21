@@ -58,15 +58,21 @@ export function boundedText(v: string, max: number): string | null {
 }
 
 /** A look-up phrase (`03` G2): 1 to 4 words once the characters that are not
- * letters or digits are trimmed from both ends, so a selection must start and
- * end on word boundaries; null otherwise. */
+ * letters, combining marks or digits are trimmed from both ends, so a
+ * selection must start and end on word boundaries; null otherwise.
+ *
+ * The `\p{L}`, `\p{M}` and `\p{N}` classes follow the Unicode version of
+ * the JavaScript engine, so a browser and the server may trim a phrase with
+ * a newly assigned character differently. That is accepted: the client's
+ * prediction is replaced by the server's stored `look` and `q` when the write
+ * is confirmed (rebase, `01` Y11; M1b review 8). */
 export function lookPhrase(v: string): string | null {
-  const s = v.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+  const s = v.replace(/^[^\p{L}\p{M}\p{N}]+|[^\p{L}\p{M}\p{N}]+$/gu, "");
   const words = s.split(/\s+/).filter(Boolean);
   return words.length >= 1 && words.length <= 4 ? words.join(" ") : null;
 }
 
-const WORD_CHAR = /[\p{L}\p{N}]/u;
+const WORD_CHAR = /[\p{L}\p{M}\p{N}]/u;
 
 /** Whether a look-up phrase is whole words of the passage it was selected in
  * (`03` G2: the selection starts and ends on word boundaries): it occurs in
@@ -88,11 +94,13 @@ export function onWordBoundaries(phrase: string, quote: string): boolean {
 export const LOOKUP_PROMPT_V1 = (phrase: string) =>
   `Look up "${phrase}" as it is used in this answer. Describe what it refers to in two or three sentences, with a source.`;
 
-/** The handles a text mentions (`@handle`), once each, in order. */
+/** The handles a text mentions (`@handle`), once each, in order. Trailing
+ * `.`, `_` and `-` are punctuation, not part of the handle ("@mona_",
+ * "@otto-": M1b review 15). */
 export function mentionsIn(t: string): string[] {
   const out: string[] = [];
   for (const m of t.matchAll(/(?:^|[^a-z0-9._@-])@([a-z0-9][a-z0-9._-]{0,63})/g)) {
-    const h = (m[1] ?? "").replace(/[.]+$/, "");
+    const h = (m[1] ?? "").replace(/[._-]+$/, "");
     if (h && !out.includes(h)) out.push(h);
   }
   return out;

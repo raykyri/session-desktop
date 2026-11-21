@@ -15,7 +15,7 @@ test("G4: a comment writes a comment record and never a run, and changes no coun
   t.like(w.get(`comment:${c}`), { th, node: n, parent: null, u: "otto", t: "Nice." });
   t.is(w.all("run").length, runs);
   t.deepEqual(w.get(`counts:${th}`), counts);
-  // nested one level, on the same node
+  // nested to any depth, on the same node
   const sub = w.id();
   ok(t, w.apply("mel", "comments.create", { id: sub, thread: th, node: n, t: "x", parent: c }));
   refused(
@@ -23,11 +23,9 @@ test("G4: a comment writes a comment record and never a run, and changes no coun
     w.apply("mel", "comments.create", { id: w.id(), thread: th, node: "r", t: "x", parent: c }),
     "NOT_FOUND",
   );
-  refused(
-    t,
-    w.apply("mel", "comments.create", { id: w.id(), thread: th, node: n, t: "x", parent: sub }),
-    "NOT_FOUND",
-  );
+  const deep = w.id();
+  ok(t, w.apply("mel", "comments.create", { id: deep, thread: th, node: n, t: "x", parent: sub }));
+  t.like(w.get(`comment:${deep}`), { parent: sub });
   const p = post(t, w, "mel", open);
   refused(
     t,
@@ -50,5 +48,17 @@ test("an author's edit of a comment compares its rev; a delete keeps a top-level
   t.deepEqual(ok(t, w.apply("otto", "comments.delete", { id: c })), { kept: true });
   t.like(w.get(`comment:${c}`), { t: "" });
   t.deepEqual(ok(t, w.apply("mel", "comments.delete", { id: sub })), { kept: false });
+  t.is(w.get(`comment:${sub}`), undefined);
+});
+
+test("a top-level comment with only its author's comments under it goes with them (M1b review 9)", (t) => {
+  const { w, open } = cast(t);
+  const th = ask(t, w, "mel", open);
+  const c = w.id();
+  const sub = w.id();
+  ok(t, w.apply("otto", "comments.create", { id: c, thread: th, node: "r", t: "x" }));
+  ok(t, w.apply("otto", "comments.create", { id: sub, thread: th, node: "r", t: "y", parent: c }));
+  t.deepEqual(ok(t, w.apply("otto", "comments.delete", { id: c })), { kept: false });
+  t.is(w.get(`comment:${c}`), undefined);
   t.is(w.get(`comment:${sub}`), undefined);
 });

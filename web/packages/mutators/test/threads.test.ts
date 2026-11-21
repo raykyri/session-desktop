@@ -123,6 +123,32 @@ test("a deleted thread with replies stays as a shell; one without is gone and le
   t.is(w.get(`save:otto:${lone}`), undefined);
 });
 
+test("nothing is added to a gone thread: replies, nodes, comments and saves (M1b review 10)", (t) => {
+  const { w, open } = cast(t);
+  const p = post(t, w, "mel", open);
+  const a = ask(t, w, "mel", open);
+  ok(t, w.apply("mel", "threads.delete", { id: p }));
+  ok(t, w.apply("mel", "threads.delete", { id: a }));
+  t.like(w.get(`thread:${a}`), { gone: true });
+  const gone = (u: string, name: string, input: unknown) =>
+    t.like(refused(t, w.apply(u, name, input), "PRECONDITION_FAILED"), {
+      message: "This thread was deleted.",
+    });
+  gone("otto", "research.createPostFollowUp", { id: w.id(), thread: p, t: "late" });
+  gone("otto", "saved.set", { kind: "thread", id: p, on: true });
+  gone("otto", "research.forkNode", {
+    id: w.id(),
+    thread: a,
+    parent: "r",
+    kind: "ask",
+    q: "late",
+    ...MODEL,
+  });
+  gone("otto", "comments.create", { id: w.id(), thread: a, node: "r", t: "late" });
+  // taking a save back still works
+  ok(t, w.apply("otto", "saved.set", { kind: "thread", id: p, on: false }));
+});
+
 test("G5: opening a branch as its own thread copies its question and answer and starts no run", (t) => {
   const { w, open } = cast(t);
   const th = ask(t, w, "mel", open);

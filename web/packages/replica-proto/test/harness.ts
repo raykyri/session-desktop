@@ -1,5 +1,6 @@
-// The suite's only link to an implementation is `makeServer`. A later server
-// half runs this suite by exporting a `ServerFactory` here instead.
+// The suite's only link to an implementation is `makeServer`: the server half
+// of `@session/sync` on its in-memory store (M2), or with
+// `REPLICA_PROTO_SERVER=proto` the prototype server, kept as the reference.
 
 import type { ExecutionContext } from "ava";
 
@@ -7,6 +8,7 @@ import {
   PROTOCOL_VERSION,
   ReplicaClient,
   createProtoServer,
+  createSyncTestServer,
   ulid,
   type Actor,
   type ApplyResult,
@@ -20,7 +22,8 @@ import {
 } from "../src/index.js";
 
 /** The server under test. */
-export const makeServer: ServerFactory = createProtoServer;
+export const makeServer: ServerFactory =
+  process.env["REPLICA_PROTO_SERVER"] === "proto" ? createProtoServer : createSyncTestServer;
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;

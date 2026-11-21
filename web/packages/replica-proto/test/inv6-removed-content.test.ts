@@ -497,13 +497,15 @@ test("hiding and removing redact every text field: question, title, summary, nod
       parent: fu,
       kind: "lookup",
       look: "MK-LK-P",
+      quote: "MK-LK-P",
       ...MODEL,
     }),
   );
   await ok(t, w.as("otto", "research.createPostFollowUp", { id: rp, thread: post, t: "MK-RP-T" }));
   await ok(t, w.as("otto", "comments.create", { id: cm, thread: ask, node: fu, t: "MK-CM-T" }));
   const markers = (s: unknown) => (JSON.stringify(s).match(/MK-[A-Z]+-[A-Z]+/g) ?? []).sort();
-  // a look-up's phrase is stored as `look` and inside its prompt `q`
+  // a look-up's phrase is stored as `look`, inside its prompt `q` and in the
+  // quote it was selected in
   const all = [
     "MK-ASK-Q",
     "MK-ASK-SUM",
@@ -512,6 +514,7 @@ test("hiding and removing redact every text field: question, title, summary, nod
     "MK-FU-A",
     "MK-FU-Q",
     "MK-FU-QT",
+    "MK-LK-P",
     "MK-LK-P",
     "MK-LK-P",
     "MK-POST-Q",
@@ -551,6 +554,7 @@ test("hiding and removing redact every text field: question, title, summary, nod
     "MK-FU-QT",
     "MK-LK-P",
     "MK-LK-P",
+    "MK-LK-P",
     "MK-RP-T",
   ]);
   // removed: no reader gets any of it, and no value at rest holds it
@@ -560,4 +564,20 @@ test("hiding and removing redact every text field: question, title, summary, nod
   for (const u of [null, "eve", "mel", "otto", "mona", "olga"])
     t.deepEqual(await seen(u), [], String(u));
   t.deepEqual(markers(await w.server.scanStorage()), []);
+});
+
+test("removing an ask whose run is still queued erases the run, and no reader gets it again (M1b review 20)", async (t) => {
+  const { w, open } = await cast(t);
+  const a = await thread(t, w, "mel", open, "ask", "queued, then removed", true);
+  t.true(w.server.jobs().some((j) => j.kind === "run"));
+  const before = (await w.server.snapshot(null, `space:${open}`)).cursor;
+  await ok(t, w.as("olga", "moderation.decide", { item: `a:${a}`, decision: "removed" }));
+  t.false([...w.server.dump().values()].some((x) => x.kind === "run" && x.th === a));
+  t.false(
+    w.server.jobs().length > 0 &&
+      [...w.server.dump().values()].some((x) => x.kind === "run" && x.th === a),
+  );
+  const p = await w.server.pull(null, `space:${open}`, before);
+  if ("resync" in p) return t.fail("resync");
+  t.true(p.changes.some((c) => c.op === "del" && c.key.startsWith("run:")));
 });

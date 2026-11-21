@@ -1,7 +1,10 @@
-// Replies to a post (`01` C5, C15): one level of nesting, a reply's parent
-// is a top-level reply. The author edits (comparing the reply's rev) and
-// deletes: a top-level reply with replies under it stays as an empty shell
-// (`t: ""`, `del`), one without is erased.
+// Replies to a post (`01` C5, C15), nested to any depth as the mockup and
+// `02` §4.2 have them (the client caps the indent): a reply's parent is any
+// reply of the same post the person may read and that is not removed. The
+// author edits (comparing the reply's rev) and deletes: a reply with someone
+// else's reply anywhere under it stays as an empty shell (`t: ""`, `del`);
+// otherwise it is erased with the author's own replies under it (M1b review
+// 9).
 
 import { canRead } from "./access.js";
 import { Notifier } from "./notify.js";
@@ -10,8 +13,10 @@ import {
   M,
   bad,
   deleted,
+  itemsUnder,
   notAuthor,
   notFound,
+  notGone,
   ownOrReadable,
   readable,
   readableThread,
@@ -36,10 +41,11 @@ export const REPLIES = {
       const p = readableThread(tx, i.thread);
       if (p.k !== "post") throw bad("thread", "a post");
       if (p.mod === "removed") throw removed();
+      notGone(p);
       if (i.parent !== undefined) {
-        const top = readable(tx, `reply:${i.parent}`, "reply");
-        if (top.th !== p.id || top.parent !== null) throw notFound();
-        if (top.mod === "removed") throw removed();
+        const up = readable(tx, `reply:${i.parent}`, "reply");
+        if (up.th !== p.id) throw notFound();
+        if (up.mod === "removed") throw removed();
       }
       const t = text(i.t, "t");
       tx.create({
@@ -99,10 +105,11 @@ export const REPLIES = {
     run: (tx, i) => {
       const r = ownOrReadable(tx, `reply:${i.id}`, "reply");
       const reads = canRead(tx, r, tx.me);
-      const kept =
-        r.parent === null && tx.list("reply", { th: r.th }).some((x) => x.parent === r.id);
+      const under = itemsUnder(tx.list("reply", { th: r.th }), r.id);
+      const kept = under.some((x) => x.u !== tx.me);
       if (kept) tx.put({ ...r, t: "", del: true });
       else {
+        for (const x of under) tx.del(`reply:${x.id}`);
         tx.del(`reply:${r.id}`);
         recount(tx, tx.byKey(threadKey(r.th)) as ThreadRec);
       }

@@ -8,7 +8,9 @@ import tseslint from "typescript-eslint";
 /** ADR-1: client ──► shared; server ──► shared, db; db ──► shared; shared ──► nothing.
  * mutators ──► shared (`01` §3: shared by the client and the server, so it
  * depends on neither, nor on the prototype).
- * replica-proto (phase 0 prototype) ──► shared, mutators, and nothing imports it. */
+ * sync ──► shared, mutators (`01` §4: the client and server halves of the sync
+ * core; `@session/db` implements its `ServerStore`).
+ * replica-proto (phase 0 prototype) ──► shared, mutators, sync, and nothing imports it. */
 const forbidden = {
   "packages/shared": [
     "@session/db",
@@ -16,13 +18,16 @@ const forbidden = {
     "@session/client",
     "@session/replica-proto",
     "@session/mutators",
+    "@session/sync",
   ],
   "packages/mutators": [
     "@session/db",
     "@session/server",
     "@session/client",
     "@session/replica-proto",
+    "@session/sync",
   ],
+  "packages/sync": ["@session/db", "@session/server", "@session/client", "@session/replica-proto"],
   "packages/db": ["@session/server", "@session/client", "@session/replica-proto"],
   "packages/server": ["@session/client", "@session/replica-proto"],
   "packages/client": ["@session/db", "@session/server", "@session/replica-proto"],
@@ -54,6 +59,37 @@ const nondeterministic = {
       group: ["crypto", "node:crypto", "node:perf_hooks", "perf_hooks"],
       message: `${DETERMINISTIC}: randomness comes from ctx.random().`,
     },
+    {
+      group: ["@session/shared/*"],
+      message: `${DETERMINISTIC}: import only the spaces contract and the model registry from @session/shared.`,
+    },
+  ],
+  /** `@session/shared` holds formatting and Markdown code too: the mutators
+   * import only the spaces contract and the model registry from it. */
+  paths: [
+    {
+      name: "@session/shared",
+      allowImportNames: ["spaces", "Spaces", "MODEL_REGISTRY", "ReasoningEffort"],
+      message: `${DETERMINISTIC}: import only the spaces contract and the model registry from @session/shared.`,
+    },
+  ],
+  /** Locale-dependent methods, and the global object, through which a
+   * computed name (`globalThis["Da" + "te"]`) reaches what the global and
+   * property bans name. */
+  syntax: [
+    {
+      selector: "MemberExpression[property.name='localeCompare']",
+      message: `${DETERMINISTIC}: compare with < and >, not the locale.`,
+    },
+    {
+      selector: "MemberExpression[property.name=/^toLocale/]",
+      message: `${DETERMINISTIC}: no locale formatting.`,
+    },
+    {
+      // the global object itself, so no global is reached by a computed name
+      selector: "Identifier[name=/^(globalThis|window|self|global)$/]",
+      message: `${DETERMINISTIC}: no global object (a computed name reaches any global).`,
+    },
   ],
 };
 
@@ -70,6 +106,7 @@ const boundaries = Object.entries(forbidden).map(([directory, packages]) => ({
           })),
           ...(directory === "packages/mutators" ? nondeterministic.imports : []),
         ],
+        ...(directory === "packages/mutators" ? { paths: nondeterministic.paths } : {}),
       },
     ],
   },
@@ -185,13 +222,18 @@ export default tseslint.config(
     rules: {
       "no-restricted-globals": ["error", ...nondeterministic.globals],
       "no-restricted-properties": ["error", ...nondeterministic.properties],
+      "no-restricted-syntax": ["error", ...nondeterministic.syntax],
     },
   },
   // the test that mutators read no clock, random source or Intl replaces
   // them with traps, so it names them
   {
     files: ["packages/mutators/test/determinism.test.ts"],
-    rules: { "no-restricted-globals": "off", "no-restricted-properties": "off" },
+    rules: {
+      "no-restricted-globals": "off",
+      "no-restricted-properties": "off",
+      "no-restricted-syntax": "off",
+    },
   },
   // The tRPC client imports the server router's type. `verbatimModuleSyntax`
   // erases an

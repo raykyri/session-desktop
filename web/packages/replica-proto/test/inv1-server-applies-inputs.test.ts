@@ -309,7 +309,10 @@ test("mutators read no clock, no random source and no Intl while the server appl
       w.as("mona", "followups.update", { thread: th, node: fu, q: "F2", base: { rev: node } }),
     );
     await ok(t, w.as("ada", "research.cancelNode", { thread: th, node: look }));
-    await ok(t, w.as("ada", "research.retryNode", { thread: th, node: look, ...MODEL }));
+    await ok(
+      t,
+      w.as("ada", "research.retryNode", { thread: th, node: look, ...MODEL, base: { attempt: 1 } }),
+    );
     await ok(t, w.as("mel", "threads.create", { id: w.id(), from: { th, node: fu } }));
     const c = w.id();
     await ok(t, w.as("ada", "comments.create", { id: c, thread: th, node: fu, t: "C" }));

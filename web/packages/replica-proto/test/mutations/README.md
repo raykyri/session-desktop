@@ -33,10 +33,15 @@ It exits with 1 when a mutation survives.
 
 The mutators, the stored shape and the read rules live in
 `@session/mutators` since M1b: their patterns name `../mutators/src/<file>`.
-Each copy holds a copy of that package too, which the copy of this one
-imports; a mutation there is type-checked in that package and runs its suite
-as well as this one. Build the declarations first (`cd web && npx tsc -b`):
-the copies use them.
+Since M2 the suite runs on `@session/sync` (`src/sync-target.ts` and
+`src/client.ts` wrap its server and client halves), and the patterns that
+named the prototype's server and client name `../sync/src/<file>`, with the
+faults kept; the prototype server (`src/server.ts`) is kept as the reference
+(`REPLICA_PROTO_SERVER=proto npm test`) and is no longer mutated. Each copy
+holds copies of both packages, linked into the copies that import them; a
+mutation there is type-checked in that package and runs its suite as well
+as this one. Build the declarations first (`cd web && npx tsc -b`): the
+copies use them.
 
 A pattern that no longer matches stops the run with an error: when the code
 changes, move the pattern with it and keep the fault the same. Where the code

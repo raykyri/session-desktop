@@ -23,6 +23,7 @@ import {
   MINUTE,
   MODEL,
   World,
+  answer,
   actor,
   cast,
   forkInput,
@@ -270,6 +271,44 @@ test("a fast clock is corrected from the server's time, and the write sent again
   t.true(Math.abs(ulidTime(made[0]?.id ?? "") - w.clock.now()) < MINUTE);
   t.is((w.get(`counts:${made[0]?.id ?? ""}`) as CountsRec).r, 1);
   t.true(Math.abs(mel.now() - w.clock.now()) < 1000);
+  // an ask and a node under it, both reminted: the node names the ask's new
+  // id (M1b review 20). The ask's run is finished first, so the node can be
+  // forked under it: a second client, fast as well
+  const ada = new ReplicaClient(w.server, actor("mel"), { clock: fast, random: w.random });
+  const ask = ada.newId();
+  ada.queue("threads.create", { id: ask, space: open, kind: "ask", q: "an ask, fast", ...MODEL });
+  t.deepEqual(
+    (await ada.flush()).map((r) => (r.ok ? "ok" : r.error.code)),
+    ["ok"],
+  );
+  const asked = [...w.server.dump().values()].find(
+    (r): r is ThreadRec => r.kind === "thread" && r.q === "an ask, fast",
+  );
+  t.not(asked?.id, ask);
+  await answer(w, `thread:${asked?.id ?? ""}`);
+  const fast2 = { now: () => w.clock.now() + 3 * MINUTE };
+  const bea = new ReplicaClient(w.server, actor("mona"), { clock: fast2, random: w.random });
+  const ask2 = bea.newId();
+  bea.queue("threads.create", { id: ask2, space: open, kind: "ask", q: "ask two", ...MODEL });
+  const node = bea.newId();
+  bea.queue("research.forkNode", {
+    id: node,
+    thread: ask2,
+    parent: "r",
+    kind: "ask",
+    q: "under ask two",
+    ...MODEL,
+  });
+  const two = (await bea.flush()).map((r) => (r.ok ? "ok" : r.error.code));
+  // the node is refused only because the ask's run has not ended; it names
+  // the ask's new id, not the one the clock that was off made
+  t.deepEqual(two, ["ok", "PRECONDITION_FAILED"]);
+  const fork2 = bea.sent.filter((e) => e.name === "research.forkNode").at(-1);
+  const made2 = [...w.server.dump().values()].find(
+    (r): r is ThreadRec => r.kind === "thread" && r.q === "ask two",
+  );
+  t.is((fork2?.input as { thread?: string } | undefined)?.thread, made2?.id);
+  t.not(made2?.id, ask2);
   // the refusal was not recorded: the same envelope, sent unchanged once the
   // server's clock has caught up with the device's, is applied
   const e = await w.envelope(

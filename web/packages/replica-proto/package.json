@@ -19,6 +19,7 @@
   "dependencies": {
     "@session/mutators": "*",
     "@session/shared": "*",
+    "@session/sync": "*",
     "zod": "^4.6.5"
   }
 }

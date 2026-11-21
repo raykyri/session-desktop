@@ -278,7 +278,9 @@ export const askNodeKindSchema = z.enum(["ask", "lookup"]);
  * is `answer:<id>`. `q` holds the prompt; for a look-up the mutator builds it
  * from a versioned template (`tpl`) and the client shows `look` instead.
  * `quote` is the passage of the parent's answer it was started from, `b` the
- * index of the top-level block that holds it. `promoted`: the thread it was
+ * index of the passage that holds the quote: a top-level block, or an item
+ * of a top-level list (the mockup's `blocksOf`: a top-level paragraph, list
+ * item of a top-level list, heading or table). `promoted`: the thread it was
  * opened as (`03` G5). */
 export const nodeRecordSchema = z
   .object({
@@ -379,8 +381,8 @@ export const answerRecordSchema = z.object({
   rev,
 });
 
-/** A reply to a post (`reply:<id>`), one level of nesting: `parent` is a
- * top-level reply, or null. */
+/** A reply to a post (`reply:<id>`), nested to any depth (the client caps
+ * the indent): `parent` is a reply of the same post, or null. */
 export const replyRecordSchema = z.object({
   kind: z.literal("reply"),
   id: spaceUlidSchema,
@@ -399,7 +401,8 @@ export const replyRecordSchema = z.object({
 });
 
 /** A comment on an ask node (`comment:<id>`, C4): a discussion under a
- * branch without a run, nested like post replies. `node`: `r` for the root.
+ * branch without a run, nested like post replies to any depth: `parent` is
+ * a comment on the same node, or null. `node`: `r` for the root.
  * Moderation key `c:<thread>:<comment>`. */
 export const commentRecordSchema = z.object({
   kind: z.literal("comment"),
@@ -629,7 +632,9 @@ export const forkNodeInputSchema = z.discriminatedUnion("kind", [
     parent: askNodeRefSchema,
     kind: z.literal("lookup"),
     look: words(LOOKUP_PHRASE_MAX),
-    quote: text(QUOTE_MAX).optional(),
+    // the passage the phrase was selected in: required, so the whole-word
+    // check always runs (M1b review 13)
+    quote: words(QUOTE_MAX),
     b: count.optional(),
     model: spaceModelSchema,
     effort: spaceEffortSchema,
@@ -754,12 +759,19 @@ export const spaceMutators = {
     input: z.strictObject(nodeInput),
     result: nullResult,
   },
-  /** Run again: a new attempt with the model and effort the person picks; the
-   * attempt number fences it, so it carries no `base`. */
+  /** Run again: a new attempt with the model and effort the person picks.
+   * `base.attempt`: the attempt of the run the person saw stop; STALE when
+   * the run was retried since (a stale offline retry would otherwise start
+   * another attempt with the old model and effort). */
   "research.retryNode": {
     who: "author",
     online: false,
-    input: z.strictObject({ ...nodeInput, model: spaceModelSchema, effort: spaceEffortSchema }),
+    input: z.strictObject({
+      ...nodeInput,
+      model: spaceModelSchema,
+      effort: spaceEffortSchema,
+      base: z.strictObject({ attempt: count.min(1) }),
+    }),
     result: nullResult,
   },
   // -- replies to posts
