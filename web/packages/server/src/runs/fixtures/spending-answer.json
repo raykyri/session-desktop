@@ -1,0 +1,3048 @@
+{
+  "scenario": "spending-answer",
+  "description": "A long answer streamed over six seconds (600 deltas of 10 tokens, 10 ms apart): long enough that a member near the weekly allowance crosses it and reaches the overdraft limit at a ledger checkpoint, every 2 s, before the answer ends (the billing end-to-end spec, 03 K9).",
+  "steps": [
+    {
+      "delayMs": 10,
+      "parts": [
+        {
+          "type": "stream-start",
+          "warnings": []
+        },
+        {
+          "type": "response-metadata",
+          "id": "fixture-e2e",
+          "modelId": "fixture"
+        },
+        {
+          "type": "text-start",
+          "id": "t0"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Tokens are counted while the call runs. "
+        },
+        {
+          "type": "text-end",
+          "id": "t0"
+        },
+        {
+          "type": "finish",
+          "finishReason": {
+            "unified": "stop",
+            "raw": "end_turn"
+          },
+          "usage": {
+            "inputTokens": {
+              "total": 400,
+              "noCache": 400,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "outputTokens": {
+              "total": 6000,
+              "text": 6000,
+              "reasoning": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -203,6 +203,9 @@ export interface RunsWorldOptions extends HarnessOptions {
   backoffMs?: readonly number[];
   /** Start the dispatcher (default true). */
   start?: boolean;
+  /** The runtime's clock: the usage week, the payer and the dispatcher's
+   * backoff (`Date.now` by default). The sync server keeps its own. */
+  now?: () => number;
 }
 
 const ENDED: RunRec["status"][] = ["complete", "failed", "cancelled", "interrupted"];
@@ -231,6 +234,7 @@ export async function runsWorld(
     fetch: network.fetch,
     providers,
     pollMs: 20,
+    ...(options.now ? { now: options.now } : {}),
     onFailure: (cls) => failures.push(cls),
     ...(options.ledgerCheckpointMs === undefined
       ? {}

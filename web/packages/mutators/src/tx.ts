@@ -5,7 +5,8 @@
 // 1. `pre(ctx, input)`: server only, synchronous. It checks what the client
 //    cannot know and makes server values: an invite code, the limits (20
 //    queued runs per person, `03` L1), the model registry (`03` K11, K13). It
-//    may refuse. Its clock and random source come from `ctx`.
+//    may refuse. Its clock and random source come from `ctx`. It decides
+//    who pays for a run the write queues (`03` K8).
 // 2. `can` and `run(tx, input, values)`: deterministic over a synchronous
 //    `tx`, run by the client (prediction) and the server (authority). They
 //    read the time from `tx.now`, never a clock, use no random source, `Intl`
@@ -102,6 +103,18 @@ export interface NotifyCtx {
 /** Values the pre-check stage makes for `run` (server only). */
 export type ServerValues = Readonly<Record<string, string>>;
 
+/** What the payer of a run is decided from (`03` K8): server-only state a
+ * client does not hold, read when the write applies. */
+export interface PayerFacts {
+  /** Whether the person has included tokens left this week, the ledger's
+   * open rows counted (`03` K1, K3). */
+  includedLeft: boolean;
+  /** The Usage page's setting for when included tokens run out (`03` K7). */
+  billing: "pause" | "key";
+  /** The providers the person has a `valid` key for (`03` K4). */
+  keys: readonly ("anthropic" | "openai")[];
+}
+
 /** What `pre` may read: the server's clock and random source, and the
  * server-only state the limits need. */
 export interface PreCtx {
@@ -113,6 +126,10 @@ export interface PreCtx {
   inviteCodeTaken(code: string): boolean;
   /** How many runs the actor has with status `queued` (`03` L1). */
   queuedRuns(): number;
+  /** What the payer of a run the actor queues is decided from (`03` K8).
+   * Absent where a server keeps no ledger (the prototype's suite): a run is
+   * paid by its model's first payer. */
+  payerFacts?(): PayerFacts;
   /** Takes one use of the actor's `pre`-stage limit (`04` Z1): false when
    * it is used up, and the write is refused with TOO_MANY_REQUESTS, which is
    * not recorded. Absent where a server applies no limits (the prototype's

@@ -4,6 +4,7 @@
 // run that ended `failed { why: "error", cls }`, and the copy of the other
 // `fail.why` values.
 
+import { OUT_OF_TOKENS_TEXT as SPACES_OUT_OF_TOKENS_TEXT } from "../schemas/spaces.js";
 import type { RunFailure } from "../types/spaces.js";
 
 /** The provider error classes of `runErrorClassSchema`, and `rate_limited`,
@@ -34,8 +35,7 @@ export const RUN_ERROR_COPY: Readonly<Record<RunErrorCopyClass, string>> = {
 
 /** `03` K8: the toast of an ask sent with no payer, and the reason of a run
  * that ended `tokens`. */
-export const OUT_OF_TOKENS_TEXT =
-  "You're out of tokens until Friday. You can still post, or add an API key in Usage.";
+export const OUT_OF_TOKENS_TEXT = SPACES_OUT_OF_TOKENS_TEXT;
 
 /** The reason a failed run shows, by `fail.why`. */
 export function runFailureText(fail: Pick<RunFailure, "why" | "cls">): string {

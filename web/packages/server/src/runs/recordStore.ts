@@ -35,6 +35,7 @@ import { RunTables, preferences, users } from "@session/db";
 import {
   bannedFrom,
   canRead,
+  firstPayer,
   nodeKey,
   threadKey,
   turnKey,
@@ -48,7 +49,6 @@ import {
   type Tx,
 } from "@session/mutators";
 import type { Spaces, Turn } from "@session/shared";
-import { findModel } from "@session/shared";
 
 import type { SyncService } from "../sync/service.js";
 
@@ -147,13 +147,11 @@ function failOf(fail: RunFailure | undefined): RunRec["fail"] {
   };
 }
 
-/** The payer an attempt asks for before the dispatcher re-checks it (`03`
- * K8, K10): included tokens for every model that may run on them, the
- * member's key for a key-only model. */
-export function requestedPayer(model: string): Payer {
-  const entry = findModel(model);
-  if (!entry || entry.payers.includes("included")) return "included";
-  return entry.payers.find((p) => p !== "included") ?? "included";
+/** The payer a queued run was written with (`03` K8): `pay`, decided in
+ * `pre`; for a record written before runs carried one, its model's first
+ * payer. The dispatcher decides it again at the claim (K10). */
+export function queuedPayer(run: RunRec): Payer {
+  return (run as Partial<Pick<RunRec, "pay">>).pay ?? firstPayer(run.model);
 }
 
 /** Whether `results` answers tool calls of the stored step `step`, which
@@ -248,6 +246,11 @@ export class RecordRunStore implements RunStore {
   /** Stop watching commits. */
   close(): void {
     this.#unsubscribe();
+  }
+
+  /** The account id of a handle, or null. */
+  accountOf(handle: string): string | null {
+    return this.#accountOf(handle);
   }
 
   // ── helpers ────────────────────────────────────────────────────────────
@@ -619,7 +622,7 @@ export class RecordRunStore implements RunStore {
         userId: this.#accountOf(run.u) ?? "",
         model: run.model,
         effort: run.effort,
-        payer: requestedPayer(run.model),
+        payer: queuedPayer(run),
         queuedAt: this.#place(run),
       }))
       .sort((a, b) => a.queuedAt - b.queuedAt);
@@ -654,6 +657,8 @@ export class RecordRunStore implements RunStore {
       const startedAt = run.startedAt ?? tx.now;
       tx.put({
         ...run,
+        // the payer of the dispatcher's re-check (`03` K10)
+        pay: queued.payer,
         status: "running",
         fail: null,
         startedAt,

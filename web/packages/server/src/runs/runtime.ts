@@ -2,7 +2,8 @@
 // E1-E5): the run store over the records, the service that runs attempts,
 // and the dispatcher that claims queued runs. The store tells the service
 // when a write stopped an attempt (a cancel, a retry, a removal), and the
-// dispatcher when a write queued a run.
+// dispatcher when a write queued a run. The sync server's `pre` stage reads
+// the payer facts of the run's asker through it (`03` K8).
 
 import type { SessionDatabase } from "@session/db";
 
@@ -11,6 +12,7 @@ import type { Logger } from "../logger.js";
 import type { SyncService } from "../sync/service.js";
 
 import type { Allowances } from "./allowance.js";
+import { payerFacts } from "./allowance.js";
 import type { Dispatcher } from "./dispatcher.js";
 import { createDispatcher } from "./dispatcher.js";
 import type { Ledger } from "./ledger.js";
@@ -83,6 +85,22 @@ export function createRunsRuntime(deps: RunsRuntimeDeps): RunsRuntime {
     stopped: (runId) => service.cancel(runId),
     queued: () => dispatcher.wake(),
   });
+  // `03` K8: the `pre` stage of a write that queues a run decides its payer
+  // from the ledger (open rows counted), the billing setting and the keys,
+  // as the dispatcher does again at the claim (K10). A handle with no
+  // account has nothing to pay with.
+  const budget = {
+    ledger: deps.ledger,
+    allowances: deps.allowances,
+    limits: deps.config.limits,
+    now: deps.now ?? Date.now,
+  };
+  deps.sync.server.setPayerFacts((handle) => {
+    const userId = store.accountOf(handle);
+    return userId === null
+      ? { includedLeft: false, billing: "pause", keys: [] }
+      : payerFacts(budget, userId);
+  });
   return {
     store,
     service,
@@ -90,6 +108,7 @@ export function createRunsRuntime(deps: RunsRuntimeDeps): RunsRuntime {
     async close() {
       dispatcher.stop();
       store.close();
+      deps.sync.server.setPayerFacts(null);
       await service.drain();
     },
   };

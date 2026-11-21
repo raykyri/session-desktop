@@ -7,6 +7,8 @@ import { accountInvites, accounts, auth, users } from "@session/db";
 import test from "ava";
 
 import { safeReturnTo } from "../src/auth/routes.js";
+import { weekOf } from "../src/runs/ledger.js";
+import { MemoryLedger } from "../src/runs/memoryLedger.js";
 
 import type { Harness } from "./helpers.js";
 import { PUBLIC_ORIGIN, createHarness } from "./helpers.js";
@@ -510,4 +512,25 @@ test("the fixture provider runs the whole handshake in process", async (t) => {
     `/auth/fixture/x/authorize?redirect_uri=${encodeURIComponent("https://evil.example/")}&state=s`,
   );
   t.is(elsewhere.status, 400);
+});
+
+test("test-login's spent records included tokens already spent this week", async (t) => {
+  const ledger = new MemoryLedger();
+  const now = Date.UTC(2026, 10, 24, 12);
+  const harness = createHarness(t, { deps: { ledger, now: () => now } });
+  const signIn = (body: Record<string, unknown>) =>
+    harness.request("/auth/test-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  const response = await signIn({ login: "near-the-allowance", spent: 1_999_000 });
+  t.is(response.status, 200);
+  const { id } = (await response.json()) as { id: string };
+  t.is(ledger.includedUsage(id, weekOf(now)), 1_999_000);
+  t.true(ledger.rows({ userId: id }).every((row) => row.state === "closed"));
+  // anything but a positive whole number records nothing
+  for (const spent of [0, -5, 1.5, "100", null])
+    await signIn({ login: "near-the-allowance", spent });
+  t.is(ledger.rows({ userId: id }).length, 1);
 });

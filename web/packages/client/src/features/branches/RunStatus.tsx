@@ -82,10 +82,10 @@ export function RunControls({ thread, node, run }: { thread: string; node: strin
       type="button"
       className="runbtn"
       onClick={() =>
-        void writes.send("research.retryNode", {
+        void writes.retry({
           thread,
           node,
-          base: { attempt: run.attempt },
+          attempt: run.attempt,
           model: choice.model,
           effort: choice.effort,
         })

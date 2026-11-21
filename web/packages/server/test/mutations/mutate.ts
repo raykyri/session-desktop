@@ -24,7 +24,9 @@
 // store, the ledger, boot); M3-17 on each undo one fix of the M3 and M4
 // reviews, so that each fix's test is shown to fail without it. M5a-1 on
 // cover the owned runs of M5a (the run store and its fence, the loop's
-// limits and endings, the ledger, `/live`, and the mutators' run rules).
+// limits and endings, the ledger, `/live`, and the mutators' run rules);
+// M5b-1 on cover the payer, the allowance and the overdraft of M5b (the
+// pre stage's payer, the claim's re-check, the reset, the crossing).
 //
 // A mutation is killed only when one of its expected tests fails
 // (`EXPECTED`): the runner runs those tests alone, with AVA's `--match`, in
@@ -307,7 +309,7 @@ const MUTATIONS: Mutation[] = [
     // run queue (`01` U6), so the same fault is that record not written
     name: "N16 an ask's queued run is not written",
     file: "../mutators/src/threads.ts",
-    from: '      queueRun(tx, run, tx.byKey(threadKey(i.id)) as ThreadRec, "r", i.model, i.effort);',
+    from: '      queueRun(tx, run, root, "r", i.model, i.effort, payOf(values, i.model));',
     to: "      void queueRun;",
   },
   {
@@ -1409,6 +1411,72 @@ const MUTATIONS: Mutation[] = [
     file: "src/trpc/routers/spaces.ts",
     from: "      return { space: view(store, r, reader) === null ? null : r.s };",
     to: "      return { space: view(store, r, reader) === undefined ? null : r.s };",
+  }, // ---- M5b: the payer, the allowance and the overdraft (03 K3, K8-K10) ----
+  {
+    name: "M5b-1 pre decides no payer: every run is paid by its model's first payer",
+    file: "../mutators/src/rules.ts",
+    from: "  return { pay: prePayer(ctx, model) };",
+    to: "  return { pay: firstPayer(model) };",
+  },
+  {
+    name: "M5b-2 the out-of-tokens refusal carries no reason",
+    file: "../mutators/src/rules.ts",
+    from: 'new Refusal("PRECONDITION_FAILED", spaces.OUT_OF_TOKENS_TEXT, undefined, "out_of_tokens")',
+    to: 'new Refusal("PRECONDITION_FAILED", spaces.OUT_OF_TOKENS_TEXT)',
+  },
+  {
+    name: "M5b-3 the Anthropic key pays whatever the billing setting",
+    file: "../mutators/src/rules.ts",
+    from: '    facts.billing === "key" &&\n',
+    to: "    facts.billing !== undefined &&\n",
+  },
+  {
+    name: "M5b-4 the sync server reads no payer facts",
+    file: "../sync/src/server/server.ts",
+    from: "      if (payer) pre.payerFacts = () => payer(u);",
+    to: "      void payer;",
+  },
+  {
+    name: "M5b-5 a member at the allowance still has included tokens left",
+    file: "src/runs/allowance.ts",
+    from: "    includedLeft: includedUsed(deps, userId) < deps.allowances.weekly(userId),",
+    to: "    includedLeft: includedUsed(deps, userId) <= deps.allowances.weekly(userId),",
+  },
+  {
+    name: "M5b-6 the payer facts ignore the billing setting",
+    file: "src/runs/allowance.ts",
+    from: "    billing: deps.allowances.billing(userId),",
+    to: '    billing: "pause",',
+  },
+  {
+    name: "M5b-7 the claim keeps the payer it was queued with",
+    file: "src/runs/dispatcher.ts",
+    from: "      const payer = entry ? payerAtStart(budgetDeps, run.userId, entry) : run.payer;",
+    to: "      const payer = run.payer as ReturnType<typeof payerAtStart>;\n      void budgetDeps;",
+  },
+  {
+    name: "M5b-8 the claim does not write the payer to the run record",
+    file: "src/runs/recordStore.ts",
+    from: "        pay: queued.payer,\n",
+    to: "",
+  },
+  {
+    name: "M5b-9 the week starts on Thursday",
+    file: "src/runs/ledger.ts",
+    from: "  const sinceFriday = (day.getUTCDay() + 2) % 7;",
+    to: "  const sinceFriday = (day.getUTCDay() + 3) % 7;",
+  },
+  {
+    name: "M5b-10 an included run never moves to the member's key",
+    file: "src/runs/allowance.ts",
+    from: "    if (!this.allowanceSpent()) {\n      return null;\n    }\n    return anthropicKeyFor",
+    to: "    if (this.allowanceSpent() || !this.allowanceSpent()) {\n      return null;\n    }\n    return anthropicKeyFor",
+  },
+  {
+    name: "M5b-11 the overdraft limit is ten times SESSION_OVERDRAFT_TOKENS",
+    file: "src/runs/allowance.ts",
+    from: "    const limit = this.#deps.allowances.weekly(this.#userId) + this.#deps.limits.overdraftTokens;",
+    to: "    const limit = this.#deps.allowances.weekly(this.#userId) + this.#deps.limits.overdraftTokens * 10;",
   },
 ];
 
@@ -1709,6 +1777,61 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
   "M5a-64": { tests: ["T3: /live is a plain read, limited per reader"] },
   "M5a-65": { tests: ["T3: /live is a plain read, limited per reader"] },
   "M5a-66": { tests: ["E1: a thread removed in the second step of its run"] },
+  "M5b-1": {
+    tests: [
+      "K8: an ask while the allowance is spent is refused out_of_tokens",
+      "K8: once the allowance is spent, billing key and a valid Anthropic key pay",
+    ],
+  },
+  "M5b-2": {
+    tests: ["K8: an ask while the allowance is spent is refused out_of_tokens"],
+  },
+  "M5b-3": {
+    tests: ["K8: with billing pause a valid Anthropic key does not pay"],
+  },
+  "M5b-4": {
+    in: "sync",
+    tests: [
+      "K8: an ask queued with tokens left and applied after they ran out is refused",
+      "K8: an ask queued with tokens left and applied once the member's key pays",
+    ],
+  },
+  "M5b-5": {
+    tests: [
+      "K8: an ask while the allowance is spent is refused out_of_tokens",
+      "K10: a run queued while tokens were left and claimed after they ran out ends tokens",
+    ],
+  },
+  "M5b-6": {
+    tests: [
+      "K8: once the allowance is spent, billing key and a valid Anthropic key pay",
+      "K10: the claim decides the payer again and writes it to the run record",
+    ],
+  },
+  "M5b-7": {
+    tests: [
+      "K10: a run queued while tokens were left and claimed after they ran out ends tokens",
+      "a queued run admitted after the allowance is spent ends tokens without a provider call",
+    ],
+  },
+  "M5b-8": {
+    tests: [
+      "K10: the claim decides the payer again and writes it to the run record",
+      "K3, K10: a run queued on the member's key before the reset is claimed on included tokens",
+    ],
+  },
+  "M5b-9": {
+    tests: [
+      "K3: at the reset boundary the week's usage and its runs start again",
+      "the week starts on Friday 00:00 UTC",
+    ],
+  },
+  "M5b-10": {
+    tests: ["an included run that crosses the allowance moves to the member's Anthropic key"],
+  },
+  "M5b-11": {
+    tests: ["two concurrent runs of one member never exceed allowance plus overdraft"],
+  },
 };
 
 /** What one suite said about a mutation. */

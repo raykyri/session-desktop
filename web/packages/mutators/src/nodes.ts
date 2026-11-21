@@ -28,6 +28,7 @@ import {
   nodesUnder,
   notGone,
   ownOrReadable,
+  payOf,
   preRun,
   queueRun,
   readable,
@@ -85,8 +86,8 @@ export const NODES = {
     space: (tx, i) => readableThread(tx, i.thread).s,
     ids: (i) => [i.id],
     can: (_tx, i) => checkModel(i.model, i.effort),
-    pre: preRun,
-    run: (tx, i) => {
+    pre: (ctx, i) => preRun(ctx, i.model),
+    run: (tx, i, values) => {
       const p = readableThread(tx, i.thread);
       if (p.k !== "ask") throw bad("thread", "an ask thread");
       if (p.mod === "removed") throw removed();
@@ -130,7 +131,7 @@ export const NODES = {
         del: false,
         createdAt: tx.now,
       });
-      queueRun(tx, run, p, i.id, i.model, i.effort);
+      queueRun(tx, run, p, i.id, i.model, i.effort, payOf(values, i.model));
       recount(tx, p);
       return { id: i.id, run };
     },
@@ -242,8 +243,8 @@ export const NODES = {
       if (authorAt(tx, i.thread, i.node) !== tx.me) throw notAuthor();
       checkModel(i.model, i.effort);
     },
-    pre: preRun,
-    run: (tx, i) => {
+    pre: (ctx, i) => preRun(ctx, i.model),
+    run: (tx, i, values) => {
       const p = readableThread(tx, i.thread);
       if (p.mod === "removed") throw removed();
       const n = nodeOf(tx, p, i.node);
@@ -258,6 +259,7 @@ export const NODES = {
         ...run,
         model: i.model,
         effort: i.effort,
+        pay: payOf(values, i.model),
         status: "queued",
         attempt: run.attempt + 1,
         step: 0,

@@ -134,38 +134,46 @@ metadata run. Thread invitations by GitHub login: one pending per account
 and thread, at most 100 created per inviter per day.
 In-memory token buckets in Hono middleware (single process).
 
-Usage-level (schema now, enforcement later, `SESSION_ENFORCE_LIMITS=1`):
-per account per UTC day, `daily_tokens` (input + output across all models,
-from `usage_events`) and `daily_runs` (research attempts started, counted
-from the `run` rows of `usage_events`, which deleting the research does not
-remove). `usage_events`
-stores `reasoning_tokens` as a breakdown of `output_tokens` rather than as a
-third bucket — that is how the AI SDK reports it (`04-agent-runtime.md` §13) —
-so the limit check does not double-count reasoning tokens, matching the cost
-estimate recorded on the event. Defaults from env (`SESSION_DAILY_TOKENS=1000000`,
-`SESSION_DAILY_RUNS=10`), overridable per user in `user_limits`; admins exempt.
-Checked at admission (`research.createTree`, `forkNode`, `retryNode`,
-`rerunNode`, `followups.ask`, and the follow-up queue's dispatch), which
-answers `TOO_MANY_REQUESTS` as `03-api-and-events.md` §2 specifies, because
-displaying an explicit error in the query composer provides clearer feedback
-than creating a node that appears queued but cannot execute. Admission counts
-the account's queued questions as runs already spent (a reservation), preventing
-an account from queueing more runs than its remaining daily allowance. The check,
-together with the queued-per-account cap (`SESSION_QUEUED_PER_USER`), runs again inside the
-transaction that admits and queues the node (`admitWithinLimits`), synchronously
-with no asynchronous yield, preventing race conditions where concurrent requests passing
-preliminary checks prior to link resolution might otherwise both be admitted.
+Usage-level: a weekly allowance of included tokens per member, replacing the
+daily token and run limits this section described before
+(`15-implementation-plan/03-agents-and-research.md` §6, K1-K10). Every member is
+metered, admins included.
 
-The dispatcher checks the payer's limits once more before a queued node's
-fresh attempt starts, without the reservation, verifying whether limits were
-lowered or tokens were spent while the node was queued. A node refused there
-stays `queued`; its `run_queue` row is held (`not_before`) until the next UTC
-midnight, and its run `error` is set to "Queued until the daily research limit resets
-at midnight UTC." (or "daily token limit"), which the thread shows in place of its
-queue position. `admin.setLimits` releases the account's held rows at once; the
-dispatcher holds them again if the new limits still refuse them. Starting the run
-clears the error message. A 429 re-queue and a resume continue an existing attempt
-and are not subjected to the midnight hold.
+- Tokens are recorded as they are spent, one `usage_events` row per provider
+  call (the ledger, K1): opened when the call starts, its output checkpointed
+  at most every 2 s, closed however the call ends. Input plus output count,
+  with reasoning tokens inside output as the AI SDK reports them, and cached
+  input at the model's `cachedInputRatio` (K2). Tokens paid by a member's own
+  key are recorded and do not count. Every allowance check reads the ledger
+  including open rows, so a member's concurrent runs see each other's
+  spending.
+- The allowance is `SESSION_WEEKLY_TOKENS` (2,000,000) per member per week,
+  reset Fridays 00:00 UTC (K3).
+- Who pays for a run is decided when the write that queues it applies, in the
+  mutator's `pre` stage (K8): included tokens while any are left; once they
+  are spent, the member's Anthropic key when the Usage page's setting is
+  "Continue on my Anthropic key" (billing `key`) and the model may run on it;
+  otherwise the write is refused `PRECONDITION_FAILED` with reason
+  `out_of_tokens` (recorded), and the client restores the composer's text.
+  The client applies the same rule to `usage.get` before sending and sends
+  nothing while out of tokens. Posts, replies and comments are never refused.
+  The run record carries the payer (`pay`).
+- The dispatcher decides the payer again with the same rule when it claims a
+  queued run (K10); a run nothing can pay for then ends
+  `failed { why: "tokens" }` without a provider call and is not run again at
+  the reset until the member presses Run again.
+- A run on included tokens that crosses the allowance continues at its next
+  step on the member's Anthropic key (billing `key`), or on overdraft (K9).
+  The overdraft is `SESSION_OVERDRAFT_TOKENS` (200,000) per member per week,
+  shared by all of the member's included-token runs; when it is reached each
+  of them stops at its next ledger checkpoint and ends `complete` with
+  "Stopped: this week's included tokens ran out." It does not carry over.
+- Per run: `SESSION_RUN_MAX_TOKENS` (400,000), whoever pays, and at most
+  `SESSION_QUEUED_PER_USER` (20) queued runs per member (L1).
+
+`SESSION_DAILY_TOKENS`, `SESSION_DAILY_RUNS` and `SESSION_ENFORCE_LIMITS` are
+still read and reported by the legacy `usage.summary` procedure and the
+runtime configuration's `limits` (`system.ts`); nothing enforces them.
 
 Sign-up throttling (later): per-IP attempts per hour, minimum GitHub account
 age (`github_created_at`), and sign-up codes as described in §3.

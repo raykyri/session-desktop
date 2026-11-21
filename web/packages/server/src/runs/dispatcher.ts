@@ -10,8 +10,11 @@
 // - fewer than the model provider's cap running here (`SESSION_RUNS_GEMINI`,
 //   `SESSION_RUNS_OPENROUTER`, `SESSION_RUNS_ANTHROPIC`);
 // - not waiting out a 429 backoff;
-// - payable: the payer re-check of K10. A run whose payer is now `none` ends
-//   `failed { why: "tokens" }` without a provider call.
+// - payable: the payer re-check of K10, by the rule `pre` applied when the
+//   run was queued (`payerFor` of `@session/mutators`). A run nothing can
+//   pay for now ends `failed { why: "tokens" }` (or `key`, for a key-only
+//   model without its key) without a provider call; otherwise the claim
+//   writes the payer to the run record (`pay`).
 //
 // A 429 re-queues the run with backoff 5 s, 20 s, 60 s; the next 429 fails it
 // `rate` with `at` 60 s ahead (`03` E5). The backoff is kept in memory: after
@@ -22,6 +25,7 @@
 // that has had fewer than two automatic resumes (`03` E2, K1), and delete the
 // in-flight checkpoints no run continues (`01` D4).
 
+import { NO_KEY_TEXT } from "@session/mutators";
 import { OUT_OF_TOKENS_TEXT, findModel } from "@session/shared";
 
 import type { Config } from "../config.js";
@@ -239,23 +243,31 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
       // again at once, `03` E4): the new one starts once it has
       if (busy.has(run.runId) || !admit(run, at)) continue;
       const entry = findModel(run.model);
-      // `03` K10: the payer is checked again before the attempt starts.
-      const payer = entry ? payerAtStart(budgetDeps, run.userId, entry, run.payer) : run.payer;
-      if (payer === "none") {
+      // `03` K10: the payer is decided again, by the rule of `pre`, before
+      // the attempt starts; the claim writes it to the run record.
+      const payer = entry ? payerAtStart(budgetDeps, run.userId, entry) : run.payer;
+      if (payer === "out_of_tokens" || payer === "no_key") {
         store.settleQueued(
           run,
-          summaryOf(
-            ledger,
-            run.runId,
-            { why: "tokens" },
-            { errorClass: "unknown", message: OUT_OF_TOKENS_MESSAGE, detail: "no payer" },
-          ),
+          payer === "out_of_tokens"
+            ? summaryOf(
+                ledger,
+                run.runId,
+                { why: "tokens" },
+                { errorClass: "unknown", message: OUT_OF_TOKENS_MESSAGE, detail: "no payer" },
+              )
+            : summaryOf(
+                ledger,
+                run.runId,
+                { why: "key" },
+                { errorClass: "auth", message: NO_KEY_TEXT, detail: "no key for a key-only model" },
+              ),
         );
         continue;
       }
-      const request = store.claim(run);
+      const request = store.claim({ ...run, payer });
       if (request === null) continue;
-      start({ ...request, payer }, entry?.provider ?? null);
+      start(request, entry?.provider ?? null);
       started += 1;
     }
     return started;
