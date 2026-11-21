@@ -50,12 +50,6 @@ let reloading = false;
 export function upgradeRequired(deps: UpgradeDeps = browserDeps()): "reload" | "message" | "none" {
   if (reloading) return "none";
   if (useUpgradeStore.getState().stuck) return "message";
-  for (const keep of before)
-    try {
-      keep();
-    } catch {
-      // a draft that could not be kept does not stop the reload
-    }
   const now = deps.now();
   let last = Number.NaN;
   try {
@@ -72,6 +66,14 @@ export function upgradeRequired(deps: UpgradeDeps = browserDeps()): "reload" | "
   } catch {
     // reload without the record: a loop is then bounded by the server
   }
+  // only before a reload: without one the writes stay "Not sent", with
+  // their own Retry and Discard
+  for (const keep of before)
+    try {
+      keep();
+    } catch {
+      // a draft that could not be kept does not stop the reload
+    }
   reloading = true;
   deps.reload();
   return "reload";
