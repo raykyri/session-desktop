@@ -81,6 +81,17 @@ export interface UsageRunsPage {
 
 const cursorOf = (run: { startedAt: number; runId: string }) => `${run.startedAt}:${run.runId}`;
 
+/** Whether `run` comes after the cursor's run in the listing's order
+ * (newest `startedAt` first, then run id descending). A cursor whose run is
+ * gone still pages from where it was; a malformed one starts over. */
+function isAfterCursor(run: { startedAt: number; runId: string }, cursor: string): boolean {
+  const split = cursor.indexOf(":");
+  const at = Number(cursor.slice(0, split));
+  const runId = cursor.slice(split + 1);
+  if (split < 0 || !Number.isFinite(at)) return true;
+  return run.startedAt < at || (run.startedAt === at && run.runId < runId);
+}
+
 function hasValidAnthropicKey(
   ctx: { db: Parameters<typeof keyRepo.find>[0] },
   userId: string,
@@ -116,7 +127,8 @@ export const usageProcedures = {
       const allowance = ctx.config.limits.weeklyTokens;
       const all = ctx.ledger.runsOf(ctx.user.id, weekOf(ctx.now()));
       const after = input?.cursor ?? null;
-      const start = after === null ? 0 : all.findIndex((run) => cursorOf(run) === after) + 1;
+      const found = after === null ? 0 : all.findIndex((run) => isAfterCursor(run, after));
+      const start = found < 0 ? all.length : found;
       const page = all.slice(start, start + limit);
       const last = page.at(-1);
       return {

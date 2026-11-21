@@ -207,6 +207,8 @@ export const modelsQueryOptions = () =>
     staleTime: 60_000,
   });
 
+type WeeklyUsageReading = Awaited<ReturnType<typeof getWeeklyUsage>>;
+
 export function useWeeklyUsage(enabled = true) {
   return useQuery({ ...weeklyUsageQueryOptions(), enabled });
 }
@@ -228,22 +230,50 @@ export function useSetBilling() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: setBilling,
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.weeklyUsage() }),
-  });
-}
-
-export function useSetApiKey() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: setApiKey,
+    onSuccess: ({ billing }) =>
+      client.setQueryData<WeeklyUsageReading>(queryKeys.weeklyUsage(), (old) =>
+        old ? { ...old, billing } : old,
+      ),
     onSettled: () => client.invalidateQueries({ queryKey: queryKeys.weeklyUsage() }),
   });
 }
 
+/** The saved key goes into the cached reading at once, so its row does not
+ * fall back to "Not set" until the refetch answers. */
+export function useSetApiKey() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: setApiKey,
+    onSuccess: (saved) =>
+      client.setQueryData<WeeklyUsageReading>(queryKeys.weeklyUsage(), (old) =>
+        old
+          ? {
+              ...old,
+              keys: [...old.keys.filter((key) => key.provider !== saved.provider), saved].sort(
+                (a, b) => a.provider.localeCompare(b.provider),
+              ),
+            }
+          : old,
+      ),
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.weeklyUsage() }),
+  });
+}
+
+/** Without an Anthropic key billing is `pause` (03 K7). */
 export function useRemoveApiKey() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: removeApiKey,
+    onSuccess: (_result, provider) =>
+      client.setQueryData<WeeklyUsageReading>(queryKeys.weeklyUsage(), (old) =>
+        old
+          ? {
+              ...old,
+              keys: old.keys.filter((key) => key.provider !== provider),
+              billing: provider === "anthropic" ? "pause" : old.billing,
+            }
+          : old,
+      ),
     onSettled: () => client.invalidateQueries({ queryKey: queryKeys.weeklyUsage() }),
   });
 }

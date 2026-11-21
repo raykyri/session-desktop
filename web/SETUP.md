@@ -205,8 +205,13 @@ fly secrets set -a session-dev \
   LITESTREAM_REPLICA_URL=s3://your-bucket/session \
   AWS_ACCESS_KEY_ID=... \
   AWS_SECRET_ACCESS_KEY=... \
-  SESSION_METRICS_TOKEN="$(openssl rand -hex 32)"
+  SESSION_METRICS_TOKEN="$(openssl rand -hex 32)" \
+  SESSION_SECRET_KEY="$(openssl rand -base64 32)"
 ```
+
+The server refuses to start in production without `SESSION_SECRET_KEY`: it
+encrypts members' API keys at rest. Keep a copy outside Fly; a lost key makes
+every stored API key unreadable, and members have to add theirs again.
 
 Three of those are not optional before real traffic. Without
 `LITESTREAM_REPLICA_URL` the database has no backup. Without

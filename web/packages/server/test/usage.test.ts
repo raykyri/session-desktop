@@ -181,6 +181,12 @@ test("usage.listRuns pages with a cursor; the default page is 6", async (t) => {
     ["run-6", "run-7"],
   );
   t.is(second.nextCursor, null);
+  // A cursor whose run is no longer listed pages from where it was.
+  const gone = await caller.usage.listRuns({ cursor: `${NOW - 5.5 * HOUR}:run-gone` });
+  t.deepEqual(
+    gone.runs.map((run) => run.runId),
+    ["run-6", "run-7"],
+  );
   const small = await caller.usage.listRuns({ limit: 3 });
   t.is(small.runs.length, 3);
   await t.throwsAsync(caller.usage.listRuns({ limit: 0 }));

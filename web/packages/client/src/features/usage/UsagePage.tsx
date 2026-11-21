@@ -115,9 +115,14 @@ function BillingSection({ billing, keys }: { billing: "pause" | "key"; keys: Key
   const anthropic = keys.find((k) => k.provider === "anthropic" && k.status === "valid");
   const openai = keys.find((k) => k.provider === "openai" && k.status === "valid");
   const [error, setError] = useState<string | null>(null);
+  // The choice being written shows at once; a refusal restores the stored one.
+  const [pending, setPending] = useState<"pause" | "key" | null>(null);
+  const current = pending ?? billing;
   const choose = (mode: "pause" | "key") => {
     setError(null);
+    setPending(mode);
     setBilling.mutate(mode, {
+      onSettled: () => setPending(null),
       onSuccess: () =>
         showToast(
           mode === "key"
@@ -143,7 +148,7 @@ function BillingSection({ billing, keys }: { billing: "pause" | "key"; keys: Key
             type="radio"
             name="billing"
             value="pause"
-            checked={billing === "pause"}
+            checked={current === "pause"}
             onChange={() => choose("pause")}
           />{" "}
           <span>
@@ -156,7 +161,7 @@ function BillingSection({ billing, keys }: { billing: "pause" | "key"; keys: Key
             type="radio"
             name="billing"
             value="key"
-            checked={billing === "key"}
+            checked={current === "key"}
             disabled={!anthropic}
             onChange={() => choose("key")}
           />{" "}
