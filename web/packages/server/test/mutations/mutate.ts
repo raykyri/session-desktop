@@ -122,8 +122,14 @@ const MUTATIONS: Mutation[] = [
   {
     name: "X6 the invite code is taken from the client's id",
     file: "../mutators/src/invites.ts",
-    from: "    pre: (ctx) => {\n      const B32",
-    to: "    pre: (ctx, i) => {\n      if (i.id) return { code: i.id.toLowerCase() };\n      const B32",
+    from: '      within(ctx, "invites.create");\n      const B32',
+    to: '      within(ctx, "invites.create");\n      if (i.id) return { code: i.id.toLowerCase() };\n      const B32',
+    also: [
+      {
+        from: "    pre: (ctx) => {\n      // 20 links",
+        to: "    pre: (ctx, i) => {\n      // 20 links",
+      },
+    ],
   },
   {
     name: "X7 an invite link is not used up",
