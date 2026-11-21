@@ -28,6 +28,17 @@
 // that package's suite as well as this one. M1b-1 on cover the checks M1b
 // added (the model registry, the run queue limit, frozen spaces, a parent
 // whose run has not ended, look-up phrases, promotion, cancel and retry).
+// Z4 to Z28 are the M2 build's own mutations that the suite did not kill
+// then, and M2-1 on cover the M2 review's fixes (the window's live threads,
+// rev-merged promotions, serialized reads, applied writes, in-flight drops,
+// the clock, replays, client ids, prediction fullness, savepoints, hidden
+// copies).
+//
+// Before the mutations, the suites run in an unmutated slot: a failure there
+// stops the run (a mutation is not killed by a test that fails anyway). A
+// mutation's type check does not decide whether it is killed: the suites
+// run on the sources as they are, and the run lists the mutations whose copy
+// does not type-check separately.
 
 import { spawn } from "node:child_process";
 import {
@@ -950,6 +961,279 @@ const MUTATIONS: Mutation[] = [
     from: '      const under = itemsUnder(tx.list("reply", { th: r.th }), r.id);',
     to: '      const under = tx.list("reply", { th: r.th }).filter((x) => x.parent === r.id);',
   },
+  // ---- M2: the sync server and client (Z: the M2 build's own runs; M2-: the M2 review's fixes) ----
+  {
+    name: "Z4 a re-attach counts against the daily limit",
+    file: "../sync/src/server/server.ts",
+    from: "          store.putClient({ ...c, seen: now });\n          return { ok: true, clientId: c.clientId",
+    to: "          { const reg = (store as unknown as { registrations: Map<string, number[]> }).registrations; reg.set(u, [...(reg.get(u) ?? []), now]); }\n          store.putClient({ ...c, seen: now });\n          return { ok: true, clientId: c.clientId",
+  },
+  {
+    name: "Z6 a dependent write keeps its prediction after the write before it is refused",
+    file: "../sync/src/client/client.ts",
+    from: "    this.overlay = new Map();\n    this.predictions.clear();",
+    to: "    const old = this.overlay;\n    const was = new Map(this.predictions);\n    this.overlay = new Map();\n    this.predictions.clear();",
+    also: [
+      {
+        from: '      if (state !== "applied") continue;\n',
+        to: '      if (state !== "applied") {\n        if (was.get(p.local) === "applied") for (const [k, r] of old) if (!this.overlay.has(k)) this.overlay.set(k, r);\n        continue;\n      }\n',
+      },
+    ],
+  },
+  {
+    name: "Z7 a refused write's prediction is not rolled back",
+    file: "../sync/src/client/client.ts",
+    from: '        this.pendingChanged();\n        this.emit({\n          type: "refused",',
+    to: '        this.emit({\n          type: "refused",',
+  },
+  {
+    name: "Z8 a duplicated tab keeps the stored client id",
+    file: "../sync/src/client/clientIds.ts",
+    from: "    const release = await tryLock(o.locks, stored.clientId);",
+    to: "    const release = (await tryLock(o.locks, stored.clientId)) ?? (() => {});",
+  },
+  {
+    name: "Z9 the window is not capped",
+    file: "../sync/src/server/window.ts",
+    from: "Math.min(settings.cap, Math.max(recent, settings.threads))",
+    to: "Math.max(recent, settings.threads)",
+  },
+  {
+    name: "Z10 the window ignores the newest-N rule",
+    file: "../sync/src/server/window.ts",
+    from: "Math.min(settings.cap, Math.max(recent, settings.threads))",
+    to: "Math.min(settings.cap, recent)",
+  },
+  {
+    name: "Z11 summaries reach back 400 days",
+    file: "../sync/src/server/window.ts",
+    from: "export const SUMMARY_WINDOW = 730 * DAY;",
+    to: "export const SUMMARY_WINDOW = 400 * DAY;",
+  },
+  {
+    name: "Z12 own and saved threads are full for 61 days",
+    file: "../sync/src/server/window.ts",
+    from: "export const OWN_WINDOW = 90 * DAY;",
+    to: "export const OWN_WINDOW = 61 * DAY;",
+  },
+  {
+    name: "Z13 a window snapshot does not send the opened threads",
+    file: "../sync/src/client/client.ts",
+    from: '      ...(tier === "window" && this.opened.size ? { threads: [...this.opened] } : {}),\n',
+    to: "",
+  },
+  {
+    name: "Z15 a re-attach does not count as use of the id",
+    file: "../sync/src/server/server.ts",
+    from: "          store.putClient({ ...c, seen: now });\n          return { ok: true, clientId: c.clientId",
+    to: "          return { ok: true, clientId: c.clientId",
+  },
+  {
+    name: "Z16 PRECONDITION_FAILED is not recorded",
+    file: "../sync/src/wire.ts",
+    from: '  "TOO_LARGE",\n]);',
+    to: '  "TOO_LARGE",\n  "PRECONDITION_FAILED",\n]);',
+  },
+  {
+    name: "Z17 the client ignores a re-attached id's lastSeq",
+    file: "../sync/src/client/client.ts",
+    from: "restore?.acked ?? options.lastSeq ?? 0",
+    to: "restore?.acked ?? 0",
+  },
+  {
+    name: "Z18 the previous cursor key is accepted for ever",
+    file: "../sync/src/server/tokens.ts",
+    from: "if (this.previous && now < this.previous.rotatedAt + PREVIOUS_KEY_TTL)",
+    to: "if (this.previous)",
+  },
+  {
+    name: "Z19 the in-flight policy keeps a failed write queued",
+    file: "../sync/src/client/client.ts",
+    from: 'if (this.policy === "in-flight" && UNRECORDED.has(code)) {',
+    to: "if ((false as boolean) && UNRECORDED.has(code)) {",
+  },
+  {
+    name: "Z20 Discard does not roll back",
+    file: "../sync/src/client/client.ts",
+    from: '    if (p) this.emit({ type: "discarded", local: p.local, name: p.name, input: p.input });\n    this.pendingChanged();',
+    to: '    if (p) this.emit({ type: "discarded", local: p.local, name: p.name, input: p.input });',
+  },
+  {
+    name: "Z25 a thread that arrives by a pull is held as a summary",
+    file: "../sync/src/client/replica.ts",
+    from: '        if (r.kind === "thread" && !s.records.has(c.key)) s.full.add(r.id);\n',
+    to: "",
+  },
+  {
+    name: "Z28 a prediction reads the content index of a summary thread",
+    file: "../sync/src/client/predict.ts",
+    from: "      if (log && CONTENT_KINDS.has(kind) && !this.replica.isFull(log, index.th))",
+    to: "      if (log && CONTENT_KINDS.has(kind) && !this.replica.isFull(log, index.th) && (false as boolean))",
+  },
+  {
+    name: "M2-1 the window counts deleted and removed threads",
+    file: "../sync/src/server/window.ts",
+    from: 'const live = threads.filter((t) => !t.gone && t.mod !== "removed");',
+    to: "const live = threads;",
+  },
+  // package only: the client's merge of a promotion with what it holds; no
+  // server answer changes it, so the acceptance targets cannot differ on it
+  // (@session/sync's suite kills it)
+  {
+    name: "M2-2 a promotion's snapshot overwrites a newer record",
+    file: "../sync/src/client/replica.ts",
+    from: "      if (held && held.rev > record.rev) continue;\n",
+    to: "",
+    packageOnly: true,
+  },
+  // package only: the client's merge of a pull with what it holds; no server
+  // answer changes it, so the acceptance targets cannot differ on it
+  // (@session/sync's suite kills it)
+  {
+    name: "M2-3 a pull overwrites a newer record a promotion brought",
+    file: "../sync/src/client/replica.ts",
+    from: "      if (held && held.rev > r.rev) continue;\n",
+    to: "",
+    packageOnly: true,
+  },
+  // package only: the order in which the client sends its own reads; no server
+  // answer changes it, so the acceptance targets cannot differ on it
+  // (@session/sync's suite kills it)
+  {
+    name: "M2-4 reads of one log are not serialized",
+    file: "../sync/src/client/client.ts",
+    from: "return this.serial(log, () => this.syncNow(log, tier));",
+    to: "return this.syncNow(log, tier);",
+    packageOnly: true,
+  },
+  {
+    name: "M2-5 an applied write's records are not overlaid until a read confirms them",
+    file: "../sync/src/client/client.ts",
+    from: "      for (const [k, r] of a.staged) if (!this.covered(a, k, r)) this.overlay.set(k, r);\n",
+    to: "",
+  },
+  // package only: when the client stops laying an applied write over its
+  // replica; no server answer changes it, so the acceptance targets cannot
+  // differ on it (@session/sync's suite kills it)
+  {
+    name: "M2-6 an applied write's records stay overlaid after a read confirms them",
+    file: "../sync/src/client/client.ts",
+    from: "return logs.length === 0 || logs.some((log) => (this.replica.state(log)?.seq ?? -1) >= a.seq);",
+    to: "return logs.length === 0;",
+    packageOnly: true,
+  },
+  {
+    name: "M2-7 drop takes out the write in flight",
+    file: "../sync/src/client/client.ts",
+    from: "if (!p || p === this.inFlight) return false;",
+    to: "if (!p) return false;",
+  },
+  {
+    name: "M2-8 no answer marks the clock known",
+    file: "../sync/src/client/client.ts",
+    from: "      if (answered) {\n        // an answer",
+    to: "      if ((true as boolean) || answered) {\n        // an answer",
+  },
+  {
+    name: "M2-9 a replay moves the acked seq",
+    file: "../sync/src/client/client.ts",
+    from: "if (!res.replay) this.acked = e.seq;",
+    to: "this.acked = e.seq;",
+  },
+  // package only: claimClientId's lock handling in the tab; no server answer
+  // changes it, so the acceptance targets cannot differ on it (@session/sync's
+  // suite kills it)
+  {
+    name: "M2-10 a re-attach that throws keeps the lock",
+    file: "../sync/src/client/clientIds.ts",
+    from: "      } catch (e) {\n        release();\n        throw e;",
+    to: "      } catch (e) {\n        throw e;",
+    packageOnly: true,
+  },
+  {
+    name: "M2-11 a prediction reads a window snapshot's threads as all of them",
+    file: "../sync/src/client/predict.ts",
+    from: "|| this.replica.fullLog(log);",
+    to: "|| true;",
+  },
+  {
+    name: "M2-12 open() answers full for a thread the replica does not hold",
+    file: "../sync/src/client/client.ts",
+    from: 'if (!log) return "missing";',
+    to: 'if (!log) return "full";',
+  },
+  // package only: the client's bookkeeping of applied writes across ids; no
+  // server answer changes it, so the acceptance targets cannot differ on it
+  // (@session/sync's suite kills it)
+  {
+    name: "M2-13 a new client id keeps the applied writes of the old one",
+    file: "../sync/src/client/client.ts",
+    from: "      this.appliedWrites = [];\n      this.replica.resetSeqs();",
+    to: "      this.replica.resetSeqs();",
+    packageOnly: true,
+  },
+  {
+    name: "M2-14 a snapshot of an unknown tier is served",
+    file: "../sync/src/server/server.ts",
+    from: "    if (!TIERS.has(tier))\n",
+    to: "    if ((false as boolean) && !TIERS.has(tier))\n",
+  },
+  {
+    name: "M2-15 a nested transaction's throw takes back the outer writes too",
+    file: "../sync/src/server/memory.ts",
+    from: "for (const f of undo.splice(mark).reverse()) f();",
+    to: "for (const f of undo.splice(0).reverse()) f();",
+  },
+  {
+    name: "M2-16 hiding a node leaves the answer of the thread opened from it",
+    file: "../mutators/src/moderation.ts",
+    from: '          if (copy?.kind === "answer" && !keep) tx.put({ ...copy, mod });',
+    to: "          void keep;",
+  },
+  {
+    name: "M2-17 another person's client id re-attaches",
+    file: "../sync/src/server/server.ts",
+    from: '          if (!c || c.u !== u || c.seen <= now - this.clientIdleTtl)\n            return { ok: false, error: refuse("WRONG_CLIENT").toError() };\n          store.putClient',
+    to: '          if (!c || c.seen <= now - this.clientIdleTtl)\n            return { ok: false, error: refuse("WRONG_CLIENT").toError() };\n          store.putClient',
+  },
+  // package only: the client's listener loop; no server answer changes it, so
+  // the acceptance targets cannot differ on it (@session/sync's suite kills it)
+  {
+    name: "M2-18 a listener that throws stops the others",
+    file: "../sync/src/client/client.ts",
+    from: "      try {\n        f(changed, { structural });\n      } catch (x) {\n        report(x);\n      }",
+    to: "      f(changed, { structural });",
+    packageOnly: true,
+  },
+  // package only: send()'s bookkeeping in the client; no server answer changes
+  // it, so the acceptance targets cannot differ on it (@session/sync's suite
+  // kills it)
+  {
+    name: "M2-19 a write send() waits for becomes Not sent",
+    file: "../sync/src/client/client.ts",
+    from: "    if (!this.sending.has(p)) {\n      this.unsentWrites.push(p);",
+    to: "    if ((true as boolean) || !this.sending.has(p)) {\n      this.unsentWrites.push(p);",
+    packageOnly: true,
+  },
+  // package only: LiveQuery's equality check; no server answer changes it, so
+  // the acceptance targets cannot differ on it (@session/sync's suite kills it)
+  {
+    name: "M2-20 a query tells its listeners of an equal value",
+    file: "../sync/src/client/query.ts",
+    from: "if (this.runs > 1 && shallowEqual(next, this.value)) return false;",
+    to: "if ((false as boolean) && shallowEqual(next, this.value)) return false;",
+    packageOnly: true,
+  },
+  // package only: the time the client stamps on its own prediction; no server
+  // answer changes it, so the acceptance targets cannot differ on it
+  // (@session/sync's suite kills it)
+  {
+    name: "M2-21 a prediction stamps its writes with the send time",
+    file: "../sync/src/client/client.ts",
+    from: 'new StagedTx(source, me, msToIso(p.queuedAt), p.mutationId, "client")',
+    to: 'new StagedTx(source, me, msToIso(this.now()), p.mutationId, "client")',
+    packageOnly: true,
+  },
 ];
 
 /** What one suite said about a mutation. */
@@ -1060,6 +1344,24 @@ async function run(m: Mutation, dir: string): Promise<Outcome> {
   }
 }
 
+/** The suites of an unmutated slot: this package's and each copied one's.
+ * Returns what failed. */
+async function baseline(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  const tc = await sh("npx", ["tsc", "-p", "tsconfig.test.json", "--noEmit"], dir);
+  if (tc.code !== 0) out.push(`type check: ${tc.out.split("\n")[0] ?? ""}`);
+  const suites = [
+    ["replica-proto", dir],
+    ...COPIED.map((name) => [name, join(dir, "..", name)] as const),
+  ] as const;
+  for (const [name, at] of suites) {
+    const r = results((await sh("npx", ["ava", "--timeout=600s"], at)).out);
+    if (r.failed > 0 || r.passed === 0)
+      out.push(`${name}: ${r.failed} failed, ${r.passed} passed ${JSON.stringify(r.tests)}`);
+  }
+  return out;
+}
+
 /** A mutation is killed when the acceptance suite fails; one marked
  * `packageOnly` (a fault the acceptance suite cannot reach) also when its
  * own package's suite fails. */
@@ -1093,8 +1395,14 @@ const todo = MUTATIONS.filter((m) => !only.length || only.some((o) => selects(o,
 if (only.length && !todo.length) throw new Error(`no mutation has the ids ${only.join(" ")}`);
 const root = mkdtempSync(join(tmpdir(), "replica-proto-mutate-"));
 let survived = 0;
+/** The mutations whose copy does not type-check (listed, not counted). */
+const untyped: string[] = [];
 try {
   const dirs = Array.from({ length: Math.min(slots, todo.length) }, (_, n) => makeSlot(root, n));
+  const base = await baseline(dirs[0] ?? "");
+  if (base.length)
+    throw new Error(`the unmutated copy fails, so no mutation runs:\n${base.join("\n")}`);
+  console.log("baseline: the unmutated copy passes every suite");
   const queue = [...todo];
   await Promise.all(
     dirs.map(async (dir) => {
@@ -1103,6 +1411,7 @@ try {
         const broken = o.suite.passed + o.suite.failed === 0;
         const dead = killed(m, o);
         if (!dead) survived++;
+        if (o.typecheck !== "ok") untyped.push(idOf(m));
         console.log(
           `${broken ? "BROKEN  " : dead ? "killed  " : "SURVIVED"} ${m.name}${m.packageOnly ? " (package only)" : ""}: ${JSON.stringify(o)}`,
         );
@@ -1112,5 +1421,9 @@ try {
 } finally {
   rmSync(root, { recursive: true, force: true });
 }
+if (untyped.length)
+  console.log(
+    `${untyped.length} mutations do not type-check (killed or not by the suites alone): ${untyped.join(" ")}`,
+  );
 console.log(survived ? `${survived} mutations survived` : "every mutation was killed");
 process.exitCode = survived ? 1 : 0;

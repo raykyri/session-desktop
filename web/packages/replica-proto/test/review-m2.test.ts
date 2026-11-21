@@ -79,6 +79,7 @@ test("a failed request leaves the write Not sent with its prediction; Retry send
   await mona.retry(save.local);
   t.is(new Set(mona.sent.filter((e) => e.name === "saved.set").map((e) => e.mutationId)).size, 1);
   t.like(w.get(`save:mona:${p}`), { u: "mona" });
+  t.like(mona.get(`counts:${p}`), { r: 1 }, "the Not sent reply is still shown");
   t.true(mona.discard(r.local));
   t.like(mona.get(`counts:${p}`), { r: 0 });
   t.is(
@@ -91,7 +92,17 @@ test("a failed request leaves the write Not sent with its prediction; Retry send
 test("a prediction shows a write before its answer, rolls back a refusal and is not counted twice after the pull", async (t) => {
   const { w, open } = await cast(t);
   const p = await thread(t, w, "mel", open, "post");
-  const mona = web(w, "mona");
+  // what the view shows when the reply is sent, after its thread's refusal
+  const base = transport(w.server, "mona");
+  const atReply: unknown[] = [];
+  const mona: SyncClient = web(w, "mona", {
+    ...base,
+    apply: (e) => {
+      if (e.name === "research.createPostFollowUp")
+        atReply.push(mona.get(`thread:${th}`) ?? null, mona.get(`reply:${rid}`) ?? null);
+      return base.apply(e);
+    },
+  });
   await mona.sync(`space:${open}`);
   await mona.sync("user:mona");
   mona.queue("saved.set", { kind: "thread", id: p, on: true });
@@ -108,10 +119,12 @@ test("a prediction shows a write before its answer, rolls back a refusal and is 
   await ok(t, w.as("olga", "members.ban", { space: open, user: "mona" }));
   const th = mona.newId();
   const a = mona.queue("threads.create", threadInput(th, open, "post", "banned"));
-  const b = mona.queue("research.createPostFollowUp", { id: mona.newId(), thread: th, t: "x" });
+  const rid = mona.newId();
+  const b = mona.queue("research.createPostFollowUp", { id: rid, thread: th, t: "x" });
   t.is(mona.prediction(a.local), "applied");
   t.is(mona.prediction(b.local), "applied");
   await mona.flush();
+  t.deepEqual(atReply, [null, null], "the reply's prediction rolled back with the thread's");
   t.is(mona.get(`thread:${th}`), undefined);
   t.deepEqual(mona.pending(), []);
 });
@@ -232,6 +245,27 @@ syncOnly(
     const s2 = await w2.w.server.snapshot(actor("mona"), `space:${w2.open}`, { tier: "window" });
     t.true(s2.full?.includes(own));
     t.true(s2.full?.includes(other));
+    // the newest threads when none is recent; summaries back to 2 years; own
+    // threads full for 90 days
+    const w3 = await cast(t, 3, { window: { days: 1, threads: 1, cap: 3 } });
+    const own3 = await thread(t, w3.w, "mona", w3.open, "post", "own");
+    const old3 = await thread(t, w3.w, "mel", w3.open, "post", "old");
+    w3.w.clock.advance(75 * DAY);
+    const mel3 = web(w3.w, "mel");
+    const newest = mel3.newId();
+    const sent = await mel3.send("threads.create", threadInput(newest, w3.open, "post", "newest"));
+    t.true(sent.ok);
+    w3.w.clock.advance(2 * DAY);
+    const at77 = await w3.w.server.snapshot(actor("mona"), `space:${w3.open}`, { tier: "window" });
+    t.true(at77.full?.includes(own3), "an own thread 77 days old is full");
+    t.true(at77.full?.includes(newest), "the newest threads are full when none is recent");
+    w3.w.clock.advance(423 * DAY);
+    const at500 = await w3.w.server.snapshot(actor("mona"), `space:${w3.open}`, { tier: "window" });
+    t.true(
+      at500.records.some((x) => x.key === `thread:${old3}`),
+      "a thread 500 days old is a summary",
+    );
+    t.false(at500.full?.includes(own3), "an own thread 500 days old is not full");
     // a tier the protocol does not have is refused
     await t.throwsAsync(async () =>
       w2.w.server.snapshot(actor("mona"), `space:${w2.open}`, { tier: "all" as never }),

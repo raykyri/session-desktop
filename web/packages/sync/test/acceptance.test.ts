@@ -40,7 +40,17 @@ const codes = (rs: ApplyResult[]) => rs.map((r) => (r.ok ? "ok" : r.error.code))
 
 test("22: a refused thread and the reply under it both roll back, and a listener hears it", async (t) => {
   const { w, open } = cast(t);
-  const otto = client(w, "otto");
+  // what the view shows when the reply is sent, after the thread's refusal
+  const base = w.transport("otto");
+  const atReply: unknown[] = [];
+  const otto: SyncClient = client(w, "otto", {
+    ...base,
+    apply: (e) => {
+      if (e.name === "research.createPostFollowUp")
+        atReply.push(otto.get(`thread:${th}`) ?? null, otto.get(`reply:${reply}`) ?? null);
+      return base.apply(e);
+    },
+  });
   await otto.sync(`space:${open}`);
   await otto.sync("user:otto");
   ok(t, w.as("olga", "members.ban", { space: open, user: "otto" }));
@@ -55,6 +65,7 @@ test("22: a refused thread and the reply under it both roll back, and a listener
   heard.length = 0;
   // the thread is refused, so the reply's thread is not found
   t.deepEqual(codes(await otto.flush()), ["FORBIDDEN", "NOT_FOUND"]);
+  t.deepEqual(atReply, [null, null], "the reply's prediction rolled back with the thread's");
   t.is(otto.get(`thread:${th}`), undefined);
   t.is(otto.get(`reply:${reply}`), undefined);
   t.true(heard.some((keys) => keys.includes(`thread:${th}`)));

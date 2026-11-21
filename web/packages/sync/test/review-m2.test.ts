@@ -1,6 +1,6 @@
 // The M2 reviews' findings on the client and the server half, as tests.
 
-import { MUTATORS, Refusal } from "@session/mutators";
+import { MUTATORS, Refusal, type LogId } from "@session/mutators";
 import test from "ava";
 
 import {
@@ -15,6 +15,7 @@ import {
   type SyncTransport,
 } from "../src/client/index.js";
 import { MemoryStore } from "../src/server/index.js";
+import type { Pull, Snapshot } from "../src/wire.js";
 
 import { DAY, MINUTE, World, actor, cast, ok, post } from "./world.js";
 
@@ -56,6 +57,11 @@ test("1: an applied write's record is not counted twice once the log that holds 
   await mona.sync("user:mona");
   t.deepEqual(mona.get(`save:mona:${p}`), w.get(`save:mona:${p}`));
   t.deepEqual(mona.view(), new Map(mona.replica.all()));
+  // a later change by someone else shows: the applied write's records are
+  // no longer laid over the replica
+  ok(t, w.as("mel", "research.createPostFollowUp", { id: w.id(), thread: p, t: "a reply" }));
+  await mona.sync(`space:${open}`);
+  t.deepEqual(mona.get(`counts:${p}`), w.get(`counts:${p}`));
 });
 
 test("2, 17: a promotion and a pull of the same log run in turn: no reply is lost", async (t) => {
@@ -492,4 +498,96 @@ test("19: a snapshot's tier and threads are validated", (t) => {
   bad({ tier: "window", threads: ["not-an-id"] });
   bad({ tier: "window", threads: Array.from({ length: 501 }, () => w.id()) });
   t.notThrows(() => w.server.snapshot(actor("mona"), `space:${open}`, { tier: "window" }));
+});
+
+test("2: a promotion's snapshot or a pull older than a record the replica holds does not replace it", async (t) => {
+  const w = new World({ window: { days: 1, threads: 1, cap: 1 } });
+  const { open } = cast(t, w);
+  const first = post(t, w, "mel", open, "first");
+  const second = post(t, w, "mel", open, "second");
+  w.clock.advance(2 * DAY);
+  post(t, w, "mel", open);
+  const log: LogId = `space:${open}`;
+  const base = w.transport("mona");
+  let snap: Snapshot | null = null;
+  let pulled: Pull | null = null;
+  const mona = client(w, "mona", {
+    ...base,
+    snapshot: async (l, o) => (o?.tier === "threads" && snap ? snap : base.snapshot(l, o)),
+    pull: async (l, c, o) => pulled ?? base.pull(l, c, o),
+  });
+  const edit = (id: string, q: string) =>
+    ok(t, w.as("mel", "threads.update", { id, q, base: { rev: w.get(`thread:${id}`)?.rev } }));
+  await mona.sync(log, "window");
+  // a promotion's snapshot taken before an edit that a pull then brings
+  snap = await base.snapshot(log, { tier: "threads", threads: [first] });
+  edit(first, "first, edited");
+  await mona.sync(log);
+  t.is(await mona.open(first), "full");
+  t.deepEqual(mona.get(`thread:${first}`), w.get(`thread:${first}`));
+  snap = null;
+  // a pull answered before an edit that a promotion then brings
+  edit(second, "second, edited");
+  pulled = await base.pull(log, mona.replica.state(log)?.cursor ?? "");
+  edit(second, "second, edited again");
+  t.is(await mona.open(second), "full");
+  await mona.sync(log);
+  pulled = null;
+  t.deepEqual(mona.get(`thread:${second}`), w.get(`thread:${second}`));
+});
+
+test("2: reads of one log run one at a time, a promotion's among them", async (t) => {
+  const w = new World({ window: { days: 1, threads: 1, cap: 1 } });
+  const { open } = cast(t, w);
+  const older = post(t, w, "mel", open);
+  w.clock.advance(2 * DAY);
+  post(t, w, "mel", open);
+  const log: LogId = `space:${open}`;
+  const base = w.transport("mona");
+  let active = 0;
+  let most = 0;
+  const one = async <T>(f: () => Promise<T>): Promise<T> => {
+    most = Math.max(most, ++active);
+    try {
+      await new Promise((r) => setImmediate(r));
+      return await f();
+    } finally {
+      active--;
+    }
+  };
+  const mona = client(w, "mona", {
+    ...base,
+    snapshot: (l, o) => one(async () => base.snapshot(l, o)),
+    pull: (l, c, o) => one(async () => base.pull(l, c, o)),
+  });
+  const first = await Promise.all([mona.sync(log, "window"), mona.sync(log, "window")]);
+  const outcomes = await Promise.all([mona.sync(log), mona.open(older), mona.sync(log)]);
+  t.is(most, 1);
+  t.deepEqual(first, ["snapshot", "pull"]);
+  t.deepEqual(outcomes, ["pull", "full", "pull"]);
+});
+
+test("11: the writes applied under an expired id are not laid over the replica once it is read under the new one", async (t) => {
+  const w = new World({ expireEveryCall: true });
+  const { open } = cast(t, w);
+  const p = post(t, w, "mel", open);
+  const mona = client(w, "mona");
+  await mona.sync(`space:${open}`);
+  await mona.sync("user:mona");
+  // seqs 1 to 3 under the first id, applied and not read yet
+  mona.write("prefs.set", { layout: "wide" });
+  mona.write("prefs.set", { layout: "centred" });
+  mona.write("saved.set", { kind: "thread", id: p, on: true });
+  await mona.flush();
+  const old = mona.clientId;
+  w.clock.advance(8 * DAY);
+  // WRONG_CLIENT: a new id, whose seqs start again at 1
+  mona.write("prefs.set", { layout: "wide" });
+  await mona.flush();
+  t.not(mona.clientId, old);
+  ok(t, w.as("otto", "saved.set", { kind: "thread", id: p, on: true }));
+  await mona.sync(`space:${open}`);
+  await mona.sync("user:mona");
+  t.deepEqual(mona.get(`counts:${p}`), w.get(`counts:${p}`));
+  t.deepEqual(mona.view(), new Map(mona.replica.all()));
 });
