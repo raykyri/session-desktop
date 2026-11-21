@@ -298,7 +298,12 @@ const invitesView = (open: number) => ({
     usedBy: null,
   })),
   invited: [
-    { handle: "priya.n", displayName: "Priya", avatarUrl: null, joinedAt: Date.UTC(2026, 10, 14, 12) },
+    {
+      handle: "priya.n",
+      displayName: "Priya",
+      avatarUrl: null,
+      joinedAt: Date.UTC(2026, 10, 14, 12),
+    },
   ],
   openCount: open,
   openLimit: 3,
