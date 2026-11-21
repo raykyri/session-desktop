@@ -117,15 +117,21 @@ export function ChannelInfoDialog({
         </dd>
         <dt>Members</dt>
         <dd>
-          <button
-            ref={membersButton}
-            type="button"
-            className="tlink inl"
-            aria-label={`Members, ${channel.members}`}
-            onClick={() => setMembers(true)}
-          >
-            {channel.members}
-          </button>
+          {/* a private channel's members are its members' to read: anyone
+              else gets the count only */}
+          {channel.private && !channel.joined ? (
+            channel.members
+          ) : (
+            <button
+              ref={membersButton}
+              type="button"
+              className="tlink inl"
+              aria-label={`Members, ${channel.members}`}
+              onClick={() => setMembers(true)}
+            >
+              {channel.members}
+            </button>
+          )}
         </dd>
         <dt>Visibility</dt>
         <dd>

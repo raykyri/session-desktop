@@ -39,6 +39,18 @@ test.serial("a remote image is never fetched", (t) => {
   t.truthy(screen.getByRole("link", { name: "Open image: a chart" }));
 });
 
+test.serial(
+  "an image without alt text opens on a link with every rel token of untrusted content",
+  (t) => {
+    render(<ResearchMarkdown markdown="![](https://example.com/chart.png)" />);
+    t.is(document.querySelector("img"), null);
+    const link = screen.getByRole("link", { name: "Open external image" });
+    const rel = (link.getAttribute("rel") ?? "").split(/\s+/);
+    for (const token of ["noopener", "noreferrer", "nofollow", "ugc"])
+      t.true(rel.includes(token), token);
+  },
+);
+
 test.serial("an image marker collapses to an inert chip", (t) => {
   render(<ResearchMarkdown markdown="Before [Image: /tmp/shot.png] after" />);
   t.true((document.body.textContent ?? "").includes("[Image]"));

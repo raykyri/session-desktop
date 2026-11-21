@@ -39,12 +39,18 @@ function world(o: ConstructorParameters<typeof FakeSync>[0] = {}) {
 function replicaOf(
   f: FakeSync,
   u: string | null,
-  o: { onUpgrade?: () => void; storage?: FakeStorage; locks?: FakeLocks } = {},
+  o: {
+    onUpgrade?: () => void;
+    storage?: FakeStorage;
+    locks?: FakeLocks;
+    threadSpace?: (thread: string) => Promise<string | null>;
+  } = {},
 ) {
   const storage = o.storage ?? new FakeStorage();
   const locks = o.locks ?? new FakeLocks();
   const restored: DraftRef[] = [];
   const left: string[] = [];
+  const banned: string[] = [];
   const transport = new HttpSyncTransport({
     fetch: f.fetchFor(u),
     ...(o.onUpgrade ? { onUpgrade: o.onUpgrade } : {}),
@@ -56,15 +62,17 @@ function replicaOf(
     transport,
     directory: f.directory,
     byName: f.byName,
+    ...(o.threadSpace ? { threadSpace: o.threadSpace } : {}),
     claim: (userId, register) => claimClientId({ userId, storage, locks, register }),
     restoreDraft: (d) => restored.push(d),
     onLeft: (name) => left.push(name),
+    onBanned: (name) => banned.push(name),
     clock: f.clock,
     maxBackoffMs: 50,
     gatherMs: 20,
   });
   r.activate();
-  return { r, restored, left, storage, locks };
+  return { r, restored, left, banned, storage, locks };
 }
 
 const query = <T>(f: () => T) => runQuery(f);
@@ -266,6 +274,42 @@ test("a thread address outside the window is fetched from its channel; one the s
   t.is(r.get(threadKey(nowhere)), undefined);
 });
 
+test("an address without its channel asks spaces.threadSpace and reads that channel's log alone", async (t) => {
+  const { f, lounge, post } = world({ window: { days: 1, threads: 1, cap: 1 } });
+  const room = f.id();
+  f.ok(OLGA, "spaces.create", { id: room, name: "room" });
+  f.ok(MONA, "spaces.join", { space: room });
+  f.clock.offset = 800 * DAY;
+  f.ok(OLGA, "threads.create", { id: f.id(), space: lounge, kind: "post", q: "Fresh" });
+  const asked: string[] = [];
+  const { r } = replicaOf(f, MONA, {
+    threadSpace: (thread) => {
+      asked.push(thread);
+      return Promise.resolve(thread === post ? lounge : null);
+    },
+  });
+  t.teardown(() => r.dispose());
+  await until(() => r.ready());
+  t.is(r.get(threadKey(post)), UNKNOWN);
+  r.open(post);
+  await until(() => r.get(threadKey(post)) !== UNKNOWN);
+  t.is((r.get(threadKey(post)) as { q?: string }).q, "Welcome to the lounge");
+  t.deepEqual(asked, [post]);
+  const threadReads = () => reads(f).filter((x) => x.tier === "threads");
+  t.deepEqual(
+    threadReads().map((x) => [x.log, x.threads]),
+    [[`space:${lounge}`, [post]]],
+    "one read, of the thread's channel only",
+  );
+
+  // a thread the server names no channel for is absent, with no read
+  const nowhere = f.id();
+  r.open(nowhere);
+  await until(() => r.get(threadKey(nowhere)) !== UNKNOWN);
+  t.is(r.get(threadKey(nowhere)), undefined);
+  t.is(threadReads().length, 1);
+});
+
 test("signed out: every open channel through the same source, no private channel, no writes and no client id", async (t) => {
   const { f, post } = world();
   const { r } = replicaOf(f, null);
@@ -371,6 +415,35 @@ test("leaving a private channel in this tab shows no lost-access message", async
   await until(() => !channelsOf(r).some((c) => c.name === "lab" && c.joined));
   await new Promise((resolve) => setTimeout(resolve, 50));
   t.deepEqual(left, []);
+});
+
+test("a ban in an open channel reaches the banned member as their lost membership, once", async (t) => {
+  const { f, lounge } = world();
+  const { r, banned, left } = replicaOf(f, MONA);
+  t.teardown(() => r.dispose());
+  await until(() => r.ready() && f.streams.size === 1);
+  await until(() => channelsOf(r).some((c) => c.name === "lounge" && c.joined));
+  f.ok(OLGA, "members.ban", { space: lounge, user: MONA });
+  await until(() => banned.length > 0);
+  t.deepEqual(banned, ["lounge"], "You are banned from #lounge.");
+  t.deepEqual(left, [], "an open channel stays readable: no lost-access message");
+  t.true(channelsOf(r).some((c) => c.name === "lounge" && !c.joined));
+  // a later change tells nothing again
+  f.ok(OLGA, "threads.create", { id: f.id(), space: lounge, kind: "post", q: "After the ban" });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  t.deepEqual(banned, ["lounge"]);
+});
+
+test("leaving an open channel in this tab is not told as a ban", async (t) => {
+  const { f, lounge } = world();
+  const { r, banned } = replicaOf(f, MONA);
+  t.teardown(() => r.dispose());
+  await until(() => r.ready() && f.streams.size === 1);
+  await until(() => channelsOf(r).some((c) => c.name === "lounge" && c.joined));
+  t.true((await r.mutate("spaces.leave", { space: lounge })).ok);
+  await until(() => !channelsOf(r).some((c) => c.name === "lounge" && c.joined));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  t.deepEqual(banned, []);
 });
 
 test("joining an open channel moves its log to the stream", async (t) => {

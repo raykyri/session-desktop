@@ -102,6 +102,9 @@ export interface SyncReplicaOptions {
   directory: () => Promise<readonly SpaceRec[]>;
   /** `spaces.byName`: a channel by name, a private one's landing included. */
   byName?: (name: string) => Promise<SpaceRec | null>;
+  /** `spaces.threadSpace`: the id of a thread's channel, null when the
+   * viewer may not read the thread. */
+  threadSpace?: (thread: string) => Promise<string | null>;
   /** The tab's client id (`tabClient.ts`). */
   claim?: (
     userId: string,
@@ -128,6 +131,9 @@ export interface SyncReplicaOptions {
   beforeReload?: (keep: () => void) => () => void;
   /** The person lost access to a private channel (01 R4). */
   onLeft?: (name: string) => void;
+  /** The person's membership of an open channel went without a Leave from
+   * this tab: the owner banned them (04 §6.4). */
+  onBanned?: (name: string) => void;
   /** The event stream opened or closed. */
   onConnection?: (status: "open" | "closed") => void;
   clock?: Clock;
@@ -235,9 +241,13 @@ export class SyncReplica implements ReplicaSource {
     string,
     { promise: Promise<WriteOutcome>; resolve: (o: WriteOutcome) => void }
   >();
-  /** Private channels this tab left with `spaces.leave`: their resync is no
-   * news to the person. By space, with the write's local id. */
+  /** Channels this tab left with `spaces.leave`: a private one's resync and
+   * an open one's lost membership are no news to the person. By space, with
+   * the write's local id. */
   private readonly leaving = new Map<string, string>();
+  /** The open channels the person is a member of (not the owner), by id
+   * with the name, as of the last change; null until the user log is read. */
+  private openMemberships: Map<string, string> | null = null;
   private unsentCache: { version: number; list: UnsentWrite[] } | null = null;
 
   private active = false;
@@ -367,6 +377,7 @@ export class SyncReplica implements ReplicaSource {
     this.unsubscribe.push(
       client.subscribe(() => {
         this.pruneRunTexts();
+        this.checkOpenMemberships(client);
         this.changed();
         this.scheduleRecompute();
       }),
@@ -760,6 +771,41 @@ export class SyncReplica implements ReplicaSource {
     }
   }
 
+  /**
+   * A ban in an open channel (04 §6.4): the banned person can still read the
+   * channel, so no resync drops it (`left` is for private channels); what
+   * reaches their replica is the deletion of their membership. The ban
+   * record is the owner's only. A membership of an open channel that goes
+   * from the server's records (not a prediction, which an acknowledged write
+   * drops before the server's change arrives) without a Leave from this tab
+   * is told as a ban, with the server's wording. A Leave from another tab of
+   * the same account looks the same.
+   */
+  private checkOpenMemberships(client: SyncClient): void {
+    const me = this.me;
+    if (!this.writer || me === null || !this.userLogLoaded()) return;
+    const server = client.replica;
+    const before = this.openMemberships;
+    const now = new Map<string, string>();
+    for (const key of server.keysIn("member", { u: me })) {
+      const m = server.get(key);
+      if (m?.kind !== "member" || m.role !== "member") continue;
+      const s = this.get(`space:${m.sp}`);
+      if (s !== UNKNOWN && s?.kind === "space" && s.vis === "open") now.set(m.sp, s.name);
+    }
+    for (const [sp, name] of before ?? []) {
+      if (now.has(sp)) continue;
+      // still a member: the space record is not loaded at the moment
+      if (server.get(`member:${sp}:${me}`)) {
+        now.set(sp, name);
+        continue;
+      }
+      if (this.leaving.delete(sp)) continue;
+      this.options.onBanned?.(name);
+    }
+    this.openMemberships = now;
+  }
+
   /** A Leave that was refused or discarded: its resync, if one comes, is
    * news again. */
   private endLeave(local: string): void {
@@ -1144,8 +1190,11 @@ export class SyncReplica implements ReplicaSource {
     // rendered within `GATHER_MS` are fetched with one `threads` read per
     // log (`openMany`), which keeps a reader scrolling through summaries
     // under the server's limit. An address names its channel and is
-    // fetched now; a thread the replica does not hold is asked of the logs
-    // it holds (`SyncClient.open`).
+    // fetched now. An address without one (Home, Saved) of a thread the
+    // replica does not hold: the server names the thread's channel
+    // (`spaces.threadSpace`), and only a channel whose log the replica reads
+    // can show it; without that lookup, the thread is asked of the logs the
+    // replica holds (`SyncClient.open`).
     if (space === undefined && held) {
       this.gathered.add(thread);
       this.gatherTimer ??= setTimeout(() => {
@@ -1153,6 +1202,23 @@ export class SyncReplica implements ReplicaSource {
         this.openGathered(client);
       }, this.options.gatherMs ?? GATHER_MS);
       (this.gatherTimer as { unref?: () => void }).unref?.();
+      return;
+    }
+    const lookUp = this.options.threadSpace;
+    if (space === undefined && lookUp) {
+      this.opens.set(thread, "pending");
+      const gen = this.generation;
+      void lookUp(thread).then(
+        (sp) => {
+          if (!this.live(gen)) return;
+          this.opens.delete(thread);
+          if (sp !== null && this.loadedLogs.has(spaceLog(sp))) this.open(thread, sp);
+          else this.opened(new Map([[thread, "missing"]]), undefined, false);
+        },
+        (error: unknown) => {
+          if (this.live(gen)) this.opened(new Map([[thread, "unavailable"]]), error, false);
+        },
+      );
       return;
     }
     this.opens.set(thread, "pending");

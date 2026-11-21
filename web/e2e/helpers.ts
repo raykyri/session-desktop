@@ -23,6 +23,9 @@ export interface SignInOptions {
   /** One login per spec keeps the accounts, and therefore the feeds, apart. */
   login: string;
   isAdmin?: boolean;
+  /** The server to sign in on: the suite's (default) or the side server
+   * (`constants.ts` `SIDE_ORIGIN`). */
+  origin?: string;
   /** Included tokens recorded as already spent this week (the billing spec,
    * `03` K9). */
   spent?: number;
@@ -56,7 +59,7 @@ export function e2eLogin(base: string): string {
 /** Signs in on the page's own context, so the cookie is the one the browser
  * will send. The account is the run's own (`e2eLogin`). */
 export async function signIn(page: Page, options: SignInOptions): Promise<SignedInUser> {
-  const response = await page.request.post(`${APP_ORIGIN}/auth/test-login`, {
+  const response = await page.request.post(`${options.origin ?? APP_ORIGIN}/auth/test-login`, {
     headers: MUTATION_HEADERS,
     data: {
       login: e2eLogin(options.login),

@@ -14,7 +14,7 @@ import { z } from "zod";
 import { meQueryOptions } from "../api/account.js";
 import { CHANNEL_NAME } from "../features/shell/screens.js";
 import { viewerOf, type Viewer } from "../features/shell/viewer.js";
-import { savePendingInvite } from "../lib/pendingInvite.js";
+import { fragmentCode, savePendingInvite } from "../lib/pendingInvite.js";
 import { loadAdminRoute, loadSettingsRoute } from "../routes/chunks.js";
 import { ChannelFeedPage, HomeFeedPage, SavedFeedPage } from "../routes/feeds.js";
 import { LoginPage } from "../routes/login.js";
@@ -124,7 +124,7 @@ async function requireSignedIn({
   if (viewer.kind === "signedOut") toLogin(location.href);
 }
 
-/** Member screens (Invites, Usage): an account without an invite goes to
+/** Member screens (Invites, Usage, Notifications): an account without an invite goes to
  * `/welcome` (02 W2.1). */
 async function requireMember({
   context,
@@ -180,17 +180,25 @@ const homeRoute = createRoute({
   component: HomeFeedPage,
 });
 
-/** A channel's feed. A `#<code>` fragment is a channel invite link, taken
- * out of the URL before the router starts (`app/captureInvite.ts`). */
+/** A channel's feed. A `#<code>` fragment is a channel invite link. A page
+ * load has already moved the code into memory (`app/captureInvite.ts`); a
+ * navigation inside the app carries it here in `location.hash`, and the
+ * route keeps the code in memory and replaces the entry with the same
+ * address without the fragment (04 B4). */
 const channelRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/c/$name",
   validateSearch: validateFeedSearch,
-  beforeLoad: ({ params }) => {
+  beforeLoad: ({ params, location, search }) => {
     if (!CHANNEL_NAME.test(params.name)) {
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw notFound();
     }
+    if (location.hash === "") return;
+    const code = fragmentCode(location.hash);
+    if (code !== "") savePendingInvite({ kind: "channel", channel: params.name, code });
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
+    throw redirect({ to: "/c/$name", params, search, replace: true });
   },
   component: ChannelFeedPage,
 });
@@ -246,7 +254,7 @@ const welcomeRoute = createRoute({
 const notificationsRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/notifications",
-  beforeLoad: requireSignedIn,
+  beforeLoad: requireMember,
   component: NotificationsPage,
 });
 
@@ -282,7 +290,7 @@ const inviteLinkRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/i",
   beforeLoad: ({ location }) => {
-    const code = location.hash.replace(/^#/, "").trim();
+    const code = fragmentCode(location.hash);
     if (code !== "") savePendingInvite({ kind: "account", code });
     // eslint-disable-next-line @typescript-eslint/only-throw-error
     throw redirect({ to: "/", replace: true });

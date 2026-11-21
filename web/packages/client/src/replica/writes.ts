@@ -98,6 +98,7 @@ export interface Writes {
     parent?: string,
     draft?: DraftRef,
   ): Promise<string | null>;
+  deleteComment(id: string): Promise<boolean>;
   join(space: string): Promise<boolean>;
   leave(space: string): Promise<boolean>;
   updateAbout(space: string, desc: string): Promise<boolean>;
@@ -231,6 +232,7 @@ export function makeWrites(source: ReplicaSource, options: WritesOptions = {}): 
         true,
         draft,
       ),
+    deleteComment: (comment) => done("comments.delete", { id: comment }),
     join: (space) => done("spaces.join", { space }),
     leave: (space) => done("spaces.leave", { space }),
     updateAbout: (space, desc) => done("spaces.update", { id: space, desc }),

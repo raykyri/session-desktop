@@ -42,6 +42,9 @@ export interface AuthDialogState {
   profileInviter: Inviter | null;
   /** Where the dialog was opened from, for its completion toast. */
   origin: "dialog" | "welcome";
+  /** The channel whose invite link opened the dialog: the landing step says
+   * that signing in joins it. */
+  channel: string | null;
   show: (patch: Partial<Omit<AuthDialogState, "show" | "close" | "set">>) => void;
   set: (patch: Partial<Omit<AuthDialogState, "show" | "close" | "set">>) => void;
   close: () => void;
@@ -58,6 +61,7 @@ const CLOSED = {
   redeem: false,
   profileInviter: null,
   origin: "dialog" as const,
+  channel: null,
 };
 
 export const useAuthDialog = create<AuthDialogState>()((set) => ({

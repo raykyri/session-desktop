@@ -169,6 +169,44 @@ test.serial("/i#<code>: the code leaves the URL and the dialog shows the inviter
   t.is(screen.queryByRole("dialog"), null, "a member's link is dropped");
 });
 
+test.serial(
+  "/c/<name>#<code>: the route keeps the code and replaces the entry without it, on a load and a same-document navigation",
+  async (t) => {
+    // a channel the fixtures do not have, so no join drops the code
+    const app = await renderApp("/c/reading-group#k3v8q2m9", { user: null });
+    await waitUntil(t, () => app.router.state.location.hash === "", "the fragment is gone");
+    t.is(app.router.state.location.pathname, "/c/reading-group");
+    t.false(app.router.state.location.href.includes("k3v8q2m9"));
+    t.deepEqual(readPendingInvite(), {
+      kind: "channel",
+      channel: "reading-group",
+      code: "k3v8q2m9",
+    });
+    clearPendingInvite();
+    act(() => app.router.history.push(`/c/other-group?t=${THREAD}#x7c4b6n1`));
+    await waitUntil(
+      t,
+      () => app.router.state.location.pathname === "/c/other-group",
+      "the navigation lands",
+    );
+    await waitUntil(t, () => app.router.state.location.hash === "", "the fragment is gone");
+    t.false(app.router.state.location.href.includes("x7c4b6n1"));
+    t.is((app.router.state.location.search as { t?: string }).t, THREAD, "the search stays");
+    t.deepEqual(readPendingInvite(), {
+      kind: "channel",
+      channel: "other-group",
+      code: "x7c4b6n1",
+    });
+    t.false(app.router.history.location.href.includes("x7c4b6n1"), "the history entry has no code");
+  },
+);
+
+test.serial("/notifications sends an account without an invite to /welcome", async (t) => {
+  const app = await renderApp("/notifications", { user: waitingUser() });
+  await waitUntil(t, () => app.router.state.location.pathname === "/welcome", "on to /welcome");
+  t.pass();
+});
+
 test("a page load takes the code out of the address before the router starts", (t) => {
   const replaced: string[] = [];
   const history = {

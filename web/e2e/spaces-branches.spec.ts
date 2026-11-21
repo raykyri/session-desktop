@@ -197,7 +197,8 @@ test("Open as its own thread scrolls to the new thread", async ({ page }) => {
   await side(page)
     .getByRole("treeitem", { name: /how does the darknet/ })
     .click();
-  await side(page).locator(".preview").getByRole("button", { name: "More" }).click();
+  // the branch's own menu (a comment of the viewer's under it has one too)
+  await side(page).locator(".preview > .who").getByRole("button", { name: "More" }).click();
   await page.getByRole("menuitem", { name: "Open as its own thread" }).click();
   const promoted = page.locator(".tcard").first();
   await expect(promoted.locator(".tt-title")).toContainText(/darknet/i);
