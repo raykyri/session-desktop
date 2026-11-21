@@ -3,7 +3,7 @@
 
 import test from "ava";
 
-import { LOOKUP_PROMPT_V1, type StoredRecord } from "../src/index.js";
+import type { StoredRecord } from "../src/index.js";
 
 import { MODEL, answer, cast, fork, ok, refused, thread } from "./harness.js";
 
@@ -147,6 +147,10 @@ test("a branch and a comment notify the node's author, a person cannot mark anot
       ...MODEL,
     }),
   );
-  t.is((w.get(`node:${look}`) as Rec<"node">).q, LOOKUP_PROMPT_V1("tide gauge"));
+  // the prompt's text, written here apart from the implementation
+  t.is(
+    (w.get(`node:${look}`) as Rec<"node">).q,
+    'Look up "tide gauge" as it is used in this answer. Describe what it refers to in two or three sentences, with a source.',
+  );
   await answer(w, `node:${look}`);
 });

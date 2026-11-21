@@ -998,6 +998,16 @@ export class ProtoServer implements TestServer {
     });
   }
 
+  freeze(space: string): boolean {
+    const now = this.begin();
+    const s = this.store.byKey(`space:${space}`);
+    if (s?.kind !== "space") return false;
+    const tx = new StagedTx(this.store, "", isoAt(now), "", "server");
+    tx.put({ ...s, frozen: true });
+    this.store.commit(tx.staged, now);
+    return true;
+  }
+
   finishJob(key: string, text: string): boolean {
     const now = this.begin();
     const r = this.store.byKey(key);

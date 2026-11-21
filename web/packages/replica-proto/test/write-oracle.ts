@@ -86,6 +86,9 @@ export interface Prediction {
   storedForSeq?: boolean;
   /** An earlier mutation id's answer, now kept under this one as well. */
   adopted?: boolean;
+  /** Why a PRECONDITION_FAILED is answered, where the client acts on it
+   * (`queue_full`). */
+  reason?: string;
 }
 
 const MIN_DAY = 86_400_000;
@@ -312,12 +315,15 @@ interface Facts {
 
 /** Thrown with the code a rule refuses with. */
 class No extends Error {
-  constructor(readonly code: ErrorCode) {
+  constructor(
+    readonly code: ErrorCode,
+    readonly reason?: string,
+  ) {
     super(code);
   }
 }
-const no = (code: ErrorCode): never => {
-  throw new No(code);
+const no = (code: ErrorCode, reason?: string): never => {
+  throw new No(code, reason);
 };
 
 type Space = Extract<StoredRecord, { kind: "space" }>;
@@ -428,7 +434,7 @@ function runPre(f: Facts, i: In) {
   let queued = 0;
   for (const r of f.dump.values())
     if (r.kind === "run" && r.u === f.me && r.status === "queued") queued++;
-  if (queued >= 20) no("PRECONDITION_FAILED");
+  if (queued >= 20) no("PRECONDITION_FAILED", "queue_full");
 }
 
 /** A look-up phrase is 1 to 4 words, once what is not a letter, a combining
@@ -762,7 +768,10 @@ interface ClientModel {
 
 export class WriteModel {
   private readonly clients = new Map<string, ClientModel>();
-  private readonly answers = new Map<string, { payload: string; code: Code; at: number }>();
+  private readonly answers = new Map<
+    string,
+    { payload: string; code: Code; reason?: string; at: number }
+  >();
   /** Every id a stored record ever had. */
   private readonly ids = new Set<string>();
   /** Each person's registrations. */
@@ -820,7 +829,12 @@ export class WriteModel {
   }
 
   predict(dump: Dump, u: string | null, envelope: unknown, now: number): Prediction {
-    const pass = (code: Code): Prediction => ({ code, usesSeq: false, stored: false });
+    const pass = (code: Code, reason?: string): Prediction => ({
+      code,
+      usesSeq: false,
+      stored: false,
+      ...(reason !== undefined ? { reason } : {}),
+    });
     const e = envelope as Envelope;
     const isObject = e !== null && typeof e === "object";
     if (isObject && depthOf((e as { input?: unknown }).input) > 32) return pass("BAD_REQUEST");
@@ -859,7 +873,8 @@ export class WriteModel {
     const payload = sortedJson([e.name, e.input]);
     const prior = formed ? this.answers.get(`${u} ${e.mutationId}`) : undefined;
     const live = prior && now - prior.at < 7 * MIN_DAY ? prior : undefined;
-    if (live && (live.payload === payload || live.payload === REPLACED)) return pass(live.code);
+    if (live && (live.payload === payload || live.payload === REPLACED))
+      return pass(live.code, live.reason);
     const again = client.bySeq.get(e.seq);
     if (again && now - again.at < 7 * MIN_DAY && again.sent === sortedJson([e.mutationId, payload]))
       return pass(again.code);
@@ -869,13 +884,24 @@ export class WriteModel {
       for (const id of e.replaces ?? []) {
         const old = this.answers.get(`${u} ${id}`);
         if (old && now - old.at < 7 * MIN_DAY)
-          return { code: old.code, usesSeq: false, stored: false, adopted: true };
+          return {
+            code: old.code,
+            usesSeq: false,
+            stored: false,
+            adopted: true,
+            ...(old.reason !== undefined ? { reason: old.reason } : {}),
+          };
       }
     if (e.seq !== client.last + 1) return pass("OUT_OF_ORDER");
     if (!formed || live)
       return { code: "BAD_REQUEST", usesSeq: true, stored: false, storedForSeq: true };
     if (Math.abs(e.clientTime - now) > MINUTE_MS) return pass("CLOCK_SKEW");
-    const stored = (code: Code): Prediction => ({ code, usesSeq: true, stored: true });
+    const stored = (code: Code, reason?: string): Prediction => ({
+      code,
+      usesSeq: true,
+      stored: true,
+      ...(reason !== undefined ? { reason } : {}),
+    });
     if (!fresh(e.mutationId, e.clientTime)) return stored("EXPIRED");
     if (!freshTime(e.queuedAt, e.clientTime)) return stored("EXPIRED");
     const schema = Object.hasOwn(SCHEMA, e.name) ? SCHEMA[e.name] : undefined;
@@ -898,7 +924,7 @@ export class WriteModel {
       rules(facts, input);
     } catch (x) {
       if (x instanceof No)
-        return x.code === "INTERNAL_SERVER_ERROR" ? pass(x.code) : stored(x.code);
+        return x.code === "INTERNAL_SERVER_ERROR" ? pass(x.code) : stored(x.code, x.reason);
       throw x;
     }
     return stored("ok");
@@ -916,22 +942,25 @@ export class WriteModel {
         code: p.code,
         at: now,
       });
+    const reason = p.reason !== undefined ? { reason: p.reason } : {};
     if (p.adopted)
       this.answers.set(`${u} ${envelope.mutationId}`, {
         payload: sortedJson([envelope.name, envelope.input]),
         code: p.code,
+        ...reason,
         at: now,
       });
     if (p.stored) {
       this.answers.set(`${u} ${envelope.mutationId}`, {
         payload: sortedJson([envelope.name, envelope.input]),
         code: p.code,
+        ...reason,
         at: now,
       });
       for (const id of envelope.replaces ?? []) {
         const old = this.answers.get(`${u} ${id}`);
         if (id !== envelope.mutationId && !(old && now - old.at < 7 * MIN_DAY))
-          this.answers.set(`${u} ${id}`, { payload: REPLACED, code: p.code, at: now });
+          this.answers.set(`${u} ${id}`, { payload: REPLACED, code: p.code, ...reason, at: now });
       }
     }
     for (const [k, a] of this.answers) if (now - a.at >= 7 * MIN_DAY) this.answers.delete(k);

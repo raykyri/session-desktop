@@ -351,7 +351,9 @@ export function predictEffects(
         if (st) keys.set(`stats:${n.s}`, { posts: Number(st["posts"]) + 1 });
         keys.set(`answer:${id}`, { node: "r", th: id, s: n.s, u: n.u, md: a.md, mod: null });
         keys.set(`node:${n.id}`, { promoted: id, q: n.q });
-        out.result = (r) => JSON.stringify(r) === JSON.stringify({ id, run: null });
+        // a promotion notifies nobody: no mentions (M1b review 18)
+        out.result = (r) =>
+          JSON.stringify(r) === JSON.stringify({ id, run: null, notified: [], notMembers: [] });
         break;
       }
       const sp = str("space");
@@ -559,11 +561,16 @@ export function predictEffects(
     case "replies.update":
     case "comments.update": {
       const kind = name === "replies.update" ? "reply" : "comment";
-      const old = get(`${kind}:${str("id")}`) as { t: string; edited: boolean };
+      const old = get(`${kind}:${str("id")}`) as {
+        t: string;
+        edited: boolean;
+        mod: string | null;
+      };
       const t = str("t").trim();
+      // an author may edit a hidden item: it stays hidden
       keys.set(`${kind}:${str("id")}`, {
         t,
-        mod: null,
+        mod: old.mod,
         del: false,
         edited: old.edited || t !== old.t,
       });

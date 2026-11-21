@@ -221,6 +221,11 @@ export interface TestServer extends ServerHalf {
    * every cursor of the log resyncs, and so does every user-log cursor of a
    * person with a record about that space. */
   replaceHistory(log: LogId): Awaitable<void>;
+  /** The operator job that deletes a space owner's account freezes the
+   * space (`04` B6): readable, closed to every write but deleting one's own
+   * items, leaving and the person's own user-log records. False for no
+   * such space. */
+  freeze(space: string): Awaitable<boolean>;
 }
 
 export interface Clock {

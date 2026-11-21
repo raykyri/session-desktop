@@ -45,6 +45,10 @@ interface Mutation {
   to: string;
   /** Further places in the same file, for a fault that two checks guard. */
   also?: { from: string; to: string }[];
+  /** A fault in a copied package that the acceptance suite cannot reach (a
+   * client-only path, a package's own helper): killed by that package's
+   * suite. Every other mutation must fail this package's suite. */
+  packageOnly?: boolean;
 }
 
 const edits = (m: Mutation) => [{ from: m.from, to: m.to }, ...(m.also ?? [])];
@@ -879,39 +883,111 @@ const MUTATIONS: Mutation[] = [
     from: "            if (!x.sent && !x.known && raw >= x.rawAt) x.queuedAt += offset - this.offset;",
     to: "            if (!x.known && raw >= x.rawAt) x.queuedAt += offset - this.offset;",
   },
+  // ---- M1a review fixes 1, 2, 4, 7, 8, 9 (M1b review 19) ----
+  {
+    name: "M1a-1 a promoted thread does not name its source",
+    file: "../mutators/src/threads.ts",
+    from: "    from: { th: p.id, node: n.id },",
+    to: "    from: null,",
+  },
+  {
+    name: "M1a-2 a removed thread's placeholder keeps its model and effort",
+    file: "../mutators/src/rules.ts",
+    from: "        model: null,\n        effort: null,\n        running: false,",
+    to: "        running: false,",
+  },
+  {
+    name: "M1a-4 an applied answer carries no server time",
+    file: "src/server.ts",
+    from: "      ? { ...a, serverTime }",
+    to: "      ? { ...a, serverTime: 0 }",
+  },
+  {
+    name: "M1a-7 an ask node has a look-up's template",
+    file: "../mutators/src/nodes.ts",
+    from: '        tpl: i.kind === "lookup" ? 1 : null,',
+    to: "        tpl: 1,",
+  },
+  {
+    name: "M1a-8 a copied answer keeps its node's id",
+    file: "../mutators/src/threads.ts",
+    from: '  tx.put({ ...a, node: "r", th: id, mod: null });',
+    to: "  tx.put({ ...a, th: id, mod: null });",
+  },
+  {
+    name: "M1a-9a a comment shell is edited",
+    file: "../mutators/src/comments.ts",
+    from: "      if (c.del) throw deleted();\n",
+    to: "",
+  },
+  {
+    name: "M1a-9b a reply shell is edited",
+    file: "../mutators/src/replies.ts",
+    from: "      if (r.del) throw deleted();\n",
+    to: "",
+  },
+  // ---- M1b review 17 ----
+  {
+    name: "M1b-27 the server counts no queued runs",
+    file: "src/server.ts",
+    from: "          ).length,\n      };",
+    to: "          ).length * 0,\n      };",
+  },
 ];
 
-interface Outcome {
-  typecheck: string;
+/** What one suite said about a mutation. */
+interface SuiteResult {
   passed: number;
   failed: number;
   tests: string[];
 }
 
+interface Outcome {
+  typecheck: string;
+  /** The acceptance suite (this package's). */
+  suite: SuiteResult;
+  /** The suite of the package the mutation is in, when it is not this one. */
+  own?: SuiteResult;
+}
+
 const PKG = process.cwd();
 const WEB = resolve(PKG, "../..");
-const MUTATORS_PKG = join(WEB, "packages", "mutators");
+/** The workspace packages a slot holds a copy of, besides this one: a
+ * mutation in one of them is type-checked there and runs its suite too. */
+const COPIED = ["mutators", "sync"] as const;
 
 /** A copy of the package beside links to the workspace's modules, base
- * config and shared package, so it type-checks and runs as the package does. */
+ * config and shared package, so it type-checks and runs as the package does.
+ * The copies of `@session/mutators` and `@session/sync` are linked into the
+ * copies that import them, so a mutation in either reaches this suite. */
 function makeSlot(root: string, n: number): string {
   const web = join(root, `slot${n}`, "web");
   mkdirSync(join(web, "packages"), { recursive: true });
   symlinkSync(join(WEB, "node_modules"), join(web, "node_modules"));
   symlinkSync(join(WEB, "tsconfig.base.json"), join(web, "tsconfig.base.json"));
   symlinkSync(join(WEB, "packages", "shared"), join(web, "packages", "shared"));
-  // the package's own copy of `@session/mutators`, with its declarations
-  cpSync(MUTATORS_PKG, join(web, "packages", "mutators"), {
-    recursive: true,
-    filter: (src) => !/[/\\]node_modules$/.test(src),
-  });
+  // the package's own copies of `@session/mutators` and `@session/sync`, with
+  // their declarations
+  for (const name of COPIED)
+    cpSync(join(WEB, "packages", name), join(web, "packages", name), {
+      recursive: true,
+      filter: (src) => !/[/\\]node_modules$/.test(src),
+    });
+  const link = (from: string, name: string) => {
+    mkdirSync(join(web, "packages", from, "node_modules", "@session"), { recursive: true });
+    symlinkSync(
+      join(web, "packages", name),
+      join(web, "packages", from, "node_modules", "@session", name),
+    );
+  };
+  link("sync", "mutators");
   const dir = join(web, "packages", "replica-proto");
   cpSync(PKG, dir, {
     recursive: true,
     filter: (src) => !/[/\\](node_modules|dist)$/.test(src),
   });
-  mkdirSync(join(dir, "node_modules", "@session"), { recursive: true });
-  symlinkSync(join(web, "packages", "mutators"), join(dir, "node_modules", "@session", "mutators"));
+  link("replica-proto", "mutators");
+  link("replica-proto", "sync");
   return dir;
 }
 
@@ -925,6 +1001,20 @@ function sh(cmd: string, args: string[], cwd: string): Promise<{ code: number; o
   });
 }
 
+/** The package a mutation's file is in: this one, or a copied one. */
+const packageOf = (m: Mutation) => COPIED.find((name) => m.file.startsWith(`../${name}/`)) ?? null;
+
+function results(out: string): SuiteResult {
+  const tests = [
+    ...new Set([...out.matchAll(/[✘×] \[fail\]: (.+?)(?:\s{2,}|$)/gm)].map((x) => x[1] ?? "")),
+  ];
+  return {
+    passed: [...out.matchAll(/(\d+) tests? passed/g)].reduce((n, x) => n + Number(x[1]), 0),
+    failed: [...out.matchAll(/(\d+) tests? failed/g)].reduce((n, x) => n + Number(x[1]), 0),
+    tests: tests.map((x) => x.slice(0, 140)),
+  };
+}
+
 async function run(m: Mutation, dir: string): Promise<Outcome> {
   const file = join(dir, m.file);
   const original = readFileSync(join(PKG, m.file), "utf8");
@@ -935,35 +1025,41 @@ async function run(m: Mutation, dir: string): Promise<Outcome> {
   }
   writeFileSync(file, source);
   try {
-    // a mutation in `@session/mutators` is type-checked in that package, and
-    // its suite runs before this one's
-    const inPackage = m.file.startsWith("../mutators/");
-    const pkg = join(dir, "../mutators");
-    const tc = await sh(
-      "npx",
-      ["tsc", "-p", "tsconfig.test.json", "--noEmit"],
-      inPackage ? pkg : dir,
-    );
-    const own = inPackage ? await sh("npx", ["ava", "--timeout=600s"], pkg) : { code: 0, out: "" };
-    const ava = await sh("npx", ["ava", "--timeout=600s"], dir);
-    ava.out = `${own.out}\n${ava.out}`;
-    const tests = [
-      ...new Set(
-        [...ava.out.matchAll(/[✘×] \[fail\]: (.+?)(?:\s{2,}|$)/gm)].map((x) => x[1] ?? ""),
-      ),
-    ];
+    // a mutation in a copied package is type-checked in that package, and
+    // its suite runs as well as this one's
+    const name = packageOf(m);
+    const pkg = name === null ? dir : join(dir, "..", name);
+    const tc = await sh("npx", ["tsc", "-p", "tsconfig.test.json", "--noEmit"], pkg);
+    const own =
+      name === null ? null : results((await sh("npx", ["ava", "--timeout=600s"], pkg)).out);
+    const suite = results((await sh("npx", ["ava", "--timeout=600s"], dir)).out);
     return {
       typecheck: tc.code === 0 ? "ok" : (tc.out.split("\n")[0] ?? "failed"),
-      passed: [...ava.out.matchAll(/(\d+) tests? passed/g)].reduce((n, x) => n + Number(x[1]), 0),
-      failed: [...ava.out.matchAll(/(\d+) tests? failed/g)].reduce((n, x) => n + Number(x[1]), 0),
-      tests: tests.map((x) => x.slice(0, 140)),
+      suite,
+      ...(own ? { own } : {}),
     };
   } finally {
     writeFileSync(file, original);
   }
 }
 
+/** A mutation is killed when the acceptance suite fails; one marked
+ * `packageOnly` (a fault the acceptance suite cannot reach) also when its
+ * own package's suite fails. */
+const killed = (m: Mutation, o: Outcome) =>
+  o.suite.failed > 0 || (m.packageOnly === true && (o.own?.failed ?? 0) > 0);
+
+/** The id of a mutation: the first word of its name (`X1`, `M1b-12`). An
+ * argument selects the mutation with that id, or with a `*` at its end the
+ * ones whose id starts with what precedes it (`M1b-*`). */
+const idOf = (m: Mutation) => m.name.split(" ")[0] ?? "";
+const selects = (arg: string, m: Mutation) =>
+  arg.endsWith("*") ? idOf(m).startsWith(arg.slice(0, -1)) : idOf(m) === arg;
+
 const args = process.argv.slice(2);
+const ids = MUTATIONS.map(idOf);
+const dup = ids.find((x, k) => ids.indexOf(x) !== k);
+if (dup) throw new Error(`two mutations have the id ${dup}`);
 if (args.includes("--check")) {
   for (const m of MUTATIONS)
     for (const e of edits(m)) {
@@ -976,7 +1072,8 @@ if (args.includes("--check")) {
 const k = args.indexOf("--slots");
 const slots = k >= 0 ? Number(args[k + 1]) : 4;
 const only = args.filter((a, i) => !a.startsWith("--") && (k < 0 || i !== k + 1));
-const todo = MUTATIONS.filter((m) => !only.length || only.some((o) => m.name.startsWith(o)));
+const todo = MUTATIONS.filter((m) => !only.length || only.some((o) => selects(o, m)));
+if (only.length && !todo.length) throw new Error(`no mutation has the ids ${only.join(" ")}`);
 const root = mkdtempSync(join(tmpdir(), "replica-proto-mutate-"));
 let survived = 0;
 try {
@@ -986,10 +1083,11 @@ try {
     dirs.map(async (dir) => {
       for (let m = queue.shift(); m; m = queue.shift()) {
         const o = await run(m, dir);
-        const broken = o.passed + o.failed === 0;
-        if (o.failed === 0) survived++;
+        const broken = o.suite.passed + o.suite.failed === 0;
+        const dead = killed(m, o);
+        if (!dead) survived++;
         console.log(
-          `${broken ? "BROKEN  " : o.failed ? "killed  " : "SURVIVED"} ${m.name}: ${JSON.stringify(o)}`,
+          `${broken ? "BROKEN  " : dead ? "killed  " : "SURVIVED"} ${m.name}${m.packageOnly ? " (package only)" : ""}: ${JSON.stringify(o)}`,
         );
       }
     }),
