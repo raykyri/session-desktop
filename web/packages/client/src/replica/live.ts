@@ -65,6 +65,8 @@ export function liveReplicaConfig(
         onSessionChanged: () => void appQueryClient.invalidateQueries({ queryKey: queryKeys.me() }),
         beforeReload: beforeUpgradeReload,
         onLeft: (name) => showToast(`You are no longer a member of #${name}.`),
+        // the server's wording of a ban (`@session/mutators` `tx.ts`)
+        onBanned: (name) => showToast(`You are banned from #${name}.`),
         onConnection: (status) => useConnectionStore.getState().setStatus(status),
       });
     },

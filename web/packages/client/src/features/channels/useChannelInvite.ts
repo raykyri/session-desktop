@@ -1,17 +1,20 @@
 // Opening a channel invite link, `/c/<name>#<code>` (02 W6.9, 04 B4). The
-// code left the address bar on page load and waits in memory
-// (`lib/pendingInvite.ts`). On the channel's page:
+// code left the address bar on page load or at the route and waits in
+// memory (`lib/pendingInvite.ts`). On the channel's page:
 //
 // - an active account joins with it (`spaces.join { space, invite }`), with
 //   the toast "Joined #name."; a link that is used, revoked or expired, or
 //   whose channel is frozen, answers "This invite link has expired or was
-//   already used." (04 §9);
+//   already used." (04 §9, B5); a banned person gets the server's message;
 // - a member of the channel already: the code is dropped;
-// - signed out, or an account without an invite: the auth dialog opens, and
-//   the code stays in memory for this page load, so an account that redeems
-//   an invite in the dialog joins next. A sign-in through a provider leaves
-//   the page, and the person opens the link again.
+// - signed out: the auth dialog opens on "Sign in to join #name.". A
+//   sign-in through a provider leaves the page; the code waits in this
+//   tab's `sessionStorage` for the page load after it, and the account joins
+//   then;
+// - an account without an invite: the code step opens, and an account that
+//   redeems an invite in the dialog joins next.
 
+import { frozenMessage, type ApiError } from "@session/mutators";
 import { useEffect, useRef } from "react";
 
 import { clearPendingInvite, readPendingInvite } from "../../lib/pendingInvite.js";
@@ -23,6 +26,19 @@ import type { Viewer } from "../shell/viewer.js";
 
 /** The one message for a channel link that does not work. */
 export const LINK_UNUSABLE = "This invite link has expired or was already used.";
+
+/** What a refused link join shows: the one message for a link that does not
+ * work (unknown, used, revoked or expired, or its channel frozen), else the
+ * server's own message (a ban). */
+export function linkJoinMessage(error: ApiError, channel: string): string {
+  if (error.code === "NOT_FOUND") return LINK_UNUSABLE;
+  if (
+    error.code === "FORBIDDEN" &&
+    (error.message === LINK_UNUSABLE || error.message === frozenMessage(channel))
+  )
+    return LINK_UNUSABLE;
+  return error.message;
+}
 
 export function useChannelInvite(viewer: Viewer, channel: ChannelView | null): void {
   const source = useReplica();
@@ -37,7 +53,9 @@ export function useChannelInvite(viewer: Viewer, channel: ChannelView | null): v
     if (kind !== "member") {
       if (!asked.current) {
         asked.current = true;
-        openAuthDialog(kind === "waiting" ? { step: "code", redeem: true } : { step: "landing" });
+        openAuthDialog(
+          kind === "waiting" ? { step: "code", redeem: true } : { step: "landing", channel: name },
+        );
       }
       return;
     }
@@ -47,9 +65,7 @@ export function useChannelInvite(viewer: Viewer, channel: ChannelView | null): v
       if (outcome.ok) {
         if (!outcome.unsent) showToast(`Joined #${name}.`);
       } else {
-        const code = outcome.error.code;
-        const unusable = code === "FORBIDDEN" || code === "NOT_FOUND";
-        showToast(unusable ? LINK_UNUSABLE : outcome.error.message, { alert: true });
+        showToast(linkJoinMessage(outcome.error, name), { alert: true });
       }
     });
   }, [source, kind, id, name, joined]);

@@ -24,6 +24,7 @@ import {
   startSignIn,
   useCreateAccount,
 } from "../../api/membership.js";
+import { keepChannelInviteForSignIn } from "../../lib/pendingInvite.js";
 import { trpcErrorCode } from "../../lib/toast.js";
 import { Avatar } from "../../ui/Avatar.js";
 import { GitHubMark } from "../../ui/GitHubMark.js";
@@ -204,6 +205,7 @@ export function AuthSteps({ headingId, returnTo }: { headingId: string; returnTo
           Explore together.
         </h2>
         <p>Session is a shared workspace for exploring questions, ideas, and artifacts.</p>
+        {state.channel ? <p data-channel-invite="">Sign in to join #{state.channel}.</p> : null}
         <div className="auth-acts">
           {providerButtons((name) => `Sign in with ${name}`, "signin")}
           <button type="button" className="btn2" onClick={() => go("code")}>
@@ -400,6 +402,9 @@ function ExplainStep({
           onClick={() => {
             setPending(true);
             setError(null);
+            // a channel invite link's code waits in this tab's storage for
+            // the page load after the provider (`lib/pendingInvite.ts`)
+            keepChannelInviteForSignIn();
             startSignIn(state.provider, { code, returnTo: safeReturn(returnTo) }).catch(
               (failure: unknown) => {
                 setPending(false);
@@ -421,9 +426,12 @@ function ExplainStep({
   );
 }
 
-/** Where to come back to after sign-in: this page, unless it is the sign-in
- * page itself or the invite link. */
-function safeReturn(href: string): string | null {
+/** Where to come back to after sign-in: this page without its fragment (an
+ * invite link's code), unless it is the sign-in page itself or the account
+ * invite link. */
+export function safeReturn(location: string): string | null {
+  const hash = location.indexOf("#");
+  const href = hash < 0 ? location : location.slice(0, hash);
   if (!href.startsWith("/") || href.startsWith("//")) return null;
   if (href === "/i" || href.startsWith("/i?") || href.startsWith("/login")) return null;
   return href;

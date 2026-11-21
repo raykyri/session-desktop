@@ -1,8 +1,9 @@
 // The notifications page's data (02 W2.6; 01 C16): the notification records
 // of the viewer's user log as rows, newest first, and the text of each row.
 // A record carries ids and no item text; the thread's title is the
-// replica's, clipped at 64 characters (the mock's `titleOf`). A removed
-// thread has no text left, so a removal names no title.
+// replica's, clipped at 64 characters, in quotes (the mock's `titleOf`):
+// “a deleted thread” when it has no text left, “a thread” while it is not
+// loaded. A removed thread has no text left, so a removal names no title.
 
 import { spaceKey, threadKey, type NotifRec } from "@session/mutators";
 
@@ -23,8 +24,10 @@ export interface NotifRow {
   createdAt: string;
   /** Who caused it: for a removal, the owner who removed the thread. */
   actor: string | null;
-  /** How many more people a coalesced row stands for (`n - 1`). */
-  others: number;
+  /** A coalesced row that stands for more than one write (`n > 1`). `n`
+   * counts writes, not people, so the row says "and others" without a
+   * number. */
+  others: boolean;
   /** The thread's title in the replica; `undefined` while the thread is not
    * loaded, null when it has no text (deleted or removed). */
   title: string | null | undefined;
@@ -34,7 +37,8 @@ export interface NotifRow {
   what: "ask" | "post";
   /** The owner's reason for a removal. */
   reason: string | null;
-  /** The code an invite was used with. */
+  /** What an `invite_used` record says of the code that was used, as the
+   * record holds it; null when it holds nothing. */
   code: string | null;
   /** The channel's name; null for an invite. */
   channel: string | null;
@@ -47,6 +51,13 @@ const newestFirst = (a: NotifRec, b: NotifRec) =>
 /** The id after `kind:` in a record key, or undefined. */
 function idOf(key: string | null, kind: string): string | undefined {
   return key?.startsWith(`${kind}:`) ? key.slice(kind.length + 1) : undefined;
+}
+
+/** A comment notification's comment record, by the key in its `item`:
+ * `UNKNOWN` while the thread's records are not loaded. */
+function commentOf(source: ReplicaSource, n: NotifRec) {
+  if (!n.item?.startsWith("comment:")) return undefined;
+  return source.get(n.item);
 }
 
 /** The viewer's notifications as rows, newest first. Records the viewer may
@@ -67,11 +78,8 @@ export function notificationsOf(source: ReplicaSource): NotifRow[] {
           : null;
     // the item to select: a reply, a new node, or the node a comment is on
     let sel = idOf(n.item, "reply") ?? idOf(n.item, "node");
-    const comment = idOf(n.item, "comment");
-    if (comment) {
-      const c = source.get(`comment:${comment}`);
-      if (c !== UNKNOWN && c?.kind === "comment" && c.node !== "r") sel = c.node;
-    }
+    const c = commentOf(source, n);
+    if (c !== UNKNOWN && c?.kind === "comment" && c.node !== "r") sel = c.node;
     const target: NotifTarget | null =
       n.type === "invite_used"
         ? { kind: "invites" }
@@ -84,7 +92,7 @@ export function notificationsOf(source: ReplicaSource): NotifRow[] {
       read: n.read,
       createdAt: n.createdAt,
       actor: n.type === "removed" ? (thread?.modBy ?? space?.owner ?? null) : n.actor,
-      others: Math.max(0, n.n - 1),
+      others: n.n > 1,
       title,
       where: n.item?.startsWith("reply:")
         ? "reply"
@@ -93,21 +101,29 @@ export function notificationsOf(source: ReplicaSource): NotifRow[] {
           : "post",
       what: thread?.k === "post" ? "post" : "ask",
       reason: n.type === "removed" ? n.note : null,
-      code: n.type === "invite_used" ? n.note : null,
+      // an `invite_used` record's `note` holds the whole code, which the
+      // row does not show (M6 review C14)
+      code: null,
       channel: space?.name ?? null,
       target,
     };
   });
 }
 
-/** The threads of rows whose title the replica has not loaded. */
+/** The threads of rows whose records the replica has not loaded: a title,
+ * or a comment's node to select (so the row opens its branch). */
 export function unloadedThreads(source: ReplicaSource): { thread: string; space: string }[] {
   const me = source.me;
   if (me === null) return [];
   const list = source.list("notif", { u: me });
   if (list === UNKNOWN) throw new NotLoaded();
   return list
-    .filter((n) => n.th !== null && n.sp !== null && source.get(threadKey(n.th)) === UNKNOWN)
+    .filter(
+      (n) =>
+        n.th !== null &&
+        n.sp !== null &&
+        (source.get(threadKey(n.th)) === UNKNOWN || commentOf(source, n) === UNKNOWN),
+    )
     .map((n) => ({ thread: n.th as string, space: n.sp as string }));
 }
 
@@ -122,16 +138,17 @@ export interface NotifParts {
   code: string | null;
 }
 
+/** The quoted title: the thread's, or what stands for it. */
+export function titleOf(row: Pick<NotifRow, "title">): string {
+  return row.title === undefined ? "a thread" : row.title === null ? "a deleted thread" : row.title;
+}
+
 export function notifParts(row: NotifRow): NotifParts {
-  const others = row.others ? ` and ${row.others} ${row.others === 1 ? "other" : "others"}` : "";
-  const who = `@${row.actor ?? "someone"}${others}`;
-  const title =
-    row.title === undefined ? "a thread" : row.title === null ? "a deleted thread" : row.title;
-  const quoted = row.title === undefined || row.title === null ? null : row.title;
+  const who = `@${row.actor ?? "someone"}${row.others ? " and others" : ""}`;
   const on = (text: string) => ({
     who,
-    text: quoted === null ? `${text} ${title}` : `${text} `,
-    quote: quoted,
+    text: `${text} `,
+    quote: titleOf(row),
     reason: false,
     code: null,
   });

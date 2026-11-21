@@ -24,6 +24,7 @@ import { AskSide } from "../branches/AskSide.js";
 import { RunNote, RunProgress, isStoppedRun } from "../branches/RunStatus.js";
 import { SelectionActions } from "../branches/SelectionActions.js";
 import { indexTree, isActiveRun, othersUnder, passageTrees } from "../branches/tree.js";
+import { ConfirmMemberAction } from "../channels/ConfirmMemberAction.js";
 import { RemoveDialog } from "../channels/RemoveDialog.js";
 import { focusSoon } from "../composer/InlineComposer.js";
 import { ReplyTree } from "../replies/ReplyTree.js";
@@ -305,6 +306,7 @@ function ThreadCard({
   const select = useThreadUiStore((state) => state.select);
   const [deleting, setDeleting] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [banning, setBanning] = useState(false);
   const source = useReplicaQuery(
     (s) => (thread.from ? threadOf(s, thread.from.th) : null),
     [thread.from?.th],
@@ -327,16 +329,16 @@ function ThreadCard({
   const actions: MoreAction[] = [];
   if (writer && !mine && space?.owned && thread.u) {
     actions.push({ label: "Remove…", danger: true, onSelect: () => setRemoving(true) });
-    const author = thread.u;
     actions.push({
       label: `Ban from #${space.name}`,
       danger: true,
-      onSelect: () =>
-        void writes
-          .send("members.ban", { space: space.id, user: author })
-          .then((o) => o.ok && showToast(`Banned @${author} from #${space.name}.`)),
+      onSelect: () => setBanning(true),
     });
   }
+  const ban = (author: string, channel: { id: string; name: string }) =>
+    void writes
+      .send("members.ban", { space: channel.id, user: author })
+      .then((o) => o.ok && !o.unsent && showToast(`Banned @${author} from #${channel.name}.`));
   // Delete needs to know what is under the thread: not offered while that is
   // not loaded, nor on a deleted thread's shell.
   const others = ask ? (index ? othersUnder(index, "r", me) : null) : replyOthers;
@@ -537,6 +539,16 @@ function ThreadCard({
       />
       {space?.owned ? (
         <RemoveDialog thread={thread} open={removing} onOpenChange={setRemoving} />
+      ) : null}
+      {space?.owned && thread.u && !mine ? (
+        <ConfirmMemberAction
+          action="ban"
+          user={thread.u}
+          channel={space}
+          open={banning}
+          onOpenChange={setBanning}
+          onConfirm={() => thread.u && ban(thread.u, space)}
+        />
       ) : null}
     </article>
   );

@@ -7,9 +7,10 @@
 // are not fetched, and widget fences are not rendered as widgets.
 
 import type { StoredRecord } from "@session/mutators";
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import test, { type ExecutionContext } from "ava";
 
+import { AnswerProse } from "../src/features/feed/AnswerProse.js";
 import { configureReplica } from "../src/replica/ReplicaProvider.js";
 import { fixtureReplicaConfig, type FixtureReplica } from "../src/replica/fixtureReplica.js";
 import { channelByName } from "../src/replica/queries.js";
@@ -115,8 +116,31 @@ test.serial("hostile answers, posts, replies, About and reasons render inert", a
   t.is(fine.getAttribute("rel"), "noopener noreferrer nofollow ugc");
   t.is(screen.queryByRole("link", { name: "click me" }), null);
   assertInert(t);
+  // the hostile reply's card renders its text when the reply is selected
+  const replies = document.querySelector<HTMLElement>(`[data-side="${post}"]`);
+  if (!replies) throw new Error("no reply tree");
+  fireEvent.click(within(replies).getByRole("treeitem", { name: /A reply/ }));
+  await waitUntil(
+    t,
+    () =>
+      (document.querySelector(`[data-side="${post}"] .rtext`)?.textContent ?? "").includes(SCRIPT),
+    "the reply's text renders as text",
+  );
+  assertInert(t);
   // About in the info dialog, as text
   fireEvent.click(screen.getByRole("button", { name: "About this channel" }));
   await screen.findByRole("dialog", { name: /^#sci-fi/ });
   assertInert(t);
+});
+
+/** The `rel` tokens of a link to untrusted content (04 Z5). */
+const UNTRUSTED_REL = ["noopener", "noreferrer", "nofollow", "ugc"];
+
+test.serial("a citation's source link carries every rel token of untrusted content", async (t) => {
+  render(<AnswerProse md="A claim.[^1]" pages={[["A source", "example.com", "What it says"]]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Source 1" }));
+  const link = await screen.findByRole("link", { name: /example\.com/ });
+  const rel = (link.getAttribute("rel") ?? "").split(/\s+/);
+  for (const token of UNTRUSTED_REL) t.true(rel.includes(token), token);
+  t.is(link.getAttribute("target"), "_blank");
 });

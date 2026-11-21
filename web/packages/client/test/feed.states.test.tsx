@@ -266,6 +266,41 @@ test.serial("the owner's menu: Remove… opens the dialog once per click; Ban", 
   t.deepEqual(calls, ["moderation.decide"]);
 });
 
+test.serial("the owner's own thread has no Remove… and no Ban (04 O4)", async (t) => {
+  let id = "";
+  prepare = (replica) => {
+    const found = othersThread(replica, "sci-fi");
+    id = found.id;
+    rewrite(replica, found, { u: "ines.v" });
+  };
+  await renderApp("/c/sci-fi");
+  await waitUntil(t, () => cardOf(id) !== null, "the thread renders");
+  const menu = await openMore(cardOf(id) as HTMLElement);
+  t.truthy(within(menu).getByRole("menuitem", { name: /^Delete post/ }));
+  t.is(within(menu).queryByRole("menuitem", { name: "Remove…" }), null);
+  t.is(within(menu).queryByRole("menuitem", { name: "Ban from #sci-fi" }), null);
+});
+
+test.serial("a member's menu on another person's thread has no Remove… and no Ban", async (t) => {
+  let id = "";
+  prepare = (replica) => {
+    id = othersThread(replica, "public").id;
+  };
+  // the "…" button shows only when the menu has an item
+  await renderApp("/c/public");
+  await waitUntil(t, () => cardOf(id) !== null, "the thread renders");
+  const more = within(cardOf(id) as HTMLElement).queryByRole("button", { name: "More" });
+  if (more) {
+    fireEvent.click(more);
+    const menu = await screen.findByRole("menu");
+    t.is(within(menu).queryByRole("menuitem", { name: "Remove…" }), null);
+    t.is(within(menu).queryByRole("menuitem", { name: /^Ban from/ }), null);
+  } else {
+    t.is(screen.queryByRole("menuitem", { name: "Remove…" }), null);
+    t.is(screen.queryByRole("menuitem", { name: /^Ban from/ }), null);
+  }
+});
+
 test.serial("a hidden thread shows its owner the note above its text", async (t) => {
   let thread: StoredRecord | null = null;
   prepare = (replica) => {
