@@ -214,15 +214,15 @@ export interface SyncServerOptions {
   clients?: { idleTtl?: number; perDay?: number };
 }
 
-/** The result of `serverApply`: the function's result and the version of
- * the commit (null when it changed nothing), or the refusal; a refusal or a
- * fault commits nothing. */
 /** The counter of the `pre`-stage limits (`SyncServer.setPreLimits`). */
 export interface PreLimits {
   /** Whether `u` has a use of `limit` left; uses it when so. */
   take(u: string, limit: PreLimit): boolean;
 }
 
+/** The result of `serverApply`: the function's result and the version of
+ * the commit (null when it changed nothing), or the refusal; a refusal or a
+ * fault commits nothing. */
 export type ServerApplyResult<T> =
   | { ok: true; result: T; version: number | null }
   | { ok: false; error: ReturnType<Refusal["toError"]> };
