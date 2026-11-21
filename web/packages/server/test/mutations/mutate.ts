@@ -29,6 +29,8 @@
 import { spawn } from "node:child_process";
 import {
   cpSync,
+  existsSync,
+  readdirSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -611,6 +613,12 @@ function makeSlot(root: string, n: number): string {
     });
   for (const from of COPIED) {
     mkdirSync(join(web, "packages", from, "node_modules", "@session"), { recursive: true });
+    // a package's own dependencies (a version the root does not hoist)
+    const own = join(WEB, "packages", from, "node_modules");
+    if (existsSync(own))
+      for (const entry of readdirSync(own))
+        if (entry !== "@session" && !entry.startsWith("."))
+          symlinkSync(join(own, entry), join(web, "packages", from, "node_modules", entry));
     for (const name of IMPORTS[from])
       symlinkSync(
         join(web, "packages", name),
@@ -730,14 +738,15 @@ try {
   const dirs = Array.from({ length: Math.min(slots, todo.length) }, (_, n) => makeSlot(root, n));
   // the suite passes on the unchanged copy, or no mutation can be judged
   if (!args.includes("--no-baseline")) {
-    const base = results(
-      await sh("npx", ["ava", "--fail-fast", "--concurrency", "2"], dirs[0] ?? "", {
-        SESSION_CONFORMANCE: "1",
-        REPLICA_PROTO_SEQUENCES: sequences,
-      }),
-    );
+    const run = await sh("npx", ["ava", "--fail-fast", "--concurrency", "2"], dirs[0] ?? "", {
+      SESSION_CONFORMANCE: "1",
+      REPLICA_PROTO_SEQUENCES: sequences,
+    });
+    const base = results(run);
     if (base.failed > 0 || base.passed === 0)
-      throw new Error(`the unchanged copy fails its suite: ${JSON.stringify(base)}`);
+      throw new Error(
+        `the unchanged copy fails its suite: ${JSON.stringify(base)}\n${run.out.slice(-3000)}`,
+      );
     console.log(`baseline: ${base.passed} tests passed`);
   }
   const queue = [...todo];
