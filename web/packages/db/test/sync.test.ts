@@ -21,7 +21,7 @@ import {
   rewriteRecords,
 } from "../src/index.js";
 
-import { KEYS, MINUTE, World, actor, cast, ok, post, refused, rng } from "./syncWorld.js";
+import { DAY, KEYS, MINUTE, World, actor, cast, ok, post, refused, rng } from "./syncWorld.js";
 
 const changesOf = (p: Pull): Change[] => ("changes" in p ? p.changes : []);
 
@@ -121,7 +121,7 @@ test("D1: putRecord and deleteRecord are the only code that writes the records t
   // the three statements are used by putRecord and deleteRecord only
   const uses = [...store.matchAll(/this\.s\.(insertRecord|updateRecord|deleteRecord)\.run/g)]
     .length;
-  t.is(uses, 4);
+  t.is(uses, 3);
   const body = (name: string) => {
     const at = store.indexOf(`\n  ${name}(`);
     return store.slice(at, store.indexOf("\n  }\n", at));
@@ -129,7 +129,7 @@ test("D1: putRecord and deleteRecord are the only code that writes the records t
   t.is(
     [...body("putRecord").matchAll(/this\.s\.\w+Record\.run/g)].length +
       [...body("deleteRecord").matchAll(/this\.s\.\w+Record\.run/g)].length,
-    4,
+    3,
   );
 });
 
@@ -628,4 +628,157 @@ test("sync review-m2 17 on SqliteStore: a nested transaction that throws takes b
   t.is(fresh.lastRev("b"), undefined);
   t.like(fresh.byKey(`thread:${p}`), { sum: null });
   fresh.sqlite.close();
+});
+
+// ---- the sync package's Y8 retention tests, on SqliteStore ----
+
+const count = (w: World, table: string) =>
+  (w.db.$client.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n;
+
+test("Y8 on SqliteStore: retention prunes each table at its boundary millisecond", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const p = post(t, w, "mel", open);
+  ok(t, w.as("mel", "threads.delete", { id: p }));
+  ok(t, w.as("otto", "saved.set", { kind: "thread", id: post(t, w, "mel", open), on: true }));
+  const saved = (
+    w.db.$client.prepare("SELECT key FROM records WHERE key LIKE 'save:otto:%'").get() as {
+      key: string;
+    }
+  ).key;
+  ok(t, w.as("otto", "saved.set", { kind: "thread", id: saved.split(":")[2], on: false }));
+  const tomb = w.store.tombstone(saved);
+  if (!tomb) return t.fail("no tombstone");
+  t.is(tomb.at, w.clock.now(), "the tombstone carries the commit time");
+  refused(t, w.as("otto", "prefs.set", { layout: "wide" }, "not-a-ulid"), "BAD_REQUEST");
+  t.is(count(w, "sync_seq_answers"), 1);
+  const answers = count(w, "sync_answers");
+  t.true(answers > 0);
+  const t0 = w.clock.now();
+  w.server.retain(t0 + 7 * DAY - 1);
+  t.is(count(w, "sync_answers"), answers, "an answer recorded 1 ms less than 7 days ago is kept");
+  t.true(count(w, "sync_clients") > 0);
+  w.server.retain(t0 + 7 * DAY);
+  t.is(count(w, "sync_answers"), 0);
+  t.is(count(w, "sync_seq_answers"), 0);
+  t.is(count(w, "sync_clients"), 0);
+  w.server.retain(tomb.at + 30 * DAY);
+  t.truthy(w.store.tombstone(saved), "a tombstone committed exactly 30 days ago is kept");
+  w.server.retain(tomb.at + 30 * DAY + 1);
+  t.is(w.store.tombstone(saved), undefined);
+  t.false(w.store.logRows("user:otto", 0).some((r) => r.key === saved));
+  t.true(w.store.idTaken(p), "the registry keeps every id");
+});
+
+test("Y8 on SqliteStore: moderation log entries over 180 days are deleted for every replica", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  ok(t, w.as("olga", "members.ban", { space: open, user: "otto" }));
+  const key = (
+    w.db.$client.prepare("SELECT key, created_at FROM records WHERE kind = 'modlog'").get() as {
+      key: string;
+      created_at: number;
+    }
+  ).key;
+  const at = w.clock.now();
+  t.is(
+    (
+      w.db.$client.prepare("SELECT created_at AS c FROM records WHERE key = ?").get(key) as {
+        c: number;
+      }
+    ).c,
+    at,
+    "the entry's row carries its creation time",
+  );
+  w.clock.ms = at + 180 * DAY;
+  const owner = w.server.snapshot(actor("olga"), `space:${open}`);
+  w.server.retain();
+  t.truthy(w.get(key), "an entry made exactly 180 days ago is kept");
+  w.clock.ms = at + 180 * DAY + 1000;
+  w.server.retain();
+  t.is(new SqliteStore(w.db).byKey(key), undefined);
+  const pull = w.server.pull(actor("olga"), `space:${open}`, owner.cursor);
+  t.true("changes" in pull && pull.changes.some((c) => c.key === key && c.op === "del"));
+});
+
+test("a record put with no creation version keeps the row's own, and a new key without one is refused", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const store = w.store as SqliteStore;
+  const key = `space:${open}`;
+  const v = store.createdVersion(key);
+  const at = (
+    w.db.$client.prepare("SELECT created_at AS c FROM records WHERE key = ?").get(key) as {
+      c: number;
+    }
+  ).c;
+  const s = store.byKey(key);
+  if (s?.kind !== "space") return t.fail("no space");
+  store.transaction(() => store.putRecord(key, { ...s, desc: "changed", rev: s.rev + 1 }, null));
+  t.is(store.createdVersion(key), v);
+  t.is(
+    (
+      w.db.$client.prepare("SELECT created_at AS c FROM records WHERE key = ?").get(key) as {
+        c: number;
+      }
+    ).c,
+    at,
+  );
+  t.throws(() =>
+    store.transaction(() =>
+      store.putRecord(`space:${w.id()}`, { ...s, id: w.id(), name: "fresh", rev: 1 }, null),
+    ),
+  );
+});
+
+test("a snapshot orders records of one creation time by the version of the commit that made them", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  // ids in reverse of the commit order, all at one server time
+  const ids = [w.id(3000), w.id(2000), w.id(1000)];
+  for (const id of ids)
+    ok(t, w.as("mona", "threads.create", { id, space: open, kind: "post", q: id }));
+  const order = w.server
+    .snapshot(actor("mona"), `space:${open}`)
+    .records.filter((r) => r.record.kind === "thread")
+    .map((r) => (r.record as { id: string }).id);
+  t.deepEqual(order, ids);
+});
+
+test("the record cache holds cacheSize records: an evicted one is read again from its row", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const ids = [
+    post(t, w, "mona", open, "a"),
+    post(t, w, "mona", open, "b"),
+    post(t, w, "mona", open, "c"),
+  ];
+  const store = new SqliteStore(w.db, { cacheSize: 3 });
+  let reads = 0;
+  const statement = (store as unknown as { s: { byKey: { get: (k: string) => unknown } } }).s.byKey;
+  const get = statement.get.bind(statement);
+  statement.get = (k: string) => {
+    reads += 1;
+    return get(k);
+  };
+  for (const id of ids) store.byKey(`thread:${id}`);
+  t.is(reads, 3);
+  for (const id of ids) store.byKey(`thread:${id}`);
+  t.is(reads, 3, "three records stay cached");
+  store.byKey(`space:${open}`);
+  t.is(reads, 4);
+  // the oldest went out
+  store.byKey(`thread:${ids[0] ?? ""}`);
+  t.is(reads, 5);
+  store.byKey(`thread:${ids[2] ?? ""}`);
+  t.is(reads, 5);
+});
+
+test("a tombstone keeps who deleted the record", (t) => {
+  const w = new World(t);
+  const { open } = cast(t, w);
+  const th = post(t, w, "mona", open);
+  ok(t, w.as("otto", "saved.set", { kind: "thread", id: th, on: true }));
+  ok(t, w.as("otto", "saved.set", { kind: "thread", id: th, on: false }));
+  t.like(w.store.tombstone(`save:otto:${th}`), { kind: "save", person: "otto", by: "otto" });
 });

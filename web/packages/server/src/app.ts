@@ -50,6 +50,8 @@ export interface CreateAppOptions extends ServerDeps {
   readiness?: Readiness;
   metrics?: MetricsRegistry;
   clientDistDirectory?: string;
+  /** The work budget of one `POST /api/sync/read` (`sync/routes.ts`). */
+  readBudget?: { bytes: number; ms: number };
 }
 
 export function createApp(options: CreateAppOptions): Hono<AppEnv> {
@@ -58,6 +60,7 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
     readiness = createReadiness("ready"),
     metrics = new MetricsRegistry(),
     clientDistDirectory,
+    readBudget,
     ...deps
   } = options;
   const logger = deps.logger ?? defaultLogger(deps.config.env);
@@ -86,7 +89,10 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   // `SESSION_TEST_ROUTES=1`, which the configuration accepts only in a test
   // server on a loopback origin (`config.ts`).
   if (deps.config.testRoutes) app.route("/api/sync/test", syncTestRoutes(sync));
-  app.route("/api/sync", syncRoutes({ sync, config: deps.config, limiter }));
+  app.route(
+    "/api/sync",
+    syncRoutes({ sync, config: deps.config, limiter, ...(readBudget ? { readBudget } : {}) }),
+  );
 
   // `03` T3: a client that saw a gap in a run's deltas, or reconnected, reads
   // the attempt's committed turns and the turn still streaming. The read

@@ -52,10 +52,16 @@ test("S1: a read shows no version, and its token's length depends only on the lo
   t.deepEqual(Object.keys(b).sort(), ["cursor", "lastSeq", "records", "serverTime"]);
   t.is(b.serverTime, w.clock.now());
   t.is(a.cursor.length, b.cursor.length);
-  // the token: a random IV, the sealed fixed-size head and [log, reader], a tag
+  // the token: a random IV, the sealed fixed-size head and [log, reader], a
+  // tag: its length less the JSON of [log, reader] is the same for another
+  // log and another reader (the head's size is the server's own: 29 bytes
+  // in the prototype, 45 with the history id in @session/sync)
   const log = `space:${open}`;
   const sealed = (cursor: string) => Buffer.from(cursor, "base64url");
-  t.is(sealed(b.cursor).length, 12 + 29 + JSON.stringify([log, null]).length + 16);
+  const fixed = sealed(b.cursor).length - JSON.stringify([log, null]).length;
+  const other = await w.server.snapshot(actor("mel"), "user:mel");
+  t.is(sealed(other.cursor).length - JSON.stringify(["user:mel", "mel"]).length, fixed);
+  t.true(fixed >= 12 + 16 && fixed <= 12 + 64 + 16);
   t.false(sealed(b.cursor).includes(Buffer.from(log)));
   // eve's own writes, sampled between others' commits, show nothing either
   const mine = w.id();

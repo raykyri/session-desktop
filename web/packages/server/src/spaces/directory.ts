@@ -20,9 +20,9 @@ export interface DirectoryPage {
 
 /** Where the open channels are read from. */
 export interface SpaceDirectory {
-  /** Open channels by id, after the id `after` (exclusive), at most
-   * `limit`. */
-  openSpaces(after: string | null, limit: number): SpaceRec[];
+  /** Open channels after the cursor `after` (exclusive; null for the first
+   * page), at most `limit`, each with the cursor that pages on after it. */
+  openSpaces(after: string | null, limit: number): { space: SpaceRec; cursor: string }[];
   /** The channel of a name, open or private: a private channel's record is
    * its landing (name, About, owner, member count; `04` I5). */
   byName(name: string): SpaceRec | null;
@@ -31,8 +31,9 @@ export interface SpaceDirectory {
 /** No channels (a server without the sync store). */
 export const EMPTY_DIRECTORY: SpaceDirectory = { openSpaces: () => [], byName: () => null };
 
-/** One page of the directory, in id order (ULIDs: creation order). A
- * private channel is never served, whatever the directory returns. */
+/** One page of the directory, in the directory's order (the store's:
+ * creation order on the server). A private channel is never served,
+ * whatever the directory returns. */
 export function directoryPage(
   directory: SpaceDirectory,
   input: { cursor?: string | undefined; limit?: number | undefined },
@@ -43,7 +44,7 @@ export function directoryPage(
   const page = rows.slice(0, limit);
   const last = page.at(-1);
   return {
-    spaces: page.filter((s) => s.vis === "open"),
-    nextCursor: rows.length > limit && last ? last.id : null,
+    spaces: page.map((r) => r.space).filter((s) => s.vis === "open"),
+    nextCursor: rows.length > limit && last ? last.cursor : null,
   };
 }

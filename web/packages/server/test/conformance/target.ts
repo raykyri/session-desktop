@@ -398,8 +398,7 @@ export class HttpTestServer implements TestServer {
     );
     // a refusal of the request (signed out: 401 before the body is read)
     // is the envelope's unrecorded answer
-    if (!json.answers && typeof json.code === "string")
-      return { ok: false, error: json as never };
+    if (!json.answers && typeof json.code === "string") return { ok: false, error: json as never };
     const a = json.answers?.[sent.length - 1];
     if (!a) throw new Error(`apply answered ${status} ${JSON.stringify(json)}`);
     if (this.#batched) {

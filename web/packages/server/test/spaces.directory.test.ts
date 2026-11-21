@@ -23,10 +23,13 @@ const space = (n: number, vis: "open" | "private" = "open"): Spaces.SpaceRecord 
 
 const spaces = [space(1), space(2, "private"), space(3), space(4), space(5)];
 
-/** As the store answers: open channels after `after`. */
+/** As the store answers: open channels after `after`, with their cursors. */
 const directory = {
   openSpaces: (after: string | null, limit: number) =>
-    spaces.filter((s) => s.vis === "open" && (after === null || s.id > after)).slice(0, limit),
+    spaces
+      .filter((s) => s.vis === "open" && (after === null || s.id > after))
+      .slice(0, limit)
+      .map((space) => ({ space, cursor: space.id })),
   byName: (name: string) => spaces.find((s) => s.name === name) ?? null,
 };
 
@@ -52,7 +55,12 @@ test("no private channel, for a signed-out caller or a member, and pages follow 
 
 test("a private channel the store returned is not served", async (t) => {
   const h = createHarness(t, {
-    deps: { directory: { openSpaces: () => spaces, byName: () => null } },
+    deps: {
+      directory: {
+        openSpaces: () => spaces.map((space) => ({ space, cursor: space.id })),
+        byName: () => null,
+      },
+    },
   });
   const page = await h.caller(null).spaces.directory();
   t.false(page.spaces.some((s) => s.vis !== "open"));

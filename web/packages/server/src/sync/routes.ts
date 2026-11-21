@@ -125,6 +125,9 @@ export interface SyncRoutesOptions {
   sync: SyncService;
   config: Config;
   limiter: RateLimiter;
+  /** The work budget of one `POST /read` (`READ_BUDGET_BYTES`,
+   * `READ_BUDGET_MS`); a test sets a small one. */
+  readBudget?: { bytes: number; ms: number };
 }
 
 export function syncRoutes(options: SyncRoutesOptions): Hono<AppEnv> {
@@ -135,6 +138,7 @@ export function syncRoutes(options: SyncRoutesOptions): Hono<AppEnv> {
   const idleTtl = sync.clientIdleTtl;
   const app = new Hono<AppEnv>();
   const now = () => sync.clock.now();
+  const budget = options.readBudget ?? { bytes: READ_BUDGET_BYTES, ms: READ_BUDGET_MS };
 
   /** The limit key of the caller: the account, or the IP key signed out. */
   const keyOf = (c: Context<AppEnv>, scope: string) => {
@@ -351,7 +355,7 @@ export function syncRoutes(options: SyncRoutesOptions): Hono<AppEnv> {
     let bytes = 0;
     let spent = 0;
     for (const read of reads as Read[]) {
-      if (bytes >= READ_BUDGET_BYTES || spent >= READ_BUDGET_MS) {
+      if (bytes >= budget.bytes || spent >= budget.ms) {
         answers.push(JSON.stringify(readError("TOO_MANY_REQUESTS")));
         continue;
       }

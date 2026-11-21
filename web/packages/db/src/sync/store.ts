@@ -449,7 +449,9 @@ export class SqliteStore implements ServerStore {
     if (created)
       this.s.insertRecord.run({ ...row, createdV: created.version, createdAt: created.at });
     else if (existed) this.s.updateRecord.run(row);
-    else this.s.insertRecord.run({ ...row, createdV: 0, createdAt: 0 });
+    // a new key without its creating commit would be born at version 0 and
+    // time 0: first in every list, and past every retention cutoff
+    else throw new Error(`record ${key} is new: its creating commit is needed`);
     if (record.kind === "save" && !existed) this.countSave(record.th, 1);
     this.remember(key, record);
     this.keys.add(key);

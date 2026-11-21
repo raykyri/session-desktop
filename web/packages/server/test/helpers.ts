@@ -22,6 +22,7 @@ import { createLogger } from "../src/logger.js";
 import { RateLimiter } from "../src/middleware/rateLimit.js";
 import type { NoopRunsService, RunsService } from "../src/runs/service.js";
 import { createNoopRunsService } from "../src/runs/service.js";
+import { storeDirectory } from "../src/sync/directory.js";
 import { SyncService, type SyncServiceOptions } from "../src/sync/service.js";
 import { createAppContext } from "../src/trpc/base.js";
 import { appRouter, createCallerFactory } from "../src/trpc/router.js";
@@ -75,6 +76,8 @@ export interface HarnessOptions {
   /** The sync core's options besides the database and config: its clock and
    * mutators (`sync/service.ts`). */
   sync?: Omit<SyncServiceOptions, "db" | "config">;
+  /** The work budget of one `POST /api/sync/read`. */
+  readBudget?: { bytes: number; ms: number };
 }
 
 let githubIdCounter = 5000;
@@ -114,11 +117,14 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
   const limiter = new RateLimiter(options.limiterNow);
   const sync = new SyncService({ db, config, logger, ...options.sync });
   t.teardown(() => sync.drain());
+  // the directory `createApp` builds, so the procedures a test calls read
+  // the store as the routes do
   const base = {
     config,
     db,
     sync,
     logger,
+    directory: storeDirectory(sync.store),
     ...(options.fetch ? { fetch: options.fetch } : {}),
     ...options.deps,
   };
@@ -126,6 +132,7 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
   const app = createApp({
     ...deps,
     limiter,
+    ...(options.readBudget ? { readBudget: options.readBudget } : {}),
     // No client bundle in a test checkout; the SPA fallback stays off.
     clientDistDirectory: join(directory, "no-client"),
   });

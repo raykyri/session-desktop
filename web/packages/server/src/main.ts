@@ -22,7 +22,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { serve } from "@hono/node-server";
+import { serve, type ServerType } from "@hono/node-server";
 import { accounts, auth, closeDatabase, openDatabase, users } from "@session/db";
 
 import { createApp } from "./app.js";
@@ -182,10 +182,7 @@ function testFaults(
  * end, then closes those still open. Resolves once every connection is
  * gone, or `graceMs` later again at most: a socket that will not close does
  * not hold up the checkpoint. */
-export async function closeServer(
-  server: { close(cb?: (err?: Error) => void): unknown; closeAllConnections(): void },
-  graceMs: number,
-): Promise<void> {
+export async function closeServer(server: ServerType, graceMs: number): Promise<void> {
   let timer: NodeJS.Timeout | undefined;
   const closed = new Promise<void>((resolve) => server.close(() => resolve()));
   const late = (ms: number) =>
@@ -195,7 +192,7 @@ export async function closeServer(
     });
   await Promise.race([closed, late(graceMs)]);
   clearTimeout(timer);
-  server.closeAllConnections();
+  if ("closeAllConnections" in server) server.closeAllConnections();
   await Promise.race([closed, late(graceMs)]);
   clearTimeout(timer);
 }
@@ -311,7 +308,7 @@ export function main(): RunningServer {
         "the drain did not finish inside its deadline; checkpointing anyway",
       );
     }
-    await closeServer(server as unknown as Parameters<typeof closeServer>[0], CONNECTION_GRACE_MS);
+    await closeServer(server, CONNECTION_GRACE_MS);
     try {
       db.$client.pragma("wal_checkpoint(TRUNCATE)");
     } catch (error) {

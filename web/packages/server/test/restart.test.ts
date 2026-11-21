@@ -6,12 +6,18 @@
 // - after the commit of a write, before its response: after a restart the
 //   replayed envelope is answered from the stored answer, and the write was
 //   applied once;
-// - inside the commit, after the mutator's stages ran: after a restart there
-//   is neither the write nor its notifications, and the resent envelope
-//   applies, notifications included.
+// - inside the commit, after the mutator's stages ran, and at a store write
+//   inside the commit (after the reply's row, before the stored answer):
+//   after a restart there is neither the write, its counts, its
+//   notifications, its answer nor its seq, and the resent envelope applies,
+//   notifications included.
+//
+// And the process lifecycle of `main.ts`: SIGTERM ends the streams, exits 0
+// and leaves the WAL checkpointed; boot closes the usage rows a crash left
+// open (ending `boot`) and interrupts the runs it left running.
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,6 +26,12 @@ import { fileURLToPath } from "node:url";
 import { auth, closeDatabase, openDatabase, users } from "@session/db";
 import { PROTOCOL_VERSION, ulid, type ApplyResult, type Envelope } from "@session/sync/server";
 import test, { type ExecutionContext } from "ava";
+
+import { ZERO_COUNTS, weekOf } from "../src/runs/ledger.js";
+import { SqliteLedger } from "../src/runs/sqliteLedger.js";
+import { SyncService } from "../src/sync/service.js";
+
+import { testConfig } from "./helpers.js";
 
 const PACKAGE = fileURLToPath(new URL("..", import.meta.url));
 const ORIGIN = "http://localhost:8787";
@@ -110,6 +122,7 @@ interface Setup {
   cookies: Record<string, string>;
   clients: Record<string, string>;
   seqs: Record<string, number>;
+  space: string;
   post: string;
 }
 
@@ -142,8 +155,8 @@ async function setup(t: ExecutionContext): Promise<Setup> {
     clients[u] = r.clientId;
     seqs[u] = 0;
   }
-  const s: Setup = { server, dir, cookies, clients, seqs, post: "" };
   const space = id();
+  const s: Setup = { server, dir, cookies, clients, seqs, space, post: "" };
   await apply(s, "mona", envelope(s, "mona", "spaces.create", { id: space, name: "lounge" }));
   for (const u of ["mel", "otto"]) await apply(s, u, envelope(s, u, "spaces.join", { space }));
   s.post = id();
@@ -248,4 +261,171 @@ test("a server killed inside the commit leaves no write and no notification; the
       .sort(),
     ["mona:reply", "otto:mention"],
   );
+});
+
+/** What a write of mel's reply leaves in the file, read with the server down. */
+function leftBy(s: Setup, mutationId: string) {
+  const db = openDatabase(join(s.dir, "session.db"));
+  try {
+    const c = db.$client;
+    return {
+      replies: (
+        c.prepare("SELECT count(*) AS n FROM records WHERE kind = 'reply'").get() as { n: number }
+      ).n,
+      notifs: (
+        c.prepare("SELECT count(*) AS n FROM records WHERE kind = 'notif'").get() as { n: number }
+      ).n,
+      counts: (
+        c.prepare("SELECT body FROM records WHERE key = ?").get(`counts:${s.post}`) as {
+          body: string;
+        }
+      ).body,
+      answer: c
+        .prepare("SELECT count(*) AS n FROM sync_answers WHERE mutation_id = ?")
+        .get(mutationId) as { n: number },
+      seq: (
+        c
+          .prepare("SELECT last_seq AS n FROM sync_clients WHERE client_id = ?")
+          .get(s.clients["mel"]) as {
+          n: number;
+        }
+      ).n,
+      head: (c.prepare("SELECT version AS n FROM server_head").get() as { n: number }).n,
+    };
+  } finally {
+    closeDatabase(db);
+  }
+}
+
+for (const at of [
+  "research.createPostFollowUp after putRecord reply:",
+  "research.createPostFollowUp before putAnswer",
+]) {
+  test(`a server killed at a store write inside the commit (${at.split(" ").slice(1).join(" ")}) leaves no reply, counts, notification, answer or seq`, async (t) => {
+    const s = await setup(t);
+    await s.server.stop();
+    const reply = id();
+    const e = envelope(s, "mel", "research.createPostFollowUp", {
+      id: reply,
+      thread: s.post,
+      t: "Agreed, @otto",
+    });
+    const before = leftBy(s, e.mutationId);
+    await s.server.start({ SESSION_TEST_KILL_AT_WRITE: at });
+    await t.throwsAsync(apply(s, "mel", e));
+    t.is(await s.server.exited(), "SIGKILL");
+    t.deepEqual(leftBy(s, e.mutationId), before);
+    t.is(before.replies, 0);
+    t.is(before.answer.n, 0);
+    await s.server.start();
+    t.like(await apply(s, "mel", e), { ok: true, result: { notified: ["otto"] } });
+    const after = leftBy(s, e.mutationId);
+    t.is(after.replies, 1);
+    t.is(after.answer.n, 1);
+    t.is(after.seq, before.seq + 1);
+  });
+}
+
+test("SIGTERM drains: open streams end, the process exits 0 within the deadline, and the WAL is checkpointed", async (t) => {
+  const s = await setup(t);
+  const cursorRes = await s.server.post("/api/sync/snapshot", s.cookies["mona"] ?? "", {
+    log: "user:mona",
+  });
+  const cursor = ((await cursorRes.json()) as { cursor: string }).cursor;
+  const stream = await fetch(
+    `http://127.0.0.1:${s.server.port}/api/sync/events?clientId=${s.clients["mona"]}`,
+    {
+      headers: {
+        "Session-Protocol": String(PROTOCOL_VERSION),
+        Cookie: `session=${s.cookies["mona"]}`,
+        "Session-Cursors": JSON.stringify({ "user:mona": cursor }),
+      },
+    },
+  );
+  t.is(stream.status, 200);
+  const reader = stream.body?.getReader();
+  await reader?.read();
+  const started = Date.now();
+  s.server.child?.kill("SIGTERM");
+  const signal = await s.server.exited();
+  t.is(signal, null);
+  t.is(s.server.child?.exitCode, 0);
+  t.true(Date.now() - started < 10_000);
+  // the stream ended with the drain
+  for (let r = await reader?.read(); r && !r.done; r = await reader?.read());
+  const wal = join(s.dir, "session.db-wal");
+  t.true(!existsSync(wal) || statSync(wal).size === 0, "the WAL was truncated");
+  s.server.child = null;
+});
+
+test("boot reconciles a crash: open usage rows close with ending 'boot', and a running run is interrupted", async (t) => {
+  const s = await setup(t);
+  const ask = id();
+  const r = (await apply(
+    s,
+    "mona",
+    envelope(s, "mona", "threads.create", {
+      id: ask,
+      space: s.space,
+      kind: "ask",
+      q: "Why?",
+      model: "claude-fable",
+      effort: "medium",
+    }),
+  )) as { ok: boolean; result?: { run?: string } };
+  const run = r.result?.run ?? "";
+  t.truthy(run);
+  await s.server.stop();
+  // the crash: a run left running, a usage row left open
+  const db = openDatabase(join(s.dir, "session.db"));
+  const config = testConfig(s.dir);
+  const sync = new SyncService({ db, config });
+  sync.server.serverApply({ me: "" }, (tx) => {
+    const rec = tx.byKey(`run:${run}`);
+    if (rec?.kind === "run") tx.put({ ...rec, status: "running", startedAt: rec.createdAt });
+  });
+  const ledger = new SqliteLedger(db);
+  const monaId = (
+    db.$client.prepare("SELECT id FROM users WHERE handle = 'mona'").get() as { id: string }
+  ).id;
+  ledger.open({
+    runId: run,
+    attempt: 1,
+    userId: monaId,
+    payer: "included",
+    week: weekOf(Date.now()),
+    kind: "research",
+    provider: "anthropic",
+    model: "claude-fable",
+    cachedInputRatio: 0.1,
+    counts: { ...ZERO_COUNTS, inputTokens: 5 },
+    openedAt: Date.now(),
+  });
+  sync.drain();
+  closeDatabase(db);
+  await s.server.start();
+  await s.server.stop();
+  const after = openDatabase(join(s.dir, "session.db"));
+  try {
+    const rows = after.$client
+      .prepare("SELECT state, ending FROM usage_events WHERE run_id = ?")
+      .all(run) as { state: string; ending: string | null }[];
+    t.deepEqual(rows[0], { state: "closed", ending: "boot" });
+    const rec = JSON.parse(
+      (
+        after.$client.prepare("SELECT body FROM records WHERE key = ?").get(`run:${run}`) as {
+          body: string;
+        }
+      ).body,
+    ) as { status: string; fail: { why: string } | null };
+    const resumes =
+      (
+        after.$client.prepare("SELECT resumes FROM run_resumes WHERE run_id = ?").get(run) as
+          { resumes: number } | undefined
+      )?.resumes ?? 0;
+    // interrupted at boot; the dispatcher may queue it again as a resume
+    t.true(rec.status === "interrupted" || resumes >= 1, JSON.stringify({ rec, resumes }));
+  } finally {
+    closeDatabase(after);
+  }
 });
