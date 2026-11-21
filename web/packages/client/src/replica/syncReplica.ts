@@ -265,7 +265,8 @@ export class SyncReplica implements ReplicaSource {
       }),
       client.onEvent((e) => this.onClientEvent(e)),
     );
-    void this.loadDirectory(gen);
+    // a reader's first snapshots wait for the directory; a member's do not
+    if (this.writer) void this.loadDirectory(gen);
     await this.loadInitial(gen);
     if (!this.live(gen)) return;
     this.poll = setInterval(() => void this.pollOnce(gen), this.options.pollMs ?? 60_000);
