@@ -167,3 +167,88 @@ test("T1: a reader that received every delta and one that dropped them all show 
   );
   t.is(after(null), "Consistent hashing places keys on a ring.");
 });
+
+test("T3: a delta of an older attempt changes nothing and reads nothing, at any seq", (t) => {
+  const { live, reads } = texts();
+  live.apply(d(1, "Second try ", { attempt: 2 }));
+  live.apply(d(2, "late text of attempt one", { attempt: 1 }));
+  t.deepEqual(reads, [], "no /live read right after the old attempt's delta");
+  live.apply(d(1, "first text of attempt one", { attempt: 1 }));
+  t.like(live.get("R"), { attempt: 2, seq: 1, text: "Second try " });
+  t.deepEqual(reads, []);
+});
+
+test("T3: /live for an older attempt does not replace a newer one", async (t) => {
+  const { live, reads, settle } = texts(() => ({
+    attempt: 1,
+    live: { n: 0, text: "Attempt one's checkpoint", seq: 50 },
+  }));
+  live.apply(d(1, "Second try ", { attempt: 2 }));
+  live.reconnected();
+  t.deepEqual(reads, ["R"]);
+  await settle();
+  t.like(live.get("R"), { attempt: 2, seq: 1, text: "Second try " });
+});
+
+test("T3: a /live answer older than the deltas that arrived during the read does not rewind", async (t) => {
+  const { live, settle } = texts(() => ({
+    attempt: 1,
+    live: { n: 0, text: "Consistent hashing ", seq: 2 },
+  }));
+  live.apply(d(1, "Consistent "));
+  live.reconnected();
+  live.apply(d(2, "hashing "));
+  live.apply(d(3, "places"));
+  await settle();
+  t.like(live.get("R"), { seq: 3, text: "Consistent hashing places" });
+});
+
+test("T3: a failed /live read is tried again with a growing wait until it answers; a drop stops it", async (t) => {
+  let failures = 2;
+  const reads: number[] = [];
+  const started = Date.now();
+  const live = new RunLiveTexts({
+    read: () => {
+      reads.push(Date.now() - started);
+      if (failures > 0) {
+        failures -= 1;
+        return Promise.reject(new Error("503"));
+      }
+      return Promise.resolve({ attempt: 1, live: { n: 0, text: "Read at last", seq: 4 } });
+    },
+    onChange: () => {},
+    retryMs: 20,
+    maxRetryMs: 40,
+  });
+  live.apply(d(2, "a gap"));
+  const until = async (ok: () => boolean) => {
+    while (!ok()) await new Promise((r) => setTimeout(r, 5));
+  };
+  await until(() => live.get("R") !== null);
+  t.like(live.get("R"), { seq: 4, text: "Read at last" });
+  t.is(reads.length, 3);
+  t.true(
+    (reads[2] ?? 0) - (reads[1] ?? 0) >= (reads[1] ?? 0) - (reads[0] ?? 0) - 5,
+    "it waits longer",
+  );
+
+  // a run dropped while its read is failing is not read again
+  failures = 100;
+  live.apply(d(9, "another gap"));
+  await until(() => reads.length === 4);
+  live.drop("R");
+  await new Promise((r) => setTimeout(r, 120));
+  t.is(reads.length, 4);
+  t.is(live.get("R"), null);
+});
+
+test("T3: the answer of a read begun before a drop is ignored", async (t) => {
+  const { live, settle } = texts(() => ({
+    attempt: 1,
+    live: { n: 0, text: "Text of a run that ended", seq: 8 },
+  }));
+  live.apply(d(3, "a gap"));
+  live.drop("R");
+  await settle();
+  t.is(live.get("R"), null);
+});

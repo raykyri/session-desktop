@@ -207,7 +207,9 @@ export class Writer {
   }
 
   /** The run records of a space log as this person reads them. */
-  async runs(space: string): Promise<Map<string, { status: string; attempt: number }>> {
+  async runs(
+    space: string,
+  ): Promise<Map<string, { status: string; attempt: number; th: string; node: string }>> {
     const res = await this.request.post(`${APP_ORIGIN}/api/sync/snapshot`, {
       headers: SYNC_HEADERS,
       data: { log: `space:${space}` },
@@ -215,13 +217,25 @@ export class Writer {
     const { records } = (await res.json()) as {
       records: {
         key: string;
-        record: { kind: string; id: string; status: string; attempt: number };
+        record: {
+          kind: string;
+          id: string;
+          status: string;
+          attempt: number;
+          th: string;
+          node: string;
+        };
       }[];
     };
-    const out = new Map<string, { status: string; attempt: number }>();
+    const out = new Map<string, { status: string; attempt: number; th: string; node: string }>();
     for (const { record } of records)
       if (record.kind === "run")
-        out.set(record.id, { status: record.status, attempt: record.attempt });
+        out.set(record.id, {
+          status: record.status,
+          attempt: record.attempt,
+          th: record.th,
+          node: record.node,
+        });
     return out;
   }
 
