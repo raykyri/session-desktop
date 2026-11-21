@@ -11,6 +11,7 @@ import { join } from "node:path";
 
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createVertex } from "@ai-sdk/google-vertex";
+import { createOpenAI } from "@ai-sdk/openai";
 import { APICallError } from "@ai-sdk/provider";
 import type {
   LanguageModelV4,
@@ -51,17 +52,19 @@ export interface ResolvedModel {
   providerTools: ToolSet;
 }
 
-/** A member's own key for one call (`03` K4, K9). */
+/** A member's own key for one call (`03` K4, K9, K11). */
 export interface PersonalKey {
-  provider: "anthropic";
+  provider: "anthropic" | "openai";
   apiKey: string;
 }
 
 export interface Providers {
   /** `null` when the model is unknown or its provider has no credential —
    * the same answer `system.runtimeConfig` gives as `available: false`.
-   * With `key`, an Anthropic model is called with the member's key instead
-   * of the deployment's; any other model answers `null`. */
+   * With `key`, a model of the key's provider is called with the member's
+   * key instead of the deployment's: an Anthropic model with an Anthropic
+   * key, an OpenAI (key-only) model with an OpenAI key, at the provider
+   * directly; any other combination answers `null`. */
   resolve(modelId: string, effort?: string | null, key?: PersonalKey): ResolvedModel | null;
   /** True when every model is a recorded fixture. */
   readonly fixtures: boolean;
@@ -279,6 +282,20 @@ export function createProviders(config: Config, options: CreateProvidersOptions 
             providerTools: {},
           };
         }
+        case "openai":
+          // Key-only (`03` K11): the deployment has no OpenAI credential, so
+          // there is no client without the member's key. The call goes to
+          // OpenAI directly, not through OpenRouter's routing (K14).
+          if (!key) return null;
+          return {
+            entry,
+            model: createOpenAI({
+              apiKey: key.apiKey,
+              ...(fetchImpl ? { fetch: fetchImpl } : {}),
+            })(entry.route),
+            providerOptions,
+            providerTools: {},
+          };
         case "anthropic":
           return {
             entry,

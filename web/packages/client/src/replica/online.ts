@@ -28,12 +28,52 @@ export interface ModelOption {
   provider: string;
 }
 
+/** The providers a member may add a key for (03 K4). */
+export type KeyProvider = "anthropic" | "openai";
+
 export interface OnlineData {
   models: readonly ModelOption[];
   defaultModel: string;
   defaultEffort: Effort;
   /** Null until known: the ring reads an unused allowance. */
   usage: UsageReading | null;
+  /** The providers the member has a `valid` key for (`usage.get`). */
+  keys: readonly KeyProvider[];
+}
+
+/** The provider whose key alone pays for `model`, or null when included
+ * tokens may pay (03 K11): such a model runs only on the member's key. */
+export function keyOnlyProvider(model: Pick<ModelOption, "payers">): KeyProvider | null {
+  if (model.payers.includes("included")) return null;
+  if (model.payers.includes("key:openai")) return "openai";
+  return model.payers.includes("key:anthropic") ? "anthropic" : null;
+}
+
+/** Whether the member can run `model`: included tokens may pay, or the
+ * member holds the key its payers name. */
+export function modelPayable(
+  model: Pick<ModelOption, "payers">,
+  keys: readonly KeyProvider[],
+): boolean {
+  const provider = keyOnlyProvider(model);
+  return provider === null ? model.payers.includes("included") : keys.includes(provider);
+}
+
+/** The model a composer runs on (02 §5): the tab's choice when the member
+ * can run it, else the site default model, else the first model the member
+ * can run. A key-only model whose key was removed falls back this way. */
+export function composerModel(
+  online: Pick<OnlineData, "models" | "defaultModel" | "keys">,
+  chosen: string | null,
+): ModelOption | undefined {
+  const usable = (id: string | null) =>
+    online.models.find((m) => m.id === id && modelPayable(m, online.keys));
+  return (
+    usable(chosen) ??
+    usable(online.defaultModel) ??
+    online.models.find((m) => modelPayable(m, online.keys)) ??
+    online.models[0]
+  );
 }
 
 /** A model's short name: its label without the vendor word and the words
@@ -68,11 +108,13 @@ export interface ModelListing {
   defaultEffort: Effort;
 }
 
-/** `usage.get`'s answer, as far as the ring reads it (03 K5, K6). */
+/** `usage.get`'s answer, as far as the ring and the composer read it
+ * (03 K5, K6, K11). */
 export interface WeeklyUsage {
   allowance: number;
   used: number;
   resetAt: number;
+  keys?: readonly { provider: KeyProvider; status: "valid" | "invalid" }[];
 }
 
 /**
@@ -109,6 +151,9 @@ export function withServerData(
             resetsAt: usage.resetAt,
             readAt: usage.readAt,
           },
+          keys: (usage.keys ?? [])
+            .filter((key) => key.status === "valid")
+            .map((key) => key.provider),
         }
       : {}),
   };
@@ -133,5 +178,6 @@ export function defaultOnlineData(): OnlineData {
     defaultModel: "gemini-flash",
     defaultEffort: "medium",
     usage: null,
+    keys: [],
   };
 }

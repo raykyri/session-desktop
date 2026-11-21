@@ -18,6 +18,17 @@ import type { BillLabel } from "./store.js";
 /** The Usage page's choice for when included tokens run out (`03` K7). */
 export type Billing = "pause" | "key";
 
+/** The providers a member may add a key for (`03` K4). */
+export type KeyProvider = "anthropic" | "openai";
+
+/** A member's key opened for the duration of one provider call. `sealed` is
+ * the stored value it was opened from: it identifies the key without the
+ * plaintext, so a later check or a rejection compares `sealed`. */
+export interface MemberKey {
+  apiKey: string;
+  sealed: string;
+}
+
 /** A member's allowance settings. M5b reads them from `user_limits`, the
  * billing setting and the stored keys (`03` K3, K4, K7). */
 export interface Allowances {
@@ -25,13 +36,18 @@ export interface Allowances {
    * an override. */
   weekly(userId: string): number;
   billing(userId: string): Billing;
-  /** The member's valid Anthropic key, for the duration of a call; null
-   * without one. Never logged or stored by the caller. */
-  anthropicKey(userId: string): string | null;
-  /** A provider rejected `apiKey`, the member's key for `provider`, during a
-   * run (`03` K4, E5): the stored key becomes `invalid` if it is still that
-   * key. Absent where no keys are stored. */
-  keyRejected?(userId: string, provider: "anthropic" | "openai", apiKey: string): void;
+  /** The sealed value of the member's `valid` key for `provider`, or null:
+   * a status check that decrypts nothing (`03` K4, K8). */
+  validKey(userId: string, provider: KeyProvider): string | null;
+  /** The member's valid Anthropic key, opened for the duration of a call;
+   * null without one. Never logged or stored by the caller. */
+  anthropicKey(userId: string): MemberKey | null;
+  /** The member's valid OpenAI key, for a key-only OpenAI model (`03` K11). */
+  openaiKey(userId: string): MemberKey | null;
+  /** A provider rejected the member's key for `provider` during a run
+   * (`03` K4, E5): the stored key becomes `invalid` if its sealed value is
+   * still `sealed`. Absent where no keys are stored. */
+  keyRejected?(userId: string, provider: KeyProvider, sealed: string): void;
 }
 
 /** Every member on the configured allowance, billing `pause`, no keys: the
@@ -40,7 +56,9 @@ export function configAllowances(config: Pick<Config, "limits">): Allowances {
   return {
     weekly: () => config.limits.weeklyTokens,
     billing: () => "pause",
+    validKey: () => null,
     anthropicKey: () => null,
+    openaiKey: () => null,
   };
 }
 
@@ -67,18 +85,21 @@ export function includedUsed(deps: BudgetDeps, userId: string): number {
   return deps.ledger.includedUsage(userId, weekOf(deps.now()));
 }
 
-/** Whether the asker's Anthropic key may pay for `entry` now: the allowance
- * is spent, billing is `key`, the model is an Anthropic model and a valid
- * key is stored (`03` K8, K9). Returns the key. */
+/** Whether billing lets the asker's Anthropic key pay for `entry`: billing
+ * is `key` and the model is an Anthropic model (`03` K8, K9). */
+function keyBillingFor(deps: BudgetDeps, userId: string, entry: Pick<ModelEntry, "provider">) {
+  return entry.provider === "anthropic" && deps.allowances.billing(userId) === "key";
+}
+
+/** The asker's Anthropic key, opened, when it may pay for `entry` now:
+ * billing is `key`, the model is an Anthropic model and a valid key is
+ * stored (`03` K8, K9). */
 export function anthropicKeyFor(
   deps: BudgetDeps,
   userId: string,
   entry: Pick<ModelEntry, "provider">,
-): string | null {
-  if (entry.provider !== "anthropic" || deps.allowances.billing(userId) !== "key") {
-    return null;
-  }
-  return deps.allowances.anthropicKey(userId);
+): MemberKey | null {
+  return keyBillingFor(deps, userId, entry) ? deps.allowances.anthropicKey(userId) : null;
 }
 
 /**
@@ -100,7 +121,11 @@ export function payerAtStart(
   if (includedUsed(deps, userId) < deps.allowances.weekly(userId)) {
     return "included";
   }
-  return anthropicKeyFor(deps, userId, entry) === null ? "none" : "key:anthropic";
+  // A status check: the key is opened only when the attempt calls with it.
+  return keyBillingFor(deps, userId, entry) &&
+    deps.allowances.validKey(userId, "anthropic") !== null
+    ? "key:anthropic"
+    : "none";
 }
 
 /** The limits one attempt checks while it runs. */
@@ -125,11 +150,26 @@ export class RunBudget {
   /** The asker's Anthropic key when the next step of an `included` run on
    * `entry` should move to it (`03` K9); null to stay on included tokens,
    * on overdraft once the allowance is spent. */
-  keyForNextStep(entry: Pick<ModelEntry, "provider">): string | null {
+  keyForNextStep(entry: Pick<ModelEntry, "provider">): MemberKey | null {
     if (!this.allowanceSpent()) {
       return null;
     }
     return anthropicKeyFor(this.#deps, this.#userId, entry);
+  }
+
+  /**
+   * Whether the member's key may still pay for the next step of a run paid
+   * by `payer` with the key sealed as `sealed` (`03` K4, K7): the stored key
+   * for the provider is still `valid` with the same sealed value (not
+   * removed, replaced or invalid), and for the Anthropic key billing is
+   * still `key`. Always true for `included`. Decrypts nothing.
+   */
+  keyStillPays(payer: Payer, sealed: string | undefined): boolean {
+    if (payer === "included") return true;
+    const provider: KeyProvider = payer === "key:openai" ? "openai" : "anthropic";
+    const stored = this.#deps.allowances.validKey(this.#userId, provider);
+    if (stored === null || stored !== sealed) return false;
+    return provider === "openai" || this.#deps.allowances.billing(this.#userId) === "key";
   }
 
   /**

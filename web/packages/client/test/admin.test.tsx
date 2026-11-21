@@ -1,6 +1,5 @@
-// The administrator view (07 §3). What is asserted here is the one number on
-// the page the server also computes: the day's token spend, which has to match
-// what `admissionCheck` charges an account against its limit.
+// The Site Admin page (02 W8.2): the heading, the line under it and exactly
+// two boxes, the default model and the default effort; nothing else.
 
 import { cleanup, screen } from "@testing-library/react";
 import test from "ava";
@@ -12,67 +11,18 @@ test.afterEach.always(() => {
   resetDocumentRoot();
 });
 
-const adminUser = (usage: Record<string, number>) => ({
-  ...testUser({ id: "u2", login: "someone", isAdmin: false }),
-  usage: {
-    day: 1_700_000_000_000,
-    inputTokens: 0,
-    outputTokens: 0,
-    reasoningTokens: 0,
-    cachedTokens: 0,
-    costEstimateMicros: 0,
-    runs: 0,
-    ...usage,
-  },
-  limits: { dailyTokens: null, dailyRuns: null },
-  workspaceCount: 1,
-});
-
-test.serial(
-  "the token usage column excludes reasoning tokens to prevent double-counting",
-  async (t) => {
-    await renderApp("/admin", {
-      user: testUser({ isAdmin: true }),
-      responses: {
-        "admin.listUsers": [
-          adminUser({ inputTokens: 1_000, outputTokens: 500, reasoningTokens: 400 }),
-        ],
-      },
-    });
-
-    const row = await screen.findByText("someone");
-    const cells = [...(row.closest("tr")?.querySelectorAll("td") ?? [])].map(
-      (cell) => cell.textContent,
-    );
-    // `reasoningTokens` is a breakdown of `outputTokens`, so the sum is 1,500 —
-    // the same number `db/repos/usage.ts:admissionCheck` spends.
-    t.is(cells[3], "1.5k");
-  },
-);
-
-test.serial("the model access column names the gated model only where it applies", async (t) => {
-  await renderApp("/admin", {
-    user: testUser({ isAdmin: true }),
-    responses: {
-      "admin.listUsers": [
-        adminUser({}),
-        { ...adminUser({}), id: "u3", login: "boss", isAdmin: true },
-      ],
-    },
-  });
-
-  const accessOf = async (login: string) => {
-    const row = (await screen.findByText(login, { exact: false })).closest("tr");
-    return row?.querySelectorAll("td")[1]?.textContent ?? "";
-  };
-
-  const plain = await accessOf("someone");
-  t.true(plain.includes("Gemini 3.8 Flash"), "every account has the open models");
-  t.false(plain.includes("Claude Fable 5.1"), "and a non-admin does not have the gated one");
-
-  const admin = await accessOf("boss");
-  t.true(
-    admin.includes("Claude Fable 5.1"),
-    "verifying the admin flag grants access to restricted models",
+test.serial("Site Admin has exactly two boxes: default model and default effort", async (t) => {
+  await renderApp("/admin", { user: testUser({ isAdmin: true }) });
+  t.truthy(await screen.findByRole("heading", { name: "Site Admin", level: 2 }));
+  t.truthy(screen.getByText("Settings for everyone on Session."));
+  await screen.findByRole("radiogroup", { name: "Default model" });
+  const boxes = [...document.querySelectorAll(".page-inner section")];
+  t.deepEqual(
+    boxes.map((box) => box.querySelector("h3")?.textContent),
+    ["Default model", "Default effort"],
   );
+  t.true(boxes.every((box) => box.classList.contains("box")));
+  // No account table, limits, sign-up codes, prices or availability.
+  t.is(document.querySelector(".page-inner table"), null);
+  t.is(screen.queryByText(/Sign-up codes|Accounts|Daily|\$/), null);
 });

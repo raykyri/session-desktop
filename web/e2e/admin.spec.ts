@@ -4,9 +4,9 @@
 // starts on both after a reload; a member who is not a site admin gets the
 // not-found page at /admin.
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 
-import { mutation, signIn, signedInContext } from "./helpers.js";
+import { mutation, query, signIn, signedInContext } from "./helpers.js";
 import { toast } from "./spaces.js";
 
 /** The registry's models payable with included tokens, in registry order. */
@@ -31,13 +31,32 @@ async function composerChoice(page: Page): Promise<{ model: string; effort: stri
   return { model, effort };
 }
 
-test.afterEach(async ({ browser }) => {
-  // Put the site defaults back for the specs that run after this one.
+/** The site defaults as they were before the test, put back after it for
+ * the specs that run later. */
+let before: { defaultModel: string; defaultEffort: string } | null = null;
+
+async function adminContext(browser: Browser) {
   const context = await browser.newContext();
   const page = await context.newPage();
   await signIn(page, { login: "e2e-admin-reset", isAdmin: true });
-  await mutation(page.request, "admin.models.setDefault", { model: "gemini-flash" });
-  await mutation(page.request, "admin.models.setDefaultEffort", { effort: "medium" });
+  return { context, page };
+}
+
+test.beforeEach(async ({ browser }) => {
+  const { context, page } = await adminContext(browser);
+  before = await query<{ defaultModel: string; defaultEffort: string }>(
+    page.request,
+    "admin.models.list",
+    undefined,
+  );
+  await context.close();
+});
+
+test.afterEach(async ({ browser }) => {
+  if (before === null) return;
+  const { context, page } = await adminContext(browser);
+  await mutation(page.request, "admin.models.setDefault", { model: before.defaultModel });
+  await mutation(page.request, "admin.models.setDefaultEffort", { effort: before.defaultEffort });
   await context.close();
 });
 

@@ -55,21 +55,29 @@ function registryDefault(registry: readonly ModelEntry[]): ModelEntry | null {
 }
 
 /**
- * The site's default model and effort. A stored model that is no longer a
- * registry entry payable with included tokens (a deploy removed it) reads as
- * the registry's default until an admin sets another; an unset or malformed
- * effort reads as that model's `defaultEffort` (K15: the launch seed).
+ * The site's default model and effort (K15). An unset model reads as the
+ * registry's default. A stored model that is no longer a registry entry
+ * payable with included tokens (a deploy removed it) reads the same, and the
+ * stored value is cleared, so the registry's default holds until an admin
+ * sets another. An unset effort reads as the default model's own
+ * `defaultEffort` (the launch seed), `medium` when that is not one of the
+ * four; a stored effort outside the four is cleared the same way.
  */
 export function readSiteDefaults(
   db: SessionDatabase,
   registry: readonly ModelEntry[],
 ): { defaultModel: string; defaultEffort: SiteEffort } {
   const stored = siteSettings.get(db, "default_model");
-  const fallback = registryDefault(registry);
-  const model =
-    registry.find((entry) => entry.id === stored && payableWithIncluded(entry)) ?? fallback;
+  const storedModel = registry.find((entry) => entry.id === stored && payableWithIncluded(entry));
+  if (stored !== undefined && storedModel === undefined) {
+    siteSettings.clear(db, "default_model");
+  }
+  const model = storedModel ?? registryDefault(registry);
   const storedEffort = siteSettings.get(db, "default_effort");
-  const seedEffort = fallback?.defaultEffort;
+  if (storedEffort !== undefined && !isSiteEffort(storedEffort)) {
+    siteSettings.clear(db, "default_effort");
+  }
+  const seedEffort = model?.defaultEffort;
   return {
     defaultModel: model?.id ?? DEFAULT_MODEL_ID,
     defaultEffort: isSiteEffort(storedEffort)

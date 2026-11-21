@@ -370,29 +370,25 @@ const FIXTURE_KEY_CHECK_URLS = [
   "https://api.openai.com/v1/models",
 ];
 
-/** How long the fixture provider takes to answer a key with `slow` in it, so
- * an end-to-end test sees "Checking…". */
-export const FIXTURE_SLOW_KEY_MS = 1_500;
-
 /**
  * The API key check under fixture providers (`03` K4), chosen by the key's
  * text: a key containing `rejected` answers 401, one containing
- * `unreachable` fails like a network error, one containing `slow` answers
- * after `FIXTURE_SLOW_KEY_MS`; any other key is accepted.
+ * `unreachable` fails like a network error; any other key is accepted.
  */
-async function fixtureKeyCheck(init: RequestInit | undefined): Promise<Response> {
+function fixtureKeyCheck(init: RequestInit | undefined): Promise<Response> {
   const headers = new Headers(init?.headers);
   const key = headers.get("x-api-key") ?? headers.get("authorization") ?? "";
   if (key.includes("unreachable")) {
-    throw new TypeError("fetch failed");
-  }
-  if (key.includes("slow")) {
-    await new Promise((resolve) => setTimeout(resolve, FIXTURE_SLOW_KEY_MS));
+    return Promise.reject(new TypeError("fetch failed"));
   }
   if (key.includes("rejected")) {
-    return new Response('{"error":{"type":"authentication_error"}}', { status: 401 });
+    return Promise.resolve(
+      new Response('{"error":{"type":"authentication_error"}}', { status: 401 }),
+    );
   }
-  return new Response('{"data":[]}', { headers: { "content-type": "application/json" } });
+  return Promise.resolve(
+    new Response('{"data":[]}', { headers: { "content-type": "application/json" } }),
+  );
 }
 
 /**

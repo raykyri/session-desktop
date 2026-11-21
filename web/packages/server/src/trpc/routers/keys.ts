@@ -2,42 +2,72 @@
 // (`03-agents-and-research.md` K4, K5, K7; ADR-23). Online-only procedures
 // (ADR-19): none of this is replicated.
 
-import { apiKeys as keyRepo, billing as billingRepo } from "@session/db";
-import { API_KEY_PROVIDERS } from "@session/shared";
+import { billing as billingRepo } from "@session/db";
+import { API_KEY_PROVIDERS, apiKeyFormatError } from "@session/shared";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import type { ApiKeyView } from "../../keys/apiKeys.js";
-import { listKeys, removeKey, setKey } from "../../keys/apiKeys.js";
+import { listKeys, openValid, removeKey, setKey } from "../../keys/apiKeys.js";
+import { RATE_LIMITS } from "../../middleware/rateLimit.js";
 import { billLabel } from "../../runs/allowance.js";
 import { weekOf, weekResetAt } from "../../runs/ledger.js";
-import { protectedProcedure, router } from "../base.js";
+import { memberProcedure, protectedProcedure, router } from "../base.js";
 
 const providerSchema = z.enum(API_KEY_PROVIDERS);
 
 export const apiKeysRouter = router({
-  list: protectedProcedure.query(({ ctx }): ApiKeyView[] => listKeys(ctx, ctx.user.id)),
+  list: memberProcedure.query(({ ctx }): ApiKeyView[] => listKeys(ctx, ctx.user.id)),
   /** Checks the key with the provider during the request (10 s timeout) and
    * saves it `valid`; refused and not saved when the provider rejects it or
    * cannot be reached (`03` K4). */
-  set: protectedProcedure
+  set: memberProcedure
     .input(z.object({ provider: providerSchema, raw: z.string().max(1024) }))
-    .mutation(({ ctx, input }): Promise<ApiKeyView> =>
-      setKey(
-        {
-          db: ctx.db,
-          box: ctx.box,
-          fetch: ctx.fetch,
-          logger: ctx.logger,
-          now: ctx.now,
-          ...(ctx.keyCheckTimeoutMs === undefined ? {} : { timeoutMs: ctx.keyCheckTimeoutMs }),
-        },
-        ctx.user.id,
-        input.provider,
-        input.raw,
-      ),
-    ),
-  remove: protectedProcedure
+    .mutation(async ({ ctx, input }): Promise<ApiKeyView> => {
+      // A malformed key is refused before the limits: it reaches no provider.
+      const formatError = apiKeyFormatError(input.provider, input.raw.trim());
+      if (formatError !== null) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: formatError });
+      }
+      // One check in flight per account, then 5 per 10 minutes per account
+      // and 60 a minute across Session (`03` K4): each call sends a pasted
+      // key to a provider.
+      const release = ctx.limiter.hold(`apiKeys.set:${ctx.user.id}`);
+      if (release === null) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "A key check is already running. Wait for it to finish.",
+        });
+      }
+      try {
+        const own = ctx.limiter.take(`apiKeys.set:${ctx.user.id}`, RATE_LIMITS.apiKeyChecks);
+        const all = own.allowed
+          ? ctx.limiter.take("apiKeys.set", RATE_LIMITS.apiKeyChecksGlobal)
+          : own;
+        if (!all.allowed) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many key checks. Try again in a few minutes.",
+          });
+        }
+        return await setKey(
+          {
+            db: ctx.db,
+            box: ctx.box,
+            fetch: ctx.fetch,
+            logger: ctx.logger,
+            now: ctx.now,
+            ...(ctx.keyCheckTimeoutMs === undefined ? {} : { timeoutMs: ctx.keyCheckTimeoutMs }),
+          },
+          ctx.user.id,
+          input.provider,
+          input.raw,
+        );
+      } finally {
+        release();
+      }
+    }),
+  remove: memberProcedure
     .input(z.object({ provider: providerSchema }))
     .mutation(({ ctx, input }) => ({ removed: removeKey(ctx, ctx.user.id, input.provider) })),
 });
@@ -81,22 +111,30 @@ export interface UsageRunsPage {
 
 const cursorOf = (run: { startedAt: number; runId: string }) => `${run.startedAt}:${run.runId}`;
 
-/** Whether `run` comes after the cursor's run in the listing's order
- * (newest `startedAt` first, then run id descending). A cursor whose run is
- * gone still pages from where it was; a malformed one starts over. */
-function isAfterCursor(run: { startedAt: number; runId: string }, cursor: string): boolean {
-  const split = cursor.indexOf(":");
-  const at = Number(cursor.slice(0, split));
-  const runId = cursor.slice(split + 1);
-  if (split < 0 || !Number.isFinite(at)) return true;
-  return run.startedAt < at || (run.startedAt === at && run.runId < runId);
+/** A cursor as `cursorOf` writes it: `<startedAt>:<runId>`, both parts
+ * present. Anything else is `BAD_REQUEST`. */
+function parseCursor(cursor: string): { at: number; runId: string } {
+  const match = /^(\d+):(.+)$/.exec(cursor);
+  if (!match?.[1] || !match[2]) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "That page cursor is not valid." });
+  }
+  return { at: Number(match[1]), runId: match[2] };
 }
 
-function hasValidAnthropicKey(
-  ctx: { db: Parameters<typeof keyRepo.find>[0] },
-  userId: string,
+/** Whether `run` comes after the cursor's run in the listing's order
+ * (newest `startedAt` first, then run id descending). A cursor whose run is
+ * gone still pages from where it was. */
+function isAfterCursor(
+  run: { startedAt: number; runId: string },
+  cursor: { at: number; runId: string },
 ): boolean {
-  return keyRepo.find(ctx.db, userId, "anthropic")?.status === "valid";
+  return run.startedAt < cursor.at || (run.startedAt === cursor.at && run.runId < cursor.runId);
+}
+
+/** `key` billing needs an Anthropic key that is `valid` and still opens
+ * under the secret key (`03` K7). */
+function hasValidAnthropicKey(ctx: Parameters<typeof openValid>[0], userId: string): boolean {
+  return openValid(ctx, userId, "anthropic") !== null;
 }
 
 export const usageProcedures = {
@@ -127,7 +165,8 @@ export const usageProcedures = {
       const allowance = ctx.config.limits.weeklyTokens;
       const all = ctx.ledger.runsOf(ctx.user.id, weekOf(ctx.now()));
       const after = input?.cursor ?? null;
-      const found = after === null ? 0 : all.findIndex((run) => isAfterCursor(run, after));
+      const position = after === null ? null : parseCursor(after);
+      const found = position === null ? 0 : all.findIndex((run) => isAfterCursor(run, position));
       const start = found < 0 ? all.length : found;
       const page = all.slice(start, start + limit);
       const last = page.at(-1);
@@ -149,7 +188,7 @@ export const usageProcedures = {
     }),
   /** What happens when included tokens run out (`03` K7): `key` needs a
    * valid Anthropic key, else `PRECONDITION_FAILED`. */
-  setBilling: protectedProcedure
+  setBilling: memberProcedure
     .input(z.object({ mode: z.enum(["pause", "key"]) }))
     .mutation(({ ctx, input }): { billing: "pause" | "key" } => {
       if (input.mode === "key" && !hasValidAnthropicKey(ctx, ctx.user.id)) {

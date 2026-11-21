@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import { create } from "zustand";
 
 import { useOnlineData, useReplica } from "../../replica/ReplicaProvider.js";
-import { stepDownEffort, type Effort } from "../../replica/online.js";
+import { composerModel, stepDownEffort, type Effort } from "../../replica/online.js";
 import { openAuthDialog } from "../auth/authDialog.js";
 import { canWrite, type Viewer } from "../shell/viewer.js";
 
@@ -70,8 +70,7 @@ export const useComposerChoice = create<ComposerChoice>()((set) => ({
 export function useRunChoice(): { model: string; effort: Effort } {
   const online = useOnlineData();
   const chosen = useComposerChoice();
-  const model =
-    online.models.find((m) => m.id === (chosen.model ?? online.defaultModel)) ?? online.models[0];
+  const model = composerModel(online, chosen.model);
   const effort = chosen.effort ?? online.defaultEffort;
   return {
     model: model?.id ?? online.defaultModel,

@@ -50,6 +50,17 @@ export function writeVertexCredentials(config: Config): string | null {
   return path;
 }
 
+/** Boot logs a warning when stored API keys would be sealed under the
+ * public development key (`SESSION_SECRET_KEY` unset; `config.ts`). */
+export function warnOnDevelopmentSecretKey(config: Config, logger: Logger): boolean {
+  if (!config.secretKeyIsDevelopment) return false;
+  logger.warn(
+    { env: config.env },
+    "SESSION_SECRET_KEY is unset: stored API keys are sealed under the public development key",
+  );
+  return true;
+}
+
 export function prepareDataDirectories(config: Config): void {
   mkdirSync(config.dataDir, { recursive: true });
   mkdirSync(config.documentsDir, { recursive: true });
@@ -125,6 +136,7 @@ export function main(): RunningServer {
   loadDotenvForDevelopment();
   const config = loadConfig();
   const logger = defaultLogger(config.env);
+  warnOnDevelopmentSecretKey(config, logger);
   prepareDataDirectories(config);
   writeVertexCredentials(config);
 

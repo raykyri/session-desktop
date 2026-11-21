@@ -244,6 +244,11 @@ test.describe("focus and Escape", () => {
     const field = page.getByRole("textbox", { name: "Ask or post" });
     const picker = page.getByTitle("Model and effort");
     const effort = page.getByRole("menuitem", { name: /^Effort/ });
+    // The composer starts on the site defaults (`models.list`); Fable is the
+    // model that accepts Max.
+    await picker.click();
+    await page.getByRole("menuitemradio", { name: "Claude Fable 5.1" }).click();
+    await expect(field).toBeFocused();
     await picker.click();
     await effort.click();
     await page

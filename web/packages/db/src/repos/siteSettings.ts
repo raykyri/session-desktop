@@ -16,6 +16,11 @@ export function get(db: SessionDatabase, key: SiteSettingKey): unknown {
   return db.select().from(siteSettings).where(eq(siteSettings.key, key)).get()?.valueJson;
 }
 
+/** Deletes the key's value, so it reads as the registry's default again. */
+export function clear(db: SessionDatabase, key: SiteSettingKey): void {
+  db.delete(siteSettings).where(eq(siteSettings.key, key)).run();
+}
+
 export function set(
   db: SessionDatabase,
   key: SiteSettingKey,

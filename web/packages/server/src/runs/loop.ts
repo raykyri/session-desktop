@@ -23,10 +23,10 @@ import { stepCountIs, streamText } from "ai";
 import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";
 
-import type { Allowances, StopReason } from "./allowance.js";
+import type { Allowances, MemberKey, StopReason } from "./allowance.js";
 import { RunBudget, billLabel, stopNote } from "./allowance.js";
 import type { ClassifiedError } from "./errors.js";
-import { classifyRunError, refusalError, timeoutError } from "./errors.js";
+import { classifyRunError, isKeyRejection, refusalError, timeoutError } from "./errors.js";
 import {
   createGroundingRedirectResolver,
   resolveGroundingRedirects,
@@ -61,6 +61,10 @@ export const CHECKPOINT_INTERVAL_MS = 1_000;
 export const CHECKPOINT_BYTES = 4 * 1024;
 
 export const NO_ANSWER = "The run finished without an answer.";
+
+/** `03` K4: the member's key stopped paying for the run between steps. */
+export const KEY_STOPPED_MESSAGE =
+  "The API key for this run was removed or changed, or billing no longer uses it.";
 
 /** Text a step writes before any tool call, past which the run counts as
  * writing its answer (`03` E3). Shorter text before a tool call is the
@@ -253,8 +257,12 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     let steps = 0;
 
     /** The model of the next step, who pays for it, and the member's key
-     * when a key pays (to report a rejection of that key, `03` K4). */
-    let current: { payer: Payer; resolved: ResolvedModel; apiKey?: string } | null = null;
+     * when a key pays (its sealed value identifies it for the per-step check
+     * and a rejection, `03` K4). */
+    let current: { payer: Payer; resolved: ResolvedModel; key?: MemberKey } | null = null;
+    /** Set when the member's key stopped paying between steps: removed,
+     * replaced, invalid, or billing moved away from `key` (`03` K4, K7). */
+    let keyLost = false;
 
     interface Settled {
       fail?: RunFailure;
@@ -330,20 +338,24 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     };
 
     // ── model and payer ─────────────────────────────────────────────────────
-    const resolveFor = (payer: Payer): { resolved: ResolvedModel; apiKey?: string } | null => {
+    const resolveFor = (payer: Payer): { resolved: ResolvedModel; key?: MemberKey } | null => {
       if (payer === "included") {
         const included = deps.providers.resolve(request.model, request.effort);
         return included ? { resolved: included } : null;
       }
-      const key = payer === "key:anthropic" ? deps.allowances.anthropicKey(userId) : null;
+      const provider = payer === "key:openai" ? "openai" : "anthropic";
+      const key =
+        provider === "openai"
+          ? deps.allowances.openaiKey(userId)
+          : deps.allowances.anthropicKey(userId);
       const keyed =
         key === null
           ? null
           : deps.providers.resolve(request.model, request.effort, {
-              provider: "anthropic",
-              apiKey: key,
+              provider,
+              apiKey: key.apiKey,
             });
-      return keyed && key !== null ? { resolved: keyed, apiKey: key } : null;
+      return keyed && key !== null ? { resolved: keyed, key } : null;
     };
     const first = resolveFor(request.payer);
     if (!first) {
@@ -387,10 +399,10 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       if (key === null) return;
       const keyed = deps.providers.resolve(request.model, request.effort, {
         provider: "anthropic",
-        apiKey: key,
+        apiKey: key.apiKey,
       });
       if (keyed) {
-        current = { payer: "key:anthropic", resolved: keyed, apiKey: key };
+        current = { payer: "key:anthropic", resolved: keyed, key };
       }
     };
 
@@ -553,6 +565,14 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
         // run before its next provider call (`03` K9, L1).
         stopWhen: [
           stepCountIs(limits.maxSteps),
+          // `03` K4: a removed, replaced or invalid key, or billing moved
+          // away from `key`, stops a key-paid run before its next step.
+          () => {
+            if (current && !budget.keyStillPays(current.payer, current.key?.sealed)) {
+              keyLost = true;
+            }
+            return keyLost;
+          },
           () => {
             const reason = budget.stopReason(current?.payer ?? request.payer);
             if (reason !== null) stopReason ??= reason;
@@ -640,6 +660,19 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     const turns = [...priorTurns, ...mapper.committedTurns];
     const asked: ModelMessage = { role: "user", content: request.userText };
 
+    // `03` K4: the key stopped paying between steps; the turns committed so
+    // far stay.
+    if (keyLost) {
+      return settle("failed", {
+        fail: { why: "key" },
+        error: {
+          errorClass: "auth",
+          message: KEY_STOPPED_MESSAGE,
+          detail: "the member's key was removed, replaced or invalid, or billing left key",
+        },
+      });
+    }
+
     // `03` E5: a token limit ends the run `complete` with what it wrote.
     if (stopReason !== null) {
       // A stream aborted mid-call has no response messages; its committed
@@ -662,14 +695,17 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       if (classified.errorClass === "rate_limited") {
         return rateLimited(classified);
       }
-      // `03` K9, E5: the asker's key was rejected after the switch. The
-      // stored key becomes `invalid` (`03` K4).
+      // `03` K4, K9, E5: the provider refused the member's key. A 401 or
+      // an `authentication_error` means the key is rejected: it becomes
+      // `invalid` (and billing returns to `pause`). A 403 is a permission
+      // error on a key that still authenticates: the run fails and the key
+      // stays valid, with the provider's message as the detail.
       if (classified.errorClass === "auth" && current.payer !== "included") {
-        if (current.apiKey !== undefined) {
+        if (current.key !== undefined && isKeyRejection(streamError)) {
           deps.allowances.keyRejected?.(
             userId,
             current.payer === "key:openai" ? "openai" : "anthropic",
-            current.apiKey,
+            current.key.sealed,
           );
         }
         return settle("failed", { fail: { why: "key" }, error: classified });
