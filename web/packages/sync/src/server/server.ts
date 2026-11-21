@@ -259,9 +259,8 @@ export class SyncServer implements ServerHalf {
    * person has a use of the limit left, and `take` uses one once the write
    * committed a change. A refused write (recorded or not), and one that
    * changes nothing (a join of a channel already joined), take no use. Null
-   * (the default)
-   * applies none: the prototype's suite and the tests of other rules. The
-   * web server sets its in-memory buckets here at boot. */
+   * (the default) applies none: the prototype's suite and the tests of other
+   * rules. The web server sets its in-memory logs here at boot. */
   setPreLimits(limits: PreLimits | null): void {
     this.preLimits = limits;
   }
