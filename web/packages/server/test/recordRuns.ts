@@ -10,12 +10,14 @@ import type { RunRec, StoredRecord, ThreadRec, TurnRec } from "@session/mutators
 import { estimateTokenCount } from "@session/shared";
 import type { ExecutionContext } from "ava";
 
+import { storedAllowances } from "../src/keys/allowances.js";
 import { configAllowances, type Allowances } from "../src/runs/allowance.js";
 import { registerFixture, setFixtureScenario } from "../src/runs/fixtureProvider.js";
 import { createProviders } from "../src/runs/providers.js";
 import type { RunsRuntime } from "../src/runs/runtime.js";
 import { createRunsRuntime } from "../src/runs/runtime.js";
 import { SqliteLedger } from "../src/runs/sqliteLedger.js";
+import { createSecretBox } from "../src/secretBox.js";
 
 import type { Harness, HarnessOptions } from "./helpers.js";
 import { createHarness } from "./helpers.js";
@@ -199,7 +201,10 @@ export interface RunsWorld extends Harness {
 
 export interface RunsWorldOptions extends HarnessOptions {
   ledgerCheckpointMs?: number;
-  allowances?: Allowances;
+  /** `stored`: the stored settings over the world's database, the
+   * `user_limits` override included (`storedAllowances`); the configured
+   * allowance for everyone by default. */
+  allowances?: Allowances | "stored";
   backoffMs?: readonly number[];
   /** Start the dispatcher (default true). */
   start?: boolean;
@@ -229,7 +234,16 @@ export async function runsWorld(
     db: h.db,
     sync: h.sync,
     ledger,
-    allowances: options.allowances ?? configAllowances(h.config),
+    allowances:
+      options.allowances === "stored"
+        ? storedAllowances({
+            db: h.db,
+            box: createSecretBox(h.config.secretKey),
+            logger: h.logger,
+            config: h.config,
+            ...(options.now ? { now: options.now } : {}),
+          })
+        : (options.allowances ?? configAllowances(h.config)),
     logger: h.logger,
     fetch: network.fetch,
     providers,

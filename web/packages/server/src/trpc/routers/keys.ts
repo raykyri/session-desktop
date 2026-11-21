@@ -141,7 +141,7 @@ export const usageProcedures = {
   get: protectedProcedure.query(({ ctx }): UsageReading => {
     const at = ctx.now();
     return {
-      allowance: ctx.config.limits.weeklyTokens,
+      allowance: ctx.allowances.weekly(ctx.user.id),
       used: ctx.ledger.includedUsage(ctx.user.id, weekOf(at)),
       resetAt: weekResetAt(at),
       billing: billingRepo.get(ctx.db, ctx.user.id),
@@ -162,7 +162,7 @@ export const usageProcedures = {
     )
     .query(({ ctx, input }): UsageRunsPage => {
       const limit = input?.limit ?? 6;
-      const allowance = ctx.config.limits.weeklyTokens;
+      const allowance = ctx.allowances.weekly(ctx.user.id);
       const all = ctx.ledger.runsOf(ctx.user.id, weekOf(ctx.now()));
       const after = input?.cursor ?? null;
       const position = after === null ? null : parseCursor(after);

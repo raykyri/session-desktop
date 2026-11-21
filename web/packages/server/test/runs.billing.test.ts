@@ -2,10 +2,12 @@
 // (`03-agents-and-research.md` K3, K8, K10): the `pre` stage of the write
 // that queues a run decides its payer from the ledger (open rows counted),
 // the billing setting and the member's keys, and the run record carries it;
+// with nothing to pay the write applies and its run is failed tokens;
 // the dispatcher decides it again when it claims the run; the week resets
 // on Friday 00:00 UTC, read through an injected clock.
 
-import { OUT_OF_TOKENS_TEXT } from "@session/shared";
+import { usage as usageRepo } from "@session/db";
+import { OUT_OF_TOKENS_TEXT, runFailureText } from "@session/shared";
 import type { ApplyResult } from "@session/sync/server";
 import type { ExecutionContext } from "ava";
 import test from "ava";
@@ -78,17 +80,30 @@ const askInput = (space: string, q = "fixture:success what pays for this") => ({
   ...MODEL,
 });
 
-function refusedForTokens(t: ExecutionContext, answer: ApplyResult | undefined) {
-  t.false(answer?.ok);
-  if (answer && !answer.ok) {
-    t.is(answer.error.code, "PRECONDITION_FAILED");
-    t.is(answer.error.reason, "out_of_tokens");
-    t.is(answer.error.message, OUT_OF_TOKENS_TEXT);
-  }
+/** The ask `input` applied with nothing to pay (`03` K8): its thread is
+ * kept, not running, and its run is `failed { why: "tokens" }` with no
+ * payer. Returns the run's id. */
+function keptFailedTokens(
+  t: ExecutionContext,
+  w: RunsWorld,
+  answer: ApplyResult | undefined,
+  input: { id: string; q: string },
+): string {
+  t.true(answer?.ok, JSON.stringify(answer));
+  const run = answer?.ok ? (answer.result as { run: string }).run : "";
+  t.like(w.thread(input.id), { q: input.q, running: false });
+  t.like(w.run(run), {
+    status: "failed",
+    fail: { why: "tokens", at: null, cls: null },
+    pay: null,
+    attempt: 1,
+  });
+  t.is(runFailureText({ why: "tokens", cls: null }), OUT_OF_TOKENS_TEXT);
+  return run;
 }
 
 test.serial(
-  "K8: an ask while the allowance is spent is refused out_of_tokens, recorded, and writes nothing",
+  "K8: an ask while the allowance is spent is kept, its run failed tokens without a provider call",
   async (t) => {
     const w = await runsWorld(t, { env: { SESSION_WEEKLY_TOKENS: "1000" }, start: false });
     spend(w, w.mona.user.id, 1_000, Date.now());
@@ -96,14 +111,14 @@ test.serial(
     const input = askInput(w.open);
     const envelope = w.mona.envelope("threads.create", input);
     const { answers } = await w.mona.send([envelope]);
-    refusedForTokens(t, answers[0]);
-    t.is(w.rec(`thread:${input.id}`), undefined, "no thread");
-    t.is(w.rt.store.queued().length, 0, "no run");
-    // recorded: the same envelope gets the same answer, and the next seq
-    // follows it
+    const run = keptFailedTokens(t, w, answers[0], input);
+    t.is(w.rt.store.queued().length, 0, "nothing queued");
+    t.is(w.rt.dispatcher.tick(), 0);
+    t.deepEqual(w.streamed, [], "no provider call");
+    t.deepEqual(w.rows(run), []);
+    // a resend of the same envelope gets the same answer
     const again = await w.mona.send([envelope]);
-    t.like(again.answers[0], { ok: false, replay: true });
-    refusedForTokens(t, again.answers[0]);
+    t.like(again.answers[0], { ok: true, replay: true });
     // a post still sends
     t.true(
       (
@@ -150,7 +165,8 @@ test.serial("K8: with billing pause a valid Anthropic key does not pay", async (
   });
   spend(w, w.mona.user.id, 1_000, Date.now());
   await w.mona.register();
-  refusedForTokens(t, await w.mona.write("threads.create", askInput(w.open)));
+  const input = askInput(w.open);
+  keptFailedTokens(t, w, await w.mona.write("threads.create", input), input);
 });
 
 test.serial(
@@ -194,15 +210,18 @@ test.serial(
     w.rt.dispatcher.tick();
     t.like(w.run(run), { status: "failed", fail: { why: "tokens" } });
 
-    // the last millisecond of the week: still spent
+    // the last millisecond of the week: still spent; the ask is kept with
+    // its run failed tokens
     c.at = BEFORE_RESET;
     await w.mona.register();
-    refusedForTokens(t, await w.mona.write("threads.create", askInput(w.open)));
+    const late = askInput(w.open);
+    const lateRun = keptFailedTokens(t, w, await w.mona.write("threads.create", late), late);
 
     // the reset: nothing runs again by itself
     c.at = RESET;
     t.is(w.rt.dispatcher.tick(), 0);
     t.like(w.run(run), { status: "failed", attempt: 1 });
+    t.like(w.run(lateRun), { status: "failed", attempt: 1 });
     t.deepEqual(w.streamed, []);
 
     // a new ask and Run again apply, on included tokens
@@ -272,3 +291,47 @@ test("K3, K9: the overdraft counts in the week it happened and does not carry ov
   t.false(budget.allowanceSpent(), "a new week");
   t.is(budget.stopReason("included"), null);
 });
+
+test.serial(
+  "K3: a member with an allowance override is metered against it: usage.get, pre, the claim and the overdraft stop",
+  async (t) => {
+    const w = await runsWorld(t, {
+      allowances: "stored",
+      env: { SESSION_OVERDRAFT_TOKENS: "1500" },
+      ledgerCheckpointMs: 50,
+      start: false,
+    });
+    usageRepo.setWeeklyAllowance(w.db, w.mona.user.id, 1_500);
+    t.like(await w.caller(w.mona.user).usage.get(), { allowance: 1_500, used: 0 });
+    t.like(await w.caller(w.mel.user).usage.get(), { allowance: 2_000_000 });
+
+    // the loop: the overdraft stop comes at the override plus the overdraft
+    const { run } = await w.ask(w.mona, w.open, "fixture:endless-answer");
+    t.like(w.run(run), { status: "queued", pay: "included" });
+    w.rt.dispatcher.start();
+    t.like(await w.settled(run), { status: "complete", note: OVERDRAFT_STOP_NOTE });
+    const counted = w.rows(run).reduce((n, r) => n + r.counted, 0);
+    t.true(counted >= 3_000, `stopped at ${counted}`);
+    t.true(counted < 2_000_000);
+    w.rt.dispatcher.stop();
+
+    // pre: the override is spent, so the next ask is kept with its run
+    // failed tokens; another member with the same spending still runs
+    await w.mona.register();
+    const input = askInput(w.open);
+    keptFailedTokens(t, w, await w.mona.write("threads.create", input), input);
+    spend(w, w.mel.user.id, 3_000, Date.now());
+    const mel = await w.ask(w.mel, w.open, "fixture:success within the deployment's allowance");
+    t.like(w.run(mel.run), { status: "queued", pay: "included" });
+
+    // the claim: an ask queued within the override and claimed after it was
+    // spent ends failed tokens
+    usageRepo.setWeeklyAllowance(w.db, w.mona.user.id, 1_000_000);
+    const queued = await w.ask(w.mona, w.open, "fixture:success queued within the override");
+    t.like(w.run(queued.run), { status: "queued", pay: "included" });
+    usageRepo.setWeeklyAllowance(w.db, w.mona.user.id, 1_000);
+    w.rt.dispatcher.tick();
+    t.like(w.run(queued.run), { status: "failed", fail: { why: "tokens" } });
+    t.like(await w.caller(w.mona.user).usage.get(), { allowance: 1_000 });
+  },
+);

@@ -10,10 +10,9 @@
 # UTC), a run that crosses it continues on the member's Anthropic key or on
 # an overdraft of SESSION_OVERDRAFT_TOKENS per member per week, and no run
 # spends more than SESSION_RUN_MAX_TOKENS (`docs/06-auth-and-users.md` §8,
-# plan `03` K3, K9, L1). SESSION_ENFORCE_LIMITS and the SESSION_DAILY_*
-# settings are only reported by the legacy usage summary; nothing enforces
-# them. Session is invite-only in every deployment: an account without an
-# invite waits (plan `04` I4).
+# plan `03` K3, K9, L1). A member's own allowance is a `user_limits` row.
+# Session is invite-only in every deployment: an account without an invite
+# waits (plan `04` I4).
 #
 # Secrets (never here): GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
 # SESSION_X_CLIENT_ID, SESSION_X_CLIENT_SECRET,
@@ -45,9 +44,6 @@ kill_timeout = "30s"
   SESSION_RUNS_OPENROUTER = "8"
   SESSION_RUNS_ANTHROPIC = "2"
   SESSION_RUN_TIMEOUT_SECONDS = "900"
-  SESSION_ENFORCE_LIMITS = "1"
-  SESSION_DAILY_TOKENS = "1000000"
-  SESSION_DAILY_RUNS = "10"
   SESSION_WEEKLY_TOKENS = "2000000"
   SESSION_OVERDRAFT_TOKENS = "200000"
   SESSION_RUN_MAX_TOKENS = "400000"

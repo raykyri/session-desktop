@@ -154,24 +154,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   defaultModel: DEFAULT_MODEL_ID,
 };
 
-/** One UTC day of recorded usage for the signed-in account, against the
- * limits in `06-auth-and-users.md` §8. */
-export const usageSummarySchema = z.object({
-  /** Start of the UTC day the counts cover, in milliseconds. */
-  day: z.number(),
-  inputTokens: z.number(),
-  outputTokens: z.number(),
-  reasoningTokens: z.number(),
-  cachedTokens: z.number(),
-  costEstimateMicros: z.number(),
-  runs: z.number(),
-  /** Null when the deployment has no limit configured. */
-  dailyTokenLimit: z.number().nullish(),
-  dailyRunLimit: z.number().nullish(),
-});
-
-export type UsageSummary = z.infer<typeof usageSummarySchema>;
-
 /** `openai` serves only key-only models, called with the member's own
  * OpenAI key (`03` K11); the deployment has no OpenAI credential. */
 export const modelProviderSchema = z.enum(["vertex", "openrouter", "anthropic", "openai"]);

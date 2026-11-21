@@ -192,10 +192,6 @@ const envSchema = z.object({
   SESSION_OVERDRAFT_TOKENS: positiveInteger(200_000),
   SESSION_RUN_MAX_TOKENS: positiveInteger(400_000, 1),
 
-  SESSION_ENFORCE_LIMITS: flag(false),
-  SESSION_DAILY_TOKENS: positiveInteger(1_000_000),
-  SESSION_DAILY_RUNS: positiveInteger(10),
-
   LITESTREAM_REPLICA_URL: optionalString,
   SESSION_DOCUMENTS_REPLICA_URL: optionalString,
   AWS_ACCESS_KEY_ID: optionalString,
@@ -237,9 +233,6 @@ export interface RunLimits {
   overdraftTokens: number;
   /** Counted tokens one run may spend, whoever pays (`03` L1). */
   runMaxTokens: number;
-  enforceDailyLimits: boolean;
-  dailyTokens: number;
-  dailyRuns: number;
 }
 
 /** Which providers have a credential. A model whose provider is missing is
@@ -639,9 +632,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       weeklyTokens: value.SESSION_WEEKLY_TOKENS,
       overdraftTokens: value.SESSION_OVERDRAFT_TOKENS,
       runMaxTokens: value.SESSION_RUN_MAX_TOKENS,
-      enforceDailyLimits: value.SESSION_ENFORCE_LIMITS,
-      dailyTokens: value.SESSION_DAILY_TOKENS,
-      dailyRuns: value.SESSION_DAILY_RUNS,
     },
 
     litestreamReplicaUrl: value.LITESTREAM_REPLICA_URL,

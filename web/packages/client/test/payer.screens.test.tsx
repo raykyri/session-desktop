@@ -2,14 +2,14 @@
 // that starts a run (Ask, follow-up, Continue, Branch, Branch here, Look up,
 // Run again) is refused before it is sent with the out-of-tokens toast and
 // its text stays in the composer, while posts, replies and comments send. A
-// write the server refuses because the allowance ran out before it applied
-// shows the server's message and keeps the composer's text.
+// write the server applies after the allowance ran out is kept, with its run
+// failed tokens, shown with the run-status copy; its composer is cleared.
 
 import { OUT_OF_TOKENS_TEXT } from "@session/shared";
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import test from "ava";
 
-import { currentToast } from "../src/features/shell/Toast.js";
+import { clearToast, currentToast } from "../src/features/shell/Toast.js";
 import { configureReplica } from "../src/replica/ReplicaProvider.js";
 import {
   createFixtureReplica,
@@ -19,7 +19,6 @@ import {
 } from "../src/replica/fixtureReplica.js";
 import { outOfTokens, registryModels, type OnlineData } from "../src/replica/online.js";
 import { channelByName } from "../src/replica/queries.js";
-import type { WriteOutcome } from "../src/replica/source.js";
 import { makeWrites } from "../src/replica/writes.js";
 import { useDraftsStore } from "../src/stores/drafts.js";
 
@@ -173,24 +172,50 @@ test.serial(
 );
 
 test.serial(
-  "K8: an ask the server refuses out_of_tokens shows the server's message and keeps its text",
+  "K8: an ask the server applies with nothing to pay shows its run failed tokens; the composer is cleared",
   async (t) => {
     await renderApp("/");
     await waitUntil(t, () => document.getElementById(`card-${FIRST}`) !== null, "the feed");
-    const message = "Out of tokens, as the server says.";
-    replica().mutate = () =>
-      Promise.resolve({
-        ok: false,
-        error: { code: "PRECONDITION_FAILED", reason: "out_of_tokens", message },
-      } as WriteOutcome);
+    // the fixture's executor would start the queued run
+    runControl.hold = "queued";
+    const r = replica();
+    const mutate = r.mutate.bind(r);
+    // the server applies the ask after the allowance ran out: its run is
+    // written failed tokens with no payer (`03` K8)
+    r.mutate = async (name: string, input: unknown) => {
+      const outcome = await mutate(name as Parameters<typeof mutate>[0], input);
+      const id = (input as { id: string }).id;
+      const run = r.rawAll("run").find((x) => x.th === id);
+      const thread = r.raw(`thread:${id}`);
+      if (run && thread?.kind === "thread") {
+        const { rev: _run, ...failed } = run;
+        const { rev: _thread, ...kept } = thread;
+        void _run;
+        void _thread;
+        r.write([
+          {
+            ...failed,
+            pay: null,
+            status: "failed",
+            fail: { why: "tokens", at: null, cls: null },
+            finishedAt: failed.createdAt,
+          } as never,
+          { ...kept, running: false },
+        ]);
+      }
+      return outcome;
+    };
+    clearToast();
     const field = await screen.findByRole("textbox", { name: "Ask or post" });
     fireEvent.change(field, { target: { value: "Sent with tokens left" } });
     fireEvent.click(screen.getByRole("button", { name: /^Ask$/ }));
-    await waitUntil(t, () => currentToast() === message, "the server's message");
-    t.is(
-      screen.getByRole("textbox", { name: "Ask or post" }),
-      screen.getByDisplayValue("Sent with tokens left"),
-      "the text stays in the composer",
+    await waitUntil(
+      t,
+      () => screen.queryByText(OUT_OF_TOKENS_TEXT) !== null,
+      "the run's failed tokens copy",
     );
+    t.truthy(screen.getByText("Sent with tokens left"), "the ask is kept");
+    t.is(screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Ask or post" }).value, "");
+    t.not(currentToast(), OUT_OF_TOKENS_TEXT, "no refusal toast: the write applied");
   },
 );

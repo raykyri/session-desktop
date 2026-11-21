@@ -26,7 +26,8 @@
 // cover the owned runs of M5a (the run store and its fence, the loop's
 // limits and endings, the ledger, `/live`, and the mutators' run rules);
 // M5b-1 on cover the payer, the allowance and the overdraft of M5b (the
-// pre stage's payer, the claim's re-check, the reset, the crossing).
+// pre stage's payer, the claim's re-check, the reset, the crossing, the
+// key-only model, a member's own allowance).
 // M6-8 on undo one fix of the M6 server review each (the deletion job, the
 // privacy check, the pre-stage limits, the invite notification), named by
 // the review's row, so that each fix's test is shown to fail without it.
@@ -314,7 +315,7 @@ const MUTATIONS: Mutation[] = [
     // run queue (`01` U6), so the same fault is that record not written
     name: "N16 an ask's queued run is not written",
     file: "../mutators/src/threads.ts",
-    from: '      queueRun(tx, run, root, "r", i.model, i.effort, payOf(values, i.model));',
+    from: '      queueRun(tx, run, root, "r", i.model, i.effort, pay);',
     to: "      void queueRun;",
   },
   {
@@ -1420,14 +1421,14 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M5b-1 pre decides no payer: every run is paid by its model's first payer",
     file: "../mutators/src/rules.ts",
-    from: "  return { pay: prePayer(ctx, model) };",
-    to: "  return { pay: firstPayer(model) };",
+    from: "  return { pay: prePayer(ctx, model) ?? NO_PAYER };",
+    to: "  return { pay: firstPayer(model) || NO_PAYER };",
   },
   {
-    name: "M5b-2 the out-of-tokens refusal carries no reason",
+    name: "M5b-2 a run nothing can pay for is queued on included tokens",
     file: "../mutators/src/rules.ts",
-    from: 'new Refusal("PRECONDITION_FAILED", spaces.OUT_OF_TOKENS_TEXT, undefined, "out_of_tokens")',
-    to: 'new Refusal("PRECONDITION_FAILED", spaces.OUT_OF_TOKENS_TEXT)',
+    from: "  return { pay: prePayer(ctx, model) ?? NO_PAYER };",
+    to: '  return { pay: prePayer(ctx, model) ?? "included" };',
   },
   {
     name: "M5b-3 the Anthropic key pays whatever the billing setting",
@@ -1482,6 +1483,30 @@ const MUTATIONS: Mutation[] = [
     file: "src/runs/allowance.ts",
     from: "    const limit = this.#deps.allowances.weekly(this.#userId) + this.#deps.limits.overdraftTokens;",
     to: "    const limit = this.#deps.allowances.weekly(this.#userId) + this.#deps.limits.overdraftTokens * 10;",
+  },
+  {
+    name: "M5b-12 a key-only model runs without its key",
+    file: "../mutators/src/rules.ts",
+    from: "      if (key !== null && facts.keys.includes(key)) return payer;",
+    to: "      if (key !== null) return payer;",
+  },
+  {
+    name: "M5b-13 the overdraft limit stops key-paid steps too",
+    file: "src/runs/allowance.ts",
+    from: '    if (payer !== "included") {\n      return null;\n    }\n',
+    to: "    void payer;\n",
+  },
+  {
+    name: "M5b-14 a member's allowance override is ignored",
+    file: "src/keys/allowances.ts",
+    from: "  return usageRepo.weeklyAllowance(deps.db, userId) ?? deps.config.limits.weeklyTokens;",
+    to: "  return (usageRepo.weeklyAllowance(deps.db, userId) && null) ?? deps.config.limits.weeklyTokens;",
+  },
+  {
+    name: "M5b-15 usage.get reads the deployment's allowance",
+    file: "src/trpc/routers/keys.ts",
+    from: "      allowance: ctx.allowances.weekly(ctx.user.id),",
+    to: "      allowance: ctx.config.limits.weeklyTokens,",
   },
   // ---- M6: membership, moderation and the deletion job (the M6 review fixes) ----
   {
@@ -2122,12 +2147,12 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
   "M5a-66": { tests: ["E1: a thread removed in the second step of its run"] },
   "M5b-1": {
     tests: [
-      "K8: an ask while the allowance is spent is refused out_of_tokens",
+      "K8: an ask while the allowance is spent is kept, its run failed tokens",
       "K8: once the allowance is spent, billing key and a valid Anthropic key pay",
     ],
   },
   "M5b-2": {
-    tests: ["K8: an ask while the allowance is spent is refused out_of_tokens"],
+    tests: ["K8: an ask while the allowance is spent is kept, its run failed tokens"],
   },
   "M5b-3": {
     tests: ["K8: with billing pause a valid Anthropic key does not pay"],
@@ -2135,13 +2160,13 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
   "M5b-4": {
     in: "sync",
     tests: [
-      "K8: an ask queued with tokens left and applied after they ran out is refused",
+      "K8: an ask queued with tokens left and applied after they ran out is kept",
       "K8: an ask queued with tokens left and applied once the member's key pays",
     ],
   },
   "M5b-5": {
     tests: [
-      "K8: an ask while the allowance is spent is refused out_of_tokens",
+      "K8: an ask while the allowance is spent is kept, its run failed tokens",
       "K10: a run queued while tokens were left and claimed after they ran out ends tokens",
     ],
   },
@@ -2174,6 +2199,19 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
   },
   "M5b-11": {
     tests: ["two concurrent runs of one member never exceed allowance plus overdraft"],
+  },
+  "M5b-12": {
+    in: "mutators",
+    tests: ["K8, K11: the payer rule for each kind of model"],
+  },
+  "M5b-13": {
+    tests: ["K9: a key-paid run is not stopped by the overdraft limit"],
+  },
+  "M5b-14": {
+    tests: ["K3: a member with an allowance override is metered against it"],
+  },
+  "M5b-15": {
+    tests: ["K3: a member with an allowance override is metered against it"],
   },
   "M6-8": { tests: ["P2: the job deletes comments, branches and bans of the person"] },
   "M6-9": { tests: ["P2: the job deletes comments, branches and bans of the person"] },

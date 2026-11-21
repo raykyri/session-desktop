@@ -288,6 +288,8 @@ Users see a pause, not a loss.
 does not start if the database has a migration unsupported by the image, so redeploying an
 older image after a migration will not start. Roll forward instead.
 
-**Limits are on.** `SESSION_ENFORCE_LIMITS=1` in `fly.toml` caps daily tokens
-and runs per account, with a queue cap alongside. Admins are exempt. Raise a
-single account through the `user_limits` table rather than the global default.
+**Limits are on.** Every member, admins included, has a weekly allowance of
+included tokens (`SESSION_WEEKLY_TOKENS`) and a per-member overdraft
+(`SESSION_OVERDRAFT_TOKENS`), with a queue cap and a per-run token cap
+alongside (`docs/06-auth-and-users.md` §8). Raise a single member's allowance
+with a `user_limits` row (`weekly_tokens`) rather than the global default.

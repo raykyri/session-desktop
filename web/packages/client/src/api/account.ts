@@ -32,7 +32,6 @@ export const queryKeys = {
   me: () => ["me"] as const,
   settings: () => ["settings"] as const,
   runtimeConfig: () => ["runtimeConfig"] as const,
-  usage: () => ["usage"] as const,
   /** `usage.get` (03 K5, K6): the ring and the Usage page. */
   weeklyUsage: () => ["usage", "week"] as const,
   usageRuns: () => ["usage", "runs"] as const,
@@ -65,10 +64,6 @@ export interface SettingsUpdate {
 
 export function updateSettings(input: SettingsUpdate) {
   return trpc().settings.update.mutate(input);
-}
-
-export function getUsageSummary() {
-  return trpc().usage.summary.query();
 }
 
 export function getWeeklyUsage() {
@@ -147,16 +142,6 @@ export function useRuntimeConfig() {
 
 /** Usage is not pushed; a mounted reader refreshes every 30 s. */
 export const USAGE_REFRESH_MS = 30_000;
-
-export function useUsageSummary() {
-  const signedIn = useSignedIn();
-  return useQuery({
-    queryKey: queryKeys.usage(),
-    queryFn: () => getUsageSummary(),
-    refetchInterval: USAGE_REFRESH_MS,
-    enabled: signedIn,
-  });
-}
 
 /** `usage.get` is online-only and not pushed: 30 s stale time (03 K6). */
 export const weeklyUsageQueryOptions = () =>

@@ -1,20 +1,15 @@
-// Recorded provider usage and daily quota tracking
+// Recorded provider usage and the per-member weekly allowance override
 // (`docs/02-domain-model-and-database.md` §3.7, `docs/06-auth-and-users.md`
-// §8, `docs/04-agent-runtime.md` §10).
+// §8). The ledger of provider calls is the server's `SqliteLedger` over
+// `usage_events`.
 
-import type { UsageSummary } from "@session/shared";
-import { and, eq, gte, lt, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { newId } from "../ids.js";
 import { usageEvents } from "../schema/usage.js";
-import { now, startOfUtcDay } from "../time.js";
-
-import { getUserLimits } from "./auth.js";
-
-/** Deployment defaults, overridden per account in `user_limits`. */
-export const DEFAULT_DAILY_TOKENS = 1_000_000;
-export const DEFAULT_DAILY_RUNS = 10;
+import { userLimits } from "../schema/users.js";
+import { now } from "../time.js";
 
 export interface UsageEventInput {
   nodeId?: string | null | undefined;
@@ -50,146 +45,29 @@ export function record(db: SessionDatabase, userId: string, input: UsageEventInp
   return id;
 }
 
-export interface DailyTotals {
-  day: number;
-  inputTokens: number;
-  outputTokens: number;
-  reasoningTokens: number;
-  cachedTokens: number;
-  costEstimateMicros: number;
-  /** Number of research attempts started during the day. */
-  runs: number;
-}
-
-/** Computes aggregate token and run usage for a user on the UTC day of `at`. */
-export function dailyTotals(db: SessionDatabase, userId: string, at: number = now()): DailyTotals {
-  const day = startOfUtcDay(at);
+/** The member's weekly allowance override (`user_limits.weekly_tokens`,
+ * plan `03` K3), or null for the deployment's `SESSION_WEEKLY_TOKENS`. */
+export function weeklyAllowance(db: SessionDatabase, userId: string): number | null {
   const row = db
-    .select({
-      inputTokens: sql<number | null>`sum(${usageEvents.inputTokens})`,
-      outputTokens: sql<number | null>`sum(${usageEvents.outputTokens})`,
-      reasoningTokens: sql<number | null>`sum(${usageEvents.reasoningTokens})`,
-      cachedTokens: sql<number | null>`sum(${usageEvents.cachedTokens})`,
-      costEstimateMicros: sql<number | null>`sum(${usageEvents.costEstimateMicros})`,
-    })
-    .from(usageEvents)
-    .where(
-      and(
-        eq(usageEvents.userId, userId),
-        gte(usageEvents.createdAt, day),
-        lt(usageEvents.createdAt, day + 86_400_000),
-      ),
-    )
+    .select({ weeklyTokens: userLimits.weeklyTokens })
+    .from(userLimits)
+    .where(eq(userLimits.userId, userId))
     .get();
-  // Count `run` usage events, which persist independently of node deletions.
-  const runs = db
-    .select({ value: sql<number>`count(*)` })
-    .from(usageEvents)
-    .where(
-      and(
-        eq(usageEvents.userId, userId),
-        eq(usageEvents.kind, "run"),
-        gte(usageEvents.createdAt, day),
-        lt(usageEvents.createdAt, day + 86_400_000),
-      ),
-    )
-    .get();
-  return {
-    day,
-    inputTokens: row?.inputTokens ?? 0,
-    outputTokens: row?.outputTokens ?? 0,
-    reasoningTokens: row?.reasoningTokens ?? 0,
-    cachedTokens: row?.cachedTokens ?? 0,
-    costEstimateMicros: row?.costEstimateMicros ?? 0,
-    runs: runs?.value ?? 0,
-  };
+  return row?.weeklyTokens ?? null;
 }
 
-export interface LimitDefaults {
-  dailyTokens?: number | null | undefined;
-  dailyRuns?: number | null | undefined;
-}
-
-/** Returns the effective limits for an account: per-account overrides when defined,
- * falling back to deployment defaults. */
-export function effectiveLimits(
+/** Sets the member's weekly allowance override to `tokens` (a positive
+ * integer), or clears it with null. */
+export function setWeeklyAllowance(
   db: SessionDatabase,
   userId: string,
-  defaults: LimitDefaults = {},
-): { dailyTokens: number | null; dailyRuns: number | null } {
-  const override = getUserLimits(db, userId);
-  return {
-    dailyTokens: override?.dailyTokens ?? defaults.dailyTokens ?? DEFAULT_DAILY_TOKENS,
-    dailyRuns: override?.dailyRuns ?? defaults.dailyRuns ?? DEFAULT_DAILY_RUNS,
-  };
-}
-
-export function summary(
-  db: SessionDatabase,
-  userId: string,
-  defaults: LimitDefaults = {},
-  at: number = now(),
-): UsageSummary {
-  const totals = dailyTotals(db, userId, at);
-  const limits = effectiveLimits(db, userId, defaults);
-  return {
-    day: totals.day,
-    inputTokens: totals.inputTokens,
-    outputTokens: totals.outputTokens,
-    reasoningTokens: totals.reasoningTokens,
-    cachedTokens: totals.cachedTokens,
-    costEstimateMicros: totals.costEstimateMicros,
-    runs: totals.runs,
-    dailyTokenLimit: limits.dailyTokens,
-    dailyRunLimit: limits.dailyRuns,
-  };
-}
-
-export interface AdmissionDecision {
-  allowed: boolean;
-  /** Null when the deployment has no limit configured. */
-  remainingTokens: number | null;
-  remainingRuns: number | null;
-  reason?: "tokens" | "runs";
-}
-
-/**
- * Validates whether an account has sufficient token and run quota to admit or start a run.
- *
- * Compares current day usage against effective limits, taking into account `reservedRuns`.
- * Administrators are exempt from quota limits.
- */
-export function admissionCheck(
-  db: SessionDatabase,
-  userId: string,
-  options: {
-    isAdmin?: boolean;
-    defaults?: LimitDefaults;
-    at?: number;
-    /** Queued runs awaiting execution to include against the daily run limit. */
-    reservedRuns?: number;
-  } = {},
-): AdmissionDecision {
-  if (options.isAdmin === true) {
-    return { allowed: true, remainingTokens: null, remainingRuns: null };
-  }
-  const at = options.at ?? now();
-  const totals = dailyTotals(db, userId, at);
-  const limits = effectiveLimits(db, userId, options.defaults ?? {});
-  // `reasoningTokens` is a subset of `outputTokens`, not a separate allocation;
-  // total tokens is calculated as inputTokens + outputTokens.
-  const spentTokens = totals.inputTokens + totals.outputTokens;
-  const remainingTokens =
-    limits.dailyTokens === null ? null : Math.max(0, limits.dailyTokens - spentTokens);
-  const remainingRuns =
-    limits.dailyRuns === null
-      ? null
-      : Math.max(0, limits.dailyRuns - totals.runs - (options.reservedRuns ?? 0));
-  if (remainingRuns !== null && remainingRuns <= 0) {
-    return { allowed: false, remainingTokens, remainingRuns, reason: "runs" };
-  }
-  if (remainingTokens !== null && remainingTokens <= 0) {
-    return { allowed: false, remainingTokens, remainingRuns, reason: "tokens" };
-  }
-  return { allowed: true, remainingTokens, remainingRuns };
+  tokens: number | null,
+): void {
+  if (tokens !== null && (!Number.isSafeInteger(tokens) || tokens <= 0))
+    throw new RangeError("a weekly allowance is a positive whole number of tokens");
+  const at = now();
+  db.insert(userLimits)
+    .values({ userId, weeklyTokens: tokens, updatedAt: at })
+    .onConflictDoUpdate({ target: userLimits.userId, set: { weeklyTokens: tokens, updatedAt: at } })
+    .run();
 }

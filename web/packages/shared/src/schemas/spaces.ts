@@ -81,9 +81,10 @@ export const LOOKUP_PHRASE_MAX = 80;
 export const INVITE_DAYS_MAX = 30;
 /** Queued runs per person before `pre` refuses with `queue_full` (`03` L1). */
 export const QUEUED_RUNS_PER_USER = 20;
-/** The message of a run-starting write nothing can pay for (`out_of_tokens`,
- * `03` K8; `02` §5's `OUT_MSG`), and the reason a run ended `tokens` shows.
- * The reset is always on a Friday (`03` K3). */
+/** The toast of a run-starting write the client does not send because
+ * nothing can pay for it (`03` K8; `02` §5's `OUT_MSG`), and the reason a
+ * run that ended `tokens` shows. The reset is always on a Friday (`03`
+ * K3). */
 export const OUT_OF_TOKENS_TEXT =
   "You're out of tokens until Friday. You can still post, or add an API key in Usage.";
 
@@ -139,9 +140,9 @@ export const runFailureSchema = z.object({
   cls: runErrorClassSchema.nullable(),
 });
 
-/** Who pays for a run's next attempt (`03` K8): the server decides it in
- * the `pre` stage of the write that queues the run, and the dispatcher
- * checks it again when it claims the run (K10). */
+/** Who pays for a run's attempt (`03` K8): the server decides it in the
+ * `pre` stage of the write that queues the run, and the dispatcher decides
+ * it again when it claims the run (K10). */
 export const runPayerSchema = z.enum(["included", "key:anthropic", "key:openai"]);
 
 /** Who paid for a run (`03` K9). */
@@ -342,9 +343,11 @@ export const runRecordSchema = z.object({
   u: spaceHandleSchema,
   model: spaceModelSchema,
   effort: spaceEffortSchema,
-  /** Who pays for the current attempt (`runPayerSchema`); `bill` names the
-   * payers the attempt used once it ends. */
-  pay: runPayerSchema,
+  /** Who pays for the current attempt (`runPayerSchema`); null when nothing
+   * could pay when the write applied, and the attempt was written `failed {
+   * why: "tokens" }` (`03` K8). `bill` names the payers the attempt used
+   * once it ends. */
+  pay: runPayerSchema.nullable(),
   status: runStatusSchema,
   attempt: z.number().int().positive(),
   /** Progress, 0 to 3 (planning, searching, reading, writing). */
@@ -1108,12 +1111,9 @@ export const unrecordedErrorCodes = [
 ] as const satisfies readonly z.infer<typeof spaceErrorCodeSchema>[];
 
 /** Why a `PRECONDITION_FAILED` was answered, where the client acts on it:
- * `queue_full`, the person has 20 queued runs (`03` L1); `out_of_tokens`,
- * nothing can pay for the run the write would queue: no included tokens
- * are left this week and the person's key does not pay for the model (`03`
- * K8). Both are recorded and use the seq; the client restores the
- * composer's text. */
-export const spaceRefusalReasonSchema = z.enum(["queue_full", "out_of_tokens"]);
+ * `queue_full`, the person has 20 queued runs (`03` L1; recorded, uses the
+ * seq; the client restores the composer's text). */
+export const spaceRefusalReasonSchema = z.enum(["queue_full"]);
 
 /** An error answer. `message` is user-facing text; `issues`: the input paths
  * that failed validation (`BAD_REQUEST`); `reason`: see

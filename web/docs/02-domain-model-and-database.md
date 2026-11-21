@@ -128,9 +128,10 @@ threads is preserved upon account deletion.
 
 `user_limits`
 
-- `user_id` PK FK, `daily_tokens` integer null, `daily_runs` integer null
-  (null = deployment default from `SESSION_DAILY_TOKENS` = 1,000,000 and
-  `SESSION_DAILY_RUNS` = 10), `updated_at`
+- `user_id` PK FK, `weekly_tokens` integer null (the member's weekly
+  allowance of included tokens; null = the deployment's
+  `SESSION_WEEKLY_TOKENS`, 2,000,000; plan `03` K3), `updated_at`. The daily
+  token and run columns were dropped by `0007_weekly_tokens`.
 
 `sessions`
 
