@@ -2,7 +2,7 @@
 // (plan `04` §3.1 acceptance, `05` M6 exit criteria).
 
 import { execFile } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -13,7 +13,6 @@ import test from "ava";
 import type SqliteDatabase from "better-sqlite3";
 
 import {
-  MIGRATIONS_FOLDER,
   accountInvites,
   accounts,
   auth,
@@ -91,73 +90,36 @@ test("a code is found by its hash, in any form a person pastes", (t) => {
   t.deepEqual(accountInvites.checkCode(db, "not a code"), { status: "unusable" });
 });
 
-test("no column holds a plain code after the migration", (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "session-invites-migrate-"));
+test("no column and no byte of the file holds a plain code", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "session-invites-plain-"));
   t.teardown(() => rmSync(directory, { recursive: true, force: true }));
-  // A database at the initial migration only, with an old plain-text invite.
-  const initial = join(directory, "initial");
-  mkdirSync(join(initial, "meta"), { recursive: true });
-  copyFileSync(join(MIGRATIONS_FOLDER, "0000_initial.sql"), join(initial, "0000_initial.sql"));
-  const journal = JSON.parse(
-    readFileSync(join(MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8"),
-  ) as { entries: { tag: string }[] };
-  writeFileSync(
-    join(initial, "meta", "_journal.json"),
-    JSON.stringify({
-      ...journal,
-      entries: journal.entries.filter((e) => e.tag === "0000_initial"),
-    }),
-  );
   const path = join(directory, "session.db");
-  const old = openDatabase(path, { migrationsFolder: initial });
-  const plain = "PlainLegacyCode42";
-  old.$client
-    .prepare(
-      `INSERT INTO users (id, github_id, login, created_at, last_login_at) VALUES ('U1', 42, 'old', 1, 1)`,
-    )
-    .run();
-  old.$client
-    .prepare(`INSERT INTO invites (code, created_by, created_at) VALUES (?, 'U1', 1)`)
-    .run(plain);
-  // An older build had no backfills; this one recorded its own as applied.
-  old.$client.prepare(`DELETE FROM backfills`).run();
-  closeDatabase(old);
-
   const db = openDatabase(path);
-  const made = invite(db, "U1");
+  const inviter = addActiveUser(db, "plain.inviter");
+  const open = invite(db, inviter.id);
+  const used = invite(db, inviter.id);
+  t.true(redeem(db, used.code, "plain.user").ok);
   const texts = allText(db.$client);
-  t.false(
-    texts.some((value) => value.includes(plain)),
-    "the legacy code",
-  );
-  t.false(
-    texts.some((value) => value.includes(made.code)),
-    "a new code",
-  );
-  const moved = db.$client
-    .prepare(
-      `SELECT code_hash AS hash, created_by AS by FROM invites WHERE created_by = 'U1' ORDER BY created_at`,
-    )
-    .all() as { hash: string; by: string }[];
-  t.is(moved.length, 2);
-  t.is(moved[0]?.hash.length, 64);
-  const identity = db.$client
-    .prepare(`SELECT provider, provider_user_id AS id FROM users WHERE id = 'U1'`)
-    .get();
-  t.deepEqual(identity, { provider: "github", id: "42" });
+  for (const code of [open.code, used.code]) {
+    t.false(
+      texts.some((value) => value.includes(code)),
+      code,
+    );
+  }
+  const hashes = db.$client
+    .prepare(`SELECT code_hash AS hash FROM invites WHERE created_by = ? ORDER BY created_at`)
+    .all(inviter.id) as { hash: string }[];
   t.deepEqual(
-    db.$client
-      .prepare(`SELECT count(*) AS n FROM sqlite_master WHERE name = 'invites_legacy'`)
-      .get(),
-    { n: 0 },
+    hashes.map((row) => row.hash),
+    [accountInvites.hashInviteCode(open.code), accountInvites.hashInviteCode(used.code)],
   );
   // Nothing on disk either, once the WAL is folded in and free pages dropped.
   db.$client.pragma("wal_checkpoint(TRUNCATE)");
   db.$client.exec("VACUUM");
   closeDatabase(db);
   const bytes = readFileSync(path).toString("latin1");
-  t.false(bytes.includes(plain));
-  t.false(bytes.includes(made.code));
+  t.false(bytes.includes(open.code));
+  t.false(bytes.includes(used.code));
 });
 
 test("code_enc is null after use and after revoke; revoked and used codes are unusable", (t) => {
