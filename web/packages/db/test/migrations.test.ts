@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -7,13 +7,75 @@ import SqliteDatabase from "better-sqlite3";
 
 import {
   MIGRATIONS_FOLDER,
+  UnappliedMigrationError,
   UnknownMigrationError,
   closeDatabase,
   openDatabase,
   runBackfills,
   tableRowCount,
+  unappliedMigrations,
   unknownMigrations,
 } from "../src/index.js";
+import * as schema from "../src/schema/index.js";
+
+/** The part of `drizzle-kit/api` the snapshot test uses, typed here: the
+ * package's own declarations do not resolve under the lint's project. */
+interface DrizzleKitApi {
+  generateSQLiteDrizzleJson(imports: Record<string, unknown>, prevId?: string): Promise<unknown>;
+  generateSQLiteMigration(prev: unknown, cur: unknown): Promise<string[]>;
+}
+
+interface Snapshot {
+  id: string;
+  prevId: string;
+}
+
+interface JournalEntry {
+  idx: number;
+  when: number;
+  tag: string;
+}
+
+function readJournal(folder = MIGRATIONS_FOLDER): { entries: JournalEntry[] } {
+  return JSON.parse(readFileSync(join(folder, "meta", "_journal.json"), "utf8")) as {
+    entries: JournalEntry[];
+  };
+}
+
+/** The tables `0000_initial.sql` still creates that the schema no longer
+ * declares: M8a's squash drops them (plan `01` D5). */
+const RESEARCH_TABLES = new Set([
+  "collapsed_groups",
+  "collapsed_places",
+  "embed_assets",
+  "feed_items",
+  "folders",
+  "followup_queue",
+  "highlights",
+  "image_refs",
+  "interface_drafts",
+  "node_messages",
+  "node_summaries",
+  "nodes",
+  "notifications",
+  "research_drafts",
+  "research_images",
+  "response_snapshots",
+  "run_attempts",
+  "run_queue",
+  "run_turns",
+  "tree_folder_membership",
+  "tree_invites",
+  "tree_member_removals",
+  "tree_members",
+  "tree_subscriptions",
+  "tree_views",
+  "trees",
+  "tweet_cache",
+  "widget_revisions",
+  "widget_state",
+  "workspaces",
+]);
 
 test("applies every migration to an empty database", (t) => {
   const directory = mkdtempSync(join(tmpdir(), "session-migrate-"));
@@ -102,6 +164,79 @@ test("the history is the initial migration and the API keys migration", (t) => {
     readdirSync(MIGRATIONS_FOLDER).filter((name) => name.endsWith(".sql")),
     ["0000_initial.sql", "0003_api_keys.sql"],
   );
+});
+
+test("journal entries ascend: idx and when strictly increase together", (t) => {
+  const { entries } = readJournal();
+  for (let index = 1; index < entries.length; index += 1) {
+    const previous = entries[index - 1] as JournalEntry;
+    const entry = entries[index] as JournalEntry;
+    t.true(entry.idx > previous.idx, `${entry.tag}: idx after ${previous.tag}`);
+    // Drizzle's migrator skips an entry dated before the last applied one.
+    t.true(entry.when > previous.when, `${entry.tag}: when after ${previous.tag}`);
+  }
+});
+
+test("every migration has a snapshot, chained, and the latest one holds the schema", async (t) => {
+  const { entries } = readJournal();
+  const snapshots = entries.map(
+    (entry) =>
+      JSON.parse(
+        readFileSync(
+          join(MIGRATIONS_FOLDER, "meta", `${entry.tag.slice(0, 4)}_snapshot.json`),
+          "utf8",
+        ),
+      ) as Snapshot,
+  );
+  for (let index = 1; index < snapshots.length; index += 1) {
+    t.is(snapshots[index]?.prevId, snapshots[index - 1]?.id, `${entries[index]?.tag} chains`);
+  }
+  // What `drizzle-kit generate` would emit now: nothing for the declared
+  // tables (they are in the latest snapshot), only the drops of the research
+  // tables the squash removes.
+  const latest = snapshots.at(-1);
+  if (!latest) throw new Error("no snapshot");
+  const kit = (await import("drizzle-kit/api")) as unknown as DrizzleKitApi;
+  const statements = await kit.generateSQLiteMigration(
+    latest,
+    await kit.generateSQLiteDrizzleJson(schema, latest.id),
+  );
+  const unexpected = statements.filter((statement) => {
+    const dropped = /^DROP TABLE `([a-z_]+)`;$/.exec(statement.trim())?.[1];
+    return dropped === undefined || !RESEARCH_TABLES.has(dropped);
+  });
+  t.deepEqual(unexpected, []);
+});
+
+test("a migration dated before one already applied fails startup", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "session-unapplied-"));
+  const folder = join(directory, "migrations");
+  const path = join(directory, "session.db");
+  try {
+    cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
+    closeDatabase(openDatabase(path, { migrationsFolder: folder }));
+    // Another branch's migration merged later, but dated before the last one
+    // applied: drizzle's migrator would skip it.
+    const journal = readJournal(folder);
+    const first = journal.entries[0] as JournalEntry;
+    journal.entries.splice(1, 0, { ...first, idx: 1, when: first.when + 1, tag: "0001_late" });
+    writeFileSync(join(folder, "meta", "_journal.json"), JSON.stringify(journal, null, 2));
+    writeFileSync(join(folder, "0001_late.sql"), "CREATE TABLE `late_table` (`id` text);");
+
+    const client = new SqliteDatabase(path);
+    t.deepEqual(unappliedMigrations(client, folder), ["0001_late"]);
+    client.close();
+    const error = t.throws(() => openDatabase(path, { migrationsFolder: folder }), {
+      instanceOf: UnappliedMigrationError,
+    });
+    t.regex(error?.message ?? "", /0001_late/);
+    // The shipped history leaves nothing unapplied.
+    const db = openDatabase(join(directory, "fresh.db"));
+    t.deepEqual(unappliedMigrations(db.$client), []);
+    closeDatabase(db);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("applies the file pragmas", (t) => {

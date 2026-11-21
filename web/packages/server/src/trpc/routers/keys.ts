@@ -2,13 +2,14 @@
 // (`03-agents-and-research.md` K4, K5, K7; ADR-23). Online-only procedures
 // (ADR-19): none of this is replicated.
 
-import { apiKeys as keyRepo, billing as billingRepo } from "@session/db";
-import { API_KEY_PROVIDERS } from "@session/shared";
+import { billing as billingRepo } from "@session/db";
+import { API_KEY_PROVIDERS, apiKeyFormatError } from "@session/shared";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import type { ApiKeyView } from "../../keys/apiKeys.js";
-import { listKeys, removeKey, setKey } from "../../keys/apiKeys.js";
+import { listKeys, openValid, removeKey, setKey } from "../../keys/apiKeys.js";
+import { RATE_LIMITS } from "../../middleware/rateLimit.js";
 import { billLabel } from "../../runs/allowance.js";
 import { weekOf, weekResetAt } from "../../runs/ledger.js";
 import { protectedProcedure, router } from "../base.js";
@@ -22,21 +23,50 @@ export const apiKeysRouter = router({
    * cannot be reached (`03` K4). */
   set: protectedProcedure
     .input(z.object({ provider: providerSchema, raw: z.string().max(1024) }))
-    .mutation(({ ctx, input }): Promise<ApiKeyView> =>
-      setKey(
-        {
-          db: ctx.db,
-          box: ctx.box,
-          fetch: ctx.fetch,
-          logger: ctx.logger,
-          now: ctx.now,
-          ...(ctx.keyCheckTimeoutMs === undefined ? {} : { timeoutMs: ctx.keyCheckTimeoutMs }),
-        },
-        ctx.user.id,
-        input.provider,
-        input.raw,
-      ),
-    ),
+    .mutation(async ({ ctx, input }): Promise<ApiKeyView> => {
+      // A malformed key is refused before the limits: it reaches no provider.
+      const formatError = apiKeyFormatError(input.provider, input.raw.trim());
+      if (formatError !== null) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: formatError });
+      }
+      // One check in flight per account, then 5 per 10 minutes per account
+      // and 60 a minute across Session (`03` K4): each call sends a pasted
+      // key to a provider.
+      const release = ctx.limiter.hold(`apiKeys.set:${ctx.user.id}`);
+      if (release === null) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "A key check is already running. Wait for it to finish.",
+        });
+      }
+      try {
+        const own = ctx.limiter.take(`apiKeys.set:${ctx.user.id}`, RATE_LIMITS.apiKeyChecks);
+        const all = own.allowed
+          ? ctx.limiter.take("apiKeys.set", RATE_LIMITS.apiKeyChecksGlobal)
+          : own;
+        if (!all.allowed) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many key checks. Try again in a few minutes.",
+          });
+        }
+        return await setKey(
+          {
+            db: ctx.db,
+            box: ctx.box,
+            fetch: ctx.fetch,
+            logger: ctx.logger,
+            now: ctx.now,
+            ...(ctx.keyCheckTimeoutMs === undefined ? {} : { timeoutMs: ctx.keyCheckTimeoutMs }),
+          },
+          ctx.user.id,
+          input.provider,
+          input.raw,
+        );
+      } finally {
+        release();
+      }
+    }),
   remove: protectedProcedure
     .input(z.object({ provider: providerSchema }))
     .mutation(({ ctx, input }) => ({ removed: removeKey(ctx, ctx.user.id, input.provider) })),
@@ -92,11 +122,10 @@ function isAfterCursor(run: { startedAt: number; runId: string }, cursor: string
   return run.startedAt < at || (run.startedAt === at && run.runId < runId);
 }
 
-function hasValidAnthropicKey(
-  ctx: { db: Parameters<typeof keyRepo.find>[0] },
-  userId: string,
-): boolean {
-  return keyRepo.find(ctx.db, userId, "anthropic")?.status === "valid";
+/** `key` billing needs an Anthropic key that is `valid` and still opens
+ * under the secret key (`03` K7). */
+function hasValidAnthropicKey(ctx: Parameters<typeof openValid>[0], userId: string): boolean {
+  return openValid(ctx, userId, "anthropic") !== null;
 }
 
 export const usageProcedures = {

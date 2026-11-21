@@ -16,7 +16,7 @@ import {
   validatedOrigin,
 } from "../src/config.js";
 import { createLogger } from "../src/logger.js";
-import { sweepExpired } from "../src/main.js";
+import { sweepExpired, warnOnDevelopmentSecretKey } from "../src/main.js";
 import { RATE_LIMITS, RateLimiter } from "../src/middleware/rateLimit.js";
 import { contentSecurityPolicy } from "../src/middleware/security.js";
 import { resolveWithinRoot } from "../src/middleware/static.js";
@@ -129,10 +129,24 @@ test("test-only auth is impossible in production", (t) => {
   t.true(config.isProduction);
 });
 
-test("production needs its own secret key; development uses the fixed one", (t) => {
+test("the development secret key only when NODE_ENV says development or test", (t) => {
   const missing = t.throws(() => testConfig("/tmp/session-config", { NODE_ENV: "production" }));
   t.true(missing instanceof ConfigError);
-  t.regex((missing as ConfigError).issues.join("\n"), /SESSION_SECRET_KEY: required in production/);
+  t.regex((missing as ConfigError).issues.join("\n"), /SESSION_SECRET_KEY: required unless/);
+  // NODE_ENV unset defaults to development elsewhere, but not for the key.
+  const unset = t.throws(() =>
+    loadConfig({ SESSION_PUBLIC_ORIGIN: "http://localhost:8787", SESSION_DATA_DIR: "/tmp/x" }),
+  );
+  t.regex((unset as ConfigError).issues.join("\n"), /SESSION_SECRET_KEY: required unless/);
+  for (const nodeEnv of ["development", "test"]) {
+    const config = testConfig("/tmp/session-config", { NODE_ENV: nodeEnv });
+    t.deepEqual(config.secretKey, DEVELOPMENT_SECRET_KEY, nodeEnv);
+    t.true(config.secretKeyIsDevelopment, nodeEnv);
+  }
+  t.false(
+    testConfig("/tmp/session-config", { SESSION_SECRET_KEY: "ab".repeat(32) })
+      .secretKeyIsDevelopment,
+  );
   const malformed = t.throws(() =>
     testConfig("/tmp/session-config", { SESSION_SECRET_KEY: "too-short" }),
   );
@@ -145,6 +159,34 @@ test("production needs its own secret key; development uses the fixed one", (t) 
   });
   t.deepEqual(base64.secretKey, Buffer.alloc(32, 7));
   t.deepEqual(testConfig("/tmp/session-config").secretKey, DEVELOPMENT_SECRET_KEY);
+});
+
+test("boot warns when the development secret key is in use", (t) => {
+  const lines: string[] = [];
+  const logger = createLogger({ level: "warn", write: (line) => lines.push(line) });
+  t.true(warnOnDevelopmentSecretKey(testConfig("/tmp/session-config"), logger));
+  t.regex(lines.join("\n"), /SESSION_SECRET_KEY is unset/);
+  lines.length = 0;
+  t.false(
+    warnOnDevelopmentSecretKey(
+      testConfig("/tmp/session-config", { SESSION_SECRET_KEY: "ab".repeat(32) }),
+      logger,
+    ),
+  );
+  t.deepEqual(lines, []);
+});
+
+test("fixture providers are refused in production", (t) => {
+  const error = t.throws(() =>
+    testConfig("/tmp/session-config", {
+      NODE_ENV: "production",
+      SESSION_FIXTURE_PROVIDERS: "1",
+      SESSION_SECRET_KEY: "ab".repeat(32),
+    }),
+  );
+  t.true(error instanceof ConfigError);
+  t.regex((error as ConfigError).issues.join("\n"), /SESSION_FIXTURE_PROVIDERS/);
+  t.true(testConfig("/tmp/session-config", { SESSION_FIXTURE_PROVIDERS: "1" }).fixtureProviders);
 });
 
 test("the auth routes are rate limited per address", async (t) => {

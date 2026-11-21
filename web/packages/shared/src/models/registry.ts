@@ -229,6 +229,8 @@ export function effortProviderOptions(
       };
     case "anthropic":
       return { anthropic: { effort } };
+    case "openai":
+      return { openai: { reasoningEffort: effort } };
   }
 }
 

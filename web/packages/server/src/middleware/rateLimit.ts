@@ -26,6 +26,11 @@ export interface RateLimitResult {
 export const RATE_LIMITS = {
   mutations: { limit: 60, windowMs: 60_000 },
   auth: { limit: 20, windowMs: 60_000 },
+  /** `apiKeys.set` per account: each call makes a request to a provider
+   * with a key someone pasted (`03` K4). */
+  apiKeyChecks: { limit: 5, windowMs: 600_000 },
+  /** `apiKeys.set` across all accounts. */
+  apiKeyChecksGlobal: { limit: 60, windowMs: 60_000 },
 } as const satisfies Record<string, BucketSpec>;
 
 /** The bucket spec with the longest refill window, the default for `sweep`. */
@@ -35,6 +40,7 @@ const LONGEST_WINDOW: BucketSpec = Object.values(RATE_LIMITS).reduce((longest, s
 
 export class RateLimiter {
   readonly #buckets = new Map<string, Bucket>();
+  readonly #held = new Set<string>();
   readonly #now: () => number;
 
   constructor(now: () => number = Date.now) {
@@ -56,6 +62,17 @@ export class RateLimiter {
     }
     this.#buckets.set(key, { tokens: tokens - cost, updatedAt: at });
     return { allowed: true, retryAfter: 0 };
+  }
+
+  /** Takes the one slot `key` has, for work that must not run twice at once
+   * (one API key check per account, `03` K4). Returns the release, or null
+   * while the slot is held. */
+  hold(key: string): (() => void) | null {
+    if (this.#held.has(key)) return null;
+    this.#held.add(key);
+    return () => {
+      this.#held.delete(key);
+    };
   }
 
   /** Evicts expired rate limit buckets to bound memory usage in long-running

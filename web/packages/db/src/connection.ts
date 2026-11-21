@@ -2,7 +2,8 @@
 // database this build does not understand
 // (`docs/02-domain-model-and-database.md` §4).
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import SqliteDatabase from "better-sqlite3";
@@ -80,6 +81,50 @@ function appliedMigrationHashes(client: SqliteDatabase.Database): string[] {
 }
 
 /**
+ * Raised when a migration of this build is still not applied after
+ * `migrate()`. Drizzle's migrator applies only the journal entries whose
+ * `when` is later than the last applied one, so an entry merged with an
+ * earlier `when` than one already applied is skipped without a word; the
+ * server refuses to start on that instead of running without its tables.
+ */
+export class UnappliedMigrationError extends Error {
+  readonly tags: readonly string[];
+
+  constructor(tags: readonly string[]) {
+    super(
+      `Database schema incomplete: migration(s) ${tags.join(", ")} of this build were not applied. ` +
+        "A journal entry is dated before one already applied; give it a later `when` in " +
+        "migrations/meta/_journal.json.",
+    );
+    this.name = "UnappliedMigrationError";
+    this.tags = tags;
+  }
+}
+
+/** The journal's tags in the order of `readMigrationFiles`, which reads the
+ * journal's entries in order. */
+function journalTags(migrationsFolder: string): string[] {
+  const journal = JSON.parse(
+    readFileSync(join(migrationsFolder, "meta", "_journal.json"), "utf8"),
+  ) as { entries: { tag: string }[] };
+  return journal.entries.map((entry) => entry.tag);
+}
+
+/** The tags of this build's migrations the database has not applied. */
+export function unappliedMigrations(
+  client: SqliteDatabase.Database,
+  migrationsFolder = MIGRATIONS_FOLDER,
+): string[] {
+  if (!existsSync(migrationsFolder)) return [];
+  const applied = new Set(appliedMigrationHashes(client));
+  const tags = journalTags(migrationsFolder);
+  return readMigrationFiles({ migrationsFolder })
+    .map((migration, index) => ({ hash: migration.hash, tag: tags[index] ?? `#${index}` }))
+    .filter((migration) => !applied.has(migration.hash))
+    .map((migration) => migration.tag);
+}
+
+/**
  * Compares what the database has applied against the migrations bundled with
  * this build. Returns the hashes the build cannot account for.
  */
@@ -115,6 +160,11 @@ export function openDatabase(path: string, options: OpenDatabaseOptions = {}): S
       throw new UnknownMigrationError(unknown);
     }
     migrate(db, { migrationsFolder });
+    const unapplied = unappliedMigrations(client, migrationsFolder);
+    if (unapplied.length > 0) {
+      client.close();
+      throw new UnappliedMigrationError(unapplied);
+    }
     runBackfills(db);
   }
   return db;

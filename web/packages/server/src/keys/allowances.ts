@@ -9,7 +9,7 @@ import type { Config } from "../config.js";
 import type { Allowances } from "../runs/allowance.js";
 
 import type { ApiKeysDeps } from "./apiKeys.js";
-import { keyRejected, openValid } from "./apiKeys.js";
+import { keyRejected, openValid, validSealed } from "./apiKeys.js";
 
 export function storedAllowances(
   deps: Pick<ApiKeysDeps, "db" | "box" | "logger" | "now"> & { config: Pick<Config, "limits"> },
@@ -17,13 +17,13 @@ export function storedAllowances(
   return {
     weekly: () => deps.config.limits.weeklyTokens,
     billing: (userId) => billingRepo.get(deps.db, userId),
-    anthropicKey: (userId) => openValid(deps, userId, "anthropic")?.apiKey ?? null,
-    keyRejected: (userId, provider, apiKey) => {
-      // Only the key the run used: a key saved since then stays valid.
-      const stored = openValid(deps, userId, provider);
-      if (stored?.apiKey === apiKey) {
-        keyRejected(deps, userId, provider, stored);
-      }
+    validKey: (userId, provider) => validSealed(deps, userId, provider),
+    anthropicKey: (userId) => openValid(deps, userId, "anthropic"),
+    openaiKey: (userId) => openValid(deps, userId, "openai"),
+    // Only the key the run used, compared by its sealed value: a key saved
+    // since then stays valid (`markInvalid` matches `sealed`).
+    keyRejected: (userId, provider, sealed) => {
+      keyRejected(deps, userId, provider, { sealed });
     },
   };
 }

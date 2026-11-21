@@ -26,6 +26,7 @@ import {
 import { TRPCError } from "@trpc/server";
 
 import type { Logger } from "../logger.js";
+import type { MemberKey } from "../runs/allowance.js";
 import type { SecretBox } from "../secretBox.js";
 
 /** How long `apiKeys.set` waits for the provider (`03` K4). */
@@ -51,8 +52,9 @@ function checkRequest(provider: ApiKeyProvider, raw: string): RequestInit {
 /**
  * Lists `provider`'s models with `raw`: `accepted` on a 2xx, `rejected` on
  * 401 or 403 (the providers' answers to an unknown, revoked or
- * unauthorised key), `unreachable` on a timeout, a network error or any
- * other status (a 429 or a 5xx says nothing about the key).
+ * unauthorised key; at save a 403 also refuses, `03` K4), `unreachable` on
+ * a timeout, a network error, a redirect (never followed: the key would go
+ * with it) or any other status (a 429 or a 5xx says nothing about the key).
  */
 export async function checkWithProvider(
   provider: ApiKeyProvider,
@@ -65,6 +67,7 @@ export async function checkWithProvider(
     response = await options.fetch(PROVIDER_MODELS_URL[provider], {
       ...checkRequest(provider, raw),
       method: "GET",
+      redirect: "error",
       signal,
     });
   } catch {
@@ -87,10 +90,7 @@ export interface ApiKeyView {
 
 /** A key opened for one provider call. `sealed` identifies the stored value,
  * so a rejection marks this key and not one the member saved since. */
-export interface OpenedKey {
-  apiKey: string;
-  sealed: string;
-}
+export type OpenedKey = MemberKey;
 
 export interface ApiKeysDeps {
   db: SessionDatabase;
@@ -107,17 +107,42 @@ export function keyContext(userId: string, provider: ApiKeyProvider): string {
   return `api-key:${userId}:${provider}`;
 }
 
-function view(row: keyRepo.StoredApiKey): ApiKeyView {
+/** Whether a stored row opens under the configured secret key and its
+ * owner's context. */
+function opens(deps: Pick<ApiKeysDeps, "box">, row: keyRepo.StoredApiKey): boolean {
+  try {
+    deps.box.open(row.sealed, keyContext(row.userId, row.provider));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A row as reads return it. A `valid` row that no longer opens (the secret
+ * key changed) reads `invalid`: it cannot pay for anything. */
+function view(deps: Pick<ApiKeysDeps, "box">, row: keyRepo.StoredApiKey): ApiKeyView {
   return {
     provider: row.provider,
     last4: row.last4,
-    status: row.status,
+    status: row.status === "valid" && opens(deps, row) ? "valid" : "invalid",
     addedAt: row.createdAt,
   };
 }
 
-export function listKeys(deps: Pick<ApiKeysDeps, "db">, userId: string): ApiKeyView[] {
-  return keyRepo.list(deps.db, userId).map(view);
+export function listKeys(deps: Pick<ApiKeysDeps, "db" | "box">, userId: string): ApiKeyView[] {
+  return keyRepo.list(deps.db, userId).map((row) => view(deps, row));
+}
+
+/** The sealed value of the member's `valid` key for `provider`, or null: a
+ * status check that decrypts nothing (the run loop's per-step check and the
+ * payer at start, `03` K4, K8). */
+export function validSealed(
+  deps: Pick<ApiKeysDeps, "db">,
+  userId: string,
+  provider: ApiKeyProvider,
+): string | null {
+  const row = keyRepo.find(deps.db, userId, provider);
+  return row?.status === "valid" ? row.sealed : null;
 }
 
 /**
@@ -155,18 +180,21 @@ export async function setKey(
     { userId, provider, sealed, last4: raw.slice(-4) },
     (deps.now ?? Date.now)(),
   );
-  return view(saved);
+  return view(deps, saved);
 }
 
 /** Deletes the member's key (`apiKeys.remove`). Without an Anthropic key
- * billing cannot be `key`, so it returns to `pause` (`03` K7). */
+ * billing cannot be `key`, so removing it returns billing from `key` to
+ * `pause` (`03` K7); removing the OpenAI key leaves billing as it is. A
+ * running attempt paid by the removed key stops at its next step (the run
+ * loop's per-step check). */
 export function removeKey(
   deps: Pick<ApiKeysDeps, "db" | "logger">,
   userId: string,
   provider: ApiKeyProvider,
 ): boolean {
   const removed = keyRepo.remove(deps.db, userId, provider);
-  if (provider === "anthropic") {
+  if (provider === "anthropic" && billingRepo.get(deps.db, userId) === "key") {
     billingRepo.set(deps.db, userId, "pause");
   }
   if (removed) {
@@ -213,7 +241,9 @@ export function keyRejected(
     (deps.now ?? Date.now)(),
   );
   if (changed) {
-    if (provider === "anthropic") billingRepo.set(deps.db, userId, "pause");
+    if (provider === "anthropic" && billingRepo.get(deps.db, userId) === "key") {
+      billingRepo.set(deps.db, userId, "pause");
+    }
     deps.logger.info({ userId, provider }, "api key rejected during a run");
   }
   return changed;

@@ -119,7 +119,9 @@ export const usageSummarySchema = z.object({
 
 export type UsageSummary = z.infer<typeof usageSummarySchema>;
 
-export const modelProviderSchema = z.enum(["vertex", "openrouter", "anthropic"]);
+/** `openai` serves only key-only models, called with the member's own
+ * OpenAI key (`03` K11); the deployment has no OpenAI credential. */
+export const modelProviderSchema = z.enum(["vertex", "openrouter", "anthropic", "openai"]);
 
 export type ModelProvider = z.infer<typeof modelProviderSchema>;
 

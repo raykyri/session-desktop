@@ -122,6 +122,20 @@ export function classifyRunError(error: unknown): ClassifiedError {
   return classOf("unknown");
 }
 
+/**
+ * Whether a provider error says the key itself is rejected (`03` K4): a 401,
+ * or a body naming Anthropic's `authentication_error` or OpenAI's
+ * `invalid_api_key`. A 403 is a permission error on a key that still
+ * authenticates, and is not a rejection.
+ */
+export function isKeyRejection(error: unknown): boolean {
+  if (!APICallError.isInstance(error)) return false;
+  if (error.statusCode === 401) return true;
+  if (error.statusCode === 403) return false;
+  const body = `${error.responseBody ?? ""} ${error.message}`;
+  return /authentication_error|invalid_api_key/.test(body);
+}
+
 /** A `content-filter` finish reason, or Fable's `refusal` stop reason, is not
  * an exception: the request succeeded and the model declined
  * (`04-agent-runtime.md` §3.6). */

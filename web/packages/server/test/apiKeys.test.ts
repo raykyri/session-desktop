@@ -23,6 +23,7 @@ import { createSecretBox } from "../src/secretBox.js";
 
 import type { Harness } from "./helpers.js";
 import { createHarness } from "./helpers.js";
+import { until } from "./runsHelpers.js";
 
 const ANTHROPIC_KEY = "sk-ant-api03-k4-raw-key-must-never-be-stored-a1f9";
 const OPENAI_KEY = "sk-proj-k4-openai-raw-key-must-never-be-stored-77c2";
@@ -64,36 +65,52 @@ test("an accepted key is saved valid and stored sealed: the database file holds 
   const user = harness.addUser("keyholder");
   const caller = harness.caller(user);
 
-  t.like(await caller.apiKeys.set({ provider: "anthropic", raw: ANTHROPIC_KEY }), {
+  const anthropic = await caller.apiKeys.set({ provider: "anthropic", raw: ANTHROPIC_KEY });
+  const openai = await caller.apiKeys.set({ provider: "openai", raw: `  ${OPENAI_KEY}\n` });
+  t.deepEqual(anthropic, {
     provider: "anthropic",
     last4: "a1f9",
     status: "valid",
+    addedAt: anthropic.addedAt,
   });
-  t.like(await caller.apiKeys.set({ provider: "openai", raw: `  ${OPENAI_KEY}\n` }), {
+  t.deepEqual(openai, {
     provider: "openai",
     last4: "77c2",
     status: "valid",
+    addedAt: openai.addedAt,
   });
-  t.deepEqual(
-    (await caller.apiKeys.list()).map((key) => [key.provider, key.last4, key.status]),
-    [
-      ["anthropic", "a1f9", "valid"],
-      ["openai", "77c2", "valid"],
-    ],
-  );
+  t.true(Number.isInteger(anthropic.addedAt) && anthropic.addedAt > 0);
+  t.deepEqual(await caller.apiKeys.list(), [anthropic, openai]);
   // Reads never carry the key or its sealed form.
-  t.false(JSON.stringify(await caller.usage.get()).includes("sk-"));
+  const reading = JSON.stringify(await caller.usage.get());
+  t.false(reading.includes("sk-"));
+  t.false(reading.includes("v1."));
 
-  // The whole database on disk, WAL included, holds neither raw key.
-  harness.db.$client.pragma("wal_checkpoint(TRUNCATE)");
-  const files = readdirSync(harness.directory).filter((name) => name.startsWith("session.db"));
-  t.true(files.includes("session.db"));
-  for (const name of files) {
-    const bytes = readFileSync(join(harness.directory, name));
-    for (const raw of [ANTHROPIC_KEY, OPENAI_KEY]) {
-      t.is(bytes.indexOf(raw), -1, `${name} holds no raw key`);
-      t.is(bytes.indexOf(Buffer.from(raw, "utf16le")), -1, `${name} holds no UTF-16 key`);
+  /** Every file of the database (main, WAL, shared memory) holds neither
+   * raw key, as UTF-8 or UTF-16. */
+  const scan = (when: string) => {
+    const files = readdirSync(harness.directory).filter((name) => name.startsWith("session.db"));
+    t.true(files.includes("session.db"), when);
+    for (const name of files) {
+      const bytes = readFileSync(join(harness.directory, name));
+      for (const raw of [ANTHROPIC_KEY, OPENAI_KEY]) {
+        t.is(bytes.indexOf(raw), -1, `${when}: ${name} holds no raw key`);
+        t.is(bytes.indexOf(Buffer.from(raw, "utf16le")), -1, `${when}: ${name}, UTF-16`);
+      }
     }
+    return files;
+  };
+  // Before the checkpoint the writes are in the WAL; after it, in the file.
+  t.true(scan("before the checkpoint").includes("session.db-wal"));
+  harness.db.$client.pragma("wal_checkpoint(TRUNCATE)");
+  scan("after the checkpoint");
+
+  // Nor does anything the server logged.
+  const logged = harness.logs.join("\n");
+  t.true(logged.includes("api key checked"), "the check is logged");
+  for (const raw of [ANTHROPIC_KEY, OPENAI_KEY]) {
+    t.false(logged.includes(raw));
+    t.false(logged.includes(raw.slice(8, -4)), "no part of the key either");
   }
 
   // What is stored opens to the key, under the configured key and the
@@ -109,6 +126,104 @@ test("an accepted key is saved valid and stored sealed: the database file holds 
       keyContext(user.id, "anthropic"),
     ),
   );
+});
+
+test("apiKeys.set: 5 checks per 10 minutes per account, then TOO_MANY_REQUESTS", async (t) => {
+  let now = 1_000_000;
+  const provider = accepts();
+  const harness = createHarness(t, { fetch: provider.fetch, limiterNow: () => now });
+  const caller = harness.caller(harness.addUser("eager"));
+  for (let index = 0; index < 5; index += 1) {
+    await caller.apiKeys.set({ provider: "anthropic", raw: ANTHROPIC_KEY });
+  }
+  await t.throwsAsync(caller.apiKeys.set({ provider: "anthropic", raw: ANTHROPIC_KEY }), {
+    code: "TOO_MANY_REQUESTS",
+  });
+  t.is(provider.calls.length, 5, "the refused call reached no provider");
+  // Format errors reach no provider and do not count.
+  await t.throwsAsync(caller.apiKeys.set({ provider: "openai", raw: "sk-short" }), {
+    code: "BAD_REQUEST",
+  });
+  // Another account has its own five.
+  await harness
+    .caller(harness.addUser("other"))
+    .apiKeys.set({ provider: "openai", raw: OPENAI_KEY });
+  // One check comes back every two minutes.
+  now += 120_000;
+  await caller.apiKeys.set({ provider: "anthropic", raw: ANTHROPIC_KEY });
+  await t.throwsAsync(caller.apiKeys.set({ provider: "anthropic", raw: ANTHROPIC_KEY }), {
+    code: "TOO_MANY_REQUESTS",
+  });
+});
+
+test("apiKeys.set: at most 60 checks a minute across all accounts", async (t) => {
+  const provider = accepts();
+  const harness = createHarness(t, { fetch: provider.fetch, limiterNow: () => 5_000_000 });
+  for (let index = 0; index < 12; index += 1) {
+    const caller = harness.caller(harness.addUser(`member${index}`));
+    for (let call = 0; call < 5; call += 1) {
+      await caller.apiKeys.set({ provider: "openai", raw: OPENAI_KEY });
+    }
+  }
+  t.is(provider.calls.length, 60);
+  const error = await t.throwsAsync(
+    harness.caller(harness.addUser("sixty-first")).apiKeys.set({
+      provider: "openai",
+      raw: OPENAI_KEY,
+    }),
+  );
+  t.like(error, { code: "TOO_MANY_REQUESTS" });
+  t.is(provider.calls.length, 60);
+});
+
+test("apiKeys.set: one check in flight per account", async (t) => {
+  // Each check waits until the test answers it, oldest first.
+  const waiting: ((response: Response) => void)[] = [];
+  const answer = (response: Response) => waiting.shift()?.(response);
+  const held = providerStub(() => new Promise<Response>((resolve) => waiting.push(resolve)));
+  const harness = createHarness(t, { fetch: held.fetch });
+  const user = harness.addUser("double");
+  const caller = harness.caller(user);
+  const first = caller.apiKeys.set({ provider: "anthropic", raw: ANTHROPIC_KEY });
+  await until(() => held.calls.length === 1, "the first check");
+  const second = await t.throwsAsync(caller.apiKeys.set({ provider: "openai", raw: OPENAI_KEY }));
+  t.like(second, { code: "TOO_MANY_REQUESTS" });
+  // Another account is not held up.
+  const other = harness.caller(harness.addUser("bystander"));
+  const parallel = other.apiKeys.set({ provider: "openai", raw: OPENAI_KEY });
+  await until(() => held.calls.length === 2, "the other account's check");
+  answer(Response.json({ data: [] }));
+  t.like(await first, { status: "valid" });
+  answer(Response.json({ data: [] }));
+  t.like(await parallel, { status: "valid" });
+  // The slot is free again once the first check ended.
+  const third = caller.apiKeys.set({ provider: "openai", raw: OPENAI_KEY });
+  await until(() => held.calls.length === 3, "the next check");
+  answer(Response.json({ data: [] }));
+  t.like(await third, { status: "valid" });
+});
+
+test("a redirect from the provider is never followed and reads as unreachable", async (t) => {
+  const inits: RequestInit[] = [];
+  const redirecting = providerStub((_call, init) => {
+    if (init) inits.push(init);
+    return Promise.resolve(
+      new Response(null, { status: 302, headers: { location: "https://elsewhere.example/" } }),
+    );
+  });
+  const harness = createHarness(t, { fetch: redirecting.fetch });
+  const error = await t.throwsAsync(
+    harness.caller(harness.addUser("redirected")).apiKeys.set({
+      provider: "anthropic",
+      raw: ANTHROPIC_KEY,
+    }),
+  );
+  t.like(error, { code: "BAD_GATEWAY" });
+  t.is(inits[0]?.redirect, "error");
+  // A fetch that refuses the redirect, as `redirect: "error"` makes it.
+  const refusing = providerStub(() => Promise.reject(new TypeError("unexpected redirect")));
+  t.is(await checkWithProvider("openai", OPENAI_KEY, { fetch: refusing.fetch }), "unreachable");
+  savedNothing(t, harness);
 });
 
 test("the check lists the provider's models with the provider's own header", async (t) => {
@@ -264,13 +379,20 @@ test("a key a run finds rejected becomes invalid, and billing returns to pause",
     config: harness.config,
   });
   t.is(allowances.billing(user.id), "key");
-  t.is(allowances.anthropicKey(user.id), ANTHROPIC_KEY);
+  const opened = allowances.anthropicKey(user.id);
+  t.is(opened?.apiKey, ANTHROPIC_KEY);
+  const sealed = keyRepo.find(harness.db, user.id, "anthropic")?.sealed;
+  t.is(opened?.sealed, sealed);
+  t.is(allowances.validKey(user.id, "anthropic"), sealed ?? null);
+  t.is(allowances.validKey(user.id, "openai"), null);
 
-  // A rejection of a key the member has since replaced changes nothing.
-  allowances.keyRejected?.(user.id, "anthropic", "sk-ant-an-older-key-that-was-replaced-0000");
+  // A rejection of a key the member has since replaced changes nothing: the
+  // sealed value is compared, not the plaintext.
+  allowances.keyRejected?.(user.id, "anthropic", "v1.an-older-sealed-key");
+  allowances.keyRejected?.(user.id, "anthropic", ANTHROPIC_KEY);
   t.is(keyRepo.find(harness.db, user.id, "anthropic")?.status, "valid");
 
-  allowances.keyRejected?.(user.id, "anthropic", ANTHROPIC_KEY);
+  allowances.keyRejected?.(user.id, "anthropic", sealed ?? "");
   t.is(keyRepo.find(harness.db, user.id, "anthropic")?.status, "invalid");
   t.is(allowances.anthropicKey(user.id), null, "an invalid key pays for nothing");
   t.is(billing.get(harness.db, user.id), "pause");
@@ -279,10 +401,10 @@ test("a key a run finds rejected becomes invalid, and billing returns to pause",
 
   // Saving a key again makes it valid.
   await caller.apiKeys.set({ provider: "anthropic", raw: ANTHROPIC_KEY });
-  t.is(allowances.anthropicKey(user.id), ANTHROPIC_KEY);
+  t.is(allowances.anthropicKey(user.id)?.apiKey, ANTHROPIC_KEY);
 });
 
-test("a stored key that does not open under the secret key pays for nothing", (t) => {
+test("a stored key that does not open under the secret key reads invalid and pays for nothing", async (t) => {
   const harness = createHarness(t);
   const user = harness.addUser("rotated");
   const other = createSecretBox(Buffer.alloc(32, 9));
@@ -299,6 +421,15 @@ test("a stored key that does not open under the secret key pays for nothing", (t
     config: harness.config,
   });
   t.is(allowances.anthropicKey(user.id), null);
+  // The row says valid, but it cannot pay: reads say invalid, and billing
+  // cannot move to `key` on it (`03` K7).
+  const caller = harness.caller(user);
+  t.deepEqual(
+    (await caller.apiKeys.list()).map((key) => [key.provider, key.status]),
+    [["anthropic", "invalid"]],
+  );
+  t.like((await caller.usage.get()).keys[0], { status: "invalid" });
+  await t.throwsAsync(caller.usage.setBilling({ mode: "key" }), { code: "PRECONDITION_FAILED" });
 });
 
 test("fixture providers answer the key check by the key's text, without a network", async (t) => {
