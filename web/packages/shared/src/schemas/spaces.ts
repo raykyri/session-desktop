@@ -445,8 +445,10 @@ export const commentRecordSchema = z.object({
   rev,
 });
 
-/** A ban (`ban:<space>:<user>`), read by the space's owner. Its id is
- * `<space>:<user>`, outside the ULID registry. */
+/** A ban (`ban:<space>:<user>`), read by the space's owner and by the
+ * banned person (in their user log). Its id is `<space>:<user>`, outside
+ * the ULID registry. It names no one but the banned person: who banned them
+ * is in the moderation log, which only the owner reads. */
 export const banRecordSchema = z.object({
   kind: z.literal("ban"),
   id: z.string().min(1),
@@ -852,7 +854,8 @@ export const spaceMutators = {
   },
   // -- members (C18): the owner acts on anyone but themselves
   /** `base.adm`: the member's admission id as the owner saw it; STALE when
-   * the person was let in again since. */
+   * the person was let in again since. `removed`: false when the person was
+   * no longer a member (nothing changed). */
   "members.remove": {
     who: "owner",
     online: false,
@@ -861,7 +864,7 @@ export const spaceMutators = {
       user: spaceHandleSchema,
       base: z.strictObject({ adm: z.string().max(64) }),
     }),
-    result: nullResult,
+    result: z.object({ removed: z.boolean() }),
   },
   /** Applies to the person as they are now; no `base`. */
   "members.ban": {

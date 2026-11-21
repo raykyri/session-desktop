@@ -60,10 +60,11 @@ export const READ: Record<Kind, { open: Row; closed: Row }> = {
   // closedMembers: the member list of a private space is for its members; a
   // person reads their own membership
   member: { open: PUBLIC, closed: row("none", "own", "all", "all") },
-  // join requests (prototype only): your own, and all of them for the owner;
-  // bans, invite links and the moderation log: the owner only (`01` C12, C18)
+  // join requests (prototype only) and bans: your own, and all of them for
+  // the owner (a banned person is an outsider: `own` in that place); invite
+  // links and the moderation log: the owner only (`01` C12, C18)
   request: { open: OWN_OR_OWNER, closed: OWN_OR_OWNER },
-  ban: { open: OWNER_ONLY, closed: OWNER_ONLY },
+  ban: { open: OWN_OR_OWNER, closed: OWN_OR_OWNER },
   invite: { open: OWNER_ONLY, closed: OWNER_ONLY },
   modlog: { open: OWNER_ONLY, closed: OWNER_ONLY },
   // the person's own, and in a private space only while the person may read
@@ -85,7 +86,7 @@ const OWNER: Record<Kind, ((r: never) => string) | null> = {
   comment: null,
   run: null,
   turn: null,
-  ban: null,
+  ban: (r: { u: string }) => r.u,
   invite: null,
   modlog: null,
   member: (r: { u: string }) => r.u,
@@ -138,6 +139,7 @@ const IN_SPACE_LOG: ReadonlySet<Kind> = new Set<Kind>([
 const IN_USER_LOG: ReadonlySet<Kind> = new Set<Kind>([
   "member",
   "request",
+  "ban",
   "save",
   "notif",
   "prefs",

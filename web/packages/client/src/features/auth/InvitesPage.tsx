@@ -1,6 +1,8 @@
 // Invites (02 W7.1, the mockup's `membersPage`): the invite tree on the left
 // and "Invite someone" beside it (one column at 860 px and below). Both are
-// online-only reads (`members.tree`, `accountInvites.list`).
+// online-only reads (`members.tree`, `accountInvites.list`). An account that
+// was deleted (`handle: null`) reads "Deleted account" with the neutral
+// avatar, as its content does elsewhere.
 
 import { useMe } from "../../api/account.js";
 import {
@@ -12,6 +14,7 @@ import {
 import { writeClipboardText } from "../../lib/clipboard.js";
 import { cn } from "../../lib/cn.js";
 import { Avatar } from "../../ui/Avatar.js";
+import { authorName } from "../feed/format.js";
 import { CloseIcon } from "../feed/icons.js";
 import { PageFrame } from "../shell/Frames.js";
 import { showToast } from "../shell/Toast.js";
@@ -92,10 +95,10 @@ function InviteTree({ meId }: { meId: string | null }) {
           className={cn("trow", node.id === meId && "me", node.handle === null && "gone")}
           style={{ paddingLeft: indent(depth) - 10 }}
         >
-          <Avatar handle={node.handle ?? "?"} size="sm" />
+          <Avatar handle={node.handle} size="sm" />
           <span className="tn">
             <b>
-              {node.handle ?? "Deleted account"}
+              {authorName(node.handle)}
               {node.staff === "admin" ? <span className="trole"> · Admin</span> : null}
             </b>
             {node.displayName ? <small>{node.displayName}</small> : null}
@@ -188,8 +191,8 @@ function InviteBox() {
           <div className="ippl">
             {view.invited.map((person) => (
               <div key={`${person.handle ?? ""}:${person.joinedAt}`} className="ip">
-                <Avatar handle={person.handle ?? "?"} size="xs" />
-                <b>{person.handle}</b>
+                <Avatar handle={person.handle} size="xs" />
+                <b>{authorName(person.handle)}</b>
                 <span className="grow" />
                 <small>{joined(person.joinedAt)}</small>
               </div>

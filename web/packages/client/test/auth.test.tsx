@@ -326,6 +326,32 @@ test.serial("Invites: the tree, the open links, and no create button at 3 open",
   t.truthy(screen.getByText("Joined Nov 14"));
 });
 
+test.serial(
+  "Invites: a deleted account reads “Deleted account” with the neutral avatar, in the tree and in You invited",
+  async (t) => {
+    const nodes = treeNodes();
+    nodes[3] = { ...nodes[3]!, handle: null, displayName: null };
+    const view = invitesView(1);
+    view.invited.push({ handle: null, displayName: null, avatarUrl: null, joinedAt: 2 } as never);
+    await renderApp("/invites", {
+      user: testUser({ id: "ines.v", login: "ines.v" }),
+      responses: { "members.tree": nodes, "accountInvites.list": view },
+    });
+    const tree = await screen.findByRole("list", { name: "Invite tree" });
+    const gone = within(tree)
+      .getAllByRole("listitem")
+      .find((row) => row.classList.contains("gone"));
+    t.is(gone?.textContent, "Deleted account");
+    t.is(gone?.querySelector("[data-deleted-account]")?.textContent, "");
+    const invited = [...document.querySelectorAll<HTMLElement>(".ippl .ip")];
+    t.is(invited.length, 2);
+    const deleted = invited.find((row) => row.querySelector("[data-deleted-account]") !== null);
+    t.is(deleted?.querySelector("b")?.textContent, "Deleted account");
+    t.is(deleted?.querySelector("[data-deleted-account]")?.textContent, "");
+    t.false((document.body.textContent ?? "").includes("?"));
+  },
+);
+
 test.serial("Invites: create, copy and revoke toast", async (t) => {
   const copied: string[] = [];
   Object.defineProperty(navigator, "clipboard", {
