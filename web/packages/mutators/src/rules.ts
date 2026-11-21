@@ -29,7 +29,7 @@ import {
   type ThreadRec,
   type TurnRec,
 } from "./records.js";
-import type { PreCtx, ServerValues, Tx } from "./tx.js";
+import type { PreCtx, PreLimit, ServerValues, Tx } from "./tx.js";
 
 /** The contract's mutators: names, inputs, `who` and `online`. */
 export const M = spaces.spaceMutators;
@@ -394,6 +394,12 @@ export function checkQueue(ctx: PreCtx): void {
       undefined,
       "queue_full",
     );
+}
+
+/** Takes one use of a `pre`-stage limit (`04` Z1), or refuses with
+ * TOO_MANY_REQUESTS, which the server does not record. */
+export function within(ctx: PreCtx, limit: PreLimit): void {
+  if (ctx.allow && !ctx.allow(limit)) throw refuse("TOO_MANY_REQUESTS");
 }
 
 /** The pre-check of a write that queues a run: room in the person's queue

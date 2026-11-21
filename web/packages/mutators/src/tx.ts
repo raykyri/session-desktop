@@ -113,7 +113,17 @@ export interface PreCtx {
   inviteCodeTaken(code: string): boolean;
   /** How many runs the actor has with status `queued` (`03` L1). */
   queuedRuns(): number;
+  /** Takes one use of the actor's `pre`-stage limit (`04` Z1): false when
+   * it is used up, and the write is refused with TOO_MANY_REQUESTS, which is
+   * not recorded. Absent where a server applies no limits (the prototype's
+   * suite). */
+  allow?(limit: PreLimit): boolean;
 }
+
+/** The limits of `04` Z1 that a mutator's `pre` stage applies, per person:
+ * channels made (5 a day), channel invite links made (20 a day) and joins
+ * (60 an hour). The server counts them; `pre` names the one a write uses. */
+export type PreLimit = "spaces.create" | "invites.create" | "spaces.join";
 
 export type Who = "user" | "member" | "author" | "owner";
 
@@ -184,7 +194,7 @@ export function authorize(tx: Tx, def: AnyMutator, input: unknown): void {
     // rolls a banned person's prediction back. A write of the person's own
     // user-log records only is not stopped by a ban.
     if (tx.server && !def.ownLog?.(input) && bannedFrom(tx, sp, tx.me))
-      throw refuse("FORBIDDEN", "You are banned from this space.");
+      throw refuse("FORBIDDEN", `You are banned from #${s.name}.`);
     if (s.frozen && def.frozen !== "allowed") throw refuse("FORBIDDEN", frozenMessage(s.name));
     const who = def.who;
     if (who === "member") {
