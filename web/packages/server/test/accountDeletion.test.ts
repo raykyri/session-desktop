@@ -368,3 +368,72 @@ test("the job over its own connection refuses while the server runs", async (t) 
   });
   t.not(users.findByHandle(h.db, "mel")?.provider ?? null, null);
 });
+
+interface Due {
+  run: () => void;
+  ms: number;
+  next: number;
+  unref(): void;
+}
+
+/** A clock and interval timers that move only when the test steps them:
+ * `step(ms)` runs every interval that falls due on the way, at its time;
+ * `moveTo(at)` sets the clock with no interval set yet. */
+function steppedTime(start: number) {
+  let at = start;
+  const due = new Set<Due>();
+  return {
+    clock: { now: () => at },
+    timers: {
+      set(run: () => void, ms: number): Due {
+        const handle = { run, ms, next: at + ms, unref: () => undefined };
+        due.add(handle);
+        return handle;
+      },
+      clear(handle: object) {
+        due.delete(handle as Due);
+      },
+    },
+    moveTo(to: number) {
+      if (due.size) throw new Error("moveTo with intervals set");
+      at = to;
+    },
+    step(ms: number) {
+      const end = at + ms;
+      for (;;) {
+        const first = [...due].sort((a, b) => a.next - b.next)[0];
+        if (!first || first.next > end) break;
+        at = first.next;
+        first.next += first.ms;
+        first.run();
+      }
+      at = end;
+    },
+  };
+}
+
+const heartbeatAt = (h: Harness) =>
+  (
+    h.db.$client
+      .prepare("SELECT updated_at AS at FROM server_meta WHERE key = 'server_heartbeat'")
+      .get() as { at: number } | undefined
+  )?.at;
+
+test("S1, S2: a running server rewrites its heartbeat every 30 s, so the job refuses at boot + 91 s", async (t) => {
+  const time = steppedTime(Date.now());
+  const h = createHarness(t, { sync: { clock: time.clock, timers: time.timers } });
+  const { mel } = await channels(h);
+  // the server boots 91 s before the job, which reads this machine's clock
+  time.moveTo(Date.now() - 91_000);
+  h.sync.startMaintenance();
+  const boot = time.clock.now();
+  t.is(heartbeatAt(h), boot);
+  time.step(30_000);
+  t.is(heartbeatAt(h), time.clock.now(), "the beat 30 s after boot");
+  time.step(61_000);
+  t.is(heartbeatAt(h), boot + 90_000);
+  t.throws(() => accounts.deleteAccount(h.db, mel.user.id), {
+    message: /needs the server stopped: a server \(pid \d+\) wrote its heartbeat/,
+  });
+  t.not(users.findByHandle(h.db, "mel")?.provider ?? null, null);
+});

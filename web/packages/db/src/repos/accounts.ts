@@ -65,8 +65,8 @@ export interface DeletedAccount {
 export interface DeleteAccountOptions {
   /** The sync core the spaces step writes through: the running server's in
    * a test, otherwise one over `db`. The job then runs only while no server
-   * has the database open (its heartbeat, `sync/running.ts`;
-   * `web/docs/runbooks/delete-account.md`). */
+   * has the database open (its heartbeat and an exclusive lock on the file,
+   * `sync/running.ts`; `web/docs/runbooks/delete-account.md`). */
   server?: SyncServer;
   /** Further steps; `ACCOUNT_DELETION_STEPS` by default. */
   steps?: readonly AccountDeletionStep[];
@@ -89,7 +89,23 @@ export function deleteAccount(
   userId: string,
   options: DeleteAccountOptions = {},
 ): DeletedAccount {
-  if (!options.server) assertServerStopped(db, now(), "The account-deletion job");
+  // no fresh heartbeat and no other connection; the lock is held until the
+  // transaction has committed (`sync/running.ts`)
+  const release = options.server
+    ? null
+    : assertServerStopped(db, now(), "The account-deletion job");
+  try {
+    return deleteAccountLocked(db, userId, options);
+  } finally {
+    release?.();
+  }
+}
+
+function deleteAccountLocked(
+  db: SessionDatabase,
+  userId: string,
+  options: DeleteAccountOptions,
+): DeletedAccount {
   const server = options.server ?? localSyncServer(db);
   const steps = options.steps ?? ACCOUNT_DELETION_STEPS;
   return db.transaction(

@@ -46,7 +46,8 @@ export class UnknownMigrationError extends Error {
   constructor(unknownHashes: readonly string[]) {
     super(
       `Database schema incompatibility: database contains ${unknownHashes.length} unrecognized migration(s). ` +
-        "Update the application to a compatible version.",
+        "A newer build made it, or a build from before the M8a migration squash: deploy a build that " +
+        "knows these migrations, or replace the database as web/docs/runbooks/reset-database.md describes.",
     );
     this.name = "UnknownMigrationError";
     this.unknownHashes = unknownHashes;

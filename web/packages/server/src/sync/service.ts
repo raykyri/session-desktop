@@ -44,7 +44,27 @@ export interface SyncServiceOptions {
   /** … or at one store write inside the commit of a write of a mutator
    * (`SESSION_TEST_KILL_AT_WRITE`). */
   killAtWrite?: KillAtWrite;
+  /** The interval timers of the heartbeat and the retention job; the
+   * global ones when absent. A test passes its own, with `clock`, to step
+   * time. */
+  timers?: IntervalTimers;
 }
+
+/** A handle `IntervalTimers.set` returns. */
+export interface IntervalHandle {
+  unref?(): unknown;
+}
+
+/** `setInterval` and `clearInterval`, as the service uses them. */
+export interface IntervalTimers {
+  set(run: () => void, ms: number): IntervalHandle;
+  clear(handle: IntervalHandle): void;
+}
+
+const GLOBAL_TIMERS: IntervalTimers = {
+  set: (run, ms) => setInterval(run, ms),
+  clear: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
+};
 
 /** A store write to kill the process at: before or after the first call of
  * `method` (with a key that starts with `key`, when given) while a write of
@@ -93,8 +113,9 @@ export class SyncService {
   readonly clientIdleTtl: number;
   /** Set by the drain: every later envelope answers SERVICE_UNAVAILABLE. */
   draining = false;
-  #retention: ReturnType<typeof setInterval> | null = null;
-  #heartbeat: ReturnType<typeof setInterval> | null = null;
+  #retention: IntervalHandle | null = null;
+  #heartbeat: IntervalHandle | null = null;
+  readonly #timers: IntervalTimers;
   readonly #logger: Logger | undefined;
   readonly #killAfter: string | undefined;
   readonly #killAt: KillAtWrite | undefined;
@@ -132,6 +153,7 @@ export class SyncService {
 
   constructor(options: SyncServiceOptions) {
     this.clock = options.clock ?? { now: () => Date.now() };
+    this.#timers = options.timers ?? GLOBAL_TIMERS;
     this.#logger = options.logger;
     this.clientIdleTtl = options.clients?.idleTtl ?? CLIENT_IDLE_TTL;
     this.#killAfter = options.killAfterCommit;
@@ -254,7 +276,7 @@ export class SyncService {
       }
     };
     beat();
-    this.#heartbeat = setInterval(beat, HEARTBEAT_INTERVAL_MS);
+    this.#heartbeat = this.#timers.set(beat, HEARTBEAT_INTERVAL_MS);
     this.#heartbeat.unref?.();
     const run = () => {
       try {
@@ -266,7 +288,7 @@ export class SyncService {
       if (checkpoint?.busy) this.#logger?.info({ checkpoint }, "the WAL checkpoint was blocked");
     };
     run();
-    this.#retention = setInterval(run, RETENTION_INTERVAL_MS);
+    this.#retention = this.#timers.set(run, RETENTION_INTERVAL_MS);
     this.#retention.unref?.();
   }
 
@@ -275,11 +297,11 @@ export class SyncService {
    * close. Commits are synchronous, so none is open across the signal. */
   drain(): void {
     this.draining = true;
-    if (this.#retention) clearInterval(this.#retention);
+    if (this.#retention) this.#timers.clear(this.#retention);
     this.#retention = null;
     // the row stays until the shutdown deletes it (`main.ts`): the drain
     // still writes records as running attempts end
-    if (this.#heartbeat) clearInterval(this.#heartbeat);
+    if (this.#heartbeat) this.#timers.clear(this.#heartbeat);
     this.#heartbeat = null;
     this.hub.closeAll("draining");
   }

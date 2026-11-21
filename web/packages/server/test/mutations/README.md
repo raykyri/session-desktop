@@ -45,6 +45,16 @@ otherwise. It exits with 1 when a mutation survives.
   stream hub, event ids, the history id, the store, the configuration,
   `/read`'s scope, limits and budget, the directory), so the fix's test is
   shown to fail without it.
+- M8a-1 to M8a-20: the rows of the M8a test-strength review (the
+  heartbeat's interval and staleness, the server's beat and its deletion at
+  shutdown, the reset script's flags, exit codes and data directory, the
+  column defaults, unique indexes, CHECK constraints and cascade of
+  `0000_initial.sql`, the refusal of a pre-squash database, the image's
+  `admin.mjs` and `reset-database.mjs`). M8a-21 on: each undoes one fix of
+  the M8a squash and reset-tool review (R1-R10: the lock, the first
+  heartbeat, an unreadable or absent database, symlinks, the dry run's
+  `-wal`, the boot's one-line refusal, a heartbeat ahead of the clock, the
+  bundle's `#!` line, the pinned hash of `0000_initial.sql`).
 - Not applicable (`--list` prints the reasons): the client half's faults
   (X28, X31, N26-N28, R2-6, R2-8, R2-10 to R2-14, R2-23) and the prototype's
   join requests (X16, X22, N23, R2-2); X25 (a tombstone keeping the whole

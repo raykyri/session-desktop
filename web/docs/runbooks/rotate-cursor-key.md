@@ -37,14 +37,25 @@ Use it on a schedule, or when someone who had the key leaves.
    openssl rand -base64 32
    ```
 
-2. Set the three values in one change, so that one deploy applies them:
+2. Set the three values in one change, so that one deploy applies them.
+   The keys go into a file only its owner can read, written with an editor,
+   so that no key is on a command line or in the shell history:
 
    ```sh
-   fly secrets set -a <app> \
-     SESSION_CURSOR_KEY_PREVIOUS='<current key>' \
-     SESSION_CURSOR_KEY='<new key>' \
-     SESSION_CURSOR_KEY_ROTATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+   date -u +%Y-%m-%dT%H:%M:%SZ                 # the rotation time
+   install -m 600 /dev/null cursor.env
+   "$EDITOR" cursor.env
+   #   SESSION_CURSOR_KEY_PREVIOUS=<current key>
+   #   SESSION_CURSOR_KEY=<new key>
+   #   SESSION_CURSOR_KEY_ROTATED_AT=<the rotation time>
+   fly secrets import -a <app> < cursor.env
+   shred -u cursor.env
    ```
+
+   Without `--stage`, `fly secrets import` is expected to apply the values
+   and restart the machine as `fly secrets set` does (unverified,
+   `launch.md` §4.13 U5). If it does not, use `fly secrets set` with
+   `HISTCONTROL=ignorespace` set and the command typed with a leading space.
 
    Fly restarts the machine with the new secrets. Open tabs reconnect their
    streams; their cursors and the stream's last event id, sealed with the old
@@ -71,9 +82,15 @@ rules of the time of the read, so it exposes no records; it does expose
 the metadata above. Rotate without an overlap:
 
 ```sh
-fly secrets set -a <app> SESSION_CURSOR_KEY='<new key>'
+install -m 600 /dev/null cursor.env
+"$EDITOR" cursor.env                           # SESSION_CURSOR_KEY=<new key>
+fly secrets import --stage -a <app> < cursor.env
+shred -u cursor.env
 fly secrets unset -a <app> SESSION_CURSOR_KEY_PREVIOUS SESSION_CURSOR_KEY_ROTATED_AT
 ```
+
+The import is staged, and the `unset` is expected to apply both changes
+with one restart (unverified, `launch.md` §4.13 U5 and U6).
 
 Every open tab resyncs each log it reads once, which is a snapshot per log
 per client: a short load spike, well within the snapshot limits for one

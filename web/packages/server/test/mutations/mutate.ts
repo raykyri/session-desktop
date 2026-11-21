@@ -35,6 +35,10 @@
 // the review's row, so that each fix's test is shown to fail without it.
 // M6-55 on cover the M6 tail: `members.remove`'s result (C12) and the
 // banned person's read of their own ban record (C18).
+// M8a-1 to M8a-20 are the rows of the M8a test-strength review (the
+// heartbeat's constants and timer, the reset script, `0000_initial.sql`, the
+// boot check of a pre-squash database, the operator bundles); M8a-21 on
+// undo one fix of the M8a squash and reset-tool review (R1-R10) each.
 //
 // A mutation is killed only when one of its expected tests fails
 // (`EXPECTED`): the runner runs those tests alone, with AVA's `--match`, in
@@ -1900,8 +1904,8 @@ const MUTATIONS: Mutation[] = [
   {
     name: "M6-42 S3a: the job runs while a server's heartbeat is fresh",
     file: "../db/src/repos/accounts.ts",
-    from: '  if (!options.server) assertServerStopped(db, now(), "The account-deletion job");\n',
-    to: "",
+    from: '  const release = options.server\n    ? null\n    : assertServerStopped(db, now(), "The account-deletion job");',
+    to: "  const release: (() => void) | null = null;",
   },
   {
     name: "M6-43 S3b: the server writes no heartbeat at boot",
@@ -2018,6 +2022,206 @@ const MUTATIONS: Mutation[] = [
     file: "../mutators/src/access.ts",
     from: '    case "request":\n    case "ban":\n      return own || (sp !== null && isOwnerOf(g, sp, u));',
     to: '    case "ban":\n      return own || (sp !== null && readsSpace(g, sp, u));\n    case "request":\n      return own || (sp !== null && isOwnerOf(g, sp, u));',
+  },
+  // ---- M8a review: the test-strength rows, then one undone fix of R1-R10 each ----
+  {
+    name: "M8a-1 H3: a server counts as stopped after two missed beats",
+    file: "../db/src/sync/running.ts",
+    from: "export const HEARTBEAT_STALE_MS = 3 * HEARTBEAT_INTERVAL_MS;",
+    to: "export const HEARTBEAT_STALE_MS = 2 * HEARTBEAT_INTERVAL_MS;",
+  },
+  {
+    name: "M8a-2 H4: the heartbeat interval is five minutes",
+    file: "../db/src/sync/running.ts",
+    from: "export const HEARTBEAT_INTERVAL_MS = 30_000;",
+    to: "export const HEARTBEAT_INTERVAL_MS = 300_000;",
+  },
+  {
+    name: "M8a-3 S1: the server beats ten times less often",
+    file: "src/sync/service.ts",
+    from: "this.#timers.set(beat, HEARTBEAT_INTERVAL_MS);",
+    to: "this.#timers.set(beat, HEARTBEAT_INTERVAL_MS * 10);",
+  },
+  {
+    name: "M8a-4 S2: the server beats at boot only",
+    file: "src/sync/service.ts",
+    from: "    this.#heartbeat = this.#timers.set(beat, HEARTBEAT_INTERVAL_MS);\n    this.#heartbeat.unref?.();\n",
+    to: "",
+  },
+  {
+    name: "M8a-5 S4: the shutdown leaves the heartbeat",
+    file: "src/main.ts",
+    from: "      clearHeartbeat(db);\n",
+    to: "",
+  },
+  {
+    name: "M8a-6 R12: --assume-stopped skips the lock and the heartbeat",
+    file: "src/ops/resetDatabase.ts",
+    from: "  const found = probe(path, input);",
+    to: '  const found: Probe =\n    input.assumeStopped === true ? { stopped: "assumed", client: null } : probe(path, input);',
+  },
+  {
+    name: "M8a-7 R18: with no time given the heartbeat is compared with 0",
+    file: "src/ops/resetDatabase.ts",
+    from: "assertNoFreshHeartbeat(client, input.now ?? Date.now(), JOB);",
+    to: "assertNoFreshHeartbeat(client, input.now ?? 0, JOB);",
+  },
+  {
+    name: "M8a-8 C2a: the script always passes --assume-stopped",
+    file: "scripts/reset-database.ts",
+    from: '    assumeStopped: values["assume-stopped"],',
+    to: "    assumeStopped: true,",
+  },
+  {
+    name: "M8a-9 C2b: the script never passes --assume-stopped",
+    file: "scripts/reset-database.ts",
+    from: '    assumeStopped: values["assume-stopped"],',
+    to: "    assumeStopped: false,",
+  },
+  {
+    name: "M8a-10 C4: SESSION_DATA_DIR wins over --data-dir",
+    file: "scripts/reset-database.ts",
+    from: 'const dataDir = resolve(values["data-dir"] ?? fromEnv ?? ".data");',
+    to: 'const dataDir = resolve(fromEnv ?? values["data-dir"] ?? ".data");',
+  },
+  {
+    name: "M8a-11 C6: an unexpected error exits 0",
+    file: "scripts/reset-database.ts",
+    from: "process.exitCode = error instanceof ResetRefusedError ? 1 : 3;",
+    to: "process.exitCode = error instanceof ResetRefusedError ? 1 : 0;",
+  },
+  {
+    name: "M8a-12 M3: a new account's status defaults to active",
+    file: "../db/migrations/0000_initial.sql",
+    from: "`status` text DEFAULT 'waiting' NOT NULL",
+    to: "`status` text DEFAULT 'active' NOT NULL",
+  },
+  {
+    name: "M8a-13 M4: a new account is a site admin by default",
+    file: "../db/migrations/0000_initial.sql",
+    from: "`is_admin` integer DEFAULT false NOT NULL",
+    to: "`is_admin` integer DEFAULT true NOT NULL",
+  },
+  {
+    name: "M8a-14 M8: handles are not unique",
+    file: "../db/migrations/0000_initial.sql",
+    from: "CREATE UNIQUE INDEX `users_handle_unique` ON `users` (`handle`);--> statement-breakpoint\n",
+    to: "",
+  },
+  {
+    name: "M8a-15 M9: invite code hashes are not unique",
+    file: "../db/migrations/0000_initial.sql",
+    from: "CREATE UNIQUE INDEX `invites_code_hash_unique`",
+    to: "CREATE INDEX `invites_code_hash_unique`",
+  },
+  {
+    name: "M8a-16 M12: an account's status is not checked",
+    file: "../db/migrations/0000_initial.sql",
+    from: ',\n\tCONSTRAINT "users_status_ck" CHECK("users"."status" IN (\'waiting\', \'active\'))',
+    to: "",
+  },
+  {
+    name: "M8a-17 M14: an account's API keys outlive it",
+    file: "../db/migrations/0000_initial.sql",
+    from: "FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade\n);\n--> statement-breakpoint\nCREATE TABLE `site_settings`",
+    to: "FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action\n);\n--> statement-breakpoint\nCREATE TABLE `site_settings`",
+  },
+  {
+    name: "M8a-18 B4: a database with only unknown migrations is accepted",
+    file: "../db/src/connection.ts",
+    from: "  return appliedMigrationHashes(client).filter((hash) => !known.has(hash));",
+    to: "  const applied = appliedMigrationHashes(client);\n  return applied.some((hash) => known.has(hash)) ? applied.filter((hash) => !known.has(hash)) : [];",
+  },
+  {
+    name: "M8a-19 A1: admin resolves the migrations from its own directory",
+    file: "../db/bin/admin.ts",
+    from: 'new URL("../../db/migrations", import.meta.url)',
+    to: 'new URL("../migrations", import.meta.url)',
+  },
+  {
+    name: "M8a-20 A3: admin opens the database without the migration check",
+    file: "../db/bin/admin.ts",
+    from: "  db = openDatabase(path, { migrationsFolder });",
+    to: "  db = openDatabase(path, { migrationsFolder, skipMigrations: true });",
+  },
+  {
+    name: "M8a-21 R1a: the reset takes no lock",
+    file: "src/ops/resetDatabase.ts",
+    from: "      lockDatabase(client, JOB);\n      locked = true;",
+    to: "      locked = true;",
+    also: [{ from: '    client.pragma("locking_mode = EXCLUSIVE");\n', to: "" }],
+  },
+  {
+    name: "M8a-22 R1b: the account-deletion job takes no lock",
+    file: "../db/src/sync/running.ts",
+    from: "  assertNoFreshHeartbeat(db, at, job);\n  return lockDatabase(db, job);",
+    to: "  assertNoFreshHeartbeat(db, at, job);\n  return () => undefined;",
+  },
+  {
+    name: "M8a-23 R1c: the job lets go of the lock before it writes",
+    file: "../db/src/repos/accounts.ts",
+    from: "  try {\n    return deleteAccountLocked(db, userId, options);",
+    to: "  release?.();\n  try {\n    return deleteAccountLocked(db, userId, options);",
+  },
+  {
+    name: "M8a-24 R1d: the server writes no heartbeat when it opens the database",
+    file: "src/main.ts",
+    from: "  writeHeartbeat(db, Date.now());\n  return db;",
+    to: "  return db;",
+  },
+  {
+    name: "M8a-25 R2: a file that is not a database is an unexpected error",
+    file: "src/ops/resetDatabase.ts",
+    from: "/^SQLITE_(NOTADB|CORRUPT)/.test(code)",
+    to: "/^SQLITE_NEVER/.test(code)",
+  },
+  {
+    name: "M8a-26 R3a: with no database --yes deletes",
+    file: "src/ops/resetDatabase.ts",
+    from: "    if (input.apply && paths.length > 0 && input.noDatabase !== true)",
+    to: "    if (false)",
+  },
+  {
+    name: "M8a-27 R3b: an empty SESSION_DATA_DIR names the current directory",
+    file: "scripts/reset-database.ts",
+    from: 'const fromEnv = process.env["SESSION_DATA_DIR"] || undefined;',
+    to: 'const fromEnv = process.env["SESSION_DATA_DIR"] ?? undefined;',
+  },
+  {
+    name: "M8a-28 R4: a symlinked directory is followed",
+    file: "src/ops/resetDatabase.ts",
+    from: "    if (link)\n",
+    to: "    if (false)\n",
+  },
+  {
+    name: "M8a-29 R5: the listing leaves the -wal it created",
+    file: "src/ops/resetDatabase.ts",
+    from: "      if (!paths.includes(own)) rmSync(own, { force: true });",
+    to: "      if (!paths.includes(own) && false) rmSync(own, { force: true });",
+  },
+  {
+    name: "M8a-30 R6: a database from before the squash is thrown with its stack",
+    file: "src/main.ts",
+    from: "      logger.error({ path, unknownHashes: error.unknownHashes }, error.message);\n      return exit(1);\n",
+    to: "      throw error;\n",
+  },
+  {
+    name: "M8a-31 R7: a heartbeat ahead of the clock reads as 0 s ago",
+    file: "../db/src/sync/running.ts",
+    from: "    running.at > at\n",
+    to: "    false\n",
+  },
+  {
+    name: "M8a-32 R9: admin keeps its tsx #! line",
+    file: "../db/bin/admin.ts",
+    from: "// Operator commands on accounts (plan",
+    to: "#!/usr/bin/env tsx\n// Operator commands on accounts (plan",
+  },
+  {
+    name: "M8a-33 R10: a comment of 0000_initial.sql edited",
+    file: "../db/migrations/0000_initial.sql",
+    from: "-- is replaced (docs/runbooks/reset-database.md).",
+    to: "-- is replaced (web/docs/runbooks/reset-database.md).",
   },
 ];
 
@@ -2572,6 +2776,44 @@ const EXPECTED: Record<string, { in?: "db" | "sync" | "mutators"; tests: string[
       "a banned person's snapshots and pulls hold their own ban and no other",
     ],
   },
+  "M8a-1": { in: "db", tests: ["H3, H4: a server beats every 30 s"] },
+  "M8a-2": { in: "db", tests: ["H3, H4: a server beats every 30 s"] },
+  "M8a-3": { tests: ["S1, S2: a running server rewrites its heartbeat every 30 s"] },
+  "M8a-4": { tests: ["S1, S2: a running server rewrites its heartbeat every 30 s"] },
+  "M8a-5": { tests: ["S4: main() writes the heartbeat and its shutdown deletes it"] },
+  "M8a-6": { tests: ["R12: --assume-stopped still refuses on a fresh heartbeat"] },
+  "M8a-7": { tests: ["R18: a heartbeat 90 s old counts as stopped when no time is given"] },
+  "M8a-8": { tests: ["C2a: the script with --yes on a database without server_meta exits 1"] },
+  "M8a-9": { tests: ["C2b: the script with --yes --assume-stopped deletes it"] },
+  "M8a-10": { tests: ["C4: --data-dir wins over SESSION_DATA_DIR"] },
+  "M8a-11": { tests: ["C6: an error that is not a refusal exits 3"] },
+  "M8a-12": { in: "db", tests: ["M3-M14: 0000_initial.sql is what drizzle-kit generates"] },
+  "M8a-13": { in: "db", tests: ["M3-M14: 0000_initial.sql is what drizzle-kit generates"] },
+  "M8a-14": { in: "db", tests: ["M3-M14: 0000_initial.sql is what drizzle-kit generates"] },
+  "M8a-15": { in: "db", tests: ["M3-M14: 0000_initial.sql is what drizzle-kit generates"] },
+  "M8a-16": { in: "db", tests: ["M3-M14: 0000_initial.sql is what drizzle-kit generates"] },
+  "M8a-17": { in: "db", tests: ["M3-M14: 0000_initial.sql is what drizzle-kit generates"] },
+  "M8a-18": { in: "db", tests: ["B4: a database whose migrations are all unknown"] },
+  "M8a-19": { tests: ["A1: the image's admin.mjs, beside the migrations, prints a root invite"] },
+  "M8a-20": {
+    tests: ["A3: the image's admin.mjs refuses a database with an unrecognized migration"],
+  },
+  "M8a-21": { tests: ["R1: refuses while another connection has the database open"] },
+  "M8a-22": {
+    in: "db",
+    tests: ["R1: the job refuses while another connection has the database open"],
+  },
+  "M8a-23": { in: "db", tests: ["R1: the job holds an exclusive lock while it writes"] },
+  "M8a-24": { tests: ["R1: the server's open writes the first heartbeat"] },
+  "M8a-25": { tests: ["R2: a session.db that is not a SQLite database needs --assume-stopped"] },
+  "M8a-26": { tests: ["R3: with no database it refuses to delete without --no-database"] },
+  "M8a-27": { tests: ["R3: an empty SESSION_DATA_DIR is unset"] },
+  "M8a-28": { tests: ["R4: a symlinked documents, embeds or session.db is refused"] },
+  "M8a-29": { tests: ["after a clean shutdown it deletes the database and the data"] },
+  "M8a-30": { tests: ["R6: a database from before the squash logs one line"] },
+  "M8a-31": { in: "db", tests: ["R7: a heartbeat dated ahead of this machine's clock says so"] },
+  "M8a-32": { tests: ["R9: neither bundle starts with a #! line naming tsx"] },
+  "M8a-33": { in: "db", tests: ["R10: 0000_initial.sql is the file deployed databases recorded"] },
 };
 
 /** What one suite said about a mutation. */

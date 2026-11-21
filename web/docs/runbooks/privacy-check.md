@@ -82,9 +82,18 @@ privacy check passed
   then run the script again.
 - **The text is in the file or the WAL after a completed checkpoint.**
   `secure_delete` did not take effect, or a table outside `records` holds
-  the text (a run's stream rows, `usage_events`). Find it with
-  `sqlite3 /data/session.db .dump | grep -n "<marker>"` and treat it as a
-  privacy incident.
+  the text (a run's stream rows, `usage_events`). The image has no
+  `sqlite3`; find the rows with `better-sqlite3`, which is in
+  `/app/node_modules`, and treat it as a privacy incident:
+
+  ```sh
+  cd /app && node -e '
+    const d = require("better-sqlite3")("/data/session.db", { readonly: true });
+    for (const { name } of d.prepare("SELECT name FROM sqlite_master WHERE type = ?").all("table"))
+      for (const row of d.prepare(`SELECT * FROM "${name}"`).all())
+        if (JSON.stringify(row).includes(process.argv[1]))
+          console.log(name, JSON.stringify(row).slice(0, 300));' "<marker>"
+  ```
 - **A reader's snapshot or pull holds the text.** The erase or the read
   rules are wrong; the conformance suite (`inv6`) should have caught it.
   Treat it as a privacy incident.

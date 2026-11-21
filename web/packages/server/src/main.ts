@@ -23,7 +23,18 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { serve, type ServerType } from "@hono/node-server";
-import { accounts, auth, clearHeartbeat, closeDatabase, openDatabase, users } from "@session/db";
+import {
+  UnappliedMigrationError,
+  UnknownMigrationError,
+  accounts,
+  auth,
+  clearHeartbeat,
+  closeDatabase,
+  openDatabase,
+  users,
+  writeHeartbeat,
+  type SessionDatabase,
+} from "@session/db";
 
 import { createApp } from "./app.js";
 import { BACKUP_CHECK_INTERVAL_MS, createDocumentBackupScheduler } from "./backups.js";
@@ -85,6 +96,40 @@ export function warnOnDevelopmentCursorKey(config: Config, logger: Logger): bool
     "SESSION_CURSOR_KEY is unset: cursor tokens are sealed under the public development key",
   );
   return true;
+}
+
+/**
+ * Opens and migrates the database for the server and writes the first
+ * heartbeat, before the boot steps: from then on an operator job refuses on
+ * the row as well as on the open file (`runbooks/reset-database.md`;
+ * `@session/db` `sync/running.ts`). A database this build cannot run on
+ * (one made by a newer build, or by a build from before the M8a migration
+ * squash, `UnknownMigrationError`; or one with a migration left unapplied,
+ * `UnappliedMigrationError`) logs one error line, whose message names
+ * `runbooks/reset-database.md` for the first, and ends the process with exit
+ * code 1 and no stack trace. Any other error is thrown.
+ */
+export function openServerDatabase(
+  path: string,
+  logger: Logger,
+  exit: (code: number) => never = (code) => process.exit(code),
+): SessionDatabase {
+  let db: SessionDatabase;
+  try {
+    db = openDatabase(path, { migrationsFolder: MIGRATIONS_DIRECTORY });
+  } catch (error) {
+    if (error instanceof UnknownMigrationError) {
+      logger.error({ path, unknownHashes: error.unknownHashes }, error.message);
+      return exit(1);
+    }
+    if (error instanceof UnappliedMigrationError) {
+      logger.error({ path, tags: error.tags }, error.message);
+      return exit(1);
+    }
+    throw error;
+  }
+  writeHeartbeat(db, Date.now());
+  return db;
 }
 
 export function prepareDataDirectories(config: Config): void {
@@ -210,7 +255,7 @@ export function main(): RunningServer {
   prepareDataDirectories(config);
   writeVertexCredentials(config);
 
-  const db = openDatabase(config.databasePath, { migrationsFolder: MIGRATIONS_DIRECTORY });
+  const db = openServerDatabase(config.databasePath, logger);
   const sync = new SyncService({ db, config, logger, ...testFaults(config) });
   const ledger = new SqliteLedger(db);
   // What the run loop and the dispatcher read of a member's allowance, keys

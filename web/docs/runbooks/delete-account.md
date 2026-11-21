@@ -53,16 +53,32 @@ writing to the same database would leave that cache stale: the server would
 keep serving the deleted text, a channel the job froze would still take
 posts, and the server could write a cached record back over the job's
 change. Two processes must never write the same SQLite file
-(`reset-database.md` §1).
+(`reset-database.md`, "The server is stopped for every step that writes").
 
-The job checks it. A running server writes a heartbeat row
-(`server_heartbeat` in `server_meta`) at boot and every 30 seconds, and
-deletes it at the end of its shutdown. The job refuses while the heartbeat
-is under 90 seconds old:
+The job checks it in two ways (`web/packages/db/src/sync/running.ts`):
 
-```text
-The account-deletion job needs the server stopped: a server (pid 7) wrote its heartbeat 12 s ago. ...
-```
+- A running server writes a heartbeat row (`server_heartbeat` in
+  `server_meta`) right after it opens the database and every 30 seconds,
+  and deletes it at the end of its shutdown. The job refuses while the
+  heartbeat is under 90 seconds old:
+
+  ```text
+  The account-deletion job needs the server stopped: a server (pid 7) wrote its heartbeat 12 s ago. ...
+  ```
+
+- The job then takes an exclusive lock on the database file through its
+  own connection, with no busy timeout, and holds it until its transaction
+  has committed. In WAL mode SQLite refuses the lock while any other
+  connection has the file open (a server that has not written its
+  heartbeat yet, Litestream, another operator command), and the job
+  refuses:
+
+  ```text
+  The account-deletion job needs the server stopped: another process has the database open (SQLite answered SQLITE_BUSY to an exclusive lock). ...
+  ```
+
+  While the job holds the lock, a server that starts cannot open the
+  database.
 
 After `fly scale count 0` the shutdown deletes the row and the job runs at
 once. A server that was killed (out of memory, a host failure) leaves the
@@ -78,18 +94,19 @@ row; the job runs 90 seconds after its last heartbeat.
    fly scale count 0 -a <app>
    ```
 
-3. Start a shell on a machine with the volume attached and the entrypoint
-   overridden, as in `restore.md` §2. The runtime image holds only the
-   built server; `npm run db:admin` needs the sources and dev dependencies
-   of the `build` stage of `web/Dockerfile`, built from the deployed commit
-   and pushed to the app's registry:
+3. Start a shell on a one-off machine of the deployed image with the
+   volume attached, in the volume's region (`fly volumes list -a <app>`),
+   as in `restore.md` §2; `--shell` is taken not to run the entrypoint
+   (unverified, `launch.md` §4.13 U1). The runtime image holds the operator
+   commands bundled as `/app/packages/server/dist/admin.mjs`; `setpriv`
+   runs the job as the `session` user that owns the database files:
 
    ```sh
-   docker build --target build -t registry.fly.io/<app>:ops-<commit> web
-   docker push registry.fly.io/<app>:ops-<commit>
-   fly machine run --shell -a <app> --volume session_data:/data registry.fly.io/<app>:ops-<commit>
-   # inside:
-   cd /app && SESSION_DATA_DIR=/data npm run db:admin -- --delete <handle>
+   fly image show -a <app>                       # the deployed image
+   fly machine run <image> --shell -a <app> -r <region> --volume session_data:/data
+   # inside (SESSION_DATA_DIR is /data in the image):
+   setpriv --reuid=1000 --regid=1000 --clear-groups \
+     node /app/packages/server/dist/admin.mjs --delete <handle>
    ```
 
    The command prints what it did, for example:

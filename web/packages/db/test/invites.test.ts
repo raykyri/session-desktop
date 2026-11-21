@@ -448,28 +448,52 @@ test("db:admin prints a root invite and promotes by handle", async (t) => {
 test("the deletion job deletes by handle and leaves the handle taken", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "session-delete-"));
   t.teardown(() => rmSync(directory, { recursive: true, force: true }));
-  const db = openDatabase(join(directory, "session.db"));
-  t.teardown(() => closeDatabase(db));
-  const member = addActiveUser(db, "leaving.soon");
+  const path = join(directory, "session.db");
+  const before = openDatabase(path);
+  const member = addActiveUser(before, "leaving.soon");
+  // the job refuses while another connection has the file open
+  closeDatabase(before);
   const output = await dbAdmin(directory, ["--delete", "leaving.soon"]);
   t.regex(output.stdout, /the handle stays reserved/);
+  const db = openDatabase(path);
   t.is(users.findById(db, member.id), null);
   t.false(users.handleAvailable(db, "leaving.soon"));
+  closeDatabase(db);
   await t.throwsAsync(dbAdmin(directory, ["--delete", "leaving.soon"]));
 });
 
 test("the deletion job exits 1 and changes nothing while a server's heartbeat is fresh", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "session-delete-"));
   t.teardown(() => rmSync(directory, { recursive: true, force: true }));
-  const db = openDatabase(join(directory, "session.db"));
-  t.teardown(() => closeDatabase(db));
-  const member = addActiveUser(db, "still.here");
-  writeHeartbeat(db, Date.now());
+  const path = join(directory, "session.db");
+  const before = openDatabase(path);
+  const member = addActiveUser(before, "still.here");
+  writeHeartbeat(before, Date.now());
+  closeDatabase(before);
   const refused = await t.throwsAsync(dbAdmin(directory, ["--delete", "still.here"]));
   t.like(refused, { code: 1 });
   t.regex(
     String((refused as { stderr?: unknown } | undefined)?.stderr),
-    /needs the server stopped/,
+    /needs the server stopped: a server \(pid \d+\) wrote its heartbeat/,
+  );
+  const db = openDatabase(path);
+  t.teardown(() => closeDatabase(db));
+  t.not(users.findById(db, member.id), null);
+});
+
+test("R1: the deletion job exits 1 and changes nothing while another connection has the database open", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "session-delete-"));
+  t.teardown(() => rmSync(directory, { recursive: true, force: true }));
+  // a server between openDatabase and its first heartbeat, or a build
+  // without one: the file is open, no heartbeat row
+  const db = openDatabase(join(directory, "session.db"));
+  t.teardown(() => closeDatabase(db));
+  const member = addActiveUser(db, "still.here");
+  const refused = await t.throwsAsync(dbAdmin(directory, ["--delete", "still.here"]));
+  t.like(refused, { code: 1 });
+  t.regex(
+    String((refused as { stderr?: unknown } | undefined)?.stderr),
+    /needs the server stopped: another process has the database open/,
   );
   t.not(users.findById(db, member.id), null);
 });
