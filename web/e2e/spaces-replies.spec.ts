@@ -1,5 +1,6 @@
 // Reply trees on posts (02 §12.2 `spaces-replies`, W4.3): selecting a reply,
-// replying to it, Reply at root, the footer's Reply, and the mention toast.
+// replying to it, Reply at root, the footer's Reply, the mention toast, the
+// tree's keys, and collapsing a reply's replies.
 
 import { expect, test, type Page } from "@playwright/test";
 
@@ -58,4 +59,31 @@ test("the reply tree moves by keyboard", async ({ page }) => {
   await expect(tree.getByRole("treeitem").nth(1)).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(tree.getByRole("treeitem").nth(1)).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowUp");
+  await expect(tree.getByRole("treeitem").nth(0)).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(tree.getByRole("treeitem").nth(2)).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(tree.getByRole("treeitem").nth(0)).toBeFocused();
+});
+
+test("a reply's replies collapse with Left and expand with Right or +N", async ({ page }) => {
+  const tree = post(page).getByRole("tree", { name: "Replies" });
+  const parent = tree.getByRole("treeitem").nth(1);
+  await expect(parent).toHaveAttribute("aria-expanded", "true");
+  await parent.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(parent).toHaveAttribute("aria-expanded", "false");
+  await expect(parent).toBeFocused();
+  await expect(tree.getByRole("treeitem")).toHaveCount(2);
+  await page.keyboard.press("ArrowRight");
+  await expect(parent).toHaveAttribute("aria-expanded", "true");
+  await expect(tree.getByRole("treeitem")).toHaveCount(3);
+
+  await page.keyboard.press("ArrowLeft");
+  const more = post(page).getByRole("button", { name: "Show 1 more reply" });
+  await expect(post(page).locator(".rhid")).toHaveText("+1");
+  await more.click();
+  await expect(parent).toHaveAttribute("aria-expanded", "true");
+  await expect(tree.getByRole("treeitem")).toHaveCount(3);
 });
